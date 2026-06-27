@@ -11,6 +11,16 @@ npm run dev
 
 App öffnen: http://localhost:5173
 
+## Tests
+
+```bash
+npm test
+npm run test:watch
+npm run build
+```
+
+`npm test` führt alle Vitest-Service-Regressionstests einmal aus. `test:watch` startet Vitest im Watch-Modus während der Entwicklung.
+
 ## Screens
 
 - **Setup** – Sprache, Firmenname, Branche, Steuerstatus, Material-Standard
