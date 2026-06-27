@@ -1,0 +1,48 @@
+import { Navigate, Route, Routes } from 'react-router-dom';
+import { AppShell } from './components/layout/AppShell';
+import { useApp } from './context/AppContext';
+import { AnalysekartePage } from './pages/AnalysekartePage';
+import { AssistentPage } from './pages/AssistentPage';
+import { AufgabenPage } from './pages/AufgabenPage';
+import { EingangDetailPage } from './pages/EingangDetailPage';
+import { EingangPage } from './pages/EingangPage';
+import { PapierarchivPage } from './pages/PapierarchivPage';
+import { RechnungPage } from './pages/RechnungPage';
+import { SetupPage } from './pages/SetupPage';
+import { VorgaengePage } from './pages/VorgaengePage';
+import { VorgangDetailPage } from './pages/VorgangDetailPage';
+
+function AppRoutes() {
+  const { setup } = useApp();
+
+  if (!setup.setupComplete) {
+    return (
+      <Routes>
+        <Route path="/setup" element={<SetupPage />} />
+        <Route path="*" element={<Navigate to="/setup" replace />} />
+      </Routes>
+    );
+  }
+
+  return (
+    <Routes>
+      <Route element={<AppShell />}>
+        <Route path="/eingang" element={<EingangPage />} />
+        <Route path="/eingang/:id" element={<EingangDetailPage />} />
+        <Route path="/analyse" element={<AnalysekartePage />} />
+        <Route path="/aufgaben" element={<AufgabenPage />} />
+        <Route path="/vorgaenge" element={<VorgaengePage />} />
+        <Route path="/vorgaenge/:id" element={<VorgangDetailPage />} />
+        <Route path="/vorgaenge/:id/rechnung" element={<RechnungPage />} />
+        <Route path="/papierarchiv" element={<PapierarchivPage />} />
+        <Route path="/assistent" element={<AssistentPage />} />
+        <Route path="/setup" element={<SetupPage />} />
+        <Route path="*" element={<Navigate to="/eingang" replace />} />
+      </Route>
+    </Routes>
+  );
+}
+
+export default function App() {
+  return <AppRoutes />;
+}
