@@ -1,6 +1,19 @@
 import { DEFAULT_SETUP, MOCK_TASKS, MOCK_VORGAENGE } from '../data/mockData';
 import { MOCK_INBOX_ITEMS } from '../data/inboxMockData';
-import type { AppPersistedState, CompanySetup, InboxItem, Task, Vorgang } from '../types/models';
+import { MOCK_COMPANY_DOCUMENTS } from '../data/documentMockData';
+import type {
+  AppPersistedState,
+  CompanyDocument,
+  CompanySetup,
+  InboxItem,
+  Task,
+  Vorgang,
+} from '../types/models';
+import {
+  getDocumentStoreSnapshot,
+  hydrateDocumentStore,
+  resetDocuments,
+} from './documentService';
 import {
   getInboxStoreSnapshot,
   hydrateInboxStore,
@@ -54,6 +67,16 @@ function cloneTask(t: Task): Task {
   return { ...t };
 }
 
+function cloneCompanyDocument(doc: CompanyDocument): CompanyDocument {
+  return {
+    ...doc,
+    digitalFolder: { ...doc.digitalFolder },
+    paperFolder: { ...doc.paperFolder },
+    tags: [...doc.tags],
+    linkedVorgang: doc.linkedVorgang ? { ...doc.linkedVorgang } : null,
+  };
+}
+
 export function loadLegacySetup(): CompanySetup | null {
   try {
     const stored = localStorage.getItem(LEGACY_SETUP_KEY);
@@ -74,6 +97,7 @@ export function createSeedState(setupOverride?: CompanySetup): AppPersistedState
     inboxItems: MOCK_INBOX_ITEMS.map(cloneInboxItem),
     vorgaenge: MOCK_VORGAENGE.map(cloneVorgang),
     tasks: MOCK_TASKS.map(cloneTask),
+    documents: MOCK_COMPANY_DOCUMENTS.map(cloneCompanyDocument),
     savedAt: new Date().toISOString(),
   };
 }
@@ -86,6 +110,7 @@ function isValidPersistedState(value: unknown): value is AppPersistedState {
     Array.isArray(state.inboxItems) &&
     Array.isArray(state.vorgaenge) &&
     Array.isArray(state.tasks) &&
+    (Array.isArray(state.documents) || state.documents === undefined) &&
     typeof state.setup === 'object' &&
     state.setup !== null
   );
@@ -106,6 +131,7 @@ export function loadPersistedState(): AppPersistedState | null {
       inboxItems: parsed.inboxItems.map(cloneInboxItem),
       vorgaenge: parsed.vorgaenge.map(cloneVorgang),
       tasks: parsed.tasks.map(cloneTask),
+      documents: (parsed.documents ?? MOCK_COMPANY_DOCUMENTS).map(cloneCompanyDocument),
     };
   } catch (error) {
     console.warn('[OfficePilot] localStorage konnte nicht gelesen werden:', error);
@@ -138,6 +164,7 @@ function applyStateToStores(state: AppPersistedState): void {
   hydrateInboxStore(state.inboxItems);
   hydrateVorgangStore(state.vorgaenge);
   hydrateTaskStore(state.tasks);
+  hydrateDocumentStore(state.documents ?? []);
 }
 
 export function hydrateStoresFromStorage(): CompanySetup {
@@ -164,6 +191,7 @@ export function persistAll(setupOverride?: CompanySetup): void {
     inboxItems: getInboxStoreSnapshot(),
     vorgaenge: getVorgangStoreSnapshot(),
     tasks: getTaskStoreSnapshot(),
+    documents: getDocumentStoreSnapshot(),
     savedAt: new Date().toISOString(),
   };
 
@@ -177,6 +205,7 @@ export function resetDemoData(options?: { keepSetup?: boolean }): CompanySetup {
   resetInboxItems();
   resetVorgaenge();
   resetTasks();
+  resetDocuments();
 
   const seed = createSeedState(setup);
   applyStateToStores(seed);

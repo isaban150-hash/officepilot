@@ -29,6 +29,7 @@ const de = {
   'nav.eingang': 'Eingang',
   'nav.aufgaben': 'Zu erledigen',
   'nav.vorgaenge': 'Vorgänge',
+  'nav.dokumente': 'Dokumente',
   'nav.assistent': 'Assistent',
 
   'eingang.title': 'Eingang',
@@ -211,6 +212,47 @@ const de = {
   'archive.subtitle': 'Ordner und Ablageregeln',
   'archive.filingHint': 'Bitte Original abheften in',
 
+  'document.title': 'Dokumente',
+  'document.subtitle': 'Firmendokumente archivieren und finden',
+  'document.add': 'Dokument hinzufügen',
+  'document.addTitle': 'Neues Dokument',
+  'document.addSubtitle': 'Metadaten erfassen – kein Datei-Upload',
+  'document.editTitle': 'Dokument bearbeiten',
+  'document.edit': 'Bearbeiten',
+  'document.delete': 'Löschen',
+  'document.deleteConfirm': 'Endgültig löschen',
+  'document.deleted': 'Dokument gelöscht.',
+  'document.added': 'Dokument gespeichert.',
+  'document.saved': 'Änderungen gespeichert.',
+  'document.empty': 'Keine Dokumente gefunden.',
+  'document.searchPlaceholder': 'Suchen nach Titel, Aussteller, Tags…',
+  'document.categoryAll': 'Alle',
+  'document.noIssuer': 'Kein Aussteller',
+  'document.previewHint': 'Mock-Vorschau – kein echtes Bild gespeichert',
+  'document.titleRequired': 'Titel darf nicht leer sein.',
+  'document.categoryRequired': 'Bitte eine Kategorie wählen.',
+  'document.notFound': 'Dokument nicht gefunden.',
+  'document.fieldTitle': 'Titel',
+  'document.fieldCategory': 'Kategorie',
+  'document.fieldIssuer': 'Aussteller',
+  'document.fieldIssueDate': 'Ausstellungsdatum',
+  'document.fieldValidUntil': 'Gültig bis',
+  'document.fieldValidity': 'Gültigkeit',
+  'document.fieldTags': 'Tags',
+  'document.tagsPlaceholder': 'z. B. Versicherung, 2026',
+  'document.fieldRecognizedText': 'Erkannter Text',
+  'document.fieldDigitalFolder': 'Digitaler Ordner',
+  'document.fieldPaperFolder': 'Papierordner',
+  'document.fieldLinkedCompany': 'Firma',
+  'document.fieldLinkedVorgang': 'Verknüpfter Vorgang',
+  'document.category.vertrag': 'Vertrag',
+  'document.category.versicherung': 'Versicherung',
+  'document.category.zertifikat': 'Zertifikat',
+  'document.category.steuer': 'Steuer',
+  'document.category.behoerde': 'Behörde',
+  'document.category.personal': 'Personal',
+  'document.category.sonstiges': 'Sonstiges',
+
   'invoice.title': 'Rechnung vorbereiten',
   'invoice.subtitle': 'Positionen prüfen – nichts wird automatisch versendet',
   'invoice.abschlagTitle': 'Abschlagsrechnung',
@@ -281,6 +323,7 @@ const tr: Partial<Record<TranslationKey, string>> = {
   'nav.eingang': 'Giriş',
   'nav.aufgaben': 'Yapılacaklar',
   'nav.vorgaenge': 'İşlemler',
+  'nav.dokumente': 'Belgeler',
   'nav.assistent': 'Asistan',
 };
 
@@ -290,6 +333,7 @@ const bg: Partial<Record<TranslationKey, string>> = {
   'nav.eingang': 'Вход',
   'nav.aufgaben': 'Задачи',
   'nav.vorgaenge': 'Процеси',
+  'nav.dokumente': 'Документи',
   'nav.assistent': 'Асистент',
 };
 
@@ -299,6 +343,7 @@ const ro: Partial<Record<TranslationKey, string>> = {
   'nav.eingang': 'Intrare',
   'nav.aufgaben': 'De făcut',
   'nav.vorgaenge': 'Procese',
+  'nav.dokumente': 'Documente',
   'nav.assistent': 'Asistent',
 };
 
@@ -308,6 +353,7 @@ const ru: Partial<Record<TranslationKey, string>> = {
   'nav.eingang': 'Вход',
   'nav.aufgaben': 'Задачи',
   'nav.vorgaenge': 'Процессы',
+  'nav.dokumente': 'Документы',
   'nav.assistent': 'Ассистент',
 };
 

@@ -17,6 +17,7 @@ function minimalState(overrides: Partial<AppPersistedState> = {}): AppPersistedS
     inboxItems: [],
     vorgaenge: [],
     tasks: [],
+    documents: [],
     savedAt: '2026-03-27T12:00:00.000Z',
     ...overrides,
   };
@@ -80,5 +81,6 @@ describe('createSeedState', () => {
     expect(seed.version).toBe(STORAGE_VERSION);
     expect(seed.inboxItems.length).toBeGreaterThan(0);
     expect(seed.vorgaenge.length).toBeGreaterThan(0);
+    expect(seed.documents.length).toBeGreaterThan(0);
   });
 });

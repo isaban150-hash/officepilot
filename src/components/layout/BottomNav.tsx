@@ -5,6 +5,7 @@ const NAV_ITEMS = [
   { to: '/eingang', key: 'nav.eingang' as const, icon: '📥' },
   { to: '/aufgaben', key: 'nav.aufgaben' as const, icon: '✅' },
   { to: '/vorgaenge', key: 'nav.vorgaenge' as const, icon: '📋' },
+  { to: '/dokumente', key: 'nav.dokumente' as const, icon: '📁' },
   { to: '/assistent', key: 'nav.assistent' as const, icon: '💬' },
 ];
 

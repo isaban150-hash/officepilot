@@ -4,6 +4,9 @@ import { useApp } from './context/AppContext';
 import { AnalysekartePage } from './pages/AnalysekartePage';
 import { AssistentPage } from './pages/AssistentPage';
 import { AufgabenPage } from './pages/AufgabenPage';
+import { DokumentDetailPage } from './pages/DokumentDetailPage';
+import { DokumentePage } from './pages/DokumentePage';
+import { DokumentNeuPage } from './pages/DokumentNeuPage';
 import { EingangDetailPage } from './pages/EingangDetailPage';
 import { EingangPage } from './pages/EingangPage';
 import { PapierarchivPage } from './pages/PapierarchivPage';
@@ -34,6 +37,9 @@ function AppRoutes() {
         <Route path="/vorgaenge" element={<VorgaengePage />} />
         <Route path="/vorgaenge/:id" element={<VorgangDetailPage />} />
         <Route path="/vorgaenge/:id/rechnung" element={<RechnungPage />} />
+        <Route path="/dokumente" element={<DokumentePage />} />
+        <Route path="/dokumente/neu" element={<DokumentNeuPage />} />
+        <Route path="/dokumente/:id" element={<DokumentDetailPage />} />
         <Route path="/papierarchiv" element={<PapierarchivPage />} />
         <Route path="/assistent" element={<AssistentPage />} />
         <Route path="/setup" element={<SetupPage />} />

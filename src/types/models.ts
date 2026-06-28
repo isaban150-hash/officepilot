@@ -318,7 +318,55 @@ export interface AssistantSuggestion {
   questionKey: string;
 }
 
-export type NavTab = 'eingang' | 'aufgaben' | 'vorgaenge' | 'assistent';
+export type NavTab = 'eingang' | 'aufgaben' | 'vorgaenge' | 'dokumente' | 'assistent';
+
+export type CompanyDocumentCategory =
+  | 'vertrag'
+  | 'versicherung'
+  | 'zertifikat'
+  | 'steuer'
+  | 'behoerde'
+  | 'personal'
+  | 'sonstiges';
+
+export interface CompanyDocumentVorgangLink {
+  vorgangId: string;
+  vorgangTitle: string;
+}
+
+export interface CompanyDocument {
+  id: string;
+  title: string;
+  category: CompanyDocumentCategory;
+  issuer: string;
+  recognizedText: string;
+  issueDate: string | null;
+  validUntil: string | null;
+  digitalFolder: DigitalFolder;
+  paperFolder: PaperFilingRule;
+  tags: string[];
+  linkedCompany: string;
+  linkedVorgang: CompanyDocumentVorgangLink | null;
+  archived: boolean;
+  createdAt: string;
+  imagePreview?: string;
+}
+
+export interface CompanyDocumentInput {
+  title: string;
+  category: CompanyDocumentCategory;
+  issuer?: string;
+  recognizedText?: string;
+  issueDate?: string | null;
+  validUntil?: string | null;
+  digitalFolder?: DigitalFolder;
+  paperFolder?: PaperFilingRule;
+  tags?: string[];
+  linkedCompany?: string;
+  linkedVorgang?: CompanyDocumentVorgangLink | null;
+  archived?: boolean;
+  imagePreview?: string;
+}
 
 export interface AppPersistedState {
   version: number;
@@ -326,5 +374,6 @@ export interface AppPersistedState {
   inboxItems: InboxItem[];
   vorgaenge: Vorgang[];
   tasks: Task[];
+  documents: CompanyDocument[];
   savedAt: string;
 }
