@@ -1,5 +1,6 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { PendingAttentionCard } from '../components/dashboard/PendingAttentionCard';
 import { InboxCard } from '../components/inbox/InboxCard';
 import { Button } from '../components/ui/Button';
 import { Card, CardMeta, CardTitle, PageHeader } from '../components/ui/Card';
@@ -14,6 +15,7 @@ import {
   getInboxSummary,
   processUpload,
 } from '../services/inboxService';
+import { scanPendingItems } from '../services/pendingEngineService';
 import type { UploadDocumentKind } from '../types/models';
 
 export function EingangPage() {
@@ -22,10 +24,16 @@ export function EingangPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [items, setItems] = useState(() => filterActiveItems(getInboxItems()));
   const [selectedKind, setSelectedKind] = useState<UploadDocumentKind | null>(null);
+  const [pendingSummary, setPendingSummary] = useState(() => scanPendingItems().summary);
   const summary = getInboxSummary();
 
   const refresh = useCallback(() => {
     setItems(filterActiveItems(getInboxItems()));
+    setPendingSummary(scanPendingItems().summary);
+  }, []);
+
+  useEffect(() => {
+    setPendingSummary(scanPendingItems().summary);
   }, []);
 
   const handleUploadComplete = (itemId: string) => {
@@ -64,6 +72,8 @@ export function EingangPage() {
         title={translate('inbox.title')}
         subtitle={translate('inbox.subtitle')}
       />
+
+      <PendingAttentionCard summary={pendingSummary} />
 
       <Card className="upload-card upload-card--capture">
         <CardTitle>{translate('inbox.addDocument')}</CardTitle>

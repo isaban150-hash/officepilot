@@ -82,6 +82,66 @@ export interface TaskSummary {
   total: number;
 }
 
+export type PendingItemKind =
+  | 'inbox_new'
+  | 'inbox_deferred'
+  | 'inbox_unfiled'
+  | 'inbox_unlinked'
+  | 'document_unarchived'
+  | 'document_expiring'
+  | 'document_expired'
+  | 'invoice_overdue'
+  | 'invoice_due_today'
+  | 'invoice_due_soon'
+  | 'invoice_partial'
+  | 'contract_missing_proof';
+
+export interface PendingItem {
+  id: string;
+  kind: PendingItemKind;
+  title: string;
+  description?: string;
+  priority: InboxPriority;
+  route: string;
+  sourceType: 'inbox' | 'document' | 'invoice' | 'contract';
+  sourceId?: string;
+  dueDate?: string;
+  daysUntilDue?: number;
+  metadata?: Record<string, string | number>;
+}
+
+export interface PendingHighlight {
+  id: string;
+  kind: PendingItemKind | 'open_tasks';
+  labelKey: string;
+  count: number;
+  route: string;
+  params?: Record<string, string | number>;
+}
+
+export interface PendingSummary {
+  newInboxItems: number;
+  deferredInboxItems: number;
+  unfiledInboxItems: number;
+  unlinkedInboxItems: number;
+  unarchivedDocuments: number;
+  openTasks: number;
+  overdueInvoices: number;
+  dueTodayInvoices: number;
+  dueSoonInvoices: number;
+  partialInvoices: number;
+  expiringDocuments: number;
+  expiredDocuments: number;
+  missingContractDocuments: number;
+  highlights: PendingHighlight[];
+  scannedAt: string;
+}
+
+export interface PendingScanResult {
+  items: PendingItem[];
+  summary: PendingSummary;
+}
+
 export type DocumentType =
   | 'eingangsrechnung'
   | 'kundenauftrag'
