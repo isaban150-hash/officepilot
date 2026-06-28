@@ -1,84 +1,45 @@
 import { PAPER_FOLDERS } from '../data/mockData';
 import { getPaperFolderById } from './analysisService';
 import { buildVorgangDraftFromInbox, findSimilarVorgaenge, getVorgangById } from './vorgangService';
+import {
+  buildDigitalFolderSpec,
+  buildExplanation,
+  buildNextTask,
+  CLASSIFICATION_RULES,
+  defaultPriority,
+  defaultRecommendedAction,
+  getActionsForKind,
+  isKnownClassifiedKind,
+  mapKindToDocumentType,
+  suggestPaperFolderId,
+  suggestProcessType,
+} from './documentClassificationCatalog';
 import type {
   ClassifiedDocumentKind,
   DigitalFolder,
   DocumentClassificationInput,
   DocumentClassificationResult,
-  DocumentType,
   InboxItem,
-  InboxPriority,
   InboxTaskTemplate,
   PaperFilingRule,
-  RecommendedAction,
   SuggestedDocumentAction,
   SuggestedVorgangLink,
   UploadDocumentKind,
 } from '../types/models';
 
+export {
+  CLASSIFIED_DOCUMENT_KINDS,
+  mapKindToDocumentType,
+} from './documentClassificationCatalog';
+
 const UPLOAD_KIND_MAP: Record<UploadDocumentKind, ClassifiedDocumentKind> = {
   auftrag: 'auftrag',
-  zahlungserinnerung: 'mahnung',
-  materialrechnung: 'rechnung',
+  zahlungserinnerung: 'zahlungserinnerung',
+  materialrechnung: 'eingangsrechnung',
   bg_bau: 'bg_bau',
   werbung: 'sonstiges',
   kontoauszug: 'kontoauszug',
 };
-
-const DOCUMENT_TYPE_MAP: Record<ClassifiedDocumentKind, DocumentType> = {
-  rechnung: 'eingangsrechnung',
-  mahnung: 'eingangsrechnung',
-  lieferschein: 'sonstiges',
-  auftrag: 'kundenauftrag',
-  angebot: 'kundenauftrag',
-  bg_bau: 'behoerde',
-  finanzamt: 'behoerde',
-  aok: 'behoerde',
-  krankenkasse: 'behoerde',
-  berufsgenossenschaft: 'behoerde',
-  versicherung: 'behoerde',
-  gewerbeanmeldung: 'behoerde',
-  freistellungsbescheinigung: 'behoerde',
-  unbedenklichkeitsbescheinigung: 'behoerde',
-  soka_bau: 'behoerde',
-  handelsregister: 'behoerde',
-  lohnunterlagen: 'sonstiges',
-  kontoauszug: 'sonstiges',
-  pruefprotokoll: 'sonstiges',
-  brief: 'brief',
-  foto: 'foto',
-  sonstiges: 'sonstiges',
-};
-
-interface KindRule {
-  kind: ClassifiedDocumentKind;
-  pattern: RegExp;
-}
-
-const CLASSIFICATION_RULES: KindRule[] = [
-  { kind: 'mahnung', pattern: /mahnung|zahlungserinnerung|zahlungsaufforderung|inkasso/ },
-  { kind: 'freistellungsbescheinigung', pattern: /freistellungsbescheinigung|§48b|§48 b/ },
-  { kind: 'unbedenklichkeitsbescheinigung', pattern: /unbedenklichkeitsbescheinigung|unbedenklichkeit/ },
-  { kind: 'bg_bau', pattern: /bg[\s-]?bau|berufsgenossenschaft der bauwirtschaft/ },
-  { kind: 'berufsgenossenschaft', pattern: /berufsgenossenschaft/ },
-  { kind: 'soka_bau', pattern: /soka[\s-]?bau/ },
-  { kind: 'aok', pattern: /\baok\b/ },
-  { kind: 'krankenkasse', pattern: /krankenkasse|barmer|techniker[\s-]?kranken|dak[\s-]?gesundheit|ikk/ },
-  { kind: 'finanzamt', pattern: /finanzamt|steuerbescheid|umsatzsteuer|lohnsteuer|steuernummer/ },
-  { kind: 'gewerbeanmeldung', pattern: /gewerbeanmeldung|gewerbeamt|gewerbeanzeige/ },
-  { kind: 'handelsregister', pattern: /handelsregister|hrb|hr a|amtsgericht.*register/ },
-  { kind: 'lohnunterlagen', pattern: /lohnabrechnung|lohnunterlagen|gehaltsabrechnung|entgeltabrechnung/ },
-  { kind: 'kontoauszug', pattern: /kontoauszug|kontoumsätze|kontobewegungen|sparkasse|volksbank|commerzbank/ },
-  { kind: 'auftrag', pattern: /kundenauftrag|auftragsbestätigung|auftrag erteilt|auftragserteilung/ },
-  { kind: 'angebot', pattern: /angebot|kostenvoranschlag|offerte/ },
-  { kind: 'lieferschein', pattern: /lieferschein|wareneingang|lieferung/ },
-  { kind: 'pruefprotokoll', pattern: /prüfprotokoll|pruefprotokoll|abnahmeprotokoll|prüfbericht/ },
-  { kind: 'rechnung', pattern: /rechnung|invoice|rechnungsnummer|materialrechnung/ },
-  { kind: 'versicherung', pattern: /versicherung|haftpflicht|allianz|policy|versicherungsschreiben/ },
-  { kind: 'foto', pattern: /\.(jpg|jpeg|png|heic|webp)$/ },
-  { kind: 'brief', pattern: /brief|schreiben|mitteilung|einladung/ },
-];
 
 const SECURITY_DEFAULT =
   'OfficePilot trifft keine endgültigen Entscheidungen und versendet nichts ohne Ihre Bestätigung.';
@@ -105,178 +66,59 @@ function resolveKindFromHint(kindHint?: UploadDocumentKind | ClassifiedDocumentK
   if (kindHint in UPLOAD_KIND_MAP) {
     return UPLOAD_KIND_MAP[kindHint as UploadDocumentKind];
   }
-  return kindHint as ClassifiedDocumentKind;
+  if (isKnownClassifiedKind(kindHint)) {
+    return kindHint;
+  }
+  return null;
 }
 
-export function detectClassifiedKind(input: DocumentClassificationInput): ClassifiedDocumentKind {
+export interface DetectionResult {
+  kind: ClassifiedDocumentKind;
+  reasonKey: string;
+}
+
+export function detectClassifiedKindWithReason(input: DocumentClassificationInput): DetectionResult {
   const fromHint = resolveKindFromHint(input.kindHint);
   if (fromHint && input.kindHint !== 'werbung') {
-    return fromHint;
+    return { kind: fromHint, reasonKey: 'classification.detect.uploadHint' };
   }
 
   const haystack = buildHaystack(input);
 
   if (input.kindHint === 'werbung' || /werbung|reklame|prospekt|newsletter|aktionsmail/.test(haystack)) {
-    return 'sonstiges';
+    return { kind: 'sonstiges', reasonKey: 'classification.detect.advertisement' };
   }
 
   for (const rule of CLASSIFICATION_RULES) {
     if (rule.pattern.test(haystack)) {
-      return rule.kind;
+      return { kind: rule.kind, reasonKey: rule.reasonKey };
     }
   }
 
-  return 'sonstiges';
+  return { kind: 'sonstiges', reasonKey: 'classification.detect.fallback' };
 }
 
-export function mapKindToDocumentType(kind: ClassifiedDocumentKind): DocumentType {
-  return DOCUMENT_TYPE_MAP[kind];
+export function detectClassifiedKind(input: DocumentClassificationInput): ClassifiedDocumentKind {
+  return detectClassifiedKindWithReason(input).kind;
 }
 
 export function suggestDigitalFolder(
   kind: ClassifiedDocumentKind,
   context: { customer?: string; vorgangTitle?: string; sender?: string } = {},
 ): DigitalFolder {
-  const year = new Date().getFullYear();
-  const customerSlug = (context.customer ?? context.sender ?? 'Allgemein').replace(/\s+/g, '-').slice(0, 30);
-  const vorgangSlug = (context.vorgangTitle ?? 'Neu').replace(/\s+/g, '-').slice(0, 30);
-
-  const folders: Record<ClassifiedDocumentKind, DigitalFolder> = {
-    rechnung: {
-      id: `dig-rechnung-${Date.now()}`,
-      name: 'Eingangsrechnungen',
-      path: `/Eingang/Rechnungen/${customerSlug}/`,
-    },
-    mahnung: {
-      id: `dig-mahnung-${Date.now()}`,
-      name: 'Mahnungen',
-      path: `/Eingang/Mahnungen/${customerSlug}/`,
-    },
-    auftrag: {
-      id: `dig-auftrag-${Date.now()}`,
-      name: 'Kundenaufträge',
-      path: `/Vorgänge/Neu/${vorgangSlug}/`,
-    },
-    angebot: {
-      id: `dig-angebot-${Date.now()}`,
-      name: 'Angebote',
-      path: `/Vorgänge/Angebote/${customerSlug}/`,
-    },
-    lieferschein: {
-      id: `dig-lieferschein-${Date.now()}`,
-      name: 'Lieferscheine',
-      path: `/Vorgänge/${vorgangSlug}/Lieferscheine/`,
-    },
-    bg_bau: {
-      id: `dig-bg-bau-${Date.now()}`,
-      name: 'BG BAU',
-      path: `/Behörden/BG-BAU/${year}/`,
-    },
-    berufsgenossenschaft: {
-      id: `dig-bg-${Date.now()}`,
-      name: 'Berufsgenossenschaft',
-      path: `/Behörden/Berufsgenossenschaft/${year}/`,
-    },
-    soka_bau: {
-      id: `dig-soka-${Date.now()}`,
-      name: 'SOKA-BAU',
-      path: `/Behörden/SOKA-BAU/${year}/`,
-    },
-    finanzamt: {
-      id: `dig-finanzamt-${Date.now()}`,
-      name: 'Finanzamt',
-      path: `/Steuerberater/${year}/Finanzamt/`,
-    },
-    freistellungsbescheinigung: {
-      id: `dig-freistellung-${Date.now()}`,
-      name: 'Steuer',
-      path: `/Steuerberater/${year}/Freistellungsbescheinigungen/`,
-    },
-    unbedenklichkeitsbescheinigung: {
-      id: `dig-unbedenklich-${Date.now()}`,
-      name: 'Unbedenklichkeit',
-      path: `/Behörden/Unbedenklichkeit/${year}/`,
-    },
-    aok: {
-      id: `dig-aok-${Date.now()}`,
-      name: 'AOK',
-      path: `/Personal/Krankenkassen/AOK/${year}/`,
-    },
-    krankenkasse: {
-      id: `dig-kk-${Date.now()}`,
-      name: 'Krankenkassen',
-      path: `/Personal/Krankenkassen/${year}/`,
-    },
-    versicherung: {
-      id: `dig-vers-${Date.now()}`,
-      name: 'Versicherungen',
-      path: `/Versicherungen/${year}/`,
-    },
-    gewerbeanmeldung: {
-      id: `dig-gewerbe-${Date.now()}`,
-      name: 'Gewerbe',
-      path: `/Firma/Gewerbe/${year}/`,
-    },
-    handelsregister: {
-      id: `dig-hr-${Date.now()}`,
-      name: 'Handelsregister',
-      path: `/Firma/Handelsregister/${year}/`,
-    },
-    lohnunterlagen: {
-      id: `dig-lohn-${Date.now()}`,
-      name: 'Lohnunterlagen',
-      path: `/Personal/Lohn/${year}/`,
-    },
-    kontoauszug: {
-      id: `dig-konto-${Date.now()}`,
-      name: 'Kontoauszüge',
-      path: `/Steuerberater/${year}/Kontoauszüge/`,
-    },
-    pruefprotokoll: {
-      id: `dig-protokoll-${Date.now()}`,
-      name: 'Protokolle',
-      path: `/Vorgänge/${vorgangSlug}/Protokolle/`,
-    },
-    brief: {
-      id: `dig-brief-${Date.now()}`,
-      name: 'Briefe',
-      path: `/Firma/Briefe/${year}/`,
-    },
-    foto: {
-      id: `dig-foto-${Date.now()}`,
-      name: 'Fotos',
-      path: `/Vorgänge/${vorgangSlug}/Fotos/`,
-    },
-    sonstiges: {
-      id: `dig-sonst-${Date.now()}`,
-      name: 'Eingang',
-      path: `/Eingang/Sonstiges/${year}/`,
-    },
+  const spec = buildDigitalFolderSpec(kind, context);
+  return {
+    id: `dig-${kind}-${Date.now()}`,
+    name: spec.name,
+    path: spec.path,
   };
-
-  return folders[kind];
 }
 
 export function suggestPaperFolder(kind: ClassifiedDocumentKind): PaperFilingRule {
-  switch (kind) {
-    case 'rechnung':
-    case 'mahnung':
-    case 'lieferschein':
-      return paperFolder('folder-1', 'A');
-    case 'auftrag':
-    case 'angebot':
-      return paperFolder('folder-2', 'A');
-    case 'kontoauszug':
-    case 'finanzamt':
-    case 'freistellungsbescheinigung':
-    case 'lohnunterlagen':
-      return paperFolder('folder-4', 'Monat 01');
-    case 'foto':
-    case 'pruefprotokoll':
-      return paperFolder('folder-2', 'B');
-    default:
-      return paperFolder('folder-5', 'A');
-  }
+  const folderId = suggestPaperFolderId(kind);
+  const register =
+    folderId === 'folder-4' ? 'Monat 01' : folderId === 'folder-2' ? 'B' : 'A';
+  return paperFolder(folderId, register);
 }
 
 function buildRecognizedData(
@@ -288,6 +130,11 @@ function buildRecognizedData(
   };
 
   const profiles: Partial<Record<ClassifiedDocumentKind, Record<string, string>>> = {
+    eingangsrechnung: {
+      Rechnungsnummer: 'RE-2026-0001',
+      Betrag: '342,16 €',
+      Lieferant: input.senderHint ?? 'Unbekannt',
+    },
     rechnung: {
       Rechnungsnummer: 'RE-2026-0001',
       Betrag: '342,16 €',
@@ -297,7 +144,18 @@ function buildRecognizedData(
       Rechnungsnummer: 'BZ-2026-8842',
       Betrag: '1.247,80 €',
       Fälligkeit: '30.03.2026',
+      Hinweis: 'Mahnung',
+    },
+    zahlungserinnerung: {
+      Rechnungsnummer: 'BZ-2026-8842',
+      Betrag: '1.247,80 €',
+      Fälligkeit: '30.03.2026',
       Hinweis: 'Zahlungserinnerung',
+    },
+    werkvertrag: {
+      Kunde: input.senderHint ?? 'Unbekannt',
+      Vertragsart: 'Werkvertrag',
+      Baustelle: 'Baustelle laut Vertrag',
     },
     auftrag: {
       Kunde: input.senderHint ?? 'Unbekannt',
@@ -340,80 +198,21 @@ function buildRecognizedData(
       Lieferant: input.senderHint ?? 'Lieferant',
       Vorgang: input.titleHint ?? '',
     },
+    stundenzettel: {
+      Zeitraum: `${new Date().getFullYear()}`,
+      Mitarbeiter: 'Mitarbeiter',
+    },
+    tankbeleg: {
+      Betrag: '85,40 €',
+      Tankstelle: input.senderHint ?? 'Tankstelle',
+    },
+    abnahmeprotokoll: {
+      Vorgang: input.titleHint ?? '',
+      Status: 'Abnahme',
+    },
   };
 
   return { ...base, ...(profiles[kind] ?? { Betreff: input.titleHint ?? 'Dokument' }) };
-}
-
-function defaultPriority(kind: ClassifiedDocumentKind): InboxPriority {
-  if (kind === 'mahnung') return 'kritisch';
-  if (['finanzamt', 'bg_bau', 'freistellungsbescheinigung', 'auftrag'].includes(kind)) return 'hoch';
-  if (['rechnung', 'kontoauszug', 'unbedenklichkeitsbescheinigung'].includes(kind)) return 'mittel';
-  return 'niedrig';
-}
-
-function defaultRecommendedAction(kind: ClassifiedDocumentKind): RecommendedAction {
-  switch (kind) {
-    case 'rechnung':
-    case 'lieferschein':
-      return 'zuordnen';
-    case 'mahnung':
-      return 'zahlung_pruefen';
-    case 'auftrag':
-    case 'angebot':
-      return 'auftrag_annehmen';
-    case 'kontoauszug':
-    case 'finanzamt':
-    case 'lohnunterlagen':
-      return 'steuerberater_vorbereiten';
-    case 'foto':
-      return 'archivieren';
-    case 'sonstiges':
-      return 'klaeren';
-    default:
-      return 'abheften';
-  }
-}
-
-function buildExplanation(kind: ClassifiedDocumentKind, sender: string): string {
-  const explanations: Record<ClassifiedDocumentKind, string> = {
-    rechnung: `Eingangsrechnung von „${sender}“ erkannt. Bitte Betrag prüfen und einem Vorgang zuordnen.`,
-    mahnung: `Mahnung oder Zahlungserinnerung von „${sender}“ erkannt. Zahlungsstatus prüfen.`,
-    auftrag: `Kundenauftrag von „${sender}“ erkannt. Umfang und Termine prüfen.`,
-    angebot: `Angebot von „${sender}“ erkannt. Leistungen und Preise prüfen.`,
-    bg_bau: `BG-BAU-Schreiben erkannt. Beitrag und Frist prüfen, im BG-BAU-Ordner ablegen.`,
-    berufsgenossenschaft: `Schreiben der Berufsgenossenschaft erkannt. Fristen und Beiträge prüfen.`,
-    finanzamt: `Finanzamt-Schreiben erkannt. Frist beachten – ggf. Steuerberater einbeziehen.`,
-    aok: `AOK-Schreiben erkannt. Im Krankenkassenordner speichern.`,
-    krankenkasse: `Krankenkassen-Schreiben erkannt. Beiträge und Meldungen prüfen.`,
-    versicherung: `Versicherungsschreiben erkannt. Deckung und Fristen prüfen.`,
-    freistellungsbescheinigung: `Freistellungsbescheinigung erkannt. Im Steuerordner ablegen und ggf. an Auftraggeber senden.`,
-    unbedenklichkeitsbescheinigung: `Unbedenklichkeitsbescheinigung erkannt. Für Auftraggeber bereithalten.`,
-    soka_bau: `SOKA-BAU-Schreiben erkannt. Beiträge und Bescheinigungen prüfen.`,
-    gewerbeanmeldung: `Gewerbeanmeldung erkannt. Im Firmenordner ablegen.`,
-    handelsregister: `Handelsregister-Schreiben erkannt. Original abheften.`,
-    lohnunterlagen: `Lohnunterlagen erkannt. Vertraulich aufbewahren.`,
-    kontoauszug: `Kontoauszug erkannt. Für Steuerberater vorbereiten.`,
-    lieferschein: `Lieferschein erkannt. Wareneingang und Vorgang prüfen.`,
-    pruefprotokoll: `Prüf- oder Abnahmeprotokoll erkannt. Dem Vorgang zuordnen.`,
-    brief: `Brief von „${sender}“ erkannt. Inhalt und Frist prüfen.`,
-    foto: `Foto erkannt. Baustelle oder Vorgang zuordnen.`,
-    sonstiges: `Dokument erkannt. Bitte Inhalt manuell prüfen.`,
-  };
-  return explanations[kind];
-}
-
-function buildNextTask(kind: ClassifiedDocumentKind): string {
-  const tasks: Partial<Record<ClassifiedDocumentKind, string>> = {
-    rechnung: 'Rechnung prüfen und Vorgang zuordnen',
-    mahnung: 'Zahlung prüfen',
-    auftrag: 'Auftrag prüfen oder Rückfrage stellen',
-    bg_bau: 'BG-BAU-Schreiben prüfen und Frist beachten',
-    freistellungsbescheinigung: 'Freistellungsbescheinigung ablegen und weiterleiten',
-    aok: 'AOK-Schreiben prüfen und ablegen',
-    kontoauszug: 'Kontoauszug für Steuerberater vorbereiten',
-  };
-  return tasks[kind] ?? 'Dokument prüfen und ablegen';
 }
 
 function buildTaskTemplate(
@@ -421,12 +220,12 @@ function buildTaskTemplate(
   title: string,
   deadline: string | null,
 ): InboxTaskTemplate | undefined {
-  if (kind === 'sonstiges' || kind === 'foto') return undefined;
+  if (kind === 'sonstiges' || kind === 'foto' || kind === 'baustellenfoto') return undefined;
 
   const type =
-    kind === 'kontoauszug' || kind === 'finanzamt' || kind === 'lohnunterlagen'
+    kind === 'kontoauszug' || kind === 'finanzamt' || kind === 'lohnunterlagen' || kind === 'lohnabrechnung'
       ? 'steuerberater_export'
-      : kind === 'brief'
+      : kind === 'brief' || kind === 'schriftverkehr'
         ? 'brief_abheften'
         : 'dokument_pruefen';
 
@@ -448,98 +247,7 @@ export function suggestActions(
     ];
   }
 
-  const common: SuggestedDocumentAction[] = [
-    { id: 'confirm_filing', labelKey: 'classification.action.confirmFiling', variant: 'outline' },
-  ];
-
-  const byKind: Record<ClassifiedDocumentKind, SuggestedDocumentAction[]> = {
-    bg_bau: [
-      { id: 'save_bg_bau_folder', labelKey: 'classification.action.saveBgBauFolder', variant: 'primary' },
-      { id: 'check_deadline', labelKey: 'classification.action.checkDeadline', variant: 'secondary' },
-      { id: 'show_contact', labelKey: 'classification.action.showContact', variant: 'outline' },
-    ],
-    berufsgenossenschaft: [
-      { id: 'save_bg_bau_folder', labelKey: 'classification.action.saveBgBauFolder', variant: 'primary' },
-      { id: 'check_deadline', labelKey: 'classification.action.checkDeadline', variant: 'secondary' },
-    ],
-    rechnung: [
-      { id: 'link_vorgang', labelKey: 'classification.action.linkVorgang', variant: 'primary' },
-      { id: 'check_payment', labelKey: 'classification.action.checkPayment', variant: 'secondary' },
-      { id: 'archive', labelKey: 'classification.action.archive', variant: 'outline' },
-    ],
-    mahnung: [
-      { id: 'mark_important', labelKey: 'classification.action.markImportant', variant: 'primary' },
-      { id: 'check_payment', labelKey: 'classification.action.checkPayment', variant: 'secondary' },
-      { id: 'link_vorgang', labelKey: 'classification.action.linkVorgang', variant: 'outline' },
-    ],
-    freistellungsbescheinigung: [
-      { id: 'save_tax_folder', labelKey: 'classification.action.saveTaxFolder', variant: 'primary' },
-      { id: 'send_to_customer', labelKey: 'classification.action.sendToCustomer', variant: 'secondary' },
-    ],
-    unbedenklichkeitsbescheinigung: [
-      { id: 'save_tax_folder', labelKey: 'classification.action.saveTaxFolder', variant: 'primary' },
-      { id: 'send_to_customer', labelKey: 'classification.action.sendToCustomer', variant: 'secondary' },
-    ],
-    aok: [
-      { id: 'save_health_folder', labelKey: 'classification.action.saveHealthFolder', variant: 'primary' },
-      { id: 'check_deadline', labelKey: 'classification.action.checkDeadline', variant: 'outline' },
-    ],
-    krankenkasse: [
-      { id: 'save_health_folder', labelKey: 'classification.action.saveHealthFolder', variant: 'primary' },
-      { id: 'check_deadline', labelKey: 'classification.action.checkDeadline', variant: 'outline' },
-    ],
-    auftrag: [
-      { id: 'create_vorgang', labelKey: 'classification.action.createVorgang', variant: 'primary' },
-      { id: 'import_positions', labelKey: 'classification.action.importPositions', variant: 'secondary' },
-    ],
-    angebot: [
-      { id: 'create_vorgang', labelKey: 'classification.action.createVorgang', variant: 'primary' },
-      { id: 'archive', labelKey: 'classification.action.archive', variant: 'outline' },
-    ],
-    finanzamt: [
-      { id: 'save_tax_folder', labelKey: 'classification.action.saveTaxFolder', variant: 'primary' },
-      { id: 'check_deadline', labelKey: 'classification.action.checkDeadline', variant: 'secondary' },
-    ],
-    kontoauszug: [
-      { id: 'save_tax_folder', labelKey: 'classification.action.saveTaxFolder', variant: 'primary' },
-      { id: 'archive', labelKey: 'classification.action.archive', variant: 'outline' },
-    ],
-    lieferschein: [
-      { id: 'link_vorgang', labelKey: 'classification.action.linkVorgang', variant: 'primary' },
-      { id: 'confirm_filing', labelKey: 'classification.action.confirmFiling', variant: 'outline' },
-    ],
-    brief: [
-      { id: 'confirm_filing', labelKey: 'classification.action.confirmFiling', variant: 'primary' },
-      { id: 'check_deadline', labelKey: 'classification.action.checkDeadline', variant: 'outline' },
-    ],
-    versicherung: [
-      { id: 'confirm_filing', labelKey: 'classification.action.confirmFiling', variant: 'primary' },
-      { id: 'check_deadline', labelKey: 'classification.action.checkDeadline', variant: 'outline' },
-    ],
-    soka_bau: [
-      { id: 'save_bg_bau_folder', labelKey: 'classification.action.saveSokaFolder', variant: 'primary' },
-      { id: 'check_deadline', labelKey: 'classification.action.checkDeadline', variant: 'outline' },
-    ],
-    gewerbeanmeldung: [
-      { id: 'archive', labelKey: 'classification.action.archive', variant: 'primary' },
-    ],
-    handelsregister: [
-      { id: 'archive', labelKey: 'classification.action.archive', variant: 'primary' },
-    ],
-    lohnunterlagen: [
-      { id: 'save_tax_folder', labelKey: 'classification.action.saveTaxFolder', variant: 'primary' },
-    ],
-    pruefprotokoll: [
-      { id: 'link_vorgang', labelKey: 'classification.action.linkVorgang', variant: 'primary' },
-    ],
-    foto: [
-      { id: 'link_vorgang', labelKey: 'classification.action.linkVorgang', variant: 'primary' },
-      { id: 'archive', labelKey: 'classification.action.archive', variant: 'outline' },
-    ],
-    sonstiges: common,
-  };
-
-  const actions = byKind[kind] ?? common;
+  const actions = getActionsForKind(kind);
 
   if (item?.vorgangLinkStatus === 'linked' || item?.vorgangLinkStatus === 'created') {
     return actions.filter((action) => action.id !== 'link_vorgang' && action.id !== 'create_vorgang');
@@ -603,7 +311,8 @@ export function suggestRelatedVorgang(
 }
 
 export function classifyDocument(input: DocumentClassificationInput): DocumentClassificationResult {
-  const classifiedKind = detectClassifiedKind(input);
+  const detection = detectClassifiedKindWithReason(input);
+  const classifiedKind = detection.kind;
   const isAdvertisement =
     input.kindHint === 'werbung' ||
     /werbung|reklame|prospekt|aktionsmail|newsletter/.test(buildHaystack(input));
@@ -630,15 +339,18 @@ export function classifyDocument(input: DocumentClassificationInput): DocumentCl
   const deadline =
     recognizedData.Frist ??
     recognizedData.Fälligkeit ??
-    (classifiedKind === 'mahnung' ? '2026-03-30' : null);
+    (classifiedKind === 'mahnung' || classifiedKind === 'zahlungserinnerung' ? '2026-03-30' : null);
 
   const explanation = buildExplanation(classifiedKind, sender);
   const priority = isAdvertisement ? 'niedrig' : defaultPriority(classifiedKind);
   const recommendedAction = isAdvertisement ? 'entsorgen' : defaultRecommendedAction(classifiedKind);
+  const processType = isAdvertisement ? 'archive_only' : suggestProcessType(classifiedKind);
 
   const result: DocumentClassificationResult = {
     classifiedKind,
     documentType: mapKindToDocumentType(classifiedKind),
+    processType,
+    detectionReasonKey: detection.reasonKey,
     title,
     sender,
     explanation,
@@ -657,7 +369,10 @@ export function classifyDocument(input: DocumentClassificationInput): DocumentCl
     actions: suggestActions(classifiedKind, { isAdvertisement }),
   };
 
-  if (suggestedVorgangRaw && ['rechnung', 'lieferschein', 'mahnung'].includes(classifiedKind)) {
+  if (
+    suggestedVorgangRaw &&
+    ['eingangsrechnung', 'rechnung', 'lieferschein', 'mahnung', 'zahlungserinnerung'].includes(classifiedKind)
+  ) {
     result.recognizedData.Vorgang = suggestedVorgangRaw.vorgangTitle;
   }
 
@@ -667,9 +382,8 @@ export function classifyDocument(input: DocumentClassificationInput): DocumentCl
 export function getClassifiedKindFromItem(item: InboxItem): ClassifiedDocumentKind {
   if (item.classifiedKind) return item.classifiedKind;
 
-  if (item.recognizedData.Dokumentart) {
-    const kind = item.recognizedData.Dokumentart as ClassifiedDocumentKind;
-    if (kind in DOCUMENT_TYPE_MAP) return kind;
+  if (item.recognizedData.Dokumentart && isKnownClassifiedKind(item.recognizedData.Dokumentart)) {
+    return item.recognizedData.Dokumentart;
   }
 
   return detectClassifiedKind({
@@ -754,50 +468,32 @@ export function getSuggestedVorgangForItem(item: InboxItem): SuggestedVorgangLin
 }
 
 export function getClassificationForItem(item: InboxItem): DocumentClassificationResult {
-  const kind = getClassifiedKindFromItem(item);
+  const dokumentart = item.recognizedData.Dokumentart;
+  const kindFromData = dokumentart && isKnownClassifiedKind(dokumentart) ? dokumentart : undefined;
+
+  const reclassified = classifyDocument({
+    sourceFileName: item.sourceFileName,
+    titleHint: item.title,
+    senderHint: item.sender,
+    recognizedText: Object.entries(item.recognizedData)
+      .filter(([key]) => !key.startsWith('_'))
+      .map(([, value]) => value)
+      .join(' '),
+    kindHint: item.classifiedKind ?? kindFromData,
+  });
+
   return {
-    classifiedKind: kind,
-    documentType: item.documentType,
+    ...reclassified,
     title: item.title,
     sender: item.sender,
-    explanation: item.officePilotSuggestion,
     priority: item.priority,
     deadline: item.deadline,
-    recommendedAction: item.recommendedAction,
     digitalFolder: item.digitalFolder,
     paperFiling: item.paperFiling,
     recognizedData: item.recognizedData,
-    officePilotSuggestion: item.officePilotSuggestion,
-    nextTaskLabel: item.nextTaskLabel,
-    securityHint: item.securityHint,
-    taskTemplate: item.taskTemplate,
-    isAdvertisement: item.isAdvertisement,
-    suggestedVorgang: getSuggestedVorgangForItem(item) ?? undefined,
-    actions: suggestActions(kind, item),
+    officePilotSuggestion: item.officePilotSuggestion || reclassified.explanation,
+    nextTaskLabel: item.nextTaskLabel || reclassified.nextTaskLabel,
+    suggestedVorgang: getSuggestedVorgangForItem(item) ?? reclassified.suggestedVorgang,
+    actions: suggestActions(reclassified.classifiedKind, item),
   };
 }
-
-export const CLASSIFIED_DOCUMENT_KINDS: ClassifiedDocumentKind[] = [
-  'rechnung',
-  'brief',
-  'bg_bau',
-  'finanzamt',
-  'aok',
-  'krankenkasse',
-  'berufsgenossenschaft',
-  'versicherung',
-  'gewerbeanmeldung',
-  'freistellungsbescheinigung',
-  'unbedenklichkeitsbescheinigung',
-  'soka_bau',
-  'handelsregister',
-  'lohnunterlagen',
-  'kontoauszug',
-  'mahnung',
-  'angebot',
-  'auftrag',
-  'lieferschein',
-  'pruefprotokoll',
-  'foto',
-  'sonstiges',
-];

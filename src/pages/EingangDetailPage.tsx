@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { CompanyRelevancePanel } from '../components/inbox/CompanyRelevancePanel';
 import { ContractAnalysisPanel } from '../components/inbox/ContractAnalysisPanel';
 import { DocumentActionSuggestionsPanel } from '../components/inbox/DocumentActionSuggestionsPanel';
 import { ImportToArchiveDialog } from '../components/inbox/ImportToArchiveDialog';
@@ -14,6 +15,7 @@ import { Button } from '../components/ui/Button';
 import { Badge, Card, DataRow, PageHeader } from '../components/ui/Card';
 import { useApp } from '../context/AppContext';
 import { formatPaperFilingInstruction } from '../services/analysisService';
+import { checkCompanyRelevanceFromInbox } from '../services/companyRelevanceService';
 import { analyzeContractFromInbox } from '../services/contractAnalysisService';
 import { getClassifiedKindFromItem } from '../services/documentClassificationService';
 import { getLetterExplanation } from '../services/letterExplanationService';
@@ -30,16 +32,17 @@ import {
   getInboxItemById,
   getPriorityLabel,
   getStatusLabel,
+  markInboxAsCompanyDocument,
   markInboxImportedToArchive,
   saveAdvertisementAnyway,
   updateInboxItemRecognizedData,
 } from '../services/inboxService';
-import type { CompanyDocument, InboxItem, Vorgang } from '../types/models';
+import type { ClassifiedDocumentKind, CompanyDocument, InboxItem, Vorgang } from '../types/models';
 import type { TranslationKey } from '../i18n';
 
 export function EingangDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { translate, showToast, setup } = useApp();
+  const { translate, showToast, setup, companyProfile } = useApp();
   const navigate = useNavigate();
   const [item, setItem] = useState<InboxItem | undefined>(() =>
     id ? getInboxItemById(id) : undefined,
@@ -49,6 +52,7 @@ export function EingangDetailPage() {
   const [duplicateDocument, setDuplicateDocument] = useState<CompanyDocument | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [vorgangDialogRequest, setVorgangDialogRequest] = useState(0);
+  const [manualCategory, setManualCategory] = useState<ClassifiedDocumentKind>('sonstiges');
 
   useEffect(() => {
     if (id) {
@@ -69,8 +73,18 @@ export function EingangDetailPage() {
   const docTypeKey = `docType.${item.documentType}` as TranslationKey;
   const classifiedKindKey = `classifiedKind.${getClassifiedKindFromItem(item)}` as TranslationKey;
   const actionKey = `action.${item.recommendedAction}` as TranslationKey;
-  const letterExplanation = getLetterExplanation(item);
-  const contractAnalysis = analyzeContractFromInbox(item);
+  const relevance = checkCompanyRelevanceFromInbox(item, companyProfile);
+  const analysisAllowed = relevance.isRelevant;
+  const letterExplanation = analysisAllowed ? getLetterExplanation(item) : null;
+  const contractAnalysis = analysisAllowed ? analyzeContractFromInbox(item) : null;
+
+  const handleMarkAsCompanyDocument = () => {
+    const updated = markInboxAsCompanyDocument(item.id, manualCategory);
+    if (updated) {
+      setItem(updated);
+      showToast(translate('companyRelevance.markedSuccess'));
+    }
+  };
 
   const goBack = () => navigate('/eingang');
 
@@ -218,7 +232,7 @@ export function EingangDetailPage() {
         ← {translate('common.back')}
       </button>
 
-      {item.isNewUpload && !isEditing && (
+      {item.isNewUpload && !isEditing && analysisAllowed && (
         <div className="upload-recognized-banner">
           {translate('inbox.uploadRecognized')}
         </div>
@@ -237,6 +251,9 @@ export function EingangDetailPage() {
         )}
         {(item.vorgangLinkStatus === 'linked' || item.vorgangLinkStatus === 'created') && (
           <Badge tone="info">{translate('vorgang.linkedBadge')}</Badge>
+        )}
+        {item.markedAsCompanyDocument && (
+          <Badge tone="success">{translate('companyRelevance.manualBadge')}</Badge>
         )}
         {item.importedToArchive && (
           <Badge tone="success">{translate('inbox.importToArchive.badge')}</Badge>
@@ -272,7 +289,9 @@ export function EingangDetailPage() {
               <DataRow label={translate('inbox.sourceDocument')} value={item.sourceFileName} />
             )}
             <DataRow label={translate('inbox.documentType')} value={translate(docTypeKey)} />
-            <DataRow label={translate('classification.documentKind')} value={translate(classifiedKindKey)} />
+            {analysisAllowed && (
+              <DataRow label={translate('classification.documentKind')} value={translate(classifiedKindKey)} />
+            )}
             <DataRow label={translate('inbox.sender')} value={item.sender} />
             {item.vorgangTitle && (
               <DataRow label={translate('analysis.vorgang')} value={item.vorgangTitle} />
@@ -287,46 +306,63 @@ export function EingangDetailPage() {
             )}
           </Card>
 
-          {letterExplanation && <LetterExplanationPanel explanation={letterExplanation} />}
-
-          <ContractAnalysisPanel
-            analysis={contractAnalysis}
+          <CompanyRelevancePanel
+            relevance={relevance}
             translate={translate}
-            onAction={handleContractAction}
+            markedAsCompanyDocument={Boolean(item.markedAsCompanyDocument)}
+            selectedCategory={manualCategory}
+            onCategoryChange={setManualCategory}
+            onMarkAsCompanyDocument={handleMarkAsCompanyDocument}
           />
 
-          <DocumentActionSuggestionsPanel
-            item={item}
-            translate={translate}
-            onVorgangLinked={handleVorgangLinked}
-            onConfirmFiling={handleFiling}
-            onImportArchive={handleImportToArchive}
-            onCreateTask={handleCreateTask}
-            onOpenVorgangDialog={() => setVorgangDialogRequest((n) => n + 1)}
-            onShowToast={showToast}
-          />
+          {analysisAllowed && letterExplanation && (
+            <LetterExplanationPanel explanation={letterExplanation} />
+          )}
 
-          <Card className="inbox-suggestion">
-            <h3 className="section__title">{translate('inbox.officePilotSuggestion')}</h3>
-            <p>{item.officePilotSuggestion}</p>
-          </Card>
-
-          <InboxVorgangPanel
-            item={item}
-            materialDefault={setup.materialStandard}
-            onLinked={handleVorgangLinked}
-            requestOpenDialog={vorgangDialogRequest}
-          />
-
-          <Card>
-            <DataRow label={translate('inbox.nextTask')} value={item.nextTaskLabel} />
-            <DataRow label={translate('inbox.recommendedAction')} value={translate(actionKey)} />
-            <DataRow label={translate('analysis.digitalFolder')} value={item.digitalFolder.path} />
-            <DataRow
-              label={translate('analysis.paperFiling')}
-              value={formatPaperFilingInstruction(item.paperFiling)}
+          {analysisAllowed && contractAnalysis && (
+            <ContractAnalysisPanel
+              analysis={contractAnalysis}
+              translate={translate}
+              onAction={handleContractAction}
             />
-          </Card>
+          )}
+
+          {analysisAllowed && (
+            <>
+              <DocumentActionSuggestionsPanel
+                item={item}
+                translate={translate}
+                onVorgangLinked={handleVorgangLinked}
+                onConfirmFiling={handleFiling}
+                onImportArchive={handleImportToArchive}
+                onCreateTask={handleCreateTask}
+                onOpenVorgangDialog={() => setVorgangDialogRequest((n) => n + 1)}
+                onShowToast={showToast}
+              />
+
+              <Card className="inbox-suggestion">
+                <h3 className="section__title">{translate('inbox.officePilotSuggestion')}</h3>
+                <p>{item.officePilotSuggestion}</p>
+              </Card>
+
+              <InboxVorgangPanel
+                item={item}
+                materialDefault={setup.materialStandard}
+                onLinked={handleVorgangLinked}
+                requestOpenDialog={vorgangDialogRequest}
+              />
+
+              <Card>
+                <DataRow label={translate('inbox.nextTask')} value={item.nextTaskLabel} />
+                <DataRow label={translate('inbox.recommendedAction')} value={translate(actionKey)} />
+                <DataRow label={translate('analysis.digitalFolder')} value={item.digitalFolder.path} />
+                <DataRow
+                  label={translate('analysis.paperFiling')}
+                  value={formatPaperFilingInstruction(item.paperFiling)}
+                />
+              </Card>
+            </>
+          )}
 
           <div className="security-hint">
             <strong>{translate('inbox.securityHint')}</strong>
@@ -336,7 +372,7 @@ export function EingangDetailPage() {
           <div className="action-stack">
             {!item.isAdvertisement && (
               <>
-                {!item.importedToArchive && (
+                {!item.importedToArchive && analysisAllowed && (
                   <Button
                     variant="secondary"
                     fullWidth
@@ -346,14 +382,14 @@ export function EingangDetailPage() {
                     {translate('inbox.importToArchive')}
                   </Button>
                 )}
-                <Button fullWidth onClick={handleFiling}>
-                  {translate('inbox.confirmFiling')}
-                </Button>
-                {item.taskTemplate && (
+                {item.taskTemplate && analysisAllowed && (
                   <Button variant="secondary" fullWidth onClick={handleCreateTask}>
                     {translate('inbox.createTask')}: {item.taskTemplate.title}
                   </Button>
                 )}
+                <Button fullWidth onClick={handleFiling}>
+                  {translate('inbox.confirmFiling')}
+                </Button>
                 <Button variant="outline" fullWidth onClick={handleDefer}>
                   {translate('inbox.defer')}
                 </Button>

@@ -5,6 +5,7 @@ import {
   type CreateInboxFromUploadOptions,
 } from './inboxUploadFactory';
 import type {
+  ClassifiedDocumentKind,
   InboxItem,
   InboxPriority,
   InboxRecognizedDataChanges,
@@ -322,4 +323,18 @@ export function markInboxImportedToArchive(
     message: 'Ins Dokumentenarchiv übernommen.',
     item,
   };
+}
+
+export function markInboxAsCompanyDocument(
+  inboxId: string,
+  category?: ClassifiedDocumentKind,
+): InboxItem | null {
+  return updateItem(inboxId, {
+    markedAsCompanyDocument: true,
+    classifiedKind: category,
+    userModified: true,
+    modifiedAt: new Date().toISOString(),
+    status: 'geprueft',
+    isNewUpload: false,
+  });
 }

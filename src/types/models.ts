@@ -91,6 +91,8 @@ export interface InboxItem {
   archiveDocumentId?: string;
   /** Detaillierte Dokumentart aus Klassifikations-Engine */
   classifiedKind?: ClassifiedDocumentKind;
+  /** Manuelle Freigabe für Analyse trotz fehlendem automatischem Firmenbezug */
+  markedAsCompanyDocument?: boolean;
 }
 
 /** Änderungen aus dem Edit-Modus der Eingang-Detailansicht */
@@ -126,28 +128,116 @@ export type UploadDocumentKind =
 
 /** Detaillierte Dokumentart (Regel-Engine / spätere KI) */
 export type ClassifiedDocumentKind =
-  | 'rechnung'
-  | 'brief'
-  | 'bg_bau'
+  // Behörden
+  | 'zoll'
+  | 'handwerkskammer'
+  | 'ihk'
+  | 'gewerbeamt'
+  | 'bauamt'
+  | 'ordnungsamt'
+  | 'agentur_fuer_arbeit'
+  | 'deutsche_rentenversicherung'
   | 'finanzamt'
-  | 'aok'
-  | 'krankenkasse'
+  | 'bg_bau'
   | 'berufsgenossenschaft'
+  // Krankenkassen / Sozial
+  | 'aok'
+  | 'barmer'
+  | 'tk'
+  | 'dak'
+  | 'ikk'
+  | 'knappschaft'
+  | 'pflegekasse'
+  | 'soka_bau'
+  | 'krankenkasse'
+  // Buchhaltung
+  | 'eingangsrechnung'
+  | 'rechnung'
+  | 'ausgangsrechnung'
+  | 'gutschrift'
+  | 'quittung'
+  | 'kassenbeleg'
+  | 'ec_beleg'
+  | 'kreditkartenbeleg'
+  | 'kontoauszug'
+  | 'steuerbescheid'
+  | 'umsatzsteuerbescheid'
+  | 'mahnung'
+  | 'zahlungserinnerung'
+  // Kunden / Auftrag
+  | 'werkvertrag'
+  | 'subunternehmervertrag'
+  | 'nachunternehmervertrag'
+  | 'auftrag'
+  | 'angebot'
+  | 'auftragsbestaetigung'
+  | 'leistungsverzeichnis'
+  | 'nachtrag'
+  | 'lieferschein'
+  | 'abnahmeprotokoll'
+  | 'maengelprotokoll'
+  | 'uebergabeprotokoll'
+  // Mitarbeiter
+  | 'arbeitsvertrag'
+  | 'lohnabrechnung'
+  | 'lohnunterlagen'
+  | 'stundenzettel'
+  | 'urlaubsantrag'
+  | 'krankmeldung'
+  | 'arbeitsunfaehigkeitsbescheinigung'
+  | 'unterweisung'
+  | 'sicherheitsbelehrung'
+  // Versicherungen
+  | 'betriebshaftpflicht'
+  | 'fahrzeugversicherung'
+  | 'rechtsschutzversicherung'
+  | 'gebaeudeversicherung'
+  | 'versicherungsbescheid'
   | 'versicherung'
+  // Firmennachweise
   | 'gewerbeanmeldung'
+  | 'handelsregister'
+  | 'handelsregisterauszug'
   | 'freistellungsbescheinigung'
   | 'unbedenklichkeitsbescheinigung'
-  | 'soka_bau'
-  | 'handelsregister'
-  | 'lohnunterlagen'
-  | 'kontoauszug'
-  | 'mahnung'
-  | 'angebot'
-  | 'auftrag'
-  | 'lieferschein'
+  | 'betriebserlaubnis'
+  | 'zertifikat'
+  | 'iso_nachweis'
+  // Baustelle
+  | 'baustellenfoto'
   | 'pruefprotokoll'
+  | 'messprotokoll'
+  | 'materialnachweis'
+  | 'entsorgungsnachweis'
+  | 'sicherheitsdokument'
+  // Fahrzeuge / Maschinen
+  | 'tuev_bericht'
+  | 'reparaturrechnung'
+  | 'leasingvertrag'
+  | 'tankbeleg'
+  | 'wartungsnachweis'
+  // Sonstiges
+  | 'brief'
+  | 'schriftverkehr'
+  | 'email_pdf'
+  | 'pdf_anlage'
+  | 'notiz'
   | 'foto'
   | 'sonstiges';
+
+export type ProcessType =
+  | 'create_vorgang'
+  | 'attach_to_vorgang'
+  | 'create_invoice'
+  | 'monitor_payment'
+  | 'record_expense'
+  | 'request_documents'
+  | 'send_to_client'
+  | 'create_task'
+  | 'archive_only'
+  | 'review_required'
+  | 'payment_check'
+  | 'reminder_required';
 
 export type DocumentActionId =
   | 'save_bg_bau_folder'
@@ -163,7 +253,12 @@ export type DocumentActionId =
   | 'create_vorgang'
   | 'import_positions'
   | 'confirm_filing'
-  | 'create_task';
+  | 'create_task'
+  | 'record_expense'
+  | 'monitor_validity'
+  | 'check_proof_requirements'
+  | 'suggest_schlussrechnung'
+  | 'import_hours';
 
 export interface SuggestedDocumentAction {
   id: DocumentActionId;
@@ -190,6 +285,8 @@ export interface SuggestedVorgangLink {
 export interface DocumentClassificationResult {
   classifiedKind: ClassifiedDocumentKind;
   documentType: DocumentType;
+  processType: ProcessType;
+  detectionReasonKey: string;
   title: string;
   sender: string;
   explanation: string;
@@ -294,6 +391,34 @@ export interface ContractAnalysisResult {
   signaturePages: SignaturePage[];
   suggestedActions: ContractSuggestedAction[];
   signatureHint?: string;
+}
+
+export type CompanyRelevanceReason =
+  | 'company_name'
+  | 'contact_person'
+  | 'company_address'
+  | 'tax_number'
+  | 'vat_id'
+  | 'authority_reference'
+  | 'vorgang_reference'
+  | 'customer_reference'
+  | 'customer_number'
+  | 'manual_override';
+
+export interface CompanyRelevanceInput {
+  text: string;
+  recognizedData?: Record<string, string>;
+  sender?: string;
+  title?: string;
+  vorgangId?: string;
+  vorgangTitle?: string;
+  markedAsCompanyDocument?: boolean;
+}
+
+export interface CompanyRelevanceResult {
+  isRelevant: boolean;
+  reasons: CompanyRelevanceReason[];
+  matchedHints: string[];
 }
 
 export interface CompanySetup {

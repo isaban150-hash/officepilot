@@ -905,6 +905,46 @@ body {
   color: var(--color-primary);
 }
 
+.classification-explanation__summary {
+  margin: 0.75rem 0 0;
+  font-size: 0.95rem;
+}
+
+.classification-meta {
+  margin: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.classification-meta__row {
+  display: grid;
+  grid-template-columns: minmax(8rem, 40%) 1fr;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.classification-meta__row dt {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+
+.classification-meta__row dd {
+  margin: 0;
+  font-weight: 500;
+}
+
+.classification-actions__toggle {
+  margin-top: 0.65rem;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--color-primary);
+  font-size: 0.9rem;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
 .classification-vorgang-hint__meta {
   font-size: 0.85rem;
   color: var(--color-text-muted);
@@ -960,6 +1000,14 @@ body {
 
 .contract-analysis__position span {
   color: var(--color-text-muted);
+}
+
+.company-relevance__categories {
+  margin: 0.75rem 0;
+}
+
+.company-relevance__actions {
+  margin-top: 0.5rem;
 }
 
 .contract-analysis__hint {
