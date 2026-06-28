@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { InboxVorgangPanel } from '../components/inbox/InboxVorgangPanel';
+import { LetterExplanationPanel } from '../components/inbox/LetterExplanationPanel';
 import {
   createEditDraftFromItem,
   InboxItemEditForm,
@@ -10,6 +11,7 @@ import { Button } from '../components/ui/Button';
 import { Badge, Card, DataRow, PageHeader } from '../components/ui/Card';
 import { useApp } from '../context/AppContext';
 import { formatPaperFilingInstruction } from '../services/analysisService';
+import { getLetterExplanation } from '../services/letterExplanationService';
 import {
   confirmDispose,
   confirmFiling,
@@ -52,6 +54,7 @@ export function EingangDetailPage() {
 
   const docTypeKey = `docType.${item.documentType}` as TranslationKey;
   const actionKey = `action.${item.recommendedAction}` as TranslationKey;
+  const letterExplanation = getLetterExplanation(item);
 
   const goBack = () => navigate('/eingang');
 
@@ -192,6 +195,8 @@ export function EingangDetailPage() {
               <DataRow label={translate('analysis.deadline')} value={item.deadline} />
             )}
           </Card>
+
+          {letterExplanation && <LetterExplanationPanel explanation={letterExplanation} />}
 
           <Card className="inbox-suggestion">
             <h3 className="section__title">{translate('inbox.officePilotSuggestion')}</h3>

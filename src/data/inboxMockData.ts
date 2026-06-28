@@ -226,4 +226,77 @@ export const MOCK_INBOX_ITEMS: InboxItem[] = [
       dueDate: '2026-07-05',
     },
   },
+  {
+    id: 'inbox-007',
+    title: 'Finanzamt – Umsatzsteuervoranmeldung',
+    documentType: 'behoerde',
+    sender: 'Finanzamt für Körperschaften III',
+    priority: 'hoch',
+    deadline: '2026-04-10',
+    recommendedAction: 'steuerberater_vorbereiten',
+    digitalFolder: {
+      id: 'dig-inbox-007',
+      name: 'Steuerberater',
+      path: '/Steuerberater/2026/Finanzamt/',
+    },
+    paperFiling: {
+      folderId: 'folder-4',
+      register: 'Q1',
+      label: 'Steuerberater 2026',
+    },
+    status: 'neu',
+    receivedAt: '2026-03-28',
+    recognizedData: {
+      Aktenzeichen: 'FA-2026-8831',
+      Betreff: 'Umsatzsteuervoranmeldung Q1 2026',
+      Frist: '10.04.2026',
+    },
+    officePilotSuggestion:
+      'Finanzamt-Schreiben mit Frist erkannt. Bitte mit Steuerberater besprechen – keine eigenständige Bewertung.',
+    nextTaskLabel: 'Finanzamt-Schreiben prüfen',
+    securityHint:
+      'OfficePilot gibt keine Steuerberatung. Bei Unsicherheit bitte Steuerberater konsultieren.',
+    taskTemplate: {
+      type: 'steuerberater_export',
+      title: 'Finanzamt-Schreiben für Steuerberater vorbereiten',
+      description: 'Umsatzsteuervoranmeldung Q1 – Frist beachten',
+      dueDate: '2026-04-10',
+    },
+  },
+  {
+    id: 'inbox-008',
+    title: 'Handwerksinnung – Termin Mitgliederversammlung',
+    documentType: 'brief',
+    sender: 'Handwerksinnung Berlin',
+    priority: 'mittel',
+    deadline: '2026-04-20',
+    recommendedAction: 'abheften',
+    digitalFolder: {
+      id: 'dig-inbox-008',
+      name: 'Briefe',
+      path: '/Firma/Briefe/Innung/',
+    },
+    paperFiling: {
+      folderId: 'folder-5',
+      register: 'B',
+      label: 'Behörden & Versicherungen',
+    },
+    status: 'neu',
+    receivedAt: '2026-03-28',
+    recognizedData: {
+      Betreff: 'Einladung Mitgliederversammlung 2026',
+      Termin: '20.04.2026, 18:00 Uhr',
+    },
+    officePilotSuggestion:
+      'Brief mit Termin erkannt. Bitte prüfen, ob Teilnahme gewünscht ist, und Original abheften.',
+    nextTaskLabel: 'Brief der Innung prüfen',
+    securityHint:
+      'OfficePilot nimmt keine Termine automatisch an und versendet keine Antworten.',
+    taskTemplate: {
+      type: 'brief_abheften',
+      title: 'Brief der Innung prüfen und abheften',
+      description: 'Mitgliederversammlung – Termin prüfen',
+      dueDate: '2026-04-20',
+    },
+  },
 ];
