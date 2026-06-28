@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { createCompanyProfileFromSetup } from '../data/companyProfileDefaults';
 import { DEFAULT_SETUP } from '../data/mockData';
 import {
   STORAGE_KEY,
@@ -14,6 +15,8 @@ function minimalState(overrides: Partial<AppPersistedState> = {}): AppPersistedS
   return {
     version: STORAGE_VERSION,
     setup: { ...DEFAULT_SETUP, companyName: 'Test GmbH' },
+    companyProfile: createCompanyProfileFromSetup({ ...DEFAULT_SETUP, companyName: 'Test GmbH' }),
+    invoiceNumberSequence: { year: 2026, lastIssuedNumber: 0 },
     inboxItems: [],
     vorgaenge: [],
     tasks: [],

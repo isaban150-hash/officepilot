@@ -1,5 +1,12 @@
 import { DEFAULT_SETUP } from '../data/mockData';
+import { DEFAULT_COMPANY_PROFILE } from '../data/companyProfileDefaults';
 import { hydrateDocumentStore } from '../services/documentService';
+import {
+  hydrateCompanyProfileStore,
+} from '../services/companyProfileService';
+import {
+  hydrateInvoiceNumberSequence,
+} from '../services/invoiceNumberService';
 import { hydrateInboxStore } from '../services/inboxService';
 import { setCachedSetup } from '../services/persistenceService';
 import { hydrateTaskStore } from '../services/taskService';
@@ -11,4 +18,6 @@ export function resetTestStores(): void {
   hydrateTaskStore([]);
   hydrateDocumentStore([]);
   setCachedSetup({ ...DEFAULT_SETUP });
+  hydrateCompanyProfileStore({ ...DEFAULT_COMPANY_PROFILE, companyName: 'Test GmbH' });
+  hydrateInvoiceNumberSequence({ year: 2026, lastIssuedNumber: 0 });
 }

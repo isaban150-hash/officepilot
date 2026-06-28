@@ -10,6 +10,7 @@ import {
 import { setInboxVorgangLink } from './inboxService';
 import { persistAll } from './persistenceService';
 import type {
+  CustomerBilling,
   InboxItem,
   MaterialStandard,
   OrderPosition,
@@ -39,22 +40,51 @@ function normalize(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
+function cloneCustomerBilling(billing: CustomerBilling): CustomerBilling {
+  return { ...billing };
+}
+
+function cloneVorgangInvoice(invoice: VorgangInvoice): VorgangInvoice {
+  return {
+    ...invoice,
+    positions: (invoice.positions ?? []).map((p) => ({ ...p })),
+    legalNotices: invoice.legalNotices ? [...invoice.legalNotices] : undefined,
+    previousAbschlagDeductions: invoice.previousAbschlagDeductions
+      ? invoice.previousAbschlagDeductions.map((item) => ({ ...item }))
+      : undefined,
+    customerSnapshot: invoice.customerSnapshot
+      ? cloneCustomerBilling(invoice.customerSnapshot)
+      : undefined,
+    companySnapshot: invoice.companySnapshot ? { ...invoice.companySnapshot } : undefined,
+  };
+}
+
 function cloneVorgang(v: Vorgang): Vorgang {
   return {
     ...v,
+    customerBilling: v.customerBilling ? cloneCustomerBilling(v.customerBilling) : undefined,
     orderPositions: (v.orderPositions ?? []).map((p) => ({ ...p })),
     documents: v.documents.map((d) => ({ ...d })),
     tasks: v.tasks.map((t) => ({ ...t })),
     photos: v.photos.map((p) => ({ ...p })),
-    invoices: (v.invoices ?? []).map((i) => ({
-      ...i,
-      positions: (i.positions ?? []).map((p) => ({ ...p })),
-    })),
+    invoices: (v.invoices ?? []).map(cloneVorgangInvoice),
+  };
+}
+
+function defaultCustomerBilling(vorgang: Vorgang): CustomerBilling {
+  return {
+    name: vorgang.customer,
+    contactPerson: '',
+    street: '',
+    zip: '',
+    city: '',
+    email: '',
+    phone: '',
   };
 }
 
 function normalizeVorgang(v: Vorgang): Vorgang {
-  return cloneVorgang({
+  const normalized = cloneVorgang({
     ...v,
     orderPositions: v.orderPositions ?? [],
     invoices: (v.invoices ?? []).map((inv) => ({
@@ -64,8 +94,16 @@ function normalizeVorgang(v: Vorgang): Vorgang {
       subtotal: inv.subtotal ?? inv.amount ?? 0,
       taxStatus: inv.taxStatus ?? 'standard_19',
       createdAt: inv.createdAt ?? inv.date,
+      legalNotices: inv.legalNotices ?? [],
+      previousAbschlagDeductions: inv.previousAbschlagDeductions ?? [],
     })),
   });
+
+  if (!normalized.customerBilling) {
+    normalized.customerBilling = defaultCustomerBilling(normalized);
+  }
+
+  return normalized;
 }
 
 export function getAllVorgaenge(): Vorgang[] {
@@ -170,6 +208,15 @@ export function createVorgangFromInbox(
     baustelle: draft.baustelle,
     status: 'neu',
     materialSource: draft.materialSource,
+    customerBilling: {
+      name: draft.customer,
+      contactPerson: '',
+      street: '',
+      zip: '',
+      city: '',
+      email: '',
+      phone: '',
+    },
     orderPositions: buildOrderPositionsFromInbox(item),
     documents: [doc],
     tasks: [],

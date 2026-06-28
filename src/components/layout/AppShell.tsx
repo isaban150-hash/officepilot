@@ -1,4 +1,4 @@
-import { Outlet } from 'react-router-dom';
+import { Link, Outlet } from 'react-router-dom';
 import { BottomNav } from './BottomNav';
 import { Toast } from '../ui/Card';
 import { useApp } from '../../context/AppContext';
@@ -20,6 +20,9 @@ export function AppShell() {
           {setup.companyName && (
             <span className="app-shell__company">{setup.companyName}</span>
           )}
+          <Link to="/firmendaten" className="app-shell__settings">
+            {translate('companyProfile.shortLink')}
+          </Link>
           <button type="button" className="app-shell__reset" onClick={handleReset}>
             {translate('persist.resetDemo')}
           </button>

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { hydrateVorgangStore, getVorgangById } from './vorgangService';
 import {
+  buildAbschlagDraft,
   buildSchlussrechnungDraft,
   canDeleteOrderPosition,
   canEditOrderPositionField,
@@ -10,9 +11,16 @@ import {
   getOpenQuantity,
   getOverbillingWarnings,
   getPositionBillingStatus,
+  getPreviousAbschlagDeductions,
   hasFinalSchlussrechnung,
   isPositionBillable,
 } from './invoiceService';
+import {
+  hydrateCompanyProfileStore,
+  updateCompanyProfile,
+} from './companyProfileService';
+import { INVOICE_DRAFT_LABEL } from './invoiceNumberService';
+import { DEFAULT_COMPANY_PROFILE } from '../data/companyProfileDefaults';
 import {
   createAbschlagInvoice,
   createOrderPosition,
@@ -221,5 +229,147 @@ describe('hasFinalSchlussrechnung', () => {
 
   it('returns false without schluss invoice', () => {
     expect(hasFinalSchlussrechnung(createTestVorgang())).toBe(false);
+  });
+});
+
+describe('buildAbschlagDraft metadata', () => {
+  it('includes ENTWURF preview and company snapshot', () => {
+    hydrateVorgangStore([createTestVorgang()]);
+    hydrateCompanyProfileStore({
+      ...DEFAULT_COMPANY_PROFILE,
+      companyName: 'Mustermann GmbH',
+      street: 'Musterstraße 1',
+      city: 'Berlin',
+    });
+
+    const draft = buildAbschlagDraft('v-test-1', testSetup);
+    expect(draft).not.toBeNull();
+    expect(draft!.invoiceNumberPreview).toBe(INVOICE_DRAFT_LABEL);
+    expect(draft!.companySnapshot.companyName).toBe('Mustermann GmbH');
+    expect(draft!.customerBilling.name).toBe('Test Kunde');
+    expect(draft!.legalNotices).toEqual([]);
+  });
+});
+
+describe('getPreviousAbschlagDeductions', () => {
+  it('collects finalized abschlag invoices', () => {
+    const vorgang = createTestVorgang({
+      invoices: [
+        createAbschlagInvoice('op-test-1', 2, {
+          id: 'inv-a1',
+          number: '2026-0001',
+          amount: 238,
+          subtotal: 200,
+        }),
+      ],
+    });
+    const deductions = getPreviousAbschlagDeductions(vorgang);
+    expect(deductions).toHaveLength(1);
+    expect(deductions[0].invoiceNumber).toBe('2026-0001');
+    expect(deductions[0].amount).toBe(238);
+  });
+});
+
+describe('buildSchlussrechnungDraft', () => {
+  it('includes previous abschlag deductions', () => {
+    hydrateVorgangStore([
+      createTestVorgang({
+        invoices: [createAbschlagInvoice('op-test-1', 2, { number: '2026-0001', amount: 100 })],
+      }),
+    ]);
+
+    const draft = buildSchlussrechnungDraft('v-test-1', testSetup);
+    expect(draft).not.toBeNull();
+    expect(draft!.previousAbschlagDeductions).toHaveLength(1);
+  });
+});
+
+describe('finalizeInvoiceDraft', () => {
+  it('assigns global invoice number and snapshots', () => {
+    hydrateVorgangStore([createTestVorgang()]);
+    hydrateCompanyProfileStore({
+      companyName: 'Snapshot GmbH',
+      legalForm: 'GmbH',
+      street: 'Test 1',
+      zip: '10115',
+      city: 'Berlin',
+      country: 'Deutschland',
+      contactPerson: 'Max',
+      phone: '',
+      email: '',
+      website: '',
+      taxNumber: '12/345',
+      vatId: 'DE123',
+      bankName: 'Sparkasse',
+      iban: 'DE00',
+      bic: 'BELADEBE',
+      defaultPaymentDays: 14,
+      defaultPaymentTerms: '14 Tage netto',
+      defaultSkonto: '',
+      invoiceFooterNotes: '',
+    });
+
+    const draft = buildAbschlagDraft('v-test-1', testSetup);
+    expect(draft).not.toBeNull();
+
+    const invoice = finalizeInvoiceDraft('v-test-1', {
+      ...draft!,
+      positions: draft!.positions.map((p) => ({ ...p, quantity: 1 })),
+    }, testSetup);
+
+    expect(invoice).not.toBeNull();
+    expect(invoice!.number).toMatch(/^\d{4}-\d{4}$/);
+    expect(invoice!.invoiceSequenceNumber).toBe(1);
+    expect(invoice!.companySnapshot?.companyName).toBe('Snapshot GmbH');
+    expect(invoice!.customerSnapshot?.name).toBe('Test Kunde');
+    expect(invoice!.issueDate).toBeTruthy();
+  });
+
+  it('keeps invoice snapshot when company profile changes afterwards', () => {
+    hydrateVorgangStore([createTestVorgang()]);
+    hydrateCompanyProfileStore({
+      companyName: 'Alt GmbH',
+      legalForm: '',
+      street: '',
+      zip: '',
+      city: '',
+      country: 'Deutschland',
+      contactPerson: '',
+      phone: '',
+      email: '',
+      website: '',
+      taxNumber: '',
+      vatId: '',
+      bankName: '',
+      iban: '',
+      bic: '',
+      defaultPaymentDays: 14,
+      defaultPaymentTerms: '',
+      defaultSkonto: '',
+      invoiceFooterNotes: '',
+    });
+
+    const draft = buildAbschlagDraft('v-test-1', testSetup);
+    const invoice = finalizeInvoiceDraft('v-test-1', {
+      ...draft!,
+      positions: draft!.positions.map((p) => ({ ...p, quantity: 1 })),
+    }, testSetup);
+
+    updateCompanyProfile({ companyName: 'Neu GmbH' });
+    const saved = getVorgangById('v-test-1')?.invoices[0];
+    expect(saved?.companySnapshot?.companyName).toBe('Alt GmbH');
+    expect(invoice?.number).toBe(saved?.number);
+  });
+
+  it('keeps legacy invoices compatible without snapshots', () => {
+    hydrateVorgangStore([
+      createTestVorgang({
+        invoices: [createAbschlagInvoice('op-test-1', 1, { number: 'AR-2026-01' })],
+      }),
+    ]);
+
+    const vorgang = getVorgangById('v-test-1');
+    expect(vorgang?.invoices[0].number).toBe('AR-2026-01');
+    expect(vorgang?.invoices[0].companySnapshot).toBeUndefined();
   });
 });

@@ -9,6 +9,7 @@ import { DokumentePage } from './pages/DokumentePage';
 import { DokumentNeuPage } from './pages/DokumentNeuPage';
 import { EingangDetailPage } from './pages/EingangDetailPage';
 import { EingangPage } from './pages/EingangPage';
+import { FirmendatenPage } from './pages/FirmendatenPage';
 import { PapierarchivPage } from './pages/PapierarchivPage';
 import { RechnungPage } from './pages/RechnungPage';
 import { SetupPage } from './pages/SetupPage';
@@ -42,6 +43,7 @@ function AppRoutes() {
         <Route path="/dokumente/:id" element={<DokumentDetailPage />} />
         <Route path="/papierarchiv" element={<PapierarchivPage />} />
         <Route path="/assistent" element={<AssistentPage />} />
+        <Route path="/firmendaten" element={<FirmendatenPage />} />
         <Route path="/setup" element={<SetupPage />} />
         <Route path="*" element={<Navigate to="/eingang" replace />} />
       </Route>

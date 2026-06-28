@@ -11,6 +11,7 @@ import {
   getOverbillingWarnings,
   updateDraftPositionQuantity,
 } from '../services/invoiceService';
+import { getNextInvoiceNumberPreview } from '../services/invoiceNumberService';
 import { getVorgangById } from '../services/vorgangService';
 import type { InvoiceDraft } from '../types/models';
 import type { TranslationKey } from '../i18n';
@@ -128,13 +129,41 @@ export function RechnungPage() {
       <PageHeader title={pageTitle} subtitle={translate('invoice.subtitle')} />
 
       <Card>
-        <DataRow label={translate('analysis.customer')} value={draft.customer} />
+        <DataRow label={translate('invoice.number')} value={draft.invoiceNumberPreview} />
+        <DataRow
+          label={translate('invoice.nextNumberPreview')}
+          value={getNextInvoiceNumberPreview()}
+        />
+        <DataRow label={translate('analysis.customer')} value={draft.customerBilling.name} />
         <DataRow label={translate('analysis.vorgang')} value={draft.vorgangTitle} />
+        <DataRow label={translate('invoice.issueDate')} value={draft.issueDate} />
+        <DataRow
+          label={translate('invoice.servicePeriod')}
+          value={`${draft.servicePeriodFrom} – ${draft.servicePeriodTo}`}
+        />
+        <DataRow label={translate('invoice.paymentDueDate')} value={draft.paymentDueDate} />
+        <DataRow label={translate('invoice.paymentTerms')} value={draft.paymentTermsText} />
+        {draft.skontoText && (
+          <DataRow label={translate('invoice.skonto')} value={draft.skontoText} />
+        )}
         <DataRow label={translate('invoice.taxStatus')} value={translate(taxKey)} />
         {materialKey && (
           <DataRow label={translate('vorgang.materialSource')} value={translate(materialKey)} />
         )}
       </Card>
+
+      {draft.previousAbschlagDeductions.length > 0 && (
+        <Card>
+          <h3 className="section__title">{translate('invoice.previousAbschlag')}</h3>
+          {draft.previousAbschlagDeductions.map((item) => (
+            <DataRow
+              key={item.invoiceId}
+              label={item.invoiceNumber}
+              value={`${item.amount.toLocaleString('de-DE')} €`}
+            />
+          ))}
+        </Card>
+      )}
 
       {showMaterialHint && (
         <p className="invoice-hint invoice-hint--warning">{translate('invoice.materialAuftraggeberHint')}</p>

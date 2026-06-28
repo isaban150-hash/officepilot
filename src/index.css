@@ -1164,7 +1164,14 @@ body {
   margin: 0 0 1rem;
 }
 
-.archive-import-hint a {
+.company-profile-form__textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.app-shell__settings {
+  font-size: 0.75rem;
   color: var(--color-primary);
+  text-decoration: none;
   font-weight: 600;
 }

@@ -6,8 +6,9 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import type { AppLanguage, CompanySetup } from '../types/models';
+import type { AppLanguage, CompanyProfile, CompanySetup } from '../types/models';
 import { t, type TranslationKey } from '../i18n';
+import { getCompanyProfile, updateCompanyProfile } from '../services/companyProfileService';
 import {
   getCachedSetup,
   persistAll,
@@ -17,7 +18,9 @@ import {
 
 interface AppContextValue {
   setup: CompanySetup;
+  companyProfile: CompanyProfile;
   updateSetup: (partial: Partial<CompanySetup>) => void;
+  updateCompanyProfile: (partial: Partial<CompanyProfile>) => CompanyProfileUpdateResult;
   completeSetup: () => void;
   resetDemo: (keepSetup?: boolean) => void;
   translate: (key: TranslationKey) => string;
@@ -26,6 +29,10 @@ interface AppContextValue {
   showToast: (message: string) => void;
   clearToast: () => void;
 }
+
+type CompanyProfileUpdateResult =
+  | { success: true; profile: CompanyProfile }
+  | { success: false; errorKey: string };
 
 const AppContext = createContext<AppContextValue | null>(null);
 
@@ -36,6 +43,7 @@ interface AppProviderProps {
 
 export function AppProvider({ children, initialSetup }: AppProviderProps) {
   const [setup, setSetup] = useState<CompanySetup>(initialSetup);
+  const [companyProfile, setCompanyProfile] = useState<CompanyProfile>(() => getCompanyProfile());
   const [toast, setToast] = useState<string | null>(null);
 
   const updateSetup = useCallback((partial: Partial<CompanySetup>) => {
@@ -45,6 +53,17 @@ export function AppProvider({ children, initialSetup }: AppProviderProps) {
       persistAll(next);
       return next;
     });
+  }, []);
+
+  const updateCompanyProfileState = useCallback((partial: Partial<CompanyProfile>) => {
+    const result = updateCompanyProfile(partial);
+    if (result.success) {
+      setCompanyProfile(result.profile);
+      if (partial.companyName) {
+        setSetup((prev) => ({ ...prev, companyName: result.profile.companyName }));
+      }
+    }
+    return result;
   }, []);
 
   const completeSetup = useCallback(() => {
@@ -77,7 +96,9 @@ export function AppProvider({ children, initialSetup }: AppProviderProps) {
   const value = useMemo(
     () => ({
       setup,
+      companyProfile,
       updateSetup,
+      updateCompanyProfile: updateCompanyProfileState,
       completeSetup,
       resetDemo,
       translate,
@@ -86,7 +107,18 @@ export function AppProvider({ children, initialSetup }: AppProviderProps) {
       showToast,
       clearToast,
     }),
-    [setup, updateSetup, completeSetup, resetDemo, translate, toast, showToast, clearToast],
+    [
+      setup,
+      companyProfile,
+      updateSetup,
+      updateCompanyProfileState,
+      completeSetup,
+      resetDemo,
+      translate,
+      toast,
+      showToast,
+      clearToast,
+    ],
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

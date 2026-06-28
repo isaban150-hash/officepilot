@@ -131,6 +131,53 @@ export interface CompanySetup {
   setupComplete: boolean;
 }
 
+export interface CompanyProfile {
+  companyName: string;
+  legalForm: string;
+  logoDataUrl?: string;
+  street: string;
+  zip: string;
+  city: string;
+  country: string;
+  contactPerson: string;
+  phone: string;
+  email: string;
+  website: string;
+  taxNumber: string;
+  vatId: string;
+  bankName: string;
+  iban: string;
+  bic: string;
+  defaultPaymentDays: number;
+  defaultPaymentTerms: string;
+  defaultSkonto: string;
+  invoiceFooterNotes: string;
+}
+
+export interface CustomerBilling {
+  name: string;
+  contactPerson: string;
+  street: string;
+  zip: string;
+  city: string;
+  email: string;
+  phone: string;
+}
+
+export interface InvoiceNumberSequence {
+  year: number;
+  lastIssuedNumber: number;
+}
+
+export interface AbschlagDeduction {
+  invoiceId: string;
+  invoiceNumber: string;
+  abschlagNumber?: number;
+  date: string;
+  subtotal: number;
+  amount: number;
+}
+
 export interface PaperFolder {
   id: string;
   name: string;
@@ -241,6 +288,7 @@ export interface VorgangInvoice {
   number: string;
   type: 'abschlag' | 'schluss';
   abschlagNumber?: number;
+  invoiceSequenceNumber?: number;
   positions: VorgangInvoiceLine[];
   subtotal: number;
   taxStatus: TaxStatus;
@@ -248,6 +296,16 @@ export interface VorgangInvoice {
   status: 'entwurf' | 'vorbereitet' | 'versendet';
   date: string;
   createdAt: string;
+  issueDate?: string;
+  servicePeriodFrom?: string;
+  servicePeriodTo?: string;
+  paymentDueDate?: string;
+  paymentTermsText?: string;
+  skontoText?: string;
+  customerSnapshot?: CustomerBilling;
+  companySnapshot?: CompanyProfile;
+  legalNotices?: string[];
+  previousAbschlagDeductions?: AbschlagDeduction[];
 }
 
 export interface Vorgang {
@@ -257,6 +315,7 @@ export interface Vorgang {
   baustelle: string;
   status: VorgangStatus;
   materialSource: MaterialStandard;
+  customerBilling?: CustomerBilling;
   orderPositions: OrderPosition[];
   documents: VorgangDocument[];
   tasks: VorgangTask[];
@@ -300,6 +359,17 @@ export interface InvoiceDraft {
   taxStatus: TaxStatus;
   materialSource: MaterialStandard;
   positions: InvoiceDraftPosition[];
+  issueDate: string;
+  servicePeriodFrom: string;
+  servicePeriodTo: string;
+  paymentDueDate: string;
+  paymentTermsText: string;
+  skontoText: string;
+  customerBilling: CustomerBilling;
+  companySnapshot: CompanyProfile;
+  legalNotices: string[];
+  previousAbschlagDeductions: AbschlagDeduction[];
+  invoiceNumberPreview: string;
 }
 
 export interface InvoiceTotals {
@@ -374,6 +444,8 @@ export interface CompanyDocumentInput {
 export interface AppPersistedState {
   version: number;
   setup: CompanySetup;
+  companyProfile?: CompanyProfile;
+  invoiceNumberSequence?: InvoiceNumberSequence;
   inboxItems: InboxItem[];
   vorgaenge: Vorgang[];
   tasks: Task[];
