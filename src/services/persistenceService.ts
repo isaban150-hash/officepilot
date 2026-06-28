@@ -46,6 +46,7 @@ import {
   hydrateTaskStore,
   resetTasks,
 } from './taskService';
+import { normalizeTask } from './taskNormalize';
 
 export const STORAGE_KEY = 'officepilot-state';
 export const LEGACY_SETUP_KEY = 'officepilot-setup';
@@ -109,7 +110,7 @@ function cloneVorgang(v: Vorgang): Vorgang {
 }
 
 function cloneTask(t: Task): Task {
-  return { ...t };
+  return normalizeTask(t);
 }
 
 function cloneCompanyDocument(doc: CompanyDocument): CompanyDocument {
@@ -148,7 +149,9 @@ export function createSeedState(setupOverride?: CompanySetup): AppPersistedState
     invoiceNumberSequence,
     inboxItems: MOCK_INBOX_ITEMS.map(cloneInboxItem),
     vorgaenge: MOCK_VORGAENGE.map(cloneVorgang),
-    tasks: MOCK_TASKS.map(cloneTask),
+    tasks: (MOCK_TASKS as Array<Partial<Task> & Pick<Task, 'id' | 'title'>>).map((t) =>
+      normalizeTask(t),
+    ),
     documents: MOCK_COMPANY_DOCUMENTS.map(cloneCompanyDocument),
     savedAt: new Date().toISOString(),
   };

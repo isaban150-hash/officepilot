@@ -899,6 +899,22 @@ body {
   text-decoration: none;
 }
 
+.aufgaben-filters {
+  margin-bottom: 1rem;
+}
+
+.task-row__badges {
+  margin-top: 0.35rem;
+}
+
+.task-row__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.35rem;
+  font-size: 0.9rem;
+}
+
 .classification-explanation__kind {
   font-weight: 600;
   margin: 0 0 0.5rem;

@@ -27,6 +27,61 @@ export type TaskType =
   | 'kontoauszug_hochladen'
   | 'steuerberater_export';
 
+export type TaskStatus = 'open' | 'in_progress' | 'done' | 'archived';
+
+export type TaskPriority = InboxPriority;
+
+export type TaskCategory =
+  | 'dokumente'
+  | 'rechnungen'
+  | 'zahlungen'
+  | 'behoerden'
+  | 'mitarbeiter'
+  | 'baustelle'
+  | 'fahrzeuge'
+  | 'versicherungen'
+  | 'steuern'
+  | 'sonstiges';
+
+export type TaskSourceType =
+  | 'inbox'
+  | 'classification'
+  | 'contract'
+  | 'invoice'
+  | 'manual'
+  | 'system';
+
+export type TaskFilter = 'offen' | 'heute' | 'ueberfaellig' | 'kritisch' | 'erledigt';
+
+export interface TaskProposal {
+  title: string;
+  description: string;
+  priority: TaskPriority;
+  category: TaskCategory;
+  dueDate?: string;
+  linkedVorgangId?: string;
+  linkedVorgangTitle?: string;
+  linkedInboxId?: string;
+  linkedDocumentId?: string;
+  linkedInvoiceId?: string;
+  sourceType: TaskSourceType;
+  sourceId?: string;
+  taskKind: string;
+  dedupeKey?: string;
+  autoCreated?: boolean;
+  /** Legacy i18n mapping */
+  type?: TaskType;
+}
+
+export interface TaskSummary {
+  open: number;
+  today: number;
+  overdue: number;
+  critical: number;
+  done: number;
+  total: number;
+}
+
 export type DocumentType =
   | 'eingangsrechnung'
   | 'kundenauftrag'
@@ -665,13 +720,32 @@ export interface Vorgang {
 
 export interface Task {
   id: string;
-  type: TaskType;
   title: string;
   description: string;
-  vorgangId?: string;
-  vorgangTitle?: string;
-  done: boolean;
+  status: TaskStatus;
+  priority: TaskPriority;
+  category: TaskCategory;
   dueDate?: string;
+  linkedVorgangId?: string;
+  linkedVorgangTitle?: string;
+  linkedInboxId?: string;
+  linkedDocumentId?: string;
+  linkedInvoiceId?: string;
+  sourceType: TaskSourceType;
+  sourceId?: string;
+  taskKind: string;
+  dedupeKey: string;
+  autoCreated: boolean;
+  createdAt: string;
+  completedAt?: string;
+  /** Legacy – für i18n task.{type} */
+  type: TaskType;
+  /** Legacy – use linkedVorgangId */
+  vorgangId?: string;
+  /** Legacy – use linkedVorgangTitle */
+  vorgangTitle?: string;
+  /** Legacy – abgeleitet aus status */
+  done?: boolean;
 }
 
 export interface InvoiceDraftPosition {

@@ -1,52 +1,69 @@
-import { MOCK_TASKS } from '../data/mockData';
-import type { InboxTaskTemplate, Task } from '../types/models';
-import { persistAll } from './persistenceService';
+import type { InboxItem, InboxTaskTemplate, Task } from '../types/models';
+import {
+  createTaskFromInboxItem,
+  completeTask,
+  getTasksFiltered,
+  reopenTask,
+  toggleTaskCompletion,
+} from './taskEngineService';
+import { isTaskOpen } from './taskNormalize';
+import { getAllTasksFromStore } from './taskStore';
 
-let tasks: Task[] = [];
+export {
+  getTaskStoreSnapshot,
+  hydrateTaskStore,
+  resetTasks,
+} from './taskStore';
 
-export function getTaskStoreSnapshot(): Task[] {
-  return tasks.map((t) => ({ ...t }));
-}
-
-export function hydrateTaskStore(items: Task[]): void {
-  tasks = items.map((t) => ({ ...t }));
-}
+export { completeTask, reopenTask };
 
 export function getAllTasks(): Task[] {
-  return tasks.map((t) => ({ ...t }));
+  return getAllTasksFromStore();
 }
 
 export function getOpenTasks(): Task[] {
-  return tasks.filter((t) => !t.done);
+  return getAllTasksFromStore().filter(isTaskOpen);
 }
 
 export function toggleTaskDone(taskId: string): Task[] {
-  tasks = tasks.map((t) => (t.id === taskId ? { ...t, done: !t.done } : t));
-  persistAll();
+  toggleTaskCompletion(taskId);
   return getAllTasks();
 }
 
-export function getTodayTasks(): Task[] {
-  const today = '2026-03-27';
-  return tasks.filter((t) => !t.done && t.dueDate && t.dueDate <= today);
+export function getTodayTasks(referenceDate?: Date | string): Task[] {
+  return getTasksFiltered('heute', referenceDate ?? new Date());
 }
 
-export function addTaskFromTemplate(template: InboxTaskTemplate, sourceInboxId: string): Task {
-  const newTask: Task = {
-    id: `t-${Date.now()}`,
-    type: template.type,
-    title: template.title,
-    description: `${template.description} (aus Eingang ${sourceInboxId})`,
+export function addTaskFromTemplate(
+  template: InboxTaskTemplate,
+  sourceInboxId: string,
+  itemOverrides: Partial<InboxItem> = {},
+): Task {
+  const item = {
+    id: sourceInboxId,
+    title: template.description,
+    documentType: 'sonstiges' as const,
+    sender: '',
+    priority: 'mittel' as const,
+    deadline: template.dueDate ?? null,
+    recommendedAction: 'zuordnen' as const,
+    digitalFolder: { id: 'd', name: 'n', path: '/' },
+    paperFiling: { folderId: 'folder-1', register: 'A', label: 'x' },
+    status: 'neu' as const,
+    receivedAt: new Date().toISOString().slice(0, 10),
+    recognizedData: {},
+    officePilotSuggestion: '',
+    nextTaskLabel: template.title,
+    securityHint: '',
+    taskTemplate: template,
     vorgangId: template.vorgangId,
     vorgangTitle: template.vorgangTitle,
-    done: false,
-    dueDate: template.dueDate,
-  };
-  tasks = [...tasks, newTask];
-  persistAll();
-  return { ...newTask };
-}
+    ...itemOverrides,
+  } satisfies InboxItem;
 
-export function resetTasks(): void {
-  tasks = MOCK_TASKS.map((t) => ({ ...t }));
+  const created = createTaskFromInboxItem(item);
+  if (!created) {
+    throw new Error('Task could not be created from template');
+  }
+  return created;
 }

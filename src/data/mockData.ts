@@ -4,7 +4,6 @@ import type {
   DocumentAnalysis,
   OrderPosition,
   PaperFolder,
-  Task,
   Vorgang,
 } from '../types/models';
 
@@ -216,7 +215,7 @@ export const MOCK_VORGAENGE: Vorgang[] = [
   },
 ];
 
-export const MOCK_TASKS: Task[] = [
+export const MOCK_TASKS = [
   {
     id: 't-001',
     type: 'dokument_pruefen',

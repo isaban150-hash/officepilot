@@ -1,5 +1,8 @@
 import { MOCK_INBOX_ITEMS } from '../data/inboxMockData';
-import { addTaskFromTemplate } from './taskService';
+import { createTaskFromInboxItem, createTasksFromContractAnalysis } from './taskEngineService';
+import { getCompanyProfile } from './companyProfileService';
+import { analyzeContractFromInbox } from './contractAnalysisService';
+import { isDocumentAnalysisAllowed } from './companyRelevanceService';
 import {
   createMockInboxItemFromUpload,
   type CreateInboxFromUploadOptions,
@@ -141,9 +144,8 @@ export function confirmFiling(id: string): InboxActionResult | null {
   if (!item) return null;
   const filing = formatPaperFilingInstruction(item.paperFiling);
   let taskCreated: Task | undefined;
-  if (item.taskTemplate) {
-    taskCreated = addTaskFromTemplate(item.taskTemplate, item.id);
-  }
+  const created = createTaskFromInboxItem(item, getCompanyProfile(), { autoCreated: true });
+  if (created) taskCreated = created;
   persistAll();
   return {
     success: true,
@@ -189,14 +191,36 @@ export function saveAdvertisementAnyway(id: string): InboxActionResult | null {
 
 export function createTaskForItem(id: string): InboxActionResult | null {
   const existing = findItem(id);
-  if (!existing?.taskTemplate) return null;
-  const taskCreated = addTaskFromTemplate(existing.taskTemplate, existing.id);
+  if (!existing) return null;
+  if (!isDocumentAnalysisAllowed(existing, getCompanyProfile())) return null;
+
+  const taskCreated = createTaskFromInboxItem(existing, getCompanyProfile(), { autoCreated: false });
+  if (!taskCreated) return null;
+
   const item = updateItem(id, { status: 'geprueft', isNewUpload: false })!;
   return {
     success: true,
     message: `Aufgabe erstellt: ${taskCreated.title}`,
     item,
     taskCreated,
+  };
+}
+
+export function createContractTasksForItem(id: string): InboxActionResult | null {
+  const existing = findItem(id);
+  if (!existing) return null;
+  if (!isDocumentAnalysisAllowed(existing, getCompanyProfile())) return null;
+
+  const analysis = analyzeContractFromInbox(existing);
+  const createdTasks = createTasksFromContractAnalysis(analysis, existing.id);
+  if (createdTasks.length === 0) return null;
+
+  const item = updateItem(id, { status: 'geprueft', isNewUpload: false })!;
+  return {
+    success: true,
+    message: `${createdTasks.length} Aufgabe(n) aus Vertrag erstellt`,
+    item,
+    taskCreated: createdTasks[0],
   };
 }
 

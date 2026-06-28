@@ -7,6 +7,7 @@ interface Props {
   analysis: ContractAnalysisResult;
   translate: (key: TranslationKey) => string;
   onAction: (actionId: ContractSuggestedAction['id']) => void;
+  onCreateContractTasks?: () => void;
 }
 
 function confidenceTone(confidence: ContractAnalysisResult['confidence']): 'default' | 'info' | 'success' {
@@ -15,7 +16,7 @@ function confidenceTone(confidence: ContractAnalysisResult['confidence']): 'defa
   return 'default';
 }
 
-export function ContractAnalysisPanel({ analysis, translate, onAction }: Props) {
+export function ContractAnalysisPanel({ analysis, translate, onAction, onCreateContractTasks }: Props) {
   if (!analysis.isContract || !analysis.contractType) return null;
 
   const typeKey = `contract.type.${analysis.contractType}` as TranslationKey;
@@ -130,6 +131,14 @@ export function ContractAnalysisPanel({ analysis, translate, onAction }: Props) 
             <li key={page.pageHint}>{page.pageHint}: {page.description}</li>
           ))}
         </ul>
+      )}
+
+      {analysis.requiredDocuments.length > 0 && onCreateContractTasks && (
+        <div className="contract-analysis__section">
+          <Button type="button" onClick={onCreateContractTasks}>
+            {translate('contract.createTasks')}
+          </Button>
+        </div>
       )}
 
       <div className="contract-analysis__section">

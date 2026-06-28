@@ -18,6 +18,7 @@ import { formatPaperFilingInstruction } from '../services/analysisService';
 import { checkCompanyRelevanceFromInbox } from '../services/companyRelevanceService';
 import { analyzeContractFromInbox } from '../services/contractAnalysisService';
 import { getClassifiedKindFromItem } from '../services/documentClassificationService';
+import { isClassificationKindWithTasks } from '../services/taskEngineService';
 import { getLetterExplanation } from '../services/letterExplanationService';
 import {
   importInboxDocument,
@@ -28,6 +29,7 @@ import {
   confirmDispose,
   confirmFiling,
   createTaskForItem,
+  createContractTasksForItem,
   deferItem,
   getInboxItemById,
   getPriorityLabel,
@@ -71,10 +73,14 @@ export function EingangDetailPage() {
   if (!item) return null;
 
   const docTypeKey = `docType.${item.documentType}` as TranslationKey;
-  const classifiedKindKey = `classifiedKind.${getClassifiedKindFromItem(item)}` as TranslationKey;
   const actionKey = `action.${item.recommendedAction}` as TranslationKey;
   const relevance = checkCompanyRelevanceFromInbox(item, companyProfile);
   const analysisAllowed = relevance.isRelevant;
+  const classifiedKind = getClassifiedKindFromItem(item);
+  const classifiedKindKey = `classifiedKind.${classifiedKind}` as TranslationKey;
+  const canCreateTask =
+    analysisAllowed &&
+    (Boolean(item.taskTemplate) || isClassificationKindWithTasks(classifiedKind));
   const letterExplanation = analysisAllowed ? getLetterExplanation(item) : null;
   const contractAnalysis = analysisAllowed ? analyzeContractFromInbox(item) : null;
 
@@ -164,8 +170,22 @@ export function EingangDetailPage() {
     if (result) {
       showToast(result.message);
       setItem(getInboxItemById(item.id));
+    } else if (!analysisAllowed) {
+      showToast(translate('taskEngine.blockedByRelevance'));
     } else {
-      showToast('Für dieses Dokument ist keine Aufgabe vorgesehen.');
+      showToast(translate('taskEngine.noTaskAvailable'));
+    }
+  };
+
+  const handleCreateContractTasks = () => {
+    const result = createContractTasksForItem(item.id);
+    if (result) {
+      showToast(result.message);
+      setItem(getInboxItemById(item.id));
+    } else if (!analysisAllowed) {
+      showToast(translate('taskEngine.blockedByRelevance'));
+    } else {
+      showToast(translate('taskEngine.noContractTasks'));
     }
   };
 
@@ -324,6 +344,11 @@ export function EingangDetailPage() {
               analysis={contractAnalysis}
               translate={translate}
               onAction={handleContractAction}
+              onCreateContractTasks={
+                contractAnalysis.requiredDocuments.length > 0
+                  ? handleCreateContractTasks
+                  : undefined
+              }
             />
           )}
 
@@ -382,9 +407,9 @@ export function EingangDetailPage() {
                     {translate('inbox.importToArchive')}
                   </Button>
                 )}
-                {item.taskTemplate && analysisAllowed && (
+                {canCreateTask && (
                   <Button variant="secondary" fullWidth onClick={handleCreateTask}>
-                    {translate('inbox.createTask')}: {item.taskTemplate.title}
+                    {translate('inbox.createTask')}
                   </Button>
                 )}
                 <Button fullWidth onClick={handleFiling}>
