@@ -89,6 +89,8 @@ export interface InboxItem {
   /** Nach Übernahme ins Dokumentenarchiv */
   importedToArchive?: boolean;
   archiveDocumentId?: string;
+  /** Detaillierte Dokumentart aus Klassifikations-Engine */
+  classifiedKind?: ClassifiedDocumentKind;
 }
 
 /** Änderungen aus dem Edit-Modus der Eingang-Detailansicht */
@@ -121,6 +123,90 @@ export type UploadDocumentKind =
   | 'bg_bau'
   | 'werbung'
   | 'kontoauszug';
+
+/** Detaillierte Dokumentart (Regel-Engine / spätere KI) */
+export type ClassifiedDocumentKind =
+  | 'rechnung'
+  | 'brief'
+  | 'bg_bau'
+  | 'finanzamt'
+  | 'aok'
+  | 'krankenkasse'
+  | 'berufsgenossenschaft'
+  | 'versicherung'
+  | 'gewerbeanmeldung'
+  | 'freistellungsbescheinigung'
+  | 'unbedenklichkeitsbescheinigung'
+  | 'soka_bau'
+  | 'handelsregister'
+  | 'lohnunterlagen'
+  | 'kontoauszug'
+  | 'mahnung'
+  | 'angebot'
+  | 'auftrag'
+  | 'lieferschein'
+  | 'pruefprotokoll'
+  | 'foto'
+  | 'sonstiges';
+
+export type DocumentActionId =
+  | 'save_bg_bau_folder'
+  | 'check_deadline'
+  | 'show_contact'
+  | 'link_vorgang'
+  | 'check_payment'
+  | 'archive'
+  | 'save_tax_folder'
+  | 'send_to_customer'
+  | 'save_health_folder'
+  | 'mark_important'
+  | 'create_vorgang'
+  | 'import_positions'
+  | 'confirm_filing'
+  | 'create_task';
+
+export interface SuggestedDocumentAction {
+  id: DocumentActionId;
+  labelKey: string;
+  variant?: 'primary' | 'secondary' | 'outline';
+}
+
+export interface DocumentClassificationInput {
+  sourceFileName?: string;
+  kindHint?: UploadDocumentKind | ClassifiedDocumentKind;
+  titleHint?: string;
+  senderHint?: string;
+  recognizedText?: string;
+}
+
+export interface SuggestedVorgangLink {
+  vorgangId: string;
+  vorgangTitle: string;
+  customer: string;
+  confidence: 'high' | 'medium' | 'low';
+  reasonKey: string;
+}
+
+export interface DocumentClassificationResult {
+  classifiedKind: ClassifiedDocumentKind;
+  documentType: DocumentType;
+  title: string;
+  sender: string;
+  explanation: string;
+  priority: InboxPriority;
+  deadline: string | null;
+  recommendedAction: RecommendedAction;
+  digitalFolder: DigitalFolder;
+  paperFiling: PaperFilingRule;
+  recognizedData: Record<string, string>;
+  officePilotSuggestion: string;
+  nextTaskLabel: string;
+  securityHint: string;
+  taskTemplate?: InboxTaskTemplate;
+  isAdvertisement?: boolean;
+  suggestedVorgang?: SuggestedVorgangLink;
+  actions: SuggestedDocumentAction[];
+}
 
 export interface CompanySetup {
   companyName: string;

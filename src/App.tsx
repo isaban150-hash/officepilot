@@ -12,6 +12,7 @@ import { EingangPage } from './pages/EingangPage';
 import { FirmendatenPage } from './pages/FirmendatenPage';
 import { PapierarchivPage } from './pages/PapierarchivPage';
 import { InvoiceDetailPage } from './pages/InvoiceDetailPage';
+import { OffeneRechnungenPage } from './pages/OffeneRechnungenPage';
 import { RechnungPage } from './pages/RechnungPage';
 import { SetupPage } from './pages/SetupPage';
 import { VorgaengePage } from './pages/VorgaengePage';
@@ -40,6 +41,7 @@ function AppRoutes() {
         <Route path="/vorgaenge/:id" element={<VorgangDetailPage />} />
         <Route path="/vorgaenge/:id/rechnung" element={<RechnungPage />} />
         <Route path="/vorgaenge/:id/rechnungen/:invoiceId" element={<InvoiceDetailPage />} />
+        <Route path="/rechnungen/offen" element={<OffeneRechnungenPage />} />
         <Route path="/dokumente" element={<DokumentePage />} />
         <Route path="/dokumente/neu" element={<DokumentNeuPage />} />
         <Route path="/dokumente/:id" element={<DokumentDetailPage />} />

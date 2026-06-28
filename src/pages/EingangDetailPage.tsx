@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { DocumentActionSuggestionsPanel } from '../components/inbox/DocumentActionSuggestionsPanel';
 import { ImportToArchiveDialog } from '../components/inbox/ImportToArchiveDialog';
 import { InboxVorgangPanel } from '../components/inbox/InboxVorgangPanel';
 import { LetterExplanationPanel } from '../components/inbox/LetterExplanationPanel';
@@ -12,6 +13,7 @@ import { Button } from '../components/ui/Button';
 import { Badge, Card, DataRow, PageHeader } from '../components/ui/Card';
 import { useApp } from '../context/AppContext';
 import { formatPaperFilingInstruction } from '../services/analysisService';
+import { getClassifiedKindFromItem } from '../services/documentClassificationService';
 import { getLetterExplanation } from '../services/letterExplanationService';
 import {
   importInboxDocument,
@@ -44,6 +46,7 @@ export function EingangDetailPage() {
   const [editDraft, setEditDraft] = useState<InboxEditDraft | null>(null);
   const [duplicateDocument, setDuplicateDocument] = useState<CompanyDocument | null>(null);
   const [isImporting, setIsImporting] = useState(false);
+  const [vorgangDialogRequest, setVorgangDialogRequest] = useState(0);
 
   useEffect(() => {
     if (id) {
@@ -62,6 +65,7 @@ export function EingangDetailPage() {
   if (!item) return null;
 
   const docTypeKey = `docType.${item.documentType}` as TranslationKey;
+  const classifiedKindKey = `classifiedKind.${getClassifiedKindFromItem(item)}` as TranslationKey;
   const actionKey = `action.${item.recommendedAction}` as TranslationKey;
   const letterExplanation = getLetterExplanation(item);
 
@@ -242,6 +246,7 @@ export function EingangDetailPage() {
               <DataRow label={translate('inbox.sourceDocument')} value={item.sourceFileName} />
             )}
             <DataRow label={translate('inbox.documentType')} value={translate(docTypeKey)} />
+            <DataRow label={translate('classification.documentKind')} value={translate(classifiedKindKey)} />
             <DataRow label={translate('inbox.sender')} value={item.sender} />
             {item.vorgangTitle && (
               <DataRow label={translate('analysis.vorgang')} value={item.vorgangTitle} />
@@ -256,6 +261,17 @@ export function EingangDetailPage() {
 
           {letterExplanation && <LetterExplanationPanel explanation={letterExplanation} />}
 
+          <DocumentActionSuggestionsPanel
+            item={item}
+            translate={translate}
+            onVorgangLinked={handleVorgangLinked}
+            onConfirmFiling={handleFiling}
+            onImportArchive={handleImportToArchive}
+            onCreateTask={handleCreateTask}
+            onOpenVorgangDialog={() => setVorgangDialogRequest((n) => n + 1)}
+            onShowToast={showToast}
+          />
+
           <Card className="inbox-suggestion">
             <h3 className="section__title">{translate('inbox.officePilotSuggestion')}</h3>
             <p>{item.officePilotSuggestion}</p>
@@ -265,6 +281,7 @@ export function EingangDetailPage() {
             item={item}
             materialDefault={setup.materialStandard}
             onLinked={handleVorgangLinked}
+            requestOpenDialog={vorgangDialogRequest}
           />
 
           <Card>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '../ui/Button';
 import { Card, DataRow } from '../ui/Card';
@@ -20,9 +20,15 @@ interface InboxVorgangPanelProps {
   item: InboxItem;
   materialDefault: MaterialStandard;
   onLinked: (inbox: InboxItem, vorgang: Vorgang) => void;
+  requestOpenDialog?: number;
 }
 
-export function InboxVorgangPanel({ item, materialDefault, onLinked }: InboxVorgangPanelProps) {
+export function InboxVorgangPanel({
+  item,
+  materialDefault,
+  onLinked,
+  requestOpenDialog = 0,
+}: InboxVorgangPanelProps) {
   const { translate, showToast } = useApp();
   const mode = getVorgangCardMode(item);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -55,6 +61,13 @@ export function InboxVorgangPanel({ item, materialDefault, onLinked }: InboxVorg
     setSelectedVorgangId(matches[0]?.id ?? item.vorgangId ?? '');
     setDialogOpen(true);
   };
+
+  useEffect(() => {
+    if (requestOpenDialog > 0 && mode !== 'open') {
+      openDialog();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestOpenDialog]);
 
   const closeDialog = () => setDialogOpen(false);
 

@@ -17,6 +17,10 @@ import {
 import { hasMissingOrderPrice } from '../services/orderPositionFactory';
 import { getVorgangById, removeOrderPosition } from '../services/vorgangService';
 import { InvoiceListCard } from '../components/invoice/InvoiceListCard';
+import {
+  formatPaymentCurrency,
+  summarizeVorgangInvoicePayments,
+} from '../services/invoicePaymentService';
 import type { OrderPosition, Vorgang } from '../types/models';
 import type { TranslationKey } from '../i18n';
 
@@ -24,7 +28,7 @@ type FormMode = { type: 'add' } | { type: 'edit'; position: OrderPosition } | nu
 
 export function VorgangDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { translate } = useApp();
+  const { translate, showToast } = useApp();
   const navigate = useNavigate();
   const [vorgang, setVorgang] = useState<Vorgang | undefined>(() =>
     id ? getVorgangById(id) : undefined,
@@ -63,9 +67,18 @@ export function VorgangDetailPage() {
   const sortedInvoices = [...vorgang.invoices].sort(
     (a, b) => new Date(b.issueDate ?? b.date).getTime() - new Date(a.issueDate ?? a.date).getTime(),
   );
+  const paymentTotals = summarizeVorgangInvoicePayments(vorgang.invoices);
 
   const handleSaved = (updated: Vorgang) => {
     setVorgang(updated);
+  };
+
+  const handleInvoiceUpdated = () => {
+    refreshVorgang();
+  };
+
+  const handlePaymentToast = (message: string) => {
+    showToast(message);
   };
 
   return (
@@ -214,6 +227,18 @@ export function VorgangDetailPage() {
 
       <section className="section">
         <h2 className="section__title">{translate('vorgang.invoices')}</h2>
+        {sortedInvoices.length > 0 && (
+          <Card className="vorgang-invoice-totals">
+            <DataRow
+              label={translate('payment.vorgangOpenTotal')}
+              value={formatPaymentCurrency(paymentTotals.openTotal)}
+            />
+            <DataRow
+              label={translate('payment.vorgangPaidTotal')}
+              value={formatPaymentCurrency(paymentTotals.paidTotal)}
+            />
+          </Card>
+        )}
         {sortedInvoices.length === 0 ? (
           <p className="empty-state">{translate('vorgang.noInvoices')}</p>
         ) : (
@@ -223,6 +248,8 @@ export function VorgangDetailPage() {
               vorgangId={vorgang.id}
               invoice={inv}
               translate={translate}
+              onInvoiceUpdated={handleInvoiceUpdated}
+              onPaymentToast={handlePaymentToast}
             />
           ))
         )}

@@ -1,8 +1,21 @@
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '../ui/Button';
-import { Badge, Card, CardMeta, CardTitle, DataRow } from '../ui/Card';
-import { getInvoiceGrossAmount, isFinalizedInvoice } from '../../services/invoiceArchiveService';
+import { Card, CardMeta, CardTitle, DataRow } from '../ui/Card';
+import {
+  getPaymentSavedToastKey,
+  InvoicePaymentForm,
+} from './InvoicePaymentForm';
+import { InvoicePaymentBadge } from './InvoicePaymentBadge';
+import { isFinalizedInvoice } from '../../services/invoiceArchiveService';
+import {
+  calculatePaymentSummary,
+  formatPaymentCurrency,
+  getPaidAmount,
+  isInvoiceCancelled,
+} from '../../services/invoicePaymentService';
 import { formatInvoiceDate } from '../../services/invoicePrintModel';
+import { getVorgangInvoice } from '../../services/vorgangService';
 import type { VorgangInvoice } from '../../types/models';
 import type { TranslationKey } from '../../i18n';
 
@@ -10,6 +23,8 @@ interface Props {
   vorgangId: string;
   invoice: VorgangInvoice;
   translate: (key: TranslationKey) => string;
+  onInvoiceUpdated?: (invoice: VorgangInvoice) => void;
+  onPaymentToast?: (message: string) => void;
 }
 
 function invoiceLabel(inv: VorgangInvoice, translate: (key: TranslationKey) => string): string {
@@ -19,63 +34,133 @@ function invoiceLabel(inv: VorgangInvoice, translate: (key: TranslationKey) => s
   return `${translate('invoice.abschlagLabel')} ${inv.abschlagNumber ?? '?'}`;
 }
 
-function statusLabel(status: VorgangInvoice['status'], translate: (key: TranslationKey) => string): string {
+function workflowStatusLabel(
+  status: VorgangInvoice['status'],
+  translate: (key: TranslationKey) => string,
+): string {
   const key = `invoice.status.${status}` as TranslationKey;
   return translate(key);
 }
 
-export function InvoiceListCard({ vorgangId, invoice, translate }: Props) {
+export function InvoiceListCard({
+  vorgangId,
+  invoice,
+  translate,
+  onInvoiceUpdated,
+  onPaymentToast,
+}: Props) {
   const navigate = useNavigate();
-  const grossAmount = getInvoiceGrossAmount(invoice);
-  const readOnly = isFinalizedInvoice(invoice);
+  const [currentInvoice, setCurrentInvoice] = useState(invoice);
+  const [showPaymentForm, setShowPaymentForm] = useState(false);
+  const readOnly = isFinalizedInvoice(currentInvoice);
+  const summary = calculatePaymentSummary(currentInvoice);
+
+  useEffect(() => {
+    setCurrentInvoice(invoice);
+  }, [invoice]);
 
   const openInvoice = () => {
-    navigate(`/vorgaenge/${vorgangId}/rechnungen/${invoice.id}`);
+    navigate(`/vorgaenge/${vorgangId}/rechnungen/${currentInvoice.id}`);
   };
 
   const triggerPrint = () => {
     if (!readOnly) return;
-    navigate(`/vorgaenge/${vorgangId}/rechnungen/${invoice.id}?auto=print`);
+    navigate(`/vorgaenge/${vorgangId}/rechnungen/${currentInvoice.id}?auto=print`);
   };
 
   const triggerPdf = () => {
     if (!readOnly) return;
-    navigate(`/vorgaenge/${vorgangId}/rechnungen/${invoice.id}?auto=pdf`);
+    navigate(`/vorgaenge/${vorgangId}/rechnungen/${currentInvoice.id}?auto=pdf`);
+  };
+
+  const handlePaymentSaved = (updated: VorgangInvoice) => {
+    setCurrentInvoice(updated);
+    onInvoiceUpdated?.(updated);
+    onPaymentToast?.(translate(getPaymentSavedToastKey(updated)));
   };
 
   return (
-    <Card className="invoice-list-card">
-      <CardTitle>{invoiceLabel(invoice, translate)}</CardTitle>
-      <CardMeta>
-        {invoice.number} · {formatInvoiceDate(invoice.issueDate ?? invoice.date)}
-      </CardMeta>
-      <DataRow label={translate('invoice.taxStatus')} value={statusLabel(invoice.status, translate)} />
-      <DataRow
-        label={translate('invoice.grossAmount')}
-        value={`${grossAmount.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`}
+    <>
+      <Card className="invoice-list-card">
+        <CardTitle>{invoiceLabel(currentInvoice, translate)}</CardTitle>
+        <CardMeta>
+          {currentInvoice.number} · {formatInvoiceDate(currentInvoice.issueDate ?? currentInvoice.date)}
+        </CardMeta>
+
+        {readOnly && (
+          <>
+            <DataRow
+              label={translate('payment.workflowStatus')}
+              value={workflowStatusLabel(currentInvoice.status, translate)}
+            />
+            <DataRow
+              label={translate('payment.paymentStatus')}
+              value={<InvoicePaymentBadge status={summary.status} translate={translate} />}
+            />
+            <DataRow
+              label={translate('payment.paidAmount')}
+              value={formatPaymentCurrency(getPaidAmount(currentInvoice))}
+            />
+            <DataRow
+              label={translate('payment.openAmount')}
+              value={formatPaymentCurrency(summary.openAmount)}
+            />
+            <DataRow
+              label={translate('invoice.paymentDueDate')}
+              value={formatInvoiceDate(currentInvoice.paymentDueDate ?? '')}
+            />
+          </>
+        )}
+
+        {!readOnly && (
+          <DataRow
+            label={translate('payment.workflowStatus')}
+            value={workflowStatusLabel(currentInvoice.status, translate)}
+          />
+        )}
+
+        {currentInvoice.archiveDocumentId && (
+          <p className="invoice-list-card__archive">
+            <Link to={`/dokumente/${currentInvoice.archiveDocumentId}`}>
+              {translate('invoice.openArchiveDocument')}
+            </Link>
+          </p>
+        )}
+
+        {readOnly ? (
+          <div className="invoice-list-card__actions">
+            <Button type="button" onClick={openInvoice}>
+              {translate('invoice.open')}
+            </Button>
+            {!isInvoiceCancelled(currentInvoice) && (
+              <Button type="button" variant="outline" onClick={() => setShowPaymentForm(true)}>
+                {translate('payment.recordShort')}
+              </Button>
+            )}
+            <Button type="button" variant="outline" onClick={triggerPrint}>
+              {translate('invoice.print')}
+            </Button>
+            <Button type="button" variant="outline" onClick={triggerPdf}>
+              {translate('invoice.savePdf')}
+            </Button>
+          </div>
+        ) : (
+          <InvoicePaymentBadge status="offen" translate={translate} />
+        )}
+      </Card>
+
+      <InvoicePaymentForm
+        vorgangId={vorgangId}
+        invoice={currentInvoice}
+        open={showPaymentForm}
+        onClose={() => setShowPaymentForm(false)}
+        onSaved={handlePaymentSaved}
+        translate={translate}
       />
-      {invoice.archiveDocumentId && (
-        <p className="invoice-list-card__archive">
-          <Link to={`/dokumente/${invoice.archiveDocumentId}`}>
-            {translate('invoice.openArchiveDocument')}
-          </Link>
-        </p>
-      )}
-      {readOnly ? (
-        <div className="invoice-list-card__actions">
-          <Button type="button" onClick={openInvoice}>
-            {translate('invoice.open')}
-          </Button>
-          <Button type="button" variant="outline" onClick={triggerPrint}>
-            {translate('invoice.print')}
-          </Button>
-          <Button type="button" variant="outline" onClick={triggerPdf}>
-            {translate('invoice.savePdf')}
-          </Button>
-        </div>
-      ) : (
-        <Badge tone="warning">{translate('invoice.status.entwurf')}</Badge>
-      )}
-    </Card>
+    </>
   );
+}
+
+export function refreshInvoiceFromStore(vorgangId: string, invoiceId: string): VorgangInvoice | undefined {
+  return getVorgangInvoice(vorgangId, invoiceId);
 }

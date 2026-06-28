@@ -121,11 +121,15 @@ export function DokumentDetailPage() {
           <DataRow
             label={translate('document.fieldLinkedInvoice')}
             value={
-              <Link
-                to={`/vorgaenge/${document.linkedVorgang.vorgangId}/rechnungen/${document.linkedInvoiceId}`}
-              >
-                {translate('document.openInvoice')}
-              </Link>
+              <>
+                <Link
+                  to={`/vorgaenge/${document.linkedVorgang.vorgangId}/rechnungen/${document.linkedInvoiceId}?from=overview`}
+                >
+                  {translate('document.openInvoice')}
+                </Link>
+                {' · '}
+                <Link to="/rechnungen/offen">{translate('overview.title')}</Link>
+              </>
             }
           />
         )}

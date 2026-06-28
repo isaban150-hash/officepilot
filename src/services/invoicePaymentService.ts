@@ -183,3 +183,38 @@ export function removePayment(
 
   return { success: true, invoice: updated };
 }
+
+export function getOverdueDays(
+  invoice: VorgangInvoice,
+  today: Date | string = new Date(),
+): number {
+  if (!invoice.paymentDueDate || !isInvoiceOverdue(invoice, today)) {
+    return 0;
+  }
+
+  const due = new Date(toDateOnly(invoice.paymentDueDate));
+  const now = new Date(toDateOnly(today));
+  const diffMs = now.getTime() - due.getTime();
+  return Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+}
+
+export function summarizeVorgangInvoicePayments(invoices: VorgangInvoice[]): {
+  openTotal: number;
+  paidTotal: number;
+} {
+  let openTotal = 0;
+  let paidTotal = 0;
+
+  for (const invoice of invoices) {
+    if (!isFinalizedInvoice(invoice)) continue;
+    const summary = calculatePaymentSummary(invoice);
+    openTotal += summary.openAmount;
+    paidTotal += summary.paidAmount;
+  }
+
+  return { openTotal, paidTotal };
+}
+
+export function formatPaymentCurrency(value: number): string {
+  return `${value.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
+}

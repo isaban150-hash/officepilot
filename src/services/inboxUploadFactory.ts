@@ -1,14 +1,8 @@
 import { MOCK_INBOX_ITEMS } from '../data/inboxMockData';
-import type { InboxItem, InboxTaskTemplate, UploadDocumentKind } from '../types/models';
-
-const KIND_TEMPLATE_IDS: Record<UploadDocumentKind, string> = {
-  auftrag: 'inbox-001',
-  zahlungserinnerung: 'inbox-002',
-  materialrechnung: 'inbox-003',
-  bg_bau: 'inbox-004',
-  werbung: 'inbox-005',
-  kontoauszug: 'inbox-006',
-};
+import type { DocumentClassificationInput, InboxItem, UploadDocumentKind } from '../types/models';
+import {
+  classifyInboxItem,
+} from './documentClassificationService';
 
 export const UPLOAD_DOCUMENT_KINDS: UploadDocumentKind[] = [
   'auftrag',
@@ -33,73 +27,54 @@ export interface CreateInboxFromUploadOptions {
   kind?: UploadDocumentKind;
 }
 
-function deepCloneTaskTemplate(template?: InboxTaskTemplate): InboxTaskTemplate | undefined {
-  return template ? { ...template } : undefined;
-}
-
-function cloneTemplateById(templateId: string): Omit<InboxItem, 'id' | 'status' | 'receivedAt'> {
-  const source = MOCK_INBOX_ITEMS.find((item) => item.id === templateId);
-  if (!source) {
-    throw new Error(`Inbox template not found: ${templateId}`);
-  }
-
-  const {
-    id: _id,
-    status: _status,
-    receivedAt: _receivedAt,
-    isNewUpload: _isNewUpload,
-    sourceFileName: _sourceFileName,
-    ...rest
-  } = source;
-
-  return {
-    ...rest,
-    digitalFolder: { ...rest.digitalFolder },
-    paperFiling: { ...rest.paperFiling },
-    recognizedData: { ...rest.recognizedData },
-    taskTemplate: deepCloneTaskTemplate(rest.taskTemplate),
-  };
-}
-
 function pickRandomKind(): UploadDocumentKind {
   const index = Math.floor(Math.random() * UPLOAD_DOCUMENT_KINDS.length);
   return UPLOAD_DOCUMENT_KINDS[index];
 }
 
-function buildTitleFromTemplate(templateTitle: string): string {
-  return `Gerade erfasst: ${templateTitle}`;
-}
-
-function todayIsoDate(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
 function defaultFileName(): string {
-  const stamp = todayIsoDate().replace(/-/g, '');
+  const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
   return `Dokument_${stamp}.jpg`;
+}
+
+function enrichFromTemplate(
+  classified: InboxItem,
+  kind: UploadDocumentKind,
+): InboxItem {
+  const templateIdMap: Record<UploadDocumentKind, string> = {
+    auftrag: 'inbox-001',
+    zahlungserinnerung: 'inbox-002',
+    materialrechnung: 'inbox-003',
+    bg_bau: 'inbox-004',
+    werbung: 'inbox-005',
+    kontoauszug: 'inbox-006',
+  };
+
+  const template = MOCK_INBOX_ITEMS.find((item) => item.id === templateIdMap[kind]);
+  if (!template) return classified;
+
+  return {
+    ...classified,
+    recognizedData: { ...template.recognizedData, Dokumentart: classified.classifiedKind ?? '' },
+    taskTemplate: template.taskTemplate ? { ...template.taskTemplate } : classified.taskTemplate,
+    vorgangId: template.vorgangId ?? classified.vorgangId,
+    vorgangTitle: template.vorgangTitle ?? classified.vorgangTitle,
+    securityHint: template.securityHint,
+    classifiedKind: classified.classifiedKind,
+  };
 }
 
 export function createMockInboxItemFromUpload(
   options: CreateInboxFromUploadOptions = {},
 ): InboxItem {
   const kind = options.kind ?? pickRandomKind();
-  const templateId = KIND_TEMPLATE_IDS[kind];
-  const template = cloneTemplateById(templateId);
-  const receivedAt = todayIsoDate();
   const sourceFileName = options.sourceFileName ?? defaultFileName();
-  const timestamp = Date.now();
 
-  return {
-    ...template,
-    id: `inbox-upload-${timestamp}`,
-    title: buildTitleFromTemplate(template.title),
-    status: 'neu',
-    receivedAt,
+  const input: DocumentClassificationInput = {
     sourceFileName,
-    isNewUpload: true,
-    digitalFolder: {
-      ...template.digitalFolder,
-      id: `dig-upload-${timestamp}`,
-    },
+    kindHint: kind,
   };
+
+  const classified = classifyInboxItem(input);
+  return enrichFromTemplate(classified, kind);
 }
