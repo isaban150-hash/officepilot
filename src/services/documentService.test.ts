@@ -6,9 +6,19 @@ import {
   getDocumentById,
   getDocumentsByCategory,
   hydrateDocumentStore,
+  importInboxDocument,
+  isDuplicateDocument,
+  mapInboxItemToDocumentInput,
   searchDocuments,
   updateDocument,
+  updateDocumentFromInbox,
 } from './documentService';
+import {
+  getInboxItemById,
+  hydrateInboxStore,
+  markInboxImportedToArchive,
+} from './inboxService';
+import { createAuftragInboxItem } from '../test/fixtures';
 import type { CompanyDocument } from '../types/models';
 
 function createTestDocument(overrides: Partial<CompanyDocument> = {}): CompanyDocument {
@@ -194,6 +204,158 @@ describe('vorgang linking', () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.document.linkedVorgang?.vorgangId).toBe('v-002');
+    }
+  });
+});
+
+describe('mapInboxItemToDocumentInput', () => {
+  it('maps inbox fields to document input', () => {
+    const inboxItem = createAuftragInboxItem({
+      title: 'Auftrag Schmidt',
+      sender: 'Familie Schmidt',
+      deadline: '2026-05-01',
+      vorgangId: 'v-001',
+      vorgangTitle: 'Bad Schmidt',
+      recognizedData: { Leistung: 'Sanierung', Angebotssumme: '5.000 €' },
+    });
+
+    const input = mapInboxItemToDocumentInput(inboxItem, 'Mustermann GmbH');
+
+    expect(input.title).toBe('Auftrag Schmidt');
+    expect(input.category).toBe('vertrag');
+    expect(input.issuer).toBe('Familie Schmidt');
+    expect(input.recognizedText).toContain('Leistung: Sanierung');
+    expect(input.issueDate).toBe('2026-03-27');
+    expect(input.validUntil).toBe('2026-05-01');
+    expect(input.digitalFolder?.path).toBe('/test/');
+    expect(input.paperFolder?.register).toBe('A');
+    expect(input.tags).toContain('Inbox:kundenauftrag');
+    expect(input.linkedCompany).toBe('Mustermann GmbH');
+    expect(input.linkedVorgang?.vorgangId).toBe('v-001');
+  });
+});
+
+describe('isDuplicateDocument', () => {
+  it('detects duplicate by title and issuer', () => {
+    hydrateDocumentStore([
+      createTestDocument({ title: 'BG BAU Schreiben', issuer: 'BG BAU' }),
+    ]);
+
+    const inboxItem = createAuftragInboxItem({
+      title: 'BG BAU Schreiben',
+      sender: 'BG BAU',
+      documentType: 'behoerde',
+    });
+
+    const duplicate = isDuplicateDocument(inboxItem, 'Test GmbH');
+    expect(duplicate?.id).toBe('doc-test-1');
+  });
+
+  it('returns null when title or issuer differ', () => {
+    hydrateDocumentStore([createTestDocument()]);
+
+    const inboxItem = createAuftragInboxItem({
+      title: 'Anderes Dokument',
+      sender: 'Andere AG',
+    });
+
+    expect(isDuplicateDocument(inboxItem, 'Test GmbH')).toBeNull();
+  });
+});
+
+describe('importInboxDocument', () => {
+  it('creates archive document from inbox item', () => {
+    hydrateDocumentStore([]);
+    const inboxItem = createAuftragInboxItem({ title: 'Import Test' });
+
+    const result = importInboxDocument(inboxItem, 'Firma GmbH');
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.document.title).toBe('Import Test');
+      expect(result.document.linkedCompany).toBe('Firma GmbH');
+    }
+  });
+
+  it('persists imported document to localStorage', () => {
+    hydrateDocumentStore([]);
+    localStorage.clear();
+
+    importInboxDocument(createAuftragInboxItem({ title: 'Persist Import' }), 'Firma GmbH');
+
+    const raw = localStorage.getItem(STORAGE_KEY);
+    const parsed = JSON.parse(raw!);
+    expect(parsed.documents.some((d: CompanyDocument) => d.title === 'Persist Import')).toBe(true);
+  });
+});
+
+describe('updateDocumentFromInbox', () => {
+  it('updates existing document with inbox data', () => {
+    hydrateDocumentStore([
+      createTestDocument({ title: 'Alt', issuer: 'Alt AG', recognizedText: 'alt' }),
+    ]);
+
+    const inboxItem = createAuftragInboxItem({
+      title: 'Alt',
+      sender: 'Alt AG',
+      recognizedData: { Hinweis: 'Neu erkannt' },
+    });
+
+    const result = updateDocumentFromInbox('doc-test-1', inboxItem, 'Neu GmbH');
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.document.recognizedText).toContain('Hinweis: Neu erkannt');
+      expect(result.document.linkedCompany).toBe('Neu GmbH');
+    }
+  });
+});
+
+describe('inbox → archive integration', () => {
+  it('marks inbox archived and document is searchable', () => {
+    const inboxItem = createAuftragInboxItem({
+      id: 'inbox-import-1',
+      title: 'Archiv Import',
+      sender: 'Import Kunde',
+    });
+    hydrateInboxStore([inboxItem]);
+    hydrateDocumentStore([]);
+
+    const importResult = importInboxDocument(inboxItem, 'Test GmbH');
+    expect(importResult.success).toBe(true);
+
+    if (importResult.success) {
+      const archiveResult = markInboxImportedToArchive('inbox-import-1', importResult.document.id);
+      expect(archiveResult?.item.importedToArchive).toBe(true);
+      expect(archiveResult?.item.archiveDocumentId).toBe(importResult.document.id);
+      expect(archiveResult?.item.status).toBe('abgelegt');
+
+      const found = searchDocuments('Archiv Import');
+      expect(found).toHaveLength(1);
+      expect(getInboxItemById('inbox-import-1')?.importedToArchive).toBe(true);
+    }
+  });
+
+  it('leaves inbox unmarked when archive mark fails after successful import', () => {
+    const inboxItem = createAuftragInboxItem({
+      id: 'inbox-import-2',
+      title: 'Teil-Erfolg Test',
+      sender: 'Import Kunde',
+    });
+    hydrateInboxStore([inboxItem]);
+    hydrateDocumentStore([]);
+
+    const importResult = importInboxDocument(inboxItem, 'Test GmbH');
+    expect(importResult.success).toBe(true);
+
+    if (importResult.success) {
+      const archiveResult = markInboxImportedToArchive('missing-inbox-id', importResult.document.id);
+      expect(archiveResult).toBeNull();
+
+      const inbox = getInboxItemById('inbox-import-2');
+      expect(inbox?.importedToArchive).toBeFalsy();
+      expect(inbox?.status).toBe('neu');
+
+      const found = searchDocuments('Teil-Erfolg Test');
+      expect(found).toHaveLength(1);
     }
   });
 });

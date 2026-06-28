@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { ImportToArchiveDialog } from '../components/inbox/ImportToArchiveDialog';
 import { InboxVorgangPanel } from '../components/inbox/InboxVorgangPanel';
 import { LetterExplanationPanel } from '../components/inbox/LetterExplanationPanel';
 import {
@@ -13,6 +14,11 @@ import { useApp } from '../context/AppContext';
 import { formatPaperFilingInstruction } from '../services/analysisService';
 import { getLetterExplanation } from '../services/letterExplanationService';
 import {
+  importInboxDocument,
+  isDuplicateDocument,
+  updateDocumentFromInbox,
+} from '../services/documentService';
+import {
   confirmDispose,
   confirmFiling,
   createTaskForItem,
@@ -20,10 +26,11 @@ import {
   getInboxItemById,
   getPriorityLabel,
   getStatusLabel,
+  markInboxImportedToArchive,
   saveAdvertisementAnyway,
   updateInboxItemRecognizedData,
 } from '../services/inboxService';
-import type { InboxItem, Vorgang } from '../types/models';
+import type { CompanyDocument, InboxItem, Vorgang } from '../types/models';
 import type { TranslationKey } from '../i18n';
 
 export function EingangDetailPage() {
@@ -35,6 +42,8 @@ export function EingangDetailPage() {
   );
   const [isEditing, setIsEditing] = useState(false);
   const [editDraft, setEditDraft] = useState<InboxEditDraft | null>(null);
+  const [duplicateDocument, setDuplicateDocument] = useState<CompanyDocument | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -136,6 +145,43 @@ export function EingangDetailPage() {
     setItem(updatedInbox);
   };
 
+  const finishArchiveImport = (mode: 'create' | 'update', existingDocumentId?: string) => {
+    setIsImporting(true);
+    try {
+      const result =
+        mode === 'create'
+          ? importInboxDocument(item, setup.companyName)
+          : updateDocumentFromInbox(existingDocumentId!, item, setup.companyName);
+
+      if (!result.success) {
+        showToast(translate(result.errorKey as TranslationKey));
+        return;
+      }
+
+      const archiveResult = markInboxImportedToArchive(item.id, result.document.id);
+      if (!archiveResult) {
+        showToast(translate('inbox.importToArchive.markFailed'));
+        return;
+      }
+
+      setItem(archiveResult.item);
+      showToast(translate('inbox.importToArchive.success'));
+      setDuplicateDocument(null);
+      navigate(`/dokumente/${result.document.id}`);
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const handleImportToArchive = () => {
+    const duplicate = isDuplicateDocument(item, setup.companyName);
+    if (duplicate) {
+      setDuplicateDocument(duplicate);
+      return;
+    }
+    finishArchiveImport('create');
+  };
+
   return (
     <div className={`page ${isEditing ? 'page--editing' : ''}`}>
       <button type="button" className="back-link" onClick={goBack}>
@@ -162,7 +208,19 @@ export function EingangDetailPage() {
         {(item.vorgangLinkStatus === 'linked' || item.vorgangLinkStatus === 'created') && (
           <Badge tone="info">{translate('vorgang.linkedBadge')}</Badge>
         )}
+        {item.importedToArchive && (
+          <Badge tone="success">{translate('inbox.importToArchive.badge')}</Badge>
+        )}
       </div>
+
+      {item.importedToArchive && item.archiveDocumentId && (
+        <p className="archive-import-hint">
+          {translate('inbox.importToArchive.viewDocument')}{' '}
+          <Link to={`/dokumente/${item.archiveDocumentId}`}>
+            {translate('inbox.importToArchive.openArchive')}
+          </Link>
+        </p>
+      )}
 
       {isEditing && editDraft ? (
         <InboxItemEditForm
@@ -227,6 +285,16 @@ export function EingangDetailPage() {
           <div className="action-stack">
             {!item.isAdvertisement && (
               <>
+                {!item.importedToArchive && (
+                  <Button
+                    variant="secondary"
+                    fullWidth
+                    disabled={isImporting}
+                    onClick={handleImportToArchive}
+                  >
+                    {translate('inbox.importToArchive')}
+                  </Button>
+                )}
                 <Button fullWidth onClick={handleFiling}>
                   {translate('inbox.confirmFiling')}
                 </Button>
@@ -252,6 +320,16 @@ export function EingangDetailPage() {
             )}
           </div>
         </>
+      )}
+
+      {duplicateDocument && (
+        <ImportToArchiveDialog
+          existingDocument={duplicateDocument}
+          isImporting={isImporting}
+          onSaveNew={() => finishArchiveImport('create')}
+          onUpdateExisting={() => finishArchiveImport('update', duplicateDocument.id)}
+          onCancel={() => setDuplicateDocument(null)}
+        />
       )}
     </div>
   );

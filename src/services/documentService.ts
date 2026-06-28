@@ -7,6 +7,8 @@ import type {
   CompanyDocumentInput,
   CompanyDocumentVorgangLink,
   DigitalFolder,
+  DocumentType,
+  InboxItem,
   PaperFilingRule,
 } from '../types/models';
 
@@ -207,4 +209,117 @@ export function linkDocumentToVorgang(
   link: CompanyDocumentVorgangLink | null,
 ): DocumentMutationResult {
   return updateDocument(id, { linkedVorgang: link });
+}
+
+function normalizeDuplicateKey(title: string, issuer: string): string {
+  return `${title.trim().toLowerCase()}|${issuer.trim().toLowerCase()}`;
+}
+
+function buildRecognizedTextFromInbox(item: InboxItem): string {
+  const lines = Object.entries(item.recognizedData).map(([key, value]) => `${key}: ${value}`);
+  if (item.officePilotSuggestion) {
+    lines.push('', item.officePilotSuggestion);
+  }
+  return lines.join('\n').trim();
+}
+
+function buildTagsFromInbox(item: InboxItem): string[] {
+  const tags = [`Inbox:${item.documentType}`];
+  if (item.sourceFileName) tags.push(item.sourceFileName);
+  if (item.vorgangTitle) tags.push(item.vorgangTitle);
+  return tags;
+}
+
+function mapDocumentCategory(item: InboxItem): CompanyDocumentCategory {
+  const text = `${item.sender} ${item.title} ${JSON.stringify(item.recognizedData)}`.toLowerCase();
+
+  switch (item.documentType) {
+    case 'behoerde':
+      if (/versicherung|allianz|haftpflicht|policy/.test(text)) return 'versicherung';
+      return 'behoerde';
+    case 'eingangsrechnung':
+    case 'ausgangsrechnung':
+      return 'steuer';
+    case 'kundenauftrag':
+      return 'vertrag';
+    case 'brief':
+      return 'sonstiges';
+    default:
+      return 'sonstiges';
+  }
+}
+
+function imagePreviewForDocumentType(type: DocumentType): string {
+  switch (type) {
+    case 'behoerde':
+      return '🏛️';
+    case 'brief':
+      return '✉️';
+    case 'eingangsrechnung':
+    case 'ausgangsrechnung':
+      return '🧾';
+    case 'kundenauftrag':
+      return '📋';
+    default:
+      return '📄';
+  }
+}
+
+function linkedVorgangFromInbox(item: InboxItem): CompanyDocumentVorgangLink | null {
+  if (!item.vorgangId || !item.vorgangTitle) return null;
+  return { vorgangId: item.vorgangId, vorgangTitle: item.vorgangTitle };
+}
+
+export function mapInboxItemToDocumentInput(
+  item: InboxItem,
+  linkedCompany: string,
+): CompanyDocumentInput {
+  return {
+    title: item.title,
+    category: mapDocumentCategory(item),
+    issuer: item.sender,
+    recognizedText: buildRecognizedTextFromInbox(item),
+    issueDate: item.receivedAt || null,
+    validUntil: item.deadline,
+    digitalFolder: { ...item.digitalFolder },
+    paperFolder: { ...item.paperFiling },
+    tags: buildTagsFromInbox(item),
+    linkedCompany,
+    linkedVorgang: linkedVorgangFromInbox(item),
+    archived: true,
+    imagePreview: imagePreviewForDocumentType(item.documentType),
+  };
+}
+
+export function isDuplicateDocument(
+  item: InboxItem,
+  linkedCompany: string,
+  options?: { excludeDocumentId?: string },
+): CompanyDocument | null {
+  const input = mapInboxItemToDocumentInput(item, linkedCompany);
+  const candidateKey = normalizeDuplicateKey(input.title, input.issuer ?? '');
+
+  const match = documents.find((doc) => {
+    if (options?.excludeDocumentId && doc.id === options.excludeDocumentId) return false;
+    return normalizeDuplicateKey(doc.title, doc.issuer) === candidateKey;
+  });
+
+  return match ? cloneDocument(match) : null;
+}
+
+export function importInboxDocument(
+  item: InboxItem,
+  linkedCompany: string,
+): DocumentMutationResult {
+  const input = mapInboxItemToDocumentInput(item, linkedCompany);
+  return addDocument(input);
+}
+
+export function updateDocumentFromInbox(
+  documentId: string,
+  item: InboxItem,
+  linkedCompany: string,
+): DocumentMutationResult {
+  const input = mapInboxItemToDocumentInput(item, linkedCompany);
+  return updateDocument(documentId, input);
 }

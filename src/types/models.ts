@@ -86,6 +86,9 @@ export interface InboxItem {
   userModified?: boolean;
   modifiedAt?: string;
   originalRecognizedData?: Record<string, string>;
+  /** Nach Übernahme ins Dokumentenarchiv */
+  importedToArchive?: boolean;
+  archiveDocumentId?: string;
 }
 
 /** Änderungen aus dem Edit-Modus der Eingang-Detailansicht */

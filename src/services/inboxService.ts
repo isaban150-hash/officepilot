@@ -305,3 +305,21 @@ export function setInboxVorgangLink(
     isNewUpload: false,
   });
 }
+
+export function markInboxImportedToArchive(
+  inboxId: string,
+  documentId: string,
+): InboxActionResult | null {
+  const item = updateItem(inboxId, {
+    status: 'abgelegt',
+    importedToArchive: true,
+    archiveDocumentId: documentId,
+    isNewUpload: false,
+  });
+  if (!item) return null;
+  return {
+    success: true,
+    message: 'Ins Dokumentenarchiv übernommen.',
+    item,
+  };
+}

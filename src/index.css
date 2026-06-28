@@ -1158,6 +1158,13 @@ body {
   font-size: 0.85rem;
 }
 
-.letter-explanation__disclaimer p {
-  margin: 0.35rem 0 0;
+.archive-import-hint {
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  margin: 0 0 1rem;
+}
+
+.archive-import-hint a {
+  color: var(--color-primary);
+  font-weight: 600;
 }

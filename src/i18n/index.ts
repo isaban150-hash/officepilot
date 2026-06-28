@@ -67,6 +67,20 @@ const de = {
   'inbox.justCaptured': 'Gerade erfasst',
   'inbox.manuallyReviewed': 'Manuell geprüft',
 
+  'inbox.importToArchive': 'Ins Dokumentenarchiv übernehmen',
+  'inbox.importToArchive.success': 'Dokument im Archiv gespeichert.',
+  'inbox.importToArchive.markFailed':
+    'Dokument wurde gespeichert, aber der Inbox-Status konnte nicht aktualisiert werden. Bitte erneut prüfen.',
+  'inbox.importToArchive.badge': 'Im Archiv',
+  'inbox.importToArchive.viewDocument': 'Archiviert unter',
+  'inbox.importToArchive.openArchive': 'Archivdokument öffnen',
+  'inbox.importToArchive.duplicateTitle': 'Ähnliches Dokument gefunden',
+  'inbox.importToArchive.duplicateHint':
+    'Ein Dokument mit gleichem Titel und Aussteller existiert bereits. Wie möchten Sie fortfahren?',
+  'inbox.importToArchive.saveNew': 'Neu speichern',
+  'inbox.importToArchive.updateExisting': 'Vorhandenes aktualisieren',
+  'inbox.importToArchive.cancel': 'Abbrechen',
+
   'letter.explain.title': 'Brief erklären',
   'letter.explain.intro':
     'Einfache Orientierung – keine Rechts- oder Steuerberatung. Bitte Inhalt im Original prüfen.',
