@@ -117,6 +117,18 @@ export function DokumentDetailPage() {
             }
           />
         )}
+        {document.linkedInvoiceId && document.linkedVorgang && (
+          <DataRow
+            label={translate('document.fieldLinkedInvoice')}
+            value={
+              <Link
+                to={`/vorgaenge/${document.linkedVorgang.vorgangId}/rechnungen/${document.linkedInvoiceId}`}
+              >
+                {translate('document.openInvoice')}
+              </Link>
+            }
+          />
+        )}
         {document.tags.length > 0 && (
           <div className="badge-row document-detail__tags">
             {document.tags.map((tag) => (

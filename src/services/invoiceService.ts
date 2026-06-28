@@ -1,4 +1,5 @@
 import { addInvoiceToVorgang, getVorgangById } from './vorgangService';
+import { archiveOutgoingInvoice } from './invoiceArchiveService';
 import { createCompanyProfileSnapshot } from './companyProfileService';
 import {
   getNextInvoiceNumberPreview,
@@ -438,7 +439,19 @@ export function finalizeInvoiceDraft(
     introText: draft.introText,
     closingText: draft.closingText,
     baustelle: draft.baustelle,
+    vorgangTitle: draft.vorgangTitle,
   };
 
-  return addInvoiceToVorgang(vorgangId, invoice);
+  const saved = addInvoiceToVorgang(vorgangId, invoice);
+  if (!saved) return null;
+
+  const vorgang = getVorgangById(vorgangId);
+  if (!vorgang) return saved;
+
+  const archiveResult = archiveOutgoingInvoice(vorgangId, saved, setup.companyName);
+  if (archiveResult.success) {
+    return archiveResult.invoice;
+  }
+
+  return saved;
 }

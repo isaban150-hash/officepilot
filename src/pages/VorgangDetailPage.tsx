@@ -16,15 +16,9 @@ import {
 } from '../services/invoiceService';
 import { hasMissingOrderPrice } from '../services/orderPositionFactory';
 import { getVorgangById, removeOrderPosition } from '../services/vorgangService';
-import type { OrderPosition, Vorgang, VorgangInvoice } from '../types/models';
+import { InvoiceListCard } from '../components/invoice/InvoiceListCard';
+import type { OrderPosition, Vorgang } from '../types/models';
 import type { TranslationKey } from '../i18n';
-
-function invoiceLabel(inv: VorgangInvoice, translate: (key: TranslationKey) => string): string {
-  if (inv.type === 'schluss') {
-    return translate('invoice.schlussLabel');
-  }
-  return `${translate('invoice.abschlagLabel')} ${inv.abschlagNumber ?? '?'}`;
-}
 
 type FormMode = { type: 'add' } | { type: 'edit'; position: OrderPosition } | null;
 
@@ -66,8 +60,9 @@ export function VorgangDetailPage() {
   const canAdd = canAddOrderPosition(vorgang);
   const missingPrice = hasMissingOrderPrice(vorgang.orderPositions);
 
-  const abschlagInvoices = vorgang.invoices.filter((inv) => inv.type === 'abschlag');
-  const schlussInvoices = vorgang.invoices.filter((inv) => inv.type === 'schluss');
+  const sortedInvoices = [...vorgang.invoices].sort(
+    (a, b) => new Date(b.issueDate ?? b.date).getTime() - new Date(a.issueDate ?? a.date).getTime(),
+  );
 
   const handleSaved = (updated: Vorgang) => {
     setVorgang(updated);
@@ -219,27 +214,17 @@ export function VorgangDetailPage() {
 
       <section className="section">
         <h2 className="section__title">{translate('vorgang.invoices')}</h2>
-        {vorgang.invoices.length === 0 ? (
+        {sortedInvoices.length === 0 ? (
           <p className="empty-state">{translate('vorgang.noInvoices')}</p>
         ) : (
-          <>
-            {abschlagInvoices.map((inv) => (
-              <Card key={inv.id}>
-                <CardTitle>{invoiceLabel(inv, translate)}</CardTitle>
-                <CardMeta>
-                  {inv.number} · {inv.subtotal.toLocaleString('de-DE')} € netto · {inv.status}
-                </CardMeta>
-              </Card>
-            ))}
-            {schlussInvoices.map((inv) => (
-              <Card key={inv.id}>
-                <CardTitle>{invoiceLabel(inv, translate)}</CardTitle>
-                <CardMeta>
-                  {inv.number} · {inv.subtotal.toLocaleString('de-DE')} € netto · {inv.status}
-                </CardMeta>
-              </Card>
-            ))}
-          </>
+          sortedInvoices.map((inv) => (
+            <InvoiceListCard
+              key={inv.id}
+              vorgangId={vorgang.id}
+              invoice={inv}
+              translate={translate}
+            />
+          ))
         )}
       </section>
 

@@ -263,6 +263,41 @@ export function addInvoiceToVorgang(vorgangId: string, invoice: VorgangInvoice):
   return { ...invoice };
 }
 
+export function getVorgangInvoice(
+  vorgangId: string,
+  invoiceId: string,
+): VorgangInvoice | undefined {
+  const vorgang = getVorgangById(vorgangId);
+  if (!vorgang) return undefined;
+  const invoice = vorgang.invoices.find((item) => item.id === invoiceId);
+  return invoice ? { ...invoice } : undefined;
+}
+
+export function updateInvoiceArchiveDocumentId(
+  vorgangId: string,
+  invoiceId: string,
+  archiveDocumentId: string,
+): VorgangInvoice | null {
+  const index = vorgaenge.findIndex((v) => v.id === vorgangId);
+  if (index === -1) return null;
+
+  const vorgang = cloneVorgang(vorgaenge[index]);
+  const invoiceIndex = vorgang.invoices.findIndex((item) => item.id === invoiceId);
+  if (invoiceIndex === -1) return null;
+
+  const updatedInvoice: VorgangInvoice = {
+    ...vorgang.invoices[invoiceIndex],
+    archiveDocumentId,
+  };
+  vorgang.invoices = [
+    ...vorgang.invoices.slice(0, invoiceIndex),
+    updatedInvoice,
+    ...vorgang.invoices.slice(invoiceIndex + 1),
+  ];
+  updateVorgangInStore(vorgang);
+  return { ...updatedInvoice };
+}
+
 function normalizeDescription(description: string): string {
   const trimmed = description.trim();
   return trimmed || 'Neue Position';

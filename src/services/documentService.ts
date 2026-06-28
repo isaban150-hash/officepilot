@@ -17,6 +17,7 @@ export const COMPANY_DOCUMENT_CATEGORIES: CompanyDocumentCategory[] = [
   'versicherung',
   'zertifikat',
   'steuer',
+  'ausgangsrechnung',
   'behoerde',
   'personal',
   'sonstiges',
@@ -35,6 +36,7 @@ function cloneDocument(doc: CompanyDocument): CompanyDocument {
     paperFolder: { ...doc.paperFolder },
     tags: [...doc.tags],
     linkedVorgang: doc.linkedVorgang ? { ...doc.linkedVorgang } : null,
+    linkedInvoiceId: doc.linkedInvoiceId ?? null,
   };
 }
 
@@ -92,6 +94,7 @@ function buildDocumentFromInput(
     archived: input.archived ?? true,
     createdAt,
     imagePreview: input.imagePreview ?? '📄',
+    linkedInvoiceId: input.linkedInvoiceId ?? null,
   };
 }
 
@@ -113,6 +116,11 @@ export function getAllDocuments(): CompanyDocument[] {
 
 export function getDocumentById(id: string): CompanyDocument | undefined {
   const doc = documents.find((d) => d.id === id);
+  return doc ? cloneDocument(doc) : undefined;
+}
+
+export function getDocumentByLinkedInvoiceId(invoiceId: string): CompanyDocument | undefined {
+  const doc = documents.find((d) => d.linkedInvoiceId === invoiceId);
   return doc ? cloneDocument(doc) : undefined;
 }
 
@@ -183,6 +191,8 @@ export function updateDocument(
       changes.linkedVorgang !== undefined ? changes.linkedVorgang : current.linkedVorgang,
     archived: changes.archived ?? current.archived,
     imagePreview: changes.imagePreview ?? current.imagePreview,
+    linkedInvoiceId:
+      changes.linkedInvoiceId !== undefined ? changes.linkedInvoiceId : current.linkedInvoiceId,
   };
 
   const validationError = validateInput(merged);
@@ -238,8 +248,9 @@ function mapDocumentCategory(item: InboxItem): CompanyDocumentCategory {
       if (/versicherung|allianz|haftpflicht|policy/.test(text)) return 'versicherung';
       return 'behoerde';
     case 'eingangsrechnung':
-    case 'ausgangsrechnung':
       return 'steuer';
+    case 'ausgangsrechnung':
+      return 'ausgangsrechnung';
     case 'kundenauftrag':
       return 'vertrag';
     case 'brief':

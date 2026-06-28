@@ -309,6 +309,8 @@ export interface VorgangInvoice {
   introText?: string;
   closingText?: string;
   baustelle?: string;
+  vorgangTitle?: string;
+  archiveDocumentId?: string;
 }
 
 export interface Vorgang {
@@ -466,6 +468,7 @@ export type CompanyDocumentCategory =
   | 'versicherung'
   | 'zertifikat'
   | 'steuer'
+  | 'ausgangsrechnung'
   | 'behoerde'
   | 'personal'
   | 'sonstiges';
@@ -491,6 +494,7 @@ export interface CompanyDocument {
   archived: boolean;
   createdAt: string;
   imagePreview?: string;
+  linkedInvoiceId?: string | null;
 }
 
 export interface CompanyDocumentInput {
@@ -507,6 +511,7 @@ export interface CompanyDocumentInput {
   linkedVorgang?: CompanyDocumentVorgangLink | null;
   archived?: boolean;
   imagePreview?: string;
+  linkedInvoiceId?: string | null;
 }
 
 export interface AppPersistedState {

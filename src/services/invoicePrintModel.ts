@@ -1,4 +1,4 @@
-import { getAbschlagDeductionsTotal, calculateInvoiceTotals } from './invoiceService';
+import { getAbschlagDeductionsTotal, calculateInvoiceTotals, getTaxRateForStatus } from './invoiceService';
 import type {
   CompanySetup,
   InvoiceDraft,
@@ -6,6 +6,7 @@ import type {
   InvoicePrintModel,
   InvoicePrintPosition,
   TaxStatus,
+  VorgangInvoice,
 } from '../types/models';
 
 function documentTitle(type: InvoiceDraft['type'], abschlagNumber?: number): string {
@@ -32,6 +33,77 @@ function buildPositions(draft: InvoiceDraft): InvoicePrintPosition[] {
       unitPrice: position.unitPrice,
       lineTotal: position.quantity * position.unitPrice,
     }));
+}
+
+function documentTitleFromInvoice(invoice: VorgangInvoice): string {
+  if (invoice.type === 'schluss') return 'Schlussrechnung';
+  return invoice.abschlagNumber
+    ? `Abschlagsrechnung ${invoice.abschlagNumber}`
+    : 'Abschlagsrechnung';
+}
+
+function buildDeductionLinesFromInvoice(invoice: VorgangInvoice): InvoicePrintDeductionLine[] {
+  return (invoice.previousAbschlagDeductions ?? []).map((item, index) => ({
+    label: item.abschlagNumber ? `Abschlag ${item.abschlagNumber}` : `Abschlag ${index + 1}`,
+    invoiceNumber: item.invoiceNumber,
+    amount: item.amount,
+  }));
+}
+
+function buildPositionsFromInvoice(invoice: VorgangInvoice): InvoicePrintPosition[] {
+  return invoice.positions.map((position, index) => ({
+    index: index + 1,
+    description: position.description,
+    quantity: position.quantity,
+    unit: position.unit,
+    unitPrice: position.unitPrice,
+    lineTotal: position.lineTotal,
+  }));
+}
+
+export function buildInvoicePrintModelFromInvoice(invoice: VorgangInvoice): InvoicePrintModel {
+  if (!invoice.companySnapshot || !invoice.customerSnapshot) {
+    throw new Error('Invoice snapshots missing – cannot render finalized invoice.');
+  }
+
+  const taxRate = getTaxRateForStatus(invoice.taxStatus);
+  const taxAmount = invoice.subtotal * (taxRate / 100);
+  const grossTotal = invoice.subtotal + taxAmount;
+  const deductions = invoice.previousAbschlagDeductions ?? [];
+  const deductionsTotal = getAbschlagDeductionsTotal(deductions);
+  const amountDue =
+    invoice.type === 'schluss' ? Math.max(0, grossTotal - deductionsTotal) : grossTotal;
+
+  return {
+    type: invoice.type,
+    documentTitle: documentTitleFromInvoice(invoice),
+    invoiceNumber: invoice.number,
+    issueDate: invoice.issueDate ?? invoice.date,
+    company: { ...invoice.companySnapshot },
+    customer: { ...invoice.customerSnapshot },
+    projectTitle: invoice.vorgangTitle ?? '—',
+    projectSite: invoice.baustelle ?? '',
+    servicePeriodFrom: invoice.servicePeriodFrom ?? invoice.issueDate ?? invoice.date,
+    servicePeriodTo: invoice.servicePeriodTo ?? invoice.issueDate ?? invoice.date,
+    introText: invoice.introText ?? '',
+    closingText: invoice.closingText ?? '',
+    positions: buildPositionsFromInvoice(invoice),
+    summary: {
+      subtotalNet: invoice.subtotal,
+      taxRate,
+      taxAmount,
+      grossTotal,
+      deductionLines: buildDeductionLinesFromInvoice(invoice),
+      deductionsTotal,
+      amountDue,
+    },
+    taxStatus: invoice.taxStatus,
+    taxNotices: [...(invoice.legalNotices ?? [])],
+    paymentDueDate: invoice.paymentDueDate ?? '',
+    paymentTermsText: invoice.paymentTermsText ?? '',
+    skontoText: invoice.skontoText ?? '',
+    footerNotes: invoice.companySnapshot.invoiceFooterNotes,
+  };
 }
 
 export function buildInvoicePrintModel(
