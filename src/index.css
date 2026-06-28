@@ -918,6 +918,56 @@ body {
   margin-top: 0.5rem;
 }
 
+.contract-analysis__badges {
+  margin-bottom: 0.75rem;
+}
+
+.contract-analysis__reason {
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  margin: 0 0 1rem;
+}
+
+.contract-analysis__section {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.contract-analysis__subtitle {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+}
+
+.contract-analysis__list {
+  margin: 0;
+  padding-left: 1.25rem;
+  font-size: 0.9rem;
+}
+
+.contract-analysis__positions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.contract-analysis__position {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: 0.9rem;
+}
+
+.contract-analysis__position span {
+  color: var(--color-text-muted);
+}
+
+.contract-analysis__hint {
+  margin: 0.75rem 0 0;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
 @media (min-width: 768px) {
   .overview-kpi-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { ContractAnalysisPanel } from '../components/inbox/ContractAnalysisPanel';
 import { DocumentActionSuggestionsPanel } from '../components/inbox/DocumentActionSuggestionsPanel';
 import { ImportToArchiveDialog } from '../components/inbox/ImportToArchiveDialog';
 import { InboxVorgangPanel } from '../components/inbox/InboxVorgangPanel';
@@ -13,6 +14,7 @@ import { Button } from '../components/ui/Button';
 import { Badge, Card, DataRow, PageHeader } from '../components/ui/Card';
 import { useApp } from '../context/AppContext';
 import { formatPaperFilingInstruction } from '../services/analysisService';
+import { analyzeContractFromInbox } from '../services/contractAnalysisService';
 import { getClassifiedKindFromItem } from '../services/documentClassificationService';
 import { getLetterExplanation } from '../services/letterExplanationService';
 import {
@@ -68,8 +70,32 @@ export function EingangDetailPage() {
   const classifiedKindKey = `classifiedKind.${getClassifiedKindFromItem(item)}` as TranslationKey;
   const actionKey = `action.${item.recommendedAction}` as TranslationKey;
   const letterExplanation = getLetterExplanation(item);
+  const contractAnalysis = analyzeContractFromInbox(item);
 
   const goBack = () => navigate('/eingang');
+
+  const handleContractAction = (actionId: string) => {
+    switch (actionId) {
+      case 'create_vorgang':
+      case 'import_positions':
+        setVorgangDialogRequest((n) => n + 1);
+        break;
+      case 'archive_contract':
+        handleImportToArchive();
+        break;
+      case 'send_freistellung':
+        showToast(translate('contract.action.sendFreistellungHint'));
+        break;
+      case 'check_bg_bau':
+        showToast(translate('contract.action.checkBgBauHint'));
+        break;
+      case 'send_aok':
+        showToast(translate('contract.action.sendAokHint'));
+        break;
+      default:
+        break;
+    }
+  };
 
   const startEditing = () => {
     setEditDraft(createEditDraftFromItem(item));
@@ -251,7 +277,9 @@ export function EingangDetailPage() {
             {item.vorgangTitle && (
               <DataRow label={translate('analysis.vorgang')} value={item.vorgangTitle} />
             )}
-            {Object.entries(item.recognizedData).map(([key, value]) => (
+            {Object.entries(item.recognizedData)
+              .filter(([key]) => !key.startsWith('_'))
+              .map(([key, value]) => (
               <DataRow key={key} label={key} value={value} />
             ))}
             {item.deadline && (
@@ -260,6 +288,12 @@ export function EingangDetailPage() {
           </Card>
 
           {letterExplanation && <LetterExplanationPanel explanation={letterExplanation} />}
+
+          <ContractAnalysisPanel
+            analysis={contractAnalysis}
+            translate={translate}
+            onAction={handleContractAction}
+          />
 
           <DocumentActionSuggestionsPanel
             item={item}

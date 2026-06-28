@@ -208,6 +208,94 @@ export interface DocumentClassificationResult {
   actions: SuggestedDocumentAction[];
 }
 
+export type ContractType =
+  | 'werkvertrag'
+  | 'subunternehmervertrag'
+  | 'nachunternehmervertrag'
+  | 'bauvertrag'
+  | 'auftrag'
+  | 'leistungsverzeichnis';
+
+export type AnalysisConfidence = 'high' | 'medium' | 'low';
+
+export interface DetectedOrderPosition {
+  positionNumber?: string;
+  description: string;
+  unit: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+}
+
+export interface DetectedPaymentTerm {
+  type: 'net_days' | 'skonto' | 'abschlag' | 'weekly_abschlag' | 'schlussrechnung' | 'payment_due';
+  label: string;
+  value?: string;
+}
+
+export interface RequiredDocument {
+  type: string;
+  priority: InboxPriority;
+  reason: string;
+}
+
+export interface SignaturePage {
+  pageHint: string;
+  description: string;
+}
+
+export type ContractActionId =
+  | 'create_vorgang'
+  | 'import_positions'
+  | 'send_freistellung'
+  | 'check_bg_bau'
+  | 'send_aok'
+  | 'archive_contract';
+
+export interface ContractSuggestedAction {
+  id: ContractActionId;
+  labelKey: string;
+  variant?: 'primary' | 'secondary' | 'outline';
+}
+
+export interface ContractExtractedFields {
+  auftraggeber?: string;
+  subunternehmer?: string;
+  bauvorhaben?: string;
+  baustellenadresse?: string;
+  projektname?: string;
+  leistungszeitraum?: string;
+  vertragsdatum?: string;
+  auftragsnummer?: string;
+  bestellnummer?: string;
+  ansprechpartner?: string;
+  telefon?: string;
+  email?: string;
+}
+
+export interface ContractAnalysisInput {
+  recognizedText: string;
+  sourceFileName?: string;
+  titleHint?: string;
+  senderHint?: string;
+  kindHint?: UploadDocumentKind | ClassifiedDocumentKind;
+  recognizedData?: Record<string, string>;
+}
+
+export interface ContractAnalysisResult {
+  isContract: boolean;
+  contractType: ContractType | null;
+  confidence: AnalysisConfidence;
+  reason: string;
+  fields: ContractExtractedFields;
+  positions: DetectedOrderPosition[];
+  paymentTerms: DetectedPaymentTerm[];
+  requiredDocuments: RequiredDocument[];
+  signaturePages: SignaturePage[];
+  suggestedActions: ContractSuggestedAction[];
+  signatureHint?: string;
+}
+
 export interface CompanySetup {
   companyName: string;
   industry: string;

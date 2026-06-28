@@ -1,5 +1,6 @@
 import { MOCK_INBOX_ITEMS } from '../data/inboxMockData';
 import type { DocumentClassificationInput, InboxItem, UploadDocumentKind } from '../types/models';
+import { SAMPLE_WERKVERTRAG_TEXT } from './contractAnalysisService';
 import {
   classifyInboxItem,
 } from './documentClassificationService';
@@ -55,7 +56,11 @@ function enrichFromTemplate(
 
   return {
     ...classified,
-    recognizedData: { ...template.recognizedData, Dokumentart: classified.classifiedKind ?? '' },
+    recognizedData: {
+      ...template.recognizedData,
+      Dokumentart: classified.classifiedKind ?? '',
+      ...(kind === 'auftrag' ? { _vertragstext: SAMPLE_WERKVERTRAG_TEXT } : {}),
+    },
     taskTemplate: template.taskTemplate ? { ...template.taskTemplate } : classified.taskTemplate,
     vorgangId: template.vorgangId ?? classified.vorgangId,
     vorgangTitle: template.vorgangTitle ?? classified.vorgangTitle,
