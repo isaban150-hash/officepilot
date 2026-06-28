@@ -2,11 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { hydrateVorgangStore, getVorgangById } from './vorgangService';
 import {
   buildSchlussrechnungDraft,
+  canDeleteOrderPosition,
+  canEditOrderPositionField,
   finalizeInvoiceDraft,
   getBilledQuantity,
   getNextAbschlagNumber,
   getOpenQuantity,
   getOverbillingWarnings,
+  getPositionBillingStatus,
+  hasFinalSchlussrechnung,
   isPositionBillable,
 } from './invoiceService';
 import {
@@ -137,5 +141,85 @@ describe('getOverbillingWarnings', () => {
     const warnings = getOverbillingWarnings(draft);
     expect(warnings.length).toBeGreaterThan(0);
     expect(warnings[0]).toContain('Testleistung');
+  });
+});
+
+describe('getPositionBillingStatus', () => {
+  it('reports partial billing correctly', () => {
+    const vorgang = createTestVorgang({
+      invoices: [createAbschlagInvoice('op-test-1', 4)],
+    });
+    const status = getPositionBillingStatus(vorgang, 'op-test-1');
+
+    expect(status).toMatchObject({
+      billedQuantity: 4,
+      openQuantity: 6,
+      hasBilling: true,
+      isFullyBilled: false,
+    });
+  });
+});
+
+describe('canEditOrderPositionField', () => {
+  it('allows all fields when unbilled', () => {
+    const vorgang = createTestVorgang();
+    expect(canEditOrderPositionField(vorgang, 'op-test-1', 'unitPrice')).toBe(true);
+    expect(canEditOrderPositionField(vorgang, 'op-test-1', 'unit')).toBe(true);
+  });
+
+  it('locks price and unit after billing', () => {
+    const vorgang = createTestVorgang({
+      invoices: [createAbschlagInvoice('op-test-1', 2)],
+    });
+    expect(canEditOrderPositionField(vorgang, 'op-test-1', 'unitPrice')).toBe(false);
+    expect(canEditOrderPositionField(vorgang, 'op-test-1', 'unit')).toBe(false);
+    expect(canEditOrderPositionField(vorgang, 'op-test-1', 'category')).toBe(false);
+    expect(canEditOrderPositionField(vorgang, 'op-test-1', 'description')).toBe(true);
+    expect(canEditOrderPositionField(vorgang, 'op-test-1', 'plannedQuantity')).toBe(true);
+  });
+
+  it('locks all fields when schlussrechnung exists', () => {
+    const vorgang = createTestVorgang({
+      invoices: [
+        createAbschlagInvoice('op-test-1', 1, {
+          id: 'inv-s',
+          type: 'schluss',
+          abschlagNumber: undefined,
+        }),
+      ],
+    });
+    expect(canEditOrderPositionField(vorgang, 'op-test-1', 'description')).toBe(false);
+  });
+});
+
+describe('canDeleteOrderPosition', () => {
+  it('allows delete when unbilled', () => {
+    expect(canDeleteOrderPosition(createTestVorgang(), 'op-test-1')).toBe(true);
+  });
+
+  it('blocks delete when billed', () => {
+    const vorgang = createTestVorgang({
+      invoices: [createAbschlagInvoice('op-test-1', 1)],
+    });
+    expect(canDeleteOrderPosition(vorgang, 'op-test-1')).toBe(false);
+  });
+});
+
+describe('hasFinalSchlussrechnung', () => {
+  it('returns true for finalized schluss invoice', () => {
+    const vorgang = createTestVorgang({
+      invoices: [
+        createAbschlagInvoice('op-test-1', 1, {
+          id: 'inv-s',
+          type: 'schluss',
+          abschlagNumber: undefined,
+        }),
+      ],
+    });
+    expect(hasFinalSchlussrechnung(vorgang)).toBe(true);
+  });
+
+  it('returns false without schluss invoice', () => {
+    expect(hasFinalSchlussrechnung(createTestVorgang())).toBe(false);
   });
 });
