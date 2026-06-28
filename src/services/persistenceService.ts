@@ -10,6 +10,7 @@ import type {
   CustomerBilling,
   InboxItem,
   InvoiceNumberSequence,
+  InvoicePayment,
   Task,
   Vorgang,
   VorgangInvoice,
@@ -73,6 +74,10 @@ function cloneCompanyProfile(profile: CompanyProfile): CompanyProfile {
   return { ...profile, logoDataUrl: profile.logoDataUrl };
 }
 
+function cloneInvoicePayment(payment: InvoicePayment): InvoicePayment {
+  return { ...payment };
+}
+
 function cloneVorgangInvoice(invoice: VorgangInvoice): VorgangInvoice {
   return {
     ...invoice,
@@ -87,6 +92,7 @@ function cloneVorgangInvoice(invoice: VorgangInvoice): VorgangInvoice {
     companySnapshot: invoice.companySnapshot
       ? cloneCompanyProfile(invoice.companySnapshot)
       : undefined,
+    payments: (invoice.payments ?? []).map(cloneInvoicePayment),
   };
 }
 

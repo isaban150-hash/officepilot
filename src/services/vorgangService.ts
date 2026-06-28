@@ -12,6 +12,8 @@ import { persistAll } from './persistenceService';
 import type {
   CustomerBilling,
   InboxItem,
+  InvoicePayment,
+  InvoicePaymentStatus,
   MaterialStandard,
   OrderPosition,
   OrderPositionEditableField,
@@ -44,6 +46,10 @@ function cloneCustomerBilling(billing: CustomerBilling): CustomerBilling {
   return { ...billing };
 }
 
+function cloneInvoicePayment(payment: InvoicePayment): InvoicePayment {
+  return { ...payment };
+}
+
 function cloneVorgangInvoice(invoice: VorgangInvoice): VorgangInvoice {
   return {
     ...invoice,
@@ -56,6 +62,7 @@ function cloneVorgangInvoice(invoice: VorgangInvoice): VorgangInvoice {
       ? cloneCustomerBilling(invoice.customerSnapshot)
       : undefined,
     companySnapshot: invoice.companySnapshot ? { ...invoice.companySnapshot } : undefined,
+    payments: (invoice.payments ?? []).map(cloneInvoicePayment),
   };
 }
 
@@ -96,6 +103,7 @@ function normalizeVorgang(v: Vorgang): Vorgang {
       createdAt: inv.createdAt ?? inv.date,
       legalNotices: inv.legalNotices ?? [],
       previousAbschlagDeductions: inv.previousAbschlagDeductions ?? [],
+      payments: inv.payments ?? [],
     })),
   });
 
@@ -296,6 +304,69 @@ export function updateInvoiceArchiveDocumentId(
   ];
   updateVorgangInStore(vorgang);
   return { ...updatedInvoice };
+}
+
+function updateInvoicePaymentFields(
+  vorgangId: string,
+  invoiceId: string,
+  payments: InvoicePayment[],
+  paymentStatus: InvoicePaymentStatus,
+): VorgangInvoice | null {
+  const index = vorgaenge.findIndex((v) => v.id === vorgangId);
+  if (index === -1) return null;
+
+  const vorgang = cloneVorgang(vorgaenge[index]);
+  const invoiceIndex = vorgang.invoices.findIndex((item) => item.id === invoiceId);
+  if (invoiceIndex === -1) return null;
+
+  const current = vorgang.invoices[invoiceIndex];
+  const updatedInvoice: VorgangInvoice = {
+    ...current,
+    payments: payments.map(cloneInvoicePayment),
+    paymentStatus,
+  };
+
+  vorgang.invoices = [
+    ...vorgang.invoices.slice(0, invoiceIndex),
+    updatedInvoice,
+    ...vorgang.invoices.slice(invoiceIndex + 1),
+  ];
+  updateVorgangInStore(vorgang);
+  return cloneVorgangInvoice(updatedInvoice);
+}
+
+export function addPaymentToInvoice(
+  vorgangId: string,
+  invoiceId: string,
+  payment: InvoicePayment,
+  paymentStatus: InvoicePaymentStatus,
+): VorgangInvoice | null {
+  const invoice = getVorgangInvoice(vorgangId, invoiceId);
+  if (!invoice) return null;
+
+  return updateInvoicePaymentFields(
+    vorgangId,
+    invoiceId,
+    [...(invoice.payments ?? []), cloneInvoicePayment(payment)],
+    paymentStatus,
+  );
+}
+
+export function removePaymentFromInvoice(
+  vorgangId: string,
+  invoiceId: string,
+  paymentId: string,
+  paymentStatus: InvoicePaymentStatus,
+): VorgangInvoice | null {
+  const invoice = getVorgangInvoice(vorgangId, invoiceId);
+  if (!invoice) return null;
+
+  const payments = (invoice.payments ?? []).filter((payment) => payment.id !== paymentId);
+  if (payments.length === (invoice.payments ?? []).length) {
+    return null;
+  }
+
+  return updateInvoicePaymentFields(vorgangId, invoiceId, payments, paymentStatus);
 }
 
 function normalizeDescription(description: string): string {

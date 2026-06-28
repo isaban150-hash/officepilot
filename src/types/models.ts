@@ -283,6 +283,37 @@ export interface VorgangInvoiceLine {
   lineTotal: number;
 }
 
+export type InvoicePaymentStatus =
+  | 'offen'
+  | 'teilbezahlt'
+  | 'bezahlt'
+  | 'ueberfaellig'
+  | 'storniert';
+
+export interface InvoicePayment {
+  id: string;
+  date: string;
+  amount: number;
+  reference?: string;
+  note?: string;
+  createdAt: string;
+}
+
+export interface InvoicePaymentInput {
+  date: string;
+  amount: number;
+  reference?: string;
+  note?: string;
+}
+
+export interface PaymentSummary {
+  totalDue: number;
+  paidAmount: number;
+  openAmount: number;
+  overpaidAmount: number;
+  status: InvoicePaymentStatus;
+}
+
 export interface VorgangInvoice {
   id: string;
   number: string;
@@ -311,6 +342,10 @@ export interface VorgangInvoice {
   baustelle?: string;
   vorgangTitle?: string;
   archiveDocumentId?: string;
+  payments?: InvoicePayment[];
+  paymentStatus?: InvoicePaymentStatus;
+  cancelledAt?: string;
+  cancelReason?: string;
 }
 
 export interface Vorgang {
