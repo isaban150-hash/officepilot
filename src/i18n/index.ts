@@ -347,6 +347,12 @@ const de = {
   'invoice.saveAnyway': 'Trotzdem speichern',
   'invoice.previewHint': 'Bitte Vorschau prüfen und bestätigen. Keine automatische Versendung.',
   'invoice.previewReady': 'Vorschau bereit zur Prüfung.',
+  'invoice.continueToPreview': 'Weiter zur Vorschau',
+  'invoice.edit': 'Bearbeiten',
+  'invoice.finalize': 'Finalisieren',
+  'invoice.editSubtitle': 'Rechnungsdaten vor Finalisierung anpassen',
+  'invoice.backToPreview': 'Zurück zur Vorschau',
+  'invoice.backToPositions': 'Zurück zu Positionen',
   'invoice.overbillingTitle': 'Hinweis: Menge übersteigt offenen Rest',
   'invoice.overbillingConfirm':
     'Mindestens eine Position übersteigt die offene Menge. Trotzdem speichern?',

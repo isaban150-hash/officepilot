@@ -11,6 +11,7 @@ import type {
   CompanySetup,
   CustomerBilling,
   InvoiceDraft,
+  InvoiceDraftMetadataChanges,
   InvoiceDraftPosition,
   InvoiceTotals,
   MaterialStandard,
@@ -278,11 +279,14 @@ function buildBaseDraft(
     vorgangId: vorgang.id,
     vorgangTitle: vorgang.title,
     customer: vorgang.customer,
+    baustelle: vorgang.baustelle,
     type,
     abschlagNumber,
     taxStatus: setup.taxStatus,
     materialSource: vorgang.materialSource,
     positions,
+    introText: '',
+    closingText: '',
     ...buildDraftMetadata(vorgang, setup, type),
   };
 }
@@ -328,6 +332,31 @@ export function updateDraftPositionQuantity(
       return { ...p, quantity: Math.max(0, quantity) };
     }),
   };
+}
+
+export function updateInvoiceDraftMetadata(
+  draft: InvoiceDraft,
+  changes: InvoiceDraftMetadataChanges,
+): InvoiceDraft {
+  const next: InvoiceDraft = { ...draft };
+
+  if (changes.issueDate !== undefined) next.issueDate = changes.issueDate;
+  if (changes.servicePeriodFrom !== undefined) {
+    next.servicePeriodFrom = changes.servicePeriodFrom;
+  }
+  if (changes.servicePeriodTo !== undefined) next.servicePeriodTo = changes.servicePeriodTo;
+  if (changes.paymentDueDate !== undefined) next.paymentDueDate = changes.paymentDueDate;
+  if (changes.paymentTermsText !== undefined) next.paymentTermsText = changes.paymentTermsText;
+  if (changes.skontoText !== undefined) next.skontoText = changes.skontoText;
+  if (changes.introText !== undefined) next.introText = changes.introText;
+  if (changes.closingText !== undefined) next.closingText = changes.closingText;
+  if (changes.projectTitle !== undefined) next.vorgangTitle = changes.projectTitle;
+  if (changes.projectSite !== undefined) next.baustelle = changes.projectSite;
+  if (changes.customerBilling) {
+    next.customerBilling = { ...next.customerBilling, ...changes.customerBilling };
+  }
+
+  return next;
 }
 
 export function getAbschlagDeductionsTotal(deductions: AbschlagDeduction[]): number {
@@ -406,6 +435,9 @@ export function finalizeInvoiceDraft(
     companySnapshot: cloneCompanySnapshot(draft.companySnapshot),
     legalNotices: [...draft.legalNotices],
     previousAbschlagDeductions: draft.previousAbschlagDeductions.map((item) => ({ ...item })),
+    introText: draft.introText,
+    closingText: draft.closingText,
+    baustelle: draft.baustelle,
   };
 
   return addInvoiceToVorgang(vorgangId, invoice);

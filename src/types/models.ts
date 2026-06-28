@@ -306,6 +306,9 @@ export interface VorgangInvoice {
   companySnapshot?: CompanyProfile;
   legalNotices?: string[];
   previousAbschlagDeductions?: AbschlagDeduction[];
+  introText?: string;
+  closingText?: string;
+  baustelle?: string;
 }
 
 export interface Vorgang {
@@ -354,6 +357,7 @@ export interface InvoiceDraft {
   vorgangId: string;
   vorgangTitle: string;
   customer: string;
+  baustelle: string;
   type: 'abschlag' | 'schluss';
   abschlagNumber?: number;
   taxStatus: TaxStatus;
@@ -370,6 +374,70 @@ export interface InvoiceDraft {
   legalNotices: string[];
   previousAbschlagDeductions: AbschlagDeduction[];
   invoiceNumberPreview: string;
+  introText: string;
+  closingText: string;
+}
+
+export interface InvoicePrintPosition {
+  index: number;
+  description: string;
+  quantity: number;
+  unit: string;
+  unitPrice: number;
+  lineTotal: number;
+}
+
+export interface InvoicePrintDeductionLine {
+  label: string;
+  invoiceNumber: string;
+  amount: number;
+}
+
+export interface InvoicePrintSummary {
+  subtotalNet: number;
+  taxRate: number;
+  taxAmount: number;
+  grossTotal: number;
+  deductionLines: InvoicePrintDeductionLine[];
+  deductionsTotal: number;
+  amountDue: number;
+}
+
+export interface InvoicePrintModel {
+  type: 'abschlag' | 'schluss';
+  documentTitle: string;
+  invoiceNumber: string;
+  issueDate: string;
+  company: CompanyProfile;
+  customer: CustomerBilling;
+  projectTitle: string;
+  projectSite: string;
+  servicePeriodFrom: string;
+  servicePeriodTo: string;
+  introText: string;
+  closingText: string;
+  positions: InvoicePrintPosition[];
+  summary: InvoicePrintSummary;
+  taxStatus: TaxStatus;
+  taxNotices: string[];
+  paymentDueDate: string;
+  paymentTermsText: string;
+  skontoText: string;
+  footerNotes: string;
+}
+
+export interface InvoiceDraftMetadataChanges {
+  issueDate?: string;
+  servicePeriodFrom?: string;
+  servicePeriodTo?: string;
+  paymentDueDate?: string;
+  paymentTermsText?: string;
+  skontoText?: string;
+  introText?: string;
+  closingText?: string;
+  projectTitle?: string;
+  projectSite?: string;
+  customerBilling?: Partial<CustomerBilling>;
 }
 
 export interface InvoiceTotals {
