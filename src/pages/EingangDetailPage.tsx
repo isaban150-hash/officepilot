@@ -21,6 +21,7 @@ import { analyzeContractFromInbox } from '../services/contractAnalysisService';
 import { getClassifiedKindFromItem } from '../services/documentClassificationService';
 import { isClassificationKindWithTasks } from '../services/taskEngineService';
 import { getLetterExplanation } from '../services/letterExplanationService';
+import { executeSmartIntake } from '../services/intakeExecutionService';
 import {
   acceptSuggestedTasks,
   createWorkflowVorgang,
@@ -47,7 +48,13 @@ import {
   saveAdvertisementAnyway,
   updateInboxItemRecognizedData,
 } from '../services/inboxService';
-import type { ClassifiedDocumentKind, CompanyDocument, InboxItem, Vorgang } from '../types/models';
+import type {
+  ClassifiedDocumentKind,
+  CompanyDocument,
+  InboxItem,
+  Vorgang,
+  WorkflowResultExecution,
+} from '../types/models';
 import type { TranslationKey } from '../i18n';
 
 export function EingangDetailPage() {
@@ -64,6 +71,8 @@ export function EingangDetailPage() {
   const [vorgangDialogRequest, setVorgangDialogRequest] = useState(0);
   const [manualCategory, setManualCategory] = useState<ClassifiedDocumentKind>('sonstiges');
   const [intakeOpen, setIntakeOpen] = useState(false);
+  const [intakeExecution, setIntakeExecution] = useState<WorkflowResultExecution | null>(null);
+  const [isExecutingIntake, setIsExecutingIntake] = useState(false);
 
   const workflow = useMemo(
     () => (item ? processUploadedDocument(item.id) : null),
@@ -276,19 +285,16 @@ export function EingangDetailPage() {
     setIntakeOpen(false);
   };
 
-  const handleIntakeLinkVorgang = () => {
-    if (!workflow?.suggestedVorgang) {
-      setVorgangDialogRequest((n) => n + 1);
-      return;
-    }
-    const result = linkWorkflowVorgang(item, workflow.suggestedVorgang.vorgangId);
-    if (result) {
-      setItem(result.inbox);
-      showToast(translate('vorgang.link.success'));
-    }
-  };
-
   const handleIntakeCreateVorgang = () => {
+    if (workflow?.suggestedVorgang) {
+      const linked = linkWorkflowVorgang(item, workflow.suggestedVorgang.vorgangId);
+      if (linked) {
+        setItem(linked.inbox);
+        showToast(translate('vorgang.link.success'));
+        return;
+      }
+    }
+
     const result = createWorkflowVorgang(item, setup.materialStandard);
     if (result) {
       setItem(result.inbox);
@@ -321,6 +327,28 @@ export function EingangDetailPage() {
     }
   };
 
+  const handleExecuteAll = () => {
+    if (!workflow) return;
+    setIsExecutingIntake(true);
+    try {
+      const duplicate = isDuplicateDocument(item, setup.companyName);
+      const result = executeSmartIntake(workflow, {
+        companyName: setup.companyName,
+        materialStandard: setup.materialStandard,
+        duplicateMode: duplicate ? 'update' : 'create',
+      });
+      setIntakeExecution(result);
+      if (result.inboxItem) setItem(result.inboxItem);
+      if (result.completed) {
+        showToast(translate('intake.execute.success'));
+      } else if (result.failedSteps.length > 0) {
+        showToast(translate('intake.execute.partial'));
+      }
+    } finally {
+      setIsExecutingIntake(false);
+    }
+  };
+
   return (
     <div className={`page ${isEditing ? 'page--editing' : ''}`}>
       <button type="button" className="back-link" onClick={goBack}>
@@ -339,8 +367,10 @@ export function EingangDetailPage() {
         <SmartIntakeSummary
           workflow={workflow}
           item={item}
+          executionResult={intakeExecution}
+          isExecuting={isExecutingIntake}
+          onExecuteAll={handleExecuteAll}
           onArchive={handleIntakeArchive}
-          onLinkVorgang={handleIntakeLinkVorgang}
           onCreateVorgang={handleIntakeCreateVorgang}
           onImportPositions={handleIntakeImportPositions}
           onAcceptTasks={handleIntakeAcceptTasks}

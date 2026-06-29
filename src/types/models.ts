@@ -585,6 +585,34 @@ export interface WorkflowResult {
   nextActions: WorkflowNextAction[];
 }
 
+export type WorkflowExecutionStepId =
+  | 'archive_document'
+  | 'link_vorgang'
+  | 'create_vorgang'
+  | 'import_positions'
+  | 'apply_contract_fields'
+  | 'accept_tasks'
+  | 'refresh_pending'
+  | 'finalize_inbox';
+
+export interface WorkflowExecutionFailure {
+  step: WorkflowExecutionStepId;
+  message: string;
+}
+
+export interface WorkflowResultExecution {
+  completed: boolean;
+  successSteps: WorkflowExecutionStepId[];
+  failedSteps: WorkflowExecutionFailure[];
+  warnings: WorkflowWarning[];
+  inboxItem: InboxItem | null;
+  vorgangId?: string;
+  archiveDocumentId?: string;
+  tasksCreated: number;
+  positionsAdded: number;
+  pendingSummary: PendingSummary | null;
+}
+
 export interface CompanySetup {
   companyName: string;
   industry: string;

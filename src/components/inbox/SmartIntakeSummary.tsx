@@ -1,14 +1,16 @@
 import { Button } from '../ui/Button';
 import { Card, CardMeta, CardTitle } from '../ui/Card';
 import { useApp } from '../../context/AppContext';
-import type { InboxItem, WorkflowResult } from '../../types/models';
+import type { InboxItem, WorkflowResult, WorkflowResultExecution } from '../../types/models';
 import type { TranslationKey } from '../../i18n';
 
 interface SmartIntakeSummaryProps {
   workflow: WorkflowResult;
   item: InboxItem;
+  executionResult?: WorkflowResultExecution | null;
+  isExecuting?: boolean;
+  onExecuteAll: () => void;
   onArchive: () => void;
-  onLinkVorgang: () => void;
   onCreateVorgang: () => void;
   onImportPositions: () => void;
   onAcceptTasks: () => void;
@@ -40,8 +42,10 @@ function CheckRow({
 export function SmartIntakeSummary({
   workflow,
   item,
+  executionResult,
+  isExecuting = false,
+  onExecuteAll,
   onArchive,
-  onLinkVorgang,
   onCreateVorgang,
   onImportPositions,
   onAcceptTasks,
@@ -49,31 +53,6 @@ export function SmartIntakeSummary({
 }: SmartIntakeSummaryProps) {
   const { translate } = useApp();
   const kindKey = `classifiedKind.${workflow.classifiedKind}` as TranslationKey;
-
-  const handleAction = (actionId: WorkflowResult['nextActions'][number]['id']) => {
-    switch (actionId) {
-      case 'archive_document':
-        onArchive();
-        break;
-      case 'link_vorgang':
-        onLinkVorgang();
-        break;
-      case 'create_vorgang':
-        onCreateVorgang();
-        break;
-      case 'import_positions':
-        onImportPositions();
-        break;
-      case 'accept_tasks':
-        onAcceptTasks();
-        break;
-      case 'cancel':
-        onCancel();
-        break;
-      default:
-        break;
-    }
-  };
 
   const vorgangDetail = workflow.suggestedVorgang
     ? workflow.suggestedVorgang.vorgangTitle
@@ -84,10 +63,26 @@ export function SmartIntakeSummary({
         )
       : translate('intake.vorgang.createNew');
 
+  const canExecuteAll = workflow.companyRelevant && !item.isAdvertisement;
+
   return (
     <Card className="smart-intake-card" highlight>
       <CardTitle>{translate('intake.title')}</CardTitle>
       <CardMeta>{translate('intake.subtitle')}</CardMeta>
+
+      {executionResult?.completed && (
+        <p className="smart-intake-success">{translate('intake.execute.success')}</p>
+      )}
+
+      {executionResult && !executionResult.completed && executionResult.failedSteps.length > 0 && (
+        <div className="smart-intake-warnings">
+          {executionResult.failedSteps.map((failure) => (
+            <p key={`${failure.step}-${failure.message}`}>
+              {failure.step}: {failure.message}
+            </p>
+          ))}
+        </div>
+      )}
 
       <ul className="smart-intake-checks">
         <CheckRow
@@ -168,7 +163,7 @@ export function SmartIntakeSummary({
         />
       </ul>
 
-      {workflow.warnings.length > 0 && (
+      {workflow.warnings.length > 0 && !executionResult && (
         <div className="smart-intake-warnings">
           {workflow.warnings.map((warning) => (
             <p key={warning.id}>{warning.message}</p>
@@ -176,18 +171,57 @@ export function SmartIntakeSummary({
         </div>
       )}
 
+      <div className="smart-intake-actions smart-intake-actions--primary">
+        <Button
+          type="button"
+          fullWidth
+          disabled={!canExecuteAll || isExecuting || executionResult?.completed}
+          onClick={onExecuteAll}
+        >
+          {translate('intake.action.executeAll')}
+        </Button>
+      </div>
+
       <div className="smart-intake-actions">
-        {workflow.nextActions.map((action) => (
-          <Button
-            key={action.id}
-            type="button"
-            variant={action.id === 'cancel' ? 'ghost' : action.id === 'archive_document' ? 'primary' : 'outline'}
-            disabled={!action.enabled}
-            onClick={() => handleAction(action.id)}
-          >
-            {translate(action.labelKey as TranslationKey)}
-          </Button>
-        ))}
+        <Button
+          type="button"
+          variant="outline"
+          disabled={isExecuting || item.importedToArchive || !workflow.companyRelevant}
+          onClick={onArchive}
+        >
+          {translate('intake.action.archive')}
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={isExecuting || Boolean(item.vorgangId)}
+          onClick={onCreateVorgang}
+        >
+          {translate('intake.action.createVorgang')}
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={
+            isExecuting ||
+            workflow.suggestedOrderPositions.length === 0 ||
+            (!item.vorgangId && !workflow.suggestedVorgang)
+          }
+          onClick={onImportPositions}
+        >
+          {translate('intake.action.importPositions')}
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={isExecuting || workflow.suggestedTasks.length === 0}
+          onClick={onAcceptTasks}
+        >
+          {translate('intake.action.acceptTasks')}
+        </Button>
+        <Button type="button" variant="ghost" disabled={isExecuting} onClick={onCancel}>
+          {translate('intake.action.cancel')}
+        </Button>
       </div>
     </Card>
   );

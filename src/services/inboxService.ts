@@ -349,6 +349,20 @@ export function markInboxImportedToArchive(
   };
 }
 
+export function finalizeInboxIntake(inboxId: string): InboxItem | null {
+  const existing = findItem(inboxId);
+  if (!existing) return null;
+
+  if (existing.importedToArchive) {
+    return updateItem(inboxId, { isNewUpload: false });
+  }
+
+  return updateItem(inboxId, {
+    status: existing.status === 'neu' ? 'geprueft' : existing.status,
+    isNewUpload: false,
+  });
+}
+
 export function markInboxAsCompanyDocument(
   inboxId: string,
   category?: ClassifiedDocumentKind,

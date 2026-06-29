@@ -25,6 +25,7 @@ import {
   buildVorgangDraftFromInbox,
   createVorgangFromInbox,
   findSimilarVorgaenge,
+  getVorgangById,
   linkInboxToExistingVorgang,
 } from './vorgangService';
 import type {
@@ -315,10 +316,21 @@ export function acceptSuggestedTasks(proposals: TaskProposal[]): Task[] {
 export function importSuggestedPositionsToVorgang(
   vorgangId: string,
   positions: DetectedOrderPosition[],
-): { success: boolean; added: number } {
+): { success: boolean; added: number; skipped: number } {
+  const vorgang = getVorgangById(vorgangId);
+  const existingDescriptions = new Set(
+    (vorgang?.orderPositions ?? []).map((position) => position.description.trim().toLowerCase()),
+  );
   let added = 0;
+  let skipped = 0;
 
   for (const position of positions) {
+    const descriptionKey = position.description.trim().toLowerCase();
+    if (!descriptionKey || existingDescriptions.has(descriptionKey)) {
+      skipped += 1;
+      continue;
+    }
+
     const result = addOrderPosition(vorgangId, {
       description: position.description,
       plannedQuantity: position.quantity,
@@ -327,10 +339,13 @@ export function importSuggestedPositionsToVorgang(
       category: 'arbeit',
       billable: true,
     });
-    if (result.success) added += 1;
+    if (result.success) {
+      added += 1;
+      existingDescriptions.add(descriptionKey);
+    }
   }
 
-  return { success: added > 0, added };
+  return { success: added > 0, added, skipped };
 }
 
 export function linkWorkflowVorgang(

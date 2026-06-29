@@ -10,6 +10,7 @@ import {
 import { setInboxVorgangLink } from './inboxService';
 import { persistAll } from './persistenceService';
 import type {
+  ContractExtractedFields,
   CustomerBilling,
   InboxItem,
   InvoicePayment,
@@ -508,6 +509,50 @@ export function getVorgangCardMode(item: InboxItem): VorgangCardMode {
   }
 
   return 'none';
+}
+
+function emptyCustomerBilling(customer: string): CustomerBilling {
+  return {
+    name: customer,
+    contactPerson: '',
+    street: '',
+    zip: '',
+    city: '',
+    email: '',
+    phone: '',
+  };
+}
+
+export function applyContractFieldsToVorgang(
+  vorgangId: string,
+  fields: ContractExtractedFields,
+): { success: true; vorgang: Vorgang } | { success: false; errorKey: string } {
+  const vorgang = getVorgangById(vorgangId);
+  if (!vorgang) return { success: false, errorKey: 'position.vorgangNotFound' };
+
+  const updated = cloneVorgang(vorgang);
+  const title = fields.bauvorhaben ?? fields.projektname;
+  if (title && (!updated.title.trim() || updated.title.startsWith('Gerade erfasst'))) {
+    updated.title = title;
+  }
+  if (
+    fields.baustellenadresse &&
+    (!updated.baustelle.trim() || updated.baustelle === 'Unbekannte Baustelle')
+  ) {
+    updated.baustelle = fields.baustellenadresse;
+  }
+  if (fields.auftraggeber && !updated.customer.trim()) {
+    updated.customer = fields.auftraggeber;
+  }
+
+  const billing = { ...emptyCustomerBilling(updated.customer), ...(updated.customerBilling ?? {}) };
+  if (fields.ansprechpartner) billing.contactPerson = fields.ansprechpartner;
+  if (fields.telefon) billing.phone = fields.telefon;
+  if (fields.email) billing.email = fields.email;
+  if (fields.auftraggeber) billing.name = fields.auftraggeber;
+  updated.customerBilling = billing;
+
+  return { success: true, vorgang: updateVorgangInStore(updated) };
 }
 
 export function resetVorgaenge(): void {
