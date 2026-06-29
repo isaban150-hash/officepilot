@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { Card, CardMeta, CardTitle, PageHeader } from '../components/ui/Card';
 import { useApp } from '../context/AppContext';
-import { getAllPaperFolders } from '../services/analysisService';
+import { getAllPaperFolders } from '../services/paperFolderService';
 
 export function PapierarchivPage() {
   const { translate } = useApp();

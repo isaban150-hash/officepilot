@@ -15,10 +15,20 @@ import {
   scanPendingItems,
   scanRequiredContractDocuments,
 } from './pendingEngineService';
-import { getOpenTasks, getTodayTasks } from './taskService';
+import { getTasksFiltered } from './taskEngineService';
+import { getAllTasksFromStore } from './taskStore';
+import { isTaskOpen } from './taskNormalize';
 import { getTodayIso } from './taskNormalize';
 import { getAllVorgaenge } from './vorgangService';
 import type { AssistantAction, AssistantAnswer, CompanyDocument, Task, Vorgang } from '../types/models';
+
+function getOpenTasks(): Task[] {
+  return getAllTasksFromStore().filter(isTaskOpen);
+}
+
+function getTodayTasks(referenceDate?: Date | string): Task[] {
+  return getTasksFiltered('heute', referenceDate ?? new Date());
+}
 
 export const NO_DATA_MESSAGE = 'Ich habe dazu aktuell keine Informationen.';
 

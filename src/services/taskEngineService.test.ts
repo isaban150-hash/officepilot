@@ -23,8 +23,8 @@ import {
   confirmFiling,
   createContractTasksForItem,
   createTaskForItem,
-  hydrateInboxStore,
-} from './inboxService';
+} from './inboxTaskService';
+import { hydrateInboxStore } from './inboxService';
 import { analyzeContract, SAMPLE_WERKVERTRAG_TEXT } from './contractAnalysisService';
 import { hydrateVorgangStore } from './vorgangService';
 import { loadPersistedState, persistAll } from './persistenceService';

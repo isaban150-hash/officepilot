@@ -1,7 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from './components/layout/AppShell';
 import { useApp } from './context/AppContext';
-import { AnalysekartePage } from './pages/AnalysekartePage';
 import { AssistentPage } from './pages/AssistentPage';
 import { AufgabenPage } from './pages/AufgabenPage';
 import { DokumentDetailPage } from './pages/DokumentDetailPage';
@@ -35,7 +34,7 @@ function AppRoutes() {
       <Route element={<AppShell />}>
         <Route path="/eingang" element={<EingangPage />} />
         <Route path="/eingang/:id" element={<EingangDetailPage />} />
-        <Route path="/analyse" element={<AnalysekartePage />} />
+        <Route path="/analyse" element={<Navigate to="/assistent" replace />} />
         <Route path="/aufgaben" element={<AufgabenPage />} />
         <Route path="/vorgaenge" element={<VorgaengePage />} />
         <Route path="/vorgaenge/:id" element={<VorgangDetailPage />} />

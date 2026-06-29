@@ -1,4 +1,4 @@
-import { formatPaperFilingInstruction } from './analysisService';
+import { formatPaperFilingInstruction } from './paperFolderService';
 import type { InboxItem, InboxPriority, WorkflowLetterSummary } from '../types/models';
 
 export type LetterKind =

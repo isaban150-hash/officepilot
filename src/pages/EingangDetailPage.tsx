@@ -15,7 +15,7 @@ import {
 import { Button } from '../components/ui/Button';
 import { Badge, Card, DataRow, PageHeader } from '../components/ui/Card';
 import { useApp } from '../context/AppContext';
-import { formatPaperFilingInstruction } from '../services/analysisService';
+import { formatPaperFilingInstruction } from '../services/paperFolderService';
 import { letterExplanationFromWorkflow } from '../services/letterExplanationService';
 import { isClassificationKindWithTasks } from '../services/taskEngineService';
 import { executeSmartIntake } from '../services/intakeExecutionService';
@@ -33,9 +33,6 @@ import {
 } from '../services/documentService';
 import {
   confirmDispose,
-  confirmFiling,
-  createTaskForItem,
-  createContractTasksForItem,
   deferItem,
   getInboxItemById,
   getPriorityLabel,
@@ -45,6 +42,11 @@ import {
   saveAdvertisementAnyway,
   updateInboxItemRecognizedData,
 } from '../services/inboxService';
+import {
+  confirmFiling,
+  createContractTasksForItem,
+  createTaskForItem,
+} from '../services/inboxTaskService';
 import type {
   ClassifiedDocumentKind,
   CompanyDocument,

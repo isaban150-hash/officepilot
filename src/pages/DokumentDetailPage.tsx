@@ -4,7 +4,7 @@ import { DocumentForm } from '../components/documents/DocumentForm';
 import { Button } from '../components/ui/Button';
 import { Badge, Card, DataRow, PageHeader } from '../components/ui/Card';
 import { useApp } from '../context/AppContext';
-import { formatPaperFilingInstruction } from '../services/analysisService';
+import { formatPaperFilingInstruction } from '../services/paperFolderService';
 import { deleteDocument, getDocumentById } from '../services/documentService';
 import type { CompanyDocument } from '../types/models';
 import type { TranslationKey } from '../i18n';

@@ -1,12 +1,16 @@
 import { MOCK_VORGAENGE } from '../data/mockData';
 import { buildOrderPositionsFromInbox } from './orderPositionFactory';
 import {
+  canAddOrderPosition,
   canDeleteOrderPosition,
   canEditOrderPositionField,
-  canAddOrderPosition,
   getBilledQuantity,
   hasFinalSchlussrechnung,
-} from './invoiceService';
+} from './orderBillingRules';
+import {
+  buildVorgangDraftFromInbox as buildDraftFromInbox,
+  findSimilarVorgaenge as findSimilarInList,
+} from './vorgangMatchingService';
 import { setInboxVorgangLink } from './inboxVorgangLinkService';
 import { persistAll } from './persistenceService';
 import type {
@@ -37,10 +41,6 @@ export function getVorgangStoreSnapshot(): Vorgang[] {
 
 export function hydrateVorgangStore(items: Vorgang[]): void {
   vorgaenge = items.map(normalizeVorgang);
-}
-
-function normalize(value: string): string {
-  return value.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
 function cloneCustomerBilling(billing: CustomerBilling): CustomerBilling {
@@ -128,39 +128,11 @@ export function buildVorgangDraftFromInbox(
   item: InboxItem,
   defaultMaterial: MaterialStandard = 'unclear',
 ): VorgangDraft {
-  const leistung = item.recognizedData.Leistung;
-  const kunde = item.recognizedData.Kunde ?? item.sender;
-  const baustelle = item.recognizedData.Baustelle ?? 'Unbekannte Baustelle';
-
-  let title = item.vorgangTitle?.trim();
-  if (!title) {
-    title = leistung?.trim() || item.title.replace(/^Gerade erfasst: /, '');
-  }
-
-  return {
-    title,
-    customer: kunde,
-    baustelle,
-    materialSource: defaultMaterial,
-  };
+  return buildDraftFromInbox(item, defaultMaterial);
 }
 
 export function findSimilarVorgaenge(draft: VorgangDraft): Vorgang[] {
-  const customerNorm = normalize(draft.customer);
-  const baustelleNorm = normalize(draft.baustelle);
-
-  return getAllVorgaenge().filter((v) => {
-    const sameCustomer = normalize(v.customer) === customerNorm;
-    const sameBaustelle =
-      normalize(v.baustelle) === baustelleNorm ||
-      normalize(v.baustelle).includes(baustelleNorm) ||
-      baustelleNorm.includes(normalize(v.baustelle));
-    const titleOverlap =
-      normalize(v.title).includes(normalize(draft.customer)) ||
-      normalize(draft.title).includes(normalize(v.customer));
-
-    return sameCustomer || (sameCustomer && sameBaustelle) || (sameBaustelle && titleOverlap);
-  });
+  return findSimilarInList(draft, getAllVorgaenge());
 }
 
 function inboxDocumentName(item: InboxItem): string {

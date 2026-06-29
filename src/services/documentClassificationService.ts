@@ -1,6 +1,7 @@
 import { PAPER_FOLDERS } from '../data/mockData';
-import { getPaperFolderById } from './analysisService';
-import { buildVorgangDraftFromInbox, findSimilarVorgaenge, getVorgangById } from './vorgangService';
+import { getPaperFolderById } from './paperFolderService';
+import { buildVorgangDraftFromInbox, findSimilarVorgaenge } from './vorgangMatchingService';
+import { getAllVorgaenge, getVorgangById } from './vorgangService';
 import {
   buildDigitalFolderSpec,
   buildExplanation,
@@ -281,7 +282,7 @@ export function suggestRelatedVorgang(
   };
 
   const draft = buildVorgangDraftFromInbox(draftItem, 'betrieb');
-  const matches = findSimilarVorgaenge(draft);
+  const matches = findSimilarVorgaenge(draft, getAllVorgaenge());
   if (matches.length === 0) return null;
 
   const best = matches[0];

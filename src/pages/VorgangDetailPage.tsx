@@ -4,7 +4,7 @@ import { Button } from '../components/ui/Button';
 import { OrderPositionForm } from '../components/vorgang/OrderPositionForm';
 import { Badge, Card, CardMeta, CardTitle, DataRow, PageHeader } from '../components/ui/Card';
 import { useApp } from '../context/AppContext';
-import { formatPaperFilingInstruction } from '../services/analysisService';
+import { formatPaperFilingInstruction } from '../services/paperFolderService';
 import {
   canAddOrderPosition,
   canDeleteOrderPosition,

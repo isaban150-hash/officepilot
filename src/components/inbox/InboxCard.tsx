@@ -3,13 +3,13 @@ import { Badge, Card, CardMeta, CardTitle, DataRow } from '../ui/Card';
 import { useApp } from '../../context/AppContext';
 import {
   confirmDispose,
-  confirmFiling,
   deferItem,
   getPriorityLabel,
   getStatusLabel,
   saveAdvertisementAnyway,
 } from '../../services/inboxService';
-import { formatPaperFilingInstruction } from '../../services/analysisService';
+import { confirmFiling } from '../../services/inboxTaskService';
+import { formatPaperFilingInstruction } from '../../services/paperFolderService';
 import type { InboxItem } from '../../types/models';
 import type { TranslationKey } from '../../i18n';
 
