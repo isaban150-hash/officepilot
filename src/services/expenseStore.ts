@@ -1,5 +1,5 @@
 import { MOCK_EXPENSES } from '../data/expenseMockData';
-import type { Expense } from '../types/expense';
+import type { Expense, ExpensePayment, ExpensePaymentStatus } from '../types/expense';
 import { normalizeExpense } from './expenseNormalize';
 
 function cloneExpense(expense: Expense): Expense {
@@ -53,4 +53,58 @@ export function deleteExpenseFromStore(id: string): Expense | null {
 
 export function setExpenseStoreForTests(items: Expense[]): void {
   expenses = items.map((item) => normalizeExpense(item));
+}
+
+function cloneExpensePayment(payment: ExpensePayment): ExpensePayment {
+  return { ...payment };
+}
+
+function updateExpensePaymentFields(
+  expenseId: string,
+  payments: ExpensePayment[],
+  paymentStatus: ExpensePaymentStatus,
+): Expense | null {
+  const current = expenses.find((item) => item.id === expenseId);
+  if (!current) return null;
+
+  const normalized = normalizeExpense({
+    ...current,
+    payments: payments.map(cloneExpensePayment),
+    paymentStatus,
+    updatedAt: new Date().toISOString(),
+  });
+
+  expenses = expenses.map((item) => (item.id === expenseId ? normalized : item));
+  return cloneExpense(normalized);
+}
+
+export function addPaymentToExpense(
+  expenseId: string,
+  payment: ExpensePayment,
+  paymentStatus: ExpensePaymentStatus,
+): Expense | null {
+  const current = expenses.find((item) => item.id === expenseId);
+  if (!current) return null;
+
+  return updateExpensePaymentFields(
+    expenseId,
+    [...(current.payments ?? []), cloneExpensePayment(payment)],
+    paymentStatus,
+  );
+}
+
+export function removePaymentFromExpense(
+  expenseId: string,
+  paymentId: string,
+  paymentStatus: ExpensePaymentStatus,
+): Expense | null {
+  const current = expenses.find((item) => item.id === expenseId);
+  if (!current) return null;
+
+  const payments = (current.payments ?? []).filter((payment) => payment.id !== paymentId);
+  if (payments.length === (current.payments ?? []).length) {
+    return null;
+  }
+
+  return updateExpensePaymentFields(expenseId, payments, paymentStatus);
 }

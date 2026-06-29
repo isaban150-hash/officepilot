@@ -11,6 +11,11 @@ import {
   buildExpenseDedupeKey,
   normalizeExpense,
 } from './expenseNormalize';
+import { normalizeExpensePaymentFields } from './expensePaymentCalculations';
+import {
+  recordExpensePayment,
+  removeExpensePayment,
+} from './expensePaymentService';
 import { EXPENSE_CATEGORIES } from './expenseCategoryMapping';
 import type {
   Expense,
@@ -85,6 +90,7 @@ function buildExpenseFromInput(
     grossAmount,
     currency: input.currency ?? 'EUR',
     paymentStatus: 'offen',
+    payments: [],
     positions: [],
     allocations: [],
     linkedInboxId: input.linkedInboxId,
@@ -205,14 +211,17 @@ export function updateExpense(id: string, changes: Partial<ExpenseInput>): Expen
 
   const now = new Date().toISOString();
   const updated = buildExpenseFromInput(merged, current.id, current.createdAt, now);
-  replaceExpenseInStore(id, {
-    ...updated,
-    paymentStatus: current.paymentStatus,
-    positions: current.positions,
-    allocations: current.allocations,
-    cancelledAt: current.cancelledAt,
-    cancelReason: current.cancelReason,
-  });
+  replaceExpenseInStore(
+    id,
+    normalizeExpensePaymentFields({
+      ...updated,
+      payments: current.payments ?? [],
+      positions: current.positions,
+      allocations: current.allocations,
+      cancelledAt: current.cancelledAt,
+      cancelReason: current.cancelReason,
+    }),
+  );
   persistAll();
   return { success: true, expense: getExpenseById(id)! };
 }
@@ -251,4 +260,15 @@ export function getExpenseSummary(): ExpenseSummary {
     totalGrossAmount,
     byCategory,
   };
+}
+
+export function addPaymentToExpense(
+  expenseId: string,
+  input: Parameters<typeof recordExpensePayment>[1],
+) {
+  return recordExpensePayment(expenseId, input);
+}
+
+export function removePaymentFromExpense(expenseId: string, paymentId: string) {
+  return removeExpensePayment(expenseId, paymentId);
 }

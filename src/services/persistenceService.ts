@@ -55,6 +55,7 @@ import {
 } from './taskService';
 import { normalizeTask } from './taskNormalize';
 import { normalizeExpense } from './expenseNormalize';
+import { normalizeExpensePaymentFields } from './expensePaymentCalculations';
 
 export const STORAGE_KEY = 'officepilot-state';
 export const LEGACY_SETUP_KEY = 'officepilot-setup';
@@ -132,7 +133,7 @@ function cloneCompanyDocument(doc: CompanyDocument): CompanyDocument {
 }
 
 function cloneExpense(expense: Expense): Expense {
-  return normalizeExpense(expense);
+  return normalizeExpensePaymentFields(normalizeExpense(expense));
 }
 
 export function loadLegacySetup(): CompanySetup | null {

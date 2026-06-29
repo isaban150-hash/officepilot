@@ -2,6 +2,7 @@ import type {
   Expense,
   ExpensePaymentStatus,
   ExpenseStatus,
+  ExpensePayment,
 } from '../types/expense';
 
 export const EXPENSE_STATUSES: ExpenseStatus[] = ['entwurf', 'gebucht', 'storniert'];
@@ -32,6 +33,10 @@ function coerceAmount(value: unknown, fallback = 0): number {
     return Number.isFinite(parsed) ? parsed : fallback;
   }
   return fallback;
+}
+
+function cloneExpensePayment(payment: ExpensePayment): ExpensePayment {
+  return { ...payment };
 }
 
 function resolveStatus(raw: Partial<Expense>): ExpenseStatus {
@@ -78,6 +83,7 @@ export function normalizeExpense(raw: Partial<Expense> & Pick<Expense, 'id'>): E
     grossAmount,
     currency: raw.currency?.trim() || 'EUR',
     paymentStatus,
+    payments: (raw.payments ?? []).map(cloneExpensePayment),
     positions: (raw.positions ?? []).map((line) => ({ ...line })),
     allocations: (raw.allocations ?? []).map((allocation) => ({ ...allocation })),
     linkedInboxId: raw.linkedInboxId,

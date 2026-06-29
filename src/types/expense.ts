@@ -24,6 +24,30 @@ export type ExpensePaymentStatus =
   | 'ueberfaellig'
   | 'storniert';
 
+export interface ExpensePayment {
+  id: string;
+  date: string;
+  amount: number;
+  reference?: string;
+  note?: string;
+  createdAt: string;
+}
+
+export interface ExpensePaymentInput {
+  date: string;
+  amount: number;
+  reference?: string;
+  note?: string;
+}
+
+export interface ExpensePaymentSummary {
+  totalDue: number;
+  paidAmount: number;
+  openAmount: number;
+  overpaidAmount: number;
+  status: ExpensePaymentStatus;
+}
+
 export interface ExpenseLine {
   id: string;
   description: string;
@@ -57,6 +81,7 @@ export interface Expense {
   grossAmount: number;
   currency: string;
   paymentStatus: ExpensePaymentStatus;
+  payments?: ExpensePayment[];
   positions: ExpenseLine[];
   allocations: ExpenseAllocation[];
   linkedInboxId?: string;
@@ -100,6 +125,7 @@ export interface ExpenseInput {
 
 export interface ExpenseOverviewItem {
   expense: Expense;
+  paymentSummary: ExpensePaymentSummary;
 }
 
 export interface ExpenseSummary {

@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from './components/layout/AppShell';
 import { useApp } from './context/AppContext';
+import { OffeneAusgabenPage } from './pages/OffeneAusgabenPage';
 import { AusgabeDetailPage } from './pages/AusgabeDetailPage';
 import { AusgabeNeuPage } from './pages/AusgabeNeuPage';
 import { AusgabenPage } from './pages/AusgabenPage';
@@ -48,6 +49,7 @@ function AppRoutes() {
         <Route path="/dokumente/neu" element={<DokumentNeuPage />} />
         <Route path="/dokumente/:id" element={<DokumentDetailPage />} />
         <Route path="/ausgaben" element={<AusgabenPage />} />
+        <Route path="/ausgaben/offen" element={<OffeneAusgabenPage />} />
         <Route path="/ausgaben/neu" element={<AusgabeNeuPage />} />
         <Route path="/ausgaben/:id" element={<AusgabeDetailPage />} />
         <Route path="/papierarchiv" element={<PapierarchivPage />} />

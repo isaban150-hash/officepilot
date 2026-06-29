@@ -1,10 +1,19 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ExpenseForm } from '../components/expenses/ExpenseForm';
+import { ExpensePaymentForm } from '../components/expenses/ExpensePaymentForm';
+import { getExpensePaymentSavedToastKey } from '../components/expenses/ExpensePaymentSummary';
+import { ExpensePaymentHistory } from '../components/expenses/ExpensePaymentHistory';
+import { ExpensePaymentSummary } from '../components/expenses/ExpensePaymentSummary';
 import { Button } from '../components/ui/Button';
 import { Badge, Card, DataRow, PageHeader } from '../components/ui/Card';
 import { useApp } from '../context/AppContext';
 import { formatPaperFilingInstruction } from '../services/paperFolderService';
+import {
+  isExpenseCancelled,
+  isExpensePayable,
+  removeExpensePayment,
+} from '../services/expensePaymentService';
 import { deleteExpense, getExpenseById } from '../services/expenseService';
 import type { Expense } from '../types/expense';
 import type { TranslationKey } from '../i18n';
@@ -24,6 +33,8 @@ function formatEuro(amount: number): string {
 
 export function AusgabeDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
+  const fromOverview = searchParams.get('from') === 'overview';
   const { translate, showToast } = useApp();
   const navigate = useNavigate();
   const [expense, setExpense] = useState<Expense | undefined>(() =>
@@ -31,6 +42,7 @@ export function AusgabeDetailPage() {
   );
   const [isEditing, setIsEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [showPaymentForm, setShowPaymentForm] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -50,7 +62,6 @@ export function AusgabeDetailPage() {
 
   const categoryKey = `expense.category.${expense.category}` as TranslationKey;
   const statusKey = `expense.status.${expense.status}` as TranslationKey;
-  const paymentStatusKey = `expense.paymentStatus.${expense.paymentStatus}` as TranslationKey;
 
   const handleDelete = () => {
     const result = deleteExpense(expense.id);
@@ -58,6 +69,21 @@ export function AusgabeDetailPage() {
       showToast(translate('expense.deleted'));
       navigate('/ausgaben', { replace: true });
     }
+  };
+
+  const handlePaymentSaved = (updated: Expense) => {
+    setExpense(updated);
+    showToast(translate(getExpensePaymentSavedToastKey(updated)));
+  };
+
+  const handleRemovePayment = (paymentId: string) => {
+    const result = removeExpensePayment(expense.id, paymentId);
+    if (!result.success) {
+      showToast(translate(result.errorKey as TranslationKey));
+      return;
+    }
+    setExpense(result.expense);
+    showToast(translate('expense.payment.removedSuccess'));
   };
 
   if (isEditing) {
@@ -82,8 +108,12 @@ export function AusgabeDetailPage() {
 
   return (
     <div className="page">
-      <button type="button" className="back-link" onClick={() => navigate('/ausgaben')}>
-        ← {translate('common.back')}
+      <button
+        type="button"
+        className="back-link"
+        onClick={() => navigate(fromOverview ? '/ausgaben/offen' : '/ausgaben')}
+      >
+        ← {fromOverview ? translate('expenseOverview.backToOverview') : translate('common.back')}
       </button>
 
       <PageHeader title={expense.title} subtitle={expense.supplierName} />
@@ -91,8 +121,24 @@ export function AusgabeDetailPage() {
       <div className="badge-row">
         <Badge tone="info">{translate(categoryKey)}</Badge>
         <Badge>{translate(statusKey)}</Badge>
-        <Badge tone="warning">{translate(paymentStatusKey)}</Badge>
       </div>
+
+      <div className="invoice-detail__actions">
+        {isExpensePayable(expense) && !isExpenseCancelled(expense) && (
+          <Button type="button" onClick={() => setShowPaymentForm(true)}>
+            {translate('payment.record')}
+          </Button>
+        )}
+      </div>
+
+      <Card className="invoice-detail__payment">
+        <ExpensePaymentSummary expense={expense} translate={translate} />
+        <ExpensePaymentHistory
+          expense={expense}
+          translate={translate}
+          onRemovePayment={handleRemovePayment}
+        />
+      </Card>
 
       <Card>
         <DataRow label={translate('expense.fieldSupplier')} value={expense.supplierName} />
@@ -147,6 +193,14 @@ export function AusgabeDetailPage() {
           </>
         )}
       </div>
+
+      <ExpensePaymentForm
+        expense={expense}
+        open={showPaymentForm}
+        onClose={() => setShowPaymentForm(false)}
+        onSaved={handlePaymentSaved}
+        translate={translate}
+      />
     </div>
   );
 }

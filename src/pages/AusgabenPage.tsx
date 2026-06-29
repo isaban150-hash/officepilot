@@ -59,6 +59,11 @@ export function AusgabenPage() {
             {translate('expense.add')}
           </Button>
         </Link>
+        <Link to="/ausgaben/offen">
+          <Button variant="outline" fullWidth>
+            {translate('expense.openLiabilities')}
+          </Button>
+        </Link>
       </div>
 
       <div className="document-toolbar">

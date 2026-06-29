@@ -1076,7 +1076,10 @@ export type {
   ExpenseInput,
   ExpenseLine,
   ExpenseOverviewItem,
+  ExpensePayment,
+  ExpensePaymentInput,
   ExpensePaymentStatus,
+  ExpensePaymentSummary,
   ExpenseStatus,
   ExpenseSummary,
 } from './expense';
