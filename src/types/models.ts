@@ -1054,6 +1054,8 @@ export interface CompanyDocumentInput {
   linkedInvoiceId?: string | null;
 }
 
+import type { Expense } from './expense';
+
 export interface AppPersistedState {
   version: number;
   setup: CompanySetup;
@@ -1063,5 +1065,18 @@ export interface AppPersistedState {
   vorgaenge: Vorgang[];
   tasks: Task[];
   documents: CompanyDocument[];
+  expenses?: Expense[];
   savedAt: string;
 }
+
+export type {
+  Expense,
+  ExpenseAllocation,
+  ExpenseCategory,
+  ExpenseInput,
+  ExpenseLine,
+  ExpenseOverviewItem,
+  ExpensePaymentStatus,
+  ExpenseStatus,
+  ExpenseSummary,
+} from './expense';

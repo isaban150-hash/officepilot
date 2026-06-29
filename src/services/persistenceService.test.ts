@@ -21,6 +21,7 @@ function minimalState(overrides: Partial<AppPersistedState> = {}): AppPersistedS
     vorgaenge: [],
     tasks: [],
     documents: [],
+    expenses: [],
     savedAt: '2026-03-27T12:00:00.000Z',
     ...overrides,
   };
@@ -85,5 +86,45 @@ describe('createSeedState', () => {
     expect(seed.inboxItems.length).toBeGreaterThan(0);
     expect(seed.vorgaenge.length).toBeGreaterThan(0);
     expect(seed.documents.length).toBeGreaterThan(0);
+    expect(seed.expenses?.length).toBeGreaterThan(0);
+  });
+});
+
+describe('expenses persistence', () => {
+  it('roundtrips expenses in persisted state', () => {
+    const state = minimalState({
+      expenses: [
+        {
+          id: 'exp-test-1',
+          status: 'gebucht',
+          category: 'material',
+          supplierName: 'Test Lieferant',
+          invoiceNumber: 'R-1',
+          title: 'Test Ausgabe',
+          description: '',
+          issueDate: '2026-03-01',
+          paymentDueDate: null,
+          taxStatus: 'standard_19',
+          netAmount: 100,
+          taxAmount: 19,
+          grossAmount: 119,
+          currency: 'EUR',
+          paymentStatus: 'offen',
+          positions: [],
+          allocations: [],
+          isCreditNote: false,
+          dedupeKey: 'test lieferant|r-1',
+          tags: [],
+          digitalFolder: { id: 'dig-1', name: 'Ausgaben', path: '/Ausgaben/' },
+          paperFolder: { folderId: 'folder-1', register: 'A', label: 'Test' },
+          createdAt: '2026-03-01T10:00:00.000Z',
+          updatedAt: '2026-03-01T10:00:00.000Z',
+        },
+      ],
+    });
+    savePersistedState(state);
+    const loaded = loadPersistedState();
+    expect(loaded?.expenses).toHaveLength(1);
+    expect(loaded?.expenses?.[0].title).toBe('Test Ausgabe');
   });
 });

@@ -2,12 +2,14 @@ import { DEFAULT_SETUP, MOCK_TASKS, MOCK_VORGAENGE } from '../data/mockData';
 import { createCompanyProfileFromSetup } from '../data/companyProfileDefaults';
 import { MOCK_INBOX_ITEMS } from '../data/inboxMockData';
 import { MOCK_COMPANY_DOCUMENTS } from '../data/documentMockData';
+import { MOCK_EXPENSES } from '../data/expenseMockData';
 import type {
   AppPersistedState,
   CompanyDocument,
   CompanyProfile,
   CompanySetup,
   CustomerBilling,
+  Expense,
   InboxItem,
   InvoiceNumberSequence,
   InvoicePayment,
@@ -26,6 +28,11 @@ import {
   hydrateDocumentStore,
   resetDocuments,
 } from './documentService';
+import {
+  getExpenseStoreSnapshot,
+  hydrateExpenseStore,
+  resetExpenses,
+} from './expenseStore';
 import {
   getInvoiceNumberSequenceSnapshot,
   hydrateInvoiceNumberSequence,
@@ -47,6 +54,7 @@ import {
   resetTasks,
 } from './taskService';
 import { normalizeTask } from './taskNormalize';
+import { normalizeExpense } from './expenseNormalize';
 
 export const STORAGE_KEY = 'officepilot-state';
 export const LEGACY_SETUP_KEY = 'officepilot-setup';
@@ -123,6 +131,10 @@ function cloneCompanyDocument(doc: CompanyDocument): CompanyDocument {
   };
 }
 
+function cloneExpense(expense: Expense): Expense {
+  return normalizeExpense(expense);
+}
+
 export function loadLegacySetup(): CompanySetup | null {
   try {
     const stored = localStorage.getItem(LEGACY_SETUP_KEY);
@@ -153,6 +165,7 @@ export function createSeedState(setupOverride?: CompanySetup): AppPersistedState
       normalizeTask(t),
     ),
     documents: MOCK_COMPANY_DOCUMENTS.map(cloneCompanyDocument),
+    expenses: MOCK_EXPENSES.map(cloneExpense),
     savedAt: new Date().toISOString(),
   };
 }
@@ -166,6 +179,7 @@ function isValidPersistedState(value: unknown): value is AppPersistedState {
     Array.isArray(state.vorgaenge) &&
     Array.isArray(state.tasks) &&
     (Array.isArray(state.documents) || state.documents === undefined) &&
+    (Array.isArray(state.expenses) || state.expenses === undefined) &&
     typeof state.setup === 'object' &&
     state.setup !== null
   );
@@ -194,6 +208,7 @@ export function loadPersistedState(): AppPersistedState | null {
       vorgaenge: parsed.vorgaenge.map(cloneVorgang),
       tasks: parsed.tasks.map(cloneTask),
       documents: (parsed.documents ?? MOCK_COMPANY_DOCUMENTS).map(cloneCompanyDocument),
+      expenses: (parsed.expenses ?? []).map(cloneExpense),
     };
   } catch (error) {
     console.warn('[OfficePilot] localStorage konnte nicht gelesen werden:', error);
@@ -237,6 +252,7 @@ function applyStateToStores(state: AppPersistedState): void {
   hydrateVorgangStore(state.vorgaenge);
   hydrateTaskStore(state.tasks);
   hydrateDocumentStore(state.documents ?? []);
+  hydrateExpenseStore(state.expenses ?? []);
 }
 
 export function hydrateStoresFromStorage(): CompanySetup {
@@ -266,6 +282,7 @@ export function persistAll(setupOverride?: CompanySetup): void {
     vorgaenge: getVorgangStoreSnapshot(),
     tasks: getTaskStoreSnapshot(),
     documents: getDocumentStoreSnapshot(),
+    expenses: getExpenseStoreSnapshot(),
     savedAt: new Date().toISOString(),
   };
 
@@ -280,6 +297,7 @@ export function resetDemoData(options?: { keepSetup?: boolean }): CompanySetup {
   resetVorgaenge();
   resetTasks();
   resetDocuments();
+  resetExpenses();
   resetCompanyProfile(setup.companyName);
   resetInvoiceNumberSequence();
 
