@@ -3,8 +3,7 @@ import { AssistantAnswerCard } from '../components/assistant/AssistantAnswerCard
 import { Button } from '../components/ui/Button';
 import { Card, PageHeader } from '../components/ui/Card';
 import { useApp } from '../context/AppContext';
-import { ASSISTANT_SUGGESTIONS } from '../data/mockData';
-import { answerQuestion } from '../services/officeAssistantService';
+import { answerQuestion, ASSISTANT_EXAMPLE_QUESTION_KEYS } from '../services/officeAssistantService';
 import type { AssistantAnswer } from '../types/models';
 import type { TranslationKey } from '../i18n';
 
@@ -63,14 +62,14 @@ export function AssistentPage() {
       <section className="section">
         <h2 className="section__title">{translate('assistant.examples')}</h2>
         <div className="chip-group">
-          {ASSISTANT_SUGGESTIONS.map((s) => (
+          {ASSISTANT_EXAMPLE_QUESTION_KEYS.map((questionKey) => (
             <button
-              key={s.id}
+              key={questionKey}
               type="button"
               className="chip"
-              onClick={() => handleSuggestion(s.questionKey)}
+              onClick={() => handleSuggestion(questionKey)}
             >
-              {translate(s.questionKey as TranslationKey)}
+              {translate(questionKey as TranslationKey)}
             </button>
           ))}
         </div>

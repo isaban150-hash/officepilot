@@ -7,7 +7,7 @@ import {
   getBilledQuantity,
   hasFinalSchlussrechnung,
 } from './invoiceService';
-import { setInboxVorgangLink } from './inboxService';
+import { setInboxVorgangLink } from './inboxVorgangLinkService';
 import { persistAll } from './persistenceService';
 import type {
   ContractExtractedFields,

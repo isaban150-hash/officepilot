@@ -16,11 +16,8 @@ import { Button } from '../components/ui/Button';
 import { Badge, Card, DataRow, PageHeader } from '../components/ui/Card';
 import { useApp } from '../context/AppContext';
 import { formatPaperFilingInstruction } from '../services/analysisService';
-import { checkCompanyRelevanceFromInbox } from '../services/companyRelevanceService';
-import { analyzeContractFromInbox } from '../services/contractAnalysisService';
-import { getClassifiedKindFromItem } from '../services/documentClassificationService';
+import { letterExplanationFromWorkflow } from '../services/letterExplanationService';
 import { isClassificationKindWithTasks } from '../services/taskEngineService';
-import { getLetterExplanation } from '../services/letterExplanationService';
 import { executeSmartIntake } from '../services/intakeExecutionService';
 import {
   acceptSuggestedTasks,
@@ -59,7 +56,7 @@ import type { TranslationKey } from '../i18n';
 
 export function EingangDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { translate, showToast, setup, companyProfile } = useApp();
+  const { translate, showToast, setup } = useApp();
   const navigate = useNavigate();
   const [item, setItem] = useState<InboxItem | undefined>(() =>
     id ? getInboxItemById(id) : undefined,
@@ -99,19 +96,19 @@ export function EingangDetailPage() {
     }
   }, [id, navigate]);
 
-  if (!item) return null;
+  if (!item || !workflow) return null;
 
   const docTypeKey = `docType.${item.documentType}` as TranslationKey;
   const actionKey = `action.${item.recommendedAction}` as TranslationKey;
-  const relevance = checkCompanyRelevanceFromInbox(item, companyProfile);
-  const analysisAllowed = relevance.isRelevant;
-  const classifiedKind = getClassifiedKindFromItem(item);
+  const relevance = workflow.companyRelevance;
+  const analysisAllowed = workflow.companyRelevant;
+  const classifiedKind = workflow.classifiedKind;
   const classifiedKindKey = `classifiedKind.${classifiedKind}` as TranslationKey;
   const canCreateTask =
     analysisAllowed &&
     (Boolean(item.taskTemplate) || isClassificationKindWithTasks(classifiedKind));
-  const letterExplanation = analysisAllowed ? getLetterExplanation(item) : null;
-  const contractAnalysis = analysisAllowed ? analyzeContractFromInbox(item) : null;
+  const letterExplanation = letterExplanationFromWorkflow(workflow.documentExplanation);
+  const contractAnalysis = workflow.contractAnalysis;
 
   const handleMarkAsCompanyDocument = () => {
     const updated = markInboxAsCompanyDocument(item.id, manualCategory);
@@ -474,6 +471,8 @@ export function EingangDetailPage() {
             <>
               <DocumentActionSuggestionsPanel
                 item={item}
+                classification={workflow.classification ?? undefined}
+                suggestedVorgang={workflow.suggestedVorgang ?? undefined}
                 translate={translate}
                 onVorgangLinked={handleVorgangLinked}
                 onConfirmFiling={handleFiling}

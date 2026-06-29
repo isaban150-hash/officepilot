@@ -22,6 +22,16 @@ import type { AssistantAction, AssistantAnswer, CompanyDocument, Task, Vorgang }
 
 export const NO_DATA_MESSAGE = 'Ich habe dazu aktuell keine Informationen.';
 
+export const ASSISTANT_EXAMPLE_QUESTION_KEYS = [
+  'assistant.q1',
+  'assistant.q2',
+  'assistant.q3',
+  'assistant.q4',
+  'assistant.q5',
+] as const;
+
+export type AssistantExampleQuestionKey = (typeof ASSISTANT_EXAMPLE_QUESTION_KEYS)[number];
+
 export type AssistantIntent =
   | 'tasks_today'
   | 'tasks_open'

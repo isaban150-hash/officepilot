@@ -12,7 +12,6 @@ import {
   isExplainableLetter,
 } from './letterExplanationService';
 import { buildOrderPositionsFromInbox } from './orderPositionFactory';
-import { scanPendingItems } from './pendingEngineService';
 import {
   buildDedupeKey,
   proposePrimaryInboxTask,
@@ -227,7 +226,6 @@ function buildNextActions(
 
 export function processUploadedDocument(
   inboxItemId: string,
-  today?: Date | string,
 ): WorkflowResult | null {
   const item = getInboxItemById(inboxItemId);
   if (!item) return null;
@@ -235,7 +233,6 @@ export function processUploadedDocument(
   const profile = getCompanyProfile();
   const companyRelevance = checkCompanyRelevanceFromInbox(item, profile);
   const companyRelevant = isDocumentAnalysisAllowed(item, profile);
-  const pendingSummary = scanPendingItems(today).summary;
 
   if (!companyRelevant) {
     return {
@@ -253,7 +250,7 @@ export function processUploadedDocument(
       suggestedTasks: [],
       suggestedArchiveFolder: item.digitalFolder,
       requiredDocuments: [],
-      pendingSummary,
+      pendingSummary: null,
       warnings: buildWarnings(item, false, null),
       nextActions: [
         {
@@ -295,7 +292,7 @@ export function processUploadedDocument(
     suggestedTasks,
     suggestedArchiveFolder: classification.digitalFolder,
     requiredDocuments,
-    pendingSummary,
+    pendingSummary: null,
     warnings,
     nextActions: buildNextActions(item, {
       companyRelevant: true,

@@ -5,15 +5,23 @@ import {
   getClassificationForItem,
   getSuggestedVorgangForItem,
 } from '../../services/documentClassificationService';
-import type { DocumentClassificationResult } from '../../types/models';
+import type {
+  DocumentClassificationResult,
+  DocumentActionId,
+  InboxItem,
+  SuggestedDocumentAction,
+  SuggestedVorgangLink,
+  Vorgang,
+} from '../../types/models';
 import { linkInboxToExistingVorgang } from '../../services/vorgangService';
-import type { DocumentActionId, InboxItem, SuggestedDocumentAction, Vorgang } from '../../types/models';
 import type { TranslationKey } from '../../i18n';
 
 const MAX_PRIMARY_ACTIONS = 3;
 
 interface Props {
   item: InboxItem;
+  classification?: DocumentClassificationResult;
+  suggestedVorgang?: SuggestedVorgangLink;
   translate: (key: TranslationKey) => string;
   onVorgangLinked: (item: InboxItem, vorgang: Vorgang) => void;
   onConfirmFiling: () => void;
@@ -25,6 +33,8 @@ interface Props {
 
 export function DocumentActionSuggestionsPanel({
   item,
+  classification: classificationProp,
+  suggestedVorgang: suggestedVorgangProp,
   translate,
   onVorgangLinked,
   onConfirmFiling,
@@ -34,8 +44,8 @@ export function DocumentActionSuggestionsPanel({
   onShowToast,
 }: Props) {
   const [showAllActions, setShowAllActions] = useState(false);
-  const classification: DocumentClassificationResult = getClassificationForItem(item);
-  const suggestedVorgang = getSuggestedVorgangForItem(item);
+  const classification = classificationProp ?? getClassificationForItem(item);
+  const suggestedVorgang = suggestedVorgangProp ?? getSuggestedVorgangForItem(item);
 
   const primaryActions = classification.actions.slice(0, MAX_PRIMARY_ACTIONS);
   const secondaryActions = classification.actions.slice(MAX_PRIMARY_ACTIONS);

@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { MOCK_INBOX_ITEMS } from '../data/inboxMockData';
 import { createTestVorgang } from '../test/fixtures';
 import { classifyInboxItem } from './documentClassificationService';
@@ -9,6 +9,7 @@ import {
   processUploadedDocument,
 } from './intakeWorkflowService';
 import { hydrateInboxStore } from './inboxService';
+import * as pendingEngineService from './pendingEngineService';
 import { setTaskStoreForTests } from './taskStore';
 import { hydrateVorgangStore } from './vorgangService';
 import type { InboxItem } from '../types/models';
@@ -52,7 +53,7 @@ function expectCompleteWorkflow(result: NonNullable<ReturnType<typeof processUpl
   expect(result.classifiedKind).toBeTruthy();
   expect(result.classificationConfidence).toBeTruthy();
   expect(result.suggestedArchiveFolder).toBeTruthy();
-  expect(result.pendingSummary).toBeTruthy();
+  expect(result.pendingSummary).toBeNull();
   expect(Array.isArray(result.warnings)).toBe(true);
   expect(Array.isArray(result.nextActions)).toBe(true);
   expect(Array.isArray(result.suggestedOrderPositions)).toBe(true);
@@ -233,9 +234,10 @@ describe('intakeWorkflowService', () => {
     expect(result?.nextActions.some((a) => a.id === 'create_vorgang')).toBe(true);
   });
 
-  it('berechnet Pending Summary', () => {
+  it('scannt Pending nicht während des Workflows', () => {
+    const scanSpy = vi.spyOn(pendingEngineService, 'scanPendingItems');
     const item = cloneInbox(MOCK_INBOX_ITEMS.find((i) => i.id === 'inbox-002')!, {
-      id: 'inbox-wf-pending',
+      id: 'inbox-wf-no-pending-scan',
       title: 'Zahlungserinnerung Mustermann Sanitär GmbH',
       recognizedData: {
         ...MOCK_INBOX_ITEMS[1]!.recognizedData,
@@ -245,8 +247,31 @@ describe('intakeWorkflowService', () => {
     hydrateInboxStore([item]);
 
     const result = processUploadedDocument(item.id);
-    expect(result?.pendingSummary).toBeTruthy();
-    expect(typeof result?.pendingSummary.openTasks).toBe('number');
+    expect(result?.pendingSummary).toBeNull();
+    expect(scanSpy).not.toHaveBeenCalled();
+    scanSpy.mockRestore();
+  });
+
+  it('liefert alle für die Detailansicht benötigten Workflow-Felder', () => {
+    const item = cloneInbox(MOCK_INBOX_ITEMS.find((i) => i.id === 'inbox-002')!, {
+      id: 'inbox-wf-complete-fields',
+      title: 'Zahlungserinnerung Mustermann Sanitär GmbH',
+      recognizedData: {
+        ...MOCK_INBOX_ITEMS[1]!.recognizedData,
+        Betreff: 'Mustermann Sanitär GmbH',
+      },
+    });
+    hydrateInboxStore([item]);
+
+    const result = processUploadedDocument(item.id);
+    expect(result).not.toBeNull();
+    expect(result!.companyRelevance).toBeTruthy();
+    expect(typeof result!.companyRelevant).toBe('boolean');
+    expect(result!.classifiedKind).toBeTruthy();
+    expect(result!.classification).toBeTruthy();
+    expect(result!.contractAnalysis === null || result!.contractAnalysis.isContract !== undefined).toBe(
+      true,
+    );
   });
 
   it('übernimmt vorgeschlagene Aufgaben ohne Duplikate', () => {

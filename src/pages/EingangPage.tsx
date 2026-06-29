@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PendingAttentionCard } from '../components/dashboard/PendingAttentionCard';
 import { InboxCard } from '../components/inbox/InboxCard';
@@ -29,10 +29,6 @@ export function EingangPage() {
 
   const refresh = useCallback(() => {
     setItems(filterActiveItems(getInboxItems()));
-    setPendingSummary(scanPendingItems().summary);
-  }, []);
-
-  useEffect(() => {
     setPendingSummary(scanPendingItems().summary);
   }, []);
 

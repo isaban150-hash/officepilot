@@ -15,7 +15,6 @@ import type {
   InboxStatus,
   RecommendedAction,
   Task,
-  VorgangLinkStatus,
 } from '../types/models';
 import { formatPaperFilingInstruction, getPaperFolderById } from './analysisService';
 import { persistAll } from './persistenceService';
@@ -69,7 +68,7 @@ function findItem(id: string): InboxItem | undefined {
   return inboxItems.find((i) => i.id === id);
 }
 
-function updateItem(id: string, updates: Partial<InboxItem>): InboxItem | null {
+export function patchInboxItem(id: string, updates: Partial<InboxItem>): InboxItem | null {
   const index = inboxItems.findIndex((i) => i.id === id);
   if (index === -1) return null;
   const updated = { ...inboxItems[index], ...updates };
@@ -134,13 +133,13 @@ export function getInboxSummary(): { total: number; neu: number; urgent: number 
 }
 
 export function markAsReviewed(id: string): InboxActionResult | null {
-  const item = updateItem(id, { status: 'geprueft', isNewUpload: false });
+  const item = patchInboxItem(id, { status: 'geprueft', isNewUpload: false });
   if (!item) return null;
   return { success: true, message: 'Dokument als geprüft markiert.', item };
 }
 
 export function confirmFiling(id: string): InboxActionResult | null {
-  const item = updateItem(id, { status: 'abgelegt', isNewUpload: false });
+  const item = patchInboxItem(id, { status: 'abgelegt', isNewUpload: false });
   if (!item) return null;
   const filing = formatPaperFilingInstruction(item.paperFiling);
   let taskCreated: Task | undefined;
@@ -156,7 +155,7 @@ export function confirmFiling(id: string): InboxActionResult | null {
 }
 
 export function deferItem(id: string): InboxActionResult | null {
-  const item = updateItem(id, { status: 'spaeter_klaeren', isNewUpload: false });
+  const item = patchInboxItem(id, { status: 'spaeter_klaeren', isNewUpload: false });
   if (!item) return null;
   return {
     success: true,
@@ -168,7 +167,7 @@ export function deferItem(id: string): InboxActionResult | null {
 export function confirmDispose(id: string): InboxActionResult | null {
   const existing = findItem(id);
   if (!existing?.isAdvertisement) return null;
-  const item = updateItem(id, { status: 'abgelegt', isNewUpload: false });
+  const item = patchInboxItem(id, { status: 'abgelegt', isNewUpload: false });
   if (!item) return null;
   return {
     success: true,
@@ -180,7 +179,7 @@ export function confirmDispose(id: string): InboxActionResult | null {
 export function saveAdvertisementAnyway(id: string): InboxActionResult | null {
   const existing = findItem(id);
   if (!existing?.isAdvertisement) return null;
-  const item = updateItem(id, { status: 'abgelegt', recommendedAction: 'archivieren', isNewUpload: false });
+  const item = patchInboxItem(id, { status: 'abgelegt', recommendedAction: 'archivieren', isNewUpload: false });
   if (!item) return null;
   return {
     success: true,
@@ -197,7 +196,7 @@ export function createTaskForItem(id: string): InboxActionResult | null {
   const taskCreated = createTaskFromInboxItem(existing, getCompanyProfile(), { autoCreated: false });
   if (!taskCreated) return null;
 
-  const item = updateItem(id, { status: 'geprueft', isNewUpload: false })!;
+  const item = patchInboxItem(id, { status: 'geprueft', isNewUpload: false })!;
   return {
     success: true,
     message: `Aufgabe erstellt: ${taskCreated.title}`,
@@ -215,7 +214,7 @@ export function createContractTasksForItem(id: string): InboxActionResult | null
   const createdTasks = createTasksFromContractAnalysis(analysis, existing.id);
   if (createdTasks.length === 0) return null;
 
-  const item = updateItem(id, { status: 'geprueft', isNewUpload: false })!;
+  const item = patchInboxItem(id, { status: 'geprueft', isNewUpload: false })!;
   return {
     success: true,
     message: `${createdTasks.length} Aufgabe(n) aus Vertrag erstellt`,
@@ -313,29 +312,14 @@ export function updateInboxItemRecognizedData(
     };
   }
 
-  return updateItem(id, merged);
-}
-
-export function setInboxVorgangLink(
-  inboxId: string,
-  vorgangId: string,
-  vorgangTitle: string,
-  linkStatus: VorgangLinkStatus,
-): InboxItem | null {
-  return updateItem(inboxId, {
-    vorgangId,
-    vorgangTitle,
-    vorgangLinkStatus: linkStatus,
-    status: 'geprueft',
-    isNewUpload: false,
-  });
+  return patchInboxItem(id, merged);
 }
 
 export function markInboxImportedToArchive(
   inboxId: string,
   documentId: string,
 ): InboxActionResult | null {
-  const item = updateItem(inboxId, {
+  const item = patchInboxItem(inboxId, {
     status: 'abgelegt',
     importedToArchive: true,
     archiveDocumentId: documentId,
@@ -354,10 +338,10 @@ export function finalizeInboxIntake(inboxId: string): InboxItem | null {
   if (!existing) return null;
 
   if (existing.importedToArchive) {
-    return updateItem(inboxId, { isNewUpload: false });
+    return patchInboxItem(inboxId, { isNewUpload: false });
   }
 
-  return updateItem(inboxId, {
+  return patchInboxItem(inboxId, {
     status: existing.status === 'neu' ? 'geprueft' : existing.status,
     isNewUpload: false,
   });
@@ -367,7 +351,7 @@ export function markInboxAsCompanyDocument(
   inboxId: string,
   category?: ClassifiedDocumentKind,
 ): InboxItem | null {
-  return updateItem(inboxId, {
+  return patchInboxItem(inboxId, {
     markedAsCompanyDocument: true,
     classifiedKind: category,
     userModified: true,

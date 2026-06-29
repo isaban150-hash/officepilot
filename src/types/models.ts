@@ -580,7 +580,7 @@ export interface WorkflowResult {
   suggestedTasks: TaskProposal[];
   suggestedArchiveFolder: DigitalFolder;
   requiredDocuments: RequiredDocument[];
-  pendingSummary: PendingSummary;
+  pendingSummary: PendingSummary | null;
   warnings: WorkflowWarning[];
   nextActions: WorkflowNextAction[];
 }
@@ -686,20 +686,6 @@ export interface PaperFilingRule {
   folderId: string;
   register: string;
   label: string;
-}
-
-export interface DocumentAnalysis {
-  id: string;
-  documentType: DocumentType;
-  customer: string;
-  baustelle: string;
-  vorgangId: string | null;
-  vorgangTitle: string;
-  deadline: string | null;
-  paperFiling: PaperFilingRule;
-  digitalFolder: DigitalFolder;
-  recommendedAction: RecommendedAction;
-  sourceFileName: string;
 }
 
 export interface VorgangDocument {
@@ -999,11 +985,6 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   text: string;
   timestamp: string;
-}
-
-export interface AssistantSuggestion {
-  id: string;
-  questionKey: string;
 }
 
 export interface AssistantAction {

@@ -1,5 +1,5 @@
 import { formatPaperFilingInstruction } from './analysisService';
-import type { InboxItem, InboxPriority } from '../types/models';
+import type { InboxItem, InboxPriority, WorkflowLetterSummary } from '../types/models';
 
 export type LetterKind =
   | 'brief'
@@ -181,6 +181,23 @@ export function getLetterExplanation(item: InboxItem): LetterExplanation | null 
     nextSteps: template.nextSteps,
     digitalStorage: storage.digital,
     paperStorage: storage.paper,
+    disclaimer: `${DISCLAIMER} ${UNCERTAIN_HINT}`,
+  };
+}
+
+export function letterExplanationFromWorkflow(
+  summary: WorkflowLetterSummary | null | undefined,
+): LetterExplanation | null {
+  if (!summary) return null;
+
+  return {
+    kind: summary.kind as LetterKind,
+    about: summary.about,
+    importance: summary.importance,
+    deadline: summary.deadline,
+    nextSteps: summary.nextSteps,
+    digitalStorage: summary.digitalStorage,
+    paperStorage: summary.paperStorage,
     disclaimer: `${DISCLAIMER} ${UNCERTAIN_HINT}`,
   };
 }

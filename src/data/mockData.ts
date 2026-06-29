@@ -1,7 +1,5 @@
 import type {
-  AssistantSuggestion,
   CompanySetup,
-  DocumentAnalysis,
   OrderPosition,
   PaperFolder,
   Vorgang,
@@ -261,36 +259,6 @@ export const MOCK_TASKS = [
     done: false,
     dueDate: '2026-04-05',
   },
-];
-
-export const MOCK_ANALYSIS: DocumentAnalysis = {
-  id: 'analysis-001',
-  documentType: 'eingangsrechnung',
-  customer: 'Familie Müller',
-  baustelle: 'Hauptstr. 12, Berlin',
-  vorgangId: 'v-001',
-  vorgangTitle: 'Badezimmer-Sanierung Müller',
-  deadline: '2026-04-15',
-  paperFiling: {
-    folderId: 'folder-1',
-    register: 'C',
-    label: 'Eingangsrechnungen 2026',
-  },
-  digitalFolder: {
-    id: 'dig-001',
-    name: 'Eingangsrechnungen',
-    path: '/Vorgänge/Müller/Eingangsrechnungen/',
-  },
-  recommendedAction: 'zuordnen',
-  sourceFileName: 'Rechnung_Sanitaer_20260315.pdf',
-};
-
-export const ASSISTANT_SUGGESTIONS: AssistantSuggestion[] = [
-  { id: 's-1', questionKey: 'assistant.q1' },
-  { id: 's-2', questionKey: 'assistant.q2' },
-  { id: 's-3', questionKey: 'assistant.q3' },
-  { id: 's-4', questionKey: 'assistant.q4' },
-  { id: 's-5', questionKey: 'assistant.q5' },
 ];
 
 export const INDUSTRY_OPTIONS = [
