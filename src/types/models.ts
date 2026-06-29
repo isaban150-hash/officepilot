@@ -536,6 +536,55 @@ export interface CompanyRelevanceResult {
   matchedHints: string[];
 }
 
+export type WorkflowActionId =
+  | 'archive_document'
+  | 'link_vorgang'
+  | 'create_vorgang'
+  | 'import_positions'
+  | 'accept_tasks'
+  | 'cancel';
+
+export interface WorkflowNextAction {
+  id: WorkflowActionId;
+  labelKey: string;
+  enabled: boolean;
+}
+
+export interface WorkflowWarning {
+  id: string;
+  message: string;
+}
+
+export interface WorkflowLetterSummary {
+  kind: string;
+  about: string;
+  importance: string;
+  deadline: string;
+  nextSteps: string;
+  digitalStorage: string;
+  paperStorage: string;
+}
+
+export interface WorkflowResult {
+  inboxItemId: string;
+  companyRelevant: boolean;
+  companyRelevance: CompanyRelevanceResult;
+  classifiedKind: ClassifiedDocumentKind;
+  classificationConfidence: AnalysisConfidence;
+  classification: DocumentClassificationResult | null;
+  documentExplanation: WorkflowLetterSummary | null;
+  contractAnalysis: ContractAnalysisResult | null;
+  suggestedVorgang: SuggestedVorgangLink | null;
+  similarVorgaenge: Vorgang[];
+  suggestedOrderPositions: DetectedOrderPosition[];
+  suggestedTasks: TaskProposal[];
+  suggestedArchiveFolder: DigitalFolder;
+  requiredDocuments: RequiredDocument[];
+  pendingSummary: PendingSummary;
+  warnings: WorkflowWarning[];
+  nextActions: WorkflowNextAction[];
+}
+
 export interface CompanySetup {
   companyName: string;
   industry: string;
@@ -927,6 +976,20 @@ export interface ChatMessage {
 export interface AssistantSuggestion {
   id: string;
   questionKey: string;
+}
+
+export interface AssistantAction {
+  id: string;
+  label: string;
+  route: string;
+}
+
+export interface AssistantAnswer {
+  title: string;
+  summary: string;
+  bullets: string[];
+  actions: AssistantAction[];
+  linkedRoute?: string;
 }
 
 export type NavTab = 'eingang' | 'aufgaben' | 'vorgaenge' | 'dokumente' | 'assistent';

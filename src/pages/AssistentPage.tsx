@@ -1,50 +1,64 @@
 import { useState } from 'react';
+import { AssistantAnswerCard } from '../components/assistant/AssistantAnswerCard';
 import { Button } from '../components/ui/Button';
 import { Card, PageHeader } from '../components/ui/Card';
 import { useApp } from '../context/AppContext';
 import { ASSISTANT_SUGGESTIONS } from '../data/mockData';
-import {
-  getAssistantResponse,
-  getAssistantResponseForText,
-} from '../services/assistantService';
-import type { ChatMessage } from '../types/models';
+import { answerQuestion } from '../services/officeAssistantService';
+import type { AssistantAnswer } from '../types/models';
 import type { TranslationKey } from '../i18n';
-
-function nowTimestamp(): string {
-  return new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-}
 
 export function AssistentPage() {
   const { translate } = useApp();
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
+  const [answer, setAnswer] = useState<AssistantAnswer | null>(null);
+  const [lastQuestion, setLastQuestion] = useState('');
 
-  const addExchange = (question: string, answer: string) => {
-    const ts = nowTimestamp();
-    setMessages((prev) => [
-      ...prev,
-      { id: `u-${Date.now()}`, role: 'user', text: question, timestamp: ts },
-      { id: `a-${Date.now()}`, role: 'assistant', text: answer, timestamp: ts },
-    ]);
-  };
-
-  const handleSuggestion = (questionKey: string) => {
-    const question = translate(questionKey as TranslationKey);
-    const response = getAssistantResponse(questionKey);
-    addExchange(question, response.text);
-  };
-
-  const handleSend = () => {
-    const text = input.trim();
-    if (!text) return;
-    const response = getAssistantResponseForText(text);
-    addExchange(text, response.text);
+  const ask = (question: string) => {
+    const trimmed = question.trim();
+    if (!trimmed) return;
+    setLastQuestion(trimmed);
+    setAnswer(answerQuestion(trimmed));
     setInput('');
   };
 
+  const handleSuggestion = (questionKey: string) => {
+    ask(translate(questionKey as TranslationKey));
+  };
+
+  const handleSend = () => {
+    ask(input);
+  };
+
   return (
-    <div className="page page--chat">
+    <div className="page">
       <PageHeader title={translate('assistant.title')} subtitle={translate('assistant.subtitle')} />
+
+      <Card className="assistant-question-card">
+        <div className="assistant-question-row">
+          <input
+            type="text"
+            className="input"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+            placeholder={translate('assistant.placeholder')}
+          />
+          <Button onClick={handleSend}>{translate('assistant.send')}</Button>
+        </div>
+      </Card>
+
+      {answer && (
+        <section className="assistant-answer-section">
+          {lastQuestion && (
+            <p className="assistant-last-question">
+              <span className="assistant-last-question__label">{translate('assistant.yourQuestion')}</span>
+              {lastQuestion}
+            </p>
+          )}
+          <AssistantAnswerCard answer={answer} />
+        </section>
+      )}
 
       <section className="section">
         <h2 className="section__title">{translate('assistant.examples')}</h2>
@@ -61,35 +75,6 @@ export function AssistentPage() {
           ))}
         </div>
       </section>
-
-      <div className="chat-messages">
-        {messages.length === 0 && (
-          <p className="empty-state">Stellen Sie eine Frage oder wählen Sie ein Beispiel.</p>
-        )}
-        {messages.map((msg) => (
-          <div
-            key={msg.id}
-            className={`chat-bubble chat-bubble--${msg.role}`}
-          >
-            <p className="chat-bubble__text">{msg.text}</p>
-            <span className="chat-bubble__time">{msg.timestamp}</span>
-          </div>
-        ))}
-      </div>
-
-      <Card className="chat-input-card">
-        <div className="chat-input-row">
-          <input
-            type="text"
-            className="input"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-            placeholder={translate('assistant.placeholder')}
-          />
-          <Button onClick={handleSend}>{translate('assistant.send')}</Button>
-        </div>
-      </Card>
     </div>
   );
 }

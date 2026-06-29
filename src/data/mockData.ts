@@ -290,6 +290,7 @@ export const ASSISTANT_SUGGESTIONS: AssistantSuggestion[] = [
   { id: 's-2', questionKey: 'assistant.q2' },
   { id: 's-3', questionKey: 'assistant.q3' },
   { id: 's-4', questionKey: 'assistant.q4' },
+  { id: 's-5', questionKey: 'assistant.q5' },
 ];
 
 export const INDUSTRY_OPTIONS = [

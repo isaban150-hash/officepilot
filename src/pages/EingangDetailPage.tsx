@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { CompanyRelevancePanel } from '../components/inbox/CompanyRelevancePanel';
 import { ContractAnalysisPanel } from '../components/inbox/ContractAnalysisPanel';
@@ -6,6 +6,7 @@ import { DocumentActionSuggestionsPanel } from '../components/inbox/DocumentActi
 import { ImportToArchiveDialog } from '../components/inbox/ImportToArchiveDialog';
 import { InboxVorgangPanel } from '../components/inbox/InboxVorgangPanel';
 import { LetterExplanationPanel } from '../components/inbox/LetterExplanationPanel';
+import { SmartIntakeSummary } from '../components/inbox/SmartIntakeSummary';
 import {
   createEditDraftFromItem,
   InboxItemEditForm,
@@ -20,6 +21,13 @@ import { analyzeContractFromInbox } from '../services/contractAnalysisService';
 import { getClassifiedKindFromItem } from '../services/documentClassificationService';
 import { isClassificationKindWithTasks } from '../services/taskEngineService';
 import { getLetterExplanation } from '../services/letterExplanationService';
+import {
+  acceptSuggestedTasks,
+  createWorkflowVorgang,
+  importSuggestedPositionsToVorgang,
+  linkWorkflowVorgang,
+  processUploadedDocument,
+} from '../services/intakeWorkflowService';
 import {
   importInboxDocument,
   isDuplicateDocument,
@@ -55,6 +63,18 @@ export function EingangDetailPage() {
   const [isImporting, setIsImporting] = useState(false);
   const [vorgangDialogRequest, setVorgangDialogRequest] = useState(0);
   const [manualCategory, setManualCategory] = useState<ClassifiedDocumentKind>('sonstiges');
+  const [intakeOpen, setIntakeOpen] = useState(false);
+
+  const workflow = useMemo(
+    () => (item ? processUploadedDocument(item.id) : null),
+    [item?.id, item?.status, item?.vorgangId, item?.importedToArchive, item?.markedAsCompanyDocument],
+  );
+
+  useEffect(() => {
+    if (item?.isNewUpload) {
+      setIntakeOpen(true);
+    }
+  }, [item?.id, item?.isNewUpload]);
 
   useEffect(() => {
     if (id) {
@@ -246,6 +266,61 @@ export function EingangDetailPage() {
     finishArchiveImport('create');
   };
 
+  const refreshWorkflowItem = () => {
+    const latest = getInboxItemById(item.id);
+    if (latest) setItem(latest);
+  };
+
+  const handleIntakeArchive = () => {
+    handleImportToArchive();
+    setIntakeOpen(false);
+  };
+
+  const handleIntakeLinkVorgang = () => {
+    if (!workflow?.suggestedVorgang) {
+      setVorgangDialogRequest((n) => n + 1);
+      return;
+    }
+    const result = linkWorkflowVorgang(item, workflow.suggestedVorgang.vorgangId);
+    if (result) {
+      setItem(result.inbox);
+      showToast(translate('vorgang.link.success'));
+    }
+  };
+
+  const handleIntakeCreateVorgang = () => {
+    const result = createWorkflowVorgang(item, setup.materialStandard);
+    if (result) {
+      setItem(result.inbox);
+      showToast(translate('vorgang.create.success'));
+    } else {
+      setVorgangDialogRequest((n) => n + 1);
+    }
+  };
+
+  const handleIntakeImportPositions = () => {
+    const vorgangId = item.vorgangId ?? workflow?.suggestedVorgang?.vorgangId;
+    if (!vorgangId || !workflow) {
+      setVorgangDialogRequest((n) => n + 1);
+      showToast(translate('intake.positionsNeedsVorgang'));
+      return;
+    }
+    const result = importSuggestedPositionsToVorgang(vorgangId, workflow.suggestedOrderPositions);
+    if (result.success) {
+      showToast(translate('intake.positionsImported').replace('{count}', String(result.added)));
+      refreshWorkflowItem();
+    }
+  };
+
+  const handleIntakeAcceptTasks = () => {
+    if (!workflow || workflow.suggestedTasks.length === 0) return;
+    const created = acceptSuggestedTasks(workflow.suggestedTasks);
+    if (created.length > 0) {
+      showToast(translate('intake.tasksAccepted').replace('{count}', String(created.length)));
+      refreshWorkflowItem();
+    }
+  };
+
   return (
     <div className={`page ${isEditing ? 'page--editing' : ''}`}>
       <button type="button" className="back-link" onClick={goBack}>
@@ -259,6 +334,19 @@ export function EingangDetailPage() {
       )}
 
       <PageHeader title={item.title} subtitle={item.sender} />
+
+      {intakeOpen && workflow && (
+        <SmartIntakeSummary
+          workflow={workflow}
+          item={item}
+          onArchive={handleIntakeArchive}
+          onLinkVorgang={handleIntakeLinkVorgang}
+          onCreateVorgang={handleIntakeCreateVorgang}
+          onImportPositions={handleIntakeImportPositions}
+          onAcceptTasks={handleIntakeAcceptTasks}
+          onCancel={() => setIntakeOpen(false)}
+        />
+      )}
 
       <div className="badge-row">
         <Badge tone="warning">{getPriorityLabel(item.priority)}</Badge>
