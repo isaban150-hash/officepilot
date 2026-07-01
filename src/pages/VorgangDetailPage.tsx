@@ -17,10 +17,20 @@ import {
 import { hasMissingOrderPrice } from '../services/orderPositionFactory';
 import { getVorgangById, removeOrderPosition } from '../services/vorgangService';
 import { InvoiceListCard } from '../components/invoice/InvoiceListCard';
+import { CommunicationIntegrationPanel } from '../components/communication/CommunicationIntegrationPanel';
+import { VORGANG_COMMUNICATION_BUTTON_KEYS } from '../components/communication/communicationNavigation';
+import { AreaAiPanel } from '../components/ai/AreaAiPanel';
 import {
   formatPaymentCurrency,
   summarizeVorgangInvoicePayments,
 } from '../services/invoicePaymentService';
+import {
+  addVorgangNote,
+  deleteVorgangNote,
+  getNotesForVorgang,
+} from '../services/vorgangNoteService';
+import { askVorgangAi } from '../services/vorgang/vorgangAiService';
+import type { VorgangNote } from '../types/communication';
 import type { OrderPosition, Vorgang } from '../types/models';
 import type { TranslationKey } from '../i18n';
 
@@ -34,6 +44,14 @@ export function VorgangDetailPage() {
     id ? getVorgangById(id) : undefined,
   );
   const [formMode, setFormMode] = useState<FormMode>(null);
+  const [noteDraft, setNoteDraft] = useState('');
+  const [notes, setNotes] = useState<VorgangNote[]>(() =>
+    id ? getNotesForVorgang(id) : [],
+  );
+
+  const refreshNotes = useCallback(() => {
+    if (id) setNotes(getNotesForVorgang(id));
+  }, [id]);
 
   const refreshVorgang = useCallback(() => {
     if (id) {
@@ -43,7 +61,29 @@ export function VorgangDetailPage() {
 
   useEffect(() => {
     refreshVorgang();
-  }, [refreshVorgang]);
+    refreshNotes();
+  }, [refreshVorgang, refreshNotes]);
+
+  const handleAddNote = () => {
+    const trimmed = noteDraft.trim();
+    if (!trimmed) return;
+    if (!id) return;
+    const result = addVorgangNote(id, { body: trimmed });
+    if (result.success) {
+      setNoteDraft('');
+      refreshNotes();
+      showToast(translate('vorgangNote.saved'));
+    }
+  };
+
+  const handleDeleteNote = (noteId: string) => {
+    if (!window.confirm(translate('vorgangNote.deleteConfirm'))) return;
+    const result = deleteVorgangNote(noteId);
+    if (result.success) {
+      refreshNotes();
+      showToast(translate('vorgangNote.deleted'));
+    }
+  };
 
   if (!vorgang) {
     return (
@@ -210,6 +250,54 @@ export function VorgangDetailPage() {
           </Card>
         ))}
       </section>
+
+      <section className="section">
+        <h2 className="section__title">{translate('vorgangNote.title')}</h2>
+        <Card>
+          <label className="form-group">
+            <span>{translate('vorgangNote.addLabel')}</span>
+            <textarea
+              className="input"
+              rows={3}
+              value={noteDraft}
+              onChange={(event) => setNoteDraft(event.target.value)}
+              placeholder={translate('vorgangNote.placeholder')}
+            />
+          </label>
+          <Button type="button" onClick={handleAddNote} disabled={!noteDraft.trim()}>
+            {translate('vorgangNote.add')}
+          </Button>
+        </Card>
+        {notes.length === 0 ? (
+          <p className="empty-state">{translate('vorgangNote.empty')}</p>
+        ) : (
+          notes.map((note) => (
+            <Card key={note.id}>
+              <CardMeta>{note.occurredAt}</CardMeta>
+              <CardTitle>{note.body}</CardTitle>
+              <Button type="button" variant="ghost" onClick={() => handleDeleteNote(note.id)}>
+                {translate('vorgangNote.delete')}
+              </Button>
+            </Card>
+          ))
+        )}
+      </section>
+
+      <CommunicationIntegrationPanel
+        contextRef={{ type: 'vorgang', id: vorgang.id }}
+        buttonKeys={VORGANG_COMMUNICATION_BUTTON_KEYS}
+        testIdPrefix="vorgang"
+      />
+
+      <AreaAiPanel
+        title={translate('areaAi.vorgang.title')}
+        placeholder={translate('areaAi.placeholder')}
+        askLabel={translate('areaAi.ask')}
+        loadingLabel={translate('areaAi.loading')}
+        notConfiguredLabel={translate('areaAi.notConfigured')}
+        testIdPrefix="vorgang-ai"
+        onAsk={(question) => askVorgangAi({ vorgangId: vorgang.id, question })}
+      />
 
       <section className="section">
         <h2 className="section__title">{translate('vorgang.photos')}</h2>

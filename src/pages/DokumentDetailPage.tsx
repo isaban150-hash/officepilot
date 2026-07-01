@@ -1,11 +1,15 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { DocumentForm } from '../components/documents/DocumentForm';
+import { CommunicationIntegrationPanel } from '../components/communication/CommunicationIntegrationPanel';
+import { DOCUMENT_COMMUNICATION_BUTTON_KEYS } from '../components/communication/communicationNavigation';
+import { AreaAiPanel } from '../components/ai/AreaAiPanel';
 import { Button } from '../components/ui/Button';
 import { Badge, Card, DataRow, PageHeader } from '../components/ui/Card';
 import { useApp } from '../context/AppContext';
 import { formatPaperFilingInstruction } from '../services/paperFolderService';
 import { deleteDocument, getDocumentById } from '../services/documentService';
+import { askDocumentAi } from '../services/document/documentAiService';
 import type { CompanyDocument } from '../types/models';
 import type { TranslationKey } from '../i18n';
 
@@ -147,6 +151,24 @@ export function DokumentDetailPage() {
           />
         )}
       </Card>
+
+      <CommunicationIntegrationPanel
+        contextRef={{ type: 'document', id: document.id }}
+        buttonKeys={DOCUMENT_COMMUNICATION_BUTTON_KEYS}
+        testIdPrefix="dokument"
+      />
+
+      <AreaAiPanel
+        title={translate('areaAi.document.title')}
+        placeholder={translate('areaAi.placeholder')}
+        askLabel={translate('areaAi.ask')}
+        loadingLabel={translate('areaAi.loading')}
+        notConfiguredLabel={translate('areaAi.notConfigured')}
+        testIdPrefix="document-ai"
+        onAsk={(question) =>
+          askDocumentAi({ source: { type: 'document', document }, question })
+        }
+      />
 
       <div className="form-actions document-detail__actions">
         <Button variant="outline" onClick={() => setIsEditing(true)}>

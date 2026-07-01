@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { PageHeader } from '../components/ui/Card';
 import { useApp } from '../context/AppContext';
+import { validateCompanyProfileForSettings } from '../services/setupValidationService';
+import { getInvoiceNumberSequenceSnapshot } from '../services/invoiceNumberService';
 import type { CompanyProfile } from '../types/models';
 import type { TranslationKey } from '../i18n';
 
@@ -40,6 +42,17 @@ export function FirmendatenPage() {
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
     setErrorKey(null);
+
+    const validation = validateCompanyProfileForSettings(
+      draft,
+      getInvoiceNumberSequenceSnapshot().lastIssuedNumber,
+    );
+    if (!validation.valid) {
+      const firstError = Object.values(validation.errors)[0];
+      if (firstError) setErrorKey(firstError);
+      return;
+    }
+
     const result = updateCompanyProfile(draft);
     if (!result.success) {
       setErrorKey(result.errorKey as TranslationKey);
@@ -51,7 +64,7 @@ export function FirmendatenPage() {
 
   return (
     <div className="page">
-      <Link to="/eingang" className="back-link">
+      <Link to="/" className="back-link">
         ← {translate('common.back')}
       </Link>
 

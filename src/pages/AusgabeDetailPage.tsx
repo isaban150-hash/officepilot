@@ -5,6 +5,8 @@ import { ExpensePaymentForm } from '../components/expenses/ExpensePaymentForm';
 import { getExpensePaymentSavedToastKey } from '../components/expenses/ExpensePaymentSummary';
 import { ExpensePaymentHistory } from '../components/expenses/ExpensePaymentHistory';
 import { ExpensePaymentSummary } from '../components/expenses/ExpensePaymentSummary';
+import { CommunicationIntegrationPanel } from '../components/communication/CommunicationIntegrationPanel';
+import { EXPENSE_COMMUNICATION_BUTTON_KEYS } from '../components/communication/communicationNavigation';
 import { Button } from '../components/ui/Button';
 import { Badge, Card, DataRow, PageHeader } from '../components/ui/Card';
 import { useApp } from '../context/AppContext';
@@ -173,6 +175,12 @@ export function AusgabeDetailPage() {
           </div>
         )}
       </Card>
+
+      <CommunicationIntegrationPanel
+        contextRef={{ type: 'expense', id: expense.id }}
+        buttonKeys={EXPENSE_COMMUNICATION_BUTTON_KEYS}
+        testIdPrefix="ausgabe"
+      />
 
       <div className="form-actions document-detail__actions">
         <Button variant="outline" onClick={() => setIsEditing(true)}>

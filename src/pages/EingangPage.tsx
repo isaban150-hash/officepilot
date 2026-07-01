@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PendingAttentionCard } from '../components/dashboard/PendingAttentionCard';
 import { InboxCard } from '../components/inbox/InboxCard';
@@ -6,24 +6,16 @@ import { Button } from '../components/ui/Button';
 import { Card, CardMeta, CardTitle, PageHeader } from '../components/ui/Card';
 import { useApp } from '../context/AppContext';
 import {
-  UPLOAD_DOCUMENT_KINDS,
-  UPLOAD_KIND_LABELS,
-} from '../services/inboxUploadFactory';
-import {
   filterActiveItems,
   getInboxItems,
   getInboxSummary,
-  processUpload,
 } from '../services/inboxService';
 import { scanPendingItems } from '../services/pendingEngineService';
-import type { UploadDocumentKind } from '../types/models';
 
 export function EingangPage() {
-  const { translate, showToast } = useApp();
+  const { translate } = useApp();
   const navigate = useNavigate();
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [items, setItems] = useState(() => filterActiveItems(getInboxItems()));
-  const [selectedKind, setSelectedKind] = useState<UploadDocumentKind | null>(null);
   const [pendingSummary, setPendingSummary] = useState(() => scanPendingItems().summary);
   const summary = getInboxSummary();
 
@@ -32,105 +24,42 @@ export function EingangPage() {
     setPendingSummary(scanPendingItems().summary);
   }, []);
 
-  const handleUploadComplete = (itemId: string) => {
-    refresh();
-    showToast(translate('inbox.uploadRecognized'));
-    navigate(`/eingang/${itemId}`);
-  };
-
-  const handleCapture = () => {
-    const item = processUpload({ kind: selectedKind ?? undefined });
-    handleUploadComplete(item.id);
-  };
-
-  const handleFileSelect = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    const sourceFileName = file?.name ?? undefined;
-    const item = processUpload({
-      sourceFileName,
-      kind: selectedKind ?? undefined,
-    });
-    e.target.value = '';
-    handleUploadComplete(item.id);
-  };
-
   const handleReview = (id: string) => {
-    navigate(`/eingang/${id}`);
+    navigate(`/ablage/${id}`);
   };
 
   return (
-    <div className="page">
+    <div className="page ablage-page" data-testid="ablage-page">
       <PageHeader
-        title={translate('inbox.title')}
-        subtitle={translate('inbox.subtitle')}
+        title={translate('ablage.title')}
+        subtitle={translate('ablage.subtitle')}
       />
 
       <PendingAttentionCard summary={pendingSummary} />
 
-      <Card className="upload-card upload-card--capture">
-        <CardTitle>{translate('inbox.addDocument')}</CardTitle>
-        <CardMeta>{translate('inbox.uploadHint')}</CardMeta>
-
-        <fieldset className="form-group upload-kind-picker">
-          <legend>{translate('inbox.selectType')}</legend>
-          <div className="chip-group">
-            <button
-              type="button"
-              className={`chip ${selectedKind === null ? 'chip--active' : ''}`}
-              onClick={() => setSelectedKind(null)}
-            >
-              {translate('inbox.typeRandom')}
-            </button>
-            {UPLOAD_DOCUMENT_KINDS.map((kind) => (
-              <button
-                key={kind}
-                type="button"
-                className={`chip ${selectedKind === kind ? 'chip--active' : ''}`}
-                onClick={() => setSelectedKind(kind)}
-              >
-                {UPLOAD_KIND_LABELS[kind]}
-              </button>
-            ))}
-          </div>
-        </fieldset>
-
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*,.pdf"
-          className="sr-only"
-          onChange={handleFileChange}
-        />
-
-        <div className="upload-actions">
-          <Button fullWidth onClick={handleCapture}>
-            {translate('eingang.capture')}
-          </Button>
-          <Button variant="outline" fullWidth onClick={handleFileSelect}>
-            {translate('eingang.upload')}
-          </Button>
-        </div>
+      <Card className="ablage-scan-cta">
+        <CardTitle>{translate('ablage.captureTitle')}</CardTitle>
+        <CardMeta>{translate('ablage.captureHint')}</CardMeta>
+        <Button fullWidth onClick={() => navigate('/scan')}>
+          {translate('heute.scanButton')}
+        </Button>
       </Card>
 
-      <div className="inbox-summary">
-        <span className="inbox-summary__stat">
-          <strong>{summary.neu}</strong> {translate('inbox.newCount')}
+      <div className="ablage-summary">
+        <span className="ablage-summary__stat">
+          <strong>{summary.neu}</strong> {translate('ablage.newCount')}
         </span>
-        <span className="inbox-summary__divider">·</span>
-        <span className="inbox-summary__stat inbox-summary__stat--urgent">
-          <strong>{summary.urgent}</strong> {translate('inbox.urgentCount')}
+        <span className="ablage-summary__divider">·</span>
+        <span className="ablage-summary__stat ablage-summary__stat--urgent">
+          <strong>{summary.urgent}</strong> {translate('ablage.urgentCount')}
         </span>
       </div>
 
-      <p className="inbox-intro">{translate('inbox.intro')}</p>
+      <p className="ablage-intro">{translate('ablage.intro')}</p>
 
       <div className="card-list">
         {items.length === 0 ? (
-          <p className="empty-state">{translate('inbox.empty')}</p>
+          <p className="empty-state">{translate('ablage.empty')}</p>
         ) : (
           items.map((item) => (
             <InboxCard

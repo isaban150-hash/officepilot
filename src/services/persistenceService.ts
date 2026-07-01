@@ -3,6 +3,8 @@ import { createCompanyProfileFromSetup } from '../data/companyProfileDefaults';
 import { MOCK_INBOX_ITEMS } from '../data/inboxMockData';
 import { MOCK_COMPANY_DOCUMENTS } from '../data/documentMockData';
 import { MOCK_EXPENSES } from '../data/expenseMockData';
+import type { CommunicationEvent } from '../types/communicationHistory';
+import type { KnowledgeFact } from '../types/knowledge';
 import type {
   AppPersistedState,
   CompanyDocument,
@@ -16,6 +18,7 @@ import type {
   Task,
   Vorgang,
   VorgangInvoice,
+  VorgangNote,
 } from '../types/models';
 import {
   getCompanyProfileStoreSnapshot,
@@ -48,6 +51,21 @@ import {
   hydrateVorgangStore,
   resetVorgaenge,
 } from './vorgangService';
+import {
+  getCommunicationHistorySnapshot,
+  hydrateCommunicationHistory,
+} from './communicationHistoryService';
+import { resetCommunicationHistoryStore } from './communicationHistoryStore';
+import {
+  getKnowledgeSnapshot,
+  hydrateKnowledgeFacts,
+} from './knowledgeService';
+import { resetKnowledgeStore } from './knowledgeStore';
+import {
+  getVorgangNoteStoreSnapshot,
+  hydrateVorgangNotes,
+  resetVorgangNotes,
+} from './vorgangNoteService';
 import {
   getTaskStoreSnapshot,
   hydrateTaskStore,
@@ -132,6 +150,24 @@ function cloneCompanyDocument(doc: CompanyDocument): CompanyDocument {
   };
 }
 
+function cloneVorgangNote(note: VorgangNote): VorgangNote {
+  return {
+    ...note,
+    tags: note.tags ? [...note.tags] : undefined,
+  };
+}
+
+function cloneCommunicationEvent(event: CommunicationEvent): CommunicationEvent {
+  return {
+    ...event,
+    contextRef: { ...event.contextRef },
+  };
+}
+
+function cloneKnowledgeFact(fact: KnowledgeFact): KnowledgeFact {
+  return { ...fact };
+}
+
 function cloneExpense(expense: Expense): Expense {
   return normalizeExpensePaymentFields(normalizeExpense(expense));
 }
@@ -167,6 +203,9 @@ export function createSeedState(setupOverride?: CompanySetup): AppPersistedState
     ),
     documents: MOCK_COMPANY_DOCUMENTS.map(cloneCompanyDocument),
     expenses: MOCK_EXPENSES.map(cloneExpense),
+    vorgangNotes: [],
+    communicationHistory: [],
+    knowledgeFacts: [],
     savedAt: new Date().toISOString(),
   };
 }
@@ -181,6 +220,9 @@ function isValidPersistedState(value: unknown): value is AppPersistedState {
     Array.isArray(state.tasks) &&
     (Array.isArray(state.documents) || state.documents === undefined) &&
     (Array.isArray(state.expenses) || state.expenses === undefined) &&
+    (Array.isArray(state.vorgangNotes) || state.vorgangNotes === undefined) &&
+    (Array.isArray(state.communicationHistory) || state.communicationHistory === undefined) &&
+    (Array.isArray(state.knowledgeFacts) || state.knowledgeFacts === undefined) &&
     typeof state.setup === 'object' &&
     state.setup !== null
   );
@@ -210,6 +252,9 @@ export function loadPersistedState(): AppPersistedState | null {
       tasks: parsed.tasks.map(cloneTask),
       documents: (parsed.documents ?? MOCK_COMPANY_DOCUMENTS).map(cloneCompanyDocument),
       expenses: (parsed.expenses ?? []).map(cloneExpense),
+      vorgangNotes: (parsed.vorgangNotes ?? []).map(cloneVorgangNote),
+      communicationHistory: (parsed.communicationHistory ?? []).map(cloneCommunicationEvent),
+      knowledgeFacts: (parsed.knowledgeFacts ?? []).map(cloneKnowledgeFact),
     };
   } catch (error) {
     console.warn('[OfficePilot] localStorage konnte nicht gelesen werden:', error);
@@ -254,6 +299,9 @@ function applyStateToStores(state: AppPersistedState): void {
   hydrateTaskStore(state.tasks);
   hydrateDocumentStore(state.documents ?? []);
   hydrateExpenseStore(state.expenses ?? []);
+  hydrateVorgangNotes(state.vorgangNotes ?? []);
+  hydrateCommunicationHistory(state.communicationHistory ?? []);
+  hydrateKnowledgeFacts(state.knowledgeFacts ?? []);
 }
 
 export function hydrateStoresFromStorage(): CompanySetup {
@@ -284,6 +332,9 @@ export function persistAll(setupOverride?: CompanySetup): void {
     tasks: getTaskStoreSnapshot(),
     documents: getDocumentStoreSnapshot(),
     expenses: getExpenseStoreSnapshot(),
+    vorgangNotes: getVorgangNoteStoreSnapshot(),
+    communicationHistory: getCommunicationHistorySnapshot(),
+    knowledgeFacts: getKnowledgeSnapshot(),
     savedAt: new Date().toISOString(),
   };
 
@@ -299,6 +350,9 @@ export function resetDemoData(options?: { keepSetup?: boolean }): CompanySetup {
   resetTasks();
   resetDocuments();
   resetExpenses();
+  resetVorgangNotes();
+  resetCommunicationHistoryStore();
+  resetKnowledgeStore();
   resetCompanyProfile(setup.companyName);
   resetInvoiceNumberSequence();
 

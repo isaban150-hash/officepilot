@@ -6,4 +6,9 @@ describe('App routing', () => {
     expect(appSource).toMatch(/path="\/analyse" element=\{<Navigate to="\/assistent" replace \/>\}/);
     expect(appSource).not.toMatch(/AnalysekartePage/);
   });
+
+  it('nutzt Heute als Standard-Route', () => {
+    expect(appSource).toMatch(/path="\/" element=\{<HeutePage/);
+    expect(appSource).toMatch(/path="\*" element=\{<Navigate to="\/" replace/);
+  });
 });

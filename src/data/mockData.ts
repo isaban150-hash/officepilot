@@ -12,6 +12,8 @@ export const DEFAULT_SETUP: CompanySetup = {
   materialStandard: 'betrieb',
   language: 'de',
   setupComplete: false,
+  setupVersion: 0,
+  communicationChannel: 'email',
 };
 
 export const PAPER_FOLDERS: PaperFolder[] = [

@@ -613,6 +613,8 @@ export interface WorkflowResultExecution {
   pendingSummary: PendingSummary | null;
 }
 
+import type { CommunicationChannel } from './communication';
+
 export interface CompanySetup {
   companyName: string;
   industry: string;
@@ -620,6 +622,8 @@ export interface CompanySetup {
   materialStandard: MaterialStandard;
   language: AppLanguage;
   setupComplete: boolean;
+  setupVersion: number;
+  communicationChannel: CommunicationChannel;
 }
 
 export interface CompanyProfile {
@@ -1055,6 +1059,9 @@ export interface CompanyDocumentInput {
 }
 
 import type { Expense } from './expense';
+import type { VorgangNote } from './communication';
+import type { CommunicationEvent } from './communicationHistory';
+import type { KnowledgeFact } from './knowledge';
 
 export interface AppPersistedState {
   version: number;
@@ -1066,9 +1073,28 @@ export interface AppPersistedState {
   tasks: Task[];
   documents: CompanyDocument[];
   expenses?: Expense[];
+  vorgangNotes?: VorgangNote[];
+  communicationHistory?: CommunicationEvent[];
+  knowledgeFacts?: KnowledgeFact[];
   savedAt: string;
 }
 
+export type {
+  CommunicationChannel,
+  CommunicationContext,
+  CommunicationContextRef,
+  CommunicationDraft,
+  CommunicationIntent,
+  CommunicationMode,
+  CommunicationRequest,
+  CommunicationResult,
+  DocumentQuestionResult,
+  MissingCommunicationInfo,
+  RewriteStyle,
+  VorgangNote,
+  VorgangNoteInput,
+  VorgangNoteSource,
+} from './communication';
 export type {
   Expense,
   ExpenseAllocation,

@@ -8,6 +8,8 @@ import {
 } from '../components/invoice/InvoicePaymentForm';
 import { InvoicePaymentHistory } from '../components/invoice/InvoicePaymentHistory';
 import { InvoicePaymentSummary } from '../components/invoice/InvoicePaymentSummary';
+import { CommunicationIntegrationPanel } from '../components/communication/CommunicationIntegrationPanel';
+import { INVOICE_COMMUNICATION_BUTTON_KEYS } from '../components/communication/communicationNavigation';
 import { Button } from '../components/ui/Button';
 import { Card, PageHeader } from '../components/ui/Card';
 import { useApp } from '../context/AppContext';
@@ -145,6 +147,16 @@ export function InvoiceDetailPage() {
           onRemovePayment={handleRemovePayment}
         />
       </Card>
+
+      <CommunicationIntegrationPanel
+        contextRef={{
+          type: 'invoice',
+          id: invoice.id,
+          vorgangId: vorgangId ?? '',
+        }}
+        buttonKeys={INVOICE_COMMUNICATION_BUTTON_KEYS}
+        testIdPrefix="invoice"
+      />
 
       <div className="invoice-detail__document">
         <InvoiceDocumentView model={printModel} />

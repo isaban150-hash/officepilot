@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useParams } from 'react-router-dom';
 import { AppShell } from './components/layout/AppShell';
 import { useApp } from './context/AppContext';
 import { OffeneAusgabenPage } from './pages/OffeneAusgabenPage';
@@ -13,13 +13,23 @@ import { DokumentNeuPage } from './pages/DokumentNeuPage';
 import { EingangDetailPage } from './pages/EingangDetailPage';
 import { EingangPage } from './pages/EingangPage';
 import { FirmendatenPage } from './pages/FirmendatenPage';
+import { HeutePage } from './pages/HeutePage';
+import { MehrPage } from './pages/MehrPage';
 import { PapierarchivPage } from './pages/PapierarchivPage';
+import { KommunikationPage } from './pages/KommunikationPage';
 import { InvoiceDetailPage } from './pages/InvoiceDetailPage';
 import { OffeneRechnungenPage } from './pages/OffeneRechnungenPage';
 import { RechnungPage } from './pages/RechnungPage';
+import { ScanPage } from './pages/ScanPage';
 import { SetupPage } from './pages/SetupPage';
+import { WissenPage } from './pages/WissenPage';
 import { VorgaengePage } from './pages/VorgaengePage';
 import { VorgangDetailPage } from './pages/VorgangDetailPage';
+
+function LegacyInboxDetailRedirect() {
+  const { id } = useParams<{ id: string }>();
+  return <Navigate to={id ? `/ablage/${id}` : '/ablage'} replace />;
+}
 
 function AppRoutes() {
   const { setup } = useApp();
@@ -36,8 +46,14 @@ function AppRoutes() {
   return (
     <Routes>
       <Route element={<AppShell />}>
-        <Route path="/eingang" element={<EingangPage />} />
-        <Route path="/eingang/:id" element={<EingangDetailPage />} />
+        <Route path="/" element={<HeutePage />} />
+        <Route path="/start" element={<Navigate to="/" replace />} />
+        <Route path="/scan" element={<ScanPage />} />
+        <Route path="/mehr" element={<MehrPage />} />
+        <Route path="/ablage" element={<EingangPage />} />
+        <Route path="/ablage/:id" element={<EingangDetailPage />} />
+        <Route path="/eingang" element={<Navigate to="/ablage" replace />} />
+        <Route path="/eingang/:id" element={<LegacyInboxDetailRedirect />} />
         <Route path="/analyse" element={<Navigate to="/assistent" replace />} />
         <Route path="/aufgaben" element={<AufgabenPage />} />
         <Route path="/vorgaenge" element={<VorgaengePage />} />
@@ -54,9 +70,11 @@ function AppRoutes() {
         <Route path="/ausgaben/:id" element={<AusgabeDetailPage />} />
         <Route path="/papierarchiv" element={<PapierarchivPage />} />
         <Route path="/assistent" element={<AssistentPage />} />
+        <Route path="/kommunikation" element={<KommunikationPage />} />
+        <Route path="/wissen" element={<WissenPage />} />
         <Route path="/firmendaten" element={<FirmendatenPage />} />
         <Route path="/setup" element={<SetupPage />} />
-        <Route path="*" element={<Navigate to="/eingang" replace />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
   );

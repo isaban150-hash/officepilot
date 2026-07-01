@@ -12,6 +12,9 @@ import { hydrateInboxStore } from '../services/inboxService';
 import { setCachedSetup } from '../services/persistenceService';
 import { hydrateTaskStore } from '../services/taskService';
 import { hydrateVorgangStore } from '../services/vorgangService';
+import { hydrateVorgangNotes } from '../services/vorgangNoteService';
+import { resetCommunicationHistoryStore } from '../services/communicationHistoryStore';
+import { resetKnowledgeStore } from '../services/knowledgeStore';
 
 export function resetTestStores(): void {
   hydrateInboxStore([]);
@@ -19,6 +22,9 @@ export function resetTestStores(): void {
   hydrateTaskStore([]);
   hydrateDocumentStore([]);
   hydrateExpenseStore([]);
+  hydrateVorgangNotes([]);
+  resetCommunicationHistoryStore();
+  resetKnowledgeStore();
   setCachedSetup({ ...DEFAULT_SETUP });
   hydrateCompanyProfileStore({ ...DEFAULT_COMPANY_PROFILE, companyName: 'Test GmbH' });
   hydrateInvoiceNumberSequence({ year: 2026, lastIssuedNumber: 0 });

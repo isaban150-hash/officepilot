@@ -237,7 +237,7 @@ export function executeSmartIntake(
   let pendingSummary = workflow.pendingSummary;
 
   if (!workflow.companyRelevant) {
-    markFailure(failedSteps, 'archive_document', 'Kein Firmenbezug – Smart Intake eingeschränkt.');
+    markFailure(failedSteps, 'archive_document', 'Kein Firmenbezug – Übernahme eingeschränkt.');
     const finalized = finalizeInboxIntake(item.id);
     if (finalized) {
       item = finalized;
@@ -325,7 +325,7 @@ export function executeSmartIntake(
     markFailure(
       failedSteps,
       'finalize_inbox',
-      error instanceof Error ? error.message : 'Unbekannter Fehler beim Smart Intake.',
+      error instanceof Error ? error.message : 'Unbekannter Fehler bei der Übernahme.',
     );
   }
 

@@ -9,12 +9,15 @@ import {
 import type { AppLanguage, CompanyProfile, CompanySetup } from '../types/models';
 import { t, type TranslationKey } from '../i18n';
 import { getCompanyProfile, updateCompanyProfile } from '../services/companyProfileService';
+import { completeSetupWizard as applySetupWizard } from '../services/setupCompletionService';
 import {
   getCachedSetup,
   persistAll,
   resetDemoData,
   setCachedSetup,
 } from '../services/persistenceService';
+import type { SetupWizardDraft } from '../types/setup';
+import type { SetupCompletionResult } from '../services/setupCompletionService';
 
 interface AppContextValue {
   setup: CompanySetup;
@@ -22,6 +25,7 @@ interface AppContextValue {
   updateSetup: (partial: Partial<CompanySetup>) => void;
   updateCompanyProfile: (partial: Partial<CompanyProfile>) => CompanyProfileUpdateResult;
   completeSetup: () => void;
+  completeSetupWizard: (draft: SetupWizardDraft) => SetupCompletionResult;
   resetDemo: (keepSetup?: boolean) => void;
   translate: (key: TranslationKey) => string;
   language: AppLanguage;
@@ -68,11 +72,21 @@ export function AppProvider({ children, initialSetup }: AppProviderProps) {
 
   const completeSetup = useCallback(() => {
     setSetup((prev) => {
-      const next = { ...prev, setupComplete: true };
+      const next = { ...prev, setupComplete: true, setupVersion: prev.setupVersion || 1 };
       setCachedSetup(next);
       persistAll(next);
       return next;
     });
+  }, []);
+
+  const completeSetupWizardState = useCallback((draft: SetupWizardDraft): SetupCompletionResult => {
+    const result = applySetupWizard(draft, getCachedSetup());
+    if (result.success) {
+      setSetup(result.setup);
+      setCompanyProfile(result.profile);
+      setCachedSetup(result.setup);
+    }
+    return result;
   }, []);
 
   const resetDemo = useCallback((keepSetup = false) => {
@@ -100,6 +114,7 @@ export function AppProvider({ children, initialSetup }: AppProviderProps) {
       updateSetup,
       updateCompanyProfile: updateCompanyProfileState,
       completeSetup,
+      completeSetupWizard: completeSetupWizardState,
       resetDemo,
       translate,
       language: setup.language,
@@ -113,6 +128,7 @@ export function AppProvider({ children, initialSetup }: AppProviderProps) {
       updateSetup,
       updateCompanyProfileState,
       completeSetup,
+      completeSetupWizardState,
       resetDemo,
       translate,
       toast,
