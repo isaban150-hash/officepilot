@@ -8,6 +8,7 @@ import {
   UPLOAD_KIND_LABELS,
 } from '../services/inboxUploadFactory';
 import { processUpload } from '../services/inboxService';
+import { extractTextFromUploadFile } from '../services/uploadTextExtractionService';
 import type { UploadDocumentKind } from '../types/models';
 
 export function ScanPage() {
@@ -30,12 +31,22 @@ export function ScanPage() {
     fileInputRef.current?.click();
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    const sourceFileName = file?.name ?? undefined;
+    if (!file) return;
+
+    let recognizedText: string | undefined;
+    try {
+      const extracted = await extractTextFromUploadFile(file);
+      recognizedText = extracted || undefined;
+    } catch {
+      recognizedText = undefined;
+    }
+
     const item = processUpload({
-      sourceFileName,
+      sourceFileName: file.name,
       kind: selectedKind ?? undefined,
+      recognizedText,
     });
     e.target.value = '';
     handleUploadComplete(item.id);

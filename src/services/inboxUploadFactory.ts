@@ -1,9 +1,9 @@
 import { MOCK_INBOX_ITEMS } from '../data/inboxMockData';
 import type { DocumentClassificationInput, InboxItem, UploadDocumentKind } from '../types/models';
-import { SAMPLE_WERKVERTRAG_TEXT } from './contractAnalysisService';
 import {
   classifyInboxItem,
 } from './documentClassificationService';
+import { withInboxExtractedDocumentText } from './inboxDocumentText';
 
 export const UPLOAD_DOCUMENT_KINDS: UploadDocumentKind[] = [
   'auftrag',
@@ -26,6 +26,7 @@ export const UPLOAD_KIND_LABELS: Record<UploadDocumentKind, string> = {
 export interface CreateInboxFromUploadOptions {
   sourceFileName?: string;
   kind?: UploadDocumentKind;
+  recognizedText?: string;
 }
 
 function pickRandomKind(): UploadDocumentKind {
@@ -59,7 +60,6 @@ function enrichFromTemplate(
     recognizedData: {
       ...template.recognizedData,
       Dokumentart: classified.classifiedKind ?? '',
-      ...(kind === 'auftrag' ? { _vertragstext: SAMPLE_WERKVERTRAG_TEXT } : {}),
     },
     taskTemplate: template.taskTemplate ? { ...template.taskTemplate } : classified.taskTemplate,
     vorgangId: template.vorgangId ?? classified.vorgangId,
@@ -72,14 +72,28 @@ function enrichFromTemplate(
 export function createMockInboxItemFromUpload(
   options: CreateInboxFromUploadOptions = {},
 ): InboxItem {
-  const kind = options.kind ?? pickRandomKind();
+  const recognizedText = options.recognizedText?.trim();
+  const kind = options.kind ?? (recognizedText ? undefined : pickRandomKind());
   const sourceFileName = options.sourceFileName ?? defaultFileName();
 
   const input: DocumentClassificationInput = {
     sourceFileName,
     kindHint: kind,
+    recognizedText,
   };
 
-  const classified = classifyInboxItem(input);
-  return enrichFromTemplate(classified, kind);
+  let item = classifyInboxItem(input);
+
+  if (kind) {
+    item = enrichFromTemplate(item, kind);
+  }
+
+  if (recognizedText) {
+    item = {
+      ...item,
+      recognizedData: withInboxExtractedDocumentText(item.recognizedData, recognizedText),
+    };
+  }
+
+  return item;
 }

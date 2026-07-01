@@ -15,6 +15,7 @@ import {
   suggestPaperFolderId,
   suggestProcessType,
 } from './documentClassificationCatalog';
+import { getInboxExtractedDocumentText } from './inboxDocumentText';
 import type {
   ClassifiedDocumentKind,
   DigitalFolder,
@@ -380,6 +381,15 @@ export function classifyDocument(input: DocumentClassificationInput): DocumentCl
   return result;
 }
 
+function buildRecognizedTextFromItem(item: InboxItem): string {
+  const extracted = getInboxExtractedDocumentText(item);
+  const visible = Object.entries(item.recognizedData)
+    .filter(([key]) => !key.startsWith('_'))
+    .map(([, value]) => value)
+    .join(' ');
+  return [extracted, visible].filter(Boolean).join('\n');
+}
+
 export function getClassifiedKindFromItem(item: InboxItem): ClassifiedDocumentKind {
   if (item.classifiedKind) return item.classifiedKind;
 
@@ -391,7 +401,7 @@ export function getClassifiedKindFromItem(item: InboxItem): ClassifiedDocumentKi
     sourceFileName: item.sourceFileName,
     titleHint: item.title,
     senderHint: item.sender,
-    recognizedText: Object.values(item.recognizedData).join(' '),
+    recognizedText: buildRecognizedTextFromItem(item),
   });
 }
 
@@ -476,10 +486,7 @@ export function getClassificationForItem(item: InboxItem): DocumentClassificatio
     sourceFileName: item.sourceFileName,
     titleHint: item.title,
     senderHint: item.sender,
-    recognizedText: Object.entries(item.recognizedData)
-      .filter(([key]) => !key.startsWith('_'))
-      .map(([, value]) => value)
-      .join(' '),
+    recognizedText: buildRecognizedTextFromItem(item),
     kindHint: item.classifiedKind ?? kindFromData,
   });
 

@@ -14,13 +14,13 @@ export interface ClassificationRule {
 }
 
 export const CLASSIFICATION_RULES: ClassificationRule[] = [
+  { kind: 'werkvertrag', pattern: /werkvertrag|werkvertrags/, reasonKey: 'classification.detect.werkvertrag' },
+  { kind: 'subunternehmervertrag', pattern: /subunternehmervertrag|subunternehmer/, reasonKey: 'classification.detect.subunternehmer' },
+  { kind: 'nachunternehmervertrag', pattern: /nachunternehmervertrag|nachunternehmer/, reasonKey: 'classification.detect.nachunternehmer' },
   { kind: 'mahnung', pattern: /mahnung|inkasso|zahlungsaufforderung/, reasonKey: 'classification.detect.mahnung' },
   { kind: 'zahlungserinnerung', pattern: /zahlungserinnerung/, reasonKey: 'classification.detect.zahlungserinnerung' },
   { kind: 'freistellungsbescheinigung', pattern: /freistellungsbescheinigung|§48b|§48 b/, reasonKey: 'classification.detect.freistellung' },
   { kind: 'unbedenklichkeitsbescheinigung', pattern: /unbedenklichkeitsbescheinigung|unbedenklichkeit/, reasonKey: 'classification.detect.unbedenklichkeit' },
-  { kind: 'werkvertrag', pattern: /werkvertrag|werkvertrags/, reasonKey: 'classification.detect.werkvertrag' },
-  { kind: 'subunternehmervertrag', pattern: /subunternehmervertrag|subunternehmer/, reasonKey: 'classification.detect.subunternehmer' },
-  { kind: 'nachunternehmervertrag', pattern: /nachunternehmervertrag|nachunternehmer/, reasonKey: 'classification.detect.nachunternehmer' },
   { kind: 'abnahmeprotokoll', pattern: /abnahmeprotokoll|abnahme protokoll/, reasonKey: 'classification.detect.abnahmeprotokoll' },
   { kind: 'maengelprotokoll', pattern: /mängelprotokoll|maengelprotokoll|mangelprotokoll/, reasonKey: 'classification.detect.maengelprotokoll' },
   { kind: 'uebergabeprotokoll', pattern: /übergabeprotokoll|uebergabeprotokoll/, reasonKey: 'classification.detect.uebergabeprotokoll' },

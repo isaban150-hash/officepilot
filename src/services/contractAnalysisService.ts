@@ -15,6 +15,7 @@ import type {
   SignaturePage,
   UploadDocumentKind,
 } from '../types/models';
+import { getInboxExtractedDocumentText } from './inboxDocumentText';
 
 export const SAMPLE_WERKVERTRAG_TEXT = `
 Werkvertrag
@@ -519,13 +520,10 @@ function emptyResult(reason: string): ContractAnalysisResult {
 }
 
 export function buildContractAnalysisInputFromInbox(item: InboxItem): ContractAnalysisInput {
-  const vertragstext =
-    item.recognizedData._vertragstext ??
-    item.recognizedData.Vertragstext ??
-    '';
+  const documentText = getInboxExtractedDocumentText(item);
 
   return {
-    recognizedText: vertragstext,
+    recognizedText: documentText,
     sourceFileName: item.sourceFileName,
     titleHint: item.title,
     senderHint: item.sender,

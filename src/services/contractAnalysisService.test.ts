@@ -137,7 +137,10 @@ describe('analyzeContract – Fehlklassifizierung vermeiden', () => {
 
 describe('Integration Upload → Analyse', () => {
   it('analysiert Auftrag-Upload mit Vertragstext', () => {
-    const item = createMockInboxItemFromUpload({ kind: 'auftrag' });
+    const item = createMockInboxItemFromUpload({
+      kind: 'auftrag',
+      recognizedText: SAMPLE_WERKVERTRAG_TEXT,
+    });
     const analysis = analyzeContractFromInbox(item);
 
     expect(analysis.isContract).toBe(true);

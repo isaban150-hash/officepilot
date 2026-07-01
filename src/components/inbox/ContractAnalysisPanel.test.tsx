@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { ContractAnalysisPanel } from './ContractAnalysisPanel';
-import { analyzeContractFromInbox } from '../../services/contractAnalysisService';
+import { analyzeContractFromInbox, SAMPLE_WERKVERTRAG_TEXT } from '../../services/contractAnalysisService';
 import { createMockInboxItemFromUpload } from '../../services/inboxUploadFactory';
 import type { TranslationKey } from '../../i18n';
 
@@ -11,7 +11,10 @@ function translate(key: TranslationKey): string {
 
 describe('ContractAnalysisPanel', () => {
   it('rendert Vertragsanalyse-Karte nach Upload', () => {
-    const item = createMockInboxItemFromUpload({ kind: 'auftrag' });
+    const item = createMockInboxItemFromUpload({
+      kind: 'auftrag',
+      recognizedText: `Werkvertrag\n${SAMPLE_WERKVERTRAG_TEXT}`,
+    });
     const analysis = analyzeContractFromInbox(item);
 
     const html = renderToStaticMarkup(
