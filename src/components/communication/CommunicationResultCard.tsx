@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { Card, CardMeta, CardTitle } from '../ui/Card';
 import { Button } from '../ui/Button';
+import { ShowMoreSection } from '../ui/ShowMoreSection';
 import { CommunicationChannelTabs } from './CommunicationChannelTabs';
 import { CommunicationCopyButton } from './CommunicationCopyButton';
 import { CommunicationDraftView, formatCommunicationDraftText } from './CommunicationDraftView';
@@ -70,6 +72,7 @@ export function CommunicationResultCard({
   onAiVariantChange,
   aiMessage,
 }: CommunicationResultCardProps) {
+  const [showRefineOptions, setShowRefineOptions] = useState(false);
   const title = translateMaybeKey(result.title, translate);
   const summary = translateMaybeKey(result.summary, translate);
 
@@ -152,17 +155,17 @@ export function CommunicationResultCard({
       );
     }
 
-    const showAiVariant = Boolean(aiEnhancedDraft);
+    const showImprovedVariant = Boolean(aiEnhancedDraft);
     const activeDraft = aiVariant === 'ai' && aiEnhancedDraft ? aiEnhancedDraft : draft;
 
     return (
       <div data-testid="communication-draft">
         <Card className="communication-result-card communication-result-card--draft">
-          <CardTitle>{title}</CardTitle>
+          <CardTitle>{translate('communication.draftHeading')}</CardTitle>
           <CardMeta>{summary}</CardMeta>
           <CommunicationChannelTabs channel={channel} onChange={onChannelChange} translate={translate} />
 
-          {showAiVariant && (
+          {showImprovedVariant && (
             <div className="communication-ai-variant-tabs" data-testid="communication-ai-variant-tabs">
               <button
                 type="button"
@@ -178,7 +181,7 @@ export function CommunicationResultCard({
                 data-testid="communication-ai-variant-ai"
                 onClick={() => onAiVariantChange('ai')}
               >
-                {translate('communication.ai.variantAi')}
+                {translate('communication.ai.variantImproved')}
               </button>
             </div>
           )}
@@ -187,51 +190,11 @@ export function CommunicationResultCard({
             draft={activeDraft}
             translate={translate}
             bodyTestId={
-              aiVariant === 'ai' && showAiVariant
+              aiVariant === 'ai' && showImprovedVariant
                 ? 'communication-draft-body-ai'
                 : 'communication-draft-body'
             }
           />
-
-          <div className="communication-ai-section" data-testid="communication-ai-section">
-            <div className="communication-ai-controls">
-              <label className="communication-ai-style-label" htmlFor="communication-ai-style">
-                {translate('communication.ai.styleLabel')}
-              </label>
-              <select
-                id="communication-ai-style"
-                className="input communication-ai-style-select"
-                value={aiStyle}
-                onChange={(event) => onAiStyleChange(event.target.value as CommunicationAiEnhanceStyle)}
-                data-testid="communication-ai-style"
-              >
-                {AI_STYLES.map((style) => (
-                  <option key={style} value={style}>
-                    {translate(`communication.ai.style.${style}` as TranslationKey)}
-                  </option>
-                ))}
-              </select>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={onAiEnhance}
-                disabled={!aiConfigured || aiLoading}
-                data-testid="communication-ai-enhance"
-              >
-                {aiLoading ? translate('communication.ai.loading') : translate('communication.ai.enhance')}
-              </Button>
-            </div>
-            {!aiConfigured && translate('communication.ai.notConfigured') ? (
-              <p className="communication-ai-hint" data-testid="communication-ai-not-configured">
-                {translate('communication.ai.notConfigured')}
-              </p>
-            ) : null}
-            {aiMessage && (
-              <p className="communication-ai-message" data-testid="communication-ai-message">
-                {aiMessage}
-              </p>
-            )}
-          </div>
 
           <div className="communication-draft-actions">
             <CommunicationCopyButton
@@ -241,6 +204,50 @@ export function CommunicationResultCard({
               onCopied={onCopied}
             />
           </div>
+
+          <ShowMoreSection
+            expanded={showRefineOptions}
+            onToggle={() => setShowRefineOptions((open) => !open)}
+            showLabel={translate('communication.refineShowMore')}
+            hideLabel={translate('communication.refineShowLess')}
+            testId="communication-refine-show-more"
+          >
+            <div className="communication-ai-section" data-testid="communication-ai-section">
+              <div className="communication-ai-controls">
+                <label className="communication-ai-style-label" htmlFor="communication-ai-style">
+                  {translate('communication.ai.styleLabel')}
+                </label>
+                <select
+                  id="communication-ai-style"
+                  className="input communication-ai-style-select"
+                  value={aiStyle}
+                  onChange={(event) => onAiStyleChange(event.target.value as CommunicationAiEnhanceStyle)}
+                  data-testid="communication-ai-style"
+                >
+                  {AI_STYLES.map((style) => (
+                    <option key={style} value={style}>
+                      {translate(`communication.ai.style.${style}` as TranslationKey)}
+                    </option>
+                  ))}
+                </select>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={onAiEnhance}
+                  disabled={!aiConfigured || aiLoading}
+                  data-testid="communication-ai-enhance"
+                >
+                  {aiLoading ? translate('communication.ai.loading') : translate('communication.ai.enhance')}
+                </Button>
+              </div>
+              {aiMessage && (
+                <p className="communication-ai-message" data-testid="communication-ai-message">
+                  {aiMessage}
+                </p>
+              )}
+            </div>
+          </ShowMoreSection>
+
           <p className="communication-disclaimer">{result.disclaimer}</p>
         </Card>
       </div>

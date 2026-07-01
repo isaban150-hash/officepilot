@@ -152,6 +152,16 @@ function renderPageAt(path: string, element: ReactElement): PageMount {
   return { container, root };
 }
 
+function expandDetailShowMore(container: ParentNode): void {
+  const toggle = container.querySelector('[data-testid="show-more-toggle"]') as HTMLElement | null;
+  if (!toggle) {
+    throw new Error('Missing show-more toggle');
+  }
+  act(() => {
+    toggle.click();
+  });
+}
+
 function getCommunicationLinks(container: ParentNode, testIdPrefix: string): HTMLAnchorElement[] {
   const panel = container.querySelector(`[data-testid="${testIdPrefix}-communication"]`);
   if (!panel) {
@@ -237,6 +247,7 @@ describe('communication detail page integration', () => {
   it('EingangDetailPage links to inbox communication context', () => {
     hydrateInboxStore([createBriefInboxItem()]);
     mounted = renderPageAt('/eingang/inbox-integration-1', <EingangDetailPage />);
+    expandDetailShowMore(mounted.container);
     expectLinksMatchContext(mounted.container, 'eingang', {
       type: 'inbox',
       id: 'inbox-integration-1',
@@ -246,6 +257,7 @@ describe('communication detail page integration', () => {
   it('DokumentDetailPage links to document communication context', () => {
     hydrateDocumentStore([createTestDocument()]);
     mounted = renderPageAt('/dokumente/doc-integration-1', <DokumentDetailPage />);
+    expandDetailShowMore(mounted.container);
     expectLinksMatchContext(mounted.container, 'dokument', {
       type: 'document',
       id: 'doc-integration-1',
@@ -255,6 +267,7 @@ describe('communication detail page integration', () => {
   it('VorgangDetailPage links to vorgang communication context', () => {
     hydrateVorgangStore([createTestVorgang({ id: 'v-integration-1' })]);
     mounted = renderPageAt('/vorgaenge/v-integration-1', <VorgangDetailPage />);
+    expandDetailShowMore(mounted.container);
     expectLinksMatchContext(mounted.container, 'vorgang', {
       type: 'vorgang',
       id: 'v-integration-1',
@@ -272,6 +285,7 @@ describe('communication detail page integration', () => {
       '/vorgaenge/v-integration-1/rechnungen/inv-integration-1',
       <InvoiceDetailPage />,
     );
+    expandDetailShowMore(mounted.container);
     expectLinksMatchContext(mounted.container, 'invoice', {
       type: 'invoice',
       id: 'inv-integration-1',

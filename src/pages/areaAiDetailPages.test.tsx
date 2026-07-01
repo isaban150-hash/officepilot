@@ -91,9 +91,13 @@ describe('Detail pages AreaAiPanel', () => {
     document.body.innerHTML = '';
   });
 
-  it('DokumentDetailPage zeigt AreaAiPanel', () => {
+  it('DokumentDetailPage zeigt AreaAiPanel nach Mehr anzeigen', () => {
     hydrateDocumentStore([sampleDocument]);
     mounted = renderPage('/dokumente/doc-detail-ai', <DokumentDetailPage />);
+    expect(mounted.container.querySelector('[data-testid="document-detail-experience"]')).not.toBeNull();
+    expect(mounted.container.querySelector('[data-testid="document-ai-panel"]')).toBeNull();
+
+    flushSync(() => clickByTestId(mounted!.container, 'show-more-toggle'));
     expect(mounted.container.querySelector('[data-testid="document-ai-panel"]')).not.toBeNull();
     expect(mounted.container.textContent).toContain('Frage zu diesem Dokument');
   });
@@ -101,6 +105,9 @@ describe('Detail pages AreaAiPanel', () => {
   it('VorgangDetailPage zeigt AreaAiPanel und Antwort', async () => {
     hydrateVorgangStore([createTestVorgang({ id: 'v-detail-ai', title: 'Test Vorgang' })]);
     mounted = renderPage('/vorgaenge/v-detail-ai', <VorgangDetailPage />);
+    expect(mounted.container.querySelector('[data-testid="vorgang-detail-experience"]')).not.toBeNull();
+
+    flushSync(() => clickByTestId(mounted!.container, 'show-more-toggle'));
     expect(mounted.container.querySelector('[data-testid="vorgang-ai-panel"]')).not.toBeNull();
 
     const input = mounted.container.querySelector('[data-testid="vorgang-ai-input"]') as HTMLInputElement;

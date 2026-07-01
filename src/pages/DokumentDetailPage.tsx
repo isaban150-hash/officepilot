@@ -3,9 +3,11 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { DocumentForm } from '../components/documents/DocumentForm';
 import { CommunicationIntegrationPanel } from '../components/communication/CommunicationIntegrationPanel';
 import { DOCUMENT_COMMUNICATION_BUTTON_KEYS } from '../components/communication/communicationNavigation';
+import { DetailExperienceCard } from '../components/detail/DetailExperienceCard';
 import { AreaAiPanel } from '../components/ai/AreaAiPanel';
 import { Button } from '../components/ui/Button';
-import { Badge, Card, DataRow, PageHeader } from '../components/ui/Card';
+import { Badge, Card, DataRow } from '../components/ui/Card';
+import { ShowMoreSection } from '../components/ui/ShowMoreSection';
 import { useApp } from '../context/AppContext';
 import { formatPaperFilingInstruction } from '../services/paperFolderService';
 import { deleteDocument, getDocumentById } from '../services/documentService';
@@ -31,12 +33,14 @@ export function DokumentDetailPage() {
   );
   const [isEditing, setIsEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
 
   useEffect(() => {
     if (id) {
       setDocument(getDocumentById(id));
       setIsEditing(false);
       setConfirmDelete(false);
+      setShowDetails(false);
     }
   }, [id]);
 
@@ -49,6 +53,8 @@ export function DokumentDetailPage() {
   if (!document) return null;
 
   const categoryKey = `document.category.${document.category}` as TranslationKey;
+  const categoryLabel = translate(categoryKey);
+  const paperInstruction = formatPaperFilingInstruction(document.paperFolder);
 
   const handleDelete = () => {
     const result = deleteDocument(document.id);
@@ -64,7 +70,13 @@ export function DokumentDetailPage() {
         <button type="button" className="back-link" onClick={() => setIsEditing(false)}>
           ← {translate('common.back')}
         </button>
-        <PageHeader title={translate('document.editTitle')} subtitle={document.title} />
+        <DetailExperienceCard
+          recognizedTitle={document.title}
+          recognizedSummary={categoryLabel}
+          assistantMessage={translate('document.experience.editing')}
+          paperInstruction={paperInstruction}
+          testId="document-detail-experience"
+        />
         <DocumentForm
           mode="edit"
           document={document}
@@ -78,14 +90,25 @@ export function DokumentDetailPage() {
     );
   }
 
-  return (
-    <div className="page">
-      <button type="button" className="back-link" onClick={() => navigate('/dokumente')}>
-        ← {translate('common.back')}
-      </button>
+  const primaryActions = (
+    <>
+      <Button fullWidth onClick={() => navigate(`/kommunikation?context=document&id=${document.id}`)}>
+        {translate('detail.action.writeMessage')}
+      </Button>
+      {document.linkedVorgang && (
+        <Button
+          variant="outline"
+          fullWidth
+          onClick={() => navigate(`/vorgaenge/${document.linkedVorgang!.vorgangId}`)}
+        >
+          {translate('detail.action.openOrder')}
+        </Button>
+      )}
+    </>
+  );
 
-      <PageHeader title={document.title} subtitle={translate(categoryKey)} />
-
+  const technicalPanels = (
+    <>
       <Card className="document-detail__preview">
         <div className="document-detail__image" aria-hidden>
           {document.imagePreview ?? '📄'}
@@ -94,15 +117,11 @@ export function DokumentDetailPage() {
       </Card>
 
       <Card>
-        <DataRow label={translate('document.fieldCategory')} value={translate(categoryKey)} />
+        <DataRow label={translate('document.fieldCategory')} value={categoryLabel} />
         <DataRow label={translate('document.fieldIssuer')} value={document.issuer || '—'} />
         <DataRow
           label={translate('document.fieldValidity')}
           value={`${formatDate(document.issueDate)} – ${formatDate(document.validUntil)}`}
-        />
-        <DataRow
-          label={translate('document.fieldPaperFolder')}
-          value={formatPaperFilingInstruction(document.paperFolder)}
         />
         <DataRow
           label={translate('document.fieldDigitalFolder')}
@@ -159,8 +178,8 @@ export function DokumentDetailPage() {
       />
 
       <AreaAiPanel
-        title={translate('areaAi.document.title')}
-        placeholder={translate('areaAi.placeholder')}
+        title={translate('detail.askDocument')}
+        placeholder={translate('detail.askPlaceholder')}
         askLabel={translate('areaAi.ask')}
         loadingLabel={translate('areaAi.loading')}
         notConfiguredLabel={translate('areaAi.notConfigured')}
@@ -189,6 +208,33 @@ export function DokumentDetailPage() {
           </>
         )}
       </div>
+    </>
+  );
+
+  return (
+    <div className="page document-detail-page" data-testid="document-detail-page">
+      <button type="button" className="back-link" onClick={() => navigate('/dokumente')}>
+        ← {translate('common.back')}
+      </button>
+
+      <DetailExperienceCard
+        recognizedTitle={document.title}
+        recognizedSummary={categoryLabel}
+        assistantMessage={translate('document.experience.saved')}
+        paperInstruction={paperInstruction}
+        actions={primaryActions}
+        testId="document-detail-experience"
+      />
+
+      <ShowMoreSection
+        expanded={showDetails}
+        onToggle={() => setShowDetails((open) => !open)}
+        showLabel={translate('common.showMore')}
+        hideLabel={translate('common.showLess')}
+        testId="document-detail-show-more"
+      >
+        {technicalPanels}
+      </ShowMoreSection>
     </div>
   );
 }

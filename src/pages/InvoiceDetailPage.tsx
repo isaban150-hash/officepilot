@@ -8,18 +8,25 @@ import {
 } from '../components/invoice/InvoicePaymentForm';
 import { InvoicePaymentHistory } from '../components/invoice/InvoicePaymentHistory';
 import { InvoicePaymentSummary } from '../components/invoice/InvoicePaymentSummary';
+import { DetailExperienceCard } from '../components/detail/DetailExperienceCard';
 import { CommunicationIntegrationPanel } from '../components/communication/CommunicationIntegrationPanel';
 import { INVOICE_COMMUNICATION_BUTTON_KEYS } from '../components/communication/communicationNavigation';
 import { Button } from '../components/ui/Button';
-import { Card, PageHeader } from '../components/ui/Card';
+import { ShowMoreSection } from '../components/ui/ShowMoreSection';
 import { useApp } from '../context/AppContext';
 import { isFinalizedInvoice, buildPrintTitle } from '../services/invoiceArchiveService';
 import { buildInvoicePrintModelFromInvoice } from '../services/invoicePrintModel';
 import { exportInvoiceAsPdf } from '../services/invoicePdfService';
-import { isInvoiceCancelled, removePayment } from '../services/invoicePaymentService';
+import {
+  calculatePaymentSummary,
+  formatPaymentCurrency,
+  isInvoiceCancelled,
+  removePayment,
+} from '../services/invoicePaymentService';
 import { printInvoice } from '../services/invoicePrintService';
 import { getVorgangById, getVorgangInvoice } from '../services/vorgangService';
 import type { VorgangInvoice } from '../types/models';
+import type { TranslationKey } from '../i18n';
 
 export function InvoiceDetailPage() {
   const { id: vorgangId, invoiceId } = useParams<{ id: string; invoiceId: string }>();
@@ -32,12 +39,14 @@ export function InvoiceDetailPage() {
     vorgangId && invoiceId ? getVorgangInvoice(vorgangId, invoiceId) : undefined,
   );
   const [showPaymentForm, setShowPaymentForm] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
 
   const vorgang = vorgangId ? getVorgangById(vorgangId) : undefined;
 
   useEffect(() => {
     if (vorgangId && invoiceId) {
       setInvoice(getVorgangInvoice(vorgangId, invoiceId));
+      setShowDetails(false);
     }
   }, [vorgangId, invoiceId]);
 
@@ -99,54 +108,53 @@ export function InvoiceDetailPage() {
     );
   }
 
-  return (
-    <div className="page page--invoice-detail">
-      <div className="invoice-detail__toolbar no-print">
-        <button
-          type="button"
-          className="back-link"
-          onClick={() => navigate(fromOverview ? '/rechnungen/offen' : `/vorgaenge/${vorgangId}`)}
-        >
-          ← {fromOverview ? translate('overview.backToOverview') : translate('common.back')}
-        </button>
-        <PageHeader
-          title={printModel.documentTitle}
-          subtitle={`${printModel.invoiceNumber} · ${vorgang.title}`}
-        />
-        <div className="invoice-detail__actions">
-          <InvoicePrintActions model={printModel} translate={translate} layout="inline" />
-          {!isInvoiceCancelled(invoice) && (
-            <Button type="button" onClick={() => setShowPaymentForm(true)}>
-              {translate('payment.record')}
-            </Button>
-          )}
-        </div>
-        {(fromOverview || invoice.archiveDocumentId) && (
-          <p className="invoice-detail__archive-link">
-            {fromOverview && (
-              <>
-                <Link to="/rechnungen/offen">{translate('overview.backToOverview')}</Link>
-                {invoice.archiveDocumentId && ' · '}
-              </>
-            )}
-            {invoice.archiveDocumentId && (
-              <Link to={`/dokumente/${invoice.archiveDocumentId}`}>
-                {translate('invoice.openArchiveDocument')}
-              </Link>
-            )}
-          </p>
-        )}
-        <p className="hint-text">{translate('invoice.readOnlyHint')}</p>
-      </div>
+  const paymentSummary = calculatePaymentSummary(invoice);
+  const statusKey = `payment.status.${paymentSummary.status}` as TranslationKey;
 
-      <Card className="invoice-detail__payment no-print">
-        <InvoicePaymentSummary invoice={invoice} translate={translate} />
-        <InvoicePaymentHistory
-          invoice={invoice}
-          translate={translate}
-          onRemovePayment={handleRemovePayment}
-        />
-      </Card>
+  const primaryActions = (
+    <>
+      <InvoicePrintActions model={printModel} translate={translate} layout="stack" />
+      {!isInvoiceCancelled(invoice) && (
+        <Button type="button" fullWidth onClick={() => setShowPaymentForm(true)}>
+          {translate('detail.action.recordPayment')}
+        </Button>
+      )}
+      <Button
+        variant="outline"
+        fullWidth
+        onClick={() =>
+          navigate(`/kommunikation?context=invoice&id=${invoice.id}&vorgangId=${vorgangId}`)
+        }
+      >
+        {translate('detail.action.writeMessage')}
+      </Button>
+    </>
+  );
+
+  const technicalPanels = (
+    <>
+      {(fromOverview || invoice.archiveDocumentId) && (
+        <p className="invoice-detail__archive-link">
+          {fromOverview && (
+            <>
+              <Link to="/rechnungen/offen">{translate('overview.backToOverview')}</Link>
+              {invoice.archiveDocumentId && ' · '}
+            </>
+          )}
+          {invoice.archiveDocumentId && (
+            <Link to={`/dokumente/${invoice.archiveDocumentId}`}>
+              {translate('invoice.openArchiveDocument')}
+            </Link>
+          )}
+        </p>
+      )}
+
+      <InvoicePaymentSummary invoice={invoice} translate={translate} />
+      <InvoicePaymentHistory
+        invoice={invoice}
+        translate={translate}
+        onRemovePayment={handleRemovePayment}
+      />
 
       <CommunicationIntegrationPanel
         contextRef={{
@@ -160,6 +168,54 @@ export function InvoiceDetailPage() {
 
       <div className="invoice-detail__document">
         <InvoiceDocumentView model={printModel} />
+      </div>
+
+      <p className="hint-text">{translate('invoice.readOnlyHint')}</p>
+    </>
+  );
+
+  return (
+    <div className="page page--invoice-detail" data-testid="invoice-detail-page">
+      <div className="invoice-detail__toolbar no-print">
+        <button
+          type="button"
+          className="back-link"
+          onClick={() => navigate(fromOverview ? '/rechnungen/offen' : `/vorgaenge/${vorgangId}`)}
+        >
+          ← {fromOverview ? translate('overview.backToOverview') : translate('common.back')}
+        </button>
+
+        <DetailExperienceCard
+          recognizedTitle={printModel.documentTitle}
+          recognizedSummary={`${printModel.invoiceNumber} · ${vorgang.customer}`}
+          assistantMessage={translate('invoice.experience.finalized').replace(
+            '{amount}',
+            formatPaymentCurrency(paymentSummary.totalDue),
+          )}
+          highlights={
+            paymentSummary.openAmount > 0
+              ? [
+                  translate('invoice.highlight.openAmount').replace(
+                    '{amount}',
+                    formatPaymentCurrency(paymentSummary.openAmount),
+                  ),
+                  translate(statusKey),
+                ]
+              : [translate(statusKey)]
+          }
+          actions={primaryActions}
+          testId="invoice-detail-experience"
+        />
+
+        <ShowMoreSection
+          expanded={showDetails}
+          onToggle={() => setShowDetails((open) => !open)}
+          showLabel={translate('common.showMore')}
+          hideLabel={translate('common.showLess')}
+          testId="invoice-detail-show-more"
+        >
+          {technicalPanels}
+        </ShowMoreSection>
       </div>
 
       <InvoicePaymentForm

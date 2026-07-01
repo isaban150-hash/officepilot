@@ -63,10 +63,6 @@ import type {
 } from '../types/models';
 import type { TranslationKey } from '../i18n';
 
-function useCompactScanView(item: InboxItem | undefined): boolean {
-  return Boolean(item?.isNewUpload && !item.userModified);
-}
-
 export function EingangDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { translate, showToast, setup } = useApp();
@@ -74,10 +70,7 @@ export function EingangDetailPage() {
   const [item, setItem] = useState<InboxItem | undefined>(() =>
     id ? getInboxItemById(id) : undefined,
   );
-  const [showDetails, setShowDetails] = useState(() => {
-    const initial = id ? getInboxItemById(id) : undefined;
-    return !(initial?.isNewUpload && !initial?.userModified);
-  });
+  const [showDetails, setShowDetails] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editDraft, setEditDraft] = useState<InboxEditDraft | null>(null);
   const [duplicateDocument, setDuplicateDocument] = useState<CompanyDocument | null>(null);
@@ -104,10 +97,11 @@ export function EingangDetailPage() {
   ]);
 
   useEffect(() => {
-    const compact = Boolean(item?.isNewUpload && !item?.userModified);
-    setShowDetails(!compact);
-    setIntakeOpen(false);
-  }, [item?.id, item?.isNewUpload, item?.userModified]);
+    if (id) {
+      setShowDetails(false);
+      setIntakeOpen(false);
+    }
+  }, [id]);
 
   useEffect(() => {
     if (id) {
@@ -124,8 +118,6 @@ export function EingangDetailPage() {
   }, [id, navigate]);
 
   if (!item || !workflow) return null;
-
-  const compactScanView = useCompactScanView(item);
 
   const docTypeKey = `docType.${item.documentType}` as TranslationKey;
   const actionKey = `action.${item.recommendedAction}` as TranslationKey;
@@ -548,7 +540,7 @@ export function EingangDetailPage() {
       />
 
       <AreaAiPanel
-        title={translate('areaAi.inbox.title')}
+        title={translate('detail.askLetter')}
         placeholder={translate('areaAi.placeholder')}
         askLabel={translate('areaAi.ask')}
         loadingLabel={translate('areaAi.loading')}
@@ -618,12 +610,8 @@ export function EingangDetailPage() {
         ← {translate('common.back')}
       </button>
 
-      {compactScanView && scanResultView && !isEditing && (
+      {scanResultView && !isEditing && (
         <ScanResultPanel view={scanResultView} onAction={handleScanResultAction} />
-      )}
-
-      {(!compactScanView || showDetails) && (
-        <PageHeader title={item.title} subtitle={item.sender} />
       )}
 
       {isEditing && editDraft ? (
@@ -633,7 +621,7 @@ export function EingangDetailPage() {
           onSave={saveEditing}
           onCancel={cancelEditing}
         />
-      ) : compactScanView ? (
+      ) : (
         <ShowMoreSection
           expanded={showDetails}
           onToggle={handleToggleDetails}
@@ -641,10 +629,11 @@ export function EingangDetailPage() {
           hideLabel={translate('common.showLess')}
           testId="ablage-detail-show-more"
         >
+          {showDetails && (
+            <PageHeader title={item.title} subtitle={item.sender} />
+          )}
           {detailPanels}
         </ShowMoreSection>
-      ) : (
-        detailPanels
       )}
 
       {duplicateDocument && (

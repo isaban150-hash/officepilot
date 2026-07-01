@@ -2,7 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { OrderPositionForm } from '../components/vorgang/OrderPositionForm';
-import { Badge, Card, CardMeta, CardTitle, DataRow, PageHeader } from '../components/ui/Card';
+import { DetailExperienceCard } from '../components/detail/DetailExperienceCard';
+import { Card, CardMeta, CardTitle, DataRow } from '../components/ui/Card';
+import { ShowMoreSection } from '../components/ui/ShowMoreSection';
 import { useApp } from '../context/AppContext';
 import { formatPaperFilingInstruction } from '../services/paperFolderService';
 import {
@@ -48,6 +50,7 @@ export function VorgangDetailPage() {
   const [notes, setNotes] = useState<VorgangNote[]>(() =>
     id ? getNotesForVorgang(id) : [],
   );
+  const [showDetails, setShowDetails] = useState(false);
 
   const refreshNotes = useCallback(() => {
     if (id) setNotes(getNotesForVorgang(id));
@@ -62,12 +65,12 @@ export function VorgangDetailPage() {
   useEffect(() => {
     refreshVorgang();
     refreshNotes();
-  }, [refreshVorgang, refreshNotes]);
+    setShowDetails(false);
+  }, [refreshVorgang, refreshNotes, id]);
 
   const handleAddNote = () => {
     const trimmed = noteDraft.trim();
-    if (!trimmed) return;
-    if (!id) return;
+    if (!trimmed || !id) return;
     const result = addVorgangNote(id, { body: trimmed });
     if (result.success) {
       setNoteDraft('');
@@ -88,7 +91,7 @@ export function VorgangDetailPage() {
   if (!vorgang) {
     return (
       <div className="page">
-        <p className="empty-state">Vorgang nicht gefunden.</p>
+        <p className="empty-state">{translate('vorgang.notFound')}</p>
         <Button variant="outline" onClick={() => navigate('/vorgaenge')}>
           {translate('common.back')}
         </Button>
@@ -109,6 +112,30 @@ export function VorgangDetailPage() {
   );
   const paymentTotals = summarizeVorgangInvoicePayments(vorgang.invoices);
 
+  const openTasks = vorgang.tasks.filter((task) => !task.done);
+  const highlights: string[] = [];
+  if (openTasks.length > 0) {
+    highlights.push(
+      openTasks.length === 1
+        ? openTasks[0]!.title
+        : translate('vorgang.highlight.openTasks').replace('{count}', String(openTasks.length)),
+    );
+  }
+  if (missingPrice) {
+    highlights.push(translate('vorgang.missingPriceHint'));
+  }
+  if (paymentTotals.openTotal > 0) {
+    highlights.push(
+      translate('vorgang.highlight.openInvoices').replace(
+        '{amount}',
+        formatPaymentCurrency(paymentTotals.openTotal),
+      ),
+    );
+  }
+  if (!hasOrderPositions) {
+    highlights.push(translate('vorgang.noOrderPositions'));
+  }
+
   const handleSaved = (updated: Vorgang) => {
     setVorgang(updated);
   };
@@ -121,24 +148,37 @@ export function VorgangDetailPage() {
     showToast(message);
   };
 
-  return (
-    <div className="page">
-      <button type="button" className="back-link" onClick={() => navigate('/vorgaenge')}>
-        ← {translate('common.back')}
-      </button>
+  const primaryActions = (
+    <>
+      {hasOrderPositions && (
+        <Link to={`/vorgaenge/${vorgang.id}/rechnung?type=abschlag`}>
+          <Button fullWidth>{translate('detail.action.writeInvoice')}</Button>
+        </Link>
+      )}
+      <Button variant="outline" fullWidth onClick={() => navigate('/scan')}>
+        {translate('detail.action.addPhoto')}
+      </Button>
+      <Button
+        variant="outline"
+        fullWidth
+        onClick={() => navigate(`/kommunikation?context=vorgang&id=${vorgang.id}`)}
+      >
+        {translate('detail.action.writeMessage')}
+      </Button>
+    </>
+  );
 
-      <PageHeader title={vorgang.title} subtitle={vorgang.customer} />
-
+  const technicalPanels = (
+    <>
       <Card>
         <DataRow label={translate('analysis.baustelle')} value={vorgang.baustelle} />
-        <DataRow label="Status" value={<Badge tone="warning">{translate(statusKey)}</Badge>} />
         <DataRow label={translate('vorgang.materialSource')} value={translate(materialKey)} />
       </Card>
 
       <section className="section">
         <h2 className="section__title">{translate('vorgang.documents')}</h2>
         {vorgang.documents.length === 0 ? (
-          <p className="empty-state">Keine Dokumente</p>
+          <p className="empty-state">{translate('vorgang.noDocuments')}</p>
         ) : (
           vorgang.documents.map((doc) => {
             const typeKey = `docType.${doc.type}` as TranslationKey;
@@ -170,74 +210,66 @@ export function VorgangDetailPage() {
         )}
 
         {!hasOrderPositions ? (
-          <>
-            <p className="invoice-hint invoice-hint--warning">{translate('vorgang.noOrderPositions')}</p>
-            {canAdd && (
-              <Button fullWidth onClick={() => setFormMode({ type: 'add' })}>
-                {translate('position.addFirst')}
-              </Button>
-            )}
-          </>
+          canAdd && (
+            <Button fullWidth onClick={() => setFormMode({ type: 'add' })}>
+              {translate('position.addFirst')}
+            </Button>
+          )
         ) : (
-          <>
-            {missingPrice && (
-              <p className="invoice-hint invoice-hint--warning">{translate('vorgang.missingPriceHint')}</p>
-            )}
-            {vorgang.orderPositions.map((pos) => {
-              const billing = getPositionBillingStatus(vorgang, pos.id);
-              const billed = billing?.billedQuantity ?? getBilledQuantity(vorgang, pos.id);
-              const open = billing?.openQuantity ?? getOpenQuantity(vorgang, pos.id);
-              const deletable = canDeleteOrderPosition(vorgang, pos.id);
+          vorgang.orderPositions.map((pos) => {
+            const billing = getPositionBillingStatus(vorgang, pos.id);
+            const billed = billing?.billedQuantity ?? getBilledQuantity(vorgang, pos.id);
+            const open = billing?.openQuantity ?? getOpenQuantity(vorgang, pos.id);
+            const deletable = canDeleteOrderPosition(vorgang, pos.id);
 
-              return (
-                <Card key={pos.id} className="order-position-card">
-                  <CardTitle>{pos.description}</CardTitle>
-                  <DataRow
-                    label={translate('invoice.planned')}
-                    value={`${pos.plannedQuantity} ${pos.unit}`}
-                  />
-                  <DataRow
-                    label={translate('invoice.unitPrice')}
-                    value={`${pos.unitPrice.toLocaleString('de-DE')} €`}
-                  />
-                  <DataRow
-                    label={translate('invoice.alreadyBilled')}
-                    value={`${billed} ${pos.unit}`}
-                  />
-                  <DataRow
-                    label={translate('invoice.stillOpen')}
-                    value={`${open} ${pos.unit}`}
-                  />
-                  {pos.unitPrice === 0 && (
-                    <p className="invoice-pos-hint">{translate('vorgang.missingPriceHint')}</p>
+            return (
+              <Card key={pos.id} className="order-position-card">
+                <CardTitle>{pos.description}</CardTitle>
+                <DataRow
+                  label={translate('invoice.planned')}
+                  value={`${pos.plannedQuantity} ${pos.unit}`}
+                />
+                <DataRow
+                  label={translate('invoice.unitPrice')}
+                  value={`${pos.unitPrice.toLocaleString('de-DE')} €`}
+                />
+                <DataRow
+                  label={translate('invoice.alreadyBilled')}
+                  value={`${billed} ${pos.unit}`}
+                />
+                <DataRow
+                  label={translate('invoice.stillOpen')}
+                  value={`${open} ${pos.unit}`}
+                />
+                {pos.unitPrice === 0 && (
+                  <p className="invoice-pos-hint">{translate('vorgang.missingPriceHint')}</p>
+                )}
+                {billing?.hasBilling && !positionsLocked && (
+                  <p className="invoice-pos-hint">{translate('position.billedLockHint')}</p>
+                )}
+                <div className="order-position-card__actions">
+                  {!positionsLocked && (
+                    <Button variant="outline" onClick={() => setFormMode({ type: 'edit', position: pos })}>
+                      {translate('position.edit')}
+                    </Button>
                   )}
-                  {billing?.hasBilling && !positionsLocked && (
-                    <p className="invoice-pos-hint">{translate('position.billedLockHint')}</p>
+                  {deletable && (
+                    <Button
+                      variant="ghost"
+                      onClick={() => {
+                        if (window.confirm(translate('position.deleteConfirm'))) {
+                          const result = removeOrderPosition(vorgang.id, pos.id);
+                          if (result.success) setVorgang(result.vorgang);
+                        }
+                      }}
+                    >
+                      {translate('position.delete')}
+                    </Button>
                   )}
-                  <div className="order-position-card__actions">
-                    {!positionsLocked && (
-                      <Button variant="outline" onClick={() => setFormMode({ type: 'edit', position: pos })}>
-                        {translate('position.edit')}
-                      </Button>
-                    )}
-                    {deletable && (
-                      <Button
-                        variant="ghost"
-                        onClick={() => {
-                          if (window.confirm(translate('position.deleteConfirm'))) {
-                            const result = removeOrderPosition(vorgang.id, pos.id);
-                            if (result.success) setVorgang(result.vorgang);
-                          }
-                        }}
-                      >
-                        {translate('position.delete')}
-                      </Button>
-                    )}
-                  </div>
-                </Card>
-              );
-            })}
-          </>
+                </div>
+              </Card>
+            );
+          })
         )}
       </section>
 
@@ -283,26 +315,10 @@ export function VorgangDetailPage() {
         )}
       </section>
 
-      <CommunicationIntegrationPanel
-        contextRef={{ type: 'vorgang', id: vorgang.id }}
-        buttonKeys={VORGANG_COMMUNICATION_BUTTON_KEYS}
-        testIdPrefix="vorgang"
-      />
-
-      <AreaAiPanel
-        title={translate('areaAi.vorgang.title')}
-        placeholder={translate('areaAi.placeholder')}
-        askLabel={translate('areaAi.ask')}
-        loadingLabel={translate('areaAi.loading')}
-        notConfiguredLabel={translate('areaAi.notConfigured')}
-        testIdPrefix="vorgang-ai"
-        onAsk={(question) => askVorgangAi({ vorgangId: vorgang.id, question })}
-      />
-
       <section className="section">
         <h2 className="section__title">{translate('vorgang.photos')}</h2>
         {vorgang.photos.length === 0 ? (
-          <p className="empty-state">Keine Fotos</p>
+          <p className="empty-state">{translate('vorgang.noPhotos')}</p>
         ) : (
           vorgang.photos.map((photo) => (
             <Card key={photo.id}>
@@ -343,25 +359,61 @@ export function VorgangDetailPage() {
         )}
       </section>
 
+      <CommunicationIntegrationPanel
+        contextRef={{ type: 'vorgang', id: vorgang.id }}
+        buttonKeys={VORGANG_COMMUNICATION_BUTTON_KEYS}
+        testIdPrefix="vorgang"
+      />
+
+      <AreaAiPanel
+        title={translate('detail.askOrder')}
+        placeholder={translate('detail.askPlaceholder')}
+        askLabel={translate('areaAi.ask')}
+        loadingLabel={translate('areaAi.loading')}
+        notConfiguredLabel={translate('areaAi.notConfigured')}
+        testIdPrefix="vorgang-ai"
+        onAsk={(question) => askVorgangAi({ vorgangId: vorgang.id, question })}
+      />
+
       <div className="action-stack">
-        {hasOrderPositions && (
-          <>
-            <Link to={`/vorgaenge/${vorgang.id}/rechnung?type=abschlag`}>
-              <Button fullWidth>{translate('vorgang.prepareAbschlag')}</Button>
-            </Link>
-            {!schlussExists && (
-              <Link to={`/vorgaenge/${vorgang.id}/rechnung?type=schluss`}>
-                <Button variant="outline" fullWidth>
-                  {translate('vorgang.prepareSchluss')}
-                </Button>
-              </Link>
-            )}
-          </>
+        {hasOrderPositions && !schlussExists && (
+          <Link to={`/vorgaenge/${vorgang.id}/rechnung?type=schluss`}>
+            <Button variant="outline" fullWidth>
+              {translate('vorgang.prepareSchluss')}
+            </Button>
+          </Link>
         )}
         <Link to="/papierarchiv">
           <Button variant="outline" fullWidth>{translate('vorgang.paperArchive')}</Button>
         </Link>
       </div>
+    </>
+  );
+
+  return (
+    <div className="page vorgang-detail-page" data-testid="vorgang-detail-page">
+      <button type="button" className="back-link" onClick={() => navigate('/vorgaenge')}>
+        ← {translate('common.back')}
+      </button>
+
+      <DetailExperienceCard
+        recognizedTitle={vorgang.title}
+        recognizedSummary={`${vorgang.customer} · ${translate(statusKey)}`}
+        assistantMessage={translate('vorgang.experience.managed')}
+        highlights={highlights.length > 0 ? highlights : undefined}
+        actions={primaryActions}
+        testId="vorgang-detail-experience"
+      />
+
+      <ShowMoreSection
+        expanded={showDetails}
+        onToggle={() => setShowDetails((open) => !open)}
+        showLabel={translate('common.showMore')}
+        hideLabel={translate('common.showLess')}
+        testId="vorgang-detail-show-more"
+      >
+        {technicalPanels}
+      </ShowMoreSection>
 
       {formMode && (
         <OrderPositionForm

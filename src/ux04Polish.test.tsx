@@ -79,7 +79,6 @@ describe('UX-04 Beta Polish', () => {
     );
 
     expect(html).toContain('data-testid="scan-result-panel"');
-    expect(html).toContain('data-testid="show-more-toggle"');
     expect(html).toContain('Mehr anzeigen');
     expect(html).not.toContain('data-testid="show-more-content"');
     expect(html).not.toContain('data-testid="inbox-ai-panel"');

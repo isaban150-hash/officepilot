@@ -351,7 +351,7 @@ describe('KommunikationPage', () => {
   });
 });
 
-describe('KommunikationPage KI verbessern', () => {
+describe('KommunikationPage Formulierung verbessern', () => {
   let mounted: PageMount | null = null;
 
   beforeEach(() => {
@@ -374,15 +374,25 @@ describe('KommunikationPage KI verbessern', () => {
     document.body.innerHTML = '';
   });
 
+  function expandRefineSection(container: HTMLElement): void {
+    const section = container.querySelector('[data-testid="communication-refine-show-more"]');
+    const toggle = section?.querySelector('[data-testid="show-more-toggle"]') as HTMLElement | null;
+    if (!toggle) {
+      throw new Error('Missing refine toggle');
+    }
+    flushSync(() => toggle.click());
+  }
+
   async function createDelayDraft(): Promise<void> {
     mounted = renderKommunikationPage('/kommunikation?context=vorgang&id=v-test-1');
     submitCommunicationRequest(mounted.container, 'Verzögerung melden');
     fillCommunicationField(mounted.container, 'delayReason', 'Material verzögert');
     submitMissingInfo(mounted.container);
     await flushUiUpdates();
+    expandRefineSection(mounted!.container);
   }
 
-  it('zeigt KI-Button bei fertigem Draft', async () => {
+  it('zeigt Formulierung-Button bei fertigem Draft', async () => {
     await createDelayDraft();
     expect(mounted!.container.querySelector('[data-testid="communication-ai-enhance"]')).not.toBeNull();
   });
@@ -397,7 +407,7 @@ describe('KommunikationPage KI verbessern', () => {
     expect(mounted!.container.textContent).not.toContain('Gemini');
   });
 
-  it('zeigt Mock-KI-Vorschlag und behält Original beim Umschalten', async () => {
+  it('zeigt verbesserte Formulierung und behält Original beim Umschalten', async () => {
     await createDelayDraft();
     const originalText = (
       mounted!.container.querySelector('[data-testid="communication-draft-body"]') as HTMLElement
@@ -419,7 +429,7 @@ describe('KommunikationPage KI verbessern', () => {
     expect(restoredText).toBe(originalText);
   });
 
-  it('kopiert die aktive KI-Variante', async () => {
+  it('kopiert die aktive Formulierung', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
