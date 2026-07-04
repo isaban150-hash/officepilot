@@ -28,6 +28,12 @@ import {
 
   recordDraftCopied,
 
+  recordMarkedAnswered,
+
+  recordMarkedNoReplyNeeded,
+
+  recordRemindLater,
+
 } from '../services/communicationHistoryService';
 
 import { processCommunicationRequest } from '../services/communicationOrchestrator';
@@ -244,6 +250,48 @@ export function KommunikationPage() {
 
 
 
+  const handleMarkAnswered = () => {
+
+    if (recordMarkedAnswered(contextRef, lastRequestText || undefined)) {
+
+      bumpHistory();
+
+    }
+
+    showToast(translate('communication.reply.markedDoneToast'));
+
+  };
+
+
+
+  const handleRemindLater = () => {
+
+    if (recordRemindLater(contextRef, lastRequestText || undefined)) {
+
+      bumpHistory();
+
+    }
+
+    showToast(translate('communication.reply.remindLaterToast'));
+
+  };
+
+
+
+  const handleMarkNoReplyNeeded = () => {
+
+    if (recordMarkedNoReplyNeeded(contextRef, lastRequestText || undefined)) {
+
+      bumpHistory();
+
+    }
+
+    showToast(translate('communication.reply.noReplyNeededToast'));
+
+  };
+
+
+
   const handleAiEnhance = async () => {
 
     if (!result?.drafts || aiLoading) return;
@@ -447,6 +495,12 @@ export function KommunikationPage() {
             translate={translate}
 
             onCopied={handleCopied}
+
+            onMarkAnswered={handleMarkAnswered}
+
+            onRemindLater={handleRemindLater}
+
+            onMarkNoReplyNeeded={handleMarkNoReplyNeeded}
 
             aiConfigured={isAiProviderConfigured()}
 

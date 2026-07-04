@@ -28,7 +28,7 @@ export function HeutePage() {
         subtitle={translate('heute.subtitle')}
       />
 
-      <div className="heute-scan-cta">
+      <section className="heute-hero" aria-label={translate('heute.scanButton')}>
         <Button
           fullWidth
           className="heute-scan-button"
@@ -37,7 +37,7 @@ export function HeutePage() {
         >
           {translate('heute.scanButton')}
         </Button>
-      </div>
+      </section>
 
       <section className="heute-quick-actions" data-testid="heute-quick-actions">
         <h2 className="heute-section-title">{translate('heute.quickActionsTitle')}</h2>

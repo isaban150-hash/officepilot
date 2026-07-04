@@ -23,6 +23,9 @@ interface CommunicationResultCardProps {
   onMissingSubmit: () => void;
   translate: (key: TranslationKey) => string;
   onCopied?: () => void;
+  onMarkAnswered?: () => void;
+  onRemindLater?: () => void;
+  onMarkNoReplyNeeded?: () => void;
   aiConfigured: boolean;
   aiLoading: boolean;
   aiStyle: CommunicationAiEnhanceStyle;
@@ -62,6 +65,9 @@ export function CommunicationResultCard({
   onMissingSubmit,
   translate,
   onCopied,
+  onMarkAnswered,
+  onRemindLater,
+  onMarkNoReplyNeeded,
   aiConfigured,
   aiLoading,
   aiStyle,
@@ -162,7 +168,14 @@ export function CommunicationResultCard({
       <div data-testid="communication-draft">
         <Card className="communication-result-card communication-result-card--draft">
           <CardTitle>{translate('communication.draftHeading')}</CardTitle>
-          <CardMeta>{summary}</CardMeta>
+          <div className="communication-reply-ready" data-testid="communication-reply-ready">
+            <p className="communication-reply-ready__headline">
+              {translate('communication.reply.readyHeadline')}
+            </p>
+            <p className="communication-reply-ready__hint">
+              {translate('communication.reply.sendHint')}
+            </p>
+          </div>
           <CommunicationChannelTabs channel={channel} onChange={onChannelChange} translate={translate} />
 
           {showImprovedVariant && (
@@ -196,13 +209,44 @@ export function CommunicationResultCard({
             }
           />
 
-          <div className="communication-draft-actions">
+          <div className="communication-draft-actions communication-reply-actions">
             <CommunicationCopyButton
               text={formatCommunicationDraftText(activeDraft)}
-              label={translate('communication.copy')}
+              label={translate('communication.reply.copyAndSend')}
               copiedLabel={translate('communication.copied')}
               onCopied={onCopied}
             />
+            {onMarkAnswered && (
+              <Button
+                type="button"
+                fullWidth
+                onClick={onMarkAnswered}
+                data-testid="communication-mark-answered"
+              >
+                {translate('communication.reply.markDone')}
+              </Button>
+            )}
+            {onRemindLater && (
+              <Button
+                type="button"
+                variant="outline"
+                fullWidth
+                onClick={onRemindLater}
+                data-testid="communication-remind-later"
+              >
+                {translate('communication.reply.remindLater')}
+              </Button>
+            )}
+            {onMarkNoReplyNeeded && (
+              <button
+                type="button"
+                className="communication-reply-no-needed"
+                onClick={onMarkNoReplyNeeded}
+                data-testid="communication-no-reply-needed"
+              >
+                {translate('communication.reply.noReplyNeeded')}
+              </button>
+            )}
           </div>
 
           <ShowMoreSection
@@ -248,7 +292,9 @@ export function CommunicationResultCard({
             </div>
           </ShowMoreSection>
 
-          <p className="communication-disclaimer">{result.disclaimer}</p>
+          {result.disclaimer && (
+            <p className="communication-disclaimer communication-disclaimer--subtle">{result.disclaimer}</p>
+          )}
         </Card>
       </div>
     );

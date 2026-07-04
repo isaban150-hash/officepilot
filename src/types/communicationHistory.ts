@@ -9,7 +9,17 @@ export type CommunicationEventType =
   | 'document_answer'
   | 'draft_created'
   | 'draft_copied'
-  | 'draft_channel_switched';
+  | 'draft_channel_switched'
+  | 'marked_answered'
+  | 'marked_no_reply_needed'
+  | 'marked_remind_later';
+
+export type CommunicationReplyStatus =
+  | 'needs_reply'
+  | 'draft_ready'
+  | 'copied'
+  | 'answered'
+  | 'no_reply_needed';
 
 export type CommunicationEventStatus = 'complete' | 'needs_info' | 'blocked';
 

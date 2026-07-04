@@ -15,6 +15,7 @@ import type {
   CommunicationEvent,
   CommunicationEventInput,
   CommunicationEventType,
+  CommunicationReplyStatus,
 } from '../types/communicationHistory';
 import { COMMUNICATION_EXCERPT_MAX_LENGTH } from '../types/communicationHistory';
 
@@ -198,5 +199,75 @@ export function recordChannelSwitched(
     userInputExcerpt: createExcerpt(userInput),
     resultExcerpt: draftExcerpt(result, channel),
     disclaimerShown: Boolean(result.disclaimer?.trim()),
+  });
+}
+
+const REPLY_STATUS_BY_EVENT: Partial<Record<CommunicationEventType, CommunicationReplyStatus>> = {
+  marked_answered: 'answered',
+  marked_no_reply_needed: 'no_reply_needed',
+  draft_copied: 'copied',
+  draft_created: 'draft_ready',
+  document_answer: 'draft_ready',
+  marked_remind_later: 'needs_reply',
+};
+
+export function getCommunicationReplyStatus(
+  contextRef: CommunicationContextRef,
+): CommunicationReplyStatus {
+  if (contextRef.type === 'none') {
+    return 'needs_reply';
+  }
+
+  const statusEvents = getEventsForContext(contextRef).filter(
+    (event) => REPLY_STATUS_BY_EVENT[event.type],
+  );
+
+  if (statusEvents.length === 0) {
+    return 'needs_reply';
+  }
+
+  const latest = statusEvents.sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0]!;
+  return REPLY_STATUS_BY_EVENT[latest.type] ?? 'needs_reply';
+}
+
+export function recordMarkedAnswered(
+  contextRef: CommunicationContextRef,
+  userInput?: string,
+): CommunicationEvent | null {
+  return addCommunicationEvent({
+    type: 'marked_answered',
+    contextRef,
+    status: 'complete',
+    disclaimerShown: false,
+    userInputExcerpt: userInput ? createExcerpt(userInput) : undefined,
+    resultExcerpt: 'Als erledigt markiert',
+  });
+}
+
+export function recordMarkedNoReplyNeeded(
+  contextRef: CommunicationContextRef,
+  userInput?: string,
+): CommunicationEvent | null {
+  return addCommunicationEvent({
+    type: 'marked_no_reply_needed',
+    contextRef,
+    status: 'complete',
+    disclaimerShown: false,
+    userInputExcerpt: userInput ? createExcerpt(userInput) : undefined,
+    resultExcerpt: 'Kein Antwortbedarf',
+  });
+}
+
+export function recordRemindLater(
+  contextRef: CommunicationContextRef,
+  userInput?: string,
+): CommunicationEvent | null {
+  return addCommunicationEvent({
+    type: 'marked_remind_later',
+    contextRef,
+    status: 'complete',
+    disclaimerShown: false,
+    userInputExcerpt: userInput ? createExcerpt(userInput) : undefined,
+    resultExcerpt: 'Später erinnern',
   });
 }

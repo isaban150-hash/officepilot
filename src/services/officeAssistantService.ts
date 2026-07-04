@@ -19,6 +19,10 @@ import { getTasksFiltered } from './taskEngineService';
 import { getAllTasksFromStore } from './taskStore';
 import { isTaskOpen } from './taskNormalize';
 import { getTodayIso } from './taskNormalize';
+import {
+  memoryQueryAnswerToAssistantAnswer,
+  tryMemoryQueryAnswer,
+} from './memory/memoryQueryService';
 import { getAllVorgaenge } from './vorgangService';
 import type { AssistantAction, AssistantAnswer, CompanyDocument, Task, Vorgang } from '../types/models';
 
@@ -232,8 +236,13 @@ export function detectIntent(question: string): AssistantIntent {
 }
 
 export function answerQuestion(question: string, today?: Date | string): AssistantAnswer {
-  const intent = detectIntent(question);
   const todayIso = getTodayIso(today);
+  const memoryAnswer = tryMemoryQueryAnswer(question, todayIso);
+  if (memoryAnswer) {
+    return memoryQueryAnswerToAssistantAnswer(memoryAnswer);
+  }
+
+  const intent = detectIntent(question);
 
   switch (intent) {
     case 'tasks_today':

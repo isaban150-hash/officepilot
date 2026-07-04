@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import { Button } from '../ui/Button';
-import { PageHeader } from '../ui/Card';
 import { useApp } from '../../context/AppContext';
 import { INDUSTRY_OPTIONS } from '../../data/mockData';
 import { validateSetupStep } from '../../services/setupValidationService';
@@ -14,12 +13,12 @@ import type { CommunicationChannel } from '../../types/communication';
 import type { TranslationKey } from '../../i18n';
 import type { SetupCompletionResult } from '../../services/setupCompletionService';
 
-const LANGUAGES: { value: AppLanguage; labelKey: TranslationKey }[] = [
-  { value: 'de', labelKey: 'lang.de' },
-  { value: 'tr', labelKey: 'lang.tr' },
-  { value: 'bg', labelKey: 'lang.bg' },
-  { value: 'ro', labelKey: 'lang.ro' },
-  { value: 'ru', labelKey: 'lang.ru' },
+const LANGUAGES: { value: AppLanguage; labelKey: TranslationKey; code: string }[] = [
+  { value: 'de', labelKey: 'lang.de', code: 'DE' },
+  { value: 'tr', labelKey: 'lang.tr', code: 'TR' },
+  { value: 'bg', labelKey: 'lang.bg', code: 'BG' },
+  { value: 'ro', labelKey: 'lang.ro', code: 'RO' },
+  { value: 'ru', labelKey: 'lang.ru', code: 'RU' },
 ];
 
 const TAX_OPTIONS: { value: TaxStatus; labelKey: TranslationKey }[] = [
@@ -102,7 +101,12 @@ export function FirstRunWizard({ initialDraft, onComplete }: FirstRunWizardProps
   };
 
   const renderFieldError = (field: string) =>
-    errors[field] ? <p className="form-error">{translate(errors[field]!)}</p> : null;
+    errors[field] ? <p className="form-error" role="alert">{translate(errors[field]!)}</p> : null;
+
+  const inputClassName = (field: string) =>
+    `input ${errors[field] ? 'input--error' : ''}`.trim();
+
+  const progressPercent = ((stepIndex + 1) / SETUP_WIZARD_STEPS.length) * 100;
 
   const renderStep = (currentStep: SetupWizardStep) => {
     switch (currentStep) {
@@ -110,16 +114,18 @@ export function FirstRunWizard({ initialDraft, onComplete }: FirstRunWizardProps
         return (
           <>
             <fieldset className="form-group">
-              <label>{translate('setup.language')}</label>
-              <div className="chip-group">
-                {LANGUAGES.map(({ value, labelKey }) => (
+              <legend className="form-group__legend">{translate('setup.language')}</legend>
+              <div className="setup-lang-chips" role="group" aria-label={translate('setup.language')}>
+                {LANGUAGES.map(({ value, labelKey, code }) => (
                   <button
                     key={value}
                     type="button"
-                    className={`chip ${draft.language === value ? 'chip--active' : ''}`}
+                    className={`setup-lang-chip ${draft.language === value ? 'setup-lang-chip--active' : ''}`}
                     onClick={() => updateDraft('language', value)}
+                    aria-pressed={draft.language === value}
                   >
-                    {translate(labelKey)}
+                    <span className="setup-lang-chip__code">{code}</span>
+                    <span className="setup-lang-chip__label">{translate(labelKey)}</span>
                   </button>
                 ))}
               </div>
@@ -129,10 +135,11 @@ export function FirstRunWizard({ initialDraft, onComplete }: FirstRunWizardProps
               <label htmlFor="setup-companyName">{translate('setup.companyName')}</label>
               <input
                 id="setup-companyName"
-                className="input"
+                className={inputClassName('companyName')}
                 value={draft.companyName}
                 onChange={(event) => updateDraft('companyName', event.target.value)}
                 data-testid="setup-companyName"
+                aria-invalid={errors.companyName ? true : undefined}
               />
               {renderFieldError('companyName')}
             </fieldset>
@@ -201,18 +208,21 @@ export function FirstRunWizard({ initialDraft, onComplete }: FirstRunWizardProps
 
             <fieldset className="form-group">
               <label htmlFor="setup-industry">{translate('setup.industry')}</label>
-              <select
-                id="setup-industry"
-                className="select"
-                value={draft.industry}
-                onChange={(event) => updateDraft('industry', event.target.value)}
-              >
-                {INDUSTRY_OPTIONS.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
+              <div className="select-field">
+                <select
+                  id="setup-industry"
+                  className="select"
+                  value={draft.industry}
+                  onChange={(event) => updateDraft('industry', event.target.value)}
+                  data-testid="setup-industry"
+                >
+                  {INDUSTRY_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </fieldset>
           </>
         );
@@ -390,15 +400,36 @@ export function FirstRunWizard({ initialDraft, onComplete }: FirstRunWizardProps
 
   return (
     <div className="setup-page" data-testid="first-run-wizard">
-      <PageHeader title={translate('setup.title')} subtitle={translate('setup.subtitle')} />
+      <header className="setup-brand">
+        <div className="setup-brand__mark" aria-hidden>
+          OP
+        </div>
+        <div className="setup-brand__text">
+          <h1 className="setup-brand__title">OfficePilot</h1>
+          <p className="setup-brand__subtitle">{translate('setup.subtitle')}</p>
+        </div>
+      </header>
 
       <div className="setup-progress" data-testid="setup-progress">
-        <span className="setup-progress__label">
-          {translate('setup.stepProgress')
-            .replace('{current}', String(stepIndex + 1))
-            .replace('{total}', String(SETUP_WIZARD_STEPS.length))}
-        </span>
-        <span className="setup-progress__step">{stepLabel}</span>
+        <div className="setup-progress__header">
+          <span className="setup-progress__label">
+            {translate('setup.stepProgress')
+              .replace('{current}', String(stepIndex + 1))
+              .replace('{total}', String(SETUP_WIZARD_STEPS.length))}
+          </span>
+          <span className="setup-progress__step">{stepLabel}</span>
+        </div>
+        <div
+          className="setup-progress__track"
+          data-testid="setup-progress-bar"
+          role="progressbar"
+          aria-valuenow={stepIndex + 1}
+          aria-valuemin={1}
+          aria-valuemax={SETUP_WIZARD_STEPS.length}
+          aria-label={stepLabel}
+        >
+          <div className="setup-progress__fill" style={{ width: `${progressPercent}%` }} />
+        </div>
       </div>
 
       <form

@@ -1,6 +1,11 @@
 import { MOCK_COMPANY_DOCUMENTS } from '../data/documentMockData';
 import { PAPER_FOLDERS } from '../data/mockData';
 import { persistAll } from './persistenceService';
+import {
+  isContractInboxItem,
+  recordArchivedDocumentMemory,
+  syncContractProofRequirementsFromInbox,
+} from './officePilotMemoryService';
 import type {
   CompanyDocument,
   CompanyDocumentCategory,
@@ -164,6 +169,7 @@ export function addDocument(input: CompanyDocumentInput): DocumentMutationResult
   const now = new Date().toISOString();
   const document = buildDocumentFromInput(input, `doc-${Date.now()}`, now);
   documents = [document, ...documents];
+  recordArchivedDocumentMemory(document);
   persistAll();
   return { success: true, document: cloneDocument(document) };
 }
@@ -323,7 +329,15 @@ export function importInboxDocument(
   linkedCompany: string,
 ): DocumentMutationResult {
   const input = mapInboxItemToDocumentInput(item, linkedCompany);
-  return addDocument(input);
+  const result = addDocument(input);
+  if (result.success) {
+    recordArchivedDocumentMemory(result.document, { inboxItem: item });
+    if (isContractInboxItem(item)) {
+      syncContractProofRequirementsFromInbox(item);
+    }
+    persistAll();
+  }
+  return result;
 }
 
 export function updateDocumentFromInbox(

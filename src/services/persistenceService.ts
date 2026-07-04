@@ -5,6 +5,7 @@ import { MOCK_COMPANY_DOCUMENTS } from '../data/documentMockData';
 import { MOCK_EXPENSES } from '../data/expenseMockData';
 import type { CommunicationEvent } from '../types/communicationHistory';
 import type { KnowledgeFact } from '../types/knowledge';
+import type { OfficePilotMemoryState } from '../types/memory';
 import type {
   AppPersistedState,
   CompanyDocument,
@@ -61,6 +62,11 @@ import {
   hydrateKnowledgeFacts,
 } from './knowledgeService';
 import { resetKnowledgeStore } from './knowledgeStore';
+import {
+  getOfficePilotMemorySnapshot,
+  hydrateMemory,
+  resetMemory,
+} from './officePilotMemoryService';
 import {
   getVorgangNoteStoreSnapshot,
   hydrateVorgangNotes,
@@ -168,6 +174,21 @@ function cloneKnowledgeFact(fact: KnowledgeFact): KnowledgeFact {
   return { ...fact };
 }
 
+function cloneOfficePilotMemoryState(state: OfficePilotMemoryState): OfficePilotMemoryState {
+  return {
+    documentMemories: (state.documentMemories ?? []).map((item) => ({
+      ...item,
+      digitalFolder: { ...item.digitalFolder },
+      paperFolder: { ...item.paperFolder },
+    })),
+    proofMemories: (state.proofMemories ?? []).map((item) => ({
+      ...item,
+      requiredByVorgangIds: [...item.requiredByVorgangIds],
+    })),
+    relations: (state.relations ?? []).map((item) => ({ ...item })),
+  };
+}
+
 function cloneExpense(expense: Expense): Expense {
   return normalizeExpensePaymentFields(normalizeExpense(expense));
 }
@@ -206,6 +227,11 @@ export function createSeedState(setupOverride?: CompanySetup): AppPersistedState
     vorgangNotes: [],
     communicationHistory: [],
     knowledgeFacts: [],
+    officePilotMemory: {
+      documentMemories: [],
+      proofMemories: [],
+      relations: [],
+    },
     savedAt: new Date().toISOString(),
   };
 }
@@ -223,6 +249,10 @@ function isValidPersistedState(value: unknown): value is AppPersistedState {
     (Array.isArray(state.vorgangNotes) || state.vorgangNotes === undefined) &&
     (Array.isArray(state.communicationHistory) || state.communicationHistory === undefined) &&
     (Array.isArray(state.knowledgeFacts) || state.knowledgeFacts === undefined) &&
+    (state.officePilotMemory === undefined ||
+      (Array.isArray(state.officePilotMemory.documentMemories) &&
+        Array.isArray(state.officePilotMemory.proofMemories) &&
+        Array.isArray(state.officePilotMemory.relations))) &&
     typeof state.setup === 'object' &&
     state.setup !== null
   );
@@ -255,6 +285,13 @@ export function loadPersistedState(): AppPersistedState | null {
       vorgangNotes: (parsed.vorgangNotes ?? []).map(cloneVorgangNote),
       communicationHistory: (parsed.communicationHistory ?? []).map(cloneCommunicationEvent),
       knowledgeFacts: (parsed.knowledgeFacts ?? []).map(cloneKnowledgeFact),
+      officePilotMemory: cloneOfficePilotMemoryState(
+        parsed.officePilotMemory ?? {
+          documentMemories: [],
+          proofMemories: [],
+          relations: [],
+        },
+      ),
     };
   } catch (error) {
     console.warn('[OfficePilot] localStorage konnte nicht gelesen werden:', error);
@@ -302,6 +339,13 @@ function applyStateToStores(state: AppPersistedState): void {
   hydrateVorgangNotes(state.vorgangNotes ?? []);
   hydrateCommunicationHistory(state.communicationHistory ?? []);
   hydrateKnowledgeFacts(state.knowledgeFacts ?? []);
+  hydrateMemory(
+    state.officePilotMemory ?? {
+      documentMemories: [],
+      proofMemories: [],
+      relations: [],
+    },
+  );
 }
 
 export function hydrateStoresFromStorage(): CompanySetup {
@@ -335,6 +379,7 @@ export function persistAll(setupOverride?: CompanySetup): void {
     vorgangNotes: getVorgangNoteStoreSnapshot(),
     communicationHistory: getCommunicationHistorySnapshot(),
     knowledgeFacts: getKnowledgeSnapshot(),
+    officePilotMemory: getOfficePilotMemorySnapshot(),
     savedAt: new Date().toISOString(),
   };
 
@@ -353,6 +398,7 @@ export function resetDemoData(options?: { keepSetup?: boolean }): CompanySetup {
   resetVorgangNotes();
   resetCommunicationHistoryStore();
   resetKnowledgeStore();
+  resetMemory();
   resetCompanyProfile(setup.companyName);
   resetInvoiceNumberSequence();
 

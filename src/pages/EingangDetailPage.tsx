@@ -603,7 +603,7 @@ export function EingangDetailPage() {
 
   return (
     <div
-      className={`page ${isEditing ? 'page--editing' : ''}`}
+      className={`page eingang-detail-page ${isEditing ? 'page--editing' : ''}`}
       data-testid="ablage-detail-page"
     >
       <button type="button" className="back-link" onClick={goBack}>

@@ -1062,6 +1062,7 @@ import type { Expense } from './expense';
 import type { VorgangNote } from './communication';
 import type { CommunicationEvent } from './communicationHistory';
 import type { KnowledgeFact } from './knowledge';
+import type { OfficePilotMemoryState } from './memory';
 
 export interface AppPersistedState {
   version: number;
@@ -1076,6 +1077,7 @@ export interface AppPersistedState {
   vorgangNotes?: VorgangNote[];
   communicationHistory?: CommunicationEvent[];
   knowledgeFacts?: KnowledgeFact[];
+  officePilotMemory?: OfficePilotMemoryState;
   savedAt: string;
 }
 

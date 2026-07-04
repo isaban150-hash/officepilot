@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
+import { NavIcon } from './NavIcon';
 import { MAIN_NAV_ITEMS } from './navConfig';
 
 export function SidebarNav() {
@@ -16,9 +17,7 @@ export function SidebarNav() {
             `sidebar-nav__item ${isActive ? 'sidebar-nav__item--active' : ''}`
           }
         >
-          <span className="sidebar-nav__icon" aria-hidden>
-            {icon}
-          </span>
+          <NavIcon id={icon} className="sidebar-nav__icon" />
           <span className="sidebar-nav__label">{translate(key)}</span>
         </NavLink>
       ))}

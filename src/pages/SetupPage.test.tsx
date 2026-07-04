@@ -101,6 +101,13 @@ describe('FirstRunWizard / SetupPage', () => {
     expect(mounted.container.querySelector('[data-testid="first-run-wizard"]')).not.toBeNull();
   });
 
+  it('shows branding and step progress bar', () => {
+    mounted = renderSetupPage(incompleteSetup);
+    expect(mounted.container.querySelector('.setup-brand__title')?.textContent).toBe('OfficePilot');
+    expect(mounted.container.querySelector('[data-testid="setup-progress-bar"]')).not.toBeNull();
+    expect(mounted.container.textContent).toContain('Schritt 1 von 5');
+  });
+
   it('blocks next step when required company fields are missing', () => {
     mounted = renderSetupPage(incompleteSetup);
     act(() => {

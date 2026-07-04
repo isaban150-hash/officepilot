@@ -11,6 +11,8 @@ import { DokumentDetailPage } from './DokumentDetailPage';
 import { VorgangDetailPage } from './VorgangDetailPage';
 import { hydrateCompanyProfileStore } from '../services/companyProfileService';
 import { hydrateDocumentStore } from '../services/documentService';
+import { recordArchivedDocumentMemory, resetMemory } from '../services/officePilotMemoryService';
+import { createAuftragInboxItem } from '../test/fixtures';
 import { createTestVorgang } from '../test/fixtures';
 import { hydrateVorgangStore } from '../services/vorgangService';
 import { setAiGenerateTextForTests } from '../services/ai/aiRequestRunner';
@@ -74,6 +76,7 @@ describe('Detail pages AreaAiPanel', () => {
 
   beforeEach(() => {
     vi.stubEnv('VITE_GEMINI_API_KEY', 'test-gemini-key');
+    resetMemory();
     hydrateCompanyProfileStore({ ...DEFAULT_COMPANY_PROFILE, companyName: 'Test GmbH' });
     setAiGenerateTextForTests(
       vi.fn().mockResolvedValue({ success: true, text: 'Mock-Antwort aus dem Dokumentkontext.' }),
@@ -89,6 +92,21 @@ describe('Detail pages AreaAiPanel', () => {
       mounted = null;
     }
     document.body.innerHTML = '';
+  });
+
+  it('DokumentDetailPage zeigt Verständnis-Karte', () => {
+    hydrateDocumentStore([sampleDocument]);
+    recordArchivedDocumentMemory(sampleDocument, {
+      inboxItem: createAuftragInboxItem({
+        classifiedKind: 'versicherung',
+        sender: 'Allianz',
+      }),
+      todayIso: '2026-06-01',
+    });
+
+    mounted = renderPage('/dokumente/doc-detail-ai', <DokumentDetailPage />);
+    expect(mounted.container.querySelector('[data-testid="document-understanding-card"]')).not.toBeNull();
+    expect(mounted.container.textContent).toContain('OfficePilot versteht dieses Dokument');
   });
 
   it('DokumentDetailPage zeigt AreaAiPanel nach Mehr anzeigen', () => {
