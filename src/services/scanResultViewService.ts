@@ -1,4 +1,5 @@
 import { formatPaperFilingInstruction } from './paperFolderService';
+import { isScanResultActionAvailable } from './officeActionService';
 import { processUploadedDocument } from './intakeWorkflowService';
 import type { InboxItem } from '../types/models';
 import type { TranslationKey } from '../i18n';
@@ -85,7 +86,7 @@ function buildNextActions(item: InboxItem): ScanResultActionView[] {
     actions.push({ id: 'openOrder', labelKey: 'scanResult.action.openOrder' });
   }
 
-  return actions.slice(0, 3);
+  return actions.filter((action) => isScanResultActionAvailable(action.id, item)).slice(0, 3);
 }
 
 export function buildScanResultView(item: InboxItem): ScanResultViewModel {

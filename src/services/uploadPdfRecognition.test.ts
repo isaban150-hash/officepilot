@@ -107,6 +107,7 @@ describe('upload PDF contract recognition', () => {
     const html = renderToStaticMarkup(
       createElement(ContractAnalysisPanel, {
         analysis: workflow!.contractAnalysis!,
+        item,
         translate,
         onAction: () => {},
       }),

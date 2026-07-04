@@ -59,7 +59,7 @@ function parseAmount(value: string): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function toInput(draft: ExpenseFormDraft): ExpenseInput {
+function toInput(draft: ExpenseFormDraft, linkedInboxId?: string): ExpenseInput {
   const grossAmount = parseAmount(draft.grossAmount);
   const netAmount = parseAmount(draft.netAmount);
   const taxAmount = parseAmount(draft.taxAmount);
@@ -74,25 +74,46 @@ function toInput(draft: ExpenseFormDraft): ExpenseInput {
     grossAmount,
     netAmount: netAmount || undefined,
     taxAmount: taxAmount || undefined,
+    linkedInboxId,
   };
 }
 
 interface ExpenseFormProps {
   mode: 'add' | 'edit';
   expense?: Expense;
+  prefill?: Partial<ExpenseInput>;
   onSaved: (expense: Expense) => void;
   onCancel: () => void;
 }
 
-export function ExpenseForm({ mode, expense, onSaved, onCancel }: ExpenseFormProps) {
+function draftFromInput(input: Partial<ExpenseInput>): ExpenseFormDraft {
+  const base = emptyDraft();
+  return {
+    title: input.title ?? base.title,
+    category: input.category ?? base.category,
+    supplierName: input.supplierName ?? base.supplierName,
+    invoiceNumber: input.invoiceNumber ?? base.invoiceNumber,
+    description: input.description ?? base.description,
+    issueDate: input.issueDate ?? base.issueDate,
+    paymentDueDate: input.paymentDueDate ?? base.paymentDueDate,
+    grossAmount: input.grossAmount ? String(input.grossAmount) : base.grossAmount,
+    netAmount: input.netAmount ? String(input.netAmount) : base.netAmount,
+    taxAmount: input.taxAmount ? String(input.taxAmount) : base.taxAmount,
+  };
+}
+
+export function ExpenseForm({ mode, expense, prefill, onSaved, onCancel }: ExpenseFormProps) {
   const { translate, showToast } = useApp();
-  const [draft, setDraft] = useState<ExpenseFormDraft>(
-    expense ? draftFromExpense(expense) : emptyDraft(),
-  );
+  const [linkedInboxId] = useState(prefill?.linkedInboxId);
+  const [draft, setDraft] = useState<ExpenseFormDraft>(() => {
+    if (expense) return draftFromExpense(expense);
+    if (prefill) return draftFromInput(prefill);
+    return emptyDraft();
+  });
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
-    const input = toInput(draft);
+    const input = toInput(draft, linkedInboxId);
     const result =
       mode === 'add'
         ? addExpense(input)

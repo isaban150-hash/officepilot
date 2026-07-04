@@ -15,6 +15,7 @@ export function ScanPage() {
   const { translate, showToast } = useApp();
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const [selectedKind, setSelectedKind] = useState<UploadDocumentKind | null>(null);
 
   const handleUploadComplete = (itemId: string) => {
@@ -22,9 +23,24 @@ export function ScanPage() {
     navigate(`/ablage/${itemId}`);
   };
 
+  const createInboxFromFile = async (file: File) => {
+    let recognizedText: string | undefined;
+    try {
+      const extracted = await extractTextFromUploadFile(file);
+      recognizedText = extracted || undefined;
+    } catch {
+      recognizedText = undefined;
+    }
+
+    return processUpload({
+      sourceFileName: file.name,
+      kind: selectedKind ?? undefined,
+      recognizedText,
+    });
+  };
+
   const handleCapture = () => {
-    const item = processUpload({ kind: selectedKind ?? undefined });
-    handleUploadComplete(item.id);
+    cameraInputRef.current?.click();
   };
 
   const handleFileSelect = () => {
@@ -35,19 +51,7 @@ export function ScanPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    let recognizedText: string | undefined;
-    try {
-      const extracted = await extractTextFromUploadFile(file);
-      recognizedText = extracted || undefined;
-    } catch {
-      recognizedText = undefined;
-    }
-
-    const item = processUpload({
-      sourceFileName: file.name,
-      kind: selectedKind ?? undefined,
-      recognizedText,
-    });
+    const item = await createInboxFromFile(file);
     e.target.value = '';
     handleUploadComplete(item.id);
   };
@@ -86,6 +90,14 @@ export function ScanPage() {
           </div>
         </fieldset>
 
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="sr-only"
+          onChange={handleFileChange}
+        />
         <input
           ref={fileInputRef}
           type="file"

@@ -2,6 +2,12 @@ import { useState } from 'react';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import {
+  applyOfficeActionResult,
+  executeDocumentAction,
+  filterAvailableDocumentActions,
+  isDocumentActionAvailable,
+} from '../../services/officeActionService';
+import {
   getClassificationForItem,
   getSuggestedVorgangForItem,
 } from '../../services/documentClassificationService';
@@ -14,6 +20,7 @@ import type {
   Vorgang,
 } from '../../types/models';
 import { linkInboxToExistingVorgang } from '../../services/vorgangService';
+import type { ApplyOfficeActionContext } from '../../services/officeActionService';
 import type { TranslationKey } from '../../i18n';
 
 const MAX_PRIMARY_ACTIONS = 3;
@@ -28,7 +35,9 @@ interface Props {
   onImportArchive: () => void;
   onCreateTask: () => void;
   onOpenVorgangDialog: () => void;
-  onShowToast: (message: string) => void;
+  onItemUpdated: (item: InboxItem) => void;
+  navigate: (route: string) => void;
+  showToast: (message: string) => void;
 }
 
 export function DocumentActionSuggestionsPanel({
@@ -41,81 +50,46 @@ export function DocumentActionSuggestionsPanel({
   onImportArchive,
   onCreateTask,
   onOpenVorgangDialog,
-  onShowToast,
+  onItemUpdated,
+  navigate,
+  showToast,
 }: Props) {
   const [showAllActions, setShowAllActions] = useState(false);
   const classification = classificationProp ?? getClassificationForItem(item);
   const suggestedVorgang = suggestedVorgangProp ?? getSuggestedVorgangForItem(item);
+  const availableActions = filterAvailableDocumentActions(item);
+  const primaryActions = availableActions.slice(0, MAX_PRIMARY_ACTIONS);
+  const secondaryActions = availableActions.slice(MAX_PRIMARY_ACTIONS);
+  const visibleActions = showAllActions ? availableActions : primaryActions;
 
-  const primaryActions = classification.actions.slice(0, MAX_PRIMARY_ACTIONS);
-  const secondaryActions = classification.actions.slice(MAX_PRIMARY_ACTIONS);
-  const visibleActions = showAllActions ? classification.actions : primaryActions;
+  const actionContext: ApplyOfficeActionContext = {
+    navigate,
+    translate,
+    showToast,
+    onItemUpdated,
+    delegates: {
+      confirmFiling: onConfirmFiling,
+      importArchive: onImportArchive,
+      createTask: onCreateTask,
+      openVorgangDialog: onOpenVorgangDialog,
+    },
+  };
 
   const handleLinkSuggestedVorgang = () => {
     if (!suggestedVorgang) return;
     const result = linkInboxToExistingVorgang(item, suggestedVorgang.vorgangId);
     if (result) {
       onVorgangLinked(result.inbox, result.vorgang);
-      onShowToast(translate('vorgang.link.success'));
+      showToast(translate('vorgang.link.success'));
     }
   };
 
   const handleAction = (actionId: DocumentActionId) => {
-    switch (actionId) {
-      case 'save_bg_bau_folder':
-      case 'save_tax_folder':
-      case 'save_health_folder':
-        onConfirmFiling();
-        break;
-      case 'confirm_filing':
-        if (item.isAdvertisement) {
-          onShowToast(translate('classification.action.disposeHint'));
-        } else {
-          onConfirmFiling();
-        }
-        break;
-      case 'check_deadline':
-      case 'monitor_validity':
-        if (item.taskTemplate) {
-          onCreateTask();
-        } else {
-          onShowToast(translate('classification.action.deadlineHint'));
-        }
-        break;
-      case 'show_contact':
-        onShowToast(
-          item.recognizedData.Ansprechpartner
-            ? `${translate('classification.action.contactLabel')}: ${item.recognizedData.Ansprechpartner}`
-            : `${translate('classification.action.contactLabel')}: ${item.sender}`,
-        );
-        break;
-      case 'link_vorgang':
-      case 'create_vorgang':
-      case 'import_positions':
-      case 'import_hours':
-      case 'check_proof_requirements':
-      case 'suggest_schlussrechnung':
-        onOpenVorgangDialog();
-        break;
-      case 'check_payment':
-      case 'record_expense':
-        onShowToast(translate('classification.action.paymentHint'));
-        break;
-      case 'archive':
-        onImportArchive();
-        break;
-      case 'send_to_customer':
-        onShowToast(translate('classification.action.sendToCustomerHint'));
-        break;
-      case 'mark_important':
-        onShowToast(translate('classification.action.markedImportant'));
-        break;
-      case 'create_task':
-        onCreateTask();
-        break;
-      default:
-        break;
-    }
+    if (!isDocumentActionAvailable(actionId, item, classification.classifiedKind)) return;
+    const result = executeDocumentAction(actionId, item, {
+      classifiedKind: classification.classifiedKind,
+    });
+    applyOfficeActionResult(result, actionContext);
   };
 
   const kindKey = `classifiedKind.${classification.classifiedKind}` as TranslationKey;
@@ -168,32 +142,34 @@ export function DocumentActionSuggestionsPanel({
         </Card>
       )}
 
-      <Card className="classification-actions">
-        <h3 className="section__title">{translate('classification.actionsTitle')}</h3>
-        <div className="classification-actions__buttons">
-          {visibleActions.map((action: SuggestedDocumentAction) => (
-            <Button
-              key={action.id}
+      {visibleActions.length > 0 && (
+        <Card className="classification-actions">
+          <h3 className="section__title">{translate('classification.actionsTitle')}</h3>
+          <div className="classification-actions__buttons">
+            {visibleActions.map((action: SuggestedDocumentAction) => (
+              <Button
+                key={action.id}
+                type="button"
+                variant={action.variant ?? 'outline'}
+                onClick={() => handleAction(action.id)}
+              >
+                {translate(action.labelKey as TranslationKey)}
+              </Button>
+            ))}
+          </div>
+          {secondaryActions.length > 0 && (
+            <button
               type="button"
-              variant={action.variant ?? 'outline'}
-              onClick={() => handleAction(action.id)}
+              className="classification-actions__toggle"
+              onClick={() => setShowAllActions((prev) => !prev)}
             >
-              {translate(action.labelKey as TranslationKey)}
-            </Button>
-          ))}
-        </div>
-        {secondaryActions.length > 0 && (
-          <button
-            type="button"
-            className="classification-actions__toggle"
-            onClick={() => setShowAllActions((prev) => !prev)}
-          >
-            {showAllActions
-              ? translate('classification.showLess')
-              : translate('classification.showMore')}
-          </button>
-        )}
-      </Card>
+              {showAllActions
+                ? translate('classification.showLess')
+                : translate('classification.showMore')}
+            </button>
+          )}
+        </Card>
+      )}
     </>
   );
 }

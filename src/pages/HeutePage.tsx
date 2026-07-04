@@ -1,25 +1,35 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { HeuteTodayList } from '../components/heute/HeuteTodayList';
 import { Button } from '../components/ui/Button';
 import { PageHeader } from '../components/ui/Card';
 import { useApp } from '../context/AppContext';
+import { resolveHeuteQuickActionRoute } from '../services/officeActionService';
 import { scanPendingItems } from '../services/pendingEngineService';
 import type { TranslationKey } from '../i18n';
 
-const QUICK_ACTIONS: { key: TranslationKey; route: string }[] = [
-  { key: 'heute.action.understandLetter', route: '/scan' },
-  { key: 'heute.action.writeInvoice', route: '/vorgaenge' },
-  { key: 'heute.action.captureExpense', route: '/ausgaben/neu' },
-  { key: 'heute.action.openOrder', route: '/vorgaenge' },
-  { key: 'heute.action.writeMessage', route: '/kommunikation' },
-  { key: 'heute.action.askOfficePilot', route: '/assistent' },
+const QUICK_ACTION_KEYS: TranslationKey[] = [
+  'heute.action.understandLetter',
+  'heute.action.writeInvoice',
+  'heute.action.captureExpense',
+  'heute.action.openOrder',
+  'heute.action.writeMessage',
+  'heute.action.askOfficePilot',
 ];
 
 export function HeutePage() {
   const { translate } = useApp();
   const navigate = useNavigate();
   const [pendingItems] = useState(() => scanPendingItems().items);
+
+  const quickActions = useMemo(
+    () =>
+      QUICK_ACTION_KEYS.map((key) => ({
+        key,
+        route: resolveHeuteQuickActionRoute(key),
+      })).filter((entry): entry is { key: TranslationKey; route: string } => entry.route !== null),
+    [],
+  );
 
   return (
     <div className="page heute-page" data-testid="heute-page">
@@ -42,7 +52,7 @@ export function HeutePage() {
       <section className="heute-quick-actions" data-testid="heute-quick-actions">
         <h2 className="heute-section-title">{translate('heute.quickActionsTitle')}</h2>
         <div className="heute-quick-actions__grid">
-          {QUICK_ACTIONS.map(({ key, route }) => (
+          {quickActions.map(({ key, route }) => (
             <Link key={key} to={route} className="heute-quick-action">
               {translate(key)}
             </Link>

@@ -6,6 +6,8 @@ import { DEFAULT_SETUP } from '../data/mockData';
 import { MOCK_INBOX_ITEMS } from '../data/inboxMockData';
 import { HeutePage } from './HeutePage';
 import { hydrateInboxStore } from '../services/inboxService';
+import { hydrateVorgangStore } from '../services/vorgangService';
+import { createTestVorgang } from '../test/fixtures';
 import * as pendingEngineService from '../services/pendingEngineService';
 
 const FORBIDDEN_TERMS = [
@@ -21,6 +23,9 @@ const FORBIDDEN_TERMS = [
 describe('HeutePage', () => {
   beforeEach(() => {
     hydrateInboxStore(MOCK_INBOX_ITEMS.map((item) => ({ ...item })));
+    hydrateVorgangStore([
+      createTestVorgang({ id: 'v-heute-1', title: 'Testauftrag', status: 'in_bearbeitung' }),
+    ]);
   });
 
   afterEach(() => {

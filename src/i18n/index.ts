@@ -567,6 +567,11 @@ const de = {
   'action.auftrag_annehmen': 'Auftrag annehmen / Rückfrage',
   'action.steuerberater_vorbereiten': 'Für Steuerberater vorbereiten',
   'action.entsorgen': 'Entsorgen',
+  'action.expense.created': 'Ausgabe wurde erfasst.',
+  'action.inbox.markedImportant': 'Als wichtig markiert.',
+  'action.communication.openForProof': 'Kommunikation geöffnet – Entwurf vorbereiten.',
+  'action.task.created': 'Aufgabe wurde erstellt.',
+  'action.unsupported': 'Diese Aktion ist derzeit nicht verfügbar.',
 
   'vorgaenge.title': 'Vorgänge',
   'vorgaenge.subtitle': 'Alle laufenden Aufträge',

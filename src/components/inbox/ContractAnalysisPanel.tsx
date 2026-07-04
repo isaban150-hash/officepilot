@@ -1,10 +1,13 @@
 import { Button } from '../ui/Button';
 import { Badge, Card, DataRow } from '../ui/Card';
 import type { ContractAnalysisResult, ContractSuggestedAction } from '../../types/models';
+import { isContractActionAvailable } from '../../services/officeActionService';
+import type { InboxItem } from '../../types/models';
 import type { TranslationKey } from '../../i18n';
 
 interface Props {
   analysis: ContractAnalysisResult;
+  item: InboxItem;
   translate: (key: TranslationKey) => string;
   onAction: (actionId: ContractSuggestedAction['id']) => void;
   onCreateContractTasks?: () => void;
@@ -16,8 +19,12 @@ function confidenceTone(confidence: ContractAnalysisResult['confidence']): 'defa
   return 'default';
 }
 
-export function ContractAnalysisPanel({ analysis, translate, onAction, onCreateContractTasks }: Props) {
+export function ContractAnalysisPanel({ analysis, item, translate, onAction, onCreateContractTasks }: Props) {
   if (!analysis.isContract || !analysis.contractType) return null;
+
+  const visibleActions = analysis.suggestedActions.filter((action) =>
+    isContractActionAvailable(action.id, item),
+  );
 
   const typeKey = `contract.type.${analysis.contractType}` as TranslationKey;
   const confidenceKey = `contract.confidence.${analysis.confidence}` as TranslationKey;
@@ -144,7 +151,7 @@ export function ContractAnalysisPanel({ analysis, translate, onAction, onCreateC
       <div className="contract-analysis__section">
         <h4 className="contract-analysis__subtitle">{translate('contract.actionsTitle')}</h4>
         <div className="classification-actions__buttons">
-          {analysis.suggestedActions.map((action) => (
+          {visibleActions.map((action) => (
             <Button
               key={action.id}
               type="button"

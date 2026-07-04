@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { ContractAnalysisPanel } from './ContractAnalysisPanel';
 import { analyzeContractFromInbox, SAMPLE_WERKVERTRAG_TEXT } from '../../services/contractAnalysisService';
 import { createMockInboxItemFromUpload } from '../../services/inboxUploadFactory';
+import { createAuftragInboxItem } from '../../test/fixtures';
 import type { TranslationKey } from '../../i18n';
 
 function translate(key: TranslationKey): string {
@@ -18,7 +19,7 @@ describe('ContractAnalysisPanel', () => {
     const analysis = analyzeContractFromInbox(item);
 
     const html = renderToStaticMarkup(
-      <ContractAnalysisPanel analysis={analysis} translate={translate} onAction={() => {}} />,
+      <ContractAnalysisPanel analysis={analysis} item={item} translate={translate} onAction={() => {}} />,
     );
 
     expect(html).toContain('contract.analysisTitle');
@@ -30,8 +31,10 @@ describe('ContractAnalysisPanel', () => {
   });
 
   it('rendert nichts wenn kein Vertrag erkannt', () => {
+    const item = createAuftragInboxItem({ id: 'contract-panel-empty' });
     const html = renderToStaticMarkup(
       <ContractAnalysisPanel
+        item={item}
         analysis={{
           isContract: false,
           contractType: null,

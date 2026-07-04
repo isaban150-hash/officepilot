@@ -53,10 +53,16 @@ import {
   createTaskForItem,
 } from '../services/inboxTaskService';
 import { askDocumentAi } from '../services/document/documentAiService';
+import {
+  applyOfficeActionResult,
+  executeContractAction,
+  executeScanResultAction,
+} from '../services/officeActionService';
 import { buildScanResultView } from '../services/scanResultViewService';
 import type {
   ClassifiedDocumentKind,
   CompanyDocument,
+  ContractSuggestedAction,
   InboxItem,
   Vorgang,
   WorkflowResultExecution,
@@ -141,27 +147,17 @@ export function EingangDetailPage() {
 
   const goBack = () => navigate('/ablage');
 
-  const handleContractAction = (actionId: string) => {
-    switch (actionId) {
-      case 'create_vorgang':
-      case 'import_positions':
-        setVorgangDialogRequest((n) => n + 1);
-        break;
-      case 'archive_contract':
-        handleImportToArchive();
-        break;
-      case 'send_freistellung':
-        showToast(translate('contract.action.sendFreistellungHint'));
-        break;
-      case 'check_bg_bau':
-        showToast(translate('contract.action.checkBgBauHint'));
-        break;
-      case 'send_aok':
-        showToast(translate('contract.action.sendAokHint'));
-        break;
-      default:
-        break;
-    }
+  const handleContractAction = (actionId: ContractSuggestedAction['id']) => {
+    applyOfficeActionResult(executeContractAction(actionId, item, contractAnalysis ?? undefined), {
+      navigate,
+      translate,
+      showToast,
+      onItemUpdated: setItem,
+      delegates: {
+        importArchive: handleImportToArchive,
+        openVorgangDialog: () => setVorgangDialogRequest((n) => n + 1),
+      },
+    });
   };
 
   const startEditing = () => {
@@ -346,32 +342,22 @@ export function EingangDetailPage() {
   };
 
   const handleScanResultAction = (actionId: string) => {
-    switch (actionId) {
-      case 'filing':
-        handleFiling();
-        break;
-      case 'dispose':
-        handleDispose();
-        break;
-      case 'save':
-        handleSaveAnyway();
-        break;
-      case 'assign':
-        setVorgangDialogRequest((n) => n + 1);
-        break;
-      case 'invoice':
-        if (item.vorgangId) {
-          navigate(`/vorgaenge/${item.vorgangId}/rechnung`);
-        } else {
-          setVorgangDialogRequest((n) => n + 1);
-        }
-        break;
-      case 'openOrder':
-        if (item.vorgangId) navigate(`/vorgaenge/${item.vorgangId}`);
-        break;
-      default:
-        break;
-    }
+    applyOfficeActionResult(executeScanResultAction(actionId, item), {
+      navigate,
+      translate,
+      showToast,
+      onItemUpdated: setItem,
+      delegates: {
+        confirmFiling: handleFiling,
+        dispose: handleDispose,
+        saveAnyway: handleSaveAnyway,
+        openVorgangDialog: () => setVorgangDialogRequest((n) => n + 1),
+        expandDetails: () => {
+          setShowDetails(true);
+          setIntakeOpen(true);
+        },
+      },
+    });
   };
 
   const handleExecuteAll = () => {
@@ -486,6 +472,7 @@ export function EingangDetailPage() {
       {analysisAllowed && contractAnalysis && (
         <ContractAnalysisPanel
           analysis={contractAnalysis}
+          item={item}
           translate={translate}
           onAction={handleContractAction}
           onCreateContractTasks={
@@ -506,7 +493,9 @@ export function EingangDetailPage() {
             onImportArchive={handleImportToArchive}
             onCreateTask={handleCreateTask}
             onOpenVorgangDialog={() => setVorgangDialogRequest((n) => n + 1)}
-            onShowToast={showToast}
+            onItemUpdated={setItem}
+            navigate={navigate}
+            showToast={showToast}
           />
 
           <Card className="inbox-suggestion">
