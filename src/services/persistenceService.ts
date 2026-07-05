@@ -80,6 +80,11 @@ import {
 import { normalizeTask } from './taskNormalize';
 import { normalizeExpense } from './expenseNormalize';
 import { normalizeExpensePaymentFields } from './expensePaymentCalculations';
+import {
+  BETA_TEST_COMPANY_PROFILE,
+  BETA_TEST_SETUP,
+  isBetaTestMode,
+} from '../config/betaTestMode';
 
 export const STORAGE_KEY = 'officepilot-state';
 export const LEGACY_SETUP_KEY = 'officepilot-setup';
@@ -208,7 +213,10 @@ export function loadLegacySetup(): CompanySetup | null {
 
 export function createSeedState(setupOverride?: CompanySetup): AppPersistedState {
   const setup = setupOverride ?? loadLegacySetup() ?? { ...DEFAULT_SETUP };
-  const companyProfile = createCompanyProfileFromSetup(setup);
+  const companyProfile =
+    isBetaTestMode() && setup.setupComplete
+      ? { ...BETA_TEST_COMPANY_PROFILE, companyName: setup.companyName || BETA_TEST_SETUP.companyName }
+      : createCompanyProfileFromSetup(setup);
   const invoiceNumberSequence: InvoiceNumberSequence = {
     year: new Date().getFullYear(),
     lastIssuedNumber: 0,
@@ -354,7 +362,32 @@ function applyStateToStores(state: AppPersistedState): void {
   );
 }
 
+function bootstrapBetaTestState(): CompanySetup {
+  const seed = createSeedState({ ...BETA_TEST_SETUP });
+  const betaSeed: AppPersistedState = {
+    ...seed,
+    setup: { ...BETA_TEST_SETUP },
+    companyProfile: { ...BETA_TEST_COMPANY_PROFILE },
+    invoiceNumberSequence: seed.invoiceNumberSequence ?? {
+      year: new Date().getFullYear(),
+      lastIssuedNumber: 0,
+    },
+  };
+  applyStateToStores(betaSeed);
+  savePersistedState(betaSeed);
+  return getCachedSetup();
+}
+
 export function hydrateStoresFromStorage(): CompanySetup {
+  if (isBetaTestMode()) {
+    const stored = loadPersistedState();
+    if (stored && stored.setup.setupComplete) {
+      applyStateToStores(stored);
+      return getCachedSetup();
+    }
+    return bootstrapBetaTestState();
+  }
+
   const stored = loadPersistedState();
   if (stored) {
     applyStateToStores(stored);
