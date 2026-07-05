@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { OcrPreviewPanel } from '../components/scan/OcrPreviewPanel';
 import { Button } from '../components/ui/Button';
 import { Card, CardMeta, CardTitle, PageHeader } from '../components/ui/Card';
 import { useApp } from '../context/AppContext';
@@ -8,8 +9,19 @@ import {
   UPLOAD_KIND_LABELS,
 } from '../services/inboxUploadFactory';
 import { processUpload } from '../services/inboxService';
-import { extractTextFromUploadFile } from '../services/uploadTextExtractionService';
+import {
+  buildOcrPreviewSummary,
+  extractDocumentText,
+  type DocumentTextExtractionResult,
+  type OcrPreviewSummary,
+} from '../services/ocrDocumentService';
 import type { UploadDocumentKind } from '../types/models';
+
+interface PendingScan {
+  file: File;
+  extraction: DocumentTextExtractionResult;
+  preview: OcrPreviewSummary;
+}
 
 export function ScanPage() {
   const { translate, showToast } = useApp();
@@ -17,26 +29,53 @@ export function ScanPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const [selectedKind, setSelectedKind] = useState<UploadDocumentKind | null>(null);
+  const [pendingScan, setPendingScan] = useState<PendingScan | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const handleUploadComplete = (itemId: string) => {
     showToast(translate('scanResult.toastRecognized'));
     navigate(`/ablage/${itemId}`);
   };
 
-  const createInboxFromFile = async (file: File) => {
-    let recognizedText: string | undefined;
+  const processFile = async (file: File) => {
+    setIsProcessing(true);
     try {
-      const extracted = await extractTextFromUploadFile(file);
-      recognizedText = extracted || undefined;
-    } catch {
-      recognizedText = undefined;
-    }
+      const extraction = await extractDocumentText(file);
+      const preview = buildOcrPreviewSummary(
+        file.name,
+        extraction.recognizedText,
+        selectedKind ?? undefined,
+      );
 
-    return processUpload({
-      sourceFileName: file.name,
+      if (extraction.errorCode === 'unsupported_format') {
+        showToast(extraction.message ?? translate('scan.ocr.unsupportedFormat'));
+        return;
+      }
+
+      setPendingScan({ file, extraction, preview });
+
+      if (extraction.qualityHint) {
+        showToast(extraction.qualityHint);
+      }
+    } catch {
+      showToast(translate('scan.ocr.failed'));
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const confirmPendingScan = () => {
+    if (!pendingScan) return;
+
+    const recognizedText = pendingScan.extraction.recognizedText.trim() || undefined;
+    const item = processUpload({
+      sourceFileName: pendingScan.file.name,
       kind: selectedKind ?? undefined,
       recognizedText,
     });
+
+    setPendingScan(null);
+    handleUploadComplete(item.id);
   };
 
   const handleCapture = () => {
@@ -49,12 +88,31 @@ export function ScanPage() {
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-
-    const item = await createInboxFromFile(file);
     e.target.value = '';
-    handleUploadComplete(item.id);
+    if (!file) return;
+    await processFile(file);
   };
+
+  if (pendingScan) {
+    return (
+      <div className="page scan-page" data-testid="scan-page">
+        <PageHeader title={translate('scan.title')} subtitle={translate('scan.ocr.previewSubtitle')} />
+        <OcrPreviewPanel
+          fileName={pendingScan.file.name}
+          extraction={pendingScan.extraction}
+          preview={pendingScan.preview}
+          continueLabel={translate('scan.ocr.continue')}
+          qualityHintLabel={pendingScan.extraction.qualityHint}
+          documentTypeLabel={translate('scan.ocr.documentType')}
+          senderLabel={translate('scan.ocr.sender')}
+          previewTextLabel={translate('scan.ocr.previewText')}
+          cancelLabel={translate('common.cancel')}
+          onContinue={confirmPendingScan}
+          onCancel={() => setPendingScan(null)}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="page scan-page" data-testid="scan-page">
@@ -93,7 +151,7 @@ export function ScanPage() {
         <input
           ref={cameraInputRef}
           type="file"
-          accept="image/*"
+          accept="image/jpeg,image/png,image/jpg,image/*,.pdf"
           capture="environment"
           className="sr-only"
           onChange={handleFileChange}
@@ -101,16 +159,21 @@ export function ScanPage() {
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*,.pdf"
+          accept="image/jpeg,image/png,image/jpg,image/*,.pdf"
           className="sr-only"
           onChange={handleFileChange}
         />
 
         <div className="upload-actions">
-          <Button fullWidth data-testid="scan-capture-button" onClick={handleCapture}>
-            {translate('heute.scanButton')}
+          <Button
+            fullWidth
+            data-testid="scan-capture-button"
+            onClick={handleCapture}
+            disabled={isProcessing}
+          >
+            {isProcessing ? translate('scan.ocr.processing') : translate('heute.scanButton')}
           </Button>
-          <Button variant="outline" fullWidth onClick={handleFileSelect}>
+          <Button variant="outline" fullWidth onClick={handleFileSelect} disabled={isProcessing}>
             {translate('scan.uploadFile')}
           </Button>
         </div>

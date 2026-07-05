@@ -37,12 +37,7 @@ export function extractTextFromPdfBytes(bytes: Uint8Array): string {
 }
 
 export async function extractTextFromUploadFile(file: File): Promise<string> {
-  const lowerName = file.name.toLowerCase();
-  const isPdf = file.type === 'application/pdf' || lowerName.endsWith('.pdf');
-  if (!isPdf) {
-    return '';
-  }
-
-  const buffer = await file.arrayBuffer();
-  return extractTextFromPdfBytes(new Uint8Array(buffer));
+  const { extractDocumentText } = await import('./ocrDocumentService');
+  const result = await extractDocumentText(file);
+  return result.recognizedText;
 }
