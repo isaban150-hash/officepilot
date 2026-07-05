@@ -448,7 +448,11 @@ export function persistAll(setupOverride?: CompanySetup): void {
     cachedSetup = { ...setupOverride };
   }
 
-  const state: AppPersistedState = {
+  savePersistedState(buildPersistedStateSnapshot());
+}
+
+export function buildPersistedStateSnapshot(): AppPersistedState {
+  return {
     version: STORAGE_VERSION,
     syncClient: ensureSyncClientFromState(),
     syncOutbox: getSyncOutboxSnapshot(),
@@ -467,7 +471,10 @@ export function persistAll(setupOverride?: CompanySetup): void {
     mailImports: getMailImportSnapshot().map(cloneMailImport),
     savedAt: new Date().toISOString(),
   };
+}
 
+export function applyPersistedStateFromSync(state: AppPersistedState): void {
+  applyStateToStores(state);
   savePersistedState(state);
 }
 

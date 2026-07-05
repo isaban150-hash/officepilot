@@ -13,6 +13,7 @@ const MEHR_LINKS: { key: TranslationKey; route: string; descriptionKey: Translat
   { key: 'mehr.paperArchive', route: '/papierarchiv', descriptionKey: 'mehr.paperArchiveDesc' },
   { key: 'mehr.knowledge', route: '/wissen', descriptionKey: 'mehr.knowledgeDesc' },
   { key: 'mehr.company', route: '/firmendaten', descriptionKey: 'mehr.companyDesc' },
+  { key: 'mehr.sync', route: '/synchronisation', descriptionKey: 'mehr.syncDesc' },
 ];
 
 export function MehrPage() {

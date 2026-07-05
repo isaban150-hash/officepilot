@@ -3398,6 +3398,83 @@ body {
   resize: vertical;
 }
 
+.sync-page__banner {
+  margin-bottom: 0.75rem;
+}
+
+.sync-page__mode {
+  margin: 0;
+  font-weight: 600;
+  color: var(--color-text, #1f2937);
+}
+
+.sync-page__offline {
+  margin: 0.5rem 0 0;
+  color: var(--color-muted, #6b7280);
+  font-size: 0.95rem;
+}
+
+.sync-page__section {
+  margin-bottom: 0.75rem;
+}
+
+.sync-page__section .card__title {
+  margin-bottom: 0.5rem;
+}
+
+.sync-page__status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.25rem;
+}
+
+.sync-page__status-row .card__title {
+  margin: 0;
+}
+
+.sync-page__error {
+  margin: 0.5rem 0 0;
+  color: #b45309;
+  font-size: 0.92rem;
+}
+
+.sync-page__outbox-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.sync-page__outbox-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.65rem 0.35rem;
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 0.65rem;
+  background: var(--color-surface-muted, #f9fafb);
+}
+
+.sync-page__outbox-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.sync-page__outbox-label {
+  margin-top: 0.15rem;
+  font-size: 0.78rem;
+  color: var(--color-muted, #6b7280);
+  text-align: center;
+}
+
+.sync-page__actions {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
 .app-shell__settings {
   font-size: 0.75rem;
   color: var(--color-primary);

@@ -24,6 +24,7 @@ import { RechnungPage } from './pages/RechnungPage';
 import { SearchPage } from './pages/SearchPage';
 import { ScanPage } from './pages/ScanPage';
 import { SetupPage } from './pages/SetupPage';
+import { SyncPage } from './pages/SyncPage';
 import { WissenPage } from './pages/WissenPage';
 import { VorgaengePage } from './pages/VorgaengePage';
 import { VorgangDetailPage } from './pages/VorgangDetailPage';
@@ -77,6 +78,7 @@ function AppRoutes() {
         <Route path="/kommunikation" element={<KommunikationPage />} />
         <Route path="/wissen" element={<WissenPage />} />
         <Route path="/firmendaten" element={<FirmendatenPage />} />
+        <Route path="/synchronisation" element={<SyncPage />} />
         <Route path="/setup" element={<SetupPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
