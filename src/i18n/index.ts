@@ -176,6 +176,7 @@ const de = {
   'sync.outbox.pending': 'Ausstehend',
   'sync.outbox.completed': 'Abgeschlossen',
   'sync.outbox.error': 'Fehler',
+  'sync.outbox.emptyPending': 'Keine ausstehenden Änderungen.',
   'sync.report.duration': 'Dauer',
   'sync.report.uploads': 'Uploads',
   'sync.report.downloads': 'Downloads',

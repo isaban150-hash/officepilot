@@ -19,6 +19,7 @@ export interface SyncUiSnapshot {
   lastReport: SyncCoordinatorReport | null;
   outbox: SyncOutboxEntry[];
   outboxCounts: SyncOutboxCounts;
+  pendingOutboxEntries: SyncOutboxEntry[];
   isOffline: boolean;
   hasRetryableErrors: boolean;
 }
@@ -37,6 +38,9 @@ export function getSyncUiSnapshot(): SyncUiSnapshot {
   const coordinator = getSyncCoordinator();
   const status = coordinator.getStatus();
   const isOffline = syncClient.syncPolicy === 'disabled' || status.syncState === 'offline';
+  const pendingOutboxEntries = outbox.filter(
+    (entry) => entry.status === 'pending' || entry.status === 'blocked',
+  );
 
   return {
     deviceId: syncClient.deviceId,
@@ -46,6 +50,7 @@ export function getSyncUiSnapshot(): SyncUiSnapshot {
     lastReport: coordinator.getLastReport(),
     outbox,
     outboxCounts: countOutbox(outbox),
+    pendingOutboxEntries,
     isOffline,
     hasRetryableErrors: outbox.some((entry) => entry.status === 'error' || entry.status === 'failed'),
   };

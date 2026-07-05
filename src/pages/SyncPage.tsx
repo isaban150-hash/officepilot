@@ -150,6 +150,18 @@ export function SyncPage() {
             <span className="sync-page__outbox-label">{translate('sync.outbox.error')}</span>
           </div>
         </div>
+        {snapshot.pendingOutboxEntries.length > 0 && (
+          <ul className="sync-page__outbox-list" data-testid="sync-outbox-pending-list">
+            {snapshot.pendingOutboxEntries.map((entry) => (
+              <li key={entry.id} className="sync-page__outbox-item">
+                <span className="sync-page__outbox-item-type">{entry.entityType}</span>
+                <span className="sync-page__outbox-item-id">{shortenSyncId(entry.entityId)}</span>
+                <span className="sync-page__outbox-item-op">{entry.operation}</span>
+                <Badge tone={entry.status === 'blocked' ? 'warning' : 'info'}>{entry.status}</Badge>
+              </li>
+            ))}
+          </ul>
+        )}
       </Card>
 
       {(report || snapshot.status.lastError) && (

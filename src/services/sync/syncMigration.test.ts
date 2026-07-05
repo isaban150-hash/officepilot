@@ -202,6 +202,8 @@ describe('CLOUD-01B tombstones and outbox', () => {
 
     hydrateSyncClient(createSyncClient());
     hydrateDocumentStore([]);
+    const { seedSyncChangeTrackerFromCurrentStores } = await import('../persistenceService');
+    seedSyncChangeTrackerFromCurrentStores();
 
     addDocument({ title: 'Outbox Test', category: 'vertrag' });
 

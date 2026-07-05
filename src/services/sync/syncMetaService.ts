@@ -1,7 +1,5 @@
-import type { SyncMeta, SyncableEntity } from '../../types/sync';
+import type { SyncMeta, SyncableEntity, SyncEntityType } from '../../types/sync';
 import { getSyncClient } from './syncClientService';
-import { enqueueSyncOutbox } from './syncOutboxService';
-import type { SyncEntityType, SyncOutboxOperation } from '../../types/sync';
 
 export function generateUuid(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -80,43 +78,28 @@ export function createInitialSyncMeta(): SyncMeta {
   return createDefaultSyncMeta(new Date().toISOString(), client);
 }
 
-function recordOutbox(
-  entityType: SyncEntityType,
-  entityId: string,
-  operation: SyncOutboxOperation,
-  version: number,
-): void {
-  enqueueSyncOutbox({ entityType, entityId, operation, version });
-}
-
 export function withNewEntitySync<T extends SyncableEntity & { id: string }>(
   entity: T,
-  entityType: SyncEntityType,
+  _entityType: SyncEntityType,
 ): T & { sync: SyncMeta } {
   const sync = createInitialSyncMeta();
-  const next = { ...entity, sync };
-  recordOutbox(entityType, entity.id, 'create', sync.version);
-  return next;
+  return { ...entity, sync };
 }
 
 export function withUpdatedEntitySync<T extends SyncableEntity & { id: string }>(
   entity: T,
-  entityType: SyncEntityType,
+  _entityType: SyncEntityType,
 ): T & { sync: SyncMeta } {
   const base = ensureSyncMeta(entity, entity.sync?.updatedAt ?? new Date().toISOString());
   const sync = bumpSyncMeta(base.sync);
-  const next = { ...base, sync };
-  recordOutbox(entityType, entity.id, 'update', sync.version);
-  return next;
+  return { ...base, sync };
 }
 
 export function withTombstonedEntity<T extends SyncableEntity & { id: string }>(
   entity: T,
-  entityType: SyncEntityType,
+  _entityType: SyncEntityType,
 ): T & { sync: SyncMeta } {
   const base = ensureSyncMeta(entity, entity.sync?.updatedAt ?? new Date().toISOString());
   const sync = applyTombstoneSyncMeta(base.sync);
-  const next = { ...base, sync };
-  recordOutbox(entityType, entity.id, 'delete', sync.version);
-  return next;
+  return { ...base, sync };
 }

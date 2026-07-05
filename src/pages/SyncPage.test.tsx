@@ -143,6 +143,58 @@ describe('SyncPage', () => {
     expect(runSpy).toHaveBeenCalledTimes(1);
   });
 
+  it('zeigt pending Outbox-Einträge', () => {
+    vi.spyOn(syncUiService, 'getSyncUiSnapshot').mockReturnValue({
+      deviceId: 'device-1234567890',
+      workspaceId: 'workspace-1234567890',
+      syncPolicy: 'cloud_ready',
+      status: {
+        syncState: 'idle',
+        pendingChanges: 1,
+      },
+      lastReport: null,
+      outbox: [
+        {
+          id: 'outbox-pending-1',
+          entityType: 'document',
+          entityId: 'doc-pending-1234567890',
+          operation: 'update',
+          version: 2,
+          queuedAt: '2026-03-01T10:00:00.000Z',
+          retryCount: 0,
+          status: 'pending',
+        },
+      ],
+      outboxCounts: { pending: 1, completed: 0, error: 0 },
+      pendingOutboxEntries: [
+        {
+          id: 'outbox-pending-1',
+          entityType: 'document',
+          entityId: 'doc-pending-1234567890',
+          operation: 'update',
+          version: 2,
+          queuedAt: '2026-03-01T10:00:00.000Z',
+          retryCount: 0,
+          status: 'pending',
+        },
+      ],
+      isOffline: false,
+      hasRetryableErrors: false,
+    });
+
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <AppProvider initialSetup={completeSetup}>
+          <SyncPage />
+        </AppProvider>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('data-testid="sync-outbox-pending-list"');
+    expect(html).toContain('document');
+    expect(html).toContain('update');
+  });
+
   it('zeigt Report-Werte nach Sync', () => {
     vi.spyOn(syncUiService, 'getSyncUiSnapshot').mockReturnValue({
       deviceId: 'device-1234567890',
@@ -156,6 +208,7 @@ describe('SyncPage', () => {
       lastReport: emptyReport,
       outbox: [],
       outboxCounts: { pending: 0, completed: 2, error: 0 },
+      pendingOutboxEntries: [],
       isOffline: false,
       hasRetryableErrors: false,
     });

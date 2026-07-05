@@ -100,6 +100,10 @@ import {
 } from './sync/syncMigrationService';
 import { ensureSyncClientFromState, hydrateSyncClient } from './sync/syncClientService';
 import { hydrateSyncOutbox, getSyncOutboxSnapshot } from './sync/syncOutboxService';
+import {
+  resetSyncChangeTrackerFromState,
+  trackPersistedChanges,
+} from './sync/syncChangeTrackerService';
 
 export { STORAGE_VERSION } from './sync/syncMigrationService';
 export const LEGACY_STORAGE_VERSION = 1;
@@ -403,6 +407,7 @@ function applyStateToStores(state: AppPersistedState): void {
     },
   );
   hydrateMailImports(state.mailImports ?? []);
+  resetSyncChangeTrackerFromState(state);
 }
 
 function bootstrapBetaTestState(): CompanySetup {
@@ -448,7 +453,17 @@ export function persistAll(setupOverride?: CompanySetup): void {
     cachedSetup = { ...setupOverride };
   }
 
-  savePersistedState(buildPersistedStateSnapshot());
+  const snapshot = buildPersistedStateSnapshot();
+  trackPersistedChanges(snapshot);
+  savePersistedState({
+    ...snapshot,
+    syncOutbox: getSyncOutboxSnapshot(),
+    savedAt: new Date().toISOString(),
+  });
+}
+
+export function seedSyncChangeTrackerFromCurrentStores(): void {
+  resetSyncChangeTrackerFromState(buildPersistedStateSnapshot());
 }
 
 export function buildPersistedStateSnapshot(): AppPersistedState {
