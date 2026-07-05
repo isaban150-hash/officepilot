@@ -11,10 +11,13 @@ import {
   getAllDocumentMemories,
   getDocumentMemoryByDocumentId,
   getMemoryRelations,
+  getPaperRegisterEntries,
+  getPaperRegisterEntryForDocument,
   getProofMemories,
   getProofsByStatus,
   getProofsForVorgang,
   hydrateMemory,
+  markDocumentPhysicallyFiled,
   recordArchivedDocumentMemory,
   resetMemory,
   syncContractProofRequirements,
@@ -116,7 +119,7 @@ describe('officePilotMemoryService – archive import', () => {
     const docMemory = getDocumentMemoryByDocumentId(result.success ? result.document.id : '');
     expect(docMemory?.proofType).toBe('freistellungsbescheinigung');
     expect(docMemory?.digitalFolder.path).toBeTruthy();
-    expect(docMemory?.paperFolder.register).toBe('A');
+    expect(docMemory?.paperFolder.register).toBe('Freistellungsbescheinigungen');
   });
 
   it('markiert ablaufende Freistellung als expiring', () => {
@@ -222,6 +225,50 @@ describe('officePilotMemoryService – Werkvertrag', () => {
   });
 });
 
+describe('officePilotMemoryService – paper filing', () => {
+  beforeEach(() => {
+    resetMemory();
+    hydrateDocumentStore([]);
+  });
+
+  it('Archivieren erzeugt PaperRegisterEntry', () => {
+    const inboxItem = createFreistellungInboxItem();
+    const result = importInboxDocument(inboxItem, 'Test GmbH');
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+
+    const entry = getPaperRegisterEntryForDocument(result.document.id);
+    expect(entry).toBeDefined();
+    expect(entry!.register).toBe('Freistellungsbescheinigungen');
+    expect(entry!.physicalFiled).toBe(false);
+    expect(getPaperRegisterEntries()).toHaveLength(1);
+  });
+
+  it('DocumentMemory speichert Papierinfos', () => {
+    const inboxItem = createFreistellungInboxItem();
+    const result = importInboxDocument(inboxItem, 'Test GmbH');
+    if (!result.success) throw new Error('import failed');
+    const memory = getDocumentMemoryByDocumentId(result.document.id);
+    expect(memory?.paperFolder.register).toBe('Freistellungsbescheinigungen');
+    expect(memory?.paperRegisterEntryId).toBeTruthy();
+    expect(memory?.physicalFiled).toBe(false);
+  });
+
+  it('Original abgeheftet aktualisiert Memory und Register', () => {
+    const inboxItem = createFreistellungInboxItem();
+    const result = importInboxDocument(inboxItem, 'Test GmbH');
+    if (!result.success) throw new Error('import failed');
+    const updated = markDocumentPhysicallyFiled(result.document.id, 'Max Mustermann');
+    expect(updated?.physicalFiled).toBe(true);
+    expect(updated?.filedByUser).toBe('Max Mustermann');
+    expect(updated?.filedAt).toBeTruthy();
+
+    const entry = getPaperRegisterEntryForDocument(result.document.id);
+    expect(entry?.physicalFiled).toBe(true);
+    expect(entry?.filedAt).toBeTruthy();
+  });
+});
+
 describe('officePilotMemoryService – persistence', () => {
   beforeEach(() => {
     resetMemory();
@@ -237,6 +284,7 @@ describe('officePilotMemoryService – persistence', () => {
     const parsed = JSON.parse(raw!);
     expect(parsed.officePilotMemory.documentMemories.length).toBeGreaterThan(0);
     expect(parsed.officePilotMemory.proofMemories.length).toBeGreaterThan(0);
+    expect(parsed.officePilotMemory.paperRegisterEntries?.length ?? 0).toBeGreaterThan(0);
 
     resetMemory();
     expect(getAllDocumentMemories()).toHaveLength(0);

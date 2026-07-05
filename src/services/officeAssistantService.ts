@@ -23,6 +23,10 @@ import {
   memoryQueryAnswerToAssistantAnswer,
   tryMemoryQueryAnswer,
 } from './memory/memoryQueryService';
+import {
+  EXPLANATION_NO_DATA_MESSAGE,
+  findDocumentForExplanationQuestion,
+} from './memory/documentExplanationService';
 import { getAllVorgaenge } from './vorgangService';
 import type { AssistantAction, AssistantAnswer, CompanyDocument, Task, Vorgang } from '../types/models';
 
@@ -240,6 +244,31 @@ export function answerQuestion(question: string, today?: Date | string): Assista
   const memoryAnswer = tryMemoryQueryAnswer(question, todayIso);
   if (memoryAnswer) {
     return memoryQueryAnswerToAssistantAnswer(memoryAnswer);
+  }
+
+  if (/was bedeutet|was muss ich tun|was wollte|was ist mit.*freistellung|fehlen nachweise/i.test(question)) {
+    const explanation = findDocumentForExplanationQuestion(question);
+    if (explanation) {
+      return memoryQueryAnswerToAssistantAnswer(
+        {
+          shortAnswer: explanation.shortAnswer,
+          source: `Firmen-Gedächtnis: ${explanation.sourceTitle ?? 'Dokument'}`,
+          digitalLocation: explanation.digitalLocation,
+          paperLocation: explanation.paperLocation,
+          register: explanation.register,
+          status: explanation.actionRequired,
+          nextStep: explanation.nextSteps[0] ?? explanation.recommendation,
+          uncertainty: explanation.uncertaintyNote,
+        },
+        'Dokument-Erklärung',
+      );
+    }
+    return {
+      title: 'Dokument-Erklärung',
+      summary: EXPLANATION_NO_DATA_MESSAGE,
+      bullets: [],
+      actions: [],
+    };
   }
 
   const intent = detectIntent(question);

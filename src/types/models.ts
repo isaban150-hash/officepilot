@@ -678,6 +678,31 @@ export interface PaperFolder {
   name: string;
   year?: number;
   registers: string[];
+  /** Standard-Kategorie (FOLDER-01) */
+  category?: PaperFolderCategory;
+}
+
+export type PaperFolderCategory =
+  | 'behoerden'
+  | 'kunden'
+  | 'lieferanten'
+  | 'eingangsrechnungen'
+  | 'ausgangsrechnungen'
+  | 'steuerberater'
+  | 'bg_bau'
+  | 'krankenkassen'
+  | 'versicherungen'
+  | 'personal'
+  | 'fahrzeuge'
+  | 'maschinen'
+  | 'vertraege'
+  | 'baustellen'
+  | 'sonstiges';
+
+/** Register innerhalb eines Papierordners */
+export interface PaperRegister {
+  folderId: string;
+  name: string;
 }
 
 export interface DigitalFolder {

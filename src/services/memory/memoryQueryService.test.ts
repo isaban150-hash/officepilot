@@ -110,4 +110,35 @@ describe('memoryQueryService', () => {
     expect(tryMemoryQueryAnswer('Wo liegt meine Freistellung?', '2026-06-01')).toBeNull();
     expect(getProofMemories()).toHaveLength(0);
   });
+
+  it('beantwortet Papierfragen zum Abheftstatus', () => {
+    const document = createFreistellungDocument();
+    hydrateDocumentStore([document]);
+    recordArchivedDocumentMemory(document, {
+      inboxItem: createAuftragInboxItem({ classifiedKind: 'freistellungsbescheinigung' }),
+      todayIso: '2026-06-01',
+    });
+
+    const answer = tryMemoryQueryAnswer('Habe ich das schon abgeheftet?', '2026-06-01');
+    expect(answer).not.toBeNull();
+    expect(answer!.register).toContain('Freistellungsbescheinigungen');
+    expect(answer!.status).toContain('noch abheften');
+    expect(answer!.shortAnswer.toLowerCase()).toContain('nein');
+  });
+
+  it('beantwortet Register- und Ordnerfragen', () => {
+    const document = createFreistellungDocument();
+    hydrateDocumentStore([document]);
+    recordArchivedDocumentMemory(document, {
+      inboxItem: createAuftragInboxItem({ classifiedKind: 'freistellungsbescheinigung' }),
+      todayIso: '2026-06-01',
+    });
+
+    const registerAnswer = tryMemoryQueryAnswer('In welches Register gehört das?', '2026-06-01');
+    expect(registerAnswer?.register).toBe('Freistellungsbescheinigungen');
+
+    const folderAnswer = tryMemoryQueryAnswer('In welchen Ordner muss ich das legen?', '2026-06-01');
+    expect(folderAnswer?.paperLocation.length).toBeGreaterThan(5);
+    expect(folderAnswer?.register.length).toBeGreaterThan(0);
+  });
 });

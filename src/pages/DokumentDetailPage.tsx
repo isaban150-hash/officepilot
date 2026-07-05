@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { DocumentUnderstandingCard } from '../components/documents/DocumentUnderstandingCard';
+import { DocumentFilingCard } from '../components/documents/DocumentFilingCard';
 import { DocumentForm } from '../components/documents/DocumentForm';
 import { CommunicationIntegrationPanel } from '../components/communication/CommunicationIntegrationPanel';
 import { DOCUMENT_COMMUNICATION_BUTTON_KEYS } from '../components/communication/communicationNavigation';
@@ -228,6 +229,8 @@ export function DokumentDetailPage() {
       />
 
       <DocumentUnderstandingCard documentId={document.id} />
+
+      <DocumentFilingCard documentId={document.id} />
 
       <ShowMoreSection
         expanded={showDetails}

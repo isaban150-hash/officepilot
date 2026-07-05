@@ -1,20 +1,36 @@
 import type { AssistantAction, AssistantAnswer } from '../../types/models';
-import type { MemoryQueryAnswer } from '../../types/memory';
+import type { DocumentMemory, MemoryQueryAnswer } from '../../types/memory';
 import { getCommunicationReplyStatus } from '../communicationHistoryService';
 import { getAllDocuments } from '../documentService';
-import { formatPaperFilingInstruction } from '../paperFolderService';
+import {
+  formatPaperFilingInstruction,
+  formatPaperLocationSummary,
+  getPhysicalFilingStatusLabel,
+} from '../paperFolderService';
 import {
   computeProofStatus,
   getAllDocumentMemories,
+  getPaperRegisterEntryForDocument,
   getProofMemories,
 } from '../officePilotMemoryService';
 import { getTodayIso } from '../taskNormalize';
-import { getAuthorityLabel } from './memoryAuthorityMapping';
 import { formatDigitalLocation, formatPaperLocation } from './documentSummaryService';
+import {
+  buildDocumentExplanation,
+  documentExplanationToMemoryQueryAnswer,
+  findDocumentForExplanationQuestion,
+} from './documentExplanationService';
 
 export type MemoryQueryIntent =
   | 'freistellung_location'
+  | 'freistellung_explanation'
+  | 'document_explanation'
+  | 'action_required'
   | 'paper_filing'
+  | 'original_location'
+  | 'physical_filed_status'
+  | 'which_register'
+  | 'which_folder'
   | 'expiry'
   | 'bg_bau_content'
   | 'missing_proofs'
@@ -48,10 +64,31 @@ function normalizeQuestion(question: string): string {
 export function detectMemoryQueryIntent(question: string): MemoryQueryIntent | null {
   const q = normalizeQuestion(question);
 
+  if (/was ist mit.*freistellung|freistellung.*(status|bedeutet|gültig|gueltig)/.test(q)) {
+    return 'freistellung_explanation';
+  }
+  if (/was bedeutet.*(brief|schreiben|dokument)|bedeutet der brief/.test(q)) {
+    return 'document_explanation';
+  }
+  if (/was muss ich tun|muss ich etwas tun|was soll ich tun/.test(q)) {
+    return 'action_required';
+  }
   if (/wo liegt.*freistellung|freistellung.*(liegt|ablage|speicher|archiv)/.test(q)) {
     return 'freistellung_location';
   }
-  if (/wo muss ich.*(abheften|ablegen)|original abheften|papierordner/.test(q)) {
+  if (/wo liegt.*original|original.*(liegt|ablage|ordner|speicher)/.test(q)) {
+    return 'original_location';
+  }
+  if (/habe ich.*(abgeheftet|abheft)|original abgeheftet|schon abgeheftet/.test(q)) {
+    return 'physical_filed_status';
+  }
+  if (/in welches register|welches register/.test(q)) {
+    return 'which_register';
+  }
+  if (/in welchen ordner|welchen ordner|wo muss ich.*(abheften|ablegen)/.test(q)) {
+    return 'which_folder';
+  }
+  if (/original abheften|papierordner/.test(q)) {
     return 'paper_filing';
   }
   if (/wann läuft|ablauf|gültig bis|gueltig bis/.test(q) && /dokument|nachweis|freistellung|bescheinigung/.test(q)) {
@@ -107,17 +144,66 @@ function findFinanzamtMemories() {
   );
 }
 
-function memoryPaperLocation(memory: ReturnType<typeof getAllDocumentMemories>[number]): string {
+function findMemoryForQuestion(question: string): DocumentMemory | null {
+  const q = normalizeQuestion(question);
+  const memories = getAllDocumentMemories();
+  if (memories.length === 0) return null;
+
+  if (/freistellung/.test(q)) {
+    return findFreistellungMemories()[0] ?? null;
+  }
+  if (/bg[\s-]?bau|unbedenklichkeit/.test(q)) {
+    return findBgBauMemories()[0] ?? null;
+  }
+  if (/finanzamt/.test(q)) {
+    return findFinanzamtMemories()[0] ?? null;
+  }
+
+  const byTitle = memories.find((item) => q.includes(item.title.toLowerCase().slice(0, 12)));
+  return byTitle ?? memories[0]!;
+}
+
+function memoryPaperLocation(memory: DocumentMemory): string {
   if (!memory.paperFolder?.folderId && !memory.paperFolder?.label) {
     return 'Kein Papierordner hinterlegt – bitte Ablage prüfen.';
   }
   return formatPaperFilingInstruction(memory.paperFolder);
 }
 
-function memoryDigitalLocation(memory: ReturnType<typeof getAllDocumentMemories>[number]): string {
+function memoryRegister(memory: DocumentMemory): string {
+  const entry = getPaperRegisterEntryForDocument(memory.documentId);
+  if (entry?.register) return entry.register;
+  if (memory.paperFolder?.register) return memory.paperFolder.register;
+  return 'Kein Register hinterlegt.';
+}
+
+function memoryDigitalLocation(memory: DocumentMemory): string {
   const name = memory.digitalFolder?.name?.trim();
   if (!memory.digitalFolder?.path) return 'Kein digitaler Speicherort hinterlegt.';
   return name ? `${name} (${memory.digitalFolder.path})` : memory.digitalFolder.path;
+}
+
+function memoryPhysicalStatus(memory: DocumentMemory): string {
+  const entry = getPaperRegisterEntryForDocument(memory.documentId);
+  const physicalFiled = memory.physicalFiled ?? entry?.physicalFiled ?? false;
+  const filedAt = memory.filedAt ?? entry?.filedAt;
+  const label = getPhysicalFilingStatusLabel(physicalFiled, filedAt);
+  if (label.statusKey === 'document.filing.statusFiled' && label.filedAtLabel) {
+    return `Original abgeheftet am ${label.filedAtLabel}`;
+  }
+  return physicalFiled ? 'Original abgeheftet' : 'Original noch abheften';
+}
+
+function memoryNextFilingStep(memory: DocumentMemory): string {
+  const entry = getPaperRegisterEntryForDocument(memory.documentId);
+  const physicalFiled = memory.physicalFiled ?? entry?.physicalFiled ?? false;
+  if (physicalFiled) {
+    return 'Kein weiterer Schritt – Original ist abgeheftet.';
+  }
+  if (!memory.paperFolder?.folderId) {
+    return 'Papierablage prüfen oder Original entsorgen.';
+  }
+  return 'Original im Papierordner abheften und in OfficePilot bestätigen.';
 }
 
 function answerFreistellungLocation(): MemoryQueryAnswer | null {
@@ -128,9 +214,10 @@ function answerFreistellungLocation(): MemoryQueryAnswer | null {
   const doc = getAllDocuments().find((item) => item.id === memory.documentId);
   const digital = doc ? formatDigitalLocation(doc) : memoryDigitalLocation(memory);
   const paper = doc ? formatPaperLocation(doc) : memoryPaperLocation(memory);
+  const register = memoryRegister(memory);
   const status = memory.validUntil
-    ? `Gültig bis ${memory.validUntil.slice(0, 10)}`
-    : 'Gültigkeit unbekannt';
+    ? `Gültig bis ${memory.validUntil.slice(0, 10)} · ${memoryPhysicalStatus(memory)}`
+    : memoryPhysicalStatus(memory);
 
   return {
     shortAnswer:
@@ -140,33 +227,108 @@ function answerFreistellungLocation(): MemoryQueryAnswer | null {
     source: `Firmen-Gedächtnis: ${memory.title}`,
     digitalLocation: digital,
     paperLocation: paper,
+    register,
     status,
-    nextStep: memory.nextAction ?? memory.summary?.nextAction ?? 'Gültigkeit regelmäßig prüfen.',
+    nextStep: memory.nextAction ?? memory.summary?.nextAction ?? memoryNextFilingStep(memory),
     uncertainty: memories.length > 1 ? 'Mehrere Freistellungen gefunden – neueste zuerst genannt.' : undefined,
   };
 }
 
 function answerPaperFiling(question: string): MemoryQueryAnswer | null {
-  const q = normalizeQuestion(question);
-  const memories = getAllDocumentMemories();
-  if (memories.length === 0) return null;
-
-  let memory = memories[0]!;
-  if (/freistellung/.test(q)) {
-    memory = findFreistellungMemories()[0] ?? memory;
-  }
+  const memory = findMemoryForQuestion(question);
+  if (!memory) return null;
 
   const doc = getAllDocuments().find((item) => item.id === memory.documentId);
   const paper = doc ? formatPaperLocation(doc) : memoryPaperLocation(memory);
+  const register = memoryRegister(memory);
 
   return {
     shortAnswer: paper,
     source: `Firmen-Gedächtnis: ${memory.title}`,
     digitalLocation: doc ? formatDigitalLocation(doc) : memoryDigitalLocation(memory),
     paperLocation: paper,
-    status: memory.memoryStatus === 'understood' ? 'Verstanden und abgelegt' : 'Teilweise verstanden',
-    nextStep: 'Original im Papierordner abheften und digitalen Pfad beibehalten.',
+    register,
+    status: memoryPhysicalStatus(memory),
+    nextStep: memoryNextFilingStep(memory),
     uncertainty: !doc?.paperFolder?.folderId ? 'Papierordner nicht vollständig hinterlegt.' : undefined,
+  };
+}
+
+function answerOriginalLocation(question: string): MemoryQueryAnswer | null {
+  const memory = findMemoryForQuestion(question);
+  if (!memory) return null;
+
+  const doc = getAllDocuments().find((item) => item.id === memory.documentId);
+  const paper = doc ? formatPaperLocation(doc) : memoryPaperLocation(memory);
+  const register = memoryRegister(memory);
+  const physical = memoryPhysicalStatus(memory);
+
+  return {
+    shortAnswer: `Das Original gehört in ${formatPaperLocationSummary(memory.paperFolder)}.`,
+    source: `Firmen-Gedächtnis: ${memory.title}`,
+    digitalLocation: doc ? formatDigitalLocation(doc) : memoryDigitalLocation(memory),
+    paperLocation: paper,
+    register,
+    status: physical,
+    nextStep: memoryNextFilingStep(memory),
+  };
+}
+
+function answerPhysicalFiledStatus(question: string): MemoryQueryAnswer | null {
+  const memory = findMemoryForQuestion(question);
+  if (!memory) return null;
+
+  const doc = getAllDocuments().find((item) => item.id === memory.documentId);
+  const physical = memoryPhysicalStatus(memory);
+  const filed = /abgeheftet/.test(physical) && !/noch abheften/.test(physical);
+
+  return {
+    shortAnswer: filed
+      ? `Ja, „${memory.title}“ ist als abgeheftet markiert.`
+      : `Nein, „${memory.title}“ ist noch nicht als abgeheftet markiert.`,
+    source: `Firmen-Gedächtnis: ${memory.title}`,
+    digitalLocation: doc ? formatDigitalLocation(doc) : memoryDigitalLocation(memory),
+    paperLocation: doc ? formatPaperLocation(doc) : memoryPaperLocation(memory),
+    register: memoryRegister(memory),
+    status: physical,
+    nextStep: memoryNextFilingStep(memory),
+  };
+}
+
+function answerWhichRegister(question: string): MemoryQueryAnswer | null {
+  const memory = findMemoryForQuestion(question);
+  if (!memory) return null;
+
+  const register = memoryRegister(memory);
+  const doc = getAllDocuments().find((item) => item.id === memory.documentId);
+
+  return {
+    shortAnswer: `Register: ${register}`,
+    source: `Firmen-Gedächtnis: ${memory.title}`,
+    digitalLocation: doc ? formatDigitalLocation(doc) : memoryDigitalLocation(memory),
+    paperLocation: doc ? formatPaperLocation(doc) : memoryPaperLocation(memory),
+    register,
+    status: memoryPhysicalStatus(memory),
+    nextStep: memoryNextFilingStep(memory),
+  };
+}
+
+function answerWhichFolder(question: string): MemoryQueryAnswer | null {
+  const memory = findMemoryForQuestion(question);
+  if (!memory) return null;
+
+  const doc = getAllDocuments().find((item) => item.id === memory.documentId);
+  const paper = doc ? formatPaperLocation(doc) : memoryPaperLocation(memory);
+  const folderName = memory.paperFolder?.label ?? 'Unbekannt';
+
+  return {
+    shortAnswer: `Ordner: ${folderName}`,
+    source: `Firmen-Gedächtnis: ${memory.title}`,
+    digitalLocation: doc ? formatDigitalLocation(doc) : memoryDigitalLocation(memory),
+    paperLocation: paper,
+    register: memoryRegister(memory),
+    status: memoryPhysicalStatus(memory),
+    nextStep: memoryNextFilingStep(memory),
   };
 }
 
@@ -190,6 +352,7 @@ function answerExpiry(todayIso: string): MemoryQueryAnswer | null {
     source: memory ? `Firmen-Gedächtnis: ${memory.title}` : `Nachweis: ${label}`,
     digitalLocation: memory ? memoryDigitalLocation(memory) : 'Kein digitaler Speicherort hinterlegt.',
     paperLocation: memory ? memoryPaperLocation(memory) : 'Kein Papierordner hinterlegt.',
+    register: memory ? memoryRegister(memory) : '—',
     status:
       status === 'expired'
         ? 'Abgelaufen'
@@ -200,25 +363,44 @@ function answerExpiry(todayIso: string): MemoryQueryAnswer | null {
   };
 }
 
-function answerBgBauContent(): MemoryQueryAnswer | null {
-  const memories = findBgBauMemories();
-  if (memories.length === 0) return null;
+function answerFromExplanation(question: string): MemoryQueryAnswer | null {
+  const explanation = findDocumentForExplanationQuestion(question);
+  if (!explanation) return null;
+  return documentExplanationToMemoryQueryAnswer(explanation);
+}
 
-  const memory = memories[0]!;
-  const summary = memory.summary;
-  const topic = summary?.topic ?? memory.topic ?? 'BG BAU Schreiben';
-  const action = summary?.nextAction ?? memory.nextAction ?? 'Nachweis prüfen und archivieren.';
+function answerDocumentExplanation(question: string): MemoryQueryAnswer | null {
+  return answerFromExplanation(question);
+}
 
+function answerActionRequired(question: string): MemoryQueryAnswer | null {
+  const explanation = findDocumentForExplanationQuestion(question);
+  if (!explanation) return null;
+  const answer = documentExplanationToMemoryQueryAnswer(explanation);
   return {
-    shortAnswer: summary?.shortSummary ?? `${topic}. ${action}`,
-    source: `Firmen-Gedächtnis: ${memory.title} (${getAuthorityLabel('bg_bau')})`,
-    digitalLocation: memoryDigitalLocation(memory),
-    paperLocation: memoryPaperLocation(memory),
-    status: memory.validUntil
-      ? `Gültig bis ${memory.validUntil.slice(0, 10)}`
-      : 'Inhalt aus Archiv – Frist prüfen',
-    nextStep: action,
-    uncertainty: summary?.sourceConfidence === 'low' ? 'Inhalt nur teilweise erkannt.' : undefined,
+    ...answer,
+    shortAnswer: explanation.actionRequired,
+    nextStep: explanation.nextSteps.join(' '),
+  };
+}
+
+function answerFreistellungExplanation(): MemoryQueryAnswer | null {
+  const memory = findFreistellungMemories()[0];
+  if (!memory) return null;
+  const explanation = buildDocumentExplanation({ documentId: memory.documentId });
+  if (!explanation) return null;
+  return documentExplanationToMemoryQueryAnswer(explanation);
+}
+
+function answerBgBauContent(): MemoryQueryAnswer | null {
+  const memory = findBgBauMemories()[0];
+  if (!memory) return null;
+  const explanation = buildDocumentExplanation({ documentId: memory.documentId });
+  if (!explanation) return null;
+  return {
+    ...documentExplanationToMemoryQueryAnswer(explanation),
+    shortAnswer: explanation.shortAnswer,
+    nextStep: explanation.nextSteps[0] ?? explanation.recommendation,
   };
 }
 
@@ -232,6 +414,7 @@ function answerMissingProofs(): MemoryQueryAnswer | null {
     source: 'Firmen-Gedächtnis: Nachweisstatus',
     digitalLocation: 'Fehlende Nachweise sind noch nicht digital abgelegt.',
     paperLocation: 'Kein Papierordner – Nachweis fehlt.',
+    register: '—',
     status: 'Fehlend',
     nextStep: 'Fehlende Nachweise beschaffen und archivieren.',
   };
@@ -253,6 +436,7 @@ function answerExpiringProofs(todayIso: string): MemoryQueryAnswer | null {
     source: 'Firmen-Gedächtnis: Nachweisstatus',
     digitalLocation: 'Betroffene Nachweise im Dokumentarchiv prüfen.',
     paperLocation: 'Originalnachweise im Papierordner mitführen.',
+    register: '—',
     status: 'Läuft bald ab',
     nextStep: 'Erneuerung anstoßen: ' + labels.join('; '),
   };
@@ -270,6 +454,7 @@ function answerFinanzamtLetters(): MemoryQueryAnswer | null {
     source: 'Firmen-Gedächtnis: Finanzamt-Bezug',
     digitalLocation: memoryDigitalLocation(latest),
     paperLocation: memoryPaperLocation(latest),
+    register: memoryRegister(latest),
     status: latest.memoryStatus === 'understood' ? 'Archiviert' : 'Teilweise erfasst',
     nextStep: latest.nextAction ?? 'Schreiben prüfen und bei Frist reagieren.',
     uncertainty: memories.length > 5 ? 'Weitere Finanzamt-Schreiben vorhanden.' : undefined,
@@ -290,6 +475,7 @@ function answerReplyStatus(): MemoryQueryAnswer | null {
   const pending = statuses.find((item) => item.status === 'needs_reply');
   const answered = statuses.find((item) => item.status === 'answered');
   const target = pending ?? answered ?? statuses[0]!;
+  const memory = getAllDocumentMemories().find((item) => item.documentId === target.doc.id);
 
   return {
     shortAnswer: pending
@@ -300,6 +486,7 @@ function answerReplyStatus(): MemoryQueryAnswer | null {
     source: `Kommunikationsverlauf / Firmen-Gedächtnis: ${target.doc.title}`,
     digitalLocation: formatDigitalLocation(target.doc),
     paperLocation: formatPaperLocation(target.doc),
+    register: memory ? memoryRegister(memory) : target.doc.paperFolder?.register ?? '—',
     status: REPLY_STATUS_LABELS[target.status] ?? target.status,
     nextStep: pending ? 'Antwort vorbereiten oder als erledigt markieren.' : 'Kein weiterer Schritt nötig.',
     uncertainty: statuses.length > 1 ? 'Mehrere Dokumente mit Kommunikationsstatus vorhanden.' : undefined,
@@ -314,8 +501,22 @@ export function answerMemoryQuestion(
   switch (intent) {
     case 'freistellung_location':
       return answerFreistellungLocation();
+    case 'freistellung_explanation':
+      return answerFreistellungExplanation();
+    case 'document_explanation':
+      return answerDocumentExplanation(question);
+    case 'action_required':
+      return answerActionRequired(question);
     case 'paper_filing':
       return answerPaperFiling(question);
+    case 'original_location':
+      return answerOriginalLocation(question);
+    case 'physical_filed_status':
+      return answerPhysicalFiledStatus(question);
+    case 'which_register':
+      return answerWhichRegister(question);
+    case 'which_folder':
+      return answerWhichFolder(question);
     case 'expiry':
       return answerExpiry(todayIso);
     case 'bg_bau_content':
@@ -350,6 +551,7 @@ export function memoryQueryAnswerToAssistantAnswer(
     `Quelle: ${answer.source}`,
     `Digital: ${answer.digitalLocation}`,
     `Papier: ${answer.paperLocation}`,
+    `Register: ${answer.register}`,
     `Status: ${answer.status}`,
     `Nächster Schritt: ${answer.nextStep}`,
   ];

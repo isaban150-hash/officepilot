@@ -2,6 +2,7 @@ import type {
   ClassifiedDocumentKind,
   CompanyDocument,
   InboxItem,
+  PaperFilingRule,
   RequiredDocument,
 } from '../types/models';
 import type {
@@ -9,6 +10,7 @@ import type {
   DocumentSummary,
   MemoryRelation,
   OfficePilotMemoryState,
+  PaperRegisterEntry,
   ProofMemory,
   ProofStatus,
   ProofType,
@@ -17,15 +19,24 @@ import { PROOF_EXPIRY_WARNING_DAYS, SUPPORTED_PROOF_TYPES } from '../types/memor
 import { analyzeContractFromInbox } from './contractAnalysisService';
 import { understandArchivedDocument } from './memory/documentUnderstandingService';
 import { applyAiSummaryEnhancement } from './memory/documentSummaryService';
+import { persistAll } from './persistenceService';
+import {
+  resolvePaperFiling,
+  type PaperFilingContext,
+} from './paperFolderService';
+import { getCompanyProfile } from './companyProfileService';
 import { getTodayIso } from './taskNormalize';
 import {
   getAllDocumentMemoriesFromStore,
+  getAllPaperRegisterEntriesFromStore,
   getAllProofMemoriesFromStore,
   getMemoryStoreSnapshot,
+  getPaperRegisterEntryByDocumentId,
   hydrateMemoryStore,
   removeProofMemoriesFromStore,
   resetMemoryStore,
   upsertDocumentMemoryInStore,
+  upsertPaperRegisterEntryInStore,
   upsertProofMemoryInStore,
   upsertRelationInStore,
 } from './officePilotMemoryStore';
@@ -80,6 +91,131 @@ function cloneProofMemory(memory: ProofMemory): ProofMemory {
 
 function cloneRelation(relation: MemoryRelation): MemoryRelation {
   return { ...relation };
+}
+
+function clonePaperRegisterEntry(entry: PaperRegisterEntry): PaperRegisterEntry {
+  return { ...entry };
+}
+
+function paperRegisterEntryId(documentId: string): string {
+  return `paper-reg-${documentId}`;
+}
+
+export function resolvePaperFilingForDocument(
+  document: CompanyDocument,
+  context?: PaperFilingContext,
+): ReturnType<typeof resolvePaperFiling> {
+  return resolvePaperFiling({
+    classifiedKind: context?.classifiedKind,
+    documentType: context?.documentType,
+    issuer: document.issuer,
+    sender: document.issuer,
+    isAdvertisement: context?.isAdvertisement,
+    linkedVorgangId: document.linkedVorgang?.vorgangId ?? context?.linkedVorgangId,
+    year: context?.year,
+  });
+}
+
+export function createPaperRegisterEntryForDocument(
+  document: CompanyDocument,
+  options?: {
+    sourceInboxId?: string;
+    skipIfNoRule?: boolean;
+    classifiedKind?: ClassifiedDocumentKind;
+    isAdvertisement?: boolean;
+    paperFolder?: PaperFilingRule;
+  },
+): PaperRegisterEntry | null {
+  const resolution = options?.paperFolder?.folderId
+    ? { rule: options.paperFolder, skipPhysicalFiling: false }
+    : document.paperFolder?.folderId
+      ? { rule: document.paperFolder, skipPhysicalFiling: false }
+      : resolvePaperFilingForDocument(document, {
+          classifiedKind: options?.classifiedKind,
+          isAdvertisement: options?.isAdvertisement,
+        });
+
+  if (resolution.skipPhysicalFiling || !resolution.rule?.folderId) {
+    return options?.skipIfNoRule ? null : null;
+  }
+
+  const existing = getPaperRegisterEntryByDocumentId(document.id);
+  if (existing) {
+    if (
+      existing.folderId !== resolution.rule.folderId ||
+      existing.register !== resolution.rule.register
+    ) {
+      const now = new Date().toISOString();
+      const updated: PaperRegisterEntry = {
+        ...existing,
+        folderId: resolution.rule.folderId,
+        register: resolution.rule.register,
+        documentTitle: document.title,
+        sourceInboxId: options?.sourceInboxId ?? existing.sourceInboxId,
+        updatedAt: now,
+      };
+      upsertPaperRegisterEntryInStore(updated);
+      return clonePaperRegisterEntry(updated);
+    }
+    return clonePaperRegisterEntry(existing);
+  }
+
+  const now = new Date().toISOString();
+  const entry: PaperRegisterEntry = {
+    id: paperRegisterEntryId(document.id),
+    documentId: document.id,
+    documentTitle: document.title,
+    sourceInboxId: options?.sourceInboxId,
+    folderId: resolution.rule.folderId,
+    register: resolution.rule.register,
+    physicalFiled: false,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  upsertPaperRegisterEntryInStore(entry);
+  return clonePaperRegisterEntry(entry);
+}
+
+export function getPaperRegisterEntries(): PaperRegisterEntry[] {
+  return getAllPaperRegisterEntriesFromStore().map(clonePaperRegisterEntry);
+}
+
+export function getPaperRegisterEntryForDocument(documentId: string): PaperRegisterEntry | undefined {
+  const entry = getPaperRegisterEntryByDocumentId(documentId);
+  return entry ? clonePaperRegisterEntry(entry) : undefined;
+}
+
+export function markDocumentPhysicallyFiled(
+  documentId: string,
+  filedByUser?: string,
+): DocumentMemory | null {
+  const memory = getDocumentMemoryByDocumentId(documentId);
+  if (!memory) return null;
+
+  const now = new Date().toISOString();
+  const user = filedByUser ?? getCompanyProfile().contactPerson ?? 'Nutzer';
+
+  const entry = getPaperRegisterEntryByDocumentId(documentId);
+  if (entry) {
+    upsertPaperRegisterEntryInStore({
+      ...entry,
+      physicalFiled: true,
+      filedAt: now,
+      filedByUser: user,
+      updatedAt: now,
+    });
+  }
+
+  const updated = enrichDocumentMemory(documentId, {
+    physicalFiled: true,
+    filedAt: now,
+    filedByUser: user,
+    paperRegisterEntryId: entry?.id ?? memory.paperRegisterEntryId,
+  });
+
+  persistAll();
+  return updated;
 }
 
 export function daysUntil(isoDate: string, todayIso: string): number {
@@ -171,6 +307,10 @@ export function addDocumentMemory(
     relatedProofs: existing?.relatedProofs,
     letterExplanation: existing?.letterExplanation,
     memoryStatus: existing?.memoryStatus,
+    physicalFiled: input.physicalFiled ?? existing?.physicalFiled,
+    filedAt: input.filedAt ?? existing?.filedAt,
+    filedByUser: input.filedByUser ?? existing?.filedByUser,
+    paperRegisterEntryId: input.paperRegisterEntryId ?? existing?.paperRegisterEntryId,
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
   };
@@ -215,6 +355,10 @@ export function enrichDocumentMemory(
       | 'relatedProofs'
       | 'letterExplanation'
       | 'memoryStatus'
+      | 'physicalFiled'
+      | 'filedAt'
+      | 'filedByUser'
+      | 'paperRegisterEntryId'
     >
   >,
 ): DocumentMemory | null {
@@ -233,6 +377,10 @@ export function enrichDocumentMemory(
     summary: patch.summary ?? existing.summary,
     letterExplanation: patch.letterExplanation ?? existing.letterExplanation,
     memoryStatus: patch.memoryStatus ?? existing.memoryStatus,
+    physicalFiled: patch.physicalFiled ?? existing.physicalFiled,
+    filedAt: patch.filedAt ?? existing.filedAt,
+    filedByUser: patch.filedByUser ?? existing.filedByUser,
+    paperRegisterEntryId: patch.paperRegisterEntryId ?? existing.paperRegisterEntryId,
     updatedAt: new Date().toISOString(),
   };
 
@@ -345,6 +493,31 @@ export function recordArchivedDocumentMemory(
   const linkedVorgangId =
     document.linkedVorgang?.vorgangId ?? options?.inboxItem?.vorgangId ?? undefined;
 
+  const paperResolution = resolvePaperFiling({
+    classifiedKind,
+    documentType: options?.inboxItem?.documentType,
+    issuer: document.issuer,
+    sender: document.issuer,
+    isAdvertisement: options?.inboxItem?.isAdvertisement,
+    linkedVorgangId,
+  });
+
+  const paperFolder =
+    paperResolution.rule && !paperResolution.skipPhysicalFiling
+      ? paperResolution.rule
+      : document.paperFolder;
+
+  const registerEntry =
+    paperResolution.rule && !paperResolution.skipPhysicalFiling
+      ? createPaperRegisterEntryForDocument(document, {
+            sourceInboxId: options?.inboxItem?.id,
+            skipIfNoRule: true,
+            classifiedKind,
+            isAdvertisement: options?.inboxItem?.isAdvertisement,
+            paperFolder,
+          })
+      : null;
+
   const documentMemory = addDocumentMemory({
     documentId: document.id,
     inboxId: options?.inboxItem?.id,
@@ -352,10 +525,12 @@ export function recordArchivedDocumentMemory(
     title: document.title,
     issuer: document.issuer,
     digitalFolder: document.digitalFolder,
-    paperFolder: document.paperFolder,
+    paperFolder,
     validUntil: document.validUntil,
     linkedVorgangId,
     proofType,
+    paperRegisterEntryId: registerEntry?.id,
+    physicalFiled: false,
   });
 
   if (proofType && SUPPORTED_PROOF_TYPES.includes(proofType)) {

@@ -186,6 +186,7 @@ function cloneOfficePilotMemoryState(state: OfficePilotMemoryState): OfficePilot
       requiredByVorgangIds: [...item.requiredByVorgangIds],
     })),
     relations: (state.relations ?? []).map((item) => ({ ...item })),
+    paperRegisterEntries: (state.paperRegisterEntries ?? []).map((item) => ({ ...item })),
   };
 }
 
@@ -231,6 +232,7 @@ export function createSeedState(setupOverride?: CompanySetup): AppPersistedState
       documentMemories: [],
       proofMemories: [],
       relations: [],
+      paperRegisterEntries: [],
     },
     savedAt: new Date().toISOString(),
   };
@@ -252,7 +254,9 @@ function isValidPersistedState(value: unknown): value is AppPersistedState {
     (state.officePilotMemory === undefined ||
       (Array.isArray(state.officePilotMemory.documentMemories) &&
         Array.isArray(state.officePilotMemory.proofMemories) &&
-        Array.isArray(state.officePilotMemory.relations))) &&
+        Array.isArray(state.officePilotMemory.relations) &&
+        (state.officePilotMemory.paperRegisterEntries === undefined ||
+          Array.isArray(state.officePilotMemory.paperRegisterEntries)))) &&
     typeof state.setup === 'object' &&
     state.setup !== null
   );
@@ -290,6 +294,7 @@ export function loadPersistedState(): AppPersistedState | null {
           documentMemories: [],
           proofMemories: [],
           relations: [],
+          paperRegisterEntries: [],
         },
       ),
     };
@@ -344,6 +349,7 @@ function applyStateToStores(state: AppPersistedState): void {
       documentMemories: [],
       proofMemories: [],
       relations: [],
+      paperRegisterEntries: [],
     },
   );
 }

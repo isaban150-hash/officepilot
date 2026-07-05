@@ -1,28 +1,11 @@
 import { Card, CardMeta, CardTitle } from '../ui/Card';
 import { useApp } from '../../context/AppContext';
-import { formatPaperFilingInstruction } from '../../services/paperFolderService';
+import { buildDocumentExplanation } from '../../services/memory/documentExplanationService';
 import { getDocumentUnderstanding } from '../../services/memory/documentUnderstandingService';
-import type { MemoryRiskLevel } from '../../types/memory';
 import type { TranslationKey } from '../../i18n';
 
 interface DocumentUnderstandingCardProps {
   documentId: string;
-}
-
-function formatRiskLabel(
-  riskLevel: MemoryRiskLevel | undefined,
-  translate: (key: TranslationKey) => string,
-): string {
-  switch (riskLevel) {
-    case 'high':
-      return translate('document.understanding.risk.high');
-    case 'medium':
-      return translate('document.understanding.risk.medium');
-    case 'low':
-      return translate('document.understanding.risk.low');
-    default:
-      return translate('document.understanding.risk.unknown');
-  }
 }
 
 function formatMemoryStatus(
@@ -42,42 +25,50 @@ function formatMemoryStatus(
 export function DocumentUnderstandingCard({ documentId }: DocumentUnderstandingCardProps) {
   const { translate } = useApp();
   const memory = getDocumentUnderstanding(documentId);
+  const explanation = buildDocumentExplanation({ documentId });
 
-  if (!memory?.summary && !memory?.letterExplanation) {
+  if (!explanation && !memory?.summary && !memory?.letterExplanation) {
     return null;
   }
 
-  const summary = memory.summary;
-  const explanation = memory.letterExplanation;
-  const shortText = summary?.shortSummary ?? explanation?.shortExplanation ?? '—';
-  const deadline =
-    summary?.deadline ??
-    (explanation?.deadline !== 'Keine Frist erkannt.' ? explanation?.deadline : null);
-  const nextStep = summary?.nextAction ?? explanation?.recommendation ?? '—';
-  const digitalLocation =
-    explanation?.digitalStorage ?? `${memory.digitalFolder.name} (${memory.digitalFolder.path})`;
-  const paperLocation =
-    explanation?.paperStorage ??
-    (memory.paperFolder?.folderId || memory.paperFolder?.label
-      ? formatPaperFilingInstruction(memory.paperFolder)
-      : translate('document.understanding.paperUnknown'));
-  const riskLabel = formatRiskLabel(summary?.riskLevel ?? memory.riskLevel, translate);
-  const deadlineText = deadline ?? translate('document.understanding.noDeadline');
+  if (!explanation) {
+    return null;
+  }
+
+  const requiredDocs =
+    explanation.requiredDocuments.length === 1 &&
+    explanation.requiredDocuments[0] === 'Keine zusätzlichen Unterlagen erkannt.'
+      ? translate('document.understanding.noRequiredDocuments')
+      : explanation.requiredDocuments.join(' · ');
+
+  const deadlineText =
+    explanation.deadline === 'Keine Frist erkannt.'
+      ? translate('document.understanding.noDeadline')
+      : explanation.deadline;
 
   return (
-    <div className="detail-experience-card document-understanding-card" data-testid="document-understanding-card">
+    <div
+      className="detail-experience-card document-understanding-card"
+      data-testid="document-understanding-card"
+    >
       <Card className="detail-experience-card__inner">
         <CardTitle>{translate('document.understanding.title')}</CardTitle>
-        <CardMeta>{formatMemoryStatus(memory.memoryStatus, translate)}</CardMeta>
+        <CardMeta>{formatMemoryStatus(memory?.memoryStatus, translate)}</CardMeta>
 
         <section className="detail-experience-section">
           <h3 className="detail-experience-section__label">
             {translate('document.understanding.shortSummary')}
           </h3>
-          <p className="detail-experience-section__value">{shortText}</p>
+          <p className="detail-experience-section__value">{explanation.shortAnswer}</p>
         </section>
 
         <section className="detail-experience-section document-understanding-meta">
+          <p className="document-understanding-meta__line">
+            <span className="document-understanding-meta__label">
+              {translate('document.understanding.actionRequired')}
+            </span>
+            {explanation.actionRequired}
+          </p>
           <p className="document-understanding-meta__line">
             <span className="document-understanding-meta__label">
               {translate('document.understanding.deadline')}
@@ -86,18 +77,24 @@ export function DocumentUnderstandingCard({ documentId }: DocumentUnderstandingC
           </p>
           <p className="document-understanding-meta__line">
             <span className="document-understanding-meta__label">
+              {translate('document.understanding.requiredDocuments')}
+            </span>
+            {requiredDocs}
+          </p>
+          <p className="document-understanding-meta__line">
+            <span className="document-understanding-meta__label">
               {translate('document.understanding.risk')}
             </span>
-            {riskLabel}
+            {explanation.risk}
           </p>
         </section>
 
         <section className="detail-experience-section">
           <h3 className="detail-experience-section__label">
-            {translate('document.understanding.nextStep')}
+            {translate('document.understanding.recommendation')}
           </h3>
           <p className="detail-experience-section__value detail-experience-section__value--assistant">
-            {nextStep}
+            {explanation.recommendation}
           </p>
         </section>
 
@@ -106,10 +103,32 @@ export function DocumentUnderstandingCard({ documentId }: DocumentUnderstandingC
             {translate('document.understanding.filing')}
           </h3>
           <p className="detail-experience-section__value document-understanding-filing__digital">
-            {digitalLocation}
+            {explanation.digitalLocation}
           </p>
-          <p className="detail-experience-section__value">{paperLocation}</p>
+          <p className="detail-experience-section__value">
+            {explanation.paperLocation}
+            {explanation.register !== '—' ? ` · Register ${explanation.register}` : ''}
+          </p>
+          <p className="detail-experience-section__value">{explanation.originalFiledStatus}</p>
         </section>
+
+        {explanation.nextSteps.length > 0 && (
+          <section className="detail-experience-section">
+            <h3 className="detail-experience-section__label">
+              {translate('document.understanding.nextSteps')}
+            </h3>
+            <ul className="document-understanding-steps">
+              {explanation.nextSteps.map((step) => (
+                <li key={step}>{step}</li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {explanation.uncertaintyNote && (
+          <p className="document-understanding-disclaimer">{explanation.uncertaintyNote}</p>
+        )}
+        <p className="document-understanding-disclaimer">{explanation.disclaimer}</p>
       </Card>
     </div>
   );

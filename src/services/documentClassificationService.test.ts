@@ -151,7 +151,8 @@ describe('classifyDocument', () => {
     expect(result.classifiedKind).toBe('bg_bau');
     expect(result.documentType).toBe('behoerde');
     expect(result.digitalFolder.path).toContain('BG-BAU');
-    expect(result.paperFiling.folderId).toBe('folder-5');
+    expect(result.paperFiling.folderId).toBe('paper-behoerden');
+    expect(result.paperFiling.register).toBe('BG BAU');
     expect(result.actions.map((a) => a.id)).toContain('save_bg_bau_folder');
     expect(result.actions.map((a) => a.id)).toContain('create_task');
     expect(result.detectionReasonKey).toBe('classification.detect.uploadHint');
@@ -250,7 +251,7 @@ describe('suggestDigitalFolder and suggestPaperFolder', () => {
 
   it('suggests steuer paper folder for kontoauszug', () => {
     const paper = suggestPaperFolder('kontoauszug');
-    expect(paper.folderId).toBe('folder-4');
+    expect(paper?.folderId).toBe('folder-4');
   });
 
   it('suggests employee folder for lohnabrechnung', () => {

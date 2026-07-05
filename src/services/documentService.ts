@@ -1,6 +1,7 @@
 import { MOCK_COMPANY_DOCUMENTS } from '../data/documentMockData';
 import { PAPER_FOLDERS } from '../data/mockData';
 import { persistAll } from './persistenceService';
+import { resolvePaperFilingFromInbox } from './paperFolderService';
 import {
   isContractInboxItem,
   recordArchivedDocumentMemory,
@@ -291,6 +292,11 @@ export function mapInboxItemToDocumentInput(
   item: InboxItem,
   linkedCompany: string,
 ): CompanyDocumentInput {
+  const filing = resolvePaperFilingFromInbox(item);
+  const paperFolder: PaperFilingRule = filing.skipPhysicalFiling
+    ? item.paperFiling
+    : filing.rule ?? item.paperFiling;
+
   return {
     title: item.title,
     category: mapDocumentCategory(item),
@@ -299,7 +305,7 @@ export function mapInboxItemToDocumentInput(
     issueDate: item.receivedAt || null,
     validUntil: item.deadline,
     digitalFolder: { ...item.digitalFolder },
-    paperFolder: { ...item.paperFiling },
+    paperFolder: { ...paperFolder },
     tags: buildTagsFromInbox(item),
     linkedCompany,
     linkedVorgang: linkedVorgangFromInbox(item),

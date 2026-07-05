@@ -6,6 +6,7 @@ import type {
   RecommendedAction,
   SuggestedDocumentAction,
 } from '../types/models';
+import { suggestPaperFolderId as resolvePaperFolderIdFromService } from './paperFolderService';
 
 export interface ClassificationRule {
   kind: ClassifiedDocumentKind;
@@ -358,16 +359,7 @@ export function buildDigitalFolderSpec(
 }
 
 export function suggestPaperFolderId(kind: ClassifiedDocumentKind): string {
-  if (EXPENSE_KINDS.has(kind) || kind === 'mahnung' || kind === 'zahlungserinnerung' || kind === 'lieferschein') {
-    return 'folder-1';
-  }
-  if (CUSTOMER_KINDS.has(kind)) return 'folder-2';
-  if (kind === 'kontoauszug' || kind === 'finanzamt' || kind === 'freistellungsbescheinigung' || EMPLOYEE_KINDS.has(kind)) {
-    return 'folder-4';
-  }
-  if (SITE_KINDS.has(kind)) return 'folder-2';
-  if (VEHICLE_KINDS.has(kind)) return 'folder-1';
-  return 'folder-5';
+  return resolvePaperFolderIdFromService(kind);
 }
 
 const COMMON_ACTIONS: SuggestedDocumentAction[] = [

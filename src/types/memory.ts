@@ -70,9 +70,46 @@ export interface MemoryQueryAnswer {
   source: string;
   digitalLocation: string;
   paperLocation: string;
+  register: string;
   status: string;
   nextStep: string;
   uncertainty?: string;
+}
+
+/** Einheitliche Dokument-Erklärung aus Firmen-Gedächtnis (AI-01, regelbasiert). */
+export interface DocumentExplanation {
+  shortAnswer: string;
+  whatIsIt: string;
+  whyImportant: string;
+  actionRequired: string;
+  deadline: string;
+  requiredDocuments: string[];
+  risk: string;
+  recommendation: string;
+  digitalLocation: string;
+  paperLocation: string;
+  register: string;
+  originalFiledStatus: string;
+  communicationStatus?: string;
+  nextSteps: string[];
+  uncertaintyNote?: string;
+  disclaimer: string;
+  sourceDocumentId?: string;
+  sourceTitle?: string;
+}
+
+export interface PaperRegisterEntry {
+  id: string;
+  documentId: string;
+  documentTitle: string;
+  sourceInboxId?: string;
+  folderId: string;
+  register: string;
+  physicalFiled: boolean;
+  filedAt?: string;
+  filedByUser?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface DocumentMemory {
@@ -97,6 +134,10 @@ export interface DocumentMemory {
   relatedProofs?: ProofType[];
   letterExplanation?: PremiumLetterExplanation;
   memoryStatus?: 'understood' | 'partial' | 'pending';
+  physicalFiled?: boolean;
+  filedAt?: string;
+  filedByUser?: string;
+  paperRegisterEntryId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -130,6 +171,7 @@ export interface OfficePilotMemoryState {
   documentMemories: DocumentMemory[];
   proofMemories: ProofMemory[];
   relations: MemoryRelation[];
+  paperRegisterEntries: PaperRegisterEntry[];
 }
 
 export const PROOF_EXPIRY_WARNING_DAYS = 30;

@@ -12,9 +12,9 @@ import {
   getActionsForKind,
   isKnownClassifiedKind,
   mapKindToDocumentType,
-  suggestPaperFolderId,
   suggestProcessType,
 } from './documentClassificationCatalog';
+import { resolvePaperFiling, suggestPaperFolder } from './paperFolderService';
 import { getInboxExtractedDocumentText } from './inboxDocumentText';
 import type {
   ClassifiedDocumentKind,
@@ -116,11 +116,13 @@ export function suggestDigitalFolder(
   };
 }
 
-export function suggestPaperFolder(kind: ClassifiedDocumentKind): PaperFilingRule {
-  const folderId = suggestPaperFolderId(kind);
-  const register =
-    folderId === 'folder-4' ? 'Monat 01' : folderId === 'folder-2' ? 'B' : 'A';
-  return paperFolder(folderId, register);
+export { suggestPaperFolder } from './paperFolderService';
+
+export function suggestPaperFolderForKind(
+  kind: ClassifiedDocumentKind,
+  context: { issuer?: string; linkedVorgangId?: string } = {},
+): PaperFilingRule | null {
+  return suggestPaperFolder(kind, context);
 }
 
 function buildRecognizedData(
@@ -337,7 +339,15 @@ export function classifyDocument(input: DocumentClassificationInput): DocumentCl
     vorgangTitle: recognizedData.Vorgang ?? suggestedVorgangRaw?.vorgangTitle,
     sender,
   });
-  const paperFiling = suggestPaperFolder(classifiedKind);
+  const paperResolution = resolvePaperFiling({
+    classifiedKind,
+    isAdvertisement,
+    issuer: sender,
+    sender,
+  });
+  const paperFiling =
+    paperResolution.rule ??
+    ({ folderId: '', register: '—', label: 'Entsorgen' } satisfies PaperFilingRule);
   const deadline =
     recognizedData.Frist ??
     recognizedData.Fälligkeit ??
