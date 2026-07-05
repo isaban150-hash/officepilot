@@ -1289,6 +1289,13 @@ const de = {
   'document.filing.markFiledAction': 'Original abgeheftet',
   'document.filing.markedFiled': 'Original als abgeheftet markiert',
 
+  'document.lifecycle.title': 'Stand dieses Dokuments',
+  'document.lifecycle.completed': 'OfficePilot hat erledigt',
+  'document.lifecycle.open': 'Noch offen',
+  'document.lifecycle.nextStep': 'Nächster Schritt',
+
+  'heute.lifecycleTitle': 'Offene Dokumente',
+
   'vorgang.notFound': 'Auftrag nicht gefunden.',
   'vorgang.noDocuments': 'Keine Dokumente',
   'vorgang.noPhotos': 'Keine Fotos',

@@ -2,8 +2,9 @@ import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { HeuteTodayList } from '../components/heute/HeuteTodayList';
 import { Button } from '../components/ui/Button';
-import { PageHeader } from '../components/ui/Card';
+import { Card, CardTitle, PageHeader } from '../components/ui/Card';
 import { useApp } from '../context/AppContext';
+import { scanDocumentLifecyclePending } from '../services/documentLifecycleService';
 import { resolveHeuteQuickActionRoute } from '../services/officeActionService';
 import { scanPendingItems } from '../services/pendingEngineService';
 import type { TranslationKey } from '../i18n';
@@ -21,6 +22,7 @@ export function HeutePage() {
   const { translate } = useApp();
   const navigate = useNavigate();
   const [pendingItems] = useState(() => scanPendingItems().items);
+  const [lifecycleItems] = useState(() => scanDocumentLifecyclePending());
 
   const quickActions = useMemo(
     () =>
@@ -61,6 +63,15 @@ export function HeutePage() {
       </section>
 
       <HeuteTodayList items={pendingItems.slice(0, 10)} />
+
+      {lifecycleItems.length > 0 && (
+        <section className="heute-lifecycle-list" data-testid="heute-lifecycle-list">
+          <Card>
+            <CardTitle>{translate('heute.lifecycleTitle')}</CardTitle>
+            <HeuteTodayList items={lifecycleItems.slice(0, 8)} />
+          </Card>
+        </section>
+      )}
     </div>
   );
 }

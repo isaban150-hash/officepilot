@@ -15,9 +15,10 @@ import { getDocumentById } from '../../services/documentService';
 
 interface DocumentFilingCardProps {
   documentId: string;
+  onChanged?: () => void;
 }
 
-export function DocumentFilingCard({ documentId }: DocumentFilingCardProps) {
+export function DocumentFilingCard({ documentId, onChanged }: DocumentFilingCardProps) {
   const { translate, showToast } = useApp();
   const [revision, setRevision] = useState(0);
 
@@ -58,6 +59,7 @@ export function DocumentFilingCard({ documentId }: DocumentFilingCardProps) {
     const updated = markDocumentPhysicallyFiled(documentId);
     if (updated) {
       setRevision((value) => value + 1);
+      onChanged?.();
       showToast(translate('document.filing.markedFiled'));
     }
   };

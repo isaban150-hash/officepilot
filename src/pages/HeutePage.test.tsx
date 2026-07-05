@@ -7,7 +7,9 @@ import { MOCK_INBOX_ITEMS } from '../data/inboxMockData';
 import { HeutePage } from './HeutePage';
 import { hydrateInboxStore } from '../services/inboxService';
 import { hydrateVorgangStore } from '../services/vorgangService';
-import { createTestVorgang } from '../test/fixtures';
+import { hydrateDocumentStore, importInboxDocument } from '../services/documentService';
+import { resetMemory } from '../services/officePilotMemoryService';
+import { createTestVorgang, createAuftragInboxItem } from '../test/fixtures';
 import * as pendingEngineService from '../services/pendingEngineService';
 
 const FORBIDDEN_TERMS = [
@@ -66,6 +68,33 @@ describe('HeutePage', () => {
 
     expect(scanSpy).toHaveBeenCalled();
     expect(scanSpy.mock.results[0]?.value.items.length).toBeGreaterThan(0);
+  });
+
+  it('zeigt offene Dokument-Lebenszyklen', () => {
+    resetMemory();
+    hydrateDocumentStore([]);
+    importInboxDocument(
+      createAuftragInboxItem({
+        id: 'inbox-heute-ui',
+        title: 'Freistellungsbescheinigung §48b',
+        documentType: 'behoerde',
+        classifiedKind: 'freistellungsbescheinigung',
+        sender: 'Finanzamt München',
+        deadline: '2026-12-31',
+      }),
+      'Test GmbH',
+    );
+
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <AppProvider initialSetup={DEFAULT_SETUP}>
+          <HeutePage />
+        </AppProvider>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('data-testid="heute-lifecycle-list"');
+    expect(html).toContain('Original noch abheften');
   });
 
   it('zeigt keine technischen Entwicklerbegriffe', () => {

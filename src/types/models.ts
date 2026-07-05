@@ -94,7 +94,11 @@ export type PendingItemKind =
   | 'invoice_due_today'
   | 'invoice_due_soon'
   | 'invoice_partial'
-  | 'contract_missing_proof';
+  | 'contract_missing_proof'
+  | 'document_lifecycle_reply'
+  | 'document_lifecycle_filing'
+  | 'document_lifecycle_deadline'
+  | 'document_lifecycle_proof';
 
 export interface PendingItem {
   id: string;

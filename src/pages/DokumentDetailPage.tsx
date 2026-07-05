@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { DocumentUnderstandingCard } from '../components/documents/DocumentUnderstandingCard';
 import { DocumentFilingCard } from '../components/documents/DocumentFilingCard';
+import { DocumentLifecycleCard } from '../components/documents/DocumentLifecycleCard';
 import { DocumentForm } from '../components/documents/DocumentForm';
 import { CommunicationIntegrationPanel } from '../components/communication/CommunicationIntegrationPanel';
 import { DOCUMENT_COMMUNICATION_BUTTON_KEYS } from '../components/communication/communicationNavigation';
@@ -36,6 +37,7 @@ export function DokumentDetailPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
+  const [detailRevision, setDetailRevision] = useState(0);
 
   useEffect(() => {
     if (id) {
@@ -230,7 +232,12 @@ export function DokumentDetailPage() {
 
       <DocumentUnderstandingCard documentId={document.id} />
 
-      <DocumentFilingCard documentId={document.id} />
+      <DocumentFilingCard
+        documentId={document.id}
+        onChanged={() => setDetailRevision((value) => value + 1)}
+      />
+
+      <DocumentLifecycleCard documentId={document.id} revision={detailRevision} />
 
       <ShowMoreSection
         expanded={showDetails}
