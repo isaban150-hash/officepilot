@@ -14,12 +14,14 @@ import { EingangDetailPage } from './pages/EingangDetailPage';
 import { EingangPage } from './pages/EingangPage';
 import { FirmendatenPage } from './pages/FirmendatenPage';
 import { HeutePage } from './pages/HeutePage';
+import { MailImportPage } from './pages/MailImportPage';
 import { MehrPage } from './pages/MehrPage';
 import { PapierarchivPage } from './pages/PapierarchivPage';
 import { KommunikationPage } from './pages/KommunikationPage';
 import { InvoiceDetailPage } from './pages/InvoiceDetailPage';
 import { OffeneRechnungenPage } from './pages/OffeneRechnungenPage';
 import { RechnungPage } from './pages/RechnungPage';
+import { SearchPage } from './pages/SearchPage';
 import { ScanPage } from './pages/ScanPage';
 import { SetupPage } from './pages/SetupPage';
 import { WissenPage } from './pages/WissenPage';
@@ -49,7 +51,9 @@ function AppRoutes() {
         <Route path="/" element={<HeutePage />} />
         <Route path="/start" element={<Navigate to="/" replace />} />
         <Route path="/scan" element={<ScanPage />} />
+        <Route path="/suche" element={<SearchPage />} />
         <Route path="/mehr" element={<MehrPage />} />
+        <Route path="/mail-import" element={<MailImportPage />} />
         <Route path="/ablage" element={<EingangPage />} />
         <Route path="/ablage/:id" element={<EingangDetailPage />} />
         <Route path="/eingang" element={<Navigate to="/ablage" replace />} />

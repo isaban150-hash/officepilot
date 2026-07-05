@@ -1,4 +1,5 @@
 import type { ClassifiedDocumentKind, DigitalFolder, PaperFilingRule, TaxStatus } from './models';
+import type { SyncMeta } from './sync';
 
 export type ExpenseCategory =
   | 'material'
@@ -97,6 +98,7 @@ export interface Expense {
   updatedAt: string;
   cancelledAt?: string;
   cancelReason?: string;
+  sync?: SyncMeta;
 }
 
 export interface ExpenseInput {

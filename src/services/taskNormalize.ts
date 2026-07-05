@@ -61,6 +61,7 @@ export function normalizeTask(raw: Partial<Task> & Pick<Task, 'id' | 'title'>): 
     vorgangId: linkedVorgangId,
     vorgangTitle: linkedVorgangTitle,
     done: isTaskDone({ status }),
+    sync: raw.sync,
   };
 }
 

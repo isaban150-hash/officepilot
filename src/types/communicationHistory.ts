@@ -3,6 +3,7 @@ import type {
   CommunicationContextRef,
   CommunicationIntent,
 } from './communication';
+import type { SyncMeta } from './sync';
 
 export type CommunicationEventType =
   | 'document_question'
@@ -34,6 +35,7 @@ export interface CommunicationEvent {
   userInputExcerpt?: string;
   resultExcerpt?: string;
   disclaimerShown: boolean;
+  sync?: SyncMeta;
 }
 
 export type CommunicationEventInput = Omit<CommunicationEvent, 'id' | 'timestamp'>;

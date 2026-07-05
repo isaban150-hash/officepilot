@@ -3,6 +3,7 @@ import type {
   DigitalFolder,
   PaperFilingRule,
 } from './models';
+import type { SyncMeta } from './sync';
 
 /** Nachweis-Typen für CORE-01B (Handwerks-Nachweise) */
 export type ProofType =
@@ -110,7 +111,10 @@ export interface PaperRegisterEntry {
   filedByUser?: string;
   createdAt: string;
   updatedAt: string;
+  sync?: SyncMeta;
 }
+
+export type DocumentMemorySource = 'scan' | 'upload' | 'email';
 
 export interface DocumentMemory {
   id: string;
@@ -138,8 +142,13 @@ export interface DocumentMemory {
   filedAt?: string;
   filedByUser?: string;
   paperRegisterEntryId?: string;
+  source?: DocumentMemorySource;
+  mailFrom?: string;
+  mailSubject?: string;
+  mailImportId?: string;
   createdAt: string;
   updatedAt: string;
+  sync?: SyncMeta;
 }
 
 export interface ProofMemory {
@@ -154,6 +163,7 @@ export interface ProofMemory {
   sourceInboxId?: string;
   lastCheckedAt: string;
   updatedAt: string;
+  sync?: SyncMeta;
 }
 
 export interface MemoryRelation {
@@ -165,6 +175,7 @@ export interface MemoryRelation {
   sourceInboxId?: string;
   reason?: string;
   createdAt: string;
+  sync?: SyncMeta;
 }
 
 export interface OfficePilotMemoryState {

@@ -103,5 +103,6 @@ export function normalizeExpense(raw: Partial<Expense> & Pick<Expense, 'id'>): E
     updatedAt: raw.updatedAt ?? createdAt,
     cancelledAt: raw.cancelledAt,
     cancelReason: raw.cancelReason,
+    sync: raw.sync,
   };
 }

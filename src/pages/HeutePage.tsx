@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { HeuteTodayList } from '../components/heute/HeuteTodayList';
+import { GlobalSearchBar } from '../components/search/GlobalSearchBar';
 import { Button } from '../components/ui/Button';
 import { Card, CardTitle, PageHeader } from '../components/ui/Card';
 import { useApp } from '../context/AppContext';
@@ -39,6 +40,10 @@ export function HeutePage() {
         title={translate('heute.title')}
         subtitle={translate('heute.subtitle')}
       />
+
+      <section className="heute-search" data-testid="heute-search">
+        <GlobalSearchBar compact />
+      </section>
 
       <section className="heute-hero" aria-label={translate('heute.scanButton')}>
         <Button

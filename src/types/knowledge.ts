@@ -10,6 +10,8 @@ export type KnowledgeCategory =
 
 export type KnowledgeSourceType = 'user' | 'note' | 'communication_event';
 
+import type { SyncMeta } from './sync';
+
 export interface KnowledgeFact {
   id: string;
   scope: KnowledgeScope;
@@ -25,6 +27,7 @@ export interface KnowledgeFact {
   createdAt: string;
   updatedAt?: string;
   active: boolean;
+  sync?: SyncMeta;
 }
 
 export interface KnowledgeFactInput {

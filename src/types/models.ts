@@ -1,5 +1,7 @@
 /** OfficePilot V1 – zentrales Datenmodell (Foundation MVP) */
 
+import type { SyncClientConfig, SyncMeta, SyncOutboxEntry } from './sync';
+
 export type AppLanguage = 'de' | 'tr' | 'bg' | 'ro' | 'ru';
 
 export type TaxStatus =
@@ -212,6 +214,10 @@ export interface InboxItem {
   classifiedKind?: ClassifiedDocumentKind;
   /** Manuelle Freigabe für Analyse trotz fehlendem automatischem Firmenbezug */
   markedAsCompanyDocument?: boolean;
+  /** Herkunft aus E-Mail-Import (MAIL-01) */
+  mailImportId?: string;
+  importSource?: 'scan' | 'upload' | 'email';
+  sync?: SyncMeta;
 }
 
 /** Änderungen aus dem Edit-Modus der Eingang-Detailansicht */
@@ -872,6 +878,7 @@ export interface Vorgang {
   photos: VorgangPhoto[];
   invoices: VorgangInvoice[];
   createdFromInboxId?: string;
+  sync?: SyncMeta;
 }
 
 export interface Task {
@@ -902,6 +909,7 @@ export interface Task {
   vorgangTitle?: string;
   /** Legacy – abgeleitet aus status */
   done?: boolean;
+  sync?: SyncMeta;
 }
 
 export interface InvoiceDraftPosition {
@@ -1068,6 +1076,7 @@ export interface CompanyDocument {
   createdAt: string;
   imagePreview?: string;
   linkedInvoiceId?: string | null;
+  sync?: SyncMeta;
 }
 
 export interface CompanyDocumentInput {
@@ -1095,6 +1104,8 @@ import type { OfficePilotMemoryState } from './memory';
 
 export interface AppPersistedState {
   version: number;
+  syncClient?: SyncClientConfig;
+  syncOutbox?: SyncOutboxEntry[];
   setup: CompanySetup;
   companyProfile?: CompanyProfile;
   invoiceNumberSequence?: InvoiceNumberSequence;
@@ -1107,6 +1118,7 @@ export interface AppPersistedState {
   communicationHistory?: CommunicationEvent[];
   knowledgeFacts?: KnowledgeFact[];
   officePilotMemory?: OfficePilotMemoryState;
+  mailImports?: import('./mailImport').MailImport[];
   savedAt: string;
 }
 

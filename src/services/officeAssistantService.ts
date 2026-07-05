@@ -27,6 +27,7 @@ import {
   EXPLANATION_NO_DATA_MESSAGE,
   findDocumentForExplanationQuestion,
 } from './memory/documentExplanationService';
+import { trySearchAssistantAnswer } from './officeSearchService';
 import { getAllVorgaenge } from './vorgangService';
 import type { AssistantAction, AssistantAnswer, CompanyDocument, Task, Vorgang } from '../types/models';
 
@@ -244,6 +245,11 @@ export function answerQuestion(question: string, today?: Date | string): Assista
   const memoryAnswer = tryMemoryQueryAnswer(question, todayIso);
   if (memoryAnswer) {
     return memoryQueryAnswerToAssistantAnswer(memoryAnswer);
+  }
+
+  const searchAnswer = trySearchAssistantAnswer(question, todayIso);
+  if (searchAnswer) {
+    return searchAnswer;
   }
 
   if (/was bedeutet|was muss ich tun|was wollte|was ist mit.*freistellung|fehlen nachweise/i.test(question)) {

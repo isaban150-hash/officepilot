@@ -15,6 +15,7 @@ import {
   mapTaskTypeToCategory,
   normalizeTask,
 } from './taskNormalize';
+import { generateEntityId, withNewEntitySync } from './sync/syncMetaService';
 import type {
   ClassifiedDocumentKind,
   CompanyProfile,
@@ -223,9 +224,10 @@ export function proposeTasksFromOverdueInvoices(today?: Date | string): TaskProp
 function proposalToTask(proposal: TaskProposal): Task {
   const dedupeKey = buildDedupeKey(proposal);
   const now = new Date().toISOString();
-  return normalizeTask({
-    id: `t-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-    title: proposal.title,
+  return withNewEntitySync(
+    normalizeTask({
+      id: generateEntityId('t'),
+      title: proposal.title,
     description: proposal.description,
     status: 'open',
     priority: proposal.priority,
@@ -243,7 +245,9 @@ function proposalToTask(proposal: TaskProposal): Task {
     autoCreated: proposal.autoCreated ?? false,
     createdAt: now,
     type: proposal.type ?? 'dokument_pruefen',
-  });
+    }),
+    'task',
+  );
 }
 
 export function createTaskFromProposal(proposal: TaskProposal): Task {

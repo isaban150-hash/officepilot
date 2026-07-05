@@ -9,11 +9,15 @@ import {
   loadPersistedState,
   savePersistedState,
 } from './persistenceService';
+import { createSyncClient } from './sync/syncClientService';
 import type { AppPersistedState } from '../types/models';
 
 function minimalState(overrides: Partial<AppPersistedState> = {}): AppPersistedState {
+  const client = createSyncClient();
   return {
     version: STORAGE_VERSION,
+    syncClient: client,
+    syncOutbox: [],
     setup: { ...DEFAULT_SETUP, companyName: 'Test GmbH' },
     companyProfile: createCompanyProfileFromSetup({ ...DEFAULT_SETUP, companyName: 'Test GmbH' }),
     invoiceNumberSequence: { year: 2026, lastIssuedNumber: 0 },
@@ -36,6 +40,7 @@ describe('savePersistedState + loadPersistedState', () => {
     expect(loaded).not.toBeNull();
     expect(loaded!.setup.companyName).toBe('Test GmbH');
     expect(loaded!.version).toBe(STORAGE_VERSION);
+    expect(loaded!.syncClient).toBeDefined();
     expect(loaded!.inboxItems).toEqual([]);
   });
 });
@@ -83,6 +88,8 @@ describe('createSeedState', () => {
   it('produces valid persisted shape', () => {
     const seed = createSeedState();
     expect(seed.version).toBe(STORAGE_VERSION);
+    expect(seed.syncClient).toBeDefined();
+    expect(seed.syncOutbox).toEqual([]);
     expect(seed.inboxItems.length).toBeGreaterThan(0);
     expect(seed.vorgaenge.length).toBeGreaterThan(0);
     expect(seed.documents.length).toBeGreaterThan(0);

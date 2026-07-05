@@ -18,6 +18,7 @@ import type {
   CommunicationReplyStatus,
 } from '../types/communicationHistory';
 import { COMMUNICATION_EXCERPT_MAX_LENGTH } from '../types/communicationHistory';
+import { generateEntityId, withNewEntitySync } from './sync/syncMetaService';
 
 export function createExcerpt(text: string, maxLength = COMMUNICATION_EXCERPT_MAX_LENGTH): string {
   const trimmed = text.trim().replace(/\s+/g, ' ');
@@ -38,11 +39,14 @@ export function contextRefsEqual(
 }
 
 function cloneContextRef(ref: CommunicationContextRef): CommunicationContextRef {
+  if (ref.type === 'mail') {
+    return { type: 'mail', id: ref.id };
+  }
   return { ...ref };
 }
 
 function createEventId(): string {
-  return `comm-evt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  return generateEntityId('comm-evt');
 }
 
 function isDuplicateEvent(candidate: CommunicationEventInput, existing: CommunicationEvent[]): boolean {
@@ -73,11 +77,14 @@ export function addCommunicationEvent(input: CommunicationEventInput): Communica
     return null;
   }
 
-  const event: CommunicationEvent = {
-    ...normalized,
-    id: createEventId(),
-    timestamp: new Date().toISOString(),
-  };
+  const event = withNewEntitySync(
+    {
+      ...normalized,
+      id: createEventId(),
+      timestamp: new Date().toISOString(),
+    },
+    'communication_event',
+  );
 
   prependCommunicationEventToStore(event);
   persistAll();

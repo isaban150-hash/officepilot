@@ -1,6 +1,7 @@
 import { Link, Outlet } from 'react-router-dom';
 import { BottomNav } from './BottomNav';
 import { SidebarNav } from './SidebarNav';
+import { GlobalSearchBar } from '../search/GlobalSearchBar';
 import { Toast } from '../ui/Card';
 import { useApp } from '../../context/AppContext';
 
@@ -19,6 +20,9 @@ export function AppShell() {
             {translate('companyProfile.shortLink')}
           </Link>
         </div>
+      </div>
+      <div className="app-shell__search" data-testid="app-shell-search">
+        <GlobalSearchBar compact />
       </div>
       <div className="app-shell__body">
         <SidebarNav />

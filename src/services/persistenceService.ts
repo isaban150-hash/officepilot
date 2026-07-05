@@ -6,6 +6,7 @@ import { MOCK_EXPENSES } from '../data/expenseMockData';
 import type { CommunicationEvent } from '../types/communicationHistory';
 import type { KnowledgeFact } from '../types/knowledge';
 import type { OfficePilotMemoryState } from '../types/memory';
+import type { MailImport } from '../types/mailImport';
 import type {
   AppPersistedState,
   CompanyDocument,
@@ -63,6 +64,11 @@ import {
 } from './knowledgeService';
 import { resetKnowledgeStore } from './knowledgeStore';
 import {
+  getMailImportSnapshot,
+  hydrateMailImports,
+  resetMailImports,
+} from './mailImportService';
+import {
   getOfficePilotMemorySnapshot,
   hydrateMemory,
   resetMemory,
@@ -85,10 +91,20 @@ import {
   BETA_TEST_SETUP,
   isBetaTestMode,
 } from '../config/betaTestMode';
+import {
+  applySyncMetadataToState,
+  isValidPersistedStateV1,
+  isValidPersistedStateV2,
+  migratePersistedStateV1ToV2,
+  STORAGE_VERSION,
+} from './sync/syncMigrationService';
+import { ensureSyncClientFromState, hydrateSyncClient } from './sync/syncClientService';
+import { hydrateSyncOutbox, getSyncOutboxSnapshot } from './sync/syncOutboxService';
 
+export { STORAGE_VERSION } from './sync/syncMigrationService';
+export const LEGACY_STORAGE_VERSION = 1;
 export const STORAGE_KEY = 'officepilot-state';
 export const LEGACY_SETUP_KEY = 'officepilot-setup';
-export const STORAGE_VERSION = 1;
 
 let cachedSetup: CompanySetup = { ...DEFAULT_SETUP };
 
@@ -179,6 +195,15 @@ function cloneKnowledgeFact(fact: KnowledgeFact): KnowledgeFact {
   return { ...fact };
 }
 
+function cloneMailImport(item: MailImport): MailImport {
+  return {
+    ...item,
+    attachments: item.attachments.map((attachment) => ({ ...attachment })),
+    linkedInboxIds: [...item.linkedInboxIds],
+    linkedDocumentIds: [...item.linkedDocumentIds],
+  };
+}
+
 function cloneOfficePilotMemoryState(state: OfficePilotMemoryState): OfficePilotMemoryState {
   return {
     documentMemories: (state.documentMemories ?? []).map((item) => ({
@@ -221,53 +246,62 @@ export function createSeedState(setupOverride?: CompanySetup): AppPersistedState
     year: new Date().getFullYear(),
     lastIssuedNumber: 0,
   };
-  return {
-    version: STORAGE_VERSION,
-    setup,
-    companyProfile,
-    invoiceNumberSequence,
-    inboxItems: MOCK_INBOX_ITEMS.map(cloneInboxItem),
-    vorgaenge: MOCK_VORGAENGE.map(cloneVorgang),
-    tasks: (MOCK_TASKS as Array<Partial<Task> & Pick<Task, 'id' | 'title'>>).map((t) =>
-      normalizeTask(t),
-    ),
-    documents: MOCK_COMPANY_DOCUMENTS.map(cloneCompanyDocument),
-    expenses: MOCK_EXPENSES.map(cloneExpense),
-    vorgangNotes: [],
-    communicationHistory: [],
-    knowledgeFacts: [],
-    officePilotMemory: {
-      documentMemories: [],
-      proofMemories: [],
-      relations: [],
-      paperRegisterEntries: [],
+  return applySyncMetadataToState(
+    {
+      version: STORAGE_VERSION,
+      syncClient: ensureSyncClientFromState(),
+      syncOutbox: [],
+      setup,
+      companyProfile,
+      invoiceNumberSequence,
+      inboxItems: MOCK_INBOX_ITEMS.map(cloneInboxItem),
+      vorgaenge: MOCK_VORGAENGE.map(cloneVorgang),
+      tasks: (MOCK_TASKS as Array<Partial<Task> & Pick<Task, 'id' | 'title'>>).map((t) =>
+        normalizeTask(t),
+      ),
+      documents: MOCK_COMPANY_DOCUMENTS.map(cloneCompanyDocument),
+      expenses: MOCK_EXPENSES.map(cloneExpense),
+      vorgangNotes: [],
+      communicationHistory: [],
+      knowledgeFacts: [],
+      officePilotMemory: {
+        documentMemories: [],
+        proofMemories: [],
+        relations: [],
+        paperRegisterEntries: [],
+      },
+      mailImports: [],
+      savedAt: new Date().toISOString(),
     },
-    savedAt: new Date().toISOString(),
-  };
+    ensureSyncClientFromState(),
+  );
 }
 
-function isValidPersistedState(value: unknown): value is AppPersistedState {
-  if (!value || typeof value !== 'object') return false;
-  const state = value as AppPersistedState;
-  return (
-    state.version === STORAGE_VERSION &&
-    Array.isArray(state.inboxItems) &&
-    Array.isArray(state.vorgaenge) &&
-    Array.isArray(state.tasks) &&
-    (Array.isArray(state.documents) || state.documents === undefined) &&
-    (Array.isArray(state.expenses) || state.expenses === undefined) &&
-    (Array.isArray(state.vorgangNotes) || state.vorgangNotes === undefined) &&
-    (Array.isArray(state.communicationHistory) || state.communicationHistory === undefined) &&
-    (Array.isArray(state.knowledgeFacts) || state.knowledgeFacts === undefined) &&
-    (state.officePilotMemory === undefined ||
-      (Array.isArray(state.officePilotMemory.documentMemories) &&
-        Array.isArray(state.officePilotMemory.proofMemories) &&
-        Array.isArray(state.officePilotMemory.relations) &&
-        (state.officePilotMemory.paperRegisterEntries === undefined ||
-          Array.isArray(state.officePilotMemory.paperRegisterEntries)))) &&
-    typeof state.setup === 'object' &&
-    state.setup !== null
+function finalizeLoadedState(state: AppPersistedState): AppPersistedState {
+  const client = ensureSyncClientFromState(state.syncClient);
+  const withSync = applySyncMetadataToState(
+    {
+      ...state,
+      syncClient: client,
+      syncOutbox: state.syncOutbox ?? [],
+    },
+    client,
   );
+  hydrateSyncClient(withSync.syncClient!);
+  hydrateSyncOutbox(withSync.syncOutbox ?? []);
+  return withSync;
+}
+
+function normalizeLoadedState(parsed: unknown): AppPersistedState | null {
+  if (isValidPersistedStateV2(parsed)) {
+    return finalizeLoadedState(parsed);
+  }
+  if (isValidPersistedStateV1(parsed)) {
+    const migrated = migratePersistedStateV1ToV2(parsed);
+    savePersistedState(migrated);
+    return finalizeLoadedState(migrated);
+  }
+  return null;
 }
 
 export function loadPersistedState(): AppPersistedState | null {
@@ -275,36 +309,41 @@ export function loadPersistedState(): AppPersistedState | null {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed: unknown = JSON.parse(raw);
-    if (!isValidPersistedState(parsed)) {
+    const normalized = normalizeLoadedState(parsed);
+    if (!normalized) {
       console.warn('[OfficePilot] Ungültiger gespeicherter Zustand – Seed-Daten werden verwendet.');
       return null;
     }
     return {
-      ...parsed,
-      setup: { ...DEFAULT_SETUP, ...parsed.setup },
-      companyProfile: parsed.companyProfile
-        ? cloneCompanyProfile({ ...createCompanyProfileFromSetup(parsed.setup), ...parsed.companyProfile })
-        : createCompanyProfileFromSetup({ ...DEFAULT_SETUP, ...parsed.setup }),
-      invoiceNumberSequence: parsed.invoiceNumberSequence ?? {
+      ...normalized,
+      setup: { ...DEFAULT_SETUP, ...normalized.setup },
+      companyProfile: normalized.companyProfile
+        ? cloneCompanyProfile({
+            ...createCompanyProfileFromSetup(normalized.setup),
+            ...normalized.companyProfile,
+          })
+        : createCompanyProfileFromSetup({ ...DEFAULT_SETUP, ...normalized.setup }),
+      invoiceNumberSequence: normalized.invoiceNumberSequence ?? {
         year: new Date().getFullYear(),
         lastIssuedNumber: 0,
       },
-      inboxItems: parsed.inboxItems.map(cloneInboxItem),
-      vorgaenge: parsed.vorgaenge.map(cloneVorgang),
-      tasks: parsed.tasks.map(cloneTask),
-      documents: (parsed.documents ?? MOCK_COMPANY_DOCUMENTS).map(cloneCompanyDocument),
-      expenses: (parsed.expenses ?? []).map(cloneExpense),
-      vorgangNotes: (parsed.vorgangNotes ?? []).map(cloneVorgangNote),
-      communicationHistory: (parsed.communicationHistory ?? []).map(cloneCommunicationEvent),
-      knowledgeFacts: (parsed.knowledgeFacts ?? []).map(cloneKnowledgeFact),
+      inboxItems: normalized.inboxItems.map(cloneInboxItem),
+      vorgaenge: normalized.vorgaenge.map(cloneVorgang),
+      tasks: normalized.tasks.map(cloneTask),
+      documents: (normalized.documents ?? MOCK_COMPANY_DOCUMENTS).map(cloneCompanyDocument),
+      expenses: (normalized.expenses ?? []).map(cloneExpense),
+      vorgangNotes: (normalized.vorgangNotes ?? []).map(cloneVorgangNote),
+      communicationHistory: (normalized.communicationHistory ?? []).map(cloneCommunicationEvent),
+      knowledgeFacts: (normalized.knowledgeFacts ?? []).map(cloneKnowledgeFact),
       officePilotMemory: cloneOfficePilotMemoryState(
-        parsed.officePilotMemory ?? {
+        normalized.officePilotMemory ?? {
           documentMemories: [],
           proofMemories: [],
           relations: [],
           paperRegisterEntries: [],
         },
       ),
+      mailImports: (normalized.mailImports ?? []).map(cloneMailImport),
     };
   } catch (error) {
     console.warn('[OfficePilot] localStorage konnte nicht gelesen werden:', error);
@@ -333,6 +372,9 @@ export function getCachedSetup(): CompanySetup {
 }
 
 function applyStateToStores(state: AppPersistedState): void {
+  const client = ensureSyncClientFromState(state.syncClient);
+  hydrateSyncClient(client);
+  hydrateSyncOutbox(state.syncOutbox ?? []);
   cachedSetup = { ...DEFAULT_SETUP, ...state.setup };
   hydrateCompanyProfileStore(
     state.companyProfile ?? createCompanyProfileFromSetup(cachedSetup),
@@ -360,6 +402,7 @@ function applyStateToStores(state: AppPersistedState): void {
       paperRegisterEntries: [],
     },
   );
+  hydrateMailImports(state.mailImports ?? []);
 }
 
 function bootstrapBetaTestState(): CompanySetup {
@@ -407,6 +450,8 @@ export function persistAll(setupOverride?: CompanySetup): void {
 
   const state: AppPersistedState = {
     version: STORAGE_VERSION,
+    syncClient: ensureSyncClientFromState(),
+    syncOutbox: getSyncOutboxSnapshot(),
     setup: getCachedSetup(),
     companyProfile: getCompanyProfileStoreSnapshot(),
     invoiceNumberSequence: getInvoiceNumberSequenceSnapshot(),
@@ -419,6 +464,7 @@ export function persistAll(setupOverride?: CompanySetup): void {
     communicationHistory: getCommunicationHistorySnapshot(),
     knowledgeFacts: getKnowledgeSnapshot(),
     officePilotMemory: getOfficePilotMemorySnapshot(),
+    mailImports: getMailImportSnapshot().map(cloneMailImport),
     savedAt: new Date().toISOString(),
   };
 
@@ -436,6 +482,7 @@ export function resetDemoData(options?: { keepSetup?: boolean }): CompanySetup {
   resetExpenses();
   resetVorgangNotes();
   resetCommunicationHistoryStore();
+  resetMailImports();
   resetKnowledgeStore();
   resetMemory();
   resetCompanyProfile(setup.companyName);

@@ -3,7 +3,14 @@ import { getDocumentById } from './documentService';
 import { getInboxItemById } from './inboxService';
 import { getVorgangById } from './vorgangService';
 import {
-  deleteKnowledgeFromStore,
+  filterSyncActive,
+  generateEntityId,
+  isEntitySyncActive,
+  withNewEntitySync,
+  withTombstonedEntity,
+  withUpdatedEntitySync,
+} from './sync/syncMetaService';
+import {
   getAllKnowledgeFromStore,
   getKnowledgeStoreSnapshot,
   hydrateKnowledgeStore,
@@ -36,6 +43,7 @@ function isDuplicateActiveFact(
   return getAllKnowledgeFromStore().some(
     (fact) =>
       fact.id !== excludeId &&
+      isEntitySyncActive(fact) &&
       fact.active &&
       fact.scope === candidate.scope &&
       (fact.scopeId ?? '') === (candidate.scopeId ?? '') &&
@@ -66,21 +74,24 @@ export function addKnowledgeFact(input: KnowledgeFactInput): KnowledgeMutationRe
   }
 
   const now = new Date().toISOString();
-  const fact: KnowledgeFact = {
-    id: `knowledge-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    scope: input.scope,
-    scopeId,
-    scopeLabel: input.scopeLabel?.trim() || undefined,
-    category: input.category,
-    key,
-    value,
-    displayText,
-    sourceType: input.sourceType ?? 'user',
-    sourceId: input.sourceId,
-    confirmedAt: now,
-    createdAt: now,
-    active,
-  };
+  const fact = withNewEntitySync(
+    {
+      id: generateEntityId('knowledge'),
+      scope: input.scope,
+      scopeId,
+      scopeLabel: input.scopeLabel?.trim() || undefined,
+      category: input.category,
+      key,
+      value,
+      displayText,
+      sourceType: input.sourceType ?? 'user',
+      sourceId: input.sourceId,
+      confirmedAt: now,
+      createdAt: now,
+      active,
+    },
+    'knowledge_fact',
+  );
 
   prependKnowledgeToStore(fact);
   persistAll();
@@ -91,7 +102,7 @@ export function updateKnowledgeFact(
   id: string,
   changes: Partial<KnowledgeFactInput>,
 ): KnowledgeMutationResult {
-  const current = getAllKnowledgeFromStore().find((fact) => fact.id === id);
+  const current = getAllKnowledgeFromStore().find((fact) => fact.id === id && isEntitySyncActive(fact));
   if (!current) return { success: false, errorKey: 'knowledge.notFound' };
 
   const nextScope = changes.scope ?? current.scope;
@@ -115,18 +126,21 @@ export function updateKnowledgeFact(
     return { success: false, errorKey: 'knowledge.duplicate' };
   }
 
-  const updated: KnowledgeFact = {
-    ...current,
-    scope: nextScope,
-    scopeId: nextScopeId,
-    scopeLabel: changes.scopeLabel !== undefined ? changes.scopeLabel.trim() || undefined : current.scopeLabel,
-    category: changes.category ?? current.category,
-    key: nextKey,
-    value: nextValue,
-    displayText: nextDisplayText,
-    active: nextActive,
-    updatedAt: new Date().toISOString(),
-  };
+  const updated = withUpdatedEntitySync(
+    {
+      ...current,
+      scope: nextScope,
+      scopeId: nextScopeId,
+      scopeLabel: changes.scopeLabel !== undefined ? changes.scopeLabel.trim() || undefined : current.scopeLabel,
+      category: changes.category ?? current.category,
+      key: nextKey,
+      value: nextValue,
+      displayText: nextDisplayText,
+      active: nextActive,
+      updatedAt: new Date().toISOString(),
+    },
+    'knowledge_fact',
+  );
 
   const saved = replaceKnowledgeInStore(id, updated);
   if (!saved) return { success: false, errorKey: 'knowledge.notFound' };
@@ -135,14 +149,16 @@ export function updateKnowledgeFact(
 }
 
 export function deleteKnowledgeFact(id: string): KnowledgeMutationResult {
-  const removed = deleteKnowledgeFromStore(id);
-  if (!removed) return { success: false, errorKey: 'knowledge.notFound' };
+  const current = getAllKnowledgeFromStore().find((fact) => fact.id === id && isEntitySyncActive(fact));
+  if (!current) return { success: false, errorKey: 'knowledge.notFound' };
+  const tombstoned = withTombstonedEntity({ ...current, active: false }, 'knowledge_fact');
+  replaceKnowledgeInStore(id, tombstoned);
   persistAll();
-  return { success: true, fact: cloneFact(removed) };
+  return { success: true, fact: cloneFact(tombstoned) };
 }
 
 export function getKnowledgeFacts(): KnowledgeFact[] {
-  return getAllKnowledgeFromStore()
+  return filterSyncActive(getAllKnowledgeFromStore())
     .map(cloneFact)
     .sort((a, b) => b.confirmedAt.localeCompare(a.confirmedAt) || b.createdAt.localeCompare(a.createdAt));
 }

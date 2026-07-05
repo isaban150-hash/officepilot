@@ -13,6 +13,7 @@ import {
 } from './vorgangMatchingService';
 import { setInboxVorgangLink } from './inboxVorgangLinkService';
 import { persistAll } from './persistenceService';
+import { generateEntityId, withNewEntitySync, filterSyncActive, isEntitySyncActive } from './sync/syncMetaService';
 import type {
   ContractExtractedFields,
   CustomerBilling,
@@ -116,11 +117,11 @@ function normalizeVorgang(v: Vorgang): Vorgang {
 }
 
 export function getAllVorgaenge(): Vorgang[] {
-  return vorgaenge.map(cloneVorgang);
+  return filterSyncActive(vorgaenge).map(cloneVorgang);
 }
 
 export function getVorgangById(id: string): Vorgang | undefined {
-  const v = vorgaenge.find((x) => x.id === id);
+  const v = vorgaenge.find((x) => x.id === id && isEntitySyncActive(x));
   return v ? cloneVorgang(v) : undefined;
 }
 
@@ -182,29 +183,32 @@ export function createVorgangFromInbox(
   const draft: VorgangDraft = { ...baseDraft, ...optionalDraft };
   const doc = buildDocumentFromInbox(item);
 
-  const newVorgang: Vorgang = {
-    id: `v-${Date.now()}`,
-    title: draft.title,
-    customer: draft.customer,
-    baustelle: draft.baustelle,
-    status: 'neu',
-    materialSource: draft.materialSource,
-    customerBilling: {
-      name: draft.customer,
-      contactPerson: '',
-      street: '',
-      zip: '',
-      city: '',
-      email: '',
-      phone: '',
+  const newVorgang: Vorgang = withNewEntitySync(
+    {
+      id: generateEntityId('v'),
+      title: draft.title,
+      customer: draft.customer,
+      baustelle: draft.baustelle,
+      status: 'neu' as const,
+      materialSource: draft.materialSource,
+      customerBilling: {
+        name: draft.customer,
+        contactPerson: '',
+        street: '',
+        zip: '',
+        city: '',
+        email: '',
+        phone: '',
+      },
+      orderPositions: buildOrderPositionsFromInbox(item),
+      documents: [doc],
+      tasks: [],
+      photos: [],
+      invoices: [],
+      createdFromInboxId: item.id,
     },
-    orderPositions: buildOrderPositionsFromInbox(item),
-    documents: [doc],
-    tasks: [],
-    photos: [],
-    invoices: [],
-    createdFromInboxId: item.id,
-  };
+    'vorgang',
+  );
 
   vorgaenge = [newVorgang, ...vorgaenge];
   persistAll();

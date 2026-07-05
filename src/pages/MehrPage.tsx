@@ -8,6 +8,7 @@ const MEHR_LINKS: { key: TranslationKey; route: string; descriptionKey: Translat
   { key: 'mehr.invoices', route: '/rechnungen/offen', descriptionKey: 'mehr.invoicesDesc' },
   { key: 'mehr.expenses', route: '/ausgaben', descriptionKey: 'mehr.expensesDesc' },
   { key: 'mehr.communication', route: '/kommunikation', descriptionKey: 'mehr.communicationDesc' },
+  { key: 'mehr.mailImport', route: '/mail-import', descriptionKey: 'mehr.mailImportDesc' },
   { key: 'mehr.documents', route: '/dokumente', descriptionKey: 'mehr.documentsDesc' },
   { key: 'mehr.paperArchive', route: '/papierarchiv', descriptionKey: 'mehr.paperArchiveDesc' },
   { key: 'mehr.knowledge', route: '/wissen', descriptionKey: 'mehr.knowledgeDesc' },

@@ -44,6 +44,7 @@ describe('HeutePage', () => {
     );
 
     expect(html).toContain('data-testid="heute-page"');
+    expect(html).toContain('data-testid="heute-search"');
     expect(html).toContain('data-testid="heute-scan-button"');
     expect(html).toContain('Foto / Scan');
     expect(html).toContain('data-testid="heute-quick-actions"');

@@ -8,6 +8,7 @@ import { getDocumentById } from './documentService';
 import { getExpenseById } from './expenseService';
 import { calculateExpensePaymentSummary } from './expensePaymentCalculations';
 import { getInboxItemById } from './inboxService';
+import { getMailImportById } from './mailImportService';
 import { getLetterExplanation } from './letterExplanationService';
 import { calculatePaymentSummary } from './invoicePaymentService';
 import { getVorgangById, getVorgangInvoice } from './vorgangService';
@@ -280,6 +281,53 @@ export function buildCommunicationContext(
         source: 'system',
       });
     }
+  }
+
+  if (ref.type === 'mail' && ref.id) {
+    const mailImport = getMailImportById(ref.id);
+    if (!mailImport) {
+      return {
+        ref,
+        companyName: profile.companyName,
+        facts,
+        relevanceAllowed: false,
+        relevanceBlockReason: 'communication.block.mailNotFound',
+        disclaimer: COMMUNICATION_DISCLAIMER,
+      };
+    }
+
+    const linkedInboxId = mailImport.linkedInboxIds[0];
+    const linkedInbox = linkedInboxId ? getInboxItemById(linkedInboxId) : undefined;
+
+    recognizedText = [
+      mailImport.subject,
+      mailImport.from,
+      mailImport.bodyText,
+      linkedInbox ? buildRecognizedTextFromInbox(linkedInbox) : '',
+    ]
+      .filter(Boolean)
+      .join('\n');
+    recognizedData = {
+      Betreff: mailImport.subject,
+      Von: mailImport.from,
+      ...(linkedInbox?.recognizedData ?? {}),
+    };
+    classifiedKind = linkedInbox?.classifiedKind;
+    recipient = { name: mailImport.from, organization: mailImport.from };
+    subject = mailImport.subject;
+    relevanceAllowed = true;
+
+    if (linkedInbox) {
+      const explanation = getLetterExplanation(linkedInbox);
+      if (explanation) {
+        letterExplanation = letterToSummary(explanation);
+      }
+    }
+
+    facts.push(
+      { key: 'mail:from', value: mailImport.from, source: 'system' },
+      { key: 'mail:subject', value: mailImport.subject, source: 'system' },
+    );
   }
 
   if (ref.type === 'expense' && ref.id) {

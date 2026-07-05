@@ -6,7 +6,16 @@ import {
   isContractInboxItem,
   recordArchivedDocumentMemory,
   syncContractProofRequirementsFromInbox,
+  tombstoneMemoryForDocument,
 } from './officePilotMemoryService';
+import {
+  filterSyncActive,
+  generateEntityId,
+  isEntitySyncActive,
+  withNewEntitySync,
+  withTombstonedEntity,
+  withUpdatedEntitySync,
+} from './sync/syncMetaService';
 import type {
   CompanyDocument,
   CompanyDocumentCategory,
@@ -48,7 +57,7 @@ function cloneDocument(doc: CompanyDocument): CompanyDocument {
 
 function defaultDigitalFolder(): DigitalFolder {
   return {
-    id: `dig-doc-${Date.now()}`,
+    id: generateEntityId('dig-doc'),
     name: 'Firmendokumente',
     path: '/Firma/Dokumente/',
   };
@@ -117,21 +126,21 @@ export function resetDocuments(): void {
 }
 
 export function getAllDocuments(): CompanyDocument[] {
-  return documents.map(cloneDocument);
+  return filterSyncActive(documents).map(cloneDocument);
 }
 
 export function getDocumentById(id: string): CompanyDocument | undefined {
-  const doc = documents.find((d) => d.id === id);
+  const doc = documents.find((d) => d.id === id && isEntitySyncActive(d));
   return doc ? cloneDocument(doc) : undefined;
 }
 
 export function getDocumentByLinkedInvoiceId(invoiceId: string): CompanyDocument | undefined {
-  const doc = documents.find((d) => d.linkedInvoiceId === invoiceId);
+  const doc = documents.find((d) => d.linkedInvoiceId === invoiceId && isEntitySyncActive(d));
   return doc ? cloneDocument(doc) : undefined;
 }
 
 export function getDocumentsByCategory(category: CompanyDocumentCategory): CompanyDocument[] {
-  return documents.filter((d) => d.category === category).map(cloneDocument);
+  return filterSyncActive(documents).filter((d) => d.category === category).map(cloneDocument);
 }
 
 export function searchDocuments(
@@ -141,6 +150,7 @@ export function searchDocuments(
   const normalizedQuery = query.trim().toLowerCase();
 
   return documents
+    .filter((doc) => isEntitySyncActive(doc))
     .filter((doc) => {
       if (categoryFilter && categoryFilter !== 'all' && doc.category !== categoryFilter) {
         return false;
@@ -168,7 +178,10 @@ export function addDocument(input: CompanyDocumentInput): DocumentMutationResult
   if (validationError) return { success: false, errorKey: validationError };
 
   const now = new Date().toISOString();
-  const document = buildDocumentFromInput(input, `doc-${Date.now()}`, now);
+  const document = withNewEntitySync(
+    buildDocumentFromInput(input, generateEntityId('doc'), now),
+    'document',
+  );
   documents = [document, ...documents];
   recordArchivedDocumentMemory(document);
   persistAll();
@@ -205,20 +218,24 @@ export function updateDocument(
   const validationError = validateInput(merged);
   if (validationError) return { success: false, errorKey: validationError };
 
-  const updated = buildDocumentFromInput(merged, current.id, current.createdAt);
+  const updated = withUpdatedEntitySync(
+    buildDocumentFromInput(merged, current.id, current.createdAt),
+    'document',
+  );
   documents = [...documents.slice(0, index), updated, ...documents.slice(index + 1)];
   persistAll();
   return { success: true, document: cloneDocument(updated) };
 }
 
 export function deleteDocument(id: string): DocumentMutationResult {
-  const index = documents.findIndex((d) => d.id === id);
+  const index = documents.findIndex((d) => d.id === id && isEntitySyncActive(d));
   if (index === -1) return { success: false, errorKey: 'document.notFound' };
 
-  const deleted = cloneDocument(documents[index]);
-  documents = documents.filter((d) => d.id !== id);
+  const tombstoned = withTombstonedEntity(cloneDocument(documents[index]), 'document');
+  documents = [...documents.slice(0, index), tombstoned, ...documents.slice(index + 1)];
+  tombstoneMemoryForDocument(id);
   persistAll();
-  return { success: true, document: deleted };
+  return { success: true, document: cloneDocument(tombstoned) };
 }
 
 export function linkDocumentToVorgang(

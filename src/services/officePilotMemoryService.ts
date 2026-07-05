@@ -21,6 +21,14 @@ import { understandArchivedDocument } from './memory/documentUnderstandingServic
 import { applyAiSummaryEnhancement } from './memory/documentSummaryService';
 import { persistAll } from './persistenceService';
 import {
+  filterSyncActive,
+  generateEntityId,
+  isEntitySyncActive,
+  withNewEntitySync,
+  withTombstonedEntity,
+  withUpdatedEntitySync,
+} from './sync/syncMetaService';
+import {
   resolvePaperFiling,
   type PaperFilingContext,
 } from './paperFolderService';
@@ -60,7 +68,7 @@ const CLASSIFIED_KIND_PROOF_MAP: Partial<Record<ClassifiedDocumentKind, ProofTyp
 };
 
 function createId(prefix: string): string {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  return generateEntityId(prefix);
 }
 
 function cloneDocumentMemory(memory: DocumentMemory): DocumentMemory {
@@ -178,12 +186,13 @@ export function createPaperRegisterEntryForDocument(
 }
 
 export function getPaperRegisterEntries(): PaperRegisterEntry[] {
-  return getAllPaperRegisterEntriesFromStore().map(clonePaperRegisterEntry);
+  return filterSyncActive(getAllPaperRegisterEntriesFromStore()).map(clonePaperRegisterEntry);
 }
 
 export function getPaperRegisterEntryForDocument(documentId: string): PaperRegisterEntry | undefined {
   const entry = getPaperRegisterEntryByDocumentId(documentId);
-  return entry ? clonePaperRegisterEntry(entry) : undefined;
+  if (!entry || !isEntitySyncActive(entry)) return undefined;
+  return clonePaperRegisterEntry(entry);
 }
 
 export function markDocumentPhysicallyFiled(
@@ -311,6 +320,10 @@ export function addDocumentMemory(
     filedAt: input.filedAt ?? existing?.filedAt,
     filedByUser: input.filedByUser ?? existing?.filedByUser,
     paperRegisterEntryId: input.paperRegisterEntryId ?? existing?.paperRegisterEntryId,
+    source: input.source ?? existing?.source,
+    mailFrom: input.mailFrom ?? existing?.mailFrom,
+    mailSubject: input.mailSubject ?? existing?.mailSubject,
+    mailImportId: input.mailImportId ?? existing?.mailImportId,
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
   };
@@ -384,12 +397,13 @@ export function enrichDocumentMemory(
     updatedAt: new Date().toISOString(),
   };
 
-  upsertDocumentMemoryInStore(merged);
-  return cloneDocumentMemory(merged);
+  const synced = withUpdatedEntitySync(merged, 'document_memory');
+  upsertDocumentMemoryInStore(synced);
+  return cloneDocumentMemory(synced);
 }
 
 export function getAllDocumentMemories(): DocumentMemory[] {
-  return getAllDocumentMemoriesFromStore().map(cloneDocumentMemory);
+  return filterSyncActive(getAllDocumentMemoriesFromStore()).map(cloneDocumentMemory);
 }
 
 export function addOrUpdateProofMemory(
@@ -399,7 +413,8 @@ export function addOrUpdateProofMemory(
   },
 ): ProofMemory {
   const now = new Date().toISOString();
-  const memory: ProofMemory = {
+  const existingProof = getAllProofMemoriesFromStore().find((item) => item.id === input.id);
+  const base: ProofMemory = {
     id: input.id,
     proofType: input.proofType,
     status: input.status,
@@ -411,14 +426,19 @@ export function addOrUpdateProofMemory(
     sourceInboxId: input.sourceInboxId,
     lastCheckedAt: input.lastCheckedAt ?? now,
     updatedAt: input.updatedAt ?? now,
+    sync: existingProof?.sync,
   };
+
+  const memory = existingProof
+    ? withUpdatedEntitySync(base, 'proof_memory')
+    : withNewEntitySync(base, 'proof_memory');
 
   upsertProofMemoryInStore(memory);
   return cloneProofMemory(memory);
 }
 
 export function getProofMemories(): ProofMemory[] {
-  return getAllProofMemoriesFromStore().map(cloneProofMemory);
+  return filterSyncActive(getAllProofMemoriesFromStore()).map(cloneProofMemory);
 }
 
 export function getProofsByStatus(status: ProofStatus): ProofMemory[] {
@@ -440,7 +460,24 @@ export function getProofsForVorgang(vorgangId: string): ProofMemory[] {
 }
 
 export function getMemoryRelations(): MemoryRelation[] {
-  return getMemoryStoreSnapshot().relations.map(cloneRelation);
+  return filterSyncActive(getMemoryStoreSnapshot().relations).map(cloneRelation);
+}
+
+export function tombstoneMemoryForDocument(documentId: string): void {
+  for (const memory of getAllDocumentMemoriesFromStore()) {
+    if (memory.documentId === documentId && isEntitySyncActive(memory)) {
+      upsertDocumentMemoryInStore(withTombstonedEntity(memory, 'document_memory'));
+    }
+  }
+  for (const proof of getAllProofMemoriesFromStore()) {
+    if (proof.documentId === documentId && isEntitySyncActive(proof)) {
+      upsertProofMemoryInStore(withTombstonedEntity(proof, 'proof_memory'));
+    }
+  }
+  const paperEntry = getPaperRegisterEntryByDocumentId(documentId);
+  if (paperEntry && isEntitySyncActive(paperEntry)) {
+    upsertPaperRegisterEntryInStore(withTombstonedEntity(paperEntry, 'paper_register_entry'));
+  }
 }
 
 export function resetMemory(): void {
@@ -531,6 +568,16 @@ export function recordArchivedDocumentMemory(
     proofType,
     paperRegisterEntryId: registerEntry?.id,
     physicalFiled: false,
+    source: options?.inboxItem?.importSource === 'email' ? 'email' : undefined,
+    mailFrom:
+      options?.inboxItem?.importSource === 'email'
+        ? (options.inboxItem.sender || document.issuer)
+        : undefined,
+    mailSubject:
+      options?.inboxItem?.importSource === 'email'
+        ? (options.inboxItem.title || document.title)
+        : undefined,
+    mailImportId: options?.inboxItem?.mailImportId,
   });
 
   if (proofType && SUPPORTED_PROOF_TYPES.includes(proofType)) {

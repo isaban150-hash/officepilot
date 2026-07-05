@@ -38,7 +38,7 @@ export type DocumentQuestionType =
   | 'custom';
 
 export interface CommunicationContextRef {
-  type: 'inbox' | 'document' | 'vorgang' | 'invoice' | 'expense' | 'none';
+  type: 'inbox' | 'document' | 'vorgang' | 'invoice' | 'expense' | 'mail' | 'none';
   id?: string;
   vorgangId?: string;
 }
@@ -163,6 +163,8 @@ export interface CommunicationResult {
 
 export type VorgangNoteSource = 'user' | 'communication' | 'assistant';
 
+import type { SyncMeta } from './sync';
+
 export interface VorgangNote {
   id: string;
   vorgangId: string;
@@ -176,6 +178,7 @@ export interface VorgangNote {
   linkedCommunicationEventId?: string;
   linkedInboxId?: string;
   pinned?: boolean;
+  sync?: SyncMeta;
 }
 
 export interface VorgangNoteInput {

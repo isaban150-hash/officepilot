@@ -1,8 +1,15 @@
 import { PAPER_FOLDERS } from '../data/mockData';
 import { getCachedSetup, persistAll } from './persistenceService';
 import {
+  filterSyncActive,
+  generateEntityId,
+  isEntitySyncActive,
+  withNewEntitySync,
+  withTombstonedEntity,
+  withUpdatedEntitySync,
+} from './sync/syncMetaService';
+import {
   appendExpenseToStore,
-  deleteExpenseFromStore,
   getAllExpensesFromStore,
   getExpenseFromStoreById,
   replaceExpenseInStore,
@@ -36,7 +43,7 @@ function defaultDigitalFolder(): DigitalFolder {
   const year = new Date().getFullYear();
   const month = String(new Date().getMonth() + 1).padStart(2, '0');
   return {
-    id: `dig-exp-${Date.now()}`,
+    id: generateEntityId('dig-exp'),
     name: 'Ausgaben',
     path: `/Steuerberater/${year}/${month}/Ausgaben/`,
   };
@@ -108,11 +115,15 @@ function buildExpenseFromInput(
 }
 
 export function getAllExpenses(): Expense[] {
-  return getAllExpensesFromStore().sort((a, b) => b.issueDate.localeCompare(a.issueDate));
+  return filterSyncActive(getAllExpensesFromStore()).sort((a, b) =>
+    b.issueDate.localeCompare(a.issueDate),
+  );
 }
 
 export function getExpenseById(id: string): Expense | undefined {
-  return getExpenseFromStoreById(id);
+  const expense = getExpenseFromStoreById(id);
+  if (!expense || !isEntitySyncActive(expense)) return undefined;
+  return expense;
 }
 
 export function searchExpenses(
@@ -150,7 +161,7 @@ export function isDuplicateExpense(
   const dedupeKey = buildExpenseDedupeKey(supplierName, invoiceNumber);
   if (!dedupeKey || dedupeKey === '|') return null;
 
-  const match = getAllExpensesFromStore().find((expense) => {
+  const match = filterSyncActive(getAllExpensesFromStore()).find((expense) => {
     if (options?.excludeExpenseId && expense.id === options.excludeExpenseId) return false;
     return expense.dedupeKey === dedupeKey;
   });
@@ -166,7 +177,10 @@ export function addExpense(input: ExpenseInput): ExpenseMutationResult {
   if (duplicate) return { success: false, errorKey: 'expense.duplicate' };
 
   const now = new Date().toISOString();
-  const expense = buildExpenseFromInput(input, `exp-${Date.now()}`, now, now);
+  const expense = withNewEntitySync(
+    buildExpenseFromInput(input, generateEntityId('exp'), now, now),
+    'expense',
+  );
   appendExpenseToStore(expense);
   persistAll();
   return { success: true, expense: getExpenseById(expense.id)! };
@@ -174,7 +188,7 @@ export function addExpense(input: ExpenseInput): ExpenseMutationResult {
 
 export function updateExpense(id: string, changes: Partial<ExpenseInput>): ExpenseMutationResult {
   const current = getExpenseFromStoreById(id);
-  if (!current) return { success: false, errorKey: 'expense.notFound' };
+  if (!current || !isEntitySyncActive(current)) return { success: false, errorKey: 'expense.notFound' };
 
   const merged: ExpenseInput = {
     title: changes.title ?? current.title,
@@ -210,7 +224,10 @@ export function updateExpense(id: string, changes: Partial<ExpenseInput>): Expen
   if (duplicate) return { success: false, errorKey: 'expense.duplicate' };
 
   const now = new Date().toISOString();
-  const updated = buildExpenseFromInput(merged, current.id, current.createdAt, now);
+  const updated = withUpdatedEntitySync(
+    buildExpenseFromInput(merged, current.id, current.createdAt, now),
+    'expense',
+  );
   replaceExpenseInStore(
     id,
     normalizeExpensePaymentFields({
@@ -227,14 +244,16 @@ export function updateExpense(id: string, changes: Partial<ExpenseInput>): Expen
 }
 
 export function deleteExpense(id: string): ExpenseMutationResult {
-  const removed = deleteExpenseFromStore(id);
-  if (!removed) return { success: false, errorKey: 'expense.notFound' };
+  const current = getExpenseFromStoreById(id);
+  if (!current || !isEntitySyncActive(current)) return { success: false, errorKey: 'expense.notFound' };
+  const tombstoned = withTombstonedEntity(current, 'expense');
+  replaceExpenseInStore(id, tombstoned);
   persistAll();
-  return { success: true, expense: removed };
+  return { success: true, expense: tombstoned };
 }
 
 export function getExpenseSummary(): ExpenseSummary {
-  const items = getAllExpensesFromStore();
+  const items = filterSyncActive(getAllExpensesFromStore());
   const byCategory: Partial<Record<ExpenseCategory, number>> = {};
 
   let bookedCount = 0;

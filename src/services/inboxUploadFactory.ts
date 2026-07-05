@@ -27,6 +27,10 @@ export interface CreateInboxFromUploadOptions {
   sourceFileName?: string;
   kind?: UploadDocumentKind;
   recognizedText?: string;
+  titleHint?: string;
+  senderHint?: string;
+  mailImportId?: string;
+  importSource?: 'scan' | 'upload' | 'email';
 }
 
 function pickRandomKind(): UploadDocumentKind {
@@ -80,6 +84,8 @@ export function createMockInboxItemFromUpload(
     sourceFileName,
     kindHint: kind,
     recognizedText,
+    titleHint: options.titleHint,
+    senderHint: options.senderHint,
   };
 
   let item = classifyInboxItem(input);
@@ -92,6 +98,32 @@ export function createMockInboxItemFromUpload(
     item = {
       ...item,
       recognizedData: withInboxExtractedDocumentText(item.recognizedData, recognizedText),
+    };
+  }
+
+  if (options.titleHint) {
+    item = {
+      ...item,
+      title: options.titleHint,
+      recognizedData: {
+        ...item.recognizedData,
+        Betreff: options.titleHint,
+      },
+    };
+  }
+
+  if (options.senderHint) {
+    item = {
+      ...item,
+      sender: options.senderHint,
+    };
+  }
+
+  if (options.mailImportId || options.importSource) {
+    item = {
+      ...item,
+      mailImportId: options.mailImportId,
+      importSource: options.importSource,
     };
   }
 

@@ -13,6 +13,7 @@ import type {
 } from '../types/models';
 import { getPaperFolderById } from './paperFolderService';
 import { persistAll } from './persistenceService';
+import { filterSyncActive, isEntitySyncActive, withUpdatedEntitySync } from './sync/syncMetaService';
 
 export type { CreateInboxFromUploadOptions };
 export { createMockInboxItemFromUpload } from './inboxUploadFactory';
@@ -60,13 +61,18 @@ export interface InboxActionResult {
 }
 
 function findItem(id: string): InboxItem | undefined {
-  return inboxItems.find((i) => i.id === id);
+  const item = inboxItems.find((i) => i.id === id);
+  if (!item || !isEntitySyncActive(item)) return undefined;
+  return item;
 }
 
 export function patchInboxItem(id: string, updates: Partial<InboxItem>): InboxItem | null {
-  const index = inboxItems.findIndex((i) => i.id === id);
+  const index = inboxItems.findIndex((i) => i.id === id && isEntitySyncActive(i));
   if (index === -1) return null;
-  const updated = { ...inboxItems[index], ...updates };
+  const updated = withUpdatedEntitySync(
+    { ...inboxItems[index], ...updates },
+    'inbox_item',
+  );
   inboxItems = [...inboxItems.slice(0, index), updated, ...inboxItems.slice(index + 1)];
   persistAll();
   return updated;
@@ -188,7 +194,7 @@ export function getStatusLabel(status: InboxStatus): string {
 }
 
 export function filterActiveItems(items: InboxItem[]): InboxItem[] {
-  return items.filter((i) => i.status !== 'abgelegt');
+  return filterSyncActive(items).filter((i) => i.status !== 'abgelegt');
 }
 
 export const EDITABLE_PRIORITIES: InboxPriority[] = ['niedrig', 'mittel', 'hoch', 'kritisch'];

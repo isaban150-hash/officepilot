@@ -2,6 +2,7 @@ import { MOCK_TASKS } from '../data/mockData';
 import type { Task } from '../types/models';
 import { normalizeTask } from './taskNormalize';
 import { persistAll } from './persistenceService';
+import { withUpdatedEntitySync } from './sync/syncMetaService';
 
 let tasks: Task[] = [];
 
@@ -18,7 +19,7 @@ export function hydrateTaskStore(items: Task[]): void {
 }
 
 export function getAllTasksFromStore(): Task[] {
-  return cloneTasks(tasks);
+  return tasks.filter((task) => !task.sync?.deleted).map((t) => ({ ...t }));
 }
 
 export function findTasksInStore(predicate: (task: Task) => boolean): Task[] {
@@ -36,7 +37,10 @@ export function replaceTaskInStore(
 ): Task | null {
   const index = tasks.findIndex((t) => t.id === taskId);
   if (index === -1) return null;
-  const updated = normalizeTask(updater({ ...tasks[index] }));
+  const updated = withUpdatedEntitySync(
+    normalizeTask(updater({ ...tasks[index] })),
+    'task',
+  );
   tasks = [...tasks.slice(0, index), updated, ...tasks.slice(index + 1)];
   persistAll();
   return { ...updated };

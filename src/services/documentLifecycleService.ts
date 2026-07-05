@@ -32,6 +32,24 @@ const REPLY_STATUS_EVENT_TYPES = new Set([
   'marked_remind_later',
 ]);
 
+function resolveLifecycleReplyStatus(input: {
+  documentId?: string;
+  inboxItem?: InboxItem;
+  memory?: DocumentMemory;
+}): CommunicationReplyStatus {
+  const refs: CommunicationContextRef[] = [];
+  if (input.documentId) refs.push({ type: 'document', id: input.documentId });
+  if (input.memory?.mailImportId) refs.push({ type: 'mail', id: input.memory.mailImportId });
+  if (input.inboxItem?.mailImportId) refs.push({ type: 'mail', id: input.inboxItem.mailImportId });
+  if (input.inboxItem?.id) refs.push({ type: 'inbox', id: input.inboxItem.id });
+
+  for (const ref of refs) {
+    const status = resolveCommunicationReplyForLifecycle(ref);
+    if (status !== 'no_reply_needed') return status;
+  }
+  return 'no_reply_needed';
+}
+
 function resolveCommunicationReplyForLifecycle(
   contextRef: CommunicationContextRef | null,
 ): CommunicationReplyStatus {
@@ -261,11 +279,7 @@ export function resolveDocumentLifecycle(
   const isAd = isAdvertisement(memory, inboxItem, document?.issuer, document?.recognizedText);
   const needsPaper = needsPaperFolder(memory, inboxItem, document?.paperFolder?.folderId);
   const physicalFiled = documentId ? isPhysicallyFiled(documentId, memory) : false;
-  const replyStatus = documentId
-    ? resolveCommunicationReplyForLifecycle({ type: 'document', id: documentId })
-    : inboxItem
-      ? resolveCommunicationReplyForLifecycle({ type: 'inbox', id: inboxItem.id })
-      : 'no_reply_needed';
+  const replyStatus = resolveLifecycleReplyStatus({ documentId, inboxItem, memory });
   const openDeadline = hasOpenDeadline(memory, inboxItem, todayIso);
   const missingProofs = getMissingProofLabels(
     memory?.linkedVorgangId ?? document?.linkedVorgang?.vorgangId ?? inboxItem?.vorgangId,

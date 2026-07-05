@@ -1,5 +1,13 @@
 import { persistAll } from './persistenceService';
 import { getVorgangById } from './vorgangService';
+import {
+  filterSyncActive,
+  generateEntityId,
+  isEntitySyncActive,
+  withNewEntitySync,
+  withTombstonedEntity,
+  withUpdatedEntitySync,
+} from './sync/syncMetaService';
 import type { VorgangNote, VorgangNoteInput } from '../types/communication';
 
 function cloneNote(note: VorgangNote): VorgangNote {
@@ -25,6 +33,7 @@ function normalizeNote(note: Partial<VorgangNote> & Pick<VorgangNote, 'id' | 'vo
     linkedCommunicationEventId: note.linkedCommunicationEventId,
     linkedInboxId: note.linkedInboxId,
     pinned: note.pinned ?? false,
+    sync: note.sync,
   };
 }
 
@@ -47,7 +56,7 @@ export function setVorgangNoteStoreForTests(items: VorgangNote[]): void {
 }
 
 export function getNotesForVorgang(vorgangId: string): VorgangNote[] {
-  return notes
+  return filterSyncActive(notes)
     .filter((note) => note.vorgangId === vorgangId)
     .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt) || b.createdAt.localeCompare(a.createdAt))
     .map(cloneNote);
@@ -68,15 +77,18 @@ export function addVorgangNote(
     return { success: false, errorKey: 'vorgangNote.bodyRequired' };
   }
 
-  const note = normalizeNote({
-    id: `note-${Date.now()}`,
-    vorgangId,
-    body: input.body,
-    tags: input.tags,
-    occurredAt: input.occurredAt,
-    source: input.source ?? 'user',
-    linkedInboxId: input.linkedInboxId,
-  });
+  const note = withNewEntitySync(
+    normalizeNote({
+      id: generateEntityId('note'),
+      vorgangId,
+      body: input.body,
+      tags: input.tags,
+      occurredAt: input.occurredAt,
+      source: input.source ?? 'user',
+      linkedInboxId: input.linkedInboxId,
+    }),
+    'vorgang_note',
+  );
 
   notes = [note, ...notes];
   persistAll();
@@ -87,7 +99,7 @@ export function updateVorgangNote(
   noteId: string,
   changes: Partial<VorgangNoteInput>,
 ): VorgangNoteMutationResult {
-  const index = notes.findIndex((note) => note.id === noteId);
+  const index = notes.findIndex((note) => note.id === noteId && isEntitySyncActive(note));
   if (index === -1) return { success: false, errorKey: 'vorgangNote.notFound' };
 
   const current = notes[index];
@@ -95,13 +107,16 @@ export function updateVorgangNote(
     return { success: false, errorKey: 'vorgangNote.bodyRequired' };
   }
 
-  const updated = normalizeNote({
-    ...current,
-    body: changes.body ?? current.body,
-    tags: changes.tags ?? current.tags,
-    occurredAt: changes.occurredAt ?? current.occurredAt,
-  });
-  updated.updatedAt = new Date().toISOString();
+  const updated = withUpdatedEntitySync(
+    normalizeNote({
+      ...current,
+      body: changes.body ?? current.body,
+      tags: changes.tags ?? current.tags,
+      occurredAt: changes.occurredAt ?? current.occurredAt,
+      updatedAt: new Date().toISOString(),
+    }),
+    'vorgang_note',
+  );
 
   notes = [...notes.slice(0, index), updated, ...notes.slice(index + 1)];
   persistAll();
@@ -109,17 +124,19 @@ export function updateVorgangNote(
 }
 
 export function deleteVorgangNote(noteId: string): VorgangNoteMutationResult {
-  const index = notes.findIndex((note) => note.id === noteId);
+  const index = notes.findIndex((note) => note.id === noteId && isEntitySyncActive(note));
   if (index === -1) return { success: false, errorKey: 'vorgangNote.notFound' };
-  const removed = cloneNote(notes[index]);
-  notes = notes.filter((note) => note.id !== noteId);
+  const tombstoned = withTombstonedEntity(cloneNote(notes[index]), 'vorgang_note');
+  notes = [...notes.slice(0, index), tombstoned, ...notes.slice(index + 1)];
   persistAll();
-  return { success: true, note: removed };
+  return { success: true, note: cloneNote(tombstoned) };
 }
 
 export function searchVorgangNotes(query: string, vorgangId?: string): VorgangNote[] {
   const normalized = query.trim().toLowerCase();
-  const filtered = vorgangId ? notes.filter((note) => note.vorgangId === vorgangId) : [...notes];
+  const filtered = vorgangId
+    ? filterSyncActive(notes).filter((note) => note.vorgangId === vorgangId)
+    : filterSyncActive(notes);
 
   if (!normalized) {
     return filtered.map(cloneNote).sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
