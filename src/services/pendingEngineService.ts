@@ -458,7 +458,7 @@ export function buildPendingSummary(
     kind: 'inbox_new',
     labelKey: 'pending.highlight.newInbox',
     count: newInboxItems,
-    route: '/eingang',
+    route: '/ablage',
   });
 
   pushHighlight(highlights, {
@@ -466,7 +466,7 @@ export function buildPendingSummary(
     kind: 'inbox_deferred',
     labelKey: 'pending.highlight.deferredInbox',
     count: deferredInboxItems,
-    route: '/eingang',
+    route: '/ablage',
   });
 
   const expiringItems = items.filter((item) => item.kind === 'document_expiring');
@@ -523,7 +523,7 @@ export function buildPendingSummary(
       kind: 'contract_missing_proof',
       labelKey: 'pending.highlight.missingProofs',
       count: missingContractDocuments,
-      route: '/eingang',
+      route: '/ablage',
     });
   }
 

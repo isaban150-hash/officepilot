@@ -434,14 +434,14 @@ function answerDocumentsMissing(): AssistantAnswer {
     `${missing.length} fehlende Vertragsunterlage${missing.length === 1 ? '' : 'n'}.`,
     missing.map((item) => item.title + (item.description ? ` (${item.description})` : '')),
     [
-      { id: 'inbox', label: 'Eingang öffnen', route: '/eingang' },
+      { id: 'inbox', label: 'Ablage öffnen', route: '/ablage' },
       ...missing.map((item) => ({
         id: item.id,
         label: item.title,
         route: item.route,
       })),
     ],
-    '/eingang',
+    '/ablage',
   );
 }
 
@@ -540,14 +540,14 @@ function answerMissingProofs(): AssistantAnswer {
     `${missing.length} Nachweis${missing.length === 1 ? '' : 'e'} laut Vertragsanalyse nicht im Archiv.`,
     missing.map((item) => item.title),
     [
-      { id: 'inbox', label: 'Eingang öffnen', route: '/eingang' },
+      { id: 'inbox', label: 'Ablage öffnen', route: '/ablage' },
       ...missing.map((item) => ({
         id: item.id,
         label: item.title,
         route: item.route,
       })),
     ],
-    '/eingang',
+    '/ablage',
   );
 }
 
@@ -717,7 +717,7 @@ function answerDashboard(todayIso: string): AssistantAnswer {
 
   if (summary.newInboxItems > 0) {
     bullets.push(`${summary.newInboxItems} neue Dokumente`);
-    actions.push({ id: 'inbox', label: 'Eingang öffnen', route: '/eingang' });
+    actions.push({ id: 'inbox', label: 'Ablage öffnen', route: '/ablage' });
   }
   if (summary.deferredInboxItems > 0) {
     bullets.push(`${summary.deferredInboxItems} zum Später klären`);
@@ -748,6 +748,6 @@ function answerDashboard(todayIso: string): AssistantAnswer {
     'Das sollten Sie heute beachten:',
     bullets,
     actions,
-    '/eingang',
+    '/ablage',
   );
 }
