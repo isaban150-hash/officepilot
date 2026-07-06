@@ -1,0 +1,170 @@
+/**
+ * OfficePilot Design System v1.0 – Layout & Typography
+ */
+
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  font-family: var(--font-family);
+  background: var(--op-bg);
+  color: var(--op-text);
+  font-size: var(--text-body-mobile);
+  line-height: var(--line-height-body);
+  min-height: 100dvh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@media (min-width: 768px) {
+  body {
+    font-size: var(--text-body);
+  }
+}
+
+/* Focus ring – accessibility */
+:focus {
+  outline: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--op-focus);
+  outline-offset: 2px;
+}
+
+.btn:focus-visible,
+.heute-action-card:focus-visible,
+.heute-dashboard-card:focus-visible,
+.sidebar-nav__item:focus-visible,
+.bottom-nav__item:focus-visible {
+  outline: 2px solid var(--op-focus);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(31, 60, 136, 0.18);
+}
+
+/* Typography utilities */
+.text-hero {
+  font-size: var(--text-hero);
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  line-height: var(--line-height-tight);
+  color: var(--op-text);
+}
+
+.text-section {
+  font-size: var(--text-section);
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: var(--line-height-tight);
+  color: var(--op-text);
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-3);
+}
+
+.section-header__title {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--op-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.page-header__title {
+  font-size: var(--text-section);
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  color: var(--op-primary);
+  line-height: var(--line-height-tight);
+}
+
+.page-header__subtitle {
+  font-size: var(--text-meta);
+  color: var(--op-text-muted);
+  margin-top: var(--space-2);
+  line-height: var(--line-height-relaxed);
+}
+
+/* App shell */
+.app-shell {
+  background: var(--op-bg);
+}
+
+.app-shell__top {
+  background: linear-gradient(180deg, var(--op-primary-hover) 0%, var(--op-primary) 100%);
+  box-shadow: var(--shadow-card);
+}
+
+.app-shell__settings {
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.page {
+  max-width: var(--content-max-width);
+}
+
+/* Sidebar – premium desktop nav */
+@media (min-width: 1024px) {
+  .sidebar-nav {
+    display: flex;
+    flex-direction: column;
+    width: var(--sidebar-width);
+    flex-shrink: 0;
+    background: var(--op-surface);
+    border-right: 1px solid var(--op-divider);
+    padding: var(--space-5) var(--space-3);
+    gap: var(--space-1);
+    position: sticky;
+    top: var(--top-height);
+    align-self: flex-start;
+    min-height: calc(100dvh - var(--top-height));
+  }
+
+  .sidebar-nav__item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    min-height: 48px;
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-md);
+    text-decoration: none;
+    color: var(--op-text-muted);
+    font-size: var(--text-meta);
+    font-weight: 600;
+    transition:
+      background var(--motion-base) var(--ease-standard),
+      color var(--motion-base) var(--ease-standard),
+      box-shadow var(--motion-base) var(--ease-standard);
+  }
+
+  .sidebar-nav__item:hover {
+    background: var(--op-surface-soft);
+    color: var(--op-text);
+  }
+
+  .sidebar-nav__item--active {
+    background: rgba(31, 60, 136, 0.1);
+    color: var(--op-primary);
+    font-weight: 700;
+    box-shadow: inset 3px 0 0 var(--op-primary);
+  }
+
+  .sidebar-nav__icon {
+    width: 1.25rem;
+    height: 1.25rem;
+    flex-shrink: 0;
+    color: currentColor;
+  }
+
+  .sidebar-nav__item--active .sidebar-nav__icon {
+    color: var(--op-primary);
+  }
+}

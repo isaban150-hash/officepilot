@@ -4,35 +4,39 @@ import { InvoiceDocumentView } from '../components/invoice/InvoiceDocumentView';
 import { InvoiceDraftEditForm } from '../components/invoice/InvoiceDraftEditForm';
 import { Button } from '../components/ui/Button';
 import { Card, DataRow, PageHeader } from '../components/ui/Card';
+import { EmptyStateBlock } from '../components/ui/EmptyStateBlock';
 import { useApp } from '../context/AppContext';
 import {
-  buildAbschlagDraft,
-  buildSchlussrechnungDraft,
+  buildInvoiceDraftForType,
   calculateInvoiceTotals,
   finalizeInvoiceDraft,
   getOverbillingWarnings,
   updateDraftPositionQuantity,
   updateInvoiceDraftMetadata,
+  updateInvoiceDraftTaxStatus,
 } from '../services/invoiceService';
 import { buildInvoicePrintModel } from '../services/invoicePrintModel';
+import { getInvoiceDocumentTitle, INVOICE_DOCUMENT_TYPES, parseInvoiceDocumentType } from '../services/invoiceTypeService';
 import { getVorgangById } from '../services/vorgangService';
-import type { InvoiceDraft, InvoiceDraftMetadataChanges } from '../types/models';
+import type { InvoiceDraft, InvoiceDraftMetadataChanges, InvoiceDocumentType, TaxStatus } from '../types/models';
 import type { TranslationKey } from '../i18n';
 
-type InvoiceType = 'abschlag' | 'schluss';
 type RechnungStep = 'positions' | 'preview' | 'edit';
 
-function resolveInvoiceType(searchParams: URLSearchParams): InvoiceType {
-  const type = searchParams.get('type');
-  return type === 'schluss' ? 'schluss' : 'abschlag';
-}
+const TAX_OPTIONS: TaxStatus[] = [
+  'standard_19',
+  'standard_7',
+  'kleinunternehmer_19',
+  'reverse_charge_13b',
+  'tax_free',
+];
 
 export function RechnungPage() {
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
   const { translate, showToast, setup } = useApp();
   const navigate = useNavigate();
-  const invoiceType = resolveInvoiceType(searchParams);
+  const invoiceType = parseInvoiceDocumentType(searchParams.get('type'));
 
   const [draft, setDraft] = useState<InvoiceDraft | null>(null);
   const [step, setStep] = useState<RechnungStep>('positions');
@@ -43,10 +47,7 @@ export function RechnungPage() {
       setDraft(null);
       return;
     }
-    const next =
-      invoiceType === 'schluss'
-        ? buildSchlussrechnungDraft(id, setup)
-        : buildAbschlagDraft(id, setup);
+    const next = buildInvoiceDraftForType(id, setup, invoiceType);
     setDraft(next);
     setStep('positions');
   }, [id, invoiceType, setup]);
@@ -58,13 +59,17 @@ export function RechnungPage() {
     [draft, setup],
   );
   const overbillingWarnings = draft ? getOverbillingWarnings(draft) : [];
-  const taxKey = `tax.${setup.taxStatus}` as TranslationKey;
+  const taxKey = `tax.${draft?.taxStatus ?? setup.taxStatus}` as TranslationKey;
   const materialKey = draft ? (`material.${draft.materialSource}` as TranslationKey) : null;
 
   if (!id || !vorgang) {
     return (
       <div className="page">
-        <p className="empty-state">Vorgang nicht gefunden.</p>
+        <EmptyStateBlock
+          title={translate('vorgang.notFound')}
+          description=""
+          testId="rechnung-not-found"
+        />
         <Button variant="outline" onClick={() => navigate('/vorgaenge')}>
           {translate('common.back')}
         </Button>
@@ -91,10 +96,17 @@ export function RechnungPage() {
     );
   }
 
-  const pageTitle =
-    draft.type === 'schluss'
-      ? translate('invoice.schlussTitle')
-      : `${translate('invoice.abschlagTitle')} ${draft.abschlagNumber ?? 1}`;
+  const pageTitle = draft
+    ? getInvoiceDocumentTitle(draft.type, draft.abschlagNumber)
+    : translate('invoice.title');
+
+  const handleTypeChange = (type: InvoiceDocumentType) => {
+    navigate(`/vorgaenge/${id}/rechnung?type=${type}`);
+  };
+
+  const handleTaxChange = (taxStatus: TaxStatus) => {
+    setDraft((prev) => (prev ? updateInvoiceDraftTaxStatus(prev, taxStatus) : prev));
+  };
 
   const handleQuantityChange = (positionId: string, value: string) => {
     const qty = parseFloat(value) || 0;
@@ -172,6 +184,29 @@ export function RechnungPage() {
 
       {step === 'positions' && (
         <>
+          <Card className="invoice-type-picker" data-testid="invoice-type-picker">
+            <p className="invoice-type-picker__label">{translate('invoice.typeLabel')}</p>
+            <div className="chip-group">
+              {INVOICE_DOCUMENT_TYPES.map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  className={`chip ${draft.type === type ? 'chip--active' : ''}`}
+                  data-testid={`invoice-type-${type}`}
+                  onClick={() => handleTypeChange(type)}
+                >
+                  {translate(`invoice.type.${type}` as TranslationKey)}
+                </button>
+              ))}
+            </div>
+          </Card>
+
+          {draft.companySnapshot.logoDataUrl && (
+            <p className="hint-text invoice-brand-hint" data-testid="invoice-brand-logo-hint">
+              {translate('invoice.logoFromProfile')}
+            </p>
+          )}
+
           {showMaterialHint && (
             <p className="invoice-hint invoice-hint--warning">
               {translate('invoice.materialAuftraggeberHint')}
@@ -313,6 +348,22 @@ export function RechnungPage() {
       {step === 'edit' && (
         <>
           <Card>
+            <fieldset className="invoice-edit__section">
+              <legend>{translate('invoice.taxStatus')}</legend>
+              <div className="chip-group">
+                {TAX_OPTIONS.map((status) => (
+                  <button
+                    key={status}
+                    type="button"
+                    className={`chip ${draft.taxStatus === status ? 'chip--active' : ''}`}
+                    data-testid={`invoice-tax-${status}`}
+                    onClick={() => handleTaxChange(status)}
+                  >
+                    {translate(`tax.${status}` as TranslationKey)}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
             <InvoiceDraftEditForm draft={draft} onChange={handleMetadataChange} />
           </Card>
           <div className="action-stack">

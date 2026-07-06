@@ -9,7 +9,7 @@ export function InvoicePaymentBlock({ model }: Props) {
   const { company } = model;
 
   return (
-    <section className="invoice-block invoice-payment">
+    <section className="invoice-block invoice-payment invoice-payment--highlight">
       <h2 className="invoice-block__title">Zahlungsinformationen</h2>
       <dl className="invoice-payment__facts">
         {company.iban && (

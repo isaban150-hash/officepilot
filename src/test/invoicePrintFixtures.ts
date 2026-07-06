@@ -1,6 +1,6 @@
 import { DEFAULT_COMPANY_PROFILE } from '../data/companyProfileDefaults';
 import { buildInvoicePrintModel } from '../services/invoicePrintModel';
-import { buildLegalNotices } from '../services/invoiceService';
+import { buildLegalNotices } from '../services/invoiceTaxService';
 import type { CompanySetup, InvoiceDraft } from '../types/models';
 import { createTestVorgang, testSetup } from './fixtures';
 
@@ -31,8 +31,8 @@ function createDraftBase(overrides: Partial<InvoiceDraft> = {}): InvoiceDraft {
     vorgangTitle: vorgang.title,
     customer: vorgang.customer,
     baustelle: vorgang.baustelle,
-    type: 'abschlag',
-    abschlagNumber: 1,
+    type: 'rechnung',
+    abschlagNumber: undefined,
     taxStatus: 'standard_19',
     materialSource: 'betrieb',
     positions: [
@@ -55,7 +55,7 @@ function createDraftBase(overrides: Partial<InvoiceDraft> = {}): InvoiceDraft {
     servicePeriodTo: '2026-05-31',
     paymentDueDate: '2026-06-15',
     paymentTermsText: 'Zahlbar innerhalb von 14 Tagen ohne Abzug.',
-    skontoText: '2 % Skonto bei Zahlung innerhalb von 7 Tagen',
+    skontoText: '',
     customerBilling: {
       name: 'Bauherr Müller',
       contactPerson: 'Frau Müller',

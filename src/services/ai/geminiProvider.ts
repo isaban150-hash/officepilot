@@ -42,7 +42,7 @@ export async function geminiGenerateText(
     return {
       success: false,
       errorCode: 'api_error',
-      message: 'Gemini-Antwort konnte nicht gelesen werden.',
+      message: 'Die Antwort konnte nicht gelesen werden. Bitte versuchen Sie es erneut.',
     };
   }
 
@@ -50,7 +50,7 @@ export async function geminiGenerateText(
     return {
       success: false,
       errorCode: 'api_error',
-      message: data.error?.message ?? 'Gemini API Fehler',
+      message: 'Der KI-Dienst ist gerade nicht erreichbar. Bitte versuchen Sie es später erneut.',
     };
   }
 
@@ -59,7 +59,7 @@ export async function geminiGenerateText(
     return {
       success: false,
       errorCode: 'empty_response',
-      message: 'Keine Antwort von Gemini erhalten.',
+      message: 'Es wurde keine Antwort erhalten. Bitte versuchen Sie es erneut.',
     };
   }
 

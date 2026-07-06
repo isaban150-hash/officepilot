@@ -1,6 +1,7 @@
 import { FormEvent, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Card, CardMeta, CardTitle, PageHeader } from '../ui/Card';
+import { EmptyStateBlock } from '../ui/EmptyStateBlock';
 import { useApp } from '../../context/AppContext';
 import { searchOffice } from '../../services/officeSearchService';
 import type { SearchResult } from '../../types/officeSearch';
@@ -9,13 +10,26 @@ interface SearchResultsListProps {
   results: SearchResult[];
   onSelect?: (result: SearchResult) => void;
   compact?: boolean;
+  query?: string;
 }
 
-export function SearchResultsList({ results, onSelect, compact = false }: SearchResultsListProps) {
+export function SearchResultsList({
+  results,
+  onSelect,
+  compact = false,
+  query = '',
+}: SearchResultsListProps) {
   const { translate } = useApp();
 
   if (results.length === 0) {
-    return <p className="empty-state">{translate('search.noResults')}</p>;
+    const hasQuery = query.trim().length >= 2;
+    return (
+      <EmptyStateBlock
+        title={translate(hasQuery ? 'search.noResults.title' : 'search.emptyQuery.title')}
+        description={translate(hasQuery ? 'search.noResults.desc' : 'search.emptyQuery.desc')}
+        testId={hasQuery ? 'search-no-results' : 'search-empty-query'}
+      />
+    );
   }
 
   return (
@@ -143,6 +157,7 @@ export function SearchPage() {
         {query.trim() && <CardMeta>{translate('search.resultCount').replace('{count}', String(results.length))}</CardMeta>}
         <SearchResultsList
           results={results}
+          query={query}
           onSelect={(result) => navigate(result.route)}
         />
       </Card>

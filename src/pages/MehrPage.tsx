@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Card, CardMeta, CardTitle, PageHeader } from '../components/ui/Card';
 import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 import type { TranslationKey } from '../i18n';
 
 const MEHR_LINKS: { key: TranslationKey; route: string; descriptionKey: TranslationKey }[] = [
@@ -18,6 +19,18 @@ const MEHR_LINKS: { key: TranslationKey; route: string; descriptionKey: Translat
 
 export function MehrPage() {
   const { translate } = useApp();
+  const { isAdmin } = useAuth();
+
+  const links = isAdmin
+    ? [
+        ...MEHR_LINKS,
+        {
+          key: 'mehr.adminUsers' as TranslationKey,
+          route: '/admin/users',
+          descriptionKey: 'mehr.adminUsersDesc' as TranslationKey,
+        },
+      ]
+    : MEHR_LINKS;
 
   return (
     <div className="page mehr-page" data-testid="mehr-page">
@@ -27,7 +40,7 @@ export function MehrPage() {
       />
 
       <div className="card-list">
-        {MEHR_LINKS.map(({ key, route, descriptionKey }) => (
+        {links.map(({ key, route, descriptionKey }) => (
           <Link key={route} to={route} className="mehr-link-card">
             <Card>
               <CardTitle>{translate(key)}</CardTitle>

@@ -1,3 +1,4 @@
+import { usesAbschlagDeductions } from '../../services/invoiceTypeService';
 import type { InvoicePrintModel } from '../../types/models';
 import { formatInvoiceCurrency } from '../../services/invoicePrintModel';
 
@@ -7,7 +8,7 @@ interface Props {
 
 export function InvoiceSummary({ model }: Props) {
   const { summary, type } = model;
-  const isSchluss = type === 'schluss' && summary.deductionLines.length > 0;
+  const isSchluss = usesAbschlagDeductions(type) && summary.deductionLines.length > 0;
 
   return (
     <section className="invoice-block invoice-summary">

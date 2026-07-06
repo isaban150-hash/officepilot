@@ -1,3 +1,4 @@
+import { OFFICEPILOT_LEGAL_DISCLAIMER } from '../config/legalDisclaimer';
 import { formatPaperFilingInstruction } from './paperFolderService';
 import type { InboxItem, InboxPriority, WorkflowLetterSummary } from '../types/models';
 
@@ -25,8 +26,7 @@ export interface LetterExplanation {
 const UNCERTAIN_HINT =
   'Bitte prüfen oder Steuerberater/Ansprechpartner fragen.';
 
-const DISCLAIMER =
-  'OfficePilot erteilt keine Rechts- oder Steuerberatung und trifft keine endgültigen Aussagen.';
+const DISCLAIMER = OFFICEPILOT_LEGAL_DISCLAIMER;
 
 function normalizedHaystack(item: InboxItem): string {
   return [

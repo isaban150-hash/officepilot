@@ -31,11 +31,12 @@ import {
 } from './documentSummaryService';
 import { buildPremiumLetterExplanation } from './documentUnderstandingService';
 
+import { OFFICEPILOT_LEGAL_DISCLAIMER } from '../../config/legalDisclaimer';
+
 export const EXPLANATION_NO_DATA_MESSAGE =
   'Dazu habe ich noch nicht genug Informationen. Bitte prüfen Sie den Brief oder laden Sie den Text erneut hoch.';
 
-export const EXPLANATION_DISCLAIMER =
-  'OfficePilot erteilt keine Rechts- oder Steuerberatung. Bei steuerlichen Fragen bitte Steuerberater fragen.';
+export const EXPLANATION_DISCLAIMER = OFFICEPILOT_LEGAL_DISCLAIMER;
 
 export const FORBIDDEN_EXPLANATION_PHRASES = [
   'rechtlich verbindlich',

@@ -1,82 +1,69 @@
 import { useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { HeuteTodayList } from '../components/heute/HeuteTodayList';
-import { GlobalSearchBar } from '../components/search/GlobalSearchBar';
+import { useNavigate } from 'react-router-dom';
+import { HeuteDashboardCards } from '../components/heute/HeuteDashboardCards';
+import { HeuteOpenItems } from '../components/heute/HeuteOpenItems';
+import { HeuteQuickActionCards } from '../components/heute/HeuteQuickActionCards';
+import { HeuteWelcomeState } from '../components/heute/HeuteWelcomeState';
 import { Button } from '../components/ui/Button';
-import { Card, CardTitle, PageHeader } from '../components/ui/Card';
 import { useApp } from '../context/AppContext';
 import { scanDocumentLifecyclePending } from '../services/documentLifecycleService';
-import { resolveHeuteQuickActionRoute } from '../services/officeActionService';
-import { scanPendingItems } from '../services/pendingEngineService';
-import type { TranslationKey } from '../i18n';
-
-const QUICK_ACTION_KEYS: TranslationKey[] = [
-  'heute.action.understandLetter',
-  'heute.action.writeInvoice',
-  'heute.action.captureExpense',
-  'heute.action.openOrder',
-  'heute.action.writeMessage',
-  'heute.action.askOfficePilot',
-];
+import {
+  getHeuteDashboardStats,
+  isHeuteFirstRunState,
+} from '../services/heuteDashboardService';
 
 export function HeutePage() {
   const { translate } = useApp();
   const navigate = useNavigate();
-  const [pendingItems] = useState(() => scanPendingItems().items);
-  const [lifecycleItems] = useState(() => scanDocumentLifecyclePending());
+  const [{ dashboardStats, isFirstRun, openItems }] = useState(() => {
+    const firstRun = isHeuteFirstRunState();
+    return {
+      dashboardStats: getHeuteDashboardStats(),
+      isFirstRun: firstRun,
+      openItems: firstRun ? [] : scanDocumentLifecyclePending().slice(0, 5),
+    };
+  });
 
-  const quickActions = useMemo(
-    () =>
-      QUICK_ACTION_KEYS.map((key) => ({
-        key,
-        route: resolveHeuteQuickActionRoute(key),
-      })).filter((entry): entry is { key: TranslationKey; route: string } => entry.route !== null),
-    [],
+  const showOpenItems = useMemo(
+    () => !isFirstRun && openItems.length > 0,
+    [isFirstRun, openItems.length],
   );
 
   return (
     <div className="page heute-page" data-testid="heute-page">
-      <PageHeader
-        title={translate('heute.title')}
-        subtitle={translate('heute.subtitle')}
-      />
-
-      <section className="heute-search" data-testid="heute-search">
-        <GlobalSearchBar compact />
-      </section>
-
-      <section className="heute-hero" aria-label={translate('heute.scanButton')}>
-        <Button
-          fullWidth
-          className="heute-scan-button"
-          data-testid="heute-scan-button"
-          onClick={() => navigate('/scan')}
-        >
-          {translate('heute.scanButton')}
-        </Button>
-      </section>
-
-      <section className="heute-quick-actions" data-testid="heute-quick-actions">
-        <h2 className="heute-section-title">{translate('heute.quickActionsTitle')}</h2>
-        <div className="heute-quick-actions__grid">
-          {quickActions.map(({ key, route }) => (
-            <Link key={key} to={route} className="heute-quick-action">
-              {translate(key)}
-            </Link>
-          ))}
+      <section className="heute-hero" data-testid="heute-hero">
+        <div className="heute-hero__copy">
+          <h1 className="heute-hero__title">{translate('heute.hero.title')}</h1>
+          <p className="heute-hero__subtitle">{translate('heute.hero.subtitle')}</p>
+        </div>
+        <div className="heute-hero__actions">
+          <Button
+            fullWidth
+            className="heute-hero__primary"
+            data-testid="heute-scan-button"
+            onClick={() => navigate('/scan')}
+          >
+            {translate('heute.hero.scan')}
+          </Button>
+          <Button
+            fullWidth
+            variant="outline"
+            className="heute-hero__secondary"
+            data-testid="heute-ask-button"
+            onClick={() => navigate('/assistent')}
+          >
+            {translate('heute.hero.ask')}
+          </Button>
         </div>
       </section>
 
-      <HeuteTodayList items={pendingItems.slice(0, 10)} />
+      <HeuteDashboardCards stats={dashboardStats} />
 
-      {lifecycleItems.length > 0 && (
-        <section className="heute-lifecycle-list" data-testid="heute-lifecycle-list">
-          <Card>
-            <CardTitle>{translate('heute.lifecycleTitle')}</CardTitle>
-            <HeuteTodayList items={lifecycleItems.slice(0, 8)} />
-          </Card>
-        </section>
-      )}
+      {isFirstRun ? <HeuteWelcomeState /> : null}
+
+      <HeuteQuickActionCards />
+
+      {showOpenItems ? <HeuteOpenItems items={openItems} /> : null}
     </div>
   );
 }

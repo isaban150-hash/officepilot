@@ -56,6 +56,8 @@ export function hydrateInboxStore(items: InboxItem[]): void {
 export interface InboxActionResult {
   success: boolean;
   message: string;
+  messageKey?: import('../i18n').TranslationKey;
+  messageParams?: Record<string, string>;
   item: InboxItem;
   taskCreated?: import('../types/models').Task;
 }
@@ -136,7 +138,7 @@ export function getInboxSummary(): { total: number; neu: number; urgent: number 
 export function markAsReviewed(id: string): InboxActionResult | null {
   const item = patchInboxItem(id, { status: 'geprueft', isNewUpload: false });
   if (!item) return null;
-  return { success: true, message: 'Dokument als geprüft markiert.', item };
+  return { success: true, messageKey: 'inbox.toast.reviewed', message: 'Dokument als geprüft markiert.', item };
 }
 
 export function deferItem(id: string): InboxActionResult | null {
@@ -144,6 +146,7 @@ export function deferItem(id: string): InboxActionResult | null {
   if (!item) return null;
   return {
     success: true,
+    messageKey: 'inbox.toast.deferred',
     message: 'Zur späteren Klärung gespeichert – nichts wurde gelöscht.',
     item,
   };
@@ -156,7 +159,9 @@ export function confirmDispose(id: string): InboxActionResult | null {
   if (!item) return null;
   return {
     success: true,
-    message: 'Entsorgung bestätigt. Das Dokument wurde aus dem aktiven Eingang entfernt – nichts automatisch gelöscht.',
+    messageKey: 'inbox.toast.disposed',
+    message:
+      'Entsorgung bestätigt. Das Dokument wurde aus dem aktiven Eingang entfernt – nichts automatisch gelöscht.',
     item,
   };
 }
@@ -168,6 +173,7 @@ export function saveAdvertisementAnyway(id: string): InboxActionResult | null {
   if (!item) return null;
   return {
     success: true,
+    messageKey: 'inbox.toast.adSaved',
     message: 'Werbung manuell gespeichert und abgelegt.',
     item,
   };
@@ -278,6 +284,7 @@ export function markInboxImportedToArchive(
   if (!item) return null;
   return {
     success: true,
+    messageKey: 'inbox.toast.archived',
     message: 'Ins Dokumentenarchiv übernommen.',
     item,
   };

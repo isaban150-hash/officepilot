@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { PageHeader } from '../components/ui/Card';
 import { useApp } from '../context/AppContext';
+import { buildSkontoText } from '../services/invoiceTaxService';
 import { validateCompanyProfileForSettings } from '../services/setupValidationService';
 import { getInvoiceNumberSequenceSnapshot } from '../services/invoiceNumberService';
 import type { CompanyProfile } from '../types/models';
@@ -13,6 +14,7 @@ type ProfileField = keyof CompanyProfile;
 const TEXT_FIELDS: { key: ProfileField; labelKey: TranslationKey; type?: string }[] = [
   { key: 'companyName', labelKey: 'companyProfile.companyName' },
   { key: 'legalForm', labelKey: 'companyProfile.legalForm' },
+  { key: 'managingDirector', labelKey: 'companyProfile.managingDirector' },
   { key: 'street', labelKey: 'companyProfile.street' },
   { key: 'zip', labelKey: 'companyProfile.zip' },
   { key: 'city', labelKey: 'companyProfile.city' },
@@ -27,7 +29,7 @@ const TEXT_FIELDS: { key: ProfileField; labelKey: TranslationKey; type?: string 
   { key: 'iban', labelKey: 'companyProfile.iban' },
   { key: 'bic', labelKey: 'companyProfile.bic' },
   { key: 'defaultPaymentTerms', labelKey: 'companyProfile.defaultPaymentTerms' },
-  { key: 'defaultSkonto', labelKey: 'companyProfile.defaultSkonto' },
+  { key: 'taxFreeNotice', labelKey: 'companyProfile.taxFreeNotice' },
 ];
 
 export function FirmendatenPage() {
@@ -35,16 +37,39 @@ export function FirmendatenPage() {
   const [draft, setDraft] = useState<CompanyProfile>(() => ({ ...companyProfile }));
   const [errorKey, setErrorKey] = useState<TranslationKey | null>(null);
 
-  const handleChange = (key: ProfileField, value: string | number) => {
-    setDraft((prev) => ({ ...prev, [key]: value }));
+  const handleChange = (key: ProfileField, value: string | number | boolean) => {
+    setDraft((prev) => {
+      const next = { ...prev, [key]: value };
+      if (key === 'skontoEnabled' || key === 'skontoPercent' || key === 'skontoDays') {
+        next.defaultSkonto = buildSkontoText(next);
+      }
+      return next;
+    });
+  };
+
+  const handleLogoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        handleChange('logoDataUrl', reader.result);
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
     setErrorKey(null);
 
+    const payload = {
+      ...draft,
+      defaultSkonto: draft.skontoEnabled ? buildSkontoText(draft) : '',
+    };
+
     const validation = validateCompanyProfileForSettings(
-      draft,
+      payload,
       getInvoiceNumberSequenceSnapshot().lastIssuedNumber,
     );
     if (!validation.valid) {
@@ -53,7 +78,7 @@ export function FirmendatenPage() {
       return;
     }
 
-    const result = updateCompanyProfile(draft);
+    const result = updateCompanyProfile(payload);
     if (!result.success) {
       setErrorKey(result.errorKey as TranslationKey);
       return;
@@ -100,6 +125,48 @@ export function FirmendatenPage() {
           />
         </fieldset>
 
+        <fieldset className="form-group company-profile-form__skonto">
+          <label className="checkbox-row">
+            <input
+              type="checkbox"
+              checked={Boolean(draft.skontoEnabled)}
+              onChange={(e) => handleChange('skontoEnabled', e.target.checked)}
+            />
+            {translate('companyProfile.skontoEnabled')}
+          </label>
+          {draft.skontoEnabled && (
+            <div className="form-row">
+              <div>
+                <label htmlFor="profile-skonto-percent">{translate('companyProfile.skontoPercent')}</label>
+                <input
+                  id="profile-skonto-percent"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  className="input"
+                  value={draft.skontoPercent ?? 0}
+                  onChange={(e) => handleChange('skontoPercent', Number(e.target.value) || 0)}
+                />
+              </div>
+              <div>
+                <label htmlFor="profile-skonto-days">{translate('companyProfile.skontoDays')}</label>
+                <input
+                  id="profile-skonto-days"
+                  type="number"
+                  min="1"
+                  className="input"
+                  value={draft.skontoDays ?? 0}
+                  onChange={(e) => handleChange('skontoDays', Number(e.target.value) || 0)}
+                />
+              </div>
+            </div>
+          )}
+          {draft.skontoEnabled && buildSkontoText(draft) && (
+            <p className="hint-text">{buildSkontoText(draft)}</p>
+          )}
+        </fieldset>
+
         <fieldset className="form-group">
           <label htmlFor="profile-footer">{translate('companyProfile.invoiceFooterNotes')}</label>
           <textarea
@@ -112,6 +179,22 @@ export function FirmendatenPage() {
         </fieldset>
 
         <fieldset className="form-group">
+          <label htmlFor="profile-logo-file">{translate('companyProfile.logoUpload')}</label>
+          <input
+            id="profile-logo-file"
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/svg+xml"
+            className="input"
+            onChange={handleLogoUpload}
+          />
+          {draft.logoDataUrl && (
+            <img
+              src={draft.logoDataUrl}
+              alt=""
+              className="company-profile-form__logo-preview"
+              data-testid="company-logo-preview"
+            />
+          )}
           <label htmlFor="profile-logo">{translate('companyProfile.logoDataUrl')}</label>
           <input
             id="profile-logo"

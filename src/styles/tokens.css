@@ -1,0 +1,111 @@
+/**
+ * OfficePilot Design System v1.0 – Tokens
+ * Navy Trust palette for premium B2B handwerk apps
+ */
+
+:root {
+  /* Brand colors */
+  --op-primary: #1f3c88;
+  --op-primary-hover: #1a3170;
+  --op-secondary: #0f766e;
+  --op-secondary-hover: #0d655e;
+
+  /* Surfaces */
+  --op-bg: #f8fafc;
+  --op-surface: #ffffff;
+  --op-surface-soft: #f1f5f9;
+
+  /* Text */
+  --op-text: #0f172a;
+  --op-text-muted: #475569;
+
+  /* Borders & controls */
+  --op-divider: #e2e8f0;
+  --op-control-border: #64748b;
+  --op-focus: #1f3c88;
+
+  /* Semantic */
+  --op-success: #15803d;
+  --op-warning: #b45309;
+  --op-danger: #b91c1c;
+
+  /* Radius */
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --radius-xl: 20px;
+
+  /* Spacing scale */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* Shadows */
+  --shadow-card: 0 4px 16px rgba(15, 23, 42, 0.06);
+  --shadow-card-hover: 0 10px 28px rgba(15, 23, 42, 0.1);
+  --shadow-elevated: 0 16px 40px rgba(15, 23, 42, 0.12);
+
+  /* Motion */
+  --motion-fast: 120ms;
+  --motion-base: 180ms;
+  --motion-enter: 220ms;
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Typography */
+  --font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --text-hero: clamp(2rem, 5vw, 2.5rem);
+  --text-section: clamp(1.25rem, 3vw, 1.5rem);
+  --text-card-title: 1.125rem;
+  --text-body: 1rem;
+  --text-body-mobile: 0.9375rem;
+  --text-meta: 0.875rem;
+  --text-button: 0.9375rem;
+  --line-height-tight: 1.25;
+  --line-height-body: 1.55;
+  --line-height-relaxed: 1.65;
+
+  /* Layout */
+  --content-max-width: 1120px;
+  --nav-height: 72px;
+  --top-height: 52px;
+  --sidebar-width: 248px;
+
+  /* Legacy aliases (backward compatible) */
+  --color-bg: var(--op-bg);
+  --color-bg-soft: var(--op-surface-soft);
+  --color-surface: var(--op-surface);
+  --color-primary: var(--op-primary);
+  --color-primary-light: var(--op-primary-hover);
+  --color-accent: var(--op-primary);
+  --color-accent-soft: #eef2ff;
+  --color-text: var(--op-text);
+  --color-text-muted: var(--op-text-muted);
+  --color-border: var(--op-divider);
+  --color-border-subtle: var(--op-divider);
+  --color-success: var(--op-success);
+  --color-warning: var(--op-warning);
+  --color-danger: var(--op-danger);
+  --color-focus: var(--op-focus);
+  --radius: var(--radius-lg);
+  --shadow-sm: var(--shadow-card);
+  --shadow: var(--shadow-card-hover);
+  --shadow-lg: var(--shadow-elevated);
+  --font: var(--font-family);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

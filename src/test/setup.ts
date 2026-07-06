@@ -1,3 +1,4 @@
+import { resetAuthForTests } from './authFixtures';
 import { beforeEach } from 'vitest';
 import { resetTestStores } from './resetStores';
 
@@ -6,5 +7,7 @@ import { resetTestStores } from './resetStores';
 
 beforeEach(() => {
   localStorage.clear();
+  sessionStorage.clear();
   resetTestStores();
+  resetAuthForTests();
 });

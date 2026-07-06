@@ -5,12 +5,14 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { DEFAULT_SETUP } from '../data/mockData';
 import { DEFAULT_COMPANY_PROFILE } from '../data/companyProfileDefaults';
 import { AppProvider } from '../context/AppContext';
+import { AuthProvider } from '../context/AuthContext';
 import App from '../App';
 import { SetupPage } from './SetupPage';
 import { hydrateCompanyProfileStore } from '../services/companyProfileService';
 import { resetInvoiceNumberSequence } from '../services/invoiceNumberService';
 import { resetCommunicationHistoryStore } from '../services/communicationHistoryStore';
 import { resetKnowledgeStore } from '../services/knowledgeStore';
+import { loginAsDefaultAdmin } from '../test/authFixtures';
 import { createDefaultSetupWizardDraft } from '../types/setup';
 
 const incompleteSetup = { ...DEFAULT_SETUP, setupComplete: false };
@@ -31,9 +33,11 @@ function renderApp(initialSetup = incompleteSetup): Mount {
     root = createRoot(container);
     root.render(
       <MemoryRouter initialEntries={['/setup']}>
-        <AppProvider initialSetup={initialSetup}>
-          <App />
-        </AppProvider>
+        <AuthProvider>
+          <AppProvider initialSetup={initialSetup}>
+            <App />
+          </AppProvider>
+        </AuthProvider>
       </MemoryRouter>,
     );
   });
@@ -78,12 +82,14 @@ function fillCompanyStep(container: ParentNode): void {
 describe('FirstRunWizard / SetupPage', () => {
   let mounted: Mount | undefined;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     localStorage.clear();
+    sessionStorage.clear();
     hydrateCompanyProfileStore({ ...DEFAULT_COMPANY_PROFILE });
     resetInvoiceNumberSequence();
     resetCommunicationHistoryStore();
     resetKnowledgeStore();
+    await loginAsDefaultAdmin();
   });
 
   afterEach(() => {

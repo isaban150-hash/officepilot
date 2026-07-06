@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { AppProvider } from '../context/AppContext';
+import { AuthProvider } from '../context/AuthContext';
 import { DEFAULT_SETUP } from '../data/mockData';
 import { SyncPage } from './SyncPage';
 import { MehrPage } from './MehrPage';
@@ -191,8 +192,11 @@ describe('SyncPage', () => {
     );
 
     expect(html).toContain('data-testid="sync-outbox-pending-list"');
-    expect(html).toContain('document');
-    expect(html).toContain('update');
+    expect(html).toContain('Dokument');
+    expect(html).toContain('Aktualisieren');
+    expect(html).toContain('Ausstehend');
+    expect(html).not.toContain('document');
+    expect(html).not.toContain('update');
   });
 
   it('zeigt Report-Werte nach Sync', () => {
@@ -222,7 +226,7 @@ describe('SyncPage', () => {
     );
 
     expect(html).toContain('12 ms');
-    expect(html).toContain('Retry-Versuche');
+    expect(html).toContain('Wiederholungen');
   });
 });
 
@@ -230,9 +234,11 @@ describe('MehrPage sync link', () => {
   it('zeigt Link zur Synchronisation', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
-        <AppProvider initialSetup={completeSetup}>
-          <MehrPage />
-        </AppProvider>
+        <AuthProvider>
+          <AppProvider initialSetup={completeSetup}>
+            <MehrPage />
+          </AppProvider>
+        </AuthProvider>
       </MemoryRouter>,
     );
 

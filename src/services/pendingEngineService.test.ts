@@ -327,7 +327,7 @@ describe('pendingEngineService summary and dedupe', () => {
         kind: 'inbox_new' as const,
         title: 'A',
         priority: 'niedrig' as const,
-        route: '/eingang/inbox-1',
+        route: '/ablage/inbox-1',
         sourceType: 'inbox' as const,
       },
       {
@@ -335,7 +335,7 @@ describe('pendingEngineService summary and dedupe', () => {
         kind: 'inbox_new' as const,
         title: 'A',
         priority: 'niedrig' as const,
-        route: '/eingang/inbox-1',
+        route: '/ablage/inbox-1',
         sourceType: 'inbox' as const,
       },
     ];

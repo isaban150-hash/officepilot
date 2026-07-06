@@ -15,12 +15,14 @@ import { hydrateVorgangStore } from '../services/vorgangService';
 import { hydrateVorgangNotes } from '../services/vorgangNoteService';
 import { resetCommunicationHistoryStore } from '../services/communicationHistoryStore';
 import { resetKnowledgeStore } from '../services/knowledgeStore';
+import { resetUploadedDocumentStore } from '../services/uploadedDocumentStore';
 
 export function resetTestStores(): void {
   hydrateInboxStore([]);
   hydrateVorgangStore([]);
   hydrateTaskStore([]);
   hydrateDocumentStore([]);
+  resetUploadedDocumentStore();
   hydrateExpenseStore([]);
   hydrateVorgangNotes([]);
   resetCommunicationHistoryStore();

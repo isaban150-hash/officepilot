@@ -5,6 +5,7 @@ import type {
   MemoryRiskLevel,
   PremiumLetterExplanation,
 } from '../../types/memory';
+import { OFFICEPILOT_LEGAL_DISCLAIMER } from '../../config/legalDisclaimer';
 import { buildExplanation } from '../documentClassificationCatalog';
 import { getTodayIso } from '../taskNormalize';
 import {
@@ -20,8 +21,7 @@ import {
   mergeRulesIntoMemorySummary,
 } from './documentSummaryService';
 
-const DISCLAIMER =
-  'OfficePilot erteilt keine Rechts- oder Steuerberatung und trifft keine endgültigen Aussagen.';
+const DISCLAIMER = OFFICEPILOT_LEGAL_DISCLAIMER;
 
 export interface UnderstandDocumentOptions {
   inboxItem?: InboxItem;

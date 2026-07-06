@@ -135,7 +135,7 @@ describe('documentExplanationService', () => {
     expect(explanation).not.toBeNull();
     expect(explanation!.deadline).toContain('2026');
     expect(explanation!.risk.length).toBeGreaterThan(3);
-    expect(explanation!.disclaimer).toContain('Steuerberater');
+    expect(explanation!.disclaimer).toContain('keine Rechts- oder Steuerberatung');
     expect(explanation!.shortAnswer.toLowerCase()).not.toContain('steuerlich sicher');
   });
 
@@ -195,7 +195,7 @@ describe('documentExplanationService', () => {
       expect(containsForbiddenExplanationPhrase(combined)).toBe(false);
       expect(combined.toLowerCase()).not.toContain('rechtlich verbindlich');
     }
-    expect(EXPLANATION_DISCLAIMER).toContain('Steuerberater');
+    expect(EXPLANATION_DISCLAIMER).toContain('keine Rechts- oder Steuerberatung');
   });
 });
 

@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import App from '../App';
 import { AppProvider } from '../context/AppContext';
+import { AuthProvider } from '../context/AuthContext';
 import {
   BETA_TEST_SETUP,
   isBetaTestMode,
@@ -21,6 +22,7 @@ import {
 import { resetInvoiceNumberSequence } from '../services/invoiceNumberService';
 import { resetCommunicationHistoryStore } from '../services/communicationHistoryStore';
 import { resetKnowledgeStore } from '../services/knowledgeStore';
+import { loginAsDefaultAdmin } from '../test/authFixtures';
 
 type Mount = { container: HTMLDivElement; root: Root };
 
@@ -32,9 +34,11 @@ function renderAppAt(path: string, initialSetup = DEFAULT_SETUP): Mount {
     root = createRoot(container);
     root.render(
       <MemoryRouter initialEntries={[path]}>
-        <AppProvider initialSetup={initialSetup}>
-          <App />
-        </AppProvider>
+        <AuthProvider>
+          <AppProvider initialSetup={initialSetup}>
+            <App />
+          </AppProvider>
+        </AuthProvider>
       </MemoryRouter>,
     );
   });
@@ -45,6 +49,7 @@ describe('betaTestMode', () => {
   afterEach(() => {
     vi.unstubAllEnvs();
     localStorage.clear();
+    sessionStorage.clear();
   });
 
   it('ist ohne Flag inaktiv', () => {
@@ -59,12 +64,14 @@ describe('betaTestMode', () => {
 });
 
 describe('betaTestMode – persistence bootstrap', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     localStorage.clear();
+    sessionStorage.clear();
     hydrateCompanyProfileStore({ ...DEFAULT_COMPANY_PROFILE });
     resetInvoiceNumberSequence();
     resetCommunicationHistoryStore();
     resetKnowledgeStore();
+    await loginAsDefaultAdmin();
   });
 
   afterEach(() => {
@@ -96,12 +103,14 @@ describe('betaTestMode – persistence bootstrap', () => {
 describe('betaTestMode – routing', () => {
   let mounted: Mount | undefined;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     localStorage.clear();
+    sessionStorage.clear();
     hydrateCompanyProfileStore({ ...DEFAULT_COMPANY_PROFILE });
     resetInvoiceNumberSequence();
     resetCommunicationHistoryStore();
     resetKnowledgeStore();
+    await loginAsDefaultAdmin();
   });
 
   afterEach(() => {

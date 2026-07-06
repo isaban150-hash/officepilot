@@ -1,5 +1,7 @@
+import { OFFICEPILOT_LEGAL_DISCLAIMER } from '../config/legalDisclaimer';
+
 export const COMMUNICATION_DISCLAIMER =
-  'OfficePilot erteilt keine Rechts- oder Steuerberatung und trifft keine endgültigen Aussagen. Bitte prüfen Sie alle Formulierungen vor dem Versand.';
+  `${OFFICEPILOT_LEGAL_DISCLAIMER} Bitte prüfen Sie alle Formulierungen vor dem Versand.`;
 
 export const COMMUNICATION_UNCERTAIN_HINT =
   'Bitte prüfen oder Steuerberater/Ansprechpartner fragen.';

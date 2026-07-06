@@ -7,29 +7,9 @@
 }
 
 :root {
-  --color-bg: #e9eef5;
-  --color-bg-soft: #f4f7fb;
-  --color-surface: #ffffff;
-  --color-primary: #152238;
-  --color-primary-light: #243b5c;
-  --color-accent: #2563eb;
-  --color-accent-soft: #eef4ff;
-  --color-text: #0f172a;
-  --color-text-muted: #5c6b80;
-  --color-border: #d5dee9;
-  --color-border-subtle: #e8eef4;
-  --color-success: #047857;
-  --color-warning: #b45309;
-  --color-danger: #b91c1c;
-  --radius: 16px;
-  --radius-sm: 10px;
-  --radius-lg: 20px;
-  --shadow-sm: 0 1px 3px rgba(15, 35, 56, 0.06);
-  --shadow: 0 6px 20px rgba(15, 35, 56, 0.08);
-  --shadow-lg: 0 12px 32px rgba(15, 35, 56, 0.12);
+  /* Design tokens: see src/styles/tokens.css */
   --nav-height: 72px;
   --top-height: 52px;
-  --font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 
 html {
@@ -201,114 +181,7 @@ body {
   color: var(--color-primary);
 }
 
-/* Heute start page */
-.heute-page {
-  gap: 1.25rem;
-}
-
-.heute-hero {
-  margin-top: 0.15rem;
-  padding: 1.125rem;
-  border-radius: var(--radius-lg);
-  background: linear-gradient(145deg, #1a2d4a 0%, #243b5c 55%, #2f4f7a 100%);
-  box-shadow: var(--shadow-lg);
-}
-
-.heute-scan-button {
-  font-size: 1.05rem;
-  padding: 1rem 1.25rem;
-  min-height: 52px;
-  background: #fff !important;
-  color: var(--color-primary) !important;
-  border: none;
-  box-shadow: var(--shadow-sm);
-}
-
-.heute-scan-button:hover {
-  background: #f8fafc !important;
-}
-
-.heute-section-title {
-  font-size: 0.78rem;
-  font-weight: 700;
-  color: var(--color-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  margin-bottom: 0.65rem;
-}
-
-.heute-quick-actions__grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.65rem;
-}
-
-.heute-quick-action {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 3.25rem;
-  padding: 0.85rem 0.75rem;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius);
-  text-decoration: none;
-  color: var(--color-text);
-  font-size: 0.88rem;
-  font-weight: 600;
-  line-height: 1.35;
-  text-align: center;
-  box-shadow: var(--shadow-sm);
-  transition: border-color 0.15s, box-shadow 0.15s, transform 0.1s;
-}
-
-.heute-quick-action:active {
-  transform: scale(0.98);
-}
-
-.heute-quick-action:hover {
-  border-color: #b8c9e6;
-  box-shadow: var(--shadow);
-  color: var(--color-primary);
-}
-
-.heute-today-list__items {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.heute-today-list__item {
-  width: 100%;
-  text-align: left;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius);
-  padding: 0.9rem 1rem;
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  box-shadow: var(--shadow-sm);
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-
-.heute-today-list__item:active {
-  box-shadow: var(--shadow);
-}
-
-.heute-today-list__item-title {
-  font-weight: 650;
-  font-size: 0.95rem;
-  line-height: 1.35;
-}
-
-.heute-today-list__item-desc {
-  font-size: 0.82rem;
-  color: var(--color-text-muted);
-  line-height: 1.4;
-}
+/* Heute styles → src/styles/heute.css */
 
 .app-shell__body {
   display: flex;
@@ -688,10 +561,6 @@ body {
   .sidebar-nav__item {
     padding: 0.75rem 1rem;
     font-size: 0.95rem;
-  }
-
-  .heute-quick-actions__grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
@@ -2444,6 +2313,67 @@ body {
 .invoice-footer p {
   margin: 0;
   white-space: pre-wrap;
+}
+
+.invoice-footer__notes {
+  margin-bottom: 0.5rem;
+}
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: var(--radius-md);
+  padding: 1rem;
+}
+
+.invoice-footer__legal {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #e5e7eb;
+  line-height: 1.5;
+}
+
+.invoice-footer__legal p {
+  margin: 0.15rem 0;
+}
+
+.invoice-footer__company {
+  font-weight: 650;
+  color: #374151;
+}
+
+.company-profile-form__logo-preview {
+  display: block;
+  max-width: 120px;
+  max-height: 80px;
+  margin: 0.75rem 0;
+  object-fit: contain;
+}
+
+.invoice-type-picker {
+  margin-bottom: 1rem;
+}
+
+.invoice-type-picker__label {
+  margin: 0 0 0.5rem;
+  font-weight: 600;
+}
+
+.invoice-header__logo,
+.invoice-header__logo-placeholder {
+  width: 88px;
+  height: 88px;
+}
+
+.invoice-header {
+  border-bottom-color: #1f3c88;
+}
+
+.invoice-positions__table th,
+.invoice-positions__table td {
+  padding: 0.65rem 0.5rem;
+}
+
+.invoice-summary__row--total {
+  color: #1f3c88;
 }
 
 .invoice-edit {

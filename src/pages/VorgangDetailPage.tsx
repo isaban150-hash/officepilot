@@ -151,7 +151,7 @@ export function VorgangDetailPage() {
   const primaryActions = (
     <>
       {hasOrderPositions && (
-        <Link to={`/vorgaenge/${vorgang.id}/rechnung?type=abschlag`}>
+        <Link to={`/vorgaenge/${vorgang.id}/rechnung?type=rechnung`}>
           <Button fullWidth>{translate('detail.action.writeInvoice')}</Button>
         </Link>
       )}

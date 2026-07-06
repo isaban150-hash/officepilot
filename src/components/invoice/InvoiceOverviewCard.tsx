@@ -24,8 +24,12 @@ interface Props {
 }
 
 function invoiceTypeLabel(invoice: VorgangInvoice, translate: (key: TranslationKey) => string): string {
-  if (invoice.type === 'schluss') return translate('invoice.schlussLabel');
-  return `${translate('invoice.abschlagLabel')} ${invoice.abschlagNumber ?? '?'}`;
+  const key = `invoice.type.${invoice.type}` as TranslationKey;
+  const label = translate(key);
+  if (invoice.type === 'abschlag' && invoice.abschlagNumber) {
+    return `${label} ${invoice.abschlagNumber}`;
+  }
+  return label;
 }
 
 function workflowStatusLabel(

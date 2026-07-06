@@ -10,6 +10,7 @@ import {
 } from '../../services/inboxService';
 import { confirmFiling } from '../../services/inboxTaskService';
 import { formatPaperFilingInstruction } from '../../services/paperFolderService';
+import { formatInboxActionToast } from '../../utils/inboxActionToast';
 import type { InboxItem } from '../../types/models';
 import type { TranslationKey } from '../../i18n';
 
@@ -31,39 +32,29 @@ export function InboxCard({ item, onReview, onUpdated }: InboxCardProps) {
   const docTypeKey = `docType.${item.documentType}` as TranslationKey;
   const actionKey = `action.${item.recommendedAction}` as TranslationKey;
 
+  const notify = (result: NonNullable<ReturnType<typeof confirmFiling>>) => {
+    showToast(formatInboxActionToast(result, translate));
+    onUpdated();
+  };
+
   const handleFiling = () => {
     const result = confirmFiling(item.id);
-    if (result) {
-      const msg = result.taskCreated
-        ? `${result.message} Aufgabe: ${result.taskCreated.title}`
-        : result.message;
-      showToast(msg);
-      onUpdated();
-    }
+    if (result) notify(result);
   };
 
   const handleDefer = () => {
     const result = deferItem(item.id);
-    if (result) {
-      showToast(result.message);
-      onUpdated();
-    }
+    if (result) notify(result);
   };
 
   const handleDispose = () => {
     const result = confirmDispose(item.id);
-    if (result) {
-      showToast(result.message);
-      onUpdated();
-    }
+    if (result) notify(result);
   };
 
   const handleSaveAnyway = () => {
     const result = saveAdvertisementAnyway(item.id);
-    if (result) {
-      showToast(result.message);
-      onUpdated();
-    }
+    if (result) notify(result);
   };
 
   return (

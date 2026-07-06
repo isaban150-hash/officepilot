@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { PendingAttentionCard } from '../components/dashboard/PendingAttentionCard';
 import { InboxCard } from '../components/inbox/InboxCard';
 import { Button } from '../components/ui/Button';
+import { EmptyStateBlock } from '../components/ui/EmptyStateBlock';
 import { Card, CardMeta, CardTitle, PageHeader } from '../components/ui/Card';
 import { useApp } from '../context/AppContext';
 import {
@@ -59,7 +60,16 @@ export function EingangPage() {
 
       <div className="card-list">
         {items.length === 0 ? (
-          <p className="empty-state">{translate('ablage.empty')}</p>
+          <EmptyStateBlock
+            title={translate('ablage.empty.title')}
+            description={translate('ablage.empty.desc')}
+            testId="ablage-empty-state"
+            actions={
+              <Button fullWidth onClick={() => navigate('/scan')}>
+                {translate('ablage.empty.action')}
+              </Button>
+            }
+          />
         ) : (
           items.map((item) => (
             <InboxCard

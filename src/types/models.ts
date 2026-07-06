@@ -6,9 +6,19 @@ export type AppLanguage = 'de' | 'tr' | 'bg' | 'ro' | 'ru';
 
 export type TaxStatus =
   | 'standard_19'
+  | 'standard_7'
   | 'kleinunternehmer_19'
   | 'reverse_charge_13b'
+  | 'tax_free'
   | 'unclear';
+
+export type InvoiceDocumentType =
+  | 'rechnung'
+  | 'abschlag'
+  | 'teilrechnung'
+  | 'schluss'
+  | 'gutschrift'
+  | 'storno';
 
 export type MaterialStandard =
   | 'auftraggeber'
@@ -656,6 +666,11 @@ export interface CompanyProfile {
   defaultPaymentDays: number;
   defaultPaymentTerms: string;
   defaultSkonto: string;
+  skontoEnabled?: boolean;
+  skontoPercent?: number;
+  skontoDays?: number;
+  managingDirector?: string;
+  taxFreeNotice?: string;
   invoiceFooterNotes: string;
 }
 
@@ -833,7 +848,7 @@ export interface PaymentSummary {
 export interface VorgangInvoice {
   id: string;
   number: string;
-  type: 'abschlag' | 'schluss';
+  type: InvoiceDocumentType;
   abschlagNumber?: number;
   invoiceSequenceNumber?: number;
   positions: VorgangInvoiceLine[];
@@ -932,7 +947,7 @@ export interface InvoiceDraft {
   vorgangTitle: string;
   customer: string;
   baustelle: string;
-  type: 'abschlag' | 'schluss';
+  type: InvoiceDocumentType;
   abschlagNumber?: number;
   taxStatus: TaxStatus;
   materialSource: MaterialStandard;
@@ -978,7 +993,7 @@ export interface InvoicePrintSummary {
 }
 
 export interface InvoicePrintModel {
-  type: 'abschlag' | 'schluss';
+  type: InvoiceDocumentType;
   documentTitle: string;
   invoiceNumber: string;
   issueDate: string;
@@ -1113,6 +1128,7 @@ export interface AppPersistedState {
   vorgaenge: Vorgang[];
   tasks: Task[];
   documents: CompanyDocument[];
+  uploadedDocuments?: import('./uploadedDocument').UploadedDocument[];
   expenses?: Expense[];
   vorgangNotes?: VorgangNote[];
   communicationHistory?: CommunicationEvent[];

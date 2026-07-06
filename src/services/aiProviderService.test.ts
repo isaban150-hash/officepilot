@@ -77,7 +77,8 @@ describe('aiProviderService', () => {
     expect(result.success).toBe(false);
     if (result.success) return;
     expect(result.errorCode).toBe('api_error');
-    expect(result.message).toContain('quota');
+    expect(result.message).toContain('Bitte versuchen Sie');
+    expect(result.message).not.toContain('quota');
   });
 
   it('handles empty Gemini responses', async () => {

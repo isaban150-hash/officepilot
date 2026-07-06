@@ -34,6 +34,11 @@ import {
   resetDocuments,
 } from './documentService';
 import {
+  getUploadedDocumentStoreSnapshot,
+  hydrateUploadedDocumentStore,
+  resetUploadedDocumentStore,
+} from './uploadedDocumentStore';
+import {
   getExpenseStoreSnapshot,
   hydrateExpenseStore,
   resetExpenses,
@@ -242,6 +247,7 @@ export function loadLegacySetup(): CompanySetup | null {
 
 export function createSeedState(setupOverride?: CompanySetup): AppPersistedState {
   const setup = setupOverride ?? loadLegacySetup() ?? { ...DEFAULT_SETUP };
+  const emptyBusinessData = true;
   const companyProfile =
     isBetaTestMode() && setup.setupComplete
       ? { ...BETA_TEST_COMPANY_PROFILE, companyName: setup.companyName || BETA_TEST_SETUP.companyName }
@@ -258,13 +264,16 @@ export function createSeedState(setupOverride?: CompanySetup): AppPersistedState
       setup,
       companyProfile,
       invoiceNumberSequence,
-      inboxItems: MOCK_INBOX_ITEMS.map(cloneInboxItem),
-      vorgaenge: MOCK_VORGAENGE.map(cloneVorgang),
-      tasks: (MOCK_TASKS as Array<Partial<Task> & Pick<Task, 'id' | 'title'>>).map((t) =>
-        normalizeTask(t),
-      ),
-      documents: MOCK_COMPANY_DOCUMENTS.map(cloneCompanyDocument),
-      expenses: MOCK_EXPENSES.map(cloneExpense),
+      inboxItems: emptyBusinessData ? [] : MOCK_INBOX_ITEMS.map(cloneInboxItem),
+      vorgaenge: emptyBusinessData ? [] : MOCK_VORGAENGE.map(cloneVorgang),
+      tasks: emptyBusinessData
+        ? []
+        : (MOCK_TASKS as Array<Partial<Task> & Pick<Task, 'id' | 'title'>>).map((t) =>
+            normalizeTask(t),
+          ),
+      documents: emptyBusinessData ? [] : MOCK_COMPANY_DOCUMENTS.map(cloneCompanyDocument),
+      uploadedDocuments: [],
+      expenses: emptyBusinessData ? [] : MOCK_EXPENSES.map(cloneExpense),
       vorgangNotes: [],
       communicationHistory: [],
       knowledgeFacts: [],
@@ -394,6 +403,7 @@ function applyStateToStores(state: AppPersistedState): void {
   hydrateVorgangStore(state.vorgaenge);
   hydrateTaskStore(state.tasks);
   hydrateDocumentStore(state.documents ?? []);
+  hydrateUploadedDocumentStore(state.uploadedDocuments ?? []);
   hydrateExpenseStore(state.expenses ?? []);
   hydrateVorgangNotes(state.vorgangNotes ?? []);
   hydrateCommunicationHistory(state.communicationHistory ?? []);
@@ -478,6 +488,7 @@ export function buildPersistedStateSnapshot(): AppPersistedState {
     vorgaenge: getVorgangStoreSnapshot(),
     tasks: getTaskStoreSnapshot(),
     documents: getDocumentStoreSnapshot(),
+    uploadedDocuments: getUploadedDocumentStoreSnapshot(),
     expenses: getExpenseStoreSnapshot(),
     vorgangNotes: getVorgangNoteStoreSnapshot(),
     communicationHistory: getCommunicationHistorySnapshot(),
@@ -501,6 +512,7 @@ export function resetDemoData(options?: { keepSetup?: boolean }): CompanySetup {
   resetVorgaenge();
   resetTasks();
   resetDocuments();
+  resetUploadedDocumentStore();
   resetExpenses();
   resetVorgangNotes();
   resetCommunicationHistoryStore();

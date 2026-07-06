@@ -146,7 +146,7 @@ export function scanPendingInboxItems(
           'inbox_new',
           item.id,
           item.title,
-          `/eingang/${item.id}`,
+          `/ablage/${item.id}`,
           'inbox',
         ),
       );
@@ -158,7 +158,7 @@ export function scanPendingInboxItems(
           'inbox_deferred',
           item.id,
           item.title,
-          `/eingang/${item.id}`,
+          `/ablage/${item.id}`,
           'inbox',
         ),
       );
@@ -170,7 +170,7 @@ export function scanPendingInboxItems(
           'inbox_unfiled',
           item.id,
           item.title,
-          `/eingang/${item.id}`,
+          `/ablage/${item.id}`,
           'inbox',
         ),
       );
@@ -182,7 +182,7 @@ export function scanPendingInboxItems(
           'inbox_unlinked',
           item.id,
           item.title,
-          `/eingang/${item.id}`,
+          `/ablage/${item.id}`,
           'inbox',
         ),
       );
@@ -368,7 +368,7 @@ export function scanRequiredContractDocuments(
           'contract_missing_proof',
           `${item.id}:${required.type}`,
           `${label} fehlt`,
-          `/eingang/${item.id}`,
+          `/ablage/${item.id}`,
           'contract',
           {
             description: required.reason,

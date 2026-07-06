@@ -17,6 +17,7 @@ import type {
   CompanyProfile,
   CompanySetup,
   CustomerBilling,
+  InvoiceDocumentType,
   InvoiceDraft,
   InvoiceDraftMetadataChanges,
   InvoiceDraftPosition,
@@ -27,35 +28,20 @@ import type {
   VorgangInvoice,
   VorgangInvoiceLine,
 } from '../types/models';
+import {
+  buildLegalNotices,
+  buildSkontoText,
+  getTaxRateForStatus,
+} from './invoiceTaxService';
+import {
+  prefillsOpenQuantity,
+  usesAbschlagDeductions,
+  usesAbschlagNumber,
+} from './invoiceTypeService';
 
 const COUNTED_STATUSES: VorgangInvoice['status'][] = ['vorbereitet', 'versendet'];
 
-export function getTaxRateForStatus(status: TaxStatus | string): number {
-  switch (status) {
-    case 'standard_19':
-      return 19;
-    case 'kleinunternehmer_19':
-      return 0;
-    case 'reverse_charge_13b':
-      return 0;
-    default:
-      return 19;
-  }
-}
-
-export function buildLegalNotices(taxStatus: TaxStatus): string[] {
-  switch (taxStatus) {
-    case 'kleinunternehmer_19':
-      return ['Gemäß § 19 UStG wird keine Umsatzsteuer ausgewiesen.'];
-    case 'reverse_charge_13b':
-      return [
-        'Steuerschuldnerschaft des Leistungsempfängers gemäß § 13b UStG.',
-        'Bitte prüfen oder Steuerberater/Ansprechpartner fragen.',
-      ];
-    default:
-      return [];
-  }
-}
+export { buildLegalNotices, getTaxRateForStatus } from './invoiceTaxService';
 
 export function getVorgangCustomerBilling(vorgang: Vorgang): CustomerBilling {
   if (vorgang.customerBilling) {
@@ -125,12 +111,12 @@ function buildDraftMetadata(
     servicePeriodTo: issueDate,
     paymentDueDate: addDays(issueDate, profile.defaultPaymentDays),
     paymentTermsText: buildDefaultPaymentTerms(profile),
-    skontoText: profile.defaultSkonto,
+    skontoText: buildSkontoText(profile),
     customerBilling: getVorgangCustomerBilling(vorgang),
     companySnapshot: profile,
-    legalNotices: buildLegalNotices(setup.taxStatus),
+    legalNotices: buildLegalNotices(setup.taxStatus, profile),
     previousAbschlagDeductions:
-      type === 'schluss' ? getPreviousAbschlagDeductions(vorgang) : [],
+      usesAbschlagDeductions(type) ? getPreviousAbschlagDeductions(vorgang) : [],
     invoiceNumberPreview: INVOICE_DRAFT_LABEL,
   };
 }
@@ -203,34 +189,76 @@ function buildBaseDraft(
   };
 }
 
-export function buildAbschlagDraft(vorgangId: string, setup: CompanySetup): InvoiceDraft | null {
+function initialQuantityForType(
+  vorgang: Vorgang,
+  orderPosition: OrderPosition,
+  type: InvoiceDocumentType,
+): number {
+  if (!prefillsOpenQuantity(type)) return 0;
+  return getOpenQuantity(vorgang, orderPosition.id);
+}
+
+function buildPositionsForType(
+  vorgang: Vorgang,
+  type: InvoiceDocumentType,
+): InvoiceDraftPosition[] {
+  return vorgang.orderPositions.map((op) =>
+    buildDraftPosition(vorgang, op, initialQuantityForType(vorgang, op, type)),
+  );
+}
+
+export function buildInvoiceDraftForType(
+  vorgangId: string,
+  setup: CompanySetup,
+  type: InvoiceDocumentType,
+): InvoiceDraft | null {
   const vorgang = getVorgangById(vorgangId);
   if (!vorgang || vorgang.orderPositions.length === 0) return null;
 
-  return buildBaseDraft(
-    vorgang,
-    setup,
-    'abschlag',
-    vorgang.orderPositions.map((op) => buildDraftPosition(vorgang, op, 0)),
-    getNextAbschlagNumber(vorgang),
-  );
+  if (type === 'abschlag') {
+    return buildBaseDraft(
+      vorgang,
+      setup,
+      'abschlag',
+      buildPositionsForType(vorgang, 'abschlag'),
+      getNextAbschlagNumber(vorgang),
+    );
+  }
+
+  if (type === 'schluss') {
+    return buildBaseDraft(
+      vorgang,
+      setup,
+      'schluss',
+      buildPositionsForType(vorgang, 'schluss'),
+    );
+  }
+
+  return buildBaseDraft(vorgang, setup, type, buildPositionsForType(vorgang, type));
+}
+
+export function buildRechnungDraft(vorgangId: string, setup: CompanySetup): InvoiceDraft | null {
+  return buildInvoiceDraftForType(vorgangId, setup, 'rechnung');
+}
+
+export function buildAbschlagDraft(vorgangId: string, setup: CompanySetup): InvoiceDraft | null {
+  return buildInvoiceDraftForType(vorgangId, setup, 'abschlag');
 }
 
 export function buildSchlussrechnungDraft(vorgangId: string, setup: CompanySetup): InvoiceDraft | null {
-  const vorgang = getVorgangById(vorgangId);
-  if (!vorgang || vorgang.orderPositions.length === 0) return null;
-
-  return buildBaseDraft(
-    vorgang,
-    setup,
-    'schluss',
-    vorgang.orderPositions.map((op) => {
-      const openQuantity = getOpenQuantity(vorgang, op.id);
-      return buildDraftPosition(vorgang, op, openQuantity);
-    }),
-  );
+  return buildInvoiceDraftForType(vorgangId, setup, 'schluss');
 }
 
+export function updateInvoiceDraftTaxStatus(
+  draft: InvoiceDraft,
+  taxStatus: TaxStatus,
+): InvoiceDraft {
+  return {
+    ...draft,
+    taxStatus,
+    legalNotices: buildLegalNotices(taxStatus, draft.companySnapshot),
+  };
+}
 export function updateDraftPositionQuantity(
   draft: InvoiceDraft,
   positionId: string,
@@ -277,7 +305,7 @@ export function getAbschlagDeductionsTotal(deductions: AbschlagDeduction[]): num
 
 export function calculateInvoiceTotals(draft: InvoiceDraft, setup: CompanySetup): InvoiceTotals {
   const subtotal = draft.positions.reduce((sum, p) => sum + p.quantity * p.unitPrice, 0);
-  const taxRate = getTaxRateForStatus(setup.taxStatus);
+  const taxRate = getTaxRateForStatus(draft.taxStatus ?? setup.taxStatus);
   const tax = subtotal * (taxRate / 100);
   const gross = subtotal + tax;
   const deductions = getAbschlagDeductionsTotal(draft.previousAbschlagDeductions);
@@ -329,10 +357,10 @@ export function finalizeInvoiceDraft(
     number: reservation.formatted,
     invoiceSequenceNumber: reservation.sequenceNumber,
     type: draft.type,
-    abschlagNumber: draft.type === 'abschlag' ? draft.abschlagNumber : undefined,
+    abschlagNumber: usesAbschlagNumber(draft.type) ? draft.abschlagNumber : undefined,
     positions,
     subtotal: totals.subtotal,
-    taxStatus: setup.taxStatus,
+    taxStatus: draft.taxStatus ?? setup.taxStatus,
     amount: totals.total,
     status: 'vorbereitet',
     date: issueDate,

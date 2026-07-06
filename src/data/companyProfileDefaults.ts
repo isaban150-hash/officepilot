@@ -19,6 +19,11 @@ export const DEFAULT_COMPANY_PROFILE: CompanyProfile = {
   defaultPaymentDays: 14,
   defaultPaymentTerms: 'Zahlbar innerhalb von 14 Tagen ohne Abzug.',
   defaultSkonto: '',
+  skontoEnabled: false,
+  skontoPercent: 0,
+  skontoDays: 0,
+  managingDirector: '',
+  taxFreeNotice: 'Die Leistung ist ohne Umsatzsteuer.',
   invoiceFooterNotes: '',
 };
 

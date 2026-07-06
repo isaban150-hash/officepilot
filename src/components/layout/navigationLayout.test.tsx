@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { AppProvider } from '../../context/AppContext';
+import { AuthProvider } from '../../context/AuthContext';
 import { DEFAULT_SETUP } from '../../data/mockData';
 import { BottomNav } from './BottomNav';
 import { AppShell } from './AppShell';
@@ -28,9 +29,11 @@ describe('Navigation layout UX-03', () => {
   it('Desktop-Layout nutzt Sidebar und breitere Arbeitsfläche', () => {
     const shellHtml = renderToStaticMarkup(
       <MemoryRouter>
-        <AppProvider initialSetup={DEFAULT_SETUP}>
-          <AppShell />
-        </AppProvider>
+        <AuthProvider>
+          <AppProvider initialSetup={DEFAULT_SETUP}>
+            <AppShell />
+          </AppProvider>
+        </AuthProvider>
       </MemoryRouter>,
     );
 

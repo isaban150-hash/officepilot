@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { Badge, Card, CardMeta, CardTitle, PageHeader } from '../components/ui/Card';
+import { EmptyStateBlock } from '../components/ui/EmptyStateBlock';
 import { useApp } from '../context/AppContext';
 import { getAllVorgaenge } from '../services/vorgangService';
 import type { TranslationKey } from '../i18n';
@@ -16,6 +17,7 @@ const STATUS_TONE: Record<string, 'default' | 'info' | 'warning' | 'success'> = 
 export function VorgaengePage() {
   const { translate } = useApp();
   const location = useLocation();
+  const navigate = useNavigate();
   const [vorgaenge, setVorgaenge] = useState(getAllVorgaenge);
 
   useEffect(() => {
@@ -35,7 +37,16 @@ export function VorgaengePage() {
       </div>
 
       {vorgaenge.length === 0 ? (
-        <p className="empty-state">{translate('vorgaenge.empty')}</p>
+        <EmptyStateBlock
+          title={translate('vorgaenge.empty.title')}
+          description={translate('vorgaenge.empty.desc')}
+          testId="vorgaenge-empty-state"
+          actions={
+            <Button fullWidth onClick={() => navigate('/scan')}>
+              {translate('vorgaenge.empty.action')}
+            </Button>
+          }
+        />
       ) : (
         <div className="card-list">
           {vorgaenge.map((v) => {
@@ -51,7 +62,12 @@ export function VorgaengePage() {
                     <Badge>{translate(materialKey)}</Badge>
                   </div>
                   <CardMeta>
-                    {v.documents.length} Dok. · {v.tasks.filter((t) => !t.done).length} Aufgaben
+                    {translate('vorgaenge.meta.documents').replace('{count}', String(v.documents.length))}
+                    {' · '}
+                    {translate('vorgaenge.meta.tasks').replace(
+                      '{count}',
+                      String(v.tasks.filter((t) => !t.done).length),
+                    )}
                   </CardMeta>
                 </Card>
               </Link>

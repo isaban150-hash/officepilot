@@ -2,12 +2,15 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Badge, Card, CardMeta, CardTitle, PageHeader } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
+import { EmptyStateBlock } from '../components/ui/EmptyStateBlock';
 import { useApp } from '../context/AppContext';
 import {
   COMPANY_DOCUMENT_CATEGORIES,
   getAllDocuments,
   searchDocuments,
 } from '../services/documentService';
+import { getAllUploadedDocuments } from '../services/uploadedDocumentService';
+import { UploadedDocumentsSection } from '../components/documents/UploadedDocumentsSection';
 import type { CompanyDocumentCategory } from '../types/models';
 import type { TranslationKey } from '../i18n';
 
@@ -26,9 +29,11 @@ export function DokumentePage() {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<CompanyDocumentCategory | 'all'>('all');
   const [documents, setDocuments] = useState(getAllDocuments);
+  const [uploads, setUploads] = useState(getAllUploadedDocuments);
 
   useEffect(() => {
     setDocuments(getAllDocuments());
+    setUploads(getAllUploadedDocuments());
   }, [location.pathname, location.key]);
 
   const filtered = useMemo(
@@ -40,13 +45,20 @@ export function DokumentePage() {
     <div className="page">
       <PageHeader title={translate('document.title')} subtitle={translate('document.subtitle')} />
 
-      <div className="page-header__actions">
+      <div className="page-header__actions page-header__actions--row">
+        <Link to="/dokumente/upload">
+          <Button variant="primary" fullWidth data-testid="document-upload-link">
+            {translate('document.upload.action')}
+          </Button>
+        </Link>
         <Link to="/dokumente/neu">
-          <Button variant="primary" fullWidth>
+          <Button variant="outline" fullWidth>
             {translate('document.add')}
           </Button>
         </Link>
       </div>
+
+      <UploadedDocumentsSection items={uploads} />
 
       <div className="document-toolbar">
         <input
@@ -82,8 +94,24 @@ export function DokumentePage() {
         })}
       </div>
 
-      {filtered.length === 0 ? (
-        <p className="empty-state">{translate('document.empty')}</p>
+      {filtered.length === 0 && uploads.length === 0 ? (
+        <EmptyStateBlock
+          title={translate('document.empty.title')}
+          description={translate('document.empty.desc')}
+          testId="document-empty-state"
+          actions={
+            <>
+              <Link to="/dokumente/upload">
+                <Button fullWidth>{translate('document.upload.action')}</Button>
+              </Link>
+              <Link to="/dokumente/neu">
+                <Button variant="outline" fullWidth>{translate('document.empty.action')}</Button>
+              </Link>
+            </>
+          }
+        />
+      ) : filtered.length === 0 ? (
+        <p className="document-archive-empty-hint">{translate('document.emptyArchiveOnly')}</p>
       ) : (
         <div className="card-list">
           {filtered.map((doc) => {
@@ -92,8 +120,11 @@ export function DokumentePage() {
               <Link key={doc.id} to={`/dokumente/${doc.id}`} className="card-link">
                 <Card>
                   <div className="document-card__header">
-                    <span className="document-card__preview" aria-hidden>
-                      {doc.imagePreview ?? '📄'}
+                    <span
+                      className={`document-card__preview${doc.imagePreview ? '' : ' document-card__preview--placeholder'}`}
+                      aria-hidden
+                    >
+                      {doc.imagePreview ?? ''}
                     </span>
                     <div>
                       <CardTitle>{doc.title}</CardTitle>

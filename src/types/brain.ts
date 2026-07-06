@@ -1,3 +1,5 @@
+import { OFFICEPILOT_LEGAL_DISCLAIMER } from '../config/legalDisclaimer';
+
 export interface BrainCompanySnapshot {
   companyName: string;
   contactPerson: string;
@@ -112,4 +114,4 @@ export interface BrainAnswer {
 }
 
 export const BRAIN_ANSWER_DISCLAIMER =
-  'OfficePilot erteilt keine Rechts- oder Steuerberatung. Antworten basieren nur auf den lokal gespeicherten Daten und können unvollständig sein.';
+  `${OFFICEPILOT_LEGAL_DISCLAIMER} Antworten basieren nur auf den lokal gespeicherten Daten und können unvollständig sein.`;

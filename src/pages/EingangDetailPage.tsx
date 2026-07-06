@@ -20,6 +20,7 @@ import { Button } from '../components/ui/Button';
 import { Badge, Card, DataRow, PageHeader } from '../components/ui/Card';
 import { ShowMoreSection } from '../components/ui/ShowMoreSection';
 import { useApp } from '../context/AppContext';
+import { formatInboxActionToast } from '../utils/inboxActionToast';
 import { formatPaperFilingInstruction } from '../services/paperFolderService';
 import { letterExplanationFromWorkflow } from '../services/letterExplanationService';
 import { isClassificationKindWithTasks } from '../services/taskEngineService';
@@ -195,7 +196,7 @@ export function EingangDetailPage() {
   const handleFiling = () => {
     const result = confirmFiling(item.id);
     if (result) {
-      showToast(result.message);
+      showToast(formatInboxActionToast(result, translate));
       goBack();
     }
   };
@@ -203,7 +204,7 @@ export function EingangDetailPage() {
   const handleDefer = () => {
     const result = deferItem(item.id);
     if (result) {
-      showToast(result.message);
+      showToast(formatInboxActionToast(result, translate));
       goBack();
     }
   };
@@ -211,7 +212,7 @@ export function EingangDetailPage() {
   const handleCreateTask = () => {
     const result = createTaskForItem(item.id);
     if (result) {
-      showToast(result.message);
+      showToast(formatInboxActionToast(result, translate));
       setItem(getInboxItemById(item.id));
     } else if (!analysisAllowed) {
       showToast(translate('taskEngine.blockedByRelevance'));
@@ -223,7 +224,7 @@ export function EingangDetailPage() {
   const handleCreateContractTasks = () => {
     const result = createContractTasksForItem(item.id);
     if (result) {
-      showToast(result.message);
+      showToast(formatInboxActionToast(result, translate));
       setItem(getInboxItemById(item.id));
     } else if (!analysisAllowed) {
       showToast(translate('taskEngine.blockedByRelevance'));
@@ -235,7 +236,7 @@ export function EingangDetailPage() {
   const handleDispose = () => {
     const result = confirmDispose(item.id);
     if (result) {
-      showToast(result.message);
+      showToast(formatInboxActionToast(result, translate));
       goBack();
     }
   };
@@ -243,7 +244,7 @@ export function EingangDetailPage() {
   const handleSaveAnyway = () => {
     const result = saveAdvertisementAnyway(item.id);
     if (result) {
-      showToast(result.message);
+      showToast(formatInboxActionToast(result, translate));
       goBack();
     }
   };

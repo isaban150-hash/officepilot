@@ -1,18 +1,16 @@
-import { getAbschlagDeductionsTotal, calculateInvoiceTotals, getTaxRateForStatus } from './invoiceService';
+import { getAbschlagDeductionsTotal, calculateInvoiceTotals } from './invoiceService';
+import { getTaxRateForStatus } from './invoiceTaxService';
+import { getInvoiceDocumentTitle, usesAbschlagDeductions } from './invoiceTypeService';
 import type {
   CompanySetup,
   InvoiceDraft,
   InvoicePrintDeductionLine,
   InvoicePrintModel,
   InvoicePrintPosition,
-  TaxStatus,
   VorgangInvoice,
 } from '../types/models';
 
-function documentTitle(type: InvoiceDraft['type'], abschlagNumber?: number): string {
-  if (type === 'schluss') return 'Schlussrechnung';
-  return abschlagNumber ? `Abschlagsrechnung ${abschlagNumber}` : 'Abschlagsrechnung';
-}
+export { getTaxStatusLabel } from './invoiceTaxService';
 
 function buildDeductionLines(draft: InvoiceDraft): InvoicePrintDeductionLine[] {
   return draft.previousAbschlagDeductions.map((item, index) => ({
@@ -33,13 +31,6 @@ function buildPositions(draft: InvoiceDraft): InvoicePrintPosition[] {
       unitPrice: position.unitPrice,
       lineTotal: position.quantity * position.unitPrice,
     }));
-}
-
-function documentTitleFromInvoice(invoice: VorgangInvoice): string {
-  if (invoice.type === 'schluss') return 'Schlussrechnung';
-  return invoice.abschlagNumber
-    ? `Abschlagsrechnung ${invoice.abschlagNumber}`
-    : 'Abschlagsrechnung';
 }
 
 function buildDeductionLinesFromInvoice(invoice: VorgangInvoice): InvoicePrintDeductionLine[] {
@@ -71,12 +62,13 @@ export function buildInvoicePrintModelFromInvoice(invoice: VorgangInvoice): Invo
   const grossTotal = invoice.subtotal + taxAmount;
   const deductions = invoice.previousAbschlagDeductions ?? [];
   const deductionsTotal = getAbschlagDeductionsTotal(deductions);
-  const amountDue =
-    invoice.type === 'schluss' ? Math.max(0, grossTotal - deductionsTotal) : grossTotal;
+  const amountDue = usesAbschlagDeductions(invoice.type)
+    ? Math.max(0, grossTotal - deductionsTotal)
+    : grossTotal;
 
   return {
     type: invoice.type,
-    documentTitle: documentTitleFromInvoice(invoice),
+    documentTitle: getInvoiceDocumentTitle(invoice.type, invoice.abschlagNumber),
     invoiceNumber: invoice.number,
     issueDate: invoice.issueDate ?? invoice.date,
     company: { ...invoice.companySnapshot },
@@ -117,7 +109,7 @@ export function buildInvoicePrintModel(
 
   return {
     type: draft.type,
-    documentTitle: documentTitle(draft.type, draft.abschlagNumber),
+    documentTitle: getInvoiceDocumentTitle(draft.type, draft.abschlagNumber),
     invoiceNumber: draft.invoiceNumberPreview,
     issueDate: draft.issueDate,
     company: { ...draft.companySnapshot },
@@ -136,7 +128,7 @@ export function buildInvoicePrintModel(
       grossTotal,
       deductionLines: buildDeductionLines(draft),
       deductionsTotal,
-      amountDue: draft.type === 'schluss' ? amountDue : grossTotal,
+      amountDue: usesAbschlagDeductions(draft.type) ? amountDue : grossTotal,
     },
     taxStatus: draft.taxStatus,
     taxNotices: [...draft.legalNotices],
@@ -145,19 +137,6 @@ export function buildInvoicePrintModel(
     skontoText: draft.skontoText,
     footerNotes: draft.companySnapshot.invoiceFooterNotes,
   };
-}
-
-export function getTaxStatusLabel(taxStatus: TaxStatus): string {
-  switch (taxStatus) {
-    case 'kleinunternehmer_19':
-      return '§19 Kleinunternehmer';
-    case 'reverse_charge_13b':
-      return '§13b Reverse Charge';
-    case 'standard_19':
-      return 'Normalbesteuerung (19 % USt)';
-    default:
-      return 'Steuerstatus unklar – bitte prüfen';
-  }
 }
 
 export function formatInvoiceCurrency(value: number): string {

@@ -15,6 +15,8 @@ export function confirmFiling(id: string): InboxActionResult | null {
   const taskCreated = createTaskFromInboxItem(item, getCompanyProfile(), { autoCreated: true }) ?? undefined;
   return {
     success: true,
+    messageKey: 'inbox.toast.filed',
+    messageParams: { filing },
     message: `Abgelegt. ${filing}`,
     item,
     taskCreated,
@@ -32,6 +34,8 @@ export function createTaskForItem(id: string): InboxActionResult | null {
   const item = patchInboxItem(id, { status: 'geprueft', isNewUpload: false })!;
   return {
     success: true,
+    messageKey: 'inbox.toast.taskFromItem',
+    messageParams: { title: taskCreated.title },
     message: `Aufgabe erstellt: ${taskCreated.title}`,
     item,
     taskCreated,
@@ -50,6 +54,8 @@ export function createContractTasksForItem(id: string): InboxActionResult | null
   const item = patchInboxItem(id, { status: 'geprueft', isNewUpload: false })!;
   return {
     success: true,
+    messageKey: 'inbox.toast.contractTasks',
+    messageParams: { count: String(createdTasks.length) },
     message: `${createdTasks.length} Aufgabe(n) aus Vertrag erstellt`,
     item,
     taskCreated: createdTasks[0],

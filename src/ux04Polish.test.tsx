@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { AppProvider } from './context/AppContext';
+import { TestProviders } from './test/testProviders';
 import { DEFAULT_SETUP } from './data/mockData';
 import { MOCK_INBOX_ITEMS } from './data/inboxMockData';
 import { AppShell } from './components/layout/AppShell';
@@ -37,9 +37,9 @@ describe('UX-04 Beta Polish', () => {
   it('blendet Demo-Reset aus der Shell aus', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
-        <AppProvider initialSetup={DEFAULT_SETUP}>
+        <TestProviders initialSetup={DEFAULT_SETUP}>
           <AppShell />
-        </AppProvider>
+        </TestProviders>
       </MemoryRouter>,
     );
 
@@ -50,9 +50,9 @@ describe('UX-04 Beta Polish', () => {
   it('zeigt Ablage ohne Entwicklerbegriffe', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
-        <AppProvider initialSetup={DEFAULT_SETUP}>
+        <TestProviders initialSetup={DEFAULT_SETUP}>
           <EingangPage />
-        </AppProvider>
+        </TestProviders>
       </MemoryRouter>,
     );
 
@@ -70,11 +70,11 @@ describe('UX-04 Beta Polish', () => {
 
     const html = renderToStaticMarkup(
       <MemoryRouter initialEntries={[`/ablage/${uploaded.id}`]}>
-        <AppProvider initialSetup={DEFAULT_SETUP}>
+        <TestProviders initialSetup={DEFAULT_SETUP}>
           <Routes>
             <Route path="/ablage/:id" element={<EingangDetailPage />} />
           </Routes>
-        </AppProvider>
+        </TestProviders>
       </MemoryRouter>,
     );
 
@@ -87,9 +87,9 @@ describe('UX-04 Beta Polish', () => {
   it('Assistent zeigt einheitliche Oberfläche', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
-        <AppProvider initialSetup={DEFAULT_SETUP}>
+        <TestProviders initialSetup={DEFAULT_SETUP}>
           <AssistentPage />
-        </AppProvider>
+        </TestProviders>
       </MemoryRouter>,
     );
 

@@ -5,6 +5,7 @@ import {
 } from './invoiceNumberService';
 import { persistAll } from './persistenceService';
 import { validateSetupWizard } from './setupValidationService';
+import { DEFAULT_COMPANY_PROFILE } from '../data/companyProfileDefaults';
 import type { CompanyProfile, CompanySetup } from '../types/models';
 import { SETUP_VERSION, type SetupWizardDraft } from '../types/setup';
 import type { TranslationKey } from '../i18n';
@@ -15,6 +16,7 @@ export type SetupCompletionResult =
 
 function buildProfileFromDraft(draft: SetupWizardDraft): CompanyProfile {
   return {
+    ...DEFAULT_COMPANY_PROFILE,
     companyName: draft.companyName.trim(),
     legalForm: '',
     street: draft.street.trim(),

@@ -46,7 +46,7 @@ export function InvoiceHeader({ model }: Props) {
       </div>
 
       <div className="invoice-header__meta">
-        <h1 className="invoice-header__title">Rechnung</h1>
+        <h1 className="invoice-header__title">{model.documentTitle}</h1>
         <dl className="invoice-header__facts">
           <div>
             <dt>Rechnungsnummer</dt>

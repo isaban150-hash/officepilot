@@ -10,11 +10,10 @@ import type {
   VorgangInvoice,
 } from '../types/models';
 
+import { getInvoiceDocumentTitle } from './invoiceTypeService';
+
 function invoiceTypeLabel(invoice: VorgangInvoice): string {
-  if (invoice.type === 'schluss') return 'Schlussrechnung';
-  return invoice.abschlagNumber
-    ? `Abschlagsrechnung ${invoice.abschlagNumber}`
-    : 'Abschlagsrechnung';
+  return getInvoiceDocumentTitle(invoice.type, invoice.abschlagNumber);
 }
 
 function buildRecognizedText(invoice: VorgangInvoice, vorgang: Vorgang, companyName: string): string {

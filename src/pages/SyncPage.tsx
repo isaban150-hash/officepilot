@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { Badge, Card, CardTitle, DataRow, PageHeader } from '../components/ui/Card';
 import { useApp } from '../context/AppContext';
-import type { SyncState } from '../types/sync';
+import type { SyncOutboxEntry, SyncState } from '../types/sync';
 import type { TranslationKey } from '../i18n';
 import {
   getSyncUiSnapshot,
@@ -14,6 +14,36 @@ import {
 } from '../services/sync/syncUiService';
 
 const SYNCING_STATES: SyncState[] = ['checking', 'uploading', 'downloading', 'merging'];
+
+function entityTypeKey(entityType: string): TranslationKey {
+  const map: Record<string, TranslationKey> = {
+    document: 'sync.entity.document',
+    inbox_item: 'sync.entity.inbox_item',
+    task: 'sync.entity.task',
+    vorgang: 'sync.entity.vorgang',
+    invoice: 'sync.entity.invoice',
+  };
+  return map[entityType] ?? 'sync.entity.other';
+}
+
+function operationKey(operation: string): TranslationKey {
+  const map: Record<string, TranslationKey> = {
+    create: 'sync.operation.create',
+    update: 'sync.operation.update',
+    delete: 'sync.operation.delete',
+  };
+  return map[operation] ?? 'sync.operation.update';
+}
+
+function outboxStatusKey(status: SyncOutboxEntry['status']): TranslationKey {
+  const map: Record<string, TranslationKey> = {
+    blocked: 'sync.outboxStatus.blocked',
+    pending: 'sync.outboxStatus.pending',
+    error: 'sync.outboxStatus.error',
+    failed: 'sync.outboxStatus.error',
+  };
+  return map[status] ?? 'sync.outboxStatus.pending';
+}
 
 function statusTone(
   syncState: SyncState,
@@ -113,7 +143,7 @@ export function SyncPage() {
         <DataRow label={translate('sync.lastSync')} value={formatTimestamp(snapshot.status.lastSyncedAt)} />
         {snapshot.status.lastError && (
           <p className="sync-page__error" data-testid="sync-error-message">
-            {snapshot.status.lastError}
+            {translate('sync.error.userMessage')}
           </p>
         )}
       </Card>
@@ -154,10 +184,11 @@ export function SyncPage() {
           <ul className="sync-page__outbox-list" data-testid="sync-outbox-pending-list">
             {snapshot.pendingOutboxEntries.map((entry) => (
               <li key={entry.id} className="sync-page__outbox-item">
-                <span className="sync-page__outbox-item-type">{entry.entityType}</span>
-                <span className="sync-page__outbox-item-id">{shortenSyncId(entry.entityId)}</span>
-                <span className="sync-page__outbox-item-op">{entry.operation}</span>
-                <Badge tone={entry.status === 'blocked' ? 'warning' : 'info'}>{entry.status}</Badge>
+                <span className="sync-page__outbox-item-type">{translate(entityTypeKey(entry.entityType))}</span>
+                <span className="sync-page__outbox-item-op">{translate(operationKey(entry.operation))}</span>
+                <Badge tone={entry.status === 'blocked' ? 'warning' : 'info'}>
+                  {translate(outboxStatusKey(entry.status))}
+                </Badge>
               </li>
             ))}
           </ul>

@@ -151,7 +151,7 @@ function taskRoute(task: Task): string {
     return `/vorgaenge/${task.linkedVorgangId}/rechnungen/${task.linkedInvoiceId}`;
   }
   if (task.linkedDocumentId) return `/dokumente/${task.linkedDocumentId}`;
-  if (task.linkedInboxId) return `/eingang/${task.linkedInboxId}`;
+  if (task.linkedInboxId) return `/ablage/${task.linkedInboxId}`;
   if (task.linkedVorgangId) return `/vorgaenge/${task.linkedVorgangId}`;
   return '/aufgaben';
 }
@@ -565,7 +565,7 @@ function answerWerkvertraege(): AssistantAnswer {
     ) {
       contracts.push({
         title: item.title,
-        route: `/eingang/${item.id}`,
+        route: `/ablage/${item.id}`,
         type: analysis.contractType ?? 'vertrag',
       });
     }

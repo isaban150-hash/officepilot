@@ -8,9 +8,11 @@ import { HeutePage } from './HeutePage';
 import { hydrateInboxStore } from '../services/inboxService';
 import { hydrateVorgangStore } from '../services/vorgangService';
 import { hydrateDocumentStore, importInboxDocument } from '../services/documentService';
+import { hydrateTaskStore } from '../services/taskStore';
 import { resetMemory } from '../services/officePilotMemoryService';
 import { createTestVorgang, createAuftragInboxItem } from '../test/fixtures';
-import * as pendingEngineService from '../services/pendingEngineService';
+import * as heuteDashboardService from '../services/heuteDashboardService';
+import { SidebarNav } from '../components/layout/SidebarNav';
 
 const FORBIDDEN_TERMS = [
   'Inbox',
@@ -20,6 +22,10 @@ const FORBIDDEN_TERMS = [
   'Engine',
   'recognizedData',
   'Context',
+  'Pending',
+  'Lifecycle',
+  'Entity',
+  'Sync',
 ];
 
 describe('HeutePage', () => {
@@ -28,13 +34,15 @@ describe('HeutePage', () => {
     hydrateVorgangStore([
       createTestVorgang({ id: 'v-heute-1', title: 'Testauftrag', status: 'in_bearbeitung' }),
     ]);
+    hydrateDocumentStore([]);
+    hydrateTaskStore([]);
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it('rendert die Startseite mit Scan-Button und Schnellaktionen', () => {
+  it('rendert Premium-Hero mit Dashboard und 6 Schnellaktionen', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
         <AppProvider initialSetup={DEFAULT_SETUP}>
@@ -44,20 +52,40 @@ describe('HeutePage', () => {
     );
 
     expect(html).toContain('data-testid="heute-page"');
-    expect(html).toContain('data-testid="heute-search"');
+    expect(html).toContain('data-testid="heute-hero"');
+    expect(html).toContain('Was soll OfficePilot heute erledigen?');
     expect(html).toContain('data-testid="heute-scan-button"');
-    expect(html).toContain('Foto / Scan');
+    expect(html).toContain('Dokument scannen');
+    expect(html).toContain('OfficePilot fragen');
+    expect(html).toContain('data-testid="heute-dashboard"');
+    expect(html).toContain('Offene Dokumente');
+    expect(html).toContain('Offene Rechnungen');
+    expect(html).toContain('Fristen diese Woche');
+    expect(html).toContain('Aufgaben heute');
     expect(html).toContain('data-testid="heute-quick-actions"');
-    expect(html).toContain('Brief verstehen');
-    expect(html).toContain('Rechnung schreiben');
-    expect(html).toContain('Ausgabe erfassen');
-    expect(html).toContain('Auftrag öffnen');
-    expect(html).toContain('Nachricht schreiben');
-    expect(html).toContain('Frag OfficePilot');
+    expect(html).toContain('data-testid="heute-action-scan"');
+    expect(html).toContain('data-testid="heute-action-understand"');
+    expect(html).toContain('data-testid="heute-action-invoice"');
+    expect(html).toContain('data-testid="heute-action-expense"');
+    expect(html).toContain('data-testid="heute-action-message"');
+    expect(html).toContain('data-testid="heute-action-search"');
   });
 
-  it('nutzt Pending-Daten für die Heute-Liste', () => {
-    const scanSpy = vi.spyOn(pendingEngineService, 'scanPendingItems');
+  it('zeigt keine dominante Gerade-erfasst-Liste mehr', () => {
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <AppProvider initialSetup={DEFAULT_SETUP}>
+          <HeutePage />
+        </AppProvider>
+      </MemoryRouter>,
+    );
+
+    expect(html).not.toContain('data-testid="heute-today-list"');
+    expect(html).not.toContain('Gerade erfasst');
+  });
+
+  it('nutzt Dashboard-Daten aus bestehenden Services', () => {
+    const statsSpy = vi.spyOn(heuteDashboardService, 'getHeuteDashboardStats');
 
     renderToStaticMarkup(
       <MemoryRouter>
@@ -67,11 +95,30 @@ describe('HeutePage', () => {
       </MemoryRouter>,
     );
 
-    expect(scanSpy).toHaveBeenCalled();
-    expect(scanSpy.mock.results[0]?.value.items.length).toBeGreaterThan(0);
+    expect(statsSpy).toHaveBeenCalled();
   });
 
-  it('zeigt offene Dokument-Lebenszyklen', () => {
+  it('zeigt Welcome-State im First-Run ohne offene Punkte', () => {
+    hydrateInboxStore([]);
+    hydrateVorgangStore([]);
+    hydrateDocumentStore([]);
+    hydrateTaskStore([]);
+
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <AppProvider initialSetup={DEFAULT_SETUP}>
+          <HeutePage />
+        </AppProvider>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('data-testid="heute-welcome"');
+    expect(html).toContain('Willkommen bei OfficePilot');
+    expect(html).toContain('Erstes Dokument scannen');
+    expect(html).not.toContain('data-testid="heute-open-items"');
+  });
+
+  it('zeigt kompakte offene Punkte nur bei echten Daten', () => {
     resetMemory();
     hydrateDocumentStore([]);
     importInboxDocument(
@@ -94,8 +141,11 @@ describe('HeutePage', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('data-testid="heute-lifecycle-list"');
+    expect(html).toContain('data-testid="heute-open-items"');
+    expect(html).not.toContain('data-testid="heute-lifecycle-list"');
     expect(html).toContain('Original noch abheften');
+    expect(html).toContain('Alle anzeigen');
+    expect(html).not.toContain('data-testid="heute-welcome"');
   });
 
   it('zeigt keine technischen Entwicklerbegriffe', () => {
@@ -110,5 +160,35 @@ describe('HeutePage', () => {
     for (const term of FORBIDDEN_TERMS) {
       expect(html).not.toContain(term);
     }
+  });
+
+  it('enthält Scan- und Suche-Routen in Schnellaktionen', () => {
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <AppProvider initialSetup={DEFAULT_SETUP}>
+          <HeutePage />
+        </AppProvider>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('data-testid="heute-action-scan"');
+    expect(html).toContain('data-testid="heute-action-search"');
+    expect(html).toContain('/suche');
+  });
+});
+
+
+describe('SidebarNav active state', () => {
+  it('markiert aktiven Link auf Heute', () => {
+    const html = renderToStaticMarkup(
+      <MemoryRouter initialEntries={['/']}>
+        <AppProvider initialSetup={DEFAULT_SETUP}>
+          <SidebarNav />
+        </AppProvider>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('data-testid="sidebar-nav-link-home"');
+    expect(html).toContain('sidebar-nav__item--active');
   });
 });

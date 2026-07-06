@@ -13,6 +13,7 @@ export function SidebarNav() {
           key={to}
           to={to}
           end={end}
+          data-testid={`sidebar-nav-link${to === '/' ? '-home' : to.replace(/\//g, '-')}`}
           className={({ isActive }) =>
             `sidebar-nav__item ${isActive ? 'sidebar-nav__item--active' : ''}`
           }

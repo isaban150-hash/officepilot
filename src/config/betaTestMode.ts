@@ -35,7 +35,8 @@ export const BETA_TEST_COMPANY_PROFILE: CompanyProfile = {
   defaultPaymentDays: 14,
   defaultPaymentTerms: 'Zahlbar innerhalb von 14 Tagen ohne Abzug.',
   defaultSkonto: '',
-  invoiceFooterNotes: '',
+  managingDirector: 'Max Mustermann',
+  invoiceFooterNotes: 'Musterbetrieb GmbH · Handwerkerweg 7 · 10115 Berlin',
 };
 
 export function shouldSkipSetupWizard(setup: CompanySetup): boolean {

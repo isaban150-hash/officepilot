@@ -16,6 +16,7 @@ import {
 } from '../../services/invoicePaymentService';
 import { formatInvoiceDate } from '../../services/invoicePrintModel';
 import { getVorgangInvoice } from '../../services/vorgangService';
+import { getInvoiceDocumentTitle } from '../../services/invoiceTypeService';
 import type { VorgangInvoice } from '../../types/models';
 import type { TranslationKey } from '../../i18n';
 
@@ -28,10 +29,12 @@ interface Props {
 }
 
 function invoiceLabel(inv: VorgangInvoice, translate: (key: TranslationKey) => string): string {
-  if (inv.type === 'schluss') {
-    return translate('invoice.schlussLabel');
+  const key = `invoice.type.${inv.type}` as TranslationKey;
+  const translated = translate(key);
+  if (inv.type === 'abschlag' && inv.abschlagNumber) {
+    return `${translated} ${inv.abschlagNumber}`;
   }
-  return `${translate('invoice.abschlagLabel')} ${inv.abschlagNumber ?? '?'}`;
+  return translated || getInvoiceDocumentTitle(inv.type, inv.abschlagNumber);
 }
 
 function workflowStatusLabel(

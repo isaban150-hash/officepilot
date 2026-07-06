@@ -13,7 +13,7 @@ describe('buildInvoicePrintModel', () => {
     const { draft, setup } = createNormalPrintSetup();
     const model = buildInvoicePrintModel(draft, setup);
 
-    expect(model.documentTitle).toBe('Abschlagsrechnung 1');
+    expect(model.documentTitle).toBe('Rechnung');
     expect(model.invoiceNumber).toBe('ENTWURF');
     expect(model.projectSite).toBe('Teststraße 1');
     expect(model.positions).toHaveLength(1);

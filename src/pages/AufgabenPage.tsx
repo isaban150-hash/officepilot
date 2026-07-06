@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Badge, Card, CardMeta, CardTitle, PageHeader } from '../components/ui/Card';
+import { EmptyStateBlock } from '../components/ui/EmptyStateBlock';
 import { useApp } from '../context/AppContext';
 import {
   getTaskSummary,
@@ -70,7 +71,11 @@ export function AufgabenPage() {
       </div>
 
       {tasks.length === 0 ? (
-        <p className="empty-state">{translate('aufgaben.emptyFilter')}</p>
+        <EmptyStateBlock
+          title={translate(filter === 'offen' ? 'aufgaben.allDone.title' : 'aufgaben.emptyFilter.title')}
+          description={translate(filter === 'offen' ? 'aufgaben.allDone.desc' : 'aufgaben.emptyFilter.desc')}
+          testId="aufgaben-empty-state"
+        />
       ) : (
         <div className="card-list">
           {tasks.map((task) => {
@@ -105,7 +110,7 @@ export function AufgabenPage() {
                         </Link>
                       )}
                       {task.linkedInboxId && (
-                        <Link to={`/eingang/${task.linkedInboxId}`} className="link">
+                        <Link to={`/ablage/${task.linkedInboxId}`} className="link">
                           {translate('aufgaben.linkInbox')}
                         </Link>
                       )}

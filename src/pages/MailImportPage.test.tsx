@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { AppProvider } from '../context/AppContext';
+import { AuthProvider } from '../context/AuthContext';
 import { DEFAULT_SETUP } from '../data/mockData';
 import { MailImportPage } from './MailImportPage';
 import { MehrPage } from './MehrPage';
@@ -30,9 +31,11 @@ describe('MehrPage mail import link', () => {
   it('zeigt Link zu E-Mails importieren', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
-        <AppProvider initialSetup={DEFAULT_SETUP}>
-          <MehrPage />
-        </AppProvider>
+        <AuthProvider>
+          <AppProvider initialSetup={DEFAULT_SETUP}>
+            <MehrPage />
+          </AppProvider>
+        </AuthProvider>
       </MemoryRouter>,
     );
 

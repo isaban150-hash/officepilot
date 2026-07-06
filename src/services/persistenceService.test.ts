@@ -90,10 +90,10 @@ describe('createSeedState', () => {
     expect(seed.version).toBe(STORAGE_VERSION);
     expect(seed.syncClient).toBeDefined();
     expect(seed.syncOutbox).toEqual([]);
-    expect(seed.inboxItems.length).toBeGreaterThan(0);
-    expect(seed.vorgaenge.length).toBeGreaterThan(0);
-    expect(seed.documents.length).toBeGreaterThan(0);
-    expect(seed.expenses?.length).toBeGreaterThan(0);
+    expect(seed.inboxItems).toEqual([]);
+    expect(seed.vorgaenge).toEqual([]);
+    expect(seed.documents).toEqual([]);
+    expect(seed.expenses).toEqual([]);
   });
 });
 
