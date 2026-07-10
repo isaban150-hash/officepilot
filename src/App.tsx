@@ -42,6 +42,7 @@ import { ImpressumPage } from './pages/legal/ImpressumPage';
 import { DatenschutzPage } from './pages/legal/DatenschutzPage';
 import { AgbPage } from './pages/legal/AgbPage';
 import { LizenzbedingungenPage } from './pages/legal/LizenzbedingungenPage';
+import { NotFoundPage } from './pages/system/NotFoundPage';
 
 function PublicAuthRoutes() {
   return (
@@ -152,7 +153,7 @@ function AppRoutes() {
         <Route path="/setup" element={<SetupPage />} />
         <Route path="/login" element={<Navigate to="/" replace />} />
         <Route path="/register" element={<Navigate to="/" replace />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>
   );

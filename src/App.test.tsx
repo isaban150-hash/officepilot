@@ -7,8 +7,8 @@ describe('App routing', () => {
     expect(appSource).not.toMatch(/AnalysekartePage/);
   });
 
-  it('nutzt Heute als Standard-Route', () => {
+  it('nutzt Heute als Standard-Route und 404 für unbekannte Pfade', () => {
     expect(appSource).toMatch(/path="\/" element=\{<HeutePage/);
-    expect(appSource).toMatch(/path="\*" element=\{<Navigate to="\/" replace/);
+    expect(appSource).toMatch(/path="\*" element=\{<NotFoundPage/);
   });
 });

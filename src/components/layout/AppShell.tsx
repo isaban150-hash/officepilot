@@ -1,5 +1,6 @@
 import { Link, Outlet } from 'react-router-dom';
 import { BetaModeBanner } from './BetaModeBanner';
+import { NetworkStatusBanner } from '../system/NetworkStatusBanner';
 import { BottomNav } from './BottomNav';
 import { SidebarNav } from './SidebarNav';
 import { GlobalSearchBar } from '../search/GlobalSearchBar';
@@ -39,6 +40,7 @@ export function AppShell() {
           </Button>
         </div>
       </div>
+      <NetworkStatusBanner />
       <BetaModeBanner />
       <div className="app-shell__search" data-testid="app-shell-search">
         <GlobalSearchBar compact />

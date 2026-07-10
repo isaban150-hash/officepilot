@@ -70,6 +70,9 @@ export { isUserAllowedToUseApp, getLicenseBlockReason } from './licenseService';
 export { hydrateAuthFromStorage } from './authPersistence';
 
 export async function ensureDefaultAdminUser(): Promise<UserAccount | null> {
+  const { isDefaultAdminBootstrapAllowed } = await import('../../config/productionGuard');
+  if (!isDefaultAdminBootstrapAllowed()) return null;
+
   const existing = findUserByEmail(DEFAULT_ADMIN_EMAIL);
   if (existing) return existing;
 
