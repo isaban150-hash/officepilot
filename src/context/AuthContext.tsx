@@ -2,27 +2,30 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
 } from 'react';
+import type { Session } from '@supabase/supabase-js';
 import type { AuthSession, UserAccount } from '../types/auth';
+import type { RegisterUserInput } from '../types/auth';
+import { getSupabaseClient } from '../lib/supabase';
 import {
   approveUser,
   blockUser,
-  ensureDefaultAdminUser,
-  extendLicense,
   expireLicense,
-  getCurrentUser,
+  extendLicense,
+  fetchCurrentSession,
   grantBetaLicense,
-  hydrateAuthFromStorage,
   isUserAllowedToUseApp,
-  login as loginUser,
-  logout as logoutUser,
-  registerUser,
+  signInWithPassword,
+  signOutUser,
+  signUpUser,
+  type AuthPayload,
   type AuthResult,
-} from '../services/auth/authService';
-import type { RegisterUserInput } from '../types/auth';
+} from '../services/auth/supabaseAuthService';
+import { mapSupabaseSession, mapSupabaseUserToAccount } from '../services/auth/userAccountMapper';
 
 interface AuthContextValue {
   user: UserAccount | null;
@@ -30,10 +33,11 @@ interface AuthContextValue {
   isAuthenticated: boolean;
   isAllowed: boolean;
   isAdmin: boolean;
-  login: (email: string, password: string) => Promise<AuthResult<AuthSession>>;
-  logout: () => void;
+  isAuthReady: boolean;
+  login: (email: string, password: string) => Promise<AuthResult<AuthPayload>>;
+  logout: () => Promise<void>;
   register: (input: RegisterUserInput) => Promise<AuthResult<UserAccount>>;
-  refreshAuth: () => void;
+  refreshAuth: () => Promise<void>;
   approveUser: typeof approveUser;
   blockUser: typeof blockUser;
   extendLicense: typeof extendLicense;
@@ -47,34 +51,85 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
-export function AuthProvider({ children }: AuthProviderProps) {
-  const [session, setSession] = useState(() => hydrateAuthFromStorage());
-  const [user, setUser] = useState<UserAccount | null>(() => getCurrentUser());
+function applyAuthPayload(
+  payload: AuthPayload | null,
+  setSession: (session: AuthSession | null) => void,
+  setUser: (user: UserAccount | null) => void,
+): void {
+  if (!payload) {
+    setSession(null);
+    setUser(null);
+    return;
+  }
+  setSession(payload.session);
+  setUser(payload.user);
+}
 
-  const refreshAuth = useCallback(() => {
-    const nextSession = hydrateAuthFromStorage();
-    setSession(nextSession);
-    setUser(getCurrentUser());
+export function AuthProvider({ children }: AuthProviderProps) {
+  const [session, setSession] = useState<AuthSession | null>(null);
+  const [user, setUser] = useState<UserAccount | null>(null);
+  const [isAuthReady, setIsAuthReady] = useState(false);
+
+  const refreshAuth = useCallback(async () => {
+    const payload = await fetchCurrentSession();
+    applyAuthPayload(payload, setSession, setUser);
+  }, []);
+
+  useEffect(() => {
+    const client = getSupabaseClient();
+    if (!client) {
+      setIsAuthReady(true);
+      return;
+    }
+
+    let active = true;
+
+    void (async () => {
+      const payload = await fetchCurrentSession();
+      if (!active) return;
+      applyAuthPayload(payload, setSession, setUser);
+      setIsAuthReady(true);
+    })();
+
+    const {
+      data: { subscription },
+    } = client.auth.onAuthStateChange((_event, nextSession: Session | null) => {
+      if (!nextSession) {
+        applyAuthPayload(null, setSession, setUser);
+        return;
+      }
+      applyAuthPayload(
+        {
+          session: mapSupabaseSession(nextSession),
+          user: mapSupabaseUserToAccount(nextSession.user),
+          supabaseSession: nextSession,
+        },
+        setSession,
+        setUser,
+      );
+    });
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
-    const result = await loginUser(email, password);
+    const result = await signInWithPassword(email, password);
     if (result.success) {
-      setSession(result.data);
-      setUser(getCurrentUser());
+      applyAuthPayload(result.data, setSession, setUser);
     }
     return result;
   }, []);
 
-  const logout = useCallback(() => {
-    logoutUser();
-    setSession(null);
-    setUser(null);
+  const logout = useCallback(async () => {
+    await signOutUser();
+    applyAuthPayload(null, setSession, setUser);
   }, []);
 
   const register = useCallback(async (input: RegisterUserInput) => {
-    const result = await registerUser(input);
-    return result;
+    return signUpUser(input);
   }, []);
 
   const value = useMemo(
@@ -84,6 +139,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       isAuthenticated: Boolean(user && session),
       isAllowed: isUserAllowedToUseApp(user ?? undefined),
       isAdmin: user?.role === 'admin',
+      isAuthReady,
       login,
       logout,
       register,
@@ -94,7 +150,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       expireLicense,
       grantBetaLicense,
     }),
-    [user, session, login, logout, register, refreshAuth],
+    [user, session, isAuthReady, login, logout, register, refreshAuth],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -104,9 +160,4 @@ export function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error('useAuth must be used within AuthProvider');
   return ctx;
-}
-
-export async function bootstrapAuthOnStartup(): Promise<void> {
-  hydrateAuthFromStorage();
-  await ensureDefaultAdminUser();
 }

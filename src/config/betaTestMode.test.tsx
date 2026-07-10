@@ -26,11 +26,22 @@ import { loginAsDefaultAdmin } from '../test/authFixtures';
 
 type Mount = { container: HTMLDivElement; root: Root };
 
-function renderAppAt(path: string, initialSetup = DEFAULT_SETUP): Mount {
+async function waitForAuthReady(container: HTMLElement): Promise<void> {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    if (!container.querySelector('[data-testid="auth-loading"]')) {
+      return;
+    }
+    await act(async () => {
+      await Promise.resolve();
+    });
+  }
+}
+
+async function renderAppAt(path: string, initialSetup = DEFAULT_SETUP): Promise<Mount> {
   const container = document.createElement('div');
   document.body.appendChild(container);
   let root!: Root;
-  act(() => {
+  await act(async () => {
     root = createRoot(container);
     root.render(
       <MemoryRouter initialEntries={[path]}>
@@ -41,7 +52,9 @@ function renderAppAt(path: string, initialSetup = DEFAULT_SETUP): Mount {
         </AuthProvider>
       </MemoryRouter>,
     );
+    await Promise.resolve();
   });
+  await waitForAuthReady(container);
   return { container, root };
 }
 
@@ -125,16 +138,16 @@ describe('betaTestMode – routing', () => {
     clearPersistedState();
   });
 
-  it('ohne Beta-Flag: Setup-Wizard erscheint bei unvollständigem Setup', () => {
+  it('ohne Beta-Flag: Setup-Wizard erscheint bei unvollständigem Setup', async () => {
     vi.stubEnv('VITE_BETA_TEST_MODE', '');
-    mounted = renderAppAt('/setup', { ...DEFAULT_SETUP, setupComplete: false });
+    mounted = await renderAppAt('/setup', { ...DEFAULT_SETUP, setupComplete: false });
     expect(mounted.container.querySelector('[data-testid="first-run-wizard"]')).not.toBeNull();
   });
 
-  it('mit Beta-Flag: Heute-Seite wird angezeigt, kein Wizard', () => {
+  it('mit Beta-Flag: Heute-Seite wird angezeigt, kein Wizard', async () => {
     vi.stubEnv('VITE_BETA_TEST_MODE', 'true');
     const setup = hydrateStoresFromStorage();
-    mounted = renderAppAt('/', setup);
+    mounted = await renderAppAt('/', setup);
     expect(mounted.container.querySelector('[data-testid="first-run-wizard"]')).toBeNull();
     expect(mounted.container.querySelector('[data-testid="heute-page"]')).not.toBeNull();
   });

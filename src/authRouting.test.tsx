@@ -18,11 +18,22 @@ const completeSetup = { ...DEFAULT_SETUP, setupComplete: true, setupVersion: 1 }
 
 type Mount = { container: HTMLDivElement; root: Root };
 
-function renderAppAt(path: string, initialSetup = completeSetup): Mount {
+async function waitForAuthReady(container: HTMLElement): Promise<void> {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    if (!container.querySelector('[data-testid="auth-loading"]')) {
+      return;
+    }
+    await act(async () => {
+      await Promise.resolve();
+    });
+  }
+}
+
+async function renderAppAt(path: string, initialSetup = completeSetup): Promise<Mount> {
   const container = document.createElement('div');
   document.body.appendChild(container);
   let root!: Root;
-  act(() => {
+  await act(async () => {
     root = createRoot(container);
     root.render(
       <MemoryRouter initialEntries={[path]}>
@@ -33,11 +44,13 @@ function renderAppAt(path: string, initialSetup = completeSetup): Mount {
         </AuthProvider>
       </MemoryRouter>,
     );
+    await Promise.resolve();
   });
+  await waitForAuthReady(container);
   return { container, root };
 }
 
-describe('AUTH-01 routing', () => {
+describe('SUPABASE-AUTH-02 routing', () => {
   let mounted: Mount | undefined;
 
   afterEach(() => {
@@ -49,21 +62,21 @@ describe('AUTH-01 routing', () => {
   });
 
   it('nicht eingeloggt: Weiterleitung zu Login', async () => {
-    mounted = renderAppAt('/');
+    mounted = await renderAppAt('/');
     expect(mounted.container.querySelector('[data-testid="login-page"]')).not.toBeNull();
   });
 
   it('pending user sieht waiting approval', async () => {
     await registerPendingTestUser('pending-route@example.com');
     await login('pending-route@example.com', 'TestPasswort1');
-    mounted = renderAppAt('/');
+    mounted = await renderAppAt('/');
     expect(mounted.container.querySelector('[data-testid="waiting-approval-page"]')).not.toBeNull();
   });
 
   it('active user kommt in App', async () => {
     await seedDefaultAdminUser();
     await loginAsDefaultAdmin();
-    mounted = renderAppAt('/', completeSetup);
+    mounted = await renderAppAt('/', completeSetup);
     expect(mounted.container.querySelector('[data-testid="heute-page"]')).not.toBeNull();
   });
 
@@ -71,13 +84,13 @@ describe('AUTH-01 routing', () => {
     const user = await registerPendingTestUser('user-admin@example.com');
     approveUser(user.id);
     await login('user-admin@example.com', 'TestPasswort1');
-    mounted = renderAppAt('/admin/users', completeSetup);
+    mounted = await renderAppAt('/admin/users', completeSetup);
     expect(mounted.container.querySelector('[data-testid="admin-users-denied"]')).not.toBeNull();
   });
 
   it('admin sieht user list', async () => {
     await loginAsDefaultAdmin();
-    mounted = renderAppAt('/admin/users', completeSetup);
+    mounted = await renderAppAt('/admin/users', completeSetup);
     expect(mounted.container.querySelector('[data-testid="admin-users-page"]')).not.toBeNull();
     expect(mounted.container.querySelector('[data-testid="admin-users-table"]')).not.toBeNull();
   });

@@ -4,21 +4,23 @@ import { createSeedState } from './services/persistenceService';
 import {
   approveUser,
   blockUser,
-  getCurrentUser,
-  login,
+  expireLicense,
+  fetchCurrentSession,
+  signInWithPassword,
+  signUpUser,
 } from './services/auth/authService';
-import { expireLicense, getLicenseBlockReason, isUserAllowedToUseApp } from './services/auth/licenseService';
-import { findUserByEmail, getCurrentSession } from './services/auth/authStore';
+import { getLicenseBlockReason, isUserAllowedToUseApp } from './services/auth/licenseService';
 import { PRIVACY_VERSION, TERMS_VERSION, LICENSE_VERSION } from './config/legalVersions';
 import {
+  findUserByEmail,
+  login,
   loginAsDefaultAdmin,
   registerAndApproveUser,
   registerPendingTestUser,
   seedDefaultAdminUser,
 } from './test/authFixtures';
-import { hydrateAuthFromStorage } from './services/auth/authPersistence';
 
-describe('AUTH-01', () => {
+describe('SUPABASE-AUTH-02', () => {
   afterEach(() => {
     vi.unstubAllEnvs();
   });
@@ -35,9 +37,10 @@ describe('AUTH-01', () => {
 
     it('Login funktioniert für freigeschalteten Nutzer', async () => {
       await registerAndApproveUser('active@example.com');
-      const result = await login('active@example.com', 'TestPasswort1');
+      const result = await signInWithPassword('active@example.com', 'TestPasswort1');
       expect(result.success).toBe(true);
-      expect(getCurrentUser()?.email).toBe('active@example.com');
+      const session = await fetchCurrentSession();
+      expect(session?.user.email).toBe('active@example.com');
     });
   });
 
@@ -58,7 +61,8 @@ describe('AUTH-01', () => {
     it('active user darf App nutzen', async () => {
       await registerAndApproveUser('allowed@example.com');
       await login('allowed@example.com', 'TestPasswort1');
-      expect(isUserAllowedToUseApp(getCurrentUser()!)).toBe(true);
+      const session = await fetchCurrentSession();
+      expect(isUserAllowedToUseApp(session?.user)).toBe(true);
     });
 
     it('blocked user darf App nicht nutzen', async () => {
@@ -125,13 +129,31 @@ describe('AUTH-01', () => {
     it('Session wird nach Login gesetzt', async () => {
       await registerAndApproveUser('session@example.com');
       await login('session@example.com', 'TestPasswort1');
-      hydrateAuthFromStorage();
-      expect(getCurrentSession()?.userId).toBeTruthy();
+      const session = await fetchCurrentSession();
+      expect(session?.session.userId).toBeTruthy();
     });
 
     it('Default-Admin kann sich anmelden', async () => {
       await loginAsDefaultAdmin();
-      expect(getCurrentUser()?.role).toBe('admin');
+      const session = await fetchCurrentSession();
+      expect(session?.user.role).toBe('admin');
+    });
+
+    it('Registrierung ohne Zustimmung blockiert', async () => {
+      const result = await signUpUser({
+        companyName: 'Firma',
+        firstName: 'Max',
+        lastName: 'Muster',
+        email: 'no-consent@example.com',
+        password: 'TestPasswort1',
+        acceptedTermsVersion: '',
+        acceptedPrivacyVersion: PRIVACY_VERSION,
+        acceptedLicenseVersion: LICENSE_VERSION,
+      });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error).toBe('terms_required');
+      }
     });
   });
 });

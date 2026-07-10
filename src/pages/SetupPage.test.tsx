@@ -25,11 +25,22 @@ const completeSetup = {
 
 type Mount = { container: HTMLDivElement; root: Root };
 
-function renderApp(initialSetup = incompleteSetup): Mount {
+async function waitForAuthReady(container: HTMLElement): Promise<void> {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    if (!container.querySelector('[data-testid="auth-loading"]')) {
+      return;
+    }
+    await act(async () => {
+      await Promise.resolve();
+    });
+  }
+}
+
+async function renderApp(initialSetup = incompleteSetup): Promise<Mount> {
   const container = document.createElement('div');
   document.body.appendChild(container);
   let root!: Root;
-  act(() => {
+  await act(async () => {
     root = createRoot(container);
     root.render(
       <MemoryRouter initialEntries={['/setup']}>
@@ -40,7 +51,9 @@ function renderApp(initialSetup = incompleteSetup): Mount {
         </AuthProvider>
       </MemoryRouter>,
     );
+    await Promise.resolve();
   });
+  await waitForAuthReady(container);
   return { container, root };
 }
 
@@ -102,8 +115,8 @@ describe('FirstRunWizard / SetupPage', () => {
     }
   });
 
-  it('shows wizard on first start', () => {
-    mounted = renderApp(incompleteSetup);
+  it('shows wizard on first start', async () => {
+    mounted = await renderApp(incompleteSetup);
     expect(mounted.container.querySelector('[data-testid="first-run-wizard"]')).not.toBeNull();
   });
 
@@ -161,8 +174,8 @@ describe('FirstRunWizard / SetupPage', () => {
     expect(mounted.container.querySelector('[data-testid="heute-page"]')).not.toBeNull();
   });
 
-  it('does not show wizard after setup is complete', () => {
-    mounted = renderApp(completeSetup);
+  it('does not show wizard after setup is complete', async () => {
+    mounted = await renderApp(completeSetup);
     expect(mounted.container.querySelector('[data-testid="first-run-wizard"]')).toBeNull();
   });
 });

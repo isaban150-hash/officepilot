@@ -16,8 +16,8 @@ import {
   TERMS_VERSION,
 } from './config/legalVersions';
 import { OFFICEPILOT_LEGAL_DISCLAIMER } from './config/legalDisclaimer';
-import { registerUser } from './services/auth/authService';
-import { findUserByEmail } from './services/auth/authStore';
+import { signUpUser } from './services/auth/authService';
+import { findUserByEmail } from './test/authFixtures';
 import { loginAsDefaultAdmin } from './test/authFixtures';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -31,7 +31,7 @@ describe('LEGAL-01', () => {
   });
 
   it('Registrierung ohne Zustimmung blockiert', async () => {
-    const result = await registerUser({
+    const result = await signUpUser({
       companyName: 'Firma',
       firstName: 'Max',
       lastName: 'Muster',
@@ -48,7 +48,7 @@ describe('LEGAL-01', () => {
   });
 
   it('Zustimmung und Versionen werden gespeichert', async () => {
-    const result = await registerUser({
+    const result = await signUpUser({
       companyName: 'Legal GmbH',
       firstName: 'Anna',
       lastName: 'Test',

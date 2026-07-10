@@ -3,9 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { AuthLayout } from '../components/auth/AuthLayout';
 import { Button } from '../components/ui/Button';
 import { useAuth } from '../context/AuthContext';
-import { getAuthErrorMessage } from '../services/auth/authService';
-import { getLicenseBlockReason } from '../services/auth/licenseService';
-import { findUserByEmail } from '../services/auth/authStore';
+import { getAuthErrorMessage, getPostLoginRoute } from '../services/auth/authService';
 
 export function LoginPage() {
   const { login } = useAuth();
@@ -25,21 +23,7 @@ export function LoginPage() {
       setError(getAuthErrorMessage(result.error));
       return;
     }
-    const user = findUserByEmail(email);
-    const block = getLicenseBlockReason(user);
-    if (block === 'pending') {
-      navigate('/waiting-approval', { replace: true });
-      return;
-    }
-    if (block === 'blocked') {
-      navigate('/access-blocked', { replace: true });
-      return;
-    }
-    if (block === 'license_expired' || block === 'no_license') {
-      navigate('/license-expired', { replace: true });
-      return;
-    }
-    navigate('/', { replace: true });
+    navigate(getPostLoginRoute(result.data.user), { replace: true });
   }
 
   return (

@@ -11,8 +11,6 @@ export interface UserAccount {
   email: string;
   phone?: string;
   industry?: string;
-  /** Local auth stub – replace with Supabase/Auth0/Firebase hash. */
-  passwordHash: string;
   role: UserRole;
   status: UserStatus;
   createdAt: string;
@@ -24,6 +22,10 @@ export interface UserAccount {
   /** @deprecated Use legalAcceptedAt */
   acceptedAt?: string;
   legalAcceptedAt?: string;
+  licensePlan?: LicensePlan;
+  licenseStatus?: LicenseStatus;
+  licenseStartsAt?: string;
+  licenseExpiresAt?: string;
 }
 
 export interface License {
@@ -39,6 +41,7 @@ export interface License {
 
 export interface AuthSession {
   userId: string;
+  accessToken: string;
   createdAt: string;
   expiresAt?: string;
 }

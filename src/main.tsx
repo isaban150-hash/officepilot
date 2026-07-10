@@ -8,8 +8,6 @@ import { AppErrorBoundary } from './components/system/AppErrorBoundary';
 import { NetworkStatusBanner } from './components/system/NetworkStatusBanner';
 import { ProductionConfigBanner } from './components/system/ProductionConfigBanner';
 import { hydrateStoresFromStorage } from './services/persistenceService';
-import { ensureDefaultAdminUser } from './services/auth/authService';
-import { isBetaTestMode } from './config/betaTestMode';
 import './styles/tokens.css';
 import './index.css';
 import './styles/layout.css';
@@ -52,27 +50,7 @@ function BootstrapApp() {
   const [initialSetup] = useState(() => hydrateStoresFromStorage());
 
   useEffect(() => {
-    void (async () => {
-      try {
-        await ensureDefaultAdminUser();
-        if (isBetaTestMode()) {
-          const { login, getCurrentSession } = await import('./services/auth/authService');
-          if (!getCurrentSession()) {
-            const { DEFAULT_ADMIN_EMAIL, DEFAULT_ADMIN_PASSWORD } = await import(
-              './services/auth/authService'
-            );
-            await login(DEFAULT_ADMIN_EMAIL, DEFAULT_ADMIN_PASSWORD);
-          }
-        }
-        setReady(true);
-      } catch (bootstrapError) {
-        setError(
-          bootstrapError instanceof Error
-            ? bootstrapError.message
-            : 'OfficePilot konnte nicht gestartet werden.',
-        );
-      }
-    })();
+    setReady(true);
   }, []);
 
   if (error) {

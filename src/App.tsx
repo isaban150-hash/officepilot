@@ -93,7 +93,15 @@ function SetupRoutes() {
 
 function AppRoutes() {
   const { setup } = useApp();
-  const { user, isAuthenticated, isAllowed } = useAuth();
+  const { user, isAuthenticated, isAllowed, isAuthReady } = useAuth();
+
+  if (!isAuthReady) {
+    return (
+      <div className="bootstrap-loading" data-testid="auth-loading">
+        <p className="bootstrap-loading__text">Anmeldung wird geprüft…</p>
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return <PublicAuthRoutes />;
