@@ -5,6 +5,8 @@ interface ImportMetaEnv {
   readonly VITE_GEMINI_MODEL?: string;
   readonly VITE_BETA_TEST_MODE?: string;
   readonly VITE_ALLOW_DEFAULT_ADMIN?: string;
+  readonly VITE_SUPABASE_URL?: string;
+  readonly VITE_SUPABASE_ANON_KEY?: string;
 }
 
 interface ImportMeta {
