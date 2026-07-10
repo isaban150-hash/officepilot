@@ -1,7 +1,7 @@
 export type UserRole = 'user' | 'admin';
-export type UserStatus = 'pending' | 'active' | 'blocked';
+export type UserStatus = 'pending' | 'approved' | 'blocked';
 export type LicensePlan = 'beta' | 'starter' | 'pro' | 'premium';
-export type LicenseStatus = 'active' | 'expired' | 'cancelled';
+export type LicenseStatus = 'inactive' | 'active' | 'expired' | 'cancelled';
 
 export interface UserAccount {
   id: string;

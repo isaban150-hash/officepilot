@@ -1,5 +1,4 @@
 import './supabaseMockSetup';
-import './adminAccessTestBridge';
 import { resetAuthForTests } from './authFixtures';
 import { beforeEach } from 'vitest';
 import { resetTestStores } from './resetStores';

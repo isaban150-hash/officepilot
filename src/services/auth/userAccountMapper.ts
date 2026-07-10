@@ -1,52 +1,36 @@
 import type { Session, User } from '@supabase/supabase-js';
-import type {
-  AuthSession,
-  License,
-  LicensePlan,
-  LicenseStatus,
-  RegisterUserInput,
-  UserAccount,
-  UserRole,
-  UserStatus,
-} from '../../types/auth';
+import type { AuthSession, RegisterUserInput } from '../../types/auth';
+import { buildRegistrationMetadata } from './profileMapper';
 
 export interface OfficePilotUserMetadata {
-  company_name?: string;
-  first_name?: string;
-  last_name?: string;
+  companyName?: string;
+  firstName?: string;
+  lastName?: string;
   phone?: string;
   industry?: string;
-  status?: UserStatus;
-  role?: UserRole;
-  accepted_terms_version?: string;
-  accepted_privacy_version?: string;
-  accepted_license_version?: string;
-  legal_accepted_at?: string;
-  license_plan?: LicensePlan;
-  license_status?: LicenseStatus;
-  license_expires_at?: string;
-  license_starts_at?: string;
+  acceptedTermsVersion?: string;
+  acceptedPrivacyVersion?: string;
+  acceptedLicenseVersion?: string;
+  legalAcceptedAt?: string;
 }
 
 function readMetadata(user: User): OfficePilotUserMetadata {
-  return (user.user_metadata ?? {}) as OfficePilotUserMetadata;
+  const raw = (user.user_metadata ?? {}) as Record<string, string | undefined>;
+  return {
+    companyName: raw.companyName ?? raw.company_name,
+    firstName: raw.firstName ?? raw.first_name,
+    lastName: raw.lastName ?? raw.last_name,
+    phone: raw.phone,
+    industry: raw.industry,
+    acceptedTermsVersion: raw.acceptedTermsVersion ?? raw.accepted_terms_version,
+    acceptedPrivacyVersion: raw.acceptedPrivacyVersion ?? raw.accepted_privacy_version,
+    acceptedLicenseVersion: raw.acceptedLicenseVersion ?? raw.accepted_license_version,
+    legalAcceptedAt: raw.legalAcceptedAt ?? raw.legal_accepted_at,
+  };
 }
 
-export function buildSignUpMetadata(input: RegisterUserInput): OfficePilotUserMetadata {
-  const now = new Date().toISOString();
-  return {
-    company_name: input.companyName.trim(),
-    first_name: input.firstName.trim(),
-    last_name: input.lastName.trim(),
-    phone: input.phone?.trim() || undefined,
-    industry: input.industry?.trim() || undefined,
-    status: 'pending',
-    role: 'user',
-    accepted_terms_version: input.acceptedTermsVersion,
-    accepted_privacy_version: input.acceptedPrivacyVersion,
-    accepted_license_version: input.acceptedLicenseVersion,
-    legal_accepted_at: now,
-  };
+export function buildSignUpMetadata(input: RegisterUserInput): Record<string, string> {
+  return buildRegistrationMetadata(input);
 }
 
 export function mapSupabaseSession(session: Session): AuthSession {
@@ -58,71 +42,34 @@ export function mapSupabaseSession(session: Session): AuthSession {
   };
 }
 
-export function mapSupabaseUserToAccount(user: User): UserAccount {
+export function mapRegistrationPreviewFromUser(user: User) {
   const metadata = readMetadata(user);
   const createdAt = user.created_at ? new Date(user.created_at).toISOString() : new Date().toISOString();
-  const updatedAt = user.updated_at ? new Date(user.updated_at).toISOString() : createdAt;
 
   return {
     id: user.id,
-    companyName: metadata.company_name ?? '',
-    firstName: metadata.first_name ?? '',
-    lastName: metadata.last_name ?? '',
     email: user.email ?? '',
+    companyName: metadata.companyName ?? '',
+    firstName: metadata.firstName ?? '',
+    lastName: metadata.lastName ?? '',
     phone: metadata.phone,
     industry: metadata.industry,
-    role: metadata.role ?? 'user',
-    status: metadata.status ?? 'pending',
     createdAt,
-    updatedAt,
-    lastLoginAt: user.last_sign_in_at ? new Date(user.last_sign_in_at).toISOString() : undefined,
-    acceptedTermsVersion: metadata.accepted_terms_version,
-    acceptedPrivacyVersion: metadata.accepted_privacy_version,
-    acceptedLicenseVersion: metadata.accepted_license_version,
-    legalAcceptedAt: metadata.legal_accepted_at,
-    acceptedAt: metadata.legal_accepted_at,
-    licensePlan: metadata.license_plan,
-    licenseStatus: metadata.license_status,
-    licenseStartsAt: metadata.license_starts_at,
-    licenseExpiresAt: metadata.license_expires_at,
+    acceptedTermsVersion: metadata.acceptedTermsVersion,
+    acceptedPrivacyVersion: metadata.acceptedPrivacyVersion,
+    acceptedLicenseVersion: metadata.acceptedLicenseVersion,
+    legalAcceptedAt: metadata.legalAcceptedAt,
   };
 }
 
-export function mapLicenseFromUser(user: UserAccount): License | undefined {
-  if (!user.licensePlan || !user.licenseStatus) return undefined;
-
-  const startsAt = user.licenseStartsAt ?? user.createdAt;
+/** @deprecated Verwende mapProfileRowToUserAccount aus profileMapper. */
+export function mapSupabaseUserToAccount(user: User) {
+  const preview = mapRegistrationPreviewFromUser(user);
   return {
-    id: `lic-${user.id}`,
-    userId: user.id,
-    plan: user.licensePlan,
-    status: user.licenseStatus,
-    startsAt,
-    expiresAt: user.licenseExpiresAt,
-    createdAt: startsAt,
-    updatedAt: user.updatedAt,
-  };
-}
-
-export function withUpdatedMetadata(
-  user: User,
-  patch: Partial<OfficePilotUserMetadata>,
-): OfficePilotUserMetadata {
-  return {
-    ...readMetadata(user),
-    ...patch,
-  };
-}
-
-export function buildActiveLicenseMetadata(daysValid = 90): Partial<OfficePilotUserMetadata> {
-  const startsAt = new Date().toISOString();
-  const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + daysValid);
-  return {
-    status: 'active',
-    license_plan: 'beta',
-    license_status: 'active',
-    license_starts_at: startsAt,
-    license_expires_at: expiresAt.toISOString(),
+    ...preview,
+    role: 'user' as const,
+    status: 'pending' as const,
+    updatedAt: preview.createdAt,
+    acceptedAt: preview.legalAcceptedAt,
   };
 }

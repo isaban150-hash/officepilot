@@ -26,7 +26,9 @@ import {
   type AuthResult,
   type RegisterResult,
 } from '../services/auth/supabaseAuthService';
-import { mapSupabaseSession, mapSupabaseUserToAccount } from '../services/auth/userAccountMapper';
+import { mapSupabaseSession } from '../services/auth/userAccountMapper';
+import { fetchCurrentUserProfile } from '../services/auth/profileService';
+import { mapProfileRowToUserAccount } from '../services/auth/profileMapper';
 
 interface AuthContextValue {
   user: UserAccount | null;
@@ -35,6 +37,7 @@ interface AuthContextValue {
   isAllowed: boolean;
   isAdmin: boolean;
   isAuthReady: boolean;
+  profileError: boolean;
   login: (email: string, password: string) => Promise<AuthResult<AuthPayload>>;
   logout: () => Promise<void>;
   register: (input: RegisterUserInput) => Promise<RegisterResult>;
@@ -52,29 +55,58 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
-function applyAuthPayload(
-  payload: AuthPayload | null,
-  setSession: (session: AuthSession | null) => void,
-  setUser: (user: UserAccount | null) => void,
-): void {
-  if (!payload) {
-    setSession(null);
-    setUser(null);
-    return;
+async function resolveAuthFromSession(session: Session | null): Promise<{
+  session: AuthSession | null;
+  user: UserAccount | null;
+  profileError: boolean;
+}> {
+  if (!session) {
+    return { session: null, user: null, profileError: false };
   }
-  setSession(payload.session);
-  setUser(payload.user);
+
+  const profileResult = await fetchCurrentUserProfile(session.user.id);
+  if (!profileResult.success) {
+    return {
+      session: mapSupabaseSession(session),
+      user: null,
+      profileError: true,
+    };
+  }
+
+  return {
+    session: mapSupabaseSession(session),
+    user: mapProfileRowToUserAccount(profileResult.profile),
+    profileError: false,
+  };
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
   const [session, setSession] = useState<AuthSession | null>(null);
   const [user, setUser] = useState<UserAccount | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
+  const [profileError, setProfileError] = useState(false);
+
+  const applyResolvedAuth = useCallback(
+    (resolved: { session: AuthSession | null; user: UserAccount | null; profileError: boolean }) => {
+      setSession(resolved.session);
+      setUser(resolved.user);
+      setProfileError(resolved.profileError);
+    },
+    [],
+  );
 
   const refreshAuth = useCallback(async () => {
     const payload = await fetchCurrentSession();
-    applyAuthPayload(payload, setSession, setUser);
-  }, []);
+    if (!payload) {
+      applyResolvedAuth({ session: null, user: null, profileError: false });
+      return;
+    }
+    applyResolvedAuth({
+      session: payload.session,
+      user: payload.user,
+      profileError: false,
+    });
+  }, [applyResolvedAuth]);
 
   useEffect(() => {
     const client = getSupabaseClient();
@@ -88,63 +120,77 @@ export function AuthProvider({ children }: AuthProviderProps) {
     void (async () => {
       const payload = await fetchCurrentSession();
       if (!active) return;
-      applyAuthPayload(payload, setSession, setUser);
+      if (payload) {
+        applyResolvedAuth({
+          session: payload.session,
+          user: payload.user,
+          profileError: false,
+        });
+      } else {
+        const { data } = await client.auth.getSession();
+        if (data.session) {
+          const resolved = await resolveAuthFromSession(data.session);
+          applyResolvedAuth(resolved);
+        } else {
+          applyResolvedAuth({ session: null, user: null, profileError: false });
+        }
+      }
       setIsAuthReady(true);
     })();
 
     const {
       data: { subscription },
     } = client.auth.onAuthStateChange((_event, nextSession: Session | null) => {
-      if (!nextSession) {
-        applyAuthPayload(null, setSession, setUser);
-        return;
-      }
-      applyAuthPayload(
-        {
-          session: mapSupabaseSession(nextSession),
-          user: mapSupabaseUserToAccount(nextSession.user),
-          supabaseSession: nextSession,
-        },
-        setSession,
-        setUser,
-      );
+      void (async () => {
+        const resolved = await resolveAuthFromSession(nextSession);
+        applyResolvedAuth(resolved);
+      })();
     });
 
     return () => {
       active = false;
       subscription.unsubscribe();
     };
-  }, []);
+  }, [applyResolvedAuth]);
 
   const login = useCallback(async (email: string, password: string) => {
     const result = await signInWithPassword(email, password);
     if (result.success) {
-      applyAuthPayload(result.data, setSession, setUser);
+      applyResolvedAuth({
+        session: result.data.session,
+        user: result.data.user,
+        profileError: false,
+      });
     }
     return result;
-  }, []);
+  }, [applyResolvedAuth]);
 
   const logout = useCallback(async () => {
     await signOutUser();
-    applyAuthPayload(null, setSession, setUser);
-  }, []);
+    applyResolvedAuth({ session: null, user: null, profileError: false });
+  }, [applyResolvedAuth]);
 
   const register = useCallback(async (input: RegisterUserInput) => {
     const result = await signUpUser(input);
     if (result.success && result.outcome === 'session_created') {
-      applyAuthPayload(result.payload, setSession, setUser);
+      applyResolvedAuth({
+        session: result.payload.session,
+        user: result.payload.user,
+        profileError: false,
+      });
     }
     return result;
-  }, []);
+  }, [applyResolvedAuth]);
 
   const value = useMemo(
     () => ({
       user,
       session,
-      isAuthenticated: Boolean(user && session),
+      isAuthenticated: Boolean(session && user && !profileError),
       isAllowed: isUserAllowedToUseApp(user ?? undefined),
       isAdmin: user?.role === 'admin',
       isAuthReady,
+      profileError,
       login,
       logout,
       register,
@@ -155,7 +201,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       expireLicense,
       grantBetaLicense,
     }),
-    [user, session, isAuthReady, login, logout, register, refreshAuth],
+    [user, session, isAuthReady, profileError, login, logout, register, refreshAuth],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

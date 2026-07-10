@@ -4,16 +4,17 @@ import {
   TERMS_VERSION,
 } from '../config/legalVersions';
 import type { UserAccount } from '../types/auth';
-import { signInWithPassword, signUpUser, expireLicense as expireLicenseAccess } from '../services/auth/authService';
-import { mapSupabaseUserToAccount } from '../services/auth/userAccountMapper';
+import { signInWithPassword, signUpUser } from '../services/auth/authService';
+import { mapProfileRowToUserAccount } from '../services/auth/profileMapper';
 import { getLicenseFromUserAccount, isUserAllowedToUseApp } from '../services/auth/licenseService';
 import {
   DEFAULT_ADMIN_EMAIL,
   DEFAULT_ADMIN_PASSWORD,
+  getMockProfile,
   mockApproveUser,
   mockBlockUser,
+  mockExpireLicense,
   mockFindUserByEmail,
-  mockGrantBetaLicense,
   mockListUsersForAdmin,
   resetMockSupabaseAuth,
   seedMockAdminUser,
@@ -27,7 +28,9 @@ export function resetAuthForTests(): void {
 
 export async function seedDefaultAdminUser(): Promise<UserAccount> {
   const user = seedMockAdminUser();
-  return mapSupabaseUserToAccount(user);
+  const profile = getMockProfile(user.id);
+  if (!profile) throw new Error('Admin profile missing');
+  return mapProfileRowToUserAccount(profile);
 }
 
 export async function loginAsDefaultAdmin(): Promise<void> {
@@ -74,31 +77,33 @@ export async function registerAndApproveUser(email: string): Promise<UserAccount
   const user = await registerPendingTestUser(email);
   const approved = mockApproveUser(user.id);
   if (!approved) throw new Error('Approve failed');
-  return mapSupabaseUserToAccount(approved);
+  return mapProfileRowToUserAccount(approved);
 }
 
-export function approveUser(userId: string): UserAccount | null {
+export async function approveUser(userId: string): Promise<UserAccount | null> {
   const approved = mockApproveUser(userId);
-  return approved ? mapSupabaseUserToAccount(approved) : null;
+  return approved ? mapProfileRowToUserAccount(approved) : null;
 }
 
-export function blockUser(userId: string): UserAccount | null {
+export async function blockUser(userId: string): Promise<UserAccount | null> {
   const blocked = mockBlockUser(userId);
-  return blocked ? mapSupabaseUserToAccount(blocked) : null;
+  return blocked ? mapProfileRowToUserAccount(blocked) : null;
 }
 
-export function expireLicense(userId: string): UserAccount | null {
-  return expireLicenseAccess(userId);
+export async function expireLicense(userId: string): Promise<UserAccount | null> {
+  const expired = mockExpireLicense(userId);
+  return expired ? mapProfileRowToUserAccount(expired) : null;
 }
 
 export function findUserByEmail(email: string): UserAccount | undefined {
   const user = mockFindUserByEmail(email);
-  return user ? mapSupabaseUserToAccount(user) : undefined;
+  if (!user) return undefined;
+  const profile = getMockProfile(user.id);
+  return profile ? mapProfileRowToUserAccount(profile) : undefined;
 }
 
 export {
   getLicenseFromUserAccount,
   isUserAllowedToUseApp,
-  mockGrantBetaLicense as grantBetaLicense,
   signUpUser as registerUser,
 };

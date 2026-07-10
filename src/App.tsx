@@ -93,7 +93,7 @@ function SetupRoutes() {
 
 function AppRoutes() {
   const { setup } = useApp();
-  const { user, isAuthenticated, isAllowed, isAuthReady } = useAuth();
+  const { user, isAuthenticated, isAllowed, isAuthReady, profileError } = useAuth();
 
   if (!isAuthReady) {
     return (
@@ -103,7 +103,7 @@ function AppRoutes() {
     );
   }
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated || profileError) {
     return <PublicAuthRoutes />;
   }
 

@@ -82,7 +82,7 @@ describe('SUPABASE-AUTH-02 routing', () => {
 
   it('normaler user kommt nicht in admin', async () => {
     const user = await registerPendingTestUser('user-admin@example.com');
-    approveUser(user.id);
+    await approveUser(user.id);
     await login('user-admin@example.com', 'TestPasswort1');
     mounted = await renderAppAt('/admin/users', completeSetup);
     expect(mounted.container.querySelector('[data-testid="admin-users-denied"]')).not.toBeNull();

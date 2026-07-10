@@ -9,9 +9,11 @@ import type {
 } from '../../types/auth';
 import {
   buildSignUpMetadata,
+  mapRegistrationPreviewFromUser,
   mapSupabaseSession,
-  mapSupabaseUserToAccount,
 } from './userAccountMapper';
+import { fetchCurrentUserProfile } from './profileService';
+import { mapProfileRowToUserAccount } from './profileMapper';
 import { getLicenseBlockReason, isUserAllowedToUseApp } from './licenseService';
 
 const MIN_PASSWORD_LENGTH = 8;
@@ -43,10 +45,18 @@ function requireSupabaseClient() {
   return client;
 }
 
-function mapAuthPayload(session: Session): AuthPayload {
+async function loadUserFromProfile(userId: string): Promise<UserAccount | null> {
+  const result = await fetchCurrentUserProfile(userId);
+  if (!result.success) return null;
+  return mapProfileRowToUserAccount(result.profile);
+}
+
+async function mapAuthPayload(session: Session): Promise<AuthPayload | null> {
+  const user = await loadUserFromProfile(session.user.id);
+  if (!user) return null;
   return {
     session: mapSupabaseSession(session),
-    user: mapSupabaseUserToAccount(session.user),
+    user,
     supabaseSession: session,
   };
 }
@@ -85,7 +95,12 @@ export async function signInWithPassword(
     };
   }
 
-  return { success: true, data: mapAuthPayload(data.session) };
+  const payload = await mapAuthPayload(data.session);
+  if (!payload) {
+    return { success: false, error: 'user_not_found' };
+  }
+
+  return { success: true, data: payload };
 }
 
 export async function signUpUser(input: RegisterUserInput): Promise<RegisterResult> {
@@ -124,21 +139,30 @@ export async function signUpUser(input: RegisterUserInput): Promise<RegisterResu
     return { success: false, error: 'email_exists' };
   }
 
-  const user = mapSupabaseUserToAccount(data.user);
-
   if (data.session) {
+    const payload = await mapAuthPayload(data.session);
+    if (!payload) {
+      return { success: false, error: 'registration_failed' };
+    }
     return {
       success: true,
       outcome: 'session_created',
-      user,
-      payload: mapAuthPayload(data.session),
+      user: payload.user,
+      payload,
     };
   }
 
+  const preview = mapRegistrationPreviewFromUser(data.user);
   return {
     success: true,
     outcome: 'email_confirmation_required',
-    user,
+    user: {
+      ...preview,
+      role: 'user',
+      status: 'pending',
+      updatedAt: preview.createdAt,
+      licenseStatus: 'inactive',
+    },
   };
 }
 
@@ -161,7 +185,7 @@ export function getLoginErrorMessage(error: AuthErrorCode): string {
   const messages: Record<AuthErrorCode, string> = {
     invalid_credentials: 'E-Mail oder Passwort ist falsch.',
     email_exists: 'Diese E-Mail-Adresse ist bereits registriert.',
-    user_not_found: 'Benutzer wurde nicht gefunden.',
+    user_not_found: 'Benutzerprofil wurde nicht gefunden.',
     user_pending: 'Ihr Zugang wartet noch auf Freischaltung.',
     user_blocked: 'Ihr Zugang wurde gesperrt.',
     license_expired: 'Ihre Lizenz ist abgelaufen.',
@@ -211,4 +235,4 @@ export {
   extendLicense,
   grantBetaLicense,
   listUsersForAdmin,
-} from './adminAccessBridge';
+} from './profileAdminService';

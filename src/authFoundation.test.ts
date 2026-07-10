@@ -5,13 +5,6 @@ import {
   approveUser,
   blockUser,
   expireLicense,
-  fetchCurrentSession,
-  signInWithPassword,
-  signUpUser,
-} from './services/auth/authService';
-import { getLicenseBlockReason, isUserAllowedToUseApp } from './services/auth/licenseService';
-import { PRIVACY_VERSION, TERMS_VERSION, LICENSE_VERSION } from './config/legalVersions';
-import {
   findUserByEmail,
   login,
   loginAsDefaultAdmin,
@@ -19,6 +12,13 @@ import {
   registerPendingTestUser,
   seedDefaultAdminUser,
 } from './test/authFixtures';
+import {
+  fetchCurrentSession,
+  signInWithPassword,
+  signUpUser,
+} from './services/auth/authService';
+import { getLicenseBlockReason, isUserAllowedToUseApp } from './services/auth/licenseService';
+import { PRIVACY_VERSION, TERMS_VERSION, LICENSE_VERSION } from './config/legalVersions';
 
 describe('SUPABASE-AUTH-02', () => {
   afterEach(() => {
@@ -53,12 +53,12 @@ describe('SUPABASE-AUTH-02', () => {
 
     it('admin kann user freischalten', async () => {
       const user = await registerPendingTestUser('approve@example.com');
-      const approved = approveUser(user.id);
-      expect(approved?.status).toBe('active');
+      const approved = await approveUser(user.id);
+      expect(approved?.status).toBe('approved');
       expect(isUserAllowedToUseApp(approved!)).toBe(true);
     });
 
-    it('active user darf App nutzen', async () => {
+    it('approved user darf App nutzen', async () => {
       await registerAndApproveUser('allowed@example.com');
       await login('allowed@example.com', 'TestPasswort1');
       const session = await fetchCurrentSession();
@@ -67,7 +67,7 @@ describe('SUPABASE-AUTH-02', () => {
 
     it('blocked user darf App nicht nutzen', async () => {
       const user = await registerAndApproveUser('blocked@example.com');
-      blockUser(user.id);
+      await blockUser(user.id);
       const blocked = findUserByEmail('blocked@example.com');
       expect(blocked?.status).toBe('blocked');
       expect(isUserAllowedToUseApp(blocked!)).toBe(false);
@@ -76,7 +76,7 @@ describe('SUPABASE-AUTH-02', () => {
 
     it('expired license zeigt license-expired Zustand', async () => {
       const user = await registerAndApproveUser('expired@example.com');
-      expireLicense(user.id);
+      await expireLicense(user.id);
       const refreshed = findUserByEmail('expired@example.com');
       expect(getLicenseBlockReason(refreshed!)).toBe('license_expired');
       expect(isUserAllowedToUseApp(refreshed!)).toBe(false);

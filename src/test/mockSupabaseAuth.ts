@@ -1,14 +1,23 @@
 import type { Session, SupabaseClient, User } from '@supabase/supabase-js';
-import type { LicensePlan, LicenseStatus, UserRole, UserStatus } from '../types/auth';
-import {
-  buildActiveLicenseMetadata,
-  buildSignUpMetadata,
-  mapSupabaseSession,
-  mapSupabaseUserToAccount,
-  type OfficePilotUserMetadata,
-} from '../services/auth/userAccountMapper';
 import type { RegisterUserInput } from '../types/auth';
-import { getLicenseFromUserAccount } from '../services/auth/licenseService';
+import { mapProfileRowToUserAccount, mapProfileToLicense, buildRegistrationMetadata } from '../services/auth/profileMapper';
+import { mapSupabaseSession } from '../services/auth/userAccountMapper';
+import {
+  createMockProfileFromRegistration,
+  getAllMockProfiles,
+  mockApproveProfile,
+  mockBlockProfile,
+  mockExpireProfileLicense,
+  mockExtendProfileLicense,
+  mockGrantBetaProfileLicense,
+  mockProfileSelectOwn,
+  mockRpc,
+  mockUpdateProfileRole,
+  mockUpdateProfileStatus,
+  resetMockProfileStore,
+  seedMockAdminProfile,
+  setMockProfileCurrentUser,
+} from './mockProfileStore';
 
 interface MockAuthUser {
   password: string;
@@ -47,7 +56,7 @@ function notifyAuthChange(event: string): void {
   }
 }
 
-function toUser(email: string, metadata: OfficePilotUserMetadata, id = createUserId()): User {
+function toUser(email: string, metadata: Record<string, string>, id = createUserId()): User {
   const createdAt = nowIso();
   return {
     id,
@@ -78,28 +87,19 @@ function toUser(email: string, metadata: OfficePilotUserMetadata, id = createUse
   };
 }
 
-function upsertMockUser(email: string, password: string, metadata: OfficePilotUserMetadata, id?: string): User {
+function upsertMockUser(
+  email: string,
+  password: string,
+  metadata: Record<string, string>,
+  id?: string,
+): User {
   const normalizedEmail = email.trim().toLowerCase();
   const user = toUser(normalizedEmail, metadata, id);
   const record = { password, user };
   usersByEmail.set(normalizedEmail, record);
   usersById.set(user.id, record);
+  createMockProfileFromRegistration(user.id, normalizedEmail, metadata);
   return user;
-}
-
-function updateUserMetadata(userId: string, patch: Partial<OfficePilotUserMetadata>): User | null {
-  const record = usersById.get(userId);
-  if (!record) return null;
-  const metadata = { ...(record.user.user_metadata as OfficePilotUserMetadata), ...patch };
-  const updatedUser = { ...record.user, user_metadata: metadata, updated_at: nowIso() };
-  record.user = updatedUser;
-  usersByEmail.set(updatedUser.email ?? '', record);
-  usersById.set(userId, record);
-  if (currentSession?.user.id === userId) {
-    currentSession = createSession(updatedUser);
-    notifyAuthChange('USER_UPDATED');
-  }
-  return updatedUser;
 }
 
 export const DEFAULT_ADMIN_EMAIL = 'admin@officepilot.local';
@@ -117,62 +117,101 @@ export function resetMockSupabaseAuth(): void {
   currentSession = null;
   listeners.clear();
   signUpMode = 'with_session';
+  resetMockProfileStore();
 }
 
 export function seedMockAdminUser(): User {
-  const metadata: OfficePilotUserMetadata = {
-    company_name: 'OfficePilot Admin',
-    first_name: 'System',
-    last_name: 'Administrator',
-    status: 'active',
-    role: 'admin',
-    accepted_terms_version: '1.0-draft',
-    accepted_privacy_version: '1.0-draft',
-    accepted_license_version: '1.0-draft',
-    legal_accepted_at: nowIso(),
-    ...buildActiveLicenseMetadata(365),
-  };
-  return upsertMockUser(DEFAULT_ADMIN_EMAIL, DEFAULT_ADMIN_PASSWORD, metadata, 'usr-admin');
+  const metadata = buildRegistrationMetadata({
+    companyName: 'OfficePilot Admin',
+    firstName: 'System',
+    lastName: 'Administrator',
+    acceptedTermsVersion: '1.0-draft',
+    acceptedPrivacyVersion: '1.0-draft',
+    acceptedLicenseVersion: '1.0-draft',
+  });
+  const user = toUser(DEFAULT_ADMIN_EMAIL, metadata, 'usr-admin');
+  usersByEmail.set(DEFAULT_ADMIN_EMAIL, { password: DEFAULT_ADMIN_PASSWORD, user });
+  usersById.set(user.id, { password: DEFAULT_ADMIN_PASSWORD, user });
+  seedMockAdminProfile(user.id, DEFAULT_ADMIN_EMAIL, metadata);
+  return user;
 }
 
 export function mockRegisterUser(input: RegisterUserInput): User {
   if (usersByEmail.has(input.email.trim().toLowerCase())) {
     throw new Error('User already registered');
   }
-  return upsertMockUser(input.email, input.password, buildSignUpMetadata(input));
-}
-
-export function mockApproveUser(userId: string): User | null {
-  return updateUserMetadata(userId, buildActiveLicenseMetadata(90));
-}
-
-export function mockBlockUser(userId: string): User | null {
-  return updateUserMetadata(userId, { status: 'blocked' });
-}
-
-export function mockExpireLicense(userId: string): User | null {
-  return updateUserMetadata(userId, {
-    license_status: 'expired' as LicenseStatus,
-    license_expires_at: nowIso(),
-  });
-}
-
-export function mockGrantBetaLicense(userId: string, daysValid = 90): User | null {
-  return updateUserMetadata(userId, buildActiveLicenseMetadata(daysValid));
+  return upsertMockUser(input.email, input.password, buildRegistrationMetadata(input));
 }
 
 export function mockFindUserByEmail(email: string): User | undefined {
   return usersByEmail.get(email.trim().toLowerCase())?.user;
 }
 
-export function mockListUsersForAdmin(): Array<{
-  user: ReturnType<typeof mapSupabaseUserToAccount>;
-  license: ReturnType<typeof getLicenseFromUserAccount>;
-}> {
-  return Array.from(usersById.values()).map(({ user }) => {
-    const account = mapSupabaseUserToAccount(user);
-    return { user: account, license: getLicenseFromUserAccount(account) };
-  });
+export function mockManipulateUserMetadata(userId: string, patch: Record<string, string>): void {
+  const record = usersById.get(userId);
+  if (!record) return;
+  record.user = {
+    ...record.user,
+    user_metadata: {
+      ...(record.user.user_metadata as Record<string, string>),
+      ...patch,
+    },
+  };
+  usersByEmail.set(record.user.email ?? '', record);
+  usersById.set(userId, record);
+}
+
+export function mockApproveUser(userId: string, daysValid = 90) {
+  return mockApproveProfile(userId, daysValid);
+}
+
+export function mockBlockUser(userId: string) {
+  return mockBlockProfile(userId);
+}
+
+export function mockExpireLicense(userId: string) {
+  return mockExpireProfileLicense(userId);
+}
+
+export function mockGrantBetaLicense(userId: string, daysValid = 90) {
+  return mockGrantBetaProfileLicense(userId, daysValid);
+}
+
+export function mockExtendLicense(userId: string, days: number) {
+  return mockExtendProfileLicense(userId, days);
+}
+
+export function mockUpdateUserRole(userId: string, role: 'user' | 'admin') {
+  return mockUpdateProfileRole(userId, role);
+}
+
+export function mockUpdateUserStatus(userId: string, status: 'pending' | 'approved' | 'blocked') {
+  return mockUpdateProfileStatus(userId, status);
+}
+
+export function mockListUsersForAdmin() {
+  return getAllMockProfiles().map((profile) => ({
+    user: mapProfileRowToUserAccount(profile),
+    license: mapProfileToLicense(profile),
+  }));
+}
+
+export { getMockProfile, setMockProfileCurrentUser } from './mockProfileStore';
+
+function createMockFrom() {
+  return {
+    select: () => ({
+      eq: (_column: string, value: string) => ({
+        maybeSingle: async () => {
+          const profile = mockProfileSelectOwn(value);
+          if (!profile) {
+            return { data: null, error: null };
+          }
+          return { data: profile, error: null };
+        },
+      }),
+    }),
+  };
 }
 
 function createMockAuth() {
@@ -183,6 +222,7 @@ function createMockAuth() {
         return { data: { session: null, user: null }, error: { message: 'Invalid login credentials' } };
       }
       currentSession = createSession(record.user);
+      setMockProfileCurrentUser(record.user.id);
       notifyAuthChange('SIGNED_IN');
       return { data: { session: currentSession, user: record.user }, error: null };
     },
@@ -193,27 +233,37 @@ function createMockAuth() {
     }: {
       email: string;
       password: string;
-      options?: { data?: OfficePilotUserMetadata };
+      options?: { data?: Record<string, string> };
     }) => {
       const normalizedEmail = email.trim().toLowerCase();
       if (usersByEmail.has(normalizedEmail)) {
         return { data: { session: null, user: null }, error: { message: 'User already registered' } };
       }
-      const user = upsertMockUser(normalizedEmail, password, options?.data ?? {});
+      const metadata = options?.data ?? {};
+      const user = upsertMockUser(normalizedEmail, password, metadata);
       if (signUpMode === 'email_confirmation') {
         notifyAuthChange('SIGNED_UP');
         return { data: { session: null, user }, error: null };
       }
       currentSession = createSession(user);
+      setMockProfileCurrentUser(user.id);
       notifyAuthChange('SIGNED_UP');
       return { data: { session: currentSession, user }, error: null };
     },
     signOut: async () => {
       currentSession = null;
+      setMockProfileCurrentUser(null);
       notifyAuthChange('SIGNED_OUT');
       return { error: null };
     },
-    getSession: async () => ({ data: { session: currentSession }, error: null }),
+    getSession: async () => {
+      if (currentSession) {
+        setMockProfileCurrentUser(currentSession.user.id);
+      } else {
+        setMockProfileCurrentUser(null);
+      }
+      return { data: { session: currentSession }, error: null };
+    },
     onAuthStateChange: (callback: AuthChangeCallback) => {
       listeners.add(callback);
       return {
@@ -230,6 +280,18 @@ function createMockAuth() {
 export function createMockSupabaseClient(): SupabaseClient {
   return {
     auth: createMockAuth(),
+    from: () => createMockFrom(),
+    rpc: async (name: string, args?: Record<string, unknown>) => {
+      try {
+        const data = mockRpc(name, args ?? {});
+        return { data, error: null };
+      } catch (error) {
+        return {
+          data: null,
+          error: { message: error instanceof Error ? error.message : 'RPC fehlgeschlagen' },
+        };
+      }
+    },
   } as unknown as SupabaseClient;
 }
 
@@ -237,24 +299,7 @@ export function getMockCurrentSession(): Session | null {
   return currentSession;
 }
 
-export function getMockCurrentUserAccount() {
-  if (!currentSession) return null;
-  return mapSupabaseUserToAccount(currentSession.user);
-}
-
 export function getMockCurrentAuthSession() {
   if (!currentSession) return null;
   return mapSupabaseSession(currentSession);
-}
-
-export function mockUpdateUserRole(userId: string, role: UserRole): User | null {
-  return updateUserMetadata(userId, { role });
-}
-
-export function mockUpdateUserStatus(userId: string, status: UserStatus): User | null {
-  return updateUserMetadata(userId, { status });
-}
-
-export function mockUpdateLicensePlan(userId: string, plan: LicensePlan): User | null {
-  return updateUserMetadata(userId, { license_plan: plan });
 }
