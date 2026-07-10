@@ -123,6 +123,7 @@ describe('LEGAL-01', () => {
     expect(html).toContain('data-testid="register-terms"');
     expect(html).toContain('data-testid="register-privacy"');
     expect(html).toContain('data-testid="register-license"');
+    expect(html).toContain('data-testid="register-password-confirm"');
     expect(html).toContain('data-testid="legal-footer-links"');
   });
 

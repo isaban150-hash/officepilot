@@ -67,7 +67,7 @@ export async function registerPendingTestUser(
   if (!result.success) {
     throw new Error(`Register failed: ${result.error}`);
   }
-  return result.data;
+  return result.user;
 }
 
 export async function registerAndApproveUser(email: string): Promise<UserAccount> {

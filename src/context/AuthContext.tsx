@@ -24,6 +24,7 @@ import {
   signUpUser,
   type AuthPayload,
   type AuthResult,
+  type RegisterResult,
 } from '../services/auth/supabaseAuthService';
 import { mapSupabaseSession, mapSupabaseUserToAccount } from '../services/auth/userAccountMapper';
 
@@ -36,7 +37,7 @@ interface AuthContextValue {
   isAuthReady: boolean;
   login: (email: string, password: string) => Promise<AuthResult<AuthPayload>>;
   logout: () => Promise<void>;
-  register: (input: RegisterUserInput) => Promise<AuthResult<UserAccount>>;
+  register: (input: RegisterUserInput) => Promise<RegisterResult>;
   refreshAuth: () => Promise<void>;
   approveUser: typeof approveUser;
   blockUser: typeof blockUser;
@@ -129,7 +130,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, []);
 
   const register = useCallback(async (input: RegisterUserInput) => {
-    return signUpUser(input);
+    const result = await signUpUser(input);
+    if (result.success && result.outcome === 'session_created') {
+      applyAuthPayload(result.payload, setSession, setUser);
+    }
+    return result;
   }, []);
 
   const value = useMemo(

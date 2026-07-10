@@ -3,6 +3,7 @@ import { getSupabaseClient } from '../../lib/supabase';
 import type {
   AuthErrorCode,
   AuthSession,
+  RegisterErrorCode,
   RegisterUserInput,
   UserAccount,
 } from '../../types/auth';
@@ -18,6 +19,11 @@ const MIN_PASSWORD_LENGTH = 8;
 export type AuthResult<T> =
   | { success: true; data: T }
   | { success: false; error: AuthErrorCode };
+
+export type RegisterResult =
+  | { success: true; outcome: 'email_confirmation_required'; user: UserAccount }
+  | { success: true; outcome: 'session_created'; user: UserAccount; payload: AuthPayload }
+  | { success: false; error: RegisterErrorCode };
 
 export interface AuthPayload {
   session: AuthSession;
@@ -45,12 +51,21 @@ function mapAuthPayload(session: Session): AuthPayload {
   };
 }
 
-function mapSupabaseAuthError(message: string): AuthErrorCode {
+function mapSupabaseLoginError(message: string): AuthErrorCode {
   const normalized = message.toLowerCase();
   if (normalized.includes('invalid login credentials')) return 'invalid_credentials';
-  if (normalized.includes('user already registered')) return 'email_exists';
-  if (normalized.includes('email')) return 'invalid_email';
+  if (normalized.includes('email not confirmed')) return 'invalid_credentials';
   return 'invalid_credentials';
+}
+
+function mapSupabaseSignUpError(message: string): RegisterErrorCode {
+  const normalized = message.toLowerCase();
+  if (normalized.includes('already registered') || normalized.includes('already exists')) {
+    return 'email_exists';
+  }
+  if (normalized.includes('password')) return 'password_too_short';
+  if (normalized.includes('email')) return 'invalid_email';
+  return 'registration_failed';
 }
 
 export async function signInWithPassword(
@@ -64,13 +79,16 @@ export async function signInWithPassword(
   });
 
   if (error || !data.session) {
-    return { success: false, error: mapSupabaseAuthError(error?.message ?? 'invalid login credentials') };
+    return {
+      success: false,
+      error: mapSupabaseLoginError(error?.message ?? 'invalid login credentials'),
+    };
   }
 
   return { success: true, data: mapAuthPayload(data.session) };
 }
 
-export async function signUpUser(input: RegisterUserInput): Promise<AuthResult<UserAccount>> {
+export async function signUpUser(input: RegisterUserInput): Promise<RegisterResult> {
   if (
     !input.acceptedTermsVersion ||
     !input.acceptedPrivacyVersion ||
@@ -95,14 +113,33 @@ export async function signUpUser(input: RegisterUserInput): Promise<AuthResult<U
   });
 
   if (error) {
-    return { success: false, error: mapSupabaseAuthError(error.message) };
+    return { success: false, error: mapSupabaseSignUpError(error.message) };
   }
 
   if (!data.user) {
-    return { success: false, error: 'invalid_email' };
+    return { success: false, error: 'registration_failed' };
   }
 
-  return { success: true, data: mapSupabaseUserToAccount(data.user) };
+  if (data.user.identities?.length === 0) {
+    return { success: false, error: 'email_exists' };
+  }
+
+  const user = mapSupabaseUserToAccount(data.user);
+
+  if (data.session) {
+    return {
+      success: true,
+      outcome: 'session_created',
+      user,
+      payload: mapAuthPayload(data.session),
+    };
+  }
+
+  return {
+    success: true,
+    outcome: 'email_confirmation_required',
+    user,
+  };
 }
 
 export async function signOutUser(): Promise<void> {
@@ -120,7 +157,7 @@ export async function fetchCurrentSession(): Promise<AuthPayload | null> {
   return mapAuthPayload(data.session);
 }
 
-export function getAuthErrorMessage(error: AuthErrorCode): string {
+export function getLoginErrorMessage(error: AuthErrorCode): string {
   const messages: Record<AuthErrorCode, string> = {
     invalid_credentials: 'E-Mail oder Passwort ist falsch.',
     email_exists: 'Diese E-Mail-Adresse ist bereits registriert.',
@@ -134,6 +171,27 @@ export function getAuthErrorMessage(error: AuthErrorCode): string {
     password_too_short: `Das Passwort muss mindestens ${MIN_PASSWORD_LENGTH} Zeichen haben.`,
   };
   return messages[error];
+}
+
+export function getRegisterErrorMessage(error: RegisterErrorCode): string {
+  const messages: Record<RegisterErrorCode, string> = {
+    email_exists: 'Diese E-Mail-Adresse ist bereits registriert.',
+    terms_required:
+      'Bitte akzeptieren Sie AGB, Datenschutzerklärung und Lizenzbedingungen.',
+    invalid_email: 'Bitte geben Sie eine gültige E-Mail-Adresse ein.',
+    password_too_short: `Das Passwort muss mindestens ${MIN_PASSWORD_LENGTH} Zeichen haben.`,
+    registration_failed:
+      'Die Registrierung konnte nicht abgeschlossen werden. Bitte versuchen Sie es erneut.',
+  };
+  return messages[error];
+}
+
+/** @deprecated Verwende getLoginErrorMessage oder getRegisterErrorMessage. */
+export function getAuthErrorMessage(error: AuthErrorCode | RegisterErrorCode): string {
+  if (error === 'registration_failed') {
+    return getRegisterErrorMessage(error);
+  }
+  return getLoginErrorMessage(error as AuthErrorCode);
 }
 
 export function getPostLoginRoute(user: UserAccount | null | undefined): string {

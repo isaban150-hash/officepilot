@@ -60,7 +60,18 @@ function toUser(email: string, metadata: OfficePilotUserMetadata, id = createUse
     last_sign_in_at: createdAt,
     app_metadata: { provider: 'email', providers: ['email'] },
     user_metadata: metadata,
-    identities: [],
+    identities: [
+      {
+        id: `${id}-identity`,
+        identity_id: id,
+        user_id: id,
+        identity_data: { email, sub: id },
+        provider: 'email',
+        created_at: createdAt,
+        updated_at: createdAt,
+        last_sign_in_at: createdAt,
+      },
+    ],
     created_at: createdAt,
     updated_at: createdAt,
     is_anonymous: false,
@@ -94,11 +105,18 @@ function updateUserMetadata(userId: string, patch: Partial<OfficePilotUserMetada
 export const DEFAULT_ADMIN_EMAIL = 'admin@officepilot.local';
 export const DEFAULT_ADMIN_PASSWORD = 'OfficePilot-Admin-2026';
 
+let signUpMode: 'with_session' | 'email_confirmation' = 'with_session';
+
+export function setMockSignUpMode(mode: 'with_session' | 'email_confirmation'): void {
+  signUpMode = mode;
+}
+
 export function resetMockSupabaseAuth(): void {
   usersByEmail.clear();
   usersById.clear();
   currentSession = null;
   listeners.clear();
+  signUpMode = 'with_session';
 }
 
 export function seedMockAdminUser(): User {
@@ -182,6 +200,10 @@ function createMockAuth() {
         return { data: { session: null, user: null }, error: { message: 'User already registered' } };
       }
       const user = upsertMockUser(normalizedEmail, password, options?.data ?? {});
+      if (signUpMode === 'email_confirmation') {
+        notifyAuthChange('SIGNED_UP');
+        return { data: { session: null, user }, error: null };
+      }
       currentSession = createSession(user);
       notifyAuthChange('SIGNED_UP');
       return { data: { session: currentSession, user }, error: null };

@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { AuthLayout } from '../components/auth/AuthLayout';
 import { Button } from '../components/ui/Button';
 import { useAuth } from '../context/AuthContext';
-import { getAuthErrorMessage, getPostLoginRoute } from '../services/auth/authService';
+import { getLoginErrorMessage, getPostLoginRoute } from '../services/auth/authService';
 
 export function LoginPage() {
   const { login } = useAuth();
@@ -20,7 +20,7 @@ export function LoginPage() {
     const result = await login(email, password);
     setLoading(false);
     if (!result.success) {
-      setError(getAuthErrorMessage(result.error));
+      setError(getLoginErrorMessage(result.error));
       return;
     }
     navigate(getPostLoginRoute(result.data.user), { replace: true });

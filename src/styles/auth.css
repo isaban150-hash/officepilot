@@ -60,6 +60,52 @@
   border-radius: var(--op-radius-md, 8px);
 }
 
+.auth-form__field--password {
+  gap: 0.35rem;
+}
+
+.auth-form__password-wrap {
+  display: flex;
+  align-items: stretch;
+  gap: 0.5rem;
+}
+
+.auth-form__password-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #cbd5e1;
+  border-radius: var(--op-radius-md, 8px);
+}
+
+.auth-form__password-toggle {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  padding: 0;
+  border: 1px solid #cbd5e1;
+  border-radius: var(--op-radius-md, 8px);
+  background: #f8fafc;
+  color: #475569;
+  cursor: pointer;
+}
+
+.auth-form__password-toggle:hover {
+  background: #f1f5f9;
+}
+
+.auth-form__password-toggle:focus-visible {
+  outline: 2px solid var(--op-primary, #2563eb);
+  outline-offset: 2px;
+}
+
+.auth-form__password-toggle svg {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
 .auth-form__checkbox {
   display: flex;
   gap: 0.5rem;
@@ -74,6 +120,15 @@
   border-radius: var(--op-radius-md, 8px);
   background: #fef2f2;
   color: #b91c1c;
+  font-size: 0.875rem;
+}
+
+.auth-form__success {
+  margin: 0;
+  padding: 0.75rem;
+  border-radius: var(--op-radius-md, 8px);
+  background: #ecfdf5;
+  color: #047857;
   font-size: 0.875rem;
 }
 

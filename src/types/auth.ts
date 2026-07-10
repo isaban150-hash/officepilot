@@ -81,3 +81,10 @@ export type AuthErrorCode =
   | 'terms_required'
   | 'invalid_email'
   | 'password_too_short';
+
+export type RegisterErrorCode =
+  | 'email_exists'
+  | 'terms_required'
+  | 'invalid_email'
+  | 'password_too_short'
+  | 'registration_failed';
