@@ -773,6 +773,8 @@ export interface OrderPosition {
   description: string;
   plannedQuantity: number;
   unit: OrderUnit;
+  /** Anzeige-Einheit, z. B. lfm bei gespeichertem Meter-Wert */
+  unitLabel?: string;
   unitPrice: number;
   category?: OrderPositionCategory;
   billable?: boolean;
@@ -799,6 +801,7 @@ export interface OrderPositionInput {
   description: string;
   plannedQuantity: number;
   unit: OrderUnit;
+  unitLabel?: string;
   unitPrice: number;
   category?: OrderPositionCategory;
   billable?: boolean;
@@ -810,6 +813,7 @@ export interface VorgangInvoiceLine {
   description: string;
   quantity: number;
   unit: OrderUnit;
+  unitLabel?: string;
   unitPrice: number;
   lineTotal: number;
 }
@@ -936,6 +940,7 @@ export interface InvoiceDraftPosition {
   openQuantity: number;
   quantity: number;
   unit: OrderUnit;
+  unitLabel?: string;
   unitPrice: number;
   category?: OrderPositionCategory;
   billable: boolean;

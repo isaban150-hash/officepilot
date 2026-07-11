@@ -26,11 +26,7 @@ export function InvoiceHeader({ model }: Props) {
             alt=""
             className="invoice-header__logo"
           />
-        ) : (
-          <div className="invoice-header__logo-placeholder" aria-hidden="true">
-            Logo
-          </div>
-        )}
+        ) : null}
         <div className="invoice-header__company">
           <p className="invoice-header__name">
             {company.companyName}

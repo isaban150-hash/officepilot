@@ -17,6 +17,7 @@ import {
   hasSchlussrechnung,
 } from '../services/invoiceService';
 import { hasMissingOrderPrice } from '../services/orderPositionFactory';
+import { formatOrderUnitDisplay } from '../services/orderUnitMapper';
 import { getVorgangById, removeOrderPosition } from '../services/vorgangService';
 import { InvoiceListCard } from '../components/invoice/InvoiceListCard';
 import { CommunicationIntegrationPanel } from '../components/communication/CommunicationIntegrationPanel';
@@ -222,12 +223,14 @@ export function VorgangDetailPage() {
             const open = billing?.openQuantity ?? getOpenQuantity(vorgang, pos.id);
             const deletable = canDeleteOrderPosition(vorgang, pos.id);
 
+            const unitLabel = formatOrderUnitDisplay(pos.unit, pos.unitLabel);
+
             return (
               <Card key={pos.id} className="order-position-card">
                 <CardTitle>{pos.description}</CardTitle>
                 <DataRow
                   label={translate('invoice.planned')}
-                  value={`${pos.plannedQuantity} ${pos.unit}`}
+                  value={`${pos.plannedQuantity} ${unitLabel}`}
                 />
                 <DataRow
                   label={translate('invoice.unitPrice')}
@@ -235,11 +238,11 @@ export function VorgangDetailPage() {
                 />
                 <DataRow
                   label={translate('invoice.alreadyBilled')}
-                  value={`${billed} ${pos.unit}`}
+                  value={`${billed} ${unitLabel}`}
                 />
                 <DataRow
                   label={translate('invoice.stillOpen')}
-                  value={`${open} ${pos.unit}`}
+                  value={`${open} ${unitLabel}`}
                 />
                 {pos.unitPrice === 0 && (
                   <p className="invoice-pos-hint">{translate('vorgang.missingPriceHint')}</p>

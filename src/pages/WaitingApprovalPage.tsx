@@ -1,9 +1,23 @@
+import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { AuthLayout } from '../components/auth/AuthLayout';
 import { useAuth } from '../context/AuthContext';
+import { getPostLoginRoute } from '../services/auth/authService';
 
 export function WaitingApprovalPage() {
-  const { logout, user } = useAuth();
+  const { logout, user, refreshAuth } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    void refreshAuth();
+  }, [refreshAuth]);
+
+  useEffect(() => {
+    if (user && user.status !== 'pending') {
+      navigate(getPostLoginRoute(user), { replace: true });
+    }
+  }, [user, navigate]);
 
   return (
     <AuthLayout

@@ -175,6 +175,7 @@ const de = {
   'scanResult.action.dispose': 'Entsorgen bestätigen',
   'scanResult.action.saveAnyway': 'Trotzdem speichern',
   'scanResult.action.assignOrder': 'Auftrag zuordnen',
+  'scanResult.action.createOrder': 'Auftrag anlegen',
   'scanResult.action.writeInvoice': 'Rechnung vorbereiten',
   'scanResult.action.checkPayment': 'Zahlung prüfen',
   'scanResult.action.review': 'Jetzt prüfen',
@@ -753,6 +754,15 @@ const de = {
   'vorgang.paperArchive': 'Papierarchiv',
   'vorgang.panelTitle': 'Vorgang',
   'vorgang.create': 'Vorgang anlegen',
+  'vorgang.createOrder': 'Auftrag anlegen',
+  'vorgang.createOrderHint':
+    'OfficePilot schlägt vor, aus dem Werkvertrag einen neuen Auftrag anzulegen.',
+  'vorgang.createOrderDialogTitle': 'Auftrag anlegen',
+  'vorgang.createOrderConfirm': 'Auftrag anlegen',
+  'vorgang.preview.positionCount': 'Erkannte Positionen',
+  'vorgang.preview.contractSum': 'Vertragssumme',
+  'vorgang.preview.reviewBeforeInvoice':
+    'Die Werte können vor der Rechnung geprüft und angepasst werden.',
   'vorgang.link': 'Mit Vorgang verknüpfen',
   'vorgang.open': 'Vorgang öffnen',
   'vorgang.createHint': 'OfficePilot schlägt vor, daraus einen neuen Vorgang anzulegen.',

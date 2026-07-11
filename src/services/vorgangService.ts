@@ -11,7 +11,7 @@ import {
   buildVorgangDraftFromInbox as buildDraftFromInbox,
   findSimilarVorgaenge as findSimilarInList,
 } from './vorgangMatchingService';
-import { setInboxVorgangLink } from './inboxVorgangLinkService';
+import { resolveInboxItemForLinking, setInboxVorgangLink } from './inboxVorgangLinkService';
 import { persistAll } from './persistenceService';
 import { generateEntityId, withNewEntitySync, filterSyncActive, isEntitySyncActive } from './sync/syncMetaService';
 import type {
@@ -176,12 +176,14 @@ export function createVorgangFromInbox(
   item: InboxItem,
   optionalDraft?: Partial<VorgangDraft>,
   defaultMaterial: MaterialStandard = 'unclear',
+  options?: { skipDefaultPositions?: boolean },
 ): { vorgang: Vorgang; inbox: InboxItem } | null {
-  if (isInboxLinkedToVorgang(item)) return null;
+  const currentItem = resolveInboxItemForLinking(item);
+  if (isInboxLinkedToVorgang(currentItem)) return null;
 
-  const baseDraft = buildVorgangDraftFromInbox(item, defaultMaterial);
+  const baseDraft = buildVorgangDraftFromInbox(currentItem, defaultMaterial);
   const draft: VorgangDraft = { ...baseDraft, ...optionalDraft };
-  const doc = buildDocumentFromInbox(item);
+  const doc = buildDocumentFromInbox(currentItem);
 
   const newVorgang: Vorgang = withNewEntitySync(
     {
@@ -200,7 +202,7 @@ export function createVorgangFromInbox(
         email: '',
         phone: '',
       },
-      orderPositions: buildOrderPositionsFromInbox(item),
+      orderPositions: options?.skipDefaultPositions ? [] : buildOrderPositionsFromInbox(currentItem),
       documents: [doc],
       tasks: [],
       photos: [],
@@ -213,7 +215,7 @@ export function createVorgangFromInbox(
   vorgaenge = [newVorgang, ...vorgaenge];
   persistAll();
 
-  const linkedInbox = setInboxVorgangLink(item.id, newVorgang.id, newVorgang.title, 'created');
+  const linkedInbox = setInboxVorgangLink(currentItem.id, newVorgang.id, newVorgang.title, 'created');
   if (!linkedInbox) return null;
 
   return { vorgang: cloneVorgang(newVorgang), inbox: linkedInbox };
@@ -223,16 +225,17 @@ export function linkInboxToExistingVorgang(
   item: InboxItem,
   vorgangId: string,
 ): { vorgang: Vorgang; inbox: InboxItem } | null {
-  if (isInboxLinkedToVorgang(item)) return null;
+  const currentItem = resolveInboxItemForLinking(item);
+  if (isInboxLinkedToVorgang(currentItem)) return null;
 
   const index = vorgaenge.findIndex((v) => v.id === vorgangId);
   if (index === -1) return null;
 
   const vorgang = cloneVorgang(vorgaenge[index]);
-  appendDocumentIfNew(vorgang, buildDocumentFromInbox(item));
+  appendDocumentIfNew(vorgang, buildDocumentFromInbox(currentItem));
   updateVorgangInStore(vorgang);
 
-  const linkedInbox = setInboxVorgangLink(item.id, vorgang.id, vorgang.title, 'linked');
+  const linkedInbox = setInboxVorgangLink(currentItem.id, vorgang.id, vorgang.title, 'linked');
   if (!linkedInbox) return null;
 
   return { vorgang, inbox: linkedInbox };
@@ -379,6 +382,7 @@ export function addOrderPosition(
     description: normalizeDescription(input.description),
     plannedQuantity: input.plannedQuantity,
     unit: input.unit,
+    unitLabel: input.unitLabel,
     unitPrice: input.unitPrice,
     category: input.category ?? 'arbeit',
     billable: input.billable ?? true,

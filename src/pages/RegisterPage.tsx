@@ -12,7 +12,7 @@ import { LICENSE_VERSION, PRIVACY_VERSION, TERMS_VERSION } from '../config/legal
 
 import { useAuth } from '../context/AuthContext';
 
-import { getRegisterErrorMessage } from '../services/auth/authService';
+import { getRegisterErrorMessage, getPostLoginRoute } from '../services/auth/authService';
 
 
 
@@ -140,7 +140,7 @@ export function RegisterPage() {
 
 
 
-    navigate('/waiting-approval', { replace: true });
+    navigate(getPostLoginRoute(result.payload.user), { replace: true });
 
   }
 

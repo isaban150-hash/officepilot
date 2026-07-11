@@ -10,6 +10,7 @@ import {
 } from './inboxService';
 import {
   acceptSuggestedTasks,
+  createVorgangFromInboxWithContract,
   importSuggestedPositionsToVorgang,
   linkWorkflowVorgang,
 } from './intakeWorkflowService';
@@ -18,7 +19,6 @@ import { getCachedSetup } from './persistenceService';
 import {
   applyContractFieldsToVorgang,
   buildVorgangDraftFromInbox,
-  createVorgangFromInbox,
   isInboxLinkedToVorgang,
 } from './vorgangService';
 import type {
@@ -157,7 +157,7 @@ function executeVorgangStep(
 
   if (canCreateVorgang(workflow, item)) {
     const materialDefault = options.materialStandard ?? getCachedSetup().materialStandard;
-    const created = createVorgangFromInbox(
+    const created = createVorgangFromInboxWithContract(
       item,
       {
         ...buildVorgangDraftFromInbox(item, materialDefault),
@@ -290,7 +290,8 @@ export function executeSmartIntake(
           vorgangId,
           workflow.suggestedOrderPositions,
         );
-        positionsAdded = positionResult.added;
+        positionsAdded =
+          positionResult.added > 0 ? positionResult.added : positionResult.skipped;
         if (positionResult.added > 0 || positionResult.skipped > 0) {
           markSuccess(successSteps, 'import_positions');
         } else {

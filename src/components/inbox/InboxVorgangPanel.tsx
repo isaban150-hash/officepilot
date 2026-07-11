@@ -4,8 +4,11 @@ import { Button } from '../ui/Button';
 import { Card, DataRow } from '../ui/Card';
 import { useApp } from '../../context/AppContext';
 import {
+  createVorgangFromInboxWithContract,
+  getContractPreviewForInbox,
+} from '../../services/intakeWorkflowService';
+import {
   buildVorgangDraftFromInbox,
-  createVorgangFromInbox,
   findSimilarVorgaenge,
   getAllVorgaenge,
   getVorgangById,
@@ -31,6 +34,8 @@ export function InboxVorgangPanel({
 }: InboxVorgangPanelProps) {
   const { translate, showToast } = useApp();
   const mode = getVorgangCardMode(item);
+  const contractPreview = getContractPreviewForInbox(item);
+  const isOrderCreate = mode === 'create';
   const [dialogOpen, setDialogOpen] = useState(false);
   const [draft, setDraft] = useState<VorgangDraft>(() =>
     buildVorgangDraftFromInbox(item, materialDefault),
@@ -81,7 +86,7 @@ export function InboxVorgangPanel({
   };
 
   const handleCreate = () => {
-    const result = createVorgangFromInbox(item, draft, materialDefault);
+    const result = createVorgangFromInboxWithContract(item, draft, materialDefault);
     if (result) {
       showToast(translate('vorgang.create.success'));
       onLinked(result.inbox, result.vorgang);
@@ -91,11 +96,14 @@ export function InboxVorgangPanel({
     }
   };
 
+  const formatCurrency = (value: number) =>
+    `${value.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
+
   const primaryLabel =
     mode === 'open'
       ? translate('vorgang.open')
       : mode === 'create'
-        ? translate('vorgang.create')
+        ? translate(isOrderCreate ? 'vorgang.createOrder' : 'vorgang.create')
         : translate('vorgang.link');
 
   return (
@@ -108,14 +116,21 @@ export function InboxVorgangPanel({
         {mode !== 'open' && (
           <p className="vorgang-panel__hint">
             {mode === 'create'
-              ? translate('vorgang.createHint')
+              ? translate(isOrderCreate ? 'vorgang.createOrderHint' : 'vorgang.createHint')
               : translate('vorgang.linkHint')}
           </p>
         )}
         {mode === 'open' && item.vorgangId ? (
-          <Link to={`/vorgaenge/${item.vorgangId}`}>
-            <Button fullWidth>{primaryLabel}</Button>
-          </Link>
+          <div className="vorgang-panel__actions">
+            <Link to={`/vorgaenge/${item.vorgangId}`}>
+              <Button fullWidth>{primaryLabel}</Button>
+            </Link>
+            <Link to={`/vorgaenge/${item.vorgangId}/rechnung`}>
+              <Button fullWidth variant="outline">
+                {translate('vorgang.prepareInvoice')}
+              </Button>
+            </Link>
+          </div>
         ) : (
           <Button fullWidth onClick={openDialog}>
             {primaryLabel}
@@ -131,13 +146,34 @@ export function InboxVorgangPanel({
             aria-modal="true"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="vorgang-dialog__title">{translate('vorgang.dialogTitle')}</h3>
+            <h3 className="vorgang-dialog__title">
+              {translate(
+                isOrderCreate ? 'vorgang.createOrderDialogTitle' : 'vorgang.dialogTitle',
+              )}
+            </h3>
             <p className="vorgang-dialog__subtitle">{translate('vorgang.dialogSubtitle')}</p>
 
             <div className="vorgang-dialog__preview">
               <DataRow label={translate('vorgang.fieldTitle')} value={draft.title} />
               <DataRow label={translate('inbox.sender')} value={draft.customer} />
               <DataRow label={translate('analysis.baustelle')} value={draft.baustelle} />
+              {isOrderCreate && contractPreview.hasContractPositions && (
+                <>
+                  <DataRow
+                    label={translate('vorgang.preview.positionCount')}
+                    value={String(contractPreview.positionCount)}
+                  />
+                  <DataRow
+                    label={translate('vorgang.preview.contractSum')}
+                    value={formatCurrency(contractPreview.contractSum)}
+                  />
+                </>
+              )}
+              {isOrderCreate && (
+                <p className="vorgang-dialog__review-hint">
+                  {translate('vorgang.preview.reviewBeforeInvoice')}
+                </p>
+              )}
               <DataRow
                 label={translate('vorgang.materialSource')}
                 value={translate(`material.${draft.materialSource}` as TranslationKey)}
@@ -214,7 +250,11 @@ export function InboxVorgangPanel({
               )}
               {mode === 'create' && (
                 <Button variant={similar.length > 0 ? 'outline' : 'primary'} fullWidth onClick={handleCreate}>
-                  {translate('vorgang.createNew')}
+                  {translate(
+                    isOrderCreate && similar.length === 0
+                      ? 'vorgang.createOrderConfirm'
+                      : 'vorgang.createNew',
+                  )}
                 </Button>
               )}
               <Button variant="ghost" fullWidth onClick={closeDialog}>

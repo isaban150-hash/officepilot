@@ -1,4 +1,5 @@
 import { getAbschlagDeductionsTotal, calculateInvoiceTotals } from './invoiceService';
+import { formatOrderUnitDisplay } from './orderUnitMapper';
 import { getTaxRateForStatus } from './invoiceTaxService';
 import { getInvoiceDocumentTitle, usesAbschlagDeductions } from './invoiceTypeService';
 import type {
@@ -27,7 +28,7 @@ function buildPositions(draft: InvoiceDraft): InvoicePrintPosition[] {
       index: index + 1,
       description: position.description,
       quantity: position.quantity,
-      unit: position.unit,
+      unit: formatOrderUnitDisplay(position.unit, position.unitLabel),
       unitPrice: position.unitPrice,
       lineTotal: position.quantity * position.unitPrice,
     }));
@@ -46,7 +47,7 @@ function buildPositionsFromInvoice(invoice: VorgangInvoice): InvoicePrintPositio
     index: index + 1,
     description: position.description,
     quantity: position.quantity,
-    unit: position.unit,
+    unit: formatOrderUnitDisplay(position.unit, position.unitLabel),
     unitPrice: position.unitPrice,
     lineTotal: position.lineTotal,
   }));

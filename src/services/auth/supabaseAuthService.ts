@@ -1,5 +1,5 @@
 import type { Session } from '@supabase/supabase-js';
-import { getSupabaseClient } from '../../lib/supabase';
+import { getSupabaseClient, getSupabaseUrl } from '../../lib/supabase';
 import type {
   AuthErrorCode,
   AuthSession,
@@ -119,7 +119,12 @@ export async function signUpUser(input: RegisterUserInput): Promise<RegisterResu
   }
 
   const client = requireSupabaseClient();
-  const { data, error } = await client.auth.signUp({
+  const supabaseUrl = getSupabaseUrl();
+  const signupEndpoint = supabaseUrl ? `${supabaseUrl}/auth/v1/signup` : undefined;
+  console.debug('[OfficePilot] Supabase URL:', supabaseUrl);
+  console.debug('[OfficePilot] SignUp-Endpunkt:', signupEndpoint);
+
+  const signUpResponse = await client.auth.signUp({
     email: input.email.trim().toLowerCase(),
     password: input.password,
     options: {
@@ -127,7 +132,17 @@ export async function signUpUser(input: RegisterUserInput): Promise<RegisterResu
     },
   });
 
+  console.debug('[OfficePilot] supabase.auth.signUp() – vollständige Rückgabe', signUpResponse);
+
+  const { data, error } = signUpResponse;
+
   if (error) {
+    const authError = error as { message?: string; code?: string; status?: number };
+    console.debug('[OfficePilot] supabase.auth.signUp() – Fehlerdetails', {
+      message: authError.message,
+      code: authError.code,
+      status: authError.status,
+    });
     return { success: false, error: mapSupabaseSignUpError(error.message) };
   }
 

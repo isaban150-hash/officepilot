@@ -8,8 +8,16 @@ function readEnv(name: 'VITE_SUPABASE_URL' | 'VITE_SUPABASE_ANON_KEY'): string |
   return undefined;
 }
 
+/** REST-API-Pfad entfernen – Auth erwartet die Projekt-Basis-URL (…supabase.co). */
+export function normalizeSupabaseProjectUrl(url: string): string {
+  const trimmed = url.trim().replace(/\/+$/, '');
+  return trimmed.replace(/\/rest\/v1$/i, '');
+}
+
 export function getSupabaseUrl(): string | undefined {
-  return readEnv('VITE_SUPABASE_URL');
+  const raw = readEnv('VITE_SUPABASE_URL');
+  if (!raw) return undefined;
+  return normalizeSupabaseProjectUrl(raw);
 }
 
 export function getSupabaseAnonKey(): string | undefined {

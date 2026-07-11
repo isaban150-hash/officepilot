@@ -65,8 +65,10 @@ function buildNextActions(item: InboxItem): ScanResultActionView[] {
       actions.push({ id: 'dispose', labelKey: 'scanResult.action.dispose' });
       break;
     case 'zuordnen':
-    case 'auftrag_annehmen':
       actions.push({ id: 'assign', labelKey: 'scanResult.action.assignOrder' });
+      break;
+    case 'auftrag_annehmen':
+      actions.push({ id: 'assign', labelKey: 'scanResult.action.createOrder' });
       break;
     case 'rechnung_vorbereiten':
       actions.push({ id: 'invoice', labelKey: 'scanResult.action.writeInvoice' });

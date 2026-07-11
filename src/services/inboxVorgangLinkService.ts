@@ -1,5 +1,9 @@
-import { patchInboxItem } from './inboxService';
+import { getInboxItemById, patchInboxItem } from './inboxService';
 import type { InboxItem, VorgangLinkStatus } from '../types/models';
+
+export function resolveInboxItemForLinking(item: InboxItem): InboxItem {
+  return getInboxItemById(item.id) ?? item;
+}
 
 export function setInboxVorgangLink(
   inboxId: string,

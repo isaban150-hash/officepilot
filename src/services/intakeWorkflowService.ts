@@ -11,7 +11,13 @@ import {
   getLetterExplanation,
   isExplainableLetter,
 } from './letterExplanationService';
-import { buildOrderPositionsFromInbox } from './orderPositionFactory';
+import { buildOrderPositionsFromInbox, parseOfferAmount } from './orderPositionFactory';
+import {
+  buildPositionImportKey,
+  computeContractPositionsTotal,
+  formatDetectedPositionDescription,
+  mapDetectedUnit,
+} from './orderUnitMapper';
 import {
   buildDedupeKey,
   proposePrimaryInboxTask,
@@ -34,23 +40,14 @@ import type {
   InboxItem,
   MaterialStandard,
   Task,
-  OrderUnit,
   TaskProposal,
   Vorgang,
+  VorgangDraft,
   WorkflowLetterSummary,
   WorkflowNextAction,
   WorkflowResult,
   WorkflowWarning,
 } from '../types/models';
-
-function mapDetectedUnit(unit: string): OrderUnit {
-  const normalized = unit.trim().toLowerCase();
-  if (normalized.includes('m²') || normalized === 'm2') return 'm²';
-  if (normalized.includes('stunde') || normalized === 'h') return 'Stunden';
-  if (normalized.includes('pausch')) return 'Pauschal';
-  if (normalized.includes('meter') || normalized === 'm') return 'Meter';
-  return 'Stück';
-}
 
 function inferClassificationConfidence(
   classification: DocumentClassificationResult,
@@ -310,39 +307,96 @@ export function acceptSuggestedTasks(proposals: TaskProposal[]): Task[] {
   return createTasksFromProposals(proposals);
 }
 
+export function getContractPreviewForInbox(item: InboxItem): {
+  positions: DetectedOrderPosition[];
+  positionCount: number;
+  contractSum: number;
+  hasContractPositions: boolean;
+} {
+  const contractAnalysis = analyzeContractFromInbox(item);
+  const positions =
+    contractAnalysis.isContract && contractAnalysis.positions.length > 0
+      ? contractAnalysis.positions
+      : [];
+  const contractSum =
+    positions.length > 0
+      ? computeContractPositionsTotal(positions)
+      : parseOfferAmount(item.recognizedData.Angebotssumme);
+
+  return {
+    positions,
+    positionCount: positions.length,
+    contractSum,
+    hasContractPositions: positions.length > 0,
+  };
+}
+
+export function createVorgangFromInboxWithContract(
+  item: InboxItem,
+  optionalDraft?: Partial<VorgangDraft>,
+  materialDefault: MaterialStandard = 'unclear',
+): { vorgang: Vorgang; inbox: InboxItem } | null {
+  const { positions, hasContractPositions } = getContractPreviewForInbox(item);
+
+  const result = createVorgangFromInbox(item, optionalDraft, materialDefault, {
+    skipDefaultPositions: hasContractPositions,
+  });
+  if (!result) return null;
+
+  if (hasContractPositions) {
+    importSuggestedPositionsToVorgang(result.vorgang.id, positions);
+    const refreshed = getVorgangById(result.vorgang.id);
+    if (refreshed) {
+      return { vorgang: refreshed, inbox: result.inbox };
+    }
+  }
+
+  return result;
+}
+
 export function importSuggestedPositionsToVorgang(
   vorgangId: string,
   positions: DetectedOrderPosition[],
 ): { success: boolean; added: number; skipped: number } {
   const vorgang = getVorgangById(vorgangId);
-  const existingDescriptions = new Set(
-    (vorgang?.orderPositions ?? []).map((position) => position.description.trim().toLowerCase()),
+  const existingKeys = new Set(
+    (vorgang?.orderPositions ?? []).map((position) => {
+      const match = position.description.match(/^(\d+)\s*[–-]\s*/);
+      if (match) {
+        return `pos:${match[1]!.toLowerCase()}`;
+      }
+      return `desc:${position.description.trim().toLowerCase()}`;
+    }),
   );
   let added = 0;
   let skipped = 0;
 
   for (const position of positions) {
-    const descriptionKey = position.description.trim().toLowerCase();
-    if (!descriptionKey || existingDescriptions.has(descriptionKey)) {
+    const importKey = buildPositionImportKey(position);
+    if (!position.description.trim() || existingKeys.has(importKey)) {
       skipped += 1;
       continue;
     }
 
+    const mappedUnit = mapDetectedUnit(position.unit);
     const result = addOrderPosition(vorgangId, {
-      description: position.description,
+      description: formatDetectedPositionDescription(position),
       plannedQuantity: position.quantity,
-      unit: mapDetectedUnit(position.unit),
+      unit: mappedUnit.unit,
+      unitLabel: mappedUnit.unitLabel,
       unitPrice: position.unitPrice,
       category: 'arbeit',
       billable: true,
     });
     if (result.success) {
       added += 1;
-      existingDescriptions.add(descriptionKey);
+      existingKeys.add(importKey);
+    } else {
+      skipped += 1;
     }
   }
 
-  return { success: added > 0, added, skipped };
+  return { success: added > 0 || skipped > 0, added, skipped };
 }
 
 export function linkWorkflowVorgang(
@@ -356,5 +410,5 @@ export function createWorkflowVorgang(
   item: InboxItem,
   materialDefault: MaterialStandard = 'unclear',
 ): { vorgang: Vorgang; inbox: InboxItem } | null {
-  return createVorgangFromInbox(item, undefined, materialDefault);
+  return createVorgangFromInboxWithContract(item, undefined, materialDefault);
 }
