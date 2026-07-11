@@ -9,6 +9,7 @@ import type {
 } from '../../types/workspace';
 import { getSupabaseClient } from '../../lib/supabase';
 import { stripLogoFromCompanyProfile } from './workspaceStore';
+import type { WorkspaceVorgangRow } from '../vorgang/vorgangCloudService';
 
 interface WorkspaceRow {
   id: string;
@@ -187,6 +188,8 @@ export async function rpcPullWorkspaceSyncState(
   const setupRow = data?.setup as WorkspaceSetupRow | null;
   const profileRow = data?.company_profile as WorkspaceCompanyProfileRow | null;
 
+  const vorgaengeRaw = (data?.vorgaenge as WorkspaceVorgangRow[] | null) ?? [];
+
   return {
     workspace: workspaceRow ? mapWorkspaceRow(workspaceRow) : null,
     members: membersRaw.map(mapMemberRow),
@@ -197,6 +200,7 @@ export async function rpcPullWorkspaceSyncState(
     companyProfilePayload: profileRow?.payload ?? null,
     companyProfileRowVersion: profileRow ? Number(profileRow.row_version) : 0,
     companyProfileUpdatedAt: profileRow?.updated_at ?? null,
+    vorgaenge: vorgaengeRaw,
   };
 }
 

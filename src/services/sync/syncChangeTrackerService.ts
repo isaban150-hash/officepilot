@@ -3,8 +3,10 @@ import type { SyncEntityType, SyncOutboxOperation, SyncableEntity } from '../../
 import { listEntitiesByType } from './syncEntityRegistry';
 import { enqueueSyncOutbox } from './syncOutboxService';
 import { stripLogoFromCompanyProfile } from '../workspace/workspaceStore';
+import { buildVorgangCloudContentKey } from '../vorgang/vorgangCloudService';
 import { resolveCloudWorkspaceId } from '../workspace/workspaceSyncPayloadService';
 import { buildCloudEntityId } from '../workspace/workspaceSyncPayloadService';
+import type { Vorgang } from '../../types/models';
 
 export const TRACKED_SYNC_ENTITY_TYPES: SyncEntityType[] = [
   'inbox_item',
@@ -68,6 +70,16 @@ function buildFingerprint(entity: SyncableEntity & { id: string }): EntitySyncFi
   };
 }
 
+function buildVorgangFingerprint(vorgang: Vorgang): EntitySyncFingerprint {
+  const sync = vorgang.sync;
+  return {
+    version: sync?.version ?? 0,
+    deleted: sync?.deleted ?? false,
+    updatedAt: sync?.updatedAt ?? '',
+    contentKey: buildVorgangCloudContentKey(vorgang),
+  };
+}
+
 function collectTrackedEntities(state: AppPersistedState): Map<string, TrackedEntityRef> {
   const refs = new Map<string, TrackedEntityRef>();
 
@@ -76,7 +88,10 @@ function collectTrackedEntities(state: AppPersistedState): Map<string, TrackedEn
       refs.set(entityKey(entityType, entity.id), {
         entityType,
         entityId: entity.id,
-        fingerprint: buildFingerprint(entity),
+        fingerprint:
+          entityType === 'vorgang'
+            ? buildVorgangFingerprint(entity as Vorgang)
+            : buildFingerprint(entity),
       });
     }
   }
@@ -138,7 +153,14 @@ function collectTrackedEntities(state: AppPersistedState): Map<string, TrackedEn
 function fingerprintChanged(
   previous: EntitySyncFingerprint,
   current: EntitySyncFingerprint,
+  entityType?: SyncEntityType,
 ): boolean {
+  if (entityType === 'vorgang') {
+    return (
+      previous.deleted !== current.deleted ||
+      previous.contentKey !== current.contentKey
+    );
+  }
   return (
     previous.version !== current.version ||
     previous.deleted !== current.deleted ||
@@ -186,7 +208,7 @@ export function trackPersistedChanges(state: AppPersistedState): void {
 
   for (const [key, ref] of currentEntities.entries()) {
     const previous = trackedFingerprints.get(key);
-    if (previous && !fingerprintChanged(previous, ref.fingerprint)) {
+    if (previous && !fingerprintChanged(previous, ref.fingerprint, ref.entityType)) {
       continue;
     }
 

@@ -3,6 +3,8 @@ import type { SyncClientConfig } from '../../types/sync';
 import { hydrateCompanyProfileStore } from '../companyProfileService';
 import { persistAll } from '../persistenceService';
 import { ensureSyncClientFromState, hydrateSyncClient } from '../sync/syncClientService';
+import { enqueueSyncOutbox } from '../sync/syncOutboxService';
+import { filterSyncActive } from '../sync/syncMetaService';
 import {
   parseCompanyProfileFromCloud,
   parseCompanySetupFromCloud,
@@ -10,6 +12,7 @@ import {
   rpcPullWorkspaceSyncState,
   WorkspaceCloudError,
 } from './workspaceCloudService';
+import { mergeVorgaengeFromPull } from '../vorgang/vorgangCloudService';
 import {
   applyRemoteCompanyProfileSyncMeta,
   applyRemoteSetupSyncMeta,
@@ -223,6 +226,31 @@ export function mergeRemoteWorkspacePullIntoState(
 
   if (pull.members.length > 0) {
     next.workspaceMembers = pull.members;
+  }
+
+  const activeLocalVorgaenge = filterSyncActive(state.vorgaenge);
+  if ((pull.vorgaenge ?? []).length === 0 && activeLocalVorgaenge.length > 0) {
+    for (const vorgang of activeLocalVorgaenge) {
+      enqueueSyncOutbox({
+        entityType: 'vorgang',
+        entityId: vorgang.id,
+        operation: 'create',
+        version: Math.max(1, vorgang.sync?.version ?? 1),
+      });
+    }
+  } else if ((pull.vorgaenge ?? []).length > 0) {
+    const deviceId = state.syncClient!.deviceId;
+    const vorgangMerge = mergeVorgaengeFromPull(
+      state.vorgaenge,
+      pull.vorgaenge ?? [],
+      deviceId,
+      workspaceId,
+    );
+    if (vorgangMerge.conflicts.length > 0) {
+      conflicts.push(...vorgangMerge.conflicts);
+    } else {
+      next.vorgaenge = vorgangMerge.vorgaenge;
+    }
   }
 
   next.savedAt = new Date().toISOString();

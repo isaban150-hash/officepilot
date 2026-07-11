@@ -35,6 +35,12 @@ import {
   applyRemoteCompanyProfileSyncMeta,
   applyRemoteSetupSyncMeta,
 } from '../workspace/workspaceStore';
+import {
+  applyVorgangPushResultToState,
+  buildVorgangCloudPushPayload,
+  mergeVorgaengeFromPull,
+} from '../vorgang/vorgangCloudService';
+import type { SyncOutboxOperation } from '../../types/sync';
 
 function updateOutboxEntryStatus(
   outbox: SyncOutboxEntry[],
@@ -55,6 +61,7 @@ function updateOutboxEntryStatus(
 
 function buildPushPayload(
   extracted: NonNullable<ReturnType<typeof extractCloudSyncEntity>>,
+  operation: SyncOutboxOperation,
 ): Record<string, unknown> {
   switch (extracted.entityType) {
     case 'workspace':
@@ -67,6 +74,11 @@ function buildPushPayload(
       return buildCompanyProfileCloudPayload(extracted.entity);
     case 'workspace_member':
       return { ...extracted.entity };
+    case 'vorgang':
+      return buildVorgangCloudPushPayload(
+        extracted.entity,
+        operation === 'delete' || extracted.deleted,
+      );
     default:
       return {};
   }
@@ -75,8 +87,10 @@ function buildPushPayload(
 function applyPushResultToState(
   state: AppPersistedState,
   entityType: string,
+  entityId: string,
   rowVersion: number,
   updatedAt: string,
+  deleted = false,
 ): AppPersistedState {
   const workspaceId = resolveCloudWorkspaceId(state);
   const next = { ...state };
@@ -111,6 +125,16 @@ function applyPushResultToState(
       version: rowVersion,
       updatedAt,
     };
+  } else if (entityType === 'vorgang') {
+    next.vorgaenge = applyVorgangPushResultToState(
+      next.vorgaenge,
+      entityId,
+      rowVersion,
+      updatedAt,
+      deleted,
+      state.syncClient!.deviceId,
+      workspaceId,
+    );
   }
 
   return next;
@@ -200,15 +224,20 @@ export class SupabaseSyncAdapter implements SyncAdapter {
         const pushResult = await rpcUpsertWorkspaceSyncEntity(
           workspaceId,
           entry.entityType,
-          buildPushPayload(extracted),
+          buildPushPayload(extracted, entry.operation),
           extracted.rowVersion,
           this.client,
         );
+        const pushDeleted =
+          entry.entityType === 'vorgang' &&
+          (entry.operation === 'delete' || extracted.entityType === 'vorgang' && extracted.deleted);
         currentState = applyPushResultToState(
           currentState,
           entry.entityType,
+          entry.entityId,
           pushResult.rowVersion,
           new Date().toISOString(),
+          pushDeleted,
         );
         completedOutboxIds.push(entry.id);
         outbox = updateOutboxEntryStatus(outbox, entry.id, 'completed');
@@ -291,8 +320,14 @@ export class SupabaseSyncAdapter implements SyncAdapter {
       this.assertClient();
       const remote = await rpcPullWorkspaceSyncState(workspaceId, this.client);
       const merged = mergeRemoteWorkspacePullIntoState(input.state, remote);
-      report.mergedEntityCount = 1;
-      report.conflictCount = merged.conflicts.length;
+      const vorgangMerge = mergeVorgaengeFromPull(
+        merged.state.vorgaenge,
+        remote.vorgaenge ?? [],
+        input.state.syncClient!.deviceId,
+        workspaceId,
+      );
+      report.mergedEntityCount = 1 + vorgangMerge.vorgaenge.length;
+      report.conflictCount = merged.conflicts.length + vorgangMerge.conflicts.length;
       for (const conflict of merged.conflicts) {
         report.conflicts.push({
           entityType: conflict as SyncOutboxEntry['entityType'],
@@ -300,6 +335,19 @@ export class SupabaseSyncAdapter implements SyncAdapter {
           resolution: 'conflict',
         });
       }
+      for (const conflict of vorgangMerge.conflicts) {
+        const [, vorgangId] = conflict.split(':');
+        report.conflicts.push({
+          entityType: 'vorgang',
+          entityId: vorgangId ?? conflict,
+          resolution: 'conflict',
+        });
+      }
+
+      const finalState = {
+        ...merged.state,
+        vorgaenge: vorgangMerge.vorgaenge,
+      };
 
       this.syncState = 'synced';
       this.lastSyncedAt = new Date().toISOString();
@@ -307,7 +355,7 @@ export class SupabaseSyncAdapter implements SyncAdapter {
 
       return {
         success: true,
-        state: merged.state,
+        state: finalState,
         report: finalizeSyncSimulationReport(report, new Date().toISOString()),
       };
     } catch (error) {

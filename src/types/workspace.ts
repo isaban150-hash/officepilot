@@ -1,4 +1,5 @@
 import type { SyncMeta } from './sync';
+import type { WorkspaceVorgangRow } from '../services/vorgang/vorgangCloudService';
 
 export type WorkspaceRole = 'owner' | 'admin' | 'member';
 
@@ -50,6 +51,7 @@ export interface WorkspaceSyncPullPayload {
   companyProfilePayload: Record<string, unknown> | null;
   companyProfileRowVersion: number;
   companyProfileUpdatedAt: string | null;
+  vorgaenge: WorkspaceVorgangRow[];
 }
 
 export interface EnsurePersonalWorkspaceResult {

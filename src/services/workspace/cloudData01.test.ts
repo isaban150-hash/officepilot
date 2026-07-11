@@ -105,10 +105,10 @@ describe('CLOUD-DATA-01 allowlist', () => {
     expect(isSupabaseSyncAllowed('company_setup')).toBe(true);
     expect(isSupabaseSyncAllowed('company_profile')).toBe(true);
     expect(isSupabaseSyncAllowed('workspace_settings')).toBe(true);
-    expect(isSupabaseSyncAllowed('vorgang')).toBe(false);
+    expect(isSupabaseSyncAllowed('vorgang')).toBe(true);
     expect(isSupabaseSyncAllowed('document')).toBe(false);
     expect(isSupabaseSyncAllowed('inbox_item')).toBe(false);
-    expect(SUPABASE_SYNC_ALLOWLIST.size).toBe(5);
+    expect(SUPABASE_SYNC_ALLOWLIST.size).toBe(6);
   });
 });
 
@@ -221,8 +221,8 @@ describe('CLOUD-DATA-01 SupabaseSyncAdapter', () => {
       outbox: [
         {
           id: outboxId,
-          entityType: 'vorgang',
-          entityId: 'v-1',
+          entityType: 'document',
+          entityId: 'doc-1',
           operation: 'update',
           version: 1,
           queuedAt: new Date().toISOString(),

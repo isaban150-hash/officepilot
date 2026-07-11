@@ -13,7 +13,7 @@ import {
 } from './vorgangMatchingService';
 import { resolveInboxItemForLinking, setInboxVorgangLink } from './inboxVorgangLinkService';
 import { persistAll } from './persistenceService';
-import { generateEntityId, withNewEntitySync, filterSyncActive, isEntitySyncActive } from './sync/syncMetaService';
+import { generateEntityId, withNewEntitySync, withUpdatedEntitySync, withTombstonedEntity, filterSyncActive, isEntitySyncActive } from './sync/syncMetaService';
 import type {
   ContractExtractedFields,
   CustomerBilling,
@@ -160,9 +160,24 @@ function appendDocumentIfNew(vorgang: Vorgang, doc: VorgangDocument): void {
 }
 
 function updateVorgangInStore(updated: Vorgang): Vorgang {
-  vorgaenge = vorgaenge.map((v) => (v.id === updated.id ? updated : v));
+  const next = isEntitySyncActive(updated)
+    ? withUpdatedEntitySync(updated, 'vorgang')
+    : updated;
+  vorgaenge = vorgaenge.map((v) => (v.id === next.id ? next : v));
   persistAll();
-  return cloneVorgang(updated);
+  return cloneVorgang(next);
+}
+
+export function deleteVorgang(
+  vorgangId: string,
+): { success: true; vorgang: Vorgang } | { success: false; errorKey: string } {
+  const index = vorgaenge.findIndex((v) => v.id === vorgangId && isEntitySyncActive(v));
+  if (index === -1) return { success: false, errorKey: 'vorgang.notFound' };
+
+  const tombstoned = withTombstonedEntity(cloneVorgang(vorgaenge[index]), 'vorgang');
+  vorgaenge = vorgaenge.map((v) => (v.id === vorgangId ? tombstoned : v));
+  persistAll();
+  return { success: true, vorgang: cloneVorgang(tombstoned) };
 }
 
 export function isInboxLinkedToVorgang(item: InboxItem): boolean {
