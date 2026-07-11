@@ -40,6 +40,8 @@ describe('Navigation layout UX-03', () => {
     expect(shellHtml).toContain('data-testid="sidebar-nav"');
     expect(shellHtml).toContain('data-testid="bottom-nav"');
     expect(shellHtml).toContain('app-shell__body');
+    expect(shellHtml).toContain('app-shell__top-right');
     expect(shellHtml).not.toContain('Demo zurücksetzen');
+    expect(shellHtml).not.toContain('app-shell__settings');
   });
 });

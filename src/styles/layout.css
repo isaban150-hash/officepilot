@@ -79,11 +79,11 @@ body {
 }
 
 .page-header__title {
-  font-size: var(--text-section);
-  font-weight: 750;
-  letter-spacing: -0.02em;
-  color: var(--op-primary);
-  line-height: var(--line-height-tight);
+  font-size: var(--text-h1-size);
+  font-weight: var(--text-h1-weight);
+  letter-spacing: var(--text-h1-spacing);
+  color: var(--op-text);
+  line-height: var(--text-h1-line);
 }
 
 .page-header__subtitle {

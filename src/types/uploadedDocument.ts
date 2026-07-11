@@ -28,4 +28,7 @@ export interface UploadedDocumentInput {
   notes?: string;
 }
 
-export type DocumentUploadValidationError = 'invalid_type' | 'file_too_large';
+export type DocumentUploadValidationError =
+  | 'invalid_type'
+  | 'unsupported_photo_format'
+  | 'file_too_large';

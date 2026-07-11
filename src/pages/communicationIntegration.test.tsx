@@ -138,6 +138,7 @@ function renderPageAt(path: string, element: ReactElement): PageMount {
       <MemoryRouter initialEntries={[path]}>
         <AppProvider initialSetup={setupComplete}>
           <Routes>
+            <Route path="/ablage/:id" element={element} />
             <Route path="/eingang/:id" element={element} />
             <Route path="/dokumente/:id" element={element} />
             <Route path="/vorgaenge/:id" element={element} />
@@ -153,6 +154,24 @@ function renderPageAt(path: string, element: ReactElement): PageMount {
 }
 
 function expandDetailShowMore(container: ParentNode): void {
+  const reviewMore = container.querySelector(
+    '[data-testid="document-review-more-toggle"]',
+  ) as HTMLElement | null;
+  if (reviewMore) {
+    act(() => {
+      reviewMore.click();
+    });
+    const communicationToggle = container.querySelector(
+      '[data-testid="review-section-toggle-communication"]',
+    ) as HTMLElement | null;
+    if (communicationToggle) {
+      act(() => {
+        communicationToggle.click();
+      });
+    }
+    return;
+  }
+
   const toggle = container.querySelector('[data-testid="show-more-toggle"]') as HTMLElement | null;
   if (!toggle) {
     throw new Error('Missing show-more toggle');
@@ -246,7 +265,7 @@ describe('communication detail page integration', () => {
 
   it('EingangDetailPage links to inbox communication context', () => {
     hydrateInboxStore([createBriefInboxItem()]);
-    mounted = renderPageAt('/eingang/inbox-integration-1', <EingangDetailPage />);
+    mounted = renderPageAt('/ablage/inbox-integration-1', <EingangDetailPage />);
     expandDetailShowMore(mounted.container);
     expectLinksMatchContext(mounted.container, 'eingang', {
       type: 'inbox',

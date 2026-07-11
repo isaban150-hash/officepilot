@@ -1,10 +1,22 @@
 import { createMockInboxItemFromUpload } from './inboxUploadFactory';
+import { isHeicUploadFile } from './documentUploadValidation';
 import { extractTextFromPdfBytes } from './uploadTextExtractionService';
+import { extractPdfTextViaOcr } from './pdfOcrFallbackService';
+import {
+  assessTextQuality,
+  buildDisplayPreviewLines,
+  sanitizeExtractedText,
+} from './textQualityService';
+import type { DocumentUnderstandingSummary, DocumentAiAction } from '../types/models';
+import {
+  buildDocumentAiActions,
+  buildDocumentUnderstandingSummary,
+} from './documentIntakeUnderstandingService';
 import type { UploadDocumentKind } from '../types/models';
 
 export type DocumentTextSourceType = 'pdf' | 'image';
-
 export type OcrConfidenceLevel = 'high' | 'medium' | 'low' | 'none';
+export type DocumentTextExtractionMethod = 'pdf_direct' | 'pdf_ocr' | 'image_ocr';
 
 export type DocumentTextErrorCode =
   | 'unsupported_format'
@@ -14,9 +26,11 @@ export type DocumentTextErrorCode =
 
 export interface DocumentTextExtractionResult {
   recognizedText: string;
+  displayText: string;
   confidence: OcrConfidenceLevel;
   pageCount?: number;
   sourceType: DocumentTextSourceType;
+  extractionMethod?: DocumentTextExtractionMethod;
   errorCode?: DocumentTextErrorCode;
   message?: string;
   qualityHint?: string;
@@ -27,6 +41,8 @@ export interface OcrPreviewSummary {
   sender?: string;
   previewLines: string[];
   classifiedKind?: string;
+  understanding?: DocumentUnderstandingSummary;
+  aiActions?: DocumentAiAction[];
 }
 
 type ImageOcrExtractor = (file: File) => Promise<{ text: string; confidence: number }>;
@@ -41,9 +57,6 @@ const PARTIAL_TEXT_HINT =
 
 const UNSUPPORTED_FORMAT_MESSAGE =
   'Dieses Dateiformat wird nicht unterstützt. Bitte JPG, PNG oder PDF verwenden.';
-
-const HEIC_UNSUPPORTED_MESSAGE =
-  'HEIC wird in diesem Browser nicht unterstützt. Bitte JPG oder PNG verwenden.';
 
 export function setImageOcrExtractorForTests(extractor: ImageOcrExtractor | null): void {
   imageOcrExtractorOverride = extractor;
@@ -67,15 +80,19 @@ function resolveSourceType(file: File): DocumentTextSourceType | 'unsupported' {
 }
 
 function isHeicFile(file: File): boolean {
-  const ext = fileExtension(file.name);
-  return ext === '.heic' || ext === '.heif' || file.type === 'image/heic' || file.type === 'image/heif';
+  return isHeicUploadFile(file);
 }
 
-function deriveConfidence(textLength: number, ocrScore?: number): OcrConfidenceLevel {
+function deriveConfidence(textLength: number, ocrScore?: number, qualityScore?: number): OcrConfidenceLevel {
   if (textLength <= 0) return 'none';
   if (ocrScore !== undefined) {
     if (ocrScore >= 75 && textLength >= 40) return 'high';
     if (ocrScore >= 45 || textLength >= 25) return 'medium';
+    return 'low';
+  }
+  if (qualityScore !== undefined) {
+    if (qualityScore >= 70 && textLength >= 40) return 'high';
+    if (qualityScore >= 45 || textLength >= 20) return 'medium';
     return 'low';
   }
   if (textLength >= 100) return 'high';
@@ -83,9 +100,13 @@ function deriveConfidence(textLength: number, ocrScore?: number): OcrConfidenceL
   return 'low';
 }
 
-function buildQualityHint(confidence: OcrConfidenceLevel, hasText: boolean): string | undefined {
+function buildQualityHint(
+  confidence: OcrConfidenceLevel,
+  hasText: boolean,
+  partialRecognition = false,
+): string | undefined {
   if (!hasText) return NO_TEXT_MESSAGE;
-  if (confidence === 'low') return PARTIAL_TEXT_HINT;
+  if (confidence === 'low' || partialRecognition) return PARTIAL_TEXT_HINT;
   return undefined;
 }
 
@@ -96,16 +117,25 @@ function estimatePdfPageCount(bytes: Uint8Array): number | undefined {
 }
 
 function finalizeResult(
-  partial: Omit<DocumentTextExtractionResult, 'qualityHint'> & { qualityHint?: string },
+  partial: Omit<DocumentTextExtractionResult, 'qualityHint' | 'displayText'> & {
+    qualityHint?: string;
+    displayText?: string;
+    partialRecognition?: boolean;
+  },
 ): DocumentTextExtractionResult {
   const hasText = partial.recognizedText.trim().length > 0;
   const confidence = hasText ? partial.confidence : 'none';
+  const displayText =
+    partial.displayText ??
+    (hasText ? sanitizeExtractedText(partial.recognizedText) : '');
   const qualityHint =
-    partial.qualityHint ?? buildQualityHint(confidence, hasText);
+    partial.qualityHint ??
+    buildQualityHint(confidence, hasText, partial.partialRecognition);
 
   if (!hasText && !partial.errorCode) {
     return {
       ...partial,
+      displayText: '',
       confidence: 'none',
       errorCode: 'no_text',
       message: NO_TEXT_MESSAGE,
@@ -116,22 +146,83 @@ function finalizeResult(
 
   return {
     ...partial,
+    displayText,
     confidence,
     qualityHint,
+  };
+}
+
+function pickBestPdfVariant(
+  directText: string,
+  ocrText: string,
+  ocrConfidence: number,
+): {
+  text: string;
+  method: DocumentTextExtractionMethod;
+  quality: ReturnType<typeof assessTextQuality>;
+  ocrScore?: number;
+} {
+  const directQuality = assessTextQuality(directText);
+  const ocrQuality = assessTextQuality(ocrText);
+
+  if (directQuality.readable && directQuality.score >= ocrQuality.score) {
+    return {
+      text: directQuality.sanitizedText,
+      method: 'pdf_direct',
+      quality: directQuality,
+    };
+  }
+
+  if (ocrQuality.readable || ocrQuality.score > directQuality.score) {
+    return {
+      text: ocrQuality.sanitizedText || ocrText.trim(),
+      method: 'pdf_ocr',
+      quality: ocrQuality,
+      ocrScore: ocrConfidence,
+    };
+  }
+
+  return {
+    text: directQuality.sanitizedText || directText.trim(),
+    method: 'pdf_direct',
+    quality: directQuality,
   };
 }
 
 async function extractFromPdf(file: File): Promise<DocumentTextExtractionResult> {
   const buffer = await file.arrayBuffer();
   const bytes = new Uint8Array(buffer);
-  const recognizedText = extractTextFromPdfBytes(bytes);
-  const confidence = deriveConfidence(recognizedText.trim().length);
+  const pageCount = estimatePdfPageCount(bytes);
+  const directRaw = extractTextFromPdfBytes(bytes);
+  const directQuality = assessTextQuality(directRaw);
+
+  let recognizedText = directQuality.sanitizedText;
+  let extractionMethod: DocumentTextExtractionMethod = 'pdf_direct';
+  let ocrScore: number | undefined;
+  let quality = directQuality;
+
+  const ocr = await extractPdfTextViaOcr(file, pageCount);
+  const picked = pickBestPdfVariant(directRaw, ocr.text, ocr.confidence);
+
+  if (!directQuality.readable || picked.method === 'pdf_ocr') {
+    recognizedText = picked.text;
+    extractionMethod = picked.method;
+    quality = picked.quality;
+    ocrScore = picked.ocrScore;
+  }
+
+  const confidence = deriveConfidence(recognizedText.length, ocrScore, quality.score);
+  const partialRecognition = Boolean(recognizedText) && !quality.readable;
 
   return finalizeResult({
     recognizedText,
+    displayText: recognizedText,
     confidence,
-    pageCount: estimatePdfPageCount(bytes),
+    pageCount,
     sourceType: 'pdf',
+    extractionMethod,
+    partialRecognition,
+    qualityHint: partialRecognition ? PARTIAL_TEXT_HINT : undefined,
   });
 }
 
@@ -155,30 +246,37 @@ async function extractFromImage(file: File): Promise<DocumentTextExtractionResul
       score = data.confidence ?? 0;
     }
 
-    const recognizedText = text.trim();
-    const confidence = deriveConfidence(recognizedText.length, score);
+    const quality = assessTextQuality(text);
+    const recognizedText = quality.sanitizedText || text.trim();
+    const confidence = deriveConfidence(recognizedText.length, score, quality.score);
+    const partialRecognition = Boolean(recognizedText) && !quality.readable;
 
     return finalizeResult({
       recognizedText,
+      displayText: recognizedText,
       confidence,
       pageCount: 1,
       sourceType: 'image',
+      extractionMethod: 'image_ocr',
+      partialRecognition,
       errorCode: recognizedText ? undefined : 'no_text',
       message: recognizedText ? undefined : NO_TEXT_MESSAGE,
+      qualityHint: partialRecognition ? PARTIAL_TEXT_HINT : undefined,
     });
   } catch {
     if (isHeicFile(file)) {
       return finalizeResult({
         recognizedText: '',
+        displayText: '',
         confidence: 'none',
         sourceType: 'image',
         errorCode: 'heic_unsupported',
-        message: HEIC_UNSUPPORTED_MESSAGE,
       });
     }
 
     return finalizeResult({
       recognizedText: '',
+      displayText: '',
       confidence: 'none',
       sourceType: 'image',
       errorCode: 'ocr_failed',
@@ -188,11 +286,22 @@ async function extractFromImage(file: File): Promise<DocumentTextExtractionResul
 }
 
 export async function extractDocumentText(file: File): Promise<DocumentTextExtractionResult> {
+  if (isHeicUploadFile(file)) {
+    return finalizeResult({
+      recognizedText: '',
+      displayText: '',
+      confidence: 'none',
+      sourceType: 'image',
+      errorCode: 'heic_unsupported',
+    });
+  }
+
   const sourceType = resolveSourceType(file);
 
   if (sourceType === 'unsupported') {
     return finalizeResult({
       recognizedText: '',
+      displayText: '',
       confidence: 'none',
       sourceType: 'image',
       errorCode: 'unsupported_format',
@@ -218,17 +327,17 @@ export function buildOcrPreviewSummary(
     kind: kindHint,
   });
 
-  const previewLines = recognizedText
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .slice(0, 3);
+  const understanding = buildDocumentUnderstandingSummary(item, { recognizedText });
+  const aiActions = buildDocumentAiActions(item.classifiedKind ?? 'sonstiges', understanding);
+  const previewLines = buildDisplayPreviewLines(recognizedText, PARTIAL_TEXT_HINT);
 
   return {
     documentTypeLabel: item.documentType,
-    sender: item.sender?.trim() || undefined,
+    sender: understanding.sender ?? (item.sender?.trim() || undefined),
     previewLines,
     classifiedKind: item.classifiedKind,
+    understanding,
+    aiActions,
   };
 }
 
@@ -236,5 +345,4 @@ export {
   NO_TEXT_MESSAGE,
   PARTIAL_TEXT_HINT,
   UNSUPPORTED_FORMAT_MESSAGE,
-  HEIC_UNSUPPORTED_MESSAGE,
 };

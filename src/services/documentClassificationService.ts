@@ -16,6 +16,7 @@ import {
 } from './documentClassificationCatalog';
 import { resolvePaperFiling, suggestPaperFolder } from './paperFolderService';
 import { getInboxExtractedDocumentText } from './inboxDocumentText';
+import { extractFieldsFromText, mergeExtractedFields } from './documentFieldExtractionService';
 import type {
   ClassifiedDocumentKind,
   DigitalFolder,
@@ -216,7 +217,10 @@ function buildRecognizedData(
     },
   };
 
-  return { ...base, ...(profiles[kind] ?? { Betreff: input.titleHint ?? 'Dokument' }) };
+  return mergeExtractedFields(
+    { ...base, ...(profiles[kind] ?? { Betreff: input.titleHint ?? 'Dokument' }) },
+    input.recognizedText ? extractFieldsFromText(input.recognizedText) : {},
+  );
 }
 
 function buildTaskTemplate(

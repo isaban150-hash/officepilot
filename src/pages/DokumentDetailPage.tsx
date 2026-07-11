@@ -10,6 +10,7 @@ import { DetailExperienceCard } from '../components/detail/DetailExperienceCard'
 import { AreaAiPanel } from '../components/ai/AreaAiPanel';
 import { Button } from '../components/ui/Button';
 import { Badge, Card, DataRow } from '../components/ui/Card';
+import { FileTypeIcon } from '../components/ui/FileTypeIcon';
 import { ShowMoreSection } from '../components/ui/ShowMoreSection';
 import { useApp } from '../context/AppContext';
 import { formatPaperFilingInstruction } from '../services/paperFolderService';
@@ -114,8 +115,16 @@ export function DokumentDetailPage() {
   const technicalPanels = (
     <>
       <Card className="document-detail__preview">
-        <div className="document-detail__image" aria-hidden>
-          {document.imagePreview ?? '📄'}
+        <div className="document-detail__image">
+          {document.imagePreview ? (
+            <span aria-hidden>{document.imagePreview}</span>
+          ) : (
+            <FileTypeIcon
+              mimeType={document.mimeType}
+              fileName={document.title}
+              size="lg"
+            />
+          )}
         </div>
         <p className="document-detail__preview-hint">{translate('document.previewHint')}</p>
       </Card>

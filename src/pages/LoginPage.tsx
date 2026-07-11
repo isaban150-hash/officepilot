@@ -2,6 +2,7 @@ import { FormEvent, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AuthLayout } from '../components/auth/AuthLayout';
 import { Button } from '../components/ui/Button';
+import { Input } from '../components/ui/Input';
 import { useAuth } from '../context/AuthContext';
 import { getLoginErrorMessage, getPostLoginRoute } from '../services/auth/authService';
 
@@ -34,29 +35,25 @@ export function LoginPage() {
             {error}
           </p>
         ) : null}
-        <label className="auth-form__field">
-          <span>E-Mail</span>
-          <input
-            type="email"
-            autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            data-testid="login-email"
-          />
-        </label>
-        <label className="auth-form__field">
-          <span>Passwort</span>
-          <input
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            data-testid="login-password"
-          />
-        </label>
-        <Button type="submit" fullWidth disabled={loading} data-testid="login-submit">
+        <Input
+          label="E-Mail"
+          type="email"
+          autoComplete="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+          data-testid="login-email"
+        />
+        <Input
+          label="Passwort"
+          type="password"
+          autoComplete="current-password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+          data-testid="login-password"
+        />
+        <Button type="submit" fullWidth loading={loading} disabled={loading} data-testid="login-submit">
           {loading ? 'Wird angemeldet…' : 'Anmelden'}
         </Button>
         <p className="auth-form__links">

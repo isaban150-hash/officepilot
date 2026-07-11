@@ -63,7 +63,7 @@ describe('UX-04 Beta Polish', () => {
     }
   });
 
-  it('priorisiert ScanResultPanel und klappt technische Panels ein', () => {
+  it('priorisiert DocumentReviewExperience und klappt technische Panels ein', () => {
     const uploaded = processUpload({ kind: 'auftrag' });
     const item = getInboxItemById(uploaded.id);
     expect(item?.isNewUpload).toBe(true);
@@ -78,9 +78,9 @@ describe('UX-04 Beta Polish', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('data-testid="scan-result-panel"');
-    expect(html).toContain('Mehr anzeigen');
-    expect(html).not.toContain('data-testid="show-more-content"');
+    expect(html).toContain('data-testid="document-review-experience"');
+    expect(html).toContain('Weitere Optionen');
+    expect(html).not.toContain('data-testid="document-review-more-content"');
     expect(html).not.toContain('data-testid="inbox-ai-panel"');
   });
 

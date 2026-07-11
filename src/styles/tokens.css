@@ -1,41 +1,58 @@
 /**
- * OfficePilot Design System v1.0 – Tokens
+ * OfficePilot Design System v1.0 – Tokens (authoritative source)
  * Navy Trust palette for premium B2B handwerk apps
  */
 
 :root {
-  /* Brand colors */
+  /* Brand */
   --op-primary: #1f3c88;
   --op-primary-hover: #1a3170;
+  --op-primary-active: #152a5c;
+  --op-primary-subtle: #eef2ff;
+
   --op-secondary: #0f766e;
   --op-secondary-hover: #0d655e;
 
   /* Surfaces */
   --op-bg: #f8fafc;
   --op-surface: #ffffff;
-  --op-surface-soft: #f1f5f9;
+  --op-surface-raised: #ffffff;
+  --op-surface-sunken: #f1f5f9;
+  --op-surface-soft: var(--op-surface-sunken);
 
   /* Text */
   --op-text: #0f172a;
   --op-text-muted: #475569;
+  --op-text-subtle: #64748b;
 
-  /* Borders & controls */
-  --op-divider: #e2e8f0;
+  /* Borders */
+  --op-border: #e2e8f0;
+  --op-border-strong: #cbd5e1;
+  --op-divider: var(--op-border);
   --op-control-border: #64748b;
+
+  /* Focus */
   --op-focus: #1f3c88;
+  --op-focus-ring: 0 0 0 3px rgba(31, 60, 136, 0.18);
 
   /* Semantic */
   --op-success: #15803d;
+  --op-success-subtle: #ecfdf5;
   --op-warning: #b45309;
+  --op-warning-subtle: #fffbeb;
   --op-danger: #b91c1c;
+  --op-danger-subtle: #fef2f2;
+  --op-info: #0369a1;
+  --op-info-subtle: #e0f2fe;
 
   /* Radius */
   --radius-sm: 10px;
   --radius-md: 14px;
   --radius-lg: 18px;
   --radius-xl: 20px;
+  --radius-pill: 999px;
 
-  /* Spacing scale */
+  /* Spacing scale (4px grid) */
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -45,57 +62,97 @@
   --space-8: 32px;
   --space-10: 40px;
   --space-12: 48px;
+  --space-16: 64px;
 
   /* Shadows */
-  --shadow-card: 0 4px 16px rgba(15, 23, 42, 0.06);
+  --shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.05);
+  --shadow-md: 0 4px 16px rgba(15, 23, 42, 0.06);
+  --shadow-lg: 0 16px 40px rgba(15, 23, 42, 0.12);
+  --shadow-card: var(--shadow-md);
   --shadow-card-hover: 0 10px 28px rgba(15, 23, 42, 0.1);
-  --shadow-elevated: 0 16px 40px rgba(15, 23, 42, 0.12);
+  --shadow-elevated: var(--shadow-lg);
+  --shadow-focus: var(--op-focus-ring);
 
   /* Motion */
   --motion-fast: 120ms;
   --motion-base: 180ms;
+  --motion-slow: 280ms;
   --motion-enter: 220ms;
   --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
 
-  /* Typography */
+  /* Typography scale */
   --font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --text-hero: clamp(2rem, 5vw, 2.5rem);
-  --text-section: clamp(1.25rem, 3vw, 1.5rem);
-  --text-card-title: 1.125rem;
+
+  --text-display-size: clamp(2rem, 5vw, 2.75rem);
+  --text-display-line: 1.2;
+  --text-display-weight: 750;
+  --text-display-spacing: -0.02em;
+
+  --text-h1-size: clamp(1.5rem, 3vw, 1.75rem);
+  --text-h1-line: 1.25;
+  --text-h1-weight: 750;
+  --text-h1-spacing: -0.02em;
+
+  --text-h2-size: clamp(1.25rem, 2.5vw, 1.375rem);
+  --text-h2-line: 1.3;
+  --text-h2-weight: 700;
+  --text-h2-spacing: -0.015em;
+
+  --text-h3-size: 1.125rem;
+  --text-h3-line: 1.35;
+  --text-h3-weight: 700;
+  --text-h3-spacing: -0.01em;
+
   --text-body: 1rem;
-  --text-body-mobile: 0.9375rem;
-  --text-meta: 0.875rem;
-  --text-button: 0.9375rem;
+  --text-body-small: 0.9375rem;
+  --text-body-mobile: var(--text-body-small);
+  --text-body-line: 1.55;
+  --text-body-weight: 400;
+
+  --text-meta-size: 0.875rem;
+  --text-meta-line: 1.5;
+  --text-meta-weight: 500;
+
+  --text-overline-size: 0.75rem;
+  --text-overline-line: 1.35;
+  --text-overline-weight: 700;
+  --text-overline-spacing: 0.07em;
+
+  /* Legacy typography aliases */
+  --text-hero: var(--text-display-size);
+  --text-section: var(--text-h2-size);
+  --text-card-title: var(--text-h3-size);
+  --text-meta: var(--text-meta-size);
+  --text-button: var(--text-body-small);
   --line-height-tight: 1.25;
-  --line-height-body: 1.55;
+  --line-height-body: var(--text-body-line);
   --line-height-relaxed: 1.65;
 
   /* Layout */
-  --content-max-width: 1120px;
+  --content-max-width: 1200px;
   --nav-height: 72px;
-  --top-height: 52px;
+  --top-height: 56px;
   --sidebar-width: 248px;
+  --breakpoint-tablet: 768px;
+  --breakpoint-desktop: 1024px;
 
-  /* Legacy aliases (backward compatible) */
+  /* Legacy aliases (backward compatible – do not use in new components) */
   --color-bg: var(--op-bg);
-  --color-bg-soft: var(--op-surface-soft);
+  --color-bg-soft: var(--op-surface-sunken);
   --color-surface: var(--op-surface);
   --color-primary: var(--op-primary);
   --color-primary-light: var(--op-primary-hover);
   --color-accent: var(--op-primary);
-  --color-accent-soft: #eef2ff;
+  --color-accent-soft: var(--op-primary-subtle);
   --color-text: var(--op-text);
   --color-text-muted: var(--op-text-muted);
-  --color-border: var(--op-divider);
-  --color-border-subtle: var(--op-divider);
+  --color-border: var(--op-border);
+  --color-border-subtle: var(--op-border);
   --color-success: var(--op-success);
   --color-warning: var(--op-warning);
   --color-danger: var(--op-danger);
   --color-focus: var(--op-focus);
   --radius: var(--radius-lg);
-  --shadow-sm: var(--shadow-card);
-  --shadow: var(--shadow-card-hover);
-  --shadow-lg: var(--shadow-elevated);
   --font: var(--font-family);
 }
 

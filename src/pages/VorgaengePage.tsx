@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
-import { Badge, Card, CardMeta, CardTitle, PageHeader } from '../components/ui/Card';
+import { Badge, Card, CardMeta, CardTitle } from '../components/ui/Card';
+import { PageHeader } from '../components/ui/PageHeader';
 import { EmptyStateBlock } from '../components/ui/EmptyStateBlock';
 import { useApp } from '../context/AppContext';
 import { getAllVorgaenge } from '../services/vorgangService';
@@ -26,15 +27,15 @@ export function VorgaengePage() {
 
   return (
     <div className="page">
-      <PageHeader title={translate('vorgaenge.title')} subtitle={translate('vorgaenge.subtitle')} />
-
-      <div className="page-header__actions">
-        <Link to="/rechnungen/offen">
-          <Button variant="outline" fullWidth>
-            {translate('vorgaenge.openInvoices')}
-          </Button>
-        </Link>
-      </div>
+      <PageHeader
+        title={translate('vorgaenge.title')}
+        subtitle={translate('vorgaenge.subtitle')}
+        secondaryAction={
+          <Link to="/rechnungen/offen">
+            <Button variant="outline">{translate('vorgaenge.openInvoices')}</Button>
+          </Link>
+        }
+      />
 
       {vorgaenge.length === 0 ? (
         <EmptyStateBlock

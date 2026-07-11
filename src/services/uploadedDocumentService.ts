@@ -75,6 +75,8 @@ export { getAllUploadedDocuments, getUploadedDocumentById };
 export function getUploadErrorMessage(error: DocumentUploadValidationError): string {
   const messages: Record<DocumentUploadValidationError, string> = {
     invalid_type: 'Nur PDF, JPG, PNG und WEBP sind erlaubt.',
+    unsupported_photo_format:
+      'Dieses Fotoformat wird noch nicht unterstützt. Bitte als JPG, PNG oder PDF hochladen.',
     file_too_large: 'Die Datei ist zu groß (max. 10 MB).',
   };
   return messages[error];

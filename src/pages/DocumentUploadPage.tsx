@@ -2,6 +2,7 @@ import { DragEvent, FormEvent, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { Card, PageHeader } from '../components/ui/Card';
+import { SkeletonStack } from '../components/ui/Skeleton';
 import { useApp } from '../context/AppContext';
 import {
   formatFileSize,
@@ -9,6 +10,7 @@ import {
   isPdfUpload,
 } from '../services/documentUploadValidation';
 import { intakeDocumentFile } from '../services/documentIntakeService';
+import { resolveIntakeErrorKey } from '../services/documentUploadErrorService';
 import { getDocumentFileDataUrl, getDocumentFileRefById } from '../services/documentFileStoreService';
 import type { DocumentIntakeErrorCode } from '../services/documentIntakeService';
 import type { InboxItem } from '../types/models';
@@ -16,6 +18,7 @@ import type { TranslationKey } from '../i18n';
 
 const INTAKE_ERROR_KEYS: Partial<Record<DocumentIntakeErrorCode, TranslationKey>> = {
   invalid_type: 'document.upload.error.invalidType',
+  unsupported_photo_format: 'document.upload.error.unsupportedPhotoFormat',
   file_too_large: 'document.upload.error.fileTooLarge',
   read_failed: 'document.upload.error.processFailed',
   hash_failed: 'document.upload.error.processFailed',
@@ -47,7 +50,7 @@ export function DocumentUploadPage() {
     setLoading(false);
 
     if (!result.success) {
-      const key = INTAKE_ERROR_KEYS[result.error];
+      const key = INTAKE_ERROR_KEYS[result.error] ?? resolveIntakeErrorKey(result.error);
       setError(key ? translate(key) : translate('document.upload.error.processFailed'));
       return;
     }
@@ -126,6 +129,7 @@ export function DocumentUploadPage() {
             variant="outline"
             onClick={() => inputRef.current?.click()}
             disabled={loading}
+            loading={loading}
             data-testid="document-upload-select"
           >
             {loading
@@ -133,6 +137,12 @@ export function DocumentUploadPage() {
               : translate('document.upload.select')}
           </Button>
         </div>
+
+        {loading ? (
+          <div className="document-upload-loading" data-testid="document-upload-loading" aria-busy="true">
+            <SkeletonStack count={2} variant="list-row" testId="document-upload-skeleton" />
+          </div>
+        ) : null}
 
         {error ? (
           <p className="document-upload-error" role="alert" data-testid="document-upload-error">

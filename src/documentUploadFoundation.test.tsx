@@ -71,6 +71,21 @@ describe('DOCUMENT-01', () => {
     }
   });
 
+  it('HEIC wird mit unsupported_photo_format abgelehnt', async () => {
+    const file = new File(['heic'], 'iphone.heic', { type: 'image/heic' });
+    const result = await intakeDocumentFile(file, { importSource: 'upload' });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toBe('unsupported_photo_format');
+    }
+  });
+
+  it('WebP wird akzeptiert', async () => {
+    const file = new File(['webp'], 'scan.webp', { type: 'image/webp' });
+    const result = await intakeDocumentFile(file, { importSource: 'upload' });
+    expect(result.success).toBe(true);
+  });
+
   it('zu große Datei wird abgelehnt', async () => {
     const file = new File([new Uint8Array(10 * 1024 * 1024 + 1)], 'riesig.pdf', {
       type: 'application/pdf',

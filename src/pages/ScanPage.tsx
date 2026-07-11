@@ -10,12 +10,21 @@ import {
 } from '../services/inboxUploadFactory';
 import { intakeDocumentFile } from '../services/documentIntakeService';
 import {
+  isBlockingExtractionError,
+  resolveExtractionErrorKey,
+  resolveIntakeErrorKey,
+} from '../services/documentUploadErrorService';
+import { isHeicUploadFile } from '../services/documentUploadValidation';
+import {
   buildOcrPreviewSummary,
   extractDocumentText,
   type DocumentTextExtractionResult,
   type OcrPreviewSummary,
 } from '../services/ocrDocumentService';
 import type { UploadDocumentKind } from '../types/models';
+
+const SCAN_FILE_ACCEPT =
+  'image/jpeg,image/png,image/webp,application/pdf,.jpg,.jpeg,.png,.webp,.pdf';
 
 interface PendingScan {
   file: File;
@@ -37,7 +46,21 @@ export function ScanPage() {
     navigate(`/ablage/${itemId}`);
   };
 
+  const showExtractionFailure = (extraction: DocumentTextExtractionResult): boolean => {
+    if (!isBlockingExtractionError(extraction.errorCode)) {
+      return false;
+    }
+    const key = resolveExtractionErrorKey(extraction.errorCode);
+    showToast(key ? translate(key) : translate('scan.ocr.failed'));
+    return true;
+  };
+
   const processFile = async (file: File) => {
+    if (isHeicUploadFile(file)) {
+      showToast(translate('document.upload.error.unsupportedPhotoFormat'));
+      return;
+    }
+
     setIsProcessing(true);
     try {
       const extraction = await extractDocumentText(file);
@@ -47,8 +70,7 @@ export function ScanPage() {
         selectedKind ?? undefined,
       );
 
-      if (extraction.errorCode === 'unsupported_format') {
-        showToast(extraction.message ?? translate('scan.ocr.unsupportedFormat'));
+      if (showExtractionFailure(extraction)) {
         return;
       }
 
@@ -67,6 +89,12 @@ export function ScanPage() {
   const confirmPendingScan = async () => {
     if (!pendingScan) return;
 
+    if (isHeicUploadFile(pendingScan.file)) {
+      showToast(translate('document.upload.error.unsupportedPhotoFormat'));
+      setPendingScan(null);
+      return;
+    }
+
     const recognizedText = pendingScan.extraction.recognizedText.trim() || undefined;
     const result = await intakeDocumentFile(pendingScan.file, {
       sourceFileName: pendingScan.file.name,
@@ -78,7 +106,7 @@ export function ScanPage() {
     setPendingScan(null);
 
     if (!result.success) {
-      showToast(translate('document.upload.error.processFailed'));
+      showToast(translate(resolveIntakeErrorKey(result.error)));
       return;
     }
 
@@ -123,6 +151,8 @@ export function ScanPage() {
           documentTypeLabel={translate('scan.ocr.documentType')}
           senderLabel={translate('scan.ocr.sender')}
           previewTextLabel={translate('scan.ocr.previewText')}
+          aiActionsLabel={translate('document.intakeUnderstanding.aiActions')}
+          translate={translate}
           cancelLabel={translate('common.cancel')}
           onContinue={confirmPendingScan}
           onCancel={() => setPendingScan(null)}
@@ -141,6 +171,37 @@ export function ScanPage() {
       <Card className="upload-card upload-card--capture">
         <CardTitle>{translate('scan.captureTitle')}</CardTitle>
         <CardMeta>{translate('scan.captureHint')}</CardMeta>
+
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept={SCAN_FILE_ACCEPT}
+          capture="environment"
+          className="sr-only"
+          onChange={handleFileChange}
+        />
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept={SCAN_FILE_ACCEPT}
+          className="sr-only"
+          onChange={handleFileChange}
+        />
+
+        <div className="upload-actions">
+          <Button
+            fullWidth
+            data-testid="scan-capture-button"
+            onClick={handleCapture}
+            disabled={isProcessing}
+            loading={isProcessing}
+          >
+            {isProcessing ? translate('scan.ocr.processing') : translate('heute.scanButton')}
+          </Button>
+          <Button variant="outline" fullWidth onClick={handleFileSelect} disabled={isProcessing}>
+            {translate('scan.uploadFile')}
+          </Button>
+        </div>
 
         <fieldset className="form-group upload-kind-picker">
           <legend>{translate('scan.selectType')}</legend>
@@ -164,36 +225,6 @@ export function ScanPage() {
             ))}
           </div>
         </fieldset>
-
-        <input
-          ref={cameraInputRef}
-          type="file"
-          accept="image/jpeg,image/png,image/jpg,image/*,.pdf"
-          capture="environment"
-          className="sr-only"
-          onChange={handleFileChange}
-        />
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/jpeg,image/png,image/jpg,image/*,.pdf"
-          className="sr-only"
-          onChange={handleFileChange}
-        />
-
-        <div className="upload-actions">
-          <Button
-            fullWidth
-            data-testid="scan-capture-button"
-            onClick={handleCapture}
-            disabled={isProcessing}
-          >
-            {isProcessing ? translate('scan.ocr.processing') : translate('heute.scanButton')}
-          </Button>
-          <Button variant="outline" fullWidth onClick={handleFileSelect} disabled={isProcessing}>
-            {translate('scan.uploadFile')}
-          </Button>
-        </div>
       </Card>
     </div>
   );

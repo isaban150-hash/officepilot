@@ -29,12 +29,22 @@ export function isAcceptedUploadFileName(fileName: string): boolean {
   return (ACCEPTED_UPLOAD_EXTENSIONS as readonly string[]).includes(ext);
 }
 
+export function isHeicUploadFile(file: File): boolean {
+  const ext = extensionFromFileName(file.name);
+  const mime = file.type.trim().toLowerCase();
+  return ext === '.heic' || ext === '.heif' || mime === 'image/heic' || mime === 'image/heif';
+}
+
 export function validateUploadFile(file: File): {
   valid: true;
 } | {
   valid: false;
   error: DocumentUploadValidationError;
 } {
+  if (isHeicUploadFile(file)) {
+    return { valid: false, error: 'unsupported_photo_format' };
+  }
+
   if (file.size > MAX_UPLOAD_FILE_SIZE_BYTES) {
     return { valid: false, error: 'file_too_large' };
   }

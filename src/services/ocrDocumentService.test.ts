@@ -146,6 +146,12 @@ describe('ocrDocumentService', () => {
     expect(result.recognizedText).toBe('');
   });
 
+  it('HEIC/HEIF → früher Abbruch ohne OCR', async () => {
+    const result = await extractDocumentText(createFile('iphone.heic', 'image/heic'));
+    expect(result.errorCode).toBe('heic_unsupported');
+    expect(result.recognizedText).toBe('');
+  });
+
   it('buildOcrPreviewSummary nutzt dieselbe Upload-Klassifizierung', () => {
     const preview = buildOcrPreviewSummary('scan.jpg', CONTRACT_PDF_TEXT);
     expect(preview.previewLines.length).toBeGreaterThan(0);

@@ -519,9 +519,9 @@ body {
   }
 
   .sidebar-nav__item--active {
-    background: rgba(59, 130, 246, 0.1);
-    color: var(--color-primary);
-    font-weight: 600;
+    background: rgba(31, 60, 136, 0.1);
+    color: var(--op-primary);
+    font-weight: 700;
   }
 
   .sidebar-nav__icon {
@@ -576,7 +576,7 @@ body {
   font-size: 1.65rem;
   font-weight: 750;
   letter-spacing: -0.02em;
-  color: var(--color-primary);
+  color: var(--op-text);
   line-height: 1.2;
 }
 
@@ -3287,10 +3287,6 @@ body {
   .form-row {
     grid-template-columns: 1fr;
   }
-
-  .bottom-nav__label {
-    font-size: 0.62rem;
-  }
 }
 
 .letter-explanation__header {
@@ -3732,5 +3728,199 @@ body {
   body.invoice-print-active .page--invoice-detail .invoice-detail__toolbar {
     display: none !important;
   }
+}
+
+.doc-understanding__list,
+.ocr-preview-panel__summary {
+  margin: 0.75rem 0 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.doc-understanding__row,
+.ocr-preview-panel__meta {
+  display: grid;
+  grid-template-columns: minmax(7rem, 38%) 1fr;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.doc-understanding__row dt,
+.ocr-preview-panel__label {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+
+.doc-understanding__row dd {
+  margin: 0;
+  font-weight: 500;
+}
+
+.doc-understanding__actions,
+.ocr-preview-panel__actions-list {
+  margin-top: 0.85rem;
+}
+
+.doc-understanding__actions-title {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+}
+
+.doc-understanding__action-list,
+.ocr-preview-panel__actions-list ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.doc-understanding__action,
+.ocr-preview-panel__actions-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  font-size: 0.92rem;
+}
+
+  .doc-understanding__action--recommended {
+  font-weight: 600;
+}
+
+.document-review-experience {
+  display: grid;
+  gap: 1rem;
+}
+
+.document-review-experience__layout {
+  display: grid;
+  gap: 1rem;
+}
+
+@media (min-width: 1024px) {
+  .document-review-experience__layout {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+  }
+}
+
+.document-review-experience__summary,
+.document-review-experience__aside {
+  display: grid;
+  gap: 1rem;
+}
+
+.document-review-experience__primary {
+  margin-top: 0.25rem;
+}
+
+.document-review-hero__facts {
+  margin: 0.75rem 0 0;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.document-review-hero__row {
+  display: grid;
+  grid-template-columns: minmax(7rem, 38%) 1fr;
+  gap: 0.5rem;
+  font-size: 0.92rem;
+}
+
+.document-review-hero__row dt {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+
+.document-review-hero__row dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.document-review-list {
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.document-review-list__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.92rem;
+}
+
+.document-review-list__mark {
+  flex: 0 0 auto;
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
+.document-review-list__mark--warn {
+  color: var(--color-warning, #b45309);
+}
+
+.document-review-list__hint {
+  color: var(--color-text-muted);
+  font-size: 0.88rem;
+}
+
+.review-more-options {
+  margin-top: 0.25rem;
+}
+
+.review-more-options__content {
+  display: grid;
+  gap: 0.65rem;
+  margin-bottom: 0.5rem;
+}
+
+.review-collapsible {
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: var(--op-radius-md, 0.75rem);
+  overflow: hidden;
+  background: var(--color-surface, #fff);
+}
+
+.review-collapsible__trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.review-collapsible__content {
+  padding: 0 1rem 1rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.review-collapsible__chevron {
+  color: var(--color-text-muted);
+}
+
+.document-review-ocr-text {
+  margin: 0;
+  white-space: pre-wrap;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.document-review-success__actions {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
 }
 

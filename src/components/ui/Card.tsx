@@ -1,19 +1,38 @@
 import type { ReactNode } from 'react';
 
+export type CardVariant = 'default' | 'interactive' | 'compact' | 'highlight';
+
 interface CardProps {
   children: ReactNode;
   className?: string;
   onClick?: () => void;
   highlight?: boolean;
+  variant?: CardVariant;
 }
 
-export function Card({ children, className = '', onClick, highlight }: CardProps) {
-  const Tag = onClick ? 'button' : 'div';
+export function Card({
+  children,
+  className = '',
+  onClick,
+  highlight,
+  variant = 'default',
+}: CardProps) {
+  const Tag = onClick || variant === 'interactive' ? 'button' : 'div';
+  const resolvedVariant = highlight ? 'highlight' : variant;
+  const isClickable = Boolean(onClick) || variant === 'interactive';
+
   return (
     <Tag
-      className={`card ${highlight ? 'card--highlight' : ''} ${onClick ? 'card--clickable' : ''} ${className}`.trim()}
+      className={[
+        'card',
+        resolvedVariant !== 'default' ? `card--${resolvedVariant}` : '',
+        isClickable ? 'card--clickable' : '',
+        className,
+      ]
+        .filter(Boolean)
+        .join(' ')}
       onClick={onClick}
-      type={onClick ? 'button' : undefined}
+      type={isClickable ? 'button' : undefined}
     >
       {children}
     </Tag>
@@ -37,18 +56,17 @@ export function DataRow({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-export function Badge({ children, tone = 'default' }: { children: ReactNode; tone?: 'default' | 'success' | 'warning' | 'info' }) {
+export function Badge({
+  children,
+  tone = 'default',
+}: {
+  children: ReactNode;
+  tone?: 'default' | 'success' | 'warning' | 'info' | 'danger';
+}) {
   return <span className={`badge badge--${tone}`}>{children}</span>;
 }
 
-export function PageHeader({ title, subtitle }: { title: string; subtitle?: string }) {
-  return (
-    <header className="page-header">
-      <h1 className="page-header__title">{title}</h1>
-      {subtitle && <p className="page-header__subtitle">{subtitle}</p>}
-    </header>
-  );
-}
+export { PageHeader } from './PageHeader';
 
 export function Toast({ message, onClose }: { message: string; onClose: () => void }) {
   return (

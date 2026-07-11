@@ -142,7 +142,7 @@ describe('UX-05 Detail experience', () => {
     }
   });
 
-  it('EingangDetailPage zeigt ScanResultPanel vor eingeklappten Panels', () => {
+  it('EingangDetailPage zeigt DocumentReviewExperience vor eingeklappten Panels', () => {
     const uploaded = processUpload({ kind: 'auftrag' });
     const html = renderToStaticMarkup(
       <MemoryRouter initialEntries={[`/ablage/${uploaded.id}`]}>
@@ -154,9 +154,9 @@ describe('UX-05 Detail experience', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('data-testid="scan-result-panel"');
-    expect(html).toContain('Mehr anzeigen');
-    expect(html).not.toContain('data-testid="show-more-content"');
+    expect(html).toContain('data-testid="document-review-experience"');
+    expect(html).toContain('Weitere Optionen');
+    expect(html).not.toContain('data-testid="document-review-more-content"');
   });
 
   it('InvoiceDetailPage zeigt Ergebnis-Kopfkarte wenn Rechnung finalisiert', () => {

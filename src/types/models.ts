@@ -589,6 +589,36 @@ export interface WorkflowLetterSummary {
   paperStorage: string;
 }
 
+export interface DocumentUnderstandingSummary {
+  documentType: string;
+  sender?: string;
+  recipient?: string;
+  date?: string;
+  referenceNumber?: string;
+  constructionSite?: string;
+  customer?: string;
+  vorgang?: string;
+  invoiceNumber?: string;
+  amount?: string;
+  deadline?: string;
+  nextStep: string;
+  partialRecognition: boolean;
+}
+
+export type DocumentAiActionId =
+  | 'create_order'
+  | 'write_invoice'
+  | 'monitor_deadline'
+  | 'archive_document'
+  | 'paper_folder'
+  | 'tax_advisor_relevant';
+
+export interface DocumentAiAction {
+  id: DocumentAiActionId;
+  labelKey: string;
+  recommended: boolean;
+}
+
 export interface WorkflowResult {
   inboxItemId: string;
   companyRelevant: boolean;
@@ -597,6 +627,8 @@ export interface WorkflowResult {
   classificationConfidence: AnalysisConfidence;
   classification: DocumentClassificationResult | null;
   documentExplanation: WorkflowLetterSummary | null;
+  documentUnderstanding: DocumentUnderstandingSummary | null;
+  documentAiActions: DocumentAiAction[];
   contractAnalysis: ContractAnalysisResult | null;
   suggestedVorgang: SuggestedVorgangLink | null;
   similarVorgaenge: Vorgang[];

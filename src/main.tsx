@@ -10,6 +10,7 @@ import { ProductionConfigBanner } from './components/system/ProductionConfigBann
 import { hydrateStoresFromStorage } from './services/persistenceService';
 import './styles/tokens.css';
 import './index.css';
+import './styles/shell.css';
 import './styles/layout.css';
 import './styles/components.css';
 import './styles/heute.css';

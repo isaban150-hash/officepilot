@@ -39,7 +39,8 @@ export function HeutePage() {
         <div className="heute-hero__actions">
           <Button
             fullWidth
-            className="heute-hero__primary"
+            size="lg"
+            variant="on-dark"
             data-testid="heute-scan-button"
             onClick={() => navigate('/scan')}
           >
@@ -47,8 +48,8 @@ export function HeutePage() {
           </Button>
           <Button
             fullWidth
-            variant="outline"
-            className="heute-hero__secondary"
+            size="lg"
+            variant="on-dark-outline"
             data-testid="heute-ask-button"
             onClick={() => navigate('/assistent')}
           >

@@ -1,0 +1,213 @@
+/**
+ * OfficePilot Design System v1.0 – App Shell (responsive layout)
+ * Overrides legacy 480px mobile-shell constraints from index.css
+ */
+
+.app-shell {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+
+.bottom-nav {
+  left: 0;
+  right: 0;
+  transform: none;
+  width: 100%;
+  max-width: none;
+}
+
+.bottom-nav__label {
+  font-size: 0.6875rem;
+  line-height: 1.15;
+  max-width: 100%;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
+.bottom-nav__item {
+  min-width: 0;
+}
+
+@media (max-width: 480px) {
+  .bottom-nav__item {
+    padding-inline: 0.1rem;
+  }
+
+  .bottom-nav__item--featured .bottom-nav__icon-wrap {
+    width: 2rem;
+    height: 2rem;
+  }
+}
+
+.app-shell__search {
+  padding-top: var(--space-2);
+  padding-bottom: var(--space-2);
+}
+
+.global-search--compact .global-search__input,
+.global-search--compact .input {
+  min-height: 40px;
+  padding: 0.5rem 0.75rem;
+  font-size: var(--text-meta-size);
+}
+
+@media (max-width: 767px) {
+  .user-menu .dropdown-menu__trigger {
+    min-height: 40px;
+    padding: var(--space-1) var(--space-2);
+    font-size: 0.8125rem;
+  }
+
+  .user-menu__name {
+    max-width: 5.5rem;
+  }
+
+  .scan-page .chip-group {
+    gap: var(--space-2);
+  }
+
+  .scan-page .chip {
+    padding: 0.4rem 0.75rem;
+    font-size: 0.8125rem;
+    min-height: 36px;
+  }
+
+  .scan-page .upload-kind-picker {
+    margin-top: var(--space-4);
+  }
+
+  .scan-page .upload-actions {
+    margin-top: var(--space-2);
+  }
+}
+
+.app-shell__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  min-height: var(--top-height);
+}
+
+.app-shell__top-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  flex: 1;
+}
+
+.app-shell__top-right {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.app-shell__brand {
+  font-size: var(--text-h3-size);
+  font-weight: var(--text-h3-weight);
+  letter-spacing: var(--text-h3-spacing);
+  white-space: nowrap;
+}
+
+.app-shell__company {
+  font-size: var(--text-meta-size);
+  opacity: 0.9;
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: none;
+}
+
+.app-shell__search {
+  padding: var(--space-2) var(--space-4);
+  background: var(--op-surface);
+  border-bottom: 1px solid var(--op-border);
+}
+
+.app-shell__body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.app-shell__main {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+}
+
+.app-shell__legal-footer {
+  display: none;
+}
+
+/* User menu container */
+.user-menu {
+  position: relative;
+}
+
+.user-menu__name {
+  max-width: 8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-menu__chevron {
+  width: 1rem;
+  height: 1rem;
+  opacity: 0.85;
+  flex-shrink: 0;
+}
+
+@media (min-width: 768px) {
+  .app-shell__company {
+    display: block;
+    max-width: 16rem;
+  }
+
+  .app-shell__top {
+    padding: var(--space-3) var(--space-6);
+  }
+
+  .app-shell__search {
+    padding: var(--space-3) var(--space-6);
+  }
+
+  .app-shell__main {
+    padding-left: var(--space-6);
+    padding-right: var(--space-6);
+  }
+}
+
+@media (min-width: 1024px) {
+  .app-shell__body {
+    flex-direction: row;
+    align-items: stretch;
+  }
+
+  .app-shell__main {
+    padding: 0 var(--space-8) var(--space-8);
+    padding-bottom: var(--space-8);
+  }
+
+  .app-shell__search {
+    padding-left: calc(var(--sidebar-width) + var(--space-6));
+  }
+
+  .app-shell__top {
+    padding-left: var(--space-8);
+    padding-right: var(--space-8);
+  }
+
+  .user-menu__name {
+    max-width: 10rem;
+  }
+}

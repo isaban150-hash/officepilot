@@ -1,4 +1,7 @@
 import { checkCompanyRelevanceFromInbox, isDocumentAnalysisAllowed } from './companyRelevanceService';
+import {
+  buildUnderstandingFromItem,
+} from './documentIntakeUnderstandingService';
 import { analyzeContractFromInbox } from './contractAnalysisService';
 import {
   getClassificationForItem,
@@ -240,6 +243,8 @@ export function processUploadedDocument(
       classificationConfidence: 'low',
       classification: null,
       documentExplanation: null,
+      documentUnderstanding: null,
+      documentAiActions: [],
       contractAnalysis: null,
       suggestedVorgang: null,
       similarVorgaenge: [],
@@ -273,6 +278,7 @@ export function processUploadedDocument(
   const suggestedTasks = collectSuggestedTasks(item, contractAnalysis);
   const requiredDocuments = contractAnalysis.isContract ? contractAnalysis.requiredDocuments : [];
   const warnings = buildWarnings(item, true, classification);
+  const understanding = buildUnderstandingFromItem(item, classification);
 
   return {
     inboxItemId,
@@ -282,6 +288,8 @@ export function processUploadedDocument(
     classificationConfidence: inferClassificationConfidence(classification),
     classification,
     documentExplanation,
+    documentUnderstanding: understanding.summary,
+    documentAiActions: understanding.actions,
     contractAnalysis: contractAnalysis.isContract ? contractAnalysis : null,
     suggestedVorgang,
     similarVorgaenge,
