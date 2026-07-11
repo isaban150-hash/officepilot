@@ -1,6 +1,7 @@
 /** OfficePilot V1 – zentrales Datenmodell (Foundation MVP) */
 
 import type { SyncClientConfig, SyncMeta, SyncOutboxEntry } from './sync';
+import type { Workspace, WorkspaceMember, WorkspaceSettings } from './workspace';
 
 export type AppLanguage = 'de' | 'tr' | 'bg' | 'ro' | 'ru';
 
@@ -1126,6 +1127,11 @@ export interface AppPersistedState {
   version: number;
   syncClient?: SyncClientConfig;
   syncOutbox?: SyncOutboxEntry[];
+  workspace?: Workspace;
+  workspaceMembers?: WorkspaceMember[];
+  workspaceSettings?: WorkspaceSettings;
+  setupSync?: SyncMeta;
+  companyProfileSync?: SyncMeta;
   setup: CompanySetup;
   companyProfile?: CompanyProfile;
   invoiceNumberSequence?: InvoiceNumberSequence;

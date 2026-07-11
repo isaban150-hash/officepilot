@@ -100,7 +100,9 @@ import {
   applySyncMetadataToState,
   isValidPersistedStateV1,
   isValidPersistedStateV2,
+  isValidPersistedStateV3,
   migratePersistedStateV1ToV2,
+  migratePersistedStateV2ToV3,
   STORAGE_VERSION,
 } from './sync/syncMigrationService';
 import { ensureSyncClientFromState, hydrateSyncClient } from './sync/syncClientService';
@@ -109,6 +111,15 @@ import {
   resetSyncChangeTrackerFromState,
   trackPersistedChanges,
 } from './sync/syncChangeTrackerService';
+import {
+  getCompanyProfileSyncSnapshot,
+  getSetupSyncSnapshot,
+  getWorkspaceMembersSnapshot,
+  getWorkspaceSettingsSnapshot,
+  getWorkspaceStoreSnapshot,
+  hydrateWorkspaceStore,
+  resetWorkspaceStore,
+} from './workspace/workspaceStore';
 
 export { STORAGE_VERSION } from './sync/syncMigrationService';
 export const LEGACY_STORAGE_VERSION = 1;
@@ -306,8 +317,13 @@ function finalizeLoadedState(state: AppPersistedState): AppPersistedState {
 }
 
 function normalizeLoadedState(parsed: unknown): AppPersistedState | null {
-  if (isValidPersistedStateV2(parsed)) {
+  if (isValidPersistedStateV3(parsed)) {
     return finalizeLoadedState(parsed);
+  }
+  if (isValidPersistedStateV2(parsed)) {
+    const migrated = migratePersistedStateV2ToV3(parsed);
+    savePersistedState(migrated);
+    return finalizeLoadedState(migrated);
   }
   if (isValidPersistedStateV1(parsed)) {
     const migrated = migratePersistedStateV1ToV2(parsed);
@@ -417,6 +433,13 @@ function applyStateToStores(state: AppPersistedState): void {
     },
   );
   hydrateMailImports(state.mailImports ?? []);
+  hydrateWorkspaceStore({
+    workspace: state.workspace ?? null,
+    workspaceMembers: state.workspaceMembers ?? [],
+    workspaceSettings: state.workspaceSettings ?? null,
+    setupSync: state.setupSync ?? null,
+    companyProfileSync: state.companyProfileSync ?? null,
+  });
   resetSyncChangeTrackerFromState(state);
 }
 
@@ -481,6 +504,11 @@ export function buildPersistedStateSnapshot(): AppPersistedState {
     version: STORAGE_VERSION,
     syncClient: ensureSyncClientFromState(),
     syncOutbox: getSyncOutboxSnapshot(),
+    workspace: getWorkspaceStoreSnapshot() ?? undefined,
+    workspaceMembers: getWorkspaceMembersSnapshot(),
+    workspaceSettings: getWorkspaceSettingsSnapshot() ?? undefined,
+    setupSync: getSetupSyncSnapshot() ?? undefined,
+    companyProfileSync: getCompanyProfileSyncSnapshot() ?? undefined,
     setup: getCachedSetup(),
     companyProfile: getCompanyProfileStoreSnapshot(),
     invoiceNumberSequence: getInvoiceNumberSequenceSnapshot(),
@@ -521,6 +549,7 @@ export function resetDemoData(options?: { keepSetup?: boolean }): CompanySetup {
   resetMemory();
   resetCompanyProfile(setup.companyName);
   resetInvoiceNumberSequence();
+  resetWorkspaceStore();
 
   const seed = createSeedState(setup);
   applyStateToStores(seed);

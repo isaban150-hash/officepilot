@@ -92,6 +92,21 @@ export function markOutboxEntriesCompleted(outboxIds: string[]): void {
   );
 }
 
+export function markOutboxEntriesFailed(outboxIds: string[], reason?: string): void {
+  if (outboxIds.length === 0) return;
+  const failedIds = new Set(outboxIds);
+  outbox = outbox.map((entry) =>
+    failedIds.has(entry.id)
+      ? {
+          ...entry,
+          status: 'error',
+          retryCount: entry.retryCount + 1,
+          blockedReason: reason ?? entry.blockedReason,
+        }
+      : entry,
+  );
+}
+
 export function isSyncOutboxEnabled(): boolean {
   return getSyncClient().syncPolicy !== 'disabled';
 }

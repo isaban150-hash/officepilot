@@ -29,6 +29,8 @@ import {
 import { mapSupabaseSession } from '../services/auth/userAccountMapper';
 import { fetchCurrentUserProfile } from '../services/auth/profileService';
 import { mapProfileRowToUserAccount } from '../services/auth/profileMapper';
+import { bootstrapWorkspaceCloudSyncIfNeeded } from '../services/workspace/workspaceCloudBootstrapService';
+import { isSupabaseConfigured } from '../lib/supabase';
 
 interface AuthContextValue {
   user: UserAccount | null;
@@ -91,6 +93,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setSession(resolved.session);
       setUser(resolved.user);
       setProfileError(resolved.profileError);
+
+      if (
+        resolved.session &&
+        resolved.user &&
+        !resolved.profileError &&
+        isSupabaseConfigured() &&
+        isUserAllowedToUseApp(resolved.user)
+      ) {
+        void bootstrapWorkspaceCloudSyncIfNeeded();
+      }
     },
     [],
   );

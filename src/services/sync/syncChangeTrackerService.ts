@@ -2,6 +2,9 @@ import type { AppPersistedState } from '../../types/models';
 import type { SyncEntityType, SyncOutboxOperation, SyncableEntity } from '../../types/sync';
 import { listEntitiesByType } from './syncEntityRegistry';
 import { enqueueSyncOutbox } from './syncOutboxService';
+import { stripLogoFromCompanyProfile } from '../workspace/workspaceStore';
+import { resolveCloudWorkspaceId } from '../workspace/workspaceSyncPayloadService';
+import { buildCloudEntityId } from '../workspace/workspaceSyncPayloadService';
 
 export const TRACKED_SYNC_ENTITY_TYPES: SyncEntityType[] = [
   'inbox_item',
@@ -17,6 +20,14 @@ export const TRACKED_SYNC_ENTITY_TYPES: SyncEntityType[] = [
   'vorgang_note',
   'communication_event',
   'knowledge_fact',
+];
+
+export const TRACKED_CLOUD_SYNC_ENTITY_TYPES: SyncEntityType[] = [
+  'workspace',
+  'workspace_member',
+  'workspace_settings',
+  'company_setup',
+  'company_profile',
 ];
 
 interface EntitySyncFingerprint {
@@ -66,6 +77,57 @@ function collectTrackedEntities(state: AppPersistedState): Map<string, TrackedEn
         entityType,
         entityId: entity.id,
         fingerprint: buildFingerprint(entity),
+      });
+    }
+  }
+
+  const workspaceId = resolveCloudWorkspaceId(state);
+  if (workspaceId) {
+    if (state.workspace) {
+      refs.set(entityKey('workspace', state.workspace.id), {
+        entityType: 'workspace',
+        entityId: state.workspace.id,
+        fingerprint: buildFingerprint(state.workspace as SyncableEntity & { id: string }),
+      });
+    }
+    if (state.workspaceSettings) {
+      refs.set(entityKey('workspace_settings', state.workspaceSettings.workspaceId), {
+        entityType: 'workspace_settings',
+        entityId: state.workspaceSettings.workspaceId,
+        fingerprint: buildFingerprint({
+          ...state.workspaceSettings,
+          id: state.workspaceSettings.workspaceId,
+        } as SyncableEntity & { id: string }),
+      });
+    }
+    for (const member of state.workspaceMembers ?? []) {
+      const memberId = buildCloudEntityId('workspace_member', member.workspaceId, member.userId);
+      refs.set(entityKey('workspace_member', memberId), {
+        entityType: 'workspace_member',
+        entityId: memberId,
+        fingerprint: buildFingerprint({ ...member, id: memberId } as SyncableEntity & { id: string }),
+      });
+    }
+    refs.set(entityKey('company_setup', workspaceId), {
+      entityType: 'company_setup',
+      entityId: workspaceId,
+      fingerprint: {
+        version: state.setupSync?.version ?? 0,
+        deleted: state.setupSync?.deleted ?? false,
+        updatedAt: state.setupSync?.updatedAt ?? '',
+        contentKey: JSON.stringify(state.setup),
+      },
+    });
+    if (state.companyProfile) {
+      refs.set(entityKey('company_profile', workspaceId), {
+        entityType: 'company_profile',
+        entityId: workspaceId,
+        fingerprint: {
+          version: state.companyProfileSync?.version ?? 0,
+          deleted: state.companyProfileSync?.deleted ?? false,
+          updatedAt: state.companyProfileSync?.updatedAt ?? '',
+          contentKey: JSON.stringify(stripLogoFromCompanyProfile(state.companyProfile)),
+        },
       });
     }
   }

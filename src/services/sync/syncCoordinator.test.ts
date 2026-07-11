@@ -120,13 +120,21 @@ describe('syncAdapterFactory', () => {
     expect(adapter.pullChanges).toBeTypeOf('function');
   });
 
-  it('markiert nur local als verfügbar', () => {
+  it('markiert local immer als verfügbar', () => {
     expect(isSyncProviderAvailable('local')).toBe(true);
-    expect(isSyncProviderAvailable('supabase')).toBe(false);
   });
 
   it('wirft für nicht implementierte Provider', () => {
-    expect(() => createSyncAdapter({ provider: 'supabase' })).toThrow(/nicht implementiert/);
+    expect(() => createSyncAdapter({ provider: 'firebase' })).toThrow(/nicht implementiert/);
+  });
+
+  it('erstellt SupabaseSyncAdapter wenn explizit angefordert und konfiguriert', () => {
+    if (!isSyncProviderAvailable('supabase')) {
+      expect(() => createSyncAdapter({ provider: 'supabase' })).toThrow();
+      return;
+    }
+    const adapter = createSyncAdapter({ provider: 'supabase' });
+    expect(adapter.providerKind).toBe('supabase');
   });
 });
 

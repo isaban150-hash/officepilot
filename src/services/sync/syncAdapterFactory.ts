@@ -1,6 +1,8 @@
 import type { SyncProviderKind } from './syncAdapter';
 import { LocalSyncAdapter } from './localSyncAdapter';
+import { createSupabaseSyncAdapter } from './supabaseSyncAdapter';
 import type { SyncAdapter } from './syncAdapter';
+import { isSupabaseConfigured } from '../../lib/supabase';
 
 export interface SyncAdapterFactoryOptions {
   provider?: SyncProviderKind;
@@ -13,6 +15,7 @@ export function createSyncAdapter(options: SyncAdapterFactoryOptions = {}): Sync
     case 'local':
       return new LocalSyncAdapter();
     case 'supabase':
+      return createSupabaseSyncAdapter();
     case 'firebase':
     case 'node':
     case 'json':
@@ -23,5 +26,7 @@ export function createSyncAdapter(options: SyncAdapterFactoryOptions = {}): Sync
 }
 
 export function isSyncProviderAvailable(provider: SyncProviderKind): boolean {
-  return provider === 'local';
+  if (provider === 'local') return true;
+  if (provider === 'supabase') return isSupabaseConfigured();
+  return false;
 }

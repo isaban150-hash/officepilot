@@ -3,6 +3,11 @@
 export type SyncPolicy = 'disabled' | 'local_only' | 'cloud_ready';
 
 export type SyncEntityType =
+  | 'workspace'
+  | 'workspace_member'
+  | 'workspace_settings'
+  | 'company_setup'
+  | 'company_profile'
   | 'inbox_item'
   | 'document'
   | 'document_memory'
@@ -91,9 +96,11 @@ export interface SyncMeta {
 export interface SyncClientConfig {
   deviceId: string;
   workspaceId: string;
+  serverWorkspaceId?: string;
   createdAt: string;
   migratedAt?: string;
   syncPolicy: SyncPolicy;
+  cloudProvisionedAt?: string;
 }
 
 export interface SyncOutboxEntry {

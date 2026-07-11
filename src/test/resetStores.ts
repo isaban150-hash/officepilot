@@ -16,6 +16,12 @@ import { hydrateVorgangNotes } from '../services/vorgangNoteService';
 import { resetCommunicationHistoryStore } from '../services/communicationHistoryStore';
 import { resetKnowledgeStore } from '../services/knowledgeStore';
 import { resetUploadedDocumentStore } from '../services/uploadedDocumentStore';
+import { resetSyncChangeTrackerForTests } from '../services/sync/syncChangeTrackerService';
+import { resetSyncCoordinatorForTests } from '../services/sync/syncCoordinator';
+import { resetSyncClientForTests } from '../services/sync/syncClientService';
+import { resetSyncOutboxForTests } from '../services/sync/syncOutboxService';
+import { resetWorkspaceStore } from '../services/workspace/workspaceStore';
+import { resetWorkspaceCloudBootstrapForTests } from '../services/workspace/workspaceCloudBootstrapService';
 
 export function resetTestStores(): void {
   hydrateInboxStore([]);
@@ -30,4 +36,10 @@ export function resetTestStores(): void {
   setCachedSetup({ ...DEFAULT_SETUP });
   hydrateCompanyProfileStore({ ...DEFAULT_COMPANY_PROFILE, companyName: 'Test GmbH' });
   hydrateInvoiceNumberSequence({ year: 2026, lastIssuedNumber: 0 });
+  resetWorkspaceStore();
+  resetSyncOutboxForTests([]);
+  resetSyncClientForTests();
+  resetSyncChangeTrackerForTests();
+  resetSyncCoordinatorForTests();
+  resetWorkspaceCloudBootstrapForTests();
 }
