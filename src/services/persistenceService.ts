@@ -39,6 +39,13 @@ import {
   resetUploadedDocumentStore,
 } from './uploadedDocumentStore';
 import {
+  backfillMissingFileRefHashes,
+  getDocumentFileBlobStoreSnapshot,
+  getDocumentFileRefStoreSnapshot,
+  hydrateDocumentFileStore,
+  resetDocumentFileStoreForTests,
+} from './documentFileStoreService';
+import {
   getExpenseStoreSnapshot,
   hydrateExpenseStore,
   resetExpenses,
@@ -101,8 +108,10 @@ import {
   isValidPersistedStateV1,
   isValidPersistedStateV2,
   isValidPersistedStateV3,
+  isValidPersistedStateV4,
   migratePersistedStateV1ToV2,
   migratePersistedStateV2ToV3,
+  migratePersistedStateV3ToV4,
   STORAGE_VERSION,
 } from './sync/syncMigrationService';
 import { ensureSyncClientFromState, hydrateSyncClient } from './sync/syncClientService';
@@ -284,6 +293,8 @@ export function createSeedState(setupOverride?: CompanySetup): AppPersistedState
           ),
       documents: emptyBusinessData ? [] : MOCK_COMPANY_DOCUMENTS.map(cloneCompanyDocument),
       uploadedDocuments: [],
+      documentFileRefs: [],
+      documentFileBlobs: {},
       expenses: emptyBusinessData ? [] : MOCK_EXPENSES.map(cloneExpense),
       vorgangNotes: [],
       communicationHistory: [],
@@ -317,11 +328,16 @@ function finalizeLoadedState(state: AppPersistedState): AppPersistedState {
 }
 
 function normalizeLoadedState(parsed: unknown): AppPersistedState | null {
-  if (isValidPersistedStateV3(parsed)) {
+  if (isValidPersistedStateV4(parsed)) {
     return finalizeLoadedState(parsed);
   }
+  if (isValidPersistedStateV3(parsed)) {
+    const migrated = migratePersistedStateV3ToV4(parsed);
+    savePersistedState(migrated);
+    return finalizeLoadedState(migrated);
+  }
   if (isValidPersistedStateV2(parsed)) {
-    const migrated = migratePersistedStateV2ToV3(parsed);
+    const migrated = migratePersistedStateV3ToV4(migratePersistedStateV2ToV3(parsed));
     savePersistedState(migrated);
     return finalizeLoadedState(migrated);
   }
@@ -420,6 +436,7 @@ function applyStateToStores(state: AppPersistedState): void {
   hydrateTaskStore(state.tasks);
   hydrateDocumentStore(state.documents ?? []);
   hydrateUploadedDocumentStore(state.uploadedDocuments ?? []);
+  hydrateDocumentFileStore(state.documentFileRefs ?? [], state.documentFileBlobs ?? {});
   hydrateExpenseStore(state.expenses ?? []);
   hydrateVorgangNotes(state.vorgangNotes ?? []);
   hydrateCommunicationHistory(state.communicationHistory ?? []);
@@ -472,6 +489,7 @@ export function hydrateStoresFromStorage(): CompanySetup {
   const stored = loadPersistedState();
   if (stored) {
     applyStateToStores(stored);
+    void backfillMissingFileRefHashes().then(() => persistAll());
     return getCachedSetup();
   }
 
@@ -517,6 +535,8 @@ export function buildPersistedStateSnapshot(): AppPersistedState {
     tasks: getTaskStoreSnapshot(),
     documents: getDocumentStoreSnapshot(),
     uploadedDocuments: getUploadedDocumentStoreSnapshot(),
+    documentFileRefs: getDocumentFileRefStoreSnapshot(),
+    documentFileBlobs: getDocumentFileBlobStoreSnapshot(),
     expenses: getExpenseStoreSnapshot(),
     vorgangNotes: getVorgangNoteStoreSnapshot(),
     communicationHistory: getCommunicationHistorySnapshot(),
@@ -541,6 +561,7 @@ export function resetDemoData(options?: { keepSetup?: boolean }): CompanySetup {
   resetTasks();
   resetDocuments();
   resetUploadedDocumentStore();
+  resetDocumentFileStoreForTests();
   resetExpenses();
   resetVorgangNotes();
   resetCommunicationHistoryStore();

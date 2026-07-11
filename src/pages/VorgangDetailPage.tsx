@@ -7,6 +7,7 @@ import { Card, CardMeta, CardTitle, DataRow } from '../components/ui/Card';
 import { ShowMoreSection } from '../components/ui/ShowMoreSection';
 import { useApp } from '../context/AppContext';
 import { formatPaperFilingInstruction } from '../services/paperFolderService';
+import { resolveVorgangDocumentDisplayName } from '../services/vorgangDocumentLinkService';
 import {
   canAddOrderPosition,
   canDeleteOrderPosition,
@@ -185,7 +186,7 @@ export function VorgangDetailPage() {
             const typeKey = `docType.${doc.type}` as TranslationKey;
             return (
               <Card key={doc.id}>
-                <CardTitle>{doc.name}</CardTitle>
+                <CardTitle>{resolveVorgangDocumentDisplayName(doc)}</CardTitle>
                 <CardMeta>{translate(typeKey)} · {doc.date}</CardMeta>
                 {doc.paperFiling && (
                   <p className="filing-hint">{formatPaperFilingInstruction(doc.paperFiling)}</p>

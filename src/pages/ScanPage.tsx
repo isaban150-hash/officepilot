@@ -8,7 +8,7 @@ import {
   UPLOAD_DOCUMENT_KINDS,
   UPLOAD_KIND_LABELS,
 } from '../services/inboxUploadFactory';
-import { processUpload } from '../services/inboxService';
+import { intakeDocumentFile } from '../services/documentIntakeService';
 import {
   buildOcrPreviewSummary,
   extractDocumentText,
@@ -64,18 +64,35 @@ export function ScanPage() {
     }
   };
 
-  const confirmPendingScan = () => {
+  const confirmPendingScan = async () => {
     if (!pendingScan) return;
 
     const recognizedText = pendingScan.extraction.recognizedText.trim() || undefined;
-    const item = processUpload({
+    const result = await intakeDocumentFile(pendingScan.file, {
       sourceFileName: pendingScan.file.name,
       kind: selectedKind ?? undefined,
       recognizedText,
+      importSource: 'scan',
     });
 
     setPendingScan(null);
-    handleUploadComplete(item.id);
+
+    if (!result.success) {
+      showToast(translate('document.upload.error.processFailed'));
+      return;
+    }
+
+    if (result.duplicate) {
+      showToast(translate('document.upload.duplicateDetected'));
+      if (result.existing?.type === 'inbox') {
+        navigate(`/ablage/${result.existing.id}`);
+      } else if (result.existing?.type === 'document') {
+        navigate(`/dokumente/${result.existing.id}`);
+      }
+      return;
+    }
+
+    handleUploadComplete(result.inboxItem.id);
   };
 
   const handleCapture = () => {

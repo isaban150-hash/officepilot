@@ -8,33 +8,62 @@ import {
   isImageUpload,
   isPdfUpload,
 } from '../services/documentUploadValidation';
-import {
-  getUploadErrorMessage,
-  uploadDocumentFromFile,
-} from '../services/uploadedDocumentService';
-import type { UploadedDocument } from '../types/uploadedDocument';
+import { intakeDocumentFile } from '../services/documentIntakeService';
+import { getDocumentFileDataUrl, getDocumentFileRefById } from '../services/documentFileStoreService';
+import type { DocumentIntakeErrorCode } from '../services/documentIntakeService';
+import type { InboxItem } from '../types/models';
+import type { TranslationKey } from '../i18n';
+
+const INTAKE_ERROR_KEYS: Partial<Record<DocumentIntakeErrorCode, TranslationKey>> = {
+  invalid_type: 'document.upload.error.invalidType',
+  file_too_large: 'document.upload.error.fileTooLarge',
+  read_failed: 'document.upload.error.processFailed',
+  hash_failed: 'document.upload.error.processFailed',
+  persist_failed: 'document.upload.error.processFailed',
+};
 
 export function DocumentUploadPage() {
-  const { translate } = useApp();
+  const { translate, showToast } = useApp();
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragActive, setDragActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [uploaded, setUploaded] = useState<UploadedDocument | null>(null);
+  const [inboxItem, setInboxItem] = useState<InboxItem | null>(null);
+  const [duplicateInfo, setDuplicateInfo] = useState<{
+    title: string;
+    type: 'inbox' | 'document';
+    id: string;
+  } | null>(null);
 
   async function handleFile(file: File | null | undefined) {
     if (!file) return;
     setError(null);
+    setDuplicateInfo(null);
+    setInboxItem(null);
     setLoading(true);
-    const result = await uploadDocumentFromFile(file);
+
+    const result = await intakeDocumentFile(file, { importSource: 'upload' });
     setLoading(false);
+
     if (!result.success) {
-      setUploaded(null);
-      setError(getUploadErrorMessage(result.error));
+      const key = INTAKE_ERROR_KEYS[result.error];
+      setError(key ? translate(key) : translate('document.upload.error.processFailed'));
       return;
     }
-    setUploaded(result.document);
+
+    if (result.duplicate) {
+      setDuplicateInfo({
+        title: result.existing?.title ?? '',
+        type: result.existing?.type ?? 'inbox',
+        id: result.existing?.id ?? '',
+      });
+      showToast(translate('document.upload.duplicateDetected'));
+      return;
+    }
+
+    setInboxItem(result.inboxItem);
+    showToast(translate('document.upload.addedToInbox'));
   }
 
   function onInputChange(event: FormEvent<HTMLInputElement>) {
@@ -49,6 +78,9 @@ export function DocumentUploadPage() {
     const file = event.dataTransfer.files?.[0];
     void handleFile(file);
   }
+
+  const fileRef = inboxItem?.fileRefId ? getDocumentFileRefById(inboxItem.fileRefId) : undefined;
+  const previewUrl = fileRef ? getDocumentFileDataUrl(fileRef) : undefined;
 
   return (
     <div className="page document-upload-page" data-testid="document-upload-page">
@@ -96,7 +128,9 @@ export function DocumentUploadPage() {
             disabled={loading}
             data-testid="document-upload-select"
           >
-            {loading ? translate('document.upload.uploading') : translate('document.upload.select')}
+            {loading
+              ? translate('document.upload.processing')
+              : translate('document.upload.select')}
           </Button>
         </div>
 
@@ -106,56 +140,82 @@ export function DocumentUploadPage() {
           </p>
         ) : null}
 
-        {uploaded ? (
+        {duplicateInfo ? (
+          <div className="document-upload-preview" data-testid="document-upload-duplicate">
+            <h2 className="document-upload-preview__title">
+              {translate('document.upload.duplicateTitle')}
+            </h2>
+            <p>
+              {translate('document.upload.duplicateMessage')} {duplicateInfo.title}
+            </p>
+            <div className="document-upload-preview__actions">
+              {duplicateInfo.type === 'inbox' ? (
+                <Link to={`/ablage/${duplicateInfo.id}`}>
+                  <Button variant="primary" data-testid="document-upload-open-existing">
+                    {translate('document.upload.openExisting')}
+                  </Button>
+                </Link>
+              ) : (
+                <Link to={`/dokumente/${duplicateInfo.id}`}>
+                  <Button variant="primary" data-testid="document-upload-open-existing">
+                    {translate('document.upload.openExisting')}
+                  </Button>
+                </Link>
+              )}
+            </div>
+          </div>
+        ) : null}
+
+        {inboxItem ? (
           <div className="document-upload-preview" data-testid="document-upload-preview">
-            <h2 className="document-upload-preview__title">{translate('document.upload.previewTitle')}</h2>
+            <h2 className="document-upload-preview__title">
+              {translate('document.upload.inboxPreviewTitle')}
+            </h2>
             <dl className="document-upload-preview__meta">
               <div>
-                <dt>{translate('document.upload.fileName')}</dt>
-                <dd data-testid="document-upload-file-name">{uploaded.fileName}</dd>
+                <dt>{translate('document.upload.originalFileName')}</dt>
+                <dd data-testid="document-upload-file-name">
+                  {fileRef?.originalFileName ?? inboxItem.sourceFileName ?? inboxItem.title}
+                </dd>
               </div>
               <div>
                 <dt>{translate('document.upload.fileType')}</dt>
-                <dd data-testid="document-upload-file-type">{uploaded.fileType || '—'}</dd>
+                <dd data-testid="document-upload-file-type">{fileRef?.mimeType || '—'}</dd>
               </div>
               <div>
                 <dt>{translate('document.upload.fileSize')}</dt>
-                <dd data-testid="document-upload-file-size">{formatFileSize(uploaded.fileSize)}</dd>
+                <dd data-testid="document-upload-file-size">
+                  {fileRef ? formatFileSize(fileRef.fileSize) : '—'}
+                </dd>
               </div>
               <div>
-                <dt>{translate('document.upload.status')}</dt>
-                <dd data-testid="document-upload-status">{uploaded.status}</dd>
+                <dt>{translate('document.upload.inboxTitle')}</dt>
+                <dd data-testid="document-upload-inbox-title">{inboxItem.title}</dd>
               </div>
             </dl>
 
-            {isImageUpload(uploaded.fileType, uploaded.fileName) && uploaded.previewUrl ? (
+            {previewUrl && fileRef && isImageUpload(fileRef.mimeType, fileRef.originalFileName) ? (
               <img
-                src={uploaded.previewUrl}
-                alt={uploaded.fileName}
+                src={previewUrl}
+                alt={fileRef.originalFileName}
                 className="document-upload-preview__image"
                 data-testid="document-upload-image-preview"
               />
             ) : null}
 
-            {isPdfUpload(uploaded.fileType, uploaded.fileName) ? (
-              uploaded.previewUrl ? (
-                <iframe
-                  title={uploaded.fileName}
-                  src={uploaded.previewUrl}
-                  className="document-upload-preview__pdf"
-                  data-testid="document-upload-pdf-preview"
-                />
-              ) : (
-                <p className="document-upload-preview__pdf-fallback" data-testid="document-upload-pdf-fallback">
-                  {translate('document.upload.pdfFallback')}
-                </p>
-              )
+            {previewUrl && fileRef && isPdfUpload(fileRef.mimeType, fileRef.originalFileName) ? (
+              <iframe
+                title={fileRef.originalFileName}
+                src={previewUrl}
+                className="document-upload-preview__pdf"
+                data-testid="document-upload-pdf-preview"
+              />
             ) : null}
 
             <div className="document-upload-preview__actions">
-              <Link to="/dokumente">
-                <Button variant="primary" data-testid="document-upload-to-list">
-                  {translate('document.upload.toList')}
+              <Link to={`/ablage/${inboxItem.id}`}>
+                <Button variant="primary" data-testid="document-upload-to-inbox">
+                  {translate('document.upload.openInboxReview')}
                 </Button>
               </Link>
             </div>

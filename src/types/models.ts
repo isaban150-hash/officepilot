@@ -228,6 +228,9 @@ export interface InboxItem {
   /** Herkunft aus E-Mail-Import (MAIL-01) */
   mailImportId?: string;
   importSource?: 'scan' | 'upload' | 'email';
+  /** Lokale Dateireferenz (DOC-FOUNDATION-01) */
+  fileRefId?: string;
+  sourceFileHash?: string;
   sync?: SyncMeta;
 }
 
@@ -749,6 +752,8 @@ export interface VorgangDocument {
   type: DocumentType;
   date: string;
   paperFiling?: PaperFilingRule;
+  /** Verweis auf zentrales Firmenarchiv (DOC-FOUNDATION-01) */
+  companyDocumentId?: string;
 }
 
 export interface VorgangTask {
@@ -1097,6 +1102,15 @@ export interface CompanyDocument {
   createdAt: string;
   imagePreview?: string;
   linkedInvoiceId?: string | null;
+  fileRefId?: string;
+  sourceFileHash?: string;
+  originalFileName?: string;
+  mimeType?: string;
+  fileSize?: number;
+  classifiedKind?: ClassifiedDocumentKind;
+  sourceInboxItemId?: string;
+  documentDate?: string | null;
+  uploadedAt?: string;
   sync?: SyncMeta;
 }
 
@@ -1115,6 +1129,15 @@ export interface CompanyDocumentInput {
   archived?: boolean;
   imagePreview?: string;
   linkedInvoiceId?: string | null;
+  fileRefId?: string;
+  sourceFileHash?: string;
+  originalFileName?: string;
+  mimeType?: string;
+  fileSize?: number;
+  classifiedKind?: ClassifiedDocumentKind;
+  sourceInboxItemId?: string;
+  documentDate?: string | null;
+  uploadedAt?: string;
 }
 
 import type { Expense } from './expense';
@@ -1122,6 +1145,7 @@ import type { VorgangNote } from './communication';
 import type { CommunicationEvent } from './communicationHistory';
 import type { KnowledgeFact } from './knowledge';
 import type { OfficePilotMemoryState } from './memory';
+import type { DocumentFileRef } from './documentFileRef';
 
 export interface AppPersistedState {
   version: number;
@@ -1140,6 +1164,8 @@ export interface AppPersistedState {
   tasks: Task[];
   documents: CompanyDocument[];
   uploadedDocuments?: import('./uploadedDocument').UploadedDocument[];
+  documentFileRefs?: DocumentFileRef[];
+  documentFileBlobs?: Record<string, string>;
   expenses?: Expense[];
   vorgangNotes?: VorgangNote[];
   communicationHistory?: CommunicationEvent[];

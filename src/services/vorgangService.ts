@@ -16,6 +16,7 @@ import { persistAll } from './persistenceService';
 import { generateEntityId, withNewEntitySync, withUpdatedEntitySync, withTombstonedEntity, filterSyncActive, isEntitySyncActive } from './sync/syncMetaService';
 import type {
   ContractExtractedFields,
+  CompanyDocument,
   CustomerBilling,
   InboxItem,
   InvoicePayment,
@@ -140,9 +141,10 @@ function inboxDocumentName(item: InboxItem): string {
   return item.sourceFileName ?? item.title;
 }
 
-function buildDocumentFromInbox(item: InboxItem): VorgangDocument {
+function buildDocumentFromInbox(item: InboxItem, companyDocumentId?: string): VorgangDocument {
   return {
-    id: `d-inbox-${item.id}-${Date.now()}`,
+    id: companyDocumentId ?? `d-inbox-${item.id}`,
+    companyDocumentId,
     name: inboxDocumentName(item),
     type: item.documentType,
     date: item.receivedAt,
@@ -150,9 +152,68 @@ function buildDocumentFromInbox(item: InboxItem): VorgangDocument {
   };
 }
 
+export function attachCompanyDocumentToVorgang(
+  vorgangId: string,
+  companyDocument: CompanyDocument,
+  inboxItem?: InboxItem,
+): void {
+  const index = vorgaenge.findIndex((v) => v.id === vorgangId && isEntitySyncActive(v));
+  if (index === -1) return;
+
+  const vorgang = cloneVorgang(vorgaenge[index]);
+  const refDoc = buildDocumentFromInbox(
+    inboxItem ?? {
+      id: companyDocument.sourceInboxItemId ?? companyDocument.id,
+      title: companyDocument.title,
+      documentType: 'sonstiges',
+      sender: companyDocument.issuer,
+      priority: 'mittel',
+      deadline: companyDocument.validUntil,
+      recommendedAction: 'archivieren',
+      digitalFolder: companyDocument.digitalFolder,
+      paperFiling: companyDocument.paperFolder,
+      status: 'abgelegt',
+      receivedAt: companyDocument.documentDate ?? companyDocument.createdAt,
+      recognizedData: {},
+      officePilotSuggestion: '',
+      nextTaskLabel: '',
+      securityHint: '',
+      sourceFileName: companyDocument.originalFileName,
+    },
+    companyDocument.id,
+  );
+  refDoc.companyDocumentId = companyDocument.id;
+  refDoc.name = companyDocument.title;
+  refDoc.type =
+    companyDocument.category === 'vertrag'
+      ? 'kundenauftrag'
+      : companyDocument.category === 'steuer'
+        ? 'eingangsrechnung'
+        : 'sonstiges';
+
+  const existingIndex = vorgang.documents.findIndex(
+    (d) =>
+      d.companyDocumentId === companyDocument.id ||
+      (inboxItem && d.id === `d-inbox-${inboxItem.id}`),
+  );
+  if (existingIndex >= 0) {
+    vorgang.documents[existingIndex] = {
+      ...vorgang.documents[existingIndex],
+      ...refDoc,
+      id: vorgang.documents[existingIndex].id,
+    };
+  } else {
+    appendDocumentIfNew(vorgang, refDoc);
+  }
+
+  updateVorgangInStore(vorgang);
+}
+
 function appendDocumentIfNew(vorgang: Vorgang, doc: VorgangDocument): void {
   const exists = vorgang.documents.some(
-    (d) => d.name === doc.name && d.date === doc.date,
+    (d) =>
+      (doc.companyDocumentId && d.companyDocumentId === doc.companyDocumentId) ||
+      (d.name === doc.name && d.date === doc.date),
   );
   if (!exists) {
     vorgang.documents.push(doc);

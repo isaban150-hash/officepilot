@@ -2,6 +2,7 @@ import { MOCK_COMPANY_DOCUMENTS } from '../data/documentMockData';
 import { PAPER_FOLDERS } from '../data/mockData';
 import { persistAll } from './persistenceService';
 import { resolvePaperFilingFromInbox } from './paperFolderService';
+import { getDocumentFileRefById } from './documentFileStoreService';
 import {
   isContractInboxItem,
   recordArchivedDocumentMemory,
@@ -52,6 +53,31 @@ function cloneDocument(doc: CompanyDocument): CompanyDocument {
     tags: [...doc.tags],
     linkedVorgang: doc.linkedVorgang ? { ...doc.linkedVorgang } : null,
     linkedInvoiceId: doc.linkedInvoiceId ?? null,
+  };
+}
+
+function fileFieldsFromInput(input: CompanyDocumentInput): Pick<
+  CompanyDocument,
+  | 'fileRefId'
+  | 'sourceFileHash'
+  | 'originalFileName'
+  | 'mimeType'
+  | 'fileSize'
+  | 'classifiedKind'
+  | 'sourceInboxItemId'
+  | 'documentDate'
+  | 'uploadedAt'
+> {
+  return {
+    fileRefId: input.fileRefId,
+    sourceFileHash: input.sourceFileHash,
+    originalFileName: input.originalFileName,
+    mimeType: input.mimeType,
+    fileSize: input.fileSize,
+    classifiedKind: input.classifiedKind,
+    sourceInboxItemId: input.sourceInboxItemId,
+    documentDate: input.documentDate ?? null,
+    uploadedAt: input.uploadedAt,
   };
 }
 
@@ -110,6 +136,7 @@ function buildDocumentFromInput(
     createdAt,
     imagePreview: input.imagePreview ?? '📄',
     linkedInvoiceId: input.linkedInvoiceId ?? null,
+    ...fileFieldsFromInput(input),
   };
 }
 
@@ -213,6 +240,15 @@ export function updateDocument(
     imagePreview: changes.imagePreview ?? current.imagePreview,
     linkedInvoiceId:
       changes.linkedInvoiceId !== undefined ? changes.linkedInvoiceId : current.linkedInvoiceId,
+    fileRefId: changes.fileRefId ?? current.fileRefId,
+    sourceFileHash: changes.sourceFileHash ?? current.sourceFileHash,
+    originalFileName: changes.originalFileName ?? current.originalFileName,
+    mimeType: changes.mimeType ?? current.mimeType,
+    fileSize: changes.fileSize ?? current.fileSize,
+    classifiedKind: changes.classifiedKind ?? current.classifiedKind,
+    sourceInboxItemId: changes.sourceInboxItemId ?? current.sourceInboxItemId,
+    documentDate: changes.documentDate !== undefined ? changes.documentDate : current.documentDate,
+    uploadedAt: changes.uploadedAt ?? current.uploadedAt,
   };
 
   const validationError = validateInput(merged);
@@ -305,6 +341,32 @@ function linkedVorgangFromInbox(item: InboxItem): CompanyDocumentVorgangLink | n
   return { vorgangId: item.vorgangId, vorgangTitle: item.vorgangTitle };
 }
 
+function fileMetaFromInbox(item: InboxItem): Pick<
+  CompanyDocumentInput,
+  | 'fileRefId'
+  | 'sourceFileHash'
+  | 'originalFileName'
+  | 'mimeType'
+  | 'fileSize'
+  | 'classifiedKind'
+  | 'sourceInboxItemId'
+  | 'documentDate'
+  | 'uploadedAt'
+> {
+  const ref = item.fileRefId ? getDocumentFileRefById(item.fileRefId) : undefined;
+  return {
+    fileRefId: item.fileRefId ?? ref?.id,
+    sourceFileHash: item.sourceFileHash ?? ref?.contentHash,
+    originalFileName: ref?.originalFileName ?? item.sourceFileName,
+    mimeType: ref?.mimeType,
+    fileSize: ref?.fileSize,
+    classifiedKind: item.classifiedKind,
+    sourceInboxItemId: item.id,
+    documentDate: item.receivedAt || null,
+    uploadedAt: ref?.createdAt ?? item.receivedAt,
+  };
+}
+
 export function mapInboxItemToDocumentInput(
   item: InboxItem,
   linkedCompany: string,
@@ -328,7 +390,16 @@ export function mapInboxItemToDocumentInput(
     linkedVorgang: linkedVorgangFromInbox(item),
     archived: true,
     imagePreview: imagePreviewForDocumentType(item.documentType),
+    ...fileMetaFromInbox(item),
   };
+}
+
+export function findDocumentByContentHash(contentHash: string): CompanyDocument | null {
+  if (!contentHash) return null;
+  const doc = documents.find(
+    (entry) => entry.sourceFileHash === contentHash && isEntitySyncActive(entry),
+  );
+  return doc ? cloneDocument(doc) : null;
 }
 
 export function isDuplicateDocument(
@@ -336,6 +407,13 @@ export function isDuplicateDocument(
   linkedCompany: string,
   options?: { excludeDocumentId?: string },
 ): CompanyDocument | null {
+  if (item.sourceFileHash) {
+    const hashMatch = findDocumentByContentHash(item.sourceFileHash);
+    if (hashMatch && hashMatch.id !== options?.excludeDocumentId) {
+      return hashMatch;
+    }
+  }
+
   const input = mapInboxItemToDocumentInput(item, linkedCompany);
   const candidateKey = normalizeDuplicateKey(input.title, input.issuer ?? '');
 
@@ -347,6 +425,8 @@ export function isDuplicateDocument(
   return match ? cloneDocument(match) : null;
 }
 
+import { linkArchivedDocumentToVorgang } from './vorgangDocumentLinkService';
+
 export function importInboxDocument(
   item: InboxItem,
   linkedCompany: string,
@@ -357,6 +437,9 @@ export function importInboxDocument(
     recordArchivedDocumentMemory(result.document, { inboxItem: item });
     if (isContractInboxItem(item)) {
       syncContractProofRequirementsFromInbox(item);
+    }
+    if (item.vorgangId) {
+      linkArchivedDocumentToVorgang(result.document, item);
     }
     persistAll();
   }

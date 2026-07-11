@@ -22,8 +22,9 @@ import { createSyncClient, ensureSyncClientFromState } from './syncClientService
 import { createDefaultSyncMeta } from './syncMetaService';
 
 export const LEGACY_STORAGE_VERSION = 1;
-export const STORAGE_VERSION = 3;
+export const STORAGE_VERSION = 4;
 export const STORAGE_VERSION_V2 = 2;
+export const STORAGE_VERSION_V3 = 3;
 
 type PersistedStateV1 = Omit<AppPersistedState, 'syncClient' | 'syncOutbox'> & {
   version: typeof LEGACY_STORAGE_VERSION;
@@ -149,6 +150,36 @@ type PersistedStateV2 = Omit<
   companyProfileSync?: undefined;
 };
 
+export function migratePersistedStateV3ToV4(state: AppPersistedState): AppPersistedState {
+  const documentFileRefs = [...(state.documentFileRefs ?? [])];
+  const documentFileBlobs = { ...(state.documentFileBlobs ?? {}) };
+
+  for (const upl of state.uploadedDocuments ?? []) {
+    if (!upl.originalFileDataUrl) continue;
+    const refId = `legacy-upl-${upl.id}`;
+    if (documentFileRefs.some((entry) => entry.id === refId)) continue;
+    const localDataKey = `legacy-blob-${upl.id}`;
+    documentFileBlobs[localDataKey] = upl.originalFileDataUrl;
+    documentFileRefs.push({
+      id: refId,
+      originalFileName: upl.fileName,
+      mimeType: upl.fileType,
+      fileSize: upl.fileSize,
+      contentHash: '',
+      storageType: 'local_data_url',
+      localDataKey,
+      createdAt: upl.uploadedAt,
+    });
+  }
+
+  return {
+    ...state,
+    version: STORAGE_VERSION,
+    documentFileRefs,
+    documentFileBlobs,
+  };
+}
+
 export function migratePersistedStateV2ToV3(state: PersistedStateV2): AppPersistedState {
   const client = ensureSyncClientFromState(state.syncClient);
   const workspaceId = client.serverWorkspaceId ?? client.workspaceId;
@@ -156,7 +187,7 @@ export function migratePersistedStateV2ToV3(state: PersistedStateV2): AppPersist
 
   return {
     ...state,
-    version: STORAGE_VERSION,
+    version: STORAGE_VERSION_V3,
     syncClient: client,
     workspace: state.workspace,
     workspaceMembers: state.workspaceMembers ?? [],
@@ -179,7 +210,7 @@ export function migratePersistedStateV1ToV2(state: PersistedStateV1): AppPersist
     syncClient: client,
     syncOutbox: [],
   };
-  return migratePersistedStateV2ToV3(applySyncMetadataToState(base, client) as PersistedStateV2);
+  return migratePersistedStateV3ToV4(migratePersistedStateV2ToV3(applySyncMetadataToState(base, client) as PersistedStateV2));
 }
 
 export function isValidPersistedStateV1(value: unknown): value is PersistedStateV1 {
@@ -225,11 +256,30 @@ export function isValidPersistedStateV2(value: unknown): value is PersistedState
   );
 }
 
-export function isValidPersistedStateV3(value: unknown): value is AppPersistedState {
+export function isValidPersistedStateV4(value: unknown): value is AppPersistedState {
   if (!value || typeof value !== 'object') return false;
   const state = value as AppPersistedState;
   return (
     state.version === STORAGE_VERSION &&
+    typeof state.syncClient === 'object' &&
+    state.syncClient !== null &&
+    typeof state.syncClient.deviceId === 'string' &&
+    typeof state.syncClient.workspaceId === 'string' &&
+    Array.isArray(state.syncOutbox) &&
+    Array.isArray(state.inboxItems) &&
+    Array.isArray(state.vorgaenge) &&
+    Array.isArray(state.tasks) &&
+    (Array.isArray(state.documents) || state.documents === undefined) &&
+    typeof state.setup === 'object' &&
+    state.setup !== null
+  );
+}
+
+export function isValidPersistedStateV3(value: unknown): value is AppPersistedState {
+  if (!value || typeof value !== 'object') return false;
+  const state = value as AppPersistedState;
+  return (
+    state.version === STORAGE_VERSION_V3 &&
     typeof state.syncClient === 'object' &&
     state.syncClient !== null &&
     typeof state.syncClient.deviceId === 'string' &&

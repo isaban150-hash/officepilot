@@ -73,11 +73,28 @@ function enrichFromTemplate(
   };
 }
 
-export function createMockInboxItemFromUpload(
+/** Nur für Tests – erzwingt Mock-Anreicherung ohne OCR-Text. */
+export function createMockInboxItemFromUploadForTests(
   options: CreateInboxFromUploadOptions = {},
 ): InboxItem {
   const recognizedText = options.recognizedText?.trim();
   const kind = options.kind ?? (recognizedText ? undefined : pickRandomKind());
+  return createInboxItemFromUploadInternal({ ...options, kind, recognizedText });
+}
+
+export function createMockInboxItemFromUpload(
+  options: CreateInboxFromUploadOptions = {},
+): InboxItem {
+  const recognizedText = options.recognizedText?.trim();
+  const kind = options.kind;
+  return createInboxItemFromUploadInternal({ ...options, kind, recognizedText });
+}
+
+function createInboxItemFromUploadInternal(
+  options: CreateInboxFromUploadOptions & { kind?: UploadDocumentKind; recognizedText?: string },
+): InboxItem {
+  const recognizedText = options.recognizedText;
+  const kind = options.kind;
   const sourceFileName = options.sourceFileName ?? defaultFileName();
 
   const input: DocumentClassificationInput = {

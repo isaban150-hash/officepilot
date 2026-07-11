@@ -21,6 +21,7 @@ import { resetSyncCoordinatorForTests } from '../services/sync/syncCoordinator';
 import { resetSyncClientForTests } from '../services/sync/syncClientService';
 import { resetSyncOutboxForTests } from '../services/sync/syncOutboxService';
 import { resetWorkspaceStore } from '../services/workspace/workspaceStore';
+import { resetDocumentFileStoreForTests } from '../services/documentFileStoreService';
 import { resetWorkspaceCloudBootstrapForTests } from '../services/workspace/workspaceCloudBootstrapService';
 
 export function resetTestStores(): void {
@@ -29,6 +30,7 @@ export function resetTestStores(): void {
   hydrateTaskStore([]);
   hydrateDocumentStore([]);
   resetUploadedDocumentStore();
+  resetDocumentFileStoreForTests();
   hydrateExpenseStore([]);
   hydrateVorgangNotes([]);
   resetCommunicationHistoryStore();
