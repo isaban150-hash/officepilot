@@ -1,5 +1,6 @@
 import { DragEvent, FormEvent, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { DocumentUploadErrorPanel } from '../components/documents/DocumentUploadErrorPanel';
 import { Button } from '../components/ui/Button';
 import { Card, PageHeader } from '../components/ui/Card';
 import { SkeletonStack } from '../components/ui/Skeleton';
@@ -10,27 +11,16 @@ import {
   isPdfUpload,
 } from '../services/documentUploadValidation';
 import { intakeDocumentFile } from '../services/documentIntakeService';
-import { resolveIntakeErrorKey } from '../services/documentUploadErrorService';
+import type { DocumentUploadErrorCode } from '../services/documentUploadErrorService';
 import { getDocumentFileDataUrl, getDocumentFileRefById } from '../services/documentFileStoreService';
-import type { DocumentIntakeErrorCode } from '../services/documentIntakeService';
 import type { InboxItem } from '../types/models';
-import type { TranslationKey } from '../i18n';
-
-const INTAKE_ERROR_KEYS: Partial<Record<DocumentIntakeErrorCode, TranslationKey>> = {
-  invalid_type: 'document.upload.error.invalidType',
-  unsupported_photo_format: 'document.upload.error.unsupportedPhotoFormat',
-  file_too_large: 'document.upload.error.fileTooLarge',
-  read_failed: 'document.upload.error.processFailed',
-  hash_failed: 'document.upload.error.processFailed',
-  persist_failed: 'document.upload.error.processFailed',
-};
 
 export function DocumentUploadPage() {
   const { translate, showToast } = useApp();
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragActive, setDragActive] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<DocumentUploadErrorCode | null>(null);
   const [loading, setLoading] = useState(false);
   const [inboxItem, setInboxItem] = useState<InboxItem | null>(null);
   const [duplicateInfo, setDuplicateInfo] = useState<{
@@ -50,8 +40,7 @@ export function DocumentUploadPage() {
     setLoading(false);
 
     if (!result.success) {
-      const key = INTAKE_ERROR_KEYS[result.error] ?? resolveIntakeErrorKey(result.error);
-      setError(key ? translate(key) : translate('document.upload.error.processFailed'));
+      setError(result.error);
       return;
     }
 
@@ -145,9 +134,22 @@ export function DocumentUploadPage() {
         ) : null}
 
         {error ? (
-          <p className="document-upload-error" role="alert" data-testid="document-upload-error">
-            {error}
-          </p>
+          <DocumentUploadErrorPanel
+            errorCode={error}
+            translate={translate}
+            onRetry={() => {
+              setError(null);
+              inputRef.current?.click();
+            }}
+            onNewPhoto={() => {
+              setError(null);
+              navigate('/scan?input=camera');
+            }}
+            onSelectFile={() => {
+              setError(null);
+              inputRef.current?.click();
+            }}
+          />
         ) : null}
 
         {duplicateInfo ? (

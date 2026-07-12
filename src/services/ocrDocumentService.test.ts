@@ -155,7 +155,7 @@ describe('ocrDocumentService', () => {
   it('buildOcrPreviewSummary nutzt dieselbe Upload-Klassifizierung', () => {
     const preview = buildOcrPreviewSummary('scan.jpg', CONTRACT_PDF_TEXT);
     expect(preview.previewLines.length).toBeGreaterThan(0);
-    expect(preview.classifiedKind).toBeTruthy();
+    expect(preview.documentTypeLabelKey).toBeTruthy();
   });
 
   it('keine zweite Pipeline – processUpload bleibt Einstieg', async () => {

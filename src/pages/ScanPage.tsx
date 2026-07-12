@@ -1,5 +1,6 @@
 import { useRef, useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { DocumentUploadErrorPanel } from '../components/documents/DocumentUploadErrorPanel';
 import { OcrPreviewPanel } from '../components/scan/OcrPreviewPanel';
 import { Button } from '../components/ui/Button';
 import { Card, CardMeta, CardTitle, PageHeader } from '../components/ui/Card';
@@ -11,8 +12,7 @@ import {
 import { intakeDocumentFile } from '../services/documentIntakeService';
 import {
   isBlockingExtractionError,
-  resolveExtractionErrorKey,
-  resolveIntakeErrorKey,
+  type DocumentUploadErrorCode,
 } from '../services/documentUploadErrorService';
 import { isHeicUploadFile } from '../services/documentUploadValidation';
 import {
@@ -39,7 +39,9 @@ export function ScanPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const [selectedKind, setSelectedKind] = useState<UploadDocumentKind | null>(null);
+  const [showKindPicker, setShowKindPicker] = useState(false);
   const [pendingScan, setPendingScan] = useState<PendingScan | null>(null);
+  const [uploadError, setUploadError] = useState<DocumentUploadErrorCode | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const inputMode = searchParams.get('input');
 
@@ -56,33 +58,36 @@ export function ScanPage() {
     navigate(`/ablage/${itemId}`);
   };
 
-  const showExtractionFailure = (extraction: DocumentTextExtractionResult): boolean => {
-    if (!isBlockingExtractionError(extraction.errorCode)) {
-      return false;
+  const openFilePicker = (camera = false) => {
+    setUploadError(null);
+    if (camera) {
+      cameraInputRef.current?.click();
+    } else {
+      fileInputRef.current?.click();
     }
-    const key = resolveExtractionErrorKey(extraction.errorCode);
-    showToast(key ? translate(key) : translate('scan.ocr.failed'));
-    return true;
   };
 
   const processFile = async (file: File) => {
     if (isHeicUploadFile(file)) {
-      showToast(translate('document.upload.error.unsupportedPhotoFormat'));
+      setUploadError('heic_unsupported');
       return;
     }
 
+    setUploadError(null);
     setIsProcessing(true);
     try {
       const extraction = await extractDocumentText(file);
+
+      if (isBlockingExtractionError(extraction.errorCode)) {
+        setUploadError(extraction.errorCode ?? 'ocr_failed');
+        return;
+      }
+
       const preview = buildOcrPreviewSummary(
         file.name,
         extraction.recognizedText,
         selectedKind ?? undefined,
       );
-
-      if (showExtractionFailure(extraction)) {
-        return;
-      }
 
       setPendingScan({ file, extraction, preview });
 
@@ -90,7 +95,7 @@ export function ScanPage() {
         showToast(extraction.qualityHint);
       }
     } catch {
-      showToast(translate('scan.ocr.failed'));
+      setUploadError('ocr_failed');
     } finally {
       setIsProcessing(false);
     }
@@ -100,7 +105,7 @@ export function ScanPage() {
     if (!pendingScan) return;
 
     if (isHeicUploadFile(pendingScan.file)) {
-      showToast(translate('document.upload.error.unsupportedPhotoFormat'));
+      setUploadError('heic_unsupported');
       setPendingScan(null);
       return;
     }
@@ -116,7 +121,7 @@ export function ScanPage() {
     setPendingScan(null);
 
     if (!result.success) {
-      showToast(translate(resolveIntakeErrorKey(result.error)));
+      setUploadError(result.error);
       return;
     }
 
@@ -133,14 +138,6 @@ export function ScanPage() {
     handleUploadComplete(result.inboxItem.id);
   };
 
-  const handleCapture = () => {
-    cameraInputRef.current?.click();
-  };
-
-  const handleFileSelect = () => {
-    fileInputRef.current?.click();
-  };
-
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
@@ -148,10 +145,61 @@ export function ScanPage() {
     await processFile(file);
   };
 
+  if (uploadError) {
+    return (
+      <div className="page scan-page" data-testid="scan-page">
+        <PageHeader title={translate('scan.title')} subtitle={translate('scan.subtitle')} />
+        <DocumentUploadErrorPanel
+          errorCode={uploadError}
+          translate={translate}
+          onRetry={() => {
+            setUploadError(null);
+            openFilePicker(false);
+          }}
+          onNewPhoto={() => {
+            setUploadError(null);
+            openFilePicker(true);
+          }}
+          onSelectFile={() => {
+            setUploadError(null);
+            openFilePicker(false);
+          }}
+        />
+      </div>
+    );
+  }
+
   if (pendingScan) {
     return (
       <div className="page scan-page" data-testid="scan-page">
         <PageHeader title={translate('scan.title')} subtitle={translate('scan.ocr.previewSubtitle')} />
+        {showKindPicker ? (
+          <Card className="upload-kind-picker-card">
+            <CardTitle>{translate('docAssistant.changeType')}</CardTitle>
+            <div className="chip-group">
+              <button
+                type="button"
+                className={`chip ${selectedKind === null ? 'chip--active' : ''}`}
+                onClick={() => setSelectedKind(null)}
+              >
+                {translate('scan.typeAuto')}
+              </button>
+              {UPLOAD_DOCUMENT_KINDS.map((kind) => (
+                <button
+                  key={kind}
+                  type="button"
+                  className={`chip ${selectedKind === kind ? 'chip--active' : ''}`}
+                  onClick={() => setSelectedKind(kind)}
+                >
+                  {UPLOAD_KIND_LABELS[kind]}
+                </button>
+              ))}
+            </div>
+            <Button variant="outline" fullWidth onClick={() => setShowKindPicker(false)}>
+              {translate('common.back')}
+            </Button>
+          </Card>
+        ) : null}
         <OcrPreviewPanel
           fileName={pendingScan.file.name}
           extraction={pendingScan.extraction}
@@ -166,6 +214,8 @@ export function ScanPage() {
           cancelLabel={translate('common.cancel')}
           onContinue={confirmPendingScan}
           onCancel={() => setPendingScan(null)}
+          onChangeType={() => setShowKindPicker(true)}
+          changeTypeLabel={translate('docAssistant.changeType')}
         />
       </div>
     );
@@ -180,7 +230,7 @@ export function ScanPage() {
 
       <Card className="upload-card upload-card--capture">
         <CardTitle>{translate('scan.captureTitle')}</CardTitle>
-        <CardMeta>{translate('scan.captureHint')}</CardMeta>
+        <CardMeta>{translate('docAssistant.autoDetect')}</CardMeta>
 
         <input
           ref={cameraInputRef}
@@ -202,39 +252,16 @@ export function ScanPage() {
           <Button
             fullWidth
             data-testid="scan-capture-button"
-            onClick={handleCapture}
+            onClick={() => openFilePicker(true)}
             disabled={isProcessing}
             loading={isProcessing}
           >
             {isProcessing ? translate('scan.ocr.processing') : translate('heute.scanButton')}
           </Button>
-          <Button variant="outline" fullWidth onClick={handleFileSelect} disabled={isProcessing}>
+          <Button variant="outline" fullWidth onClick={() => openFilePicker(false)} disabled={isProcessing}>
             {translate('scan.uploadFile')}
           </Button>
         </div>
-
-        <fieldset className="form-group upload-kind-picker">
-          <legend>{translate('scan.selectType')}</legend>
-          <div className="chip-group">
-            <button
-              type="button"
-              className={`chip ${selectedKind === null ? 'chip--active' : ''}`}
-              onClick={() => setSelectedKind(null)}
-            >
-              {translate('scan.typeAuto')}
-            </button>
-            {UPLOAD_DOCUMENT_KINDS.map((kind) => (
-              <button
-                key={kind}
-                type="button"
-                className={`chip ${selectedKind === kind ? 'chip--active' : ''}`}
-                onClick={() => setSelectedKind(kind)}
-              >
-                {UPLOAD_KIND_LABELS[kind]}
-              </button>
-            ))}
-          </div>
-        </fieldset>
       </Card>
     </div>
   );

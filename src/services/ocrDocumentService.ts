@@ -14,6 +14,7 @@ import {
   buildDocumentAiActions,
   buildDocumentUnderstandingSummary,
 } from './documentIntakeUnderstandingService';
+import { getDocumentDisplayLabelKey } from './documentDisplayLabelService';
 import type { UploadDocumentKind } from '../types/models';
 
 export type DocumentTextSourceType = 'pdf' | 'image';
@@ -44,10 +45,9 @@ export interface DocumentTextExtractionResult {
 }
 
 export interface OcrPreviewSummary {
-  documentTypeLabel: string;
+  documentTypeLabelKey: import('../i18n').TranslationKey;
   sender?: string;
   previewLines: string[];
-  classifiedKind?: string;
   understanding?: DocumentUnderstandingSummary;
   aiActions?: DocumentAiAction[];
 }
@@ -377,12 +377,12 @@ export function buildOcrPreviewSummary(
   const understanding = buildDocumentUnderstandingSummary(item, { recognizedText });
   const aiActions = buildDocumentAiActions(item.classifiedKind ?? 'sonstiges', understanding);
   const previewLines = buildDisplayPreviewLines(recognizedText, PARTIAL_TEXT_HINT);
+  const kind = item.classifiedKind ?? 'sonstiges';
 
   return {
-    documentTypeLabel: item.documentType,
+    documentTypeLabelKey: getDocumentDisplayLabelKey(kind, item.documentType),
     sender: understanding.sender ?? (item.sender?.trim() || undefined),
     previewLines,
-    classifiedKind: item.classifiedKind,
     understanding,
     aiActions,
   };

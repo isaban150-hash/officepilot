@@ -1,5 +1,6 @@
 import { Card, CardMeta, CardTitle } from '../ui/Card';
-import type { DocumentAiAction, DocumentUnderstandingSummary } from '../../types/models';
+import { getDocumentDisplayLabelKey } from '../../services/documentDisplayLabelService';
+import type { ClassifiedDocumentKind, DocumentAiAction, DocumentUnderstandingSummary } from '../../types/models';
 import type { TranslationKey } from '../../i18n';
 
 interface DocumentIntakeUnderstandingPanelProps {
@@ -25,7 +26,7 @@ export function DocumentIntakeUnderstandingPanel({
   translate,
   titleKey = 'document.intakeUnderstanding.title',
 }: DocumentIntakeUnderstandingPanelProps) {
-  const kindKey = `classifiedKind.${summary.documentType}` as TranslationKey;
+  const kindKey = getDocumentDisplayLabelKey(summary.documentType as ClassifiedDocumentKind);
 
   return (
     <Card className="doc-understanding-panel" highlight data-testid="document-intake-understanding">

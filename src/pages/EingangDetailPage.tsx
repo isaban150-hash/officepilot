@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { DocumentAssistantPanel } from '../components/documents/DocumentAssistantPanel';
 import { CompanyRelevancePanel } from '../components/inbox/CompanyRelevancePanel';
 import { ContractAnalysisPanel } from '../components/inbox/ContractAnalysisPanel';
 import { DocumentActionSuggestionsPanel } from '../components/inbox/DocumentActionSuggestionsPanel';
@@ -703,6 +704,21 @@ export function EingangDetailPage() {
       <button type="button" className="back-link" onClick={goBack}>
         ← {translate('common.back')}
       </button>
+
+      <DocumentAssistantPanel
+        item={item}
+        workflow={workflow}
+        translate={translate}
+        showChangeType
+        onChangeType={() => {
+          setMoreOptionsExpanded(true);
+          setExpandedSections((current) => ({ ...current, technical: true }));
+        }}
+        onAskAi={async (question) => {
+          const answer = await askDocumentAi({ source: { type: 'inbox', item }, question });
+          return { text: answer.text, uncertain: answer.source !== 'ai' };
+        }}
+      />
 
       <DocumentReviewExperience
         item={item}
