@@ -43,7 +43,7 @@ describe('BETA-TEST-01 polish', () => {
   });
 
   describe('Empty states', () => {
-    it('zeigt Ablage-Empty-State mit Scan-Aktion', () => {
+    it('zeigt Ablage-Empty-State mit Aufnahmewege', () => {
       const html = renderToStaticMarkup(
         <MemoryRouter>
           <TestProviders initialSetup={completeSetup}>
@@ -54,7 +54,8 @@ describe('BETA-TEST-01 polish', () => {
 
       expect(html).toContain('data-testid="ablage-empty-state"');
       expect(html).toContain('Alles erledigt');
-      expect(html).toContain('Dokument scannen');
+      expect(html).toContain('data-testid="documents-capture-panel"');
+      expect(html).toContain('Foto');
     });
 
     it('zeigt Dokumente-Empty-State mit Hinzufügen-Aktion', () => {

@@ -7,8 +7,8 @@ import { DEFAULT_SETUP } from '../../data/mockData';
 import { BottomNav } from './BottomNav';
 import { AppShell } from './AppShell';
 
-describe('Navigation layout UX-03', () => {
-  it('Mobile-Navigation enthält die neuen Labels', () => {
+describe('Navigation layout UX-HOME-01 ABSCHLUSSFIX', () => {
+  it('Mobile-Navigation hat maximal 5 Hauptbereiche', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
         <AppProvider initialSetup={DEFAULT_SETUP}>
@@ -17,13 +17,16 @@ describe('Navigation layout UX-03', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Heute');
+    expect(html).toContain('Schreibtisch');
+    expect(html).toContain('Dokumente');
     expect(html).toContain('Aufträge');
-    expect(html).toContain('Scan');
-    expect(html).toContain('Ablage');
+    expect(html).toContain('OfficePilot');
     expect(html).toContain('Mehr');
-    expect(html).not.toContain('Smart Inbox');
-    expect(html).not.toContain('Eingang');
+    expect(html).not.toContain('Steuerberater');
+    expect(html).not.toContain('Kunden');
+    expect(html).not.toContain('Heute');
+    expect(html).not.toContain('Scan');
+    expect(html).not.toContain('Ablage');
   });
 
   it('Desktop-Layout nutzt Sidebar und breitere Arbeitsfläche', () => {
@@ -42,6 +45,5 @@ describe('Navigation layout UX-03', () => {
     expect(shellHtml).toContain('app-shell__body');
     expect(shellHtml).toContain('app-shell__top-right');
     expect(shellHtml).not.toContain('Demo zurücksetzen');
-    expect(shellHtml).not.toContain('app-shell__settings');
   });
 });

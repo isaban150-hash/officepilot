@@ -18,11 +18,14 @@ import { AufgabenPage } from './pages/AufgabenPage';
 import { DokumentDetailPage } from './pages/DokumentDetailPage';
 import { DokumentePage } from './pages/DokumentePage';
 import { DokumentNeuPage } from './pages/DokumentNeuPage';
+import { DocumentAddPage } from './pages/DocumentAddPage';
 import { DocumentUploadPage } from './pages/DocumentUploadPage';
 import { EingangDetailPage } from './pages/EingangDetailPage';
 import { EingangPage } from './pages/EingangPage';
 import { FirmendatenPage } from './pages/FirmendatenPage';
 import { HeutePage } from './pages/HeutePage';
+import { KundenPage } from './pages/KundenPage';
+import { SteuerberaterPage } from './pages/SteuerberaterPage';
 import { MailImportPage } from './pages/MailImportPage';
 import { MehrPage } from './pages/MehrPage';
 import { PapierarchivPage } from './pages/PapierarchivPage';
@@ -128,6 +131,8 @@ function AppRoutes() {
       <Route element={<AppShell />}>
         <Route path="/" element={<HeutePage />} />
         <Route path="/start" element={<Navigate to="/" replace />} />
+        <Route path="/kunden" element={<KundenPage />} />
+        <Route path="/steuerberater" element={<SteuerberaterPage />} />
         <Route path="/scan" element={<ScanPage />} />
         <Route path="/suche" element={<SearchPage />} />
         <Route path="/mehr" element={<MehrPage />} />
@@ -145,6 +150,7 @@ function AppRoutes() {
         <Route path="/rechnungen/offen" element={<OffeneRechnungenPage />} />
         <Route path="/dokumente" element={<DokumentePage />} />
         <Route path="/dokumente/upload" element={<DocumentUploadPage />} />
+        <Route path="/dokumente/hinzufuegen" element={<DocumentAddPage />} />
         <Route path="/dokumente/neu" element={<DokumentNeuPage />} />
         <Route path="/dokumente/:id" element={<DokumentDetailPage />} />
         <Route path="/ausgaben" element={<AusgabenPage />} />

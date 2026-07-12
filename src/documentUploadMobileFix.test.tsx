@@ -86,7 +86,7 @@ describe('DESIGN-SYSTEM-01A mobile upload fix', () => {
     }
   });
 
-  it('Bottom Navigation zeigt Scan-Label vollständig', () => {
+  it('Bottom Navigation zeigt Hauptlabels vollständig', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
         <AppProvider initialSetup={DEFAULT_SETUP}>
@@ -96,7 +96,8 @@ describe('DESIGN-SYSTEM-01A mobile upload fix', () => {
     );
 
     expect(html).toContain('bottom-nav__label');
-    expect(html).toContain('>Scan</span>');
+    expect(html).toContain('>Dokumente</span>');
+    expect(html).toContain('>OfficePilot</span>');
     expect(html).not.toMatch(/>\s*Sca\s*</);
   });
 });

@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { BrainOrchestrationCard } from '../components/assistant/BrainOrchestrationCard';
 import { Button } from '../components/ui/Button';
 import { Card, PageHeader } from '../components/ui/Card';
@@ -13,6 +13,7 @@ import type { TranslationKey } from '../i18n';
 export function AssistentPage() {
   const { translate } = useApp();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [input, setInput] = useState('');
   const [result, setResult] = useState<BrainOrchestrationResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -33,6 +34,14 @@ export function AssistentPage() {
     }
   };
 
+  useEffect(() => {
+    const q = searchParams.get('q');
+    if (q) {
+      void runQuestion(q, 'rules');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleSuggestion = (questionKey: string) => {
     void runQuestion(translate(questionKey as TranslationKey), 'rules');
   };
@@ -52,6 +61,11 @@ export function AssistentPage() {
   return (
     <div className="page assistant-page" data-testid="assistant-page">
       <PageHeader title={translate('assistant.title')} subtitle={translate('assistant.subtitle')} />
+
+      <section className="assistant-employee-hero" data-testid="assistant-employee-hero">
+        <h2 className="assistant-employee-hero__title">{translate('assistant.employeeTitle')}</h2>
+        <p className="assistant-employee-hero__hint">{translate('assistant.employeeHint')}</p>
+      </section>
 
       <Card className="assistant-input-card">
         <label className="assistant-input-label" htmlFor="assistant-question">

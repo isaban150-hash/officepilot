@@ -57,7 +57,7 @@ describe('UX-04 Beta Polish', () => {
     );
 
     expect(html).toContain('data-testid="ablage-page"');
-    expect(html).toContain('Ablage');
+    expect(html).toContain('Dokumente');
     for (const term of FORBIDDEN_UI_TERMS) {
       expect(html).not.toContain(term);
     }

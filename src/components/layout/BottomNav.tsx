@@ -1,14 +1,14 @@
 import { NavLink } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { NavIcon } from './NavIcon';
-import { MAIN_NAV_ITEMS } from './navConfig';
+import { MOBILE_BOTTOM_NAV_ITEMS } from './navConfig';
 
 export function BottomNav() {
   const { translate } = useApp();
 
   return (
     <nav className="bottom-nav" aria-label="Hauptnavigation" data-testid="bottom-nav">
-      {MAIN_NAV_ITEMS.map(({ to, key, icon, end, featured }) => (
+      {MOBILE_BOTTOM_NAV_ITEMS.map(({ to, key, icon, end, featured }) => (
         <NavLink
           key={to}
           to={to}

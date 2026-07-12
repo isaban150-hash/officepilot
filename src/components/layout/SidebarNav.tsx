@@ -1,14 +1,14 @@
 import { NavLink } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { NavIcon } from './NavIcon';
-import { MAIN_NAV_ITEMS } from './navConfig';
+import { DESKTOP_NAV_ITEMS } from './navConfig';
 
 export function SidebarNav() {
   const { translate } = useApp();
 
   return (
     <nav className="sidebar-nav" aria-label="Hauptnavigation" data-testid="sidebar-nav">
-      {MAIN_NAV_ITEMS.map(({ to, key, icon, end }) => (
+      {DESKTOP_NAV_ITEMS.map(({ to, key, icon, end }) => (
         <NavLink
           key={to}
           to={to}

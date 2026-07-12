@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useRef, useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { OcrPreviewPanel } from '../components/scan/OcrPreviewPanel';
 import { Button } from '../components/ui/Button';
 import { Card, CardMeta, CardTitle, PageHeader } from '../components/ui/Card';
@@ -35,11 +35,21 @@ interface PendingScan {
 export function ScanPage() {
   const { translate, showToast } = useApp();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const [selectedKind, setSelectedKind] = useState<UploadDocumentKind | null>(null);
   const [pendingScan, setPendingScan] = useState<PendingScan | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const inputMode = searchParams.get('input');
+
+  useEffect(() => {
+    if (inputMode === 'camera') {
+      cameraInputRef.current?.click();
+    } else if (inputMode === 'gallery') {
+      fileInputRef.current?.click();
+    }
+  }, [inputMode]);
 
   const handleUploadComplete = (itemId: string) => {
     showToast(translate('scanResult.toastRecognized'));

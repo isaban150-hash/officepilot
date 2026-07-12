@@ -1,10 +1,10 @@
 import { useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { DocumentsCapturePanel } from '../components/documents/DocumentsCapturePanel';
 import { PendingAttentionCard } from '../components/dashboard/PendingAttentionCard';
 import { InboxCard } from '../components/inbox/InboxCard';
-import { Button } from '../components/ui/Button';
 import { EmptyStateBlock } from '../components/ui/EmptyStateBlock';
-import { Card, CardMeta, CardTitle, PageHeader } from '../components/ui/Card';
+import { PageHeader } from '../components/ui/Card';
 import { useApp } from '../context/AppContext';
 import {
   filterActiveItems,
@@ -36,15 +36,9 @@ export function EingangPage() {
         subtitle={translate('ablage.subtitle')}
       />
 
-      <PendingAttentionCard summary={pendingSummary} />
+      <DocumentsCapturePanel />
 
-      <Card className="ablage-scan-cta">
-        <CardTitle>{translate('ablage.captureTitle')}</CardTitle>
-        <CardMeta>{translate('ablage.captureHint')}</CardMeta>
-        <Button fullWidth onClick={() => navigate('/scan')}>
-          {translate('heute.scanButton')}
-        </Button>
-      </Card>
+      <PendingAttentionCard summary={pendingSummary} />
 
       <div className="ablage-summary">
         <span className="ablage-summary__stat">
@@ -58,17 +52,12 @@ export function EingangPage() {
 
       <p className="ablage-intro">{translate('ablage.intro')}</p>
 
-      <div className="card-list">
+      <div className="card-list" id="eingang-list" data-testid="eingang-list">
         {items.length === 0 ? (
           <EmptyStateBlock
             title={translate('ablage.empty.title')}
             description={translate('ablage.empty.desc')}
             testId="ablage-empty-state"
-            actions={
-              <Button fullWidth onClick={() => navigate('/scan')}>
-                {translate('ablage.empty.action')}
-              </Button>
-            }
           />
         ) : (
           items.map((item) => (

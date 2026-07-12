@@ -7,11 +7,9 @@ import { MOCK_INBOX_ITEMS } from '../data/inboxMockData';
 import { HeutePage } from './HeutePage';
 import { hydrateInboxStore } from '../services/inboxService';
 import { hydrateVorgangStore } from '../services/vorgangService';
-import { hydrateDocumentStore, importInboxDocument } from '../services/documentService';
+import { hydrateDocumentStore } from '../services/documentService';
 import { hydrateTaskStore } from '../services/taskStore';
-import { resetMemory } from '../services/officePilotMemoryService';
-import { createTestVorgang, createAuftragInboxItem } from '../test/fixtures';
-import * as heuteDashboardService from '../services/heuteDashboardService';
+import { resetHomeHintDismissals } from '../services/homeHintDismissalService';
 import { SidebarNav } from '../components/layout/SidebarNav';
 
 const FORBIDDEN_TERMS = [
@@ -26,23 +24,25 @@ const FORBIDDEN_TERMS = [
   'Lifecycle',
   'Entity',
   'Sync',
+  'Dashboard',
+  'KPI',
 ];
 
-describe('HeutePage', () => {
+describe('HeutePage MOBILE-FIRST-01', () => {
   beforeEach(() => {
+    resetHomeHintDismissals();
     hydrateInboxStore(MOCK_INBOX_ITEMS.map((item) => ({ ...item })));
-    hydrateVorgangStore([
-      createTestVorgang({ id: 'v-heute-1', title: 'Testauftrag', status: 'in_bearbeitung' }),
-    ]);
+    hydrateVorgangStore([]);
     hydrateDocumentStore([]);
     hydrateTaskStore([]);
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
+    resetHomeHintDismissals();
   });
 
-  it('rendert Premium-Hero mit Dashboard und 6 Schnellaktionen', () => {
+  it('rendert Mobile-First Startseite mit 5 Hauptkarten', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
         <AppProvider initialSetup={DEFAULT_SETUP}>
@@ -52,26 +52,18 @@ describe('HeutePage', () => {
     );
 
     expect(html).toContain('data-testid="heute-page"');
-    expect(html).toContain('data-testid="heute-hero"');
-    expect(html).toContain('Was soll OfficePilot heute erledigen?');
-    expect(html).toContain('data-testid="heute-scan-button"');
-    expect(html).toContain('Dokument scannen');
-    expect(html).toContain('OfficePilot fragen');
-    expect(html).toContain('data-testid="heute-dashboard"');
-    expect(html).toContain('Offene Dokumente');
-    expect(html).toContain('Offene Rechnungen');
-    expect(html).toContain('Fristen diese Woche');
-    expect(html).toContain('Aufgaben heute');
-    expect(html).toContain('data-testid="heute-quick-actions"');
-    expect(html).toContain('data-testid="heute-action-scan"');
-    expect(html).toContain('data-testid="heute-action-understand"');
-    expect(html).toContain('data-testid="heute-action-invoice"');
-    expect(html).toContain('data-testid="heute-action-expense"');
-    expect(html).toContain('data-testid="heute-action-message"');
-    expect(html).toContain('data-testid="heute-action-search"');
+    expect(html).toContain('data-testid="mobile-first-home"');
+    expect(html).toContain('data-testid="home-card-add-document"');
+    expect(html).toContain('data-testid="home-card-orders"');
+    expect(html).toContain('data-testid="home-card-officepilot"');
+    expect(html).toContain('data-testid="home-card-steuerberater"');
+    expect(html).toContain('data-testid="home-card-more"');
+    expect(html).toContain('Dokument hinzufügen');
+    expect(html).toContain('data-testid="desk-greeting-header"');
+    expect(html).toContain('Heute kümmere ich mich um Folgendes:');
   });
 
-  it('zeigt keine dominante Gerade-erfasst-Liste mehr', () => {
+  it('zeigt keine KPI-Wand oder altes Dashboard', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
         <AppProvider initialSetup={DEFAULT_SETUP}>
@@ -80,30 +72,13 @@ describe('HeutePage', () => {
       </MemoryRouter>,
     );
 
-    expect(html).not.toContain('data-testid="heute-today-list"');
-    expect(html).not.toContain('Gerade erfasst');
+    expect(html).not.toContain('data-testid="heute-dashboard"');
+    expect(html).not.toContain('data-testid="home-desk-tiles"');
+    expect(html).not.toContain('data-testid="heute-hero"');
+    expect(html).not.toContain('Offene Rechnungen');
   });
 
-  it('nutzt Dashboard-Daten aus bestehenden Services', () => {
-    const statsSpy = vi.spyOn(heuteDashboardService, 'getHeuteDashboardStats');
-
-    renderToStaticMarkup(
-      <MemoryRouter>
-        <AppProvider initialSetup={DEFAULT_SETUP}>
-          <HeutePage />
-        </AppProvider>
-      </MemoryRouter>,
-    );
-
-    expect(statsSpy).toHaveBeenCalled();
-  });
-
-  it('zeigt Welcome-State im First-Run ohne offene Punkte', () => {
-    hydrateInboxStore([]);
-    hydrateVorgangStore([]);
-    hydrateDocumentStore([]);
-    hydrateTaskStore([]);
-
+  it('Hauptfunktionen mit maximal zwei Klicks erreichbar', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
         <AppProvider initialSetup={DEFAULT_SETUP}>
@@ -112,40 +87,11 @@ describe('HeutePage', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('data-testid="heute-welcome"');
-    expect(html).toContain('Willkommen bei OfficePilot');
-    expect(html).toContain('Erstes Dokument scannen');
-    expect(html).not.toContain('data-testid="heute-open-items"');
-  });
-
-  it('zeigt kompakte offene Punkte nur bei echten Daten', () => {
-    resetMemory();
-    hydrateDocumentStore([]);
-    importInboxDocument(
-      createAuftragInboxItem({
-        id: 'inbox-heute-ui',
-        title: 'Freistellungsbescheinigung §48b',
-        documentType: 'behoerde',
-        classifiedKind: 'freistellungsbescheinigung',
-        sender: 'Finanzamt München',
-        deadline: '2026-12-31',
-      }),
-      'Test GmbH',
-    );
-
-    const html = renderToStaticMarkup(
-      <MemoryRouter>
-        <AppProvider initialSetup={DEFAULT_SETUP}>
-          <HeutePage />
-        </AppProvider>
-      </MemoryRouter>,
-    );
-
-    expect(html).toContain('data-testid="heute-open-items"');
-    expect(html).not.toContain('data-testid="heute-lifecycle-list"');
-    expect(html).toContain('Original noch abheften');
-    expect(html).toContain('Alle anzeigen');
-    expect(html).not.toContain('data-testid="heute-welcome"');
+    expect(html).toContain('href="/dokumente/hinzufuegen"');
+    expect(html).toContain('href="/vorgaenge"');
+    expect(html).toContain('href="/steuerberater"');
+    expect(html).toContain('href="/mehr"');
+    expect(html).toContain('data-testid="home-assistant-input"');
   });
 
   it('zeigt keine technischen Entwicklerbegriffe', () => {
@@ -161,25 +107,10 @@ describe('HeutePage', () => {
       expect(html).not.toContain(term);
     }
   });
-
-  it('enthält Scan- und Suche-Routen in Schnellaktionen', () => {
-    const html = renderToStaticMarkup(
-      <MemoryRouter>
-        <AppProvider initialSetup={DEFAULT_SETUP}>
-          <HeutePage />
-        </AppProvider>
-      </MemoryRouter>,
-    );
-
-    expect(html).toContain('data-testid="heute-action-scan"');
-    expect(html).toContain('data-testid="heute-action-search"');
-    expect(html).toContain('/suche');
-  });
 });
 
-
 describe('SidebarNav active state', () => {
-  it('markiert aktiven Link auf Heute', () => {
+  it('markiert aktiven Link auf Schreibtisch', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter initialEntries={['/']}>
         <AppProvider initialSetup={DEFAULT_SETUP}>
