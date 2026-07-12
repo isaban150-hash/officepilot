@@ -3,6 +3,7 @@ import type { BrainAnswer } from './brain';
 import type { ProactiveHint } from './companySession';
 import type { CommunicationContextRef } from './communication';
 import type { WorkflowAnalysisSummary } from './workflowIntelligence';
+import type { FinanceAnalysisSummary } from './financeIntelligence';
 
 /** Erweiterbare Fähigkeiten – geplante Module sind vorbereitet, aber nicht aktiv. */
 export type BrainCapabilityId =
@@ -69,5 +70,7 @@ export interface BrainOrchestrationResult {
   handwerkKnowledgeUsed?: string[];
   workflowUsed?: string[];
   workflowSummary?: WorkflowAnalysisSummary;
+  financeUsed?: string[];
+  financeSummary?: FinanceAnalysisSummary;
   generatedAt: string;
 }

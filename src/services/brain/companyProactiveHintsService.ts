@@ -7,6 +7,7 @@ import { getAllInvoiceOverview } from '../invoiceOverviewService';
 import { getAllVorgaenge, getVorgangById } from '../vorgangService';
 import { buildHandwerkAdviceForSession } from './handwerkContextAdvisor';
 import { buildWorkflowProactiveHints } from './workflowIntelligenceService';
+import { buildFinanceProactiveHints } from './financeIntelligenceService';
 
 function normalize(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, ' ');
@@ -106,6 +107,10 @@ export function buildProactiveHints(session: CompanySessionContext): ProactiveHi
 
   for (const workflowHint of buildWorkflowProactiveHints(session)) {
     hints.push(workflowHint);
+  }
+
+  for (const financeHint of buildFinanceProactiveHints(session)) {
+    hints.push(financeHint);
   }
 
   return hints;

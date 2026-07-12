@@ -94,7 +94,7 @@ const ACTIVE_CAPABILITIES: BrainCapabilityDefinition[] = [
     status: 'active',
     labelKey: 'brain.capability.invoices',
     detectPatterns: [/rechnung|zahlung|offen|überfällig|skonto/i],
-    serviceModules: ['invoiceService', 'invoiceOverviewService'],
+    serviceModules: ['invoiceService', 'invoiceOverviewService', 'financeIntelligenceService', 'financeKnowledgeResolver'],
   },
   {
     id: 'tasks',

@@ -30,6 +30,7 @@ import { assessBrainIntent } from './brainIntentRegistry';
 import { tryResolveCompanyContextQuestion } from './companyContextResolver';
 import { tryResolveHandwerkKnowledgeQuestion } from './handwerkKnowledgeResolver';
 import { tryResolveWorkflowQuestion } from './workflowKnowledgeResolver';
+import { tryResolveFinanceQuestion } from './financeKnowledgeResolver';
 import { buildProactiveHints } from './companyProactiveHintsService';
 import {
   getCompanySession,
@@ -139,6 +140,8 @@ function buildResult(params: {
   handwerkKnowledgeUsed?: string[];
   workflowUsed?: string[];
   workflowSummary?: import('../../types/workflowIntelligence').WorkflowAnalysisSummary;
+  financeUsed?: string[];
+  financeSummary?: import('../../types/financeIntelligence').FinanceAnalysisSummary;
 }): BrainOrchestrationResult {
   const confidence = confidenceForSource(params.source, params.assistantAnswer);
   const session = getCompanySession();
@@ -157,6 +160,8 @@ function buildResult(params: {
     handwerkKnowledgeUsed: params.handwerkKnowledgeUsed,
     workflowUsed: params.workflowUsed,
     workflowSummary: params.workflowSummary,
+    financeUsed: params.financeUsed,
+    financeSummary: params.financeSummary,
     generatedAt: nowIso(),
   };
 }
@@ -270,6 +275,20 @@ export async function processOfficePilotQuestion(
       clarificationQuestion: workflowResolution.clarificationQuestion,
       workflowUsed: workflowResolution.workflowUsed,
       workflowSummary: workflowResolution.workflowSummary,
+    });
+  }
+
+  const financeResolution = tryResolveFinanceQuestion(trimmed, session);
+  if (financeResolution) {
+    return buildResult({
+      question: trimmed,
+      source: financeResolution.source,
+      assistantAnswer: financeResolution.assistantAnswer,
+      suggestedNextSteps: financeResolution.suggestedNextSteps,
+      uncertaintyNote: financeResolution.uncertaintyNote,
+      clarificationQuestion: financeResolution.clarificationQuestion,
+      financeUsed: financeResolution.financeUsed,
+      financeSummary: financeResolution.financeSummary,
     });
   }
 
