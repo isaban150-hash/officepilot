@@ -21,6 +21,8 @@ const EXTRACTION_ERROR_KEYS: Partial<Record<DocumentTextErrorCode, TranslationKe
   heic_unsupported: 'document.upload.error.unsupportedPhotoFormat',
   unsupported_format: 'document.upload.error.unsupportedPhotoFormat',
   ocr_failed: 'scan.ocr.failed',
+  password_required: 'document.upload.error.passwordRequired',
+  pdf_corrupt: 'document.upload.error.pdfCorrupt',
 };
 
 export function resolveIntakeErrorKey(
@@ -40,6 +42,8 @@ export function isBlockingExtractionError(errorCode?: DocumentTextErrorCode): bo
   return (
     errorCode === 'heic_unsupported' ||
     errorCode === 'unsupported_format' ||
-    errorCode === 'ocr_failed'
+    errorCode === 'ocr_failed' ||
+    errorCode === 'password_required' ||
+    errorCode === 'pdf_corrupt'
   );
 }

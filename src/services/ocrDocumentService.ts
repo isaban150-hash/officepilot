@@ -1,7 +1,9 @@
 import { createMockInboxItemFromUpload } from './inboxUploadFactory';
 import { isHeicUploadFile } from './documentUploadValidation';
 import { extractTextFromPdfBytes } from './uploadTextExtractionService';
-import { extractPdfTextViaOcr } from './pdfOcrFallbackService';
+import { extractPdfTextViaOcr, shouldRunPdfOcr } from './pdfOcrFallbackService';
+import { getPdfPageCount } from './pdfDocumentService';
+import { recognizeImageOrCanvas } from './tesseractOcrService';
 import {
   assessTextQuality,
   buildDisplayPreviewLines,
@@ -22,15 +24,20 @@ export type DocumentTextErrorCode =
   | 'unsupported_format'
   | 'no_text'
   | 'ocr_failed'
-  | 'heic_unsupported';
+  | 'heic_unsupported'
+  | 'password_required'
+  | 'pdf_corrupt';
 
 export interface DocumentTextExtractionResult {
   recognizedText: string;
   displayText: string;
   confidence: OcrConfidenceLevel;
   pageCount?: number;
+  pagesProcessed?: number;
+  pageTexts?: Array<{ pageNumber: number; text: string }>;
   sourceType: DocumentTextSourceType;
   extractionMethod?: DocumentTextExtractionMethod;
+  ocrAttempted?: boolean;
   errorCode?: DocumentTextErrorCode;
   message?: string;
   qualityHint?: string;
@@ -192,7 +199,7 @@ function pickBestPdfVariant(
 async function extractFromPdf(file: File): Promise<DocumentTextExtractionResult> {
   const buffer = await file.arrayBuffer();
   const bytes = new Uint8Array(buffer);
-  const pageCount = estimatePdfPageCount(bytes);
+  const pageCount = await resolvePdfPageCount(bytes);
   const directRaw = extractTextFromPdfBytes(bytes);
   const directQuality = assessTextQuality(directRaw);
 
@@ -200,30 +207,75 @@ async function extractFromPdf(file: File): Promise<DocumentTextExtractionResult>
   let extractionMethod: DocumentTextExtractionMethod = 'pdf_direct';
   let ocrScore: number | undefined;
   let quality = directQuality;
+  let pagesProcessed: number | undefined;
+  let pageTexts: Array<{ pageNumber: number; text: string }> | undefined;
+  let ocrAttempted = false;
+  let pdfErrorCode: DocumentTextErrorCode | undefined;
+  let pdfErrorMessage: string | undefined;
 
-  const ocr = await extractPdfTextViaOcr(file, pageCount);
-  const picked = pickBestPdfVariant(directRaw, ocr.text, ocr.confidence);
+  if (shouldRunPdfOcr(directQuality)) {
+    ocrAttempted = true;
+    const ocr = await extractPdfTextViaOcr(file, { pageCount, directTextQuality: directQuality });
+    pagesProcessed = ocr.pagesProcessed;
+    pageTexts = ocr.pageTexts;
 
-  if (!directQuality.readable || picked.method === 'pdf_ocr') {
-    recognizedText = picked.text;
-    extractionMethod = picked.method;
-    quality = picked.quality;
-    ocrScore = picked.ocrScore;
+    if (ocr.errorCode === 'password_required') {
+      pdfErrorCode = 'password_required';
+      pdfErrorMessage = ocr.message;
+    } else if (ocr.errorCode === 'pdf_corrupt' || ocr.errorCode === 'render_failed') {
+      pdfErrorCode = 'pdf_corrupt';
+      pdfErrorMessage = ocr.message;
+    }
+
+    const picked = pickBestPdfVariant(directRaw, ocr.text, ocr.confidence);
+    if (!directQuality.readable || picked.method === 'pdf_ocr') {
+      recognizedText = picked.text;
+      extractionMethod = picked.method;
+      quality = picked.quality;
+      ocrScore = picked.ocrScore;
+    }
   }
 
   const confidence = deriveConfidence(recognizedText.length, ocrScore, quality.score);
   const partialRecognition = Boolean(recognizedText) && !quality.readable;
+
+  if (!recognizedText.trim() && pdfErrorCode) {
+    return finalizeResult({
+      recognizedText: '',
+      displayText: '',
+      confidence: 'none',
+      pageCount,
+      pagesProcessed,
+      pageTexts,
+      sourceType: 'pdf',
+      extractionMethod,
+      ocrAttempted,
+      errorCode: pdfErrorCode,
+      message: pdfErrorMessage,
+    });
+  }
 
   return finalizeResult({
     recognizedText,
     displayText: recognizedText,
     confidence,
     pageCount,
+    pagesProcessed,
+    pageTexts,
     sourceType: 'pdf',
     extractionMethod,
+    ocrAttempted,
     partialRecognition,
     qualityHint: partialRecognition ? PARTIAL_TEXT_HINT : undefined,
   });
+}
+
+async function resolvePdfPageCount(bytes: Uint8Array): Promise<number | undefined> {
+  try {
+    return await getPdfPageCount(bytes);
+  } catch {
+    return estimatePdfPageCount(bytes);
+  }
 }
 
 async function extractFromImage(file: File): Promise<DocumentTextExtractionResult> {
@@ -236,14 +288,9 @@ async function extractFromImage(file: File): Promise<DocumentTextExtractionResul
       text = result.text;
       score = result.confidence;
     } else {
-      const { createWorker } = await import('tesseract.js');
-      const worker = await createWorker('deu', 1, {
-        logger: () => {},
-      });
-      const { data } = await worker.recognize(file);
-      await worker.terminate();
-      text = data.text ?? '';
-      score = data.confidence ?? 0;
+      const result = await recognizeImageOrCanvas(file);
+      text = result.text;
+      score = result.confidence;
     }
 
     const quality = assessTextQuality(text);

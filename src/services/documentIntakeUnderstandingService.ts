@@ -6,7 +6,9 @@ import type {
   DocumentUnderstandingSummary,
   InboxItem,
 } from '../types/models';
-import { extractFieldsFromText } from './documentFieldExtractionService';
+import { extractFieldsWithConfidence, listUncertainFieldKeys, toConfidentPlainFields } from './documentFieldExtractionService';
+import { analyzeContractIntelligenceFromInbox } from './contractIntelligenceService';
+import { formatGermanMoney } from './documentAmountExtractionService';
 import { getInboxExtractedDocumentText } from './inboxDocumentText';
 import { assessTextQuality } from './textQualityService';
 
@@ -28,11 +30,18 @@ export function buildDocumentUnderstandingSummary(
   } = {},
 ): DocumentUnderstandingSummary {
   const text = resolveText(item, options.recognizedText);
-  const extracted = extractFieldsFromText(text);
+  const recognizedData = item.recognizedData;
+  const fieldsWithConfidence = extractFieldsWithConfidence(text);
+  const extracted = toConfidentPlainFields(fieldsWithConfidence);
+  const uncertainFields = listUncertainFieldKeys(fieldsWithConfidence);
+  const intelligence = analyzeContractIntelligenceFromInbox(item);
+  const resolvedAmount =
+    intelligence?.contractTotalNet?.status === 'confirmed' && intelligence.contractTotalNet.value !== undefined
+      ? formatGermanMoney(intelligence.contractTotalNet.value)
+      : extracted.Betrag ?? recognizedData.Betrag;
   const quality = assessTextQuality(text);
   const classification = options.classification;
   const kind = item.classifiedKind ?? classification?.classifiedKind ?? 'sonstiges';
-  const recognizedData = item.recognizedData;
 
   return {
     documentType: kind,
@@ -45,10 +54,11 @@ export function buildDocumentUnderstandingSummary(
     customer: extracted.Kunde ?? extracted.Empfänger ?? recognizedData.Kunde,
     vorgang: extracted.Vorgang ?? item.vorgangTitle ?? extracted.Projekt ?? recognizedData.Vorgang,
     invoiceNumber: extracted.Rechnungsnummer ?? recognizedData.Rechnungsnummer,
-    amount: extracted.Betrag ?? recognizedData.Betrag,
+    amount: resolvedAmount,
     deadline: extracted.Frist ?? item.deadline ?? recognizedData.Frist ?? undefined,
     nextStep: resolveNextStep(classification),
     partialRecognition: !quality.readable && quality.wordCount > 0,
+    uncertainFields: uncertainFields.length > 0 ? uncertainFields : undefined,
   };
 }
 

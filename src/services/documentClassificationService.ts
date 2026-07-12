@@ -35,6 +35,100 @@ export {
   mapKindToDocumentType,
 } from './documentClassificationCatalog';
 
+const INVOICE_KINDS = new Set<ClassifiedDocumentKind>([
+  'eingangsrechnung',
+  'rechnung',
+  'ausgangsrechnung',
+  'gutschrift',
+]);
+
+const CONTRACT_PAYMENT_TERMS = /schlussrechnung|abschlagsrechnung|teilrechnung/i;
+
+function hasStrongInvoiceSignals(haystack: string): boolean {
+  const invoiceMarkers = [
+    /rechnungsnummer/i,
+    /rechnungsdatum/i,
+    /rechnungsempfänger|rechnungsempfaenger/i,
+    /leistungsdatum/i,
+    /leistungszeitraum/i,
+    /(?:netto|umsatzsteuer|mehrwertsteuer|ust).*(?:brutto|gesamt)/i,
+    /zahlungsaufforderung/i,
+    /rechnungsaussteller/i,
+    /bankverbindung.*rechnung/i,
+  ];
+  const hits = invoiceMarkers.filter((pattern) => pattern.test(haystack)).length;
+  if (hits >= 2) return true;
+  return /rechnungsnummer/i.test(haystack) && /(?:netto|brutto|umsatzsteuer)/i.test(haystack);
+}
+
+function hasContractPrioritySignals(
+  haystack: string,
+  pageTexts?: DocumentClassificationInput['pageTexts'],
+): boolean {
+  const intro = pageTexts?.length
+    ? pageTexts
+        .slice(0, 3)
+        .map((page) => page.text)
+        .join('\n')
+        .toLowerCase()
+    : haystack.slice(0, 4000);
+
+  return /werkvertrag|bau[\s-]?subunternehmer|subunternehmervertrag|auftraggeber.*subunternehmer/i.test(intro);
+}
+
+function hasBillOfQuantitiesSignals(
+  haystack: string,
+  pageTexts?: DocumentClassificationInput['pageTexts'],
+): boolean {
+  if (/leistungsverzeichnis|\bpos\.\s+menge|einzelpreis.*gesamt/i.test(haystack)) return true;
+  return Boolean(
+    pageTexts?.some((page) =>
+      /leistungsverzeichnis|pos\.\s|einzelpreis|gesamtsumme\s+netto/i.test(page.text),
+    ),
+  );
+}
+
+function detectContractPriorityKind(
+  haystack: string,
+  pageTexts?: DocumentClassificationInput['pageTexts'],
+): DetectionResult | null {
+  if (!hasContractPrioritySignals(haystack, pageTexts)) return null;
+
+  if (/subunternehmervertrag|subunternehmer/i.test(haystack)) {
+    return {
+      kind: 'subunternehmervertrag',
+      reasonKey: hasBillOfQuantitiesSignals(haystack, pageTexts)
+        ? 'classification.detect.werkvertragMitLv'
+        : 'classification.detect.subunternehmer',
+    };
+  }
+
+  if (/nachunternehmervertrag|nachunternehmer/i.test(haystack)) {
+    return {
+      kind: 'nachunternehmervertrag',
+      reasonKey: 'classification.detect.nachunternehmer',
+    };
+  }
+
+  return {
+    kind: 'werkvertrag',
+    reasonKey: hasBillOfQuantitiesSignals(haystack, pageTexts)
+      ? 'classification.detect.werkvertragMitLv'
+      : 'classification.detect.werkvertrag',
+  };
+}
+
+function shouldSkipInvoiceRule(kind: ClassifiedDocumentKind, haystack: string): boolean {
+  if (!INVOICE_KINDS.has(kind)) return false;
+  if (hasStrongInvoiceSignals(haystack)) return false;
+  if (/eingangsrechnung|ausgangsrechnung|rechnungsnummer|materialrechnung|hotelrechnung|gutschrift/i.test(haystack)) {
+    return false;
+  }
+  if (CONTRACT_PAYMENT_TERMS.test(haystack) && hasContractPrioritySignals(haystack)) return true;
+  if (kind === 'rechnung' && /werkvertrag|leistungsverzeichnis|auftraggeber/i.test(haystack)) return true;
+  return !hasStrongInvoiceSignals(haystack);
+}
+
 const UPLOAD_KIND_MAP: Record<UploadDocumentKind, ClassifiedDocumentKind> = {
   auftrag: 'auftrag',
   zahlungserinnerung: 'zahlungserinnerung',
@@ -92,7 +186,22 @@ export function detectClassifiedKindWithReason(input: DocumentClassificationInpu
     return { kind: 'sonstiges', reasonKey: 'classification.detect.advertisement' };
   }
 
+  const contractPriority = detectContractPriorityKind(haystack, input.pageTexts);
+  if (contractPriority) {
+    return contractPriority;
+  }
+
+  if (hasStrongInvoiceSignals(haystack)) {
+    for (const rule of CLASSIFICATION_RULES) {
+      if (!INVOICE_KINDS.has(rule.kind)) continue;
+      if (rule.pattern.test(haystack)) {
+        return { kind: rule.kind, reasonKey: rule.reasonKey };
+      }
+    }
+  }
+
   for (const rule of CLASSIFICATION_RULES) {
+    if (shouldSkipInvoiceRule(rule.kind, haystack)) continue;
     if (rule.pattern.test(haystack)) {
       return { kind: rule.kind, reasonKey: rule.reasonKey };
     }
@@ -492,6 +601,16 @@ export function getSuggestedVorgangForItem(item: InboxItem): SuggestedVorgangLin
   return suggestRelatedVorgang(item.recognizedData, item.sender, item.title);
 }
 
+function parsePageTextsFromItem(item: InboxItem): DocumentClassificationInput['pageTexts'] {
+  const raw = item.recognizedData._pageTexts;
+  if (!raw) return undefined;
+  try {
+    return JSON.parse(raw) as DocumentClassificationInput['pageTexts'];
+  } catch {
+    return undefined;
+  }
+}
+
 export function getClassificationForItem(item: InboxItem): DocumentClassificationResult {
   const dokumentart = item.recognizedData.Dokumentart;
   const kindFromData = dokumentart && isKnownClassifiedKind(dokumentart) ? dokumentart : undefined;
@@ -502,6 +621,7 @@ export function getClassificationForItem(item: InboxItem): DocumentClassificatio
     senderHint: item.sender,
     recognizedText: buildRecognizedTextFromItem(item),
     kindHint: item.classifiedKind ?? kindFromData,
+    pageTexts: parsePageTextsFromItem(item),
   });
 
   return {

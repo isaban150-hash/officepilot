@@ -1,18 +1,13 @@
+import { AI_QA_SYSTEM_RULES } from '../ai/aiGuardrails';
 import type { BrainSnapshot } from '../../types/brain';
 import { BRAIN_ANSWER_DISCLAIMER } from '../../types/brain';
+import type { CompanySessionContext } from '../../types/companySession';
+import { buildSessionContextBlock } from './companySessionService';
+import { buildHandwerkGlossaryBlock } from './handwerkKnowledgeRegistry';
 
 export { BRAIN_ANSWER_DISCLAIMER };
 
-const BRAIN_SYSTEM_RULES = `Du bist OfficePilot-Assistent für ein Handwerks- und Bürounternehmen.
-
-STRENGE REGELN:
-- Nutze ausschließlich die bereitgestellten OfficePilot-Daten.
-- Erfinde keine Fakten, Beträge, Namen, Fristen oder Vorgänge.
-- Wenn die Daten keine Antwort erlauben, sage das klar und konkret.
-- Keine Rechtsberatung und keine Steuerberatung.
-- Keine Handlungsaufforderungen ohne ausdrückliche Nutzerbestätigung.
-- Formuliere sachlich, kurz und auf Deutsch.
-- Keine Markdown-Überschriften, keine Codeblöcke.`;
+const BRAIN_SYSTEM_RULES = AI_QA_SYSTEM_RULES;
 
 function formatEuro(amount: number): string {
   return `${amount.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
@@ -85,14 +80,20 @@ export function buildBrainContextBlock(snapshot: BrainSnapshot): string {
   return sections.join('\n\n');
 }
 
-export function buildBrainPrompt(question: string, snapshot: BrainSnapshot): string {
+export function buildBrainPrompt(
+  question: string,
+  snapshot: BrainSnapshot,
+  session?: CompanySessionContext,
+): string {
+  const sessionBlock = session ? `\n\n${buildSessionContextBlock(session)}` : '';
+  const handwerkBlock = `\n\n${buildHandwerkGlossaryBlock()}`;
   return `${BRAIN_SYSTEM_RULES}
 
 OFFICEPILOT-DATEN:
-${buildBrainContextBlock(snapshot)}
+${buildBrainContextBlock(snapshot)}${sessionBlock}${handwerkBlock}
 
 NUTZERFRAGE:
 ${question}
 
-Antworte in 2–6 Sätzen oder einer kurzen Aufzählung. Wenn Informationen fehlen, sage das explizit.`;
+Antworte in 2–6 Sätzen oder einer kurzen Aufzählung. Wenn Informationen fehlen, sage das explizit. Nutze den Gesprächskontext für Folgefragen, wenn vorhanden.`;
 }

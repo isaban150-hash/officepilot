@@ -56,10 +56,14 @@ export async function intakeDocumentFile(
   }
 
   let recognizedText = options.recognizedText;
+  let pageTextsJson: string | undefined;
   if (recognizedText === undefined) {
     try {
       const extraction = await extractDocumentText(file);
       recognizedText = extraction.recognizedText.trim() || undefined;
+      if (extraction.pageTexts?.length) {
+        pageTextsJson = JSON.stringify(extraction.pageTexts);
+      }
     } catch {
       recognizedText = undefined;
     }
@@ -73,6 +77,10 @@ export async function intakeDocumentFile(
 
   const inboxItem = addInboxItem({
     ...classified,
+    recognizedData: {
+      ...classified.recognizedData,
+      ...(pageTextsJson ? { _pageTexts: pageTextsJson } : {}),
+    },
     isNewUpload: true,
     importSource: options.importSource ?? 'upload',
     fileRefId: fileRef.id,

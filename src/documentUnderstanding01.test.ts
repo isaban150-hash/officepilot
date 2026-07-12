@@ -3,7 +3,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { DocumentIntakeUnderstandingPanel } from './components/inbox/DocumentIntakeUnderstandingPanel';
 import { detectClassifiedKind } from './services/documentClassificationService';
-import { extractFieldsFromText } from './services/documentFieldExtractionService';
+import { extractFieldsFromText, extractFieldsWithConfidence, toConfidentPlainFields } from './services/documentFieldExtractionService';
 import { buildUnderstandingFromItem } from './services/documentIntakeUnderstandingService';
 import { createMockInboxItemFromUpload } from './services/inboxUploadFactory';
 import { processUpload } from './services/inboxService';
@@ -218,6 +218,11 @@ describe('document field extraction and understanding', () => {
     hydrateCompanyProfileStore(testProfile);
   });
 
+  it('übernimmt kein unsicheres Datum ohne Label', () => {
+    const fields = toConfidentPlainFields(extractFieldsWithConfidence('Projektinfo ohne Datum 15.03.2026 im Fließtext'));
+    expect(fields.Datum).toBeUndefined();
+  });
+
   it('extrahiert Felder aus Materialrechnung', () => {
     const fields = extractFieldsFromText(MATERIAL_INVOICE);
     expect(fields.Rechnungsnummer).toBe('MR-2026-118');
@@ -281,14 +286,16 @@ describe('pdfOcrFallbackService', () => {
   });
 
   it('unterstützt Test-Override für mehrseitige PDF', async () => {
-    setPdfOcrExtractorForTests(async (_file, pageCount) => ({
+    setPdfOcrExtractorForTests(async (_file, options) => ({
       text: MULTIPAGE_OCR,
-      confidence: pageCount && pageCount > 1 ? 88 : 70,
+      confidence: options?.pageCount && options.pageCount > 1 ? 88 : 70,
+      pagesProcessed: options?.pageCount ?? 1,
     }));
 
     const result = await extractPdfTextViaOcr(createFile('multi.pdf', 'application/pdf'), 2);
     expect(result.text).toContain('Seite 1');
     expect(result.text).toContain('Seite 2');
     expect(result.confidence).toBe(88);
+    expect(result.pagesProcessed).toBe(2);
   });
 });

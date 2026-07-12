@@ -16,6 +16,7 @@ import { useApp } from '../context/AppContext';
 import { formatPaperFilingInstruction } from '../services/paperFolderService';
 import { deleteDocument, getDocumentById } from '../services/documentService';
 import { askDocumentAi } from '../services/document/documentAiService';
+import { recordDocumentContext } from '../services/brain/companySessionService';
 import type { CompanyDocument } from '../types/models';
 import type { TranslationKey } from '../i18n';
 
@@ -46,6 +47,12 @@ export function DokumentDetailPage() {
       setIsEditing(false);
       setConfirmDelete(false);
       setShowDetails(false);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    if (id) {
+      recordDocumentContext(id);
     }
   }, [id]);
 

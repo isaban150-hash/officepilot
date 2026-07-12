@@ -31,6 +31,13 @@ export const INVOICE_DOCUMENT_TYPES: InvoiceDocumentType[] = [
   'storno',
 ];
 
+/** Rechnungstypen für Aufträge aus Werkvertrag (ohne Gutschrift/Storno/Teilrechnung). */
+export const CONTRACT_ORDER_INVOICE_TYPES: InvoiceDocumentType[] = [
+  'rechnung',
+  'abschlag',
+  'schluss',
+];
+
 export function parseInvoiceDocumentType(value: string | null): InvoiceDocumentType {
   if (value && INVOICE_DOCUMENT_TYPES.includes(value as InvoiceDocumentType)) {
     return value as InvoiceDocumentType;

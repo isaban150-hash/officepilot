@@ -4,6 +4,10 @@ import {
 } from './documentIntakeUnderstandingService';
 import { analyzeContractFromInbox } from './contractAnalysisService';
 import {
+  analyzeContractIntelligenceFromInbox,
+  buildContractOrderProposal,
+} from './contractIntelligenceService';
+import {
   getClassificationForItem,
   getSuggestedVorgangForItem,
 } from './documentClassificationService';
@@ -246,6 +250,8 @@ export function processUploadedDocument(
       documentUnderstanding: null,
       documentAiActions: [],
       contractAnalysis: null,
+      contractIntelligence: null,
+      contractOrderProposal: null,
       suggestedVorgang: null,
       similarVorgaenge: [],
       suggestedOrderPositions: [],
@@ -270,27 +276,40 @@ export function processUploadedDocument(
       ? mapLetterExplanation(getLetterExplanation(item)!)
       : null;
   const contractAnalysis = analyzeContractFromInbox(item);
+  const contractIntelligence = analyzeContractIntelligenceFromInbox(item);
+  const contractOrderProposal = buildContractOrderProposal(item);
   const suggestedVorgang = getSuggestedVorgangForItem(item) ?? classification.suggestedVorgang ?? null;
   const materialDefault = getCachedSetup()?.materialStandard ?? 'unclear';
   const draft = buildVorgangDraftFromInbox(item, materialDefault);
   const similarVorgaenge = findSimilarVorgaenge(draft);
-  const suggestedOrderPositions = resolveSuggestedPositions(item, contractAnalysis);
+  let suggestedOrderPositions = resolveSuggestedPositions(item, contractAnalysis);
+  if (contractIntelligence?.positions.length) {
+    suggestedOrderPositions = contractIntelligence.positions.map(
+      ({ sourcePage: _s, confidence: _c, reviewStatus: _r, ...position }) => position,
+    );
+  }
   const suggestedTasks = collectSuggestedTasks(item, contractAnalysis);
   const requiredDocuments = contractAnalysis.isContract ? contractAnalysis.requiredDocuments : [];
   const warnings = buildWarnings(item, true, classification);
   const understanding = buildUnderstandingFromItem(item, classification);
+  const resolvedKind =
+    contractIntelligence?.classifiedKind && contractIntelligence.positions.length > 0
+      ? contractIntelligence.classifiedKind
+      : classification.classifiedKind;
 
   return {
     inboxItemId,
     companyRelevant: true,
     companyRelevance,
-    classifiedKind: classification.classifiedKind,
+    classifiedKind: resolvedKind,
     classificationConfidence: inferClassificationConfidence(classification),
     classification,
     documentExplanation,
     documentUnderstanding: understanding.summary,
     documentAiActions: understanding.actions,
     contractAnalysis: contractAnalysis.isContract ? contractAnalysis : null,
+    contractIntelligence,
+    contractOrderProposal,
     suggestedVorgang,
     similarVorgaenge,
     suggestedOrderPositions,
@@ -321,6 +340,22 @@ export function getContractPreviewForInbox(item: InboxItem): {
   contractSum: number;
   hasContractPositions: boolean;
 } {
+  const intelligence = analyzeContractIntelligenceFromInbox(item);
+  if (intelligence && intelligence.positions.length > 0) {
+    const positions = intelligence.positions.map(
+      ({ sourcePage: _sourcePage, confidence: _confidence, reviewStatus: _reviewStatus, ...position }) =>
+        position,
+    );
+    const contractSum =
+      intelligence.contractTotalNet?.value ?? computeContractPositionsTotal(positions);
+    return {
+      positions,
+      positionCount: positions.length,
+      contractSum,
+      hasContractPositions: true,
+    };
+  }
+
   const contractAnalysis = analyzeContractFromInbox(item);
   const positions =
     contractAnalysis.isContract && contractAnalysis.positions.length > 0

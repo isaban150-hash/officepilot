@@ -2,6 +2,7 @@
 
 import type { SyncClientConfig, SyncMeta, SyncOutboxEntry } from './sync';
 import type { Workspace, WorkspaceMember, WorkspaceSettings } from './workspace';
+import type { ContractIntelligenceResult, ContractOrderProposal } from './documentIntelligence';
 
 export type AppLanguage = 'de' | 'tr' | 'bg' | 'ro' | 'ru';
 
@@ -411,6 +412,7 @@ export interface DocumentClassificationInput {
   titleHint?: string;
   senderHint?: string;
   recognizedText?: string;
+  pageTexts?: Array<{ pageNumber: number; text: string }>;
 }
 
 export interface SuggestedVorgangLink {
@@ -603,6 +605,7 @@ export interface DocumentUnderstandingSummary {
   deadline?: string;
   nextStep: string;
   partialRecognition: boolean;
+  uncertainFields?: string[];
 }
 
 export type DocumentAiActionId =
@@ -630,6 +633,8 @@ export interface WorkflowResult {
   documentUnderstanding: DocumentUnderstandingSummary | null;
   documentAiActions: DocumentAiAction[];
   contractAnalysis: ContractAnalysisResult | null;
+  contractIntelligence: ContractIntelligenceResult | null;
+  contractOrderProposal: ContractOrderProposal | null;
   suggestedVorgang: SuggestedVorgangLink | null;
   similarVorgaenge: Vorgang[];
   suggestedOrderPositions: DetectedOrderPosition[];

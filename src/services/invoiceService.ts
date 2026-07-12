@@ -30,7 +30,6 @@ import type {
 } from '../types/models';
 import {
   buildLegalNotices,
-  buildSkontoText,
   getTaxRateForStatus,
 } from './invoiceTaxService';
 import {
@@ -111,7 +110,7 @@ function buildDraftMetadata(
     servicePeriodTo: issueDate,
     paymentDueDate: addDays(issueDate, profile.defaultPaymentDays),
     paymentTermsText: buildDefaultPaymentTerms(profile),
-    skontoText: buildSkontoText(profile),
+    skontoText: '',
     customerBilling: getVorgangCustomerBilling(vorgang),
     companySnapshot: profile,
     legalNotices: buildLegalNotices(setup.taxStatus, profile),
@@ -272,6 +271,16 @@ export function updateDraftPositionQuantity(
       if (!p.billable) return p;
       return { ...p, quantity: Math.max(0, quantity) };
     }),
+  };
+}
+
+export function applyAllOpenPositionsToDraft(draft: InvoiceDraft): InvoiceDraft {
+  return {
+    ...draft,
+    positions: draft.positions.map((position) => ({
+      ...position,
+      quantity: position.billable ? position.openQuantity : 0,
+    })),
   };
 }
 

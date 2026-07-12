@@ -34,6 +34,7 @@ import {
   getNotesForVorgang,
 } from '../services/vorgangNoteService';
 import { askVorgangAi } from '../services/vorgang/vorgangAiService';
+import { recordVorgangContext } from '../services/brain/companySessionService';
 import type { VorgangNote } from '../types/communication';
 import type { OrderPosition, Vorgang } from '../types/models';
 import type { TranslationKey } from '../i18n';
@@ -63,6 +64,12 @@ export function VorgangDetailPage() {
       setVorgang(getVorgangById(id));
     }
   }, [id]);
+
+  useEffect(() => {
+    if (id) {
+      recordVorgangContext(id);
+    }
+  }, [id, vorgang?.status, vorgang?.invoices?.length]);
 
   useEffect(() => {
     refreshVorgang();

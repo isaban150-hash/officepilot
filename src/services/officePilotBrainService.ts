@@ -5,6 +5,7 @@ import { buildBrainPrompt } from './brain/brainPromptBuilder';
 import { buildBrainSnapshot } from './brain/brainSnapshotService';
 
 import { BRAIN_ANSWER_DISCLAIMER, type BrainAnswer } from '../types/brain';
+import type { CompanySessionContext } from '../types/companySession';
 
 
 
@@ -42,7 +43,10 @@ function unavailableAnswer(question: string, text: string, errorCode?: string): 
 
 
 
-export async function askOfficePilotBrain(question: string): Promise<BrainAnswer> {
+export async function askOfficePilotBrain(
+  question: string,
+  session?: CompanySessionContext,
+): Promise<BrainAnswer> {
 
   const trimmedQuestion = question.trim();
 
@@ -56,7 +60,7 @@ export async function askOfficePilotBrain(question: string): Promise<BrainAnswer
 
   const snapshot = buildBrainSnapshot();
 
-  const prompt = buildBrainPrompt(trimmedQuestion, snapshot);
+  const prompt = buildBrainPrompt(trimmedQuestion, snapshot, session);
 
   const result = await runAiRequest({ prompt, skipGuard: true });
 

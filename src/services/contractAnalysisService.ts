@@ -15,6 +15,7 @@ import type {
   SignaturePage,
   UploadDocumentKind,
 } from '../types/models';
+import { extractBillOfQuantitiesPositions } from './billOfQuantitiesExtractionService';
 import { getInboxExtractedDocumentText } from './inboxDocumentText';
 
 export const SAMPLE_WERKVERTRAG_TEXT = `
@@ -252,6 +253,11 @@ function parseGermanAmount(value: string): number {
 }
 
 function detectOrderPositions(text: string): DetectedOrderPosition[] {
+  const fromBoq = extractBillOfQuantitiesPositions(text);
+  if (fromBoq.length > 0) {
+    return fromBoq.map(({ sourcePage: _sourcePage, confidence: _confidence, reviewStatus: _reviewStatus, ...position }) => position);
+  }
+
   const positions: DetectedOrderPosition[] = [];
   const linePattern =
     /^(\d+)\s*[|]\s*(.+?)\s*[|]\s*(\S+)\s*[|]\s*([\d.,]+)\s*[|]\s*([\d.,]+)\s*[|]\s*([\d.,]+)\s*$/gm;

@@ -16,6 +16,17 @@ export interface ExtractedDocumentFields {
   Betreff?: string;
 }
 
+export type FieldConfidenceLevel = 'high' | 'medium' | 'low';
+
+export interface ConfidentField {
+  value: string;
+  confidence: FieldConfidenceLevel;
+}
+
+export type ExtractedDocumentFieldsWithConfidence = Partial<
+  Record<keyof ExtractedDocumentFields, ConfidentField>
+>;
+
 const LABEL_VALUE =
   /^(?:absender|von|auftraggeber|lieferant|aussteller|anbieter|empfänger|empfaenger|an|kunde|mandant)\s*[:]\s*(.+)$/i;
 
@@ -52,13 +63,37 @@ function normalizeAmount(value: string): string {
   return value.replace(/\s+/g, ' ').trim();
 }
 
-export function extractFieldsFromText(text: string): ExtractedDocumentFields {
+function setField(
+  fields: ExtractedDocumentFieldsWithConfidence,
+  key: keyof ExtractedDocumentFields,
+  value: string | undefined,
+  confidence: FieldConfidenceLevel,
+): void {
+  if (!value?.trim()) return;
+  const existing = fields[key];
+  if (existing && rankConfidence(existing.confidence) >= rankConfidence(confidence)) {
+    return;
+  }
+  fields[key] = { value: value.trim(), confidence };
+}
+
+function rankConfidence(level: FieldConfidenceLevel): number {
+  if (level === 'high') return 3;
+  if (level === 'medium') return 2;
+  return 1;
+}
+
+export function isFieldConfidentEnough(level: FieldConfidenceLevel): boolean {
+  return level === 'high' || level === 'medium';
+}
+
+export function extractFieldsWithConfidence(text: string): ExtractedDocumentFieldsWithConfidence {
   const lines = text
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
 
-  const fields: ExtractedDocumentFields = {};
+  const fields: ExtractedDocumentFieldsWithConfidence = {};
 
   for (const line of lines) {
     const generic = line.match(LABEL_VALUE);
@@ -69,28 +104,45 @@ export function extractFieldsFromText(text: string): ExtractedDocumentFields {
     if (!value) continue;
 
     if (/absender|von|auftraggeber|lieferant|aussteller|anbieter/.test(label)) {
-      fields.Absender ??= value;
-      if (/lieferant|anbieter/.test(label)) fields.Lieferant ??= value;
+      setField(fields, 'Absender', value, 'high');
+      if (/lieferant|anbieter/.test(label)) {
+        setField(fields, 'Lieferant', value, 'high');
+      }
     }
     if (/empfänger|empfaenger|an|kunde|mandant/.test(label)) {
-      fields.Empfänger ??= value;
-      fields.Kunde ??= value;
+      setField(fields, 'Empfänger', value, 'high');
+      setField(fields, 'Kunde', value, 'high');
     }
   }
 
-  fields.Absender ??= pickLabeledValue(lines, /^(?:absender|von|auftraggeber|lieferant)\s*[:]\s*(.+)$/i);
-  fields.Empfänger ??= pickLabeledValue(lines, /^(?:empfänger|empfaenger|an|kunde)\s*[:]\s*(.+)$/i);
-  fields.Kunde ??= fields.Empfänger ?? pickLabeledValue(lines, /^kunde\s*[:]\s*(.+)$/i);
-  fields.Lieferant ??= fields.Absender ?? pickLabeledValue(lines, /^lieferant\s*[:]\s*(.+)$/i);
+  setField(
+    fields,
+    'Absender',
+    pickLabeledValue(lines, /^(?:absender|von|auftraggeber|lieferant)\s*[:]\s*(.+)$/i),
+    'high',
+  );
+  setField(
+    fields,
+    'Empfänger',
+    pickLabeledValue(lines, /^(?:empfänger|empfaenger|an|kunde)\s*[:]\s*(.+)$/i),
+    'high',
+  );
+  setField(fields, 'Kunde', fields.Empfänger?.value ?? pickLabeledValue(lines, /^kunde\s*[:]\s*(.+)$/i), 'high');
+  setField(
+    fields,
+    'Lieferant',
+    fields.Absender?.value ?? pickLabeledValue(lines, /^lieferant\s*[:]\s*(.+)$/i),
+    'high',
+  );
 
   const siteLine = lines.find((line) => SITE_PATTERN.test(line));
   if (siteLine) {
     const match = siteLine.match(SITE_PATTERN);
     const value = match?.[1]?.trim();
     if (value) {
-      fields.Baustelle = value;
-      fields.Projekt = value;
-      fields.Vorgang = value;
+      setField(fields, 'Baustelle', value, 'high');
+      setField(fields, 'Projekt', value, 'medium');
+      setField(fields, 'Vorgang', value, 'medium');
     }
   }
 
@@ -98,30 +150,72 @@ export function extractFieldsFromText(text: string): ExtractedDocumentFields {
   if (addressLine) {
     const match = addressLine.match(ADDRESS_PATTERN);
     if (match?.[1]?.trim()) {
-      fields.Straße = match[1].trim();
-      fields.Baustelle ??= match[1].trim();
+      setField(fields, 'Straße', match[1].trim(), 'high');
+      setField(fields, 'Baustelle', match[1].trim(), 'medium');
     }
   }
 
-  const cityMatch = text.match(CITY_PATTERN);
-  if (cityMatch) {
-    fields.Ort = `${cityMatch[1]} ${cityMatch[2]}`.trim();
-    fields.Baustelle ??= fields.Ort;
+  const cityLine = lines.find((line) => CITY_PATTERN.test(line));
+  if (cityLine) {
+    const cityMatch = cityLine.match(CITY_PATTERN);
+    if (cityMatch) {
+      const cityValue = `${cityMatch[1]} ${cityMatch[2]}`.trim();
+      const confidence: FieldConfidenceLevel = /adresse|straße|strasse|ort|baustelle/i.test(cityLine)
+        ? 'high'
+        : 'medium';
+      setField(fields, 'Ort', cityValue, confidence);
+      if (confidence === 'high') {
+        setField(fields, 'Baustelle', cityValue, 'medium');
+      }
+    }
   }
 
-  fields.Datum ??= firstMatch(text, DATE_PATTERN);
-  fields.Rechnungsnummer ??= firstMatch(text, INVOICE_NUMBER_PATTERN);
-  fields.Aktenzeichen ??= firstMatch(text, REFERENCE_PATTERN);
-  fields.Betrag ??= firstMatch(text, AMOUNT_PATTERN);
-  if (fields.Betrag) fields.Betrag = normalizeAmount(fields.Betrag);
-  fields.Frist ??= firstMatch(text, DEADLINE_PATTERN);
+  const labeledDate = pickLabeledValue(lines, /^(?:datum|vertragsdatum|belegdatum)\s*[:]\s*(.+)$/i);
+  setField(fields, 'Datum', labeledDate ?? firstMatch(text, DATE_PATTERN), labeledDate ? 'high' : 'low');
+
+  setField(fields, 'Rechnungsnummer', firstMatch(text, INVOICE_NUMBER_PATTERN), 'high');
+  setField(fields, 'Aktenzeichen', firstMatch(text, REFERENCE_PATTERN), 'high');
+  setField(fields, 'Betrag', firstMatch(text, AMOUNT_PATTERN), 'high');
+  if (fields.Betrag?.value) {
+    fields.Betrag = {
+      value: normalizeAmount(fields.Betrag.value),
+      confidence: fields.Betrag.confidence,
+    };
+  }
+  setField(fields, 'Frist', firstMatch(text, DEADLINE_PATTERN), 'high');
 
   const subjectLine = lines.find((line) => /^betreff\s*[:]/i.test(line));
   if (subjectLine) {
-    fields.Betreff = subjectLine.replace(/^betreff\s*[:]\s*/i, '').trim();
+    setField(fields, 'Betreff', subjectLine.replace(/^betreff\s*[:]\s*/i, '').trim(), 'high');
   }
 
   return fields;
+}
+
+export function toConfidentPlainFields(
+  fields: ExtractedDocumentFieldsWithConfidence,
+): ExtractedDocumentFields {
+  const plain: ExtractedDocumentFields = {};
+  for (const [key, field] of Object.entries(fields) as Array<
+    [keyof ExtractedDocumentFields, ConfidentField]
+  >) {
+    if (!field || !isFieldConfidentEnough(field.confidence)) continue;
+    plain[key] = field.value;
+  }
+  return plain;
+}
+
+export function listUncertainFieldKeys(
+  fields: ExtractedDocumentFieldsWithConfidence,
+): Array<keyof ExtractedDocumentFields> {
+  return (Object.keys(fields) as Array<keyof ExtractedDocumentFields>).filter((key) => {
+    const field = fields[key];
+    return Boolean(field?.value?.trim()) && field?.confidence === 'low';
+  });
+}
+
+export function extractFieldsFromText(text: string): ExtractedDocumentFields {
+  return toConfidentPlainFields(extractFieldsWithConfidence(text));
 }
 
 export function mergeExtractedFields(

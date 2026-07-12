@@ -7,6 +7,7 @@ import { Card, DataRow, PageHeader } from '../components/ui/Card';
 import { EmptyStateBlock } from '../components/ui/EmptyStateBlock';
 import { useApp } from '../context/AppContext';
 import {
+  applyAllOpenPositionsToDraft,
   buildInvoiceDraftForType,
   calculateInvoiceTotals,
   finalizeInvoiceDraft,
@@ -16,7 +17,16 @@ import {
   updateInvoiceDraftTaxStatus,
 } from '../services/invoiceService';
 import { buildInvoicePrintModel } from '../services/invoicePrintModel';
-import { getInvoiceDocumentTitle, INVOICE_DOCUMENT_TYPES, parseInvoiceDocumentType } from '../services/invoiceTypeService';
+import {
+  CONTRACT_ORDER_INVOICE_TYPES,
+  getInvoiceDocumentTitle,
+  parseInvoiceDocumentType,
+} from '../services/invoiceTypeService';
+import {
+  analyzeContractIntelligenceFromInbox,
+  getContractSkontoOfferForVorgang,
+} from '../services/contractIntelligenceService';
+import { getInboxItemById } from '../services/inboxService';
 import { getVorgangById } from '../services/vorgangService';
 import type { InvoiceDraft, InvoiceDraftMetadataChanges, InvoiceDocumentType, TaxStatus } from '../types/models';
 import type { TranslationKey } from '../i18n';
@@ -41,6 +51,20 @@ export function RechnungPage() {
   const [draft, setDraft] = useState<InvoiceDraft | null>(null);
   const [step, setStep] = useState<RechnungStep>('positions');
   const [showOverbillingConfirm, setShowOverbillingConfirm] = useState(false);
+  const [applyContractSkonto, setApplyContractSkonto] = useState(false);
+
+  const vorgang = id ? getVorgangById(id) : undefined;
+  const contractSkontoOffer = useMemo(
+    () => (vorgang ? getContractSkontoOfferForVorgang(vorgang) : null),
+    [vorgang],
+  );
+  const progressBillingAllowed = useMemo(() => {
+    if (!vorgang?.createdFromInboxId) return false;
+    const item = getInboxItemById(vorgang.createdFromInboxId);
+    if (!item) return false;
+    const intelligence = analyzeContractIntelligenceFromInbox(item);
+    return intelligence?.progressBillingAllowed ?? false;
+  }, [vorgang]);
 
   useEffect(() => {
     if (!id) {
@@ -50,9 +74,20 @@ export function RechnungPage() {
     const next = buildInvoiceDraftForType(id, setup, invoiceType);
     setDraft(next);
     setStep('positions');
+    setApplyContractSkonto(false);
   }, [id, invoiceType, setup]);
 
-  const vorgang = id ? getVorgangById(id) : undefined;
+  useEffect(() => {
+    if (!draft) return;
+    const skontoText =
+      applyContractSkonto && contractSkontoOffer ? contractSkontoOffer.text : '';
+    setDraft((prev) =>
+      prev && prev.skontoText !== skontoText
+        ? updateInvoiceDraftMetadata(prev, { skontoText })
+        : prev,
+    );
+  }, [applyContractSkonto, contractSkontoOffer, draft?.id]);
+
   const totals = draft ? calculateInvoiceTotals(draft, setup) : null;
   const printModel = useMemo(
     () => (draft ? buildInvoicePrintModel(draft, setup) : null),
@@ -99,6 +134,10 @@ export function RechnungPage() {
   const pageTitle = draft
     ? getInvoiceDocumentTitle(draft.type, draft.abschlagNumber)
     : translate('invoice.title');
+
+  const handleApplyAllPositions = () => {
+    setDraft((prev) => (prev ? applyAllOpenPositionsToDraft(prev) : prev));
+  };
 
   const handleTypeChange = (type: InvoiceDocumentType) => {
     navigate(`/vorgaenge/${id}/rechnung?type=${type}`);
@@ -187,7 +226,7 @@ export function RechnungPage() {
           <Card className="invoice-type-picker" data-testid="invoice-type-picker">
             <p className="invoice-type-picker__label">{translate('invoice.typeLabel')}</p>
             <div className="chip-group">
-              {INVOICE_DOCUMENT_TYPES.map((type) => (
+              {CONTRACT_ORDER_INVOICE_TYPES.map((type) => (
                 <button
                   key={type}
                   type="button"
@@ -200,6 +239,38 @@ export function RechnungPage() {
               ))}
             </div>
           </Card>
+
+          {progressBillingAllowed && (
+            <p className="invoice-hint" data-testid="invoice-progress-billing-hint">
+              {translate('invoice.progressBillingContractHint')}
+            </p>
+          )}
+
+          {contractSkontoOffer && (
+            <Card className="invoice-skonto-choice" data-testid="invoice-skonto-choice">
+              <p className="invoice-type-picker__label">{translate('invoice.skontoFromContractTitle')}</p>
+              <div className="chip-group">
+                <button
+                  type="button"
+                  className={`chip ${!applyContractSkonto ? 'chip--active' : ''}`}
+                  data-testid="invoice-skonto-no"
+                  onClick={() => setApplyContractSkonto(false)}
+                >
+                  {translate('invoice.skontoFromContractNo')}
+                </button>
+                <button
+                  type="button"
+                  className={`chip ${applyContractSkonto ? 'chip--active' : ''}`}
+                  data-testid="invoice-skonto-yes"
+                  onClick={() => setApplyContractSkonto(true)}
+                >
+                  {translate('invoice.skontoFromContractYes')
+                    .replace('{percent}', String(contractSkontoOffer.percent))
+                    .replace('{days}', String(contractSkontoOffer.days))}
+                </button>
+              </div>
+            </Card>
+          )}
 
           {draft.companySnapshot.logoDataUrl && (
             <p className="hint-text invoice-brand-hint" data-testid="invoice-brand-logo-hint">
@@ -231,7 +302,12 @@ export function RechnungPage() {
           )}
 
           <section className="section">
-            <h2 className="section__title">{translate('invoice.positions')}</h2>
+            <div className="section__header-row">
+              <h2 className="section__title">{translate('invoice.positions')}</h2>
+              <Button variant="outline" onClick={handleApplyAllPositions} data-testid="invoice-apply-all-positions">
+                {translate('invoice.applyAllPositions')}
+              </Button>
+            </div>
             {draft.positions.map((pos) => (
               <Card key={pos.id} className={!pos.billable ? 'invoice-pos--disabled' : ''}>
                 <p className="position-desc">{pos.description}</p>

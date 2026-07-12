@@ -35,6 +35,11 @@ export function DocumentIntakeUnderstandingPanel({
           {translate('document.intakeUnderstanding.partialHint')}
         </CardMeta>
       )}
+      {summary.uncertainFields && summary.uncertainFields.length > 0 && (
+        <CardMeta data-testid="document-uncertain-hint">
+          {translate('document.intakeUnderstanding.uncertainHint')}
+        </CardMeta>
+      )}
 
       <dl className="doc-understanding__list">
         <SummaryRow label={translate('document.intakeUnderstanding.documentType')} value={translate(kindKey)} />

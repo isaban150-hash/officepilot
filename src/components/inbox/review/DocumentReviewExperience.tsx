@@ -19,6 +19,7 @@ import { DocumentReviewHero } from './DocumentReviewHero';
 import { DocumentReviewRecommendations } from './DocumentReviewRecommendations';
 import { DocumentReviewSuccess } from './DocumentReviewSuccess';
 import { ReviewMoreOptionsShell } from './CollapsibleReviewSection';
+import { ContractOrderProposalPanel } from './ContractOrderProposalPanel';
 
 interface DocumentReviewExperienceProps {
   item: InboxItem;
@@ -28,6 +29,8 @@ interface DocumentReviewExperienceProps {
   moreOptionsExpanded: boolean;
   onToggleMoreOptions: () => void;
   onApplySuggestion: () => void;
+  onCreateContractOrder?: () => void;
+  isCreatingContractOrder?: boolean;
   onOpenVorgang?: () => void;
   onNextDocument: () => void;
   moreOptionsContent: ReactNode;
@@ -42,6 +45,8 @@ export function DocumentReviewExperience({
   moreOptionsExpanded,
   onToggleMoreOptions,
   onApplySuggestion,
+  onCreateContractOrder,
+  isCreatingContractOrder = false,
   onOpenVorgang,
   onNextDocument,
   moreOptionsContent,
@@ -58,9 +63,22 @@ export function DocumentReviewExperience({
 
   const primaryDisabled = !item.isAdvertisement && !workflow.companyRelevant;
 
-  const primaryLabel = item.isAdvertisement
+  const primaryLabel = workflow.contractOrderProposal
+    ? translate('documentIntelligence.action.createOrderWithPositions').replace(
+        '{count}',
+        String(workflow.contractOrderProposal.positionCount),
+      )
+    : item.isAdvertisement
     ? translate('reviewWorkflow.action.reviewAdvertisement')
     : translate('reviewWorkflow.action.applySuggestion');
+
+  const handlePrimaryAction = () => {
+    if (workflow.contractOrderProposal && onCreateContractOrder) {
+      onCreateContractOrder();
+      return;
+    }
+    onApplySuggestion();
+  };
 
   return (
     <div className="document-review-experience" data-testid="document-review-experience">
@@ -79,6 +97,15 @@ export function DocumentReviewExperience({
         </div>
       </div>
 
+      {workflow.contractOrderProposal && !executionResult?.completed && (
+        <ContractOrderProposalPanel
+          proposal={workflow.contractOrderProposal}
+          translate={translate}
+          onCreateOrder={handlePrimaryAction}
+          isCreating={isCreatingContractOrder}
+        />
+      )}
+
       {executionResult?.completed && successSteps.length > 0 ? (
         <DocumentReviewSuccess
           steps={successSteps}
@@ -87,13 +114,13 @@ export function DocumentReviewExperience({
           onOpenVorgang={onOpenVorgang}
           onNextDocument={onNextDocument}
         />
-      ) : (
+      ) : workflow.contractOrderProposal ? null : (
         <div className="document-review-experience__primary" data-testid="document-review-primary-action">
           <Button
             fullWidth
             disabled={primaryDisabled}
-            loading={isExecuting}
-            onClick={onApplySuggestion}
+            loading={isExecuting || isCreatingContractOrder}
+            onClick={handlePrimaryAction}
             data-testid="document-review-apply-button"
           >
             {primaryLabel}

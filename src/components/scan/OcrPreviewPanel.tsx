@@ -4,6 +4,15 @@ import type { OcrPreviewSummary } from '../../services/ocrDocumentService';
 import type { DocumentTextExtractionResult } from '../../services/ocrDocumentService';
 import type { TranslationKey } from '../../i18n';
 
+function resolveExtractionSourceKey(
+  extraction: DocumentTextExtractionResult,
+): TranslationKey | null {
+  if (extraction.extractionMethod === 'pdf_direct') return 'document.extraction.source.pdfDirect';
+  if (extraction.extractionMethod === 'pdf_ocr') return 'document.extraction.source.pdfOcr';
+  if (extraction.extractionMethod === 'image_ocr') return 'document.extraction.source.imageOcr';
+  return null;
+}
+
 interface OcrPreviewPanelProps {
   fileName: string;
   extraction: DocumentTextExtractionResult;
@@ -37,13 +46,17 @@ export function OcrPreviewPanel({
 }: OcrPreviewPanelProps) {
   const understanding = preview.understanding;
   const showPreviewLines = preview.previewLines.length > 0;
+  const sourceKey = resolveExtractionSourceKey(extraction);
 
   return (
     <Card className="ocr-preview-panel" data-testid="ocr-preview-panel">
       <CardTitle>{fileName}</CardTitle>
-      <CardMeta>
+      <CardMeta data-testid="ocr-extraction-meta">
         {extraction.sourceType === 'pdf' ? 'PDF' : 'Foto'} · {extraction.confidence}
-        {extraction.extractionMethod ? ` · ${extraction.extractionMethod}` : ''}
+        {sourceKey ? ` · ${translate(sourceKey)}` : ''}
+        {extraction.pagesProcessed
+          ? ` · ${translate('document.extraction.pagesProcessed').replace('{count}', String(extraction.pagesProcessed))}`
+          : ''}
       </CardMeta>
 
       {qualityHintLabel && (

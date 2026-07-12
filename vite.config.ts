@@ -3,6 +3,12 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig(({ mode }) => ({
   plugins: [react()],
+  optimizeDeps: {
+    include: ['pdfjs-dist'],
+  },
+  worker: {
+    format: 'es',
+  },
   build: {
     outDir: 'dist',
     sourcemap: mode !== 'production',
