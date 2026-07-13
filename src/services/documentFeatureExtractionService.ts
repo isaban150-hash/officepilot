@@ -1,0 +1,424 @@
+import type { DocumentZone, EvidenceRef } from '../types/documentAnalysis';
+import { clampAnalysisConfidence, isValidEvidenceRef } from '../types/documentAnalysis';
+import type {
+  DocumentFeatureCategory,
+  DocumentFeatureExtractionResult,
+  DocumentFeatureStrength,
+} from '../types/documentFeatures';
+import type { DocumentZonedText, ZonedLine } from '../types/documentZoning';
+import { parseGermanMoney } from './documentAmountExtractionService';
+import { findZonedLineAtOffset } from './documentZoningService';
+
+const SENDER_LABEL_PATTERN =
+  /^(?:absender|von|auftraggeber|lieferant|aussteller|anbieter)\s*[:]\s*(.+)$/i;
+const RECIPIENT_LABEL_PATTERN =
+  /^(?:empfänger|empfaenger|an|kunde|mandant)\s*[:]\s*(.+)$/i;
+const DOCUMENT_DATE_PATTERN = /\b(\d{1,2}[./]\d{1,2}[./]\d{2,4})\b/;
+const LABELED_DATE_PATTERN =
+  /^(?:datum|vertragsdatum|belegdatum)\s*[:]\s*(\d{1,2}[./]\d{1,2}[./]\d{2,4})/i;
+const DEADLINE_PATTERN =
+  /\b(?:frist|fällig(?:keit| am)?|zahlbar bis|bis zum|zahlungsziel)\s*[:.]?\s*(\d{1,2}[./]\d{1,2}[./]\d{2,4})/i;
+const INVOICE_NUMBER_PATTERN =
+  /\b(?:rechnungs(?:nummer|nr\.?)|invoice(?:\s*no\.?)?|beleg(?:nummer|nr\.?))\s*[:#]?\s*([A-Z0-9][\w./-]{2,})/i;
+const CASE_REFERENCE_PATTERN =
+  /\b(?:aktenzeichen|az\.?|vorgang(?:snummer|snr\.?)?|auftrags(?:nummer|nr\.?)|referenz)\s*[:#]?\s*([A-Z0-9][\w./-]{2,})/i;
+const MONETARY_VALUE_PATTERN =
+  /\b(\d{1,3}(?:\.\d{3})*,\d{2})\s*(?:€|eur)?\b/i;
+const LABELED_TOTAL_PATTERN =
+  /\b(?:betrag|summe|gesamt|total)\s*[:]\s*(\d{1,3}(?:[.\s]\d{3})*,\d{2}\s*€?|\d{1,3}(?:[.\s]\d{3})*,\d{2}\s*(?:EUR|eur))/i;
+const IBAN_PATTERN = /\b([A-Z]{2}\d{2}(?:\s?[A-Z0-9]{4}){3,7}\s?[A-Z0-9]{1,4})\b/i;
+const HRB_HRA_PATTERN = /\b(HR[AB]\s*\d[\dA-Z./-]{1,})\b/i;
+const COURT_MARKER_PATTERN = /\b(Amtsgericht\s+[\p{L}\-]+(?:\s+[\p{L}\-]+)*)/iu;
+const MANAGING_DIRECTOR_PATTERN =
+  /\b(Geschäftsführer(?:in)?|Inhaber(?:in)?)\s*[:.]?\s*([\p{L}\-]+(?:\s+[\p{L}\-]+)*)/iu;
+const PAYMENT_REQUEST_PATTERN =
+  /\b(zahlungsaufforderung|zahlungserinnerung|zahlungsfrist|zu\s+zahlen|zahlbar\s+bis)\b/i;
+const AUTHORITY_MARKER_PATTERN =
+  /\b(finanzamt|steueramt|zollamt|sozialversicherung|berufsgenossenschaft|agentur\s+für\s+arbeit|jobcenter|stadtverwaltung|gemeindeverwaltung|landratsamt|ordnungsamt)\b/i;
+
+type PatternFeatureSpec = {
+  id: string;
+  category: DocumentFeatureCategory;
+  pattern: RegExp;
+  labeled?: boolean;
+  valueFromMatch?: (match: RegExpMatchArray) => string | number | boolean | undefined;
+};
+
+const PATTERN_FEATURES: PatternFeatureSpec[] = [
+  {
+    id: 'date.document_date',
+    category: 'date',
+    pattern: DOCUMENT_DATE_PATTERN,
+    valueFromMatch: (match) => match[1],
+  },
+  {
+    id: 'date.deadline_date',
+    category: 'date',
+    pattern: DEADLINE_PATTERN,
+    labeled: true,
+    valueFromMatch: (match) => match[1],
+  },
+  {
+    id: 'reference.invoice_number',
+    category: 'reference',
+    pattern: INVOICE_NUMBER_PATTERN,
+    labeled: true,
+    valueFromMatch: (match) => match[1],
+  },
+  {
+    id: 'reference.case_reference',
+    category: 'reference',
+    pattern: CASE_REFERENCE_PATTERN,
+    labeled: true,
+    valueFromMatch: (match) => match[1],
+  },
+  {
+    id: 'amount.monetary_value',
+    category: 'amount',
+    pattern: MONETARY_VALUE_PATTERN,
+    valueFromMatch: (match) => parseGermanMoney(match[1]),
+  },
+  {
+    id: 'amount.labeled_total',
+    category: 'amount',
+    pattern: LABELED_TOTAL_PATTERN,
+    labeled: true,
+    valueFromMatch: (match) => parseGermanMoney(match[1]),
+  },
+  {
+    id: 'payment.iban',
+    category: 'payment',
+    pattern: IBAN_PATTERN,
+    labeled: true,
+    valueFromMatch: (match) => match[1].replace(/\s+/g, '').toUpperCase(),
+  },
+  {
+    id: 'register.hrb_hra_number',
+    category: 'register',
+    pattern: HRB_HRA_PATTERN,
+    valueFromMatch: (match) => match[1].replace(/\s+/g, ' ').trim(),
+  },
+  {
+    id: 'register.court_marker',
+    category: 'register',
+    pattern: COURT_MARKER_PATTERN,
+    valueFromMatch: (match) => match[1].trim(),
+  },
+  {
+    id: 'register.managing_director_marker',
+    category: 'register',
+    pattern: MANAGING_DIRECTOR_PATTERN,
+    labeled: true,
+    valueFromMatch: (match) => match[2]?.trim(),
+  },
+  {
+    id: 'structure.payment_request',
+    category: 'structure',
+    pattern: PAYMENT_REQUEST_PATTERN,
+    valueFromMatch: () => true,
+  },
+];
+
+function deriveStrength(
+  category: DocumentFeatureCategory,
+  zone: DocumentZone,
+  labeled: boolean,
+): DocumentFeatureStrength {
+  if (category === 'register' && zone === 'footer') {
+    return 'weak';
+  }
+  if (category === 'structure') {
+    return 'medium';
+  }
+  if (category === 'identity') {
+    return zone === 'header' ? 'strong' : 'medium';
+  }
+  if ((category === 'amount' || category === 'reference') && zone === 'body') {
+    return labeled ? 'strong' : 'medium';
+  }
+  if (category === 'payment') {
+    return 'medium';
+  }
+  if (category === 'date') {
+    return labeled ? 'strong' : 'medium';
+  }
+  return 'medium';
+}
+
+function deriveConfidence(strength: DocumentFeatureStrength, labeled: boolean): number {
+  if (strength === 'strong') {
+    return clampAnalysisConfidence(labeled ? 0.9 : 0.82);
+  }
+  if (strength === 'medium') {
+    return clampAnalysisConfidence(labeled ? 0.78 : 0.72);
+  }
+  return clampAnalysisConfidence(0.55);
+}
+
+function buildEvidenceRef(
+  evidenceId: string,
+  zonedLine: ZonedLine,
+  snippet: string,
+  startOffset: number,
+  endOffset: number,
+): EvidenceRef {
+  return {
+    id: evidenceId,
+    zone: zonedLine.zone,
+    snippet: snippet.trim(),
+    startOffset,
+    endOffset,
+    startLine: zonedLine.lineIndex + 1,
+    endLine: zonedLine.lineIndex + 1,
+    pageNumber: zonedLine.pageNumber,
+  };
+}
+
+function addLineFeature(
+  result: DocumentFeatureExtractionResult,
+  counters: Record<string, number>,
+  spec: {
+    id: string;
+    category: DocumentFeatureCategory;
+    line: ZonedLine;
+    rawValue: string;
+    value?: string | number | boolean;
+    labeled?: boolean;
+    startOffset: number;
+    endOffset: number;
+  },
+): void {
+  const index = counters[spec.id] ?? 0;
+  counters[spec.id] = index + 1;
+  const evidenceId = `feature:${spec.id}:${index}`;
+  const strength = deriveStrength(spec.category, spec.line.zone, Boolean(spec.labeled));
+  const confidence = deriveConfidence(strength, Boolean(spec.labeled));
+
+  result.evidenceIndex[evidenceId] = buildEvidenceRef(
+    evidenceId,
+    spec.line,
+    spec.rawValue,
+    spec.startOffset,
+    spec.endOffset,
+  );
+  result.features.push({
+    id: spec.id,
+    category: spec.category,
+    value: spec.value,
+    rawValue: spec.rawValue,
+    confidence,
+    strength,
+    zone: spec.line.zone,
+    evidenceRefs: [evidenceId],
+    source: 'rules',
+  });
+}
+
+function extractIdentityFeatures(
+  zonedText: DocumentZonedText,
+  result: DocumentFeatureExtractionResult,
+  counters: Record<string, number>,
+): void {
+  for (const line of zonedText.lines) {
+    const trimmed = line.text.trim();
+    if (!trimmed) {
+      continue;
+    }
+
+    const senderMatch = trimmed.match(SENDER_LABEL_PATTERN);
+    if (senderMatch?.[1]?.trim()) {
+      const value = senderMatch[1].trim();
+      const valueStart = line.startOffset + line.text.indexOf(value);
+      addLineFeature(result, counters, {
+        id: 'identity.sender_labeled',
+        category: 'identity',
+        line,
+        rawValue: trimmed,
+        value,
+        labeled: true,
+        startOffset: valueStart,
+        endOffset: valueStart + value.length,
+      });
+    }
+
+    const recipientMatch = trimmed.match(RECIPIENT_LABEL_PATTERN);
+    if (recipientMatch?.[1]?.trim()) {
+      const value = recipientMatch[1].trim();
+      const valueStart = line.startOffset + line.text.indexOf(value);
+      addLineFeature(result, counters, {
+        id: 'identity.recipient_labeled',
+        category: 'identity',
+        line,
+        rawValue: trimmed,
+        value,
+        labeled: true,
+        startOffset: valueStart,
+        endOffset: valueStart + value.length,
+      });
+    }
+
+    const labeledDateMatch = trimmed.match(LABELED_DATE_PATTERN);
+    if (labeledDateMatch?.[1]) {
+      const value = labeledDateMatch[1];
+      const valueStart = line.startOffset + line.text.indexOf(value);
+      addLineFeature(result, counters, {
+        id: 'date.document_date',
+        category: 'date',
+        line,
+        rawValue: trimmed,
+        value,
+        labeled: true,
+        startOffset: valueStart,
+        endOffset: valueStart + value.length,
+      });
+    }
+  }
+}
+
+function extractPatternFeatures(
+  zonedText: DocumentZonedText,
+  result: DocumentFeatureExtractionResult,
+  counters: Record<string, number>,
+): void {
+  const text = zonedText.originalText;
+
+  for (const spec of PATTERN_FEATURES) {
+    const regex = new RegExp(spec.pattern.source, spec.pattern.flags.includes('g') ? spec.pattern.flags : `${spec.pattern.flags}g`);
+    let match: RegExpExecArray | null;
+
+    while ((match = regex.exec(text)) !== null) {
+      const startOffset = match.index;
+      const endOffset = startOffset + match[0].length;
+      const zonedLine = findZonedLineAtOffset(zonedText, startOffset);
+      if (!zonedLine || zonedLine.zone === 'unknown') {
+        continue;
+      }
+
+      const index = counters[spec.id] ?? 0;
+      counters[spec.id] = index + 1;
+      const evidenceId = `feature:${spec.id}:${index}`;
+      const strength = deriveStrength(spec.category, zonedLine.zone, Boolean(spec.labeled));
+      const confidence = deriveConfidence(strength, Boolean(spec.labeled));
+
+      result.evidenceIndex[evidenceId] = buildEvidenceRef(
+        evidenceId,
+        zonedLine,
+        match[0],
+        startOffset,
+        endOffset,
+      );
+      result.features.push({
+        id: spec.id,
+        category: spec.category,
+        value: spec.valueFromMatch?.(match),
+        rawValue: match[0],
+        confidence,
+        strength,
+        zone: zonedLine.zone,
+        evidenceRefs: [evidenceId],
+        source: 'rules',
+      });
+    }
+  }
+}
+
+function extractStructureFeatures(
+  zonedText: DocumentZonedText,
+  result: DocumentFeatureExtractionResult,
+  counters: Record<string, number>,
+): void {
+  const meaningfulLines = zonedText.lines.filter(
+    (line) => line.zone !== 'unknown' && line.text.trim().length > 0,
+  );
+
+  const authorityLine = meaningfulLines.find((line) => AUTHORITY_MARKER_PATTERN.test(line.text));
+  if (authorityLine) {
+    const match = authorityLine.text.match(AUTHORITY_MARKER_PATTERN);
+    if (match) {
+      const marker = match[0];
+      const startOffset = authorityLine.startOffset + authorityLine.text.indexOf(marker);
+      addLineFeature(result, counters, {
+        id: 'structure.authority_letter',
+        category: 'structure',
+        line: authorityLine,
+        rawValue: authorityLine.text.trim(),
+        value: true,
+        startOffset,
+        endOffset: startOffset + marker.length,
+      });
+    }
+  }
+
+  const bodyAmountLine = zonedText.bodyLines.find((line) => MONETARY_VALUE_PATTERN.test(line.text));
+  const isShortReceipt =
+    meaningfulLines.length <= 6 &&
+    Boolean(bodyAmountLine) &&
+    zonedText.footerLines.every((line) => !HRB_HRA_PATTERN.test(line.text));
+
+  if (isShortReceipt && bodyAmountLine) {
+    const match = bodyAmountLine.text.match(MONETARY_VALUE_PATTERN);
+    if (match) {
+      const marker = match[0];
+      const startOffset = bodyAmountLine.startOffset + bodyAmountLine.text.indexOf(marker);
+      addLineFeature(result, counters, {
+        id: 'structure.receipt_layout',
+        category: 'structure',
+        line: bodyAmountLine,
+        rawValue: bodyAmountLine.text.trim(),
+        value: true,
+        startOffset,
+        endOffset: startOffset + marker.length,
+      });
+    }
+  }
+}
+
+export function extractDocumentFeatures(zonedText: DocumentZonedText): DocumentFeatureExtractionResult {
+  const result: DocumentFeatureExtractionResult = {
+    features: [],
+    evidenceIndex: {},
+    warnings: [],
+  };
+  const counters: Record<string, number> = {};
+
+  if (!zonedText.originalText.trim()) {
+    result.warnings.push('feature_extraction:no_text');
+    return result;
+  }
+
+  extractIdentityFeatures(zonedText, result, counters);
+  extractPatternFeatures(zonedText, result, counters);
+  extractStructureFeatures(zonedText, result, counters);
+
+  return result;
+}
+
+export function validateFeatureExtractionResult(result: DocumentFeatureExtractionResult): boolean {
+  for (const [evidenceId, evidenceRef] of Object.entries(result.evidenceIndex)) {
+    if (!isValidEvidenceRef(evidenceRef) || evidenceRef.id !== evidenceId) {
+      return false;
+    }
+  }
+
+  return result.features.every((feature) => {
+    if (!feature.id.trim() || !feature.evidenceRefs.length) {
+      return false;
+    }
+    if (feature.confidence < 0 || feature.confidence > 1) {
+      return false;
+    }
+    return feature.evidenceRefs.every(
+      (refId) => refId in result.evidenceIndex && isValidEvidenceRef(result.evidenceIndex[refId]),
+    );
+  });
+}
+
+export function mergeFeatureEvidenceIndex(
+  zoneEvidenceIndex: Record<string, EvidenceRef>,
+  featureResult: DocumentFeatureExtractionResult,
+): Record<string, EvidenceRef> {
+  return {
+    ...zoneEvidenceIndex,
+    ...featureResult.evidenceIndex,
+  };
+}

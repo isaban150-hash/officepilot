@@ -3,6 +3,11 @@ import { clampAnalysisConfidence, validateDocumentAnalysisResult } from '../type
 import { assessTextQuality } from './textQualityService';
 import { buildDocumentAnalysisFromLegacy } from './documentAnalysisLegacyAdapter';
 import {
+  extractDocumentFeatures,
+  mergeFeatureEvidenceIndex,
+  validateFeatureExtractionResult,
+} from './documentFeatureExtractionService';
+import {
   buildCanonicalDocumentText,
   buildEvidenceIndex,
   validateZoneEvidenceIndex,
@@ -34,6 +39,16 @@ export function runLegacyDocumentAnalysisShadow(
     const zonedText = zoneDocumentText(recognizedText, input.pageTexts);
     const zoneEvidenceIndex = buildEvidenceIndex(zonedText);
     if (!validateZoneEvidenceIndex(zoneEvidenceIndex)) {
+      return;
+    }
+
+    const featureResult = extractDocumentFeatures(zonedText);
+    if (!validateFeatureExtractionResult(featureResult)) {
+      return;
+    }
+
+    const mergedEvidenceIndex = mergeFeatureEvidenceIndex(zoneEvidenceIndex, featureResult);
+    if (!validateZoneEvidenceIndex(mergedEvidenceIndex)) {
       return;
     }
 
