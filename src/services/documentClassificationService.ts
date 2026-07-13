@@ -16,6 +16,7 @@ import {
 } from './documentClassificationCatalog';
 import { resolvePaperFiling, suggestPaperFolder } from './paperFolderService';
 import { getInboxExtractedDocumentText } from './inboxDocumentText';
+import { runLegacyDocumentAnalysisShadow } from './documentAnalysisShadowService';
 import { extractFieldsFromText, mergeExtractedFields } from './documentFieldExtractionService';
 import type {
   ClassifiedDocumentKind,
@@ -499,6 +500,8 @@ export function classifyDocument(input: DocumentClassificationInput): DocumentCl
   ) {
     result.recognizedData.Vorgang = suggestedVorgangRaw.vorgangTitle;
   }
+
+  runLegacyDocumentAnalysisShadow(result, input);
 
   return result;
 }
