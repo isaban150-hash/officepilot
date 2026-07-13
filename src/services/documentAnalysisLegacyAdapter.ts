@@ -1,4 +1,5 @@
 import type { DocumentClassificationResult } from '../types/models';
+import type { DocumentZonedText } from '../types/documentZoning';
 import type {
   AnalysisSource,
   DocumentAnalysisFacts,
@@ -11,10 +12,12 @@ import type {
   ReviewStatus,
 } from '../types/documentAnalysis';
 import { clampAnalysisConfidence } from '../types/documentAnalysis';
+import { findZonedLineAtOffset } from './documentZoningService';
 
 export type DocumentAnalysisLegacyAdapterInput = {
   classification: DocumentClassificationResult;
   recognizedText?: string;
+  zonedText?: DocumentZonedText;
   ocrQuality?: {
     score: number;
     readable: boolean;
@@ -163,6 +166,7 @@ function buildOcrEvidenceRef(
   id: string,
   match: OcrTextMatch,
   zone: DocumentZone = 'body',
+  pageNumber?: number,
 ): EvidenceRef {
   return {
     id,
@@ -172,7 +176,21 @@ function buildOcrEvidenceRef(
     endOffset: match.endOffset,
     startLine: match.startLine,
     endLine: match.endLine,
+    pageNumber,
   };
+}
+
+function resolveEvidenceZone(
+  match: OcrTextMatch,
+  fallback: DocumentZone,
+  zonedText?: DocumentZonedText,
+): { zone: DocumentZone; pageNumber?: number } {
+  const zonedLine = zonedText ? findZonedLineAtOffset(zonedText, match.startOffset) : undefined;
+  if (!zonedLine) {
+    return { zone: fallback, pageNumber: undefined };
+  }
+
+  return { zone: zonedLine.zone, pageNumber: zonedLine.pageNumber };
 }
 
 function parseGermanAmount(value: string): number | undefined {
@@ -294,6 +312,7 @@ function buildFacts(
   classification: DocumentClassificationResult,
   recognizedText: string | undefined,
   confidence: number,
+  zonedText?: DocumentZonedText,
 ): FactBuildResult {
   const evidenceIndex: Record<string, EvidenceRef> = {};
   const warnings: string[] = [];
@@ -306,7 +325,13 @@ function buildFacts(
     const senderMatch = findSenderMatch(text, classification.sender);
     if (senderMatch) {
       const evidenceId = 'legacy:sender';
-      evidenceIndex[evidenceId] = buildOcrEvidenceRef(evidenceId, senderMatch, 'header');
+      const senderZone = resolveEvidenceZone(senderMatch, 'header', zonedText);
+      evidenceIndex[evidenceId] = buildOcrEvidenceRef(
+        evidenceId,
+        senderMatch,
+        senderZone.zone,
+        senderZone.pageNumber,
+      );
       facts.sender = buildLegacyFact(
         senderMatch.snippet.includes(':')
           ? senderMatch.snippet.split(':').slice(1).join(':').trim()
@@ -320,7 +345,13 @@ function buildFacts(
     const recipientMatch = findRecipientMatch(text);
     if (recipientMatch) {
       const evidenceId = 'legacy:recipient';
-      evidenceIndex[evidenceId] = buildOcrEvidenceRef(evidenceId, recipientMatch, 'header');
+      const recipientZone = resolveEvidenceZone(recipientMatch, 'header', zonedText);
+      evidenceIndex[evidenceId] = buildOcrEvidenceRef(
+        evidenceId,
+        recipientMatch,
+        recipientZone.zone,
+        recipientZone.pageNumber,
+      );
       facts.recipient = buildLegacyFact(
         recipientMatch.snippet.split(':').slice(1).join(':').trim(),
         confidence,
@@ -332,7 +363,13 @@ function buildFacts(
     const dateMatch = findDateMatch(text);
     if (dateMatch) {
       const evidenceId = 'legacy:documentDate';
-      evidenceIndex[evidenceId] = buildOcrEvidenceRef(evidenceId, dateMatch, 'body');
+      const dateZone = resolveEvidenceZone(dateMatch, 'body', zonedText);
+      evidenceIndex[evidenceId] = buildOcrEvidenceRef(
+        evidenceId,
+        dateMatch,
+        dateZone.zone,
+        dateZone.pageNumber,
+      );
       const normalizedDate = dateMatch.snippet.match(/\d{1,2}[./]\d{1,2}[./]\d{2,4}/)?.[0];
       if (normalizedDate) {
         facts.documentDate = buildLegacyFact(normalizedDate, confidence, [evidenceId]);
@@ -343,7 +380,13 @@ function buildFacts(
     const dueDateMatch = findDueDateMatch(text);
     if (dueDateMatch) {
       const evidenceId = 'legacy:dueDate';
-      evidenceIndex[evidenceId] = buildOcrEvidenceRef(evidenceId, dueDateMatch, 'body');
+      const dueDateZone = resolveEvidenceZone(dueDateMatch, 'body', zonedText);
+      evidenceIndex[evidenceId] = buildOcrEvidenceRef(
+        evidenceId,
+        dueDateMatch,
+        dueDateZone.zone,
+        dueDateZone.pageNumber,
+      );
       const normalizedDueDate = dueDateMatch.snippet.match(/\d{1,2}[./]\d{1,2}[./]\d{2,4}/)?.[0];
       if (normalizedDueDate) {
         facts.dueDate = buildLegacyFact(normalizedDueDate, confidence, [evidenceId]);
@@ -354,7 +397,13 @@ function buildFacts(
     const amountMatch = findAmountMatch(text);
     if (amountMatch) {
       const evidenceId = 'legacy:grossAmount';
-      evidenceIndex[evidenceId] = buildOcrEvidenceRef(evidenceId, amountMatch, 'body');
+      const amountZone = resolveEvidenceZone(amountMatch, 'body', zonedText);
+      evidenceIndex[evidenceId] = buildOcrEvidenceRef(
+        evidenceId,
+        amountMatch,
+        amountZone.zone,
+        amountZone.pageNumber,
+      );
       const parsedAmount = parseGermanAmount(amountMatch.snippet);
       if (parsedAmount !== undefined) {
         facts.grossAmount = buildLegacyFact(parsedAmount, confidence, [evidenceId]);
@@ -366,7 +415,13 @@ function buildFacts(
     if (referenceMatches.length > 0) {
       facts.referenceNumbers = referenceMatches.map((referenceMatch, index) => {
         const evidenceId = `legacy:reference:${index}`;
-        evidenceIndex[evidenceId] = buildOcrEvidenceRef(evidenceId, referenceMatch, 'body');
+        const referenceZone = resolveEvidenceZone(referenceMatch, 'body', zonedText);
+        evidenceIndex[evidenceId] = buildOcrEvidenceRef(
+          evidenceId,
+          referenceMatch,
+          referenceZone.zone,
+          referenceZone.pageNumber,
+        );
         const value =
           referenceMatch.snippet.match(/[A-Z0-9][\w./-]{2,}/i)?.[0] ?? referenceMatch.snippet.trim();
         includedFactKeys.add(`reference:${index}`);
@@ -465,7 +520,6 @@ function buildLegacyCandidate(
     negativeEvidenceRefs: [],
     structuralEvidenceRefs: [],
     missingRequiredFeatures: [
-      'zone_segmentation',
       'weighted_candidate_scoring',
       'evidence_backed_field_extraction',
     ],
@@ -524,15 +578,18 @@ export function buildDocumentAnalysisFromLegacy(
     ),
   };
 
-  const factBundle = buildFacts(classification, input.recognizedText, confidence);
+  const factBundle = buildFacts(classification, input.recognizedText, confidence, input.zonedText);
   Object.assign(evidenceIndex, factBundle.evidenceIndex);
 
   const candidate = buildLegacyCandidate(classification, confidence, DETECTION_EVIDENCE_ID);
   const warnings = [
     'legacy:no_weighted_candidate_scoring',
-    'legacy:no_document_zone_segmentation',
     ...factBundle.warnings,
   ];
+
+  if (!input.zonedText) {
+    warnings.unshift('legacy:no_document_zone_segmentation');
+  }
 
   return {
     version: 'v1',

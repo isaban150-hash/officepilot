@@ -5,6 +5,7 @@ import {
   buildDocumentAnalysisFromLegacyClassification,
   isValidLegacyAdapterInput,
 } from './documentAnalysisLegacyAdapter';
+import { zoneDocumentText } from './documentZoningService';
 import {
   getLegacyAnalysisShadowInvocationCountForTests,
   resetLegacyAnalysisShadowInvocationCountForTests,
@@ -172,6 +173,26 @@ describe('documentAnalysisLegacyAdapter', () => {
     expect(analysis.evidenceIndex['legacy:detection']?.snippet).toBe(classification.detectionReasonKey);
     expect(analysis.facts.sender?.evidenceRefs).toEqual(['legacy:sender']);
     expect(analysis.facts.sender?.evidenceRefs).not.toContain('legacy:detection');
+  });
+
+  it('uses zoned evidence zones when zonedText is provided', () => {
+    const ocrText = [
+      'ARAL Tankstelle',
+      'Diesel 52,18 EUR',
+      'HRB 99999 Amtsgericht Beispielstadt',
+    ].join('\n');
+    const zonedText = zoneDocumentText(ocrText);
+    const classification = buildClassification({ recognizedText: ocrText });
+    const analysis = buildDocumentAnalysisFromLegacy({
+      classification,
+      recognizedText: ocrText,
+      zonedText,
+      ocrQuality: { score: 0.9, readable: true, partialRecognition: false },
+    });
+
+    expect(analysis.warnings).not.toContain('legacy:no_document_zone_segmentation');
+    expect(analysis.facts.grossAmount?.evidenceRefs[0]).toBe('legacy:grossAmount');
+    expect(analysis.evidenceIndex['legacy:grossAmount']?.zone).toBe('body');
   });
 
   it('exposes the masterplan alias buildDocumentAnalysisFromLegacyClassification', () => {
