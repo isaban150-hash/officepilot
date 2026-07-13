@@ -10,9 +10,11 @@ import {
   isImageUpload,
   isPdfUpload,
 } from '../services/documentUploadValidation';
-import { intakeDocumentFile } from '../services/documentIntakeService';
+import { intakeCachedDocumentFile } from '../services/documentIntakeService';
 import type { DocumentUploadErrorCode } from '../services/documentUploadErrorService';
-import { getDocumentFileDataUrl, getDocumentFileRefById } from '../services/documentFileStoreService';
+import { loadCachedDocumentFileFromUpload } from '../services/cachedDocumentFileService';
+import { getDocumentFileRefById } from '../services/documentFileStoreService';
+import { useDocumentFileObjectUrl } from '../hooks/useDocumentFileObjectUrl';
 import type { InboxItem } from '../types/models';
 
 export function DocumentUploadPage() {
@@ -36,7 +38,14 @@ export function DocumentUploadPage() {
     setInboxItem(null);
     setLoading(true);
 
-    const result = await intakeDocumentFile(file, { importSource: 'upload' });
+    const loaded = await loadCachedDocumentFileFromUpload(file);
+    if (!loaded.success) {
+      setLoading(false);
+      setError(loaded.error);
+      return;
+    }
+
+    const result = await intakeCachedDocumentFile(loaded.payload, { importSource: 'upload' });
     setLoading(false);
 
     if (!result.success) {
@@ -72,7 +81,7 @@ export function DocumentUploadPage() {
   }
 
   const fileRef = inboxItem?.fileRefId ? getDocumentFileRefById(inboxItem.fileRefId) : undefined;
-  const previewUrl = fileRef ? getDocumentFileDataUrl(fileRef) : undefined;
+  const previewUrl = useDocumentFileObjectUrl(fileRef);
 
   return (
     <div className="page document-upload-page" data-testid="document-upload-page">

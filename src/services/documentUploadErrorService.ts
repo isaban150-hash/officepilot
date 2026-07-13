@@ -3,6 +3,8 @@ import type { DocumentIntakeErrorCode } from './documentIntakeService';
 import type { DocumentTextErrorCode } from './ocrDocumentService';
 import type { DocumentUploadValidationError } from '../types/uploadedDocument';
 
+export type { DocumentIntakeErrorCode };
+
 export type DocumentUploadErrorCode =
   | DocumentUploadValidationError
   | DocumentIntakeErrorCode
@@ -21,9 +23,15 @@ const INTAKE_ERROR_KEYS: Partial<Record<DocumentIntakeErrorCode, TranslationKey>
   invalid_type: 'document.upload.error.invalidType',
   unsupported_photo_format: 'document.upload.error.unsupportedPhotoFormat',
   file_too_large: 'document.upload.error.fileTooLarge',
-  read_failed: 'docAssistant.error.technicalFailure',
-  hash_failed: 'docAssistant.error.technicalFailure',
-  persist_failed: 'docAssistant.error.technicalFailure',
+  file_read_failed: 'docAssistant.error.fileReadFailed',
+  storage_failed: 'docAssistant.error.storageFailed',
+  hash_failed: 'docAssistant.error.storageFailed',
+  persist_failed: 'docAssistant.error.persistFailed',
+  navigation_failed: 'docAssistant.error.navigationFailed',
+  blob_storage_unavailable: 'docAssistant.error.blobStorageFailed',
+  blob_write_failed: 'docAssistant.error.blobStorageFailed',
+  blob_read_failed: 'docAssistant.error.blobStorageFailed',
+  blob_delete_failed: 'docAssistant.error.blobStorageFailed',
 };
 
 const EXTRACTION_ERROR_KEYS: Partial<Record<DocumentTextErrorCode, TranslationKey>> = {
@@ -48,9 +56,15 @@ const INTAKE_TITLE_KEYS: Partial<Record<DocumentIntakeErrorCode, TranslationKey>
   invalid_type: 'docAssistant.error.title.unsupportedFormat',
   unsupported_photo_format: 'docAssistant.error.title.unsupportedFormat',
   file_too_large: 'docAssistant.error.title.fileTooLarge',
-  read_failed: 'docAssistant.error.title.technicalFailure',
-  hash_failed: 'docAssistant.error.title.technicalFailure',
-  persist_failed: 'docAssistant.error.title.technicalFailure',
+  file_read_failed: 'docAssistant.error.title.fileReadFailed',
+  storage_failed: 'docAssistant.error.title.storageFailed',
+  hash_failed: 'docAssistant.error.title.storageFailed',
+  persist_failed: 'docAssistant.error.title.persistFailed',
+  navigation_failed: 'docAssistant.error.title.navigationFailed',
+  blob_storage_unavailable: 'docAssistant.error.title.storageFailed',
+  blob_write_failed: 'docAssistant.error.title.storageFailed',
+  blob_read_failed: 'docAssistant.error.title.storageFailed',
+  blob_delete_failed: 'docAssistant.error.title.storageFailed',
 };
 
 export function resolveIntakeErrorKey(
@@ -74,6 +88,19 @@ export function isBlockingExtractionError(errorCode?: DocumentTextErrorCode): bo
     errorCode === 'no_text' ||
     errorCode === 'password_required' ||
     errorCode === 'pdf_corrupt'
+  );
+}
+
+export function isConfirmRetryableIntakeError(error: DocumentIntakeErrorCode): boolean {
+  return (
+    error === 'storage_failed' ||
+    error === 'hash_failed' ||
+    error === 'persist_failed' ||
+    error === 'navigation_failed' ||
+    error === 'blob_storage_unavailable' ||
+    error === 'blob_write_failed' ||
+    error === 'blob_read_failed' ||
+    error === 'blob_delete_failed'
   );
 }
 

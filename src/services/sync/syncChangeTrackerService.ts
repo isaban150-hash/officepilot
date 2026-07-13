@@ -228,3 +228,13 @@ export function trackPersistedChanges(state: AppPersistedState): void {
 export function getSyncChangeTrackerSnapshotForTests(): Map<string, EntitySyncFingerprint> {
   return new Map(trackedFingerprints ?? []);
 }
+
+export function captureSyncChangeTrackerState(): Map<string, EntitySyncFingerprint> | null {
+  return trackedFingerprints === null ? null : new Map(trackedFingerprints);
+}
+
+export function restoreSyncChangeTrackerState(
+  snapshot: Map<string, EntitySyncFingerprint> | null,
+): void {
+  trackedFingerprints = snapshot === null ? null : new Map(snapshot);
+}

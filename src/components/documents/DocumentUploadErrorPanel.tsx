@@ -3,7 +3,6 @@ import { Card, CardMeta, CardTitle } from '../ui/Card';
 import type { TranslationKey } from '../../i18n';
 import type { DocumentUploadErrorCode } from '../../services/documentUploadErrorService';
 import { resolveUploadErrorView } from '../../services/documentUploadErrorService';
-
 interface DocumentUploadErrorPanelProps {
   errorCode: DocumentUploadErrorCode;
   translate: (key: TranslationKey) => string;

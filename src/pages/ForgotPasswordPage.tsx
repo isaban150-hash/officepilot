@@ -1,20 +1,20 @@
 import { Link } from 'react-router-dom';
 import { AuthLayout } from '../components/auth/AuthLayout';
+import { useApp } from '../context/AppContext';
 
 export function ForgotPasswordPage() {
+  const { translate } = useApp();
+
   return (
     <AuthLayout
-      title="Passwort vergessen"
-      subtitle="Die Passwort-Zurücksetzung ist in dieser lokalen Version noch nicht angebunden."
+      title={translate('auth.forgotPassword.title')}
+      subtitle={translate('auth.forgotPassword.subtitle')}
       testId="forgot-password-page"
     >
       <div className="auth-info">
-        <p>
-          Bitte wenden Sie sich an Ihren Administrator. Eine echte Passwort-Wiederherstellung
-          wird mit der späteren Cloud-Anbindung (Supabase/Auth0/Firebase) bereitgestellt.
-        </p>
+        <p>{translate('auth.forgotPassword.body')}</p>
         <Link to="/login" className="btn btn--outline btn--full">
-          Zurück zur Anmeldung
+          {translate('auth.forgotPassword.backToLogin')}
         </Link>
       </div>
     </AuthLayout>

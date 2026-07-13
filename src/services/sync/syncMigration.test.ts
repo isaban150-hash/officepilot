@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { DEFAULT_SETUP } from '../../data/mockData';
 import {
   LEGACY_STORAGE_VERSION,
-  STORAGE_KEY,
+  getActiveStorageKey,
   STORAGE_VERSION,
   clearPersistedState,
   loadPersistedState,
@@ -75,7 +75,7 @@ describe('CLOUD-01B migration v1 → v2', () => {
     expect(loaded!.syncClient).toBeDefined();
     expect(loaded!.syncOutbox).toEqual([]);
 
-    const raw = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
+    const raw = JSON.parse(localStorage.getItem(getActiveStorageKey())!);
     expect(raw.version).toBe(STORAGE_VERSION);
   });
 
@@ -106,7 +106,7 @@ describe('CLOUD-01B migration v1 → v2', () => {
   it('behandelt unbekannte Version sauber', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     localStorage.setItem(
-      STORAGE_KEY,
+      getActiveStorageKey(),
       JSON.stringify({
         version: 99,
         setup: DEFAULT_SETUP,

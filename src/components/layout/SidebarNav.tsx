@@ -7,7 +7,7 @@ export function SidebarNav() {
   const { translate } = useApp();
 
   return (
-    <nav className="sidebar-nav" aria-label="Hauptnavigation" data-testid="sidebar-nav">
+    <nav className="sidebar-nav" aria-label={translate('common.nav.main')} data-testid="sidebar-nav">
       {DESKTOP_NAV_ITEMS.map(({ to, key, icon, end }) => (
         <NavLink
           key={to}

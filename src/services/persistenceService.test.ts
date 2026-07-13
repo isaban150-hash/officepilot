@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { createCompanyProfileFromSetup } from '../data/companyProfileDefaults';
 import { DEFAULT_SETUP } from '../data/mockData';
 import {
@@ -6,8 +6,10 @@ import {
   STORAGE_VERSION,
   clearPersistedState,
   createSeedState,
+  getActiveStorageKey,
   loadPersistedState,
   savePersistedState,
+  setActiveStorageScope,
 } from './persistenceService';
 import { createSyncClient } from './sync/syncClientService';
 import type { AppPersistedState } from '../types/models';
@@ -31,6 +33,10 @@ function minimalState(overrides: Partial<AppPersistedState> = {}): AppPersistedS
   };
 }
 
+beforeEach(() => {
+  setActiveStorageScope({ type: 'guest' });
+});
+
 describe('savePersistedState + loadPersistedState', () => {
   it('roundtrips valid state', () => {
     const state = minimalState();
@@ -47,14 +53,14 @@ describe('savePersistedState + loadPersistedState', () => {
 
 describe('loadPersistedState error handling', () => {
   it('returns null for corrupt JSON without throwing', () => {
-    localStorage.setItem(STORAGE_KEY, '{not-json');
+    localStorage.setItem(getActiveStorageKey(), '{not-json');
     expect(loadPersistedState()).toBeNull();
   });
 
   it('returns null for wrong version', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     localStorage.setItem(
-      STORAGE_KEY,
+      getActiveStorageKey(),
       JSON.stringify({
         version: 99,
         setup: DEFAULT_SETUP,
@@ -77,10 +83,10 @@ describe('loadPersistedState error handling', () => {
 describe('clearPersistedState', () => {
   it('removes stored data', () => {
     savePersistedState(minimalState());
-    expect(localStorage.getItem(STORAGE_KEY)).not.toBeNull();
+    expect(localStorage.getItem(getActiveStorageKey())).not.toBeNull();
 
     clearPersistedState();
-    expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+    expect(localStorage.getItem(getActiveStorageKey())).toBeNull();
   });
 });
 

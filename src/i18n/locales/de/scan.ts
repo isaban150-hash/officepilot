@@ -1,0 +1,26 @@
+export const deScan = {
+  'heute.scanButton': 'Foto / Scan',
+  'scan.title': 'Scan',
+  'scan.subtitle': 'Foto oder PDF – OfficePilot sortiert und legt ab.',
+  'scan.captureTitle': 'Dokument erfassen',
+  'scan.captureHint': 'Foto aufnehmen oder Datei wählen. OfficePilot erkennt den Inhalt.',
+  'scan.selectType': 'Art wählen (optional)',
+  'scan.typeAuto': 'Automatisch erkennen',
+  'scan.uploadFile': 'Datei wählen',
+  'scan.camera': 'Kamera',
+  'scan.gallery': 'Galerie',
+  'scan.pdf': 'PDF',
+  'scan.ocr.processing': 'Text wird erkannt…',
+  'scan.ocr.previewSubtitle': 'Erkannten Text prüfen und weiter analysieren.',
+  'scan.ocr.continue': 'Weiter analysieren',
+  'scan.ocr.documentType': 'Erkannte Art',
+  'scan.ocr.sender': 'Absender',
+  'scan.ocr.previewText': 'Textvorschau',
+  'scan.ocr.unsupportedFormat': 'Dieses Dateiformat wird nicht unterstützt.',
+  'scan.ocr.failed': 'Texterkennung fehlgeschlagen. Bitte erneut versuchen.',
+  'scan.ocr.noText':
+    'Es wurde kein verwertbarer Text erkannt. Bitte fotografieren Sie das Dokument gerade und bei gutem Licht.',
+  'scan.ocr.partialHint':
+    'Der Text konnte nur teilweise erkannt werden. Bitte prüfen Sie das Ergebnis.',
+  'scanResult.toastRecognized': 'Dokument erkannt – bitte kurz prüfen.',
+} as const;

@@ -68,11 +68,19 @@ export function Badge({
 
 export { PageHeader } from './PageHeader';
 
-export function Toast({ message, onClose }: { message: string; onClose: () => void }) {
+export function Toast({
+  message,
+  onClose,
+  closeLabel = 'Schließen',
+}: {
+  message: string;
+  onClose: () => void;
+  closeLabel?: string;
+}) {
   return (
     <div className="toast" role="status">
       <span>{message}</span>
-      <button type="button" className="toast__close" onClick={onClose} aria-label="Schließen">
+      <button type="button" className="toast__close" onClick={onClose} aria-label={closeLabel}>
         ×
       </button>
     </div>

@@ -9,8 +9,7 @@ import { analyzeContractFromInbox } from './contractAnalysisService';
 import {
   buildOcrPreviewSummary,
   extractDocumentText,
-  NO_TEXT_MESSAGE,
-  PARTIAL_TEXT_HINT,
+  OCR_TEXT_HINT_KEYS,
   setImageOcrExtractorForTests,
 } from './ocrDocumentService';
 import {
@@ -126,7 +125,7 @@ describe('ocrDocumentService', () => {
     }));
     const result = await extractDocumentText(createFile('bad.jpg', 'image/jpeg'));
     expect(result.confidence).toBe('low');
-    expect(result.qualityHint).toBe(PARTIAL_TEXT_HINT);
+    expect(result.qualityHintKey).toBe(OCR_TEXT_HINT_KEYS.partial);
   });
 
   it('leeres Bild → ehrliche Fehlermeldung', async () => {
@@ -136,7 +135,7 @@ describe('ocrDocumentService', () => {
     }));
     const result = await extractDocumentText(createFile('empty.png', 'image/png'));
     expect(result.errorCode).toBe('no_text');
-    expect(result.message).toBe(NO_TEXT_MESSAGE);
+    expect(result.messageKey).toBe(OCR_TEXT_HINT_KEYS.noText);
     expect(result.recognizedText).toBe('');
   });
 

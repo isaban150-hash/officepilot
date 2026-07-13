@@ -1,6 +1,8 @@
-import { OFFICEPILOT_LEGAL_DISCLAIMER } from '../config/legalDisclaimer';
+import type { ExplanationTextBlock } from '../i18n/types';
+import type { TranslationKey } from '../i18n';
 import { formatPaperFilingInstruction } from './paperFolderService';
-import type { InboxItem, InboxPriority, WorkflowLetterSummary } from '../types/models';
+import { getCachedSetup } from './persistenceService';
+import type { AppLanguage, InboxItem, InboxPriority, WorkflowLetterSummary } from '../types/models';
 
 export type LetterKind =
   | 'brief'
@@ -14,19 +16,37 @@ export type LetterKind =
 
 export interface LetterExplanation {
   kind: LetterKind;
-  about: string;
-  importance: string;
-  deadline: string;
-  nextSteps: string;
+  about: ExplanationTextBlock;
+  importance: ExplanationTextBlock;
+  deadline: ExplanationTextBlock;
+  nextSteps: ExplanationTextBlock;
   digitalStorage: string;
   paperStorage: string;
-  disclaimer: string;
+  legalDisclaimerKey: TranslationKey;
+  disclaimer: ExplanationTextBlock[];
 }
 
-const UNCERTAIN_HINT =
-  'Bitte prüfen oder Steuerberater/Ansprechpartner fragen.';
+const ABOUT_KEYS: Record<LetterKind, string> = {
+  brief: 'letter.explain.about.brief',
+  behoerde: 'letter.explain.about.behoerde',
+  versicherung: 'letter.explain.about.versicherung',
+  krankenkasse: 'letter.explain.about.krankenkasse',
+  bg_bau: 'letter.explain.about.bgBau',
+  finanzamt: 'letter.explain.about.finanzamt',
+  soka_bau: 'letter.explain.about.sokaBau',
+  wichtiges_schreiben: 'letter.explain.about.wichtig',
+};
 
-const DISCLAIMER = OFFICEPILOT_LEGAL_DISCLAIMER;
+const NEXT_STEP_KEYS: Record<LetterKind, string> = {
+  brief: 'letter.explain.nextSteps.brief',
+  behoerde: 'letter.explain.nextSteps.behoerde',
+  versicherung: 'letter.explain.nextSteps.versicherung',
+  krankenkasse: 'letter.explain.nextSteps.krankenkasse',
+  bg_bau: 'letter.explain.nextSteps.bgBau',
+  finanzamt: 'letter.explain.nextSteps.finanzamt',
+  soka_bau: 'letter.explain.nextSteps.sokaBau',
+  wichtiges_schreiben: 'letter.explain.nextSteps.wichtig',
+};
 
 function normalizedHaystack(item: InboxItem): string {
   return [
@@ -73,36 +93,6 @@ export function isExplainableLetter(item: InboxItem): boolean {
   return detectLetterKind(item) !== null;
 }
 
-function formatDeadline(item: InboxItem): string {
-  const recognizedFrist =
-    item.recognizedData.Frist ??
-    item.recognizedData.frist ??
-    item.recognizedData.Deadline;
-
-  if (item.deadline) {
-    return `Mögliche Frist erkannt: ${item.deadline}. Bitte im Originalschreiben verifizieren.`;
-  }
-  if (recognizedFrist) {
-    return `Im Text erkannte Frist: ${recognizedFrist}. Bitte im Originalschreiben verifizieren.`;
-  }
-  return `Keine erkennbare Frist. ${UNCERTAIN_HINT}`;
-}
-
-function importanceFromPriority(priority: InboxPriority): string {
-  switch (priority) {
-    case 'kritisch':
-      return 'Vermutlich zeitkritisch – bitte prioritär prüfen und Fristen im Schreiben kontrollieren.';
-    case 'hoch':
-      return 'Wahrscheinlich wichtig – zeitnah bearbeiten und nicht liegen lassen.';
-    case 'mittel':
-      return 'Möglicherweise relevant – in den nächsten Tagen prüfen.';
-    case 'niedrig':
-      return 'Priorität eher niedrig – dennoch kurz prüfen, ob Handlungsbedarf besteht.';
-    default:
-      return `Bedeutung unklar. ${UNCERTAIN_HINT}`;
-  }
-}
-
 function subjectHint(item: InboxItem): string {
   return (
     item.recognizedData.Betreff ??
@@ -111,77 +101,83 @@ function subjectHint(item: InboxItem): string {
   );
 }
 
-function storageHints(item: InboxItem): { digital: string; paper: string } {
+function buildDeadlineBlock(item: InboxItem): ExplanationTextBlock {
+  const recognizedFrist =
+    item.recognizedData.Frist ??
+    item.recognizedData.frist ??
+    item.recognizedData.Deadline;
+
+  if (item.deadline) {
+    return {
+      key: 'letter.explain.deadline.recognized',
+      params: { deadline: item.deadline },
+    };
+  }
+  if (recognizedFrist) {
+    return {
+      key: 'letter.explain.deadline.fromText',
+      params: { deadline: String(recognizedFrist) },
+    };
+  }
+  return { key: 'letter.explain.deadline.none' };
+}
+
+function importanceBlock(priority: InboxPriority): ExplanationTextBlock {
+  switch (priority) {
+    case 'kritisch':
+      return { key: 'letter.explain.importance.critical' };
+    case 'hoch':
+      return { key: 'letter.explain.importance.high' };
+    case 'mittel':
+      return { key: 'letter.explain.importance.medium' };
+    case 'niedrig':
+      return { key: 'letter.explain.importance.low' };
+    default:
+      return { key: 'letter.explain.importance.unclear' };
+  }
+}
+
+function storageHints(item: InboxItem, lang: AppLanguage): { digital: string; paper: string } {
   return {
     digital: `${item.digitalFolder.name} → ${item.digitalFolder.path}`,
-    paper: formatPaperFilingInstruction(item.paperFiling),
+    paper: formatPaperFilingInstruction(item.paperFiling, lang),
   };
 }
 
-type TemplateBuilder = (item: InboxItem) => {
-  about: string;
-  nextSteps: string;
-};
+function buildAboutBlock(kind: LetterKind, item: InboxItem): ExplanationTextBlock {
+  const sender = item.sender || '—';
+  const subject = subjectHint(item);
+  if (kind === 'wichtiges_schreiben') {
+    return {
+      key: ABOUT_KEYS[kind],
+      params: { sender, title: item.title },
+    };
+  }
+  return {
+    key: ABOUT_KEYS[kind],
+    params: { sender, subject },
+  };
+}
 
-const TEMPLATES: Record<LetterKind, TemplateBuilder> = {
-  brief: (item) => ({
-    about: `Es könnte sich um einen allgemeinen Brief handeln – vermutlich von „${item.sender}“. Betreff: „${subjectHint(item)}“.`,
-    nextSteps:
-      'Schreiben kurz durchlesen, ob eine Antwort, Unterschrift oder Ablage nötig ist. Bei unklarem Inhalt Rückfrage beim Absender oder intern klären.',
-  }),
-  behoerde: (item) => ({
-    about: `Es könnte ein behördliches Schreiben sein – Absender: „${item.sender}“. Betreff: „${subjectHint(item)}“.`,
-    nextSteps:
-      'Inhalt und Frist prüfen, Original abheften und ggf. an zuständige Person oder Steuerberater weiterleiten – ohne automatische Antwort.',
-  }),
-  versicherung: (item) => ({
-    about: `Es könnte ein Versicherungsschreiben sein (z. B. Police, Mahnung oder Mitteilung) von „${item.sender}“.`,
-    nextSteps:
-      'Prüfen, ob Beitrag, Laufzeit oder Deckung betroffen sind. Unterlagen abheften und bei Bedarf Versicherungsmakler kontaktieren.',
-  }),
-  krankenkasse: (item) => ({
-    about: `Es könnte ein Schreiben der Krankenkasse (z. B. AOK) sein von „${item.sender}“. Betreff: „${subjectHint(item)}“.`,
-    nextSteps:
-      'Prüfen, ob Beiträge, Meldungen oder Fristen betroffen sind. Original abheften und bei Unklarheiten die Krankenkasse oder Lohnbuchhaltung fragen.',
-  }),
-  bg_bau: (item) => ({
-    about: `Es könnte ein Schreiben der BG BAU (Berufsgenossenschaft) sein – z. B. Beitrag, Unbedenklichkeitsbescheinigung oder Mitteilung. Absender: „${item.sender}“.`,
-    nextSteps:
-      'Beitrag und Frist prüfen, Original abheften. Bei Beitragsbescheiden ggf. Steuerberater oder Lohnbuchhaltung einbeziehen.',
-  }),
-  finanzamt: (item) => ({
-    about: `Es könnte ein Finanzamt-Schreiben sein (z. B. Steuerbescheid, Anfrage oder Fristsetzung) von „${item.sender}“.`,
-    nextSteps:
-      'Schreiben sorgfältig prüfen, Fristen notieren, Original abheften. Bei Steuerfragen Steuerberater hinzuziehen – keine eigenständige Bewertung vornehmen.',
-  }),
-  soka_bau: (item) => ({
-    about: `Es könnte ein SOKA-BAU-Schreiben sein (Sozialkassen der Bauwirtschaft) von „${item.sender}“.`,
-    nextSteps:
-      'Prüfen, ob Beiträge, Bescheinigungen oder Meldepflichten betroffen sind. Original abheften und bei Unklarheiten SOKA-BAU oder Steuerberater fragen.',
-  }),
-  wichtiges_schreiben: (item) => ({
-    about: `Es könnte ein wichtiges Schreiben sein – Absender: „${item.sender}“, Titel: „${item.title}“. Genauer Inhalt bitte manuell prüfen.`,
-    nextSteps:
-      'Kurz prüfen, ob Frist, Zahlung oder Antwort erforderlich ist. Bei Unsicherheit nicht allein entscheiden – Ansprechpartner oder Steuerberater einbeziehen.',
-  }),
-};
-
-export function getLetterExplanation(item: InboxItem): LetterExplanation | null {
+export function getLetterExplanation(
+  item: InboxItem,
+  lang: AppLanguage = getCachedSetup()?.language ?? 'de',
+): LetterExplanation | null {
   const kind = detectLetterKind(item);
   if (!kind) return null;
 
-  const storage = storageHints(item);
-  const template = TEMPLATES[kind](item);
+  const storage = storageHints(item, lang);
 
   return {
     kind,
-    about: template.about,
-    importance: importanceFromPriority(item.priority),
-    deadline: formatDeadline(item),
-    nextSteps: template.nextSteps,
+    about: buildAboutBlock(kind, item),
+    importance: importanceBlock(item.priority),
+    deadline: buildDeadlineBlock(item),
+    nextSteps: { key: NEXT_STEP_KEYS[kind] },
     digitalStorage: storage.digital,
     paperStorage: storage.paper,
-    disclaimer: `${DISCLAIMER} ${UNCERTAIN_HINT}`,
+    legalDisclaimerKey: 'legal.disclaimer',
+    disclaimer: [{ key: 'letter.explain.uncertainHint' }],
   };
 }
 
@@ -198,6 +194,7 @@ export function letterExplanationFromWorkflow(
     nextSteps: summary.nextSteps,
     digitalStorage: summary.digitalStorage,
     paperStorage: summary.paperStorage,
-    disclaimer: `${DISCLAIMER} ${UNCERTAIN_HINT}`,
+    legalDisclaimerKey: 'legal.disclaimer',
+    disclaimer: summary.disclaimer ?? [{ key: 'letter.explain.uncertainHint' }],
   };
 }

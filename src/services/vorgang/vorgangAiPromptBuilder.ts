@@ -1,3 +1,5 @@
+import { buildAiLanguageInstruction } from '../ai/aiLanguageRules';
+import type { AppLanguage } from '../../types/models';
 import { AI_QA_SYSTEM_RULES } from '../ai/aiGuardrails';
 import { getCompanyProfile } from '../companyProfileService';
 import { sanitizeAiText } from '../ai/aiTextSanitizer';
@@ -12,13 +14,19 @@ function formatSection(title: string, lines: string[]): string {
   return `${title}:\n${lines.map((line) => `- ${line}`).join('\n')}`;
 }
 
-export function buildVorgangAiPrompt(question: string, context: VorgangAiContext): string {
+export function buildVorgangAiPrompt(
+  question: string,
+  context: VorgangAiContext,
+  lang: AppLanguage = 'de',
+): string {
   const profile = getCompanyProfile();
   const companyLine = sanitizeAiText(
     [profile.companyName, profile.contactPerson, profile.city].filter(Boolean).join(' | '),
   );
 
   return `${AI_QA_SYSTEM_RULES}
+
+${buildAiLanguageInstruction(lang)}
 
 FIRMA (ohne Bank-/Steuerdaten):
 ${companyLine || '—'}

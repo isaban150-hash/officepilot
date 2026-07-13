@@ -79,6 +79,8 @@ function mapLetterExplanation(
     nextSteps: explanation.nextSteps,
     digitalStorage: explanation.digitalStorage,
     paperStorage: explanation.paperStorage,
+    legalDisclaimer: explanation.legalDisclaimerKey,
+    disclaimer: explanation.disclaimer,
   };
 }
 

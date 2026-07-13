@@ -7,7 +7,7 @@ export function BottomNav() {
   const { translate } = useApp();
 
   return (
-    <nav className="bottom-nav" aria-label="Hauptnavigation" data-testid="bottom-nav">
+    <nav className="bottom-nav" aria-label={translate('common.nav.main')} data-testid="bottom-nav">
       {MOBILE_BOTTOM_NAV_ITEMS.map(({ to, key, icon, end, featured }) => (
         <NavLink
           key={to}

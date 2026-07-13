@@ -1,5 +1,10 @@
 import { createMockInboxItemFromUpload } from './inboxUploadFactory';
 import { isHeicUploadFile } from './documentUploadValidation';
+import {
+  loadCachedDocumentFileFromUpload,
+  stableFileFromCachedPayload,
+  type CachedDocumentFilePayload,
+} from './cachedDocumentFileService';
 import { extractTextFromPdfBytes } from './uploadTextExtractionService';
 import { extractPdfTextViaOcr, shouldRunPdfOcr } from './pdfOcrFallbackService';
 import { getPdfPageCount } from './pdfDocumentService';
@@ -15,7 +20,14 @@ import {
   buildDocumentUnderstandingSummary,
 } from './documentIntakeUnderstandingService';
 import { getDocumentDisplayLabelKey } from './documentDisplayLabelService';
+import type { TranslationKey } from '../i18n';
 import type { UploadDocumentKind } from '../types/models';
+
+export const OCR_TEXT_HINT_KEYS = {
+  partial: 'scan.ocr.partialHint',
+  noText: 'scan.ocr.noText',
+  unsupportedFormat: 'scan.ocr.unsupportedFormat',
+} as const satisfies Record<string, TranslationKey>;
 
 export type DocumentTextSourceType = 'pdf' | 'image';
 export type OcrConfidenceLevel = 'high' | 'medium' | 'low' | 'none';
@@ -40,14 +52,15 @@ export interface DocumentTextExtractionResult {
   extractionMethod?: DocumentTextExtractionMethod;
   ocrAttempted?: boolean;
   errorCode?: DocumentTextErrorCode;
-  message?: string;
-  qualityHint?: string;
+  messageKey?: TranslationKey;
+  qualityHintKey?: TranslationKey;
 }
 
 export interface OcrPreviewSummary {
-  documentTypeLabelKey: import('../i18n').TranslationKey;
+  documentTypeLabelKey: TranslationKey;
   sender?: string;
   previewLines: string[];
+  previewPartialHint?: boolean;
   understanding?: DocumentUnderstandingSummary;
   aiActions?: DocumentAiAction[];
 }
@@ -56,15 +69,6 @@ type ImageOcrExtractor = (file: File) => Promise<{ text: string; confidence: num
 
 let imageOcrExtractorOverride: ImageOcrExtractor | null = null;
 
-const NO_TEXT_MESSAGE =
-  'Ich konnte keinen verwertbaren Text erkennen. Bitte fotografieren Sie das Dokument gerade und mit gutem Licht.';
-
-const PARTIAL_TEXT_HINT =
-  'Der Text konnte nur teilweise erkannt werden. Bitte prüfen Sie das Ergebnis.';
-
-const UNSUPPORTED_FORMAT_MESSAGE =
-  'Dieses Dateiformat wird nicht unterstützt. Bitte JPG, PNG oder PDF verwenden.';
-
 export function setImageOcrExtractorForTests(extractor: ImageOcrExtractor | null): void {
   imageOcrExtractorOverride = extractor;
 }
@@ -72,18 +76,6 @@ export function setImageOcrExtractorForTests(extractor: ImageOcrExtractor | null
 function fileExtension(name: string): string {
   const index = name.lastIndexOf('.');
   return index === -1 ? '' : name.slice(index).toLowerCase();
-}
-
-function resolveSourceType(file: File): DocumentTextSourceType | 'unsupported' {
-  const ext = fileExtension(file.name);
-  if (file.type === 'application/pdf' || ext === '.pdf') return 'pdf';
-  if (
-    file.type.startsWith('image/') ||
-    ['.jpg', '.jpeg', '.png', '.heic', '.heif'].includes(ext)
-  ) {
-    return 'image';
-  }
-  return 'unsupported';
 }
 
 function isHeicFile(file: File): boolean {
@@ -107,25 +99,19 @@ function deriveConfidence(textLength: number, ocrScore?: number, qualityScore?: 
   return 'low';
 }
 
-function buildQualityHint(
+function buildQualityHintKey(
   confidence: OcrConfidenceLevel,
   hasText: boolean,
   partialRecognition = false,
-): string | undefined {
-  if (!hasText) return NO_TEXT_MESSAGE;
-  if (confidence === 'low' || partialRecognition) return PARTIAL_TEXT_HINT;
+): TranslationKey | undefined {
+  if (!hasText) return OCR_TEXT_HINT_KEYS.noText;
+  if (confidence === 'low' || partialRecognition) return OCR_TEXT_HINT_KEYS.partial;
   return undefined;
 }
 
-function estimatePdfPageCount(bytes: Uint8Array): number | undefined {
-  const decoded = new TextDecoder('latin1').decode(bytes);
-  const matches = decoded.match(/\/Type\s*\/Page\b/g);
-  return matches && matches.length > 0 ? matches.length : undefined;
-}
-
 function finalizeResult(
-  partial: Omit<DocumentTextExtractionResult, 'qualityHint' | 'displayText'> & {
-    qualityHint?: string;
+  partial: Omit<DocumentTextExtractionResult, 'qualityHintKey' | 'displayText'> & {
+    qualityHintKey?: TranslationKey;
     displayText?: string;
     partialRecognition?: boolean;
   },
@@ -135,9 +121,9 @@ function finalizeResult(
   const displayText =
     partial.displayText ??
     (hasText ? sanitizeExtractedText(partial.recognizedText) : '');
-  const qualityHint =
-    partial.qualityHint ??
-    buildQualityHint(confidence, hasText, partial.partialRecognition);
+  const qualityHintKey =
+    partial.qualityHintKey ??
+    buildQualityHintKey(confidence, hasText, partial.partialRecognition);
 
   if (!hasText && !partial.errorCode) {
     return {
@@ -145,8 +131,8 @@ function finalizeResult(
       displayText: '',
       confidence: 'none',
       errorCode: 'no_text',
-      message: NO_TEXT_MESSAGE,
-      qualityHint,
+      messageKey: OCR_TEXT_HINT_KEYS.noText,
+      qualityHintKey,
       recognizedText: '',
     };
   }
@@ -155,7 +141,7 @@ function finalizeResult(
     ...partial,
     displayText,
     confidence,
-    qualityHint,
+    qualityHintKey,
   };
 }
 
@@ -196,9 +182,28 @@ function pickBestPdfVariant(
   };
 }
 
-async function extractFromPdf(file: File): Promise<DocumentTextExtractionResult> {
-  const buffer = await file.arrayBuffer();
-  const bytes = new Uint8Array(buffer);
+function resolveSourceTypeFromMeta(fileName: string, mimeType: string): DocumentTextSourceType | 'unsupported' {
+  const ext = fileExtension(fileName);
+  if (mimeType === 'application/pdf' || ext === '.pdf') return 'pdf';
+  if (
+    mimeType.startsWith('image/') ||
+    ['.jpg', '.jpeg', '.png', '.heic', '.heif'].includes(ext)
+  ) {
+    return 'image';
+  }
+  return 'unsupported';
+}
+
+function estimatePdfPageCount(bytes: Uint8Array): number | undefined {
+  const decoded = new TextDecoder('latin1').decode(bytes);
+  const matches = decoded.match(/\/Type\s*\/Page\b/g);
+  return matches && matches.length > 0 ? matches.length : undefined;
+}
+
+async function extractFromPdfBytes(
+  bytes: Uint8Array,
+  stableFile: File,
+): Promise<DocumentTextExtractionResult> {
   const pageCount = await resolvePdfPageCount(bytes);
   const directRaw = extractTextFromPdfBytes(bytes);
   const directQuality = assessTextQuality(directRaw);
@@ -211,20 +216,17 @@ async function extractFromPdf(file: File): Promise<DocumentTextExtractionResult>
   let pageTexts: Array<{ pageNumber: number; text: string }> | undefined;
   let ocrAttempted = false;
   let pdfErrorCode: DocumentTextErrorCode | undefined;
-  let pdfErrorMessage: string | undefined;
 
   if (shouldRunPdfOcr(directQuality)) {
     ocrAttempted = true;
-    const ocr = await extractPdfTextViaOcr(file, { pageCount, directTextQuality: directQuality });
+    const ocr = await extractPdfTextViaOcr(stableFile, { pageCount, directTextQuality: directQuality });
     pagesProcessed = ocr.pagesProcessed;
     pageTexts = ocr.pageTexts;
 
     if (ocr.errorCode === 'password_required') {
       pdfErrorCode = 'password_required';
-      pdfErrorMessage = ocr.message;
     } else if (ocr.errorCode === 'pdf_corrupt' || ocr.errorCode === 'render_failed') {
       pdfErrorCode = 'pdf_corrupt';
-      pdfErrorMessage = ocr.message;
     }
 
     const picked = pickBestPdfVariant(directRaw, ocr.text, ocr.confidence);
@@ -251,7 +253,6 @@ async function extractFromPdf(file: File): Promise<DocumentTextExtractionResult>
       extractionMethod,
       ocrAttempted,
       errorCode: pdfErrorCode,
-      message: pdfErrorMessage,
     });
   }
 
@@ -266,7 +267,7 @@ async function extractFromPdf(file: File): Promise<DocumentTextExtractionResult>
     extractionMethod,
     ocrAttempted,
     partialRecognition,
-    qualityHint: partialRecognition ? PARTIAL_TEXT_HINT : undefined,
+    qualityHintKey: partialRecognition ? OCR_TEXT_HINT_KEYS.partial : undefined,
   });
 }
 
@@ -307,8 +308,8 @@ async function extractFromImage(file: File): Promise<DocumentTextExtractionResul
       extractionMethod: 'image_ocr',
       partialRecognition,
       errorCode: recognizedText ? undefined : 'no_text',
-      message: recognizedText ? undefined : NO_TEXT_MESSAGE,
-      qualityHint: partialRecognition ? PARTIAL_TEXT_HINT : undefined,
+      messageKey: recognizedText ? undefined : OCR_TEXT_HINT_KEYS.noText,
+      qualityHintKey: partialRecognition ? OCR_TEXT_HINT_KEYS.partial : undefined,
     });
   } catch {
     if (isHeicFile(file)) {
@@ -327,9 +328,44 @@ async function extractFromImage(file: File): Promise<DocumentTextExtractionResul
       confidence: 'none',
       sourceType: 'image',
       errorCode: 'ocr_failed',
-      message: NO_TEXT_MESSAGE,
+      messageKey: OCR_TEXT_HINT_KEYS.noText,
     });
   }
+}
+
+export async function extractDocumentTextFromCache(
+  payload: CachedDocumentFilePayload,
+): Promise<DocumentTextExtractionResult> {
+  const stableFile = stableFileFromCachedPayload(payload);
+
+  if (isHeicUploadFile(stableFile)) {
+    return finalizeResult({
+      recognizedText: '',
+      displayText: '',
+      confidence: 'none',
+      sourceType: 'image',
+      errorCode: 'heic_unsupported',
+    });
+  }
+
+  const sourceType = resolveSourceTypeFromMeta(payload.fileName, payload.mimeType);
+
+  if (sourceType === 'unsupported') {
+    return finalizeResult({
+      recognizedText: '',
+      displayText: '',
+      confidence: 'none',
+      sourceType: 'image',
+      errorCode: 'unsupported_format',
+      messageKey: OCR_TEXT_HINT_KEYS.unsupportedFormat,
+    });
+  }
+
+  if (sourceType === 'pdf') {
+    return extractFromPdfBytes(payload.bytes, stableFile);
+  }
+
+  return extractFromImage(stableFile);
 }
 
 export async function extractDocumentText(file: File): Promise<DocumentTextExtractionResult> {
@@ -343,24 +379,48 @@ export async function extractDocumentText(file: File): Promise<DocumentTextExtra
     });
   }
 
-  const sourceType = resolveSourceType(file);
-
-  if (sourceType === 'unsupported') {
+  const loaded = await loadCachedDocumentFileFromUpload(file);
+  if (!loaded.success) {
+    if (loaded.error === 'unsupported_photo_format') {
+      return finalizeResult({
+        recognizedText: '',
+        displayText: '',
+        confidence: 'none',
+        sourceType: 'image',
+        errorCode: 'heic_unsupported',
+      });
+    }
+    if (loaded.error === 'invalid_type') {
+      return finalizeResult({
+        recognizedText: '',
+        displayText: '',
+        confidence: 'none',
+        sourceType: 'image',
+        errorCode: 'unsupported_format',
+        messageKey: OCR_TEXT_HINT_KEYS.unsupportedFormat,
+      });
+    }
+    if (loaded.error === 'file_too_large') {
+      return finalizeResult({
+        recognizedText: '',
+        displayText: '',
+        confidence: 'none',
+        sourceType: 'image',
+        errorCode: 'unsupported_format',
+        messageKey: OCR_TEXT_HINT_KEYS.unsupportedFormat,
+      });
+    }
     return finalizeResult({
       recognizedText: '',
       displayText: '',
       confidence: 'none',
       sourceType: 'image',
-      errorCode: 'unsupported_format',
-      message: UNSUPPORTED_FORMAT_MESSAGE,
+      errorCode: 'ocr_failed',
+      messageKey: OCR_TEXT_HINT_KEYS.noText,
     });
   }
 
-  if (sourceType === 'pdf') {
-    return extractFromPdf(file);
-  }
-
-  return extractFromImage(file);
+  return extractDocumentTextFromCache(loaded.payload);
 }
 
 export function buildOcrPreviewSummary(
@@ -376,20 +436,15 @@ export function buildOcrPreviewSummary(
 
   const understanding = buildDocumentUnderstandingSummary(item, { recognizedText });
   const aiActions = buildDocumentAiActions(item.classifiedKind ?? 'sonstiges', understanding);
-  const previewLines = buildDisplayPreviewLines(recognizedText, PARTIAL_TEXT_HINT);
+  const { lines: previewLines, usesPartialHint } = buildDisplayPreviewLines(recognizedText);
   const kind = item.classifiedKind ?? 'sonstiges';
 
   return {
     documentTypeLabelKey: getDocumentDisplayLabelKey(kind, item.documentType),
     sender: understanding.sender ?? (item.sender?.trim() || undefined),
     previewLines,
+    previewPartialHint: usesPartialHint,
     understanding,
     aiActions,
   };
 }
-
-export {
-  NO_TEXT_MESSAGE,
-  PARTIAL_TEXT_HINT,
-  UNSUPPORTED_FORMAT_MESSAGE,
-};

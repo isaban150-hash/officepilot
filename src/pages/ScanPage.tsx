@@ -7,17 +7,27 @@ import { Card, CardMeta, CardTitle, PageHeader } from '../components/ui/Card';
 import { useApp } from '../context/AppContext';
 import {
   UPLOAD_DOCUMENT_KINDS,
-  UPLOAD_KIND_LABELS,
+  UPLOAD_KIND_LABEL_KEYS,
 } from '../services/inboxUploadFactory';
-import { intakeDocumentFile } from '../services/documentIntakeService';
+import {
+  intakeCachedDocumentFile,
+} from '../services/documentIntakeService';
+import { getPersistFailureDiagnosticForDev } from '../services/persistenceService';
 import {
   isBlockingExtractionError,
+  isConfirmRetryableIntakeError,
+  resolveUploadErrorView,
+  type DocumentIntakeErrorCode,
   type DocumentUploadErrorCode,
 } from '../services/documentUploadErrorService';
 import { isHeicUploadFile } from '../services/documentUploadValidation';
 import {
+  loadCachedDocumentFileFromUpload,
+  type CachedDocumentFilePayload,
+} from '../services/cachedDocumentFileService';
+import {
   buildOcrPreviewSummary,
-  extractDocumentText,
+  extractDocumentTextFromCache,
   type DocumentTextExtractionResult,
   type OcrPreviewSummary,
 } from '../services/ocrDocumentService';
@@ -27,7 +37,7 @@ const SCAN_FILE_ACCEPT =
   'image/jpeg,image/png,image/webp,application/pdf,.jpg,.jpeg,.png,.webp,.pdf';
 
 interface PendingScan {
-  file: File;
+  cachedFile: CachedDocumentFilePayload;
   extraction: DocumentTextExtractionResult;
   preview: OcrPreviewSummary;
 }
@@ -38,11 +48,14 @@ export function ScanPage() {
   const [searchParams] = useSearchParams();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const confirmInFlightRef = useRef(false);
   const [selectedKind, setSelectedKind] = useState<UploadDocumentKind | null>(null);
   const [showKindPicker, setShowKindPicker] = useState(false);
   const [pendingScan, setPendingScan] = useState<PendingScan | null>(null);
   const [uploadError, setUploadError] = useState<DocumentUploadErrorCode | null>(null);
+  const [confirmError, setConfirmError] = useState<DocumentIntakeErrorCode | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isConfirming, setIsConfirming] = useState(false);
   const inputMode = searchParams.get('input');
 
   useEffect(() => {
@@ -60,6 +73,8 @@ export function ScanPage() {
 
   const openFilePicker = (camera = false) => {
     setUploadError(null);
+    setConfirmError(null);
+    setPendingScan(null);
     if (camera) {
       cameraInputRef.current?.click();
     } else {
@@ -74,9 +89,23 @@ export function ScanPage() {
     }
 
     setUploadError(null);
+    setConfirmError(null);
+    setPendingScan(null);
     setIsProcessing(true);
     try {
-      const extraction = await extractDocumentText(file);
+      const loaded = await loadCachedDocumentFileFromUpload(file);
+      if (!loaded.success) {
+        if (loaded.error === 'unsupported_photo_format') {
+          setUploadError('heic_unsupported');
+        } else if (loaded.error === 'file_too_large') {
+          setUploadError('file_too_large');
+        } else {
+          setUploadError('file_read_failed');
+        }
+        return;
+      }
+
+      const extraction = await extractDocumentTextFromCache(loaded.payload);
 
       if (isBlockingExtractionError(extraction.errorCode)) {
         setUploadError(extraction.errorCode ?? 'ocr_failed');
@@ -84,15 +113,15 @@ export function ScanPage() {
       }
 
       const preview = buildOcrPreviewSummary(
-        file.name,
+        loaded.payload.fileName,
         extraction.recognizedText,
         selectedKind ?? undefined,
       );
 
-      setPendingScan({ file, extraction, preview });
+      setPendingScan({ cachedFile: loaded.payload, extraction, preview });
 
-      if (extraction.qualityHint) {
-        showToast(extraction.qualityHint);
+      if (extraction.qualityHintKey) {
+        showToast(translate(extraction.qualityHintKey));
       }
     } catch {
       setUploadError('ocr_failed');
@@ -102,40 +131,43 @@ export function ScanPage() {
   };
 
   const confirmPendingScan = async () => {
-    if (!pendingScan) return;
+    if (!pendingScan || confirmInFlightRef.current) return;
 
-    if (isHeicUploadFile(pendingScan.file)) {
-      setUploadError('heic_unsupported');
-      setPendingScan(null);
-      return;
-    }
+    confirmInFlightRef.current = true;
+    setConfirmError(null);
+    setIsConfirming(true);
 
-    const recognizedText = pendingScan.extraction.recognizedText.trim() || undefined;
-    const result = await intakeDocumentFile(pendingScan.file, {
-      sourceFileName: pendingScan.file.name,
-      kind: selectedKind ?? undefined,
-      recognizedText,
-      importSource: 'scan',
-    });
+    try {
+      const recognizedText = pendingScan.extraction.recognizedText.trim() || undefined;
+      const result = await intakeCachedDocumentFile(pendingScan.cachedFile, {
+        sourceFileName: pendingScan.cachedFile.fileName,
+        kind: selectedKind ?? undefined,
+        recognizedText,
+        importSource: 'scan',
+      });
 
-    setPendingScan(null);
-
-    if (!result.success) {
-      setUploadError(result.error);
-      return;
-    }
-
-    if (result.duplicate) {
-      showToast(translate('document.upload.duplicateDetected'));
-      if (result.existing?.type === 'inbox') {
-        navigate(`/ablage/${result.existing.id}`);
-      } else if (result.existing?.type === 'document') {
-        navigate(`/dokumente/${result.existing.id}`);
+      if (!result.success) {
+        setConfirmError(result.error);
+        return;
       }
-      return;
-    }
 
-    handleUploadComplete(result.inboxItem.id);
+      if (result.duplicate) {
+        setPendingScan(null);
+        showToast(translate('document.upload.duplicateDetected'));
+        if (result.existing?.type === 'inbox') {
+          navigate(`/ablage/${result.existing.id}`);
+        } else if (result.existing?.type === 'document') {
+          navigate(`/dokumente/${result.existing.id}`);
+        }
+        return;
+      }
+
+      setPendingScan(null);
+      handleUploadComplete(result.inboxItem.id);
+    } finally {
+      confirmInFlightRef.current = false;
+      setIsConfirming(false);
+    }
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -170,6 +202,10 @@ export function ScanPage() {
   }
 
   if (pendingScan) {
+    const confirmErrorView = confirmError ? resolveUploadErrorView(confirmError) : null;
+    const persistErrorDiagnostic =
+      confirmError === 'persist_failed' ? getPersistFailureDiagnosticForDev() : null;
+
     return (
       <div className="page scan-page" data-testid="scan-page">
         <PageHeader title={translate('scan.title')} subtitle={translate('scan.ocr.previewSubtitle')} />
@@ -191,7 +227,7 @@ export function ScanPage() {
                   className={`chip ${selectedKind === kind ? 'chip--active' : ''}`}
                   onClick={() => setSelectedKind(kind)}
                 >
-                  {UPLOAD_KIND_LABELS[kind]}
+                  {translate(UPLOAD_KIND_LABEL_KEYS[kind])}
                 </button>
               ))}
             </div>
@@ -201,11 +237,15 @@ export function ScanPage() {
           </Card>
         ) : null}
         <OcrPreviewPanel
-          fileName={pendingScan.file.name}
+          fileName={pendingScan.cachedFile.fileName}
           extraction={pendingScan.extraction}
           preview={pendingScan.preview}
           continueLabel={translate('scan.ocr.continue')}
-          qualityHintLabel={pendingScan.extraction.qualityHint}
+          qualityHintLabel={
+            pendingScan.extraction.qualityHintKey
+              ? translate(pendingScan.extraction.qualityHintKey)
+              : undefined
+          }
           documentTypeLabel={translate('scan.ocr.documentType')}
           senderLabel={translate('scan.ocr.sender')}
           previewTextLabel={translate('scan.ocr.previewText')}
@@ -216,6 +256,17 @@ export function ScanPage() {
           onCancel={() => setPendingScan(null)}
           onChangeType={() => setShowKindPicker(true)}
           changeTypeLabel={translate('docAssistant.changeType')}
+          isConfirming={isConfirming}
+          confirmErrorTitle={confirmErrorView ? translate(confirmErrorView.titleKey) : undefined}
+          confirmErrorMessage={confirmErrorView ? translate(confirmErrorView.descriptionKey) : undefined}
+          confirmErrorDiagnostic={persistErrorDiagnostic}
+          onRetryConfirm={
+            confirmError && isConfirmRetryableIntakeError(confirmError)
+              ? () => void confirmPendingScan()
+              : undefined
+          }
+          onNewPhoto={() => openFilePicker(true)}
+          onSelectFile={() => openFilePicker(false)}
         />
       </div>
     );

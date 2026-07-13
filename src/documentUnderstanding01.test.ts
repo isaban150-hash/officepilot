@@ -11,7 +11,6 @@ import { processUploadedDocument } from './services/intakeWorkflowService';
 import {
   buildOcrPreviewSummary,
   extractDocumentText,
-  PARTIAL_TEXT_HINT,
   setImageOcrExtractorForTests,
 } from './services/ocrDocumentService';
 import {
@@ -244,11 +243,9 @@ describe('document field extraction and understanding', () => {
   });
 
   it('liefert partielle Erkennung statt kryptischer Zeichen in der Vorschau', () => {
-    const preview = buildOcrPreviewSummary('bad.pdf', '/Type endobj garbage 123');
-    expect(preview.previewLines.length).toBeLessThanOrEqual(1);
-    if (preview.previewLines.length === 1) {
-      expect(preview.previewLines[0]).toBe(PARTIAL_TEXT_HINT);
-    }
+    const preview = buildOcrPreviewSummary('bad.pdf', 'abc xyz');
+    expect(preview.previewPartialHint).toBe(true);
+    expect(preview.previewLines.length).toBe(0);
   });
 
   it('integriert Understanding in Workflow', () => {

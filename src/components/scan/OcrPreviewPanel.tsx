@@ -1,9 +1,15 @@
 import { Button } from '../ui/Button';
 import { Card, CardMeta, CardTitle } from '../ui/Card';
+import type { TranslationKey } from '../../i18n';
 import type { OcrPreviewSummary } from '../../services/ocrDocumentService';
 import type { DocumentTextExtractionResult } from '../../services/ocrDocumentService';
-import type { TranslationKey } from '../../i18n';
+import type { PersistFailureDiagnostic } from '../../services/persistenceService';
 
+function formatApproxStorageSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+}
 interface OcrPreviewPanelProps {
   fileName: string;
   extraction: DocumentTextExtractionResult;
@@ -20,6 +26,13 @@ interface OcrPreviewPanelProps {
   cancelLabel: string;
   onChangeType?: () => void;
   changeTypeLabel?: string;
+  isConfirming?: boolean;
+  confirmErrorTitle?: string;
+  confirmErrorMessage?: string;
+  confirmErrorDiagnostic?: PersistFailureDiagnostic | null;
+  onRetryConfirm?: () => void;
+  onNewPhoto?: () => void;
+  onSelectFile?: () => void;
 }
 
 export function OcrPreviewPanel({
@@ -37,9 +50,16 @@ export function OcrPreviewPanel({
   cancelLabel,
   onChangeType,
   changeTypeLabel,
+  isConfirming = false,
+  confirmErrorTitle,
+  confirmErrorMessage,
+  confirmErrorDiagnostic,
+  onRetryConfirm,
+  onNewPhoto,
+  onSelectFile,
 }: OcrPreviewPanelProps) {
   const understanding = preview.understanding;
-  const showPreviewLines = preview.previewLines.length > 0;
+  const showPreviewLines = preview.previewLines.length > 0 || preview.previewPartialHint;
 
   return (
     <Card className="ocr-preview-panel" data-testid="ocr-preview-panel">
@@ -53,6 +73,66 @@ export function OcrPreviewPanel({
           {qualityHintLabel}
         </p>
       )}
+
+      {confirmErrorTitle && confirmErrorMessage ? (
+        <div className="ocr-preview-panel__confirm-error" role="alert" data-testid="ocr-confirm-error">
+          <p className="ocr-preview-panel__confirm-error-title">{confirmErrorTitle}</p>
+          <p>{confirmErrorMessage}</p>
+          {confirmErrorDiagnostic ? (
+            <dl
+              className="ocr-preview-panel__confirm-error-diagnostic"
+              data-testid="ocr-confirm-error-diagnostic"
+            >
+              <div>
+                <dt>Phase</dt>
+                <dd>{confirmErrorDiagnostic.phase}</dd>
+              </div>
+              <div>
+                <dt>Fehler</dt>
+                <dd>{confirmErrorDiagnostic.errorName}</dd>
+              </div>
+              <div>
+                <dt>Meldung</dt>
+                <dd>{confirmErrorDiagnostic.errorMessage}</dd>
+              </div>
+              <div>
+                <dt>Größe</dt>
+                <dd>
+                  {formatApproxStorageSize(confirmErrorDiagnostic.payloadBytesApprox)} (
+                  {confirmErrorDiagnostic.payloadCharacters.toLocaleString()} Zeichen)
+                </dd>
+              </div>
+              {confirmErrorDiagnostic.existingStoredCharacters !== undefined ? (
+                <div>
+                  <dt>Bereits gespeichert</dt>
+                  <dd>{confirmErrorDiagnostic.existingStoredCharacters.toLocaleString()} Zeichen</dd>
+                </div>
+              ) : null}
+              <div>
+                <dt>Storage-Key</dt>
+                <dd>{confirmErrorDiagnostic.storageKey}</dd>
+              </div>
+            </dl>
+          ) : null}
+          <div className="ocr-preview-panel__confirm-error-actions">
+            {onRetryConfirm ? (
+              <Button fullWidth onClick={onRetryConfirm} data-testid="ocr-confirm-retry">
+                {translate('docAssistant.error.retry')}
+              </Button>
+            ) : null}
+            {onNewPhoto ? (
+              <Button variant="outline" fullWidth onClick={onNewPhoto} data-testid="ocr-confirm-new-photo">
+                {translate('docAssistant.error.newPhoto')}
+              </Button>
+            ) : null}
+            {onSelectFile ? (
+              <Button variant="outline" fullWidth onClick={onSelectFile} data-testid="ocr-confirm-select-file">
+                {translate('docAssistant.error.selectFile')}
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
 
       {understanding && (
         <dl className="ocr-preview-panel__summary" data-testid="ocr-understanding-summary">
@@ -98,6 +178,9 @@ export function OcrPreviewPanel({
         <details className="ocr-preview-panel__details">
           <summary>{previewTextLabel}</summary>
           <div className="ocr-preview-panel__text">
+            {preview.previewPartialHint ? (
+              <p>{translate('scan.ocr.partialHint')}</p>
+            ) : null}
             {preview.previewLines.map((line) => (
               <p key={line}>{line}</p>
             ))}
@@ -106,15 +189,27 @@ export function OcrPreviewPanel({
       )}
 
       <div className="ocr-preview-panel__actions">
-        <Button fullWidth data-testid="ocr-continue-button" onClick={onContinue}>
-          {continueLabel}
+        <Button
+          fullWidth
+          data-testid="ocr-continue-button"
+          onClick={onContinue}
+          disabled={isConfirming}
+          loading={isConfirming}
+        >
+          {isConfirming ? translate('scan.ocr.processing') : continueLabel}
         </Button>
         {onChangeType && changeTypeLabel ? (
-          <Button variant="outline" fullWidth onClick={onChangeType} data-testid="ocr-change-type-button">
+          <Button
+            variant="outline"
+            fullWidth
+            onClick={onChangeType}
+            data-testid="ocr-change-type-button"
+            disabled={isConfirming}
+          >
             {changeTypeLabel}
           </Button>
         ) : null}
-        <Button variant="outline" fullWidth onClick={onCancel}>
+        <Button variant="outline" fullWidth onClick={onCancel} disabled={isConfirming}>
           {cancelLabel}
         </Button>
       </div>

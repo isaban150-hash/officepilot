@@ -10,6 +10,10 @@ import { calculateExpensePaymentSummary } from './expensePaymentCalculations';
 import { getInboxItemById } from './inboxService';
 import { getMailImportById } from './mailImportService';
 import { getLetterExplanation } from './letterExplanationService';
+import { t, type TranslationKey } from '../i18n';
+import { formatMessage } from '../i18n/formatMessage';
+import { getCachedSetup } from './persistenceService';
+import type { ExplanationTextBlock } from '../i18n/types';
 import { calculatePaymentSummary } from './invoicePaymentService';
 import { getVorgangById, getVorgangInvoice } from './vorgangService';
 import { getNotesForVorgang } from './vorgangNoteService';
@@ -50,15 +54,20 @@ function buildRecognizedTextFromDocument(doc: CompanyDocument): string {
   return truncateText([doc.title, doc.issuer, doc.recognizedText, ...doc.tags].filter(Boolean).join('\n'));
 }
 
+function blockToPlainText(block: ExplanationTextBlock): string {
+  const lang = getCachedSetup()?.language ?? 'de';
+  return formatMessage((key) => t(key as TranslationKey, lang), block);
+}
+
 function letterToSummary(
   explanation: NonNullable<ReturnType<typeof getLetterExplanation>>,
 ): CommunicationLetterSummary {
   return {
     kind: explanation.kind,
-    about: explanation.about,
-    importance: explanation.importance,
-    deadline: explanation.deadline,
-    nextSteps: explanation.nextSteps,
+    about: blockToPlainText(explanation.about),
+    importance: blockToPlainText(explanation.importance),
+    deadline: blockToPlainText(explanation.deadline),
+    nextSteps: blockToPlainText(explanation.nextSteps),
   };
 }
 

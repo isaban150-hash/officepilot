@@ -119,6 +119,8 @@ import { hydrateSyncOutbox, getSyncOutboxSnapshot } from './sync/syncOutboxServi
 import {
   resetSyncChangeTrackerFromState,
   trackPersistedChanges,
+  captureSyncChangeTrackerState,
+  restoreSyncChangeTrackerState,
 } from './sync/syncChangeTrackerService';
 import {
   getCompanyProfileSyncSnapshot,
@@ -129,13 +131,158 @@ import {
   hydrateWorkspaceStore,
   resetWorkspaceStore,
 } from './workspace/workspaceStore';
+import { LEGACY_SETUP_KEY } from './storage/storageScopeService';
 
 export { STORAGE_VERSION } from './sync/syncMigrationService';
 export const LEGACY_STORAGE_VERSION = 1;
-export const STORAGE_KEY = 'officepilot-state';
-export const LEGACY_SETUP_KEY = 'officepilot-setup';
+export {
+  STORAGE_KEY,
+  LEGACY_GLOBAL_STORAGE_KEY,
+  LEGACY_SETUP_KEY,
+  buildStorageKey,
+  getActiveStorageKey,
+  getActiveStorageScope,
+  setActiveStorageScope,
+  resetStorageScopeForTests,
+  type StorageScope,
+} from './storage/storageScopeService';
+
+export type PersistFailurePhase =
+  | 'build_snapshot'
+  | 'json_stringify'
+  | 'localStorage_setItem';
+
+export type PersistFailureReason =
+  | 'quota_exceeded'
+  | 'serialization_failed'
+  | 'storage_unavailable'
+  | 'unknown_persist_error';
+
+export interface PersistFailureDiagnostic {
+  phase: PersistFailurePhase;
+  reason: PersistFailureReason;
+  errorName: string;
+  errorMessage: string;
+  payloadCharacters: number;
+  payloadBytesApprox: number;
+  storageKey: string;
+  existingStoredCharacters?: number;
+}
+
+export interface PersistFailureInfo {
+  reason: PersistFailureReason;
+  diagnostic?: PersistFailureDiagnostic;
+}
+
+export interface PersistSaveResult {
+  success: boolean;
+  failure?: PersistFailureInfo;
+}
+
+export type PersistResult = PersistSaveResult;
+
+const PERSIST_ERROR_MESSAGE_MAX_LENGTH = 200;
+
+let persistDiagnosticOverride: boolean | null = null;
+
+export function setPersistDiagnosticEnabledForTests(enabled: boolean | null): void {
+  persistDiagnosticOverride = enabled;
+}
+
+export function isPersistDiagnosticEnabled(): boolean {
+  if (persistDiagnosticOverride !== null) return persistDiagnosticOverride;
+  return import.meta.env.DEV || import.meta.env.MODE === 'test';
+}
+
+function truncatePersistErrorMessage(message: string): string {
+  if (message.length <= PERSIST_ERROR_MESSAGE_MAX_LENGTH) return message;
+  return message.slice(0, PERSIST_ERROR_MESSAGE_MAX_LENGTH);
+}
+
+function resolvePersistErrorName(error: unknown): string {
+  if (error instanceof Error && error.name) return error.name;
+  if (typeof error === 'object' && error !== null && 'name' in error) {
+    const name = (error as { name?: unknown }).name;
+    if (typeof name === 'string' && name.length > 0) return name;
+  }
+  return 'Error';
+}
+
+function resolvePersistErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) {
+    return truncatePersistErrorMessage(error.message);
+  }
+  if (typeof error === 'string') return truncatePersistErrorMessage(error);
+  return 'Unbekannter Fehler';
+}
+
+function classifyPersistFailureReason(
+  error: unknown,
+  phase: PersistFailurePhase,
+): PersistFailureReason {
+  if (error instanceof DOMException && error.name === 'QuotaExceededError') {
+    return 'quota_exceeded';
+  }
+  if (phase === 'json_stringify') {
+    return 'serialization_failed';
+  }
+  if (
+    error instanceof DOMException &&
+    (error.name === 'SecurityError' || error.name === 'InvalidStateError')
+  ) {
+    return 'storage_unavailable';
+  }
+  if (error instanceof ReferenceError) {
+    return 'storage_unavailable';
+  }
+  return 'unknown_persist_error';
+}
+
+function readExistingStoredCharacters(storageKey: string): number | undefined {
+  try {
+    const raw = localStorage.getItem(storageKey);
+    return raw === null ? 0 : raw.length;
+  } catch {
+    return undefined;
+  }
+}
+
+function estimatePayloadBytes(serialized: string): number {
+  return new TextEncoder().encode(serialized).length;
+}
+
+function buildPersistFailureInfo(
+  phase: PersistFailurePhase,
+  error: unknown,
+  context: {
+    storageKey: string;
+    payloadCharacters?: number;
+    payloadBytesApprox?: number;
+    existingStoredCharacters?: number;
+  },
+): PersistFailureInfo {
+  const reason = classifyPersistFailureReason(error, phase);
+  const info: PersistFailureInfo = { reason };
+  if (isPersistDiagnosticEnabled()) {
+    info.diagnostic = {
+      phase,
+      reason,
+      errorName: resolvePersistErrorName(error),
+      errorMessage: resolvePersistErrorMessage(error),
+      payloadCharacters: context.payloadCharacters ?? 0,
+      payloadBytesApprox: context.payloadBytesApprox ?? 0,
+      storageKey: context.storageKey,
+      ...(context.existingStoredCharacters !== undefined
+        ? { existingStoredCharacters: context.existingStoredCharacters }
+        : {}),
+    };
+  }
+  return info;
+}
 
 let cachedSetup: CompanySetup = { ...DEFAULT_SETUP };
+let lastPersistSuccess = true;
+let lastPersistFailure: PersistFailureInfo | null = null;
 
 function cloneInboxItem(item: InboxItem): InboxItem {
   return {
@@ -327,85 +474,141 @@ function finalizeLoadedState(state: AppPersistedState): AppPersistedState {
   return withSync;
 }
 
-function normalizeLoadedState(parsed: unknown): AppPersistedState | null {
+import {
+  buildStorageKey,
+  getActiveStorageKey,
+  getActiveStorageScope,
+  setActiveStorageScope,
+  type StorageScope,
+} from './storage/storageScopeService';
+
+function normalizeLoadedState(parsed: unknown, persistMigrations = true): AppPersistedState | null {
   if (isValidPersistedStateV4(parsed)) {
     return finalizeLoadedState(parsed);
   }
   if (isValidPersistedStateV3(parsed)) {
     const migrated = migratePersistedStateV3ToV4(parsed);
-    savePersistedState(migrated);
+    if (persistMigrations) savePersistedState(migrated);
     return finalizeLoadedState(migrated);
   }
   if (isValidPersistedStateV2(parsed)) {
     const migrated = migratePersistedStateV3ToV4(migratePersistedStateV2ToV3(parsed));
-    savePersistedState(migrated);
+    if (persistMigrations) savePersistedState(migrated);
     return finalizeLoadedState(migrated);
   }
   if (isValidPersistedStateV1(parsed)) {
     const migrated = migratePersistedStateV1ToV2(parsed);
-    savePersistedState(migrated);
+    if (persistMigrations) savePersistedState(migrated);
     return finalizeLoadedState(migrated);
   }
   return null;
 }
 
-export function loadPersistedState(): AppPersistedState | null {
+function finalizeLoadedPersistedState(normalized: AppPersistedState): AppPersistedState {
+  return {
+    ...normalized,
+    setup: { ...DEFAULT_SETUP, ...normalized.setup },
+    companyProfile: normalized.companyProfile
+      ? cloneCompanyProfile({
+          ...createCompanyProfileFromSetup(normalized.setup),
+          ...normalized.companyProfile,
+        })
+      : createCompanyProfileFromSetup({ ...DEFAULT_SETUP, ...normalized.setup }),
+    invoiceNumberSequence: normalized.invoiceNumberSequence ?? {
+      year: new Date().getFullYear(),
+      lastIssuedNumber: 0,
+    },
+    inboxItems: normalized.inboxItems.map(cloneInboxItem),
+    vorgaenge: normalized.vorgaenge.map(cloneVorgang),
+    tasks: normalized.tasks.map(cloneTask),
+    documents: (normalized.documents ?? []).map(cloneCompanyDocument),
+    expenses: (normalized.expenses ?? []).map(cloneExpense),
+    vorgangNotes: (normalized.vorgangNotes ?? []).map(cloneVorgangNote),
+    communicationHistory: (normalized.communicationHistory ?? []).map(cloneCommunicationEvent),
+    knowledgeFacts: (normalized.knowledgeFacts ?? []).map(cloneKnowledgeFact),
+    officePilotMemory: cloneOfficePilotMemoryState(
+      normalized.officePilotMemory ?? {
+        documentMemories: [],
+        proofMemories: [],
+        relations: [],
+        paperRegisterEntries: [],
+      },
+    ),
+    mailImports: (normalized.mailImports ?? []).map(cloneMailImport),
+  };
+}
+
+export function loadPersistedStateFromKey(storageKey: string): AppPersistedState | null {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(storageKey);
     if (!raw) return null;
     const parsed: unknown = JSON.parse(raw);
-    const normalized = normalizeLoadedState(parsed);
+    const normalized = normalizeLoadedState(parsed, storageKey === getActiveStorageKey());
     if (!normalized) {
       console.warn('[OfficePilot] Ungültiger gespeicherter Zustand – Seed-Daten werden verwendet.');
       return null;
     }
-    return {
-      ...normalized,
-      setup: { ...DEFAULT_SETUP, ...normalized.setup },
-      companyProfile: normalized.companyProfile
-        ? cloneCompanyProfile({
-            ...createCompanyProfileFromSetup(normalized.setup),
-            ...normalized.companyProfile,
-          })
-        : createCompanyProfileFromSetup({ ...DEFAULT_SETUP, ...normalized.setup }),
-      invoiceNumberSequence: normalized.invoiceNumberSequence ?? {
-        year: new Date().getFullYear(),
-        lastIssuedNumber: 0,
-      },
-      inboxItems: normalized.inboxItems.map(cloneInboxItem),
-      vorgaenge: normalized.vorgaenge.map(cloneVorgang),
-      tasks: normalized.tasks.map(cloneTask),
-      documents: (normalized.documents ?? MOCK_COMPANY_DOCUMENTS).map(cloneCompanyDocument),
-      expenses: (normalized.expenses ?? []).map(cloneExpense),
-      vorgangNotes: (normalized.vorgangNotes ?? []).map(cloneVorgangNote),
-      communicationHistory: (normalized.communicationHistory ?? []).map(cloneCommunicationEvent),
-      knowledgeFacts: (normalized.knowledgeFacts ?? []).map(cloneKnowledgeFact),
-      officePilotMemory: cloneOfficePilotMemoryState(
-        normalized.officePilotMemory ?? {
-          documentMemories: [],
-          proofMemories: [],
-          relations: [],
-          paperRegisterEntries: [],
-        },
-      ),
-      mailImports: (normalized.mailImports ?? []).map(cloneMailImport),
-    };
+    return finalizeLoadedPersistedState(normalized);
   } catch (error) {
     console.warn('[OfficePilot] localStorage konnte nicht gelesen werden:', error);
     return null;
   }
 }
 
-export function savePersistedState(state: AppPersistedState): void {
+export function loadPersistedState(): AppPersistedState | null {
+  return loadPersistedStateFromKey(getActiveStorageKey());
+}
+
+export function savePersistedStateToKey(
+  scope: StorageScope,
+  state: AppPersistedState,
+): PersistSaveResult {
+  const storageKey = buildStorageKey(scope);
+  const existingStoredCharacters = readExistingStoredCharacters(storageKey);
+
+  let serialized = '';
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    serialized = JSON.stringify(state);
   } catch (error) {
+    const failure = buildPersistFailureInfo('json_stringify', error, {
+      storageKey,
+      existingStoredCharacters,
+    });
     console.warn('[OfficePilot] Speichern fehlgeschlagen:', error);
+    lastPersistFailure = failure;
+    return { success: false, failure };
+  }
+
+  const payloadCharacters = serialized.length;
+  const payloadBytesApprox = estimatePayloadBytes(serialized);
+
+  try {
+    localStorage.setItem(storageKey, serialized);
+    lastPersistFailure = null;
+    return { success: true };
+  } catch (error) {
+    const failure = buildPersistFailureInfo('localStorage_setItem', error, {
+      storageKey,
+      payloadCharacters,
+      payloadBytesApprox,
+      existingStoredCharacters,
+    });
+    console.warn('[OfficePilot] Speichern fehlgeschlagen:', error);
+    lastPersistFailure = failure;
+    return { success: false, failure };
   }
 }
 
+export function savePersistedState(state: AppPersistedState): boolean {
+  return savePersistedStateToKey(getActiveStorageScope(), state).success;
+}
+
 export function clearPersistedState(): void {
-  localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(getActiveStorageKey());
+}
+
+export function clearPersistedStateForScope(scope: StorageScope): void {
+  localStorage.removeItem(buildStorageKey(scope));
 }
 
 export function setCachedSetup(setup: CompanySetup): void {
@@ -416,7 +619,26 @@ export function getCachedSetup(): CompanySetup {
   return { ...cachedSetup };
 }
 
-function applyStateToStores(state: AppPersistedState): void {
+export function clearInMemoryBusinessState(): void {
+  resetInboxItems();
+  resetVorgaenge();
+  resetTasks();
+  resetDocuments();
+  resetUploadedDocumentStore();
+  resetDocumentFileStoreForTests();
+  resetExpenses();
+  resetVorgangNotes();
+  resetCommunicationHistoryStore();
+  resetMailImports();
+  resetKnowledgeStore();
+  resetMemory();
+  resetCompanyProfile(DEFAULT_SETUP.companyName);
+  resetInvoiceNumberSequence();
+  resetWorkspaceStore();
+  cachedSetup = { ...DEFAULT_SETUP };
+}
+
+export function applyStateToStores(state: AppPersistedState): void {
   const client = ensureSyncClientFromState(state.syncClient);
   hydrateSyncClient(client);
   hydrateSyncOutbox(state.syncOutbox ?? []);
@@ -476,6 +698,7 @@ function bootstrapBetaTestState(): CompanySetup {
   return getCachedSetup();
 }
 
+/** @deprecated Use bootstrapBusinessState() from storageBootstrapService after auth. */
 export function hydrateStoresFromStorage(): CompanySetup {
   if (isBetaTestMode()) {
     const stored = loadPersistedState();
@@ -486,6 +709,7 @@ export function hydrateStoresFromStorage(): CompanySetup {
     return bootstrapBetaTestState();
   }
 
+  setActiveStorageScope({ type: 'guest' });
   const stored = loadPersistedState();
   if (stored) {
     applyStateToStores(stored);
@@ -499,18 +723,68 @@ export function hydrateStoresFromStorage(): CompanySetup {
   return getCachedSetup();
 }
 
-export function persistAll(setupOverride?: CompanySetup): void {
+
+export function getLastPersistSuccess(): boolean {
+  return lastPersistSuccess;
+}
+
+export function getLastPersistFailure(): PersistFailureInfo | null {
+  return lastPersistFailure;
+}
+
+export function getPersistFailureDiagnosticForDev(): PersistFailureDiagnostic | null {
+  if (!isPersistDiagnosticEnabled()) return null;
+  return lastPersistFailure?.diagnostic ?? null;
+}
+
+export function resetLastPersistFailureForTests(): void {
+  lastPersistFailure = null;
+  lastPersistSuccess = true;
+  persistDiagnosticOverride = null;
+}
+
+export function persistAll(setupOverride?: CompanySetup): PersistResult {
   if (setupOverride) {
     cachedSetup = { ...setupOverride };
   }
 
-  const snapshot = buildPersistedStateSnapshot();
+  const storageKey = buildStorageKey(getActiveStorageScope());
+  const existingStoredCharacters = readExistingStoredCharacters(storageKey);
+  const syncOutboxBefore = getSyncOutboxSnapshot();
+  const syncTrackerBefore = captureSyncChangeTrackerState();
+
+  let snapshot: AppPersistedState;
+  try {
+    snapshot = buildPersistedStateSnapshot();
+  } catch (error) {
+    const failure = buildPersistFailureInfo('build_snapshot', error, {
+      storageKey,
+      existingStoredCharacters,
+    });
+    console.warn('[OfficePilot] Speichern fehlgeschlagen:', error);
+    lastPersistFailure = failure;
+    lastPersistSuccess = false;
+    return { success: false, failure };
+  }
+
   trackPersistedChanges(snapshot);
-  savePersistedState({
+  const saveResult = savePersistedStateToKey(getActiveStorageScope(), {
     ...snapshot,
     syncOutbox: getSyncOutboxSnapshot(),
     savedAt: new Date().toISOString(),
   });
+
+  if (!saveResult.success) {
+    hydrateSyncOutbox(syncOutboxBefore);
+    restoreSyncChangeTrackerState(syncTrackerBefore);
+    lastPersistFailure = saveResult.failure ?? null;
+    lastPersistSuccess = false;
+    return { success: false, failure: saveResult.failure };
+  }
+
+  lastPersistFailure = null;
+  lastPersistSuccess = true;
+  return { success: true };
 }
 
 export function seedSyncChangeTrackerFromCurrentStores(): void {

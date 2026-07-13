@@ -1,5 +1,6 @@
 import { Badge, Card, DataRow } from '../ui/Card';
 import { useApp } from '../../context/AppContext';
+import { formatMessage } from '../../i18n/formatMessage';
 import type { LetterExplanation } from '../../services/letterExplanationService';
 import type { TranslationKey } from '../../i18n';
 
@@ -11,6 +12,9 @@ export function LetterExplanationPanel({ explanation }: LetterExplanationPanelPr
   const { translate } = useApp();
   const kindKey = `letter.kind.${explanation.kind}` as TranslationKey;
 
+  const renderBlock = (block: LetterExplanation['about']) =>
+    formatMessage((key) => translate(key as TranslationKey), block);
+
   return (
     <Card className="letter-explanation" highlight>
       <div className="letter-explanation__header">
@@ -19,16 +23,19 @@ export function LetterExplanationPanel({ explanation }: LetterExplanationPanelPr
       </div>
       <p className="letter-explanation__intro">{translate('letter.explain.intro')}</p>
 
-      <DataRow label={translate('letter.explain.about')} value={explanation.about} />
-      <DataRow label={translate('letter.explain.importance')} value={explanation.importance} />
-      <DataRow label={translate('letter.explain.deadline')} value={explanation.deadline} />
-      <DataRow label={translate('letter.explain.nextSteps')} value={explanation.nextSteps} />
+      <DataRow label={translate('letter.explain.about')} value={renderBlock(explanation.about)} />
+      <DataRow label={translate('letter.explain.importance')} value={renderBlock(explanation.importance)} />
+      <DataRow label={translate('letter.explain.deadline')} value={renderBlock(explanation.deadline)} />
+      <DataRow label={translate('letter.explain.nextSteps')} value={renderBlock(explanation.nextSteps)} />
       <DataRow label={translate('letter.explain.digitalStorage')} value={explanation.digitalStorage} />
       <DataRow label={translate('letter.explain.paperStorage')} value={explanation.paperStorage} />
 
       <div className="letter-explanation__disclaimer" role="note">
         <strong>{translate('letter.explain.disclaimerTitle')}</strong>
-        <p>{explanation.disclaimer}</p>
+        <p>
+          {translate(explanation.legalDisclaimerKey)}{' '}
+          {explanation.disclaimer.map((block) => renderBlock(block)).join(' ')}
+        </p>
       </div>
     </Card>
   );

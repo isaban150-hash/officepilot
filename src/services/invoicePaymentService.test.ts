@@ -15,7 +15,7 @@ import {
 import {
   loadPersistedState,
   persistAll,
-  STORAGE_KEY,
+  getActiveStorageKey,
 } from './persistenceService';
 import { hydrateVorgangStore, getVorgangById } from './vorgangService';
 import type { VorgangInvoice } from '../types/models';
@@ -280,14 +280,14 @@ describe('recordPayment / removePayment', () => {
     });
 
     persistAll();
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(getActiveStorageKey());
     expect(raw).not.toBeNull();
 
     const parsed = JSON.parse(raw!);
     expect(parsed.vorgaenge[0].invoices[0].payments).toHaveLength(1);
     expect(parsed.vorgaenge[0].invoices[0].paymentStatus).toBe('teilbezahlt');
 
-    localStorage.setItem(STORAGE_KEY, raw!);
+    localStorage.setItem(getActiveStorageKey(), raw!);
     const reloaded = loadPersistedState();
     expect(reloaded?.vorgaenge[0].invoices[0].payments).toHaveLength(1);
     expect(reloaded?.vorgaenge[0].invoices[0].payments![0].amount).toBe(200);

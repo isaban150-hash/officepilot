@@ -11,7 +11,7 @@ import {
   getAllUploadedDocuments,
   getUploadedDocumentById,
 } from './uploadedDocumentStore';
-import { intakeDocumentFile } from './documentIntakeService';
+import { intakeDocumentFile, type DocumentIntakeErrorCode } from './documentIntakeService';
 
 export type UploadDocumentResult =
   | { success: true; inboxItemId: string; duplicate: false }
@@ -22,7 +22,7 @@ export type UploadDocumentResult =
       existingId: string;
       existingTitle: string;
     }
-  | { success: false; error: DocumentUploadValidationError | 'duplicate' | 'read_failed' | 'hash_failed' | 'persist_failed' };
+  | { success: false; error: DocumentUploadValidationError | 'duplicate' | DocumentIntakeErrorCode | 'read_failed' };
 
 /**
  * @deprecated Legacy-Hülle – leitet neue Uploads in die zentrale Intake-Pipeline um.

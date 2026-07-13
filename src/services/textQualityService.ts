@@ -114,24 +114,27 @@ export function isReadableText(text: string): boolean {
 
 export function buildDisplayPreviewLines(
   text: string,
-  partialHint: string,
   maxLines = 3,
-): string[] {
+): { lines: string[]; usesPartialHint: boolean } {
   const quality = assessTextQuality(text);
 
   if (!quality.sanitizedText || quality.wordCount < 2 || containsCrypticCharacters(quality.sanitizedText) || PDF_OPERATOR_INLINE.test(quality.sanitizedText)) {
-    return quality.wordCount > 0 && quality.score >= 25
-      ? [partialHint]
-      : [];
+    return {
+      lines: [],
+      usesPartialHint: quality.wordCount > 0 && quality.score >= 25,
+    };
   }
 
   if (!quality.readable) {
-    return [partialHint];
+    return { lines: [], usesPartialHint: true };
   }
 
-  return quality.sanitizedText
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .slice(0, maxLines);
+  return {
+    lines: quality.sanitizedText
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .slice(0, maxLines),
+    usesPartialHint: false,
+  };
 }

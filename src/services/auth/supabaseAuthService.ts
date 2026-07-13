@@ -1,5 +1,8 @@
 import type { Session } from '@supabase/supabase-js';
-import { getSupabaseClient, getSupabaseUrl } from '../../lib/supabase';
+import { getSupabaseClient } from '../../lib/supabase';
+import type { AppLanguage } from '../../types/models';
+import type { TranslationKey } from '../../i18n';
+import { t } from '../../i18n';
 import type {
   AuthErrorCode,
   AuthSession,
@@ -119,10 +122,6 @@ export async function signUpUser(input: RegisterUserInput): Promise<RegisterResu
   }
 
   const client = requireSupabaseClient();
-  const supabaseUrl = getSupabaseUrl();
-  const signupEndpoint = supabaseUrl ? `${supabaseUrl}/auth/v1/signup` : undefined;
-  console.debug('[OfficePilot] Supabase URL:', supabaseUrl);
-  console.debug('[OfficePilot] SignUp-Endpunkt:', signupEndpoint);
 
   const signUpResponse = await client.auth.signUp({
     email: input.email.trim().toLowerCase(),
@@ -132,17 +131,9 @@ export async function signUpUser(input: RegisterUserInput): Promise<RegisterResu
     },
   });
 
-  console.debug('[OfficePilot] supabase.auth.signUp() – vollständige Rückgabe', signUpResponse);
-
   const { data, error } = signUpResponse;
 
   if (error) {
-    const authError = error as { message?: string; code?: string; status?: number };
-    console.debug('[OfficePilot] supabase.auth.signUp() – Fehlerdetails', {
-      message: authError.message,
-      code: authError.code,
-      status: authError.status,
-    });
     return { success: false, error: mapSupabaseSignUpError(error.message) };
   }
 
@@ -196,33 +187,48 @@ export async function fetchCurrentSession(): Promise<AuthPayload | null> {
   return mapAuthPayload(data.session);
 }
 
-export function getLoginErrorMessage(error: AuthErrorCode): string {
-  const messages: Record<AuthErrorCode, string> = {
-    invalid_credentials: 'E-Mail oder Passwort ist falsch.',
-    email_exists: 'Diese E-Mail-Adresse ist bereits registriert.',
-    user_not_found: 'Benutzerprofil wurde nicht gefunden.',
-    user_pending: 'Ihr Zugang wartet noch auf Freischaltung.',
-    user_blocked: 'Ihr Zugang wurde gesperrt.',
-    license_expired: 'Ihre Lizenz ist abgelaufen.',
-    terms_required:
-      'Bitte akzeptieren Sie AGB, Datenschutzerklärung und Lizenzbedingungen.',
-    invalid_email: 'Bitte geben Sie eine gültige E-Mail-Adresse ein.',
-    password_too_short: `Das Passwort muss mindestens ${MIN_PASSWORD_LENGTH} Zeichen haben.`,
-  };
-  return messages[error];
+const LOGIN_ERROR_KEYS: Record<AuthErrorCode, TranslationKey> = {
+  invalid_credentials: 'auth.error.invalidCredentials',
+  email_exists: 'auth.error.emailExists',
+  user_not_found: 'auth.error.userNotFound',
+  user_pending: 'auth.error.userPending',
+  user_blocked: 'auth.error.userBlocked',
+  license_expired: 'auth.error.licenseExpired',
+  terms_required: 'auth.error.termsRequired',
+  invalid_email: 'auth.error.invalidEmail',
+  password_too_short: 'auth.error.passwordTooShort',
+};
+
+const REGISTER_ERROR_KEYS: Record<RegisterErrorCode, TranslationKey> = {
+  email_exists: 'auth.error.emailExists',
+  terms_required: 'auth.error.termsRequired',
+  invalid_email: 'auth.error.invalidEmail',
+  password_too_short: 'auth.error.passwordTooShort',
+  registration_failed: 'auth.error.registrationFailed',
+};
+
+export function getLoginErrorKey(error: AuthErrorCode): TranslationKey {
+  return LOGIN_ERROR_KEYS[error];
 }
 
-export function getRegisterErrorMessage(error: RegisterErrorCode): string {
-  const messages: Record<RegisterErrorCode, string> = {
-    email_exists: 'Diese E-Mail-Adresse ist bereits registriert.',
-    terms_required:
-      'Bitte akzeptieren Sie AGB, Datenschutzerklärung und Lizenzbedingungen.',
-    invalid_email: 'Bitte geben Sie eine gültige E-Mail-Adresse ein.',
-    password_too_short: `Das Passwort muss mindestens ${MIN_PASSWORD_LENGTH} Zeichen haben.`,
-    registration_failed:
-      'Die Registrierung konnte nicht abgeschlossen werden. Bitte versuchen Sie es erneut.',
-  };
-  return messages[error];
+export function getRegisterErrorKey(error: RegisterErrorCode): TranslationKey {
+  return REGISTER_ERROR_KEYS[error];
+}
+
+export function getLoginErrorMessage(error: AuthErrorCode, lang: AppLanguage = 'de'): string {
+  const key = LOGIN_ERROR_KEYS[error];
+  if (key === 'auth.error.passwordTooShort') {
+    return t(key, lang, { min: MIN_PASSWORD_LENGTH });
+  }
+  return t(key, lang);
+}
+
+export function getRegisterErrorMessage(error: RegisterErrorCode, lang: AppLanguage = 'de'): string {
+  const key = REGISTER_ERROR_KEYS[error];
+  if (key === 'auth.error.passwordTooShort') {
+    return t(key, lang, { min: MIN_PASSWORD_LENGTH });
+  }
+  return t(key, lang);
 }
 
 /** @deprecated Verwende getLoginErrorMessage oder getRegisterErrorMessage. */

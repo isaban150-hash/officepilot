@@ -1,15 +1,17 @@
 import type { TranslationKey } from '../i18n';
+import { t } from '../i18n';
 import { isDatevRelevantKind } from './brain/financeIntelligenceService';
 import {
   formatDigitalFolderBreadcrumb,
-  formatPaperFolderLabel,
   getDocumentDisplayLabelKey,
 } from './documentDisplayLabelService';
 import { buildDocumentUnderstandingSummary } from './documentIntakeUnderstandingService';
 import { getLetterExplanation } from './letterExplanationService';
 import { getInboxExtractedDocumentText } from './inboxDocumentText';
 import { resolvePaperFiling } from './paperFolderService';
-import type { ClassifiedDocumentKind, InboxItem, WorkflowResult } from '../types/models';
+import { formatPaperFilingInstruction } from './paperFolderDisplayService';
+import { getCachedSetup } from './persistenceService';
+import type { AppLanguage, ClassifiedDocumentKind, InboxItem, WorkflowResult } from '../types/models';
 
 export type SteuerberaterRelevanceStatus = 'mark' | 'not_relevant' | 'check';
 
@@ -239,6 +241,7 @@ function buildInactionConsequence(
 export function buildInboxDocumentAssistant(
   item: InboxItem,
   workflow?: WorkflowResult | null,
+  lang: AppLanguage = getCachedSetup()?.language ?? 'de',
 ): InboxDocumentAssistant {
   const recognizedText = getInboxExtractedDocumentText(item);
   const summary = buildDocumentUnderstandingSummary(item, {
@@ -260,10 +263,9 @@ export function buildInboxDocumentAssistant(
 
   const paperFolderLabel = paperResolution.skipPhysicalFiling
     ? '—'
-    : formatPaperFolderLabel(
-        paperResolution.rule?.register ?? '',
-        paperResolution.rule?.label ?? 'Sonstiges',
-      );
+    : paperResolution.rule
+      ? formatPaperFilingInstruction(paperResolution.rule, lang)
+      : t('common.misc', lang);
 
   const confidentFields: InboxDocumentAssistant['confidentFields'] = [];
   const uncertainFields: InboxDocumentAssistant['uncertainFields'] = [];

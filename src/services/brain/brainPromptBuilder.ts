@@ -1,4 +1,6 @@
+import { buildAiLanguageInstruction } from '../ai/aiLanguageRules';
 import { AI_QA_SYSTEM_RULES } from '../ai/aiGuardrails';
+import type { AppLanguage } from '../../types/models';
 import type { BrainSnapshot } from '../../types/brain';
 import { BRAIN_ANSWER_DISCLAIMER } from '../../types/brain';
 import type { CompanySessionContext } from '../../types/companySession';
@@ -84,10 +86,12 @@ export function buildBrainPrompt(
   question: string,
   snapshot: BrainSnapshot,
   session?: CompanySessionContext,
+  lang: AppLanguage = 'de',
 ): string {
   const sessionBlock = session ? `\n\n${buildSessionContextBlock(session)}` : '';
   const handwerkBlock = `\n\n${buildHandwerkGlossaryBlock()}`;
-  return `${BRAIN_SYSTEM_RULES}
+  const languageBlock = `\n\n${buildAiLanguageInstruction(lang)}`;
+  return `${BRAIN_SYSTEM_RULES}${languageBlock}
 
 OFFICEPILOT-DATEN:
 ${buildBrainContextBlock(snapshot)}${sessionBlock}${handwerkBlock}

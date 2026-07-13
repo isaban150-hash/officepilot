@@ -9,7 +9,7 @@ import {
   hydrateInvoiceNumberSequence,
 } from '../services/invoiceNumberService';
 import { hydrateInboxStore } from '../services/inboxService';
-import { setCachedSetup } from '../services/persistenceService';
+import { resetLastPersistFailureForTests, setCachedSetup } from '../services/persistenceService';
 import { hydrateTaskStore } from '../services/taskService';
 import { hydrateVorgangStore } from '../services/vorgangService';
 import { hydrateVorgangNotes } from '../services/vorgangNoteService';
@@ -23,8 +23,10 @@ import { resetSyncOutboxForTests } from '../services/sync/syncOutboxService';
 import { resetWorkspaceStore } from '../services/workspace/workspaceStore';
 import { resetDocumentFileStoreForTests } from '../services/documentFileStoreService';
 import { resetWorkspaceCloudBootstrapForTests } from '../services/workspace/workspaceCloudBootstrapService';
+import { resetStorageScopeForTests } from '../services/storage/storageScopeService';
 
 export function resetTestStores(): void {
+  resetStorageScopeForTests();
   hydrateInboxStore([]);
   hydrateVorgangStore([]);
   hydrateTaskStore([]);
@@ -44,4 +46,5 @@ export function resetTestStores(): void {
   resetSyncChangeTrackerForTests();
   resetSyncCoordinatorForTests();
   resetWorkspaceCloudBootstrapForTests();
+  resetLastPersistFailureForTests();
 }

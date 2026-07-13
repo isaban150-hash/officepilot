@@ -1,3 +1,4 @@
+import { getCachedSetup } from './persistenceService';
 import { runAiRequest, setAiGenerateTextForTests } from './ai/aiRequestRunner';
 
 import { buildBrainPrompt } from './brain/brainPromptBuilder';
@@ -59,8 +60,8 @@ export async function askOfficePilotBrain(
 
 
   const snapshot = buildBrainSnapshot();
-
-  const prompt = buildBrainPrompt(trimmedQuestion, snapshot, session);
+  const lang = getCachedSetup().language;
+  const prompt = buildBrainPrompt(trimmedQuestion, snapshot, session, lang);
 
   const result = await runAiRequest({ prompt, skipGuard: true });
 

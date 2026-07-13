@@ -1,4 +1,5 @@
 import { runAiRequest, setAiGenerateTextForTests } from '../ai/aiRequestRunner';
+import { getCachedSetup } from '../persistenceService';
 
 import type {
 
@@ -80,7 +81,8 @@ export async function enhanceCommunicationDraft(
 
 ): Promise<CommunicationAiEnhanceResult> {
 
-  const prompt = buildCommunicationAiPrompt(input);
+  const lang = getCachedSetup()?.language ?? 'de';
+  const prompt = buildCommunicationAiPrompt(input, lang);
 
   const generation = await runAiRequest({
 

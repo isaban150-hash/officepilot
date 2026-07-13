@@ -1,3 +1,4 @@
+import { getCachedSetup } from '../persistenceService';
 import { runAiRequest } from '../ai/aiRequestRunner';
 import {
   buildVorgangAiAllowedSourceText,
@@ -37,7 +38,8 @@ export async function askVorgangAi(input: {
     return unavailableAnswer(trimmedQuestion, 'Vorgang nicht gefunden.', 'not_found');
   }
 
-  const prompt = buildVorgangAiPrompt(trimmedQuestion, context);
+  const lang = getCachedSetup().language;
+  const prompt = buildVorgangAiPrompt(trimmedQuestion, context, lang);
   const allowedSourceText = buildVorgangAiAllowedSourceText(context);
 
   const result = await runAiRequest({

@@ -29,8 +29,9 @@ import {
 import { mapSupabaseSession } from '../services/auth/userAccountMapper';
 import { fetchCurrentUserProfile } from '../services/auth/profileService';
 import { mapProfileRowToUserAccount } from '../services/auth/profileMapper';
-import { bootstrapWorkspaceCloudSyncIfNeeded } from '../services/workspace/workspaceCloudBootstrapService';
-import { isSupabaseConfigured } from '../lib/supabase';
+import { isolateBusinessStateOnLogout } from '../services/storage/storageBootstrapService';
+import { resetCompanySession } from '../services/brain/companySessionService';
+import { resetWorkspaceCloudBootstrapForTests } from '../services/workspace/workspaceCloudBootstrapService';
 
 interface AuthContextValue {
   user: UserAccount | null;
@@ -93,16 +94,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setSession(resolved.session);
       setUser(resolved.user);
       setProfileError(resolved.profileError);
-
-      if (
-        resolved.session &&
-        resolved.user &&
-        !resolved.profileError &&
-        isSupabaseConfigured() &&
-        isUserAllowedToUseApp(resolved.user)
-      ) {
-        void bootstrapWorkspaceCloudSyncIfNeeded();
-      }
     },
     [],
   );
@@ -179,6 +170,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const logout = useCallback(async () => {
     await signOutUser();
+    isolateBusinessStateOnLogout();
+    resetCompanySession();
+    resetWorkspaceCloudBootstrapForTests();
     applyResolvedAuth({ session: null, user: null, profileError: false });
   }, [applyResolvedAuth]);
 

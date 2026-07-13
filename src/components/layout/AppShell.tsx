@@ -9,7 +9,7 @@ import { Toast } from '../ui/Card';
 import { useApp } from '../../context/AppContext';
 
 export function AppShell() {
-  const { setup, toast, clearToast } = useApp();
+  const { setup, toast, clearToast, translate } = useApp();
 
   return (
     <div className="app-shell" data-testid="app-shell">
@@ -38,7 +38,9 @@ export function AppShell() {
         </main>
       </div>
       <BottomNav />
-      {toast && <Toast message={toast} onClose={clearToast} />}
+      {toast && (
+        <Toast message={toast} onClose={clearToast} closeLabel={translate('common.close')} />
+      )}
     </div>
   );
 }

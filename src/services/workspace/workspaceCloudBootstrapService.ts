@@ -3,6 +3,8 @@ import {
   applyPersistedStateFromSync,
   buildPersistedStateSnapshot,
 } from '../persistenceService';
+import { switchToWorkspaceScope } from '../storage/storageBootstrapService';
+import { stripDefinitelyMockDataFromState } from '../storage/mockDataDetectionService';
 import { getSyncCoordinator } from '../sync/syncCoordinator';
 import { getSyncClient } from '../sync/syncClientService';
 import { createSyncAdapter } from '../sync/syncAdapterFactory';
@@ -54,8 +56,19 @@ export async function bootstrapWorkspaceCloudSyncIfNeeded(): Promise<void> {
       coordinator.setAdapter(createSyncAdapter({ provider: 'supabase' }));
       return coordinator.runSync(buildPersistedStateSnapshot());
     })();
-    applyPersistedStateFromSync(syncResult.state);
-    applyWorkspaceStateToStores(syncResult.state);
+
+    let finalState = stripDefinitelyMockDataFromState(syncResult.state);
+    applyPersistedStateFromSync(finalState);
+    applyWorkspaceStateToStores(finalState);
+
+    const workspaceId = finalState.workspace?.id ?? finalState.syncClient?.serverWorkspaceId;
+    const ownerUserId = finalState.workspace?.ownerUserId;
+    if (workspaceId && ownerUserId) {
+      switchToWorkspaceScope(ownerUserId, workspaceId);
+      finalState = stripDefinitelyMockDataFromState(buildPersistedStateSnapshot());
+      applyPersistedStateFromSync(finalState);
+      applyWorkspaceStateToStores(finalState);
+    }
 
     bootstrapCompleted = true;
   })();

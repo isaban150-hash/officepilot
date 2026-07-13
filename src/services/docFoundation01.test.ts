@@ -8,6 +8,7 @@ import {
   resetDocumentFileStoreForTests,
   storeDocumentFileFromUpload,
 } from './documentFileStoreService';
+import { hasDocumentBlob } from './storage/documentBlobIndexedDbService';
 import { findDuplicateByContentHash } from './documentDuplicateService';
 import { intakeDocumentFile } from './documentIntakeService';
 import {
@@ -49,11 +50,12 @@ describe('DOC-FOUNDATION-01 file ref', () => {
   it('speichert Bytes nur einmal bei gleichem Inhalt', async () => {
     const fileA = samplePdfFile('a.pdf', '%PDF-same-content');
     const fileB = samplePdfFile('b.pdf', '%PDF-same-content');
-    await storeDocumentFileFromUpload(fileA);
+    const first = await storeDocumentFileFromUpload(fileA);
     const second = await storeDocumentFileFromUpload(fileB);
     expect(second.created).toBe(false);
     expect(getDocumentFileRefStoreSnapshot()).toHaveLength(1);
-    expect(Object.keys(getDocumentFileBlobStoreSnapshot())).toHaveLength(1);
+    expect(Object.keys(getDocumentFileBlobStoreSnapshot())).toHaveLength(0);
+    expect(await hasDocumentBlob(first.fileRef.id)).toBe(true);
   });
 });
 
@@ -211,7 +213,8 @@ describe('DOC-FOUNDATION-01 vorgang link', () => {
     attachCompanyDocumentToVorgang('v-1', archived.document, intake.inboxItem);
     const linked = getVorgangStoreSnapshot()[0];
     expect(linked.documents.some((d) => d.companyDocumentId === archived.document.id)).toBe(true);
-    expect(Object.keys(getDocumentFileBlobStoreSnapshot())).toHaveLength(1);
+    expect(Object.keys(getDocumentFileBlobStoreSnapshot())).toHaveLength(0);
+    expect(await hasDocumentBlob(intake.fileRef.id)).toBe(true);
   });
 });
 

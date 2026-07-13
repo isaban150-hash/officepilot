@@ -1,0 +1,26 @@
+export const bgScan = {
+  'heute.scanButton': 'Снимка / Сканиране',
+  'scan.title': 'Сканиране',
+  'scan.subtitle': 'Снимка или PDF – OfficePilot сортира и архивира.',
+  'scan.captureTitle': 'Записване на документ',
+  'scan.captureHint': 'Направете снимка или изберете файл. OfficePilot разпознава съдържанието.',
+  'scan.selectType': 'Изберете вид (по избор)',
+  'scan.typeAuto': 'Автоматично разпознаване',
+  'scan.uploadFile': 'Избор на файл',
+  'scan.camera': 'Камера',
+  'scan.gallery': 'Галерия',
+  'scan.pdf': 'PDF',
+  'scan.ocr.processing': 'Разпознаване на текст…',
+  'scan.ocr.previewSubtitle': 'Проверете разпознатия текст и продължете.',
+  'scan.ocr.continue': 'Продължи анализа',
+  'scan.ocr.documentType': 'Разпознат вид',
+  'scan.ocr.sender': 'Подател',
+  'scan.ocr.previewText': 'Преглед на текст',
+  'scan.ocr.unsupportedFormat': 'Този файлов формат не се поддържа.',
+  'scan.ocr.failed': 'Разпознаването на текст не успя. Моля, опитайте отново.',
+  'scan.ocr.noText':
+    'Не бе разпознат използваем текст. Моля, снимайте документа изправено и при добра светлина.',
+  'scan.ocr.partialHint':
+    'Текстът бе разпознат само частично. Моля, проверете резултата.',
+  'scanResult.toastRecognized': 'Документът е разпознат – моля, проверете накратко.',
+} as const;

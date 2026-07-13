@@ -13,12 +13,12 @@ import type { CommunicationChannel } from '../../types/communication';
 import type { TranslationKey } from '../../i18n';
 import type { SetupCompletionResult } from '../../services/setupCompletionService';
 
-const LANGUAGES: { value: AppLanguage; labelKey: TranslationKey; code: string }[] = [
-  { value: 'de', labelKey: 'lang.de', code: 'DE' },
-  { value: 'tr', labelKey: 'lang.tr', code: 'TR' },
-  { value: 'bg', labelKey: 'lang.bg', code: 'BG' },
-  { value: 'ro', labelKey: 'lang.ro', code: 'RO' },
-  { value: 'ru', labelKey: 'lang.ru', code: 'RU' },
+const LANGUAGES: { value: AppLanguage; labelKey: TranslationKey; code: string; preview?: boolean }[] = [
+  { value: 'de', labelKey: 'language.de', code: 'DE' },
+  { value: 'tr', labelKey: 'language.tr', code: 'TR' },
+  { value: 'bg', labelKey: 'language.bg', code: 'BG' },
+  { value: 'ro', labelKey: 'language.ro', code: 'RO', preview: true },
+  { value: 'ru', labelKey: 'language.ru', code: 'RU', preview: true },
 ];
 
 const TAX_OPTIONS: { value: TaxStatus; labelKey: TranslationKey }[] = [

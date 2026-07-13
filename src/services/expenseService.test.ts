@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { STORAGE_KEY } from './persistenceService';
+import { getActiveStorageKey } from './persistenceService';
 import {
   addExpense,
   buildExpenseDedupeKey,
@@ -66,7 +66,7 @@ describe('expense CRUD', () => {
 
   it('persists mutations to localStorage', () => {
     addExpense(validInput());
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(getActiveStorageKey());
     expect(raw).not.toBeNull();
     const parsed = JSON.parse(raw!);
     expect(parsed.expenses).toHaveLength(1);

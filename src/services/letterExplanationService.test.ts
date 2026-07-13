@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { InboxItem } from '../types/models';
+import { t } from '../i18n';
+import { formatMessage } from '../i18n/formatMessage';
 import {
   detectLetterKind,
   getLetterExplanation,
@@ -126,19 +128,21 @@ describe('getLetterExplanation', () => {
 
     expect(explanation).not.toBeNull();
     expect(explanation!.kind).toBe('bg_bau');
-    expect(explanation!.about).toContain('BG BAU');
-    expect(explanation!.importance).toBeTruthy();
-    expect(explanation!.deadline).toContain('2026-04-10');
-    expect(explanation!.nextSteps).toBeTruthy();
+    const aboutText = formatMessage((key) => t(key as never), explanation!.about);
+    expect(aboutText).toContain('BG BAU');
+    const deadlineText = formatMessage((key) => t(key as never), explanation!.deadline);
+    expect(deadlineText).toContain('2026-04-10');
     expect(explanation!.digitalStorage).toContain('Briefe');
     expect(explanation!.paperStorage).toContain('abheften');
-    expect(explanation!.disclaimer).toContain('Steuerberater');
-    expect(explanation!.disclaimer).toContain('Rechts- oder Steuerberatung');
+    expect(explanation!.legalDisclaimerKey).toBe('legal.disclaimer');
+    expect(t(explanation!.legalDisclaimerKey, 'de')).toContain('Steuerberatung');
+    expect(t(explanation!.legalDisclaimerKey, 'de')).toContain('Rechts- oder Steuerberatung');
   });
 
   it('includes uncertain hint when no deadline', () => {
     const explanation = getLetterExplanation(createInboxItem({ deadline: null }));
-    expect(explanation!.deadline).toContain('Bitte prüfen');
+    const deadlineText = formatMessage((key) => t(key as never), explanation!.deadline);
+    expect(deadlineText).toContain('Keine Frist');
   });
 
   it('returns null for non-letter documents', () => {

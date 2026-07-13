@@ -1,3 +1,4 @@
+import { getCachedSetup } from '../persistenceService';
 import { runAiRequest } from '../ai/aiRequestRunner';
 import {
   buildDocumentAiAllowedSourceText as buildAllowedFromContext,
@@ -46,7 +47,8 @@ export async function askDocumentAi(input: {
   }
 
   const context = buildContext(input.source);
-  const prompt = buildDocumentAiPrompt(trimmedQuestion, context);
+  const lang = getCachedSetup().language;
+  const prompt = buildDocumentAiPrompt(trimmedQuestion, context, lang);
   const allowedSourceText = buildAllowedFromContext(context);
 
   const result = await runAiRequest({

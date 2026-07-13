@@ -1,11 +1,17 @@
 import { PAPER_FOLDERS } from '../data/mockData';
 import type {
+  AppLanguage,
   ClassifiedDocumentKind,
   DocumentType,
   InboxItem,
   PaperFilingRule,
   PaperFolder,
 } from '../types/models';
+import {
+  formatPaperFilingInstruction as formatPaperFilingInstructionLocalized,
+  formatPaperLocationSummary as formatPaperLocationSummaryLocalized,
+} from './paperFolderDisplayService';
+import { getCachedSetup } from './persistenceService';
 import { getTodayIso } from './taskNormalize';
 
 export interface PaperFilingContext {
@@ -98,16 +104,18 @@ export function getAllPaperFolders(): PaperFolder[] {
   return PAPER_FOLDERS;
 }
 
-export function formatPaperFilingInstruction(rule: PaperFilingRule): string {
-  const folder = getPaperFolderById(rule.folderId);
-  const folderName = folder?.name ?? rule.label;
-  return `Bitte Original abheften in: ${folderName} → Register ${rule.register}`;
+export function formatPaperFilingInstruction(
+  rule: PaperFilingRule,
+  lang: AppLanguage = getCachedSetup()?.language ?? 'de',
+): string {
+  return formatPaperFilingInstructionLocalized(rule, lang);
 }
 
-export function formatPaperLocationSummary(rule: PaperFilingRule): string {
-  const folder = getPaperFolderById(rule.folderId);
-  const folderName = folder?.name ?? rule.label;
-  return `${folderName}, Register ${rule.register}`;
+export function formatPaperLocationSummary(
+  rule: PaperFilingRule,
+  lang: AppLanguage = getCachedSetup()?.language ?? 'de',
+): string {
+  return formatPaperLocationSummaryLocalized(rule, lang);
 }
 
 export function isAdvertisementContext(context: PaperFilingContext): boolean {

@@ -1,4 +1,4 @@
-import type { ClassifiedDocumentKind, CompanyDocument, InboxItem } from '../../types/models';
+import type { AppLanguage, ClassifiedDocumentKind, CompanyDocument, InboxItem } from '../../types/models';
 import type {
   DocumentExplanation,
   DocumentMemory,
@@ -33,8 +33,25 @@ import { buildPremiumLetterExplanation } from './documentUnderstandingService';
 
 import { OFFICEPILOT_LEGAL_DISCLAIMER } from '../../config/legalDisclaimer';
 
-export const EXPLANATION_NO_DATA_MESSAGE =
-  'Dazu habe ich noch nicht genug Informationen. Bitte prüfen Sie den Brief oder laden Sie den Text erneut hoch.';
+import type { TranslationKey } from '../../i18n';
+import { t } from '../../i18n';
+
+export const EXPLANATION_NO_DATA_KEY = 'documentExplanation.noData' as const satisfies TranslationKey;
+
+export function getExplanationNoDataMessage(lang: AppLanguage = 'de'): string {
+  return t(EXPLANATION_NO_DATA_KEY, lang);
+}
+
+/** @deprecated Use getExplanationNoDataMessage(lang) */
+export const EXPLANATION_NO_DATA_MESSAGE = getExplanationNoDataMessage('de');
+
+export function isExplanationNoDataMessage(message: string): boolean {
+  return (
+    message === getExplanationNoDataMessage('de') ||
+    message === getExplanationNoDataMessage('tr') ||
+    message === getExplanationNoDataMessage('bg')
+  );
+}
 
 export const EXPLANATION_DISCLAIMER = OFFICEPILOT_LEGAL_DISCLAIMER;
 

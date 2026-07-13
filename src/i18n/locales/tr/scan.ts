@@ -1,0 +1,26 @@
+export const trScan = {
+  'heute.scanButton': 'Fotoğraf / Tarama',
+  'scan.title': 'Tarama',
+  'scan.subtitle': 'Fotoğraf veya PDF – OfficePilot sıralar ve arşivler.',
+  'scan.captureTitle': 'Belge kaydet',
+  'scan.captureHint': 'Fotoğraf çekin veya dosya seçin. OfficePilot içeriği tanır.',
+  'scan.selectType': 'Tür seçin (isteğe bağlı)',
+  'scan.typeAuto': 'Otomatik tanı',
+  'scan.uploadFile': 'Dosya seç',
+  'scan.camera': 'Kamera',
+  'scan.gallery': 'Galeri',
+  'scan.pdf': 'PDF',
+  'scan.ocr.processing': 'Metin tanınıyor…',
+  'scan.ocr.previewSubtitle': 'Tanınan metni kontrol edin ve devam edin.',
+  'scan.ocr.continue': 'Analize devam et',
+  'scan.ocr.documentType': 'Tanınan tür',
+  'scan.ocr.sender': 'Gönderen',
+  'scan.ocr.previewText': 'Metin önizlemesi',
+  'scan.ocr.unsupportedFormat': 'Bu dosya formatı desteklenmiyor.',
+  'scan.ocr.failed': 'Metin tanıma başarısız. Lütfen tekrar deneyin.',
+  'scan.ocr.noText':
+    'Kullanılabilir metin tanınmadı. Lütfen belgeyi düz ve iyi ışıkta yeniden fotoğraflayın.',
+  'scan.ocr.partialHint':
+    'Metin yalnızca kısmen tanındı. Lütfen sonucu kontrol edin.',
+  'scanResult.toastRecognized': 'Belge tanındı – lütfen kısaca kontrol edin.',
+} as const;

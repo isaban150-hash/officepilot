@@ -1,3 +1,4 @@
+import { getCachedSetup } from '../persistenceService';
 import type { AssistantAnswer } from '../../types/models';
 import type { BrainAnswer } from '../../types/brain';
 import type {
@@ -10,7 +11,8 @@ import type {
 } from '../../types/brainOrchestration';
 import { isAiProviderConfigured } from '../aiProviderService';
 import {
-  EXPLANATION_NO_DATA_MESSAGE,
+  getExplanationNoDataMessage,
+  isExplanationNoDataMessage,
   findDocumentForExplanationQuestion,
 } from '../memory/documentExplanationService';
 import {
@@ -46,7 +48,7 @@ function nowIso(): string {
 function isNoDataAnswer(answer: AssistantAnswer): boolean {
   return (
     answer.summary === NO_DATA_MESSAGE ||
-    answer.summary === EXPLANATION_NO_DATA_MESSAGE ||
+    isExplanationNoDataMessage(answer.summary) ||
     (answer.bullets.length === 0 &&
       answer.actions.length === 0 &&
       /keine informationen|keine daten|nicht gefunden/i.test(answer.summary))
@@ -206,7 +208,7 @@ function tryRulesAnswer(
     return {
       answer: {
         title: 'Dokument-Erklärung',
-        summary: EXPLANATION_NO_DATA_MESSAGE,
+        summary: getExplanationNoDataMessage(getCachedSetup().language),
         bullets: [],
         actions: [],
       },

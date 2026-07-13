@@ -21,6 +21,7 @@ import {
 import { Button } from '../components/ui/Button';
 import { Badge, Card, DataRow } from '../components/ui/Card';
 import { useApp } from '../context/AppContext';
+import { localizeStoredUserText } from '../i18n/resolveStoredText';
 import { formatInboxActionToast } from '../utils/inboxActionToast';
 import { formatPaperFilingInstruction } from '../services/paperFolderService';
 import { letterExplanationFromWorkflow } from '../services/letterExplanationService';
@@ -567,7 +568,7 @@ export function EingangDetailPage() {
           <DataRow label={translate('analysis.digitalFolder')} value={item.digitalFolder.path} />
           <DataRow
             label={translate('analysis.paperFiling')}
-            value={formatPaperFilingInstruction(item.paperFiling)}
+            value={formatPaperFilingInstruction(item.paperFiling, setup.language)}
           />
           <DataRow label={translate('inbox.nextTask')} value={item.nextTaskLabel} />
           <DataRow label={translate('inbox.recommendedAction')} value={translate(actionKey)} />
@@ -599,8 +600,8 @@ export function EingangDetailPage() {
         onToggle={() => toggleSection('technical')}
       >
         <div className="badge-row">
-          <Badge tone="warning">{getPriorityLabel(item.priority)}</Badge>
-          <Badge>{getStatusLabel(item.status)}</Badge>
+          <Badge tone="warning">{getPriorityLabel(item.priority, setup.language)}</Badge>
+          <Badge>{getStatusLabel(item.status, setup.language)}</Badge>
           {item.isNewUpload && !item.userModified && (
             <Badge tone="info">{translate('inboxStatus.neu')}</Badge>
           )}
@@ -684,7 +685,7 @@ export function EingangDetailPage() {
 
         <div className="security-hint">
           <strong>{translate('inbox.securityHint')}</strong>
-          <p>{item.securityHint}</p>
+          <p>{localizeStoredUserText(item.securityHint, setup.language)}</p>
         </div>
 
         {!item.isAdvertisement && (
@@ -709,6 +710,7 @@ export function EingangDetailPage() {
         item={item}
         workflow={workflow}
         translate={translate}
+        language={setup.language}
         showChangeType
         onChangeType={() => {
           setMoreOptionsExpanded(true);

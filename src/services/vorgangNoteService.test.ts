@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { STORAGE_KEY } from './persistenceService';
+import { getActiveStorageKey } from './persistenceService';
 import { createTestVorgang } from '../test/fixtures';
 import { hydrateVorgangStore } from './vorgangService';
 import {
@@ -53,7 +53,7 @@ describe('vorgangNoteService CRUD', () => {
 
   it('persists notes to localStorage', () => {
     addVorgangNote('v-test-1', { body: 'Persistenz-Test' });
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(getActiveStorageKey());
     expect(raw).not.toBeNull();
     const parsed = JSON.parse(raw!);
     expect(parsed.vorgangNotes).toHaveLength(1);

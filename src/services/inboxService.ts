@@ -1,9 +1,9 @@
-import { MOCK_INBOX_ITEMS } from '../data/inboxMockData';
 import {
   createMockInboxItemFromUpload,
   type CreateInboxFromUploadOptions,
 } from './inboxUploadFactory';
 import type {
+  AppLanguage,
   ClassifiedDocumentKind,
   InboxItem,
   InboxPriority,
@@ -11,8 +11,9 @@ import type {
   InboxStatus,
   RecommendedAction,
 } from '../types/models';
+import { t, type TranslationKey } from '../i18n';
 import { getPaperFolderById } from './paperFolderService';
-import { persistAll } from './persistenceService';
+import { getCachedSetup, persistAll } from './persistenceService';
 import { filterSyncActive, isEntitySyncActive, withUpdatedEntitySync } from './sync/syncMetaService';
 
 export type { CreateInboxFromUploadOptions };
@@ -81,19 +82,25 @@ export function patchInboxItem(id: string, updates: Partial<InboxItem>): InboxIt
 }
 
 export function resetInboxItems(): void {
-  inboxItems = MOCK_INBOX_ITEMS.map((item) => ({
-    ...item,
-    digitalFolder: { ...item.digitalFolder },
-    paperFiling: { ...item.paperFiling },
-    recognizedData: { ...item.recognizedData },
-    taskTemplate: item.taskTemplate ? { ...item.taskTemplate } : undefined,
-  }));
+  inboxItems = [];
+}
+
+export function stageInboxItem(item: InboxItem): InboxItem {
+  inboxItems = [item, ...inboxItems];
+  return { ...item };
+}
+
+export function removeStagedInboxItemById(id: string): boolean {
+  const index = inboxItems.findIndex((item) => item.id === id);
+  if (index === -1) return false;
+  inboxItems = [...inboxItems.slice(0, index), ...inboxItems.slice(index + 1)];
+  return true;
 }
 
 export function addInboxItem(item: InboxItem): InboxItem {
-  inboxItems = [item, ...inboxItems];
+  const staged = stageInboxItem(item);
   persistAll();
-  return { ...item };
+  return staged;
 }
 
 export function processUpload(options: CreateInboxFromUploadOptions = {}): InboxItem {
@@ -179,24 +186,18 @@ export function saveAdvertisementAnyway(id: string): InboxActionResult | null {
   };
 }
 
-export function getPriorityLabel(priority: InboxPriority): string {
-  const labels: Record<InboxPriority, string> = {
-    kritisch: 'Kritisch',
-    hoch: 'Hoch',
-    mittel: 'Mittel',
-    niedrig: 'Niedrig',
-  };
-  return labels[priority];
+export function getPriorityLabel(
+  priority: InboxPriority,
+  lang: AppLanguage = getCachedSetup()?.language ?? 'de',
+): string {
+  return t(`priority.${priority}` as TranslationKey, lang);
 }
 
-export function getStatusLabel(status: InboxStatus): string {
-  const labels: Record<InboxStatus, string> = {
-    neu: 'Neu',
-    geprueft: 'Geprüft',
-    abgelegt: 'Abgelegt',
-    spaeter_klaeren: 'Später klären',
-  };
-  return labels[status];
+export function getStatusLabel(
+  status: InboxStatus,
+  lang: AppLanguage = getCachedSetup()?.language ?? 'de',
+): string {
+  return t(`inboxStatus.${status}` as TranslationKey, lang);
 }
 
 export function filterActiveItems(items: InboxItem[]): InboxItem[] {

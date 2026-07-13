@@ -1,4 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
+import { getCachedSetup } from './services/persistenceService';
+import { t } from './i18n';
 import { AppShell } from './components/layout/AppShell';
 import { useAuth } from './context/AuthContext';
 import { useApp } from './context/AppContext';
@@ -99,9 +101,10 @@ function AppRoutes() {
   const { user, isAuthenticated, isAllowed, isAuthReady, profileError } = useAuth();
 
   if (!isAuthReady) {
+    const lang = getCachedSetup()?.language ?? 'de';
     return (
       <div className="bootstrap-loading" data-testid="auth-loading">
-        <p className="bootstrap-loading__text">Anmeldung wird geprüft…</p>
+        <p className="bootstrap-loading__text">{t('common.loading.auth', lang)}</p>
       </div>
     );
   }

@@ -1,6 +1,8 @@
+import { buildAiLanguageInstruction } from '../ai/aiLanguageRules';
 import { getCompanyProfile } from '../companyProfileService';
 import { COMMUNICATION_AI_SYSTEM_RULES } from '../ai/aiGuardrails';
 import type { CommunicationAiEnhanceInput, CommunicationAiEnhanceStyle } from '../../types/communicationAi';
+import type { AppLanguage } from '../../types/models';
 import type { CommunicationContext, CommunicationFact } from '../../types/communication';
 
 const SENSITIVE_VALUE_PATTERNS = [
@@ -89,7 +91,10 @@ function buildOriginalDraftBlock(input: CommunicationAiEnhanceInput): string {
   return parts.join('\n\n');
 }
 
-export function buildCommunicationAiPrompt(input: CommunicationAiEnhanceInput): string {
+export function buildCommunicationAiPrompt(
+  input: CommunicationAiEnhanceInput,
+  lang: AppLanguage = 'de',
+): string {
   const profile = getCompanyProfile();
   const companyLine = [
     profile.companyName,
@@ -100,6 +105,8 @@ export function buildCommunicationAiPrompt(input: CommunicationAiEnhanceInput): 
     .join(' | ');
 
   return `${COMMUNICATION_AI_SYSTEM_RULES}
+
+${buildAiLanguageInstruction(lang)}
 
 FIRMA (ohne Bank-/Steuerdaten):
 ${sanitizeSensitiveText(companyLine || '—')}

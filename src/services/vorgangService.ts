@@ -1,4 +1,3 @@
-import { MOCK_VORGAENGE } from '../data/mockData';
 import { buildOrderPositionsFromInbox } from './orderPositionFactory';
 import {
   canAddOrderPosition,
@@ -612,7 +611,7 @@ export function applyContractFieldsToVorgang(
 }
 
 export function resetVorgaenge(): void {
-  vorgaenge = MOCK_VORGAENGE.map(normalizeVorgang);
+  vorgaenge = [];
 }
 
 export { buildOrderPositionsFromInbox, parseOfferAmount } from './orderPositionFactory';

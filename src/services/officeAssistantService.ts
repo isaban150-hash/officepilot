@@ -24,9 +24,10 @@ import {
   tryMemoryQueryAnswer,
 } from './memory/memoryQueryService';
 import {
-  EXPLANATION_NO_DATA_MESSAGE,
+  getExplanationNoDataMessage,
   findDocumentForExplanationQuestion,
 } from './memory/documentExplanationService';
+import { getCachedSetup } from './persistenceService';
 import { trySearchAssistantAnswer } from './officeSearchService';
 import { getAllVorgaenge } from './vorgangService';
 import type { AssistantAction, AssistantAnswer, CompanyDocument, Task, Vorgang } from '../types/models';
@@ -269,9 +270,10 @@ export function answerQuestion(question: string, today?: Date | string): Assista
         'Dokument-Erklärung',
       );
     }
+    const lang = getCachedSetup()?.language ?? 'de';
     return {
       title: 'Dokument-Erklärung',
-      summary: EXPLANATION_NO_DATA_MESSAGE,
+      summary: getExplanationNoDataMessage(lang),
       bullets: [],
       actions: [],
     };

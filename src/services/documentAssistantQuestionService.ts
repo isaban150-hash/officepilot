@@ -27,12 +27,76 @@ export const DOCUMENT_QUESTION_SUGGESTIONS: DocumentQuestionSuggestion[] = [
   { id: 'dispose', labelKey: 'docAssistant.question.dispose' },
 ];
 
+const QUESTION_PATTERNS = {
+  pay: [
+    'bezahlen',
+    'zahlung',
+    'muss ich das bezahlen',
+    'ödeme',
+    'odemem',
+    'плащам',
+    'плащане',
+    'трябва ли да плащам',
+    'трябва ли да го платя',
+  ],
+  why: ['warum', 'weshalb', 'why', 'neden', 'niçin', 'защо', 'защо получих'],
+  deadline: [
+    'bis wann',
+    'frist',
+    'deadline',
+    'ne zaman',
+    'son tarih',
+    'до кога',
+    'срок',
+    'краен срок',
+    'кога трябва',
+  ],
+  ignore: [
+    'nichts mache',
+    'nichts tun',
+    'ignore',
+    'yapmazsam',
+    'yapmaz',
+    'ако не направя',
+    'нищо не направя',
+    'какво става',
+  ],
+  tax: ['steuerberater', 'tax advisor', 'mali müşavir', 'steuer', 'данъчен консултант'],
+  file: [
+    'abheften',
+    'ablage',
+    'ordner',
+    'file',
+    'klasör',
+    'nereye',
+    'архивирам',
+    'къде да',
+    'папка',
+    'абхефтен',
+  ],
+  dispose: ['wegwerfen', 'entsorgen', 'dispose', 'at', 'throw', 'изхвърля', 'махна', 'изхвърли'],
+  draftReply: [
+    'antwort schreib',
+    'schreib eine antwort',
+    'schreib mir eine antwort',
+    'write a reply',
+    'cevap yaz',
+    'yanıt yaz',
+    'напиши отговор',
+    'напишете отговор',
+  ],
+} as const;
+
 function normalizeQuestion(question: string): string {
   return question.trim().toLowerCase();
 }
 
-function matches(question: string, patterns: string[]): boolean {
+function matches(question: string, patterns: readonly string[]): boolean {
   return patterns.some((pattern) => question.includes(pattern));
+}
+
+export function isDraftReplyQuestion(question: string): boolean {
+  return matches(normalizeQuestion(question), QUESTION_PATTERNS.draftReply);
 }
 
 export function answerInboxDocumentQuestion(
@@ -47,9 +111,7 @@ export function answerInboxDocumentQuestion(
   const kind = (item.classifiedKind ?? summary.documentType) as ClassifiedDocumentKind;
   const typeLabelKey = getDocumentDisplayLabelKey(kind, item.documentType);
 
-  if (
-    matches(normalized, ['bezahlen', 'zahlung', 'muss ich das bezahlen', 'ödeme', 'odemem'])
-  ) {
+  if (matches(normalized, QUESTION_PATTERNS.pay)) {
     if (summary.amount && (kind === 'mahnung' || kind === 'zahlungserinnerung' || kind === 'eingangsrechnung')) {
       return {
         answerKey: 'docAssistant.answer.payYesCheck',
@@ -70,7 +132,7 @@ export function answerInboxDocumentQuestion(
     };
   }
 
-  if (matches(normalized, ['warum', 'weshalb', 'why', 'neden', 'niçin'])) {
+  if (matches(normalized, QUESTION_PATTERNS.why)) {
     return {
       answerKey: 'docAssistant.answer.whyReceived',
       params: {
@@ -80,7 +142,7 @@ export function answerInboxDocumentQuestion(
     };
   }
 
-  if (matches(normalized, ['bis wann', 'frist', 'deadline', 'ne zaman', 'son tarih'])) {
+  if (matches(normalized, QUESTION_PATTERNS.deadline)) {
     if (summary.deadline || item.deadline) {
       return {
         answerKey: 'docAssistant.answer.deadlineKnown',
@@ -94,21 +156,21 @@ export function answerInboxDocumentQuestion(
     };
   }
 
-  if (matches(normalized, ['nichts mache', 'nichts tun', 'ignore', 'yapmazsam', 'yapmaz'])) {
+  if (matches(normalized, QUESTION_PATTERNS.ignore)) {
     if (assistant.inactionConsequence) {
       return { answerKey: assistant.inactionConsequence.key, params: assistant.inactionConsequence.params };
     }
     return { answerKey: 'docAssistant.answer.ignoreNoRisk' };
   }
 
-  if (matches(normalized, ['steuerberater', 'tax advisor', 'mali müşavir', 'steuer'])) {
+  if (matches(normalized, QUESTION_PATTERNS.tax)) {
     return {
       answerKey: assistant.steuerberaterReasonKey,
       params: { status: assistant.steuerberaterStatus },
     };
   }
 
-  if (matches(normalized, ['abheften', 'ablage', 'ordner', 'file', 'klasör', 'nereye'])) {
+  if (matches(normalized, QUESTION_PATTERNS.file)) {
     return {
       answerKey: 'docAssistant.answer.filing',
       params: {
@@ -118,7 +180,7 @@ export function answerInboxDocumentQuestion(
     };
   }
 
-  if (matches(normalized, ['wegwerfen', 'entsorgen', 'dispose', 'at', 'throw'])) {
+  if (matches(normalized, QUESTION_PATTERNS.dispose)) {
     const guidanceKey =
       assistant.originalGuidance === 'keep_until_tax'
         ? 'docAssistant.answer.disposeKeepTax'

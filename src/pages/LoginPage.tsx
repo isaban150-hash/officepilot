@@ -3,11 +3,13 @@ import { Link, useNavigate } from 'react-router-dom';
 import { AuthLayout } from '../components/auth/AuthLayout';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
+import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { getLoginErrorMessage, getPostLoginRoute } from '../services/auth/authService';
 
 export function LoginPage() {
   const { login } = useAuth();
+  const { translate, language } = useApp();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -21,14 +23,18 @@ export function LoginPage() {
     const result = await login(email, password);
     setLoading(false);
     if (!result.success) {
-      setError(getLoginErrorMessage(result.error));
+      setError(getLoginErrorMessage(result.error, language));
       return;
     }
     navigate(getPostLoginRoute(result.data.user), { replace: true });
   }
 
   return (
-    <AuthLayout title="Anmelden" subtitle="Melden Sie sich mit Ihrem OfficePilot-Zugang an." testId="login-page">
+    <AuthLayout
+      title={translate('auth.login.title')}
+      subtitle={translate('auth.login.subtitle')}
+      testId="login-page"
+    >
       <form className="auth-form" onSubmit={handleSubmit}>
         {error ? (
           <p className="auth-form__error" role="alert" data-testid="login-error">
@@ -36,7 +42,7 @@ export function LoginPage() {
           </p>
         ) : null}
         <Input
-          label="E-Mail"
+          label={translate('auth.login.email')}
           type="email"
           autoComplete="email"
           value={email}
@@ -45,7 +51,7 @@ export function LoginPage() {
           data-testid="login-email"
         />
         <Input
-          label="Passwort"
+          label={translate('auth.login.password')}
           type="password"
           autoComplete="current-password"
           value={password}
@@ -54,11 +60,11 @@ export function LoginPage() {
           data-testid="login-password"
         />
         <Button type="submit" fullWidth loading={loading} disabled={loading} data-testid="login-submit">
-          {loading ? 'Wird angemeldet…' : 'Anmelden'}
+          {loading ? translate('auth.login.submitting') : translate('auth.login.submit')}
         </Button>
         <p className="auth-form__links">
-          <Link to="/forgot-password">Passwort vergessen?</Link>
-          <Link to="/register">Neu registrieren</Link>
+          <Link to="/forgot-password">{translate('auth.login.forgotPassword')}</Link>
+          <Link to="/register">{translate('auth.login.register')}</Link>
         </p>
       </form>
     </AuthLayout>

@@ -1,8 +1,7 @@
+import type { TranslationKey } from '../i18n';
 import { MOCK_INBOX_ITEMS } from '../data/inboxMockData';
 import type { DocumentClassificationInput, InboxItem, UploadDocumentKind } from '../types/models';
-import {
-  classifyInboxItem,
-} from './documentClassificationService';
+import { classifyInboxItem } from './documentClassificationService';
 import { withInboxExtractedDocumentText } from './inboxDocumentText';
 
 export const UPLOAD_DOCUMENT_KINDS: UploadDocumentKind[] = [
@@ -14,6 +13,16 @@ export const UPLOAD_DOCUMENT_KINDS: UploadDocumentKind[] = [
   'kontoauszug',
 ];
 
+export const UPLOAD_KIND_LABEL_KEYS: Record<UploadDocumentKind, TranslationKey> = {
+  auftrag: 'uploadKind.auftrag',
+  zahlungserinnerung: 'uploadKind.zahlungserinnerung',
+  materialrechnung: 'uploadKind.materialrechnung',
+  bg_bau: 'uploadKind.bg_bau',
+  werbung: 'uploadKind.werbung',
+  kontoauszug: 'uploadKind.kontoauszug',
+};
+
+/** @deprecated Use UPLOAD_KIND_LABEL_KEYS with translate() */
 export const UPLOAD_KIND_LABELS: Record<UploadDocumentKind, string> = {
   auftrag: 'Auftrag',
   zahlungserinnerung: 'Zahlungserinnerung',
@@ -79,7 +88,7 @@ export function createMockInboxItemFromUploadForTests(
 ): InboxItem {
   const recognizedText = options.recognizedText?.trim();
   const kind = options.kind ?? (recognizedText ? undefined : pickRandomKind());
-  return createInboxItemFromUploadInternal({ ...options, kind, recognizedText });
+  return createInboxItemFromUploadInternal({ ...options, kind, recognizedText, enrichTemplate: true });
 }
 
 export function createMockInboxItemFromUpload(
@@ -87,11 +96,15 @@ export function createMockInboxItemFromUpload(
 ): InboxItem {
   const recognizedText = options.recognizedText?.trim();
   const kind = options.kind;
-  return createInboxItemFromUploadInternal({ ...options, kind, recognizedText });
+  return createInboxItemFromUploadInternal({ ...options, kind, recognizedText, enrichTemplate: false });
 }
 
 function createInboxItemFromUploadInternal(
-  options: CreateInboxFromUploadOptions & { kind?: UploadDocumentKind; recognizedText?: string },
+  options: CreateInboxFromUploadOptions & {
+    kind?: UploadDocumentKind;
+    recognizedText?: string;
+    enrichTemplate?: boolean;
+  },
 ): InboxItem {
   const recognizedText = options.recognizedText;
   const kind = options.kind;
@@ -107,7 +120,7 @@ function createInboxItemFromUploadInternal(
 
   let item = classifyInboxItem(input);
 
-  if (kind) {
+  if (options.enrichTemplate && kind) {
     item = enrichFromTemplate(item, kind);
   }
 

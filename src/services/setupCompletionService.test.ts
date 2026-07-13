@@ -7,7 +7,7 @@ import {
   hydrateInvoiceNumberSequence,
   resetInvoiceNumberSequence,
 } from './invoiceNumberService';
-import { loadPersistedState } from './persistenceService';
+import { getActiveStorageKey, loadPersistedState } from './persistenceService';
 import { completeSetupWizard } from './setupCompletionService';
 import { validateSetupStep, validateSetupWizard } from './setupValidationService';
 import { SETUP_VERSION, createDefaultSetupWizardDraft } from '../types/setup';
@@ -92,7 +92,7 @@ describe('setupCompletionService', () => {
   it('rejects incomplete drafts', () => {
     const result = completeSetupWizard(createDefaultSetupWizardDraft(), DEFAULT_SETUP);
     expect(result.success).toBe(false);
-    expect(localStorage.getItem('officepilot-state')).toBeNull();
+    expect(localStorage.getItem(getActiveStorageKey())).toBeNull();
   });
 
   it('loads existing profile values into draft helper', () => {

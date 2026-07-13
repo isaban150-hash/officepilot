@@ -13,6 +13,7 @@ import {
   WorkspaceCloudError,
 } from './workspaceCloudService';
 import { mergeVorgaengeFromPull } from '../vorgang/vorgangCloudService';
+import { isDefinitelyMockVorgang } from '../storage/mockDataDetectionService';
 import {
   applyRemoteCompanyProfileSyncMeta,
   applyRemoteSetupSyncMeta,
@@ -229,8 +230,9 @@ export function mergeRemoteWorkspacePullIntoState(
   }
 
   const activeLocalVorgaenge = filterSyncActive(state.vorgaenge);
-  if ((pull.vorgaenge ?? []).length === 0 && activeLocalVorgaenge.length > 0) {
-    for (const vorgang of activeLocalVorgaenge) {
+  const realLocalVorgaenge = activeLocalVorgaenge.filter((vorgang) => !isDefinitelyMockVorgang(vorgang));
+  if ((pull.vorgaenge ?? []).length === 0 && realLocalVorgaenge.length > 0) {
+    for (const vorgang of realLocalVorgaenge) {
       enqueueSyncOutbox({
         entityType: 'vorgang',
         entityId: vorgang.id,
@@ -238,6 +240,8 @@ export function mergeRemoteWorkspacePullIntoState(
         version: Math.max(1, vorgang.sync?.version ?? 1),
       });
     }
+  } else if ((pull.vorgaenge ?? []).length === 0 && activeLocalVorgaenge.length > 0) {
+    next.vorgaenge = [];
   } else if ((pull.vorgaenge ?? []).length > 0) {
     const deviceId = state.syncClient!.deviceId;
     const vorgangMerge = mergeVorgaengeFromPull(

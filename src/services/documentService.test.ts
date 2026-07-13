@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach } from 'vitest';
-import { STORAGE_KEY } from './persistenceService';
+import { getActiveStorageKey } from './persistenceService';
 import {
   addDocument,
   deleteDocument,
@@ -73,7 +73,7 @@ describe('addDocument', () => {
 
     addDocument({ title: 'Persist Test', category: 'steuer' });
 
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(getActiveStorageKey());
     expect(raw).not.toBeNull();
     const parsed = JSON.parse(raw!);
     expect(parsed.documents).toHaveLength(1);
@@ -282,7 +282,7 @@ describe('importInboxDocument', () => {
 
     importInboxDocument(createAuftragInboxItem({ title: 'Persist Import' }), 'Firma GmbH');
 
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(getActiveStorageKey());
     const parsed = JSON.parse(raw!);
     expect(parsed.documents.some((d: CompanyDocument) => d.title === 'Persist Import')).toBe(true);
   });

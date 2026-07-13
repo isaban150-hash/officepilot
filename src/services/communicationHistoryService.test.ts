@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_SETUP } from '../data/mockData';
-import { STORAGE_KEY, loadPersistedState, persistAll } from './persistenceService';
+import { getActiveStorageKey, loadPersistedState, persistAll } from './persistenceService';
 import {
   addCommunicationEvent,
   clearCommunicationHistory,
@@ -224,7 +224,7 @@ describe('communicationHistoryService', () => {
     });
     clearCommunicationHistory();
     expect(getCommunicationEvents()).toHaveLength(0);
-    expect(localStorage.getItem(STORAGE_KEY)).not.toBeNull();
+    expect(localStorage.getItem(getActiveStorageKey())).not.toBeNull();
   });
 
   it('createExcerpt adds ellipsis for long strings', () => {
@@ -251,7 +251,7 @@ describe('communicationHistory persistence roundtrip', () => {
     });
 
     persistAll({ ...DEFAULT_SETUP, setupComplete: true });
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(getActiveStorageKey());
     expect(raw).toContain('communicationHistory');
     expect(raw).not.toContain('A'.repeat(200));
   });

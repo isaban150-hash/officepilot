@@ -2,8 +2,17 @@ import { analyzeContractFromInbox } from '../contractAnalysisService';
 import { getLetterExplanation } from '../letterExplanationService';
 import { MAX_RECOGNIZED_TEXT_LENGTH } from '../communicationConstants';
 import { sanitizeAiText, containsSensitiveFactKey } from '../ai/aiTextSanitizer';
+import { t, type TranslationKey } from '../../i18n';
+import { formatMessage } from '../../i18n/formatMessage';
+import { getCachedSetup } from '../persistenceService';
+import type { ExplanationTextBlock } from '../../i18n/types';
 import type { DocumentAiContext } from '../../types/areaAi';
 import type { CompanyDocument, InboxItem } from '../../types/models';
+
+function blockToPlainText(block: ExplanationTextBlock): string {
+  const lang = getCachedSetup()?.language ?? 'de';
+  return formatMessage((key) => t(key as TranslationKey, lang), block);
+}
 
 function truncateText(text: string, max = MAX_RECOGNIZED_TEXT_LENGTH): string {
   if (text.length <= max) return text;
@@ -62,9 +71,9 @@ export function buildDocumentAiContextFromInbox(item: InboxItem): DocumentAiCont
     linkedVorgangTitle: item.vorgangTitle,
     letterSummary: explanation
       ? {
-          about: sanitizeAiText(explanation.about),
-          deadline: sanitizeAiText(explanation.deadline),
-          nextSteps: sanitizeAiText(explanation.nextSteps),
+          about: sanitizeAiText(blockToPlainText(explanation.about)),
+          deadline: sanitizeAiText(blockToPlainText(explanation.deadline)),
+          nextSteps: sanitizeAiText(blockToPlainText(explanation.nextSteps)),
         }
       : undefined,
     missingDocuments: contract.isContract

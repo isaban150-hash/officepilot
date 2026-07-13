@@ -3,6 +3,8 @@ import { Card, CardMeta, CardTitle } from '../ui/Card';
 import { useApp } from '../../context/AppContext';
 import type { InboxItem, WorkflowResult, WorkflowResultExecution } from '../../types/models';
 import type { TranslationKey } from '../../i18n';
+import { formatMessage } from '../../i18n/formatMessage';
+import type { ExplanationTextBlock } from '../../i18n/types';
 
 interface SmartIntakeSummaryProps {
   workflow: WorkflowResult;
@@ -53,6 +55,8 @@ export function SmartIntakeSummary({
 }: SmartIntakeSummaryProps) {
   const { translate } = useApp();
   const kindKey = `classifiedKind.${workflow.classifiedKind}` as TranslationKey;
+  const renderExplanationBlock = (block: ExplanationTextBlock) =>
+    formatMessage((key) => translate(key as TranslationKey), block);
 
   const vorgangDetail = workflow.suggestedVorgang
     ? workflow.suggestedVorgang.vorgangTitle
@@ -155,7 +159,9 @@ export function SmartIntakeSummary({
         <CheckRow
           label={translate('intake.check.nextSteps')}
           detail={
-            workflow.documentExplanation?.nextSteps ??
+            (workflow.documentExplanation?.nextSteps
+              ? renderExplanationBlock(workflow.documentExplanation.nextSteps)
+              : undefined) ??
             workflow.classification?.nextTaskLabel ??
             item.officePilotSuggestion
           }

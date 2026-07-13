@@ -9,7 +9,7 @@ import {
   removeExpensePayment,
   resolveExpensePaymentStatus,
 } from './expensePaymentService';
-import { STORAGE_KEY, persistAll } from './persistenceService';
+import { getActiveStorageKey, persistAll } from './persistenceService';
 import type { Expense } from '../types/expense';
 
 function createTestExpense(overrides: Partial<Expense> = {}): Expense {
@@ -160,7 +160,7 @@ describe('recordExpensePayment', () => {
 
   it('persists payments to localStorage', () => {
     recordExpensePayment('exp-pay-1', { date: '2026-06-08', amount: 50 });
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(getActiveStorageKey());
     expect(raw).not.toBeNull();
     const parsed = JSON.parse(raw!);
     expect(parsed.expenses[0].payments).toHaveLength(1);

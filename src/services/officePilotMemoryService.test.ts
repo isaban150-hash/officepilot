@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { STORAGE_KEY } from './persistenceService';
+import { getActiveStorageKey } from './persistenceService';
 import { SAMPLE_WERKVERTRAG_TEXT } from './contractAnalysisService';
 import {
   addDocument,
@@ -279,7 +279,7 @@ describe('officePilotMemoryService – persistence', () => {
   it('persistiert und hydratisiert officePilotMemory', () => {
     importInboxDocument(createFreistellungInboxItem(), 'Test GmbH');
 
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(getActiveStorageKey());
     expect(raw).toBeTruthy();
     const parsed = JSON.parse(raw!);
     expect(parsed.officePilotMemory.documentMemories.length).toBeGreaterThan(0);

@@ -1,5 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Card, CardMeta, CardTitle, PageHeader } from '../components/ui/Card';
+import { DemoDataCleanupPanel } from '../components/system/DemoDataCleanupPanel';
+import { LanguageSwitcher } from '../components/settings/LanguageSwitcher';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import type { TranslationKey } from '../i18n';
@@ -39,6 +41,8 @@ export function MehrPage() {
         subtitle={translate('mehr.subtitle')}
       />
 
+      <LanguageSwitcher />
+
       <div className="card-list">
         {links.map(({ key, route, descriptionKey }) => (
           <Link key={route} to={route} className="mehr-link-card">
@@ -49,6 +53,12 @@ export function MehrPage() {
           </Link>
         ))}
       </div>
+
+      {isAdmin && (
+        <div className="mehr-page__dev-tools" data-testid="mehr-dev-tools">
+          <DemoDataCleanupPanel />
+        </div>
+      )}
     </div>
   );
 }

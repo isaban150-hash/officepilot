@@ -267,10 +267,16 @@ export function deleteDocument(id: string): DocumentMutationResult {
   const index = documents.findIndex((d) => d.id === id && isEntitySyncActive(d));
   if (index === -1) return { success: false, errorKey: 'document.notFound' };
 
+  const fileRefId = documents[index].fileRefId;
   const tombstoned = withTombstonedEntity(cloneDocument(documents[index]), 'document');
   documents = [...documents.slice(0, index), tombstoned, ...documents.slice(index + 1)];
   tombstoneMemoryForDocument(id);
   persistAll();
+  queueMicrotask(() => {
+    void import('./documentFileReferenceService')
+      .then(({ releaseDocumentFileIfUnreferenced }) => releaseDocumentFileIfUnreferenced(fileRefId))
+      .then(() => persistAll());
+  });
   return { success: true, document: cloneDocument(tombstoned) };
 }
 

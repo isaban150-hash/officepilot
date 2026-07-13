@@ -583,12 +583,14 @@ export interface WorkflowWarning {
 
 export interface WorkflowLetterSummary {
   kind: string;
-  about: string;
-  importance: string;
-  deadline: string;
-  nextSteps: string;
+  about: import('../i18n/types').ExplanationTextBlock;
+  importance: import('../i18n/types').ExplanationTextBlock;
+  deadline: import('../i18n/types').ExplanationTextBlock;
+  nextSteps: import('../i18n/types').ExplanationTextBlock;
   digitalStorage: string;
   paperStorage: string;
+  legalDisclaimer: string;
+  disclaimer: import('../i18n/types').ExplanationTextBlock[];
 }
 
 export interface DocumentUnderstandingSummary {

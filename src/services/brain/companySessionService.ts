@@ -64,6 +64,10 @@ export function resetCompanySessionForTests(): void {
   }
 }
 
+export function resetCompanySession(): void {
+  resetCompanySessionForTests();
+}
+
 export function recordAssistantQuestion(question: string): CompanySessionContext {
   const session = readStorage();
   const turns = [...session.conversationTurns, question.trim()].filter(Boolean).slice(-MAX_CONVERSATION_TURNS);

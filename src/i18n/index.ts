@@ -1,8 +1,12 @@
 import type { AppLanguage } from '../types/models';
+import { deModules } from './locales/de';
+import { trModules } from './locales/tr';
+import { bgModules } from './locales/bg';
+import { translateKey, type TranslateCatalog } from './translate';
 
 export type TranslationKey = keyof typeof de;
 
-const de = {
+const deLegacy = {
   'app.name': 'OfficePilot',
   'app.tagline': 'Ihr Büroassistent',
 
@@ -1156,12 +1160,21 @@ const de = {
   'docAssistant.error.blurryPhoto': 'Das Foto ist unscharf oder der Text konnte nicht gelesen werden. Bitte bei gutem Licht erneut fotografieren.',
   'docAssistant.error.noReadableText': 'Im Dokument wurde kein lesbarer Text gefunden.',
   'docAssistant.error.technicalFailure': 'Die Verarbeitung konnte technisch nicht abgeschlossen werden.',
+  'docAssistant.error.fileReadFailed': 'Die Datei konnte nicht gelesen werden. Bitte erneut fotografieren oder eine andere Datei wählen.',
+  'docAssistant.error.storageFailed': 'Die Datei konnte nicht gespeichert werden. Bitte erneut versuchen.',
+  'docAssistant.error.blobStorageFailed': 'Die Datei konnte nicht dauerhaft gespeichert werden. Bitte erneut versuchen.',
+  'docAssistant.error.persistFailed': 'Das Dokument wurde erkannt, konnte aber nicht dauerhaft gespeichert werden. Bitte erneut versuchen.',
+  'docAssistant.error.navigationFailed': 'Das Dokument wurde gespeichert, die Detailseite konnte aber nicht geöffnet werden.',
   'docAssistant.error.title.unsupportedFormat': 'Dateiformat nicht unterstützt',
   'docAssistant.error.title.blurryPhoto': 'Foto unscharf',
   'docAssistant.error.title.noReadableText': 'Kein lesbarer Text',
   'docAssistant.error.title.passwordRequired': 'PDF passwortgeschützt',
   'docAssistant.error.title.pdfCorrupt': 'PDF beschädigt',
   'docAssistant.error.title.fileTooLarge': 'Datei zu groß',
+  'docAssistant.error.title.fileReadFailed': 'Datei konnte nicht gelesen werden',
+  'docAssistant.error.title.storageFailed': 'Speichern fehlgeschlagen',
+  'docAssistant.error.title.persistFailed': 'Speichern fehlgeschlagen',
+  'docAssistant.error.title.navigationFailed': 'Seite konnte nicht geöffnet werden',
   'docAssistant.error.title.technicalFailure': 'Verarbeitung fehlgeschlagen',
   'document.upload.listTitle': 'Hochgeladene Dateien',
   'document.upload.emptyHint': 'Erste Datei hochladen',
@@ -2059,9 +2072,22 @@ const de = {
   'persist.resetDemo': 'Demo zurücksetzen',
   'persist.resetConfirm':
     'Alle Inbox-, Vorgangs- und Aufgabendaten auf Demo zurücksetzen? Ihr Firmen-Setup bleibt erhalten.',
+  'dataCleanup.title': 'Demo-Daten bereinigen',
+  'dataCleanup.intro':
+    'Nur eindeutig erkannte Beispieldaten werden entfernt. Ihre echten Aufträge und Dokumente bleiben unangetastet.',
+  'dataCleanup.noneFound': 'Keine eindeutigen Demo-Daten im aktuellen Konto gefunden.',
+  'dataCleanup.vorgaenge': 'Beispiel-Aufträge',
+  'dataCleanup.inbox': 'Beispiel-Dokumente',
+  'dataCleanup.tasks': 'Beispiel-Aufgaben',
+  'dataCleanup.confirmLabel': 'Ich möchte nur die oben genannten Demo-Daten entfernen.',
+  'dataCleanup.remove': 'Demo-Daten jetzt entfernen',
+  'dataCleanup.success': 'Demo-Daten wurden entfernt.',
+  'dataCleanup.failed': 'Demo-Daten konnten nicht entfernt werden.',
 } as const;
 
-const tr: Partial<Record<TranslationKey, string>> = {
+const de = { ...deLegacy, ...deModules } as const;
+
+const trLegacy: Partial<Record<keyof typeof de, string>> = {
   'app.name': 'OfficePilot',
   'setup.title': 'OfficePilot\'a Hoş Geldiniz',
   'nav.eingang': 'Giriş',
@@ -2319,12 +2345,21 @@ const tr: Partial<Record<TranslationKey, string>> = {
   'docAssistant.error.blurryPhoto': 'Fotoğraf bulanık veya metin okunamadı. İyi ışıkta yeniden çekin.',
   'docAssistant.error.noReadableText': 'Belgede okunabilir metin bulunamadı.',
   'docAssistant.error.technicalFailure': 'İşlem teknik olarak tamamlanamadı.',
+  'docAssistant.error.fileReadFailed': 'Dosya okunamadı. Lütfen yeniden çekin veya başka bir dosya seçin.',
+  'docAssistant.error.storageFailed': 'Dosya kaydedilemedi. Lütfen tekrar deneyin.',
+  'docAssistant.error.blobStorageFailed': 'Dosya kalıcı olarak kaydedilemedi. Lütfen tekrar deneyin.',
+  'docAssistant.error.persistFailed': 'Belge tanındı ancak kalıcı olarak kaydedilemedi. Lütfen tekrar deneyin.',
+  'docAssistant.error.navigationFailed': 'Belge kaydedildi ancak detay sayfası açılamadı.',
   'docAssistant.error.title.unsupportedFormat': 'Dosya formatı desteklenmiyor',
   'docAssistant.error.title.blurryPhoto': 'Fotoğraf bulanık',
   'docAssistant.error.title.noReadableText': 'Okunabilir metin yok',
   'docAssistant.error.title.passwordRequired': 'PDF şifre korumalı',
   'docAssistant.error.title.pdfCorrupt': 'PDF hasarlı',
   'docAssistant.error.title.fileTooLarge': 'Dosya çok büyük',
+  'docAssistant.error.title.fileReadFailed': 'Dosya okunamadı',
+  'docAssistant.error.title.storageFailed': 'Kaydetme başarısız',
+  'docAssistant.error.title.persistFailed': 'Kaydetme başarısız',
+  'docAssistant.error.title.navigationFailed': 'Sayfa açılamadı',
   'docAssistant.error.title.technicalFailure': 'İşlem başarısız',
   'document.upload.error.invalidType': 'Yalnızca PDF, JPG, PNG ve WEBP izinlidir.',
   'document.upload.error.unsupportedPhotoFormat':
@@ -2566,7 +2601,12 @@ const tr: Partial<Record<TranslationKey, string>> = {
   'financeIntelligence.uncertainty.reviewRecommended': 'Lütfen belgelerinize göre kontrol edin – vergi danışmanlığı değil.',
 };
 
-const bg: Partial<Record<TranslationKey, string>> = {
+const tr: Partial<Record<keyof typeof de, string>> = {
+  ...trLegacy,
+  ...trModules,
+};
+
+const bgLegacy: Partial<Record<keyof typeof de, string>> = {
   'app.name': 'OfficePilot',
   'setup.title': 'Добре дошли в OfficePilot',
   'nav.eingang': 'Вход',
@@ -2579,6 +2619,11 @@ const bg: Partial<Record<TranslationKey, string>> = {
   'nav.scan': 'Скан',
   'nav.ablage': 'Архив',
   'nav.mehr': 'Още',
+};
+
+const bg: Partial<Record<keyof typeof de, string>> = {
+  ...bgLegacy,
+  ...bgModules,
 };
 
 const ro: Partial<Record<TranslationKey, string>> = {
@@ -2611,18 +2656,23 @@ const ru: Partial<Record<TranslationKey, string>> = {
   'nav.mehr': 'Ещё',
 };
 
-const locales: Record<AppLanguage, Partial<Record<TranslationKey, string>>> = {
-  de: {},
+const locales: TranslateCatalog = {
+  de: de as Record<string, string>,
   tr,
   bg,
   ro,
   ru,
 };
 
-export function t(key: TranslationKey, lang: AppLanguage = 'de'): string {
-  const override = locales[lang][key];
-  if (override) return override;
-  return de[key] ?? key;
+export function t(
+  key: TranslationKey,
+  lang: AppLanguage = 'de',
+  params?: Record<string, string | number>,
+): string {
+  return translateKey(key, lang, locales, params);
 }
 
-export { de, tr };
+export { de, deLegacy, tr, trLegacy, bg, bgLegacy };
+export { assertCoreTranslations, resetMissingTranslationLog } from './translate';
+export { formatMessage, interpolateParams } from './formatMessage';
+export type { ExplanationTextBlock } from './types';

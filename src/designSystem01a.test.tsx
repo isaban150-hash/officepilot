@@ -235,7 +235,9 @@ describe('DESIGN-SYSTEM-01A app shell and reference pages', () => {
       renderToStaticMarkup(
         <MemoryRouter>
           <AuthProvider>
-            <LoginPage />
+            <AppProvider initialSetup={DEFAULT_SETUP}>
+              <LoginPage />
+            </AppProvider>
           </AuthProvider>
         </MemoryRouter>,
       ),

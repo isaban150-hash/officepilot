@@ -138,8 +138,7 @@ const UPLOAD_KIND_MAP: Record<UploadDocumentKind, ClassifiedDocumentKind> = {
   kontoauszug: 'kontoauszug',
 };
 
-const SECURITY_DEFAULT =
-  'OfficePilot trifft keine endgültigen Entscheidungen und versendet nichts ohne Ihre Bestätigung.';
+const SECURITY_DEFAULT = 'inbox.securityHintBody';
 
 function paperFolder(folderId: string, register: string): PaperFilingRule {
   const folder = getPaperFolderById(folderId) ?? PAPER_FOLDERS[4];

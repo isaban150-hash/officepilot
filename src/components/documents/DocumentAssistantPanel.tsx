@@ -12,9 +12,10 @@ import {
   answerInboxDocumentQuestion,
   answerInboxDocumentQuestionById,
   DOCUMENT_QUESTION_SUGGESTIONS,
+  isDraftReplyQuestion,
 } from '../../services/documentAssistantQuestionService';
 import { getDocumentDisplayLabelKey } from '../../services/documentDisplayLabelService';
-import type { InboxItem, WorkflowResult } from '../../types/models';
+import type { InboxItem, WorkflowResult, AppLanguage } from '../../types/models';
 
 function interpolate(
   translate: (key: TranslationKey) => string,
@@ -49,6 +50,7 @@ interface DocumentAssistantPanelProps {
   item: InboxItem;
   workflow?: WorkflowResult | null;
   translate: (key: TranslationKey) => string;
+  language: AppLanguage;
   onAskAi?: (question: string) => Promise<{ text: string; uncertain?: boolean }>;
   showChangeType?: boolean;
   onChangeType?: () => void;
@@ -58,11 +60,15 @@ export function DocumentAssistantPanel({
   item,
   workflow,
   translate,
+  language,
   onAskAi,
   showChangeType = false,
   onChangeType,
 }: DocumentAssistantPanelProps) {
-  const assistant = useMemo(() => buildInboxDocumentAssistant(item, workflow), [item, workflow]);
+  const assistant = useMemo(
+    () => buildInboxDocumentAssistant(item, workflow, language),
+    [item, workflow, language],
+  );
   const [question, setQuestion] = useState('');
   const [answerText, setAnswerText] = useState<string | null>(null);
   const [answerUncertain, setAnswerUncertain] = useState(false);
@@ -84,8 +90,7 @@ export function DocumentAssistantPanel({
       text = `${text} ${translate(ruleAnswer.followUpKey)}`;
     }
 
-    const needsAi =
-      /türkisch|turkce|turkish|antwort schreib|write a reply|cevap yaz/i.test(trimmed) && onAskAi;
+    const needsAi = isDraftReplyQuestion(trimmed) && onAskAi;
 
     if (needsAi) {
       setIsAsking(true);
