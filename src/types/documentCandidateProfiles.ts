@@ -131,7 +131,13 @@ export const RECEIPT_CANDIDATE_PROFILES: ReceiptCandidateProfile[] = [
     family: 'eingangsrechnung',
     structural: [],
     positive: [
-      { featureId: 'reference.invoice_number', weight: 3.5, zones: ['body', 'header'], minStrength: 'medium' },
+      {
+        featureId: 'reference.invoice_number',
+        weight: 3.5,
+        zones: ['body', 'header'],
+        minStrength: 'medium',
+        required: true,
+      },
       { featureId: 'amount.labeled_total', weight: 2.5, zones: ['body'] },
       { featureId: 'amount.monetary_value', weight: 1.5, zones: ['body'] },
       { featureId: 'structure.payment_request', weight: 2, zones: ['body'] },
@@ -142,6 +148,44 @@ export const RECEIPT_CANDIDATE_PROFILES: ReceiptCandidateProfile[] = [
       { featureId: 'structure.receipt_layout', weight: 3, zones: ['body'] },
       { featureId: 'structure.fuel_marker', weight: 2.5, zones: ['body', 'header'] },
       { featureId: 'payment.card_payment', weight: 1.5, zones: ['body'] },
+    ],
+  },
+  {
+    kind: 'mahnung',
+    family: 'zahlung',
+    structural: [],
+    positive: [
+      { featureId: 'structure.payment_request', weight: 3.5, zones: ['body', 'header'] },
+      { featureId: 'date.deadline_date', weight: 2, zones: ['body'] },
+      { featureId: 'amount.monetary_value', weight: 2, zones: ['body'] },
+      { featureId: 'reference.invoice_number', weight: 1.5, zones: ['body', 'header'] },
+    ],
+    negative: [
+      { featureId: 'amount.labeled_total', weight: 2, zones: ['body'] },
+      { featureId: 'structure.receipt_layout', weight: 3, zones: ['body'] },
+      { featureId: 'payment.card_payment', weight: 2, zones: ['body'] },
+      { featureId: 'payment.iban', weight: 1, zones: ['body', 'footer'] },
+    ],
+  },
+  {
+    kind: 'zahlungserinnerung',
+    family: 'zahlung',
+    structural: [],
+    positive: [
+      {
+        featureId: 'structure.payment_request',
+        weight: 4,
+        zones: ['body', 'header'],
+        minStrength: 'medium',
+      },
+      { featureId: 'date.deadline_date', weight: 2, zones: ['body'] },
+      { featureId: 'amount.monetary_value', weight: 2, zones: ['body'] },
+    ],
+    negative: [
+      { featureId: 'amount.labeled_total', weight: 2, zones: ['body'] },
+      { featureId: 'structure.receipt_layout', weight: 3, zones: ['body'] },
+      { featureId: 'payment.card_payment', weight: 2, zones: ['body'] },
+      { featureId: 'reference.invoice_number', weight: 1, zones: ['body', 'header'] },
     ],
   },
   {

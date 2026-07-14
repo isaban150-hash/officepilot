@@ -27,6 +27,42 @@ export const RECEIPT_SCORING_CUTOVER = {
 
 export const DI_RECEIPT_SCORING_REASON_KEY = 'classification.detect.diReceiptScoring';
 
+export type InvoiceCutoverKind = 'eingangsrechnung';
+
+export type InvoiceCutoverKindThresholds = {
+  minConfidence: number;
+  minMargin: number;
+};
+
+export const INVOICE_SCORING_CUTOVER = {
+  enabled: true,
+  allowedKinds: ['eingangsrechnung'],
+  minOcrScore: 0.65,
+  minEvidenceRefs: 3,
+  kindThresholds: {
+    eingangsrechnung: { minConfidence: 0.85, minMargin: 0.20 },
+  },
+} as const satisfies {
+  enabled: boolean;
+  allowedKinds: readonly InvoiceCutoverKind[];
+  minOcrScore: number;
+  minEvidenceRefs: number;
+  kindThresholds: Record<InvoiceCutoverKind, InvoiceCutoverKindThresholds>;
+};
+
+export const DI_INVOICE_SCORING_REASON_KEY = 'classification.detect.diInvoiceScoring';
+
+const INVOICE_KIND_TEXT_GUARD = /rechnungsnummer|eingangsrechnung|invoice|rechnung/i;
+const MAHNUNG_EXCLUSION_GUARD = /mahnung|zahlungserinnerung|zahlungsaufforderung|inkasso/i;
+
+export function hasInvoiceCutoverKindTextGuard(recognizedText: string): boolean {
+  return INVOICE_KIND_TEXT_GUARD.test(recognizedText);
+}
+
+export function hasInvoiceCutoverMahnungExclusion(recognizedText: string): boolean {
+  return MAHNUNG_EXCLUSION_GUARD.test(recognizedText);
+}
+
 let cutoverEnabledOverride: boolean | null = null;
 
 export function getReceiptScoringCutoverEnabled(): boolean {
@@ -38,6 +74,34 @@ export function getReceiptScoringCutoverEnabled(): boolean {
 
 export function setReceiptScoringCutoverEnabledForTests(value: boolean | null): void {
   cutoverEnabledOverride = value;
+}
+
+let invoiceCutoverEnabledOverride: boolean | null = null;
+
+export function getInvoiceScoringCutoverEnabled(): boolean {
+  if (invoiceCutoverEnabledOverride !== null) {
+    return invoiceCutoverEnabledOverride;
+  }
+  return INVOICE_SCORING_CUTOVER.enabled;
+}
+
+export function setInvoiceScoringCutoverEnabledForTests(value: boolean | null): void {
+  invoiceCutoverEnabledOverride = value;
+}
+
+export function isInvoiceScoringCutoverKind(
+  kind: ClassifiedDocumentKind,
+): kind is InvoiceCutoverKind {
+  return INVOICE_SCORING_CUTOVER.allowedKinds.includes(kind as InvoiceCutoverKind);
+}
+
+export function getInvoiceCutoverKindThresholds(
+  kind: ClassifiedDocumentKind,
+): InvoiceCutoverKindThresholds | null {
+  if (!isInvoiceScoringCutoverKind(kind)) {
+    return null;
+  }
+  return INVOICE_SCORING_CUTOVER.kindThresholds[kind];
 }
 
 export function isReceiptScoringCutoverKind(
