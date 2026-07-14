@@ -33,6 +33,10 @@ const MANAGING_DIRECTOR_PATTERN =
   /\b(Geschäftsführer(?:in)?|Inhaber(?:in)?)\s*[:.]?\s*([\p{L}\-]+(?:\s+[\p{L}\-]+)*)/iu;
 const PAYMENT_REQUEST_PATTERN =
   /\b(zahlungsaufforderung|zahlungserinnerung|zahlungsfrist|zu\s+zahlen|zahlbar\s+bis)\b/i;
+const CARD_PAYMENT_PATTERN =
+  /\b(kartenzahlung|girocard|ec-cash|ec\s+zahlung|visa|mastercard|kreditkarte|contactless|terminal)\b/i;
+const FUEL_MARKER_PATTERN =
+  /\b(kraftstoff|diesel|benzin|super|e10|adblue|erdgas|cng|lpg|tankstelle)\b/i;
 const AUTHORITY_MARKER_PATTERN =
   /\b(finanzamt|steueramt|zollamt|sozialversicherung|berufsgenossenschaft|agentur\s+für\s+arbeit|jobcenter|stadtverwaltung|gemeindeverwaltung|landratsamt|ordnungsamt)\b/i;
 
@@ -115,6 +119,19 @@ const PATTERN_FEATURES: PatternFeatureSpec[] = [
     id: 'structure.payment_request',
     category: 'structure',
     pattern: PAYMENT_REQUEST_PATTERN,
+    valueFromMatch: () => true,
+  },
+  {
+    id: 'payment.card_payment',
+    category: 'payment',
+    pattern: CARD_PAYMENT_PATTERN,
+    labeled: true,
+    valueFromMatch: () => true,
+  },
+  {
+    id: 'structure.fuel_marker',
+    category: 'structure',
+    pattern: FUEL_MARKER_PATTERN,
     valueFromMatch: () => true,
   },
 ];
@@ -349,22 +366,27 @@ function extractStructureFeatures(
     }
   }
 
-  const bodyAmountLine = zonedText.bodyLines.find((line) => MONETARY_VALUE_PATTERN.test(line.text));
-  const isShortReceipt =
-    meaningfulLines.length <= 6 &&
-    Boolean(bodyAmountLine) &&
-    zonedText.footerLines.every((line) => !HRB_HRA_PATTERN.test(line.text));
+  const amountLine =
+    zonedText.bodyLines.find((line) => MONETARY_VALUE_PATTERN.test(line.text)) ??
+    zonedText.headerLines.find((line) => MONETARY_VALUE_PATTERN.test(line.text));
+  const hasInvoiceNumberInBody = zonedText.bodyLines.some((line) =>
+    INVOICE_NUMBER_PATTERN.test(line.text),
+  );
+  const isReceiptLayout =
+    meaningfulLines.length <= 12 &&
+    Boolean(amountLine) &&
+    !hasInvoiceNumberInBody;
 
-  if (isShortReceipt && bodyAmountLine) {
-    const match = bodyAmountLine.text.match(MONETARY_VALUE_PATTERN);
+  if (isReceiptLayout && amountLine) {
+    const match = amountLine.text.match(MONETARY_VALUE_PATTERN);
     if (match) {
       const marker = match[0];
-      const startOffset = bodyAmountLine.startOffset + bodyAmountLine.text.indexOf(marker);
+      const startOffset = amountLine.startOffset + amountLine.text.indexOf(marker);
       addLineFeature(result, counters, {
         id: 'structure.receipt_layout',
         category: 'structure',
-        line: bodyAmountLine,
-        rawValue: bodyAmountLine.text.trim(),
+        line: amountLine,
+        rawValue: amountLine.text.trim(),
         value: true,
         startOffset,
         endOffset: startOffset + marker.length,
