@@ -71,12 +71,14 @@ export function hasReceiptCutoverKindTextGuard(
   return RECEIPT_KIND_TEXT_GUARDS[kind].test(recognizedText);
 }
 
+export type OcrOnlyRecognizedDataKind = ReceiptCutoverKind | 'eingangsrechnung';
+
 export const OCR_ONLY_RECOGNIZED_DATA = {
   enabled: true,
-  kinds: ['tankbeleg', 'ec_beleg', 'kassenbeleg'],
+  kinds: ['tankbeleg', 'ec_beleg', 'kassenbeleg', 'eingangsrechnung'],
 } as const satisfies {
   enabled: boolean;
-  kinds: readonly ReceiptCutoverKind[];
+  kinds: readonly OcrOnlyRecognizedDataKind[];
 };
 
 let ocrOnlyRecognizedDataOverride: boolean | null = null;
@@ -94,6 +96,6 @@ export function setOcrOnlyRecognizedDataEnabledForTests(value: boolean | null): 
 
 export function isOcrOnlyRecognizedDataKind(
   kind: ClassifiedDocumentKind,
-): kind is ReceiptCutoverKind {
-  return OCR_ONLY_RECOGNIZED_DATA.kinds.includes(kind as ReceiptCutoverKind);
+): kind is OcrOnlyRecognizedDataKind {
+  return OCR_ONLY_RECOGNIZED_DATA.kinds.includes(kind as OcrOnlyRecognizedDataKind);
 }

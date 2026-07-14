@@ -320,7 +320,7 @@ describe('integration: upload → classification → inbox item', () => {
 
     expect(item.classifiedKind).toBe('eingangsrechnung');
     expect(item.isNewUpload).toBe(true);
-    expect(item.recognizedData.Rechnungsnummer).toBeTruthy();
+    expect(item.recognizedData.Rechnungsnummer).toBeUndefined();
     expect(getClassifiedKindFromItem(item)).toBe('eingangsrechnung');
   });
 

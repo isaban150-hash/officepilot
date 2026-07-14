@@ -42,134 +42,191 @@ const KASSEN_RECEIPT = [
   'Vielen Dank',
 ].join('\n');
 
+const INCOMING_INVOICE = [
+  'Müller Bau GmbH',
+  'Musterstraße 1',
+  '12345 Musterstadt',
+  'Rechnungsnummer: INV-2026-77',
+  'Datum: 12.03.2026',
+  'Leistung: Sanierung Dach',
+  'Position 1    450,00 EUR',
+  'Position 2    320,00 EUR',
+  'Gesamtbetrag 1.247,80 EUR',
+  'IBAN: DE89 3704 0044 0532 0130 00',
+  'zahlbar bis 31.03.2026',
+].join('\n');
+
 describe('documentRecognizedDataService', () => {
   afterEach(() => {
     setOcrOnlyRecognizedDataEnabledForTests(null);
   });
 
-  it('uses OCR amount and station instead of demo values for tankbeleg', () => {
-    const recognizedData = buildEvidenceBasedRecognizedData({
-      classifiedKind: 'tankbeleg',
-      recognizedText: TANK_RECEIPT_WITH_AMOUNT,
+  describe('receipt family', () => {
+    it('uses OCR amount and station instead of demo values for tankbeleg', () => {
+      const recognizedData = buildEvidenceBasedRecognizedData({
+        classifiedKind: 'tankbeleg',
+        recognizedText: TANK_RECEIPT_WITH_AMOUNT,
+      });
+
+      expect(recognizedData.Dokumentart).toBe('tankbeleg');
+      expect(recognizedData.Betrag).toContain('52,18');
+      expect(recognizedData.Betrag).not.toBe('85,40 €');
+      expect(recognizedData.Tankstelle).toBe('ARAL Tankstelle München');
+      expect(recognizedData.Tankstelle).not.toBe('Tankstelle');
     });
 
-    expect(recognizedData.Dokumentart).toBe('tankbeleg');
-    expect(recognizedData.Betrag).toContain('52,18');
-    expect(recognizedData.Betrag).not.toBe('85,40 €');
-    expect(recognizedData.Tankstelle).toBe('ARAL Tankstelle München');
-    expect(recognizedData.Tankstelle).not.toBe('Tankstelle');
-  });
+    it('uses OCR-only fields for ec_beleg', () => {
+      const recognizedData = buildEvidenceBasedRecognizedData({
+        classifiedKind: 'ec_beleg',
+        recognizedText: EC_RECEIPT,
+      });
 
-  it('uses OCR-only fields for ec_beleg', () => {
-    const recognizedData = buildEvidenceBasedRecognizedData({
-      classifiedKind: 'ec_beleg',
-      recognizedText: EC_RECEIPT,
+      expect(recognizedData.Dokumentart).toBe('ec_beleg');
+      expect(recognizedData.Betrag).toContain('18,42');
+      expect(recognizedData.Lieferant).toBe('REWE Markt München');
+      expect(recognizedData.Belegnummer).toBe('EC-4421');
     });
 
-    expect(recognizedData.Dokumentart).toBe('ec_beleg');
-    expect(recognizedData.Betrag).toContain('18,42');
-    expect(recognizedData.Lieferant).toBe('REWE Markt München');
-    expect(recognizedData.Belegnummer).toBe('EC-4421');
-  });
+    it('uses OCR-only fields for kassenbeleg including receipt number', () => {
+      const recognizedData = buildEvidenceBasedRecognizedData({
+        classifiedKind: 'kassenbeleg',
+        recognizedText: KASSEN_RECEIPT,
+      });
 
-  it('uses OCR-only fields for kassenbeleg including receipt number', () => {
-    const recognizedData = buildEvidenceBasedRecognizedData({
-      classifiedKind: 'kassenbeleg',
-      recognizedText: KASSEN_RECEIPT,
+      expect(recognizedData.Dokumentart).toBe('kassenbeleg');
+      expect(recognizedData.Betrag).toContain('8,90');
+      expect(recognizedData.Datum).toBe('14.07.2026');
+      expect(recognizedData.Lieferant).toBe('Bäckerei Schmidt');
+      expect(recognizedData.Belegnummer).toBe('4421');
     });
 
-    expect(recognizedData.Dokumentart).toBe('kassenbeleg');
-    expect(recognizedData.Betrag).toContain('8,90');
-    expect(recognizedData.Datum).toBe('14.07.2026');
-    expect(recognizedData.Lieferant).toBe('Bäckerei Schmidt');
-    expect(recognizedData.Belegnummer).toBe('4421');
-  });
+    it('does not inject sender hints as merchant name for tankbeleg', () => {
+      const result = classifyDocument({
+        recognizedText: TANK_RECEIPT_WITH_AMOUNT,
+        senderHint: 'Shell Autobahn',
+      });
 
-  it('returns only Dokumentart when OCR text is missing', () => {
-    const recognizedData = buildEvidenceBasedRecognizedData({
-      classifiedKind: 'tankbeleg',
+      expect(result.classifiedKind).toBe('tankbeleg');
+      expect(result.recognizedData.Tankstelle).toBe('ARAL Tankstelle München');
+      expect(result.recognizedData.Tankstelle).not.toBe('Shell Autobahn');
     });
 
-    expect(recognizedData).toEqual({ Dokumentart: 'tankbeleg' });
-    expect(recognizedData.Betrag).toBeUndefined();
-    expect(recognizedData.Tankstelle).toBeUndefined();
+    it('feeds OCR amount into the expense flow for tankbeleg', () => {
+      const classification = classifyDocument({ recognizedText: TANK_RECEIPT_WITH_AMOUNT });
+      const inboxItem = {
+        id: 'inbox-tank-ocr',
+        title: 'Tankbeleg',
+        sender: classification.recognizedData.Tankstelle ?? '',
+        recognizedData: classification.recognizedData,
+        classifiedKind: classification.classifiedKind,
+      } as InboxItem;
+
+      const expenseInput = buildExpenseInputFromInbox(inboxItem, 'tankbeleg');
+
+      expect(expenseInput.grossAmount).toBe(52.18);
+      expect(expenseInput.category).toBe('fahrzeug');
+    });
   });
 
-  it('does not inject sender hints as merchant name', () => {
-    const result = classifyDocument({
-      recognizedText: TANK_RECEIPT_WITH_AMOUNT,
-      senderHint: 'Shell Autobahn',
+  describe('eingangsrechnung', () => {
+    it('uses OCR-only invoice fields instead of demo values', () => {
+      const recognizedData = buildEvidenceBasedRecognizedData({
+        classifiedKind: 'eingangsrechnung',
+        recognizedText: INCOMING_INVOICE,
+      });
+
+      expect(recognizedData.Dokumentart).toBe('eingangsrechnung');
+      expect(recognizedData.Rechnungsnummer).toBe('INV-2026-77');
+      expect(recognizedData.Rechnungsnummer).not.toBe('RE-2026-0001');
+      expect(recognizedData.Betrag).toContain('1.247,80');
+      expect(recognizedData.Betrag).not.toBe('342,16 €');
+      expect(recognizedData.Lieferant).toBe('Müller Bau GmbH');
+      expect(recognizedData.Datum).toBe('12.03.2026');
+      expect(recognizedData.Frist).toBe('31.03.2026');
     });
 
-    expect(result.classifiedKind).toBe('tankbeleg');
-    expect(result.recognizedData.Tankstelle).toBe('ARAL Tankstelle München');
-    expect(result.recognizedData.Tankstelle).not.toBe('Shell Autobahn');
-  });
+    it('prefers invoice total over line item amounts', () => {
+      const recognizedData = buildEvidenceBasedRecognizedData({
+        classifiedKind: 'eingangsrechnung',
+        recognizedText: INCOMING_INVOICE,
+      });
 
-  it('feeds OCR amount into the expense flow for tankbeleg', () => {
-    const classification = classifyDocument({ recognizedText: TANK_RECEIPT_WITH_AMOUNT });
-    const inboxItem = {
-      id: 'inbox-tank-ocr',
-      title: 'Tankbeleg',
-      sender: classification.recognizedData.Tankstelle ?? '',
-      recognizedData: classification.recognizedData,
-      classifiedKind: classification.classifiedKind,
-    } as InboxItem;
-
-    const expenseInput = buildExpenseInputFromInbox(inboxItem, 'tankbeleg');
-
-    expect(expenseInput.grossAmount).toBe(52.18);
-    expect(expenseInput.category).toBe('fahrzeug');
-  });
-
-  it('feeds OCR amount into the expense flow for ec_beleg', () => {
-    const classification = classifyDocument({ recognizedText: EC_RECEIPT });
-    const inboxItem = {
-      id: 'inbox-ec-ocr',
-      title: 'EC-Beleg',
-      sender: classification.recognizedData.Lieferant ?? '',
-      recognizedData: classification.recognizedData,
-      classifiedKind: classification.classifiedKind,
-    } as InboxItem;
-
-    const expenseInput = buildExpenseInputFromInbox(inboxItem, 'ec_beleg');
-
-    expect(classification.classifiedKind).toBe('ec_beleg');
-    expect(expenseInput.grossAmount).toBe(18.42);
-  });
-
-  it('feeds OCR amount into the expense flow for kassenbeleg', () => {
-    const classification = classifyDocument({ recognizedText: KASSEN_RECEIPT });
-    const inboxItem = {
-      id: 'inbox-kassen-ocr',
-      title: 'Kassenbeleg',
-      sender: classification.recognizedData.Lieferant ?? '',
-      recognizedData: classification.recognizedData,
-      classifiedKind: classification.classifiedKind,
-    } as InboxItem;
-
-    const expenseInput = buildExpenseInputFromInbox(inboxItem, 'kassenbeleg');
-
-    expect(classification.classifiedKind).toBe('kassenbeleg');
-    expect(expenseInput.grossAmount).toBe(8.9);
-  });
-
-  it('leaves other document kinds on legacy recognizedData profiles', () => {
-    const result = classifyDocument({
-      recognizedText: 'Eingangsrechnung Lieferant Mustermann GmbH',
-      kindHint: 'eingangsrechnung',
+      expect(recognizedData.Betrag).toContain('1.247,80');
+      expect(recognizedData.Betrag).not.toContain('450,00');
+      expect(recognizedData.Betrag).not.toContain('320,00');
     });
 
-    expect(shouldUseEvidenceBasedRecognizedData(result.classifiedKind)).toBe(false);
-    expect(result.recognizedData.Betrag).toBe('342,16 €');
+    it('returns only Dokumentart when OCR text is missing', () => {
+      const recognizedData = buildEvidenceBasedRecognizedData({
+        classifiedKind: 'eingangsrechnung',
+      });
+
+      expect(recognizedData).toEqual({ Dokumentart: 'eingangsrechnung' });
+      expect(recognizedData.Betrag).toBeUndefined();
+      expect(recognizedData.Rechnungsnummer).toBeUndefined();
+      expect(recognizedData.Frist).toBeUndefined();
+    });
+
+    it('does not inject sender hints as Lieferant', () => {
+      const result = classifyDocument({
+        recognizedText: INCOMING_INVOICE,
+        senderHint: 'Falscher Lieferant AG',
+      });
+
+      expect(result.classifiedKind).toBe('eingangsrechnung');
+      expect(result.recognizedData.Lieferant).toBe('Müller Bau GmbH');
+      expect(result.recognizedData.Lieferant).not.toBe('Falscher Lieferant AG');
+    });
+
+    it('feeds OCR amount and invoice number into the expense flow', () => {
+      const classification = classifyDocument({ recognizedText: INCOMING_INVOICE });
+      const inboxItem = {
+        id: 'inbox-invoice-ocr',
+        title: 'Eingangsrechnung',
+        sender: classification.recognizedData.Lieferant ?? '',
+        recognizedData: classification.recognizedData,
+        classifiedKind: classification.classifiedKind,
+      } as InboxItem;
+
+      const expenseInput = buildExpenseInputFromInbox(inboxItem, 'eingangsrechnung');
+
+      expect(classification.classifiedKind).toBe('eingangsrechnung');
+      expect(expenseInput.grossAmount).toBe(1247.8);
+      expect(expenseInput.invoiceNumber).toBe('INV-2026-77');
+    });
+
+    it('enables evidence-based recognizedData for eingangsrechnung', () => {
+      const result = classifyDocument({ recognizedText: INCOMING_INVOICE });
+
+      expect(shouldUseEvidenceBasedRecognizedData(result.classifiedKind)).toBe(true);
+      expect(result.recognizedData.Betrag).not.toBe('342,16 €');
+    });
   });
 
-  it('can be disabled via feature flag for rollback', () => {
-    setOcrOnlyRecognizedDataEnabledForTests(false);
+  describe('legacy and rollback', () => {
+    it('leaves mahnung on legacy recognizedData profiles', () => {
+      const result = classifyDocument({
+        recognizedText: 'Mahnung Zahlungsaufforderung',
+        kindHint: 'mahnung',
+      });
 
-    const result = classifyDocument({ recognizedText: 'Tankstelle Diesel Beleg' });
+      expect(shouldUseEvidenceBasedRecognizedData(result.classifiedKind)).toBe(false);
+      expect(result.recognizedData.Betrag).toBe('1.247,80 €');
+      expect(result.recognizedData.Fälligkeit).toBe('30.03.2026');
+    });
 
-    expect(result.classifiedKind).toBe('tankbeleg');
-    expect(result.recognizedData.Betrag).toBe('85,40 €');
+    it('can be disabled via feature flag for rollback', () => {
+      setOcrOnlyRecognizedDataEnabledForTests(false);
+
+      const tank = classifyDocument({ recognizedText: 'Tankstelle Diesel Beleg' });
+      const invoice = classifyDocument({
+        recognizedText: 'Eingangsrechnung ohne erkennbare Details',
+        kindHint: 'eingangsrechnung',
+      });
+
+      expect(tank.recognizedData.Betrag).toBe('85,40 €');
+      expect(invoice.recognizedData.Betrag).toBe('342,16 €');
+      expect(invoice.recognizedData.Rechnungsnummer).toBe('RE-2026-0001');
+    });
   });
 });

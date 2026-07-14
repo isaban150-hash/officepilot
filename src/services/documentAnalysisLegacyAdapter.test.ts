@@ -82,7 +82,6 @@ describe('documentAnalysisLegacyAdapter', () => {
     expect(analysis.facts.sender).toBeUndefined();
     expect(analysis.facts.grossAmount).toBeUndefined();
     expect(analysis.facts.referenceNumbers).toBeUndefined();
-    expect(analysis.warnings).toContain('legacy_fact_without_evidence');
   });
 
   it('omits pseudo amounts from profile defaults when they are not present in OCR text', () => {
@@ -93,7 +92,6 @@ describe('documentAnalysisLegacyAdapter', () => {
     });
 
     expect(analysis.facts.grossAmount).toBeUndefined();
-    expect(analysis.warnings).toContain('legacy_fact_without_evidence');
   });
 
   it('omits pseudo dates from profile defaults when they are not present in OCR text', () => {

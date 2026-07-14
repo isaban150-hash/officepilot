@@ -1,11 +1,14 @@
 import type { ClassifiedDocumentKind } from '../types/models';
 import type { DocumentClassificationInput } from '../types/models';
-import type { ReceiptCutoverKind } from '../config/documentIntelligenceConfig';
+import type { OcrOnlyRecognizedDataKind, ReceiptCutoverKind } from '../config/documentIntelligenceConfig';
 import {
   getOcrOnlyRecognizedDataEnabled,
   isOcrOnlyRecognizedDataKind,
 } from '../config/documentIntelligenceConfig';
-import { formatGermanMoney } from './documentAmountExtractionService';
+import {
+  formatGermanMoney,
+  resolveInvoiceAmount,
+} from './documentAmountExtractionService';
 import {
   extractFieldsWithConfidence,
   toConfidentPlainFields,
@@ -19,6 +22,8 @@ export type EvidenceBasedRecognizedDataInput = {
   pageTexts?: DocumentClassificationInput['pageTexts'];
 };
 
+type RecognizedDataFamily = 'receipt' | 'invoice';
+
 type ReceiptRecognizedDataConfig = {
   merchantField: string;
 };
@@ -29,8 +34,24 @@ const RECEIPT_RECOGNIZED_DATA_CONFIG: Record<ReceiptCutoverKind, ReceiptRecogniz
   kassenbeleg: { merchantField: 'Lieferant' },
 };
 
-const HEADER_SKIP_PATTERN =
+const OCR_ONLY_KIND_FAMILY: Record<OcrOnlyRecognizedDataKind, RecognizedDataFamily> = {
+  tankbeleg: 'receipt',
+  ec_beleg: 'receipt',
+  kassenbeleg: 'receipt',
+  eingangsrechnung: 'invoice',
+};
+
+const RECEIPT_HEADER_SKIP_PATTERN =
   /^(?:HRB|Amtsgericht|Geschäftsf|Geschaeftsf|Kartenzahlung|Vielen Dank|Danke|Girocard|Mastercard|Visa|EC-Karte|Terminal|Summe|Bar\s+gezahlt|Barzahlung)/i;
+
+const INVOICE_HEADER_SKIP_PATTERN =
+  /^(?:Rechnungs(?:nummer|nr)|Invoice|Inv\.|Eingangsrechnung|Datum|Leistung|IBAN|USt|MwSt|Gesamtbetrag|Summe|zu\s+zahlen|zahlbar|Netto|Brutto)/i;
+
+const RECEIPT_NUMBER_PATTERN =
+  /\b(?:beleg[\s-]*nr\.?|belegnummer)\s*[:#]?\s*([A-Z0-9][\w./-]{2,})/i;
+
+const INVOICE_TOTAL_LINE_PATTERN =
+  /\b(?:gesamtbetrag|rechnungssumme|rechnungsbetrag|endsumme|summe(?:\s+brutto)?|zu\s+zahlen)\s+(\d{1,3}(?:\.\d{3})*,\d{2})\s*(?:€|EUR|eur)?/i;
 
 function isLikelyAmountLine(line: string): boolean {
   return /\d{1,3}(?:[.\s]\d{3})*,\d{2}\s*(?:€|EUR|eur)?\b/i.test(line);
@@ -47,7 +68,7 @@ function inferMerchantFromHeader(text: string): string | undefined {
     .filter(Boolean);
 
   for (const line of lines.slice(0, 4)) {
-    if (HEADER_SKIP_PATTERN.test(line)) continue;
+    if (RECEIPT_HEADER_SKIP_PATTERN.test(line)) continue;
     if (/^kassenbeleg$/i.test(line)) continue;
     if (isLikelyAmountLine(line) && !/tankstelle|markt|bäckerei|baeckerei|shop|store/i.test(line)) {
       continue;
@@ -59,23 +80,46 @@ function inferMerchantFromHeader(text: string): string | undefined {
   return undefined;
 }
 
-function resolveReceiptConfig(
+function inferSupplierFromHeader(text: string): string | undefined {
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  for (const line of lines.slice(0, 4)) {
+    if (INVOICE_HEADER_SKIP_PATTERN.test(line)) continue;
+    if (isLikelyAmountLine(line)) continue;
+    if (isLikelyDateLine(line)) continue;
+    if (/^\d{5}\b/.test(line)) continue;
+    if (line.length >= 3) return line;
+  }
+
+  return undefined;
+}
+
+function resolveRecognizedDataFamily(
   kind: ClassifiedDocumentKind,
-): ReceiptRecognizedDataConfig | null {
+): RecognizedDataFamily | null {
   if (!isOcrOnlyRecognizedDataKind(kind)) {
     return null;
   }
-  return RECEIPT_RECOGNIZED_DATA_CONFIG[kind];
+  return OCR_ONLY_KIND_FAMILY[kind];
 }
 
-function applyOcrAmount(
+function extractDocumentFeaturesFromText(
+  text: string,
+  pageTexts?: DocumentClassificationInput['pageTexts'],
+) {
+  return extractDocumentFeatures(zoneDocumentText(text, pageTexts));
+}
+
+function applyReceiptOcrAmount(
   result: Record<string, string>,
   plain: ReturnType<typeof toConfidentPlainFields>,
   text: string,
   pageTexts?: DocumentClassificationInput['pageTexts'],
 ): void {
-  const zoned = zoneDocumentText(text, pageTexts);
-  const features = extractDocumentFeatures(zoned);
+  const features = extractDocumentFeaturesFromText(text, pageTexts);
 
   const labeledTotal = features.features.find((feature) => feature.id === 'amount.labeled_total');
   if (labeledTotal && typeof labeledTotal.value === 'number' && labeledTotal.value > 0) {
@@ -98,8 +142,32 @@ function applyOcrAmount(
   }
 }
 
-const RECEIPT_NUMBER_PATTERN =
-  /\b(?:beleg[\s-]*nr\.?|belegnummer)\s*[:#]?\s*([A-Z0-9][\w./-]{2,})/i;
+function applyInvoiceOcrAmount(
+  result: Record<string, string>,
+  text: string,
+  pageTexts?: DocumentClassificationInput['pageTexts'],
+): void {
+  const features = extractDocumentFeaturesFromText(text, pageTexts);
+
+  const labeledTotal = features.features.find((feature) => feature.id === 'amount.labeled_total');
+  if (labeledTotal && typeof labeledTotal.value === 'number' && labeledTotal.value > 0) {
+    result.Betrag = formatGermanMoney(labeledTotal.value);
+    return;
+  }
+
+  const resolvedInvoiceAmount = resolveInvoiceAmount(text);
+  if (resolvedInvoiceAmount.status === 'confirmed' && resolvedInvoiceAmount.value) {
+    result.Betrag = formatGermanMoney(resolvedInvoiceAmount.value);
+    return;
+  }
+
+  const totalLineMatch = text.match(INVOICE_TOTAL_LINE_PATTERN);
+  if (totalLineMatch?.[1]) {
+    result.Betrag = formatGermanMoney(
+      Number.parseFloat(totalLineMatch[1].replace(/\./g, '').replace(',', '.')),
+    );
+  }
+}
 
 function applyOcrReceiptNumber(
   result: Record<string, string>,
@@ -118,8 +186,7 @@ function applyOcrReceiptNumber(
     return;
   }
 
-  const zoned = zoneDocumentText(text, pageTexts);
-  const features = extractDocumentFeatures(zoned);
+  const features = extractDocumentFeaturesFromText(text, pageTexts);
   const receiptNumberFeature = features.features.find(
     (feature) => feature.id === 'reference.invoice_number',
   );
@@ -128,37 +195,61 @@ function applyOcrReceiptNumber(
   }
 }
 
-export function shouldUseEvidenceBasedRecognizedData(kind: ClassifiedDocumentKind): boolean {
-  return isOcrOnlyRecognizedDataKind(kind) && getOcrOnlyRecognizedDataEnabled();
+function applyInvoiceOcrReference(
+  result: Record<string, string>,
+  plain: ReturnType<typeof toConfidentPlainFields>,
+  text: string,
+  pageTexts?: DocumentClassificationInput['pageTexts'],
+): void {
+  if (plain.Rechnungsnummer?.trim()) {
+    result.Rechnungsnummer = plain.Rechnungsnummer;
+    return;
+  }
+
+  const features = extractDocumentFeaturesFromText(text, pageTexts);
+  const invoiceNumberFeature = features.features.find(
+    (feature) => feature.id === 'reference.invoice_number',
+  );
+  if (typeof invoiceNumberFeature?.value === 'string' && invoiceNumberFeature.value.trim()) {
+    result.Rechnungsnummer = invoiceNumberFeature.value.trim();
+  }
 }
 
-export function buildEvidenceBasedRecognizedData(
-  input: EvidenceBasedRecognizedDataInput,
+function applyInvoiceOcrDeadline(
+  result: Record<string, string>,
+  plain: ReturnType<typeof toConfidentPlainFields>,
+  text: string,
+  pageTexts?: DocumentClassificationInput['pageTexts'],
+): void {
+  if (plain.Frist?.trim()) {
+    result.Frist = plain.Frist;
+    return;
+  }
+
+  const features = extractDocumentFeaturesFromText(text, pageTexts);
+  const deadlineFeature = features.features.find((feature) => feature.id === 'date.deadline_date');
+  if (typeof deadlineFeature?.value === 'string' && deadlineFeature.value.trim()) {
+    result.Frist = deadlineFeature.value.trim();
+  }
+}
+
+function buildReceiptRecognizedData(
+  kind: ReceiptCutoverKind,
+  text: string,
+  pageTexts?: DocumentClassificationInput['pageTexts'],
 ): Record<string, string> {
-  const receiptConfig = resolveReceiptConfig(input.classifiedKind);
-  const result: Record<string, string> = {
-    Dokumentart: input.classifiedKind,
-  };
-
-  if (!receiptConfig) {
-    return result;
-  }
-
-  const text = buildCanonicalDocumentText(input.recognizedText, input.pageTexts);
-  if (!text.trim()) {
-    return result;
-  }
-
+  const receiptConfig = RECEIPT_RECOGNIZED_DATA_CONFIG[kind];
+  const result: Record<string, string> = { Dokumentart: kind };
   const fieldsWithConfidence = extractFieldsWithConfidence(text);
   const plain = toConfidentPlainFields(fieldsWithConfidence);
 
-  applyOcrAmount(result, plain, text, input.pageTexts);
+  applyReceiptOcrAmount(result, plain, text, pageTexts);
 
   if (plain.Datum?.trim()) {
     result.Datum = plain.Datum;
   }
 
-  applyOcrReceiptNumber(result, plain, text, input.pageTexts);
+  applyOcrReceiptNumber(result, plain, text, pageTexts);
 
   const merchant = plain.Absender ?? plain.Lieferant;
   if (merchant?.trim()) {
@@ -171,4 +262,62 @@ export function buildEvidenceBasedRecognizedData(
   }
 
   return result;
+}
+
+function buildInvoiceRecognizedData(
+  text: string,
+  pageTexts?: DocumentClassificationInput['pageTexts'],
+): Record<string, string> {
+  const result: Record<string, string> = { Dokumentart: 'eingangsrechnung' };
+  const fieldsWithConfidence = extractFieldsWithConfidence(text);
+  const plain = toConfidentPlainFields(fieldsWithConfidence);
+
+  applyInvoiceOcrReference(result, plain, text, pageTexts);
+  applyInvoiceOcrAmount(result, text, pageTexts);
+
+  if (plain.Datum?.trim()) {
+    result.Datum = plain.Datum;
+  }
+
+  applyInvoiceOcrDeadline(result, plain, text, pageTexts);
+
+  const supplier = plain.Absender ?? plain.Lieferant;
+  if (supplier?.trim()) {
+    result.Lieferant = supplier;
+  } else {
+    const supplierFromHeader = inferSupplierFromHeader(text);
+    if (supplierFromHeader) {
+      result.Lieferant = supplierFromHeader;
+    }
+  }
+
+  return result;
+}
+
+export function shouldUseEvidenceBasedRecognizedData(kind: ClassifiedDocumentKind): boolean {
+  return isOcrOnlyRecognizedDataKind(kind) && getOcrOnlyRecognizedDataEnabled();
+}
+
+export function buildEvidenceBasedRecognizedData(
+  input: EvidenceBasedRecognizedDataInput,
+): Record<string, string> {
+  const family = resolveRecognizedDataFamily(input.classifiedKind);
+  const result: Record<string, string> = {
+    Dokumentart: input.classifiedKind,
+  };
+
+  if (!family) {
+    return result;
+  }
+
+  const text = buildCanonicalDocumentText(input.recognizedText, input.pageTexts);
+  if (!text.trim()) {
+    return result;
+  }
+
+  if (family === 'receipt') {
+    return buildReceiptRecognizedData(input.classifiedKind as ReceiptCutoverKind, text, input.pageTexts);
+  }
+
+  return buildInvoiceRecognizedData(text, input.pageTexts);
 }
