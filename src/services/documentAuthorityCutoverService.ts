@@ -11,6 +11,7 @@ import {
   isAuthorityScoringCutoverKind,
 } from '../config/documentIntelligenceConfig';
 import { clampAnalysisConfidence } from '../types/documentAnalysis';
+import type { DocumentCandidate } from '../types/documentAnalysis';
 import type { ClassifiedDocumentKind } from '../types/models';
 import { RECEIPT_CANDIDATE_PROFILES } from '../types/documentCandidateProfiles';
 import type { ReceiptAnalysisPipelineResult } from './documentReceiptAnalysisPipelineService';
@@ -26,6 +27,8 @@ export type AuthorityCutoverDecision = {
   rejectionReason?: string;
 };
 
+const AUTHORITY_CANDIDATES_TOO_CLOSE_MARGIN = 0.12;
+
 function hasConflictType(
   pipeline: ReceiptAnalysisPipelineResult,
   type: 'footer_dominates_body' | 'candidates_too_close',
@@ -35,6 +38,35 @@ function hasConflictType(
 
 function hasCriticalConflict(pipeline: ReceiptAnalysisPipelineResult): boolean {
   return pipeline.scoringResult.conflicts.some((conflict) => conflict.severity === 'critical');
+}
+
+function getRankedAuthorityCandidates(pipeline: ReceiptAnalysisPipelineResult): DocumentCandidate[] {
+  return pipeline.scoringResult.candidates.filter(
+    (candidate) =>
+      isAuthorityScoringCutoverKind(candidate.kind as ClassifiedDocumentKind) && candidate.score > 0,
+  );
+}
+
+function computeAuthorityMargin(
+  winner: DocumentCandidate | undefined,
+  runnerUp: DocumentCandidate | undefined,
+): number {
+  if (!winner || winner.score <= 0) {
+    return 0;
+  }
+  if (!runnerUp) {
+    return 1;
+  }
+  return clampAnalysisConfidence(
+    (winner.score - runnerUp.score) / Math.max(winner.score, 0.01),
+  );
+}
+
+function hasAuthorityKindCandidatesTooClose(
+  authorityMargin: number,
+  authorityCandidates: DocumentCandidate[],
+): boolean {
+  return authorityMargin < AUTHORITY_CANDIDATES_TOO_CLOSE_MARGIN && authorityCandidates.length > 1;
 }
 
 function computeRequiredFeatureMaxScore(kind: ClassifiedDocumentKind): number {
@@ -51,7 +83,7 @@ function computeRequiredFeatureMaxScore(kind: ClassifiedDocumentKind): number {
 }
 
 export function computeAuthorityCutoverConfidence(pipeline: ReceiptAnalysisPipelineResult): number {
-  const winner = pipeline.scoringResult.candidates[0];
+  const winner = getRankedAuthorityCandidates(pipeline)[0];
   if (!winner || winner.score <= 0) {
     return 0;
   }
@@ -91,13 +123,16 @@ export function evaluateAuthorityCutoverEligibility(
     return { eligible: false, rejectionReason: 'cutover:certificate_excluded' };
   }
 
-  const { scoringResult, ocrQuality } = pipeline;
-  const winner = scoringResult.candidates[0];
-  const winnerKind = scoringResult.winnerKind as ClassifiedDocumentKind;
+  const { ocrQuality } = pipeline;
+  const authorityCandidates = getRankedAuthorityCandidates(pipeline);
+  const winner = authorityCandidates[0];
+  const runnerUp = authorityCandidates[1];
+  const winnerKind = winner?.kind as ClassifiedDocumentKind | undefined;
+  const authorityMargin = computeAuthorityMargin(winner, runnerUp);
   const cutoverConfidence = computeAuthorityCutoverConfidence(pipeline);
-  const kindThresholds = getAuthorityCutoverKindThresholds(winnerKind);
+  const kindThresholds = winnerKind ? getAuthorityCutoverKindThresholds(winnerKind) : undefined;
 
-  if (!isAuthorityScoringCutoverKind(winnerKind) || !kindThresholds) {
+  if (!winnerKind || !kindThresholds) {
     return { eligible: false, rejectionReason: 'cutover:winner_not_allowed' };
   }
 
@@ -117,7 +152,7 @@ export function evaluateAuthorityCutoverEligibility(
     return { eligible: false, rejectionReason: 'cutover:confidence_too_low' };
   }
 
-  if (scoringResult.margin < kindThresholds.minMargin) {
+  if (authorityMargin < kindThresholds.minMargin) {
     return { eligible: false, rejectionReason: 'cutover:margin_too_low' };
   }
 
@@ -129,7 +164,7 @@ export function evaluateAuthorityCutoverEligibility(
     return { eligible: false, rejectionReason: 'cutover:critical_conflict' };
   }
 
-  if (hasConflictType(pipeline, 'candidates_too_close')) {
+  if (hasAuthorityKindCandidatesTooClose(authorityMargin, authorityCandidates)) {
     return { eligible: false, rejectionReason: 'cutover:candidates_too_close' };
   }
 

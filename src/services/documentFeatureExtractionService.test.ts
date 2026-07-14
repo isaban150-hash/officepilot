@@ -249,6 +249,26 @@ describe('documentFeatureExtractionService', () => {
     ).toBe(false);
   });
 
+  it('extracts krankenkasse and soka_bau authority markers with evidence', () => {
+    const krankenkasseResult = extractDocumentFeatures(
+      zoneText(['Techniker Krankenkasse', 'Betreff: Beitrag', 'Frist: 30.04.2026'].join('\n')),
+    );
+    const sokaResult = extractDocumentFeatures(
+      zoneText(['SOKA-BAU', 'Urlaubs- und Lohnausgleichskasse', 'Frist: 31.05.2026'].join('\n')),
+    );
+
+    expect(
+      krankenkasseResult.features.some((feature) => feature.id === 'structure.krankenkasse_marker'),
+    ).toBe(true);
+    expect(
+      krankenkasseResult.features.some((feature) => feature.id === 'structure.authority_letter'),
+    ).toBe(true);
+    expect(sokaResult.features.some((feature) => feature.id === 'structure.soka_bau_marker')).toBe(true);
+    expect(
+      sokaResult.features.some((feature) => feature.id === 'structure.authority_letter'),
+    ).toBe(true);
+  });
+
   it('does not log document contents during feature extraction in shadow mode', () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const debugSpy = vi.spyOn(console, 'debug').mockImplementation(() => undefined);

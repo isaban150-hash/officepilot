@@ -80,7 +80,12 @@ export const PAYMENT_SCORING_CUTOVER = {
 
 export const DI_PAYMENT_SCORING_REASON_KEY = 'classification.detect.diPaymentScoring';
 
-export type AuthorityCutoverKind = 'finanzamt' | 'bg_bau' | 'steuerbescheid';
+export type AuthorityCutoverKind =
+  | 'finanzamt'
+  | 'bg_bau'
+  | 'steuerbescheid'
+  | 'krankenkasse'
+  | 'soka_bau';
 
 export type AuthorityCutoverKindThresholds = {
   minConfidence: number;
@@ -89,13 +94,15 @@ export type AuthorityCutoverKindThresholds = {
 
 export const AUTHORITY_SCORING_CUTOVER = {
   enabled: true,
-  allowedKinds: ['finanzamt', 'bg_bau', 'steuerbescheid'],
+  allowedKinds: ['finanzamt', 'bg_bau', 'steuerbescheid', 'krankenkasse', 'soka_bau'],
   minOcrScore: 0.65,
   minEvidenceRefs: 3,
   kindThresholds: {
     finanzamt: { minConfidence: 0.85, minMargin: 0.18 },
     bg_bau: { minConfidence: 0.85, minMargin: 0.18 },
     steuerbescheid: { minConfidence: 0.80, minMargin: 0.18 },
+    krankenkasse: { minConfidence: 0.85, minMargin: 0.18 },
+    soka_bau: { minConfidence: 0.85, minMargin: 0.20 },
   },
 } as const satisfies {
   enabled: boolean;
@@ -275,9 +282,10 @@ const AUTHORITY_CONTRACT_EXCLUSION_GUARD =
 
 const AUTHORITY_KIND_TEXT_GUARDS: Record<AuthorityCutoverKind, RegExp> = {
   finanzamt: /finanzamt|steuernummer|umsatzsteuer|lohnsteuer|steueramt/i,
-  bg_bau:
-    /beitragsbescheid|berufsgenossenschaft\s+(der\s+)?bauwirtschaft|bg[\s-]?bau[\s\S]{0,160}beitragsbescheid/i,
+  bg_bau: /\b(?:bg[\s-]?bau|berufsgenossenschaft\s+(?:der\s+)?bauwirtschaft)\b/i,
   steuerbescheid: /steuerbescheid|festsetzung|einkommensteuerbescheid/i,
+  krankenkasse: /\bkrankenkasse\b|\bgesetzliche\s+krankenversicherung\b/i,
+  soka_bau: /\bsoka[\s-]?bau\b|urlaubs-?\s*und\s*lohnausgleichskasse/i,
 };
 
 export function hasAuthorityCutoverKindTextGuard(
@@ -298,7 +306,9 @@ export function hasAuthorityCutoverInvoiceExclusion(recognizedText: string): boo
   if (!AUTHORITY_INVOICE_EXCLUSION_GUARD.test(recognizedText)) {
     return false;
   }
-  return !/(finanzamt|steuerbescheid|bg[\s-]?bau|beitragsbescheid|festsetzung)/i.test(recognizedText);
+  return !/(finanzamt|steuerbescheid|bg[\s-]?bau|beitragsbescheid|festsetzung|krankenkasse|soka[\s-]?bau)/i.test(
+    recognizedText,
+  );
 }
 
 export function hasAuthorityCutoverContractExclusion(recognizedText: string): boolean {
@@ -548,6 +558,8 @@ export const OCR_ONLY_RECOGNIZED_DATA = {
     'finanzamt',
     'bg_bau',
     'steuerbescheid',
+    'krankenkasse',
+    'soka_bau',
     'freistellungsbescheinigung',
     'unbedenklichkeitsbescheinigung',
     'werkvertrag',

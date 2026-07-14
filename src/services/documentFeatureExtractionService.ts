@@ -21,7 +21,7 @@ const DEADLINE_PATTERN =
 const INVOICE_NUMBER_PATTERN =
   /\b(?:rechnungs(?:nummer|nr\.?)|invoice(?:\s*no\.?)?|beleg(?:nummer|nr\.?))\s*[:#]?\s*([A-Z0-9][\w./-]{2,})/i;
 const CASE_REFERENCE_PATTERN =
-  /\b(?:aktenzeichen|az\.?|vorgang(?:snummer|snr\.?)?|auftrags(?:nummer|nr\.?)|referenz)\s*[:#]?\s*([A-Z0-9][\w./-]{2,})/i;
+  /\b(?:aktenzeichen|az\.?|vorgang(?:snummer|snr\.?)?|auftrags(?:nummer|nr\.?)|beitrags(?:nummer|nr\.?)|referenz)\s*[:#]?\s*([A-Z0-9][\w./-]{2,})/i;
 const MONETARY_VALUE_PATTERN =
   /\b(\d{1,3}(?:\.\d{3})*,\d{2})\s*(?:€|eur)?\b/i;
 const LABELED_TOTAL_PATTERN =
@@ -44,10 +44,14 @@ const QUITTUNG_MARKER_PATTERN = /\b(quittung|bar erhalten|quittung über)\b/i;
 const FUEL_MARKER_PATTERN =
   /\b(kraftstoff|diesel|benzin|super|e10|adblue|erdgas|cng|lpg|tankstelle)\b/i;
 const AUTHORITY_MARKER_PATTERN =
-  /\b(finanzamt|steueramt|steuerbescheid|bg[\s-]?bau|berufsgenossenschaft|zollamt|sozialversicherung|agentur\s+für\s+arbeit|jobcenter|stadtverwaltung|gemeindeverwaltung|landratsamt|ordnungsamt)\b/i;
+  /\b(finanzamt|steueramt|steuerbescheid|bg[\s-]?bau|berufsgenossenschaft|krankenkasse|soka[\s-]?bau|zollamt|sozialversicherung|agentur\s+für\s+arbeit|jobcenter|stadtverwaltung|gemeindeverwaltung|landratsamt|ordnungsamt)\b/i;
 const FINANZAMT_MARKER_PATTERN = /\b(finanzamt|steuernummer|umsatzsteuer|lohnsteuer|steueramt)\b/i;
 const BG_BAU_MARKER_PATTERN =
-  /\b(bg[\s-]?bau|berufsgenossenschaft\s+(der\s+)?bauwirtschaft|beitragsbescheid)\b/i;
+  /\b(bg[\s-]?bau|berufsgenossenschaft\s+(der\s+)?bauwirtschaft)\b/i;
+const KRANKENKASSE_MARKER_PATTERN =
+  /\bkrankenkasse\b|\bgesetzliche\s+krankenversicherung\b|krankenversicherungsbeitrag/i;
+const SOKA_BAU_MARKER_PATTERN =
+  /\bsoka[\s-]?bau\b|urlaubs-?\s*und\s*lohnausgleichskasse|lohnausgleichskasse\s+der\s+bauwirtschaft/i;
 const STEUERBESCHEID_MARKER_PATTERN = /\b(steuerbescheid|festsetzung|einkommensteuerbescheid)\b/i;
 const FREISTELLUNG_MARKER_PATTERN = /\b(freistellungsbescheinigung|§48b|§48\s*b)\b/i;
 const UNBEDENKLICHKEIT_MARKER_PATTERN = /\b(unbedenklichkeitsbescheinigung|unbedenklichkeit)\b/i;
@@ -198,6 +202,18 @@ const PATTERN_FEATURES: PatternFeatureSpec[] = [
     id: 'structure.bg_bau_marker',
     category: 'structure',
     pattern: BG_BAU_MARKER_PATTERN,
+    valueFromMatch: (match) => match[0]?.trim(),
+  },
+  {
+    id: 'structure.krankenkasse_marker',
+    category: 'structure',
+    pattern: KRANKENKASSE_MARKER_PATTERN,
+    valueFromMatch: (match) => match[0]?.trim(),
+  },
+  {
+    id: 'structure.soka_bau_marker',
+    category: 'structure',
+    pattern: SOKA_BAU_MARKER_PATTERN,
     valueFromMatch: (match) => match[0]?.trim(),
   },
   {

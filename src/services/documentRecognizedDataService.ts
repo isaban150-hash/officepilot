@@ -48,6 +48,8 @@ const OCR_ONLY_KIND_FAMILY: Record<OcrOnlyRecognizedDataKind, RecognizedDataFami
   finanzamt: 'authority',
   bg_bau: 'authority',
   steuerbescheid: 'authority',
+  krankenkasse: 'authority',
+  soka_bau: 'authority',
   freistellungsbescheinigung: 'certificate',
   unbedenklichkeitsbescheinigung: 'certificate',
   werkvertrag: 'contract',
@@ -64,10 +66,10 @@ const CERTIFICATE_HEADER_SKIP_PATTERN =
   /^(?:Betreff|Aussteller|Datum|gültig bis|gueltig bis|Gültigkeit|Gueltigkeit|Freistellungsbescheinigung|Unbedenklichkeitsbescheinigung|§48b)\s*[:]/i;
 
 const AUTHORITY_HEADER_SKIP_PATTERN =
-  /^(?:Betreff|Aktenzeichen|Az\.|Datum|Frist|Beitragsbescheid|Festsetzung|Steuernummer|USt|MwSt)\s*[:]/i;
+  /^(?:Betreff|Aktenzeichen|Az\.|Beitragsnummer|Datum|Frist|Beitragsbescheid|Festsetzung|Steuernummer|USt|MwSt)\s*[:]/i;
 
 const AUTHORITY_MARKER_LINE_PATTERN =
-  /\b(finanzamt|steueramt|steuerbescheid|bg[\s-]?bau|berufsgenossenschaft|zollamt|sozialversicherung|agentur\s+für\s+arbeit|jobcenter|stadtverwaltung|gemeindeverwaltung|landratsamt|ordnungsamt)\b/i;
+  /\b(finanzamt|steueramt|steuerbescheid|bg[\s-]?bau|berufsgenossenschaft|krankenkasse|soka[\s-]?bau|zollamt|sozialversicherung|agentur\s+für\s+arbeit|jobcenter|stadtverwaltung|gemeindeverwaltung|landratsamt|ordnungsamt)\b/i;
 
 const PAYMENT_HEADER_SKIP_PATTERN =
   /^(?:Rechnungs(?:nummer|nr)|Invoice|Inv\.|Mahnung|Zahlungserinnerung|Zahlungsaufforderung|Inkasso|Datum|Offener\s+Betrag|IBAN|zu\s+zahlen|zahlbar|Fälligkeit|Faelligkeit)/i;

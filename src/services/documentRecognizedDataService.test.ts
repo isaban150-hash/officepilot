@@ -454,6 +454,45 @@ describe('documentRecognizedDataService', () => {
       expect(recognizedData.Frist).toBe('30.04.2026');
     });
 
+    it('uses OCR-only fields for krankenkasse without demo betreff', () => {
+      const recognizedData = buildEvidenceBasedRecognizedData({
+        classifiedKind: 'krankenkasse',
+        recognizedText: [
+          'Techniker Krankenkasse',
+          'Betreff: Beitragsbescheid Krankenversicherung',
+          'Aktenzeichen: KK-2026-8891',
+          'Frist: 30.04.2026',
+          'Datum: 15.03.2026',
+        ].join('\n'),
+      });
+
+      expect(recognizedData.Dokumentart).toBe('krankenkasse');
+      expect(recognizedData.Betreff).toBe('Beitragsbescheid Krankenversicherung');
+      expect(recognizedData.Aktenzeichen).toBe('KK-2026-8891');
+      expect(recognizedData.Frist).toBe('30.04.2026');
+      expect(recognizedData.Datum).toBe('15.03.2026');
+      expect(recognizedData.Betreff).not.toBe('Mitteilung Krankenkasse');
+    });
+
+    it('uses OCR-only fields for soka_bau with beitragsnummer and labeled amount', () => {
+      const recognizedData = buildEvidenceBasedRecognizedData({
+        classifiedKind: 'soka_bau',
+        recognizedText: [
+          'SOKA-BAU',
+          'Betreff: Beitragsabrechnung SOKA-BAU',
+          'Beitragsnummer: SB-2026-3344',
+          'Betrag: 890,50 EUR',
+          'Frist: 31.05.2026',
+        ].join('\n'),
+      });
+
+      expect(recognizedData.Dokumentart).toBe('soka_bau');
+      expect(recognizedData.Betreff).toBe('Beitragsabrechnung SOKA-BAU');
+      expect(recognizedData.Aktenzeichen).toBe('SB-2026-3344');
+      expect(recognizedData.Betrag).toContain('890,50');
+      expect(recognizedData.Frist).toBe('31.05.2026');
+    });
+
     it('returns only Dokumentart when OCR text is missing for authority kinds', () => {
       const recognizedData = buildEvidenceBasedRecognizedData({
         classifiedKind: 'steuerbescheid',
