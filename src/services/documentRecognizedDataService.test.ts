@@ -416,6 +416,80 @@ describe('documentRecognizedDataService', () => {
     });
   });
 
+  describe('customer family', () => {
+    it('uses OCR-only customer fields instead of demo values for auftrag', () => {
+      const recognizedData = buildEvidenceBasedRecognizedData({
+        classifiedKind: 'auftrag',
+        recognizedText: [
+          'Kundenauftrag',
+          'Betreff: Sanierung Fassade',
+          'Auftraggeber: Stadt München',
+          'Baustelle: Hauptstr. 12, 80331 München',
+          'Auftragsnummer: KA-2026-0042',
+          'Auftragssumme: 45.000,00 EUR',
+          'Datum: 15.03.2026',
+        ].join('\n'),
+      });
+
+      expect(recognizedData.Dokumentart).toBe('auftrag');
+      expect(recognizedData.Auftraggeber).toBe('Stadt München');
+      expect(recognizedData.Baustelle).toBe('Hauptstr. 12, 80331 München');
+      expect(recognizedData.Auftragsnummer).toBe('KA-2026-0042');
+      expect(recognizedData.Auftragssumme).toBe('45.000,00 EUR');
+      expect(recognizedData.Leistung).toBeUndefined();
+      expect(recognizedData.Baustelle).not.toBe('Baustelle laut Auftrag');
+    });
+
+    it('uses OCR-only fields for angebot with labeled summe only', () => {
+      const recognizedData = buildEvidenceBasedRecognizedData({
+        classifiedKind: 'angebot',
+        recognizedText: [
+          'Angebot',
+          'Betreff: Elektroinstallation',
+          'Kunde: Weber GmbH',
+          'Angebotsnummer: AN-2026-118',
+          'Angebotssumme: 12.500,00 EUR',
+          'Datum: 20.02.2026',
+        ].join('\n'),
+      });
+
+      expect(recognizedData.Dokumentart).toBe('angebot');
+      expect(recognizedData.Kunde).toBe('Weber GmbH');
+      expect(recognizedData.Angebotsnummer).toBe('AN-2026-118');
+      expect(recognizedData.Angebotssumme).toBe('12.500,00 EUR');
+      expect(recognizedData.Angebotssumme).not.toBe('ca. 5.000 €');
+    });
+
+    it('omits unlabeled amounts and baustelle for auftragsbestaetigung', () => {
+      const recognizedData = buildEvidenceBasedRecognizedData({
+        classifiedKind: 'auftragsbestaetigung',
+        recognizedText: [
+          'Auftragsbestätigung',
+          'Betreff: Bestätigung Auftrag',
+          'Auftraggeber: Großbau AG',
+          'Auftragsnummer: AB-2026-77',
+          '45.000,00 EUR',
+          'Datum: 01.04.2026',
+        ].join('\n'),
+      });
+
+      expect(recognizedData.Dokumentart).toBe('auftragsbestaetigung');
+      expect(recognizedData.Auftraggeber).toBe('Großbau AG');
+      expect(recognizedData.Auftragsnummer).toBe('AB-2026-77');
+      expect(recognizedData.Auftragssumme).toBeUndefined();
+      expect(recognizedData.Baustelle).toBeUndefined();
+    });
+
+    it('returns only Dokumentart when OCR text is missing for customer kinds', () => {
+      const recognizedData = buildEvidenceBasedRecognizedData({
+        classifiedKind: 'auftrag',
+      });
+
+      expect(recognizedData).toEqual({ Dokumentart: 'auftrag' });
+      expect(recognizedData.Leistung).toBeUndefined();
+    });
+  });
+
   describe('authority family', () => {
     it('uses OCR-only authority fields instead of demo values for finanzamt', () => {
       const recognizedData = buildEvidenceBasedRecognizedData({

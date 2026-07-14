@@ -1,6 +1,6 @@
 import type { ClassifiedDocumentKind } from '../types/models';
 import type { DocumentClassificationInput } from '../types/models';
-import type { AuthorityCutoverKind, CertificateCutoverKind, ContractCutoverKind, OcrOnlyRecognizedDataKind, PaymentCutoverKind, ReceiptCutoverKind } from '../config/documentIntelligenceConfig';
+import type { AuthorityCutoverKind, CertificateCutoverKind, ContractCutoverKind, CustomerCutoverKind, OcrOnlyRecognizedDataKind, PaymentCutoverKind, ReceiptCutoverKind } from '../config/documentIntelligenceConfig';
 import {
   getOcrOnlyRecognizedDataEnabled,
   isOcrOnlyRecognizedDataKind,
@@ -22,7 +22,7 @@ export type EvidenceBasedRecognizedDataInput = {
   pageTexts?: DocumentClassificationInput['pageTexts'];
 };
 
-type RecognizedDataFamily = 'receipt' | 'invoice' | 'payment' | 'authority' | 'certificate' | 'contract';
+type RecognizedDataFamily = 'receipt' | 'invoice' | 'payment' | 'authority' | 'certificate' | 'contract' | 'customer';
 
 type ReceiptRecognizedDataConfig = {
   merchantField: string;
@@ -55,12 +55,19 @@ const OCR_ONLY_KIND_FAMILY: Record<OcrOnlyRecognizedDataKind, RecognizedDataFami
   werkvertrag: 'contract',
   subunternehmervertrag: 'contract',
   nachunternehmervertrag: 'contract',
+  auftrag: 'customer',
+  angebot: 'customer',
+  auftragsbestaetigung: 'customer',
 };
 
 
 const CONTRACT_AUFTRAGGEBER_PATTERN = /^auftraggeber(?:in)?\s*[:]\s*(.+)$/i;
 const CONTRACT_AUFTRAGNEHMER_PATTERN =
   /^(?:auftragnehmer|subunternehmer|nachunternehmer)\s*[:]\s*(.+)$/i;
+const CUSTOMER_PARTY_PATTERN = /^(?:kunde|auftraggeber)\s*[:]\s*(.+)$/i;
+const CUSTOMER_BAUSTELLE_PATTERN = /^(?:baustelle|baustellenadresse)\s*[:]\s*(.+)$/i;
+const CUSTOMER_AUFTRAGSSUMME_PATTERN = /^(?:auftragssumme|auftragswert)\s*[:]\s*(.+)$/i;
+const CUSTOMER_ANGEBOTSSUMME_PATTERN = /^(?:angebotssumme|angebotswert)\s*[:]\s*(.+)$/i;
 
 const CERTIFICATE_HEADER_SKIP_PATTERN =
   /^(?:Betreff|Aussteller|Datum|gültig bis|gueltig bis|Gültigkeit|Gueltigkeit|Freistellungsbescheinigung|Unbedenklichkeitsbescheinigung|§48b)\s*[:]/i;
@@ -671,6 +678,70 @@ function applyContractOcrDate(
   }
 }
 
+function buildCustomerRecognizedData(
+  kind: CustomerCutoverKind,
+  text: string,
+  pageTexts?: DocumentClassificationInput['pageTexts'],
+): Record<string, string> {
+  const result: Record<string, string> = { Dokumentart: kind };
+  const fieldsWithConfidence = extractFieldsWithConfidence(text);
+  const plain = toConfidentPlainFields(fieldsWithConfidence);
+
+  if (plain.Betreff?.trim()) {
+    result.Betreff = plain.Betreff;
+  }
+
+  const labeledCustomer =
+    pickLabeledContractValue(text, CUSTOMER_PARTY_PATTERN) ??
+    extractDocumentFeaturesFromText(text, pageTexts).features.find(
+      (feature) => feature.id === 'identity.sender_labeled',
+    )?.value;
+  if (typeof labeledCustomer === 'string' && labeledCustomer.trim()) {
+    result.Kunde = labeledCustomer.trim();
+    result.Auftraggeber = labeledCustomer.trim();
+  }
+
+  const baustelle = pickLabeledContractValue(text, CUSTOMER_BAUSTELLE_PATTERN);
+  if (baustelle) {
+    result.Baustelle = baustelle;
+  }
+
+  const features = extractDocumentFeaturesFromText(text, pageTexts);
+  const caseReferenceFeature = features.features.find(
+    (feature) => feature.id === 'reference.case_reference',
+  );
+  if (typeof caseReferenceFeature?.value === 'string' && caseReferenceFeature.value.trim()) {
+    if (kind === 'angebot') {
+      result.Angebotsnummer = caseReferenceFeature.value.trim();
+    } else {
+      result.Auftragsnummer = caseReferenceFeature.value.trim();
+    }
+  }
+
+  if (kind === 'angebot') {
+    const angebotssumme = pickLabeledContractValue(text, CUSTOMER_ANGEBOTSSUMME_PATTERN);
+    if (angebotssumme) {
+      result.Angebotssumme = angebotssumme;
+    }
+  } else {
+    const auftragssumme = pickLabeledContractValue(text, CUSTOMER_AUFTRAGSSUMME_PATTERN);
+    if (auftragssumme) {
+      result.Auftragssumme = auftragssumme;
+    }
+  }
+
+  if (plain.Datum?.trim()) {
+    result.Datum = plain.Datum;
+  } else {
+    const documentDateFeature = features.features.find((feature) => feature.id === 'date.document_date');
+    if (typeof documentDateFeature?.value === 'string' && documentDateFeature.value.trim()) {
+      result.Datum = documentDateFeature.value.trim();
+    }
+  }
+
+  return result;
+}
+
 function buildContractRecognizedData(
   kind: ContractCutoverKind,
   text: string,
@@ -790,6 +861,14 @@ export function buildEvidenceBasedRecognizedData(
   if (family === 'contract') {
     return buildContractRecognizedData(
       input.classifiedKind as ContractCutoverKind,
+      text,
+      input.pageTexts,
+    );
+  }
+
+  if (family === 'customer') {
+    return buildCustomerRecognizedData(
+      input.classifiedKind as CustomerCutoverKind,
       text,
       input.pageTexts,
     );

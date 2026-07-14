@@ -249,6 +249,42 @@ describe('documentFeatureExtractionService', () => {
     ).toBe(false);
   });
 
+  it('extracts customer markers and customer party labels with zone-aware evidence', () => {
+    const bodyFiller = Array.from({ length: 22 }, (_, index) => `Position ${index + 1} Leistungsbeschreibung`);
+    const auftragText = [
+      'Kundenauftrag',
+      'Auftraggeber: Stadt München',
+      'Auftragsnummer: KA-2026-0042',
+      ...bodyFiller,
+      'Datum: 15.03.2026',
+    ].join('\n');
+    const auftragResult = extractDocumentFeatures(zoneText(auftragText));
+    const auftragMarker = auftragResult.features.find((feature) => feature.id === 'structure.auftrag_marker');
+    const customerParty = auftragResult.features.find(
+      (feature) => feature.id === 'structure.customer_party_marker',
+    );
+
+    expect(auftragMarker?.zone).toBe('header');
+    expect(customerParty?.zone).toBe('header');
+    expect(customerParty?.rawValue).toMatch(/auftraggeber/i);
+
+    const angebotResult = extractDocumentFeatures(
+      zoneText(['Angebot', 'Kostenvoranschlag', 'Angebotsnummer: AN-1', 'Datum: 01.01.2026'].join('\n')),
+    );
+    expect(
+      angebotResult.features.some((feature) => feature.id === 'structure.angebot_marker'),
+    ).toBe(true);
+
+    const confirmationResult = extractDocumentFeatures(
+      zoneText(['Auftragsbestätigung', 'Auftraggeber: Großbau AG', 'Datum: 01.04.2026'].join('\n')),
+    );
+    expect(
+      confirmationResult.features.some(
+        (feature) => feature.id === 'structure.auftragsbestaetigung_marker',
+      ),
+    ).toBe(true);
+  });
+
   it('extracts krankenkasse and soka_bau authority markers with evidence', () => {
     const krankenkasseResult = extractDocumentFeatures(
       zoneText(['Techniker Krankenkasse', 'Betreff: Beitrag', 'Frist: 30.04.2026'].join('\n')),

@@ -2,6 +2,7 @@ import {
   getAuthorityScoringCutoverEnabled,
   getCertificateScoringCutoverEnabled,
   getContractScoringCutoverEnabled,
+  getCustomerScoringCutoverEnabled,
   getInvoiceScoringCutoverEnabled,
   getPaymentScoringCutoverEnabled,
   getReceiptScoringCutoverEnabled,
@@ -11,6 +12,7 @@ import type { DetectionResult } from './documentClassificationService';
 import { evaluateAuthorityCutoverEligibility } from './documentAuthorityCutoverService';
 import { evaluateCertificateCutoverEligibility } from './documentCertificateCutoverService';
 import { evaluateContractCutoverEligibility } from './documentContractCutoverService';
+import { evaluateCustomerCutoverEligibility } from './documentCustomerCutoverService';
 import { evaluateInvoiceCutoverEligibility } from './documentInvoiceCutoverService';
 import { evaluatePaymentCutoverEligibility } from './documentPaymentCutoverService';
 import { runReceiptAnalysisPipeline } from './documentReceiptAnalysisPipelineService';
@@ -39,6 +41,7 @@ export function resolveClassificationDetection(
   const authorityEnabled = getAuthorityScoringCutoverEnabled();
   const certificateEnabled = getCertificateScoringCutoverEnabled();
   const contractEnabled = getContractScoringCutoverEnabled();
+  const customerEnabled = getCustomerScoringCutoverEnabled();
 
   if (
     !receiptEnabled &&
@@ -46,7 +49,8 @@ export function resolveClassificationDetection(
     !paymentEnabled &&
     !authorityEnabled &&
     !certificateEnabled &&
-    !contractEnabled
+    !contractEnabled &&
+    !customerEnabled
   ) {
     return { detection: legacyDetection, cutoverApplied: false };
   }
@@ -108,6 +112,16 @@ export function resolveClassificationDetection(
     if (contractCutover.eligible && contractCutover.detection) {
       return {
         detection: contractCutover.detection,
+        cutoverApplied: true,
+      };
+    }
+  }
+
+  if (customerEnabled) {
+    const customerCutover = evaluateCustomerCutoverEligibility(pipeline);
+    if (customerCutover.eligible && customerCutover.detection) {
+      return {
+        detection: customerCutover.detection,
         cutoverApplied: true,
       };
     }

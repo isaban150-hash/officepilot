@@ -695,6 +695,8 @@ const deLegacy = {
     'Nachweis (Freistellung/Unbedenklichkeit) per Dokumentanalyse erkannt',
   'classification.detect.diContractScoring':
     'Vertrag (Werk/Sub/Nachunternehmer) per Dokumentanalyse erkannt',
+  'classification.detect.diCustomerScoring':
+    'Kundenauftrag/Angebot/Auftragsbestätigung per Dokumentanalyse erkannt',
   'classification.detect.kontoauszug': 'Kontoauszug erkannt',
   'classification.detect.lohnabrechnung': 'Lohnabrechnung erkannt',
   'classification.detect.lohnunterlagen': 'Lohnunterlagen erkannt',
@@ -2485,6 +2487,8 @@ const trLegacy: Partial<Record<keyof typeof de, string>> = {
     'Belge (muafiyet/borçsuzluk) belge analizi ile algılandı',
   'classification.detect.diContractScoring':
     'Sözleşme (iş/alt/yüklenici) belge analizi ile algılandı',
+  'classification.detect.diCustomerScoring':
+    'Müşteri siparişi/teklif/sipariş onayı belge analizi ile algılandı',
 
   'invoice.skontoFromContractTitle': 'Sözleşmedeki erken ödeme indirimi uygulansın mı?',
   'invoice.skontoFromContractNo': 'Hayır',
@@ -2646,6 +2650,8 @@ const bgLegacy: Partial<Record<keyof typeof de, string>> = {
     'Удостоверение (освобождаване/липса на претенции), разпознато чрез анализ на документа',
   'classification.detect.diContractScoring':
     'Договор (работен/подизпълнител/подизпълнител), разпознат чрез анализ на документа',
+  'classification.detect.diCustomerScoring':
+    'Поръчка/оферта/потвърждение на поръчка, разпознати чрез анализ на документа',
 };
 
 const bg: Partial<Record<keyof typeof de, string>> = {

@@ -21,7 +21,7 @@ const DEADLINE_PATTERN =
 const INVOICE_NUMBER_PATTERN =
   /\b(?:rechnungs(?:nummer|nr\.?)|invoice(?:\s*no\.?)?|beleg(?:nummer|nr\.?))\s*[:#]?\s*([A-Z0-9][\w./-]{2,})/i;
 const CASE_REFERENCE_PATTERN =
-  /\b(?:aktenzeichen|az\.?|vorgang(?:snummer|snr\.?)?|auftrags(?:nummer|nr\.?)|beitrags(?:nummer|nr\.?)|referenz)\s*[:#]?\s*([A-Z0-9][\w./-]{2,})/i;
+  /\b(?:aktenzeichen|az\.?|vorgang(?:snummer|snr\.?)?|auftrags(?:nummer|nr\.?)|angebots(?:nummer|nr\.?)|beitrags(?:nummer|nr\.?)|referenz)\s*[:#]?\s*([A-Z0-9][\w./-]{2,})/i;
 const MONETARY_VALUE_PATTERN =
   /\b(\d{1,3}(?:\.\d{3})*,\d{2})\s*(?:€|eur)?\b/i;
 const LABELED_TOTAL_PATTERN =
@@ -65,6 +65,12 @@ const CONTRACT_PARTY_LINE_PATTERN =
   /^(?:auftraggeber(?:in)?|auftragnehmer(?:in)?|subunternehmer|nachunternehmer)\s*[:]/i;
 const CONTRACT_DATE_LINE_PATTERN =
   /^vertragsdatum\s*[:]\s*(\d{1,2}[./]\d{1,2}[./]\d{2,4})/i;
+const CUSTOMER_PARTY_LINE_PATTERN = /^(?:kunde|auftraggeber)\s*[:]/i;
+const AUFTRAG_MARKER_PATTERN =
+  /\b(?:kundenauftrag|auftrag\s+erteilt|auftragserteilung)\b|^(?:auftrag)\s*[:]/im;
+const ANGEBOT_MARKER_PATTERN = /\b(?:angebot|kostenvoranschlag|offerte)\b/i;
+const AUFTRAGSBESTAETIGUNG_MARKER_PATTERN =
+  /\bauftragsbestätigung\b|\bauftragsbestaetigung\b/i;
 const VALID_UNTIL_PATTERN =
   /\b(?:gültig bis|gueltig bis|gültigkeit|gueltigkeit|valid until)\s*[:.]?\s*(\d{1,2}[./]\d{1,2}[./]\d{2,4})/i;
 
@@ -259,6 +265,24 @@ const PATTERN_FEATURES: PatternFeatureSpec[] = [
     valueFromMatch: (match) => match[0]?.trim(),
   },
   {
+    id: 'structure.auftrag_marker',
+    category: 'structure',
+    pattern: AUFTRAG_MARKER_PATTERN,
+    valueFromMatch: (match) => match[0]?.trim(),
+  },
+  {
+    id: 'structure.angebot_marker',
+    category: 'structure',
+    pattern: ANGEBOT_MARKER_PATTERN,
+    valueFromMatch: (match) => match[0]?.trim(),
+  },
+  {
+    id: 'structure.auftragsbestaetigung_marker',
+    category: 'structure',
+    pattern: AUFTRAGSBESTAETIGUNG_MARKER_PATTERN,
+    valueFromMatch: (match) => match[0]?.trim(),
+  },
+  {
     id: 'date.valid_until',
     category: 'date',
     pattern: VALID_UNTIL_PATTERN,
@@ -411,6 +435,22 @@ function extractIdentityFeatures(
       const markerStart = line.startOffset + line.text.indexOf(marker);
       addLineFeature(result, counters, {
         id: 'structure.contract_party_marker',
+        category: 'structure',
+        line,
+        rawValue: trimmed,
+        value: true,
+        labeled: true,
+        startOffset: markerStart,
+        endOffset: markerStart + marker.length,
+      });
+    }
+
+    const customerPartyMatch = trimmed.match(CUSTOMER_PARTY_LINE_PATTERN);
+    if (customerPartyMatch) {
+      const marker = customerPartyMatch[0];
+      const markerStart = line.startOffset + line.text.indexOf(marker);
+      addLineFeature(result, counters, {
+        id: 'structure.customer_party_marker',
         category: 'structure',
         line,
         rawValue: trimmed,

@@ -167,6 +167,91 @@ export const CONTRACT_SCORING_CUTOVER = {
 
 export const DI_CONTRACT_SCORING_REASON_KEY = 'classification.detect.diContractScoring';
 
+export type CustomerCutoverKind = 'auftrag' | 'angebot' | 'auftragsbestaetigung';
+
+export type CustomerCutoverKindThresholds = {
+  minConfidence: number;
+  minMargin: number;
+};
+
+export const CUSTOMER_SCORING_CUTOVER = {
+  enabled: true,
+  allowedKinds: ['auftrag', 'angebot', 'auftragsbestaetigung'],
+  minOcrScore: 0.65,
+  minEvidenceRefs: 3,
+  kindThresholds: {
+    auftrag: { minConfidence: 0.85, minMargin: 0.15 },
+    angebot: { minConfidence: 0.85, minMargin: 0.15 },
+    auftragsbestaetigung: { minConfidence: 0.85, minMargin: 0.18 },
+  },
+} as const satisfies {
+  enabled: boolean;
+  allowedKinds: readonly CustomerCutoverKind[];
+  minOcrScore: number;
+  minEvidenceRefs: number;
+  kindThresholds: Record<CustomerCutoverKind, CustomerCutoverKindThresholds>;
+};
+
+export const DI_CUSTOMER_SCORING_REASON_KEY = 'classification.detect.diCustomerScoring';
+
+const CUSTOMER_DOMINANT_MARKER =
+  /\b(?:angebot|kostenvoranschlag|offerte|kundenauftrag|auftrag\s+erteilt|auftragserteilung|auftragsbestätigung|auftragsbestaetigung)\b/i;
+
+const CUSTOMER_CONTRACT_EXCLUSION_GUARD =
+  /\bwerkvertrag\b|\bwerk[\s-]?vertrag\b|\bsubunternehmer(?:vertrag)?\b|\bnachunternehmer(?:vertrag)?\b|\bleistungsverzeichnis\b|\bbau-?subunternehmer\b|\bvertragsdatum\b|\bbauvorhaben\b|\bbaustellenadresse\b/i;
+
+const CUSTOMER_KIND_TEXT_GUARDS: Record<CustomerCutoverKind, RegExp> = {
+  auftrag: /\b(?:kundenauftrag|auftrag\s+erteilt|auftragserteilung)\b|\bauftrag\s*[:]/i,
+  angebot: /\b(?:angebot|kostenvoranschlag|offerte)\b/i,
+  auftragsbestaetigung: /\bauftragsbestätigung\b|\bauftragsbestaetigung\b/i,
+};
+
+export function hasCustomerCutoverKindTextGuard(
+  kind: ClassifiedDocumentKind,
+  recognizedText: string,
+): boolean {
+  if (!isCustomerScoringCutoverKind(kind)) {
+    return false;
+  }
+  return CUSTOMER_KIND_TEXT_GUARDS[kind].test(recognizedText);
+}
+
+export function hasCustomerCutoverPaymentExclusion(recognizedText: string): boolean {
+  return MAHNUNG_EXCLUSION_GUARD.test(recognizedText);
+}
+
+export function hasCustomerCutoverInvoiceExclusion(recognizedText: string): boolean {
+  if (!AUTHORITY_INVOICE_EXCLUSION_GUARD.test(recognizedText)) {
+    return false;
+  }
+  return !CUSTOMER_DOMINANT_MARKER.test(recognizedText);
+}
+
+export function hasCustomerCutoverContractExclusion(recognizedText: string): boolean {
+  return CUSTOMER_CONTRACT_EXCLUSION_GUARD.test(recognizedText);
+}
+
+export function hasCustomerCutoverReceiptExclusion(recognizedText: string): boolean {
+  if (CUSTOMER_DOMINANT_MARKER.test(recognizedText)) {
+    return false;
+  }
+  return CERTIFICATE_RECEIPT_EXCLUSION_GUARD.test(recognizedText);
+}
+
+export function hasCustomerCutoverCertificateExclusion(recognizedText: string): boolean {
+  if (!CERTIFICATE_DOCUMENT_MARKER.test(recognizedText)) {
+    return false;
+  }
+  return !CUSTOMER_DOMINANT_MARKER.test(recognizedText);
+}
+
+export function hasCustomerCutoverAuthorityExclusion(recognizedText: string): boolean {
+  if (!AUTHORITY_DOMINANT_FOR_CERTIFICATE_EXCLUSION.test(recognizedText)) {
+    return false;
+  }
+  return !CUSTOMER_DOMINANT_MARKER.test(recognizedText);
+}
+
 const CONTRACT_DOMINANT_MARKER =
   /\b(werkvertrag|werk[\s-]?vertrag|subunternehmervertrag|subunternehmer[\s-]?vertrag|nachunternehmervertrag|nachunternehmer[\s-]?vertrag|bau-?subunternehmer|leistungsverzeichnis|bauvorhaben|baustellenadresse)\b/i;
 
@@ -491,6 +576,34 @@ export function getContractCutoverKindThresholds(
   return CONTRACT_SCORING_CUTOVER.kindThresholds[kind];
 }
 
+let customerCutoverEnabledOverride: boolean | null = null;
+
+export function getCustomerScoringCutoverEnabled(): boolean {
+  if (customerCutoverEnabledOverride !== null) {
+    return customerCutoverEnabledOverride;
+  }
+  return CUSTOMER_SCORING_CUTOVER.enabled;
+}
+
+export function setCustomerScoringCutoverEnabledForTests(value: boolean | null): void {
+  customerCutoverEnabledOverride = value;
+}
+
+export function isCustomerScoringCutoverKind(
+  kind: ClassifiedDocumentKind,
+): kind is CustomerCutoverKind {
+  return CUSTOMER_SCORING_CUTOVER.allowedKinds.includes(kind as CustomerCutoverKind);
+}
+
+export function getCustomerCutoverKindThresholds(
+  kind: ClassifiedDocumentKind,
+): CustomerCutoverKindThresholds | null {
+  if (!isCustomerScoringCutoverKind(kind)) {
+    return null;
+  }
+  return CUSTOMER_SCORING_CUTOVER.kindThresholds[kind];
+}
+
 export function isReceiptScoringCutoverKind(
   kind: ClassifiedDocumentKind,
 ): kind is ReceiptCutoverKind {
@@ -542,7 +655,8 @@ export type OcrOnlyRecognizedDataKind =
   | PaymentCutoverKind
   | AuthorityCutoverKind
   | CertificateCutoverKind
-  | ContractCutoverKind;
+  | ContractCutoverKind
+  | CustomerCutoverKind;
 
 export const OCR_ONLY_RECOGNIZED_DATA = {
   enabled: true,
@@ -565,6 +679,9 @@ export const OCR_ONLY_RECOGNIZED_DATA = {
     'werkvertrag',
     'subunternehmervertrag',
     'nachunternehmervertrag',
+    'auftrag',
+    'angebot',
+    'auftragsbestaetigung',
   ],
 } as const satisfies {
   enabled: boolean;
