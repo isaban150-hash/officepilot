@@ -38,3 +38,32 @@ export function isReceiptScoringCutoverKind(
     kind as (typeof RECEIPT_SCORING_CUTOVER.allowedKinds)[number],
   );
 }
+
+export const OCR_ONLY_RECOGNIZED_DATA = {
+  enabled: true,
+  kinds: ['tankbeleg'],
+} as const satisfies {
+  enabled: boolean;
+  kinds: readonly ClassifiedDocumentKind[];
+};
+
+let ocrOnlyRecognizedDataOverride: boolean | null = null;
+
+export function getOcrOnlyRecognizedDataEnabled(): boolean {
+  if (ocrOnlyRecognizedDataOverride !== null) {
+    return ocrOnlyRecognizedDataOverride;
+  }
+  return OCR_ONLY_RECOGNIZED_DATA.enabled;
+}
+
+export function setOcrOnlyRecognizedDataEnabledForTests(value: boolean | null): void {
+  ocrOnlyRecognizedDataOverride = value;
+}
+
+export function isOcrOnlyRecognizedDataKind(
+  kind: ClassifiedDocumentKind,
+): kind is (typeof OCR_ONLY_RECOGNIZED_DATA.kinds)[number] {
+  return OCR_ONLY_RECOGNIZED_DATA.kinds.includes(
+    kind as (typeof OCR_ONLY_RECOGNIZED_DATA.kinds)[number],
+  );
+}

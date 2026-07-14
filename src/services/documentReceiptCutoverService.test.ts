@@ -74,6 +74,8 @@ describe('documentClassificationHybridService', () => {
     expect(result.classifiedKind).toBe('tankbeleg');
     expect(result.detectionReasonKey).toBe(DI_RECEIPT_SCORING_REASON_KEY);
     expect(result.recognizedData.Dokumentart).toBe('tankbeleg');
+    expect(result.recognizedData.Betrag).toContain('52,18');
+    expect(result.recognizedData.Betrag).not.toBe('85,40 €');
     expect(mapClassifiedKindToExpenseCategory(result.classifiedKind)).toBe('fahrzeug');
   });
 

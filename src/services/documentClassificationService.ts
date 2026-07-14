@@ -19,6 +19,10 @@ import { getInboxExtractedDocumentText } from './inboxDocumentText';
 import { runLegacyDocumentAnalysisShadow } from './documentAnalysisShadowService';
 import { resolveClassificationDetection } from './documentClassificationHybridService';
 import { extractFieldsFromText, mergeExtractedFields } from './documentFieldExtractionService';
+import {
+  buildEvidenceBasedRecognizedData,
+  shouldUseEvidenceBasedRecognizedData,
+} from './documentRecognizedDataService';
 import type {
   ClassifiedDocumentKind,
   DigitalFolder,
@@ -240,6 +244,14 @@ function buildRecognizedData(
   kind: ClassifiedDocumentKind,
   input: DocumentClassificationInput,
 ): Record<string, string> {
+  if (shouldUseEvidenceBasedRecognizedData(kind)) {
+    return buildEvidenceBasedRecognizedData({
+      classifiedKind: kind,
+      recognizedText: input.recognizedText,
+      pageTexts: input.pageTexts,
+    });
+  }
+
   const base: Record<string, string> = {
     Dokumentart: kind,
   };
