@@ -264,6 +264,55 @@ describe('documentRecognizedDataService', () => {
     });
   });
 
+  describe('authority family', () => {
+    it('uses OCR-only authority fields instead of demo values for finanzamt', () => {
+      const recognizedData = buildEvidenceBasedRecognizedData({
+        classifiedKind: 'finanzamt',
+        recognizedText: [
+          'Finanzamt München',
+          'Betreff: Umsatzsteuervoranmeldung',
+          'Aktenzeichen: 143/123/45678',
+          'Frist: 10.05.2026',
+        ].join('\n'),
+      });
+
+      expect(recognizedData.Dokumentart).toBe('finanzamt');
+      expect(recognizedData.Betreff).toBe('Umsatzsteuervoranmeldung');
+      expect(recognizedData.Aktenzeichen).toBe('143/123/45678');
+      expect(recognizedData.Frist).toBe('10.05.2026');
+      expect(recognizedData.Frist).not.toBe('10.04.2026');
+      expect(recognizedData.Absender).toBe('Finanzamt München');
+    });
+
+    it('uses OCR-only fields for bg_bau with labeled amount only', () => {
+      const recognizedData = buildEvidenceBasedRecognizedData({
+        classifiedKind: 'bg_bau',
+        recognizedText: [
+          'BG BAU',
+          'Beitragsbescheid 2026',
+          'Aktenzeichen: BEI-2026-4455',
+          'Betrag: 1.250,00 EUR',
+          'Frist: 30.04.2026',
+        ].join('\n'),
+      });
+
+      expect(recognizedData.Dokumentart).toBe('bg_bau');
+      expect(recognizedData.Aktenzeichen).toBe('BEI-2026-4455');
+      expect(recognizedData.Betrag).toContain('1.250,00');
+      expect(recognizedData.Frist).toBe('30.04.2026');
+    });
+
+    it('returns only Dokumentart when OCR text is missing for authority kinds', () => {
+      const recognizedData = buildEvidenceBasedRecognizedData({
+        classifiedKind: 'steuerbescheid',
+      });
+
+      expect(recognizedData).toEqual({ Dokumentart: 'steuerbescheid' });
+      expect(recognizedData.Frist).toBeUndefined();
+      expect(recognizedData.Betreff).toBeUndefined();
+    });
+  });
+
   describe('legacy and rollback', () => {
     it('leaves mahnung without demo values when cutover is disabled', () => {
       setPaymentScoringCutoverEnabledForTests(false);

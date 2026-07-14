@@ -1,6 +1,6 @@
 import type { ClassifiedDocumentKind } from '../types/models';
 import type { DocumentClassificationInput } from '../types/models';
-import type { OcrOnlyRecognizedDataKind, PaymentCutoverKind, ReceiptCutoverKind } from '../config/documentIntelligenceConfig';
+import type { AuthorityCutoverKind, OcrOnlyRecognizedDataKind, PaymentCutoverKind, ReceiptCutoverKind } from '../config/documentIntelligenceConfig';
 import {
   getOcrOnlyRecognizedDataEnabled,
   isOcrOnlyRecognizedDataKind,
@@ -22,7 +22,7 @@ export type EvidenceBasedRecognizedDataInput = {
   pageTexts?: DocumentClassificationInput['pageTexts'];
 };
 
-type RecognizedDataFamily = 'receipt' | 'invoice' | 'payment';
+type RecognizedDataFamily = 'receipt' | 'invoice' | 'payment' | 'authority';
 
 type ReceiptRecognizedDataConfig = {
   merchantField: string;
@@ -41,7 +41,16 @@ const OCR_ONLY_KIND_FAMILY: Record<OcrOnlyRecognizedDataKind, RecognizedDataFami
   eingangsrechnung: 'invoice',
   mahnung: 'payment',
   zahlungserinnerung: 'payment',
+  finanzamt: 'authority',
+  bg_bau: 'authority',
+  steuerbescheid: 'authority',
 };
+
+const AUTHORITY_HEADER_SKIP_PATTERN =
+  /^(?:Betreff|Aktenzeichen|Az\.|Datum|Frist|Beitragsbescheid|Festsetzung|Steuernummer|USt|MwSt)\s*[:]/i;
+
+const AUTHORITY_MARKER_LINE_PATTERN =
+  /\b(finanzamt|steueramt|steuerbescheid|bg[\s-]?bau|berufsgenossenschaft|zollamt|sozialversicherung|agentur\s+für\s+arbeit|jobcenter|stadtverwaltung|gemeindeverwaltung|landratsamt|ordnungsamt)\b/i;
 
 const PAYMENT_HEADER_SKIP_PATTERN =
   /^(?:Rechnungs(?:nummer|nr)|Invoice|Inv\.|Mahnung|Zahlungserinnerung|Zahlungsaufforderung|Inkasso|Datum|Offener\s+Betrag|IBAN|zu\s+zahlen|zahlbar|Fälligkeit|Faelligkeit)/i;
@@ -429,6 +438,133 @@ function buildPaymentRecognizedData(
   return result;
 }
 
+function isLikelyStreetLine(line: string): boolean {
+  return /\b(?:straße|strasse|str\.|weg|platz|allee|gasse|ring)\b/i.test(line);
+}
+
+function inferAuthorityFromHeader(text: string): string | undefined {
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  for (const line of lines.slice(0, 4)) {
+    if (AUTHORITY_MARKER_LINE_PATTERN.test(line)) {
+      return line;
+    }
+  }
+
+  for (const line of lines.slice(0, 4)) {
+    if (AUTHORITY_HEADER_SKIP_PATTERN.test(line)) continue;
+    if (isLikelyDateLine(line)) continue;
+    if (isLikelyStreetLine(line)) continue;
+    if (/^\d{5}\b/.test(line)) continue;
+    if (line.length >= 3) return line;
+  }
+
+  return undefined;
+}
+
+function applyAuthorityOcrSender(
+  result: Record<string, string>,
+  plain: ReturnType<typeof toConfidentPlainFields>,
+  text: string,
+  pageTexts?: DocumentClassificationInput['pageTexts'],
+): void {
+  const features = extractDocumentFeaturesFromText(text, pageTexts);
+  const authorityLetter = features.features.find((feature) => feature.id === 'structure.authority_letter');
+  if (authorityLetter?.rawValue?.trim()) {
+    result.Absender = authorityLetter.rawValue.trim();
+    return;
+  }
+
+  const labeledAuthority = plain.Absender ?? plain.Lieferant;
+  if (labeledAuthority?.trim() && !isLikelyStreetLine(labeledAuthority)) {
+    result.Absender = labeledAuthority;
+    return;
+  }
+
+  const authorityFromHeader = inferAuthorityFromHeader(text);
+  if (authorityFromHeader) {
+    result.Absender = authorityFromHeader;
+  }
+}
+
+function applyAuthorityOcrReference(
+  result: Record<string, string>,
+  plain: ReturnType<typeof toConfidentPlainFields>,
+  text: string,
+  pageTexts?: DocumentClassificationInput['pageTexts'],
+): void {
+  if (plain.Aktenzeichen?.trim()) {
+    result.Aktenzeichen = plain.Aktenzeichen;
+    return;
+  }
+
+  const features = extractDocumentFeaturesFromText(text, pageTexts);
+  const caseReferenceFeature = features.features.find(
+    (feature) => feature.id === 'reference.case_reference',
+  );
+  if (typeof caseReferenceFeature?.value === 'string' && caseReferenceFeature.value.trim()) {
+    result.Aktenzeichen = caseReferenceFeature.value.trim();
+  }
+}
+
+function applyAuthorityOcrDeadline(
+  result: Record<string, string>,
+  plain: ReturnType<typeof toConfidentPlainFields>,
+  text: string,
+  pageTexts?: DocumentClassificationInput['pageTexts'],
+): void {
+  if (plain.Frist?.trim()) {
+    result.Frist = plain.Frist;
+    return;
+  }
+
+  const features = extractDocumentFeaturesFromText(text, pageTexts);
+  const deadlineFeature = features.features.find((feature) => feature.id === 'date.deadline_date');
+  if (typeof deadlineFeature?.value === 'string' && deadlineFeature.value.trim()) {
+    result.Frist = deadlineFeature.value.trim();
+  }
+}
+
+function applyAuthorityOcrLabeledAmount(
+  result: Record<string, string>,
+  text: string,
+  pageTexts?: DocumentClassificationInput['pageTexts'],
+): void {
+  const features = extractDocumentFeaturesFromText(text, pageTexts);
+  const labeledTotal = features.features.find((feature) => feature.id === 'amount.labeled_total');
+  if (labeledTotal && typeof labeledTotal.value === 'number' && labeledTotal.value > 0) {
+    result.Betrag = formatGermanMoney(labeledTotal.value);
+  }
+}
+
+function buildAuthorityRecognizedData(
+  kind: AuthorityCutoverKind,
+  text: string,
+  pageTexts?: DocumentClassificationInput['pageTexts'],
+): Record<string, string> {
+  const result: Record<string, string> = { Dokumentart: kind };
+  const fieldsWithConfidence = extractFieldsWithConfidence(text);
+  const plain = toConfidentPlainFields(fieldsWithConfidence);
+
+  if (plain.Betreff?.trim()) {
+    result.Betreff = plain.Betreff;
+  }
+
+  applyAuthorityOcrReference(result, plain, text, pageTexts);
+  applyAuthorityOcrDeadline(result, plain, text, pageTexts);
+  applyAuthorityOcrLabeledAmount(result, text, pageTexts);
+  applyAuthorityOcrSender(result, plain, text, pageTexts);
+
+  if (plain.Datum?.trim()) {
+    result.Datum = plain.Datum;
+  }
+
+  return result;
+}
+
 export function shouldUseEvidenceBasedRecognizedData(kind: ClassifiedDocumentKind): boolean {
   return isOcrOnlyRecognizedDataKind(kind) && getOcrOnlyRecognizedDataEnabled();
 }
@@ -458,5 +594,9 @@ export function buildEvidenceBasedRecognizedData(
     return buildInvoiceRecognizedData(text, input.pageTexts);
   }
 
-  return buildPaymentRecognizedData(input.classifiedKind as PaymentCutoverKind, text, input.pageTexts);
+  if (family === 'payment') {
+    return buildPaymentRecognizedData(input.classifiedKind as PaymentCutoverKind, text, input.pageTexts);
+  }
+
+  return buildAuthorityRecognizedData(input.classifiedKind as AuthorityCutoverKind, text, input.pageTexts);
 }

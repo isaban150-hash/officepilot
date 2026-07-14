@@ -127,6 +127,100 @@ export const RECEIPT_CANDIDATE_PROFILES: ReceiptCandidateProfile[] = [
     ],
   },
   {
+    kind: 'finanzamt',
+    family: 'behoerde',
+    structural: [
+      {
+        featureId: 'structure.authority_letter',
+        weight: 3,
+        zones: ['header', 'body'],
+        required: true,
+      },
+    ],
+    positive: [
+      {
+        featureId: 'structure.finanzamt_marker',
+        weight: 4,
+        zones: ['header', 'body'],
+        required: true,
+      },
+      { featureId: 'date.deadline_date', weight: 2.5, zones: ['body', 'header', 'footer'] },
+      { featureId: 'reference.case_reference', weight: 2, zones: ['body', 'header'] },
+    ],
+    negative: [
+      { featureId: 'structure.payment_request', weight: 3.5, zones: ['body', 'header'] },
+      { featureId: 'structure.mahnung_marker', weight: 3, zones: ['body', 'header'] },
+      { featureId: 'structure.zahlungserinnerung_marker', weight: 3, zones: ['body', 'header'] },
+      { featureId: 'structure.receipt_layout', weight: 3, zones: ['body'] },
+      { featureId: 'reference.invoice_number', weight: 2.5, zones: ['body', 'header'] },
+      { featureId: 'payment.card_payment', weight: 2, zones: ['body'] },
+      { featureId: 'structure.steuerbescheid_marker', weight: 2.5, zones: ['body', 'header'] },
+      { featureId: 'structure.bg_bau_marker', weight: 2.5, zones: ['body', 'header'] },
+    ],
+  },
+  {
+    kind: 'bg_bau',
+    family: 'behoerde',
+    structural: [
+      {
+        featureId: 'structure.authority_letter',
+        weight: 3,
+        zones: ['header', 'body'],
+        required: true,
+      },
+    ],
+    positive: [
+      {
+        featureId: 'structure.bg_bau_marker',
+        weight: 5,
+        zones: ['header', 'body'],
+        required: true,
+      },
+      { featureId: 'date.deadline_date', weight: 2.5, zones: ['body', 'header', 'footer'] },
+      { featureId: 'reference.case_reference', weight: 2, zones: ['body', 'header'] },
+      { featureId: 'amount.labeled_total', weight: 1.5, zones: ['body'] },
+    ],
+    negative: [
+      { featureId: 'structure.payment_request', weight: 3.5, zones: ['body', 'header'] },
+      { featureId: 'structure.mahnung_marker', weight: 3, zones: ['body', 'header'] },
+      { featureId: 'structure.receipt_layout', weight: 3, zones: ['body'] },
+      { featureId: 'reference.invoice_number', weight: 2.5, zones: ['body', 'header'] },
+      { featureId: 'payment.card_payment', weight: 2, zones: ['body'] },
+      { featureId: 'structure.finanzamt_marker', weight: 2, zones: ['body', 'header'] },
+      { featureId: 'structure.steuerbescheid_marker', weight: 2, zones: ['body', 'header'] },
+    ],
+  },
+  {
+    kind: 'steuerbescheid',
+    family: 'behoerde',
+    structural: [
+      {
+        featureId: 'structure.authority_letter',
+        weight: 3,
+        zones: ['header', 'body'],
+        required: true,
+      },
+    ],
+    positive: [
+      {
+        featureId: 'structure.steuerbescheid_marker',
+        weight: 5,
+        zones: ['header', 'body'],
+        required: true,
+      },
+      { featureId: 'date.deadline_date', weight: 2.5, zones: ['body', 'header', 'footer'] },
+      { featureId: 'reference.case_reference', weight: 2, zones: ['body', 'header'] },
+    ],
+    negative: [
+      { featureId: 'structure.payment_request', weight: 3.5, zones: ['body', 'header'] },
+      { featureId: 'structure.mahnung_marker', weight: 3, zones: ['body', 'header'] },
+      { featureId: 'structure.receipt_layout', weight: 3, zones: ['body'] },
+      { featureId: 'reference.invoice_number', weight: 2.5, zones: ['body', 'header'] },
+      { featureId: 'payment.card_payment', weight: 2, zones: ['body'] },
+      { featureId: 'structure.bg_bau_marker', weight: 3, zones: ['body', 'header'] },
+    ],
+  },
+  {
     kind: 'eingangsrechnung',
     family: 'eingangsrechnung',
     structural: [],

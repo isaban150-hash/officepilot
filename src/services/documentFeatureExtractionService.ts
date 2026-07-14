@@ -40,7 +40,11 @@ const CARD_PAYMENT_PATTERN =
 const FUEL_MARKER_PATTERN =
   /\b(kraftstoff|diesel|benzin|super|e10|adblue|erdgas|cng|lpg|tankstelle)\b/i;
 const AUTHORITY_MARKER_PATTERN =
-  /\b(finanzamt|steueramt|zollamt|sozialversicherung|berufsgenossenschaft|agentur\s+für\s+arbeit|jobcenter|stadtverwaltung|gemeindeverwaltung|landratsamt|ordnungsamt)\b/i;
+  /\b(finanzamt|steueramt|steuerbescheid|bg[\s-]?bau|berufsgenossenschaft|zollamt|sozialversicherung|agentur\s+für\s+arbeit|jobcenter|stadtverwaltung|gemeindeverwaltung|landratsamt|ordnungsamt)\b/i;
+const FINANZAMT_MARKER_PATTERN = /\b(finanzamt|steuernummer|umsatzsteuer|lohnsteuer|steueramt)\b/i;
+const BG_BAU_MARKER_PATTERN =
+  /\b(bg[\s-]?bau|berufsgenossenschaft\s+(der\s+)?bauwirtschaft|beitragsbescheid)\b/i;
+const STEUERBESCHEID_MARKER_PATTERN = /\b(steuerbescheid|festsetzung|einkommensteuerbescheid)\b/i;
 
 type PatternFeatureSpec = {
   id: string;
@@ -147,6 +151,24 @@ const PATTERN_FEATURES: PatternFeatureSpec[] = [
     category: 'structure',
     pattern: FUEL_MARKER_PATTERN,
     valueFromMatch: () => true,
+  },
+  {
+    id: 'structure.finanzamt_marker',
+    category: 'structure',
+    pattern: FINANZAMT_MARKER_PATTERN,
+    valueFromMatch: (match) => match[0]?.trim(),
+  },
+  {
+    id: 'structure.bg_bau_marker',
+    category: 'structure',
+    pattern: BG_BAU_MARKER_PATTERN,
+    valueFromMatch: (match) => match[0]?.trim(),
+  },
+  {
+    id: 'structure.steuerbescheid_marker',
+    category: 'structure',
+    pattern: STEUERBESCHEID_MARKER_PATTERN,
+    valueFromMatch: (match) => match[0]?.trim(),
   },
 ];
 

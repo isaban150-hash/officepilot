@@ -280,15 +280,6 @@ function buildRecognizedData(
       Leistung: 'Sanierungsarbeiten',
       Baustelle: 'Baustelle laut Auftrag',
     },
-    bg_bau: {
-      Betreff: 'Beitragsbescheid',
-      Frist: '10.04.2026',
-      Ansprechpartner: 'BG BAU Service',
-    },
-    finanzamt: {
-      Betreff: 'Steuerschreiben',
-      Frist: '10.04.2026',
-    },
     aok: {
       Betreff: 'Mitteilung Krankenkasse',
       Krankenkasse: 'AOK',

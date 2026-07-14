@@ -78,8 +78,71 @@ export const PAYMENT_SCORING_CUTOVER = {
 
 export const DI_PAYMENT_SCORING_REASON_KEY = 'classification.detect.diPaymentScoring';
 
+export type AuthorityCutoverKind = 'finanzamt' | 'bg_bau' | 'steuerbescheid';
+
+export type AuthorityCutoverKindThresholds = {
+  minConfidence: number;
+  minMargin: number;
+};
+
+export const AUTHORITY_SCORING_CUTOVER = {
+  enabled: true,
+  allowedKinds: ['finanzamt', 'bg_bau', 'steuerbescheid'],
+  minOcrScore: 0.65,
+  minEvidenceRefs: 3,
+  kindThresholds: {
+    finanzamt: { minConfidence: 0.85, minMargin: 0.18 },
+    bg_bau: { minConfidence: 0.85, minMargin: 0.18 },
+    steuerbescheid: { minConfidence: 0.80, minMargin: 0.18 },
+  },
+} as const satisfies {
+  enabled: boolean;
+  allowedKinds: readonly AuthorityCutoverKind[];
+  minOcrScore: number;
+  minEvidenceRefs: number;
+  kindThresholds: Record<AuthorityCutoverKind, AuthorityCutoverKindThresholds>;
+};
+
+export const DI_AUTHORITY_SCORING_REASON_KEY = 'classification.detect.diAuthorityScoring';
+
 const INVOICE_KIND_TEXT_GUARD = /rechnungsnummer|eingangsrechnung|invoice|rechnung/i;
 const MAHNUNG_EXCLUSION_GUARD = /mahnung|zahlungserinnerung|zahlungsaufforderung|inkasso/i;
+const AUTHORITY_INVOICE_EXCLUSION_GUARD =
+  /\brechnungsnummer\b|\beingangsrechnung\b|\bgesamtbetrag\b|\brechnungssumme\b/i;
+const AUTHORITY_CONTRACT_EXCLUSION_GUARD =
+  /\bwerkvertrag\b|\bsubunternehmer(?:vertrag)?\b|\bleistungsverzeichnis\b|\bbau-?subunternehmer\b|\bunternehmervertrag\b/i;
+
+const AUTHORITY_KIND_TEXT_GUARDS: Record<AuthorityCutoverKind, RegExp> = {
+  finanzamt: /finanzamt|steuernummer|umsatzsteuer|lohnsteuer|steueramt/i,
+  bg_bau:
+    /beitragsbescheid|berufsgenossenschaft\s+(der\s+)?bauwirtschaft|bg[\s-]?bau[\s\S]{0,160}beitragsbescheid/i,
+  steuerbescheid: /steuerbescheid|festsetzung|einkommensteuerbescheid/i,
+};
+
+export function hasAuthorityCutoverKindTextGuard(
+  kind: ClassifiedDocumentKind,
+  recognizedText: string,
+): boolean {
+  if (!isAuthorityScoringCutoverKind(kind)) {
+    return false;
+  }
+  return AUTHORITY_KIND_TEXT_GUARDS[kind].test(recognizedText);
+}
+
+export function hasAuthorityCutoverPaymentExclusion(recognizedText: string): boolean {
+  return MAHNUNG_EXCLUSION_GUARD.test(recognizedText);
+}
+
+export function hasAuthorityCutoverInvoiceExclusion(recognizedText: string): boolean {
+  if (!AUTHORITY_INVOICE_EXCLUSION_GUARD.test(recognizedText)) {
+    return false;
+  }
+  return !/(finanzamt|steuerbescheid|bg[\s-]?bau|beitragsbescheid|festsetzung)/i.test(recognizedText);
+}
+
+export function hasAuthorityCutoverContractExclusion(recognizedText: string): boolean {
+  return AUTHORITY_CONTRACT_EXCLUSION_GUARD.test(recognizedText);
+}
 
 const PAYMENT_KIND_TEXT_GUARDS: Record<PaymentCutoverKind, RegExp> = {
   mahnung: /mahnung|inkasso|zahlungsaufforderung/i,
@@ -173,6 +236,34 @@ export function getPaymentCutoverKindThresholds(
   return PAYMENT_SCORING_CUTOVER.kindThresholds[kind];
 }
 
+let authorityCutoverEnabledOverride: boolean | null = null;
+
+export function getAuthorityScoringCutoverEnabled(): boolean {
+  if (authorityCutoverEnabledOverride !== null) {
+    return authorityCutoverEnabledOverride;
+  }
+  return AUTHORITY_SCORING_CUTOVER.enabled;
+}
+
+export function setAuthorityScoringCutoverEnabledForTests(value: boolean | null): void {
+  authorityCutoverEnabledOverride = value;
+}
+
+export function isAuthorityScoringCutoverKind(
+  kind: ClassifiedDocumentKind,
+): kind is AuthorityCutoverKind {
+  return AUTHORITY_SCORING_CUTOVER.allowedKinds.includes(kind as AuthorityCutoverKind);
+}
+
+export function getAuthorityCutoverKindThresholds(
+  kind: ClassifiedDocumentKind,
+): AuthorityCutoverKindThresholds | null {
+  if (!isAuthorityScoringCutoverKind(kind)) {
+    return null;
+  }
+  return AUTHORITY_SCORING_CUTOVER.kindThresholds[kind];
+}
+
 export function isReceiptScoringCutoverKind(
   kind: ClassifiedDocumentKind,
 ): kind is ReceiptCutoverKind {
@@ -204,11 +295,25 @@ export function hasReceiptCutoverKindTextGuard(
   return RECEIPT_KIND_TEXT_GUARDS[kind].test(recognizedText);
 }
 
-export type OcrOnlyRecognizedDataKind = ReceiptCutoverKind | 'eingangsrechnung' | PaymentCutoverKind;
+export type OcrOnlyRecognizedDataKind =
+  | ReceiptCutoverKind
+  | 'eingangsrechnung'
+  | PaymentCutoverKind
+  | AuthorityCutoverKind;
 
 export const OCR_ONLY_RECOGNIZED_DATA = {
   enabled: true,
-  kinds: ['tankbeleg', 'ec_beleg', 'kassenbeleg', 'eingangsrechnung', 'mahnung', 'zahlungserinnerung'],
+  kinds: [
+    'tankbeleg',
+    'ec_beleg',
+    'kassenbeleg',
+    'eingangsrechnung',
+    'mahnung',
+    'zahlungserinnerung',
+    'finanzamt',
+    'bg_bau',
+    'steuerbescheid',
+  ],
 } as const satisfies {
   enabled: boolean;
   kinds: readonly OcrOnlyRecognizedDataKind[];
