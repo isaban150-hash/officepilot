@@ -1,6 +1,6 @@
 import type { ClassifiedDocumentKind } from '../types/models';
 import type { DocumentClassificationInput } from '../types/models';
-import type { AuthorityCutoverKind, CertificateCutoverKind, OcrOnlyRecognizedDataKind, PaymentCutoverKind, ReceiptCutoverKind } from '../config/documentIntelligenceConfig';
+import type { AuthorityCutoverKind, CertificateCutoverKind, ContractCutoverKind, OcrOnlyRecognizedDataKind, PaymentCutoverKind, ReceiptCutoverKind } from '../config/documentIntelligenceConfig';
 import {
   getOcrOnlyRecognizedDataEnabled,
   isOcrOnlyRecognizedDataKind,
@@ -22,7 +22,7 @@ export type EvidenceBasedRecognizedDataInput = {
   pageTexts?: DocumentClassificationInput['pageTexts'];
 };
 
-type RecognizedDataFamily = 'receipt' | 'invoice' | 'payment' | 'authority' | 'certificate';
+type RecognizedDataFamily = 'receipt' | 'invoice' | 'payment' | 'authority' | 'certificate' | 'contract';
 
 type ReceiptRecognizedDataConfig = {
   merchantField: string;
@@ -50,7 +50,15 @@ const OCR_ONLY_KIND_FAMILY: Record<OcrOnlyRecognizedDataKind, RecognizedDataFami
   steuerbescheid: 'authority',
   freistellungsbescheinigung: 'certificate',
   unbedenklichkeitsbescheinigung: 'certificate',
+  werkvertrag: 'contract',
+  subunternehmervertrag: 'contract',
+  nachunternehmervertrag: 'contract',
 };
+
+
+const CONTRACT_AUFTRAGGEBER_PATTERN = /^auftraggeber(?:in)?\s*[:]\s*(.+)$/i;
+const CONTRACT_AUFTRAGNEHMER_PATTERN =
+  /^(?:auftragnehmer|subunternehmer|nachunternehmer)\s*[:]\s*(.+)$/i;
 
 const CERTIFICATE_HEADER_SKIP_PATTERN =
   /^(?:Betreff|Aussteller|Datum|gültig bis|gueltig bis|Gültigkeit|Gueltigkeit|Freistellungsbescheinigung|Unbedenklichkeitsbescheinigung|§48b)\s*[:]/i;
@@ -618,6 +626,99 @@ function applyCertificateOcrValidUntil(
   }
 }
 
+function pickLabeledContractValue(text: string, pattern: RegExp): string | undefined {
+  for (const line of text.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    const match = trimmed.match(pattern);
+    if (match?.[1]?.trim()) {
+      return match[1].trim();
+    }
+  }
+  return undefined;
+}
+
+function applyContractOcrReference(
+  result: Record<string, string>,
+  plain: ReturnType<typeof toConfidentPlainFields>,
+  text: string,
+  pageTexts?: DocumentClassificationInput['pageTexts'],
+): void {
+  if (plain.Aktenzeichen?.trim()) {
+    result.Auftragsnummer = plain.Aktenzeichen;
+    return;
+  }
+
+  const features = extractDocumentFeaturesFromText(text, pageTexts);
+  const caseReferenceFeature = features.features.find(
+    (feature) => feature.id === 'reference.case_reference',
+  );
+  if (typeof caseReferenceFeature?.value === 'string' && caseReferenceFeature.value.trim()) {
+    result.Auftragsnummer = caseReferenceFeature.value.trim();
+  }
+}
+
+function applyContractOcrDate(
+  result: Record<string, string>,
+  text: string,
+  pageTexts?: DocumentClassificationInput['pageTexts'],
+): void {
+  const features = extractDocumentFeaturesFromText(text, pageTexts);
+  const contractDateFeature = features.features.find((feature) => feature.id === 'date.contract_date');
+  if (typeof contractDateFeature?.value === 'string' && contractDateFeature.value.trim()) {
+    result.Vertragsdatum = contractDateFeature.value.trim();
+  }
+}
+
+function buildContractRecognizedData(
+  kind: ContractCutoverKind,
+  text: string,
+  pageTexts?: DocumentClassificationInput['pageTexts'],
+): Record<string, string> {
+  const result: Record<string, string> = { Dokumentart: kind };
+  const fieldsWithConfidence = extractFieldsWithConfidence(text);
+  const plain = toConfidentPlainFields(fieldsWithConfidence);
+
+  if (plain.Betreff?.trim()) {
+    result.Betreff = plain.Betreff;
+  }
+
+  const auftraggeber = pickLabeledContractValue(text, CONTRACT_AUFTRAGGEBER_PATTERN);
+  if (auftraggeber) {
+    result.Kunde = auftraggeber;
+    result.Auftraggeber = auftraggeber;
+  } else if (plain.Absender?.trim()) {
+    result.Kunde = plain.Absender;
+    result.Auftraggeber = plain.Absender;
+  }
+
+  const auftragnehmer = pickLabeledContractValue(text, CONTRACT_AUFTRAGNEHMER_PATTERN);
+  if (auftragnehmer) {
+    result.Auftragnehmer = auftragnehmer;
+  }
+
+  const baustellenadresse = pickLabeledContractValue(
+    text,
+    /^(?:baustellenadresse|baustelle)\s*[:]\s*(.+)$/i,
+  );
+  if (baustellenadresse) {
+    result.Baustelle = baustellenadresse;
+  } else if (plain.Baustelle?.trim()) {
+    result.Baustelle = plain.Baustelle;
+  } else {
+    const bauvorhaben = pickLabeledContractValue(text, /^bauvorhaben\s*[:]\s*(.+)$/i);
+    if (bauvorhaben) {
+      result.Baustelle = bauvorhaben;
+    } else if (plain.Projekt?.trim()) {
+      result.Baustelle = plain.Projekt;
+    }
+  }
+
+  applyContractOcrDate(result, text, pageTexts);
+  applyContractOcrReference(result, plain, text, pageTexts);
+
+  return result;
+}
+
 function buildAuthorityRecognizedData(
   kind: AuthorityCutoverKind,
   text: string,
@@ -679,6 +780,14 @@ export function buildEvidenceBasedRecognizedData(
   if (family === 'certificate') {
     return buildCertificateRecognizedData(
       input.classifiedKind as CertificateCutoverKind,
+      text,
+      input.pageTexts,
+    );
+  }
+
+  if (family === 'contract') {
+    return buildContractRecognizedData(
+      input.classifiedKind as ContractCutoverKind,
       text,
       input.pageTexts,
     );

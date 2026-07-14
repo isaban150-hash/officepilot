@@ -183,6 +183,72 @@ describe('documentFeatureExtractionService', () => {
     expect(result.sender).toBe('Finanzamt Musterstadt');
   });
 
+  it('extracts contract party markers and contract dates with zone-aware evidence', () => {
+    const bodyFiller = Array.from({ length: 22 }, (_, index) => `Position ${index + 1} Leistungsbeschreibung`);
+    const headerPartyText = [
+      'Werkvertrag',
+      'Subunternehmer: Mustermann Sanitär GmbH',
+      'Vertragsdatum: 15.03.2026',
+      'Leistungsverzeichnis',
+      ...bodyFiller,
+      'Unterschrift Auftraggeber',
+      'Ort, Datum: ___________',
+    ].join('\n');
+    const headerResult = extractDocumentFeatures(zoneText(headerPartyText));
+    const headerParty = headerResult.features.find((feature) => feature.id === 'structure.contract_party_marker');
+    const headerDate = headerResult.features.find((feature) => feature.id === 'date.contract_date');
+
+    expect(headerParty?.zone).toBe('header');
+    expect(headerParty?.strength).toBe('medium');
+    expect(headerDate?.zone).toBe('header');
+    expect(headerDate?.value).toBe('15.03.2026');
+
+    const bodyPartyText = [
+      'Werkvertrag',
+      'Auftraggeber: Müller Bau GmbH',
+      'Leistungsverzeichnis',
+      ...bodyFiller.slice(0, 8),
+      'Subunternehmer: Mustermann Sanitär GmbH',
+      'Vertragsdatum: 20.02.2026',
+      ...bodyFiller.slice(8),
+      'Unterschrift Auftraggeber',
+      'Ort, Datum: ___________',
+    ].join('\n');
+    const bodyResult = extractDocumentFeatures(zoneText(bodyPartyText));
+    const bodyParty = bodyResult.features.filter((feature) => feature.id === 'structure.contract_party_marker');
+    const bodyDate = bodyResult.features.find((feature) => feature.id === 'date.contract_date');
+
+    expect(bodyParty.some((feature) => feature.zone === 'body' && feature.rawValue.includes('Subunternehmer'))).toBe(true);
+    expect(bodyDate?.zone).toBe('body');
+    expect(bodyDate?.value).toBe('20.02.2026');
+
+    const footerPartyText = [
+      'Werkvertrag',
+      'Auftraggeber: Müller Bau GmbH',
+      'Vertragsdatum: 15.03.2026',
+      'Leistungsverzeichnis',
+      ...bodyFiller,
+      'Subunternehmer: Mustermann Sanitär GmbH',
+      'Unterschrift Auftraggeber',
+      'Ort, Datum: 01.07.2026',
+    ].join('\n');
+    const footerResult = extractDocumentFeatures(zoneText(footerPartyText));
+    const footerParty = footerResult.features.find(
+      (feature) => feature.id === 'structure.contract_party_marker' && feature.zone === 'footer',
+    );
+    const footerContractDates = footerResult.features.filter(
+      (feature) => feature.id === 'date.contract_date' && feature.zone === 'footer',
+    );
+
+    expect(footerParty?.rawValue).toContain('Subunternehmer');
+    expect(footerContractDates).toHaveLength(0);
+    expect(
+      footerResult.features.some(
+        (feature) => feature.id === 'date.contract_date' && feature.value === '01.07.2026',
+      ),
+    ).toBe(false);
+  });
+
   it('does not log document contents during feature extraction in shadow mode', () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const debugSpy = vi.spyOn(console, 'debug').mockImplementation(() => undefined);

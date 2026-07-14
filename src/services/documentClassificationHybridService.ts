@@ -1,6 +1,7 @@
 import {
   getAuthorityScoringCutoverEnabled,
   getCertificateScoringCutoverEnabled,
+  getContractScoringCutoverEnabled,
   getInvoiceScoringCutoverEnabled,
   getPaymentScoringCutoverEnabled,
   getReceiptScoringCutoverEnabled,
@@ -9,6 +10,7 @@ import type { DocumentClassificationInput } from '../types/models';
 import type { DetectionResult } from './documentClassificationService';
 import { evaluateAuthorityCutoverEligibility } from './documentAuthorityCutoverService';
 import { evaluateCertificateCutoverEligibility } from './documentCertificateCutoverService';
+import { evaluateContractCutoverEligibility } from './documentContractCutoverService';
 import { evaluateInvoiceCutoverEligibility } from './documentInvoiceCutoverService';
 import { evaluatePaymentCutoverEligibility } from './documentPaymentCutoverService';
 import { runReceiptAnalysisPipeline } from './documentReceiptAnalysisPipelineService';
@@ -36,13 +38,15 @@ export function resolveClassificationDetection(
   const paymentEnabled = getPaymentScoringCutoverEnabled();
   const authorityEnabled = getAuthorityScoringCutoverEnabled();
   const certificateEnabled = getCertificateScoringCutoverEnabled();
+  const contractEnabled = getContractScoringCutoverEnabled();
 
   if (
     !receiptEnabled &&
     !invoiceEnabled &&
     !paymentEnabled &&
     !authorityEnabled &&
-    !certificateEnabled
+    !certificateEnabled &&
+    !contractEnabled
   ) {
     return { detection: legacyDetection, cutoverApplied: false };
   }
@@ -94,6 +98,16 @@ export function resolveClassificationDetection(
     if (certificateCutover.eligible && certificateCutover.detection) {
       return {
         detection: certificateCutover.detection,
+        cutoverApplied: true,
+      };
+    }
+  }
+
+  if (contractEnabled) {
+    const contractCutover = evaluateContractCutoverEligibility(pipeline);
+    if (contractCutover.eligible && contractCutover.detection) {
+      return {
+        detection: contractCutover.detection,
         cutoverApplied: true,
       };
     }

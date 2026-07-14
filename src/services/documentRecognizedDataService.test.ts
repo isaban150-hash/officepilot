@@ -365,6 +365,57 @@ describe('documentRecognizedDataService', () => {
     });
   });
 
+  describe('contract family', () => {
+    it('uses OCR-only contract fields instead of demo values for werkvertrag', () => {
+      const recognizedData = buildEvidenceBasedRecognizedData({
+        classifiedKind: 'werkvertrag',
+        recognizedText: [
+          'Werkvertrag',
+          'Auftraggeber: Müller Bau GmbH',
+          'Subunternehmer: Mustermann Sanitär GmbH',
+          'Baustellenadresse: Hauptstr. 12, 10115 Berlin',
+          'Vertragsdatum: 15.03.2026',
+          'Auftragsnummer: AV-2026-0042',
+        ].join('\n'),
+      });
+
+      expect(recognizedData.Dokumentart).toBe('werkvertrag');
+      expect(recognizedData.Auftraggeber).toBe('Müller Bau GmbH');
+      expect(recognizedData.Auftragnehmer).toBe('Mustermann Sanitär GmbH');
+      expect(recognizedData.Baustelle).toBe('Hauptstr. 12, 10115 Berlin');
+      expect(recognizedData.Baustelle).not.toBe('Baustelle laut Vertrag');
+      expect(recognizedData.Vertragsdatum).toBe('15.03.2026');
+      expect(recognizedData.Auftragsnummer).toBe('AV-2026-0042');
+    });
+
+    it('uses OCR-only fields for subunternehmervertrag without default baustelle', () => {
+      const recognizedData = buildEvidenceBasedRecognizedData({
+        classifiedKind: 'subunternehmervertrag',
+        recognizedText: [
+          'Subunternehmervertrag',
+          'Auftraggeber: Großbau AG',
+          'Nachunternehmer: Klempner Meier OHG',
+          'Baustelle: Schulweg 5, 80331 München',
+          'Vertragsdatum: 20.02.2026',
+          'Auftragsnummer: SU-2026-118',
+        ].join('\n'),
+      });
+
+      expect(recognizedData.Dokumentart).toBe('subunternehmervertrag');
+      expect(recognizedData.Auftraggeber).toBe('Großbau AG');
+      expect(recognizedData.Baustelle).toBe('Schulweg 5, 80331 München');
+    });
+
+    it('returns only Dokumentart when OCR text is missing for contract kinds', () => {
+      const recognizedData = buildEvidenceBasedRecognizedData({
+        classifiedKind: 'werkvertrag',
+      });
+
+      expect(recognizedData).toEqual({ Dokumentart: 'werkvertrag' });
+      expect(recognizedData.Baustelle).toBeUndefined();
+    });
+  });
+
   describe('authority family', () => {
     it('uses OCR-only authority fields instead of demo values for finanzamt', () => {
       const recognizedData = buildEvidenceBasedRecognizedData({

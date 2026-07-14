@@ -270,11 +270,6 @@ function buildRecognizedData(
       Betrag: '342,16 €',
       Lieferant: input.senderHint ?? 'Unbekannt',
     },
-    werkvertrag: {
-      Kunde: input.senderHint ?? 'Unbekannt',
-      Vertragsart: 'Werkvertrag',
-      Baustelle: 'Baustelle laut Vertrag',
-    },
     auftrag: {
       Kunde: input.senderHint ?? 'Unbekannt',
       Leistung: 'Sanierungsarbeiten',

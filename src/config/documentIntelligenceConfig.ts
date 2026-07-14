@@ -133,6 +133,36 @@ export const CERTIFICATE_SCORING_CUTOVER = {
 
 export const DI_CERTIFICATE_SCORING_REASON_KEY = 'classification.detect.diCertificateScoring';
 
+export type ContractCutoverKind = 'werkvertrag' | 'subunternehmervertrag' | 'nachunternehmervertrag';
+
+export type ContractCutoverKindThresholds = {
+  minConfidence: number;
+  minMargin: number;
+};
+
+export const CONTRACT_SCORING_CUTOVER = {
+  enabled: true,
+  allowedKinds: ['werkvertrag', 'subunternehmervertrag', 'nachunternehmervertrag'],
+  minOcrScore: 0.65,
+  minEvidenceRefs: 3,
+  kindThresholds: {
+    werkvertrag: { minConfidence: 0.85, minMargin: 0.03 },
+    subunternehmervertrag: { minConfidence: 0.85, minMargin: 0.10 },
+    nachunternehmervertrag: { minConfidence: 0.85, minMargin: 0.10 },
+  },
+} as const satisfies {
+  enabled: boolean;
+  allowedKinds: readonly ContractCutoverKind[];
+  minOcrScore: number;
+  minEvidenceRefs: number;
+  kindThresholds: Record<ContractCutoverKind, ContractCutoverKindThresholds>;
+};
+
+export const DI_CONTRACT_SCORING_REASON_KEY = 'classification.detect.diContractScoring';
+
+const CONTRACT_DOMINANT_MARKER =
+  /\b(werkvertrag|werk[\s-]?vertrag|subunternehmervertrag|subunternehmer[\s-]?vertrag|nachunternehmervertrag|nachunternehmer[\s-]?vertrag|bau-?subunternehmer|leistungsverzeichnis|bauvorhaben|baustellenadresse)\b/i;
+
 const CERTIFICATE_DOCUMENT_MARKER =
   /freistellungsbescheinigung|§48b|§48\s*b|unbedenklichkeitsbescheinigung/i;
 const AUTHORITY_DOMINANT_FOR_CERTIFICATE_EXCLUSION =
@@ -185,6 +215,55 @@ export function hasCertificateCutoverAuthorityExclusion(recognizedText: string):
 
 export function hasCertificateCutoverInvoiceExclusion(recognizedText: string): boolean {
   return AUTHORITY_INVOICE_EXCLUSION_GUARD.test(recognizedText);
+}
+
+const CONTRACT_KIND_TEXT_GUARDS: Record<ContractCutoverKind, RegExp> = {
+  werkvertrag: /\bwerkvertrag\b|\bwerk[\s-]?vertrag\b/i,
+  subunternehmervertrag:
+    /\bsubunternehmervertrag\b|\bsubunternehmer[\s-]?vertrag\b|\bbau-?subunternehmer\b/i,
+  nachunternehmervertrag: /\bnachunternehmervertrag\b|\bnachunternehmer[\s-]?vertrag\b/i,
+};
+
+export function hasContractCutoverKindTextGuard(
+  kind: ClassifiedDocumentKind,
+  recognizedText: string,
+): boolean {
+  if (!isContractScoringCutoverKind(kind)) {
+    return false;
+  }
+  return CONTRACT_KIND_TEXT_GUARDS[kind].test(recognizedText);
+}
+
+export function hasContractCutoverPaymentExclusion(recognizedText: string): boolean {
+  return MAHNUNG_EXCLUSION_GUARD.test(recognizedText);
+}
+
+export function hasContractCutoverInvoiceExclusion(recognizedText: string): boolean {
+  if (!AUTHORITY_INVOICE_EXCLUSION_GUARD.test(recognizedText)) {
+    return false;
+  }
+  return !CONTRACT_DOMINANT_MARKER.test(recognizedText);
+}
+
+export function hasContractCutoverReceiptExclusion(recognizedText: string): boolean {
+  if (CONTRACT_DOMINANT_MARKER.test(recognizedText)) {
+    return false;
+  }
+  return CERTIFICATE_RECEIPT_EXCLUSION_GUARD.test(recognizedText);
+}
+
+export function hasContractCutoverCertificateExclusion(recognizedText: string): boolean {
+  if (!CERTIFICATE_DOCUMENT_MARKER.test(recognizedText)) {
+    return false;
+  }
+  return !CONTRACT_DOMINANT_MARKER.test(recognizedText);
+}
+
+export function hasContractCutoverAuthorityExclusion(recognizedText: string): boolean {
+  if (!AUTHORITY_DOMINANT_FOR_CERTIFICATE_EXCLUSION.test(recognizedText)) {
+    return false;
+  }
+  return !CONTRACT_DOMINANT_MARKER.test(recognizedText);
 }
 
 const INVOICE_KIND_TEXT_GUARD = /rechnungsnummer|eingangsrechnung|invoice|rechnung/i;
@@ -374,6 +453,34 @@ export function getCertificateCutoverKindThresholds(
   return CERTIFICATE_SCORING_CUTOVER.kindThresholds[kind];
 }
 
+let contractCutoverEnabledOverride: boolean | null = null;
+
+export function getContractScoringCutoverEnabled(): boolean {
+  if (contractCutoverEnabledOverride !== null) {
+    return contractCutoverEnabledOverride;
+  }
+  return CONTRACT_SCORING_CUTOVER.enabled;
+}
+
+export function setContractScoringCutoverEnabledForTests(value: boolean | null): void {
+  contractCutoverEnabledOverride = value;
+}
+
+export function isContractScoringCutoverKind(
+  kind: ClassifiedDocumentKind,
+): kind is ContractCutoverKind {
+  return CONTRACT_SCORING_CUTOVER.allowedKinds.includes(kind as ContractCutoverKind);
+}
+
+export function getContractCutoverKindThresholds(
+  kind: ClassifiedDocumentKind,
+): ContractCutoverKindThresholds | null {
+  if (!isContractScoringCutoverKind(kind)) {
+    return null;
+  }
+  return CONTRACT_SCORING_CUTOVER.kindThresholds[kind];
+}
+
 export function isReceiptScoringCutoverKind(
   kind: ClassifiedDocumentKind,
 ): kind is ReceiptCutoverKind {
@@ -424,7 +531,8 @@ export type OcrOnlyRecognizedDataKind =
   | 'eingangsrechnung'
   | PaymentCutoverKind
   | AuthorityCutoverKind
-  | CertificateCutoverKind;
+  | CertificateCutoverKind
+  | ContractCutoverKind;
 
 export const OCR_ONLY_RECOGNIZED_DATA = {
   enabled: true,
@@ -442,6 +550,9 @@ export const OCR_ONLY_RECOGNIZED_DATA = {
     'steuerbescheid',
     'freistellungsbescheinigung',
     'unbedenklichkeitsbescheinigung',
+    'werkvertrag',
+    'subunternehmervertrag',
+    'nachunternehmervertrag',
   ],
 } as const satisfies {
   enabled: boolean;

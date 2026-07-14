@@ -51,6 +51,16 @@ const BG_BAU_MARKER_PATTERN =
 const STEUERBESCHEID_MARKER_PATTERN = /\b(steuerbescheid|festsetzung|einkommensteuerbescheid)\b/i;
 const FREISTELLUNG_MARKER_PATTERN = /\b(freistellungsbescheinigung|§48b|§48\s*b)\b/i;
 const UNBEDENKLICHKEIT_MARKER_PATTERN = /\b(unbedenklichkeitsbescheinigung|unbedenklichkeit)\b/i;
+const WERKVERTRAG_MARKER_PATTERN = /\b(werkvertrag|werk[\s-]?vertrag)\b/i;
+const SUBUNTERNEHMER_MARKER_PATTERN =
+  /\b(subunternehmervertrag|subunternehmer[\s-]?vertrag|bau-?subunternehmer)\b/i;
+const NACHUNTERNEHMER_MARKER_PATTERN =
+  /\b(nachunternehmervertrag|nachunternehmer[\s-]?vertrag)\b/i;
+const LEISTUNGSVERZEICHNIS_MARKER_PATTERN = /\b(leistungsverzeichnis)\b/i;
+const CONTRACT_PARTY_LINE_PATTERN =
+  /^(?:auftraggeber(?:in)?|auftragnehmer(?:in)?|subunternehmer|nachunternehmer)\s*[:]/i;
+const CONTRACT_DATE_LINE_PATTERN =
+  /^vertragsdatum\s*[:]\s*(\d{1,2}[./]\d{1,2}[./]\d{2,4})/i;
 const VALID_UNTIL_PATTERN =
   /\b(?:gültig bis|gueltig bis|gültigkeit|gueltigkeit|valid until)\s*[:.]?\s*(\d{1,2}[./]\d{1,2}[./]\d{2,4})/i;
 
@@ -209,6 +219,30 @@ const PATTERN_FEATURES: PatternFeatureSpec[] = [
     valueFromMatch: (match) => match[0]?.trim(),
   },
   {
+    id: 'structure.werkvertrag_marker',
+    category: 'structure',
+    pattern: WERKVERTRAG_MARKER_PATTERN,
+    valueFromMatch: (match) => match[0]?.trim(),
+  },
+  {
+    id: 'structure.subunternehmer_marker',
+    category: 'structure',
+    pattern: SUBUNTERNEHMER_MARKER_PATTERN,
+    valueFromMatch: (match) => match[0]?.trim(),
+  },
+  {
+    id: 'structure.nachunternehmer_marker',
+    category: 'structure',
+    pattern: NACHUNTERNEHMER_MARKER_PATTERN,
+    valueFromMatch: (match) => match[0]?.trim(),
+  },
+  {
+    id: 'structure.leistungsverzeichnis_marker',
+    category: 'structure',
+    pattern: LEISTUNGSVERZEICHNIS_MARKER_PATTERN,
+    valueFromMatch: (match) => match[0]?.trim(),
+  },
+  {
     id: 'date.valid_until',
     category: 'date',
     pattern: VALID_UNTIL_PATTERN,
@@ -355,8 +389,40 @@ function extractIdentityFeatures(
       });
     }
 
+    const contractPartyMatch = trimmed.match(CONTRACT_PARTY_LINE_PATTERN);
+    if (contractPartyMatch) {
+      const marker = contractPartyMatch[0];
+      const markerStart = line.startOffset + line.text.indexOf(marker);
+      addLineFeature(result, counters, {
+        id: 'structure.contract_party_marker',
+        category: 'structure',
+        line,
+        rawValue: trimmed,
+        value: true,
+        labeled: true,
+        startOffset: markerStart,
+        endOffset: markerStart + marker.length,
+      });
+    }
+
+    const contractDateMatch = trimmed.match(CONTRACT_DATE_LINE_PATTERN);
+    if (contractDateMatch?.[1]) {
+      const value = contractDateMatch[1];
+      const valueStart = line.startOffset + line.text.indexOf(value);
+      addLineFeature(result, counters, {
+        id: 'date.contract_date',
+        category: 'date',
+        line,
+        rawValue: trimmed,
+        value,
+        labeled: true,
+        startOffset: valueStart,
+        endOffset: valueStart + value.length,
+      });
+    }
+
     const labeledDateMatch = trimmed.match(LABELED_DATE_PATTERN);
-    if (labeledDateMatch?.[1]) {
+    if (labeledDateMatch?.[1] && !/^vertragsdatum\s*[:]/i.test(trimmed)) {
       const value = labeledDateMatch[1];
       const valueStart = line.startOffset + line.text.indexOf(value);
       addLineFeature(result, counters, {

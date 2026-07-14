@@ -2,11 +2,13 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   DI_AUTHORITY_SCORING_REASON_KEY,
   DI_CERTIFICATE_SCORING_REASON_KEY,
+  DI_CONTRACT_SCORING_REASON_KEY,
   DI_INVOICE_SCORING_REASON_KEY,
   DI_PAYMENT_SCORING_REASON_KEY,
   DI_RECEIPT_SCORING_REASON_KEY,
   setAuthorityScoringCutoverEnabledForTests,
   setCertificateScoringCutoverEnabledForTests,
+  setContractScoringCutoverEnabledForTests,
   setInvoiceScoringCutoverEnabledForTests,
   setPaymentScoringCutoverEnabledForTests,
   setReceiptScoringCutoverEnabledForTests,
@@ -44,9 +46,13 @@ const STEUERBESCHEID_TEXT = [
 ].join('\n');
 
 const CONTRACT_WITH_CERT_MENTION = [
-  'Bau-Subunternehmervertrag',
   'Werkvertrag',
   'Auftraggeber: Müller Bau GmbH',
+  'Subunternehmer: Mustermann Sanitär GmbH',
+  'Baustellenadresse: Hauptstr. 12, 10115 Berlin',
+  'Vertragsdatum: 15.03.2026',
+  'Auftragsnummer: AV-2026-0042',
+  'Leistungsverzeichnis',
   'Freistellungsbescheinigung, BG BAU Unbedenklichkeitsbescheinigung',
 ].join('\n');
 
@@ -148,6 +154,7 @@ describe('documentCertificateCutoverHybridService', () => {
     setInvoiceScoringCutoverEnabledForTests(null);
     setPaymentScoringCutoverEnabledForTests(null);
     setAuthorityScoringCutoverEnabledForTests(null);
+    setContractScoringCutoverEnabledForTests(null);
   });
 
   it('productively applies freistellungsbescheinigung cutover with OCR-only recognizedData', () => {
@@ -190,11 +197,12 @@ describe('documentCertificateCutoverHybridService', () => {
     expect(unbedenklichkeit.classifiedKind).toBe('unbedenklichkeitsbescheinigung');
   });
 
-  it('keeps contract documents on legacy, not certificate cutover', () => {
+  it('keeps contract documents on contract cutover, not certificate cutover', () => {
     const result = classifyDocument({ recognizedText: CONTRACT_WITH_CERT_MENTION });
 
+    expect(result.detectionReasonKey).toBe(DI_CONTRACT_SCORING_REASON_KEY);
     expect(result.detectionReasonKey).not.toBe(DI_CERTIFICATE_SCORING_REASON_KEY);
-    expect(['werkvertrag', 'subunternehmervertrag']).toContain(result.classifiedKind);
+    expect(result.classifiedKind).toBe('werkvertrag');
   });
 
   it('keeps invoice on invoice cutover, not certificate', () => {
