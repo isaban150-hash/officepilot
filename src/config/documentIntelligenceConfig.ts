@@ -706,3 +706,26 @@ export function isOcrOnlyRecognizedDataKind(
 ): kind is OcrOnlyRecognizedDataKind {
   return OCR_ONLY_RECOGNIZED_DATA.kinds.includes(kind as OcrOnlyRecognizedDataKind);
 }
+
+export const DI_SHADOW_OBSERVABILITY = {
+  enabled: true,
+  storageKey: 'officepilot:di-shadow-log',
+  maxEntries: 100,
+} as const satisfies {
+  enabled: boolean;
+  storageKey: string;
+  maxEntries: number;
+};
+
+let diShadowObservabilityOverride: boolean | null = null;
+
+export function getDiShadowObservabilityEnabled(): boolean {
+  if (diShadowObservabilityOverride !== null) {
+    return diShadowObservabilityOverride;
+  }
+  return DI_SHADOW_OBSERVABILITY.enabled;
+}
+
+export function setDiShadowObservabilityEnabledForTests(value: boolean | null): void {
+  diShadowObservabilityOverride = value;
+}

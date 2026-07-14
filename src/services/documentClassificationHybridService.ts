@@ -7,6 +7,7 @@ import {
   getPaymentScoringCutoverEnabled,
   getReceiptScoringCutoverEnabled,
 } from '../config/documentIntelligenceConfig';
+import type { DiCutoverLane } from '../types/documentShadowTypes';
 import type { DocumentClassificationInput } from '../types/models';
 import type { DetectionResult } from './documentClassificationService';
 import { evaluateAuthorityCutoverEligibility } from './documentAuthorityCutoverService';
@@ -15,49 +16,54 @@ import { evaluateContractCutoverEligibility } from './documentContractCutoverSer
 import { evaluateCustomerCutoverEligibility } from './documentCustomerCutoverService';
 import { evaluateInvoiceCutoverEligibility } from './documentInvoiceCutoverService';
 import { evaluatePaymentCutoverEligibility } from './documentPaymentCutoverService';
-import { runReceiptAnalysisPipeline } from './documentReceiptAnalysisPipelineService';
+import {
+  runReceiptAnalysisPipeline,
+  type ReceiptAnalysisPipelineResult,
+} from './documentReceiptAnalysisPipelineService';
 import { evaluateReceiptCutoverEligibility } from './documentReceiptCutoverService';
+import { resolveCutoverLaneFromResolution } from './documentHybridLaneEvaluationService';
 
 export type ClassificationDetectionResolution = {
   detection: DetectionResult;
   cutoverApplied: boolean;
 };
 
+export type HybridClassificationContext = {
+  resolution: ClassificationDetectionResolution;
+  cutoverLane: DiCutoverLane;
+  pipeline: ReceiptAnalysisPipelineResult | null;
+};
+
 function hasUploadKindHint(input: DocumentClassificationInput): boolean {
   return Boolean(input.kindHint && input.kindHint !== 'werbung');
 }
 
-export function resolveClassificationDetection(
+function isAnyCutoverEnabled(): boolean {
+  return (
+    getReceiptScoringCutoverEnabled() ||
+    getInvoiceScoringCutoverEnabled() ||
+    getPaymentScoringCutoverEnabled() ||
+    getAuthorityScoringCutoverEnabled() ||
+    getCertificateScoringCutoverEnabled() ||
+    getContractScoringCutoverEnabled() ||
+    getCustomerScoringCutoverEnabled()
+  );
+}
+
+function resolveClassificationFromPipeline(
   input: DocumentClassificationInput,
   legacyDetection: DetectionResult,
+  pipeline: ReceiptAnalysisPipelineResult | null,
 ): ClassificationDetectionResolution {
   if (hasUploadKindHint(input)) {
     return { detection: legacyDetection, cutoverApplied: false };
   }
 
-  const receiptEnabled = getReceiptScoringCutoverEnabled();
-  const invoiceEnabled = getInvoiceScoringCutoverEnabled();
-  const paymentEnabled = getPaymentScoringCutoverEnabled();
-  const authorityEnabled = getAuthorityScoringCutoverEnabled();
-  const certificateEnabled = getCertificateScoringCutoverEnabled();
-  const contractEnabled = getContractScoringCutoverEnabled();
-  const customerEnabled = getCustomerScoringCutoverEnabled();
-
-  if (
-    !receiptEnabled &&
-    !invoiceEnabled &&
-    !paymentEnabled &&
-    !authorityEnabled &&
-    !certificateEnabled &&
-    !contractEnabled &&
-    !customerEnabled
-  ) {
+  if (!isAnyCutoverEnabled()) {
     return { detection: legacyDetection, cutoverApplied: false };
   }
 
-  const pipeline = runReceiptAnalysisPipeline(input);
-
-  if (receiptEnabled) {
+  if (getReceiptScoringCutoverEnabled()) {
     const receiptCutover = evaluateReceiptCutoverEligibility(pipeline);
     if (receiptCutover.eligible && receiptCutover.detection) {
       return {
@@ -67,7 +73,7 @@ export function resolveClassificationDetection(
     }
   }
 
-  if (invoiceEnabled) {
+  if (getInvoiceScoringCutoverEnabled()) {
     const invoiceCutover = evaluateInvoiceCutoverEligibility(pipeline);
     if (invoiceCutover.eligible && invoiceCutover.detection) {
       return {
@@ -77,7 +83,7 @@ export function resolveClassificationDetection(
     }
   }
 
-  if (paymentEnabled) {
+  if (getPaymentScoringCutoverEnabled()) {
     const paymentCutover = evaluatePaymentCutoverEligibility(pipeline);
     if (paymentCutover.eligible && paymentCutover.detection) {
       return {
@@ -87,7 +93,7 @@ export function resolveClassificationDetection(
     }
   }
 
-  if (authorityEnabled) {
+  if (getAuthorityScoringCutoverEnabled()) {
     const authorityCutover = evaluateAuthorityCutoverEligibility(pipeline);
     if (authorityCutover.eligible && authorityCutover.detection) {
       return {
@@ -97,7 +103,7 @@ export function resolveClassificationDetection(
     }
   }
 
-  if (certificateEnabled) {
+  if (getCertificateScoringCutoverEnabled()) {
     const certificateCutover = evaluateCertificateCutoverEligibility(pipeline);
     if (certificateCutover.eligible && certificateCutover.detection) {
       return {
@@ -107,7 +113,7 @@ export function resolveClassificationDetection(
     }
   }
 
-  if (contractEnabled) {
+  if (getContractScoringCutoverEnabled()) {
     const contractCutover = evaluateContractCutoverEligibility(pipeline);
     if (contractCutover.eligible && contractCutover.detection) {
       return {
@@ -117,7 +123,7 @@ export function resolveClassificationDetection(
     }
   }
 
-  if (customerEnabled) {
+  if (getCustomerScoringCutoverEnabled()) {
     const customerCutover = evaluateCustomerCutoverEligibility(pipeline);
     if (customerCutover.eligible && customerCutover.detection) {
       return {
@@ -128,4 +134,38 @@ export function resolveClassificationDetection(
   }
 
   return { detection: legacyDetection, cutoverApplied: false };
+}
+
+export function resolveHybridClassification(
+  input: DocumentClassificationInput,
+  legacyDetection: DetectionResult,
+): HybridClassificationContext {
+  if (hasUploadKindHint(input) || !isAnyCutoverEnabled()) {
+    const resolution = resolveClassificationFromPipeline(input, legacyDetection, null);
+    return {
+      resolution,
+      cutoverLane: 'legacy',
+      pipeline: null,
+    };
+  }
+
+  const pipeline = runReceiptAnalysisPipeline(input);
+  const resolution = resolveClassificationFromPipeline(input, legacyDetection, pipeline);
+  const cutoverLane = resolveCutoverLaneFromResolution(
+    resolution.cutoverApplied,
+    resolution.detection.reasonKey,
+  );
+
+  return {
+    resolution,
+    cutoverLane,
+    pipeline,
+  };
+}
+
+export function resolveClassificationDetection(
+  input: DocumentClassificationInput,
+  legacyDetection: DetectionResult,
+): ClassificationDetectionResolution {
+  return resolveHybridClassification(input, legacyDetection).resolution;
 }

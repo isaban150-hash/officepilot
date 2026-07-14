@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { classifyDocument } from './documentClassificationService';
+import { classifyDocument, detectClassifiedKindWithReason } from './documentClassificationService';
+import { resolveHybridClassification } from './documentClassificationHybridService';
 import {
   buildDocumentAnalysisFromLegacy,
   buildDocumentAnalysisFromLegacyClassification,
@@ -225,16 +226,18 @@ describe('documentAnalysisShadowService', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
-    runLegacyDocumentAnalysisShadow(
-      buildClassification({
-        recognizedText: 'Rechnung INV-SECRET-77 an geheime@firma.de',
-        senderHint: 'Geheime Firma GmbH',
-      }),
-      {
-        recognizedText: 'Rechnung INV-SECRET-77 an geheime@firma.de',
-        senderHint: 'Geheime Firma GmbH',
-      },
-    );
+    const input = {
+      recognizedText: 'Rechnung INV-SECRET-77 an geheime@firma.de',
+      senderHint: 'Geheime Firma GmbH',
+    };
+    const classification = buildClassification(input);
+    const legacyDetection = detectClassifiedKindWithReason(input);
+    const hybridContext = resolveHybridClassification(input, legacyDetection);
+
+    runLegacyDocumentAnalysisShadow(classification, input, {
+      legacyDetection,
+      hybridContext,
+    });
 
     const logged = [...logSpy.mock.calls, ...debugSpy.mock.calls, ...warnSpy.mock.calls, ...errorSpy.mock.calls]
       .flat()
@@ -257,8 +260,13 @@ describe('documentAnalysisShadowService', () => {
   });
 
   it('swallows adapter failures inside runLegacyDocumentAnalysisShadow', () => {
+    const legacyDetection = detectClassifiedKindWithReason({});
+    const hybridContext = resolveHybridClassification({}, legacyDetection);
     expect(() =>
-      runLegacyDocumentAnalysisShadow({ classifiedKind: 'rechnung' } as never, {}),
+      runLegacyDocumentAnalysisShadow({ classifiedKind: 'rechnung' } as never, {}, {
+        legacyDetection,
+        hybridContext,
+      }),
     ).not.toThrow();
   });
 });

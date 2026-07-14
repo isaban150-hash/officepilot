@@ -17,7 +17,7 @@ import {
 import { resolvePaperFiling, suggestPaperFolder } from './paperFolderService';
 import { getInboxExtractedDocumentText } from './inboxDocumentText';
 import { runLegacyDocumentAnalysisShadow } from './documentAnalysisShadowService';
-import { resolveClassificationDetection } from './documentClassificationHybridService';
+import { resolveHybridClassification } from './documentClassificationHybridService';
 import { extractFieldsFromText, mergeExtractedFields } from './documentFieldExtractionService';
 import {
   buildEvidenceBasedRecognizedData,
@@ -411,7 +411,8 @@ export function suggestRelatedVorgang(
 
 export function classifyDocument(input: DocumentClassificationInput): DocumentClassificationResult {
   const legacyDetection = detectClassifiedKindWithReason(input);
-  const { detection } = resolveClassificationDetection(input, legacyDetection);
+  const hybridContext = resolveHybridClassification(input, legacyDetection);
+  const { detection } = hybridContext.resolution;
   const classifiedKind = detection.kind;
   const isAdvertisement =
     input.kindHint === 'werbung' ||
@@ -481,7 +482,10 @@ export function classifyDocument(input: DocumentClassificationInput): DocumentCl
     result.recognizedData.Vorgang = suggestedVorgangRaw.vorgangTitle;
   }
 
-  runLegacyDocumentAnalysisShadow(result, input);
+  runLegacyDocumentAnalysisShadow(result, input, {
+    legacyDetection,
+    hybridContext,
+  });
 
   return result;
 }
