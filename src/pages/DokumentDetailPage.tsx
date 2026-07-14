@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { DocumentUnderstandingCard } from '../components/documents/DocumentUnderstandingCard';
+import { DocumentOriginalFilePanel } from '../components/documents/DocumentOriginalFilePanel';
 import { DocumentFilingCard } from '../components/documents/DocumentFilingCard';
 import { DocumentLifecycleCard } from '../components/documents/DocumentLifecycleCard';
 import { DocumentForm } from '../components/documents/DocumentForm';
@@ -122,18 +123,24 @@ export function DokumentDetailPage() {
   const technicalPanels = (
     <>
       <Card className="document-detail__preview">
-        <div className="document-detail__image">
-          {document.imagePreview ? (
-            <span aria-hidden>{document.imagePreview}</span>
-          ) : (
-            <FileTypeIcon
-              mimeType={document.mimeType}
-              fileName={document.title}
-              size="lg"
-            />
-          )}
-        </div>
-        <p className="document-detail__preview-hint">{translate('document.previewHint')}</p>
+        {document.fileRefId ? (
+          <DocumentOriginalFilePanel fileRefId={document.fileRefId} translate={translate} />
+        ) : (
+          <>
+            <div className="document-detail__image">
+              {document.imagePreview ? (
+                <span aria-hidden>{document.imagePreview}</span>
+              ) : (
+                <FileTypeIcon
+                  mimeType={document.mimeType}
+                  fileName={document.title}
+                  size="lg"
+                />
+              )}
+            </div>
+            <p className="document-detail__preview-hint">{translate('document.previewHint')}</p>
+          </>
+        )}
       </Card>
 
       <Card>

@@ -3,11 +3,15 @@ import { generateEntityId } from './sync/syncMetaService';
 import type { CachedDocumentFilePayload } from './cachedDocumentFileService';
 import { computeBufferContentHash, computeDataUrlContentHash } from './documentFileHashService';
 import {
+  copyDocumentBlobToScope,
   deleteDocumentBlob,
   DocumentBlobStorageError,
+  hasDocumentBlob,
+  migrateDocumentBlobsToScope,
   readDocumentBlob,
   saveDocumentBlob,
 } from './storage/documentBlobIndexedDbService';
+import { getActiveStorageScope, type StorageScope } from './storage/storageScopeService';
 
 let fileRefs: DocumentFileRef[] = [];
 let fileBlobs: Record<string, string> = {};
@@ -55,7 +59,82 @@ export function getDocumentFileDataUrl(ref: DocumentFileRef | string): string | 
   return fileBlobs[resolved.localDataKey];
 }
 
-export async function getDocumentFileBlob(ref: DocumentFileRef | string): Promise<Blob | null> {
+function buildBlobFallbackScopes(activeScope: StorageScope, userId?: string): StorageScope[] {
+  const scopes: StorageScope[] = [];
+  if (activeScope.type !== 'guest') {
+    scopes.push({ type: 'guest' });
+  }
+  if (userId && activeScope.type === 'workspace') {
+    scopes.push({ type: 'user', userId });
+  }
+  return scopes;
+}
+
+async function readDocumentBlobWithFallback(
+  fileRefId: string,
+  fallbackScopes: StorageScope[] = [],
+): Promise<Awaited<ReturnType<typeof readDocumentBlob>>> {
+  const activeScope = getActiveStorageScope();
+  const activeRecord = await readDocumentBlob(fileRefId, activeScope);
+  if (activeRecord) {
+    return activeRecord;
+  }
+
+  for (const sourceScope of fallbackScopes) {
+    const copied = await copyDocumentBlobToScope(fileRefId, sourceScope, activeScope);
+    if (copied) {
+      return readDocumentBlob(fileRefId, activeScope);
+    }
+  }
+
+  return null;
+}
+
+export async function ensureDocumentBlobsForActiveScope(
+  fileRefIds: string[],
+  sourceScopes: StorageScope[] = [{ type: 'guest' }],
+): Promise<{ migrated: number; missing: string[] }> {
+  return migrateDocumentBlobsToScope(fileRefIds, sourceScopes, getActiveStorageScope());
+}
+
+export async function getOriginalDocumentFileBytes(
+  ref: DocumentFileRef | string,
+  fallbackScopes: StorageScope[] = [],
+): Promise<Uint8Array | null> {
+  const blob = await getDocumentFileBlob(ref, fallbackScopes);
+  if (!blob) return null;
+  return new Uint8Array(await blob.arrayBuffer());
+}
+
+export async function verifyDocumentFileIntegrity(
+  ref: DocumentFileRef,
+  fallbackScopes: StorageScope[] = [],
+): Promise<boolean> {
+  if (!ref.contentHash) return false;
+  const bytes = await getOriginalDocumentFileBytes(ref, fallbackScopes);
+  if (!bytes) return false;
+  const hash = await computeBufferContentHash(bytes);
+  return hash === ref.contentHash;
+}
+
+export function downloadDocumentFile(ref: DocumentFileRef): void {
+  if (typeof document === 'undefined') return;
+  void getDocumentFileBlob(ref).then((blob) => {
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = ref.originalFileName;
+    anchor.rel = 'noopener';
+    anchor.click();
+    URL.revokeObjectURL(url);
+  });
+}
+
+export async function getDocumentFileBlob(
+  ref: DocumentFileRef | string,
+  fallbackScopes: StorageScope[] = [],
+): Promise<Blob | null> {
   const resolved = typeof ref === 'string' ? getDocumentFileRefById(ref) : ref;
   if (!resolved) return null;
 
@@ -66,8 +145,26 @@ export async function getDocumentFileBlob(ref: DocumentFileRef | string): Promis
     return response.blob();
   }
 
-  const record = await readDocumentBlob(resolved.id);
+  const record = await readDocumentBlobWithFallback(resolved.id, fallbackScopes);
   return record?.blob ?? null;
+}
+
+export async function hasStoredOriginalDocumentFile(
+  ref: DocumentFileRef,
+  fallbackScopes: StorageScope[] = [],
+): Promise<boolean> {
+  if (ref.storageType === 'local_data_url') {
+    return Boolean(fileBlobs[ref.localDataKey]);
+  }
+  if (await hasDocumentBlob(ref.id)) {
+    return true;
+  }
+  for (const sourceScope of fallbackScopes) {
+    if (await hasDocumentBlob(ref.id, sourceScope)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export async function storeDocumentFileFromCachedPayload(
@@ -82,6 +179,11 @@ export async function storeDocumentFileFromCachedPayload(
 
   const existing = getDocumentFileRefByHash(contentHash);
   if (existing) {
+    await ensureDocumentBlobsForActiveScope([existing.id], [{ type: 'guest' }]);
+    const stored = await hasStoredOriginalDocumentFile(existing, [{ type: 'guest' }]);
+    if (!stored) {
+      throw new DocumentBlobStorageError('blob_read_failed');
+    }
     return { fileRef: existing, created: false };
   }
 
@@ -125,6 +227,8 @@ export async function storeDocumentFileFromCachedPayload(
   fileRefs = [...fileRefs, fileRef];
   return { fileRef, created: true };
 }
+
+export { buildBlobFallbackScopes };
 
 export async function removeDocumentFileStoreEntry(
   fileRefId: string,

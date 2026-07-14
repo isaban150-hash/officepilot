@@ -14,7 +14,9 @@ import {
   storeDocumentFileFromCachedPayload,
   removeDocumentFileStoreEntry,
   DocumentBlobStorageError,
+  hasStoredOriginalDocumentFile,
 } from './documentFileStoreService';
+import { hasDocumentBlob } from './storage/documentBlobIndexedDbService';
 import type { DocumentBlobStorageErrorCode } from './storage/documentBlobIndexedDbService';
 import * as persistenceService from './persistenceService';
 import type { DocumentUploadValidationError } from '../types/uploadedDocument';
@@ -88,6 +90,21 @@ export async function intakeCachedDocumentFile(
     createdFileRef = stored.created;
   } catch (error) {
     return { success: false, error: mapStorageError(error) };
+  }
+
+  const originalStored = await hasStoredOriginalDocumentFile(fileRef, [{ type: 'guest' }]);
+  if (!originalStored) {
+    if (createdFileRef) {
+      await removeDocumentFileStoreEntry(fileRef.id, fileRef.localDataKey);
+    }
+    return { success: false, error: 'storage_failed' };
+  }
+
+  if (fileRef.storageType === 'indexeddb' && !(await hasDocumentBlob(fileRef.id))) {
+    if (createdFileRef) {
+      await removeDocumentFileStoreEntry(fileRef.id, fileRef.localDataKey);
+    }
+    return { success: false, error: 'storage_failed' };
   }
 
   const duplicate = findDuplicateByContentHash(fileRef.contentHash);

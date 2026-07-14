@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { DocumentAssistantPanel } from '../components/documents/DocumentAssistantPanel';
+import { DocumentOriginalFilePanel } from '../components/documents/DocumentOriginalFilePanel';
 import { CompanyRelevancePanel } from '../components/inbox/CompanyRelevancePanel';
 import { ContractAnalysisPanel } from '../components/inbox/ContractAnalysisPanel';
 import { DocumentActionSuggestionsPanel } from '../components/inbox/DocumentActionSuggestionsPanel';
@@ -75,6 +76,7 @@ import type { TranslationKey } from '../i18n';
 
 type ReviewSectionId =
   | 'document-data'
+  | 'original-file'
   | 'ocr-text'
   | 'communication'
   | 'tasks'
@@ -472,6 +474,18 @@ export function EingangDetailPage() {
           </Card>
         )}
       </CollapsibleReviewSection>
+
+      {item.fileRefId ? (
+        <CollapsibleReviewSection
+          id="original-file"
+          title={translate('document.original.title')}
+          expanded={Boolean(expandedSections['original-file'])}
+          onToggle={() => toggleSection('original-file')}
+          testId="document-review-original-section"
+        >
+          <DocumentOriginalFilePanel fileRefId={item.fileRefId} translate={translate} />
+        </CollapsibleReviewSection>
+      ) : null}
 
       {extractedText && (
         <CollapsibleReviewSection

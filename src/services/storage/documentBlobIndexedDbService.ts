@@ -254,6 +254,69 @@ export async function deleteDocumentBlob(
   }
 }
 
+export async function copyDocumentBlobToScope(
+  fileRefId: string,
+  sourceScope: import('./storageScopeService').StorageScope,
+  targetScope: import('./storageScopeService').StorageScope,
+): Promise<boolean> {
+  const sourceKey = buildDocumentBlobScopeKey(sourceScope);
+  const targetKey = buildDocumentBlobScopeKey(targetScope);
+  if (sourceKey === targetKey) {
+    return hasDocumentBlob(fileRefId, targetScope);
+  }
+
+  if (await hasDocumentBlob(fileRefId, targetScope)) {
+    return true;
+  }
+
+  const source = await readDocumentBlob(fileRefId, sourceScope);
+  if (!source) {
+    return false;
+  }
+
+  await saveDocumentBlob({
+    fileRefId,
+    blob: source.blob,
+    mimeType: source.mimeType,
+    fileSize: source.fileSize,
+    contentHash: source.contentHash,
+    createdAt: source.createdAt,
+    scope: targetScope,
+  });
+  return true;
+}
+
+export async function migrateDocumentBlobsToScope(
+  fileRefIds: string[],
+  sourceScopes: import('./storageScopeService').StorageScope[],
+  targetScope: import('./storageScopeService').StorageScope,
+): Promise<{ migrated: number; missing: string[] }> {
+  const uniqueIds = [...new Set(fileRefIds.filter(Boolean))];
+  const missing: string[] = [];
+  let migrated = 0;
+
+  for (const fileRefId of uniqueIds) {
+    if (await hasDocumentBlob(fileRefId, targetScope)) {
+      continue;
+    }
+
+    let copied = false;
+    for (const sourceScope of sourceScopes) {
+      if (await copyDocumentBlobToScope(fileRefId, sourceScope, targetScope)) {
+        copied = true;
+        migrated += 1;
+        break;
+      }
+    }
+
+    if (!copied) {
+      missing.push(fileRefId);
+    }
+  }
+
+  return { migrated, missing };
+}
+
 async function deleteDatabaseWithRetry(factory: IDBFactory, attempts = 8): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const request = factory.deleteDatabase(DOCUMENT_BLOB_DB_NAME);

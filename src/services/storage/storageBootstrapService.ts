@@ -24,7 +24,12 @@ import {
   getActiveStorageScope,
   type StorageScope,
 } from './storageScopeService';
-import { backfillMissingFileRefHashes } from '../documentFileStoreService';
+import {
+  backfillMissingFileRefHashes,
+  buildBlobFallbackScopes,
+  ensureDocumentBlobsForActiveScope,
+  getDocumentFileRefStoreSnapshot,
+} from '../documentFileStoreService';
 
 export interface BusinessBootstrapInput {
   userId?: string;
@@ -64,6 +69,14 @@ function bootstrapBetaTestState(): CompanySetup {
   return getCachedSetup();
 }
 
+function scheduleDocumentFileMaintenance(scope: StorageScope, userId?: string): void {
+  const fileRefIds = getDocumentFileRefStoreSnapshot().map((ref) => ref.id);
+  const sourceScopes = buildBlobFallbackScopes(scope, userId);
+  void ensureDocumentBlobsForActiveScope(fileRefIds, sourceScopes)
+    .then(() => backfillMissingFileRefHashes())
+    .then(() => persistAll());
+}
+
 function loadOrSeedScopedState(scope: StorageScope, userId?: string): BusinessBootstrapResult {
   setActiveStorageScope(scope);
 
@@ -80,7 +93,7 @@ function loadOrSeedScopedState(scope: StorageScope, userId?: string): BusinessBo
     if (strippedMockData) {
       savePersistedStateToKey(scope, stripped);
     }
-    void backfillMissingFileRefHashes().then(() => persistAll());
+    scheduleDocumentFileMaintenance(scope, userId);
     return {
       setup: getCachedSetup(),
       scope,
