@@ -49,6 +49,10 @@ const FINANZAMT_MARKER_PATTERN = /\b(finanzamt|steuernummer|umsatzsteuer|lohnste
 const BG_BAU_MARKER_PATTERN =
   /\b(bg[\s-]?bau|berufsgenossenschaft\s+(der\s+)?bauwirtschaft|beitragsbescheid)\b/i;
 const STEUERBESCHEID_MARKER_PATTERN = /\b(steuerbescheid|festsetzung|einkommensteuerbescheid)\b/i;
+const FREISTELLUNG_MARKER_PATTERN = /\b(freistellungsbescheinigung|§48b|§48\s*b)\b/i;
+const UNBEDENKLICHKEIT_MARKER_PATTERN = /\b(unbedenklichkeitsbescheinigung|unbedenklichkeit)\b/i;
+const VALID_UNTIL_PATTERN =
+  /\b(?:gültig bis|gueltig bis|gültigkeit|gueltigkeit|valid until)\s*[:.]?\s*(\d{1,2}[./]\d{1,2}[./]\d{2,4})/i;
 
 type PatternFeatureSpec = {
   id: string;
@@ -191,6 +195,25 @@ const PATTERN_FEATURES: PatternFeatureSpec[] = [
     category: 'structure',
     pattern: STEUERBESCHEID_MARKER_PATTERN,
     valueFromMatch: (match) => match[0]?.trim(),
+  },
+  {
+    id: 'structure.freistellung_marker',
+    category: 'structure',
+    pattern: FREISTELLUNG_MARKER_PATTERN,
+    valueFromMatch: (match) => match[0]?.trim(),
+  },
+  {
+    id: 'structure.unbedenklichkeit_marker',
+    category: 'structure',
+    pattern: UNBEDENKLICHKEIT_MARKER_PATTERN,
+    valueFromMatch: (match) => match[0]?.trim(),
+  },
+  {
+    id: 'date.valid_until',
+    category: 'date',
+    pattern: VALID_UNTIL_PATTERN,
+    labeled: true,
+    valueFromMatch: (match) => match[1],
   },
 ];
 

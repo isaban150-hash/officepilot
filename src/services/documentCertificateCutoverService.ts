@@ -1,28 +1,29 @@
 import {
-  AUTHORITY_SCORING_CUTOVER,
-  DI_AUTHORITY_SCORING_REASON_KEY,
-  getAuthorityCutoverKindThresholds,
-  getAuthorityScoringCutoverEnabled,
-  hasAuthorityCutoverInvoiceExclusion,
-  hasAuthorityCutoverContractExclusion,
-  hasAuthorityCutoverCertificateExclusion,
-  hasAuthorityCutoverKindTextGuard,
-  hasAuthorityCutoverPaymentExclusion,
-  isAuthorityScoringCutoverKind,
+  CERTIFICATE_SCORING_CUTOVER,
+  DI_CERTIFICATE_SCORING_REASON_KEY,
+  getCertificateCutoverKindThresholds,
+  getCertificateScoringCutoverEnabled,
+  hasCertificateCutoverAuthorityExclusion,
+  hasCertificateCutoverContractExclusion,
+  hasCertificateCutoverInvoiceExclusion,
+  hasCertificateCutoverKindTextGuard,
+  hasCertificateCutoverPaymentExclusion,
+  hasCertificateCutoverReceiptExclusion,
+  isCertificateScoringCutoverKind,
 } from '../config/documentIntelligenceConfig';
 import { clampAnalysisConfidence } from '../types/documentAnalysis';
 import type { ClassifiedDocumentKind } from '../types/models';
 import { RECEIPT_CANDIDATE_PROFILES } from '../types/documentCandidateProfiles';
 import type { ReceiptAnalysisPipelineResult } from './documentReceiptAnalysisPipelineService';
 
-export type AuthorityCutoverDetection = {
+export type CertificateCutoverDetection = {
   kind: ClassifiedDocumentKind;
   reasonKey: string;
 };
 
-export type AuthorityCutoverDecision = {
+export type CertificateCutoverDecision = {
   eligible: boolean;
-  detection?: AuthorityCutoverDetection;
+  detection?: CertificateCutoverDetection;
   rejectionReason?: string;
 };
 
@@ -50,7 +51,9 @@ function computeRequiredFeatureMaxScore(kind: ClassifiedDocumentKind): number {
   );
 }
 
-export function computeAuthorityCutoverConfidence(pipeline: ReceiptAnalysisPipelineResult): number {
+export function computeCertificateCutoverConfidence(
+  pipeline: ReceiptAnalysisPipelineResult,
+): number {
   const winner = pipeline.scoringResult.candidates[0];
   if (!winner || winner.score <= 0) {
     return 0;
@@ -60,10 +63,10 @@ export function computeAuthorityCutoverConfidence(pipeline: ReceiptAnalysisPipel
   return clampAnalysisConfidence(winner.score / requiredMax);
 }
 
-export function evaluateAuthorityCutoverEligibility(
+export function evaluateCertificateCutoverEligibility(
   pipeline: ReceiptAnalysisPipelineResult | null,
-): AuthorityCutoverDecision {
-  if (!getAuthorityScoringCutoverEnabled()) {
+): CertificateCutoverDecision {
+  if (!getCertificateScoringCutoverEnabled()) {
     return { eligible: false, rejectionReason: 'cutover:disabled' };
   }
 
@@ -75,33 +78,37 @@ export function evaluateAuthorityCutoverEligibility(
     return { eligible: false, rejectionReason: 'cutover:pipeline_invalid' };
   }
 
-  if (hasAuthorityCutoverPaymentExclusion(pipeline.recognizedText)) {
+  if (hasCertificateCutoverPaymentExclusion(pipeline.recognizedText)) {
     return { eligible: false, rejectionReason: 'cutover:payment_excluded' };
   }
 
-  if (hasAuthorityCutoverInvoiceExclusion(pipeline.recognizedText)) {
+  if (hasCertificateCutoverInvoiceExclusion(pipeline.recognizedText)) {
     return { eligible: false, rejectionReason: 'cutover:invoice_excluded' };
   }
 
-  if (hasAuthorityCutoverContractExclusion(pipeline.recognizedText)) {
+  if (hasCertificateCutoverContractExclusion(pipeline.recognizedText)) {
     return { eligible: false, rejectionReason: 'cutover:contract_excluded' };
   }
 
-  if (hasAuthorityCutoverCertificateExclusion(pipeline.recognizedText)) {
-    return { eligible: false, rejectionReason: 'cutover:certificate_excluded' };
+  if (hasCertificateCutoverReceiptExclusion(pipeline.recognizedText)) {
+    return { eligible: false, rejectionReason: 'cutover:receipt_excluded' };
+  }
+
+  if (hasCertificateCutoverAuthorityExclusion(pipeline.recognizedText)) {
+    return { eligible: false, rejectionReason: 'cutover:authority_excluded' };
   }
 
   const { scoringResult, ocrQuality } = pipeline;
   const winner = scoringResult.candidates[0];
   const winnerKind = scoringResult.winnerKind as ClassifiedDocumentKind;
-  const cutoverConfidence = computeAuthorityCutoverConfidence(pipeline);
-  const kindThresholds = getAuthorityCutoverKindThresholds(winnerKind);
+  const cutoverConfidence = computeCertificateCutoverConfidence(pipeline);
+  const kindThresholds = getCertificateCutoverKindThresholds(winnerKind);
 
-  if (!isAuthorityScoringCutoverKind(winnerKind) || !kindThresholds) {
+  if (!isCertificateScoringCutoverKind(winnerKind) || !kindThresholds) {
     return { eligible: false, rejectionReason: 'cutover:winner_not_allowed' };
   }
 
-  if (!hasAuthorityCutoverKindTextGuard(winnerKind, pipeline.recognizedText)) {
+  if (!hasCertificateCutoverKindTextGuard(winnerKind, pipeline.recognizedText)) {
     return { eligible: false, rejectionReason: 'cutover:missing_kind_marker' };
   }
 
@@ -109,7 +116,7 @@ export function evaluateAuthorityCutoverEligibility(
     return { eligible: false, rejectionReason: 'cutover:ocr_not_readable' };
   }
 
-  if (ocrQuality.score < AUTHORITY_SCORING_CUTOVER.minOcrScore) {
+  if (ocrQuality.score < CERTIFICATE_SCORING_CUTOVER.minOcrScore) {
     return { eligible: false, rejectionReason: 'cutover:ocr_score_too_low' };
   }
 
@@ -142,7 +149,7 @@ export function evaluateAuthorityCutoverEligibility(
   }
 
   const evidenceCount = winner.positiveEvidenceRefs.length + winner.structuralEvidenceRefs.length;
-  if (evidenceCount < AUTHORITY_SCORING_CUTOVER.minEvidenceRefs) {
+  if (evidenceCount < CERTIFICATE_SCORING_CUTOVER.minEvidenceRefs) {
     return { eligible: false, rejectionReason: 'cutover:insufficient_evidence_refs' };
   }
 
@@ -150,7 +157,7 @@ export function evaluateAuthorityCutoverEligibility(
     eligible: true,
     detection: {
       kind: winnerKind,
-      reasonKey: DI_AUTHORITY_SCORING_REASON_KEY,
+      reasonKey: DI_CERTIFICATE_SCORING_REASON_KEY,
     },
   };
 }

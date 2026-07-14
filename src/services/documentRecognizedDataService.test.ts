@@ -317,6 +317,54 @@ describe('documentRecognizedDataService', () => {
     });
   });
 
+  describe('certificate family', () => {
+    it('uses OCR-only certificate fields instead of demo values for freistellungsbescheinigung', () => {
+      const recognizedData = buildEvidenceBasedRecognizedData({
+        classifiedKind: 'freistellungsbescheinigung',
+        recognizedText: [
+          'Finanzamt München',
+          'Freistellungsbescheinigung §48b',
+          'Betreff: Freistellungsbescheinigung nach §48b EStG',
+          'Aussteller: Finanzamt München',
+          'Datum: 15.03.2026',
+          'gültig bis 31.12.2027',
+        ].join('\n'),
+      });
+
+      expect(recognizedData.Dokumentart).toBe('freistellungsbescheinigung');
+      expect(recognizedData.Betreff).toBe('Freistellungsbescheinigung nach §48b EStG');
+      expect(recognizedData.Aussteller).toBe('Finanzamt München');
+      expect(recognizedData.Gültig_bis).toBe('31.12.2027');
+      expect(recognizedData.Gültig_bis).not.toBe('31.12.2026');
+      expect(recognizedData.Datum).toBe('15.03.2026');
+    });
+
+    it('uses OCR-only fields for unbedenklichkeitsbescheinigung without default BG BAU', () => {
+      const recognizedData = buildEvidenceBasedRecognizedData({
+        classifiedKind: 'unbedenklichkeitsbescheinigung',
+        recognizedText: [
+          'BG BAU',
+          'Unbedenklichkeitsbescheinigung',
+          'Aussteller: BG BAU',
+          'gültig bis 30.06.2027',
+        ].join('\n'),
+      });
+
+      expect(recognizedData.Dokumentart).toBe('unbedenklichkeitsbescheinigung');
+      expect(recognizedData.Aussteller).toBe('BG BAU');
+      expect(recognizedData.Gültig_bis).toBe('30.06.2027');
+    });
+
+    it('returns only Dokumentart when OCR text is missing for certificate kinds', () => {
+      const recognizedData = buildEvidenceBasedRecognizedData({
+        classifiedKind: 'freistellungsbescheinigung',
+      });
+
+      expect(recognizedData).toEqual({ Dokumentart: 'freistellungsbescheinigung' });
+      expect(recognizedData.Gültig_bis).toBeUndefined();
+    });
+  });
+
   describe('authority family', () => {
     it('uses OCR-only authority fields instead of demo values for finanzamt', () => {
       const recognizedData = buildEvidenceBasedRecognizedData({

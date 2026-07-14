@@ -691,6 +691,8 @@ const deLegacy = {
   'classification.detect.diInvoiceScoring': 'Eingangsrechnung per Dokumentanalyse erkannt',
   'classification.detect.diPaymentScoring': 'Mahnung/Zahlungserinnerung per Dokumentanalyse erkannt',
   'classification.detect.diAuthorityScoring': 'Behördenbrief per Dokumentanalyse erkannt',
+  'classification.detect.diCertificateScoring':
+    'Nachweis (Freistellung/Unbedenklichkeit) per Dokumentanalyse erkannt',
   'classification.detect.kontoauszug': 'Kontoauszug erkannt',
   'classification.detect.lohnabrechnung': 'Lohnabrechnung erkannt',
   'classification.detect.lohnunterlagen': 'Lohnunterlagen erkannt',
@@ -2477,6 +2479,8 @@ const trLegacy: Partial<Record<keyof typeof de, string>> = {
   'classification.detect.diInvoiceScoring': 'Gelen fatura belge analizi ile algılandı',
   'classification.detect.diPaymentScoring': 'Ödeme hatırlatması/ihbar belge analizi ile algılandı',
   'classification.detect.diAuthorityScoring': 'Resmi kurum yazısı belge analizi ile algılandı',
+  'classification.detect.diCertificateScoring':
+    'Belge (muafiyet/borçsuzluk) belge analizi ile algılandı',
 
   'invoice.skontoFromContractTitle': 'Sözleşmedeki erken ödeme indirimi uygulansın mı?',
   'invoice.skontoFromContractNo': 'Hayır',
@@ -2634,6 +2638,8 @@ const bgLegacy: Partial<Record<keyof typeof de, string>> = {
   'classification.detect.diInvoiceScoring': 'Входяща фактура, разпозната чрез анализ на документа',
   'classification.detect.diPaymentScoring': 'Напомняне/предупреждение за плащане, разпознато чрез анализ на документа',
   'classification.detect.diAuthorityScoring': 'Писмо от орган, разпознато чрез анализ на документа',
+  'classification.detect.diCertificateScoring':
+    'Удостоверение (освобождаване/липса на претенции), разпознато чрез анализ на документа',
 };
 
 const bg: Partial<Record<keyof typeof de, string>> = {

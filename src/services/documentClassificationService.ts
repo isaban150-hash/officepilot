@@ -287,14 +287,6 @@ function buildRecognizedData(
     krankenkasse: {
       Betreff: 'Mitteilung Krankenkasse',
     },
-    freistellungsbescheinigung: {
-      Betreff: 'Freistellungsbescheinigung §48b',
-      Gültig_bis: '31.12.2026',
-    },
-    unbedenklichkeitsbescheinigung: {
-      Betreff: 'Unbedenklichkeitsbescheinigung',
-      Aussteller: input.senderHint ?? 'BG BAU',
-    },
     kontoauszug: {
       Zeitraum: `${new Date().getFullYear()}`,
       Konto: 'Geschäftskonto',

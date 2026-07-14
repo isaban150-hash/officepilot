@@ -107,6 +107,86 @@ export const AUTHORITY_SCORING_CUTOVER = {
 
 export const DI_AUTHORITY_SCORING_REASON_KEY = 'classification.detect.diAuthorityScoring';
 
+export type CertificateCutoverKind = 'freistellungsbescheinigung' | 'unbedenklichkeitsbescheinigung';
+
+export type CertificateCutoverKindThresholds = {
+  minConfidence: number;
+  minMargin: number;
+};
+
+export const CERTIFICATE_SCORING_CUTOVER = {
+  enabled: true,
+  allowedKinds: ['freistellungsbescheinigung', 'unbedenklichkeitsbescheinigung'],
+  minOcrScore: 0.65,
+  minEvidenceRefs: 2,
+  kindThresholds: {
+    freistellungsbescheinigung: { minConfidence: 0.85, minMargin: 0.18 },
+    unbedenklichkeitsbescheinigung: { minConfidence: 0.85, minMargin: 0.18 },
+  },
+} as const satisfies {
+  enabled: boolean;
+  allowedKinds: readonly CertificateCutoverKind[];
+  minOcrScore: number;
+  minEvidenceRefs: number;
+  kindThresholds: Record<CertificateCutoverKind, CertificateCutoverKindThresholds>;
+};
+
+export const DI_CERTIFICATE_SCORING_REASON_KEY = 'classification.detect.diCertificateScoring';
+
+const CERTIFICATE_DOCUMENT_MARKER =
+  /freistellungsbescheinigung|§48b|§48\s*b|unbedenklichkeitsbescheinigung/i;
+const AUTHORITY_DOMINANT_FOR_CERTIFICATE_EXCLUSION =
+  /beitragsbescheid|steuerbescheid|festsetzung|umsatzsteuervoranmeldung|lohnsteuer-anmeldung/i;
+const CERTIFICATE_CONTRACT_EXCLUSION_GUARD =
+  /\bwerkvertrag\b|\bsubunternehmer(?:vertrag)?\b|\bleistungsverzeichnis\b|\bbau-?subunternehmer\b|\bunternehmervertrag\b/i;
+const CERTIFICATE_RECEIPT_EXCLUSION_GUARD =
+  /\btankbeleg\b|\btankstelle\b|\bkassenbeleg\b|\bkassenbon\b|\bec-beleg\b|\bec beleg\b/i;
+
+const CERTIFICATE_KIND_TEXT_GUARDS: Record<CertificateCutoverKind, RegExp> = {
+  freistellungsbescheinigung: /freistellungsbescheinigung|§48b|§48\s*b/i,
+  unbedenklichkeitsbescheinigung: /unbedenklichkeitsbescheinigung|\bunbedenklichkeit\b/i,
+};
+
+export function hasAuthorityCutoverCertificateExclusion(recognizedText: string): boolean {
+  if (!CERTIFICATE_DOCUMENT_MARKER.test(recognizedText)) {
+    return false;
+  }
+  return !AUTHORITY_DOMINANT_FOR_CERTIFICATE_EXCLUSION.test(recognizedText);
+}
+
+export function hasCertificateCutoverKindTextGuard(
+  kind: ClassifiedDocumentKind,
+  recognizedText: string,
+): boolean {
+  if (!isCertificateScoringCutoverKind(kind)) {
+    return false;
+  }
+  return CERTIFICATE_KIND_TEXT_GUARDS[kind].test(recognizedText);
+}
+
+export function hasCertificateCutoverPaymentExclusion(recognizedText: string): boolean {
+  return MAHNUNG_EXCLUSION_GUARD.test(recognizedText);
+}
+
+export function hasCertificateCutoverContractExclusion(recognizedText: string): boolean {
+  return CERTIFICATE_CONTRACT_EXCLUSION_GUARD.test(recognizedText);
+}
+
+export function hasCertificateCutoverReceiptExclusion(recognizedText: string): boolean {
+  if (CERTIFICATE_DOCUMENT_MARKER.test(recognizedText)) {
+    return false;
+  }
+  return CERTIFICATE_RECEIPT_EXCLUSION_GUARD.test(recognizedText);
+}
+
+export function hasCertificateCutoverAuthorityExclusion(recognizedText: string): boolean {
+  return AUTHORITY_DOMINANT_FOR_CERTIFICATE_EXCLUSION.test(recognizedText);
+}
+
+export function hasCertificateCutoverInvoiceExclusion(recognizedText: string): boolean {
+  return AUTHORITY_INVOICE_EXCLUSION_GUARD.test(recognizedText);
+}
+
 const INVOICE_KIND_TEXT_GUARD = /rechnungsnummer|eingangsrechnung|invoice|rechnung/i;
 const MAHNUNG_EXCLUSION_GUARD = /mahnung|zahlungserinnerung|zahlungsaufforderung|inkasso/i;
 const AUTHORITY_INVOICE_EXCLUSION_GUARD =
@@ -266,6 +346,34 @@ export function getAuthorityCutoverKindThresholds(
   return AUTHORITY_SCORING_CUTOVER.kindThresholds[kind];
 }
 
+let certificateCutoverEnabledOverride: boolean | null = null;
+
+export function getCertificateScoringCutoverEnabled(): boolean {
+  if (certificateCutoverEnabledOverride !== null) {
+    return certificateCutoverEnabledOverride;
+  }
+  return CERTIFICATE_SCORING_CUTOVER.enabled;
+}
+
+export function setCertificateScoringCutoverEnabledForTests(value: boolean | null): void {
+  certificateCutoverEnabledOverride = value;
+}
+
+export function isCertificateScoringCutoverKind(
+  kind: ClassifiedDocumentKind,
+): kind is CertificateCutoverKind {
+  return CERTIFICATE_SCORING_CUTOVER.allowedKinds.includes(kind as CertificateCutoverKind);
+}
+
+export function getCertificateCutoverKindThresholds(
+  kind: ClassifiedDocumentKind,
+): CertificateCutoverKindThresholds | null {
+  if (!isCertificateScoringCutoverKind(kind)) {
+    return null;
+  }
+  return CERTIFICATE_SCORING_CUTOVER.kindThresholds[kind];
+}
+
 export function isReceiptScoringCutoverKind(
   kind: ClassifiedDocumentKind,
 ): kind is ReceiptCutoverKind {
@@ -315,7 +423,8 @@ export type OcrOnlyRecognizedDataKind =
   | ReceiptCutoverKind
   | 'eingangsrechnung'
   | PaymentCutoverKind
-  | AuthorityCutoverKind;
+  | AuthorityCutoverKind
+  | CertificateCutoverKind;
 
 export const OCR_ONLY_RECOGNIZED_DATA = {
   enabled: true,
@@ -331,6 +440,8 @@ export const OCR_ONLY_RECOGNIZED_DATA = {
     'finanzamt',
     'bg_bau',
     'steuerbescheid',
+    'freistellungsbescheinigung',
+    'unbedenklichkeitsbescheinigung',
   ],
 } as const satisfies {
   enabled: boolean;

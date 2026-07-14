@@ -1,6 +1,6 @@
 import type { ClassifiedDocumentKind } from '../types/models';
 import type { DocumentClassificationInput } from '../types/models';
-import type { AuthorityCutoverKind, OcrOnlyRecognizedDataKind, PaymentCutoverKind, ReceiptCutoverKind } from '../config/documentIntelligenceConfig';
+import type { AuthorityCutoverKind, CertificateCutoverKind, OcrOnlyRecognizedDataKind, PaymentCutoverKind, ReceiptCutoverKind } from '../config/documentIntelligenceConfig';
 import {
   getOcrOnlyRecognizedDataEnabled,
   isOcrOnlyRecognizedDataKind,
@@ -22,7 +22,7 @@ export type EvidenceBasedRecognizedDataInput = {
   pageTexts?: DocumentClassificationInput['pageTexts'];
 };
 
-type RecognizedDataFamily = 'receipt' | 'invoice' | 'payment' | 'authority';
+type RecognizedDataFamily = 'receipt' | 'invoice' | 'payment' | 'authority' | 'certificate';
 
 type ReceiptRecognizedDataConfig = {
   merchantField: string;
@@ -48,7 +48,12 @@ const OCR_ONLY_KIND_FAMILY: Record<OcrOnlyRecognizedDataKind, RecognizedDataFami
   finanzamt: 'authority',
   bg_bau: 'authority',
   steuerbescheid: 'authority',
+  freistellungsbescheinigung: 'certificate',
+  unbedenklichkeitsbescheinigung: 'certificate',
 };
+
+const CERTIFICATE_HEADER_SKIP_PATTERN =
+  /^(?:Betreff|Aussteller|Datum|gültig bis|gueltig bis|Gültigkeit|Gueltigkeit|Freistellungsbescheinigung|Unbedenklichkeitsbescheinigung|§48b)\s*[:]/i;
 
 const AUTHORITY_HEADER_SKIP_PATTERN =
   /^(?:Betreff|Aktenzeichen|Az\.|Datum|Frist|Beitragsbescheid|Festsetzung|Steuernummer|USt|MwSt)\s*[:]/i;
@@ -544,6 +549,75 @@ function applyAuthorityOcrLabeledAmount(
   }
 }
 
+function buildCertificateRecognizedData(
+  kind: CertificateCutoverKind,
+  text: string,
+  pageTexts?: DocumentClassificationInput['pageTexts'],
+): Record<string, string> {
+  const result: Record<string, string> = { Dokumentart: kind };
+  const fieldsWithConfidence = extractFieldsWithConfidence(text);
+  const plain = toConfidentPlainFields(fieldsWithConfidence);
+
+  if (plain.Betreff?.trim()) {
+    result.Betreff = plain.Betreff;
+  } else {
+    const subjectLine = text
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .find((line) => /^betreff\s*[:]/i.test(line));
+    if (subjectLine) {
+      result.Betreff = subjectLine.replace(/^betreff\s*[:]\s*/i, '').trim();
+    }
+  }
+
+  applyCertificateOcrValidUntil(result, text, pageTexts);
+
+  if (plain.Datum?.trim()) {
+    result.Datum = plain.Datum;
+  }
+
+  const issuer = plain.Absender ?? plain.Lieferant;
+  if (issuer?.trim()) {
+    result.Aussteller = issuer;
+  } else {
+    const issuerFromHeader = inferCertificateIssuerFromHeader(text);
+    if (issuerFromHeader) {
+      result.Aussteller = issuerFromHeader;
+    }
+  }
+
+  return result;
+}
+
+function inferCertificateIssuerFromHeader(text: string): string | undefined {
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  for (const line of lines.slice(0, 4)) {
+    if (CERTIFICATE_HEADER_SKIP_PATTERN.test(line)) continue;
+    if (isLikelyDateLine(line)) continue;
+    if (/^\d{5}\b/.test(line)) continue;
+    if (/^§48/i.test(line)) continue;
+    if (line.length >= 3) return line;
+  }
+
+  return undefined;
+}
+
+function applyCertificateOcrValidUntil(
+  result: Record<string, string>,
+  text: string,
+  pageTexts?: DocumentClassificationInput['pageTexts'],
+): void {
+  const features = extractDocumentFeaturesFromText(text, pageTexts);
+  const validUntilFeature = features.features.find((feature) => feature.id === 'date.valid_until');
+  if (typeof validUntilFeature?.value === 'string' && validUntilFeature.value.trim()) {
+    result.Gültig_bis = validUntilFeature.value.trim();
+  }
+}
+
 function buildAuthorityRecognizedData(
   kind: AuthorityCutoverKind,
   text: string,
@@ -600,6 +674,14 @@ export function buildEvidenceBasedRecognizedData(
 
   if (family === 'payment') {
     return buildPaymentRecognizedData(input.classifiedKind as PaymentCutoverKind, text, input.pageTexts);
+  }
+
+  if (family === 'certificate') {
+    return buildCertificateRecognizedData(
+      input.classifiedKind as CertificateCutoverKind,
+      text,
+      input.pageTexts,
+    );
   }
 
   return buildAuthorityRecognizedData(input.classifiedKind as AuthorityCutoverKind, text, input.pageTexts);
