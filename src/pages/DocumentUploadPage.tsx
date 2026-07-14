@@ -21,6 +21,7 @@ export function DocumentUploadPage() {
   const { translate, showToast } = useApp();
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
+  const uploadGenerationRef = useRef(0);
   const [dragActive, setDragActive] = useState(false);
   const [error, setError] = useState<DocumentUploadErrorCode | null>(null);
   const [loading, setLoading] = useState(false);
@@ -33,12 +34,15 @@ export function DocumentUploadPage() {
 
   async function handleFile(file: File | null | undefined) {
     if (!file) return;
+    const generation = uploadGenerationRef.current + 1;
+    uploadGenerationRef.current = generation;
     setError(null);
     setDuplicateInfo(null);
     setInboxItem(null);
     setLoading(true);
 
     const loaded = await loadCachedDocumentFileFromUpload(file);
+    if (uploadGenerationRef.current !== generation) return;
     if (!loaded.success) {
       setLoading(false);
       setError(loaded.error);
@@ -46,6 +50,7 @@ export function DocumentUploadPage() {
     }
 
     const result = await intakeCachedDocumentFile(loaded.payload, { importSource: 'upload' });
+    if (uploadGenerationRef.current !== generation) return;
     setLoading(false);
 
     if (!result.success) {

@@ -491,12 +491,7 @@ export function classifyDocument(input: DocumentClassificationInput): DocumentCl
 }
 
 function buildRecognizedTextFromItem(item: InboxItem): string {
-  const extracted = getInboxExtractedDocumentText(item);
-  const visible = Object.entries(item.recognizedData)
-    .filter(([key]) => !key.startsWith('_'))
-    .map(([, value]) => value)
-    .join(' ');
-  return [extracted, visible].filter(Boolean).join('\n');
+  return getInboxExtractedDocumentText(item);
 }
 
 export function getClassifiedKindFromItem(item: InboxItem): ClassifiedDocumentKind {

@@ -107,12 +107,15 @@ export async function intakeCachedDocumentFile(
     } catch {
       recognizedText = undefined;
     }
+  } else if (options.pageTexts?.length) {
+    pageTextsJson = JSON.stringify(options.pageTexts);
   }
 
   const classified = createMockInboxItemFromUpload({
     ...options,
     sourceFileName: options.sourceFileName ?? payload.fileName,
     recognizedText,
+    pageTexts: options.pageTexts,
   });
 
   const inboxItem = stageInboxItem({

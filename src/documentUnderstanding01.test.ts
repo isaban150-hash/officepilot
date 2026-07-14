@@ -177,11 +177,12 @@ describe('upload PDF extraction pipeline', () => {
     expect(result.extractionMethod).toBe('pdf_ocr');
   });
 
-  it('filtert PDF-Literale von Operatoren', () => {
+  it('filtert PDF-Literale von Operatoren', async () => {
+    setPdfTextExtractorForTests(() => 'Werkvertrag\nAuftraggeber: Müller Bau GmbH');
     const pdfLike = 'BT (Werkvertrag) Tj (Auftraggeber: Müller Bau GmbH) Tj (/Type) Tj ET';
-    const text = extractTextFromPdfBytes(new TextEncoder().encode(pdfLike));
-    expect(text).toContain('Werkvertrag');
-    expect(text).not.toContain('/Type');
+    const result = await extractTextFromPdfBytes(new TextEncoder().encode(pdfLike));
+    expect(result.text).toContain('Werkvertrag');
+    expect(result.text).not.toContain('/Type');
   });
 });
 

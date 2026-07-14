@@ -49,6 +49,7 @@ export function ScanPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const confirmInFlightRef = useRef(false);
+  const processGenerationRef = useRef(0);
   const [selectedKind, setSelectedKind] = useState<UploadDocumentKind | null>(null);
   const [showKindPicker, setShowKindPicker] = useState(false);
   const [pendingScan, setPendingScan] = useState<PendingScan | null>(null);
@@ -88,12 +89,15 @@ export function ScanPage() {
       return;
     }
 
+    const generation = processGenerationRef.current + 1;
+    processGenerationRef.current = generation;
     setUploadError(null);
     setConfirmError(null);
     setPendingScan(null);
     setIsProcessing(true);
     try {
       const loaded = await loadCachedDocumentFileFromUpload(file);
+      if (processGenerationRef.current !== generation) return;
       if (!loaded.success) {
         if (loaded.error === 'unsupported_photo_format') {
           setUploadError('heic_unsupported');
@@ -107,6 +111,7 @@ export function ScanPage() {
 
       const extraction = await extractDocumentTextFromCache(loaded.payload);
 
+      if (processGenerationRef.current !== generation) return;
       if (isBlockingExtractionError(extraction.errorCode)) {
         setUploadError(extraction.errorCode ?? 'ocr_failed');
         return;
@@ -143,6 +148,7 @@ export function ScanPage() {
         sourceFileName: pendingScan.cachedFile.fileName,
         kind: selectedKind ?? undefined,
         recognizedText,
+        pageTexts: pendingScan.extraction.pageTexts,
         importSource: 'scan',
       });
 

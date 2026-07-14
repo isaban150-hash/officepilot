@@ -69,11 +69,12 @@ describe('uploadTextExtractionService', () => {
     setPdfTextExtractorForTests(null);
   });
 
-  it('liest Text aus PDF-Literalen', () => {
+  it('liest Text aus PDF-Literalen', async () => {
     const pdfLike = 'BT (Bau-Subunternehmervertrag) Tj (Werkvertrag) Tj ET';
-    const text = extractTextFromPdfBytes(new TextEncoder().encode(pdfLike));
-    expect(text).toContain('Bau-Subunternehmervertrag');
-    expect(text).toContain('Werkvertrag');
+    setPdfTextExtractorForTests(() => 'Bau-Subunternehmervertrag\nWerkvertrag');
+    const result = await extractTextFromPdfBytes(new TextEncoder().encode(pdfLike));
+    expect(result.text).toContain('Bau-Subunternehmervertrag');
+    expect(result.text).toContain('Werkvertrag');
   });
 });
 

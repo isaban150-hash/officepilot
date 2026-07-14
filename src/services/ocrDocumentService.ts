@@ -205,7 +205,8 @@ async function extractFromPdfBytes(
   stableFile: File,
 ): Promise<DocumentTextExtractionResult> {
   const pageCount = await resolvePdfPageCount(bytes);
-  const directRaw = extractTextFromPdfBytes(bytes);
+  const directExtraction = await extractTextFromPdfBytes(bytes);
+  const directRaw = directExtraction.text;
   const directQuality = assessTextQuality(directRaw);
 
   let recognizedText = directQuality.sanitizedText;
@@ -213,7 +214,7 @@ async function extractFromPdfBytes(
   let ocrScore: number | undefined;
   let quality = directQuality;
   let pagesProcessed: number | undefined;
-  let pageTexts: Array<{ pageNumber: number; text: string }> | undefined;
+  let pageTexts: Array<{ pageNumber: number; text: string }> | undefined = directExtraction.pageTexts;
   let ocrAttempted = false;
   let pdfErrorCode: DocumentTextErrorCode | undefined;
 

@@ -178,9 +178,10 @@ describe('uploadTextExtractionService integration', () => {
     setImageOcrExtractorForTests(null);
   });
 
-  it('bestehende PDF-Erkennung bleibt grün', () => {
+  it('bestehende PDF-Erkennung bleibt grün', async () => {
     const pdfLike = 'BT (Bau-Subunternehmervertrag) Tj (Werkvertrag) Tj ET';
-    const text = extractTextFromPdfBytes(new TextEncoder().encode(pdfLike));
-    expect(text).toContain('Werkvertrag');
+    setPdfTextExtractorForTests(() => 'Bau-Subunternehmervertrag\nWerkvertrag');
+    const result = await extractTextFromPdfBytes(new TextEncoder().encode(pdfLike));
+    expect(result.text).toContain('Werkvertrag');
   });
 });

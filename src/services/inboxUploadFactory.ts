@@ -36,6 +36,7 @@ export interface CreateInboxFromUploadOptions {
   sourceFileName?: string;
   kind?: UploadDocumentKind;
   recognizedText?: string;
+  pageTexts?: DocumentClassificationInput['pageTexts'];
   titleHint?: string;
   senderHint?: string;
   mailImportId?: string;
@@ -114,6 +115,7 @@ function createInboxItemFromUploadInternal(
     sourceFileName,
     kindHint: kind,
     recognizedText,
+    pageTexts: options.pageTexts,
     titleHint: options.titleHint,
     senderHint: options.senderHint,
   };

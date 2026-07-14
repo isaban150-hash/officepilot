@@ -169,3 +169,58 @@ export function releaseCanvas(canvas: HTMLCanvasElement): void {
 export function resolveOcrPageLimit(pageCount: number, maxPages = PDF_OCR_MAX_PAGES): number {
   return Math.max(1, Math.min(pageCount, maxPages));
 }
+
+export interface PdfPageTextEntry {
+  pageNumber: number;
+  text: string;
+}
+
+export interface PdfPageTextExtraction {
+  text: string;
+  pageTexts: PdfPageTextEntry[];
+  pageCount: number;
+}
+
+function textItemsToPageText(items: Array<{ str?: string }>): string {
+  const parts: string[] = [];
+  for (const item of items) {
+    if (typeof item.str === 'string' && item.str.trim()) {
+      parts.push(item.str);
+    }
+  }
+  return parts.join(' ').replace(/\s+/g, ' ').trim();
+}
+
+export async function extractTextFromPdfPages(
+  bytes: Uint8Array,
+  maxPages = PDF_OCR_MAX_PAGES,
+): Promise<PdfPageTextExtraction> {
+  const { pdf, pageCount } = await loadPdfDocument(bytes);
+  const pageLimit = resolveOcrPageLimit(pageCount, maxPages);
+  const pageTexts: PdfPageTextEntry[] = [];
+  const mergedParts: string[] = [];
+
+  try {
+    for (let pageNumber = 1; pageNumber <= pageLimit; pageNumber += 1) {
+      const page = await pdf.getPage(pageNumber);
+      try {
+        const textContent = await page.getTextContent();
+        const pageText = textItemsToPageText(textContent.items as Array<{ str?: string }>);
+        pageTexts.push({ pageNumber, text: pageText });
+        if (pageText) {
+          mergedParts.push(pageText);
+        }
+      } finally {
+        await page.cleanup();
+      }
+    }
+  } finally {
+    await pdf.destroy();
+  }
+
+  return {
+    text: mergedParts.join('\n').trim(),
+    pageTexts,
+    pageCount,
+  };
+}

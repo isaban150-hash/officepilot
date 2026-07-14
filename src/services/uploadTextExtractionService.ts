@@ -1,11 +1,17 @@
+import { extractTextFromPdfPages } from './pdfDocumentService';
 import { isLikelyPdfGarbageChunk } from './textQualityService';
 
-type PdfTextExtractor = (bytes: Uint8Array) => string;
+type PdfTextExtractor = (bytes: Uint8Array) => string | Promise<string>;
 
 let pdfTextExtractorOverride: PdfTextExtractor | null = null;
 
 export function setPdfTextExtractorForTests(extractor: PdfTextExtractor | null): void {
   pdfTextExtractorOverride = extractor;
+}
+
+export interface PdfDirectTextExtraction {
+  text: string;
+  pageTexts?: Array<{ pageNumber: number; text: string }>;
 }
 
 function decodePdfLiteralValue(value: string): string {
@@ -56,11 +62,8 @@ function collectAngleBracketText(decoded: string): string[] {
   return chunks;
 }
 
-export function extractTextFromPdfBytes(bytes: Uint8Array): string {
-  if (pdfTextExtractorOverride) {
-    return pdfTextExtractorOverride(bytes);
-  }
-
+/** Whole-file binary scan — leaks non-page literals; kept for regression tests only. */
+export function harvestPdfLiteralStringsFromBinary(bytes: Uint8Array): string {
   const decoded = new TextDecoder('latin1').decode(bytes);
   const chunks = [...collectLiteralMatches(decoded), ...collectAngleBracketText(decoded)];
 
@@ -74,6 +77,23 @@ export function extractTextFromPdfBytes(bytes: Uint8Array): string {
   }
 
   return unique.join('\n').trim();
+}
+
+export async function extractTextFromPdfBytes(bytes: Uint8Array): Promise<PdfDirectTextExtraction> {
+  if (pdfTextExtractorOverride) {
+    const text = await Promise.resolve(pdfTextExtractorOverride(bytes));
+    return { text: text.trim() };
+  }
+
+  try {
+    const result = await extractTextFromPdfPages(bytes);
+    return {
+      text: result.text,
+      pageTexts: result.pageTexts,
+    };
+  } catch {
+    return { text: '' };
+  }
 }
 
 export async function extractTextFromUploadFile(file: File): Promise<string> {
