@@ -113,7 +113,15 @@ function estimateProfileMaxScore(profile: ReceiptCandidateProfile): number {
   if (rules.length === 0) {
     return 0.01;
   }
-  return rules.reduce((sum, rule) => sum + rule.weight * 1.5 * 1, 0);
+
+  const requiredMax = rules
+    .filter((rule) => rule.required)
+    .reduce((sum, rule) => sum + rule.weight * 1.5, 0);
+  const optionalMax = rules
+    .filter((rule) => !rule.required)
+    .reduce((sum, rule) => sum + rule.weight * 0.75, 0);
+
+  return Math.max(requiredMax + optionalMax, 0.01);
 }
 
 function scoreProfile(
@@ -206,7 +214,7 @@ function detectFooterDominatesBody(
   const bodyReceiptScore = sumFeatureContributions(
     features,
     (feature) =>
-      feature.zone === 'body' &&
+      (feature.zone === 'body' || feature.zone === 'header') &&
       (feature.id === 'structure.receipt_layout' ||
         feature.id === 'amount.monetary_value' ||
         feature.id === 'payment.card_payment' ||

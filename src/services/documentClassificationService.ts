@@ -17,6 +17,7 @@ import {
 import { resolvePaperFiling, suggestPaperFolder } from './paperFolderService';
 import { getInboxExtractedDocumentText } from './inboxDocumentText';
 import { runLegacyDocumentAnalysisShadow } from './documentAnalysisShadowService';
+import { resolveClassificationDetection } from './documentClassificationHybridService';
 import { extractFieldsFromText, mergeExtractedFields } from './documentFieldExtractionService';
 import type {
   ClassifiedDocumentKind,
@@ -428,7 +429,8 @@ export function suggestRelatedVorgang(
 }
 
 export function classifyDocument(input: DocumentClassificationInput): DocumentClassificationResult {
-  const detection = detectClassifiedKindWithReason(input);
+  const legacyDetection = detectClassifiedKindWithReason(input);
+  const { detection } = resolveClassificationDetection(input, legacyDetection);
   const classifiedKind = detection.kind;
   const isAdvertisement =
     input.kindHint === 'werbung' ||

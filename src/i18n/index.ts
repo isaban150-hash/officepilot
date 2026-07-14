@@ -686,6 +686,7 @@ const deLegacy = {
   'classification.detect.ecBeleg': 'EC-Beleg erkannt',
   'classification.detect.kreditkartenbeleg': 'Kreditkartenbeleg erkannt',
   'classification.detect.tankbeleg': 'Tankbeleg erkannt',
+  'classification.detect.diReceiptScoring': 'Tankbeleg per Dokumentanalyse erkannt',
   'classification.detect.kontoauszug': 'Kontoauszug erkannt',
   'classification.detect.lohnabrechnung': 'Lohnabrechnung erkannt',
   'classification.detect.lohnunterlagen': 'Lohnunterlagen erkannt',

@@ -23,11 +23,17 @@ export const RECEIPT_CANDIDATE_PROFILES: ReceiptCandidateProfile[] = [
     kind: 'tankbeleg',
     family: 'eingangsrechnung',
     structural: [
-      { featureId: 'structure.receipt_layout', weight: 3, zones: ['body', 'header'] },
+      { featureId: 'structure.receipt_layout', weight: 3, zones: ['body', 'header'], required: true },
     ],
     positive: [
-      { featureId: 'structure.fuel_marker', weight: 4, zones: ['body', 'header'], minStrength: 'medium' },
-      { featureId: 'amount.monetary_value', weight: 2.5, zones: ['body'] },
+      {
+        featureId: 'structure.fuel_marker',
+        weight: 4,
+        zones: ['body', 'header'],
+        minStrength: 'medium',
+        required: true,
+      },
+      { featureId: 'amount.monetary_value', weight: 2.5, zones: ['body', 'header'], required: true },
       { featureId: 'payment.card_payment', weight: 1.5, zones: ['body', 'header'] },
       { featureId: 'date.document_date', weight: 0.8, zones: ['body', 'header'] },
     ],

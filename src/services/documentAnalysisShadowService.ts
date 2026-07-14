@@ -1,22 +1,10 @@
 import { buildDocumentAnalysisFromLegacy } from './documentAnalysisLegacyAdapter';
-import {
-  extractDocumentFeatures,
-  mergeFeatureEvidenceIndex,
-  validateFeatureExtractionResult,
-} from './documentFeatureExtractionService';
-import { scoreReceiptCandidates } from './documentReceiptCandidateScoringService';
-import {
-  buildCanonicalDocumentText,
-  buildEvidenceIndex,
-  validateZoneEvidenceIndex,
-  zoneDocumentText,
-} from './documentZoningService';
+import { validateDocumentAnalysisResult } from '../types/documentAnalysis';
 import type { DocumentAnalysisResult } from '../types/documentAnalysis';
-import { clampAnalysisConfidence, validateDocumentAnalysisResult } from '../types/documentAnalysis';
 import type { DocumentClassificationInput, DocumentClassificationResult } from '../types/models';
 import type { DocumentFeatureExtractionResult } from '../types/documentFeatures';
 import type { DocumentZonedText } from '../types/documentZoning';
-import { assessTextQuality } from './textQualityService';
+import { runReceiptAnalysisPipeline } from './documentReceiptAnalysisPipelineService';
 import type { ReceiptScoringResult } from './documentReceiptCandidateScoringService';
 
 let shadowInvocationCount = 0;
@@ -86,43 +74,19 @@ export function runLegacyDocumentAnalysisShadow(
   shadowInvocationCount += 1;
 
   try {
-    const recognizedText = buildCanonicalDocumentText(input.recognizedText, input.pageTexts);
-    if (!recognizedText) {
+    const pipeline = runReceiptAnalysisPipeline(input);
+    if (!pipeline?.valid) {
       return;
     }
 
-    const zonedText = zoneDocumentText(recognizedText, input.pageTexts);
-    const zoneEvidenceIndex = buildEvidenceIndex(zonedText);
-    if (!validateZoneEvidenceIndex(zoneEvidenceIndex)) {
-      return;
-    }
-
-    const featureResult = extractDocumentFeatures(zonedText);
-    if (!validateFeatureExtractionResult(featureResult)) {
-      return;
-    }
-
-    const mergedEvidenceIndex = mergeFeatureEvidenceIndex(zoneEvidenceIndex, featureResult);
-    if (!validateZoneEvidenceIndex(mergedEvidenceIndex)) {
-      return;
-    }
-
-    const scoringResult = scoreReceiptCandidates(featureResult.features);
-
-    const quality = assessTextQuality(recognizedText);
-    const ocrQuality = {
-      score: clampAnalysisConfidence(quality.score / 100),
-      readable: quality.readable,
-      partialRecognition: !quality.readable && quality.wordCount > 0,
-    };
     const analysis = buildShadowScoredDocumentAnalysis({
       classification,
-      recognizedText,
-      zonedText,
-      featureResult,
-      mergedEvidenceIndex,
-      scoringResult,
-      ocrQuality,
+      recognizedText: pipeline.recognizedText,
+      zonedText: pipeline.zonedText,
+      featureResult: pipeline.featureResult,
+      mergedEvidenceIndex: pipeline.mergedEvidenceIndex,
+      scoringResult: pipeline.scoringResult,
+      ocrQuality: pipeline.ocrQuality,
     });
     const validation = validateDocumentAnalysisResult(analysis);
     if (!validation.valid) {
