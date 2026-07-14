@@ -127,6 +127,59 @@ describe('documentRecognizedDataService', () => {
       expect(expenseInput.grossAmount).toBe(52.18);
       expect(expenseInput.category).toBe('fahrzeug');
     });
+
+    it('uses OCR-only fields for kreditkartenbeleg without demo values', () => {
+      const recognizedData = buildEvidenceBasedRecognizedData({
+        classifiedKind: 'kreditkartenbeleg',
+        recognizedText: [
+          'REWE Markt München',
+          'Kreditkartenbeleg',
+          'Visa contactless',
+          'Summe 42,80 EUR',
+          'Datum: 14.07.2026',
+          'Beleg-Nr. KC-8821',
+        ].join('\n'),
+      });
+
+      expect(recognizedData.Dokumentart).toBe('kreditkartenbeleg');
+      expect(recognizedData.Betrag).toContain('42,80');
+      expect(recognizedData.Betrag).not.toBe('85,40 €');
+      expect(recognizedData.Lieferant).toBe('REWE Markt München');
+      expect(recognizedData.Datum).toBe('14.07.2026');
+      expect(recognizedData.Belegnummer).toBe('KC-8821');
+    });
+
+    it('uses OCR-only fields for quittung without demo values', () => {
+      const recognizedData = buildEvidenceBasedRecognizedData({
+        classifiedKind: 'quittung',
+        recognizedText: [
+          'Handwerker Müller',
+          'Quittung',
+          'Bar erhalten',
+          'Betrag: 150,00 EUR',
+          'Datum: 14.07.2026',
+        ].join('\n'),
+      });
+
+      expect(recognizedData.Dokumentart).toBe('quittung');
+      expect(recognizedData.Betrag).toContain('150,00');
+      expect(recognizedData.Lieferant).toBe('Handwerker Müller');
+      expect(recognizedData.Datum).toBe('14.07.2026');
+    });
+
+    it('returns only Dokumentart when OCR text is missing for receipt kinds', () => {
+      const recognizedData = buildEvidenceBasedRecognizedData({
+        classifiedKind: 'quittung',
+      });
+
+      expect(recognizedData).toEqual({ Dokumentart: 'quittung' });
+      expect(recognizedData.Betrag).toBeUndefined();
+    });
+
+    it('enables evidence-based recognizedData for all receipt cutover kinds', () => {
+      expect(shouldUseEvidenceBasedRecognizedData('kreditkartenbeleg')).toBe(true);
+      expect(shouldUseEvidenceBasedRecognizedData('quittung')).toBe(true);
+    });
   });
 
   describe('eingangsrechnung', () => {

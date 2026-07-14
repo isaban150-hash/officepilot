@@ -32,12 +32,16 @@ const RECEIPT_RECOGNIZED_DATA_CONFIG: Record<ReceiptCutoverKind, ReceiptRecogniz
   tankbeleg: { merchantField: 'Tankstelle' },
   ec_beleg: { merchantField: 'Lieferant' },
   kassenbeleg: { merchantField: 'Lieferant' },
+  kreditkartenbeleg: { merchantField: 'Lieferant' },
+  quittung: { merchantField: 'Lieferant' },
 };
 
 const OCR_ONLY_KIND_FAMILY: Record<OcrOnlyRecognizedDataKind, RecognizedDataFamily> = {
   tankbeleg: 'receipt',
   ec_beleg: 'receipt',
   kassenbeleg: 'receipt',
+  kreditkartenbeleg: 'receipt',
+  quittung: 'receipt',
   eingangsrechnung: 'invoice',
   mahnung: 'payment',
   zahlungserinnerung: 'payment',

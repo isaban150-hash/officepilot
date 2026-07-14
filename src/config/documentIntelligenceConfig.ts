@@ -1,6 +1,6 @@
 import type { ClassifiedDocumentKind } from '../types/models';
 
-export type ReceiptCutoverKind = 'tankbeleg' | 'ec_beleg' | 'kassenbeleg';
+export type ReceiptCutoverKind = 'tankbeleg' | 'ec_beleg' | 'kassenbeleg' | 'kreditkartenbeleg' | 'quittung';
 
 export type ReceiptCutoverKindThresholds = {
   minConfidence: number;
@@ -9,13 +9,15 @@ export type ReceiptCutoverKindThresholds = {
 
 export const RECEIPT_SCORING_CUTOVER = {
   enabled: true,
-  allowedKinds: ['tankbeleg', 'ec_beleg', 'kassenbeleg'],
+  allowedKinds: ['tankbeleg', 'ec_beleg', 'kassenbeleg', 'kreditkartenbeleg', 'quittung'],
   minOcrScore: 0.60,
   minEvidenceRefs: 2,
   kindThresholds: {
     tankbeleg: { minConfidence: 0.85, minMargin: 0.25 },
     ec_beleg: { minConfidence: 0.85, minMargin: 0.12 },
     kassenbeleg: { minConfidence: 0.80, minMargin: 0.12 },
+    kreditkartenbeleg: { minConfidence: 0.85, minMargin: 0.12 },
+    quittung: { minConfidence: 0.80, minMargin: 0.12 },
   },
 } as const satisfies {
   enabled: boolean;
@@ -281,9 +283,23 @@ export function getReceiptCutoverKindThresholds(
 
 const RECEIPT_KIND_TEXT_GUARDS: Record<ReceiptCutoverKind, RegExp> = {
   tankbeleg: /tankbeleg|tankstelle|kraftstoff|diesel|benzin|super|e10|adblue/i,
-  ec_beleg: /ec-beleg|ec beleg|kartenzahlung|girocard|ec-cash|ec\s+zahlung/i,
+  ec_beleg: /ec-beleg|ec beleg|girocard|ec-cash|ec\s+zahlung/i,
   kassenbeleg: /kassenbeleg|kassenbon/i,
+  kreditkartenbeleg: /kreditkartenbeleg|visa|mastercard|contactless|\bkreditkarte\b/i,
+  quittung: /quittung|bar erhalten|quittung über/i,
 };
+
+const RECEIPT_INVOICE_EXCLUSION_GUARD =
+  /\brechnungsnummer\b|\brechnungs(?:nr\.?)\b|\binvoice(?:\s*no\.?)?\b/i;
+const RECEIPT_IBAN_PATTERN = /\b[A-Z]{2}\d{2}(?:\s?[A-Z0-9]{4}){3,7}\s?[A-Z0-9]{1,4}\b/i;
+
+export function hasReceiptCutoverPaymentExclusion(recognizedText: string): boolean {
+  return MAHNUNG_EXCLUSION_GUARD.test(recognizedText);
+}
+
+export function hasReceiptCutoverInvoiceExclusion(recognizedText: string): boolean {
+  return RECEIPT_INVOICE_EXCLUSION_GUARD.test(recognizedText) && RECEIPT_IBAN_PATTERN.test(recognizedText);
+}
 
 export function hasReceiptCutoverKindTextGuard(
   kind: ClassifiedDocumentKind,
@@ -307,6 +323,8 @@ export const OCR_ONLY_RECOGNIZED_DATA = {
     'tankbeleg',
     'ec_beleg',
     'kassenbeleg',
+    'kreditkartenbeleg',
+    'quittung',
     'eingangsrechnung',
     'mahnung',
     'zahlungserinnerung',

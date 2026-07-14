@@ -31,9 +31,10 @@ const PURE_HANDELSREGISTER = [
 
 const EC_RECEIPT = [
   'REWE Markt',
+  'EC-Beleg',
   'Summe',
   '18,42 EUR',
-  'Kartenzahlung',
+  'Kartenzahlung Girocard',
   'Terminal 04',
   'Danke',
 ].join('\n');

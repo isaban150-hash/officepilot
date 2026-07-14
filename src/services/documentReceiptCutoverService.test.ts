@@ -43,6 +43,44 @@ const KASSEN_RECEIPT = [
   'Vielen Dank',
 ].join('\n');
 
+const KREDITKARTEN_RECEIPT = [
+  'REWE Markt München',
+  'Kreditkartenbeleg',
+  'Visa contactless',
+  'Summe 42,80 EUR',
+  'Terminal-ID 04',
+  'Datum: 14.07.2026',
+  'Beleg-Nr. KC-8821',
+  'Danke für Ihren Einkauf',
+].join('\n');
+
+const QUITTUNG_RECEIPT = [
+  'Handwerker Müller',
+  'Quittung',
+  'Bar erhalten',
+  'Betrag: 150,00 EUR',
+  'Datum: 14.07.2026',
+].join('\n');
+
+const INVOICE_TEXT = [
+  'Müller Bau GmbH',
+  'Rechnungsnummer: INV-2026-77',
+  'Gesamtbetrag 1.247,80 EUR',
+  'IBAN: DE89 3704 0044 0532 0130 00',
+  'zahlbar bis 31.03.2026',
+].join('\n');
+
+const MAHNUNG_TEXT = [
+  'Müller Bau GmbH',
+  '2. Mahnung',
+  'Rechnungsnummer: INV-2026-77',
+  'Offener Betrag: 1.247,80 EUR',
+  'Zahlungsaufforderung',
+  'Zahlbar bis 31.03.2026',
+].join('\n');
+
+const AMBIGUOUS_RECEIPT = ['Quittung', '42,80 EUR', 'Danke'].join('\n');
+
 const PURE_HANDELSREGISTER = [
   'Muster GmbH',
   'Handelsregisterauszug',
@@ -84,6 +122,49 @@ describe('documentReceiptCutoverService', () => {
     expect(pipeline?.valid).toBe(true);
     expect(decision.eligible).toBe(true);
     expect(decision.detection?.kind).toBe('kassenbeleg');
+  });
+
+  it('accepts a clear kreditkartenbeleg when all cutover gates pass', () => {
+    const pipeline = runReceiptAnalysisPipeline({ recognizedText: KREDITKARTEN_RECEIPT });
+    const decision = evaluateReceiptCutoverEligibility(pipeline);
+
+    expect(pipeline?.valid).toBe(true);
+    expect(decision.eligible).toBe(true);
+    expect(decision.detection?.kind).toBe('kreditkartenbeleg');
+    expect(decision.detection?.reasonKey).toBe(DI_RECEIPT_SCORING_REASON_KEY);
+  });
+
+  it('accepts a clear quittung when all cutover gates pass', () => {
+    const pipeline = runReceiptAnalysisPipeline({ recognizedText: QUITTUNG_RECEIPT });
+    const decision = evaluateReceiptCutoverEligibility(pipeline);
+
+    expect(pipeline?.valid).toBe(true);
+    expect(decision.eligible).toBe(true);
+    expect(decision.detection?.kind).toBe('quittung');
+  });
+
+  it('rejects cutover for invoice texts via invoice exclusion guard', () => {
+    const pipeline = runReceiptAnalysisPipeline({ recognizedText: INVOICE_TEXT });
+    const decision = evaluateReceiptCutoverEligibility(pipeline);
+
+    expect(decision.eligible).toBe(false);
+    expect(decision.rejectionReason).toBe('cutover:invoice_excluded');
+  });
+
+  it('rejects cutover for mahnung texts via payment exclusion guard', () => {
+    const pipeline = runReceiptAnalysisPipeline({ recognizedText: MAHNUNG_TEXT });
+    const decision = evaluateReceiptCutoverEligibility(pipeline);
+
+    expect(decision.eligible).toBe(false);
+    expect(decision.rejectionReason).toBe('cutover:payment_excluded');
+  });
+
+  it('rejects cutover when margin is too low', () => {
+    const pipeline = runReceiptAnalysisPipeline({ recognizedText: AMBIGUOUS_RECEIPT });
+    const decision = evaluateReceiptCutoverEligibility(pipeline);
+
+    expect(decision.eligible).toBe(false);
+    expect(decision.rejectionReason).toBeTruthy();
   });
 
   it('rejects cutover when the feature flag is disabled', () => {
@@ -152,6 +233,57 @@ describe('documentClassificationHybridService', () => {
     expect(result.processType).toBe('record_expense');
   });
 
+  it('productively applies kreditkartenbeleg cutover with OCR-only recognizedData', () => {
+    const result = classifyDocument({ recognizedText: KREDITKARTEN_RECEIPT });
+
+    expect(result.classifiedKind).toBe('kreditkartenbeleg');
+    expect(result.detectionReasonKey).toBe(DI_RECEIPT_SCORING_REASON_KEY);
+    expect(result.recognizedData.Betrag).toContain('42,80');
+    expect(result.recognizedData.Betrag).not.toBe('85,40 €');
+    expect(result.recognizedData.Lieferant).toBe('REWE Markt München');
+    expect(result.recognizedData.Datum).toBe('14.07.2026');
+    expect(result.recognizedData.Belegnummer).toBe('KC-8821');
+  });
+
+  it('productively applies quittung cutover with OCR-only recognizedData', () => {
+    const result = classifyDocument({ recognizedText: QUITTUNG_RECEIPT });
+
+    expect(result.classifiedKind).toBe('quittung');
+    expect(result.detectionReasonKey).toBe(DI_RECEIPT_SCORING_REASON_KEY);
+    expect(result.recognizedData.Betrag).toContain('150,00');
+    expect(result.recognizedData.Lieferant).toBe('Handwerker Müller');
+    expect(result.recognizedData.Datum).toBe('14.07.2026');
+  });
+
+  it('keeps ec_beleg for girocard receipts, not kreditkartenbeleg', () => {
+    const result = classifyDocument({ recognizedText: EC_RECEIPT });
+
+    expect(result.classifiedKind).toBe('ec_beleg');
+    expect(result.classifiedKind).not.toBe('kreditkartenbeleg');
+  });
+
+  it('keeps kassenbeleg distinct from quittung', () => {
+    const kassen = classifyDocument({ recognizedText: KASSEN_RECEIPT });
+    const quittung = classifyDocument({ recognizedText: QUITTUNG_RECEIPT });
+
+    expect(kassen.classifiedKind).toBe('kassenbeleg');
+    expect(quittung.classifiedKind).toBe('quittung');
+  });
+
+  it('keeps invoice on invoice cutover, not receipt', () => {
+    const result = classifyDocument({ recognizedText: INVOICE_TEXT });
+
+    expect(result.classifiedKind).toBe('eingangsrechnung');
+    expect(result.detectionReasonKey).not.toBe(DI_RECEIPT_SCORING_REASON_KEY);
+  });
+
+  it('keeps mahnung on payment cutover, not receipt', () => {
+    const result = classifyDocument({ recognizedText: MAHNUNG_TEXT });
+
+    expect(result.classifiedKind).toBe('mahnung');
+    expect(result.detectionReasonKey).not.toBe(DI_RECEIPT_SCORING_REASON_KEY);
+  });
+
   it('keeps kartenzahlung with fuel markers on tankbeleg', () => {
     const result = classifyDocument({ recognizedText: TANK_RECEIPT_WITH_REGISTER_FOOTER });
 
@@ -197,5 +329,13 @@ describe('documentClassificationHybridService', () => {
     expect(result.classifiedKind).toBe('tankbeleg');
     expect(result.digitalFolder.path).toContain('Tankbelege');
     expect(result.processType).toBe('record_expense');
+  });
+
+  it('falls back to legacy when OCR text is missing', () => {
+    const legacy = detectClassifiedKindWithReason({});
+    const result = classifyDocument({});
+
+    expect(result.classifiedKind).toBe(legacy.kind);
+    expect(result.detectionReasonKey).not.toBe(DI_RECEIPT_SCORING_REASON_KEY);
   });
 });

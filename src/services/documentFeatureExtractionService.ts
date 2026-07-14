@@ -37,6 +37,10 @@ const MAHNUNG_MARKER_PATTERN = /\b(\d+\.\s*mahnung|mahnung|inkasso|zahlungsauffo
 const ZAHLUNGSERINNERUNG_MARKER_PATTERN = /\b(zahlungserinnerung)\b/i;
 const CARD_PAYMENT_PATTERN =
   /\b(kartenzahlung|girocard|ec-cash|ec\s+zahlung|visa|mastercard|kreditkarte|contactless|terminal)\b/i;
+const EC_MARKER_PATTERN = /\b(ec-beleg|ec beleg|girocard|ec-cash|ec\s+zahlung)\b/i;
+const KREDITKARTEN_MARKER_PATTERN =
+  /\b(kreditkartenbeleg|visa|mastercard|contactless|kreditkarte)\b/i;
+const QUITTUNG_MARKER_PATTERN = /\b(quittung|bar erhalten|quittung über)\b/i;
 const FUEL_MARKER_PATTERN =
   /\b(kraftstoff|diesel|benzin|super|e10|adblue|erdgas|cng|lpg|tankstelle)\b/i;
 const AUTHORITY_MARKER_PATTERN =
@@ -145,6 +149,24 @@ const PATTERN_FEATURES: PatternFeatureSpec[] = [
     pattern: CARD_PAYMENT_PATTERN,
     labeled: true,
     valueFromMatch: () => true,
+  },
+  {
+    id: 'structure.ec_marker',
+    category: 'structure',
+    pattern: EC_MARKER_PATTERN,
+    valueFromMatch: (match) => match[0]?.trim(),
+  },
+  {
+    id: 'structure.kreditkarten_marker',
+    category: 'structure',
+    pattern: KREDITKARTEN_MARKER_PATTERN,
+    valueFromMatch: (match) => match[0]?.trim(),
+  },
+  {
+    id: 'structure.quittung_marker',
+    category: 'structure',
+    pattern: QUITTUNG_MARKER_PATTERN,
+    valueFromMatch: (match) => match[0]?.trim(),
   },
   {
     id: 'structure.fuel_marker',

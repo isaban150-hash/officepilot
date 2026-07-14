@@ -686,7 +686,8 @@ const deLegacy = {
   'classification.detect.ecBeleg': 'EC-Beleg erkannt',
   'classification.detect.kreditkartenbeleg': 'Kreditkartenbeleg erkannt',
   'classification.detect.tankbeleg': 'Tankbeleg erkannt',
-  'classification.detect.diReceiptScoring': 'Tankbeleg per Dokumentanalyse erkannt',
+  'classification.detect.diReceiptScoring':
+    'Beleg (Tank/EC/Kasse/Kreditkarte/Quittung) per Dokumentanalyse erkannt',
   'classification.detect.diInvoiceScoring': 'Eingangsrechnung per Dokumentanalyse erkannt',
   'classification.detect.diPaymentScoring': 'Mahnung/Zahlungserinnerung per Dokumentanalyse erkannt',
   'classification.detect.diAuthorityScoring': 'Behördenbrief per Dokumentanalyse erkannt',
@@ -2471,6 +2472,8 @@ const trLegacy: Partial<Record<keyof typeof de, string>> = {
   'reviewWorkflow.success.nextDocument': 'Sonraki belge',
 
   'classification.detect.werkvertragMitLv': 'İş kalemleri listeli eser sözleşmesi algılandı',
+  'classification.detect.diReceiptScoring':
+    'Fiş (yakıt/EC/kasa/kredi kartı/makbuz) belge analizi ile algılandı',
   'classification.detect.diInvoiceScoring': 'Gelen fatura belge analizi ile algılandı',
   'classification.detect.diPaymentScoring': 'Ödeme hatırlatması/ihbar belge analizi ile algılandı',
   'classification.detect.diAuthorityScoring': 'Resmi kurum yazısı belge analizi ile algılandı',
@@ -2626,6 +2629,8 @@ const bgLegacy: Partial<Record<keyof typeof de, string>> = {
   'nav.scan': 'Скан',
   'nav.ablage': 'Архив',
   'nav.mehr': 'Още',
+  'classification.detect.diReceiptScoring':
+    'Разпознат бележка (гориво/EC/каса/кредитна карта/разписка) чрез анализ на документа',
   'classification.detect.diInvoiceScoring': 'Входяща фактура, разпозната чрез анализ на документа',
   'classification.detect.diPaymentScoring': 'Напомняне/предупреждение за плащане, разпознато чрез анализ на документа',
   'classification.detect.diAuthorityScoring': 'Писмо от орган, разпознато чрез анализ на документа',

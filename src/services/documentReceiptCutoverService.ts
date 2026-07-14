@@ -2,7 +2,9 @@ import {
   DI_RECEIPT_SCORING_REASON_KEY,
   getReceiptCutoverKindThresholds,
   getReceiptScoringCutoverEnabled,
+  hasReceiptCutoverInvoiceExclusion,
   hasReceiptCutoverKindTextGuard,
+  hasReceiptCutoverPaymentExclusion,
   isReceiptScoringCutoverKind,
   RECEIPT_SCORING_CUTOVER,
 } from '../config/documentIntelligenceConfig';
@@ -69,6 +71,14 @@ export function evaluateReceiptCutoverEligibility(
 
   if (!pipeline.valid) {
     return { eligible: false, rejectionReason: 'cutover:pipeline_invalid' };
+  }
+
+  if (hasReceiptCutoverPaymentExclusion(pipeline.recognizedText)) {
+    return { eligible: false, rejectionReason: 'cutover:payment_excluded' };
+  }
+
+  if (hasReceiptCutoverInvoiceExclusion(pipeline.recognizedText)) {
+    return { eligible: false, rejectionReason: 'cutover:invoice_excluded' };
   }
 
   const { scoringResult, ocrQuality } = pipeline;
