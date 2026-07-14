@@ -69,7 +69,7 @@ export const RECEIPT_CANDIDATE_PROFILES: ReceiptCandidateProfile[] = [
       { featureId: 'structure.receipt_layout', weight: 2, zones: ['body'] },
     ],
     positive: [
-      { featureId: 'payment.card_payment', weight: 3.5, zones: ['body', 'header'] },
+      { featureId: 'payment.card_payment', weight: 3, zones: ['body', 'header'] },
       { featureId: 'amount.monetary_value', weight: 2.5, zones: ['body'] },
     ],
     negative: [

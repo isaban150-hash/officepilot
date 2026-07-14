@@ -18,7 +18,29 @@ const TANK_RECEIPT_WITH_AMOUNT = [
   'Geschäftsführer: Max Mustermann',
 ].join('\n');
 
-const TANK_RECEIPT_WITH_REGISTER_FOOTER = TANK_RECEIPT_WITH_AMOUNT;
+const EC_RECEIPT = [
+  'REWE Markt München',
+  'EC-Beleg',
+  'Datum 14.07.2026',
+  'Kartenzahlung Girocard',
+  'Summe 18,42 EUR',
+  'Terminal-ID 04',
+  'Beleg-Nr. EC-4421',
+  'Danke für Ihren Einkauf',
+].join('\n');
+
+const KASSEN_RECEIPT = [
+  'Bäckerei Schmidt',
+  'Kassenbeleg',
+  'Beleg-Nr. 4421',
+  'Datum: 14.07.2026',
+  'Brötchen    2,40 EUR',
+  'Kaffee      2,50 EUR',
+  'Croissant   3,00 EUR',
+  'Summe       8,90 EUR',
+  'Bar gezahlt',
+  'Vielen Dank',
+].join('\n');
 
 describe('documentRecognizedDataService', () => {
   afterEach(() => {
@@ -38,6 +60,31 @@ describe('documentRecognizedDataService', () => {
     expect(recognizedData.Tankstelle).not.toBe('Tankstelle');
   });
 
+  it('uses OCR-only fields for ec_beleg', () => {
+    const recognizedData = buildEvidenceBasedRecognizedData({
+      classifiedKind: 'ec_beleg',
+      recognizedText: EC_RECEIPT,
+    });
+
+    expect(recognizedData.Dokumentart).toBe('ec_beleg');
+    expect(recognizedData.Betrag).toContain('18,42');
+    expect(recognizedData.Lieferant).toBe('REWE Markt München');
+    expect(recognizedData.Belegnummer).toBe('EC-4421');
+  });
+
+  it('uses OCR-only fields for kassenbeleg including receipt number', () => {
+    const recognizedData = buildEvidenceBasedRecognizedData({
+      classifiedKind: 'kassenbeleg',
+      recognizedText: KASSEN_RECEIPT,
+    });
+
+    expect(recognizedData.Dokumentart).toBe('kassenbeleg');
+    expect(recognizedData.Betrag).toContain('8,90');
+    expect(recognizedData.Datum).toBe('14.07.2026');
+    expect(recognizedData.Lieferant).toBe('Bäckerei Schmidt');
+    expect(recognizedData.Belegnummer).toBe('4421');
+  });
+
   it('returns only Dokumentart when OCR text is missing', () => {
     const recognizedData = buildEvidenceBasedRecognizedData({
       classifiedKind: 'tankbeleg',
@@ -48,9 +95,9 @@ describe('documentRecognizedDataService', () => {
     expect(recognizedData.Tankstelle).toBeUndefined();
   });
 
-  it('does not inject sender hints as tank station', () => {
+  it('does not inject sender hints as merchant name', () => {
     const result = classifyDocument({
-      recognizedText: TANK_RECEIPT_WITH_REGISTER_FOOTER,
+      recognizedText: TANK_RECEIPT_WITH_AMOUNT,
       senderHint: 'Shell Autobahn',
     });
 
@@ -59,7 +106,7 @@ describe('documentRecognizedDataService', () => {
     expect(result.recognizedData.Tankstelle).not.toBe('Shell Autobahn');
   });
 
-  it('feeds OCR amount into the expense flow', () => {
+  it('feeds OCR amount into the expense flow for tankbeleg', () => {
     const classification = classifyDocument({ recognizedText: TANK_RECEIPT_WITH_AMOUNT });
     const inboxItem = {
       id: 'inbox-tank-ocr',
@@ -73,6 +120,38 @@ describe('documentRecognizedDataService', () => {
 
     expect(expenseInput.grossAmount).toBe(52.18);
     expect(expenseInput.category).toBe('fahrzeug');
+  });
+
+  it('feeds OCR amount into the expense flow for ec_beleg', () => {
+    const classification = classifyDocument({ recognizedText: EC_RECEIPT });
+    const inboxItem = {
+      id: 'inbox-ec-ocr',
+      title: 'EC-Beleg',
+      sender: classification.recognizedData.Lieferant ?? '',
+      recognizedData: classification.recognizedData,
+      classifiedKind: classification.classifiedKind,
+    } as InboxItem;
+
+    const expenseInput = buildExpenseInputFromInbox(inboxItem, 'ec_beleg');
+
+    expect(classification.classifiedKind).toBe('ec_beleg');
+    expect(expenseInput.grossAmount).toBe(18.42);
+  });
+
+  it('feeds OCR amount into the expense flow for kassenbeleg', () => {
+    const classification = classifyDocument({ recognizedText: KASSEN_RECEIPT });
+    const inboxItem = {
+      id: 'inbox-kassen-ocr',
+      title: 'Kassenbeleg',
+      sender: classification.recognizedData.Lieferant ?? '',
+      recognizedData: classification.recognizedData,
+      classifiedKind: classification.classifiedKind,
+    } as InboxItem;
+
+    const expenseInput = buildExpenseInputFromInbox(inboxItem, 'kassenbeleg');
+
+    expect(classification.classifiedKind).toBe('kassenbeleg');
+    expect(expenseInput.grossAmount).toBe(8.9);
   });
 
   it('leaves other document kinds on legacy recognizedData profiles', () => {

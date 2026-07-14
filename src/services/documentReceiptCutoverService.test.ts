@@ -19,6 +19,30 @@ const TANK_RECEIPT_WITH_REGISTER_FOOTER = [
   'Geschäftsführer: Max Mustermann',
 ].join('\n');
 
+const EC_RECEIPT = [
+  'REWE Markt München',
+  'EC-Beleg',
+  'Datum 14.07.2026',
+  'Kartenzahlung Girocard',
+  'Summe 18,42 EUR',
+  'Terminal-ID 04',
+  'Beleg-Nr. EC-4421',
+  'Danke für Ihren Einkauf',
+].join('\n');
+
+const KASSEN_RECEIPT = [
+  'Bäckerei Schmidt',
+  'Kassenbeleg',
+  'Beleg-Nr. 4421',
+  'Datum: 14.07.2026',
+  'Brötchen    2,40 EUR',
+  'Kaffee      2,50 EUR',
+  'Croissant   3,00 EUR',
+  'Summe       8,90 EUR',
+  'Bar gezahlt',
+  'Vielen Dank',
+].join('\n');
+
 const PURE_HANDELSREGISTER = [
   'Muster GmbH',
   'Handelsregisterauszug',
@@ -44,6 +68,24 @@ describe('documentReceiptCutoverService', () => {
     expect(decision.detection?.reasonKey).toBe(DI_RECEIPT_SCORING_REASON_KEY);
   });
 
+  it('accepts a clear ec_beleg when all cutover gates pass', () => {
+    const pipeline = runReceiptAnalysisPipeline({ recognizedText: EC_RECEIPT });
+    const decision = evaluateReceiptCutoverEligibility(pipeline);
+
+    expect(pipeline?.valid).toBe(true);
+    expect(decision.eligible).toBe(true);
+    expect(decision.detection?.kind).toBe('ec_beleg');
+  });
+
+  it('accepts a clear kassenbeleg when all cutover gates pass', () => {
+    const pipeline = runReceiptAnalysisPipeline({ recognizedText: KASSEN_RECEIPT });
+    const decision = evaluateReceiptCutoverEligibility(pipeline);
+
+    expect(pipeline?.valid).toBe(true);
+    expect(decision.eligible).toBe(true);
+    expect(decision.detection?.kind).toBe('kassenbeleg');
+  });
+
   it('rejects cutover when the feature flag is disabled', () => {
     setReceiptScoringCutoverEnabledForTests(false);
     const pipeline = runReceiptAnalysisPipeline({ recognizedText: TANK_RECEIPT_WITH_REGISTER_FOOTER });
@@ -61,6 +103,16 @@ describe('documentReceiptCutoverService', () => {
   it('rejects cutover when OCR text is missing', () => {
     expect(evaluateReceiptCutoverEligibility(null).rejectionReason).toBe('cutover:no_text');
   });
+
+  it('rejects kassenbeleg cutover without a kassenbeleg marker in the text', () => {
+    const pipeline = runReceiptAnalysisPipeline({
+      recognizedText: 'AOK Nordwest Beitragsbescheid 250,00 EUR Frist 30.04.2026',
+    });
+    const decision = evaluateReceiptCutoverEligibility(pipeline);
+
+    expect(decision.eligible).toBe(false);
+    expect(decision.rejectionReason).toBe('cutover:missing_kind_marker');
+  });
 });
 
 describe('documentClassificationHybridService', () => {
@@ -77,6 +129,34 @@ describe('documentClassificationHybridService', () => {
     expect(result.recognizedData.Betrag).toContain('52,18');
     expect(result.recognizedData.Betrag).not.toBe('85,40 €');
     expect(mapClassifiedKindToExpenseCategory(result.classifiedKind)).toBe('fahrzeug');
+  });
+
+  it('productively applies ec_beleg cutover with OCR-only recognizedData', () => {
+    const result = classifyDocument({ recognizedText: EC_RECEIPT });
+
+    expect(result.classifiedKind).toBe('ec_beleg');
+    expect(result.detectionReasonKey).toBe(DI_RECEIPT_SCORING_REASON_KEY);
+    expect(result.recognizedData.Betrag).toContain('18,42');
+    expect(result.recognizedData.Lieferant).toBe('REWE Markt München');
+    expect(result.processType).toBe('record_expense');
+  });
+
+  it('productively applies kassenbeleg cutover with OCR-only recognizedData', () => {
+    const result = classifyDocument({ recognizedText: KASSEN_RECEIPT });
+
+    expect(result.classifiedKind).toBe('kassenbeleg');
+    expect(result.detectionReasonKey).toBe(DI_RECEIPT_SCORING_REASON_KEY);
+    expect(result.recognizedData.Betrag).toContain('8,90');
+    expect(result.recognizedData.Lieferant).toBe('Bäckerei Schmidt');
+    expect(result.recognizedData.Belegnummer).toBe('4421');
+    expect(result.processType).toBe('record_expense');
+  });
+
+  it('keeps kartenzahlung with fuel markers on tankbeleg', () => {
+    const result = classifyDocument({ recognizedText: TANK_RECEIPT_WITH_REGISTER_FOOTER });
+
+    expect(result.classifiedKind).toBe('tankbeleg');
+    expect(result.classifiedKind).not.toBe('ec_beleg');
   });
 
   it('falls back to legacy when cutover is disabled', () => {

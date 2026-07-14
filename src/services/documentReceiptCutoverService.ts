@@ -1,6 +1,8 @@
 import {
   DI_RECEIPT_SCORING_REASON_KEY,
+  getReceiptCutoverKindThresholds,
   getReceiptScoringCutoverEnabled,
+  hasReceiptCutoverKindTextGuard,
   isReceiptScoringCutoverKind,
   RECEIPT_SCORING_CUTOVER,
 } from '../config/documentIntelligenceConfig';
@@ -73,13 +75,14 @@ export function evaluateReceiptCutoverEligibility(
   const winner = scoringResult.candidates[0];
   const winnerKind = scoringResult.winnerKind as ClassifiedDocumentKind;
   const cutoverConfidence = computeReceiptCutoverConfidence(pipeline);
+  const kindThresholds = getReceiptCutoverKindThresholds(winnerKind);
 
-  if (!isReceiptScoringCutoverKind(winnerKind)) {
+  if (!isReceiptScoringCutoverKind(winnerKind) || !kindThresholds) {
     return { eligible: false, rejectionReason: 'cutover:winner_not_allowed' };
   }
 
-  if (winnerKind !== 'tankbeleg') {
-    return { eligible: false, rejectionReason: 'cutover:winner_not_tankbeleg' };
+  if (!hasReceiptCutoverKindTextGuard(winnerKind, pipeline.recognizedText)) {
+    return { eligible: false, rejectionReason: 'cutover:missing_kind_marker' };
   }
 
   if (!ocrQuality.readable) {
@@ -90,11 +93,11 @@ export function evaluateReceiptCutoverEligibility(
     return { eligible: false, rejectionReason: 'cutover:ocr_score_too_low' };
   }
 
-  if (cutoverConfidence < RECEIPT_SCORING_CUTOVER.minConfidence) {
+  if (cutoverConfidence < kindThresholds.minConfidence) {
     return { eligible: false, rejectionReason: 'cutover:confidence_too_low' };
   }
 
-  if (scoringResult.margin < RECEIPT_SCORING_CUTOVER.minMargin) {
+  if (scoringResult.margin < kindThresholds.minMargin) {
     return { eligible: false, rejectionReason: 'cutover:margin_too_low' };
   }
 
