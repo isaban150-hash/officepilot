@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { setOcrOnlyRecognizedDataEnabledForTests } from '../config/documentIntelligenceConfig';
+import { setOcrOnlyRecognizedDataEnabledForTests, setPaymentScoringCutoverEnabledForTests } from '../config/documentIntelligenceConfig';
 import { classifyDocument } from './documentClassificationService';
 import {
   buildEvidenceBasedRecognizedData,
@@ -59,6 +59,7 @@ const INCOMING_INVOICE = [
 describe('documentRecognizedDataService', () => {
   afterEach(() => {
     setOcrOnlyRecognizedDataEnabledForTests(null);
+    setPaymentScoringCutoverEnabledForTests(null);
   });
 
   describe('receipt family', () => {
@@ -203,16 +204,88 @@ describe('documentRecognizedDataService', () => {
     });
   });
 
+  describe('payment family', () => {
+    const MAHNUNG_OCR = [
+      'Müller Bau GmbH',
+      '2. Mahnung',
+      'Rechnungsnummer: INV-2026-77',
+      'Datum: 12.03.2026',
+      'Offener Betrag: 1.247,80 EUR',
+      'Zahlungsaufforderung',
+      'Zahlbar bis 31.03.2026',
+    ].join('\n');
+
+    it('uses OCR-only payment fields instead of demo values for mahnung', () => {
+      const recognizedData = buildEvidenceBasedRecognizedData({
+        classifiedKind: 'mahnung',
+        recognizedText: MAHNUNG_OCR,
+      });
+
+      expect(recognizedData.Dokumentart).toBe('mahnung');
+      expect(recognizedData.Rechnungsnummer).toBe('INV-2026-77');
+      expect(recognizedData.Rechnungsnummer).not.toBe('BZ-2026-8842');
+      expect(recognizedData.Betrag).toContain('1.247,80');
+      expect(recognizedData.Betrag).not.toBe('342,16 €');
+      expect(recognizedData.Fälligkeit).toBe('31.03.2026');
+      expect(recognizedData.Fälligkeit).not.toBe('30.03.2026');
+      expect(recognizedData.Lieferant).toBe('Müller Bau GmbH');
+      expect(recognizedData.Hinweis).toMatch(/mahnung/i);
+    });
+
+    it('uses OCR-only fields for zahlungserinnerung', () => {
+      const recognizedData = buildEvidenceBasedRecognizedData({
+        classifiedKind: 'zahlungserinnerung',
+        recognizedText: [
+          'Müller Bau GmbH',
+          'Zahlungserinnerung',
+          'Rechnungsnummer: INV-2026-55',
+          'Datum: 08.03.2026',
+          'Offener Betrag: 842,50 EUR',
+          'Zahlbar bis 22.03.2026',
+        ].join('\n'),
+      });
+
+      expect(recognizedData.Dokumentart).toBe('zahlungserinnerung');
+      expect(recognizedData.Rechnungsnummer).toBe('INV-2026-55');
+      expect(recognizedData.Betrag).toContain('842,50');
+      expect(recognizedData.Fälligkeit).toBe('22.03.2026');
+      expect(recognizedData.Hinweis).toMatch(/zahlungserinnerung/i);
+    });
+
+    it('returns only Dokumentart when OCR text is missing for payment kinds', () => {
+      const recognizedData = buildEvidenceBasedRecognizedData({
+        classifiedKind: 'mahnung',
+      });
+
+      expect(recognizedData).toEqual({ Dokumentart: 'mahnung' });
+      expect(recognizedData.Betrag).toBeUndefined();
+      expect(recognizedData.Rechnungsnummer).toBeUndefined();
+      expect(recognizedData.Fälligkeit).toBeUndefined();
+    });
+  });
+
   describe('legacy and rollback', () => {
-    it('leaves mahnung on legacy recognizedData profiles', () => {
+    it('leaves mahnung without demo values when cutover is disabled', () => {
+      setPaymentScoringCutoverEnabledForTests(false);
+      const result = classifyDocument({
+        recognizedText: 'Mahnung Zahlungsaufforderung',
+      });
+
+      expect(shouldUseEvidenceBasedRecognizedData(result.classifiedKind)).toBe(true);
+      expect(result.recognizedData.Betrag).toBeUndefined();
+      expect(result.recognizedData.Fälligkeit).toBeUndefined();
+      expect(result.recognizedData.Rechnungsnummer).toBeUndefined();
+    });
+
+    it('leaves mahnung with empty fields on kindHint legacy path', () => {
       const result = classifyDocument({
         recognizedText: 'Mahnung Zahlungsaufforderung',
         kindHint: 'mahnung',
       });
 
-      expect(shouldUseEvidenceBasedRecognizedData(result.classifiedKind)).toBe(false);
-      expect(result.recognizedData.Betrag).toBe('1.247,80 €');
-      expect(result.recognizedData.Fälligkeit).toBe('30.03.2026');
+      expect(shouldUseEvidenceBasedRecognizedData(result.classifiedKind)).toBe(true);
+      expect(result.recognizedData.Betrag).toBeUndefined();
+      expect(result.recognizedData.Fälligkeit).toBeUndefined();
     });
 
     it('can be disabled via feature flag for rollback', () => {

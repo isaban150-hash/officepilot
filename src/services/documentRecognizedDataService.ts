@@ -1,6 +1,6 @@
 import type { ClassifiedDocumentKind } from '../types/models';
 import type { DocumentClassificationInput } from '../types/models';
-import type { OcrOnlyRecognizedDataKind, ReceiptCutoverKind } from '../config/documentIntelligenceConfig';
+import type { OcrOnlyRecognizedDataKind, PaymentCutoverKind, ReceiptCutoverKind } from '../config/documentIntelligenceConfig';
 import {
   getOcrOnlyRecognizedDataEnabled,
   isOcrOnlyRecognizedDataKind,
@@ -22,7 +22,7 @@ export type EvidenceBasedRecognizedDataInput = {
   pageTexts?: DocumentClassificationInput['pageTexts'];
 };
 
-type RecognizedDataFamily = 'receipt' | 'invoice';
+type RecognizedDataFamily = 'receipt' | 'invoice' | 'payment';
 
 type ReceiptRecognizedDataConfig = {
   merchantField: string;
@@ -39,7 +39,15 @@ const OCR_ONLY_KIND_FAMILY: Record<OcrOnlyRecognizedDataKind, RecognizedDataFami
   ec_beleg: 'receipt',
   kassenbeleg: 'receipt',
   eingangsrechnung: 'invoice',
+  mahnung: 'payment',
+  zahlungserinnerung: 'payment',
 };
+
+const PAYMENT_HEADER_SKIP_PATTERN =
+  /^(?:Rechnungs(?:nummer|nr)|Invoice|Inv\.|Mahnung|Zahlungserinnerung|Zahlungsaufforderung|Inkasso|Datum|Offener\s+Betrag|IBAN|zu\s+zahlen|zahlbar|Fälligkeit|Faelligkeit)/i;
+
+const PAYMENT_HINT_PATTERN =
+  /\b(\d+\.\s*mahnung|mahnung|zahlungserinnerung|zahlungsaufforderung|inkasso)\b/i;
 
 const RECEIPT_HEADER_SKIP_PATTERN =
   /^(?:HRB|Amtsgericht|Geschäftsf|Geschaeftsf|Kartenzahlung|Vielen Dank|Danke|Girocard|Mastercard|Visa|EC-Karte|Terminal|Summe|Bar\s+gezahlt|Barzahlung)/i;
@@ -294,6 +302,133 @@ function buildInvoiceRecognizedData(
   return result;
 }
 
+function inferSupplierFromPaymentHeader(text: string): string | undefined {
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  for (const line of lines.slice(0, 4)) {
+    if (PAYMENT_HEADER_SKIP_PATTERN.test(line)) continue;
+    if (isLikelyAmountLine(line)) continue;
+    if (isLikelyDateLine(line)) continue;
+    if (/^\d{5}\b/.test(line)) continue;
+    if (line.length >= 3) return line;
+  }
+
+  return undefined;
+}
+
+function applyPaymentOcrAmount(
+  result: Record<string, string>,
+  text: string,
+  pageTexts?: DocumentClassificationInput['pageTexts'],
+): void {
+  const features = extractDocumentFeaturesFromText(text, pageTexts);
+  const monetaryValues = features.features
+    .filter(
+      (feature) => feature.id === 'amount.monetary_value' && typeof feature.value === 'number',
+    )
+    .map((feature) => feature.value as number);
+
+  if (monetaryValues.length > 0) {
+    result.Betrag = formatGermanMoney(Math.max(...monetaryValues));
+  }
+}
+
+function applyPaymentOcrReference(
+  result: Record<string, string>,
+  plain: ReturnType<typeof toConfidentPlainFields>,
+  text: string,
+  pageTexts?: DocumentClassificationInput['pageTexts'],
+): void {
+  if (plain.Rechnungsnummer?.trim()) {
+    result.Rechnungsnummer = plain.Rechnungsnummer;
+    return;
+  }
+
+  const features = extractDocumentFeaturesFromText(text, pageTexts);
+  const invoiceNumberFeature = features.features.find(
+    (feature) => feature.id === 'reference.invoice_number',
+  );
+  if (typeof invoiceNumberFeature?.value === 'string' && invoiceNumberFeature.value.trim()) {
+    result.Rechnungsnummer = invoiceNumberFeature.value.trim();
+  }
+}
+
+function applyPaymentOcrDeadline(
+  result: Record<string, string>,
+  plain: ReturnType<typeof toConfidentPlainFields>,
+  text: string,
+  pageTexts?: DocumentClassificationInput['pageTexts'],
+): void {
+  if (plain.Frist?.trim()) {
+    result.Fälligkeit = plain.Frist;
+    return;
+  }
+
+  const features = extractDocumentFeaturesFromText(text, pageTexts);
+  const deadlineFeature = features.features.find((feature) => feature.id === 'date.deadline_date');
+  if (typeof deadlineFeature?.value === 'string' && deadlineFeature.value.trim()) {
+    result.Fälligkeit = deadlineFeature.value.trim();
+  }
+}
+
+function inferPaymentHint(text: string): string | undefined {
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  for (const line of lines) {
+    const match = line.match(PAYMENT_HINT_PATTERN);
+    if (match?.[1]) {
+      return match[1].trim();
+    }
+    if (match?.[0]) {
+      return match[0].trim();
+    }
+  }
+
+  return undefined;
+}
+
+function buildPaymentRecognizedData(
+  kind: PaymentCutoverKind,
+  text: string,
+  pageTexts?: DocumentClassificationInput['pageTexts'],
+): Record<string, string> {
+  const result: Record<string, string> = { Dokumentart: kind };
+  const fieldsWithConfidence = extractFieldsWithConfidence(text);
+  const plain = toConfidentPlainFields(fieldsWithConfidence);
+
+  applyPaymentOcrReference(result, plain, text, pageTexts);
+  applyPaymentOcrAmount(result, text, pageTexts);
+
+  if (plain.Datum?.trim()) {
+    result.Datum = plain.Datum;
+  }
+
+  applyPaymentOcrDeadline(result, plain, text, pageTexts);
+
+  const supplier = plain.Absender ?? plain.Lieferant;
+  if (supplier?.trim()) {
+    result.Lieferant = supplier;
+  } else {
+    const supplierFromHeader = inferSupplierFromPaymentHeader(text);
+    if (supplierFromHeader) {
+      result.Lieferant = supplierFromHeader;
+    }
+  }
+
+  const hint = inferPaymentHint(text);
+  if (hint) {
+    result.Hinweis = hint;
+  }
+
+  return result;
+}
+
 export function shouldUseEvidenceBasedRecognizedData(kind: ClassifiedDocumentKind): boolean {
   return isOcrOnlyRecognizedDataKind(kind) && getOcrOnlyRecognizedDataEnabled();
 }
@@ -319,5 +454,9 @@ export function buildEvidenceBasedRecognizedData(
     return buildReceiptRecognizedData(input.classifiedKind as ReceiptCutoverKind, text, input.pageTexts);
   }
 
-  return buildInvoiceRecognizedData(text, input.pageTexts);
+  if (family === 'invoice') {
+    return buildInvoiceRecognizedData(text, input.pageTexts);
+  }
+
+  return buildPaymentRecognizedData(input.classifiedKind as PaymentCutoverKind, text, input.pageTexts);
 }

@@ -51,6 +51,9 @@ const INVOICE_KINDS = new Set<ClassifiedDocumentKind>([
 const CONTRACT_PAYMENT_TERMS = /schlussrechnung|abschlagsrechnung|teilrechnung/i;
 
 function hasStrongInvoiceSignals(haystack: string): boolean {
+  if (/mahnung|zahlungserinnerung|inkasso/.test(haystack)) {
+    return false;
+  }
   const invoiceMarkers = [
     /rechnungsnummer/i,
     /rechnungsdatum/i,
@@ -267,18 +270,6 @@ function buildRecognizedData(
       Betrag: '342,16 €',
       Lieferant: input.senderHint ?? 'Unbekannt',
     },
-    mahnung: {
-      Rechnungsnummer: 'BZ-2026-8842',
-      Betrag: '1.247,80 €',
-      Fälligkeit: '30.03.2026',
-      Hinweis: 'Mahnung',
-    },
-    zahlungserinnerung: {
-      Rechnungsnummer: 'BZ-2026-8842',
-      Betrag: '1.247,80 €',
-      Fälligkeit: '30.03.2026',
-      Hinweis: 'Zahlungserinnerung',
-    },
     werkvertrag: {
       Kunde: input.senderHint ?? 'Unbekannt',
       Vertragsart: 'Werkvertrag',
@@ -475,10 +466,7 @@ export function classifyDocument(input: DocumentClassificationInput): DocumentCl
   const paperFiling =
     paperResolution.rule ??
     ({ folderId: '', register: '—', label: 'Entsorgen' } satisfies PaperFilingRule);
-  const deadline =
-    recognizedData.Frist ??
-    recognizedData.Fälligkeit ??
-    (classifiedKind === 'mahnung' || classifiedKind === 'zahlungserinnerung' ? '2026-03-30' : null);
+  const deadline = recognizedData.Frist ?? recognizedData.Fälligkeit ?? null;
 
   const explanation = buildExplanation(classifiedKind, sender);
   const priority = isAdvertisement ? 'niedrig' : defaultPriority(classifiedKind);

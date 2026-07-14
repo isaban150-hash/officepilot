@@ -52,8 +52,49 @@ export const INVOICE_SCORING_CUTOVER = {
 
 export const DI_INVOICE_SCORING_REASON_KEY = 'classification.detect.diInvoiceScoring';
 
+export type PaymentCutoverKind = 'mahnung' | 'zahlungserinnerung';
+
+export type PaymentCutoverKindThresholds = {
+  minConfidence: number;
+  minMargin: number;
+};
+
+export const PAYMENT_SCORING_CUTOVER = {
+  enabled: true,
+  allowedKinds: ['mahnung', 'zahlungserinnerung'],
+  minOcrScore: 0.65,
+  minEvidenceRefs: 3,
+  kindThresholds: {
+    mahnung: { minConfidence: 0.85, minMargin: 0.18 },
+    zahlungserinnerung: { minConfidence: 0.74, minMargin: 0.18 },
+  },
+} as const satisfies {
+  enabled: boolean;
+  allowedKinds: readonly PaymentCutoverKind[];
+  minOcrScore: number;
+  minEvidenceRefs: number;
+  kindThresholds: Record<PaymentCutoverKind, PaymentCutoverKindThresholds>;
+};
+
+export const DI_PAYMENT_SCORING_REASON_KEY = 'classification.detect.diPaymentScoring';
+
 const INVOICE_KIND_TEXT_GUARD = /rechnungsnummer|eingangsrechnung|invoice|rechnung/i;
 const MAHNUNG_EXCLUSION_GUARD = /mahnung|zahlungserinnerung|zahlungsaufforderung|inkasso/i;
+
+const PAYMENT_KIND_TEXT_GUARDS: Record<PaymentCutoverKind, RegExp> = {
+  mahnung: /mahnung|inkasso|zahlungsaufforderung/i,
+  zahlungserinnerung: /zahlungserinnerung/i,
+};
+
+export function hasPaymentCutoverKindTextGuard(
+  kind: ClassifiedDocumentKind,
+  recognizedText: string,
+): boolean {
+  if (!isPaymentScoringCutoverKind(kind)) {
+    return false;
+  }
+  return PAYMENT_KIND_TEXT_GUARDS[kind].test(recognizedText);
+}
 
 export function hasInvoiceCutoverKindTextGuard(recognizedText: string): boolean {
   return INVOICE_KIND_TEXT_GUARD.test(recognizedText);
@@ -104,6 +145,34 @@ export function getInvoiceCutoverKindThresholds(
   return INVOICE_SCORING_CUTOVER.kindThresholds[kind];
 }
 
+let paymentCutoverEnabledOverride: boolean | null = null;
+
+export function getPaymentScoringCutoverEnabled(): boolean {
+  if (paymentCutoverEnabledOverride !== null) {
+    return paymentCutoverEnabledOverride;
+  }
+  return PAYMENT_SCORING_CUTOVER.enabled;
+}
+
+export function setPaymentScoringCutoverEnabledForTests(value: boolean | null): void {
+  paymentCutoverEnabledOverride = value;
+}
+
+export function isPaymentScoringCutoverKind(
+  kind: ClassifiedDocumentKind,
+): kind is PaymentCutoverKind {
+  return PAYMENT_SCORING_CUTOVER.allowedKinds.includes(kind as PaymentCutoverKind);
+}
+
+export function getPaymentCutoverKindThresholds(
+  kind: ClassifiedDocumentKind,
+): PaymentCutoverKindThresholds | null {
+  if (!isPaymentScoringCutoverKind(kind)) {
+    return null;
+  }
+  return PAYMENT_SCORING_CUTOVER.kindThresholds[kind];
+}
+
 export function isReceiptScoringCutoverKind(
   kind: ClassifiedDocumentKind,
 ): kind is ReceiptCutoverKind {
@@ -135,11 +204,11 @@ export function hasReceiptCutoverKindTextGuard(
   return RECEIPT_KIND_TEXT_GUARDS[kind].test(recognizedText);
 }
 
-export type OcrOnlyRecognizedDataKind = ReceiptCutoverKind | 'eingangsrechnung';
+export type OcrOnlyRecognizedDataKind = ReceiptCutoverKind | 'eingangsrechnung' | PaymentCutoverKind;
 
 export const OCR_ONLY_RECOGNIZED_DATA = {
   enabled: true,
-  kinds: ['tankbeleg', 'ec_beleg', 'kassenbeleg', 'eingangsrechnung'],
+  kinds: ['tankbeleg', 'ec_beleg', 'kassenbeleg', 'eingangsrechnung', 'mahnung', 'zahlungserinnerung'],
 } as const satisfies {
   enabled: boolean;
   kinds: readonly OcrOnlyRecognizedDataKind[];

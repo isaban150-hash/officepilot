@@ -688,6 +688,7 @@ const deLegacy = {
   'classification.detect.tankbeleg': 'Tankbeleg erkannt',
   'classification.detect.diReceiptScoring': 'Tankbeleg per Dokumentanalyse erkannt',
   'classification.detect.diInvoiceScoring': 'Eingangsrechnung per Dokumentanalyse erkannt',
+  'classification.detect.diPaymentScoring': 'Mahnung/Zahlungserinnerung per Dokumentanalyse erkannt',
   'classification.detect.kontoauszug': 'Kontoauszug erkannt',
   'classification.detect.lohnabrechnung': 'Lohnabrechnung erkannt',
   'classification.detect.lohnunterlagen': 'Lohnunterlagen erkannt',
@@ -2470,6 +2471,7 @@ const trLegacy: Partial<Record<keyof typeof de, string>> = {
 
   'classification.detect.werkvertragMitLv': 'İş kalemleri listeli eser sözleşmesi algılandı',
   'classification.detect.diInvoiceScoring': 'Gelen fatura belge analizi ile algılandı',
+  'classification.detect.diPaymentScoring': 'Ödeme hatırlatması/ihbar belge analizi ile algılandı',
 
   'invoice.skontoFromContractTitle': 'Sözleşmedeki erken ödeme indirimi uygulansın mı?',
   'invoice.skontoFromContractNo': 'Hayır',
@@ -2623,6 +2625,7 @@ const bgLegacy: Partial<Record<keyof typeof de, string>> = {
   'nav.ablage': 'Архив',
   'nav.mehr': 'Още',
   'classification.detect.diInvoiceScoring': 'Входяща фактура, разпозната чрез анализ на документа',
+  'classification.detect.diPaymentScoring': 'Напомняне/предупреждение за плащане, разпознато чрез анализ на документа',
 };
 
 const bg: Partial<Record<keyof typeof de, string>> = {

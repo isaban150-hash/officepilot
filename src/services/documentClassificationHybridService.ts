@@ -1,10 +1,12 @@
 import {
   getInvoiceScoringCutoverEnabled,
+  getPaymentScoringCutoverEnabled,
   getReceiptScoringCutoverEnabled,
 } from '../config/documentIntelligenceConfig';
 import type { DocumentClassificationInput } from '../types/models';
 import type { DetectionResult } from './documentClassificationService';
 import { evaluateInvoiceCutoverEligibility } from './documentInvoiceCutoverService';
+import { evaluatePaymentCutoverEligibility } from './documentPaymentCutoverService';
 import { runReceiptAnalysisPipeline } from './documentReceiptAnalysisPipelineService';
 import { evaluateReceiptCutoverEligibility } from './documentReceiptCutoverService';
 
@@ -27,8 +29,9 @@ export function resolveClassificationDetection(
 
   const receiptEnabled = getReceiptScoringCutoverEnabled();
   const invoiceEnabled = getInvoiceScoringCutoverEnabled();
+  const paymentEnabled = getPaymentScoringCutoverEnabled();
 
-  if (!receiptEnabled && !invoiceEnabled) {
+  if (!receiptEnabled && !invoiceEnabled && !paymentEnabled) {
     return { detection: legacyDetection, cutoverApplied: false };
   }
 
@@ -49,6 +52,16 @@ export function resolveClassificationDetection(
     if (invoiceCutover.eligible && invoiceCutover.detection) {
       return {
         detection: invoiceCutover.detection,
+        cutoverApplied: true,
+      };
+    }
+  }
+
+  if (paymentEnabled) {
+    const paymentCutover = evaluatePaymentCutoverEligibility(pipeline);
+    if (paymentCutover.eligible && paymentCutover.detection) {
+      return {
+        detection: paymentCutover.detection,
         cutoverApplied: true,
       };
     }

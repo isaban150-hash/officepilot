@@ -32,7 +32,9 @@ const COURT_MARKER_PATTERN = /\b(Amtsgericht\s+[\p{L}\-]+(?:\s+[\p{L}\-]+)*)/iu;
 const MANAGING_DIRECTOR_PATTERN =
   /\b(Geschäftsführer(?:in)?|Inhaber(?:in)?)\s*[:.]?\s*([\p{L}\-]+(?:\s+[\p{L}\-]+)*)/iu;
 const PAYMENT_REQUEST_PATTERN =
-  /\b(zahlungsaufforderung|zahlungserinnerung|zahlungsfrist|zu\s+zahlen|zahlbar\s+bis)\b/i;
+  /\b(zahlungsaufforderung|zahlungserinnerung|zahlungsfrist|zu\s+zahlen|zahlbar\s+bis|mahnung|inkasso)\b/i;
+const MAHNUNG_MARKER_PATTERN = /\b(\d+\.\s*mahnung|mahnung|inkasso|zahlungsaufforderung)\b/i;
+const ZAHLUNGSERINNERUNG_MARKER_PATTERN = /\b(zahlungserinnerung)\b/i;
 const CARD_PAYMENT_PATTERN =
   /\b(kartenzahlung|girocard|ec-cash|ec\s+zahlung|visa|mastercard|kreditkarte|contactless|terminal)\b/i;
 const FUEL_MARKER_PATTERN =
@@ -120,6 +122,18 @@ const PATTERN_FEATURES: PatternFeatureSpec[] = [
     category: 'structure',
     pattern: PAYMENT_REQUEST_PATTERN,
     valueFromMatch: () => true,
+  },
+  {
+    id: 'structure.mahnung_marker',
+    category: 'structure',
+    pattern: MAHNUNG_MARKER_PATTERN,
+    valueFromMatch: (match) => match[1]?.trim() ?? match[0]?.trim(),
+  },
+  {
+    id: 'structure.zahlungserinnerung_marker',
+    category: 'structure',
+    pattern: ZAHLUNGSERINNERUNG_MARKER_PATTERN,
+    valueFromMatch: (match) => match[1]?.trim() ?? match[0]?.trim(),
   },
   {
     id: 'payment.card_payment',
