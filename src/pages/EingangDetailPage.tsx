@@ -10,8 +10,8 @@ import { InboxVorgangPanel } from '../components/inbox/InboxVorgangPanel';
 import { LetterExplanationPanel } from '../components/inbox/LetterExplanationPanel';
 import { CommunicationIntegrationPanel } from '../components/communication/CommunicationIntegrationPanel';
 import { INBOX_COMMUNICATION_BUTTON_KEYS } from '../components/communication/communicationNavigation';
-import { AreaAiPanel } from '../components/ai/AreaAiPanel';
 import { SmartIntakeSummary } from '../components/inbox/SmartIntakeSummary';
+import { DocumentFreeQuestionPanel } from '../components/documents/DocumentFreeQuestionPanel';
 import { CollapsibleReviewSection } from '../components/inbox/review/CollapsibleReviewSection';
 import { DocumentReviewExperience } from '../components/inbox/review/DocumentReviewExperience';
 import {
@@ -58,7 +58,6 @@ import {
   createContractTasksForItem,
   createTaskForItem,
 } from '../services/inboxTaskService';
-import { askDocumentAi } from '../services/document/documentAiService';
 import { recordInboxContext } from '../services/brain/companySessionService';
 import {
   applyOfficeActionResult,
@@ -499,15 +498,6 @@ export function EingangDetailPage() {
           buttonKeys={INBOX_COMMUNICATION_BUTTON_KEYS}
           testIdPrefix="eingang"
         />
-        <AreaAiPanel
-          title={translate('detail.askLetter')}
-          placeholder={translate('areaAi.placeholder')}
-          askLabel={translate('areaAi.ask')}
-          loadingLabel={translate('areaAi.loading')}
-          notConfiguredLabel={translate('areaAi.notConfigured')}
-          testIdPrefix="inbox-ai"
-          onAsk={(question) => askDocumentAi({ source: { type: 'inbox', item }, question })}
-        />
       </CollapsibleReviewSection>
 
       <CollapsibleReviewSection
@@ -717,11 +707,9 @@ export function EingangDetailPage() {
           setMoreOptionsExpanded(true);
           setExpandedSections((current) => ({ ...current, technical: true }));
         }}
-        onAskAi={async (question) => {
-          const answer = await askDocumentAi({ source: { type: 'inbox', item }, question });
-          return { text: answer.text, uncertain: answer.source !== 'ai' };
-        }}
       />
+
+      <DocumentFreeQuestionPanel source={{ type: 'inbox', item }} testIdPrefix="document-free-question" />
 
       {item.fileRefId ? (
         <div data-testid="ablage-original-file">

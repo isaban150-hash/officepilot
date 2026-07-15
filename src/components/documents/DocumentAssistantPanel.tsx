@@ -8,10 +8,6 @@ import {
   type InboxDocumentAssistant,
   type OriginalGuidanceStatus,
 } from '../../services/documentAssistantService';
-import {
-  answerInboxDocumentQuestion,
-  isDraftReplyQuestion,
-} from '../../services/documentAssistantQuestionService';
 import { getDocumentDisplayLabelKey } from '../../services/documentDisplayLabelService';
 import type { InboxItem, WorkflowResult, AppLanguage } from '../../types/models';
 
@@ -49,7 +45,6 @@ interface DocumentAssistantPanelProps {
   workflow?: WorkflowResult | null;
   translate: (key: TranslationKey) => string;
   language: AppLanguage;
-  onAskAi?: (question: string) => Promise<{ text: string; uncertain?: boolean }>;
   showChangeType?: boolean;
   onChangeType?: () => void;
 }
@@ -59,7 +54,6 @@ export function DocumentAssistantPanel({
   workflow,
   translate,
   language,
-  onAskAi,
   showChangeType = false,
   onChangeType,
 }: DocumentAssistantPanelProps) {
@@ -67,47 +61,7 @@ export function DocumentAssistantPanel({
     () => buildInboxDocumentAssistant(item, workflow, language),
     [item, workflow, language],
   );
-  const [question, setQuestion] = useState('');
-  const [answerText, setAnswerText] = useState<string | null>(null);
-  const [answerUncertain, setAnswerUncertain] = useState(false);
-  const [isAsking, setIsAsking] = useState(false);
   const [detailsExpanded, setDetailsExpanded] = useState(false);
-
-  const handleAsk = async (value: string) => {
-    const trimmed = value.trim();
-    if (!trimmed) return;
-
-    const ruleAnswer = answerInboxDocumentQuestion(item, assistant, trimmed);
-    let text = interpolate(translate, {
-      key: ruleAnswer.answerKey,
-      params: ruleAnswer.params,
-    });
-    let uncertain = Boolean(ruleAnswer.uncertain);
-
-    if (ruleAnswer.followUpKey) {
-      text = `${text} ${translate(ruleAnswer.followUpKey)}`;
-    }
-
-    const needsAi = isDraftReplyQuestion(trimmed) && onAskAi;
-
-    if (needsAi) {
-      setIsAsking(true);
-      try {
-        const aiAnswer = await onAskAi(trimmed);
-        text = aiAnswer.text;
-        uncertain = Boolean(aiAnswer.uncertain);
-      } catch {
-        text = translate('docAssistant.answer.aiUnavailable');
-        uncertain = true;
-      } finally {
-        setIsAsking(false);
-      }
-    }
-
-    setAnswerText(text);
-    setAnswerUncertain(uncertain);
-  };
-
   const kind = item.classifiedKind ?? workflow?.classifiedKind;
 
   return (
@@ -203,36 +157,6 @@ export function DocumentAssistantPanel({
             </ul>
           </div>
         )}
-      </Card>
-
-      <Card className="document-assistant-panel__section">
-        <h2 className="document-assistant-panel__heading">{translate('docAssistant.section.questions')}</h2>
-        <form
-          className="document-assistant-panel__ask"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void handleAsk(question);
-          }}
-        >
-          <input
-            type="text"
-            value={question}
-            onChange={(event) => setQuestion(event.target.value)}
-            placeholder={translate('docAssistant.question.placeholder')}
-            data-testid="doc-assistant-question-input"
-          />
-          <Button type="submit" loading={isAsking} data-testid="doc-assistant-question-submit">
-            {translate('docAssistant.question.ask')}
-          </Button>
-        </form>
-        {answerText ? (
-          <p
-            className={`document-assistant-panel__answer${answerUncertain ? ' document-assistant-panel__answer--uncertain' : ''}`}
-            data-testid="doc-assistant-answer"
-          >
-            {answerText}
-          </p>
-        ) : null}
       </Card>
 
       <CollapsibleReviewSection

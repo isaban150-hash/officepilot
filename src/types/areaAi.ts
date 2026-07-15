@@ -13,6 +13,10 @@ export interface AreaAiAnswer {
   generatedAt: string;
   errorCode?: string;
   warnings?: string[];
+  /** True when answer rests on incomplete/uncertain document data or AI issues. */
+  uncertain?: boolean;
+  /** User-visible concrete uncertainty notes (not a generic disclaimer alone). */
+  uncertaintyNotes?: string[];
 }
 
 export interface DocumentAiContext {
@@ -20,12 +24,18 @@ export interface DocumentAiContext {
   title: string;
   issuerOrSender: string;
   category: string;
+  classifiedKind?: string | null;
   deadline?: string;
   validUntil?: string | null;
   issueDate?: string | null;
+  amountHint?: string | null;
   recognizedText?: string;
   recognizedDataLines: string[];
+  /** Only set when a confirmed Vorgang link exists. */
+  linkedVorgangId?: string | null;
   linkedVorgangTitle?: string;
+  digitalFolderPath?: string;
+  paperFolderLabel?: string;
   letterSummary?: {
     about: string;
     deadline: string;
@@ -33,6 +43,9 @@ export interface DocumentAiContext {
   };
   missingDocuments: string[];
   tags: string[];
+  /** Precomputed data-quality notes for the prompt and UI. */
+  uncertainFieldNotes: string[];
+  missingFieldNotes: string[];
 }
 
 export interface VorgangAiContext {

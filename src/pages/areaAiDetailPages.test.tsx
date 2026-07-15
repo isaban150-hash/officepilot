@@ -126,14 +126,12 @@ describe('Detail pages AreaAiPanel', () => {
     expect(mounted.container.textContent).toContain('Ablage');
   });
 
-  it('DokumentDetailPage zeigt AreaAiPanel nach Mehr anzeigen', () => {
+  it('DokumentDetailPage zeigt freies Fragenpanel sichtbar (nicht nur hinter Mehr)', () => {
     hydrateDocumentStore([sampleDocument]);
     mounted = renderPage('/dokumente/doc-detail-ai', <DokumentDetailPage />);
     expect(mounted.container.querySelector('[data-testid="document-detail-experience"]')).not.toBeNull();
+    expect(mounted.container.querySelector('[data-testid="document-free-question-panel"]')).not.toBeNull();
     expect(mounted.container.querySelector('[data-testid="document-ai-panel"]')).toBeNull();
-
-    flushSync(() => clickByTestId(mounted!.container, 'show-more-toggle'));
-    expect(mounted.container.querySelector('[data-testid="document-ai-panel"]')).not.toBeNull();
     expect(mounted.container.textContent).toContain('Frage zu diesem Dokument');
   });
 

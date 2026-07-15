@@ -118,6 +118,7 @@ describe('UX-05 Detail experience', () => {
     expect(html).toContain('Mehr anzeigen');
     expect(html).not.toContain('data-testid="show-more-content"');
     expect(html).not.toContain('data-testid="document-ai-panel"');
+    expect(html).toContain('data-testid="document-free-question-panel"');
     for (const term of FORBIDDEN) {
       expect(html).not.toContain(term);
     }

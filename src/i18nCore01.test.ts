@@ -94,6 +94,9 @@ describe('I18N-CORE-01', () => {
       category: 'brief',
       recognizedDataLines: [],
       missingDocuments: [],
+      tags: [],
+      uncertainFieldNotes: [],
+      missingFieldNotes: [],
     }, 'bg');
     expect(docPrompt).toContain('български');
     const commPrompt = buildCommunicationAiPrompt({

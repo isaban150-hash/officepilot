@@ -140,7 +140,7 @@ describe('DOCUMENT-DETAIL-PRESENTATION-FIX-01', () => {
     expect(recommendations.some((entry) => entry.labelKey === 'reviewWorkflow.recommend.writeInvoice')).toBe(false);
   });
 
-  it('DocumentAssistantPanel zeigt keine Frage-Chips, Freitext bleibt', () => {
+  it('DocumentAssistantPanel zeigt automatische Erklärung ohne Frage-Chips und ohne Freitextfragen', () => {
     const item = createMockInboxItemFromUpload({
       sourceFileName: 'frage.pdf',
       recognizedText: 'BG BAU Beitragsbescheid',
@@ -154,8 +154,8 @@ describe('DOCUMENT-DETAIL-PRESENTATION-FIX-01', () => {
         language="de"
       />,
     );
-    expect(html).toContain('data-testid="doc-assistant-question-input"');
-    expect(html).toContain('data-testid="doc-assistant-question-submit"');
+    expect(html).toContain('data-testid="document-assistant-panel"');
+    expect(html).not.toContain('data-testid="doc-assistant-question-input"');
     expect(html).not.toContain('document-assistant-panel__chips');
     expect(html).not.toContain('document-assistant-panel__chip');
   });

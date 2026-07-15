@@ -2650,6 +2650,37 @@ body {
   line-height: 1.5;
 }
 
+.document-free-question-panel__hint {
+  margin: 0.35rem 0 0;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.document-free-question-panel__error {
+  margin: 0.75rem 0 0;
+  font-size: 0.9rem;
+  color: var(--color-danger, #b91c1c);
+}
+
+.document-free-question-panel__answer--uncertain {
+  border-left: 3px solid var(--color-warning, #d97706);
+  padding-left: 0.75rem;
+}
+
+.document-free-question-panel__uncertainty {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.document-free-question-panel__uncertainty ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
 .assistant-answer-section {
   margin-bottom: 1.5rem;
 }

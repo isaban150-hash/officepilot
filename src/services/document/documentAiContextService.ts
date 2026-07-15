@@ -7,7 +7,7 @@ import { formatMessage } from '../../i18n/formatMessage';
 import { getCachedSetup } from '../persistenceService';
 import type { ExplanationTextBlock } from '../../i18n/types';
 import type { DocumentAiContext } from '../../types/areaAi';
-import type { CompanyDocument, InboxItem } from '../../types/models';
+import type { AppLanguage, CompanyDocument, InboxItem } from '../../types/models';
 
 function blockToPlainText(block: ExplanationTextBlock): string {
   const lang = getCachedSetup()?.language ?? 'de';
@@ -25,25 +25,115 @@ function buildRecognizedDataLines(data: Record<string, string>): string[] {
     .map(([key, value]) => `${key}: ${sanitizeAiText(value)}`);
 }
 
+function note(key: TranslationKey, lang: AppLanguage): string {
+  return t(key, lang);
+}
+
+function pickAmountHint(data: Record<string, string> | undefined): string | null {
+  if (!data) return null;
+  const keys = ['Betrag', 'Gesamtbetrag', 'Brutto', 'Netto', 'Amount', 'Summe'];
+  for (const key of keys) {
+    const value = data[key]?.trim();
+    if (value) return sanitizeAiText(value);
+  }
+  return null;
+}
+
+function collectInboxQualityNotes(
+  item: InboxItem,
+  lang: AppLanguage,
+): { uncertainFieldNotes: string[]; missingFieldNotes: string[] } {
+  const uncertainFieldNotes: string[] = [];
+  const missingFieldNotes: string[] = [];
+  const textBudget = [
+    item.title,
+    item.sender,
+    ...Object.values(item.recognizedData ?? {}),
+  ]
+    .join(' ')
+    .trim();
+
+  if (!textBudget) {
+    missingFieldNotes.push(note('document.freeQuestion.note.noRecognizedText', lang));
+  }
+  if (!item.deadline && !item.recognizedData.Frist) {
+    missingFieldNotes.push(note('document.freeQuestion.note.noDeadline', lang));
+  }
+  if (!item.sender?.trim()) {
+    missingFieldNotes.push(note('document.freeQuestion.note.noSender', lang));
+  }
+  if (!item.vorgangId && !item.vorgangTitle) {
+    uncertainFieldNotes.push(note('document.freeQuestion.note.customerUncertain', lang));
+  } else if (item.vorgangLinkStatus === 'none' || (!item.vorgangId && item.vorgangTitle)) {
+    uncertainFieldNotes.push(note('document.freeQuestion.note.customerUncertain', lang));
+  }
+  if (item.classifiedKind === 'sonstiges' || !item.classifiedKind) {
+    uncertainFieldNotes.push(note('document.freeQuestion.note.documentTypeUncertain', lang));
+  }
+  if (pickAmountHint(item.recognizedData)) {
+    uncertainFieldNotes.push(note('document.freeQuestion.note.amountNeedsReview', lang));
+  }
+
+  return { uncertainFieldNotes, missingFieldNotes };
+}
+
+function collectDocumentQualityNotes(
+  document: CompanyDocument,
+  lang: AppLanguage,
+): { uncertainFieldNotes: string[]; missingFieldNotes: string[] } {
+  const uncertainFieldNotes: string[] = [];
+  const missingFieldNotes: string[] = [];
+
+  if (!document.recognizedText?.trim()) {
+    missingFieldNotes.push(note('document.freeQuestion.note.noRecognizedText', lang));
+  }
+  if (!document.validUntil && !document.issueDate && !document.documentDate) {
+    missingFieldNotes.push(note('document.freeQuestion.note.noDeadline', lang));
+  }
+  if (!document.issuer?.trim()) {
+    missingFieldNotes.push(note('document.freeQuestion.note.noSender', lang));
+  }
+  if (!document.linkedVorgang?.vorgangId) {
+    uncertainFieldNotes.push(note('document.freeQuestion.note.customerUncertain', lang));
+  }
+  if (!document.classifiedKind || document.classifiedKind === 'sonstiges') {
+    uncertainFieldNotes.push(note('document.freeQuestion.note.documentTypeUncertain', lang));
+  }
+
+  return { uncertainFieldNotes, missingFieldNotes };
+}
+
 export function buildDocumentAiContextFromDocument(document: CompanyDocument): DocumentAiContext {
+  const lang = getCachedSetup()?.language ?? 'de';
+  const quality = collectDocumentQualityNotes(document, lang);
+  const confirmedLink = Boolean(document.linkedVorgang?.vorgangId);
+
   return {
     sourceType: 'document',
     title: document.title,
     issuerOrSender: document.issuer,
     category: document.category,
+    classifiedKind: document.classifiedKind ?? null,
     issueDate: document.issueDate,
     validUntil: document.validUntil,
     recognizedText: document.recognizedText
       ? sanitizeAiText(truncateText(document.recognizedText))
       : undefined,
     recognizedDataLines: document.tags.map((tag) => `Tag: ${sanitizeAiText(tag)}`),
-    linkedVorgangTitle: document.linkedVorgang?.vorgangTitle,
+    linkedVorgangId: confirmedLink ? document.linkedVorgang!.vorgangId : null,
+    linkedVorgangTitle: confirmedLink ? document.linkedVorgang!.vorgangTitle : undefined,
+    digitalFolderPath: document.digitalFolder?.path,
+    paperFolderLabel: document.paperFolder?.label,
     missingDocuments: [],
     tags: document.tags,
+    uncertainFieldNotes: quality.uncertainFieldNotes,
+    missingFieldNotes: quality.missingFieldNotes,
   };
 }
 
 export function buildDocumentAiContextFromInbox(item: InboxItem): DocumentAiContext {
+  const lang = getCachedSetup()?.language ?? 'de';
+  const quality = collectInboxQualityNotes(item, lang);
   const vertragstext =
     item.recognizedData._vertragstext ?? item.recognizedData.Vertragstext ?? '';
   const recognizedText = truncateText(
@@ -59,16 +149,22 @@ export function buildDocumentAiContextFromInbox(item: InboxItem): DocumentAiCont
 
   const explanation = getLetterExplanation(item);
   const contract = analyzeContractFromInbox(item);
+  const confirmedLink = Boolean(item.vorgangId);
 
   return {
     sourceType: 'inbox',
     title: item.title,
     issuerOrSender: item.sender,
     category: item.documentType,
+    classifiedKind: item.classifiedKind ?? null,
     deadline: item.deadline ?? item.recognizedData.Frist ?? undefined,
+    amountHint: pickAmountHint(item.recognizedData),
     recognizedText: sanitizeAiText(recognizedText),
     recognizedDataLines: buildRecognizedDataLines(item.recognizedData),
-    linkedVorgangTitle: item.vorgangTitle,
+    linkedVorgangId: confirmedLink ? item.vorgangId : null,
+    linkedVorgangTitle: confirmedLink ? item.vorgangTitle : undefined,
+    digitalFolderPath: item.digitalFolder?.path,
+    paperFolderLabel: item.paperFiling?.label,
     letterSummary: explanation
       ? {
           about: sanitizeAiText(blockToPlainText(explanation.about)),
@@ -80,6 +176,8 @@ export function buildDocumentAiContextFromInbox(item: InboxItem): DocumentAiCont
       ? contract.requiredDocuments.map((doc) => doc.reason || doc.type.replace(/_/g, ' '))
       : [],
     tags: [],
+    uncertainFieldNotes: quality.uncertainFieldNotes,
+    missingFieldNotes: quality.missingFieldNotes,
   };
 }
 
@@ -88,16 +186,23 @@ export function buildDocumentAiAllowedSourceText(context: DocumentAiContext): st
     context.title,
     context.issuerOrSender,
     context.category,
+    context.classifiedKind ?? '',
     context.deadline ?? '',
     context.validUntil ?? '',
     context.issueDate ?? '',
+    context.amountHint ?? '',
     context.recognizedText ?? '',
     ...context.recognizedDataLines,
+    context.linkedVorgangId ?? '',
     context.linkedVorgangTitle ?? '',
+    context.digitalFolderPath ?? '',
+    context.paperFolderLabel ?? '',
     context.letterSummary?.about ?? '',
     context.letterSummary?.deadline ?? '',
     context.letterSummary?.nextSteps ?? '',
     ...context.missingDocuments,
     ...context.tags,
+    ...context.uncertainFieldNotes,
+    ...context.missingFieldNotes,
   ].join('\n');
 }

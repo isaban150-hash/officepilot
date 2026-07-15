@@ -1685,6 +1685,27 @@ const deLegacy = {
   'areaAi.inbox.title': 'Frage zu diesem Schreiben',
   'areaAi.vorgang.title': 'Frage zu diesem Auftrag',
 
+  'document.freeQuestion.title': 'Frage zu diesem Dokument',
+  'document.freeQuestion.placeholder': 'Schreiben Sie Ihre Frage zu diesem Dokument…',
+  'document.freeQuestion.ask': 'Fragen',
+  'document.freeQuestion.loading': 'Antwort wird erstellt…',
+  'document.freeQuestion.notConfigured':
+    'Für Antworten ist eine KI-Einrichtung nötig. Es wird nichts gespeichert oder versendet.',
+  'document.freeQuestion.scopeHint':
+    'Die Antwort bezieht sich nur auf dieses Dokument. Unsichere Angaben werden gekennzeichnet.',
+  'document.freeQuestion.uncertainBadge': 'Unsicher / unvollständig',
+  'document.freeQuestion.error.empty': 'Bitte geben Sie eine Frage ein.',
+  'document.freeQuestion.error.unavailable': 'KI nicht verfügbar.',
+  'document.freeQuestion.error.failed': 'Die Antwort konnte nicht erstellt werden.',
+  'document.freeQuestion.note.noRecognizedText': 'Im Dokument ist kein belastbarer Text erkennbar.',
+  'document.freeQuestion.note.noDeadline': 'Im Dokument ist keine eindeutige Frist erkennbar.',
+  'document.freeQuestion.note.noSender': 'Ein Absender ist nicht sicher erkennbar.',
+  'document.freeQuestion.note.customerUncertain': 'Ein Kunde oder Auftrag ist nicht sicher zugeordnet.',
+  'document.freeQuestion.note.documentTypeUncertain': 'Die Dokumentart ist nicht sicher erkannt.',
+  'document.freeQuestion.note.amountNeedsReview': 'Der Betrag wurde erkannt, sollte aber geprüft werden.',
+  'document.freeQuestion.note.cannotAnswerFromDocument':
+    'Diese Frage lässt sich aus dem Dokument möglicherweise nicht beantworten.',
+
   'communication.page.title': 'Kommunikation',
   'communication.page.subtitle': 'Nachrichten formulieren – E-Mail, WhatsApp oder Brief',
   'communication.section.title': 'Nachrichten',
@@ -2743,6 +2764,27 @@ const trLegacy: Partial<Record<keyof typeof de, string>> = {
   'document.area.paper.pending': 'Kağıt açık',
   'document.area.paper.filed': 'Kağıt dosyalandı',
 
+  'document.freeQuestion.title': 'Bu belge hakkında soru',
+  'document.freeQuestion.placeholder': 'Bu belge hakkındaki sorunuzu yazın…',
+  'document.freeQuestion.ask': 'Sor',
+  'document.freeQuestion.loading': 'Yanıt hazırlanıyor…',
+  'document.freeQuestion.notConfigured':
+    'Yanıtlar için yapay zeka kurulumu gerekir. Hiçbir şey kaydedilmez veya gönderilmez.',
+  'document.freeQuestion.scopeHint':
+    'Yanıt yalnızca bu belgeye aittir. Belirsiz bilgiler işaretlenir.',
+  'document.freeQuestion.uncertainBadge': 'Belirsiz / eksik',
+  'document.freeQuestion.error.empty': 'Lütfen bir soru girin.',
+  'document.freeQuestion.error.unavailable': 'Yapay zeka kullanılamıyor.',
+  'document.freeQuestion.error.failed': 'Yanıt oluşturulamadı.',
+  'document.freeQuestion.note.noRecognizedText': 'Belgede güvenilir metin yok.',
+  'document.freeQuestion.note.noDeadline': 'Belgede net bir süre görünmüyor.',
+  'document.freeQuestion.note.noSender': 'Gönderen güvenilir şekilde tanınmadı.',
+  'document.freeQuestion.note.customerUncertain': 'Müşteri veya iş güvenilir şekilde atanmadı.',
+  'document.freeQuestion.note.documentTypeUncertain': 'Belge türü güvenilir şekilde tanınmadı.',
+  'document.freeQuestion.note.amountNeedsReview': 'Tutar tanındı, ancak kontrol edilmelidir.',
+  'document.freeQuestion.note.cannotAnswerFromDocument':
+    'Bu soru belgeden yanıtlanamayabilir.',
+
   'ablage.title': 'Giriş',
   'mehr.documents': 'Belge arşivi',
   'mehr.documentsDesc': 'Kayıtlı firma belgelerini bulun ve yönetin.',
@@ -2831,6 +2873,27 @@ const bgLegacy: Partial<Record<keyof typeof de, string>> = {
   'document.area.empty': 'В тази област няма записани документи.',
   'document.area.paper.pending': 'Хартия отворена',
   'document.area.paper.filed': 'Хартията е подредена',
+
+  'document.freeQuestion.title': 'Въпрос за този документ',
+  'document.freeQuestion.placeholder': 'Напишете въпроса си за този документ…',
+  'document.freeQuestion.ask': 'Питай',
+  'document.freeQuestion.loading': 'Отговорът се подготвя…',
+  'document.freeQuestion.notConfigured':
+    'За отговори е нужна KI настройка. Нищо не се запазва и не се изпраща.',
+  'document.freeQuestion.scopeHint':
+    'Отговорът се отнася само до този документ. Несигурните данни се маркират.',
+  'document.freeQuestion.uncertainBadge': 'Несигурно / непълно',
+  'document.freeQuestion.error.empty': 'Моля, въведете въпрос.',
+  'document.freeQuestion.error.unavailable': 'KI не е налична.',
+  'document.freeQuestion.error.failed': 'Отговорът не можа да бъде създаден.',
+  'document.freeQuestion.note.noRecognizedText': 'В документа няма надежден текст.',
+  'document.freeQuestion.note.noDeadline': 'В документа няма ясен срок.',
+  'document.freeQuestion.note.noSender': 'Подателят не е сигурно разпознат.',
+  'document.freeQuestion.note.customerUncertain': 'Клиент или поръчка не са сигурно свързани.',
+  'document.freeQuestion.note.documentTypeUncertain': 'Видът на документа не е сигурно разпознат.',
+  'document.freeQuestion.note.amountNeedsReview': 'Сумата е разпозната, но трябва да се провери.',
+  'document.freeQuestion.note.cannotAnswerFromDocument':
+    'Този въпрос може да не се отговаря от документа.',
 
   'ablage.title': 'Вход',
   'mehr.documents': 'Архив на документи',

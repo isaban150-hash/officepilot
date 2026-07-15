@@ -6,8 +6,9 @@ import {
   buildDocumentAiContextFromInbox,
 } from './documentAiContextService';
 import { buildDocumentAiPrompt } from './documentAiPromptBuilder';
+import { t } from '../../i18n';
 import { AREA_AI_DISCLAIMER, type AreaAiAnswer, type DocumentAiContext } from '../../types/areaAi';
-import type { CompanyDocument, InboxItem } from '../../types/models';
+import type { AppLanguage, CompanyDocument, InboxItem } from '../../types/models';
 
 export type DocumentAiSource =
   | { type: 'document'; document: CompanyDocument }
@@ -17,8 +18,10 @@ function unavailableAnswer(
   question: string,
   text: string,
   errorCode?: string,
+  uncertaintyNotes: string[] = [],
   warnings?: string[],
 ): AreaAiAnswer {
+  const notes = uncertaintyNotes.length > 0 ? uncertaintyNotes : undefined;
   return {
     question,
     text,
@@ -27,6 +30,8 @@ function unavailableAnswer(
     generatedAt: new Date().toISOString(),
     errorCode,
     warnings,
+    uncertain: true,
+    uncertaintyNotes: notes,
   };
 }
 
@@ -37,17 +42,37 @@ function buildContext(source: DocumentAiSource): DocumentAiContext {
   return buildDocumentAiContextFromInbox(source.item);
 }
 
+function collectAnswerUncertainty(
+  context: DocumentAiContext,
+  warnings: string[] | undefined,
+  lang: AppLanguage,
+): string[] {
+  const notes = [
+    ...context.missingFieldNotes,
+    ...context.uncertainFieldNotes,
+    ...(warnings ?? []),
+  ];
+  if (!context.recognizedText?.trim()) {
+    notes.push(t('document.freeQuestion.note.cannotAnswerFromDocument', lang));
+  }
+  return Array.from(new Set(notes.filter(Boolean)));
+}
+
 export async function askDocumentAi(input: {
   source: DocumentAiSource;
   question: string;
 }): Promise<AreaAiAnswer> {
+  const lang = getCachedSetup().language;
   const trimmedQuestion = input.question.trim();
   if (!trimmedQuestion) {
-    return unavailableAnswer('', 'Bitte geben Sie eine Frage ein.', 'invalid_prompt');
+    return unavailableAnswer(
+      '',
+      t('document.freeQuestion.error.empty', lang),
+      'invalid_prompt',
+    );
   }
 
   const context = buildContext(input.source);
-  const lang = getCachedSetup().language;
   const prompt = buildDocumentAiPrompt(trimmedQuestion, context, lang);
   const allowedSourceText = buildAllowedFromContext(context);
 
@@ -57,15 +82,23 @@ export async function askDocumentAi(input: {
     guardContext: { allowedSourceText },
   });
 
+  const uncertaintyNotes = collectAnswerUncertainty(context, result.warnings, lang);
+
   if (result.source === 'unavailable') {
-    return unavailableAnswer(trimmedQuestion, result.message ?? 'KI nicht verfügbar.', result.errorCode);
+    return unavailableAnswer(
+      trimmedQuestion,
+      result.message ?? t('document.freeQuestion.error.unavailable', lang),
+      result.errorCode,
+      uncertaintyNotes,
+    );
   }
 
   if (result.source === 'rule_fallback' || !result.text) {
     return unavailableAnswer(
       trimmedQuestion,
-      result.message ?? 'KI-Antwort konnte nicht erstellt werden.',
+      result.message ?? t('document.freeQuestion.error.failed', lang),
       result.errorCode,
+      uncertaintyNotes,
       result.warnings,
     );
   }
@@ -77,6 +110,8 @@ export async function askDocumentAi(input: {
     disclaimer: AREA_AI_DISCLAIMER,
     generatedAt: new Date().toISOString(),
     warnings: result.warnings,
+    uncertain: uncertaintyNotes.length > 0,
+    uncertaintyNotes: uncertaintyNotes.length > 0 ? uncertaintyNotes : undefined,
   };
 }
 
