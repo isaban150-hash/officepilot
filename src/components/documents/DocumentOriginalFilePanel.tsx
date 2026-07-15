@@ -57,7 +57,7 @@ export function DocumentOriginalFilePanel({
 
   if (!fileRef) {
     return (
-      <Card data-testid={testId}>
+      <Card className="document-original-file-panel" data-testid={testId}>
         <p>{translate('document.original.unavailable')}</p>
       </Card>
     );
@@ -105,7 +105,7 @@ export function DocumentOriginalFilePanel({
   };
 
   return (
-    <Card data-testid={testId}>
+    <Card className="document-original-file-panel" data-testid={testId}>
       <h3 className="section__title">{translate('document.original.title')}</h3>
       <dl className="document-original-file-panel__meta">
         <DataRow label={translate('document.upload.originalFileName')} value={fileRef.originalFileName} />
@@ -141,21 +141,25 @@ export function DocumentOriginalFilePanel({
       ) : null}
 
       {previewUrl && isImageUpload(fileRef.mimeType, fileRef.originalFileName) ? (
-        <img
-          src={previewUrl}
-          alt={fileRef.originalFileName}
-          className="document-original-file-panel__image"
-          data-testid={`${testId}-image`}
-        />
+        <div className="document-original-file-panel__preview">
+          <img
+            src={previewUrl}
+            alt={fileRef.originalFileName}
+            className="document-original-file-panel__image"
+            data-testid={`${testId}-image`}
+          />
+        </div>
       ) : null}
 
       {previewUrl && isPdfUpload(fileRef.mimeType, fileRef.originalFileName) ? (
-        <iframe
-          title={fileRef.originalFileName}
-          src={previewUrl}
-          className="document-original-file-panel__pdf"
-          data-testid={`${testId}-pdf`}
-        />
+        <div className="document-original-file-panel__preview">
+          <iframe
+            title={fileRef.originalFileName}
+            src={previewUrl}
+            className="document-original-file-panel__pdf"
+            data-testid={`${testId}-pdf`}
+          />
+        </div>
       ) : null}
 
       {promoteError ? (

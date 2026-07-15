@@ -8,6 +8,7 @@ import type {
 } from '../types/documentLifecycle';
 import type { DocumentMemory, ProofMemory } from '../types/memory';
 import type { InboxItem, PendingItem, PendingItemKind } from '../types/models';
+import type { TranslationKey } from '../i18n';
 import { getCommunicationReplyStatus, getEventsForContext } from './communicationHistoryService';
 import { getDocumentById } from './documentService';
 import { filterActiveItems, getInboxItemById, getInboxItems } from './inboxService';
@@ -233,8 +234,14 @@ function buildNextStep(
   status: DocumentLifecycleStatus,
   openItems: string[],
   reasons: DocumentLifecycleReason[],
+  physicalFiled: boolean,
 ): string {
-  if (status === 'done') return 'Kein weiterer Schritt nötig.';
+  if (status === 'done') {
+    if (physicalFiled) {
+      return 'Papierablage erledigt – digitales Dokument bleibt im Archiv.';
+    }
+    return 'Kein weiterer Schritt nötig.';
+  }
   if (reasons.includes('reply_open')) return 'Antwort vorbereiten oder als erledigt markieren.';
   if (reasons.includes('file_original')) return 'Original abheften und in OfficePilot bestätigen.';
   if (reasons.includes('deadline_open')) return 'Frist prüfen und rechtzeitig reagieren.';
@@ -242,7 +249,9 @@ function buildNextStep(
   if (reasons.includes('task_open')) return 'Offene Aufgabe erledigen.';
   if (status === 'waiting') return 'Entwurf prüfen und versenden.';
   if (status === 'answered') return 'Original abheften, falls noch offen.';
-  if (status === 'filed') return 'Ablage ist erledigt – bei Bedarf Dokument nachlesen.';
+  if (status === 'filed') {
+    return 'Papierablage erledigt – digitales Dokument bleibt im Archiv.';
+  }
   if (openItems.length === 0) return 'Dokument im Archiv prüfen.';
   return openItems[0] ?? 'Nächsten Schritt prüfen.';
 }
@@ -313,8 +322,6 @@ export function resolveDocumentLifecycle(
   } else if (physicalFiled && status !== 'done' && status !== 'waiting' && status !== 'answered') {
     if (openItems.filter((item) => item !== 'Original noch abheften').length === 0) {
       status = 'done';
-    } else if (reasons.includes('file_original') === false) {
-      status = physicalFiled ? 'filed' : status;
     }
   }
 
@@ -326,10 +333,6 @@ export function resolveDocumentLifecycle(
     status = 'done';
   }
 
-  if (physicalFiled && status === 'needs_action' && !reasons.includes('file_original')) {
-    status = 'filed';
-  }
-
   return {
     status,
     title,
@@ -337,7 +340,7 @@ export function resolveDocumentLifecycle(
     inboxId: memory?.inboxId ?? inboxItem?.id,
     completedSteps: buildCompletedSteps(memory, Boolean(document)),
     openItems,
-    nextStep: buildNextStep(status, openItems, reasons),
+    nextStep: buildNextStep(status, openItems, reasons, physicalFiled),
     openReasons: reasons,
     route: lifecycleRoute(documentId, memory?.inboxId ?? inboxItem?.id),
   };
@@ -431,11 +434,37 @@ export function getDocumentLifecycleStatusLabel(status: DocumentLifecycleStatus)
     case 'answered':
       return 'Beantwortet';
     case 'filed':
-      return 'Original abgeheftet';
+      return 'Papieroriginal abgeheftet';
     case 'done':
       return 'Erledigt';
     default:
       return 'Unbekannt';
+  }
+}
+
+export function getDocumentLifecycleStatusLabelKey(
+  status: DocumentLifecycleStatus,
+  options?: { physicalFiled?: boolean },
+): TranslationKey {
+  switch (status) {
+    case 'new':
+      return 'document.lifecycle.status.new';
+    case 'recognized':
+      return 'document.lifecycle.status.recognized';
+    case 'needs_action':
+      return 'document.lifecycle.status.needsAction';
+    case 'waiting':
+      return 'document.lifecycle.status.waiting';
+    case 'answered':
+      return 'document.lifecycle.status.answered';
+    case 'filed':
+      return 'document.lifecycle.status.paperFiled';
+    case 'done':
+      return options?.physicalFiled
+        ? 'document.lifecycle.status.paperDoneDigitalRemains'
+        : 'document.lifecycle.status.done';
+    default:
+      return 'document.lifecycle.status.unknown';
   }
 }
 

@@ -285,6 +285,13 @@ body {
   color: var(--color-primary);
 }
 
+.detail-experience-section__hint {
+  margin: var(--space-2) 0 0;
+  font-size: 0.875rem;
+  line-height: 1.45;
+  color: var(--color-text-muted);
+}
+
 .detail-experience-section--paper {
   background: var(--color-accent-soft);
   border: 1px solid #c7d9f8;

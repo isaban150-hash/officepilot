@@ -269,3 +269,49 @@
   font-weight: 600;
   margin-bottom: var(--space-2);
 }
+
+/* Original file panel – mobile containment (iPhone/Safari) */
+.document-original-file-panel,
+[data-testid='ablage-original-file'],
+.document-detail__preview {
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+
+.document-original-file-panel__preview {
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+
+.document-original-file-panel__image {
+  display: block;
+  max-width: 100%;
+  width: auto;
+  height: auto;
+  margin: 0 auto var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--op-border);
+  box-sizing: border-box;
+}
+
+.document-original-file-panel__pdf {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-height: 360px;
+  border: 1px solid var(--op-border);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-4);
+  box-sizing: border-box;
+}
+
+.document-original-file-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  max-width: 100%;
+}

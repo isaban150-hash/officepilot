@@ -1,9 +1,10 @@
 import { Card, CardMeta, CardTitle } from '../ui/Card';
 import { useApp } from '../../context/AppContext';
 import {
-  getDocumentLifecycleStatusLabel,
+  getDocumentLifecycleStatusLabelKey,
   resolveDocumentLifecycle,
 } from '../../services/documentLifecycleService';
+import { getDocumentMemoryByDocumentId } from '../../services/officePilotMemoryService';
 
 interface DocumentLifecycleCardProps {
   documentId: string;
@@ -14,12 +15,16 @@ export function DocumentLifecycleCard({ documentId, revision = 0 }: DocumentLife
   const { translate } = useApp();
   void revision;
   const lifecycle = resolveDocumentLifecycle({ documentId });
+  const memory = getDocumentMemoryByDocumentId(documentId);
+  const physicalFiled = Boolean(memory?.physicalFiled);
 
   if (!lifecycle) {
     return null;
   }
 
-  const statusLabel = getDocumentLifecycleStatusLabel(lifecycle.status);
+  const statusLabel = translate(
+    getDocumentLifecycleStatusLabelKey(lifecycle.status, { physicalFiled }),
+  );
 
   return (
     <div
@@ -60,7 +65,10 @@ export function DocumentLifecycleCard({ documentId, revision = 0 }: DocumentLife
           <h3 className="detail-experience-section__label">
             {translate('document.lifecycle.nextStep')}
           </h3>
-          <p className="detail-experience-section__value detail-experience-section__value--assistant">
+          <p
+            className="detail-experience-section__value detail-experience-section__value--assistant"
+            data-testid="document-lifecycle-next-step"
+          >
             {lifecycle.nextStep}
           </p>
         </section>

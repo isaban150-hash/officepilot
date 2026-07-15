@@ -2029,20 +2029,35 @@ const deLegacy = {
 
   'document.filing.title': 'Ablage',
   'document.filing.digital': 'Digital',
+  'document.filing.digitalSaved': 'Digital gespeichert',
   'document.filing.paperFolder': 'Papierordner',
   'document.filing.register': 'Register',
-  'document.filing.originalStatus': 'Status Original',
-  'document.filing.statusPending': 'Original noch abheften',
-  'document.filing.statusFiled': 'Original abgeheftet',
+  'document.filing.originalStatus': 'Papierstatus',
+  'document.filing.statusPending': 'Papieroriginal noch abheften',
+  'document.filing.statusFiled': 'Papieroriginal abgeheftet',
   'document.filing.noPaperFolder': 'Kein Papierordner – Entsorgen oder manuell ablegen',
   'document.filing.noRegister': '—',
-  'document.filing.markFiledAction': 'Original abgeheftet',
-  'document.filing.markedFiled': 'Original als abgeheftet markiert',
+  'document.filing.markFiledAction': 'Papieroriginal abgeheftet',
+  'document.filing.markedFiled': 'Nur Papierstatus aktualisiert – digitales Dokument bleibt gespeichert',
+  'document.filing.paperOnlyHint':
+    'Markiert nur das Papieroriginal. Das digitale Dokument bleibt unter Dokumente auffindbar.',
 
   'document.lifecycle.title': 'Stand dieses Dokuments',
   'document.lifecycle.completed': 'OfficePilot hat erledigt',
   'document.lifecycle.open': 'Noch offen',
   'document.lifecycle.nextStep': 'Nächster Schritt',
+  'document.lifecycle.status.new': 'Neu erfasst',
+  'document.lifecycle.status.recognized': 'Digital gespeichert',
+  'document.lifecycle.status.needsAction': 'Handlung nötig',
+  'document.lifecycle.status.waiting': 'Warten auf Versand',
+  'document.lifecycle.status.answered': 'Beantwortet',
+  'document.lifecycle.status.paperFiled': 'Papieroriginal abgeheftet',
+  'document.lifecycle.status.done': 'Erledigt',
+  'document.lifecycle.status.paperDoneDigitalRemains':
+    'Papierablage erledigt – digitales Dokument bleibt im Archiv',
+  'document.lifecycle.status.unknown': 'Unbekannt',
+  'document.lifecycle.status.taskDone': 'Aufgabe erledigt',
+  'document.lifecycle.status.archived': 'Dokument archiviert',
 
   'heute.lifecycleTitle': 'Offene Dokumente',
 
@@ -2660,6 +2675,38 @@ const trLegacy: Partial<Record<keyof typeof de, string>> = {
   'financeIntelligence.nextStep.assignMaterial': 'Malzemeyi ata',
   'financeIntelligence.nextStep.default': 'Adımı aç',
   'financeIntelligence.uncertainty.reviewRecommended': 'Lütfen belgelerinize göre kontrol edin – vergi danışmanlığı değil.',
+
+  'document.filing.title': 'Arşiv',
+  'document.filing.digital': 'Dijital',
+  'document.filing.digitalSaved': 'Dijital olarak kaydedildi',
+  'document.filing.paperFolder': 'Kağıt klasörü',
+  'document.filing.register': 'Defter',
+  'document.filing.originalStatus': 'Kağıt durumu',
+  'document.filing.statusPending': 'Kağıt orijinali henüz dosyalanmadı',
+  'document.filing.statusFiled': 'Kağıt orijinali dosyalandı',
+  'document.filing.noPaperFolder': 'Kağıt klasörü yok – imha edin veya elle dosyalayın',
+  'document.filing.noRegister': '—',
+  'document.filing.markFiledAction': 'Kağıt orijinali dosyalandı',
+  'document.filing.markedFiled': 'Yalnızca kağıt durumu güncellendi – dijital belge kaydedilmiş olarak kalır',
+  'document.filing.paperOnlyHint':
+    'Yalnızca kağıt orijinalini işaretler. Dijital belge Belgeler altında bulunmaya devam eder.',
+
+  'document.lifecycle.title': 'Bu belgenin durumu',
+  'document.lifecycle.completed': 'OfficePilot tamamladı',
+  'document.lifecycle.open': 'Hâlâ açık',
+  'document.lifecycle.nextStep': 'Sonraki adım',
+  'document.lifecycle.status.new': 'Yeni kaydedildi',
+  'document.lifecycle.status.recognized': 'Dijital olarak kaydedildi',
+  'document.lifecycle.status.needsAction': 'İşlem gerekli',
+  'document.lifecycle.status.waiting': 'Gönderim bekleniyor',
+  'document.lifecycle.status.answered': 'Yanıtlandı',
+  'document.lifecycle.status.paperFiled': 'Kağıt orijinali dosyalandı',
+  'document.lifecycle.status.done': 'Tamamlandı',
+  'document.lifecycle.status.paperDoneDigitalRemains':
+    'Kağıt arşivleme tamam – dijital belge arşivde kalır',
+  'document.lifecycle.status.unknown': 'Bilinmiyor',
+  'document.lifecycle.status.taskDone': 'Görev tamamlandı',
+  'document.lifecycle.status.archived': 'Belge arşivlendi',
 };
 
 const tr: Partial<Record<keyof typeof de, string>> = {
@@ -2691,6 +2738,39 @@ const bgLegacy: Partial<Record<keyof typeof de, string>> = {
     'Договор (работен/подизпълнител/подизпълнител), разпознат чрез анализ на документа',
   'classification.detect.diCustomerScoring':
     'Поръчка/оферта/потвърждение на поръчка, разпознати чрез анализ на документа',
+
+  'document.filing.title': 'Архив',
+  'document.filing.digital': 'Дигитално',
+  'document.filing.digitalSaved': 'Дигитално записано',
+  'document.filing.paperFolder': 'Хартиена папка',
+  'document.filing.register': 'Регистър',
+  'document.filing.originalStatus': 'Статус на хартията',
+  'document.filing.statusPending': 'Хартиеният оригинал още не е подреден',
+  'document.filing.statusFiled': 'Хартиеният оригинал е подреден',
+  'document.filing.noPaperFolder': 'Няма хартиена папка – изхвърлете или подредете ръчно',
+  'document.filing.noRegister': '—',
+  'document.filing.markFiledAction': 'Хартиеният оригинал е подреден',
+  'document.filing.markedFiled':
+    'Обновен е само хартиеният статус – дигиталният документ остава записан',
+  'document.filing.paperOnlyHint':
+    'Маркира само хартиения оригинал. Дигиталният документ остава намираем в Документи.',
+
+  'document.lifecycle.title': 'Състояние на този документ',
+  'document.lifecycle.completed': 'OfficePilot е изпълнил',
+  'document.lifecycle.open': 'Все още отворено',
+  'document.lifecycle.nextStep': 'Следваща стъпка',
+  'document.lifecycle.status.new': 'Ново записано',
+  'document.lifecycle.status.recognized': 'Дигитално записано',
+  'document.lifecycle.status.needsAction': 'Нужно е действие',
+  'document.lifecycle.status.waiting': 'Изчаква изпращане',
+  'document.lifecycle.status.answered': 'Отговорено',
+  'document.lifecycle.status.paperFiled': 'Хартиеният оригинал е подреден',
+  'document.lifecycle.status.done': 'Готово',
+  'document.lifecycle.status.paperDoneDigitalRemains':
+    'Хартиеното подреждане е готово – дигиталният документ остава в архива',
+  'document.lifecycle.status.unknown': 'Неизвестно',
+  'document.lifecycle.status.taskDone': 'Задачата е изпълнена',
+  'document.lifecycle.status.archived': 'Документът е архивиран',
 };
 
 const bg: Partial<Record<keyof typeof de, string>> = {

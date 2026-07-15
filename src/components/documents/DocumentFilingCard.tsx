@@ -50,7 +50,7 @@ export function DocumentFilingCard({ documentId, onChanged }: DocumentFilingCard
   const physicalFiled = memory?.physicalFiled ?? registerEntry?.physicalFiled ?? false;
   const filedAt = memory?.filedAt ?? registerEntry?.filedAt;
   const statusInfo = getPhysicalFilingStatusLabel(physicalFiled, filedAt);
-  const statusLabel =
+  const paperStatusLabel =
     statusInfo.statusKey === 'document.filing.statusFiled' && statusInfo.filedAtLabel
       ? `${translate('document.filing.statusFiled')} (${statusInfo.filedAtLabel})`
       : translate(statusInfo.statusKey);
@@ -71,13 +71,15 @@ export function DocumentFilingCard({ documentId, onChanged }: DocumentFilingCard
     >
       <Card className="detail-experience-card__inner">
         <CardTitle>{translate('document.filing.title')}</CardTitle>
-        <CardMeta>{statusLabel}</CardMeta>
+        <CardMeta>{translate('document.filing.digitalSaved')}</CardMeta>
 
         <section className="detail-experience-section">
           <h3 className="detail-experience-section__label">
             {translate('document.filing.digital')}
           </h3>
-          <p className="detail-experience-section__value">{digitalPath}</p>
+          <p className="detail-experience-section__value" data-testid="document-filing-digital-path">
+            {digitalPath}
+          </p>
         </section>
 
         <section className="detail-experience-section document-understanding-meta">
@@ -97,7 +99,12 @@ export function DocumentFilingCard({ documentId, onChanged }: DocumentFilingCard
             <h3 className="detail-experience-section__label">
               {translate('document.filing.originalStatus')}
             </h3>
-            <p className="detail-experience-section__value">{statusLabel}</p>
+            <p
+              className="detail-experience-section__value"
+              data-testid="document-filing-paper-status"
+            >
+              {paperStatusLabel}
+            </p>
           </div>
         </section>
 
@@ -110,6 +117,9 @@ export function DocumentFilingCard({ documentId, onChanged }: DocumentFilingCard
             >
               {translate('document.filing.markFiledAction')}
             </Button>
+            <p className="detail-experience-section__hint" data-testid="document-filing-paper-only-hint">
+              {translate('document.filing.paperOnlyHint')}
+            </p>
           </div>
         )}
       </Card>
