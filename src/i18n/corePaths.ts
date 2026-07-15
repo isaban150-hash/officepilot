@@ -6,6 +6,7 @@ export const CORE_I18N_PATHS = [
 
   'nav.schreibtisch',
 
+  'nav.eingang',
   'nav.dokumente',
 
   'nav.auftraege',

@@ -18,7 +18,7 @@ describe('Navigation layout UX-HOME-01 ABSCHLUSSFIX', () => {
     );
 
     expect(html).toContain('Schreibtisch');
-    expect(html).toContain('Dokumente');
+    expect(html).toContain('Eingang');
     expect(html).toContain('Aufträge');
     expect(html).toContain('OfficePilot');
     expect(html).toContain('Mehr');

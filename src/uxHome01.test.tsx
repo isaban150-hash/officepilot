@@ -81,7 +81,7 @@ describe('UX-HOME-01 ABSCHLUSSFIX', () => {
     expect(html).not.toContain('Steuerberater');
     expect(html).not.toContain('Kunden');
     expect(html).toContain('Schreibtisch');
-    expect(html).toContain('Dokumente');
+    expect(html).toContain('Eingang');
   });
 
   it('Desktop-Sidebar behält 6 Bereiche inkl. Steuerberater', () => {

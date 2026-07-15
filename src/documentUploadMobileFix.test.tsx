@@ -96,7 +96,7 @@ describe('DESIGN-SYSTEM-01A mobile upload fix', () => {
     );
 
     expect(html).toContain('bottom-nav__label');
-    expect(html).toContain('>Dokumente</span>');
+    expect(html).toContain('>Eingang</span>');
     expect(html).toContain('>OfficePilot</span>');
     expect(html).not.toMatch(/>\s*Sca\s*</);
   });

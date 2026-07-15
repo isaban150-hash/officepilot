@@ -12,7 +12,7 @@ export interface NavItemConfig {
 /** Desktop sidebar: all 6 main areas including Steuerberater. */
 export const DESKTOP_NAV_ITEMS: NavItemConfig[] = [
   { to: '/', key: 'nav.schreibtisch', icon: 'home', end: true },
-  { to: '/ablage', key: 'nav.dokumente', icon: 'documents' },
+  { to: '/ablage', key: 'nav.eingang', icon: 'documents' },
   { to: '/vorgaenge', key: 'nav.auftraege', icon: 'orders' },
   { to: '/assistent', key: 'nav.officepilot', icon: 'assistant' },
   { to: '/steuerberater', key: 'nav.steuerberater', icon: 'tax' },
@@ -22,7 +22,7 @@ export const DESKTOP_NAV_ITEMS: NavItemConfig[] = [
 /** Mobile bottom nav: max 5 – Kunden & Steuerberater via Schreibtisch-Kacheln. */
 export const MOBILE_BOTTOM_NAV_ITEMS: NavItemConfig[] = [
   { to: '/', key: 'nav.schreibtisch', icon: 'home', end: true },
-  { to: '/ablage', key: 'nav.dokumente', icon: 'documents' },
+  { to: '/ablage', key: 'nav.eingang', icon: 'documents' },
   { to: '/vorgaenge', key: 'nav.auftraege', icon: 'orders' },
   { to: '/assistent', key: 'nav.officepilot', icon: 'assistant' },
   { to: '/mehr', key: 'nav.mehr', icon: 'more' },

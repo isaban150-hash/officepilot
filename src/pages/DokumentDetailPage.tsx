@@ -20,19 +20,14 @@ import { askDocumentAi } from '../services/document/documentAiService';
 import { recordDocumentContext } from '../services/brain/companySessionService';
 import type { CompanyDocument } from '../types/models';
 import type { TranslationKey } from '../i18n';
-
-function formatDate(value: string | null): string {
-  if (!value) return '—';
-  try {
-    return new Date(value).toLocaleDateString('de-DE');
-  } catch {
-    return value;
-  }
-}
+import {
+  formatSafeDocumentDate,
+  formatDocumentValidUntil,
+} from '../utils/documentDateDisplay';
 
 export function DokumentDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { translate, showToast } = useApp();
+  const { translate, showToast, setup } = useApp();
   const navigate = useNavigate();
   const [document, setDocument] = useState<CompanyDocument | undefined>(() =>
     id ? getDocumentById(id) : undefined,
@@ -152,7 +147,17 @@ export function DokumentDetailPage() {
         <DataRow label={translate('document.fieldIssuer')} value={document.issuer || '—'} />
         <DataRow
           label={translate('document.fieldValidity')}
-          value={`${formatDate(document.issueDate)} – ${formatDate(document.validUntil)}`}
+          value={`${
+            document.issueDate
+              ? formatSafeDocumentDate(
+                  document.issueDate,
+                  setup.language,
+                  translate('document.date.unrecognized'),
+                )
+              : '—'
+          } – ${
+            formatDocumentValidUntil(document.validUntil, setup.language) ?? '—'
+          }`}
         />
         <DataRow
           label={translate('document.fieldDigitalFolder')}

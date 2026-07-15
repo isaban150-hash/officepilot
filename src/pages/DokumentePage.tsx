@@ -16,19 +16,14 @@ import {
 } from '../types/documentArea';
 import { getAllUploadedDocuments } from '../services/uploadedDocumentService';
 import { UploadedDocumentsSection } from '../components/documents/UploadedDocumentsSection';
+import {
+  formatDocumentValidUntil,
+  resolveDocumentCardDate,
+} from '../utils/documentDateDisplay';
 import type { TranslationKey } from '../i18n';
 
-function formatDate(value: string | null): string {
-  if (!value) return '—';
-  try {
-    return new Date(value).toLocaleDateString('de-DE');
-  } catch {
-    return value;
-  }
-}
-
 export function DokumentePage() {
-  const { translate } = useApp();
+  const { translate, setup } = useApp();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [query, setQuery] = useState('');
@@ -65,6 +60,8 @@ export function DokumentePage() {
     () => searchDocuments(query, { area }),
     [query, area, documents],
   );
+
+  const unrecognizedDate = translate('document.date.unrecognized');
 
   return (
     <div className="page">
@@ -146,6 +143,8 @@ export function DokumentePage() {
               paperStatus === 'filed'
                 ? 'document.area.paper.filed'
                 : 'document.area.paper.pending';
+            const cardDate = resolveDocumentCardDate(doc, setup.language, unrecognizedDate);
+            const validUntilLabel = formatDocumentValidUntil(doc.validUntil, setup.language);
             return (
               <Link key={doc.id} to={`/dokumente/${doc.id}`} className="card-link">
                 <Card>
@@ -159,8 +158,17 @@ export function DokumentePage() {
                     <div>
                       <CardTitle>{doc.title}</CardTitle>
                       <CardMeta>
-                        {doc.issuer || translate('document.noIssuer')} ·{' '}
-                        {formatDate(doc.validUntil)}
+                        <span data-testid={`document-card-date-${doc.id}`}>
+                          {doc.issuer || translate('document.noIssuer')} · {cardDate.formatted}
+                        </span>
+                        {validUntilLabel ? (
+                          <>
+                            {' · '}
+                            <span data-testid={`document-card-deadline-${doc.id}`}>
+                              {translate('document.date.validUntil')}: {validUntilLabel}
+                            </span>
+                          </>
+                        ) : null}
                       </CardMeta>
                     </div>
                   </div>

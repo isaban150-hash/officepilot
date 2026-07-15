@@ -308,8 +308,8 @@ const deLegacy = {
   'mehr.communicationDesc': 'Antworten schreiben und versenden',
   'mehr.mailImport': 'E-Mails importieren',
   'mehr.mailImportDesc': 'E-Mail-Inhalt und Anhänge in den Eingang übernehmen',
-  'mehr.documents': 'Dokumente',
-  'mehr.documentsDesc': 'Digitales Archiv durchsuchen',
+  'mehr.documents': 'Dokumentenarchiv',
+  'mehr.documentsDesc': 'Gespeicherte Firmendokumente finden und verwalten.',
   'mehr.paperArchive': 'Papierarchiv',
   'mehr.paperArchiveDesc': 'Ordner und Register für Originale',
   'mehr.knowledge': 'Wissen',
@@ -378,7 +378,7 @@ const deLegacy = {
   'eingang.capture': 'Dokument erfassen',
   'eingang.recent': 'Zuletzt erfasst',
 
-  'ablage.title': 'Dokumente',
+  'ablage.title': 'Eingang',
   'ablage.subtitle': 'Briefe, PDFs, Fotos und Scans – automatisch sortiert.',
   'ablage.intro': 'OfficePilot sortiert nach Wichtigkeit. Sie brauchen keine Ordner.',
   'ablage.newCount': 'neu',
@@ -1018,8 +1018,10 @@ const deLegacy = {
   'archive.subtitle': 'Ordner und Ablageregeln',
   'archive.filingHint': 'Bitte Original abheften in',
 
-  'document.title': 'Dokumente',
-  'document.subtitle': 'Firmendokumente archivieren und finden',
+  'document.title': 'Dokumentenarchiv',
+  'document.subtitle': 'Gespeicherte Firmendokumente finden und verwalten.',
+  'document.date.unrecognized': 'Datum nicht erkannt',
+  'document.date.validUntil': 'Gültig bis',
   'document.add': 'Dokument hinzufügen',
   'document.addTitle': 'Neues Dokument',
   'document.addSubtitle': 'Metadaten erfassen – kein Datei-Upload',
@@ -2740,6 +2742,14 @@ const trLegacy: Partial<Record<keyof typeof de, string>> = {
   'document.area.empty': 'Bu alanda kayıtlı belge yok.',
   'document.area.paper.pending': 'Kağıt açık',
   'document.area.paper.filed': 'Kağıt dosyalandı',
+
+  'ablage.title': 'Giriş',
+  'mehr.documents': 'Belge arşivi',
+  'mehr.documentsDesc': 'Kayıtlı firma belgelerini bulun ve yönetin.',
+  'document.title': 'Belge arşivi',
+  'document.subtitle': 'Kayıtlı firma belgelerini bulun ve yönetin.',
+  'document.date.unrecognized': 'Tarih tanınmadı',
+  'document.date.validUntil': 'Geçerlilik',
 };
 
 const tr: Partial<Record<keyof typeof de, string>> = {
@@ -2821,6 +2831,14 @@ const bgLegacy: Partial<Record<keyof typeof de, string>> = {
   'document.area.empty': 'В тази област няма записани документи.',
   'document.area.paper.pending': 'Хартия отворена',
   'document.area.paper.filed': 'Хартията е подредена',
+
+  'ablage.title': 'Вход',
+  'mehr.documents': 'Архив на документи',
+  'mehr.documentsDesc': 'Намерете и управлявайте запазени фирмени документи.',
+  'document.title': 'Архив на документи',
+  'document.subtitle': 'Намерете и управлявайте запазени фирмени документи.',
+  'document.date.unrecognized': 'Датата не е разпозната',
+  'document.date.validUntil': 'Валидно до',
 };
 
 const bg: Partial<Record<keyof typeof de, string>> = {

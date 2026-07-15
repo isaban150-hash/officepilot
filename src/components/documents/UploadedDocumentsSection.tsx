@@ -1,21 +1,27 @@
-import { Link } from 'react-router-dom';
-import { Badge, Card, CardMeta, CardTitle } from '../ui/Card';
 import { useApp } from '../../context/AppContext';
 import { formatFileSize } from '../../services/documentUploadValidation';
 import type { UploadedDocument } from '../../types/uploadedDocument';
+import {
+  localeForAppLanguage,
+  parseSafeDocumentDate,
+} from '../../utils/documentDateDisplay';
+import { Link } from 'react-router-dom';
+import { Badge, Card, CardMeta, CardTitle } from '../ui/Card';
 
-function formatDate(value: string): string {
-  try {
-    return new Date(value).toLocaleDateString('de-DE', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  } catch {
-    return value;
-  }
+function formatUploadedAt(
+  value: string,
+  language: Parameters<typeof localeForAppLanguage>[0],
+  unrecognizedLabel: string,
+): string {
+  const date = parseSafeDocumentDate(value);
+  if (!date) return unrecognizedLabel;
+  return date.toLocaleString(localeForAppLanguage(language), {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 interface UploadedDocumentsSectionProps {
@@ -23,7 +29,8 @@ interface UploadedDocumentsSectionProps {
 }
 
 export function UploadedDocumentsSection({ items }: UploadedDocumentsSectionProps) {
-  const { translate } = useApp();
+  const { translate, setup } = useApp();
+  const unrecognized = translate('document.date.unrecognized');
 
   if (items.length === 0) {
     return null;
@@ -49,7 +56,7 @@ export function UploadedDocumentsSection({ items }: UploadedDocumentsSectionProp
                 <td>{doc.fileName}</td>
                 <td>{doc.fileType || '—'}</td>
                 <td>{formatFileSize(doc.fileSize)}</td>
-                <td>{formatDate(doc.uploadedAt)}</td>
+                <td>{formatUploadedAt(doc.uploadedAt, setup.language, unrecognized)}</td>
                 <td>
                   <Badge tone={doc.status === 'needs_review' ? 'warning' : 'info'}>{doc.status}</Badge>
                 </td>
@@ -63,7 +70,8 @@ export function UploadedDocumentsSection({ items }: UploadedDocumentsSectionProp
           <Card key={doc.id} data-testid={`uploaded-document-card-${doc.id}`}>
             <CardTitle>{doc.fileName}</CardTitle>
             <CardMeta>
-              {formatFileSize(doc.fileSize)} · {formatDate(doc.uploadedAt)}
+              {formatFileSize(doc.fileSize)} ·{' '}
+              {formatUploadedAt(doc.uploadedAt, setup.language, unrecognized)}
             </CardMeta>
             <Badge tone={doc.status === 'needs_review' ? 'warning' : 'info'}>{doc.status}</Badge>
           </Card>
