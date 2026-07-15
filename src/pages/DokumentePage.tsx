@@ -1,17 +1,21 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { Badge, Card, CardMeta, CardTitle, PageHeader } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { EmptyStateBlock } from '../components/ui/EmptyStateBlock';
 import { useApp } from '../context/AppContext';
+import { getAllDocuments, searchDocuments } from '../services/documentService';
 import {
-  COMPANY_DOCUMENT_CATEGORIES,
-  getAllDocuments,
-  searchDocuments,
-} from '../services/documentService';
+  getDocumentAreaLabelKey,
+  resolveDocumentPaperListStatus,
+} from '../services/documentAreaCatalog';
+import {
+  DOCUMENT_AREA_FILTER_IDS,
+  parseDocumentAreaFilter,
+  type DocumentAreaFilterId,
+} from '../types/documentArea';
 import { getAllUploadedDocuments } from '../services/uploadedDocumentService';
 import { UploadedDocumentsSection } from '../components/documents/UploadedDocumentsSection';
-import type { CompanyDocumentCategory } from '../types/models';
 import type { TranslationKey } from '../i18n';
 
 function formatDate(value: string | null): string {
@@ -26,19 +30,40 @@ function formatDate(value: string | null): string {
 export function DokumentePage() {
   const { translate } = useApp();
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [query, setQuery] = useState('');
-  const [category, setCategory] = useState<CompanyDocumentCategory | 'all'>('all');
   const [documents, setDocuments] = useState(getAllDocuments);
   const [uploads, setUploads] = useState(getAllUploadedDocuments);
+
+  const area: DocumentAreaFilterId = parseDocumentAreaFilter(searchParams.get('area'));
 
   useEffect(() => {
     setDocuments(getAllDocuments());
     setUploads(getAllUploadedDocuments());
   }, [location.pathname, location.key]);
 
+  useEffect(() => {
+    const raw = searchParams.get('area');
+    if (raw && parseDocumentAreaFilter(raw) === 'alle' && raw !== 'alle') {
+      const next = new URLSearchParams(searchParams);
+      next.delete('area');
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
+
+  const setArea = (nextArea: DocumentAreaFilterId) => {
+    const next = new URLSearchParams(searchParams);
+    if (nextArea === 'alle') {
+      next.delete('area');
+    } else {
+      next.set('area', nextArea);
+    }
+    setSearchParams(next, { replace: true });
+  };
+
   const filtered = useMemo(
-    () => searchDocuments(query, category),
-    [query, category, documents],
+    () => searchDocuments(query, { area }),
+    [query, area, documents],
   );
 
   return (
@@ -71,27 +96,24 @@ export function DokumentePage() {
         />
       </div>
 
-      <div className="chip-group document-categories">
-        <button
-          type="button"
-          className={`chip ${category === 'all' ? 'chip--active' : ''}`}
-          onClick={() => setCategory('all')}
-        >
-          {translate('document.categoryAll')}
-        </button>
-        {COMPANY_DOCUMENT_CATEGORIES.map((cat) => {
-          const key = `document.category.${cat}` as TranslationKey;
-          return (
-            <button
-              key={cat}
-              type="button"
-              className={`chip ${category === cat ? 'chip--active' : ''}`}
-              onClick={() => setCategory(cat)}
-            >
-              {translate(key)}
-            </button>
-          );
-        })}
+      <div
+        className="chip-group document-area-chips"
+        data-testid="document-area-chips"
+        role="toolbar"
+        aria-label={translate('document.area.toolbar')}
+      >
+        {DOCUMENT_AREA_FILTER_IDS.map((id) => (
+          <button
+            key={id}
+            type="button"
+            className={`chip ${area === id ? 'chip--active' : ''}`}
+            data-testid={`document-area-chip-${id}`}
+            aria-pressed={area === id}
+            onClick={() => setArea(id)}
+          >
+            {translate(getDocumentAreaLabelKey(id) as TranslationKey)}
+          </button>
+        ))}
       </div>
 
       {filtered.length === 0 && uploads.length === 0 ? (
@@ -105,17 +127,25 @@ export function DokumentePage() {
                 <Button fullWidth>{translate('document.upload.action')}</Button>
               </Link>
               <Link to="/dokumente/neu">
-                <Button variant="outline" fullWidth>{translate('document.empty.action')}</Button>
+                <Button variant="outline" fullWidth>
+                  {translate('document.empty.action')}
+                </Button>
               </Link>
             </>
           }
         />
       ) : filtered.length === 0 ? (
-        <p className="document-archive-empty-hint">{translate('document.emptyArchiveOnly')}</p>
+        <p className="document-archive-empty-hint" data-testid="document-area-empty">
+          {translate('document.area.empty')}
+        </p>
       ) : (
-        <div className="card-list">
+        <div className="card-list" data-testid="document-area-list">
           {filtered.map((doc) => {
-            const categoryKey = `document.category.${doc.category}` as TranslationKey;
+            const paperStatus = resolveDocumentPaperListStatus(doc.id);
+            const paperKey =
+              paperStatus === 'filed'
+                ? 'document.area.paper.filed'
+                : 'document.area.paper.pending';
             return (
               <Link key={doc.id} to={`/dokumente/${doc.id}`} className="card-link">
                 <Card>
@@ -135,10 +165,12 @@ export function DokumentePage() {
                     </div>
                   </div>
                   <div className="badge-row">
-                    <Badge tone="info">{translate(categoryKey)}</Badge>
-                    {doc.linkedVorgang && (
-                      <Badge>{doc.linkedVorgang.vorgangTitle}</Badge>
-                    )}
+                    <span data-testid={`document-paper-status-${doc.id}`}>
+                      <Badge tone={paperStatus === 'filed' ? 'success' : 'warning'}>
+                        {translate(paperKey)}
+                      </Badge>
+                    </span>
+                    {doc.linkedVorgang && <Badge>{doc.linkedVorgang.vorgangTitle}</Badge>}
                   </div>
                 </Card>
               </Link>

@@ -3306,6 +3306,32 @@ body {
   margin-bottom: 1rem;
 }
 
+.document-area-chips {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 0.25rem;
+  box-sizing: border-box;
+}
+
+.document-area-chips .chip {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+@media (min-width: 768px) {
+  .document-area-chips {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+}
+
 .document-card__header {
   display: flex;
   gap: 0.75rem;

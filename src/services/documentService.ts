@@ -3,6 +3,8 @@ import { PAPER_FOLDERS } from '../data/mockData';
 import { persistAll } from './persistenceService';
 import { resolvePaperFilingFromInbox } from './paperFolderService';
 import { getDocumentFileRefById } from './documentFileStoreService';
+import { documentMatchesArea } from './documentAreaCatalog';
+import type { DocumentAreaFilterId } from '../types/documentArea';
 import {
   isContractInboxItem,
   recordArchivedDocumentMemory,
@@ -172,14 +174,25 @@ export function getDocumentsByCategory(category: CompanyDocumentCategory): Compa
 
 export function searchDocuments(
   query: string,
-  categoryFilter?: CompanyDocumentCategory | 'all',
+  filter:
+    | CompanyDocumentCategory
+    | 'all'
+    | {
+        category?: CompanyDocumentCategory | 'all';
+        area?: DocumentAreaFilterId;
+      } = 'all',
 ): CompanyDocument[] {
   const normalizedQuery = query.trim().toLowerCase();
+  const categoryFilter = typeof filter === 'string' ? filter : (filter.category ?? 'all');
+  const areaFilter = typeof filter === 'string' ? 'alle' : (filter.area ?? 'alle');
 
   return documents
     .filter((doc) => isEntitySyncActive(doc))
     .filter((doc) => {
       if (categoryFilter && categoryFilter !== 'all' && doc.category !== categoryFilter) {
+        return false;
+      }
+      if (!documentMatchesArea(doc, areaFilter)) {
         return false;
       }
       if (!normalizedQuery) return true;
