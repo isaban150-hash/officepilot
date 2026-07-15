@@ -12,7 +12,10 @@ export type DocumentBlobStorageErrorCode =
   | 'blob_storage_unavailable'
   | 'blob_write_failed'
   | 'blob_read_failed'
-  | 'blob_delete_failed';
+  | 'blob_delete_failed'
+  | 'blob_missing_after_write'
+  | 'blob_size_mismatch'
+  | 'blob_hash_mismatch';
 
 export class DocumentBlobStorageError extends Error {
   readonly code: DocumentBlobStorageErrorCode;

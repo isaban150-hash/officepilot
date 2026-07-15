@@ -5,8 +5,18 @@ import {
   getDocumentFileDataUrl,
 } from '../services/documentFileStoreService';
 
-export function useDocumentFileObjectUrl(fileRef: DocumentFileRef | undefined): string | undefined {
-  const [objectUrl, setObjectUrl] = useState<string | undefined>();
+export type DocumentFileObjectUrlStatus = 'idle' | 'loading' | 'ready' | 'missing';
+
+export interface DocumentFileObjectUrlState {
+  status: DocumentFileObjectUrlStatus;
+  objectUrl: string | undefined;
+}
+
+export function useDocumentFileObjectUrl(fileRef: DocumentFileRef | undefined): DocumentFileObjectUrlState {
+  const [state, setState] = useState<DocumentFileObjectUrlState>({
+    status: fileRef ? 'loading' : 'idle',
+    objectUrl: undefined,
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -14,30 +24,36 @@ export function useDocumentFileObjectUrl(fileRef: DocumentFileRef | undefined): 
 
     void (async () => {
       if (!fileRef) {
-        setObjectUrl(undefined);
+        setState({ status: 'idle', objectUrl: undefined });
         return;
       }
+
+      setState({ status: 'loading', objectUrl: undefined });
 
       if (fileRef.storageType === 'local_data_url') {
         const dataUrl = getDocumentFileDataUrl(fileRef);
         if (!cancelled) {
-          setObjectUrl(dataUrl);
+          setState({
+            status: dataUrl ? 'ready' : 'missing',
+            objectUrl: dataUrl,
+          });
         }
         return;
       }
 
       try {
         const blob = await getDocumentFileBlob(fileRef);
-        if (cancelled || !blob) {
-          if (!cancelled) setObjectUrl(undefined);
+        if (cancelled) return;
+        if (!blob) {
+          setState({ status: 'missing', objectUrl: undefined });
           return;
         }
         createdUrl = URL.createObjectURL(blob);
-        if (!cancelled) {
-          setObjectUrl(createdUrl);
-        }
+        setState({ status: 'ready', objectUrl: createdUrl });
       } catch {
-        if (!cancelled) setObjectUrl(undefined);
+        if (!cancelled) {
+          setState({ status: 'missing', objectUrl: undefined });
+        }
       }
     })();
 
@@ -46,9 +62,8 @@ export function useDocumentFileObjectUrl(fileRef: DocumentFileRef | undefined): 
       if (createdUrl) {
         URL.revokeObjectURL(createdUrl);
       }
-      setObjectUrl(undefined);
     };
   }, [fileRef?.id, fileRef?.storageType, fileRef?.localDataKey]);
 
-  return objectUrl;
+  return state;
 }

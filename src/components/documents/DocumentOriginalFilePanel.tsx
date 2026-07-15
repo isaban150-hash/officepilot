@@ -24,7 +24,7 @@ export function DocumentOriginalFilePanel({
   testId = 'document-original-file-panel',
 }: DocumentOriginalFilePanelProps) {
   const fileRef = fileRefId ? getDocumentFileRefById(fileRefId) : undefined;
-  const previewUrl = useDocumentFileObjectUrl(fileRef);
+  const { status, objectUrl: previewUrl } = useDocumentFileObjectUrl(fileRef);
 
   if (!fileRef) {
     return (
@@ -47,6 +47,12 @@ export function DocumentOriginalFilePanel({
         <DataRow label={translate('document.upload.fileSize')} value={formatFileSize(fileRef.fileSize)} />
         <DataRow label={translate('document.original.uploadedAt')} value={uploadedAt} />
       </dl>
+
+      {status === 'missing' ? (
+        <p className="document-original-file-panel__blob-missing" data-testid={`${testId}-blob-missing`}>
+          {translate('document.original.blobMissing')}
+        </p>
+      ) : null}
 
       {previewUrl && isImageUpload(fileRef.mimeType, fileRef.originalFileName) ? (
         <img
@@ -72,6 +78,7 @@ export function DocumentOriginalFilePanel({
           variant="outline"
           onClick={() => downloadDocumentFile(fileRef)}
           data-testid={`${testId}-download`}
+          disabled={status === 'missing'}
         >
           {translate('document.original.download')}
         </Button>

@@ -9,6 +9,7 @@ import { trScan } from './scan';
 import { trIntakePreview } from './intakePreview';
 import { trStorageRecommendation } from './storageRecommendation';
 import { trUserStorageDecision } from './userStorageDecision';
+import { trDocumentOriginal } from './documentOriginal';
 
 export const trModules = {
   ...trAuth,
@@ -25,4 +26,5 @@ export const trModules = {
   ...trIntakePreview,
   ...trStorageRecommendation,
   ...trUserStorageDecision,
+  ...trDocumentOriginal,
 } as const;

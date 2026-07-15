@@ -32,6 +32,9 @@ const INTAKE_ERROR_KEYS: Partial<Record<DocumentIntakeErrorCode, TranslationKey>
   blob_write_failed: 'docAssistant.error.blobStorageFailed',
   blob_read_failed: 'docAssistant.error.blobStorageFailed',
   blob_delete_failed: 'docAssistant.error.blobStorageFailed',
+  blob_missing_after_write: 'docAssistant.error.blobMissingAfterWrite',
+  blob_size_mismatch: 'docAssistant.error.blobSizeMismatch',
+  blob_hash_mismatch: 'docAssistant.error.blobHashMismatch',
 };
 
 const EXTRACTION_ERROR_KEYS: Partial<Record<DocumentTextErrorCode, TranslationKey>> = {
@@ -65,6 +68,9 @@ const INTAKE_TITLE_KEYS: Partial<Record<DocumentIntakeErrorCode, TranslationKey>
   blob_write_failed: 'docAssistant.error.title.storageFailed',
   blob_read_failed: 'docAssistant.error.title.storageFailed',
   blob_delete_failed: 'docAssistant.error.title.storageFailed',
+  blob_missing_after_write: 'docAssistant.error.title.integrityFailed',
+  blob_size_mismatch: 'docAssistant.error.title.integrityFailed',
+  blob_hash_mismatch: 'docAssistant.error.title.integrityFailed',
 };
 
 export function resolveIntakeErrorKey(
@@ -100,7 +106,10 @@ export function isConfirmRetryableIntakeError(error: DocumentIntakeErrorCode): b
     error === 'blob_storage_unavailable' ||
     error === 'blob_write_failed' ||
     error === 'blob_read_failed' ||
-    error === 'blob_delete_failed'
+    error === 'blob_delete_failed' ||
+    error === 'blob_missing_after_write' ||
+    error === 'blob_size_mismatch' ||
+    error === 'blob_hash_mismatch'
   );
 }
 

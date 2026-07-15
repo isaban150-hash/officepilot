@@ -118,8 +118,44 @@ export async function verifyDocumentFileIntegrity(
   if (!ref.contentHash) return false;
   const bytes = await getOriginalDocumentFileBytes(ref, fallbackScopes);
   if (!bytes) return false;
+  if (bytes.byteLength !== ref.fileSize) return false;
   const hash = await computeBufferContentHash(bytes);
   return hash === ref.contentHash;
+}
+
+export async function verifyStoredBlobMatchesExpected(input: {
+  fileRefId: string;
+  expectedHash: string;
+  expectedByteLength: number;
+  scope?: StorageScope;
+}): Promise<void> {
+  let record: Awaited<ReturnType<typeof readDocumentBlob>>;
+  try {
+    record = await readDocumentBlob(input.fileRefId, input.scope);
+  } catch (error) {
+    if (error instanceof DocumentBlobStorageError) {
+      throw new DocumentBlobStorageError('blob_missing_after_write', error);
+    }
+    throw new DocumentBlobStorageError('blob_missing_after_write', error);
+  }
+
+  if (!record) {
+    throw new DocumentBlobStorageError('blob_missing_after_write');
+  }
+
+  const bytes = new Uint8Array(await record.blob.arrayBuffer());
+  if (bytes.byteLength !== input.expectedByteLength) {
+    throw new DocumentBlobStorageError('blob_size_mismatch');
+  }
+  let actualHash: string;
+  try {
+    actualHash = await computeBufferContentHash(bytes);
+  } catch {
+    throw new DocumentBlobStorageError('blob_hash_mismatch');
+  }
+  if (actualHash !== input.expectedHash) {
+    throw new DocumentBlobStorageError('blob_hash_mismatch');
+  }
 }
 
 export function downloadDocumentFile(ref: DocumentFileRef): void {
@@ -196,6 +232,7 @@ export async function storeDocumentFileFromCachedPayload(
   const fileRefId = generateEntityId('file-ref');
   const createdAt = new Date().toISOString();
   const mimeType = payload.mimeType || 'application/octet-stream';
+  const byteLength = payload.bytes.byteLength;
 
   let blob: Blob;
   try {
@@ -209,7 +246,7 @@ export async function storeDocumentFileFromCachedPayload(
       fileRefId,
       blob,
       mimeType,
-      fileSize: payload.fileSize,
+      fileSize: byteLength,
       contentHash,
       createdAt,
     });
@@ -218,6 +255,24 @@ export async function storeDocumentFileFromCachedPayload(
       throw error;
     }
     throw new DocumentBlobStorageError('blob_write_failed', error);
+  }
+
+  try {
+    await verifyStoredBlobMatchesExpected({
+      fileRefId,
+      expectedHash: contentHash,
+      expectedByteLength: byteLength,
+    });
+  } catch (error) {
+    try {
+      await deleteDocumentBlob(fileRefId);
+    } catch {
+      /* best-effort rollback of orphan blob */
+    }
+    if (error instanceof DocumentBlobStorageError) {
+      throw error;
+    }
+    throw new DocumentBlobStorageError('blob_hash_mismatch', error);
   }
 
   const lifecycleFields =
@@ -229,7 +284,7 @@ export async function storeDocumentFileFromCachedPayload(
     id: fileRefId,
     originalFileName: payload.fileName,
     mimeType,
-    fileSize: payload.fileSize,
+    fileSize: byteLength,
     contentHash,
     storageType: 'indexeddb',
     localDataKey: fileRefId,

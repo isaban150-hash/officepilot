@@ -11,6 +11,7 @@ import { bgScan } from './scan';
 import { bgIntakePreview } from './intakePreview';
 import { bgStorageRecommendation } from './storageRecommendation';
 import { bgUserStorageDecision } from './userStorageDecision';
+import { bgDocumentOriginal } from './documentOriginal';
 
 export const bgModules = {
   ...bgAuth,
@@ -30,4 +31,5 @@ export const bgModules = {
   ...bgIntakePreview,
   ...bgStorageRecommendation,
   ...bgUserStorageDecision,
+  ...bgDocumentOriginal,
 } as const;
