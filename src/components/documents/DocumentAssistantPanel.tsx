@@ -10,8 +10,6 @@ import {
 } from '../../services/documentAssistantService';
 import {
   answerInboxDocumentQuestion,
-  answerInboxDocumentQuestionById,
-  getDocumentQuestionSuggestionsForItem,
   isDraftReplyQuestion,
 } from '../../services/documentAssistantQuestionService';
 import { getDocumentDisplayLabelKey } from '../../services/documentDisplayLabelService';
@@ -110,20 +108,7 @@ export function DocumentAssistantPanel({
     setAnswerUncertain(uncertain);
   };
 
-  const handleSuggestion = (id: string) => {
-    const ruleAnswer = answerInboxDocumentQuestionById(item, assistant, id);
-    const text = interpolate(translate, {
-      key: ruleAnswer.answerKey,
-      params: ruleAnswer.params,
-    });
-    setAnswerText(
-      ruleAnswer.followUpKey ? `${text} ${translate(ruleAnswer.followUpKey)}` : text,
-    );
-    setAnswerUncertain(Boolean(ruleAnswer.uncertain));
-  };
-
   const kind = item.classifiedKind ?? workflow?.classifiedKind;
-  const questionSuggestions = getDocumentQuestionSuggestionsForItem(kind ?? 'sonstiges');
 
   return (
     <section className="document-assistant-panel" data-testid="document-assistant-panel">
@@ -222,19 +207,6 @@ export function DocumentAssistantPanel({
 
       <Card className="document-assistant-panel__section">
         <h2 className="document-assistant-panel__heading">{translate('docAssistant.section.questions')}</h2>
-        <div className="document-assistant-panel__chips">
-          {questionSuggestions.map((suggestion) => (
-            <button
-              key={suggestion.id}
-              type="button"
-              className="document-assistant-panel__chip"
-              data-testid={`doc-assistant-question-${suggestion.id}`}
-              onClick={() => handleSuggestion(suggestion.id)}
-            >
-              {translate(suggestion.labelKey)}
-            </button>
-          ))}
-        </div>
         <form
           className="document-assistant-panel__ask"
           onSubmit={(event) => {

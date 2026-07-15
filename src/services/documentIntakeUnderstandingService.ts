@@ -76,8 +76,8 @@ export function buildDocumentAiActions(
     push('create_order', 'document.aiAction.createOrder', true);
   }
 
-  if (['eingangsrechnung', 'rechnung', 'mahnung', 'zahlungserinnerung', 'ausgangsrechnung', 'gutschrift'].includes(kind)) {
-    push('write_invoice', 'document.aiAction.writeInvoice', kind === 'ausgangsrechnung');
+  if (kind === 'ausgangsrechnung') {
+    push('write_invoice', 'document.aiAction.writeInvoice', true);
   }
 
   if (summary.deadline || ['mahnung', 'zahlungserinnerung', 'finanzamt', 'bg_bau', 'steuerbescheid'].includes(kind)) {

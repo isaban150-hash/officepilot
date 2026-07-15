@@ -76,7 +76,6 @@ import type { TranslationKey } from '../i18n';
 
 type ReviewSectionId =
   | 'document-data'
-  | 'original-file'
   | 'ocr-text'
   | 'communication'
   | 'tasks'
@@ -475,22 +474,6 @@ export function EingangDetailPage() {
         )}
       </CollapsibleReviewSection>
 
-      {item.fileRefId ? (
-        <CollapsibleReviewSection
-          id="original-file"
-          title={translate('document.original.title')}
-          expanded={Boolean(expandedSections['original-file'])}
-          onToggle={() => toggleSection('original-file')}
-          testId="document-review-original-section"
-        >
-          <DocumentOriginalFilePanel
-            fileRefId={item.fileRefId}
-            translate={translate}
-            onPromoted={() => showToast(translate('document.original.promote.success'))}
-          />
-        </CollapsibleReviewSection>
-      ) : null}
-
       {extractedText && (
         <CollapsibleReviewSection
           id="ocr-text"
@@ -739,6 +722,16 @@ export function EingangDetailPage() {
           return { text: answer.text, uncertain: answer.source !== 'ai' };
         }}
       />
+
+      {item.fileRefId ? (
+        <div data-testid="ablage-original-file">
+          <DocumentOriginalFilePanel
+            fileRefId={item.fileRefId}
+            translate={translate}
+            onPromoted={() => showToast(translate('document.original.promote.success'))}
+          />
+        </div>
+      ) : null}
 
       <DocumentReviewExperience
         item={item}
