@@ -9,9 +9,12 @@ import {
 import { isHeicUploadFile } from './documentUploadValidation';
 import type { CreateInboxFromUploadOptions } from './inboxUploadFactory';
 import type { StorageRecommendation } from '../types/storageRecommendation';
+import type { ResolvedStoragePolicy } from '../types/storagePolicy';
+import { classifyDocument } from './documentClassificationService';
 import {
   buildStorageRecommendation,
 } from './storageRecommendationService';
+import { resolveStoragePolicy } from './storagePolicyService';
 import {
   buildOcrPreviewSummary,
   extractDocumentTextFromCache,
@@ -24,6 +27,7 @@ export interface PendingDocumentIntake {
   extraction: DocumentTextExtractionResult;
   preview: OcrPreviewSummary;
   storageRecommendation: StorageRecommendation;
+  storagePolicy: ResolvedStoragePolicy;
 }
 
 export type ProcessDocumentPreviewResult =
@@ -60,6 +64,13 @@ export async function processDocumentFileForPreview(
     options.selectedKind,
   );
 
+  const classificationInput = {
+    sourceFileName: loaded.payload.fileName,
+    kindHint: options.selectedKind,
+    recognizedText: extraction.recognizedText,
+  };
+  const classification = classifyDocument(classificationInput);
+
   const storageRecommendation = await buildStorageRecommendation({
     cachedFile: loaded.payload,
     recognizedText: extraction.recognizedText,
@@ -68,9 +79,26 @@ export async function processDocumentFileForPreview(
     sourceFileName: loaded.payload.fileName,
   });
 
+  const storagePolicy = resolveStoragePolicy({
+    classifiedKind: classification.classifiedKind,
+    detectionReasonKey: classification.detectionReasonKey,
+    mimeType: loaded.payload.mimeType,
+    fileName: loaded.payload.fileName,
+    extractionMethod: extraction.extractionMethod,
+    sourceType: extraction.sourceType,
+    ocrConfidence: extraction.confidence,
+    recognizedText: extraction.recognizedText,
+  });
+
   return {
     success: true,
-    pending: { cachedFile: loaded.payload, extraction, preview, storageRecommendation },
+    pending: {
+      cachedFile: loaded.payload,
+      extraction,
+      preview,
+      storageRecommendation,
+      storagePolicy,
+    },
   };
 }
 
