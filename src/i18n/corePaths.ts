@@ -150,6 +150,12 @@ export const CORE_I18N_PATHS = [
 
   'document.intakeUnderstanding.uncertainHint',
 
+  'document.intakePreview.pendingNotice',
+
+  'document.intakePreview.savePermanently',
+
+  'document.intakePreview.discard',
+
   // Upload errors
 
   'document.upload.error.processFailed',

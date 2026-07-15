@@ -1069,6 +1069,11 @@ const deLegacy = {
   'document.upload.error.passwordRequired': 'Die PDF ist passwortgeschützt. Bitte eine ungeschützte Version hochladen.',
   'document.upload.error.pdfCorrupt': 'Die PDF konnte nicht gelesen werden. Bitte die Datei prüfen.',
 
+  'document.intakePreview.pendingNotice':
+    'Dokument wurde verarbeitet, aber noch nicht dauerhaft gespeichert.',
+  'document.intakePreview.savePermanently': 'Dauerhaft speichern',
+  'document.intakePreview.discard': 'Nicht speichern',
+
   'docAssistant.autoDetect': 'OfficePilot erkennt die Dokumentart automatisch.',
   'docAssistant.recognized': 'Dokument erkannt',
   'docAssistant.changeType': 'Dokumentart ändern',

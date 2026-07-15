@@ -1,80 +1,128 @@
 import { DragEvent, FormEvent, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { DocumentUploadErrorPanel } from '../components/documents/DocumentUploadErrorPanel';
+import { OcrPreviewPanel } from '../components/scan/OcrPreviewPanel';
 import { Button } from '../components/ui/Button';
 import { Card, PageHeader } from '../components/ui/Card';
-import { SkeletonStack } from '../components/ui/Skeleton';
 import { useApp } from '../context/AppContext';
+import { getPersistFailureDiagnosticForDev } from '../services/persistenceService';
 import {
-  formatFileSize,
-  isImageUpload,
-  isPdfUpload,
-} from '../services/documentUploadValidation';
-import { intakeCachedDocumentFile } from '../services/documentIntakeService';
-import type { DocumentUploadErrorCode } from '../services/documentUploadErrorService';
-import { loadCachedDocumentFileFromUpload } from '../services/cachedDocumentFileService';
-import { getDocumentFileRefById } from '../services/documentFileStoreService';
-import { useDocumentFileObjectUrl } from '../hooks/useDocumentFileObjectUrl';
-import type { InboxItem } from '../types/models';
+  isConfirmRetryableIntakeError,
+  resolveUploadErrorView,
+  type DocumentIntakeErrorCode,
+  type DocumentUploadErrorCode,
+} from '../services/documentUploadErrorService';
+import {
+  confirmPendingDocumentIntake,
+  discardPendingDocumentIntake,
+  processDocumentFileForPreview,
+  type PendingDocumentIntake,
+} from '../services/pendingDocumentIntakeService';
 
 export function DocumentUploadPage() {
   const { translate, showToast } = useApp();
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
-  const uploadGenerationRef = useRef(0);
+  const confirmInFlightRef = useRef(false);
+  const processGenerationRef = useRef(0);
   const [dragActive, setDragActive] = useState(false);
-  const [error, setError] = useState<DocumentUploadErrorCode | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [inboxItem, setInboxItem] = useState<InboxItem | null>(null);
-  const [duplicateInfo, setDuplicateInfo] = useState<{
-    title: string;
-    type: 'inbox' | 'document';
-    id: string;
-  } | null>(null);
+  const [uploadError, setUploadError] = useState<DocumentUploadErrorCode | null>(null);
+  const [confirmError, setConfirmError] = useState<DocumentIntakeErrorCode | null>(null);
+  const [pendingUpload, setPendingUpload] = useState<PendingDocumentIntake | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [isConfirming, setIsConfirming] = useState(false);
 
-  async function handleFile(file: File | null | undefined) {
-    if (!file) return;
-    const generation = uploadGenerationRef.current + 1;
-    uploadGenerationRef.current = generation;
-    setError(null);
-    setDuplicateInfo(null);
-    setInboxItem(null);
-    setLoading(true);
-
-    const loaded = await loadCachedDocumentFileFromUpload(file);
-    if (uploadGenerationRef.current !== generation) return;
-    if (!loaded.success) {
-      setLoading(false);
-      setError(loaded.error);
-      return;
-    }
-
-    const result = await intakeCachedDocumentFile(loaded.payload, { importSource: 'upload' });
-    if (uploadGenerationRef.current !== generation) return;
-    setLoading(false);
-
-    if (!result.success) {
-      setError(result.error);
-      return;
-    }
-
-    if (result.duplicate) {
-      setDuplicateInfo({
-        title: result.existing?.title ?? '',
-        type: result.existing?.type ?? 'inbox',
-        id: result.existing?.id ?? '',
-      });
-      showToast(translate('document.upload.duplicateDetected'));
-      return;
-    }
-
-    setInboxItem(result.inboxItem);
+  const handleUploadComplete = (itemId: string) => {
     showToast(translate('document.upload.addedToInbox'));
-  }
+    navigate(`/ablage/${itemId}`);
+  };
+
+  const openFilePicker = () => {
+    setUploadError(null);
+    setConfirmError(null);
+    discardPendingDocumentIntake(pendingUpload);
+    setPendingUpload(null);
+    inputRef.current?.click();
+  };
+
+  const processFile = async (file: File | null | undefined) => {
+    if (!file) return;
+
+    const generation = processGenerationRef.current + 1;
+    processGenerationRef.current = generation;
+    setUploadError(null);
+    setConfirmError(null);
+    discardPendingDocumentIntake(pendingUpload);
+    setPendingUpload(null);
+    setIsProcessing(true);
+
+    try {
+      const result = await processDocumentFileForPreview(file);
+      if (processGenerationRef.current !== generation) return;
+
+      if (!result.success) {
+        setUploadError(result.error);
+        return;
+      }
+
+      setPendingUpload(result.pending);
+
+      if (result.pending.extraction.qualityHintKey) {
+        showToast(translate(result.pending.extraction.qualityHintKey));
+      }
+    } catch {
+      setUploadError('ocr_failed');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const confirmPendingUpload = async () => {
+    if (!pendingUpload || confirmInFlightRef.current) return;
+
+    confirmInFlightRef.current = true;
+    setConfirmError(null);
+    setIsConfirming(true);
+
+    try {
+      const result = await confirmPendingDocumentIntake(pendingUpload, { importSource: 'upload' });
+
+      if (!result.success) {
+        setConfirmError(result.error);
+        return;
+      }
+
+      if (result.duplicate) {
+        discardPendingDocumentIntake(pendingUpload);
+        setPendingUpload(null);
+        showToast(translate('document.upload.duplicateDetected'));
+        if (result.existing?.type === 'inbox') {
+          navigate(`/ablage/${result.existing.id}`);
+        } else if (result.existing?.type === 'document') {
+          navigate(`/dokumente/${result.existing.id}`);
+        }
+        return;
+      }
+
+      const itemId = result.inboxItem.id;
+      discardPendingDocumentIntake(pendingUpload);
+      setPendingUpload(null);
+      handleUploadComplete(itemId);
+    } finally {
+      confirmInFlightRef.current = false;
+      setIsConfirming(false);
+    }
+  };
+
+  const discardUpload = () => {
+    discardPendingDocumentIntake(pendingUpload);
+    setPendingUpload(null);
+    setConfirmError(null);
+  };
 
   function onInputChange(event: FormEvent<HTMLInputElement>) {
     const file = event.currentTarget.files?.[0];
-    void handleFile(file);
+    void processFile(file);
     event.currentTarget.value = '';
   }
 
@@ -82,11 +130,86 @@ export function DocumentUploadPage() {
     event.preventDefault();
     setDragActive(false);
     const file = event.dataTransfer.files?.[0];
-    void handleFile(file);
+    void processFile(file);
   }
 
-  const fileRef = inboxItem?.fileRefId ? getDocumentFileRefById(inboxItem.fileRefId) : undefined;
-  const previewUrl = useDocumentFileObjectUrl(fileRef);
+  if (uploadError) {
+    return (
+      <div className="page document-upload-page" data-testid="document-upload-page">
+        <button type="button" className="back-link" onClick={() => navigate('/dokumente')}>
+          ← {translate('common.back')}
+        </button>
+        <PageHeader
+          title={translate('document.upload.title')}
+          subtitle={translate('document.upload.subtitle')}
+        />
+        <DocumentUploadErrorPanel
+          errorCode={uploadError}
+          translate={translate}
+          onRetry={() => {
+            setUploadError(null);
+            openFilePicker();
+          }}
+          onNewPhoto={() => {
+            setUploadError(null);
+            navigate('/scan?input=camera');
+          }}
+          onSelectFile={() => {
+            setUploadError(null);
+            openFilePicker();
+          }}
+        />
+      </div>
+    );
+  }
+
+  if (pendingUpload) {
+    const confirmErrorView = confirmError ? resolveUploadErrorView(confirmError) : null;
+    const persistErrorDiagnostic =
+      confirmError === 'persist_failed' ? getPersistFailureDiagnosticForDev() : null;
+
+    return (
+      <div className="page document-upload-page" data-testid="document-upload-page">
+        <button type="button" className="back-link" onClick={() => navigate('/dokumente')}>
+          ← {translate('common.back')}
+        </button>
+        <PageHeader
+          title={translate('document.upload.title')}
+          subtitle={translate('scan.ocr.previewSubtitle')}
+        />
+        <OcrPreviewPanel
+          fileName={pendingUpload.cachedFile.fileName}
+          extraction={pendingUpload.extraction}
+          preview={pendingUpload.preview}
+          pendingNoticeLabel={translate('document.intakePreview.pendingNotice')}
+          continueLabel={translate('document.intakePreview.savePermanently')}
+          qualityHintLabel={
+            pendingUpload.extraction.qualityHintKey
+              ? translate(pendingUpload.extraction.qualityHintKey)
+              : undefined
+          }
+          documentTypeLabel={translate('scan.ocr.documentType')}
+          senderLabel={translate('scan.ocr.sender')}
+          previewTextLabel={translate('scan.ocr.previewText')}
+          aiActionsLabel={translate('document.intakeUnderstanding.aiActions')}
+          translate={translate}
+          cancelLabel={translate('document.intakePreview.discard')}
+          onContinue={confirmPendingUpload}
+          onCancel={discardUpload}
+          isConfirming={isConfirming}
+          confirmErrorTitle={confirmErrorView ? translate(confirmErrorView.titleKey) : undefined}
+          confirmErrorMessage={confirmErrorView ? translate(confirmErrorView.descriptionKey) : undefined}
+          confirmErrorDiagnostic={persistErrorDiagnostic}
+          onRetryConfirm={
+            confirmError && isConfirmRetryableIntakeError(confirmError)
+              ? () => void confirmPendingUpload()
+              : undefined
+          }
+          onSelectFile={openFilePicker}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="page document-upload-page" data-testid="document-upload-page">
@@ -125,128 +248,21 @@ export function DocumentUploadPage() {
             className="document-upload-dropzone__input"
             data-testid="document-upload-input"
             onChange={onInputChange}
-            disabled={loading}
+            disabled={isProcessing}
           />
           <Button
             type="button"
             variant="outline"
-            onClick={() => inputRef.current?.click()}
-            disabled={loading}
-            loading={loading}
+            onClick={openFilePicker}
+            disabled={isProcessing}
+            loading={isProcessing}
             data-testid="document-upload-select"
           >
-            {loading
+            {isProcessing
               ? translate('document.upload.processing')
               : translate('document.upload.select')}
           </Button>
         </div>
-
-        {loading ? (
-          <div className="document-upload-loading" data-testid="document-upload-loading" aria-busy="true">
-            <SkeletonStack count={2} variant="list-row" testId="document-upload-skeleton" />
-          </div>
-        ) : null}
-
-        {error ? (
-          <DocumentUploadErrorPanel
-            errorCode={error}
-            translate={translate}
-            onRetry={() => {
-              setError(null);
-              inputRef.current?.click();
-            }}
-            onNewPhoto={() => {
-              setError(null);
-              navigate('/scan?input=camera');
-            }}
-            onSelectFile={() => {
-              setError(null);
-              inputRef.current?.click();
-            }}
-          />
-        ) : null}
-
-        {duplicateInfo ? (
-          <div className="document-upload-preview" data-testid="document-upload-duplicate">
-            <h2 className="document-upload-preview__title">
-              {translate('document.upload.duplicateTitle')}
-            </h2>
-            <p>
-              {translate('document.upload.duplicateMessage')} {duplicateInfo.title}
-            </p>
-            <div className="document-upload-preview__actions">
-              {duplicateInfo.type === 'inbox' ? (
-                <Link to={`/ablage/${duplicateInfo.id}`}>
-                  <Button variant="primary" data-testid="document-upload-open-existing">
-                    {translate('document.upload.openExisting')}
-                  </Button>
-                </Link>
-              ) : (
-                <Link to={`/dokumente/${duplicateInfo.id}`}>
-                  <Button variant="primary" data-testid="document-upload-open-existing">
-                    {translate('document.upload.openExisting')}
-                  </Button>
-                </Link>
-              )}
-            </div>
-          </div>
-        ) : null}
-
-        {inboxItem ? (
-          <div className="document-upload-preview" data-testid="document-upload-preview">
-            <h2 className="document-upload-preview__title">
-              {translate('document.upload.inboxPreviewTitle')}
-            </h2>
-            <dl className="document-upload-preview__meta">
-              <div>
-                <dt>{translate('document.upload.originalFileName')}</dt>
-                <dd data-testid="document-upload-file-name">
-                  {fileRef?.originalFileName ?? inboxItem.sourceFileName ?? inboxItem.title}
-                </dd>
-              </div>
-              <div>
-                <dt>{translate('document.upload.fileType')}</dt>
-                <dd data-testid="document-upload-file-type">{fileRef?.mimeType || '—'}</dd>
-              </div>
-              <div>
-                <dt>{translate('document.upload.fileSize')}</dt>
-                <dd data-testid="document-upload-file-size">
-                  {fileRef ? formatFileSize(fileRef.fileSize) : '—'}
-                </dd>
-              </div>
-              <div>
-                <dt>{translate('document.upload.inboxTitle')}</dt>
-                <dd data-testid="document-upload-inbox-title">{inboxItem.title}</dd>
-              </div>
-            </dl>
-
-            {previewUrl && fileRef && isImageUpload(fileRef.mimeType, fileRef.originalFileName) ? (
-              <img
-                src={previewUrl}
-                alt={fileRef.originalFileName}
-                className="document-upload-preview__image"
-                data-testid="document-upload-image-preview"
-              />
-            ) : null}
-
-            {previewUrl && fileRef && isPdfUpload(fileRef.mimeType, fileRef.originalFileName) ? (
-              <iframe
-                title={fileRef.originalFileName}
-                src={previewUrl}
-                className="document-upload-preview__pdf"
-                data-testid="document-upload-pdf-preview"
-              />
-            ) : null}
-
-            <div className="document-upload-preview__actions">
-              <Link to={`/ablage/${inboxItem.id}`}>
-                <Button variant="primary" data-testid="document-upload-to-inbox">
-                  {translate('document.upload.openInboxReview')}
-                </Button>
-              </Link>
-            </div>
-          </div>
-        ) : null}
       </Card>
     </div>
   );

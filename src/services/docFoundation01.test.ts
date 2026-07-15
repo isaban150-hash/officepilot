@@ -21,8 +21,10 @@ import { createMockInboxItemFromUpload } from './inboxUploadFactory';
 import { setImageOcrExtractorForTests } from './ocrDocumentService';
 import {
   migratePersistedStateV3ToV4,
+  migratePersistedStateV4ToV5,
   STORAGE_VERSION,
   STORAGE_VERSION_V3,
+  STORAGE_VERSION_V4,
 } from './sync/syncMigrationService';
 import type { AppPersistedState } from '../types/models';
 import { attachCompanyDocumentToVorgang, getVorgangStoreSnapshot, hydrateVorgangStore } from './vorgangService';
@@ -243,11 +245,15 @@ describe('DOC-FOUNDATION-01 migration', () => {
     };
 
     const once = migratePersistedStateV3ToV4(v3);
-    expect(once.version).toBe(STORAGE_VERSION);
+    expect(once.version).toBe(STORAGE_VERSION_V4);
     expect(once.documentFileRefs?.length).toBe(1);
     expect(once.documentFileBlobs?.['legacy-blob-upl-1']).toContain('data:application/pdf');
 
-    const twice = migratePersistedStateV3ToV4(once);
+    const v5 = migratePersistedStateV4ToV5(once);
+    expect(v5.version).toBe(STORAGE_VERSION);
+    expect(v5.documentFileRefs?.[0].lifecycleStatus).toBe('committed');
+
+    const twice = migratePersistedStateV3ToV4(v3);
     expect(twice.documentFileRefs?.length).toBe(1);
     expect(twice.uploadedDocuments?.length).toBe(1);
   });

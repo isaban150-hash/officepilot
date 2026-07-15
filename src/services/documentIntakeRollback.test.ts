@@ -52,6 +52,8 @@ function seedExistingFileRef(): { ref: DocumentFileRef; blob: string } {
     storageType: 'local_data_url',
     localDataKey: 'blob-existing',
     createdAt: '2026-03-01T10:00:00.000Z',
+    lifecycleStatus: 'committed',
+    committedAt: '2026-03-01T10:00:00.000Z',
   };
   return { ref, blob: 'data:image/png;base64,ZXhpdA==' };
 }

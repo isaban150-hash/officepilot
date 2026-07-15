@@ -6,6 +6,7 @@ import { trDocumentExplanation, trLetterExplanation, trLetterLabels, trDocAssist
 import { trIntakeUnderstanding } from './intakeUnderstanding';
 import { trLanguage } from './language';
 import { trScan } from './scan';
+import { trIntakePreview } from './intakePreview';
 
 export const trModules = {
   ...trAuth,
@@ -19,4 +20,5 @@ export const trModules = {
   ...trLetterLabels,
   ...trDocAssistantCore,
   ...trScan,
+  ...trIntakePreview,
 } as const;

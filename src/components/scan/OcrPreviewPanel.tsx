@@ -14,6 +14,7 @@ interface OcrPreviewPanelProps {
   fileName: string;
   extraction: DocumentTextExtractionResult;
   preview: OcrPreviewSummary;
+  pendingNoticeLabel?: string;
   continueLabel: string;
   qualityHintLabel?: string;
   documentTypeLabel: string;
@@ -38,6 +39,7 @@ interface OcrPreviewPanelProps {
 export function OcrPreviewPanel({
   fileName,
   preview,
+  pendingNoticeLabel,
   continueLabel,
   qualityHintLabel,
   documentTypeLabel,
@@ -67,6 +69,12 @@ export function OcrPreviewPanel({
       <CardMeta data-testid="ocr-extraction-meta">
         {translate('docAssistant.recognized')}: {translate(preview.documentTypeLabelKey)}
       </CardMeta>
+
+      {pendingNoticeLabel ? (
+        <p className="ocr-preview-panel__pending-notice" data-testid="ocr-pending-notice">
+          {pendingNoticeLabel}
+        </p>
+      ) : null}
 
       {qualityHintLabel && (
         <p className="ocr-preview-panel__hint" data-testid="ocr-quality-hint">

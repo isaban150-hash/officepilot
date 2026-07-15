@@ -1,4 +1,5 @@
 import type { DocumentFileRef } from '../types/documentFileRef';
+import { buildCommittedLifecycleFields } from './documentFileStorageLifecycleService';
 import { generateEntityId } from './sync/syncMetaService';
 import type { CachedDocumentFilePayload } from './cachedDocumentFileService';
 import { computeBufferContentHash, computeDataUrlContentHash } from './documentFileHashService';
@@ -223,6 +224,7 @@ export async function storeDocumentFileFromCachedPayload(
     storageType: 'indexeddb',
     localDataKey: fileRefId,
     createdAt,
+    ...buildCommittedLifecycleFields(createdAt),
   };
   fileRefs = [...fileRefs, fileRef];
   return { fileRef, created: true };
@@ -331,6 +333,7 @@ export async function registerLegacyDocumentFile(input: {
   const localDataKey = generateEntityId('file-blob');
   fileBlobs[localDataKey] = input.dataUrl;
 
+  const createdAt = new Date().toISOString();
   const fileRef: DocumentFileRef = {
     id: `legacy-upl-${input.legacyId}`,
     originalFileName: input.originalFileName,
@@ -339,7 +342,8 @@ export async function registerLegacyDocumentFile(input: {
     contentHash,
     storageType: 'local_data_url',
     localDataKey,
-    createdAt: new Date().toISOString(),
+    createdAt,
+    ...buildCommittedLifecycleFields(createdAt),
   };
   fileRefs = [...fileRefs, fileRef];
   return fileRef;

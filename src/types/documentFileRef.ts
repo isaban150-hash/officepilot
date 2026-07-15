@@ -1,5 +1,8 @@
 export type DocumentFileStorageType = 'local_data_url' | 'indexeddb';
 
+export const DOCUMENT_FILE_LIFECYCLE_STATUSES = ['temp', 'staged', 'committed', 'trashed'] as const;
+export type DocumentFileLifecycleStatus = (typeof DOCUMENT_FILE_LIFECYCLE_STATUSES)[number];
+
 /** Lokale Dateireferenz – Bytes liegen unter `localDataKey` (Legacy) oder in IndexedDB. */
 export interface DocumentFileRef {
   id: string;
@@ -10,6 +13,9 @@ export interface DocumentFileRef {
   storageType: DocumentFileStorageType;
   localDataKey: string;
   createdAt: string;
+  lifecycleStatus: DocumentFileLifecycleStatus;
+  expiresAt?: string;
+  committedAt?: string;
 }
 
 export interface DocumentFileBlob {

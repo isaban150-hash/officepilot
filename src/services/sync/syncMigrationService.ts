@@ -18,13 +18,15 @@ import type {
   Vorgang,
 } from '../../types/models';
 import type { SyncClientConfig, SyncMeta } from '../../types/sync';
+import { migrateDocumentFileRefsToCommitted } from '../documentFileStorageLifecycleService';
 import { createSyncClient, ensureSyncClientFromState } from './syncClientService';
 import { createDefaultSyncMeta } from './syncMetaService';
 
 export const LEGACY_STORAGE_VERSION = 1;
-export const STORAGE_VERSION = 4;
+export const STORAGE_VERSION = 5;
 export const STORAGE_VERSION_V2 = 2;
 export const STORAGE_VERSION_V3 = 3;
+export const STORAGE_VERSION_V4 = 4;
 
 type PersistedStateV1 = Omit<AppPersistedState, 'syncClient' | 'syncOutbox'> & {
   version: typeof LEGACY_STORAGE_VERSION;
@@ -169,14 +171,24 @@ export function migratePersistedStateV3ToV4(state: AppPersistedState): AppPersis
       storageType: 'local_data_url',
       localDataKey,
       createdAt: upl.uploadedAt,
+      lifecycleStatus: 'committed',
+      committedAt: upl.uploadedAt,
     });
   }
 
   return {
     ...state,
-    version: STORAGE_VERSION,
+    version: STORAGE_VERSION_V4,
     documentFileRefs,
     documentFileBlobs,
+  };
+}
+
+export function migratePersistedStateV4ToV5(state: AppPersistedState): AppPersistedState {
+  return {
+    ...state,
+    version: STORAGE_VERSION,
+    documentFileRefs: migrateDocumentFileRefsToCommitted(state.documentFileRefs ?? []),
   };
 }
 
@@ -256,11 +268,30 @@ export function isValidPersistedStateV2(value: unknown): value is PersistedState
   );
 }
 
-export function isValidPersistedStateV4(value: unknown): value is AppPersistedState {
+export function isValidPersistedStateV5(value: unknown): value is AppPersistedState {
   if (!value || typeof value !== 'object') return false;
   const state = value as AppPersistedState;
   return (
     state.version === STORAGE_VERSION &&
+    typeof state.syncClient === 'object' &&
+    state.syncClient !== null &&
+    typeof state.syncClient.deviceId === 'string' &&
+    typeof state.syncClient.workspaceId === 'string' &&
+    Array.isArray(state.syncOutbox) &&
+    Array.isArray(state.inboxItems) &&
+    Array.isArray(state.vorgaenge) &&
+    Array.isArray(state.tasks) &&
+    (Array.isArray(state.documents) || state.documents === undefined) &&
+    typeof state.setup === 'object' &&
+    state.setup !== null
+  );
+}
+
+export function isValidPersistedStateV4(value: unknown): value is AppPersistedState {
+  if (!value || typeof value !== 'object') return false;
+  const state = value as AppPersistedState;
+  return (
+    state.version === STORAGE_VERSION_V4 &&
     typeof state.syncClient === 'object' &&
     state.syncClient !== null &&
     typeof state.syncClient.deviceId === 'string' &&

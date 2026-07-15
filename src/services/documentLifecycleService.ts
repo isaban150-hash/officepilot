@@ -438,3 +438,13 @@ export function getDocumentLifecycleStatusLabel(status: DocumentLifecycleStatus)
       return 'Unbekannt';
   }
 }
+
+export {
+  DOCUMENT_FILE_LIFECYCLE_STATUSES,
+  buildCommittedLifecycleFields,
+  buildTempLifecycleFields,
+  migrateDocumentFileRefsToCommitted,
+  normalizeDocumentFileRefLifecycle,
+  isCommittedFileRefLifecycle,
+} from './documentFileStorageLifecycleService';
+export type { DocumentFileLifecycleStatus } from './documentFileStorageLifecycleService';

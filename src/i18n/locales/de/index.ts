@@ -6,6 +6,7 @@ import { deDocumentExplanation, deLetterExplanation } from './letterExplanation'
 import { deLanguage } from './language';
 import { deOverlay } from './overlay';
 import { deScan } from './scan';
+import { deIntakePreview } from './intakePreview';
 
 export const deModules = {
   ...deAuth,
@@ -17,4 +18,5 @@ export const deModules = {
   ...deDocumentExplanation,
   ...deOverlay,
   ...deScan,
+  ...deIntakePreview,
 } as const;

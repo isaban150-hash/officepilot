@@ -109,9 +109,11 @@ import {
   isValidPersistedStateV2,
   isValidPersistedStateV3,
   isValidPersistedStateV4,
+  isValidPersistedStateV5,
   migratePersistedStateV1ToV2,
   migratePersistedStateV2ToV3,
   migratePersistedStateV3ToV4,
+  migratePersistedStateV4ToV5,
   STORAGE_VERSION,
 } from './sync/syncMigrationService';
 import { ensureSyncClientFromState, hydrateSyncClient } from './sync/syncClientService';
@@ -483,21 +485,28 @@ import {
 } from './storage/storageScopeService';
 
 function normalizeLoadedState(parsed: unknown, persistMigrations = true): AppPersistedState | null {
-  if (isValidPersistedStateV4(parsed)) {
+  if (isValidPersistedStateV5(parsed)) {
     return finalizeLoadedState(parsed);
   }
+  if (isValidPersistedStateV4(parsed)) {
+    const migrated = migratePersistedStateV4ToV5(parsed);
+    if (persistMigrations) savePersistedState(migrated);
+    return finalizeLoadedState(migrated);
+  }
   if (isValidPersistedStateV3(parsed)) {
-    const migrated = migratePersistedStateV3ToV4(parsed);
+    const migrated = migratePersistedStateV4ToV5(migratePersistedStateV3ToV4(parsed));
     if (persistMigrations) savePersistedState(migrated);
     return finalizeLoadedState(migrated);
   }
   if (isValidPersistedStateV2(parsed)) {
-    const migrated = migratePersistedStateV3ToV4(migratePersistedStateV2ToV3(parsed));
+    const migrated = migratePersistedStateV4ToV5(
+      migratePersistedStateV3ToV4(migratePersistedStateV2ToV3(parsed)),
+    );
     if (persistMigrations) savePersistedState(migrated);
     return finalizeLoadedState(migrated);
   }
   if (isValidPersistedStateV1(parsed)) {
-    const migrated = migratePersistedStateV1ToV2(parsed);
+    const migrated = migratePersistedStateV4ToV5(migratePersistedStateV1ToV2(parsed));
     if (persistMigrations) savePersistedState(migrated);
     return finalizeLoadedState(migrated);
   }

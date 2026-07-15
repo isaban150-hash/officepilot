@@ -9,38 +9,23 @@ import {
   UPLOAD_DOCUMENT_KINDS,
   UPLOAD_KIND_LABEL_KEYS,
 } from '../services/inboxUploadFactory';
-import {
-  intakeCachedDocumentFile,
-} from '../services/documentIntakeService';
 import { getPersistFailureDiagnosticForDev } from '../services/persistenceService';
 import {
-  isBlockingExtractionError,
   isConfirmRetryableIntakeError,
   resolveUploadErrorView,
   type DocumentIntakeErrorCode,
   type DocumentUploadErrorCode,
 } from '../services/documentUploadErrorService';
-import { isHeicUploadFile } from '../services/documentUploadValidation';
 import {
-  loadCachedDocumentFileFromUpload,
-  type CachedDocumentFilePayload,
-} from '../services/cachedDocumentFileService';
-import {
-  buildOcrPreviewSummary,
-  extractDocumentTextFromCache,
-  type DocumentTextExtractionResult,
-  type OcrPreviewSummary,
-} from '../services/ocrDocumentService';
+  confirmPendingDocumentIntake,
+  discardPendingDocumentIntake,
+  processDocumentFileForPreview,
+  type PendingDocumentIntake,
+} from '../services/pendingDocumentIntakeService';
 import type { UploadDocumentKind } from '../types/models';
 
 const SCAN_FILE_ACCEPT =
   'image/jpeg,image/png,image/webp,application/pdf,.jpg,.jpeg,.png,.webp,.pdf';
-
-interface PendingScan {
-  cachedFile: CachedDocumentFilePayload;
-  extraction: DocumentTextExtractionResult;
-  preview: OcrPreviewSummary;
-}
 
 export function ScanPage() {
   const { translate, showToast } = useApp();
@@ -52,7 +37,7 @@ export function ScanPage() {
   const processGenerationRef = useRef(0);
   const [selectedKind, setSelectedKind] = useState<UploadDocumentKind | null>(null);
   const [showKindPicker, setShowKindPicker] = useState(false);
-  const [pendingScan, setPendingScan] = useState<PendingScan | null>(null);
+  const [pendingScan, setPendingScan] = useState<PendingDocumentIntake | null>(null);
   const [uploadError, setUploadError] = useState<DocumentUploadErrorCode | null>(null);
   const [confirmError, setConfirmError] = useState<DocumentIntakeErrorCode | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -75,6 +60,7 @@ export function ScanPage() {
   const openFilePicker = (camera = false) => {
     setUploadError(null);
     setConfirmError(null);
+    discardPendingDocumentIntake(pendingScan);
     setPendingScan(null);
     if (camera) {
       cameraInputRef.current?.click();
@@ -84,49 +70,29 @@ export function ScanPage() {
   };
 
   const processFile = async (file: File) => {
-    if (isHeicUploadFile(file)) {
-      setUploadError('heic_unsupported');
-      return;
-    }
-
     const generation = processGenerationRef.current + 1;
     processGenerationRef.current = generation;
     setUploadError(null);
     setConfirmError(null);
+    discardPendingDocumentIntake(pendingScan);
     setPendingScan(null);
     setIsProcessing(true);
+
     try {
-      const loaded = await loadCachedDocumentFileFromUpload(file);
+      const result = await processDocumentFileForPreview(file, {
+        selectedKind: selectedKind ?? undefined,
+      });
+
       if (processGenerationRef.current !== generation) return;
-      if (!loaded.success) {
-        if (loaded.error === 'unsupported_photo_format') {
-          setUploadError('heic_unsupported');
-        } else if (loaded.error === 'file_too_large') {
-          setUploadError('file_too_large');
-        } else {
-          setUploadError('file_read_failed');
-        }
+      if (!result.success) {
+        setUploadError(result.error);
         return;
       }
 
-      const extraction = await extractDocumentTextFromCache(loaded.payload);
+      setPendingScan(result.pending);
 
-      if (processGenerationRef.current !== generation) return;
-      if (isBlockingExtractionError(extraction.errorCode)) {
-        setUploadError(extraction.errorCode ?? 'ocr_failed');
-        return;
-      }
-
-      const preview = buildOcrPreviewSummary(
-        loaded.payload.fileName,
-        extraction.recognizedText,
-        selectedKind ?? undefined,
-      );
-
-      setPendingScan({ cachedFile: loaded.payload, extraction, preview });
-
-      if (extraction.qualityHintKey) {
-        showToast(translate(extraction.qualityHintKey));
+      if (result.pending.extraction.qualityHintKey) {
+        showToast(translate(result.pending.extraction.qualityHintKey));
       }
     } catch {
       setUploadError('ocr_failed');
@@ -143,12 +109,8 @@ export function ScanPage() {
     setIsConfirming(true);
 
     try {
-      const recognizedText = pendingScan.extraction.recognizedText.trim() || undefined;
-      const result = await intakeCachedDocumentFile(pendingScan.cachedFile, {
-        sourceFileName: pendingScan.cachedFile.fileName,
+      const result = await confirmPendingDocumentIntake(pendingScan, {
         kind: selectedKind ?? undefined,
-        recognizedText,
-        pageTexts: pendingScan.extraction.pageTexts,
         importSource: 'scan',
       });
 
@@ -158,6 +120,7 @@ export function ScanPage() {
       }
 
       if (result.duplicate) {
+        discardPendingDocumentIntake(pendingScan);
         setPendingScan(null);
         showToast(translate('document.upload.duplicateDetected'));
         if (result.existing?.type === 'inbox') {
@@ -168,12 +131,20 @@ export function ScanPage() {
         return;
       }
 
+      const itemId = result.inboxItem.id;
+      discardPendingDocumentIntake(pendingScan);
       setPendingScan(null);
-      handleUploadComplete(result.inboxItem.id);
+      handleUploadComplete(itemId);
     } finally {
       confirmInFlightRef.current = false;
       setIsConfirming(false);
     }
+  };
+
+  const discardScan = () => {
+    discardPendingDocumentIntake(pendingScan);
+    setPendingScan(null);
+    setConfirmError(null);
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -246,7 +217,8 @@ export function ScanPage() {
           fileName={pendingScan.cachedFile.fileName}
           extraction={pendingScan.extraction}
           preview={pendingScan.preview}
-          continueLabel={translate('scan.ocr.continue')}
+          pendingNoticeLabel={translate('document.intakePreview.pendingNotice')}
+          continueLabel={translate('document.intakePreview.savePermanently')}
           qualityHintLabel={
             pendingScan.extraction.qualityHintKey
               ? translate(pendingScan.extraction.qualityHintKey)
@@ -257,9 +229,9 @@ export function ScanPage() {
           previewTextLabel={translate('scan.ocr.previewText')}
           aiActionsLabel={translate('document.intakeUnderstanding.aiActions')}
           translate={translate}
-          cancelLabel={translate('common.cancel')}
+          cancelLabel={translate('document.intakePreview.discard')}
           onContinue={confirmPendingScan}
-          onCancel={() => setPendingScan(null)}
+          onCancel={discardScan}
           onChangeType={() => setShowKindPicker(true)}
           changeTypeLabel={translate('docAssistant.changeType')}
           isConfirming={isConfirming}

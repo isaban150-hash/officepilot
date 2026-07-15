@@ -12,8 +12,10 @@ import { LocalSyncAdapter } from '../sync/localSyncAdapter';
 import {
   migratePersistedStateV2ToV3,
   migratePersistedStateV3ToV4,
+  migratePersistedStateV4ToV5,
   STORAGE_VERSION,
   STORAGE_VERSION_V2,
+  STORAGE_VERSION_V4,
 } from '../sync/syncMigrationService';
 import { createSyncClient, resetSyncClientForTests } from '../sync/syncClientService';
 import { resetSyncOutboxForTests, getSyncOutboxSnapshot, enqueueSyncOutbox } from '../sync/syncOutboxService';
@@ -127,7 +129,9 @@ describe('CLOUD-DATA-01 migration v2 → v3', () => {
       savedAt: '2026-07-01T10:00:00.000Z',
     };
 
-    const migrated = migratePersistedStateV3ToV4(migratePersistedStateV2ToV3(v2State));
+    const migrated = migratePersistedStateV4ToV5(
+      migratePersistedStateV3ToV4(migratePersistedStateV2ToV3(v2State)),
+    );
     expect(migrated.version).toBe(STORAGE_VERSION);
     expect(migrated.setupSync?.version).toBeGreaterThanOrEqual(1);
     expect(migrated.companyProfileSync?.version).toBeGreaterThanOrEqual(1);

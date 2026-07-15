@@ -8,6 +8,7 @@ import { bgIntakeUnderstanding } from './intakeUnderstanding';
 import { bgLanguage } from './language';
 import { bgReviewWorkflow } from './reviewWorkflow';
 import { bgScan } from './scan';
+import { bgIntakePreview } from './intakePreview';
 
 export const bgModules = {
   ...bgAuth,
@@ -24,4 +25,5 @@ export const bgModules = {
   ...bgDocAssistantCore,
   ...bgReviewWorkflow,
   ...bgScan,
+  ...bgIntakePreview,
 } as const;
