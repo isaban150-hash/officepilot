@@ -25,6 +25,29 @@ export function buildTempLifecycleFields(ttlMs = DEFAULT_TEMP_TTL_MS): {
   };
 }
 
+/** Metadata-only promotion fields. Does not touch blob, hash, or fileRefId. */
+export function applyDocumentFileRefCommittedPromotion(
+  ref: DocumentFileRef,
+  promotedAt = new Date().toISOString(),
+): DocumentFileRef {
+  const { expiresAt: _removedExpiresAt, ...withoutExpires } = ref;
+  return {
+    ...withoutExpires,
+    lifecycleStatus: 'committed',
+    committedAt: promotedAt,
+  };
+}
+
+export function isDocumentFileRefTempExpired(
+  ref: DocumentFileRef,
+  nowMs = Date.now(),
+): boolean {
+  if (ref.lifecycleStatus !== 'temp' || !ref.expiresAt) return false;
+  const expiresMs = Date.parse(ref.expiresAt);
+  if (Number.isNaN(expiresMs)) return false;
+  return expiresMs <= nowMs;
+}
+
 export function normalizeDocumentFileRefLifecycle(ref: DocumentFileRef): DocumentFileRef {
   if (ref.lifecycleStatus === 'committed') {
     return {

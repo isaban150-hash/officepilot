@@ -443,6 +443,8 @@ export {
   DOCUMENT_FILE_LIFECYCLE_STATUSES,
   buildCommittedLifecycleFields,
   buildTempLifecycleFields,
+  applyDocumentFileRefCommittedPromotion,
+  isDocumentFileRefTempExpired,
   migrateDocumentFileRefsToCommitted,
   normalizeDocumentFileRefLifecycle,
   isCommittedFileRefLifecycle,

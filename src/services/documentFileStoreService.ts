@@ -1,5 +1,6 @@
 import type { DocumentFileRef } from '../types/documentFileRef';
 import {
+  applyDocumentFileRefCommittedPromotion,
   buildCommittedLifecycleFields,
   buildTempLifecycleFields,
 } from './documentFileStorageLifecycleService';
@@ -17,6 +18,7 @@ import {
   saveDocumentBlob,
 } from './storage/documentBlobIndexedDbService';
 import { getActiveStorageScope, type StorageScope } from './storage/storageScopeService';
+import * as persistenceService from './persistenceService';
 
 let fileRefs: DocumentFileRef[] = [];
 let fileBlobs: Record<string, string> = {};
@@ -415,3 +417,60 @@ export async function registerLegacyDocumentFile(input: {
 }
 
 export { DocumentBlobStorageError } from './storage/documentBlobIndexedDbService';
+
+export type PromoteDocumentFileRefError =
+  | 'file_ref_not_found'
+  | 'lifecycle_not_temp'
+  | 'persist_failed';
+
+export type PromoteDocumentFileRefResult =
+  | { success: true; fileRef: DocumentFileRef; alreadyCommitted: boolean }
+  | { success: false; error: PromoteDocumentFileRefError };
+
+/**
+ * Promotes a temporary DocumentFileRef to committed without touching the blob.
+ * Idempotent for already-committed refs (no-op success).
+ */
+export function promoteDocumentFileRefToCommitted(fileRefId: string): PromoteDocumentFileRefResult {
+  const index = fileRefs.findIndex((entry) => entry.id === fileRefId);
+  if (index === -1) {
+    return { success: false, error: 'file_ref_not_found' };
+  }
+
+  const current = fileRefs[index];
+  if (current.lifecycleStatus === 'committed') {
+    return {
+      success: true,
+      fileRef: cloneRef(current),
+      alreadyCommitted: true,
+    };
+  }
+
+  if (current.lifecycleStatus !== 'temp') {
+    return { success: false, error: 'lifecycle_not_temp' };
+  }
+
+  const previous = cloneRef(current);
+  const promoted = applyDocumentFileRefCommittedPromotion(current);
+  fileRefs = [
+    ...fileRefs.slice(0, index),
+    cloneRef(promoted),
+    ...fileRefs.slice(index + 1),
+  ];
+
+  const persistResult = persistenceService.persistAll();
+  if (!persistResult.success) {
+    fileRefs = [
+      ...fileRefs.slice(0, index),
+      previous,
+      ...fileRefs.slice(index + 1),
+    ];
+    return { success: false, error: 'persist_failed' };
+  }
+
+  return {
+    success: true,
+    fileRef: cloneRef(promoted),
+    alreadyCommitted: false,
+  };
+}

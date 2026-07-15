@@ -483,7 +483,11 @@ export function EingangDetailPage() {
           onToggle={() => toggleSection('original-file')}
           testId="document-review-original-section"
         >
-          <DocumentOriginalFilePanel fileRefId={item.fileRefId} translate={translate} />
+          <DocumentOriginalFilePanel
+            fileRefId={item.fileRefId}
+            translate={translate}
+            onPromoted={() => showToast(translate('document.original.promote.success'))}
+          />
         </CollapsibleReviewSection>
       ) : null}
 

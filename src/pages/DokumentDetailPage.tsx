@@ -124,7 +124,11 @@ export function DokumentDetailPage() {
     <>
       <Card className="document-detail__preview">
         {document.fileRefId ? (
-          <DocumentOriginalFilePanel fileRefId={document.fileRefId} translate={translate} />
+          <DocumentOriginalFilePanel
+            fileRefId={document.fileRefId}
+            translate={translate}
+            onPromoted={() => showToast(translate('document.original.promote.success'))}
+          />
         ) : (
           <>
             <div className="document-detail__image">
