@@ -244,7 +244,10 @@ describe('DOCUMENT-FREE-QUESTION-01', () => {
     });
     expect(answer.uncertain).toBe(true);
     expect(answer.uncertaintyNotes?.length).toBeGreaterThan(0);
-    expect(answer.uncertaintyNotes?.some((n) => /Frist|Text|Absender|zuordnet/i.test(n))).toBe(true);
+    expect(answer.uncertaintyNotes?.some((n) => /Frist|Text|beantworten|yanıtlan|документа/i.test(n))).toBe(
+      true,
+    );
+    expect(answer.uncertaintyNotes?.some((n) => /Kunde|Auftrag|zuordnet/i.test(n))).toBe(false);
   });
 
   it('fehlende Information wird als fehlend bezeichnet', () => {
@@ -312,6 +315,8 @@ describe('DOCUMENT-FREE-QUESTION-01', () => {
       expect(t('document.freeQuestion.title', lang).length).toBeGreaterThan(0);
       expect(t('document.freeQuestion.uncertainBadge', lang).length).toBeGreaterThan(0);
       expect(t('document.freeQuestion.note.noDeadline', lang).length).toBeGreaterThan(0);
+      expect(t('document.freeQuestion.direct.unclear', lang).length).toBeGreaterThan(0);
+      expect(t('document.freeQuestion.direct.noDeadline', lang).length).toBeGreaterThan(0);
     }
   });
 });

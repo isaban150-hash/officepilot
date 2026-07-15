@@ -4,6 +4,7 @@ import { AI_QA_SYSTEM_RULES } from '../ai/aiGuardrails';
 import { getCompanyProfile } from '../companyProfileService';
 import { sanitizeAiText } from '../ai/aiTextSanitizer';
 import type { DocumentAiContext } from '../../types/areaAi';
+import { applyQuestionScopedQualityNotes } from './documentAiQuestionIntent';
 
 function formatSection(title: string, lines: string[] | undefined): string {
   if (!lines || lines.length === 0) return `${title}:\n- (keine Angaben)`;
@@ -17,13 +18,27 @@ function questionNeedsCompanyContext(question: string): boolean {
 }
 
 const ANSWER_FORMAT_RULES = `ANTWORTFORMAT (verbindlich):
-Unterscheide klar:
+Gib ausschließlich ein JSON-Objekt in genau diesem Schema zurück (kein Text außerhalb):
+{"directAnswer":"...","explanation":"..."}
+
+directAnswer:
+- Kurze, verständliche Kernaussage zur Nutzerfrage zuerst.
+- Bei belegbarer Ja-/Nein-Frage z. B. „Nein. …“ oder „Ja. …“.
+- Bei Fristen z. B. „Die Frist ist …“.
+- Wenn der Dokumentkontext keinen sicheren Beleg enthält: keine Ja-/Nein-Erfindung.
+  Dann z. B. „Das lässt sich aus dem Dokument nicht eindeutig beantworten.“
+  oder „Im Dokument ist keine eindeutige Frist erkennbar.“
+
+explanation:
+- Kurze Begründung mit Bezug auf den Dokumentinhalt.
+- Formulierungen wie „Laut dem Hinweis im Dokument …“, „Im Dokument ist ein Betrag von … genannt.“
+  oder „Eine eindeutige Zahlungsaufforderung ist nicht erkennbar.“
 - „Im Dokument steht …“ nur für wörtlich belegbare Angaben.
 - „OfficePilot erkennt …“ für erkannte, aber prüfbedürftige Felder.
 - „Diese Information fehlt …“ wenn die Angabe im Kontext fehlt.
 - „Das ist nicht sicher erkennbar …“ bei unsicheren OCR-/Zuordnungswerten.
-- „Dafür brauche ich noch folgende Angabe …“ wenn ohne Nachtrag keine Antwort möglich ist.
-Erfinde keine Fristen, Beträge, Namen, Kunden, Rechtsfolgen, steuerlichen Pflichten oder Formularangaben.
+
+Erfinde keine Fristen, Beträge, Namen, Kunden, Forderungen, Rechtsfolgen, steuerlichen Pflichten oder Formularangaben.
 Nutze keine anderen Dokumente und keine globalen App-Daten.`;
 
 export function buildDocumentAiPrompt(
@@ -39,6 +54,8 @@ export function buildDocumentAiPrompt(
           .join(' | '),
       )
     : '';
+
+  const scopedNotes = applyQuestionScopedQualityNotes(question, context, lang);
 
   const sections = [
     `Quelle: ${context.sourceType === 'inbox' ? 'Eingangsschreiben' : 'Archivdokument'}`,
@@ -71,8 +88,8 @@ export function buildDocumentAiPrompt(
       ? `Erkannter Text (Auszug):\n${context.recognizedText}`
       : undefined,
     formatSection('Fehlende Unterlagen', context.missingDocuments),
-    formatSection('Unsichere Felder', context.uncertainFieldNotes),
-    formatSection('Fehlende Informationen', context.missingFieldNotes),
+    formatSection('Unsichere Felder', scopedNotes.uncertainFieldNotes),
+    formatSection('Fehlende Informationen', scopedNotes.missingFieldNotes),
   ].filter(Boolean);
 
   const companyBlock = includeCompany
@@ -91,5 +108,5 @@ ${sections.join('\n\n')}
 NUTZERFRAGE:
 ${question}
 
-Antworte in 2–6 Sätzen oder einer kurzen Aufzählung. Wenn Informationen fehlen oder unsicher sind, sage das explizit mit den oben genannten Formulierungen.`;
+Antworte nur mit dem JSON-Objekt. Halte directAnswer kurz; explanation in 1–5 Sätzen. Wenn Informationen fehlen oder unsicher sind, sage das in directAnswer bzw. explanation explizit.`;
 }

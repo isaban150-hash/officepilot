@@ -6,6 +6,8 @@ import {
   buildDocumentAiContextFromInbox,
 } from './documentAiContextService';
 import { buildDocumentAiPrompt } from './documentAiPromptBuilder';
+import { parseDocumentAiAnswer } from './documentAiAnswerParser';
+import { filterUncertaintyNotesForQuestion } from './documentAiQuestionIntent';
 import { t } from '../../i18n';
 import { AREA_AI_DISCLAIMER, type AreaAiAnswer, type DocumentAiContext } from '../../types/areaAi';
 import type { AppLanguage, CompanyDocument, InboxItem } from '../../types/models';
@@ -22,9 +24,12 @@ function unavailableAnswer(
   warnings?: string[],
 ): AreaAiAnswer {
   const notes = uncertaintyNotes.length > 0 ? uncertaintyNotes : undefined;
+  const parsed = parseDocumentAiAnswer(text);
   return {
     question,
-    text,
+    text: parsed.text || text,
+    directAnswer: parsed.directAnswer || text,
+    explanation: parsed.explanation || undefined,
     source: 'unavailable',
     disclaimer: AREA_AI_DISCLAIMER,
     generatedAt: new Date().toISOString(),
@@ -43,6 +48,7 @@ function buildContext(source: DocumentAiSource): DocumentAiContext {
 }
 
 function collectAnswerUncertainty(
+  question: string,
   context: DocumentAiContext,
   warnings: string[] | undefined,
   lang: AppLanguage,
@@ -55,7 +61,8 @@ function collectAnswerUncertainty(
   if (!context.recognizedText?.trim()) {
     notes.push(t('document.freeQuestion.note.cannotAnswerFromDocument', lang));
   }
-  return Array.from(new Set(notes.filter(Boolean)));
+  const deduped = Array.from(new Set(notes.filter(Boolean)));
+  return filterUncertaintyNotesForQuestion(question, deduped, lang);
 }
 
 export async function askDocumentAi(input: {
@@ -82,7 +89,12 @@ export async function askDocumentAi(input: {
     guardContext: { allowedSourceText },
   });
 
-  const uncertaintyNotes = collectAnswerUncertainty(context, result.warnings, lang);
+  const uncertaintyNotes = collectAnswerUncertainty(
+    trimmedQuestion,
+    context,
+    result.warnings,
+    lang,
+  );
 
   if (result.source === 'unavailable') {
     return unavailableAnswer(
@@ -103,9 +115,13 @@ export async function askDocumentAi(input: {
     );
   }
 
+  const parsed = parseDocumentAiAnswer(result.text);
+
   return {
     question: trimmedQuestion,
-    text: result.text,
+    text: parsed.text,
+    directAnswer: parsed.directAnswer,
+    explanation: parsed.explanation || undefined,
     source: 'ai',
     disclaimer: AREA_AI_DISCLAIMER,
     generatedAt: new Date().toISOString(),
@@ -115,4 +131,10 @@ export async function askDocumentAi(input: {
   };
 }
 
-export { buildDocumentAiContextFromDocument, buildDocumentAiContextFromInbox, buildDocumentAiPrompt };
+export {
+  buildDocumentAiContextFromDocument,
+  buildDocumentAiContextFromInbox,
+  buildDocumentAiPrompt,
+  filterUncertaintyNotesForQuestion,
+  parseDocumentAiAnswer,
+};

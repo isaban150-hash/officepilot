@@ -13,6 +13,10 @@ export interface AreaAiAnswer {
   generatedAt: string;
   errorCode?: string;
   warnings?: string[];
+  /** Short core answer shown first (e.g. "Nein." or an honest unclear statement). */
+  directAnswer?: string;
+  /** Document-grounded reasoning that follows the core answer. */
+  explanation?: string;
   /** True when answer rests on incomplete/uncertain document data or AI issues. */
   uncertain?: boolean;
   /** User-visible concrete uncertainty notes (not a generic disclaimer alone). */

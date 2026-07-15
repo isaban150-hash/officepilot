@@ -1705,6 +1705,10 @@ const deLegacy = {
   'document.freeQuestion.note.amountNeedsReview': 'Der Betrag wurde erkannt, sollte aber geprüft werden.',
   'document.freeQuestion.note.cannotAnswerFromDocument':
     'Diese Frage lässt sich aus dem Dokument möglicherweise nicht beantworten.',
+  'document.freeQuestion.direct.unclear':
+    'Das lässt sich aus dem Dokument nicht eindeutig beantworten.',
+  'document.freeQuestion.direct.noDeadline':
+    'Im Dokument ist keine eindeutige Frist erkennbar.',
 
   'communication.page.title': 'Kommunikation',
   'communication.page.subtitle': 'Nachrichten formulieren – E-Mail, WhatsApp oder Brief',
@@ -2784,6 +2788,10 @@ const trLegacy: Partial<Record<keyof typeof de, string>> = {
   'document.freeQuestion.note.amountNeedsReview': 'Tutar tanındı, ancak kontrol edilmelidir.',
   'document.freeQuestion.note.cannotAnswerFromDocument':
     'Bu soru belgeden yanıtlanamayabilir.',
+  'document.freeQuestion.direct.unclear':
+    'Bu, belgeden net olarak yanıtlanamıyor.',
+  'document.freeQuestion.direct.noDeadline':
+    'Belgede net bir süre görünmüyor.',
 
   'ablage.title': 'Giriş',
   'mehr.documents': 'Belge arşivi',
@@ -2894,6 +2902,10 @@ const bgLegacy: Partial<Record<keyof typeof de, string>> = {
   'document.freeQuestion.note.amountNeedsReview': 'Сумата е разпозната, но трябва да се провери.',
   'document.freeQuestion.note.cannotAnswerFromDocument':
     'Този въпрос може да не се отговаря от документа.',
+  'document.freeQuestion.direct.unclear':
+    'Това не може да се отговори еднозначно от документа.',
+  'document.freeQuestion.direct.noDeadline':
+    'В документа няма ясен срок.',
 
   'ablage.title': 'Вход',
   'mehr.documents': 'Архив на документи',

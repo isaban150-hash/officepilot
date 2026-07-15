@@ -2662,6 +2662,17 @@ body {
   color: var(--color-danger, #b91c1c);
 }
 
+.document-free-question-panel__direct-answer {
+  margin: 0;
+  line-height: 1.45;
+  font-weight: 600;
+}
+
+.document-free-question-panel__explanation {
+  margin: 0.55rem 0 0;
+  line-height: 1.5;
+}
+
 .document-free-question-panel__answer--uncertain {
   border-left: 3px solid var(--color-warning, #d97706);
   padding-left: 0.75rem;
@@ -2671,7 +2682,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  margin-bottom: 0.5rem;
+  margin-top: 0.75rem;
 }
 
 .document-free-question-panel__uncertainty ul {

@@ -110,6 +110,26 @@ export function DocumentFreeQuestionPanel({
             }${answer.uncertain ? ' document-free-question-panel__answer--uncertain' : ''}`}
             data-testid={`${testIdPrefix}-answer`}
           >
+            {answer.directAnswer ? (
+              <p
+                className="document-free-question-panel__direct-answer"
+                data-testid={`${testIdPrefix}-direct-answer`}
+              >
+                {answer.directAnswer}
+              </p>
+            ) : (
+              <p className="area-ai-panel__answer-text" data-testid={`${testIdPrefix}-answer-text`}>
+                {answer.text}
+              </p>
+            )}
+            {answer.explanation ? (
+              <p
+                className="document-free-question-panel__explanation"
+                data-testid={`${testIdPrefix}-explanation`}
+              >
+                {answer.explanation}
+              </p>
+            ) : null}
             {answer.uncertain ? (
               <div
                 className="document-free-question-panel__uncertainty"
@@ -125,9 +145,6 @@ export function DocumentFreeQuestionPanel({
                 ) : null}
               </div>
             ) : null}
-            <p className="area-ai-panel__answer-text" data-testid={`${testIdPrefix}-answer-text`}>
-              {answer.text}
-            </p>
             <p className="area-ai-panel__disclaimer" data-testid={`${testIdPrefix}-disclaimer`}>
               {answer.disclaimer}
             </p>
