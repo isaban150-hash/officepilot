@@ -108,7 +108,10 @@ describe('STORAGE-LIFECYCLE-FOUNDATION-01', () => {
     expect(preview.success).toBe(true);
     if (!preview.success) return;
 
-    const result = await confirmPendingDocumentIntake(preview.pending, { importSource: 'upload' });
+    const result = await confirmPendingDocumentIntake(preview.pending, {
+      importSource: 'upload',
+      userDecision: 'save_permanently',
+    });
     expect(result.success).toBe(true);
     if (!result.success || result.duplicate) return;
 
@@ -140,11 +143,17 @@ describe('STORAGE-LIFECYCLE-FOUNDATION-01', () => {
     expect(preview.success).toBe(true);
     if (!preview.success) return;
 
-    const first = await confirmPendingDocumentIntake(preview.pending, { importSource: 'upload' });
+    const first = await confirmPendingDocumentIntake(preview.pending, {
+      importSource: 'upload',
+      userDecision: 'save_permanently',
+    });
     expect(first.success).toBe(true);
     if (!first.success || first.duplicate) return;
 
-    const second = await confirmPendingDocumentIntake(preview.pending, { importSource: 'upload' });
+    const second = await confirmPendingDocumentIntake(preview.pending, {
+      importSource: 'upload',
+      userDecision: 'save_permanently',
+    });
     expect(second.success).toBe(true);
     if (!second.success) return;
     expect(second.duplicate).toBe(true);
@@ -165,7 +174,10 @@ describe('STORAGE-LIFECYCLE-FOUNDATION-01', () => {
     expect(preview.success).toBe(true);
     if (!preview.success) return;
 
-    const result = await confirmPendingDocumentIntake(preview.pending, { importSource: 'upload' });
+    const result = await confirmPendingDocumentIntake(preview.pending, {
+      importSource: 'upload',
+      userDecision: 'save_permanently',
+    });
     expect(result.success).toBe(false);
     if (result.success) return;
     expect(result.error).toBe('persist_failed');
@@ -188,8 +200,14 @@ describe('STORAGE-LIFECYCLE-FOUNDATION-01', () => {
 
     expect(getDocumentFileRefStoreSnapshot()).toHaveLength(0);
 
-    const scanResult = await confirmPendingDocumentIntake(scanPreview.pending, { importSource: 'scan' });
-    const uploadResult = await confirmPendingDocumentIntake(uploadPreview.pending, { importSource: 'upload' });
+    const scanResult = await confirmPendingDocumentIntake(scanPreview.pending, {
+      importSource: 'scan',
+      userDecision: 'save_permanently',
+    });
+    const uploadResult = await confirmPendingDocumentIntake(uploadPreview.pending, {
+      importSource: 'upload',
+      userDecision: 'save_permanently',
+    });
 
     expect(scanResult.success).toBe(true);
     expect(uploadResult.success).toBe(true);

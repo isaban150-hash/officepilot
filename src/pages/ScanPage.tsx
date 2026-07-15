@@ -17,11 +17,18 @@ import {
   type DocumentUploadErrorCode,
 } from '../services/documentUploadErrorService';
 import {
-  confirmPendingDocumentIntake,
   discardPendingDocumentIntake,
   processDocumentFileForPreview,
   type PendingDocumentIntake,
 } from '../services/pendingDocumentIntakeService';
+import {
+  buildPendingDocumentDecisionActions,
+  executePendingDocumentDecision,
+  isDiscardedPendingDocumentDecision,
+  isNavigateExistingPendingDocumentDecision,
+  isPendingDocumentDecisionResultIntake,
+} from '../services/pendingDocumentDecisionService';
+import type { UserStorageDecision } from '../types/userStorageDecision';
 import type { UploadDocumentKind } from '../types/models';
 
 const SCAN_FILE_ACCEPT =
@@ -101,18 +108,41 @@ export function ScanPage() {
     }
   };
 
-  const confirmPendingScan = async () => {
+  const handlePendingDecision = async (decision: UserStorageDecision) => {
     if (!pendingScan || confirmInFlightRef.current) return;
+
+    if (decision === 'discard') {
+      discardScan();
+      return;
+    }
 
     confirmInFlightRef.current = true;
     setConfirmError(null);
     setIsConfirming(true);
 
     try {
-      const result = await confirmPendingDocumentIntake(pendingScan, {
+      const result = await executePendingDocumentDecision(pendingScan, decision, {
         kind: selectedKind ?? undefined,
         importSource: 'scan',
       });
+
+      if (isDiscardedPendingDocumentDecision(result)) {
+        setPendingScan(null);
+        return;
+      }
+
+      if (isNavigateExistingPendingDocumentDecision(result)) {
+        discardPendingDocumentIntake(pendingScan);
+        setPendingScan(null);
+        if (result.match.type === 'inbox') {
+          navigate(`/ablage/${result.match.id}`);
+        } else {
+          navigate(`/dokumente/${result.match.id}`);
+        }
+        return;
+      }
+
+      if (!isPendingDocumentDecisionResultIntake(result)) return;
 
       if (!result.success) {
         setConfirmError(result.error);
@@ -145,18 +175,6 @@ export function ScanPage() {
     discardPendingDocumentIntake(pendingScan);
     setPendingScan(null);
     setConfirmError(null);
-  };
-
-  const useExistingDuplicate = () => {
-    const match = pendingScan?.storageRecommendation.duplicateMatch;
-    if (!match) return;
-    discardPendingDocumentIntake(pendingScan);
-    setPendingScan(null);
-    if (match.type === 'inbox') {
-      navigate(`/ablage/${match.id}`);
-    } else {
-      navigate(`/dokumente/${match.id}`);
-    }
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -230,8 +248,8 @@ export function ScanPage() {
           extraction={pendingScan.extraction}
           preview={pendingScan.preview}
           storageRecommendation={pendingScan.storageRecommendation}
+          decisionActions={buildPendingDocumentDecisionActions(pendingScan)}
           pendingNoticeLabel={translate('document.intakePreview.pendingNotice')}
-          continueLabel={translate('document.intakePreview.savePermanently')}
           qualityHintLabel={
             pendingScan.extraction.qualityHintKey
               ? translate(pendingScan.extraction.qualityHintKey)
@@ -242,10 +260,7 @@ export function ScanPage() {
           previewTextLabel={translate('scan.ocr.previewText')}
           aiActionsLabel={translate('document.intakeUnderstanding.aiActions')}
           translate={translate}
-          cancelLabel={translate('document.intakePreview.discard')}
-          onContinue={confirmPendingScan}
-          onCancel={discardScan}
-          onUseExistingDuplicate={useExistingDuplicate}
+          onDecision={(decision) => void handlePendingDecision(decision)}
           onChangeType={() => setShowKindPicker(true)}
           changeTypeLabel={translate('docAssistant.changeType')}
           isConfirming={isConfirming}
@@ -254,7 +269,7 @@ export function ScanPage() {
           confirmErrorDiagnostic={persistErrorDiagnostic}
           onRetryConfirm={
             confirmError && isConfirmRetryableIntakeError(confirmError)
-              ? () => void confirmPendingScan()
+              ? () => void handlePendingDecision('save_permanently')
               : undefined
           }
           onNewPhoto={() => openFilePicker(true)}

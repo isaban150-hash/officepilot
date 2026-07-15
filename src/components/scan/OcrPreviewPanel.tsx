@@ -8,10 +8,11 @@ import {
   getRecognitionStatusKey,
   getSteuerberaterHintKey,
   getStorageRecommendationLevelKey,
-  getStorageRecommendationPrimaryActionKey,
   translateStorageReasonKey,
 } from '../../services/storageRecommendationPresentationService';
+import type { StorageDecisionActionSpec } from '../../services/userStorageDecisionPresentationService';
 import type { StorageRecommendation } from '../../types/storageRecommendation';
+import type { UserStorageDecision } from '../../types/userStorageDecision';
 
 function formatApproxStorageSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -24,21 +25,18 @@ interface OcrPreviewPanelProps {
   extraction: DocumentTextExtractionResult;
   preview: OcrPreviewSummary;
   storageRecommendation: StorageRecommendation;
+  decisionActions: StorageDecisionActionSpec[];
   pendingNoticeLabel?: string;
-  continueLabel: string;
   qualityHintLabel?: string;
   documentTypeLabel: string;
   senderLabel: string;
   previewTextLabel: string;
   aiActionsLabel: string;
   translate: (key: TranslationKey) => string;
-  onContinue: () => void;
-  onCancel: () => void;
-  cancelLabel: string;
-  onUseExistingDuplicate?: () => void;
+  onDecision: (decision: UserStorageDecision) => void;
+  isConfirming?: boolean;
   onChangeType?: () => void;
   changeTypeLabel?: string;
-  isConfirming?: boolean;
   confirmErrorTitle?: string;
   confirmErrorMessage?: string;
   confirmErrorDiagnostic?: PersistFailureDiagnostic | null;
@@ -51,18 +49,15 @@ export function OcrPreviewPanel({
   fileName,
   preview,
   storageRecommendation,
+  decisionActions,
   pendingNoticeLabel,
-  continueLabel,
   qualityHintLabel,
   documentTypeLabel,
   senderLabel,
   previewTextLabel,
   aiActionsLabel,
   translate,
-  onContinue,
-  onCancel,
-  cancelLabel,
-  onUseExistingDuplicate,
+  onDecision,
   onChangeType,
   changeTypeLabel,
   isConfirming = false,
@@ -75,11 +70,11 @@ export function OcrPreviewPanel({
 }: OcrPreviewPanelProps) {
   const understanding = preview.understanding;
   const showPreviewLines = preview.previewLines.length > 0 || preview.previewPartialHint;
-  const primaryActionKey = getStorageRecommendationPrimaryActionKey(storageRecommendation.level);
-  const primaryLabel =
-    primaryActionKey === 'storageRecommendation.action.savePermanently'
-      ? continueLabel
-      : translate(primaryActionKey);
+  const persistingDecisions = new Set<UserStorageDecision>([
+    'save_permanently',
+    'keep_temporarily',
+    'save_duplicate_anyway',
+  ]);
 
   return (
     <Card className="ocr-preview-panel" data-testid="ocr-preview-panel">
@@ -255,25 +250,21 @@ export function OcrPreviewPanel({
       )}
 
       <div className="ocr-preview-panel__actions">
-        {storageRecommendation.level === 'duplicate_detected' && onUseExistingDuplicate ? (
+        {decisionActions.map((action) => (
           <Button
+            key={action.decision}
             fullWidth
-            data-testid="storage-use-existing-button"
-            onClick={onUseExistingDuplicate}
+            variant={action.variant === 'primary' ? undefined : 'outline'}
+            data-testid={action.testId}
+            onClick={() => onDecision(action.decision)}
             disabled={isConfirming}
+            loading={isConfirming && persistingDecisions.has(action.decision)}
           >
-            {translate('storageRecommendation.action.useExisting')}
+            {isConfirming && persistingDecisions.has(action.decision)
+              ? translate('scan.ocr.processing')
+              : translate(action.labelKey)}
           </Button>
-        ) : null}
-        <Button
-          fullWidth
-          data-testid="ocr-continue-button"
-          onClick={onContinue}
-          disabled={isConfirming}
-          loading={isConfirming}
-        >
-          {isConfirming ? translate('scan.ocr.processing') : primaryLabel}
-        </Button>
+        ))}
         {onChangeType && changeTypeLabel ? (
           <Button
             variant="outline"
@@ -285,9 +276,6 @@ export function OcrPreviewPanel({
             {changeTypeLabel}
           </Button>
         ) : null}
-        <Button variant="outline" fullWidth onClick={onCancel} disabled={isConfirming}>
-          {cancelLabel}
-        </Button>
       </div>
     </Card>
   );

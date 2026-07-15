@@ -287,7 +287,10 @@ describe('STORAGE-RECOMMENDATION-02 rule engine', () => {
     if (!preview.success) return;
     expect(getInboxStoreSnapshot()).toHaveLength(0);
 
-    const result = await confirmPendingDocumentIntake(preview.pending, { importSource: 'upload' });
+    const result = await confirmPendingDocumentIntake(preview.pending, {
+      importSource: 'upload',
+      userDecision: 'save_permanently',
+    });
     expect(result.success).toBe(true);
     if (!result.success || result.duplicate) return;
     expect(getInboxStoreSnapshot()).toHaveLength(1);

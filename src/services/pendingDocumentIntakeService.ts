@@ -1,13 +1,18 @@
 import type { UploadDocumentKind } from '../types/models';
 import type { CachedDocumentFilePayload } from './cachedDocumentFileService';
 import { loadCachedDocumentFileFromUpload, releaseCachedDocumentFile } from './cachedDocumentFileService';
-import { intakeCachedDocumentFile, type DocumentIntakeResult } from './documentIntakeService';
+import {
+  intakeCachedDocumentFile,
+  type DocumentIntakeOptions,
+  type DocumentIntakeResult,
+} from './documentIntakeService';
 import {
   isBlockingExtractionError,
   type DocumentUploadErrorCode,
 } from './documentUploadErrorService';
 import { isHeicUploadFile } from './documentUploadValidation';
 import type { CreateInboxFromUploadOptions } from './inboxUploadFactory';
+import type { PersistingUserStorageDecision } from '../types/userStorageDecision';
 import type { StorageRecommendation } from '../types/storageRecommendation';
 import type { ResolvedStoragePolicy } from '../types/storagePolicy';
 import { classifyDocument } from './documentClassificationService';
@@ -21,6 +26,7 @@ import {
   type DocumentTextExtractionResult,
   type OcrPreviewSummary,
 } from './ocrDocumentService';
+import { validateUserStorageDecision } from './userStorageDecisionService';
 
 export interface PendingDocumentIntake {
   cachedFile: CachedDocumentFilePayload;
@@ -102,17 +108,35 @@ export async function processDocumentFileForPreview(
   };
 }
 
+export interface ConfirmPendingDocumentIntakeOptions extends CreateInboxFromUploadOptions {
+  userDecision: PersistingUserStorageDecision;
+}
+
 export async function confirmPendingDocumentIntake(
   pending: PendingDocumentIntake,
-  intakeOptions: CreateInboxFromUploadOptions = {},
+  options: ConfirmPendingDocumentIntakeOptions,
 ): Promise<DocumentIntakeResult> {
+  const validation = validateUserStorageDecision({
+    decision: options.userDecision,
+    recommendation: pending.storageRecommendation,
+    storagePolicy: pending.storagePolicy,
+  });
+
+  if (!validation.valid) {
+    return { success: false, error: 'navigation_failed' };
+  }
+
   const recognizedText = pending.extraction.recognizedText.trim() || undefined;
-  return intakeCachedDocumentFile(pending.cachedFile, {
+  const intakeOptions: DocumentIntakeOptions = {
+    ...options,
     sourceFileName: pending.cachedFile.fileName,
     recognizedText,
     pageTexts: pending.extraction.pageTexts,
-    ...intakeOptions,
-  });
+    userDecision: options.userDecision,
+    allowDuplicateIntake: options.userDecision === 'save_duplicate_anyway',
+  };
+
+  return intakeCachedDocumentFile(pending.cachedFile, intakeOptions);
 }
 
 export function discardPendingDocumentIntake(pending: PendingDocumentIntake | null | undefined): void {

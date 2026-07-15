@@ -1,5 +1,9 @@
 import type { DocumentFileRef } from '../types/documentFileRef';
-import { buildCommittedLifecycleFields } from './documentFileStorageLifecycleService';
+import {
+  buildCommittedLifecycleFields,
+  buildTempLifecycleFields,
+} from './documentFileStorageLifecycleService';
+import type { DocumentFileLifecycleIntent } from '../types/userStorageDecision';
 import { generateEntityId } from './sync/syncMetaService';
 import type { CachedDocumentFilePayload } from './cachedDocumentFileService';
 import { computeBufferContentHash, computeDataUrlContentHash } from './documentFileHashService';
@@ -170,6 +174,7 @@ export async function hasStoredOriginalDocumentFile(
 
 export async function storeDocumentFileFromCachedPayload(
   payload: CachedDocumentFilePayload,
+  options: { lifecycleIntent?: DocumentFileLifecycleIntent } = {},
 ): Promise<{ fileRef: DocumentFileRef; created: boolean }> {
   let contentHash: string;
   try {
@@ -215,6 +220,11 @@ export async function storeDocumentFileFromCachedPayload(
     throw new DocumentBlobStorageError('blob_write_failed', error);
   }
 
+  const lifecycleFields =
+    options.lifecycleIntent === 'temp'
+      ? buildTempLifecycleFields()
+      : buildCommittedLifecycleFields(createdAt);
+
   const fileRef: DocumentFileRef = {
     id: fileRefId,
     originalFileName: payload.fileName,
@@ -224,7 +234,7 @@ export async function storeDocumentFileFromCachedPayload(
     storageType: 'indexeddb',
     localDataKey: fileRefId,
     createdAt,
-    ...buildCommittedLifecycleFields(createdAt),
+    ...lifecycleFields,
   };
   fileRefs = [...fileRefs, fileRef];
   return { fileRef, created: true };

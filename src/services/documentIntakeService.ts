@@ -20,6 +20,11 @@ import { hasDocumentBlob } from './storage/documentBlobIndexedDbService';
 import type { DocumentBlobStorageErrorCode } from './storage/documentBlobIndexedDbService';
 import * as persistenceService from './persistenceService';
 import type { DocumentUploadValidationError } from '../types/uploadedDocument';
+import {
+  isPersistingUserStorageDecision,
+  type PersistingUserStorageDecision,
+} from '../types/userStorageDecision';
+import { mapDecisionToLifecycleIntent } from './userStorageDecisionService';
 
 export type DocumentIntakeErrorCode =
   | DocumentUploadValidationError
@@ -71,10 +76,23 @@ async function rollbackFailedIntakeAttempt(input: {
   }
 }
 
+export interface DocumentIntakeOptions extends CreateInboxFromUploadOptions {
+  userDecision?: PersistingUserStorageDecision;
+  allowDuplicateIntake?: boolean;
+}
+
 export async function intakeCachedDocumentFile(
   payload: CachedDocumentFilePayload,
-  options: CreateInboxFromUploadOptions = {},
+  options: DocumentIntakeOptions = {},
 ): Promise<DocumentIntakeResult> {
+  const userDecision: PersistingUserStorageDecision = options.userDecision ?? 'save_permanently';
+  if (!isPersistingUserStorageDecision(userDecision)) {
+    return { success: false, error: 'navigation_failed' };
+  }
+
+  const lifecycleIntent = mapDecisionToLifecycleIntent(userDecision);
+  const allowDuplicateIntake =
+    options.allowDuplicateIntake ?? userDecision === 'save_duplicate_anyway';
   const validation = validateUploadFile(
     new File([payload.bytes], payload.fileName, { type: payload.mimeType }),
   );
@@ -85,7 +103,9 @@ export async function intakeCachedDocumentFile(
   let fileRef: DocumentFileRef;
   let createdFileRef = false;
   try {
-    const stored = await storeDocumentFileFromCachedPayload(payload);
+    const stored = await storeDocumentFileFromCachedPayload(payload, {
+      lifecycleIntent: lifecycleIntent ?? 'committed',
+    });
     fileRef = stored.fileRef;
     createdFileRef = stored.created;
   } catch (error) {
@@ -108,7 +128,7 @@ export async function intakeCachedDocumentFile(
   }
 
   const duplicate = findDuplicateByContentHash(fileRef.contentHash);
-  if (duplicate) {
+  if (duplicate && !allowDuplicateIntake) {
     return { success: true, duplicate: true, fileRef, existing: duplicate };
   }
 
@@ -165,7 +185,7 @@ export async function intakeCachedDocumentFile(
 
 export async function intakeDocumentFile(
   file: File,
-  options: CreateInboxFromUploadOptions = {},
+  options: DocumentIntakeOptions = {},
 ): Promise<DocumentIntakeResult> {
   const loaded = await loadCachedDocumentFileFromUpload(file);
   if (!loaded.success) {

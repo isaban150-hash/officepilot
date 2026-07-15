@@ -254,7 +254,10 @@ describe('STORAGE-POLICY-FOUNDATION-01', () => {
       expect(preview.pending.storagePolicy.mediaProfile).toBe('native_pdf');
       expect(getDocumentFileRefStoreSnapshot()).toHaveLength(0);
 
-      const confirm = await confirmPendingDocumentIntake(preview.pending, { importSource: 'upload' });
+      const confirm = await confirmPendingDocumentIntake(preview.pending, {
+        importSource: 'upload',
+        userDecision: 'save_permanently',
+      });
       expect(confirm.success).toBe(true);
       if (!confirm.success) return;
 

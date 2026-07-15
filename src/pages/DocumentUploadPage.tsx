@@ -13,11 +13,18 @@ import {
   type DocumentUploadErrorCode,
 } from '../services/documentUploadErrorService';
 import {
-  confirmPendingDocumentIntake,
   discardPendingDocumentIntake,
   processDocumentFileForPreview,
   type PendingDocumentIntake,
 } from '../services/pendingDocumentIntakeService';
+import {
+  buildPendingDocumentDecisionActions,
+  executePendingDocumentDecision,
+  isDiscardedPendingDocumentDecision,
+  isNavigateExistingPendingDocumentDecision,
+  isPendingDocumentDecisionResultIntake,
+} from '../services/pendingDocumentDecisionService';
+import type { UserStorageDecision } from '../types/userStorageDecision';
 
 export function DocumentUploadPage() {
   const { translate, showToast } = useApp();
@@ -77,15 +84,40 @@ export function DocumentUploadPage() {
     }
   };
 
-  const confirmPendingUpload = async () => {
+  const handlePendingDecision = async (decision: UserStorageDecision) => {
     if (!pendingUpload || confirmInFlightRef.current) return;
+
+    if (decision === 'discard') {
+      discardUpload();
+      return;
+    }
 
     confirmInFlightRef.current = true;
     setConfirmError(null);
     setIsConfirming(true);
 
     try {
-      const result = await confirmPendingDocumentIntake(pendingUpload, { importSource: 'upload' });
+      const result = await executePendingDocumentDecision(pendingUpload, decision, {
+        importSource: 'upload',
+      });
+
+      if (isDiscardedPendingDocumentDecision(result)) {
+        setPendingUpload(null);
+        return;
+      }
+
+      if (isNavigateExistingPendingDocumentDecision(result)) {
+        discardPendingDocumentIntake(pendingUpload);
+        setPendingUpload(null);
+        if (result.match.type === 'inbox') {
+          navigate(`/ablage/${result.match.id}`);
+        } else {
+          navigate(`/dokumente/${result.match.id}`);
+        }
+        return;
+      }
+
+      if (!isPendingDocumentDecisionResultIntake(result)) return;
 
       if (!result.success) {
         setConfirmError(result.error);
@@ -118,18 +150,6 @@ export function DocumentUploadPage() {
     discardPendingDocumentIntake(pendingUpload);
     setPendingUpload(null);
     setConfirmError(null);
-  };
-
-  const useExistingDuplicate = () => {
-    const match = pendingUpload?.storageRecommendation.duplicateMatch;
-    if (!match) return;
-    discardPendingDocumentIntake(pendingUpload);
-    setPendingUpload(null);
-    if (match.type === 'inbox') {
-      navigate(`/ablage/${match.id}`);
-    } else {
-      navigate(`/dokumente/${match.id}`);
-    }
   };
 
   function onInputChange(event: FormEvent<HTMLInputElement>) {
@@ -194,8 +214,8 @@ export function DocumentUploadPage() {
           extraction={pendingUpload.extraction}
           preview={pendingUpload.preview}
           storageRecommendation={pendingUpload.storageRecommendation}
+          decisionActions={buildPendingDocumentDecisionActions(pendingUpload)}
           pendingNoticeLabel={translate('document.intakePreview.pendingNotice')}
-          continueLabel={translate('document.intakePreview.savePermanently')}
           qualityHintLabel={
             pendingUpload.extraction.qualityHintKey
               ? translate(pendingUpload.extraction.qualityHintKey)
@@ -206,17 +226,14 @@ export function DocumentUploadPage() {
           previewTextLabel={translate('scan.ocr.previewText')}
           aiActionsLabel={translate('document.intakeUnderstanding.aiActions')}
           translate={translate}
-          cancelLabel={translate('document.intakePreview.discard')}
-          onContinue={confirmPendingUpload}
-          onCancel={discardUpload}
-          onUseExistingDuplicate={useExistingDuplicate}
+          onDecision={(decision) => void handlePendingDecision(decision)}
           isConfirming={isConfirming}
           confirmErrorTitle={confirmErrorView ? translate(confirmErrorView.titleKey) : undefined}
           confirmErrorMessage={confirmErrorView ? translate(confirmErrorView.descriptionKey) : undefined}
           confirmErrorDiagnostic={persistErrorDiagnostic}
           onRetryConfirm={
             confirmError && isConfirmRetryableIntakeError(confirmError)
-              ? () => void confirmPendingUpload()
+              ? () => void handlePendingDecision('save_permanently')
               : undefined
           }
           onSelectFile={openFilePicker}
