@@ -11,7 +11,7 @@ import {
 import {
   answerInboxDocumentQuestion,
   answerInboxDocumentQuestionById,
-  DOCUMENT_QUESTION_SUGGESTIONS,
+  getDocumentQuestionSuggestionsForItem,
   isDraftReplyQuestion,
 } from '../../services/documentAssistantQuestionService';
 import { getDocumentDisplayLabelKey } from '../../services/documentDisplayLabelService';
@@ -123,6 +123,7 @@ export function DocumentAssistantPanel({
   };
 
   const kind = item.classifiedKind ?? workflow?.classifiedKind;
+  const questionSuggestions = getDocumentQuestionSuggestionsForItem(kind ?? 'sonstiges');
 
   return (
     <section className="document-assistant-panel" data-testid="document-assistant-panel">
@@ -183,9 +184,14 @@ export function DocumentAssistantPanel({
 
       <Card className="document-assistant-panel__section">
         <h2 className="document-assistant-panel__heading">{translate('docAssistant.section.trust')}</h2>
+        <p className="document-assistant-panel__trust-label document-assistant-panel__trust-label--primary">
+          {translate(assistant.recognitionStatusKey)}
+        </p>
         {assistant.confidentFields.length > 0 && (
           <div className="document-assistant-panel__trust-group">
-            <p className="document-assistant-panel__trust-label">{translate('docAssistant.trust.confident')}</p>
+            {assistant.recognitionStatus !== 'assign_customer' ? (
+              <p className="document-assistant-panel__trust-label">{translate('docAssistant.trust.confident')}</p>
+            ) : null}
             <ul>
               {assistant.confidentFields.map((field) => (
                 <li key={field.labelKey}>
@@ -200,7 +206,9 @@ export function DocumentAssistantPanel({
         )}
         {assistant.uncertainFields.length > 0 && (
           <div className="document-assistant-panel__trust-group">
-            <p className="document-assistant-panel__trust-label">{translate('docAssistant.trust.review')}</p>
+            {assistant.recognitionStatus !== 'assign_customer' ? (
+              <p className="document-assistant-panel__trust-label">{translate('docAssistant.trust.review')}</p>
+            ) : null}
             <ul>
               {assistant.uncertainFields.map((field) => (
                 <li key={field.labelKey}>
@@ -215,7 +223,7 @@ export function DocumentAssistantPanel({
       <Card className="document-assistant-panel__section">
         <h2 className="document-assistant-panel__heading">{translate('docAssistant.section.questions')}</h2>
         <div className="document-assistant-panel__chips">
-          {DOCUMENT_QUESTION_SUGGESTIONS.map((suggestion) => (
+          {questionSuggestions.map((suggestion) => (
             <button
               key={suggestion.id}
               type="button"

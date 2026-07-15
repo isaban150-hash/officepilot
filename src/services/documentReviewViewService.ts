@@ -1,4 +1,9 @@
 import { formatPaperFilingInstruction } from './paperFolderService';
+import {
+  buildPresentationChecks,
+  buildPresentationContext,
+  isUnknownPresentationValue,
+} from './documentResultPresentationService';
 import type {
   DocumentAiAction,
   InboxItem,
@@ -31,11 +36,9 @@ export interface DocumentReviewSuccessStepView {
   labelKey: TranslationKey;
 }
 
-const UNKNOWN_VALUES = /^(unbekannt|unknown|—|-)$/i;
 
 function isUnknown(value?: string | null): boolean {
-  if (!value?.trim()) return true;
-  return UNKNOWN_VALUES.test(value.trim());
+  return isUnknownPresentationValue(value);
 }
 
 function resolveContext(item: InboxItem, workflow: WorkflowResult): {
@@ -157,21 +160,13 @@ export function buildDocumentReviewChecks(
     checks.push({ id: 'partial-text', labelKey: 'reviewWorkflow.check.partialText' });
   }
 
-  const customer = summary?.customer ?? item.recognizedData.Kunde;
-  if (
-    isUnknown(customer) &&
-    (['auftrag', 'werkvertrag', 'angebot'].includes(workflow.classifiedKind) ||
-      item.documentType === 'kundenauftrag')
-  ) {
-    checks.push({ id: 'customer', labelKey: 'reviewWorkflow.check.selectCustomer' });
-  }
-
-  const site = summary?.constructionSite ?? item.recognizedData.Baustelle;
-  if (
-    isUnknown(site) &&
-    ['werkvertrag', 'auftrag', 'lieferschein', 'abnahmeprotokoll'].includes(workflow.classifiedKind)
-  ) {
-    checks.push({ id: 'site', labelKey: 'reviewWorkflow.check.confirmSite' });
+  const presentationContext = buildPresentationContext(
+    item,
+    summary,
+    workflow.classifiedKind,
+  );
+  for (const check of buildPresentationChecks(presentationContext)) {
+    checks.push(check);
   }
 
   if (!item.vorgangId && workflow.suggestedVorgang) {

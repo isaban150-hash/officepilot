@@ -317,7 +317,7 @@ export function buildDigitalFolderSpec(
     werkvertrag: { name: 'Verträge', path: `/Kunden/${vorgangSlug}/Verträge/` },
     subunternehmervertrag: { name: 'Subunternehmer', path: `/Kunden/${vorgangSlug}/Verträge/` },
     nachunternehmervertrag: { name: 'Nachunternehmer', path: `/Kunden/${vorgangSlug}/Verträge/` },
-    auftrag: { name: 'Aufträge', path: `/Kunden/${vorgangSlug}/Verträge/` },
+    auftrag: { name: 'Aufträge', path: `/Kunden/${customerSlug}/Aufträge/` },
     angebot: { name: 'Angebote', path: `/Kunden/${customerSlug}/Angebote/` },
     lieferschein: { name: 'Lieferscheine', path: `/Kunden/${vorgangSlug}/Lieferscheine/` },
     abnahmeprotokoll: { name: 'Abnahmeprotokolle', path: `/Kunden/${vorgangSlug}/Protokolle/` },
@@ -521,6 +521,12 @@ export function buildExplanation(kind: ClassifiedDocumentKind, sender: string): 
   }
   if (kind === 'abnahmeprotokoll') {
     return `Abnahmeprotokoll erkannt. Vorgang abschließen prüfen und Schlussrechnung vorschlagen.`;
+  }
+  if (kind === 'auftrag') {
+    return `Auftrag von „${sender}“ erkannt. Kunden zuordnen und Vorgang anlegen.`;
+  }
+  if (kind === 'angebot') {
+    return `Angebot von „${sender}“ erkannt. Kunden zuordnen und prüfen.`;
   }
   if (kind === 'stundenzettel') {
     return `Stundenzettel erkannt. Vorgang zuordnen und Stunden für Rechnung übernehmen.`;

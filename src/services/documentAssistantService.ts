@@ -6,6 +6,17 @@ import {
   getDocumentDisplayLabelKey,
 } from './documentDisplayLabelService';
 import { buildDocumentUnderstandingSummary } from './documentIntakeUnderstandingService';
+import {
+  buildPresentationContext,
+  getBriefLineKeyForKind,
+  recognitionStatusKey,
+  requiresCustomerAssignment,
+  resolvePresentationCustomer,
+  resolveRecognitionStatus,
+  resolveSteuerberaterPresentation,
+  type RecognitionStatus,
+  type SteuerberaterRelevanceStatus,
+} from './documentResultPresentationService';
 import { getLetterExplanation } from './letterExplanationService';
 import { getInboxExtractedDocumentText } from './inboxDocumentText';
 import { resolvePaperFiling } from './paperFolderService';
@@ -13,7 +24,7 @@ import { formatPaperFilingInstruction } from './paperFolderDisplayService';
 import { getCachedSetup } from './persistenceService';
 import type { AppLanguage, ClassifiedDocumentKind, InboxItem, WorkflowResult } from '../types/models';
 
-export type SteuerberaterRelevanceStatus = 'mark' | 'not_relevant' | 'check';
+export type { SteuerberaterRelevanceStatus } from './documentResultPresentationService';
 
 export type OriginalGuidanceStatus =
   | 'keep'
@@ -37,6 +48,8 @@ export interface InboxDocumentAssistant {
   originalGuidance: OriginalGuidanceStatus;
   steuerberaterStatus: SteuerberaterRelevanceStatus;
   steuerberaterReasonKey: TranslationKey;
+  recognitionStatus: RecognitionStatus;
+  recognitionStatusKey: TranslationKey;
   confidentFields: Array<{ labelKey: TranslationKey; value: string }>;
   uncertainFields: Array<{ labelKey: TranslationKey; noteKey: TranslationKey }>;
 }
@@ -66,50 +79,6 @@ function resolveOriginalGuidance(
     return 'dispose_after_digital';
   }
   return 'uncertain';
-}
-
-function resolveSteuerberater(
-  kind: ClassifiedDocumentKind,
-): { status: SteuerberaterRelevanceStatus; reasonKey: TranslationKey } {
-  if (
-    isDatevRelevantKind(kind) ||
-    kind === 'freistellungsbescheinigung' ||
-    kind === 'lohnabrechnung' ||
-    kind === 'lohnunterlagen' ||
-    kind === 'kontoauszug' ||
-    kind === 'steuerbescheid' ||
-    kind === 'umsatzsteuerbescheid'
-  ) {
-    return {
-      status: 'mark',
-      reasonKey: 'docAssistant.steuerberater.markReason',
-    };
-  }
-  if (
-    kind === 'aok' ||
-    kind === 'barmer' ||
-    kind === 'tk' ||
-    kind === 'dak' ||
-    kind === 'ikk' ||
-    kind === 'krankenkasse' ||
-    kind === 'knappschaft' ||
-    kind === 'pflegekasse'
-  ) {
-    return {
-      status: 'check',
-      reasonKey: 'docAssistant.steuerberater.checkReason',
-    };
-  }
-  if (kind === 'werkvertrag' || kind === 'auftrag' || kind === 'lieferschein') {
-    return {
-      status: 'check',
-      reasonKey: 'docAssistant.steuerberater.checkReason',
-    };
-  }
-  return {
-    status: 'not_relevant',
-    reasonKey: 'docAssistant.steuerberater.notReason',
-  };
 }
 
 function buildBriefLines(
@@ -167,10 +136,9 @@ function buildBriefLines(
   }
   if (kind === 'eingangsrechnung' || kind === 'rechnung') {
     pushUnique(lines, { key: 'docAssistant.brief.invoiceReceived' });
-  } else if (kind === 'werkvertrag' || kind === 'auftrag') {
-    pushUnique(lines, { key: 'docAssistant.brief.orderDocument' });
   } else {
-    pushUnique(lines, { key: 'docAssistant.brief.generalDocument' });
+    const briefKey = getBriefLineKeyForKind(kind);
+    pushUnique(lines, { key: briefKey ?? 'docAssistant.brief.generalDocument' });
   }
 
   return lines.slice(0, 6);
@@ -267,6 +235,8 @@ export function buildInboxDocumentAssistant(
       ? formatPaperFilingInstruction(paperResolution.rule, lang)
       : t('common.misc', lang);
 
+  const presentationContext = buildPresentationContext(item, summary, kind);
+  const customer = resolvePresentationCustomer(summary, item.recognizedData);
   const confidentFields: InboxDocumentAssistant['confidentFields'] = [];
   const uncertainFields: InboxDocumentAssistant['uncertainFields'] = [];
 
@@ -283,6 +253,17 @@ export function buildInboxDocumentAssistant(
     labelKey: 'docAssistant.check.documentType',
     value: kind,
   });
+
+  if (requiresCustomerAssignment(kind)) {
+    if (customer) {
+      confidentFields.push({ labelKey: 'docAssistant.check.customer', value: customer });
+    } else {
+      uncertainFields.push({
+        labelKey: 'docAssistant.check.customer',
+        noteKey: 'docAssistant.check.missing',
+      });
+    }
+  }
 
   if (summary.amount) {
     confidentFields.push({ labelKey: 'docAssistant.check.amount', value: summary.amount });
@@ -305,7 +286,8 @@ export function buildInboxDocumentAssistant(
     });
   }
 
-  const steuer = resolveSteuerberater(kind);
+  const recognitionStatus = resolveRecognitionStatus(presentationContext, uncertainFields.length);
+  const steuer = resolveSteuerberaterPresentation(kind);
 
   return {
     documentTypeLabelKey: getDocumentDisplayLabelKey(kind, item.documentType),
@@ -318,6 +300,8 @@ export function buildInboxDocumentAssistant(
     originalGuidance: resolveOriginalGuidance(item, kind),
     steuerberaterStatus: steuer.status,
     steuerberaterReasonKey: steuer.reasonKey,
+    recognitionStatus,
+    recognitionStatusKey: recognitionStatusKey(recognitionStatus),
     confidentFields,
     uncertainFields,
   };

@@ -2,13 +2,15 @@ import type { TranslationKey } from '../i18n';
 import type { InboxDocumentAssistant } from './documentAssistantService';
 import { getDocumentDisplayLabelKey } from './documentDisplayLabelService';
 import { buildDocumentUnderstandingSummary } from './documentIntakeUnderstandingService';
+import {
+  getDocumentQuestionSuggestions,
+  resolvePresentationCustomer,
+  type DocumentQuestionSuggestion,
+} from './documentResultPresentationService';
 import { getInboxExtractedDocumentText } from './inboxDocumentText';
 import type { InboxItem, ClassifiedDocumentKind } from '../types/models';
 
-export interface DocumentQuestionSuggestion {
-  id: string;
-  labelKey: TranslationKey;
-}
+export type { DocumentQuestionSuggestion };
 
 export interface DocumentQuestionAnswer {
   answerKey: TranslationKey;
@@ -17,15 +19,14 @@ export interface DocumentQuestionAnswer {
   followUpKey?: TranslationKey;
 }
 
-export const DOCUMENT_QUESTION_SUGGESTIONS: DocumentQuestionSuggestion[] = [
-  { id: 'pay', labelKey: 'docAssistant.question.pay' },
-  { id: 'why', labelKey: 'docAssistant.question.why' },
-  { id: 'deadline', labelKey: 'docAssistant.question.deadline' },
-  { id: 'ignore', labelKey: 'docAssistant.question.ignore' },
-  { id: 'tax', labelKey: 'docAssistant.question.tax' },
-  { id: 'file', labelKey: 'docAssistant.question.file' },
-  { id: 'dispose', labelKey: 'docAssistant.question.dispose' },
-];
+/** @deprecated Use getDocumentQuestionSuggestionsForItem(kind) instead. */
+export const DOCUMENT_QUESTION_SUGGESTIONS: DocumentQuestionSuggestion[] = getDocumentQuestionSuggestions('sonstiges');
+
+export function getDocumentQuestionSuggestionsForItem(
+  kind: ClassifiedDocumentKind,
+): DocumentQuestionSuggestion[] {
+  return getDocumentQuestionSuggestions(kind);
+}
 
 const QUESTION_PATTERNS = {
   pay: [
@@ -207,7 +208,57 @@ export function answerInboxDocumentQuestionById(
   assistant: InboxDocumentAssistant,
   suggestionId: string,
 ): DocumentQuestionAnswer {
-  const suggestion = DOCUMENT_QUESTION_SUGGESTIONS.find((entry) => entry.id === suggestionId);
+  const summary = buildDocumentUnderstandingSummary(item, {
+    recognizedText: getInboxExtractedDocumentText(item),
+  });
+  const kind = (item.classifiedKind ?? summary.documentType) as ClassifiedDocumentKind;
+  const typeLabelKey = getDocumentDisplayLabelKey(kind, item.documentType);
+  const customer = resolvePresentationCustomer(summary, item.recognizedData) ?? '—';
+  const site = summary.constructionSite ?? item.recognizedData.Baustelle ?? item.vorgangTitle ?? '—';
+
+  if (suggestionId === 'orderWhat') {
+    return {
+      answerKey: 'docAssistant.answer.orderWhat',
+      params: { typeKey: typeLabelKey, sender: assistant.sender ?? item.sender ?? '—' },
+    };
+  }
+  if (suggestionId === 'orderSite') {
+    return {
+      answerKey: 'docAssistant.answer.orderSite',
+      params: { site },
+      uncertain: site === '—',
+    };
+  }
+  if (suggestionId === 'orderDeadline') {
+    if (summary.deadline || item.deadline) {
+      return {
+        answerKey: 'docAssistant.answer.orderDeadline',
+        params: { deadline: summary.deadline ?? item.deadline ?? '—' },
+      };
+    }
+    return {
+      answerKey: 'docAssistant.answer.deadlineUnknown',
+      uncertain: true,
+      followUpKey: 'docAssistant.answer.deadlineFollowUp',
+    };
+  }
+  if (suggestionId === 'orderConfirm') {
+    return {
+      answerKey: 'docAssistant.answer.orderConfirm',
+      params: { customer },
+      uncertain: customer === '—',
+    };
+  }
+  if (suggestionId === 'orderNextSteps') {
+    return {
+      answerKey: 'docAssistant.answer.orderNextSteps',
+      params: { customer },
+      uncertain: customer === '—',
+    };
+  }
+
+  const suggestions = getDocumentQuestionSuggestions(kind);
+  const suggestion = suggestions.find((entry) => entry.id === suggestionId);
   if (!suggestion) {
     return answerInboxDocumentQuestion(item, assistant, suggestionId);
   }

@@ -258,6 +258,12 @@ describe('suggestDigitalFolder and suggestPaperFolder', () => {
     const folder = suggestDigitalFolder('lohnabrechnung');
     expect(folder.path).toContain('Mitarbeiter/Lohnunterlagen');
   });
+
+  it('suggests Aufträge folder for auftrag', () => {
+    const folder = suggestDigitalFolder('auftrag', { customer: 'Müller GmbH' });
+    expect(folder.path).toContain('/Kunden/Müller-GmbH/Aufträge/');
+    expect(folder.path).not.toContain('/Verträge/');
+  });
 });
 
 describe('suggestActions limits', () => {
