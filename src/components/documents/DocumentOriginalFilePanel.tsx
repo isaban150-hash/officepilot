@@ -152,7 +152,7 @@ export function DocumentOriginalFilePanel({
       ) : null}
 
       {previewUrl && isPdfUpload(fileRef.mimeType, fileRef.originalFileName) ? (
-        <div className="document-original-file-panel__preview">
+        <div className="document-original-file-panel__preview document-original-file-panel__preview--pdf">
           <iframe
             title={fileRef.originalFileName}
             src={previewUrl}

@@ -9,6 +9,9 @@
   padding: var(--space-5);
   box-shadow: var(--shadow-card);
   border: 1px solid var(--op-divider);
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   transition:
     box-shadow var(--motion-base) var(--ease-standard),
     border-color var(--motion-base) var(--ease-standard);

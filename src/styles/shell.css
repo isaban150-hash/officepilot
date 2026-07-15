@@ -141,7 +141,10 @@
 .app-shell__main {
   flex: 1;
   width: 100%;
+  max-width: 100%;
   min-width: 0;
+  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 .app-shell__legal-footer {

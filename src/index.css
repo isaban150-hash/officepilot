@@ -95,6 +95,11 @@ body {
 .app-shell__main {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
+  overflow-x: clip;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
   padding-bottom: calc(var(--nav-height) + env(safe-area-inset-bottom, 0) + 1rem);
 }
 
@@ -407,12 +412,18 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .show-more-section__content {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .ablage-page .ablage-summary {

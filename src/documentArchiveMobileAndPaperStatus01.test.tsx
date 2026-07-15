@@ -89,17 +89,19 @@ describe('DOCUMENT-ARCHIVE-MOBILE-AND-PAPER-STATUS-01', () => {
 
   it('Bildvorschau besitzt mobile Breitenbegrenzung', () => {
     const css = readFileSync(CSS_PATH, 'utf8');
+    expect(css).toMatch(/\.document-original-file-panel__image\s*\{[^}]*width:\s*100%/s);
     expect(css).toMatch(/\.document-original-file-panel__image\s*\{[^}]*max-width:\s*100%/s);
     expect(css).toMatch(/\.document-original-file-panel__image\s*\{[^}]*height:\s*auto/s);
-    expect(css).toMatch(/\.document-original-file-panel__image\s*\{[^}]*display:\s*block/s);
+    expect(css).toMatch(/\.document-original-file-panel__image\s*\{[^}]*object-fit:\s*contain/s);
   });
 
   it('PDF-Vorschau besitzt mobile Breitenbegrenzung', () => {
     const css = readFileSync(CSS_PATH, 'utf8');
     expect(css).toMatch(/\.document-original-file-panel__pdf\s*\{[^}]*width:\s*100%/s);
     expect(css).toMatch(/\.document-original-file-panel__pdf\s*\{[^}]*max-width:\s*100%/s);
-    expect(css).toMatch(/\.document-original-file-panel__pdf\s*\{[^}]*box-sizing:\s*border-box/s);
-    expect(css).toMatch(/\.document-original-file-panel__preview\s*\{[^}]*overflow-x:\s*hidden/s);
+    expect(css).toMatch(/\.document-original-file-panel__pdf\s*\{[^}]*min-width:\s*0/s);
+    expect(css).toMatch(/\.document-original-file-panel__preview\s*\{[^}]*overflow-x:\s*auto/s);
+    expect(css).toMatch(/\.document-original-file-panel__preview\s*\{[^}]*contain:\s*layout\s+paint/s);
   });
 
   it('Originalpanel-Markup enthält Containment-Klassen und Download', async () => {
