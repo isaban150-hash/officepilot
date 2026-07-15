@@ -9,6 +9,7 @@ import { bgLanguage } from './language';
 import { bgReviewWorkflow } from './reviewWorkflow';
 import { bgScan } from './scan';
 import { bgIntakePreview } from './intakePreview';
+import { bgStorageRecommendation } from './storageRecommendation';
 
 export const bgModules = {
   ...bgAuth,
@@ -26,4 +27,5 @@ export const bgModules = {
   ...bgReviewWorkflow,
   ...bgScan,
   ...bgIntakePreview,
+  ...bgStorageRecommendation,
 } as const;

@@ -7,6 +7,7 @@ import { deLanguage } from './language';
 import { deOverlay } from './overlay';
 import { deScan } from './scan';
 import { deIntakePreview } from './intakePreview';
+import { deStorageRecommendation } from './storageRecommendation';
 
 export const deModules = {
   ...deAuth,
@@ -19,4 +20,5 @@ export const deModules = {
   ...deOverlay,
   ...deScan,
   ...deIntakePreview,
+  ...deStorageRecommendation,
 } as const;

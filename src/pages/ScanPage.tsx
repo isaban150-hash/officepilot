@@ -147,6 +147,18 @@ export function ScanPage() {
     setConfirmError(null);
   };
 
+  const useExistingDuplicate = () => {
+    const match = pendingScan?.storageRecommendation.duplicateMatch;
+    if (!match) return;
+    discardPendingDocumentIntake(pendingScan);
+    setPendingScan(null);
+    if (match.type === 'inbox') {
+      navigate(`/ablage/${match.id}`);
+    } else {
+      navigate(`/dokumente/${match.id}`);
+    }
+  };
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
@@ -217,6 +229,7 @@ export function ScanPage() {
           fileName={pendingScan.cachedFile.fileName}
           extraction={pendingScan.extraction}
           preview={pendingScan.preview}
+          storageRecommendation={pendingScan.storageRecommendation}
           pendingNoticeLabel={translate('document.intakePreview.pendingNotice')}
           continueLabel={translate('document.intakePreview.savePermanently')}
           qualityHintLabel={
@@ -232,6 +245,7 @@ export function ScanPage() {
           cancelLabel={translate('document.intakePreview.discard')}
           onContinue={confirmPendingScan}
           onCancel={discardScan}
+          onUseExistingDuplicate={useExistingDuplicate}
           onChangeType={() => setShowKindPicker(true)}
           changeTypeLabel={translate('docAssistant.changeType')}
           isConfirming={isConfirming}

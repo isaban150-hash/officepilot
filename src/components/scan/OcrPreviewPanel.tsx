@@ -4,16 +4,26 @@ import type { TranslationKey } from '../../i18n';
 import type { OcrPreviewSummary } from '../../services/ocrDocumentService';
 import type { DocumentTextExtractionResult } from '../../services/ocrDocumentService';
 import type { PersistFailureDiagnostic } from '../../services/persistenceService';
+import {
+  getRecognitionStatusKey,
+  getSteuerberaterHintKey,
+  getStorageRecommendationLevelKey,
+  getStorageRecommendationPrimaryActionKey,
+  translateStorageReasonKey,
+} from '../../services/storageRecommendationPresentationService';
+import type { StorageRecommendation } from '../../types/storageRecommendation';
 
 function formatApproxStorageSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
+
 interface OcrPreviewPanelProps {
   fileName: string;
   extraction: DocumentTextExtractionResult;
   preview: OcrPreviewSummary;
+  storageRecommendation: StorageRecommendation;
   pendingNoticeLabel?: string;
   continueLabel: string;
   qualityHintLabel?: string;
@@ -25,6 +35,7 @@ interface OcrPreviewPanelProps {
   onContinue: () => void;
   onCancel: () => void;
   cancelLabel: string;
+  onUseExistingDuplicate?: () => void;
   onChangeType?: () => void;
   changeTypeLabel?: string;
   isConfirming?: boolean;
@@ -39,6 +50,7 @@ interface OcrPreviewPanelProps {
 export function OcrPreviewPanel({
   fileName,
   preview,
+  storageRecommendation,
   pendingNoticeLabel,
   continueLabel,
   qualityHintLabel,
@@ -50,6 +62,7 @@ export function OcrPreviewPanel({
   onContinue,
   onCancel,
   cancelLabel,
+  onUseExistingDuplicate,
   onChangeType,
   changeTypeLabel,
   isConfirming = false,
@@ -62,6 +75,11 @@ export function OcrPreviewPanel({
 }: OcrPreviewPanelProps) {
   const understanding = preview.understanding;
   const showPreviewLines = preview.previewLines.length > 0 || preview.previewPartialHint;
+  const primaryActionKey = getStorageRecommendationPrimaryActionKey(storageRecommendation.level);
+  const primaryLabel =
+    primaryActionKey === 'storageRecommendation.action.savePermanently'
+      ? continueLabel
+      : translate(primaryActionKey);
 
   return (
     <Card className="ocr-preview-panel" data-testid="ocr-preview-panel">
@@ -75,6 +93,46 @@ export function OcrPreviewPanel({
           {pendingNoticeLabel}
         </p>
       ) : null}
+
+      <div className="ocr-preview-panel__storage-recommendation" data-testid="storage-recommendation">
+        <p className="ocr-preview-panel__storage-level" data-testid="storage-recommendation-level">
+          {translate(getStorageRecommendationLevelKey(storageRecommendation.level))}
+        </p>
+        <ul className="ocr-preview-panel__storage-reasons" data-testid="storage-recommendation-reasons">
+          {storageRecommendation.reasonKeys.map((reasonKey) => (
+            <li key={reasonKey}>{translateStorageReasonKey(reasonKey, translate)}</li>
+          ))}
+        </ul>
+        {storageRecommendation.recommendedFolder ? (
+          <p className="ocr-preview-panel__storage-folder" data-testid="storage-recommendation-folder">
+            <span className="ocr-preview-panel__label">
+              {translate('storageRecommendation.folderLabel')}
+            </span>
+            {storageRecommendation.recommendedFolder.path}
+          </p>
+        ) : null}
+        {storageRecommendation.recognitionStatus ? (
+          <p className="ocr-preview-panel__storage-recognition" data-testid="storage-recommendation-recognition">
+            {translate(getRecognitionStatusKey(storageRecommendation.recognitionStatus))}
+          </p>
+        ) : null}
+        {storageRecommendation.steuerberaterHint &&
+        storageRecommendation.steuerberaterHint !== 'not_relevant' ? (
+          <p className="ocr-preview-panel__storage-tax" data-testid="storage-recommendation-tax">
+            {translate(getSteuerberaterHintKey(storageRecommendation.steuerberaterHint))}
+          </p>
+        ) : null}
+        {storageRecommendation.duplicateMatch ? (
+          <p className="ocr-preview-panel__storage-duplicate" data-testid="storage-recommendation-duplicate">
+            {storageRecommendation.duplicateMatch.title}
+          </p>
+        ) : null}
+        {storageRecommendation.disclaimerKey ? (
+          <p className="ocr-preview-panel__storage-disclaimer" data-testid="storage-recommendation-disclaimer">
+            {translate(storageRecommendation.disclaimerKey as TranslationKey)}
+          </p>
+        ) : null}
+      </div>
 
       {qualityHintLabel && (
         <p className="ocr-preview-panel__hint" data-testid="ocr-quality-hint">
@@ -197,6 +255,16 @@ export function OcrPreviewPanel({
       )}
 
       <div className="ocr-preview-panel__actions">
+        {storageRecommendation.level === 'duplicate_detected' && onUseExistingDuplicate ? (
+          <Button
+            fullWidth
+            data-testid="storage-use-existing-button"
+            onClick={onUseExistingDuplicate}
+            disabled={isConfirming}
+          >
+            {translate('storageRecommendation.action.useExisting')}
+          </Button>
+        ) : null}
         <Button
           fullWidth
           data-testid="ocr-continue-button"
@@ -204,7 +272,7 @@ export function OcrPreviewPanel({
           disabled={isConfirming}
           loading={isConfirming}
         >
-          {isConfirming ? translate('scan.ocr.processing') : continueLabel}
+          {isConfirming ? translate('scan.ocr.processing') : primaryLabel}
         </Button>
         {onChangeType && changeTypeLabel ? (
           <Button

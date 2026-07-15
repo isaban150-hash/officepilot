@@ -8,6 +8,10 @@ import {
 } from './documentUploadErrorService';
 import { isHeicUploadFile } from './documentUploadValidation';
 import type { CreateInboxFromUploadOptions } from './inboxUploadFactory';
+import type { StorageRecommendation } from '../types/storageRecommendation';
+import {
+  buildStorageRecommendation,
+} from './storageRecommendationService';
 import {
   buildOcrPreviewSummary,
   extractDocumentTextFromCache,
@@ -19,6 +23,7 @@ export interface PendingDocumentIntake {
   cachedFile: CachedDocumentFilePayload;
   extraction: DocumentTextExtractionResult;
   preview: OcrPreviewSummary;
+  storageRecommendation: StorageRecommendation;
 }
 
 export type ProcessDocumentPreviewResult =
@@ -55,9 +60,17 @@ export async function processDocumentFileForPreview(
     options.selectedKind,
   );
 
+  const storageRecommendation = await buildStorageRecommendation({
+    cachedFile: loaded.payload,
+    recognizedText: extraction.recognizedText,
+    extraction,
+    kindHint: options.selectedKind,
+    sourceFileName: loaded.payload.fileName,
+  });
+
   return {
     success: true,
-    pending: { cachedFile: loaded.payload, extraction, preview },
+    pending: { cachedFile: loaded.payload, extraction, preview, storageRecommendation },
   };
 }
 

@@ -120,6 +120,18 @@ export function DocumentUploadPage() {
     setConfirmError(null);
   };
 
+  const useExistingDuplicate = () => {
+    const match = pendingUpload?.storageRecommendation.duplicateMatch;
+    if (!match) return;
+    discardPendingDocumentIntake(pendingUpload);
+    setPendingUpload(null);
+    if (match.type === 'inbox') {
+      navigate(`/ablage/${match.id}`);
+    } else {
+      navigate(`/dokumente/${match.id}`);
+    }
+  };
+
   function onInputChange(event: FormEvent<HTMLInputElement>) {
     const file = event.currentTarget.files?.[0];
     void processFile(file);
@@ -181,6 +193,7 @@ export function DocumentUploadPage() {
           fileName={pendingUpload.cachedFile.fileName}
           extraction={pendingUpload.extraction}
           preview={pendingUpload.preview}
+          storageRecommendation={pendingUpload.storageRecommendation}
           pendingNoticeLabel={translate('document.intakePreview.pendingNotice')}
           continueLabel={translate('document.intakePreview.savePermanently')}
           qualityHintLabel={
@@ -196,6 +209,7 @@ export function DocumentUploadPage() {
           cancelLabel={translate('document.intakePreview.discard')}
           onContinue={confirmPendingUpload}
           onCancel={discardUpload}
+          onUseExistingDuplicate={useExistingDuplicate}
           isConfirming={isConfirming}
           confirmErrorTitle={confirmErrorView ? translate(confirmErrorView.titleKey) : undefined}
           confirmErrorMessage={confirmErrorView ? translate(confirmErrorView.descriptionKey) : undefined}

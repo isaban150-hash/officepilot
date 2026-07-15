@@ -156,6 +156,16 @@ export const CORE_I18N_PATHS = [
 
   'document.intakePreview.discard',
 
+  'storageRecommendation.level.archive_required',
+
+  'storageRecommendation.level.duplicate_detected',
+
+  'storageRecommendation.disclaimer.notLegalAdvice',
+
+  'storageRecommendation.action.savePermanently',
+
+  'storageRecommendation.action.useExisting',
+
   // Upload errors
 
   'document.upload.error.processFailed',

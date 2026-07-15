@@ -7,6 +7,7 @@ import { trIntakeUnderstanding } from './intakeUnderstanding';
 import { trLanguage } from './language';
 import { trScan } from './scan';
 import { trIntakePreview } from './intakePreview';
+import { trStorageRecommendation } from './storageRecommendation';
 
 export const trModules = {
   ...trAuth,
@@ -21,4 +22,5 @@ export const trModules = {
   ...trDocAssistantCore,
   ...trScan,
   ...trIntakePreview,
+  ...trStorageRecommendation,
 } as const;
