@@ -34,6 +34,7 @@ body {
 .app-shell {
   display: flex;
   flex-direction: column;
+  height: 100dvh;
   min-height: 100dvh;
   max-width: 480px;
   margin: 0 auto;
@@ -94,9 +95,9 @@ body {
 
 .app-shell__main {
   flex: 1;
-  overflow-y: auto;
+  min-height: 0;
   overflow-x: hidden;
-  overflow-x: clip;
+  overflow-y: auto;
   min-width: 0;
   width: 100%;
   max-width: 100%;
@@ -193,6 +194,7 @@ body {
   flex: 1;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
 }
 
 /* Sidebar Nav (desktop) */

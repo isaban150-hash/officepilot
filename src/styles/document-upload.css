@@ -364,7 +364,3 @@
   min-width: 0;
   max-width: 100%;
 }
-
-.app-shell__main {
-  overflow-x: clip;
-}
