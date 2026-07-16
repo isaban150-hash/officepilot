@@ -5,7 +5,6 @@ import type {
 } from '../../types/companySession';
 import { getDocumentById } from '../documentService';
 import { getInboxItemById } from '../inboxService';
-import { getContractPreviewForInbox, processUploadedDocument } from '../intakeWorkflowService';
 import { getVorgangById } from '../vorgangService';
 
 const STORAGE_KEY = 'officepilot-company-session';
@@ -15,10 +14,6 @@ const EMPTY_SESSION: CompanySessionContext = {
   updatedAt: new Date(0).toISOString(),
   conversationTurns: [],
 };
-
-function formatEuro(amount: number): string {
-  return `${amount.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
-}
 
 function readStorage(): CompanySessionContext {
   if (typeof sessionStorage === 'undefined') return { ...EMPTY_SESSION };
@@ -77,27 +72,30 @@ export function recordAssistantQuestion(question: string): CompanySessionContext
   });
 }
 
+/**
+ * Light session update only — never runs contract intelligence / BOQ / pageTexts analysis.
+ * Heavy analysis belongs on the detail page deferred workflow path.
+ */
 export function recordInboxContext(inboxId: string, action: CompanySessionAction = 'view_inbox'): CompanySessionContext {
   const item = getInboxItemById(inboxId);
   if (!item) return getCompanySession();
 
-  const preview = getContractPreviewForInbox(item);
-  const workflow = processUploadedDocument(inboxId);
   const linkedVorgang = item.vorgangId ? getVorgangById(item.vorgangId) : undefined;
-
   const previous = readStorage();
 
   return updateCompanySession({
     currentInboxId: inboxId,
     currentDocumentId: undefined,
     currentVorgangId: linkedVorgang?.id ?? item.vorgangId,
-    currentVorgangTitle: linkedVorgang?.title ?? workflow?.suggestedVorgang?.vorgangTitle,
+    currentVorgangTitle: linkedVorgang?.title ?? item.vorgangTitle,
     currentCustomer: item.recognizedData.Kunde ?? item.sender ?? linkedVorgang?.customer,
     currentBaustelle: item.recognizedData.Baustelle ?? linkedVorgang?.baustelle,
     currentDocumentKind: item.classifiedKind ?? item.documentType,
     currentDocumentTitle: item.title,
-    contractTotalNet: preview.contractSum > 0 ? formatEuro(preview.contractSum) : undefined,
-    contractPositionCount: preview.positionCount > 0 ? preview.positionCount : undefined,
+    // Keep prior contract totals if any; do not recompute from OCR on mount.
+    contractTotalNet: previous.currentInboxId === inboxId ? previous.contractTotalNet : undefined,
+    contractPositionCount:
+      previous.currentInboxId === inboxId ? previous.contractPositionCount : undefined,
     lastUploadInboxId: action === 'upload_document' ? inboxId : previous.lastUploadInboxId,
     lastUploadTitle: action === 'upload_document' ? item.title : previous.lastUploadTitle,
     lastAction: action,

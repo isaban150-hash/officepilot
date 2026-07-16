@@ -65,7 +65,10 @@ import {
   createTaskForItem,
 } from '../services/inboxTaskService';
 import { recordInboxContext } from '../services/brain/companySessionService';
-import { buildInboxWorkflowAnalysisKey } from '../services/inboxWorkflowAnalysisKey';
+import {
+  buildInboxWorkflowAnalysisKey,
+  itemNeedsDeferredWorkflowAnalysis,
+} from '../services/inboxWorkflowAnalysisKey';
 import {
   applyOfficeActionResult,
   executeContractAction,
@@ -90,18 +93,6 @@ type ReviewSectionId =
   | 'archive'
   | 'technical';
 
-/** Multi-page OCR payloads make sync contract/LV analysis too heavy for first paint. */
-function itemNeedsDeferredWorkflowAnalysis(item: InboxItem): boolean {
-  const raw = item.recognizedData._pageTexts;
-  if (!raw) return false;
-  try {
-    const pages = JSON.parse(raw) as unknown;
-    return Array.isArray(pages) && pages.length > 2;
-  } catch {
-    return false;
-  }
-}
-
 export function EingangDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { translate, showToast, setup } = useApp();
@@ -124,12 +115,14 @@ export function EingangDetailPage() {
   const [deferredStatus, setDeferredStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>(
     'idle',
   );
+  const [analysisRetryToken, setAnalysisRetryToken] = useState(0);
 
   useEffect(() => {
     if (id) {
       setMoreOptionsExpanded(false);
       setExpandedSections({});
       setIntakeExecution(null);
+      setAnalysisRetryToken(0);
     }
   }, [id]);
 
@@ -141,6 +134,7 @@ export function EingangDetailPage() {
     }
   }, [id]);
 
+  // Light session only — never triggers contract/BOQ analysis.
   useEffect(() => {
     if (id) {
       recordInboxContext(id);
@@ -155,17 +149,17 @@ export function EingangDetailPage() {
 
   // Ignore vorgangId/status — confirm/import must not clear proposal or re-run BOQ.
   const workflowAnalysisKey = buildInboxWorkflowAnalysisKey(item);
+  const needsDeferredAnalysis = item ? itemNeedsDeferredWorkflowAnalysis(item) : false;
 
+  // Small documents: sync workflow for first paint (no multi-page OCR payload).
   const syncWorkflow = useMemo(() => {
-    if (!item) return null;
-    if (itemNeedsDeferredWorkflowAnalysis(item)) return null;
+    if (!item || needsDeferredAnalysis) return null;
     return processUploadedDocument(item.id);
-  }, [workflowAnalysisKey]);
+  }, [workflowAnalysisKey, needsDeferredAnalysis]);
 
-  // Heavy multi-page contract/LV analysis after navigation paint — never during save/confirm.
-  // Re-runs only when workflowAnalysisKey changes (document content / archive flags), not vorgangId.
+  // Exactly one deferred heavy analysis path for multi-page contracts — after first paint.
   useEffect(() => {
-    if (!item || !itemNeedsDeferredWorkflowAnalysis(item)) {
+    if (!item || !needsDeferredAnalysis) {
       setDeferredWorkflow(null);
       setDeferredStatus('idle');
       return;
@@ -192,15 +186,33 @@ export function EingangDetailPage() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [workflowAnalysisKey]);
+  }, [workflowAnalysisKey, needsDeferredAnalysis, analysisRetryToken]);
 
   const workflow = syncWorkflow ?? deferredWorkflow;
+  const goBack = () => navigate('/ablage');
 
-  if (!item) return null;
+  if (!item) {
+    return (
+      <div className="page" data-testid="eingang-detail-missing">
+        <button type="button" className="back-link" onClick={goBack}>
+          ← {translate('common.back')}
+        </button>
+        <Card>
+          <p data-testid="eingang-detail-missing-message">{translate('common.loading')}</p>
+        </Card>
+      </div>
+    );
+  }
 
-  if (itemNeedsDeferredWorkflowAnalysis(item) && (deferredStatus !== 'ready' || !workflow)) {
+  const showDeferredShell =
+    needsDeferredAnalysis && (deferredStatus !== 'ready' || !workflow);
+
+  if (showDeferredShell) {
     return (
       <div className="page" data-testid="eingang-detail-analysis-pending">
+        <button type="button" className="back-link" onClick={goBack}>
+          ← {translate('common.back')}
+        </button>
         <Card>
           <DataRow label={translate('inbox.title')} value={item.title} />
           <DataRow
@@ -211,30 +223,75 @@ export function EingangDetailPage() {
                 : translate('reviewWorkflow.hero.unknown')
             }
           />
+          <DataRow
+            label={translate('document.upload.status')}
+            value={getStatusLabel(item.status, setup.language)}
+          />
           {deferredStatus === 'error' ? (
-            <p data-testid="eingang-detail-analysis-error">
-              {translate('reviewWorkflow.analysis.error')}
-            </p>
+            <>
+              <p data-testid="eingang-detail-analysis-error">
+                {translate('reviewWorkflow.analysis.error')}
+              </p>
+              <Button
+                fullWidth
+                variant="outline"
+                data-testid="eingang-detail-analysis-retry"
+                onClick={() => setAnalysisRetryToken((token) => token + 1)}
+              >
+                {translate('reviewWorkflow.analysis.retry')}
+              </Button>
+            </>
           ) : (
             <p data-testid="eingang-detail-analysis-loading">
               {translate('reviewWorkflow.analysis.loading')}
             </p>
           )}
         </Card>
-        {item.fileRefId ? (
-          <div data-testid="ablage-original-file">
-            <DocumentOriginalFilePanel
-              fileRefId={item.fileRefId}
-              translate={translate}
-              onPromoted={() => showToast(translate('document.original.promote.success'))}
-            />
-          </div>
-        ) : null}
+        <div data-testid="ablage-original-file">
+          <DocumentOriginalFilePanel
+            fileRefId={item.fileRefId}
+            translate={translate}
+            onPromoted={() => showToast(translate('document.original.promote.success'))}
+          />
+        </div>
       </div>
     );
   }
 
-  if (!workflow) return null;
+  if (!workflow) {
+    return (
+      <div className="page" data-testid="eingang-detail-analysis-pending">
+        <button type="button" className="back-link" onClick={goBack}>
+          ← {translate('common.back')}
+        </button>
+        <Card>
+          <DataRow label={translate('inbox.title')} value={item.title} />
+          <DataRow
+            label={translate('reviewWorkflow.hero.documentType')}
+            value={
+              item.classifiedKind
+                ? translate(`classifiedKind.${item.classifiedKind}` as TranslationKey)
+                : translate('reviewWorkflow.hero.unknown')
+            }
+          />
+          <DataRow
+            label={translate('document.upload.status')}
+            value={getStatusLabel(item.status, setup.language)}
+          />
+          <p data-testid="eingang-detail-analysis-loading">
+            {translate('reviewWorkflow.analysis.loading')}
+          </p>
+        </Card>
+        <div data-testid="ablage-original-file">
+          <DocumentOriginalFilePanel
+            fileRefId={item.fileRefId}
+            translate={translate}
+            onPromoted={() => showToast(translate('document.original.promote.success'))}
+          />
+        </div>
+      </div>
+    );
+  }
 
   const docTypeKey = `docType.${item.documentType}` as TranslationKey;
   const actionKey = `action.${item.recommendedAction}` as TranslationKey;
@@ -263,8 +320,6 @@ export function EingangDetailPage() {
       showToast(translate('companyRelevance.markedSuccess'));
     }
   };
-
-  const goBack = () => navigate('/ablage');
 
   const handleContractAction = (actionId: ContractSuggestedAction['id']) => {
     applyOfficeActionResult(executeContractAction(actionId, item, contractAnalysis ?? undefined), {

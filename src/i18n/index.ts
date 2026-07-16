@@ -2104,9 +2104,10 @@ const deLegacy = {
   'reviewWorkflow.hero.site': 'Baustelle',
   'reviewWorkflow.hero.sender': 'Absender',
   'reviewWorkflow.hero.unknown': 'Unbekannt',
-  'reviewWorkflow.analysis.loading': 'Vertragsanalyse läuft…',
+  'reviewWorkflow.analysis.loading': 'Dokument wird weiter analysiert.',
   'reviewWorkflow.analysis.error':
     'Vertragsanalyse fehlgeschlagen. Das Dokument ist gespeichert und kann weiter bearbeitet werden.',
+  'reviewWorkflow.analysis.retry': 'Analyse erneut versuchen',
 
   'reviewWorkflow.recommend.title': 'OfficePilot empfiehlt',
   'reviewWorkflow.recommend.createOrder': 'Auftrag anlegen',
@@ -2648,9 +2649,10 @@ const trLegacy: Partial<Record<keyof typeof de, string>> = {
   'reviewWorkflow.hero.site': 'Şantiye',
   'reviewWorkflow.hero.sender': 'Gönderen',
   'reviewWorkflow.hero.unknown': 'Bilinmiyor',
-  'reviewWorkflow.analysis.loading': 'Sözleşme analizi sürüyor…',
+  'reviewWorkflow.analysis.loading': 'Belge analiz edilmeye devam ediyor.',
   'reviewWorkflow.analysis.error':
     'Sözleşme analizi başarısız oldu. Belge kaydedildi ve düzenlenmeye devam edilebilir.',
+  'reviewWorkflow.analysis.retry': 'Analizi yeniden dene',
   'reviewWorkflow.recommend.title': 'OfficePilot öneriyor',
   'reviewWorkflow.recommend.createOrder': 'İş oluştur',
   'reviewWorkflow.recommend.writeInvoice': 'Fatura yaz',
@@ -3084,9 +3086,10 @@ const bgLegacy: Partial<Record<keyof typeof de, string>> = {
   'documentIntelligence.action.reviewPositionsBelow': 'Проверете и потвърдете позициите по-долу',
   'documentIntelligence.createOrderSuccess': 'Поръчката е създадена – {count} позиции са прехвърлени',
   'documentIntelligence.createOrderFailed': 'Поръчката не можа да бъде създадена',
-  'reviewWorkflow.analysis.loading': 'Анализът на договора е в ход…',
+  'reviewWorkflow.analysis.loading': 'Документът продължава да се анализира.',
   'reviewWorkflow.analysis.error':
     'Анализът на договора не бе успешен. Документът е записан и може да се редактира.',
+  'reviewWorkflow.analysis.retry': 'Опитай анализа отново',
 
   'document.filing.title': 'Архив',
   'document.filing.digital': 'Дигитално',
