@@ -453,7 +453,7 @@ export function addOrderPosition(
   if (validationError) return { success: false, errorKey: validationError };
 
   const position: OrderPosition = {
-    id: `op-${Date.now()}`,
+    id: generateEntityId('op'),
     description: normalizeDescription(input.description),
     plannedQuantity: input.plannedQuantity,
     unit: input.unit,
@@ -466,6 +466,71 @@ export function addOrderPosition(
   const updated = cloneVorgang(vorgang);
   updated.orderPositions = [...updated.orderPositions, position];
   return { success: true, vorgang: updateVorgangInStore(updated) };
+}
+
+/**
+ * Append many order positions with a single store update / persistAll.
+ * Used by confirm-first contract import to avoid N× localStorage writes.
+ */
+export function appendOrderPositionsBulk(
+  vorgangId: string,
+  inputs: OrderPositionInput[],
+): {
+  success: boolean;
+  added: number;
+  skipped: number;
+  errorKey?: string;
+  vorgang?: Vorgang;
+} {
+  const vorgang = getVorgangById(vorgangId);
+  if (!vorgang) {
+    return { success: false, added: 0, skipped: 0, errorKey: 'position.vorgangNotFound' };
+  }
+  if (!canAddOrderPosition(vorgang)) {
+    return {
+      success: false,
+      added: 0,
+      skipped: inputs.length,
+      errorKey: 'position.schlussLocked',
+    };
+  }
+
+  const nextPositions = [...vorgang.orderPositions];
+  let added = 0;
+  let skipped = 0;
+
+  for (const input of inputs) {
+    const validationError = validateOrderPositionInput(input);
+    if (validationError) {
+      skipped += 1;
+      continue;
+    }
+
+    nextPositions.push({
+      id: generateEntityId('op'),
+      description: normalizeDescription(input.description),
+      plannedQuantity: input.plannedQuantity,
+      unit: input.unit,
+      unitLabel: input.unitLabel,
+      unitPrice: input.unitPrice,
+      category: input.category ?? 'arbeit',
+      billable: input.billable ?? true,
+    });
+    added += 1;
+  }
+
+  if (added === 0) {
+    return { success: false, added: 0, skipped };
+  }
+
+  const updated = cloneVorgang(vorgang);
+  updated.orderPositions = nextPositions;
+  return {
+    success: true,
+    added,
+    skipped,
+    vorgang: updateVorgangInStore(updated),
+  };
 }
 
 export function updateOrderPosition(

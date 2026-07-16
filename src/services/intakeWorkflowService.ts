@@ -33,7 +33,7 @@ import {
   createTasksFromProposals,
 } from './taskEngineService';
 import {
-  addOrderPosition,
+  appendOrderPositionsBulk,
   buildVorgangDraftFromInbox,
   createVorgangFromInbox,
   findSimilarVorgaenge,
@@ -46,6 +46,7 @@ import type {
   DocumentClassificationResult,
   InboxItem,
   MaterialStandard,
+  OrderPositionInput,
   Task,
   TaskProposal,
   Vorgang,
@@ -374,20 +375,35 @@ export function getContractPreviewForInbox(item: InboxItem): {
   };
 }
 
+/**
+ * Light skip signal — never re-runs contract intelligence / pageTexts / BOQ.
+ * Confirmed positions or existing contract metadata are enough.
+ */
+function shouldSkipDefaultPositionsForContractCreate(
+  item: InboxItem,
+  confirmedPositions?: DetectedOrderPosition[],
+): boolean {
+  if (confirmedPositions && confirmedPositions.length > 0) return true;
+  const kind = item.classifiedKind;
+  if (kind === 'werkvertrag' || kind === 'subunternehmervertrag') return true;
+  const dokumentart = item.recognizedData.Dokumentart;
+  if (dokumentart === 'werkvertrag' || dokumentart === 'subunternehmervertrag') return true;
+  const vertragstext = item.recognizedData._vertragstext;
+  return typeof vertragstext === 'string' && vertragstext.trim().length > 0;
+}
+
 export function createVorgangFromInboxWithContract(
   item: InboxItem,
   optionalDraft?: Partial<VorgangDraft>,
   materialDefault: MaterialStandard = 'unclear',
   options?: { confirmedPositions?: DetectedOrderPosition[] },
 ): { vorgang: Vorgang; inbox: InboxItem } | null {
-  const { hasContractPositions } = getContractPreviewForInbox(item);
-
+  const confirmed = options?.confirmedPositions;
   const result = createVorgangFromInbox(item, optionalDraft, materialDefault, {
-    skipDefaultPositions: hasContractPositions,
+    skipDefaultPositions: shouldSkipDefaultPositionsForContractCreate(item, confirmed),
   });
   if (!result) return null;
 
-  const confirmed = options?.confirmedPositions;
   if (confirmed && confirmed.length > 0) {
     importSuggestedPositionsToVorgang(result.vorgang.id, confirmed);
     const refreshed = getVorgangById(result.vorgang.id);
@@ -404,8 +420,12 @@ export function importSuggestedPositionsToVorgang(
   positions: DetectedOrderPosition[],
 ): { success: boolean; added: number; skipped: number } {
   const vorgang = getVorgangById(vorgangId);
+  if (!vorgang) {
+    return { success: false, added: 0, skipped: 0 };
+  }
+
   const existingKeys = new Set(
-    (vorgang?.orderPositions ?? []).map((position) => {
+    (vorgang.orderPositions ?? []).map((position) => {
       const match = position.description.match(/^(\d+)\s*[–-]\s*/);
       if (match) {
         return `pos:${match[1]!.toLowerCase()}`;
@@ -413,7 +433,8 @@ export function importSuggestedPositionsToVorgang(
       return `desc:${position.description.trim().toLowerCase()}`;
     }),
   );
-  let added = 0;
+
+  const toAppend: OrderPositionInput[] = [];
   let skipped = 0;
 
   for (const position of positions) {
@@ -424,7 +445,7 @@ export function importSuggestedPositionsToVorgang(
     }
 
     const mappedUnit = mapDetectedUnit(position.unit);
-    const result = addOrderPosition(vorgangId, {
+    toAppend.push({
       description: formatDetectedPositionDescription(position),
       plannedQuantity: position.quantity,
       unit: mappedUnit.unit,
@@ -433,15 +454,19 @@ export function importSuggestedPositionsToVorgang(
       category: 'arbeit',
       billable: true,
     });
-    if (result.success) {
-      added += 1;
-      existingKeys.add(importKey);
-    } else {
-      skipped += 1;
-    }
+    existingKeys.add(importKey);
   }
 
-  return { success: added > 0 || skipped > 0, added, skipped };
+  if (toAppend.length === 0) {
+    return { success: skipped > 0, added: 0, skipped };
+  }
+
+  const bulk = appendOrderPositionsBulk(vorgangId, toAppend);
+  return {
+    success: bulk.success || skipped > 0,
+    added: bulk.added,
+    skipped: skipped + bulk.skipped,
+  };
 }
 
 export function linkWorkflowVorgang(

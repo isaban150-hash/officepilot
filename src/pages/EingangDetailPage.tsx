@@ -65,6 +65,7 @@ import {
   createTaskForItem,
 } from '../services/inboxTaskService';
 import { recordInboxContext } from '../services/brain/companySessionService';
+import { buildInboxWorkflowAnalysisKey } from '../services/inboxWorkflowAnalysisKey';
 import {
   applyOfficeActionResult,
   executeContractAction,
@@ -152,21 +153,17 @@ export function EingangDetailPage() {
     }
   }, [id, navigate]);
 
-  const workflowDepsKey = [
-    item?.id,
-    item?.status,
-    item?.vorgangId,
-    item?.importedToArchive,
-    item?.markedAsCompanyDocument,
-  ].join('|');
+  // Ignore vorgangId/status — confirm/import must not clear proposal or re-run BOQ.
+  const workflowAnalysisKey = buildInboxWorkflowAnalysisKey(item);
 
   const syncWorkflow = useMemo(() => {
     if (!item) return null;
     if (itemNeedsDeferredWorkflowAnalysis(item)) return null;
     return processUploadedDocument(item.id);
-  }, [workflowDepsKey]);
+  }, [workflowAnalysisKey]);
 
-  // Heavy multi-page contract/LV analysis after navigation paint — never during save.
+  // Heavy multi-page contract/LV analysis after navigation paint — never during save/confirm.
+  // Re-runs only when workflowAnalysisKey changes (document content / archive flags), not vorgangId.
   useEffect(() => {
     if (!item || !itemNeedsDeferredWorkflowAnalysis(item)) {
       setDeferredWorkflow(null);
@@ -195,7 +192,7 @@ export function EingangDetailPage() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [workflowDepsKey]);
+  }, [workflowAnalysisKey]);
 
   const workflow = syncWorkflow ?? deferredWorkflow;
 
