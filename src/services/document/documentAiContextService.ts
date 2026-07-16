@@ -8,6 +8,8 @@ import { getCachedSetup } from '../persistenceService';
 import type { ExplanationTextBlock } from '../../i18n/types';
 import type { DocumentAiContext } from '../../types/areaAi';
 import type { AppLanguage, CompanyDocument, InboxItem } from '../../types/models';
+import { detectDocumentNature } from './documentAiDocumentNature';
+import { hasStructuredDeadlineEvidence } from './documentAiEvidence';
 
 function blockToPlainText(block: ExplanationTextBlock): string {
   const lang = getCachedSetup()?.language ?? 'de';
@@ -37,6 +39,17 @@ function pickAmountHint(data: Record<string, string> | undefined): string | null
     if (value) return sanitizeAiText(value);
   }
   return null;
+}
+
+function withTestNatureNote(
+  uncertainFieldNotes: string[],
+  documentNature: 'test_or_sample' | 'unknown',
+  lang: AppLanguage,
+): string[] {
+  if (documentNature !== 'test_or_sample') return uncertainFieldNotes;
+  const testNote = note('document.freeQuestion.note.testOrSample', lang);
+  if (uncertainFieldNotes.includes(testNote)) return uncertainFieldNotes;
+  return [testNote, ...uncertainFieldNotes];
 }
 
 function collectInboxQualityNotes(
@@ -87,7 +100,8 @@ function collectDocumentQualityNotes(
   if (!document.recognizedText?.trim()) {
     missingFieldNotes.push(note('document.freeQuestion.note.noRecognizedText', lang));
   }
-  if (!document.validUntil && !document.issueDate && !document.documentDate) {
+  // issueDate / documentDate alone are not deadline evidence.
+  if (!document.validUntil) {
     missingFieldNotes.push(note('document.freeQuestion.note.noDeadline', lang));
   }
   if (!document.issuer?.trim()) {
@@ -107,6 +121,13 @@ export function buildDocumentAiContextFromDocument(document: CompanyDocument): D
   const lang = getCachedSetup()?.language ?? 'de';
   const quality = collectDocumentQualityNotes(document, lang);
   const confirmedLink = Boolean(document.linkedVorgang?.vorgangId);
+  const recognizedText = document.recognizedText
+    ? sanitizeAiText(truncateText(document.recognizedText))
+    : undefined;
+  const documentNature = detectDocumentNature({
+    title: document.title,
+    recognizedText: document.recognizedText,
+  });
 
   return {
     sourceType: 'document',
@@ -116,9 +137,8 @@ export function buildDocumentAiContextFromDocument(document: CompanyDocument): D
     classifiedKind: document.classifiedKind ?? null,
     issueDate: document.issueDate,
     validUntil: document.validUntil,
-    recognizedText: document.recognizedText
-      ? sanitizeAiText(truncateText(document.recognizedText))
-      : undefined,
+    documentNature,
+    recognizedText,
     recognizedDataLines: document.tags.map((tag) => `Tag: ${sanitizeAiText(tag)}`),
     linkedVorgangId: confirmedLink ? document.linkedVorgang!.vorgangId : null,
     linkedVorgangTitle: confirmedLink ? document.linkedVorgang!.vorgangTitle : undefined,
@@ -126,7 +146,7 @@ export function buildDocumentAiContextFromDocument(document: CompanyDocument): D
     paperFolderLabel: document.paperFolder?.label,
     missingDocuments: [],
     tags: document.tags,
-    uncertainFieldNotes: quality.uncertainFieldNotes,
+    uncertainFieldNotes: withTestNatureNote(quality.uncertainFieldNotes, documentNature, lang),
     missingFieldNotes: quality.missingFieldNotes,
   };
 }
@@ -150,6 +170,10 @@ export function buildDocumentAiContextFromInbox(item: InboxItem): DocumentAiCont
   const explanation = getLetterExplanation(item);
   const contract = analyzeContractFromInbox(item);
   const confirmedLink = Boolean(item.vorgangId);
+  const documentNature = detectDocumentNature({
+    title: item.title,
+    recognizedText,
+  });
 
   return {
     sourceType: 'inbox',
@@ -159,6 +183,7 @@ export function buildDocumentAiContextFromInbox(item: InboxItem): DocumentAiCont
     classifiedKind: item.classifiedKind ?? null,
     deadline: item.deadline ?? item.recognizedData.Frist ?? undefined,
     amountHint: pickAmountHint(item.recognizedData),
+    documentNature,
     recognizedText: sanitizeAiText(recognizedText),
     recognizedDataLines: buildRecognizedDataLines(item.recognizedData),
     linkedVorgangId: confirmedLink ? item.vorgangId : null,
@@ -176,7 +201,7 @@ export function buildDocumentAiContextFromInbox(item: InboxItem): DocumentAiCont
       ? contract.requiredDocuments.map((doc) => doc.reason || doc.type.replace(/_/g, ' '))
       : [],
     tags: [],
-    uncertainFieldNotes: quality.uncertainFieldNotes,
+    uncertainFieldNotes: withTestNatureNote(quality.uncertainFieldNotes, documentNature, lang),
     missingFieldNotes: quality.missingFieldNotes,
   };
 }
@@ -187,6 +212,7 @@ export function buildDocumentAiAllowedSourceText(context: DocumentAiContext): st
     context.issuerOrSender,
     context.category,
     context.classifiedKind ?? '',
+    context.documentNature ?? '',
     context.deadline ?? '',
     context.validUntil ?? '',
     context.issueDate ?? '',
@@ -204,5 +230,6 @@ export function buildDocumentAiAllowedSourceText(context: DocumentAiContext): st
     ...context.tags,
     ...context.uncertainFieldNotes,
     ...context.missingFieldNotes,
+    hasStructuredDeadlineEvidence(context) ? 'structured_deadline_evidence' : '',
   ].join('\n');
 }

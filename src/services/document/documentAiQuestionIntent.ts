@@ -20,6 +20,7 @@ const NOTE_KEYS = [
   'document.freeQuestion.note.documentTypeUncertain',
   'document.freeQuestion.note.amountNeedsReview',
   'document.freeQuestion.note.cannotAnswerFromDocument',
+  'document.freeQuestion.note.testOrSample',
 ] as const satisfies readonly TranslationKey[];
 
 type QualityNoteKey = (typeof NOTE_KEYS)[number];
@@ -28,6 +29,7 @@ type QualityNoteKey = (typeof NOTE_KEYS)[number];
 const NOTE_RELEVANCE: Record<QualityNoteKey, NoteRelevance[]> = {
   'document.freeQuestion.note.noRecognizedText': ['always'],
   'document.freeQuestion.note.cannotAnswerFromDocument': ['always'],
+  'document.freeQuestion.note.testOrSample': ['payment', 'deadline'],
   'document.freeQuestion.note.noDeadline': ['deadline'],
   'document.freeQuestion.note.noSender': ['sender'],
   'document.freeQuestion.note.customerUncertain': ['customer_or_order'],

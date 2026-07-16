@@ -1705,10 +1705,28 @@ const deLegacy = {
   'document.freeQuestion.note.amountNeedsReview': 'Der Betrag wurde erkannt, sollte aber geprüft werden.',
   'document.freeQuestion.note.cannotAnswerFromDocument':
     'Diese Frage lässt sich aus dem Dokument möglicherweise nicht beantworten.',
+  'document.freeQuestion.note.testOrSample':
+    'Das Dokument enthält einen Test-, Muster- oder Entwurfshinweis.',
   'document.freeQuestion.direct.unclear':
     'Das lässt sich aus dem Dokument nicht eindeutig beantworten.',
   'document.freeQuestion.direct.noDeadline':
     'Im Dokument ist keine eindeutige Frist erkennbar.',
+  'document.freeQuestion.direct.dateMentioned':
+    'Im Dokument wird der {date} genannt.',
+  'document.freeQuestion.direct.testDateMention':
+    'Im Dokument wird der {date} genannt. Das Dokument kennzeichnet sich jedoch als Testdokument ohne echte Forderung.',
+  'document.freeQuestion.direct.testNoObligation':
+    'Das Dokument kennzeichnet sich als Testdokument ohne echte Forderung.',
+  'document.freeQuestion.direct.documentDemandsPayment':
+    'Das Dokument fordert eine Zahlung bis zum {date}.',
+  'document.freeQuestion.explanation.testOrSample':
+    'Aus dem Testhinweis folgt keine echte Zahlungs- oder Reaktionspflicht.',
+  'document.freeQuestion.explanation.dateMentionOnly':
+    'Eine klare Zahlungs- oder Reaktionsaufforderung ist dazu nicht sicher belegt.',
+  'document.freeQuestion.explanation.dateWithoutBoundDeadline':
+    'Eine Aufforderung ist angedeutet, aber keine belastbare strukturierte Frist-Evidence vorhanden.',
+  'document.freeQuestion.explanation.documentDemandOnly':
+    'Das beschreibt die Aufforderung im Dokument – keine Feststellung einer rechtlichen Zahlungspflicht.',
 
   'communication.page.title': 'Kommunikation',
   'communication.page.subtitle': 'Nachrichten formulieren – E-Mail, WhatsApp oder Brief',
@@ -2788,10 +2806,28 @@ const trLegacy: Partial<Record<keyof typeof de, string>> = {
   'document.freeQuestion.note.amountNeedsReview': 'Tutar tanındı, ancak kontrol edilmelidir.',
   'document.freeQuestion.note.cannotAnswerFromDocument':
     'Bu soru belgeden yanıtlanamayabilir.',
+  'document.freeQuestion.note.testOrSample':
+    'Belgede test, örnek veya taslak ifadesi var.',
   'document.freeQuestion.direct.unclear':
     'Bu, belgeden net olarak yanıtlanamıyor.',
   'document.freeQuestion.direct.noDeadline':
     'Belgede net bir süre görünmüyor.',
+  'document.freeQuestion.direct.dateMentioned':
+    'Belgede {date} belirtiliyor.',
+  'document.freeQuestion.direct.testDateMention':
+    'Belgede {date} belirtiliyor. Belge ancak gerçek alacağı olmayan bir test belgesi olarak işaretleniyor.',
+  'document.freeQuestion.direct.testNoObligation':
+    'Belge, gerçek alacağı olmayan bir test belgesi olarak işaretleniyor.',
+  'document.freeQuestion.direct.documentDemandsPayment':
+    'Belge, {date} tarihine kadar ödeme talep ediyor.',
+  'document.freeQuestion.explanation.testOrSample':
+    'Test ifadesinden gerçek bir ödeme veya yanıt yükümlülüğü doğmaz.',
+  'document.freeQuestion.explanation.dateMentionOnly':
+    'Buna bağlı net bir ödeme veya yanıt talebi güvenilir şekilde belgelenmedi.',
+  'document.freeQuestion.explanation.dateWithoutBoundDeadline':
+    'Bir talep ima ediliyor, ancak güvenilir yapılandırılmış süre kanıtı yok.',
+  'document.freeQuestion.explanation.documentDemandOnly':
+    'Bu, belgedeki talebi açıklar – yasal ödeme yükümlülüğü tespiti değildir.',
 
   'ablage.title': 'Giriş',
   'mehr.documents': 'Belge arşivi',
@@ -2902,10 +2938,28 @@ const bgLegacy: Partial<Record<keyof typeof de, string>> = {
   'document.freeQuestion.note.amountNeedsReview': 'Сумата е разпозната, но трябва да се провери.',
   'document.freeQuestion.note.cannotAnswerFromDocument':
     'Този въпрос може да не се отговаря от документа.',
+  'document.freeQuestion.note.testOrSample':
+    'Документът съдържа указание за тест, образец или чернова.',
   'document.freeQuestion.direct.unclear':
     'Това не може да се отговори еднозначно от документа.',
   'document.freeQuestion.direct.noDeadline':
     'В документа няма ясен срок.',
+  'document.freeQuestion.direct.dateMentioned':
+    'В документа е посочена датата {date}.',
+  'document.freeQuestion.direct.testDateMention':
+    'В документа е посочена датата {date}. Документът обаче се обозначава като тестов без истинско вземане.',
+  'document.freeQuestion.direct.testNoObligation':
+    'Документът се обозначава като тестов без истинско вземане.',
+  'document.freeQuestion.direct.documentDemandsPayment':
+    'Документът изисква плащане до {date}.',
+  'document.freeQuestion.explanation.testOrSample':
+    'От тестовото указание не следва реално задължение за плащане или отговор.',
+  'document.freeQuestion.explanation.dateMentionOnly':
+    'Ясно изискване за плащане или отговор към това не е сигурно доказано.',
+  'document.freeQuestion.explanation.dateWithoutBoundDeadline':
+    'Има намек за изискване, но липсва надеждно структурирано доказателство за срок.',
+  'document.freeQuestion.explanation.documentDemandOnly':
+    'Това описва изискването в документа – не е установяване на правно задължение за плащане.',
 
   'ablage.title': 'Вход',
   'mehr.documents': 'Архив на документи',

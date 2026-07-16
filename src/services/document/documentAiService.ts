@@ -7,6 +7,11 @@ import {
 } from './documentAiContextService';
 import { buildDocumentAiPrompt } from './documentAiPromptBuilder';
 import { parseDocumentAiAnswer } from './documentAiAnswerParser';
+import {
+  applyDocumentAiAnswerPostCheck,
+  ensureTestNatureNote,
+} from './documentAiAnswerPostCheck';
+import { detectDocumentNature } from './documentAiDocumentNature';
 import { filterUncertaintyNotesForQuestion } from './documentAiQuestionIntent';
 import { t } from '../../i18n';
 import { AREA_AI_DISCLAIMER, type AreaAiAnswer, type DocumentAiContext } from '../../types/areaAi';
@@ -61,7 +66,8 @@ function collectAnswerUncertainty(
   if (!context.recognizedText?.trim()) {
     notes.push(t('document.freeQuestion.note.cannotAnswerFromDocument', lang));
   }
-  const deduped = Array.from(new Set(notes.filter(Boolean)));
+  const withTest = ensureTestNatureNote(notes, context, lang);
+  const deduped = Array.from(new Set(withTest.filter(Boolean)));
   return filterUncertaintyNotesForQuestion(question, deduped, lang);
 }
 
@@ -116,17 +122,27 @@ export async function askDocumentAi(input: {
   }
 
   const parsed = parseDocumentAiAnswer(result.text);
+  const checked = applyDocumentAiAnswerPostCheck({
+    question: trimmedQuestion,
+    parsed,
+    context,
+    lang,
+  });
+
+  const mergedWarnings = Array.from(
+    new Set([...(result.warnings ?? []), ...checked.warnings]),
+  );
 
   return {
     question: trimmedQuestion,
-    text: parsed.text,
-    directAnswer: parsed.directAnswer,
-    explanation: parsed.explanation || undefined,
+    text: checked.text,
+    directAnswer: checked.directAnswer,
+    explanation: checked.explanation || undefined,
     source: 'ai',
     disclaimer: AREA_AI_DISCLAIMER,
     generatedAt: new Date().toISOString(),
-    warnings: result.warnings,
-    uncertain: uncertaintyNotes.length > 0,
+    warnings: mergedWarnings.length > 0 ? mergedWarnings : undefined,
+    uncertain: uncertaintyNotes.length > 0 || checked.softened,
     uncertaintyNotes: uncertaintyNotes.length > 0 ? uncertaintyNotes : undefined,
   };
 }
@@ -137,4 +153,6 @@ export {
   buildDocumentAiPrompt,
   filterUncertaintyNotesForQuestion,
   parseDocumentAiAnswer,
+  applyDocumentAiAnswerPostCheck,
+  detectDocumentNature,
 };

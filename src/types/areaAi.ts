@@ -35,6 +35,8 @@ export interface DocumentAiContext {
   amountHint?: string | null;
   recognizedText?: string;
   recognizedDataLines: string[];
+  /** Runtime-only: test/sample/demo/draft markers in title or text. */
+  documentNature?: 'test_or_sample' | 'unknown';
   /** Only set when a confirmed Vorgang link exists. */
   linkedVorgangId?: string | null;
   linkedVorgangTitle?: string;

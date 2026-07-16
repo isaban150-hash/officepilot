@@ -317,6 +317,7 @@ describe('DOCUMENT-FREE-QUESTION-01', () => {
       expect(t('document.freeQuestion.note.noDeadline', lang).length).toBeGreaterThan(0);
       expect(t('document.freeQuestion.direct.unclear', lang).length).toBeGreaterThan(0);
       expect(t('document.freeQuestion.direct.noDeadline', lang).length).toBeGreaterThan(0);
+      expect(t('document.freeQuestion.note.testOrSample', lang).length).toBeGreaterThan(0);
     }
   });
 });

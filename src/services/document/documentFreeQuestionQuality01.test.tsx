@@ -167,14 +167,17 @@ describe('DOCUMENT-FREE-QUESTION-QUALITY-01', () => {
     const vague: CompanyDocument = {
       ...testInvoice,
       id: 'doc-vague',
+      title: 'Allgemeines Schreiben',
       recognizedText: 'Allgemeines Schreiben ohne Zahlungsangabe.',
+      classifiedKind: 'sonstiges',
     };
     const answer = await askDocumentAi({
       source: { type: 'document', document: vague },
       question: 'Muss ich das bezahlen?',
     });
-    expect(answer.directAnswer).toMatch(/nicht eindeutig|nicht erkennbar/i);
+    expect(answer.directAnswer).toMatch(/nicht eindeutig|nicht erkennbar|genannt/i);
     expect(answer.directAnswer).not.toMatch(/^(Ja|Nein)\b/i);
+    expect(answer.directAnswer).not.toMatch(/Sie müssen zahlen/i);
   });
 
   it('unsicherer Betrag bleibt bei Zahlungsfrage sichtbar', async () => {
