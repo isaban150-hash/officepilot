@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { DocumentAssistantPanel } from '../components/documents/DocumentAssistantPanel';
-import { DocumentOriginalFilePanel } from '../components/documents/DocumentOriginalFilePanel';
+import { InboxOriginalFileSection } from '../components/documents/InboxOriginalFileSection';
+import { useCompactDetailLayout } from '../hooks/useCompactDetailLayout';
 import { CompanyRelevancePanel } from '../components/inbox/CompanyRelevancePanel';
 import { ContractAnalysisPanel } from '../components/inbox/ContractAnalysisPanel';
 import { DocumentActionSuggestionsPanel } from '../components/inbox/DocumentActionSuggestionsPanel';
@@ -98,11 +99,13 @@ export function EingangDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { translate, showToast, setup } = useApp();
   const navigate = useNavigate();
+  const compactLayout = useCompactDetailLayout();
   const [item, setItem] = useState<InboxItem | undefined>(() =>
     id ? getInboxItemById(id) : undefined,
   );
   const [moreOptionsExpanded, setMoreOptionsExpanded] = useState(false);
   const [expandedSections, setExpandedSections] = useState<Partial<Record<ReviewSectionId, boolean>>>({});
+  const [ocrExpanded, setOcrExpanded] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editDraft, setEditDraft] = useState<InboxEditDraft | null>(null);
   const [duplicateDocument, setDuplicateDocument] = useState<CompanyDocument | null>(null);
@@ -249,13 +252,12 @@ export function EingangDetailPage() {
             </p>
           )}
         </Card>
-        <div data-testid="ablage-original-file">
-          <DocumentOriginalFilePanel
-            fileRefId={item.fileRefId}
-            translate={translate}
-            onPromoted={() => showToast(translate('document.original.promote.success'))}
-          />
-        </div>
+        <InboxOriginalFileSection
+          fileRefId={item.fileRefId}
+          translate={translate}
+          compactLayout={compactLayout}
+          onPromoted={() => showToast(translate('document.original.promote.success'))}
+        />
       </div>
     );
   }
@@ -284,13 +286,12 @@ export function EingangDetailPage() {
             {translate('reviewWorkflow.analysis.loading')}
           </p>
         </Card>
-        <div data-testid="ablage-original-file">
-          <DocumentOriginalFilePanel
-            fileRefId={item.fileRefId}
-            translate={translate}
-            onPromoted={() => showToast(translate('document.original.promote.success'))}
-          />
-        </div>
+        <InboxOriginalFileSection
+          fileRefId={item.fileRefId}
+          translate={translate}
+          compactLayout={compactLayout}
+          onPromoted={() => showToast(translate('document.original.promote.success'))}
+        />
       </div>
     );
   }
@@ -693,7 +694,7 @@ export function EingangDetailPage() {
         )}
       </CollapsibleReviewSection>
 
-      {extractedText && (
+      {!compactLayout && extractedText ? (
         <CollapsibleReviewSection
           id="ocr-text"
           title={translate('reviewWorkflow.section.ocrText')}
@@ -705,7 +706,7 @@ export function EingangDetailPage() {
             <p className="document-review-ocr-text">{extractedText}</p>
           </Card>
         </CollapsibleReviewSection>
-      )}
+      ) : null}
 
       <CollapsibleReviewSection
         id="communication"
@@ -919,9 +920,52 @@ export function EingangDetailPage() {
     </>
   );
 
+  const originalFileSection = item.fileRefId ? (
+    <InboxOriginalFileSection
+      fileRefId={item.fileRefId}
+      translate={translate}
+      compactLayout={compactLayout}
+      onPromoted={() => showToast(translate('document.original.promote.success'))}
+    />
+  ) : null;
+
+  const ocrSection =
+    compactLayout && extractedText ? (
+      <CollapsibleReviewSection
+        id="ocr-text"
+        title={translate('reviewWorkflow.section.ocrText')}
+        expanded={ocrExpanded}
+        onToggle={() => setOcrExpanded((open) => !open)}
+        testId="document-review-ocr-section"
+      >
+        <Card data-testid="document-review-ocr-content">
+          <p className="document-review-ocr-text">{extractedText}</p>
+        </Card>
+      </CollapsibleReviewSection>
+    ) : null;
+
+  const reviewExperience = (
+    <DocumentReviewExperience
+      item={item}
+      workflow={workflow}
+      executionResult={intakeExecution}
+      isExecuting={isExecutingIntake}
+      moreOptionsExpanded={moreOptionsExpanded}
+      onToggleMoreOptions={() => setMoreOptionsExpanded((open) => !open)}
+      onApplySuggestion={handleApplySuggestion}
+      onCreateContractOrder={handleCreateContractOrder}
+      onDiscardContractProposal={handleDiscardContractProposal}
+      isCreatingContractOrder={isCreatingContractOrder}
+      onOpenVorgang={handleOpenVorgang}
+      onNextDocument={goBack}
+      moreOptionsContent={moreOptionsContent}
+      translate={translate}
+    />
+  );
+
   return (
     <div
-      className={`page eingang-detail-page ${isEditing ? 'page--editing' : ''}`}
+      className={`page eingang-detail-page${compactLayout ? ' eingang-detail-page--compact' : ''}${isEditing ? ' page--editing' : ''}`}
       data-testid="ablage-detail-page"
     >
       <button type="button" className="back-link" onClick={goBack}>
@@ -933,6 +977,7 @@ export function EingangDetailPage() {
         workflow={workflow}
         translate={translate}
         language={setup.language}
+        compactLayout={compactLayout}
         showChangeType
         onChangeType={() => {
           setMoreOptionsExpanded(true);
@@ -940,34 +985,20 @@ export function EingangDetailPage() {
         }}
       />
 
-      <DocumentFreeQuestionPanel source={{ type: 'inbox', item }} testIdPrefix="document-free-question" />
-
-      {item.fileRefId ? (
-        <div data-testid="ablage-original-file">
-          <DocumentOriginalFilePanel
-            fileRefId={item.fileRefId}
-            translate={translate}
-            onPromoted={() => showToast(translate('document.original.promote.success'))}
-          />
-        </div>
-      ) : null}
-
-      <DocumentReviewExperience
-        item={item}
-        workflow={workflow}
-        executionResult={intakeExecution}
-        isExecuting={isExecutingIntake}
-        moreOptionsExpanded={moreOptionsExpanded}
-        onToggleMoreOptions={() => setMoreOptionsExpanded((open) => !open)}
-        onApplySuggestion={handleApplySuggestion}
-        onCreateContractOrder={handleCreateContractOrder}
-        onDiscardContractProposal={handleDiscardContractProposal}
-        isCreatingContractOrder={isCreatingContractOrder}
-        onOpenVorgang={handleOpenVorgang}
-        onNextDocument={goBack}
-        moreOptionsContent={moreOptionsContent}
-        translate={translate}
-      />
+      {compactLayout ? (
+        <>
+          {reviewExperience}
+          {originalFileSection}
+          {ocrSection}
+          <DocumentFreeQuestionPanel source={{ type: 'inbox', item }} testIdPrefix="document-free-question" />
+        </>
+      ) : (
+        <>
+          <DocumentFreeQuestionPanel source={{ type: 'inbox', item }} testIdPrefix="document-free-question" />
+          {originalFileSection}
+          {reviewExperience}
+        </>
+      )}
 
       {duplicateDocument && (
         <ImportToArchiveDialog
