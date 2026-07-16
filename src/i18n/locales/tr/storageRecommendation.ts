@@ -58,6 +58,8 @@ export const trStorageRecommendation = {
     'Bilinmeyen belge – atamayı kontrol edin.',
   'storageRecommendation.reason.kind.brief':
     'Mektup tanındı – atamayı kontrol edin.',
+  'storageRecommendation.reason.kind.agentur_fuer_arbeit':
+    'İş Kurumu yazısı tanındı – atamayı kontrol edin ve arşivleyin.',
 
   'storageRecommendation.reason.authorityDeadline.finanzamt':
     'Finanzamt yazısı ve süre – kalıcı kaydetme önerilir.',

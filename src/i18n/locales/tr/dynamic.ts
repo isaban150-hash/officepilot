@@ -4,7 +4,7 @@ export const trDynamic = {
   'paperFiling.instruction': 'Lütfen orijinali şuraya dosyalayın: {folder} → Defter {register}',
   'paperFiling.summary': '{folder}, Defter {register}',
   'common.misc': 'Diğer',
-  'common.unknownSender': 'Bilinmeyen gönderen',
+  'common.unknownSender': 'Gönderen net olarak tanınmadı.',
   'inbox.securityHintBody':
     'OfficePilot kesin kararlar vermez ve onayınız olmadan hiçbir şey göndermez.',
   'priority.kritisch': 'Kritik',

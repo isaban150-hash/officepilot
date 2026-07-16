@@ -128,9 +128,15 @@ describe('documentFeatureExtractionService', () => {
   it('detects structural payment requests and authority-letter markers', () => {
     const authorityResult = extractDocumentFeatures(zoneText(AUTHORITY_LETTER));
     const invoiceResult = extractDocumentFeatures(zoneText(INVOICE_TEXT));
+    const mahnungResult = extractDocumentFeatures(
+      zoneText(['2. Mahnung', 'Offener Betrag: 100,00 EUR', 'Zahlungsaufforderung'].join('\n')),
+    );
 
     expect(authorityResult.features.some((feature) => feature.id === 'structure.authority_letter')).toBe(true);
-    expect(invoiceResult.features.some((feature) => feature.id === 'structure.payment_request')).toBe(true);
+    expect(invoiceResult.features.some((feature) => feature.id === 'structure.weak_payment_signal')).toBe(true);
+    expect(invoiceResult.features.some((feature) => feature.id === 'structure.payment_request')).toBe(false);
+    expect(mahnungResult.features.some((feature) => feature.id === 'structure.payment_request')).toBe(true);
+    expect(mahnungResult.features.some((feature) => feature.id === 'structure.mahnung_marker')).toBe(true);
   });
 
   it('detects short receipt layout features in the body without footer dominance', () => {

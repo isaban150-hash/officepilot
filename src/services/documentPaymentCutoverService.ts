@@ -2,6 +2,7 @@ import {
   DI_PAYMENT_SCORING_REASON_KEY,
   getPaymentCutoverKindThresholds,
   getPaymentScoringCutoverEnabled,
+  hasPaymentCutoverEmploymentExclusion,
   hasPaymentCutoverKindTextGuard,
   isPaymentScoringCutoverKind,
   PAYMENT_SCORING_CUTOVER,
@@ -69,6 +70,10 @@ export function evaluatePaymentCutoverEligibility(
 
   if (!pipeline.valid) {
     return { eligible: false, rejectionReason: 'cutover:pipeline_invalid' };
+  }
+
+  if (hasPaymentCutoverEmploymentExclusion(pipeline.recognizedText)) {
+    return { eligible: false, rejectionReason: 'cutover:employment_excluded' };
   }
 
   const { scoringResult, ocrQuality } = pipeline;

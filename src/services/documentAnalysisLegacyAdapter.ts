@@ -26,7 +26,7 @@ export type DocumentAnalysisLegacyAdapterInput = {
 };
 
 const DETECTION_EVIDENCE_ID = 'legacy:detection';
-const DEFAULT_SENDER = 'Unbekannter Absender';
+const DEFAULT_SENDER = 'Absender nicht eindeutig erkannt.';
 
 const TAX_ADVISOR_KINDS = new Set([
   'eingangsrechnung',

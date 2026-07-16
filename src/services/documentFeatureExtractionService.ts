@@ -31,8 +31,10 @@ const HRB_HRA_PATTERN = /\b(HR[AB]\s*\d[\dA-Z./-]{1,})\b/i;
 const COURT_MARKER_PATTERN = /\b(Amtsgericht\s+[\p{L}\-]+(?:\s+[\p{L}\-]+)*)/iu;
 const MANAGING_DIRECTOR_PATTERN =
   /\b(Geschäftsführer(?:in)?|Inhaber(?:in)?)\s*[:.]?\s*([\p{L}\-]+(?:\s+[\p{L}\-]+)*)/iu;
+/** Strong payment-demand signals only — weak phrases are soft features. */
 const PAYMENT_REQUEST_PATTERN =
-  /\b(zahlungsaufforderung|zahlungserinnerung|zahlungsfrist|zu\s+zahlen|zahlbar\s+bis|mahnung|inkasso)\b/i;
+  /\b(zahlungsaufforderung|offener\s+betrag|offene\s+forderung|bitte\s+(?:überweisen|zahlen|begleichen)|überweisen\s+sie|mahngebühr|forderungs(?:nummer|nr\.?)|zu\s+zahlen)\b/i;
+const WEAK_PAYMENT_SIGNAL_PATTERN = /\b(zahlungsfrist|zahlbar\s+bis)\b/i;
 const MAHNUNG_MARKER_PATTERN = /\b(\d+\.\s*mahnung|mahnung|inkasso|zahlungsaufforderung)\b/i;
 const ZAHLUNGSERINNERUNG_MARKER_PATTERN = /\b(zahlungserinnerung)\b/i;
 const CARD_PAYMENT_PATTERN =
@@ -44,7 +46,9 @@ const QUITTUNG_MARKER_PATTERN = /\b(quittung|bar erhalten|quittung über)\b/i;
 const FUEL_MARKER_PATTERN =
   /\b(kraftstoff|diesel|benzin|super|e10|adblue|erdgas|cng|lpg|tankstelle)\b/i;
 const AUTHORITY_MARKER_PATTERN =
-  /\b(finanzamt|steueramt|steuerbescheid|bg[\s-]?bau|berufsgenossenschaft|krankenkasse|soka[\s-]?bau|zollamt|sozialversicherung|agentur\s+für\s+arbeit|jobcenter|stadtverwaltung|gemeindeverwaltung|landratsamt|ordnungsamt)\b/i;
+  /\b(finanzamt|steueramt|steuerbescheid|bg[\s-]?bau|berufsgenossenschaft|krankenkasse|soka[\s-]?bau|zollamt|sozialversicherung|(?:bundes)?agentur\s+für\s+arbeit|bundesagentur|arbeitsagentur|arbeitsbescheinigung|jobcenter|stadtverwaltung|gemeindeverwaltung|landratsamt|ordnungsamt)\b/i;
+const AGENTUR_FUER_ARBEIT_MARKER_PATTERN =
+  /\b(arbeitsbescheinigung|arbeitgeberbescheinigung|bundesagentur|(?:bundes)?agentur\s+für\s+arbeit|arbeitsagentur|§\s*312|sgb\s*iii|beschäftigungsverhältnis)\b/i;
 const FINANZAMT_MARKER_PATTERN = /\b(finanzamt|steuernummer|umsatzsteuer|lohnsteuer|steueramt)\b/i;
 const BG_BAU_MARKER_PATTERN =
   /\b(bg[\s-]?bau|berufsgenossenschaft\s+(der\s+)?bauwirtschaft)\b/i;
@@ -156,6 +160,12 @@ const PATTERN_FEATURES: PatternFeatureSpec[] = [
     valueFromMatch: () => true,
   },
   {
+    id: 'structure.weak_payment_signal',
+    category: 'structure',
+    pattern: WEAK_PAYMENT_SIGNAL_PATTERN,
+    valueFromMatch: () => true,
+  },
+  {
     id: 'structure.mahnung_marker',
     category: 'structure',
     pattern: MAHNUNG_MARKER_PATTERN,
@@ -220,6 +230,12 @@ const PATTERN_FEATURES: PatternFeatureSpec[] = [
     id: 'structure.soka_bau_marker',
     category: 'structure',
     pattern: SOKA_BAU_MARKER_PATTERN,
+    valueFromMatch: (match) => match[0]?.trim(),
+  },
+  {
+    id: 'structure.agentur_fuer_arbeit_marker',
+    category: 'structure',
+    pattern: AGENTUR_FUER_ARBEIT_MARKER_PATTERN,
     valueFromMatch: (match) => match[0]?.trim(),
   },
   {

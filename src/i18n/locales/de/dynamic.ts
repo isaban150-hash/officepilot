@@ -4,7 +4,7 @@ export const deDynamic = {
   'paperFiling.instruction': 'Bitte Original abheften in: {folder} → Register {register}',
   'paperFiling.summary': '{folder}, Register {register}',
   'common.misc': 'Sonstiges',
-  'common.unknownSender': 'Unbekannter Absender',
+  'common.unknownSender': 'Absender nicht eindeutig erkannt.',
   'inbox.securityHintBody':
     'OfficePilot trifft keine endgültigen Entscheidungen und versendet nichts ohne Ihre Bestätigung.',
   'priority.kritisch': 'Kritisch',

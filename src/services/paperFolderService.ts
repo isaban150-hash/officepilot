@@ -151,6 +151,9 @@ export function resolvePaperFiling(context: PaperFilingContext): PaperFilingReso
   if (kind === 'finanzamt' || kind === 'steuerbescheid' || kind === 'umsatzsteuerbescheid') {
     return { rule: buildRule('paper-behoerden', 'Finanzamt'), skipPhysicalFiling: false };
   }
+  if (kind === 'agentur_fuer_arbeit') {
+    return { rule: buildRule('paper-behoerden', 'Agentur für Arbeit'), skipPhysicalFiling: false };
+  }
   if (kind === 'bg_bau' || kind === 'berufsgenossenschaft' || kind === 'soka_bau') {
     return { rule: buildRule('paper-behoerden', 'BG BAU'), skipPhysicalFiling: false };
   }

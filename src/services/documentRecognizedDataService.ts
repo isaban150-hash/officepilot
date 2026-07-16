@@ -50,6 +50,7 @@ const OCR_ONLY_KIND_FAMILY: Record<OcrOnlyRecognizedDataKind, RecognizedDataFami
   steuerbescheid: 'authority',
   krankenkasse: 'authority',
   soka_bau: 'authority',
+  agentur_fuer_arbeit: 'authority',
   freistellungsbescheinigung: 'certificate',
   unbedenklichkeitsbescheinigung: 'certificate',
   werkvertrag: 'contract',
@@ -76,7 +77,13 @@ const AUTHORITY_HEADER_SKIP_PATTERN =
   /^(?:Betreff|Aktenzeichen|Az\.|Beitragsnummer|Datum|Frist|Beitragsbescheid|Festsetzung|Steuernummer|USt|MwSt)\s*[:]/i;
 
 const AUTHORITY_MARKER_LINE_PATTERN =
-  /\b(finanzamt|steueramt|steuerbescheid|bg[\s-]?bau|berufsgenossenschaft|krankenkasse|soka[\s-]?bau|zollamt|sozialversicherung|agentur\s+für\s+arbeit|jobcenter|stadtverwaltung|gemeindeverwaltung|landratsamt|ordnungsamt)\b/i;
+  /\b(finanzamt|steueramt|steuerbescheid|bg[\s-]?bau|berufsgenossenschaft|krankenkasse|soka[\s-]?bau|zollamt|sozialversicherung|(?:bundes)?agentur\s+für\s+arbeit|bundesagentur|arbeitsagentur|jobcenter|stadtverwaltung|gemeindeverwaltung|landratsamt|ordnungsamt)\b/i;
+
+const BUNDESAGENTUR_CANONICAL_SENDER = 'Bundesagentur für Arbeit';
+const BA_AUTHORITY_NAME_PATTERN =
+  /\b(?:bundesagentur(?:\s+für\s+arbeit)?|(?:bundes)?agentur\s+für\s+arbeit|arbeitsagentur)\b/i;
+const OCR_SENDER_NOISE_PATTERN =
+  /seite\s+\d+|von\s+\d+|page\s+\d+|arbeitsbescheinigung|arbeitgeberbescheinigung|§\s*312|sgb\s*iii/i;
 
 const PAYMENT_HEADER_SKIP_PATTERN =
   /^(?:Rechnungs(?:nummer|nr)|Invoice|Inv\.|Mahnung|Zahlungserinnerung|Zahlungsaufforderung|Inkasso|Datum|Offener\s+Betrag|IBAN|zu\s+zahlen|zahlbar|Fälligkeit|Faelligkeit)/i;
@@ -491,27 +498,66 @@ function inferAuthorityFromHeader(text: string): string | undefined {
   return undefined;
 }
 
+function isNoisyAuthoritySenderLine(line: string): boolean {
+  const trimmed = line.trim();
+  if (!trimmed) return true;
+  if (OCR_SENDER_NOISE_PATTERN.test(trimmed) && !BA_AUTHORITY_NAME_PATTERN.test(trimmed)) {
+    return true;
+  }
+  if (/^seite\b/i.test(trimmed)) return true;
+  return false;
+}
+
+function resolveAgenturFuerArbeitSender(text: string): string | undefined {
+  if (BA_AUTHORITY_NAME_PATTERN.test(text)) {
+    return BUNDESAGENTUR_CANONICAL_SENDER;
+  }
+  return undefined;
+}
+
 function applyAuthorityOcrSender(
   result: Record<string, string>,
   plain: ReturnType<typeof toConfidentPlainFields>,
   text: string,
   pageTexts?: DocumentClassificationInput['pageTexts'],
+  kind?: AuthorityCutoverKind,
 ): void {
+  if (kind === 'agentur_fuer_arbeit') {
+    const agenturSender = resolveAgenturFuerArbeitSender(text);
+    if (agenturSender) {
+      result.Absender = agenturSender;
+    }
+    return;
+  }
+
   const features = extractDocumentFeaturesFromText(text, pageTexts);
   const authorityLetter = features.features.find((feature) => feature.id === 'structure.authority_letter');
-  if (authorityLetter?.rawValue?.trim()) {
-    result.Absender = authorityLetter.rawValue.trim();
+  const authorityLetterValue = authorityLetter?.rawValue?.trim();
+  if (authorityLetterValue && !isNoisyAuthoritySenderLine(authorityLetterValue)) {
+    if (BA_AUTHORITY_NAME_PATTERN.test(authorityLetterValue)) {
+      result.Absender = BUNDESAGENTUR_CANONICAL_SENDER;
+      return;
+    }
+    result.Absender = authorityLetterValue;
     return;
   }
 
   const labeledAuthority = plain.Absender ?? plain.Lieferant;
-  if (labeledAuthority?.trim() && !isLikelyStreetLine(labeledAuthority)) {
+  if (
+    labeledAuthority?.trim() &&
+    !isLikelyStreetLine(labeledAuthority) &&
+    !isNoisyAuthoritySenderLine(labeledAuthority)
+  ) {
     result.Absender = labeledAuthority;
     return;
   }
 
   const authorityFromHeader = inferAuthorityFromHeader(text);
-  if (authorityFromHeader) {
+  if (authorityFromHeader && !isNoisyAuthoritySenderLine(authorityFromHeader)) {
+    if (BA_AUTHORITY_NAME_PATTERN.test(authorityFromHeader)) {
+      result.Absender = BUNDESAGENTUR_CANONICAL_SENDER;
+      return;
+    }
     result.Absender = authorityFromHeader;
   }
 }
@@ -808,7 +854,7 @@ function buildAuthorityRecognizedData(
   applyAuthorityOcrReference(result, plain, text, pageTexts);
   applyAuthorityOcrDeadline(result, plain, text, pageTexts);
   applyAuthorityOcrLabeledAmount(result, text, pageTexts);
-  applyAuthorityOcrSender(result, plain, text, pageTexts);
+  applyAuthorityOcrSender(result, plain, text, pageTexts, kind);
 
   if (plain.Datum?.trim()) {
     result.Datum = plain.Datum;

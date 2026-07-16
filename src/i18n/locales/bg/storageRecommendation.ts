@@ -58,6 +58,8 @@ export const bgStorageRecommendation = {
     'Неизвестен документ – проверете присвояването.',
   'storageRecommendation.reason.kind.brief':
     'Разпознато е писмо – проверете присвояването.',
+  'storageRecommendation.reason.kind.agentur_fuer_arbeit':
+    'Разпознато е писмо от Агенцията по заетост – проверете и архивирайте.',
 
   'storageRecommendation.reason.authorityDeadline.finanzamt':
     'Писмо от Finanzamt със срок – препоръчва се постоянно запазване.',

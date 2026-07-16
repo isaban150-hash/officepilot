@@ -4,7 +4,7 @@ export const bgDynamic = {
   'paperFiling.instruction': 'Моля, подредете оригинала в: {folder} → Регистър {register}',
   'paperFiling.summary': '{folder}, Регистър {register}',
   'common.misc': 'Друго',
-  'common.unknownSender': 'Неизвестен подател',
+  'common.unknownSender': 'Подателят не е еднозначно разпознат.',
   'inbox.securityHintBody':
     'OfficePilot не взема окончателни решения и не изпраща нищо без вашето потвърждение.',
   'priority.kritisch': 'Критично',

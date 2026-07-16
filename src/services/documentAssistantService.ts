@@ -240,7 +240,11 @@ export function buildInboxDocumentAssistant(
   const confidentFields: InboxDocumentAssistant['confidentFields'] = [];
   const uncertainFields: InboxDocumentAssistant['uncertainFields'] = [];
 
-  if (item.sender && item.sender !== 'Unbekannter Absender') {
+  if (
+    item.sender &&
+    item.sender !== 'Absender nicht eindeutig erkannt.' &&
+    item.sender !== 'Unbekannter Absender'
+  ) {
     confidentFields.push({ labelKey: 'docAssistant.check.sender', value: item.sender });
   } else {
     uncertainFields.push({

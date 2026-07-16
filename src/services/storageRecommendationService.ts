@@ -219,7 +219,7 @@ function resolveKindLevel(
     };
   }
 
-  if (kind === 'sonstiges' || kind === 'brief') {
+  if (kind === 'sonstiges' || kind === 'brief' || kind === 'agentur_fuer_arbeit') {
     return {
       level: 'review_required',
       reasonKeys: [`storageRecommendation.reason.kind.${kind}`],
@@ -392,7 +392,7 @@ export async function buildStorageRecommendation(input: {
   const confidentFields = toConfidentPlainFields(fieldsWithConfidence);
   const uncertainFieldKeys = listUncertainFieldKeys(fieldsWithConfidence);
   const presentationCustomer = resolvePresentationCustomer(null, asRecognizedData(confidentFields));
-  const sender = resolveSenderFromEvidence(text) ?? 'Unbekannter Absender';
+  const sender = resolveSenderFromEvidence(text) ?? 'Absender nicht eindeutig erkannt.';
   const title = input.sourceFileName ?? input.cachedFile.fileName;
   const hasVorgang = hasSecureVorgangAssignment(text, sender, title);
   const suggestedVorgang = suggestRelatedVorgang(asRecognizedData(confidentFields), sender, title);

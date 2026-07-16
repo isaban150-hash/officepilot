@@ -55,7 +55,11 @@ function resolveContext(item: InboxItem, workflow: WorkflowResult): {
   if (!isUnknown(site)) {
     return { labelKey: 'reviewWorkflow.hero.site', value: site!.trim() };
   }
-  if (!isUnknown(item.sender) && item.sender !== 'Unbekannter Absender') {
+  if (
+    !isUnknown(item.sender) &&
+    item.sender !== 'Absender nicht eindeutig erkannt.' &&
+    item.sender !== 'Unbekannter Absender'
+  ) {
     return { labelKey: 'reviewWorkflow.hero.sender', value: item.sender.trim() };
   }
 

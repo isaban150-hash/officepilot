@@ -58,6 +58,8 @@ export const deStorageRecommendation = {
     'Unbekanntes Dokument – Zuordnung prüfen.',
   'storageRecommendation.reason.kind.brief':
     'Brief erkannt – Zuordnung prüfen.',
+  'storageRecommendation.reason.kind.agentur_fuer_arbeit':
+    'Agentur-für-Arbeit-Schreiben erkannt – Zuordnung prüfen und ablegen.',
 
   'storageRecommendation.reason.authorityDeadline.finanzamt':
     'Finanzamt-Schreiben mit Frist – dauerhaftes Speichern wird empfohlen.',

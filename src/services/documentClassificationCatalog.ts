@@ -50,7 +50,12 @@ export const CLASSIFICATION_RULES: ClassificationRule[] = [
   { kind: 'gewerbeamt', pattern: /gewerbeamt/, reasonKey: 'classification.detect.gewerbeamt' },
   { kind: 'bauamt', pattern: /bauamt|bauaufsicht/, reasonKey: 'classification.detect.bauamt' },
   { kind: 'ordnungsamt', pattern: /ordnungsamt/, reasonKey: 'classification.detect.ordnungsamt' },
-  { kind: 'agentur_fuer_arbeit', pattern: /agentur für arbeit|arbeitsagentur/, reasonKey: 'classification.detect.agenturArbeit' },
+  {
+    kind: 'agentur_fuer_arbeit',
+    pattern:
+      /agentur für arbeit|arbeitsagentur|bundesagentur|arbeitsbescheinigung|arbeitgeberbescheinigung|§\s*312|sgb\s*iii/,
+    reasonKey: 'classification.detect.agenturArbeit',
+  },
   { kind: 'deutsche_rentenversicherung', pattern: /deutsche rentenversicherung|rentenversicherung/, reasonKey: 'classification.detect.rentenversicherung' },
   { kind: 'steuerbescheid', pattern: /steuerbescheid/, reasonKey: 'classification.detect.steuerbescheid' },
   { kind: 'umsatzsteuerbescheid', pattern: /umsatzsteuerbescheid/, reasonKey: 'classification.detect.umsatzsteuerbescheid' },
@@ -235,6 +240,7 @@ const PROCESS_TYPE_MAP: Partial<Record<ClassifiedDocumentKind, ProcessType>> = {
   pruefprotokoll: 'attach_to_vorgang',
   finanzamt: 'review_required',
   steuerbescheid: 'review_required',
+  agentur_fuer_arbeit: 'review_required',
   versicherung: 'review_required',
   sonstiges: 'review_required',
   brief: 'review_required',
@@ -475,6 +481,11 @@ const KIND_ACTIONS: Partial<Record<ClassifiedDocumentKind, SuggestedDocumentActi
     { id: 'save_tax_folder', labelKey: 'classification.action.saveTaxFolder', variant: 'primary' },
     { id: 'check_deadline', labelKey: 'classification.action.checkDeadline', variant: 'secondary' },
   ],
+  agentur_fuer_arbeit: [
+    { id: 'confirm_filing', labelKey: 'classification.action.confirmFiling', variant: 'primary' },
+    { id: 'archive', labelKey: 'classification.action.archive', variant: 'secondary' },
+    { id: 'check_deadline', labelKey: 'classification.action.checkDeadline', variant: 'outline' },
+  ],
   lieferschein: [
     { id: 'link_vorgang', labelKey: 'classification.action.linkVorgang', variant: 'primary' },
     { id: 'confirm_filing', labelKey: 'classification.action.confirmFiling', variant: 'outline' },
@@ -518,6 +529,9 @@ export function buildExplanation(kind: ClassifiedDocumentKind, sender: string): 
   }
   if (kind === 'freistellungsbescheinigung') {
     return `Freistellungsbescheinigung erkannt. Im Steuerordner ablegen und Gültigkeit überwachen.`;
+  }
+  if (kind === 'agentur_fuer_arbeit') {
+    return `Schreiben der Bundesagentur für Arbeit erkannt. Bitte Inhalt prüfen und im Behördenordner ablegen.`;
   }
   if (kind === 'abnahmeprotokoll') {
     return `Abnahmeprotokoll erkannt. Vorgang abschließen prüfen und Schlussrechnung vorschlagen.`;
@@ -565,6 +579,7 @@ export function buildNextTask(kind: ClassifiedDocumentKind): string {
     auftrag: 'Auftrag prüfen oder Rückfrage stellen',
     bg_bau: 'BG-BAU-Schreiben prüfen und Frist beachten',
     freistellungsbescheinigung: 'Freistellungsbescheinigung ablegen und weiterleiten',
+    agentur_fuer_arbeit: 'Agentur-für-Arbeit-Schreiben prüfen und ablegen',
     aok: 'AOK-Schreiben prüfen und ablegen',
     kontoauszug: 'Kontoauszug für Steuerberater vorbereiten',
     abnahmeprotokoll: 'Vorgang abschließen und Schlussrechnung prüfen',

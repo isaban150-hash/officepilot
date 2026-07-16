@@ -3,6 +3,10 @@ import { getPaperFolderById } from './paperFolderService';
 import { buildVorgangDraftFromInbox, findSimilarVorgaenge } from './vorgangMatchingService';
 import { getAllVorgaenge, getVorgangById } from './vorgangService';
 import {
+  hasEmploymentBaSignals,
+  hasStrongPaymentDemandEvidence,
+} from '../config/documentIntelligenceConfig';
+import {
   buildDigitalFolderSpec,
   buildExplanation,
   buildNextTask,
@@ -14,6 +18,7 @@ import {
   mapKindToDocumentType,
   suggestProcessType,
 } from './documentClassificationCatalog';
+import { UNKNOWN_SENDER_CANONICAL } from '../i18n/resolveStoredText';
 import { resolvePaperFiling, suggestPaperFolder } from './paperFolderService';
 import { getInboxExtractedDocumentText } from './inboxDocumentText';
 import { runLegacyDocumentAnalysisShadow } from './documentAnalysisShadowService';
@@ -138,6 +143,13 @@ function shouldSkipInvoiceRule(kind: ClassifiedDocumentKind, haystack: string): 
   return !hasStrongInvoiceSignals(haystack);
 }
 
+/** Skip legacy Mahnung/ZE when BA/employment docs lack a real payment demand. */
+function shouldSkipPaymentRule(kind: ClassifiedDocumentKind, haystack: string): boolean {
+  if (kind !== 'mahnung' && kind !== 'zahlungserinnerung') return false;
+  if (!hasEmploymentBaSignals(haystack)) return false;
+  return !hasStrongPaymentDemandEvidence(haystack);
+}
+
 const UPLOAD_KIND_MAP: Record<UploadDocumentKind, ClassifiedDocumentKind> = {
   auftrag: 'auftrag',
   zahlungserinnerung: 'zahlungserinnerung',
@@ -210,6 +222,7 @@ export function detectClassifiedKindWithReason(input: DocumentClassificationInpu
 
   for (const rule of CLASSIFICATION_RULES) {
     if (shouldSkipInvoiceRule(rule.kind, haystack)) continue;
+    if (shouldSkipPaymentRule(rule.kind, haystack)) continue;
     if (rule.pattern.test(haystack)) {
       return { kind: rule.kind, reasonKey: rule.reasonKey };
     }
@@ -421,10 +434,12 @@ export function classifyDocument(input: DocumentClassificationInput): DocumentCl
   const recognizedData = buildRecognizedData(classifiedKind, input);
   const sender =
     input.senderHint ??
+    recognizedData.Absender ??
     recognizedData.Lieferant ??
     recognizedData.Kunde ??
     recognizedData.Krankenkasse ??
-    'Unbekannter Absender';
+    recognizedData.Aussteller ??
+    UNKNOWN_SENDER_CANONICAL;
 
   const title =
     input.titleHint ??

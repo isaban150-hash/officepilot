@@ -38,7 +38,7 @@ const GERMAN_CORE_MARKERS = [
   'Neues Foto',
   'Dokument hinzufügen',
   'Abheften',
-  'Unbekannter Absender',
+  'Absender nicht eindeutig erkannt.',
   'Steuerberatung',
   'keine Rechts- oder Steuerberatung',
 ];

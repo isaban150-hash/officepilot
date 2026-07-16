@@ -67,8 +67,9 @@ export const PAYMENT_SCORING_CUTOVER = {
   minOcrScore: 0.65,
   minEvidenceRefs: 3,
   kindThresholds: {
-    mahnung: { minConfidence: 0.85, minMargin: 0.18 },
-    zahlungserinnerung: { minConfidence: 0.74, minMargin: 0.18 },
+    // Dual required features (marker + demand) raise the confidence denominator.
+    mahnung: { minConfidence: 0.72, minMargin: 0.18 },
+    zahlungserinnerung: { minConfidence: 0.70, minMargin: 0.18 },
   },
 } as const satisfies {
   enabled: boolean;
@@ -85,7 +86,8 @@ export type AuthorityCutoverKind =
   | 'bg_bau'
   | 'steuerbescheid'
   | 'krankenkasse'
-  | 'soka_bau';
+  | 'soka_bau'
+  | 'agentur_fuer_arbeit';
 
 export type AuthorityCutoverKindThresholds = {
   minConfidence: number;
@@ -94,7 +96,14 @@ export type AuthorityCutoverKindThresholds = {
 
 export const AUTHORITY_SCORING_CUTOVER = {
   enabled: true,
-  allowedKinds: ['finanzamt', 'bg_bau', 'steuerbescheid', 'krankenkasse', 'soka_bau'],
+  allowedKinds: [
+    'finanzamt',
+    'bg_bau',
+    'steuerbescheid',
+    'krankenkasse',
+    'soka_bau',
+    'agentur_fuer_arbeit',
+  ],
   minOcrScore: 0.65,
   minEvidenceRefs: 3,
   kindThresholds: {
@@ -103,6 +112,7 @@ export const AUTHORITY_SCORING_CUTOVER = {
     steuerbescheid: { minConfidence: 0.80, minMargin: 0.18 },
     krankenkasse: { minConfidence: 0.85, minMargin: 0.18 },
     soka_bau: { minConfidence: 0.85, minMargin: 0.20 },
+    agentur_fuer_arbeit: { minConfidence: 0.85, minMargin: 0.18 },
   },
 } as const satisfies {
   enabled: boolean;
@@ -365,12 +375,50 @@ const AUTHORITY_INVOICE_EXCLUSION_GUARD =
 const AUTHORITY_CONTRACT_EXCLUSION_GUARD =
   /\bwerkvertrag\b|\bsubunternehmer(?:vertrag)?\b|\bleistungsverzeichnis\b|\bbau-?subunternehmer\b|\bunternehmervertrag\b/i;
 
+/** Employment / Bundesagentur signals that must not become payment without a real demand. */
+const EMPLOYMENT_BA_EXCLUSION_PATTERN =
+  /arbeitsbescheinigung|arbeitgeberbescheinigung|bundesagentur|agentur\s+für\s+arbeit|arbeitsagentur|§\s*312|sgb\s*iii|arbeitgeber|arbeitnehmer|beschäftigungsverhältnis|versicherungsnummer/i;
+
+/** Clear payment-demand markers (Mahnung / ZE / Inkasso / Zahlungsaufforderung). */
+const STRONG_PAYMENT_MARKER_PATTERN =
+  /\b(?:\d+\.\s*)?mahnung\b|\binkasso\b|\bzahlungsaufforderung\b|\bzahlungserinnerung\b/i;
+
+/**
+ * Separate demand evidence — not satisfied by the marker token alone.
+ * Prevents BA Arbeitsbescheinigung + stray OCR "Mahnung" from paying through.
+ */
+const STRONG_PAYMENT_DEMAND_EVIDENCE_PATTERN =
+  /\b(?:offener\s+betrag|offene\s+forderung|bitte\s+(?:überweisen|zahlen|begleichen)|überweisen\s+sie|mahngebühr|forderungs(?:nummer|nr\.?)|rechnungs(?:nummer|nr\.?)|zu\s+zahlen)\b/i;
+
+export function hasEmploymentBaSignals(recognizedText: string): boolean {
+  return EMPLOYMENT_BA_EXCLUSION_PATTERN.test(recognizedText);
+}
+
+export function hasStrongPaymentDemandEvidence(recognizedText: string): boolean {
+  return (
+    STRONG_PAYMENT_MARKER_PATTERN.test(recognizedText) &&
+    STRONG_PAYMENT_DEMAND_EVIDENCE_PATTERN.test(recognizedText)
+  );
+}
+
+/**
+ * Block payment cutover for employment / BA documents unless a real Mahnung/ZE demand is present.
+ */
+export function hasPaymentCutoverEmploymentExclusion(recognizedText: string): boolean {
+  if (!hasEmploymentBaSignals(recognizedText)) {
+    return false;
+  }
+  return !hasStrongPaymentDemandEvidence(recognizedText);
+}
+
 const AUTHORITY_KIND_TEXT_GUARDS: Record<AuthorityCutoverKind, RegExp> = {
   finanzamt: /finanzamt|steuernummer|umsatzsteuer|lohnsteuer|steueramt/i,
   bg_bau: /\b(?:bg[\s-]?bau|berufsgenossenschaft\s+(?:der\s+)?bauwirtschaft)\b/i,
   steuerbescheid: /steuerbescheid|festsetzung|einkommensteuerbescheid/i,
   krankenkasse: /\bkrankenkasse\b|\bgesetzliche\s+krankenversicherung\b/i,
   soka_bau: /\bsoka[\s-]?bau\b|urlaubs-?\s*und\s*lohnausgleichskasse/i,
+  agentur_fuer_arbeit:
+    /arbeitsbescheinigung|arbeitgeberbescheinigung|bundesagentur|(?:bundes)?agentur\s+für\s+arbeit|arbeitsagentur|§\s*312|sgb\s*iii|beschäftigungsverhältnis/i,
 };
 
 export function hasAuthorityCutoverKindTextGuard(
@@ -674,6 +722,7 @@ export const OCR_ONLY_RECOGNIZED_DATA = {
     'steuerbescheid',
     'krankenkasse',
     'soka_bau',
+    'agentur_fuer_arbeit',
     'freistellungsbescheinigung',
     'unbedenklichkeitsbescheinigung',
     'werkvertrag',
