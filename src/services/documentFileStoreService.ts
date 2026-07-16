@@ -19,6 +19,7 @@ import {
 } from './storage/documentBlobIndexedDbService';
 import { getActiveStorageScope, type StorageScope } from './storage/storageScopeService';
 import * as persistenceService from './persistenceService';
+import { traceStep, traceStepEnd, traceStepStart } from './documentSaveTraceService';
 
 let fileRefs: DocumentFileRef[] = [];
 let fileBlobs: Record<string, string> = {};
@@ -212,11 +213,17 @@ export async function hasStoredOriginalDocumentFile(
 
 export async function storeDocumentFileFromCachedPayload(
   payload: CachedDocumentFilePayload,
-  options: { lifecycleIntent?: DocumentFileLifecycleIntent } = {},
+  options: { lifecycleIntent?: DocumentFileLifecycleIntent; saveTraceId?: string } = {},
 ): Promise<{ fileRef: DocumentFileRef; created: boolean }> {
+  const saveTraceId = options.saveTraceId;
+  const fileSize = payload.bytes.byteLength;
+  traceStepStart(saveTraceId, 'file_store_start', { fileSize });
+
   let contentHash: string;
   try {
+    traceStepStart(saveTraceId, 'hash_start', { fileSize });
     contentHash = await computeBufferContentHash(payload.bytes);
+    traceStepEnd(saveTraceId, 'hash_start', 'hash_done', { fileSize });
   } catch {
     throw new Error('hash_failed');
   }
@@ -228,6 +235,7 @@ export async function storeDocumentFileFromCachedPayload(
     if (!stored) {
       throw new DocumentBlobStorageError('blob_read_failed');
     }
+    traceStep(saveTraceId, 'file_ref_created', { fileSize: existing.fileSize, success: true });
     return { fileRef: existing, created: false };
   }
 
@@ -244,6 +252,7 @@ export async function storeDocumentFileFromCachedPayload(
   }
 
   try {
+    traceStepStart(saveTraceId, 'indexeddb_write_start', { fileSize: byteLength });
     await saveDocumentBlob({
       fileRefId,
       blob,
@@ -251,6 +260,9 @@ export async function storeDocumentFileFromCachedPayload(
       fileSize: byteLength,
       contentHash,
       createdAt,
+    });
+    traceStepEnd(saveTraceId, 'indexeddb_write_start', 'indexeddb_write_done', {
+      fileSize: byteLength,
     });
   } catch (error) {
     if (error instanceof DocumentBlobStorageError) {
@@ -260,11 +272,13 @@ export async function storeDocumentFileFromCachedPayload(
   }
 
   try {
+    traceStepStart(saveTraceId, 'file_verify_start', { fileSize: byteLength });
     await verifyStoredBlobMatchesExpected({
       fileRefId,
       expectedHash: contentHash,
       expectedByteLength: byteLength,
     });
+    traceStepEnd(saveTraceId, 'file_verify_start', 'file_verify_done', { fileSize: byteLength });
   } catch (error) {
     try {
       await deleteDocumentBlob(fileRefId);
@@ -294,6 +308,7 @@ export async function storeDocumentFileFromCachedPayload(
     ...lifecycleFields,
   };
   fileRefs = [...fileRefs, fileRef];
+  traceStep(saveTraceId, 'file_ref_created', { fileSize: byteLength, success: true });
   return { fileRef, created: true };
 }
 

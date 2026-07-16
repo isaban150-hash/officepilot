@@ -27,7 +27,7 @@ export type ExecutePendingDocumentDecisionResult =
 export async function executePendingDocumentDecision(
   pending: PendingDocumentIntake,
   decision: UserStorageDecision,
-  intakeOptions: CreateInboxFromUploadOptions = {},
+  intakeOptions: CreateInboxFromUploadOptions & { saveTraceId?: string } = {},
 ): Promise<ExecutePendingDocumentDecisionResult> {
   const validation = validateUserStorageDecision({
     decision,
@@ -60,6 +60,7 @@ export async function executePendingDocumentDecision(
   return confirmPendingDocumentIntake(pending, {
     ...intakeOptions,
     userDecision: decision,
+    saveTraceId: intakeOptions.saveTraceId,
   });
 }
 

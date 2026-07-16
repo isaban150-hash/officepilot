@@ -24,6 +24,12 @@ import {
   isNavigateExistingPendingDocumentDecision,
   isPendingDocumentDecisionResultIntake,
 } from '../services/pendingDocumentDecisionService';
+import {
+  finishDocumentSaveTrace,
+  startDocumentSaveTrace,
+  traceStep,
+  traceStepError,
+} from '../services/documentSaveTraceService';
 import type { UserStorageDecision } from '../types/userStorageDecision';
 
 export function DocumentUploadPage() {
@@ -92,13 +98,19 @@ export function DocumentUploadPage() {
       return;
     }
 
+    const saveTraceId = startDocumentSaveTrace('upload');
     confirmInFlightRef.current = true;
     setConfirmError(null);
     setIsConfirming(true);
 
     try {
+      traceStep(saveTraceId, 'execute_decision_start');
       const result = await executePendingDocumentDecision(pendingUpload, decision, {
         importSource: 'upload',
+        saveTraceId,
+      });
+      traceStep(saveTraceId, 'execute_decision_resolved', {
+        success: !('outcome' in result) ? result.success : true,
       });
 
       if (isDiscardedPendingDocumentDecision(result)) {
@@ -109,11 +121,13 @@ export function DocumentUploadPage() {
       if (isNavigateExistingPendingDocumentDecision(result)) {
         discardPendingDocumentIntake(pendingUpload);
         setPendingUpload(null);
+        traceStep(saveTraceId, 'navigation_start');
         if (result.match.type === 'inbox') {
           navigate(`/ablage/${result.match.id}`);
         } else {
           navigate(`/dokumente/${result.match.id}`);
         }
+        traceStep(saveTraceId, 'navigation_done');
         return;
       }
 
@@ -128,19 +142,28 @@ export function DocumentUploadPage() {
         discardPendingDocumentIntake(pendingUpload);
         setPendingUpload(null);
         showToast(translate('document.upload.duplicateDetected'));
+        traceStep(saveTraceId, 'navigation_start');
         if (result.existing?.type === 'inbox') {
           navigate(`/ablage/${result.existing.id}`);
         } else if (result.existing?.type === 'document') {
           navigate(`/dokumente/${result.existing.id}`);
         }
+        traceStep(saveTraceId, 'navigation_done');
         return;
       }
 
       const itemId = result.inboxItem.id;
       discardPendingDocumentIntake(pendingUpload);
       setPendingUpload(null);
+      traceStep(saveTraceId, 'navigation_start');
       handleUploadComplete(itemId);
+      traceStep(saveTraceId, 'navigation_done');
+    } catch (error) {
+      traceStepError(saveTraceId, 'execute_decision_rejected', error);
+      throw error;
     } finally {
+      traceStep(saveTraceId, 'finally_reset_loading');
+      finishDocumentSaveTrace(saveTraceId);
       confirmInFlightRef.current = false;
       setIsConfirming(false);
     }

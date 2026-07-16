@@ -27,6 +27,7 @@ import {
   type OcrPreviewSummary,
 } from './ocrDocumentService';
 import { validateUserStorageDecision } from './userStorageDecisionService';
+import { traceStep, traceStepStart } from './documentSaveTraceService';
 
 export interface PendingDocumentIntake {
   cachedFile: CachedDocumentFilePayload;
@@ -110,12 +111,21 @@ export async function processDocumentFileForPreview(
 
 export interface ConfirmPendingDocumentIntakeOptions extends CreateInboxFromUploadOptions {
   userDecision: PersistingUserStorageDecision;
+  /** Diagnostic only — never persisted on documents */
+  saveTraceId?: string;
 }
 
 export async function confirmPendingDocumentIntake(
   pending: PendingDocumentIntake,
   options: ConfirmPendingDocumentIntakeOptions,
 ): Promise<DocumentIntakeResult> {
+  const saveTraceId = options.saveTraceId;
+  traceStepStart(saveTraceId, 'confirm_pending_start', {
+    fileSize: pending.cachedFile.bytes.byteLength,
+    pageCount: pending.extraction.pageTexts?.length ?? 0,
+    textLength: pending.extraction.recognizedText.length,
+  });
+
   const validation = validateUserStorageDecision({
     decision: options.userDecision,
     recommendation: pending.storageRecommendation,
@@ -123,10 +133,21 @@ export async function confirmPendingDocumentIntake(
   });
 
   if (!validation.valid) {
+    traceStep(saveTraceId, 'intake_failure', {
+      success: false,
+      errorName: 'navigation_failed',
+      errorMessage: 'validation_invalid',
+    });
     return { success: false, error: 'navigation_failed' };
   }
 
   const recognizedText = pending.extraction.recognizedText.trim() || undefined;
+  traceStep(saveTraceId, 'cached_payload_loaded', {
+    fileSize: pending.cachedFile.bytes.byteLength,
+    pageCount: pending.extraction.pageTexts?.length ?? 0,
+    textLength: recognizedText?.length ?? 0,
+  });
+
   const intakeOptions: DocumentIntakeOptions = {
     ...options,
     sourceFileName: pending.cachedFile.fileName,
@@ -134,6 +155,7 @@ export async function confirmPendingDocumentIntake(
     pageTexts: pending.extraction.pageTexts,
     userDecision: options.userDecision,
     allowDuplicateIntake: options.userDecision === 'save_duplicate_anyway',
+    saveTraceId,
   };
 
   return intakeCachedDocumentFile(pending.cachedFile, intakeOptions);
