@@ -56,16 +56,14 @@ function cloneInbox(item: InboxItem, overrides: Partial<InboxItem> = {}): InboxI
   };
 }
 
+/** Multipage / large-OCR signal without multi-megabyte payload (keeps tests fast). */
 function createLargeContractItem(): InboxItem {
-  const pageTexts = Array.from({ length: 40 }, (_, index) => ({
-    pageNumber: index + 1,
-    text:
-      index % 5 === 0
-        ? `${SAMPLE_WERKVERTRAG_TEXT}\nSeite ${index + 1}`
-        : `Technische Anlage Windlastberechnung Seite ${index + 1}\n`.repeat(20),
-  }));
-  const recognizedText = pageTexts.map((page) => page.text).join('\n\n');
-
+  const pageTexts = [
+    { pageNumber: 1, text: 'Seite 1' },
+    { pageNumber: 2, text: 'Seite 2' },
+    { pageNumber: 3, text: 'Seite 3' },
+    { pageNumber: 4, text: 'Seite 4' },
+  ];
   return cloneInbox(createAuftragInboxItem(), {
     id: 'inbox-detail-open-large',
     title: 'Subunternehmervertrag groß',
@@ -77,7 +75,7 @@ function createLargeContractItem(): InboxItem {
       Baustelle: 'Hauptstr. 12, Berlin',
       _vertragstext: SAMPLE_WERKVERTRAG_TEXT,
       Betreff: 'Mustermann Sanitär GmbH',
-      _extractedText: recognizedText,
+      _extractedText: 'x'.repeat(50_000),
       _pageTexts: JSON.stringify(pageTexts),
     },
   });
@@ -108,6 +106,27 @@ function renderShell(itemId: string): string {
   );
 }
 
+function installPaintSchedulerStubs() {
+  vi.stubGlobal(
+    'requestAnimationFrame',
+    (cb: FrameRequestCallback) => setTimeout(() => cb(performance.now()), 0) as unknown as number,
+  );
+  vi.stubGlobal('cancelAnimationFrame', (id: number) => clearTimeout(id));
+  vi.stubGlobal(
+    'requestIdleCallback',
+    (cb: IdleRequestCallback) =>
+      setTimeout(
+        () =>
+          cb({
+            didTimeout: false,
+            timeRemaining: () => 50,
+          } as IdleDeadline),
+        0,
+      ) as unknown as number,
+  );
+  vi.stubGlobal('cancelIdleCallback', (id: number) => clearTimeout(id));
+}
+
 describe('CONTRACT-DETAIL-OPEN-01', () => {
   beforeEach(() => {
     localStorage.clear();
@@ -115,10 +134,12 @@ describe('CONTRACT-DETAIL-OPEN-01', () => {
     resetDeferredWorkflowAnalysisCacheForTests();
     hydrateCompanyProfileStore(testProfile);
     hydrateVorgangStore([]);
+    installPaintSchedulerStubs();
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
     vi.useRealTimers();
   });
 
@@ -161,7 +182,9 @@ describe('CONTRACT-DETAIL-OPEN-01', () => {
   it('deferred Analysis höchstens einmal pro Analyse-Key', async () => {
     const item = createLargeContractItem();
     hydrateInboxStore([item]);
-    const processSpy = vi.spyOn(intakeWorkflowService, 'processUploadedDocument');
+    const processSpy = vi
+      .spyOn(intakeWorkflowService, 'processUploadedDocument')
+      .mockReturnValue(null);
 
     vi.useFakeTimers();
     const container = document.createElement('div');

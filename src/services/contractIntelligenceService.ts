@@ -192,8 +192,18 @@ export function analyzeContractIntelligenceFromInbox(item: InboxItem): ContractI
   return analyzeContractIntelligenceFromText(recognizedText, pageTexts);
 }
 
-export function buildContractOrderProposal(item: InboxItem): ContractOrderProposal | null {
-  const intelligence = analyzeContractIntelligenceFromInbox(item);
+export function buildContractOrderProposal(
+  item: InboxItem,
+  /**
+   * When provided (including null), skips a second analyzeContractIntelligenceFromInbox.
+   * Omit to analyze from the inbox item (standalone callers / tests).
+   */
+  precomputedIntelligence?: ContractIntelligenceResult | null,
+): ContractOrderProposal | null {
+  const intelligence =
+    precomputedIntelligence !== undefined
+      ? precomputedIntelligence
+      : analyzeContractIntelligenceFromInbox(item);
   if (!intelligence || intelligence.positions.length === 0) return null;
 
   const fields = intelligence.contractFields;

@@ -4,6 +4,7 @@ import { Card, CardMeta, CardTitle, DataRow } from '../../ui/Card';
 import type { ContractOrderProposal, EnhancedDetectedOrderPosition } from '../../../types/documentIntelligence';
 import type { TranslationKey } from '../../../i18n';
 import {
+  buildContractPositionKey,
   buildDefaultContractPositionSelections,
   hasPositionMathConflict,
   isImportableLvPosition,
@@ -11,17 +12,15 @@ import {
   type ContractPositionSelectionState,
 } from '../../../services/contractPositionImportService';
 
+/** Keep first paint light — remaining rows load on demand. */
+export const CONTRACT_PROPOSAL_INITIAL_VISIBLE_ROWS = 30;
+
 interface ContractOrderProposalPanelProps {
   proposal: ContractOrderProposal;
   translate: (key: TranslationKey) => string;
   onConfirmImport: (selectedPositions: EnhancedDetectedOrderPosition[]) => void;
   onDiscard?: () => void;
   isCreating?: boolean;
-}
-
-interface ProposalRow {
-  id: string;
-  position: EnhancedDetectedOrderPosition;
 }
 
 function formatMoney(value: number | undefined): string {
@@ -44,23 +43,6 @@ function selectionLabelKey(state: ContractPositionSelectionState): TranslationKe
   }
 }
 
-function buildInitialRows(positions: EnhancedDetectedOrderPosition[]): ProposalRow[] {
-  return positions.map((position, index) => ({
-    id: `row-${index}-${position.positionNumber ?? 'x'}`,
-    position: { ...position },
-  }));
-}
-
-function buildInitialSelections(rows: ProposalRow[]): ContractPositionSelectionMap {
-  const byOriginalKey = buildDefaultContractPositionSelections(rows.map((row) => row.position));
-  const selections: ContractPositionSelectionMap = {};
-  for (const row of rows) {
-    const originalKey = `${row.position.positionNumber ?? ''}::${row.position.description.trim().toLowerCase()}`;
-    selections[row.id] = byOriginalKey[originalKey] ?? 'deselected';
-  }
-  return selections;
-}
-
 export function ContractOrderProposalPanel({
   proposal,
   translate,
@@ -69,47 +51,58 @@ export function ContractOrderProposalPanel({
   isCreating = false,
 }: ContractOrderProposalPanelProps) {
   const labelKey = proposal.intelligence.documentLabelKey as TranslationKey;
-  const [rows, setRows] = useState<ProposalRow[]>(() => buildInitialRows(proposal.positions));
-  const [selections, setSelections] = useState<ContractPositionSelectionMap>(() =>
-    buildInitialSelections(buildInitialRows(proposal.positions)),
+  const positions = proposal.positions;
+
+  const [visibleCount, setVisibleCount] = useState(() =>
+    Math.min(CONTRACT_PROPOSAL_INITIAL_VISIBLE_ROWS, positions.length),
   );
+  const [drafts, setDrafts] = useState<Record<string, EnhancedDetectedOrderPosition>>({});
+  const [selections, setSelections] = useState<ContractPositionSelectionMap>(() =>
+    buildDefaultContractPositionSelections(positions),
+  );
+
+  const resolvePosition = (original: EnhancedDetectedOrderPosition): EnhancedDetectedOrderPosition => {
+    const key = buildContractPositionKey(original);
+    return drafts[key] ?? original;
+  };
 
   const selectedCount = useMemo(
     () =>
-      rows.filter(
-        (row) => selections[row.id] === 'selected' && isImportableLvPosition(row.position),
-      ).length,
-    [rows, selections],
+      positions.filter((original) => {
+        const key = buildContractPositionKey(original);
+        const position = drafts[key] ?? original;
+        return selections[key] === 'selected' && isImportableLvPosition(position);
+      }).length,
+    [positions, drafts, selections],
   );
 
-  const setSelection = (id: string, state: ContractPositionSelectionState) => {
-    setSelections((current) => ({ ...current, [id]: state }));
+  const setSelection = (key: string, state: ContractPositionSelectionState) => {
+    setSelections((current) => ({ ...current, [key]: state }));
   };
 
   const updateDraft = (
-    id: string,
+    original: EnhancedDetectedOrderPosition,
     patch: Partial<Pick<EnhancedDetectedOrderPosition, 'description' | 'quantity' | 'unit' | 'unitPrice'>>,
   ) => {
-    setRows((current) =>
-      current.map((row) => {
-        if (row.id !== id) return row;
-        const next = { ...row.position, ...patch };
-        if (patch.quantity != null || patch.unitPrice != null) {
-          const quantity = patch.quantity ?? next.quantity;
-          const unitPrice = patch.unitPrice ?? next.unitPrice;
-          if (quantity > 0 && unitPrice > 0) {
-            next.lineTotal = Math.round(quantity * unitPrice * 100) / 100;
-          }
+    const key = buildContractPositionKey(original);
+    setDrafts((current) => {
+      const base = current[key] ?? { ...original };
+      const next = { ...base, ...patch };
+      if (patch.quantity != null || patch.unitPrice != null) {
+        const quantity = patch.quantity ?? next.quantity;
+        const unitPrice = patch.unitPrice ?? next.unitPrice;
+        if (quantity > 0 && unitPrice > 0) {
+          next.lineTotal = Math.round(quantity * unitPrice * 100) / 100;
         }
-        return { ...row, position: next };
-      }),
-    );
+      }
+      return { ...current, [key]: next };
+    });
   };
 
   const handleConfirm = () => {
-    const selected = rows
-      .filter((row) => selections[row.id] === 'selected')
-      .map((row) => row.position)
+    const selected = positions
+      .filter((original) => selections[buildContractPositionKey(original)] === 'selected')
+      .map((original) => resolvePosition(original))
       .filter((position) => isImportableLvPosition(position));
     onConfirmImport(selected);
   };
@@ -117,24 +110,29 @@ export function ContractOrderProposalPanel({
   const handleSelectAllSafe = () => {
     setSelections((current) => {
       const next = { ...current };
-      for (const row of rows) {
-        if (!isImportableLvPosition(row.position)) {
-          next[row.id] = 'rejected';
+      for (const original of positions) {
+        const key = buildContractPositionKey(original);
+        const position = drafts[key] ?? original;
+        if (!isImportableLvPosition(position)) {
+          next[key] = 'rejected';
           continue;
         }
-        if (row.position.reviewStatus === 'review_required' || hasPositionMathConflict(row.position)) {
-          if (next[row.id] !== 'selected' && next[row.id] !== 'rejected') {
-            next[row.id] = 'needs_review';
+        if (position.reviewStatus === 'review_required' || hasPositionMathConflict(position)) {
+          if (next[key] !== 'selected' && next[key] !== 'rejected') {
+            next[key] = 'needs_review';
           }
           continue;
         }
-        if (next[row.id] !== 'rejected') {
-          next[row.id] = 'selected';
+        if (next[key] !== 'rejected') {
+          next[key] = 'selected';
         }
       }
       return next;
     });
   };
+
+  const visiblePositions = positions.slice(0, visibleCount);
+  const hasMore = visibleCount < positions.length;
 
   return (
     <Card className="contract-order-proposal" data-testid="contract-order-proposal">
@@ -212,9 +210,10 @@ export function ContractOrderProposalPanel({
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => {
-              const { position } = row;
-              const state = selections[row.id] ?? 'deselected';
+            {visiblePositions.map((original) => {
+              const key = buildContractPositionKey(original);
+              const position = drafts[key] ?? original;
+              const state = selections[key] ?? 'deselected';
               const checked = state === 'selected';
               const mathConflict = hasPositionMathConflict(position);
               const importable = isImportableLvPosition(position);
@@ -222,7 +221,7 @@ export function ContractOrderProposalPanel({
 
               return (
                 <tr
-                  key={row.id}
+                  key={key}
                   data-testid={`contract-position-row-${position.positionNumber ?? 'x'}`}
                   data-selection={state}
                   className={
@@ -242,11 +241,11 @@ export function ContractOrderProposalPanel({
                       data-testid={`contract-position-select-${position.positionNumber ?? 'x'}`}
                       onChange={(event) => {
                         if (event.target.checked) {
-                          setSelection(row.id, 'selected');
+                          setSelection(key, 'selected');
                         } else if (position.reviewStatus === 'review_required' || mathConflict) {
-                          setSelection(row.id, 'needs_review');
+                          setSelection(key, 'needs_review');
                         } else {
-                          setSelection(row.id, 'deselected');
+                          setSelection(key, 'deselected');
                         }
                       }}
                     />
@@ -263,7 +262,7 @@ export function ContractOrderProposalPanel({
                       aria-label={translate('documentIntelligence.table.quantity')}
                       onChange={(event) => {
                         const quantity = Number(event.target.value);
-                        updateDraft(row.id, {
+                        updateDraft(original, {
                           quantity: Number.isFinite(quantity) ? quantity : 0,
                         });
                       }}
@@ -276,7 +275,7 @@ export function ContractOrderProposalPanel({
                       value={position.unit || ''}
                       disabled={state === 'rejected'}
                       aria-label={translate('documentIntelligence.table.unit')}
-                      onChange={(event) => updateDraft(row.id, { unit: event.target.value })}
+                      onChange={(event) => updateDraft(original, { unit: event.target.value })}
                     />
                   </td>
                   <td>
@@ -286,7 +285,7 @@ export function ContractOrderProposalPanel({
                       value={position.description}
                       disabled={state === 'rejected'}
                       aria-label={translate('documentIntelligence.table.description')}
-                      onChange={(event) => updateDraft(row.id, { description: event.target.value })}
+                      onChange={(event) => updateDraft(original, { description: event.target.value })}
                     />
                     {position.sourcePage != null && (
                       <span className="contract-order-proposal__meta">
@@ -308,7 +307,7 @@ export function ContractOrderProposalPanel({
                       aria-label={translate('documentIntelligence.table.unitPrice')}
                       onChange={(event) => {
                         const unitPrice = Number(event.target.value);
-                        updateDraft(row.id, {
+                        updateDraft(original, {
                           unitPrice: Number.isFinite(unitPrice) ? unitPrice : 0,
                         });
                       }}
@@ -345,7 +344,7 @@ export function ContractOrderProposalPanel({
                         type="button"
                         className="contract-order-proposal__reject"
                         data-testid={`contract-position-reject-${position.positionNumber ?? 'x'}`}
-                        onClick={() => setSelection(row.id, 'rejected')}
+                        onClick={() => setSelection(key, 'rejected')}
                       >
                         {translate('documentIntelligence.action.rejectPosition')}
                       </button>
@@ -356,6 +355,16 @@ export function ContractOrderProposalPanel({
             })}
           </tbody>
         </table>
+        {hasMore ? (
+          <Button
+            variant="outline"
+            fullWidth
+            data-testid="contract-proposal-show-more"
+            onClick={() => setVisibleCount(positions.length)}
+          >
+            {translate('common.showMore')} ({positions.length - visibleCount})
+          </Button>
+        ) : null}
       </div>
 
       <div className="contract-order-proposal__actions">

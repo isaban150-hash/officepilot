@@ -279,8 +279,9 @@ export function processUploadedDocument(
       ? mapLetterExplanation(getLetterExplanation(item)!)
       : null;
   const contractAnalysis = analyzeContractFromInbox(item);
+  // Intelligence once — proposal reuses the same result (no second BOQ/JSON pass).
   const contractIntelligence = analyzeContractIntelligenceFromInbox(item);
-  const contractOrderProposal = buildContractOrderProposal(item);
+  const contractOrderProposal = buildContractOrderProposal(item, contractIntelligence);
   const suggestedVorgang = getSuggestedVorgangForItem(item) ?? classification.suggestedVorgang ?? null;
   const materialDefault = getCachedSetup()?.materialStandard ?? 'unclear';
   const draft = buildVorgangDraftFromInbox(item, materialDefault);
@@ -294,7 +295,11 @@ export function processUploadedDocument(
   const suggestedTasks = collectSuggestedTasks(item, contractAnalysis);
   const requiredDocuments = contractAnalysis.isContract ? contractAnalysis.requiredDocuments : [];
   const warnings = buildWarnings(item, true, classification);
-  const understanding = buildUnderstandingFromItem(item, classification);
+  const understanding = buildUnderstandingFromItem(
+    item,
+    classification,
+    contractIntelligence,
+  );
   const resolvedKind =
     contractIntelligence?.classifiedKind && contractIntelligence.positions.length > 0
       ? contractIntelligence.classifiedKind

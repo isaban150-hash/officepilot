@@ -7,6 +7,7 @@ import type {
   InboxItem,
 } from '../types/models';
 import { extractFieldsWithConfidence, listUncertainFieldKeys, toConfidentPlainFields } from './documentFieldExtractionService';
+import type { ContractIntelligenceResult } from '../types/documentIntelligence';
 import { analyzeContractIntelligenceFromInbox } from './contractIntelligenceService';
 import { formatGermanMoney } from './documentAmountExtractionService';
 import { getInboxExtractedDocumentText } from './inboxDocumentText';
@@ -30,6 +31,8 @@ export function buildDocumentUnderstandingSummary(
   options: {
     recognizedText?: string;
     classification?: DocumentClassificationResult | null;
+    /** When set (including null), skips a second contract-intelligence pass. */
+    contractIntelligence?: ContractIntelligenceResult | null;
   } = {},
 ): DocumentUnderstandingSummary {
   const text = resolveText(item, options.recognizedText);
@@ -37,7 +40,10 @@ export function buildDocumentUnderstandingSummary(
   const fieldsWithConfidence = extractFieldsWithConfidence(text);
   const extracted = toConfidentPlainFields(fieldsWithConfidence);
   const uncertainFields = listUncertainFieldKeys(fieldsWithConfidence);
-  const intelligence = analyzeContractIntelligenceFromInbox(item);
+  const intelligence =
+    options.contractIntelligence !== undefined
+      ? options.contractIntelligence
+      : analyzeContractIntelligenceFromInbox(item);
   const resolvedAmount =
     intelligence?.contractTotalNet?.status === 'confirmed' && intelligence.contractTotalNet.value !== undefined
       ? formatGermanMoney(intelligence.contractTotalNet.value)
@@ -129,8 +135,12 @@ export function buildDocumentAiActions(
 export function buildUnderstandingFromItem(
   item: InboxItem,
   classification?: DocumentClassificationResult | null,
+  contractIntelligence?: ContractIntelligenceResult | null,
 ): { summary: DocumentUnderstandingSummary; actions: DocumentAiAction[] } {
-  const summary = buildDocumentUnderstandingSummary(item, { classification });
+  const summary = buildDocumentUnderstandingSummary(item, {
+    classification,
+    contractIntelligence,
+  });
   const kind = item.classifiedKind ?? classification?.classifiedKind ?? 'sonstiges';
   const actions = buildDocumentAiActions(kind, summary, {
     paymentDemand: classification?.documentProfile?.paymentDemand,

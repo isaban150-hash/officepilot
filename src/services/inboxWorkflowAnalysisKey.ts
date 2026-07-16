@@ -28,32 +28,39 @@ export function resetDeferredWorkflowAnalysisCacheForTests(): void {
   deferredDecisionCache.clear();
 }
 
+const LARGE_TEXT_THRESHOLD = 50_000;
+
 /**
- * Light multi-page signal without JSON.parse of full `_pageTexts`.
+ * Light multi-page / large-OCR signal without JSON.parse of full `_pageTexts`.
  * Used to defer heavy contract/LV analysis until after first paint.
  */
 export function itemNeedsDeferredWorkflowAnalysis(
   item: Pick<InboxItem, 'id' | 'recognizedData'>,
 ): boolean {
   const raw = item.recognizedData._pageTexts;
-  if (!raw || typeof raw !== 'string') return false;
+  const extracted = item.recognizedData._extractedText;
+  const pageLen = typeof raw === 'string' ? raw.length : 0;
+  const extractedLen = typeof extracted === 'string' ? extracted.length : 0;
 
-  const cacheKey = `${item.id}:${raw.length}`;
+  const cacheKey = `${item.id}:${pageLen}:${extractedLen}`;
   const cached = deferredDecisionCache.get(cacheKey);
   if (cached !== undefined) return cached;
 
-  // Scan for page markers instead of parsing the whole OCR payload.
-  let pageMarkers = 0;
-  let from = 0;
-  while (pageMarkers <= 2) {
-    const next = raw.indexOf('"pageNumber"', from);
-    if (next === -1) break;
-    pageMarkers += 1;
-    from = next + 12;
+  let needsDeferred = extractedLen >= LARGE_TEXT_THRESHOLD;
+
+  if (!needsDeferred && typeof raw === 'string' && raw.length > 0) {
+    // Scan for page markers instead of parsing the whole OCR payload.
+    let pageMarkers = 0;
+    let from = 0;
+    while (pageMarkers <= 2) {
+      const next = raw.indexOf('"pageNumber"', from);
+      if (next === -1) break;
+      pageMarkers += 1;
+      from = next + 12;
+    }
+    needsDeferred = pageMarkers > 2 || raw.length >= LARGE_TEXT_THRESHOLD;
   }
 
-  // Large OCR blobs are also deferred even with few markers.
-  const needsDeferred = pageMarkers > 2 || raw.length >= 50_000;
   deferredDecisionCache.set(cacheKey, needsDeferred);
   return needsDeferred;
 }

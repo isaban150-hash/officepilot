@@ -69,6 +69,7 @@ import {
   buildInboxWorkflowAnalysisKey,
   itemNeedsDeferredWorkflowAnalysis,
 } from '../services/inboxWorkflowAnalysisKey';
+import { scheduleAfterPaint } from '../services/scheduleAfterPaint';
 import {
   applyOfficeActionResult,
   executeContractAction,
@@ -157,7 +158,7 @@ export function EingangDetailPage() {
     return processUploadedDocument(item.id);
   }, [workflowAnalysisKey, needsDeferredAnalysis]);
 
-  // Exactly one deferred heavy analysis path for multi-page contracts — after first paint.
+  // Heavy analysis only after paint (double rAF + idle) — never setTimeout(0) alone.
   useEffect(() => {
     if (!item || !needsDeferredAnalysis) {
       setDeferredWorkflow(null);
@@ -169,7 +170,8 @@ export function EingangDetailPage() {
     setDeferredStatus('loading');
     setDeferredWorkflow(null);
 
-    const timer = window.setTimeout(() => {
+    const cancelSchedule = scheduleAfterPaint(() => {
+      if (cancelled) return;
       try {
         const result = processUploadedDocument(item.id);
         if (cancelled) return;
@@ -180,11 +182,11 @@ export function EingangDetailPage() {
         setDeferredWorkflow(null);
         setDeferredStatus('error');
       }
-    }, 0);
+    });
 
     return () => {
       cancelled = true;
-      window.clearTimeout(timer);
+      cancelSchedule();
     };
   }, [workflowAnalysisKey, needsDeferredAnalysis, analysisRetryToken]);
 
