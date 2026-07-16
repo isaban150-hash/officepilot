@@ -6,6 +6,7 @@ import { SidebarNav } from './SidebarNav';
 import { UserMenu } from './UserMenu';
 import { GlobalSearchBar } from '../search/GlobalSearchBar';
 import { Toast } from '../ui/Card';
+import { SafariResumeDebugOverlay } from '../system/SafariResumeDebugOverlay';
 import { useApp } from '../../context/AppContext';
 
 export function AppShell() {
@@ -41,6 +42,7 @@ export function AppShell() {
       {toast && (
         <Toast message={toast} onClose={clearToast} closeLabel={translate('common.close')} />
       )}
+      <SafariResumeDebugOverlay />
     </div>
   );
 }
