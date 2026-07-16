@@ -120,10 +120,11 @@ describe('finalizeInvoiceDraft', () => {
     const draft = buildSchlussrechnungDraft('v-test-1', testSetup)!;
     draft.positions[0].quantity = 5;
 
-    const invoice = finalizeInvoiceDraft('v-test-1', draft, testSetup);
-    expect(invoice).not.toBeNull();
-    expect(invoice!.positions).toHaveLength(1);
-    expect(invoice!.positions[0]).toMatchObject({
+    const result = finalizeInvoiceDraft('v-test-1', draft, testSetup);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.invoice.positions).toHaveLength(1);
+    expect(result.invoice.positions[0]).toMatchObject({
       orderPositionId: 'op-test-1',
       quantity: 5,
       unitPrice: 65,
@@ -312,17 +313,18 @@ describe('finalizeInvoiceDraft', () => {
     const draft = buildAbschlagDraft('v-test-1', testSetup);
     expect(draft).not.toBeNull();
 
-    const invoice = finalizeInvoiceDraft('v-test-1', {
+    const result = finalizeInvoiceDraft('v-test-1', {
       ...draft!,
       positions: draft!.positions.map((p) => ({ ...p, quantity: 1 })),
     }, testSetup);
 
-    expect(invoice).not.toBeNull();
-    expect(invoice!.number).toMatch(/^\d{4}-\d{4}$/);
-    expect(invoice!.invoiceSequenceNumber).toBe(1);
-    expect(invoice!.companySnapshot?.companyName).toBe('Snapshot GmbH');
-    expect(invoice!.customerSnapshot?.name).toBe('Test Kunde');
-    expect(invoice!.issueDate).toBeTruthy();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.invoice.number).toMatch(/^\d{4}-\d{4}$/);
+    expect(result.invoice.invoiceSequenceNumber).toBe(1);
+    expect(result.invoice.companySnapshot?.companyName).toBe('Snapshot GmbH');
+    expect(result.invoice.customerSnapshot?.name).toBe('Test Kunde');
+    expect(result.invoice.issueDate).toBeTruthy();
   });
 
   it('keeps invoice snapshot when company profile changes afterwards', () => {
@@ -330,9 +332,9 @@ describe('finalizeInvoiceDraft', () => {
     hydrateCompanyProfileStore({
       companyName: 'Alt GmbH',
       legalForm: '',
-      street: '',
-      zip: '',
-      city: '',
+      street: 'Altstr. 1',
+      zip: '10115',
+      city: 'Berlin',
       country: 'Deutschland',
       contactPerson: '',
       phone: '',
@@ -350,15 +352,17 @@ describe('finalizeInvoiceDraft', () => {
     });
 
     const draft = buildAbschlagDraft('v-test-1', testSetup);
-    const invoice = finalizeInvoiceDraft('v-test-1', {
+    const result = finalizeInvoiceDraft('v-test-1', {
       ...draft!,
       positions: draft!.positions.map((p) => ({ ...p, quantity: 1 })),
     }, testSetup);
 
     updateCompanyProfile({ companyName: 'Neu GmbH' });
     const saved = getVorgangById('v-test-1')?.invoices[0];
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
     expect(saved?.companySnapshot?.companyName).toBe('Alt GmbH');
-    expect(invoice?.number).toBe(saved?.number);
+    expect(result.invoice.number).toBe(saved?.number);
   });
 
   it('keeps legacy invoices compatible without snapshots', () => {

@@ -156,11 +156,12 @@ describe('finalizeInvoiceDraft archive integration', () => {
     expect(draft).not.toBeNull();
 
     draft!.positions[0].quantity = 4;
-    const invoice = finalizeInvoiceDraft('v-test-1', draft!, testSetup);
+    const result = finalizeInvoiceDraft('v-test-1', draft!, testSetup);
 
-    expect(invoice).not.toBeNull();
-    expect(invoice!.archiveDocumentId).toBeTruthy();
-    expect(getDocumentByLinkedInvoiceId(invoice!.id)?.category).toBe('ausgangsrechnung');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.invoice.archiveDocumentId).toBeTruthy();
+    expect(getDocumentByLinkedInvoiceId(result.invoice.id)?.category).toBe('ausgangsrechnung');
   });
 });
 

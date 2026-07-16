@@ -1,3 +1,5 @@
+import { useApp } from '../../context/AppContext';
+import { INVOICE_DRAFT_LABEL } from '../../services/invoiceNumberService';
 import type { InvoicePrintModel } from '../../types/models';
 import { formatInvoiceDate } from '../../services/invoicePrintModel';
 
@@ -14,8 +16,15 @@ function formatCompanyLine(model: InvoicePrintModel): string {
 }
 
 export function InvoiceHeader({ model }: Props) {
+  const { translate } = useApp();
   const { company } = model;
   const companyLine = formatCompanyLine(model);
+  const numberLabel =
+    !model.invoiceNumber ||
+    model.invoiceNumber === INVOICE_DRAFT_LABEL ||
+    model.invoiceNumber === 'ENTWURF'
+      ? translate('invoice.draftNumberLabel')
+      : model.invoiceNumber;
 
   return (
     <header className="invoice-header">
@@ -45,8 +54,8 @@ export function InvoiceHeader({ model }: Props) {
         <h1 className="invoice-header__title">{model.documentTitle}</h1>
         <dl className="invoice-header__facts">
           <div>
-            <dt>Rechnungsnummer</dt>
-            <dd>{model.invoiceNumber}</dd>
+            <dt>{translate('invoice.number')}</dt>
+            <dd data-testid="invoice-document-number">{numberLabel}</dd>
           </div>
           <div>
             <dt>Rechnungsdatum</dt>

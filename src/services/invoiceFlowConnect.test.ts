@@ -206,10 +206,26 @@ describe('invoice flow connect', () => {
     expect(draft.companySnapshot.vatId).toBe(companyProfile.vatId);
     expect(draft.companySnapshot.iban).toBe(companyProfile.iban);
 
-    const invoice = finalizeInvoiceDraft(created.vorgang.id, draft, testSetup);
-    expect(invoice?.companySnapshot?.logoDataUrl).toBe(companyProfile.logoDataUrl);
-    expect(invoice?.paymentStatus).toBe('offen');
-    expect(invoice?.customerSnapshot?.name).toBeTruthy();
+    const withAddress = {
+      ...draft,
+      customerBilling: {
+        ...draft.customerBilling,
+        name: draft.customerBilling.name || 'Müller Bau GmbH',
+        street: draft.customerBilling.street || 'Hauptstr. 12',
+        zip: draft.customerBilling.zip || '10115',
+        city: draft.customerBilling.city || 'Berlin',
+      },
+      positions: draft.positions.map((p) => ({
+        ...p,
+        quantity: p.quantity > 0 ? p.quantity : 1,
+      })),
+    };
+    const result = finalizeInvoiceDraft(created.vorgang.id, withAddress, testSetup);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.invoice.companySnapshot?.logoDataUrl).toBe(companyProfile.logoDataUrl);
+    expect(result.invoice.paymentStatus).toBe('offen');
+    expect(result.invoice.customerSnapshot?.name).toBeTruthy();
   });
 
   it('funktioniert ohne Logo ohne Fehler', () => {

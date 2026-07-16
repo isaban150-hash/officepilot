@@ -37,10 +37,28 @@ import {
   usesAbschlagDeductions,
   usesAbschlagNumber,
 } from './invoiceTypeService';
+import { getAbschlagDeductionsTotal } from './invoiceDeductions';
+import {
+  fromCents,
+  lineTotalCents,
+  lineTotalMoney,
+  roundMoney,
+  sumCents,
+  taxCentsFromNet,
+  toCents,
+} from './invoiceMoney';
+import {
+  validateInvoiceDraftForApproval,
+  type InvoiceApprovalOptions,
+  type InvoiceValidationResult,
+} from './invoiceValidationService';
 
 const COUNTED_STATUSES: VorgangInvoice['status'][] = ['vorbereitet', 'versendet'];
 
 export { buildLegalNotices, getTaxRateForStatus } from './invoiceTaxService';
+export { getAbschlagDeductionsTotal } from './invoiceDeductions';
+export { validateInvoiceDraftForApproval } from './invoiceValidationService';
+export { INVOICE_DRAFT_LABEL } from './invoiceNumberService';
 
 export function getVorgangCustomerBilling(vorgang: Vorgang): CustomerBilling {
   if (vorgang.customerBilling) {
@@ -309,18 +327,37 @@ export function updateInvoiceDraftMetadata(
   return next;
 }
 
-export function getAbschlagDeductionsTotal(deductions: AbschlagDeduction[]): number {
-  return deductions.reduce((sum, item) => sum + item.amount, 0);
+export function calculateInvoiceTotals(draft: InvoiceDraft, setup: CompanySetup): InvoiceTotals {
+  const lineCents = draft.positions
+    .filter((p) => p.quantity > 0)
+    .map((p) => lineTotalCents(p.quantity, p.unitPrice))
+    .filter((cents) => Number.isFinite(cents));
+  const subtotalCents = sumCents(lineCents);
+  const taxRate = getTaxRateForStatus(draft.taxStatus ?? setup.taxStatus);
+  const taxCents = taxCentsFromNet(subtotalCents, taxRate);
+  const grossCents = subtotalCents + taxCents;
+  const deductionsCents = toCents(getAbschlagDeductionsTotal(draft.previousAbschlagDeductions));
+  const safeDeductions = Number.isFinite(deductionsCents) ? deductionsCents : 0;
+  // Schluss/Abschlag: keep prior clamp so over-deduction does not go negative.
+  const amountDueCents = usesAbschlagDeductions(draft.type)
+    ? Math.max(0, grossCents - safeDeductions)
+    : grossCents - safeDeductions;
+
+  return {
+    subtotal: fromCents(subtotalCents),
+    taxRate,
+    tax: fromCents(taxCents),
+    total: fromCents(amountDueCents),
+  };
 }
 
-export function calculateInvoiceTotals(draft: InvoiceDraft, setup: CompanySetup): InvoiceTotals {
-  const subtotal = draft.positions.reduce((sum, p) => sum + p.quantity * p.unitPrice, 0);
-  const taxRate = getTaxRateForStatus(draft.taxStatus ?? setup.taxStatus);
-  const tax = subtotal * (taxRate / 100);
-  const gross = subtotal + tax;
-  const deductions = getAbschlagDeductionsTotal(draft.previousAbschlagDeductions);
-  return { subtotal, taxRate, tax, total: Math.max(0, gross - deductions) };
-}
+export type FinalizeInvoiceResult =
+  | { ok: true; invoice: VorgangInvoice }
+  | {
+      ok: false;
+      reason: 'validation_failed' | 'vorgang_missing' | 'save_failed';
+      validation?: InvoiceValidationResult;
+    };
 
 export function getOverbillingWarnings(draft: InvoiceDraft): string[] {
   return draft.positions
@@ -343,9 +380,38 @@ export function finalizeInvoiceDraft(
   vorgangId: string,
   draft: InvoiceDraft,
   setup: CompanySetup,
-): VorgangInvoice | null {
+  options: InvoiceApprovalOptions = {},
+): FinalizeInvoiceResult {
+  const vorgang = getVorgangById(vorgangId);
+  if (!vorgang) {
+    return { ok: false, reason: 'vorgang_missing' };
+  }
+
+  if (draft.type === 'rechnung' || draft.taxStatus === 'reverse_charge_13b') {
+    const validation = validateInvoiceDraftForApproval(
+      draft,
+      draft.companySnapshot,
+      vorgang,
+      options,
+    );
+    // Full gate for normal invoices; §13b confirmation required on any type.
+    const blockers =
+      draft.type === 'rechnung'
+        ? validation.blockingErrors
+        : validation.blockingErrors.filter((e) => e.code === 'reverse_charge_unconfirmed');
+    if (blockers.length > 0) {
+      return {
+        ok: false,
+        reason: 'validation_failed',
+        validation: { ...validation, blockingErrors: blockers },
+      };
+    }
+  }
+
   const totals = calculateInvoiceTotals(draft, setup);
   const now = new Date().toISOString();
+
+  // Reserve number only after validation and vorgang existence checks.
   const reservation = reserveNextInvoiceNumber();
 
   const positions: VorgangInvoiceLine[] = draft.positions
@@ -357,8 +423,8 @@ export function finalizeInvoiceDraft(
       quantity: p.quantity,
       unit: p.unit,
       unitLabel: p.unitLabel,
-      unitPrice: p.unitPrice,
-      lineTotal: p.quantity * p.unitPrice,
+      unitPrice: roundMoney(p.unitPrice),
+      lineTotal: lineTotalMoney(p.quantity, p.unitPrice),
     }));
 
   const issueDate = draft.issueDate || now.slice(0, 10);
@@ -395,15 +461,15 @@ export function finalizeInvoiceDraft(
   };
 
   const saved = addInvoiceToVorgang(vorgangId, invoice);
-  if (!saved) return null;
-
-  const vorgang = getVorgangById(vorgangId);
-  if (!vorgang) return saved;
+  if (!saved) {
+    // Number was reserved; do not invent a silent invoice. Caller surfaces save_failed.
+    return { ok: false, reason: 'save_failed' };
+  }
 
   const archiveResult = archiveOutgoingInvoice(vorgangId, saved, setup.companyName);
   if (archiveResult.success) {
-    return archiveResult.invoice;
+    return { ok: true, invoice: archiveResult.invoice };
   }
 
-  return saved;
+  return { ok: true, invoice: saved };
 }

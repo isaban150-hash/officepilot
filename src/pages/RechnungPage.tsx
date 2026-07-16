@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { InvoiceDocumentView } from '../components/invoice/InvoiceDocumentView';
 import { InvoiceDraftEditForm } from '../components/invoice/InvoiceDraftEditForm';
@@ -15,6 +15,7 @@ import {
   updateDraftPositionQuantity,
   updateInvoiceDraftMetadata,
   updateInvoiceDraftTaxStatus,
+  validateInvoiceDraftForApproval,
 } from '../services/invoiceService';
 import { buildInvoicePrintModel } from '../services/invoicePrintModel';
 import {
@@ -52,6 +53,11 @@ export function RechnungPage() {
   const [step, setStep] = useState<RechnungStep>('positions');
   const [showOverbillingConfirm, setShowOverbillingConfirm] = useState(false);
   const [applyContractSkonto, setApplyContractSkonto] = useState(false);
+  const [reverseCharge13bConfirmed, setReverseCharge13bConfirmed] = useState(false);
+  const [approving, setApproving] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<TranslationKey[]>([]);
+  const [validationWarnings, setValidationWarnings] = useState<TranslationKey[]>([]);
+  const approveLockRef = useRef(false);
 
   const vorgang = id ? getVorgangById(id) : undefined;
   const contractSkontoOffer = useMemo(
@@ -75,6 +81,11 @@ export function RechnungPage() {
     setDraft(next);
     setStep('positions');
     setApplyContractSkonto(false);
+    setReverseCharge13bConfirmed(false);
+    setValidationErrors([]);
+    setValidationWarnings([]);
+    approveLockRef.current = false;
+    setApproving(false);
   }, [id, invoiceType, setup]);
 
   useEffect(() => {
@@ -144,6 +155,9 @@ export function RechnungPage() {
   };
 
   const handleTaxChange = (taxStatus: TaxStatus) => {
+    if (taxStatus !== 'reverse_charge_13b') {
+      setReverseCharge13bConfirmed(false);
+    }
     setDraft((prev) => (prev ? updateInvoiceDraftTaxStatus(prev, taxStatus) : prev));
   };
 
@@ -156,27 +170,59 @@ export function RechnungPage() {
     setDraft((prev) => (prev ? updateInvoiceDraftMetadata(prev, changes) : prev));
   };
 
-  const saveDraft = () => {
-    const result = finalizeInvoiceDraft(id, draft, setup);
-    if (!result) {
-      showToast(translate('invoice.saveFailed'));
+  const runApproval = () => {
+    if (!id || !draft || approveLockRef.current || approving) return;
+    approveLockRef.current = true;
+    setApproving(true);
+
+    const validation = validateInvoiceDraftForApproval(
+      draft,
+      draft.companySnapshot,
+      vorgang,
+      { reverseCharge13bConfirmed },
+    );
+
+    const blockers =
+      draft.type === 'rechnung'
+        ? validation.blockingErrors
+        : validation.blockingErrors.filter((e) => e.code === 'reverse_charge_unconfirmed');
+
+    setValidationWarnings(validation.warnings.map((w) => w.messageKey));
+    if (blockers.length > 0) {
+      setValidationErrors(blockers.map((e) => e.messageKey));
+      approveLockRef.current = false;
+      setApproving(false);
+      showToast(translate('invoice.approve.blocked'));
       return;
     }
-    showToast(translate('invoice.saved'));
-    navigate(`/vorgaenge/${id}`);
+
+    setValidationErrors([]);
+    const result = finalizeInvoiceDraft(id, draft, setup, { reverseCharge13bConfirmed });
+    if (!result.ok) {
+      if (result.reason === 'validation_failed' && result.validation) {
+        setValidationErrors(result.validation.blockingErrors.map((e) => e.messageKey));
+      }
+      showToast(translate('invoice.approve.failed'));
+      approveLockRef.current = false;
+      setApproving(false);
+      return;
+    }
+
+    showToast(translate('invoice.approved'));
+    navigate(`/vorgaenge/${id}/rechnungen/${result.invoice.id}`);
   };
 
-  const handleSave = () => {
+  const handleApprove = () => {
     if (overbillingWarnings.length > 0) {
       setShowOverbillingConfirm(true);
       return;
     }
-    saveDraft();
+    runApproval();
   };
 
   const handleConfirmOverbilling = () => {
     setShowOverbillingConfirm(false);
-    saveDraft();
+    runApproval();
   };
 
   const showMaterialHint =
@@ -205,7 +251,7 @@ export function RechnungPage() {
   };
 
   return (
-    <div className="page">
+    <div className="page" data-testid="rechnung-page">
       <button type="button" className="back-link" onClick={handleBack}>
         ← {translate('common.back')}
       </button>
@@ -357,18 +403,26 @@ export function RechnungPage() {
             <Card>
               <DataRow
                 label={translate('invoice.subtotal')}
-                value={`${totals.subtotal.toLocaleString('de-DE')} €`}
+                value={`${totals.subtotal.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`}
               />
               <DataRow label={translate('invoice.taxStatus')} value={translate(taxKey)} />
               {totals.taxRate > 0 && (
                 <DataRow
                   label={`${translate('invoice.tax')} (${totals.taxRate} %)`}
-                  value={`${totals.tax.toLocaleString('de-DE')} €`}
+                  value={`${totals.tax.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`}
                 />
               )}
               <DataRow
                 label={translate('invoice.total')}
-                value={<strong>{totals.total.toLocaleString('de-DE')} €</strong>}
+                value={
+                  <strong>
+                    {totals.total.toLocaleString('de-DE', {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}{' '}
+                    €
+                  </strong>
+                }
               />
               {materialKey && (
                 <DataRow
@@ -380,7 +434,7 @@ export function RechnungPage() {
           )}
 
           <div className="action-stack">
-            <Button fullWidth onClick={() => setStep('preview')}>
+            <Button fullWidth onClick={() => setStep('preview')} data-testid="invoice-continue-preview">
               {translate('invoice.continueToPreview')}
             </Button>
             <Button variant="outline" fullWidth onClick={() => navigate(`/vorgaenge/${id}`)}>
@@ -393,7 +447,46 @@ export function RechnungPage() {
       {step === 'preview' && (
         <>
           <InvoiceDocumentView model={printModel} />
-          <p className="hint-text">{translate('invoice.previewHint')}</p>
+          <p className="hint-text" data-testid="invoice-preview-hint">
+            {translate('invoice.previewHint')}
+          </p>
+
+          {draft.taxStatus === 'reverse_charge_13b' ? (
+            <Card className="invoice-13b-confirm" data-testid="invoice-13b-confirm">
+              <label className="invoice-13b-confirm__label">
+                <input
+                  type="checkbox"
+                  checked={reverseCharge13bConfirmed}
+                  onChange={(event) => setReverseCharge13bConfirmed(event.target.checked)}
+                  data-testid="invoice-13b-confirm-checkbox"
+                />
+                <span>{translate('invoice.reverseCharge.confirmLabel')}</span>
+              </label>
+              <p className="hint-text">{translate('invoice.reverseCharge.confirmHelp')}</p>
+            </Card>
+          ) : null}
+
+          {validationErrors.length > 0 ? (
+            <Card className="invoice-validation invoice-validation--errors" data-testid="invoice-validation-errors">
+              <strong>{translate('invoice.validation.blockingTitle')}</strong>
+              <ul>
+                {validationErrors.map((key) => (
+                  <li key={key}>{translate(key)}</li>
+                ))}
+              </ul>
+            </Card>
+          ) : null}
+
+          {validationWarnings.length > 0 ? (
+            <Card className="invoice-validation invoice-validation--warnings" data-testid="invoice-validation-warnings">
+              <strong>{translate('invoice.validation.warningTitle')}</strong>
+              <ul>
+                {validationWarnings.map((key) => (
+                  <li key={key}>{translate(key)}</li>
+                ))}
+              </ul>
+            </Card>
+          ) : null}
 
           {showOverbillingConfirm && (
             <Card className="invoice-confirm">
@@ -402,19 +495,31 @@ export function RechnungPage() {
                 <Button variant="outline" onClick={() => setShowOverbillingConfirm(false)}>
                   {translate('common.cancel')}
                 </Button>
-                <Button onClick={handleConfirmOverbilling}>{translate('invoice.saveAnyway')}</Button>
+                <Button onClick={handleConfirmOverbilling} data-testid="invoice-approve-anyway">
+                  {translate('invoice.saveAnyway')}
+                </Button>
               </div>
             </Card>
           )}
 
           <div className="action-stack">
-            <Button fullWidth onClick={() => setStep('edit')}>
+            <Button fullWidth onClick={() => setStep('edit')} data-testid="invoice-edit">
               {translate('invoice.edit')}
             </Button>
-            <Button fullWidth onClick={handleSave}>
-              {translate('invoice.finalize')}
+            <Button
+              fullWidth
+              onClick={handleApprove}
+              disabled={approving}
+              data-testid="invoice-approve"
+            >
+              {approving ? translate('invoice.approve.working') : translate('invoice.approve')}
             </Button>
-            <Button variant="outline" fullWidth onClick={() => setStep('positions')}>
+            <Button
+              variant="outline"
+              fullWidth
+              onClick={() => setStep('positions')}
+              data-testid="invoice-back-positions"
+            >
               {translate('invoice.backToPositions')}
             </Button>
           </div>
@@ -443,7 +548,7 @@ export function RechnungPage() {
             <InvoiceDraftEditForm draft={draft} onChange={handleMetadataChange} />
           </Card>
           <div className="action-stack">
-            <Button fullWidth onClick={() => setStep('preview')}>
+            <Button fullWidth onClick={() => setStep('preview')} data-testid="invoice-back-preview">
               {translate('invoice.backToPreview')}
             </Button>
           </div>

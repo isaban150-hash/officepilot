@@ -1,4 +1,6 @@
-import { getAbschlagDeductionsTotal, calculateInvoiceTotals } from './invoiceService';
+import { calculateInvoiceTotals } from './invoiceService';
+import { getAbschlagDeductionsTotal } from './invoiceDeductions';
+import { fromCents, taxCentsFromNet, toCents } from './invoiceMoney';
 import { formatOrderUnitDisplay } from './orderUnitMapper';
 import { getTaxRateForStatus } from './invoiceTaxService';
 import { getInvoiceDocumentTitle, usesAbschlagDeductions } from './invoiceTypeService';
@@ -59,13 +61,15 @@ export function buildInvoicePrintModelFromInvoice(invoice: VorgangInvoice): Invo
   }
 
   const taxRate = getTaxRateForStatus(invoice.taxStatus);
-  const taxAmount = invoice.subtotal * (taxRate / 100);
-  const grossTotal = invoice.subtotal + taxAmount;
+  const subtotalCents = toCents(invoice.subtotal);
+  const taxCents = taxCentsFromNet(subtotalCents, taxRate);
+  const taxAmount = fromCents(taxCents);
+  const grossTotal = fromCents(subtotalCents + taxCents);
   const deductions = invoice.previousAbschlagDeductions ?? [];
   const deductionsTotal = getAbschlagDeductionsTotal(deductions);
   const amountDue = usesAbschlagDeductions(invoice.type)
-    ? Math.max(0, grossTotal - deductionsTotal)
-    : grossTotal;
+    ? Math.max(0, fromCents(subtotalCents + taxCents - toCents(deductionsTotal)))
+    : fromCents(subtotalCents + taxCents);
 
   return {
     type: invoice.type,
@@ -104,14 +108,14 @@ export function buildInvoicePrintModel(
   setup: CompanySetup,
 ): InvoicePrintModel {
   const totals = calculateInvoiceTotals(draft, setup);
-  const grossTotal = totals.subtotal + totals.tax;
+  const grossTotal = fromCents(toCents(totals.subtotal) + toCents(totals.tax));
   const deductionsTotal = getAbschlagDeductionsTotal(draft.previousAbschlagDeductions);
-  const amountDue = Math.max(0, grossTotal - deductionsTotal);
+  const amountDue = Math.max(0, fromCents(toCents(grossTotal) - toCents(deductionsTotal)));
 
   return {
     type: draft.type,
     documentTitle: getInvoiceDocumentTitle(draft.type, draft.abschlagNumber),
-    invoiceNumber: draft.invoiceNumberPreview,
+    invoiceNumber: draft.invoiceNumberPreview || 'ENTWURF',
     issueDate: draft.issueDate,
     company: { ...draft.companySnapshot },
     customer: { ...draft.customerBilling },

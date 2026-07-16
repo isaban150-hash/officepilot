@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { AppProvider } from '../../context/AppContext';
+import { DEFAULT_SETUP } from '../../data/mockData';
 import { InvoiceDocumentView } from './InvoiceDocumentView';
 import { buildInvoicePrintModel } from '../../services/invoicePrintModel';
 import {
@@ -12,7 +14,11 @@ import {
 } from '../../test/invoicePrintFixtures';
 
 function renderInvoice(model: ReturnType<typeof buildInvoicePrintModel>): string {
-  return renderToStaticMarkup(<InvoiceDocumentView model={model} />);
+  return renderToStaticMarkup(
+    <AppProvider initialSetup={{ ...DEFAULT_SETUP, setupComplete: true }}>
+      <InvoiceDocumentView model={model} />
+    </AppProvider>,
+  );
 }
 
 describe('InvoiceDocumentView snapshots', () => {
