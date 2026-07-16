@@ -3,6 +3,7 @@ import { MOCK_INBOX_ITEMS } from '../data/inboxMockData';
 import { createAuftragInboxItem, createOrderPosition, createTestVorgang, testSetup } from '../test/fixtures';
 import { hydrateCompanyProfileStore } from './companyProfileService';
 import { SAMPLE_WERKVERTRAG_TEXT } from './contractAnalysisService';
+import { confirmImportSafeContractPositions } from './contractPositionImportService';
 import {
   createVorgangFromInboxWithContract,
   getContractPreviewForInbox,
@@ -69,6 +70,18 @@ function createWerkvertragItem(overrides: Partial<InboxItem> = {}): InboxItem {
   });
 }
 
+function createVorgangWithConfirmedPositions(item: InboxItem) {
+  const preview = getContractPreviewForInbox(item);
+  const created = createVorgangFromInboxWithContract(item);
+  expect(created).not.toBeNull();
+  if (preview.hasContractPositions) {
+    confirmImportSafeContractPositions(created!.vorgang.id, preview.positions);
+  }
+  const vorgang = getVorgangById(created!.vorgang.id);
+  expect(vorgang).not.toBeNull();
+  return { inbox: created!.inbox, vorgang: vorgang! };
+}
+
 describe('invoice flow connect', () => {
   beforeEach(() => {
     localStorage.clear();
@@ -76,14 +89,17 @@ describe('invoice flow connect', () => {
     hydrateVorgangStore([]);
   });
 
-  it('legt bei Werkvertrag alle erkannten Positionen im neuen Auftrag an', () => {
+  it('legt bei Werkvertrag alle erkannten Positionen erst nach Bestätigung an', () => {
     const item = createWerkvertragItem();
     hydrateInboxStore([item]);
 
-    const result = createVorgangFromInboxWithContract(item);
-    expect(result).not.toBeNull();
+    const preview = getContractPreviewForInbox(item);
+    const beforeConfirm = createVorgangFromInboxWithContract(item);
+    expect(beforeConfirm).not.toBeNull();
+    expect(getVorgangById(beforeConfirm!.vorgang.id)?.orderPositions).toHaveLength(0);
 
-    const vorgang = getVorgangById(result!.vorgang.id);
+    confirmImportSafeContractPositions(beforeConfirm!.vorgang.id, preview.positions);
+    const vorgang = getVorgangById(beforeConfirm!.vorgang.id);
     expect(vorgang?.orderPositions).toHaveLength(3);
     expect(vorgang?.orderPositions.filter((p) => p.id.startsWith('op-inbox-'))).toHaveLength(0);
     expect(vorgang?.orderPositions[0]?.description).toContain('Demontage Badewanne');
@@ -93,11 +109,10 @@ describe('invoice flow connect', () => {
     const item = createWerkvertragItem();
     hydrateInboxStore([item]);
 
-    const result = createVorgangFromInboxWithContract(item);
-    const vorgang = getVorgangById(result!.vorgang.id);
+    const { vorgang } = createVorgangWithConfirmedPositions(item);
 
-    expect(vorgang?.orderPositions).toHaveLength(3);
-    expect(vorgang?.orderPositions.filter((p) => p.id.startsWith('op-inbox-'))).toHaveLength(0);
+    expect(vorgang.orderPositions).toHaveLength(3);
+    expect(vorgang.orderPositions.filter((p) => p.id.startsWith('op-inbox-'))).toHaveLength(0);
   });
 
   it('verwendet Pauschal-Fallback ohne erkannte Vertragspositionen', () => {
@@ -118,9 +133,8 @@ describe('invoice flow connect', () => {
     const item = createWerkvertragItem();
     hydrateInboxStore([item]);
 
-    const result = createVorgangFromInboxWithContract(item);
-    const vorgang = getVorgangById(result!.vorgang.id);
-    const fliesen = vorgang?.orderPositions.find((p) => p.description.includes('Fliesenarbeiten'));
+    const { vorgang } = createVorgangWithConfirmedPositions(item);
+    const fliesen = vorgang.orderPositions.find((p) => p.description.includes('Fliesenarbeiten'));
 
     expect(fliesen).toMatchObject({
       plannedQuantity: 28,
@@ -158,9 +172,9 @@ describe('invoice flow connect', () => {
   it('erzeugt Rechnungsentwurf aus übernommenen Auftragspositionen', () => {
     const item = createWerkvertragItem();
     hydrateInboxStore([item]);
-    const created = createVorgangFromInboxWithContract(item)!;
+    const { vorgang } = createVorgangWithConfirmedPositions(item);
 
-    const draft = buildInvoiceDraftForType(created.vorgang.id, testSetup, 'rechnung');
+    const draft = buildInvoiceDraftForType(vorgang.id, testSetup, 'rechnung');
     expect(draft).not.toBeNull();
     expect(draft!.positions.length).toBe(3);
     expect(draft!.positions[0]?.description).toContain('Demontage Badewanne');
@@ -197,9 +211,9 @@ describe('invoice flow connect', () => {
   it('übernimmt Logo und Firmendaten in den Invoice-Snapshot', () => {
     const item = createWerkvertragItem();
     hydrateInboxStore([item]);
-    const created = createVorgangFromInboxWithContract(item)!;
+    const { vorgang } = createVorgangWithConfirmedPositions(item);
 
-    const draft = buildInvoiceDraftForType(created.vorgang.id, testSetup, 'rechnung')!;
+    const draft = buildInvoiceDraftForType(vorgang.id, testSetup, 'rechnung')!;
     expect(draft.companySnapshot.logoDataUrl).toBe(companyProfile.logoDataUrl);
     expect(draft.companySnapshot.companyName).toBe(companyProfile.companyName);
     expect(draft.companySnapshot.taxNumber).toBe(companyProfile.taxNumber);
@@ -220,7 +234,7 @@ describe('invoice flow connect', () => {
         quantity: p.quantity > 0 ? p.quantity : 1,
       })),
     };
-    const result = finalizeInvoiceDraft(created.vorgang.id, withAddress, testSetup);
+    const result = finalizeInvoiceDraft(vorgang.id, withAddress, testSetup);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.invoice.companySnapshot?.logoDataUrl).toBe(companyProfile.logoDataUrl);
@@ -232,9 +246,9 @@ describe('invoice flow connect', () => {
     hydrateCompanyProfileStore({ ...companyProfile, logoDataUrl: undefined });
     const item = createWerkvertragItem();
     hydrateInboxStore([item]);
-    const created = createVorgangFromInboxWithContract(item)!;
+    const { vorgang } = createVorgangWithConfirmedPositions(item);
 
-    const draft = buildInvoiceDraftForType(created.vorgang.id, testSetup, 'rechnung')!;
+    const draft = buildInvoiceDraftForType(vorgang.id, testSetup, 'rechnung')!;
     expect(() => buildInvoicePrintModel(draft, testSetup)).not.toThrow();
     expect(draft.companySnapshot.logoDataUrl).toBeUndefined();
   });
@@ -243,17 +257,16 @@ describe('invoice flow connect', () => {
     const item = createWerkvertragItem();
     hydrateInboxStore([item]);
 
-    const first = createVorgangFromInboxWithContract(item);
+    const first = createVorgangWithConfirmedPositions(item);
     const second = createVorgangFromInboxWithContract(item);
-    expect(first).not.toBeNull();
     expect(second).toBeNull();
 
     const preview = getContractPreviewForInbox(item);
-    const reimport = importSuggestedPositionsToVorgang(first!.vorgang.id, preview.positions);
+    const reimport = importSuggestedPositionsToVorgang(first.vorgang.id, preview.positions);
     expect(reimport.added).toBe(0);
     expect(reimport.skipped).toBe(preview.positions.length);
 
-    const vorgang = getVorgangById(first!.vorgang.id);
+    const vorgang = getVorgangById(first.vorgang.id);
     expect(vorgang?.orderPositions).toHaveLength(3);
   });
 });

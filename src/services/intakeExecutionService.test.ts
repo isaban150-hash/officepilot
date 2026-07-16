@@ -83,12 +83,16 @@ describe('intakeExecutionService', () => {
     expect(result.completed).toBe(true);
     expect(result.successSteps).toContain('archive_document');
     expect(result.successSteps).toContain('create_vorgang');
-    expect(result.successSteps).toContain('import_positions');
+    expect(result.successSteps).not.toContain('import_positions');
     expect(result.successSteps).toContain('accept_tasks');
     expect(result.successSteps).toContain('finalize_inbox');
     expect(result.inboxItem?.isNewUpload).toBe(false);
     expect(result.archiveDocumentId).toBeTruthy();
-    expect(result.positionsAdded).toBeGreaterThan(0);
+    expect(result.positionsAdded).toBe(0);
+    expect(result.warnings.some((warning) => warning.id === 'positions_need_confirmation')).toBe(
+      true,
+    );
+    expect(getVorgangById(result.vorgangId!)?.orderPositions ?? []).toHaveLength(0);
     expect(result.tasksCreated).toBeGreaterThan(0);
     expect(getAllDocuments().length).toBe(1);
   });

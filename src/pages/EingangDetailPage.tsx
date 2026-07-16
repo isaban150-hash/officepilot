@@ -33,10 +33,16 @@ import {
   acceptSuggestedTasks,
   createVorgangFromInboxWithContract,
   createWorkflowVorgang,
-  importSuggestedPositionsToVorgang,
   linkWorkflowVorgang,
   processUploadedDocument,
 } from '../services/intakeWorkflowService';
+import {
+  buildContractPositionKey,
+  buildDefaultContractPositionSelections,
+  confirmImportContractPositions,
+  countSelectedContractPositions,
+} from '../services/contractPositionImportService';
+import type { EnhancedDetectedOrderPosition } from '../types/documentIntelligence';
 import {
   importInboxDocument,
   isDuplicateDocument,
@@ -339,13 +345,30 @@ export function EingangDetailPage() {
   };
 
   const handleIntakeImportPositions = () => {
-    const vorgangId = item.vorgangId ?? workflow?.suggestedVorgang?.vorgangId;
-    if (!vorgangId || !workflow) {
+    if (!workflow) return;
+
+    // Prefer the shared confirm-first Proposal UI when available.
+    if (workflow.contractOrderProposal) {
+      document
+        .querySelector('[data-testid="contract-order-proposal"]')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      showToast(translate('documentIntelligence.proposal.confirmBelow'));
+      return;
+    }
+
+    const vorgangId = item.vorgangId ?? workflow.suggestedVorgang?.vorgangId;
+    if (!vorgangId) {
       setVorgangDialogRequest((n) => n + 1);
       showToast(translate('intake.positionsNeedsVorgang'));
       return;
     }
-    const result = importSuggestedPositionsToVorgang(vorgangId, workflow.suggestedOrderPositions);
+
+    const selections = buildDefaultContractPositionSelections(workflow.suggestedOrderPositions);
+    const result = confirmImportContractPositions(
+      vorgangId,
+      workflow.suggestedOrderPositions,
+      selections,
+    );
     if (result.success) {
       showToast(translate('intake.positionsImported').replace('{count}', String(result.added)));
       refreshWorkflowItem();
@@ -397,11 +420,51 @@ export function EingangDetailPage() {
     if (vorgangId) navigate(`/vorgaenge/${vorgangId}`);
   };
 
-  const handleCreateContractOrder = () => {
+  const handleCreateContractOrder = (selectedPositions: EnhancedDetectedOrderPosition[]) => {
     if (!item || !workflow?.contractOrderProposal) return;
+    if (selectedPositions.length === 0) {
+      showToast(translate('documentIntelligence.createOrderFailed'));
+      return;
+    }
+    const confirmedSelections = Object.fromEntries(
+      selectedPositions.map((position) => [buildContractPositionKey(position), 'selected' as const]),
+    );
     setIsCreatingContractOrder(true);
     try {
-      const result = createVorgangFromInboxWithContract(item, undefined, setup.materialStandard);
+      if (item.vorgangId) {
+        const importResult = confirmImportContractPositions(
+          item.vorgangId,
+          selectedPositions,
+          confirmedSelections,
+        );
+        if (importResult.added === 0 && importResult.skipped === 0) {
+          showToast(translate('documentIntelligence.createOrderFailed'));
+          return;
+        }
+        setIntakeExecution({
+          completed: true,
+          successSteps: ['import_positions'],
+          failedSteps: [],
+          warnings: [],
+          vorgangId: item.vorgangId,
+          inboxItem: item,
+          tasksCreated: 0,
+          positionsAdded: importResult.added,
+          pendingSummary: null,
+        });
+        showToast(
+          translate('documentIntelligence.createOrderSuccess').replace(
+            '{count}',
+            String(importResult.added),
+          ),
+        );
+        refreshWorkflowItem();
+        return;
+      }
+
+      const result = createVorgangFromInboxWithContract(item, undefined, setup.materialStandard, {
+        confirmedPositions: selectedPositions,
+      });
       if (!result) {
         showToast(translate('documentIntelligence.createOrderFailed'));
         return;
@@ -409,22 +472,28 @@ export function EingangDetailPage() {
       setItem(result.inbox);
       setIntakeExecution({
         completed: true,
-        successSteps: ['create_vorgang'],
+        successSteps: ['create_vorgang', 'import_positions'],
         failedSteps: [],
         warnings: [],
         vorgangId: result.vorgang.id,
         inboxItem: result.inbox,
         tasksCreated: 0,
-        positionsAdded: workflow.contractOrderProposal.positionCount,
+        positionsAdded: result.vorgang.orderPositions?.length ?? selectedPositions.length,
         pendingSummary: null,
       });
-      showToast(translate('documentIntelligence.createOrderSuccess').replace(
-        '{count}',
-        String(workflow.contractOrderProposal.positionCount),
-      ));
+      showToast(
+        translate('documentIntelligence.createOrderSuccess').replace(
+          '{count}',
+          String(result.vorgang.orderPositions?.length ?? selectedPositions.length),
+        ),
+      );
     } finally {
       setIsCreatingContractOrder(false);
     }
+  };
+
+  const handleDiscardContractProposal = () => {
+    showToast(translate('documentIntelligence.proposal.discarded'));
   };
 
   const moreOptionsContent = (
@@ -528,7 +597,7 @@ export function EingangDetailPage() {
         </div>
       </CollapsibleReviewSection>
 
-      {workflow.suggestedOrderPositions.length > 0 && (
+      {workflow.suggestedOrderPositions.length > 0 && !workflow.contractOrderProposal && (
         <CollapsibleReviewSection
           id="positions"
           title={translate('reviewWorkflow.section.positions')}
@@ -542,8 +611,19 @@ export function EingangDetailPage() {
                 String(workflow.suggestedOrderPositions.length),
               )}
             </p>
+            <p className="contract-order-proposal__hint">
+              {translate('documentIntelligence.proposal.onlySelectedHint')}
+            </p>
             <Button variant="outline" fullWidth onClick={handleIntakeImportPositions}>
-              {translate('intake.action.importPositions')}
+              {translate('documentIntelligence.action.confirmSelectedPositions').replace(
+                '{count}',
+                String(
+                  countSelectedContractPositions(
+                    workflow.suggestedOrderPositions,
+                    buildDefaultContractPositionSelections(workflow.suggestedOrderPositions),
+                  ),
+                ),
+              )}
             </Button>
           </Card>
         </CollapsibleReviewSection>
@@ -730,6 +810,7 @@ export function EingangDetailPage() {
         onToggleMoreOptions={() => setMoreOptionsExpanded((open) => !open)}
         onApplySuggestion={handleApplySuggestion}
         onCreateContractOrder={handleCreateContractOrder}
+        onDiscardContractProposal={handleDiscardContractProposal}
         isCreatingContractOrder={isCreatingContractOrder}
         onOpenVorgang={handleOpenVorgang}
         onNextDocument={goBack}

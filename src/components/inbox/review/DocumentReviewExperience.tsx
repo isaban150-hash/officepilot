@@ -13,6 +13,7 @@ import type {
   WorkflowResult,
   WorkflowResultExecution,
 } from '../../../types/models';
+import type { EnhancedDetectedOrderPosition } from '../../../types/documentIntelligence';
 import type { TranslationKey } from '../../../i18n';
 import { DocumentReviewChecks } from './DocumentReviewChecks';
 import { DocumentReviewHero } from './DocumentReviewHero';
@@ -29,7 +30,8 @@ interface DocumentReviewExperienceProps {
   moreOptionsExpanded: boolean;
   onToggleMoreOptions: () => void;
   onApplySuggestion: () => void;
-  onCreateContractOrder?: () => void;
+  onCreateContractOrder?: (selectedPositions: EnhancedDetectedOrderPosition[]) => void;
+  onDiscardContractProposal?: () => void;
   isCreatingContractOrder?: boolean;
   onOpenVorgang?: () => void;
   onNextDocument: () => void;
@@ -46,6 +48,7 @@ export function DocumentReviewExperience({
   onToggleMoreOptions,
   onApplySuggestion,
   onCreateContractOrder,
+  onDiscardContractProposal,
   isCreatingContractOrder = false,
   onOpenVorgang,
   onNextDocument,
@@ -63,21 +66,14 @@ export function DocumentReviewExperience({
 
   const primaryDisabled = !item.isAdvertisement && !workflow.companyRelevant;
 
-  const primaryLabel = workflow.contractOrderProposal
-    ? translate('documentIntelligence.action.createOrderWithPositions').replace(
-        '{count}',
-        String(workflow.contractOrderProposal.positionCount),
-      )
-    : item.isAdvertisement
+  const primaryLabel = item.isAdvertisement
     ? translate('reviewWorkflow.action.reviewAdvertisement')
     : translate('reviewWorkflow.action.applySuggestion');
 
-  const handlePrimaryAction = () => {
-    if (workflow.contractOrderProposal && onCreateContractOrder) {
-      onCreateContractOrder();
-      return;
-    }
-    onApplySuggestion();
+  const scrollToProposal = () => {
+    document
+      .querySelector('[data-testid="contract-order-proposal"]')
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   return (
@@ -101,7 +97,8 @@ export function DocumentReviewExperience({
         <ContractOrderProposalPanel
           proposal={workflow.contractOrderProposal}
           translate={translate}
-          onCreateOrder={handlePrimaryAction}
+          onConfirmImport={(selected) => onCreateContractOrder?.(selected)}
+          onDiscard={onDiscardContractProposal}
           isCreating={isCreatingContractOrder}
         />
       )}
@@ -114,13 +111,24 @@ export function DocumentReviewExperience({
           onOpenVorgang={onOpenVorgang}
           onNextDocument={onNextDocument}
         />
-      ) : workflow.contractOrderProposal ? null : (
+      ) : workflow.contractOrderProposal ? (
+        <div className="document-review-experience__primary" data-testid="document-review-primary-action">
+          <Button
+            variant="outline"
+            fullWidth
+            onClick={scrollToProposal}
+            data-testid="document-review-scroll-proposal-button"
+          >
+            {translate('documentIntelligence.action.reviewPositionsBelow')}
+          </Button>
+        </div>
+      ) : (
         <div className="document-review-experience__primary" data-testid="document-review-primary-action">
           <Button
             fullWidth
             disabled={primaryDisabled}
             loading={isExecuting || isCreatingContractOrder}
-            onClick={handlePrimaryAction}
+            onClick={onApplySuggestion}
             data-testid="document-review-apply-button"
           >
             {primaryLabel}

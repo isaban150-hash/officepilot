@@ -20,6 +20,7 @@ import {
   buildInvoiceDraftForType,
 } from './services/invoiceService';
 import { CONTRACT_ORDER_INVOICE_TYPES } from './services/invoiceTypeService';
+import { confirmImportSafeContractPositions } from './services/contractPositionImportService';
 import {
   createVorgangFromInboxWithContract,
   getContractPreviewForInbox,
@@ -157,6 +158,8 @@ describe('DOCUMENT-INTELLIGENCE-01 order proposal', () => {
 
     const created = createVorgangFromInboxWithContract(item);
     expect(created).not.toBeNull();
+    expect(getVorgangById(created!.vorgang.id)?.orderPositions).toHaveLength(0);
+    confirmImportSafeContractPositions(created!.vorgang.id, preview.positions);
     const vorgang = getVorgangById(created!.vorgang.id);
     expect(vorgang?.orderPositions).toHaveLength(11);
     expect(created!.inbox.vorgangId).toBe(created!.vorgang.id);
@@ -169,7 +172,9 @@ describe('DOCUMENT-INTELLIGENCE-01 invoice flow', () => {
     hydrateVorgangStore([]);
     const item = createSyntheticWerkvertragItem();
     hydrateInboxStore([item]);
+    const preview = getContractPreviewForInbox(item);
     const created = createVorgangFromInboxWithContract(item)!;
+    confirmImportSafeContractPositions(created.vorgang.id, preview.positions);
     const draft = buildInvoiceDraftForType(created.vorgang.id, {
       companyName: 'Test GmbH',
       industry: 'sanitaer',
@@ -188,7 +193,9 @@ describe('DOCUMENT-INTELLIGENCE-01 invoice flow', () => {
     hydrateVorgangStore([]);
     const item = createSyntheticWerkvertragItem();
     hydrateInboxStore([item]);
+    const preview = getContractPreviewForInbox(item);
     const created = createVorgangFromInboxWithContract(item)!;
+    confirmImportSafeContractPositions(created.vorgang.id, preview.positions);
     const vorgang = getVorgangById(created.vorgang.id)!;
     vorgang.createdFromInboxId = item.id;
 

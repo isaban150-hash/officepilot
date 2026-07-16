@@ -11,7 +11,6 @@ import {
 import {
   acceptSuggestedTasks,
   createVorgangFromInboxWithContract,
-  importSuggestedPositionsToVorgang,
   linkWorkflowVorgang,
 } from './intakeWorkflowService';
 import { scanPendingItems } from './pendingEngineService';
@@ -278,26 +277,15 @@ export function executeSmartIntake(
     item = vorgangOutcome.item;
     vorgangId = vorgangOutcome.vorgangId ?? item.vorgangId;
 
+    // Confirm-first: never silently persist suggestedOrderPositions.
+    // Vorgang may be prepared; LV import stays in the Proposal-Confirm flow.
     if (workflow.suggestedOrderPositions.length > 0) {
-      if (!vorgangId) {
-        markFailure(
-          failedSteps,
-          'import_positions',
-          'Kein Vorgang für Positionsimport vorhanden.',
-        );
-      } else {
-        const positionResult = importSuggestedPositionsToVorgang(
-          vorgangId,
-          workflow.suggestedOrderPositions,
-        );
-        positionsAdded =
-          positionResult.added > 0 ? positionResult.added : positionResult.skipped;
-        if (positionResult.added > 0 || positionResult.skipped > 0) {
-          markSuccess(successSteps, 'import_positions');
-        } else {
-          markFailure(failedSteps, 'import_positions', 'Positionen konnten nicht übernommen werden.');
-        }
-      }
+      pushWarning(
+        warnings,
+        'positions_need_confirmation',
+        'Erkannte Leistungspositionen warten auf Ihre Bestätigung und wurden noch nicht übernommen.',
+      );
+      positionsAdded = 0;
     }
 
     executeContractFieldsStep(vorgangId, workflow, successSteps, failedSteps);

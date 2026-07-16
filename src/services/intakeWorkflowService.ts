@@ -344,10 +344,8 @@ export function getContractPreviewForInbox(item: InboxItem): {
 } {
   const intelligence = analyzeContractIntelligenceFromInbox(item);
   if (intelligence && intelligence.positions.length > 0) {
-    const positions = intelligence.positions.map(
-      ({ sourcePage: _sourcePage, confidence: _confidence, reviewStatus: _reviewStatus, ...position }) =>
-        position,
-    );
+    // Keep reviewStatus/confidence/sourcePage for confirm-first selection defaults.
+    const positions = intelligence.positions;
     const contractSum =
       intelligence.contractTotalNet?.value ?? computeContractPositionsTotal(positions);
     return {
@@ -380,16 +378,18 @@ export function createVorgangFromInboxWithContract(
   item: InboxItem,
   optionalDraft?: Partial<VorgangDraft>,
   materialDefault: MaterialStandard = 'unclear',
+  options?: { confirmedPositions?: DetectedOrderPosition[] },
 ): { vorgang: Vorgang; inbox: InboxItem } | null {
-  const { positions, hasContractPositions } = getContractPreviewForInbox(item);
+  const { hasContractPositions } = getContractPreviewForInbox(item);
 
   const result = createVorgangFromInbox(item, optionalDraft, materialDefault, {
     skipDefaultPositions: hasContractPositions,
   });
   if (!result) return null;
 
-  if (hasContractPositions) {
-    importSuggestedPositionsToVorgang(result.vorgang.id, positions);
+  const confirmed = options?.confirmedPositions;
+  if (confirmed && confirmed.length > 0) {
+    importSuggestedPositionsToVorgang(result.vorgang.id, confirmed);
     const refreshed = getVorgangById(result.vorgang.id);
     if (refreshed) {
       return { vorgang: refreshed, inbox: result.inbox };

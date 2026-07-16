@@ -211,11 +211,18 @@ export function SmartIntakeSummary({
           disabled={
             isExecuting ||
             workflow.suggestedOrderPositions.length === 0 ||
-            (!item.vorgangId && !workflow.suggestedVorgang)
+            Boolean(workflow.contractOrderProposal
+              ? false
+              : !item.vorgangId && !workflow.suggestedVorgang)
           }
           onClick={onImportPositions}
         >
-          {translate('intake.action.importPositions')}
+          {workflow.contractOrderProposal
+            ? translate('documentIntelligence.action.reviewPositionsBelow')
+            : translate('documentIntelligence.action.confirmSelectedPositions').replace(
+                '{count}',
+                String(workflow.suggestedOrderPositions.length),
+              )}
         </Button>
         <Button
           type="button"
