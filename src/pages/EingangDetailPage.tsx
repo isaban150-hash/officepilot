@@ -75,6 +75,7 @@ import type {
   ContractSuggestedAction,
   InboxItem,
   Vorgang,
+  WorkflowResult,
   WorkflowResultExecution,
 } from '../types/models';
 import type { TranslationKey } from '../i18n';
@@ -87,6 +88,18 @@ type ReviewSectionId =
   | 'positions'
   | 'archive'
   | 'technical';
+
+/** Multi-page OCR payloads make sync contract/LV analysis too heavy for first paint. */
+function itemNeedsDeferredWorkflowAnalysis(item: InboxItem): boolean {
+  const raw = item.recognizedData._pageTexts;
+  if (!raw) return false;
+  try {
+    const pages = JSON.parse(raw) as unknown;
+    return Array.isArray(pages) && pages.length > 2;
+  } catch {
+    return false;
+  }
+}
 
 export function EingangDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -106,10 +119,9 @@ export function EingangDetailPage() {
   const [intakeExecution, setIntakeExecution] = useState<WorkflowResultExecution | null>(null);
   const [isExecutingIntake, setIsExecutingIntake] = useState(false);
   const [isCreatingContractOrder, setIsCreatingContractOrder] = useState(false);
-
-  const workflow = useMemo(
-    () => (item ? processUploadedDocument(item.id) : null),
-    [item?.id, item?.status, item?.vorgangId, item?.importedToArchive, item?.markedAsCompanyDocument],
+  const [deferredWorkflow, setDeferredWorkflow] = useState<WorkflowResult | null>(null);
+  const [deferredStatus, setDeferredStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>(
+    'idle',
   );
 
   useEffect(() => {
@@ -140,7 +152,92 @@ export function EingangDetailPage() {
     }
   }, [id, navigate]);
 
-  if (!item || !workflow) return null;
+  const workflowDepsKey = [
+    item?.id,
+    item?.status,
+    item?.vorgangId,
+    item?.importedToArchive,
+    item?.markedAsCompanyDocument,
+  ].join('|');
+
+  const syncWorkflow = useMemo(() => {
+    if (!item) return null;
+    if (itemNeedsDeferredWorkflowAnalysis(item)) return null;
+    return processUploadedDocument(item.id);
+  }, [workflowDepsKey]);
+
+  // Heavy multi-page contract/LV analysis after navigation paint — never during save.
+  useEffect(() => {
+    if (!item || !itemNeedsDeferredWorkflowAnalysis(item)) {
+      setDeferredWorkflow(null);
+      setDeferredStatus('idle');
+      return;
+    }
+
+    let cancelled = false;
+    setDeferredStatus('loading');
+    setDeferredWorkflow(null);
+
+    const timer = window.setTimeout(() => {
+      try {
+        const result = processUploadedDocument(item.id);
+        if (cancelled) return;
+        setDeferredWorkflow(result);
+        setDeferredStatus(result ? 'ready' : 'error');
+      } catch {
+        if (cancelled) return;
+        setDeferredWorkflow(null);
+        setDeferredStatus('error');
+      }
+    }, 0);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [workflowDepsKey]);
+
+  const workflow = syncWorkflow ?? deferredWorkflow;
+
+  if (!item) return null;
+
+  if (itemNeedsDeferredWorkflowAnalysis(item) && (deferredStatus !== 'ready' || !workflow)) {
+    return (
+      <div className="page" data-testid="eingang-detail-analysis-pending">
+        <Card>
+          <DataRow label={translate('inbox.title')} value={item.title} />
+          <DataRow
+            label={translate('reviewWorkflow.hero.documentType')}
+            value={
+              item.classifiedKind
+                ? translate(`classifiedKind.${item.classifiedKind}` as TranslationKey)
+                : translate('reviewWorkflow.hero.unknown')
+            }
+          />
+          {deferredStatus === 'error' ? (
+            <p data-testid="eingang-detail-analysis-error">
+              {translate('reviewWorkflow.analysis.error')}
+            </p>
+          ) : (
+            <p data-testid="eingang-detail-analysis-loading">
+              {translate('reviewWorkflow.analysis.loading')}
+            </p>
+          )}
+        </Card>
+        {item.fileRefId ? (
+          <div data-testid="ablage-original-file">
+            <DocumentOriginalFilePanel
+              fileRefId={item.fileRefId}
+              translate={translate}
+              onPromoted={() => showToast(translate('document.original.promote.success'))}
+            />
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (!workflow) return null;
 
   const docTypeKey = `docType.${item.documentType}` as TranslationKey;
   const actionKey = `action.${item.recommendedAction}` as TranslationKey;

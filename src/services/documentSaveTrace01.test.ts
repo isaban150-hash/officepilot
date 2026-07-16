@@ -9,6 +9,7 @@ import {
   confirmPendingDocumentIntake,
   type PendingDocumentIntake,
 } from './pendingDocumentIntakeService';
+import type { DocumentClassificationResult } from '../types/models';
 import {
   finishDocumentSaveTrace,
   getDocumentSaveTraceEventsForTests,
@@ -203,6 +204,25 @@ describe('CONTRACT-DOCUMENT-SAVE-TRACE-01', () => {
   });
 
   it('confirmPendingDocumentIntake nutzt denselben Trace-Helper (Scan/Upload-Pfad)', async () => {
+    const previewClassification: DocumentClassificationResult = {
+      classifiedKind: 'werkvertrag',
+      documentType: 'kundenauftrag',
+      processType: 'create_vorgang',
+      detectionReasonKey: 'classification.detect.contract',
+      title: 'Werkvertrag Trace',
+      sender: 'Test',
+      explanation: 'Trace preview',
+      priority: 'mittel',
+      deadline: null,
+      recommendedAction: 'auftrag_annehmen',
+      digitalFolder: { id: 'dig-1', name: 'Test', path: '/test/' },
+      paperFiling: { folderId: 'folder-1', register: 'A', label: 'Test' },
+      recognizedData: { Dokumentart: 'werkvertrag' },
+      officePilotSuggestion: 'Trace',
+      nextTaskLabel: 'Prüfen',
+      securityHint: 'Test',
+      actions: [],
+    };
     const pending: PendingDocumentIntake = {
       cachedFile: createPayload(sampleBytes('PENDING-TRACE'), 'scan-vertrag.pdf'),
       extraction: {
@@ -218,6 +238,7 @@ describe('CONTRACT-DOCUMENT-SAVE-TRACE-01', () => {
         previewLines: ['Werkvertrag'],
         previewPartialHint: false,
       },
+      previewClassification,
       storageRecommendation: {
         level: 'archive_recommended',
         reasonKeys: [],

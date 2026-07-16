@@ -4,11 +4,12 @@ import {
   releaseCachedDocumentFile,
 } from './cachedDocumentFileService';
 import type { DocumentFileRef } from '../types/documentFileRef';
-import type { InboxItem } from '../types/models';
+import type { DocumentClassificationResult, InboxItem } from '../types/models';
 import { validateUploadFile } from './documentUploadValidation';
 import { findDuplicateByContentHash } from './documentDuplicateService';
 import { extractDocumentTextFromCache } from './ocrDocumentService';
-import { createMockInboxItemFromUpload, type CreateInboxFromUploadOptions } from './inboxUploadFactory';
+import type { CreateInboxFromUploadOptions } from './inboxUploadFactory';
+import { buildInboxItemForDocumentIntake } from './documentIntakeInboxBuilder';
 import { stageInboxItem, removeStagedInboxItemById } from './inboxService';
 import {
   storeDocumentFileFromCachedPayload,
@@ -90,6 +91,8 @@ export interface DocumentIntakeOptions extends CreateInboxFromUploadOptions {
   allowDuplicateIntake?: boolean;
   /** Diagnostic only — never persisted on documents */
   saveTraceId?: string;
+  /** Reuse preview classification; skips heavy pageTexts re-classification on save */
+  previewClassification?: DocumentClassificationResult;
 }
 
 export async function intakeCachedDocumentFile(
@@ -197,18 +200,25 @@ export async function intakeCachedDocumentFile(
     textLength,
     fileSize: payload.bytes.byteLength,
   });
-  traceStepStart(saveTraceId, 'classification_start', { pageCount, textLength });
+  // Classification on save is light: reuse preview result or classify without pageTexts.
+  traceStepStart(saveTraceId, 'classification_start', {
+    pageCount,
+    textLength,
+    detectionReasonKey: options.previewClassification
+      ? 'preview_classification_reused'
+      : 'light_classification_no_page_texts',
+  });
   let classified: InboxItem;
   try {
-    classified = createMockInboxItemFromUpload({
+    classified = buildInboxItemForDocumentIntake({
       sourceFileName: options.sourceFileName ?? payload.fileName,
       kind: options.kind,
       recognizedText,
-      pageTexts: options.pageTexts,
       titleHint: options.titleHint,
       senderHint: options.senderHint,
       mailImportId: options.mailImportId,
       importSource: options.importSource,
+      previewClassification: options.previewClassification,
     });
   } catch (error) {
     // Trace only — do not alter product error handling beyond rethrow.
@@ -219,6 +229,7 @@ export async function intakeCachedDocumentFile(
     pageCount,
     textLength,
     classifiedKind: classified.classifiedKind,
+    detectionReasonKey: options.previewClassification?.detectionReasonKey,
   });
 
   traceStepStart(saveTraceId, 'stage_inbox_start');

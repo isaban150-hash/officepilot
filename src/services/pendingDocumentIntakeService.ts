@@ -1,4 +1,4 @@
-import type { UploadDocumentKind } from '../types/models';
+import type { DocumentClassificationResult, UploadDocumentKind } from '../types/models';
 import type { CachedDocumentFilePayload } from './cachedDocumentFileService';
 import { loadCachedDocumentFileFromUpload, releaseCachedDocumentFile } from './cachedDocumentFileService';
 import {
@@ -33,6 +33,8 @@ export interface PendingDocumentIntake {
   cachedFile: CachedDocumentFilePayload;
   extraction: DocumentTextExtractionResult;
   preview: OcrPreviewSummary;
+  /** Light preview classification — reused on save to avoid main-thread re-analysis */
+  previewClassification: DocumentClassificationResult;
   storageRecommendation: StorageRecommendation;
   storagePolicy: ResolvedStoragePolicy;
 }
@@ -103,6 +105,7 @@ export async function processDocumentFileForPreview(
       cachedFile: loaded.payload,
       extraction,
       preview,
+      previewClassification: classification,
       storageRecommendation,
       storagePolicy,
     },
@@ -152,7 +155,9 @@ export async function confirmPendingDocumentIntake(
     ...options,
     sourceFileName: pending.cachedFile.fileName,
     recognizedText,
+    // Persist page texts for later detail analysis, but do not re-classify with them on save.
     pageTexts: pending.extraction.pageTexts,
+    previewClassification: pending.previewClassification,
     userDecision: options.userDecision,
     allowDuplicateIntake: options.userDecision === 'save_duplicate_anyway',
     saveTraceId,
