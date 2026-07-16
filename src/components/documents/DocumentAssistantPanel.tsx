@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Button } from '../ui/Button';
 import { Card, CardMeta, CardTitle } from '../ui/Card';
-import { ShowMoreSection } from '../ui/ShowMoreSection';
 import { CollapsibleReviewSection } from '../inbox/review/CollapsibleReviewSection';
 import type { TranslationKey } from '../../i18n';
 import {
@@ -48,8 +47,6 @@ interface DocumentAssistantPanelProps {
   language: AppLanguage;
   showChangeType?: boolean;
   onChangeType?: () => void;
-  /** When true, expert cards start collapsed behind "Mehr anzeigen". */
-  compactLayout?: boolean;
 }
 
 export function DocumentAssistantPanel({
@@ -59,46 +56,48 @@ export function DocumentAssistantPanel({
   language,
   showChangeType = false,
   onChangeType,
-  compactLayout = false,
 }: DocumentAssistantPanelProps) {
   const assistant = useMemo(
     () => buildInboxDocumentAssistant(item, workflow, language),
     [item, workflow, language],
   );
   const [detailsExpanded, setDetailsExpanded] = useState(false);
-  const [expertExpanded, setExpertExpanded] = useState(false);
   const kind = item.classifiedKind ?? workflow?.classifiedKind;
 
-  const briefCard = (
-    <Card className="document-assistant-panel__section">
-      <h2 className="document-assistant-panel__heading">{translate('docAssistant.section.brief')}</h2>
-      <ul className="document-assistant-panel__lines">
-        {assistant.briefLines.map((line) => (
-          <li key={line.key}>{interpolate(translate, line)}</li>
-        ))}
-      </ul>
-    </Card>
-  );
+  return (
+    <section className="document-assistant-panel" data-testid="document-assistant-panel">
+      <Card highlight className="document-assistant-panel__hero">
+        <CardMeta>{translate('docAssistant.recognized')}</CardMeta>
+        <CardTitle>
+          {translate(assistant.documentTypeLabelKey)}
+          {assistant.sender ? ` · ${assistant.sender}` : ''}
+        </CardTitle>
+      </Card>
 
-  const actionsCard = (
-    <Card className="document-assistant-panel__section">
-      <h2 className="document-assistant-panel__heading">{translate('docAssistant.section.actions')}</h2>
-      <ul className="document-assistant-panel__steps">
-        {assistant.actionSteps.map((step) => (
-          <li key={step.key}>{interpolate(translate, step)}</li>
-        ))}
-      </ul>
-      {assistant.inactionConsequence ? (
-        <p className="document-assistant-panel__inaction">
-          <strong>{translate('docAssistant.section.inaction')}: </strong>
-          {interpolate(translate, assistant.inactionConsequence)}
-        </p>
-      ) : null}
-    </Card>
-  );
+      <Card className="document-assistant-panel__section">
+        <h2 className="document-assistant-panel__heading">{translate('docAssistant.section.brief')}</h2>
+        <ul className="document-assistant-panel__lines">
+          {assistant.briefLines.map((line) => (
+            <li key={line.key}>{interpolate(translate, line)}</li>
+          ))}
+        </ul>
+      </Card>
 
-  const expertCards = (
-    <>
+      <Card className="document-assistant-panel__section">
+        <h2 className="document-assistant-panel__heading">{translate('docAssistant.section.actions')}</h2>
+        <ul className="document-assistant-panel__steps">
+          {assistant.actionSteps.map((step) => (
+            <li key={step.key}>{interpolate(translate, step)}</li>
+          ))}
+        </ul>
+        {assistant.inactionConsequence ? (
+          <p className="document-assistant-panel__inaction">
+            <strong>{translate('docAssistant.section.inaction')}: </strong>
+            {interpolate(translate, assistant.inactionConsequence)}
+          </p>
+        ) : null}
+      </Card>
+
       <Card className="document-assistant-panel__section">
         <h2 className="document-assistant-panel__heading">{translate('docAssistant.section.filing')}</h2>
         <p className="document-assistant-panel__filing-line">
@@ -123,9 +122,7 @@ export function DocumentAssistantPanel({
       </Card>
 
       <Card className="document-assistant-panel__section">
-        <h2 className="document-assistant-panel__heading" data-testid="document-assistant-recognition">
-          {translate('docAssistant.section.trust')}
-        </h2>
+        <h2 className="document-assistant-panel__heading">{translate('docAssistant.section.trust')}</h2>
         <p className="document-assistant-panel__trust-label document-assistant-panel__trust-label--primary">
           {translate(assistant.recognitionStatusKey)}
         </p>
@@ -161,38 +158,6 @@ export function DocumentAssistantPanel({
           </div>
         )}
       </Card>
-    </>
-  );
-
-  return (
-    <section
-      className={`document-assistant-panel${compactLayout ? ' document-assistant-panel--compact' : ''}`}
-      data-testid="document-assistant-panel"
-    >
-      <Card highlight className="document-assistant-panel__hero">
-        <CardMeta>{translate('docAssistant.recognized')}</CardMeta>
-        <CardTitle>
-          {translate(assistant.documentTypeLabelKey)}
-          {assistant.sender ? ` · ${assistant.sender}` : ''}
-        </CardTitle>
-      </Card>
-
-      {briefCard}
-      {actionsCard}
-
-      {compactLayout ? (
-        <ShowMoreSection
-          expanded={expertExpanded}
-          onToggle={() => setExpertExpanded((open) => !open)}
-          showLabel={translate('common.showMore')}
-          hideLabel={translate('common.showLess')}
-          testId="document-assistant-expert-more"
-        >
-          {expertCards}
-        </ShowMoreSection>
-      ) : (
-        expertCards
-      )}
 
       <CollapsibleReviewSection
         id="assistant-details"

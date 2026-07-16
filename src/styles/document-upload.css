@@ -186,11 +186,6 @@
   margin-bottom: var(--space-5);
 }
 
-.document-assistant-panel--compact {
-  gap: var(--space-3);
-  margin-bottom: var(--space-3);
-}
-
 .document-assistant-panel__hero {
   border-color: rgba(31, 60, 136, 0.18);
 }
