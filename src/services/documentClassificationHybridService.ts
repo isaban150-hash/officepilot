@@ -7,6 +7,7 @@ import {
   getPaymentScoringCutoverEnabled,
   getReceiptScoringCutoverEnabled,
 } from '../config/documentIntelligenceConfig';
+import type { DocumentProfile } from '../types/documentProfile';
 import type { DiCutoverLane } from '../types/documentShadowTypes';
 import type { DocumentClassificationInput } from '../types/models';
 import type { DetectionResult } from './documentClassificationService';
@@ -16,6 +17,10 @@ import { evaluateContractCutoverEligibility } from './documentContractCutoverSer
 import { evaluateCustomerCutoverEligibility } from './documentCustomerCutoverService';
 import { evaluateInvoiceCutoverEligibility } from './documentInvoiceCutoverService';
 import { evaluatePaymentCutoverEligibility } from './documentPaymentCutoverService';
+import {
+  applyDocumentProfileToDetection,
+  buildDocumentProfile,
+} from './documentProfileService';
 import {
   runReceiptAnalysisPipeline,
   type ReceiptAnalysisPipelineResult,
@@ -32,6 +37,8 @@ export type HybridClassificationContext = {
   resolution: ClassificationDetectionResolution;
   cutoverLane: DiCutoverLane;
   pipeline: ReceiptAnalysisPipelineResult | null;
+  /** Runtime-only; never persisted. */
+  documentProfile: DocumentProfile | null;
 };
 
 function hasUploadKindHint(input: DocumentClassificationInput): boolean {
@@ -50,7 +57,7 @@ function isAnyCutoverEnabled(): boolean {
   );
 }
 
-function resolveClassificationFromPipeline(
+function resolvePreliminaryDetection(
   input: DocumentClassificationInput,
   legacyDetection: DetectionResult,
   pipeline: ReceiptAnalysisPipelineResult | null,
@@ -136,6 +143,38 @@ function resolveClassificationFromPipeline(
   return { detection: legacyDetection, cutoverApplied: false };
 }
 
+function resolveClassificationFromPipeline(
+  input: DocumentClassificationInput,
+  legacyDetection: DetectionResult,
+  pipeline: ReceiptAnalysisPipelineResult | null,
+): ClassificationDetectionResolution & { documentProfile: DocumentProfile } {
+  const recognizedText = pipeline?.recognizedText ?? input.recognizedText ?? '';
+  const documentProfile = buildDocumentProfile({
+    pipeline,
+    recognizedText,
+    sourceFileName: input.sourceFileName,
+  });
+
+  const preliminary = resolvePreliminaryDetection(input, legacyDetection, pipeline);
+
+  if (hasUploadKindHint(input)) {
+    return { ...preliminary, documentProfile };
+  }
+
+  const guarded = applyDocumentProfileToDetection({
+    detection: preliminary.detection,
+    cutoverApplied: preliminary.cutoverApplied,
+    profile: documentProfile,
+    recognizedText,
+  });
+
+  return {
+    detection: guarded.detection,
+    cutoverApplied: guarded.cutoverApplied,
+    documentProfile,
+  };
+}
+
 export function resolveHybridClassification(
   input: DocumentClassificationInput,
   legacyDetection: DetectionResult,
@@ -143,9 +182,13 @@ export function resolveHybridClassification(
   if (hasUploadKindHint(input) || !isAnyCutoverEnabled()) {
     const resolution = resolveClassificationFromPipeline(input, legacyDetection, null);
     return {
-      resolution,
+      resolution: {
+        detection: resolution.detection,
+        cutoverApplied: resolution.cutoverApplied,
+      },
       cutoverLane: 'legacy',
       pipeline: null,
+      documentProfile: resolution.documentProfile,
     };
   }
 
@@ -157,9 +200,13 @@ export function resolveHybridClassification(
   );
 
   return {
-    resolution,
+    resolution: {
+      detection: resolution.detection,
+      cutoverApplied: resolution.cutoverApplied,
+    },
     cutoverLane,
     pipeline,
+    documentProfile: resolution.documentProfile,
   };
 }
 

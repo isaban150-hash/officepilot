@@ -19,6 +19,9 @@ function resolveText(item: InboxItem, recognizedText?: string): string {
 }
 
 function resolveNextStep(classification?: DocumentClassificationResult | null): string {
+  if (classification?.needsKindReview) {
+    return 'Dokumentart bitte prüfen';
+  }
   return classification?.nextTaskLabel || classification?.officePilotSuggestion || 'Dokument prüfen und passende Aktion wählen.';
 }
 
@@ -42,10 +45,21 @@ export function buildDocumentUnderstandingSummary(
   const quality = assessTextQuality(text);
   const classification = options.classification;
   const kind = item.classifiedKind ?? classification?.classifiedKind ?? 'sonstiges';
+  const profile = classification?.documentProfile;
+  const kindReviewRequired = Boolean(classification?.needsKindReview);
+  const profileWarningKeys = [
+    ...(kindReviewRequired ? ['document.profile.reviewKind', 'document.profile.multipleKindsPossible'] : []),
+    ...(profile?.reviewReasonKeys ?? []),
+  ];
 
   return {
     documentType: kind,
-    sender: extracted.Absender ?? item.sender ?? extracted.Lieferant ?? recognizedData.Lieferant,
+    sender:
+      profile?.senderEntity ??
+      extracted.Absender ??
+      item.sender ??
+      extracted.Lieferant ??
+      recognizedData.Lieferant,
     recipient: extracted.Empfänger ?? extracted.Kunde ?? recognizedData.Kunde,
     date: extracted.Datum ?? recognizedData.Datum,
     referenceNumber: extracted.Aktenzeichen ?? recognizedData.Aktenzeichen,
@@ -55,22 +69,36 @@ export function buildDocumentUnderstandingSummary(
     vorgang: extracted.Vorgang ?? item.vorgangTitle ?? extracted.Projekt ?? recognizedData.Vorgang,
     invoiceNumber: extracted.Rechnungsnummer ?? recognizedData.Rechnungsnummer,
     amount: resolvedAmount,
-    deadline: extracted.Frist ?? item.deadline ?? recognizedData.Frist ?? undefined,
+    deadline: profile?.deadlineEvidence
+      ? extracted.Frist ?? item.deadline ?? recognizedData.Frist ?? undefined
+      : extracted.Frist ?? item.deadline ?? recognizedData.Frist ?? undefined,
     nextStep: resolveNextStep(classification),
     partialRecognition: !quality.readable && quality.wordCount > 0,
     uncertainFields: uncertainFields.length > 0 ? uncertainFields : undefined,
+    kindReviewRequired: kindReviewRequired || undefined,
+    suggestedDocumentKinds:
+      classification?.suggestedKinds?.map(String) ??
+      profile?.topCandidates.slice(0, 2).map((entry) => entry.kind),
+    profileWarningKeys: profileWarningKeys.length > 0 ? [...new Set(profileWarningKeys)] : undefined,
   };
 }
 
 export function buildDocumentAiActions(
   kind: ClassifiedDocumentKind,
   summary: DocumentUnderstandingSummary,
+  options: { paymentDemand?: boolean; needsKindReview?: boolean } = {},
 ): DocumentAiAction[] {
   const actions: DocumentAiAction[] = [];
 
   const push = (id: DocumentAiActionId, labelKey: string, recommended: boolean) => {
     actions.push({ id, labelKey, recommended });
   };
+
+  if (options.needsKindReview || summary.kindReviewRequired) {
+    push('archive_document', 'document.aiAction.archive', false);
+    push('paper_folder', 'document.aiAction.paperFolder', true);
+    return actions;
+  }
 
   if (['werkvertrag', 'subunternehmervertrag', 'nachunternehmervertrag', 'auftrag', 'angebot', 'auftragsbestaetigung'].includes(kind)) {
     push('create_order', 'document.aiAction.createOrder', true);
@@ -80,7 +108,11 @@ export function buildDocumentAiActions(
     push('write_invoice', 'document.aiAction.writeInvoice', true);
   }
 
-  if (summary.deadline || ['mahnung', 'zahlungserinnerung', 'finanzamt', 'bg_bau', 'steuerbescheid'].includes(kind)) {
+  const mayMonitorPaymentDeadline =
+    options.paymentDemand !== false &&
+    (summary.deadline ||
+      ['mahnung', 'zahlungserinnerung', 'finanzamt', 'bg_bau', 'steuerbescheid'].includes(kind));
+  if (mayMonitorPaymentDeadline) {
     push('monitor_deadline', 'document.aiAction.monitorDeadline', Boolean(summary.deadline));
   }
 
@@ -100,6 +132,9 @@ export function buildUnderstandingFromItem(
 ): { summary: DocumentUnderstandingSummary; actions: DocumentAiAction[] } {
   const summary = buildDocumentUnderstandingSummary(item, { classification });
   const kind = item.classifiedKind ?? classification?.classifiedKind ?? 'sonstiges';
-  const actions = buildDocumentAiActions(kind, summary);
+  const actions = buildDocumentAiActions(kind, summary, {
+    paymentDemand: classification?.documentProfile?.paymentDemand,
+    needsKindReview: classification?.needsKindReview ?? summary.kindReviewRequired,
+  });
   return { summary, actions };
 }

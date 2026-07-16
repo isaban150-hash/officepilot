@@ -6,6 +6,7 @@ import {
   hasEmploymentBaSignals,
   hasStrongPaymentDemandEvidence,
 } from '../config/documentIntelligenceConfig';
+import { UNKNOWN_SENDER_CANONICAL } from '../i18n/resolveStoredText';
 import {
   buildDigitalFolderSpec,
   buildExplanation,
@@ -18,7 +19,7 @@ import {
   mapKindToDocumentType,
   suggestProcessType,
 } from './documentClassificationCatalog';
-import { UNKNOWN_SENDER_CANONICAL } from '../i18n/resolveStoredText';
+import { shouldBlockHealthInsuranceKind } from './documentProfileService';
 import { resolvePaperFiling, suggestPaperFolder } from './paperFolderService';
 import { getInboxExtractedDocumentText } from './inboxDocumentText';
 import { runLegacyDocumentAnalysisShadow } from './documentAnalysisShadowService';
@@ -150,6 +151,11 @@ function shouldSkipPaymentRule(kind: ClassifiedDocumentKind, haystack: string): 
   return !hasStrongPaymentDemandEvidence(haystack);
 }
 
+/** Skip generic KK / Knappschaft legacy hits on BA employment forms without KK correspondence. */
+function shouldSkipHealthInsuranceRule(kind: ClassifiedDocumentKind, haystack: string): boolean {
+  return shouldBlockHealthInsuranceKind(kind, haystack);
+}
+
 const UPLOAD_KIND_MAP: Record<UploadDocumentKind, ClassifiedDocumentKind> = {
   auftrag: 'auftrag',
   zahlungserinnerung: 'zahlungserinnerung',
@@ -223,6 +229,7 @@ export function detectClassifiedKindWithReason(input: DocumentClassificationInpu
   for (const rule of CLASSIFICATION_RULES) {
     if (shouldSkipInvoiceRule(rule.kind, haystack)) continue;
     if (shouldSkipPaymentRule(rule.kind, haystack)) continue;
+    if (shouldSkipHealthInsuranceRule(rule.kind, haystack)) continue;
     if (rule.pattern.test(haystack)) {
       return { kind: rule.kind, reasonKey: rule.reasonKey };
     }
@@ -426,14 +433,20 @@ export function classifyDocument(input: DocumentClassificationInput): DocumentCl
   const legacyDetection = detectClassifiedKindWithReason(input);
   const hybridContext = resolveHybridClassification(input, legacyDetection);
   const { detection } = hybridContext.resolution;
+  const documentProfile = hybridContext.documentProfile;
   const classifiedKind = detection.kind;
+  const needsKindReview =
+    Boolean(documentProfile?.needsKindReview) ||
+    detection.reasonKey === 'classification.detect.kindReviewRequired';
   const isAdvertisement =
     input.kindHint === 'werbung' ||
     /werbung|reklame|prospekt|aktionsmail|newsletter/.test(buildHaystack(input));
 
   const recognizedData = buildRecognizedData(classifiedKind, input);
+  const profileSender = documentProfile?.senderEntity?.trim();
   const sender =
     input.senderHint ??
+    profileSender ??
     recognizedData.Absender ??
     recognizedData.Lieferant ??
     recognizedData.Kunde ??
@@ -443,7 +456,9 @@ export function classifyDocument(input: DocumentClassificationInput): DocumentCl
 
   const title =
     input.titleHint ??
-    `${classifiedKind.charAt(0).toUpperCase()}${classifiedKind.slice(1).replace(/_/g, ' ')} – ${sender}`;
+    (needsKindReview
+      ? `Dokument – ${sender}`
+      : `${classifiedKind.charAt(0).toUpperCase()}${classifiedKind.slice(1).replace(/_/g, ' ')} – ${sender}`);
 
   const suggestedVorgangRaw = suggestRelatedVorgang(recognizedData, sender, title);
   const digitalFolder = suggestDigitalFolder(classifiedKind, {
@@ -462,10 +477,29 @@ export function classifyDocument(input: DocumentClassificationInput): DocumentCl
     ({ folderId: '', register: '—', label: 'Entsorgen' } satisfies PaperFilingRule);
   const deadline = recognizedData.Frist ?? recognizedData.Fälligkeit ?? null;
 
-  const explanation = buildExplanation(classifiedKind, sender);
-  const priority = isAdvertisement ? 'niedrig' : defaultPriority(classifiedKind);
-  const recommendedAction = isAdvertisement ? 'entsorgen' : defaultRecommendedAction(classifiedKind);
-  const processType = isAdvertisement ? 'archive_only' : suggestProcessType(classifiedKind);
+  const explanation = needsKindReview
+    ? `Dokumentart bitte prüfen. Mehrere Dokumentarten möglich. Absender: „${sender}“.`
+    : buildExplanation(classifiedKind, sender);
+  const priority = isAdvertisement
+    ? 'niedrig'
+    : needsKindReview
+      ? 'mittel'
+      : defaultPriority(classifiedKind);
+  const recommendedAction = isAdvertisement
+    ? 'entsorgen'
+    : needsKindReview
+      ? 'klaeren'
+      : defaultRecommendedAction(classifiedKind);
+  const processType = isAdvertisement
+    ? 'archive_only'
+    : needsKindReview
+      ? 'review_required'
+      : suggestProcessType(classifiedKind);
+
+  const suggestedKinds = (documentProfile?.topCandidates ?? [])
+    .map((candidate) => candidate.kind)
+    .filter((kind, index, all) => all.indexOf(kind) === index)
+    .slice(0, 2);
 
   const result: DocumentClassificationResult = {
     classifiedKind,
@@ -482,12 +516,29 @@ export function classifyDocument(input: DocumentClassificationInput): DocumentCl
     paperFiling,
     recognizedData,
     officePilotSuggestion: explanation,
-    nextTaskLabel: isAdvertisement ? 'Keine Aufgabe nötig' : buildNextTask(classifiedKind),
+    nextTaskLabel: isAdvertisement
+      ? 'Keine Aufgabe nötig'
+      : needsKindReview
+        ? 'Dokumentart bitte prüfen'
+        : buildNextTask(classifiedKind),
     securityHint: SECURITY_DEFAULT,
-    taskTemplate: isAdvertisement ? undefined : buildTaskTemplate(classifiedKind, title, deadline),
+    taskTemplate: isAdvertisement || needsKindReview
+      ? undefined
+      : buildTaskTemplate(classifiedKind, title, deadline),
     isAdvertisement,
     suggestedVorgang: suggestedVorgangRaw ?? undefined,
-    actions: suggestActions(classifiedKind, { isAdvertisement }),
+    actions: needsKindReview
+      ? [
+          {
+            id: 'confirm_filing',
+            labelKey: 'classification.action.confirmFiling',
+            variant: 'primary',
+          },
+        ]
+      : suggestActions(classifiedKind, { isAdvertisement }),
+    documentProfile: documentProfile ?? undefined,
+    needsKindReview: needsKindReview || undefined,
+    suggestedKinds: suggestedKinds.length > 0 ? suggestedKinds : undefined,
   };
 
   if (

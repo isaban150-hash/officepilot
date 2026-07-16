@@ -640,6 +640,12 @@ const deLegacy = {
   'classification.detect.uploadHint': 'Upload-Kategorie oder manuelle Zuordnung',
   'classification.detect.advertisement': 'Werbung oder nicht geschäftlich erkannt',
   'classification.detect.fallback': 'Kein spezifisches Muster – manuelle Prüfung',
+  'classification.detect.kindReviewRequired':
+    'Widersprüchliche Signale – Dokumentart bitte prüfen',
+  'document.profile.reviewKind': 'Dokumentart bitte prüfen',
+  'document.profile.multipleKindsPossible': 'Mehrere Dokumentarten möglich',
+  'document.profile.assignmentUncertain': 'Zuordnung unsicher',
+  'document.profile.suggestedKinds': 'Vorgeschlagene Dokumentarten',
   'classification.detect.mahnung': 'Schlüsselwort „Mahnung“ oder Inkasso erkannt',
   'classification.detect.zahlungserinnerung': 'Schlüsselwort „Zahlungserinnerung“ erkannt',
   'classification.detect.freistellung': 'Freistellungsbescheinigung (§48b) erkannt',
@@ -2646,6 +2652,12 @@ const trLegacy: Partial<Record<keyof typeof de, string>> = {
     'Sözleşme (iş/alt/yüklenici) belge analizi ile algılandı',
   'classification.detect.diCustomerScoring':
     'Müşteri siparişi/teklif/sipariş onayı belge analizi ile algılandı',
+  'classification.detect.kindReviewRequired':
+    'Çelişkili sinyaller – lütfen belge türünü kontrol edin',
+  'document.profile.reviewKind': 'Lütfen belge türünü kontrol edin',
+  'document.profile.multipleKindsPossible': 'Birden fazla belge türü mümkün',
+  'document.profile.assignmentUncertain': 'Atama belirsiz',
+  'document.profile.suggestedKinds': 'Önerilen belge türleri',
 
   'invoice.skontoFromContractTitle': 'Sözleşmedeki erken ödeme indirimi uygulansın mı?',
   'invoice.skontoFromContractNo': 'Hayır',
@@ -2954,6 +2966,12 @@ const bgLegacy: Partial<Record<keyof typeof de, string>> = {
     'Договор (работен/подизпълнител/подизпълнител), разпознат чрез анализ на документа',
   'classification.detect.diCustomerScoring':
     'Поръчка/оферта/потвърждение на поръчка, разпознати чрез анализ на документа',
+  'classification.detect.kindReviewRequired':
+    'Противоречиви сигнали – моля, проверете вида на документа',
+  'document.profile.reviewKind': 'Моля, проверете вида на документа',
+  'document.profile.multipleKindsPossible': 'Възможни са няколко вида документи',
+  'document.profile.assignmentUncertain': 'Присвояването е несигурно',
+  'document.profile.suggestedKinds': 'Предложени видове документи',
 
   'document.filing.title': 'Архив',
   'document.filing.digital': 'Дигитално',

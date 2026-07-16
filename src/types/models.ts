@@ -444,6 +444,12 @@ export interface DocumentClassificationResult {
   isAdvertisement?: boolean;
   suggestedVorgang?: SuggestedVorgangLink;
   actions: SuggestedDocumentAction[];
+  /**
+   * Runtime-only universal understanding. Never persist on InboxItem / CompanyDocument.
+   */
+  documentProfile?: import('./documentProfile').DocumentProfile;
+  needsKindReview?: boolean;
+  suggestedKinds?: ClassifiedDocumentKind[];
 }
 
 export type ContractType =
@@ -608,6 +614,10 @@ export interface DocumentUnderstandingSummary {
   nextStep: string;
   partialRecognition: boolean;
   uncertainFields?: string[];
+  /** Runtime hints from document profile — not persisted. */
+  kindReviewRequired?: boolean;
+  suggestedDocumentKinds?: string[];
+  profileWarningKeys?: string[];
 }
 
 export type DocumentAiActionId =
