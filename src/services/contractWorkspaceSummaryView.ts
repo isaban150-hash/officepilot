@@ -1,5 +1,7 @@
 import type { ContractOrderProposal, ExtractedContractField } from '../types/documentIntelligence';
+import type { InboxItem, Vorgang } from '../types/models';
 import type { TranslationKey } from '../i18n';
+import { hasSchlussrechnung } from './orderBillingRules';
 
 export type ContractWorkspaceSummaryRow = {
   id: string;
@@ -8,12 +10,25 @@ export type ContractWorkspaceSummaryRow = {
   needsReview: boolean;
 };
 
+export type ContractWorkspaceStatusRow = {
+  id: string;
+  labelKey: TranslationKey;
+  valueKey: TranslationKey;
+  valueParams?: Record<string, string | number>;
+};
+
 export type ContractWorkspaceSummaryView = {
   titleKey: TranslationKey;
   disclaimerKey: TranslationKey;
   contractKindLabelKey: TranslationKey;
   rows: ContractWorkspaceSummaryRow[];
+  statusRows: ContractWorkspaceStatusRow[];
   reviewHintKeys: string[];
+};
+
+export type ContractWorkspaceSummaryContext = {
+  item?: InboxItem;
+  vorgang?: Vorgang | null;
 };
 
 const POSITION_SUM_SOURCE = 'Summe der erkannten Positionen';
@@ -40,12 +55,78 @@ function pushRow(
   rows.push({ id, labelKey, value: trimmed, needsReview });
 }
 
+function isLinkedToVorgang(item: InboxItem): boolean {
+  if (item.vorgangId) return true;
+  return item.vorgangLinkStatus === 'linked' || item.vorgangLinkStatus === 'created';
+}
+
+function isArchived(item: InboxItem): boolean {
+  return Boolean(item.importedToArchive) || Boolean(item.archiveDocumentId) || item.status === 'abgelegt';
+}
+
+function buildStatusRows(context?: ContractWorkspaceSummaryContext): ContractWorkspaceStatusRow[] {
+  const item = context?.item;
+  if (!item) return [];
+
+  const statusRows: ContractWorkspaceStatusRow[] = [
+    {
+      id: 'vorgang',
+      labelKey: 'documentIntelligence.workspace.status.vorgang',
+      valueKey: isLinkedToVorgang(item)
+        ? 'documentIntelligence.workspace.status.vorgangLinked'
+        : 'documentIntelligence.workspace.status.vorgangUnlinked',
+    },
+    {
+      id: 'archive',
+      labelKey: 'documentIntelligence.workspace.status.archive',
+      valueKey: isArchived(item)
+        ? 'documentIntelligence.workspace.status.archived'
+        : 'documentIntelligence.workspace.status.notArchived',
+    },
+  ];
+
+  // Rechnungszeilen nur, wenn ein Vorgang existiert.
+  const vorgang = context?.vorgang ?? null;
+  const hasVorgang = Boolean(item.vorgangId) || Boolean(vorgang);
+  if (!hasVorgang) {
+    return statusRows;
+  }
+
+  const invoiceCount = vorgang?.invoices.length ?? 0;
+  let invoicesValueKey: TranslationKey = 'documentIntelligence.workspace.status.invoicesNone';
+  let valueParams: Record<string, string | number> | undefined;
+  if (invoiceCount === 1) {
+    invoicesValueKey = 'documentIntelligence.workspace.status.invoicesOne';
+  } else if (invoiceCount > 1) {
+    invoicesValueKey = 'documentIntelligence.workspace.status.invoicesMany';
+    valueParams = { count: invoiceCount };
+  }
+
+  statusRows.push({
+    id: 'invoices',
+    labelKey: 'documentIntelligence.workspace.status.invoices',
+    valueKey: invoicesValueKey,
+    valueParams,
+  });
+
+  if (vorgang && hasSchlussrechnung(vorgang)) {
+    statusRows.push({
+      id: 'schlussrechnung',
+      labelKey: 'documentIntelligence.workspace.status.schlussrechnung',
+      valueKey: 'documentIntelligence.workspace.status.schlussPresent',
+    });
+  }
+
+  return statusRows;
+}
+
 /**
- * Reiner View-Adapter: bildet nur bestehende Proposal-/Intelligence-Werte ab.
+ * Reiner View-Adapter: bildet nur bestehende Proposal-/Intelligence-/Inbox-/Vorgang-Werte ab.
  * Keine neue Extraktion, keine Betragsberechnung, keine fachliche Wahrheit.
  */
 export function buildContractWorkspaceSummaryView(
   proposal: ContractOrderProposal,
+  context?: ContractWorkspaceSummaryContext,
 ): ContractWorkspaceSummaryView {
   const fields = proposal.intelligence.contractFields;
   const rows: ContractWorkspaceSummaryRow[] = [];
@@ -139,6 +220,7 @@ export function buildContractWorkspaceSummaryView(
     disclaimerKey: 'documentIntelligence.workspace.summaryDisclaimer',
     contractKindLabelKey: kindKey,
     rows,
+    statusRows: buildStatusRows(context),
     reviewHintKeys: proposal.reviewHints.slice(),
   };
 }

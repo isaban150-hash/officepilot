@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Button } from '../../ui/Button';
 import { Card, CardMeta, CardTitle } from '../../ui/Card';
 import type { ContractOrderProposal, EnhancedDetectedOrderPosition } from '../../../types/documentIntelligence';
+import type { InboxItem } from '../../../types/models';
 import type { TranslationKey } from '../../../i18n';
 import {
   buildContractPositionKey,
@@ -11,6 +12,7 @@ import {
   type ContractPositionSelectionMap,
   type ContractPositionSelectionState,
 } from '../../../services/contractPositionImportService';
+import { getVorgangById } from '../../../services/vorgangService';
 import { ContractWorkspaceSummary } from './ContractWorkspaceSummary';
 
 /** Keep first paint light — remaining rows load on demand. */
@@ -19,6 +21,7 @@ export const CONTRACT_PROPOSAL_INITIAL_VISIBLE_ROWS = 30;
 interface ContractOrderProposalPanelProps {
   proposal: ContractOrderProposal;
   translate: (key: TranslationKey) => string;
+  item?: InboxItem;
   onConfirmImport: (selectedPositions: EnhancedDetectedOrderPosition[]) => void;
   onDiscard?: () => void;
   isCreating?: boolean;
@@ -47,12 +50,14 @@ function selectionLabelKey(state: ContractPositionSelectionState): TranslationKe
 export function ContractOrderProposalPanel({
   proposal,
   translate,
+  item,
   onConfirmImport,
   onDiscard,
   isCreating = false,
 }: ContractOrderProposalPanelProps) {
   const labelKey = proposal.intelligence.documentLabelKey as TranslationKey;
   const positions = proposal.positions;
+  const vorgang = item?.vorgangId ? getVorgangById(item.vorgangId) ?? null : null;
 
   const [visibleCount, setVisibleCount] = useState(() =>
     Math.min(CONTRACT_PROPOSAL_INITIAL_VISIBLE_ROWS, positions.length),
@@ -168,7 +173,12 @@ export function ContractOrderProposalPanel({
         </p>
       )}
 
-      <ContractWorkspaceSummary proposal={proposal} translate={translate} />
+      <ContractWorkspaceSummary
+        proposal={proposal}
+        translate={translate}
+        item={item}
+        vorgang={vorgang}
+      />
 
       <div className="contract-order-proposal__positions" data-testid="contract-order-positions">
         <h4>{translate('documentIntelligence.positionsTitle')}</h4>

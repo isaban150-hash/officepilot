@@ -97,6 +97,7 @@ export function DocumentReviewExperience({
         <ContractOrderProposalPanel
           proposal={workflow.contractOrderProposal}
           translate={translate}
+          item={item}
           onConfirmImport={(selected) => onCreateContractOrder?.(selected)}
           onDiscard={onDiscardContractProposal}
           isCreating={isCreatingContractOrder}
