@@ -166,8 +166,9 @@ describe('CONTRACT-POSITION-INSIGHTS-01', () => {
     expect(html.toLowerCase()).not.toContain('importiert');
     expect(html).not.toContain('Importhistorie');
 
-    const positionsLabelOccurrences = html.split('>Positionen<').length - 1;
-    expect(positionsLabelOccurrences).toBe(1);
+    // Gesamtszahl nur einmal als Field-Row; Abschnittsüberschrift „Positionen“ ist zusätzlich erlaubt.
+    expect((html.match(/data-testid="contract-workspace-summary-positions"/g) ?? []).length).toBe(1);
+    expect(html).toContain('data-testid="contract-workspace-summary-section-positions"');
   });
 
   it('fehlende-Feld-Zähler mit 0 werden weggelassen; Importierbarkeit zeigt auch 0', () => {

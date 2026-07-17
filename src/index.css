@@ -4100,6 +4100,22 @@ body {
   font-weight: 600;
 }
 
+.contract-workspace-summary__section {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.contract-workspace-summary__section-title {
+  margin: 0.65rem 0 0.15rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-text, #111827);
+}
+
+.contract-workspace-summary__section:first-of-type .contract-workspace-summary__section-title {
+  margin-top: 0.35rem;
+}
+
 .contract-order-proposal__intro {
   display: grid;
   gap: 0.25rem;

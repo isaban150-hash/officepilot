@@ -19,6 +19,8 @@ export function ContractWorkspaceSummary({
   vorgang,
 }: ContractWorkspaceSummaryProps) {
   const view = buildContractWorkspaceSummaryView(proposal, { item, vorgang });
+  const showPositionsSection = view.positionInsightRows.length > 0;
+  const showStatusSection = view.statusRows.length > 0;
 
   return (
     <section
@@ -31,49 +33,72 @@ export function ContractWorkspaceSummary({
         {translate(view.disclaimerKey)}
       </p>
 
-      <DataRow
-        label={translate('documentIntelligence.field.contractKind')}
-        value={translate(view.contractKindLabelKey)}
-      />
-
-      <div data-testid="contract-workspace-summary-rows">
-        {view.rows.map((row) => (
-          <div key={row.id} data-testid={`contract-workspace-summary-${row.id}`}>
-            <DataRow
-              label={translate(row.labelKey)}
-              value={
-                row.needsReview
-                  ? `${row.value} (${translate('documentIntelligence.workspace.needsReview')})`
-                  : row.value
-              }
-            />
-          </div>
-        ))}
-      </div>
-
-      {view.positionInsightRows.length > 0 ? (
-        <div data-testid="contract-workspace-summary-position-insights">
-          {view.positionInsightRows.map((row) => (
+      <div
+        className="contract-workspace-summary__section"
+        data-testid="contract-workspace-summary-section-contract"
+      >
+        <h5 className="contract-workspace-summary__section-title">
+          {translate('documentIntelligence.workspace.section.contract')}
+        </h5>
+        <DataRow
+          label={translate('documentIntelligence.field.contractKind')}
+          value={translate(view.contractKindLabelKey)}
+        />
+        <div data-testid="contract-workspace-summary-rows">
+          {view.rows.map((row) => (
             <div key={row.id} data-testid={`contract-workspace-summary-${row.id}`}>
               <DataRow
                 label={translate(row.labelKey)}
-                value={interpolateParams(translate(row.valueKey), row.valueParams)}
+                value={
+                  row.needsReview
+                    ? `${row.value} (${translate('documentIntelligence.workspace.needsReview')})`
+                    : row.value
+                }
               />
             </div>
           ))}
         </div>
+      </div>
+
+      {showPositionsSection ? (
+        <div
+          className="contract-workspace-summary__section"
+          data-testid="contract-workspace-summary-section-positions"
+        >
+          <h5 className="contract-workspace-summary__section-title">
+            {translate('documentIntelligence.workspace.section.positions')}
+          </h5>
+          <div data-testid="contract-workspace-summary-position-insights">
+            {view.positionInsightRows.map((row) => (
+              <div key={row.id} data-testid={`contract-workspace-summary-${row.id}`}>
+                <DataRow
+                  label={translate(row.labelKey)}
+                  value={interpolateParams(translate(row.valueKey), row.valueParams)}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
       ) : null}
 
-      {view.statusRows.length > 0 ? (
-        <div data-testid="contract-workspace-summary-status">
-          {view.statusRows.map((row) => (
-            <div key={row.id} data-testid={`contract-workspace-summary-status-${row.id}`}>
-              <DataRow
-                label={translate(row.labelKey)}
-                value={interpolateParams(translate(row.valueKey), row.valueParams)}
-              />
-            </div>
-          ))}
+      {showStatusSection ? (
+        <div
+          className="contract-workspace-summary__section"
+          data-testid="contract-workspace-summary-section-status"
+        >
+          <h5 className="contract-workspace-summary__section-title">
+            {translate('documentIntelligence.workspace.section.status')}
+          </h5>
+          <div data-testid="contract-workspace-summary-status">
+            {view.statusRows.map((row) => (
+              <div key={row.id} data-testid={`contract-workspace-summary-status-${row.id}`}>
+                <DataRow
+                  label={translate(row.labelKey)}
+                  value={interpolateParams(translate(row.valueKey), row.valueParams)}
+                />
+              </div>
+            ))}
+          </div>
         </div>
       ) : null}
 

@@ -2058,6 +2058,9 @@ const deLegacy = {
   'documentIntelligence.workspace.summaryTitle': 'Vertrag kurz erklärt',
   'documentIntelligence.workspace.summaryDisclaimer':
     'Angaben aus dem Dokument – noch kein bestätigter Auftrag und kein verknüpfter Kunde.',
+  'documentIntelligence.workspace.section.contract': 'Vertragsdaten',
+  'documentIntelligence.workspace.section.positions': 'Positionen',
+  'documentIntelligence.workspace.section.status': 'Status',
   'documentIntelligence.workspace.needsReview': 'bitte prüfen',
   'documentIntelligence.workspace.status.vorgang': 'Vorgang',
   'documentIntelligence.workspace.status.vorgangLinked': 'Mit Vorgang verknüpft',
@@ -2094,6 +2097,8 @@ const deLegacy = {
   'documentIntelligence.review.contractField': 'Vertragsfeld bitte prüfen',
   'documentIntelligence.positionsTitle': 'Leistungspositionen',
   'documentIntelligence.proposal.detectedTitle': 'Aus dem Vertrag erkannte Positionen',
+  'documentIntelligence.proposal.instruction':
+    'Bitte prüfen Sie Vertragsdaten und Positionen und bestätigen oder verwerfen Sie den Vorschlag.',
   'documentIntelligence.proposal.reviewHint': 'Bitte prüfen Sie Menge, Einheit und Preis.',
   'documentIntelligence.proposal.onlySelectedHint':
     'Nur ausgewählte Positionen werden in den Auftrag übernommen.',
@@ -2636,6 +2641,9 @@ const trLegacy: Partial<Record<keyof typeof de, string>> = {
   'documentIntelligence.workspace.summaryTitle': 'Sözleşme kısa özet',
   'documentIntelligence.workspace.summaryDisclaimer':
     'Belgeden alınan bilgiler – henüz onaylı sipariş veya bağlı müşteri değil.',
+  'documentIntelligence.workspace.section.contract': 'Sözleşme verileri',
+  'documentIntelligence.workspace.section.positions': 'Kalemler',
+  'documentIntelligence.workspace.section.status': 'Durum',
   'documentIntelligence.workspace.needsReview': 'kontrol edin',
   'documentIntelligence.workspace.status.vorgang': 'İş',
   'documentIntelligence.workspace.status.vorgangLinked': 'İşe bağlı',
@@ -2671,6 +2679,8 @@ const trLegacy: Partial<Record<keyof typeof de, string>> = {
   'documentIntelligence.review.contractField': 'Lütfen sözleşme alanını kontrol edin',
   'documentIntelligence.positionsTitle': 'İş kalemleri',
   'documentIntelligence.proposal.detectedTitle': 'Sözleşmeden tanınan kalemler',
+  'documentIntelligence.proposal.instruction':
+    'Lütfen sözleşme verilerini ve kalemleri kontrol edin, ardından öneriyi onaylayın veya reddedin.',
   'documentIntelligence.proposal.reviewHint': 'Lütfen miktar, birim ve fiyatı kontrol edin.',
   'documentIntelligence.proposal.onlySelectedHint':
     'Yalnızca seçilen kalemler işe aktarılır.',
@@ -3115,6 +3125,9 @@ const bgLegacy: Partial<Record<keyof typeof de, string>> = {
   'documentIntelligence.workspace.summaryTitle': 'Договорът накратко',
   'documentIntelligence.workspace.summaryDisclaimer':
     'Данни от документа – още няма потвърдена поръчка и свързан клиент.',
+  'documentIntelligence.workspace.section.contract': 'Данни по договора',
+  'documentIntelligence.workspace.section.positions': 'Позиции',
+  'documentIntelligence.workspace.section.status': 'Статус',
   'documentIntelligence.workspace.needsReview': 'за проверка',
   'documentIntelligence.workspace.status.vorgang': 'Процес',
   'documentIntelligence.workspace.status.vorgangLinked': 'Свързан с процес',
@@ -3151,6 +3164,8 @@ const bgLegacy: Partial<Record<keyof typeof de, string>> = {
   'documentIntelligence.review.contractField': 'Моля, проверете поле от договора',
   'documentIntelligence.positionsTitle': 'Позиции по количество',
   'documentIntelligence.proposal.detectedTitle': 'Разпознати позиции от договора',
+  'documentIntelligence.proposal.instruction':
+    'Моля, проверете данните по договора и позициите и потвърдете или отхвърлете предложението.',
   'documentIntelligence.proposal.reviewHint': 'Моля, проверете количество, единица и цена.',
   'documentIntelligence.proposal.onlySelectedHint':
     'Само избраните позиции се прехвърлят в поръчката.',

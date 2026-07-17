@@ -281,6 +281,7 @@ describe('CONTRACT-TO-ORDER-POSITIONS-01 confirm-first', () => {
   it('stellt neue Proposal-Texte in DE/TR/BG bereit', () => {
     const keys = [
       'documentIntelligence.proposal.detectedTitle',
+      'documentIntelligence.proposal.instruction',
       'documentIntelligence.proposal.reviewHint',
       'documentIntelligence.proposal.onlySelectedHint',
       'documentIntelligence.proposal.unsureNotSelectedHint',

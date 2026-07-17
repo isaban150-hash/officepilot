@@ -156,9 +156,7 @@ export function ContractOrderProposalPanel({
 
       <div className="contract-order-proposal__intro" data-testid="contract-order-proposal-intro">
         <h4>{translate('documentIntelligence.proposal.detectedTitle')}</h4>
-        <p>{translate('documentIntelligence.proposal.reviewHint')}</p>
-        <p>{translate('documentIntelligence.proposal.onlySelectedHint')}</p>
-        <p>{translate('documentIntelligence.proposal.unsureNotSelectedHint')}</p>
+        <p>{translate('documentIntelligence.proposal.instruction')}</p>
       </div>
 
       {proposal.progressBillingHint && (
