@@ -919,6 +919,38 @@ export function EingangDetailPage() {
     </>
   );
 
+  const prioritizeContractWorkspace = Boolean(workflow?.contractOrderProposal);
+  const freeQuestionPanel = (
+    <DocumentFreeQuestionPanel source={{ type: 'inbox', item }} testIdPrefix="document-free-question" />
+  );
+  const originalFilePanel = item.fileRefId ? (
+    <div data-testid="ablage-original-file">
+      <DocumentOriginalFilePanel
+        fileRefId={item.fileRefId}
+        translate={translate}
+        onPromoted={() => showToast(translate('document.original.promote.success'))}
+      />
+    </div>
+  ) : null;
+  const reviewExperience = (
+    <DocumentReviewExperience
+      item={item}
+      workflow={workflow}
+      executionResult={intakeExecution}
+      isExecuting={isExecutingIntake}
+      moreOptionsExpanded={moreOptionsExpanded}
+      onToggleMoreOptions={() => setMoreOptionsExpanded((open) => !open)}
+      onApplySuggestion={handleApplySuggestion}
+      onCreateContractOrder={handleCreateContractOrder}
+      onDiscardContractProposal={handleDiscardContractProposal}
+      isCreatingContractOrder={isCreatingContractOrder}
+      onOpenVorgang={handleOpenVorgang}
+      onNextDocument={goBack}
+      moreOptionsContent={moreOptionsContent}
+      translate={translate}
+    />
+  );
+
   return (
     <div
       className={`page eingang-detail-page ${isEditing ? 'page--editing' : ''}`}
@@ -940,34 +972,19 @@ export function EingangDetailPage() {
         }}
       />
 
-      <DocumentFreeQuestionPanel source={{ type: 'inbox', item }} testIdPrefix="document-free-question" />
-
-      {item.fileRefId ? (
-        <div data-testid="ablage-original-file">
-          <DocumentOriginalFilePanel
-            fileRefId={item.fileRefId}
-            translate={translate}
-            onPromoted={() => showToast(translate('document.original.promote.success'))}
-          />
-        </div>
-      ) : null}
-
-      <DocumentReviewExperience
-        item={item}
-        workflow={workflow}
-        executionResult={intakeExecution}
-        isExecuting={isExecutingIntake}
-        moreOptionsExpanded={moreOptionsExpanded}
-        onToggleMoreOptions={() => setMoreOptionsExpanded((open) => !open)}
-        onApplySuggestion={handleApplySuggestion}
-        onCreateContractOrder={handleCreateContractOrder}
-        onDiscardContractProposal={handleDiscardContractProposal}
-        isCreatingContractOrder={isCreatingContractOrder}
-        onOpenVorgang={handleOpenVorgang}
-        onNextDocument={goBack}
-        moreOptionsContent={moreOptionsContent}
-        translate={translate}
-      />
+      {prioritizeContractWorkspace ? (
+        <>
+          {reviewExperience}
+          {freeQuestionPanel}
+          {originalFilePanel}
+        </>
+      ) : (
+        <>
+          {freeQuestionPanel}
+          {originalFilePanel}
+          {reviewExperience}
+        </>
+      )}
 
       {duplicateDocument && (
         <ImportToArchiveDialog
