@@ -1,6 +1,7 @@
 import type { ContractOrderProposal, ExtractedContractField } from '../types/documentIntelligence';
-import type { InboxItem, Vorgang } from '../types/models';
+import type { DetectedOrderPosition, InboxItem, Vorgang } from '../types/models';
 import type { TranslationKey } from '../i18n';
+import { isImportableLvPosition } from './contractPositionImportService';
 import { hasSchlussrechnung } from './orderBillingRules';
 
 export type ContractWorkspaceSummaryRow = {
@@ -23,6 +24,7 @@ export type ContractWorkspaceSummaryView = {
   contractKindLabelKey: TranslationKey;
   rows: ContractWorkspaceSummaryRow[];
   statusRows: ContractWorkspaceStatusRow[];
+  positionInsightRows: ContractWorkspaceStatusRow[];
   reviewHintKeys: string[];
 };
 
@@ -118,6 +120,83 @@ function buildStatusRows(context?: ContractWorkspaceSummaryContext): ContractWor
   }
 
   return statusRows;
+}
+
+/** Field absence uses the same finite/>0 convention as isImportableLvPosition. */
+function lacksRecognizedQuantity(position: DetectedOrderPosition): boolean {
+  return !(Number.isFinite(position.quantity) && position.quantity > 0);
+}
+
+function lacksRecognizedUnitPrice(position: DetectedOrderPosition): boolean {
+  return !(Number.isFinite(position.unitPrice) && position.unitPrice > 0);
+}
+
+function lacksRecognizedUnit(position: DetectedOrderPosition): boolean {
+  return !(position.unit?.trim());
+}
+
+/**
+ * Faktenzähler aus der aktuellen Proposal-Positionsliste.
+ * Kein Import-Vergleich, keine Historie, keine Heuristik.
+ */
+function buildPositionInsightRows(proposal: ContractOrderProposal): ContractWorkspaceStatusRow[] {
+  const positions = proposal.positions;
+  if (!positions.length) return [];
+
+  let importable = 0;
+  let withoutQuantity = 0;
+  let withoutUnitPrice = 0;
+  let withoutUnit = 0;
+
+  for (const position of positions) {
+    if (isImportableLvPosition(position)) importable += 1;
+    if (lacksRecognizedQuantity(position)) withoutQuantity += 1;
+    if (lacksRecognizedUnitPrice(position)) withoutUnitPrice += 1;
+    if (lacksRecognizedUnit(position)) withoutUnit += 1;
+  }
+
+  const notImportable = positions.length - importable;
+  const rows: ContractWorkspaceStatusRow[] = [
+    {
+      id: 'positionsImportable',
+      labelKey: 'documentIntelligence.workspace.positions.importable',
+      valueKey: 'documentIntelligence.workspace.positions.importableCount',
+      valueParams: { count: importable },
+    },
+    {
+      id: 'positionsNotImportable',
+      labelKey: 'documentIntelligence.workspace.positions.notImportable',
+      valueKey: 'documentIntelligence.workspace.positions.notImportableCount',
+      valueParams: { count: notImportable },
+    },
+  ];
+
+  if (withoutQuantity > 0) {
+    rows.push({
+      id: 'positionsWithoutQuantity',
+      labelKey: 'documentIntelligence.workspace.positions.withoutQuantity',
+      valueKey: 'documentIntelligence.workspace.positions.withoutQuantityCount',
+      valueParams: { count: withoutQuantity },
+    });
+  }
+  if (withoutUnitPrice > 0) {
+    rows.push({
+      id: 'positionsWithoutUnitPrice',
+      labelKey: 'documentIntelligence.workspace.positions.withoutUnitPrice',
+      valueKey: 'documentIntelligence.workspace.positions.withoutUnitPriceCount',
+      valueParams: { count: withoutUnitPrice },
+    });
+  }
+  if (withoutUnit > 0) {
+    rows.push({
+      id: 'positionsWithoutUnit',
+      labelKey: 'documentIntelligence.workspace.positions.withoutUnit',
+      valueKey: 'documentIntelligence.workspace.positions.withoutUnitCount',
+      valueParams: { count: withoutUnit },
+    });
+  }
+
+  return rows;
 }
 
 /**
@@ -221,6 +300,7 @@ export function buildContractWorkspaceSummaryView(
     contractKindLabelKey: kindKey,
     rows,
     statusRows: buildStatusRows(context),
+    positionInsightRows: buildPositionInsightRows(proposal),
     reviewHintKeys: proposal.reviewHints.slice(),
   };
 }

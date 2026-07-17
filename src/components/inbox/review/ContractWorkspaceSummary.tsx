@@ -51,6 +51,19 @@ export function ContractWorkspaceSummary({
         ))}
       </div>
 
+      {view.positionInsightRows.length > 0 ? (
+        <div data-testid="contract-workspace-summary-position-insights">
+          {view.positionInsightRows.map((row) => (
+            <div key={row.id} data-testid={`contract-workspace-summary-${row.id}`}>
+              <DataRow
+                label={translate(row.labelKey)}
+                value={interpolateParams(translate(row.valueKey), row.valueParams)}
+              />
+            </div>
+          ))}
+        </div>
+      ) : null}
+
       {view.statusRows.length > 0 ? (
         <div data-testid="contract-workspace-summary-status">
           {view.statusRows.map((row) => (

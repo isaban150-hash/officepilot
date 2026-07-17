@@ -2071,6 +2071,19 @@ const deLegacy = {
   'documentIntelligence.workspace.status.invoicesMany': '{count} Rechnungen vorhanden',
   'documentIntelligence.workspace.status.schlussrechnung': 'Schlussrechnung',
   'documentIntelligence.workspace.status.schlussPresent': 'Schlussrechnung vorhanden',
+  'documentIntelligence.workspace.positions.importable': 'Importierbar',
+  'documentIntelligence.workspace.positions.importableCount': '{count} Positionen importierbar',
+  'documentIntelligence.workspace.positions.notImportable': 'Nicht importierbar',
+  'documentIntelligence.workspace.positions.notImportableCount': '{count} Positionen nicht importierbar',
+  'documentIntelligence.workspace.positions.withoutQuantity': 'Ohne erkannte Menge',
+  'documentIntelligence.workspace.positions.withoutQuantityCount':
+    '{count} Positionen ohne erkannte Menge',
+  'documentIntelligence.workspace.positions.withoutUnitPrice': 'Ohne erkannten Einzelpreis',
+  'documentIntelligence.workspace.positions.withoutUnitPriceCount':
+    '{count} Positionen ohne erkannten Einzelpreis',
+  'documentIntelligence.workspace.positions.withoutUnit': 'Ohne erkannte Einheit',
+  'documentIntelligence.workspace.positions.withoutUnitCount':
+    '{count} Positionen ohne erkannte Einheit',
   'documentIntelligence.hint.progressBilling': 'Im Vertrag sind Abschlagsrechnungen vorgesehen.',
   'documentIntelligence.hint.technicalAttachments': 'Technische Anlagen vorhanden',
   'documentIntelligence.review.classification': 'Dokumentart bitte prüfen',
@@ -2634,6 +2647,18 @@ const trLegacy: Partial<Record<keyof typeof de, string>> = {
   'documentIntelligence.workspace.status.invoicesMany': '{count} fatura mevcut',
   'documentIntelligence.workspace.status.schlussrechnung': 'Kesin hesap',
   'documentIntelligence.workspace.status.schlussPresent': 'Kesin hesap mevcut',
+  'documentIntelligence.workspace.positions.importable': 'Aktarılabilir',
+  'documentIntelligence.workspace.positions.importableCount': '{count} kalem aktarılabilir',
+  'documentIntelligence.workspace.positions.notImportable': 'Aktarılamaz',
+  'documentIntelligence.workspace.positions.notImportableCount': '{count} kalem aktarılamaz',
+  'documentIntelligence.workspace.positions.withoutQuantity': 'Tanımlı miktar yok',
+  'documentIntelligence.workspace.positions.withoutQuantityCount':
+    '{count} kalemde tanımlı miktar yok',
+  'documentIntelligence.workspace.positions.withoutUnitPrice': 'Tanımlı birim fiyat yok',
+  'documentIntelligence.workspace.positions.withoutUnitPriceCount':
+    '{count} kalemde tanımlı birim fiyat yok',
+  'documentIntelligence.workspace.positions.withoutUnit': 'Tanımlı birim yok',
+  'documentIntelligence.workspace.positions.withoutUnitCount': '{count} kalemde tanımlı birim yok',
   'documentIntelligence.hint.progressBilling': 'Sözleşmede hakediş faturaları öngörülmüştür.',
   'documentIntelligence.hint.technicalAttachments': 'Teknik ekler mevcut',
   'documentIntelligence.review.classification': 'Lütfen belge türünü kontrol edin',
@@ -3099,6 +3124,19 @@ const bgLegacy: Partial<Record<keyof typeof de, string>> = {
   'documentIntelligence.workspace.status.invoicesMany': '{count} фактури налични',
   'documentIntelligence.workspace.status.schlussrechnung': 'Окончателна фактура',
   'documentIntelligence.workspace.status.schlussPresent': 'Окончателна фактура налична',
+  'documentIntelligence.workspace.positions.importable': 'Импортируеми',
+  'documentIntelligence.workspace.positions.importableCount': '{count} позиции импортируеми',
+  'documentIntelligence.workspace.positions.notImportable': 'Неимпортируеми',
+  'documentIntelligence.workspace.positions.notImportableCount': '{count} позиции неимпортируеми',
+  'documentIntelligence.workspace.positions.withoutQuantity': 'Без разпознато количество',
+  'documentIntelligence.workspace.positions.withoutQuantityCount':
+    '{count} позиции без разпознато количество',
+  'documentIntelligence.workspace.positions.withoutUnitPrice': 'Без разпозната единична цена',
+  'documentIntelligence.workspace.positions.withoutUnitPriceCount':
+    '{count} позиции без разпозната единична цена',
+  'documentIntelligence.workspace.positions.withoutUnit': 'Без разпозната единица',
+  'documentIntelligence.workspace.positions.withoutUnitCount':
+    '{count} позиции без разпозната единица',
   'documentIntelligence.hint.progressBilling': 'В договора са предвидени междинни фактури.',
   'documentIntelligence.hint.technicalAttachments': 'Има технически приложения',
   'documentIntelligence.review.classification': 'Моля, проверете вида на документа',
