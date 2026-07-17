@@ -1,0 +1,282 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { createElement } from 'react';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { DocumentAssistantPanel } from './components/documents/DocumentAssistantPanel';
+import { AppProvider } from './context/AppContext';
+import { DEFAULT_SETUP } from './data/mockData';
+import { EingangDetailPage } from './pages/EingangDetailPage';
+import { createAuftragInboxItem } from './test/fixtures';
+import type { InboxItem, WorkflowResult } from './types/models';
+import { SAMPLE_WERKVERTRAG_TEXT } from './services/contractAnalysisService';
+import { hydrateCompanyProfileStore } from './services/companyProfileService';
+import { hydrateInboxStore } from './services/inboxService';
+import { resetDeferredWorkflowAnalysisCacheForTests } from './services/inboxWorkflowAnalysisKey';
+import { hydrateVorgangStore } from './services/vorgangService';
+import { resetTestStores } from './test/resetStores';
+import { t, type TranslationKey } from './i18n';
+
+function translate(key: TranslationKey): string {
+  return t(key, 'de');
+}
+
+const testProfile = {
+  companyName: 'Mustermann Sanitär GmbH',
+  legalForm: 'GmbH',
+  street: 'Handwerkerweg 7',
+  zip: '10115',
+  city: 'Berlin',
+  country: 'Deutschland',
+  contactPerson: 'Max Mustermann',
+  phone: '030',
+  email: 'info@mustermann-sanitaer.de',
+  website: '',
+  taxNumber: '27/123/45678',
+  vatId: 'DE123456789',
+  bankName: 'Sparkasse',
+  iban: 'DE89370400440532013000',
+  bic: 'COBADEFFXXX',
+  defaultPaymentDays: 14,
+  defaultPaymentTerms: '14 Tage',
+  defaultSkonto: '',
+  invoiceFooterNotes: '',
+};
+
+function cloneInbox(item: InboxItem, overrides: Partial<InboxItem> = {}): InboxItem {
+  const { recognizedData: recognizedOverride, ...rest } = overrides;
+  return {
+    ...item,
+    digitalFolder: { ...item.digitalFolder },
+    paperFiling: { ...item.paperFiling },
+    ...rest,
+    recognizedData: {
+      ...item.recognizedData,
+      ...(recognizedOverride ?? {}),
+    },
+  };
+}
+
+function createContractItem(): InboxItem {
+  return cloneInbox(createAuftragInboxItem(), {
+    id: 'inbox-assistant-compact-contract',
+    title: 'Werkvertrag Compact',
+    classifiedKind: 'werkvertrag',
+    documentType: 'werkvertrag',
+    sender: 'Isobautec GmbH',
+    fileRefId: 'file-ref-assistant-compact',
+    recognizedData: {
+      Kunde: 'Müller Bau GmbH',
+      Baustelle: 'Hauptstr. 12, Berlin',
+      Betreff: 'Mustermann Sanitär GmbH',
+      _vertragstext: SAMPLE_WERKVERTRAG_TEXT,
+      _extractedText: SAMPLE_WERKVERTRAG_TEXT,
+    },
+  });
+}
+
+function createNonContractItem(): InboxItem {
+  return cloneInbox(createAuftragInboxItem(), {
+    id: 'inbox-assistant-compact-auftrag',
+    title: 'Kleiner Auftrag',
+    classifiedKind: 'auftrag',
+    sender: 'Test Kunde',
+    fileRefId: 'file-ref-assistant-compact-auftrag',
+    recognizedData: {
+      Leistung: 'Reparatur',
+      Angebotssumme: '120 €',
+      Betreff: 'Mustermann Sanitär GmbH',
+    },
+  });
+}
+
+function minimalWorkflow(item: InboxItem): WorkflowResult {
+  return {
+    inboxItemId: item.id,
+    companyRelevant: true,
+    companyRelevance: { status: 'relevant', reasons: [] },
+    classifiedKind: item.classifiedKind ?? 'auftrag',
+    classificationConfidence: 'high',
+    classification: {
+      documentType: item.documentType,
+      classifiedKind: item.classifiedKind ?? 'auftrag',
+      digitalFolder: item.digitalFolder,
+      paperFiling: item.paperFiling,
+      recommendedAction: item.recommendedAction,
+      suggestedVorgang: null,
+    },
+    documentExplanation: null,
+    documentUnderstanding: null,
+    documentAiActions: [],
+    contractAnalysis: null,
+    contractIntelligence: null,
+    contractOrderProposal: null,
+    suggestedVorgang: null,
+    similarVorgaenge: [],
+    suggestedOrderPositions: [],
+    suggestedTasks: [],
+    suggestedArchiveFolder: item.digitalFolder,
+    requiredDocuments: [],
+    pendingSummary: null,
+    warnings: [],
+    nextActions: [],
+  } as WorkflowResult;
+}
+
+function assertOrder(html: string, earlier: string, later: string) {
+  const earlyIdx = html.indexOf(earlier);
+  const lateIdx = html.indexOf(later);
+  expect(earlyIdx, `missing ${earlier}`).toBeGreaterThan(-1);
+  expect(lateIdx, `missing ${later}`).toBeGreaterThan(-1);
+  expect(earlyIdx).toBeLessThan(lateIdx);
+}
+
+describe('CONTRACT-WORKSPACE-ASSISTANT-COMPACT-01', () => {
+  beforeEach(() => {
+    resetTestStores();
+    resetDeferredWorkflowAnalysisCacheForTests();
+    hydrateCompanyProfileStore(testProfile);
+    hydrateVorgangStore([]);
+  });
+
+  afterEach(() => {
+    resetTestStores();
+  });
+
+  it('Fall A: Contract-Proposal → Assistant startet kompakt', () => {
+    const item = createContractItem();
+    const html = renderToStaticMarkup(
+      createElement(DocumentAssistantPanel, {
+        item,
+        workflow: minimalWorkflow(item),
+        translate,
+        language: 'de' as const,
+        compactForContractWorkspace: true,
+      }),
+    );
+
+    expect(html).toContain('data-testid="document-assistant-panel"');
+    expect(html).toContain('data-compact="true"');
+    expect(html).toContain(translate('docAssistant.recognized'));
+    expect(html).toContain('Werkvertrag');
+    expect(html).toContain('data-testid="doc-assistant-details"');
+    expect(html).toContain('aria-expanded="false"');
+
+    expect(html).not.toContain('data-testid="review-section-content-assistant-details"');
+    expect(html).not.toContain(`>${translate('docAssistant.section.brief')}<`);
+    expect(html).not.toContain(`>${translate('docAssistant.section.actions')}<`);
+    expect(html).not.toContain(`>${translate('docAssistant.section.filing')}<`);
+    expect(html).not.toContain(`>${translate('docAssistant.section.original')}<`);
+    expect(html).not.toContain(`>${translate('docAssistant.section.steuerberater')}<`);
+    expect(html).not.toContain(`>${translate('docAssistant.section.trust')}<`);
+  });
+
+  it('Fall B: Details öffnen → alle Guidance-Abschnitte sichtbar', async () => {
+    const item = createContractItem();
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    let root: Root | null = createRoot(host);
+
+    await act(async () => {
+      root!.render(
+        createElement(DocumentAssistantPanel, {
+          item,
+          workflow: minimalWorkflow(item),
+          translate,
+          language: 'de' as const,
+          compactForContractWorkspace: true,
+          showChangeType: true,
+          onChangeType: vi.fn(),
+        }),
+      );
+    });
+
+    const toggle = host.querySelector(
+      '[data-testid="review-section-toggle-assistant-details"]',
+    ) as HTMLButtonElement | null;
+    expect(toggle).toBeTruthy();
+
+    await act(async () => {
+      toggle!.click();
+    });
+
+    const html = host.innerHTML;
+    expect(html).toContain('data-testid="review-section-content-assistant-details"');
+    expect(html).toContain(translate('docAssistant.section.brief'));
+    expect(html).toContain(translate('docAssistant.section.actions'));
+    expect(html).toContain(translate('docAssistant.section.filing'));
+    expect(html).toContain(translate('docAssistant.section.original'));
+    expect(html).toContain(translate('docAssistant.section.steuerberater'));
+    expect(html).toContain(translate('docAssistant.section.trust'));
+    expect(html).toContain('data-testid="doc-assistant-change-type"');
+
+    await act(async () => {
+      root?.unmount();
+    });
+    root = null;
+    host.remove();
+  });
+
+  it('Fall C: ohne Contract-Proposal → bisheriges Verhalten', () => {
+    const item = createNonContractItem();
+    const html = renderToStaticMarkup(
+      createElement(DocumentAssistantPanel, {
+        item,
+        workflow: minimalWorkflow(item),
+        translate,
+        language: 'de' as const,
+        compactForContractWorkspace: false,
+      }),
+    );
+
+    expect(html).not.toContain('data-compact="true"');
+    expect(html).toContain(translate('docAssistant.section.brief'));
+    expect(html).toContain(translate('docAssistant.section.actions'));
+    expect(html).toContain(translate('docAssistant.section.filing'));
+    expect(html).toContain(translate('docAssistant.section.original'));
+    expect(html).toContain(translate('docAssistant.section.steuerberater'));
+    expect(html).toContain(translate('docAssistant.section.trust'));
+  });
+
+  it('Fall D: Workspace-Reihenfolge unverändert, Assistant kompakt auf Page', () => {
+    const item = createContractItem();
+    hydrateInboxStore([item]);
+
+    const html = renderToStaticMarkup(
+      createElement(
+        MemoryRouter,
+        { initialEntries: [`/ablage/${item.id}`] },
+        createElement(
+          AppProvider,
+          { initialSetup: DEFAULT_SETUP },
+          createElement(
+            Routes,
+            null,
+            createElement(Route, {
+              path: '/ablage/:id',
+              element: createElement(EingangDetailPage),
+            }),
+          ),
+        ),
+      ),
+    );
+
+    expect(html).toContain('contract-order-proposal');
+    expect(html).toContain('data-testid="document-assistant-panel"');
+    expect(html).toContain('data-compact="true"');
+
+    assertOrder(html, 'data-testid="document-assistant-panel"', 'data-testid="document-review-hero"');
+    assertOrder(html, 'data-testid="document-review-hero"', 'document-review-recommendations');
+    assertOrder(html, 'document-review-recommendations', 'data-testid="document-review-checks"');
+    assertOrder(html, 'data-testid="document-review-checks"', 'contract-order-proposal');
+    assertOrder(html, 'contract-order-proposal', 'data-testid="contract-workspace-summary"');
+    assertOrder(html, 'data-testid="contract-workspace-summary"', 'data-testid="contract-order-positions"');
+    assertOrder(
+      html,
+      'data-testid="contract-order-positions"',
+      'data-testid="document-free-question-panel"',
+    );
+    assertOrder(html, 'data-testid="document-free-question-panel"', 'data-testid="ablage-original-file"');
+  });
+});

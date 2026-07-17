@@ -965,6 +965,7 @@ export function EingangDetailPage() {
         workflow={workflow}
         translate={translate}
         language={setup.language}
+        compactForContractWorkspace={Boolean(workflow?.contractOrderProposal)}
         showChangeType
         onChangeType={() => {
           setMoreOptionsExpanded(true);

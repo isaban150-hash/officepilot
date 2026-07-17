@@ -47,6 +47,8 @@ interface DocumentAssistantPanelProps {
   language: AppLanguage;
   showChangeType?: boolean;
   onChangeType?: () => void;
+  /** Compact entry for contract workspace only — must be set explicitly by the page. */
+  compactForContractWorkspace?: boolean;
 }
 
 export function DocumentAssistantPanel({
@@ -56,6 +58,7 @@ export function DocumentAssistantPanel({
   language,
   showChangeType = false,
   onChangeType,
+  compactForContractWorkspace = false,
 }: DocumentAssistantPanelProps) {
   const assistant = useMemo(
     () => buildInboxDocumentAssistant(item, workflow, language),
@@ -64,16 +67,8 @@ export function DocumentAssistantPanel({
   const [detailsExpanded, setDetailsExpanded] = useState(false);
   const kind = item.classifiedKind ?? workflow?.classifiedKind;
 
-  return (
-    <section className="document-assistant-panel" data-testid="document-assistant-panel">
-      <Card highlight className="document-assistant-panel__hero">
-        <CardMeta>{translate('docAssistant.recognized')}</CardMeta>
-        <CardTitle>
-          {translate(assistant.documentTypeLabelKey)}
-          {assistant.sender ? ` · ${assistant.sender}` : ''}
-        </CardTitle>
-      </Card>
-
+  const guidanceSections = (
+    <>
       <Card className="document-assistant-panel__section">
         <h2 className="document-assistant-panel__heading">{translate('docAssistant.section.brief')}</h2>
         <ul className="document-assistant-panel__lines">
@@ -158,20 +153,55 @@ export function DocumentAssistantPanel({
           </div>
         )}
       </Card>
+    </>
+  );
 
-      <CollapsibleReviewSection
-        id="assistant-details"
-        title={translate('docAssistant.section.details')}
-        expanded={detailsExpanded}
-        onToggle={() => setDetailsExpanded((open) => !open)}
-        testId="doc-assistant-details"
-      >
-        {showChangeType && onChangeType ? (
-          <Button variant="outline" fullWidth onClick={onChangeType} data-testid="doc-assistant-change-type">
-            {translate('docAssistant.changeType')}
-          </Button>
-        ) : null}
-      </CollapsibleReviewSection>
+  const changeTypeButton =
+    showChangeType && onChangeType ? (
+      <Button variant="outline" fullWidth onClick={onChangeType} data-testid="doc-assistant-change-type">
+        {translate('docAssistant.changeType')}
+      </Button>
+    ) : null;
+
+  return (
+    <section
+      className="document-assistant-panel"
+      data-testid="document-assistant-panel"
+      data-compact={compactForContractWorkspace ? 'true' : undefined}
+    >
+      <Card highlight className="document-assistant-panel__hero">
+        <CardMeta>{translate('docAssistant.recognized')}</CardMeta>
+        <CardTitle>
+          {translate(assistant.documentTypeLabelKey)}
+          {assistant.sender ? ` · ${assistant.sender}` : ''}
+        </CardTitle>
+      </Card>
+
+      {compactForContractWorkspace ? (
+        <CollapsibleReviewSection
+          id="assistant-details"
+          title={translate('docAssistant.section.details')}
+          expanded={detailsExpanded}
+          onToggle={() => setDetailsExpanded((open) => !open)}
+          testId="doc-assistant-details"
+        >
+          {guidanceSections}
+          {changeTypeButton}
+        </CollapsibleReviewSection>
+      ) : (
+        <>
+          {guidanceSections}
+          <CollapsibleReviewSection
+            id="assistant-details"
+            title={translate('docAssistant.section.details')}
+            expanded={detailsExpanded}
+            onToggle={() => setDetailsExpanded((open) => !open)}
+            testId="doc-assistant-details"
+          >
+            {changeTypeButton}
+          </CollapsibleReviewSection>
+        </>
+      )}
     </section>
   );
 }
