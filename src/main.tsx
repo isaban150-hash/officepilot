@@ -7,6 +7,7 @@ import { AppErrorBoundary } from './components/system/AppErrorBoundary';
 import { NetworkStatusBanner } from './components/system/NetworkStatusBanner';
 import { ProductionConfigBanner } from './components/system/ProductionConfigBanner';
 import { BusinessStateGate } from './components/system/BusinessStateGate';
+import { RootMountDebugOverlay } from './components/system/RootMountDebugOverlay';
 import './styles/tokens.css';
 import './index.css';
 import './styles/shell.css';
@@ -24,6 +25,7 @@ createRoot(document.getElementById('root')!).render(
         <ProductionConfigBanner />
         <NetworkStatusBanner />
         <AuthProvider>
+          {import.meta.env.DEV ? <RootMountDebugOverlay /> : null}
           <BusinessStateGate>
             <App />
           </BusinessStateGate>
