@@ -154,6 +154,7 @@ export {
   getOpenQuantity,
   getPositionBillingStatus,
   hasFinalSchlussrechnung,
+  hasAbschlagsrechnung,
   hasSchlussrechnung,
   isPositionBillable,
 } from './orderBillingRules';

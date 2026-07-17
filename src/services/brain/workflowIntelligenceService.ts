@@ -14,6 +14,7 @@ import { processUploadedDocument } from '../intakeWorkflowService';
 import {
   getOpenQuantity,
   getPositionBillingStatus,
+  hasAbschlagsrechnung,
   hasFinalSchlussrechnung,
   hasSchlussrechnung,
 } from '../orderBillingRules';
@@ -104,13 +105,6 @@ function isAbnahme(item: InboxItem): boolean {
 
 function getLinkedInbox(vorgangId: string): InboxItem[] {
   return filterActiveItems(getInboxItems()).filter((item) => item.vorgangId === vorgangId);
-}
-
-function hasAbschlagsrechnung(vorgang: Vorgang): boolean {
-  return vorgang.invoices.some(
-    (inv) =>
-      inv.type === 'abschlag' && (inv.status === 'vorbereitet' || inv.status === 'versendet'),
-  );
 }
 
 function hasAnyInvoice(vorgang: Vorgang): boolean {

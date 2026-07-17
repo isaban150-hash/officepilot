@@ -29,6 +29,12 @@ export function hasSchlussrechnung(vorgang: Vorgang): boolean {
   );
 }
 
+export function hasAbschlagsrechnung(vorgang: Vorgang): boolean {
+  return vorgang.invoices.some(
+    (inv) => inv.type === 'abschlag' && COUNTED_STATUSES.includes(inv.status),
+  );
+}
+
 export function hasFinalSchlussrechnung(vorgang: Vorgang): boolean {
   return hasSchlussrechnung(vorgang);
 }

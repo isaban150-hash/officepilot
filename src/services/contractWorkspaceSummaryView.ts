@@ -2,7 +2,7 @@ import type { ContractOrderProposal, ExtractedContractField } from '../types/doc
 import type { DetectedOrderPosition, InboxItem, Vorgang } from '../types/models';
 import type { TranslationKey } from '../i18n';
 import { isImportableLvPosition } from './contractPositionImportService';
-import { hasSchlussrechnung } from './orderBillingRules';
+import { hasAbschlagsrechnung, hasSchlussrechnung } from './orderBillingRules';
 
 export type ContractWorkspaceSummaryRow = {
   id: string;
@@ -110,6 +110,14 @@ function buildStatusRows(context?: ContractWorkspaceSummaryContext): ContractWor
     valueKey: invoicesValueKey,
     valueParams,
   });
+
+  if (vorgang && hasAbschlagsrechnung(vorgang)) {
+    statusRows.push({
+      id: 'abschlagsrechnung',
+      labelKey: 'documentIntelligence.workspace.status.abschlagsrechnung',
+      valueKey: 'documentIntelligence.workspace.status.abschlagPresent',
+    });
+  }
 
   if (vorgang && hasSchlussrechnung(vorgang)) {
     statusRows.push({

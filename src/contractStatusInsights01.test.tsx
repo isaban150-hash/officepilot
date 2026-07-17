@@ -104,7 +104,13 @@ describe('CONTRACT-STATUS-INSIGHTS-01', () => {
 
     const view = buildContractWorkspaceSummaryView(proposal, { item, vorgang });
     const statusIds = view.statusRows.map((row) => row.id);
-    expect(statusIds).toEqual(['vorgang', 'archive', 'invoices', 'schlussrechnung']);
+    expect(statusIds).toEqual([
+      'vorgang',
+      'archive',
+      'invoices',
+      'abschlagsrechnung',
+      'schlussrechnung',
+    ]);
 
     const html = renderToStaticMarkup(
       createElement(ContractWorkspaceSummary, { proposal, item, vorgang, translate }),
@@ -114,6 +120,7 @@ describe('CONTRACT-STATUS-INSIGHTS-01', () => {
     expect(html).toContain('Mit Vorgang verknüpft');
     expect(html).toContain('Archiviert');
     expect(html).toContain('2 Rechnungen vorhanden');
+    expect(html).toContain('Abschlagsrechnung vorhanden');
     expect(html).toContain('Schlussrechnung vorhanden');
   });
 
