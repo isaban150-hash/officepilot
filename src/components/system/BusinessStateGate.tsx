@@ -35,35 +35,51 @@ export function BusinessStateGate({ children }: BusinessStateGateProps) {
   useEffect(() => {
     if (!isAuthReady) return;
 
+    let cancelled = false;
     const nextUserId = user?.id ?? null;
 
-    if (bootstrappedUserRef.current === nextUserId) {
-      return;
-    }
+    void (async () => {
+      if (bootstrappedUserRef.current && !nextUserId) {
+        isolateBusinessStateOnLogout();
+        resetCompanySession();
+        resetWorkspaceCloudBootstrapForTests();
+        const guestResult = bootstrapBusinessState();
+        if (cancelled) return;
+        setSetup(guestResult.setup);
+        setBootstrapKey('guest');
+        bootstrappedUserRef.current = null;
+        return;
+      }
 
-    if (bootstrappedUserRef.current && !nextUserId) {
-      isolateBusinessStateOnLogout();
-      resetCompanySession();
-      resetWorkspaceCloudBootstrapForTests();
-      const guestResult = bootstrapBusinessState();
-      setSetup(guestResult.setup);
-      setBootstrapKey('guest');
-      bootstrappedUserRef.current = null;
-      return;
-    }
+      // Freigabe erst nach optionalem Workspace-Bootstrap — kein AppProvider auf User-Default-Seed.
+      setSetup(null);
+      bootstrappedUserRef.current = nextUserId;
 
-    bootstrappedUserRef.current = nextUserId;
-    const result = bootstrapBusinessState(nextUserId ? { userId: nextUserId } : {});
-    setSetup(result.setup);
-    setBootstrapKey(nextUserId ?? 'guest');
+      const result = bootstrapBusinessState(nextUserId ? { userId: nextUserId } : {});
+      const needsWorkspaceBootstrap =
+        Boolean(nextUserId) && isAuthenticated && isAllowed && isSupabaseConfigured();
 
-    if (nextUserId && isAuthenticated && isAllowed && isSupabaseConfigured()) {
-      void bootstrapWorkspaceCloudSyncIfNeeded().then(() => {
+      if (needsWorkspaceBootstrap) {
+        try {
+          await bootstrapWorkspaceCloudSyncIfNeeded();
+        } catch {
+          // Bootstrap fehlgeschlagen: mit aktuellem Cache freigeben (kein Auth-Fail-open).
+        }
+        if (cancelled) return;
         const workspaceId = getWorkspaceStoreSnapshot()?.id;
         setSetup(getCachedSetup());
         setBootstrapKey(workspaceId ? `${nextUserId}:${workspaceId}` : (nextUserId ?? 'guest'));
-      });
-    }
+        return;
+      }
+
+      if (cancelled) return;
+      setSetup(result.setup);
+      setBootstrapKey(nextUserId ?? 'guest');
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [isAuthReady, isAuthenticated, isAllowed, user?.id]);
 
   if (!isAuthReady || !setup) {
