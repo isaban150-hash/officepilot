@@ -11,6 +11,7 @@ import {
   type ContractPositionSelectionMap,
   type ContractPositionSelectionState,
 } from '../../../services/contractPositionImportService';
+import { ContractWorkspaceSummary } from './ContractWorkspaceSummary';
 
 /** Keep first paint light — remaining rows load on demand. */
 export const CONTRACT_PROPOSAL_INITIAL_VISIBLE_ROWS = 30;
@@ -193,6 +194,8 @@ export function ContractOrderProposalPanel({
           ))}
         </ul>
       )}
+
+      <ContractWorkspaceSummary proposal={proposal} translate={translate} />
 
       <div className="contract-order-proposal__positions" data-testid="contract-order-positions">
         <h4>{translate('documentIntelligence.positionsTitle')}</h4>
