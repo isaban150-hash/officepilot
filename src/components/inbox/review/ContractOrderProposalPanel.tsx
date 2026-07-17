@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Button } from '../../ui/Button';
-import { Card, CardMeta, CardTitle, DataRow } from '../../ui/Card';
+import { Card, CardMeta, CardTitle } from '../../ui/Card';
 import type { ContractOrderProposal, EnhancedDetectedOrderPosition } from '../../../types/documentIntelligence';
 import type { TranslationKey } from '../../../i18n';
 import {
@@ -156,25 +156,6 @@ export function ContractOrderProposalPanel({
         <p>{translate('documentIntelligence.proposal.unsureNotSelectedHint')}</p>
       </div>
 
-      <div className="contract-order-proposal__summary">
-        <DataRow label={translate('documentIntelligence.field.customer')} value={proposal.customer} />
-        <DataRow label={translate('documentIntelligence.field.contractor')} value={proposal.contractor} />
-        <DataRow label={translate('documentIntelligence.field.constructionSite')} value={proposal.constructionSite} />
-        <DataRow label={translate('documentIntelligence.field.contractDate')} value={proposal.contractDate} />
-        <DataRow
-          label={translate('documentIntelligence.field.positions')}
-          value={String(proposal.positionCount)}
-        />
-        <DataRow
-          label={translate('documentIntelligence.field.contractTotal')}
-          value={proposal.contractTotalNet}
-        />
-        <DataRow
-          label={translate('documentIntelligence.field.paymentTerms')}
-          value={proposal.paymentTermsSummary}
-        />
-      </div>
-
       {proposal.progressBillingHint && (
         <p className="contract-order-proposal__hint" data-testid="contract-progress-billing-hint">
           {translate(proposal.progressBillingHint as TranslationKey)}
@@ -185,14 +166,6 @@ export function ContractOrderProposalPanel({
         <p className="contract-order-proposal__hint" data-testid="contract-technical-attachments-hint">
           {translate(proposal.technicalAttachmentsLabel as TranslationKey)}
         </p>
-      )}
-
-      {proposal.reviewHints.length > 0 && (
-        <ul className="contract-order-proposal__reviews" data-testid="contract-review-hints">
-          {proposal.reviewHints.map((hint) => (
-            <li key={hint}>{translate(hint as TranslationKey)}</li>
-          ))}
-        </ul>
       )}
 
       <ContractWorkspaceSummary proposal={proposal} translate={translate} />
