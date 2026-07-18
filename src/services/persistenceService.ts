@@ -46,6 +46,11 @@ import {
   resetDocumentFileStoreForTests,
 } from './documentFileStoreService';
 import {
+  getDocumentFileRepresentationBindingStoreSnapshot,
+  hydrateDocumentFileRepresentationBindingStore,
+  resetDocumentFileRepresentationBindingStoreForTests,
+} from './documentFileRepresentationBindingStoreService';
+import {
   getExpenseStoreSnapshot,
   hydrateExpenseStore,
   resetExpenses,
@@ -444,6 +449,7 @@ export function createSeedState(setupOverride?: CompanySetup): AppPersistedState
       uploadedDocuments: [],
       documentFileRefs: [],
       documentFileBlobs: {},
+      documentFileRepresentationBindings: [],
       expenses: emptyBusinessData ? [] : MOCK_EXPENSES.map(cloneExpense),
       vorgangNotes: [],
       communicationHistory: [],
@@ -635,6 +641,7 @@ export function clearInMemoryBusinessState(): void {
   resetDocuments();
   resetUploadedDocumentStore();
   resetDocumentFileStoreForTests();
+  resetDocumentFileRepresentationBindingStoreForTests();
   resetExpenses();
   resetVorgangNotes();
   resetCommunicationHistoryStore();
@@ -668,6 +675,7 @@ export function applyStateToStores(state: AppPersistedState): void {
   hydrateDocumentStore(state.documents ?? []);
   hydrateUploadedDocumentStore(state.uploadedDocuments ?? []);
   hydrateDocumentFileStore(state.documentFileRefs ?? [], state.documentFileBlobs ?? {});
+  hydrateDocumentFileRepresentationBindingStore(state.documentFileRepresentationBindings ?? []);
   hydrateExpenseStore(state.expenses ?? []);
   hydrateVorgangNotes(state.vorgangNotes ?? []);
   hydrateCommunicationHistory(state.communicationHistory ?? []);
@@ -820,6 +828,7 @@ export function buildPersistedStateSnapshot(): AppPersistedState {
     uploadedDocuments: getUploadedDocumentStoreSnapshot(),
     documentFileRefs: getDocumentFileRefStoreSnapshot(),
     documentFileBlobs: getDocumentFileBlobStoreSnapshot(),
+    documentFileRepresentationBindings: getDocumentFileRepresentationBindingStoreSnapshot(),
     expenses: getExpenseStoreSnapshot(),
     vorgangNotes: getVorgangNoteStoreSnapshot(),
     communicationHistory: getCommunicationHistorySnapshot(),
@@ -845,6 +854,7 @@ export function resetDemoData(options?: { keepSetup?: boolean }): CompanySetup {
   resetDocuments();
   resetUploadedDocumentStore();
   resetDocumentFileStoreForTests();
+  resetDocumentFileRepresentationBindingStoreForTests();
   resetExpenses();
   resetVorgangNotes();
   resetCommunicationHistoryStore();

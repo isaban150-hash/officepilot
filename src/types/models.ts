@@ -1195,6 +1195,7 @@ import type { CommunicationEvent } from './communicationHistory';
 import type { KnowledgeFact } from './knowledge';
 import type { OfficePilotMemoryState } from './memory';
 import type { DocumentFileRef } from './documentFileRef';
+import type { DocumentFileRepresentationBinding } from './documentFileRepresentationBinding';
 
 export interface AppPersistedState {
   version: number;
@@ -1215,6 +1216,8 @@ export interface AppPersistedState {
   uploadedDocuments?: import('./uploadedDocument').UploadedDocument[];
   documentFileRefs?: DocumentFileRef[];
   documentFileBlobs?: Record<string, string>;
+  /** Document-scoped additional representation roles (not original). */
+  documentFileRepresentationBindings?: DocumentFileRepresentationBinding[];
   expenses?: Expense[];
   vorgangNotes?: VorgangNote[];
   communicationHistory?: CommunicationEvent[];
