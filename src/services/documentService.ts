@@ -447,10 +447,18 @@ export function isDuplicateDocument(
 }
 
 import { linkArchivedDocumentToVorgang } from './vorgangDocumentLinkService';
+import type { DocumentFileTransformPlan } from '../types/documentFileTransformPlan';
+import { orchestrateSourceReuseArchiveBindingAfterImport } from './documentFileSourceReuseArchiveOrchestrationService';
+
+export interface ImportInboxDocumentOptions {
+  /** Pre-built transform plan for post-import source-reuse archive binding. */
+  transformPlan?: DocumentFileTransformPlan | null;
+}
 
 export function importInboxDocument(
   item: InboxItem,
   linkedCompany: string,
+  options?: ImportInboxDocumentOptions,
 ): DocumentMutationResult {
   const input = mapInboxItemToDocumentInput(item, linkedCompany);
   const result = addDocument(input);
@@ -463,6 +471,10 @@ export function importInboxDocument(
       linkArchivedDocumentToVorgang(result.document, item);
     }
     persistAll();
+    orchestrateSourceReuseArchiveBindingAfterImport({
+      documentId: result.document.id,
+      transformPlan: options?.transformPlan,
+    });
   }
   return result;
 }
