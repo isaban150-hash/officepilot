@@ -20,6 +20,16 @@ export interface ImageToPdfDrawDimensions {
   readonly y: number;
 }
 
+type ImageToPdfWriter = (
+  input: EncodeDocumentFileImageToPdfInput,
+) => Promise<DocumentFileImageToPdfWriteResult>;
+
+let imageToPdfWriterOverride: ImageToPdfWriter | null = null;
+
+export function setImageToPdfWriteForTests(writer: ImageToPdfWriter | null): void {
+  imageToPdfWriterOverride = writer;
+}
+
 function imageToPdfWriteError(
   code: DocumentFileImageToPdfWriteError['code'],
   message: string,
@@ -102,6 +112,10 @@ export async function encodeDocumentFileImageToPdf(
   input: EncodeDocumentFileImageToPdfInput,
 ): Promise<DocumentFileImageToPdfWriteResult> {
   assertInput(input);
+
+  if (imageToPdfWriterOverride) {
+    return imageToPdfWriterOverride(input);
+  }
 
   const sourceMimeType = normalizeSourceMimeType(input.sourceMimeType);
   // Copy so embedders never observe a live alias of caller-owned bytes.
