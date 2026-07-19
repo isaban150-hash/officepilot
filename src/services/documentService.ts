@@ -471,6 +471,7 @@ import { orchestrateRasterArchiveEncodeAfterImport } from './documentFileRasterA
 import { orchestrateRasterThumbnailEncodeAfterImport } from './documentFileRasterThumbnailEncodeOrchestrationService';
 import { orchestrateRasterPreviewEncodeAfterImport } from './documentFileRasterPreviewEncodeOrchestrationService';
 import { orchestratePdfThumbnailEncodeAfterImport } from './documentFilePdfThumbnailEncodeOrchestrationService';
+import { orchestratePdfPreviewEncodeAfterImport } from './documentFilePdfPreviewEncodeOrchestrationService';
 
 export interface ImportInboxDocumentOptions {
   /** Pre-built transform plan for post-import archive/preview/thumbnail encode. */
@@ -511,6 +512,10 @@ export function importInboxDocument(
       transformPlan: options?.transformPlan,
     });
     void orchestratePdfThumbnailEncodeAfterImport({
+      documentId: result.document.id,
+      transformPlan: options?.transformPlan,
+    });
+    void orchestratePdfPreviewEncodeAfterImport({
       documentId: result.document.id,
       transformPlan: options?.transformPlan,
     });
