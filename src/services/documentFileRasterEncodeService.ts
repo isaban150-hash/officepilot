@@ -10,6 +10,10 @@ import {
 export interface EncodeDocumentFileRasterToJpegInput {
   bytes: Uint8Array;
   sourceMimeType: string;
+  /** Optional JPEG quality (0..1). Defaults to archive RASTER_ENCODE_JPEG_QUALITY. */
+  quality?: number;
+  /** Optional longest output edge in pixels. Defaults to archive RASTER_ENCODE_MAX_EDGE_PX. */
+  maxEdge?: number;
 }
 
 /**
@@ -216,6 +220,24 @@ function resolveAdapters(): DocumentFileRasterEncodeAdapters {
   return adaptersOverride ?? defaultAdapters;
 }
 
+function assertOptionalEncodeNumber(
+  value: unknown,
+  field: 'quality' | 'maxEdge',
+): asserts value is number | undefined {
+  if (value === undefined) {
+    return;
+  }
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new TypeError(`Invalid raster encode ${field}`);
+  }
+  if (field === 'quality' && (value <= 0 || value > 1)) {
+    throw new TypeError('Invalid raster encode quality');
+  }
+  if (field === 'maxEdge' && value < 1) {
+    throw new TypeError('Invalid raster encode maxEdge');
+  }
+}
+
 function assertInput(
   input: EncodeDocumentFileRasterToJpegInput,
 ): asserts input is EncodeDocumentFileRasterToJpegInput & {
@@ -234,6 +256,8 @@ function assertInput(
   if (!isRasterSourceMimeType(input.sourceMimeType)) {
     throw new TypeError('Invalid raster encode sourceMimeType');
   }
+  assertOptionalEncodeNumber(input.quality, 'quality');
+  assertOptionalEncodeNumber(input.maxEdge, 'maxEdge');
 }
 
 /**
@@ -271,10 +295,13 @@ export async function encodeDocumentFileRasterToJpeg(
     throw rasterEncodeError('decode_failed', 'Raster decode produced invalid dimensions.');
   }
 
+  const maxEdge = input.maxEdge ?? RASTER_ENCODE_MAX_EDGE_PX;
+  const quality = input.quality ?? RASTER_ENCODE_JPEG_QUALITY;
+
   const target = computeRasterEncodeTargetDimensions(
     decoded.width,
     decoded.height,
-    RASTER_ENCODE_MAX_EDGE_PX,
+    maxEdge,
   );
 
   let encoded: Uint8Array;
@@ -283,7 +310,7 @@ export async function encodeDocumentFileRasterToJpeg(
       decoded,
       target.width,
       target.height,
-      RASTER_ENCODE_JPEG_QUALITY,
+      quality,
     );
   } catch (error) {
     adapters.releaseDecoded?.(decoded);

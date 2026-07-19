@@ -27,12 +27,26 @@ export type RasterEncodeSourceMimeType = (typeof RASTER_ENCODE_SOURCE_MIME_TYPES
 
 /**
  * JPEG quality (0..1) passed to the browser encoder / injectable adapter.
- * Documented default for STORAGE-RASTER-ENCODE-CORE-01 — not a policy knob.
+ * Documented archive default for STORAGE-RASTER-ENCODE-CORE-01 — not a policy knob.
  */
 export const RASTER_ENCODE_JPEG_QUALITY = 0.85;
 
 /**
  * Longest allowed output edge in pixels. Sources at or below this size are not upscaled.
- * Documented default for STORAGE-RASTER-ENCODE-CORE-01 — not a policy knob.
+ * Documented archive default for STORAGE-RASTER-ENCODE-CORE-01 — not a policy knob.
  */
 export const RASTER_ENCODE_MAX_EDGE_PX = 2048;
+
+/**
+ * Documented preview JPEG defaults (STORAGE-RASTER-DERIVATIVE-ENCODE-OPTIONS-01).
+ * Not a policy knob; used by derivative encode plans.
+ */
+export const RASTER_PREVIEW_ENCODE_JPEG_QUALITY = 0.8;
+export const RASTER_PREVIEW_ENCODE_MAX_EDGE_PX = 1280;
+
+/**
+ * Documented thumbnail JPEG defaults (STORAGE-RASTER-DERIVATIVE-ENCODE-OPTIONS-01).
+ * Not a policy knob; used by derivative encode plans.
+ */
+export const RASTER_THUMBNAIL_ENCODE_JPEG_QUALITY = 0.72;
+export const RASTER_THUMBNAIL_ENCODE_MAX_EDGE_PX = 384;
