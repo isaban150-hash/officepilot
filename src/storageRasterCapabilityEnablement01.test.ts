@@ -39,19 +39,19 @@ afterEach(() => {
 
 describe('STORAGE-RASTER-CAPABILITY-ENABLEMENT-01', () => {
   describe('Fall A: Provider-Baseline', () => {
-    it('zeigt decode/encode supported; write_pdf bleibt unsupported', async () => {
+    it('zeigt decode/encode/write_pdf supported', async () => {
       expect(PROJECT_STATIC_DOCUMENT_FILE_TRANSFORM_CAPABILITY_SNAPSHOT).toEqual({
         load_pdf: 'supported',
         render_pdf_page: 'supported',
         decode_raster_image: 'supported',
         encode_raster_image: 'supported',
-        write_pdf: 'unsupported',
+        write_pdf: 'supported',
       });
 
       const snapshot = await createProjectStaticDocumentFileTransformCapabilityProvider().getSnapshot();
       expect(snapshot.decode_raster_image).toBe('supported');
       expect(snapshot.encode_raster_image).toBe('supported');
-      expect(snapshot.write_pdf).toBe('unsupported');
+      expect(snapshot.write_pdf).toBe('supported');
       expect(snapshot.load_pdf).toBe('supported');
       expect(snapshot.render_pdf_page).toBe('supported');
     });
@@ -83,7 +83,7 @@ describe('STORAGE-RASTER-CAPABILITY-ENABLEMENT-01', () => {
     });
   });
 
-  describe('Fall C: PDF-Archive und write_pdf bleiben blockiert', () => {
+  describe('Fall C: PDF create_archive bleibt unresolved', () => {
     it('PDF create_archive bleibt unresolved', async () => {
       expect(
         deriveDocumentFileTransformCapabilityRequirements({
@@ -91,16 +91,6 @@ describe('STORAGE-RASTER-CAPABILITY-ENABLEMENT-01', () => {
           sourceMimeType: 'application/pdf',
         }),
       ).toEqual({ kind: 'unresolved' });
-    });
-
-    it('write_pdf bleibt unsupported', async () => {
-      const snapshot = await createProjectStaticDocumentFileTransformCapabilityProvider().getSnapshot();
-      expect(
-        evaluateDocumentFileTransformCapabilities({
-          requiredCapabilities: ['write_pdf'],
-          capabilitySnapshot: snapshot,
-        }).status,
-      ).toBe('unsupported');
     });
   });
 

@@ -18,11 +18,11 @@ describe('STORAGE-TRANSFORM-CAPABILITY-PROVIDER-01', () => {
         render_pdf_page: 'supported',
         decode_raster_image: 'supported',
         encode_raster_image: 'supported',
-        write_pdf: 'unsupported',
+        write_pdf: 'supported',
       });
 
       expect(PROJECT_STATIC_DOCUMENT_FILE_TRANSFORM_CAPABILITY_SNAPSHOT.write_pdf).toBe(
-        'unsupported',
+        'supported',
       );
 
       const provider = createProjectStaticDocumentFileTransformCapabilityProvider();

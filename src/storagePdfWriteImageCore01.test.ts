@@ -126,12 +126,12 @@ function createSolidPngBytes(width: number, height: number): Uint8Array {
 
 describe('STORAGE-PDF-WRITE-IMAGE-CORE-01', () => {
   describe('Fall A: Defaults', () => {
-    it('dokumentiert A4-Seite und akzeptierte MIME-Typen; write_pdf bleibt unsupported', () => {
+    it('dokumentiert A4-Seite und akzeptierte MIME-Typen', () => {
       expect(IMAGE_TO_PDF_PAGE_WIDTH_PT).toBe(595.28);
       expect(IMAGE_TO_PDF_PAGE_HEIGHT_PT).toBe(841.89);
       expect([...IMAGE_TO_PDF_SOURCE_MIME_TYPES]).toEqual(['image/jpeg', 'image/png']);
       expect(PROJECT_STATIC_DOCUMENT_FILE_TRANSFORM_CAPABILITY_SNAPSHOT.write_pdf).toBe(
-        'unsupported',
+        'supported',
       );
     });
   });

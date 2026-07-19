@@ -30,7 +30,7 @@ export const PROJECT_STATIC_DOCUMENT_FILE_TRANSFORM_CAPABILITY_SNAPSHOT = {
   render_pdf_page: 'supported',
   decode_raster_image: 'supported',
   encode_raster_image: 'supported',
-  write_pdf: 'unsupported',
+  write_pdf: 'supported',
 } as const satisfies DocumentFileTransformCapabilitySnapshot;
 
 function isCapabilityStatus(value: unknown): value is DocumentFileTransformCapabilityStatus {

@@ -33,20 +33,20 @@ function archiveIntent(): DocumentFileTransformIntent {
 
 describe('STORAGE-PDF-RENDER-CAPABILITY-ENABLEMENT-01', () => {
   describe('Fall A: Provider-Snapshot', () => {
-    it('setzt load_pdf und render_pdf_page auf supported; write_pdf bleibt unsupported', async () => {
+    it('setzt load_pdf und render_pdf_page auf supported', async () => {
       expect(PROJECT_STATIC_DOCUMENT_FILE_TRANSFORM_CAPABILITY_SNAPSHOT).toEqual({
         load_pdf: 'supported',
         render_pdf_page: 'supported',
         decode_raster_image: 'supported',
         encode_raster_image: 'supported',
-        write_pdf: 'unsupported',
+        write_pdf: 'supported',
       });
 
       const snapshot = await createProjectStaticDocumentFileTransformCapabilityProvider().getSnapshot();
       expect(snapshot).toEqual(PROJECT_STATIC_DOCUMENT_FILE_TRANSFORM_CAPABILITY_SNAPSHOT);
       expect(snapshot.load_pdf).toBe('supported');
       expect(snapshot.render_pdf_page).toBe('supported');
-      expect(snapshot.write_pdf).toBe('unsupported');
+      expect(snapshot.write_pdf).toBe('supported');
     });
   });
 
@@ -77,15 +77,15 @@ describe('STORAGE-PDF-RENDER-CAPABILITY-ENABLEMENT-01', () => {
     });
   });
 
-  describe('Fall C: write_pdf bleibt blockiert', () => {
-    it('write_pdf-Requirement bleibt unsupported', async () => {
+  describe('Fall C: write_pdf ist capability-seitig supported', () => {
+    it('write_pdf-Requirement evaluieren zu supported', async () => {
       const snapshot = await createProjectStaticDocumentFileTransformCapabilityProvider().getSnapshot();
       const evaluation = evaluateDocumentFileTransformCapabilities({
         requiredCapabilities: ['write_pdf'],
         capabilitySnapshot: snapshot,
       });
-      expect(evaluation.status).toBe('unsupported');
-      expect(evaluation.unsupportedCapabilities).toEqual(['write_pdf']);
+      expect(evaluation.status).toBe('supported');
+      expect(evaluation.unsupportedCapabilities).toEqual([]);
     });
   });
 

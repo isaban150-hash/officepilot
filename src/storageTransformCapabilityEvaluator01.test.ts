@@ -143,7 +143,7 @@ describe('STORAGE-TRANSFORM-CAPABILITY-EVALUATOR-01', () => {
           requiredCapabilities: ['write_pdf'],
           capabilitySnapshot: snapshot,
         }).status,
-      ).toBe('unsupported');
+      ).toBe('supported');
 
       const multi = evaluateDocumentFileTransformCapabilities({
         requiredCapabilities: ['load_pdf', 'render_pdf_page', 'encode_raster_image'],
