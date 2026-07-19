@@ -16,14 +16,14 @@ describe('STORAGE-TRANSFORM-CAPABILITY-PROVIDER-01', () => {
       expect(PROJECT_STATIC_DOCUMENT_FILE_TRANSFORM_CAPABILITY_SNAPSHOT).toEqual({
         load_pdf: 'unknown',
         render_pdf_page: 'unknown',
-        decode_raster_image: 'unknown',
-        encode_raster_image: 'unsupported',
+        decode_raster_image: 'supported',
+        encode_raster_image: 'supported',
         write_pdf: 'unsupported',
       });
 
-      for (const status of Object.values(PROJECT_STATIC_DOCUMENT_FILE_TRANSFORM_CAPABILITY_SNAPSHOT)) {
-        expect(status).not.toBe('supported');
-      }
+      expect(PROJECT_STATIC_DOCUMENT_FILE_TRANSFORM_CAPABILITY_SNAPSHOT.write_pdf).toBe(
+        'unsupported',
+      );
 
       const provider = createProjectStaticDocumentFileTransformCapabilityProvider();
       const snapshot = await provider.getSnapshot();

@@ -30,6 +30,12 @@ const RASTER_PREVIEW_OR_THUMBNAIL_CAPABILITIES = Object.freeze([
   'encode_raster_image',
 ] as const satisfies readonly DocumentFileTransformCapabilityId[]);
 
+/** Raster create_archive JPEG re-encode path (decode → canvas → JPEG). */
+const RASTER_ARCHIVE_CAPABILITIES = Object.freeze([
+  'decode_raster_image',
+  'encode_raster_image',
+] as const satisfies readonly DocumentFileTransformCapabilityId[]);
+
 function isTransformIntentKind(value: unknown): value is DocumentFileTransformIntentKind {
   return (
     typeof value === 'string' &&
@@ -90,6 +96,13 @@ export function deriveDocumentFileTransformCapabilityRequirements(
   const sourceClass = classifyTechnicalSource(input.sourceMimeType);
 
   if (intentKind === 'create_archive') {
+    if (sourceClass === 'raster_image') {
+      return freezeResult({
+        kind: 'capability_requirements',
+        requiredCapabilities: RASTER_ARCHIVE_CAPABILITIES,
+      });
+    }
+    // PDF and other non-raster archive strategies remain unresolved here.
     return freezeResult({ kind: 'unresolved' });
   }
 

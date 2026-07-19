@@ -18,14 +18,17 @@ export interface DocumentFileTransformCapabilityProvider {
 /**
  * Project-static baseline for the current OfficePilot build.
  * Not a browser feature detection result.
+ * - supported: productive path exists in this build (technical availability only)
  * - unknown: library/path may exist, runtime not probed
- * - unsupported: no productive transform encode/PDF-write path in this build
+ * - unsupported: no productive path in this build
+ *
+ * supported does not imply every transform intent (e.g. preview/thumbnail) is orchestrated.
  */
 export const PROJECT_STATIC_DOCUMENT_FILE_TRANSFORM_CAPABILITY_SNAPSHOT = {
   load_pdf: 'unknown',
   render_pdf_page: 'unknown',
-  decode_raster_image: 'unknown',
-  encode_raster_image: 'unsupported',
+  decode_raster_image: 'supported',
+  encode_raster_image: 'supported',
   write_pdf: 'unsupported',
 } as const satisfies DocumentFileTransformCapabilitySnapshot;
 

@@ -133,31 +133,51 @@ describe('STORAGE-TRANSFORM-DERIVATIVE-CAPABILITY-REQUIREMENTS-01', () => {
     });
   });
 
-  describe('Fall F–G: create_archive ist unresolved', () => {
-    it('create_archive für PDF und JPEG → unresolved ohne Capability-Menge', () => {
-      for (const sourceMimeType of ['application/pdf', 'image/jpeg'] as const) {
+  describe('Fall F–G: create_archive Requirements', () => {
+    it('create_archive für JPEG/PNG/WebP → decode_raster_image, encode_raster_image', () => {
+      for (const sourceMimeType of ['image/jpeg', 'image/png', 'image/webp'] as const) {
         const result = deriveDocumentFileTransformCapabilityRequirements({
           transformIntent: archiveIntent(),
           sourceMimeType,
         });
-        expect(result).toEqual({ kind: 'unresolved' });
-        expect(result).not.toHaveProperty('requiredCapabilities');
+        expect(result).toEqual({
+          kind: 'capability_requirements',
+          requiredCapabilities: ['decode_raster_image', 'encode_raster_image'],
+        });
       }
     });
 
-    it('produktive business_document / legal_document Archive-Intents → unresolved', () => {
+    it('create_archive für PDF bleibt unresolved', () => {
+      const result = deriveDocumentFileTransformCapabilityRequirements({
+        transformIntent: archiveIntent(),
+        sourceMimeType: 'application/pdf',
+      });
+      expect(result).toEqual({ kind: 'unresolved' });
+      expect(result).not.toHaveProperty('requiredCapabilities');
+    });
+
+    it('produktive Archive-Intents: PDF unresolved, Raster mit decode/encode', () => {
       for (const policyId of ['business_document', 'legal_document'] as const) {
         const plan = requireTransformPlan(policyId);
         const archive = plan.intents.find((entry) => entry.intent === 'create_archive');
         expect(archive).toBeDefined();
-        expect(plan.hints.preferredOutputKind).toBe('preserve_source');
 
-        const result = deriveDocumentFileTransformCapabilityRequirements({
-          transformIntent: archive!,
-          sourceMimeType: 'application/pdf',
+        expect(
+          deriveDocumentFileTransformCapabilityRequirements({
+            transformIntent: archive!,
+            sourceMimeType: 'application/pdf',
+          }),
+        ).toEqual({ kind: 'unresolved' });
+
+        expect(
+          deriveDocumentFileTransformCapabilityRequirements({
+            transformIntent: archive!,
+            sourceMimeType: 'image/jpeg',
+          }),
+        ).toEqual({
+          kind: 'capability_requirements',
+          requiredCapabilities: ['decode_raster_image', 'encode_raster_image'],
         });
-        expect(result).toEqual({ kind: 'unresolved' });
-        expect(JSON.stringify(result)).not.toMatch(/write_pdf|encode_raster_image|requiredCapabilities/);
       }
     });
   });

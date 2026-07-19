@@ -1,0 +1,194 @@
+import { afterEach, describe, expect, it } from 'vitest';
+import { buildDocumentFileRepresentationPlan } from './services/documentFileRepresentationPlanService';
+import { buildDocumentFileTransformPlan } from './services/documentFileTransformPlanService';
+import {
+  PROJECT_STATIC_DOCUMENT_FILE_TRANSFORM_CAPABILITY_SNAPSHOT,
+  createProjectStaticDocumentFileTransformCapabilityProvider,
+} from './services/documentFileTransformCapabilityProvider';
+import { evaluateDocumentFileTransformCapabilities } from './services/documentFileTransformCapabilityEvaluationService';
+import { deriveDocumentFileTransformCapabilityRequirements } from './services/documentFileTransformCapabilityRequirementsService';
+import {
+  getDocumentFileRepresentationBindingStoreSnapshot,
+  resetDocumentFileRepresentationBindingStoreForTests,
+} from './services/documentFileRepresentationBindingStoreService';
+import { importInboxDocument } from './services/documentService';
+import {
+  resetDocumentFileStoreForTests,
+  storeDocumentFileFromCachedPayload,
+} from './services/documentFileStoreService';
+import { hydrateInboxStore } from './services/inboxService';
+import { setDocumentFileRasterEncodeAdaptersForTests } from './services/documentFileRasterEncodeService';
+import { createAuftragInboxItem } from './test/fixtures';
+import { resetTestStores } from './test/resetStores';
+import type { DocumentFileTransformIntent } from './types/documentFileTransformPlan';
+
+function archiveIntent(): DocumentFileTransformIntent {
+  return {
+    targetKind: 'archive',
+    intent: 'create_archive',
+    executionIntent: 'preferred',
+  };
+}
+
+function previewIntent(): DocumentFileTransformIntent {
+  return {
+    targetKind: 'preview',
+    intent: 'create_preview',
+    executionIntent: 'preferred',
+  };
+}
+
+afterEach(() => {
+  setDocumentFileRasterEncodeAdaptersForTests(null);
+  resetTestStores();
+  resetDocumentFileStoreForTests();
+  resetDocumentFileRepresentationBindingStoreForTests();
+});
+
+describe('STORAGE-RASTER-CAPABILITY-ENABLEMENT-01', () => {
+  describe('Fall A: Provider-Baseline', () => {
+    it('zeigt decode/encode supported; write_pdf bleibt unsupported', async () => {
+      expect(PROJECT_STATIC_DOCUMENT_FILE_TRANSFORM_CAPABILITY_SNAPSHOT).toEqual({
+        load_pdf: 'unknown',
+        render_pdf_page: 'unknown',
+        decode_raster_image: 'supported',
+        encode_raster_image: 'supported',
+        write_pdf: 'unsupported',
+      });
+
+      const snapshot = await createProjectStaticDocumentFileTransformCapabilityProvider().getSnapshot();
+      expect(snapshot.decode_raster_image).toBe('supported');
+      expect(snapshot.encode_raster_image).toBe('supported');
+      expect(snapshot.write_pdf).toBe('unsupported');
+      expect(snapshot.load_pdf).toBe('unknown');
+      expect(snapshot.render_pdf_page).toBe('unknown');
+    });
+  });
+
+  describe('Fall B: Raster create_archive capability-seitig supported', () => {
+    it('JPEG/PNG/WebP Archive-Requirements evaluieren zu supported', async () => {
+      const snapshot = await createProjectStaticDocumentFileTransformCapabilityProvider().getSnapshot();
+
+      for (const sourceMimeType of ['image/jpeg', 'image/png', 'image/webp'] as const) {
+        const requirements = deriveDocumentFileTransformCapabilityRequirements({
+          transformIntent: archiveIntent(),
+          sourceMimeType,
+        });
+        expect(requirements).toEqual({
+          kind: 'capability_requirements',
+          requiredCapabilities: ['decode_raster_image', 'encode_raster_image'],
+        });
+        if (requirements.kind !== 'capability_requirements') return;
+
+        const evaluation = evaluateDocumentFileTransformCapabilities({
+          requiredCapabilities: requirements.requiredCapabilities,
+          capabilitySnapshot: snapshot,
+        });
+        expect(evaluation.status).toBe('supported');
+        expect(evaluation.unsupportedCapabilities).toEqual([]);
+        expect(evaluation.unknownCapabilities).toEqual([]);
+      }
+    });
+  });
+
+  describe('Fall C: PDF-Pfade bleiben blockiert', () => {
+    it('PDF create_archive bleibt unresolved; PDF Preview nicht voll supported', async () => {
+      const snapshot = await createProjectStaticDocumentFileTransformCapabilityProvider().getSnapshot();
+
+      expect(
+        deriveDocumentFileTransformCapabilityRequirements({
+          transformIntent: archiveIntent(),
+          sourceMimeType: 'application/pdf',
+        }),
+      ).toEqual({ kind: 'unresolved' });
+
+      const previewRequirements = deriveDocumentFileTransformCapabilityRequirements({
+        transformIntent: previewIntent(),
+        sourceMimeType: 'application/pdf',
+      });
+      expect(previewRequirements.kind).toBe('capability_requirements');
+      if (previewRequirements.kind !== 'capability_requirements') return;
+
+      const evaluation = evaluateDocumentFileTransformCapabilities({
+        requiredCapabilities: previewRequirements.requiredCapabilities,
+        capabilitySnapshot: snapshot,
+      });
+      expect(evaluation.status).not.toBe('supported');
+      expect(evaluation.unknownCapabilities).toEqual(
+        expect.arrayContaining(['load_pdf', 'render_pdf_page']),
+      );
+    });
+
+    it('write_pdf bleibt unsupported', async () => {
+      const snapshot = await createProjectStaticDocumentFileTransformCapabilityProvider().getSnapshot();
+      expect(
+        evaluateDocumentFileTransformCapabilities({
+          requiredCapabilities: ['write_pdf'],
+          capabilitySnapshot: snapshot,
+        }).status,
+      ).toBe('unsupported');
+    });
+  });
+
+  describe('Fall D: Import erzeugt keine Preview-/Thumbnail-Bindings', () => {
+    it('business Raster-Import legt höchstens archive an, nie preview/thumbnail', async () => {
+      setDocumentFileRasterEncodeAdaptersForTests({
+        async decodeRaster() {
+          return { width: 16, height: 12 };
+        },
+        async encodeJpeg() {
+          return new Uint8Array([0xff, 0xd8, 0xff, 0xd9, 0x11]);
+        },
+      });
+
+      const bytes = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x01]);
+      const stored = await storeDocumentFileFromCachedPayload(
+        {
+          fileName: 'cap-enable.jpg',
+          mimeType: 'image/jpeg',
+          fileSize: bytes.byteLength,
+          bytes,
+        },
+        { lifecycleIntent: 'committed' },
+      );
+
+      const representationPlan = buildDocumentFileRepresentationPlan({
+        policyId: 'business_document',
+        decision: 'save_permanently',
+      });
+      expect(representationPlan).not.toBeNull();
+      const transformPlan = buildDocumentFileTransformPlan({
+        representationPlan: representationPlan!,
+        mediaProfile: 'raster_image',
+      });
+      expect(transformPlan).not.toBeNull();
+
+      const item = createAuftragInboxItem({
+        id: 'inbox-cap-enablement',
+        fileRefId: stored.fileRef.id,
+        sourceFileHash: stored.fileRef.contentHash,
+      });
+      hydrateInboxStore([item]);
+
+      const imported = importInboxDocument(item, 'Test GmbH', {
+        transformPlan: transformPlan!,
+      });
+      expect(imported.success).toBe(true);
+      if (!imported.success) return;
+
+      // Drain async raster archive orch.
+      const { orchestrateRasterArchiveEncodeAfterImport } = await import(
+        './services/documentFileRasterArchiveEncodeOrchestrationService'
+      );
+      await orchestrateRasterArchiveEncodeAfterImport({
+        documentId: imported.document.id,
+        transformPlan: transformPlan!,
+      });
+
+      const bindings = getDocumentFileRepresentationBindingStoreSnapshot();
+      expect(bindings.every((binding) => binding.kind === 'archive')).toBe(true);
+      expect(bindings.some((binding) => binding.kind === 'preview')).toBe(false);
+      expect(bindings.some((binding) => binding.kind === 'thumbnail')).toBe(false);
+    });
+  });
+});
