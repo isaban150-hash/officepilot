@@ -14,8 +14,8 @@ describe('STORAGE-TRANSFORM-CAPABILITY-PROVIDER-01', () => {
   describe('Fall A–B: projektstatischer Baseline-Snapshot', () => {
     it('beschreibt den aktuellen OfficePilot-Build ohne Browser-Feature-Erkennung', async () => {
       expect(PROJECT_STATIC_DOCUMENT_FILE_TRANSFORM_CAPABILITY_SNAPSHOT).toEqual({
-        load_pdf: 'unknown',
-        render_pdf_page: 'unknown',
+        load_pdf: 'supported',
+        render_pdf_page: 'supported',
         decode_raster_image: 'supported',
         encode_raster_image: 'supported',
         write_pdf: 'unsupported',
@@ -122,7 +122,7 @@ describe('STORAGE-TRANSFORM-CAPABILITY-PROVIDER-01', () => {
         /* freeze may throw in strict mode */
       }
       const second = await provider.getSnapshot();
-      expect(second.load_pdf).toBe('unknown');
+      expect(second.load_pdf).toBe('supported');
       expect(first).toEqual(second);
     });
 

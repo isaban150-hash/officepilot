@@ -22,11 +22,12 @@ export interface DocumentFileTransformCapabilityProvider {
  * - unknown: library/path may exist, runtime not probed
  * - unsupported: no productive path in this build
  *
- * supported does not imply every transform intent (e.g. preview/thumbnail) is orchestrated.
+ * supported does not imply every transform intent is orchestrated or persisted
+ * (e.g. PDF load/render does not imply PDF preview/thumbnail FileRefs).
  */
 export const PROJECT_STATIC_DOCUMENT_FILE_TRANSFORM_CAPABILITY_SNAPSHOT = {
-  load_pdf: 'unknown',
-  render_pdf_page: 'unknown',
+  load_pdf: 'supported',
+  render_pdf_page: 'supported',
   decode_raster_image: 'supported',
   encode_raster_image: 'supported',
   write_pdf: 'unsupported',

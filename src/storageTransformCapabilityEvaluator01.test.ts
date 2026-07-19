@@ -136,7 +136,7 @@ describe('STORAGE-TRANSFORM-CAPABILITY-EVALUATOR-01', () => {
           requiredCapabilities: ['load_pdf'],
           capabilitySnapshot: snapshot,
         }).status,
-      ).toBe('unknown');
+      ).toBe('supported');
 
       expect(
         evaluateDocumentFileTransformCapabilities({
@@ -149,8 +149,8 @@ describe('STORAGE-TRANSFORM-CAPABILITY-EVALUATOR-01', () => {
         requiredCapabilities: ['load_pdf', 'render_pdf_page', 'encode_raster_image'],
         capabilitySnapshot: snapshot,
       });
-      expect(multi.status).toBe('unknown');
-      expect(multi.unknownCapabilities).toEqual(['load_pdf', 'render_pdf_page']);
+      expect(multi.status).toBe('supported');
+      expect(multi.unknownCapabilities).toEqual([]);
       expect(multi.unsupportedCapabilities).toEqual([]);
     });
   });
@@ -239,8 +239,8 @@ describe('STORAGE-TRANSFORM-CAPABILITY-EVALUATOR-01', () => {
       } catch {
         /* freeze may throw */
       }
-      // load_pdf unknown + encode supported → unknown (PDF path still blocked)
-      expect(evaluation.status).toBe('unknown');
+      // load_pdf + encode_raster_image are both supported in the project baseline
+      expect(evaluation.status).toBe('supported');
     });
 
     it('ist deterministisch', () => {

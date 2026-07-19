@@ -30,14 +30,6 @@ function archiveIntent(): DocumentFileTransformIntent {
   };
 }
 
-function previewIntent(): DocumentFileTransformIntent {
-  return {
-    targetKind: 'preview',
-    intent: 'create_preview',
-    executionIntent: 'preferred',
-  };
-}
-
 afterEach(() => {
   setDocumentFileRasterEncodeAdaptersForTests(null);
   resetTestStores();
@@ -49,8 +41,8 @@ describe('STORAGE-RASTER-CAPABILITY-ENABLEMENT-01', () => {
   describe('Fall A: Provider-Baseline', () => {
     it('zeigt decode/encode supported; write_pdf bleibt unsupported', async () => {
       expect(PROJECT_STATIC_DOCUMENT_FILE_TRANSFORM_CAPABILITY_SNAPSHOT).toEqual({
-        load_pdf: 'unknown',
-        render_pdf_page: 'unknown',
+        load_pdf: 'supported',
+        render_pdf_page: 'supported',
         decode_raster_image: 'supported',
         encode_raster_image: 'supported',
         write_pdf: 'unsupported',
@@ -60,8 +52,8 @@ describe('STORAGE-RASTER-CAPABILITY-ENABLEMENT-01', () => {
       expect(snapshot.decode_raster_image).toBe('supported');
       expect(snapshot.encode_raster_image).toBe('supported');
       expect(snapshot.write_pdf).toBe('unsupported');
-      expect(snapshot.load_pdf).toBe('unknown');
-      expect(snapshot.render_pdf_page).toBe('unknown');
+      expect(snapshot.load_pdf).toBe('supported');
+      expect(snapshot.render_pdf_page).toBe('supported');
     });
   });
 
@@ -91,32 +83,14 @@ describe('STORAGE-RASTER-CAPABILITY-ENABLEMENT-01', () => {
     });
   });
 
-  describe('Fall C: PDF-Pfade bleiben blockiert', () => {
-    it('PDF create_archive bleibt unresolved; PDF Preview nicht voll supported', async () => {
-      const snapshot = await createProjectStaticDocumentFileTransformCapabilityProvider().getSnapshot();
-
+  describe('Fall C: PDF-Archive und write_pdf bleiben blockiert', () => {
+    it('PDF create_archive bleibt unresolved', async () => {
       expect(
         deriveDocumentFileTransformCapabilityRequirements({
           transformIntent: archiveIntent(),
           sourceMimeType: 'application/pdf',
         }),
       ).toEqual({ kind: 'unresolved' });
-
-      const previewRequirements = deriveDocumentFileTransformCapabilityRequirements({
-        transformIntent: previewIntent(),
-        sourceMimeType: 'application/pdf',
-      });
-      expect(previewRequirements.kind).toBe('capability_requirements');
-      if (previewRequirements.kind !== 'capability_requirements') return;
-
-      const evaluation = evaluateDocumentFileTransformCapabilities({
-        requiredCapabilities: previewRequirements.requiredCapabilities,
-        capabilitySnapshot: snapshot,
-      });
-      expect(evaluation.status).not.toBe('supported');
-      expect(evaluation.unknownCapabilities).toEqual(
-        expect.arrayContaining(['load_pdf', 'render_pdf_page']),
-      );
     });
 
     it('write_pdf bleibt unsupported', async () => {
