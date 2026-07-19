@@ -22,8 +22,13 @@ export interface PdfDocumentError {
 }
 
 type PdfLoader = (bytes: Uint8Array, password?: string) => Promise<PdfDocumentLoadResult>;
+type PdfPageRenderer = (
+  pdf: PDFDocumentProxy,
+  pageNumber: number,
+) => Promise<PdfPageRenderResult>;
 
 let pdfLoaderOverride: PdfLoader | null = null;
+let pdfPageRendererOverride: PdfPageRenderer | null = null;
 let workerConfigured = false;
 
 export const PDF_OCR_MAX_PAGES = 12;
@@ -33,6 +38,10 @@ export const PDF_RENDER_MAX_SCALE = 2;
 
 export function setPdfDocumentLoaderForTests(loader: PdfLoader | null): void {
   pdfLoaderOverride = loader;
+}
+
+export function setPdfPageRendererForTests(renderer: PdfPageRenderer | null): void {
+  pdfPageRendererOverride = renderer;
 }
 
 async function configurePdfWorker(): Promise<void> {
@@ -117,6 +126,10 @@ export async function renderPdfPageToCanvas(
   pdf: PDFDocumentProxy,
   pageNumber: number,
 ): Promise<PdfPageRenderResult> {
+  if (pdfPageRendererOverride) {
+    return pdfPageRendererOverride(pdf, pageNumber);
+  }
+
   if (pageNumber < 1 || pageNumber > pdf.numPages) {
     throw {
       code: 'render_failed' as const,
@@ -132,6 +145,7 @@ export async function renderPdfPageToCanvas(
   const context = canvas.getContext('2d');
 
   if (!context) {
+    releaseCanvas(canvas);
     await page.cleanup();
     throw {
       code: 'render_failed' as const,
@@ -148,7 +162,7 @@ export async function renderPdfPageToCanvas(
       viewport,
     }).promise;
   } catch {
-    await page.cleanup();
+    releaseCanvas(canvas);
     throw {
       code: 'render_failed' as const,
       message: 'PDF-Seite konnte nicht gerendert werden.',

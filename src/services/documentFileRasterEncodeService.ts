@@ -16,6 +16,18 @@ export interface EncodeDocumentFileRasterToJpegInput {
   maxEdge?: number;
 }
 
+export interface EncodeDocumentFileDrawableSourceToJpegInput {
+  /**
+   * Already-decoded drawable (e.g. canvas from PDF page render).
+   * Caller retains ownership and must release resources.
+   */
+  source: DocumentFileDecodedRasterSource;
+  /** Optional JPEG quality (0..1). Defaults to archive RASTER_ENCODE_JPEG_QUALITY. */
+  quality?: number;
+  /** Optional longest output edge in pixels. Defaults to archive RASTER_ENCODE_MAX_EDGE_PX. */
+  maxEdge?: number;
+}
+
 /**
  * Drawable raster source produced by a decode adapter.
  * Production uses ImageBitmap; tests may supply a lightweight fake.
@@ -260,6 +272,81 @@ function assertInput(
   assertOptionalEncodeNumber(input.maxEdge, 'maxEdge');
 }
 
+async function encodeDecodedSourceToJpeg(
+  decoded: DocumentFileDecodedRasterSource,
+  quality: number,
+  maxEdge: number,
+  releaseDecoded: boolean,
+): Promise<DocumentFileRasterEncodeJpegResult> {
+  const adapters = resolveAdapters();
+
+  if (
+    !Number.isFinite(decoded.width) ||
+    !Number.isFinite(decoded.height) ||
+    decoded.width < 1 ||
+    decoded.height < 1
+  ) {
+    if (releaseDecoded) {
+      adapters.releaseDecoded?.(decoded);
+    }
+    throw rasterEncodeError('decode_failed', 'Raster decode produced invalid dimensions.');
+  }
+
+  const target = computeRasterEncodeTargetDimensions(decoded.width, decoded.height, maxEdge);
+
+  let encoded: Uint8Array;
+  try {
+    encoded = await adapters.encodeJpeg(decoded, target.width, target.height, quality);
+  } catch (error) {
+    if (releaseDecoded) {
+      adapters.releaseDecoded?.(decoded);
+    }
+    if (isRasterEncodeError(error)) {
+      throw error;
+    }
+    throw rasterEncodeError('encode_failed', 'Raster JPEG encode failed.');
+  }
+
+  if (releaseDecoded) {
+    adapters.releaseDecoded?.(decoded);
+  }
+
+  if (!(encoded instanceof Uint8Array) || encoded.byteLength === 0) {
+    throw rasterEncodeError('encode_failed', 'Raster JPEG encode produced empty output.');
+  }
+
+  return Object.freeze({
+    bytes: encoded,
+    mimeType: 'image/jpeg' as const,
+    width: target.width,
+    height: target.height,
+  });
+}
+
+/**
+ * Scale and JPEG-encode an already-decoded drawable source (e.g. PDF page canvas).
+ * Does not decode bytes, persist, bind FileRefs, or release the caller's source.
+ */
+export async function encodeDocumentFileDrawableSourceToJpeg(
+  input: EncodeDocumentFileDrawableSourceToJpegInput,
+): Promise<DocumentFileRasterEncodeJpegResult> {
+  if (input === null || typeof input !== 'object') {
+    throw new TypeError('Invalid drawable raster encode input');
+  }
+  if (input.source === null || typeof input.source !== 'object') {
+    throw new TypeError('Invalid drawable raster encode source');
+  }
+  assertOptionalEncodeNumber(input.quality, 'quality');
+  assertOptionalEncodeNumber(input.maxEdge, 'maxEdge');
+
+  return encodeDecodedSourceToJpeg(
+    input.source,
+    input.quality ?? RASTER_ENCODE_JPEG_QUALITY,
+    input.maxEdge ?? RASTER_ENCODE_MAX_EDGE_PX,
+    false,
+  );
+}
+
 /**
  * Decode accepted raster source bytes and re-encode as JPEG in memory.
  * EXIF and other non-pixel metadata are removed by the decode→canvas→encode path.
@@ -285,51 +372,10 @@ export async function encodeDocumentFileRasterToJpeg(
     throw rasterEncodeError('decode_failed', 'Raster image could not be decoded for JPEG encode.');
   }
 
-  if (
-    !Number.isFinite(decoded.width) ||
-    !Number.isFinite(decoded.height) ||
-    decoded.width < 1 ||
-    decoded.height < 1
-  ) {
-    adapters.releaseDecoded?.(decoded);
-    throw rasterEncodeError('decode_failed', 'Raster decode produced invalid dimensions.');
-  }
-
-  const maxEdge = input.maxEdge ?? RASTER_ENCODE_MAX_EDGE_PX;
-  const quality = input.quality ?? RASTER_ENCODE_JPEG_QUALITY;
-
-  const target = computeRasterEncodeTargetDimensions(
-    decoded.width,
-    decoded.height,
-    maxEdge,
+  return encodeDecodedSourceToJpeg(
+    decoded,
+    input.quality ?? RASTER_ENCODE_JPEG_QUALITY,
+    input.maxEdge ?? RASTER_ENCODE_MAX_EDGE_PX,
+    true,
   );
-
-  let encoded: Uint8Array;
-  try {
-    encoded = await adapters.encodeJpeg(
-      decoded,
-      target.width,
-      target.height,
-      quality,
-    );
-  } catch (error) {
-    adapters.releaseDecoded?.(decoded);
-    if (isRasterEncodeError(error)) {
-      throw error;
-    }
-    throw rasterEncodeError('encode_failed', 'Raster JPEG encode failed.');
-  }
-
-  adapters.releaseDecoded?.(decoded);
-
-  if (!(encoded instanceof Uint8Array) || encoded.byteLength === 0) {
-    throw rasterEncodeError('encode_failed', 'Raster JPEG encode produced empty output.');
-  }
-
-  return Object.freeze({
-    bytes: encoded,
-    mimeType: 'image/jpeg',
-    width: target.width,
-    height: target.height,
-  });
 }
