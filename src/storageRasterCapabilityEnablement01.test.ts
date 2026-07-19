@@ -130,8 +130,8 @@ describe('STORAGE-RASTER-CAPABILITY-ENABLEMENT-01', () => {
     });
   });
 
-  describe('Fall D: Import erzeugt keine Preview-/Thumbnail-Bindings', () => {
-    it('business Raster-Import legt höchstens archive an, nie preview/thumbnail', async () => {
+  describe('Fall D: Import erzeugt keine Preview-Bindings', () => {
+    it('business Raster-Import darf archive/thumbnail anlegen, nie preview', async () => {
       setDocumentFileRasterEncodeAdaptersForTests({
         async decodeRaster() {
           return { width: 16, height: 12 };
@@ -176,19 +176,28 @@ describe('STORAGE-RASTER-CAPABILITY-ENABLEMENT-01', () => {
       expect(imported.success).toBe(true);
       if (!imported.success) return;
 
-      // Drain async raster archive orch.
+      // Drain async raster archive + thumbnail orch.
       const { orchestrateRasterArchiveEncodeAfterImport } = await import(
         './services/documentFileRasterArchiveEncodeOrchestrationService'
+      );
+      const { orchestrateRasterThumbnailEncodeAfterImport } = await import(
+        './services/documentFileRasterThumbnailEncodeOrchestrationService'
       );
       await orchestrateRasterArchiveEncodeAfterImport({
         documentId: imported.document.id,
         transformPlan: transformPlan!,
       });
+      await orchestrateRasterThumbnailEncodeAfterImport({
+        documentId: imported.document.id,
+        transformPlan: transformPlan!,
+      });
 
       const bindings = getDocumentFileRepresentationBindingStoreSnapshot();
-      expect(bindings.every((binding) => binding.kind === 'archive')).toBe(true);
+      expect(
+        bindings.every((binding) => binding.kind === 'archive' || binding.kind === 'thumbnail'),
+      ).toBe(true);
       expect(bindings.some((binding) => binding.kind === 'preview')).toBe(false);
-      expect(bindings.some((binding) => binding.kind === 'thumbnail')).toBe(false);
+      expect(bindings.some((binding) => binding.kind === 'thumbnail')).toBe(true);
     });
   });
 });

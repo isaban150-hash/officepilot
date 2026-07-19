@@ -468,9 +468,10 @@ import { linkArchivedDocumentToVorgang } from './vorgangDocumentLinkService';
 import type { DocumentFileTransformPlan } from '../types/documentFileTransformPlan';
 import { orchestrateSourceReuseArchiveBindingAfterImport } from './documentFileSourceReuseArchiveOrchestrationService';
 import { orchestrateRasterArchiveEncodeAfterImport } from './documentFileRasterArchiveEncodeOrchestrationService';
+import { orchestrateRasterThumbnailEncodeAfterImport } from './documentFileRasterThumbnailEncodeOrchestrationService';
 
 export interface ImportInboxDocumentOptions {
-  /** Pre-built transform plan for post-import archive binding / raster encode. */
+  /** Pre-built transform plan for post-import archive/thumbnail raster encode. */
   transformPlan?: DocumentFileTransformPlan | null;
 }
 
@@ -496,6 +497,10 @@ export function importInboxDocument(
     });
     // Raster encode is async; failures are logged inside and must not fail import.
     void orchestrateRasterArchiveEncodeAfterImport({
+      documentId: result.document.id,
+      transformPlan: options?.transformPlan,
+    });
+    void orchestrateRasterThumbnailEncodeAfterImport({
       documentId: result.document.id,
       transformPlan: options?.transformPlan,
     });
