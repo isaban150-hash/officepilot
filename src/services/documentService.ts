@@ -469,9 +469,10 @@ import type { DocumentFileTransformPlan } from '../types/documentFileTransformPl
 import { orchestrateSourceReuseArchiveBindingAfterImport } from './documentFileSourceReuseArchiveOrchestrationService';
 import { orchestrateRasterArchiveEncodeAfterImport } from './documentFileRasterArchiveEncodeOrchestrationService';
 import { orchestrateRasterThumbnailEncodeAfterImport } from './documentFileRasterThumbnailEncodeOrchestrationService';
+import { orchestrateRasterPreviewEncodeAfterImport } from './documentFileRasterPreviewEncodeOrchestrationService';
 
 export interface ImportInboxDocumentOptions {
-  /** Pre-built transform plan for post-import archive/thumbnail raster encode. */
+  /** Pre-built transform plan for post-import archive/preview/thumbnail raster encode. */
   transformPlan?: DocumentFileTransformPlan | null;
 }
 
@@ -501,6 +502,10 @@ export function importInboxDocument(
       transformPlan: options?.transformPlan,
     });
     void orchestrateRasterThumbnailEncodeAfterImport({
+      documentId: result.document.id,
+      transformPlan: options?.transformPlan,
+    });
+    void orchestrateRasterPreviewEncodeAfterImport({
       documentId: result.document.id,
       transformPlan: options?.transformPlan,
     });

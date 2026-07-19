@@ -130,8 +130,8 @@ describe('STORAGE-RASTER-CAPABILITY-ENABLEMENT-01', () => {
     });
   });
 
-  describe('Fall D: Import erzeugt keine Preview-Bindings', () => {
-    it('business Raster-Import darf archive/thumbnail anlegen, nie preview', async () => {
+  describe('Fall D: Import erzeugt Raster-Derivative-Bindings ohne PDF-Pfad', () => {
+    it('business Raster-Import darf archive/preview/thumbnail anlegen', async () => {
       setDocumentFileRasterEncodeAdaptersForTests({
         async decodeRaster() {
           return { width: 16, height: 12 };
@@ -176,12 +176,14 @@ describe('STORAGE-RASTER-CAPABILITY-ENABLEMENT-01', () => {
       expect(imported.success).toBe(true);
       if (!imported.success) return;
 
-      // Drain async raster archive + thumbnail orch.
       const { orchestrateRasterArchiveEncodeAfterImport } = await import(
         './services/documentFileRasterArchiveEncodeOrchestrationService'
       );
       const { orchestrateRasterThumbnailEncodeAfterImport } = await import(
         './services/documentFileRasterThumbnailEncodeOrchestrationService'
+      );
+      const { orchestrateRasterPreviewEncodeAfterImport } = await import(
+        './services/documentFileRasterPreviewEncodeOrchestrationService'
       );
       await orchestrateRasterArchiveEncodeAfterImport({
         documentId: imported.document.id,
@@ -191,12 +193,21 @@ describe('STORAGE-RASTER-CAPABILITY-ENABLEMENT-01', () => {
         documentId: imported.document.id,
         transformPlan: transformPlan!,
       });
+      await orchestrateRasterPreviewEncodeAfterImport({
+        documentId: imported.document.id,
+        transformPlan: transformPlan!,
+      });
 
       const bindings = getDocumentFileRepresentationBindingStoreSnapshot();
       expect(
-        bindings.every((binding) => binding.kind === 'archive' || binding.kind === 'thumbnail'),
+        bindings.every(
+          (binding) =>
+            binding.kind === 'archive' ||
+            binding.kind === 'thumbnail' ||
+            binding.kind === 'preview',
+        ),
       ).toBe(true);
-      expect(bindings.some((binding) => binding.kind === 'preview')).toBe(false);
+      expect(bindings.some((binding) => binding.kind === 'preview')).toBe(true);
       expect(bindings.some((binding) => binding.kind === 'thumbnail')).toBe(true);
     });
   });
