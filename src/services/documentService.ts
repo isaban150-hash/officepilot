@@ -467,9 +467,10 @@ export function isDuplicateDocument(
 import { linkArchivedDocumentToVorgang } from './vorgangDocumentLinkService';
 import type { DocumentFileTransformPlan } from '../types/documentFileTransformPlan';
 import { orchestrateSourceReuseArchiveBindingAfterImport } from './documentFileSourceReuseArchiveOrchestrationService';
+import { orchestrateRasterArchiveEncodeAfterImport } from './documentFileRasterArchiveEncodeOrchestrationService';
 
 export interface ImportInboxDocumentOptions {
-  /** Pre-built transform plan for post-import source-reuse archive binding. */
+  /** Pre-built transform plan for post-import archive binding / raster encode. */
   transformPlan?: DocumentFileTransformPlan | null;
 }
 
@@ -490,6 +491,11 @@ export function importInboxDocument(
     }
     persistAll();
     orchestrateSourceReuseArchiveBindingAfterImport({
+      documentId: result.document.id,
+      transformPlan: options?.transformPlan,
+    });
+    // Raster encode is async; failures are logged inside and must not fail import.
+    void orchestrateRasterArchiveEncodeAfterImport({
       documentId: result.document.id,
       transformPlan: options?.transformPlan,
     });
