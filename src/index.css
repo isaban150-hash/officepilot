@@ -3430,6 +3430,42 @@ body {
   margin: 0;
 }
 
+.document-detail__recovery-status {
+  margin-bottom: 1rem;
+  text-align: left;
+}
+
+.document-detail__recovery-status-title {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.document-detail__recovery-status-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.document-detail__recovery-status-item-title {
+  margin: 0 0 0.25rem;
+  font-weight: 600;
+}
+
+.document-detail__recovery-status-item-detail,
+.document-detail__recovery-status-item-hint {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+}
+
+.document-detail__recovery-status-item-hint {
+  margin-top: 0.25rem;
+}
+
 .document-detail__tags {
   padding: 0.5rem 0;
 }

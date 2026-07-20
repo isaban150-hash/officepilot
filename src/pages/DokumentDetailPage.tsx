@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { DocumentUnderstandingCard } from '../components/documents/DocumentUnderstandingCard';
 import { DocumentDetailPreview } from '../components/documents/DocumentDetailPreview';
+import { DocumentDerivativeRecoveryStatusPanel } from '../components/documents/DocumentDerivativeRecoveryStatusPanel';
 import { DocumentOriginalFilePanel } from '../components/documents/DocumentOriginalFilePanel';
 import { DocumentFilingCard } from '../components/documents/DocumentFilingCard';
 import { DocumentLifecycleCard } from '../components/documents/DocumentLifecycleCard';
@@ -142,6 +143,8 @@ export function DokumentDetailPage() {
           </>
         )}
       </Card>
+
+      <DocumentDerivativeRecoveryStatusPanel documentId={document.id} />
 
       <Card>
         <DataRow label={translate('document.fieldCategory')} value={categoryLabel} />
