@@ -2,10 +2,16 @@ import type { DocumentFileTransformPlan } from '../types/documentFileTransformPl
 import { resolveDocumentFileTransformArchiveMaterialization } from './documentFileTransformArchiveMaterializationService';
 import { planDocumentFileRepresentationSourceReuseBinding } from './documentFileRepresentationSourceReuseBindingPlanService';
 import { persistSourceReuseArchiveRepresentationBinding } from './documentFileRepresentationSourceReuseArchiveBindingPersistenceService';
+import {
+  createDocumentFileDerivativeOrchestrationErrorResult,
+  reportDocumentFileDerivativeStepError,
+} from './documentFileDerivativeErrorReportingService';
+import type { DocumentFileDerivativeStepErrorCode } from '../types/documentFileDerivativeStepOutcome';
 import { getDocumentById } from './documentService';
 import { getDocumentFileRefById } from './documentFileStoreService';
 
 const LOG_PREFIX = '[OfficePilot:source-reuse-archive-binding]';
+const STEP_ID = 'source_reuse_archive' as const;
 
 export type SourceReuseArchiveOrchestrationResult =
   | {
@@ -30,7 +36,7 @@ export type SourceReuseArchiveOrchestrationResult =
     }
   | {
       readonly kind: 'error';
-      readonly error: unknown;
+      readonly errorCode: DocumentFileDerivativeStepErrorCode;
     };
 
 export interface OrchestrateSourceReuseArchiveBindingAfterImportInput {
@@ -39,8 +45,8 @@ export interface OrchestrateSourceReuseArchiveBindingAfterImportInput {
   transformPlan: DocumentFileTransformPlan | null | undefined;
 }
 
-function reportInfrastructureError(error: unknown): void {
-  console.error(LOG_PREFIX, error);
+function reportCode(errorCode: DocumentFileDerivativeStepErrorCode): void {
+  reportDocumentFileDerivativeStepError(LOG_PREFIX, STEP_ID, errorCode);
 }
 
 /**
@@ -116,8 +122,8 @@ export function orchestrateSourceReuseArchiveBindingAfterImport(
     }
 
     return { kind: 'noop', reason: 'unresolved' };
-  } catch (error) {
-    reportInfrastructureError(error);
-    return { kind: 'error', error };
+  } catch {
+    reportCode('unexpected_failure');
+    return createDocumentFileDerivativeOrchestrationErrorResult('unexpected_failure');
   }
 }

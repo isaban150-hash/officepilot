@@ -7,6 +7,11 @@ import {
   rollbackOwnedDerivedRepresentationCreation,
   type ExactDocumentFileRepresentationBindingKey,
 } from './documentFileRepresentationDerivedBindingRollbackService';
+import {
+  createDocumentFileDerivativeOrchestrationErrorResult,
+  reportDocumentFileDerivativeStepError,
+} from './documentFileDerivativeErrorReportingService';
+import type { DocumentFileDerivativeStepErrorCode } from '../types/documentFileDerivativeStepOutcome';
 import { getDocumentById } from './documentService';
 import {
   getDocumentFileRefById,
@@ -17,6 +22,7 @@ import { releaseDocumentFileIfUnreferenced } from './documentFileReferenceServic
 import { persistAll } from './persistenceService';
 
 const LOG_PREFIX = '[OfficePilot:image-to-pdf-archive-encode]';
+const STEP_ID = 'image_to_pdf_archive' as const;
 
 export type ImageToPdfArchiveEncodeOrchestrationResult =
   | {
@@ -41,7 +47,7 @@ export type ImageToPdfArchiveEncodeOrchestrationResult =
     }
   | {
       readonly kind: 'error';
-      readonly error: unknown;
+      readonly errorCode: DocumentFileDerivativeStepErrorCode;
     };
 
 export interface OrchestrateImageToPdfArchiveEncodeAfterImportInput {
@@ -50,8 +56,8 @@ export interface OrchestrateImageToPdfArchiveEncodeAfterImportInput {
   transformPlan: DocumentFileTransformPlan | null | undefined;
 }
 
-function reportInfrastructureError(error: unknown): void {
-  console.error(LOG_PREFIX, error);
+function reportCode(errorCode: DocumentFileDerivativeStepErrorCode): void {
+  reportDocumentFileDerivativeStepError(LOG_PREFIX, STEP_ID, errorCode);
 }
 
 function archivePdfFileNameFromOriginal(originalFileName: string): string {
@@ -67,8 +73,8 @@ async function releaseCreatedArchiveFileRef(fileRefId: string | null): Promise<v
   }
   try {
     await releaseDocumentFileIfUnreferenced(fileRefId);
-  } catch (error) {
-    reportInfrastructureError(error);
+  } catch {
+    reportCode('cleanup_failed');
   }
 }
 
@@ -209,13 +215,13 @@ export async function orchestrateImageToPdfArchiveEncodeAfterImport(
 
     await releaseCreatedArchiveFileRef(createdArchiveFileRefId);
     return { kind: 'noop', reason: 'encode_plan_unresolved' };
-  } catch (error) {
+  } catch {
     await rollbackOwnedDerivedRepresentationCreation({
       createdBinding: ownedCreatedBinding,
       createdFileRefId: createdArchiveFileRefId,
-      reportError: reportInfrastructureError,
+      reportError: reportCode,
     });
-    reportInfrastructureError(error);
-    return { kind: 'error', error };
+    reportCode('unexpected_failure');
+    return createDocumentFileDerivativeOrchestrationErrorResult('unexpected_failure');
   }
 }

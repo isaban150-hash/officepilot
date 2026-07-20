@@ -98,7 +98,7 @@ describe('STORAGE-DERIVATIVE-STEP-OUTCOME-01', () => {
         pdf_metadata_strip: async () => ({ kind: 'conflict' }),
         raster_thumbnail: async () => ({
           kind: 'error',
-          error: new Error('secret path C:\\Users\\secret\\doc.bin with bytes'),
+          errorCode: 'unexpected_failure',
         }),
       }),
     );
@@ -141,7 +141,7 @@ describe('STORAGE-DERIVATIVE-STEP-OUTCOME-01', () => {
     const errored = findDocumentFileDerivativeStepOutcome(DOC_A, 'raster_thumbnail');
     expect(errored).toMatchObject({
       outcome: 'error',
-      errorCode: 'orchestrator_error',
+      errorCode: 'unexpected_failure',
       representationKind: 'thumbnail',
       attempt: 1,
     });

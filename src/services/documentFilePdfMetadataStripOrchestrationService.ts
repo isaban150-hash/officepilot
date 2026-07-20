@@ -7,6 +7,11 @@ import {
   rollbackOwnedDerivedRepresentationCreation,
   type ExactDocumentFileRepresentationBindingKey,
 } from './documentFileRepresentationDerivedBindingRollbackService';
+import {
+  createDocumentFileDerivativeOrchestrationErrorResult,
+  reportDocumentFileDerivativeStepError,
+} from './documentFileDerivativeErrorReportingService';
+import type { DocumentFileDerivativeStepErrorCode } from '../types/documentFileDerivativeStepOutcome';
 import { getDocumentById } from './documentService';
 import {
   getDocumentFileRefById,
@@ -17,6 +22,7 @@ import { releaseDocumentFileIfUnreferenced } from './documentFileReferenceServic
 import { persistAll } from './persistenceService';
 
 const LOG_PREFIX = '[OfficePilot:pdf-metadata-strip]';
+const STEP_ID = 'pdf_metadata_strip' as const;
 
 export type PdfMetadataStripOrchestrationResult =
   | {
@@ -41,7 +47,7 @@ export type PdfMetadataStripOrchestrationResult =
     }
   | {
       readonly kind: 'error';
-      readonly error: unknown;
+      readonly errorCode: DocumentFileDerivativeStepErrorCode;
     };
 
 export interface OrchestratePdfMetadataStripAfterImportInput {
@@ -50,8 +56,8 @@ export interface OrchestratePdfMetadataStripAfterImportInput {
   transformPlan: DocumentFileTransformPlan | null | undefined;
 }
 
-function reportInfrastructureError(error: unknown): void {
-  console.error(LOG_PREFIX, error);
+function reportCode(errorCode: DocumentFileDerivativeStepErrorCode): void {
+  reportDocumentFileDerivativeStepError(LOG_PREFIX, STEP_ID, errorCode);
 }
 
 async function releaseCreatedArchiveFileRef(fileRefId: string | null): Promise<void> {
@@ -60,8 +66,8 @@ async function releaseCreatedArchiveFileRef(fileRefId: string | null): Promise<v
   }
   try {
     await releaseDocumentFileIfUnreferenced(fileRefId);
-  } catch (error) {
-    reportInfrastructureError(error);
+  } catch {
+    reportCode('cleanup_failed');
   }
 }
 
@@ -201,13 +207,13 @@ export async function orchestratePdfMetadataStripAfterImport(
 
     await releaseCreatedArchiveFileRef(createdArchiveFileRefId);
     return { kind: 'noop', reason: 'strip_plan_unresolved' };
-  } catch (error) {
+  } catch {
     await rollbackOwnedDerivedRepresentationCreation({
       createdBinding: ownedCreatedBinding,
       createdFileRefId: createdArchiveFileRefId,
-      reportError: reportInfrastructureError,
+      reportError: reportCode,
     });
-    reportInfrastructureError(error);
-    return { kind: 'error', error };
+    reportCode('unexpected_failure');
+    return createDocumentFileDerivativeOrchestrationErrorResult('unexpected_failure');
   }
 }

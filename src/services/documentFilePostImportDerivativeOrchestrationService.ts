@@ -2,6 +2,7 @@ import type { DocumentFileTransformPlan } from '../types/documentFileTransformPl
 import {
   POST_IMPORT_DERIVATIVE_STEP_IDS,
   type PostImportDerivativeStepId,
+  type DocumentFileDerivativeStepErrorCode,
 } from '../types/documentFileDerivativeStepOutcome';
 import { recordPostImportDerivativeStepOutcome } from './documentFileDerivativeStepOutcomeService';
 import {
@@ -12,6 +13,7 @@ import {
   releaseDocumentFileDerivativeStepInFlightLock,
   tryAcquireDocumentFileDerivativeStepInFlightLock,
 } from './documentFileDerivativeStepInFlightLockService';
+import { readDocumentFileDerivativeOrchestrationErrorCode } from './documentFileDerivativeErrorReportingService';
 import { getDocumentById } from './documentService';
 import { getDocumentFileRefById } from './documentFileStoreService';
 
@@ -44,7 +46,7 @@ export interface OrchestratePostImportDerivativesAfterImportInput {
 export interface PostImportDerivativeStepResult {
   readonly stepId: PostImportDerivativeStepId;
   readonly outcome: 'completed' | 'failed';
-  readonly error?: unknown;
+  readonly errorCode?: DocumentFileDerivativeStepErrorCode;
 }
 
 export interface PostImportDerivativesOrchestrationResult {
@@ -122,13 +124,13 @@ export async function orchestratePostImportDerivativesAfterImport(
           Object.freeze({
             stepId,
             outcome: 'failed' as const,
-            error: (result as { error?: unknown }).error,
+            errorCode: readDocumentFileDerivativeOrchestrationErrorCode(result),
           }),
         );
       } else {
         steps.push(Object.freeze({ stepId, outcome: 'completed' as const }));
       }
-    } catch (error) {
+    } catch {
       reportCoordinatorError(stepId, 'runner_threw');
       recordStepOutcomeSafely({
         documentId: input.documentId,
@@ -138,7 +140,7 @@ export async function orchestratePostImportDerivativesAfterImport(
         sourceMimeType: source.sourceMimeType,
         runnerThrew: true,
       });
-      steps.push(Object.freeze({ stepId, outcome: 'failed' as const, error }));
+      steps.push(Object.freeze({ stepId, outcome: 'failed' as const, errorCode: 'runner_threw' }));
     } finally {
       releaseDocumentFileDerivativeStepInFlightLock(input.documentId, stepId);
     }

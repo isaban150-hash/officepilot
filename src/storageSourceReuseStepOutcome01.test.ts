@@ -279,7 +279,7 @@ describe('STORAGE-SOURCE-REUSE-STEP-OUTCOME-01', () => {
     );
     expect(outcome).toMatchObject({
       outcome: 'error',
-      errorCode: 'orchestrator_error',
+      errorCode: 'unexpected_failure',
       attempt: 1,
     });
     expect(JSON.stringify(outcome)).not.toMatch(/secret-internal-detail/);

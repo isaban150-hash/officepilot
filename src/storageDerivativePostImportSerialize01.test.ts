@@ -218,7 +218,7 @@ describe('STORAGE-DERIVATIVE-POST-IMPORT-SERIALIZE-01', () => {
       },
       image_to_pdf_archive: async () => {
         order.push('image_to_pdf_archive');
-        return { kind: 'error', error: Object.freeze({ code: 'encode_failed' }) };
+        return { kind: 'error', errorCode: 'transform_failed' };
       },
       pdf_metadata_strip: async () => {
         order.push('pdf_metadata_strip');
@@ -248,9 +248,19 @@ describe('STORAGE-DERIVATIVE-POST-IMPORT-SERIALIZE-01', () => {
     });
 
     expect(order).toEqual([...POST_IMPORT_DERIVATIVE_STEP_IDS]);
-    expect(result.steps[0]).toMatchObject({ stepId: 'raster_archive', outcome: 'failed' });
-    expect(result.steps[1]).toMatchObject({ stepId: 'image_to_pdf_archive', outcome: 'failed' });
+    expect(result.steps[0]).toMatchObject({
+      stepId: 'raster_archive',
+      outcome: 'failed',
+      errorCode: 'runner_threw',
+    });
+    expect(result.steps[1]).toMatchObject({
+      stepId: 'image_to_pdf_archive',
+      outcome: 'failed',
+      errorCode: 'transform_failed',
+    });
     expect(result.steps.slice(2).every((step) => step.outcome === 'completed')).toBe(true);
+    expect(JSON.stringify(result)).not.toMatch(/raster boom|encode_failed|stack|SECRET/i);
+    expect(result.steps.every((step) => !('error' in step))).toBe(true);
   });
 
   it('bewahrt Sibling-Binding bei Fehler-Rollback eines späteren Schritts', async () => {

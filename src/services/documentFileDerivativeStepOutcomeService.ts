@@ -200,6 +200,10 @@ export function normalizeDerivativeOrchestrationResult(
   }
 
   if (kind === 'error') {
+    const code = record.errorCode;
+    if (isErrorCode(code)) {
+      return { outcome: 'error', errorCode: code, createdFileRef: false };
+    }
     return { outcome: 'error', errorCode: 'orchestrator_error', createdFileRef: false };
   }
 

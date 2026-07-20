@@ -76,6 +76,12 @@ export const DOCUMENT_FILE_DERIVATIVE_STEP_ERROR_CODES = [
   'orchestrator_error',
   'runner_threw',
   'unknown_result',
+  'transform_failed',
+  'file_ref_write_failed',
+  'binding_persist_failed',
+  'rollback_failed',
+  'cleanup_failed',
+  'unexpected_failure',
 ] as const;
 
 export type DocumentFileDerivativeStepErrorCode =

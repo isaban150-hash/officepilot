@@ -207,10 +207,12 @@ describe('STORAGE-SOURCE-REUSE-ARCHIVE-ORCHESTRATION-01', () => {
       },
     );
 
-    expect(result.kind).toBe('error');
-    expect(errorSpy).toHaveBeenCalled();
-    expect(String(errorSpy.mock.calls[0]?.[0])).toContain(
+    expect(result).toEqual({ kind: 'error', errorCode: 'unexpected_failure' });
+    expect(errorSpy).toHaveBeenCalledWith(
       '[OfficePilot:source-reuse-archive-binding]',
+      'source_reuse_archive',
+      'unexpected_failure',
     );
+    expect(JSON.stringify(errorSpy.mock.calls)).not.toMatch(/TypeError|Invalid source/i);
   });
 });

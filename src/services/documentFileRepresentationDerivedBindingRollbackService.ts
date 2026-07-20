@@ -1,6 +1,7 @@
 import type {
   DocumentFileRepresentationBindingKind,
 } from '../types/documentFileRepresentationBinding';
+import type { DocumentFileDerivativeStepErrorCode } from '../types/documentFileDerivativeStepOutcome';
 import {
   getDocumentFileRepresentationBindingStoreSnapshot,
   replaceDocumentFileRepresentationBindingStore,
@@ -55,11 +56,12 @@ export function removeDocumentFileRepresentationBindingIfExactMatch(
 /**
  * Undo a binding created in this orchestration run (exact match only) and optionally
  * release a FileRef that was newly created in the same run.
+ * Failures are reported only as stable error codes — never raw Error objects.
  */
 export async function rollbackOwnedDerivedRepresentationCreation(input: {
   createdBinding: ExactDocumentFileRepresentationBindingKey | null;
   createdFileRefId: string | null;
-  reportError: (error: unknown) => void;
+  reportError: (errorCode: DocumentFileDerivativeStepErrorCode) => void;
 }): Promise<void> {
   if (input.createdBinding) {
     try {
@@ -67,16 +69,16 @@ export async function rollbackOwnedDerivedRepresentationCreation(input: {
       if (removed) {
         persistAll();
       }
-    } catch (error) {
-      input.reportError(error);
+    } catch {
+      input.reportError('rollback_failed');
     }
   }
 
   if (input.createdFileRefId) {
     try {
       await releaseDocumentFileIfUnreferenced(input.createdFileRefId);
-    } catch (error) {
-      input.reportError(error);
+    } catch {
+      input.reportError('cleanup_failed');
     }
   }
 }
