@@ -3,9 +3,9 @@ import { planDocumentFilePdfDerivativeEncode } from './documentFilePdfDerivative
 import { encodeDocumentFilePdfPageToJpeg } from './documentFilePdfPageJpegEncodeService';
 import { persistDerivedPreviewRepresentationBinding } from './documentFileRepresentationDerivedPreviewBindingPersistenceService';
 import {
-  getDocumentFileRepresentationBindingStoreSnapshot,
-  replaceDocumentFileRepresentationBindingStore,
-} from './documentFileRepresentationBindingStoreService';
+  rollbackOwnedDerivedRepresentationCreation,
+  type ExactDocumentFileRepresentationBindingKey,
+} from './documentFileRepresentationDerivedBindingRollbackService';
 import { getDocumentById } from './documentService';
 import {
   getDocumentFileRefById,
@@ -13,6 +13,7 @@ import {
   storeDocumentFileFromCachedPayload,
 } from './documentFileStoreService';
 import { releaseDocumentFileIfUnreferenced } from './documentFileReferenceService';
+import { persistAll } from './persistenceService';
 
 const LOG_PREFIX = '[OfficePilot:pdf-preview-encode]';
 
@@ -79,7 +80,7 @@ export async function orchestratePdfPreviewEncodeAfterImport(
   input: OrchestratePdfPreviewEncodeAfterImportInput,
 ): Promise<PdfPreviewEncodeOrchestrationResult> {
   let createdPreviewFileRefId: string | null = null;
-  const bindingsBefore = getDocumentFileRepresentationBindingStoreSnapshot();
+  let ownedCreatedBinding: ExactDocumentFileRepresentationBindingKey | null = null;
 
   try {
     if (input === null || typeof input !== 'object') {
@@ -173,11 +174,28 @@ export async function orchestratePdfPreviewEncodeAfterImport(
       return { kind: 'conflict' };
     }
 
-    if (registration.kind === 'created' || registration.kind === 'unchanged') {
+    if (registration.kind === 'created') {
+      ownedCreatedBinding = {
+        documentId: registration.binding.documentId,
+        kind: registration.binding.kind,
+        fileRefId: registration.binding.fileRefId,
+      };
+      persistAll();
+      ownedCreatedBinding = null;
       createdPreviewFileRefId = null;
       return {
         kind: 'persisted',
-        registration: registration.kind,
+        registration: 'created',
+        previewFileRefId: stored.fileRef.id,
+        createdPreviewFileRef: stored.created,
+      };
+    }
+
+    if (registration.kind === 'unchanged') {
+      createdPreviewFileRefId = null;
+      return {
+        kind: 'persisted',
+        registration: 'unchanged',
         previewFileRefId: stored.fileRef.id,
         createdPreviewFileRef: stored.created,
       };
@@ -186,12 +204,11 @@ export async function orchestratePdfPreviewEncodeAfterImport(
     await releaseCreatedPreviewFileRef(createdPreviewFileRefId);
     return { kind: 'noop', reason: 'encode_plan_unresolved' };
   } catch (error) {
-    try {
-      replaceDocumentFileRepresentationBindingStore(bindingsBefore);
-    } catch (restoreError) {
-      reportInfrastructureError(restoreError);
-    }
-    await releaseCreatedPreviewFileRef(createdPreviewFileRefId);
+    await rollbackOwnedDerivedRepresentationCreation({
+      createdBinding: ownedCreatedBinding,
+      createdFileRefId: createdPreviewFileRefId,
+      reportError: reportInfrastructureError,
+    });
     reportInfrastructureError(error);
     return { kind: 'error', error };
   }

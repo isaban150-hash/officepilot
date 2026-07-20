@@ -3,9 +3,9 @@ import { planDocumentFileRasterDerivativeEncode } from './documentFileRasterDeri
 import { encodeDocumentFileRasterToJpeg } from './documentFileRasterEncodeService';
 import { persistDerivedThumbnailRepresentationBinding } from './documentFileRepresentationDerivedThumbnailBindingPersistenceService';
 import {
-  getDocumentFileRepresentationBindingStoreSnapshot,
-  replaceDocumentFileRepresentationBindingStore,
-} from './documentFileRepresentationBindingStoreService';
+  rollbackOwnedDerivedRepresentationCreation,
+  type ExactDocumentFileRepresentationBindingKey,
+} from './documentFileRepresentationDerivedBindingRollbackService';
 import { getDocumentById } from './documentService';
 import {
   getDocumentFileRefById,
@@ -13,6 +13,7 @@ import {
   storeDocumentFileFromCachedPayload,
 } from './documentFileStoreService';
 import { releaseDocumentFileIfUnreferenced } from './documentFileReferenceService';
+import { persistAll } from './persistenceService';
 
 const LOG_PREFIX = '[OfficePilot:raster-thumbnail-encode]';
 
@@ -79,7 +80,7 @@ export async function orchestrateRasterThumbnailEncodeAfterImport(
   input: OrchestrateRasterThumbnailEncodeAfterImportInput,
 ): Promise<RasterThumbnailEncodeOrchestrationResult> {
   let createdThumbnailFileRefId: string | null = null;
-  const bindingsBefore = getDocumentFileRepresentationBindingStoreSnapshot();
+  let ownedCreatedBinding: ExactDocumentFileRepresentationBindingKey | null = null;
 
   try {
     if (input === null || typeof input !== 'object') {
@@ -175,11 +176,28 @@ export async function orchestrateRasterThumbnailEncodeAfterImport(
       return { kind: 'conflict' };
     }
 
-    if (registration.kind === 'created' || registration.kind === 'unchanged') {
+    if (registration.kind === 'created') {
+      ownedCreatedBinding = {
+        documentId: registration.binding.documentId,
+        kind: registration.binding.kind,
+        fileRefId: registration.binding.fileRefId,
+      };
+      persistAll();
+      ownedCreatedBinding = null;
       createdThumbnailFileRefId = null;
       return {
         kind: 'persisted',
-        registration: registration.kind,
+        registration: 'created',
+        thumbnailFileRefId: stored.fileRef.id,
+        createdThumbnailFileRef: stored.created,
+      };
+    }
+
+    if (registration.kind === 'unchanged') {
+      createdThumbnailFileRefId = null;
+      return {
+        kind: 'persisted',
+        registration: 'unchanged',
         thumbnailFileRefId: stored.fileRef.id,
         createdThumbnailFileRef: stored.created,
       };
@@ -188,12 +206,11 @@ export async function orchestrateRasterThumbnailEncodeAfterImport(
     await releaseCreatedThumbnailFileRef(createdThumbnailFileRefId);
     return { kind: 'noop', reason: 'encode_plan_unresolved' };
   } catch (error) {
-    try {
-      replaceDocumentFileRepresentationBindingStore(bindingsBefore);
-    } catch (restoreError) {
-      reportInfrastructureError(restoreError);
-    }
-    await releaseCreatedThumbnailFileRef(createdThumbnailFileRefId);
+    await rollbackOwnedDerivedRepresentationCreation({
+      createdBinding: ownedCreatedBinding,
+      createdFileRefId: createdThumbnailFileRefId,
+      reportError: reportInfrastructureError,
+    });
     reportInfrastructureError(error);
     return { kind: 'error', error };
   }

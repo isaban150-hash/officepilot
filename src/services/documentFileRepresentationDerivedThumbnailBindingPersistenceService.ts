@@ -7,7 +7,6 @@ import {
 } from './documentFileRepresentationBindingStoreService';
 import { getDocumentById } from './documentService';
 import { getDocumentFileRefById } from './documentFileStoreService';
-import { persistAll } from './persistenceService';
 
 export interface PersistDerivedThumbnailRepresentationBindingInput {
   documentId: string;
@@ -16,8 +15,8 @@ export interface PersistDerivedThumbnailRepresentationBindingInput {
 }
 
 /**
- * Persist thumbnail → committed FileRef for a CompanyDocument.
- * Never replaces on conflict. Calls persistAll only when a binding is newly created.
+ * Register thumbnail → committed FileRef for a CompanyDocument in the binding store.
+ * Never replaces on conflict. Does not call persistAll — callers persist after `created`.
  */
 export function persistDerivedThumbnailRepresentationBinding(
   input: PersistDerivedThumbnailRepresentationBindingInput,
@@ -68,9 +67,5 @@ export function persistDerivedThumbnailRepresentationBinding(
   }
 
   replaceDocumentFileRepresentationBindingStore(result.bindings);
-  if (result.kind === 'created') {
-    persistAll();
-  }
-
   return result;
 }

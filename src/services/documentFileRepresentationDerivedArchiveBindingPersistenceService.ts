@@ -7,7 +7,6 @@ import {
 } from './documentFileRepresentationBindingStoreService';
 import { getDocumentById } from './documentService';
 import { getDocumentFileRefById } from './documentFileStoreService';
-import { persistAll } from './persistenceService';
 
 export interface PersistDerivedArchiveRepresentationBindingInput {
   documentId: string;
@@ -16,9 +15,9 @@ export interface PersistDerivedArchiveRepresentationBindingInput {
 }
 
 /**
- * Persist archive → committed FileRef for a CompanyDocument.
+ * Register archive → committed FileRef for a CompanyDocument in the binding store.
  * Unlike source-reuse persistence, the archive FileRef may differ from the original.
- * Never replaces on conflict. Calls persistAll only when a binding is newly created.
+ * Never replaces on conflict. Does not call persistAll — callers persist after `created`.
  */
 export function persistDerivedArchiveRepresentationBinding(
   input: PersistDerivedArchiveRepresentationBindingInput,
@@ -69,9 +68,5 @@ export function persistDerivedArchiveRepresentationBinding(
   }
 
   replaceDocumentFileRepresentationBindingStore(result.bindings);
-  if (result.kind === 'created') {
-    persistAll();
-  }
-
   return result;
 }
