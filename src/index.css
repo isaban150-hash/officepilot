@@ -2694,6 +2694,82 @@ body {
   color: var(--color-text-muted);
 }
 
+.document-field-fill-confirm {
+  margin: 1rem 0;
+}
+
+.document-field-fill-confirm__hint {
+  margin: 0 0 0.75rem;
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+}
+
+.document-field-fill-confirm__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.document-field-fill-confirm__row {
+  text-align: left;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--color-border, #e2e8f0);
+}
+
+.document-field-fill-confirm__row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.document-field-fill-confirm__row-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 0.25rem;
+}
+
+.document-field-fill-confirm__label {
+  font-weight: 600;
+}
+
+.document-field-fill-confirm__value {
+  margin: 0 0 0.5rem;
+  font-size: 0.9375rem;
+}
+
+.document-field-fill-confirm__edit {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.document-field-fill-confirm__edit .input {
+  flex: 1 1 12rem;
+  min-width: 8rem;
+}
+
+.document-field-fill-confirm__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.document-field-fill-confirm__footer {
+  margin-top: 0.75rem;
+}
+
+.document-field-fill-confirm__copy-feedback {
+  margin: 0.35rem 0 0;
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+}
+
 .assistant-answer-section {
   margin-bottom: 1.5rem;
 }

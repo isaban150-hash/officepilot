@@ -12,6 +12,7 @@ import { CommunicationIntegrationPanel } from '../components/communication/Commu
 import { INBOX_COMMUNICATION_BUTTON_KEYS } from '../components/communication/communicationNavigation';
 import { SmartIntakeSummary } from '../components/inbox/SmartIntakeSummary';
 import { DocumentFreeQuestionPanel } from '../components/documents/DocumentFreeQuestionPanel';
+import { DocumentFieldFillConfirmPanel } from '../components/documents/DocumentFieldFillConfirmPanel';
 import { CollapsibleReviewSection } from '../components/inbox/review/CollapsibleReviewSection';
 import { DocumentReviewExperience } from '../components/inbox/review/DocumentReviewExperience';
 import {
@@ -928,6 +929,9 @@ export function EingangDetailPage() {
   const freeQuestionPanel = (
     <DocumentFreeQuestionPanel source={{ type: 'inbox', item }} testIdPrefix="document-free-question" />
   );
+  const fieldFillConfirmPanel = (
+    <DocumentFieldFillConfirmPanel item={item} testIdPrefix="document-field-fill-confirm" />
+  );
   const originalFilePanel = item.fileRefId ? (
     <div data-testid="ablage-original-file">
       <DocumentOriginalFilePanel
@@ -982,11 +986,13 @@ export function EingangDetailPage() {
         <>
           {reviewExperience}
           {freeQuestionPanel}
+          {fieldFillConfirmPanel}
           {originalFilePanel}
         </>
       ) : (
         <>
           {freeQuestionPanel}
+          {fieldFillConfirmPanel}
           {originalFilePanel}
           {reviewExperience}
         </>
