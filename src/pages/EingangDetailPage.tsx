@@ -13,6 +13,10 @@ import { INBOX_COMMUNICATION_BUTTON_KEYS } from '../components/communication/com
 import { SmartIntakeSummary } from '../components/inbox/SmartIntakeSummary';
 import { DocumentFreeQuestionPanel } from '../components/documents/DocumentFreeQuestionPanel';
 import { DocumentFieldFillConfirmPanel } from '../components/documents/DocumentFieldFillConfirmPanel';
+import { DocumentConfirmedReplyDraftPanel } from '../components/documents/DocumentConfirmedReplyDraftPanel';
+import { buildDocumentFieldFillConfirmViewModel } from '../services/documentFieldFillConfirmService';
+import { isConfirmedReplyDraftSupported } from '../services/documentConfirmedReplyDraftService';
+import type { DocumentFieldFillConfirmRow } from '../types/documentFieldFillConfirm';
 import type { DocumentFieldFillFreeTextBridgeProposal } from '../types/documentFieldFillFreeTextBridge';
 import { CollapsibleReviewSection } from '../components/inbox/review/CollapsibleReviewSection';
 import { DocumentReviewExperience } from '../components/inbox/review/DocumentReviewExperience';
@@ -123,6 +127,10 @@ export function EingangDetailPage() {
   const [freeTextBridgeProposal, setFreeTextBridgeProposal] =
     useState<DocumentFieldFillFreeTextBridgeProposal | null>(null);
   const freeTextBridgeSeqRef = useRef(0);
+  const [fillConfirmRows, setFillConfirmRows] = useState<DocumentFieldFillConfirmRow[]>(() => {
+    const initial = id ? getInboxItemById(id) : undefined;
+    return initial ? [...buildDocumentFieldFillConfirmViewModel(initial).rows] : [];
+  });
 
   useEffect(() => {
     if (id) {
@@ -137,9 +145,13 @@ export function EingangDetailPage() {
 
   useEffect(() => {
     if (id) {
-      setItem(getInboxItemById(id));
+      const next = getInboxItemById(id);
+      setItem(next);
       setIsEditing(false);
       setEditDraft(null);
+      setFillConfirmRows(
+        next ? [...buildDocumentFieldFillConfirmViewModel(next).rows] : [],
+      );
     }
   }, [id]);
 
@@ -951,8 +963,17 @@ export function EingangDetailPage() {
       item={item}
       testIdPrefix="document-field-fill-confirm"
       freeTextBridgeProposal={freeTextBridgeProposal}
+      rows={fillConfirmRows}
+      onRowsChange={setFillConfirmRows}
     />
   );
+  const confirmedReplyDraftPanel = isConfirmedReplyDraftSupported(item) ? (
+    <DocumentConfirmedReplyDraftPanel
+      item={item}
+      rows={fillConfirmRows}
+      testIdPrefix="document-confirmed-reply-draft"
+    />
+  ) : null;
   const originalFilePanel = item.fileRefId ? (
     <div data-testid="ablage-original-file">
       <DocumentOriginalFilePanel
@@ -1008,12 +1029,14 @@ export function EingangDetailPage() {
           {reviewExperience}
           {freeQuestionPanel}
           {fieldFillConfirmPanel}
+          {confirmedReplyDraftPanel}
           {originalFilePanel}
         </>
       ) : (
         <>
           {freeQuestionPanel}
           {fieldFillConfirmPanel}
+          {confirmedReplyDraftPanel}
           {originalFilePanel}
           {reviewExperience}
         </>

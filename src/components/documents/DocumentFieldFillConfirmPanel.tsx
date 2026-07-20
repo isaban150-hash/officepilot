@@ -15,6 +15,12 @@ export interface DocumentFieldFillConfirmPanelProps {
   testIdPrefix?: string;
   /** Session-only free-text proposal; applied as local `proposed` when id changes. */
   freeTextBridgeProposal?: DocumentFieldFillFreeTextBridgeProposal | null;
+  /**
+   * Optional controlled rows (page-owned single source of truth).
+   * When both `rows` and `onRowsChange` are set, internal row state is unused.
+   */
+  rows?: DocumentFieldFillConfirmRow[];
+  onRowsChange?: (rows: DocumentFieldFillConfirmRow[]) => void;
 }
 
 function confidenceLabel(confidence: DocumentFieldFillConfirmRow['confidence']): string | null {
@@ -31,29 +37,48 @@ export function DocumentFieldFillConfirmPanel({
   item,
   testIdPrefix = 'document-field-fill-confirm',
   freeTextBridgeProposal = null,
+  rows: controlledRows,
+  onRowsChange,
 }: DocumentFieldFillConfirmPanelProps) {
-  const [rows, setRows] = useState<DocumentFieldFillConfirmRow[]>(() => [
+  const isControlled = controlledRows !== undefined && onRowsChange !== undefined;
+  const [internalRows, setInternalRows] = useState<DocumentFieldFillConfirmRow[]>(() => [
     ...buildDocumentFieldFillConfirmViewModel(item).rows,
   ]);
+  const rows = isControlled ? controlledRows : internalRows;
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editSeed, setEditSeed] = useState('');
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
   const editInputRef = useRef<HTMLInputElement | null>(null);
   const lastBridgeIdRef = useRef<number | null>(null);
 
+  const replaceRows = (
+    updater: (current: DocumentFieldFillConfirmRow[]) => DocumentFieldFillConfirmRow[],
+  ): void => {
+    if (isControlled) {
+      onRowsChange(updater(controlledRows));
+      return;
+    }
+    setInternalRows((current) => updater(current));
+  };
+
   useEffect(() => {
     if (!freeTextBridgeProposal) return;
     if (lastBridgeIdRef.current === freeTextBridgeProposal.id) return;
     lastBridgeIdRef.current = freeTextBridgeProposal.id;
-    setRows((current) => applyFreeTextBridgeProposalToRows(current, freeTextBridgeProposal));
+    const proposal = freeTextBridgeProposal;
+    if (isControlled) {
+      onRowsChange(applyFreeTextBridgeProposalToRows(controlledRows, proposal));
+    } else {
+      setInternalRows((current) => applyFreeTextBridgeProposalToRows(current, proposal));
+    }
     setEditingKey(null);
-  }, [freeTextBridgeProposal]);
+  }, [freeTextBridgeProposal, isControlled, onRowsChange, controlledRows]);
 
   const updateRow = (
     fieldKey: string,
     updater: (row: DocumentFieldFillConfirmRow) => DocumentFieldFillConfirmRow,
   ): void => {
-    setRows((current) =>
+    replaceRows((current) =>
       current.map((row) => (row.fieldKey === fieldKey ? updater(row) : row)),
     );
   };
