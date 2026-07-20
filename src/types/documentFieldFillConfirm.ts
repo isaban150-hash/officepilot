@@ -26,6 +26,8 @@ export interface DocumentFieldFillConfirmRow {
   readonly status: DocumentFieldFillConfirmStatus;
   /** Set only when status is confirmed (confirm or correct). */
   readonly confirmedValue?: string;
+  /** True when the current proposal came from free-text bridge (session only). */
+  readonly bridgedFromFreeText?: boolean;
 }
 
 export interface DocumentFieldFillConfirmViewModel {

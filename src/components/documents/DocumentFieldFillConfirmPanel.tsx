@@ -1,16 +1,20 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '../ui/Button';
 import { Card, CardTitle } from '../ui/Card';
 import {
   buildDocumentFieldFillConfirmViewModel,
   formatConfirmedFillConfirmClipboardText,
 } from '../../services/documentFieldFillConfirmService';
+import { applyFreeTextBridgeProposalToRows } from '../../services/documentFieldFillFreeTextBridgeService';
 import type { DocumentFieldFillConfirmRow } from '../../types/documentFieldFillConfirm';
+import type { DocumentFieldFillFreeTextBridgeProposal } from '../../types/documentFieldFillFreeTextBridge';
 import type { InboxItem } from '../../types/models';
 
 export interface DocumentFieldFillConfirmPanelProps {
   item: InboxItem;
   testIdPrefix?: string;
+  /** Session-only free-text proposal; applied as local `proposed` when id changes. */
+  freeTextBridgeProposal?: DocumentFieldFillFreeTextBridgeProposal | null;
 }
 
 function confidenceLabel(confidence: DocumentFieldFillConfirmRow['confidence']): string | null {
@@ -26,6 +30,7 @@ function confidenceLabel(confidence: DocumentFieldFillConfirmRow['confidence']):
 export function DocumentFieldFillConfirmPanel({
   item,
   testIdPrefix = 'document-field-fill-confirm',
+  freeTextBridgeProposal = null,
 }: DocumentFieldFillConfirmPanelProps) {
   const [rows, setRows] = useState<DocumentFieldFillConfirmRow[]>(() => [
     ...buildDocumentFieldFillConfirmViewModel(item).rows,
@@ -34,6 +39,15 @@ export function DocumentFieldFillConfirmPanel({
   const [editSeed, setEditSeed] = useState('');
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
   const editInputRef = useRef<HTMLInputElement | null>(null);
+  const lastBridgeIdRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!freeTextBridgeProposal) return;
+    if (lastBridgeIdRef.current === freeTextBridgeProposal.id) return;
+    lastBridgeIdRef.current = freeTextBridgeProposal.id;
+    setRows((current) => applyFreeTextBridgeProposalToRows(current, freeTextBridgeProposal));
+    setEditingKey(null);
+  }, [freeTextBridgeProposal]);
 
   const updateRow = (
     fieldKey: string,
@@ -52,6 +66,7 @@ export function DocumentFieldFillConfirmPanel({
         ...current,
         status: 'confirmed',
         confirmedValue: value,
+        bridgedFromFreeText: undefined,
       }),
     );
     setEditingKey(null);
@@ -63,6 +78,7 @@ export function DocumentFieldFillConfirmPanel({
         ...current,
         status: 'rejected',
         confirmedValue: undefined,
+        bridgedFromFreeText: undefined,
       }),
     );
     setEditingKey(null);
@@ -85,6 +101,7 @@ export function DocumentFieldFillConfirmPanel({
         ...current,
         status: 'confirmed',
         confirmedValue: value,
+        bridgedFromFreeText: undefined,
       }),
     );
     setEditingKey(null);
@@ -184,12 +201,22 @@ export function DocumentFieldFillConfirmPanel({
                 </div>
 
                 {!isEditing ? (
-                  <p
-                    className="document-field-fill-confirm__value"
-                    data-testid={`${testIdPrefix}-value-${row.fieldKey}`}
-                  >
-                    {displayValue || '—'}
-                  </p>
+                  <>
+                    <p
+                      className="document-field-fill-confirm__value"
+                      data-testid={`${testIdPrefix}-value-${row.fieldKey}`}
+                    >
+                      {displayValue || '—'}
+                    </p>
+                    {row.bridgedFromFreeText && row.status === 'proposed' ? (
+                      <p
+                        className="document-field-fill-confirm__bridge-hint"
+                        data-testid={`${testIdPrefix}-bridge-hint-${row.fieldKey}`}
+                      >
+                        Aus deiner Eingabe vorgeschlagen – noch nicht bestätigt.
+                      </p>
+                    ) : null}
+                  </>
                 ) : (
                   <div className="document-field-fill-confirm__edit">
                     <input

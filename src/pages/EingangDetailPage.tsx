@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { DocumentAssistantPanel } from '../components/documents/DocumentAssistantPanel';
 import { DocumentOriginalFilePanel } from '../components/documents/DocumentOriginalFilePanel';
@@ -13,6 +13,7 @@ import { INBOX_COMMUNICATION_BUTTON_KEYS } from '../components/communication/com
 import { SmartIntakeSummary } from '../components/inbox/SmartIntakeSummary';
 import { DocumentFreeQuestionPanel } from '../components/documents/DocumentFreeQuestionPanel';
 import { DocumentFieldFillConfirmPanel } from '../components/documents/DocumentFieldFillConfirmPanel';
+import type { DocumentFieldFillFreeTextBridgeProposal } from '../types/documentFieldFillFreeTextBridge';
 import { CollapsibleReviewSection } from '../components/inbox/review/CollapsibleReviewSection';
 import { DocumentReviewExperience } from '../components/inbox/review/DocumentReviewExperience';
 import {
@@ -119,6 +120,9 @@ export function EingangDetailPage() {
     'idle',
   );
   const [analysisRetryToken, setAnalysisRetryToken] = useState(0);
+  const [freeTextBridgeProposal, setFreeTextBridgeProposal] =
+    useState<DocumentFieldFillFreeTextBridgeProposal | null>(null);
+  const freeTextBridgeSeqRef = useRef(0);
 
   useEffect(() => {
     if (id) {
@@ -126,6 +130,8 @@ export function EingangDetailPage() {
       setExpandedSections({});
       setIntakeExecution(null);
       setAnalysisRetryToken(0);
+      setFreeTextBridgeProposal(null);
+      freeTextBridgeSeqRef.current = 0;
     }
   }, [id]);
 
@@ -927,10 +933,25 @@ export function EingangDetailPage() {
 
   const prioritizeContractWorkspace = Boolean(workflow?.contractOrderProposal);
   const freeQuestionPanel = (
-    <DocumentFreeQuestionPanel source={{ type: 'inbox', item }} testIdPrefix="document-free-question" />
+    <DocumentFreeQuestionPanel
+      source={{ type: 'inbox', item }}
+      testIdPrefix="document-free-question"
+      onFieldStatementProposal={(statement) => {
+        freeTextBridgeSeqRef.current += 1;
+        setFreeTextBridgeProposal({
+          id: freeTextBridgeSeqRef.current,
+          fieldKey: statement.fieldKey,
+          value: statement.value,
+        });
+      }}
+    />
   );
   const fieldFillConfirmPanel = (
-    <DocumentFieldFillConfirmPanel item={item} testIdPrefix="document-field-fill-confirm" />
+    <DocumentFieldFillConfirmPanel
+      item={item}
+      testIdPrefix="document-field-fill-confirm"
+      freeTextBridgeProposal={freeTextBridgeProposal}
+    />
   );
   const originalFilePanel = item.fileRefId ? (
     <div data-testid="ablage-original-file">

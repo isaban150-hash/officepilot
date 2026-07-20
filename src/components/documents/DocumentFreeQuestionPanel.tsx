@@ -7,16 +7,26 @@ import {
   askDocumentAi,
   type DocumentAiSource,
 } from '../../services/document/documentAiService';
+import { parseFreeTextFieldBridge } from '../../services/documentFieldFillFreeTextBridgeService';
 import type { AreaAiAnswer } from '../../types/areaAi';
+import type { DocumentFieldFillFreeTextBridgeParseResult } from '../../types/documentFieldFillFreeTextBridge';
 
 interface DocumentFreeQuestionPanelProps {
   source: DocumentAiSource;
   testIdPrefix?: string;
+  /**
+   * When set (inbox fill-confirm bridge), unique field statements are handed
+   * off locally and are not sent to `askDocumentAi`.
+   */
+  onFieldStatementProposal?: (
+    statement: Extract<DocumentFieldFillFreeTextBridgeParseResult, { kind: 'field_statement' }>,
+  ) => void;
 }
 
 export function DocumentFreeQuestionPanel({
   source,
   testIdPrefix = 'document-free-question',
+  onFieldStatementProposal,
 }: DocumentFreeQuestionPanelProps) {
   const { translate } = useApp();
   const [question, setQuestion] = useState('');
@@ -28,6 +38,18 @@ export function DocumentFreeQuestionPanel({
   const handleAsk = async () => {
     const trimmed = question.trim();
     if (!trimmed || loading) return;
+
+    if (onFieldStatementProposal) {
+      const bridge = parseFreeTextFieldBridge(trimmed);
+      if (bridge.kind === 'field_statement') {
+        onFieldStatementProposal(bridge);
+        setQuestion('');
+        setAnswer(null);
+        setError(null);
+        return;
+      }
+    }
+
     if (!aiConfigured) {
       setError(translate('document.freeQuestion.notConfigured'));
       return;
@@ -82,7 +104,11 @@ export function DocumentFreeQuestionPanel({
           <Button
             type="button"
             onClick={() => void handleAsk()}
-            disabled={loading || !question.trim() || !aiConfigured}
+            disabled={
+              loading ||
+              !question.trim() ||
+              (!aiConfigured && !onFieldStatementProposal)
+            }
             data-testid={`${testIdPrefix}-ask`}
           >
             {loading ? translate('document.freeQuestion.loading') : translate('document.freeQuestion.ask')}
