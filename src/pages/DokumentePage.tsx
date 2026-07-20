@@ -15,6 +15,7 @@ import {
   type DocumentAreaFilterId,
 } from '../types/documentArea';
 import { getAllUploadedDocuments } from '../services/uploadedDocumentService';
+import { DocumentCardThumbnail } from '../components/documents/DocumentCardThumbnail';
 import { UploadedDocumentsSection } from '../components/documents/UploadedDocumentsSection';
 import {
   formatDocumentValidUntil,
@@ -149,12 +150,10 @@ export function DokumentePage() {
               <Link key={doc.id} to={`/dokumente/${doc.id}`} className="card-link">
                 <Card>
                   <div className="document-card__header">
-                    <span
-                      className={`document-card__preview${doc.imagePreview ? '' : ' document-card__preview--placeholder'}`}
-                      aria-hidden
-                    >
-                      {doc.imagePreview ?? ''}
-                    </span>
+                    <DocumentCardThumbnail
+                      documentId={doc.id}
+                      placeholder={doc.imagePreview ?? ''}
+                    />
                     <div>
                       <CardTitle>{doc.title}</CardTitle>
                       <CardMeta>
