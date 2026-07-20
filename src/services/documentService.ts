@@ -469,6 +469,7 @@ import type { DocumentFileTransformPlan } from '../types/documentFileTransformPl
 import { orchestrateSourceReuseArchiveBindingAfterImport } from './documentFileSourceReuseArchiveOrchestrationService';
 import { orchestrateRasterArchiveEncodeAfterImport } from './documentFileRasterArchiveEncodeOrchestrationService';
 import { orchestrateImageToPdfArchiveEncodeAfterImport } from './documentFileImageToPdfArchiveEncodeOrchestrationService';
+import { orchestratePdfMetadataStripAfterImport } from './documentFilePdfMetadataStripOrchestrationService';
 import { orchestrateRasterThumbnailEncodeAfterImport } from './documentFileRasterThumbnailEncodeOrchestrationService';
 import { orchestrateRasterPreviewEncodeAfterImport } from './documentFileRasterPreviewEncodeOrchestrationService';
 import { orchestratePdfThumbnailEncodeAfterImport } from './documentFilePdfThumbnailEncodeOrchestrationService';
@@ -505,6 +506,10 @@ export function importInboxDocument(
       transformPlan: options?.transformPlan,
     });
     void orchestrateImageToPdfArchiveEncodeAfterImport({
+      documentId: result.document.id,
+      transformPlan: options?.transformPlan,
+    });
+    void orchestratePdfMetadataStripAfterImport({
       documentId: result.document.id,
       transformPlan: options?.transformPlan,
     });
