@@ -1196,6 +1196,7 @@ import type { KnowledgeFact } from './knowledge';
 import type { OfficePilotMemoryState } from './memory';
 import type { DocumentFileRef } from './documentFileRef';
 import type { DocumentFileRepresentationBinding } from './documentFileRepresentationBinding';
+import type { DocumentFileDerivativeStepOutcome } from './documentFileDerivativeStepOutcome';
 
 export interface AppPersistedState {
   version: number;
@@ -1218,6 +1219,8 @@ export interface AppPersistedState {
   documentFileBlobs?: Record<string, string>;
   /** Document-scoped additional representation roles (not original). */
   documentFileRepresentationBindings?: DocumentFileRepresentationBinding[];
+  /** Post-import derived step outcomes (natural key: documentId + stepId). */
+  documentFileDerivativeStepOutcomes?: DocumentFileDerivativeStepOutcome[];
   expenses?: Expense[];
   vorgangNotes?: VorgangNote[];
   communicationHistory?: CommunicationEvent[];

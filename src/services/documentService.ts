@@ -7,6 +7,7 @@ import {
   getDocumentFileRepresentationBindingStoreSnapshot,
   removeDocumentFileRepresentationBindingsForDocument,
 } from './documentFileRepresentationBindingStoreService';
+import { removeDocumentFileDerivativeStepOutcomesForDocument } from './documentFileDerivativeStepOutcomeStoreService';
 import { documentMatchesArea } from './documentAreaCatalog';
 import type { DocumentAreaFilterId } from '../types/documentArea';
 import {
@@ -300,6 +301,7 @@ export function deleteDocument(id: string): DocumentMutationResult {
   documents = [...documents.slice(0, index), tombstoned, ...documents.slice(index + 1)];
   tombstoneMemoryForDocument(id);
   removeDocumentFileRepresentationBindingsForDocument(id);
+  removeDocumentFileDerivativeStepOutcomesForDocument(id);
   persistAll();
   queueMicrotask(() => {
     void import('./documentFileReferenceService')

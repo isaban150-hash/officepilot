@@ -1,4 +1,8 @@
 import type { DocumentFileTransformPlan } from '../types/documentFileTransformPlan';
+import {
+  POST_IMPORT_DERIVATIVE_STEP_IDS,
+  type PostImportDerivativeStepId,
+} from '../types/documentFileDerivativeStepOutcome';
 import { orchestrateRasterArchiveEncodeAfterImport } from './documentFileRasterArchiveEncodeOrchestrationService';
 import { orchestrateImageToPdfArchiveEncodeAfterImport } from './documentFileImageToPdfArchiveEncodeOrchestrationService';
 import { orchestratePdfMetadataStripAfterImport } from './documentFilePdfMetadataStripOrchestrationService';
@@ -6,20 +10,29 @@ import { orchestrateRasterThumbnailEncodeAfterImport } from './documentFileRaste
 import { orchestrateRasterPreviewEncodeAfterImport } from './documentFileRasterPreviewEncodeOrchestrationService';
 import { orchestratePdfThumbnailEncodeAfterImport } from './documentFilePdfThumbnailEncodeOrchestrationService';
 import { orchestratePdfPreviewEncodeAfterImport } from './documentFilePdfPreviewEncodeOrchestrationService';
+import { recordPostImportDerivativeStepOutcome } from './documentFileDerivativeStepOutcomeService';
+import { getDocumentById } from './documentService';
+import { getDocumentFileRefById } from './documentFileStoreService';
 
 const LOG_PREFIX = '[OfficePilot:post-import-derivatives]';
 
-export const POST_IMPORT_DERIVATIVE_STEP_IDS = [
-  'raster_archive',
-  'image_to_pdf_archive',
-  'pdf_metadata_strip',
-  'raster_thumbnail',
-  'raster_preview',
-  'pdf_thumbnail',
-  'pdf_preview',
-] as const;
+function resolveStepSourceContext(documentId: string): {
+  sourceFileRefId: string;
+  sourceMimeType: string;
+} {
+  const document = getDocumentById(documentId);
+  if (!document?.fileRefId) {
+    return { sourceFileRefId: '', sourceMimeType: '' };
+  }
+  const fileRef = getDocumentFileRefById(document.fileRefId);
+  return {
+    sourceFileRefId: document.fileRefId,
+    sourceMimeType: fileRef?.mimeType ?? '',
+  };
+}
 
-export type PostImportDerivativeStepId = (typeof POST_IMPORT_DERIVATIVE_STEP_IDS)[number];
+export { POST_IMPORT_DERIVATIVE_STEP_IDS };
+export type { PostImportDerivativeStepId };
 
 export interface OrchestratePostImportDerivativesAfterImportInput {
   documentId: string;
@@ -66,14 +79,30 @@ function resolveStepRunner(stepId: PostImportDerivativeStepId): PostImportDeriva
   return stepRunnerOverrides?.[stepId] ?? DEFAULT_STEP_RUNNERS[stepId];
 }
 
-function reportCoordinatorError(stepId: PostImportDerivativeStepId, error: unknown): void {
-  console.error(LOG_PREFIX, stepId, error);
+function reportCoordinatorError(stepId: PostImportDerivativeStepId, errorCode: string): void {
+  console.error(LOG_PREFIX, stepId, errorCode);
+}
+
+function recordStepOutcomeSafely(input: {
+  documentId: string;
+  stepId: PostImportDerivativeStepId;
+  result: unknown;
+  sourceFileRefId: string;
+  sourceMimeType: string;
+  runnerThrew?: boolean;
+}): void {
+  try {
+    recordPostImportDerivativeStepOutcome(input);
+  } catch {
+    reportCoordinatorError(input.stepId, 'outcome_write_failed');
+  }
 }
 
 /**
  * Run post-import derived representation orchestrators strictly one after another.
  * Import callers should fire-and-forget this; a failing step is logged and must not
  * block later steps or fail the document import.
+ * After each step, exactly one durable outcome is written (best-effort).
  */
 export async function orchestratePostImportDerivativesAfterImport(
   input: OrchestratePostImportDerivativesAfterImportInput,
@@ -89,12 +118,20 @@ export async function orchestratePostImportDerivativesAfterImport(
     documentId: input.documentId,
     transformPlan: input.transformPlan,
   };
+  const source = resolveStepSourceContext(input.documentId);
 
   const steps: PostImportDerivativeStepResult[] = [];
 
   for (const stepId of POST_IMPORT_DERIVATIVE_STEP_IDS) {
     try {
       const result = await resolveStepRunner(stepId)(stepInput);
+      recordStepOutcomeSafely({
+        documentId: input.documentId,
+        stepId,
+        result,
+        sourceFileRefId: source.sourceFileRefId,
+        sourceMimeType: source.sourceMimeType,
+      });
       if (
         result !== null &&
         typeof result === 'object' &&
@@ -112,7 +149,15 @@ export async function orchestratePostImportDerivativesAfterImport(
         steps.push(Object.freeze({ stepId, outcome: 'completed' as const }));
       }
     } catch (error) {
-      reportCoordinatorError(stepId, error);
+      reportCoordinatorError(stepId, 'runner_threw');
+      recordStepOutcomeSafely({
+        documentId: input.documentId,
+        stepId,
+        result: null,
+        sourceFileRefId: source.sourceFileRefId,
+        sourceMimeType: source.sourceMimeType,
+        runnerThrew: true,
+      });
       steps.push(Object.freeze({ stepId, outcome: 'failed' as const, error }));
     }
   }
