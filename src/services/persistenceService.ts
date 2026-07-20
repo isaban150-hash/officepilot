@@ -56,6 +56,11 @@ import {
   resetDocumentFileDerivativeStepOutcomeStoreForTests,
 } from './documentFileDerivativeStepOutcomeStoreService';
 import {
+  getDocumentFileDerivativeRecoveryContextStoreSnapshot,
+  hydrateDocumentFileDerivativeRecoveryContextStore,
+  resetDocumentFileDerivativeRecoveryContextStoreForTests,
+} from './documentFileDerivativeRecoveryContextStoreService';
+import {
   getExpenseStoreSnapshot,
   hydrateExpenseStore,
   resetExpenses,
@@ -456,6 +461,7 @@ export function createSeedState(setupOverride?: CompanySetup): AppPersistedState
       documentFileBlobs: {},
       documentFileRepresentationBindings: [],
       documentFileDerivativeStepOutcomes: [],
+      documentFileDerivativeRecoveryContexts: [],
       expenses: emptyBusinessData ? [] : MOCK_EXPENSES.map(cloneExpense),
       vorgangNotes: [],
       communicationHistory: [],
@@ -649,6 +655,7 @@ export function clearInMemoryBusinessState(): void {
   resetDocumentFileStoreForTests();
   resetDocumentFileRepresentationBindingStoreForTests();
   resetDocumentFileDerivativeStepOutcomeStoreForTests();
+  resetDocumentFileDerivativeRecoveryContextStoreForTests();
   resetExpenses();
   resetVorgangNotes();
   resetCommunicationHistoryStore();
@@ -684,6 +691,9 @@ export function applyStateToStores(state: AppPersistedState): void {
   hydrateDocumentFileStore(state.documentFileRefs ?? [], state.documentFileBlobs ?? {});
   hydrateDocumentFileRepresentationBindingStore(state.documentFileRepresentationBindings ?? []);
   hydrateDocumentFileDerivativeStepOutcomeStore(state.documentFileDerivativeStepOutcomes ?? []);
+  hydrateDocumentFileDerivativeRecoveryContextStore(
+    state.documentFileDerivativeRecoveryContexts ?? [],
+  );
   hydrateExpenseStore(state.expenses ?? []);
   hydrateVorgangNotes(state.vorgangNotes ?? []);
   hydrateCommunicationHistory(state.communicationHistory ?? []);
@@ -838,6 +848,8 @@ export function buildPersistedStateSnapshot(): AppPersistedState {
     documentFileBlobs: getDocumentFileBlobStoreSnapshot(),
     documentFileRepresentationBindings: getDocumentFileRepresentationBindingStoreSnapshot(),
     documentFileDerivativeStepOutcomes: getDocumentFileDerivativeStepOutcomeStoreSnapshot(),
+    documentFileDerivativeRecoveryContexts:
+      getDocumentFileDerivativeRecoveryContextStoreSnapshot(),
     expenses: getExpenseStoreSnapshot(),
     vorgangNotes: getVorgangNoteStoreSnapshot(),
     communicationHistory: getCommunicationHistorySnapshot(),
@@ -865,6 +877,7 @@ export function resetDemoData(options?: { keepSetup?: boolean }): CompanySetup {
   resetDocumentFileStoreForTests();
   resetDocumentFileRepresentationBindingStoreForTests();
   resetDocumentFileDerivativeStepOutcomeStoreForTests();
+  resetDocumentFileDerivativeRecoveryContextStoreForTests();
   resetExpenses();
   resetVorgangNotes();
   resetCommunicationHistoryStore();

@@ -1197,6 +1197,7 @@ import type { OfficePilotMemoryState } from './memory';
 import type { DocumentFileRef } from './documentFileRef';
 import type { DocumentFileRepresentationBinding } from './documentFileRepresentationBinding';
 import type { DocumentFileDerivativeStepOutcome } from './documentFileDerivativeStepOutcome';
+import type { DocumentFileDerivativeRecoveryContext } from './documentFileDerivativeRecoveryContext';
 
 export interface AppPersistedState {
   version: number;
@@ -1221,6 +1222,8 @@ export interface AppPersistedState {
   documentFileRepresentationBindings?: DocumentFileRepresentationBinding[];
   /** Post-import derived step outcomes (natural key: documentId + stepId). */
   documentFileDerivativeStepOutcomes?: DocumentFileDerivativeStepOutcome[];
+  /** Frozen transform plans for later manual derivative retry (natural key: documentId). */
+  documentFileDerivativeRecoveryContexts?: DocumentFileDerivativeRecoveryContext[];
   expenses?: Expense[];
   vorgangNotes?: VorgangNote[];
   communicationHistory?: CommunicationEvent[];

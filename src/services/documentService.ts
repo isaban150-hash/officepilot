@@ -8,6 +8,8 @@ import {
   removeDocumentFileRepresentationBindingsForDocument,
 } from './documentFileRepresentationBindingStoreService';
 import { removeDocumentFileDerivativeStepOutcomesForDocument } from './documentFileDerivativeStepOutcomeStoreService';
+import { removeDocumentFileDerivativeRecoveryContextsForDocument } from './documentFileDerivativeRecoveryContextStoreService';
+import { persistDocumentFileDerivativeRecoveryContextAfterImport } from './documentFileDerivativeRecoveryContextService';
 import { documentMatchesArea } from './documentAreaCatalog';
 import type { DocumentAreaFilterId } from '../types/documentArea';
 import {
@@ -302,6 +304,7 @@ export function deleteDocument(id: string): DocumentMutationResult {
   tombstoneMemoryForDocument(id);
   removeDocumentFileRepresentationBindingsForDocument(id);
   removeDocumentFileDerivativeStepOutcomesForDocument(id);
+  removeDocumentFileDerivativeRecoveryContextsForDocument(id);
   persistAll();
   queueMicrotask(() => {
     void import('./documentFileReferenceService')
@@ -468,12 +471,18 @@ export function isDuplicateDocument(
 
 import { linkArchivedDocumentToVorgang } from './vorgangDocumentLinkService';
 import type { DocumentFileTransformPlan } from '../types/documentFileTransformPlan';
+import type { DocumentFileDerivativeRecoveryContextOrigin } from '../types/documentFileDerivativeRecoveryContext';
 import { orchestrateSourceReuseArchiveBindingAfterImport } from './documentFileSourceReuseArchiveOrchestrationService';
 import { orchestratePostImportDerivativesAfterImport } from './documentFilePostImportDerivativeOrchestrationService';
 
 export interface ImportInboxDocumentOptions {
   /** Pre-built transform plan for post-import archive/preview/thumbnail encode. */
   transformPlan?: DocumentFileTransformPlan | null;
+  /**
+   * Optional plan provenance. Stored only when provided with a transformPlan —
+   * never inferred from MIME, document type, or outcomes.
+   */
+  transformPlanOrigin?: DocumentFileDerivativeRecoveryContextOrigin;
 }
 
 export function importInboxDocument(
@@ -492,14 +501,24 @@ export function importInboxDocument(
       linkArchivedDocumentToVorgang(result.document, item);
     }
     persistAll();
+
+    const transformPlan = options?.transformPlan;
+    if (transformPlan) {
+      persistDocumentFileDerivativeRecoveryContextAfterImport({
+        documentId: result.document.id,
+        transformPlan,
+        origin: options?.transformPlanOrigin,
+      });
+    }
+
     orchestrateSourceReuseArchiveBindingAfterImport({
       documentId: result.document.id,
-      transformPlan: options?.transformPlan,
+      transformPlan,
     });
     // Derived encode is async and serialized; failures must not fail import.
     void orchestratePostImportDerivativesAfterImport({
       documentId: result.document.id,
-      transformPlan: options?.transformPlan,
+      transformPlan,
     });
   }
   return result;
