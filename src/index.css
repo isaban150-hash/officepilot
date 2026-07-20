@@ -2802,6 +2802,13 @@ body {
   color: var(--color-text-muted);
 }
 
+/* Consolidated assist lane: stable column order on mobile and desktop. */
+.eingang-assist-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
 .document-field-fill-confirm__list {
   list-style: none;
   margin: 0;

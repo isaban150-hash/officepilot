@@ -101,6 +101,7 @@ type ReviewSectionId =
   | 'tasks'
   | 'positions'
   | 'archive'
+  | 'further-hints'
   | 'technical';
 
 export function EingangDetailPage() {
@@ -327,6 +328,10 @@ export function EingangDetailPage() {
     analysisAllowed &&
     (Boolean(item.taskTemplate) || isClassificationKindWithTasks(classifiedKind));
   const letterExplanation = letterExplanationFromWorkflow(workflow.documentExplanation);
+  const prioritizeContractWorkspace = Boolean(workflow?.contractOrderProposal);
+  /** Behörde / BG BAU / Mahnung / Zahlungserinnerung — consolidated assist lane. */
+  const useAssistFlowConsolidate =
+    isConfirmedReplyDraftSupported(item) && !prioritizeContractWorkspace;
   const contractAnalysis = workflow.contractAnalysis;
   const extractedText = getInboxExtractedDocumentText(item);
 
@@ -673,6 +678,46 @@ export function EingangDetailPage() {
     showToast(translate('documentIntelligence.proposal.discarded'));
   };
 
+  const overlappingHintPanels = analysisAllowed ? (
+    <>
+      {letterExplanation ? <LetterExplanationPanel explanation={letterExplanation} /> : null}
+      <DocumentActionSuggestionsPanel
+        item={item}
+        classification={workflow.classification ?? undefined}
+        suggestedVorgang={workflow.suggestedVorgang ?? undefined}
+        translate={translate}
+        onVorgangLinked={handleVorgangLinked}
+        onConfirmFiling={handleFiling}
+        onImportArchive={handleImportToArchive}
+        onCreateTask={handleCreateTask}
+        onOpenVorgangDialog={() => setVorgangDialogRequest((n) => n + 1)}
+        onItemUpdated={setItem}
+        navigate={navigate}
+        showToast={showToast}
+      />
+      <SmartIntakeSummary
+        workflow={workflow}
+        item={item}
+        executionResult={intakeExecution}
+        isExecuting={isExecutingIntake}
+        onExecuteAll={handleExecuteAll}
+        onArchive={handleIntakeArchive}
+        onCreateVorgang={handleIntakeCreateVorgang}
+        onImportPositions={handleIntakeImportPositions}
+        onAcceptTasks={handleIntakeAcceptTasks}
+        onCancel={() => undefined}
+      />
+    </>
+  ) : null;
+
+  const communicationPanel = (
+    <CommunicationIntegrationPanel
+      contextRef={{ type: 'inbox', id: item.id }}
+      buttonKeys={INBOX_COMMUNICATION_BUTTON_KEYS}
+      testIdPrefix="eingang"
+    />
+  );
+
   const moreOptionsContent = (
     <>
       <CollapsibleReviewSection
@@ -733,18 +778,16 @@ export function EingangDetailPage() {
         </CollapsibleReviewSection>
       )}
 
-      <CollapsibleReviewSection
-        id="communication"
-        title={translate('reviewWorkflow.section.communication')}
-        expanded={Boolean(expandedSections.communication)}
-        onToggle={() => toggleSection('communication')}
-      >
-        <CommunicationIntegrationPanel
-          contextRef={{ type: 'inbox', id: item.id }}
-          buttonKeys={INBOX_COMMUNICATION_BUTTON_KEYS}
-          testIdPrefix="eingang"
-        />
-      </CollapsibleReviewSection>
+      {!useAssistFlowConsolidate ? (
+        <CollapsibleReviewSection
+          id="communication"
+          title={translate('reviewWorkflow.section.communication')}
+          expanded={Boolean(expandedSections.communication)}
+          onToggle={() => toggleSection('communication')}
+        >
+          {communicationPanel}
+        </CollapsibleReviewSection>
+      ) : null}
 
       <CollapsibleReviewSection
         id="tasks"
@@ -876,10 +919,6 @@ export function EingangDetailPage() {
           onMarkAsCompanyDocument={handleMarkAsCompanyDocument}
         />
 
-        {analysisAllowed && letterExplanation && (
-          <LetterExplanationPanel explanation={letterExplanation} />
-        )}
-
         {analysisAllowed && contractAnalysis && (
           <ContractAnalysisPanel
             analysis={contractAnalysis}
@@ -892,43 +931,15 @@ export function EingangDetailPage() {
           />
         )}
 
+        {!useAssistFlowConsolidate && overlappingHintPanels}
+
         {analysisAllowed && (
-          <>
-            <DocumentActionSuggestionsPanel
-              item={item}
-              classification={workflow.classification ?? undefined}
-              suggestedVorgang={workflow.suggestedVorgang ?? undefined}
-              translate={translate}
-              onVorgangLinked={handleVorgangLinked}
-              onConfirmFiling={handleFiling}
-              onImportArchive={handleImportToArchive}
-              onCreateTask={handleCreateTask}
-              onOpenVorgangDialog={() => setVorgangDialogRequest((n) => n + 1)}
-              onItemUpdated={setItem}
-              navigate={navigate}
-              showToast={showToast}
-            />
-
-            <InboxVorgangPanel
-              item={item}
-              materialDefault={setup.materialStandard}
-              onLinked={handleVorgangLinked}
-              requestOpenDialog={vorgangDialogRequest}
-            />
-
-            <SmartIntakeSummary
-              workflow={workflow}
-              item={item}
-              executionResult={intakeExecution}
-              isExecuting={isExecutingIntake}
-              onExecuteAll={handleExecuteAll}
-              onArchive={handleIntakeArchive}
-              onCreateVorgang={handleIntakeCreateVorgang}
-              onImportPositions={handleIntakeImportPositions}
-              onAcceptTasks={handleIntakeAcceptTasks}
-              onCancel={() => undefined}
-            />
-          </>
+          <InboxVorgangPanel
+            item={item}
+            materialDefault={setup.materialStandard}
+            onLinked={handleVorgangLinked}
+            requestOpenDialog={vorgangDialogRequest}
+          />
         )}
 
         <div className="security-hint">
@@ -942,10 +953,22 @@ export function EingangDetailPage() {
           </Button>
         )}
       </CollapsibleReviewSection>
+
+      {useAssistFlowConsolidate ? (
+        <CollapsibleReviewSection
+          id="further-hints"
+          title="Weitere Hinweise"
+          expanded={Boolean(expandedSections['further-hints'])}
+          onToggle={() => toggleSection('further-hints')}
+          testId="review-section-further-hints"
+        >
+          {overlappingHintPanels}
+          {communicationPanel}
+        </CollapsibleReviewSection>
+      ) : null}
     </>
   );
 
-  const prioritizeContractWorkspace = Boolean(workflow?.contractOrderProposal);
   const freeQuestionPanel = (
     <DocumentFreeQuestionPanel
       source={{ type: 'inbox', item }}
@@ -1023,7 +1046,9 @@ export function EingangDetailPage() {
         workflow={workflow}
         translate={translate}
         language={setup.language}
-        compactForContractWorkspace={Boolean(workflow?.contractOrderProposal)}
+        compactForContractWorkspace={
+          prioritizeContractWorkspace || useAssistFlowConsolidate
+        }
         showChangeType
         onChangeType={() => {
           setMoreOptionsExpanded(true);
@@ -1039,6 +1064,23 @@ export function EingangDetailPage() {
           {confirmedReplyDraftPanel}
           {originalFilePanel}
         </>
+      ) : useAssistFlowConsolidate ? (
+        <div
+          className="eingang-assist-flow"
+          data-testid="eingang-assist-flow"
+          data-assist-flow="consolidated"
+        >
+          {/* 1. Document understand = assistant above */}
+          {/* 2. Angaben prüfen */}
+          {fieldFillConfirmPanel}
+          {/* 3. Freie Frage */}
+          {freeQuestionPanel}
+          {/* 4. Antwort + Handoff */}
+          {confirmedReplyDraftPanel}
+          {/* 5. Original, Ablage, weitere Aktionen */}
+          {originalFilePanel}
+          {reviewExperience}
+        </div>
       ) : (
         <>
           {freeQuestionPanel}

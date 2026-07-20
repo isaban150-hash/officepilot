@@ -161,6 +161,16 @@ function expandDetailShowMore(container: ParentNode): void {
     act(() => {
       reviewMore.click();
     });
+    // Consolidated assist flow: communication lives under "Weitere Hinweise".
+    const furtherHintsToggle = container.querySelector(
+      '[data-testid="review-section-toggle-further-hints"]',
+    ) as HTMLElement | null;
+    if (furtherHintsToggle) {
+      act(() => {
+        furtherHintsToggle.click();
+      });
+      return;
+    }
     const communicationToggle = container.querySelector(
       '[data-testid="review-section-toggle-communication"]',
     ) as HTMLElement | null;
