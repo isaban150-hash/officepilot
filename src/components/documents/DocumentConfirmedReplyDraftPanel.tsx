@@ -5,14 +5,18 @@ import {
   buildConfirmedReplyDraft,
   formatConfirmedReplyDraftClipboardText,
 } from '../../services/documentConfirmedReplyDraftService';
+import { buildDocumentReplyDraftHandoffPayload } from '../../services/documentReplyDraftHandoffService';
 import type { DocumentFieldFillConfirmRow } from '../../types/documentFieldFillConfirm';
 import type { DocumentConfirmedReplyDraft } from '../../types/documentConfirmedReplyDraft';
+import type { DocumentReplyDraftHandoffPayload } from '../../types/documentReplyDraftHandoff';
 import type { InboxItem } from '../../types/models';
 
 export interface DocumentConfirmedReplyDraftPanelProps {
   item: InboxItem;
   rows: readonly DocumentFieldFillConfirmRow[];
   testIdPrefix?: string;
+  /** Explicit handoff into Kommunikation — only called on user click. */
+  onHandoffToCommunication?: (payload: DocumentReplyDraftHandoffPayload) => void;
 }
 
 /**
@@ -23,6 +27,7 @@ export function DocumentConfirmedReplyDraftPanel({
   item,
   rows,
   testIdPrefix = 'document-confirmed-reply-draft',
+  onHandoffToCommunication,
 }: DocumentConfirmedReplyDraftPanelProps) {
   const [coreMessage, setCoreMessage] = useState('');
   const [draft, setDraft] = useState<DocumentConfirmedReplyDraft | null>(null);
@@ -55,6 +60,17 @@ export function DocumentConfirmedReplyDraftPanel({
     } catch {
       setCopyFeedback('Kopieren nicht möglich.');
     }
+  };
+
+  const handleHandoff = (): void => {
+    if (!draft || !onHandoffToCommunication) return;
+    const payload = buildDocumentReplyDraftHandoffPayload({
+      item,
+      draft,
+      coreMessage,
+    });
+    if (!payload) return;
+    onHandoffToCommunication(payload);
   };
 
   return (
@@ -149,15 +165,27 @@ export function DocumentConfirmedReplyDraftPanel({
               )}
             </div>
 
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => void handleCopy()}
-              data-testid={`${testIdPrefix}-copy`}
-            >
-              Entwurf kopieren
-            </Button>
+            <div className="document-confirmed-reply-draft__result-actions">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => void handleCopy()}
+                data-testid={`${testIdPrefix}-copy`}
+              >
+                Entwurf kopieren
+              </Button>
+              {onHandoffToCommunication ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleHandoff}
+                  data-testid={`${testIdPrefix}-handoff`}
+                >
+                  Im Kommunikationsbereich prüfen
+                </Button>
+              ) : null}
+            </div>
             {copyFeedback ? (
               <p
                 className="document-confirmed-reply-draft__copy-feedback"

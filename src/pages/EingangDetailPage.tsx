@@ -14,8 +14,10 @@ import { SmartIntakeSummary } from '../components/inbox/SmartIntakeSummary';
 import { DocumentFreeQuestionPanel } from '../components/documents/DocumentFreeQuestionPanel';
 import { DocumentFieldFillConfirmPanel } from '../components/documents/DocumentFieldFillConfirmPanel';
 import { DocumentConfirmedReplyDraftPanel } from '../components/documents/DocumentConfirmedReplyDraftPanel';
+import { buildKommunikationPath } from '../components/communication/communicationNavigation';
 import { buildDocumentFieldFillConfirmViewModel } from '../services/documentFieldFillConfirmService';
 import { isConfirmedReplyDraftSupported } from '../services/documentConfirmedReplyDraftService';
+import { createDocumentReplyDraftHandoffLocationState } from '../services/documentReplyDraftHandoffService';
 import type { DocumentFieldFillConfirmRow } from '../types/documentFieldFillConfirm';
 import type { DocumentFieldFillFreeTextBridgeProposal } from '../types/documentFieldFillFreeTextBridge';
 import { CollapsibleReviewSection } from '../components/inbox/review/CollapsibleReviewSection';
@@ -972,6 +974,11 @@ export function EingangDetailPage() {
       item={item}
       rows={fillConfirmRows}
       testIdPrefix="document-confirmed-reply-draft"
+      onHandoffToCommunication={(payload) => {
+        navigate(buildKommunikationPath(payload.contextRef), {
+          state: createDocumentReplyDraftHandoffLocationState(payload),
+        });
+      }}
     />
   ) : null;
   const originalFilePanel = item.fileRefId ? (
