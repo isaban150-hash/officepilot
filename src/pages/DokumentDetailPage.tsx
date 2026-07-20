@@ -37,6 +37,7 @@ export function DokumentDetailPage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   const [detailRevision, setDetailRevision] = useState(0);
+  const [previewRevision, setPreviewRevision] = useState(0);
 
   useEffect(() => {
     if (id) {
@@ -119,7 +120,7 @@ export function DokumentDetailPage() {
   const technicalPanels = (
     <>
       <Card className="document-detail__preview">
-        <DocumentDetailPreview documentId={document.id} />
+        <DocumentDetailPreview documentId={document.id} revision={previewRevision} />
         {document.fileRefId ? (
           <DocumentOriginalFilePanel
             fileRefId={document.fileRefId}
@@ -144,7 +145,10 @@ export function DokumentDetailPage() {
         )}
       </Card>
 
-      <DocumentDerivativeRecoveryStatusPanel documentId={document.id} />
+      <DocumentDerivativeRecoveryStatusPanel
+        documentId={document.id}
+        onRecovered={() => setPreviewRevision((value) => value + 1)}
+      />
 
       <Card>
         <DataRow label={translate('document.fieldCategory')} value={categoryLabel} />

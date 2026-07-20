@@ -16,6 +16,8 @@ export type { DocumentFileObjectUrlState, DocumentFileObjectUrlStatus };
 export function useDocumentFileRepresentationObjectUrl(
   documentId: string | undefined,
   kind: DocumentFileRepresentationBindingKind,
+  /** Bump to force a fresh resolve (e.g. after derivative recovery). */
+  revision = 0,
 ): DocumentFileObjectUrlState {
   const [state, setState] = useState<DocumentFileObjectUrlState>({
     status: documentId ? 'loading' : 'idle',
@@ -68,7 +70,7 @@ export function useDocumentFileRepresentationObjectUrl(
         URL.revokeObjectURL(createdUrl);
       }
     };
-  }, [documentId, kind]);
+  }, [documentId, kind, revision]);
 
   return state;
 }

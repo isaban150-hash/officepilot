@@ -13,7 +13,7 @@ export type DocumentFileDerivativeRecoveryDetailStatus =
 
 /**
  * One user-visible recovery problem for a missing representation on the document detail page.
- * canRetry is informational only — no retry handler is attached in this sprint.
+ * When canRetry and selectedStepId are set, the detail panel may offer a one-step manual retry.
  */
 export interface DocumentFileDerivativeRecoveryDetailProblem {
   readonly representationKind: DocumentFileRepresentationBindingKind;

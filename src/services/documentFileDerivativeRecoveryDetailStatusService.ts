@@ -177,9 +177,7 @@ function buildProblemForKind(input: {
     attempt: diagnostic.attempt,
     displayTitle: displayTitleForKind(input.kind),
     displayDetail: displayDetailForStatus(status),
-    ...(canRetry
-      ? { retryHint: 'Erneutes Erstellen ist möglich (noch keine Aktion).' }
-      : {}),
+    ...(canRetry ? { retryHint: 'Erneutes Erstellen ist möglich.' } : {})
   });
 }
 

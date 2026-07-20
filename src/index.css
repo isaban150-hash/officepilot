@@ -3466,6 +3466,10 @@ body {
   margin-top: 0.25rem;
 }
 
+.document-detail__recovery-status-item-actions {
+  margin-top: 0.5rem;
+}
+
 .document-detail__tags {
   padding: 0.5rem 0;
 }

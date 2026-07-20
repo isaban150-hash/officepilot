@@ -2,6 +2,8 @@ import { useDocumentFileRepresentationObjectUrl } from '../../hooks/useDocumentF
 
 export interface DocumentDetailPreviewProps {
   documentId: string;
+  /** Bump after derivative recovery so the preview Object URL reloads. */
+  revision?: number;
 }
 
 /**
@@ -9,8 +11,15 @@ export interface DocumentDetailPreviewProps {
  * Loading / missing / error render nothing — callers keep DocumentOriginalFilePanel.
  * Does not fall back to or load the original FileRef.
  */
-export function DocumentDetailPreview({ documentId }: DocumentDetailPreviewProps) {
-  const { status, objectUrl } = useDocumentFileRepresentationObjectUrl(documentId, 'preview');
+export function DocumentDetailPreview({
+  documentId,
+  revision = 0,
+}: DocumentDetailPreviewProps) {
+  const { status, objectUrl } = useDocumentFileRepresentationObjectUrl(
+    documentId,
+    'preview',
+    revision,
+  );
 
   if (status !== 'ready' || !objectUrl) {
     return null;
