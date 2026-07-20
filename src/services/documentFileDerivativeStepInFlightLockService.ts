@@ -1,6 +1,6 @@
-import type { PostImportDerivativeStepId } from '../types/documentFileDerivativeStepOutcome';
+import type { DocumentFileDerivativeStepId } from '../types/documentFileDerivativeStepOutcome';
 
-function lockKey(documentId: string, stepId: PostImportDerivativeStepId): string {
+function lockKey(documentId: string, stepId: DocumentFileDerivativeStepId): string {
   return `${documentId}\0${stepId}`;
 }
 
@@ -12,7 +12,7 @@ const inFlightKeys = new Set<string>();
  */
 export function tryAcquireDocumentFileDerivativeStepInFlightLock(
   documentId: string,
-  stepId: PostImportDerivativeStepId,
+  stepId: DocumentFileDerivativeStepId,
 ): boolean {
   const key = lockKey(documentId, stepId);
   if (inFlightKeys.has(key)) {
@@ -24,7 +24,7 @@ export function tryAcquireDocumentFileDerivativeStepInFlightLock(
 
 export function releaseDocumentFileDerivativeStepInFlightLock(
   documentId: string,
-  stepId: PostImportDerivativeStepId,
+  stepId: DocumentFileDerivativeStepId,
 ): void {
   inFlightKeys.delete(lockKey(documentId, stepId));
 }
@@ -35,7 +35,7 @@ export function resetDocumentFileDerivativeStepInFlightLocksForTests(): void {
 
 export function isDocumentFileDerivativeStepInFlightForTests(
   documentId: string,
-  stepId: PostImportDerivativeStepId,
+  stepId: DocumentFileDerivativeStepId,
 ): boolean {
   return inFlightKeys.has(lockKey(documentId, stepId));
 }

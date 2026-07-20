@@ -109,7 +109,12 @@ describe('STORAGE-SOURCE-REUSE-ARCHIVE-ORCHESTRATION-01', () => {
       transformPlan: plan,
     });
 
-    expect(second).toEqual({ kind: 'persisted', registration: 'unchanged' });
+    expect(second).toEqual({
+      kind: 'persisted',
+      registration: 'unchanged',
+      archiveFileRefId: FILE_X,
+      createdArchiveFileRef: false,
+    });
     expect(getDocumentFileRepresentationBindingStoreSnapshot()).toHaveLength(1);
   });
 

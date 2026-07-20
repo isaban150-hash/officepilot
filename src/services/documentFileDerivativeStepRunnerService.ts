@@ -1,5 +1,6 @@
 import type { DocumentFileTransformPlan } from '../types/documentFileTransformPlan';
-import type { PostImportDerivativeStepId } from '../types/documentFileDerivativeStepOutcome';
+import type { DocumentFileDerivativeStepId } from '../types/documentFileDerivativeStepOutcome';
+import { orchestrateSourceReuseArchiveBindingAfterImport } from './documentFileSourceReuseArchiveOrchestrationService';
 import { orchestrateRasterArchiveEncodeAfterImport } from './documentFileRasterArchiveEncodeOrchestrationService';
 import { orchestrateImageToPdfArchiveEncodeAfterImport } from './documentFileImageToPdfArchiveEncodeOrchestrationService';
 import { orchestratePdfMetadataStripAfterImport } from './documentFilePdfMetadataStripOrchestrationService';
@@ -9,7 +10,7 @@ import { orchestratePdfThumbnailEncodeAfterImport } from './documentFilePdfThumb
 import { orchestratePdfPreviewEncodeAfterImport } from './documentFilePdfPreviewEncodeOrchestrationService';
 
 /**
- * Shared step input for post-import derivative runners (coordinator + manual retry).
+ * Shared step input for derivative runners (coordinator + manual retry + sync source-reuse).
  */
 export interface DocumentFileDerivativeStepRunnerInput {
   documentId: string;
@@ -20,9 +21,19 @@ export type DocumentFileDerivativeStepRunner = (
   input: DocumentFileDerivativeStepRunnerInput,
 ) => Promise<unknown>;
 
+async function runSourceReuseArchiveStep(
+  input: DocumentFileDerivativeStepRunnerInput,
+): Promise<unknown> {
+  return orchestrateSourceReuseArchiveBindingAfterImport({
+    documentId: input.documentId,
+    transformPlan: input.transformPlan,
+  });
+}
+
 const DEFAULT_STEP_RUNNERS: Readonly<
-  Record<PostImportDerivativeStepId, DocumentFileDerivativeStepRunner>
+  Record<DocumentFileDerivativeStepId, DocumentFileDerivativeStepRunner>
 > = Object.freeze({
+  source_reuse_archive: runSourceReuseArchiveStep,
   raster_archive: orchestrateRasterArchiveEncodeAfterImport,
   image_to_pdf_archive: orchestrateImageToPdfArchiveEncodeAfterImport,
   pdf_metadata_strip: orchestratePdfMetadataStripAfterImport,
@@ -33,7 +44,7 @@ const DEFAULT_STEP_RUNNERS: Readonly<
 });
 
 let stepRunnerOverrides: Partial<
-  Record<PostImportDerivativeStepId, DocumentFileDerivativeStepRunner>
+  Record<DocumentFileDerivativeStepId, DocumentFileDerivativeStepRunner>
 > | null = null;
 
 /**
@@ -41,7 +52,7 @@ let stepRunnerOverrides: Partial<
  * Used by both the post-import coordinator and manual retry.
  */
 export function setPostImportDerivativeStepRunnersForTests(
-  runners: Partial<Record<PostImportDerivativeStepId, DocumentFileDerivativeStepRunner>> | null,
+  runners: Partial<Record<DocumentFileDerivativeStepId, DocumentFileDerivativeStepRunner>> | null,
 ): void {
   stepRunnerOverrides = runners;
 }
@@ -50,7 +61,7 @@ export function setPostImportDerivativeStepRunnersForTests(
  * Resolve the single shared orchestrator for a derivative step id.
  */
 export function resolveDocumentFileDerivativeStepRunner(
-  stepId: PostImportDerivativeStepId,
+  stepId: DocumentFileDerivativeStepId,
 ): DocumentFileDerivativeStepRunner {
   return stepRunnerOverrides?.[stepId] ?? DEFAULT_STEP_RUNNERS[stepId];
 }

@@ -474,6 +474,7 @@ import type { DocumentFileTransformPlan } from '../types/documentFileTransformPl
 import type { DocumentFileDerivativeRecoveryContextOrigin } from '../types/documentFileDerivativeRecoveryContext';
 import { orchestrateSourceReuseArchiveBindingAfterImport } from './documentFileSourceReuseArchiveOrchestrationService';
 import { orchestratePostImportDerivativesAfterImport } from './documentFilePostImportDerivativeOrchestrationService';
+import { recordPostImportDerivativeStepOutcome } from './documentFileDerivativeStepOutcomeService';
 
 export interface ImportInboxDocumentOptions {
   /** Pre-built transform plan for post-import archive/preview/thumbnail encode. */
@@ -511,11 +512,21 @@ export function importInboxDocument(
       });
     }
 
-    orchestrateSourceReuseArchiveBindingAfterImport({
+    const sourceReuseResult = orchestrateSourceReuseArchiveBindingAfterImport({
       documentId: result.document.id,
       transformPlan,
     });
+    recordPostImportDerivativeStepOutcome({
+      documentId: result.document.id,
+      stepId: 'source_reuse_archive',
+      result: sourceReuseResult,
+      sourceFileRefId: result.document.fileRefId ?? '',
+      sourceMimeType: result.document.fileRefId
+        ? (getDocumentFileRefById(result.document.fileRefId)?.mimeType ?? '')
+        : '',
+    });
     // Derived encode is async and serialized; failures must not fail import.
+    // Does not include source_reuse_archive (already executed synchronously above).
     void orchestratePostImportDerivativesAfterImport({
       documentId: result.document.id,
       transformPlan,

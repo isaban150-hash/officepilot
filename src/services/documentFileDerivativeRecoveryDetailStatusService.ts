@@ -3,9 +3,9 @@ import {
   type DocumentFileRepresentationBindingKind,
 } from '../types/documentFileRepresentationBinding';
 import {
-  POST_IMPORT_DERIVATIVE_STEP_IDS,
+  DOCUMENT_FILE_DERIVATIVE_STEP_IDS,
   type DocumentFileDerivativeStepOutcome,
-  type PostImportDerivativeStepId,
+  type DocumentFileDerivativeStepId,
 } from '../types/documentFileDerivativeStepOutcome';
 import type {
   DocumentFileDerivativeRecoveryDetailProblem,
@@ -52,8 +52,8 @@ function displayDetailForStatus(status: DocumentFileDerivativeRecoveryDetailStat
   }
 }
 
-function stepOrderIndex(stepId: PostImportDerivativeStepId): number {
-  return POST_IMPORT_DERIVATIVE_STEP_IDS.indexOf(stepId);
+function stepOrderIndex(stepId: DocumentFileDerivativeStepId): number {
+  return DOCUMENT_FILE_DERIVATIVE_STEP_IDS.indexOf(stepId);
 }
 
 function isExhaustedOutcome(outcome: DocumentFileDerivativeStepOutcome): boolean {
@@ -129,7 +129,7 @@ function mapOutcomeToStatus(
 
 function selectRetryStepId(
   candidates: readonly DocumentFileDerivativeStepOutcome[],
-): PostImportDerivativeStepId | undefined {
+): DocumentFileDerivativeStepId | undefined {
   const ordered = [...candidates].sort(
     (left, right) => stepOrderIndex(left.stepId) - stepOrderIndex(right.stepId),
   );

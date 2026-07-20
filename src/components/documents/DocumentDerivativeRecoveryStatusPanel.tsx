@@ -5,7 +5,7 @@ import { buildDocumentFileDerivativeRecoveryDetailStatus } from '../../services/
 import { executeDocumentFileDerivativeRecoveryDetailRetry } from '../../services/documentFileDerivativeRecoveryDetailRetryService';
 import type { DocumentFileDerivativeRecoveryDetailStatusViewModel } from '../../types/documentFileDerivativeRecoveryDetailStatus';
 import type { DocumentFileRepresentationBindingKind } from '../../types/documentFileRepresentationBinding';
-import type { PostImportDerivativeStepId } from '../../types/documentFileDerivativeStepOutcome';
+import type { DocumentFileDerivativeStepId } from '../../types/documentFileDerivativeStepOutcome';
 
 export interface DocumentDerivativeRecoveryStatusPanelProps {
   documentId: string;
@@ -83,7 +83,7 @@ export function DocumentDerivativeRecoveryStatusPanel({
 
   const handleRetry = (
     representationKind: DocumentFileRepresentationBindingKind,
-    selectedStepId: PostImportDerivativeStepId,
+    selectedStepId: DocumentFileDerivativeStepId,
   ): void => {
     if (inFlightRef.current[representationKind]) {
       return;

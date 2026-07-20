@@ -1,9 +1,9 @@
 import type { DocumentFileTransformPlan } from '../types/documentFileTransformPlan';
 import {
-  POST_IMPORT_DERIVATIVE_STEP_IDS,
-  POST_IMPORT_DERIVATIVE_STEP_REPRESENTATION_KIND,
+  DOCUMENT_FILE_DERIVATIVE_STEP_IDS,
+  DOCUMENT_FILE_DERIVATIVE_STEP_REPRESENTATION_KIND,
+  type DocumentFileDerivativeStepId,
   type DocumentFileDerivativeStepOutcome,
-  type PostImportDerivativeStepId,
 } from '../types/documentFileDerivativeStepOutcome';
 import { findDocumentFileDerivativeStepOutcome } from './documentFileDerivativeStepOutcomeStoreService';
 import { recordPostImportDerivativeStepOutcome } from './documentFileDerivativeStepOutcomeService';
@@ -23,7 +23,7 @@ export const DOCUMENT_FILE_DERIVATIVE_STEP_MAX_ATTEMPTS = 5;
 
 export interface RetryDocumentFileDerivativeStepInput {
   documentId: string;
-  stepId: PostImportDerivativeStepId;
+  stepId: DocumentFileDerivativeStepId;
   /** Required pre-built plan; never reconstructed or persisted here. */
   transformPlan: DocumentFileTransformPlan;
 }
@@ -46,14 +46,14 @@ export type RetryDocumentFileDerivativeStepResult =
       readonly kind: 'exhausted';
     };
 
-function isStepId(value: unknown): value is PostImportDerivativeStepId {
+function isStepId(value: unknown): value is DocumentFileDerivativeStepId {
   return (
     typeof value === 'string' &&
-    (POST_IMPORT_DERIVATIVE_STEP_IDS as readonly string[]).includes(value)
+    (DOCUMENT_FILE_DERIVATIVE_STEP_IDS as readonly string[]).includes(value)
   );
 }
 
-function reportRetryCode(stepId: PostImportDerivativeStepId, code: string): void {
+function reportRetryCode(stepId: DocumentFileDerivativeStepId, code: string): void {
   console.error(LOG_PREFIX, stepId, code);
 }
 
@@ -91,7 +91,7 @@ function evaluateEligibility(
 }
 
 /**
- * Manually retry exactly one post-import derived step.
+ * Manually retry exactly one derivative step (including sync source_reuse_archive).
  * Shares the step→orchestrator map and in-flight lock with the coordinator.
  */
 export async function retryDocumentFileDerivativeStep(
@@ -127,7 +127,7 @@ export async function retryDocumentFileDerivativeStep(
   }
 
   try {
-    const representationKind = POST_IMPORT_DERIVATIVE_STEP_REPRESENTATION_KIND[input.stepId];
+    const representationKind = DOCUMENT_FILE_DERIVATIVE_STEP_REPRESENTATION_KIND[input.stepId];
     const representation = await resolveDocumentFileRepresentation({
       documentId: input.documentId,
       kind: representationKind,

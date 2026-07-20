@@ -1,4 +1,4 @@
-import type { PostImportDerivativeStepId } from '../types/documentFileDerivativeStepOutcome';
+import type { DocumentFileDerivativeStepId } from '../types/documentFileDerivativeStepOutcome';
 import { getDocumentFileTransformPlanForDerivativeRetry } from './documentFileDerivativeRecoveryContextService';
 import { retryDocumentFileDerivativeStep } from './documentFileDerivativeStepManualRetryService';
 
@@ -16,7 +16,7 @@ export interface DocumentFileDerivativeRecoveryDetailRetryResult {
 
 export interface ExecuteDocumentFileDerivativeRecoveryDetailRetryInput {
   documentId: string;
-  selectedStepId: PostImportDerivativeStepId;
+  selectedStepId: DocumentFileDerivativeStepId;
 }
 
 /**

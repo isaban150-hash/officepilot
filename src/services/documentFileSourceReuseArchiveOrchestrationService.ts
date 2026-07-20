@@ -21,6 +21,9 @@ export type SourceReuseArchiveOrchestrationResult =
   | {
       readonly kind: 'persisted';
       readonly registration: 'created' | 'unchanged';
+      /** Source FileRef reused as archive — no new bytes created. */
+      readonly archiveFileRefId: string;
+      readonly createdArchiveFileRef: false;
     }
   | {
       readonly kind: 'conflict';
@@ -104,7 +107,12 @@ export function orchestrateSourceReuseArchiveBindingAfterImport(
       return { kind: 'conflict' };
     }
     if (registration.kind === 'created' || registration.kind === 'unchanged') {
-      return { kind: 'persisted', registration: registration.kind };
+      return {
+        kind: 'persisted',
+        registration: registration.kind,
+        archiveFileRefId: bindingPlan.sourceFileRefId,
+        createdArchiveFileRef: false,
+      };
     }
 
     return { kind: 'noop', reason: 'unresolved' };

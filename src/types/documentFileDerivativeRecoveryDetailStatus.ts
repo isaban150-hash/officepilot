@@ -1,5 +1,5 @@
 import type { DocumentFileRepresentationBindingKind } from './documentFileRepresentationBinding';
-import type { PostImportDerivativeStepId } from './documentFileDerivativeStepOutcome';
+import type { DocumentFileDerivativeStepId } from './documentFileDerivativeStepOutcome';
 
 export const DOCUMENT_FILE_DERIVATIVE_RECOVERY_DETAIL_STATUSES = [
   'error',
@@ -18,7 +18,7 @@ export type DocumentFileDerivativeRecoveryDetailStatus =
 export interface DocumentFileDerivativeRecoveryDetailProblem {
   readonly representationKind: DocumentFileRepresentationBindingKind;
   readonly status: DocumentFileDerivativeRecoveryDetailStatus;
-  readonly selectedStepId?: PostImportDerivativeStepId;
+  readonly selectedStepId?: DocumentFileDerivativeStepId;
   readonly canRetry: boolean;
   readonly attempt: number;
   /** Short kind label, e.g. "Vorschau fehlt". */

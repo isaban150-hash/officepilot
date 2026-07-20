@@ -1,16 +1,16 @@
 import {
   DOCUMENT_FILE_DERIVATIVE_STEP_ERROR_CODES,
+  DOCUMENT_FILE_DERIVATIVE_STEP_IDS,
   DOCUMENT_FILE_DERIVATIVE_STEP_NOOP_REASONS,
   DOCUMENT_FILE_DERIVATIVE_STEP_OUTCOMES,
   DOCUMENT_FILE_DERIVATIVE_STEP_REGISTRATION_STATUSES,
-  POST_IMPORT_DERIVATIVE_STEP_IDS,
-  POST_IMPORT_DERIVATIVE_STEP_REPRESENTATION_KIND,
+  DOCUMENT_FILE_DERIVATIVE_STEP_REPRESENTATION_KIND,
   type DocumentFileDerivativeStepErrorCode,
+  type DocumentFileDerivativeStepId,
   type DocumentFileDerivativeStepNoopReason,
   type DocumentFileDerivativeStepOutcome,
   type DocumentFileDerivativeStepOutcomeKind,
   type DocumentFileDerivativeStepRegistrationStatus,
-  type PostImportDerivativeStepId,
 } from '../types/documentFileDerivativeStepOutcome';
 import { DOCUMENT_FILE_REPRESENTATION_BINDING_KINDS } from '../types/documentFileRepresentationBinding';
 import {
@@ -30,10 +30,10 @@ export type DocumentFileDerivativeStepOutcomeInput = Omit<
   readonly updatedAt?: string;
 };
 
-function isStepId(value: unknown): value is PostImportDerivativeStepId {
+function isStepId(value: unknown): value is DocumentFileDerivativeStepId {
   return (
     typeof value === 'string' &&
-    (POST_IMPORT_DERIVATIVE_STEP_IDS as readonly string[]).includes(value)
+    (DOCUMENT_FILE_DERIVATIVE_STEP_IDS as readonly string[]).includes(value)
   );
 }
 
@@ -263,7 +263,7 @@ export function upsertDocumentFileDerivativeStepOutcome(
  */
 export function recordPostImportDerivativeStepOutcome(input: {
   documentId: string;
-  stepId: PostImportDerivativeStepId;
+  stepId: DocumentFileDerivativeStepId;
   result: unknown;
   sourceFileRefId: string;
   sourceMimeType: string;
@@ -288,7 +288,7 @@ export function recordPostImportDerivativeStepOutcome(input: {
     const recorded = upsertDocumentFileDerivativeStepOutcome({
       documentId: input.documentId,
       stepId: input.stepId,
-      representationKind: POST_IMPORT_DERIVATIVE_STEP_REPRESENTATION_KIND[input.stepId],
+      representationKind: DOCUMENT_FILE_DERIVATIVE_STEP_REPRESENTATION_KIND[input.stepId],
       outcome: normalized.outcome,
       noopReason: normalized.noopReason,
       errorCode: normalized.errorCode,
