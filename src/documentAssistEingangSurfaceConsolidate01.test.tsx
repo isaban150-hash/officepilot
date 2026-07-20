@@ -179,6 +179,11 @@ describe('DOCUMENT-ASSIST-EINGANG-SURFACE-CONSOLIDATE-01', () => {
     assertOrder(
       html,
       'data-testid="document-free-question-panel"',
+      'data-testid="document-contextual-next-steps-panel"',
+    );
+    assertOrder(
+      html,
+      'data-testid="document-contextual-next-steps-panel"',
       'data-testid="document-confirmed-reply-draft-panel"',
     );
     assertOrder(

@@ -14,6 +14,7 @@ import { SmartIntakeSummary } from '../components/inbox/SmartIntakeSummary';
 import { DocumentFreeQuestionPanel } from '../components/documents/DocumentFreeQuestionPanel';
 import { DocumentFieldFillConfirmPanel } from '../components/documents/DocumentFieldFillConfirmPanel';
 import { DocumentConfirmedReplyDraftPanel } from '../components/documents/DocumentConfirmedReplyDraftPanel';
+import { DocumentContextualNextStepsPanel } from '../components/documents/DocumentContextualNextStepsPanel';
 import { buildKommunikationPath } from '../components/communication/communicationNavigation';
 import { buildDocumentFieldFillConfirmViewModel } from '../services/documentFieldFillConfirmService';
 import { isConfirmedReplyDraftSupported } from '../services/documentConfirmedReplyDraftService';
@@ -134,6 +135,8 @@ export function EingangDetailPage() {
     const initial = id ? getInboxItemById(id) : undefined;
     return initial ? [...buildDocumentFieldFillConfirmViewModel(initial).rows] : [];
   });
+  const [replyCoreMessage, setReplyCoreMessage] = useState('');
+  const [hasReplyDraft, setHasReplyDraft] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -143,6 +146,8 @@ export function EingangDetailPage() {
       setAnalysisRetryToken(0);
       setFreeTextBridgeProposal(null);
       freeTextBridgeSeqRef.current = 0;
+      setReplyCoreMessage('');
+      setHasReplyDraft(false);
     }
   }, [id]);
 
@@ -992,6 +997,14 @@ export function EingangDetailPage() {
       onRowsChange={setFillConfirmRows}
     />
   );
+  const contextualNextStepsPanel = useAssistFlowConsolidate ? (
+    <DocumentContextualNextStepsPanel
+      rows={fillConfirmRows}
+      coreMessage={replyCoreMessage}
+      hasReplyDraft={hasReplyDraft}
+      testIdPrefix="document-contextual-next-steps"
+    />
+  ) : null;
   const confirmedReplyDraftPanel = isConfirmedReplyDraftSupported(item) ? (
     <DocumentConfirmedReplyDraftPanel
       item={item}
@@ -1002,6 +1015,8 @@ export function EingangDetailPage() {
           state: createDocumentReplyDraftHandoffLocationState(payload),
         });
       }}
+      onCoreMessageChange={setReplyCoreMessage}
+      onReplyDraftPresenceChange={setHasReplyDraft}
     />
   ) : null;
   const originalFilePanel = item.fileRefId ? (
@@ -1075,6 +1090,8 @@ export function EingangDetailPage() {
           {fieldFillConfirmPanel}
           {/* 3. Freie Frage */}
           {freeQuestionPanel}
+          {/* 3b. Contextual next steps */}
+          {contextualNextStepsPanel}
           {/* 4. Antwort + Handoff */}
           {confirmedReplyDraftPanel}
           {/* 5. Original, Ablage, weitere Aktionen */}

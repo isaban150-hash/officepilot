@@ -2809,6 +2809,34 @@ body {
   gap: 0;
 }
 
+.document-contextual-next-steps {
+  margin: 1rem 0;
+}
+
+.document-contextual-next-steps__hint {
+  margin: 0 0 0.75rem;
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+}
+
+.document-contextual-next-steps__meta-title {
+  margin: 0.5rem 0 0.25rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.document-contextual-next-steps__meta-empty {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.document-contextual-next-steps ul {
+  margin: 0 0 0.65rem;
+  padding-left: 1.1rem;
+  font-size: 0.875rem;
+}
+
 .document-field-fill-confirm__list {
   list-style: none;
   margin: 0;

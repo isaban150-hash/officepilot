@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '../ui/Button';
 import { Card, CardTitle } from '../ui/Card';
 import {
@@ -17,6 +17,9 @@ export interface DocumentConfirmedReplyDraftPanelProps {
   testIdPrefix?: string;
   /** Explicit handoff into Kommunikation — only called on user click. */
   onHandoffToCommunication?: (payload: DocumentReplyDraftHandoffPayload) => void;
+  /** Session bridge for contextual next steps on the page. */
+  onCoreMessageChange?: (coreMessage: string) => void;
+  onReplyDraftPresenceChange?: (hasDraft: boolean) => void;
 }
 
 /**
@@ -28,11 +31,21 @@ export function DocumentConfirmedReplyDraftPanel({
   rows,
   testIdPrefix = 'document-confirmed-reply-draft',
   onHandoffToCommunication,
+  onCoreMessageChange,
+  onReplyDraftPresenceChange,
 }: DocumentConfirmedReplyDraftPanelProps) {
   const [coreMessage, setCoreMessage] = useState('');
   const [draft, setDraft] = useState<DocumentConfirmedReplyDraft | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+
+  useEffect(() => {
+    onCoreMessageChange?.(coreMessage);
+  }, [coreMessage, onCoreMessageChange]);
+
+  useEffect(() => {
+    onReplyDraftPresenceChange?.(Boolean(draft));
+  }, [draft, onReplyDraftPresenceChange]);
 
   const handlePrepare = (): void => {
     const next = buildConfirmedReplyDraft({
@@ -92,7 +105,9 @@ export function DocumentConfirmedReplyDraftPanel({
           id={`${testIdPrefix}-core`}
           className="input document-confirmed-reply-draft__core"
           value={coreMessage}
-          onChange={(event) => setCoreMessage(event.target.value)}
+          onChange={(event) => {
+            setCoreMessage(event.target.value);
+          }}
           placeholder="Was möchtest du mitteilen?"
           rows={3}
           data-testid={`${testIdPrefix}-core`}
