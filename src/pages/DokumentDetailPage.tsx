@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { DocumentUnderstandingCard } from '../components/documents/DocumentUnderstandingCard';
+import { DocumentDetailPreview } from '../components/documents/DocumentDetailPreview';
 import { DocumentOriginalFilePanel } from '../components/documents/DocumentOriginalFilePanel';
 import { DocumentFilingCard } from '../components/documents/DocumentFilingCard';
 import { DocumentLifecycleCard } from '../components/documents/DocumentLifecycleCard';
@@ -117,6 +118,7 @@ export function DokumentDetailPage() {
   const technicalPanels = (
     <>
       <Card className="document-detail__preview">
+        <DocumentDetailPreview documentId={document.id} />
         {document.fileRefId ? (
           <DocumentOriginalFilePanel
             fileRefId={document.fileRefId}

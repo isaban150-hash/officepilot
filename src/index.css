@@ -3401,6 +3401,23 @@ body {
   margin-bottom: 1rem;
 }
 
+.document-detail__representation-preview {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  margin-bottom: 0.75rem;
+}
+
+.document-detail__representation-preview-image {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  max-height: 360px;
+  object-fit: contain;
+  margin: 0 auto;
+}
+
 .document-detail__image {
   font-size: 4rem;
   line-height: 1;
