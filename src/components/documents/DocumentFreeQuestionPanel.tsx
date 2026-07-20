@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '../ui/Button';
 import { Badge, Card, CardTitle } from '../ui/Card';
 import { useApp } from '../../context/AppContext';
@@ -23,6 +23,10 @@ interface DocumentFreeQuestionPanelProps {
   ) => void;
 }
 
+function sourceDocumentKey(source: DocumentAiSource): string {
+  return source.type === 'inbox' ? source.item.id : source.document.id;
+}
+
 export function DocumentFreeQuestionPanel({
   source,
   testIdPrefix = 'document-free-question',
@@ -34,6 +38,17 @@ export function DocumentFreeQuestionPanel({
   const [answer, setAnswer] = useState<AreaAiAnswer | null>(null);
   const [error, setError] = useState<string | null>(null);
   const aiConfigured = isAiProviderConfigured();
+  /** Ignores late AI results after document switch or newer ask. */
+  const requestGenerationRef = useRef(0);
+  const documentKey = sourceDocumentKey(source);
+
+  useEffect(() => {
+    requestGenerationRef.current += 1;
+    setQuestion('');
+    setLoading(false);
+    setAnswer(null);
+    setError(null);
+  }, [documentKey]);
 
   const handleAsk = async () => {
     const trimmed = question.trim();
@@ -55,10 +70,14 @@ export function DocumentFreeQuestionPanel({
       return;
     }
 
+    const requestGeneration = ++requestGenerationRef.current;
     setLoading(true);
     setError(null);
     try {
       const result = await askDocumentAi({ source, question: trimmed });
+      if (requestGeneration !== requestGenerationRef.current) {
+        return;
+      }
       setAnswer(result);
       if (result.source === 'unavailable' && result.errorCode === 'invalid_prompt') {
         setError(result.text);
@@ -67,10 +86,15 @@ export function DocumentFreeQuestionPanel({
         setQuestion('');
       }
     } catch {
+      if (requestGeneration !== requestGenerationRef.current) {
+        return;
+      }
       setAnswer(null);
       setError(translate('document.freeQuestion.error.failed'));
     } finally {
-      setLoading(false);
+      if (requestGeneration === requestGenerationRef.current) {
+        setLoading(false);
+      }
     }
   };
 

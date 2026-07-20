@@ -974,8 +974,12 @@ export function EingangDetailPage() {
     </>
   );
 
+  /** Remount assist session surfaces when the inbox document changes (SPA reuse). */
+  const assistSessionKey = item.id;
+
   const freeQuestionPanel = (
     <DocumentFreeQuestionPanel
+      key={`document-free-question-${assistSessionKey}`}
       source={{ type: 'inbox', item }}
       testIdPrefix="document-free-question"
       onFieldStatementProposal={(statement) => {
@@ -990,6 +994,7 @@ export function EingangDetailPage() {
   );
   const fieldFillConfirmPanel = (
     <DocumentFieldFillConfirmPanel
+      key={`document-field-fill-confirm-${assistSessionKey}`}
       item={item}
       testIdPrefix="document-field-fill-confirm"
       freeTextBridgeProposal={freeTextBridgeProposal}
@@ -999,6 +1004,7 @@ export function EingangDetailPage() {
   );
   const contextualNextStepsPanel = useAssistFlowConsolidate ? (
     <DocumentContextualNextStepsPanel
+      key={`document-contextual-next-steps-${assistSessionKey}`}
       rows={fillConfirmRows}
       coreMessage={replyCoreMessage}
       hasReplyDraft={hasReplyDraft}
@@ -1007,6 +1013,7 @@ export function EingangDetailPage() {
   ) : null;
   const confirmedReplyDraftPanel = isConfirmedReplyDraftSupported(item) ? (
     <DocumentConfirmedReplyDraftPanel
+      key={`document-confirmed-reply-draft-${assistSessionKey}`}
       item={item}
       rows={fillConfirmRows}
       testIdPrefix="document-confirmed-reply-draft"
@@ -1057,6 +1064,7 @@ export function EingangDetailPage() {
       </button>
 
       <DocumentAssistantPanel
+        key={`document-assistant-${assistSessionKey}`}
         item={item}
         workflow={workflow}
         translate={translate}
