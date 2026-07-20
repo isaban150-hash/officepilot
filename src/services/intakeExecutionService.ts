@@ -8,6 +8,7 @@ import {
   getInboxItemById,
   markInboxImportedToArchive,
 } from './inboxService';
+import { resolveImportInboxDocumentOptionsFromIntakeCarry } from './documentFileIntakeTransformPlanCarryContextService';
 import {
   acceptSuggestedTasks,
   createVorgangFromInboxWithContract,
@@ -113,7 +114,11 @@ function executeArchiveStep(
 
   const archiveResult = duplicate
     ? updateDocumentFromInbox(duplicate.id, item, options.companyName)
-    : importInboxDocument(item, options.companyName);
+    : importInboxDocument(
+        item,
+        options.companyName,
+        resolveImportInboxDocumentOptionsFromIntakeCarry(item.id),
+      );
 
   if (!archiveResult.success) {
     markFailure(failedSteps, 'archive_document', archiveResult.errorKey);

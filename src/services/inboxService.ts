@@ -15,6 +15,7 @@ import { t, type TranslationKey } from '../i18n';
 import { getPaperFolderById } from './paperFolderService';
 import { getCachedSetup, persistAll } from './persistenceService';
 import { filterSyncActive, isEntitySyncActive, withUpdatedEntitySync } from './sync/syncMetaService';
+import { removeDocumentFileIntakeTransformPlanCarryContextForInboxItem } from './documentFileIntakeTransformPlanCarryContextStoreService';
 
 export type { CreateInboxFromUploadOptions };
 export { createMockInboxItemFromUpload } from './inboxUploadFactory';
@@ -94,6 +95,7 @@ export function removeStagedInboxItemById(id: string): boolean {
   const index = inboxItems.findIndex((item) => item.id === id);
   if (index === -1) return false;
   inboxItems = [...inboxItems.slice(0, index), ...inboxItems.slice(index + 1)];
+  removeDocumentFileIntakeTransformPlanCarryContextForInboxItem(id);
   return true;
 }
 
@@ -164,6 +166,8 @@ export function confirmDispose(id: string): InboxActionResult | null {
   if (!existing?.isAdvertisement) return null;
   const item = patchInboxItem(id, { status: 'abgelegt', isNewUpload: false });
   if (!item) return null;
+  removeDocumentFileIntakeTransformPlanCarryContextForInboxItem(id);
+  persistAll();
   return {
     success: true,
     messageKey: 'inbox.toast.disposed',

@@ -1198,6 +1198,7 @@ import type { DocumentFileRef } from './documentFileRef';
 import type { DocumentFileRepresentationBinding } from './documentFileRepresentationBinding';
 import type { DocumentFileDerivativeStepOutcome } from './documentFileDerivativeStepOutcome';
 import type { DocumentFileDerivativeRecoveryContext } from './documentFileDerivativeRecoveryContext';
+import type { DocumentFileIntakeTransformPlanCarryContext } from './documentFileIntakeTransformPlanCarryContext';
 
 export interface AppPersistedState {
   version: number;
@@ -1224,6 +1225,8 @@ export interface AppPersistedState {
   documentFileDerivativeStepOutcomes?: DocumentFileDerivativeStepOutcome[];
   /** Frozen transform plans for later manual derivative retry (natural key: documentId). */
   documentFileDerivativeRecoveryContexts?: DocumentFileDerivativeRecoveryContext[];
+  /** Intake→import transform plan carry (natural key: inboxItemId). */
+  documentFileIntakeTransformPlanCarryContexts?: DocumentFileIntakeTransformPlanCarryContext[];
   expenses?: Expense[];
   vorgangNotes?: VorgangNote[];
   communicationHistory?: CommunicationEvent[];

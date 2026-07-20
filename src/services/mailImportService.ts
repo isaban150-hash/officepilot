@@ -7,6 +7,7 @@ import type { InboxItem } from '../types/models';
 import { extractDocumentText } from './ocrDocumentService';
 import { getInboxItemById, processUpload } from './inboxService';
 import { importInboxDocument } from './documentService';
+import { resolveImportInboxDocumentOptionsFromIntakeCarry } from './documentFileIntakeTransformPlanCarryContextService';
 import { persistAll } from './persistenceService';
 import { generateEntityId, withNewEntitySync } from './sync/syncMetaService';
 import {
@@ -232,7 +233,11 @@ export function archiveMailInboxItem(
   linkedCompany: string,
   mailImportId?: string,
 ): string | null {
-  const result = importInboxDocument(inboxItem, linkedCompany);
+  const result = importInboxDocument(
+    inboxItem,
+    linkedCompany,
+    resolveImportInboxDocumentOptionsFromIntakeCarry(inboxItem.id),
+  );
   if (!result.success) return null;
 
   if (mailImportId) {

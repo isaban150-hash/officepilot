@@ -48,6 +48,7 @@ import {
   isDuplicateDocument,
   updateDocumentFromInbox,
 } from '../services/documentService';
+import { resolveImportInboxDocumentOptionsFromIntakeCarry } from '../services/documentFileIntakeTransformPlanCarryContextService';
 import {
   confirmDispose,
   deferItem,
@@ -435,7 +436,11 @@ export function EingangDetailPage() {
     try {
       const result =
         mode === 'create'
-          ? importInboxDocument(item, setup.companyName)
+          ? importInboxDocument(
+              item,
+              setup.companyName,
+              resolveImportInboxDocumentOptionsFromIntakeCarry(item.id),
+            )
           : updateDocumentFromInbox(existingDocumentId!, item, setup.companyName);
 
       if (!result.success) {

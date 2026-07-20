@@ -28,6 +28,7 @@ import {
 } from './ocrDocumentService';
 import { validateUserStorageDecision } from './userStorageDecisionService';
 import { traceStep, traceStepStart } from './documentSaveTraceService';
+import { persistDocumentFileIntakeTransformPlanCarryContextAfterConfirm } from './documentFileIntakeTransformPlanCarryContextService';
 
 export interface PendingDocumentIntake {
   cachedFile: CachedDocumentFilePayload;
@@ -163,7 +164,18 @@ export async function confirmPendingDocumentIntake(
     saveTraceId,
   };
 
-  return intakeCachedDocumentFile(pending.cachedFile, intakeOptions);
+  const result = await intakeCachedDocumentFile(pending.cachedFile, intakeOptions);
+
+  if (result.success && !result.duplicate) {
+    persistDocumentFileIntakeTransformPlanCarryContextAfterConfirm({
+      inboxItemId: result.inboxItem.id,
+      policyId: pending.storagePolicy.policyId,
+      userDecision: options.userDecision,
+      mediaProfile: pending.storagePolicy.mediaProfile,
+    });
+  }
+
+  return result;
 }
 
 export function discardPendingDocumentIntake(pending: PendingDocumentIntake | null | undefined): void {
