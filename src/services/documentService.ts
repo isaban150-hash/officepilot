@@ -467,13 +467,7 @@ export function isDuplicateDocument(
 import { linkArchivedDocumentToVorgang } from './vorgangDocumentLinkService';
 import type { DocumentFileTransformPlan } from '../types/documentFileTransformPlan';
 import { orchestrateSourceReuseArchiveBindingAfterImport } from './documentFileSourceReuseArchiveOrchestrationService';
-import { orchestrateRasterArchiveEncodeAfterImport } from './documentFileRasterArchiveEncodeOrchestrationService';
-import { orchestrateImageToPdfArchiveEncodeAfterImport } from './documentFileImageToPdfArchiveEncodeOrchestrationService';
-import { orchestratePdfMetadataStripAfterImport } from './documentFilePdfMetadataStripOrchestrationService';
-import { orchestrateRasterThumbnailEncodeAfterImport } from './documentFileRasterThumbnailEncodeOrchestrationService';
-import { orchestrateRasterPreviewEncodeAfterImport } from './documentFileRasterPreviewEncodeOrchestrationService';
-import { orchestratePdfThumbnailEncodeAfterImport } from './documentFilePdfThumbnailEncodeOrchestrationService';
-import { orchestratePdfPreviewEncodeAfterImport } from './documentFilePdfPreviewEncodeOrchestrationService';
+import { orchestratePostImportDerivativesAfterImport } from './documentFilePostImportDerivativeOrchestrationService';
 
 export interface ImportInboxDocumentOptions {
   /** Pre-built transform plan for post-import archive/preview/thumbnail encode. */
@@ -500,32 +494,8 @@ export function importInboxDocument(
       documentId: result.document.id,
       transformPlan: options?.transformPlan,
     });
-    // Raster encode is async; failures are logged inside and must not fail import.
-    void orchestrateRasterArchiveEncodeAfterImport({
-      documentId: result.document.id,
-      transformPlan: options?.transformPlan,
-    });
-    void orchestrateImageToPdfArchiveEncodeAfterImport({
-      documentId: result.document.id,
-      transformPlan: options?.transformPlan,
-    });
-    void orchestratePdfMetadataStripAfterImport({
-      documentId: result.document.id,
-      transformPlan: options?.transformPlan,
-    });
-    void orchestrateRasterThumbnailEncodeAfterImport({
-      documentId: result.document.id,
-      transformPlan: options?.transformPlan,
-    });
-    void orchestrateRasterPreviewEncodeAfterImport({
-      documentId: result.document.id,
-      transformPlan: options?.transformPlan,
-    });
-    void orchestratePdfThumbnailEncodeAfterImport({
-      documentId: result.document.id,
-      transformPlan: options?.transformPlan,
-    });
-    void orchestratePdfPreviewEncodeAfterImport({
+    // Derived encode is async and serialized; failures must not fail import.
+    void orchestratePostImportDerivativesAfterImport({
       documentId: result.document.id,
       transformPlan: options?.transformPlan,
     });
