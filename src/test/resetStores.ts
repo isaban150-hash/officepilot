@@ -24,6 +24,7 @@ import { resetWorkspaceStore } from '../services/workspace/workspaceStore';
 import { resetDocumentFileStoreForTests } from '../services/documentFileStoreService';
 import { resetDocumentFileRepresentationBindingStoreForTests } from '../services/documentFileRepresentationBindingStoreService';
 import { resetDocumentFileDerivativeStepOutcomeStoreForTests } from '../services/documentFileDerivativeStepOutcomeStoreService';
+import { resetDocumentFileDerivativeStepInFlightLocksForTests } from '../services/documentFileDerivativeStepInFlightLockService';
 import { resetWorkspaceCloudBootstrapForTests } from '../services/workspace/workspaceCloudBootstrapService';
 import { resetStorageScopeForTests } from '../services/storage/storageScopeService';
 
@@ -37,6 +38,7 @@ export function resetTestStores(): void {
   resetDocumentFileStoreForTests();
   resetDocumentFileRepresentationBindingStoreForTests();
   resetDocumentFileDerivativeStepOutcomeStoreForTests();
+  resetDocumentFileDerivativeStepInFlightLocksForTests();
   hydrateExpenseStore([]);
   hydrateVorgangNotes([]);
   resetCommunicationHistoryStore();

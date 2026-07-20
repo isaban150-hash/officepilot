@@ -3,14 +3,15 @@ import {
   POST_IMPORT_DERIVATIVE_STEP_IDS,
   type PostImportDerivativeStepId,
 } from '../types/documentFileDerivativeStepOutcome';
-import { orchestrateRasterArchiveEncodeAfterImport } from './documentFileRasterArchiveEncodeOrchestrationService';
-import { orchestrateImageToPdfArchiveEncodeAfterImport } from './documentFileImageToPdfArchiveEncodeOrchestrationService';
-import { orchestratePdfMetadataStripAfterImport } from './documentFilePdfMetadataStripOrchestrationService';
-import { orchestrateRasterThumbnailEncodeAfterImport } from './documentFileRasterThumbnailEncodeOrchestrationService';
-import { orchestrateRasterPreviewEncodeAfterImport } from './documentFileRasterPreviewEncodeOrchestrationService';
-import { orchestratePdfThumbnailEncodeAfterImport } from './documentFilePdfThumbnailEncodeOrchestrationService';
-import { orchestratePdfPreviewEncodeAfterImport } from './documentFilePdfPreviewEncodeOrchestrationService';
 import { recordPostImportDerivativeStepOutcome } from './documentFileDerivativeStepOutcomeService';
+import {
+  resolveDocumentFileDerivativeStepRunner,
+  setPostImportDerivativeStepRunnersForTests,
+} from './documentFileDerivativeStepRunnerService';
+import {
+  releaseDocumentFileDerivativeStepInFlightLock,
+  tryAcquireDocumentFileDerivativeStepInFlightLock,
+} from './documentFileDerivativeStepInFlightLockService';
 import { getDocumentById } from './documentService';
 import { getDocumentFileRefById } from './documentFileStoreService';
 
@@ -33,6 +34,7 @@ function resolveStepSourceContext(documentId: string): {
 
 export { POST_IMPORT_DERIVATIVE_STEP_IDS };
 export type { PostImportDerivativeStepId };
+export { setPostImportDerivativeStepRunnersForTests };
 
 export interface OrchestratePostImportDerivativesAfterImportInput {
   documentId: string;
@@ -48,35 +50,6 @@ export interface PostImportDerivativeStepResult {
 export interface PostImportDerivativesOrchestrationResult {
   readonly kind: 'completed';
   readonly steps: readonly PostImportDerivativeStepResult[];
-}
-
-type PostImportDerivativeStepRunner = (
-  input: OrchestratePostImportDerivativesAfterImportInput,
-) => Promise<unknown>;
-
-const DEFAULT_STEP_RUNNERS: Readonly<Record<PostImportDerivativeStepId, PostImportDerivativeStepRunner>> =
-  Object.freeze({
-    raster_archive: orchestrateRasterArchiveEncodeAfterImport,
-    image_to_pdf_archive: orchestrateImageToPdfArchiveEncodeAfterImport,
-    pdf_metadata_strip: orchestratePdfMetadataStripAfterImport,
-    raster_thumbnail: orchestrateRasterThumbnailEncodeAfterImport,
-    raster_preview: orchestrateRasterPreviewEncodeAfterImport,
-    pdf_thumbnail: orchestratePdfThumbnailEncodeAfterImport,
-    pdf_preview: orchestratePdfPreviewEncodeAfterImport,
-  });
-
-let stepRunnerOverrides: Partial<
-  Record<PostImportDerivativeStepId, PostImportDerivativeStepRunner>
-> | null = null;
-
-export function setPostImportDerivativeStepRunnersForTests(
-  runners: Partial<Record<PostImportDerivativeStepId, PostImportDerivativeStepRunner>> | null,
-): void {
-  stepRunnerOverrides = runners;
-}
-
-function resolveStepRunner(stepId: PostImportDerivativeStepId): PostImportDerivativeStepRunner {
-  return stepRunnerOverrides?.[stepId] ?? DEFAULT_STEP_RUNNERS[stepId];
 }
 
 function reportCoordinatorError(stepId: PostImportDerivativeStepId, errorCode: string): void {
@@ -103,6 +76,7 @@ function recordStepOutcomeSafely(input: {
  * Import callers should fire-and-forget this; a failing step is logged and must not
  * block later steps or fail the document import.
  * After each step, exactly one durable outcome is written (best-effort).
+ * Shares the step→orchestrator map and in-flight locks with manual retry.
  */
 export async function orchestratePostImportDerivativesAfterImport(
   input: OrchestratePostImportDerivativesAfterImportInput,
@@ -123,8 +97,14 @@ export async function orchestratePostImportDerivativesAfterImport(
   const steps: PostImportDerivativeStepResult[] = [];
 
   for (const stepId of POST_IMPORT_DERIVATIVE_STEP_IDS) {
+    if (!tryAcquireDocumentFileDerivativeStepInFlightLock(input.documentId, stepId)) {
+      reportCoordinatorError(stepId, 'in_flight');
+      steps.push(Object.freeze({ stepId, outcome: 'failed' as const }));
+      continue;
+    }
+
     try {
-      const result = await resolveStepRunner(stepId)(stepInput);
+      const result = await resolveDocumentFileDerivativeStepRunner(stepId)(stepInput);
       recordStepOutcomeSafely({
         documentId: input.documentId,
         stepId,
@@ -159,6 +139,8 @@ export async function orchestratePostImportDerivativesAfterImport(
         runnerThrew: true,
       });
       steps.push(Object.freeze({ stepId, outcome: 'failed' as const, error }));
+    } finally {
+      releaseDocumentFileDerivativeStepInFlightLock(input.documentId, stepId);
     }
   }
 
