@@ -183,18 +183,28 @@ describe('payment UI integration', () => {
   });
 
   it('updates status after partial and full payment', () => {
-    const partial = recordPayment('v-test-1', 'inv-ui-1', {
-      date: '2026-06-08',
-      amount: 100,
-    });
+    const partial = recordPayment(
+      'v-test-1',
+      'inv-ui-1',
+      {
+        date: '2026-06-08',
+        amount: 100,
+      },
+      { confirmUnsent: true },
+    );
     expect(partial.success).toBe(true);
     if (!partial.success) return;
     expect(partial.invoice.paymentStatus).toBe('teilbezahlt');
 
-    const full = recordPayment('v-test-1', 'inv-ui-1', {
-      date: '2026-06-09',
-      amount: 286.75,
-    });
+    const full = recordPayment(
+      'v-test-1',
+      'inv-ui-1',
+      {
+        date: '2026-06-09',
+        amount: 286.75,
+      },
+      { confirmUnsent: true },
+    );
     expect(full.success).toBe(true);
     if (!full.success) return;
     expect(full.invoice.paymentStatus).toBe('bezahlt');
@@ -202,7 +212,12 @@ describe('payment UI integration', () => {
   });
 
   it('supports overpayment and payment removal with status change', () => {
-    recordPayment('v-test-1', 'inv-ui-1', { date: '2026-06-08', amount: 400 });
+    recordPayment(
+      'v-test-1',
+      'inv-ui-1',
+      { date: '2026-06-08', amount: 400 },
+      { confirmUnsent: true, confirmOverpayment: true },
+    );
     let invoice = getVorgangById('v-test-1')!.invoices.find((item) => item.id === 'inv-ui-1')!;
     expect(calculatePaymentSummary(invoice).overpaidAmount).toBeGreaterThan(0);
 

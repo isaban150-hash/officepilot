@@ -7,6 +7,7 @@ import {
   getOverdueInvoices,
   type InvoiceOverviewItem,
 } from './invoiceOverviewService';
+import { isExpectingPayment } from './invoicePaymentService';
 import { filterActiveItems, getInboxItems } from './inboxService';
 import { getTodayIso } from './taskNormalize';
 import { getTaskSummary, syncOverdueInvoiceTasks } from './taskEngineService';
@@ -289,8 +290,18 @@ export function scanUpcomingInvoiceDueDates(today?: Date | string): PendingItem[
   const pending: PendingItem[] = [];
 
   for (const entry of getAllInvoiceOverview(todayIso)) {
+    // Due / partial hints only when payment is expected (versendet).
+    if (!isExpectingPayment(entry.invoice)) {
+      continue;
+    }
+
     const { status } = entry.paymentSummary;
     const dueDate = entry.invoice.paymentDueDate;
+
+    // Paid invoices never produce due-date hints.
+    if (status === 'bezahlt' || status === 'storniert') {
+      continue;
+    }
 
     if (status === 'teilbezahlt') {
       pending.push(
@@ -308,7 +319,7 @@ export function scanUpcomingInvoiceDueDates(today?: Date | string): PendingItem[
       );
     }
 
-    if (!dueDate || status === 'bezahlt' || status === 'storniert' || status === 'ueberfaellig') {
+    if (!dueDate || status === 'ueberfaellig') {
       continue;
     }
 

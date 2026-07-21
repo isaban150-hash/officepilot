@@ -11,6 +11,7 @@ import { resetTestStores } from '../test/resetStores';
 import {
   calculatePaymentSummary,
   isInvoiceOverdue,
+  isSentDateAfterPaymentDue,
 } from './invoicePaymentService';
 import { generateApprovedInvoicePdf } from './invoicePdfService';
 import {
@@ -207,6 +208,25 @@ describe('INVOICE-PILOT-MARK-SENT-01 — service', () => {
       sentVia: 'persoenlich',
     });
     expect(corrected.ok).toBe(true);
+  });
+
+  it('verspätetes Versanddatum erzeugt Hinweis ohne Neuberechnung der Fälligkeit', () => {
+    const invoice = createPreparedInvoice({
+      paymentDueDate: '2026-06-01',
+    });
+    hydrateVorgangStore([createTestVorgang({ invoices: [invoice] })]);
+
+    const result = markInvoiceAsSent('v-test-1', 'inv-sent-1', {
+      sentAt: '2026-06-20',
+      sentVia: 'post',
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.invoice.paymentDueDate).toBe('2026-06-01');
+    expect(result.invoice.sentAt).toBe('2026-06-20');
+    expect(isSentDateAfterPaymentDue(result.invoice.sentAt, result.invoice.paymentDueDate)).toBe(
+      true,
+    );
   });
 });
 

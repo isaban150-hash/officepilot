@@ -7,6 +7,7 @@ import {
   getOpenAmount,
   getPaidAmount,
   isInvoiceOverdue,
+  isSentDateAfterPaymentDue,
   normalizeInvoicePaymentFields,
   recordPayment,
   removePayment,
@@ -211,12 +212,17 @@ describe('recordPayment / removePayment', () => {
   });
 
   it('adds payment via recordPayment', () => {
-    const result = recordPayment('v-test-1', 'inv-pay-1', {
-      date: '2026-06-08',
-      amount: 150,
-      reference: 'RE 2026-0100',
-      note: 'Teilzahlung',
-    });
+    const result = recordPayment(
+      'v-test-1',
+      'inv-pay-1',
+      {
+        date: '2026-06-08',
+        amount: 150,
+        reference: 'RE 2026-0100',
+        note: 'Teilzahlung',
+      },
+      { confirmUnsent: true },
+    );
 
     expect(result.success).toBe(true);
     if (!result.success) return;
@@ -224,6 +230,120 @@ describe('recordPayment / removePayment', () => {
     expect(result.invoice.payments).toHaveLength(1);
     expect(result.invoice.paymentStatus).toBe('teilbezahlt');
     expect(getPaidAmount(result.invoice)).toBe(150);
+  });
+
+  it('rejects payment on draft invoice', () => {
+    hydrateVorgangStore([
+      createTestVorgang({
+        invoices: [createFinalizedInvoice({ status: 'entwurf' })],
+      }),
+    ]);
+
+    const result = recordPayment('v-test-1', 'inv-pay-1', {
+      date: '2026-06-08',
+      amount: 100,
+    });
+
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.errorKey).toBe('payment.invoiceNotFinalized');
+  });
+
+  it('rejects payment on prepared invoice without confirmation', () => {
+    const result = recordPayment('v-test-1', 'inv-pay-1', {
+      date: '2026-06-08',
+      amount: 100,
+    });
+
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.errorKey).toBe('payment.unsentConfirmationRequired');
+  });
+
+  it('records payment on prepared invoice with confirmation without changing send status', () => {
+    const result = recordPayment(
+      'v-test-1',
+      'inv-pay-1',
+      { date: '2026-06-08', amount: 100 },
+      { confirmUnsent: true },
+    );
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.invoice.status).toBe('vorbereitet');
+    expect(result.invoice.paymentStatus).toBe('teilbezahlt');
+  });
+
+  it('records payment on sent invoice without unsent confirmation', () => {
+    hydrateVorgangStore([
+      createTestVorgang({
+        invoices: [
+          createFinalizedInvoice({
+            status: 'versendet',
+            sentAt: '2026-06-01',
+            sentVia: 'email',
+          }),
+        ],
+      }),
+    ]);
+
+    const result = recordPayment('v-test-1', 'inv-pay-1', {
+      date: '2026-06-08',
+      amount: 100,
+    });
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.invoice.status).toBe('versendet');
+  });
+
+  it('rejects overpayment without confirmation', () => {
+    hydrateVorgangStore([
+      createTestVorgang({
+        invoices: [
+          createFinalizedInvoice({
+            status: 'versendet',
+            sentAt: '2026-06-01',
+            sentVia: 'email',
+          }),
+        ],
+      }),
+    ]);
+
+    const result = recordPayment('v-test-1', 'inv-pay-1', {
+      date: '2026-06-08',
+      amount: 400,
+    });
+
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.errorKey).toBe('payment.overpaymentConfirmationRequired');
+  });
+
+  it('records confirmed overpayment', () => {
+    hydrateVorgangStore([
+      createTestVorgang({
+        invoices: [
+          createFinalizedInvoice({
+            status: 'versendet',
+            sentAt: '2026-06-01',
+            sentVia: 'email',
+          }),
+        ],
+      }),
+    ]);
+
+    const result = recordPayment(
+      'v-test-1',
+      'inv-pay-1',
+      { date: '2026-06-08', amount: 400 },
+      { confirmOverpayment: true },
+    );
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(calculatePaymentSummary(result.invoice).overpaidAmount).toBeCloseTo(13.25, 2);
+    expect(result.invoice.paymentStatus).toBe('bezahlt');
   });
 
   it('rejects payment on cancelled invoice', () => {
@@ -259,7 +379,12 @@ describe('recordPayment / removePayment', () => {
   });
 
   it('removePayment deletes payment and recalculates status', () => {
-    recordPayment('v-test-1', 'inv-pay-1', { date: '2026-06-08', amount: 386.75 });
+    recordPayment(
+      'v-test-1',
+      'inv-pay-1',
+      { date: '2026-06-08', amount: 386.75 },
+      { confirmUnsent: true },
+    );
     const invoice = getVorgangById('v-test-1')!.invoices[0];
     const paymentId = invoice.payments![0].id;
 
@@ -277,7 +402,12 @@ describe('recordPayment / removePayment', () => {
     const positionsBefore = JSON.stringify(before.positions);
     const amountBefore = before.amount;
 
-    recordPayment('v-test-1', 'inv-pay-1', { date: '2026-06-08', amount: 100 });
+    recordPayment(
+      'v-test-1',
+      'inv-pay-1',
+      { date: '2026-06-08', amount: 100 },
+      { confirmUnsent: true },
+    );
 
     const after = getVorgangById('v-test-1')!.invoices[0];
     expect(JSON.stringify(after.customerSnapshot)).toBe(snapshotBefore);
@@ -287,11 +417,16 @@ describe('recordPayment / removePayment', () => {
   });
 
   it('persists payments across persistAll/loadPersistedState', () => {
-    recordPayment('v-test-1', 'inv-pay-1', {
-      date: '2026-06-08',
-      amount: 200,
-      reference: 'Überweisung',
-    });
+    recordPayment(
+      'v-test-1',
+      'inv-pay-1',
+      {
+        date: '2026-06-08',
+        amount: 200,
+        reference: 'Überweisung',
+      },
+      { confirmUnsent: true },
+    );
 
     persistAll();
     const raw = localStorage.getItem(getActiveStorageKey());
@@ -305,5 +440,11 @@ describe('recordPayment / removePayment', () => {
     const reloaded = loadPersistedState();
     expect(reloaded?.vorgaenge[0].invoices[0].payments).toHaveLength(1);
     expect(reloaded?.vorgaenge[0].invoices[0].payments![0].amount).toBe(200);
+  });
+
+  it('detects sent date after payment due without changing due date', () => {
+    expect(isSentDateAfterPaymentDue('2026-06-20', '2026-06-15')).toBe(true);
+    expect(isSentDateAfterPaymentDue('2026-06-10', '2026-06-15')).toBe(false);
+    expect(isSentDateAfterPaymentDue(undefined, '2026-06-15')).toBe(false);
   });
 });

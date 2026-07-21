@@ -8,6 +8,7 @@ import {
   updateInvoiceSentDetails,
   type InvoiceSentInput,
 } from '../../services/invoiceSentService';
+import { isSentDateAfterPaymentDue } from '../../services/invoicePaymentService';
 import type { InvoiceSentVia, VorgangInvoice } from '../../types/models';
 import type { TranslationKey } from '../../i18n';
 
@@ -92,6 +93,8 @@ export function InvoiceSentPanel({ vorgangId, invoice, translate, onUpdated }: P
   const showForm = mode === 'mark' || mode === 'correct';
   const showConfirm = mode === 'confirm-mark' || mode === 'confirm-correct';
   const isSent = invoice.status === 'versendet';
+  const lateSentHintDate = showForm || showConfirm ? sentAt : invoice.sentAt;
+  const showLateSentHint = isSentDateAfterPaymentDue(lateSentHintDate, invoice.paymentDueDate);
 
   return (
     <section className="invoice-sent-panel" data-testid="invoice-sent-panel">
@@ -100,6 +103,15 @@ export function InvoiceSentPanel({ vorgangId, invoice, translate, onUpdated }: P
         <p className="invoice-sent-panel__hint" data-testid="invoice-sent-hint">
           {translate('invoice.sent.hint')}
         </p>
+
+        {showLateSentHint && isSent && mode === 'closed' ? (
+          <p className="invoice-sent-panel__late-due" data-testid="invoice-sent-late-due">
+            {translate('invoice.sent.dueAlreadyPassed').replace(
+              '{due}',
+              formatDisplayDate(invoice.paymentDueDate ?? ''),
+            )}
+          </p>
+        ) : null}
 
         {isSent ? (
           <div className="invoice-sent-panel__status" data-testid="invoice-sent-status">
@@ -208,6 +220,15 @@ export function InvoiceSentPanel({ vorgangId, invoice, translate, onUpdated }: P
               </p>
             ) : null}
 
+            {showLateSentHint ? (
+              <p className="invoice-sent-panel__late-due" data-testid="invoice-sent-late-due">
+                {translate('invoice.sent.dueAlreadyPassed').replace(
+                  '{due}',
+                  formatDisplayDate(invoice.paymentDueDate ?? ''),
+                )}
+              </p>
+            ) : null}
+
             <div className="invoice-sent-panel__actions">
               <Button type="button" variant="outline" size="sm" onClick={closeAll}>
                 {translate('common.cancel')}
@@ -225,6 +246,14 @@ export function InvoiceSentPanel({ vorgangId, invoice, translate, onUpdated }: P
             <p className="invoice-sent-panel__confirm-summary">
               {formatDisplayDate(sentAt)} · {formatInvoiceSentViaLabel(sentVia, translate)}
             </p>
+            {showLateSentHint ? (
+              <p className="invoice-sent-panel__late-due" data-testid="invoice-sent-late-due">
+                {translate('invoice.sent.dueAlreadyPassed').replace(
+                  '{due}',
+                  formatDisplayDate(invoice.paymentDueDate ?? ''),
+                )}
+              </p>
+            ) : null}
             {errorKey ? (
               <p className="invoice-sent-panel__error" data-testid="invoice-sent-error">
                 {translate(errorKey)}

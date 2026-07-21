@@ -1482,6 +1482,8 @@ const deLegacy = {
   'invoice.sent.title': 'Versand',
   'invoice.sent.hint':
     'Hier halten Sie fest, dass die Rechnung an den Kunden übergeben wurde. OfficePilot verschickt nichts automatisch.',
+  'invoice.sent.dueAlreadyPassed':
+    'Das Versanddatum liegt nach dem Zahlungsziel ({due}). Die Fälligkeit wird nicht automatisch angepasst.',
   'invoice.sent.notSentYet': 'Noch nicht als versendet markiert.',
   'invoice.sent.mark': 'Als versendet markieren',
   'invoice.sent.correct': 'Versandangaben korrigieren',
@@ -1529,6 +1531,15 @@ const deLegacy = {
   'payment.invoiceOverdueNotice': 'Rechnung ist überfällig.',
   'payment.invoiceCancelledNotice': 'Diese Rechnung wurde storniert.',
   'payment.overpaymentWarning': 'Überzahlung: {amount}',
+  'payment.overpaymentConfirmDetail':
+    'Der Betrag liegt {amount} über dem offenen Rest. Ohne Bestätigung wird nicht gebucht.',
+  'payment.unsentNotice': 'Diese Rechnung ist noch nicht als versendet markiert.',
+  'payment.unsentConfirmationRequired':
+    'Zahlung vor Versand erfordert eine ausdrückliche Bestätigung.',
+  'payment.overpaymentConfirmationRequired':
+    'Überzahlung erfordert eine ausdrückliche Bestätigung.',
+  'payment.confirmIntro': 'Bitte bestätigen Sie die Zahlung ausdrücklich.',
+  'payment.confirmSave': 'Zahlung bestätigen und buchen',
   'payment.overdueDays': 'Seit {days} Tagen überfällig',
   'payment.vorgangOpenTotal': 'Offene Rechnungen',
   'payment.vorgangPaidTotal': 'Summe bezahlt',

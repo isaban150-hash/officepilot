@@ -23,12 +23,15 @@ import {
   formatPaymentCurrency,
   getInvoicePayments,
   getOverdueDays,
-  isInvoiceCancelled,
+  isExpectingPayment,
   isInvoiceOverdue,
+  isSentInvoice,
 } from '../invoicePaymentService';
 import { buildLegalNotices } from '../invoiceTaxService';
 import { getNotesForVorgang } from '../vorgangNoteService';
 import { getAllVorgaenge, getVorgangById, getVorgangInvoice } from '../vorgangService';
+
+export { isExpectingPayment, isSentInvoice };
 
 const FINANCE_ORDER: FinanceStepId[] = ['auftrag', 'rechnung', 'zahlung', 'faelligkeit', 'mahnung'];
 
@@ -97,14 +100,6 @@ function isIncomingInvoiceItem(item: InboxItem): boolean {
     item.documentType === 'eingangsrechnung' ||
     item.classifiedKind === 'gutschrift'
   );
-}
-
-export function isSentInvoice(invoice: VorgangInvoice): boolean {
-  return invoice.status === 'versendet';
-}
-
-export function isExpectingPayment(invoice: VorgangInvoice): boolean {
-  return isSentInvoice(invoice) && !isInvoiceCancelled(invoice);
 }
 
 function getDueRelation(invoice: VorgangInvoice, today: Date | string): DueRelation {

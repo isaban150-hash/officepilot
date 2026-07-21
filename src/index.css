@@ -3890,6 +3890,15 @@ body {
   color: var(--color-text-muted, #5c6570);
 }
 
+.invoice-sent-panel__late-due {
+  margin: 0 0 0.75rem;
+  padding: 0.65rem 0.75rem;
+  background: #fef3c7;
+  border-radius: var(--radius-sm);
+  color: #92400e;
+  font-size: 0.85rem;
+}
+
 .invoice-sent-panel__facts {
   display: grid;
   gap: 0.5rem;
@@ -4101,6 +4110,12 @@ body {
   border-radius: var(--radius-sm);
   color: #92400e;
   font-size: 0.9rem;
+}
+
+.invoice-payment-form__confirm-summary {
+  margin: 0 0 0.75rem;
+  font-size: 0.9rem;
+  color: var(--color-text-muted, #5c6570);
 }
 
 .invoice-payment-form__notice,

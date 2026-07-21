@@ -44,16 +44,48 @@ export function isInvoiceCancelled(invoice: VorgangInvoice): boolean {
   return invoice.paymentStatus === 'storniert' || Boolean(invoice.cancelledAt);
 }
 
+/** Workflow status: invoice was marked as handed to the customer. */
+export function isSentInvoice(invoice: VorgangInvoice): boolean {
+  return invoice.status === 'versendet';
+}
+
+/**
+ * Payment is expected only after the invoice was marked as sent.
+ * Prepared (vorbereitet) invoices stay visible in open receivables but are not due/dunning.
+ */
+export function isExpectingPayment(invoice: VorgangInvoice): boolean {
+  return isSentInvoice(invoice) && !isInvoiceCancelled(invoice);
+}
+
 export function isInvoiceOverdue(invoice: VorgangInvoice, today: Date | string = new Date()): boolean {
   // Overdue / dunning only for invoices marked as sent to the customer.
-  if (invoice.status !== 'versendet') {
+  if (!isExpectingPayment(invoice)) {
     return false;
   }
-  if (!invoice.paymentDueDate || getOpenAmount(invoice) <= 0 || isInvoiceCancelled(invoice)) {
+  if (!invoice.paymentDueDate || getOpenAmount(invoice) <= 0) {
     return false;
   }
 
   return toDateOnly(today) > toDateOnly(invoice.paymentDueDate);
+}
+
+/** True when sent date is after payment due date — due date is not auto-adjusted. */
+export function isSentDateAfterPaymentDue(
+  sentAt: string | undefined,
+  paymentDueDate: string | undefined,
+): boolean {
+  if (!sentAt?.trim() || !paymentDueDate?.trim()) return false;
+  return toDateOnly(sentAt) > toDateOnly(paymentDueDate);
+}
+
+export function getPaymentOverpayAmount(openAmount: number, paymentAmount: number): number {
+  if (!Number.isFinite(paymentAmount) || !Number.isFinite(openAmount)) return 0;
+  return Math.max(0, paymentAmount - openAmount);
+}
+
+/** Prepared invoices require an explicit confirmation before recording payment. */
+export function willPaymentNeedUnsentConfirm(invoice: VorgangInvoice): boolean {
+  return invoice.status === 'vorbereitet' && !isInvoiceCancelled(invoice);
 }
 
 export function calculatePaymentSummary(
@@ -114,10 +146,18 @@ export function normalizeInvoicePaymentFields(invoice: VorgangInvoice): VorgangI
   };
 }
 
+export interface RecordPaymentOptions {
+  /** Required when invoice.status is `vorbereitet` — does not change send status. */
+  confirmUnsent?: boolean;
+  /** Required when amount exceeds the current open remainder. */
+  confirmOverpayment?: boolean;
+}
+
 export function recordPayment(
   vorgangId: string,
   invoiceId: string,
   input: InvoicePaymentInput,
+  options: RecordPaymentOptions = {},
 ): PaymentMutationResult {
   const invoice = getVorgangInvoice(vorgangId, invoiceId);
   if (!invoice) {
@@ -138,6 +178,16 @@ export function recordPayment(
 
   if (!input.date?.trim()) {
     return { success: false, errorKey: 'payment.dateRequired' };
+  }
+
+  if (invoice.status === 'vorbereitet' && !options.confirmUnsent) {
+    return { success: false, errorKey: 'payment.unsentConfirmationRequired' };
+  }
+
+  const openAmount = getOpenAmount(invoice);
+  const overpayAmount = getPaymentOverpayAmount(openAmount, input.amount);
+  if (overpayAmount > 0 && !options.confirmOverpayment) {
+    return { success: false, errorKey: 'payment.overpaymentConfirmationRequired' };
   }
 
   const payment: InvoicePayment = {

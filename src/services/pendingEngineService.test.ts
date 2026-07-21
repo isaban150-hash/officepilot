@@ -188,6 +188,79 @@ describe('pendingEngineService invoices', () => {
     const items = scanUpcomingInvoiceDueDates('2026-06-27');
     expect(items.some((item) => item.kind === 'invoice_due_soon')).toBe(true);
   });
+
+  it('ignores prepared invoices for due-date hints', () => {
+    hydrateVorgangStore([
+      createTestVorgang({
+        id: 'v-prep',
+        invoices: [
+          {
+            id: 'inv-prep-soon',
+            number: '2026-0099',
+            type: 'schluss',
+            positions: [],
+            subtotal: 500,
+            taxStatus: 'standard_19',
+            amount: 595,
+            status: 'vorbereitet',
+            date: '2026-06-01',
+            createdAt: '2026-06-01T00:00:00.000Z',
+            paymentDueDate: '2026-07-02',
+          },
+          {
+            id: 'inv-prep-overdue-date',
+            number: '2026-0098',
+            type: 'schluss',
+            positions: [],
+            subtotal: 500,
+            taxStatus: 'standard_19',
+            amount: 595,
+            status: 'vorbereitet',
+            date: '2026-01-01',
+            createdAt: '2026-01-01T00:00:00.000Z',
+            paymentDueDate: '2026-01-01',
+          },
+        ],
+      }),
+    ]);
+
+    expect(scanUpcomingInvoiceDueDates('2026-06-27')).toHaveLength(0);
+    expect(scanOverdueInvoices('2026-06-27')).toHaveLength(0);
+  });
+
+  it('ignores paid sent invoices for due-date hints', () => {
+    hydrateVorgangStore([
+      createTestVorgang({
+        id: 'v-paid',
+        invoices: [
+          {
+            id: 'inv-paid-soon',
+            number: '2026-0088',
+            type: 'schluss',
+            positions: [],
+            subtotal: 500,
+            taxStatus: 'standard_19',
+            amount: 595,
+            status: 'versendet',
+            date: '2026-06-01',
+            createdAt: '2026-06-01T00:00:00.000Z',
+            paymentDueDate: '2026-07-02',
+            paymentStatus: 'bezahlt',
+            payments: [
+              {
+                id: 'pay-1',
+                amount: 595,
+                date: '2026-06-10',
+                createdAt: '2026-06-10T00:00:00.000Z',
+              },
+            ],
+          },
+        ],
+      }),
+    ]);
+
+    expect(scanUpcomingInvoiceDueDates('2026-06-27')).toHaveLength(0);
+  });
 });
 
 describe('pendingEngineService contracts', () => {
