@@ -111,6 +111,11 @@ import {
   resetVorgangNotes,
 } from './vorgangNoteService';
 import {
+  getDunningDocumentationStoreSnapshot,
+  hydrateDunningDocumentations,
+  resetDunningDocumentations,
+} from './dunningDocumentationService';
+import {
   getTaskStoreSnapshot,
   hydrateTaskStore,
   resetTasks,
@@ -470,6 +475,7 @@ export function createSeedState(setupOverride?: CompanySetup): AppPersistedState
       documentFileIntakeTransformPlanCarryContexts: [],
       expenses: emptyBusinessData ? [] : MOCK_EXPENSES.map(cloneExpense),
       vorgangNotes: [],
+      dunningDocumentations: [],
       communicationHistory: [],
       knowledgeFacts: [],
       officePilotMemory: {
@@ -557,6 +563,7 @@ function finalizeLoadedPersistedState(normalized: AppPersistedState): AppPersist
     documents: (normalized.documents ?? []).map(cloneCompanyDocument),
     expenses: (normalized.expenses ?? []).map(cloneExpense),
     vorgangNotes: (normalized.vorgangNotes ?? []).map(cloneVorgangNote),
+    dunningDocumentations: (normalized.dunningDocumentations ?? []).map((doc) => ({ ...doc })),
     communicationHistory: (normalized.communicationHistory ?? []).map(cloneCommunicationEvent),
     knowledgeFacts: (normalized.knowledgeFacts ?? []).map(cloneKnowledgeFact),
     officePilotMemory: cloneOfficePilotMemoryState(
@@ -665,6 +672,7 @@ export function clearInMemoryBusinessState(): void {
   resetDocumentFileIntakeTransformPlanCarryContextStoreForTests();
   resetExpenses();
   resetVorgangNotes();
+  resetDunningDocumentations();
   resetCommunicationHistoryStore();
   resetMailImports();
   resetKnowledgeStore();
@@ -706,6 +714,7 @@ export function applyStateToStores(state: AppPersistedState): void {
   );
   hydrateExpenseStore(state.expenses ?? []);
   hydrateVorgangNotes(state.vorgangNotes ?? []);
+  hydrateDunningDocumentations(state.dunningDocumentations ?? []);
   hydrateCommunicationHistory(state.communicationHistory ?? []);
   hydrateKnowledgeFacts(state.knowledgeFacts ?? []);
   hydrateMemory(
@@ -864,6 +873,7 @@ export function buildPersistedStateSnapshot(): AppPersistedState {
       getDocumentFileIntakeTransformPlanCarryContextStoreSnapshot(),
     expenses: getExpenseStoreSnapshot(),
     vorgangNotes: getVorgangNoteStoreSnapshot(),
+    dunningDocumentations: getDunningDocumentationStoreSnapshot(),
     communicationHistory: getCommunicationHistorySnapshot(),
     knowledgeFacts: getKnowledgeSnapshot(),
     officePilotMemory: getOfficePilotMemorySnapshot(),
@@ -893,6 +903,7 @@ export function resetDemoData(options?: { keepSetup?: boolean }): CompanySetup {
   resetDocumentFileIntakeTransformPlanCarryContextStoreForTests();
   resetExpenses();
   resetVorgangNotes();
+  resetDunningDocumentations();
   resetCommunicationHistoryStore();
   resetMailImports();
   resetKnowledgeStore();

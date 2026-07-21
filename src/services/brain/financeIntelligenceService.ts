@@ -8,8 +8,11 @@ import type {
 } from '../../types/financeIntelligence';
 import type { CompanySessionContext } from '../../types/companySession';
 import type { InboxItem, InvoicePayment, Vorgang, VorgangInvoice } from '../../types/models';
+import {
+  getDunningDocumentationsByInvoiceNumber,
+  resolveDocumentedDunningLevelFromRecords,
+} from '../dunningDocumentationService';
 import { getContractSkontoOfferForVorgang } from '../contractIntelligenceService';
-import { getCommunicationHistoryStoreEvents } from '../communicationHistoryStore';
 import { filterActiveItems, getInboxItemById, getInboxItems } from '../inboxService';
 import { isFinalizedInvoice } from '../invoiceArchiveService';
 import {
@@ -324,39 +327,14 @@ function hasPaymentDisputeOrDeferral(vorgang: Vorgang, invoice: VorgangInvoice):
   return false;
 }
 
+/**
+ * Confirmed dunning level from explicit handoff documentation only.
+ * Ignores draft_created / draft_copied and other communication history.
+ * payment_reminder → 1, dunning_notice → 2; never decreases a higher level.
+ */
 export function getDocumentedDunningLevel(vorgangId: string, invoiceNumber: string): DunningLevel {
-  let level: DunningLevel = 0;
-  const normNumber = normalize(invoiceNumber);
-
-  for (const event of getCommunicationHistoryStoreEvents()) {
-    const excerpt = `${event.userInputExcerpt ?? ''} ${event.resultExcerpt ?? ''}`;
-    const matchesInvoice =
-      (event.contextRef.type === 'invoice' &&
-        event.contextRef.vorgangId === vorgangId &&
-        event.contextRef.id) ||
-      normalize(excerpt).includes(normNumber);
-
-    if (!matchesInvoice) continue;
-
-    if (event.intent === 'payment_reminder') level = Math.max(level, 1) as DunningLevel;
-    if (/mahnung/i.test(excerpt)) level = 2;
-    else if (/zahlungserinnerung/i.test(excerpt)) level = Math.max(level, 1) as DunningLevel;
-  }
-
-  for (const note of getNotesForVorgang(vorgangId)) {
-    if (!normalize(note.body).includes(normNumber)) continue;
-    if (/mahnung/i.test(note.body)) level = 2;
-    else if (/zahlungserinnerung/i.test(note.body)) level = Math.max(level, 1) as DunningLevel;
-  }
-
-  for (const item of filterActiveItems(getInboxItems()).filter((entry) => entry.vorgangId === vorgangId)) {
-    const ref = normalize(item.recognizedData.Rechnungsnummer ?? item.title);
-    if (normNumber && ref && !ref.includes(normNumber)) continue;
-    if (item.classifiedKind === 'mahnung') level = 2;
-    if (item.classifiedKind === 'zahlungserinnerung') level = Math.max(level, 1) as DunningLevel;
-  }
-
-  return level;
+  const records = getDunningDocumentationsByInvoiceNumber(vorgangId, invoiceNumber);
+  return resolveDocumentedDunningLevelFromRecords(records);
 }
 
 function resolveDunningAction(

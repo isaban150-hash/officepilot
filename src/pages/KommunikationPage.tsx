@@ -171,6 +171,13 @@ export function KommunikationPage() {
     }
     showToast(translate('communication.reply.noReplyNeededToast'));
   };
+  const handleDunningDocumented = () => {
+    showToast(translate('dunning.doc.savedToast'));
+  };
+  const dunningContext =
+    contextRef.type === 'invoice' && contextRef.id && contextRef.vorgangId
+      ? { vorgangId: contextRef.vorgangId, invoiceId: contextRef.id }
+      : null;
   const handleAiEnhance = async () => {
     if (!result?.drafts || aiLoading) return;
     const draft = result.drafts[channel] ?? result.drafts.email;
@@ -273,6 +280,8 @@ export function KommunikationPage() {
             onMarkAnswered={handleMarkAnswered}
             onRemindLater={handleRemindLater}
             onMarkNoReplyNeeded={handleMarkNoReplyNeeded}
+            dunningContext={dunningContext}
+            onDunningDocumented={handleDunningDocumented}
             aiConfigured={isAiProviderConfigured()}
             aiLoading={aiLoading}
             aiStyle={aiStyle}

@@ -3239,6 +3239,57 @@ body {
   gap: 0.65rem;
 }
 
+.dunning-doc-panel {
+  margin-top: 1rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--color-border, #e2e8f0);
+}
+
+.dunning-doc-panel__hint,
+.dunning-doc-panel__empty {
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+  color: var(--color-text-muted, #5c6570);
+}
+
+.dunning-doc-panel__list {
+  margin: 0 0 0.75rem;
+  padding-left: 1.1rem;
+  font-size: 0.85rem;
+}
+
+.dunning-doc-panel__form,
+.dunning-doc-panel__confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.dunning-doc-panel__label {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.dunning-doc-panel__actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.35rem;
+}
+
+.dunning-doc-panel__error {
+  margin: 0;
+  color: #b91c1c;
+  font-size: 0.85rem;
+}
+
+.dunning-doc-panel__confirm-summary {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--color-text-muted, #5c6570);
+}
+
 .communication-reply-no-needed {
   background: none;
   border: none;

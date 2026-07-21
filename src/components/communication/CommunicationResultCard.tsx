@@ -6,11 +6,16 @@ import { CommunicationChannelTabs } from './CommunicationChannelTabs';
 import { CommunicationCopyButton } from './CommunicationCopyButton';
 import { CommunicationDraftView, formatCommunicationDraftText } from './CommunicationDraftView';
 import { CommunicationMissingInfoForm } from './CommunicationMissingInfoForm';
+import {
+  DunningDocumentationPanel,
+  isDunningDocumentationIntent,
+} from './DunningDocumentationPanel';
 import type {
   CommunicationChannel,
   CommunicationDraft,
   CommunicationResult,
 } from '../../types/communication';
+import type { InvoiceDunningDocumentation } from '../../types/dunningDocumentation';
 import type { CommunicationAiEnhanceStyle } from '../../types/communicationAi';
 import type { TranslationKey } from '../../i18n';
 
@@ -26,6 +31,9 @@ interface CommunicationResultCardProps {
   onMarkAnswered?: () => void;
   onRemindLater?: () => void;
   onMarkNoReplyNeeded?: () => void;
+  /** Invoice context for documenting reminder/dunning handoff. */
+  dunningContext?: { vorgangId: string; invoiceId: string } | null;
+  onDunningDocumented?: (doc: InvoiceDunningDocumentation) => void;
   aiConfigured: boolean;
   aiLoading: boolean;
   aiStyle: CommunicationAiEnhanceStyle;
@@ -68,6 +76,8 @@ export function CommunicationResultCard({
   onMarkAnswered,
   onRemindLater,
   onMarkNoReplyNeeded,
+  dunningContext,
+  onDunningDocumented,
   aiConfigured,
   aiLoading,
   aiStyle,
@@ -248,6 +258,16 @@ export function CommunicationResultCard({
               </button>
             )}
           </div>
+
+          {dunningContext && isDunningDocumentationIntent(result.intent) ? (
+            <DunningDocumentationPanel
+              vorgangId={dunningContext.vorgangId}
+              invoiceId={dunningContext.invoiceId}
+              draftIntent={result.intent}
+              translate={translate}
+              onDocumented={onDunningDocumented}
+            />
+          ) : null}
 
           <ShowMoreSection
             expanded={showRefineOptions}

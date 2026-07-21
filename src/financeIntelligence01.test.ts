@@ -3,6 +3,10 @@ import { hydrateCompanyProfileStore } from './services/companyProfileService';
 import { hydrateInboxStore } from './services/inboxService';
 import { hydrateVorgangStore } from './services/vorgangService';
 import { hydrateCommunicationHistory } from './services/communicationHistoryService';
+import {
+  documentDunningDelivery,
+  resetDunningDocumentations,
+} from './services/dunningDocumentationService';
 import { processOfficePilotQuestion } from './services/brain/brainOrchestrator';
 import {
   analyzeGlobalFinance,
@@ -92,6 +96,7 @@ describe('AI-FINANCE-01 intelligence service', () => {
     hydrateInboxStore([]);
     hydrateVorgangStore([]);
     hydrateCommunicationHistory([]);
+    resetDunningDocumentations();
   });
 
   it('meldet vor Fälligkeit kein Zahlungsrisiko', () => {
@@ -199,17 +204,11 @@ describe('AI-FINANCE-01 intelligence service', () => {
         ],
       }),
     ]);
-    hydrateCommunicationHistory([
-      {
-        id: 'comm-reminder-1',
-        timestamp: '2026-06-01T10:00:00.000Z',
-        type: 'draft_created',
-        intent: 'payment_reminder',
-        contextRef: { type: 'invoice', id: 'inv-mahn', vorgangId: 'v-fin-mahn' },
-        status: 'complete',
-        disclaimerShown: true,
-      },
-    ]);
+    documentDunningDelivery('v-fin-mahn', 'inv-mahn', {
+      kind: 'payment_reminder',
+      documentedAt: '2026-06-01',
+      deliveryMethod: 'email',
+    });
 
     expect(getDocumentedDunningLevel('v-fin-mahn', 'RE-2026-500')).toBe(1);
     const analysis = analyzeInvoiceFinance('v-fin-mahn', 'inv-mahn', '2026-07-01');
@@ -231,17 +230,11 @@ describe('AI-FINANCE-01 intelligence service', () => {
         ],
       }),
     ]);
-    hydrateCommunicationHistory([
-      {
-        id: 'comm-reminder-block',
-        timestamp: '2026-06-25T10:00:00.000Z',
-        type: 'draft_created',
-        intent: 'payment_reminder',
-        contextRef: { type: 'invoice', id: 'inv-remind-block', vorgangId: 'v-remind-block' },
-        status: 'complete',
-        disclaimerShown: true,
-      },
-    ]);
+    documentDunningDelivery('v-remind-block', 'inv-remind-block', {
+      kind: 'payment_reminder',
+      documentedAt: '2026-06-25',
+      deliveryMethod: 'email',
+    });
 
     const analysis = analyzeInvoiceFinance('v-remind-block', 'inv-remind-block', '2026-07-01');
     expect(analysis?.recommendations.some((r) => r.id === 'payment_reminder')).toBe(false);

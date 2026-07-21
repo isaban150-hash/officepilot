@@ -178,6 +178,7 @@ export function getRequiredFieldsForIntent(intent: CommunicationIntent): FieldDe
     case 'additional_work':
       return [FIELD.workDescription, FIELD.reason];
     case 'payment_reminder':
+    case 'dunning_notice':
       return [FIELD.invoiceReference];
     case 'invoice_followup':
       return [FIELD.invoiceReference];
@@ -218,7 +219,11 @@ export function getMissingCommunicationInfo(
     return [];
   }
 
-  if (intent === 'payment_reminder' || intent === 'invoice_followup') {
+  if (
+    intent === 'payment_reminder' ||
+    intent === 'dunning_notice' ||
+    intent === 'invoice_followup'
+  ) {
     if (context.invoiceSummary?.number) {
       answers.invoiceReference = answers.invoiceReference ?? context.invoiceSummary.number;
     }

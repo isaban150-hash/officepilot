@@ -1242,6 +1242,8 @@ export interface AppPersistedState {
   documentFileIntakeTransformPlanCarryContexts?: DocumentFileIntakeTransformPlanCarryContext[];
   expenses?: Expense[];
   vorgangNotes?: VorgangNote[];
+  /** Confirmed payment-reminder / dunning handoffs (local documentation only). */
+  dunningDocumentations?: import('./dunningDocumentation').InvoiceDunningDocumentation[];
   communicationHistory?: CommunicationEvent[];
   knowledgeFacts?: KnowledgeFact[];
   officePilotMemory?: OfficePilotMemoryState;

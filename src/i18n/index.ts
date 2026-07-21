@@ -1506,6 +1506,29 @@ const deLegacy = {
   'invoice.sent.error.notPrepared': 'Nur vorbereitete Rechnungen können als versendet markiert werden.',
   'invoice.sent.error.failed': 'Versandstatus konnte nicht gespeichert werden.',
 
+  'dunning.doc.hint':
+    'Hier dokumentieren Sie, dass Sie die Zahlungserinnerung oder Mahnung an den Kunden übergeben haben. OfficePilot verschickt nichts automatisch.',
+  'dunning.doc.empty': 'Noch keine Übergabe dokumentiert.',
+  'dunning.doc.mark': 'Als übergeben dokumentieren',
+  'dunning.doc.kind': 'Art',
+  'dunning.doc.kind.payment_reminder': 'Zahlungserinnerung',
+  'dunning.doc.kind.dunning_notice': 'Mahnung',
+  'dunning.doc.date': 'Übergabedatum',
+  'dunning.doc.delivery': 'Übergabeweg',
+  'dunning.doc.noteOptional': 'Notiz (optional)',
+  'dunning.doc.continue': 'Weiter zur Bestätigung',
+  'dunning.doc.confirm': 'Übergabe bestätigen',
+  'dunning.doc.confirmText':
+    'Übergabe dokumentieren? Das ändert nur den Mahnstand – es wird nichts versendet.',
+  'dunning.doc.savedToast': 'Übergabe dokumentiert.',
+  'dunning.doc.error.date': 'Bitte ein gültiges Übergabedatum angeben.',
+  'dunning.doc.error.delivery': 'Bitte einen Übergabeweg wählen.',
+  'dunning.doc.error.kind': 'Bitte Art der Übergabe wählen.',
+  'dunning.doc.error.notOpen': 'Vollständig bezahlte Rechnungen können nicht dokumentiert werden.',
+  'dunning.doc.error.notSent':
+    'Nur versendete Rechnungen mit offenem Betrag können dokumentiert werden.',
+  'dunning.doc.error.failed': 'Übergabe konnte nicht gespeichert werden.',
+
   'payment.summaryTitle': 'Zahlungsstand',
   'payment.historyTitle': 'Zahlungshistorie',
   'payment.historyEmpty': 'Noch keine Zahlungen erfasst.',
@@ -1970,6 +1993,7 @@ const deLegacy = {
   'communication.intent.delay_notice': 'Verzögerungsmitteilung',
   'communication.intent.additional_work': 'Zusatzleistung',
   'communication.intent.payment_reminder': 'Zahlungserinnerung',
+  'communication.intent.dunning_notice': 'Mahnung',
   'communication.intent.invoice_followup': 'Rechnungsnachfrage',
   'communication.intent.document_reply': 'Antwort auf Schreiben',
   'communication.intent.document_question': 'Frage zum Dokument',

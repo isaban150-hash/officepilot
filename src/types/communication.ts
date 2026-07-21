@@ -8,6 +8,7 @@ export type CommunicationIntent =
   | 'delay_notice'
   | 'additional_work'
   | 'payment_reminder'
+  | 'dunning_notice'
   | 'invoice_followup'
   | 'document_reply'
   | 'document_question'

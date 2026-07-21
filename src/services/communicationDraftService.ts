@@ -187,6 +187,47 @@ function buildPaymentReminderDraft(
   };
 }
 
+function buildDunningNoticeDraft(
+  answers: Record<string, string>,
+  context: CommunicationContext,
+): CommunicationDraftCore {
+  const invoiceRef = answers.invoiceReference?.trim() ?? context.invoiceSummary?.number ?? '';
+  const openAmount = context.invoiceSummary?.openAmount;
+  const dueDate = context.invoiceSummary?.dueDate;
+
+  const lines = [
+    `Sehr geehrte/r ${recipientName(context)},`,
+    '',
+    `hiermit mahnen wir die offene Rechnung ${invoiceRef} an.`,
+  ];
+  if (openAmount !== undefined) {
+    lines.push(`Offener Betrag: ${openAmount.toLocaleString('de-DE', { minimumFractionDigits: 2 })} €`);
+  }
+  if (dueDate) {
+    lines.push(`Zahlungsziel: ${dueDate}`);
+  }
+  lines.push(
+    '',
+    'Bitte überweisen Sie den offenen Betrag zeitnah.',
+    '',
+    'Mit freundlichen Grüßen',
+    context.companyName,
+  );
+
+  const basedOnFacts = [`Rechnungsbezug: ${invoiceRef}`];
+  if (openAmount !== undefined) basedOnFacts.push(`Offener Betrag aus System: ${openAmount}`);
+  if (dueDate) basedOnFacts.push(`Fälligkeit aus System: ${dueDate}`);
+
+  return {
+    intent: 'dunning_notice',
+    subject: `Mahnung – Rechnung ${invoiceRef}`,
+    body: lines.join('\n'),
+    tone: 'formal',
+    basedOnFacts,
+    notIncluded: ['Keine Mahngebühren', 'Keine rechtlichen Schritte', 'Kein automatischer Versand'],
+  };
+}
+
 function buildGenericDraft(
   intent: CommunicationIntent,
   answers: Record<string, string>,
@@ -244,6 +285,10 @@ export function buildCommunicationDraft(
     case 'invoice_followup':
       if (!answers.invoiceReference && !context.invoiceSummary?.number) return null;
       return buildPaymentReminderDraft(answers, context);
+
+    case 'dunning_notice':
+      if (!answers.invoiceReference && !context.invoiceSummary?.number) return null;
+      return buildDunningNoticeDraft(answers, context);
 
     case 'cancel_order':
       if (!answers.cancelTarget || !answers.cancelReason) return null;

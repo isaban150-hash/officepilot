@@ -13,6 +13,7 @@ import { resetLastPersistFailureForTests, setCachedSetup } from '../services/per
 import { hydrateTaskStore } from '../services/taskService';
 import { hydrateVorgangStore } from '../services/vorgangService';
 import { hydrateVorgangNotes } from '../services/vorgangNoteService';
+import { resetDunningDocumentations } from '../services/dunningDocumentationService';
 import { resetCommunicationHistoryStore } from '../services/communicationHistoryStore';
 import { resetKnowledgeStore } from '../services/knowledgeStore';
 import { resetUploadedDocumentStore } from '../services/uploadedDocumentStore';
@@ -45,6 +46,7 @@ export function resetTestStores(): void {
   resetDocumentFileDerivativeStepInFlightLocksForTests();
   hydrateExpenseStore([]);
   hydrateVorgangNotes([]);
+  resetDunningDocumentations();
   resetCommunicationHistoryStore();
   resetKnowledgeStore();
   setCachedSetup({ ...DEFAULT_SETUP });

@@ -60,7 +60,10 @@ export function detectCommunicationIntent(
   if (/termin.*verschieb|termin.*änder|terminänderung|neuer termin/.test(text)) return 'appointment_change';
   if (/verzöger|verspät|delay|später fertig|verzug/.test(text)) return 'delay_notice';
   if (/zusätzlich|mehrarbeit|nachtrag|zusatzleistung/.test(text)) return 'additional_work';
-  if (/zahlungserinnerung|mahnung|zahlung.*erinnern|offene rechnung/.test(text)) {
+  if (/mahnung/.test(text)) {
+    return 'dunning_notice';
+  }
+  if (/zahlungserinnerung|zahlung.*erinnern|offene rechnung/.test(text)) {
     return 'payment_reminder';
   }
   if (/rechnung.*nachfrage|rechnung.*follow|nachfrage.*rechnung/.test(text)) return 'invoice_followup';
