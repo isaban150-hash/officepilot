@@ -112,3 +112,7 @@ npx vercel --prod
 - Rechtstexte: Draft-Platzhalter
 - Upload: Base64 in localStorage (Größenlimit)
 - Build-Warnungen: große Chunks, CSS-Minify (P2, nicht blockierend)
+
+## Begleiteter Pilot
+
+Checklisten und Vorlagen für den ersten begleiteten Pilot: [pilot/README.md](./pilot/README.md)

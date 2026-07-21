@@ -51,3 +51,7 @@ src/
 - Keine automatische Rechnungsversendung
 - Keine automatische Preis-/Mengenänderung
 - Vorschau + Nutzerbestätigung bei wichtigen Aktionen
+
+## Begleiteter Pilot
+
+Betriebspaket (Checklisten, Routinen, Vorlagen): [docs/pilot/README.md](docs/pilot/README.md)
