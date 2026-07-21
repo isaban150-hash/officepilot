@@ -10,6 +10,7 @@ import { deIntakePreview } from './intakePreview';
 import { deStorageRecommendation } from './storageRecommendation';
 import { deUserStorageDecision } from './userStorageDecision';
 import { deDocumentOriginal } from './documentOriginal';
+import { deBackup } from './backup';
 
 export const deModules = {
   ...deAuth,
@@ -25,4 +26,5 @@ export const deModules = {
   ...deStorageRecommendation,
   ...deUserStorageDecision,
   ...deDocumentOriginal,
+  ...deBackup,
 } as const;

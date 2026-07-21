@@ -3500,6 +3500,24 @@ body {
   line-height: 1.35;
 }
 
+.backup-export-panel {
+  margin: 1rem 0 1.25rem;
+}
+
+.backup-export-panel__hint {
+  margin: 0 0 0.85rem;
+}
+
+.backup-export-panel__success {
+  margin: 0.65rem 0 0;
+  font-size: 0.85rem;
+  color: var(--color-success, #1a7a3c);
+}
+
+.backup-export-panel__error {
+  margin-top: 0.65rem;
+}
+
 .page-header__actions {
   margin-bottom: 1rem;
 }

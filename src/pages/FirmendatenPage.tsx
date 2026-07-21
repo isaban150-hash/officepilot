@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { PageHeader } from '../components/ui/Card';
 import { LanguageSwitcher } from '../components/settings/LanguageSwitcher';
+import { BackupExportPanel } from '../components/settings/BackupExportPanel';
 import { useApp } from '../context/AppContext';
 import { buildSkontoText } from '../services/invoiceTaxService';
 import { validateCompanyProfileForSettings } from '../services/setupValidationService';
@@ -100,6 +101,8 @@ export function FirmendatenPage() {
       />
 
       <LanguageSwitcher />
+
+      <BackupExportPanel />
 
       <form className="company-profile-form" onSubmit={handleSubmit}>
         {TEXT_FIELDS.map(({ key, labelKey, type = 'text' }) => (
