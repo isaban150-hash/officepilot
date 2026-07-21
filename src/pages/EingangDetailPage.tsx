@@ -38,6 +38,7 @@ import { letterExplanationFromWorkflow } from '../services/letterExplanationServ
 import { getInboxExtractedDocumentText } from '../services/inboxDocumentText';
 import { isClassificationKindWithTasks } from '../services/taskEngineService';
 import { executeSmartIntake } from '../services/intakeExecutionService';
+import { getLastPersistSuccess } from '../services/persistenceService';
 import {
   acceptSuggestedTasks,
   createVorgangFromInboxWithContract,
@@ -486,6 +487,11 @@ export function EingangDetailPage() {
       }
 
       setItem(archiveResult.item);
+      if (!getLastPersistSuccess()) {
+        showToast(translate('persist.failed.userAction'));
+        setDuplicateDocument(null);
+        return;
+      }
       showToast(translate('inbox.importToArchive.success'));
       setDuplicateDocument(null);
       navigate(`/dokumente/${result.document.id}`);
@@ -517,7 +523,11 @@ export function EingangDetailPage() {
       const linked = linkWorkflowVorgang(item, workflow.suggestedVorgang.vorgangId);
       if (linked) {
         setItem(linked.inbox);
-        showToast(translate('vorgang.link.success'));
+        if (!getLastPersistSuccess()) {
+          showToast(translate('persist.failed.userAction'));
+        } else {
+          showToast(translate('vorgang.link.success'));
+        }
         return;
       }
     }
@@ -525,7 +535,11 @@ export function EingangDetailPage() {
     const result = createWorkflowVorgang(item, setup.materialStandard);
     if (result) {
       setItem(result.inbox);
-      showToast(translate('vorgang.create.success'));
+      if (!getLastPersistSuccess()) {
+        showToast(translate('persist.failed.userAction'));
+      } else {
+        showToast(translate('vorgang.create.success'));
+      }
     } else {
       setVorgangDialogRequest((n) => n + 1);
     }

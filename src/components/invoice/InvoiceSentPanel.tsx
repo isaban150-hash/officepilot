@@ -9,6 +9,7 @@ import {
   type InvoiceSentInput,
 } from '../../services/invoiceSentService';
 import { isSentDateAfterPaymentDue } from '../../services/invoicePaymentService';
+import { getLastPersistSuccess } from '../../services/persistenceService';
 import type { InvoiceSentVia, VorgangInvoice } from '../../types/models';
 import type { TranslationKey } from '../../i18n';
 
@@ -87,6 +88,11 @@ export function InvoiceSentPanel({ vorgangId, invoice, translate, onUpdated }: P
     }
 
     onUpdated(result.invoice);
+    if (!getLastPersistSuccess()) {
+      setErrorKey('persist.failed.userAction');
+      setMode('closed');
+      return;
+    }
     closeAll();
   };
 

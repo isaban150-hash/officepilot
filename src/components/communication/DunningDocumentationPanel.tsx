@@ -8,6 +8,7 @@ import {
   formatDunningKindLabel,
   getDunningDocumentationsForInvoice,
 } from '../../services/dunningDocumentationService';
+import { getLastPersistSuccess } from '../../services/persistenceService';
 import type {
   DocumentDunningInput,
   DunningDeliveryMethod,
@@ -108,6 +109,11 @@ export function DunningDocumentationPanel({
 
     setRecords(getDunningDocumentationsForInvoice(vorgangId, invoiceId));
     onDocumented?.(result.documentation);
+    if (!getLastPersistSuccess()) {
+      setErrorKey('persist.failed.userAction');
+      setMode('closed');
+      return;
+    }
     closeAll();
   };
 

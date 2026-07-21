@@ -322,9 +322,13 @@ const deLegacy = {
   'mehr.adminUsersDesc': 'Freischaltung, Sperren und Lizenzen',
 
   'sync.title': 'Synchronisation',
-  'sync.subtitle': 'Lokale Synchronisation vorbereitet – ohne Cloud-Anbindung.',
+  'sync.subtitle': 'Lokaler Status – ohne Cloud-Synchronisierung der Geschäftsdaten.',
   'sync.mode.localPrepared': 'Lokale Synchronisation vorbereitet.',
   'sync.offlineHint': 'OfficePilot arbeitet lokal weiter.',
+  'sync.noCloudDataHint':
+    'Deine Geschäftsdaten werden derzeit nicht automatisch mit der Cloud synchronisiert.',
+  'sync.feedback.localOnly':
+    'Keine Cloud-Synchronisierung: Deine Geschäftsdaten bleiben lokal in diesem Browser.',
   'sync.section.status': 'Status',
   'sync.section.device': 'Gerät & Arbeitsbereich',
   'sync.section.outbox': 'Ausstehende Änderungen',

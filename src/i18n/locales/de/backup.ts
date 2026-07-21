@@ -18,8 +18,7 @@ export const deBackup = {
   'backup.validate.fileCount': 'Anzahl Dateien',
   'backup.validate.totalSize': 'Gesamtgröße',
   'backup.validate.replaceHint':
-    'Die Wiederherstellung würde später alle lokalen OfficePilot-Daten in diesem Browser ersetzen.',
-  'backup.validate.restoreUnavailable': 'Wiederherstellung ist in dieser Version noch nicht verfügbar.',
+    'Die Wiederherstellung ersetzt alle lokalen OfficePilot-Daten in diesem Browser.',
 
   'backup.validate.error.invalid': 'Die Datei ist keine gültige OfficePilot-Datensicherung.',
   'backup.validate.error.tooLarge': 'Die Datei ist zu groß und kann nicht geprüft werden.',

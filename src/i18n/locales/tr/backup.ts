@@ -18,8 +18,7 @@ export const trBackup = {
   'backup.validate.fileCount': 'Dosya sayısı',
   'backup.validate.totalSize': 'Toplam boyut',
   'backup.validate.replaceHint':
-    'Geri yükleme daha sonra bu tarayıcıdaki tüm yerel OfficePilot verilerini değiştirir.',
-  'backup.validate.restoreUnavailable': 'Geri yükleme bu sürümde henüz kullanılamıyor.',
+    'Geri yükleme bu tarayıcıdaki tüm yerel OfficePilot verilerini değiştirir.',
 
   'backup.validate.error.invalid': 'Dosya geçerli bir OfficePilot yedeği değil.',
   'backup.validate.error.tooLarge': 'Dosya çok büyük; kontrol edilemiyor.',

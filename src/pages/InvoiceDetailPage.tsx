@@ -22,6 +22,7 @@ import {
   isInvoiceCancelled,
   removePayment,
 } from '../services/invoicePaymentService';
+import { getLastPersistSuccess } from '../services/persistenceService';
 import { printInvoice } from '../services/invoicePrintService';
 import { getVorgangById, getVorgangInvoice } from '../services/vorgangService';
 import { InvoiceSentPanel } from '../components/invoice/InvoiceSentPanel';
@@ -69,6 +70,10 @@ export function InvoiceDetailPage() {
 
   const handlePaymentSaved = (updated: VorgangInvoice) => {
     setInvoice(updated);
+    if (!getLastPersistSuccess()) {
+      showToast(translate('persist.failed.userAction'));
+      return;
+    }
     showToast(translate(getPaymentSavedToastKey(updated)));
   };
 

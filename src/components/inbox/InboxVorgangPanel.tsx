@@ -16,6 +16,7 @@ import {
   linkInboxToExistingVorgang,
   type VorgangCardMode,
 } from '../../services/vorgangService';
+import { getLastPersistSuccess } from '../../services/persistenceService';
 import type { InboxItem, MaterialStandard, Vorgang, VorgangDraft } from '../../types/models';
 import type { TranslationKey } from '../../i18n';
 
@@ -79,18 +80,26 @@ export function InboxVorgangPanel({
   const handleLink = (vorgangId: string) => {
     const result = linkInboxToExistingVorgang(item, vorgangId);
     if (result) {
-      showToast(translate('vorgang.link.success'));
       onLinked(result.inbox, result.vorgang);
       closeDialog();
+      if (!getLastPersistSuccess()) {
+        showToast(translate('persist.failed.userAction'));
+      } else {
+        showToast(translate('vorgang.link.success'));
+      }
     }
   };
 
   const handleCreate = () => {
     const result = createVorgangFromInboxWithContract(item, draft, materialDefault);
     if (result) {
-      showToast(translate('vorgang.create.success'));
       onLinked(result.inbox, result.vorgang);
       closeDialog();
+      if (!getLastPersistSuccess()) {
+        showToast(translate('persist.failed.userAction'));
+      } else {
+        showToast(translate('vorgang.create.success'));
+      }
     } else {
       showToast(translate('vorgang.alreadyLinked'));
     }

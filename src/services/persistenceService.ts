@@ -513,6 +513,14 @@ import {
   setActiveStorageScope,
   type StorageScope,
 } from './storage/storageScopeService';
+import { notifyPersistenceHealthChanged } from './persistenceHealthService';
+
+function publishPersistenceHealth(): void {
+  notifyPersistenceHealthChanged({
+    healthy: lastPersistSuccess,
+    hasFailure: !lastPersistSuccess || lastPersistFailure !== null,
+  });
+}
 
 function normalizeLoadedState(parsed: unknown, persistMigrations = true): AppPersistedState | null {
   if (isValidPersistedStateV5(parsed)) {
@@ -795,6 +803,7 @@ export function resetLastPersistFailureForTests(): void {
   lastPersistFailure = null;
   lastPersistSuccess = true;
   persistDiagnosticOverride = null;
+  publishPersistenceHealth();
 }
 
 export function persistAll(setupOverride?: CompanySetup): PersistResult {
@@ -818,6 +827,7 @@ export function persistAll(setupOverride?: CompanySetup): PersistResult {
     console.warn('[OfficePilot] Speichern fehlgeschlagen:', error);
     lastPersistFailure = failure;
     lastPersistSuccess = false;
+    publishPersistenceHealth();
     return { success: false, failure };
   }
 
@@ -833,11 +843,13 @@ export function persistAll(setupOverride?: CompanySetup): PersistResult {
     restoreSyncChangeTrackerState(syncTrackerBefore);
     lastPersistFailure = saveResult.failure ?? null;
     lastPersistSuccess = false;
+    publishPersistenceHealth();
     return { success: false, failure: saveResult.failure };
   }
 
   lastPersistFailure = null;
   lastPersistSuccess = true;
+  publishPersistenceHealth();
   return { success: true };
 }
 

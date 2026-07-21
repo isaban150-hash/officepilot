@@ -20,6 +20,7 @@ import type {
   Vorgang,
 } from '../../types/models';
 import { linkInboxToExistingVorgang } from '../../services/vorgangService';
+import { getLastPersistSuccess } from '../../services/persistenceService';
 import type { ApplyOfficeActionContext } from '../../services/officeActionService';
 import type { TranslationKey } from '../../i18n';
 
@@ -80,7 +81,11 @@ export function DocumentActionSuggestionsPanel({
     const result = linkInboxToExistingVorgang(item, suggestedVorgang.vorgangId);
     if (result) {
       onVorgangLinked(result.inbox, result.vorgang);
-      showToast(translate('vorgang.link.success'));
+      if (!getLastPersistSuccess()) {
+        showToast(translate('persist.failed.userAction'));
+      } else {
+        showToast(translate('vorgang.link.success'));
+      }
     }
   };
 

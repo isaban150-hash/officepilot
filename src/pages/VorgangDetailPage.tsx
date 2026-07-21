@@ -35,6 +35,7 @@ import {
 } from '../services/vorgangNoteService';
 import { askVorgangAi } from '../services/vorgang/vorgangAiService';
 import { recordVorgangContext } from '../services/brain/companySessionService';
+import { getLastPersistSuccess } from '../services/persistenceService';
 import type { VorgangNote } from '../types/communication';
 import type { OrderPosition, Vorgang } from '../types/models';
 import type { TranslationKey } from '../i18n';
@@ -84,7 +85,11 @@ export function VorgangDetailPage() {
     if (result.success) {
       setNoteDraft('');
       refreshNotes();
-      showToast(translate('vorgangNote.saved'));
+      if (!getLastPersistSuccess()) {
+        showToast(translate('persist.failed.userAction'));
+      } else {
+        showToast(translate('vorgangNote.saved'));
+      }
     }
   };
 
@@ -93,7 +98,11 @@ export function VorgangDetailPage() {
     const result = deleteVorgangNote(noteId);
     if (result.success) {
       refreshNotes();
-      showToast(translate('vorgangNote.deleted'));
+      if (!getLastPersistSuccess()) {
+        showToast(translate('persist.failed.userAction'));
+      } else {
+        showToast(translate('vorgangNote.deleted'));
+      }
     }
   };
 

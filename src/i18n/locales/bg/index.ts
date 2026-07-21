@@ -13,6 +13,7 @@ import { bgStorageRecommendation } from './storageRecommendation';
 import { bgUserStorageDecision } from './userStorageDecision';
 import { bgDocumentOriginal } from './documentOriginal';
 import { bgBackup } from './backup';
+import { bgPilot } from './pilot';
 
 export const bgModules = {
   ...bgAuth,
@@ -34,4 +35,5 @@ export const bgModules = {
   ...bgUserStorageDecision,
   ...bgDocumentOriginal,
   ...bgBackup,
+  ...bgPilot,
 } as const;

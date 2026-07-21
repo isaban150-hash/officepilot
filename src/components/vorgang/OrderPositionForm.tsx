@@ -12,6 +12,7 @@ import {
   removeOrderPosition,
   updateOrderPosition,
 } from '../../services/vorgangService';
+import { getLastPersistSuccess } from '../../services/persistenceService';
 import type {
   OrderPosition,
   OrderPositionCategory,
@@ -112,9 +113,13 @@ export function OrderPositionForm({
       return;
     }
 
-    showToast(translate('position.saved'));
     onSaved(result.vorgang);
     onClose();
+    if (!getLastPersistSuccess()) {
+      showToast(translate('persist.failed.userAction'));
+    } else {
+      showToast(translate('position.saved'));
+    }
   };
 
   const handleDelete = () => {
@@ -127,9 +132,13 @@ export function OrderPositionForm({
       return;
     }
 
-    showToast(translate('position.deleted'));
     onSaved(result.vorgang);
     onClose();
+    if (!getLastPersistSuccess()) {
+      showToast(translate('persist.failed.userAction'));
+    } else {
+      showToast(translate('position.deleted'));
+    }
   };
 
   const titleKey =

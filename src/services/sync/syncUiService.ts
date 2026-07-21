@@ -32,6 +32,16 @@ function countOutbox(outbox: SyncOutboxEntry[]): SyncOutboxCounts {
   };
 }
 
+export function isLocalOnlySyncMode(
+  snapshot: Pick<SyncUiSnapshot, 'syncPolicy' | 'isOffline'>,
+): boolean {
+  return (
+    snapshot.syncPolicy === 'disabled' ||
+    snapshot.syncPolicy === 'local_only' ||
+    snapshot.isOffline
+  );
+}
+
 export function getSyncUiSnapshot(): SyncUiSnapshot {
   const syncClient = getSyncClient();
   const outbox = getSyncOutboxSnapshot();

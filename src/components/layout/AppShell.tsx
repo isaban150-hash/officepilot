@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom';
 import { BetaModeBanner } from './BetaModeBanner';
 import { NetworkStatusBanner } from '../system/NetworkStatusBanner';
+import { PersistenceFailureBanner } from '../system/PersistenceFailureBanner';
 import { BottomNav } from './BottomNav';
 import { SidebarNav } from './SidebarNav';
 import { UserMenu } from './UserMenu';
@@ -28,6 +29,7 @@ export function AppShell() {
         </div>
       </div>
       <NetworkStatusBanner />
+      <PersistenceFailureBanner />
       <BetaModeBanner />
       <div className="app-shell__search" data-testid="app-shell-search">
         <GlobalSearchBar compact />

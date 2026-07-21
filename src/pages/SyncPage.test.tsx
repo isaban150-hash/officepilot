@@ -109,6 +109,30 @@ describe('SyncPage', () => {
     expect(mounted.container.querySelector('[data-testid="sync-offline-hint"]')?.textContent).toContain(
       'OfficePilot arbeitet lokal weiter.',
     );
+    expect(mounted.container.querySelector('[data-testid="sync-no-cloud-hint"]')?.textContent).toContain(
+      'nicht automatisch mit der Cloud',
+    );
+  });
+
+  it('behandelt disabled/local_only Sync als lokal ohne Cloud-Erfolgspfad', () => {
+    expect(
+      syncUiService.isLocalOnlySyncMode({
+        syncPolicy: 'disabled',
+        isOffline: true,
+      }),
+    ).toBe(true);
+    expect(
+      syncUiService.isLocalOnlySyncMode({
+        syncPolicy: 'local_only',
+        isOffline: false,
+      }),
+    ).toBe(true);
+    expect(
+      syncUiService.isLocalOnlySyncMode({
+        syncPolicy: 'cloud_ready',
+        isOffline: false,
+      }),
+    ).toBe(false);
   });
 
   it('zeigt Outbox-Anzahl und Retry-Button bei Fehlern', () => {

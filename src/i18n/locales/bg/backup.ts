@@ -18,9 +18,7 @@ export const bgBackup = {
   'backup.validate.fileCount': 'Брой файлове',
   'backup.validate.totalSize': 'Общ размер',
   'backup.validate.replaceHint':
-    'Възстановяването по-късно би заменило всички локални данни на OfficePilot в този браузър.',
-  'backup.validate.restoreUnavailable':
-    'Възстановяването все още не е налично в тази версия.',
+    'Възстановяването заменя всички локални данни на OfficePilot в този браузър.',
 
   'backup.validate.error.invalid': 'Файлът не е валидно резервно копие на OfficePilot.',
   'backup.validate.error.tooLarge': 'Файлът е твърде голям и не може да бъде проверен.',

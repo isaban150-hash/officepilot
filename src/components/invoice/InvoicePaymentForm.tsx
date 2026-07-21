@@ -9,6 +9,7 @@ import {
   recordPayment,
   willPaymentNeedUnsentConfirm,
 } from '../../services/invoicePaymentService';
+import { getLastPersistSuccess } from '../../services/persistenceService';
 import type { InvoicePaymentInput, VorgangInvoice } from '../../types/models';
 import type { TranslationKey } from '../../i18n';
 
@@ -96,6 +97,10 @@ export function InvoicePaymentForm({
     }
 
     onSaved(result.invoice);
+    if (!getLastPersistSuccess()) {
+      setErrorKey('persist.failed.userAction');
+      return;
+    }
     onClose();
   };
 

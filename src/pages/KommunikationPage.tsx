@@ -18,6 +18,7 @@ import {
   recordRemindLater,
 } from '../services/communicationHistoryService';
 import { processCommunicationRequest } from '../services/communicationOrchestrator';
+import { getLastPersistSuccess } from '../services/persistenceService';
 import {
   buildCommunicationResultFromReplyHandoff,
   readDocumentReplyDraftHandoffFromLocationState,
@@ -172,6 +173,10 @@ export function KommunikationPage() {
     showToast(translate('communication.reply.noReplyNeededToast'));
   };
   const handleDunningDocumented = () => {
+    if (!getLastPersistSuccess()) {
+      showToast(translate('persist.failed.userAction'));
+      return;
+    }
     showToast(translate('dunning.doc.savedToast'));
   };
   const dunningContext =

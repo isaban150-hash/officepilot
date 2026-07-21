@@ -4,7 +4,9 @@ import { Button } from '../components/ui/Button';
 import { PageHeader } from '../components/ui/Card';
 import { LanguageSwitcher } from '../components/settings/LanguageSwitcher';
 import { BackupExportPanel } from '../components/settings/BackupExportPanel';
+import { PilotHintsPanel } from '../components/settings/PilotHintsPanel';
 import { useApp } from '../context/AppContext';
+import { getLastPersistSuccess } from '../services/persistenceService';
 import { buildSkontoText } from '../services/invoiceTaxService';
 import { validateCompanyProfileForSettings } from '../services/setupValidationService';
 import { getInvoiceNumberSequenceSnapshot } from '../services/invoiceNumberService';
@@ -86,6 +88,10 @@ export function FirmendatenPage() {
       return;
     }
     setDraft({ ...result.profile });
+    if (!getLastPersistSuccess()) {
+      showToast(translate('persist.failed.userAction'));
+      return;
+    }
     showToast(translate('companyProfile.saved'));
   };
 
@@ -101,6 +107,8 @@ export function FirmendatenPage() {
       />
 
       <LanguageSwitcher />
+
+      <PilotHintsPanel />
 
       <BackupExportPanel />
 

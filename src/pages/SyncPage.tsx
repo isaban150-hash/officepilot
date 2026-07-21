@@ -7,6 +7,7 @@ import type { SyncOutboxEntry, SyncState } from '../types/sync';
 import type { TranslationKey } from '../i18n';
 import {
   getSyncUiSnapshot,
+  isLocalOnlySyncMode,
   retrySyncFromUi,
   runSyncFromUi,
   shortenSyncId,
@@ -75,9 +76,12 @@ export function SyncPage() {
   const handleSync = async () => {
     setBusy(true);
     try {
+      const before = getSyncUiSnapshot();
       const report = await runSyncFromUi();
       refresh();
-      if (report.errorCount > 0) {
+      if (isLocalOnlySyncMode(before)) {
+        showToast(translate('sync.feedback.localOnly'));
+      } else if (report.errorCount > 0) {
         showToast(translate('sync.feedback.error'));
       } else {
         showToast(translate('sync.feedback.success'));
@@ -125,6 +129,9 @@ export function SyncPage() {
       <Card className="sync-page__banner" highlight={snapshot.isOffline}>
         <p className="sync-page__mode" data-testid="sync-mode-label">
           {translate('sync.mode.localPrepared')}
+        </p>
+        <p className="sync-page__no-cloud" data-testid="sync-no-cloud-hint">
+          {translate('sync.noCloudDataHint')}
         </p>
         {snapshot.isOffline && (
           <p className="sync-page__offline" data-testid="sync-offline-hint">
