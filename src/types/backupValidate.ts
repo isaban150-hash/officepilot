@@ -55,11 +55,21 @@ export type BackupValidationResult =
   | {
       ok: true;
       preview: BackupValidationPreview;
-      /** Validated, defensively cloned manifest (for later restore sprint). */
+      /** Validated, defensively cloned manifest. */
       manifest: BackupManifest;
+      /**
+       * Sealed restore payload produced only by backupValidateService.
+       * Restore must accept this object — never re-parse with weaker rules.
+       */
+      zipBytes: Uint8Array;
+      /** Normalized, defensively cloned app state from the validated ZIP. */
+      appState: import('./models').AppPersistedState;
     }
   | {
       ok: false;
       reason: BackupValidateFailureReason;
       errorKey: BackupValidateErrorKey;
     };
+
+export type ValidatedBackupBundle = Extract<BackupValidationResult, { ok: true }>;
+

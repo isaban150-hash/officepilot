@@ -38,4 +38,29 @@ export const bgBackup = {
     'Препратките към файлове в резервното копие са непълни или противоречиви.',
   'backup.validate.error.limits':
     'Резервното копие надвишава допустимите граници за размер или брой.',
+
+  'backup.restore.confirm':
+    'Разбирам, че всички локални данни на OfficePilot в този браузър ще бъдат заменени.',
+  'backup.restore.action': 'Възстановяване на резервно копие',
+  'backup.restore.success': 'Възстановяването завърши. Страницата ще се презареди.',
+  'backup.restore.phase.safety': 'Създава се резервно копие за безопасност …',
+  'backup.restore.phase.stage': 'Файловете се подготвят …',
+  'backup.restore.phase.commit': 'Данните се възстановяват …',
+  'backup.restore.phase.verify': 'Възстановяването се проверява …',
+  'backup.restore.phase.rollback': 'Предишното състояние се възстановява …',
+
+  'backup.restore.error.notValidated':
+    'Моля, първо изберете и проверете валидно резервно копие.',
+  'backup.restore.error.notConfirmed':
+    'Моля, потвърдете, че локалните данни могат да бъдат заменени.',
+  'backup.restore.error.safety':
+    'Възстановяването е прекратено, защото не можа да се създаде резервно копие за безопасност.',
+  'backup.restore.error.stage':
+    'Възстановяването е прекратено. Досегашните ви данни не са променени.',
+  'backup.restore.error.commit': 'Възстановяването не успя.',
+  'backup.restore.error.verify':
+    'Възстановяването не можа да бъде потвърдено. Предишното състояние е върнато.',
+  'backup.restore.error.rollback':
+    'Възстановяването не успя. Моля, заредете последното си резервно копие ръчно.',
+  'backup.restore.error.failed': 'Възстановяването не успя.',
 } as const;

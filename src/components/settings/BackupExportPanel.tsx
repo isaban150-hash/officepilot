@@ -4,11 +4,17 @@ import { Card, CardTitle } from '../ui/Card';
 import { useApp } from '../../context/AppContext';
 import { exportLocalBackupBundle } from '../../services/backupExportService';
 import { validateLocalBackupFile } from '../../services/backupValidateService';
-import type { BackupValidationPreview } from '../../types/backupValidate';
+import {
+  backupRestorePhaseMessageKey,
+  restoreLocalBackupBundle,
+} from '../../services/backupRestoreService';
+import type { BackupValidationPreview, ValidatedBackupBundle } from '../../types/backupValidate';
+import type { BackupRestorePhase } from '../../types/backupRestore';
 import type { TranslationKey } from '../../i18n';
 
 type ExportUiStatus = 'idle' | 'loading' | 'success' | 'error';
 type ValidateUiStatus = 'idle' | 'checking' | 'preview' | 'error';
+type RestoreUiStatus = 'idle' | 'running' | 'success' | 'error';
 
 function formatByteSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -36,9 +42,15 @@ export function BackupExportPanel() {
   const [validateStatus, setValidateStatus] = useState<ValidateUiStatus>('idle');
   const [validateErrorKey, setValidateErrorKey] = useState<TranslationKey | null>(null);
   const [preview, setPreview] = useState<BackupValidationPreview | null>(null);
+  const [validatedBundle, setValidatedBundle] = useState<ValidatedBackupBundle | null>(null);
+
+  const [confirmReplace, setConfirmReplace] = useState(false);
+  const [restoreStatus, setRestoreStatus] = useState<RestoreUiStatus>('idle');
+  const [restoreErrorKey, setRestoreErrorKey] = useState<TranslationKey | null>(null);
+  const [restorePhaseKey, setRestorePhaseKey] = useState<TranslationKey | null>(null);
 
   const handleDownload = async () => {
-    if (exportStatus === 'loading') return;
+    if (exportStatus === 'loading' || restoreStatus === 'running') return;
     setExportStatus('loading');
     setExportErrorKey(null);
 
@@ -58,10 +70,15 @@ export function BackupExportPanel() {
   };
 
   const handleFileChosen = async (file: File | undefined) => {
-    if (!file) return;
+    if (!file || restoreStatus === 'running') return;
     setValidateStatus('checking');
     setValidateErrorKey(null);
     setPreview(null);
+    setValidatedBundle(null);
+    setConfirmReplace(false);
+    setRestoreStatus('idle');
+    setRestoreErrorKey(null);
+    setRestorePhaseKey(null);
 
     try {
       const result = await validateLocalBackupFile(file);
@@ -71,6 +88,7 @@ export function BackupExportPanel() {
         return;
       }
       setPreview(result.preview);
+      setValidatedBundle(result);
       setValidateStatus('preview');
     } catch {
       setValidateErrorKey('backup.validate.error.invalid');
@@ -82,6 +100,43 @@ export function BackupExportPanel() {
     }
   };
 
+  const handleRestore = async () => {
+    if (!validatedBundle || !confirmReplace || restoreStatus === 'running') return;
+    setRestoreStatus('running');
+    setRestoreErrorKey(null);
+    setRestorePhaseKey('backup.restore.phase.safety');
+
+    try {
+      const result = await restoreLocalBackupBundle(
+        { validated: validatedBundle, confirmed: true, reload: true },
+        {
+          onPhase: (phase: BackupRestorePhase) => {
+            const key = backupRestorePhaseMessageKey(phase);
+            if (key) setRestorePhaseKey(key);
+          },
+        },
+      );
+      if (!result.ok) {
+        setRestoreErrorKey(result.errorKey as TranslationKey);
+        setRestoreStatus('error');
+        setRestorePhaseKey(null);
+        return;
+      }
+      setRestoreStatus('success');
+      setRestorePhaseKey(null);
+    } catch {
+      setRestoreErrorKey('backup.restore.error.failed');
+      setRestoreStatus('error');
+      setRestorePhaseKey(null);
+    }
+  };
+
+  const restoreEnabled =
+    validateStatus === 'preview' &&
+    Boolean(validatedBundle) &&
+    confirmReplace &&
+    restoreStatus !== 'running';
+
   return (
     <Card className="backup-export-panel" data-testid="backup-export-panel">
       <CardTitle>{translate('backup.title')}</CardTitle>
@@ -89,7 +144,7 @@ export function BackupExportPanel() {
       <Button
         type="button"
         fullWidth
-        disabled={exportStatus === 'loading'}
+        disabled={exportStatus === 'loading' || restoreStatus === 'running'}
         onClick={() => {
           void handleDownload();
         }}
@@ -123,7 +178,7 @@ export function BackupExportPanel() {
         <Button
           type="button"
           fullWidth
-          disabled={validateStatus === 'checking'}
+          disabled={validateStatus === 'checking' || restoreStatus === 'running'}
           onClick={() => fileInputRef.current?.click()}
           data-testid="backup-validate-choose"
         >
@@ -166,9 +221,49 @@ export function BackupExportPanel() {
             <p className="backup-export-panel__replace-hint hint-text" data-testid="backup-validate-replace-hint">
               {translate('backup.validate.replaceHint')}
             </p>
-            <p className="hint-text" data-testid="backup-validate-restore-unavailable">
-              {translate('backup.validate.restoreUnavailable')}
-            </p>
+
+            <label className="backup-export-panel__confirm checkbox-row" data-testid="backup-restore-confirm-label">
+              <input
+                type="checkbox"
+                checked={confirmReplace}
+                disabled={restoreStatus === 'running'}
+                onChange={(e) => setConfirmReplace(e.target.checked)}
+                data-testid="backup-restore-confirm"
+              />
+              {translate('backup.restore.confirm')}
+            </label>
+
+            <Button
+              type="button"
+              fullWidth
+              disabled={!restoreEnabled}
+              onClick={() => {
+                void handleRestore();
+              }}
+              data-testid="backup-restore-action"
+            >
+              {translate('backup.restore.action')}
+            </Button>
+
+            {restoreStatus === 'running' && restorePhaseKey && (
+              <p className="hint-text" data-testid="backup-restore-phase" role="status">
+                {translate(restorePhaseKey)}
+              </p>
+            )}
+            {restoreStatus === 'success' && (
+              <p className="backup-export-panel__success" data-testid="backup-restore-success" role="status">
+                {translate('backup.restore.success')}
+              </p>
+            )}
+            {restoreStatus === 'error' && restoreErrorKey && (
+              <p
+                className="backup-export-panel__error form-error"
+                data-testid="backup-restore-error"
+                role="alert"
+              >
+                {translate(restoreErrorKey)}
+              </p>
+            )}
           </div>
         )}
 

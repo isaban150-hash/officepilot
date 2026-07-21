@@ -37,4 +37,30 @@ export const deBackup = {
     'Die Dateiverweise in der Datensicherung sind unvollständig oder widersprüchlich.',
   'backup.validate.error.limits':
     'Die Datensicherung überschreitet zulässige Größen- oder Anzahlgrenzen.',
+
+  'backup.restore.confirm':
+    'Ich verstehe, dass alle lokalen OfficePilot-Daten in diesem Browser ersetzt werden.',
+  'backup.restore.action': 'Datensicherung wiederherstellen',
+  'backup.restore.success': 'Wiederherstellung abgeschlossen. Die Seite wird neu geladen.',
+  'backup.restore.phase.safety': 'Sicherheitsbackup wird erstellt …',
+  'backup.restore.phase.stage': 'Dateien werden vorbereitet …',
+  'backup.restore.phase.commit': 'Daten werden wiederhergestellt …',
+  'backup.restore.phase.verify': 'Wiederherstellung wird geprüft …',
+  'backup.restore.phase.rollback': 'Vorheriger Stand wird wiederhergestellt …',
+
+  'backup.restore.error.notValidated':
+    'Bitte zuerst eine gültige Datensicherung auswählen und prüfen.',
+  'backup.restore.error.notConfirmed':
+    'Bitte bestätigen Sie, dass die lokalen Daten ersetzt werden dürfen.',
+  'backup.restore.error.safety':
+    'Die Wiederherstellung wurde abgebrochen, weil das Sicherheitsbackup nicht erstellt werden konnte.',
+  'backup.restore.error.stage':
+    'Die Wiederherstellung wurde abgebrochen. Ihre bisherigen Daten wurden nicht verändert.',
+  'backup.restore.error.commit':
+    'Die Wiederherstellung ist fehlgeschlagen.',
+  'backup.restore.error.verify':
+    'Die Wiederherstellung konnte nicht bestätigt werden. Der vorherige Stand wurde wiederhergestellt.',
+  'backup.restore.error.rollback':
+    'Die Wiederherstellung ist fehlgeschlagen. Bitte laden Sie Ihre letzte Datensicherung manuell.',
+  'backup.restore.error.failed': 'Die Wiederherstellung ist fehlgeschlagen.',
 } as const;

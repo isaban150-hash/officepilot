@@ -3575,6 +3575,19 @@ body {
   font-weight: 500;
 }
 
+.backup-export-panel__confirm {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin: 0.85rem 0;
+  font-size: 0.88rem;
+  line-height: 1.35;
+}
+
+.backup-export-panel__confirm input {
+  margin-top: 0.15rem;
+}
+
 .page-header__actions {
   margin-bottom: 1rem;
 }

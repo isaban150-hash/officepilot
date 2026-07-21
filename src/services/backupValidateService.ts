@@ -542,6 +542,8 @@ export async function validateLocalBackupZip(
       ok: true,
       preview,
       manifest: cloneJson(manifest),
+      zipBytes: new Uint8Array(zipBytes),
+      appState: cloneJson(normalized),
     };
   } catch {
     return fail('invalid_zip', 'backup.validate.error.invalid');

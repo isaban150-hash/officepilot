@@ -35,4 +35,27 @@ export const trBackup = {
     'Yedekteki dosya başvuruları eksik veya çelişkili.',
   'backup.validate.error.limits':
     'Yedek izin verilen boyut veya sayı sınırlarını aşıyor.',
+
+  'backup.restore.confirm':
+    'Bu tarayıcıdaki tüm yerel OfficePilot verilerinin değiştirileceğini anlıyorum.',
+  'backup.restore.action': 'Yedeği geri yükle',
+  'backup.restore.success': 'Geri yükleme tamamlandı. Sayfa yenilenecek.',
+  'backup.restore.phase.safety': 'Güvenlik yedeği oluşturuluyor …',
+  'backup.restore.phase.stage': 'Dosyalar hazırlanıyor …',
+  'backup.restore.phase.commit': 'Veriler geri yükleniyor …',
+  'backup.restore.phase.verify': 'Geri yükleme kontrol ediliyor …',
+  'backup.restore.phase.rollback': 'Önceki durum geri yükleniyor …',
+
+  'backup.restore.error.notValidated': 'Lütfen önce geçerli bir yedek seçip kontrol edin.',
+  'backup.restore.error.notConfirmed': 'Lütfen yerel verilerin değiştirilmesini onaylayın.',
+  'backup.restore.error.safety':
+    'Güvenlik yedeği oluşturulamadığı için geri yükleme iptal edildi.',
+  'backup.restore.error.stage':
+    'Geri yükleme iptal edildi. Mevcut verileriniz değişmedi.',
+  'backup.restore.error.commit': 'Geri yükleme başarısız oldu.',
+  'backup.restore.error.verify':
+    'Geri yükleme doğrulanamadı. Önceki durum geri yüklendi.',
+  'backup.restore.error.rollback':
+    'Geri yükleme başarısız oldu. Lütfen son yedeğinizi elle yükleyin.',
+  'backup.restore.error.failed': 'Geri yükleme başarısız oldu.',
 } as const;
