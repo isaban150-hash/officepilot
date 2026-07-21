@@ -106,6 +106,32 @@
   margin-bottom: 0.35rem;
 }
 
+.pilot-hints-panel__backup-link {
+  display: inline-block;
+  margin-top: 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--op-accent, #1d4ed8);
+  text-decoration: underline;
+}
+
+.backup-section {
+  scroll-margin-top: 1.25rem;
+  outline: none;
+}
+
+.backup-section:focus-visible {
+  box-shadow: 0 0 0 2px var(--op-accent, #1d4ed8);
+  border-radius: 0.5rem;
+}
+
+@media (max-width: 767px) {
+  .backup-section {
+    scroll-margin-top: 0.75rem;
+    scroll-margin-bottom: calc(var(--nav-height, 4rem) + env(safe-area-inset-bottom, 0px));
+  }
+}
+
 .production-config-banner {
   background: #fee2e2;
   color: #991b1b;

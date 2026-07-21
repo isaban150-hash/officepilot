@@ -74,7 +74,7 @@ describe('persistence health + banner', () => {
     expect(
       (container.querySelector('[data-testid="persistence-failure-backup-link"]') as HTMLAnchorElement)
         .getAttribute('href'),
-    ).toBe('/firmendaten');
+    ).toBe('/firmendaten#datensicherung');
     expect(listeners).toContain('fail');
 
     await act(async () => {

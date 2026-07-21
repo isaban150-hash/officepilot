@@ -8,6 +8,7 @@ import {
   backupRestorePhaseMessageKey,
   restoreLocalBackupBundle,
 } from '../../services/backupRestoreService';
+import { BACKUP_SECTION_ID } from '../../services/backupSectionNavigation';
 import type { BackupValidationPreview, ValidatedBackupBundle } from '../../types/backupValidate';
 import type { BackupRestorePhase } from '../../types/backupRestore';
 import type { TranslationKey } from '../../i18n';
@@ -138,20 +139,29 @@ export function BackupExportPanel() {
     restoreStatus !== 'running';
 
   return (
-    <Card className="backup-export-panel" data-testid="backup-export-panel">
-      <CardTitle>{translate('backup.title')}</CardTitle>
-      <p className="backup-export-panel__hint hint-text">{translate('backup.hint')}</p>
-      <Button
-        type="button"
-        fullWidth
-        disabled={exportStatus === 'loading' || restoreStatus === 'running'}
-        onClick={() => {
-          void handleDownload();
-        }}
-        data-testid="backup-export-download"
-      >
-        {exportStatus === 'loading' ? translate('backup.loading') : translate('backup.download')}
-      </Button>
+    <section
+      id={BACKUP_SECTION_ID}
+      tabIndex={-1}
+      className="backup-section"
+      data-testid="backup-section"
+      aria-labelledby="backup-section-title"
+    >
+      <Card className="backup-export-panel" data-testid="backup-export-panel">
+        <CardTitle>
+          <span id="backup-section-title">{translate('backup.title')}</span>
+        </CardTitle>
+        <p className="backup-export-panel__hint hint-text">{translate('backup.hint')}</p>
+        <Button
+          type="button"
+          fullWidth
+          disabled={exportStatus === 'loading' || restoreStatus === 'running'}
+          onClick={() => {
+            void handleDownload();
+          }}
+          data-testid="backup-export-download"
+        >
+          {exportStatus === 'loading' ? translate('backup.loading') : translate('backup.download')}
+        </Button>
       {exportStatus === 'success' && (
         <p className="backup-export-panel__success" data-testid="backup-export-success" role="status">
           {translate('backup.success')}
@@ -278,5 +288,6 @@ export function BackupExportPanel() {
         )}
       </div>
     </Card>
+    </section>
   );
 }

@@ -1,7 +1,7 @@
 export const trBackup = {
   'backup.title': 'Veri yedekleme',
   'backup.hint':
-    'Verileriniz şu anda yalnızca bu tarayıcıda duruyor. Düzenli olarak bir yedek indirin.',
+    'Verileriniz şu anda yalnızca bu tarayıcıda duruyor. En iyisi her iş gününün sonunda bir yedek indirmek.',
   'backup.download': 'Yedek indirme',
   'backup.loading': 'Yedek oluşturuluyor…',
   'backup.success': 'Yedek indirildi.',

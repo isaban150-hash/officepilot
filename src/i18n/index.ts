@@ -315,7 +315,7 @@ const deLegacy = {
   'mehr.knowledge': 'Wissen',
   'mehr.knowledgeDesc': 'Betriebswissen und Vorlagen',
   'mehr.company': 'Firmendaten',
-  'mehr.companyDesc': 'Stammdaten und Rechnungsangaben',
+  'mehr.companyDesc': 'Firmendaten, Rechnungsangaben und Datensicherung',
   'mehr.sync': 'Synchronisation',
   'mehr.syncDesc': 'Status, Outbox und lokale Synchronisation',
   'mehr.adminUsers': 'Benutzerverwaltung',

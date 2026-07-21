@@ -1,5 +1,7 @@
+import { Link } from 'react-router-dom';
 import { Card, CardTitle } from '../ui/Card';
 import { useApp } from '../../context/AppContext';
+import { FIRMENDATEN_BACKUP_HREF } from '../../services/backupSectionNavigation';
 
 export function PilotHintsPanel() {
   const { translate } = useApp();
@@ -16,6 +18,13 @@ export function PilotHintsPanel() {
         <li>{translate('pilot.hints.aiSuggestions')}</li>
         <li>{translate('pilot.hints.legalDraft')}</li>
       </ul>
+      <Link
+        to={FIRMENDATEN_BACKUP_HREF}
+        className="pilot-hints-panel__backup-link"
+        data-testid="pilot-hints-backup-link"
+      >
+        {translate('persist.banner.openBackup')}
+      </Link>
     </Card>
   );
 }

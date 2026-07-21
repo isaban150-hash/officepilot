@@ -5,6 +5,7 @@ import { LanguageSwitcher } from '../components/settings/LanguageSwitcher';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import type { TranslationKey } from '../i18n';
+import { FIRMENDATEN_BACKUP_HREF } from '../services/backupSectionNavigation';
 
 const MEHR_LINKS: { key: TranslationKey; route: string; descriptionKey: TranslationKey }[] = [
   { key: 'mehr.tasks', route: '/aufgaben', descriptionKey: 'mehr.tasksDesc' },
@@ -15,7 +16,7 @@ const MEHR_LINKS: { key: TranslationKey; route: string; descriptionKey: Translat
   { key: 'mehr.documents', route: '/dokumente', descriptionKey: 'mehr.documentsDesc' },
   { key: 'mehr.paperArchive', route: '/papierarchiv', descriptionKey: 'mehr.paperArchiveDesc' },
   { key: 'mehr.knowledge', route: '/wissen', descriptionKey: 'mehr.knowledgeDesc' },
-  { key: 'mehr.company', route: '/firmendaten', descriptionKey: 'mehr.companyDesc' },
+  { key: 'mehr.company', route: FIRMENDATEN_BACKUP_HREF, descriptionKey: 'mehr.companyDesc' },
   { key: 'mehr.sync', route: '/synchronisation', descriptionKey: 'mehr.syncDesc' },
 ];
 

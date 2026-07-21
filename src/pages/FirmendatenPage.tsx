@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { PageHeader } from '../components/ui/Card';
 import { LanguageSwitcher } from '../components/settings/LanguageSwitcher';
@@ -7,6 +7,7 @@ import { BackupExportPanel } from '../components/settings/BackupExportPanel';
 import { PilotHintsPanel } from '../components/settings/PilotHintsPanel';
 import { useApp } from '../context/AppContext';
 import { getLastPersistSuccess } from '../services/persistenceService';
+import { BACKUP_SECTION_ID } from '../services/backupSectionNavigation';
 import { buildSkontoText } from '../services/invoiceTaxService';
 import { validateCompanyProfileForSettings } from '../services/setupValidationService';
 import { getInvoiceNumberSequenceSnapshot } from '../services/invoiceNumberService';
@@ -36,10 +37,28 @@ const TEXT_FIELDS: { key: ProfileField; labelKey: TranslationKey; type?: string 
   { key: 'taxFreeNotice', labelKey: 'companyProfile.taxFreeNotice' },
 ];
 
+function focusBackupSection(): void {
+  const el = document.getElementById(BACKUP_SECTION_ID);
+  if (!el) return;
+  el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (typeof el.focus === 'function') {
+    el.focus({ preventScroll: true });
+  }
+}
+
 export function FirmendatenPage() {
   const { companyProfile, updateCompanyProfile, translate, showToast } = useApp();
+  const location = useLocation();
   const [draft, setDraft] = useState<CompanyProfile>(() => ({ ...companyProfile }));
   const [errorKey, setErrorKey] = useState<TranslationKey | null>(null);
+
+  useEffect(() => {
+    if (location.hash !== `#${BACKUP_SECTION_ID}`) return;
+    const frame = window.requestAnimationFrame(() => {
+      focusBackupSection();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [location.hash, location.key]);
 
   const handleChange = (key: ProfileField, value: string | number | boolean) => {
     setDraft((prev) => {

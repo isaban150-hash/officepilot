@@ -1,7 +1,7 @@
 export const deBackup = {
   'backup.title': 'Datensicherung',
   'backup.hint':
-    'Deine Daten liegen derzeit nur in diesem Browser. Lade regelmäßig eine Datensicherung herunter.',
+    'Deine Daten liegen derzeit nur in diesem Browser. Am besten täglich am Ende des Arbeitstags eine Datensicherung herunterladen.',
   'backup.download': 'Datensicherung herunterladen',
   'backup.loading': 'Datensicherung wird erstellt…',
   'backup.success': 'Datensicherung wurde heruntergeladen.',
