@@ -9,6 +9,7 @@ import {
   summarizeInvoiceOverview,
   type InvoiceOverviewItem,
 } from './invoiceOverviewService';
+import { buildInvoiceDetailPath } from './invoiceNavigation';
 import { filterActiveItems, getInboxItems } from './inboxService';
 import {
   scanExpiringDocuments,
@@ -136,7 +137,7 @@ function dedupeActions(actions: AssistantAction[]): AssistantAction[] {
 }
 
 function invoiceRoute(entry: InvoiceOverviewItem): string {
-  return `/vorgaenge/${entry.vorgangId}/rechnungen/${entry.invoice.id}`;
+  return buildInvoiceDetailPath(entry.vorgangId, entry.invoice.id);
 }
 
 function invoiceAction(entry: InvoiceOverviewItem): AssistantAction {
@@ -149,7 +150,7 @@ function invoiceAction(entry: InvoiceOverviewItem): AssistantAction {
 
 function taskRoute(task: Task): string {
   if (task.linkedVorgangId && task.linkedInvoiceId) {
-    return `/vorgaenge/${task.linkedVorgangId}/rechnungen/${task.linkedInvoiceId}`;
+    return buildInvoiceDetailPath(task.linkedVorgangId, task.linkedInvoiceId);
   }
   if (task.linkedDocumentId) return `/dokumente/${task.linkedDocumentId}`;
   if (task.linkedInboxId) return `/ablage/${task.linkedInboxId}`;

@@ -17,6 +17,7 @@ import {
   searchInvoiceOverview,
   type InvoiceOverviewItem,
 } from './invoiceOverviewService';
+import { buildInvoiceDetailPath } from './invoiceNavigation';
 import { getMailImports } from './mailImportService';
 import {
   getAllDocumentMemories,
@@ -163,7 +164,7 @@ function resultKey(result: SearchResult): string {
 }
 
 function invoiceRoute(entry: InvoiceOverviewItem): string {
-  return `/vorgaenge/${entry.vorgangId}/rechnungen/${entry.invoice.id}`;
+  return buildInvoiceDetailPath(entry.vorgangId, entry.invoice.id);
 }
 
 function taskRoute(task: {
@@ -173,7 +174,7 @@ function taskRoute(task: {
   linkedInboxId?: string;
 }): string {
   if (task.linkedVorgangId && task.linkedInvoiceId) {
-    return `/vorgaenge/${task.linkedVorgangId}/rechnungen/${task.linkedInvoiceId}`;
+    return buildInvoiceDetailPath(task.linkedVorgangId, task.linkedInvoiceId);
   }
   if (task.linkedDocumentId) return `/dokumente/${task.linkedDocumentId}`;
   if (task.linkedInboxId) return `/ablage/${task.linkedInboxId}`;

@@ -12,6 +12,7 @@ import {
   getDunningDocumentationsByInvoiceNumber,
   resolveDocumentedDunningLevelFromRecords,
 } from '../dunningDocumentationService';
+import { buildInvoiceCreatePath, buildInvoiceDetailPath } from '../invoiceNavigation';
 import { getContractSkontoOfferForVorgang } from '../contractIntelligenceService';
 import { filterActiveItems, getInboxItemById, getInboxItems } from '../inboxService';
 import { isFinalizedInvoice } from '../invoiceArchiveService';
@@ -524,7 +525,6 @@ function buildRecommendationsForInvoice(
 
   const summary = calculatePaymentSummary(invoice, today);
   const dueRelation = getDueRelation(invoice, today);
-  const hasPayments = getInvoicePayments(invoice).length > 0;
   const dunningAction = resolveDunningAction(invoice, vorgang, today);
   const skonto = getOutgoingSkontoWindow(invoice, vorgang, today);
 
@@ -534,6 +534,8 @@ function buildRecommendationsForInvoice(
       priority: PRIORITY_OPTIONAL,
       messageKey: 'financeIntelligence.info.dueToday',
       params: { number: invoice.number },
+      route: buildInvoiceDetailPath(vorgang.id, invoice.id),
+      labelKey: 'financeIntelligence.nextStep.openInvoice',
     });
   }
 
@@ -543,7 +545,7 @@ function buildRecommendationsForInvoice(
       priority: PRIORITY_PAYMENT_RISK,
       messageKey: 'financeIntelligence.recommend.mahnung',
       params: { number: invoice.number, days: getOverdueDays(invoice, today) },
-      route: `/vorgaenge/${vorgang.id}/rechnung/${invoice.id}`,
+      route: buildInvoiceDetailPath(vorgang.id, invoice.id),
       labelKey: 'financeIntelligence.nextStep.paymentReminder',
       reasonKey: 'financeIntelligence.uncertainty.reviewRecommended',
     });
@@ -553,18 +555,21 @@ function buildRecommendationsForInvoice(
       priority: PRIORITY_DEADLINE,
       messageKey: 'financeIntelligence.recommend.paymentReminder',
       params: { number: invoice.number, days: getOverdueDays(invoice, today) },
-      route: `/vorgaenge/${vorgang.id}/rechnung/${invoice.id}`,
+      route: buildInvoiceDetailPath(vorgang.id, invoice.id),
       labelKey: 'financeIntelligence.nextStep.paymentReminder',
     });
   }
 
-  if (summary.openAmount > 0 && dueRelation === 'after' && !hasPayments) {
+  if (
+    summary.openAmount > 0 &&
+    (dueRelation === 'after' || summary.status === 'teilbezahlt')
+  ) {
     recs.push({
       id: 'record_payment',
       priority: PRIORITY_NEXT,
       messageKey: 'financeIntelligence.recommend.recordPayment',
       params: { number: invoice.number },
-      route: `/vorgaenge/${vorgang.id}/rechnung/${invoice.id}`,
+      route: buildInvoiceDetailPath(vorgang.id, invoice.id),
       labelKey: 'financeIntelligence.nextStep.recordPayment',
     });
   }
@@ -579,7 +584,7 @@ function buildRecommendationsForInvoice(
         percent: skonto.percent,
         deadline: skonto.deadline,
       },
-      route: `/vorgaenge/${vorgang.id}/rechnung/${invoice.id}`,
+      route: buildInvoiceDetailPath(vorgang.id, invoice.id),
       labelKey: 'financeIntelligence.nextStep.openInvoice',
     });
   }
@@ -590,7 +595,7 @@ function buildRecommendationsForInvoice(
       priority: PRIORITY_OPTIONAL,
       messageKey: 'financeIntelligence.recommend.reviewOverpaid',
       params: { number: invoice.number, amount: formatPaymentCurrency(summary.overpaidAmount) },
-      route: `/vorgaenge/${vorgang.id}/rechnung/${invoice.id}`,
+      route: buildInvoiceDetailPath(vorgang.id, invoice.id),
       labelKey: 'financeIntelligence.nextStep.openInvoice',
     });
   }
@@ -730,7 +735,7 @@ function buildRecommendationsForVorgang(vorgang: Vorgang, today: Date | string):
       priority: PRIORITY_NEXT,
       messageKey: 'financeIntelligence.recommend.createInvoice',
       params: { vorgang: vorgang.title },
-      route: `/vorgaenge/${vorgang.id}/rechnung`,
+      route: buildInvoiceCreatePath(vorgang.id),
       labelKey: 'financeIntelligence.nextStep.openInvoice',
     });
   }
@@ -750,7 +755,7 @@ function buildRecommendationsForVorgang(vorgang: Vorgang, today: Date | string):
           ? 'financeIntelligence.recommend.mahnung'
           : 'financeIntelligence.recommend.paymentReminder',
       params: { number: topOverdue.number, days: getOverdueDays(topOverdue, today) },
-      route: `/vorgaenge/${vorgang.id}/rechnung/${topOverdue.id}`,
+      route: buildInvoiceDetailPath(vorgang.id, topOverdue.id),
       labelKey: 'financeIntelligence.nextStep.paymentReminder',
     });
   }
@@ -848,7 +853,7 @@ export function analyzeGlobalFinance(today: Date | string = new Date()): Finance
             ? 'financeIntelligence.recommend.mahnung'
             : 'financeIntelligence.recommend.paymentReminder',
         params: { number: topOverdue.invoice.number, days: getOverdueDays(topOverdue.invoice, today) },
-        route: `/vorgaenge/${topOverdue.vorgangId}/rechnung/${topOverdue.invoice.id}`,
+        route: buildInvoiceDetailPath(topOverdue.vorgangId, topOverdue.invoice.id),
         labelKey: 'financeIntelligence.nextStep.paymentReminder',
       });
     }

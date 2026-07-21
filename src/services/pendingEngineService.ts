@@ -2,11 +2,8 @@ import { analyzeContractFromInbox } from './contractAnalysisService';
 import { isDocumentAnalysisAllowed } from './companyRelevanceService';
 import { getCompanyProfile } from './companyProfileService';
 import { getAllDocuments } from './documentService';
-import {
-  getAllInvoiceOverview,
-  getOverdueInvoices,
-  type InvoiceOverviewItem,
-} from './invoiceOverviewService';
+import { getAllInvoiceOverview, getOverdueInvoices, type InvoiceOverviewItem } from './invoiceOverviewService';
+import { buildInvoiceDetailPath } from './invoiceNavigation';
 import { isExpectingPayment } from './invoicePaymentService';
 import { filterActiveItems, getInboxItems } from './inboxService';
 import { getTodayIso } from './taskNormalize';
@@ -84,7 +81,7 @@ function isInboxUnfiled(item: InboxItem): boolean {
 }
 
 function invoiceRoute(entry: InvoiceOverviewItem): string {
-  return `/vorgaenge/${entry.vorgangId}/rechnungen/${entry.invoice.id}`;
+  return buildInvoiceDetailPath(entry.vorgangId, entry.invoice.id);
 }
 
 function pendingPriority(kind: PendingItemKind): PendingItem['priority'] {

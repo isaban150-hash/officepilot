@@ -168,6 +168,56 @@ describe('AI-FINANCE-01 intelligence service', () => {
     const partial = analysis?.risks.find((r) => r.id === 'partial_payment');
     expect(partial).toBeTruthy();
     expect(partial?.params?.amount).toMatch(/286,75/);
+    const paymentRec = analysis?.recommendations.find((r) => r.id === 'record_payment');
+    expect(paymentRec?.route).toBe('/vorgaenge/v-fin-partial/rechnungen/inv-partial');
+  });
+
+  it('verlinkt fällige Rechnung auf die Rechnungsdetailseite', () => {
+    hydrateVorgangStore([
+      createTestVorgang({
+        id: 'v-fin-due',
+        title: 'Fällig Test',
+        invoices: [
+          createFinalizedInvoice({
+            id: 'inv-due',
+            number: 'RE-DUE-1',
+            paymentDueDate: '2026-07-01',
+          }),
+        ],
+      }),
+    ]);
+
+    const analysis = analyzeInvoiceFinance('v-fin-due', 'inv-due', '2026-07-01');
+    const due = analysis?.recommendations.find((r) => r.id === 'due_today');
+    expect(due).toBeTruthy();
+    expect(due?.route).toBe('/vorgaenge/v-fin-due/rechnungen/inv-due');
+  });
+
+  it('verlinkt überfällige Rechnung auf die Rechnungsdetailseite', () => {
+    hydrateVorgangStore([
+      createTestVorgang({
+        id: 'v-fin-overdue-link',
+        title: 'Überfällig Link',
+        invoices: [
+          createFinalizedInvoice({
+            id: 'inv-overdue-link',
+            number: 'RE-OD-1',
+            paymentDueDate: '2026-06-01',
+          }),
+        ],
+      }),
+    ]);
+
+    const analysis = analyzeInvoiceFinance(
+      'v-fin-overdue-link',
+      'inv-overdue-link',
+      '2026-07-01',
+    );
+    expect(analysis?.risks.some((r) => r.id === 'invoice_overdue')).toBe(true);
+    const paymentRec = analysis?.recommendations.find((r) => r.id === 'record_payment');
+    expect(paymentRec?.route).toBe(
+      '/vorgaenge/v-fin-overdue-link/rechnungen/inv-overdue-link',
+    );
   });
 
   it('empfiehlt Zahlungserinnerung erst nach Fälligkeit und ohne dokumentierte Erinnerung', () => {
@@ -186,7 +236,9 @@ describe('AI-FINANCE-01 intelligence service', () => {
     ]);
 
     const analysis = analyzeInvoiceFinance('v-fin-remind', 'inv-remind', '2026-07-01');
-    expect(analysis?.recommendations.some((r) => r.id === 'payment_reminder')).toBe(true);
+    const reminder = analysis?.recommendations.find((r) => r.id === 'payment_reminder');
+    expect(reminder).toBeTruthy();
+    expect(reminder?.route).toBe('/vorgaenge/v-fin-remind/rechnungen/inv-remind');
     expect(analysis?.recommendations.some((r) => r.id === 'mahnung')).toBe(false);
   });
 
@@ -212,7 +264,9 @@ describe('AI-FINANCE-01 intelligence service', () => {
 
     expect(getDocumentedDunningLevel('v-fin-mahn', 'RE-2026-500')).toBe(1);
     const analysis = analyzeInvoiceFinance('v-fin-mahn', 'inv-mahn', '2026-07-01');
-    expect(analysis?.recommendations.some((r) => r.id === 'mahnung')).toBe(true);
+    const mahnung = analysis?.recommendations.find((r) => r.id === 'mahnung');
+    expect(mahnung).toBeTruthy();
+    expect(mahnung?.route).toBe('/vorgaenge/v-fin-mahn/rechnungen/inv-mahn');
     expect(analysis?.recommendations.some((r) => r.id === 'payment_reminder')).toBe(false);
   });
 
