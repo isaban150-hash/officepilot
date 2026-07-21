@@ -14,16 +14,23 @@ import { getSupabaseClient } from '../lib/supabase';
 import {
   approveUser,
   blockUser,
+  clearPasswordRecoveryPending,
   expireLicense,
   extendLicense,
   fetchCurrentSession,
   grantBetaLicense,
+  hasPasswordRecoverySession,
   isUserAllowedToUseApp,
+  markPasswordRecoveryPending,
+  readPasswordRecoveryPendingFlag,
+  requestPasswordReset,
   signInWithPassword,
   signOutUser,
   signUpUser,
+  updatePasswordDuringRecovery,
   type AuthPayload,
   type AuthResult,
+  type PasswordUpdateError,
   type RegisterResult,
 } from '../services/auth/supabaseAuthService';
 import { mapSupabaseSession } from '../services/auth/userAccountMapper';
@@ -41,10 +48,17 @@ interface AuthContextValue {
   isAdmin: boolean;
   isAuthReady: boolean;
   profileError: boolean;
+  /** True while a password-recovery session must stay on /reset-password. */
+  passwordRecoveryPending: boolean;
   login: (email: string, password: string) => Promise<AuthResult<AuthPayload>>;
   logout: () => Promise<void>;
   register: (input: RegisterUserInput) => Promise<RegisterResult>;
   refreshAuth: () => Promise<void>;
+  requestPasswordReset: (email: string, redirectTo: string) => ReturnType<typeof requestPasswordReset>;
+  refreshPasswordRecoveryState: () => Promise<boolean>;
+  updatePasswordDuringRecovery: (
+    password: string,
+  ) => Promise<{ success: true } | { success: false; error: PasswordUpdateError }>;
   approveUser: typeof approveUser;
   blockUser: typeof blockUser;
   extendLicense: typeof extendLicense;
@@ -88,6 +102,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<UserAccount | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [profileError, setProfileError] = useState(false);
+  const [passwordRecoveryPending, setPasswordRecoveryPending] = useState(() =>
+    readPasswordRecoveryPendingFlag(),
+  );
 
   const applyResolvedAuth = useCallback(
     (resolved: { session: AuthSession | null; user: UserAccount | null; profileError: boolean }) => {
@@ -97,6 +114,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
     },
     [],
   );
+
+  const refreshPasswordRecoveryState = useCallback(async () => {
+    const active = await hasPasswordRecoverySession();
+    setPasswordRecoveryPending(active);
+    return active;
+  }, []);
 
   const refreshAuth = useCallback(async () => {
     const payload = await fetchCurrentSession();
@@ -129,13 +152,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
           user: payload.user,
           profileError: false,
         });
+        if (readPasswordRecoveryPendingFlag()) {
+          setPasswordRecoveryPending(true);
+        }
       } else {
         const { data } = await client.auth.getSession();
         if (data.session) {
           const resolved = await resolveAuthFromSession(data.session);
           applyResolvedAuth(resolved);
+          if (readPasswordRecoveryPendingFlag()) {
+            setPasswordRecoveryPending(true);
+          }
         } else {
           applyResolvedAuth({ session: null, user: null, profileError: false });
+          if (!readPasswordRecoveryPendingFlag()) {
+            setPasswordRecoveryPending(false);
+          }
         }
       }
       setIsAuthReady(true);
@@ -143,10 +175,23 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     const {
       data: { subscription },
-    } = client.auth.onAuthStateChange((_event, nextSession: Session | null) => {
+    } = client.auth.onAuthStateChange((event, nextSession: Session | null) => {
       void (async () => {
+        if (event === 'PASSWORD_RECOVERY') {
+          markPasswordRecoveryPending();
+          setPasswordRecoveryPending(true);
+        }
+        if (event === 'SIGNED_OUT') {
+          clearPasswordRecoveryPending();
+          setPasswordRecoveryPending(false);
+        }
+
         const resolved = await resolveAuthFromSession(nextSession);
         applyResolvedAuth(resolved);
+
+        if (event !== 'SIGNED_OUT' && readPasswordRecoveryPendingFlag() && nextSession) {
+          setPasswordRecoveryPending(true);
+        }
       })();
     });
 
@@ -159,6 +204,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const login = useCallback(async (email: string, password: string) => {
     const result = await signInWithPassword(email, password);
     if (result.success) {
+      clearPasswordRecoveryPending();
+      setPasswordRecoveryPending(false);
       applyResolvedAuth({
         session: result.data.session,
         user: result.data.user,
@@ -170,6 +217,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const logout = useCallback(async () => {
     await signOutUser();
+    clearPasswordRecoveryPending();
+    setPasswordRecoveryPending(false);
     isolateBusinessStateOnLogout();
     resetCompanySession();
     resetWorkspaceCloudBootstrapForTests();
@@ -188,6 +237,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return result;
   }, [applyResolvedAuth]);
 
+  const requestPasswordResetFn = useCallback(
+    (email: string, redirectTo: string) => requestPasswordReset(email, redirectTo),
+    [],
+  );
+
+  const updatePasswordDuringRecoveryFn = useCallback(
+    async (password: string) => {
+      const result = await updatePasswordDuringRecovery(password);
+      return result;
+    },
+    [],
+  );
+
   const value = useMemo(
     () => ({
       user,
@@ -197,17 +259,34 @@ export function AuthProvider({ children }: AuthProviderProps) {
       isAdmin: user?.role === 'admin',
       isAuthReady,
       profileError,
+      passwordRecoveryPending,
       login,
       logout,
       register,
       refreshAuth,
+      requestPasswordReset: requestPasswordResetFn,
+      refreshPasswordRecoveryState,
+      updatePasswordDuringRecovery: updatePasswordDuringRecoveryFn,
       approveUser,
       blockUser,
       extendLicense,
       expireLicense,
       grantBetaLicense,
     }),
-    [user, session, isAuthReady, profileError, login, logout, register, refreshAuth],
+    [
+      user,
+      session,
+      isAuthReady,
+      profileError,
+      passwordRecoveryPending,
+      login,
+      logout,
+      register,
+      refreshAuth,
+      requestPasswordResetFn,
+      refreshPasswordRecoveryState,
+      updatePasswordDuringRecoveryFn,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -22,10 +22,28 @@ export const bgAuth = {
   'auth.register.submit': 'Регистрация',
   'auth.register.submitting': 'Регистриране…',
   'auth.forgotPassword.title': 'Забравена парола',
-  'auth.forgotPassword.subtitle': 'Възстановяването на парола все още не е свързано в тази версия.',
-  'auth.forgotPassword.body':
-    'Моля, свържете се с администратора си. Възстановяването ще бъде добавено с облачната връзка.',
+  'auth.forgotPassword.subtitle': 'Ще ви изпратим връзка за задаване на нова парола.',
+  'auth.forgotPassword.email': 'Имейл',
+  'auth.forgotPassword.hint':
+    'Връзката отваря страница, на която избирате нова парола. Самата имейл връзка не променя паролата.',
+  'auth.forgotPassword.submit': 'Изпрати връзка за нулиране',
+  'auth.forgotPassword.submitting': 'Изпращане…',
+  'auth.forgotPassword.success':
+    'Ако съществува акаунт с този имейл, скоро ще получите съобщение с връзка за нулиране.',
   'auth.forgotPassword.backToLogin': 'Обратно към входа',
+  'auth.resetPassword.title': 'Задаване на нова парола',
+  'auth.resetPassword.subtitle': 'Изберете нова парола за вашия OfficePilot достъп.',
+  'auth.resetPassword.newPassword': 'Нова парола',
+  'auth.resetPassword.confirmPassword': 'Потвърдете новата парола',
+  'auth.resetPassword.submit': 'Запази паролата',
+  'auth.resetPassword.submitting': 'Запазване…',
+  'auth.resetPassword.checking': 'Връзката се проверява…',
+  'auth.resetPassword.error.invalidLink':
+    'Тази връзка е невалидна или е изтекла. Моля, поискайте нова връзка.',
+  'auth.resetPassword.error.updateFailed':
+    'Паролата не можа да бъде променена. Моля, опитайте отново.',
+  'auth.resetPassword.requestAgain': 'Поискай нова връзка',
+  'auth.login.passwordChanged': 'Паролата е променена. Вече можете да влезете.',
   'auth.accessBlocked.title': 'Достъпът е блокиран',
   'auth.accessBlocked.message': 'Вашият достъп е блокиран.',
   'auth.accessBlocked.user': 'Потребител: {email}',

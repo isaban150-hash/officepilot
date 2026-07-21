@@ -30,6 +30,9 @@ const usersByEmail = new Map<string, MockAuthUser>();
 const usersById = new Map<string, MockAuthUser>();
 let currentSession: Session | null = null;
 const listeners = new Set<AuthChangeCallback>();
+let lastResetPasswordCall: { email: string; redirectTo: string } | null = null;
+let updateUserCallCount = 0;
+let mockRecoveryActive = false;
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -117,7 +120,31 @@ export function resetMockSupabaseAuth(): void {
   currentSession = null;
   listeners.clear();
   signUpMode = 'with_session';
+  lastResetPasswordCall = null;
+  updateUserCallCount = 0;
+  mockRecoveryActive = false;
   resetMockProfileStore();
+}
+
+export function getMockLastResetPasswordCall(): { email: string; redirectTo: string } | null {
+  return lastResetPasswordCall;
+}
+
+export function getMockUpdateUserCallCount(): number {
+  return updateUserCallCount;
+}
+
+/** Establish a recovery session and emit PASSWORD_RECOVERY (test helper). */
+export function startMockPasswordRecovery(email: string): Session {
+  const record = usersByEmail.get(email.trim().toLowerCase());
+  if (!record) {
+    throw new Error(`Mock user not found for recovery: ${email}`);
+  }
+  currentSession = createSession(record.user);
+  setMockProfileCurrentUser(record.user.id);
+  mockRecoveryActive = true;
+  notifyAuthChange('PASSWORD_RECOVERY');
+  return currentSession;
 }
 
 export function seedMockAdminUser(): User {
@@ -253,6 +280,7 @@ function createMockAuth() {
     signOut: async () => {
       currentSession = null;
       setMockProfileCurrentUser(null);
+      mockRecoveryActive = false;
       notifyAuthChange('SIGNED_OUT');
       return { error: null };
     },
@@ -263,6 +291,34 @@ function createMockAuth() {
         setMockProfileCurrentUser(null);
       }
       return { data: { session: currentSession }, error: null };
+    },
+    resetPasswordForEmail: async (email: string, options?: { redirectTo?: string }) => {
+      lastResetPasswordCall = {
+        email: email.trim().toLowerCase(),
+        redirectTo: options?.redirectTo ?? '',
+      };
+      return { data: {}, error: null };
+    },
+    updateUser: async (attributes: { password?: string }) => {
+      if (!currentSession) {
+        return { data: { user: null }, error: { message: 'Auth session missing' } };
+      }
+      if (!mockRecoveryActive) {
+        return { data: { user: null }, error: { message: 'Not in recovery' } };
+      }
+      const password = attributes.password;
+      if (typeof password !== 'string' || password.length === 0) {
+        return { data: { user: null }, error: { message: 'Password required' } };
+      }
+      updateUserCallCount += 1;
+      const record = usersById.get(currentSession.user.id);
+      if (!record) {
+        return { data: { user: null }, error: { message: 'User not found' } };
+      }
+      record.password = password;
+      usersByEmail.set(record.user.email ?? '', record);
+      usersById.set(record.user.id, record);
+      return { data: { user: record.user }, error: null };
     },
     onAuthStateChange: (callback: AuthChangeCallback) => {
       listeners.add(callback);

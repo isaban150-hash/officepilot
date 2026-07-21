@@ -39,6 +39,10 @@ export const CORE_I18N_PATHS = [
 
   'auth.forgotPassword.title',
 
+  'auth.resetPassword.title',
+
+  'auth.login.passwordChanged',
+
   'auth.accessBlocked.title',
 
   'auth.error.invalidCredentials',

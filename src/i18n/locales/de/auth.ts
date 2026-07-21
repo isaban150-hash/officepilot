@@ -23,10 +23,28 @@ export const deAuth = {
   'auth.register.submitting': 'Wird registriert…',
   'auth.forgotPassword.title': 'Passwort vergessen',
   'auth.forgotPassword.subtitle':
-    'Die Passwort-Zurücksetzung ist in dieser lokalen Version noch nicht angebunden.',
-  'auth.forgotPassword.body':
-    'Bitte wenden Sie sich an Ihren Administrator. Eine echte Passwort-Wiederherstellung wird mit der späteren Cloud-Anbindung bereitgestellt.',
+    'Wir senden Ihnen einen Link zum Festlegen eines neuen Passworts.',
+  'auth.forgotPassword.email': 'E-Mail',
+  'auth.forgotPassword.hint':
+    'Der Link öffnet eine Seite, auf der Sie ein neues Passwort wählen. Das Passwort wird nicht durch den E-Mail-Link selbst geändert.',
+  'auth.forgotPassword.submit': 'Link zum Zurücksetzen senden',
+  'auth.forgotPassword.submitting': 'Wird gesendet…',
+  'auth.forgotPassword.success':
+    'Wenn ein Konto mit dieser E-Mail existiert, erhalten Sie in Kürze eine Nachricht mit einem Link zum Zurücksetzen.',
   'auth.forgotPassword.backToLogin': 'Zurück zur Anmeldung',
+  'auth.resetPassword.title': 'Neues Passwort festlegen',
+  'auth.resetPassword.subtitle': 'Wählen Sie ein neues Passwort für Ihren OfficePilot-Zugang.',
+  'auth.resetPassword.newPassword': 'Neues Passwort',
+  'auth.resetPassword.confirmPassword': 'Neues Passwort bestätigen',
+  'auth.resetPassword.submit': 'Passwort speichern',
+  'auth.resetPassword.submitting': 'Wird gespeichert…',
+  'auth.resetPassword.checking': 'Link wird geprüft…',
+  'auth.resetPassword.error.invalidLink':
+    'Dieser Link ist ungültig oder abgelaufen. Bitte fordern Sie einen neuen Link an.',
+  'auth.resetPassword.error.updateFailed':
+    'Das Passwort konnte nicht geändert werden. Bitte versuchen Sie es erneut.',
+  'auth.resetPassword.requestAgain': 'Neuen Link anfordern',
+  'auth.login.passwordChanged': 'Passwort geändert. Du kannst dich jetzt anmelden.',
   'auth.accessBlocked.title': 'Zugang gesperrt',
   'auth.accessBlocked.message': 'Ihr Zugang wurde gesperrt.',
   'auth.accessBlocked.user': 'Benutzer: {email}',

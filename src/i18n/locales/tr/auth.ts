@@ -22,10 +22,28 @@ export const trAuth = {
   'auth.register.submit': 'Kayıt ol',
   'auth.register.submitting': 'Kayıt yapılıyor…',
   'auth.forgotPassword.title': 'Şifremi unuttum',
-  'auth.forgotPassword.subtitle': 'Şifre sıfırlama bu sürümde henüz bağlı değil.',
-  'auth.forgotPassword.body':
-    'Lütfen yöneticinize başvurun. Gerçek şifre kurtarma daha sonra bulut bağlantısıyla eklenecek.',
+  'auth.forgotPassword.subtitle': 'Yeni bir şifre belirlemek için size bir bağlantı göndeririz.',
+  'auth.forgotPassword.email': 'E-posta',
+  'auth.forgotPassword.hint':
+    'Bağlantı, yeni şifrenizi seçebileceğiniz bir sayfa açar. E-posta bağlantısı şifreyi kendisi değiştirmez.',
+  'auth.forgotPassword.submit': 'Sıfırlama bağlantısı gönder',
+  'auth.forgotPassword.submitting': 'Gönderiliyor…',
+  'auth.forgotPassword.success':
+    'Bu e-posta ile bir hesap varsa, kısa süre içinde sıfırlama bağlantısı içeren bir ileti alırsınız.',
   'auth.forgotPassword.backToLogin': 'Girişe dön',
+  'auth.resetPassword.title': 'Yeni şifre belirle',
+  'auth.resetPassword.subtitle': 'OfficePilot hesabınız için yeni bir şifre seçin.',
+  'auth.resetPassword.newPassword': 'Yeni şifre',
+  'auth.resetPassword.confirmPassword': 'Yeni şifreyi onayla',
+  'auth.resetPassword.submit': 'Şifreyi kaydet',
+  'auth.resetPassword.submitting': 'Kaydediliyor…',
+  'auth.resetPassword.checking': 'Bağlantı kontrol ediliyor…',
+  'auth.resetPassword.error.invalidLink':
+    'Bu bağlantı geçersiz veya süresi dolmuş. Lütfen yeni bir bağlantı isteyin.',
+  'auth.resetPassword.error.updateFailed':
+    'Şifre değiştirilemedi. Lütfen tekrar deneyin.',
+  'auth.resetPassword.requestAgain': 'Yeni bağlantı iste',
+  'auth.login.passwordChanged': 'Şifre değiştirildi. Şimdi giriş yapabilirsiniz.',
   'auth.accessBlocked.title': 'Erişim engellendi',
   'auth.accessBlocked.message': 'Erişiminiz engellendi.',
   'auth.accessBlocked.user': 'Kullanıcı: {email}',

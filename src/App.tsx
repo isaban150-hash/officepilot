@@ -10,6 +10,7 @@ import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { LicenseExpiredPage } from './pages/LicenseExpiredPage';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
+import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { WaitingApprovalPage } from './pages/WaitingApprovalPage';
 import { OffeneAusgabenPage } from './pages/OffeneAusgabenPage';
 import { AusgabeDetailPage } from './pages/AusgabeDetailPage';
@@ -55,7 +56,18 @@ function PublicAuthRoutes() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="*" element={<Navigate to="/login" replace />} />
+    </Routes>
+  );
+}
+
+function PasswordRecoveryRoutes() {
+  return (
+    <Routes>
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="*" element={<Navigate to="/reset-password" replace />} />
     </Routes>
   );
 }
@@ -98,7 +110,14 @@ function SetupRoutes() {
 
 function AppRoutes() {
   const { setup } = useApp();
-  const { user, isAuthenticated, isAllowed, isAuthReady, profileError } = useAuth();
+  const {
+    user,
+    isAuthenticated,
+    isAllowed,
+    isAuthReady,
+    profileError,
+    passwordRecoveryPending,
+  } = useAuth();
 
   if (!isAuthReady) {
     const lang = getCachedSetup()?.language ?? 'de';
@@ -107,6 +126,10 @@ function AppRoutes() {
         <p className="bootstrap-loading__text">{t('common.loading.auth', lang)}</p>
       </div>
     );
+  }
+
+  if (passwordRecoveryPending) {
+    return <PasswordRecoveryRoutes />;
   }
 
   if (!isAuthenticated || profileError) {

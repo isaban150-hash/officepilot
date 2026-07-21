@@ -19,7 +19,97 @@ import { fetchCurrentUserProfile } from './profileService';
 import { mapProfileRowToUserAccount } from './profileMapper';
 import { getLicenseBlockReason, isUserAllowedToUseApp } from './licenseService';
 
-const MIN_PASSWORD_LENGTH = 8;
+export const MIN_PASSWORD_LENGTH = 8;
+
+/** sessionStorage flag so reload on /reset-password still recognizes recovery. */
+export const PASSWORD_RECOVERY_FLAG_KEY = 'officepilot.auth.passwordRecovery';
+
+export type PasswordResetRequestError = 'invalid_email' | 'request_failed';
+export type PasswordUpdateError =
+  | 'recovery_session_missing'
+  | 'password_too_short'
+  | 'update_failed';
+
+export function markPasswordRecoveryPending(): void {
+  try {
+    sessionStorage.setItem(PASSWORD_RECOVERY_FLAG_KEY, '1');
+  } catch {
+    // ignore quota / private mode
+  }
+}
+
+export function clearPasswordRecoveryPending(): void {
+  try {
+    sessionStorage.removeItem(PASSWORD_RECOVERY_FLAG_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+export function readPasswordRecoveryPendingFlag(): boolean {
+  try {
+    return sessionStorage.getItem(PASSWORD_RECOVERY_FLAG_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Always returns success for a syntactically valid email so responses do not
+ * reveal whether an account exists. The Supabase call still runs.
+ */
+export async function requestPasswordReset(
+  email: string,
+  redirectTo: string,
+): Promise<{ success: true } | { success: false; error: PasswordResetRequestError }> {
+  if (!isValidEmail(email)) {
+    return { success: false, error: 'invalid_email' };
+  }
+
+  const client = requireSupabaseClient();
+  try {
+    // Ignore provider errors so responses do not reveal account existence.
+    await client.auth.resetPasswordForEmail(email.trim().toLowerCase(), { redirectTo });
+  } catch {
+    // network / unexpected — still neutral success below
+  }
+  return { success: true };
+}
+
+export async function hasPasswordRecoverySession(): Promise<boolean> {
+  if (!readPasswordRecoveryPendingFlag()) return false;
+  const client = getSupabaseClient();
+  if (!client) return false;
+  const { data, error } = await client.auth.getSession();
+  return Boolean(!error && data.session);
+}
+
+/**
+ * Updates the password only when a recovery session was marked and a session exists.
+ * Does not modify profile, license, workspace, or local business data.
+ */
+export async function updatePasswordDuringRecovery(
+  password: string,
+): Promise<{ success: true } | { success: false; error: PasswordUpdateError }> {
+  if (password.length < MIN_PASSWORD_LENGTH) {
+    return { success: false, error: 'password_too_short' };
+  }
+  if (!readPasswordRecoveryPendingFlag()) {
+    return { success: false, error: 'recovery_session_missing' };
+  }
+
+  const client = requireSupabaseClient();
+  const { data: sessionData, error: sessionError } = await client.auth.getSession();
+  if (sessionError || !sessionData.session) {
+    return { success: false, error: 'recovery_session_missing' };
+  }
+
+  const { error } = await client.auth.updateUser({ password });
+  if (error) {
+    return { success: false, error: 'update_failed' };
+  }
+  return { success: true };
+}
 
 export type AuthResult<T> =
   | { success: true; data: T }

@@ -1,5 +1,5 @@
 import { FormEvent, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { AuthLayout } from '../components/auth/AuthLayout';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
@@ -11,6 +11,8 @@ export function LoginPage() {
   const { login } = useAuth();
   const { translate, language } = useApp();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const passwordChanged = searchParams.get('passwordChanged') === '1';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -36,6 +38,11 @@ export function LoginPage() {
       testId="login-page"
     >
       <form className="auth-form" onSubmit={handleSubmit}>
+        {passwordChanged ? (
+          <p className="auth-form__success" role="status" data-testid="login-password-changed">
+            {translate('auth.login.passwordChanged')}
+          </p>
+        ) : null}
         {error ? (
           <p className="auth-form__error" role="alert" data-testid="login-error">
             {error}
