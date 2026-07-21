@@ -3518,6 +3518,63 @@ body {
   margin-top: 0.65rem;
 }
 
+.backup-export-panel__validate {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-border, #e2e8f0);
+}
+
+.backup-export-panel__file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.backup-export-panel__preview {
+  margin-top: 0.85rem;
+}
+
+.backup-export-panel__preview-title {
+  margin: 0 0 0.5rem;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.backup-export-panel__preview-list {
+  margin: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.backup-export-panel__preview-list > div {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.75rem;
+  font-size: 0.88rem;
+}
+
+.backup-export-panel__preview-list dt {
+  margin: 0;
+  color: var(--color-muted, #64748b);
+}
+
+.backup-export-panel__preview-list dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.backup-export-panel__replace-hint {
+  margin-top: 0.75rem;
+  font-weight: 500;
+}
+
 .page-header__actions {
   margin-bottom: 1rem;
 }

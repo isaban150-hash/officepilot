@@ -190,6 +190,17 @@ describe('DOCUMENT-ORIGINAL-IOS-OVERFLOW-02', () => {
       );
     });
 
+    // Preview URL is resolved asynchronously from IndexedDB — wait for ready state.
+    const deadline = Date.now() + 3000;
+    while (
+      Date.now() < deadline &&
+      !host.querySelector('.document-original-file-panel__preview--pdf')
+    ) {
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 20));
+      });
+    }
+
     expect(host.querySelector('.document-original-file-panel__preview--pdf')).toBeTruthy();
     expect(host.querySelector('[data-testid="document-original-file-panel-download"]')).toBeTruthy();
     expect(host.querySelector('[data-testid="document-original-file-panel-pdf"]')).toBeTruthy();
