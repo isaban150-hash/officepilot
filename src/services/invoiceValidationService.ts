@@ -4,7 +4,9 @@ import type {
   CustomerBilling,
   InvoiceDraft,
   Vorgang,
+  VorgangInvoice,
 } from '../types/models';
+import { INVOICE_DRAFT_LABEL } from './invoiceNumberService';
 import { getTaxRateForStatus } from './invoiceTaxService';
 import { getAbschlagDeductionsTotal } from './invoiceDeductions';
 import {
@@ -15,6 +17,10 @@ import {
   taxCentsFromNet,
   toCents,
 } from './invoiceMoney';
+
+function isFinalizedInvoiceStatus(invoice: VorgangInvoice): boolean {
+  return invoice.status === 'vorbereitet' || invoice.status === 'versendet';
+}
 
 export interface InvoiceValidationIssue {
   code: string;
@@ -217,5 +223,90 @@ export function validateInvoiceDraftForApproval(
   return {
     blockingErrors: dedupe(blockingErrors),
     warnings: dedupe(warnings),
+  };
+}
+
+/**
+ * Reuses draft approval rules for PDF export of finalized invoices.
+ * Draft / non-final invoices are rejected; nothing is invented.
+ */
+export function validateFinalizedInvoiceForPdf(
+  invoice: VorgangInvoice,
+): InvoiceValidationResult {
+  if (!isFinalizedInvoiceStatus(invoice)) {
+    return {
+      blockingErrors: [
+        { code: 'not_finalized', messageKey: 'invoice.pdf.notFinalized' },
+      ],
+      warnings: [],
+    };
+  }
+
+  const number = invoice.number?.trim() ?? '';
+  if (!number || number === INVOICE_DRAFT_LABEL || number === 'ENTWURF') {
+    return {
+      blockingErrors: [
+        { code: 'draft_number', messageKey: 'invoice.pdf.draftNumber' },
+      ],
+      warnings: [],
+    };
+  }
+
+  if (!invoice.companySnapshot || !invoice.customerSnapshot) {
+    return {
+      blockingErrors: [
+        { code: 'snapshots_missing', messageKey: 'invoice.pdf.snapshotsMissing' },
+      ],
+      warnings: [],
+    };
+  }
+
+  const draft = finalizedInvoiceToValidationDraft(invoice);
+  return validateInvoiceDraftForApproval(draft, invoice.companySnapshot, undefined, {
+    // Already approved — do not re-require interactive §13b checkbox.
+    reverseCharge13bConfirmed: true,
+  });
+}
+
+function finalizedInvoiceToValidationDraft(invoice: VorgangInvoice): InvoiceDraft {
+  const company = invoice.companySnapshot!;
+  const customer = invoice.customerSnapshot!;
+  return {
+    id: invoice.id,
+    vorgangId: '',
+    vorgangTitle: invoice.vorgangTitle ?? '',
+    customer: customer.name,
+    baustelle: invoice.baustelle ?? '',
+    type: invoice.type,
+    abschlagNumber: invoice.abschlagNumber,
+    taxStatus: invoice.taxStatus,
+    materialSource: 'betrieb',
+    positions: invoice.positions.map((position) => ({
+      id: position.id,
+      orderPositionId: position.orderPositionId,
+      description: position.description,
+      plannedQuantity: position.quantity,
+      billedQuantity: 0,
+      openQuantity: position.quantity,
+      quantity: position.quantity,
+      unit: position.unit,
+      unitLabel: position.unitLabel,
+      unitPrice: position.unitPrice,
+      category: 'arbeit' as const,
+      billable: true,
+    })),
+    issueDate: invoice.issueDate ?? invoice.date,
+    servicePeriodFrom: invoice.servicePeriodFrom ?? invoice.issueDate ?? invoice.date,
+    servicePeriodTo: invoice.servicePeriodTo ?? invoice.issueDate ?? invoice.date,
+    paymentDueDate: invoice.paymentDueDate ?? '',
+    paymentTermsText: invoice.paymentTermsText ?? '',
+    skontoText: invoice.skontoText ?? '',
+    customerBilling: { ...customer },
+    companySnapshot: { ...company },
+    legalNotices: [...(invoice.legalNotices ?? [])],
+    previousAbschlagDeductions: [...(invoice.previousAbschlagDeductions ?? [])],
+    invoiceNumberPreview: invoice.number,
+    introText: invoice.introText ?? '',
+    closingText: invoice.closingText ?? '',
   };
 }

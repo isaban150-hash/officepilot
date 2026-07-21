@@ -16,7 +16,6 @@ import { ShowMoreSection } from '../components/ui/ShowMoreSection';
 import { useApp } from '../context/AppContext';
 import { isFinalizedInvoice, buildPrintTitle } from '../services/invoiceArchiveService';
 import { buildInvoicePrintModelFromInvoice } from '../services/invoicePrintModel';
-import { exportInvoiceAsPdf } from '../services/invoicePdfService';
 import {
   calculatePaymentSummary,
   formatPaymentCurrency,
@@ -62,11 +61,8 @@ export function InvoiceDetailPage() {
   useEffect(() => {
     if (!printModel) return;
     const auto = searchParams.get('auto');
-    const title = buildPrintTitle(printModel);
     if (auto === 'print') {
-      printInvoice({ title });
-    } else if (auto === 'pdf') {
-      exportInvoiceAsPdf({ title });
+      printInvoice({ title: buildPrintTitle(printModel) });
     }
   }, [printModel, searchParams]);
 
@@ -111,9 +107,17 @@ export function InvoiceDetailPage() {
   const paymentSummary = calculatePaymentSummary(invoice);
   const statusKey = `payment.status.${paymentSummary.status}` as TranslationKey;
 
+  const autoDownloadPdf = searchParams.get('auto') === 'pdf';
+
   const primaryActions = (
     <>
-      <InvoicePrintActions model={printModel} translate={translate} layout="stack" />
+      <InvoicePrintActions
+        invoice={invoice}
+        model={printModel}
+        translate={translate}
+        layout="stack"
+        autoDownloadPdf={autoDownloadPdf}
+      />
       {!isInvoiceCancelled(invoice) && (
         <Button type="button" fullWidth onClick={() => setShowPaymentForm(true)}>
           {translate('detail.action.recordPayment')}

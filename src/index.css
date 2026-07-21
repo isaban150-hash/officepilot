@@ -3872,6 +3872,13 @@ body {
   min-width: 8rem;
 }
 
+.invoice-print-actions__error {
+  flex: 1 1 100%;
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--color-danger, #b42318);
+}
+
 .invoice-detail__archive-link {
   margin: 0 0 0.75rem;
   font-size: 0.9rem;
