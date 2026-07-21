@@ -83,6 +83,9 @@ describe('invoiceOverviewService', () => {
           createFinalizedInvoice({
             id: 'inv-overdue',
             number: '2026-0302',
+            status: 'versendet',
+            sentAt: '2026-01-01',
+            sentVia: 'post',
             paymentDueDate: '2026-01-01',
           }),
           createFinalizedInvoice({

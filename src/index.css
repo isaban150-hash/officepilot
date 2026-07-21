@@ -3879,6 +3879,64 @@ body {
   color: var(--color-danger, #b42318);
 }
 
+.invoice-sent-panel {
+  margin: 0.75rem 0;
+}
+
+.invoice-sent-panel__hint,
+.invoice-sent-panel__meta {
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+  color: var(--color-text-muted, #5c6570);
+}
+
+.invoice-sent-panel__facts {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0 0 0.75rem;
+}
+
+.invoice-sent-panel__facts dt {
+  font-size: 0.75rem;
+  color: var(--color-text-muted, #5c6570);
+}
+
+.invoice-sent-panel__facts dd {
+  margin: 0.1rem 0 0;
+  font-weight: 600;
+}
+
+.invoice-sent-panel__form,
+.invoice-sent-panel__confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.invoice-sent-panel__label {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.invoice-sent-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.invoice-sent-panel__error {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--color-danger, #b42318);
+}
+
+.invoice-sent-panel__confirm-summary {
+  margin: 0;
+  font-weight: 600;
+}
+
 .invoice-detail__archive-link {
   margin: 0 0 0.75rem;
   font-size: 0.9rem;

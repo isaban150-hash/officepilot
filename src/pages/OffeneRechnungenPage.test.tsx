@@ -84,7 +84,7 @@ describe('OffeneRechnungenPage', () => {
         customer: 'Seiten Kunde',
         baustelle: 'Seiten Baustelle',
         invoices: [
-          createFinalizedInvoice({ id: 'inv-overdue-page' }),
+          createFinalizedInvoice({ id: 'inv-overdue-page', status: 'versendet' }),
           createFinalizedInvoice({
             id: 'inv-paid-page',
             number: '2026-0501',

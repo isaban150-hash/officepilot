@@ -142,12 +142,26 @@ describe('calculatePaymentSummary', () => {
     expect(summary.overpaidAmount).toBeCloseTo(13.25, 2);
   });
 
-  it('marks invoice as ueberfaellig when due date passed and open amount remains', () => {
-    const invoice = createFinalizedInvoice({ paymentDueDate: '2026-06-10' });
+  it('marks invoice as ueberfaellig when due date passed, open amount remains, and sent', () => {
+    const invoice = createFinalizedInvoice({
+      status: 'versendet',
+      paymentDueDate: '2026-06-10',
+      sentAt: '2026-06-01',
+      sentVia: 'email',
+    });
     const summary = calculatePaymentSummary(invoice, '2026-06-11');
 
     expect(summary.status).toBe('ueberfaellig');
     expect(isInvoiceOverdue(invoice, '2026-06-11')).toBe(true);
+  });
+
+  it('does not treat prepared (not sent) invoice as overdue', () => {
+    const invoice = createFinalizedInvoice({
+      status: 'vorbereitet',
+      paymentDueDate: '2026-06-10',
+    });
+    expect(isInvoiceOverdue(invoice, '2026-06-11')).toBe(false);
+    expect(calculatePaymentSummary(invoice, '2026-06-11').status).toBe('offen');
   });
 
   it('is not overdue before paymentDueDate', () => {

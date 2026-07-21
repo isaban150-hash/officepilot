@@ -104,6 +104,9 @@ describe('InvoicePaymentSummary', () => {
 
   it('shows overdue notice for overdue invoices', () => {
     const invoice = createFinalizedInvoice({
+      status: 'versendet',
+      sentAt: '2020-01-01',
+      sentVia: 'email',
       paymentDueDate: '2020-01-01',
     });
 

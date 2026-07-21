@@ -904,6 +904,13 @@ export interface PaymentSummary {
   status: InvoicePaymentStatus;
 }
 
+export type InvoiceSentVia =
+  | 'email'
+  | 'post'
+  | 'persoenlich'
+  | 'portal'
+  | 'sonstige';
+
 export interface VorgangInvoice {
   id: string;
   number: string;
@@ -936,6 +943,12 @@ export interface VorgangInvoice {
   paymentStatus?: InvoicePaymentStatus;
   cancelledAt?: string;
   cancelReason?: string;
+  /** ISO date (YYYY-MM-DD) when marked as sent — optional for legacy invoices. */
+  sentAt?: string;
+  /** How the invoice was handed to the customer — optional for legacy. */
+  sentVia?: InvoiceSentVia;
+  /** Optional free-text note (e.g. for sentVia=sonstige). */
+  sentNote?: string;
 }
 
 export interface Vorgang {

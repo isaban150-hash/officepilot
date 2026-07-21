@@ -24,6 +24,7 @@ import {
 } from '../services/invoicePaymentService';
 import { printInvoice } from '../services/invoicePrintService';
 import { getVorgangById, getVorgangInvoice } from '../services/vorgangService';
+import { InvoiceSentPanel } from '../components/invoice/InvoiceSentPanel';
 import type { VorgangInvoice } from '../types/models';
 import type { TranslationKey } from '../i18n';
 
@@ -117,6 +118,12 @@ export function InvoiceDetailPage() {
         translate={translate}
         layout="stack"
         autoDownloadPdf={autoDownloadPdf}
+      />
+      <InvoiceSentPanel
+        vorgangId={vorgangId}
+        invoice={invoice}
+        translate={translate}
+        onUpdated={setInvoice}
       />
       {!isInvoiceCancelled(invoice) && (
         <Button type="button" fullWidth onClick={() => setShowPaymentForm(true)}>

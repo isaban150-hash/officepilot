@@ -361,6 +361,50 @@ export function updateInvoiceArchiveDocumentId(
   return { ...updatedInvoice };
 }
 
+/**
+ * Controlled update of invoice send status / send metadata.
+ * Callers must enforce business rules (mark vs correct).
+ */
+export function updateInvoiceSentFields(
+  vorgangId: string,
+  invoiceId: string,
+  fields: {
+    status: VorgangInvoice['status'];
+    sentAt: string;
+    sentVia: NonNullable<VorgangInvoice['sentVia']>;
+    sentNote?: string;
+  },
+): VorgangInvoice | null {
+  const index = vorgaenge.findIndex((v) => v.id === vorgangId);
+  if (index === -1) return null;
+
+  const vorgang = cloneVorgang(vorgaenge[index]);
+  const invoiceIndex = vorgang.invoices.findIndex((item) => item.id === invoiceId);
+  if (invoiceIndex === -1) return null;
+
+  const current = vorgang.invoices[invoiceIndex];
+  const note = fields.sentNote?.trim() ?? '';
+  const updatedInvoice: VorgangInvoice = {
+    ...current,
+    status: fields.status,
+    sentAt: fields.sentAt,
+    sentVia: fields.sentVia,
+  };
+  if (note) {
+    updatedInvoice.sentNote = note;
+  } else {
+    delete updatedInvoice.sentNote;
+  }
+
+  vorgang.invoices = [
+    ...vorgang.invoices.slice(0, invoiceIndex),
+    updatedInvoice,
+    ...vorgang.invoices.slice(invoiceIndex + 1),
+  ];
+  updateVorgangInStore(vorgang);
+  return cloneVorgangInvoice(updatedInvoice);
+}
+
 function updateInvoicePaymentFields(
   vorgangId: string,
   invoiceId: string,

@@ -45,6 +45,10 @@ export function isInvoiceCancelled(invoice: VorgangInvoice): boolean {
 }
 
 export function isInvoiceOverdue(invoice: VorgangInvoice, today: Date | string = new Date()): boolean {
+  // Overdue / dunning only for invoices marked as sent to the customer.
+  if (invoice.status !== 'versendet') {
+    return false;
+  }
   if (!invoice.paymentDueDate || getOpenAmount(invoice) <= 0 || isInvoiceCancelled(invoice)) {
     return false;
   }
