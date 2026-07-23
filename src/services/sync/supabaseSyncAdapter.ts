@@ -376,8 +376,15 @@ export class SupabaseSyncAdapter implements SyncAdapter {
     /* Outbox status wird bereits in pushChanges aktualisiert */
   }
 
+  /**
+   * Intentionally unimplemented for Supabase.
+   * CLOUD-ORDER-CHAIN-03A: numbers must be assigned only inside finalize_workspace_invoice
+   * (atomic with invoice insert). Use rpcFinalizeWorkspaceInvoice — never reserve alone.
+   */
   async reserveInvoiceNumber(_workspaceId: string): Promise<SyncInvoiceNumberReservation> {
-    throw new Error('Rechnungsnummern-Reservierung ist in SupabaseSyncAdapter nicht implementiert.');
+    throw new Error(
+      'Rechnungsnummern dürfen nicht getrennt reserviert werden. Nutze finalize_workspace_invoice (CLOUD-ORDER-CHAIN-03A).',
+    );
   }
 
   async uploadBlob(
