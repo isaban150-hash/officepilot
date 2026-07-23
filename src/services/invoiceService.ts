@@ -4,7 +4,7 @@ import { createCompanyProfileSnapshot } from './companyProfileService';
 import {
   getNextAbschlagNumber,
   getBilledQuantity,
-  getOpenQuantity,
+  getBillableOpenQuantity,
   isPositionBillable,
 } from './orderBillingRules';
 import {
@@ -150,6 +150,7 @@ export {
   canDeleteOrderPosition,
   canEditOrderPositionField,
   getBilledQuantity,
+  getBillableOpenQuantity,
   getNextAbschlagNumber,
   getOpenQuantity,
   getPositionBillingStatus,
@@ -165,7 +166,7 @@ function buildDraftPosition(
   initialQuantity: number,
 ): InvoiceDraftPosition {
   const billedQuantity = getBilledQuantity(vorgang, orderPosition.id);
-  const openQuantity = getOpenQuantity(vorgang, orderPosition.id);
+  const openQuantity = getBillableOpenQuantity(vorgang, orderPosition.id);
   const billable = isPositionBillable(orderPosition, vorgang.materialSource);
 
   return {
@@ -173,6 +174,7 @@ function buildDraftPosition(
     orderPositionId: orderPosition.id,
     description: orderPosition.description,
     plannedQuantity: orderPosition.plannedQuantity,
+    executedQuantity: orderPosition.executedQuantity,
     billedQuantity,
     openQuantity,
     quantity: billable ? initialQuantity : 0,
@@ -214,7 +216,7 @@ function initialQuantityForType(
   type: InvoiceDocumentType,
 ): number {
   if (!prefillsOpenQuantity(type)) return 0;
-  return getOpenQuantity(vorgang, orderPosition.id);
+  return getBillableOpenQuantity(vorgang, orderPosition.id);
 }
 
 function buildPositionsForType(
@@ -288,7 +290,11 @@ export function updateDraftPositionQuantity(
     positions: draft.positions.map((p) => {
       if (p.id !== positionId) return p;
       if (!p.billable) return p;
-      return { ...p, quantity: Math.max(0, quantity) };
+      // Confirm-first: accept only 0 ≤ quantity ≤ billableOpen (openQuantity).
+      if (!Number.isFinite(quantity) || quantity < 0 || quantity > p.openQuantity) {
+        return p;
+      }
+      return { ...p, quantity };
     }),
   };
 }

@@ -1531,6 +1531,7 @@ const deLegacy = {
   'invoice.schlussLabel': 'Schlussrechnung',
   'invoice.positions': 'Positionen',
   'invoice.planned': 'Geplant (Auftrag)',
+  'invoice.executed': 'Ausgeführt',
   'invoice.alreadyBilled': 'Bereits abgerechnet',
   'invoice.stillOpen': 'Noch offen',
   'invoice.quantityThisInvoice': 'Menge für diese Rechnung',

@@ -141,12 +141,10 @@ describe('ORDER-EXECUTION-QTY-01', () => {
     expect(getVorgangById('v-qty-snap')?.contractConfirmation).toEqual(before);
   });
 
-  it('Rechnungsdaten bleiben unverändert', () => {
+  it('Invoice Lines und billedQuantity bleiben unverändert', () => {
     seedRunning('v-qty-inv');
     const before = getVorgangById('v-qty-inv')!;
     const billedBefore = getBilledQuantity(before, 'op-qty-1');
-    const openBefore = getOpenQuantity(before, 'op-qty-1');
-    const billingBefore = getPositionBillingStatus(before, 'op-qty-1');
     const invoicesBefore = structuredClone(before.invoices);
 
     updateOrderPositionExecutedQuantity('v-qty-inv', 'op-qty-1', 8);
@@ -154,8 +152,9 @@ describe('ORDER-EXECUTION-QTY-01', () => {
     const after = getVorgangById('v-qty-inv')!;
     expect(after.invoices).toEqual(invoicesBefore);
     expect(getBilledQuantity(after, 'op-qty-1')).toBe(billedBefore);
-    expect(getOpenQuantity(after, 'op-qty-1')).toBe(openBefore);
-    expect(getPositionBillingStatus(after, 'op-qty-1')).toEqual(billingBefore);
+    // openQuantity = min(planned, executed) − billed (billed=2 from seed); no new invoice written.
+    expect(getOpenQuantity(after, 'op-qty-1')).toBe(6);
+    expect(getPositionBillingStatus(after, 'op-qty-1')?.openQuantity).toBe(6);
     expect(after.orderPositions[0]?.executedQuantity).toBe(8);
   });
 

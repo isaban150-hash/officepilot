@@ -1,9 +1,13 @@
-import type { Vorgang } from '../../types/models';
+import type {
+  ContractConfirmationSnapshot,
+  Vorgang,
+  VorgangStatus,
+} from '../../types/models';
 import type { SyncMeta } from '../../types/sync';
 import { mergeSyncEntities } from '../sync/syncMergeEngine';
 import { migrateVorgangStatus } from '../vorgangLifecycleService';
 
-/** Cloud-syncable subset of Vorgang – ohne Rechnungen, Dokumente, Aufgaben, Fotos. */
+/** Cloud-syncable subset of Vorgang – ohne Rechnungen, Dokumente, Aufgaben, Fotos, Negotiation. */
 export interface VorgangCloudPayload {
   id: string;
   title: string;
@@ -14,6 +18,10 @@ export interface VorgangCloudPayload {
   customerBilling?: Vorgang['customerBilling'];
   orderPositions: Vorgang['orderPositions'];
   createdFromInboxId?: string;
+  /** CLOUD-ORDER-CHAIN-01: immutable confirm snapshot (write-once on merge). */
+  contractConfirmation?: ContractConfirmationSnapshot;
+  /** CLOUD-ORDER-CHAIN-01: execution start timestamp (write-once on merge). */
+  executionStartedAt?: string;
 }
 
 export interface WorkspaceVorgangRow {
@@ -27,8 +35,118 @@ export interface WorkspaceVorgangRow {
   updated_by: string | null;
 }
 
-export function stripVorgangForCloud(vorgang: Vorgang): VorgangCloudPayload {
+const PRE_BEAUFTRAGT: ReadonlySet<VorgangStatus> = new Set([
+  'neu',
+  'eingegangen',
+  'in_pruefung',
+  'in_verhandlung',
+]);
+
+const EXECUTION_STATUSES: ReadonlySet<VorgangStatus> = new Set([
+  'in_bearbeitung',
+  'wartet',
+  'abgeschlossen',
+]);
+
+function cloneCloudContractConfirmation(
+  snapshot: ContractConfirmationSnapshot,
+): ContractConfirmationSnapshot {
   return {
+    ...snapshot,
+    immutable: true,
+    positions: (snapshot.positions ?? []).map((p) => ({ ...p })),
+    negotiation: {
+      notes: [...(snapshot.negotiation?.notes ?? [])],
+      generalHints: [...(snapshot.negotiation?.generalHints ?? [])],
+      priceProposals: (snapshot.negotiation?.priceProposals ?? []).map((p) => ({ ...p })),
+      positionProposals: (snapshot.negotiation?.positionProposals ?? []).map((p) => ({ ...p })),
+      drafts: (snapshot.negotiation?.drafts ?? []).map((d) => ({
+        ...d,
+        sendConfirmed: false as const,
+      })),
+    },
+  };
+}
+
+function readCloudContractConfirmation(
+  value: unknown,
+): ContractConfirmationSnapshot | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const raw = value as ContractConfirmationSnapshot;
+  if (typeof raw.id !== 'string' || !raw.id) return undefined;
+  return cloneCloudContractConfirmation({
+    ...raw,
+    immutable: true,
+    positions: raw.positions ?? [],
+    negotiation: {
+      notes: raw.negotiation?.notes ?? [],
+      generalHints: raw.negotiation?.generalHints ?? [],
+      priceProposals: raw.negotiation?.priceProposals ?? [],
+      positionProposals: raw.negotiation?.positionProposals ?? [],
+      drafts: raw.negotiation?.drafts ?? [],
+    },
+  });
+}
+
+function readCloudExecutionStartedAt(value: unknown): string | undefined {
+  if (typeof value !== 'string' || !value.trim()) return undefined;
+  if (Number.isNaN(Date.parse(value))) return undefined;
+  return value;
+}
+
+/** Write-once: local wins when present; otherwise take cloud. */
+export function resolveWriteOnceContractConfirmation(
+  local: ContractConfirmationSnapshot | undefined,
+  cloud: ContractConfirmationSnapshot | undefined,
+): ContractConfirmationSnapshot | undefined {
+  if (local) return cloneCloudContractConfirmation(local);
+  if (cloud) return cloneCloudContractConfirmation(cloud);
+  return undefined;
+}
+
+/** Write-once: local wins when present; otherwise take cloud. */
+export function resolveWriteOnceExecutionStartedAt(
+  local: string | undefined,
+  cloud: string | undefined,
+): string | undefined {
+  if (local) return local;
+  return cloud;
+}
+
+/**
+ * Repair status after cloud merge so order-chain invariants hold:
+ * - confirmation ⇒ status at least beauftragt
+ * - in_bearbeitung|wartet|abgeschlossen ⇒ executionStartedAt present
+ */
+export function applyOrderChainCloudInvariants(vorgang: Vorgang): Vorgang {
+  let status = migrateVorgangStatus(vorgang.status);
+  const contractConfirmation = vorgang.contractConfirmation
+    ? cloneCloudContractConfirmation(vorgang.contractConfirmation)
+    : undefined;
+  const executionStartedAt = readCloudExecutionStartedAt(vorgang.executionStartedAt);
+
+  if (contractConfirmation && PRE_BEAUFTRAGT.has(status)) {
+    status = 'beauftragt';
+  }
+
+  if (EXECUTION_STATUSES.has(status) && !executionStartedAt) {
+    status = contractConfirmation ? 'beauftragt' : 'eingegangen';
+  }
+
+  if (executionStartedAt && status === 'beauftragt') {
+    status = 'in_bearbeitung';
+  }
+
+  return {
+    ...vorgang,
+    status,
+    contractConfirmation,
+    executionStartedAt,
+  };
+}
+
+export function stripVorgangForCloud(vorgang: Vorgang): VorgangCloudPayload {
+  const payload: VorgangCloudPayload = {
     id: vorgang.id,
     title: vorgang.title,
     customer: vorgang.customer,
@@ -39,6 +157,15 @@ export function stripVorgangForCloud(vorgang: Vorgang): VorgangCloudPayload {
     orderPositions: (vorgang.orderPositions ?? []).map((p) => ({ ...p })),
     createdFromInboxId: vorgang.createdFromInboxId,
   };
+
+  if (vorgang.contractConfirmation) {
+    payload.contractConfirmation = cloneCloudContractConfirmation(vorgang.contractConfirmation);
+  }
+  if (vorgang.executionStartedAt) {
+    payload.executionStartedAt = vorgang.executionStartedAt;
+  }
+
+  return payload;
 }
 
 export function buildVorgangCloudContentKey(vorgang: Vorgang): string {
@@ -63,7 +190,20 @@ export function parseVorgangCloudPayload(payload: Record<string, unknown> | null
     (payload.payload as VorgangCloudPayload | undefined) ??
     (payload as unknown as VorgangCloudPayload);
   if (!inner || typeof inner !== 'object' || !inner.id) return null;
-  return inner;
+
+  return {
+    id: inner.id,
+    title: inner.title,
+    customer: inner.customer,
+    baustelle: inner.baustelle,
+    status: migrateVorgangStatus(inner.status),
+    materialSource: inner.materialSource,
+    customerBilling: inner.customerBilling,
+    orderPositions: inner.orderPositions ?? [],
+    createdFromInboxId: inner.createdFromInboxId,
+    contractConfirmation: readCloudContractConfirmation(inner.contractConfirmation),
+    executionStartedAt: readCloudExecutionStartedAt(inner.executionStartedAt),
+  };
 }
 
 export function mergeCloudVorgangIntoLocal(
@@ -131,18 +271,24 @@ export function mergeCloudVorgangIntoLocal(
     return { vorgang: null, conflict: false };
   }
 
-  const merged: Vorgang = {
+  const merged: Vorgang = applyOrderChainCloudInvariants({
     ...mergeResult.entity,
-    documents: local?.documents ?? [],
-    tasks: local?.tasks ?? [],
-    photos: local?.photos ?? [],
-    invoices: local?.invoices ?? [],
-    customerBilling: mergeResult.entity.customerBilling ?? local?.customerBilling,
-    // Local-only fields (not in cloud payload) — preserve on merge.
-    negotiation: local?.negotiation,
-    contractConfirmation: local?.contractConfirmation,
-    executionStartedAt: local?.executionStartedAt,
-  };
+    documents: local.documents ?? [],
+    tasks: local.tasks ?? [],
+    photos: local.photos ?? [],
+    invoices: local.invoices ?? [],
+    customerBilling: mergeResult.entity.customerBilling ?? local.customerBilling,
+    // Live negotiation stays local-only.
+    negotiation: local.negotiation,
+    contractConfirmation: resolveWriteOnceContractConfirmation(
+      local.contractConfirmation,
+      cloudPayload.contractConfirmation,
+    ),
+    executionStartedAt: resolveWriteOnceExecutionStartedAt(
+      local.executionStartedAt,
+      cloudPayload.executionStartedAt,
+    ),
+  });
 
   return { vorgang: merged, conflict: false };
 }
@@ -196,7 +342,7 @@ export function createVorgangFromCloudRow(
   deviceId: string,
   workspaceId: string,
 ): Vorgang {
-  return {
+  return applyOrderChainCloudInvariants({
     id: cloudPayload.id,
     title: cloudPayload.title,
     customer: cloudPayload.customer,
@@ -210,6 +356,10 @@ export function createVorgangFromCloudRow(
     photos: [],
     invoices: [],
     createdFromInboxId: cloudPayload.createdFromInboxId,
+    contractConfirmation: cloudPayload.contractConfirmation
+      ? cloneCloudContractConfirmation(cloudPayload.contractConfirmation)
+      : undefined,
+    executionStartedAt: cloudPayload.executionStartedAt,
     sync: {
       updatedAt,
       version: rowVersion,
@@ -218,7 +368,7 @@ export function createVorgangFromCloudRow(
       deviceId,
       workspaceId,
     },
-  };
+  });
 }
 
 export function mergeVorgaengeFromPull(

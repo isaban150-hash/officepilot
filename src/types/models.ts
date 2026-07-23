@@ -1115,6 +1115,8 @@ export interface InvoiceDraftPosition {
   orderPositionId: string;
   description: string;
   plannedQuantity: number;
+  /** Read-only display of operative execution qty; never written back to the plan. */
+  executedQuantity?: number;
   billedQuantity: number;
   openQuantity: number;
   quantity: number;

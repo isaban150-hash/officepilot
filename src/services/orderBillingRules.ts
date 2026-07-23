@@ -17,10 +17,22 @@ export function getBilledQuantity(vorgang: Vorgang, orderPositionId: string): nu
     .reduce((sum, p) => sum + p.quantity, 0);
 }
 
-export function getOpenQuantity(vorgang: Vorgang, orderPositionId: string): number {
+/**
+ * Still-billable quantity for draft suggestions / openQuantity.
+ * Caps at planned; uses executedQuantity when set, otherwise planned (legacy fallback).
+ */
+export function getBillableOpenQuantity(vorgang: Vorgang, orderPositionId: string): number {
   const orderPosition = vorgang.orderPositions.find((p) => p.id === orderPositionId);
   if (!orderPosition) return 0;
-  return Math.max(0, orderPosition.plannedQuantity - getBilledQuantity(vorgang, orderPositionId));
+
+  const plannedQuantity = orderPosition.plannedQuantity;
+  const executedOrPlanned = orderPosition.executedQuantity ?? plannedQuantity;
+  const eligible = Math.min(plannedQuantity, executedOrPlanned);
+  return Math.max(0, eligible - getBilledQuantity(vorgang, orderPositionId));
+}
+
+export function getOpenQuantity(vorgang: Vorgang, orderPositionId: string): number {
+  return getBillableOpenQuantity(vorgang, orderPositionId);
 }
 
 export function hasSchlussrechnung(vorgang: Vorgang): boolean {
@@ -47,7 +59,7 @@ export function getPositionBillingStatus(
   if (!orderPosition) return null;
 
   const billedQuantity = getBilledQuantity(vorgang, orderPositionId);
-  const openQuantity = Math.max(0, orderPosition.plannedQuantity - billedQuantity);
+  const openQuantity = getBillableOpenQuantity(vorgang, orderPositionId);
 
   return {
     orderPositionId,

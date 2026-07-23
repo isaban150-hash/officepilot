@@ -362,6 +362,12 @@ export function RechnungPage() {
                     label={translate('invoice.planned')}
                     value={`${pos.plannedQuantity} ${pos.unit}`}
                   />
+                  {pos.executedQuantity !== undefined && (
+                    <DataRow
+                      label={translate('invoice.executed')}
+                      value={`${pos.executedQuantity} ${pos.unit}`}
+                    />
+                  )}
                   <DataRow
                     label={translate('invoice.alreadyBilled')}
                     value={`${pos.billedQuantity} ${pos.unit}`}
@@ -378,6 +384,7 @@ export function RechnungPage() {
                       type="number"
                       className="input input--small"
                       min="0"
+                      max={pos.openQuantity}
                       step="0.5"
                       value={pos.quantity}
                       disabled={!pos.billable}
