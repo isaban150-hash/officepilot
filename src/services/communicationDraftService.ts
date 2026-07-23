@@ -373,4 +373,103 @@ export function buildCommunicationDraft(
   }
 }
 
+export interface NegotiationDraftInput {
+  kind: 'price_change' | 'clarification' | 'adjustment_request' | 'appointment_request';
+  positionLabel?: string;
+  originalUnitPrice?: number;
+  proposedUnitPrice?: number;
+  unit?: string;
+  message?: string;
+  appointmentDate?: string;
+}
+
+/**
+ * Extends draft communication for contract negotiation.
+ * Confirm-first only — never sends.
+ */
+export function buildNegotiationDraftCore(
+  input: NegotiationDraftInput,
+  context: CommunicationContext,
+): CommunicationDraftCore | null {
+  const ref = customerReference(context);
+  const greeting =
+    recipientName(context) === 'Sehr geehrte Damen und Herren'
+      ? 'Sehr geehrte Damen und Herren,'
+      : `Sehr geehrte/r ${recipientName(context)},`;
+
+  if (input.kind === 'price_change') {
+    if (
+      !input.positionLabel ||
+      input.proposedUnitPrice === undefined ||
+      Number.isNaN(input.proposedUnitPrice)
+    ) {
+      return null;
+    }
+    const unit = input.unit ? `/${input.unit}` : '';
+    const original =
+      input.originalUnitPrice !== undefined
+        ? `${input.originalUnitPrice.toLocaleString('de-DE')} €${unit}`
+        : undefined;
+    const proposed = `${input.proposedUnitPrice.toLocaleString('de-DE')} €${unit}`;
+    const body = [
+      greeting,
+      '',
+      ref
+        ? `${ref} möchten wir eine Preisänderung für „${input.positionLabel}“ vorschlagen.`
+        : `Wir möchten eine Preisänderung für „${input.positionLabel}“ vorschlagen.`,
+      original ? `Ursprünglich: ${original}` : '',
+      `Vorschlag: ${proposed}`,
+      input.message ? `Hinweis: ${input.message.trim()}` : '',
+      '',
+      'Bitte prüfen Sie den Vorschlag. Mit freundlichen Grüßen',
+      context.companyName,
+    ]
+      .filter((line) => line !== '')
+      .join('\n');
+
+    return {
+      intent: 'price_adjustment',
+      subject: ref
+        ? `Preisvorschlag – ${context.vorgangSummary?.title ?? context.subject}`
+        : 'Preisvorschlag',
+      body,
+      tone: 'formal',
+      basedOnFacts: [
+        `Position: ${input.positionLabel}`,
+        original ? `Ursprungspreis: ${original}` : '',
+        `Vorschlag: ${proposed}`,
+      ].filter(Boolean),
+      notIncluded: ['Keine automatische Vertragsänderung', 'Kein automatischer Versand'],
+    };
+  }
+
+  if (input.kind === 'appointment_request') {
+    const date = input.appointmentDate?.trim();
+    if (!date) return null;
+    return buildGenericDraft(
+      'appointment_change',
+      { newDate: date, reason: input.message?.trim() || 'Terminabstimmung zur Verhandlung' },
+      context,
+      'Terminanfrage',
+      `Wir bitten um einen Termin am ${date} zur Abstimmung.`,
+    );
+  }
+
+  const coreMessage =
+    input.message?.trim() ||
+    (input.kind === 'adjustment_request'
+      ? 'Wir bitten um eine Anpassung der Vertragsunterlagen. Bitte prüfen Sie unseren Vorschlag.'
+      : 'Wir haben eine Rückfrage zum Werkvertrag und bitten um kurze Rückmeldung.');
+
+  return buildCommunicationDraft(
+    {
+      userText: coreMessage,
+      userAnswers: { coreMessage },
+      contextRef: { type: 'vorgang', id: context.vorgangSummary?.id },
+    },
+    context,
+    'document_reply',
+  );
+}
+
 export { applyRewriteStyle, improveText };

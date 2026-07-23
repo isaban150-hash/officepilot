@@ -19,10 +19,17 @@ import {
 } from '../services/invoiceService';
 import { hasMissingOrderPrice } from '../services/orderPositionFactory';
 import { formatOrderUnitDisplay } from '../services/orderUnitMapper';
-import { getVorgangById, removeOrderPosition } from '../services/vorgangService';
+import {
+  getAllowedVorgangStatusTransitions,
+} from '../services/vorgangLifecycleService';
+import { getVorgangById, removeOrderPosition, updateVorgangStatus } from '../services/vorgangService';
 import { InvoiceListCard } from '../components/invoice/InvoiceListCard';
 import { CommunicationIntegrationPanel } from '../components/communication/CommunicationIntegrationPanel';
 import { VORGANG_COMMUNICATION_BUTTON_KEYS } from '../components/communication/communicationNavigation';
+import { VorgangNegotiationPanel } from '../components/vorgang/VorgangNegotiationPanel';
+import { VorgangContractConfirmPanel } from '../components/vorgang/VorgangContractConfirmPanel';
+import { VorgangExecutionStartPanel } from '../components/vorgang/VorgangExecutionStartPanel';
+import { OrderPositionExecutedQuantityField } from '../components/vorgang/OrderPositionExecutedQuantityField';
 import { AreaAiPanel } from '../components/ai/AreaAiPanel';
 import {
   formatPaymentCurrency,
@@ -37,7 +44,7 @@ import { askVorgangAi } from '../services/vorgang/vorgangAiService';
 import { recordVorgangContext } from '../services/brain/companySessionService';
 import { getLastPersistSuccess } from '../services/persistenceService';
 import type { VorgangNote } from '../types/communication';
-import type { OrderPosition, Vorgang } from '../types/models';
+import type { OrderPosition, Vorgang, VorgangStatus } from '../types/models';
 import type { TranslationKey } from '../i18n';
 
 type FormMode = { type: 'add' } | { type: 'edit'; position: OrderPosition } | null;
@@ -158,6 +165,23 @@ export function VorgangDetailPage() {
     setVorgang(updated);
   };
 
+  const handleStatusChange = (nextStatus: VorgangStatus) => {
+    if (!vorgang) return;
+    const result = updateVorgangStatus(vorgang.id, nextStatus);
+    if (!result.success) {
+      showToast(translate(result.errorKey));
+      return;
+    }
+    setVorgang(result.vorgang);
+    if (!getLastPersistSuccess()) {
+      showToast(translate('persist.failed.userAction'));
+    }
+  };
+
+  const allowedStatusTransitions = vorgang
+    ? getAllowedVorgangStatusTransitions(vorgang.status)
+    : [];
+
   const handleInvoiceUpdated = () => {
     refreshVorgang();
   };
@@ -189,9 +213,52 @@ export function VorgangDetailPage() {
   const technicalPanels = (
     <>
       <Card>
+        <DataRow label={translate('vorgang.status.label')} value={translate(statusKey)} />
         <DataRow label={translate('analysis.baustelle')} value={vorgang.baustelle} />
         <DataRow label={translate('vorgang.materialSource')} value={translate(materialKey)} />
+        {allowedStatusTransitions.length > 0 ? (
+          <label className="form-group">
+            <span>{translate('vorgang.status.next')}</span>
+            <select
+              className="input"
+              data-testid="vorgang-status-select"
+              value=""
+              onChange={(event) => {
+                const next = event.target.value as VorgangStatus;
+                if (next) handleStatusChange(next);
+              }}
+            >
+              <option value="">{translate('vorgang.status.next')}</option>
+              {allowedStatusTransitions.map((status) => (
+                <option key={status} value={status}>
+                  {translate(`status.${status}` as TranslationKey)}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
       </Card>
+
+      <VorgangNegotiationPanel
+        vorgang={vorgang}
+        translate={translate}
+        onUpdated={refreshVorgang}
+        onToast={showToast}
+      />
+
+      <VorgangContractConfirmPanel
+        vorgang={vorgang}
+        translate={translate}
+        onUpdated={refreshVorgang}
+        onToast={showToast}
+      />
+
+      <VorgangExecutionStartPanel
+        vorgang={vorgang}
+        translate={translate}
+        onUpdated={refreshVorgang}
+        onToast={showToast}
+      />
 
       <section className="section">
         <h2 className="section__title">{translate('vorgang.documents')}</h2>
@@ -246,8 +313,16 @@ export function VorgangDetailPage() {
               <Card key={pos.id} className="order-position-card">
                 <CardTitle>{pos.description}</CardTitle>
                 <DataRow
-                  label={translate('invoice.planned')}
+                  label={translate('execution.plannedQuantity')}
                   value={`${pos.plannedQuantity} ${unitLabel}`}
+                />
+                <OrderPositionExecutedQuantityField
+                  vorgang={vorgang}
+                  position={pos}
+                  unitLabel={unitLabel}
+                  translate={translate}
+                  onUpdated={setVorgang}
+                  onToast={showToast}
                 />
                 <DataRow
                   label={translate('invoice.unitPrice')}

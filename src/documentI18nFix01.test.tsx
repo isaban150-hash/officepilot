@@ -99,9 +99,9 @@ describe('DOCUMENT-I18N-FIX-01', () => {
         language="bg"
       />,
     );
-    expect(html).toContain(t('docAssistant.section.brief', 'bg'));
-    expect(html).toContain(t('docAssistant.section.filing', 'bg'));
-    expect(html).toContain(t('docAssistant.section.original', 'bg'));
+    expect(html).toContain(t('docGuidance.title', 'bg'));
+    expect(html).toContain(t('docGuidance.q.what', 'bg'));
+    expect(html).toContain(t('docGuidance.q.actions', 'bg'));
     expect(html).toContain(t(assistant.documentTypeLabelKey, 'bg'));
     expect(html).not.toMatch(/Erneut versuchen|Bitte prüfen Sie das Ergebnis/);
   });

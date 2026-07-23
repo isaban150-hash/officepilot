@@ -11,6 +11,10 @@ import {
   findSimilarVorgaenge as findSimilarInList,
 } from './vorgangMatchingService';
 import { resolveInboxItemForLinking, setInboxVorgangLink } from './inboxVorgangLinkService';
+import {
+  canTransitionVorgangStatus,
+  migrateVorgangStatus,
+} from './vorgangLifecycleService';
 import { persistAll } from './persistenceService';
 import { generateEntityId, withNewEntitySync, withUpdatedEntitySync, withTombstonedEntity, filterSyncActive, isEntitySyncActive } from './sync/syncMetaService';
 import type {
@@ -21,6 +25,8 @@ import type {
   InvoicePayment,
   InvoicePaymentStatus,
   MaterialStandard,
+  ContractConfirmationSnapshot,
+  ContractNegotiationState,
   OrderPosition,
   OrderPositionEditableField,
   OrderPositionInput,
@@ -28,11 +34,61 @@ import type {
   VorgangDocument,
   VorgangDraft,
   VorgangInvoice,
+  VorgangStatus,
 } from '../types/models';
+import {
+  alignOrderPositionsToConfirmation,
+  buildOrderPositionsFromSnapshot,
+  isSnapshotAlignable,
+  orderPositionsMatchSnapshot,
+} from './contractPositionAlignService';
 
 export type OrderPositionMutationResult =
   | { success: true; vorgang: Vorgang }
   | { success: false; errorKey: string };
+
+export type VorgangStatusUpdateResult =
+  | { success: true; vorgang: Vorgang }
+  | { success: false; errorKey: 'vorgang.notFound' | 'vorgang.status.invalidTransition' };
+
+export type VorgangNegotiationUpdateResult =
+  | { success: true; vorgang: Vorgang }
+  | { success: false; errorKey: 'vorgang.notFound' };
+
+export type VorgangConfirmationUpdateResult =
+  | { success: true; vorgang: Vorgang }
+  | {
+      success: false;
+      errorKey:
+        | 'vorgang.notFound'
+        | 'vorgang.status.invalidTransition'
+        | 'confirmation.snapshotImmutable'
+        | 'confirmation.alreadyExists'
+        | 'confirmation.alignFailed';
+    };
+
+export type VorgangExecutionStartResult =
+  | { success: true; vorgang: Vorgang }
+  | {
+      success: false;
+      errorKey:
+        | 'vorgang.notFound'
+        | 'vorgang.status.invalidTransition'
+        | 'execution.notBeauftragt'
+        | 'execution.snapshotRequired'
+        | 'execution.alreadyStarted';
+    };
+
+export type ExecutedQuantityUpdateResult =
+  | { success: true; vorgang: Vorgang }
+  | {
+      success: false;
+      errorKey:
+        | 'position.vorgangNotFound'
+        | 'position.notFound'
+        | 'execution.qty.notAllowed'
+        | 'execution.qty.invalid';
+    };
 
 let vorgaenge: Vorgang[] = [];
 
@@ -68,6 +124,41 @@ function cloneVorgangInvoice(invoice: VorgangInvoice): VorgangInvoice {
   };
 }
 
+function cloneDraftSnapshot(
+  draft: NonNullable<ContractNegotiationState['draft']>,
+): NonNullable<ContractNegotiationState['draft']> {
+  return { ...draft, sendConfirmed: false as const };
+}
+
+function cloneNegotiation(state: ContractNegotiationState): ContractNegotiationState {
+  return {
+    ...state,
+    notes: [...(state.notes ?? [])],
+    generalHints: [...(state.generalHints ?? [])],
+    priceProposals: (state.priceProposals ?? []).map((p) => ({ ...p })),
+    positionProposals: (state.positionProposals ?? []).map((p) => ({ ...p })),
+    draft: state.draft ? cloneDraftSnapshot(state.draft) : state.draft,
+    draftHistory: (state.draftHistory ?? []).map(cloneDraftSnapshot),
+  };
+}
+
+function cloneContractConfirmation(
+  snapshot: ContractConfirmationSnapshot,
+): ContractConfirmationSnapshot {
+  return {
+    ...snapshot,
+    immutable: true,
+    positions: snapshot.positions.map((p) => ({ ...p })),
+    negotiation: {
+      notes: [...snapshot.negotiation.notes],
+      generalHints: [...snapshot.negotiation.generalHints],
+      priceProposals: snapshot.negotiation.priceProposals.map((p) => ({ ...p })),
+      positionProposals: snapshot.negotiation.positionProposals.map((p) => ({ ...p })),
+      drafts: snapshot.negotiation.drafts.map(cloneDraftSnapshot),
+    },
+  };
+}
+
 function cloneVorgang(v: Vorgang): Vorgang {
   return {
     ...v,
@@ -77,6 +168,10 @@ function cloneVorgang(v: Vorgang): Vorgang {
     tasks: v.tasks.map((t) => ({ ...t })),
     photos: v.photos.map((p) => ({ ...p })),
     invoices: (v.invoices ?? []).map(cloneVorgangInvoice),
+    negotiation: v.negotiation ? cloneNegotiation(v.negotiation) : undefined,
+    contractConfirmation: v.contractConfirmation
+      ? cloneContractConfirmation(v.contractConfirmation)
+      : undefined,
   };
 }
 
@@ -92,10 +187,53 @@ function defaultCustomerBilling(vorgang: Vorgang): CustomerBilling {
   };
 }
 
+function normalizeNegotiation(
+  state: ContractNegotiationState | undefined,
+): ContractNegotiationState | undefined {
+  if (!state) return undefined;
+  return {
+    startedAt: state.startedAt,
+    closed: state.closed === true,
+    completedAt: state.completedAt,
+    notes: state.notes ?? [],
+    generalHints: state.generalHints ?? [],
+    priceProposals: state.priceProposals ?? [],
+    positionProposals: state.positionProposals ?? [],
+    draft: state.draft
+      ? { ...state.draft, sendConfirmed: false as const }
+      : state.draft ?? null,
+    draftHistory: (state.draftHistory ?? []).map((draft) => ({
+      ...draft,
+      sendConfirmed: false as const,
+    })),
+  };
+}
+
+function normalizeContractConfirmation(
+  snapshot: ContractConfirmationSnapshot | undefined,
+): ContractConfirmationSnapshot | undefined {
+  if (!snapshot) return undefined;
+  return cloneContractConfirmation({
+    ...snapshot,
+    immutable: true,
+    positions: snapshot.positions ?? [],
+    negotiation: {
+      notes: snapshot.negotiation?.notes ?? [],
+      generalHints: snapshot.negotiation?.generalHints ?? [],
+      priceProposals: snapshot.negotiation?.priceProposals ?? [],
+      positionProposals: snapshot.negotiation?.positionProposals ?? [],
+      drafts: snapshot.negotiation?.drafts ?? [],
+    },
+  });
+}
+
 function normalizeVorgang(v: Vorgang): Vorgang {
   const normalized = cloneVorgang({
     ...v,
+    status: migrateVorgangStatus(v.status),
     orderPositions: v.orderPositions ?? [],
+    negotiation: normalizeNegotiation(v.negotiation),
+    contractConfirmation: normalizeContractConfirmation(v.contractConfirmation),
     invoices: (v.invoices ?? []).map((inv) => ({
       ...inv,
       type: inv.type ?? 'abschlag',
@@ -111,6 +249,17 @@ function normalizeVorgang(v: Vorgang): Vorgang {
 
   if (!normalized.customerBilling) {
     normalized.customerBilling = defaultCustomerBilling(normalized);
+  }
+
+  // Legacy: confirmed Vorgänge must keep operative positions aligned to snapshot.
+  if (normalized.contractConfirmation) {
+    const aligned = alignOrderPositionsToConfirmation(
+      normalized.orderPositions,
+      normalized.contractConfirmation,
+    );
+    if (aligned.changed) {
+      normalized.orderPositions = aligned.positions;
+    }
   }
 
   return normalized;
@@ -266,7 +415,7 @@ export function createVorgangFromInbox(
       title: draft.title,
       customer: draft.customer,
       baustelle: draft.baustelle,
-      status: 'neu' as const,
+      status: 'eingegangen' as const,
       materialSource: draft.materialSource,
       customerBilling: {
         name: draft.customer,
@@ -294,6 +443,198 @@ export function createVorgangFromInbox(
   if (!linkedInbox) return null;
 
   return { vorgang: cloneVorgang(newVorgang), inbox: linkedInbox };
+}
+
+export function updateVorgangStatus(
+  vorgangId: string,
+  nextStatus: VorgangStatus,
+): VorgangStatusUpdateResult {
+  const index = vorgaenge.findIndex((v) => v.id === vorgangId && isEntitySyncActive(v));
+  if (index === -1) {
+    return { success: false, errorKey: 'vorgang.notFound' };
+  }
+
+  const current = normalizeVorgang(vorgaenge[index]!);
+  if (!canTransitionVorgangStatus(current.status, nextStatus)) {
+    return { success: false, errorKey: 'vorgang.status.invalidTransition' };
+  }
+
+  const updated = cloneVorgang({
+    ...current,
+    status: migrateVorgangStatus(nextStatus),
+  });
+  return { success: true, vorgang: updateVorgangInStore(updated) };
+}
+
+/**
+ * Atomically moves beauftragt → in_bearbeitung and sets executionStartedAt.
+ * Does not touch snapshot, orderPositions, negotiation, or documents.
+ */
+export function startVorgangExecutionAt(
+  vorgangId: string,
+  startedAt: string,
+): VorgangExecutionStartResult {
+  const index = vorgaenge.findIndex((v) => v.id === vorgangId && isEntitySyncActive(v));
+  if (index === -1) {
+    return { success: false, errorKey: 'vorgang.notFound' };
+  }
+
+  const current = cloneVorgang(vorgaenge[index]!);
+  const status = migrateVorgangStatus(current.status);
+
+  if (current.executionStartedAt || status === 'in_bearbeitung') {
+    return { success: false, errorKey: 'execution.alreadyStarted' };
+  }
+  if (status !== 'beauftragt') {
+    return { success: false, errorKey: 'execution.notBeauftragt' };
+  }
+  if (!current.contractConfirmation) {
+    return { success: false, errorKey: 'execution.snapshotRequired' };
+  }
+  if (!canTransitionVorgangStatus(status, 'in_bearbeitung')) {
+    return { success: false, errorKey: 'vorgang.status.invalidTransition' };
+  }
+  if (!startedAt || Number.isNaN(Date.parse(startedAt))) {
+    return { success: false, errorKey: 'vorgang.status.invalidTransition' };
+  }
+
+  const updated = cloneVorgang({
+    ...current,
+    status: 'in_bearbeitung',
+    executionStartedAt: startedAt,
+  });
+  return { success: true, vorgang: updateVorgangInStore(updated) };
+}
+
+export function canUpdateExecutedQuantity(vorgang: Vorgang): boolean {
+  return vorgang.status === 'in_bearbeitung' && Boolean(vorgang.executionStartedAt);
+}
+
+/**
+ * Updates only executedQuantity on one position.
+ * Does not change plannedQuantity, prices, snapshot, or billing.
+ */
+export function updateOrderPositionExecutedQuantity(
+  vorgangId: string,
+  positionId: string,
+  executedQuantity: number | undefined,
+): ExecutedQuantityUpdateResult {
+  const index = vorgaenge.findIndex((v) => v.id === vorgangId && isEntitySyncActive(v));
+  if (index === -1) {
+    return { success: false, errorKey: 'position.vorgangNotFound' };
+  }
+
+  const current = cloneVorgang(vorgaenge[index]!);
+  if (!canUpdateExecutedQuantity(current)) {
+    return { success: false, errorKey: 'execution.qty.notAllowed' };
+  }
+
+  const positionIndex = current.orderPositions.findIndex((p) => p.id === positionId);
+  if (positionIndex === -1) {
+    return { success: false, errorKey: 'position.notFound' };
+  }
+
+  if (executedQuantity !== undefined) {
+    if (!Number.isFinite(executedQuantity) || executedQuantity < 0) {
+      return { success: false, errorKey: 'execution.qty.invalid' };
+    }
+  }
+
+  const nextPositions = current.orderPositions.map((position, i) => {
+    if (i !== positionIndex) return position;
+    const next = { ...position };
+    if (executedQuantity === undefined) {
+      delete next.executedQuantity;
+    } else {
+      next.executedQuantity = executedQuantity;
+    }
+    return next;
+  });
+
+  const updated = cloneVorgang({
+    ...current,
+    orderPositions: nextPositions,
+  });
+  return { success: true, vorgang: updateVorgangInStore(updated) };
+}
+
+/** Persists negotiation proposals on the Vorgang without touching linked contract documents. */
+export function saveVorgangNegotiation(
+  vorgangId: string,
+  negotiation: ContractNegotiationState | undefined,
+): VorgangNegotiationUpdateResult {
+  const index = vorgaenge.findIndex((v) => v.id === vorgangId && isEntitySyncActive(v));
+  if (index === -1) {
+    return { success: false, errorKey: 'vorgang.notFound' };
+  }
+
+  const current = normalizeVorgang(vorgaenge[index]!);
+  const updated = cloneVorgang({
+    ...current,
+    negotiation: negotiation ? normalizeNegotiation(negotiation) : undefined,
+  });
+  return { success: true, vorgang: updateVorgangInStore(updated) };
+}
+
+/**
+ * Atomically: freeze snapshot, align orderPositions from snapshot, close negotiation, set beauftragt.
+ * Refuses overwrite if a snapshot already exists. No partial writes on failure.
+ */
+export function saveVorgangContractConfirmation(
+  vorgangId: string,
+  snapshot: ContractConfirmationSnapshot,
+  negotiation: ContractNegotiationState,
+): VorgangConfirmationUpdateResult {
+  const index = vorgaenge.findIndex((v) => v.id === vorgangId && isEntitySyncActive(v));
+  if (index === -1) {
+    return { success: false, errorKey: 'vorgang.notFound' };
+  }
+
+  // Read raw (pre-normalize) so failed confirms never leave side effects from migration.
+  const current = cloneVorgang(vorgaenge[index]!);
+  if (current.contractConfirmation) {
+    return { success: false, errorKey: 'confirmation.alreadyExists' };
+  }
+  if (!canTransitionVorgangStatus(migrateVorgangStatus(current.status), 'beauftragt')) {
+    return { success: false, errorKey: 'vorgang.status.invalidTransition' };
+  }
+
+  const frozen = normalizeContractConfirmation({
+    ...snapshot,
+    immutable: true,
+  });
+  if (!frozen || !isSnapshotAlignable(frozen)) {
+    return { success: false, errorKey: 'confirmation.alignFailed' };
+  }
+
+  const alignedPositions = buildOrderPositionsFromSnapshot(frozen, current.orderPositions);
+  if (!orderPositionsMatchSnapshot(alignedPositions, frozen)) {
+    return { success: false, errorKey: 'confirmation.alignFailed' };
+  }
+
+  const updated = cloneVorgang({
+    ...current,
+    status: 'beauftragt',
+    orderPositions: alignedPositions,
+    negotiation: normalizeNegotiation(negotiation),
+    contractConfirmation: frozen,
+  });
+  return { success: true, vorgang: updateVorgangInStore(updated) };
+}
+
+/** Guard: existing confirmation snapshots must never be replaced. */
+export function replaceVorgangContractConfirmation(
+  vorgangId: string,
+  _snapshot: ContractConfirmationSnapshot,
+): VorgangConfirmationUpdateResult {
+  const current = getVorgangById(vorgangId);
+  if (!current) {
+    return { success: false, errorKey: 'vorgang.notFound' };
+  }
+  if (current.contractConfirmation) {
+    return { success: false, errorKey: 'confirmation.snapshotImmutable' };
+  }
+  return { success: false, errorKey: 'confirmation.snapshotImmutable' };
 }
 
 export function linkInboxToExistingVorgang(

@@ -29,7 +29,12 @@ export type MaterialStandard =
   | 'unclear';
 
 export type VorgangStatus =
+  /** @deprecated Legacy persisted value; migrated to `eingegangen` on load. */
   | 'neu'
+  | 'eingegangen'
+  | 'in_pruefung'
+  | 'in_verhandlung'
+  | 'beauftragt'
   | 'in_bearbeitung'
   | 'wartet'
   | 'abgeschlossen';
@@ -833,6 +838,8 @@ export interface OrderPosition {
   unitPrice: number;
   category?: OrderPositionCategory;
   billable?: boolean;
+  /** Actually executed quantity during order execution — not plan, not billed. */
+  executedQuantity?: number;
 }
 
 export type OrderPositionEditableField =
@@ -951,6 +958,104 @@ export interface VorgangInvoice {
   sentNote?: string;
 }
 
+/** Negotiation proposals live on the Vorgang only — never mutate the original contract document. */
+export type NegotiationDraftKind =
+  | 'price_change'
+  | 'clarification'
+  | 'adjustment_request'
+  | 'appointment_request';
+
+export interface NegotiationPriceProposal {
+  id: string;
+  orderPositionId: string;
+  positionLabel: string;
+  originalUnitPrice: number;
+  proposedUnitPrice: number;
+  unit: OrderUnit;
+  note?: string;
+  createdAt: string;
+}
+
+export interface NegotiationPositionProposal {
+  id: string;
+  description: string;
+  proposedUnitPrice?: number;
+  proposedQuantity?: number;
+  unit?: OrderUnit;
+  note?: string;
+  createdAt: string;
+}
+
+export type NegotiationCommunicationIntent =
+  | 'price_adjustment'
+  | 'document_reply'
+  | 'appointment_change';
+
+export interface NegotiationDraftSnapshot {
+  id: string;
+  kind: NegotiationDraftKind;
+  /** Mapped communication intent used to build the draft. */
+  intent: NegotiationCommunicationIntent;
+  subject: string;
+  body: string;
+  createdAt: string;
+  /**
+   * Confirm-first: drafts are never auto-sent.
+   * Remains false until the user explicitly copies/sends outside this service.
+   */
+  sendConfirmed: false;
+}
+
+export interface ContractNegotiationState {
+  startedAt?: string;
+  /** Set when the user explicitly confirms the order — blocks further proposals. */
+  closed?: boolean;
+  completedAt?: string;
+  notes: string[];
+  generalHints: string[];
+  priceProposals: NegotiationPriceProposal[];
+  positionProposals: NegotiationPositionProposal[];
+  draft?: NegotiationDraftSnapshot | null;
+  /** Previous drafts kept as history (never auto-deleted). */
+  draftHistory?: NegotiationDraftSnapshot[];
+}
+
+export interface ConfirmedContractPositionSnapshot {
+  id: string;
+  description: string;
+  plannedQuantity: number;
+  unit: OrderUnit;
+  unitLabel?: string;
+  unitPrice: number;
+  category?: OrderPositionCategory;
+  billable?: boolean;
+}
+
+export interface ContractConfirmationNegotiationSummary {
+  notes: string[];
+  generalHints: string[];
+  priceProposals: NegotiationPriceProposal[];
+  positionProposals: NegotiationPositionProposal[];
+  drafts: NegotiationDraftSnapshot[];
+}
+
+/**
+ * Immutable confirmed contract stand on the Vorgang.
+ * Must never be overwritten — later changes belong in new Vorgänge (e.g. Nachtrag).
+ */
+export interface ContractConfirmationSnapshot {
+  id: string;
+  confirmedAt: string;
+  customer: string;
+  auftraggeber: string;
+  baustelle: string;
+  title: string;
+  positions: ConfirmedContractPositionSnapshot[];
+  negotiation: ContractConfirmationNegotiationSummary;
+  /** Marker for tests and guardrails — always true once created. */
+  immutable: true;
+}
+
 export interface Vorgang {
   id: string;
   title: string;
@@ -965,6 +1070,12 @@ export interface Vorgang {
   photos: VorgangPhoto[];
   invoices: VorgangInvoice[];
   createdFromInboxId?: string;
+  /** Verhandlungsvorschläge — getrennt vom unveränderlichen Werkvertrag. */
+  negotiation?: ContractNegotiationState;
+  /** Frozen confirmed stand — created only by explicit user confirmation. */
+  contractConfirmation?: ContractConfirmationSnapshot;
+  /** Set when the user explicitly starts order execution (beauftragt → in_bearbeitung). */
+  executionStartedAt?: string;
   sync?: SyncMeta;
 }
 

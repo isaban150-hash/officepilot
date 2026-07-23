@@ -29,7 +29,7 @@ function sampleVorgang(overrides: Partial<Vorgang> = {}): Vorgang {
     title: 'Badrenovierung',
     customer: 'Müller GmbH',
     baustelle: 'Hauptstr. 1',
-    status: 'neu',
+    status: 'eingegangen',
     materialSource: 'unclear',
     orderPositions: [
       {

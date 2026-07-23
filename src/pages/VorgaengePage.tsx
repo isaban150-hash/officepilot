@@ -10,6 +10,10 @@ import type { TranslationKey } from '../i18n';
 
 const STATUS_TONE: Record<string, 'default' | 'info' | 'warning' | 'success'> = {
   neu: 'info',
+  eingegangen: 'info',
+  in_pruefung: 'info',
+  in_verhandlung: 'warning',
+  beauftragt: 'warning',
   in_bearbeitung: 'warning',
   wartet: 'default',
   abgeschlossen: 'success',

@@ -164,10 +164,7 @@ describe('CONTRACT-WORKSPACE-ASSISTANT-COMPACT-01', () => {
     expect(html).toContain('aria-expanded="false"');
 
     expect(html).not.toContain('data-testid="review-section-content-assistant-details"');
-    expect(html).not.toContain(`>${translate('docAssistant.section.brief')}<`);
-    expect(html).not.toContain(`>${translate('docAssistant.section.actions')}<`);
-    expect(html).not.toContain(`>${translate('docAssistant.section.filing')}<`);
-    expect(html).not.toContain(`>${translate('docAssistant.section.original')}<`);
+    expect(html).not.toContain('data-testid="document-guidance-panel"');
     expect(html).not.toContain(`>${translate('docAssistant.section.steuerberater')}<`);
     expect(html).not.toContain(`>${translate('docAssistant.section.trust')}<`);
   });
@@ -203,10 +200,8 @@ describe('CONTRACT-WORKSPACE-ASSISTANT-COMPACT-01', () => {
 
     const html = host.innerHTML;
     expect(html).toContain('data-testid="review-section-content-assistant-details"');
-    expect(html).toContain(translate('docAssistant.section.brief'));
-    expect(html).toContain(translate('docAssistant.section.actions'));
-    expect(html).toContain(translate('docAssistant.section.filing'));
-    expect(html).toContain(translate('docAssistant.section.original'));
+    expect(html).toContain('data-testid="document-guidance-panel"');
+    expect(html).toContain(translate('docGuidance.title'));
     expect(html).toContain(translate('docAssistant.section.steuerberater'));
     expect(html).toContain(translate('docAssistant.section.trust'));
     expect(html).toContain('data-testid="doc-assistant-change-type"');
@@ -231,12 +226,10 @@ describe('CONTRACT-WORKSPACE-ASSISTANT-COMPACT-01', () => {
     );
 
     expect(html).not.toContain('data-compact="true"');
-    expect(html).toContain(translate('docAssistant.section.brief'));
-    expect(html).toContain(translate('docAssistant.section.actions'));
-    expect(html).toContain(translate('docAssistant.section.filing'));
-    expect(html).toContain(translate('docAssistant.section.original'));
-    expect(html).toContain(translate('docAssistant.section.steuerberater'));
-    expect(html).toContain(translate('docAssistant.section.trust'));
+    expect(html).toContain('data-testid="document-guidance-panel"');
+    expect(html).toContain(translate('docGuidance.title'));
+    expect(html).toContain(translate('docGuidance.q.what'));
+    expect(html).toContain('data-testid="doc-assistant-details"');
   });
 
   it('Fall D: Workspace-Reihenfolge unverändert, Assistant kompakt auf Page', () => {

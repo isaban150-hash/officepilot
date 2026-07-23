@@ -179,7 +179,7 @@ export const MOCK_VORGAENGE: Vorgang[] = [
     title: 'Elektroinstallation Weber',
     customer: 'Weber GmbH',
     baustelle: 'Industriestr. 45, Potsdam',
-    status: 'neu',
+    status: 'eingegangen',
     materialSource: 'betrieb',
     orderPositions: [],
     documents: [

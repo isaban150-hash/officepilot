@@ -167,4 +167,52 @@ export const bgDocAssistant = {
   'docAssistant.error.title.persistFailed': 'Запазването не успя',
   'docAssistant.error.title.navigationFailed': 'Страницата не можа да се отвори',
   'docAssistant.error.title.technicalFailure': 'Обработката не успя',
+  'docGuidance.title': 'Препоръка за този документ',
+  'docGuidance.q.what': 'Какъв е този документ?',
+  'docGuidance.q.why': 'Защо получихте този документ?',
+  'docGuidance.q.act': 'Трябва ли да направите нещо?',
+  'docGuidance.q.deadline': 'Има ли срок?',
+  'docGuidance.q.reply': 'Трябва ли да отговорите?',
+  'docGuidance.q.retain': 'Трябва ли да запазите документа?',
+  'docGuidance.q.paper': 'Коя хартиена папка се препоръчва?',
+  'docGuidance.q.actions': 'Кое действие можете да стартирате сега?',
+  'docGuidance.what.typed':
+    'Вероятно става дума за {typeKey} от {sender}. Моля, проверете в оригинала.',
+  'docGuidance.what.letter':
+    'Вероятно писмо ({typeKey}) от {sender}. Моля, проверете в оригинала.',
+  'docGuidance.why.advertisement':
+    'Вероятно реклама или нежелани материали – проверете бизнес релевантността.',
+  'docGuidance.why.invoice':
+    'Вероятно за фактуриране или проверка на плащане. Проверете сума и получател.',
+  'docGuidance.why.contract':
+    'Вероятно за преглед или възлагане. Моля, проверете съдържанието в оригинала.',
+  'docGuidance.why.authority':
+    'Вероятно от институция към Вашата фирма. Моля, проверете повода.',
+  'docGuidance.why.general':
+    'Поводът не е сигурен. Моля, проверете подателя и темата в оригинала.',
+  'docGuidance.act.likely':
+    'Вероятно има нужда от действие. Моля, проверете препоръчаните стъпки.',
+  'docGuidance.act.probablyNot':
+    'Вероятно няма спешно действие. Съхраняването е по желание – проверете накратко.',
+  'docGuidance.act.uncertain':
+    'Не е сигурно дали е нужно действие. Моля, проверете накратко.',
+  'docGuidance.deadline.known':
+    'Възможен срок: {deadline}. Моля, потвърдете в оригинала.',
+  'docGuidance.deadline.unknown': 'Няма сигурен срок. Моля, проверете в оригинала.',
+  'docGuidance.reply.likely':
+    'Възможно е да е нужен отговор. Моля, проверете срока и съдържанието.',
+  'docGuidance.reply.probablyNot':
+    'Вероятно не е нужен отговор. При съмнение проверете накратко.',
+  'docGuidance.reply.uncertain':
+    'Не е сигурно дали е нужен отговор. Моля, проверете в оригинала.',
+  'docGuidance.retain.combined': 'Препоръка: {originalKey} ({storageKey})',
+  'docGuidance.paper.skip':
+    'Не се препоръчва хартиена папка – физическото архивиране може да отпадне.',
+  'docGuidance.paper.recommended': 'Препоръчана хартиена папка: {folder}. Моля, проверете.',
+  'docGuidance.action.createVorgang': 'Създаване на дело',
+  'docGuidance.action.checkInvoice': 'Проверка на фактура',
+  'docGuidance.action.checkContract': 'Проверка на договор',
+  'docGuidance.action.negotiatePrice': 'Преговори за цена',
+  'docGuidance.action.createCustomer': 'Създаване на клиент',
+  'docGuidance.action.archive': 'Архивиране на документ',
 } as const;

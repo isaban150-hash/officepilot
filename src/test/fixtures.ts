@@ -66,7 +66,7 @@ export function createTestVorgang(overrides: Partial<Vorgang> = {}): Vorgang {
     title: 'Testvorgang',
     customer: 'Test Kunde',
     baustelle: 'Teststraße 1',
-    status: 'neu',
+    status: 'eingegangen',
     materialSource: 'betrieb',
     customerBilling: {
       name: 'Test Kunde',

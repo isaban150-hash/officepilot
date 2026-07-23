@@ -1,6 +1,7 @@
 import type { Vorgang } from '../../types/models';
 import type { SyncMeta } from '../../types/sync';
 import { mergeSyncEntities } from '../sync/syncMergeEngine';
+import { migrateVorgangStatus } from '../vorgangLifecycleService';
 
 /** Cloud-syncable subset of Vorgang – ohne Rechnungen, Dokumente, Aufgaben, Fotos. */
 export interface VorgangCloudPayload {
@@ -102,7 +103,7 @@ export function mergeCloudVorgangIntoLocal(
     title: cloudPayload.title,
     customer: cloudPayload.customer,
     baustelle: cloudPayload.baustelle,
-    status: cloudPayload.status,
+    status: migrateVorgangStatus(cloudPayload.status),
     materialSource: cloudPayload.materialSource,
     customerBilling: cloudPayload.customerBilling,
     orderPositions: cloudPayload.orderPositions ?? [],
@@ -137,6 +138,10 @@ export function mergeCloudVorgangIntoLocal(
     photos: local?.photos ?? [],
     invoices: local?.invoices ?? [],
     customerBilling: mergeResult.entity.customerBilling ?? local?.customerBilling,
+    // Local-only fields (not in cloud payload) — preserve on merge.
+    negotiation: local?.negotiation,
+    contractConfirmation: local?.contractConfirmation,
+    executionStartedAt: local?.executionStartedAt,
   };
 
   return { vorgang: merged, conflict: false };
@@ -196,7 +201,7 @@ export function createVorgangFromCloudRow(
     title: cloudPayload.title,
     customer: cloudPayload.customer,
     baustelle: cloudPayload.baustelle,
-    status: cloudPayload.status,
+    status: migrateVorgangStatus(cloudPayload.status),
     materialSource: cloudPayload.materialSource,
     customerBilling: cloudPayload.customerBilling,
     orderPositions: cloudPayload.orderPositions ?? [],
