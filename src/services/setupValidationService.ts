@@ -47,8 +47,9 @@ export function validateSetupStep(
   }
 
   if (step === 'bank') {
-    if (!draft.iban.trim()) errors.iban = 'setup.error.ibanRequired';
-    else if (!isValidIban(draft.iban)) errors.iban = 'setup.error.ibanInvalid';
+    const iban = (draft.iban ?? '').toString();
+    if (!iban.trim()) errors.iban = 'setup.error.ibanRequired';
+    else if (!isValidIban(iban)) errors.iban = 'setup.error.ibanInvalid';
   }
 
   if (step === 'invoicing') {
@@ -96,7 +97,7 @@ export function validateCompanyProfileForSettings(
     taxNumber: profile.taxNumber,
     vatId: profile.vatId,
     bankName: profile.bankName,
-    iban: profile.iban,
+    iban: profile.iban ?? '',
     bic: profile.bic,
     defaultPaymentDays: profile.defaultPaymentDays,
     defaultPaymentTerms: profile.defaultPaymentTerms,

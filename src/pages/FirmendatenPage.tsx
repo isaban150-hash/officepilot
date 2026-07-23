@@ -82,12 +82,20 @@ export function FirmendatenPage() {
     reader.readAsDataURL(file);
   };
 
-  const handleSubmit = (event: React.FormEvent) => {
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setErrorKey(null);
 
+    // Browsers may autofill IBAN into the DOM without firing onChange, so
+    // React draft.iban can stay empty while the field still looks filled.
+    const ibanField = event.currentTarget.elements.namedItem('iban');
+    const ibanFromDom =
+      ibanField instanceof HTMLInputElement ? ibanField.value : undefined;
+    const iban = (ibanFromDom ?? draft.iban ?? '').toString();
+
     const payload = {
       ...draft,
+      iban,
       defaultSkonto: draft.skontoEnabled ? buildSkontoText(draft) : '',
     };
 
@@ -137,10 +145,12 @@ export function FirmendatenPage() {
             <label htmlFor={`profile-${key}`}>{translate(labelKey)}</label>
             <input
               id={`profile-${key}`}
+              name={key}
               type={type}
               className="input"
               value={String(draft[key] ?? '')}
               onChange={(e) => handleChange(key, e.target.value)}
+              autoComplete={key === 'iban' ? 'off' : undefined}
               required={key === 'companyName'}
             />
           </fieldset>
