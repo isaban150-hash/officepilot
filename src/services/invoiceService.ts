@@ -366,29 +366,25 @@ export type FinalizeInvoiceResult =
       validation?: InvoiceValidationResult;
     };
 
-export function getOverbillingWarnings(draft: InvoiceDraft): string[] {
-  return draft.positions
-    .filter((p) => p.billable && p.quantity > p.openQuantity)
-    .map(
-      (p) =>
-        `${p.description}: ${p.quantity} eingegeben, aber nur ${p.openQuantity} ${p.unit} offen.`,
-    );
-}
+export type BuildInvoiceFinalizationCandidateResult =
+  | { ok: true; invoice: VorgangInvoice }
+  | {
+      ok: false;
+      reason: 'validation_failed' | 'vorgang_missing';
+      validation?: InvoiceValidationResult;
+    };
 
-function cloneCustomerBilling(billing: CustomerBilling): CustomerBilling {
-  return { ...billing };
-}
-
-function cloneCompanySnapshot(profile: CompanyProfile): CompanyProfile {
-  return { ...profile, logoDataUrl: profile.logoDataUrl };
-}
-
-export function finalizeInvoiceDraft(
+function validateDraftForFinalize(
   vorgangId: string,
   draft: InvoiceDraft,
-  setup: CompanySetup,
   options: InvoiceApprovalOptions = {},
-): FinalizeInvoiceResult {
+):
+  | { ok: true; vorgang: Vorgang }
+  | {
+      ok: false;
+      reason: 'validation_failed' | 'vorgang_missing';
+      validation?: InvoiceValidationResult;
+    } {
   const vorgang = getVorgangById(vorgangId);
   if (!vorgang) {
     return { ok: false, reason: 'vorgang_missing' };
@@ -401,7 +397,6 @@ export function finalizeInvoiceDraft(
       vorgang,
       options,
     );
-    // Full gate for normal invoices; §13b confirmation required on any type.
     const blockers =
       draft.type === 'rechnung'
         ? validation.blockingErrors
@@ -415,16 +410,33 @@ export function finalizeInvoiceDraft(
     }
   }
 
+  return { ok: true, vorgang };
+}
+
+/**
+ * Builds a finalized invoice candidate without reserving a local number
+ * and without persisting. Used by cloud finalize orchestrator.
+ */
+export function buildInvoiceFinalizationCandidate(
+  vorgangId: string,
+  draft: InvoiceDraft,
+  setup: CompanySetup,
+  clientInvoiceId: string,
+  options: InvoiceApprovalOptions = {},
+): BuildInvoiceFinalizationCandidateResult {
+  const validated = validateDraftForFinalize(vorgangId, draft, options);
+  if (!validated.ok) {
+    return validated;
+  }
+
   const totals = calculateInvoiceTotals(draft, setup);
   const now = new Date().toISOString();
-
-  // Reserve number only after validation and vorgang existence checks.
-  const reservation = reserveNextInvoiceNumber();
+  const issueDate = draft.issueDate || now.slice(0, 10);
 
   const positions: VorgangInvoiceLine[] = draft.positions
     .filter((p) => p.quantity > 0)
     .map((p) => ({
-      id: `inv-line-${p.orderPositionId}-${Date.now()}`,
+      id: `inv-line-${clientInvoiceId}-${p.orderPositionId}`,
       orderPositionId: p.orderPositionId,
       description: p.description,
       quantity: p.quantity,
@@ -434,12 +446,9 @@ export function finalizeInvoiceDraft(
       lineTotal: lineTotalMoney(p.quantity, p.unitPrice),
     }));
 
-  const issueDate = draft.issueDate || now.slice(0, 10);
-
   const invoice: VorgangInvoice = {
-    id: `inv-${Date.now()}`,
-    number: reservation.formatted,
-    invoiceSequenceNumber: reservation.sequenceNumber,
+    id: clientInvoiceId,
+    number: INVOICE_DRAFT_LABEL,
     type: draft.type,
     abschlagNumber: usesAbschlagNumber(draft.type) ? draft.abschlagNumber : undefined,
     positions,
@@ -467,9 +476,92 @@ export function finalizeInvoiceDraft(
     vorgangTitle: draft.vorgangTitle,
   };
 
+  return { ok: true, invoice };
+}
+
+/** Stable fingerprint of finalizeable content (excludes number / client id / timestamps). */
+export function buildInvoiceFinalizationContentFingerprint(
+  draft: InvoiceDraft,
+  setup: CompanySetup,
+): string {
+  const totals = calculateInvoiceTotals(draft, setup);
+  const payload = {
+    type: draft.type,
+    abschlagNumber: draft.abschlagNumber ?? null,
+    taxStatus: draft.taxStatus ?? setup.taxStatus,
+    issueDate: draft.issueDate ?? null,
+    servicePeriodFrom: draft.servicePeriodFrom ?? null,
+    servicePeriodTo: draft.servicePeriodTo ?? null,
+    paymentDueDate: draft.paymentDueDate ?? null,
+    paymentTermsText: draft.paymentTermsText ?? '',
+    skontoText: draft.skontoText ?? '',
+    introText: draft.introText ?? '',
+    closingText: draft.closingText ?? '',
+    baustelle: draft.baustelle ?? '',
+    vorgangTitle: draft.vorgangTitle ?? '',
+    customerBilling: draft.customerBilling,
+    subtotal: totals.subtotal,
+    amount: totals.total,
+    positions: draft.positions
+      .filter((p) => p.quantity > 0)
+      .map((p) => ({
+        orderPositionId: p.orderPositionId,
+        description: p.description,
+        quantity: p.quantity,
+        unit: p.unit,
+        unitLabel: p.unitLabel ?? null,
+        unitPrice: roundMoney(p.unitPrice),
+        lineTotal: lineTotalMoney(p.quantity, p.unitPrice),
+        billable: p.billable,
+      })),
+  };
+  return JSON.stringify(payload);
+}
+
+export function getOverbillingWarnings(draft: InvoiceDraft): string[] {
+  return draft.positions
+    .filter((p) => p.billable && p.quantity > p.openQuantity)
+    .map(
+      (p) =>
+        `${p.description}: ${p.quantity} eingegeben, aber nur ${p.openQuantity} ${p.unit} offen.`,
+    );
+}
+
+function cloneCustomerBilling(billing: CustomerBilling): CustomerBilling {
+  return { ...billing };
+}
+
+function cloneCompanySnapshot(profile: CompanyProfile): CompanyProfile {
+  return { ...profile, logoDataUrl: profile.logoDataUrl };
+}
+
+export function finalizeInvoiceDraft(
+  vorgangId: string,
+  draft: InvoiceDraft,
+  setup: CompanySetup,
+  options: InvoiceApprovalOptions = {},
+): FinalizeInvoiceResult {
+  // Legacy local finalize path (tests / offline fallback). UI cloud path must not use this.
+  const candidate = buildInvoiceFinalizationCandidate(
+    vorgangId,
+    draft,
+    setup,
+    `inv-${Date.now()}`,
+    options,
+  );
+  if (!candidate.ok) {
+    return candidate;
+  }
+
+  const reservation = reserveNextInvoiceNumber();
+  const invoice: VorgangInvoice = {
+    ...candidate.invoice,
+    number: reservation.formatted,
+    invoiceSequenceNumber: reservation.sequenceNumber,
+  };
+
   const saved = addInvoiceToVorgang(vorgangId, invoice);
   if (!saved) {
-    // Number was reserved; do not invent a silent invoice. Caller surfaces save_failed.
     return { ok: false, reason: 'save_failed' };
   }
 

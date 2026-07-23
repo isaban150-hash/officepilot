@@ -667,6 +667,71 @@ export function addInvoiceToVorgang(vorgangId: string, invoice: VorgangInvoice):
   return { ...invoice };
 }
 
+export type UpsertFinalizedInvoiceResult =
+  | { ok: true; invoice: VorgangInvoice; action: 'inserted' | 'noop' }
+  | {
+      ok: false;
+      reason: 'vorgang_missing' | 'id_content_conflict' | 'number_id_conflict';
+    };
+
+function immutableInvoiceFingerprint(invoice: VorgangInvoice): string {
+  return JSON.stringify({
+    id: invoice.id,
+    number: invoice.number,
+    invoiceSequenceNumber: invoice.invoiceSequenceNumber ?? null,
+    type: invoice.type,
+    abschlagNumber: invoice.abschlagNumber ?? null,
+    subtotal: invoice.subtotal,
+    amount: invoice.amount,
+    taxStatus: invoice.taxStatus,
+    date: invoice.date,
+    issueDate: invoice.issueDate ?? null,
+    positions: (invoice.positions ?? []).map((p) => ({
+      id: p.id,
+      orderPositionId: p.orderPositionId,
+      description: p.description,
+      quantity: p.quantity,
+      unit: p.unit,
+      unitPrice: p.unitPrice,
+      lineTotal: p.lineTotal,
+    })),
+  });
+}
+
+/**
+ * Idempotent local adoption of a cloud-finalized invoice.
+ * Never silently overwrites divergent immutable content.
+ */
+export function upsertFinalizedInvoiceOnVorgang(
+  vorgangId: string,
+  invoice: VorgangInvoice,
+): UpsertFinalizedInvoiceResult {
+  const index = vorgaenge.findIndex((v) => v.id === vorgangId && isEntitySyncActive(v));
+  if (index === -1) {
+    return { ok: false, reason: 'vorgang_missing' };
+  }
+
+  const vorgang = cloneVorgang(vorgaenge[index]!);
+  const byId = vorgang.invoices.find((item) => item.id === invoice.id);
+  if (byId) {
+    if (immutableInvoiceFingerprint(byId) === immutableInvoiceFingerprint(invoice)) {
+      return { ok: true, invoice: { ...byId }, action: 'noop' };
+    }
+    return { ok: false, reason: 'id_content_conflict' };
+  }
+
+  const byNumber = vorgang.invoices.find(
+    (item) => item.number === invoice.number && item.id !== invoice.id,
+  );
+  if (byNumber) {
+    return { ok: false, reason: 'number_id_conflict' };
+  }
+
+  vorgang.invoices = [invoice, ...vorgang.invoices];
+  updateVorgangInStore(vorgang);
+  return { ok: true, invoice: { ...invoice }, action: 'inserted' };
+}
+
 export function getVorgangInvoice(
   vorgangId: string,
   invoiceId: string,

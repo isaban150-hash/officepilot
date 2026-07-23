@@ -10,13 +10,13 @@ import {
   applyAllOpenPositionsToDraft,
   buildInvoiceDraftForType,
   calculateInvoiceTotals,
-  finalizeInvoiceDraft,
   getOverbillingWarnings,
   updateDraftPositionQuantity,
   updateInvoiceDraftMetadata,
   updateInvoiceDraftTaxStatus,
   validateInvoiceDraftForApproval,
 } from '../services/invoiceService';
+import { finalizeInvoiceDraftWithCloud } from '../services/invoice/invoiceCloudFinalizeOrchestrator';
 import { buildInvoicePrintModel } from '../services/invoicePrintModel';
 import {
   CONTRACT_ORDER_INVOICE_TYPES,
@@ -170,7 +170,7 @@ export function RechnungPage() {
     setDraft((prev) => (prev ? updateInvoiceDraftMetadata(prev, changes) : prev));
   };
 
-  const runApproval = () => {
+  const runApproval = async () => {
     if (!id || !draft || approveLockRef.current || approving) return;
     approveLockRef.current = true;
     setApproving(true);
@@ -197,18 +197,37 @@ export function RechnungPage() {
     }
 
     setValidationErrors([]);
-    const result = finalizeInvoiceDraft(id, draft, setup, { reverseCharge13bConfirmed });
+    const result = await finalizeInvoiceDraftWithCloud(id, draft, setup, {
+      reverseCharge13bConfirmed,
+    });
     if (!result.ok) {
       if (result.reason === 'validation_failed' && result.validation) {
         setValidationErrors(result.validation.blockingErrors.map((e) => e.messageKey));
+        showToast(translate('invoice.approve.blocked'));
+      } else if (result.reason === 'offline_or_unconfigured') {
+        showToast(translate('invoice.approve.offline'));
+      } else if (result.reason === 'auth_missing') {
+        showToast(translate('invoice.approve.auth'));
+      } else if (result.reason === 'workspace_missing') {
+        showToast(translate('invoice.approve.workspace'));
+      } else if (
+        result.reason === 'idempotency_conflict' ||
+        result.reason === 'local_conflict'
+      ) {
+        showToast(translate('invoice.approve.conflict'));
+      } else {
+        showToast(translate('invoice.approve.failed'));
       }
-      showToast(translate('invoice.approve.failed'));
       approveLockRef.current = false;
       setApproving(false);
       return;
     }
 
-    showToast(translate('invoice.approved'));
+    showToast(
+      result.archiveWarning
+        ? translate('invoice.approve.archiveWarning')
+        : translate('invoice.approved'),
+    );
     navigate(`/vorgaenge/${id}/rechnungen/${result.invoice.id}`);
   };
 

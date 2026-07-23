@@ -90,7 +90,8 @@ function classifyFinalizeError(error: { message?: string; code?: string }): Work
   if (
     message.includes('fehlt') ||
     message.includes('positions') ||
-    message.includes('type')
+    message.includes('type') ||
+    message.includes('Vorgang gehört nicht')
   ) {
     return new WorkspaceInvoiceCloudError(message, 'validation', false);
   }
