@@ -17,6 +17,8 @@ interface SmartIntakeSummaryProps {
   onImportPositions: () => void;
   onAcceptTasks: () => void;
   onCancel: () => void;
+  /** ORDER-PLAN-INTEGRITY-01: hide/disable position import when linked vorgang is confirmed. */
+  importPositionsLocked?: boolean;
 }
 
 function CheckRow({
@@ -52,6 +54,7 @@ export function SmartIntakeSummary({
   onImportPositions,
   onAcceptTasks,
   onCancel,
+  importPositionsLocked = false,
 }: SmartIntakeSummaryProps) {
   const { translate } = useApp();
   const kindKey = `classifiedKind.${workflow.classifiedKind}` as TranslationKey;
@@ -205,25 +208,32 @@ export function SmartIntakeSummary({
         >
           {translate('intake.action.createVorgang')}
         </Button>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={
-            isExecuting ||
-            workflow.suggestedOrderPositions.length === 0 ||
-            Boolean(workflow.contractOrderProposal
-              ? false
-              : !item.vorgangId && !workflow.suggestedVorgang)
-          }
-          onClick={onImportPositions}
-        >
-          {workflow.contractOrderProposal
-            ? translate('documentIntelligence.action.reviewPositionsBelow')
-            : translate('documentIntelligence.action.confirmSelectedPositions').replace(
-                '{count}',
-                String(workflow.suggestedOrderPositions.length),
-              )}
-        </Button>
+        {!importPositionsLocked ? (
+          <Button
+            type="button"
+            variant="outline"
+            data-testid="smart-intake-import-positions"
+            disabled={
+              isExecuting ||
+              workflow.suggestedOrderPositions.length === 0 ||
+              Boolean(workflow.contractOrderProposal
+                ? false
+                : !item.vorgangId && !workflow.suggestedVorgang)
+            }
+            onClick={onImportPositions}
+          >
+            {workflow.contractOrderProposal
+              ? translate('documentIntelligence.action.reviewPositionsBelow')
+              : translate('documentIntelligence.action.confirmSelectedPositions').replace(
+                  '{count}',
+                  String(workflow.suggestedOrderPositions.length),
+                )}
+          </Button>
+        ) : (
+          <p className="invoice-hint invoice-hint--warning" data-testid="smart-intake-import-locked">
+            {translate('orderPlan.confirmedHint')}
+          </p>
+        )}
         <Button
           type="button"
           variant="outline"

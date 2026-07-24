@@ -109,7 +109,13 @@ export function confirmImportContractPositions(
   vorgangId: string,
   positions: DetectedOrderPosition[],
   selections: ContractPositionSelectionMap,
-): { success: boolean; added: number; skipped: number; selectedCount: number } {
+): {
+  success: boolean;
+  added: number;
+  skipped: number;
+  selectedCount: number;
+  errorKey?: string;
+} {
   const confirmed = filterConfirmedPositionsForImport(positions, selections);
   const result = importSuggestedPositionsToVorgang(vorgangId, confirmed);
   return {

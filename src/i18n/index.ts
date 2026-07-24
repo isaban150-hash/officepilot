@@ -883,6 +883,10 @@ const deLegacy = {
   'position.deleted': 'Position gelöscht.',
   'position.deleteConfirm': 'Position wirklich löschen?',
   'position.schlussLocked': 'Schlussrechnung existiert. Leistungspositionen sind gesperrt.',
+  'order_plan_amendment_required':
+    'Der Auftrag ist bereits bestätigt. Änderungen am vereinbarten Leistungsumfang müssen als Nachtrag erfasst werden.',
+  'orderPlan.confirmedHint':
+    'Der Auftrag ist bestätigt. Änderungen am vereinbarten Leistungsumfang müssen als Nachtrag erfasst werden.',
   'position.billedLockHint':
     'Diese Position wurde bereits abgerechnet. Preis und Einheit sind gesperrt.',
   'position.plannedNegative': 'Geplante Menge darf nicht negativ sein.',

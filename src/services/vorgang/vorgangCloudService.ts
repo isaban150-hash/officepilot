@@ -5,6 +5,7 @@ import type {
 } from '../../types/models';
 import type { SyncMeta } from '../../types/sync';
 import { mergeSyncEntities } from '../sync/syncMergeEngine';
+import { repairContractPlanFromSnapshot } from '../orderPlanIntegrityService';
 import {
   canTransitionVorgangStatus,
   migrateVorgangStatus,
@@ -214,23 +215,26 @@ export function applyOrderChainCloudInvariants(
 }
 
 export function stripVorgangForCloud(vorgang: Vorgang): VorgangCloudPayload {
+  // Avoid pushing reparable contract-plan drift from this client.
+  const planSource = repairContractPlanFromSnapshot(vorgang).vorgang;
+
   const payload: VorgangCloudPayload = {
-    id: vorgang.id,
-    title: vorgang.title,
-    customer: vorgang.customer,
-    baustelle: vorgang.baustelle,
-    status: vorgang.status,
-    materialSource: vorgang.materialSource,
-    customerBilling: vorgang.customerBilling ? { ...vorgang.customerBilling } : undefined,
-    orderPositions: (vorgang.orderPositions ?? []).map((p) => ({ ...p })),
-    createdFromInboxId: vorgang.createdFromInboxId,
+    id: planSource.id,
+    title: planSource.title,
+    customer: planSource.customer,
+    baustelle: planSource.baustelle,
+    status: planSource.status,
+    materialSource: planSource.materialSource,
+    customerBilling: planSource.customerBilling ? { ...planSource.customerBilling } : undefined,
+    orderPositions: (planSource.orderPositions ?? []).map((p) => ({ ...p })),
+    createdFromInboxId: planSource.createdFromInboxId,
   };
 
-  if (vorgang.contractConfirmation) {
-    payload.contractConfirmation = cloneCloudContractConfirmation(vorgang.contractConfirmation);
+  if (planSource.contractConfirmation) {
+    payload.contractConfirmation = cloneCloudContractConfirmation(planSource.contractConfirmation);
   }
-  if (vorgang.executionStartedAt) {
-    payload.executionStartedAt = vorgang.executionStartedAt;
+  if (planSource.executionStartedAt) {
+    payload.executionStartedAt = planSource.executionStartedAt;
   }
 
   return payload;
@@ -318,13 +322,17 @@ function buildMergedVorgangFromFacts(
   });
 
   // 6 invariant check
-  return applyOrderChainCloudInvariants(
+  const withInvariants = applyOrderChainCloudInvariants(
     {
       ...withFacts,
       status: resolvedStatus,
     },
     { protectLocalStatus: local?.status },
   );
+
+  // 7 ORDER-PLAN-INTEGRITY-01: after merge winner is chosen, canonicalize contract fields
+  // from snapshot; keep executedQuantity from the selected merged positions by id.
+  return repairContractPlanFromSnapshot(withInvariants).vorgang;
 }
 
 export function mergeCloudVorgangIntoLocal(

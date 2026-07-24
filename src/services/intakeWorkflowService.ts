@@ -32,6 +32,7 @@ import {
   proposeTasksFromContract,
   createTasksFromProposals,
 } from './taskEngineService';
+import { assertContractPlanMutable } from './orderPlanIntegrityService';
 import {
   appendOrderPositionsBulk,
   buildVorgangDraftFromInbox,
@@ -423,10 +424,21 @@ export function createVorgangFromInboxWithContract(
 export function importSuggestedPositionsToVorgang(
   vorgangId: string,
   positions: DetectedOrderPosition[],
-): { success: boolean; added: number; skipped: number } {
+): { success: boolean; added: number; skipped: number; errorKey?: string } {
   const vorgang = getVorgangById(vorgangId);
   if (!vorgang) {
     return { success: false, added: 0, skipped: 0 };
+  }
+
+  // Early UX check — authoritative lock is appendOrderPositionsBulk / integrity service.
+  const planLock = assertContractPlanMutable(vorgang);
+  if (!planLock.ok) {
+    return {
+      success: false,
+      added: 0,
+      skipped: positions.length,
+      errorKey: planLock.errorKey,
+    };
   }
 
   const existingKeys = new Set(
@@ -471,6 +483,7 @@ export function importSuggestedPositionsToVorgang(
     success: bulk.success || skipped > 0,
     added: bulk.added,
     skipped: skipped + bulk.skipped,
+    errorKey: bulk.errorKey,
   };
 }
 

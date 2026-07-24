@@ -22,6 +22,7 @@ import { formatOrderUnitDisplay } from '../services/orderUnitMapper';
 import {
   getAllowedVorgangStatusTransitions,
 } from '../services/vorgangLifecycleService';
+import { isContractPlanLocked } from '../services/orderPlanIntegrityService';
 import { getVorgangById, removeOrderPosition, updateVorgangStatus } from '../services/vorgangService';
 import { InvoiceListCard } from '../components/invoice/InvoiceListCard';
 import { CommunicationIntegrationPanel } from '../components/communication/CommunicationIntegrationPanel';
@@ -128,8 +129,9 @@ export function VorgangDetailPage() {
   const materialKey = `material.${vorgang.materialSource}` as TranslationKey;
   const hasOrderPositions = vorgang.orderPositions.length > 0;
   const schlussExists = hasSchlussrechnung(vorgang);
-  const positionsLocked = hasFinalSchlussrechnung(vorgang);
-  const canAdd = canAddOrderPosition(vorgang);
+  const planLocked = isContractPlanLocked(vorgang);
+  const positionsLocked = hasFinalSchlussrechnung(vorgang) || planLocked;
+  const canAdd = canAddOrderPosition(vorgang) && !planLocked;
   const missingPrice = hasMissingOrderPrice(vorgang.orderPositions);
 
   const sortedInvoices = [...vorgang.invoices].sort(
@@ -290,7 +292,10 @@ export function VorgangDetailPage() {
           )}
         </div>
 
-        {positionsLocked && (
+        {planLocked && (
+          <p className="invoice-hint invoice-hint--warning">{translate('orderPlan.confirmedHint')}</p>
+        )}
+        {!planLocked && positionsLocked && (
           <p className="invoice-hint invoice-hint--warning">{translate('position.schlussLocked')}</p>
         )}
 
@@ -305,7 +310,7 @@ export function VorgangDetailPage() {
             const billing = getPositionBillingStatus(vorgang, pos.id);
             const billed = billing?.billedQuantity ?? getBilledQuantity(vorgang, pos.id);
             const open = billing?.openQuantity ?? getOpenQuantity(vorgang, pos.id);
-            const deletable = canDeleteOrderPosition(vorgang, pos.id);
+            const deletable = !planLocked && canDeleteOrderPosition(vorgang, pos.id);
 
             const unitLabel = formatOrderUnitDisplay(pos.unit, pos.unitLabel);
 
@@ -339,7 +344,7 @@ export function VorgangDetailPage() {
                 {pos.unitPrice === 0 && (
                   <p className="invoice-pos-hint">{translate('vorgang.missingPriceHint')}</p>
                 )}
-                {billing?.hasBilling && !positionsLocked && (
+                {billing?.hasBilling && !positionsLocked && !planLocked && (
                   <p className="invoice-pos-hint">{translate('position.billedLockHint')}</p>
                 )}
                 <div className="order-position-card__actions">

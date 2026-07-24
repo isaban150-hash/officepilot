@@ -7,6 +7,7 @@ import {
   getPositionBillingStatus,
   hasFinalSchlussrechnung,
 } from '../../services/invoiceService';
+import { isContractPlanLocked } from '../../services/orderPlanIntegrityService';
 import {
   addOrderPosition,
   removeOrderPosition,
@@ -80,11 +81,17 @@ export function OrderPositionForm({
   const positionId = position?.id;
   const billing =
     mode === 'edit' && positionId ? getPositionBillingStatus(vorgang, positionId) : null;
+  const planLocked = isContractPlanLocked(vorgang);
   const schlussLocked = hasFinalSchlussrechnung(vorgang);
+  const formLocked = planLocked || schlussLocked;
   const canDelete =
-    mode === 'edit' && positionId ? canDeleteOrderPosition(vorgang, positionId) : false;
+    mode === 'edit' &&
+    positionId &&
+    !planLocked &&
+    canDeleteOrderPosition(vorgang, positionId);
 
   const isFieldEditable = (field: Parameters<typeof canEditOrderPositionField>[2]) => {
+    if (planLocked) return false;
     if (mode === 'add') return !schlussLocked;
     if (!positionId) return false;
     return canEditOrderPositionField(vorgang, positionId, field);
@@ -92,6 +99,10 @@ export function OrderPositionForm({
 
   const handleSave = () => {
     setErrorKey(null);
+    if (planLocked) {
+      setErrorKey('order_plan_amendment_required');
+      return;
+    }
     const payload = {
       description: draft.description,
       plannedQuantity: draft.plannedQuantity,
@@ -154,11 +165,14 @@ export function OrderPositionForm({
       >
         <h3 className="vorgang-dialog__title">{translate(titleKey)}</h3>
 
-        {schlussLocked && (
+        {planLocked && (
+          <p className="invoice-hint invoice-hint--warning">{translate('orderPlan.confirmedHint')}</p>
+        )}
+        {!planLocked && schlussLocked && (
           <p className="invoice-hint invoice-hint--warning">{translate('position.schlussLocked')}</p>
         )}
 
-        {billing?.hasBilling && !schlussLocked && (
+        {billing?.hasBilling && !formLocked && (
           <p className="invoice-hint invoice-hint--warning">
             {translate('position.billedLockHint')}
           </p>
@@ -264,7 +278,11 @@ export function OrderPositionForm({
         )}
 
         <div className="vorgang-dialog__actions">
-          <Button fullWidth onClick={handleSave} disabled={schlussLocked && mode === 'edit'}>
+          <Button
+            fullWidth
+            onClick={handleSave}
+            disabled={planLocked || (schlussLocked && mode === 'edit')}
+          >
             {translate('common.save')}
           </Button>
           {mode === 'edit' && canDelete && (

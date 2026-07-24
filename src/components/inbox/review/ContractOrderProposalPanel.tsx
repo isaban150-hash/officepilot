@@ -12,6 +12,7 @@ import {
   type ContractPositionSelectionMap,
   type ContractPositionSelectionState,
 } from '../../../services/contractPositionImportService';
+import { isContractPlanLocked } from '../../../services/orderPlanIntegrityService';
 import { getVorgangById } from '../../../services/vorgangService';
 import { ContractWorkspaceSummary } from './ContractWorkspaceSummary';
 
@@ -57,7 +58,9 @@ export function ContractOrderProposalPanel({
 }: ContractOrderProposalPanelProps) {
   const labelKey = proposal.intelligence.documentLabelKey as TranslationKey;
   const positions = proposal.positions;
-  const vorgang = item?.vorgangId ? getVorgangById(item.vorgangId) ?? null : null;
+  const linkedVorgangId = item?.vorgangId ?? null;
+  const vorgang = linkedVorgangId ? getVorgangById(linkedVorgangId) ?? null : null;
+  const planLocked = Boolean(vorgang && isContractPlanLocked(vorgang));
 
   const [visibleCount, setVisibleCount] = useState(() =>
     Math.min(CONTRACT_PROPOSAL_INITIAL_VISIBLE_ROWS, positions.length),
@@ -106,6 +109,7 @@ export function ContractOrderProposalPanel({
   };
 
   const handleConfirm = () => {
+    if (planLocked) return;
     const selected = positions
       .filter((original) => selections[buildContractPositionKey(original)] === 'selected')
       .map((original) => resolvePosition(original))
@@ -352,10 +356,18 @@ export function ContractOrderProposalPanel({
       </div>
 
       <div className="contract-order-proposal__actions">
+        {planLocked ? (
+          <p
+            className="invoice-hint invoice-hint--warning"
+            data-testid="contract-import-plan-locked"
+          >
+            {translate('orderPlan.confirmedHint')}
+          </p>
+        ) : null}
         <Button
           fullWidth
           loading={isCreating}
-          disabled={selectedCount === 0}
+          disabled={planLocked || selectedCount === 0}
           onClick={handleConfirm}
           data-testid="contract-create-order-button"
         >

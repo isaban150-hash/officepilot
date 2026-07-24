@@ -37,11 +37,14 @@ import type {
   VorgangStatus,
 } from '../types/models';
 import {
-  alignOrderPositionsToConfirmation,
   buildOrderPositionsFromSnapshot,
   isSnapshotAlignable,
   orderPositionsMatchSnapshot,
 } from './contractPositionAlignService';
+import {
+  assertContractPlanMutable,
+  repairContractPlanFromSnapshot,
+} from './orderPlanIntegrityService';
 
 export type OrderPositionMutationResult =
   | { success: true; vorgang: Vorgang }
@@ -251,18 +254,9 @@ function normalizeVorgang(v: Vorgang): Vorgang {
     normalized.customerBilling = defaultCustomerBilling(normalized);
   }
 
-  // Legacy: confirmed Vorgänge must keep operative positions aligned to snapshot.
-  if (normalized.contractConfirmation) {
-    const aligned = alignOrderPositionsToConfirmation(
-      normalized.orderPositions,
-      normalized.contractConfirmation,
-    );
-    if (aligned.changed) {
-      normalized.orderPositions = aligned.positions;
-    }
-  }
-
-  return normalized;
+  // Legacy / drift: confirmed Vorgänge keep operative contract fields aligned to snapshot.
+  const repaired = repairContractPlanFromSnapshot(normalized);
+  return repaired.vorgang;
 }
 
 export function getAllVorgaenge(): Vorgang[] {
@@ -975,6 +969,10 @@ export function addOrderPosition(
 ): OrderPositionMutationResult {
   const vorgang = getVorgangById(vorgangId);
   if (!vorgang) return { success: false, errorKey: 'position.vorgangNotFound' };
+  const planLock = assertContractPlanMutable(vorgang);
+  if (!planLock.ok) {
+    return { success: false, errorKey: planLock.errorKey };
+  }
   if (!canAddOrderPosition(vorgang)) {
     return { success: false, errorKey: 'position.schlussLocked' };
   }
@@ -1015,6 +1013,15 @@ export function appendOrderPositionsBulk(
   const vorgang = getVorgangById(vorgangId);
   if (!vorgang) {
     return { success: false, added: 0, skipped: 0, errorKey: 'position.vorgangNotFound' };
+  }
+  const planLock = assertContractPlanMutable(vorgang);
+  if (!planLock.ok) {
+    return {
+      success: false,
+      added: 0,
+      skipped: inputs.length,
+      errorKey: planLock.errorKey,
+    };
   }
   if (!canAddOrderPosition(vorgang)) {
     return {
@@ -1070,6 +1077,11 @@ export function updateOrderPosition(
 ): OrderPositionMutationResult {
   const vorgang = getVorgangById(vorgangId);
   if (!vorgang) return { success: false, errorKey: 'position.vorgangNotFound' };
+
+  const planLock = assertContractPlanMutable(vorgang);
+  if (!planLock.ok) {
+    return { success: false, errorKey: planLock.errorKey };
+  }
 
   const index = vorgang.orderPositions.findIndex((p) => p.id === positionId);
   if (index === -1) return { success: false, errorKey: 'position.notFound' };
@@ -1127,6 +1139,11 @@ export function removeOrderPosition(
 ): OrderPositionMutationResult {
   const vorgang = getVorgangById(vorgangId);
   if (!vorgang) return { success: false, errorKey: 'position.vorgangNotFound' };
+
+  const planLock = assertContractPlanMutable(vorgang);
+  if (!planLock.ok) {
+    return { success: false, errorKey: planLock.errorKey };
+  }
 
   if (!canDeleteOrderPosition(vorgang, positionId)) {
     return { success: false, errorKey: 'position.deleteBlocked' };

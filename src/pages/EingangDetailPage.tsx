@@ -52,6 +52,8 @@ import {
   confirmImportContractPositions,
   countSelectedContractPositions,
 } from '../services/contractPositionImportService';
+import { isContractPlanLocked } from '../services/orderPlanIntegrityService';
+import { getVorgangById } from '../services/vorgangService';
 import type { EnhancedDetectedOrderPosition } from '../types/documentIntelligence';
 import {
   importInboxDocument,
@@ -340,6 +342,11 @@ export function EingangDetailPage() {
     isConfirmedReplyDraftSupported(item) && !prioritizeContractWorkspace;
   const contractAnalysis = workflow.contractAnalysis;
   const extractedText = getInboxExtractedDocumentText(item);
+  const linkedVorgangId = item.vorgangId ?? workflow.suggestedVorgang?.vorgangId ?? null;
+  const linkedVorgang = linkedVorgangId ? getVorgangById(linkedVorgangId) : undefined;
+  const positionsImportLocked = Boolean(
+    linkedVorgang && isContractPlanLocked(linkedVorgang),
+  );
 
   const toggleSection = (sectionId: ReviewSectionId) => {
     setExpandedSections((current) => ({
@@ -547,6 +554,10 @@ export function EingangDetailPage() {
 
   const handleIntakeImportPositions = () => {
     if (!workflow) return;
+    if (positionsImportLocked) {
+      showToast(translate('order_plan_amendment_required'));
+      return;
+    }
 
     // Prefer the shared confirm-first Proposal UI when available.
     if (workflow.contractOrderProposal) {
@@ -573,6 +584,8 @@ export function EingangDetailPage() {
     if (result.success) {
       showToast(translate('intake.positionsImported').replace('{count}', String(result.added)));
       refreshWorkflowItem();
+    } else if (result.errorKey === 'order_plan_amendment_required') {
+      showToast(translate('order_plan_amendment_required'));
     }
   };
 
@@ -623,6 +636,10 @@ export function EingangDetailPage() {
 
   const handleCreateContractOrder = (selectedPositions: EnhancedDetectedOrderPosition[]) => {
     if (!item || !workflow?.contractOrderProposal) return;
+    if (positionsImportLocked) {
+      showToast(translate('order_plan_amendment_required'));
+      return;
+    }
     if (selectedPositions.length === 0) {
       showToast(translate('documentIntelligence.createOrderFailed'));
       return;
@@ -638,6 +655,10 @@ export function EingangDetailPage() {
           selectedPositions,
           confirmedSelections,
         );
+        if (importResult.errorKey === 'order_plan_amendment_required') {
+          showToast(translate('order_plan_amendment_required'));
+          return;
+        }
         if (importResult.added === 0 && importResult.skipped === 0) {
           showToast(translate('documentIntelligence.createOrderFailed'));
           return;
@@ -725,6 +746,7 @@ export function EingangDetailPage() {
         onImportPositions={handleIntakeImportPositions}
         onAcceptTasks={handleIntakeAcceptTasks}
         onCancel={() => undefined}
+        importPositionsLocked={positionsImportLocked}
       />
     </>
   ) : null;
@@ -853,17 +875,28 @@ export function EingangDetailPage() {
             <p className="contract-order-proposal__hint">
               {translate('documentIntelligence.proposal.onlySelectedHint')}
             </p>
-            <Button variant="outline" fullWidth onClick={handleIntakeImportPositions}>
-              {translate('documentIntelligence.action.confirmSelectedPositions').replace(
-                '{count}',
-                String(
-                  countSelectedContractPositions(
-                    workflow.suggestedOrderPositions,
-                    buildDefaultContractPositionSelections(workflow.suggestedOrderPositions),
+            {!positionsImportLocked ? (
+              <Button
+                variant="outline"
+                fullWidth
+                data-testid="intake-import-positions"
+                onClick={handleIntakeImportPositions}
+              >
+                {translate('documentIntelligence.action.confirmSelectedPositions').replace(
+                  '{count}',
+                  String(
+                    countSelectedContractPositions(
+                      workflow.suggestedOrderPositions,
+                      buildDefaultContractPositionSelections(workflow.suggestedOrderPositions),
+                    ),
                   ),
-                ),
-              )}
-            </Button>
+                )}
+              </Button>
+            ) : (
+              <p className="muted" data-testid="intake-import-plan-locked">
+                {translate('orderPlan.confirmedHint')}
+              </p>
+            )}
           </Card>
         </CollapsibleReviewSection>
       )}
