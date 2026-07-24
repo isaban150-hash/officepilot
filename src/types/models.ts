@@ -828,6 +828,9 @@ export type OrderUnit = 'm²' | 'Stück' | 'Meter' | 'Stunden' | 'Pauschal';
 
 export type OrderPositionCategory = 'arbeit' | 'material' | 'sonstiges';
 
+/** ORDER-AMENDMENT: additive change kinds (draft + confirmed). */
+export type OrderAmendmentChangeType = 'add' | 'quantity_increase';
+
 export interface OrderPosition {
   id: string;
   description: string;
@@ -840,6 +843,11 @@ export interface OrderPosition {
   billable?: boolean;
   /** Actually executed quantity during order execution — not plan, not billed. */
   executedQuantity?: number;
+  /** Provenance for positions composed from confirmed amendments (ORDER-AMENDMENT-01B2). */
+  sourceAmendmentId?: string;
+  sourceAmendmentSequence?: number;
+  parentPositionId?: string;
+  amendmentChangeType?: OrderAmendmentChangeType;
 }
 
 export type OrderPositionEditableField =
@@ -872,8 +880,6 @@ export interface OrderPositionInput {
 /** ORDER-AMENDMENT-01A: local draft only — never confirmed, never in orderPositions. */
 export type OrderAmendmentStatus = 'entwurf';
 
-export type OrderAmendmentChangeType = 'add' | 'quantity_increase';
-
 export interface OrderAmendmentDraftPosition {
   id: string;
   changeType: OrderAmendmentChangeType;
@@ -901,6 +907,41 @@ export interface OrderAmendment {
   positions: OrderAmendmentDraftPosition[];
   createdAt: string;
   updatedAt: string;
+}
+
+/** Server-authoritative confirmed amendment (ORDER-AMENDMENT-01B2). Local write-once. */
+export type ConfirmedOrderAmendmentStatus = 'bestaetigt';
+
+export interface ConfirmedOrderAmendmentPosition {
+  id: string;
+  changeType: OrderAmendmentChangeType;
+  parentPositionId?: string;
+  description: string;
+  plannedQuantity: number;
+  unit: OrderUnit;
+  unitLabel?: string;
+  unitPrice: number;
+  category?: OrderPositionCategory;
+  billable?: boolean;
+}
+
+export interface ConfirmedOrderAmendment {
+  cloudId: string;
+  clientAmendmentId: string;
+  vorgangId: string;
+  sequenceNo: number;
+  status: ConfirmedOrderAmendmentStatus;
+  title: string;
+  reason?: string;
+  positions: ConfirmedOrderAmendmentPosition[];
+  contentFingerprint: string;
+  confirmedAt: string;
+  confirmedBy: string;
+  rowVersion: number;
+  createdAt: string;
+  updatedAt: string;
+  /** Local-only link to the draft that was confirmed — never pushed to cloud. */
+  localSourceDraftId?: string;
 }
 
 export interface VorgangInvoiceLine {
@@ -990,6 +1031,11 @@ export interface VorgangInvoice {
   sentVia?: InvoiceSentVia;
   /** Optional free-text note (e.g. for sentVia=sonstige). */
   sentNote?: string;
+  /**
+   * Frozen amendment plan revision for Schluss finalize (ORDER-AMENDMENT-01B2).
+   * Captured when the Schluss draft/invoice is prepared — not recomputed at finalize.
+   */
+  expectedAmendmentSequence?: number;
 }
 
 /** Negotiation proposals live on the Vorgang only — never mutate the original contract document. */
@@ -1113,6 +1159,11 @@ export interface Vorgang {
    * Never part of VorgangCloudPayload / strip / content key.
    */
   orderAmendments?: OrderAmendment[];
+  /**
+   * Server-authoritative confirmed amendments (ORDER-AMENDMENT-01B2).
+   * Local write-once; never part of VorgangCloudPayload / strip / content key.
+   */
+  confirmedOrderAmendments?: ConfirmedOrderAmendment[];
   /** Set when the user explicitly starts order execution (beauftragt → in_bearbeitung). */
   executionStartedAt?: string;
   sync?: SyncMeta;
@@ -1190,6 +1241,11 @@ export interface InvoiceDraft {
   invoiceNumberPreview: string;
   introText: string;
   closingText: string;
+  /**
+   * Frozen at Schluss draft creation from local confirmed amendments (01B2).
+   * Sent as expectedAmendmentSequence on cloud finalize — never recomputed later.
+   */
+  expectedAmendmentSequence?: number;
 }
 
 export interface InvoicePrintPosition {

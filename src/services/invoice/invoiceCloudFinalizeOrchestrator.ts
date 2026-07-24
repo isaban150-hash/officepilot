@@ -28,6 +28,7 @@ export type CloudFinalizeFailureReason =
   | 'workspace_missing'
   | 'rpc_failed'
   | 'idempotency_conflict'
+  | 'amendment_state_stale'
   | 'local_persist_failed'
   | 'local_conflict';
 
@@ -121,6 +122,13 @@ export async function finalizeInvoiceDraftWithCloud(
         return {
           ok: false,
           reason: 'idempotency_conflict',
+          message: error.message,
+        };
+      }
+      if (error.message.includes('invoice_amendment_state_stale')) {
+        return {
+          ok: false,
+          reason: 'amendment_state_stale',
           message: error.message,
         };
       }

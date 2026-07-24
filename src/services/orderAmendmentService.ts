@@ -3,6 +3,7 @@ import {
   getVorgangById,
   saveVorgangOrderAmendments,
 } from './vorgangService';
+import { isOrderAmendmentDraftLockedByIntent } from './orderAmendment/orderAmendmentConfirmIntentService';
 import type {
   OrderAmendment,
   OrderAmendmentChangeType,
@@ -19,7 +20,18 @@ export type OrderAmendmentErrorKey =
   | 'order_amendment_not_found'
   | 'order_amendment_position_not_found'
   | 'order_amendment_invalid_position'
-  | 'order_amendment_parent_position_not_found';
+  | 'order_amendment_parent_position_not_found'
+  | 'order_amendment_confirmation_outcome_unknown';
+
+function assertDraftUnlocked(
+  vorgangId: string,
+  amendmentId: string,
+): OrderAmendmentErrorKey | null {
+  if (isOrderAmendmentDraftLockedByIntent(vorgangId, amendmentId)) {
+    return 'order_amendment_confirmation_outcome_unknown';
+  }
+  return null;
+}
 
 export type OrderAmendmentResult =
   | { success: true; vorgang: Vorgang; amendment: OrderAmendment }
@@ -180,6 +192,8 @@ export function updateOrderAmendmentDraft(
 ): OrderAmendmentResult {
   const gate = requireConfirmedVorgang(vorgangId);
   if (!gate.ok) return { success: false, errorKey: gate.errorKey };
+  const locked = assertDraftUnlocked(vorgangId, amendmentId);
+  if (locked) return { success: false, errorKey: locked };
 
   const amendments = cloneAmendments(gate.vorgang.orderAmendments);
   const index = amendments.findIndex((item) => item.id === amendmentId);
@@ -216,6 +230,8 @@ export function deleteOrderAmendmentDraft(
 ): { success: true; vorgang: Vorgang } | { success: false; errorKey: OrderAmendmentErrorKey } {
   const gate = requireConfirmedVorgang(vorgangId);
   if (!gate.ok) return { success: false, errorKey: gate.errorKey };
+  const locked = assertDraftUnlocked(vorgangId, amendmentId);
+  if (locked) return { success: false, errorKey: locked };
 
   const amendments = cloneAmendments(gate.vorgang.orderAmendments);
   const index = amendments.findIndex((item) => item.id === amendmentId);
@@ -238,6 +254,8 @@ export function addOrderAmendmentDraftPosition(
 ): OrderAmendmentResult {
   const gate = requireConfirmedVorgang(vorgangId);
   if (!gate.ok) return { success: false, errorKey: gate.errorKey };
+  const locked = assertDraftUnlocked(vorgangId, amendmentId);
+  if (locked) return { success: false, errorKey: locked };
 
   const validationError = validateDraftPosition(gate.vorgang, input);
   if (validationError) {
@@ -338,6 +356,8 @@ export function updateOrderAmendmentDraftPosition(
 ): OrderAmendmentResult {
   const gate = requireConfirmedVorgang(vorgangId);
   if (!gate.ok) return { success: false, errorKey: gate.errorKey };
+  const locked = assertDraftUnlocked(vorgangId, amendmentId);
+  if (locked) return { success: false, errorKey: locked };
 
   const amendments = cloneAmendments(gate.vorgang.orderAmendments);
   const amendmentIndex = amendments.findIndex((item) => item.id === amendmentId);
@@ -402,6 +422,8 @@ export function removeOrderAmendmentDraftPosition(
 ): OrderAmendmentResult {
   const gate = requireConfirmedVorgang(vorgangId);
   if (!gate.ok) return { success: false, errorKey: gate.errorKey };
+  const locked = assertDraftUnlocked(vorgangId, amendmentId);
+  if (locked) return { success: false, errorKey: locked };
 
   const amendments = cloneAmendments(gate.vorgang.orderAmendments);
   const amendmentIndex = amendments.findIndex((item) => item.id === amendmentId);

@@ -38,6 +38,10 @@ import type {
   VorgangStatus,
 } from '../types/models';
 import {
+  cloneConfirmedOrderAmendments,
+  normalizeConfirmedOrderAmendments,
+} from './orderAmendment/orderAmendmentConfirmedNormalize';
+import {
   buildOrderPositionsFromSnapshot,
   isSnapshotAlignable,
   orderPositionsMatchSnapshot,
@@ -213,6 +217,7 @@ function cloneVorgang(v: Vorgang): Vorgang {
       ? cloneContractConfirmation(v.contractConfirmation)
       : undefined,
     orderAmendments: cloneOrderAmendments(v.orderAmendments),
+    confirmedOrderAmendments: cloneConfirmedOrderAmendments(v.confirmedOrderAmendments),
   };
 }
 
@@ -276,6 +281,7 @@ function normalizeVorgang(v: Vorgang): Vorgang {
     negotiation: normalizeNegotiation(v.negotiation),
     contractConfirmation: normalizeContractConfirmation(v.contractConfirmation),
     orderAmendments: normalizeOrderAmendments(v.orderAmendments),
+    confirmedOrderAmendments: normalizeConfirmedOrderAmendments(v.confirmedOrderAmendments),
     invoices: (v.invoices ?? []).map((inv) => ({
       ...inv,
       type: inv.type ?? 'abschlag',
@@ -286,6 +292,12 @@ function normalizeVorgang(v: Vorgang): Vorgang {
       legalNotices: inv.legalNotices ?? [],
       previousAbschlagDeductions: inv.previousAbschlagDeductions ?? [],
       payments: inv.payments ?? [],
+      expectedAmendmentSequence:
+        typeof inv.expectedAmendmentSequence === 'number' &&
+        Number.isInteger(inv.expectedAmendmentSequence) &&
+        inv.expectedAmendmentSequence >= 0
+          ? inv.expectedAmendmentSequence
+          : undefined,
     })),
   });
 
@@ -408,6 +420,39 @@ function updateVorgangInStore(updated: Vorgang): Vorgang {
   vorgaenge = vorgaenge.map((v) => (v.id === next.id ? next : v));
   persistAll();
   return cloneVorgang(next);
+}
+
+/**
+ * Atomically mutate one Vorgang in memory and persist once.
+ * On persist failure, restores the previous in-memory row.
+ */
+export function commitVorgangMutation(
+  vorgangId: string,
+  buildNext: (
+    current: Vorgang,
+  ) => Vorgang | { errorKey: string },
+):
+  | { ok: true; vorgang: Vorgang }
+  | { ok: false; errorKey: string } {
+  const index = vorgaenge.findIndex((item) => item.id === vorgangId && isEntitySyncActive(item));
+  if (index === -1) {
+    return { ok: false, errorKey: 'vorgang.notFound' };
+  }
+
+  const previousRaw = vorgaenge[index]!;
+  const built = buildNext(cloneVorgang(previousRaw));
+  if ('errorKey' in built) {
+    return { ok: false, errorKey: built.errorKey };
+  }
+
+  const next = isEntitySyncActive(built) ? withUpdatedEntitySync(built, 'vorgang') : built;
+  vorgaenge = vorgaenge.map((item) => (item.id === vorgangId ? next : item));
+  const persistResult = persistAll();
+  if (!persistResult.success) {
+    vorgaenge = vorgaenge.map((item) => (item.id === vorgangId ? previousRaw : item));
+    return { ok: false, errorKey: 'order_amendment_local_persist_failed' };
+  }
+  return { ok: true, vorgang: cloneVorgang(next) };
 }
 
 export function deleteVorgang(

@@ -311,6 +311,8 @@ function buildMergedVorgangFromFacts(
     negotiation: local?.negotiation,
     // Local-only Nachtragsentwürfe — never taken from cloud payload.
     orderAmendments: local?.orderAmendments,
+    // Local confirmed amendments (01B2) — never taken from vorgang cloud payload.
+    confirmedOrderAmendments: local?.confirmedOrderAmendments,
     contractConfirmation: confirmation,
     executionStartedAt,
     orderPositions: shell.orderPositions ?? [],

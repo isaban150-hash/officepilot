@@ -193,7 +193,7 @@ function buildBaseDraft(
   positions: InvoiceDraftPosition[],
   abschlagNumber?: number,
 ): InvoiceDraft {
-  return {
+  const draft: InvoiceDraft = {
     id: `draft-${Date.now()}`,
     vorgangId: vorgang.id,
     vorgangTitle: vorgang.title,
@@ -208,6 +208,13 @@ function buildBaseDraft(
     closingText: '',
     ...buildDraftMetadata(vorgang, setup, type),
   };
+  // Freeze amendment revision at Schluss preparation time (ORDER-AMENDMENT-01B2).
+  if (type === 'schluss') {
+    const sequences = (vorgang.confirmedOrderAmendments ?? []).map((item) => item.sequenceNo);
+    draft.expectedAmendmentSequence =
+      sequences.length > 0 ? Math.max(...sequences) : 0;
+  }
+  return draft;
 }
 
 function initialQuantityForType(
@@ -474,6 +481,11 @@ export function buildInvoiceFinalizationCandidate(
     closingText: draft.closingText,
     baustelle: draft.baustelle,
     vorgangTitle: draft.vorgangTitle,
+    // Frozen at draft creation for Schluss — never recomputed here (01B2).
+    expectedAmendmentSequence:
+      draft.type === 'schluss'
+        ? draft.expectedAmendmentSequence ?? 0
+        : undefined,
   };
 
   return { ok: true, invoice };
@@ -502,6 +514,8 @@ export function buildInvoiceFinalizationContentFingerprint(
     customerBilling: draft.customerBilling,
     subtotal: totals.subtotal,
     amount: totals.total,
+    expectedAmendmentSequence:
+      draft.type === 'schluss' ? (draft.expectedAmendmentSequence ?? 0) : null,
     positions: draft.positions
       .filter((p) => p.quantity > 0)
       .map((p) => ({
@@ -547,6 +561,8 @@ export function buildInvoiceContentFingerprintFromInvoice(invoice: VorgangInvoic
     },
     subtotal: invoice.subtotal,
     amount: invoice.amount,
+    expectedAmendmentSequence:
+      invoice.type === 'schluss' ? (invoice.expectedAmendmentSequence ?? 0) : null,
     positions: (invoice.positions ?? []).map((p) => ({
       orderPositionId: p.orderPositionId,
       description: p.description,
@@ -577,6 +593,7 @@ function buildInvoiceContentFingerprintPayload(payload: {
   customerBilling: CustomerBilling;
   subtotal: number;
   amount: number;
+  expectedAmendmentSequence: number | null;
   positions: Array<{
     orderPositionId: string;
     description: string;

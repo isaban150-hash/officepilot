@@ -922,6 +922,22 @@ const deLegacy = {
   'orderAmendment.positionUpdated': 'Nachtragsposition aktualisiert.',
   'orderAmendment.positionRemoved': 'Nachtragsposition entfernt.',
   'orderAmendment.deleteConfirm': 'Nachtragsentwurf wirklich löschen?',
+  'orderAmendment.confirm': 'Nachtrag bestätigen',
+  'orderAmendment.confirmDialog':
+    'Möchten Sie diesen Nachtrag verbindlich bestätigen? Er ist danach nicht mehr bearbeitbar und fließt in Plan und Abrechnung ein.',
+  'orderAmendment.confirmHint':
+    'Mit der Bestätigung wird der Nachtrag verbindlich und wirkt auf Plan und Abrechnung.',
+  'orderAmendment.confirmedBadge': 'bestätigt',
+  'orderAmendment.confirmedTitle': 'Bestätigte Nachträge',
+  'orderAmendment.confirming': 'Nachtrag wird bestätigt…',
+  'orderAmendment.retry': 'Erneut versuchen',
+  'orderAmendment.total': 'Gesamtsumme',
+  'orderAmendment.lineTotal': 'Positionsbetrag',
+  'orderAmendment.outcomeUnknown':
+    'Der Bestätigungsstatus ist unklar. Bitte erneut versuchen — der Nachtrag wurde möglicherweise bereits bestätigt.',
+  'orderAmendment.localApplyPending':
+    'Die Bestätigung war erfolgreich, die lokale Übernahme steht noch aus. Bitte erneut versuchen.',
+  'orderAmendment.confirmedSuccess': 'Nachtrag wurde bestätigt.',
   'order_amendment_requires_confirmation':
     'Ein Nachtrag kann erst nach der Auftragsbestätigung vorbereitet werden.',
   'order_amendment_not_found': 'Nachtragsentwurf nicht gefunden.',
@@ -929,6 +945,31 @@ const deLegacy = {
   'order_amendment_invalid_position': 'Die Nachtragsposition ist ungültig.',
   'order_amendment_parent_position_not_found':
     'Die referenzierte Hauptposition wurde nicht gefunden.',
+  'order_amendment_cloud_unavailable':
+    'Cloud-Verbindung für Nachtragsbestätigung nicht verfügbar.',
+  'order_amendment_session_required':
+    'Bitte melden Sie sich an, um den Nachtrag zu bestätigen.',
+  'order_amendment_workspace_required':
+    'Kein Workspace aktiv. Nachtragsbestätigung nicht möglich.',
+  'order_amendment_draft_not_found': 'Nachtragsentwurf nicht gefunden.',
+  'order_amendment_contract_confirmation_missing':
+    'Der Auftrag muss zuerst bestätigt sein.',
+  'order_amendment_final_invoice_exists':
+    'Es existiert bereits eine Schlussrechnung. Nachtrag kann nicht bestätigt werden.',
+  'order_amendment_idempotency_conflict':
+    'Konflikt bei der Nachtragsbestätigung (Idempotenz).',
+  'order_amendment_position_id_conflict':
+    'Konflikt bei Positions-IDs. Nachtrag kann nicht bestätigt werden.',
+  'order_amendment_local_persist_failed':
+    'Lokale Speicherung der Bestätigung fehlgeschlagen. Bitte erneut versuchen.',
+  'order_amendment_local_confirmation_conflict':
+    'Lokaler Konflikt bei der Nachtragsbestätigung.',
+  'order_amendment_confirmation_outcome_unknown':
+    'Der Bestätigungsstatus ist unklar. Bitte erneut versuchen.',
+  'order_amendment_already_confirmed': 'Dieser Nachtrag wurde bereits bestätigt.',
+  'order_amendment_vorgang_not_found': 'Vorgang nicht gefunden.',
+  'invoice_amendment_state_stale':
+    'Der Nachtragsstand der Rechnung ist veraltet. Bitte neu laden.',
   'position.billedLockHint':
     'Diese Position wurde bereits abgerechnet. Preis und Einheit sind gesperrt.',
   'position.plannedNegative': 'Geplante Menge darf nicht negativ sein.',

@@ -149,7 +149,7 @@ export function buildWorkspaceInvoiceFinalizePayload(invoice: VorgangInvoice): R
     ...rest
   } = invoice;
 
-  return {
+  const payload: Record<string, unknown> = {
     ...rest,
     positions: (invoice.positions ?? []).map(cloneLine),
     previousAbschlagDeductions: (invoice.previousAbschlagDeductions ?? []).map((d) => ({ ...d })),
@@ -162,6 +162,16 @@ export function buildWorkspaceInvoiceFinalizePayload(invoice: VorgangInvoice): R
         })()
       : undefined,
   };
+
+  // Schluss: send frozen expectedAmendmentSequence only (camelCase). Never send snake_case twin.
+  if (invoice.type === 'schluss') {
+    payload.expectedAmendmentSequence = invoice.expectedAmendmentSequence ?? 0;
+  } else {
+    delete payload.expectedAmendmentSequence;
+  }
+  delete payload.expected_amendment_sequence;
+
+  return payload;
 }
 
 export function buildWorkspaceInvoiceFinalizeInput(

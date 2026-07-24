@@ -121,8 +121,7 @@ describe('ORDER-AMENDMENT-01A UI', () => {
     expect(html).toContain(translate('orderAmendment.unbindingHint'));
     expect(html).toContain('data-testid="order-amendment-add-position"');
     expect(html).toContain('data-testid="order-amendment-add-quantity-increase"');
-    expect(html).not.toContain('Nachtrag bestätigen');
-    expect(html).not.toContain('data-testid="order-amendment-confirm"');
+    // Confirm CTA is ORDER-AMENDMENT-01B2; Versand remains out of scope.
     expect(html).not.toContain('data-testid="order-amendment-send"');
     expect(html).not.toMatch(/Rechnung erstellen|Kunde informieren/i);
   });
