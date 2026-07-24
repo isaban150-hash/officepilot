@@ -279,6 +279,31 @@ export function parseVorgangCloudPayload(payload: Record<string, unknown> | null
   };
 }
 
+/**
+ * ORDER-AMENDMENT-01B3B: defer snapshot repair when the merged plan still carries
+ * amendment positions whose sources are not yet in confirmedOrderAmendments.
+ * Keeps cloud orderPositions (incl. executedQuantity) as quantity basis until amendment pull.
+ */
+export function shouldDeferContractPlanRepair(vorgang: Pick<
+  Vorgang,
+  'orderPositions' | 'confirmedOrderAmendments'
+>): boolean {
+  const sourceIds = new Set<string>();
+  for (const position of vorgang.orderPositions ?? []) {
+    const sourceId = position.sourceAmendmentId?.trim();
+    if (sourceId) sourceIds.add(sourceId);
+  }
+  if (sourceIds.size === 0) return false;
+
+  const confirmedIds = new Set(
+    (vorgang.confirmedOrderAmendments ?? []).map((item) => item.clientAmendmentId),
+  );
+  for (const sourceId of sourceIds) {
+    if (!confirmedIds.has(sourceId)) return true;
+  }
+  return false;
+}
+
 function buildMergedVorgangFromFacts(
   shell: Vorgang,
   local: Vorgang | null,
@@ -334,8 +359,12 @@ function buildMergedVorgangFromFacts(
     { protectLocalStatus: local?.status },
   );
 
-  // 7 ORDER-PLAN-INTEGRITY-01: after merge winner is chosen, canonicalize contract fields
-  // from snapshot; keep executedQuantity from the selected merged positions by id.
+  // 7 ORDER-PLAN-INTEGRITY-01 / ORDER-AMENDMENT-01B3B:
+  // Canonicalize from snapshot only when amendment sources are already locally known.
+  // Otherwise keep merged cloud orderPositions until amendment pull + composer.
+  if (shouldDeferContractPlanRepair(withInvariants)) {
+    return withInvariants;
+  }
   return repairContractPlanFromSnapshot(withInvariants).vorgang;
 }
 

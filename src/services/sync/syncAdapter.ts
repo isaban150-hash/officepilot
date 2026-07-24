@@ -4,6 +4,7 @@ import type {
   SyncSimulationReport,
   SyncState,
 } from '../../types/sync';
+import type { OrderAmendmentIntentClearKey } from '../orderAmendment/orderAmendmentCloudPullMergeService';
 
 export type SyncProviderKind = 'local' | 'supabase' | 'firebase' | 'node' | 'json';
 
@@ -40,6 +41,13 @@ export interface SyncPullResult {
   report: SyncSimulationReport;
   /** Invoice finalize intents to clear after successful batch persist (03B2). */
   pendingInvoiceIntentClears?: string[];
+  /** Amendment confirm intents to clear after successful batch persist (01B3B). */
+  pendingAmendmentIntentClears?: OrderAmendmentIntentClearKey[];
+  /**
+   * When true, UI/Bootstrap must not persist the pull candidate
+   * (e.g. global amendment-pull failure → keep pre-pull state).
+   */
+  skipPersist?: boolean;
 }
 
 export interface SyncAcknowledgeInput {

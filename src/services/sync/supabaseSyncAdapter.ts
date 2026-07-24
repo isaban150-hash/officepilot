@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { AppPersistedState } from '../../types/models';
-import type { SyncOutboxEntry } from '../../types/sync';
+import type { AppPersistedState, Vorgang } from '../../types/models';
+import type { SyncOutboxEntry, SyncSimulationReport } from '../../types/sync';
 import { getSupabaseClient, isSupabaseConfigured } from '../../lib/supabase';
 import type {
   SyncAcknowledgeInput,
@@ -41,7 +41,84 @@ import {
   mergeVorgaengeFromPull,
 } from '../vorgang/vorgangCloudService';
 import { applyInvoicePullAfterVorgangMerge } from '../invoice/invoiceCloudPullOrchestrator';
+import { listOrderAmendmentConfirmIntents } from '../orderAmendment/orderAmendmentConfirmIntentService';
+import {
+  type MergeCloudAmendmentsResult,
+} from '../orderAmendment/orderAmendmentCloudPullMergeService';
+import { pullAndMergeWorkspaceOrderAmendmentsInMemory } from '../orderAmendment/orderAmendmentCloudPullOrchestrator';
 import type { SyncOutboxOperation } from '../../types/sync';
+
+function shortenSyncReportId(id: string): string {
+  if (id.length <= 12) return id;
+  return `${id.slice(0, 8)}…${id.slice(-4)}`;
+}
+
+/** Map B3A merge issues into the shared sync report (no full payloads / prices). */
+function appendAmendmentMergeToSyncReport(
+  report: SyncSimulationReport,
+  merge: MergeCloudAmendmentsResult,
+): void {
+  report.mergedEntityCount += merge.appliedCount;
+
+  for (const issue of merge.issues) {
+    const entityId = issue.vorgangId ?? 'amendment';
+    const message = `${issue.errorKey ?? issue.reason}: ${issue.message}`;
+
+    // Soft warnings: visible in report, do not fail the sync toast.
+    if (issue.reason === 'duplicate_content_warning') {
+      report.conflicts.push({
+        entityType: 'vorgang',
+        entityId,
+        resolution: 'conflict',
+      });
+      report.conflictCount += 1;
+      report.errors.push({ outboxId: 'amendment-pull-warning', message });
+      continue;
+    }
+
+    report.conflictCount += 1;
+    report.conflicts.push({
+      entityType: 'vorgang',
+      entityId,
+      resolution: 'conflict',
+    });
+    report.errors.push({ outboxId: 'amendment-pull', message });
+    report.errorCount += 1;
+  }
+}
+
+/** Warn when invoice lines reference orderPositionIds missing from the final plan. */
+export function appendMissingInvoicePositionRefsToReport(
+  vorgaenge: Vorgang[],
+  report: SyncSimulationReport,
+): void {
+  const seen = new Set<string>();
+  for (const vorgang of vorgaenge) {
+    const planIds = new Set((vorgang.orderPositions ?? []).map((position) => position.id));
+    for (const invoice of vorgang.invoices ?? []) {
+      for (const line of invoice.positions ?? []) {
+        if (planIds.has(line.orderPositionId)) continue;
+        const key = `${vorgang.id}::${line.orderPositionId}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        report.conflictCount += 1;
+        report.conflicts.push({
+          entityType: 'vorgang',
+          entityId: shortenSyncReportId(vorgang.id),
+          resolution: 'conflict',
+        });
+        report.errorCount += 1;
+        report.errors.push({
+          outboxId: 'invoice-position-ref',
+          message:
+            `Invoice-Line verweist auf fehlende Planposition ` +
+            `${shortenSyncReportId(line.orderPositionId)} ` +
+            `(Vorgang ${shortenSyncReportId(vorgang.id)}).`,
+        });
+      }
+    }
+  }
+}
 
 function updateOutboxEntryStatus(
   outbox: SyncOutboxEntry[],
@@ -345,21 +422,51 @@ export class SupabaseSyncAdapter implements SyncAdapter {
         });
       }
 
-      // CLOUD-ORDER-CHAIN-03B2: invoice pull only after vorgang merge succeeds.
-      // Invoice RPC failure must not discard vorgang pull results.
-      const invoicePull = await applyInvoicePullAfterVorgangMerge({
+      // ORDER-AMENDMENT-01B3B: confirmed amendments after vorgang merge, before invoices.
+      const amendmentIntents = listOrderAmendmentConfirmIntents().filter(
+        (intent) => intent.workspaceId === workspaceId,
+      );
+      const amendmentPull = await pullAndMergeWorkspaceOrderAmendmentsInMemory({
         workspaceId,
         vorgaenge: vorgangMerge.vorgaenge,
+        intents: amendmentIntents,
+      });
+
+      if (!amendmentPull.ok) {
+        const message =
+          amendmentPull.message ??
+          `Amendment-Pull fehlgeschlagen (${amendmentPull.reason})`;
+        this.syncState = 'error';
+        this.lastError = message;
+        report.errorCount += 1;
+        report.errors.push({ outboxId: 'amendment-pull', message });
+        return {
+          success: false,
+          state: input.state,
+          report: finalizeSyncSimulationReport(report, new Date().toISOString()),
+          skipPersist: true,
+        };
+      }
+
+      appendAmendmentMergeToSyncReport(report, amendmentPull.merge);
+
+      // CLOUD-ORDER-CHAIN-03B2: invoice pull only after amendment plan is composed.
+      // Invoice RPC failure must not discard vorgang/amendment pull results.
+      const invoicePull = await applyInvoicePullAfterVorgangMerge({
+        workspaceId,
+        vorgaenge: amendmentPull.merge.vorgaenge,
         report,
         client: this.client,
       });
+
+      appendMissingInvoicePositionRefsToReport(invoicePull.vorgaenge, report);
 
       const finalState = {
         ...merged.state,
         vorgaenge: invoicePull.vorgaenge,
       };
 
-      // Vorgang pull succeeded; invoice RPC failure is reported but does not roll back.
+      // Vorgang+amendment pull succeeded; invoice RPC failure is reported but does not roll back.
       this.syncState = invoicePull.invoiceRpcFailed ? 'error' : 'synced';
       this.lastSyncedAt = new Date().toISOString();
       this.lastError = invoicePull.invoiceRpcFailed
@@ -371,6 +478,7 @@ export class SupabaseSyncAdapter implements SyncAdapter {
         state: finalState,
         report: finalizeSyncSimulationReport(report, new Date().toISOString()),
         pendingInvoiceIntentClears: invoicePull.pendingIntentClears,
+        pendingAmendmentIntentClears: amendmentPull.merge.pendingIntentClears,
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Pull fehlgeschlagen';
@@ -382,6 +490,7 @@ export class SupabaseSyncAdapter implements SyncAdapter {
         success: false,
         state: input.state,
         report: finalizeSyncSimulationReport(report, new Date().toISOString()),
+        skipPersist: true,
       };
     }
   }

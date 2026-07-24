@@ -1,5 +1,6 @@
 import type { AppPersistedState } from '../../types/models';
 import type { SyncCoordinatorReport, SyncOutboxEntry, SyncState } from '../../types/sync';
+import type { OrderAmendmentIntentClearKey } from '../orderAmendment/orderAmendmentCloudPullMergeService';
 import type { SyncAdapter, SyncAdapterStatus } from './syncAdapter';
 import { createSyncAdapter } from './syncAdapterFactory';
 import {
@@ -7,6 +8,16 @@ import {
   finalizeSyncSimulationReport,
 } from './syncSimulationReportService';
 import { retryFailedOutboxEntries, wrapStateAsVirtualDevice } from './syncSimulatorService';
+
+export type SyncRunResult = {
+  state: AppPersistedState;
+  report: SyncCoordinatorReport;
+  success: boolean;
+  /** When true, UI/Bootstrap must not persist or clear intents. */
+  skipPersist?: boolean;
+  pendingInvoiceIntentClears?: string[];
+  pendingAmendmentIntentClears?: OrderAmendmentIntentClearKey[];
+};
 
 const MAX_RETRY_ATTEMPTS = 3;
 
@@ -96,11 +107,7 @@ export class SyncCoordinator {
     };
   }
 
-  async runSync(state: AppPersistedState): Promise<{
-    state: AppPersistedState;
-    report: SyncCoordinatorReport;
-    pendingInvoiceIntentClears?: string[];
-  }> {
+  async runSync(state: AppPersistedState): Promise<SyncRunResult> {
     const startedAt = new Date().toISOString();
     this.syncState = 'checking';
 
@@ -110,7 +117,7 @@ export class SyncCoordinator {
       report.finishedAt = new Date().toISOString();
       report.durationMs = 0;
       this.lastReport = report;
-      return { state, report };
+      return { state, report, success: true };
     }
 
     const outbox = state.syncOutbox ?? [];
@@ -149,7 +156,7 @@ export class SyncCoordinator {
           toCoordinatorReport(createEmptySyncSimulationReport(startedAt), this.retryAttempts, 0, 0),
         );
         this.lastReport = failedReport;
-        return { state: currentState, report: failedReport };
+        return { state: currentState, report: failedReport, success: false };
       }
     }
 
@@ -168,10 +175,6 @@ export class SyncCoordinator {
         pullResult.report.mergedEntityCount,
       );
 
-      this.syncState = 'synced';
-      this.lastSyncedAt = new Date().toISOString();
-      this.lastError = undefined;
-
       const mergedReport = mergeReports(pushReport, pullReport);
       mergedReport.finishedAt = new Date().toISOString();
       mergedReport.durationMs = Math.max(
@@ -180,6 +183,43 @@ export class SyncCoordinator {
       );
       this.lastReport = mergedReport;
 
+      if (pullResult.skipPersist || !pullResult.success) {
+        this.syncState = 'error';
+        this.lastError =
+          pullResult.report.errors.find((item) => item.outboxId === 'amendment-pull')?.message
+          ?? pullResult.report.errors[0]?.message
+          ?? 'Pull fehlgeschlagen';
+
+        if (pullResult.skipPersist) {
+          // Global amendment / hard pull failure: keep pre-pull state, no clears.
+          return {
+            state: pullResult.state,
+            report: mergedReport,
+            success: false,
+            skipPersist: true,
+            pendingInvoiceIntentClears: [],
+            pendingAmendmentIntentClears: [],
+          };
+        }
+
+        // Partial failure (e.g. invoice RPC): persist candidate, defer clears as pending.
+        return {
+          state: {
+            ...pullResult.state,
+            syncOutbox: currentState.syncOutbox,
+            savedAt: new Date().toISOString(),
+          },
+          report: mergedReport,
+          success: false,
+          pendingInvoiceIntentClears: pullResult.pendingInvoiceIntentClears,
+          pendingAmendmentIntentClears: pullResult.pendingAmendmentIntentClears,
+        };
+      }
+
+      this.syncState = 'synced';
+      this.lastSyncedAt = new Date().toISOString();
+      this.lastError = undefined;
+
       return {
         state: {
           ...pullResult.state,
@@ -187,7 +227,9 @@ export class SyncCoordinator {
           savedAt: new Date().toISOString(),
         },
         report: mergedReport,
+        success: true,
         pendingInvoiceIntentClears: pullResult.pendingInvoiceIntentClears,
+        pendingAmendmentIntentClears: pullResult.pendingAmendmentIntentClears,
       };
     } catch (error) {
       this.syncState = 'error';
@@ -198,15 +240,18 @@ export class SyncCoordinator {
       report.errorCount = 1;
       report.errors.push({ outboxId: 'coordinator', message: this.lastError });
       this.lastReport = report;
-      return { state, report, pendingInvoiceIntentClears: [] };
+      return {
+        state,
+        report,
+        success: false,
+        skipPersist: true,
+        pendingInvoiceIntentClears: [],
+        pendingAmendmentIntentClears: [],
+      };
     }
   }
 
-  async retrySync(state: AppPersistedState): Promise<{
-    state: AppPersistedState;
-    report: SyncCoordinatorReport;
-    pendingInvoiceIntentClears?: string[];
-  }> {
+  async retrySync(state: AppPersistedState): Promise<SyncRunResult> {
     if (this.retryAttempts >= MAX_RETRY_ATTEMPTS) {
       this.syncState = 'error';
       this.lastError = 'Maximale Retry-Anzahl erreicht';
@@ -215,11 +260,24 @@ export class SyncCoordinator {
       report.finishedAt = startedAt;
       report.errors.push({ outboxId: 'coordinator', message: this.lastError });
       this.lastReport = report;
-      return { state, report };
+      return { state, report, success: false, skipPersist: true };
     }
 
     const retriedState = this.prepareRetry(state);
     return this.runSync(retriedState);
+  }
+
+  /** Update last report after UI/Bootstrap post-processing (persist/clear warnings). */
+  publishLastReport(report: SyncCoordinatorReport): void {
+    this.lastReport = { ...report };
+  }
+
+  /** Local batch persist failed after a successful pull candidate was produced. */
+  markLocalPersistFailed(message: string, report: SyncCoordinatorReport): void {
+    this.syncState = 'error';
+    this.lastError = message;
+    this.lastSyncedAt = undefined;
+    this.lastReport = { ...report };
   }
 
   resetForTests(): void {

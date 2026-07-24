@@ -3,12 +3,12 @@ import {
   applyPersistedStateFromSync,
   buildPersistedStateSnapshot,
 } from '../persistenceService';
-import { clearMatchedInvoiceFinalizeIntents } from '../invoice/invoiceCloudPullMergeService';
 import { switchToWorkspaceScope } from '../storage/storageBootstrapService';
 import { stripDefinitelyMockDataFromState } from '../storage/mockDataDetectionService';
 import { getSyncCoordinator } from '../sync/syncCoordinator';
 import { getSyncClient } from '../sync/syncClientService';
 import { createSyncAdapter } from '../sync/syncAdapterFactory';
+import { applySyncPullCandidateSafely } from '../sync/syncPullPersistService';
 import {
   applyWorkspaceStateToStores,
   provisionWorkspaceForAuthenticatedUser,
@@ -58,9 +58,22 @@ export async function bootstrapWorkspaceCloudSyncIfNeeded(): Promise<void> {
       return coordinator.runSync(buildPersistedStateSnapshot());
     })();
 
+    if (syncResult.skipPersist) {
+      // Global pull abort (e.g. amendment-pull): do not persist candidate; allow retry.
+      return;
+    }
+
     let finalState = stripDefinitelyMockDataFromState(syncResult.state);
-    applyPersistedStateFromSync(finalState);
-    clearMatchedInvoiceFinalizeIntents(syncResult.pendingInvoiceIntentClears ?? []);
+    const applied = applySyncPullCandidateSafely({
+      state: finalState,
+      report: syncResult.report,
+      pendingInvoiceIntentClears: syncResult.pendingInvoiceIntentClears,
+      pendingAmendmentIntentClears: syncResult.pendingAmendmentIntentClears,
+    });
+    if (!applied.persisted) {
+      // Store rolled back; do not mark bootstrap complete so a later attempt can retry.
+      return;
+    }
     applyWorkspaceStateToStores(finalState);
 
     const workspaceId = finalState.workspace?.id ?? finalState.syncClient?.serverWorkspaceId;
