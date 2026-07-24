@@ -485,7 +485,7 @@ export function buildInvoiceFinalizationContentFingerprint(
   setup: CompanySetup,
 ): string {
   const totals = calculateInvoiceTotals(draft, setup);
-  const payload = {
+  return buildInvoiceContentFingerprintPayload({
     type: draft.type,
     abschlagNumber: draft.abschlagNumber ?? null,
     taxStatus: draft.taxStatus ?? setup.taxStatus,
@@ -514,7 +514,80 @@ export function buildInvoiceFinalizationContentFingerprint(
         lineTotal: lineTotalMoney(p.quantity, p.unitPrice),
         billable: p.billable,
       })),
-  };
+  });
+}
+
+/**
+ * Content fingerprint from a finalized VorgangInvoice (for intent reconciliation on pull).
+ * Shape matches buildInvoiceFinalizationContentFingerprint (billable assumed true for lines).
+ */
+export function buildInvoiceContentFingerprintFromInvoice(invoice: VorgangInvoice): string {
+  return buildInvoiceContentFingerprintPayload({
+    type: invoice.type,
+    abschlagNumber: invoice.abschlagNumber ?? null,
+    taxStatus: invoice.taxStatus,
+    issueDate: invoice.issueDate ?? null,
+    servicePeriodFrom: invoice.servicePeriodFrom ?? null,
+    servicePeriodTo: invoice.servicePeriodTo ?? null,
+    paymentDueDate: invoice.paymentDueDate ?? null,
+    paymentTermsText: invoice.paymentTermsText ?? '',
+    skontoText: invoice.skontoText ?? '',
+    introText: invoice.introText ?? '',
+    closingText: invoice.closingText ?? '',
+    baustelle: invoice.baustelle ?? '',
+    vorgangTitle: invoice.vorgangTitle ?? '',
+    customerBilling: invoice.customerSnapshot ?? {
+      name: '',
+      contactPerson: '',
+      street: '',
+      zip: '',
+      city: '',
+      email: '',
+      phone: '',
+    },
+    subtotal: invoice.subtotal,
+    amount: invoice.amount,
+    positions: (invoice.positions ?? []).map((p) => ({
+      orderPositionId: p.orderPositionId,
+      description: p.description,
+      quantity: p.quantity,
+      unit: p.unit,
+      unitLabel: p.unitLabel ?? null,
+      unitPrice: roundMoney(p.unitPrice),
+      lineTotal: roundMoney(p.lineTotal),
+      billable: true,
+    })),
+  });
+}
+
+function buildInvoiceContentFingerprintPayload(payload: {
+  type: InvoiceDocumentType;
+  abschlagNumber: number | null;
+  taxStatus: TaxStatus;
+  issueDate: string | null;
+  servicePeriodFrom: string | null;
+  servicePeriodTo: string | null;
+  paymentDueDate: string | null;
+  paymentTermsText: string;
+  skontoText: string;
+  introText: string;
+  closingText: string;
+  baustelle: string;
+  vorgangTitle: string;
+  customerBilling: CustomerBilling;
+  subtotal: number;
+  amount: number;
+  positions: Array<{
+    orderPositionId: string;
+    description: string;
+    quantity: number;
+    unit: string;
+    unitLabel: string | null;
+    unitPrice: number;
+    lineTotal: number;
+    billable: boolean;
+  }>;
+}): string {
   return JSON.stringify(payload);
 }
 

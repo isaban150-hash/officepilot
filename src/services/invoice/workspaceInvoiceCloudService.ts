@@ -5,7 +5,7 @@ import { WorkspaceCloudError } from '../workspace/workspaceCloudService';
 import { formatInvoiceNumber } from '../invoiceNumberService';
 
 /**
- * CLOUD-ORDER-CHAIN-03A – thin binding for atomic finalize_workspace_invoice.
+ * CLOUD-ORDER-CHAIN-03A/03B2 – thin binding for finalize + pull workspace invoices.
  *
  * Note on SyncAdapter.reserveInvoiceNumber:
  * Separating number reservation from invoice insert is unsafe for multi-device.
@@ -47,7 +47,7 @@ export interface WorkspaceInvoiceFinalizeResult {
   cloudInvoiceId: string;
 }
 
-interface WorkspaceInvoiceRow {
+export interface WorkspaceInvoicePullRow {
   id: string;
   workspace_id: string;
   vorgang_id: string;
@@ -61,7 +61,19 @@ interface WorkspaceInvoiceRow {
   row_version: number;
   created_at: string;
   updated_at: string;
-  updated_by: string | null;
+  updated_by?: string | null;
+}
+
+/** Cloud row after successful finalize (03A). */
+type WorkspaceInvoiceRow = WorkspaceInvoicePullRow;
+
+export interface MappedWorkspaceInvoicePull {
+  workspaceId: string;
+  vorgangId: string;
+  clientInvoiceId: string;
+  cloudInvoiceId: string;
+  rowVersion: number;
+  invoice: VorgangInvoice;
 }
 
 function getClient(client?: SupabaseClient | null): SupabaseClient {
@@ -72,7 +84,7 @@ function getClient(client?: SupabaseClient | null): SupabaseClient {
   return resolved;
 }
 
-function classifyFinalizeError(error: { message?: string; code?: string }): WorkspaceInvoiceCloudError {
+function classifyInvoiceCloudError(error: { message?: string; code?: string }): WorkspaceInvoiceCloudError {
   const message = error.message ?? 'Unbekannter Cloud-Fehler';
   if (message.includes('Nicht angemeldet') || error.code === 'PGRST301') {
     return new WorkspaceInvoiceCloudError(message, 'auth', false);
@@ -109,6 +121,16 @@ function classifyFinalizeError(error: { message?: string; code?: string }): Work
   }
   return new WorkspaceInvoiceCloudError(message, 'unknown', true);
 }
+
+const INVOICE_STATUSES = new Set(['entwurf', 'vorbereitet', 'versendet']);
+const INVOICE_TYPES = new Set([
+  'rechnung',
+  'abschlag',
+  'teilrechnung',
+  'schluss',
+  'gutschrift',
+  'storno',
+]);
 
 function cloneLine(line: VorgangInvoiceLine): VorgangInvoiceLine {
   return { ...line };
@@ -205,6 +227,137 @@ export function formatWorkspaceInvoiceNumber(year: number, sequence: number): st
   return formatInvoiceNumber(year, sequence);
 }
 
+export function parseWorkspaceInvoicePullRow(
+  raw: unknown,
+): WorkspaceInvoicePullRow | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const row = raw as Record<string, unknown>;
+  const id = String(row.id ?? '').trim();
+  const workspaceId = String(row.workspace_id ?? '').trim();
+  const vorgangId = String(row.vorgang_id ?? '').trim();
+  const clientInvoiceId = String(row.client_invoice_id ?? '').trim();
+  const invoiceNumber = String(row.invoice_number ?? '').trim();
+  const invoiceType = String(row.invoice_type ?? '').trim();
+  const invoiceStatus = String(row.invoice_status ?? '').trim();
+  const payload =
+    row.payload && typeof row.payload === 'object'
+      ? (row.payload as Record<string, unknown>)
+      : null;
+  const year = Number(row.invoice_year);
+  const sequence = Number(row.invoice_sequence_number);
+  const rowVersion = Number(row.row_version ?? 1);
+
+  if (
+    !id ||
+    !workspaceId ||
+    !vorgangId ||
+    !clientInvoiceId ||
+    !invoiceNumber ||
+    !payload ||
+    !Number.isFinite(year) ||
+    !Number.isFinite(sequence) ||
+    sequence <= 0 ||
+    !INVOICE_TYPES.has(invoiceType) ||
+    !INVOICE_STATUSES.has(invoiceStatus)
+  ) {
+    return null;
+  }
+
+  return {
+    id,
+    workspace_id: workspaceId,
+    vorgang_id: vorgangId,
+    client_invoice_id: clientInvoiceId,
+    invoice_number: invoiceNumber,
+    invoice_year: year,
+    invoice_sequence_number: sequence,
+    invoice_type: invoiceType,
+    invoice_status: invoiceStatus,
+    payload,
+    row_version: Number.isFinite(rowVersion) ? rowVersion : 1,
+    created_at: String(row.created_at ?? ''),
+    updated_at: String(row.updated_at ?? ''),
+    updated_by: row.updated_by == null ? null : String(row.updated_by),
+  };
+}
+
+/**
+ * Map a pull row into VorgangInvoice.
+ * Identity/number/type/status come from row columns; body from payload.
+ * Payments and PDF/archive fields are never reconstructed from cloud.
+ */
+export function mapWorkspaceInvoicePullRowToVorgangInvoice(
+  row: WorkspaceInvoicePullRow,
+): MappedWorkspaceInvoicePull {
+  const fromPayload = mapCloudPayloadToVorgangInvoice(row.payload);
+  const invoice: VorgangInvoice = {
+    ...fromPayload,
+    id: row.client_invoice_id,
+    number: row.invoice_number,
+    invoiceSequenceNumber: row.invoice_sequence_number,
+    type: row.invoice_type as VorgangInvoice['type'],
+    status: row.invoice_status as VorgangInvoice['status'],
+  };
+  // Explicitly drop comfort/local-only fields from cloud mapping.
+  delete (invoice as { payments?: unknown }).payments;
+  delete (invoice as { paymentStatus?: unknown }).paymentStatus;
+  delete (invoice as { archiveDocumentId?: unknown }).archiveDocumentId;
+
+  return {
+    workspaceId: row.workspace_id,
+    vorgangId: row.vorgang_id,
+    clientInvoiceId: row.client_invoice_id,
+    cloudInvoiceId: row.id,
+    rowVersion: row.row_version,
+    invoice,
+  };
+}
+
+/** Raw pull rows from RPC (typed mapping happens client-side with isolation). */
+export async function rpcPullWorkspaceInvoiceRows(
+  workspaceId: string,
+  options?: { since?: string | null; client?: SupabaseClient | null },
+): Promise<unknown[]> {
+  if (!workspaceId.trim()) {
+    throw new WorkspaceInvoiceCloudError('workspace_id fehlt', 'validation', false);
+  }
+
+  try {
+    const supabase = getClient(options?.client);
+    const { data, error } = await supabase.rpc('pull_workspace_invoices', {
+      p_workspace_id: workspaceId,
+      p_since: options?.since ?? null,
+    });
+
+    if (error) {
+      throw classifyInvoiceCloudError(error);
+    }
+
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    if (error instanceof WorkspaceInvoiceCloudError) {
+      throw error;
+    }
+    throw classifyInvoiceCloudError(
+      error instanceof Error ? { message: error.message } : { message: 'Unbekannter Fehler' },
+    );
+  }
+}
+
+export async function rpcPullWorkspaceInvoices(
+  workspaceId: string,
+  options?: { since?: string | null; client?: SupabaseClient | null },
+): Promise<MappedWorkspaceInvoicePull[]> {
+  const rows = await rpcPullWorkspaceInvoiceRows(workspaceId, options);
+  const mapped: MappedWorkspaceInvoicePull[] = [];
+  for (const raw of rows) {
+    const parsed = parseWorkspaceInvoicePullRow(raw);
+    if (!parsed || parsed.workspace_id !== workspaceId) continue;
+    mapped.push(mapWorkspaceInvoicePullRowToVorgangInvoice(parsed));
+  }
+  return mapped;
+}
+
 export async function rpcFinalizeWorkspaceInvoice(
   input: WorkspaceInvoiceFinalizeInput,
   client?: SupabaseClient | null,
@@ -229,7 +382,7 @@ export async function rpcFinalizeWorkspaceInvoice(
     });
 
     if (error) {
-      throw classifyFinalizeError(error);
+      throw classifyInvoiceCloudError(error);
     }
 
     const invoicePayload = (data?.invoice as Record<string, unknown> | undefined) ?? null;
@@ -252,7 +405,7 @@ export async function rpcFinalizeWorkspaceInvoice(
     if (error instanceof WorkspaceInvoiceCloudError) {
       throw error;
     }
-    throw classifyFinalizeError(
+    throw classifyInvoiceCloudError(
       error instanceof Error ? { message: error.message } : { message: 'Unbekannter Fehler' },
     );
   }

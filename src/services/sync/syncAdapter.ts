@@ -38,6 +38,8 @@ export interface SyncPullResult {
   success: boolean;
   state: AppPersistedState;
   report: SyncSimulationReport;
+  /** Invoice finalize intents to clear after successful batch persist (03B2). */
+  pendingInvoiceIntentClears?: string[];
 }
 
 export interface SyncAcknowledgeInput {

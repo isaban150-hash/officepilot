@@ -40,6 +40,7 @@ import {
   buildVorgangCloudPushPayload,
   mergeVorgaengeFromPull,
 } from '../vorgang/vorgangCloudService';
+import { applyInvoicePullAfterVorgangMerge } from '../invoice/invoiceCloudPullOrchestrator';
 import type { SyncOutboxOperation } from '../../types/sync';
 
 function updateOutboxEntryStatus(
@@ -344,19 +345,32 @@ export class SupabaseSyncAdapter implements SyncAdapter {
         });
       }
 
+      // CLOUD-ORDER-CHAIN-03B2: invoice pull only after vorgang merge succeeds.
+      // Invoice RPC failure must not discard vorgang pull results.
+      const invoicePull = await applyInvoicePullAfterVorgangMerge({
+        workspaceId,
+        vorgaenge: vorgangMerge.vorgaenge,
+        report,
+        client: this.client,
+      });
+
       const finalState = {
         ...merged.state,
-        vorgaenge: vorgangMerge.vorgaenge,
+        vorgaenge: invoicePull.vorgaenge,
       };
 
-      this.syncState = 'synced';
+      // Vorgang pull succeeded; invoice RPC failure is reported but does not roll back.
+      this.syncState = invoicePull.invoiceRpcFailed ? 'error' : 'synced';
       this.lastSyncedAt = new Date().toISOString();
-      this.lastError = undefined;
+      this.lastError = invoicePull.invoiceRpcFailed
+        ? report.errors.find((e) => e.outboxId === 'invoice-pull')?.message
+        : undefined;
 
       return {
-        success: true,
+        success: !invoicePull.invoiceRpcFailed,
         state: finalState,
         report: finalizeSyncSimulationReport(report, new Date().toISOString()),
+        pendingInvoiceIntentClears: invoicePull.pendingIntentClears,
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Pull fehlgeschlagen';

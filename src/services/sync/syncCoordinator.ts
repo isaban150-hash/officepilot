@@ -96,7 +96,11 @@ export class SyncCoordinator {
     };
   }
 
-  async runSync(state: AppPersistedState): Promise<{ state: AppPersistedState; report: SyncCoordinatorReport }> {
+  async runSync(state: AppPersistedState): Promise<{
+    state: AppPersistedState;
+    report: SyncCoordinatorReport;
+    pendingInvoiceIntentClears?: string[];
+  }> {
     const startedAt = new Date().toISOString();
     this.syncState = 'checking';
 
@@ -183,6 +187,7 @@ export class SyncCoordinator {
           savedAt: new Date().toISOString(),
         },
         report: mergedReport,
+        pendingInvoiceIntentClears: pullResult.pendingInvoiceIntentClears,
       };
     } catch (error) {
       this.syncState = 'error';
@@ -193,11 +198,15 @@ export class SyncCoordinator {
       report.errorCount = 1;
       report.errors.push({ outboxId: 'coordinator', message: this.lastError });
       this.lastReport = report;
-      return { state, report };
+      return { state, report, pendingInvoiceIntentClears: [] };
     }
   }
 
-  async retrySync(state: AppPersistedState): Promise<{ state: AppPersistedState; report: SyncCoordinatorReport }> {
+  async retrySync(state: AppPersistedState): Promise<{
+    state: AppPersistedState;
+    report: SyncCoordinatorReport;
+    pendingInvoiceIntentClears?: string[];
+  }> {
     if (this.retryAttempts >= MAX_RETRY_ATTEMPTS) {
       this.syncState = 'error';
       this.lastError = 'Maximale Retry-Anzahl erreicht';

@@ -3,6 +3,7 @@ import {
   applyPersistedStateFromSync,
   buildPersistedStateSnapshot,
 } from '../persistenceService';
+import { clearMatchedInvoiceFinalizeIntents } from '../invoice/invoiceCloudPullMergeService';
 import { switchToWorkspaceScope } from '../storage/storageBootstrapService';
 import { stripDefinitelyMockDataFromState } from '../storage/mockDataDetectionService';
 import { getSyncCoordinator } from '../sync/syncCoordinator';
@@ -59,6 +60,7 @@ export async function bootstrapWorkspaceCloudSyncIfNeeded(): Promise<void> {
 
     let finalState = stripDefinitelyMockDataFromState(syncResult.state);
     applyPersistedStateFromSync(finalState);
+    clearMatchedInvoiceFinalizeIntents(syncResult.pendingInvoiceIntentClears ?? []);
     applyWorkspaceStateToStores(finalState);
 
     const workspaceId = finalState.workspace?.id ?? finalState.syncClient?.serverWorkspaceId;

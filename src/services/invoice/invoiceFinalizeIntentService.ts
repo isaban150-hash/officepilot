@@ -78,3 +78,10 @@ export function resetInvoiceFinalizeIntentsForTests(): void {
   if (typeof localStorage === 'undefined') return;
   localStorage.removeItem(storageKey());
 }
+
+/** Test helper — seed a specific intent without regenerating client id. */
+export function seedInvoiceFinalizeIntentForTests(intent: InvoiceFinalizeIntent): void {
+  const all = readAll();
+  all[intent.vorgangId] = intent;
+  writeAll(all);
+}

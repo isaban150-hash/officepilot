@@ -1,6 +1,7 @@
 import type { SyncCoordinatorReport, SyncOutboxEntry } from '../../types/sync';
 import type { SyncAdapterStatus } from './syncAdapter';
 import { buildPersistedStateSnapshot, applyPersistedStateFromSync } from '../persistenceService';
+import { clearMatchedInvoiceFinalizeIntents } from '../invoice/invoiceCloudPullMergeService';
 import { getSyncClient } from './syncClientService';
 import { getSyncOutboxSnapshot } from './syncOutboxService';
 import { getSyncCoordinator } from './syncCoordinator';
@@ -69,12 +70,15 @@ export function getSyncUiSnapshot(): SyncUiSnapshot {
 export async function runSyncFromUi(): Promise<SyncCoordinatorReport> {
   const result = await getSyncCoordinator().runSync(buildPersistedStateSnapshot());
   applyPersistedStateFromSync(result.state);
+  // CLOUD-ORDER-CHAIN-03B2: clear intents only after successful batch persist.
+  clearMatchedInvoiceFinalizeIntents(result.pendingInvoiceIntentClears ?? []);
   return result.report;
 }
 
 export async function retrySyncFromUi(): Promise<SyncCoordinatorReport> {
   const result = await getSyncCoordinator().retrySync(buildPersistedStateSnapshot());
   applyPersistedStateFromSync(result.state);
+  clearMatchedInvoiceFinalizeIntents(result.pendingInvoiceIntentClears ?? []);
   return result.report;
 }
 

@@ -668,15 +668,44 @@ export function addInvoiceToVorgang(vorgangId: string, invoice: VorgangInvoice):
 }
 
 export type UpsertFinalizedInvoiceResult =
-  | { ok: true; invoice: VorgangInvoice; action: 'inserted' | 'noop' }
+  | { ok: true; invoice: VorgangInvoice; action: 'inserted' | 'noop' | 'status_raised' }
   | {
       ok: false;
       reason: 'vorgang_missing' | 'id_content_conflict' | 'number_id_conflict';
     };
 
-function immutableInvoiceFingerprint(invoice: VorgangInvoice): string {
+const INVOICE_STATUS_RANK: Record<VorgangInvoice['status'], number> = {
+  entwurf: 0,
+  vorbereitet: 1,
+  versendet: 2,
+};
+
+/** Monotonic status resolve — never downgrade versendet → vorbereitet. */
+export function resolveMonotonicInvoiceStatus(
+  local: VorgangInvoice['status'],
+  cloud: VorgangInvoice['status'],
+): VorgangInvoice['status'] {
+  return INVOICE_STATUS_RANK[cloud] > INVOICE_STATUS_RANK[local] ? cloud : local;
+}
+
+/**
+ * Immutable invoice fingerprint for append-only merge conflicts.
+ * Excludes payments, archiveDocumentId, sent UI metadata, and paymentStatus.
+ */
+export function immutableInvoiceFingerprint(
+  invoice: VorgangInvoice,
+  vorgangId?: string,
+): string {
+  const company = invoice.companySnapshot
+    ? (() => {
+        const { logoDataUrl: _logo, ...rest } = invoice.companySnapshot;
+        return rest;
+      })()
+    : null;
+
   return JSON.stringify({
     id: invoice.id,
+    vorgangId: vorgangId ?? null,
     number: invoice.number,
     invoiceSequenceNumber: invoice.invoiceSequenceNumber ?? null,
     type: invoice.type,
@@ -686,16 +715,73 @@ function immutableInvoiceFingerprint(invoice: VorgangInvoice): string {
     taxStatus: invoice.taxStatus,
     date: invoice.date,
     issueDate: invoice.issueDate ?? null,
+    servicePeriodFrom: invoice.servicePeriodFrom ?? null,
+    servicePeriodTo: invoice.servicePeriodTo ?? null,
+    paymentDueDate: invoice.paymentDueDate ?? null,
+    paymentTermsText: invoice.paymentTermsText ?? '',
+    skontoText: invoice.skontoText ?? '',
+    introText: invoice.introText ?? '',
+    closingText: invoice.closingText ?? '',
+    baustelle: invoice.baustelle ?? '',
+    vorgangTitle: invoice.vorgangTitle ?? '',
+    customerSnapshot: invoice.customerSnapshot ?? null,
+    companySnapshot: company,
+    legalNotices: invoice.legalNotices ?? [],
+    previousAbschlagDeductions: invoice.previousAbschlagDeductions ?? [],
+    positionCount: (invoice.positions ?? []).length,
     positions: (invoice.positions ?? []).map((p) => ({
       id: p.id,
       orderPositionId: p.orderPositionId,
       description: p.description,
       quantity: p.quantity,
       unit: p.unit,
+      unitLabel: p.unitLabel ?? null,
       unitPrice: p.unitPrice,
       lineTotal: p.lineTotal,
     })),
   });
+}
+
+/**
+ * Pure append-only adoption of a cloud invoice onto a Vorgang clone.
+ * Preserves local payments / archiveDocumentId; never LWW-overwrites content.
+ */
+export function applyFinalizedInvoiceToVorgang(
+  vorgang: Vorgang,
+  invoice: VorgangInvoice,
+): UpsertFinalizedInvoiceResult & { vorgang?: Vorgang } {
+  const next = cloneVorgang(vorgang);
+  const byId = next.invoices.find((item) => item.id === invoice.id);
+  if (byId) {
+    if (immutableInvoiceFingerprint(byId, next.id) !== immutableInvoiceFingerprint(invoice, next.id)) {
+      return { ok: false, reason: 'id_content_conflict' };
+    }
+
+    const raisedStatus = resolveMonotonicInvoiceStatus(byId.status, invoice.status);
+    if (raisedStatus === byId.status) {
+      return { ok: true, invoice: { ...byId }, action: 'noop', vorgang: next };
+    }
+
+    const updated: VorgangInvoice = { ...byId, status: raisedStatus };
+    next.invoices = next.invoices.map((item) => (item.id === updated.id ? updated : item));
+    return { ok: true, invoice: { ...updated }, action: 'status_raised', vorgang: next };
+  }
+
+  const byNumber = next.invoices.find(
+    (item) => item.number === invoice.number && item.id !== invoice.id,
+  );
+  if (byNumber) {
+    return { ok: false, reason: 'number_id_conflict' };
+  }
+
+  const adopted: VorgangInvoice = {
+    ...invoice,
+    // Keep empty local comfort fields; never invent payments/PDF from cloud.
+    payments: invoice.payments ?? [],
+    paymentStatus: invoice.paymentStatus ?? 'offen',
+  };
+  next.invoices = [adopted, ...next.invoices];
+  return { ok: true, invoice: { ...adopted }, action: 'inserted', vorgang: next };
 }
 
 /**
@@ -711,25 +797,19 @@ export function upsertFinalizedInvoiceOnVorgang(
     return { ok: false, reason: 'vorgang_missing' };
   }
 
-  const vorgang = cloneVorgang(vorgaenge[index]!);
-  const byId = vorgang.invoices.find((item) => item.id === invoice.id);
-  if (byId) {
-    if (immutableInvoiceFingerprint(byId) === immutableInvoiceFingerprint(invoice)) {
-      return { ok: true, invoice: { ...byId }, action: 'noop' };
-    }
-    return { ok: false, reason: 'id_content_conflict' };
+  const applied = applyFinalizedInvoiceToVorgang(vorgaenge[index]!, invoice);
+  if (!applied.ok || !applied.vorgang) {
+    return applied.ok
+      ? { ok: true, invoice: applied.invoice, action: applied.action }
+      : applied;
   }
 
-  const byNumber = vorgang.invoices.find(
-    (item) => item.number === invoice.number && item.id !== invoice.id,
-  );
-  if (byNumber) {
-    return { ok: false, reason: 'number_id_conflict' };
+  if (applied.action === 'noop') {
+    return { ok: true, invoice: applied.invoice, action: 'noop' };
   }
 
-  vorgang.invoices = [invoice, ...vorgang.invoices];
-  updateVorgangInStore(vorgang);
-  return { ok: true, invoice: { ...invoice }, action: 'inserted' };
+  updateVorgangInStore(applied.vorgang);
+  return { ok: true, invoice: applied.invoice, action: applied.action };
 }
 
 export function getVorgangInvoice(
