@@ -186,20 +186,19 @@ function parsePosition(raw: unknown): ConfirmedOrderAmendmentPosition | null {
   return position;
 }
 
-export function parseConfirmWorkspaceOrderAmendmentResponse(
-  data: unknown,
-  expected: {
+/**
+ * Parse a workspace_order_amendments cloud row (+ payload) into ConfirmedOrderAmendment.
+ * Shared by Confirm-response and Pull-row parsers.
+ */
+function parseConfirmedOrderAmendmentFromCloudRow(
+  row: Record<string, unknown>,
+  payloadSource: Record<string, unknown>,
+  expected?: {
     workspaceId: string;
-    vorgangId: string;
-    clientAmendmentId: string;
+    vorgangId?: string;
+    clientAmendmentId?: string;
   },
-): ConfirmWorkspaceOrderAmendmentResult | null {
-  const root = asRecord(data);
-  if (!root) return null;
-  const row = asRecord(root.row);
-  const amendmentPayload = asRecord(root.amendment);
-  if (!row || !amendmentPayload) return null;
-
+): ConfirmedOrderAmendment | null {
   const cloudId = requireNonEmptyString(row.id);
   const workspaceId = requireNonEmptyString(row.workspace_id);
   const vorgangId = requireNonEmptyString(row.vorgang_id);
@@ -212,7 +211,6 @@ export function parseConfirmWorkspaceOrderAmendmentResponse(
   const rowVersion = requirePositiveInt(row.row_version);
   const createdAt = requireNonEmptyString(row.created_at);
   const updatedAt = requireNonEmptyString(row.updated_at);
-  const payload = asRecord(row.payload) ?? amendmentPayload;
 
   if (
     !cloudId ||
@@ -232,15 +230,17 @@ export function parseConfirmWorkspaceOrderAmendmentResponse(
   }
 
   if (status !== 'bestaetigt') return null;
-  if (workspaceId !== expected.workspaceId) return null;
-  if (vorgangId !== expected.vorgangId) return null;
-  if (clientAmendmentId !== expected.clientAmendmentId) return null;
+  if (expected && workspaceId !== expected.workspaceId) return null;
+  if (expected?.vorgangId && vorgangId !== expected.vorgangId) return null;
+  if (expected?.clientAmendmentId && clientAmendmentId !== expected.clientAmendmentId) {
+    return null;
+  }
 
-  const payloadTitle = requireNonEmptyString(payload.title);
-  const payloadClientId = requireNonEmptyString(payload.clientAmendmentId);
-  const payloadVorgangId = requireNonEmptyString(payload.vorgangId);
-  const payloadSequence = requirePositiveInt(payload.sequenceNo);
-  const positionsRaw = payload.positions;
+  const payloadTitle = requireNonEmptyString(payloadSource.title);
+  const payloadClientId = requireNonEmptyString(payloadSource.clientAmendmentId);
+  const payloadVorgangId = requireNonEmptyString(payloadSource.vorgangId);
+  const payloadSequence = requirePositiveInt(payloadSource.sequenceNo);
+  const positionsRaw = payloadSource.positions;
   if (
     !payloadTitle ||
     !payloadClientId ||
@@ -261,21 +261,24 @@ export function parseConfirmWorkspaceOrderAmendmentResponse(
   }
 
   const positions: ConfirmedOrderAmendmentPosition[] = [];
+  const seenPositionIds = new Set<string>();
   for (const item of positionsRaw) {
     const parsed = parsePosition(item);
     if (!parsed) return null;
+    if (seenPositionIds.has(parsed.id)) return null;
+    seenPositionIds.add(parsed.id);
     positions.push(parsed);
   }
 
   const reason =
-    typeof payload.reason === 'string' && payload.reason.trim()
-      ? payload.reason.trim()
-      : payload.reason === null || payload.reason === undefined
+    typeof payloadSource.reason === 'string' && payloadSource.reason.trim()
+      ? payloadSource.reason.trim()
+      : payloadSource.reason === null || payloadSource.reason === undefined
         ? undefined
         : null;
   if (reason === null) return null;
 
-  const confirmed: ConfirmedOrderAmendment = {
+  return {
     cloudId,
     clientAmendmentId,
     vorgangId,
@@ -291,11 +294,47 @@ export function parseConfirmWorkspaceOrderAmendmentResponse(
     createdAt,
     updatedAt,
   };
+}
+
+export function parseConfirmWorkspaceOrderAmendmentResponse(
+  data: unknown,
+  expected: {
+    workspaceId: string;
+    vorgangId: string;
+    clientAmendmentId: string;
+  },
+): ConfirmWorkspaceOrderAmendmentResult | null {
+  const root = asRecord(data);
+  if (!root) return null;
+  const row = asRecord(root.row);
+  const amendmentPayload = asRecord(root.amendment);
+  if (!row || !amendmentPayload) return null;
+
+  const payload = asRecord(row.payload) ?? amendmentPayload;
+  const confirmed = parseConfirmedOrderAmendmentFromCloudRow(row, payload, expected);
+  if (!confirmed) return null;
 
   return {
     confirmed,
     idempotentReplay: root.idempotent_replay === true,
   };
+}
+
+/**
+ * Strict Pull-row parser (ORDER-AMENDMENT-01B3A).
+ * Returns null for malformed / wrong-workspace rows (caller isolates).
+ */
+export function parseWorkspaceOrderAmendmentPullRow(
+  raw: unknown,
+  expectedWorkspaceId: string,
+): ConfirmedOrderAmendment | null {
+  const row = asRecord(raw);
+  if (!row) return null;
+  const payload = asRecord(row.payload);
+  if (!payload) return null;
+  return parseConfirmedOrderAmendmentFromCloudRow(row, payload, {
+    workspaceId: expectedWorkspaceId,
+  });
 }
 
 export async function rpcConfirmWorkspaceOrderAmendment(
@@ -327,4 +366,52 @@ export async function rpcConfirmWorkspaceOrderAmendment(
     );
   }
   return parsed;
+}
+
+/**
+ * Full amendment pull (ORDER-AMENDMENT-01B3A). Always sends p_since = null.
+ * Response must be a JSON array — null/object/string are global invalid_response.
+ */
+export async function rpcPullWorkspaceOrderAmendmentRows(
+  workspaceId: string,
+  options?: { client?: SupabaseClient | null },
+): Promise<unknown[]> {
+  if (!workspaceId.trim()) {
+    throw new WorkspaceOrderAmendmentCloudError('workspace_id fehlt', 'validation', false);
+  }
+
+  try {
+    const supabase = getClient(options?.client);
+    const { data, error } = await supabase.rpc('pull_workspace_order_amendments', {
+      p_workspace_id: workspaceId,
+      p_since: null,
+    });
+
+    if (error) {
+      throw classifyOrderAmendmentCloudError(error);
+    }
+
+    if (data === null || data === undefined) {
+      throw new WorkspaceOrderAmendmentCloudError(
+        'Ungültige RPC-Antwort für Nachtrags-Pull: null.',
+        'invalid_response',
+        true,
+      );
+    }
+    if (!Array.isArray(data)) {
+      throw new WorkspaceOrderAmendmentCloudError(
+        'Ungültige RPC-Antwort für Nachtrags-Pull: kein Array.',
+        'invalid_response',
+        true,
+      );
+    }
+    return data;
+  } catch (error) {
+    if (error instanceof WorkspaceOrderAmendmentCloudError) {
+      throw error;
+    }
+    throw classifyOrderAmendmentCloudError(
+      error instanceof Error ? { message: error.message } : { message: 'Unbekannter Fehler' },
+    );
+  }
 }

@@ -96,3 +96,58 @@ export function buildOrderAmendmentConfirmContentFingerprint(
   const bytes = sha256Bytes(new TextEncoder().encode(JSON.stringify(payload)));
   return toHex(bytes);
 }
+
+/**
+ * Content match for Intent ↔ Remote.
+ * Do NOT compare client SHA-256 fingerprints with server MD5 content_fingerprint.
+ */
+export function orderAmendmentConfirmRpcInputsMatch(
+  vorgangId: string,
+  left: OrderAmendmentConfirmRpcInput,
+  right: OrderAmendmentConfirmRpcInput,
+): boolean {
+  return (
+    JSON.stringify(buildOrderAmendmentConfirmFingerprintPayload(vorgangId, left)) ===
+    JSON.stringify(buildOrderAmendmentConfirmFingerprintPayload(vorgangId, right))
+  );
+}
+
+/** Map a confirmed amendment payload into Confirm-RPC input shape for content compare. */
+export function buildOrderAmendmentConfirmRpcInputFromConfirmed(input: {
+  title: string;
+  reason?: string;
+  positions: Array<{
+    id: string;
+    changeType: OrderAmendmentChangeType;
+    parentPositionId?: string;
+    description: string;
+    plannedQuantity: number;
+    unit: OrderUnit;
+    unitLabel?: string;
+    unitPrice: number;
+    category?: OrderPositionCategory;
+    billable?: boolean;
+  }>;
+}): OrderAmendmentConfirmRpcInput {
+  return {
+    title: input.title.trim(),
+    ...(input.reason?.trim() ? { reason: input.reason.trim() } : {}),
+    positions: input.positions.map((position) => {
+      const entry: OrderAmendmentConfirmRpcPosition = {
+        id: position.id.trim(),
+        changeType: position.changeType,
+        description: position.description.trim(),
+        plannedQuantity: position.plannedQuantity,
+        unit: position.unit,
+        unitPrice: position.unitPrice,
+      };
+      if (position.parentPositionId?.trim()) {
+        entry.parentPositionId = position.parentPositionId.trim();
+      }
+      if (position.unitLabel?.trim()) entry.unitLabel = position.unitLabel.trim();
+      if (position.category) entry.category = position.category;
+      if (position.billable !== undefined) entry.billable = position.billable;
+      return entry;
+    }),
+  };
+}

@@ -53,12 +53,34 @@ export function getOrderAmendmentConfirmIntent(
   return readAll()[intentKey(vorgangId, draftId)] ?? null;
 }
 
+/** All stored confirm intents for the active storage scope (ORDER-AMENDMENT-01B3A). */
+export function listOrderAmendmentConfirmIntents(): OrderAmendmentConfirmIntent[] {
+  return Object.values(readAll());
+}
+
 export function clearOrderAmendmentConfirmIntent(vorgangId: string, draftId: string): void {
   const all = readAll();
   const key = intentKey(vorgangId, draftId);
   if (!(key in all)) return;
   delete all[key];
   writeAll(all);
+}
+
+/** Clear many intents after successful batch persist (ORDER-AMENDMENT-01B3A). */
+export function clearOrderAmendmentConfirmIntents(
+  keys: Array<{ vorgangId: string; draftId: string }>,
+): void {
+  if (keys.length === 0) return;
+  const all = readAll();
+  let changed = false;
+  for (const item of keys) {
+    const key = intentKey(item.vorgangId, item.draftId);
+    if (key in all) {
+      delete all[key];
+      changed = true;
+    }
+  }
+  if (changed) writeAll(all);
 }
 
 export function updateOrderAmendmentConfirmIntentState(
