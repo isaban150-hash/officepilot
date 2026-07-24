@@ -30,6 +30,7 @@ import { VORGANG_COMMUNICATION_BUTTON_KEYS } from '../components/communication/c
 import { VorgangNegotiationPanel } from '../components/vorgang/VorgangNegotiationPanel';
 import { VorgangContractConfirmPanel } from '../components/vorgang/VorgangContractConfirmPanel';
 import { VorgangExecutionStartPanel } from '../components/vorgang/VorgangExecutionStartPanel';
+import { VorgangOrderAmendmentPanel } from '../components/vorgang/VorgangOrderAmendmentPanel';
 import { OrderPositionExecutedQuantityField } from '../components/vorgang/OrderPositionExecutedQuantityField';
 import { AreaAiPanel } from '../components/ai/AreaAiPanel';
 import {
@@ -262,6 +263,13 @@ export function VorgangDetailPage() {
         onToast={showToast}
       />
 
+      <VorgangOrderAmendmentPanel
+        vorgang={vorgang}
+        translate={translate}
+        onUpdated={refreshVorgang}
+        onToast={showToast}
+      />
+
       <section className="section">
         <h2 className="section__title">{translate('vorgang.documents')}</h2>
         {vorgang.documents.length === 0 ? (
@@ -293,7 +301,20 @@ export function VorgangDetailPage() {
         </div>
 
         {planLocked && (
-          <p className="invoice-hint invoice-hint--warning">{translate('orderPlan.confirmedHint')}</p>
+          <p className="invoice-hint invoice-hint--warning" data-testid="order-plan-confirmed-hint">
+            {translate('orderPlan.confirmedHint')}{' '}
+            <Button
+              variant="ghost"
+              data-testid="order-plan-prepare-amendment-link"
+              onClick={() => {
+                document
+                  .querySelector('[data-testid="vorgang-order-amendment-panel"]')
+                  ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }}
+            >
+              {translate('orderAmendment.prepare')}
+            </Button>
+          </p>
         )}
         {!planLocked && positionsLocked && (
           <p className="invoice-hint invoice-hint--warning">{translate('position.schlussLocked')}</p>

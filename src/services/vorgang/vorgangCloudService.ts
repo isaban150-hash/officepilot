@@ -309,6 +309,8 @@ function buildMergedVorgangFromFacts(
     invoices: local?.invoices ?? [],
     customerBilling: shell.customerBilling ?? local?.customerBilling,
     negotiation: local?.negotiation,
+    // Local-only Nachtragsentwürfe — never taken from cloud payload.
+    orderAmendments: local?.orderAmendments,
     contractConfirmation: confirmation,
     executionStartedAt,
     orderPositions: shell.orderPositions ?? [],

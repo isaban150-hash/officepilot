@@ -27,6 +27,7 @@ import type {
   MaterialStandard,
   ContractConfirmationSnapshot,
   ContractNegotiationState,
+  OrderAmendment,
   OrderPosition,
   OrderPositionEditableField,
   OrderPositionInput,
@@ -57,6 +58,13 @@ export type VorgangStatusUpdateResult =
 export type VorgangNegotiationUpdateResult =
   | { success: true; vorgang: Vorgang }
   | { success: false; errorKey: 'vorgang.notFound' };
+
+export type VorgangOrderAmendmentsUpdateResult =
+  | { success: true; vorgang: Vorgang }
+  | {
+      success: false;
+      errorKey: 'vorgang.notFound' | 'order_amendment_requires_confirmation';
+    };
 
 export type VorgangConfirmationUpdateResult =
   | { success: true; vorgang: Vorgang }
@@ -162,6 +170,35 @@ function cloneContractConfirmation(
   };
 }
 
+function cloneOrderAmendment(amendment: OrderAmendment): OrderAmendment {
+  return {
+    ...amendment,
+    positions: amendment.positions.map((position) => ({ ...position })),
+  };
+}
+
+function cloneOrderAmendments(
+  amendments: OrderAmendment[] | undefined,
+): OrderAmendment[] | undefined {
+  if (!amendments) return undefined;
+  return amendments.map(cloneOrderAmendment);
+}
+
+function normalizeOrderAmendments(
+  amendments: OrderAmendment[] | undefined,
+): OrderAmendment[] | undefined {
+  if (!amendments) return undefined;
+  return amendments.map((amendment) => ({
+    ...amendment,
+    status: 'entwurf' as const,
+    title: typeof amendment.title === 'string' ? amendment.title : 'Nachtrag',
+    reason: amendment.reason?.trim() || undefined,
+    positions: (amendment.positions ?? []).map((position) => ({ ...position })),
+    createdAt: amendment.createdAt,
+    updatedAt: amendment.updatedAt,
+  }));
+}
+
 function cloneVorgang(v: Vorgang): Vorgang {
   return {
     ...v,
@@ -175,6 +212,7 @@ function cloneVorgang(v: Vorgang): Vorgang {
     contractConfirmation: v.contractConfirmation
       ? cloneContractConfirmation(v.contractConfirmation)
       : undefined,
+    orderAmendments: cloneOrderAmendments(v.orderAmendments),
   };
 }
 
@@ -237,6 +275,7 @@ function normalizeVorgang(v: Vorgang): Vorgang {
     orderPositions: v.orderPositions ?? [],
     negotiation: normalizeNegotiation(v.negotiation),
     contractConfirmation: normalizeContractConfirmation(v.contractConfirmation),
+    orderAmendments: normalizeOrderAmendments(v.orderAmendments),
     invoices: (v.invoices ?? []).map((inv) => ({
       ...inv,
       type: inv.type ?? 'abschlag',
@@ -566,6 +605,35 @@ export function saveVorgangNegotiation(
   const updated = cloneVorgang({
     ...current,
     negotiation: negotiation ? normalizeNegotiation(negotiation) : undefined,
+  });
+  return { success: true, vorgang: updateVorgangInStore(updated) };
+}
+
+/**
+ * Local-only persist for Nachtragsentwürfe.
+ * Does not mutate orderPositions, confirmation, invoices, or sync version.
+ * Non-empty drafts require contractConfirmation; empty clears remain allowed.
+ */
+export function saveVorgangOrderAmendments(
+  vorgangId: string,
+  orderAmendments: OrderAmendment[] | undefined,
+): VorgangOrderAmendmentsUpdateResult {
+  const index = vorgaenge.findIndex((v) => v.id === vorgangId && isEntitySyncActive(v));
+  if (index === -1) {
+    return { success: false, errorKey: 'vorgang.notFound' };
+  }
+
+  const current = normalizeVorgang(vorgaenge[index]!);
+  const normalizedAmendments = normalizeOrderAmendments(orderAmendments);
+  const hasDrafts = Boolean(normalizedAmendments && normalizedAmendments.length > 0);
+
+  if (hasDrafts && !current.contractConfirmation) {
+    return { success: false, errorKey: 'order_amendment_requires_confirmation' };
+  }
+
+  const updated = cloneVorgang({
+    ...current,
+    orderAmendments: hasDrafts ? normalizedAmendments : undefined,
   });
   return { success: true, vorgang: updateVorgangInStore(updated) };
 }

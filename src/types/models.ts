@@ -869,6 +869,40 @@ export interface OrderPositionInput {
   billable?: boolean;
 }
 
+/** ORDER-AMENDMENT-01A: local draft only — never confirmed, never in orderPositions. */
+export type OrderAmendmentStatus = 'entwurf';
+
+export type OrderAmendmentChangeType = 'add' | 'quantity_increase';
+
+export interface OrderAmendmentDraftPosition {
+  id: string;
+  changeType: OrderAmendmentChangeType;
+  description: string;
+  quantity: number;
+  unit: OrderUnit;
+  unitLabel?: string;
+  unitPrice: number;
+  category?: OrderPositionCategory;
+  billable?: boolean;
+  /** Required for quantity_increase — references a confirmed order position id. */
+  parentPositionId?: string;
+}
+
+/**
+ * Local-only amendment draft on a confirmed Vorgang.
+ * Not synced; must not affect orderPositions, billing, or cloud payload.
+ */
+export interface OrderAmendment {
+  id: string;
+  vorgangId: string;
+  status: OrderAmendmentStatus;
+  title: string;
+  reason?: string;
+  positions: OrderAmendmentDraftPosition[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface VorgangInvoiceLine {
   id: string;
   orderPositionId: string;
@@ -1074,6 +1108,11 @@ export interface Vorgang {
   negotiation?: ContractNegotiationState;
   /** Frozen confirmed stand — created only by explicit user confirmation. */
   contractConfirmation?: ContractConfirmationSnapshot;
+  /**
+   * Local-only Nachtragsentwürfe (ORDER-AMENDMENT-01A).
+   * Never part of VorgangCloudPayload / strip / content key.
+   */
+  orderAmendments?: OrderAmendment[];
   /** Set when the user explicitly starts order execution (beauftragt → in_bearbeitung). */
   executionStartedAt?: string;
   sync?: SyncMeta;
