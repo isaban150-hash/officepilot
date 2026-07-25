@@ -73,6 +73,7 @@ export function SimpleConfirmDialog({
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const wasOpenRef = useRef(false);
   const [confirming, setConfirming] = useState(false);
+  const confirmingRef = useRef(false);
   const [errorVisible, setErrorVisible] = useState(false);
 
   useEffect(() => {
@@ -81,6 +82,7 @@ export function SimpleConfirmDialog({
         returnFocusRef?.current ??
         (document.activeElement instanceof HTMLElement ? document.activeElement : null);
       wasOpenRef.current = true;
+      confirmingRef.current = false;
       setConfirming(false);
       setErrorVisible(false);
       const focusCancel = () => {
@@ -111,7 +113,7 @@ export function SimpleConfirmDialog({
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
-      if (confirming) {
+      if (confirmingRef.current || confirming) {
         event.preventDefault();
         return;
       }
@@ -123,13 +125,15 @@ export function SimpleConfirmDialog({
   }, [open, onCancel, confirming]);
 
   const handleConfirm = async () => {
-    if (confirming) return;
+    if (confirmingRef.current || confirming) return;
+    confirmingRef.current = true;
     setConfirming(true);
     setErrorVisible(false);
     try {
       const ok = await onConfirm();
       if (!ok) {
         setErrorVisible(true);
+        confirmingRef.current = false;
         setConfirming(false);
         window.requestAnimationFrame(() => {
           dialogRef.current
@@ -139,12 +143,13 @@ export function SimpleConfirmDialog({
       }
     } catch {
       setErrorVisible(true);
+      confirmingRef.current = false;
       setConfirming(false);
     }
   };
 
   const handleCancel = () => {
-    if (confirming) return;
+    if (confirmingRef.current || confirming) return;
     onCancel();
   };
 

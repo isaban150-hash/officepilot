@@ -4871,11 +4871,70 @@ body {
   line-height: 1.4;
 }
 
-.order-amendment-position-row,
-.order-amendment-position-editor {
+.order-amendment-position-row {
   margin-top: 0.75rem;
   padding: 0.75rem 0 0;
   border-top: 1px solid var(--op-border, var(--color-border));
+}
+
+.order-amendment-header {
+  margin: 0.75rem 0;
+}
+
+.order-amendment-header--editing {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.order-amendment-header .field-error,
+.order-amendment-position-editor-dialog .field-error {
+  margin: -0.15rem 0 0.5rem;
+  font-size: 0.85rem;
+  color: var(--color-danger, #b42318);
+  line-height: 1.35;
+}
+
+.order-amendment-position-editor-dialog {
+  max-width: 520px;
+}
+
+.order-amendment-editor-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.25rem 0.75rem;
+}
+
+.order-amendment-editor-total {
+  display: block;
+  margin-top: 0.35rem;
+  min-height: 2.75rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--op-border, var(--color-border));
+  border-radius: var(--radius-sm, 8px);
+  background: var(--op-surface-muted, #f6f7f9);
+  font-size: 1rem;
+}
+
+.order-amendment-parent-summary {
+  margin: 0.25rem 0 0.75rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--op-border, var(--color-border));
+  border-radius: var(--radius-sm, 8px);
+  background: var(--op-surface-muted, #f6f7f9);
+}
+
+.order-amendment-more-details {
+  margin: 0.5rem 0 1rem;
+}
+
+.order-amendment-more-details .btn {
+  min-height: 44px;
+}
+
+.order-amendment-actions .btn,
+.order-amendment-header .btn {
+  min-height: 44px;
 }
 
 .order-amendment-position-row__header {
@@ -4963,6 +5022,21 @@ body {
 
   .confirmed-amendment-list__row {
     align-items: center;
+  }
+
+  .vorgang-dialog-backdrop:has(.order-amendment-position-editor-dialog) {
+    align-items: center;
+    padding: 1.5rem;
+  }
+
+  .order-amendment-position-editor-dialog {
+    border-radius: var(--radius);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+  }
+
+  .order-amendment-editor-grid {
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
   }
 }
 

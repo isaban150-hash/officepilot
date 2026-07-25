@@ -520,6 +520,7 @@ export function VorgangDetailPage() {
           translate={translate}
           onUpdated={refreshVorgang}
           onToast={showToast}
+          isSectionActive={activeSection === 'amendments'}
         />
       </div>
 

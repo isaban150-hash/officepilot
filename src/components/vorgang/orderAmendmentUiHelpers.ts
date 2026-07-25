@@ -56,3 +56,51 @@ export function formatAmendmentChangeTypeLabel(
   }
   return translate('orderAmendment.changeType.unknown');
 }
+
+/**
+ * Parse user decimal input (de-DE). Empty → null (never coerce to 0).
+ * Accepts `1,5` and `1.5`. Invalid → null.
+ */
+export function parseAmendmentDecimalInput(raw: string): number | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const normalized = trimmed.replace(/\s/g, '').replace(',', '.');
+  if (!/^-?\d+(\.\d+)?$/.test(normalized)) return null;
+  const value = Number(normalized);
+  if (!Number.isFinite(value)) return null;
+  return value;
+}
+
+export function formatAmendmentDecimalInput(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return '';
+  return String(value).replace('.', ',');
+}
+
+/** True when an element is safe to restore focus to (connected, visible, enabled). */
+export function isFocusableAmendmentTarget(element: HTMLElement | null | undefined): boolean {
+  if (!element || !element.isConnected) return false;
+  if (element.closest('[hidden]')) return false;
+  if (element.getAttribute('aria-hidden') === 'true') return false;
+  if (element.closest('[aria-hidden="true"]')) return false;
+  if ('disabled' in element && Boolean((element as HTMLButtonElement).disabled)) {
+    return false;
+  }
+  if (element.getAttribute('aria-disabled') === 'true') return false;
+  try {
+    const style = window.getComputedStyle(element);
+    if (style.display === 'none' || style.visibility === 'hidden') return false;
+  } catch {
+    return false;
+  }
+  return true;
+}
+
+export function tryFocusAmendmentTarget(element: HTMLElement | null | undefined): boolean {
+  if (!isFocusableAmendmentTarget(element) || !element) return false;
+  try {
+    element.focus({ preventScroll: true });
+    return document.activeElement === element;
+  } catch {
+    return false;
+  }
+}
