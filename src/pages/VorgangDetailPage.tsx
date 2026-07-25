@@ -475,6 +475,14 @@ export function VorgangDetailPage() {
                     onToast={showToast}
                   />
                   <DataRow
+                    label={translate('order.position.billedQuantity')}
+                    value={`${billed} ${unitLabel}`}
+                  />
+                  <DataRow
+                    label={translate('order.position.openBillableQuantity')}
+                    value={`${open} ${unitLabel}`}
+                  />
+                  <DataRow
                     label={translate('invoice.unitPrice')}
                     value={formatAmendmentMoney(pos.unitPrice)}
                   />
@@ -483,14 +491,6 @@ export function VorgangDetailPage() {
                     value={formatAmendmentMoney(
                       positionLineTotal(pos.plannedQuantity, pos.unitPrice),
                     )}
-                  />
-                  <DataRow
-                    label={translate('invoice.alreadyBilled')}
-                    value={`${billed} ${unitLabel}`}
-                  />
-                  <DataRow
-                    label={translate('invoice.stillOpen')}
-                    value={`${open} ${unitLabel}`}
                   />
                   {pos.unitPrice === 0 && (
                     <p className="invoice-pos-hint">{translate('vorgang.missingPriceHint')}</p>

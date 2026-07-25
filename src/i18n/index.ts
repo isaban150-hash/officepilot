@@ -1220,6 +1220,8 @@ const deLegacy = {
     'Ausgeführte Menge nur während laufender Ausführung änderbar.',
   'execution.error.execution.qty.invalid': 'Ungültige ausgeführte Menge.',
   'order.position.sourceMain': 'Auftragsposition',
+  'order.position.billedQuantity': 'Bereits abgerechnete Menge',
+  'order.position.openBillableQuantity': 'Noch abzurechnende Menge',
   'order.position.total': 'Gesamt',
 
   'aufgaben.title': 'Zu erledigen',

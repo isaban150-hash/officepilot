@@ -494,8 +494,30 @@ describe('ORDER-AMENDMENT-UI-UX-01B2B', () => {
         formatAmendmentMoney(positionLineTotal(10, 65)),
       );
       expect(card!.textContent).toContain(translate('order.position.total'));
-      expect(card!.textContent).toContain(translate('invoice.alreadyBilled'));
-      expect(card!.textContent).toContain(translate('invoice.stillOpen'));
+      expect(card!.textContent).toContain(translate('order.position.billedQuantity'));
+      expect(card!.textContent).toContain(translate('order.position.openBillableQuantity'));
+
+      const dataRowLabels = Array.from(card!.querySelectorAll('.data-row__label')).map(
+        (node) => node.textContent ?? '',
+      );
+      expect(dataRowLabels).toContain(translate('order.position.billedQuantity'));
+      expect(dataRowLabels).toContain(translate('order.position.openBillableQuantity'));
+      expect(dataRowLabels).not.toContain(translate('invoice.alreadyBilled'));
+      expect(dataRowLabels).not.toContain(translate('invoice.stillOpen'));
+
+      const cardText = card!.textContent ?? '';
+      const plannedIdx = cardText.indexOf(translate('execution.plannedQuantity'));
+      const executedIdx = cardText.indexOf(translate('execution.executedQuantity'));
+      const billedIdx = cardText.indexOf(translate('order.position.billedQuantity'));
+      const openIdx = cardText.indexOf(translate('order.position.openBillableQuantity'));
+      const priceIdx = cardText.indexOf(translate('invoice.unitPrice'));
+      const totalIdx = cardText.indexOf(translate('order.position.total'));
+      expect(plannedIdx).toBeGreaterThanOrEqual(0);
+      expect(executedIdx).toBeGreaterThan(plannedIdx);
+      expect(billedIdx).toBeGreaterThan(executedIdx);
+      expect(openIdx).toBeGreaterThan(billedIdx);
+      expect(priceIdx).toBeGreaterThan(openIdx);
+      expect(totalIdx).toBeGreaterThan(priceIdx);
       expect(container.querySelector('[data-testid="execution-qty-input-op-b2b-1"]')).not.toBeNull();
 
       act(() => root.unmount());
