@@ -405,7 +405,8 @@ describe('ORDER-AMENDMENT-UI-UX-01B3A1 Confirm-Dialog', () => {
           intentRetained: true,
         };
       });
-    ({ root } = renderPanel(container));
+    const { root: panelRoot, toasts } = renderPanel(container);
+    root = panelRoot;
 
     await openConfirmDialog(container);
     await act(async () => {
@@ -419,6 +420,7 @@ describe('ORDER-AMENDMENT-UI-UX-01B3A1 Confirm-Dialog', () => {
     expect(container.querySelector('[data-testid="order-amendment-confirm-dialog"]')).toBeNull();
     expect(container.textContent).toContain(translate('orderAmendment.status.outcomeUnknownTitle'));
     expect(container.textContent).toContain(translate('orderAmendment.status.retryCheck'));
+    expect(toasts).toEqual([]);
     expect(cloud).toHaveBeenCalledTimes(1);
 
     await act(async () => {
@@ -428,6 +430,7 @@ describe('ORDER-AMENDMENT-UI-UX-01B3A1 Confirm-Dialog', () => {
     });
     expect(container.querySelector('[data-testid="order-amendment-confirm-dialog"]')).toBeNull();
     expect(cloud).toHaveBeenCalledTimes(2);
+    expect(toasts).toEqual([]);
 
     act(() => root.unmount());
   });
@@ -457,7 +460,8 @@ describe('ORDER-AMENDMENT-UI-UX-01B3A1 Confirm-Dialog', () => {
           intentRetained: true,
         };
       });
-    ({ root } = renderPanel(container));
+    const { root: panelRoot, toasts } = renderPanel(container);
+    root = panelRoot;
 
     await openConfirmDialog(container);
     await act(async () => {
@@ -471,6 +475,7 @@ describe('ORDER-AMENDMENT-UI-UX-01B3A1 Confirm-Dialog', () => {
     expect(container.textContent).toContain(translate('orderAmendment.status.localApplyTitle'));
     expect(container.textContent).toContain(translate('orderAmendment.status.retryLocalApply'));
     expect(container.querySelector('[data-testid="order-amendment-confirm-dialog"]')).toBeNull();
+    expect(toasts).toEqual([]);
 
     await act(async () => {
       (
@@ -479,6 +484,7 @@ describe('ORDER-AMENDMENT-UI-UX-01B3A1 Confirm-Dialog', () => {
     });
     expect(container.querySelector('[data-testid="order-amendment-confirm-dialog"]')).toBeNull();
     expect(cloud).toHaveBeenCalledTimes(2);
+    expect(toasts).toEqual([]);
 
     act(() => root.unmount());
   });
@@ -492,7 +498,8 @@ describe('ORDER-AMENDMENT-UI-UX-01B3A1 Confirm-Dialog', () => {
         reason: 'cloud_unavailable',
         errorKey: 'order_amendment_cloud_unavailable',
       });
-    ({ root } = renderPanel(container));
+    const { root: panelRoot, toasts } = renderPanel(container);
+    root = panelRoot;
 
     await openConfirmDialog(container);
     await act(async () => {
@@ -504,6 +511,7 @@ describe('ORDER-AMENDMENT-UI-UX-01B3A1 Confirm-Dialog', () => {
     });
     expect(container.querySelector('[data-testid="order-amendment-confirm-dialog"]')).toBeNull();
     expect(container.querySelector('[data-testid="simple-confirm-error"]')).toBeNull();
+    expect(toasts).toContain(translate('order_amendment_cloud_unavailable'));
     expect(cloud).toHaveBeenCalledTimes(1);
 
     await openConfirmDialog(container);

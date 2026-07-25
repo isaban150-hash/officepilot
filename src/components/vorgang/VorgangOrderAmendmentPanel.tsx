@@ -296,14 +296,9 @@ export function VorgangOrderAmendmentPanel({
         onUpdated();
         return;
       }
-      onToast(translate(result.errorKey as TranslationKey));
-      if (result.draftLocked || result.intentRetained) {
-        const retryKey =
-          result.reason === 'local_persist_failed' ||
-          result.reason === 'local_confirmation_conflict'
-            ? 'orderAmendment.localApplyPending'
-            : 'orderAmendment.outcomeUnknown';
-        onToast(translate(retryKey));
+      // Retained intent: durable status banner + retry own the UX — no toast.
+      if (!result.intentRetained) {
+        onToast(translate(result.errorKey as TranslationKey));
       }
       onUpdated();
     } finally {
