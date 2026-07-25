@@ -211,11 +211,6 @@ export function VorgangDetailPage() {
 
   const primaryActions = (
     <>
-      {hasOrderPositions && (
-        <Link to={`/vorgaenge/${vorgang.id}/rechnung?type=rechnung`}>
-          <Button fullWidth>{translate('detail.action.writeInvoice')}</Button>
-        </Link>
-      )}
       <Button variant="outline" fullWidth onClick={() => navigate('/scan')}>
         {translate('detail.action.addPhoto')}
       </Button>
@@ -228,6 +223,9 @@ export function VorgangDetailPage() {
       </Button>
     </>
   );
+
+  const hasOpenAmendmentDraft = (vorgang.orderAmendments?.length ?? 0) > 0;
+  const prepareInvoicePath = `/vorgaenge/${vorgang.id}/rechnung?type=rechnung`;
 
   const secondaryPanels = (
     <>
@@ -538,22 +536,76 @@ export function VorgangDetailPage() {
       </div>
 
       <div {...vorgangSectionPanelProps('invoices', activeSection)}>
-        <section className="section">
-          <h2 className="section__title">{translate('vorgang.invoices')}</h2>
-          {sortedInvoices.length > 0 && (
-            <Card className="vorgang-invoice-totals">
+        <section
+          className="section vorgang-invoices-section"
+          data-testid="vorgang-invoices-section"
+        >
+          <div className="vorgang-invoices-section__header">
+            <div className="vorgang-invoices-section__heading">
+              <h2 className="section__title">{translate('vorgang.invoices')}</h2>
+              <p className="vorgang-invoices-section__intro">
+                {translate('vorgang.invoicesSectionIntro')}
+              </p>
+            </div>
+            {hasOrderPositions ? (
+              <div className="vorgang-invoices-section__cta">
+                <Link
+                  to={prepareInvoicePath}
+                  data-testid="vorgang-prepare-invoice"
+                  className="vorgang-invoices-section__cta-link"
+                >
+                  <Button fullWidth>{translate('vorgang.prepareInvoice')}</Button>
+                </Link>
+              </div>
+            ) : null}
+          </div>
+
+          {hasOpenAmendmentDraft ? (
+            <p
+              className="vorgang-invoices-section__draft-hint"
+              data-testid="vorgang-invoices-open-draft-hint"
+            >
+              {translate('vorgang.invoicesOpenDraftHint')}
+            </p>
+          ) : null}
+
+          {sortedInvoices.length > 0 ? (
+            <Card className="vorgang-invoice-totals" data-testid="vorgang-invoice-summary">
               <DataRow
-                label={translate('payment.vorgangOpenTotal')}
+                label={translate('vorgang.invoicesSummaryCount')}
+                value={String(sortedInvoices.length)}
+              />
+              <DataRow
+                label={translate('vorgang.invoicesSummaryOpen')}
                 value={formatPaymentCurrency(paymentTotals.openTotal)}
               />
               <DataRow
-                label={translate('payment.vorgangPaidTotal')}
+                label={translate('vorgang.invoicesSummaryPaid')}
                 value={formatPaymentCurrency(paymentTotals.paidTotal)}
               />
             </Card>
-          )}
+          ) : null}
+
           {sortedInvoices.length === 0 ? (
-            <p className="empty-state">{translate('vorgang.noInvoices')}</p>
+            <div
+              className="vorgang-invoices-section__empty"
+              data-testid="vorgang-invoices-empty"
+            >
+              {hasOrderPositions ? (
+                <>
+                  <p className="empty-state">
+                    {translate('vorgang.invoicesEmptyWithPositions')}
+                  </p>
+                  <p className="vorgang-invoices-section__empty-detail">
+                    {translate('vorgang.invoicesEmptyWithPositionsHint')}
+                  </p>
+                </>
+              ) : (
+                <p className="empty-state">
+                  {translate('vorgang.invoicesEmptyNoPositions')}
+                </p>
+              )}
+            </div>
           ) : (
             sortedInvoices.map((inv) => (
               <InvoiceListCard

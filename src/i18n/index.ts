@@ -859,6 +859,19 @@ const deLegacy = {
   'vorgangNote.bodyRequired': 'Bitte geben Sie einen Notiztext ein.',
   'vorgang.photos': 'Fotos',
   'vorgang.invoices': 'Rechnungen',
+  'vorgang.invoicesSectionIntro':
+    'Hier finden Sie vorbereitete und abgeschlossene Rechnungen zu diesem Vorgang.',
+  'vorgang.invoicesSummaryCount': 'Rechnungen',
+  'vorgang.invoicesSummaryOpen': 'Offener Rechnungsbetrag',
+  'vorgang.invoicesSummaryPaid': 'Bezahlt',
+  'vorgang.invoicesEmptyWithPositions':
+    'Für diesen Vorgang wurde noch keine Rechnung vorbereitet.',
+  'vorgang.invoicesEmptyWithPositionsHint':
+    'Sie können jetzt eine Rechnung auf Grundlage der vorhandenen Auftragspositionen vorbereiten.',
+  'vorgang.invoicesEmptyNoPositions':
+    'Für eine Rechnung werden zunächst Auftragspositionen benötigt.',
+  'vorgang.invoicesOpenDraftHint':
+    'Es gibt einen offenen Nachtragsentwurf. Er ist noch nicht Teil des bestätigten Auftrags.',
   'vorgang.materialSource': 'Materialquelle',
   'vorgang.prepareInvoice': 'Rechnung vorbereiten',
   'vorgang.prepareAbschlag': 'Abschlag vorbereiten',

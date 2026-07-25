@@ -136,7 +136,9 @@ describe('UX-05 Detail experience', () => {
     );
 
     expect(html).toContain('data-testid="vorgang-detail-experience"');
-    expect(html).toContain('Rechnung schreiben');
+    expect(html).toContain('data-testid="vorgang-prepare-invoice"');
+    expect(html).toContain('Rechnung vorbereiten');
+    expect(html).not.toContain('Rechnung schreiben');
     expect(html).not.toContain('data-testid="vorgang-ai-panel"');
     for (const term of FORBIDDEN) {
       expect(html).not.toContain(term);
