@@ -4737,3 +4737,232 @@ body {
   color: var(--color-text-muted);
 }
 
+/* Vorgang detail section navigation + order amendments (UI-UX-01B1) */
+.vorgang-section-nav {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  gap: var(--space-2, 8px);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: var(--space-2, 8px) 0 var(--space-3, 12px);
+  margin-bottom: var(--space-3, 12px);
+  background: var(--op-bg, var(--color-bg));
+  border-bottom: 1px solid var(--op-border, var(--color-border));
+  scrollbar-width: thin;
+}
+
+.vorgang-section-nav__tab {
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding: 0.45rem 0.85rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm, 10px);
+  background: transparent;
+  color: var(--op-text-muted, var(--color-text-muted));
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.vorgang-section-nav__tab:focus-visible {
+  outline: none;
+  box-shadow: var(--op-focus-ring, var(--shadow-focus));
+}
+
+.vorgang-section-nav__tab--active {
+  color: var(--op-primary, var(--color-primary));
+  background: var(--op-primary-subtle, #eef2ff);
+  border-color: color-mix(in srgb, var(--op-primary, var(--color-primary)) 28%, transparent);
+}
+
+.order-summary-panel__hint,
+.order-amendment-section__intro,
+.order-amendment-section__muted,
+.order-amendment-section__extra-drafts {
+  margin: 0 0 var(--space-3, 12px);
+  font-size: 0.9rem;
+  color: var(--op-text-muted, var(--color-text-muted));
+  line-height: 1.45;
+}
+
+.order-summary-panel__metrics,
+.order-amendment-section__summary {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.order-amendment-empty__title {
+  margin: 0 0 0.35rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--op-text, var(--color-text));
+}
+
+.order-amendment-draft__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.order-amendment-draft__facts {
+  margin: 0.75rem 0;
+}
+
+.order-amendment-draft__validation {
+  margin: 0.5rem 0 0;
+  font-size: 0.9rem;
+  color: var(--op-text-muted, var(--color-text-muted));
+}
+
+.order-amendment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.order-amendment-actions--primary {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.order-amendment-actions--secondary {
+  align-items: stretch;
+}
+
+.order-amendment-actions--secondary .btn,
+.order-amendment-actions--danger .btn {
+  flex: 1 1 10rem;
+}
+
+.order-amendment-actions--danger {
+  margin-top: 0.35rem;
+}
+
+.order-amendment-actions--danger .btn {
+  flex: 1 1 auto;
+}
+
+.order-amendment-status-banner {
+  margin: 0.75rem 0;
+  padding: 0.85rem 0.9rem;
+  border-radius: var(--radius-sm, 10px);
+  border: 1px solid var(--op-border-strong, var(--color-border));
+  background: var(--op-warning-subtle, #fffbeb);
+}
+
+.order-amendment-status-banner__title {
+  margin: 0 0 0.25rem;
+  font-weight: 700;
+  color: var(--op-text, var(--color-text));
+}
+
+.order-amendment-status-banner__detail {
+  margin: 0 0 0.75rem;
+  font-size: 0.9rem;
+  color: var(--op-text-muted, var(--color-text-muted));
+  line-height: 1.4;
+}
+
+.order-amendment-position-row,
+.order-amendment-position-editor {
+  margin-top: 0.75rem;
+  padding: 0.75rem 0 0;
+  border-top: 1px solid var(--op-border, var(--color-border));
+}
+
+.order-amendment-position-row__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.order-amendment-position-row__description {
+  font-weight: 600;
+  color: var(--op-text, var(--color-text));
+}
+
+.confirmed-amendment-list__items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.confirmed-amendment-list__item {
+  padding: 0.85rem 0.9rem;
+  border: 1px solid var(--op-border, var(--color-border));
+  border-radius: var(--radius-md, 14px);
+  background: var(--op-surface, var(--color-surface));
+}
+
+.confirmed-amendment-list__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.confirmed-amendment-list__title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.confirmed-amendment-list__sequence {
+  font-weight: 700;
+  color: var(--op-text, var(--color-text));
+}
+
+.confirmed-amendment-list__title {
+  margin: 0.2rem 0;
+  font-weight: 600;
+}
+
+.confirmed-amendment-list__meta {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--op-text-muted, var(--color-text-muted));
+}
+
+.confirmed-amendment-list__details {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--op-border, var(--color-border));
+}
+
+.confirmed-amendment-list__positions-title {
+  margin: 0.75rem 0 0.35rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.section__subtitle {
+  margin: 0.75rem 0 0.5rem;
+  font-size: 0.98rem;
+  font-weight: 650;
+  color: var(--op-text, var(--color-text));
+}
+
+@media (min-width: 768px) {
+  .order-amendment-actions--secondary {
+    flex-wrap: nowrap;
+  }
+
+  .confirmed-amendment-list__row {
+    align-items: center;
+  }
+}
+

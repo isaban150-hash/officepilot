@@ -68,7 +68,7 @@ describe('ORDER-AMENDMENT-01A UI', () => {
     resetTestStores();
   });
 
-  it('zeigt Nachtrag vorbereiten nur mit contractConfirmation', () => {
+  it('zeigt Nachtrag erstellen nur mit contractConfirmation, sonst verständlichen Hinweis', () => {
     const confirmed = seedConfirmed();
     const confirmedHtml = renderToStaticMarkup(
       createElement(VorgangOrderAmendmentPanel, {
@@ -80,6 +80,7 @@ describe('ORDER-AMENDMENT-01A UI', () => {
     );
     expect(confirmedHtml).toContain('data-testid="order-amendment-prepare"');
     expect(confirmedHtml).toContain(translate('orderAmendment.prepare'));
+    expect(confirmedHtml).toContain('data-testid="order-amendment-empty"');
 
     hydrateVorgangStore([createTestVorgang({ id: 'v-open', status: 'eingegangen' })]);
     const open = getVorgangById('v-open')!;
@@ -91,7 +92,9 @@ describe('ORDER-AMENDMENT-01A UI', () => {
         onToast: vi.fn(),
       }),
     );
-    expect(openHtml).toBe('');
+    expect(openHtml).toContain('data-testid="order-amendment-unavailable"');
+    expect(openHtml).toContain(translate('orderAmendment.requiresConfirmation'));
+    expect(openHtml).not.toContain('data-testid="order-amendment-prepare"');
   });
 
   it('kennzeichnet Entwurf als unverbindlich und ohne Confirm/Send/Billing-Aktionen', () => {

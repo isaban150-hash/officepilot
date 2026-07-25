@@ -887,8 +887,19 @@ const deLegacy = {
     'Der Auftrag ist bereits bestätigt. Änderungen am vereinbarten Leistungsumfang müssen als Nachtrag erfasst werden.',
   'orderPlan.confirmedHint':
     'Der Auftrag ist bestätigt. Änderungen am vereinbarten Leistungsumfang müssen als Nachtrag erfasst werden.',
-  'orderAmendment.prepare': 'Nachtrag vorbereiten',
-  'orderAmendment.title': 'Nachtragsentwurf',
+  'orderAmendment.prepare': 'Nachtrag erstellen',
+  'orderAmendment.title': 'Nachträge',
+  'orderAmendment.sectionIntro':
+    'Hier erfassen und bestätigen Sie Ergänzungen zum bestätigten Auftrag.',
+  'orderAmendment.requiresConfirmation':
+    'Nachträge können erstellt werden, sobald der Auftrag bestätigt ist.',
+  'orderAmendment.emptyTitle': 'Noch kein Nachtrag',
+  'orderAmendment.emptyBody':
+    'Ergänzungen oder Mengenänderungen zum bestätigten Auftrag werden hier als Nachtrag erfasst.',
+  'orderAmendment.summary.confirmedCount': 'Bestätigte Nachträge',
+  'orderAmendment.summary.openDraft': 'Offener Entwurf',
+  'orderAmendment.extraDraftsHint':
+    'Es gibt {count} weitere Entwürfe auf diesem Gerät. Angezeigt wird der aktive Entwurf.',
   'orderAmendment.draftBadge': 'Entwurf',
   'orderAmendment.unbindingHint':
     'Dieser Nachtrag ist nur vorbereitet. Er verändert den bestätigten Auftrag und die Rechnung noch nicht.',
@@ -897,21 +908,33 @@ const deLegacy = {
     'Für diesen Auftrag wurde bereits eine Schlussrechnung erstellt. Der Entwurf kann vorbereitet, aber derzeit nicht als Nachtrag bestätigt werden.',
   'orderAmendment.field.title': 'Titel',
   'orderAmendment.field.reason': 'Begründung (optional)',
-  'orderAmendment.positions': 'Geplante Nachtragspositionen',
-  'orderAmendment.addPosition': 'Zusatzleistung hinzufügen',
+  'orderAmendment.positions': 'Nachtragspositionen',
+  'orderAmendment.positionCount': '{count} Positionen',
+  'orderAmendment.addPosition': 'Zusatzposition hinzufügen',
   'orderAmendment.addQuantityIncrease': 'Mengenmehrung hinzufügen',
-  'orderAmendment.deleteDraft': 'Entwurf löschen',
+  'orderAmendment.deleteDraft': 'Entwurf verwerfen',
+  'orderAmendment.discardDialogTitle': 'Nachtragsentwurf verwerfen?',
+  'orderAmendment.discardDialogBody':
+    'Der Entwurf und seine noch nicht bestätigten Positionen werden entfernt. Bereits bestätigte Nachträge bleiben unverändert.',
   'orderAmendment.deletePosition': 'Position entfernen',
   'orderAmendment.emptyPositions': 'Noch keine Nachtragspositionen erfasst.',
-  'orderAmendment.changeType.add': 'Zusatzleistung',
+  'orderAmendment.changeType.add': 'Zusatzposition',
   'orderAmendment.changeType.quantity_increase': 'Mengenmehrung',
+  'orderAmendment.changeType.unknown': 'Nachtragsposition',
   'orderAmendment.parentPosition': 'Bezug zur Hauptposition',
+  'orderAmendment.parentReference': 'Bezug: {description}',
+  'orderAmendment.parentUnresolved':
+    'Bezug zur ursprünglichen Position konnte nicht angezeigt werden.',
+  'orderAmendment.discardFailed':
+    'Der Entwurf konnte nicht verworfen werden. Bitte versuchen Sie es erneut.',
   'orderAmendment.field.description': 'Beschreibung',
   'orderAmendment.field.quantity': 'Menge',
   'orderAmendment.field.unit': 'Einheit',
   'orderAmendment.field.unitPrice': 'Einzelpreis',
   'orderAmendment.field.category': 'Kategorie',
   'orderAmendment.field.billable': 'Abrechenbar',
+  'orderAmendment.editDraft': 'Entwurf bearbeiten',
+  'orderAmendment.doneEditDraft': 'Bearbeitung schließen',
   'orderAmendment.editPosition': 'Position bearbeiten',
   'orderAmendment.savePosition': 'Position speichern',
   'orderAmendment.cancelEdit': 'Abbrechen',
@@ -927,10 +950,30 @@ const deLegacy = {
     'Möchten Sie diesen Nachtrag verbindlich bestätigen? Er ist danach nicht mehr bearbeitbar und fließt in Plan und Abrechnung ein.',
   'orderAmendment.confirmHint':
     'Mit der Bestätigung wird der Nachtrag verbindlich und wirkt auf Plan und Abrechnung.',
-  'orderAmendment.confirmedBadge': 'bestätigt',
+  'orderAmendment.confirmedBadge': 'Bestätigt',
   'orderAmendment.confirmedTitle': 'Bestätigte Nachträge',
+  'orderAmendment.confirmedLabel': 'Nachtrag {n}',
+  'orderAmendment.showDetails': 'Details anzeigen',
+  'orderAmendment.hideDetails': 'Details ausblenden',
   'orderAmendment.confirming': 'Nachtrag wird bestätigt…',
   'orderAmendment.retry': 'Erneut versuchen',
+  'orderAmendment.status.confirmingTitle': 'Der Nachtrag wird bestätigt.',
+  'orderAmendment.status.confirmingDetail': 'Bitte warten Sie einen Moment.',
+  'orderAmendment.status.outcomeUnknownTitle': 'Die Bestätigung wird geprüft.',
+  'orderAmendment.status.outcomeUnknownDetail':
+    'Der Nachtrag wurde möglicherweise bereits übernommen. Prüfen Sie den Status erneut.',
+  'orderAmendment.status.localApplyTitle':
+    'Der bestätigte Nachtrag wird in der Ansicht aktualisiert.',
+  'orderAmendment.status.localApplyDetail':
+    'Die Bestätigung liegt bereits vor. Bitte aktualisieren Sie den lokalen Stand erneut.',
+  'orderAmendment.status.conflictTitle': 'Die Bestätigung konnte nicht abgeschlossen werden.',
+  'orderAmendment.status.conflictDetail':
+    'Bitte prüfen Sie den Status erneut. Bereits bestätigte Nachträge bleiben unverändert.',
+  'orderAmendment.status.retryCheck': 'Status erneut prüfen',
+  'orderAmendment.status.retryLocalApply': 'Ansicht aktualisieren',
+  'orderAmendment.validation.empty': 'Noch keine gültigen Positionen erfasst.',
+  'orderAmendment.validation.invalid': 'Bitte prüfen Sie die erfassten Positionen.',
+  'orderAmendment.validation.ready': 'Der Entwurf kann bestätigt werden.',
   'orderAmendment.total': 'Gesamtsumme',
   'orderAmendment.lineTotal': 'Positionsbetrag',
   'orderAmendment.outcomeUnknown':
@@ -938,6 +981,21 @@ const deLegacy = {
   'orderAmendment.localApplyPending':
     'Die Bestätigung war erfolgreich, die lokale Übernahme steht noch aus. Bitte erneut versuchen.',
   'orderAmendment.confirmedSuccess': 'Nachtrag wurde bestätigt.',
+  'vorgang.section.navLabel': 'Bereiche im Vorgang',
+  'vorgang.section.overview': 'Übersicht',
+  'vorgang.section.order': 'Auftrag',
+  'vorgang.section.amendments': 'Nachträge',
+  'vorgang.section.invoices': 'Rechnungen',
+  'vorgang.orderSectionIntro':
+    'Bestätigter Auftrag, Verhandlung und Hauptpositionen inklusive Ausführung.',
+  'vorgang.orderSummary.title': 'Auftragsstand',
+  'vorgang.orderSummary.notConfirmed': 'Der Auftrag ist noch nicht bestätigt.',
+  'vorgang.orderSummary.orderValue': 'Bestätigter Auftragswert',
+  'vorgang.orderSummary.mainPositions': 'Hauptpositionen',
+  'vorgang.orderSummary.confirmedAmendments': 'Bestätigte Nachträge',
+  'vorgang.orderSummary.openDraft': 'Offener Nachtragsentwurf',
+  'vorgang.orderSummary.openDraftYes': 'Ja',
+  'vorgang.orderSummary.openDraftNo': 'Nein',
   'order_amendment_requires_confirmation':
     'Ein Nachtrag kann erst nach der Auftragsbestätigung vorbereitet werden.',
   'order_amendment_not_found': 'Nachtragsentwurf nicht gefunden.',

@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '../ui/Button';
-import { Card, CardTitle, DataRow } from '../ui/Card';
+import { Badge, Card, CardTitle, DataRow } from '../ui/Card';
+import { SimpleConfirmDialog } from '../ui/SimpleConfirmDialog';
 import type { TranslationKey } from '../../i18n';
 import {
   addOrderAmendmentDraftPosition,
@@ -22,13 +23,23 @@ import { hasFinalSchlussrechnung } from '../../services/orderBillingRules';
 import { sortConfirmedOrderAmendments } from '../../services/orderPlanCompositionService';
 import { formatOrderUnitDisplay } from '../../services/orderUnitMapper';
 import type {
-  ConfirmedOrderAmendment,
   OrderAmendment,
   OrderAmendmentDraftPosition,
   OrderPositionCategory,
   OrderUnit,
   Vorgang,
 } from '../../types/models';
+import { ConfirmedOrderAmendmentList } from './ConfirmedOrderAmendmentList';
+import {
+  OrderAmendmentStatusBanner,
+  intentStateToStatusKind,
+} from './OrderAmendmentStatusBanner';
+import {
+  formatAmendmentChangeTypeLabel,
+  formatAmendmentMoney,
+  positionLineTotal,
+  resolveParentPositionDescription,
+} from './orderAmendmentUiHelpers';
 
 const ORDER_UNITS: OrderUnit[] = ['m²', 'Stück', 'Meter', 'Stunden', 'Pauschal'];
 const CATEGORIES: OrderPositionCategory[] = ['arbeit', 'material', 'sonstiges'];
@@ -79,13 +90,6 @@ function toastError(
   onToast(translate(errorKey as TranslationKey));
 }
 
-function formatMoney(value: number): string {
-  return `${value.toLocaleString('de-DE', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })} €`;
-}
-
 function isValidLookingPosition(position: OrderAmendmentDraftPosition): boolean {
   if (!position.description.trim()) return false;
   if (!Number.isFinite(position.quantity) || position.quantity <= 0) return false;
@@ -93,10 +97,6 @@ function isValidLookingPosition(position: OrderAmendmentDraftPosition): boolean 
   if (position.changeType === 'quantity_increase' && !position.parentPositionId) return false;
   if (position.changeType === 'add' && position.parentPositionId) return false;
   return true;
-}
-
-function positionLineTotal(quantity: number, unitPrice: number): number {
-  return Math.round(quantity * unitPrice * 100) / 100;
 }
 
 export function VorgangOrderAmendmentPanel({
@@ -107,6 +107,7 @@ export function VorgangOrderAmendmentPanel({
 }: VorgangOrderAmendmentPanelProps) {
   const amendments = vorgang.orderAmendments ?? [];
   const primaryAmendment: OrderAmendment | undefined = amendments[0];
+  const extraDraftCount = Math.max(0, amendments.length - 1);
   const confirmedAmendments = sortConfirmedOrderAmendments(vorgang.confirmedOrderAmendments);
   const schlussExists = hasFinalSchlussrechnung(vorgang);
   const confirmedParents = vorgang.contractConfirmation?.positions ?? [];
@@ -116,6 +117,10 @@ export function VorgangOrderAmendmentPanel({
   const [titleDraft, setTitleDraft] = useState(primaryAmendment?.title ?? '');
   const [reasonDraft, setReasonDraft] = useState(primaryAmendment?.reason ?? '');
   const [confirming, setConfirming] = useState(false);
+  const [editingMeta, setEditingMeta] = useState(false);
+  const [discardOpen, setDiscardOpen] = useState(false);
+  const sectionHeadingRef = useRef<HTMLHeadingElement>(null);
+  const discardReturnFocusRef = useRef<HTMLElement | null>(null);
 
   const draftLocked = primaryAmendment
     ? isOrderAmendmentDraftLockedByIntent(vorgang.id, primaryAmendment.id)
@@ -124,6 +129,7 @@ export function VorgangOrderAmendmentPanel({
     ? getOrderAmendmentConfirmIntent(vorgang.id, primaryAmendment.id)
     : null;
   const inputsDisabled = confirming || draftLocked;
+  const lockedStatusKind = intentStateToStatusKind(confirmIntent?.state);
 
   const draftTotals = useMemo(() => {
     if (!primaryAmendment || primaryAmendment.positions.length === 0) return null;
@@ -142,11 +148,26 @@ export function VorgangOrderAmendmentPanel({
     !draftLocked &&
     (primaryAmendment?.positions.some(isValidLookingPosition) ?? false);
 
+  const validationMessage = useMemo(() => {
+    if (!primaryAmendment) return null;
+    if (primaryAmendment.positions.length === 0) {
+      return translate('orderAmendment.validation.empty');
+    }
+    if (!primaryAmendment.positions.some(isValidLookingPosition)) {
+      return translate('orderAmendment.validation.invalid');
+    }
+    if (schlussExists) {
+      return translate('orderAmendment.schlussWarning');
+    }
+    return translate('orderAmendment.validation.ready');
+  }, [primaryAmendment, schlussExists, translate]);
+
   useEffect(() => {
     if (!primaryAmendment) {
       setTitleDraft('');
       setReasonDraft('');
       setEditor({ type: 'closed' });
+      setEditingMeta(false);
       return;
     }
     setTitleDraft(primaryAmendment.title);
@@ -163,7 +184,19 @@ export function VorgangOrderAmendmentPanel({
   );
 
   if (!vorgang.contractConfirmation) {
-    return null;
+    return (
+      <section className="section order-amendment-section" data-testid="vorgang-order-amendment-panel">
+        <h2 ref={sectionHeadingRef} tabIndex={-1} className="section__title">
+          {translate('orderAmendment.title')}
+        </h2>
+        <p className="order-amendment-section__intro">{translate('orderAmendment.sectionIntro')}</p>
+        <Card>
+          <p className="empty-state" data-testid="order-amendment-unavailable">
+            {translate('orderAmendment.requiresConfirmation')}
+          </p>
+        </Card>
+      </section>
+    );
   }
 
   const openEditor = (mode: EditorMode, nextDraft: OrderAmendmentDraftPositionInput) => {
@@ -178,6 +211,7 @@ export function VorgangOrderAmendmentPanel({
       toastError(translate, onToast, result.errorKey);
       return;
     }
+    setEditingMeta(true);
     onUpdated();
     onToast(translate('orderAmendment.created'));
   };
@@ -198,15 +232,30 @@ export function VorgangOrderAmendmentPanel({
 
   const handleDeleteDraft = () => {
     if (!primaryAmendment || inputsDisabled) return;
-    if (!window.confirm(translate('orderAmendment.deleteConfirm'))) return;
-    const result = deleteOrderAmendmentDraft(vorgang.id, primaryAmendment.id);
-    if (!result.success) {
-      toastError(translate, onToast, result.errorKey);
-      return;
+    discardReturnFocusRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setDiscardOpen(true);
+  };
+
+  const confirmDeleteDraft = async (): Promise<boolean> => {
+    if (!primaryAmendment || inputsDisabled) return false;
+    try {
+      const result = await Promise.resolve(
+        deleteOrderAmendmentDraft(vorgang.id, primaryAmendment.id),
+      );
+      if (!result.success) {
+        toastError(translate, onToast, result.errorKey);
+        return false;
+      }
+      setEditor({ type: 'closed' });
+      setEditingMeta(false);
+      setDiscardOpen(false);
+      onUpdated();
+      onToast(translate('orderAmendment.deleted'));
+      return true;
+    } catch {
+      return false;
     }
-    setEditor({ type: 'closed' });
-    onUpdated();
-    onToast(translate('orderAmendment.deleted'));
   };
 
   const startAdd = (changeType: 'add' | 'quantity_increase') => {
@@ -325,95 +374,70 @@ export function VorgangOrderAmendmentPanel({
     }
   };
 
-  const renderConfirmedCard = (amendment: ConfirmedOrderAmendment) => (
-    <Card
-      key={amendment.cloudId || amendment.clientAmendmentId}
-      data-testid={`order-amendment-confirmed-${amendment.sequenceNo}`}
-    >
-      <CardTitle>
-        <span data-testid="order-amendment-confirmed-sequence">
-          N{amendment.sequenceNo}
-        </span>
-        {': '}
-        {amendment.title}{' '}
-        <span className="badge badge--success" data-testid="order-amendment-confirmed-badge">
-          {translate('orderAmendment.confirmedBadge')}
-        </span>
-      </CardTitle>
-      {amendment.reason ? (
-        <DataRow label={translate('orderAmendment.field.reason')} value={amendment.reason} />
-      ) : null}
-      <h3 className="section__subtitle">{translate('orderAmendment.positions')}</h3>
-      {amendment.positions.map((position) => (
-        <Card key={position.id} data-testid={`order-amendment-confirmed-position-${position.id}`}>
-          <DataRow
-            label={translate(
-              `orderAmendment.changeType.${position.changeType}` as TranslationKey,
-            )}
-            value={position.description}
-          />
-          <DataRow
-            label={translate('orderAmendment.field.quantity')}
-            value={`${position.plannedQuantity} ${formatOrderUnitDisplay(position.unit, position.unitLabel)}`}
-          />
-          <DataRow
-            label={translate('orderAmendment.field.unitPrice')}
-            value={formatMoney(position.unitPrice)}
-          />
-          <DataRow
-            label={translate('orderAmendment.lineTotal')}
-            value={formatMoney(
-              positionLineTotal(position.plannedQuantity, position.unitPrice),
-            )}
-          />
-          {position.parentPositionId ? (
-            <DataRow
-              label={translate('orderAmendment.parentPosition')}
-              value={
-                confirmedParents.find((p) => p.id === position.parentPositionId)?.description ??
-                position.parentPositionId
-              }
-            />
-          ) : null}
-        </Card>
-      ))}
-    </Card>
-  );
+  const renderParentValue = (parentPositionId: string | undefined) => {
+    if (!parentPositionId) return null;
+    const parent = resolveParentPositionDescription(parentPositionId, confirmedParents);
+    return parent.found
+      ? translate('orderAmendment.parentReference').replace('{description}', parent.description)
+      : translate('orderAmendment.parentUnresolved');
+  };
+
+  const hasAnyContent = Boolean(primaryAmendment) || confirmedAmendments.length > 0;
 
   return (
-    <section className="section" data-testid="vorgang-order-amendment-panel">
-      <h2 className="section__title">{translate('orderAmendment.title')}</h2>
+    <section className="section order-amendment-section" data-testid="vorgang-order-amendment-panel">
+      <h2 ref={sectionHeadingRef} tabIndex={-1} className="section__title">
+        {translate('orderAmendment.title')}
+      </h2>
+      <p className="order-amendment-section__intro">{translate('orderAmendment.sectionIntro')}</p>
 
-      {confirmedAmendments.length > 0 ? (
-        <div data-testid="order-amendment-confirmed-list">
-          <h3 className="section__subtitle">{translate('orderAmendment.confirmedTitle')}</h3>
-          {confirmedAmendments.map(renderConfirmedCard)}
-        </div>
+      <div className="order-amendment-section__summary" data-testid="order-amendment-summary">
+        <DataRow
+          label={translate('orderAmendment.summary.confirmedCount')}
+          value={String(confirmedAmendments.length)}
+        />
+        <DataRow
+          label={translate('orderAmendment.summary.openDraft')}
+          value={
+            primaryAmendment
+              ? translate('vorgang.orderSummary.openDraftYes')
+              : translate('vorgang.orderSummary.openDraftNo')
+          }
+        />
+      </div>
+
+      {extraDraftCount > 0 ? (
+        <p className="order-amendment-section__extra-drafts" data-testid="order-amendment-extra-drafts">
+          {translate('orderAmendment.extraDraftsHint').replace('{count}', String(extraDraftCount))}
+        </p>
       ) : null}
 
-      {!primaryAmendment ? (
-        <Card>
-          <p className="invoice-hint invoice-hint--warning" data-testid="order-amendment-plan-hint">
-            {translate('orderPlan.confirmedHint')}
-          </p>
+      {!hasAnyContent ? (
+        <Card className="order-amendment-empty" data-testid="order-amendment-empty">
+          <h3 className="order-amendment-empty__title">{translate('orderAmendment.emptyTitle')}</h3>
+          <p className="empty-state">{translate('orderAmendment.emptyBody')}</p>
           <Button fullWidth onClick={handlePrepare} data-testid="order-amendment-prepare">
             {translate('orderAmendment.prepare')}
           </Button>
         </Card>
-      ) : (
-        <Card data-testid="order-amendment-draft-card">
-          <CardTitle>
-            {primaryAmendment.title}{' '}
-            <span className="badge badge--warning" data-testid="order-amendment-draft-badge">
-              {translate('orderAmendment.draftBadge')}
+      ) : null}
+
+      {primaryAmendment ? (
+        <Card className="order-amendment-draft" data-testid="order-amendment-draft-card">
+          <div className="order-amendment-draft__header">
+            <CardTitle>{primaryAmendment.title}</CardTitle>
+            <span data-testid="order-amendment-draft-badge">
+              <Badge tone="warning">{translate('orderAmendment.draftBadge')}</Badge>
             </span>
-          </CardTitle>
+          </div>
+
           <p className="invoice-hint" data-testid="order-amendment-unbinding-hint">
             {translate('orderAmendment.unbindingHint')}
           </p>
-          <p className="muted" data-testid="order-amendment-local-hint">
+          <p className="order-amendment-section__muted" data-testid="order-amendment-local-hint">
             {translate('orderAmendment.localOnlyHint')}
           </p>
+
           {schlussExists ? (
             <p
               className="invoice-hint invoice-hint--warning"
@@ -423,56 +447,80 @@ export function VorgangOrderAmendmentPanel({
             </p>
           ) : null}
 
-          {draftLocked ? (
+          {confirming ? (
+            <OrderAmendmentStatusBanner kind="confirming" translate={translate} confirming />
+          ) : null}
+
+          {!confirming && draftLocked && lockedStatusKind ? (
             <div data-testid="order-amendment-locked">
-              <p className="invoice-hint invoice-hint--warning" data-testid="order-amendment-locked-hint">
-                {confirmIntent?.state === 'local_apply_pending'
-                  ? translate('orderAmendment.localApplyPending')
-                  : translate('orderAmendment.outcomeUnknown')}
-              </p>
-              <Button
-                fullWidth
-                disabled={confirming}
-                loading={confirming}
-                onClick={() => void runConfirm({ skipDialog: true })}
-                data-testid="order-amendment-confirm-retry"
-              >
-                {confirming
-                  ? translate('orderAmendment.confirming')
-                  : translate('orderAmendment.retry')}
-              </Button>
+              <OrderAmendmentStatusBanner
+                kind={lockedStatusKind}
+                translate={translate}
+                confirming={confirming}
+                onRetry={() => void runConfirm({ skipDialog: true })}
+              />
             </div>
           ) : null}
 
-          {confirming ? (
-            <p className="invoice-hint" data-testid="order-amendment-confirming">
-              {translate('orderAmendment.confirming')}
-            </p>
-          ) : null}
+          <div className="order-amendment-draft__facts">
+            {primaryAmendment.reason ? (
+              <DataRow
+                label={translate('orderAmendment.field.reason')}
+                value={primaryAmendment.reason}
+              />
+            ) : null}
+            <DataRow
+              label={translate('orderAmendment.positions')}
+              value={translate('orderAmendment.positionCount').replace(
+                '{count}',
+                String(primaryAmendment.positions.length),
+              )}
+            />
+            {draftTotals ? (
+              <div data-testid="order-amendment-totals">
+                <DataRow
+                  label={translate('orderAmendment.total')}
+                  value={formatAmendmentMoney(draftTotals.grandTotal)}
+                />
+              </div>
+            ) : null}
+            {validationMessage ? (
+              <p
+                className="order-amendment-draft__validation"
+                data-testid="order-amendment-validation"
+              >
+                {validationMessage}
+              </p>
+            ) : null}
+          </div>
 
-          <label className="form-group">
-            <span>{translate('orderAmendment.field.title')}</span>
-            <input
-              className="input"
-              data-testid="order-amendment-title"
-              value={titleDraft}
-              disabled={inputsDisabled}
-              onChange={(event) => setTitleDraft(event.target.value)}
-              onBlur={handleSaveMeta}
-            />
-          </label>
-          <label className="form-group">
-            <span>{translate('orderAmendment.field.reason')}</span>
-            <textarea
-              className="input"
-              data-testid="order-amendment-reason"
-              value={reasonDraft}
-              disabled={inputsDisabled}
-              onChange={(event) => setReasonDraft(event.target.value)}
-              onBlur={handleSaveMeta}
-              rows={2}
-            />
-          </label>
+          {editingMeta ? (
+            <>
+              <label className="form-group">
+                <span>{translate('orderAmendment.field.title')}</span>
+                <input
+                  className="input"
+                  data-testid="order-amendment-title"
+                  value={titleDraft}
+                  disabled={inputsDisabled}
+                  onChange={(event) => setTitleDraft(event.target.value)}
+                  onBlur={handleSaveMeta}
+                />
+              </label>
+              <label className="form-group">
+                <span>{translate('orderAmendment.field.reason')}</span>
+                <textarea
+                  className="input"
+                  data-testid="order-amendment-reason"
+                  value={reasonDraft}
+                  disabled={inputsDisabled}
+                  onChange={(event) => setReasonDraft(event.target.value)}
+                  onBlur={handleSaveMeta}
+                  rows={2}
+                />
+              </label>
+            </>
+          ) : null}
 
           <h3 className="section__subtitle">{translate('orderAmendment.positions')}</h3>
           {primaryAmendment.positions.length === 0 ? (
@@ -481,69 +529,65 @@ export function VorgangOrderAmendmentPanel({
             </p>
           ) : (
             primaryAmendment.positions.map((position) => (
-              <Card key={position.id} data-testid={`order-amendment-position-${position.id}`}>
-                <DataRow
-                  label={translate(
-                    `orderAmendment.changeType.${position.changeType}` as TranslationKey,
-                  )}
-                  value={position.description}
-                />
+              <div
+                key={position.id}
+                className="order-amendment-position-row"
+                data-testid={`order-amendment-position-${position.id}`}
+              >
+                <div className="order-amendment-position-row__header">
+                  <Badge tone="info">
+                    {formatAmendmentChangeTypeLabel(position.changeType, translate)}
+                  </Badge>
+                  <span className="order-amendment-position-row__description">
+                    {position.description}
+                  </span>
+                </div>
                 <DataRow
                   label={translate('orderAmendment.field.quantity')}
                   value={`${position.quantity} ${formatOrderUnitDisplay(position.unit, position.unitLabel)}`}
                 />
                 <DataRow
                   label={translate('orderAmendment.field.unitPrice')}
-                  value={String(position.unitPrice)}
+                  value={formatAmendmentMoney(position.unitPrice)}
                 />
                 <DataRow
                   label={translate('orderAmendment.lineTotal')}
-                  value={formatMoney(positionLineTotal(position.quantity, position.unitPrice))}
+                  value={formatAmendmentMoney(positionLineTotal(position.quantity, position.unitPrice))}
                 />
                 {position.parentPositionId ? (
                   <DataRow
                     label={translate('orderAmendment.parentPosition')}
-                    value={
-                      confirmedParents.find((p) => p.id === position.parentPositionId)
-                        ?.description ?? position.parentPositionId
-                    }
+                    value={renderParentValue(position.parentPositionId)}
                   />
                 ) : null}
-                <div className="button-row">
-                  <Button
-                    variant="outline"
-                    disabled={inputsDisabled}
-                    onClick={() => startEdit(position)}
-                    data-testid={`order-amendment-edit-${position.id}`}
-                  >
-                    {translate('orderAmendment.editPosition')}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    disabled={inputsDisabled}
-                    onClick={() => handleRemovePosition(position.id)}
-                    data-testid={`order-amendment-remove-${position.id}`}
-                  >
-                    {translate('orderAmendment.deletePosition')}
-                  </Button>
-                </div>
-              </Card>
+                {editingMeta ? (
+                  <div className="order-amendment-actions order-amendment-actions--secondary">
+                    <Button
+                      variant="outline"
+                      disabled={inputsDisabled}
+                      onClick={() => startEdit(position)}
+                      data-testid={`order-amendment-edit-${position.id}`}
+                    >
+                      {translate('orderAmendment.editPosition')}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      disabled={inputsDisabled}
+                      onClick={() => handleRemovePosition(position.id)}
+                      data-testid={`order-amendment-remove-${position.id}`}
+                    >
+                      {translate('orderAmendment.deletePosition')}
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
             ))
           )}
 
-          {draftTotals ? (
-            <div data-testid="order-amendment-totals">
-              <DataRow
-                label={translate('orderAmendment.total')}
-                value={formatMoney(draftTotals.grandTotal)}
-              />
-            </div>
-          ) : null}
-
           {editor.type !== 'closed' ? (
-            <Card data-testid="order-amendment-position-editor">
+            <div className="order-amendment-position-editor" data-testid="order-amendment-position-editor">
               <CardTitle>
-                {translate(`orderAmendment.changeType.${draft.changeType}` as TranslationKey)}
+                {formatAmendmentChangeTypeLabel(draft.changeType, translate)}
               </CardTitle>
               {draft.changeType === 'quantity_increase' ? (
                 <label className="form-group">
@@ -652,73 +696,132 @@ export function VorgangOrderAmendmentPanel({
                 />
                 <span>{translate('orderAmendment.field.billable')}</span>
               </label>
-              <Button
-                fullWidth
-                disabled={inputsDisabled}
-                onClick={handleSavePosition}
-                data-testid="order-amendment-save-position"
-              >
-                {translate('orderAmendment.savePosition')}
-              </Button>
-              <Button
-                variant="ghost"
-                fullWidth
-                disabled={inputsDisabled}
-                onClick={() => setEditor({ type: 'closed' })}
-                data-testid="order-amendment-cancel-edit"
-              >
-                {translate('orderAmendment.cancelEdit')}
-              </Button>
-            </Card>
-          ) : (
-            <div className="button-row">
-              <Button
-                variant="outline"
-                fullWidth
-                disabled={inputsDisabled}
-                onClick={() => startAdd('add')}
-                data-testid="order-amendment-add-position"
-              >
-                {translate('orderAmendment.addPosition')}
-              </Button>
-              <Button
-                variant="outline"
-                fullWidth
-                disabled={inputsDisabled}
-                onClick={() => startAdd('quantity_increase')}
-                data-testid="order-amendment-add-quantity-increase"
-              >
-                {translate('orderAmendment.addQuantityIncrease')}
-              </Button>
+              <div className="order-amendment-actions">
+                <Button
+                  disabled={inputsDisabled}
+                  onClick={handleSavePosition}
+                  data-testid="order-amendment-save-position"
+                >
+                  {translate('orderAmendment.savePosition')}
+                </Button>
+                <Button
+                  variant="ghost"
+                  disabled={inputsDisabled}
+                  onClick={() => setEditor({ type: 'closed' })}
+                  data-testid="order-amendment-cancel-edit"
+                >
+                  {translate('orderAmendment.cancelEdit')}
+                </Button>
+              </div>
             </div>
-          )}
-
-          {canConfirm ? (
-            <>
-              <p className="invoice-hint" data-testid="order-amendment-confirm-hint">
-                {translate('orderAmendment.confirmHint')}
-              </p>
-              <Button
-                fullWidth
-                onClick={() => void runConfirm()}
-                data-testid="order-amendment-confirm"
-              >
-                {translate('orderAmendment.confirm')}
-              </Button>
-            </>
           ) : null}
 
-          <Button
-            variant="ghost"
-            fullWidth
-            disabled={inputsDisabled}
-            onClick={handleDeleteDraft}
-            data-testid="order-amendment-delete-draft"
-          >
-            {translate('orderAmendment.deleteDraft')}
-          </Button>
+          <div className="order-amendment-actions order-amendment-actions--primary">
+            {canConfirm ? (
+              <>
+                <p className="invoice-hint" data-testid="order-amendment-confirm-hint">
+                  {translate('orderAmendment.confirmHint')}
+                </p>
+                <Button
+                  onClick={() => void runConfirm()}
+                  data-testid="order-amendment-confirm"
+                >
+                  {translate('orderAmendment.confirm')}
+                </Button>
+              </>
+            ) : null}
+          </div>
+
+          <div className="order-amendment-actions order-amendment-actions--secondary">
+            {!editingMeta ? (
+              <Button
+                variant="outline"
+                disabled={inputsDisabled}
+                onClick={() => setEditingMeta(true)}
+                data-testid="order-amendment-edit-draft"
+              >
+                {translate('orderAmendment.editDraft')}
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                disabled={inputsDisabled}
+                onClick={() => {
+                  setEditingMeta(false);
+                  setEditor({ type: 'closed' });
+                }}
+                data-testid="order-amendment-done-edit-draft"
+              >
+                {translate('orderAmendment.doneEditDraft')}
+              </Button>
+            )}
+            {editor.type === 'closed' ? (
+              <>
+                <Button
+                  variant="outline"
+                  disabled={inputsDisabled}
+                  onClick={() => startAdd('add')}
+                  data-testid="order-amendment-add-position"
+                >
+                  {translate('orderAmendment.addPosition')}
+                </Button>
+                <Button
+                  variant="outline"
+                  disabled={inputsDisabled}
+                  onClick={() => startAdd('quantity_increase')}
+                  data-testid="order-amendment-add-quantity-increase"
+                >
+                  {translate('orderAmendment.addQuantityIncrease')}
+                </Button>
+              </>
+            ) : null}
+          </div>
+
+          <div className="order-amendment-actions order-amendment-actions--danger">
+            <Button
+              variant="danger"
+              disabled={inputsDisabled}
+              onClick={handleDeleteDraft}
+              data-testid="order-amendment-delete-draft"
+            >
+              {translate('orderAmendment.deleteDraft')}
+            </Button>
+          </div>
         </Card>
-      )}
+      ) : null}
+
+      {confirmedAmendments.length > 0 ? (
+        <ConfirmedOrderAmendmentList
+          amendments={confirmedAmendments}
+          confirmedParents={confirmedParents}
+          translate={translate}
+        />
+      ) : null}
+
+      {hasAnyContent && !primaryAmendment ? (
+        <div className="order-amendment-actions order-amendment-actions--secondary">
+          <Button onClick={handlePrepare} data-testid="order-amendment-prepare">
+            {translate('orderAmendment.prepare')}
+          </Button>
+        </div>
+      ) : null}
+
+      <SimpleConfirmDialog
+        open={discardOpen}
+        title={translate('orderAmendment.discardDialogTitle')}
+        message={translate('orderAmendment.discardDialogBody')}
+        confirmLabel={translate('orderAmendment.deleteDraft')}
+        cancelLabel={translate('orderAmendment.cancelEdit')}
+        confirmVariant="danger"
+        failureMessage={translate('orderAmendment.discardFailed')}
+        returnFocusRef={discardReturnFocusRef}
+        fallbackFocusRef={sectionHeadingRef}
+        dialogTestId="order-amendment-discard-dialog"
+        confirmTestId="order-amendment-discard-confirm"
+        cancelTestId="order-amendment-discard-cancel"
+        onCancel={() => setDiscardOpen(false)}
+        onConfirm={confirmDeleteDraft}
+      />
     </section>
   );
 }

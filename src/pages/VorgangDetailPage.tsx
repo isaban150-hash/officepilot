@@ -32,6 +32,12 @@ import { VorgangContractConfirmPanel } from '../components/vorgang/VorgangContra
 import { VorgangExecutionStartPanel } from '../components/vorgang/VorgangExecutionStartPanel';
 import { VorgangOrderAmendmentPanel } from '../components/vorgang/VorgangOrderAmendmentPanel';
 import { OrderPositionExecutedQuantityField } from '../components/vorgang/OrderPositionExecutedQuantityField';
+import {
+  VorgangSectionNav,
+  vorgangSectionPanelProps,
+  type VorgangDetailSection,
+} from '../components/vorgang/VorgangSectionNav';
+import { OrderSummaryPanel } from '../components/vorgang/OrderSummaryPanel';
 import { AreaAiPanel } from '../components/ai/AreaAiPanel';
 import {
   formatPaymentCurrency,
@@ -64,6 +70,7 @@ export function VorgangDetailPage() {
     id ? getNotesForVorgang(id) : [],
   );
   const [showDetails, setShowDetails] = useState(false);
+  const [activeSection, setActiveSection] = useState<VorgangDetailSection>('overview');
 
   const refreshNotes = useCallback(() => {
     if (id) setNotes(getNotesForVorgang(id));
@@ -85,6 +92,7 @@ export function VorgangDetailPage() {
     refreshVorgang();
     refreshNotes();
     setShowDetails(false);
+    setActiveSection('overview');
   }, [refreshVorgang, refreshNotes, id]);
 
   const handleAddNote = () => {
@@ -193,6 +201,10 @@ export function VorgangDetailPage() {
     showToast(message);
   };
 
+  const goToAmendments = () => {
+    setActiveSection('amendments');
+  };
+
   const primaryActions = (
     <>
       {hasOrderPositions && (
@@ -213,63 +225,8 @@ export function VorgangDetailPage() {
     </>
   );
 
-  const technicalPanels = (
+  const secondaryPanels = (
     <>
-      <Card>
-        <DataRow label={translate('vorgang.status.label')} value={translate(statusKey)} />
-        <DataRow label={translate('analysis.baustelle')} value={vorgang.baustelle} />
-        <DataRow label={translate('vorgang.materialSource')} value={translate(materialKey)} />
-        {allowedStatusTransitions.length > 0 ? (
-          <label className="form-group">
-            <span>{translate('vorgang.status.next')}</span>
-            <select
-              className="input"
-              data-testid="vorgang-status-select"
-              value=""
-              onChange={(event) => {
-                const next = event.target.value as VorgangStatus;
-                if (next) handleStatusChange(next);
-              }}
-            >
-              <option value="">{translate('vorgang.status.next')}</option>
-              {allowedStatusTransitions.map((status) => (
-                <option key={status} value={status}>
-                  {translate(`status.${status}` as TranslationKey)}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : null}
-      </Card>
-
-      <VorgangNegotiationPanel
-        vorgang={vorgang}
-        translate={translate}
-        onUpdated={refreshVorgang}
-        onToast={showToast}
-      />
-
-      <VorgangContractConfirmPanel
-        vorgang={vorgang}
-        translate={translate}
-        onUpdated={refreshVorgang}
-        onToast={showToast}
-      />
-
-      <VorgangExecutionStartPanel
-        vorgang={vorgang}
-        translate={translate}
-        onUpdated={refreshVorgang}
-        onToast={showToast}
-      />
-
-      <VorgangOrderAmendmentPanel
-        vorgang={vorgang}
-        translate={translate}
-        onUpdated={refreshVorgang}
-        onToast={showToast}
-      />
-
       <section className="section">
         <h2 className="section__title">{translate('vorgang.documents')}</h2>
         {vorgang.documents.length === 0 ? (
@@ -284,110 +241,6 @@ export function VorgangDetailPage() {
                 {doc.paperFiling && (
                   <p className="filing-hint">{formatPaperFilingInstruction(doc.paperFiling)}</p>
                 )}
-              </Card>
-            );
-          })
-        )}
-      </section>
-
-      <section className="section">
-        <div className="section__header-row">
-          <h2 className="section__title">{translate('vorgang.orderPositions')}</h2>
-          {canAdd && (
-            <Button variant="outline" onClick={() => setFormMode({ type: 'add' })}>
-              {translate('position.add')}
-            </Button>
-          )}
-        </div>
-
-        {planLocked && (
-          <p className="invoice-hint invoice-hint--warning" data-testid="order-plan-confirmed-hint">
-            {translate('orderPlan.confirmedHint')}{' '}
-            <Button
-              variant="ghost"
-              data-testid="order-plan-prepare-amendment-link"
-              onClick={() => {
-                document
-                  .querySelector('[data-testid="vorgang-order-amendment-panel"]')
-                  ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-              }}
-            >
-              {translate('orderAmendment.prepare')}
-            </Button>
-          </p>
-        )}
-        {!planLocked && positionsLocked && (
-          <p className="invoice-hint invoice-hint--warning">{translate('position.schlussLocked')}</p>
-        )}
-
-        {!hasOrderPositions ? (
-          canAdd && (
-            <Button fullWidth onClick={() => setFormMode({ type: 'add' })}>
-              {translate('position.addFirst')}
-            </Button>
-          )
-        ) : (
-          vorgang.orderPositions.map((pos) => {
-            const billing = getPositionBillingStatus(vorgang, pos.id);
-            const billed = billing?.billedQuantity ?? getBilledQuantity(vorgang, pos.id);
-            const open = billing?.openQuantity ?? getOpenQuantity(vorgang, pos.id);
-            const deletable = !planLocked && canDeleteOrderPosition(vorgang, pos.id);
-
-            const unitLabel = formatOrderUnitDisplay(pos.unit, pos.unitLabel);
-
-            return (
-              <Card key={pos.id} className="order-position-card">
-                <CardTitle>{pos.description}</CardTitle>
-                <DataRow
-                  label={translate('execution.plannedQuantity')}
-                  value={`${pos.plannedQuantity} ${unitLabel}`}
-                />
-                <OrderPositionExecutedQuantityField
-                  vorgang={vorgang}
-                  position={pos}
-                  unitLabel={unitLabel}
-                  translate={translate}
-                  onUpdated={setVorgang}
-                  onToast={showToast}
-                />
-                <DataRow
-                  label={translate('invoice.unitPrice')}
-                  value={`${pos.unitPrice.toLocaleString('de-DE')} €`}
-                />
-                <DataRow
-                  label={translate('invoice.alreadyBilled')}
-                  value={`${billed} ${unitLabel}`}
-                />
-                <DataRow
-                  label={translate('invoice.stillOpen')}
-                  value={`${open} ${unitLabel}`}
-                />
-                {pos.unitPrice === 0 && (
-                  <p className="invoice-pos-hint">{translate('vorgang.missingPriceHint')}</p>
-                )}
-                {billing?.hasBilling && !positionsLocked && !planLocked && (
-                  <p className="invoice-pos-hint">{translate('position.billedLockHint')}</p>
-                )}
-                <div className="order-position-card__actions">
-                  {!positionsLocked && (
-                    <Button variant="outline" onClick={() => setFormMode({ type: 'edit', position: pos })}>
-                      {translate('position.edit')}
-                    </Button>
-                  )}
-                  {deletable && (
-                    <Button
-                      variant="ghost"
-                      onClick={() => {
-                        if (window.confirm(translate('position.deleteConfirm'))) {
-                          const result = removeOrderPosition(vorgang.id, pos.id);
-                          if (result.success) setVorgang(result.vorgang);
-                        }
-                      }}
-                    >
-                      {translate('position.delete')}
-                    </Button>
-                  )}
-                </div>
               </Card>
             );
           })
@@ -450,36 +303,6 @@ export function VorgangDetailPage() {
         )}
       </section>
 
-      <section className="section">
-        <h2 className="section__title">{translate('vorgang.invoices')}</h2>
-        {sortedInvoices.length > 0 && (
-          <Card className="vorgang-invoice-totals">
-            <DataRow
-              label={translate('payment.vorgangOpenTotal')}
-              value={formatPaymentCurrency(paymentTotals.openTotal)}
-            />
-            <DataRow
-              label={translate('payment.vorgangPaidTotal')}
-              value={formatPaymentCurrency(paymentTotals.paidTotal)}
-            />
-          </Card>
-        )}
-        {sortedInvoices.length === 0 ? (
-          <p className="empty-state">{translate('vorgang.noInvoices')}</p>
-        ) : (
-          sortedInvoices.map((inv) => (
-            <InvoiceListCard
-              key={inv.id}
-              vorgangId={vorgang.id}
-              invoice={inv}
-              translate={translate}
-              onInvoiceUpdated={handleInvoiceUpdated}
-              onPaymentToast={handlePaymentToast}
-            />
-          ))
-        )}
-      </section>
-
       <CommunicationIntegrationPanel
         contextRef={{ type: 'vorgang', id: vorgang.id }}
         buttonKeys={VORGANG_COMMUNICATION_BUTTON_KEYS}
@@ -517,14 +340,220 @@ export function VorgangDetailPage() {
         ← {translate('common.back')}
       </button>
 
-      <DetailExperienceCard
-        recognizedTitle={vorgang.title}
-        recognizedSummary={`${vorgang.customer} · ${translate(statusKey)}`}
-        assistantMessage={translate('vorgang.experience.managed')}
-        highlights={highlights.length > 0 ? highlights : undefined}
-        actions={primaryActions}
-        testId="vorgang-detail-experience"
+      <VorgangSectionNav
+        activeSection={activeSection}
+        onChange={setActiveSection}
+        translate={translate}
       />
+
+      <div {...vorgangSectionPanelProps('overview', activeSection)}>
+        <DetailExperienceCard
+          recognizedTitle={vorgang.title}
+          recognizedSummary={`${vorgang.customer} · ${translate(statusKey)}`}
+          assistantMessage={translate('vorgang.experience.managed')}
+          highlights={highlights.length > 0 ? highlights : undefined}
+          actions={primaryActions}
+          testId="vorgang-detail-experience"
+        />
+
+        <Card data-testid="vorgang-overview-status">
+          <DataRow label={translate('vorgang.status.label')} value={translate(statusKey)} />
+          <DataRow label={translate('analysis.baustelle')} value={vorgang.baustelle} />
+          <DataRow label={translate('vorgang.materialSource')} value={translate(materialKey)} />
+          {allowedStatusTransitions.length > 0 ? (
+            <label className="form-group">
+              <span>{translate('vorgang.status.next')}</span>
+              <select
+                className="input"
+                data-testid="vorgang-status-select"
+                value=""
+                onChange={(event) => {
+                  const next = event.target.value as VorgangStatus;
+                  if (next) handleStatusChange(next);
+                }}
+              >
+                <option value="">{translate('vorgang.status.next')}</option>
+                {allowedStatusTransitions.map((status) => (
+                  <option key={status} value={status}>
+                    {translate(`status.${status}` as TranslationKey)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+        </Card>
+
+        <OrderSummaryPanel vorgang={vorgang} translate={translate} />
+      </div>
+
+      <div {...vorgangSectionPanelProps('order', activeSection)}>
+        <section className="section">
+          <h2 className="section__title">{translate('vorgang.section.order')}</h2>
+          <p className="order-amendment-section__intro">{translate('vorgang.orderSectionIntro')}</p>
+        </section>
+
+        <VorgangNegotiationPanel
+          vorgang={vorgang}
+          translate={translate}
+          onUpdated={refreshVorgang}
+          onToast={showToast}
+        />
+
+        <VorgangContractConfirmPanel
+          vorgang={vorgang}
+          translate={translate}
+          onUpdated={refreshVorgang}
+          onToast={showToast}
+        />
+
+        <VorgangExecutionStartPanel
+          vorgang={vorgang}
+          translate={translate}
+          onUpdated={refreshVorgang}
+          onToast={showToast}
+        />
+
+        <section className="section">
+          <div className="section__header-row">
+            <h2 className="section__title">{translate('vorgang.orderPositions')}</h2>
+            {canAdd && (
+              <Button variant="outline" onClick={() => setFormMode({ type: 'add' })}>
+                {translate('position.add')}
+              </Button>
+            )}
+          </div>
+
+          {planLocked && (
+            <p className="invoice-hint invoice-hint--warning" data-testid="order-plan-confirmed-hint">
+              {translate('orderPlan.confirmedHint')}{' '}
+              <Button
+                variant="ghost"
+                data-testid="order-plan-prepare-amendment-link"
+                onClick={goToAmendments}
+              >
+                {translate('orderAmendment.prepare')}
+              </Button>
+            </p>
+          )}
+          {!planLocked && positionsLocked && (
+            <p className="invoice-hint invoice-hint--warning">{translate('position.schlussLocked')}</p>
+          )}
+
+          {!hasOrderPositions ? (
+            canAdd && (
+              <Button fullWidth onClick={() => setFormMode({ type: 'add' })}>
+                {translate('position.addFirst')}
+              </Button>
+            )
+          ) : (
+            vorgang.orderPositions.map((pos) => {
+              const billing = getPositionBillingStatus(vorgang, pos.id);
+              const billed = billing?.billedQuantity ?? getBilledQuantity(vorgang, pos.id);
+              const open = billing?.openQuantity ?? getOpenQuantity(vorgang, pos.id);
+              const deletable = !planLocked && canDeleteOrderPosition(vorgang, pos.id);
+
+              const unitLabel = formatOrderUnitDisplay(pos.unit, pos.unitLabel);
+
+              return (
+                <Card key={pos.id} className="order-position-card">
+                  <CardTitle>{pos.description}</CardTitle>
+                  <DataRow
+                    label={translate('execution.plannedQuantity')}
+                    value={`${pos.plannedQuantity} ${unitLabel}`}
+                  />
+                  <OrderPositionExecutedQuantityField
+                    vorgang={vorgang}
+                    position={pos}
+                    unitLabel={unitLabel}
+                    translate={translate}
+                    onUpdated={setVorgang}
+                    onToast={showToast}
+                  />
+                  <DataRow
+                    label={translate('invoice.unitPrice')}
+                    value={`${pos.unitPrice.toLocaleString('de-DE')} €`}
+                  />
+                  <DataRow
+                    label={translate('invoice.alreadyBilled')}
+                    value={`${billed} ${unitLabel}`}
+                  />
+                  <DataRow
+                    label={translate('invoice.stillOpen')}
+                    value={`${open} ${unitLabel}`}
+                  />
+                  {pos.unitPrice === 0 && (
+                    <p className="invoice-pos-hint">{translate('vorgang.missingPriceHint')}</p>
+                  )}
+                  {billing?.hasBilling && !positionsLocked && !planLocked && (
+                    <p className="invoice-pos-hint">{translate('position.billedLockHint')}</p>
+                  )}
+                  <div className="order-position-card__actions">
+                    {!positionsLocked && (
+                      <Button variant="outline" onClick={() => setFormMode({ type: 'edit', position: pos })}>
+                        {translate('position.edit')}
+                      </Button>
+                    )}
+                    {deletable && (
+                      <Button
+                        variant="ghost"
+                        onClick={() => {
+                          if (window.confirm(translate('position.deleteConfirm'))) {
+                            const result = removeOrderPosition(vorgang.id, pos.id);
+                            if (result.success) setVorgang(result.vorgang);
+                          }
+                        }}
+                      >
+                        {translate('position.delete')}
+                      </Button>
+                    )}
+                  </div>
+                </Card>
+              );
+            })
+          )}
+        </section>
+      </div>
+
+      <div {...vorgangSectionPanelProps('amendments', activeSection)}>
+        <VorgangOrderAmendmentPanel
+          vorgang={vorgang}
+          translate={translate}
+          onUpdated={refreshVorgang}
+          onToast={showToast}
+        />
+      </div>
+
+      <div {...vorgangSectionPanelProps('invoices', activeSection)}>
+        <section className="section">
+          <h2 className="section__title">{translate('vorgang.invoices')}</h2>
+          {sortedInvoices.length > 0 && (
+            <Card className="vorgang-invoice-totals">
+              <DataRow
+                label={translate('payment.vorgangOpenTotal')}
+                value={formatPaymentCurrency(paymentTotals.openTotal)}
+              />
+              <DataRow
+                label={translate('payment.vorgangPaidTotal')}
+                value={formatPaymentCurrency(paymentTotals.paidTotal)}
+              />
+            </Card>
+          )}
+          {sortedInvoices.length === 0 ? (
+            <p className="empty-state">{translate('vorgang.noInvoices')}</p>
+          ) : (
+            sortedInvoices.map((inv) => (
+              <InvoiceListCard
+                key={inv.id}
+                vorgangId={vorgang.id}
+                invoice={inv}
+                translate={translate}
+                onInvoiceUpdated={handleInvoiceUpdated}
+                onPaymentToast={handlePaymentToast}
+              />
+            ))
+          )}
+        </section>
+      </div>
 
       <ShowMoreSection
         expanded={showDetails}
@@ -533,7 +562,7 @@ export function VorgangDetailPage() {
         hideLabel={translate('common.showLess')}
         testId="vorgang-detail-show-more"
       >
-        {technicalPanels}
+        {secondaryPanels}
       </ShowMoreSection>
 
       {formMode && (

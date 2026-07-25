@@ -8,6 +8,7 @@ interface CardProps {
   onClick?: () => void;
   highlight?: boolean;
   variant?: CardVariant;
+  'data-testid'?: string;
 }
 
 export function Card({
@@ -16,6 +17,7 @@ export function Card({
   onClick,
   highlight,
   variant = 'default',
+  'data-testid': dataTestId,
 }: CardProps) {
   const Tag = onClick || variant === 'interactive' ? 'button' : 'div';
   const resolvedVariant = highlight ? 'highlight' : variant;
@@ -33,6 +35,7 @@ export function Card({
         .join(' ')}
       onClick={onClick}
       type={isClickable ? 'button' : undefined}
+      data-testid={dataTestId}
     >
       {children}
     </Tag>
