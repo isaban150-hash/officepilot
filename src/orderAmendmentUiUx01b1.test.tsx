@@ -797,7 +797,6 @@ describe('ORDER-AMENDMENT-UI-UX-01B1', () => {
   it('hält Confirm-Pfad unverändert', async () => {
     const draftId = seedDraft();
     ({ root } = renderPanel(container));
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     const cloud = vi
       .spyOn(confirmOrchestrator, 'confirmOrderAmendmentWithCloud')
       .mockImplementation(async () => {
@@ -818,6 +817,16 @@ describe('ORDER-AMENDMENT-UI-UX-01B1', () => {
     await act(async () => {
       (
         container.querySelector('[data-testid="order-amendment-confirm"]') as HTMLButtonElement
+      ).click();
+    });
+    expect(container.querySelector('[data-testid="order-amendment-confirm-dialog"]')).not.toBeNull();
+    expect(cloud).not.toHaveBeenCalled();
+
+    await act(async () => {
+      (
+        container.querySelector(
+          '[data-testid="order-amendment-confirm-dialog-confirm"]',
+        ) as HTMLButtonElement
       ).click();
     });
     expect(cloud).toHaveBeenCalledWith('v-ux-1', draftId);

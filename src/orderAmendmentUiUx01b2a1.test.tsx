@@ -950,7 +950,6 @@ describe('ORDER-AMENDMENT-UI-UX-01B2A1', () => {
           idempotentReplay: false,
         });
 
-      const confirmMock = vi.spyOn(window, 'confirm').mockReturnValue(true);
       ({ root } = renderPanel(container));
 
       await act(async () => {
@@ -958,7 +957,16 @@ describe('ORDER-AMENDMENT-UI-UX-01B2A1', () => {
           container.querySelector('[data-testid="order-amendment-confirm"]') as HTMLButtonElement
         ).click();
       });
-      expect(confirmMock).toHaveBeenCalled();
+      expect(container.querySelector('[data-testid="order-amendment-confirm-dialog"]')).not.toBeNull();
+      expect(confirmSpy).not.toHaveBeenCalled();
+
+      await act(async () => {
+        (
+          container.querySelector(
+            '[data-testid="order-amendment-confirm-dialog-confirm"]',
+          ) as HTMLButtonElement
+        ).click();
+      });
       expect(confirmSpy).toHaveBeenCalledTimes(1);
 
       // After mocked confirm without local apply, draft may still show — assert CTA path only.
@@ -966,7 +974,6 @@ describe('ORDER-AMENDMENT-UI-UX-01B2A1', () => {
       expect(confirmSpy.mock.calls[0]?.[1]).toBe(draftId);
 
       act(() => root.unmount());
-      confirmMock.mockRestore();
     });
 
     it('parst deutsche Dezimalwerte ohne Leereingabe zu 0', () => {

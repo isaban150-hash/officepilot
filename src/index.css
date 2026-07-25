@@ -4927,6 +4927,61 @@ body {
   flex: 1 1 auto;
 }
 
+.order-amendment-confirm-dialog__body {
+  margin-bottom: 1rem;
+}
+
+.order-amendment-confirm-dialog__summary {
+  margin: 0 0 0.85rem;
+  padding: 0;
+}
+
+.order-amendment-confirm-dialog__row {
+  display: grid;
+  grid-template-columns: minmax(5.5rem, 35%) 1fr;
+  gap: 0.35rem 0.75rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--op-border, var(--color-border));
+  font-size: 0.9rem;
+}
+
+.order-amendment-confirm-dialog__row:last-child {
+  border-bottom: none;
+}
+
+.order-amendment-confirm-dialog__row dt {
+  margin: 0;
+  color: var(--op-text-muted, var(--color-text-muted));
+  font-weight: 500;
+}
+
+.order-amendment-confirm-dialog__row dd {
+  margin: 0;
+  color: var(--op-text, var(--color-text));
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.order-amendment-confirm-dialog__impact,
+.order-amendment-confirm-dialog__no-invoice {
+  margin: 0.55rem 0 0;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--op-text-muted, var(--color-text-muted));
+}
+
+.order-amendment-confirm-dialog__no-invoice {
+  color: var(--op-text, var(--color-text));
+}
+
+.order-amendment-confirm-dialog__actions {
+  margin-top: 0.25rem;
+}
+
+.order-amendment-confirm-dialog__actions .btn {
+  min-height: 44px;
+}
+
 .order-amendment-status-banner {
   margin: 0.75rem 0;
   padding: 0.85rem 0.9rem;
@@ -5101,12 +5156,14 @@ body {
     align-items: center;
   }
 
-  .vorgang-dialog-backdrop:has(.order-amendment-position-editor-dialog) {
+  .vorgang-dialog-backdrop:has(.order-amendment-position-editor-dialog),
+  .vorgang-dialog-backdrop:has(.order-amendment-confirm-dialog) {
     align-items: center;
     padding: 1.5rem;
   }
 
-  .order-amendment-position-editor-dialog {
+  .order-amendment-position-editor-dialog,
+  .order-amendment-confirm-dialog {
     border-radius: var(--radius);
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
   }

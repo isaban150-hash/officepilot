@@ -979,10 +979,18 @@ const deLegacy = {
   'orderAmendment.positionRemoved': 'Nachtragsposition entfernt.',
   'orderAmendment.deleteConfirm': 'Nachtragsentwurf wirklich löschen?',
   'orderAmendment.confirm': 'Nachtrag bestätigen',
+  'orderAmendment.confirmDialogTitle': 'Nachtrag bestätigen?',
+  'orderAmendment.confirmSummaryTitle': 'Titel',
+  'orderAmendment.confirmSummaryPositions': 'Positionen',
+  'orderAmendment.confirmSummaryTotal': 'Gesamtwert',
+  'orderAmendment.confirmImpact':
+    'Mit der Bestätigung wird dieser Nachtrag zum Auftrag übernommen und kann danach nicht mehr bearbeitet werden.',
+  'orderAmendment.confirmNoInvoice':
+    'Es wird dadurch keine Rechnung erstellt oder versendet.',
   'orderAmendment.confirmDialog':
-    'Möchten Sie diesen Nachtrag verbindlich bestätigen? Er ist danach nicht mehr bearbeitbar und fließt in Plan und Abrechnung ein.',
+    'Möchten Sie diesen Nachtrag bestätigen? Er ist danach nicht mehr bearbeitbar. Eine Rechnung wird nicht automatisch erstellt oder versendet.',
   'orderAmendment.confirmHint':
-    'Mit der Bestätigung wird der Nachtrag verbindlich und wirkt auf Plan und Abrechnung.',
+    'Nach der Bestätigung kann der Nachtrag nicht mehr bearbeitet werden. Eine Rechnung wird nicht automatisch erstellt.',
   'orderAmendment.confirmedBadge': 'Bestätigt',
   'orderAmendment.confirmedTitle': 'Bestätigte Nachträge',
   'orderAmendment.confirmedLabel': 'Nachtrag {n}',

@@ -19,6 +19,7 @@ import { sortConfirmedOrderAmendments } from '../../services/orderPlanCompositio
 import { formatOrderUnitDisplay } from '../../services/orderUnitMapper';
 import type { OrderAmendment, OrderAmendmentDraftPosition, Vorgang } from '../../types/models';
 import { ConfirmedOrderAmendmentList } from './ConfirmedOrderAmendmentList';
+import { OrderAmendmentConfirmDialog } from './OrderAmendmentConfirmDialog';
 import { OrderAmendmentHeaderForm } from './OrderAmendmentHeaderForm';
 import {
   OrderAmendmentPositionEditor,
@@ -83,9 +84,12 @@ export function VorgangOrderAmendmentPanel({
   const [positionEditor, setPositionEditor] = useState<PositionEditorState>({ type: 'closed' });
   const [positionEditorBusy, setPositionEditorBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [discardOpen, setDiscardOpen] = useState(false);
   const [removePositionId, setRemovePositionId] = useState<string | null>(null);
   const sectionHeadingRef = useRef<HTMLHeadingElement>(null);
+  const confirmReturnFocusRef = useRef<HTMLElement | null>(null);
+  const confirmingRef = useRef(false);
   const discardReturnFocusRef = useRef<HTMLElement | null>(null);
   const removeReturnFocusRef = useRef<HTMLElement | null>(null);
   const addPositionReturnFocusRef = useRef<HTMLElement | null>(null);
@@ -116,6 +120,9 @@ export function VorgangOrderAmendmentPanel({
     !confirming &&
     !draftLocked &&
     (primaryAmendment?.positions.some(isValidLookingPosition) ?? false);
+  const positionEditorOpen = positionEditor.type === 'open';
+  const confirmTriggerDisabled =
+    positionEditorOpen || positionEditorBusy || confirmDialogOpen;
 
   const validationMessage = useMemo(() => {
     if (!primaryAmendment) return null;
@@ -146,6 +153,9 @@ export function VorgangOrderAmendmentPanel({
     setPositionEditor({ type: 'closed' });
     setRemovePositionId(null);
     setDiscardOpen(false);
+    if (!confirmingRef.current) {
+      setConfirmDialogOpen(false);
+    }
   }, [isSectionActive, positionEditorBusy]);
 
   if (!vorgang.contractConfirmation) {
@@ -257,12 +267,27 @@ export function VorgangOrderAmendmentPanel({
     }
   };
 
+  const openConfirmDialog = () => {
+    if (!primaryAmendment || !canConfirm || confirmTriggerDisabled) return;
+    if (confirmingRef.current || confirming) return;
+    confirmReturnFocusRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setConfirmDialogOpen(true);
+  };
+
   const runConfirm = async (options?: { skipDialog?: boolean }) => {
-    if (!primaryAmendment || confirming) return;
+    if (!primaryAmendment) return;
     if (schlussExists) return;
-    if (!options?.skipDialog && !window.confirm(translate('orderAmendment.confirmDialog'))) {
+
+    if (!options?.skipDialog) {
+      openConfirmDialog();
       return;
     }
+
+    // Sync guard before first await — blocks double-click / Enter re-entry.
+    if (confirmingRef.current) return;
+    confirmingRef.current = true;
+    setConfirmDialogOpen(false);
     setConfirming(true);
     try {
       const result = await confirmOrderAmendmentWithCloud(vorgang.id, primaryAmendment.id);
@@ -282,6 +307,7 @@ export function VorgangOrderAmendmentPanel({
       }
       onUpdated();
     } finally {
+      confirmingRef.current = false;
       setConfirming(false);
     }
   };
@@ -487,7 +513,8 @@ export function VorgangOrderAmendmentPanel({
                   {translate('orderAmendment.confirmHint')}
                 </p>
                 <Button
-                  onClick={() => void runConfirm()}
+                  disabled={confirmTriggerDisabled}
+                  onClick={openConfirmDialog}
                   data-testid="order-amendment-confirm"
                 >
                   {translate('orderAmendment.confirm')}
@@ -562,6 +589,29 @@ export function VorgangOrderAmendmentPanel({
           onBusyChange={setPositionEditorBusy}
         />
       ) : null}
+
+      <OrderAmendmentConfirmDialog
+        open={confirmDialogOpen && Boolean(primaryAmendment)}
+        title={translate('orderAmendment.confirmDialogTitle')}
+        titleLabel={translate('orderAmendment.confirmSummaryTitle')}
+        amendmentTitle={primaryAmendment?.title?.trim() || translate('orderAmendment.draftBadge')}
+        positionsLabel={translate('orderAmendment.confirmSummaryPositions')}
+        positionsValue={translate('orderAmendment.positionCount').replace(
+          '{count}',
+          String(primaryAmendment?.positions.length ?? 0),
+        )}
+        totalLabel={translate('orderAmendment.confirmSummaryTotal')}
+        formattedTotal={formatAmendmentMoney(draftTotals?.grandTotal ?? 0)}
+        impactText={translate('orderAmendment.confirmImpact')}
+        noInvoiceText={translate('orderAmendment.confirmNoInvoice')}
+        confirmLabel={translate('orderAmendment.confirm')}
+        cancelLabel={translate('orderAmendment.cancelEdit')}
+        confirming={confirming}
+        returnFocusRef={confirmReturnFocusRef}
+        fallbackFocusRef={sectionHeadingRef}
+        onCancel={() => setConfirmDialogOpen(false)}
+        onConfirm={() => void runConfirm({ skipDialog: true })}
+      />
 
       <SimpleConfirmDialog
         open={discardOpen}

@@ -118,11 +118,21 @@ describe('ORDER-AMENDMENT-01B2 UI', () => {
     seedDraft();
     ({ root } = renderPanel(container));
     const cloud = vi.spyOn(confirmOrchestrator, 'confirmOrderAmendmentWithCloud');
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
 
     await act(async () => {
       (container.querySelector('[data-testid="order-amendment-confirm"]') as HTMLButtonElement).click();
     });
+    expect(container.querySelector('[data-testid="order-amendment-confirm-dialog"]')).not.toBeNull();
+    expect(cloud).not.toHaveBeenCalled();
+
+    await act(async () => {
+      (
+        container.querySelector(
+          '[data-testid="order-amendment-confirm-dialog-cancel"]',
+        ) as HTMLButtonElement
+      ).click();
+    });
+    expect(container.querySelector('[data-testid="order-amendment-confirm-dialog"]')).toBeNull();
     expect(cloud).not.toHaveBeenCalled();
     act(() => root.unmount());
   });
@@ -130,7 +140,6 @@ describe('ORDER-AMENDMENT-01B2 UI', () => {
   it('renders the confirmed badge and removes the draft after success', async () => {
     const draftId = seedDraft();
     ({ root } = renderPanel(container));
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     vi.spyOn(confirmOrchestrator, 'confirmOrderAmendmentWithCloud').mockImplementation(async () => {
       const applied = applyConfirmedOrderAmendmentLocally({
         vorgangId: 'v-test-1',
@@ -148,6 +157,13 @@ describe('ORDER-AMENDMENT-01B2 UI', () => {
 
     await act(async () => {
       (container.querySelector('[data-testid="order-amendment-confirm"]') as HTMLButtonElement).click();
+    });
+    await act(async () => {
+      (
+        container.querySelector(
+          '[data-testid="order-amendment-confirm-dialog-confirm"]',
+        ) as HTMLButtonElement
+      ).click();
     });
     expect(container.querySelector('[data-testid="order-amendment-confirmed-badge"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="order-amendment-draft-card"]')).toBeNull();
