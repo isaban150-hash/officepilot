@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { OrderPositionForm } from '../components/vorgang/OrderPositionForm';
 import { DetailExperienceCard } from '../components/detail/DetailExperienceCard';
-import { Card, CardMeta, CardTitle, DataRow } from '../components/ui/Card';
+import { Badge, Card, CardMeta, CardTitle, DataRow } from '../components/ui/Card';
 import { ShowMoreSection } from '../components/ui/ShowMoreSection';
 import { useApp } from '../context/AppContext';
 import { formatPaperFilingInstruction } from '../services/paperFolderService';
@@ -38,6 +38,10 @@ import {
   type VorgangDetailSection,
 } from '../components/vorgang/VorgangSectionNav';
 import { OrderSummaryPanel } from '../components/vorgang/OrderSummaryPanel';
+import {
+  formatAmendmentMoney,
+  positionLineTotal,
+} from '../components/vorgang/orderAmendmentUiHelpers';
 import { AreaAiPanel } from '../components/ai/AreaAiPanel';
 import {
   formatPaymentCurrency,
@@ -455,8 +459,11 @@ export function VorgangDetailPage() {
               const unitLabel = formatOrderUnitDisplay(pos.unit, pos.unitLabel);
 
               return (
-                <Card key={pos.id} className="order-position-card">
-                  <CardTitle>{pos.description}</CardTitle>
+                <Card key={pos.id} className="order-position-card" data-testid={`order-position-card-${pos.id}`}>
+                  <div className="order-position-card__header">
+                    <Badge tone="default">{translate('order.position.sourceMain')}</Badge>
+                    <CardTitle>{pos.description}</CardTitle>
+                  </div>
                   <DataRow
                     label={translate('execution.plannedQuantity')}
                     value={`${pos.plannedQuantity} ${unitLabel}`}
@@ -471,7 +478,13 @@ export function VorgangDetailPage() {
                   />
                   <DataRow
                     label={translate('invoice.unitPrice')}
-                    value={`${pos.unitPrice.toLocaleString('de-DE')} €`}
+                    value={formatAmendmentMoney(pos.unitPrice)}
+                  />
+                  <DataRow
+                    label={translate('order.position.total')}
+                    value={formatAmendmentMoney(
+                      positionLineTotal(pos.plannedQuantity, pos.unitPrice),
+                    )}
                   />
                   <DataRow
                     label={translate('invoice.alreadyBilled')}

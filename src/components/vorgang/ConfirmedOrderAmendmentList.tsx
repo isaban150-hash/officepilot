@@ -147,7 +147,11 @@ export function ConfirmedOrderAmendmentList({
                           </span>
                         </div>
                         <DataRow
-                          label={translate('orderAmendment.field.quantity')}
+                          label={
+                            position.changeType === 'quantity_increase'
+                              ? translate('orderAmendment.additionalQuantity')
+                              : translate('orderAmendment.field.quantity')
+                          }
                           value={`${position.plannedQuantity} ${formatOrderUnitDisplay(position.unit, position.unitLabel)}`}
                         />
                         <DataRow
