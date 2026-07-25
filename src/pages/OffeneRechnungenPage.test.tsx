@@ -1,4 +1,6 @@
-import { describe, expect, it, beforeEach } from 'vitest';
+import { act, createElement } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { DEFAULT_COMPANY_PROFILE } from '../data/companyProfileDefaults';
@@ -136,7 +138,12 @@ describe('OffeneRechnungenPage', () => {
 });
 
 describe('InvoiceOverviewCard', () => {
-  it('renders invoice details and navigation targets', () => {
+  let container: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
     hydrateVorgangStore([
       createTestVorgang({
         id: 'v-card',
@@ -146,7 +153,16 @@ describe('InvoiceOverviewCard', () => {
         invoices: [createFinalizedInvoice({ id: 'inv-card' })],
       }),
     ]);
+  });
 
+  afterEach(() => {
+    act(() => {
+      root?.unmount();
+    });
+    container.remove();
+  });
+
+  it('renders invoice details and navigation targets', () => {
     const item = getAllInvoiceOverview('2026-06-27')[0];
     const html = renderToStaticMarkup(
       <MemoryRouter>
@@ -161,9 +177,62 @@ describe('InvoiceOverviewCard', () => {
     expect(html).toContain('payment.openAmount');
     expect(html).toContain('invoice.open');
     expect(html).toContain('payment.recordShort');
-    expect(html).toContain('invoice.savePdf');
-    expect(html).toContain('invoice.print');
+    expect(html).toContain('invoice.moreActions');
+    expect(html).not.toContain('invoice.savePdf');
+    expect(html).not.toContain('invoice.print');
     expect(html).toContain('href="/dokumente/doc-archive-1"');
     expect(html).toContain('overview.archive');
+  });
+
+  it('zeigt Öffnen als Primary, Zahlung sichtbar und Druck/PDF im Dropdown', () => {
+    const item = getAllInvoiceOverview('2026-06-27')[0];
+    root = createRoot(container);
+    act(() => {
+      root.render(
+        createElement(
+          MemoryRouter,
+          null,
+          createElement(InvoiceOverviewCard, {
+            item,
+            translate,
+          }),
+        ),
+      );
+    });
+
+    const actions = container.querySelector('[data-testid="invoice-overview-card-actions"]');
+    expect(actions).not.toBeNull();
+
+    const openButton = container.querySelector(
+      '[data-testid="invoice-overview-card-open"]',
+    ) as HTMLButtonElement;
+    expect(openButton).not.toBeNull();
+    expect(openButton.className).toContain('btn--primary');
+    expect(openButton.textContent).toContain('invoice.open');
+
+    const paymentButton = container.querySelector(
+      '[data-testid="invoice-overview-card-payment"]',
+    ) as HTMLButtonElement;
+    expect(paymentButton).not.toBeNull();
+    expect(paymentButton.className).toContain('btn--outline');
+    expect(paymentButton.textContent).toContain('payment.recordShort');
+
+    expect(actions!.querySelector('[data-testid="invoice-overview-card-print"]')).toBeNull();
+    expect(actions!.querySelector('[data-testid="invoice-overview-card-pdf"]')).toBeNull();
+
+    act(() => {
+      (
+        container.querySelector(
+          '[data-testid="invoice-overview-card-more-trigger"]',
+        ) as HTMLButtonElement
+      ).click();
+    });
+
+    const printItem = container.querySelector('[data-testid="invoice-overview-card-print"]');
+    const pdfItem = container.querySelector('[data-testid="invoice-overview-card-pdf"]');
+    expect(printItem).not.toBeNull();
+    expect(pdfItem).not.toBeNull();
+    expect(printItem!.textContent).toContain('invoice.print');
+    expect(pdfItem!.textContent).toContain('invoice.savePdf');
   });
 });

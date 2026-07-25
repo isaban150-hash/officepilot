@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '../ui/Button';
 import { Card, CardMeta, CardTitle, DataRow } from '../ui/Card';
+import { DropdownMenu } from '../ui/DropdownMenu';
 import {
   getPaymentSavedToastKey,
   InvoicePaymentForm,
@@ -84,7 +85,7 @@ export function InvoiceListCard({
 
   return (
     <>
-      <Card className="invoice-list-card">
+      <Card className="invoice-list-card" data-testid="invoice-list-card">
         <CardTitle>{invoiceLabel(currentInvoice, translate)}</CardTitle>
         <CardMeta>
           {currentInvoice.number} · {formatInvoiceDate(currentInvoice.issueDate ?? currentInvoice.date)}
@@ -131,21 +132,40 @@ export function InvoiceListCard({
         )}
 
         {readOnly ? (
-          <div className="invoice-list-card__actions">
-            <Button type="button" onClick={openInvoice}>
+          <div className="invoice-list-card__actions" data-testid="invoice-list-card-actions">
+            <Button type="button" onClick={openInvoice} data-testid="invoice-list-card-open">
               {translate('invoice.open')}
             </Button>
             {!isInvoiceCancelled(currentInvoice) && (
-              <Button type="button" variant="outline" onClick={() => setShowPaymentForm(true)}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowPaymentForm(true)}
+                data-testid="invoice-list-card-payment"
+              >
                 {translate('payment.recordShort')}
               </Button>
             )}
-            <Button type="button" variant="outline" onClick={triggerPrint}>
-              {translate('invoice.print')}
-            </Button>
-            <Button type="button" variant="outline" onClick={triggerPdf}>
-              {translate('invoice.savePdf')}
-            </Button>
+            <DropdownMenu
+              testId="invoice-list-card-more"
+              ariaLabel={translate('invoice.moreActions')}
+              align="end"
+              trigger={<span>{translate('invoice.moreActions')}</span>}
+              items={[
+                {
+                  id: 'print',
+                  label: translate('invoice.print'),
+                  onSelect: triggerPrint,
+                  testId: 'invoice-list-card-print',
+                },
+                {
+                  id: 'pdf',
+                  label: translate('invoice.savePdf'),
+                  onSelect: triggerPdf,
+                  testId: 'invoice-list-card-pdf',
+                },
+              ]}
+            />
           </div>
         ) : (
           <InvoicePaymentBadge status="offen" translate={translate} />

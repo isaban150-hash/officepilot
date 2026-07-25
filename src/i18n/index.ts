@@ -1826,6 +1826,7 @@ const deLegacy = {
   'invoice.pdf.draftNumber': 'Entwürfe ohne Rechnungsnummer können nicht als finale PDF ausgegeben werden.',
   'invoice.pdf.snapshotsMissing': 'Rechnungsdaten sind unvollständig – PDF nicht möglich.',
   'invoice.open': 'Öffnen',
+  'invoice.moreActions': 'Weitere',
   'invoice.grossAmount': 'Brutto',
   'invoice.notFound': 'Rechnung nicht gefunden.',
   'invoice.readOnlyHint': 'Finalisierte Rechnung – nur Ansicht, keine Bearbeitung.',
