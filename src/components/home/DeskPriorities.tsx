@@ -10,10 +10,10 @@ import {
 } from '../../services/homeHintDismissalService';
 import type { TranslationKey } from '../../i18n';
 
-const SEVERITY_EMOJI: Record<HomeHintSeverity, string> = {
-  critical: '🔴',
-  warning: '🟠',
-  info: '🟡',
+const SEVERITY_LABEL_KEY: Record<HomeHintSeverity, TranslationKey> = {
+  critical: 'priority.kritisch',
+  warning: 'priority.hoch',
+  info: 'priority.mittel',
 };
 
 const SNOOZE_OPTIONS: { duration: SnoozeDuration; key: TranslationKey }[] = [
@@ -92,8 +92,13 @@ export function DeskPriorities() {
         {visiblePriorities.map((hint) => (
           <li key={hint.id} className="desk-priorities__item" data-testid={`desk-priority-${hint.id}`}>
             <div className="desk-priorities__content">
-              <span className="desk-priorities__severity" aria-hidden>
-                {SEVERITY_EMOJI[hint.severity]}
+              <span
+                className={`desk-priorities__severity desk-priorities__severity--${hint.severity}`}
+                data-severity={hint.severity}
+                data-testid={`desk-priority-severity-${hint.id}`}
+              >
+                <span className="desk-priorities__severity-dot" aria-hidden />
+                <span className="sr-only">{translate(SEVERITY_LABEL_KEY[hint.severity])}</span>
               </span>
               {hint.route ? (
                 <Link to={hint.route} className="desk-priorities__text">

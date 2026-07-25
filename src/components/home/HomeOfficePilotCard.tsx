@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { ASSISTANT_EXAMPLE_QUESTION_KEYS } from '../../services/officeAssistantService';
 import type { TranslationKey } from '../../i18n';
+import { NavIcon } from '../layout/NavIcon';
 
 export function HomeOfficePilotCard() {
   const { translate } = useApp();
@@ -23,9 +24,7 @@ export function HomeOfficePilotCard() {
   return (
     <section className="mobile-home-card mobile-home-card--assistant" data-testid="home-card-officepilot">
       <div className="mobile-home-card__body">
-        <span className="mobile-home-card__emoji" aria-hidden>
-          🤖
-        </span>
+        <NavIcon id="assistant" className="mobile-home-card__icon" />
         <span className="mobile-home-card__title">{translate('mobile.home.assistantTitle')}</span>
       </div>
 

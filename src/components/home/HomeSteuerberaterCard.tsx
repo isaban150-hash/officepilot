@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
 import { getSteuerberaterMonthOverview } from '../../services/steuerberaterOverviewService';
+import { NavIcon } from '../layout/NavIcon';
 
 export function HomeSteuerberaterCard() {
   const { translate, language } = useApp();
@@ -17,9 +18,7 @@ export function HomeSteuerberaterCard() {
   return (
     <section className="mobile-home-card" data-testid="home-card-steuerberater">
       <div className="mobile-home-card__body">
-        <span className="mobile-home-card__emoji" aria-hidden>
-          🧾
-        </span>
+        <NavIcon id="tax" className="mobile-home-card__icon" />
         <div className="mobile-home-card__content">
           <span className="mobile-home-card__title">{translate('mobile.home.taxTitle')}</span>
           <span className="mobile-home-card__meta">
