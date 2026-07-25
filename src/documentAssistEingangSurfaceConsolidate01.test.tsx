@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { AppProvider } from './context/AppContext';
 import { DEFAULT_SETUP } from './data/mockData';
+import { t, type TranslationKey } from './i18n';
 import { EingangDetailPage } from './pages/EingangDetailPage';
 import { createMockInboxItemFromUpload } from './services/inboxUploadFactory';
 import { hydrateCompanyProfileStore } from './services/companyProfileService';
@@ -19,6 +20,10 @@ import * as documentAiService from './services/document/documentAiService';
 import { setAiGenerateTextForTests } from './services/ai/aiRequestRunner';
 
 const setupComplete = { ...DEFAULT_SETUP, setupComplete: true };
+
+function translate(key: TranslationKey): string {
+  return t(key, 'de');
+}
 
 const testProfile = {
   companyName: 'Mustermann Sanitär GmbH',
@@ -197,8 +202,15 @@ describe('DOCUMENT-ASSIST-EINGANG-SURFACE-CONSOLIDATE-01', () => {
       'data-testid="document-review-experience"',
     );
 
-    // Compact understand: guidance details collapsed by default
-    expect(html).toContain('data-compact="true"');
+    // Non-compact understand: guidance visible; trust/details stay collapsed
+    expect(html).not.toContain('data-compact="true"');
+    expect(html).toContain('data-testid="document-guidance-panel"');
+    expect(html).toContain(translate('docGuidance.title'));
+    expect(html).toContain('data-testid="doc-assistant-details"');
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).not.toContain('data-testid="review-section-content-assistant-details"');
+    expect(html).not.toContain(`>${translate('docAssistant.section.steuerberater')}<`);
+    expect(html).not.toContain(`>${translate('docAssistant.section.trust')}<`);
     // Primary lane has no generic communication integration
     expect(html).not.toContain('data-testid="eingang-communication"');
   });

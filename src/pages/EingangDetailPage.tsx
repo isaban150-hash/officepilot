@@ -1116,9 +1116,7 @@ export function EingangDetailPage() {
         workflow={workflow}
         translate={translate}
         language={setup.language}
-        compactForContractWorkspace={
-          prioritizeContractWorkspace || useAssistFlowConsolidate
-        }
+        compactForContractWorkspace={prioritizeContractWorkspace}
         showChangeType
         onChangeType={() => {
           setMoreOptionsExpanded(true);
