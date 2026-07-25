@@ -39,6 +39,7 @@ import {
 } from '../components/vorgang/VorgangSectionNav';
 import { OrderSummaryPanel } from '../components/vorgang/OrderSummaryPanel';
 import {
+  formatAmendmentChangeTypeLabel,
   formatAmendmentMoney,
   positionLineTotal,
 } from '../components/vorgang/orderAmendmentUiHelpers';
@@ -455,11 +456,18 @@ export function VorgangDetailPage() {
               const deletable = !planLocked && canDeleteOrderPosition(vorgang, pos.id);
 
               const unitLabel = formatOrderUnitDisplay(pos.unit, pos.unitLabel);
+              const changeType = pos.amendmentChangeType;
+              const isAmendmentSourced =
+                changeType === 'add' || changeType === 'quantity_increase';
 
               return (
                 <Card key={pos.id} className="order-position-card" data-testid={`order-position-card-${pos.id}`}>
                   <div className="order-position-card__header">
-                    <Badge tone="default">{translate('order.position.sourceMain')}</Badge>
+                    <Badge tone={isAmendmentSourced ? 'info' : 'default'}>
+                      {isAmendmentSourced
+                        ? formatAmendmentChangeTypeLabel(changeType, translate)
+                        : translate('order.position.sourceMain')}
+                    </Badge>
                     <CardTitle>{pos.description}</CardTitle>
                   </div>
                   <DataRow

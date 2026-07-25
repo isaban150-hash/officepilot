@@ -523,6 +523,76 @@ describe('ORDER-AMENDMENT-UI-UX-01B2B', () => {
       act(() => root.unmount());
     });
 
+    it('kennzeichnet Basis-, Zusatz- und Mehrmengen-Positionen in der Hauptliste per Badge', () => {
+      seedRunning({
+        confirmedOrderAmendments: [
+          {
+            cloudId: 'cloud-badge-1',
+            clientAmendmentId: 'draft-badge-1',
+            vorgangId: 'v-b2b',
+            sequenceNo: 1,
+            status: 'bestaetigt',
+            title: 'Nachtrag Badge',
+            positions: [
+              {
+                id: 'op-add',
+                changeType: 'add',
+                description: 'Zusatzleistung',
+                plannedQuantity: 1,
+                unit: 'Stück',
+                unitPrice: 10,
+              },
+              {
+                id: 'op-qi',
+                changeType: 'quantity_increase',
+                description: 'Mehrmenge A',
+                plannedQuantity: 2,
+                unit: 'Stunden',
+                unitPrice: 65,
+                parentPositionId: 'op-b2b-1',
+              },
+            ],
+            contentFingerprint: 'fp-badge',
+            confirmedAt: '2026-07-24T15:00:00.000Z',
+            confirmedBy: 'tester',
+            rowVersion: 1,
+            createdAt: '2026-07-24T15:00:00.000Z',
+            updatedAt: '2026-07-24T15:00:00.000Z',
+          },
+        ],
+      });
+      root = renderPage(container);
+
+      act(() => {
+        (
+          container.querySelector('[data-testid="vorgang-section-tab-order"]') as HTMLButtonElement
+        ).click();
+      });
+
+      const baseCard = container.querySelector('[data-testid="order-position-card-op-b2b-1"]');
+      const addCard = container.querySelector('[data-testid="order-position-card-op-add"]');
+      const qiCard = container.querySelector('[data-testid="order-position-card-op-qi"]');
+      expect(baseCard).not.toBeNull();
+      expect(addCard).not.toBeNull();
+      expect(qiCard).not.toBeNull();
+
+      expect(baseCard!.textContent).toContain(translate('order.position.sourceMain'));
+      expect(baseCard!.textContent).not.toContain(translate('orderAmendment.changeType.add'));
+      expect(baseCard!.textContent).not.toContain(
+        translate('orderAmendment.changeType.quantity_increase'),
+      );
+
+      expect(addCard!.textContent).toContain(translate('orderAmendment.changeType.add'));
+      expect(addCard!.textContent).not.toContain(translate('order.position.sourceMain'));
+
+      expect(qiCard!.textContent).toContain(
+        translate('orderAmendment.changeType.quantity_increase'),
+      );
+      expect(qiCard!.textContent).not.toContain(translate('order.position.sourceMain'));
+
+      act(() => root.unmount());
+    });
+
     it('zeigt Zusätzliche Menge in expandierten bestätigten Details', () => {
       seedRunning({
         confirmedOrderAmendments: [
