@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Card, CardMeta, CardTitle } from '../ui/Card';
-import { Button } from '../ui/Button';
+import { Button, type ButtonVariant } from '../ui/Button';
 import { useApp } from '../../context/AppContext';
 import {
   formatPaperLocationSummary,
@@ -16,9 +16,15 @@ import { getDocumentById } from '../../services/documentService';
 interface DocumentFilingCardProps {
   documentId: string;
   onChanged?: () => void;
+  /** Visual emphasis only; handler and confirm-first behavior stay unchanged. Default primary. */
+  markFiledVariant?: ButtonVariant;
 }
 
-export function DocumentFilingCard({ documentId, onChanged }: DocumentFilingCardProps) {
+export function DocumentFilingCard({
+  documentId,
+  onChanged,
+  markFiledVariant = 'primary',
+}: DocumentFilingCardProps) {
   const { translate, showToast } = useApp();
   const [revision, setRevision] = useState(0);
 
@@ -112,6 +118,7 @@ export function DocumentFilingCard({ documentId, onChanged }: DocumentFilingCard
           <div className="detail-experience-card__actions">
             <Button
               fullWidth
+              variant={markFiledVariant}
               onClick={handleMarkFiled}
               data-testid="document-filing-mark-filed"
             >

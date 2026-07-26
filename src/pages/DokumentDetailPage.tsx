@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { DocumentUnderstandingCard } from '../components/documents/DocumentUnderstandingCard';
 import { DocumentDetailPreview } from '../components/documents/DocumentDetailPreview';
@@ -18,6 +18,7 @@ import { ShowMoreSection } from '../components/ui/ShowMoreSection';
 import { useApp } from '../context/AppContext';
 import { formatPaperFilingInstruction } from '../services/paperFolderService';
 import { deleteDocument, getDocumentById } from '../services/documentService';
+import { resolveDocumentLifecycle } from '../services/documentLifecycleService';
 import { recordDocumentContext } from '../services/brain/companySessionService';
 import type { CompanyDocument } from '../types/models';
 import type { TranslationKey } from '../i18n';
@@ -100,22 +101,65 @@ export function DokumentDetailPage() {
     );
   }
 
-  const primaryActions = (
-    <>
-      <Button fullWidth onClick={() => navigate(`/kommunikation?context=document&id=${document.id}`)}>
-        {translate('detail.action.writeMessage')}
-      </Button>
-      {document.linkedVorgang && (
-        <Button
-          variant="outline"
-          fullWidth
-          onClick={() => navigate(`/vorgaenge/${document.linkedVorgang!.vorgangId}`)}
-        >
-          {translate('detail.action.openOrder')}
-        </Button>
-      )}
-    </>
+  const lifecycle = resolveDocumentLifecycle({ documentId: document.id });
+  const openReasons = lifecycle?.openReasons ?? [];
+  const lifecycleResolved = lifecycle != null;
+  const replyOpen = lifecycleResolved && openReasons.includes('reply_open');
+  const fileOriginalOpen = lifecycleResolved && openReasons.includes('file_original');
+  const otherOpen =
+    lifecycleResolved && openReasons.length > 0 && !replyOpen && !fileOriginalOpen;
+  /** Fallback when lifecycle cannot be resolved: keep previous Experience reply CTA. */
+  const showReplyPrimary = replyOpen || !lifecycleResolved;
+  const filingMarkPrimary = Boolean(fileOriginalOpen && !replyOpen);
+
+  const openOrderButton = document.linkedVorgang ? (
+    <Button
+      key="open-order"
+      variant="outline"
+      fullWidth
+      data-testid="document-detail-open-order"
+      onClick={() => navigate(`/vorgaenge/${document.linkedVorgang!.vorgangId}`)}
+    >
+      {translate('detail.action.openOrder')}
+    </Button>
+  ) : null;
+
+  const replyButton = (
+    <Button
+      key="reply"
+      fullWidth
+      data-testid="document-detail-reply-action"
+      onClick={() => navigate(`/kommunikation?context=document&id=${document.id}`)}
+    >
+      {translate('detail.action.writeMessage')}
+    </Button>
   );
+
+  let experienceActions: ReactNode;
+  if (showReplyPrimary) {
+    experienceActions = (
+      <>
+        {replyButton}
+        {openOrderButton}
+      </>
+    );
+  } else if (fileOriginalOpen) {
+    experienceActions = openOrderButton;
+  } else if (otherOpen) {
+    experienceActions = (
+      <>
+        <p
+          className="detail-experience-section__value detail-experience-section__value--assistant"
+          data-testid="document-detail-next-step"
+        >
+          {lifecycle.nextStep}
+        </p>
+        {openOrderButton}
+      </>
+    );
+  } else {
+    experienceActions = openOrderButton;
+  }
 
   const technicalPanels = (
     <>
@@ -256,7 +300,7 @@ export function DokumentDetailPage() {
         recognizedSummary={categoryLabel}
         assistantMessage={translate('document.experience.saved')}
         paperInstruction={paperInstruction}
-        actions={primaryActions}
+        actions={experienceActions}
         testId="document-detail-experience"
       />
 
@@ -264,6 +308,7 @@ export function DokumentDetailPage() {
 
       <DocumentFilingCard
         documentId={document.id}
+        markFiledVariant={filingMarkPrimary ? 'primary' : 'outline'}
         onChanged={() => setDetailRevision((value) => value + 1)}
       />
 
