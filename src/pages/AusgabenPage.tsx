@@ -44,7 +44,24 @@ export function AusgabenPage() {
 
   return (
     <div className="page">
-      <PageHeader title={translate('expense.title')} subtitle={translate('expense.subtitle')} />
+      <PageHeader
+        title={translate('expense.title')}
+        subtitle={translate('expense.subtitle')}
+        primaryAction={
+          <Link to="/ausgaben/neu">
+            <Button variant="primary" fullWidth>
+              {translate('expense.add')}
+            </Button>
+          </Link>
+        }
+        secondaryAction={
+          <Link to="/ausgaben/offen">
+            <Button variant="outline" fullWidth>
+              {translate('expense.openLiabilities')}
+            </Button>
+          </Link>
+        }
+      />
 
       <Card className="expense-summary-card">
         <CardMeta>
@@ -52,19 +69,6 @@ export function AusgabenPage() {
           {translate('expense.summaryTotal').replace('{amount}', formatEuro(summary.totalGrossAmount))}
         </CardMeta>
       </Card>
-
-      <div className="page-header__actions">
-        <Link to="/ausgaben/neu">
-          <Button variant="primary" fullWidth>
-            {translate('expense.add')}
-          </Button>
-        </Link>
-        <Link to="/ausgaben/offen">
-          <Button variant="outline" fullWidth>
-            {translate('expense.openLiabilities')}
-          </Button>
-        </Link>
-      </div>
 
       <div className="document-toolbar">
         <input

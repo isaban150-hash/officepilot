@@ -66,20 +66,24 @@ export function DokumentePage() {
 
   return (
     <div className="page">
-      <PageHeader title={translate('document.title')} subtitle={translate('document.subtitle')} />
-
-      <div className="page-header__actions page-header__actions--row">
-        <Link to="/dokumente/upload">
-          <Button variant="primary" fullWidth data-testid="document-upload-link">
-            {translate('document.upload.action')}
-          </Button>
-        </Link>
-        <Link to="/dokumente/neu">
-          <Button variant="outline" fullWidth>
-            {translate('document.add')}
-          </Button>
-        </Link>
-      </div>
+      <PageHeader
+        title={translate('document.title')}
+        subtitle={translate('document.subtitle')}
+        primaryAction={
+          <Link to="/dokumente/upload">
+            <Button variant="primary" fullWidth data-testid="document-upload-link">
+              {translate('document.upload.action')}
+            </Button>
+          </Link>
+        }
+        secondaryAction={
+          <Link to="/dokumente/neu">
+            <Button variant="outline" fullWidth>
+              {translate('document.add')}
+            </Button>
+          </Link>
+        }
+      />
 
       <UploadedDocumentsSection items={uploads} />
 
