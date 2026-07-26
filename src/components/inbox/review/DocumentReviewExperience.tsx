@@ -116,7 +116,8 @@ export function DocumentReviewExperience({
           onOpenArchive={onOpenArchive}
           onNextDocument={onNextDocument}
         />
-      ) : workflow.contractOrderProposal ? (
+      ) : workflow.contractOrderProposal &&
+        workflow.contractOrderProposal.positions.length > 0 ? (
         <div className="document-review-experience__primary" data-testid="document-review-primary-action">
           <Button
             variant="outline"

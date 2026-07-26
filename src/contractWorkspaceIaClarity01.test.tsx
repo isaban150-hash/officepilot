@@ -72,6 +72,16 @@ function buildProposal(overrides?: {
         status: 'confirmed',
         confidence: 'high',
       },
+      zahlungsbedingungen: {
+        value: '30 Tage netto',
+        status: 'confirmed',
+        confidence: 'high',
+      },
+      baustelle: {
+        value: 'Möhnetal 55, 59602 Rüthen',
+        status: 'confirmed',
+        confidence: 'high',
+      },
     },
     positions,
     paymentTerms: [],
@@ -120,7 +130,7 @@ function linkedItem(): InboxItem {
 }
 
 describe('CONTRACT-WORKSPACE-IA-CLARITY-01', () => {
-  it('Fall A: Abschnitte Vertragsdaten → Positionen → Status in Reihenfolge', () => {
+  it('Fall A: Übersicht → Parteien → Allgemein → Typabhängig → Positionen → Status', () => {
     const proposal = buildProposal();
     const item = linkedItem();
     const vorgang = buildVorgang();
@@ -129,21 +139,37 @@ describe('CONTRACT-WORKSPACE-IA-CLARITY-01', () => {
       createElement(ContractWorkspaceSummary, { proposal, item, vorgang, translate }),
     );
 
-    expect(html).toContain('data-testid="contract-workspace-summary-section-contract"');
+    expect(html).toContain('data-testid="contract-workspace-summary-section-overview"');
+    expect(html).toContain('data-testid="contract-workspace-summary-section-parties"');
+    expect(html).toContain('data-testid="contract-workspace-summary-section-general"');
+    expect(html).toContain('data-testid="contract-workspace-summary-section-type-specific"');
     expect(html).toContain('data-testid="contract-workspace-summary-section-positions"');
     expect(html).toContain('data-testid="contract-workspace-summary-section-status"');
-    expect(html).toContain('Vertragsdaten');
+    expect(html).toContain('Vertragsübersicht');
+    expect(html).toContain('Vertragsparteien');
+    expect(html).toContain('Allgemeine Vertragsdaten');
+    expect(html).toContain('Typabhängige Vertragsdaten');
     expect(html).toContain('Positionen');
     expect(html).toContain('Status');
 
     assertOrder(
       html,
-      'data-testid="contract-workspace-summary-section-contract"',
-      'data-testid="contract-workspace-summary-rows"',
+      'data-testid="contract-workspace-summary-section-overview"',
+      'data-testid="contract-workspace-summary-section-parties"',
     );
     assertOrder(
       html,
-      'data-testid="contract-workspace-summary-rows"',
+      'data-testid="contract-workspace-summary-section-parties"',
+      'data-testid="contract-workspace-summary-section-general"',
+    );
+    assertOrder(
+      html,
+      'data-testid="contract-workspace-summary-section-general"',
+      'data-testid="contract-workspace-summary-section-type-specific"',
+    );
+    assertOrder(
+      html,
+      'data-testid="contract-workspace-summary-section-type-specific"',
       'data-testid="contract-workspace-summary-section-positions"',
     );
     assertOrder(
@@ -173,14 +199,14 @@ describe('CONTRACT-WORKSPACE-IA-CLARITY-01', () => {
       createElement(ContractWorkspaceSummary, { proposal, item, vorgang, translate }),
     );
 
-    expect(html).toContain('data-testid="contract-workspace-summary-section-contract"');
+    expect(html).toContain('data-testid="contract-workspace-summary-section-overview"');
     expect(html).toContain('data-testid="contract-workspace-summary-section-status"');
     expect(html).not.toContain('data-testid="contract-workspace-summary-section-positions"');
-    expect(html).toContain('Vertragsdaten');
+    expect(html).toContain('Vertragsübersicht');
     expect(html).toContain('Status');
   });
 
-  it('Fall C: Proposal-Intro hat genau einen allgemeinen Instruktionsabsatz', () => {
+  it('Fall C: Proposal-Intro hat genau einen allgemeinen Instruktionsabsatz ohne doppelte Übersicht', () => {
     const proposal = buildProposal();
     const html = renderToStaticMarkup(
       createElement(ContractOrderProposalPanel, {
@@ -200,6 +226,7 @@ describe('CONTRACT-WORKSPACE-IA-CLARITY-01', () => {
     expect(paragraphCount).toBe(1);
 
     expect(introHtml).toContain(translate('documentIntelligence.proposal.instruction'));
+    expect(introHtml).not.toContain(translate('documentIntelligence.workspace.section.overview'));
     expect(introHtml).not.toContain(translate('documentIntelligence.proposal.reviewHint'));
     expect(introHtml).not.toContain(translate('documentIntelligence.proposal.onlySelectedHint'));
     expect(introHtml).not.toContain(translate('documentIntelligence.proposal.unsureNotSelectedHint'));
@@ -207,6 +234,10 @@ describe('CONTRACT-WORKSPACE-IA-CLARITY-01', () => {
     // Eigenständige Hinweise bleiben außerhalb des Intro-Blocks.
     expect(html).toContain('data-testid="contract-progress-billing-hint"');
     expect(html).toContain('data-testid="contract-technical-attachments-hint"');
+
+    // Overview appears once in the summary, not duplicated in the intro.
+    const overviewMatches = html.match(/Vertragsübersicht/g) ?? [];
+    expect(overviewMatches.length).toBe(1);
   });
 
   it('Fall D: Titel, DataRows, Review-Hints und Tabelle bleiben', () => {

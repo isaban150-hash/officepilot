@@ -1,0 +1,808 @@
+import type {
+  ContractFamily,
+  ContractPartyRole,
+  DetectedContractClause,
+  DetectedContractClauseId,
+  DetectedContractParty,
+  DetectedContractType,
+  DocumentPageText,
+  ExtractedContractField,
+  FieldConfidenceLevel,
+} from '../types/documentIntelligence';
+import { joinSectionText } from './documentSegmentationService';
+
+export const CONSTRUCTION_FAMILIES = new Set<ContractFamily>([
+  'werkvertrag',
+  'subunternehmervertrag',
+]);
+
+/** Type-specific field keys that must not appear for other families. */
+export const TYPE_SPECIFIC_FIELD_KEYS: Record<ContractFamily, readonly string[]> = {
+  werkvertrag: [
+    'auftraggeber',
+    'auftragnehmer',
+    'bauvorhaben',
+    'baustelle',
+    'ausfuehrungsbeginn',
+    'fertigstellung',
+    'stundenlohn',
+    'wartezeitregelung',
+    'sicherheitseinbehalt',
+    'vertragsstrafe',
+    'bgBau',
+    'sokaBau',
+  ],
+  subunternehmervertrag: [
+    'auftraggeber',
+    'auftragnehmer',
+    'bauvorhaben',
+    'baustelle',
+    'ausfuehrungsbeginn',
+    'fertigstellung',
+    'stundenlohn',
+    'wartezeitregelung',
+    'sicherheitseinbehalt',
+    'vertragsstrafe',
+    'bgBau',
+    'sokaBau',
+  ],
+  dienstleistungsvertrag: [
+    'leistungsbeschreibung',
+    'leistungsintervall',
+    'reaktionszeit',
+    'servicezeit',
+    'pauschale',
+    'stundenverrechnungssatz',
+    'materialkosten',
+  ],
+  wartungsvertrag: [
+    'leistungsbeschreibung',
+    'leistungsintervall',
+    'reaktionszeit',
+    'servicezeit',
+    'pauschale',
+    'stundenverrechnungssatz',
+    'materialkosten',
+  ],
+  mietvertrag: [
+    'vermieter',
+    'mieter',
+    'mietobjekt',
+    'mietbeginn',
+    'kaltmiete',
+    'nebenkosten',
+    'kaution',
+    'indexierung',
+  ],
+  leasingvertrag: [
+    'leasinggeber',
+    'leasingnehmer',
+    'leasingobjekt',
+    'leasingrate',
+    'sonderzahlung',
+    'kilometergrenze',
+    'restwert',
+    'rueckgabe',
+  ],
+  liefervertrag: [
+    'verkaeufer',
+    'kaeufer',
+    'liefergegenstand',
+    'liefermenge',
+    'liefertermin',
+    'lieferort',
+    'eigentumsvorbehalt',
+  ],
+  kaufvertrag: [
+    'verkaeufer',
+    'kaeufer',
+    'liefergegenstand',
+    'liefermenge',
+    'liefertermin',
+    'lieferort',
+    'eigentumsvorbehalt',
+  ],
+  rahmenvertrag: ['rahmenvolumen', 'abrufregelung'],
+  versicherungsvertrag: [
+    'versicherer',
+    'versicherungsnehmer',
+    'versicherungsart',
+    'versicherungsschein',
+    'beitrag',
+    'deckung',
+    'selbstbeteiligung',
+  ],
+  arbeitsvertrag: [
+    'arbeitgeber',
+    'arbeitnehmer',
+    'taetigkeit',
+    'eintrittsdatum',
+    'arbeitsort',
+    'arbeitszeit',
+    'probezeit',
+    'urlaub',
+    'befristung',
+  ],
+  general_contract: [],
+  unknown: [],
+};
+
+const COMMON_FIELD_KEYS = [
+  'vertragsnummer',
+  'vertragsdatum',
+  'beginn',
+  'laufzeit',
+  'ende',
+  'kuendigungsfrist',
+  'verlaengerung',
+  'vertragsgegenstand',
+  'leistungsort',
+  'zahlungsbedingungen',
+  'gewaehrleistung',
+  'haftung',
+  'ansprechpartner',
+] as const;
+
+type FamilyRule = {
+  family: ContractFamily;
+  labelKey: string;
+  heading: RegExp;
+  roles: RegExp;
+  topics: RegExp;
+};
+
+const FAMILY_RULES: FamilyRule[] = [
+  {
+    family: 'subunternehmervertrag',
+    labelKey: 'documentIntelligence.label.subunternehmervertrag',
+    heading: /bau[\s-]?subunternehmervertrag|subunternehmervertrag|nachunternehmervertrag/i,
+    roles: /subunternehmer|nachunternehmer/i,
+    topics: /baustelle|leistungsverzeichnis|behinderungsanzeige|bg[\s-]?bau/i,
+  },
+  {
+    family: 'werkvertrag',
+    labelKey: 'documentIntelligence.label.werkvertrag',
+    heading: /\bwerkvertrag\b|\bbauvertrag\b/i,
+    roles: /auftraggeber|auftragnehmer|subunternehmer/i,
+    // "Abnahme" alone is too weak — common in non-construction contracts.
+    topics: /baustelle|bauvorhaben|leistungsverzeichnis|gewerk|behinderungsanzeige/i,
+  },
+  {
+    family: 'wartungsvertrag',
+    labelKey: 'documentIntelligence.label.wartungsvertrag',
+    heading: /\bwartungsvertrag\b|\bwartungsvertrages\b/i,
+    roles: /dienstleister|auftraggeber|kunde/i,
+    topics: /wartungsintervall|reaktionszeit|servicezeit|wartungs?pauschale/i,
+  },
+  {
+    family: 'dienstleistungsvertrag',
+    labelKey: 'documentIntelligence.label.dienstleistungsvertrag',
+    heading: /\bdienstleistungsvertrag\b|\bservicevertrag\b/i,
+    roles: /dienstleister|auftraggeber|kunde/i,
+    topics: /leistungsbeschreibung|reaktionszeit|stundensatz|pauschale/i,
+  },
+  {
+    family: 'mietvertrag',
+    labelKey: 'documentIntelligence.label.mietvertrag',
+    heading: /\bmietvertrag\b|\bmietvertrages\b/i,
+    roles: /vermieter|mieter/i,
+    topics: /kaltmiete|nebenkosten|kaution|mietobjekt|mietbeginn/i,
+  },
+  {
+    family: 'leasingvertrag',
+    labelKey: 'documentIntelligence.label.leasingvertrag',
+    heading: /\bleasingvertrag\b|\bleasingvertrages\b/i,
+    roles: /leasinggeber|leasingnehmer/i,
+    topics: /leasingrate|restwert|kilometer|sonderzahlung|leasingobjekt/i,
+  },
+  {
+    family: 'liefervertrag',
+    labelKey: 'documentIntelligence.label.liefervertrag',
+    heading: /\bliefervertrag\b|\bliefervertrages\b/i,
+    roles: /lieferant|käufer|verkäufer|besteller/i,
+    topics: /liefertermin|lieferort|eigentumsvorbehalt|waren/i,
+  },
+  {
+    family: 'kaufvertrag',
+    labelKey: 'documentIntelligence.label.kaufvertrag',
+    heading: /\bkaufvertrag\b|\bkaufvertrages\b/i,
+    roles: /verkäufer|käufer|verk[äa]ufer|k[äa]ufer/i,
+    topics: /kaufgegenstand|eigentumsvorbehalt|kaufpreis/i,
+  },
+  {
+    family: 'rahmenvertrag',
+    labelKey: 'documentIntelligence.label.rahmenvertrag',
+    heading: /\brahmenvertrag\b|\brahmenvertrages\b/i,
+    roles: /auftraggeber|auftragnehmer|lieferant/i,
+    topics: /abruf|rahmenvolumen|einzelauftrag/i,
+  },
+  {
+    family: 'versicherungsvertrag',
+    labelKey: 'documentIntelligence.label.versicherungsvertrag',
+    heading: /\bversicherungsvertrag\b|versicherungsschein\b/i,
+    roles: /versicherer|versicherungsnehmer/i,
+    topics: /selbstbeteiligung|versicherungssumme|beitrag|deckung/i,
+  },
+  {
+    family: 'arbeitsvertrag',
+    labelKey: 'documentIntelligence.label.arbeitsvertrag',
+    heading: /\barbeitsvertrag\b|\banstellungsvertrag\b/i,
+    roles: /arbeitgeber|arbeitnehmer/i,
+    topics: /probezeit|urlaub|wochenarbeitszeit|bruttogehalt|eintrittsdatum/i,
+  },
+];
+
+/** Require an explicit label colon so signatures like "Unterschrift Auftragnehmer" do not capture the next line. */
+const PARTY_PATTERNS: Array<{ role: ContractPartyRole; pattern: RegExp }> = [
+  { role: 'auftraggeber', pattern: /auftraggeber(?:in)?\s*:\s*([^\n]+)/i },
+  { role: 'auftragnehmer', pattern: /auftragnehmer(?:in)?\s*:\s*([^\n]+)/i },
+  { role: 'subunternehmer', pattern: /subunternehmer(?:in)?\s*:\s*([^\n]+)/i },
+  { role: 'nachunternehmer', pattern: /nachunternehmer(?:in)?\s*:\s*([^\n]+)/i },
+  { role: 'vermieter', pattern: /vermieter(?:in)?\s*:\s*([^\n]+)/i },
+  { role: 'mieter', pattern: /mieter(?:in)?\s*:\s*([^\n]+)/i },
+  { role: 'leasinggeber', pattern: /leasinggeber(?:in)?\s*:\s*([^\n]+)/i },
+  { role: 'leasingnehmer', pattern: /leasingnehmer(?:in)?\s*:\s*([^\n]+)/i },
+  { role: 'verkaeufer', pattern: /verk[äa]ufer(?:in)?\s*:\s*([^\n]+)/i },
+  { role: 'kaeufer', pattern: /k[äa]ufer(?:in)?\s*:\s*([^\n]+)/i },
+  { role: 'versicherer', pattern: /versicherer\s*:\s*([^\n]+)/i },
+  { role: 'versicherungsnehmer', pattern: /versicherungsnehmer(?:in)?\s*:\s*([^\n]+)/i },
+  { role: 'arbeitgeber', pattern: /arbeitgeber(?:in)?\s*:\s*([^\n]+)/i },
+  { role: 'arbeitnehmer', pattern: /arbeitnehmer(?:in)?\s*:\s*([^\n]+)/i },
+  { role: 'dienstleister', pattern: /dienstleister\s*:\s*([^\n]+)/i },
+  { role: 'kunde', pattern: /kunde\s*:\s*([^\n]+)/i },
+];
+
+const CLAUSE_RULES: Array<{
+  id: DetectedContractClauseId;
+  patterns: RegExp[];
+  context: RegExp;
+  reject?: RegExp;
+}> = [
+  {
+    id: 'nachtraege',
+    patterns: [/nachtr[äa]ge?\b/i],
+    context: /nachtr[äa]ge?.{0,40}(?:schriftform|bedürfen|beduerfen|vereinbarung)/i,
+  },
+  {
+    id: 'behinderungsanzeige',
+    patterns: [/behinderungsanzeige/i],
+    context: /behinderungsanzeige.{0,60}(?:unverzüglich|schriftlich|anzeigen)/i,
+  },
+  {
+    id: 'materialbereitstellung',
+    patterns: [/materialbereitstellung/i],
+    context: /materialbereitstellung.{0,80}(?:erfolgt|stellt|auftrag)/i,
+  },
+  {
+    id: 'baustrom',
+    patterns: [/baustrom/i],
+    context: /baustrom.{0,60}(?:stellt|bereit|kostenfrei|auftrag)/i,
+  },
+  {
+    id: 'bauwasser',
+    patterns: [/bauwasser/i],
+    context: /bauwasser.{0,60}(?:stellt|bereit|kostenfrei|auftrag)/i,
+  },
+  {
+    id: 'geruest',
+    patterns: [/gerüst|geruest/i],
+    context: /(?:gerüst|geruest).{0,60}(?:stellt|gestellt|bereit|bedarf)/i,
+  },
+  {
+    id: 'kran',
+    patterns: [/\bkran\b/i],
+    context: /\bkran\b.{0,60}(?:stellt|gestellt|bereit|bedarf)/i,
+  },
+  {
+    id: 'entsorgung',
+    patterns: [/entsorgung/i],
+    context: /entsorgung.{0,80}(?:obliegt|erfolgt|auftrag|bauschutt)/i,
+  },
+  {
+    id: 'stundenlohnarbeiten',
+    patterns: [/stundenlohnarbeiten/i],
+    context: /stundenlohnarbeiten.{0,80}(?:freigabe|nur nach|vorherig|vereinbarung)/i,
+    reject: /^stundenlohn\s*:/im,
+  },
+  {
+    id: 'wartezeit',
+    patterns: [/wartezeitregelung/i],
+    context: /wartezeitregelung[:\s].{5,}/i,
+  },
+  {
+    id: 'kuendigung',
+    patterns: [/kündigungsfrist|kuendigungsfrist|kündigung\s+aus\s+wichtigem/i],
+    context: /(?:kündigungsfrist|kuendigungsfrist)[:\s].{2,}|kündigung\s+aus\s+wichtigem\s+grund/i,
+    reject: /siehe\s+(?:§|abschnitt).*kündigung/i,
+  },
+  {
+    id: 'abnahme',
+    patterns: [/abnahme\s+(?:der\s+leistung\s+)?erfolgt|schriftliche\s+abnahme|abnahmeklausel/i],
+    context: /abnahme.{0,80}(?:erfolgt|schriftlich|fertigstellung)/i,
+    reject: /schlussrechnung\s+nach\s+abnahme|zahlung.*abnahme/i,
+  },
+];
+
+function emptyField(): ExtractedContractField {
+  return { status: 'not_found', confidence: 'low' };
+}
+
+export function extractLabeledField(
+  text: string,
+  patterns: RegExp[],
+  sourcePage?: number,
+): ExtractedContractField {
+  for (const pattern of patterns) {
+    const match = pattern.exec(text);
+    if (match?.[1]?.trim()) {
+      return {
+        value: match[1].trim().split('\n')[0].trim(),
+        status: 'confirmed',
+        confidence: 'high',
+        sourcePage,
+        sourceText: match[0].trim(),
+      };
+    }
+  }
+  return emptyField();
+}
+
+function extractPresenceWithContext(
+  text: string,
+  matchPattern: RegExp,
+  contextPattern: RegExp,
+  fallback: string,
+): ExtractedContractField {
+  const match = matchPattern.exec(text);
+  if (!match) return emptyField();
+  const window = text.slice(Math.max(0, match.index - 40), match.index + match[0].length + 100);
+  if (!contextPattern.test(window) && !contextPattern.test(text)) {
+    return emptyField();
+  }
+  const line =
+    text
+      .slice(Math.max(0, match.index - 20), match.index + match[0].length + 100)
+      .split('\n')
+      .map((entry) => entry.trim())
+      .find((entry) => matchPattern.test(entry)) || match[0].trim();
+  return {
+    value: line || fallback,
+    status: 'confirmed',
+    confidence: 'medium',
+    sourceText: match[0].trim(),
+  };
+}
+
+export function looksLikeContractDocument(text: string, pageTexts: DocumentPageText[]): boolean {
+  const intro = pageTexts
+    .slice(0, 3)
+    .map((page) => page.text)
+    .join('\n');
+  const haystack = `${intro}\n${text}`;
+  if (
+    /werkvertrag|subunternehmervertrag|mietvertrag|leasingvertrag|dienstleistungsvertrag|wartungsvertrag|kaufvertrag|liefervertrag|rahmenvertrag|arbeitsvertrag|versicherungsvertrag|\bvertrag\b/i.test(
+      haystack,
+    )
+  ) {
+    return true;
+  }
+  return PARTY_PATTERNS.some((rule) => rule.pattern.test(haystack));
+}
+
+/** Strong construction signals — roles or "Abnahme" alone are not enough. */
+const STRONG_BAU_SIGNAL_PATTERNS: RegExp[] = [
+  /\bbaustelle\b/i,
+  /\bbauvorhaben\b|\bbaustellenbezeichnung\b/i,
+  /\bleistungsverzeichnis\b/i,
+  /\bgewerk\b/i,
+  /\bbehinderungsanzeige\b/i,
+  /\bbg[\s-]?bau\b/i,
+  /\beinheitspreis\b|\b\d+\s*(?:qm|m²|m2|lfdm)\b/i,
+];
+
+function countStrongBauSignals(text: string): number {
+  let count = 0;
+  for (const pattern of STRONG_BAU_SIGNAL_PATTERNS) {
+    if (pattern.test(text)) count += 1;
+  }
+  return count;
+}
+
+function isConstructionFamily(family: ContractFamily): boolean {
+  return family === 'werkvertrag' || family === 'subunternehmervertrag';
+}
+
+/**
+ * Construction families need a real heading or multiple strong Bau signals.
+ * Auftraggeber/Auftragnehmer + Abnahme alone must not confirm Werkvertrag.
+ */
+function constructionFamilyEligible(text: string, hasHeading: boolean): boolean {
+  if (hasHeading) return true;
+  return countStrongBauSignals(text) >= 2;
+}
+
+export function detectContractType(text: string): DetectedContractType {
+  const evidence: string[] = [];
+  let best: {
+    family: ContractFamily;
+    labelKey: string;
+    score: number;
+    hasHeading: boolean;
+  } | null = null;
+
+  for (const rule of FAMILY_RULES) {
+    const hasHeading = rule.heading.test(text);
+    const hasRoles = rule.roles.test(text);
+    const hasTopics = rule.topics.test(text);
+
+    let score = 0;
+    if (hasHeading) {
+      score += 4;
+      evidence.push(`heading:${rule.family}`);
+    }
+    if (hasRoles) {
+      score += 2;
+      evidence.push(`roles:${rule.family}`);
+    }
+    if (hasTopics) {
+      score += 2;
+      evidence.push(`topics:${rule.family}`);
+    }
+
+    if (score < 4) continue;
+
+    if (isConstructionFamily(rule.family) && !constructionFamilyEligible(text, hasHeading)) {
+      // Weak role/topic combo only — do not promote to confirmed construction family.
+      continue;
+    }
+
+    if (!best || score > best.score) {
+      best = { family: rule.family, labelKey: rule.labelKey, score, hasHeading };
+    }
+  }
+
+  if (!best) {
+    if (/\bvertrag\b/i.test(text) || PARTY_PATTERNS.some((rule) => rule.pattern.test(text))) {
+      return {
+        family: 'general_contract',
+        labelKey: 'documentIntelligence.label.generalContract',
+        confidence: 'low',
+        status: 'review_required',
+        evidence: ['generic_contract_signal'],
+      };
+    }
+    return {
+      family: 'unknown',
+      labelKey: 'documentIntelligence.label.unknown',
+      confidence: 'low',
+      status: 'review_required',
+      evidence: [],
+    };
+  }
+
+  const confidence: FieldConfidenceLevel =
+    best.score >= 6 ? 'high' : best.score >= 4 ? 'medium' : 'low';
+
+  return {
+    family: best.family,
+    labelKey: best.labelKey,
+    confidence,
+    status: confidence === 'low' ? 'review_required' : 'confirmed',
+    evidence: [...new Set(evidence)].slice(0, 8),
+  };
+}
+
+export function extractContractParties(text: string): DetectedContractParty[] {
+  const parties: DetectedContractParty[] = [];
+  const seenRoles = new Set<ContractPartyRole>();
+
+  for (const rule of PARTY_PATTERNS) {
+    const match = rule.pattern.exec(text);
+    if (!match?.[1]?.trim()) continue;
+    if (seenRoles.has(rule.role)) continue;
+    seenRoles.add(rule.role);
+    parties.push({
+      role: rule.role,
+      name: match[1].trim().split('\n')[0].trim(),
+      status: 'confirmed',
+      confidence: 'high',
+      sourceText: match[0].trim(),
+    });
+  }
+
+  return parties;
+}
+
+export function extractAllContractFields(
+  contractText: string,
+  pageTexts: DocumentPageText[],
+): Record<string, ExtractedContractField> {
+  const pageHint = pageTexts[0]?.pageNumber;
+
+  return {
+    ansprechpartner: extractLabeledField(contractText, [
+      /ansprechpartner(?:in)?\s*:\s*([^\n]+)/i,
+    ], pageHint),
+    vertragsnummer: extractLabeledField(contractText, [
+      /vertragsnummer\s*:\s*([^\n]+)/i,
+      /vertrag\s*nr\.?\s*:\s*([^\n]+)/i,
+      /versicherungsschein(?:[- ]?nummer)?\s*:\s*([^\n]+)/i,
+    ], pageHint),
+    vertragsdatum: extractLabeledField(contractText, [
+      /vertragsdatum\s*:\s*([^\n]+)/i,
+    ], pageHint),
+    beginn: extractLabeledField(contractText, [
+      /(?:vertrags)?beginn\s*:\s*([^\n]+)/i,
+      /mietbeginn\s*:\s*([^\n]+)/i,
+      /eintrittsdatum\s*:\s*([^\n]+)/i,
+    ]),
+    laufzeit: extractLabeledField(contractText, [
+      /laufzeit\s*:\s*([^\n]+)/i,
+      /leistungszeitraum\s*:\s*([^\n]+)/i,
+    ]),
+    ende: extractLabeledField(contractText, [
+      /(?:vertrags)?ende\s*:\s*([^\n]+)/i,
+      /mietende\s*:\s*([^\n]+)/i,
+    ]),
+    kuendigungsfrist: extractLabeledField(contractText, [
+      /kündigungsfrist\s*:\s*([^\n]+)/i,
+      /kuendigungsfrist\s*:\s*([^\n]+)/i,
+    ]),
+    verlaengerung: extractLabeledField(contractText, [
+      /(?:automatische\s+)?verlängerung\s*:\s*([^\n]+)/i,
+      /(?:automatische\s+)?verlaengerung\s*:\s*([^\n]+)/i,
+    ]),
+    vertragsgegenstand: extractLabeledField(contractText, [
+      /vertragsgegenstand\s*:\s*([^\n]+)/i,
+      /leistungsbeschreibung\s*:\s*([^\n]+)/i,
+    ]),
+    leistungsort: extractLabeledField(contractText, [
+      /leistungsort\s*:\s*([^\n]+)/i,
+      /arbeitsort\s*:\s*([^\n]+)/i,
+      /lieferort\s*:\s*([^\n]+)/i,
+    ]),
+    zahlungsbedingungen: extractLabeledField(contractText, [
+      /zahlungsbedingungen\s*:\s*([^\n]+)/i,
+      /zahlungsziel\s*:\s*([^\n]+)/i,
+    ]),
+    gewaehrleistung: extractLabeledField(contractText, [
+      /gewährleistung\s*:\s*([^\n]+)/i,
+      /gewaehrleistung\s*:\s*([^\n]+)/i,
+      /gewährleistungsfrist\s*:\s*([^\n]+)/i,
+    ]),
+    haftung: extractLabeledField(contractText, [/haftung\s*:\s*([^\n]+)/i]),
+
+    // Construction-oriented (filtered in UI by family)
+    auftraggeber: extractLabeledField(contractText, [/auftraggeber\s*:\s*([^\n]+)/i], pageHint),
+    auftragnehmer: extractLabeledField(
+      contractText,
+      [
+        /subunternehmer\s*:\s*([^\n]+)/i,
+        /auftragnehmer\s*:\s*([^\n]+)/i,
+        /nachunternehmer\s*:\s*([^\n]+)/i,
+      ],
+      pageHint,
+    ),
+    bauvorhaben: extractLabeledField(contractText, [
+      /bauvorhaben\s*:\s*([^\n]+)/i,
+      /baustellenbezeichnung\s*:\s*([^\n]+)/i,
+    ]),
+    baustelle: extractLabeledField(contractText, [
+      /baustellenadresse\s*:\s*([^\n]+)/i,
+      /baustelle(?!nbezeichnung)\s*:\s*([^\n]+)/i,
+    ]),
+    stundenlohn: extractLabeledField(contractText, [
+      /stundenlohn\s*:\s*([^\n]+)/i,
+      /stundensatz\s*:\s*([^\n]+)/i,
+    ]),
+    wartezeitregelung: extractLabeledField(contractText, [
+      /wartezeitregelung\s*:\s*([^\n]+)/i,
+    ]),
+    sicherheitseinbehalt: extractLabeledField(contractText, [
+      /sicherheitseinbehalt\s*:\s*([^\n]+)/i,
+    ]),
+    vertragsstrafe: extractLabeledField(contractText, [/vertragsstrafe\s*:\s*([^\n]+)/i]),
+    bgBau: extractPresenceWithContext(
+      contractText,
+      /bg[\s-]?bau/i,
+      /bg[\s-]?bau.{0,80}(?:unbedenklich|nachweis|erforderlich|bescheinigung)/i,
+      'BG BAU',
+    ),
+    sokaBau: extractPresenceWithContext(
+      contractText,
+      /soka[\s-]?bau/i,
+      /soka[\s-]?bau.{0,80}(?:nachweis|erforderlich|bescheinigung)/i,
+      'SOKA-BAU',
+    ),
+
+    // Service / maintenance
+    leistungsbeschreibung: extractLabeledField(contractText, [
+      /leistungsbeschreibung\s*:\s*([^\n]+)/i,
+    ]),
+    leistungsintervall: extractLabeledField(contractText, [
+      /(?:wartungs)?intervall\s*:\s*([^\n]+)/i,
+      /leistungsintervall\s*:\s*([^\n]+)/i,
+    ]),
+    reaktionszeit: extractLabeledField(contractText, [/reaktionszeit\s*:\s*([^\n]+)/i]),
+    servicezeit: extractLabeledField(contractText, [/servicezeit\s*:\s*([^\n]+)/i]),
+    pauschale: extractLabeledField(contractText, [
+      /(?:wartungs)?pauschale\s*:\s*([^\n]+)/i,
+      /monatspauschale\s*:\s*([^\n]+)/i,
+    ]),
+    stundenverrechnungssatz: extractLabeledField(contractText, [
+      /stundenverrechnungssatz\s*:\s*([^\n]+)/i,
+      /stundensatz\s*:\s*([^\n]+)/i,
+    ]),
+
+    // Rent / lease
+    vermieter: extractLabeledField(contractText, [/vermieter\s*:\s*([^\n]+)/i]),
+    mieter: extractLabeledField(contractText, [/mieter\s*:\s*([^\n]+)/i]),
+    mietobjekt: extractLabeledField(contractText, [
+      /mietobjekt\s*:\s*([^\n]+)/i,
+      /mietsache\s*:\s*([^\n]+)/i,
+    ]),
+    mietbeginn: extractLabeledField(contractText, [/mietbeginn\s*:\s*([^\n]+)/i]),
+    kaltmiete: extractLabeledField(contractText, [/kaltmiete\s*:\s*([^\n]+)/i]),
+    nebenkosten: extractLabeledField(contractText, [/nebenkosten\s*:\s*([^\n]+)/i]),
+    kaution: extractLabeledField(contractText, [/kaution\s*:\s*([^\n]+)/i]),
+    leasinggeber: extractLabeledField(contractText, [/leasinggeber\s*:\s*([^\n]+)/i]),
+    leasingnehmer: extractLabeledField(contractText, [/leasingnehmer\s*:\s*([^\n]+)/i]),
+    leasingobjekt: extractLabeledField(contractText, [/leasingobjekt\s*:\s*([^\n]+)/i]),
+    leasingrate: extractLabeledField(contractText, [
+      /leasingrate\s*:\s*([^\n]+)/i,
+      /monatsrate\s*:\s*([^\n]+)/i,
+    ]),
+    sonderzahlung: extractLabeledField(contractText, [/sonderzahlung\s*:\s*([^\n]+)/i]),
+    restwert: extractLabeledField(contractText, [/restwert\s*:\s*([^\n]+)/i]),
+
+    // Purchase / delivery
+    verkaeufer: extractLabeledField(contractText, [/verk[äa]ufer\s*:\s*([^\n]+)/i]),
+    kaeufer: extractLabeledField(contractText, [/k[äa]ufer\s*:\s*([^\n]+)/i]),
+    liefergegenstand: extractLabeledField(contractText, [
+      /liefergegenstand\s*:\s*([^\n]+)/i,
+      /waren\s*:\s*([^\n]+)/i,
+    ]),
+    liefertermin: extractLabeledField(contractText, [/liefertermin\s*:\s*([^\n]+)/i]),
+    lieferort: extractLabeledField(contractText, [/lieferort\s*:\s*([^\n]+)/i]),
+    eigentumsvorbehalt: extractLabeledField(contractText, [
+      /eigentumsvorbehalt\s*:\s*([^\n]+)/i,
+    ]),
+
+    // Insurance / employment
+    versicherer: extractLabeledField(contractText, [/versicherer\s*:\s*([^\n]+)/i]),
+    versicherungsnehmer: extractLabeledField(contractText, [
+      /versicherungsnehmer\s*:\s*([^\n]+)/i,
+    ]),
+    versicherungsart: extractLabeledField(contractText, [/versicherungsart\s*:\s*([^\n]+)/i]),
+    beitrag: extractLabeledField(contractText, [
+      /beitrag\s*:\s*([^\n]+)/i,
+      /versicherungsbeitrag\s*:\s*([^\n]+)/i,
+    ]),
+    selbstbeteiligung: extractLabeledField(contractText, [
+      /selbstbeteiligung\s*:\s*([^\n]+)/i,
+    ]),
+    arbeitgeber: extractLabeledField(contractText, [/arbeitgeber\s*:\s*([^\n]+)/i]),
+    arbeitnehmer: extractLabeledField(contractText, [/arbeitnehmer\s*:\s*([^\n]+)/i]),
+    taetigkeit: extractLabeledField(contractText, [/tätigkeit\s*:\s*([^\n]+)/i, /taetigkeit\s*:\s*([^\n]+)/i]),
+    eintrittsdatum: extractLabeledField(contractText, [/eintrittsdatum\s*:\s*([^\n]+)/i]),
+    arbeitsort: extractLabeledField(contractText, [/arbeitsort\s*:\s*([^\n]+)/i]),
+    arbeitszeit: extractLabeledField(contractText, [/arbeitszeit\s*:\s*([^\n]+)/i]),
+    probezeit: extractLabeledField(contractText, [/probezeit\s*:\s*([^\n]+)/i]),
+    urlaub: extractLabeledField(contractText, [/urlaub\s*:\s*([^\n]+)/i]),
+  };
+}
+
+export function partitionContractFields(
+  fields: Record<string, ExtractedContractField>,
+  family: ContractFamily,
+): {
+  commonFields: Record<string, ExtractedContractField>;
+  typeSpecificFields: Record<string, ExtractedContractField>;
+  visibleFields: Record<string, ExtractedContractField>;
+} {
+  const typeKeys = new Set(TYPE_SPECIFIC_FIELD_KEYS[family] ?? []);
+  const commonFields: Record<string, ExtractedContractField> = {};
+  const typeSpecificFields: Record<string, ExtractedContractField> = {};
+
+  for (const key of COMMON_FIELD_KEYS) {
+    if (fields[key]) commonFields[key] = fields[key]!;
+  }
+
+  for (const key of typeKeys) {
+    if (fields[key]) typeSpecificFields[key] = fields[key]!;
+  }
+
+  // Backward-compatible bag: common + allowed type-specific only (never foreign type fields).
+  const visibleFields: Record<string, ExtractedContractField> = {
+    ...commonFields,
+    ...typeSpecificFields,
+  };
+
+  return { commonFields, typeSpecificFields, visibleFields };
+}
+
+export function detectContractClauses(
+  text: string,
+  pageTexts: DocumentPageText[],
+): DetectedContractClause[] {
+  const clauses: DetectedContractClause[] = [];
+  const commercial = joinSectionText(
+    pageTexts,
+    pageTexts.slice(0, Math.min(4, pageTexts.length)).map((page) => page.pageNumber),
+  );
+  const haystack = `${commercial}\n${text}`;
+
+  for (const rule of CLAUSE_RULES) {
+    let matched: RegExpExecArray | null = null;
+    for (const pattern of rule.patterns) {
+      matched = pattern.exec(haystack);
+      if (matched) break;
+    }
+    if (!matched) continue;
+
+    const window = haystack.slice(
+      Math.max(0, matched.index - 40),
+      matched.index + matched[0].length + 140,
+    );
+    if (rule.reject?.test(window)) continue;
+    if (!rule.context.test(window) && !rule.context.test(haystack)) continue;
+
+    const sourcePage = pageTexts.find((page) =>
+      rule.patterns.some((pattern) => pattern.test(page.text)),
+    )?.pageNumber;
+
+    const line =
+      haystack
+        .slice(Math.max(0, matched.index - 10), matched.index + matched[0].length + 120)
+        .split('\n')
+        .map((entry) => entry.trim())
+        .find((entry) => entry.length > 8) || matched[0].trim();
+
+    clauses.push({
+      id: rule.id,
+      status: 'confirmed',
+      confidence: 'medium',
+      sourcePage,
+      sourceText: matched[0].trim(),
+      summary: line,
+    });
+  }
+
+  return clauses;
+}
+
+export function mapPartiesToLegacyFields(
+  parties: DetectedContractParty[],
+  fields: Record<string, ExtractedContractField>,
+): void {
+  const byRole = (role: ContractPartyRole) => parties.find((party) => party.role === role);
+
+  const ag = byRole('auftraggeber') ?? byRole('vermieter') ?? byRole('leasinggeber') ?? byRole('kaeufer') ?? byRole('versicherungsnehmer') ?? byRole('arbeitgeber');
+  const an =
+    byRole('subunternehmer') ??
+    byRole('nachunternehmer') ??
+    byRole('auftragnehmer') ??
+    byRole('mieter') ??
+    byRole('leasingnehmer') ??
+    byRole('verkaeufer') ??
+    byRole('versicherer') ??
+    byRole('arbeitnehmer') ??
+    byRole('dienstleister');
+
+  if (ag && (!fields.auftraggeber || fields.auftraggeber.status === 'not_found')) {
+    fields.auftraggeber = {
+      value: ag.name,
+      status: 'confirmed',
+      confidence: ag.confidence,
+      sourceText: ag.sourceText,
+    };
+  }
+  if (an && (!fields.auftragnehmer || fields.auftragnehmer.status === 'not_found')) {
+    fields.auftragnehmer = {
+      value: an.name,
+      status: 'confirmed',
+      confidence: an.confidence,
+      sourceText: an.sourceText,
+    };
+  }
+}

@@ -17,9 +17,17 @@ Vertragsdatum: 02.03.2026
 Vertragsgegenstand: Abdichtungsarbeiten Flachdach
 Zahlungsbedingungen: 14 Tage mit 2 % Skonto oder 30 Tage netto
 Abschlagsrechnungen sind wöchentlich möglich. Schlussrechnung nach Abnahme.
+Stundenlohn: 55,00 €/Std. für freigegebene Stundenlohnarbeiten
+Wartezeitregelung: Wartezeit wird ab der 2. Stunde mit 80 % des Stundenlohns vergütet
     `.trim()),
-    page(2, 'Vergütung und Termine. Nachweispflichten: Freistellungsbescheinigung, BG BAU.'),
-    page(3, 'Gewährleistungsfrist 5 Jahre. Vertragsstrafe bei Verzug 0,5 % pro Tag.'),
+    page(
+      2,
+      'Vergütung und Termine. Nachweispflichten: Freistellungsbescheinigung, BG BAU Unbedenklichkeitsbescheinigung, SOKA-BAU Nachweis erforderlich.',
+    ),
+    page(
+      3,
+      'Gewährleistung: 5 Jahre ab Abnahme. Vertragsstrafe: 0,5 % pro Tag bei Verzug. Nachträge bedürfen der Schriftform. Die Abnahme der Leistung erfolgt schriftlich nach Fertigstellung. Stundenlohnarbeiten nur nach vorheriger Freigabe.',
+    ),
     page(4, 'Unterschrift Auftraggeber'),
     page(5, 'Unterschrift Auftragnehmer'),
     page(6, 'Allgemeine Vertragsbedingungen.'),
@@ -29,7 +37,7 @@ Leistungsverzeichnis
 Pos. Menge Einheit Bezeichnung EP GP
 1 4.799,00 qm PE-Folie verlegen EP 0,35 € GP 1.679,65 €
 2 4.799,00 qm Dämmung verlegen EP 2,80 € GP 13.437,20 €
-3 4.799,00 qm PVC-Folie verlegen EP 2,80 € GP 13.437,20 €
+3 4.799,00 qm PVC-Folie 1,5 mm verlegen EP 2,80 € GP 13.437,20 €
 4 255,00 lfdm Traufanschluss EP 10,00 € GP 2.550,00 €
 5 125,00 lfdm Attikaanschluss EP 10,00 € GP 1.250,00 €
 6 4 Stück Lichtkuppel eindichten EP 60,00 € GP 240,00 €

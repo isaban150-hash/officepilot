@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Button } from '../../ui/Button';
-import { Card, CardMeta, CardTitle } from '../../ui/Card';
+import { Card, CardMeta, CardTitle, DataRow } from '../../ui/Card';
 import type { ContractOrderProposal, EnhancedDetectedOrderPosition } from '../../../types/documentIntelligence';
 import type { InboxItem } from '../../../types/models';
 import type { TranslationKey } from '../../../i18n';
@@ -12,6 +12,8 @@ import {
   type ContractPositionSelectionMap,
   type ContractPositionSelectionState,
 } from '../../../services/contractPositionImportService';
+import { buildContractWorkspaceSummaryView } from '../../../services/contractWorkspaceSummaryView';
+import { getInboxExtractedDocumentText } from '../../../services/inboxDocumentText';
 import { isContractPlanLocked } from '../../../services/orderPlanIntegrityService';
 import { getVorgangById } from '../../../services/vorgangService';
 import { ContractWorkspaceSummary } from './ContractWorkspaceSummary';
@@ -143,6 +145,8 @@ export function ContractOrderProposalPanel({
 
   const visiblePositions = positions.slice(0, visibleCount);
   const hasMore = visibleCount < positions.length;
+  const summaryView = buildContractWorkspaceSummaryView(proposal, { item, vorgang });
+  const originalText = item ? getInboxExtractedDocumentText(item).trim() : '';
 
   return (
     <Card className="contract-order-proposal" data-testid="contract-order-proposal">
@@ -159,7 +163,6 @@ export function ContractOrderProposalPanel({
       </CardMeta>
 
       <div className="contract-order-proposal__intro" data-testid="contract-order-proposal-intro">
-        <h4>{translate('documentIntelligence.proposal.detectedTitle')}</h4>
         <p>{translate('documentIntelligence.proposal.instruction')}</p>
       </div>
 
@@ -182,6 +185,7 @@ export function ContractOrderProposalPanel({
         vorgang={vorgang}
       />
 
+      {positions.length > 0 ? (
       <div className="contract-order-proposal__positions" data-testid="contract-order-positions">
         <h4>{translate('documentIntelligence.positionsTitle')}</h4>
         <table className="contract-order-proposal__table">
@@ -354,6 +358,31 @@ export function ContractOrderProposalPanel({
           </Button>
         ) : null}
       </div>
+      ) : null}
+
+      {summaryView.clauseRows.length > 0 ? (
+        <div
+          className="contract-order-proposal__clauses"
+          data-testid="contract-order-proposal-clauses"
+        >
+          <h4>{translate('documentIntelligence.workspace.section.clauses')}</h4>
+          {summaryView.clauseRows.map((clause) => (
+            <div key={clause.id} data-testid={`contract-clause-${clause.id}`}>
+              <DataRow label={translate(clause.labelKey)} value={clause.value} />
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {originalText ? (
+        <details
+          className="contract-order-proposal__original-text"
+          data-testid="contract-order-proposal-original-text"
+        >
+          <summary>{translate('documentIntelligence.workspace.section.originalText')}</summary>
+          <pre className="contract-order-proposal__original-text-body">{originalText}</pre>
+        </details>
+      ) : null}
 
       <div className="contract-order-proposal__actions">
         {planLocked ? (
@@ -364,27 +393,31 @@ export function ContractOrderProposalPanel({
             {translate('orderPlan.confirmedHint')}
           </p>
         ) : null}
-        <Button
-          fullWidth
-          loading={isCreating}
-          disabled={planLocked || selectedCount === 0}
-          onClick={handleConfirm}
-          data-testid="contract-create-order-button"
-        >
-          {translate('documentIntelligence.action.confirmSelectedPositions').replace(
-            '{count}',
-            String(selectedCount),
-          )}
-        </Button>
-        <Button
-          variant="outline"
-          fullWidth
-          disabled={isCreating}
-          onClick={handleSelectAllSafe}
-          data-testid="contract-select-safe-button"
-        >
-          {translate('documentIntelligence.action.selectAllSafe')}
-        </Button>
+        {positions.length > 0 ? (
+          <>
+            <Button
+              fullWidth
+              loading={isCreating}
+              disabled={planLocked || selectedCount === 0}
+              onClick={handleConfirm}
+              data-testid="contract-create-order-button"
+            >
+              {translate('documentIntelligence.action.confirmSelectedPositions').replace(
+                '{count}',
+                String(selectedCount),
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              fullWidth
+              disabled={isCreating}
+              onClick={handleSelectAllSafe}
+              data-testid="contract-select-safe-button"
+            >
+              {translate('documentIntelligence.action.selectAllSafe')}
+            </Button>
+          </>
+        ) : null}
         {onDiscard && (
           <Button
             variant="ghost"

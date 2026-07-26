@@ -124,7 +124,7 @@ describe('CONTRACT-WORKSPACE-SUMMARY-01', () => {
     expect(html).toContain('36.029,05 €');
     expect(html).toContain('14 Tage mit 2 % Skonto oder 30 Tage netto');
     expect(html).toContain('data-testid="contract-workspace-summary-positions"');
-    expect(html).toContain('>2<');
+    expect(html).toContain('2 Positionen importierbar');
     expect(html).toContain('Einige Positionen benötigen Prüfung');
     expect(html).not.toContain('13b');
     expect(html).not.toContain('§ 13b');

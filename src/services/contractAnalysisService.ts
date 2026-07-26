@@ -28,20 +28,39 @@ Baustellenadresse: Hauptstr. 12, 10115 Berlin
 Projektname: Projekt Müller-Bad
 Leistungszeitraum: 01.05.2026 – 30.06.2026
 Vertragsdatum: 15.03.2026
+Vertragsnummer: WV-2026-0042
 Auftragsnummer: AV-2026-0042
 Bestellnummer: B-7712
 Ansprechpartner: Herr Schmidt
 Telefon: 030 1234567
 E-Mail: schmidt@mueller-bau.de
+Vertragssumme netto: 5.070,00 €
+
+Zahlungsbedingungen: 14 Tage netto, 2 % Skonto bei Zahlung innerhalb 7 Tagen
+Abschlagsrechnungen sind wöchentlich möglich. Schlussrechnung nach Abnahme.
+Gewährleistung: 5 Jahre ab Abnahme
+Stundenlohn: 48,00 €/Std. für Stundenlohnarbeiten
+Wartezeitregelung: Wartezeit wird ab der 2. Stunde mit 75 % des Stundenlohns vergütet
+Sicherheitseinbehalt: 5 % der Abschlagssumme bis zur Abnahme
+Vertragsstrafe: 0,1 % der Auftragssumme je Werktag bei Verzug, max. 5 %
+
+Wichtige Vertragsklauseln:
+Nachträge bedürfen der Schriftform.
+Behinderungsanzeige ist unverzüglich schriftlich anzuzeigen.
+Materialbereitstellung erfolgt durch den Auftragnehmer, soweit nicht anders vereinbart.
+Baustrom und Bauwasser stellt der Auftraggeber kostenfrei bereit.
+Gerüst und Kran werden bei Bedarf durch den Auftraggeber gestellt.
+Entsorgung von Bauschutt obliegt dem Auftragnehmer.
+Stundenlohnarbeiten nur nach vorheriger Freigabe.
+Wartezeit ist gemäß Wartezeitregelung zu dokumentieren.
+Kündigung aus wichtigem Grund bleibt vorbehalten.
+Abnahme erfolgt nach Fertigstellung schriftlich.
 
 Leistungsverzeichnis
 Pos. | Beschreibung | Einheit | Menge | EP | GP
 1 | Demontage Badewanne | Stk | 1 | 450,00 | 450,00
 2 | Fliesenarbeiten Wand | m² | 28 | 65,00 | 1.820,00
 3 | Sanitärinstallation | psch | 1 | 2.800,00 | 2.800,00
-
-Zahlungsbedingungen: 14 Tage netto, 2 % Skonto bei Zahlung innerhalb 7 Tagen
-Abschlagsrechnungen sind wöchentlich möglich. Schlussrechnung nach Abnahme.
 
 Nachweise erforderlich:
 Freistellungsbescheinigung, BG BAU Unbedenklichkeitsbescheinigung, SOKA-BAU, AOK, Betriebshaftpflicht

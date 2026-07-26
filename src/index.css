@@ -4781,6 +4781,38 @@ body {
   gap: 0.25rem;
 }
 
+.contract-order-proposal__clauses {
+  margin-top: 1rem;
+}
+
+.contract-order-proposal__clauses h4 {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+}
+
+.contract-order-proposal__original-text {
+  margin-top: 1rem;
+  border-top: 1px solid var(--border, #e2e8f0);
+  padding-top: 0.75rem;
+}
+
+.contract-order-proposal__original-text summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.contract-order-proposal__original-text-body {
+  margin: 0.5rem 0 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: inherit;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  max-height: 16rem;
+  overflow: auto;
+}
+
 .contract-order-proposal__intro h4,
 .contract-order-proposal__intro p {
   margin: 0;
