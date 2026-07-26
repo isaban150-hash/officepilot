@@ -215,6 +215,8 @@ export function DokumentDetailPage() {
         )}
       </Card>
 
+      <DocumentLifecycleCard documentId={document.id} revision={detailRevision} />
+
       <CommunicationIntegrationPanel
         contextRef={{ type: 'document', id: document.id }}
         buttonKeys={DOCUMENT_COMMUNICATION_BUTTON_KEYS}
@@ -260,17 +262,15 @@ export function DokumentDetailPage() {
 
       <DocumentUnderstandingCard documentId={document.id} />
 
-      <DocumentFreeQuestionPanel
-        source={{ type: 'document', document }}
-        testIdPrefix="document-free-question"
-      />
-
       <DocumentFilingCard
         documentId={document.id}
         onChanged={() => setDetailRevision((value) => value + 1)}
       />
 
-      <DocumentLifecycleCard documentId={document.id} revision={detailRevision} />
+      <DocumentFreeQuestionPanel
+        source={{ type: 'document', document }}
+        testIdPrefix="document-free-question"
+      />
 
       <ShowMoreSection
         expanded={showDetails}
