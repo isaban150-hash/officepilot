@@ -9,12 +9,11 @@ export function DokumentNeuPage() {
 
   return (
     <div className="page">
-      <button type="button" className="back-link" onClick={() => navigate('/dokumente')}>
-        ← {translate('common.back')}
-      </button>
       <PageHeader
         title={translate('document.addTitle')}
         subtitle={translate('document.addSubtitle')}
+        backLabel={translate('common.back')}
+        onBack={() => navigate('/dokumente')}
       />
       <DocumentForm
         mode="add"

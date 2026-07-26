@@ -17,12 +17,11 @@ export function AusgabeNeuPage() {
 
   return (
     <div className="page">
-      <button type="button" className="back-link" onClick={() => navigate('/ausgaben')}>
-        ← {translate('common.back')}
-      </button>
       <PageHeader
         title={translate('expense.addTitle')}
         subtitle={translate('expense.addSubtitle')}
+        backLabel={translate('common.back')}
+        onBack={() => navigate('/ausgaben')}
       />
       <ExpenseForm
         mode="add"

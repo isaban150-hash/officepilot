@@ -56,13 +56,11 @@ export function OffeneRechnungenPage() {
 
   return (
     <div className="page">
-      <button type="button" className="back-link" onClick={() => navigate('/vorgaenge')}>
-        ← {translate('common.back')}
-      </button>
-
       <PageHeader
         title={translate('overview.title')}
         subtitle={translate('overview.subtitle')}
+        backLabel={translate('common.back')}
+        onBack={() => navigate('/vorgaenge')}
       />
 
       {totals.overdueInvoiceCount > 0 && (

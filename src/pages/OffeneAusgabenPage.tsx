@@ -48,13 +48,11 @@ export function OffeneAusgabenPage() {
 
   return (
     <div className="page">
-      <button type="button" className="back-link" onClick={() => navigate('/ausgaben')}>
-        ← {translate('common.back')}
-      </button>
-
       <PageHeader
         title={translate('expenseOverview.title')}
         subtitle={translate('expenseOverview.subtitle')}
+        backLabel={translate('common.back')}
+        onBack={() => navigate('/ausgaben')}
       />
 
       {totals.overdueExpenseCount > 0 && (

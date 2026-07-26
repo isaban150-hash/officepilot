@@ -135,6 +135,15 @@ describe('OffeneRechnungenPage', () => {
     expect(html).toContain('href="/vorgaenge"');
     expect(html).toContain('Zurück zu Vorgängen');
   });
+
+  it('rendert PageHeader-Back ohne externen upper back-link', () => {
+    const html = renderPage();
+    expect(html).toContain('page-header__back');
+    expect(html).toContain('← Zurück');
+    expect(html).not.toContain('class="back-link"');
+    expect(html).toContain('href="/vorgaenge"');
+    expect(html).toContain('Zurück zu Vorgängen');
+  });
 });
 
 describe('InvoiceOverviewCard', () => {
