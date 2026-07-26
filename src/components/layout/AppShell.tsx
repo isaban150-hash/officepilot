@@ -32,7 +32,7 @@ export function AppShell() {
       <PersistenceFailureBanner />
       <BetaModeBanner />
       <div className="app-shell__search" data-testid="app-shell-search">
-        <GlobalSearchBar compact />
+        <GlobalSearchBar compact collapsibleOnMobile />
       </div>
       <div className="app-shell__body">
         <SidebarNav />

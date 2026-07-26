@@ -1,10 +1,27 @@
-import { FormEvent, useMemo, useState } from 'react';
+import {
+  FormEvent,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Card, CardMeta, CardTitle, PageHeader } from '../ui/Card';
+import { Button } from '../ui/Button';
 import { EmptyStateBlock } from '../ui/EmptyStateBlock';
 import { useApp } from '../../context/AppContext';
 import { searchOffice } from '../../services/officeSearchService';
 import type { SearchResult } from '../../types/officeSearch';
+
+const MOBILE_SEARCH_MQ = '(max-width: 767px)';
+
+function getIsMobileViewport(): boolean {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return false;
+  }
+  return window.matchMedia(MOBILE_SEARCH_MQ).matches;
+}
 
 interface SearchResultsListProps {
   results: SearchResult[];
@@ -70,13 +87,104 @@ export function SearchResultsList({
 interface GlobalSearchBarProps {
   autoFocus?: boolean;
   compact?: boolean;
+  /** When true, search starts collapsed below 768px and expands on demand. */
+  collapsibleOnMobile?: boolean;
 }
 
-export function GlobalSearchBar({ autoFocus = false, compact = false }: GlobalSearchBarProps) {
+export function GlobalSearchBar({
+  autoFocus = false,
+  compact = false,
+  collapsibleOnMobile = false,
+}: GlobalSearchBarProps) {
   const { translate } = useApp();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [query, setQuery] = useState(searchParams.get('q') ?? '');
+  const [isMobile, setIsMobile] = useState(getIsMobileViewport);
+  const [mobileExpanded, setMobileExpanded] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const wasMobileExpandedRef = useRef(false);
+  const panelId = useId();
+
+  const useMobileCollapse = collapsibleOnMobile && isMobile;
+  const panelHidden = useMobileCollapse && !mobileExpanded;
+
+  useEffect(() => {
+    if (!collapsibleOnMobile || typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      return;
+    }
+
+    const mediaQuery = window.matchMedia(MOBILE_SEARCH_MQ);
+    const syncViewport = (event?: MediaQueryListEvent) => {
+      const mobile =
+        typeof event?.matches === 'boolean'
+          ? event.matches
+          : window.matchMedia(MOBILE_SEARCH_MQ).matches;
+      setIsMobile(mobile);
+      if (!mobile) {
+        setMobileExpanded(false);
+      }
+    };
+
+    syncViewport();
+    mediaQuery.addEventListener('change', syncViewport);
+    return () => mediaQuery.removeEventListener('change', syncViewport);
+  }, [collapsibleOnMobile]);
+
+  useEffect(() => {
+    if (!useMobileCollapse) {
+      wasMobileExpandedRef.current = false;
+      return;
+    }
+
+    if (mobileExpanded) {
+      wasMobileExpandedRef.current = true;
+      const frameId = window.requestAnimationFrame(() => {
+        inputRef.current?.focus();
+      });
+      return () => window.cancelAnimationFrame(frameId);
+    }
+
+    if (wasMobileExpandedRef.current) {
+      wasMobileExpandedRef.current = false;
+      const frameId = window.requestAnimationFrame(() => {
+        triggerRef.current?.focus();
+      });
+      return () => window.cancelAnimationFrame(frameId);
+    }
+
+    return undefined;
+  }, [useMobileCollapse, mobileExpanded]);
+
+  useEffect(() => {
+    if (!useMobileCollapse || !mobileExpanded) return;
+
+    const closeMobileSearch = () => {
+      setMobileExpanded(false);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeMobileSearch();
+      }
+    };
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        closeMobileSearch();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('mousedown', handlePointerDown);
+    };
+  }, [useMobileCollapse, mobileExpanded]);
 
   const previewResults = useMemo(() => {
     const trimmed = query.trim();
@@ -96,31 +204,68 @@ export function GlobalSearchBar({ autoFocus = false, compact = false }: GlobalSe
   };
 
   return (
-    <div className={`global-search${compact ? ' global-search--compact' : ''}`} data-testid="global-search">
-      <form className="global-search__form" onSubmit={handleSubmit}>
-        <input
-          type="search"
-          className="input global-search__input"
-          placeholder={translate('search.globalPlaceholder')}
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          autoFocus={autoFocus}
-          data-testid="global-search-input"
-        />
-      </form>
+    <div
+      ref={rootRef}
+      className={[
+        'global-search',
+        compact ? 'global-search--compact' : '',
+        useMobileCollapse && !mobileExpanded ? 'global-search--collapsed' : '',
+        useMobileCollapse ? 'global-search--mobile-collapsible' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+      data-testid="global-search"
+    >
+      {useMobileCollapse ? (
+        <Button
+          ref={triggerRef}
+          type="button"
+          variant="ghost"
+          size="md"
+          fullWidth
+          className="global-search__mobile-trigger"
+          aria-expanded={mobileExpanded}
+          aria-controls={panelId}
+          data-testid="global-search-trigger"
+          onClick={() => setMobileExpanded((open) => !open)}
+        >
+          {translate('search.title')}
+        </Button>
+      ) : null}
 
-      {previewResults.length > 0 && (
-        <div className="global-search__preview" data-testid="global-search-preview">
-          <SearchResultsList results={previewResults} onSelect={handleSelect} compact={compact} />
-          <button
-            type="button"
-            className="global-search__show-all"
-            onClick={() => navigate(`/suche?q=${encodeURIComponent(query.trim())}`)}
-          >
-            {translate('search.showAll')}
-          </button>
-        </div>
-      )}
+      <div
+        id={useMobileCollapse ? panelId : undefined}
+        className="global-search__panel"
+        hidden={panelHidden}
+        data-testid="global-search-panel"
+      >
+        <form className="global-search__form" onSubmit={handleSubmit}>
+          <input
+            ref={inputRef}
+            type="search"
+            className="input global-search__input"
+            placeholder={translate('search.globalPlaceholder')}
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            autoFocus={autoFocus && !collapsibleOnMobile}
+            aria-label={translate('search.globalPlaceholder')}
+            data-testid="global-search-input"
+          />
+        </form>
+
+        {previewResults.length > 0 && (
+          <div className="global-search__preview" data-testid="global-search-preview">
+            <SearchResultsList results={previewResults} onSelect={handleSelect} compact={compact} />
+            <button
+              type="button"
+              className="global-search__show-all"
+              onClick={() => navigate(`/suche?q=${encodeURIComponent(query.trim())}`)}
+            >
+              {translate('search.showAll')}
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
