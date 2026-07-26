@@ -59,5 +59,8 @@ export const bgReviewWorkflow = {
   'reviewWorkflow.success.contractApplied': 'Данните от договора са прехвърлени',
   'reviewWorkflow.success.completed': 'Входящата поща е завършена',
   'reviewWorkflow.success.openOrder': 'Към поръчката',
-  'reviewWorkflow.success.nextDocument': 'Следващ документ',
+  'reviewWorkflow.success.continueReply': 'Напред: Подготви отговор',
+  'reviewWorkflow.success.continueFiling': 'Напред: Прибери оригинала',
+  'reviewWorkflow.success.openArchive': 'Отвори архивния документ',
+  'reviewWorkflow.success.nextDocument': 'Към входящи',
 } as const;

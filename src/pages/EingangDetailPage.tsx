@@ -634,6 +634,12 @@ export function EingangDetailPage() {
     if (vorgangId) navigate(`/vorgaenge/${vorgangId}`);
   };
 
+  const handleOpenArchive = () => {
+    const archiveDocumentId =
+      intakeExecution?.archiveDocumentId ?? item.archiveDocumentId;
+    if (archiveDocumentId) navigate(`/dokumente/${archiveDocumentId}`);
+  };
+
   const handleCreateContractOrder = (selectedPositions: EnhancedDetectedOrderPosition[]) => {
     if (!item || !workflow?.contractOrderProposal) return;
     if (positionsImportLocked) {
@@ -1095,6 +1101,7 @@ export function EingangDetailPage() {
       onDiscardContractProposal={handleDiscardContractProposal}
       isCreatingContractOrder={isCreatingContractOrder}
       onOpenVorgang={handleOpenVorgang}
+      onOpenArchive={handleOpenArchive}
       onNextDocument={goBack}
       moreOptionsContent={moreOptionsContent}
       translate={translate}

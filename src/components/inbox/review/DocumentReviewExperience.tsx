@@ -34,6 +34,7 @@ interface DocumentReviewExperienceProps {
   onDiscardContractProposal?: () => void;
   isCreatingContractOrder?: boolean;
   onOpenVorgang?: () => void;
+  onOpenArchive?: () => void;
   onNextDocument: () => void;
   moreOptionsContent: ReactNode;
   translate: (key: TranslationKey) => string;
@@ -51,6 +52,7 @@ export function DocumentReviewExperience({
   onDiscardContractProposal,
   isCreatingContractOrder = false,
   onOpenVorgang,
+  onOpenArchive,
   onNextDocument,
   moreOptionsContent,
   translate,
@@ -108,8 +110,10 @@ export function DocumentReviewExperience({
         <DocumentReviewSuccess
           steps={successSteps}
           vorgangId={executionResult.vorgangId ?? item.vorgangId}
+          archiveDocumentId={executionResult.archiveDocumentId ?? item.archiveDocumentId}
           translate={translate}
           onOpenVorgang={onOpenVorgang}
+          onOpenArchive={onOpenArchive}
           onNextDocument={onNextDocument}
         />
       ) : workflow.contractOrderProposal ? (

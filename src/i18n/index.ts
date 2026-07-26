@@ -2617,7 +2617,10 @@ const deLegacy = {
   'reviewWorkflow.success.contractApplied': 'Vertragsdaten übernommen',
   'reviewWorkflow.success.completed': 'Eingang abgeschlossen',
   'reviewWorkflow.success.openOrder': 'Zum Auftrag',
-  'reviewWorkflow.success.nextDocument': 'Nächstes Dokument',
+  'reviewWorkflow.success.continueReply': 'Weiter: Antwort vorbereiten',
+  'reviewWorkflow.success.continueFiling': 'Weiter: Papier abheften',
+  'reviewWorkflow.success.openArchive': 'Archivdokument öffnen',
+  'reviewWorkflow.success.nextDocument': 'Zur Ablage',
 
   'classification.detect.schlussrechnung': 'Schlussrechnung erkannt',
   'classification.detect.abschlagsrechnung': 'Abschlagsrechnung erkannt',
@@ -3242,7 +3245,10 @@ const trLegacy: Partial<Record<keyof typeof de, string>> = {
   'reviewWorkflow.success.contractApplied': 'Sözleşme verileri aktarıldı',
   'reviewWorkflow.success.completed': 'Gelen kutusu tamamlandı',
   'reviewWorkflow.success.openOrder': 'İşe git',
-  'reviewWorkflow.success.nextDocument': 'Sonraki belge',
+  'reviewWorkflow.success.continueReply': 'Devam: Yanıt hazırla',
+  'reviewWorkflow.success.continueFiling': 'Devam: Kağıdı dosyala',
+  'reviewWorkflow.success.openArchive': 'Arşiv belgesini aç',
+  'reviewWorkflow.success.nextDocument': 'Gelen kutusuna',
 
   'classification.detect.werkvertragMitLv': 'İş kalemleri listeli eser sözleşmesi algılandı',
   'classification.detect.diReceiptScoring':
