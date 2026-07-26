@@ -9,6 +9,7 @@ import {
   type SnoozeDuration,
 } from '../../services/homeHintDismissalService';
 import type { TranslationKey } from '../../i18n';
+import { DropdownMenu, type DropdownMenuItem } from '../ui/DropdownMenu';
 
 const SEVERITY_LABEL_KEY: Record<HomeHintSeverity, TranslationKey> = {
   critical: 'priority.kritisch',
@@ -80,7 +81,7 @@ export function DeskPriorities() {
     return (
       <section className="desk-priorities desk-priorities--empty" data-testid="desk-priorities">
         <p className="desk-priorities__empty" data-testid="desk-priorities-empty">
-          <span aria-hidden>🟢</span> {translate('desk.noPriorities')}
+          {translate('desk.noPriorities')}
         </p>
       </section>
     );
@@ -89,56 +90,62 @@ export function DeskPriorities() {
   return (
     <section className="desk-priorities" data-testid="desk-priorities" aria-label={translate('desk.prioritiesTitle')}>
       <ul className="desk-priorities__list">
-        {visiblePriorities.map((hint) => (
-          <li key={hint.id} className="desk-priorities__item" data-testid={`desk-priority-${hint.id}`}>
-            <div className="desk-priorities__content">
-              <span
-                className={`desk-priorities__severity desk-priorities__severity--${hint.severity}`}
-                data-severity={hint.severity}
-                data-testid={`desk-priority-severity-${hint.id}`}
-              >
-                <span className="desk-priorities__severity-dot" aria-hidden />
-                <span className="sr-only">{translate(SEVERITY_LABEL_KEY[hint.severity])}</span>
-              </span>
-              {hint.route ? (
-                <Link to={hint.route} className="desk-priorities__text">
-                  {translateHint(translate, hint)}
-                </Link>
-              ) : (
-                <span className="desk-priorities__text">{translateHint(translate, hint)}</span>
-              )}
-            </div>
-            <div className="desk-priorities__actions">
-              <button
-                type="button"
-                className="desk-priorities__action"
-                data-testid={`desk-priority-done-${hint.id}`}
-                onClick={() => handleDone(hint.id)}
-              >
-                {translate('hints.action.done')}
-              </button>
-              {SNOOZE_OPTIONS.map(({ duration, key }) => (
-                <button
-                  key={duration}
-                  type="button"
-                  className="desk-priorities__action desk-priorities__action--snooze"
-                  data-testid={`desk-priority-snooze-${duration}-${hint.id}`}
-                  onClick={() => handleSnooze(hint.id, duration)}
+        {visiblePriorities.map((hint) => {
+          const moreItems: DropdownMenuItem[] = [
+            ...SNOOZE_OPTIONS.map(({ duration, key }) => ({
+              id: `snooze-${duration}`,
+              label: `⏰ ${translate(key)}`,
+              onSelect: () => handleSnooze(hint.id, duration),
+              testId: `desk-priority-snooze-${duration}-${hint.id}`,
+            })),
+            {
+              id: 'hide',
+              label: translate('hints.action.hide'),
+              onSelect: () => handleHide(hint.id),
+              destructive: true,
+              testId: `desk-priority-hide-${hint.id}`,
+            },
+          ];
+
+          return (
+            <li key={hint.id} className="desk-priorities__item" data-testid={`desk-priority-${hint.id}`}>
+              <div className="desk-priorities__content">
+                <span
+                  className={`desk-priorities__severity desk-priorities__severity--${hint.severity}`}
+                  data-severity={hint.severity}
+                  data-testid={`desk-priority-severity-${hint.id}`}
                 >
-                  ⏰ {translate(key)}
+                  <span className="desk-priorities__severity-dot" aria-hidden />
+                  <span className="sr-only">{translate(SEVERITY_LABEL_KEY[hint.severity])}</span>
+                </span>
+                {hint.route ? (
+                  <Link to={hint.route} className="desk-priorities__text">
+                    {translateHint(translate, hint)}
+                  </Link>
+                ) : (
+                  <span className="desk-priorities__text">{translateHint(translate, hint)}</span>
+                )}
+              </div>
+              <div className="desk-priorities__actions">
+                <button
+                  type="button"
+                  className="desk-priorities__action"
+                  data-testid={`desk-priority-done-${hint.id}`}
+                  onClick={() => handleDone(hint.id)}
+                >
+                  {translate('hints.action.done')}
                 </button>
-              ))}
-              <button
-                type="button"
-                className="desk-priorities__action desk-priorities__action--muted"
-                data-testid={`desk-priority-hide-${hint.id}`}
-                onClick={() => handleHide(hint.id)}
-              >
-                {translate('hints.action.hide')}
-              </button>
-            </div>
-          </li>
-        ))}
+                <DropdownMenu
+                  testId={`desk-priority-more-${hint.id}`}
+                  ariaLabel={translate('invoice.moreActions')}
+                  align="end"
+                  trigger={<span>{translate('invoice.moreActions')}</span>}
+                  items={moreItems}
+                />
+              </div>
+            </li>
+          );
+        })}
       </ul>
     </section>
   );
