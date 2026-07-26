@@ -269,7 +269,9 @@ describe('UX-WORKFLOW-01 document review', () => {
     const html = renderDetail(item.id);
     const heroIndex = html.indexOf('document-review-hero');
     const recommendIndex = html.indexOf('document-review-recommendations');
-    const primaryIndex = html.indexOf('document-review-primary-action');
+    const primaryIndex = html.includes('document-review-primary-action')
+      ? html.indexOf('document-review-primary-action')
+      : html.indexOf('contract-chef-primary-action');
     const moreIndex = html.indexOf('document-review-more-options');
     expect(heroIndex).toBeGreaterThan(-1);
     expect(recommendIndex).toBeGreaterThan(heroIndex);
@@ -285,6 +287,12 @@ describe('UX-WORKFLOW-01 document review', () => {
     const html = renderDetail(item.id);
     expect(html).toContain('Vorschlag übernehmen');
     expect(html).toContain('data-testid="document-review-experience"');
+    // Contract proposals surface the apply action in the chef area, not as a second outer primary.
+    if (html.includes('contract-order-proposal')) {
+      expect(html).toContain('data-testid="contract-chef-primary-action"');
+      expect(html).not.toContain('data-testid="document-review-primary-action"');
+      expect((html.match(/Vorschlag übernehmen/g) ?? []).length).toBe(1);
+    }
   });
 
   it('View-Service liefert Hero-Kontext', () => {

@@ -1,8 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createElement } from 'react';
 import type { ContractOrderProposal, ContractIntelligenceResult, EnhancedDetectedOrderPosition } from './types/documentIntelligence';
-import { ContractWorkspaceSummary } from './components/inbox/review/ContractWorkspaceSummary';
+import { ContractOrderProposalPanel } from './components/inbox/review/ContractOrderProposalPanel';
 import { buildContractWorkspaceSummaryView } from './services/contractWorkspaceSummaryView';
 import { isImportableLvPosition } from './services/contractPositionImportService';
 import { t, type TranslationKey } from './i18n';
@@ -117,7 +117,7 @@ describe('CONTRACT-POSITION-INSIGHTS-01', () => {
     expect(flags).toEqual([true, true, false, false]);
   });
 
-  it('Summary zeigt faktenbasierte Positionszähler ohne Doppelung und ohne Import-Historie', () => {
+  it('View und LV-Überblick zeigen faktenbasierte Positionszähler ohne Import-Historie', () => {
     const proposal = buildFourPositionProposal();
     const view = buildContractWorkspaceSummaryView(proposal);
 
@@ -149,26 +149,28 @@ describe('CONTRACT-POSITION-INSIGHTS-01', () => {
     expect(view.positionInsightRows.find((r) => r.id === 'positionsWithoutUnit')?.valueParams).toEqual({
       count: 1,
     });
+    expect(view.lvOverview).toEqual({
+      positionCount: 4,
+      totalLabel: undefined,
+      importableCount: 2,
+      needsReviewCount: 0,
+    });
 
     const html = renderToStaticMarkup(
-      createElement(ContractWorkspaceSummary, { proposal, translate }),
+      createElement(ContractOrderProposalPanel, {
+        proposal,
+        translate,
+        onConfirmImport: vi.fn(),
+      }),
     );
 
-    expect(html).toContain('data-testid="contract-workspace-summary-position-insights"');
-    expect(html).toContain('4');
-    expect(html).toContain('2 Positionen importierbar');
-    expect(html).toContain('2 Positionen nicht importierbar');
-    expect(html).toContain('1 Positionen ohne erkannte Menge');
-    expect(html).toContain('1 Positionen ohne erkannten Einzelpreis');
-    expect(html).toContain('1 Positionen ohne erkannte Einheit');
-
+    expect(html).toContain('data-testid="contract-order-lv-overview"');
+    expect(html).toContain('data-testid="contract-order-lv-meta"');
+    expect(html).toContain('Importierbar');
+    expect(html).toMatch(/2\s+Importierbar|4\s+Positionen/);
     expect(html.toLowerCase()).not.toContain('übernommen');
-    expect(html.toLowerCase()).not.toContain('importiert');
     expect(html).not.toContain('Importhistorie');
-
-    // Gesamtszahl nur einmal als Field-Row; Abschnittsüberschrift „Positionen“ ist zusätzlich erlaubt.
-    expect((html.match(/data-testid="contract-workspace-summary-positions"/g) ?? []).length).toBe(1);
-    expect(html).toContain('data-testid="contract-workspace-summary-section-positions"');
+    expect(html).not.toContain('data-testid="contract-workspace-summary-position-insights"');
   });
 
   it('fehlende-Feld-Zähler mit 0 werden weggelassen; Importierbarkeit zeigt auch 0', () => {
@@ -222,11 +224,18 @@ describe('CONTRACT-POSITION-INSIGHTS-01', () => {
       count: 0,
     });
 
+    expect(view.lvOverview?.importableCount).toBe(1);
+    expect(view.lvOverview?.positionCount).toBe(1);
+
     const html = renderToStaticMarkup(
-      createElement(ContractWorkspaceSummary, { proposal, translate }),
+      createElement(ContractOrderProposalPanel, {
+        proposal,
+        translate,
+        onConfirmImport: vi.fn(),
+      }),
     );
-    expect(html).toContain('1 Positionen importierbar');
-    expect(html).toContain('0 Positionen nicht importierbar');
+    expect(html).toContain('data-testid="contract-order-lv-overview"');
+    expect(html).toContain('Importierbar');
     expect(html).not.toContain('ohne erkannte Menge');
     expect(html).not.toContain('ohne erkannten Einzelpreis');
     expect(html).not.toContain('ohne erkannte Einheit');

@@ -1,5 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createElement } from 'react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, createElement } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { AppProvider } from './context/AppContext';
 import { ContractOrderProposalPanel } from './components/inbox/review/ContractOrderProposalPanel';
@@ -19,6 +20,46 @@ import type {
 
 function translate(key: TranslationKey): string {
   return t(key, 'de');
+}
+
+async function mountProposalPanel(props: {
+  proposal: ContractOrderProposal;
+  item: ReturnType<typeof createAuftragInboxItem>;
+}): Promise<{ container: HTMLDivElement; root: Root }> {
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+  const root = createRoot(container);
+  await act(async () => {
+    root.render(
+      createElement(ContractOrderProposalPanel, {
+        proposal: props.proposal,
+        translate,
+        item: props.item,
+        onConfirmImport: vi.fn(),
+      }),
+    );
+  });
+  return { container, root };
+}
+
+async function expandLvEditor(container: HTMLElement): Promise<void> {
+  const toggle = container.querySelector(
+    '[data-testid="contract-lv-editor-disclosure"] [data-testid="show-more-toggle"]',
+  ) as HTMLButtonElement | null;
+  expect(toggle).toBeTruthy();
+  await act(async () => {
+    toggle!.click();
+  });
+}
+
+async function unmountProposalPanel(mounted: {
+  container: HTMLDivElement;
+  root: Root;
+}): Promise<void> {
+  await act(async () => {
+    mounted.root.unmount();
+  });
+  mounted.container.remove();
 }
 
 function confirmedSnapshot(): ContractConfirmationSnapshot {
@@ -149,7 +190,11 @@ describe('ORDER-PLAN-INTEGRITY-01 import UI lock', () => {
     resetTestStores();
   });
 
-  it('bei contractConfirmation ist Contract-Importaktion nicht ausführbar', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('bei contractConfirmation ist Contract-Importaktion nicht ausführbar', async () => {
     hydrateVorgangStore([
       createTestVorgang({
         id: 'v-locked',
@@ -163,23 +208,30 @@ describe('ORDER-PLAN-INTEGRITY-01 import UI lock', () => {
       vorgangLinkStatus: 'linked',
     });
 
-    const html = renderToStaticMarkup(
-      createElement(ContractOrderProposalPanel, {
-        proposal: buildProposal(),
-        translate,
-        item,
-        onConfirmImport: vi.fn(),
-      }),
-    );
+    const mounted = await mountProposalPanel({
+      proposal: buildProposal(),
+      item,
+    });
 
-    expect(html).toContain('data-testid="contract-import-plan-locked"');
-    expect(html).toContain('data-testid="contract-create-order-button"');
-    expect(html).toMatch(
-      /<button[^>]*disabled[^>]*data-testid="contract-create-order-button"|<button[^>]*data-testid="contract-create-order-button"[^>]*disabled/,
-    );
+    expect(mounted.container.querySelector('[data-testid="contract-import-plan-locked"]')).toBeTruthy();
+    expect(
+      (
+        mounted.container.querySelector(
+          '[data-testid="contract-chef-primary-action"]',
+        ) as HTMLButtonElement
+      ).disabled,
+    ).toBe(true);
+
+    await expandLvEditor(mounted.container);
+    const createButton = mounted.container.querySelector(
+      '[data-testid="contract-create-order-button"]',
+    ) as HTMLButtonElement | null;
+    expect(createButton).toBeTruthy();
+    expect(createButton!.disabled).toBe(true);
+    await unmountProposalPanel(mounted);
   });
 
-  it('ohne contractConfirmation bleibt Contract-Importaktion verfügbar', () => {
+  it('ohne contractConfirmation bleibt Contract-Importaktion verfügbar', async () => {
     hydrateVorgangStore([
       createTestVorgang({
         id: 'v-open',
@@ -192,21 +244,19 @@ describe('ORDER-PLAN-INTEGRITY-01 import UI lock', () => {
       vorgangLinkStatus: 'linked',
     });
 
-    const html = renderToStaticMarkup(
-      createElement(ContractOrderProposalPanel, {
-        proposal: buildProposal(),
-        translate,
-        item,
-        onConfirmImport: vi.fn(),
-      }),
-    );
+    const mounted = await mountProposalPanel({
+      proposal: buildProposal(),
+      item,
+    });
 
-    expect(html).not.toContain('data-testid="contract-import-plan-locked"');
-    expect(html).toContain('data-testid="contract-create-order-button"');
-    const buttonMatch = html.match(
-      /<button[^>]*data-testid="contract-create-order-button"[^>]*>/,
-    );
-    expect(buttonMatch?.[0] ?? '').not.toContain('disabled');
+    expect(mounted.container.querySelector('[data-testid="contract-import-plan-locked"]')).toBeFalsy();
+    await expandLvEditor(mounted.container);
+    const createButton = mounted.container.querySelector(
+      '[data-testid="contract-create-order-button"]',
+    ) as HTMLButtonElement | null;
+    expect(createButton).toBeTruthy();
+    expect(createButton!.disabled).toBe(false);
+    await unmountProposalPanel(mounted);
   });
 
   it('SmartIntakeSummary blendet Import bei Lock aus und zeigt ihn sonst', () => {

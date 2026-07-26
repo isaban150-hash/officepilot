@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { createElement } from 'react';
+import { createElement, act } from 'react';
+import { createRoot } from 'react-dom/client';
 import type { ContractOrderProposal, ContractIntelligenceResult, EnhancedDetectedOrderPosition } from './types/documentIntelligence';
 import type { InboxItem, Vorgang } from './types/models';
 import { ContractWorkspaceSummary } from './components/inbox/review/ContractWorkspaceSummary';
@@ -130,7 +131,7 @@ function linkedItem(): InboxItem {
 }
 
 describe('CONTRACT-WORKSPACE-IA-CLARITY-01', () => {
-  it('Fall A: Übersicht → Parteien → Allgemein → Typabhängig → Positionen → Status', () => {
+  it('Fall A: Kopf → Chef (Parteien) → Fakten → Status', () => {
     const proposal = buildProposal();
     const item = linkedItem();
     const vorgang = buildVorgang();
@@ -139,57 +140,37 @@ describe('CONTRACT-WORKSPACE-IA-CLARITY-01', () => {
       createElement(ContractWorkspaceSummary, { proposal, item, vorgang, translate }),
     );
 
-    expect(html).toContain('data-testid="contract-workspace-summary-section-overview"');
+    expect(html).toContain('data-testid="contract-workspace-summary-header"');
+    expect(html).toContain('data-testid="contract-workspace-summary-chef"');
     expect(html).toContain('data-testid="contract-workspace-summary-section-parties"');
-    expect(html).toContain('data-testid="contract-workspace-summary-section-general"');
-    expect(html).toContain('data-testid="contract-workspace-summary-section-type-specific"');
-    expect(html).toContain('data-testid="contract-workspace-summary-section-positions"');
+    expect(html).toContain('data-testid="contract-workspace-summary-section-facts"');
     expect(html).toContain('data-testid="contract-workspace-summary-section-status"');
-    expect(html).toContain('Vertragsübersicht');
-    expect(html).toContain('Vertragsparteien');
-    expect(html).toContain('Allgemeine Vertragsdaten');
-    expect(html).toContain('Typabhängige Vertragsdaten');
-    expect(html).toContain('Positionen');
+    expect(html).toContain('Werkvertrag mit Leistungsverzeichnis');
+    expect(html).toContain('Isobautec GmbH');
+    expect(html).toContain('Ivan Iliev');
+    expect(html).toContain('Wichtige Angaben');
     expect(html).toContain('Status');
+    expect(html).not.toContain('Typabhängige Vertragsdaten');
+    expect(html).not.toContain('Vertragsübersicht');
 
     assertOrder(
       html,
-      'data-testid="contract-workspace-summary-section-overview"',
-      'data-testid="contract-workspace-summary-section-parties"',
+      'data-testid="contract-workspace-summary-header"',
+      'data-testid="contract-workspace-summary-chef"',
     );
     assertOrder(
       html,
       'data-testid="contract-workspace-summary-section-parties"',
-      'data-testid="contract-workspace-summary-section-general"',
+      'data-testid="contract-workspace-summary-section-facts"',
     );
     assertOrder(
       html,
-      'data-testid="contract-workspace-summary-section-general"',
-      'data-testid="contract-workspace-summary-section-type-specific"',
-    );
-    assertOrder(
-      html,
-      'data-testid="contract-workspace-summary-section-type-specific"',
-      'data-testid="contract-workspace-summary-section-positions"',
-    );
-    assertOrder(
-      html,
-      'data-testid="contract-workspace-summary-section-positions"',
-      'data-testid="contract-workspace-summary-position-insights"',
-    );
-    assertOrder(
-      html,
-      'data-testid="contract-workspace-summary-position-insights"',
+      'data-testid="contract-workspace-summary-section-facts"',
       'data-testid="contract-workspace-summary-section-status"',
-    );
-    assertOrder(
-      html,
-      'data-testid="contract-workspace-summary-section-status"',
-      'data-testid="contract-workspace-summary-status"',
     );
   });
 
-  it('Fall B: ohne positionInsightRows keine Überschrift Positionen', () => {
+  it('Fall B: ohne Positionen keine LV-Sektion in der Summary', () => {
     const proposal = buildProposal({ positions: [] });
     proposal.positionCount = 0;
     const item = linkedItem();
@@ -199,14 +180,13 @@ describe('CONTRACT-WORKSPACE-IA-CLARITY-01', () => {
       createElement(ContractWorkspaceSummary, { proposal, item, vorgang, translate }),
     );
 
-    expect(html).toContain('data-testid="contract-workspace-summary-section-overview"');
+    expect(html).toContain('data-testid="contract-workspace-summary-header"');
     expect(html).toContain('data-testid="contract-workspace-summary-section-status"');
     expect(html).not.toContain('data-testid="contract-workspace-summary-section-positions"');
-    expect(html).toContain('Vertragsübersicht');
-    expect(html).toContain('Status');
+    expect(html).not.toContain('data-testid="contract-order-lv-overview"');
   });
 
-  it('Fall C: Proposal-Intro hat genau einen allgemeinen Instruktionsabsatz ohne doppelte Übersicht', () => {
+  it('Fall C: Proposal-Intro hat genau einen Instruktionsabsatz ohne doppelte Übersicht', () => {
     const proposal = buildProposal();
     const html = renderToStaticMarkup(
       createElement(ContractOrderProposalPanel, {
@@ -228,19 +208,15 @@ describe('CONTRACT-WORKSPACE-IA-CLARITY-01', () => {
     expect(introHtml).toContain(translate('documentIntelligence.proposal.instruction'));
     expect(introHtml).not.toContain(translate('documentIntelligence.workspace.section.overview'));
     expect(introHtml).not.toContain(translate('documentIntelligence.proposal.reviewHint'));
-    expect(introHtml).not.toContain(translate('documentIntelligence.proposal.onlySelectedHint'));
-    expect(introHtml).not.toContain(translate('documentIntelligence.proposal.unsureNotSelectedHint'));
 
-    // Eigenständige Hinweise bleiben außerhalb des Intro-Blocks.
     expect(html).toContain('data-testid="contract-progress-billing-hint"');
     expect(html).toContain('data-testid="contract-technical-attachments-hint"');
 
-    // Overview appears once in the summary, not duplicated in the intro.
     const overviewMatches = html.match(/Vertragsübersicht/g) ?? [];
-    expect(overviewMatches.length).toBe(1);
+    expect(overviewMatches.length).toBe(0);
   });
 
-  it('Fall D: Titel, DataRows, Review-Hints und Tabelle bleiben', () => {
+  it('Fall D: Kopf, Hints, kompakte Positionen und einklappbare Tabelle', async () => {
     const proposal = buildProposal();
     const item = linkedItem();
     const vorgang = buildVorgang();
@@ -261,7 +237,40 @@ describe('CONTRACT-WORKSPACE-IA-CLARITY-01', () => {
         onDiscard: vi.fn(),
       }),
     );
-    expect(panelHtml).toContain('data-testid="contract-order-positions"');
+    expect(panelHtml).toContain('data-testid="contract-order-lv-overview"');
+    expect(panelHtml).toContain('data-testid="contract-order-compact-positions"');
     expect(panelHtml).toContain('PE-Folie verlegen');
+    expect(panelHtml).toContain('data-testid="contract-lv-editor-disclosure"');
+    expect(panelHtml).not.toContain('data-testid="contract-order-positions"');
+    expect(panelHtml).not.toContain('data-testid="contract-order-table-scroll"');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        createElement(ContractOrderProposalPanel, {
+          proposal,
+          translate,
+          onConfirmImport: vi.fn(),
+          onDiscard: vi.fn(),
+        }),
+      );
+    });
+    const toggle = container.querySelector(
+      '[data-testid="contract-lv-editor-disclosure"] [data-testid="show-more-toggle"]',
+    ) as HTMLButtonElement | null;
+    expect(toggle).toBeTruthy();
+    expect(toggle!.getAttribute('aria-expanded')).toBe('false');
+    await act(async () => {
+      toggle!.click();
+    });
+    expect(toggle!.getAttribute('aria-expanded')).toBe('true');
+    expect(container.querySelector('[data-testid="contract-order-positions"]')).toBeTruthy();
+    expect(container.querySelector('[data-testid="contract-order-table-scroll"]')).toBeTruthy();
+    await act(async () => {
+      root.unmount();
+    });
+    container.remove();
   });
 });

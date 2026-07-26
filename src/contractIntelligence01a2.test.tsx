@@ -123,12 +123,12 @@ describe('CONTRACT-INTELLIGENCE-01A2 — allgemeine Vertragsintelligenz', () => 
           item,
         }),
       );
-      expect(summaryHtml).toContain('Vertragsübersicht');
-      expect(summaryHtml).toContain('Vertragsparteien');
+      expect(summaryHtml).toContain('data-testid="contract-workspace-summary-header"');
+      expect(summaryHtml).toContain('data-testid="contract-workspace-summary-section-parties"');
       expect(summaryHtml).toContain('Isobautec GmbH');
       expect(summaryHtml).toContain('Ivan Iliev');
-      expect(summaryHtml.indexOf('Vertragsübersicht')).toBeLessThan(
-        summaryHtml.indexOf('Vertragsparteien'),
+      expect(summaryHtml.indexOf('contract-workspace-summary-header')).toBeLessThan(
+        summaryHtml.indexOf('contract-workspace-summary-section-parties'),
       );
 
       const panelHtml = renderToStaticMarkup(
@@ -146,7 +146,7 @@ describe('CONTRACT-INTELLIGENCE-01A2 — allgemeine Vertragsintelligenz', () => 
       // Primary surface is structured summary, not a raw OCR wall.
       expect(panelHtml).toContain('data-testid="contract-workspace-summary"');
       const overviewCount = (panelHtml.match(/Vertragsübersicht/g) ?? []).length;
-      expect(overviewCount).toBe(1);
+      expect(overviewCount).toBe(0);
     });
   });
 
@@ -180,6 +180,7 @@ describe('CONTRACT-INTELLIGENCE-01A2 — allgemeine Vertragsintelligenz', () => 
         }),
       );
       expect(panelHtml).not.toContain('data-testid="contract-order-positions"');
+      expect(panelHtml).not.toContain('data-testid="contract-order-lv-overview"');
       expect(panelHtml).not.toContain('Bauvorhaben');
     });
   });
@@ -289,7 +290,8 @@ Laufzeit: 36 Monate
           translate,
         }),
       );
-      expect(html).toContain('Vertragsübersicht');
+      expect(html).toContain('data-testid="contract-workspace-summary-header"');
+      expect(html).not.toContain('Vertragsübersicht');
     });
 
     it('Zahlungszeile mit nach Abnahme erzeugt keine Abnahmeklausel', () => {

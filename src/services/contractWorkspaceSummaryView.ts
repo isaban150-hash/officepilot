@@ -3,6 +3,7 @@ import type {
   ContractOrderProposal,
   ContractPartyRole,
   DetectedContractClause,
+  EnhancedDetectedOrderPosition,
   ExtractedContractField,
 } from '../types/documentIntelligence';
 import type { DetectedOrderPosition, InboxItem, Vorgang } from '../types/models';
@@ -28,12 +29,30 @@ export type ContractWorkspaceClauseRow = {
   id: string;
   labelKey: TranslationKey;
   value: string;
+  /** Short line for default display; full value stays in `value`. */
+  shortValue: string;
 };
 
 export type ContractWorkspacePartyRow = {
   id: string;
   roleLabelKey: TranslationKey;
   name: string;
+  address?: string;
+  contact?: string;
+};
+
+export type ContractWorkspaceMoneyMetric = {
+  id: string;
+  labelKey: TranslationKey;
+  value: string;
+  needsReview: boolean;
+};
+
+export type ContractWorkspaceLvOverview = {
+  positionCount: number;
+  totalLabel?: string;
+  importableCount: number;
+  needsReviewCount: number;
 };
 
 export type ContractWorkspaceSummaryView = {
@@ -41,17 +60,33 @@ export type ContractWorkspaceSummaryView = {
   disclaimerKey: TranslationKey;
   contractKindLabelKey: TranslationKey;
   contractKindNeedsReview: boolean;
+  statusBadgeKey: TranslationKey;
+  subject?: string;
+  moneyMetric: ContractWorkspaceMoneyMetric | null;
+  objectFact: ContractWorkspaceSummaryRow | null;
+  deadlineFact: ContractWorkspaceSummaryRow | null;
   overviewRows: ContractWorkspaceSummaryRow[];
   partyRows: ContractWorkspacePartyRow[];
+  primaryPartyRows: ContractWorkspacePartyRow[];
+  extraPartyRows: ContractWorkspacePartyRow[];
+  factRows: ContractWorkspaceSummaryRow[];
   generalRows: ContractWorkspaceSummaryRow[];
   typeSpecificRows: ContractWorkspaceSummaryRow[];
-  /** @deprecated use generalRows — kept for older tests expecting rows */
+  /** @deprecated use factRows — kept for older tests expecting rows */
   rows: ContractWorkspaceSummaryRow[];
   clauseRows: ContractWorkspaceClauseRow[];
   statusRows: ContractWorkspaceStatusRow[];
   positionInsightRows: ContractWorkspaceStatusRow[];
+  lvOverview: ContractWorkspaceLvOverview | null;
+  compactPositions: EnhancedDetectedOrderPosition[];
   reviewHintKeys: string[];
   family: ContractFamily;
+  showTechnicalDetails: boolean;
+  technicalMeta: {
+    contractCorePages: string;
+    billOfQuantitiesPages: string;
+    technicalAttachmentCount: number;
+  };
 };
 
 export type ContractWorkspaceSummaryContext = {
@@ -60,8 +95,9 @@ export type ContractWorkspaceSummaryContext = {
 };
 
 const POSITION_SUM_SOURCE = 'Summe der erkannten Positionen';
+export const CONTRACT_COMPACT_POSITION_LIMIT = 5;
 
-/** Party-name fields are shown in the parties section — not again under type-specific. */
+/** Party-name fields are shown in the parties section — not again under facts. */
 const PARTY_FIELD_KEYS = new Set([
   'auftraggeber',
   'auftragnehmer',
@@ -80,6 +116,21 @@ const PARTY_FIELD_KEYS = new Set([
   'arbeitgeber',
   'arbeitnehmer',
 ]);
+
+const CLAUSE_PRIORITY: DetectedContractClause['id'][] = [
+  'kuendigung',
+  'stundenlohnarbeiten',
+  'wartezeit',
+  'abnahme',
+  'nachtraege',
+  'behinderungsanzeige',
+  'materialbereitstellung',
+  'baustrom',
+  'bauwasser',
+  'geruest',
+  'kran',
+  'entsorgung',
+];
 
 const CLAUSE_LABEL_KEYS: Record<DetectedContractClause['id'], TranslationKey> = {
   nachtraege: 'documentIntelligence.clause.nachtraege',
@@ -144,32 +195,22 @@ const FIELD_LABEL_KEYS: Record<string, TranslationKey> = {
   servicezeit: 'documentIntelligence.field.serviceHours',
   pauschale: 'documentIntelligence.field.flatRate',
   stundenverrechnungssatz: 'documentIntelligence.field.billingRate',
-  vermieter: 'documentIntelligence.party.vermieter',
-  mieter: 'documentIntelligence.party.mieter',
   mietobjekt: 'documentIntelligence.field.rentalObject',
   mietbeginn: 'documentIntelligence.field.rentStart',
   kaltmiete: 'documentIntelligence.field.coldRent',
   nebenkosten: 'documentIntelligence.field.additionalCosts',
   kaution: 'documentIntelligence.field.deposit',
-  leasinggeber: 'documentIntelligence.party.leasinggeber',
-  leasingnehmer: 'documentIntelligence.party.leasingnehmer',
   leasingobjekt: 'documentIntelligence.field.leasingObject',
   leasingrate: 'documentIntelligence.field.leasingRate',
   sonderzahlung: 'documentIntelligence.field.specialPayment',
   restwert: 'documentIntelligence.field.residualValue',
-  verkaeufer: 'documentIntelligence.party.verkaeufer',
-  kaeufer: 'documentIntelligence.party.kaeufer',
   liefergegenstand: 'documentIntelligence.field.deliveryItem',
   liefertermin: 'documentIntelligence.field.deliveryDate',
   lieferort: 'documentIntelligence.field.deliveryPlace',
   eigentumsvorbehalt: 'documentIntelligence.field.retentionOfTitle',
-  versicherer: 'documentIntelligence.party.versicherer',
-  versicherungsnehmer: 'documentIntelligence.party.versicherungsnehmer',
   versicherungsart: 'documentIntelligence.field.insuranceType',
   beitrag: 'documentIntelligence.field.premium',
   selbstbeteiligung: 'documentIntelligence.field.deductible',
-  arbeitgeber: 'documentIntelligence.party.arbeitgeber',
-  arbeitnehmer: 'documentIntelligence.party.arbeitnehmer',
   taetigkeit: 'documentIntelligence.field.jobTitle',
   eintrittsdatum: 'documentIntelligence.field.startDate',
   arbeitsort: 'documentIntelligence.field.workPlace',
@@ -177,6 +218,87 @@ const FIELD_LABEL_KEYS: Record<string, TranslationKey> = {
   probezeit: 'documentIntelligence.field.probation',
   urlaub: 'documentIntelligence.field.vacation',
 };
+
+const FACT_KEYS_BY_FAMILY: Partial<Record<ContractFamily, readonly string[]>> = {
+  werkvertrag: [
+    'bauvorhaben',
+    'baustelle',
+    'vertragsdatum',
+    'beginn',
+    'laufzeit',
+    'zahlungsbedingungen',
+    'gewaehrleistung',
+    'vertragsstrafe',
+    'sicherheitseinbehalt',
+    'stundenlohn',
+    'wartezeitregelung',
+  ],
+  subunternehmervertrag: [
+    'bauvorhaben',
+    'baustelle',
+    'vertragsdatum',
+    'beginn',
+    'laufzeit',
+    'zahlungsbedingungen',
+    'gewaehrleistung',
+    'vertragsstrafe',
+    'sicherheitseinbehalt',
+    'stundenlohn',
+    'wartezeitregelung',
+  ],
+  wartungsvertrag: [
+    'vertragsgegenstand',
+    'leistungsbeschreibung',
+    'leistungsintervall',
+    'reaktionszeit',
+    'laufzeit',
+    'kuendigungsfrist',
+    'pauschale',
+    'zahlungsbedingungen',
+  ],
+  dienstleistungsvertrag: [
+    'vertragsgegenstand',
+    'leistungsbeschreibung',
+    'reaktionszeit',
+    'laufzeit',
+    'kuendigungsfrist',
+    'pauschale',
+    'zahlungsbedingungen',
+  ],
+  mietvertrag: [
+    'mietobjekt',
+    'mietbeginn',
+    'laufzeit',
+    'kuendigungsfrist',
+    'kaution',
+    'nebenkosten',
+    'kaltmiete',
+    'vertragsdatum',
+  ],
+  leasingvertrag: [
+    'leasingobjekt',
+    'laufzeit',
+    'kuendigungsfrist',
+    'leasingrate',
+    'sonderzahlung',
+    'restwert',
+    'vertragsdatum',
+  ],
+};
+
+const DEFAULT_FACT_KEYS = [
+  'vertragsnummer',
+  'vertragsdatum',
+  'vertragsgegenstand',
+  'leistungsort',
+  'beginn',
+  'laufzeit',
+  'ende',
+  'kuendigungsfrist',
+  'verlaengerung',
+  'zahlungsbedingungen',
+  'gewaehrleistung',
+] as const;
 
 function readField(field?: ExtractedContractField): { value: string; needsReview: boolean } | null {
   if (!field || field.status === 'not_found') return null;
@@ -188,16 +310,29 @@ function readField(field?: ExtractedContractField): { value: string; needsReview
   };
 }
 
+function fieldMap(
+  intelligence: ContractOrderProposal['intelligence'],
+): Record<string, ExtractedContractField> {
+  return {
+    ...(intelligence.commonFields ?? {}),
+    ...(intelligence.typeSpecificFields ?? {}),
+    ...intelligence.contractFields,
+  };
+}
+
 function pushFieldRows(
   rows: ContractWorkspaceSummaryRow[],
   fields: Record<string, ExtractedContractField> | undefined,
-  keys: string[],
+  keys: readonly string[],
+  skipIds?: Set<string>,
 ): void {
   if (!fields) return;
   for (const key of keys) {
+    if (skipIds?.has(key)) continue;
     const parsed = readField(fields[key]);
     const labelKey = FIELD_LABEL_KEYS[key];
     if (!parsed || !labelKey) continue;
+    if (rows.some((row) => row.id === key)) continue;
     rows.push({
       id: key,
       labelKey,
@@ -349,14 +484,188 @@ function buildPositionInsightRows(proposal: ContractOrderProposal): ContractWork
   return rows;
 }
 
+function shortenClauseText(text: string): string {
+  const cleaned = text.replace(/\s+/g, ' ').trim();
+  if (cleaned.length <= 90) return cleaned;
+  return `${cleaned.slice(0, 87).trim()}…`;
+}
+
 function buildClauseRows(proposal: ContractOrderProposal): ContractWorkspaceClauseRow[] {
-  return (proposal.intelligence.clauses ?? [])
-    .filter((clause) => clause.status !== 'not_found')
-    .map((clause) => ({
+  const clauses = (proposal.intelligence.clauses ?? []).filter(
+    (clause) => clause.status !== 'not_found',
+  );
+  const order = new Map(CLAUSE_PRIORITY.map((id, index) => [id, index]));
+  clauses.sort((a, b) => (order.get(a.id) ?? 100) - (order.get(b.id) ?? 100));
+
+  return clauses.map((clause) => {
+    const value = clause.summary?.trim() || clause.sourceText?.trim() || '—';
+    return {
       id: clause.id,
       labelKey: CLAUSE_LABEL_KEYS[clause.id],
-      value: clause.summary?.trim() || clause.sourceText?.trim() || '—',
+      value,
+      shortValue: shortenClauseText(value),
+    };
+  });
+}
+
+function resolveMoneyMetric(
+  proposal: ContractOrderProposal,
+  fields: Record<string, ExtractedContractField>,
+): ContractWorkspaceMoneyMetric | null {
+  const totalField = proposal.intelligence.contractTotalNet;
+  const totalFromPositionSum = totalField?.sourceText?.trim() === POSITION_SUM_SOURCE;
+  if (
+    totalField?.value != null &&
+    !totalFromPositionSum &&
+    totalField.status !== 'not_found' &&
+    proposal.contractTotalNet?.trim()
+  ) {
+    return {
+      id: 'contractTotal',
+      labelKey: 'documentIntelligence.field.contractTotal',
+      value: proposal.contractTotalNet.trim(),
+      needsReview: totalField.status === 'review_required' || totalField.confidence === 'low',
+    };
+  }
+
+  const moneyCandidates: Array<{ id: string; labelKey: TranslationKey }> = [
+    { id: 'pauschale', labelKey: 'documentIntelligence.field.flatRate' },
+    { id: 'kaltmiete', labelKey: 'documentIntelligence.field.coldRent' },
+    { id: 'leasingrate', labelKey: 'documentIntelligence.field.leasingRate' },
+    { id: 'beitrag', labelKey: 'documentIntelligence.field.premium' },
+  ];
+
+  for (const candidate of moneyCandidates) {
+    const parsed = readField(fields[candidate.id]);
+    if (!parsed) continue;
+    return {
+      id: candidate.id,
+      labelKey: candidate.labelKey,
+      value: parsed.value,
+      needsReview: parsed.needsReview,
+    };
+  }
+
+  return null;
+}
+
+function resolveObjectFact(
+  fields: Record<string, ExtractedContractField>,
+  subject?: string,
+): ContractWorkspaceSummaryRow | null {
+  const keys = [
+    'baustelle',
+    'bauvorhaben',
+    'mietobjekt',
+    'leasingobjekt',
+    'leistungsort',
+    'liefergegenstand',
+  ] as const;
+  for (const key of keys) {
+    const parsed = readField(fields[key]);
+    const labelKey = FIELD_LABEL_KEYS[key];
+    if (!parsed || !labelKey) continue;
+    if (subject && parsed.value === subject) continue;
+    return {
+      id: key,
+      labelKey,
+      value: parsed.value,
+      needsReview: parsed.needsReview,
+    };
+  }
+  return null;
+}
+
+function resolveDeadlineFact(
+  fields: Record<string, ExtractedContractField>,
+): ContractWorkspaceSummaryRow | null {
+  for (const key of ['kuendigungsfrist', 'laufzeit', 'beginn', 'mietbeginn'] as const) {
+    const parsed = readField(fields[key]);
+    const labelKey = FIELD_LABEL_KEYS[key];
+    if (!parsed || !labelKey) continue;
+    return {
+      id: key,
+      labelKey,
+      value: parsed.value,
+      needsReview: parsed.needsReview,
+    };
+  }
+  return null;
+}
+
+function buildPartyRows(
+  proposal: ContractOrderProposal,
+  fields: Record<string, ExtractedContractField>,
+): ContractWorkspacePartyRow[] {
+  const contact = readField(fields.ansprechpartner)?.value;
+  const parties = proposal.intelligence.parties ?? [];
+  if (parties.length > 0) {
+    return parties.map((party) => ({
+      id: `${party.role}-${party.name}`,
+      roleLabelKey: PARTY_ROLE_LABEL_KEYS[party.role],
+      name: party.name,
+      address: party.address?.trim() || undefined,
+      contact,
     }));
+  }
+
+  const rows: ContractWorkspacePartyRow[] = [];
+  const ag = readField(fields.auftraggeber);
+  const an = readField(fields.auftragnehmer);
+  if (ag) {
+    rows.push({
+      id: 'legacy-ag',
+      roleLabelKey: 'documentIntelligence.party.auftraggeber',
+      name: ag.value,
+      contact,
+    });
+  }
+  if (an) {
+    rows.push({
+      id: 'legacy-an',
+      roleLabelKey: 'documentIntelligence.party.auftragnehmer',
+      name: an.value,
+    });
+  }
+  return rows;
+}
+
+function buildLvOverview(proposal: ContractOrderProposal): ContractWorkspaceLvOverview | null {
+  const positions = proposal.positions;
+  if (!positions.length) return null;
+
+  let importable = 0;
+  let needsReviewCount = 0;
+  for (const position of positions) {
+    if (isImportableLvPosition(position)) importable += 1;
+    if (position.reviewStatus === 'review_required') needsReviewCount += 1;
+  }
+
+  const totalField = proposal.intelligence.contractTotalNet;
+  const totalFromPositionSum = totalField?.sourceText?.trim() === POSITION_SUM_SOURCE;
+  const totalLabel =
+    proposal.contractTotalNet?.trim() && !totalFromPositionSum
+      ? proposal.contractTotalNet.trim()
+      : undefined;
+
+  return {
+    positionCount: positions.length,
+    totalLabel,
+    importableCount: importable,
+    needsReviewCount,
+  };
+}
+
+function resolveContractFamily(intelligence: ContractOrderProposal['intelligence']): ContractFamily {
+  if (intelligence.contractType?.family) {
+    return intelligence.contractType.family;
+  }
+  const kind = intelligence.classifiedKind;
+  if (kind === 'werkvertrag') return 'werkvertrag';
+  if (kind === 'subunternehmervertrag' || kind === 'nachunternehmervertrag') {
+    return 'subunternehmervertrag';
+  }
+  return 'unknown';
 }
 
 /**
@@ -367,26 +676,33 @@ export function buildContractWorkspaceSummaryView(
   context?: ContractWorkspaceSummaryContext,
 ): ContractWorkspaceSummaryView {
   const intelligence = proposal.intelligence;
-  const family = intelligence.contractType?.family ?? 'unknown';
+  const family = resolveContractFamily(intelligence);
+  const fields = fieldMap(intelligence);
   const kindKey = (intelligence.documentLabelKey ||
     intelligence.contractType?.labelKey ||
     'documentIntelligence.label.unknown') as TranslationKey;
 
+  // Badge reflects recognition of the contract type — not position-level review hints.
+  const needsReview =
+    intelligence.contractType?.status === 'review_required' ||
+    family === 'general_contract' ||
+    family === 'unknown';
+
+  const subject = readField(fields.vertragsgegenstand)?.value;
+  const moneyMetric = resolveMoneyMetric(proposal, fields);
+  const objectFact = resolveObjectFact(fields, subject);
+  const deadlineFact = resolveDeadlineFact(fields);
+
   const overviewRows: ContractWorkspaceSummaryRow[] = [];
-  const totalField = intelligence.contractTotalNet;
-  const totalFromPositionSum = totalField?.sourceText?.trim() === POSITION_SUM_SOURCE;
-  if (totalField?.value != null && !totalFromPositionSum && totalField.status !== 'not_found') {
-    const formatted = proposal.contractTotalNet?.trim();
-    if (formatted) {
-      overviewRows.push({
-        id: 'contractTotal',
-        labelKey: 'documentIntelligence.field.contractTotal',
-        value: formatted,
-        needsReview: totalField.status === 'review_required' || totalField.confidence === 'low',
-      });
-    }
+  if (moneyMetric) {
+    overviewRows.push({
+      id: moneyMetric.id,
+      labelKey: moneyMetric.labelKey,
+      value: moneyMetric.value,
+      needsReview: moneyMetric.needsReview,
+    });
   }
-  const date = readField(intelligence.commonFields?.vertragsdatum ?? intelligence.contractFields.vertragsdatum);
+  const date = readField(fields.vertragsdatum);
   if (date || proposal.contractDate) {
     overviewRows.push({
       id: 'contractDate',
@@ -396,32 +712,33 @@ export function buildContractWorkspaceSummaryView(
     });
   }
 
-  const partyRows: ContractWorkspacePartyRow[] = (intelligence.parties ?? []).map((party) => ({
-    id: `${party.role}-${party.name}`,
-    roleLabelKey: PARTY_ROLE_LABEL_KEYS[party.role],
-    name: party.name,
-  }));
+  const partyRows = buildPartyRows(proposal, fields);
+  const primaryPartyRows = partyRows.slice(0, 2);
+  const extraPartyRows = partyRows.slice(2);
 
-  // Fallback parties from legacy fields when parties array absent.
-  if (partyRows.length === 0) {
-    const ag = readField(intelligence.contractFields.auftraggeber);
-    const an = readField(intelligence.contractFields.auftragnehmer);
-    if (ag) {
-      partyRows.push({
-        id: 'legacy-ag',
-        roleLabelKey: 'documentIntelligence.party.auftraggeber',
-        name: ag.value,
-      });
-    }
-    if (an) {
-      partyRows.push({
-        id: 'legacy-an',
-        roleLabelKey: 'documentIntelligence.party.auftragnehmer',
-        name: an.value,
-      });
-    }
+  const chefSkip = new Set<string>();
+  if (moneyMetric) chefSkip.add(moneyMetric.id);
+  if (objectFact) chefSkip.add(objectFact.id);
+  if (deadlineFact) chefSkip.add(deadlineFact.id);
+  if (subject) chefSkip.add('vertragsgegenstand');
+  chefSkip.add('ansprechpartner');
+
+  const factKeys = FACT_KEYS_BY_FAMILY[family] ?? DEFAULT_FACT_KEYS;
+  const factRows: ContractWorkspaceSummaryRow[] = [];
+  pushFieldRows(factRows, fields, factKeys, chefSkip);
+  // Fill remaining safe common fields not already shown.
+  pushFieldRows(factRows, fields, DEFAULT_FACT_KEYS, new Set([...chefSkip, ...factRows.map((r) => r.id)]));
+
+  if (!factRows.some((row) => row.id === 'zahlungsbedingungen') && proposal.paymentTermsSummary) {
+    factRows.push({
+      id: 'paymentTerms',
+      labelKey: 'documentIntelligence.field.paymentTerms',
+      value: proposal.paymentTermsSummary,
+      needsReview: false,
+    });
   }
 
+  // Legacy general/typeSpecific partitions for older tests.
   const generalRows: ContractWorkspaceSummaryRow[] = [];
   pushFieldRows(generalRows, intelligence.commonFields ?? intelligence.contractFields, [
     'ansprechpartner',
@@ -450,8 +767,6 @@ export function buildContractWorkspaceSummaryView(
   const typeFields = intelligence.typeSpecificFields ?? {};
   const typeKeys = Object.keys(typeFields).filter((key) => !PARTY_FIELD_KEYS.has(key));
   pushFieldRows(typeSpecificRows, typeFields, typeKeys);
-
-  // Legacy fallback when typeSpecific empty but construction/service fields exist on contractFields.
   if (typeSpecificRows.length === 0) {
     pushFieldRows(typeSpecificRows, intelligence.contractFields, [
       'bauvorhaben',
@@ -471,8 +786,7 @@ export function buildContractWorkspaceSummaryView(
     ]);
   }
 
-  // Combined rows for older consumers/tests (general + type-specific, no party duplicates).
-  const rows = [...generalRows, ...typeSpecificRows];
+  const rows = [...factRows];
   if (proposal.positions.length > 0) {
     rows.push({
       id: 'positions',
@@ -482,20 +796,43 @@ export function buildContractWorkspaceSummaryView(
     });
   }
 
+  const segmentation = intelligence.segmentation;
+
   return {
     titleKey: 'documentIntelligence.workspace.summaryTitle',
     disclaimerKey: 'documentIntelligence.workspace.summaryDisclaimer',
     contractKindLabelKey: kindKey,
-    contractKindNeedsReview: intelligence.contractType?.status === 'review_required',
+    contractKindNeedsReview: needsReview,
+    statusBadgeKey: needsReview
+      ? 'documentIntelligence.workspace.statusBadge.needsReview'
+      : 'documentIntelligence.workspace.statusBadge.confirmed',
+    subject,
+    moneyMetric,
+    objectFact,
+    deadlineFact,
     overviewRows,
     partyRows,
+    primaryPartyRows,
+    extraPartyRows,
+    factRows,
     generalRows,
     typeSpecificRows,
     rows,
     clauseRows: buildClauseRows(proposal),
     statusRows: buildStatusRows(context),
     positionInsightRows: buildPositionInsightRows(proposal),
+    lvOverview: buildLvOverview(proposal),
+    compactPositions: proposal.positions.slice(0, CONTRACT_COMPACT_POSITION_LIMIT),
     reviewHintKeys: proposal.reviewHints.slice(),
     family,
+    showTechnicalDetails:
+      segmentation.contractCorePages.length > 0 ||
+      segmentation.billOfQuantitiesPages.length > 0 ||
+      intelligence.technicalAttachmentCount > 0,
+    technicalMeta: {
+      contractCorePages: segmentation.contractCorePages.join(', ') || '–',
+      billOfQuantitiesPages: segmentation.billOfQuantitiesPages.join(', ') || '–',
+      technicalAttachmentCount: intelligence.technicalAttachmentCount,
+    },
   };
 }

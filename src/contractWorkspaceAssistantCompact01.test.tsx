@@ -264,10 +264,15 @@ describe('CONTRACT-WORKSPACE-ASSISTANT-COMPACT-01', () => {
     assertOrder(html, 'document-review-recommendations', 'data-testid="document-review-checks"');
     assertOrder(html, 'data-testid="document-review-checks"', 'contract-order-proposal');
     assertOrder(html, 'contract-order-proposal', 'data-testid="contract-workspace-summary"');
-    assertOrder(html, 'data-testid="contract-workspace-summary"', 'data-testid="contract-order-positions"');
+    assertOrder(html, 'data-testid="contract-workspace-summary"', 'data-testid="contract-order-lv-overview"');
     assertOrder(
       html,
-      'data-testid="contract-order-positions"',
+      'data-testid="contract-order-lv-overview"',
+      'data-testid="contract-lv-editor-disclosure"',
+    );
+    assertOrder(
+      html,
+      'data-testid="contract-lv-editor-disclosure"',
       'data-testid="document-free-question-panel"',
     );
     assertOrder(html, 'data-testid="document-free-question-panel"', 'data-testid="ablage-original-file"');

@@ -107,8 +107,10 @@ describe('CONTRACT-WORKSPACE-LAYOUT-DEDUP-01', () => {
     expect(hintOccurrences).toBe(1);
     expect(html).toContain('data-testid="contract-workspace-summary-review-hints"');
 
-    expect(html).toContain('data-testid="contract-order-positions"');
-    expect(html).toContain('data-testid="contract-create-order-button"');
+    expect(html).toContain('data-testid="contract-order-lv-overview"');
+    expect(html).toContain('data-testid="contract-lv-editor-disclosure"');
+    expect(html).not.toContain('data-testid="contract-order-positions"');
+    expect(html).toContain('data-testid="contract-chef-primary-action"');
     expect(html).toContain('data-testid="contract-discard-button"');
     expect(html).toContain(
       'Bitte prüfen Sie Vertragsdaten und Positionen und bestätigen oder verwerfen Sie den Vorschlag.',

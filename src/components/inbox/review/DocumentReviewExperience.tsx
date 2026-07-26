@@ -72,12 +72,6 @@ export function DocumentReviewExperience({
     ? translate('reviewWorkflow.action.reviewAdvertisement')
     : translate('reviewWorkflow.action.applySuggestion');
 
-  const scrollToProposal = () => {
-    document
-      .querySelector('[data-testid="contract-order-proposal"]')
-      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
-
   return (
     <div className="document-review-experience" data-testid="document-review-experience">
       <div className="document-review-experience__layout">
@@ -102,7 +96,15 @@ export function DocumentReviewExperience({
           item={item}
           onConfirmImport={(selected) => onCreateContractOrder?.(selected)}
           onDiscard={onDiscardContractProposal}
+          onApplySuggestion={
+            primaryDisabled
+              ? undefined
+              : () => {
+                  onApplySuggestion();
+                }
+          }
           isCreating={isCreatingContractOrder}
+          isApplying={isExecuting || isCreatingContractOrder}
         />
       )}
 
@@ -116,19 +118,7 @@ export function DocumentReviewExperience({
           onOpenArchive={onOpenArchive}
           onNextDocument={onNextDocument}
         />
-      ) : workflow.contractOrderProposal &&
-        workflow.contractOrderProposal.positions.length > 0 ? (
-        <div className="document-review-experience__primary" data-testid="document-review-primary-action">
-          <Button
-            variant="outline"
-            fullWidth
-            onClick={scrollToProposal}
-            data-testid="document-review-scroll-proposal-button"
-          >
-            {translate('documentIntelligence.action.reviewPositionsBelow')}
-          </Button>
-        </div>
-      ) : (
+      ) : workflow.contractOrderProposal ? null : (
         <div className="document-review-experience__primary" data-testid="document-review-primary-action">
           <Button
             fullWidth

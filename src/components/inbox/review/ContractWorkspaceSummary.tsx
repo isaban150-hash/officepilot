@@ -1,4 +1,6 @@
-import { DataRow } from '../../ui/Card';
+import { useState } from 'react';
+import { Badge, DataRow } from '../../ui/Card';
+import { Button } from '../../ui/Button';
 import type { ContractOrderProposal } from '../../../types/documentIntelligence';
 import type { InboxItem, Vorgang } from '../../../types/models';
 import type { TranslationKey } from '../../../i18n';
@@ -10,25 +12,20 @@ interface ContractWorkspaceSummaryProps {
   translate: (key: TranslationKey) => string;
   item?: InboxItem;
   vorgang?: Vorgang | null;
+  /** Primary action rendered inside the chef summary (no duplicate outside). */
+  primaryAction?: {
+    label: string;
+    onClick: () => void;
+    disabled?: boolean;
+    loading?: boolean;
+    testId: string;
+  };
 }
 
-function renderRows(
-  rows: ReturnType<typeof buildContractWorkspaceSummaryView>['rows'],
-  translate: (key: TranslationKey) => string,
-  testIdPrefix = 'contract-workspace-summary',
-) {
-  return rows.map((row) => (
-    <div key={row.id} data-testid={`${testIdPrefix}-${row.id}`}>
-      <DataRow
-        label={translate(row.labelKey)}
-        value={
-          row.needsReview
-            ? `${row.value} (${translate('documentIntelligence.workspace.needsReview')})`
-            : row.value
-        }
-      />
-    </div>
-  ));
+function renderFactValue(value: string, needsReview: boolean, translate: (key: TranslationKey) => string) {
+  return needsReview
+    ? `${value} (${translate('documentIntelligence.workspace.needsReview')})`
+    : value;
 }
 
 export function ContractWorkspaceSummary({
@@ -36,16 +33,13 @@ export function ContractWorkspaceSummary({
   translate,
   item,
   vorgang,
+  primaryAction,
 }: ContractWorkspaceSummaryProps) {
   const view = buildContractWorkspaceSummaryView(proposal, { item, vorgang });
-  const showParties = view.partyRows.length > 0;
-  const showGeneral = view.generalRows.length > 0;
-  const showTypeSpecific = view.typeSpecificRows.length > 0;
-  const showPositionsSection = view.positionInsightRows.length > 0;
+  const showFacts = view.factRows.length > 0;
   const showStatusSection = view.statusRows.length > 0;
-  const kindValue = view.contractKindNeedsReview
-    ? `${translate(view.contractKindLabelKey)} (${translate('documentIntelligence.workspace.needsReview')})`
-    : translate(view.contractKindLabelKey);
+  const badgeTone = view.contractKindNeedsReview ? 'warning' : 'success';
+  const [statusOpen, setStatusOpen] = useState(false);
 
   return (
     <section
@@ -53,120 +47,171 @@ export function ContractWorkspaceSummary({
       data-testid="contract-workspace-summary"
       aria-label={translate(view.titleKey)}
     >
-      <h4 data-testid="contract-workspace-summary-title">{translate(view.titleKey)}</h4>
-      <p className="contract-workspace-summary__disclaimer" data-testid="contract-workspace-summary-disclaimer">
-        {translate(view.disclaimerKey)}
-      </p>
+      <header className="contract-workspace-summary__header" data-testid="contract-workspace-summary-header">
+        <div className="contract-workspace-summary__header-top">
+          <h3
+            className="contract-workspace-summary__kind"
+            data-testid="contract-workspace-summary-kind"
+          >
+            {translate(view.contractKindLabelKey)}
+          </h3>
+          <Badge tone={badgeTone}>
+            <span data-testid="contract-workspace-summary-status-badge">
+              {translate(view.statusBadgeKey)}
+            </span>
+          </Badge>
+        </div>
+        {view.subject ? (
+          <p className="contract-workspace-summary__subject" data-testid="contract-workspace-summary-subject">
+            {view.subject}
+          </p>
+        ) : null}
+        <p className="contract-workspace-summary__disclaimer" data-testid="contract-workspace-summary-disclaimer">
+          {translate(view.disclaimerKey)}
+        </p>
+      </header>
 
       <div
-        className="contract-workspace-summary__section"
-        data-testid="contract-workspace-summary-section-overview"
+        className="contract-workspace-summary__chef"
+        data-testid="contract-workspace-summary-chef"
       >
-        <h5 className="contract-workspace-summary__section-title">
-          {translate('documentIntelligence.workspace.section.overview')}
-        </h5>
-        <DataRow
-          label={translate('documentIntelligence.field.contractKind')}
-          value={kindValue}
-        />
-        {view.overviewRows.length > 0 ? (
-          <div data-testid="contract-workspace-summary-overview-rows">
-            {renderRows(view.overviewRows, translate)}
+        {view.partyRows.length > 0 ? (
+          <div
+            className="contract-workspace-summary__parties"
+            data-testid="contract-workspace-summary-section-parties"
+          >
+            <div className="contract-workspace-summary__parties-grid">
+              {view.primaryPartyRows.map((party) => (
+                <article
+                  key={party.id}
+                  className="contract-workspace-summary__party"
+                  data-testid={`contract-workspace-summary-party-${party.id}`}
+                >
+                  <p className="contract-workspace-summary__party-role">
+                    {translate(party.roleLabelKey)}
+                  </p>
+                  <p className="contract-workspace-summary__party-name">{party.name}</p>
+                  {party.address ? (
+                    <p className="contract-workspace-summary__party-meta">{party.address}</p>
+                  ) : null}
+                  {party.contact ? (
+                    <p className="contract-workspace-summary__party-meta">
+                      {translate('documentIntelligence.field.contact')}: {party.contact}
+                    </p>
+                  ) : null}
+                </article>
+              ))}
+            </div>
+            {view.extraPartyRows.length > 0 ? (
+              <div
+                className="contract-workspace-summary__parties-extra"
+                data-testid="contract-workspace-summary-parties-extra"
+              >
+                {view.extraPartyRows.map((party) => (
+                  <DataRow
+                    key={party.id}
+                    label={translate(party.roleLabelKey)}
+                    value={party.name}
+                  />
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        {view.moneyMetric ? (
+          <div
+            className="contract-workspace-summary__metric"
+            data-testid="contract-workspace-summary-metric"
+          >
+            <span className="contract-workspace-summary__metric-label">
+              {translate(view.moneyMetric.labelKey)}
+            </span>
+            <strong
+              className="contract-workspace-summary__metric-value"
+              data-testid="contract-workspace-summary-metric-value"
+            >
+              {renderFactValue(
+                view.moneyMetric.value,
+                view.moneyMetric.needsReview,
+                translate,
+              )}
+            </strong>
+          </div>
+        ) : null}
+
+        <div className="contract-workspace-summary__chef-facts">
+          {view.objectFact ? (
+            <div data-testid={`contract-workspace-summary-${view.objectFact.id}`}>
+              <DataRow
+                label={translate(view.objectFact.labelKey)}
+                value={renderFactValue(
+                  view.objectFact.value,
+                  view.objectFact.needsReview,
+                  translate,
+                )}
+              />
+            </div>
+          ) : null}
+          {view.deadlineFact ? (
+            <div data-testid={`contract-workspace-summary-${view.deadlineFact.id}`}>
+              <DataRow
+                label={translate(view.deadlineFact.labelKey)}
+                value={renderFactValue(
+                  view.deadlineFact.value,
+                  view.deadlineFact.needsReview,
+                  translate,
+                )}
+              />
+            </div>
+          ) : null}
+        </div>
+
+        {primaryAction ? (
+          <div
+            className="contract-workspace-summary__primary"
+            data-testid="contract-workspace-summary-primary"
+          >
+            <Button
+              fullWidth
+              onClick={primaryAction.onClick}
+              disabled={primaryAction.disabled}
+              loading={primaryAction.loading}
+              data-testid={primaryAction.testId}
+            >
+              {primaryAction.label}
+            </Button>
           </div>
         ) : null}
       </div>
 
-      {showParties ? (
+      {showFacts ? (
         <div
-          className="contract-workspace-summary__section"
-          data-testid="contract-workspace-summary-section-parties"
+          className="contract-workspace-summary__facts"
+          data-testid="contract-workspace-summary-section-facts"
         >
-          <h5 className="contract-workspace-summary__section-title">
-            {translate('documentIntelligence.workspace.section.parties')}
-          </h5>
-          <div data-testid="contract-workspace-summary-parties">
-            {view.partyRows.map((party) => (
-              <div key={party.id} data-testid={`contract-workspace-summary-party-${party.id}`}>
-                <DataRow label={translate(party.roleLabelKey)} value={party.name} />
-              </div>
+          <h4 className="contract-workspace-summary__section-title">
+            {translate('documentIntelligence.workspace.section.facts')}
+          </h4>
+          <ul
+            className="contract-workspace-summary__facts-list"
+            data-testid="contract-workspace-summary-facts-rows"
+          >
+            {view.factRows.map((row) => (
+              <li
+                key={row.id}
+                className="contract-workspace-summary__fact"
+                data-testid={`contract-workspace-summary-${row.id}`}
+              >
+                <span className="contract-workspace-summary__fact-label">
+                  {translate(row.labelKey)}
+                </span>
+                <span className="contract-workspace-summary__fact-value">
+                  {renderFactValue(row.value, row.needsReview, translate)}
+                </span>
+              </li>
             ))}
-          </div>
-        </div>
-      ) : null}
-
-      {showGeneral ? (
-        <div
-          className="contract-workspace-summary__section"
-          data-testid="contract-workspace-summary-section-general"
-        >
-          <h5 className="contract-workspace-summary__section-title">
-            {translate('documentIntelligence.workspace.section.general')}
-          </h5>
-          <div data-testid="contract-workspace-summary-general-rows">
-            {renderRows(view.generalRows, translate)}
-          </div>
-        </div>
-      ) : null}
-
-      {showTypeSpecific ? (
-        <div
-          className="contract-workspace-summary__section"
-          data-testid="contract-workspace-summary-section-type-specific"
-        >
-          <h5 className="contract-workspace-summary__section-title">
-            {translate('documentIntelligence.workspace.section.typeSpecific')}
-          </h5>
-          <div data-testid="contract-workspace-summary-type-specific-rows">
-            {renderRows(view.typeSpecificRows, translate)}
-          </div>
-        </div>
-      ) : null}
-
-      {showPositionsSection ? (
-        <div
-          className="contract-workspace-summary__section"
-          data-testid="contract-workspace-summary-section-positions"
-        >
-          <h5 className="contract-workspace-summary__section-title">
-            {translate('documentIntelligence.workspace.section.positions')}
-          </h5>
-          <div data-testid="contract-workspace-summary-positions">
-            <DataRow
-              label={translate('documentIntelligence.field.positions')}
-              value={String(proposal.positions.length)}
-            />
-            <div data-testid="contract-workspace-summary-position-insights">
-              {view.positionInsightRows.map((row) => (
-                <div key={row.id} data-testid={`contract-workspace-summary-${row.id}`}>
-                  <DataRow
-                    label={translate(row.labelKey)}
-                    value={interpolateParams(translate(row.valueKey), row.valueParams)}
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {showStatusSection ? (
-        <div
-          className="contract-workspace-summary__section"
-          data-testid="contract-workspace-summary-section-status"
-        >
-          <h5 className="contract-workspace-summary__section-title">
-            {translate('documentIntelligence.workspace.section.status')}
-          </h5>
-          <div data-testid="contract-workspace-summary-status">
-            {view.statusRows.map((row) => (
-              <div key={row.id} data-testid={`contract-workspace-summary-status-${row.id}`}>
-                <DataRow
-                  label={translate(row.labelKey)}
-                  value={interpolateParams(translate(row.valueKey), row.valueParams)}
-                />
-              </div>
-            ))}
-          </div>
+          </ul>
         </div>
       ) : null}
 
@@ -179,6 +224,30 @@ export function ContractWorkspaceSummary({
             <li key={hint}>{translate(hint as TranslationKey)}</li>
           ))}
         </ul>
+      ) : null}
+
+      {showStatusSection ? (
+        <details
+          className="contract-workspace-summary__status-details"
+          data-testid="contract-workspace-summary-section-status"
+          onToggle={(event) =>
+            setStatusOpen((event.currentTarget as HTMLDetailsElement).open)
+          }
+        >
+          <summary aria-expanded={statusOpen}>
+            {translate('documentIntelligence.workspace.section.status')}
+          </summary>
+          <div data-testid="contract-workspace-summary-status">
+            {view.statusRows.map((row) => (
+              <div key={row.id} data-testid={`contract-workspace-summary-status-${row.id}`}>
+                <DataRow
+                  label={translate(row.labelKey)}
+                  value={interpolateParams(translate(row.valueKey), row.valueParams)}
+                />
+              </div>
+            ))}
+          </div>
+        </details>
       ) : null}
     </section>
   );

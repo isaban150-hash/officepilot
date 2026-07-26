@@ -108,7 +108,7 @@ function buildProposal(overrides?: {
 }
 
 describe('CONTRACT-WORKSPACE-SUMMARY-01', () => {
-  it('rendert Vertrag-kurz-erklärt aus Proposal-/Intelligence-Daten', () => {
+  it('rendert Vertragskopf, Chef-Kennzahl und Parteien aus Proposal-/Intelligence-Daten', () => {
     const proposal = buildProposal();
     const html = renderToStaticMarkup(
       createElement(ContractWorkspaceSummary, { proposal, translate }),
@@ -116,18 +116,21 @@ describe('CONTRACT-WORKSPACE-SUMMARY-01', () => {
 
     expect(html).toContain('data-testid="contract-workspace-summary"');
     expect(html).toContain('Vertrag kurz erklärt');
+    expect(html).toContain('data-testid="contract-workspace-summary-header"');
+    expect(html).toContain('data-testid="contract-workspace-summary-kind"');
     expect(html).toContain('Werkvertrag mit Leistungsverzeichnis');
+    expect(html).toContain('Sicher erkannt');
     expect(html).toContain('Isobautec GmbH');
     expect(html).toContain('Ivan Iliev');
     expect(html).toContain('Möhnetal 55, 59602 Rüthen');
     expect(html).toContain('02.03.2026');
+    expect(html).toContain('data-testid="contract-workspace-summary-metric-value"');
     expect(html).toContain('36.029,05 €');
     expect(html).toContain('14 Tage mit 2 % Skonto oder 30 Tage netto');
-    expect(html).toContain('data-testid="contract-workspace-summary-positions"');
-    expect(html).toContain('2 Positionen importierbar');
     expect(html).toContain('Einige Positionen benötigen Prüfung');
     expect(html).not.toContain('13b');
     expect(html).not.toContain('§ 13b');
+    expect(html).not.toContain('Typabhängige Vertragsdaten');
   });
 
   it('zeigt keine aus Positionssumme abgeleitete Vertragssumme', () => {
@@ -146,6 +149,7 @@ describe('CONTRACT-WORKSPACE-SUMMARY-01', () => {
     });
 
     const view = buildContractWorkspaceSummaryView(proposal);
+    expect(view.moneyMetric).toBeNull();
     expect(view.rows.find((row) => row.id === 'contractTotal')).toBeUndefined();
 
     const html = renderToStaticMarkup(
@@ -172,6 +176,7 @@ describe('CONTRACT-WORKSPACE-SUMMARY-01', () => {
     });
 
     const view = buildContractWorkspaceSummaryView(proposal);
+    expect(view.objectFact?.id).not.toBe('baustelle');
     expect(view.rows.find((row) => row.id === 'constructionSite')).toBeUndefined();
   });
 });
