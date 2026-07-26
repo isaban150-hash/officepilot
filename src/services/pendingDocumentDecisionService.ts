@@ -1,8 +1,12 @@
-import type { CreateInboxFromUploadOptions } from './inboxUploadFactory';
-import type { DocumentIntakeResult } from './documentIntakeService';
+import type { CompanyRelevanceInput, ContractAnalysisInput } from '../types/models';
 import type { StorageRecommendation } from '../types/storageRecommendation';
 import type { UserStorageDecision } from '../types/userStorageDecision';
 import { isPersistingUserStorageDecision } from '../types/userStorageDecision';
+import { checkCompanyRelevance } from './companyRelevanceService';
+import { analyzeContract } from './contractAnalysisService';
+import { analyzeContractIntelligenceFromText } from './contractIntelligenceService';
+import type { CreateInboxFromUploadOptions } from './inboxUploadFactory';
+import type { DocumentIntakeResult } from './documentIntakeService';
 import {
   confirmPendingDocumentIntake,
   discardPendingDocumentIntake,
@@ -13,7 +17,11 @@ import {
   resolvePrimarySuggestedUserStorageDecision,
   validateUserStorageDecision,
 } from './userStorageDecisionService';
-import { buildStorageDecisionActionSpecs } from './userStorageDecisionPresentationService';
+import {
+  applyOcrFastPathPrimaryLabels,
+  buildStorageDecisionActionSpecs,
+  isOcrStorageFastPathLevel,
+} from './userStorageDecisionPresentationService';
 import type { StorageDecisionActionSpec } from './userStorageDecisionPresentationService';
 
 export type ExecutePendingDocumentDecisionResult =
@@ -85,6 +93,88 @@ export function isNavigateExistingPendingDocumentDecision(
   return 'outcome' in result && result.outcome === 'navigate_existing';
 }
 
+function buildCompanyRelevanceInputFromPending(
+  pending: PendingDocumentIntake,
+): CompanyRelevanceInput {
+  const classification = pending.previewClassification;
+  const dataValues = Object.entries(classification.recognizedData ?? {})
+    .filter(([key]) => !key.startsWith('_'))
+    .map(([, value]) => value);
+
+  const text = [
+    classification.title,
+    classification.sender,
+    classification.officePilotSuggestion,
+    classification.recognizedData?._vertragstext ?? '',
+    pending.extraction.recognizedText,
+    ...dataValues,
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  return {
+    text,
+    recognizedData: classification.recognizedData,
+    sender: classification.sender,
+    title: classification.title,
+    vorgangId: classification.suggestedVorgang?.vorgangId,
+    vorgangTitle: classification.suggestedVorgang?.vorgangTitle,
+  };
+}
+
+function buildContractAnalysisInputFromPending(
+  pending: PendingDocumentIntake,
+): ContractAnalysisInput {
+  return {
+    recognizedText: pending.extraction.recognizedText,
+    sourceFileName: pending.cachedFile.fileName,
+    titleHint: pending.previewClassification.title,
+    senderHint: pending.previewClassification.sender,
+    kindHint: pending.previewClassification.classifiedKind,
+    recognizedData: pending.previewClassification.recognizedData,
+  };
+}
+
+/**
+ * OCR Fast Path presentation may only surface when the storage level is clear
+ * and existing Smart-Intake safety gates would not still require attention.
+ * Reuses companyRelevance + contract/LV analysis — no parallel rules.
+ */
+export function isOcrStorageFastPathAllowedForPending(
+  pending: PendingDocumentIntake,
+): boolean {
+  const level = pending.storageRecommendation.level;
+  if (!isOcrStorageFastPathLevel(level)) {
+    return false;
+  }
+
+  // duplicate / discard Fast Path stays level-based (ads are often not companyRelevant).
+  if (level !== 'archive_required' && level !== 'archive_recommended') {
+    return true;
+  }
+
+  // Same relevance gate Smart Intake uses before analysis/apply.
+  if (!checkCompanyRelevance(buildCompanyRelevanceInputFromPending(pending)).isRelevant) {
+    return false;
+  }
+
+  // Same contract detector that feeds Smart Intake contract handling.
+  if (analyzeContract(buildContractAnalysisInputFromPending(pending)).isContract) {
+    return false;
+  }
+
+  // Same LV/positions signal that creates ContractOrderProposal (confirm UI).
+  const intelligence = analyzeContractIntelligenceFromText(
+    pending.extraction.recognizedText,
+    pending.extraction.pageTexts,
+  );
+  if (intelligence && intelligence.positions.length > 0) {
+    return false;
+  }
+
+  return true;
+}
+
 export function buildPendingDocumentDecisionActions(
   pending: PendingDocumentIntake,
 ): StorageDecisionActionSpec[] {
@@ -93,5 +183,9 @@ export function buildPendingDocumentDecisionActions(
     pending.storagePolicy,
   );
   const primary = resolvePrimarySuggestedUserStorageDecision(pending.storageRecommendation);
-  return buildStorageDecisionActionSpecs(available, primary);
+  const actions = buildStorageDecisionActionSpecs(available, primary);
+  if (!isOcrStorageFastPathAllowedForPending(pending)) {
+    return actions;
+  }
+  return applyOcrFastPathPrimaryLabels(actions, pending.storageRecommendation.level);
 }

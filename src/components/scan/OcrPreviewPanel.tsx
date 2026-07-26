@@ -70,6 +70,7 @@ export function OcrPreviewPanel({
 }: OcrPreviewPanelProps) {
   const understanding = preview.understanding;
   const showPreviewLines = preview.previewLines.length > 0 || preview.previewPartialHint;
+  const ocrFastPath = decisionActions.some((action) => action.ocrFastPathPrimary);
   const persistingDecisions = new Set<UserStorageDecision>([
     'save_permanently',
     'keep_temporarily',
@@ -249,13 +250,18 @@ export function OcrPreviewPanel({
         </details>
       )}
 
-      <div className="ocr-preview-panel__actions">
+      <div
+        className="ocr-preview-panel__actions"
+        data-testid="ocr-storage-decision-actions"
+        data-ocr-fast-path={ocrFastPath ? 'true' : 'false'}
+      >
         {decisionActions.map((action) => (
           <Button
             key={action.decision}
             fullWidth
             variant={action.variant === 'primary' ? undefined : 'outline'}
             data-testid={action.testId}
+            data-ocr-fast-path-primary={action.ocrFastPathPrimary ? 'true' : undefined}
             onClick={() => onDecision(action.decision)}
             disabled={isConfirming}
             loading={isConfirming && persistingDecisions.has(action.decision)}
