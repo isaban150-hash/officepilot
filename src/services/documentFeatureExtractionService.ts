@@ -26,11 +26,13 @@ const MONETARY_VALUE_PATTERN =
   /\b(\d{1,3}(?:\.\d{3})*,\d{2})\s*(?:€|eur)?\b/i;
 const LABELED_TOTAL_PATTERN =
   /\b(?:betrag|summe|gesamt|total)\s*[:]\s*(\d{1,3}(?:[.\s]\d{3})*,\d{2}\s*€?|\d{1,3}(?:[.\s]\d{3})*,\d{2}\s*(?:EUR|eur))/i;
-const IBAN_PATTERN = /\b([A-Z]{2}\d{2}(?:\s?[A-Z0-9]{4}){3,7}\s?[A-Z0-9]{1,4})\b/i;
+const IBAN_PATTERN =
+  /\b([A-Z]{2}\d{2}(?:[ ]?[A-Z0-9]{4}){3,7}(?:[ ]?[A-Z0-9]{1,4})?)\b/i;
 const HRB_HRA_PATTERN = /\b(HR[AB]\s*\d[\dA-Z./-]{1,})\b/i;
-const COURT_MARKER_PATTERN = /\b(Amtsgericht\s+[\p{L}\-]+(?:\s+[\p{L}\-]+)*)/iu;
+const COURT_MARKER_PATTERN =
+  /\b(Amtsgericht\s+[\p{L}\-]{2,40}(?:\s+[\p{L}\-]{2,40}){0,4})/iu;
 const MANAGING_DIRECTOR_PATTERN =
-  /\b(Geschäftsführer(?:in)?|Inhaber(?:in)?)\s*[:.]?\s*([\p{L}\-]+(?:\s+[\p{L}\-]+)*)/iu;
+  /\b(Geschäftsführer(?:in)?|Inhaber(?:in)?)\s*[:.]?\s*([\p{L}\-]{2,40}(?:\s+[\p{L}\-]{2,40}){0,3})/iu;
 /** Strong payment-demand signals only — weak phrases are soft features. */
 const PAYMENT_REQUEST_PATTERN =
   /\b(zahlungsaufforderung|offener\s+betrag|offene\s+forderung|bitte\s+(?:überweisen|zahlen|begleichen)|überweisen\s+sie|mahngebühr|forderungs(?:nummer|nr\.?)|zu\s+zahlen)\b/i;
@@ -517,12 +519,28 @@ function extractPatternFeatures(
   counters: Record<string, number>,
 ): void {
   const text = zonedText.originalText;
+  const MAX_MATCHES_PER_PATTERN = 200;
 
   for (const spec of PATTERN_FEATURES) {
-    const regex = new RegExp(spec.pattern.source, spec.pattern.flags.includes('g') ? spec.pattern.flags : `${spec.pattern.flags}g`);
+    const regex = new RegExp(
+      spec.pattern.source,
+      spec.pattern.flags.includes('g') ? spec.pattern.flags : `${spec.pattern.flags}g`,
+    );
     let match: RegExpExecArray | null;
+    let matchCount = 0;
 
     while ((match = regex.exec(text)) !== null) {
+      // Empty-match guard — prevents zero-width /g infinite loops.
+      if (match[0].length === 0) {
+        regex.lastIndex += 1;
+        continue;
+      }
+
+      matchCount += 1;
+      if (matchCount > MAX_MATCHES_PER_PATTERN) {
+        break;
+      }
+
       const startOffset = match.index;
       const endOffset = startOffset + match[0].length;
       const zonedLine = findZonedLineAtOffset(zonedText, startOffset);

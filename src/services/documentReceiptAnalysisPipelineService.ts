@@ -30,9 +30,21 @@ export type ReceiptAnalysisPipelineResult = {
   ocrQuality: DocumentAnalysisResult['ocrQuality'];
 };
 
+let receiptPipelineInvocationCount = 0;
+
+export function getReceiptPipelineInvocationCountForTests(): number {
+  return receiptPipelineInvocationCount;
+}
+
+export function resetReceiptPipelineCountersForTests(): void {
+  receiptPipelineInvocationCount = 0;
+}
+
 export function runReceiptAnalysisPipeline(
   input: Pick<DocumentClassificationInput, 'recognizedText' | 'pageTexts'>,
 ): ReceiptAnalysisPipelineResult | null {
+  receiptPipelineInvocationCount += 1;
+
   const recognizedText = buildCanonicalDocumentText(input.recognizedText, input.pageTexts);
   if (!recognizedText) {
     return null;

@@ -58,6 +58,7 @@ function buildPageSpans(text: string): PageSpan[] {
 
   while (match) {
     const contentStart = match.index + match[0].length;
+    // lastIndex already sits after `match` from the previous exec.
     const nextMatch = markerPattern.exec(text);
     const contentEnd = nextMatch?.index ?? text.length;
     const pageNumber = Number(match[1]);
@@ -70,11 +71,8 @@ function buildPageSpans(text: string): PageSpan[] {
       });
     }
 
-    if (!nextMatch) {
-      break;
-    }
-
-    markerPattern.lastIndex = nextMatch.index;
+    // Advance to nextMatch only. Rewinding lastIndex to nextMatch.index
+    // re-finds the same marker forever (DOCUMENT-INTAKE-RECEIPT-GUARD-01).
     match = nextMatch;
   }
 
@@ -82,12 +80,24 @@ function buildPageSpans(text: string): PageSpan[] {
     return [{ pageNumber: 1, startOffset: 0, endOffset: text.length }];
   }
 
-  const preamble = text.slice(0, spans[0]?.startOffset ?? text.length).trim();
+  // Real cover text before the first marker becomes page 1. Marker-only
+  // prefixes must not invent a second empty/phantom page-1 span.
+  const rawPreamble = text.slice(0, spans[0]?.startOffset ?? text.length);
+  const preamble = rawPreamble.replace(/---SEITE\s+\d+---/gi, '').trim();
   if (preamble) {
     spans.unshift({ pageNumber: 1, startOffset: 0, endOffset: spans[0]?.startOffset ?? text.length });
   }
 
   return spans;
+}
+
+/** Exported for hang-regression / marker edge-case tests only. */
+export function buildPageSpansForTests(text: string): Array<{
+  pageNumber: number;
+  startOffset: number;
+  endOffset: number;
+}> {
+  return buildPageSpans(text);
 }
 
 function resolvePageNumber(offset: number, spans: PageSpan[]): number {

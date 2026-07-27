@@ -21,6 +21,7 @@ import {
   applyDocumentProfileToDetection,
   buildDocumentProfile,
 } from './documentProfileService';
+import { shouldSkipReceiptAnalysisForContractDocument } from './documentReceiptAnalysisGate';
 import {
   runReceiptAnalysisPipeline,
   type ReceiptAnalysisPipelineResult,
@@ -33,10 +34,24 @@ export type ClassificationDetectionResolution = {
   cutoverApplied: boolean;
 };
 
+/**
+ * DOCUMENT-INTAKE-RECEIPT-GUARD-01 — distinguish intentional skip from missing compute.
+ * - ran: pipeline executed
+ * - skipped_contract: strong contract/LV gate
+ * - skipped_kind_hint: upload kind hint short-circuit (do not invent pipeline in shadow)
+ * - cutover_disabled: no DI cutover lanes enabled
+ */
+export type ReceiptPipelineDecision =
+  | 'ran'
+  | 'skipped_contract'
+  | 'skipped_kind_hint'
+  | 'cutover_disabled';
+
 export type HybridClassificationContext = {
   resolution: ClassificationDetectionResolution;
   cutoverLane: DiCutoverLane;
   pipeline: ReceiptAnalysisPipelineResult | null;
+  pipelineDecision: ReceiptPipelineDecision;
   /** Runtime-only; never persisted. */
   documentProfile: DocumentProfile | null;
 };
@@ -175,21 +190,45 @@ function resolveClassificationFromPipeline(
   };
 }
 
+function buildHybridContext(
+  resolution: ClassificationDetectionResolution & { documentProfile: DocumentProfile },
+  pipeline: ReceiptAnalysisPipelineResult | null,
+  pipelineDecision: ReceiptPipelineDecision,
+  cutoverLane: DiCutoverLane,
+): HybridClassificationContext {
+  return {
+    resolution: {
+      detection: resolution.detection,
+      cutoverApplied: resolution.cutoverApplied,
+    },
+    cutoverLane,
+    pipeline,
+    pipelineDecision,
+    documentProfile: resolution.documentProfile,
+  };
+}
+
 export function resolveHybridClassification(
   input: DocumentClassificationInput,
   legacyDetection: DetectionResult,
 ): HybridClassificationContext {
   if (hasUploadKindHint(input) || !isAnyCutoverEnabled()) {
     const resolution = resolveClassificationFromPipeline(input, legacyDetection, null);
-    return {
-      resolution: {
-        detection: resolution.detection,
-        cutoverApplied: resolution.cutoverApplied,
-      },
-      cutoverLane: 'legacy',
-      pipeline: null,
-      documentProfile: resolution.documentProfile,
-    };
+    return buildHybridContext(
+      resolution,
+      null,
+      hasUploadKindHint(input) ? 'skipped_kind_hint' : 'cutover_disabled',
+      'legacy',
+    );
+  }
+
+  if (shouldSkipReceiptAnalysisForContractDocument(input)) {
+    // Contract cutover still needs pipeline features when enabled; hang is fixed in zoning.
+    // Skip only when that lane is off — avoid useless receipt scoring work.
+    if (!getContractScoringCutoverEnabled()) {
+      const resolution = resolveClassificationFromPipeline(input, legacyDetection, null);
+      return buildHybridContext(resolution, null, 'skipped_contract', 'legacy');
+    }
   }
 
   const pipeline = runReceiptAnalysisPipeline(input);
@@ -199,15 +238,7 @@ export function resolveHybridClassification(
     resolution.detection.reasonKey,
   );
 
-  return {
-    resolution: {
-      detection: resolution.detection,
-      cutoverApplied: resolution.cutoverApplied,
-    },
-    cutoverLane,
-    pipeline,
-    documentProfile: resolution.documentProfile,
-  };
+  return buildHybridContext(resolution, pipeline, 'ran', cutoverLane);
 }
 
 export function resolveClassificationDetection(

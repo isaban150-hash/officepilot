@@ -16,7 +16,6 @@ import {
   buildHybridLaneEvaluations,
   hasLaneNearMiss,
 } from './documentHybridLaneEvaluationService';
-import { runReceiptAnalysisPipeline } from './documentReceiptAnalysisPipelineService';
 import type { ReceiptScoringResult } from './documentReceiptCandidateScoringService';
 import { appendDiShadowRecord } from './documentShadowPersistenceService';
 import { sha256Bytes } from './sha256Digest';
@@ -177,7 +176,15 @@ export function runLegacyDocumentAnalysisShadow(
   shadowInvocationCount += 1;
 
   try {
-    const pipeline = options.hybridContext.pipeline ?? runReceiptAnalysisPipeline(input);
+    // DOCUMENT-INTAKE-RECEIPT-GUARD-01: intentional null must not reinvent the pipeline.
+    const decision = options.hybridContext.pipelineDecision;
+    const intentionalSkip =
+      decision === 'skipped_contract' ||
+      decision === 'skipped_kind_hint' ||
+      decision === 'cutover_disabled';
+    // Use computed pipeline only when hybrid ran it; never call runReceiptAnalysisPipeline here.
+    const pipeline = intentionalSkip ? null : options.hybridContext.pipeline;
+
     if (pipeline?.valid) {
       const analysis = buildShadowScoredDocumentAnalysis({
         classification,
@@ -201,6 +208,11 @@ export function runLegacyDocumentAnalysisShadow(
       hybridContext: options.hybridContext,
       classificationInput: input,
     });
+    if (decision === 'skipped_contract') {
+      record.warningCodes.push('shadow:receipt_pipeline_skipped_contract');
+    } else if (decision === 'skipped_kind_hint') {
+      record.warningCodes.push('shadow:receipt_pipeline_skipped_kind_hint');
+    }
     appendDiShadowRecord(record);
   } catch {
     // Shadow analysis must never affect the productive legacy workflow.
