@@ -3,19 +3,22 @@
   "ingress": { "channel": "email", "sourceKind": "insurance_letter" },
   "document": {
     "coarseKind": "insurance",
-    "fineKindAllowed": ["versicherung", "versicherungsbescheid"],
+    "fineKindAllowed": ["versicherung", "versicherungsbescheid", "betriebshaftpflicht"],
     "recognition": "uncertain"
   },
   "businessCase": {
-    "primaryCase": "insurance_matter",
+    "primaryCase": "insurance_contribution",
     "biEventAllowed": [
-      "review_required",
-      "information_only",
       "deadline_or_obligation_detected",
-      "invoice_received",
-      "possible_new_business_case"
+      "review_required",
+      "information_only"
     ],
     "vorgangRef": "none"
+  },
+  "operational": {
+    "primaryCase": "insurance_contribution",
+    "meaningsRequired": ["money", "action_required"],
+    "nextStepContains": ["Beitrag", "keine automatische Zahlung"]
   },
   "actors": {
     "senderContains": ["Versicherung", "Handwerk"]
@@ -31,10 +34,16 @@
     "performance_plan_on_non_performance_family"
   ],
   "positions": { "maxCount": 0 },
+  "classifiedKindAllowed": [
+    "versicherung",
+    "versicherungsbescheid",
+    "betriebshaftpflicht",
+    "sonstiges",
+    "brief",
+    "email_pdf"
+  ],
   "knownGaps": [
     "Versicherungsnummer noch nicht strukturiert in facts.",
-    "Schadenstatus / Beitragsanpassung als eigener Falltyp fehlt — oft review_required oder generische Frist.",
-    "Produkt kann Versicherungsbrief fälschlich als possible_new_business_case deuten und Vertragswirkung setzen — kein LV (positions max 0), keine auto_payment.",
-    "Falls fälschlich invoice_received: trotzdem keine auto_payment und kein Auftrag (Verbote)."
+    "Schadenstatus als eigener strukturierter Status fehlt."
   ]
 }

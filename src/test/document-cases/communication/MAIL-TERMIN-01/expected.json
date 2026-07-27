@@ -7,14 +7,19 @@
     "recognition": "uncertain"
   },
   "businessCase": {
-    "primaryCase": "customer_inquiry",
+    "primaryCase": "communication_schedule_change",
     "biEventAllowed": [
       "review_required",
       "information_only",
-      "deadline_or_obligation_detected",
-      "business_case_update"
+      "deadline_or_obligation_detected"
     ],
     "vorgangRef": "none_or_suggested"
+  },
+  "operational": {
+    "primaryCase": "communication_schedule_change",
+    "meaningsRequired": ["communication", "action_required"],
+    "deadlineType": "service_due",
+    "nextStepContains": ["Termin", "nicht automatisch"]
   },
   "actors": {
     "senderContains": ["mueller", "kunde"]
@@ -33,8 +38,6 @@
   "positions": { "maxCount": 0 },
   "classifiedKindAllowed": ["brief", "schriftverkehr", "sonstiges", "email_pdf"],
   "knownGaps": [
-    "E-Mail als eigener classifiedKind ist schwach — oft brief/sonstiges.",
-    "Terminänderung nicht als strukturierte service_due-Frist modelliert.",
-    "Antwortentwurf / Communication-Brain fehlt — Schutz über Verbote auto_send."
+    "Antwortentwurf / Communication-Brain fehlt — Schutz über Verbote auto_send und Next-Step-Hinweis."
   ]
 }

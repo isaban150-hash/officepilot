@@ -7,14 +7,18 @@
     "recognition": "certain"
   },
   "businessCase": {
-    "primaryCase": "payment_disruption",
+    "primaryCase": "bank_payment_problem",
     "biEventAllowed": [
-      "review_required",
       "deadline_or_obligation_detected",
-      "information_only",
-      "payment_reminder_received"
+      "review_required",
+      "information_only"
     ],
     "vorgangRef": "none"
+  },
+  "operational": {
+    "primaryCase": "bank_payment_problem",
+    "meaningsRequired": ["money", "risk", "action_required"],
+    "nextStepContains": ["Zahlungsstörung", "keine automatische"]
   },
   "actors": {
     "senderContains": ["Sparkasse", "Bank"]
@@ -33,7 +37,6 @@
   "positions": { "maxCount": 0 },
   "classifiedKindAllowed": ["kontoauszug", "sonstiges", "brief"],
   "knownGaps": [
-    "Kein dediziertes BI-Ereignis „payment_disruption“ / Rücklastschrift.",
     "Betrag und Buchungsbezug oft nicht als finance-money strukturiert."
   ]
 }

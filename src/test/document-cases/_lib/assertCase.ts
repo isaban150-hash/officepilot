@@ -20,61 +20,60 @@ function fail(message: string): never {
 function primaryCaseMatches(
   primary: DocumentCasePrimaryCase,
   bi: BusinessInterpretationResult | null,
-  classifiedKind: string,
+  _classifiedKind: string,
 ): boolean {
+  const operational = bi?.operational.primaryCase;
   const event = bi?.meaning.eventType;
+  if (operational && operational === primary) return true;
+
+  // Legacy aliases → operational primary
+  if (primary === 'authority_obligation') {
+    return (
+      operational === 'authority_documents_required' ||
+      operational === 'authority_information' ||
+      operational === 'authority_payment'
+    );
+  }
+  if (primary === 'insurance_matter') {
+    return (
+      operational === 'insurance_information' ||
+      operational === 'insurance_contribution' ||
+      operational === 'insurance_claim'
+    );
+  }
+  if (primary === 'payment_disruption') {
+    return operational === 'bank_payment_problem' || operational === 'bank_information';
+  }
+  if (primary === 'customer_inquiry') {
+    return (
+      operational === 'communication_request' ||
+      operational === 'communication_schedule_change' ||
+      operational === 'communication_information'
+    );
+  }
+  if (primary === 'overhead_expense') {
+    return operational === 'expense_hotel' || operational === 'expense_general';
+  }
+  if (primary === 'possible_new_order') {
+    return (
+      operational === 'possible_new_order' ||
+      operational === 'contract_proposed' ||
+      event === 'possible_new_business_case' ||
+      event === 'contract_proposed'
+    );
+  }
+
   switch (primary) {
-    case 'possible_new_order':
-      return (
-        event === 'possible_new_business_case' ||
-        event === 'contract_proposed' ||
-        event === 'business_case_update'
-      );
     case 'invoice_received':
-      return event === 'invoice_received';
-    case 'overhead_expense':
-      return (
-        event === 'invoice_received' ||
-        event === 'review_required' ||
-        event === 'information_only' ||
-        event === 'deadline_or_obligation_detected'
-      );
-    case 'authority_obligation':
-      return (
-        ['finanzamt', 'bg_bau', 'soka_bau', 'berufsgenossenschaft'].includes(classifiedKind) ||
-        event === 'deadline_or_obligation_detected' ||
-        event === 'review_required' ||
-        event === 'information_only'
-      );
-    case 'insurance_matter':
-      return (
-        classifiedKind.includes('versicherung') ||
-        event === 'review_required' ||
-        event === 'information_only' ||
-        event === 'deadline_or_obligation_detected' ||
-        event === 'invoice_received' ||
-        // known product gap: insurance letter may be mis-read as new business
-        event === 'possible_new_business_case'
-      );
-    case 'payment_disruption':
-      return (
-        classifiedKind === 'kontoauszug' ||
-        event === 'review_required' ||
-        event === 'deadline_or_obligation_detected' ||
-        event === 'information_only' ||
-        event === 'payment_reminder_received'
-      );
-    case 'customer_inquiry':
-      return (
-        event === 'review_required' ||
-        event === 'information_only' ||
-        event === 'deadline_or_obligation_detected' ||
-        event === 'business_case_update'
-      );
+      return event === 'invoice_received' || operational === 'invoice_received';
     case 'information_only':
-      return event === 'information_only' || event === 'review_required';
+      return event === 'information_only' || operational === 'information_only';
     case 'review_required':
-      return event === 'review_required' || event === 'information_only';
+      return (
+        event === 'review_required' ||
+        event === 'information_only' ||
+        operational === 'review_required'
+      );
     default:
       return false;
   }
@@ -223,6 +222,36 @@ export function assertDocumentCase(
 
   if (!bi) {
     fail('Business Interpretation fehlt — betriebliche Bedeutung nicht bestimmbar.');
+  }
+
+  if (expected.operational) {
+    if (bi.operational.primaryCase !== expected.operational.primaryCase) {
+      fail(
+        `Primary Case falsch: Soll „${expected.operational.primaryCase}“, Ist „${bi.operational.primaryCase}“.`,
+      );
+    }
+    for (const requiredMeaning of expected.operational.meaningsRequired ?? []) {
+      if (!bi.operational.meanings.includes(requiredMeaning)) {
+        fail(
+          `Bedeutung „${requiredMeaning}“ fehlt (vorhanden: ${bi.operational.meanings.join(', ')}).`,
+        );
+      }
+    }
+    if (
+      expected.operational.deadlineType &&
+      bi.operational.deadlineType !== expected.operational.deadlineType
+    ) {
+      fail(
+        `Fristart falsch: Soll „${expected.operational.deadlineType}“, Ist „${bi.operational.deadlineType ?? '—'}“.`,
+      );
+    }
+    for (const needle of expected.operational.nextStepContains ?? []) {
+      if (!bi.operational.nextStep.toLowerCase().includes(needle.toLowerCase())) {
+        fail(
+          `Next Step enthält nicht „${needle}“ (Ist: „${bi.operational.nextStep}“).`,
+        );
+      }
+    }
   }
 
   if (!expected.businessCase.biEventAllowed.includes(bi.meaning.eventType)) {

@@ -6,7 +6,7 @@
     "recognition": "certain"
   },
   "businessCase": {
-    "primaryCase": "overhead_expense",
+    "primaryCase": "expense_hotel",
     "biEventAllowed": [
       "invoice_received",
       "review_required",
@@ -14,6 +14,11 @@
       "deadline_or_obligation_detected"
     ],
     "vorgangRef": "none"
+  },
+  "operational": {
+    "primaryCase": "expense_hotel",
+    "meaningsRequired": ["money", "action_required"],
+    "nextStepContains": ["Betriebsausgabe", "kein Kundenauftrag"]
   },
   "actors": {
     "senderContains": ["City Lodge", "Hotel"]
@@ -33,7 +38,7 @@
   ],
   "positions": { "maxCount": 0 },
   "knownGaps": [
-    "Keine eigene Dokumentart „hotelrechnung“ / Reisekosten-Domäne — oft als allgemeine Eingangsrechnung klassifiziert.",
+    "Keine eigene Dokumentart „hotelrechnung“ — Klassifikation oft Eingangsrechnung.",
     "Belegpositionen (Frühstück/Parken) werden nicht strukturiert als Spesenzeilen erkannt.",
     "Betrag/Gesamtbetrag wird nicht zuverlässig als strukturierte invoice_total-Geldkennzahl erkannt."
   ]

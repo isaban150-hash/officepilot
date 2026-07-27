@@ -3,6 +3,12 @@
  * Kein Dump von WorkflowResult — nur betriebliche Erwartungen.
  */
 
+import type {
+  BusinessDeadlineType,
+  BusinessMeaningKind,
+  BusinessPrimaryCase,
+} from '../../../types/businessInterpretation';
+
 export type DocumentCaseChannel = 'upload' | 'scan' | 'email' | 'photo' | 'pdf';
 
 export type DocumentCaseCoarseKind =
@@ -17,27 +23,17 @@ export type DocumentCaseCoarseKind =
   | 'banking'
   | 'uncertain';
 
+/** @deprecated Prefer operational.primaryCase (BusinessPrimaryCase). Kept for legacy mapping. */
 export type DocumentCasePrimaryCase =
+  | BusinessPrimaryCase
   | 'possible_new_order'
-  | 'invoice_received'
   | 'overhead_expense'
   | 'authority_obligation'
   | 'insurance_matter'
   | 'payment_disruption'
-  | 'customer_inquiry'
-  | 'information_only'
-  | 'review_required';
+  | 'customer_inquiry';
 
-export type DocumentCaseMeaning =
-  | 'information'
-  | 'action_required'
-  | 'money'
-  | 'deadline'
-  | 'obligation'
-  | 'evidence'
-  | 'risk'
-  | 'communication'
-  | 'vorgang_change';
+export type DocumentCaseMeaning = BusinessMeaningKind | 'vorgang_change';
 
 export type DocumentCaseForbidden =
   | 'auto_create_order'
@@ -53,12 +49,7 @@ export type DocumentCaseForbidden =
   | 'invented_money'
   | 'invoice_invented_from_letter';
 
-export type DocumentCaseDeadlineKind =
-  | 'payment_due'
-  | 'response_due'
-  | 'document_submission_due'
-  | 'service_due'
-  | 'termination_notice';
+export type DocumentCaseDeadlineKind = BusinessDeadlineType;
 
 export interface DocumentCaseScenario {
   caseId: string;
@@ -96,11 +87,19 @@ export interface DocumentCaseExpected {
     recognition?: 'certain' | 'uncertain';
   };
   businessCase: {
+    /** Legacy/soft primary — prefer operational.primaryCase when set. */
     primaryCase: DocumentCasePrimaryCase;
     /** Erlaubte BI-Ereignisse (Dokumentart ≠ Geschäftsfall). */
     biEventAllowed: string[];
     alternatives?: string[];
     vorgangRef?: 'none' | 'none_or_suggested' | 'linked';
+  };
+  /** BUSINESS-MEANING-CORE-01 positive expectations */
+  operational?: {
+    primaryCase: BusinessPrimaryCase;
+    meaningsRequired?: BusinessMeaningKind[];
+    deadlineType?: BusinessDeadlineType;
+    nextStepContains?: string[];
   };
   actors?: {
     senderContains?: string[];

@@ -1305,3 +1305,151 @@ describe('BUSINESS-BRAIN-01A1-FIX-01 Schutztests', () => {
     );
   });
 });
+
+describe('BUSINESS-MEANING-CORE-01 — shared operational reading', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    hydrateCompanyProfileStore(testProfile);
+    hydrateVorgangStore([]);
+    hydrateInboxStore([]);
+    vi.restoreAllMocks();
+  });
+
+  it('FA: authority_documents_required + document_submission_due', () => {
+    const item = baseInbox({
+      id: 'inbox-meaning-fa',
+      classifiedKind: 'finanzamt',
+      title: 'Finanzamt Unterlagen',
+      sender: 'Finanzamt Berlin',
+      recognizedData: {
+        _extractedText: `Finanzamt Berlin
+wir bitten um Einreichung der folgenden Unterlagen bis zum 15.04.2026:
+- Umsatzsteuervoranmeldung
+Eine Antwort bzw. Einreichung ist fristgebunden erforderlich.`,
+      },
+    });
+    const result = interpret(item, {
+      classifiedKind: 'finanzamt',
+      documentUnderstanding: {
+        documentType: 'finanzamt',
+        deadline: '15.04.2026',
+        nextStep: 'Prüfen',
+        partialRecognition: false,
+      },
+    });
+    expect(result.operational.primaryCase).toBe('authority_documents_required');
+    expect(result.operational.deadlineType).toBe('document_submission_due');
+    expect(result.operational.meanings).toEqual(
+      expect.arrayContaining(['obligation', 'evidence', 'deadline', 'action_required']),
+    );
+    expect(result.operational.nextStep.toLowerCase()).toMatch(/unterlagen/);
+    expect(result.operational.confirmRequirement.length).toBeGreaterThan(0);
+  });
+
+  it('Versicherung: insurance_contribution despite Schadenfall aside', () => {
+    const item = baseInbox({
+      id: 'inbox-meaning-vs',
+      classifiedKind: 'versicherung',
+      title: 'Beitragsanpassung',
+      sender: 'Handwerk Versicherung AG',
+      recognizedData: {
+        _extractedText: `Beitragsanpassung ab 01.05.2026
+Neuer Jahresbeitrag: 1.280,00 €
+Bei Rückfragen zu einem Schadenfall reichen Sie Unterlagen nach.
+Keine automatische Lastschriftänderung.`,
+      },
+    });
+    const result = interpret(item, { classifiedKind: 'versicherung' });
+    expect(result.operational.primaryCase).toBe('insurance_contribution');
+    expect(result.operational.meanings).toEqual(
+      expect.arrayContaining(['money', 'action_required']),
+    );
+    expect(result.operational.nextStep).toMatch(/keine automatische Zahlung/i);
+  });
+
+  it('Bank: bank_payment_problem', () => {
+    const item = baseInbox({
+      id: 'inbox-meaning-bank',
+      classifiedKind: 'kontoauszug',
+      title: 'Rücklastschrift',
+      sender: 'Sparkasse Berlin',
+      recognizedData: {
+        _extractedText: `Mitteilung: Rücklastschrift / Zahlungsstörung
+Grund: unzureichende Deckung
+Es erfolgt keine automatische erneute Zahlung.`,
+      },
+    });
+    const result = interpret(item, { classifiedKind: 'kontoauszug' });
+    expect(result.operational.primaryCase).toBe('bank_payment_problem');
+    expect(result.operational.meanings).toEqual(
+      expect.arrayContaining(['money', 'risk', 'action_required']),
+    );
+  });
+
+  it('Hotel: expense_hotel', () => {
+    const item = baseInbox({
+      id: 'inbox-meaning-hotel',
+      classifiedKind: 'eingangsrechnung',
+      title: 'Hotelrechnung City Lodge',
+      recognizedData: {
+        _extractedText: `Hotelrechnung
+Hotel: City Lodge Berlin
+Übernachtung EZ
+Betrag: 278,80 €`,
+        Betrag: '278,80 €',
+      },
+    });
+    const result = interpret(item, {
+      classifiedKind: 'eingangsrechnung',
+      documentUnderstanding: {
+        documentType: 'eingangsrechnung',
+        amount: '278,80 €',
+        nextStep: 'Prüfen',
+        partialRecognition: false,
+      },
+    });
+    expect(result.meaning.eventType).toBe('invoice_received');
+    expect(result.operational.primaryCase).toBe('expense_hotel');
+    expect(result.operational.nextStep).toMatch(/Betriebsausgabe/i);
+  });
+
+  it('Mail: communication_schedule_change + service_due', () => {
+    const item = baseInbox({
+      id: 'inbox-meaning-mail',
+      classifiedKind: 'brief',
+      importSource: 'email',
+      title: 'Terminverschiebung',
+      sender: 'kunde@mueller-bau.example',
+      recognizedData: {
+        _extractedText: `können wir unseren Termin vom 28.03.2026 auf den 02.04.2026 verschieben?
+Bitte um kurze Rückmeldung per E-Mail.`,
+      },
+    });
+    const result = interpret(item, { classifiedKind: 'brief' });
+    expect(result.operational.primaryCase).toBe('communication_schedule_change');
+    expect(result.operational.deadlineType).toBe('service_due');
+    expect(result.operational.meanings).toEqual(
+      expect.arrayContaining(['communication', 'action_required']),
+    );
+    expect(result.operational.nextStep).toMatch(/nicht automatisch/i);
+  });
+
+  it('BG/SOKA text without classified authority kind still yields documents_required', () => {
+    const item = baseInbox({
+      id: 'inbox-meaning-bg',
+      classifiedKind: 'sonstiges',
+      title: 'BG BAU Nachweise',
+      sender: 'BG BAU',
+      recognizedData: {
+        _extractedText: `BG BAU – Berufsgenossenschaft
+Bitte reichen Sie bis 30.04.2026 ein:
+- Unbedenklichkeitsbescheinigung
+- SOKA-BAU Meldenachweis`,
+      },
+    });
+    const result = interpret(item, { classifiedKind: 'sonstiges' });
+    expect(result.meaning.eventType).toBe('deadline_or_obligation_detected');
+    expect(result.operational.primaryCase).toBe('authority_documents_required');
+    expect(result.operational.deadlineType).toBe('document_submission_due');
+  });
+});

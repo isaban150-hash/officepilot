@@ -21,6 +21,12 @@ import type {
   WorkflowResult,
 } from '../types/models';
 import { buildStructuredBusinessFacts } from './businessInterpretationFacts';
+import {
+  isAuthorityClassifiedKind,
+  isBankClassifiedKind,
+  isInsuranceClassifiedKind,
+  resolveOperationalReading,
+} from './businessInterpretationMeaning';
 import { isContractPlanLocked } from './orderPlanIntegrityService';
 
 /** Families that may propose a construction/performance plan (LV) from existing positions. */
@@ -153,9 +159,29 @@ function resolveEvent(
     item.vorgangId || workflow.suggestedVorgang || (workflow.similarVorgaenge?.length ?? 0) > 0,
   );
   const family = resolveContractFamily(workflow);
+  const earlyCorpus = [
+    item.recognizedData._extractedText,
+    item.recognizedData._vertragstext,
+    item.title,
+    item.sender,
+  ]
+    .filter(Boolean)
+    .join('\n')
+    .toLowerCase();
+  const earlyAuthorityText =
+    /finanzamt|bg bau|berufsgenossenschaft|soka-?bau|krankenkasse|unbedenklichkeit|steuernummer|aktenzeichen/i.test(
+      earlyCorpus,
+    );
+  const earlyInsuranceText =
+    /versicherung|versicherungsschein|betriebshaftpflicht|beitragsanpassung|jahresbeitrag/i.test(
+      earlyCorpus,
+    );
+  const earlyBankText =
+    /rücklastschrift|ruecklastschrift|zahlungsstörung|zahlungsstoerung/i.test(earlyCorpus);
 
   if (recognitionUncertain && !hasProposal && !INVOICE_RECEIVED_KINDS.has(kind) && !PAYMENT_REMINDER_KINDS.has(kind)) {
     // Keep safe facts only — do not invent a concrete operational event.
+    // MEANING-CORE: authority/insurance/bank text may still yield a safe obligation event.
     if (
       !CONTRACT_KINDS.has(kind) &&
       !ORDER_CONFIRM_KINDS.has(kind) &&
@@ -164,7 +190,13 @@ function resolveEvent(
       !ACCEPTANCE_KINDS.has(kind) &&
       !COMPLAINT_KINDS.has(kind) &&
       !INVOICE_CREATED_KINDS.has(kind) &&
-      !EVIDENCE_KINDS.has(kind)
+      !EVIDENCE_KINDS.has(kind) &&
+      !isAuthorityClassifiedKind(kind) &&
+      !isInsuranceClassifiedKind(kind) &&
+      !isBankClassifiedKind(kind) &&
+      !earlyAuthorityText &&
+      !earlyInsuranceText &&
+      !earlyBankText
     ) {
       return {
         eventType: 'review_required',
@@ -266,6 +298,84 @@ function resolveEvent(
       certainty: 'proposed',
       summary: 'Auftragsbestätigung oder Auftrag — mögliche Bestätigung eines Geschäfts, ohne automatische Übernahme.',
       alternativeEventTypes: alternatives,
+      inheritedConfidence: workflow.classificationConfidence,
+    };
+  }
+
+  // Authority / insurance / bank are never contract business-cases (MEANING-CORE-01).
+  if (isAuthorityClassifiedKind(kind)) {
+    return {
+      eventType: 'deadline_or_obligation_detected',
+      certainty: 'detected',
+      summary: 'Behörden- oder Sozialkassenschreiben — Verpflichtung oder Frist, kein Auftrag.',
+      alternativeEventTypes: [],
+      inheritedConfidence: workflow.classificationConfidence,
+    };
+  }
+  if (isInsuranceClassifiedKind(kind)) {
+    return {
+      eventType: 'deadline_or_obligation_detected',
+      certainty: 'detected',
+      summary: 'Versicherungsschreiben — Information oder Handlung, kein Kundenauftrag.',
+      alternativeEventTypes: [],
+      inheritedConfidence: workflow.classificationConfidence,
+    };
+  }
+  if (isBankClassifiedKind(kind)) {
+    return {
+      eventType: 'deadline_or_obligation_detected',
+      certainty: 'detected',
+      summary: 'Bankmitteilung — mögliche Zahlungsinformation oder Störung, keine Rechnungserfindung.',
+      alternativeEventTypes: [],
+      inheritedConfidence: workflow.classificationConfidence,
+    };
+  }
+
+  // Text signals: do not treat authority/insurance/bank prose as contract (MEANING-CORE-01).
+  const corpus = [
+    item.recognizedData._extractedText,
+    item.recognizedData._vertragstext,
+    item.title,
+    item.sender,
+  ]
+    .filter(Boolean)
+    .join('\n')
+    .toLowerCase();
+  if (
+    /finanzamt|bg bau|berufsgenossenschaft|soka-?bau|steuernummer|aktenzeichen/i.test(corpus) &&
+    !CONTRACT_KINDS.has(kind)
+  ) {
+    return {
+      eventType: 'deadline_or_obligation_detected',
+      certainty: 'detected',
+      summary: 'Behördlicher Inhalt erkannt — Verpflichtung/Frist, kein Auftrag.',
+      alternativeEventTypes: [],
+      inheritedConfidence: workflow.classificationConfidence,
+    };
+  }
+  if (
+    /versicherung|versicherungsschein|betriebshaftpflicht|beitragsanpassung|jahresbeitrag/i.test(
+      corpus,
+    ) &&
+    !CONTRACT_KINDS.has(kind)
+  ) {
+    return {
+      eventType: 'deadline_or_obligation_detected',
+      certainty: 'detected',
+      summary: 'Versicherungsinhalt erkannt — kein Kundenauftrag.',
+      alternativeEventTypes: [],
+      inheritedConfidence: workflow.classificationConfidence,
+    };
+  }
+  if (
+    /rücklastschrift|ruecklastschrift|zahlungsstörung|zahlungsstoerung/i.test(corpus) &&
+    !CONTRACT_KINDS.has(kind)
+  ) {
+    return {
+      eventType: 'deadline_or_obligation_detected',
+      certainty: 'detected',
+      summary: 'Bank-/Zahlungsstörung erkannt — keine Rechnungserfindung.',
+      alternativeEventTypes: [],
       inheritedConfidence: workflow.classificationConfidence,
     };
   }
@@ -998,6 +1108,14 @@ export function interpretBusinessFromWorkflow(
   );
   const nextActionCandidates = collectNextActionCandidates(workflow);
   const family = resolveContractFamily(workflow);
+  const operational = resolveOperationalReading({
+    item,
+    workflow,
+    eventType: meaning.eventType,
+    eventCertainty: meaning.certainty,
+    facts: structured.facts,
+    requiredConfirmations,
+  });
 
   return {
     readOnly: true,
@@ -1014,6 +1132,7 @@ export function interpretBusinessFromWorkflow(
       alternativeEventTypes: meaning.alternativeEventTypes,
       inheritedConfidence: meaning.inheritedConfidence,
     },
+    operational,
     vorgangRef,
     parties,
     effects,

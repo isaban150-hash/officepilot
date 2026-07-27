@@ -114,6 +114,75 @@ export type BusinessSignatureStatus =
 
 export type BusinessPartyRelation = 'counterparty' | 'own_company' | 'other';
 
+/**
+ * BUSINESS-MEANING-CORE-01 — shared operational case (not document kind).
+ * Coordinated by Business Interpretation; no domain specialist required.
+ */
+export type BusinessPrimaryCase =
+  | 'authority_documents_required'
+  | 'authority_information'
+  | 'authority_payment'
+  | 'insurance_information'
+  | 'insurance_contribution'
+  | 'insurance_claim'
+  | 'bank_payment_problem'
+  | 'bank_information'
+  | 'expense_hotel'
+  | 'expense_general'
+  | 'communication_request'
+  | 'communication_information'
+  | 'communication_schedule_change'
+  | 'contract_proposed'
+  | 'possible_new_order'
+  | 'business_case_update'
+  | 'order_confirmed'
+  | 'service_change_proposed'
+  | 'invoice_received'
+  | 'invoice_created'
+  | 'payment_reminder_received'
+  | 'delivery_recorded'
+  | 'acceptance_recorded'
+  | 'complaint_received'
+  | 'evidence_added'
+  | 'information_only'
+  | 'review_required'
+  | 'deadline_or_obligation_detected';
+
+/** Multiple operational meanings may apply at once. */
+export type BusinessMeaningKind =
+  | 'information'
+  | 'action_required'
+  | 'money'
+  | 'deadline'
+  | 'communication'
+  | 'evidence'
+  | 'obligation'
+  | 'review'
+  | 'risk';
+
+/** Action-related deadline kinds — never mix payment with termination, etc. */
+export type BusinessDeadlineType =
+  | 'payment_due'
+  | 'response_due'
+  | 'document_submission_due'
+  | 'service_due'
+  | 'termination_notice';
+
+/**
+ * Shared operational reading for any document family.
+ * Read-only; does not execute or persist by itself.
+ */
+export interface BusinessOperationalReading {
+  primaryCase: BusinessPrimaryCase;
+  meanings: BusinessMeaningKind[];
+  deadlineType?: BusinessDeadlineType;
+  /** Human-facing suggestion — not an execution engine. */
+  nextStep: string;
+  /** Structured confirmation hint — not execution. */
+  confirmRequirement: string;
+  certainty: BusinessFactCertainty;
+}
+
 export interface BusinessInterpretationSourceDocument {
   sourceDocumentId: string;
   classifiedKind: ClassifiedDocumentKind;
@@ -295,6 +364,11 @@ export interface BusinessInterpretationResult {
   readonly readOnly: true;
   sourceDocument: BusinessInterpretationSourceDocument;
   meaning: BusinessInterpretationMeaning;
+  /**
+   * BUSINESS-MEANING-CORE-01: shared operational case / meanings / deadline / next step.
+   * Complements `meaning.eventType` — does not replace specialist outputs.
+   */
+  operational: BusinessOperationalReading;
   vorgangRef: BusinessInterpretationVorgangRef;
   parties: BusinessInterpretationParty[];
   effects: BusinessInterpretationEffect[];

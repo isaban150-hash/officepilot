@@ -7,15 +7,20 @@
     "recognition": "certain"
   },
   "businessCase": {
-    "primaryCase": "authority_obligation",
+    "primaryCase": "authority_documents_required",
     "biEventAllowed": [
       "deadline_or_obligation_detected",
       "review_required",
       "information_only",
-      "evidence_added",
-      "possible_new_business_case"
+      "evidence_added"
     ],
     "vorgangRef": "none"
+  },
+  "operational": {
+    "primaryCase": "authority_documents_required",
+    "meaningsRequired": ["obligation", "evidence", "deadline", "action_required"],
+    "deadlineType": "document_submission_due",
+    "nextStepContains": ["Unterlagen"]
   },
   "actors": {
     "senderContains": ["BG BAU", "Berufsgenossenschaft"]
@@ -32,8 +37,6 @@
   "positions": { "maxCount": 0 },
   "classifiedKindAllowed": ["bg_bau", "soka_bau", "berufsgenossenschaft", "sonstiges", "brief"],
   "knownGaps": [
-    "SOKA-BAU als eigene strukturierte Condition/Meldepflicht ist nicht immer befüllt.",
-    "Kein dedizierter Geschäftsfall „nachweis_nachreichen“ im Event-Vokabular — über authority_obligation + Verbote geschützt.",
-    "Produkt kann BG-Schreiben fälschlich als possible_new_business_case deuten — Schutz über Verbot Leistungsverzeichnis/auto_send."
+    "SOKA-BAU als eigene strukturierte Condition/Meldepflicht ist nicht immer befüllt."
   ]
 }

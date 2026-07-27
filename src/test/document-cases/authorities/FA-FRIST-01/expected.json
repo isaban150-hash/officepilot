@@ -7,13 +7,19 @@
     "recognition": "certain"
   },
   "businessCase": {
-    "primaryCase": "authority_obligation",
+    "primaryCase": "authority_documents_required",
     "biEventAllowed": [
       "deadline_or_obligation_detected",
       "review_required",
       "information_only"
     ],
     "vorgangRef": "none"
+  },
+  "operational": {
+    "primaryCase": "authority_documents_required",
+    "meaningsRequired": ["obligation", "evidence", "deadline", "action_required"],
+    "deadlineType": "document_submission_due",
+    "nextStepContains": ["Unterlagen", "Frist"]
   },
   "actors": {
     "senderContains": ["Finanzamt"]
@@ -35,8 +41,6 @@
   "positions": { "maxCount": 0 },
   "classifiedKindAllowed": ["finanzamt", "sonstiges", "brief"],
   "knownGaps": [
-    "Strukturierte Fristart document_submission_due fehlt in BI — nur generische Deadline/Review.",
-    "Aktenzeichen wird nicht als strukturiertes Feld in facts geführt.",
-    "Falls Klassifikation nur „brief/sonstiges“: Primärfall über BI-Ereignis + Verbote abgesichert."
+    "Aktenzeichen wird nicht als strukturiertes Feld in facts geführt."
   ]
 }
