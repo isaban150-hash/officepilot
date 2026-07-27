@@ -32,6 +32,7 @@ import {
   proposeTasksFromContract,
   createTasksFromProposals,
 } from './taskEngineService';
+import { interpretBusinessFromWorkflow } from './businessInterpretationService';
 import { assertContractPlanMutable } from './orderPlanIntegrityService';
 import {
   appendOrderPositionsBulk,
@@ -57,6 +58,41 @@ import type {
   WorkflowResult,
   WorkflowWarning,
 } from '../types/models';
+
+type WorkflowResultCore = Omit<WorkflowResult, 'businessInterpretation'>;
+
+function withBusinessInterpretation(
+  item: InboxItem,
+  core: WorkflowResultCore,
+): WorkflowResult {
+  const linkedId = item.vorgangId ?? core.suggestedVorgang?.vorgangId ?? null;
+  const linkedVorgang = linkedId ? getVorgangById(linkedId) ?? null : null;
+  try {
+    return {
+      ...core,
+      businessInterpretation: interpretBusinessFromWorkflow({
+        item,
+        workflow: core,
+        linkedVorgang,
+      }),
+    };
+  } catch (error) {
+    // Read-only coordination must never abort intake specialists / WorkflowResult.
+    console.warn('[businessInterpretation] interpretBusinessFromWorkflow failed', error);
+    return {
+      ...core,
+      businessInterpretation: null,
+      warnings: [
+        ...core.warnings,
+        {
+          id: 'business_interpretation_failed',
+          message:
+            'Betriebliche Koordination konnte nicht berechnet werden. Fachliche Spezialistenergebnisse bleiben verfügbar.',
+        },
+      ],
+    };
+  }
+}
 
 function inferClassificationConfidence(
   classification: DocumentClassificationResult,
@@ -243,19 +279,56 @@ export function processUploadedDocument(
   const companyRelevant = isDocumentAnalysisAllowed(item, profile);
 
   if (!companyRelevant) {
-    return {
+    // Display-only: structured contracts stay reviewable; never auto-execute.
+    const contractIntelligence = analyzeContractIntelligenceFromInbox(item);
+    const contractOrderProposal = buildContractOrderProposal(item, contractIntelligence);
+
+    if (!contractOrderProposal) {
+      return withBusinessInterpretation(item, {
+        inboxItemId,
+        companyRelevant: false,
+        companyRelevance,
+        classifiedKind: item.classifiedKind ?? 'sonstiges',
+        classificationConfidence: 'low',
+        classification: null,
+        documentExplanation: null,
+        documentUnderstanding: null,
+        documentAiActions: [],
+        contractAnalysis: null,
+        contractIntelligence: null,
+        contractOrderProposal: null,
+        suggestedVorgang: null,
+        similarVorgaenge: [],
+        suggestedOrderPositions: [],
+        suggestedTasks: [],
+        suggestedArchiveFolder: item.digitalFolder,
+        requiredDocuments: [],
+        pendingSummary: null,
+        warnings: buildWarnings(item, false, null),
+        nextActions: [
+          {
+            id: 'cancel',
+            labelKey: 'intake.action.cancel',
+            enabled: true,
+          },
+        ],
+      });
+    }
+
+    return withBusinessInterpretation(item, {
       inboxItemId,
       companyRelevant: false,
       companyRelevance,
-      classifiedKind: item.classifiedKind ?? 'sonstiges',
+      classifiedKind:
+        contractIntelligence?.classifiedKind ?? item.classifiedKind ?? 'sonstiges',
       classificationConfidence: 'low',
       classification: null,
       documentExplanation: null,
       documentUnderstanding: null,
       documentAiActions: [],
       contractAnalysis: null,
-      contractIntelligence: null,
-      contractOrderProposal: null,
+      contractIntelligence,
+      contractOrderProposal,
       suggestedVorgang: null,
       similarVorgaenge: [],
       suggestedOrderPositions: [],
@@ -271,7 +344,7 @@ export function processUploadedDocument(
           enabled: true,
         },
       ],
-    };
+    });
   }
 
   const classification = getClassificationForItem(item);
@@ -306,7 +379,7 @@ export function processUploadedDocument(
       ? contractIntelligence.classifiedKind
       : classification.classifiedKind;
 
-  return {
+  return withBusinessInterpretation(item, {
     inboxItemId,
     companyRelevant: true,
     companyRelevance,
@@ -335,7 +408,7 @@ export function processUploadedDocument(
       contractAnalysis: contractAnalysis.isContract ? contractAnalysis : null,
       classification,
     }),
-  };
+  });
 }
 
 export function acceptSuggestedTasks(proposals: TaskProposal[]): Task[] {

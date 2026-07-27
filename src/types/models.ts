@@ -2,6 +2,7 @@
 
 import type { SyncClientConfig, SyncMeta, SyncOutboxEntry } from './sync';
 import type { Workspace, WorkspaceMember, WorkspaceSettings } from './workspace';
+import type { BusinessInterpretationResult } from './businessInterpretation';
 import type { ContractIntelligenceResult, ContractOrderProposal } from './documentIntelligence';
 
 export type AppLanguage = 'de' | 'tr' | 'bg' | 'ro' | 'ru';
@@ -661,6 +662,16 @@ export interface WorkflowResult {
   pendingSummary: PendingSummary | null;
   warnings: WorkflowWarning[];
   nextActions: WorkflowNextAction[];
+  /**
+   * BUSINESS-BRAIN-01A/01A1 type contract:
+   * - Required field on every WorkflowResult.
+   * - Value type: BusinessInterpretationResult | null.
+   * - From processUploadedDocument(): object when interpretation succeeds;
+   *   null when interpretBusinessFromWorkflow throws (intake continues; warning
+   *   business_interpretation_failed). Never omits the field.
+   * - Explicit test fixtures may set null; prefer not to use unsafe casts that drop it.
+   */
+  businessInterpretation: BusinessInterpretationResult | null;
 }
 
 export type WorkflowExecutionStepId =

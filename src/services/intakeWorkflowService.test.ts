@@ -4,6 +4,7 @@ import { createTestVorgang } from '../test/fixtures';
 import { classifyInboxItem } from './documentClassificationService';
 import { hydrateCompanyProfileStore } from './companyProfileService';
 import { SAMPLE_WERKVERTRAG_TEXT } from './contractAnalysisService';
+import * as businessInterpretationService from './businessInterpretationService';
 import {
   acceptSuggestedTasks,
   processUploadedDocument,
@@ -60,6 +61,8 @@ function expectCompleteWorkflow(result: NonNullable<ReturnType<typeof processUpl
   expect(Array.isArray(result.suggestedTasks)).toBe(true);
   expect(Array.isArray(result.similarVorgaenge)).toBe(true);
   expect(Array.isArray(result.requiredDocuments)).toBe(true);
+  expect(result.businessInterpretation).not.toBeNull();
+  expect(result.businessInterpretation!.readOnly).toBe(true);
 }
 
 describe('intakeWorkflowService', () => {
@@ -200,7 +203,40 @@ describe('intakeWorkflowService', () => {
     const result = processUploadedDocument(item.id);
     expect(result?.companyRelevant).toBe(false);
     expect(result?.classification).toBeNull();
+    expect(result?.contractOrderProposal).toBeNull();
     expect(result?.warnings.some((w) => w.id === 'company_relevance_blocked')).toBe(true);
+  });
+
+  it('liefert prüfbares Contract-Proposal trotz fehlendem Firmenbezug bei strukturiertem Vertrag', () => {
+    const text = `
+Werkvertrag
+Auftraggeber: Fremde Firma AG
+Auftragnehmer: Externer Partner
+Vertragsdatum: 02.03.2026
+Vertragsgegenstand: Abdichtung
+Vertragssumme netto: 12.000,00 €
+Zahlungsbedingungen: 30 Tage netto
+`.trim();
+    const item = cloneInbox(MOCK_INBOX_ITEMS.find((i) => i.id === 'inbox-005')!, {
+      id: 'inbox-wf-contract-no-company',
+      title: 'Fremder Werkvertrag',
+      sender: 'Fremde Firma AG',
+      classifiedKind: 'werkvertrag',
+      documentType: 'werkvertrag',
+      markedAsCompanyDocument: false,
+      recognizedData: {
+        Betreff: 'Privat',
+        _extractedText: text,
+        _vertragstext: text,
+      },
+    });
+    hydrateInboxStore([item]);
+
+    const result = processUploadedDocument(item.id);
+    expect(result?.companyRelevant).toBe(false);
+    expect(result?.contractOrderProposal).not.toBeNull();
+    expect(result?.suggestedOrderPositions).toEqual([]);
+    expect(result?.classification).toBeNull();
   });
 
   it('findet vorhandenen Vorgang', () => {
@@ -296,5 +332,34 @@ describe('intakeWorkflowService', () => {
     const second = acceptSuggestedTasks(result.suggestedTasks);
     expect(first.length).toBeGreaterThan(0);
     expect(second.length).toBe(first.length);
+  });
+
+  it('BUSINESS-BRAIN-01A1-SAFETY: Interpretation-Fehler bricht Intake nicht ab', () => {
+    vi.spyOn(businessInterpretationService, 'interpretBusinessFromWorkflow').mockImplementation(
+      () => {
+        throw new Error('simulated business interpretation failure');
+      },
+    );
+
+    const item = cloneInbox(MOCK_INBOX_ITEMS.find((i) => i.id === 'inbox-002')!, {
+      id: 'inbox-wf-bi-isolation',
+      title: 'Zahlungserinnerung Mustermann Sanitär GmbH',
+      recognizedData: {
+        ...MOCK_INBOX_ITEMS[1]!.recognizedData,
+        Betreff: 'Mustermann Sanitär GmbH',
+      },
+    });
+    hydrateInboxStore([item]);
+
+    const result = processUploadedDocument(item.id);
+    expect(result).not.toBeNull();
+    expect(result!.businessInterpretation).toBeNull();
+    expect(result!.classifiedKind).toBeTruthy();
+    expect(result!.classification).toBeTruthy();
+    expect(result!.companyRelevance).toBeTruthy();
+    expect(Array.isArray(result!.nextActions)).toBe(true);
+    expect(result!.warnings.some((warning) => warning.id === 'business_interpretation_failed')).toBe(
+      true,
+    );
   });
 });
