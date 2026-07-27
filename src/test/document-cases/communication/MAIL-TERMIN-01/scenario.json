@@ -1,0 +1,12 @@
+{
+  "caseId": "MAIL-TERMIN-01",
+  "damagePrevented": "Kunden-E-Mail wird als Rechnung/Vertrag klassifiziert oder ohne Freigabe gesendet",
+  "category": "communication",
+  "layers": ["stable-pipeline"],
+  "channel": "email",
+  "importSource": "email",
+  "titleHint": "Terminverschiebung Baustelle Hauptstr.",
+  "senderHint": "kunde@mueller-bau.example",
+  "markedAsCompanyDocument": true,
+  "tags": ["customer_inquiry", "communication"]
+}

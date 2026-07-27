@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "officepilot-document-case-expected",
+  "title": "DocumentCaseExpected",
+  "type": "object",
+  "required": [
+    "damagePrevented",
+    "ingress",
+    "document",
+    "businessCase",
+    "meaning",
+    "forbidden",
+    "knownGaps"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "damagePrevented": { "type": "string", "minLength": 8 },
+    "knownGaps": { "type": "array", "items": { "type": "string" } },
+    "forbidden": { "type": "array", "items": { "type": "string" } },
+    "businessCase": {
+      "type": "object",
+      "required": ["primaryCase", "biEventAllowed"],
+      "properties": {
+        "primaryCase": { "type": "string" },
+        "biEventAllowed": { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+      }
+    }
+  }
+}

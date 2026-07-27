@@ -1,0 +1,54 @@
+{
+  "damagePrevented": "Vertragsfamilie, Parteien, Geld, LV-Positionen gehen verloren oder Auftrag wird ohne Freigabe übernommen",
+  "ingress": { "channel": "pdf", "sourceKind": "multi_page_contract" },
+  "document": {
+    "coarseKind": "contract",
+    "fineKindAllowed": ["werkvertrag", "subunternehmervertrag"],
+    "recognition": "certain"
+  },
+  "businessCase": {
+    "primaryCase": "possible_new_order",
+    "biEventAllowed": [
+      "possible_new_business_case",
+      "contract_proposed",
+      "business_case_update",
+      "review_required"
+    ],
+    "vorgangRef": "none_or_suggested"
+  },
+  "actors": {
+    "senderContains": ["Isobautec"],
+    "counterpartyContains": ["Isobautec"],
+    "ownCompanyContains": ["Iliev", "Ivan"],
+    "rolePairsForbiddenSwap": [
+      { "aContains": "Isobautec", "bContains": "Iliev" }
+    ]
+  },
+  "meaning": ["obligation", "money", "action_required", "vorgang_change"],
+  "money": {
+    "required": true,
+    "amountApprox": 36029.05,
+    "currency": "EUR",
+    "kindsAllowed": ["contract_total", "boq_total"]
+  },
+  "deadlines": {
+    "forbidTerminationAsDeadline": true
+  },
+  "decisions": ["save_document", "confirm_positions", "confirm_contract_parties"],
+  "forbidden": ["auto_create_order", "auto_payment", "silent_plan_change"],
+  "positions": {
+    "minCount": 10,
+    "mustInclude": [
+      {
+        "descriptionContains": "PVC",
+        "quantity": 4799
+      }
+    ]
+  },
+  "classifiedKindAllowed": ["werkvertrag", "subunternehmervertrag", "nachunternehmervertrag"],
+  "knownGaps": [
+    "Business Interpretation ist runtime-only und wird nicht als strukturierte facts persistiert — Persistenz-Smoke prüft OCR-Erhalt + Re-Analyse.",
+    "Voller processUploadedDocument mit Mehrseiten-Fixture hängt lokal (>10 Min); Stable-Pipeline nutzt daher Contract Intelligence + BI direkt.",
+    "Einheiten aus CI können von OCR-Token abweichen (z. B. qm vs. Stück) — Menge und Beschreibung bleiben geprüft."
+  ]
+}

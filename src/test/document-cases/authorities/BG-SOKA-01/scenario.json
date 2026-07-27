@@ -1,0 +1,13 @@
+{
+  "caseId": "BG-SOKA-01",
+  "damagePrevented": "BG-BAU-/SOKA-Schreiben erzeugt LV oder automatische Übermittlung wegen Baubegriffen",
+  "category": "authorities",
+  "layers": ["stable-pipeline"],
+  "channel": "upload",
+  "importSource": "upload",
+  "titleHint": "BG BAU Unbedenklichkeitsanforderung",
+  "senderHint": "BG BAU",
+  "kindHint": "bg_bau",
+  "markedAsCompanyDocument": true,
+  "tags": ["authority_obligation", "evidence"]
+}

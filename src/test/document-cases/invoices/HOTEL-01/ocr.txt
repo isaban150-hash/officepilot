@@ -1,0 +1,15 @@
+Hotelrechnung
+Hotel: City Lodge Berlin GmbH
+Gast: Max Mustermann
+Firma: Mustermann Sanitär GmbH
+Aufenthalt: 10.03.2026 – 12.03.2026
+Zimmer: 2 Nächte Übernachtung EZ
+Frühstück: 2 × Frühstücksbuffet
+Parken: 2 × Tiefgarage
+Rechnungsnummer: HOT-77821
+Betrag: 278,80 €
+Netto: 248,00 €
+MwSt: 30,80 €
+Bruttobetrag: 278,80 €
+Gesamtbetrag: 278,80 €
+Vielen Dank für Ihren Aufenthalt.

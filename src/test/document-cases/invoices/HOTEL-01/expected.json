@@ -1,0 +1,40 @@
+{
+  "damagePrevented": "Hotelrechnung wird als Kundenauftrag oder Bauvertrag missdeutet",
+  "ingress": { "channel": "upload", "sourceKind": "hotel_invoice" },
+  "document": {
+    "coarseKind": "invoice",
+    "recognition": "certain"
+  },
+  "businessCase": {
+    "primaryCase": "overhead_expense",
+    "biEventAllowed": [
+      "invoice_received",
+      "review_required",
+      "information_only",
+      "deadline_or_obligation_detected"
+    ],
+    "vorgangRef": "none"
+  },
+  "actors": {
+    "senderContains": ["City Lodge", "Hotel"]
+  },
+  "meaning": ["money", "action_required", "information"],
+  "money": {
+    "required": true,
+    "amountApprox": 278.8,
+    "currency": "EUR"
+  },
+  "forbidden": [
+    "hotel_creates_customer_order",
+    "auto_create_order",
+    "auto_payment",
+    "contract_effect_on_invoice",
+    "performance_plan_on_non_performance_family"
+  ],
+  "positions": { "maxCount": 0 },
+  "knownGaps": [
+    "Keine eigene Dokumentart „hotelrechnung“ / Reisekosten-Domäne — oft als allgemeine Eingangsrechnung klassifiziert.",
+    "Belegpositionen (Frühstück/Parken) werden nicht strukturiert als Spesenzeilen erkannt.",
+    "Betrag/Gesamtbetrag wird nicht zuverlässig als strukturierte invoice_total-Geldkennzahl erkannt."
+  ]
+}

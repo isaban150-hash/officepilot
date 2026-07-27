@@ -1,0 +1,40 @@
+{
+  "damagePrevented": "Kunden-E-Mail wird als Rechnung/Vertrag klassifiziert oder ohne Freigabe gesendet",
+  "ingress": { "channel": "email", "sourceKind": "email_message" },
+  "document": {
+    "coarseKind": "message",
+    "fineKindAllowed": ["brief", "schriftverkehr", "email_pdf", "sonstiges"],
+    "recognition": "uncertain"
+  },
+  "businessCase": {
+    "primaryCase": "customer_inquiry",
+    "biEventAllowed": [
+      "review_required",
+      "information_only",
+      "deadline_or_obligation_detected",
+      "business_case_update"
+    ],
+    "vorgangRef": "none_or_suggested"
+  },
+  "actors": {
+    "senderContains": ["mueller", "kunde"]
+  },
+  "meaning": ["communication", "action_required", "information"],
+  "money": { "required": false, "forbidAmount": true },
+  "forbidden": [
+    "auto_send_message",
+    "auto_create_order",
+    "auto_payment",
+    "invoice_invented_from_letter",
+    "authority_creates_boq",
+    "invented_money",
+    "performance_plan_on_non_performance_family"
+  ],
+  "positions": { "maxCount": 0 },
+  "classifiedKindAllowed": ["brief", "schriftverkehr", "sonstiges", "email_pdf"],
+  "knownGaps": [
+    "E-Mail als eigener classifiedKind ist schwach — oft brief/sonstiges.",
+    "Terminänderung nicht als strukturierte service_due-Frist modelliert.",
+    "Antwortentwurf / Communication-Brain fehlt — Schutz über Verbote auto_send."
+  ]
+}

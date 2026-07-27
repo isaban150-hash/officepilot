@@ -1,0 +1,40 @@
+{
+  "damagePrevented": "Versicherungsbrief wird als Rechnung/Auftrag missdeutet; automatische Zahlung oder Schadensanerkennung",
+  "ingress": { "channel": "email", "sourceKind": "insurance_letter" },
+  "document": {
+    "coarseKind": "insurance",
+    "fineKindAllowed": ["versicherung", "versicherungsbescheid"],
+    "recognition": "uncertain"
+  },
+  "businessCase": {
+    "primaryCase": "insurance_matter",
+    "biEventAllowed": [
+      "review_required",
+      "information_only",
+      "deadline_or_obligation_detected",
+      "invoice_received",
+      "possible_new_business_case"
+    ],
+    "vorgangRef": "none"
+  },
+  "actors": {
+    "senderContains": ["Versicherung", "Handwerk"]
+  },
+  "meaning": ["money", "deadline", "risk", "action_required", "information"],
+  "money": {
+    "required": false
+  },
+  "forbidden": [
+    "auto_payment",
+    "auto_create_order",
+    "auto_send_message",
+    "performance_plan_on_non_performance_family"
+  ],
+  "positions": { "maxCount": 0 },
+  "knownGaps": [
+    "Versicherungsnummer noch nicht strukturiert in facts.",
+    "Schadenstatus / Beitragsanpassung als eigener Falltyp fehlt — oft review_required oder generische Frist.",
+    "Produkt kann Versicherungsbrief fälschlich als possible_new_business_case deuten und Vertragswirkung setzen — kein LV (positions max 0), keine auto_payment.",
+    "Falls fälschlich invoice_received: trotzdem keine auto_payment und kein Auftrag (Verbote)."
+  ]
+}

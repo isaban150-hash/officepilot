@@ -1,0 +1,13 @@
+{
+  "caseId": "BANK-RLS-01",
+  "damagePrevented": "Rücklastschrift wird als Rechnung/Vertrag missdeutet; automatische erneute Zahlung",
+  "category": "banking",
+  "layers": ["stable-pipeline"],
+  "channel": "upload",
+  "importSource": "upload",
+  "titleHint": "Rücklastschrift Ankündigung",
+  "senderHint": "Sparkasse Berlin",
+  "kindHint": "kontoauszug",
+  "markedAsCompanyDocument": true,
+  "tags": ["payment_disruption"]
+}

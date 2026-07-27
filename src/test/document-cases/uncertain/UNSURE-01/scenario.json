@@ -1,0 +1,11 @@
+{
+  "caseId": "UNSURE-01",
+  "damagePrevented": "Unklarer Text erzeugt erfundene Parteien, Beträge oder Automatik",
+  "category": "uncertain",
+  "layers": ["stable-pipeline"],
+  "channel": "scan",
+  "importSource": "scan",
+  "titleHint": "Unleserliches Fragment",
+  "markedAsCompanyDocument": true,
+  "tags": ["review_required"]
+}

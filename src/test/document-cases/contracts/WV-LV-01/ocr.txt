@@ -1,0 +1,2 @@
+ocr.txt wird für WV-LV-01 nicht benötigt — scenario.textFixture = werkvertragMultiSection.
+Dieses Platzhalter-File erfüllt die Case-Konvention nur dokumentarisch; der Loader nutzt die Fixture.

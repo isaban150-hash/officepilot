@@ -1,0 +1,11 @@
+Rechnung
+Rechnungsnummer: RE-2026-9912
+Rechnungsdatum: 05.03.2026
+Lieferant: Nordhandel GmbH
+Rechnungsempfänger: Mustermann Sanitär GmbH
+Leistungszeitraum: 01.03.2026 – 05.03.2026
+Nettobetrag: 1.240,00 €
+Umsatzsteuer 19 %: 235,60 €
+Bruttobetrag: 1.475,60 €
+Zahlbar bis: 19.03.2026
+Bitte überweisen Sie den Betrag auf unsere Bankverbindung.

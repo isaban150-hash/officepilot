@@ -1,0 +1,28 @@
+{
+  "damagePrevented": "Unklarer Text erzeugt erfundene Parteien, Beträge oder Automatik",
+  "ingress": { "channel": "scan", "sourceKind": "poor_scan" },
+  "document": {
+    "coarseKind": "uncertain",
+    "recognition": "uncertain"
+  },
+  "businessCase": {
+    "primaryCase": "review_required",
+    "biEventAllowed": ["review_required", "information_only"],
+    "vorgangRef": "none"
+  },
+  "actors": {
+    "forbidInventedParties": true
+  },
+  "meaning": ["information", "action_required"],
+  "money": { "required": false, "forbidAmount": true },
+  "forbidden": [
+    "invented_parties",
+    "invented_money",
+    "auto_create_order",
+    "auto_payment",
+    "auto_send_message",
+    "authority_creates_boq"
+  ],
+  "positions": { "maxCount": 0 },
+  "knownGaps": []
+}

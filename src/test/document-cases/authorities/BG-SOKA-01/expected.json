@@ -1,0 +1,39 @@
+{
+  "damagePrevented": "BG-BAU-/SOKA-Schreiben erzeugt LV oder automatische Übermittlung wegen Baubegriffen",
+  "ingress": { "channel": "upload", "sourceKind": "bg_bau_letter" },
+  "document": {
+    "coarseKind": "authority",
+    "fineKindAllowed": ["bg_bau", "soka_bau"],
+    "recognition": "certain"
+  },
+  "businessCase": {
+    "primaryCase": "authority_obligation",
+    "biEventAllowed": [
+      "deadline_or_obligation_detected",
+      "review_required",
+      "information_only",
+      "evidence_added",
+      "possible_new_business_case"
+    ],
+    "vorgangRef": "none"
+  },
+  "actors": {
+    "senderContains": ["BG BAU", "Berufsgenossenschaft"]
+  },
+  "meaning": ["evidence", "deadline", "obligation", "action_required"],
+  "forbidden": [
+    "authority_creates_boq",
+    "auto_send_message",
+    "auto_create_order",
+    "auto_payment",
+    "performance_plan_on_non_performance_family",
+    "invoice_invented_from_letter"
+  ],
+  "positions": { "maxCount": 0 },
+  "classifiedKindAllowed": ["bg_bau", "soka_bau", "berufsgenossenschaft", "sonstiges", "brief"],
+  "knownGaps": [
+    "SOKA-BAU als eigene strukturierte Condition/Meldepflicht ist nicht immer befüllt.",
+    "Kein dedizierter Geschäftsfall „nachweis_nachreichen“ im Event-Vokabular — über authority_obligation + Verbote geschützt.",
+    "Produkt kann BG-Schreiben fälschlich als possible_new_business_case deuten — Schutz über Verbot Leistungsverzeichnis/auto_send."
+  ]
+}

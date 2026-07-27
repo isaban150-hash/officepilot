@@ -1,0 +1,42 @@
+{
+  "damagePrevented": "Finanzamtsschreiben wird als Rechnung oder Auftrag gedeutet; automatische Antwort",
+  "ingress": { "channel": "scan", "sourceKind": "authority_letter" },
+  "document": {
+    "coarseKind": "authority",
+    "fineKindAllowed": ["finanzamt"],
+    "recognition": "certain"
+  },
+  "businessCase": {
+    "primaryCase": "authority_obligation",
+    "biEventAllowed": [
+      "deadline_or_obligation_detected",
+      "review_required",
+      "information_only"
+    ],
+    "vorgangRef": "none"
+  },
+  "actors": {
+    "senderContains": ["Finanzamt"]
+  },
+  "meaning": ["deadline", "obligation", "action_required", "evidence"],
+  "money": { "required": false, "forbidAmount": false },
+  "deadlines": {
+    "allowedKinds": ["document_submission_due", "response_due"],
+    "forbidKinds": ["payment_due"]
+  },
+  "forbidden": [
+    "invoice_invented_from_letter",
+    "auto_create_order",
+    "auto_send_message",
+    "auto_payment",
+    "authority_creates_boq",
+    "performance_plan_on_non_performance_family"
+  ],
+  "positions": { "maxCount": 0 },
+  "classifiedKindAllowed": ["finanzamt", "sonstiges", "brief"],
+  "knownGaps": [
+    "Strukturierte Fristart document_submission_due fehlt in BI — nur generische Deadline/Review.",
+    "Aktenzeichen wird nicht als strukturiertes Feld in facts geführt.",
+    "Falls Klassifikation nur „brief/sonstiges“: Primärfall über BI-Ereignis + Verbote abgesichert."
+  ]
+}

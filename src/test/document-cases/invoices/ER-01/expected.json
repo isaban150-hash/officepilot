@@ -1,0 +1,36 @@
+{
+  "damagePrevented": "Eingangsrechnung erhält Vertragswirkung oder löst automatische Zahlung aus",
+  "ingress": { "channel": "upload", "sourceKind": "invoice_pdf" },
+  "document": {
+    "coarseKind": "invoice",
+    "fineKindAllowed": ["eingangsrechnung", "reparaturrechnung"],
+    "recognition": "certain"
+  },
+  "businessCase": {
+    "primaryCase": "invoice_received",
+    "biEventAllowed": ["invoice_received"],
+    "vorgangRef": "none_or_suggested"
+  },
+  "actors": {
+    "senderContains": ["Nordhandel"]
+  },
+  "meaning": ["money", "deadline", "action_required"],
+  "money": {
+    "required": true,
+    "amountApprox": 1475.6,
+    "currency": "EUR",
+    "kindsAllowed": ["invoice_total"]
+  },
+  "decisions": ["finalize_invoice", "save_document"],
+  "forbidden": [
+    "contract_effect_on_invoice",
+    "auto_payment",
+    "auto_create_order",
+    "performance_plan_on_non_performance_family"
+  ],
+  "positions": { "maxCount": 0 },
+  "classifiedKindAllowed": ["eingangsrechnung", "reparaturrechnung", "rechnung"],
+  "knownGaps": [
+    "Lieferant als strukturierte Gegenpartei in facts.parties ist nicht immer befüllt — Absender-/Sender-Schutz bleibt."
+  ]
+}

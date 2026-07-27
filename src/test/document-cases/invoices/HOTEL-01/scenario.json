@@ -1,0 +1,12 @@
+{
+  "caseId": "HOTEL-01",
+  "damagePrevented": "Hotelrechnung wird als Kundenauftrag oder Bauvertrag missdeutet",
+  "category": "invoices",
+  "layers": ["stable-pipeline"],
+  "channel": "upload",
+  "importSource": "upload",
+  "titleHint": "Hotelrechnung City Lodge",
+  "senderHint": "City Lodge Berlin GmbH",
+  "markedAsCompanyDocument": true,
+  "tags": ["overhead_expense", "hotel"]
+}

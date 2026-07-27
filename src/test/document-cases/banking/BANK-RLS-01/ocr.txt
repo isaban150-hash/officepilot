@@ -1,0 +1,10 @@
+Sparkasse Berlin
+Konto: DE89 3704 0044 0532 0130 00
+Mitteilung: Rücklastschrift / Zahlungsstörung
+
+Buchungsdatum: 18.03.2026
+Betrag: 475,60 €
+Verwendungszweck: Lastschrift RE-2026-8801 Nordhandel GmbH
+Grund: Widerspruch / unzureichende Deckung
+Handlungsbedarf: Bitte klären Sie den Betrag mit dem Gläubiger.
+Es erfolgt keine automatische erneute Zahlung.

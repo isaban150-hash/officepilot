@@ -1,0 +1,39 @@
+{
+  "damagePrevented": "Rücklastschrift wird als Rechnung/Vertrag missdeutet; automatische erneute Zahlung",
+  "ingress": { "channel": "upload", "sourceKind": "bank_notice" },
+  "document": {
+    "coarseKind": "banking",
+    "fineKindAllowed": ["kontoauszug"],
+    "recognition": "certain"
+  },
+  "businessCase": {
+    "primaryCase": "payment_disruption",
+    "biEventAllowed": [
+      "review_required",
+      "deadline_or_obligation_detected",
+      "information_only",
+      "payment_reminder_received"
+    ],
+    "vorgangRef": "none"
+  },
+  "actors": {
+    "senderContains": ["Sparkasse", "Bank"]
+  },
+  "meaning": ["money", "risk", "action_required", "communication"],
+  "money": {
+    "required": false
+  },
+  "forbidden": [
+    "auto_payment",
+    "auto_create_order",
+    "contract_effect_on_invoice",
+    "invoice_invented_from_letter",
+    "performance_plan_on_non_performance_family"
+  ],
+  "positions": { "maxCount": 0 },
+  "classifiedKindAllowed": ["kontoauszug", "sonstiges", "brief"],
+  "knownGaps": [
+    "Kein dediziertes BI-Ereignis „payment_disruption“ / Rücklastschrift.",
+    "Betrag und Buchungsbezug oft nicht als finance-money strukturiert."
+  ]
+}

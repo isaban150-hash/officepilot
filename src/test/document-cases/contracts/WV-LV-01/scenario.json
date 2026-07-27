@@ -1,0 +1,13 @@
+{
+  "caseId": "WV-LV-01",
+  "damagePrevented": "Vertragsfamilie, Parteien, Geld, LV-Positionen gehen verloren oder Auftrag wird ohne Freigabe übernommen",
+  "category": "contracts",
+  "layers": ["stable-pipeline", "persistence-smoke"],
+  "channel": "pdf",
+  "textFixture": "werkvertragMultiSection",
+  "importSource": "upload",
+  "titleHint": "Werkvertrag Isobautec Flachdach",
+  "senderHint": "Isobautec GmbH",
+  "markedAsCompanyDocument": true,
+  "tags": ["possible_new_order", "contract", "boq"]
+}

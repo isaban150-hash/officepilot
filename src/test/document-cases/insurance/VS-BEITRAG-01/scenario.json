@@ -1,0 +1,12 @@
+{
+  "caseId": "VS-BEITRAG-01",
+  "damagePrevented": "Versicherungsbrief wird als Rechnung/Auftrag missdeutet; automatische Zahlung oder Schadensanerkennung",
+  "category": "insurance",
+  "layers": ["stable-pipeline"],
+  "channel": "upload",
+  "importSource": "email",
+  "titleHint": "Beitragsanpassung Betriebshaftpflicht",
+  "senderHint": "Handwerk Versicherung AG",
+  "markedAsCompanyDocument": true,
+  "tags": ["insurance_matter"]
+}

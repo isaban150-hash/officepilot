@@ -1,0 +1,10 @@
+Von: kunde@mueller-bau.example
+An: info@mustermann-sanitaer.de
+Betreff: Bitte um Rückmeldung zum Termin
+
+Guten Tag Herr Mustermann,
+können wir unseren Termin vom 28.03.2026 auf den 02.04.2026 verschieben?
+Bitte um kurze Rückmeldung per E-Mail.
+Bezug: unser laufendes Projekt Hauptstraße 12
+Viele Grüße
+Familie Müller

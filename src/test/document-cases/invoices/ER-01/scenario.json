@@ -1,0 +1,12 @@
+{
+  "caseId": "ER-01",
+  "damagePrevented": "Eingangsrechnung erhält Vertragswirkung oder löst automatische Zahlung aus",
+  "category": "invoices",
+  "layers": ["stable-pipeline"],
+  "channel": "upload",
+  "importSource": "upload",
+  "titleHint": "Eingangsrechnung RE-2026-9912",
+  "senderHint": "Nordhandel GmbH",
+  "markedAsCompanyDocument": true,
+  "tags": ["invoice_received"]
+}
