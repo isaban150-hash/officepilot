@@ -175,7 +175,12 @@ describe('DOCUMENT-ASSIST-EINGANG-SURFACE-CONSOLIDATE-01', () => {
     expect(html).toContain('data-assist-flow="consolidated"');
     expect(html).toContain('eingang-assist-flow');
 
-    assertOrder(html, 'data-testid="document-assistant-panel"', 'data-testid="document-field-fill-confirm-panel"');
+    assertOrder(html, 'data-testid="document-assistant-panel"', 'data-testid="document-review-experience"');
+    assertOrder(
+      html,
+      'data-testid="document-review-experience"',
+      'data-testid="document-field-fill-confirm-panel"',
+    );
     assertOrder(
       html,
       'data-testid="document-field-fill-confirm-panel"',
@@ -195,11 +200,6 @@ describe('DOCUMENT-ASSIST-EINGANG-SURFACE-CONSOLIDATE-01', () => {
       html,
       'data-testid="document-confirmed-reply-draft-panel"',
       'data-testid="ablage-original-file"',
-    );
-    assertOrder(
-      html,
-      'data-testid="ablage-original-file"',
-      'data-testid="document-review-experience"',
     );
 
     // Non-compact understand: guidance visible; trust/details stay collapsed
@@ -376,6 +376,11 @@ describe('DOCUMENT-ASSIST-EINGANG-SURFACE-CONSOLIDATE-01', () => {
     expect(html).not.toContain('data-testid="eingang-assist-flow"');
     assertOrder(
       html,
+      'data-testid="document-review-experience"',
+      'data-testid="document-free-question-panel"',
+    );
+    assertOrder(
+      html,
       'data-testid="document-free-question-panel"',
       'data-testid="document-field-fill-confirm-panel"',
     );
@@ -383,11 +388,6 @@ describe('DOCUMENT-ASSIST-EINGANG-SURFACE-CONSOLIDATE-01', () => {
       html,
       'data-testid="document-field-fill-confirm-panel"',
       'data-testid="ablage-original-file"',
-    );
-    assertOrder(
-      html,
-      'data-testid="ablage-original-file"',
-      'data-testid="document-review-experience"',
     );
   });
 

@@ -4610,6 +4610,133 @@ body {
   margin-top: 0.25rem;
 }
 
+.operational-overview {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border, #d7dde5);
+  border-radius: 0.5rem;
+  background-color: #f8fafc;
+  background-image: linear-gradient(
+    180deg,
+    rgba(248, 250, 252, 0.95),
+    rgba(241, 245, 249, 0.88)
+  );
+}
+
+.operational-overview__title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.operational-overview__facts {
+  margin: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.operational-overview__row {
+  display: grid;
+  grid-template-columns: minmax(6.5rem, 34%) 1fr;
+  gap: 0.45rem;
+  font-size: 0.92rem;
+}
+
+.operational-overview__row dt {
+  margin: 0;
+  color: var(--muted, #64748b);
+  font-weight: 500;
+}
+
+.operational-overview__row dd {
+  margin: 0;
+  font-weight: 550;
+}
+
+.operational-overview__meanings {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.65rem;
+}
+
+.operational-overview__meanings li::before {
+  content: '· ';
+  color: var(--muted, #64748b);
+}
+
+.operational-overview__uncertainty {
+  font-size: 0.88rem;
+}
+
+.operational-overview__uncertainty-title {
+  margin: 0 0 0.25rem;
+  font-weight: 600;
+}
+
+.operational-overview__uncertainty ul {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.operational-overview__primary {
+  margin-top: 0.15rem;
+}
+
+.operational-overview__details {
+  border-top: 1px solid var(--border, #d7dde5);
+  padding-top: 0.5rem;
+}
+
+.operational-overview__details summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.operational-overview__details-body {
+  margin-top: 0.55rem;
+  display: grid;
+  gap: 0.65rem;
+}
+
+.operational-overview__block-title {
+  margin: 0 0 0.3rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.operational-overview__position-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.3rem;
+}
+
+.operational-overview__position-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.88rem;
+}
+
+.operational-overview__position-qty {
+  color: var(--muted, #64748b);
+  white-space: nowrap;
+}
+
+@media (max-width: 767px) {
+  .operational-overview__row {
+    grid-template-columns: 1fr;
+    gap: 0.1rem;
+  }
+}
+
 .document-review-hero__facts {
   margin: 0.75rem 0 0;
   display: grid;

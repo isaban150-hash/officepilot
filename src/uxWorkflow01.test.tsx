@@ -162,9 +162,9 @@ describe('UX-WORKFLOW-01 document review', () => {
       recognizedText: CONTRACT_TEXT,
     });
     const html = renderDetail(item.id);
-    expect(html).toContain('data-testid="document-review-hero"');
-    expect(html).toContain('Dokument erkannt');
-    expect(html).toContain('data-testid="document-review-hero-type"');
+    // INGRESS-OPERATIONAL-OVERVIEW-01: BI overview replaces hero when interpretation is present.
+    expect(html).toContain('data-testid="operational-overview"');
+    expect(html).toContain('data-testid="operational-overview-document-kind"');
     expect(html).toContain('Werkvertrag');
   });
 
@@ -188,7 +188,8 @@ describe('UX-WORKFLOW-01 document review', () => {
     const checks = buildDocumentReviewChecks(item, workflow);
     expect(checks.length).toBeGreaterThan(0);
     const html = renderDetail(item.id);
-    expect(html).toContain('data-testid="document-review-checks"');
+    // Overview surfaces uncertainty instead of the legacy checks card.
+    expect(html).toContain('data-testid="operational-overview-uncertainty"');
   });
 
   it('bei vollständigen Daten erscheint Alles vollständig', () => {
@@ -200,7 +201,8 @@ describe('UX-WORKFLOW-01 document review', () => {
     const checks = buildDocumentReviewChecks(item, workflow);
     expect(isDocumentReviewComplete(checks)).toBe(true);
     const html = renderDetail(item.id);
-    expect(html).toContain('data-testid="document-review-checks-complete"');
+    expect(html).toContain('data-testid="operational-overview"');
+    expect(html).toContain('data-testid="operational-overview-primary-case"');
   });
 
   it('nur eine Primary-Hauptaktion sichtbar', () => {
@@ -264,18 +266,16 @@ describe('UX-WORKFLOW-01 document review', () => {
     expect(germanFallback, `deutscher Fallback: ${germanFallback.join(', ')}`).toEqual([]);
   });
 
-  it('Mobile-Struktur rendert Hero, Empfehlungen und Hauptbutton zuerst', () => {
+  it('Mobile-Struktur rendert Overview und Hauptbutton zuerst', () => {
     const item = processUpload({ kind: 'auftrag' });
     const html = renderDetail(item.id);
-    const heroIndex = html.indexOf('document-review-hero');
-    const recommendIndex = html.indexOf('document-review-recommendations');
+    const overviewIndex = html.indexOf('operational-overview');
     const primaryIndex = html.includes('document-review-primary-action')
       ? html.indexOf('document-review-primary-action')
       : html.indexOf('contract-chef-primary-action');
     const moreIndex = html.indexOf('document-review-more-options');
-    expect(heroIndex).toBeGreaterThan(-1);
-    expect(recommendIndex).toBeGreaterThan(heroIndex);
-    expect(primaryIndex).toBeGreaterThan(recommendIndex);
+    expect(overviewIndex).toBeGreaterThan(-1);
+    expect(primaryIndex).toBeGreaterThan(overviewIndex);
     expect(moreIndex).toBeGreaterThan(primaryIndex);
   });
 

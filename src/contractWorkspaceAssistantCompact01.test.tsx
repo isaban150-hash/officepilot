@@ -259,10 +259,8 @@ describe('CONTRACT-WORKSPACE-ASSISTANT-COMPACT-01', () => {
     expect(html).toContain('data-testid="document-assistant-panel"');
     expect(html).toContain('data-compact="true"');
 
-    assertOrder(html, 'data-testid="document-assistant-panel"', 'data-testid="document-review-hero"');
-    assertOrder(html, 'data-testid="document-review-hero"', 'document-review-recommendations');
-    assertOrder(html, 'document-review-recommendations', 'data-testid="document-review-checks"');
-    assertOrder(html, 'data-testid="document-review-checks"', 'contract-order-proposal');
+    assertOrder(html, 'data-testid="document-assistant-panel"', 'data-testid="operational-overview"');
+    assertOrder(html, 'data-testid="operational-overview"', 'contract-order-proposal');
     assertOrder(html, 'contract-order-proposal', 'data-testid="contract-workspace-summary"');
     assertOrder(html, 'data-testid="contract-workspace-summary"', 'data-testid="contract-order-lv-overview"');
     assertOrder(

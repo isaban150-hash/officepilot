@@ -8,6 +8,7 @@ import {
   buildPaperRegisterHint,
   isDocumentReviewComplete,
 } from '../../../services/documentReviewViewService';
+import { buildOperationalOverviewView } from '../../../services/operationalOverviewView';
 import type {
   InboxItem,
   WorkflowResult,
@@ -21,6 +22,7 @@ import { DocumentReviewRecommendations } from './DocumentReviewRecommendations';
 import { DocumentReviewSuccess } from './DocumentReviewSuccess';
 import { ReviewMoreOptionsShell } from './CollapsibleReviewSection';
 import { ContractOrderProposalPanel } from './ContractOrderProposalPanel';
+import { OperationalOverview } from './OperationalOverview';
 
 interface DocumentReviewExperienceProps {
   item: InboxItem;
@@ -65,6 +67,7 @@ export function DocumentReviewExperience({
   const successSteps = executionResult?.completed
     ? buildDocumentReviewSuccessSteps(executionResult)
     : [];
+  const overview = buildOperationalOverviewView(workflow, { senderFallback: item.sender });
 
   const primaryDisabled = !item.isAdvertisement && !workflow.companyRelevant;
 
@@ -72,26 +75,52 @@ export function DocumentReviewExperience({
     ? translate('reviewWorkflow.action.reviewAdvertisement')
     : translate('reviewWorkflow.action.applySuggestion');
 
+  const showLegacySummary = !overview.present;
+  const showContractProposal = Boolean(workflow.contractOrderProposal) && !executionResult?.completed;
+  const showOverviewPrimary =
+    overview.present && !executionResult?.completed && !showContractProposal;
+  const showLegacyPrimary =
+    !overview.present && !executionResult?.completed && !showContractProposal;
+
   return (
     <div className="document-review-experience" data-testid="document-review-experience">
-      <div className="document-review-experience__layout">
-        <div className="document-review-experience__summary">
-          <DocumentReviewHero hero={hero} translate={translate} />
-        </div>
+      {overview.present ? (
+        <OperationalOverview
+          view={overview}
+          translate={translate}
+          primaryAction={
+            showOverviewPrimary
+              ? {
+                  label: primaryLabel,
+                  disabled: primaryDisabled,
+                  loading: isExecuting || isCreatingContractOrder,
+                  onClick: onApplySuggestion,
+                }
+              : null
+          }
+        />
+      ) : null}
 
-        <div className="document-review-experience__aside">
-          <DocumentReviewRecommendations
-            recommendations={recommendations}
-            paperRegisterHint={paperRegisterHint}
-            translate={translate}
-          />
-          <DocumentReviewChecks checks={checks} complete={complete} translate={translate} />
-        </div>
-      </div>
+      {showLegacySummary ? (
+        <div className="document-review-experience__layout">
+          <div className="document-review-experience__summary">
+            <DocumentReviewHero hero={hero} translate={translate} />
+          </div>
 
-      {workflow.contractOrderProposal && !executionResult?.completed && (
+          <div className="document-review-experience__aside">
+            <DocumentReviewRecommendations
+              recommendations={recommendations}
+              paperRegisterHint={paperRegisterHint}
+              translate={translate}
+            />
+            <DocumentReviewChecks checks={checks} complete={complete} translate={translate} />
+          </div>
+        </div>
+      ) : null}
+
+      {showContractProposal ? (
         <ContractOrderProposalPanel
-          proposal={workflow.contractOrderProposal}
+          proposal={workflow.contractOrderProposal!}
           translate={translate}
           item={item}
           onConfirmImport={(selected) => onCreateContractOrder?.(selected)}
@@ -106,7 +135,7 @@ export function DocumentReviewExperience({
           isCreating={isCreatingContractOrder}
           isApplying={isExecuting || isCreatingContractOrder}
         />
-      )}
+      ) : null}
 
       {executionResult?.completed && successSteps.length > 0 ? (
         <DocumentReviewSuccess
@@ -118,7 +147,7 @@ export function DocumentReviewExperience({
           onOpenArchive={onOpenArchive}
           onNextDocument={onNextDocument}
         />
-      ) : workflow.contractOrderProposal ? null : (
+      ) : showLegacyPrimary ? (
         <div className="document-review-experience__primary" data-testid="document-review-primary-action">
           <Button
             fullWidth
@@ -130,7 +159,7 @@ export function DocumentReviewExperience({
             {primaryLabel}
           </Button>
         </div>
-      )}
+      ) : null}
 
       <ReviewMoreOptionsShell
         expanded={moreOptionsExpanded}

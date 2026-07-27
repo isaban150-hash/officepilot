@@ -124,14 +124,14 @@ describe('CONTRACT-WORKSPACE-MOBILE-ORDER-01', () => {
     assertOrder(html, 'data-testid="document-assistant-panel"', 'data-testid="contract-workspace-summary"');
   });
 
-  it('Ohne Proposal: Free Question und Original vor ReviewExperience', () => {
+  it('Ohne Proposal: Review/Overview vor Free Question und Original', () => {
     const item = createNonContractItem();
     hydrateInboxStore([item]);
     const html = renderDetail(item.id);
 
     expect(html).not.toContain('contract-order-proposal');
+    assertOrder(html, 'data-testid="document-review-experience"', 'data-testid="document-free-question-panel"');
     assertOrder(html, 'data-testid="document-free-question-panel"', 'data-testid="ablage-original-file"');
-    assertOrder(html, 'data-testid="ablage-original-file"', 'data-testid="document-review-experience"');
-    assertOrder(html, 'data-testid="document-assistant-panel"', 'data-testid="document-free-question-panel"');
+    assertOrder(html, 'data-testid="document-assistant-panel"', 'data-testid="document-review-experience"');
   });
 });

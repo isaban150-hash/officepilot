@@ -1133,6 +1133,7 @@ export function EingangDetailPage() {
 
       {prioritizeContractWorkspace ? (
         <>
+          {/* INGRESS-OPERATIONAL-OVERVIEW-01: overview/primary first; original last */}
           {reviewExperience}
           {freeQuestionPanel}
           {fieldFillConfirmPanel}
@@ -1145,26 +1146,23 @@ export function EingangDetailPage() {
           data-testid="eingang-assist-flow"
           data-assist-flow="consolidated"
         >
-          {/* 1. Document understand = assistant above */}
-          {/* 2. Angaben prüfen */}
-          {fieldFillConfirmPanel}
-          {/* 3. Freie Frage */}
-          {freeQuestionPanel}
-          {/* 3b. Contextual next steps */}
-          {contextualNextStepsPanel}
-          {/* 4. Antwort + Handoff */}
-          {confirmedReplyDraftPanel}
-          {/* 5. Original, Ablage, weitere Aktionen */}
-          {originalFilePanel}
+          {/* 1. Betriebliche Übersicht + Primary (in ReviewExperience) */}
           {reviewExperience}
+          {/* 2. Angaben prüfen / Assist */}
+          {fieldFillConfirmPanel}
+          {freeQuestionPanel}
+          {contextualNextStepsPanel}
+          {confirmedReplyDraftPanel}
+          {/* 3. Original / OCR zuletzt */}
+          {originalFilePanel}
         </div>
       ) : (
         <>
+          {reviewExperience}
           {freeQuestionPanel}
           {fieldFillConfirmPanel}
           {confirmedReplyDraftPanel}
           {originalFilePanel}
-          {reviewExperience}
         </>
       )}
 
