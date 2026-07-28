@@ -1431,6 +1431,7 @@ import type { DocumentFileRepresentationBinding } from './documentFileRepresenta
 import type { DocumentFileDerivativeStepOutcome } from './documentFileDerivativeStepOutcome';
 import type { DocumentFileDerivativeRecoveryContext } from './documentFileDerivativeRecoveryContext';
 import type { DocumentFileIntakeTransformPlanCarryContext } from './documentFileIntakeTransformPlanCarryContext';
+import type { DocumentWorkResult } from './documentWorkResult';
 
 export interface AppPersistedState {
   version: number;
@@ -1459,6 +1460,8 @@ export interface AppPersistedState {
   documentFileDerivativeRecoveryContexts?: DocumentFileDerivativeRecoveryContext[];
   /** Intake→import transform plan carry (natural key: inboxItemId). */
   documentFileIntakeTransformPlanCarryContexts?: DocumentFileIntakeTransformPlanCarryContext[];
+  /** Canonical document work result snapshots (natural key: inboxItemId). */
+  documentWorkResults?: DocumentWorkResult[];
   expenses?: Expense[];
   vorgangNotes?: VorgangNote[];
   /** Confirmed payment-reminder / dunning handoffs (local documentation only). */

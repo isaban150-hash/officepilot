@@ -33,6 +33,7 @@ import {
   createTasksFromProposals,
 } from './taskEngineService';
 import { interpretBusinessFromWorkflow } from './businessInterpretationService';
+import { upsertDocumentWorkResultFromWorkflow } from './documentWorkResultService';
 import { assertContractPlanMutable } from './orderPlanIntegrityService';
 import {
   appendOrderPositionsBulk,
@@ -67,8 +68,9 @@ function withBusinessInterpretation(
 ): WorkflowResult {
   const linkedId = item.vorgangId ?? core.suggestedVorgang?.vorgangId ?? null;
   const linkedVorgang = linkedId ? getVorgangById(linkedId) ?? null : null;
+  let result: WorkflowResult;
   try {
-    return {
+    result = {
       ...core,
       businessInterpretation: interpretBusinessFromWorkflow({
         item,
@@ -79,7 +81,7 @@ function withBusinessInterpretation(
   } catch (error) {
     // Read-only coordination must never abort intake specialists / WorkflowResult.
     console.warn('[businessInterpretation] interpretBusinessFromWorkflow failed', error);
-    return {
+    result = {
       ...core,
       businessInterpretation: null,
       warnings: [
@@ -92,6 +94,14 @@ function withBusinessInterpretation(
       ],
     };
   }
+
+  try {
+    // In-memory snapshot only — must not call persistAll() from analysis.
+    upsertDocumentWorkResultFromWorkflow(result, item);
+  } catch {
+    // Snapshot upsert must never abort the analysis return path.
+  }
+  return result;
 }
 
 function inferClassificationConfidence(

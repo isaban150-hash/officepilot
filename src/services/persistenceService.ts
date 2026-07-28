@@ -66,6 +66,11 @@ import {
   resetDocumentFileIntakeTransformPlanCarryContextStoreForTests,
 } from './documentFileIntakeTransformPlanCarryContextStoreService';
 import {
+  getDocumentWorkResultStoreSnapshot,
+  hydrateDocumentWorkResultStore,
+  resetDocumentWorkResultStoreForTests,
+} from './documentWorkResultStoreService';
+import {
   getExpenseStoreSnapshot,
   hydrateExpenseStore,
   resetExpenses,
@@ -473,6 +478,7 @@ export function createSeedState(setupOverride?: CompanySetup): AppPersistedState
       documentFileDerivativeStepOutcomes: [],
       documentFileDerivativeRecoveryContexts: [],
       documentFileIntakeTransformPlanCarryContexts: [],
+      documentWorkResults: [],
       expenses: emptyBusinessData ? [] : MOCK_EXPENSES.map(cloneExpense),
       vorgangNotes: [],
       dunningDocumentations: [],
@@ -678,6 +684,7 @@ export function clearInMemoryBusinessState(): void {
   resetDocumentFileDerivativeStepOutcomeStoreForTests();
   resetDocumentFileDerivativeRecoveryContextStoreForTests();
   resetDocumentFileIntakeTransformPlanCarryContextStoreForTests();
+  resetDocumentWorkResultStoreForTests();
   resetExpenses();
   resetVorgangNotes();
   resetDunningDocumentations();
@@ -720,6 +727,7 @@ export function applyStateToStores(state: AppPersistedState): void {
   hydrateDocumentFileIntakeTransformPlanCarryContextStore(
     state.documentFileIntakeTransformPlanCarryContexts ?? [],
   );
+  hydrateDocumentWorkResultStore(state.documentWorkResults ?? []);
   hydrateExpenseStore(state.expenses ?? []);
   hydrateVorgangNotes(state.vorgangNotes ?? []);
   hydrateDunningDocumentations(state.dunningDocumentations ?? []);
@@ -883,6 +891,7 @@ export function buildPersistedStateSnapshot(): AppPersistedState {
       getDocumentFileDerivativeRecoveryContextStoreSnapshot(),
     documentFileIntakeTransformPlanCarryContexts:
       getDocumentFileIntakeTransformPlanCarryContextStoreSnapshot(),
+    documentWorkResults: getDocumentWorkResultStoreSnapshot(),
     expenses: getExpenseStoreSnapshot(),
     vorgangNotes: getVorgangNoteStoreSnapshot(),
     dunningDocumentations: getDunningDocumentationStoreSnapshot(),
@@ -913,6 +922,7 @@ export function resetDemoData(options?: { keepSetup?: boolean }): CompanySetup {
   resetDocumentFileDerivativeStepOutcomeStoreForTests();
   resetDocumentFileDerivativeRecoveryContextStoreForTests();
   resetDocumentFileIntakeTransformPlanCarryContextStoreForTests();
+  resetDocumentWorkResultStoreForTests();
   resetExpenses();
   resetVorgangNotes();
   resetDunningDocumentations();

@@ -82,6 +82,11 @@ import {
   buildInboxWorkflowAnalysisKey,
   itemNeedsDeferredWorkflowAnalysis,
 } from '../services/inboxWorkflowAnalysisKey';
+import {
+  getDocumentWorkResultForItem,
+  isDocumentWorkResultUsableForDisplay,
+} from '../services/documentWorkResultService';
+import type { DocumentWorkResult } from '../types/documentWorkResult';
 import { scheduleAfterPaint } from '../services/scheduleAfterPaint';
 import {
   applyOfficeActionResult,
@@ -183,6 +188,14 @@ export function EingangDetailPage() {
   const workflowAnalysisKey = buildInboxWorkflowAnalysisKey(item);
   const needsDeferredAnalysis = item ? itemNeedsDeferredWorkflowAnalysis(item) : false;
 
+  // Restored work result (in-memory / eventually persisted) — never a live WorkflowResult.
+  const restoredWorkResult = useMemo((): DocumentWorkResult | null => {
+    if (!item) return null;
+    const snapshot = getDocumentWorkResultForItem(item.id);
+    if (!snapshot || !isDocumentWorkResultUsableForDisplay(snapshot, item)) return null;
+    return snapshot;
+  }, [item, workflowAnalysisKey]);
+
   // Small documents: sync workflow for first paint (no multi-page OCR payload).
   const syncWorkflow = useMemo(() => {
     if (!item || needsDeferredAnalysis) return null;
@@ -221,6 +234,7 @@ export function EingangDetailPage() {
     };
   }, [workflowAnalysisKey, needsDeferredAnalysis, analysisRetryToken]);
 
+  // Live analysis only — restored snapshots must not drive confirm/execution.
   const workflow = syncWorkflow ?? deferredWorkflow;
   const goBack = () => navigate('/ablage');
 
@@ -260,6 +274,13 @@ export function EingangDetailPage() {
             label={translate('document.upload.status')}
             value={getStatusLabel(item.status, setup.language)}
           />
+          {restoredWorkResult ? (
+            <span
+              data-testid="eingang-detail-restored-snapshot"
+              data-inbox-item-id={restoredWorkResult.inboxItemId}
+              hidden
+            />
+          ) : null}
           {deferredStatus === 'error' ? (
             <>
               <p data-testid="eingang-detail-analysis-error">

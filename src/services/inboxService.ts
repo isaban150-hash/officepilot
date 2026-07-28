@@ -13,9 +13,10 @@ import type {
 } from '../types/models';
 import { t, type TranslationKey } from '../i18n';
 import { getPaperFolderById } from './paperFolderService';
+import { removeDocumentFileIntakeTransformPlanCarryContextForInboxItem } from './documentFileIntakeTransformPlanCarryContextStoreService';
+import { removeDocumentWorkResultForInboxItem } from './documentWorkResultStoreService';
 import { getCachedSetup, persistAll } from './persistenceService';
 import { filterSyncActive, isEntitySyncActive, withUpdatedEntitySync } from './sync/syncMetaService';
-import { removeDocumentFileIntakeTransformPlanCarryContextForInboxItem } from './documentFileIntakeTransformPlanCarryContextStoreService';
 
 export type { CreateInboxFromUploadOptions };
 export { createMockInboxItemFromUpload } from './inboxUploadFactory';
@@ -96,6 +97,7 @@ export function removeStagedInboxItemById(id: string): boolean {
   if (index === -1) return false;
   inboxItems = [...inboxItems.slice(0, index), ...inboxItems.slice(index + 1)];
   removeDocumentFileIntakeTransformPlanCarryContextForInboxItem(id);
+  removeDocumentWorkResultForInboxItem(id);
   return true;
 }
 
@@ -167,6 +169,7 @@ export function confirmDispose(id: string): InboxActionResult | null {
   const item = patchInboxItem(id, { status: 'abgelegt', isNewUpload: false });
   if (!item) return null;
   removeDocumentFileIntakeTransformPlanCarryContextForInboxItem(id);
+  removeDocumentWorkResultForInboxItem(id);
   persistAll();
   return {
     success: true,
