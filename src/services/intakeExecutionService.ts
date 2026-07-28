@@ -23,7 +23,6 @@ import {
 } from './vorgangService';
 import type {
   ContractAnalysisResult,
-  ContractExtractedFields,
   InboxItem,
   MaterialStandard,
   VorgangDraft,
@@ -33,6 +32,10 @@ import type {
   WorkflowResultExecution,
   WorkflowWarning,
 } from '../types/models';
+import {
+  canCreateVorgangFromSmartIntakeGates,
+  hasApplyableContractFields,
+} from './intakeExecutionGates';
 
 export interface SmartIntakeExecutionOptions {
   companyName?: string;
@@ -50,18 +53,6 @@ function buildContractDraft(contractAnalysis: ContractAnalysisResult | null): Pa
     customer: fields.auftraggeber,
     baustelle: fields.baustellenadresse,
   };
-}
-
-function canCreateVorgang(workflow: WorkflowResult, item: InboxItem): boolean {
-  return (
-    !item.vorgangId &&
-    workflow.companyRelevant &&
-    Boolean(
-      workflow.contractAnalysis?.isContract ||
-        workflow.classification?.processType === 'create_vorgang' ||
-        item.documentType === 'kundenauftrag',
-    )
-  );
 }
 
 function pushWarning(
@@ -159,7 +150,7 @@ function executeVorgangStep(
     return { item: linked.inbox, vorgangId: linked.vorgang.id };
   }
 
-  if (canCreateVorgang(workflow, item)) {
+  if (canCreateVorgangFromSmartIntakeGates(workflow, item)) {
     const materialDefault = options.materialStandard ?? getCachedSetup().materialStandard;
     const created = createVorgangFromInboxWithContract(
       item,
@@ -190,7 +181,7 @@ function executeContractFieldsStep(
   if (!vorgangId || !workflow.contractAnalysis?.isContract) return;
 
   const fields = workflow.contractAnalysis.fields;
-  if (!hasContractFields(fields)) return;
+  if (!hasApplyableContractFields(fields)) return;
 
   const result = applyContractFieldsToVorgang(vorgangId, fields);
   if (!result.success) {
@@ -198,18 +189,6 @@ function executeContractFieldsStep(
     return;
   }
   markSuccess(successSteps, 'apply_contract_fields');
-}
-
-function hasContractFields(fields: ContractExtractedFields): boolean {
-  return Boolean(
-    fields.bauvorhaben ||
-      fields.projektname ||
-      fields.baustellenadresse ||
-      fields.auftraggeber ||
-      fields.ansprechpartner ||
-      fields.telefon ||
-      fields.email,
-  );
 }
 
 export function executeSmartIntake(

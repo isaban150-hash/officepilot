@@ -2758,6 +2758,25 @@ const deLegacy = {
   'operationalOverview.primaryCase.review_required': 'Prüfung erforderlich',
   'operationalOverview.primaryCase.deadline_or_obligation_detected': 'Frist oder Pflicht',
 
+  'operationalExecution.preview.title': 'Geplante Bearbeitung',
+  'operationalExecution.preview.hint':
+    'OfficePilot zeigt die aktuell vorgesehene Bearbeitung.',
+  'operationalExecution.preview.hintWithExtra':
+    'OfficePilot zeigt die aktuell vorgesehene Bearbeitung. Zusätzliche Schritte werden separat bestätigt.',
+  'operationalExecution.step.archive_document': 'Dokument archivieren',
+  'operationalExecution.step.link_vorgang': 'Mit Vorgang verknüpfen',
+  'operationalExecution.step.create_vorgang': 'Vorgang anlegen',
+  'operationalExecution.step.apply_contract_fields': 'Vertragsfelder übernehmen',
+  'operationalExecution.step.accept_tasks': 'Aufgaben übernehmen',
+  'operationalExecution.step.finalize_inbox': 'Eingang abschließen',
+  'operationalExecution.step.import_positions': 'Positionen anschließend separat bestätigen',
+  'operationalExecution.step.reply_handoff': 'Antwortentwurf vorbereiten',
+  'operationalExecution.step.review_document': 'Dokument prüfen',
+  'operationalExecution.step.open_invoice_workflow': 'Rechnungsbearbeitung öffnen',
+  'operationalExecution.hint.needsExtraConfirm': 'zusätzliche Bestätigung nötig',
+  'operationalExecution.hint.blocked': 'derzeit blockiert',
+  'operationalExecution.hint.companyNotRelevant': 'nur bei Firmenbezug',
+
   'reviewWorkflow.analysis.loading': 'Dokument wird weiter analysiert.',
   'reviewWorkflow.analysis.error':
     'Vertragsanalyse fehlgeschlagen. Das Dokument ist gespeichert und kann weiter bearbeitet werden.',
@@ -3583,6 +3602,25 @@ const trLegacy: Partial<Record<keyof typeof de, string>> = {
   'operationalOverview.primaryCase.information_only': 'Yalnızca bilgi',
   'operationalOverview.primaryCase.review_required': 'Kontrol gerekli',
   'operationalOverview.primaryCase.deadline_or_obligation_detected': 'Süre veya yükümlülük',
+
+  'operationalExecution.preview.title': 'Planlanan işlem',
+  'operationalExecution.preview.hint':
+    'OfficePilot şu anda öngörülen işlemi gösterir.',
+  'operationalExecution.preview.hintWithExtra':
+    'OfficePilot şu anda öngörülen işlemi gösterir. Ek adımlar ayrıca onaylanır.',
+  'operationalExecution.step.archive_document': 'Belgeyi arşivle',
+  'operationalExecution.step.link_vorgang': 'İşlemle ilişkilendir',
+  'operationalExecution.step.create_vorgang': 'İşlem oluştur',
+  'operationalExecution.step.apply_contract_fields': 'Sözleşme alanlarını uygula',
+  'operationalExecution.step.accept_tasks': 'Görevleri üstlen',
+  'operationalExecution.step.finalize_inbox': 'Girişi tamamla',
+  'operationalExecution.step.import_positions': 'Kalemleri ayrıca onayla',
+  'operationalExecution.step.reply_handoff': 'Yanıt taslağı hazırla',
+  'operationalExecution.step.review_document': 'Belgeyi kontrol et',
+  'operationalExecution.step.open_invoice_workflow': 'Fatura işlemini aç',
+  'operationalExecution.hint.needsExtraConfirm': 'ek onay gerekli',
+  'operationalExecution.hint.blocked': 'şimdilik engelli',
+  'operationalExecution.hint.companyNotRelevant': 'yalnızca firma ilişkisi varsa',
 
   'reviewWorkflow.analysis.loading': 'Belge analiz edilmeye devam ediyor.',
   'reviewWorkflow.analysis.error':

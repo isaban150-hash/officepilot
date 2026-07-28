@@ -67,7 +67,10 @@ export function DocumentReviewExperience({
   const successSteps = executionResult?.completed
     ? buildDocumentReviewSuccessSteps(executionResult)
     : [];
-  const overview = buildOperationalOverviewView(workflow, { senderFallback: item.sender });
+  const overview = buildOperationalOverviewView(workflow, {
+    senderFallback: item.sender,
+    inboxItem: item,
+  });
 
   const primaryDisabled = !item.isAdvertisement && !workflow.companyRelevant;
 

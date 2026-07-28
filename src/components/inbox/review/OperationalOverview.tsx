@@ -142,6 +142,49 @@ export function OperationalOverview({
         </div>
       ) : null}
 
+      {view.planPreviewRows.length > 0 ? (
+        <div
+          className="operational-overview__plan-preview"
+          data-testid="operational-execution-plan-preview"
+        >
+          <p className="operational-overview__plan-preview-title">
+            {translate(view.planPreviewTitleKey)}
+          </p>
+          {view.planPreviewHintKey ? (
+            <p
+              className="operational-overview__plan-preview-intro"
+              data-testid="operational-execution-plan-preview-hint"
+            >
+              {translate(view.planPreviewHintKey)}
+            </p>
+          ) : null}
+          <ul className="operational-overview__plan-preview-list">
+            {view.planPreviewRows.map((row) => {
+              const label = translate(row.labelKey);
+              const hint = row.hintKey ? translate(row.hintKey) : undefined;
+              return (
+                <li
+                  key={row.stepId}
+                  data-testid="operational-execution-plan-step"
+                  data-plan-confirm={
+                    row.status === 'needs_extra_confirm'
+                      ? 'extra'
+                      : row.status === 'blocked'
+                        ? 'blocked'
+                        : 'ready'
+                  }
+                >
+                  <span>{label}</span>
+                  {hint ? (
+                    <span className="operational-overview__plan-preview-hint">{hint}</span>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
+
       {primaryAction ? (
         <div
           className="operational-overview__primary"

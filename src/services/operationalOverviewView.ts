@@ -12,7 +12,14 @@ import type {
   BusinessStructuredCondition,
   BusinessStructuredPosition,
 } from '../types/businessInterpretation';
-import type { ClassifiedDocumentKind, WorkflowResult } from '../types/models';
+import type { ClassifiedDocumentKind, InboxItem, WorkflowResult } from '../types/models';
+import { buildOperationalExecutionContext } from './operationalExecutionContext';
+import {
+  buildOperationalExecutionPlanFromContext,
+  buildOperationalExecutionPreview,
+  resolveOperationalExecutionPreviewSurface,
+  type OperationalExecutionPlanPreviewRow,
+} from './operationalExecutionPlanService';
 
 export type OperationalOverviewDetailRow = {
   id: string;
@@ -50,6 +57,10 @@ export type OperationalOverviewView = {
   detailRows: OperationalOverviewDetailRow[];
   positions: OperationalOverviewPositionRow[];
   hasDetails: boolean;
+  /** Shadow plan preview — read-only; does not execute. */
+  planPreviewTitleKey: TranslationKey;
+  planPreviewHintKey?: TranslationKey;
+  planPreviewRows: OperationalExecutionPlanPreviewRow[];
 };
 
 function classifiedKindKey(kind: ClassifiedDocumentKind): TranslationKey {
@@ -189,7 +200,13 @@ function buildUncertainty(bi: BusinessInterpretationResult): string[] {
 
 export function buildOperationalOverviewView(
   workflow: WorkflowResult,
-  options?: { senderFallback?: string },
+  options?: {
+    senderFallback?: string;
+    inboxItem?: Pick<
+      InboxItem,
+      'vorgangId' | 'importedToArchive' | 'documentType' | 'classifiedKind'
+    > | null;
+  },
 ): OperationalOverviewView {
   const bi = workflow.businessInterpretation;
   if (!bi) {
@@ -205,12 +222,23 @@ export function buildOperationalOverviewView(
       detailRows: [],
       positions: [],
       hasDetails: false,
+      planPreviewTitleKey: 'operationalExecution.preview.title',
+      planPreviewRows: [],
     };
   }
 
   const detailRows = buildDetailRows(bi);
   const positions = buildPositions(bi.facts.positions);
   const deadlineDate = bi.facts.timeline.deadline?.value;
+  const context = buildOperationalExecutionContext(workflow, {
+    inboxItem: options?.inboxItem,
+  });
+  const shadowPlan = context ? buildOperationalExecutionPlanFromContext(context) : null;
+  const surface = resolveOperationalExecutionPreviewSurface(workflow, options?.inboxItem);
+  const preview =
+    shadowPlan && context
+      ? buildOperationalExecutionPreview(shadowPlan, context, surface)
+      : null;
 
   return {
     present: true,
@@ -234,5 +262,8 @@ export function buildOperationalOverviewView(
     detailRows,
     positions,
     hasDetails: detailRows.length > 0 || positions.length > 0,
+    planPreviewTitleKey: preview?.titleKey ?? 'operationalExecution.preview.title',
+    planPreviewHintKey: preview?.hintKey,
+    planPreviewRows: preview?.rows ?? [],
   };
 }
