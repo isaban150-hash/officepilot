@@ -20,9 +20,11 @@ import {
   pushIntakeWarning,
   type SmartIntakeAtomOptions,
 } from './intakeExecutionAtoms';
+import { wouldLinkVorgangOnSmartIntake } from './intakeExecutionGates';
 import { buildOperationalExecutionPlan } from './operationalExecutionPlanService';
 import { runOperationalExecutionPlan } from './operationalExecutionRunner';
 import type {
+  InboxItem,
   WorkflowExecutionFailure,
   WorkflowExecutionStepId,
   WorkflowResult,
@@ -132,14 +134,25 @@ export function executeLegacySmartIntakeSequence(
   };
 }
 
+/**
+ * Central expense-runner eligibility (adapter only).
+ * Same suggestedVorgang truthiness as executeVorgangAtom / wouldLinkVorgangOnSmartIntake:
+ * if Legacy would attempt a link, stay on Legacy — runner has no link_vorgang scope.
+ */
 function shouldUseExpensePlanRunner(
   workflow: WorkflowResult,
   playbookId: string | undefined,
+  item: InboxItem,
 ): boolean {
   if (!getOperationalExecutionRunnerEnabled()) return false;
   if (!workflow.companyRelevant) return false;
   if (!playbookId) return false;
-  return isOperationalExecutionRunnerPlaybook(playbookId) && playbookId === 'expense';
+  if (!(isOperationalExecutionRunnerPlaybook(playbookId) && playbookId === 'expense')) {
+    return false;
+  }
+  // Expense + linkable suggested Vorgang → full Legacy (preserve link parity).
+  if (wouldLinkVorgangOnSmartIntake(workflow, item)) return false;
+  return true;
 }
 
 /**
@@ -167,7 +180,7 @@ export function executeSmartIntake(
   const plan = buildOperationalExecutionPlan(workflow, { inboxItem: item });
 
   // Decide path before side effects — never start runner then fall back to legacy.
-  if (shouldUseExpensePlanRunner(workflow, plan?.playbookId) && plan) {
+  if (shouldUseExpensePlanRunner(workflow, plan?.playbookId, item) && plan) {
     return runOperationalExecutionPlan({
       plan,
       workflow,

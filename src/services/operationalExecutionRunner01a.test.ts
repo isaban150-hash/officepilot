@@ -11,6 +11,7 @@ import {
 import { hydrateCompanyProfileStore } from './companyProfileService';
 import { getAllDocuments, hydrateDocumentStore } from './documentService';
 import * as intakeExecutionAtoms from './intakeExecutionAtoms';
+import { wouldLinkVorgangOnSmartIntake } from './intakeExecutionGates';
 import { executeSmartIntake } from './intakeExecutionService';
 import { processUploadedDocument } from './intakeWorkflowService';
 import { getInboxItemById, hydrateInboxStore } from './inboxService';
@@ -23,7 +24,8 @@ import {
 } from './operationalExecutionRunner';
 import { buildOperationalExecutionPlan } from './operationalExecutionPlanService';
 import { setTaskStoreForTests } from './taskStore';
-import { hydrateVorgangStore } from './vorgangService';
+import { getVorgangById, hydrateVorgangStore } from './vorgangService';
+import { createTestVorgang } from '../test/fixtures';
 import { getDocumentCase } from '../test/document-cases/_lib/loadCases';
 import { runStablePipeline, testProfile } from '../test/document-cases/_lib/runStablePipeline';
 import type {
@@ -31,7 +33,7 @@ import type {
   OperationalExecutionStep,
   OperationalExecutionStepId,
 } from './operationalExecutionTypes';
-import type { WorkflowResult } from '../types/models';
+import type { SuggestedVorgangLink, WorkflowResult } from '../types/models';
 
 function seedHotel() {
   const docCase = getDocumentCase('HOTEL-01');
@@ -154,6 +156,165 @@ describe('OPERATIONAL-EXECUTION-RUNNER-01A', () => {
       const result = executeSmartIntake(withoutBi, { companyName: testProfile.companyName });
       expect(runSpy).not.toHaveBeenCalled();
       expect(result.successSteps).toContain('finalize_inbox');
+    });
+  });
+
+  describe('expense eligibility: suggested Vorgang → Legacy (ELIGIBILITY-01)', () => {
+    const linkSuggestion = (vorgangId = 'v-expense-link'): SuggestedVorgangLink => ({
+      vorgangId,
+      vorgangTitle: 'Baustelle Müller',
+      customer: 'Familie Müller',
+      confidence: 'high',
+      reasonKey: 'classification.vorgang.reason.explicit',
+    });
+
+    it('A: Expense ohne Vorgangsvorschlag → Runner', () => {
+      setOperationalExecutionRunnerEnabledForTests(true);
+      const { workflow, item } = seedHotel();
+      expect(workflow.suggestedVorgang).toBeFalsy();
+      expect(wouldLinkVorgangOnSmartIntake(workflow, item)).toBe(false);
+
+      const runSpy = vi.spyOn(operationalExecutionRunner, 'runOperationalExecutionPlan');
+      const vorgangSpy = vi.spyOn(intakeExecutionAtoms, 'executeVorgangAtom');
+
+      const result = executeSmartIntake(workflow, { companyName: testProfile.companyName });
+
+      expect(runSpy).toHaveBeenCalledTimes(1);
+      expect(vorgangSpy).not.toHaveBeenCalled();
+      expect(result.completed).toBe(true);
+      expect(result.successSteps).toContain('archive_document');
+      expect(result.successSteps).toContain('refresh_pending');
+      expect(result.successSteps).toContain('finalize_inbox');
+      expect(result.successSteps).not.toContain('link_vorgang');
+    });
+
+    it('B: Expense mit gültigem Vorgangsvorschlag → Legacy mit Link, kein Runner', () => {
+      setOperationalExecutionRunnerEnabledForTests(true);
+      const { workflow, item } = seedHotel();
+      const vorgang = createTestVorgang({
+        id: 'v-expense-link',
+        title: 'Baustelle Müller',
+        customer: 'Familie Müller',
+      });
+      hydrateVorgangStore([vorgang]);
+      hydrateInboxStore([{ ...item, vorgangId: undefined }]);
+      const withSuggestion: WorkflowResult = {
+        ...workflow,
+        suggestedVorgang: linkSuggestion(vorgang.id),
+      };
+      expect(wouldLinkVorgangOnSmartIntake(withSuggestion, item)).toBe(true);
+
+      const runSpy = vi.spyOn(operationalExecutionRunner, 'runOperationalExecutionPlan');
+      const vorgangSpy = vi.spyOn(intakeExecutionAtoms, 'executeVorgangAtom');
+      const archiveSpy = vi.spyOn(intakeExecutionAtoms, 'executeArchiveAtom');
+
+      const result = executeSmartIntake(withSuggestion, {
+        companyName: testProfile.companyName,
+      });
+
+      expect(runSpy).not.toHaveBeenCalled();
+      expect(vorgangSpy).toHaveBeenCalledTimes(1);
+      expect(archiveSpy).toHaveBeenCalled();
+      expect(result.successSteps).toContain('link_vorgang');
+      expect(result.successSteps).toContain('archive_document');
+      expect(result.successSteps).toContain('finalize_inbox');
+      expect(result.vorgangId).toBe(vorgang.id);
+      expect(getInboxItemById(item.id)?.vorgangId).toBe(vorgang.id);
+      expect(getVorgangById(vorgang.id)).toBeTruthy();
+      expect(result.completed).toBe(true);
+    });
+
+    it('C: Flag aus + Expense mit Vorgangsvorschlag → Legacy unverändert', () => {
+      setOperationalExecutionRunnerEnabledForTests(false);
+      const { workflow, item } = seedHotel();
+      const vorgang = createTestVorgang({ id: 'v-expense-link-off' });
+      hydrateVorgangStore([vorgang]);
+      const withSuggestion: WorkflowResult = {
+        ...workflow,
+        suggestedVorgang: linkSuggestion(vorgang.id),
+      };
+
+      const runSpy = vi.spyOn(operationalExecutionRunner, 'runOperationalExecutionPlan');
+      const result = executeSmartIntake(withSuggestion, {
+        companyName: testProfile.companyName,
+      });
+
+      expect(runSpy).not.toHaveBeenCalled();
+      expect(result.successSteps).toContain('link_vorgang');
+      expect(getInboxItemById(item.id)?.vorgangId).toBe(vorgang.id);
+    });
+
+    it('D: null / undefined Vorgangsvorschlag → Runner (gleiche Semantik wie Legacy-Guard)', () => {
+      setOperationalExecutionRunnerEnabledForTests(true);
+      const { workflow, item } = seedHotel();
+
+      for (const suggestedVorgang of [null, undefined] as const) {
+        localStorage.clear();
+        setTaskStoreForTests([]);
+        hydrateDocumentStore([]);
+        hydrateVorgangStore([]);
+        hydrateCompanyProfileStore(testProfile);
+        const { workflow: w, item: i } = seedHotel();
+        const variant: WorkflowResult = { ...w, suggestedVorgang: suggestedVorgang ?? null };
+        expect(wouldLinkVorgangOnSmartIntake(variant, i)).toBe(false);
+
+        const runSpy = vi.spyOn(operationalExecutionRunner, 'runOperationalExecutionPlan');
+        const result = executeSmartIntake(variant, { companyName: testProfile.companyName });
+        expect(runSpy).toHaveBeenCalledTimes(1);
+        expect(result.successSteps).not.toContain('link_vorgang');
+        expect(result.completed).toBe(true);
+        runSpy.mockRestore();
+      }
+
+      // Already linked inbox: Legacy would not re-link via suggestion; Runner stays eligible.
+      hydrateInboxStore([{ ...item, vorgangId: 'v-already' }]);
+      const withSuggestionButLinked: WorkflowResult = {
+        ...workflow,
+        suggestedVorgang: linkSuggestion('v-already'),
+      };
+      expect(
+        wouldLinkVorgangOnSmartIntake(withSuggestionButLinked, {
+          ...item,
+          vorgangId: 'v-already',
+        }),
+      ).toBe(false);
+    });
+
+    it('E/F: Adapter mit Vorgangsvorschlag startet Runner nicht (Dual-Execution-Schutz)', () => {
+      setOperationalExecutionRunnerEnabledForTests(true);
+      const { workflow, item } = seedHotel();
+      const vorgang = createTestVorgang({ id: 'v-expense-dual' });
+      hydrateVorgangStore([vorgang]);
+      const withSuggestion: WorkflowResult = {
+        ...workflow,
+        suggestedVorgang: linkSuggestion(vorgang.id),
+      };
+
+      const runSpy = vi.spyOn(operationalExecutionRunner, 'runOperationalExecutionPlan');
+      const atoms = spyAllProductiveAtoms();
+
+      executeSmartIntake(withSuggestion, { companyName: testProfile.companyName });
+
+      expect(runSpy).not.toHaveBeenCalled();
+      expect(atoms.vorgang).toHaveBeenCalledTimes(1);
+      // Direct runner call with hostile link_vorgang ready remains blocked (existing safety).
+      const plan = buildOperationalExecutionPlan(withSuggestion, { inboxItem: item })!;
+      const hostile: OperationalExecutionPlan = {
+        ...plan,
+        steps: [
+          { id: 'archive_document', status: 'ready', source: 'playbook' },
+          { id: 'link_vorgang', status: 'ready', source: 'workflow_gate' },
+          { id: 'finalize_inbox', status: 'ready', source: 'playbook' },
+        ],
+      };
+      const direct = runOperationalExecutionPlan({
+        plan: hostile,
+        workflow: withSuggestion,
+        inboxItem: item,
+        options: { companyName: testProfile.companyName },
+      });
+      expect(direct.completed).toBe(false);
+      expect(direct.failedSteps.some((f) => f.message.includes('nicht freigegebene'))).toBe(true);
     });
   });
 
