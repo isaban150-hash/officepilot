@@ -113,11 +113,26 @@ describe('INGRESS-OPERATIONAL-OVERVIEW-01', () => {
     if (view.moneyLabel) {
       expect(html).toContain('data-testid="operational-overview-money"');
     }
-    // Contract proposal path: apply button suppressed in favor of proposal CTAs
-    const applyCount = (html.match(/data-testid="document-review-apply-button"/g) ?? []).length;
-    expect(applyCount).toBeLessThanOrEqual(1);
+    // Exactly one open chef primary (proposal); overview must not add a second apply.
+    expect((html.match(/data-testid="contract-chef-primary-action"/g) ?? []).length).toBe(1);
+    expect(html).not.toContain('data-testid="document-review-apply-button"');
+    expect(html).toContain('data-testid="contract-details-disclosure"');
+    expect(html).not.toMatch(/data-testid="contract-details-disclosure"[^>]*\sopen[\s>]/);
+    expect(html).toContain('data-testid="contract-workspace-summary"');
+    assertOrder(
+      html,
+      'data-testid="operational-overview"',
+      'data-testid="contract-chef-primary-action"',
+    );
+    assertOrder(
+      html,
+      'data-testid="contract-chef-primary-action"',
+      'data-testid="contract-details-disclosure"',
+    );
     expect(html).toMatch(/data-testid="operational-overview-details"/);
     expect(html).not.toMatch(/data-testid="operational-overview-details"[^>]*\sopen[\s>]/);
+    // No raw signature enums in the rendered tree.
+    expect(html).not.toMatch(/>\s*(unclear|detected|partial|not_detected)\s*</i);
     assertOrder(
       html,
       'data-testid="operational-overview"',
@@ -193,5 +208,37 @@ describe('INGRESS-OPERATIONAL-OVERVIEW-01', () => {
     act(() => {
       root.unmount();
     });
+  });
+
+  it('UNSURE-01: Review-Zustand, Unsicherheit, eine Primary, keine erfundenen Fakten', () => {
+    const { item, observation } = seedCase('UNSURE-01');
+    expect(observation.bi).not.toBeNull();
+    const view = buildOperationalOverviewView(observation.workflow);
+    expect(view.present).toBe(true);
+    expect(view.primaryCaseId).toMatch(/review_required|information_only|communication_/);
+
+    const html = renderDetail(item.id);
+    expect(html).toContain('data-testid="operational-overview"');
+    expect(html).toContain('data-testid="operational-overview-primary-case"');
+    expect(html).toContain(
+      t(view.primaryCaseLabelKey, 'de'),
+    );
+    if (view.uncertaintyLines.length > 0 || view.recognitionUncertain) {
+      expect(html).toContain('data-testid="operational-overview-uncertainty"');
+    }
+    if (!view.moneyLabel) {
+      expect(html).not.toContain('data-testid="operational-overview-money"');
+    }
+    if (!view.deadlineTypeLabelKey && !view.deadlineDate) {
+      expect(html).not.toContain('data-testid="operational-overview-deadline"');
+    }
+    expect((html.match(/data-testid="document-review-apply-button"/g) ?? []).length).toBe(1);
+    expect(html).not.toContain('data-testid="contract-chef-primary-action"');
+    expect(html).not.toMatch(/data-testid="operational-overview-details"[^>]*\sopen[\s>]/);
+    assertOrder(
+      html,
+      'data-testid="operational-overview"',
+      'data-testid="ablage-original-file"',
+    );
   });
 });

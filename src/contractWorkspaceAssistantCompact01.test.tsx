@@ -261,7 +261,9 @@ describe('CONTRACT-WORKSPACE-ASSISTANT-COMPACT-01', () => {
 
     assertOrder(html, 'data-testid="document-assistant-panel"', 'data-testid="operational-overview"');
     assertOrder(html, 'data-testid="operational-overview"', 'contract-order-proposal');
-    assertOrder(html, 'contract-order-proposal', 'data-testid="contract-workspace-summary"');
+    assertOrder(html, 'data-testid="contract-chef-primary-action"', 'data-testid="contract-details-disclosure"');
+    expect(html).not.toMatch(/data-testid="contract-details-disclosure"[^>]*\sopen[\s>]/);
+    assertOrder(html, 'data-testid="contract-details-disclosure"', 'data-testid="contract-workspace-summary"');
     assertOrder(html, 'data-testid="contract-workspace-summary"', 'data-testid="contract-order-lv-overview"');
     assertOrder(
       html,

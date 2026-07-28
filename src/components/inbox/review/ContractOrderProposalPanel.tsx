@@ -32,6 +32,11 @@ interface ContractOrderProposalPanelProps {
   onApplySuggestion?: () => void;
   isCreating?: boolean;
   isApplying?: boolean;
+  /**
+   * When operational overview is already open above: keep chef primary visible
+   * and collapse ContractWorkspaceSummary behind a disclosure.
+   */
+  collapseUnderOperationalOverview?: boolean;
 }
 
 function formatMoney(value: number | undefined): string {
@@ -63,6 +68,7 @@ export function ContractOrderProposalPanel({
   onApplySuggestion,
   isCreating = false,
   isApplying = false,
+  collapseUnderOperationalOverview = false,
 }: ContractOrderProposalPanelProps) {
   const positions = proposal.positions;
   const linkedVorgangId = item?.vorgangId ?? null;
@@ -224,13 +230,52 @@ export function ContractOrderProposalPanel({
         </p>
       )}
 
-      <ContractWorkspaceSummary
-        proposal={proposal}
-        translate={translate}
-        item={item}
-        vorgang={vorgang}
-        primaryAction={primaryAction}
-      />
+      {collapseUnderOperationalOverview && primaryAction ? (
+        <div
+          className="contract-order-proposal__open-primary"
+          data-testid="contract-workspace-summary-primary"
+        >
+          <Button
+            fullWidth
+            onClick={primaryAction.onClick}
+            disabled={primaryAction.disabled}
+            loading={primaryAction.loading}
+            data-testid={primaryAction.testId}
+          >
+            {primaryAction.label}
+          </Button>
+        </div>
+      ) : null}
+
+      {collapseUnderOperationalOverview ? (
+        <details
+          className="contract-order-proposal__details-disclosure"
+          data-testid="contract-details-disclosure"
+        >
+          <summary data-testid="contract-details-disclosure-toggle">
+            {translate('operationalOverview.contractDetails.toggle')}
+          </summary>
+          <div
+            className="contract-order-proposal__details-disclosure-body"
+            data-testid="contract-details-disclosure-body"
+          >
+            <ContractWorkspaceSummary
+              proposal={proposal}
+              translate={translate}
+              item={item}
+              vorgang={vorgang}
+            />
+          </div>
+        </details>
+      ) : (
+        <ContractWorkspaceSummary
+          proposal={proposal}
+          translate={translate}
+          item={item}
+          vorgang={vorgang}
+          primaryAction={primaryAction}
+        />
+      )}
 
       {summaryView.lvOverview ? (
         <section

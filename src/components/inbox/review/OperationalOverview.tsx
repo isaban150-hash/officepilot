@@ -173,14 +173,21 @@ export function OperationalOverview({
           >
             {view.detailRows.length > 0 ? (
               <dl className="operational-overview__facts">
-                {view.detailRows.map((row) => (
-                  <FactRow
-                    key={row.id}
-                    label={translate(row.labelKey)}
-                    value={row.value}
-                    testId={row.testId}
-                  />
-                ))}
+                {view.detailRows.map((row) => {
+                  const translated = row.valueKey ? translate(row.valueKey) : undefined;
+                  const parts = [translated, row.value].filter(
+                    (part): part is string => Boolean(part?.trim()),
+                  );
+                  if (parts.length === 0) return null;
+                  return (
+                    <FactRow
+                      key={row.id}
+                      label={translate(row.labelKey)}
+                      value={parts.join(' · ')}
+                      testId={row.testId}
+                    />
+                  );
+                })}
               </dl>
             ) : null}
             {view.positions.length > 0 ? (

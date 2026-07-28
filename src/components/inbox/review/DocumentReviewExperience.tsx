@@ -134,6 +134,7 @@ export function DocumentReviewExperience({
           }
           isCreating={isCreatingContractOrder}
           isApplying={isExecuting || isCreatingContractOrder}
+          collapseUnderOperationalOverview={overview.present}
         />
       ) : null}
 

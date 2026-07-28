@@ -8,6 +8,7 @@ import type {
   BusinessInterpretationResult,
   BusinessMeaningKind,
   BusinessPrimaryCase,
+  BusinessSignatureStatus,
   BusinessStructuredCondition,
   BusinessStructuredPosition,
 } from '../types/businessInterpretation';
@@ -16,7 +17,10 @@ import type { ClassifiedDocumentKind, WorkflowResult } from '../types/models';
 export type OperationalOverviewDetailRow = {
   id: string;
   labelKey: TranslationKey;
-  value: string;
+  /** Plain display value when already human-readable. */
+  value?: string;
+  /** i18n key for enum-like values (e.g. signature status). */
+  valueKey?: TranslationKey;
   testId: string;
 };
 
@@ -96,6 +100,22 @@ function conditionLabelKey(type: BusinessStructuredCondition['type']): Translati
   return `operationalOverview.condition.${type}` as TranslationKey;
 }
 
+function signatureStatusLabelKey(status: BusinessSignatureStatus): TranslationKey {
+  return `operationalOverview.signatureStatus.${status}` as TranslationKey;
+}
+
+/** Reject technical/enum-like hints so they never leak into the UI. */
+function isHumanReadablePartyHint(hint: string | undefined): hint is string {
+  const trimmed = hint?.trim() ?? '';
+  if (!trimmed) return false;
+  if (/^(unclear|detected|partial|not_detected)$/i.test(trimmed)) return false;
+  if (/^[a-z][a-z0-9_]*$/i.test(trimmed) && !/\s/.test(trimmed) && trimmed.length < 24) {
+    // Short snake/camel tokens without spaces are not user-facing copy.
+    return false;
+  }
+  return true;
+}
+
 function buildDetailRows(bi: BusinessInterpretationResult): OperationalOverviewDetailRow[] {
   const rows: OperationalOverviewDetailRow[] = [];
   const { subject, timeline, conditions, signatures } = bi.facts;
@@ -127,12 +147,17 @@ function buildDetailRows(bi: BusinessInterpretationResult): OperationalOverviewD
     );
   }
 
-  if (signatures.status !== 'not_detected') {
-    push(
-      'signatures',
-      'operationalOverview.detail.signatures',
-      signatures.partyHint || signatures.status,
-    );
+  // Always map statuses in i18n; only surface when recognition found something or a human hint exists.
+  if (signatures.status !== 'not_detected' || isHumanReadablePartyHint(signatures.partyHint)) {
+    rows.push({
+      id: 'signatures',
+      labelKey: 'operationalOverview.detail.signatures',
+      valueKey: signatureStatusLabelKey(signatures.status),
+      value: isHumanReadablePartyHint(signatures.partyHint)
+        ? signatures.partyHint.trim()
+        : undefined,
+      testId: 'operational-overview-detail-signatures',
+    });
   }
 
   return rows;
