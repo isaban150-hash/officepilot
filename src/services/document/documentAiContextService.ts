@@ -6,8 +6,10 @@ import { t, type TranslationKey } from '../../i18n';
 import { formatMessage } from '../../i18n/formatMessage';
 import { getCachedSetup } from '../persistenceService';
 import type { ExplanationTextBlock } from '../../i18n/types';
+import type { AppLanguage, CompanyDocument, InboxItem, WorkflowResult } from '../../types/models';
 import type { DocumentAiContext } from '../../types/areaAi';
-import type { AppLanguage, CompanyDocument, InboxItem } from '../../types/models';
+import { buildDocumentWorkTruthAssistContextLines } from '../documentWorkResultResolveService';
+import { buildDocumentWorkTruthViewForInboxItem } from '../documentWorkResultTruthOrchestration';
 import { detectDocumentNature } from './documentAiDocumentNature';
 import { hasStructuredDeadlineEvidence } from './documentAiEvidence';
 
@@ -151,7 +153,10 @@ export function buildDocumentAiContextFromDocument(document: CompanyDocument): D
   };
 }
 
-export function buildDocumentAiContextFromInbox(item: InboxItem): DocumentAiContext {
+export function buildDocumentAiContextFromInbox(
+  item: InboxItem,
+  options?: { liveWorkflow?: WorkflowResult | null },
+): DocumentAiContext {
   const lang = getCachedSetup()?.language ?? 'de';
   const quality = collectInboxQualityNotes(item, lang);
   const vertragstext =
@@ -174,6 +179,12 @@ export function buildDocumentAiContextFromInbox(item: InboxItem): DocumentAiCont
     title: item.title,
     recognizedText,
   });
+
+  const truth = buildDocumentWorkTruthViewForInboxItem({
+    item,
+    liveWorkflow: options?.liveWorkflow ?? null,
+  });
+  const truthLines = truth ? buildDocumentWorkTruthAssistContextLines(truth) : null;
 
   return {
     sourceType: 'inbox',
@@ -203,6 +214,8 @@ export function buildDocumentAiContextFromInbox(item: InboxItem): DocumentAiCont
     tags: [],
     uncertainFieldNotes: withTestNatureNote(quality.uncertainFieldNotes, documentNature, lang),
     missingFieldNotes: quality.missingFieldNotes,
+    documentWorkTruthFactLines: truthLines?.factLines,
+    documentWorkTruthConflictLines: truthLines?.conflictLines,
   };
 }
 
@@ -230,6 +243,8 @@ export function buildDocumentAiAllowedSourceText(context: DocumentAiContext): st
     ...context.tags,
     ...context.uncertainFieldNotes,
     ...context.missingFieldNotes,
+    ...(context.documentWorkTruthFactLines ?? []),
+    ...(context.documentWorkTruthConflictLines ?? []),
     hasStructuredDeadlineEvidence(context) ? 'structured_deadline_evidence' : '',
   ].join('\n');
 }

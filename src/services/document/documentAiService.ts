@@ -15,11 +15,11 @@ import { detectDocumentNature } from './documentAiDocumentNature';
 import { filterUncertaintyNotesForQuestion } from './documentAiQuestionIntent';
 import { t } from '../../i18n';
 import { AREA_AI_DISCLAIMER, type AreaAiAnswer, type DocumentAiContext } from '../../types/areaAi';
-import type { AppLanguage, CompanyDocument, InboxItem } from '../../types/models';
+import type { AppLanguage, CompanyDocument, InboxItem, WorkflowResult } from '../../types/models';
 
 export type DocumentAiSource =
   | { type: 'document'; document: CompanyDocument }
-  | { type: 'inbox'; item: InboxItem };
+  | { type: 'inbox'; item: InboxItem; liveWorkflow?: WorkflowResult | null };
 
 function unavailableAnswer(
   question: string,
@@ -49,7 +49,9 @@ function buildContext(source: DocumentAiSource): DocumentAiContext {
   if (source.type === 'document') {
     return buildDocumentAiContextFromDocument(source.document);
   }
-  return buildDocumentAiContextFromInbox(source.item);
+  return buildDocumentAiContextFromInbox(source.item, {
+    liveWorkflow: source.liveWorkflow ?? null,
+  });
 }
 
 function collectAnswerUncertainty(

@@ -31,6 +31,17 @@ export {
   upsertDocumentWorkResultOverlayEntry,
 } from './documentWorkResultMergeService';
 export {
+  resolveDocumentWorkResult,
+  buildDocumentWorkTruthAssistContextLines,
+  buildDocumentWorkTruthConflictDisplayLines,
+} from './documentWorkResultResolveService';
+export { buildDocumentWorkTruthViewForInboxItem } from './documentWorkResultTruthOrchestration';
+export {
+  DOCUMENT_WORK_RESULT_SLOT_HANDLERS,
+  getDocumentWorkResultSlotHandler,
+  isDocumentWorkResultKnownSlotId,
+} from './documentWorkResultSlotRegistry';
+export {
   getDocumentWorkResult,
   getDocumentWorkResultStoreSnapshot,
   hydrateDocumentWorkResultStore,

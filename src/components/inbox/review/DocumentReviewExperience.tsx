@@ -9,6 +9,10 @@ import {
   isDocumentReviewComplete,
 } from '../../../services/documentReviewViewService';
 import { buildOperationalOverviewView } from '../../../services/operationalOverviewView';
+import {
+  buildDocumentWorkTruthConflictDisplayLines,
+} from '../../../services/documentWorkResultResolveService';
+import { buildDocumentWorkTruthViewForInboxItem } from '../../../services/documentWorkResultTruthOrchestration';
 import type {
   InboxItem,
   WorkflowResult,
@@ -67,9 +71,22 @@ export function DocumentReviewExperience({
   const successSteps = executionResult?.completed
     ? buildDocumentReviewSuccessSteps(executionResult)
     : [];
+
+  // Display truth (overlay applied). Actions still use live `workflow` only.
+  const truth = buildDocumentWorkTruthViewForInboxItem({
+    item,
+    liveWorkflow: workflow,
+  });
   const overview = buildOperationalOverviewView(workflow, {
     senderFallback: item.sender,
     inboxItem: item,
+    displayBusinessInterpretation:
+      truth?.businessInterpretation ?? workflow.businessInterpretation,
+    unresolvedConflictLines: truth
+      ? buildDocumentWorkTruthConflictDisplayLines(truth)
+      : undefined,
+    // Plan preview always from live workflow (never from snapshot-only truth).
+    includePlanPreview: true,
   });
 
   const primaryDisabled = !item.isAdvertisement && !workflow.companyRelevant;

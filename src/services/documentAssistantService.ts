@@ -23,6 +23,10 @@ import { resolvePaperFiling } from './paperFolderService';
 import { formatPaperFilingInstruction } from './paperFolderDisplayService';
 import { getCachedSetup } from './persistenceService';
 import type { AppLanguage, ClassifiedDocumentKind, InboxItem, WorkflowResult } from '../types/models';
+import {
+  buildDocumentWorkTruthAssistContextLines,
+} from './documentWorkResultResolveService';
+import { buildDocumentWorkTruthViewForInboxItem } from './documentWorkResultTruthOrchestration';
 
 export type { SteuerberaterRelevanceStatus } from './documentResultPresentationService';
 
@@ -52,6 +56,9 @@ export interface InboxDocumentAssistant {
   recognitionStatusKey: TranslationKey;
   confidentFields: Array<{ labelKey: TranslationKey; value: string }>;
   uncertainFields: Array<{ labelKey: TranslationKey; noteKey: TranslationKey }>;
+  /** DOCUMENT-WORK-RESULT-01B compact truth facts for display/tests (not actions). */
+  documentWorkTruthFactLines?: string[];
+  documentWorkTruthConflictLines?: string[];
 }
 
 function pushUnique(blocks: AssistantTextBlock[], block: AssistantTextBlock): void {
@@ -293,9 +300,67 @@ export function buildInboxDocumentAssistant(
   const recognitionStatus = resolveRecognitionStatus(presentationContext, uncertainFields.length);
   const steuer = resolveSteuerberaterPresentation(kind);
 
+  const truth = buildDocumentWorkTruthViewForInboxItem({
+    item,
+    liveWorkflow: workflow ?? null,
+  });
+  const truthLines = truth ? buildDocumentWorkTruthAssistContextLines(truth) : null;
+
+  // Prefer resolved counterparty / money / deadline in confident fields when present.
+  if (truth?.businessInterpretation) {
+    const bi = truth.businessInterpretation;
+    const counterparty = bi.facts.parties.counterparty?.name?.trim();
+    if (counterparty) {
+      const existing = confidentFields.findIndex((f) => f.labelKey === 'docAssistant.check.sender');
+      if (existing >= 0) {
+        confidentFields[existing] = {
+          labelKey: 'docAssistant.check.sender',
+          value: counterparty,
+        };
+      } else {
+        confidentFields.unshift({
+          labelKey: 'docAssistant.check.sender',
+          value: counterparty,
+        });
+      }
+    }
+    const money = bi.facts.money[0];
+    const moneyLabel =
+      money?.amountFormatted ??
+      (money?.amount != null ? `${money.amount} ${money.currency ?? 'EUR'}` : undefined);
+    if (moneyLabel) {
+      const amountIdx = confidentFields.findIndex((f) => f.labelKey === 'docAssistant.check.amount');
+      if (amountIdx >= 0) {
+        confidentFields[amountIdx] = {
+          labelKey: 'docAssistant.check.amount',
+          value: moneyLabel,
+        };
+      } else {
+        confidentFields.push({ labelKey: 'docAssistant.check.amount', value: moneyLabel });
+      }
+    }
+    const deadline = bi.facts.timeline.deadline?.value?.trim();
+    if (deadline) {
+      const deadlineIdx = confidentFields.findIndex(
+        (f) => f.labelKey === 'docAssistant.check.deadline',
+      );
+      if (deadlineIdx >= 0) {
+        confidentFields[deadlineIdx] = {
+          labelKey: 'docAssistant.check.deadline',
+          value: deadline,
+        };
+      } else {
+        confidentFields.push({ labelKey: 'docAssistant.check.deadline', value: deadline });
+      }
+    }
+  }
+
   return {
     documentTypeLabelKey: getDocumentDisplayLabelKey(kind, item.documentType),
-    sender: summary.sender ?? item.sender,
+    sender:
+      truth?.businessInterpretation?.facts.parties.counterparty?.name ??
+      summary.sender ??
+      item.sender,
     briefLines: buildBriefLines(item, summary, kind),
     actionSteps: buildActionSteps(item, summary, kind),
     inactionConsequence: buildInactionConsequence(item, kind),
@@ -308,5 +373,7 @@ export function buildInboxDocumentAssistant(
     recognitionStatusKey: recognitionStatusKey(recognitionStatus),
     confidentFields,
     uncertainFields,
+    documentWorkTruthFactLines: truthLines?.factLines,
+    documentWorkTruthConflictLines: truthLines?.conflictLines,
   };
 }

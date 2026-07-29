@@ -206,9 +206,21 @@ export function buildOperationalOverviewView(
       InboxItem,
       'vorgangId' | 'importedToArchive' | 'documentType' | 'classifiedKind'
     > | null;
+    /**
+     * Resolved BI for display (overlay applied). When omitted, uses workflow.BI.
+     * Must never be forwarded to execute/confirm paths.
+     */
+    displayBusinessInterpretation?: BusinessInterpretationResult | null;
+    /** Extra uncertainty lines (e.g. overlay review conflicts). */
+    unresolvedConflictLines?: string[];
+    /**
+     * Plan preview / execution context — live WorkflowResult only.
+     * Default true. Set false for snapshot-only display.
+     */
+    includePlanPreview?: boolean;
   },
 ): OperationalOverviewView {
-  const bi = workflow.businessInterpretation;
+  const bi = options?.displayBusinessInterpretation ?? workflow.businessInterpretation;
   if (!bi) {
     return {
       present: false,
@@ -230,15 +242,26 @@ export function buildOperationalOverviewView(
   const detailRows = buildDetailRows(bi);
   const positions = buildPositions(bi.facts.positions);
   const deadlineDate = bi.facts.timeline.deadline?.value;
-  const context = buildOperationalExecutionContext(workflow, {
-    inboxItem: options?.inboxItem,
-  });
+  const includePlanPreview = options?.includePlanPreview !== false;
+  const context = includePlanPreview
+    ? buildOperationalExecutionContext(workflow, {
+        inboxItem: options?.inboxItem,
+      })
+    : null;
   const shadowPlan = context ? buildOperationalExecutionPlanFromContext(context) : null;
-  const surface = resolveOperationalExecutionPreviewSurface(workflow, options?.inboxItem);
   const preview =
-    shadowPlan && context
-      ? buildOperationalExecutionPreview(shadowPlan, context, surface)
+    includePlanPreview && shadowPlan && context
+      ? buildOperationalExecutionPreview(
+          shadowPlan,
+          context,
+          resolveOperationalExecutionPreviewSurface(workflow, options?.inboxItem),
+        )
       : null;
+
+  const uncertaintyLines = [
+    ...(options?.unresolvedConflictLines ?? []),
+    ...buildUncertainty(bi),
+  ];
 
   return {
     present: true,
@@ -257,7 +280,7 @@ export function buildOperationalOverviewView(
     deadlineDate,
     nextStep: bi.operational.nextStep?.trim() || undefined,
     confirmRequirement: bi.operational.confirmRequirement?.trim() || undefined,
-    uncertaintyLines: buildUncertainty(bi),
+    uncertaintyLines,
     recognitionUncertain: bi.sourceDocument.recognitionUncertain,
     detailRows,
     positions,
@@ -266,4 +289,70 @@ export function buildOperationalOverviewView(
     planPreviewHintKey: preview?.hintKey,
     planPreviewRows: preview?.rows ?? [],
   };
+}
+
+/**
+ * Snapshot / TruthView-only overview (no live plan preview).
+ * Display and assist only — never pass result into execute paths.
+ */
+export function buildOperationalOverviewViewFromTruth(
+  truth: {
+    businessInterpretation: BusinessInterpretationResult | null;
+    unresolvedConflictLines?: string[];
+  },
+  options?: {
+    senderFallback?: string;
+    classifiedKindFallback?: ClassifiedDocumentKind;
+    inboxItem?: Pick<
+      InboxItem,
+      'vorgangId' | 'importedToArchive' | 'documentType' | 'classifiedKind'
+    > | null;
+  },
+): OperationalOverviewView {
+  const classifiedKind =
+    truth.businessInterpretation?.sourceDocument.classifiedKind ??
+    options?.classifiedKindFallback ??
+    options?.inboxItem?.classifiedKind ??
+    'sonstiges';
+
+  const shellWorkflow: WorkflowResult = {
+    inboxItemId: truth.businessInterpretation?.sourceDocument.sourceDocumentId ?? '',
+    companyRelevant: Boolean(truth.businessInterpretation?.derivedFrom.companyRelevant),
+    companyRelevance: {
+      isRelevant: Boolean(truth.businessInterpretation?.derivedFrom.companyRelevant),
+      reasons: [],
+      matchedHints: [],
+    },
+    classifiedKind,
+    classificationConfidence: 'low',
+    classification: null,
+    documentExplanation: null,
+    documentUnderstanding: null,
+    documentAiActions: [],
+    contractAnalysis: null,
+    contractIntelligence: null,
+    contractOrderProposal: null,
+    suggestedVorgang: null,
+    similarVorgaenge: [],
+    suggestedOrderPositions: [],
+    suggestedTasks: [],
+    suggestedArchiveFolder: {
+      id: 'snapshot-display',
+      name: 'Sonstiges',
+      path: 'Sonstiges',
+    },
+    requiredDocuments: [],
+    pendingSummary: null,
+    warnings: [],
+    nextActions: [],
+    businessInterpretation: truth.businessInterpretation,
+  };
+
+  return buildOperationalOverviewView(shellWorkflow, {
+    senderFallback: options?.senderFallback,
+    inboxItem: options?.inboxItem,
+    displayBusinessInterpretation: truth.businessInterpretation,
+    unresolvedConflictLines: truth.unresolvedConflictLines,
+    includePlanPreview: false,
+  });
 }

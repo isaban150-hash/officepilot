@@ -52,6 +52,13 @@ export interface DocumentAiContext {
   /** Precomputed data-quality notes for the prompt and UI. */
   uncertainFieldNotes: string[];
   missingFieldNotes: string[];
+  /**
+   * DOCUMENT-WORK-RESULT-01B — compact resolved facts (confirmed/corrected).
+   * Prefer over raw KI hints when no conflict. Never implies actions.
+   */
+  documentWorkTruthFactLines?: string[];
+  /** Unresolved overlay conflicts — must not be treated as decided. */
+  documentWorkTruthConflictLines?: string[];
 }
 
 export interface VorgangAiContext {

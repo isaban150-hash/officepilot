@@ -132,6 +132,18 @@ export function buildDocumentAiPrompt(
     formatSection('Fehlende Unterlagen', context.missingDocuments),
     formatSection('Unsichere Felder', scopedNotes.uncertainFieldNotes),
     formatSection('Fehlende Informationen', scopedNotes.missingFieldNotes),
+    context.documentWorkTruthFactLines && context.documentWorkTruthFactLines.length > 0
+      ? formatSection(
+          'Aufgelöste Dokumentwahrheit (Nutzerbestätigung/Korrektur bevorzugen, wenn kein Konflikt)',
+          context.documentWorkTruthFactLines.map((line) => sanitizeAiText(line)),
+        )
+      : undefined,
+    context.documentWorkTruthConflictLines && context.documentWorkTruthConflictLines.length > 0
+      ? formatSection(
+          'UNGELÖSTE KONFLIKTE (nicht als entschieden darstellen; Nutzerwert und neue Analyse prüfen)',
+          context.documentWorkTruthConflictLines.map((line) => sanitizeAiText(line)),
+        )
+      : undefined,
   ].filter(Boolean);
 
   const companyBlock = includeCompany

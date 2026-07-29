@@ -1054,7 +1054,7 @@ export function EingangDetailPage() {
   const freeQuestionPanel = (
     <DocumentFreeQuestionPanel
       key={`document-free-question-${assistSessionKey}`}
-      source={{ type: 'inbox', item }}
+      source={{ type: 'inbox', item, liveWorkflow: workflow }}
       testIdPrefix="document-free-question"
       onFieldStatementProposal={(statement) => {
         freeTextBridgeSeqRef.current += 1;
