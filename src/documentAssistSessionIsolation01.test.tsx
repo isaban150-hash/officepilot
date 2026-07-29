@@ -408,6 +408,8 @@ describe('DOCUMENT-ASSIST-SESSION-ISOLATION-01', () => {
     });
     await flushUi();
 
+    // Fill-Confirm persist (03A1) may call persistAll; handoff itself must not.
+    persistSpy.mockClear();
     await act(async () => {
       (
         container.querySelector(
@@ -589,6 +591,7 @@ describe('DOCUMENT-ASSIST-SESSION-ISOLATION-01', () => {
     await goTo(container, 'b');
     await goTo(container, 'a');
 
+    // Ephemeral session UI (draft / prepared reply) must not leak across navigation.
     expect(
       (
         container.querySelector(
@@ -599,15 +602,16 @@ describe('DOCUMENT-ASSIST-SESSION-ISOLATION-01', () => {
     expect(
       container.querySelector('[data-testid="document-confirmed-reply-draft-result"]'),
     ).toBeNull();
+    // Durable Fill-Confirm (DWR overlay, 03A1) correctly rehydrates — not session leak.
     expect(
       container
         .querySelector('[data-testid="document-field-fill-confirm-row-Absender"]')
         ?.getAttribute('data-status'),
-    ).not.toBe('confirmed');
+    ).toBe('confirmed');
     expect(
       container.querySelector('[data-testid="document-contextual-next-steps-considered"]')
         ?.textContent,
-    ).toContain('Noch keine bestätigten Angaben');
+    ).toContain('Absender A GmbH');
 
     await act(async () => {
       root.unmount();

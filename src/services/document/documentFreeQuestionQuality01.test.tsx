@@ -88,7 +88,12 @@ describe('DOCUMENT-FREE-QUESTION-QUALITY-01', () => {
     const prompt = buildDocumentAiPrompt('Muss ich das bezahlen?', context, 'de');
     expect(prompt).toContain('"directAnswer"');
     expect(prompt).toContain('"explanation"');
-    expect(prompt).toMatch(/keine Ja-\/Nein-Erfindung|nicht eindeutig beantworten/i);
+    // Current contract: decision ladder A–D (replaces retired Ja/Nein wording).
+    expect(prompt).toContain('ENTSCHEIDUNG A–D');
+    expect(prompt).toContain('A. DIREKT ANTWORTEN');
+    expect(prompt).toContain('C. GEZIELT NACHFRAGEN');
+    expect(prompt).toContain('D. NICHT FACHLICH BEANTWORTBAR');
+    expect(prompt).toMatch(/nichts erfinden/i);
     expect(prompt).not.toContain(t('document.freeQuestion.note.customerUncertain', 'de'));
   });
 

@@ -30,6 +30,7 @@ import { resetDocumentFileIntakeTransformPlanCarryContextStoreForTests } from '.
 import { resetDocumentFileDerivativeStepInFlightLocksForTests } from '../services/documentFileDerivativeStepInFlightLockService';
 import { resetWorkspaceCloudBootstrapForTests } from '../services/workspace/workspaceCloudBootstrapService';
 import { resetStorageScopeForTests } from '../services/storage/storageScopeService';
+import { resetDocumentWorkResultStoreForTests } from '../services/documentWorkResultStoreService';
 
 export function resetTestStores(): void {
   resetStorageScopeForTests();
@@ -44,6 +45,7 @@ export function resetTestStores(): void {
   resetDocumentFileDerivativeRecoveryContextStoreForTests();
   resetDocumentFileIntakeTransformPlanCarryContextStoreForTests();
   resetDocumentFileDerivativeStepInFlightLocksForTests();
+  resetDocumentWorkResultStoreForTests();
   hydrateExpenseStore([]);
   hydrateVorgangNotes([]);
   resetDunningDocumentations();
