@@ -37,6 +37,12 @@ export {
   buildDocumentWorkTruthConflictDisplayLines,
 } from './documentWorkResultResolveService';
 export { buildDocumentWorkTruthViewForInboxItem } from './documentWorkResultTruthOrchestration';
+export {
+  resolveDocumentWorkTruthViewForCompanyDocument,
+  type CompanyDocumentTruthReason,
+  type CompanyDocumentTruthDiagnostic,
+  type ResolveDocumentWorkTruthViewForCompanyDocumentResult,
+} from './documentWorkResultTruthOrchestration';
 export { mapFillConfirmRowsToSessionTruthOverlay } from './documentFieldFillConfirmTruthBridge';
 export {
   DOCUMENT_WORK_RESULT_SLOT_HANDLERS,
