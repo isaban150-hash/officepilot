@@ -3,7 +3,13 @@ import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { DocumentFieldFillConfirmPanel } from './components/documents/DocumentFieldFillConfirmPanel';
 import { buildDocumentFieldFillConfirmViewModel } from './services/documentFieldFillConfirmService';
+import {
+  getDocumentWorkResult,
+  resetDocumentWorkResultStoreForTests,
+} from './services/documentWorkResultService';
 import { withInboxExtractedDocumentText } from './services/inboxDocumentText';
+import { hydrateInboxStore } from './services/inboxService';
+import { processUploadedDocument } from './services/intakeWorkflowService';
 import * as persistenceService from './services/persistenceService';
 import * as inboxService from './services/inboxService';
 import { createAuftragInboxItem } from './test/fixtures';
@@ -24,6 +30,12 @@ function itemWithText(text: string, overrides: Partial<InboxItem> = {}): InboxIt
     ...base,
     recognizedData: withInboxExtractedDocumentText(base.recognizedData, text),
   };
+}
+
+function seedDwr(item: InboxItem): void {
+  hydrateInboxStore([item]);
+  processUploadedDocument(item.id);
+  expect(getDocumentWorkResult(item.id)).not.toBeNull();
 }
 
 async function setInputValue(input: HTMLInputElement, value: string): Promise<void> {
@@ -60,6 +72,7 @@ async function renderPanel(item: InboxItem): Promise<{
 
 afterEach(async () => {
   vi.restoreAllMocks();
+  resetDocumentWorkResultStoreForTests();
   resetTestStores();
   document.body.innerHTML = '';
 });
@@ -79,22 +92,11 @@ describe('DOCUMENT-ASSIST-FILL-CONFIRM-01', () => {
   });
 
   it('niedrige Confidence wird sichtbar gekennzeichnet', async () => {
-    // Fließtext-Datum ohne Label → oft low/medium; force via spy on extract would be cleaner.
-    // Use text that yields low confidence for Ort-like patterns; Baustelle from bare project line.
     const item = itemWithText('Hinweis ohne Label zum Projekt Nordseite');
-    // Directly verify UI path with a constructed low-confidence case via remount of service output:
-    // Patch: use Absender from context (medium) and verify low badge by injecting through recognized only.
-    // Prefer UI: mock build by using extraction known low - CITY_PATTERN can be medium.
-    // Simplest: unit-check row confidence from extractFieldsWithConfidence + panel renders badge.
     const withLow: InboxItem = {
       ...item,
-      recognizedData: withInboxExtractedDocumentText(
-        {},
-        'Aktenzeichen: AZ-LOW-1\nIrgendwas',
-      ),
+      recognizedData: withInboxExtractedDocumentText({}, 'Aktenzeichen: AZ-LOW-1\nIrgendwas'),
     };
-    // Aktenzeichen from REFERENCE_PATTERN is typically high. Force UI badge via confirming extract has low.
-    // We'll spy extractFieldsWithConfidence.
     const extraction = await import('./services/documentFieldExtractionService');
     vi.spyOn(extraction, 'extractFieldsWithConfidence').mockReturnValue({
       Absender: { value: 'Unsicher Absender', confidence: 'low' },
@@ -113,10 +115,11 @@ describe('DOCUMENT-ASSIST-FILL-CONFIRM-01', () => {
     });
   });
 
-  it('Bestätigen setzt nur lokalen Status', async () => {
+  it('Bestätigen setzt Status und schreibt lokal ins DWR-Overlay', async () => {
     const persistSpy = vi.spyOn(persistenceService, 'persistAll');
     const patchSpy = vi.spyOn(inboxService, 'patchInboxItem');
     const item = itemWithText('Absender: Bestätig GmbH');
+    seedDwr(item);
     const { container, root } = await renderPanel(item);
 
     await act(async () => {
@@ -131,8 +134,11 @@ describe('DOCUMENT-ASSIST-FILL-CONFIRM-01', () => {
     expect(
       container.querySelector(`[data-testid="${PREFIX}-row-Absender"]`)?.getAttribute('data-status'),
     ).toBe('confirmed');
-    expect(persistSpy).not.toHaveBeenCalled();
+    expect(persistSpy).toHaveBeenCalled();
     expect(patchSpy).not.toHaveBeenCalled();
+    expect(
+      getDocumentWorkResult(item.id)?.overlay.find((e) => e.slotId === 'facts.parties.counterparty'),
+    ).toMatchObject({ status: 'user_confirmed', value: 'Bestätig GmbH' });
 
     await act(async () => {
       root.unmount();
@@ -141,6 +147,7 @@ describe('DOCUMENT-ASSIST-FILL-CONFIRM-01', () => {
 
   it('Korrigieren übernimmt den eingegebenen Wert als confirmed', async () => {
     const item = itemWithText('Absender: Alt Name');
+    seedDwr(item);
     const { container, root } = await renderPanel(item);
 
     await act(async () => {
@@ -171,6 +178,9 @@ describe('DOCUMENT-ASSIST-FILL-CONFIRM-01', () => {
     expect(
       container.querySelector(`[data-testid="${PREFIX}-value-Absender"]`)?.textContent,
     ).toBe('Neu Name');
+    expect(
+      getDocumentWorkResult(item.id)?.overlay.find((e) => e.slotId === 'facts.parties.counterparty'),
+    ).toMatchObject({ status: 'user_corrected', value: 'Neu Name' });
 
     await act(async () => {
       root.unmount();
@@ -179,6 +189,7 @@ describe('DOCUMENT-ASSIST-FILL-CONFIRM-01', () => {
 
   it('Verwerfen setzt rejected', async () => {
     const item = itemWithText('Absender: Weg damit');
+    seedDwr(item);
     const { container, root } = await renderPanel(item);
 
     await act(async () => {
@@ -193,6 +204,10 @@ describe('DOCUMENT-ASSIST-FILL-CONFIRM-01', () => {
     expect(
       container.querySelector(`[data-testid="${PREFIX}-row-Absender"]`)?.getAttribute('data-status'),
     ).toBe('rejected');
+    expect(
+      getDocumentWorkResult(item.id)?.overlay.find((e) => e.slotId === 'facts.parties.counterparty')
+        ?.status,
+    ).toBe('discarded');
 
     await act(async () => {
       root.unmount();
@@ -201,6 +216,7 @@ describe('DOCUMENT-ASSIST-FILL-CONFIRM-01', () => {
 
   it('leeres Feld kann manuell ergänzt werden', async () => {
     const item = itemWithText('Nur Fließtext ohne Felder');
+    seedDwr(item);
     const { container, root } = await renderPanel(item);
 
     expect(
@@ -239,9 +255,9 @@ describe('DOCUMENT-ASSIST-FILL-CONFIRM-01', () => {
     });
   });
 
-  it('keine Persistenz- oder Versandfunktion wird aufgerufen', async () => {
-    const persistSpy = vi.spyOn(persistenceService, 'persistAll');
+  it('keine Archiv- oder Versandfunktion wird ausgelöst', async () => {
     const item = itemWithText('Absender: No Persist');
+    seedDwr(item);
     const { container, root } = await renderPanel(item);
 
     await act(async () => {
@@ -250,23 +266,19 @@ describe('DOCUMENT-ASSIST-FILL-CONFIRM-01', () => {
           `[data-testid="${PREFIX}-confirm-Absender"]`,
         ) as HTMLButtonElement
       ).click();
-      (
-        container.querySelector(
-          `[data-testid="${PREFIX}-reject-Absender"]`,
-        ) as HTMLButtonElement | null
-      )?.click();
     });
-    // After confirm, reject button may be gone; confirm alone is enough
-    expect(persistSpy).not.toHaveBeenCalled();
-    expect(container.textContent).not.toMatch(/Versenden|Archivieren|Speichern/);
+    await flushUi();
+    expect(container.textContent).not.toMatch(/Versenden|Archivieren/);
+    expect(container.textContent).toMatch(/lokal auf diesem Gerät/i);
 
     await act(async () => {
       root.unmount();
     });
   });
 
-  it('Reload/Remount stellt keine Session-Werte wieder her', async () => {
+  it('Remount stellt bestätigte Werte aus DWR-Overlay wieder her', async () => {
     const item = itemWithText('Absender: Session Weg');
+    seedDwr(item);
     const first = await renderPanel(item);
     await act(async () => {
       (
@@ -291,19 +303,18 @@ describe('DOCUMENT-ASSIST-FILL-CONFIRM-01', () => {
       second.container
         .querySelector(`[data-testid="${PREFIX}-row-Absender"]`)
         ?.getAttribute('data-status'),
-    ).toBe('proposed');
+    ).toBe('confirmed');
     await act(async () => {
       second.root.unmount();
     });
   });
 
   it('freies Fragenfeld bleibt vorhanden und unverändert', async () => {
-    // Panel isolation: free-question panel is separate on page; assert our panel does not include question input.
     const item = itemWithText('Absender: X');
     const { container, root } = await renderPanel(item);
     expect(container.querySelector('[data-testid="document-free-question-panel"]')).toBeNull();
     expect(container.querySelector(`[data-testid="${PREFIX}-panel"]`)).not.toBeNull();
-    expect(container.querySelector('input[placeholder]') ).toBeNull();
+    expect(container.querySelector('input[placeholder]')).toBeNull();
     await act(async () => {
       root.unmount();
     });

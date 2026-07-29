@@ -14,8 +14,8 @@ export type DocumentFieldFillConfirmStatus =
 export type DocumentFieldFillConfirmFieldKey = keyof ExtractedDocumentFields;
 
 /**
- * One local session row for the inbox fill-confirm panel.
- * Never persisted — component state only.
+ * One fill-confirm row for the inbox panel.
+ * Slotted confirmations are persisted via DWR overlay (local snapshot); row state itself is UI.
  */
 export interface DocumentFieldFillConfirmRow {
   readonly fieldKey: DocumentFieldFillConfirmFieldKey;

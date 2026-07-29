@@ -20,6 +20,11 @@ import * as communicationHistoryService from './services/communicationHistorySer
 import * as communicationOrchestrator from './services/communicationOrchestrator';
 import * as persistenceService from './services/persistenceService';
 import { hydrateInboxStore } from './services/inboxService';
+import { processUploadedDocument } from './services/intakeWorkflowService';
+import {
+  getDocumentWorkResult,
+  resetDocumentWorkResultStoreForTests,
+} from './services/documentWorkResultService';
 import { createAuftragInboxItem } from './test/fixtures';
 import { resetTestStores } from './test/resetStores';
 import type { DocumentFieldFillConfirmRow } from './types/documentFieldFillConfirm';
@@ -31,6 +36,13 @@ const FILL_PREFIX = 'document-field-fill-confirm';
 const DRAFT_PREFIX = 'document-confirmed-reply-draft';
 const setupComplete = { ...DEFAULT_SETUP, setupComplete: true };
 
+function seedDwr(item: InboxItem): void {
+  hydrateInboxStore([item]);
+  processUploadedDocument(item.id);
+  expect(getDocumentWorkResult(item.id)).not.toBeNull();
+  // AppProvider hydrates from localStorage — flush so DWR survives provider mount.
+  expect(persistenceService.persistAll().success).toBe(true);
+}
 function itemWithText(text: string, overrides: Partial<InboxItem> = {}): InboxItem {
   const base = createAuftragInboxItem({
     id: 'inbox-handoff-1',
@@ -113,6 +125,7 @@ async function prepareDraft(container: HTMLElement, core: string): Promise<void>
 
 afterEach(() => {
   vi.restoreAllMocks();
+  resetDocumentWorkResultStoreForTests();
   resetTestStores();
   document.body.innerHTML = '';
 });
@@ -211,7 +224,7 @@ describe('DOCUMENT-ASSIST-REPLY-DRAFT-HANDOFF-01 — UI', () => {
 
   it('Klick navigiert mit exakt dem geprüften Payload; keine Übergabe ohne Klick', async () => {
     const item = itemWithText('Absender: Amt Y');
-    hydrateInboxStore([item]);
+    seedDwr(item);
     let seenPath = '';
     let seenState: unknown = null;
     const container = document.createElement('div');

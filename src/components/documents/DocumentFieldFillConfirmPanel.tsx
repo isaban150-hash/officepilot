@@ -5,10 +5,23 @@ import {
   buildDocumentFieldFillConfirmViewModel,
   formatConfirmedFillConfirmClipboardText,
 } from '../../services/documentFieldFillConfirmService';
+import { persistFillConfirmRowsToDocumentWorkOverlay } from '../../services/documentFieldFillConfirmPersistService';
+import { applyStoredOverlayToFillConfirmRows } from '../../services/documentFieldFillConfirmTruthBridge';
 import { applyFreeTextBridgeProposalToRows } from '../../services/documentFieldFillFreeTextBridgeService';
+import { getDocumentWorkResultForItem } from '../../services/documentWorkResultService';
 import type { DocumentFieldFillConfirmRow } from '../../types/documentFieldFillConfirm';
 import type { DocumentFieldFillFreeTextBridgeProposal } from '../../types/documentFieldFillFreeTextBridge';
 import type { InboxItem } from '../../types/models';
+
+/** Local-only persist failure copy (no cloud/sync wording). */
+const FILL_CONFIRM_PERSIST_FAILED_MESSAGE =
+  'Speichern fehlgeschlagen. Die Bestätigung wurde nicht dauerhaft übernommen.';
+
+function initialRowsForItem(item: InboxItem): DocumentFieldFillConfirmRow[] {
+  const base = [...buildDocumentFieldFillConfirmViewModel(item).rows];
+  const dwr = getDocumentWorkResultForItem(item.id);
+  return applyStoredOverlayToFillConfirmRows(base, dwr?.overlay ?? null);
+}
 
 export interface DocumentFieldFillConfirmPanelProps {
   item: InboxItem;
@@ -21,6 +34,8 @@ export interface DocumentFieldFillConfirmPanelProps {
    */
   rows?: DocumentFieldFillConfirmRow[];
   onRowsChange?: (rows: DocumentFieldFillConfirmRow[]) => void;
+  /** Optional host feedback (e.g. toast) when local persist fails. */
+  onPersistFailed?: (message: string) => void;
 }
 
 function confidenceLabel(confidence: DocumentFieldFillConfirmRow['confidence']): string | null {
@@ -30,8 +45,9 @@ function confidenceLabel(confidence: DocumentFieldFillConfirmRow['confidence']):
 }
 
 /**
- * Local session-only fill confirmation for inbox detail.
- * Never persists, archives, links, or sends.
+ * Fill confirmation for inbox detail.
+ * Confirmed/corrected/discarded slotted fields are written to the existing DWR overlay
+ * and flushed locally via `persistAll` (same device). Does not archive, link, send, or sync.
  */
 export function DocumentFieldFillConfirmPanel({
   item,
@@ -39,15 +55,17 @@ export function DocumentFieldFillConfirmPanel({
   freeTextBridgeProposal = null,
   rows: controlledRows,
   onRowsChange,
+  onPersistFailed,
 }: DocumentFieldFillConfirmPanelProps) {
   const isControlled = controlledRows !== undefined && onRowsChange !== undefined;
-  const [internalRows, setInternalRows] = useState<DocumentFieldFillConfirmRow[]>(() => [
-    ...buildDocumentFieldFillConfirmViewModel(item).rows,
-  ]);
+  const [internalRows, setInternalRows] = useState<DocumentFieldFillConfirmRow[]>(() =>
+    initialRowsForItem(item),
+  );
   const rows = isControlled ? controlledRows : internalRows;
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editSeed, setEditSeed] = useState('');
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+  const [persistError, setPersistError] = useState<string | null>(null);
   const editInputRef = useRef<HTMLInputElement | null>(null);
   const lastBridgeIdRef = useRef<number | null>(null);
 
@@ -59,6 +77,26 @@ export function DocumentFieldFillConfirmPanel({
       return;
     }
     setInternalRows((current) => updater(current));
+  };
+
+  const commitDurableRows = (
+    updater: (current: DocumentFieldFillConfirmRow[]) => DocumentFieldFillConfirmRow[],
+  ): boolean => {
+    const previous = rows.map((row) => row);
+    const next = updater(previous);
+    replaceRows(() => next);
+    const result = persistFillConfirmRowsToDocumentWorkOverlay({
+      inboxItemId: item.id,
+      rows: next,
+    });
+    if (result.success) {
+      setPersistError(null);
+      return true;
+    }
+    replaceRows(() => previous);
+    setPersistError(FILL_CONFIRM_PERSIST_FAILED_MESSAGE);
+    onPersistFailed?.(FILL_CONFIRM_PERSIST_FAILED_MESSAGE);
+    return false;
   };
 
   useEffect(() => {
@@ -74,37 +112,36 @@ export function DocumentFieldFillConfirmPanel({
     setEditingKey(null);
   }, [freeTextBridgeProposal, isControlled, onRowsChange, controlledRows]);
 
-  const updateRow = (
-    fieldKey: string,
-    updater: (row: DocumentFieldFillConfirmRow) => DocumentFieldFillConfirmRow,
-  ): void => {
-    replaceRows((current) =>
-      current.map((row) => (row.fieldKey === fieldKey ? updater(row) : row)),
-    );
-  };
-
   const handleConfirm = (row: DocumentFieldFillConfirmRow): void => {
     const value = row.proposedValue.trim();
     if (!value) return;
-    updateRow(row.fieldKey, (current) =>
-      Object.freeze({
-        ...current,
-        status: 'confirmed',
-        confirmedValue: value,
-        bridgedFromFreeText: undefined,
-      }),
+    commitDurableRows((current) =>
+      current.map((entry) =>
+        entry.fieldKey === row.fieldKey
+          ? Object.freeze({
+              ...entry,
+              status: 'confirmed' as const,
+              confirmedValue: value,
+              bridgedFromFreeText: undefined,
+            })
+          : entry,
+      ),
     );
     setEditingKey(null);
   };
 
   const handleReject = (row: DocumentFieldFillConfirmRow): void => {
-    updateRow(row.fieldKey, (current) =>
-      Object.freeze({
-        ...current,
-        status: 'rejected',
-        confirmedValue: undefined,
-        bridgedFromFreeText: undefined,
-      }),
+    commitDurableRows((current) =>
+      current.map((entry) =>
+        entry.fieldKey === row.fieldKey
+          ? Object.freeze({
+              ...entry,
+              status: 'rejected' as const,
+              confirmedValue: undefined,
+              bridgedFromFreeText: undefined,
+            })
+          : entry,
+      ),
     );
     setEditingKey(null);
   };
@@ -121,14 +158,19 @@ export function DocumentFieldFillConfirmPanel({
   const applyCorrect = (row: DocumentFieldFillConfirmRow): void => {
     const value = (editInputRef.current?.value ?? '').trim();
     if (!value) return;
-    updateRow(row.fieldKey, (current) =>
-      Object.freeze({
-        ...current,
-        status: 'confirmed',
-        confirmedValue: value,
-        bridgedFromFreeText: undefined,
-      }),
+    const saved = commitDurableRows((current) =>
+      current.map((entry) =>
+        entry.fieldKey === row.fieldKey
+          ? Object.freeze({
+              ...entry,
+              status: 'confirmed' as const,
+              confirmedValue: value,
+              bridgedFromFreeText: undefined,
+            })
+          : entry,
+      ),
     );
+    if (!saved) return;
     setEditingKey(null);
     setEditSeed('');
   };
@@ -160,9 +202,18 @@ export function DocumentFieldFillConfirmPanel({
           className="document-field-fill-confirm__hint"
           data-testid={`${testIdPrefix}-unsaved-hint`}
         >
-          Vorschläge sind noch nicht gespeichert. Nur lokal bestätigt — nichts wird
-          übernommen, archiviert oder versendet.
+          Bestätigte Angaben werden lokal auf diesem Gerät gespeichert. Nichts wird
+          archiviert oder versendet.
         </p>
+        {persistError ? (
+          <p
+            className="document-field-fill-confirm__persist-error"
+            data-testid={`${testIdPrefix}-persist-error`}
+            role="alert"
+          >
+            {persistError}
+          </p>
+        ) : null}
 
         <ul className="document-field-fill-confirm__list">
           {rows.map((row) => {

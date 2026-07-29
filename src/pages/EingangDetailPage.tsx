@@ -17,6 +17,7 @@ import { DocumentConfirmedReplyDraftPanel } from '../components/documents/Docume
 import { DocumentContextualNextStepsPanel } from '../components/documents/DocumentContextualNextStepsPanel';
 import { buildKommunikationPath } from '../components/communication/communicationNavigation';
 import { buildDocumentFieldFillConfirmViewModel } from '../services/documentFieldFillConfirmService';
+import { applyStoredOverlayToFillConfirmRows } from '../services/documentFieldFillConfirmTruthBridge';
 import { isConfirmedReplyDraftSupported } from '../services/documentConfirmedReplyDraftService';
 import { createDocumentReplyDraftHandoffLocationState } from '../services/documentReplyDraftHandoffService';
 import type { DocumentFieldFillConfirmRow } from '../types/documentFieldFillConfirm';
@@ -141,7 +142,10 @@ export function EingangDetailPage() {
   const freeTextBridgeSeqRef = useRef(0);
   const [fillConfirmRows, setFillConfirmRows] = useState<DocumentFieldFillConfirmRow[]>(() => {
     const initial = id ? getInboxItemById(id) : undefined;
-    return initial ? [...buildDocumentFieldFillConfirmViewModel(initial).rows] : [];
+    if (!initial) return [];
+    const base = [...buildDocumentFieldFillConfirmViewModel(initial).rows];
+    const dwr = getDocumentWorkResultForItem(initial.id);
+    return applyStoredOverlayToFillConfirmRows(base, dwr?.overlay ?? null);
   });
   const [replyCoreMessage, setReplyCoreMessage] = useState('');
   const [hasReplyDraft, setHasReplyDraft] = useState(false);
@@ -165,9 +169,12 @@ export function EingangDetailPage() {
       setItem(next);
       setIsEditing(false);
       setEditDraft(null);
-      setFillConfirmRows(
-        next ? [...buildDocumentFieldFillConfirmViewModel(next).rows] : [],
-      );
+      setFillConfirmRows(() => {
+        if (!next) return [];
+        const base = [...buildDocumentFieldFillConfirmViewModel(next).rows];
+        const dwr = getDocumentWorkResultForItem(next.id);
+        return applyStoredOverlayToFillConfirmRows(base, dwr?.overlay ?? null);
+      });
     }
   }, [id]);
 
@@ -1079,6 +1086,7 @@ export function EingangDetailPage() {
       freeTextBridgeProposal={freeTextBridgeProposal}
       rows={fillConfirmRows}
       onRowsChange={setFillConfirmRows}
+      onPersistFailed={(message) => showToast(message)}
     />
   );
   const contextualNextStepsPanel = useAssistFlowConsolidate ? (

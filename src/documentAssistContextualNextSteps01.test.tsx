@@ -9,19 +9,38 @@ import {
   contextualNextStepsTextLooksUnsafe,
 } from './services/documentContextualNextStepsService';
 import { buildDocumentFieldFillConfirmViewModel } from './services/documentFieldFillConfirmService';
+import { applyStoredOverlayToFillConfirmRows } from './services/documentFieldFillConfirmTruthBridge';
 import { isConfirmedReplyDraftSupported } from './services/documentConfirmedReplyDraftService';
 import { withInboxExtractedDocumentText } from './services/inboxDocumentText';
 import { createAuftragInboxItem } from './test/fixtures';
 import { resetTestStores } from './test/resetStores';
 import type { DocumentFieldFillConfirmRow } from './types/documentFieldFillConfirm';
 import type { InboxItem } from './types/models';
-import * as persistenceService from './services/persistenceService';
 import * as documentAiService from './services/document/documentAiService';
+import { hydrateInboxStore } from './services/inboxService';
+import { processUploadedDocument } from './services/intakeWorkflowService';
+import {
+  getDocumentWorkResult,
+  resetDocumentWorkResultStoreForTests,
+} from './services/documentWorkResultService';
 
 const NEXT_PREFIX = 'document-contextual-next-steps';
 const FILL_PREFIX = 'document-field-fill-confirm';
 const DRAFT_PREFIX = 'document-confirmed-reply-draft';
 
+function seedDwr(item: InboxItem): void {
+  hydrateInboxStore([item]);
+  processUploadedDocument(item.id);
+  expect(getDocumentWorkResult(item.id)).not.toBeNull();
+}
+
+function initialRows(item: InboxItem): DocumentFieldFillConfirmRow[] {
+  const dwr = getDocumentWorkResult(item.id);
+  return applyStoredOverlayToFillConfirmRows(
+    [...buildDocumentFieldFillConfirmViewModel(item).rows],
+    dwr?.overlay ?? null,
+  );
+}
 function itemWithText(text: string, overrides: Partial<InboxItem> = {}): InboxItem {
   const base = createAuftragInboxItem({
     id: 'inbox-contextual-next',
@@ -61,9 +80,7 @@ async function flushUi(): Promise<void> {
 }
 
 function NextStepsHarness({ item }: { item: InboxItem }): ReactElement {
-  const [rows, setRows] = useState<DocumentFieldFillConfirmRow[]>(() => [
-    ...buildDocumentFieldFillConfirmViewModel(item).rows,
-  ]);
+  const [rows, setRows] = useState<DocumentFieldFillConfirmRow[]>(() => initialRows(item));
   const [coreMessage, setCoreMessage] = useState('');
   const [hasDraft, setHasDraft] = useState(false);
   return createElement(
@@ -93,6 +110,7 @@ function NextStepsHarness({ item }: { item: InboxItem }): ReactElement {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  resetDocumentWorkResultStoreForTests();
   resetTestStores();
   document.body.innerHTML = '';
 });
@@ -218,9 +236,9 @@ describe('DOCUMENT-ASSIST-CONTEXTUAL-NEXT-STEPS-01 — service', () => {
 
 describe('DOCUMENT-ASSIST-CONTEXTUAL-NEXT-STEPS-01 — UI', () => {
   it('zeigt fehlende Angaben und bestätigt nur confirmed Fakten; Reply-Callbacks wirken', async () => {
-    const persistSpy = vi.spyOn(persistenceService, 'persistAll');
     const askSpy = vi.spyOn(documentAiService, 'askDocumentAi');
     const item = itemWithText('Absender: Amt Y\nFrist: 20.08.2026');
+    seedDwr(item);
     const container = document.createElement('div');
     document.body.appendChild(container);
     const root = createRoot(container);
@@ -273,7 +291,6 @@ describe('DOCUMENT-ASSIST-CONTEXTUAL-NEXT-STEPS-01 — UI', () => {
       container.querySelector(`[data-testid="${NEXT_PREFIX}-suggestions"]`)?.textContent,
     ).toContain('Im Kommunikationsbereich prüfen');
 
-    expect(persistSpy).not.toHaveBeenCalled();
     expect(askSpy).not.toHaveBeenCalled();
     expect(container.querySelector(`[data-testid="${NEXT_PREFIX}-panel"] button`)).toBeNull();
 
@@ -290,8 +307,9 @@ describe('DOCUMENT-ASSIST-CONTEXTUAL-NEXT-STEPS-01 — UI', () => {
     expect(isConfirmedReplyDraftSupported(item)).toBe(false);
   });
 
-  it('Remount verwirft Session-Zustand der nächsten Schritte', async () => {
+  it('Remount behält DWR-Bestätigung; Entwurf-Session bleibt ephemer', async () => {
     const item = itemWithText('Absender: Session');
+    seedDwr(item);
     const container = document.createElement('div');
     document.body.appendChild(container);
     const root = createRoot(container);
@@ -324,7 +342,8 @@ describe('DOCUMENT-ASSIST-CONTEXTUAL-NEXT-STEPS-01 — UI', () => {
     await flushUi();
     expect(
       container2.querySelector(`[data-testid="${NEXT_PREFIX}-considered"]`)?.textContent,
-    ).toContain('Noch keine bestätigten Angaben');
+    ).toContain('Session');
+    expect(container2.querySelector(`[data-testid="${DRAFT_PREFIX}-result"]`)).toBeNull();
     await act(async () => {
       root2.unmount();
     });

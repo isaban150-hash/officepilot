@@ -19,9 +19,21 @@ import { createAuftragInboxItem } from './test/fixtures';
 import { resetTestStores } from './test/resetStores';
 import type { DocumentFieldFillFreeTextBridgeProposal } from './types/documentFieldFillFreeTextBridge';
 import type { InboxItem } from './types/models';
+import { hydrateInboxStore } from './services/inboxService';
+import { processUploadedDocument } from './services/intakeWorkflowService';
+import {
+  getDocumentWorkResult,
+  resetDocumentWorkResultStoreForTests,
+} from './services/documentWorkResultService';
 
 const FILL_PREFIX = 'document-field-fill-confirm';
 const ASK_PREFIX = 'document-free-question';
+
+function seedDwr(item: InboxItem): void {
+  hydrateInboxStore([item]);
+  processUploadedDocument(item.id);
+  expect(getDocumentWorkResult(item.id)).not.toBeNull();
+}
 
 function itemWithText(text: string, overrides: Partial<InboxItem> = {}): InboxItem {
   const base = createAuftragInboxItem({
@@ -106,6 +118,7 @@ async function submitFreeText(container: HTMLElement, text: string): Promise<voi
 afterEach(async () => {
   vi.restoreAllMocks();
   setAiGenerateTextForTests(null);
+  resetDocumentWorkResultStoreForTests();
   resetTestStores();
   document.body.innerHTML = '';
 });
@@ -238,6 +251,7 @@ describe('DOCUMENT-ASSIST-FILL-FREETEXT-BRIDGE-01 — UI bridge', () => {
 
   it('bestehender bestätigter Wert wird nicht überschrieben', async () => {
     const item = itemWithText('Absender: Alt GmbH');
+    seedDwr(item);
     const { container, root } = await renderBridge(item);
 
     await act(async () => {
@@ -382,7 +396,7 @@ describe('DOCUMENT-ASSIST-FILL-FREETEXT-BRIDGE-01 — UI bridge', () => {
     });
   });
 
-  it('keine Persistenz- oder Versandfunktion wird aufgerufen', async () => {
+  it('Bridge-Vorschlag ohne Bestätigen löst keine Persistenz aus', async () => {
     const persistSpy = vi.spyOn(persistenceService, 'persistAll');
     const patchSpy = vi.spyOn(inboxService, 'patchInboxItem');
     const item = itemWithText('x');

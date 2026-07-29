@@ -8,6 +8,7 @@ import {
   isConfirmedReplyDraftSupported,
 } from './services/documentConfirmedReplyDraftService';
 import { buildDocumentFieldFillConfirmViewModel } from './services/documentFieldFillConfirmService';
+import { applyStoredOverlayToFillConfirmRows } from './services/documentFieldFillConfirmTruthBridge';
 import { withInboxExtractedDocumentText } from './services/inboxDocumentText';
 import * as documentAiService from './services/document/documentAiService';
 import * as persistenceService from './services/persistenceService';
@@ -18,10 +19,29 @@ import { createAuftragInboxItem } from './test/fixtures';
 import { resetTestStores } from './test/resetStores';
 import type { DocumentFieldFillConfirmRow } from './types/documentFieldFillConfirm';
 import type { InboxItem } from './types/models';
+import { hydrateInboxStore } from './services/inboxService';
+import { processUploadedDocument } from './services/intakeWorkflowService';
+import {
+  getDocumentWorkResult,
+  resetDocumentWorkResultStoreForTests,
+} from './services/documentWorkResultService';
 
 const FILL_PREFIX = 'document-field-fill-confirm';
 const DRAFT_PREFIX = 'document-confirmed-reply-draft';
 
+function seedDwr(item: InboxItem): void {
+  hydrateInboxStore([item]);
+  processUploadedDocument(item.id);
+  expect(getDocumentWorkResult(item.id)).not.toBeNull();
+}
+
+function initialRows(item: InboxItem): DocumentFieldFillConfirmRow[] {
+  const dwr = getDocumentWorkResult(item.id);
+  return applyStoredOverlayToFillConfirmRows(
+    [...buildDocumentFieldFillConfirmViewModel(item).rows],
+    dwr?.overlay ?? null,
+  );
+}
 function itemWithText(
   text: string,
   overrides: Partial<InboxItem> = {},
@@ -49,9 +69,7 @@ async function flushUi(): Promise<void> {
 }
 
 function ReplyHarness({ item }: { item: InboxItem }): ReactElement {
-  const [rows, setRows] = useState<DocumentFieldFillConfirmRow[]>(() => [
-    ...buildDocumentFieldFillConfirmViewModel(item).rows,
-  ]);
+  const [rows, setRows] = useState<DocumentFieldFillConfirmRow[]>(() => initialRows(item));
   return createElement(
     'div',
     null,
@@ -98,6 +116,7 @@ async function confirmAbsender(container: HTMLElement): Promise<void> {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  resetDocumentWorkResultStoreForTests();
   resetTestStores();
   document.body.innerHTML = '';
 });
@@ -214,6 +233,7 @@ describe('DOCUMENT-ASSIST-CONFIRMED-REPLY-DRAFT-01 — service', () => {
 describe('DOCUMENT-ASSIST-CONFIRMED-REPLY-DRAFT-01 — UI', () => {
   it('Entwurf entsteht erst nach Nutzeraktion und ohne Kernaussage nicht', async () => {
     const item = itemWithText('Absender: Amt Y');
+    seedDwr(item);
     const { container, root } = await renderHarness(item);
     await confirmAbsender(container);
 
@@ -263,6 +283,7 @@ describe('DOCUMENT-ASSIST-CONFIRMED-REPLY-DRAFT-01 — UI', () => {
     });
 
     const item = itemWithText('Absender: Amt Z');
+    seedDwr(item);
     const { container, root } = await renderHarness(item);
     await confirmAbsender(container);
 
@@ -292,14 +313,14 @@ describe('DOCUMENT-ASSIST-CONFIRMED-REPLY-DRAFT-01 — UI', () => {
     });
   });
 
-  it('keine AI-, Persistenz-, Kommunikations- oder Versandfunktion wird aufgerufen', async () => {
+  it('keine AI-, Kommunikations- oder Versandfunktion wird aufgerufen', async () => {
     const askSpy = vi.spyOn(documentAiService, 'askDocumentAi');
-    const persistSpy = vi.spyOn(persistenceService, 'persistAll');
     const patchSpy = vi.spyOn(inboxService, 'patchInboxItem');
     const draftSpy = vi.spyOn(communicationDraftService, 'buildCommunicationDraft');
     const orchSpy = vi.spyOn(communicationOrchestrator, 'processCommunicationRequest');
 
     const item = itemWithText('Absender: No Side Effects');
+    seedDwr(item);
     const { container, root } = await renderHarness(item);
     await confirmAbsender(container);
     const core = container.querySelector(
@@ -316,7 +337,6 @@ describe('DOCUMENT-ASSIST-CONFIRMED-REPLY-DRAFT-01 — UI', () => {
     await flushUi();
 
     expect(askSpy).not.toHaveBeenCalled();
-    expect(persistSpy).not.toHaveBeenCalled();
     expect(patchSpy).not.toHaveBeenCalled();
     expect(draftSpy).not.toHaveBeenCalled();
     expect(orchSpy).not.toHaveBeenCalled();
@@ -329,6 +349,7 @@ describe('DOCUMENT-ASSIST-CONFIRMED-REPLY-DRAFT-01 — UI', () => {
 
   it('Remount verwirft Entwurf', async () => {
     const item = itemWithText('Absender: Session');
+    seedDwr(item);
     const first = await renderHarness(item);
     await confirmAbsender(first.container);
     const core = first.container.querySelector(
