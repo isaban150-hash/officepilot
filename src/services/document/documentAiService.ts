@@ -20,6 +20,7 @@ import {
   DOCUMENT_AI_MAX_TURN_CHARS,
   formatDocumentAiPriorTurnsForPrompt,
   normalizeDocumentAiPriorTurns,
+  shouldPersistDocumentAiConversationExchange,
 } from './documentAiConversationTurns';
 import { t } from '../../i18n';
 import {
@@ -191,6 +192,7 @@ export {
   buildDocumentAiPriorTurnsGuardText,
   formatDocumentAiPriorTurnsForPrompt,
   appendDocumentAiConversationTurn,
+  shouldPersistDocumentAiConversationExchange,
   DOCUMENT_AI_MAX_PRIOR_ROUNDS,
   DOCUMENT_AI_MAX_TURN_CHARS,
 };

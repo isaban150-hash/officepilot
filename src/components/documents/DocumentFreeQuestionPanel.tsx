@@ -6,6 +6,7 @@ import { isAiProviderConfigured } from '../../services/ai/aiRequestRunner';
 import {
   askDocumentAi,
   appendDocumentAiConversationTurn,
+  shouldPersistDocumentAiConversationExchange,
   type DocumentAiSource,
 } from '../../services/document/documentAiService';
 import { parseFreeTextFieldBridge } from '../../services/documentFieldFillFreeTextBridgeService';
@@ -43,7 +44,7 @@ function assistantTurnFromAnswer(answer: AreaAiAnswer): DocumentAiPriorTurn {
 
 /**
  * Local session-only free questions for one document.
- * DOCUMENT-ASSIST-02B: ephemeral priorTurns in React state only — never persisted.
+ * DOCUMENT-ASSIST-02B/02C: ephemeral priorTurns — never persisted; unavailable excluded.
  */
 export function DocumentFreeQuestionPanel({
   source,
@@ -105,19 +106,19 @@ export function DocumentFreeQuestionPanel({
         return;
       }
       setAnswer(result);
-      setPriorTurns((current) => {
-        let next = appendDocumentAiConversationTurn(current, {
-          role: 'user',
-          text: trimmed,
+      if (shouldPersistDocumentAiConversationExchange(result)) {
+        setPriorTurns((current) => {
+          let next = appendDocumentAiConversationTurn(current, {
+            role: 'user',
+            text: trimmed,
+          });
+          next = appendDocumentAiConversationTurn(next, assistantTurnFromAnswer(result));
+          return next;
         });
-        next = appendDocumentAiConversationTurn(next, assistantTurnFromAnswer(result));
-        return next;
-      });
+        setQuestion('');
+      }
       if (result.source === 'unavailable' && result.errorCode === 'invalid_prompt') {
         setError(result.text);
-      }
-      if (result.source === 'ai') {
-        setQuestion('');
       }
     } catch {
       if (requestGeneration !== requestGenerationRef.current) {

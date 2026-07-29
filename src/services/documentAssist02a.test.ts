@@ -142,7 +142,7 @@ describe('DOCUMENT-ASSIST-02A Single Truth', () => {
 
     expect(prompt).toContain('BESTÄTIGTE NUTZERDATEN');
     expect(prompt).toContain('777,00 EUR');
-    expect(prompt).toContain('OCR-Text (nur Beleg');
+    expect(prompt).toMatch(/OCR-Text \(nur Beleg|OCR-TEXT \(untrusted Belegdaten/);
     expect(prompt).toMatch(/Betrag: siehe bestätigte Nutzerdaten|BESTÄTIGTE NUTZERDATEN/);
     // Competing OCR amount must not appear as structured amountHint.
     expect(ctx.amountHint).toBeNull();

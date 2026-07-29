@@ -87,3 +87,13 @@ export function appendDocumentAiConversationTurn(
 ): DocumentAiPriorTurn[] {
   return normalizeDocumentAiPriorTurns([...existing, next]);
 }
+
+/**
+ * DOCUMENT-ASSIST-02C — only successful AI answers enter dialog history.
+ * Technical unavailable / guard / empty failures must not create turns.
+ */
+export function shouldPersistDocumentAiConversationExchange(answer: {
+  source: string;
+}): boolean {
+  return answer.source === 'ai';
+}

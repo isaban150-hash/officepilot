@@ -9,6 +9,7 @@ import {
   hasStructuredDeadlineEvidence,
 } from './documentAiEvidence';
 import { detectDocumentQuestionIntents } from './documentAiQuestionIntent';
+import { shouldSpareDocumentAiPostCheckSoftening } from './documentAiClarificationDetect';
 
 export interface DocumentAiPostCheckResult extends ParsedDocumentAiAnswer {
   warnings: string[];
@@ -102,6 +103,8 @@ function buildSafeDemandAnswer(context: DocumentAiContext, lang: AppLanguage): P
 /**
  * Deterministic post-check: no user-obligation claims, honor test docs,
  * strip unverifiable quotes, and avoid treating issueDate as a due date.
+ * DOCUMENT-ASSIST-02C: spare genuine clarification answers from canned softens
+ * (overclaims with "?" still softened).
  */
 export function applyDocumentAiAnswerPostCheck(input: {
   question: string;
@@ -123,7 +126,9 @@ export function applyDocumentAiAnswerPostCheck(input: {
   const combined = `${directAnswer}\n${explanation}`;
   const intents = detectDocumentQuestionIntents(question);
   const paymentOrDeadline = intents.has('payment') || intents.has('deadline');
+  const spareClarification = shouldSpareDocumentAiPostCheckSoftening(combined);
 
+  // Obligation claims always soften — even if the text also contains a "?".
   if (FORBIDDEN_USER_OBLIGATION.test(combined)) {
     warnings.push('forbidden_user_obligation');
     const safe = buildSafeDemandAnswer(context, lang);
@@ -131,6 +136,7 @@ export function applyDocumentAiAnswerPostCheck(input: {
   }
 
   if (
+    !spareClarification &&
     context.documentNature === 'test_or_sample' &&
     paymentOrDeadline &&
     (CLAIMS_REAL_PAYMENT_DUTY.test(combined) || !mentionsTestNature(combined))
@@ -146,13 +152,16 @@ export function applyDocumentAiAnswerPostCheck(input: {
       combined,
     );
   if (claimsDemandWithDate && !canClaimDocumentDemandWithDate(context)) {
-    warnings.push('insufficient_deadline_demand_evidence');
-    const safe = buildStage1DateAnswer(context, lang);
-    return { ...safe, warnings, softened: true };
+    if (!spareClarification) {
+      warnings.push('insufficient_deadline_demand_evidence');
+      const safe = buildStage1DateAnswer(context, lang);
+      return { ...safe, warnings, softened: true };
+    }
   }
 
   // Explicitly block treating issueDate-only as payment deadline when no structured deadline.
   if (
+    !spareClarification &&
     paymentOrDeadline &&
     !hasStructuredDeadlineEvidence(context) &&
     /(?:zahlungsfrist|überweisung|fällig|frist\s+ist)/iu.test(combined) &&
