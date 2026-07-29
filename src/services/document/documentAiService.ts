@@ -15,11 +15,18 @@ import { detectDocumentNature } from './documentAiDocumentNature';
 import { filterUncertaintyNotesForQuestion } from './documentAiQuestionIntent';
 import { t } from '../../i18n';
 import { AREA_AI_DISCLAIMER, type AreaAiAnswer, type DocumentAiContext } from '../../types/areaAi';
+import type { DocumentFieldFillConfirmRow } from '../../types/documentFieldFillConfirm';
 import type { AppLanguage, CompanyDocument, InboxItem, WorkflowResult } from '../../types/models';
 
 export type DocumentAiSource =
   | { type: 'document'; document: CompanyDocument }
-  | { type: 'inbox'; item: InboxItem; liveWorkflow?: WorkflowResult | null };
+  | {
+      type: 'inbox';
+      item: InboxItem;
+      liveWorkflow?: WorkflowResult | null;
+      /** Session Fill-Confirm rows → same TruthView as Overview / Rule-Assist. */
+      sessionFillConfirmRows?: readonly DocumentFieldFillConfirmRow[] | null;
+    };
 
 function unavailableAnswer(
   question: string,
@@ -51,6 +58,7 @@ function buildContext(source: DocumentAiSource): DocumentAiContext {
   }
   return buildDocumentAiContextFromInbox(source.item, {
     liveWorkflow: source.liveWorkflow ?? null,
+    sessionFillConfirmRows: source.sessionFillConfirmRows ?? null,
   });
 }
 

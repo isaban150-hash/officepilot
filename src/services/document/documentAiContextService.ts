@@ -6,8 +6,10 @@ import { t, type TranslationKey } from '../../i18n';
 import { formatMessage } from '../../i18n/formatMessage';
 import { getCachedSetup } from '../persistenceService';
 import type { ExplanationTextBlock } from '../../i18n/types';
+import type { DocumentFieldFillConfirmRow } from '../../types/documentFieldFillConfirm';
 import type { AppLanguage, CompanyDocument, InboxItem, WorkflowResult } from '../../types/models';
 import type { DocumentAiContext } from '../../types/areaAi';
+import type { DocumentWorkTruthView } from '../../types/documentWorkTruth';
 import { buildDocumentWorkTruthAssistContextLines } from '../documentWorkResultResolveService';
 import { buildDocumentWorkTruthViewForInboxItem } from '../documentWorkResultTruthOrchestration';
 import { detectDocumentNature } from './documentAiDocumentNature';
@@ -43,6 +45,13 @@ function pickAmountHint(data: Record<string, string> | undefined): string | null
   return null;
 }
 
+function slotIsUserOwned(truth: DocumentWorkTruthView, slotId: string): boolean {
+  const conflicted = truth.unresolvedConflicts.some((c) => c.slotId === slotId);
+  if (conflicted) return false;
+  const slot = truth.slots.find((entry) => entry.slotId === slotId);
+  return slot?.provenance === 'user_confirmed' || slot?.provenance === 'user_corrected';
+}
+
 function withTestNatureNote(
   uncertainFieldNotes: string[],
   documentNature: 'test_or_sample' | 'unknown',
@@ -57,6 +66,11 @@ function withTestNatureNote(
 function collectInboxQualityNotes(
   item: InboxItem,
   lang: AppLanguage,
+  flags?: {
+    suppressAmountHint?: boolean;
+    suppressStructuredDeadline?: boolean;
+    suppressIssuerHint?: boolean;
+  },
 ): { uncertainFieldNotes: string[]; missingFieldNotes: string[] } {
   const uncertainFieldNotes: string[] = [];
   const missingFieldNotes: string[] = [];
@@ -71,10 +85,14 @@ function collectInboxQualityNotes(
   if (!textBudget) {
     missingFieldNotes.push(note('document.freeQuestion.note.noRecognizedText', lang));
   }
-  if (!item.deadline && !item.recognizedData.Frist) {
+  if (
+    !flags?.suppressStructuredDeadline &&
+    !item.deadline &&
+    !item.recognizedData.Frist
+  ) {
     missingFieldNotes.push(note('document.freeQuestion.note.noDeadline', lang));
   }
-  if (!item.sender?.trim()) {
+  if (!flags?.suppressIssuerHint && !item.sender?.trim()) {
     missingFieldNotes.push(note('document.freeQuestion.note.noSender', lang));
   }
   if (!item.vorgangId && !item.vorgangTitle) {
@@ -85,7 +103,7 @@ function collectInboxQualityNotes(
   if (item.classifiedKind === 'sonstiges' || !item.classifiedKind) {
     uncertainFieldNotes.push(note('document.freeQuestion.note.documentTypeUncertain', lang));
   }
-  if (pickAmountHint(item.recognizedData)) {
+  if (!flags?.suppressAmountHint && pickAmountHint(item.recognizedData)) {
     uncertainFieldNotes.push(note('document.freeQuestion.note.amountNeedsReview', lang));
   }
 
@@ -155,10 +173,12 @@ export function buildDocumentAiContextFromDocument(document: CompanyDocument): D
 
 export function buildDocumentAiContextFromInbox(
   item: InboxItem,
-  options?: { liveWorkflow?: WorkflowResult | null },
+  options?: {
+    liveWorkflow?: WorkflowResult | null;
+    sessionFillConfirmRows?: readonly DocumentFieldFillConfirmRow[] | null;
+  },
 ): DocumentAiContext {
   const lang = getCachedSetup()?.language ?? 'de';
-  const quality = collectInboxQualityNotes(item, lang);
   const vertragstext =
     item.recognizedData._vertragstext ?? item.recognizedData.Vertragstext ?? '';
   const recognizedText = truncateText(
@@ -183,31 +203,85 @@ export function buildDocumentAiContextFromInbox(
   const truth = buildDocumentWorkTruthViewForInboxItem({
     item,
     liveWorkflow: options?.liveWorkflow ?? null,
+    sessionFillConfirmRows: options?.sessionFillConfirmRows ?? null,
   });
   const truthLines = truth ? buildDocumentWorkTruthAssistContextLines(truth) : null;
+
+  const suppressAmountHint = truth ? slotIsUserOwned(truth, 'facts.money.0') : false;
+  const suppressStructuredDeadline = truth
+    ? slotIsUserOwned(truth, 'facts.timeline.deadline')
+    : false;
+  const suppressIssuerHint = truth
+    ? slotIsUserOwned(truth, 'facts.parties.counterparty')
+    : false;
+
+  const quality = collectInboxQualityNotes(item, lang, {
+    suppressAmountHint,
+    suppressStructuredDeadline,
+    suppressIssuerHint,
+  });
+
+  const bi = truth?.businessInterpretation;
+  const confirmedUserFactLines = (truthLines?.factLines ?? []).filter(
+    (line) => line.includes('[Nutzerbestätigung]') || line.includes('[Nutzerkorrektur]'),
+  );
+
+  const issuerOrSender = suppressIssuerHint
+    ? bi?.facts.parties.counterparty?.name?.trim() || item.sender
+    : item.sender;
+  const deadline = suppressStructuredDeadline
+    ? bi?.facts.timeline.deadline?.value?.trim() || undefined
+    : item.deadline ?? item.recognizedData.Frist ?? undefined;
+  const amountHint = suppressAmountHint ? null : pickAmountHint(item.recognizedData);
+
+  const recognizedDataForLines = { ...item.recognizedData };
+  if (suppressIssuerHint) {
+    delete recognizedDataForLines.Absender;
+    delete recognizedDataForLines.Kunde;
+    delete recognizedDataForLines.Lieferant;
+  }
+  if (suppressStructuredDeadline) {
+    delete recognizedDataForLines.Frist;
+  }
+  if (suppressAmountHint) {
+    delete recognizedDataForLines.Betrag;
+    delete recognizedDataForLines.Gesamtbetrag;
+    delete recognizedDataForLines.Brutto;
+    delete recognizedDataForLines.Netto;
+    delete recognizedDataForLines.Amount;
+    delete recognizedDataForLines.Summe;
+  }
+
+  let letterSummary = explanation
+    ? {
+        about: sanitizeAiText(blockToPlainText(explanation.about)),
+        deadline: sanitizeAiText(blockToPlainText(explanation.deadline)),
+        nextSteps: sanitizeAiText(blockToPlainText(explanation.nextSteps)),
+      }
+    : undefined;
+  if (letterSummary && suppressStructuredDeadline) {
+    letterSummary = {
+      ...letterSummary,
+      deadline: '(durch Nutzer bestätigt — siehe bestätigte Fakten)',
+    };
+  }
 
   return {
     sourceType: 'inbox',
     title: item.title,
-    issuerOrSender: item.sender,
+    issuerOrSender,
     category: item.documentType,
     classifiedKind: item.classifiedKind ?? null,
-    deadline: item.deadline ?? item.recognizedData.Frist ?? undefined,
-    amountHint: pickAmountHint(item.recognizedData),
+    deadline,
+    amountHint,
     documentNature,
     recognizedText: sanitizeAiText(recognizedText),
-    recognizedDataLines: buildRecognizedDataLines(item.recognizedData),
+    recognizedDataLines: buildRecognizedDataLines(recognizedDataForLines),
     linkedVorgangId: confirmedLink ? item.vorgangId : null,
     linkedVorgangTitle: confirmedLink ? item.vorgangTitle : undefined,
     digitalFolderPath: item.digitalFolder?.path,
     paperFolderLabel: item.paperFiling?.label,
-    letterSummary: explanation
-      ? {
-          about: sanitizeAiText(blockToPlainText(explanation.about)),
-          deadline: sanitizeAiText(blockToPlainText(explanation.deadline)),
-          nextSteps: sanitizeAiText(blockToPlainText(explanation.nextSteps)),
-        }
-      : undefined,
+    letterSummary,
     missingDocuments: contract.isContract
       ? contract.requiredDocuments.map((doc) => doc.reason || doc.type.replace(/_/g, ' '))
       : [],
@@ -216,6 +290,10 @@ export function buildDocumentAiContextFromInbox(
     missingFieldNotes: quality.missingFieldNotes,
     documentWorkTruthFactLines: truthLines?.factLines,
     documentWorkTruthConflictLines: truthLines?.conflictLines,
+    confirmedUserFactLines,
+    suppressAmountHint,
+    suppressStructuredDeadline,
+    suppressIssuerHint,
   };
 }
 
@@ -243,6 +321,7 @@ export function buildDocumentAiAllowedSourceText(context: DocumentAiContext): st
     ...context.tags,
     ...context.uncertainFieldNotes,
     ...context.missingFieldNotes,
+    ...(context.confirmedUserFactLines ?? []),
     ...(context.documentWorkTruthFactLines ?? []),
     ...(context.documentWorkTruthConflictLines ?? []),
     hasStructuredDeadlineEvidence(context) ? 'structured_deadline_evidence' : '',

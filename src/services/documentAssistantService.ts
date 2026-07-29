@@ -22,6 +22,7 @@ import { getInboxExtractedDocumentText } from './inboxDocumentText';
 import { resolvePaperFiling } from './paperFolderService';
 import { formatPaperFilingInstruction } from './paperFolderDisplayService';
 import { getCachedSetup } from './persistenceService';
+import type { DocumentFieldFillConfirmRow } from '../types/documentFieldFillConfirm';
 import type { AppLanguage, ClassifiedDocumentKind, InboxItem, WorkflowResult } from '../types/models';
 import {
   buildDocumentWorkTruthAssistContextLines,
@@ -217,6 +218,7 @@ export function buildInboxDocumentAssistant(
   item: InboxItem,
   workflow?: WorkflowResult | null,
   lang: AppLanguage = getCachedSetup()?.language ?? 'de',
+  options?: { sessionFillConfirmRows?: readonly DocumentFieldFillConfirmRow[] | null },
 ): InboxDocumentAssistant {
   const recognizedText = getInboxExtractedDocumentText(item);
   const summary = buildDocumentUnderstandingSummary(item, {
@@ -303,6 +305,7 @@ export function buildInboxDocumentAssistant(
   const truth = buildDocumentWorkTruthViewForInboxItem({
     item,
     liveWorkflow: workflow ?? null,
+    sessionFillConfirmRows: options?.sessionFillConfirmRows ?? null,
   });
   const truthLines = truth ? buildDocumentWorkTruthAssistContextLines(truth) : null;
 

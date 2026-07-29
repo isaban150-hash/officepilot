@@ -47,6 +47,15 @@ export type DocumentWorkTruthUnresolvedConflict = {
 };
 
 /**
+ * Confirmed Fill-Confirm fields without a typed DWR slot (session only).
+ * Prefer over OCR / structured hints in Assist prompts.
+ */
+export type DocumentWorkTruthSessionExtraFact = {
+  label: string;
+  value: string;
+};
+
+/**
  * Ephemeral resolved document truth — never persist.
  * Not a WorkflowResult; display / assist context only.
  */
@@ -59,4 +68,9 @@ export type DocumentWorkTruthView = {
   slots: DocumentWorkTruthResolvedSlot[];
   unresolvedConflicts: DocumentWorkTruthUnresolvedConflict[];
   ignoredUnknownSlotIds: string[];
+  /**
+   * DOCUMENT-ASSIST-02A — session Fill-Confirm facts without DWR slots.
+   * Always present (may be empty). Never persisted.
+   */
+  sessionConfirmedExtraFacts: DocumentWorkTruthSessionExtraFact[];
 };

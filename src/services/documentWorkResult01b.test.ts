@@ -592,8 +592,9 @@ describe('DOCUMENT-WORK-RESULT-01B', () => {
       const ctxA = buildDocumentAiContextFromInbox(item, { liveWorkflow: workflow });
       expect(ctxA.documentWorkTruthFactLines?.join('\n')).toMatch(/Nur Dokument A/);
       const prompt = buildDocumentAiPrompt('Was ist die Gegenpartei?', ctxA, 'de');
-      expect(prompt).toMatch(/Aufgelöste Dokumentwahrheit/);
+      expect(prompt).toMatch(/BESTÄTIGTE NUTZERDATEN|DocumentWorkTruth/);
       expect(prompt).toMatch(/Nur Dokument A/);
+      expect(ctxA.confirmedUserFactLines?.join('\n')).toMatch(/Nur Dokument A/);
 
       const otherCase = getDocumentCase('HOTEL-01');
       const otherObs = runStablePipeline(otherCase);

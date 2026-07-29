@@ -1054,7 +1054,12 @@ export function EingangDetailPage() {
   const freeQuestionPanel = (
     <DocumentFreeQuestionPanel
       key={`document-free-question-${assistSessionKey}`}
-      source={{ type: 'inbox', item, liveWorkflow: workflow }}
+      source={{
+        type: 'inbox',
+        item,
+        liveWorkflow: workflow,
+        sessionFillConfirmRows: fillConfirmRows,
+      }}
       testIdPrefix="document-free-question"
       onFieldStatementProposal={(statement) => {
         freeTextBridgeSeqRef.current += 1;
@@ -1126,6 +1131,7 @@ export function EingangDetailPage() {
       onNextDocument={goBack}
       moreOptionsContent={moreOptionsContent}
       translate={translate}
+      sessionFillConfirmRows={fillConfirmRows}
     />
   );
 
@@ -1146,6 +1152,7 @@ export function EingangDetailPage() {
         language={setup.language}
         compactForContractWorkspace={prioritizeContractWorkspace}
         showChangeType
+        sessionFillConfirmRows={fillConfirmRows}
         onChangeType={() => {
           setMoreOptionsExpanded(true);
           setExpandedSections((current) => ({ ...current, technical: true }));

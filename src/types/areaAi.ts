@@ -59,6 +59,17 @@ export interface DocumentAiContext {
   documentWorkTruthFactLines?: string[];
   /** Unresolved overlay conflicts — must not be treated as decided. */
   documentWorkTruthConflictLines?: string[];
+  /**
+   * DOCUMENT-ASSIST-02A — user-confirmed fact lines only (Fill-Confirm + overlay).
+   * Highest prompt priority; OCR must not override these.
+   */
+  confirmedUserFactLines?: string[];
+  /** True when a confirmed user value covers amount — suppress OCR amountHint. */
+  suppressAmountHint?: boolean;
+  /** True when a confirmed user value covers deadline — suppress structured OCR deadline. */
+  suppressStructuredDeadline?: boolean;
+  /** True when a confirmed user value covers sender/counterparty. */
+  suppressIssuerHint?: boolean;
 }
 
 export interface VorgangAiContext {

@@ -30,7 +30,32 @@ export type ResolveDocumentWorkResultInput = {
    * (empty overlay, source live_merged).
    */
   inboxItemId?: string;
+  /**
+   * DOCUMENT-ASSIST-02A — ephemeral Fill-Confirm / session overlay.
+   * Wins over stored overlay for the same slotId. Not persisted.
+   */
+  sessionOverlayEntries?: DocumentWorkResultOverlayEntry[] | null;
+  /** Confirmed Fill-Confirm fields without typed slots (pass-through onto TruthView). */
+  sessionConfirmedExtraFacts?: Array<{ label: string; value: string }> | null;
 };
+
+/**
+ * Merge stored + session overlay. Session entry replaces the same slotId.
+ */
+export function mergeDocumentWorkResultOverlayWithSession(
+  stored: DocumentWorkResultOverlayEntry[],
+  session: DocumentWorkResultOverlayEntry[] | null | undefined,
+): DocumentWorkResultOverlayEntry[] {
+  if (!session || session.length === 0) return cloneJson(stored);
+  const bySlot = new Map<string, DocumentWorkResultOverlayEntry>();
+  for (const entry of stored) {
+    bySlot.set(entry.slotId, cloneJson(entry));
+  }
+  for (const entry of session) {
+    bySlot.set(entry.slotId, cloneJson(entry));
+  }
+  return Array.from(bySlot.values());
+}
 
 function buildConflictLine(
   handlerConflictLabel: string,
@@ -70,12 +95,6 @@ export function buildDocumentWorkTruthAssistContextLines(
   const factLines: string[] = [];
   const conflictSlotIds = new Set(truth.unresolvedConflicts.map((c) => c.slotId));
 
-  const pushFact = (label: string, value: string | undefined, provenance?: string) => {
-    if (!value?.trim()) return;
-    const suffix = provenance ? ` [${provenance}]` : '';
-    factLines.push(`${label}: ${value.trim()}${suffix}`);
-  };
-
   const slotProvenance = (slotId: string): string | undefined => {
     const slot = truth.slots.find((entry) => entry.slotId === slotId);
     if (!slot) return undefined;
@@ -86,16 +105,35 @@ export function buildDocumentWorkTruthAssistContextLines(
     return undefined;
   };
 
+  // Confirmed / corrected first (priority for Assist prompts).
+  const confirmedFirst: string[] = [];
+  const otherFacts: string[] = [];
+
+  const pushOrdered = (
+    label: string,
+    value: string | undefined,
+    provenance?: string,
+  ) => {
+    if (!value?.trim()) return;
+    const suffix = provenance ? ` [${provenance}]` : '';
+    const line = `${label}: ${value.trim()}${suffix}`;
+    if (provenance === 'Nutzerbestätigung' || provenance === 'Nutzerkorrektur') {
+      confirmedFirst.push(line);
+    } else {
+      otherFacts.push(line);
+    }
+  };
+
   if (bi) {
     if (!conflictSlotIds.has('facts.parties.counterparty')) {
-      pushFact(
+      pushOrdered(
         'Gegenpartei',
         bi.facts.parties.counterparty?.name,
         slotProvenance('facts.parties.counterparty'),
       );
     }
     if (!conflictSlotIds.has('facts.parties.ownCompany')) {
-      pushFact(
+      pushOrdered(
         'Eigener Betrieb',
         bi.facts.parties.ownCompany?.name,
         slotProvenance('facts.parties.ownCompany'),
@@ -106,37 +144,40 @@ export function buildDocumentWorkTruthAssistContextLines(
       const moneyLabel =
         money?.amountFormatted ??
         (money?.amount != null ? `${money.amount} ${money.currency ?? 'EUR'}` : money?.label);
-      pushFact('Betrag', moneyLabel, slotProvenance('facts.money.0'));
+      pushOrdered('Betrag', moneyLabel, slotProvenance('facts.money.0'));
     }
     if (!conflictSlotIds.has('facts.timeline.deadline')) {
-      pushFact(
+      pushOrdered(
         'Frist',
         bi.facts.timeline.deadline?.value,
         slotProvenance('facts.timeline.deadline'),
       );
     }
     if (!conflictSlotIds.has('operational.nextStep')) {
-      pushFact('Nächster Schritt', bi.operational.nextStep, slotProvenance('operational.nextStep'));
+      pushOrdered(
+        'Nächster Schritt',
+        bi.operational.nextStep,
+        slotProvenance('operational.nextStep'),
+      );
     }
     if (!conflictSlotIds.has('operational.confirmRequirement')) {
-      pushFact(
+      pushOrdered(
         'Bestätigungserfordernis',
         bi.operational.confirmRequirement,
         slotProvenance('operational.confirmRequirement'),
       );
     }
     if (!conflictSlotIds.has('meaning.summary')) {
-      pushFact('Zusammenfassung', bi.meaning.summary, slotProvenance('meaning.summary'));
+      pushOrdered('Zusammenfassung', bi.meaning.summary, slotProvenance('meaning.summary'));
     }
   }
 
-  // Discarded slots must not appear as valid facts (already skipped via empty BI fields).
-  for (const slot of truth.slots) {
-    if (slot.provenance === 'discarded') {
-      // Explicit exclusion note only when needed for assist clarity — omit positive fact.
-      continue;
-    }
+  for (const extra of truth.sessionConfirmedExtraFacts ?? []) {
+    if (!extra.value?.trim()) continue;
+    confirmedFirst.push(`${extra.label}: ${extra.value.trim()} [Nutzerbestätigung]`);
   }
+
+  factLines.push(...confirmedFirst, ...otherFacts);
 
   const conflictLines = buildDocumentWorkTruthConflictDisplayLines(truth).map(
     (line) => `UNGELÖSTER KONFLIKT: ${line}`,
@@ -258,14 +299,20 @@ export function resolveDocumentWorkResult(
     inboxItemId = dwr?.inboxItemId ?? input.inboxItemId ?? liveBi.sourceDocument.sourceDocumentId;
     analysisVersion = dwr?.analysisVersion ?? 'live';
     sourceFingerprint = dwr?.sourceFingerprint ?? 'live';
-    overlay = dwr ? cloneJson(dwr.overlay) : [];
+    overlay = mergeDocumentWorkResultOverlayWithSession(
+      dwr ? dwr.overlay : [],
+      input.sessionOverlayEntries,
+    );
   } else if (dwr?.businessInterpretation) {
     source = 'snapshot';
     baseBi = cloneBusinessInterpretationForTruth(dwr.businessInterpretation);
     inboxItemId = dwr.inboxItemId;
     analysisVersion = dwr.analysisVersion;
     sourceFingerprint = dwr.sourceFingerprint;
-    overlay = cloneJson(dwr.overlay);
+    overlay = mergeDocumentWorkResultOverlayWithSession(
+      dwr.overlay,
+      input.sessionOverlayEntries,
+    );
   } else {
     return null;
   }
@@ -287,6 +334,8 @@ export function resolveDocumentWorkResult(
     );
   }
 
+  const sessionConfirmedExtraFacts = cloneJson(input.sessionConfirmedExtraFacts ?? []);
+
   return {
     inboxItemId,
     analysisVersion,
@@ -296,5 +345,6 @@ export function resolveDocumentWorkResult(
     slots,
     unresolvedConflicts,
     ignoredUnknownSlotIds,
+    sessionConfirmedExtraFacts,
   };
 }

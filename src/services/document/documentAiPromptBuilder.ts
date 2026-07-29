@@ -26,6 +26,12 @@ const ANSWER_FORMAT_RULES = `ANTWORTFORMAT (verbindlich):
 Gib ausschließlich ein JSON-Objekt in genau diesem Schema zurück (kein Text außerhalb):
 {"directAnswer":"...","explanation":"..."}
 
+WAHRHEITS-PRIORITÄT (verbindlich, höchste zuerst):
+1. Bestätigte Nutzerdaten (Nutzerbestätigung/Nutzerkorrektur) — niemals durch OCR oder KI-Schätzung überschreiben.
+2. Aufgelöste DocumentWorkTruth (übrige TruthView-Fakten ohne Konflikt).
+3. Strukturierte Extraktion (Frist/Betrag/Sender nur wenn nicht durch 1 abgedeckt).
+4. OCR-Text ausschließlich als Beleg/Zitatgrundlage — nie als Korrektur bestätigter Fakten.
+
 CLAIM-STUFEN für Frist-, Zahlungs- und Reaktionsfragen (verbindlich):
 Stufe 1 — Nennung (wenn Datum/Betrag/Hinweis belegt ist):
 - „Im Dokument wird der 29.07.2026 genannt.“
@@ -47,6 +53,7 @@ Evidence:
 - issueDate/documentDate allein sind KEINE Frist.
 - Ein Datum nur irgendwo im OCR-Text ist zunächst nur Stufe 1 (Nennung).
 - Stufe 2 nur bei klarer Zahlungs-/Reaktions-/Einreichungsaufforderung plus plausibler Frist-Evidence (deadline/validUntil/Frist).
+- Wenn eine Nutzerbestätigung für Frist/Betrag/Absender vorliegt: diese Werte verwenden; OCR-Abweichungen erwähnen höchstens als Beleghinweis, nie als Korrektur.
 
 Zitate:
 - Dokumentstellen nur paraphrasieren.
@@ -80,6 +87,13 @@ function evidenceLines(context: DocumentAiContext): string[] {
   ];
 }
 
+function nonConfirmedTruthLines(context: DocumentAiContext): string[] | undefined {
+  const confirmed = new Set(context.confirmedUserFactLines ?? []);
+  const all = context.documentWorkTruthFactLines ?? [];
+  const rest = all.filter((line) => !confirmed.has(line));
+  return rest.length > 0 ? rest : undefined;
+}
+
 export function buildDocumentAiPrompt(
   question: string,
   context: DocumentAiContext,
@@ -99,16 +113,47 @@ export function buildDocumentAiPrompt(
   const sections = [
     `Quelle: ${context.sourceType === 'inbox' ? 'Eingangsschreiben' : 'Archivdokument'}`,
     `Titel: ${sanitizeAiText(context.title)}`,
-    `Aussteller/Sender: ${sanitizeAiText(context.issuerOrSender)}`,
-    `Kategorie: ${sanitizeAiText(context.category)}`,
-    context.classifiedKind ? `Dokumentart: ${sanitizeAiText(context.classifiedKind)}` : undefined,
+    // 1) Bestätigte Nutzerdaten — highest priority
+    context.confirmedUserFactLines && context.confirmedUserFactLines.length > 0
+      ? formatSection(
+          '1. BESTÄTIGTE NUTZERDATEN (verbindlich — OCR darf diese nicht überschreiben)',
+          context.confirmedUserFactLines.map((line) => sanitizeAiText(line)),
+        )
+      : undefined,
+    // 2) Remaining DocumentWorkTruth
+    nonConfirmedTruthLines(context)
+      ? formatSection(
+          '2. Aufgelöste DocumentWorkTruth (ohne Konflikt; nachrangig zu bestätigten Nutzerdaten)',
+          nonConfirmedTruthLines(context)!.map((line) => sanitizeAiText(line)),
+        )
+      : undefined,
+    context.documentWorkTruthConflictLines && context.documentWorkTruthConflictLines.length > 0
+      ? formatSection(
+          'UNGELÖSTE KONFLIKTE (nicht als entschieden darstellen; Nutzerwert und neue Analyse prüfen)',
+          context.documentWorkTruthConflictLines.map((line) => sanitizeAiText(line)),
+        )
+      : undefined,
     formatSection('Evidence-Hinweise (verbindlich beachten)', evidenceLines(context)),
-    context.deadline ? `Frist (strukturiert): ${sanitizeAiText(context.deadline)}` : undefined,
+    // 3) Structured extraction — omit when suppressed by confirmed user facts
+    !context.suppressIssuerHint
+      ? `Aussteller/Sender (strukturiert, prüfen): ${sanitizeAiText(context.issuerOrSender)}`
+      : `Aussteller/Sender: siehe bestätigte Nutzerdaten`,
+    context.classifiedKind ? `Dokumentart: ${sanitizeAiText(context.classifiedKind)}` : undefined,
+    `Kategorie: ${sanitizeAiText(context.category)}`,
+    !context.suppressStructuredDeadline && context.deadline
+      ? `Frist (strukturiert): ${sanitizeAiText(context.deadline)}`
+      : context.suppressStructuredDeadline
+        ? `Frist: siehe bestätigte Nutzerdaten`
+        : undefined,
     context.validUntil ? `Gültig bis (strukturiert): ${sanitizeAiText(context.validUntil)}` : undefined,
     context.issueDate
       ? `Ausstellungsdatum (keine Frist allein): ${sanitizeAiText(context.issueDate)}`
       : undefined,
-    context.amountHint ? `Erkannter Betrag (prüfen): ${sanitizeAiText(context.amountHint)}` : undefined,
+    !context.suppressAmountHint && context.amountHint
+      ? `Erkannter Betrag (prüfen): ${sanitizeAiText(context.amountHint)}`
+      : context.suppressAmountHint
+        ? `Betrag: siehe bestätigte Nutzerdaten`
+        : undefined,
     context.linkedVorgangId && context.linkedVorgangTitle
       ? `Bestätigte Vorgangsverknüpfung: ${sanitizeAiText(context.linkedVorgangTitle)} (${sanitizeAiText(context.linkedVorgangId)})`
       : undefined,
@@ -119,31 +164,23 @@ export function buildDocumentAiPrompt(
       ? `Papierablage: ${sanitizeAiText(context.paperFolderLabel)}`
       : undefined,
     context.letterSummary
-      ? formatSection('Brief-Zusammenfassung (hilfweise, prüfen)', [
+      ? formatSection('Brief-Zusammenfassung (hilfweise, nachrangig zu bestätigten Fakten)', [
           `Inhalt: ${context.letterSummary.about}`,
           `Frist: ${context.letterSummary.deadline}`,
           `Nächste Schritte: ${context.letterSummary.nextSteps}`,
         ])
       : undefined,
-    formatSection('Erkannte Daten (nicht automatisch als sicher annehmen)', context.recognizedDataLines),
+    formatSection(
+      '3. Strukturierte Extraktion / erkannte Daten (nicht automatisch als sicher; weicht ab von bestätigten Nutzerdaten → Nutzerdaten gewinnen)',
+      context.recognizedDataLines,
+    ),
+    // 4) OCR evidence only
     context.recognizedText
-      ? `Erkannter Text (Auszug):\n${context.recognizedText}`
+      ? `4. OCR-Text (nur Beleg — niemals bestätigte Nutzerdaten überschreiben):\n${context.recognizedText}`
       : undefined,
     formatSection('Fehlende Unterlagen', context.missingDocuments),
     formatSection('Unsichere Felder', scopedNotes.uncertainFieldNotes),
     formatSection('Fehlende Informationen', scopedNotes.missingFieldNotes),
-    context.documentWorkTruthFactLines && context.documentWorkTruthFactLines.length > 0
-      ? formatSection(
-          'Aufgelöste Dokumentwahrheit (Nutzerbestätigung/Korrektur bevorzugen, wenn kein Konflikt)',
-          context.documentWorkTruthFactLines.map((line) => sanitizeAiText(line)),
-        )
-      : undefined,
-    context.documentWorkTruthConflictLines && context.documentWorkTruthConflictLines.length > 0
-      ? formatSection(
-          'UNGELÖSTE KONFLIKTE (nicht als entschieden darstellen; Nutzerwert und neue Analyse prüfen)',
-          context.documentWorkTruthConflictLines.map((line) => sanitizeAiText(line)),
-        )
-      : undefined,
   ].filter(Boolean);
 
   const companyBlock = includeCompany
@@ -162,5 +199,5 @@ ${sections.join('\n\n')}
 NUTZERFRAGE:
 ${question}
 
-Antworte nur mit dem JSON-Objekt. Halte directAnswer kurz; explanation in 1–5 Sätzen. Keine wörtlichen Zitate. Keine Nutzerpflicht behaupten.`;
+Antworte nur mit dem JSON-Objekt. Halte directAnswer kurz; explanation in 1–5 Sätzen. Keine wörtlichen Zitate. Keine Nutzerpflicht behaupten. Bestätigte Nutzerdaten haben Vorrang vor OCR.`;
 }

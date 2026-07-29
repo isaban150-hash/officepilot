@@ -11,6 +11,7 @@ import {
 import { buildDocumentGuidance } from '../../services/documentGuidanceService';
 import { getDocumentDisplayLabelKey } from '../../services/documentDisplayLabelService';
 import type { InboxItem, WorkflowResult, AppLanguage } from '../../types/models';
+import type { DocumentFieldFillConfirmRow } from '../../types/documentFieldFillConfirm';
 
 const STEUERBERATER_KEYS: Record<InboxDocumentAssistant['steuerberaterStatus'], TranslationKey> = {
   mark: 'docAssistant.steuerberater.mark',
@@ -27,6 +28,8 @@ interface DocumentAssistantPanelProps {
   onChangeType?: () => void;
   /** Compact entry for contract workspace only — must be set explicitly by the page. */
   compactForContractWorkspace?: boolean;
+  /** Session Fill-Confirm rows — same TruthView as Overview / Free-Question. */
+  sessionFillConfirmRows?: DocumentFieldFillConfirmRow[] | null;
 }
 
 export function DocumentAssistantPanel({
@@ -37,14 +40,21 @@ export function DocumentAssistantPanel({
   showChangeType = false,
   onChangeType,
   compactForContractWorkspace = false,
+  sessionFillConfirmRows = null,
 }: DocumentAssistantPanelProps) {
   const assistant = useMemo(
-    () => buildInboxDocumentAssistant(item, workflow, language),
-    [item, workflow, language],
+    () =>
+      buildInboxDocumentAssistant(item, workflow, language, {
+        sessionFillConfirmRows,
+      }),
+    [item, workflow, language, sessionFillConfirmRows],
   );
   const guidance = useMemo(
-    () => buildDocumentGuidance(item, workflow, language),
-    [item, workflow, language],
+    () =>
+      buildDocumentGuidance(item, workflow, language, {
+        sessionFillConfirmRows,
+      }),
+    [item, workflow, language, sessionFillConfirmRows],
   );
   const [detailsExpanded, setDetailsExpanded] = useState(false);
   const kind = item.classifiedKind ?? workflow?.classifiedKind;

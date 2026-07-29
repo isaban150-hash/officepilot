@@ -18,6 +18,7 @@ import type {
   WorkflowResult,
   WorkflowResultExecution,
 } from '../../../types/models';
+import type { DocumentFieldFillConfirmRow } from '../../../types/documentFieldFillConfirm';
 import type { EnhancedDetectedOrderPosition } from '../../../types/documentIntelligence';
 import type { TranslationKey } from '../../../i18n';
 import { DocumentReviewChecks } from './DocumentReviewChecks';
@@ -44,6 +45,8 @@ interface DocumentReviewExperienceProps {
   onNextDocument: () => void;
   moreOptionsContent: ReactNode;
   translate: (key: TranslationKey) => string;
+  /** Session Fill-Confirm rows — same TruthView as Assist / Free-Question. */
+  sessionFillConfirmRows?: DocumentFieldFillConfirmRow[] | null;
 }
 
 export function DocumentReviewExperience({
@@ -62,6 +65,7 @@ export function DocumentReviewExperience({
   onNextDocument,
   moreOptionsContent,
   translate,
+  sessionFillConfirmRows = null,
 }: DocumentReviewExperienceProps) {
   const hero = buildDocumentReviewHero(item, workflow);
   const recommendations = buildDocumentReviewRecommendations(item, workflow);
@@ -72,10 +76,11 @@ export function DocumentReviewExperience({
     ? buildDocumentReviewSuccessSteps(executionResult)
     : [];
 
-  // Display truth (overlay applied). Actions still use live `workflow` only.
+  // Display truth (overlay + session Fill-Confirm). Actions still use live `workflow` only.
   const truth = buildDocumentWorkTruthViewForInboxItem({
     item,
     liveWorkflow: workflow,
+    sessionFillConfirmRows,
   });
   const overview = buildOperationalOverviewView(workflow, {
     senderFallback: item.sender,

@@ -32,10 +32,12 @@ export {
 } from './documentWorkResultMergeService';
 export {
   resolveDocumentWorkResult,
+  mergeDocumentWorkResultOverlayWithSession,
   buildDocumentWorkTruthAssistContextLines,
   buildDocumentWorkTruthConflictDisplayLines,
 } from './documentWorkResultResolveService';
 export { buildDocumentWorkTruthViewForInboxItem } from './documentWorkResultTruthOrchestration';
+export { mapFillConfirmRowsToSessionTruthOverlay } from './documentFieldFillConfirmTruthBridge';
 export {
   DOCUMENT_WORK_RESULT_SLOT_HANDLERS,
   getDocumentWorkResultSlotHandler,

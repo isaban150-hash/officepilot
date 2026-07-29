@@ -16,6 +16,8 @@ import { resolvePaperFilingFromInbox } from './paperFolderService';
 import { buildDocumentReviewRecommendations } from './documentReviewViewService';
 import { getStorageRecommendationLevelKey } from './storageRecommendationPresentationService';
 import { requiresCustomerAssignment } from './documentResultPresentationService';
+import { buildDocumentWorkTruthViewForInboxItem } from './documentWorkResultTruthOrchestration';
+import type { DocumentFieldFillConfirmRow } from '../types/documentFieldFillConfirm';
 import type { StorageRecommendationLevel } from '../types/storageRecommendation';
 import type {
   AppLanguage,
@@ -346,8 +348,9 @@ export function buildDocumentGuidance(
   item: InboxItem,
   workflow?: WorkflowResult | null,
   lang: AppLanguage = getCachedSetup()?.language ?? 'de',
+  options?: { sessionFillConfirmRows?: readonly DocumentFieldFillConfirmRow[] | null },
 ): DocumentGuidance {
-  const assistant = buildInboxDocumentAssistant(item, workflow, lang);
+  const assistant = buildInboxDocumentAssistant(item, workflow, lang, options);
   const letter = resolveLetter(item, workflow);
   const recognizedText = getInboxExtractedDocumentText(item);
   const understanding =
@@ -358,7 +361,16 @@ export function buildDocumentGuidance(
     });
   const kind = resolveKind(item, workflow);
   const paper = resolvePaperFilingFromInbox(item);
-  const hasDeadline = hasDeadlineSignal(item, understanding.deadline, letter);
+
+  const truth = buildDocumentWorkTruthViewForInboxItem({
+    item,
+    liveWorkflow: workflow ?? null,
+    sessionFillConfirmRows: options?.sessionFillConfirmRows ?? null,
+  });
+  const truthDeadline = truth?.businessInterpretation?.facts.timeline.deadline?.value?.trim();
+  const understandingDeadline = truthDeadline || understanding.deadline;
+
+  const hasDeadline = hasDeadlineSignal(item, understandingDeadline, letter);
   const { actions, usedWorkflow } = buildActions(item, kind, workflow, understanding);
 
   return {
@@ -369,7 +381,7 @@ export function buildDocumentGuidance(
     ),
     whyReceived: buildWhy(item, kind, letter),
     mustAct: buildMustAct(item, kind, assistant.actionSteps, hasDeadline),
-    deadline: buildDeadline(item, understanding.deadline, letter),
+    deadline: buildDeadline(item, understandingDeadline, letter),
     mustReply: buildMustReply(item, kind, hasDeadline),
     retain: buildRetain(assistant.originalGuidance),
     paperFolder: buildPaperFolder(paper.skipPhysicalFiling, assistant.paperFolderLabel),
