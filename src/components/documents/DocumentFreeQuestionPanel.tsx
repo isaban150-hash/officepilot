@@ -5,10 +5,11 @@ import { useApp } from '../../context/AppContext';
 import { isAiProviderConfigured } from '../../services/ai/aiRequestRunner';
 import {
   askDocumentAi,
+  appendDocumentAiConversationTurn,
   type DocumentAiSource,
 } from '../../services/document/documentAiService';
 import { parseFreeTextFieldBridge } from '../../services/documentFieldFillFreeTextBridgeService';
-import type { AreaAiAnswer } from '../../types/areaAi';
+import type { AreaAiAnswer, DocumentAiPriorTurn } from '../../types/areaAi';
 import type { DocumentFieldFillFreeTextBridgeParseResult } from '../../types/documentFieldFillFreeTextBridge';
 
 interface DocumentFreeQuestionPanelProps {
@@ -27,6 +28,23 @@ function sourceDocumentKey(source: DocumentAiSource): string {
   return source.type === 'inbox' ? source.item.id : source.document.id;
 }
 
+function assistantTurnFromAnswer(answer: AreaAiAnswer): DocumentAiPriorTurn {
+  const text = [answer.directAnswer, answer.explanation].filter(Boolean).join(' ').trim()
+    || answer.text.trim();
+  return {
+    role: 'assistant',
+    text,
+    ...(answer.uncertain ? { uncertain: true as const } : {}),
+    ...(answer.uncertaintyNotes && answer.uncertaintyNotes.length > 0
+      ? { uncertaintyNotes: [...answer.uncertaintyNotes] }
+      : {}),
+  };
+}
+
+/**
+ * Local session-only free questions for one document.
+ * DOCUMENT-ASSIST-02B: ephemeral priorTurns in React state only — never persisted.
+ */
 export function DocumentFreeQuestionPanel({
   source,
   testIdPrefix = 'document-free-question',
@@ -37,6 +55,8 @@ export function DocumentFreeQuestionPanel({
   const [loading, setLoading] = useState(false);
   const [answer, setAnswer] = useState<AreaAiAnswer | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** Ephemeral dialog history for this documentKey only. */
+  const [priorTurns, setPriorTurns] = useState<DocumentAiPriorTurn[]>([]);
   const aiConfigured = isAiProviderConfigured();
   /** Ignores late AI results after document switch or newer ask. */
   const requestGenerationRef = useRef(0);
@@ -48,6 +68,7 @@ export function DocumentFreeQuestionPanel({
     setLoading(false);
     setAnswer(null);
     setError(null);
+    setPriorTurns([]);
   }, [documentKey]);
 
   const handleAsk = async () => {
@@ -71,14 +92,27 @@ export function DocumentFreeQuestionPanel({
     }
 
     const requestGeneration = ++requestGenerationRef.current;
+    const turnsSnapshot = priorTurns.map((turn) => ({ ...turn }));
     setLoading(true);
     setError(null);
     try {
-      const result = await askDocumentAi({ source, question: trimmed });
+      const result = await askDocumentAi({
+        source,
+        question: trimmed,
+        priorTurns: turnsSnapshot,
+      });
       if (requestGeneration !== requestGenerationRef.current) {
         return;
       }
       setAnswer(result);
+      setPriorTurns((current) => {
+        let next = appendDocumentAiConversationTurn(current, {
+          role: 'user',
+          text: trimmed,
+        });
+        next = appendDocumentAiConversationTurn(next, assistantTurnFromAnswer(result));
+        return next;
+      });
       if (result.source === 'unavailable' && result.errorCode === 'invalid_prompt') {
         setError(result.text);
       }

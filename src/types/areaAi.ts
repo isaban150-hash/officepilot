@@ -23,6 +23,19 @@ export interface AreaAiAnswer {
   uncertaintyNotes?: string[];
 }
 
+/**
+ * DOCUMENT-ASSIST-02B — ephemeral dialog turn (never persist, never TruthView).
+ */
+export type DocumentAiPriorTurnRole = 'user' | 'assistant';
+
+export type DocumentAiPriorTurn = {
+  role: DocumentAiPriorTurnRole;
+  text: string;
+  /** Assistant turns: prior answer was uncertain — do not harden on follow-up. */
+  uncertain?: boolean;
+  uncertaintyNotes?: string[];
+};
+
 export interface DocumentAiContext {
   sourceType: 'document' | 'inbox';
   title: string;

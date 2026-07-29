@@ -3,13 +3,17 @@ import type { AppLanguage } from '../../types/models';
 import { AI_QA_SYSTEM_RULES } from '../ai/aiGuardrails';
 import { getCompanyProfile } from '../companyProfileService';
 import { sanitizeAiText } from '../ai/aiTextSanitizer';
-import type { DocumentAiContext } from '../../types/areaAi';
+import type { DocumentAiContext, DocumentAiPriorTurn } from '../../types/areaAi';
 import { applyQuestionScopedQualityNotes } from './documentAiQuestionIntent';
 import {
   canClaimDocumentDemandWithDate,
   hasDemandEvidence,
   hasStructuredDeadlineEvidence,
 } from './documentAiEvidence';
+import {
+  formatDocumentAiPriorTurnsForPrompt,
+  normalizeDocumentAiPriorTurns,
+} from './documentAiConversationTurns';
 
 function formatSection(title: string, lines: string[] | undefined): string {
   if (!lines || lines.length === 0) return `${title}:\n- (keine Angaben)`;
@@ -27,10 +31,18 @@ Gib ausschließlich ein JSON-Objekt in genau diesem Schema zurück (kein Text au
 {"directAnswer":"...","explanation":"..."}
 
 WAHRHEITS-PRIORITÄT (verbindlich, höchste zuerst):
-1. Bestätigte Nutzerdaten (Nutzerbestätigung/Nutzerkorrektur) — niemals durch OCR oder KI-Schätzung überschreiben.
+1. Bestätigte Nutzerdaten (Nutzerbestätigung/Nutzerkorrektur) — niemals durch OCR, KI-Schätzung oder Chat überschreiben.
 2. Aufgelöste DocumentWorkTruth (übrige TruthView-Fakten ohne Konflikt).
 3. Strukturierte Extraktion (Frist/Betrag/Sender nur wenn nicht durch 1 abgedeckt).
 4. OCR-Text ausschließlich als Beleg/Zitatgrundlage — nie als Korrektur bestätigter Fakten.
+5. Gesprächsverlauf nur als Dialogkontext — niemals als bestätigte Dokumentenwahrheit.
+
+GESPRÄCHSVERLAUF-REGELN (verbindlich):
+- Nutzeraussagen im Chat sind unbestätigt, sofern sie nicht zugleich als bestätigte Nutzerdaten (TruthView) vorliegen.
+- Frühere KI-Antworten können unsicher sein; mit [UNSICHER] gekennzeichnete Aussagen nicht zu sicheren Fakten machen.
+- Vermutungen („vermutlich“, „möglich“) bei Folgefragen nicht verfestigen.
+- Beispiel: „Ich glaube, ich habe 300 Euro bezahlt.“ ist Dialogkontext, keine bestätigte Zahlung.
+- TruthView hat immer Vorrang vor Chat.
 
 CLAIM-STUFEN für Frist-, Zahlungs- und Reaktionsfragen (verbindlich):
 Stufe 1 — Nennung (wenn Datum/Betrag/Hinweis belegt ist):
@@ -98,6 +110,7 @@ export function buildDocumentAiPrompt(
   question: string,
   context: DocumentAiContext,
   lang: AppLanguage = 'de',
+  options?: { priorTurns?: readonly DocumentAiPriorTurn[] | null },
 ): string {
   const includeCompany = questionNeedsCompanyContext(question);
   const companyLine = includeCompany
@@ -109,18 +122,18 @@ export function buildDocumentAiPrompt(
     : '';
 
   const scopedNotes = applyQuestionScopedQualityNotes(question, context, lang);
+  const priorTurns = normalizeDocumentAiPriorTurns(options?.priorTurns);
+  const priorLines = formatDocumentAiPriorTurnsForPrompt(priorTurns);
 
   const sections = [
     `Quelle: ${context.sourceType === 'inbox' ? 'Eingangsschreiben' : 'Archivdokument'}`,
     `Titel: ${sanitizeAiText(context.title)}`,
-    // 1) Bestätigte Nutzerdaten — highest priority
     context.confirmedUserFactLines && context.confirmedUserFactLines.length > 0
       ? formatSection(
-          '1. BESTÄTIGTE NUTZERDATEN (verbindlich — OCR darf diese nicht überschreiben)',
+          '1. BESTÄTIGTE NUTZERDATEN (verbindlich — OCR/Chat dürfen diese nicht überschreiben)',
           context.confirmedUserFactLines.map((line) => sanitizeAiText(line)),
         )
       : undefined,
-    // 2) Remaining DocumentWorkTruth
     nonConfirmedTruthLines(context)
       ? formatSection(
           '2. Aufgelöste DocumentWorkTruth (ohne Konflikt; nachrangig zu bestätigten Nutzerdaten)',
@@ -134,7 +147,6 @@ export function buildDocumentAiPrompt(
         )
       : undefined,
     formatSection('Evidence-Hinweise (verbindlich beachten)', evidenceLines(context)),
-    // 3) Structured extraction — omit when suppressed by confirmed user facts
     !context.suppressIssuerHint
       ? `Aussteller/Sender (strukturiert, prüfen): ${sanitizeAiText(context.issuerOrSender)}`
       : `Aussteller/Sender: siehe bestätigte Nutzerdaten`,
@@ -174,13 +186,18 @@ export function buildDocumentAiPrompt(
       '3. Strukturierte Extraktion / erkannte Daten (nicht automatisch als sicher; weicht ab von bestätigten Nutzerdaten → Nutzerdaten gewinnen)',
       context.recognizedDataLines,
     ),
-    // 4) OCR evidence only
     context.recognizedText
       ? `4. OCR-Text (nur Beleg — niemals bestätigte Nutzerdaten überschreiben):\n${context.recognizedText}`
       : undefined,
     formatSection('Fehlende Unterlagen', context.missingDocuments),
     formatSection('Unsichere Felder', scopedNotes.uncertainFieldNotes),
     formatSection('Fehlende Informationen', scopedNotes.missingFieldNotes),
+    priorLines.length > 0
+      ? formatSection(
+          '5. GESPRÄCHSVERLAUF (nur Dialogkontext — keine bestätigte Dokumentenwahrheit; Unsicherheiten erhalten; Vermutungen nicht verfestigen; TruthView hat Vorrang)',
+          priorLines.map((line) => sanitizeAiText(line)),
+        )
+      : undefined,
   ].filter(Boolean);
 
   const companyBlock = includeCompany
@@ -199,5 +216,5 @@ ${sections.join('\n\n')}
 NUTZERFRAGE:
 ${question}
 
-Antworte nur mit dem JSON-Objekt. Halte directAnswer kurz; explanation in 1–5 Sätzen. Keine wörtlichen Zitate. Keine Nutzerpflicht behaupten. Bestätigte Nutzerdaten haben Vorrang vor OCR.`;
+Antworte nur mit dem JSON-Objekt. Halte directAnswer kurz; explanation in 1–5 Sätzen. Keine wörtlichen Zitate. Keine Nutzerpflicht behaupten. Bestätigte Nutzerdaten haben Vorrang vor OCR und Chat.`;
 }

@@ -13,8 +13,21 @@ import {
 } from './documentAiAnswerPostCheck';
 import { detectDocumentNature } from './documentAiDocumentNature';
 import { filterUncertaintyNotesForQuestion } from './documentAiQuestionIntent';
+import {
+  appendDocumentAiConversationTurn,
+  buildDocumentAiPriorTurnsGuardText,
+  DOCUMENT_AI_MAX_PRIOR_ROUNDS,
+  DOCUMENT_AI_MAX_TURN_CHARS,
+  formatDocumentAiPriorTurnsForPrompt,
+  normalizeDocumentAiPriorTurns,
+} from './documentAiConversationTurns';
 import { t } from '../../i18n';
-import { AREA_AI_DISCLAIMER, type AreaAiAnswer, type DocumentAiContext } from '../../types/areaAi';
+import {
+  AREA_AI_DISCLAIMER,
+  type AreaAiAnswer,
+  type DocumentAiContext,
+  type DocumentAiPriorTurn,
+} from '../../types/areaAi';
 import type { DocumentFieldFillConfirmRow } from '../../types/documentFieldFillConfirm';
 import type { AppLanguage, CompanyDocument, InboxItem, WorkflowResult } from '../../types/models';
 
@@ -84,6 +97,8 @@ function collectAnswerUncertainty(
 export async function askDocumentAi(input: {
   source: DocumentAiSource;
   question: string;
+  /** DOCUMENT-ASSIST-02B — ephemeral prior turns (dialog only). */
+  priorTurns?: readonly DocumentAiPriorTurn[] | null;
 }): Promise<AreaAiAnswer> {
   const lang = getCachedSetup().language;
   const trimmedQuestion = input.question.trim();
@@ -95,9 +110,13 @@ export async function askDocumentAi(input: {
     );
   }
 
+  const priorTurns = normalizeDocumentAiPriorTurns(input.priorTurns);
   const context = buildContext(input.source);
-  const prompt = buildDocumentAiPrompt(trimmedQuestion, context, lang);
-  const allowedSourceText = buildAllowedFromContext(context);
+  const prompt = buildDocumentAiPrompt(trimmedQuestion, context, lang, { priorTurns });
+  const dialogGuardText = buildDocumentAiPriorTurnsGuardText(priorTurns);
+  const allowedSourceText = [buildAllowedFromContext(context), dialogGuardText]
+    .filter(Boolean)
+    .join('\n');
 
   const result = await runAiRequest({
     prompt,
@@ -165,4 +184,13 @@ export {
   parseDocumentAiAnswer,
   applyDocumentAiAnswerPostCheck,
   detectDocumentNature,
+};
+
+export {
+  normalizeDocumentAiPriorTurns,
+  buildDocumentAiPriorTurnsGuardText,
+  formatDocumentAiPriorTurnsForPrompt,
+  appendDocumentAiConversationTurn,
+  DOCUMENT_AI_MAX_PRIOR_ROUNDS,
+  DOCUMENT_AI_MAX_TURN_CHARS,
 };
