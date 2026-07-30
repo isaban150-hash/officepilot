@@ -1,3 +1,4 @@
+import { importInboxDocumentForTests } from './test/confirmFilingDecisionForTests';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -74,7 +75,7 @@ function mountDetail(documentId: string): Mount {
 }
 
 function importDoc(inbox = createFreistellungInbox()) {
-  const result = importInboxDocument(inbox, 'Test GmbH');
+  const result = importInboxDocumentForTests(inbox, 'Test GmbH');
   expect(result.success).toBe(true);
   if (!result.success) throw new Error('import failed');
   return result.document;
@@ -185,7 +186,7 @@ describe('DOC-WF-02B Single Open Action on DokumentDetailPage', () => {
   });
 
   it('sonstiger offener Grund: keine Reply-/Filing-Primary, nextStep sichtbar', () => {
-    const result = importInboxDocument(createDeadlineInbox(), 'Test GmbH');
+    const result = importInboxDocumentForTests(createDeadlineInbox(), 'Test GmbH');
     expect(result.success).toBe(true);
     if (!result.success) return;
     const doc = result.document;

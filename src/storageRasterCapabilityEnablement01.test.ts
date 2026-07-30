@@ -1,3 +1,4 @@
+import { importInboxDocumentForTests } from './test/confirmFilingDecisionForTests';
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildDocumentFileRepresentationPlan } from './services/documentFileRepresentationPlanService';
 import { buildDocumentFileTransformPlan } from './services/documentFileTransformPlanService';
@@ -134,7 +135,7 @@ describe('STORAGE-RASTER-CAPABILITY-ENABLEMENT-01', () => {
       });
       hydrateInboxStore([item]);
 
-      const imported = importInboxDocument(item, 'Test GmbH', {
+      const imported = importInboxDocumentForTests(item, 'Test GmbH', {
         transformPlan: transformPlan!,
       });
       expect(imported.success).toBe(true);

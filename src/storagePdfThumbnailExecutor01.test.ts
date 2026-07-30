@@ -1,3 +1,4 @@
+import { importInboxDocumentForTests } from './test/confirmFilingDecisionForTests';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as persistenceService from './services/persistenceService';
 import * as pdfDocumentService from './services/pdfDocumentService';
@@ -480,7 +481,7 @@ describe('STORAGE-PDF-THUMBNAIL-EXECUTOR-01', () => {
       });
       hydrateInboxStore([item]);
 
-      const imported = importInboxDocument(item, 'Test GmbH', {
+      const imported = importInboxDocumentForTests(item, 'Test GmbH', {
         transformPlan: businessPdfTransformPlan(),
       });
       expect(imported.success).toBe(true);

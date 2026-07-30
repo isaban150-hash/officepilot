@@ -1,3 +1,4 @@
+import { importInboxDocumentForTests } from '../test/confirmFilingDecisionForTests';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { MOCK_INBOX_ITEMS } from '../data/inboxMockData';
 import { DEFAULT_COMPANY_PROFILE } from '../data/companyProfileDefaults';
@@ -113,7 +114,7 @@ describe('officeActionService', () => {
     });
     hydrateInboxStore([item]);
 
-    const importResult = importInboxDocument(item, 'Test GmbH');
+    const importResult = importInboxDocumentForTests(item, 'Test GmbH');
     expect(importResult.success).toBe(true);
     if (importResult.success) {
       markInboxImportedToArchive(item.id, importResult.document.id);

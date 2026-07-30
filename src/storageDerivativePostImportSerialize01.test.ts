@@ -1,3 +1,4 @@
+import { importInboxDocumentForTests } from './test/confirmFilingDecisionForTests';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createDocumentFileRepresentationBinding } from './services/documentFileRepresentationBindingService';
 import {
@@ -189,7 +190,7 @@ describe('STORAGE-DERIVATIVE-POST-IMPORT-SERIALIZE-01', () => {
     });
     hydrateInboxStore([item]);
 
-    const imported = importInboxDocument(item, 'Test GmbH', {
+    const imported = importInboxDocumentForTests(item, 'Test GmbH', {
       transformPlan: imageToPdfTransformPlan(),
     });
     expect(imported.success).toBe(true);
@@ -358,7 +359,7 @@ describe('STORAGE-DERIVATIVE-POST-IMPORT-SERIALIZE-01', () => {
       ],
     };
 
-    const imported = importInboxDocument(item, 'Test GmbH', { transformPlan: legalPlan });
+    const imported = importInboxDocumentForTests(item, 'Test GmbH', { transformPlan: legalPlan });
     expect(imported.success).toBe(true);
     if (!imported.success) return;
 

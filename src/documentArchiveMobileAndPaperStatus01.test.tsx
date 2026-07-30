@@ -1,3 +1,4 @@
+import { importInboxDocumentForTests } from './test/confirmFilingDecisionForTests';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -166,7 +167,7 @@ describe('DOCUMENT-ARCHIVE-MOBILE-AND-PAPER-STATUS-01', () => {
     );
     const fileRef = stored.fileRef;
 
-    const result = importInboxDocument(createFreistellung({ fileRefId: fileRef.id }), 'Test GmbH');
+    const result = importInboxDocumentForTests(createFreistellung({ fileRefId: fileRef.id }), 'Test GmbH');
     expect(result.success).toBe(true);
     if (!result.success) return;
 
@@ -190,7 +191,7 @@ describe('DOCUMENT-ARCHIVE-MOBILE-AND-PAPER-STATUS-01', () => {
   });
 
   it('offene Frist bleibt nach Papierablage offen', () => {
-    const result = importInboxDocument(createLetterWithDeadline(), 'Test GmbH');
+    const result = importInboxDocumentForTests(createLetterWithDeadline(), 'Test GmbH');
     expect(result.success).toBe(true);
     if (!result.success) return;
 
@@ -204,7 +205,7 @@ describe('DOCUMENT-ARCHIVE-MOBILE-AND-PAPER-STATUS-01', () => {
 
   it('offene Aufgabe bleibt nach Papierablage offen', () => {
     const inbox = createFreistellung({ id: 'inbox-with-task' });
-    const result = importInboxDocument(inbox, 'Test GmbH');
+    const result = importInboxDocumentForTests(inbox, 'Test GmbH');
     expect(result.success).toBe(true);
     if (!result.success) return;
 
@@ -235,7 +236,7 @@ describe('DOCUMENT-ARCHIVE-MOBILE-AND-PAPER-STATUS-01', () => {
   });
 
   it('UI zeigt Papierstatus getrennt vom digitalen Status', () => {
-    const result = importInboxDocument(createFreistellung(), 'Test GmbH');
+    const result = importInboxDocumentForTests(createFreistellung(), 'Test GmbH');
     expect(result.success).toBe(true);
     if (!result.success) return;
 

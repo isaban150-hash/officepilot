@@ -1,3 +1,4 @@
+import { importInboxDocumentForTests } from './test/confirmFilingDecisionForTests';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
@@ -72,7 +73,7 @@ function mountSuccess(props: {
 }
 
 function importArchiveDoc() {
-  const result = importInboxDocument(createFreistellungInbox(), 'Test GmbH');
+  const result = importInboxDocumentForTests(createFreistellungInbox(), 'Test GmbH');
   expect(result.success).toBe(true);
   if (!result.success) throw new Error('import failed');
   return result.document;

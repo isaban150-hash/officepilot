@@ -1,3 +1,4 @@
+import { importInboxDocumentForTests } from '../test/confirmFilingDecisionForTests';
 import { describe, expect, it, beforeEach } from 'vitest';
 import { DEFAULT_SETUP } from '../data/mockData';
 import { computeFileContentHash } from './documentFileHashService';
@@ -149,7 +150,7 @@ describe('DOC-FOUNDATION-01 archive', () => {
       importSource: 'upload',
     });
     if (!intake.success || intake.duplicate) throw new Error('intake failed');
-    const result = importInboxDocument(intake.inboxItem, DEFAULT_SETUP.companyName);
+    const result = importInboxDocumentForTests(intake.inboxItem, DEFAULT_SETUP.companyName);
     expect(result.success).toBe(true);
     if (!result.success) return;
     expect(result.document.fileRefId).toBe(intake.fileRef.id);
@@ -209,7 +210,7 @@ describe('DOC-FOUNDATION-01 vorgang link', () => {
       importSource: 'upload',
     });
     if (!intake.success || intake.duplicate) throw new Error('intake failed');
-    const archived = importInboxDocument(intake.inboxItem, DEFAULT_SETUP.companyName);
+    const archived = importInboxDocumentForTests(intake.inboxItem, DEFAULT_SETUP.companyName);
     if (!archived.success) throw new Error('archive failed');
 
     attachCompanyDocumentToVorgang('v-1', archived.document, intake.inboxItem);

@@ -41,6 +41,7 @@ import {
   cloneDocumentArchiveTruthSnapshot,
   preferExistingArchiveTruthSnapshot,
 } from './documentArchiveTruthSnapshotService';
+import { resolveConfirmedFilingDecisionForInboxArchive } from './documentFilingDecisionService';
 
 export const COMPANY_DOCUMENT_CATEGORIES: CompanyDocumentCategory[] = [
   'vertrag',
@@ -517,18 +518,24 @@ export function importInboxDocument(
   linkedCompany: string,
   options?: ImportInboxDocumentOptions,
 ): DocumentMutationResult {
-  const input = mapInboxItemToDocumentInput(item, linkedCompany);
+  const gate = resolveConfirmedFilingDecisionForInboxArchive(item.id);
+  if (!gate.ok) {
+    return { success: false, errorKey: gate.errorKey };
+  }
+  const authoritativeItem = gate.item;
+
+  const input = mapInboxItemToDocumentInput(authoritativeItem, linkedCompany);
   const result = addDocument(input);
   if (!result.success) {
     return result;
   }
 
-  recordArchivedDocumentMemory(result.document, { inboxItem: item });
-  if (isContractInboxItem(item)) {
-    syncContractProofRequirementsFromInbox(item);
+  recordArchivedDocumentMemory(result.document, { inboxItem: authoritativeItem });
+  if (isContractInboxItem(authoritativeItem)) {
+    syncContractProofRequirementsFromInbox(authoritativeItem);
   }
-  if (item.vorgangId) {
-    linkArchivedDocumentToVorgang(result.document, item);
+  if (authoritativeItem.vorgangId) {
+    linkArchivedDocumentToVorgang(result.document, authoritativeItem);
   }
   persistAll();
 
@@ -568,6 +575,10 @@ export function updateDocumentFromInbox(
   item: InboxItem,
   linkedCompany: string,
 ): DocumentMutationResult {
-  const input = mapInboxItemToDocumentInput(item, linkedCompany);
+  const gate = resolveConfirmedFilingDecisionForInboxArchive(item.id);
+  if (!gate.ok) {
+    return { success: false, errorKey: gate.errorKey };
+  }
+  const input = mapInboxItemToDocumentInput(gate.item, linkedCompany);
   return updateDocument(documentId, input);
 }

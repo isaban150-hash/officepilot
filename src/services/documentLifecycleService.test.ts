@@ -1,3 +1,4 @@
+import { importInboxDocumentForTests } from '../test/confirmFilingDecisionForTests';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { SAMPLE_WERKVERTRAG_TEXT } from './contractAnalysisService';
 import { resetCommunicationHistoryStore } from './communicationHistoryStore';
@@ -86,7 +87,7 @@ describe('documentLifecycleService', () => {
   });
 
   it('Brief mit Frist → needs_action', () => {
-    const result = importInboxDocument(createLetterWithDeadlineInboxItem(), 'Test GmbH');
+    const result = importInboxDocumentForTests(createLetterWithDeadlineInboxItem(), 'Test GmbH');
     expect(result.success).toBe(true);
     if (!result.success) return;
 
@@ -97,7 +98,7 @@ describe('documentLifecycleService', () => {
   });
 
   it('Antwort erledigt → answered oder done', () => {
-    const result = importInboxDocument(createFreistellungInboxItem(), 'Test GmbH');
+    const result = importInboxDocumentForTests(createFreistellungInboxItem(), 'Test GmbH');
     expect(result.success).toBe(true);
     if (!result.success) return;
 
@@ -115,7 +116,7 @@ describe('documentLifecycleService', () => {
   });
 
   it('Original nicht abgeheftet → Ablage offen', () => {
-    const result = importInboxDocument(createFreistellungInboxItem(), 'Test GmbH');
+    const result = importInboxDocumentForTests(createFreistellungInboxItem(), 'Test GmbH');
     expect(result.success).toBe(true);
     if (!result.success) return;
 
@@ -126,7 +127,7 @@ describe('documentLifecycleService', () => {
   });
 
   it('Original abgeheftet → done', () => {
-    const result = importInboxDocument(createFreistellungInboxItem(), 'Test GmbH');
+    const result = importInboxDocumentForTests(createFreistellungInboxItem(), 'Test GmbH');
     expect(result.success).toBe(true);
     if (!result.success) return;
 
@@ -137,7 +138,7 @@ describe('documentLifecycleService', () => {
   });
 
   it('Werbung → done', () => {
-    const result = importInboxDocument(createAdvertisementInboxItem(), 'Test GmbH');
+    const result = importInboxDocumentForTests(createAdvertisementInboxItem(), 'Test GmbH');
     expect(result.success).toBe(true);
     if (!result.success) return;
 
@@ -152,7 +153,7 @@ describe('documentLifecycleService', () => {
   it('Werkvertrag mit fehlenden Nachweisen → needs_action', () => {
     const werkvertrag = createWerkvertragInboxItem('v-lifecycle-1');
     syncContractProofRequirementsFromInbox(werkvertrag);
-    const result = importInboxDocument(werkvertrag, 'Test GmbH');
+    const result = importInboxDocumentForTests(werkvertrag, 'Test GmbH');
     expect(result.success).toBe(true);
     if (!result.success) return;
 
@@ -163,8 +164,8 @@ describe('documentLifecycleService', () => {
   });
 
   it('Heute zeigt offene Dokumente', () => {
-    importInboxDocument(createFreistellungInboxItem({ id: 'inbox-heute-1' }), 'Test GmbH');
-    importInboxDocument(createLetterWithDeadlineInboxItem(), 'Test GmbH');
+    importInboxDocumentForTests(createFreistellungInboxItem({ id: 'inbox-heute-1' }), 'Test GmbH');
+    importInboxDocumentForTests(createLetterWithDeadlineInboxItem(), 'Test GmbH');
 
     const openItems = getOpenDocumentLifecycleItems(TODAY);
     expect(openItems.length).toBeGreaterThanOrEqual(2);

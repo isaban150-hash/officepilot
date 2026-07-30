@@ -1,3 +1,4 @@
+import { importInboxDocumentForTests } from '../test/confirmFilingDecisionForTests';
 /**
  * DOCUMENT-ARCHIVE-TRUTH-03A3 — archive free-question AI context uses shared TruthView.
  */
@@ -78,7 +79,7 @@ function archiveDocFor(
   item: InboxItem,
   overrides: Partial<CompanyDocument> = {},
 ): CompanyDocument {
-  const imported = importInboxDocument(item, 'Test GmbH');
+  const imported = importInboxDocumentForTests(item, 'Test GmbH');
   expect(imported.success).toBe(true);
   if (!imported.success) throw new Error('import failed');
   markInboxImportedToArchive(item.id, imported.document.id);

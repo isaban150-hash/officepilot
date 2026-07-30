@@ -42,7 +42,7 @@ import { setPdfTextExtractorForTests } from './services/uploadTextExtractionServ
 import { setImageOcrExtractorForTests } from './services/ocrDocumentService';
 import { createAuftragInboxItem } from './test/fixtures';
 import { resetTestStores } from './test/resetStores';
-import { confirmFilingDecisionForTests } from './test/confirmFilingDecisionForTests';
+import { confirmFilingDecisionForTests, importInboxDocumentForTests, archiveMailInboxItemForTests } from './test/confirmFilingDecisionForTests';
 import { withNewEntitySync } from './services/sync/syncMetaService';
 import type { WorkflowResult } from './types/models';
 
@@ -129,7 +129,7 @@ describe('STORAGE-DERIVATIVE-INTAKE-PLAN-CONTEXT-CARRY-01', () => {
       .spyOn(postImportOrch, 'orchestratePostImportDerivativesAfterImport')
       .mockResolvedValue({ kind: 'completed', steps: [] });
 
-    const imported = importInboxDocument(
+    const imported = importInboxDocumentForTests(
       item,
       'Test GmbH',
       resolveImportInboxDocumentOptionsFromIntakeCarry(item.id),
@@ -263,7 +263,7 @@ describe('STORAGE-DERIVATIVE-INTAKE-PLAN-CONTEXT-CARRY-01', () => {
       steps: [],
     });
 
-    const imported = importInboxDocument(item, 'Test GmbH', options);
+    const imported = importInboxDocumentForTests(item, 'Test GmbH', options);
     expect(imported.success).toBe(true);
     const recovery = getDocumentFileDerivativeRecoveryContext(imported.document!.id);
     expect(recovery?.transformPlan.policyId).toBe('receipt');
@@ -281,7 +281,7 @@ describe('STORAGE-DERIVATIVE-INTAKE-PLAN-CONTEXT-CARRY-01', () => {
       .spyOn(postImportOrch, 'orchestratePostImportDerivativesAfterImport')
       .mockResolvedValue({ kind: 'completed', steps: [] });
 
-    const imported = importInboxDocument(
+    const imported = importInboxDocumentForTests(
       item,
       'Test GmbH',
       resolveImportInboxDocumentOptionsFromIntakeCarry(item.id),
@@ -302,7 +302,7 @@ describe('STORAGE-DERIVATIVE-INTAKE-PLAN-CONTEXT-CARRY-01', () => {
       .spyOn(postImportOrch, 'orchestratePostImportDerivativesAfterImport')
       .mockResolvedValue({ kind: 'completed', steps: [] });
 
-    const documentId = archiveMailInboxItem(item, 'Test GmbH');
+    const documentId = archiveMailInboxItemForTests(item, 'Test GmbH');
     expect(documentId).toBeTruthy();
     expect(orchSpy).toHaveBeenCalledWith(
       expect.objectContaining({

@@ -1,3 +1,4 @@
+import { importInboxDocumentForTests } from '../test/confirmFilingDecisionForTests';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { getActiveStorageKey } from './persistenceService';
 import { SAMPLE_WERKVERTRAG_TEXT } from './contractAnalysisService';
@@ -105,7 +106,7 @@ describe('officePilotMemoryService – archive import', () => {
 
   it('erzeugt ProofMemory für Freistellungsbescheinigung beim Import', () => {
     const inboxItem = createFreistellungInboxItem();
-    const result = importInboxDocument(inboxItem, 'Test GmbH');
+    const result = importInboxDocumentForTests(inboxItem, 'Test GmbH');
     expect(result.success).toBe(true);
 
     const proofs = getProofMemories().filter(
@@ -210,7 +211,7 @@ describe('officePilotMemoryService – Werkvertrag', () => {
     );
 
     hydrateDocumentStore([]);
-    importInboxDocument(createFreistellungInboxItem({ id: 'inbox-f-2' }), 'Test GmbH');
+    importInboxDocumentForTests(createFreistellungInboxItem({ id: 'inbox-f-2' }), 'Test GmbH');
 
     expect(
       getProofsByStatus('missing').some((item) => item.proofType === 'freistellungsbescheinigung'),
@@ -233,7 +234,7 @@ describe('officePilotMemoryService – paper filing', () => {
 
   it('Archivieren erzeugt PaperRegisterEntry', () => {
     const inboxItem = createFreistellungInboxItem();
-    const result = importInboxDocument(inboxItem, 'Test GmbH');
+    const result = importInboxDocumentForTests(inboxItem, 'Test GmbH');
     expect(result.success).toBe(true);
     if (!result.success) return;
 
@@ -246,7 +247,7 @@ describe('officePilotMemoryService – paper filing', () => {
 
   it('DocumentMemory speichert Papierinfos', () => {
     const inboxItem = createFreistellungInboxItem();
-    const result = importInboxDocument(inboxItem, 'Test GmbH');
+    const result = importInboxDocumentForTests(inboxItem, 'Test GmbH');
     if (!result.success) throw new Error('import failed');
     const memory = getDocumentMemoryByDocumentId(result.document.id);
     expect(memory?.paperFolder.register).toBe('Freistellungsbescheinigungen');
@@ -256,7 +257,7 @@ describe('officePilotMemoryService – paper filing', () => {
 
   it('Original abgeheftet aktualisiert Memory und Register', () => {
     const inboxItem = createFreistellungInboxItem();
-    const result = importInboxDocument(inboxItem, 'Test GmbH');
+    const result = importInboxDocumentForTests(inboxItem, 'Test GmbH');
     if (!result.success) throw new Error('import failed');
     const updated = markDocumentPhysicallyFiled(result.document.id, 'Max Mustermann');
     expect(updated?.physicalFiled).toBe(true);
@@ -277,7 +278,7 @@ describe('officePilotMemoryService – persistence', () => {
   });
 
   it('persistiert und hydratisiert officePilotMemory', () => {
-    importInboxDocument(createFreistellungInboxItem(), 'Test GmbH');
+    importInboxDocumentForTests(createFreistellungInboxItem(), 'Test GmbH');
 
     const raw = localStorage.getItem(getActiveStorageKey());
     expect(raw).toBeTruthy();

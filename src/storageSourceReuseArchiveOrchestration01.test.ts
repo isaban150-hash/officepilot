@@ -1,3 +1,4 @@
+import { importInboxDocumentForTests } from './test/confirmFilingDecisionForTests';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildDocumentFileRepresentationPlan } from './services/documentFileRepresentationPlanService';
 import { buildDocumentFileTransformPlan } from './services/documentFileTransformPlanService';
@@ -81,7 +82,7 @@ describe('STORAGE-SOURCE-REUSE-ARCHIVE-ORCHESTRATION-01', () => {
   it('Legal/source_reuse erzeugt nach Import ein Archive-Binding', () => {
     const item = prepareInbox(FILE_X);
 
-    const result = importInboxDocument(item, 'Test GmbH', {
+    const result = importInboxDocumentForTests(item, 'Test GmbH', {
       transformPlan: transformPlanFor('legal_document'),
     });
 
@@ -100,7 +101,7 @@ describe('STORAGE-SOURCE-REUSE-ARCHIVE-ORCHESTRATION-01', () => {
     const item = prepareInbox(FILE_X);
     const plan = transformPlanFor('legal_document');
 
-    const first = importInboxDocument(item, 'Test GmbH', { transformPlan: plan });
+    const first = importInboxDocumentForTests(item, 'Test GmbH', { transformPlan: plan });
     expect(first.success).toBe(true);
     if (!first.success) return;
 
@@ -121,7 +122,7 @@ describe('STORAGE-SOURCE-REUSE-ARCHIVE-ORCHESTRATION-01', () => {
   it('unresolved (business_document) bleibt no-op; Import erfolgreich', () => {
     const item = prepareInbox(FILE_X);
 
-    const result = importInboxDocument(item, 'Test GmbH', {
+    const result = importInboxDocumentForTests(item, 'Test GmbH', {
       transformPlan: transformPlanFor('business_document'),
     });
 
@@ -132,7 +133,7 @@ describe('STORAGE-SOURCE-REUSE-ARCHIVE-ORCHESTRATION-01', () => {
   it('fehlender archive-Intent (receipt) bleibt no-op; Import erfolgreich', () => {
     const item = prepareInbox(FILE_X);
 
-    const result = importInboxDocument(item, 'Test GmbH', {
+    const result = importInboxDocumentForTests(item, 'Test GmbH', {
       transformPlan: transformPlanFor('receipt'),
     });
 
@@ -143,7 +144,7 @@ describe('STORAGE-SOURCE-REUSE-ARCHIVE-ORCHESTRATION-01', () => {
   it('ohne Transform-Plan bleibt no-op; Import erfolgreich', () => {
     const item = prepareInbox(FILE_X);
 
-    const result = importInboxDocument(item, 'Test GmbH');
+    const result = importInboxDocumentForTests(item, 'Test GmbH');
     expect(result.success).toBe(true);
     expect(getDocumentFileRepresentationBindingStoreSnapshot()).toEqual([]);
   });
@@ -159,7 +160,7 @@ describe('STORAGE-SOURCE-REUSE-ARCHIVE-ORCHESTRATION-01', () => {
     });
     hydrateInboxStore([item]);
 
-    const first = importInboxDocument(item, 'Test GmbH');
+    const first = importInboxDocumentForTests(item, 'Test GmbH');
     expect(first.success).toBe(true);
     if (!first.success) return;
 
@@ -189,7 +190,7 @@ describe('STORAGE-SOURCE-REUSE-ARCHIVE-ORCHESTRATION-01', () => {
   it('nicht committed erzeugt kein Binding; Import bleibt erfolgreich', () => {
     const item = prepareInbox(FILE_X, 'temp');
 
-    const result = importInboxDocument(item, 'Test GmbH', {
+    const result = importInboxDocumentForTests(item, 'Test GmbH', {
       transformPlan: transformPlanFor('legal_document'),
     });
 

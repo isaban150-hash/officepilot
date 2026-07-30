@@ -1,3 +1,4 @@
+import { importInboxDocumentForTests } from '../test/confirmFilingDecisionForTests';
 /**
  * DOCUMENT-WORK-RESULT-PERSISTENCE-01 — analysis flush, rollback, usable-core guard.
  */
@@ -286,7 +287,7 @@ describe('DOCUMENT-WORK-RESULT-PERSISTENCE-01', () => {
     const { item } = seedHotelInbox();
     const fingerprint = getDocumentWorkResult(item.id)!.sourceFingerprint;
 
-    const imported = importInboxDocument(item, testProfile.companyName);
+    const imported = importInboxDocumentForTests(item, testProfile.companyName);
     expect(imported.success).toBe(true);
     markInboxImportedToArchive(item.id, imported.document!.id);
 

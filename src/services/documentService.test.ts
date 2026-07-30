@@ -19,6 +19,7 @@ import {
   markInboxImportedToArchive,
 } from './inboxService';
 import { createAuftragInboxItem } from '../test/fixtures';
+import { confirmFilingDecisionForTests } from '../test/confirmFilingDecisionForTests';
 import type { CompanyDocument } from '../types/models';
 
 function createTestDocument(overrides: Partial<CompanyDocument> = {}): CompanyDocument {
@@ -266,9 +267,11 @@ describe('isDuplicateDocument', () => {
 describe('importInboxDocument', () => {
   it('creates archive document from inbox item', () => {
     hydrateDocumentStore([]);
-    const inboxItem = createAuftragInboxItem({ title: 'Import Test' });
+    const inboxItem = createAuftragInboxItem({ id: 'inbox-import-create', title: 'Import Test' });
+    hydrateInboxStore([inboxItem]);
+    const confirmed = confirmFilingDecisionForTests(inboxItem.id);
 
-    const result = importInboxDocument(inboxItem, 'Firma GmbH');
+    const result = importInboxDocument(confirmed, 'Firma GmbH');
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.document.title).toBe('Import Test');
@@ -279,8 +282,11 @@ describe('importInboxDocument', () => {
   it('persists imported document to localStorage', () => {
     hydrateDocumentStore([]);
     localStorage.clear();
+    const inboxItem = createAuftragInboxItem({ id: 'inbox-import-persist', title: 'Persist Import' });
+    hydrateInboxStore([inboxItem]);
+    confirmFilingDecisionForTests(inboxItem.id);
 
-    importInboxDocument(createAuftragInboxItem({ title: 'Persist Import' }), 'Firma GmbH');
+    importInboxDocument(getInboxItemById(inboxItem.id)!, 'Firma GmbH');
 
     const raw = localStorage.getItem(getActiveStorageKey());
     const parsed = JSON.parse(raw!);
@@ -295,12 +301,15 @@ describe('updateDocumentFromInbox', () => {
     ]);
 
     const inboxItem = createAuftragInboxItem({
+      id: 'inbox-update-from-inbox',
       title: 'Alt',
       sender: 'Alt AG',
       recognizedData: { Hinweis: 'Neu erkannt' },
     });
+    hydrateInboxStore([inboxItem]);
+    const confirmed = confirmFilingDecisionForTests(inboxItem.id);
 
-    const result = updateDocumentFromInbox('doc-test-1', inboxItem, 'Neu GmbH');
+    const result = updateDocumentFromInbox('doc-test-1', confirmed, 'Neu GmbH');
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.document.recognizedText).toContain('Hinweis: Neu erkannt');
@@ -318,8 +327,9 @@ describe('inbox → archive integration', () => {
     });
     hydrateInboxStore([inboxItem]);
     hydrateDocumentStore([]);
+    confirmFilingDecisionForTests(inboxItem.id);
 
-    const importResult = importInboxDocument(inboxItem, 'Test GmbH');
+    const importResult = importInboxDocument(getInboxItemById(inboxItem.id)!, 'Test GmbH');
     expect(importResult.success).toBe(true);
 
     if (importResult.success) {
@@ -342,8 +352,9 @@ describe('inbox → archive integration', () => {
     });
     hydrateInboxStore([inboxItem]);
     hydrateDocumentStore([]);
+    confirmFilingDecisionForTests(inboxItem.id);
 
-    const importResult = importInboxDocument(inboxItem, 'Test GmbH');
+    const importResult = importInboxDocument(getInboxItemById(inboxItem.id)!, 'Test GmbH');
     expect(importResult.success).toBe(true);
 
     if (importResult.success) {

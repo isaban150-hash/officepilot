@@ -19,7 +19,7 @@ import {
 import { isCustomerDocumentKind } from './documentClassificationCatalog';
 import { suggestDigitalFolder } from './documentClassificationService';
 import { getInboxExtractedDocumentText } from './inboxDocumentText';
-import { patchInboxItem } from './inboxService';
+import { getInboxItemById, patchInboxItem } from './inboxService';
 import {
   formatPaperFilingInstruction,
   getAllPaperFolders,
@@ -49,6 +49,26 @@ const HOTEL_PATTERN =
 
 export const FILING_DECISION_ARCHIVE_BLOCKED_MESSAGE =
   'Ablageentscheidung nicht bestätigt – bitte zuerst bestätigen.';
+
+/** DocumentMutationResult.errorKey when Inbox→Archiv lacks store-confirmed filing. */
+export const DOCUMENT_FILING_DECISION_REQUIRED_ERROR_KEY =
+  'document.filingDecisionRequired' as const;
+
+/**
+ * SERVICE-FILING-CONFIRM-GATE-01 — authoritative Store-Read for Inbox→Archiv.
+ * Does not trust caller-supplied item.filingDecision; no side-effects.
+ */
+export function resolveConfirmedFilingDecisionForInboxArchive(
+  inboxItemId: string,
+):
+  | { ok: true; item: InboxItem }
+  | { ok: false; errorKey: typeof DOCUMENT_FILING_DECISION_REQUIRED_ERROR_KEY } {
+  const item = getInboxItemById(inboxItemId);
+  if (!item || !isDocumentFilingDecisionConfirmed(item)) {
+    return { ok: false, errorKey: DOCUMENT_FILING_DECISION_REQUIRED_ERROR_KEY };
+  }
+  return { ok: true, item };
+}
 
 function meaningful(value: string | null | undefined): string {
   const trimmed = value?.trim() ?? '';

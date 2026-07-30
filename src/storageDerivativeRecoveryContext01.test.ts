@@ -1,3 +1,4 @@
+import { importInboxDocumentForTests } from './test/confirmFilingDecisionForTests';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   applyStateToStores,
@@ -143,7 +144,7 @@ describe('STORAGE-DERIVATIVE-RECOVERY-CONTEXT-01', () => {
   it('Import ohne TransformPlan erzeugt keinen Context', () => {
     const item = createAuftragInboxItem({ id: 'inbox-recovery-no-plan' });
     hydrateInboxStore([item]);
-    const imported = importInboxDocument(item, 'Test GmbH');
+    const imported = importInboxDocumentForTests(item, 'Test GmbH');
     expect(imported.success).toBe(true);
     expect(getDocumentFileDerivativeRecoveryContextStoreSnapshot()).toEqual([]);
     expect(
@@ -155,7 +156,7 @@ describe('STORAGE-DERIVATIVE-RECOVERY-CONTEXT-01', () => {
     const item = createAuftragInboxItem({ id: 'inbox-recovery-with-plan' });
     hydrateInboxStore([item]);
     const plan = samplePlan();
-    const imported = importInboxDocument(item, 'Test GmbH', {
+    const imported = importInboxDocumentForTests(item, 'Test GmbH', {
       transformPlan: plan,
       transformPlanOrigin: {
         policyId: 'business_document',
@@ -184,7 +185,7 @@ describe('STORAGE-DERIVATIVE-RECOVERY-CONTEXT-01', () => {
   it('Dokumentlöschung entfernt Context', () => {
     const item = createAuftragInboxItem({ id: 'inbox-recovery-delete' });
     hydrateInboxStore([item]);
-    const imported = importInboxDocument(item, 'Test GmbH', {
+    const imported = importInboxDocumentForTests(item, 'Test GmbH', {
       transformPlan: samplePlan(),
     });
     expect(imported.success).toBe(true);

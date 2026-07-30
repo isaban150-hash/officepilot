@@ -1,3 +1,4 @@
+import { importInboxDocumentForTests } from './test/confirmFilingDecisionForTests';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildDocumentFileRepresentationPlan } from './services/documentFileRepresentationPlanService';
 import { buildDocumentFileTransformPlan } from './services/documentFileTransformPlanService';
@@ -146,7 +147,7 @@ describe('STORAGE-SOURCE-REUSE-STEP-OUTCOME-01', () => {
     );
 
     const item = prepareInbox(FILE_X);
-    const result = importInboxDocument(item, 'Test GmbH', {
+    const result = importInboxDocumentForTests(item, 'Test GmbH', {
       transformPlan: transformPlanFor('legal_document'),
     });
     expect(result.success).toBe(true);
@@ -171,7 +172,7 @@ describe('STORAGE-SOURCE-REUSE-STEP-OUTCOME-01', () => {
 
   it('initialer Erfolg schreibt persisted', () => {
     const item = prepareInbox(FILE_X);
-    const result = importInboxDocument(item, 'Test GmbH', {
+    const result = importInboxDocumentForTests(item, 'Test GmbH', {
       transformPlan: transformPlanFor('legal_document'),
     });
     expect(result.success).toBe(true);
@@ -202,7 +203,7 @@ describe('STORAGE-SOURCE-REUSE-STEP-OUTCOME-01', () => {
 
   it('Noop wird korrekt gespeichert', () => {
     const item = prepareInbox(FILE_X);
-    const result = importInboxDocument(item, 'Test GmbH', {
+    const result = importInboxDocumentForTests(item, 'Test GmbH', {
       transformPlan: transformPlanFor('business_document'),
     });
     expect(result.success).toBe(true);
@@ -220,7 +221,7 @@ describe('STORAGE-SOURCE-REUSE-STEP-OUTCOME-01', () => {
   it('Conflict wird korrekt gespeichert', () => {
     const item = prepareInbox(FILE_X);
     hydrateDocumentFileStore([sampleFileRef(FILE_X), sampleFileRef(FILE_Y)], {});
-    const result = importInboxDocument(item, 'Test GmbH', {
+    const result = importInboxDocumentForTests(item, 'Test GmbH', {
       transformPlan: transformPlanFor('legal_document'),
     });
     expect(result.success).toBe(true);
@@ -267,7 +268,7 @@ describe('STORAGE-SOURCE-REUSE-STEP-OUTCOME-01', () => {
     });
 
     const item = prepareInbox(FILE_X);
-    const result = importInboxDocument(item, 'Test GmbH', {
+    const result = importInboxDocumentForTests(item, 'Test GmbH', {
       transformPlan: transformPlanFor('legal_document'),
     });
     expect(result.success).toBe(true);
@@ -288,7 +289,7 @@ describe('STORAGE-SOURCE-REUSE-STEP-OUTCOME-01', () => {
   it('Attempt wird genau einmal erhöht', () => {
     const item = prepareInbox(FILE_X);
     const plan = transformPlanFor('legal_document');
-    const first = importInboxDocument(item, 'Test GmbH', { transformPlan: plan });
+    const first = importInboxDocumentForTests(item, 'Test GmbH', { transformPlan: plan });
     expect(first.success).toBe(true);
     if (!first.success) return;
 
@@ -332,7 +333,7 @@ describe('STORAGE-SOURCE-REUSE-STEP-OUTCOME-01', () => {
     });
 
     const item = prepareInbox(FILE_X);
-    const result = importInboxDocument(item, 'Test GmbH', {
+    const result = importInboxDocumentForTests(item, 'Test GmbH', {
       transformPlan: transformPlanFor('legal_document'),
     });
     expect(result.success).toBe(true);
@@ -360,7 +361,7 @@ describe('STORAGE-SOURCE-REUSE-STEP-OUTCOME-01', () => {
   it('Error + fehlendes Archive + Recovery-Context ist retrybar', async () => {
     const item = prepareInbox(FILE_X);
     const plan = transformPlanFor('legal_document');
-    const imported = importInboxDocument(item, 'Test GmbH', { transformPlan: plan });
+    const imported = importInboxDocumentForTests(item, 'Test GmbH', { transformPlan: plan });
     expect(imported.success).toBe(true);
     if (!imported.success) return;
 
@@ -394,7 +395,7 @@ describe('STORAGE-SOURCE-REUSE-STEP-OUTCOME-01', () => {
   it('erfolgreicher Retry erzeugt bzw. bindet das Archive', async () => {
     const item = prepareInbox(FILE_X);
     const plan = transformPlanFor('legal_document');
-    const imported = importInboxDocument(item, 'Test GmbH', { transformPlan: plan });
+    const imported = importInboxDocumentForTests(item, 'Test GmbH', { transformPlan: plan });
     expect(imported.success).toBe(true);
     if (!imported.success) return;
 
@@ -446,7 +447,7 @@ describe('STORAGE-SOURCE-REUSE-STEP-OUTCOME-01', () => {
   it('Conflict/Noop/kein Context zeigen keinen Retry', async () => {
     const item = prepareInbox(FILE_X);
     const plan = transformPlanFor('legal_document');
-    const imported = importInboxDocument(item, 'Test GmbH', { transformPlan: plan });
+    const imported = importInboxDocumentForTests(item, 'Test GmbH', { transformPlan: plan });
     expect(imported.success).toBe(true);
     if (!imported.success) return;
 

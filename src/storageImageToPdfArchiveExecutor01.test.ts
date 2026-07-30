@@ -1,3 +1,4 @@
+import { importInboxDocumentForTests } from './test/confirmFilingDecisionForTests';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as persistenceService from './services/persistenceService';
 import { createDocumentFileRepresentationBinding } from './services/documentFileRepresentationBindingService';
@@ -360,7 +361,7 @@ describe('STORAGE-IMAGE-TO-PDF-ARCHIVE-EXECUTOR-01', () => {
       });
       hydrateInboxStore([item]);
 
-      const imported = importInboxDocument(item, 'Test GmbH', {
+      const imported = importInboxDocumentForTests(item, 'Test GmbH', {
         transformPlan: imageToPdfArchiveTransformPlan(),
       });
       expect(imported.success).toBe(true);

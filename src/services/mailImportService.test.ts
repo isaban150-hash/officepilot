@@ -25,6 +25,7 @@ import {
   setImageOcrExtractorForTests,
 } from './ocrDocumentService';
 import { setPdfTextExtractorForTests } from './uploadTextExtractionService';
+import { confirmFilingDecisionForTests } from '../test/confirmFilingDecisionForTests';
 
 const BG_BAU_MAIL_BODY = `
 Sehr geehrte Damen und Herren,
@@ -131,6 +132,7 @@ describe('mailImportService', () => {
       createFile('freistellung.pdf', 'application/pdf'),
     );
 
+    confirmFilingDecisionForTests(inboxItem.id);
     const documentId = archiveMailInboxItem(inboxItem, 'Test GmbH', mail.id);
     expect(documentId).toBeTruthy();
 
@@ -148,6 +150,7 @@ describe('mailImportService', () => {
     });
 
     const { inboxItems } = importMailAsInboxItem(mail.id);
+    confirmFilingDecisionForTests(inboxItems[0]!.id);
     const documentId = archiveMailInboxItem(inboxItems[0]!, 'Test GmbH', mail.id);
     expect(documentId).toBeTruthy();
     if (!documentId) return;

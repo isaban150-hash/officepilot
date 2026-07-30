@@ -1,3 +1,4 @@
+import { importInboxDocumentForTests } from './test/confirmFilingDecisionForTests';
 import { PDFDocument, PDFName, PDFSignature } from 'pdf-lib';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as persistenceService from './services/persistenceService';
@@ -480,7 +481,7 @@ describe('STORAGE-PDF-METADATA-STRIP-EXECUTOR-01', () => {
       });
       hydrateInboxStore([item]);
 
-      const imported = importInboxDocument(item, 'Test GmbH', {
+      const imported = importInboxDocumentForTests(item, 'Test GmbH', {
         transformPlan: pdfMetadataStripTransformPlan(),
       });
       expect(imported.success).toBe(true);

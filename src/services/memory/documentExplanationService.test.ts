@@ -1,3 +1,4 @@
+import { importInboxDocumentForTests } from '../../test/confirmFilingDecisionForTests';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { SAMPLE_WERKVERTRAG_TEXT } from '../contractAnalysisService';
 import { hydrateDocumentStore, importInboxDocument } from '../documentService';
@@ -164,7 +165,7 @@ describe('documentExplanationService', () => {
       recognizedData: withInboxExtractedDocumentText({}, SAMPLE_WERKVERTRAG_TEXT),
     });
     syncContractProofRequirementsFromInbox(werkvertrag);
-    const result = importInboxDocument(werkvertrag, 'Test GmbH');
+    const result = importInboxDocumentForTests(werkvertrag, 'Test GmbH');
     if (!result.success) throw new Error('import failed');
 
     const explanation = buildDocumentExplanation({ documentId: result.document.id });

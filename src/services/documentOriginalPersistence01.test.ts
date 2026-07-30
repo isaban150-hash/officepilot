@@ -1,3 +1,4 @@
+import { importInboxDocumentForTests } from '../test/confirmFilingDecisionForTests';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   getClassificationForItem,
@@ -195,7 +196,7 @@ describe('P1-DOCUMENT-ORIGINAL-PERSISTENCE-01', () => {
     expect(intake.success).toBe(true);
     if (!intake.success || intake.duplicate) return;
 
-    const imported = importInboxDocument(intake.inboxItem, 'Test GmbH');
+    const imported = importInboxDocumentForTests(intake.inboxItem, 'Test GmbH');
     expect(imported.success).toBe(true);
     if (!imported.success) return;
 

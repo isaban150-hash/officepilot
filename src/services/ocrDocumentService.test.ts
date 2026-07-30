@@ -1,3 +1,4 @@
+import { importInboxDocumentForTests } from '../test/confirmFilingDecisionForTests';
 import { afterEach, describe, expect, it } from 'vitest';
 import { SAMPLE_WERKVERTRAG_TEXT } from './contractAnalysisService';
 import { detectClassifiedKind } from './documentClassificationService';
@@ -108,7 +109,7 @@ describe('ocrDocumentService', () => {
       ),
     };
 
-    const result = importInboxDocument(item, 'Test GmbH');
+    const result = importInboxDocumentForTests(item, 'Test GmbH');
     expect(result.success).toBe(true);
     if (!result.success) return;
     expect(

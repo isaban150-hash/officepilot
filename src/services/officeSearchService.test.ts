@@ -1,3 +1,4 @@
+import { importInboxDocumentForTests } from '../test/confirmFilingDecisionForTests';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { MOCK_INBOX_ITEMS } from '../data/inboxMockData';
 import { SAMPLE_WERKVERTRAG_TEXT } from './contractAnalysisService';
@@ -67,7 +68,7 @@ describe('officeSearchService', () => {
   });
 
   it('findet Dokumente', () => {
-    importInboxDocument(
+    importInboxDocumentForTests(
       createAuftragInboxItem({
         id: 'inbox-doc-search',
         title: 'Freistellungsbescheinigung §48b',
@@ -120,7 +121,7 @@ describe('officeSearchService', () => {
       recognizedData: withInboxExtractedDocumentText({}, SAMPLE_WERKVERTRAG_TEXT),
     });
     syncContractProofRequirementsFromInbox(werkvertrag);
-    importInboxDocument(werkvertrag, 'Test GmbH');
+    importInboxDocumentForTests(werkvertrag, 'Test GmbH');
 
     const results = searchOffice({ query: 'bg bau', todayIso: TODAY, limit: 50 });
     expect(results.some((item) => item.type === 'proof')).toBe(true);
@@ -167,7 +168,7 @@ describe('officeSearchService', () => {
   });
 
   it('findet Register und Papierordner', () => {
-    importInboxDocument(
+    importInboxDocumentForTests(
       createAuftragInboxItem({
         id: 'inbox-register-search',
         title: 'Freistellungsbescheinigung Register',
@@ -187,7 +188,7 @@ describe('officeSearchService', () => {
   });
 
   it('findet „Papier fehlt“ über Lebenszyklus', () => {
-    importInboxDocument(
+    importInboxDocumentForTests(
       createAuftragInboxItem({
         id: 'inbox-paper-missing',
         title: 'Freistellung Papier offen',

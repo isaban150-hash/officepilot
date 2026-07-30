@@ -1,5 +1,14 @@
-import { confirmProposedDocumentFilingDecision } from '../services/documentFilingDecisionService';
-import { getInboxItemById } from '../services/inboxService';
+import {
+  confirmProposedDocumentFilingDecision,
+} from '../services/documentFilingDecisionService';
+import {
+  importInboxDocument,
+  updateDocumentFromInbox,
+  type DocumentMutationResult,
+  type ImportInboxDocumentOptions,
+} from '../services/documentService';
+import { archiveMailInboxItem } from '../services/mailImportService';
+import { addInboxItem, getInboxItemById } from '../services/inboxService';
 import type { InboxItem } from '../types/models';
 
 /**
@@ -17,4 +26,46 @@ export function confirmFilingDecisionForTests(inboxId: string): InboxItem {
     throw new Error(`confirmFilingDecisionForTests: confirm failed (${inboxId})`);
   }
   return confirmed;
+}
+
+/**
+ * Test-only: ensure inbox row exists, confirm filing, then call production import.
+ * Production code must keep calling importInboxDocument directly (gate enforced there).
+ */
+export function importInboxDocumentForTests(
+  item: InboxItem,
+  linkedCompany: string,
+  options?: ImportInboxDocumentOptions,
+): DocumentMutationResult {
+  if (!getInboxItemById(item.id)) {
+    addInboxItem(item);
+  }
+  confirmFilingDecisionForTests(item.id);
+  return importInboxDocument(getInboxItemById(item.id)!, linkedCompany, options);
+}
+
+/** Test-only wrapper for updateDocumentFromInbox with store confirm. */
+export function updateDocumentFromInboxForTests(
+  documentId: string,
+  item: InboxItem,
+  linkedCompany: string,
+): DocumentMutationResult {
+  if (!getInboxItemById(item.id)) {
+    addInboxItem(item);
+  }
+  confirmFilingDecisionForTests(item.id);
+  return updateDocumentFromInbox(documentId, getInboxItemById(item.id)!, linkedCompany);
+}
+
+/** Test-only wrapper for archiveMailInboxItem with store confirm. */
+export function archiveMailInboxItemForTests(
+  item: InboxItem,
+  linkedCompany: string,
+  mailImportId?: string,
+): string | null {
+  if (!getInboxItemById(item.id)) {
+    addInboxItem(item);
+  }
+  confirmFilingDecisionForTests(item.id);
+  return archiveMailInboxItem(getInboxItemById(item.id)!, linkedCompany, mailImportId);
 }

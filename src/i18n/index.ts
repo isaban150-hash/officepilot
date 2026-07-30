@@ -1618,6 +1618,8 @@ const deLegacy = {
   'document.titleRequired': 'Titel darf nicht leer sein.',
   'document.categoryRequired': 'Bitte eine Kategorie wählen.',
   'document.notFound': 'Dokument nicht gefunden.',
+  'document.filingDecisionRequired':
+    'Die Ablageentscheidung muss vor dem Archivieren bestätigt werden.',
   'document.fieldTitle': 'Titel',
   'document.fieldCategory': 'Kategorie',
   'document.fieldIssuer': 'Aussteller',
