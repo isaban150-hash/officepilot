@@ -76,12 +76,17 @@ function findItem(id: string): InboxItem | undefined {
 export function patchInboxItem(id: string, updates: Partial<InboxItem>): InboxItem | null {
   const index = inboxItems.findIndex((i) => i.id === id && isEntitySyncActive(i));
   if (index === -1) return null;
+  const previous = inboxItems[index]!;
   const updated = withUpdatedEntitySync(
-    { ...inboxItems[index], ...updates },
+    { ...previous, ...updates },
     'inbox_item',
   );
   inboxItems = [...inboxItems.slice(0, index), updated, ...inboxItems.slice(index + 1)];
-  persistAll();
+  const persistResult = persistAll();
+  if (!persistResult.success) {
+    inboxItems = [...inboxItems.slice(0, index), previous, ...inboxItems.slice(index + 1)];
+    return null;
+  }
   return updated;
 }
 

@@ -35,7 +35,7 @@ export function DocumentFilingDecisionPanel({
   onConfirmed,
   testIdPrefix = 'document-filing-decision',
 }: DocumentFilingDecisionPanelProps) {
-  const { translate, setup } = useApp();
+  const { translate, setup, showToast } = useApp();
   const [draft, setDraft] = useState<DocumentFilingDecisionDraft>(() =>
     buildDocumentFilingDecisionDraft(item),
   );
@@ -59,7 +59,10 @@ export function DocumentFilingDecisionPanel({
 
   const handleConfirm = () => {
     const updated = confirmDocumentFilingDecision(item.id, draft);
-    if (!updated) return;
+    if (!updated) {
+      showToast(translate('filingDecision.persistFailed'));
+      return;
+    }
     setDraft(buildDocumentFilingDecisionDraft(updated));
     onConfirmed(updated);
   };

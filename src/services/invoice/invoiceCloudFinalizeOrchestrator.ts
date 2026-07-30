@@ -164,9 +164,16 @@ export async function finalizeInvoiceDraftWithCloud(
 
   const upsert = upsertFinalizedInvoiceOnVorgang(vorgangId, finalized);
   if (!upsert.ok) {
-    // Keep intent for retry with same client_invoice_id.
-    if (upsert.reason === 'vorgang_missing') {
-      return { ok: false, reason: 'local_persist_failed', message: 'Vorgang fehlt lokal.' };
+    // Keep intent for retry with same client_invoice_id (remote already succeeded).
+    if (upsert.reason === 'local_persist_failed' || upsert.reason === 'vorgang_missing') {
+      return {
+        ok: false,
+        reason: 'local_persist_failed',
+        message:
+          upsert.reason === 'vorgang_missing'
+            ? 'Vorgang fehlt lokal. Cloud-Freigabe bleibt wiederaufnehmbar.'
+            : 'Lokale Speicherung fehlgeschlagen. Cloud-Freigabe bleibt wiederaufnehmbar.',
+      };
     }
     return {
       ok: false,
@@ -178,6 +185,7 @@ export async function finalizeInvoiceDraftWithCloud(
     };
   }
 
+  // Intent only after proven local persist (remote success alone is not enough).
   clearInvoiceFinalizeIntent(vorgangId);
 
   const archiveResult = archiveOutgoingInvoice(vorgangId, upsert.invoice, setup.companyName);

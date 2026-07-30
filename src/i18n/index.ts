@@ -536,6 +536,8 @@ const deLegacy = {
   'filingDecision.confirm': 'Ablage bestätigen',
   'filingDecision.confirmed': 'Ablage bestätigt – Archivierung freigegeben.',
   'filingDecision.confirmedToast': 'Ablageentscheidung bestätigt.',
+  'filingDecision.persistFailed':
+    'Ablageentscheidung konnte nicht gespeichert werden. Bitte erneut versuchen.',
   'filingDecision.confirmRequired':
     'Bitte zuerst die Ablageentscheidung bestätigen.',
   'filingDecision.kindLabel': 'Dokumentart',
@@ -1217,6 +1219,8 @@ const deLegacy = {
   'confirmation.error.confirmation.alreadyExists': 'Auftrag wurde bereits bestätigt.',
   'confirmation.error.confirmation.snapshotImmutable': 'Snapshot darf nicht verändert werden.',
   'confirmation.error.confirmation.negotiationClosed': 'Verhandlung ist bereits abgeschlossen.',
+  'confirmation.error.confirmation.persistFailed':
+    'Auftragsbestätigung konnte nicht gespeichert werden. Bitte erneut versuchen.',
   'execution.title': 'Ausführung',
   'execution.intro':
     'Mit dem Start gilt der bestätigte Auftrag als in Bearbeitung. Snapshot und Positionen bleiben unverändert.',
@@ -1800,6 +1804,8 @@ const deLegacy = {
   'invoice.approve.auth': 'Bitte erneut anmelden, um die Rechnung freizugeben.',
   'invoice.approve.workspace': 'Kein aktiver Workspace – Freigabe nicht möglich.',
   'invoice.approve.conflict': 'Konflikt bei der Rechnungsfreigabe. Bitte Entwurf prüfen.',
+  'invoice.approve.localPersistPending':
+    'Cloud-Freigabe erfolgreich, lokale Speicherung fehlgeschlagen. Bitte erneut freigeben – keine zweite Rechnung.',
   'invoice.approve.archiveWarning': 'Rechnung freigegeben, Archiv/PDF konnte nicht erzeugt werden.',
   'invoice.approved': 'Rechnung freigegeben und gespeichert.',
   'invoice.draftNumberLabel': 'Entwurf',

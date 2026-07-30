@@ -24,7 +24,8 @@ export type ContractConfirmationResult =
         | 'confirmation.alreadyExists'
         | 'confirmation.snapshotImmutable'
         | 'confirmation.negotiationClosed'
-        | 'confirmation.alignFailed';
+        | 'confirmation.alignFailed'
+        | 'confirmation.persistFailed';
     };
 
 function latestPriceProposal(

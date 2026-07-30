@@ -34,7 +34,8 @@ export type NegotiationResult =
         | 'confirmation.notInNegotiation'
         | 'confirmation.negotiationClosed'
         | 'confirmation.snapshotImmutable'
-        | 'confirmation.alignFailed';
+        | 'confirmation.alignFailed'
+        | 'confirmation.persistFailed';
     };
 
 function emptyNegotiation(startedAt?: string): ContractNegotiationState {

@@ -234,6 +234,8 @@ export function RechnungPage() {
         result.reason === 'local_conflict'
       ) {
         showToast(translate('invoice.approve.conflict'));
+      } else if (result.reason === 'local_persist_failed') {
+        showToast(translate('invoice.approve.localPersistPending'));
       } else {
         showToast(translate('invoice.approve.failed'));
       }

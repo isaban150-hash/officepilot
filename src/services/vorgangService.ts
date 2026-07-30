@@ -79,7 +79,8 @@ export type VorgangConfirmationUpdateResult =
         | 'vorgang.status.invalidTransition'
         | 'confirmation.snapshotImmutable'
         | 'confirmation.alreadyExists'
-        | 'confirmation.alignFailed';
+        | 'confirmation.alignFailed'
+        | 'confirmation.persistFailed';
     };
 
 export type VorgangExecutionStartResult =
@@ -719,6 +720,7 @@ export function saveVorgangContractConfirmation(
     return { success: false, errorKey: 'confirmation.alignFailed' };
   }
 
+  const previousRaw = vorgaenge[index]!;
   const updated = cloneVorgang({
     ...current,
     status: 'beauftragt',
@@ -726,7 +728,16 @@ export function saveVorgangContractConfirmation(
     negotiation: normalizeNegotiation(negotiation),
     contractConfirmation: frozen,
   });
-  return { success: true, vorgang: updateVorgangInStore(updated) };
+  const next = isEntitySyncActive(updated)
+    ? withUpdatedEntitySync(updated, 'vorgang')
+    : updated;
+  vorgaenge = vorgaenge.map((v) => (v.id === vorgangId ? next : v));
+  const persistResult = persistAll();
+  if (!persistResult.success) {
+    vorgaenge = vorgaenge.map((v) => (v.id === vorgangId ? previousRaw : v));
+    return { success: false, errorKey: 'confirmation.persistFailed' };
+  }
+  return { success: true, vorgang: cloneVorgang(next) };
 }
 
 /** Guard: existing confirmation snapshots must never be replaced. */
@@ -778,7 +789,11 @@ export type UpsertFinalizedInvoiceResult =
   | { ok: true; invoice: VorgangInvoice; action: 'inserted' | 'noop' | 'status_raised' }
   | {
       ok: false;
-      reason: 'vorgang_missing' | 'id_content_conflict' | 'number_id_conflict';
+      reason:
+        | 'vorgang_missing'
+        | 'id_content_conflict'
+        | 'number_id_conflict'
+        | 'local_persist_failed';
     };
 
 const INVOICE_STATUS_RANK: Record<VorgangInvoice['status'], number> = {
@@ -904,7 +919,8 @@ export function upsertFinalizedInvoiceOnVorgang(
     return { ok: false, reason: 'vorgang_missing' };
   }
 
-  const applied = applyFinalizedInvoiceToVorgang(vorgaenge[index]!, invoice);
+  const previousRaw = vorgaenge[index]!;
+  const applied = applyFinalizedInvoiceToVorgang(previousRaw, invoice);
   if (!applied.ok || !applied.vorgang) {
     return applied.ok
       ? { ok: true, invoice: applied.invoice, action: applied.action }
@@ -915,7 +931,15 @@ export function upsertFinalizedInvoiceOnVorgang(
     return { ok: true, invoice: applied.invoice, action: 'noop' };
   }
 
-  updateVorgangInStore(applied.vorgang);
+  const next = isEntitySyncActive(applied.vorgang)
+    ? withUpdatedEntitySync(applied.vorgang, 'vorgang')
+    : applied.vorgang;
+  vorgaenge = vorgaenge.map((v) => (v.id === vorgangId ? next : v));
+  const persistResult = persistAll();
+  if (!persistResult.success) {
+    vorgaenge = vorgaenge.map((v) => (v.id === vorgangId ? previousRaw : v));
+    return { ok: false, reason: 'local_persist_failed' };
+  }
   return { ok: true, invoice: applied.invoice, action: applied.action };
 }
 
