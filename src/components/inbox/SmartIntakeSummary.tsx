@@ -5,6 +5,7 @@ import type { InboxItem, WorkflowResult, WorkflowResultExecution } from '../../t
 import type { TranslationKey } from '../../i18n';
 import { formatMessage } from '../../i18n/formatMessage';
 import type { ExplanationTextBlock } from '../../i18n/types';
+import { isDocumentFilingDecisionConfirmed } from '../../services/documentFilingDecisionService';
 
 interface SmartIntakeSummaryProps {
   workflow: WorkflowResult;
@@ -70,7 +71,14 @@ export function SmartIntakeSummary({
         )
       : translate('intake.vorgang.createNew');
 
-  const canExecuteAll = workflow.companyRelevant && !item.isAdvertisement;
+  const canExecuteAll =
+    workflow.companyRelevant &&
+    !item.isAdvertisement &&
+    isDocumentFilingDecisionConfirmed(item);
+  const canArchive =
+    workflow.companyRelevant &&
+    !item.importedToArchive &&
+    isDocumentFilingDecisionConfirmed(item);
 
   return (
     <Card className="smart-intake-card" highlight>
@@ -186,17 +194,24 @@ export function SmartIntakeSummary({
           fullWidth
           disabled={!canExecuteAll || isExecuting || executionResult?.completed}
           onClick={onExecuteAll}
+          data-testid="smart-intake-execute-all"
         >
           {translate('intake.action.executeAll')}
         </Button>
+        {!isDocumentFilingDecisionConfirmed(item) && !item.importedToArchive ? (
+          <p className="muted" data-testid="smart-intake-filing-confirm-required">
+            {translate('filingDecision.confirmRequired')}
+          </p>
+        ) : null}
       </div>
 
       <div className="smart-intake-actions">
         <Button
           type="button"
           variant="outline"
-          disabled={isExecuting || item.importedToArchive || !workflow.companyRelevant}
+          disabled={isExecuting || !canArchive}
           onClick={onArchive}
+          data-testid="smart-intake-archive"
         >
           {translate('intake.action.archive')}
         </Button>

@@ -25,6 +25,7 @@ import { hydrateInboxStore } from './inboxService';
 import * as persistenceService from './persistenceService';
 import { setTaskStoreForTests } from './taskStore';
 import { getVorgangById, hydrateVorgangStore } from './vorgangService';
+import { confirmFilingDecisionForTests } from '../test/confirmFilingDecisionForTests';
 
 const testProfile = {
   companyName: 'Mustermann Sanitär GmbH',
@@ -273,6 +274,7 @@ describe('CONTRACT-PROPOSAL-OPEN-BLOCK-01', () => {
     );
     analyzeSpy.mockClear();
 
+    confirmFilingDecisionForTests(item.id);
     const result = executeSmartIntake(workflow, {
       companyName: testProfile.companyName,
       materialStandard: 'betrieb',

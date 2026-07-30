@@ -28,6 +28,7 @@ import { getVorgangById, hydrateVorgangStore } from './vorgangService';
 import { createTestVorgang } from '../test/fixtures';
 import { getDocumentCase } from '../test/document-cases/_lib/loadCases';
 import { runStablePipeline, testProfile } from '../test/document-cases/_lib/runStablePipeline';
+import { confirmFilingDecisionForTests } from '../test/confirmFilingDecisionForTests';
 import type {
   OperationalExecutionPlan,
   OperationalExecutionStep,
@@ -40,7 +41,7 @@ function seedHotel() {
   const observation = runStablePipeline(docCase);
   hydrateInboxStore([observation.item]);
   const workflow = processUploadedDocument(observation.item.id) ?? observation.workflow;
-  const item = getInboxItemById(observation.item.id)!;
+  const item = confirmFilingDecisionForTests(observation.item.id);
   return { observation, workflow, item };
 }
 
@@ -116,6 +117,7 @@ describe('OPERATIONAL-EXECUTION-RUNNER-01A', () => {
       const docCase = getDocumentCase('WV-LV-01');
       const observation = runStablePipeline(docCase);
       hydrateInboxStore([observation.item]);
+      confirmFilingDecisionForTests(observation.item.id);
       const plan = buildOperationalExecutionPlan(observation.workflow, {
         inboxItem: observation.item,
       });
@@ -134,6 +136,7 @@ describe('OPERATIONAL-EXECUTION-RUNNER-01A', () => {
       const docCase = getDocumentCase('FA-FRIST-01');
       const observation = runStablePipeline(docCase);
       hydrateInboxStore([observation.item]);
+      confirmFilingDecisionForTests(observation.item.id);
       expect(
         buildOperationalExecutionPlan(observation.workflow, { inboxItem: observation.item })
           ?.playbookId,

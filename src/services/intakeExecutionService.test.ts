@@ -9,6 +9,7 @@ import { processUploadedDocument } from './intakeWorkflowService';
 import { hydrateInboxStore, getInboxItemById } from './inboxService';
 import { getAllTasksFromStore, setTaskStoreForTests } from './taskStore';
 import { getVorgangById, hydrateVorgangStore } from './vorgangService';
+import { confirmFilingDecisionForTests } from '../test/confirmFilingDecisionForTests';
 import type { InboxItem } from '../types/models';
 
 const testProfile = {
@@ -44,6 +45,15 @@ function cloneInbox(item: InboxItem, overrides: Partial<InboxItem> = {}): InboxI
   };
 }
 
+function runSmartIntakeWithFilingConfirm(
+  itemId: string,
+  workflow: NonNullable<ReturnType<typeof processUploadedDocument>>,
+  options: Parameters<typeof executeSmartIntake>[1] = {},
+) {
+  confirmFilingDecisionForTests(itemId);
+  return executeSmartIntake(workflow, options);
+}
+
 describe('intakeExecutionService', () => {
   beforeEach(() => {
     localStorage.clear();
@@ -75,7 +85,7 @@ describe('intakeExecutionService', () => {
     hydrateInboxStore([item]);
 
     const workflow = processUploadedDocument(item.id)!;
-    const result = executeSmartIntake(workflow, {
+    const result = runSmartIntakeWithFilingConfirm(item.id, workflow, {
       companyName: testProfile.companyName,
       materialStandard: 'betrieb',
     });
@@ -104,7 +114,9 @@ describe('intakeExecutionService', () => {
     hydrateInboxStore([item]);
 
     const workflow = processUploadedDocument(item.id)!;
-    const result = executeSmartIntake(workflow, { companyName: testProfile.companyName });
+    const result = runSmartIntakeWithFilingConfirm(item.id, workflow, {
+      companyName: testProfile.companyName,
+    });
 
     expect(result.successSteps).toContain('link_vorgang');
     expect(result.vorgangId).toBe('v-001');
@@ -126,7 +138,7 @@ describe('intakeExecutionService', () => {
     hydrateInboxStore([item]);
 
     const workflow = processUploadedDocument(item.id)!;
-    const result = executeSmartIntake(workflow, {
+    const result = runSmartIntakeWithFilingConfirm(item.id, workflow, {
       companyName: testProfile.companyName,
       materialStandard: 'betrieb',
     });
@@ -148,17 +160,21 @@ describe('intakeExecutionService', () => {
 
     const firstItem = cloneInbox(base, { id: 'exec-duplicate-1' });
     hydrateInboxStore([firstItem]);
-    executeSmartIntake(processUploadedDocument(firstItem.id)!, {
+    runSmartIntakeWithFilingConfirm(firstItem.id, processUploadedDocument(firstItem.id)!, {
       companyName: testProfile.companyName,
     });
     expect(getAllDocuments().length).toBe(1);
 
     const secondItem = cloneInbox(base, { id: 'exec-duplicate-2' });
     hydrateInboxStore([secondItem]);
-    const result = executeSmartIntake(processUploadedDocument(secondItem.id)!, {
-      companyName: testProfile.companyName,
-      duplicateMode: 'update',
-    });
+    const result = runSmartIntakeWithFilingConfirm(
+      secondItem.id,
+      processUploadedDocument(secondItem.id)!,
+      {
+        companyName: testProfile.companyName,
+        duplicateMode: 'update',
+      },
+    );
 
     expect(result.successSteps).toContain('archive_document');
     expect(getAllDocuments().length).toBe(1);
@@ -176,7 +192,9 @@ describe('intakeExecutionService', () => {
     hydrateInboxStore([item]);
 
     const workflow = processUploadedDocument(item.id)!;
-    const result = executeSmartIntake(workflow, { companyName: testProfile.companyName });
+    const result = runSmartIntakeWithFilingConfirm(item.id, workflow, {
+      companyName: testProfile.companyName,
+    });
 
     expect(result.successSteps).not.toContain('import_positions');
     expect(result.positionsAdded).toBe(0);
@@ -194,15 +212,21 @@ describe('intakeExecutionService', () => {
     hydrateInboxStore([item]);
 
     const workflow = processUploadedDocument(item.id)!;
-    const first = executeSmartIntake(workflow, { companyName: testProfile.companyName });
+    const first = runSmartIntakeWithFilingConfirm(item.id, workflow, {
+      companyName: testProfile.companyName,
+    });
     const taskCountAfterFirst = getAllTasksFromStore().length;
     expect(first.tasksCreated).toBeGreaterThan(0);
 
     const resetItem = getInboxItemById(item.id)!;
     hydrateInboxStore([{ ...resetItem, isNewUpload: false }]);
-    const second = executeSmartIntake(processUploadedDocument(item.id)!, {
-      companyName: testProfile.companyName,
-    });
+    const second = runSmartIntakeWithFilingConfirm(
+      item.id,
+      processUploadedDocument(item.id)!,
+      {
+        companyName: testProfile.companyName,
+      },
+    );
 
     expect(getAllTasksFromStore().length).toBe(taskCountAfterFirst);
     expect(second.tasksCreated).toBeGreaterThan(0);
@@ -240,7 +264,9 @@ describe('intakeExecutionService', () => {
     hydrateInboxStore([item]);
 
     const workflow = processUploadedDocument(item.id)!;
-    const result = executeSmartIntake(workflow, { companyName: testProfile.companyName });
+    const result = runSmartIntakeWithFilingConfirm(item.id, workflow, {
+      companyName: testProfile.companyName,
+    });
 
     expect(result.inboxItem?.isNewUpload).toBe(false);
     expect(result.successSteps).toContain('finalize_inbox');
@@ -258,7 +284,9 @@ describe('intakeExecutionService', () => {
     hydrateInboxStore([item]);
 
     const workflow = processUploadedDocument(item.id)!;
-    const result = executeSmartIntake(workflow, { companyName: testProfile.companyName });
+    const result = runSmartIntakeWithFilingConfirm(item.id, workflow, {
+      companyName: testProfile.companyName,
+    });
 
     expect(result.pendingSummary).toBeTruthy();
     expect(result.successSteps).toContain('refresh_pending');

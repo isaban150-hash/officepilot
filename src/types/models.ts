@@ -232,6 +232,11 @@ export interface InboxItem {
   classifiedKind?: ClassifiedDocumentKind;
   /** Manuelle Freigabe für Analyse trotz fehlendem automatischem Firmenbezug */
   markedAsCompanyDocument?: boolean;
+  /**
+   * Confirm-first Ablageentscheidung (Kunde vs. Unternehmen).
+   * Nur Metadaten; keine zweite Filing-Architektur.
+   */
+  filingDecision?: import('./documentFilingDecision').DocumentFilingDecisionRecord;
   /** Herkunft aus E-Mail-Import (MAIL-01) */
   mailImportId?: string;
   importSource?: 'scan' | 'upload' | 'email';

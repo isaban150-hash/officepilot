@@ -13,6 +13,7 @@ import { INBOX_COMMUNICATION_BUTTON_KEYS } from '../components/communication/com
 import { SmartIntakeSummary } from '../components/inbox/SmartIntakeSummary';
 import { DocumentFreeQuestionPanel } from '../components/documents/DocumentFreeQuestionPanel';
 import { DocumentFieldFillConfirmPanel } from '../components/documents/DocumentFieldFillConfirmPanel';
+import { DocumentFilingDecisionPanel } from '../components/documents/DocumentFilingDecisionPanel';
 import { DocumentConfirmedReplyDraftPanel } from '../components/documents/DocumentConfirmedReplyDraftPanel';
 import { DocumentContextualNextStepsPanel } from '../components/documents/DocumentContextualNextStepsPanel';
 import { buildKommunikationPath } from '../components/communication/communicationNavigation';
@@ -35,6 +36,10 @@ import { useApp } from '../context/AppContext';
 import { localizeStoredUserText } from '../i18n/resolveStoredText';
 import { formatInboxActionToast } from '../utils/inboxActionToast';
 import { formatPaperFilingInstruction } from '../services/paperFolderService';
+import {
+  FILING_DECISION_ARCHIVE_BLOCKED_MESSAGE,
+  isDocumentFilingDecisionConfirmed,
+} from '../services/documentFilingDecisionService';
 import { letterExplanationFromWorkflow } from '../services/letterExplanationService';
 import { getInboxExtractedDocumentText } from '../services/inboxDocumentText';
 import { isClassificationKindWithTasks } from '../services/taskEngineService';
@@ -536,6 +541,11 @@ export function EingangDetailPage() {
   };
 
   const handleImportToArchive = () => {
+    if (!isDocumentFilingDecisionConfirmed(item)) {
+      showToast(translate('filingDecision.confirmRequired'));
+      setExpandedSections((current) => ({ ...current, archive: true }));
+      return;
+    }
     const duplicate = isDuplicateDocument(item, setup.companyName);
     if (duplicate) {
       setDuplicateDocument(duplicate);
@@ -550,6 +560,11 @@ export function EingangDetailPage() {
   };
 
   const handleIntakeArchive = () => {
+    if (!isDocumentFilingDecisionConfirmed(item)) {
+      showToast(translate('filingDecision.confirmRequired'));
+      setExpandedSections((current) => ({ ...current, archive: true }));
+      return;
+    }
     handleImportToArchive();
   };
 
@@ -628,6 +643,11 @@ export function EingangDetailPage() {
 
   const handleExecuteAll = () => {
     if (!workflow) return;
+    if (!isDocumentFilingDecisionConfirmed(item)) {
+      showToast(translate('filingDecision.confirmRequired'));
+      setExpandedSections((current) => ({ ...current, archive: true }));
+      return;
+    }
     setIsExecutingIntake(true);
     try {
       const duplicate = isDuplicateDocument(item, setup.companyName);
@@ -638,7 +658,15 @@ export function EingangDetailPage() {
       });
       setIntakeExecution(result);
       if (result.inboxItem) setItem(result.inboxItem);
-      if (result.completed) {
+      const filingBlocked = result.failedSteps.some(
+        (step) =>
+          step.step === 'archive_document' &&
+          step.message === FILING_DECISION_ARCHIVE_BLOCKED_MESSAGE,
+      );
+      if (filingBlocked) {
+        showToast(translate('filingDecision.confirmRequired'));
+        setExpandedSections((current) => ({ ...current, archive: true }));
+      } else if (result.completed) {
         showToast(translate('intake.execute.success'));
       } else if (result.failedSteps.length > 0) {
         showToast(translate('intake.execute.partial'));
@@ -941,6 +969,13 @@ export function EingangDetailPage() {
         expanded={Boolean(expandedSections.archive)}
         onToggle={() => toggleSection('archive')}
       >
+        <DocumentFilingDecisionPanel
+          item={item}
+          onConfirmed={(updated) => {
+            setItem(updated);
+            showToast(translate('filingDecision.confirmedToast'));
+          }}
+        />
         <Card>
           <DataRow label={translate('analysis.digitalFolder')} value={item.digitalFolder.path} />
           <DataRow
@@ -953,12 +988,20 @@ export function EingangDetailPage() {
             <Button
               variant="outline"
               fullWidth
-              disabled={isImporting}
+              disabled={isImporting || !isDocumentFilingDecisionConfirmed(item)}
+              data-testid="inbox-import-to-archive"
               onClick={handleImportToArchive}
             >
               {translate('inbox.importToArchive')}
             </Button>
           )}
+          {!item.importedToArchive &&
+            analysisAllowed &&
+            !isDocumentFilingDecisionConfirmed(item) && (
+              <p className="muted" data-testid="filing-decision-archive-blocked">
+                {translate('filingDecision.confirmRequired')}
+              </p>
+            )}
           {item.importedToArchive && item.archiveDocumentId && (
             <p className="archive-import-hint">
               {translate('inbox.importToArchive.viewDocument')}{' '}

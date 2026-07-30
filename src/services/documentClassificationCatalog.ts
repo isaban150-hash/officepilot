@@ -156,6 +156,13 @@ const CUSTOMER_KINDS = new Set<ClassifiedDocumentKind>([
   'abnahmeprotokoll', 'maengelprotokoll', 'uebergabeprotokoll',
 ]);
 
+/** Kundendokument vs. Unternehmensdokument – dieselbe Katalog-Menge wie Folder-/Type-Mapping. */
+export function isCustomerDocumentKind(
+  kind: ClassifiedDocumentKind | undefined | null,
+): boolean {
+  return Boolean(kind && CUSTOMER_KINDS.has(kind));
+}
+
 const EXPENSE_KINDS = new Set<ClassifiedDocumentKind>([
   'eingangsrechnung', 'rechnung', 'gutschrift', 'quittung', 'kassenbeleg', 'ec_beleg',
   'kreditkartenbeleg', 'tankbeleg', 'reparaturrechnung',

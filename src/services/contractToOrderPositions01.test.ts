@@ -24,6 +24,7 @@ import { buildInvoiceDraftForType } from './invoiceService';
 import { hydrateInboxStore } from './inboxService';
 import { setTaskStoreForTests } from './taskStore';
 import { getVorgangById, hydrateVorgangStore } from './vorgangService';
+import { confirmFilingDecisionForTests } from '../test/confirmFilingDecisionForTests';
 import type { EnhancedDetectedOrderPosition } from '../types/documentIntelligence';
 import type { DetectedOrderPosition, InboxItem } from '../types/models';
 
@@ -162,6 +163,7 @@ describe('CONTRACT-TO-ORDER-POSITIONS-01 confirm-first', () => {
     });
     hydrateInboxStore([item]);
     const workflow = processUploadedDocument(item.id)!;
+    confirmFilingDecisionForTests(item.id);
     const result = executeSmartIntake(workflow, {
       companyName: testProfile.companyName,
       materialStandard: 'betrieb',

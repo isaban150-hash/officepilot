@@ -305,4 +305,36 @@ export function getDocumentAreaLabelKey(area: DocumentAreaFilterId): `document.a
   return `document.area.${area}`;
 }
 
+/**
+ * Suggested Fachbereich from kind + digital path only (no Vorgang entity).
+ * Reuses the same kind/path signals as archive area resolution.
+ */
+export function resolveSuggestedDocumentAreaFromKind(
+  kind: ClassifiedDocumentKind | undefined,
+  path?: string,
+): DocumentAreaId {
+  const areas: DocumentAreaId[] = [];
+  if (kind) {
+    if (RECHNUNG_KINDS.has(kind)) areas.push('rechnungen');
+    if (BELEG_KINDS.has(kind)) areas.push('belege');
+    if (ANGEBOT_KINDS.has(kind)) areas.push('angebote');
+    if (AUFTRAG_KINDS.has(kind)) areas.push('auftraege');
+    if (VERTRAG_KINDS.has(kind)) areas.push('vertraege');
+    if (BEHOERDE_KINDS.has(kind)) areas.push('behoerden');
+    if (MITARBEITER_KINDS.has(kind)) areas.push('mitarbeiter');
+    if (VERSICHERUNG_KINDS.has(kind)) areas.push('versicherungen');
+    if (BAUSTELLE_KIND_SECURE.has(kind)) areas.push('baustellen');
+    if (ALLGEMEIN_KINDS.has(kind)) areas.push('allgemein');
+  }
+  if (hasKundenPath(path)) areas.push('kunden');
+  if (hasBaustellePath(path)) areas.push('baustellen');
+  areas.push(...pathSuggestsArea(path));
+  const ordered = uniqueOrdered(areas);
+  if (ordered.length === 0) return 'allgemein';
+  if (ordered.length > 1 && ordered.includes('allgemein') && kind && !ALLGEMEIN_KINDS.has(kind)) {
+    return ordered.find((area) => area !== 'allgemein') ?? 'allgemein';
+  }
+  return ordered[0] ?? 'allgemein';
+}
+
 export { isDocumentAreaId };

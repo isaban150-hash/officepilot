@@ -518,6 +518,30 @@ const deLegacy = {
   'analysis.confirmed': 'Bestätigt – Original bitte abheften.',
   'analysis.deferred': 'Zur späteren Klärung gespeichert.',
 
+  'filingDecision.title': 'Ablageentscheidung',
+  'filingDecision.hint':
+    'Bitte prüfen und bestätigen, bevor das Dokument ins Archiv übernommen wird.',
+  'filingDecision.scopeLabel': 'Dokumentbezug',
+  'filingDecision.scope.customer': 'Kundendokument',
+  'filingDecision.scope.company': 'Unternehmensdokument',
+  'filingDecision.customer': 'Kunde',
+  'filingDecision.project': 'Projekt / Bauvorhaben',
+  'filingDecision.companyArea': 'Unternehmensbereich',
+  'filingDecision.digitalPath': 'Digitale Ablage',
+  'filingDecision.paper': 'Papierablage',
+  'filingDecision.paperFolder': 'Papierordner',
+  'filingDecision.paperRegister': 'Register',
+  'filingDecision.paper.skip':
+    'Dieses Dokument muss nicht dauerhaft in Papierform aufbewahrt werden.',
+  'filingDecision.confirm': 'Ablage bestätigen',
+  'filingDecision.confirmed': 'Ablage bestätigt – Archivierung freigegeben.',
+  'filingDecision.confirmedToast': 'Ablageentscheidung bestätigt.',
+  'filingDecision.confirmRequired':
+    'Bitte zuerst die Ablageentscheidung bestätigen.',
+  'filingDecision.kindLabel': 'Dokumentart',
+  'filingDecision.kind.hotelrechnung': 'Hotelrechnung',
+  'filingDecision.area.hotelTravel': 'Hotel / Reisekosten',
+
   'docType.eingangsrechnung': 'Eingangsrechnung',
   'docType.kundenauftrag': 'Kundenauftrag',
   'docType.ausgangsrechnung': 'Ausgangsrechnung',

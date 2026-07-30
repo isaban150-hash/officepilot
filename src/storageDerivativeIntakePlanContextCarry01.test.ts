@@ -42,6 +42,7 @@ import { setPdfTextExtractorForTests } from './services/uploadTextExtractionServ
 import { setImageOcrExtractorForTests } from './services/ocrDocumentService';
 import { createAuftragInboxItem } from './test/fixtures';
 import { resetTestStores } from './test/resetStores';
+import { confirmFilingDecisionForTests } from './test/confirmFilingDecisionForTests';
 import { withNewEntitySync } from './services/sync/syncMetaService';
 import type { WorkflowResult } from './types/models';
 
@@ -222,6 +223,7 @@ describe('STORAGE-DERIVATIVE-INTAKE-PLAN-CONTEXT-CARRY-01', () => {
       nextActions: [],
     } as WorkflowResult;
 
+    confirmFilingDecisionForTests(item.id);
     const result = executeSmartIntake(workflow, {
       companyName: 'Test GmbH',
     });

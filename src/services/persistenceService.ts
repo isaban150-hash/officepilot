@@ -326,6 +326,7 @@ function cloneInboxItem(item: InboxItem): InboxItem {
     originalRecognizedData: item.originalRecognizedData
       ? { ...item.originalRecognizedData }
       : undefined,
+    filingDecision: item.filingDecision ? { ...item.filingDecision } : undefined,
   };
 }
 

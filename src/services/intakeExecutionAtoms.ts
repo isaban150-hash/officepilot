@@ -24,6 +24,10 @@ import {
   buildVorgangDraftFromInbox,
   isInboxLinkedToVorgang,
 } from './vorgangService';
+import {
+  isDocumentFilingDecisionConfirmed,
+  FILING_DECISION_ARCHIVE_BLOCKED_MESSAGE,
+} from './documentFilingDecisionService';
 import type {
   ContractAnalysisResult,
   InboxItem,
@@ -99,7 +103,20 @@ export function executeArchiveAtom(
     return { item };
   }
 
-  const duplicate = isDuplicateDocument(item, options.companyName);
+  // Confirm-first: never auto-confirm filing. Archive only after explicit user confirm.
+  if (!isDocumentFilingDecisionConfirmed(item)) {
+    markIntakeFailure(failedSteps, 'archive_document', FILING_DECISION_ARCHIVE_BLOCKED_MESSAGE);
+    pushIntakeWarning(
+      warnings,
+      'filing_decision_unconfirmed',
+      FILING_DECISION_ARCHIVE_BLOCKED_MESSAGE,
+    );
+    return { item };
+  }
+
+  const workingItem = item;
+
+  const duplicate = isDuplicateDocument(workingItem, options.companyName);
   if (duplicate && options.duplicateMode === 'skip') {
     pushIntakeWarning(
       warnings,
@@ -107,30 +124,30 @@ export function executeArchiveAtom(
       'Archiv-Duplikat erkannt – Import übersprungen.',
     );
     markIntakeSuccess(successSteps, 'archive_document');
-    return { item };
+    return { item: workingItem };
   }
 
   const archiveResult = duplicate
-    ? updateDocumentFromInbox(duplicate.id, item, options.companyName)
+    ? updateDocumentFromInbox(duplicate.id, workingItem, options.companyName)
     : importInboxDocument(
-        item,
+        workingItem,
         options.companyName,
-        resolveImportInboxDocumentOptionsFromIntakeCarry(item.id),
+        resolveImportInboxDocumentOptionsFromIntakeCarry(workingItem.id),
       );
 
   if (!archiveResult.success) {
     markIntakeFailure(failedSteps, 'archive_document', archiveResult.errorKey);
-    return { item };
+    return { item: workingItem };
   }
 
-  const marked = markInboxImportedToArchive(item.id, archiveResult.document.id);
+  const marked = markInboxImportedToArchive(workingItem.id, archiveResult.document.id);
   if (!marked?.item) {
     markIntakeFailure(
       failedSteps,
       'archive_document',
       'Inbox-Status nach Archivimport nicht aktualisiert.',
     );
-    return { item, archiveDocumentId: archiveResult.document.id };
+    return { item: workingItem, archiveDocumentId: archiveResult.document.id };
   }
 
   markIntakeSuccess(successSteps, 'archive_document');

@@ -40,6 +40,7 @@ export function getInboxStoreSnapshot(): InboxItem[] {
     originalRecognizedData: item.originalRecognizedData
       ? { ...item.originalRecognizedData }
       : undefined,
+    filingDecision: item.filingDecision ? { ...item.filingDecision } : undefined,
   }));
 }
 
@@ -53,6 +54,7 @@ export function hydrateInboxStore(items: InboxItem[]): void {
     originalRecognizedData: item.originalRecognizedData
       ? { ...item.originalRecognizedData }
       : undefined,
+    filingDecision: item.filingDecision ? { ...item.filingDecision } : undefined,
   }));
 }
 

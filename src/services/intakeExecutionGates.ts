@@ -80,9 +80,13 @@ export function wouldLinkVorgangOnSmartIntake(
 
 export function wouldArchiveOnSmartIntake(
   workflow: Pick<WorkflowResult, 'companyRelevant'>,
-  item: Pick<InboxItem, 'importedToArchive'>,
+  item: Pick<InboxItem, 'importedToArchive' | 'filingDecision'>,
 ): boolean {
-  return workflow.companyRelevant && !item.importedToArchive;
+  return (
+    workflow.companyRelevant &&
+    !item.importedToArchive &&
+    item.filingDecision?.status === 'confirmed'
+  );
 }
 
 export function wouldAcceptTasksOnSmartIntake(
