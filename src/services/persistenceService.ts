@@ -383,6 +383,9 @@ function cloneCompanyDocument(doc: CompanyDocument): CompanyDocument {
     paperFolder: { ...doc.paperFolder },
     tags: [...doc.tags],
     linkedVorgang: doc.linkedVorgang ? { ...doc.linkedVorgang } : null,
+    archiveTruthSnapshot: doc.archiveTruthSnapshot
+      ? (JSON.parse(JSON.stringify(doc.archiveTruthSnapshot)) as typeof doc.archiveTruthSnapshot)
+      : undefined,
   };
 }
 

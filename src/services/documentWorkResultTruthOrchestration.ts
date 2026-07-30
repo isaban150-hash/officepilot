@@ -13,6 +13,7 @@ import {
   isDocumentWorkResultUsableForDisplay,
 } from './documentWorkResultService';
 import { resolveDocumentWorkResult } from './documentWorkResultResolveService';
+import { resolveDocumentWorkTruthViewFromArchiveSnapshot } from './documentArchiveTruthSnapshotService';
 import { getInboxItemById } from './inboxService';
 import { isEntitySyncActive } from './sync/syncMetaService';
 
@@ -90,12 +91,13 @@ export type ResolveDocumentWorkTruthViewForCompanyDocumentResult = {
 
 /**
  * DOCUMENT-ARCHIVE-TRUTH-03A2 — read-only TruthView for archived CompanyDocuments.
- * Origin: document.sourceInboxItemId only. Delegates to buildDocumentWorkTruthViewForInboxItem.
+ * Origin: document.sourceInboxItemId first (live Inbox + DWR).
+ * ARCHIVE-TRUTH-DURABILITY-01 — fallback to immutable archiveTruthSnapshot when
+ * InboxItem or usable DWR is missing.
  * Never persists, never repairs links, never synthesizes confirmations.
  *
  * Workspace security: optional input.workspaceId is forwarded to the Inbox TruthView
- * path so getDocumentWorkResultForItem / isDocumentWorkResultUsableForDisplay remain
- * the sole guards. No parallel snapshot/workspace checks.
+ * path and to snapshot usability checks. No parallel Truth engine.
  *
  * InboxItem sync.workspaceId: no dedicated public membership API exists; rely on DWR guards.
  */
@@ -109,13 +111,25 @@ export function resolveDocumentWorkTruthViewForCompanyDocument(input: {
     return { truthView: null, reason: 'document_inactive' };
   }
 
+  const workspaceOptions =
+    input.workspaceId !== undefined ? { workspaceId: input.workspaceId } : undefined;
+
   const sourceInboxItemId = document.sourceInboxItemId?.trim();
   if (!sourceInboxItemId) {
+    const fromSnapshot = tryResolveArchiveTruthSnapshot(document, workspaceOptions);
+    if (fromSnapshot) {
+      return { truthView: fromSnapshot, reason: 'available' };
+    }
     return { truthView: null, reason: 'no_source_inbox' };
   }
 
   const item = getInboxItemById(sourceInboxItemId);
   if (!item) {
+    const fromSnapshot = tryResolveArchiveTruthSnapshot(document, workspaceOptions);
+    if (fromSnapshot) {
+      // Keep diagnostic reason; Facts-Card / AI still receive TruthView.
+      return { truthView: fromSnapshot, reason: 'source_inbox_missing' };
+    }
     return { truthView: null, reason: 'source_inbox_missing' };
   }
 
@@ -137,5 +151,21 @@ export function resolveDocumentWorkTruthViewForCompanyDocument(input: {
     return { truthView, reason: 'available', diagnostic };
   }
 
+  const fromSnapshot = tryResolveArchiveTruthSnapshot(document, workspaceOptions);
+  if (fromSnapshot) {
+    return { truthView: fromSnapshot, reason: 'available', diagnostic };
+  }
+
   return { truthView: null, reason: 'truth_unavailable', diagnostic };
+}
+
+function tryResolveArchiveTruthSnapshot(
+  document: CompanyDocument,
+  workspaceOptions?: { workspaceId?: string | null },
+): DocumentWorkTruthView | null {
+  const snapshot = document.archiveTruthSnapshot;
+  if (!snapshot) return null;
+  // Workspace gate: same ambient/explicit workspaceId as live DWR (workspace store /
+  // caller). Do not compare to document.sync.workspaceId — sync client IDs differ.
+  return resolveDocumentWorkTruthViewFromArchiveSnapshot(snapshot, workspaceOptions);
 }

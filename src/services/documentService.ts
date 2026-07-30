@@ -36,6 +36,11 @@ import type {
   InboxItem,
   PaperFilingRule,
 } from '../types/models';
+import {
+  buildDocumentArchiveTruthSnapshotFromInbox,
+  cloneDocumentArchiveTruthSnapshot,
+  preferExistingArchiveTruthSnapshot,
+} from './documentArchiveTruthSnapshotService';
 
 export const COMPANY_DOCUMENT_CATEGORIES: CompanyDocumentCategory[] = [
   'vertrag',
@@ -62,6 +67,9 @@ function cloneDocument(doc: CompanyDocument): CompanyDocument {
     tags: [...doc.tags],
     linkedVorgang: doc.linkedVorgang ? { ...doc.linkedVorgang } : null,
     linkedInvoiceId: doc.linkedInvoiceId ?? null,
+    archiveTruthSnapshot: doc.archiveTruthSnapshot
+      ? cloneDocumentArchiveTruthSnapshot(doc.archiveTruthSnapshot)
+      : undefined,
   };
 }
 
@@ -146,6 +154,11 @@ function buildDocumentFromInput(
     imagePreview: input.imagePreview ?? '📄',
     linkedInvoiceId: input.linkedInvoiceId ?? null,
     ...fileFieldsFromInput(input),
+    ...(input.archiveTruthSnapshot
+      ? {
+          archiveTruthSnapshot: cloneDocumentArchiveTruthSnapshot(input.archiveTruthSnapshot),
+        }
+      : {}),
   };
 }
 
@@ -224,6 +237,7 @@ export function addDocument(input: CompanyDocumentInput): DocumentMutationResult
   const validationError = validateInput(input);
   if (validationError) return { success: false, errorKey: validationError };
 
+  const previousDocuments = documents;
   const now = new Date().toISOString();
   const document = withNewEntitySync(
     buildDocumentFromInput(input, generateEntityId('doc'), now),
@@ -231,7 +245,12 @@ export function addDocument(input: CompanyDocumentInput): DocumentMutationResult
   );
   documents = [document, ...documents];
   recordArchivedDocumentMemory(document);
-  persistAll();
+  const persistResult = persistAll();
+  if (!persistResult.success) {
+    documents = previousDocuments;
+    tombstoneMemoryForDocument(document.id);
+    return { success: false, errorKey: 'document.persistFailed' };
+  }
   return { success: true, document: cloneDocument(document) };
 }
 
@@ -269,6 +288,10 @@ export function updateDocument(
     sourceInboxItemId: changes.sourceInboxItemId ?? current.sourceInboxItemId,
     documentDate: changes.documentDate !== undefined ? changes.documentDate : current.documentDate,
     uploadedAt: changes.uploadedAt ?? current.uploadedAt,
+    archiveTruthSnapshot: preferExistingArchiveTruthSnapshot(
+      current.archiveTruthSnapshot,
+      changes.archiveTruthSnapshot,
+    ),
   };
 
   const validationError = validateInput(merged);
@@ -420,6 +443,8 @@ export function mapInboxItemToDocumentInput(
     ? item.paperFiling
     : filing.rule ?? item.paperFiling;
 
+  const archiveTruthSnapshot = buildDocumentArchiveTruthSnapshotFromInbox({ item });
+
   return {
     title: item.title,
     category: mapDocumentCategory(item),
@@ -435,6 +460,7 @@ export function mapInboxItemToDocumentInput(
     archived: true,
     imagePreview: imagePreviewForDocumentType(item.documentType),
     ...fileMetaFromInbox(item),
+    ...(archiveTruthSnapshot ? { archiveTruthSnapshot } : {}),
   };
 }
 
@@ -493,45 +519,47 @@ export function importInboxDocument(
 ): DocumentMutationResult {
   const input = mapInboxItemToDocumentInput(item, linkedCompany);
   const result = addDocument(input);
-  if (result.success) {
-    recordArchivedDocumentMemory(result.document, { inboxItem: item });
-    if (isContractInboxItem(item)) {
-      syncContractProofRequirementsFromInbox(item);
-    }
-    if (item.vorgangId) {
-      linkArchivedDocumentToVorgang(result.document, item);
-    }
-    persistAll();
+  if (!result.success) {
+    return result;
+  }
 
-    const transformPlan = options?.transformPlan;
-    if (transformPlan) {
-      persistDocumentFileDerivativeRecoveryContextAfterImport({
-        documentId: result.document.id,
-        transformPlan,
-        origin: options?.transformPlanOrigin,
-      });
-    }
+  recordArchivedDocumentMemory(result.document, { inboxItem: item });
+  if (isContractInboxItem(item)) {
+    syncContractProofRequirementsFromInbox(item);
+  }
+  if (item.vorgangId) {
+    linkArchivedDocumentToVorgang(result.document, item);
+  }
+  persistAll();
 
-    const sourceReuseResult = orchestrateSourceReuseArchiveBindingAfterImport({
+  const transformPlan = options?.transformPlan;
+  if (transformPlan) {
+    persistDocumentFileDerivativeRecoveryContextAfterImport({
       documentId: result.document.id,
       transformPlan,
-    });
-    recordPostImportDerivativeStepOutcome({
-      documentId: result.document.id,
-      stepId: 'source_reuse_archive',
-      result: sourceReuseResult,
-      sourceFileRefId: result.document.fileRefId ?? '',
-      sourceMimeType: result.document.fileRefId
-        ? (getDocumentFileRefById(result.document.fileRefId)?.mimeType ?? '')
-        : '',
-    });
-    // Derived encode is async and serialized; failures must not fail import.
-    // Does not include source_reuse_archive (already executed synchronously above).
-    void orchestratePostImportDerivativesAfterImport({
-      documentId: result.document.id,
-      transformPlan,
+      origin: options?.transformPlanOrigin,
     });
   }
+
+  const sourceReuseResult = orchestrateSourceReuseArchiveBindingAfterImport({
+    documentId: result.document.id,
+    transformPlan,
+  });
+  recordPostImportDerivativeStepOutcome({
+    documentId: result.document.id,
+    stepId: 'source_reuse_archive',
+    result: sourceReuseResult,
+    sourceFileRefId: result.document.fileRefId ?? '',
+    sourceMimeType: result.document.fileRefId
+      ? (getDocumentFileRefById(result.document.fileRefId)?.mimeType ?? '')
+      : '',
+  });
+  // Derived encode is async and serialized; failures must not fail import.
+  // Does not include source_reuse_archive (already executed synchronously above).
+  void orchestratePostImportDerivativesAfterImport({
+    documentId: result.document.id,
+    transformPlan,
+  });
   return result;
 }
 

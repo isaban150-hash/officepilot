@@ -1411,6 +1411,11 @@ export interface CompanyDocument {
   sourceInboxItemId?: string;
   documentDate?: string | null;
   uploadedAt?: string;
+  /**
+   * ARCHIVE-TRUTH-DURABILITY-01 — optional immutable truth frozen at archive import.
+   * Absent on legacy documents; never a live DWR link.
+   */
+  archiveTruthSnapshot?: import('./documentArchiveTruthSnapshot').DocumentArchiveTruthSnapshot;
   sync?: SyncMeta;
 }
 
@@ -1438,6 +1443,7 @@ export interface CompanyDocumentInput {
   sourceInboxItemId?: string;
   documentDate?: string | null;
   uploadedAt?: string;
+  archiveTruthSnapshot?: import('./documentArchiveTruthSnapshot').DocumentArchiveTruthSnapshot;
 }
 
 import type { Expense } from './expense';
