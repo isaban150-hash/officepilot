@@ -1,8 +1,9 @@
 /**
  * Document Work Result facade — project, merge, upsert, restore helpers.
  *
- * Analysis hotpath updates the in-memory store only. Durable writes ride the
- * next natural `persistAll()` (inbox mutations, confirms, etc.).
+ * Successful analysis commits DWR to the in-memory store and flushes via
+ * `flushDocumentWorkResultPersistence()` (existing `persistAll`). Unusable /
+ * failed projections must not destroy a previous valid snapshot.
  */
 import type { DocumentWorkResult } from '../types/documentWorkResult';
 import type { InboxItem, WorkflowResult, WorkflowWarning } from '../types/models';
@@ -69,6 +70,26 @@ function resolveWorkspaceId(): string | null {
   );
 }
 
+function cloneDocumentWorkResult(entry: DocumentWorkResult): DocumentWorkResult {
+  return JSON.parse(JSON.stringify(entry)) as DocumentWorkResult;
+}
+
+/**
+ * Small usability gate for analysis projections.
+ * Requires a non-null Business Interpretation core — no large validation engine.
+ */
+export function isDocumentWorkResultCoreUsable(
+  result: Pick<DocumentWorkResult, 'businessInterpretation' | 'inboxItemId' | 'sourceFingerprint'>,
+): boolean {
+  if (typeof result.inboxItemId !== 'string' || result.inboxItemId.trim().length === 0) {
+    return false;
+  }
+  if (typeof result.sourceFingerprint !== 'string' || result.sourceFingerprint.trim().length === 0) {
+    return false;
+  }
+  return result.businessInterpretation != null;
+}
+
 export function isDocumentWorkResultUsableForDisplay(
   result: DocumentWorkResult,
   item: InboxItem,
@@ -102,8 +123,8 @@ export function getDocumentWorkResultForItem(
 }
 
 /**
- * After a successful detail analysis: project, merge overlay, upsert in memory.
- * Does **not** call `persistAll()` — analysis must not rewrite the full app snapshot.
+ * Project + merge + upsert in memory only (no flush).
+ * Prefer `commitDocumentWorkResultFromAnalysis` on the analysis hotpath.
  */
 export function upsertDocumentWorkResultFromWorkflow(
   workflow: WorkflowResult,
@@ -119,9 +140,77 @@ export function upsertDocumentWorkResultFromWorkflow(
   return upsertDocumentWorkResult(merged);
 }
 
+export type CommitDocumentWorkResultFromAnalysisOutcome = {
+  /** Stored DWR after commit, or previous when skipped / rolled back. */
+  result: DocumentWorkResult | null;
+  persisted: boolean;
+  skipped: boolean;
+  reason: 'ok' | 'unusable_projection' | 'persist_failed';
+  persistResult?: PersistResult;
+};
+
 /**
- * @deprecated Prefer `upsertDocumentWorkResultFromWorkflow`.
- * `options.persist === true` is the only way to force an immediate full-app flush from here.
+ * Analysis hotpath: merge usable projection, upsert, flush via existing persistAll.
+ * Unusable projections leave a previous valid DWR untouched.
+ * Persist failure restores the prior memory snapshot (Fill-Confirm rollback pattern).
+ */
+export function commitDocumentWorkResultFromAnalysis(
+  workflow: WorkflowResult,
+  inboxItem: InboxItem,
+): CommitDocumentWorkResultFromAnalysisOutcome {
+  const previous = getDocumentWorkResult(inboxItem.id);
+  const previousSnapshot = previous ? cloneDocumentWorkResult(previous) : null;
+
+  const projected = projectDocumentWorkResultFromWorkflow({
+    workflow,
+    inboxItem,
+    workspaceId: resolveWorkspaceId(),
+  });
+
+  if (!isDocumentWorkResultCoreUsable(projected)) {
+    return {
+      result: previousSnapshot,
+      persisted: false,
+      skipped: true,
+      reason: 'unusable_projection',
+    };
+  }
+
+  const merged = mergeDocumentWorkResultOnReanalysis(previous, projected);
+  upsertDocumentWorkResult(merged);
+
+  const persistResult = flushDocumentWorkResultPersistence();
+  if (!persistResult.success) {
+    if (previousSnapshot) {
+      upsertDocumentWorkResult(previousSnapshot);
+    } else {
+      removeDocumentWorkResultForInboxItem(inboxItem.id);
+    }
+    console.warn(
+      '[documentWorkResult] Persistenz nach Analyse fehlgeschlagen – vorheriger Zustand wiederhergestellt.',
+      persistResult,
+    );
+    return {
+      result: previousSnapshot,
+      persisted: false,
+      skipped: false,
+      reason: 'persist_failed',
+      persistResult,
+    };
+  }
+
+  return {
+    result: getDocumentWorkResult(inboxItem.id),
+    persisted: true,
+    skipped: false,
+    reason: 'ok',
+    persistResult,
+  };
+}
+
+/**
+ * @deprecated Prefer `commitDocumentWorkResultFromAnalysis` on the analysis path.
+ * Memory upsert; optional immediate flush when `persist === true`.
  */
 export function persistDocumentWorkResultFromWorkflow(
   workflow: WorkflowResult,
@@ -136,7 +225,7 @@ export function persistDocumentWorkResultFromWorkflow(
 }
 
 /**
- * Explicit full-app flush including Document Work Results. Not used by analysis.
+ * Explicit full-app flush including Document Work Results.
  */
 export function flushDocumentWorkResultPersistence(): PersistResult {
   return persistAll();

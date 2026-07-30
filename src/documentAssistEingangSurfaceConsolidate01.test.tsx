@@ -391,11 +391,13 @@ describe('DOCUMENT-ASSIST-EINGANG-SURFACE-CONSOLIDATE-01', () => {
     );
   });
 
-  it('keine Persistenz durch die Konsolidierung', async () => {
-    const persistSpy = vi.spyOn(persistenceService, 'persistAll');
+  it('keine Persistenz durch die UI-Konsolidierung (Analyse-Flush ausgenommen)', async () => {
     const item = createBgBauItem();
     hydrateInboxStore([item]);
     const { container, root } = await mountDetail(item.id);
+    // Analysis may flush DWR on mount (DOCUMENT-WORK-RESULT-PERSISTENCE-01).
+    const persistSpy = vi.spyOn(persistenceService, 'persistAll');
+    persistSpy.mockClear();
     await act(async () => {
       (
         container.querySelector('[data-testid="document-review-more-toggle"]') as HTMLButtonElement

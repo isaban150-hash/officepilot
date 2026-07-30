@@ -96,21 +96,15 @@ describe('DOCUMENT-WORK-RESULT-01A', () => {
     expect(roundTrip).toEqual(projected);
   });
 
-  it('aktualisiert In-Memory nach processUploadedDocument ohne persistAll', () => {
+  it('aktualisiert und persistiert DWR nach processUploadedDocument', () => {
     const persistSpy = vi.spyOn(persistenceService, 'persistAll');
     const { item } = seedHotelInbox();
     expect(getDocumentWorkResult(item.id)).not.toBeNull();
-    expect(persistSpy).not.toHaveBeenCalled();
-
-    const snapshot = buildPersistedStateSnapshot();
-    expect(snapshot.documentWorkResults?.some((entry) => entry.inboxItemId === item.id)).toBe(
-      true,
-    );
+    expect(persistSpy).toHaveBeenCalled();
 
     resetDocumentWorkResultStoreForTests();
     expect(getDocumentWorkResult(item.id)).toBeNull();
 
-    savePersistedState(snapshot);
     hydrateStoresFromStorage();
     const restored = getDocumentWorkResult(item.id);
     expect(restored?.businessInterpretation?.operational.primaryCase).toMatch(/expense_/);
@@ -118,9 +112,7 @@ describe('DOCUMENT-WORK-RESULT-01A', () => {
 
   it('expliziter Flush schreibt DocumentWorkResults dauerhaft', () => {
     const { item } = seedHotelInbox();
-    resetDocumentWorkResultStoreForTests();
-    hydrateInboxStore([item]);
-    processUploadedDocument(item.id);
+    // Analysis already flushed; verify reload still works after another flush.
     expect(getDocumentWorkResult(item.id)).not.toBeNull();
 
     const result = flushDocumentWorkResultPersistence();
@@ -148,7 +140,7 @@ describe('DOCUMENT-WORK-RESULT-01A', () => {
     );
   });
 
-  it('akzeptiert unvollständiges WorkflowResult und fehlende Specialists', () => {
+  it('akzeptiert unvollständiges WorkflowResult und fehlende Specialists (Memory-Upsert)', () => {
     const { item } = seedHotelInbox();
     const incomplete: WorkflowResult = {
       inboxItemId: item.id,
@@ -180,6 +172,7 @@ describe('DOCUMENT-WORK-RESULT-01A', () => {
     });
     expect(projected.businessInterpretation).toBeNull();
     expect(projected.specialistRefs.hasContractIntelligence).toBe(false);
+    // Low-level memory upsert still allows null BI; analysis commit path must not.
     const merged = upsertDocumentWorkResultFromWorkflow(incomplete, item);
     expect(merged.businessInterpretation).toBeNull();
   });

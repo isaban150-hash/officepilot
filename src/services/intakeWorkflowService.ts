@@ -33,7 +33,7 @@ import {
   createTasksFromProposals,
 } from './taskEngineService';
 import { interpretBusinessFromWorkflow } from './businessInterpretationService';
-import { upsertDocumentWorkResultFromWorkflow } from './documentWorkResultService';
+import { commitDocumentWorkResultFromAnalysis } from './documentWorkResultService';
 import { assertContractPlanMutable } from './orderPlanIntegrityService';
 import {
   appendOrderPositionsBulk,
@@ -96,10 +96,12 @@ function withBusinessInterpretation(
   }
 
   try {
-    // In-memory snapshot only — must not call persistAll() from analysis.
-    upsertDocumentWorkResultFromWorkflow(result, item);
-  } catch {
-    // Snapshot upsert must never abort the analysis return path.
+    // Successful analysis: merge + upsert + durable flush (DOCUMENT-WORK-RESULT-PERSISTENCE-01).
+    // Unusable / failed projections keep a previous valid DWR; persist failure rolls back.
+    commitDocumentWorkResultFromAnalysis(result, item);
+  } catch (error) {
+    // Snapshot commit must never abort the analysis return path.
+    console.warn('[documentWorkResult] commit after analysis failed', error);
   }
   return result;
 }
