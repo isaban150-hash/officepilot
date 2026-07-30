@@ -298,12 +298,17 @@ export function updateDocument(
   const validationError = validateInput(merged);
   if (validationError) return { success: false, errorKey: validationError };
 
+  const previousDocuments = documents;
   const updated = withUpdatedEntitySync(
     buildDocumentFromInput(merged, current.id, current.createdAt),
     'document',
   );
   documents = [...documents.slice(0, index), updated, ...documents.slice(index + 1)];
-  persistAll();
+  const persistResult = persistAll();
+  if (!persistResult.success) {
+    documents = previousDocuments;
+    return { success: false, errorKey: 'document.persistFailed' };
+  }
   return { success: true, document: cloneDocument(updated) };
 }
 
