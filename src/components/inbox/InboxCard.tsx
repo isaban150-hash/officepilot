@@ -34,7 +34,9 @@ export function InboxCard({ item, onReview, onUpdated }: InboxCardProps) {
 
   const notify = (result: NonNullable<ReturnType<typeof confirmFiling>>) => {
     showToast(formatInboxActionToast(result, translate));
-    onUpdated();
+    if (result.success) {
+      onUpdated();
+    }
   };
 
   const handleFiling = () => {

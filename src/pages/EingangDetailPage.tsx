@@ -445,8 +445,9 @@ export function EingangDetailPage() {
 
   const handleFiling = () => {
     const result = confirmFiling(item.id);
-    if (result) {
-      showToast(formatInboxActionToast(result, translate));
+    if (!result) return;
+    showToast(formatInboxActionToast(result, translate));
+    if (result.success) {
       goBack();
     }
   };

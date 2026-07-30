@@ -8,6 +8,7 @@ export const trStorageRecommendation = {
 
   'storageRecommendation.reason.duplicateDetected':
     'Benzer bir dosya zaten mevcut – kopya olabilir.',
+  'storageRecommendation.reason.duplicateInInbox': 'Bu belge zaten girişte bulunuyor.',
   'storageRecommendation.reason.discardAdvertisement':
     'Tanınabilir işlevsel bir ilgi yok – kaydetme isteğe bağlı.',
   'storageRecommendation.reason.lowOcrQuality':

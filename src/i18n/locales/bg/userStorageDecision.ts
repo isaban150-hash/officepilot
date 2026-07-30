@@ -6,4 +6,5 @@ export const bgUserStorageDecision = {
   'userStorageDecision.action.useExistingDocument': 'Използвай съществуващия документ',
   'userStorageDecision.action.acceptRecommendation': 'Приеми препоръката',
   'userStorageDecision.action.saveDuplicateAnyway': 'Запази като нов запис',
+  'userStorageDecision.hint.duplicateInInbox': 'Този документ вече е във входящите.',
 } as const;

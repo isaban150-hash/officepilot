@@ -5,6 +5,7 @@ import { isPersistingUserStorageDecision } from '../types/userStorageDecision';
 import { checkCompanyRelevance } from './companyRelevanceService';
 import { analyzeContract } from './contractAnalysisService';
 import { analyzeContractIntelligenceFromText } from './contractIntelligenceService';
+import { getDocumentById } from './documentService';
 import type { CreateInboxFromUploadOptions } from './inboxUploadFactory';
 import type { DocumentIntakeResult } from './documentIntakeService';
 import {
@@ -54,11 +55,23 @@ export async function executePendingDocumentDecision(
 
   if (decision === 'use_existing') {
     const match = pending.storageRecommendation.duplicateMatch;
-    if (!match) {
-      return { success: false, error: 'navigation_failed' };
+    // Only a resolvable, active CompanyDocument may complete this path.
+    if (!match || match.type !== 'document') {
+      return { success: false, error: 'existing_document_missing' };
+    }
+    const document = getDocumentById(match.id);
+    if (!document) {
+      return { success: false, error: 'existing_document_missing' };
     }
     discardPendingDocumentIntake(pending);
-    return { outcome: 'navigate_existing', match };
+    return {
+      outcome: 'navigate_existing',
+      match: {
+        type: 'document',
+        id: document.id,
+        title: document.title,
+      },
+    };
   }
 
   if (!isPersistingUserStorageDecision(decision)) {

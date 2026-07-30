@@ -8,6 +8,8 @@ export const bgStorageRecommendation = {
 
   'storageRecommendation.reason.duplicateDetected':
     'Вече съществува подобен файл – възможен е дубликат.',
+  'storageRecommendation.reason.duplicateInInbox':
+    'Този документ вече е във входящите.',
   'storageRecommendation.reason.discardAdvertisement':
     'Няма разпознаваема бизнес релевантност – запазването е по избор.',
   'storageRecommendation.reason.lowOcrQuality':

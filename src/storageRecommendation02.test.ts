@@ -211,6 +211,8 @@ describe('STORAGE-RECOMMENDATION-02 rule engine', () => {
     });
     expect(rec.level).toBe('duplicate_detected');
     expect(rec.duplicateMatch?.id).toBe('inbox-dup');
+    expect(rec.duplicateMatch?.type).toBe('inbox');
+    expect(rec.reasonKeys).toContain('storageRecommendation.reason.duplicateInInbox');
   });
 
   it('Dublettenprüfung schreibt nichts in IndexedDB', async () => {

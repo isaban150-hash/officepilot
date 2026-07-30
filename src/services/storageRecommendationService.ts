@@ -417,7 +417,10 @@ export async function buildStorageRecommendation(input: {
 
   if (duplicateMatch) {
     level = 'duplicate_detected';
-    reasonKeys = ['storageRecommendation.reason.duplicateDetected'];
+    reasonKeys =
+      duplicateMatch.type === 'inbox'
+        ? ['storageRecommendation.reason.duplicateInInbox']
+        : ['storageRecommendation.reason.duplicateDetected'];
   } else if (
     isClearAdvertisement(classificationInput, detectionReasonKey, classification.isAdvertisement ?? false)
   ) {

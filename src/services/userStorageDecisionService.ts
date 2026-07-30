@@ -44,6 +44,10 @@ export function resolveAvailableUserStorageDecisions(
   const context = buildUserStorageDecisionContext(recommendation, storagePolicy);
 
   if (context.recommendationLevel === 'duplicate_detected') {
+    // Inbox matches are not archive documents — never offer use_existing.
+    if (recommendation.duplicateMatch?.type === 'inbox') {
+      return ['save_duplicate_anyway', 'discard'];
+    }
     return ['use_existing', 'save_duplicate_anyway', 'discard'];
   }
 
@@ -67,7 +71,9 @@ export function resolvePrimarySuggestedUserStorageDecision(
 ): UserStorageDecision {
   switch (recommendation.level) {
     case 'duplicate_detected':
-      return 'use_existing';
+      return recommendation.duplicateMatch?.type === 'inbox'
+        ? 'save_duplicate_anyway'
+        : 'use_existing';
     case 'discard_recommended':
       return 'discard';
     case 'temporary_only':
@@ -101,8 +107,14 @@ export function validateUserStorageDecision(
     return { valid: false, reason: 'decision_not_allowed' };
   }
 
-  if (input.decision === 'use_existing' && !input.recommendation.duplicateMatch) {
-    return { valid: false, reason: 'duplicate_match_required' };
+  if (input.decision === 'use_existing') {
+    const match = input.recommendation.duplicateMatch;
+    if (!match) {
+      return { valid: false, reason: 'duplicate_match_required' };
+    }
+    if (match.type !== 'document') {
+      return { valid: false, reason: 'archive_document_match_required' };
+    }
   }
 
   if (input.decision === 'save_duplicate_anyway' && !input.recommendation.duplicateMatch) {

@@ -156,6 +156,9 @@ export const bgDocAssistant = {
     'Документът е разпознат, но не можа да бъде запазен трайно. Моля, опитайте отново.',
   'docAssistant.error.navigationFailed':
     'Документът е запазен, но страницата с детайли не можа да се отвори.',
+  'docAssistant.error.existingDocumentMissing':
+    'Съществуващият архивен документ не беше намерен. Качването остава – моля, запазете или отхвърлете.',
+  'docAssistant.error.title.existingDocumentMissing': 'Съществуващият документ не е намерен',
   'docAssistant.error.title.unsupportedFormat': 'Файловият формат не се поддържа',
   'docAssistant.error.title.blurryPhoto': 'Размазана снимка',
   'docAssistant.error.title.noReadableText': 'Няма четлив текст',

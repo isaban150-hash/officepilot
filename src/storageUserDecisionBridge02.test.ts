@@ -166,7 +166,7 @@ describe('STORAGE-USER-DECISION-BRIDGE-02', () => {
     expect(await hasDocumentBlob('any')).toBe(false);
   });
 
-  it('use_existing erzeugt keinen Blob und keinen Inbox-Eintrag', async () => {
+  it('use_existing mit Inbox-Match schlägt fehl und verwirft den Upload nicht', async () => {
     setPdfTextExtractorForTests(() => SAMPLE_TEXT);
     const bytes = new TextEncoder().encode('%PDF-1.4\nexisting\n%%EOF');
     const hash = await computeBufferContentHash(bytes);
@@ -181,6 +181,14 @@ describe('STORAGE-USER-DECISION-BRIDGE-02', () => {
       receivedAt: '2026-07-15T10:00:00.000Z',
       sourceFileHash: hash,
       fileRefId: 'file-ref-existing',
+      digitalFolder: { id: 'd1', name: 'Test', path: '/test/' },
+      paperFiling: { folderId: 'f1', register: 'A', label: 'Test' },
+      deadline: null,
+      recommendedAction: 'zuordnen',
+      recognizedData: {},
+      officePilotSuggestion: '',
+      nextTaskLabel: '',
+      securityHint: '',
     };
     hydrateInboxStore([existingInbox]);
 
@@ -190,15 +198,18 @@ describe('STORAGE-USER-DECISION-BRIDGE-02', () => {
     expect(preview.success).toBe(true);
     if (!preview.success) return;
     expect(preview.pending.storageRecommendation.level).toBe('duplicate_detected');
+    expect(preview.pending.storageRecommendation.duplicateMatch?.type).toBe('inbox');
 
-    const beforeRefs = getDocumentFileRefStoreSnapshot().length;
-    const beforeInbox = getInboxStoreSnapshot().length;
+    const available = resolveAvailableUserStorageDecisions(
+      preview.pending.storageRecommendation,
+      preview.pending.storagePolicy,
+    );
+    expect(available).not.toContain('use_existing');
+
     const result = await executePendingDocumentDecision(preview.pending, 'use_existing');
-    expect(result.outcome).toBe('navigate_existing');
-    if (result.outcome !== 'navigate_existing') return;
-    expect(result.match.id).toBe('inbox-existing-decision');
-    expect(getDocumentFileRefStoreSnapshot()).toHaveLength(beforeRefs);
-    expect(getInboxStoreSnapshot()).toHaveLength(beforeInbox);
+    expect(result).toMatchObject({ success: false, error: 'navigation_failed' });
+    expect(preview.pending.cachedFile.bytes.byteLength).toBeGreaterThan(0);
+    discardPendingDocumentIntake(preview.pending);
   });
 
   it('save_duplicate_anyway erzeugt neuen Inbox-Eintrag mit bestehendem fileRefId', async () => {

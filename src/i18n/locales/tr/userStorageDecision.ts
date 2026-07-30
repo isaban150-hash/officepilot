@@ -6,4 +6,5 @@ export const trUserStorageDecision = {
   'userStorageDecision.action.useExistingDocument': 'Mevcut belgeyi kullan',
   'userStorageDecision.action.acceptRecommendation': 'Öneriyi uygula',
   'userStorageDecision.action.saveDuplicateAnyway': 'Yeni kayıt olarak ekle',
+  'userStorageDecision.hint.duplicateInInbox': 'Bu belge zaten girişte bulunuyor.',
 } as const;

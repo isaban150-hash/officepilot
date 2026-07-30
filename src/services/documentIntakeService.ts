@@ -40,6 +40,7 @@ export type DocumentIntakeErrorCode =
   | 'hash_failed'
   | 'persist_failed'
   | 'navigation_failed'
+  | 'existing_document_missing'
   | DocumentBlobStorageErrorCode;
 
 export type DocumentIntakeResult =

@@ -8,6 +8,8 @@ export const deStorageRecommendation = {
 
   'storageRecommendation.reason.duplicateDetected':
     'Eine ähnliche Datei existiert bereits – Dublette möglich.',
+  'storageRecommendation.reason.duplicateInInbox':
+    'Dieses Dokument befindet sich bereits im Eingang.',
   'storageRecommendation.reason.discardAdvertisement':
     'Keine erkennbare geschäftliche Relevanz – Speichern optional.',
   'storageRecommendation.reason.lowOcrQuality':

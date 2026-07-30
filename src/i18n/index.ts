@@ -428,6 +428,8 @@ const deLegacy = {
     'Entsorgung bestätigt. Das Dokument wurde aus der Ablage entfernt – nichts automatisch gelöscht.',
   'inbox.toast.adSaved': 'Werbung manuell gespeichert und abgelegt.',
   'inbox.toast.filed': 'Abgelegt. {filing}',
+  'inbox.toast.filingRequiresArchive':
+    'Dokument wurde noch nicht archiviert. Bitte zuerst ins Dokumentenarchiv übernehmen.',
   'inbox.toast.taskFromItem': 'Aufgabe erstellt: {title}',
   'inbox.toast.contractTasks': '{count} Aufgabe(n) aus Vertrag erstellt',
   'inbox.toast.archived': 'Ins Dokumentenarchiv übernommen.',
@@ -1582,6 +1584,9 @@ const deLegacy = {
   'docAssistant.error.blobStorageFailed': 'Die Datei konnte nicht dauerhaft gespeichert werden. Bitte erneut versuchen.',
   'docAssistant.error.persistFailed': 'Das Dokument wurde erkannt, konnte aber nicht dauerhaft gespeichert werden. Bitte erneut versuchen.',
   'docAssistant.error.navigationFailed': 'Das Dokument wurde gespeichert, die Detailseite konnte aber nicht geöffnet werden.',
+  'docAssistant.error.existingDocumentMissing':
+    'Das vorhandene Archivdokument wurde nicht gefunden. Der Upload bleibt erhalten – bitte speichern oder verwerfen.',
+  'docAssistant.error.title.existingDocumentMissing': 'Vorhandenes Dokument nicht gefunden',
   'docAssistant.error.title.unsupportedFormat': 'Dateiformat nicht unterstützt',
   'docAssistant.error.title.blurryPhoto': 'Foto unscharf',
   'docAssistant.error.title.noReadableText': 'Kein lesbarer Text',
@@ -3335,6 +3340,11 @@ const trLegacy: Partial<Record<keyof typeof de, string>> = {
   'docAssistant.error.blobStorageFailed': 'Dosya kalıcı olarak kaydedilemedi. Lütfen tekrar deneyin.',
   'docAssistant.error.persistFailed': 'Belge tanındı ancak kalıcı olarak kaydedilemedi. Lütfen tekrar deneyin.',
   'docAssistant.error.navigationFailed': 'Belge kaydedildi ancak detay sayfası açılamadı.',
+  'docAssistant.error.existingDocumentMissing':
+    'Mevcut arşiv belgesi bulunamadı. Yükleme korunur – lütfen kaydedin veya vazgeçin.',
+  'docAssistant.error.title.existingDocumentMissing': 'Mevcut belge bulunamadı',
+  'inbox.toast.filingRequiresArchive':
+    'Belge henüz arşivlenmedi. Lütfen önce belge arşivine aktarın.',
   'docAssistant.error.title.unsupportedFormat': 'Dosya formatı desteklenmiyor',
   'docAssistant.error.title.blurryPhoto': 'Fotoğraf bulanık',
   'docAssistant.error.title.noReadableText': 'Okunabilir metin yok',

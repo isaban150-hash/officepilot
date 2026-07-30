@@ -173,9 +173,36 @@ describe('BETA-TEST-01 polish', () => {
 
   describe('Fehlermeldungen', () => {
     it('formatiert Inbox-Toasts auf Deutsch über i18n', () => {
-      hydrateInboxStore([{ ...MOCK_INBOX_ITEMS[0], id: 'inbox-toast-test', status: 'neu' }]);
+      hydrateDocumentStore([
+        {
+          id: 'doc-toast-archive',
+          title: 'Toast Archiv',
+          category: 'sonstiges',
+          issuer: 'Test',
+          recognizedText: '',
+          issueDate: null,
+          validUntil: null,
+          digitalFolder: { id: 'd1', name: 'Test', path: '/test/' },
+          paperFolder: { folderId: 'f1', register: 'A', label: 'Test' },
+          tags: [],
+          linkedCompany: 'Test GmbH',
+          linkedVorgang: null,
+          archived: true,
+          createdAt: '2026-03-01T10:00:00.000Z',
+        },
+      ]);
+      hydrateInboxStore([
+        {
+          ...MOCK_INBOX_ITEMS[0],
+          id: 'inbox-toast-test',
+          status: 'neu',
+          importedToArchive: true,
+          archiveDocumentId: 'doc-toast-archive',
+        },
+      ]);
       const result = confirmFiling('inbox-toast-test');
       expect(result).not.toBeNull();
+      expect(result?.success).toBe(true);
       const msg = formatInboxActionToast(result!, translate);
       expect(msg).toContain('Abgelegt.');
       expect(msg).not.toMatch(/Upload failed|error/i);

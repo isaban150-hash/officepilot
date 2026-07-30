@@ -25,10 +25,11 @@ import {
   createTaskForItem,
 } from './inboxTaskService';
 import { hydrateInboxStore } from './inboxService';
+import { hydrateDocumentStore } from './documentService';
 import { analyzeContract, SAMPLE_WERKVERTRAG_TEXT } from './contractAnalysisService';
 import { hydrateVorgangStore } from './vorgangService';
 import { loadPersistedState, persistAll } from './persistenceService';
-import type { CompanyProfile, InboxItem, Task, TaskProposal } from '../types/models';
+import type { CompanyDocument, CompanyProfile, InboxItem, Task, TaskProposal } from '../types/models';
 
 const testProfile: CompanyProfile = {
   companyName: 'Mustermann Sanitär GmbH',
@@ -354,6 +355,23 @@ describe('inbox integration with task engine', () => {
     localStorage.clear();
     setTaskStoreForTests([]);
     hydrateCompanyProfileStore(testProfile);
+    const archiveDoc: CompanyDocument = {
+      id: 'doc-dedupe-archive',
+      title: 'BG BAU Archiv',
+      category: 'behoerde',
+      issuer: 'BG BAU',
+      recognizedText: '',
+      issueDate: null,
+      validUntil: null,
+      digitalFolder: { id: 'd1', name: 'Test', path: '/test/' },
+      paperFolder: { folderId: 'f1', register: 'A', label: 'Test' },
+      tags: [],
+      linkedCompany: testProfile.companyName,
+      linkedVorgang: null,
+      archived: true,
+      createdAt: '2026-03-01T10:00:00.000Z',
+    };
+    hydrateDocumentStore([archiveDoc]);
     hydrateInboxStore([
       createInboxItem({
         id: 'inbox-dedupe',
@@ -366,12 +384,15 @@ describe('inbox integration with task engine', () => {
         recognizedData: { Dokumentart: 'bg_bau', Betreff: 'BG BAU Beitrag Mustermann Sanitär GmbH' },
         classifiedKind: 'bg_bau',
         markedAsCompanyDocument: true,
+        importedToArchive: true,
+        archiveDocumentId: archiveDoc.id,
       }),
     ]);
   });
 
   it('confirmFiling und createTaskForItem erzeugen nur eine Aufgabe', () => {
     const filing = confirmFiling('inbox-dedupe');
+    expect(filing?.success).toBe(true);
     expect(filing?.taskCreated).toBeTruthy();
 
     const manual = createTaskForItem('inbox-dedupe');

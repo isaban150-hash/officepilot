@@ -1,14 +1,34 @@
 import { analyzeContractFromInbox } from './contractAnalysisService';
 import { isDocumentAnalysisAllowed } from './companyRelevanceService';
 import { getCompanyProfile } from './companyProfileService';
+import { getDocumentById } from './documentService';
 import { formatPaperFilingInstruction } from './paperFolderService';
 import {
   createTaskFromInboxItem,
   createTasksFromContractAnalysis,
 } from './taskEngineService';
 import { getInboxItemById, patchInboxItem, type InboxActionResult } from './inboxService';
+import type { InboxItem } from '../types/models';
+
+/** True only when inbox points at a resolvable, active archive document. */
+export function inboxHasArchiveTruth(item: InboxItem): boolean {
+  if (!item.importedToArchive || !item.archiveDocumentId) return false;
+  return Boolean(getDocumentById(item.archiveDocumentId));
+}
 
 export function confirmFiling(id: string): InboxActionResult | null {
+  const existing = getInboxItemById(id);
+  if (!existing) return null;
+
+  if (!inboxHasArchiveTruth(existing)) {
+    return {
+      success: false,
+      messageKey: 'inbox.toast.filingRequiresArchive',
+      message: 'Dokument wurde noch nicht archiviert.',
+      item: existing,
+    };
+  }
+
   const item = patchInboxItem(id, { status: 'abgelegt', isNewUpload: false });
   if (!item) return null;
   const filing = formatPaperFilingInstruction(item.paperFiling);
