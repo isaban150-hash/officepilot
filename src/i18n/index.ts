@@ -2412,6 +2412,16 @@ const deLegacy = {
 
   'document.experience.saved': 'Das Dokument liegt im Archiv.',
   'document.experience.editing': 'Sie bearbeiten die Angaben.',
+  'document.archiveTruth.title': 'Dokumentangaben',
+  'document.archiveTruth.meta':
+    'Bestätigte und korrigierte Angaben werden vorrangig berücksichtigt.',
+  'document.archiveTruth.confirmedSection': 'Bestätigt oder korrigiert',
+  'document.archiveTruth.analysisSection': 'Aus der Analyse',
+  'document.archiveTruth.conflictsSection': 'Offene Konflikte',
+  'document.archiveTruth.provenance.confirmed': 'Bestätigt',
+  'document.archiveTruth.provenance.corrected': 'Korrigiert',
+  'document.archiveTruth.provenance.analysis': 'Analyse',
+  'document.archiveTruth.provenance.conflict': 'Konflikt',
   'document.understanding.title': 'OfficePilot versteht dieses Dokument',
   'document.understanding.shortSummary': 'Kurz erklärt',
   'document.understanding.actionRequired': 'Muss ich etwas tun?',

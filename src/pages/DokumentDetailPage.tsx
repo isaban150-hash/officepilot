@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { DocumentArchiveTruthFactsCard } from '../components/documents/DocumentArchiveTruthFactsCard';
 import { DocumentUnderstandingCard } from '../components/documents/DocumentUnderstandingCard';
 import { DocumentDetailPreview } from '../components/documents/DocumentDetailPreview';
 import { DocumentDerivativeRecoveryStatusPanel } from '../components/documents/DocumentDerivativeRecoveryStatusPanel';
@@ -303,6 +304,8 @@ export function DokumentDetailPage() {
         actions={experienceActions}
         testId="document-detail-experience"
       />
+
+      <DocumentArchiveTruthFactsCard document={document} />
 
       <DocumentUnderstandingCard documentId={document.id} />
 

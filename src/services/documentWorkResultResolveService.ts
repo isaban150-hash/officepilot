@@ -85,42 +85,53 @@ export function buildDocumentWorkTruthConflictDisplayLines(
   return lines;
 }
 
+/** Structured TruthView fact for Assist prompts and archive display (no marker parsing). */
+export type DocumentWorkTruthAssistFact = {
+  label: string;
+  value: string;
+  /** From TruthView slot provenance; discarded/conflict slots are omitted. */
+  provenance: 'user_confirmed' | 'user_corrected' | 'analysis';
+};
+
 /**
- * Compact assist / free-question fact lines from a TruthView.
+ * Central structured fact list from an already-resolved TruthView.
+ * Same slot inclusion / conflict skip / discarded skip as Assist context lines.
  */
-export function buildDocumentWorkTruthAssistContextLines(
+export function listDocumentWorkTruthAssistFacts(
   truth: DocumentWorkTruthView,
-): { factLines: string[]; conflictLines: string[] } {
+): DocumentWorkTruthAssistFact[] {
   const bi = truth.businessInterpretation;
-  const factLines: string[] = [];
   const conflictSlotIds = new Set(truth.unresolvedConflicts.map((c) => c.slotId));
 
-  const slotProvenance = (slotId: string): string | undefined => {
+  const slotDisplayProvenance = (
+    slotId: string,
+  ): DocumentWorkTruthAssistFact['provenance'] | null => {
     const slot = truth.slots.find((entry) => entry.slotId === slotId);
-    if (!slot) return undefined;
-    if (slot.provenance === 'user_confirmed') return 'Nutzerbestätigung';
-    if (slot.provenance === 'user_corrected') return 'Nutzerkorrektur';
-    if (slot.provenance === 'discarded') return undefined;
-    if (slot.provenance === 'conflict') return undefined;
-    return undefined;
+    if (!slot) return 'analysis';
+    if (slot.provenance === 'user_confirmed') return 'user_confirmed';
+    if (slot.provenance === 'user_corrected') return 'user_corrected';
+    if (slot.provenance === 'discarded' || slot.provenance === 'conflict') return null;
+    return 'analysis';
   };
 
-  // Confirmed / corrected first (priority for Assist prompts).
-  const confirmedFirst: string[] = [];
-  const otherFacts: string[] = [];
+  const confirmedFirst: DocumentWorkTruthAssistFact[] = [];
+  const otherFacts: DocumentWorkTruthAssistFact[] = [];
 
   const pushOrdered = (
     label: string,
     value: string | undefined,
-    provenance?: string,
+    provenance: DocumentWorkTruthAssistFact['provenance'] | null,
   ) => {
-    if (!value?.trim()) return;
-    const suffix = provenance ? ` [${provenance}]` : '';
-    const line = `${label}: ${value.trim()}${suffix}`;
-    if (provenance === 'Nutzerbestätigung' || provenance === 'Nutzerkorrektur') {
-      confirmedFirst.push(line);
+    if (!value?.trim() || provenance == null) return;
+    const fact: DocumentWorkTruthAssistFact = {
+      label,
+      value: value.trim(),
+      provenance,
+    };
+    if (provenance === 'user_confirmed' || provenance === 'user_corrected') {
+      confirmedFirst.push(fact);
     } else {
-      otherFacts.push(line);
+      otherFacts.push(fact);
     }
   };
 
@@ -129,14 +140,14 @@ export function buildDocumentWorkTruthAssistContextLines(
       pushOrdered(
         'Gegenpartei',
         bi.facts.parties.counterparty?.name,
-        slotProvenance('facts.parties.counterparty'),
+        slotDisplayProvenance('facts.parties.counterparty'),
       );
     }
     if (!conflictSlotIds.has('facts.parties.ownCompany')) {
       pushOrdered(
         'Eigener Betrieb',
         bi.facts.parties.ownCompany?.name,
-        slotProvenance('facts.parties.ownCompany'),
+        slotDisplayProvenance('facts.parties.ownCompany'),
       );
     }
     if (!conflictSlotIds.has('facts.money.0')) {
@@ -144,40 +155,66 @@ export function buildDocumentWorkTruthAssistContextLines(
       const moneyLabel =
         money?.amountFormatted ??
         (money?.amount != null ? `${money.amount} ${money.currency ?? 'EUR'}` : money?.label);
-      pushOrdered('Betrag', moneyLabel, slotProvenance('facts.money.0'));
+      pushOrdered('Betrag', moneyLabel, slotDisplayProvenance('facts.money.0'));
     }
     if (!conflictSlotIds.has('facts.timeline.deadline')) {
       pushOrdered(
         'Frist',
         bi.facts.timeline.deadline?.value,
-        slotProvenance('facts.timeline.deadline'),
+        slotDisplayProvenance('facts.timeline.deadline'),
       );
     }
     if (!conflictSlotIds.has('operational.nextStep')) {
       pushOrdered(
         'Nächster Schritt',
         bi.operational.nextStep,
-        slotProvenance('operational.nextStep'),
+        slotDisplayProvenance('operational.nextStep'),
       );
     }
     if (!conflictSlotIds.has('operational.confirmRequirement')) {
       pushOrdered(
         'Bestätigungserfordernis',
         bi.operational.confirmRequirement,
-        slotProvenance('operational.confirmRequirement'),
+        slotDisplayProvenance('operational.confirmRequirement'),
       );
     }
     if (!conflictSlotIds.has('meaning.summary')) {
-      pushOrdered('Zusammenfassung', bi.meaning.summary, slotProvenance('meaning.summary'));
+      pushOrdered(
+        'Zusammenfassung',
+        bi.meaning.summary,
+        slotDisplayProvenance('meaning.summary'),
+      );
     }
   }
 
   for (const extra of truth.sessionConfirmedExtraFacts ?? []) {
     if (!extra.value?.trim()) continue;
-    confirmedFirst.push(`${extra.label}: ${extra.value.trim()} [Nutzerbestätigung]`);
+    confirmedFirst.push({
+      label: extra.label,
+      value: extra.value.trim(),
+      provenance: 'user_confirmed',
+    });
   }
 
-  factLines.push(...confirmedFirst, ...otherFacts);
+  return [...confirmedFirst, ...otherFacts];
+}
+
+/**
+ * Compact assist / free-question fact lines from a TruthView.
+ * Prompt markers are formatting only — derived from structured provenance.
+ */
+export function buildDocumentWorkTruthAssistContextLines(
+  truth: DocumentWorkTruthView,
+): { factLines: string[]; conflictLines: string[] } {
+  const factLines = listDocumentWorkTruthAssistFacts(truth).map((fact) => {
+    if (fact.provenance === 'user_confirmed') {
+      return `${fact.label}: ${fact.value} [Nutzerbestätigung]`;
+    }
+    if (fact.provenance === 'user_corrected') {
+      return `${fact.label}: ${fact.value} [Nutzerkorrektur]`;
+    }
+    return `${fact.label}: ${fact.value}`;
+  });
 
   const conflictLines = buildDocumentWorkTruthConflictDisplayLines(truth).map(
     (line) => `UNGELÖSTER KONFLIKT: ${line}`,

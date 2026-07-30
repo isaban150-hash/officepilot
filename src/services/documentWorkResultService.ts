@@ -33,6 +33,7 @@ export {
 export {
   resolveDocumentWorkResult,
   mergeDocumentWorkResultOverlayWithSession,
+  listDocumentWorkTruthAssistFacts,
   buildDocumentWorkTruthAssistContextLines,
   buildDocumentWorkTruthConflictDisplayLines,
 } from './documentWorkResultResolveService';

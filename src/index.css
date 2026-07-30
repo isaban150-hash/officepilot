@@ -328,6 +328,62 @@ body {
   margin-top: 0.25rem;
 }
 
+.document-archive-truth-card {
+  margin-top: 0.75rem;
+}
+
+.document-archive-truth-card .detail-experience-card__inner {
+  box-shadow: var(--shadow-md);
+}
+
+.document-archive-truth-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.document-archive-truth-list__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.4rem 0.75rem;
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+.document-archive-truth-list__text {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.document-archive-truth-badge {
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.document-archive-truth-badge--confirmed,
+.document-archive-truth-badge--corrected {
+  color: var(--color-primary);
+}
+
+.document-archive-truth-badge--conflict {
+  color: var(--color-danger, #b42318);
+}
+
+.document-archive-truth-conflicts {
+  background: var(--color-accent-soft);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem 0.9rem;
+}
+
 .document-understanding-card {
   margin-top: 0.75rem;
 }
