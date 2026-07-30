@@ -13,11 +13,16 @@ import { persistDocumentFileDerivativeRecoveryContextAfterImport } from './docum
 import { documentMatchesArea } from './documentAreaCatalog';
 import type { DocumentAreaFilterId } from '../types/documentArea';
 import {
+  isContractProofSyncHardFailure,
+  syncContractProofRequirementsAfterVorgangLink,
+} from './contractProofSyncAfterVorgangLinkService';
+import {
   isContractInboxItem,
   recordArchivedDocumentMemory,
   syncContractProofRequirementsFromInbox,
   tombstoneMemoryForDocument,
 } from './officePilotMemoryService';
+import { getInboxItemById } from './inboxService';
 import {
   filterSyncActive,
   generateEntityId,
@@ -351,7 +356,35 @@ export function linkDocumentToVorgang(
   id: string,
   link: CompanyDocumentVorgangLink | null,
 ): DocumentMutationResult {
-  return updateDocument(id, { linkedVorgang: link });
+  const result = updateDocument(id, { linkedVorgang: link });
+  if (!result.success) return result;
+
+  const vorgangId = link?.vorgangId?.trim();
+  if (!vorgangId) return result;
+
+  const inboxItem = result.document.sourceInboxItemId
+    ? getInboxItemById(result.document.sourceInboxItemId)
+    : null;
+
+  const syncResult = syncContractProofRequirementsAfterVorgangLink({
+    vorgangId,
+    document: result.document,
+    inboxItem,
+  });
+
+  if (isContractProofSyncHardFailure(syncResult)) {
+    return {
+      success: false,
+      errorKey:
+        syncResult.status === 'persist_failed'
+          ? 'document.persistFailed'
+          : syncResult.status === 'workspace_rejected' || syncResult.status === 'vorgang_not_found'
+            ? 'document.contractProofWorkspaceRejected'
+            : 'document.contractProofSourceUnavailable',
+    };
+  }
+
+  return result;
 }
 
 function normalizeDuplicateKey(title: string, issuer: string): string {

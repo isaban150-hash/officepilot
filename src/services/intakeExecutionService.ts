@@ -91,6 +91,7 @@ export function executeLegacySmartIntakeSequence(
       options,
       successSteps,
       failedSteps,
+      warnings,
     );
     current = vorgangOutcome.item;
     vorgangId = vorgangOutcome.vorgangId ?? current.vorgangId;

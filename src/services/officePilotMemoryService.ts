@@ -642,11 +642,13 @@ export function syncContractProofRequirements(
     });
     createdRelations.push(relation);
 
+    const missingId = missingProofId(vorgangId, proofType);
+
     const existingDocumentProof = getProofMemories().find(
       (item) =>
         item.proofType === proofType &&
         item.status !== 'missing' &&
-        item.documentId,
+        Boolean(item.documentId),
     );
 
     if (existingDocumentProof) {
@@ -654,8 +656,25 @@ export function syncContractProofRequirements(
       continue;
     }
 
+    // Do not reset fulfilled/valid/unknown proofs back to missing on re-sync.
+    const existingProtected = getProofMemories().find(
+      (item) =>
+        item.proofType === proofType &&
+        item.status !== 'missing' &&
+        (item.id === missingId || item.requiredByVorgangIds.includes(vorgangId)),
+    );
+    if (existingProtected) {
+      continue;
+    }
+
+    const existingMissing = getProofMemories().find((item) => item.id === missingId);
+    if (existingMissing) {
+      createdMissing.push(existingMissing);
+      continue;
+    }
+
     const missing = addOrUpdateProofMemory({
-      id: missingProofId(vorgangId, proofType),
+      id: missingId,
       proofType,
       status: 'missing',
       validFrom: null,

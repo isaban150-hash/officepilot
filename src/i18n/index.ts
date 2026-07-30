@@ -1620,6 +1620,10 @@ const deLegacy = {
   'document.notFound': 'Dokument nicht gefunden.',
   'document.persistFailed':
     'Das Dokument konnte nicht dauerhaft gespeichert werden. Bitte erneut versuchen.',
+  'document.contractProofSourceUnavailable':
+    'Vertragsnachweise konnten nicht synchronisiert werden: Textquelle fehlt.',
+  'document.contractProofWorkspaceRejected':
+    'Vertragsnachweise konnten nicht synchronisiert werden: Workspace stimmt nicht überein.',
   'document.filingDecisionRequired':
     'Die Ablageentscheidung muss vor dem Archivieren bestätigt werden.',
   'document.fieldTitle': 'Titel',

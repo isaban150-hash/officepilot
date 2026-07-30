@@ -17,6 +17,7 @@ import {
   createVorgangFromInboxWithContract,
   linkWorkflowVorgang,
 } from './intakeWorkflowService';
+import { getInboxItemById } from './inboxService';
 import { scanPendingItems } from './pendingEngineService';
 import { getCachedSetup } from './persistenceService';
 import {
@@ -28,6 +29,10 @@ import {
   isDocumentFilingDecisionConfirmed,
   FILING_DECISION_ARCHIVE_BLOCKED_MESSAGE,
 } from './documentFilingDecisionService';
+import {
+  isContractProofSyncHardFailure,
+  syncContractProofRequirementsAfterVorgangLink,
+} from './contractProofSyncAfterVorgangLinkService';
 import type {
   ContractAnalysisResult,
   InboxItem,
@@ -154,12 +159,44 @@ export function executeArchiveAtom(
   return { item: marked.item, archiveDocumentId: archiveResult.document.id };
 }
 
+function runProofSyncAfterVorgangLink(input: {
+  vorgangId: string;
+  inboxItem: InboxItem;
+  step: 'create_vorgang' | 'link_vorgang';
+  failedSteps: WorkflowExecutionFailure[];
+  warnings?: WorkflowWarning[];
+}): InboxItem {
+  const fresh = getInboxItemById(input.inboxItem.id) ?? input.inboxItem;
+  const syncResult = syncContractProofRequirementsAfterVorgangLink({
+    vorgangId: input.vorgangId,
+    inboxItem: fresh,
+  });
+
+  if (isContractProofSyncHardFailure(syncResult)) {
+    markIntakeFailure(
+      input.failedSteps,
+      input.step,
+      syncResult.message ?? 'Vertragsnachweise konnten nicht synchronisiert werden.',
+    );
+    if (input.warnings) {
+      pushIntakeWarning(
+        input.warnings,
+        'contract_proof_sync_failed',
+        syncResult.message ?? 'Vertragsnachweise konnten nicht synchronisiert werden.',
+      );
+    }
+  }
+
+  return fresh;
+}
+
 export function executeVorgangAtom(
   item: InboxItem,
   workflow: WorkflowResult,
   options: SmartIntakeAtomOptions,
   successSteps: WorkflowExecutionStepId[],
   failedSteps: WorkflowExecutionFailure[],
+  warnings?: WorkflowWarning[],
 ): { item: InboxItem; vorgangId?: string } {
   if (isInboxLinkedToVorgang(item)) {
     markIntakeSuccess(successSteps, workflow.suggestedVorgang ? 'link_vorgang' : 'create_vorgang');
@@ -175,7 +212,14 @@ export function executeVorgangAtom(
       return { item };
     }
     markIntakeSuccess(successSteps, 'link_vorgang');
-    return { item: linked.inbox, vorgangId: linked.vorgang.id };
+    const fresh = runProofSyncAfterVorgangLink({
+      vorgangId: linked.vorgang.id,
+      inboxItem: linked.inbox,
+      step: 'link_vorgang',
+      failedSteps,
+      warnings,
+    });
+    return { item: fresh, vorgangId: linked.vorgang.id };
   }
 
   if (canCreateVorgangFromSmartIntakeGates(workflow, item)) {
@@ -194,7 +238,14 @@ export function executeVorgangAtom(
     }
 
     markIntakeSuccess(successSteps, 'create_vorgang');
-    return { item: created.inbox, vorgangId: created.vorgang.id };
+    const fresh = runProofSyncAfterVorgangLink({
+      vorgangId: created.vorgang.id,
+      inboxItem: created.inbox,
+      step: 'create_vorgang',
+      failedSteps,
+      warnings,
+    });
+    return { item: fresh, vorgangId: created.vorgang.id };
   }
 
   return { item };
