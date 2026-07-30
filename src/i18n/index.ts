@@ -1791,6 +1791,16 @@ const deLegacy = {
   'invoice.validation.paymentDueDate': 'Zahlungsziel fehlt oder ist ungültig.',
   'invoice.validation.paymentDueBeforeIssue': 'Zahlungsziel liegt vor dem Rechnungsdatum.',
   'invoice.validation.noPositions': 'Mindestens eine Position mit Menge größer 0 ist erforderlich.',
+  'invoice.validation.fixedAmountNet': 'Der pauschale Nettobetrag muss größer als 0 sein.',
+  'invoice.validation.fixedAmountType': 'Pauschalbetrag ist nur für Abschlagsrechnungen zulässig.',
+  'invoice.validation.fixedAmountWithPositions':
+    'Pauschaler Abschlag darf keine Positionsmengen enthalten.',
+  'invoice.validation.quantityWithFixedAmount':
+    'Mengenbasierte Abrechnung darf keinen Pauschalbetrag enthalten.',
+  'invoice.calculationModeLabel': 'Abschlagsart',
+  'invoice.calculationMode.quantity': 'Nach ausgeführten Mengen',
+  'invoice.calculationMode.fixed': 'Pauschalen Abschlagsbetrag eingeben',
+  'invoice.fixedAmountNet': 'Pauschaler Nettobetrag',
   'invoice.validation.positionDescription': 'Eine Position hat keine Bezeichnung.',
   'invoice.validation.positionQuantity': 'Eine Position hat keine gültige Menge.',
   'invoice.validation.positionUnit': 'Eine Position hat keine Einheit.',
@@ -3739,6 +3749,16 @@ const trLegacy: Partial<Record<keyof typeof de, string>> = {
   'invoice.validation.paymentDueDate': 'Vade tarihi eksik veya geçersiz.',
   'invoice.validation.paymentDueBeforeIssue': 'Vade, fatura tarihinden önce.',
   'invoice.validation.noPositions': 'Miktarı 0’dan büyük en az bir kalem gerekir.',
+  'invoice.validation.fixedAmountNet': 'Sabit net tutar 0’dan büyük olmalıdır.',
+  'invoice.validation.fixedAmountType': 'Sabit tutar yalnızca ara faturalar için geçerlidir.',
+  'invoice.validation.fixedAmountWithPositions':
+    'Sabit tutarlı ara fatura kalem miktarı içeremez.',
+  'invoice.validation.quantityWithFixedAmount':
+    'Miktara dayalı faturalama sabit tutar içeremez.',
+  'invoice.calculationModeLabel': 'Ara fatura türü',
+  'invoice.calculationMode.quantity': 'Yapılan miktarlara göre',
+  'invoice.calculationMode.fixed': 'Sabit ara fatura tutarı gir',
+  'invoice.fixedAmountNet': 'Sabit net tutar',
   'invoice.validation.positionDescription': 'Bir kalemin açıklaması yok.',
   'invoice.validation.positionQuantity': 'Bir kalemin miktarı geçersiz.',
   'invoice.validation.positionUnit': 'Bir kalemin birimi yok.',

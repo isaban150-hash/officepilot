@@ -1,4 +1,16 @@
-import type { TranslationKey } from '../i18n';
+import { isFixedAmountAbschlag } from './invoiceCalculationMode';
+import {
+  fromCents,
+  isValidMoneyNumber,
+  lineTotalCents,
+  roundMoney,
+  sumCents,
+  taxCentsFromNet,
+  toCents,
+} from './invoiceMoney';
+import { INVOICE_DRAFT_LABEL } from './invoiceNumberService';
+import { getTaxRateForStatus } from './invoiceTaxService';
+import { getAbschlagDeductionsTotal } from './invoiceDeductions';
 import type {
   CompanyProfile,
   CustomerBilling,
@@ -6,17 +18,7 @@ import type {
   Vorgang,
   VorgangInvoice,
 } from '../types/models';
-import { INVOICE_DRAFT_LABEL } from './invoiceNumberService';
-import { getTaxRateForStatus } from './invoiceTaxService';
-import { getAbschlagDeductionsTotal } from './invoiceDeductions';
-import {
-  fromCents,
-  isValidMoneyNumber,
-  lineTotalCents,
-  sumCents,
-  taxCentsFromNet,
-  toCents,
-} from './invoiceMoney';
+import type { TranslationKey } from '../i18n';
 
 function isFinalizedInvoiceStatus(invoice: VorgangInvoice): boolean {
   return invoice.status === 'vorbereitet' || invoice.status === 'versendet';
@@ -127,43 +129,74 @@ export function validateInvoiceDraftForApproval(
     });
   }
 
-  const activePositions = draft.positions.filter((p) => p.billable && p.quantity > 0);
-  if (activePositions.length === 0) {
-    blockingErrors.push({ code: 'no_positions', messageKey: 'invoice.validation.noPositions' });
+  const fixedAmount = isFixedAmountAbschlag(draft);
+
+  if (draft.calculationMode === 'fixed_amount' && draft.type !== 'abschlag') {
+    blockingErrors.push({
+      code: 'fixed_amount_type',
+      messageKey: 'invoice.validation.fixedAmountType',
+    });
   }
 
-  for (const position of draft.positions) {
-    if (!position.billable || position.quantity <= 0) continue;
-    if (!position.description?.trim()) {
+  if (fixedAmount) {
+    const net = draft.fixedAmountNet;
+    if (net == null || !Number.isFinite(net) || net <= 0 || !isValidMoneyNumber(net)) {
       blockingErrors.push({
-        code: 'position_description',
-        messageKey: 'invoice.validation.positionDescription',
+        code: 'fixed_amount_net',
+        messageKey: 'invoice.validation.fixedAmountNet',
       });
     }
-    if (!isValidMoneyNumber(position.quantity) || position.quantity <= 0) {
+    if (draft.positions.some((p) => p.billable && p.quantity > 0)) {
       blockingErrors.push({
-        code: 'position_quantity',
-        messageKey: 'invoice.validation.positionQuantity',
+        code: 'fixed_amount_with_positions',
+        messageKey: 'invoice.validation.fixedAmountWithPositions',
       });
     }
-    if (!position.unit) {
+  } else {
+    if (draft.fixedAmountNet != null && Number.isFinite(draft.fixedAmountNet) && draft.fixedAmountNet !== 0) {
       blockingErrors.push({
-        code: 'position_unit',
-        messageKey: 'invoice.validation.positionUnit',
+        code: 'quantity_with_fixed_amount',
+        messageKey: 'invoice.validation.quantityWithFixedAmount',
       });
     }
-    if (!isValidMoneyNumber(position.unitPrice) || position.unitPrice < 0) {
-      blockingErrors.push({
-        code: 'position_price',
-        messageKey: 'invoice.validation.positionPrice',
-      });
-    } else {
-      const lineCents = lineTotalCents(position.quantity, position.unitPrice);
-      if (!Number.isFinite(lineCents)) {
+    const activePositions = draft.positions.filter((p) => p.billable && p.quantity > 0);
+    if (activePositions.length === 0) {
+      blockingErrors.push({ code: 'no_positions', messageKey: 'invoice.validation.noPositions' });
+    }
+
+    for (const position of draft.positions) {
+      if (!position.billable || position.quantity <= 0) continue;
+      if (!position.description?.trim()) {
         blockingErrors.push({
-          code: 'position_line_total',
+          code: 'position_description',
+          messageKey: 'invoice.validation.positionDescription',
+        });
+      }
+      if (!isValidMoneyNumber(position.quantity) || position.quantity <= 0) {
+        blockingErrors.push({
+          code: 'position_quantity',
+          messageKey: 'invoice.validation.positionQuantity',
+        });
+      }
+      if (!position.unit) {
+        blockingErrors.push({
+          code: 'position_unit',
+          messageKey: 'invoice.validation.positionUnit',
+        });
+      }
+      if (!isValidMoneyNumber(position.unitPrice) || position.unitPrice < 0) {
+        blockingErrors.push({
+          code: 'position_price',
           messageKey: 'invoice.validation.positionPrice',
         });
+      } else {
+        const lineCents = lineTotalCents(position.quantity, position.unitPrice);
+        if (!Number.isFinite(lineCents)) {
+          blockingErrors.push({
+            code: 'position_line_total',
+            messageKey: 'invoice.validation.positionPrice',
+          });
+        }
       }
     }
   }
@@ -187,10 +220,17 @@ export function validateInvoiceDraftForApproval(
     });
   }
 
-  const positionCents = draft.positions
-    .filter((p) => p.quantity > 0)
-    .map((p) => lineTotalCents(p.quantity, p.unitPrice));
-  const subtotalCents = sumCents(positionCents.filter(Number.isFinite));
+  let subtotalCents: number;
+  if (fixedAmount) {
+    const net = draft.fixedAmountNet;
+    subtotalCents =
+      net != null && Number.isFinite(net) && net > 0 ? toCents(roundMoney(net)) : 0;
+  } else {
+    const positionCents = draft.positions
+      .filter((p) => p.quantity > 0)
+      .map((p) => lineTotalCents(p.quantity, p.unitPrice));
+    subtotalCents = sumCents(positionCents.filter(Number.isFinite));
+  }
   const taxCents = taxCentsFromNet(subtotalCents, taxRate);
   const grossCents = subtotalCents + taxCents;
   const deductionsCents = toCents(getAbschlagDeductionsTotal(draft.previousAbschlagDeductions));

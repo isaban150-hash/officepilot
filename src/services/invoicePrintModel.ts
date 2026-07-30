@@ -1,3 +1,4 @@
+import { isFixedAmountAbschlag, FIXED_AMOUNT_ABSCHLAG_PRINT_DESCRIPTION } from './invoiceCalculationMode';
 import { calculateInvoiceTotals } from './invoiceService';
 import { getAbschlagDeductionsTotal } from './invoiceDeductions';
 import { fromCents, taxCentsFromNet, toCents } from './invoiceMoney';
@@ -24,6 +25,20 @@ function buildDeductionLines(draft: InvoiceDraft): InvoicePrintDeductionLine[] {
 }
 
 function buildPositions(draft: InvoiceDraft): InvoicePrintPosition[] {
+  if (isFixedAmountAbschlag(draft)) {
+    const net = draft.fixedAmountNet ?? 0;
+    if (!(net > 0)) return [];
+    return [
+      {
+        index: 1,
+        description: FIXED_AMOUNT_ABSCHLAG_PRINT_DESCRIPTION,
+        quantity: 1,
+        unit: 'Pauschal',
+        unitPrice: net,
+        lineTotal: net,
+      },
+    ];
+  }
   return draft.positions
     .filter((position) => position.quantity > 0)
     .map((position, index) => ({
@@ -45,6 +60,20 @@ function buildDeductionLinesFromInvoice(invoice: VorgangInvoice): InvoicePrintDe
 }
 
 function buildPositionsFromInvoice(invoice: VorgangInvoice): InvoicePrintPosition[] {
+  if (isFixedAmountAbschlag(invoice)) {
+    const net = invoice.fixedAmountNet ?? invoice.subtotal;
+    if (!(net > 0)) return [];
+    return [
+      {
+        index: 1,
+        description: FIXED_AMOUNT_ABSCHLAG_PRINT_DESCRIPTION,
+        quantity: 1,
+        unit: 'Pauschal',
+        unitPrice: net,
+        lineTotal: net,
+      },
+    ];
+  }
   return invoice.positions.map((position, index) => ({
     index: index + 1,
     description: position.description,

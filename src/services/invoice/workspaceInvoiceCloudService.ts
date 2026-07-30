@@ -200,6 +200,14 @@ export function mapCloudPayloadToVorgangInvoice(payload: Record<string, unknown>
         ? payload.invoiceSequenceNumber
         : undefined,
     positions: positionsRaw.map(cloneLine),
+    calculationMode:
+      payload.calculationMode === 'fixed_amount' || payload.calculationMode === 'quantity_based'
+        ? payload.calculationMode
+        : undefined,
+    fixedAmountNet:
+      typeof payload.fixedAmountNet === 'number' && Number.isFinite(payload.fixedAmountNet)
+        ? Number(payload.fixedAmountNet)
+        : undefined,
     subtotal: Number(payload.subtotal ?? 0),
     taxStatus: payload.taxStatus as VorgangInvoice['taxStatus'],
     amount: Number(payload.amount ?? 0),

@@ -11,7 +11,11 @@ import {
   buildInvoiceDraftForType,
   calculateInvoiceTotals,
   getOverbillingWarnings,
+  isFixedAmountAbschlag,
+  resolveInvoiceCalculationMode,
+  setAbschlagDraftCalculationMode,
   updateDraftPositionQuantity,
+  updateInvoiceDraftFixedAmountNet,
   updateInvoiceDraftMetadata,
   updateInvoiceDraftTaxStatus,
   validateInvoiceDraftForApproval,
@@ -29,7 +33,13 @@ import {
 } from '../services/contractIntelligenceService';
 import { getInboxItemById } from '../services/inboxService';
 import { getVorgangById } from '../services/vorgangService';
-import type { InvoiceDraft, InvoiceDraftMetadataChanges, InvoiceDocumentType, TaxStatus } from '../types/models';
+import type {
+  InvoiceCalculationMode,
+  InvoiceDraft,
+  InvoiceDraftMetadataChanges,
+  InvoiceDocumentType,
+  TaxStatus,
+} from '../types/models';
 import type { TranslationKey } from '../i18n';
 
 type RechnungStep = 'positions' | 'preview' | 'edit';
@@ -170,6 +180,18 @@ export function RechnungPage() {
     setDraft((prev) => (prev ? updateInvoiceDraftMetadata(prev, changes) : prev));
   };
 
+  const handleAbschlagModeChange = (mode: InvoiceCalculationMode) => {
+    setDraft((prev) => (prev ? setAbschlagDraftCalculationMode(prev, mode, setup) : prev));
+    setValidationErrors([]);
+  };
+
+  const handleFixedAmountChange = (value: string) => {
+    const parsed = Number(String(value).replace(',', '.'));
+    setDraft((prev) =>
+      prev ? updateInvoiceDraftFixedAmountNet(prev, Number.isFinite(parsed) ? parsed : 0) : prev,
+    );
+  };
+
   const runApproval = async () => {
     if (!id || !draft || approveLockRef.current || approving) return;
     approveLockRef.current = true;
@@ -182,10 +204,7 @@ export function RechnungPage() {
       { reverseCharge13bConfirmed },
     );
 
-    const blockers =
-      draft.type === 'rechnung'
-        ? validation.blockingErrors
-        : validation.blockingErrors.filter((e) => e.code === 'reverse_charge_unconfirmed');
+    const blockers = validation.blockingErrors;
 
     setValidationWarnings(validation.warnings.map((w) => w.messageKey));
     if (blockers.length > 0) {
@@ -248,7 +267,11 @@ export function RechnungPage() {
     draft.materialSource === 'auftraggeber' &&
     draft.positions.some((p) => p.category === 'material' && !p.billable);
 
-  const showMissingPriceWarning = draft.positions.some((p) => p.unitPrice === 0);
+  const showMissingPriceWarning =
+    !isFixedAmountAbschlag(draft) && draft.positions.some((p) => p.unitPrice === 0);
+
+  const isFixedAbschlag = isFixedAmountAbschlag(draft);
+  const abschlagMode = resolveInvoiceCalculationMode(draft);
 
   const backTarget =
     step === 'positions'
@@ -304,6 +327,32 @@ export function RechnungPage() {
               ))}
             </div>
           </Card>
+
+          {draft.type === 'abschlag' && (
+            <Card className="invoice-type-picker" data-testid="invoice-abschlag-mode-picker">
+              <p className="invoice-type-picker__label">
+                {translate('invoice.calculationModeLabel')}
+              </p>
+              <div className="chip-group">
+                <button
+                  type="button"
+                  className={`chip ${abschlagMode === 'quantity_based' ? 'chip--active' : ''}`}
+                  data-testid="invoice-abschlag-mode-quantity"
+                  onClick={() => handleAbschlagModeChange('quantity_based')}
+                >
+                  {translate('invoice.calculationMode.quantity')}
+                </button>
+                <button
+                  type="button"
+                  className={`chip ${abschlagMode === 'fixed_amount' ? 'chip--active' : ''}`}
+                  data-testid="invoice-abschlag-mode-fixed"
+                  onClick={() => handleAbschlagModeChange('fixed_amount')}
+                >
+                  {translate('invoice.calculationMode.fixed')}
+                </button>
+              </div>
+            </Card>
+          )}
 
           {progressBillingAllowed && (
             <p className="invoice-hint" data-testid="invoice-progress-billing-hint">
@@ -366,64 +415,101 @@ export function RechnungPage() {
             </div>
           )}
 
-          <section className="section">
-            <div className="section__header-row">
-              <h2 className="section__title">{translate('invoice.positions')}</h2>
-              <Button variant="outline" onClick={handleApplyAllPositions} data-testid="invoice-apply-all-positions">
-                {translate('invoice.applyAllPositions')}
-              </Button>
-            </div>
-            {draft.positions.map((pos) => (
-              <Card key={pos.id} className={!pos.billable ? 'invoice-pos--disabled' : ''}>
-                <p className="position-desc">{pos.description}</p>
-                <div className="invoice-leistungsstand">
-                  <DataRow
-                    label={translate('invoice.planned')}
-                    value={`${pos.plannedQuantity} ${pos.unit}`}
+          {isFixedAbschlag ? (
+            <section className="section" data-testid="invoice-fixed-amount-section">
+              <h2 className="section__title">{translate('invoice.fixedAmountNet')}</h2>
+              <Card>
+                <label className="invoice-edit__field">
+                  <span className="invoice-edit__label">{translate('invoice.fixedAmountNet')}</span>
+                  <input
+                    type="number"
+                    className="input"
+                    min={0}
+                    step="0.01"
+                    value={draft.fixedAmountNet ?? ''}
+                    data-testid="invoice-fixed-amount-net"
+                    onChange={(event) => handleFixedAmountChange(event.target.value)}
                   />
-                  {pos.executedQuantity !== undefined && (
-                    <DataRow
-                      label={translate('invoice.executed')}
-                      value={`${pos.executedQuantity} ${pos.unit}`}
-                    />
-                  )}
-                  <DataRow
-                    label={translate('invoice.alreadyBilled')}
-                    value={`${pos.billedQuantity} ${pos.unit}`}
-                  />
-                  <DataRow
-                    label={translate('invoice.stillOpen')}
-                    value={`${pos.openQuantity} ${pos.unit}`}
-                  />
-                </div>
-                <div className="position-row">
-                  <label className="position-field">
-                    {translate('invoice.quantityThisInvoice')}
-                    <input
-                      type="number"
-                      className="input input--small"
-                      min="0"
-                      max={pos.openQuantity}
-                      step="0.5"
-                      value={pos.quantity}
-                      disabled={!pos.billable}
-                      onChange={(e) => handleQuantityChange(pos.id, e.target.value)}
-                    />
-                  </label>
-                  <span className="position-meta">
-                    {translate('invoice.unitPrice')}: {pos.unitPrice.toLocaleString('de-DE')} € /{' '}
-                    {pos.unit}
-                  </span>
-                  <span className="position-price">
-                    {(pos.quantity * pos.unitPrice).toLocaleString('de-DE')} €
-                  </span>
-                </div>
-                {!pos.billable && pos.category === 'material' && (
-                  <p className="invoice-pos-hint">{translate('invoice.materialNotBillable')}</p>
-                )}
+                </label>
+                <DataRow
+                  label={translate('invoice.nextNumberPreview')}
+                  value={draft.invoiceNumberPreview}
+                />
+                <DataRow label={translate('invoice.issueDate')} value={draft.issueDate} />
+                <DataRow
+                  label={translate('invoice.servicePeriod')}
+                  value={`${draft.servicePeriodFrom} – ${draft.servicePeriodTo}`}
+                />
+                <DataRow label={translate('invoice.paymentDueDate')} value={draft.paymentDueDate} />
+                {draft.baustelle ? (
+                  <DataRow label={translate('confirmation.baustelle')} value={draft.baustelle} />
+                ) : null}
               </Card>
-            ))}
-          </section>
+            </section>
+          ) : (
+            <section className="section">
+              <div className="section__header-row">
+                <h2 className="section__title">{translate('invoice.positions')}</h2>
+                <Button
+                  variant="outline"
+                  onClick={handleApplyAllPositions}
+                  data-testid="invoice-apply-all-positions"
+                >
+                  {translate('invoice.applyAllPositions')}
+                </Button>
+              </div>
+              {draft.positions.map((pos) => (
+                <Card key={pos.id} className={!pos.billable ? 'invoice-pos--disabled' : ''}>
+                  <p className="position-desc">{pos.description}</p>
+                  <div className="invoice-leistungsstand">
+                    <DataRow
+                      label={translate('invoice.planned')}
+                      value={`${pos.plannedQuantity} ${pos.unit}`}
+                    />
+                    {pos.executedQuantity !== undefined && (
+                      <DataRow
+                        label={translate('invoice.executed')}
+                        value={`${pos.executedQuantity} ${pos.unit}`}
+                      />
+                    )}
+                    <DataRow
+                      label={translate('invoice.alreadyBilled')}
+                      value={`${pos.billedQuantity} ${pos.unit}`}
+                    />
+                    <DataRow
+                      label={translate('invoice.stillOpen')}
+                      value={`${pos.openQuantity} ${pos.unit}`}
+                    />
+                  </div>
+                  <div className="position-row">
+                    <label className="position-field">
+                      {translate('invoice.quantityThisInvoice')}
+                      <input
+                        type="number"
+                        className="input input--small"
+                        min="0"
+                        max={pos.openQuantity}
+                        step="0.5"
+                        value={pos.quantity}
+                        disabled={!pos.billable}
+                        onChange={(e) => handleQuantityChange(pos.id, e.target.value)}
+                      />
+                    </label>
+                    <span className="position-meta">
+                      {translate('invoice.unitPrice')}: {pos.unitPrice.toLocaleString('de-DE')} € /{' '}
+                      {pos.unit}
+                    </span>
+                    <span className="position-price">
+                      {(pos.quantity * pos.unitPrice).toLocaleString('de-DE')} €
+                    </span>
+                  </div>
+                  {!pos.billable && pos.category === 'material' && (
+                    <p className="invoice-pos-hint">{translate('invoice.materialNotBillable')}</p>
+                  )}
+                </Card>
+              ))}
+            </section>
+          )}
 
           {totals && (
             <Card>

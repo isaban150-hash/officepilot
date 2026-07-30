@@ -1004,6 +1004,9 @@ export type InvoiceSentVia =
   | 'portal'
   | 'sonstige';
 
+/** How an Abschlag draft/invoice computes its net total. Missing ⇒ quantity_based. */
+export type InvoiceCalculationMode = 'quantity_based' | 'fixed_amount';
+
 export interface VorgangInvoice {
   id: string;
   number: string;
@@ -1011,6 +1014,13 @@ export interface VorgangInvoice {
   abschlagNumber?: number;
   invoiceSequenceNumber?: number;
   positions: VorgangInvoiceLine[];
+  /**
+   * PAUSCHALER-ABSCHLAG-01 — optional; absent on legacy invoices means quantity_based.
+   * fixed_amount is only valid for type=abschlag with empty positions.
+   */
+  calculationMode?: InvoiceCalculationMode;
+  /** Net lump-sum for fixed_amount Abschlag; ignored for quantity_based. */
+  fixedAmountNet?: number;
   subtotal: number;
   taxStatus: TaxStatus;
   amount: number;
@@ -1239,6 +1249,10 @@ export interface InvoiceDraft {
   taxStatus: TaxStatus;
   materialSource: MaterialStandard;
   positions: InvoiceDraftPosition[];
+  /** Absent ⇒ quantity_based (legacy / non-Abschlag drafts). */
+  calculationMode?: InvoiceCalculationMode;
+  /** Net lump-sum when calculationMode=fixed_amount. */
+  fixedAmountNet?: number;
   issueDate: string;
   servicePeriodFrom: string;
   servicePeriodTo: string;

@@ -17,6 +17,7 @@ import type {
   CompanyProfile,
   CompanySetup,
   CustomerBilling,
+  InvoiceCalculationMode,
   InvoiceDocumentType,
   InvoiceDraft,
   InvoiceDraftMetadataChanges,
@@ -28,6 +29,10 @@ import type {
   VorgangInvoice,
   VorgangInvoiceLine,
 } from '../types/models';
+import {
+  isFixedAmountAbschlag,
+  resolveInvoiceCalculationMode,
+} from './invoiceCalculationMode';
 import {
   buildLegalNotices,
   getTaxRateForStatus,
@@ -59,6 +64,11 @@ export { buildLegalNotices, getTaxRateForStatus } from './invoiceTaxService';
 export { getAbschlagDeductionsTotal } from './invoiceDeductions';
 export { validateInvoiceDraftForApproval } from './invoiceValidationService';
 export { INVOICE_DRAFT_LABEL } from './invoiceNumberService';
+export {
+  isFixedAmountAbschlag,
+  resolveInvoiceCalculationMode,
+  FIXED_AMOUNT_ABSCHLAG_PRINT_DESCRIPTION,
+} from './invoiceCalculationMode';
 
 export function getVorgangCustomerBilling(vorgang: Vorgang): CustomerBilling {
   if (vorgang.customerBilling) {
@@ -204,6 +214,7 @@ function buildBaseDraft(
     taxStatus: setup.taxStatus,
     materialSource: vorgang.materialSource,
     positions,
+    calculationMode: type === 'abschlag' ? 'quantity_based' : undefined,
     introText: '',
     closingText: '',
     ...buildDraftMetadata(vorgang, setup, type),
@@ -277,6 +288,73 @@ export function buildSchlussrechnungDraft(vorgangId: string, setup: CompanySetup
   return buildInvoiceDraftForType(vorgangId, setup, 'schluss');
 }
 
+/**
+ * Switch Abschlag draft between quantity_based and fixed_amount.
+ * Clears the inactive calculation basis so totals never double-count.
+ */
+export function setAbschlagDraftCalculationMode(
+  draft: InvoiceDraft,
+  mode: InvoiceCalculationMode,
+  setup: CompanySetup,
+): InvoiceDraft {
+  if (draft.type !== 'abschlag') return draft;
+
+  if (mode === 'fixed_amount') {
+    return {
+      ...draft,
+      calculationMode: 'fixed_amount',
+      positions: [],
+      fixedAmountNet:
+        draft.calculationMode === 'fixed_amount' && draft.fixedAmountNet != null
+          ? draft.fixedAmountNet
+          : undefined,
+    };
+  }
+
+  const rebuilt = buildAbschlagDraft(draft.vorgangId, setup);
+  if (!rebuilt) {
+    return {
+      ...draft,
+      calculationMode: 'quantity_based',
+      fixedAmountNet: undefined,
+    };
+  }
+
+  return {
+    ...rebuilt,
+    id: draft.id,
+    calculationMode: 'quantity_based',
+    fixedAmountNet: undefined,
+    issueDate: draft.issueDate,
+    servicePeriodFrom: draft.servicePeriodFrom,
+    servicePeriodTo: draft.servicePeriodTo,
+    paymentDueDate: draft.paymentDueDate,
+    paymentTermsText: draft.paymentTermsText,
+    skontoText: draft.skontoText,
+    introText: draft.introText,
+    closingText: draft.closingText,
+    vorgangTitle: draft.vorgangTitle,
+    baustelle: draft.baustelle,
+    customerBilling: draft.customerBilling,
+    companySnapshot: draft.companySnapshot,
+    taxStatus: draft.taxStatus,
+    legalNotices: draft.legalNotices,
+    invoiceNumberPreview: draft.invoiceNumberPreview,
+    previousAbschlagDeductions: draft.previousAbschlagDeductions,
+  };
+}
+
+export function updateInvoiceDraftFixedAmountNet(
+  draft: InvoiceDraft,
+  fixedAmountNet: number,
+): InvoiceDraft {
+  if (!isFixedAmountAbschlag(draft)) return draft;
+  return {
+    ...draft,
+    fixedAmountNet,
+  };
+}
+
 export function updateInvoiceDraftTaxStatus(
   draft: InvoiceDraft,
   taxStatus: TaxStatus,
@@ -342,12 +420,21 @@ export function updateInvoiceDraftMetadata(
 }
 
 export function calculateInvoiceTotals(draft: InvoiceDraft, setup: CompanySetup): InvoiceTotals {
-  const lineCents = draft.positions
-    .filter((p) => p.quantity > 0)
-    .map((p) => lineTotalCents(p.quantity, p.unitPrice))
-    .filter((cents) => Number.isFinite(cents));
-  const subtotalCents = sumCents(lineCents);
   const taxRate = getTaxRateForStatus(draft.taxStatus ?? setup.taxStatus);
+  let subtotalCents: number;
+
+  if (isFixedAmountAbschlag(draft)) {
+    const net = draft.fixedAmountNet;
+    subtotalCents =
+      net != null && Number.isFinite(net) && net > 0 ? toCents(roundMoney(net)) : 0;
+  } else {
+    const lineCents = draft.positions
+      .filter((p) => p.quantity > 0)
+      .map((p) => lineTotalCents(p.quantity, p.unitPrice))
+      .filter((cents) => Number.isFinite(cents));
+    subtotalCents = sumCents(lineCents);
+  }
+
   const taxCents = taxCentsFromNet(subtotalCents, taxRate);
   const grossCents = subtotalCents + taxCents;
   const deductionsCents = toCents(getAbschlagDeductionsTotal(draft.previousAbschlagDeductions));
@@ -397,7 +484,11 @@ function validateDraftForFinalize(
     return { ok: false, reason: 'vorgang_missing' };
   }
 
-  if (draft.type === 'rechnung' || draft.taxStatus === 'reverse_charge_13b') {
+  // Full approval validation for Rechnung and fixed-amount Abschlag.
+  // Quantity-based Abschlag/Schluss keep prior finalize gate (reverse_charge only),
+  // matching historical offline/test finalize behaviour.
+  const fixedAbschlag = isFixedAmountAbschlag(draft);
+  if (draft.type === 'rechnung' || fixedAbschlag || draft.taxStatus === 'reverse_charge_13b') {
     const validation = validateInvoiceDraftForApproval(
       draft,
       draft.companySnapshot,
@@ -405,7 +496,7 @@ function validateDraftForFinalize(
       options,
     );
     const blockers =
-      draft.type === 'rechnung'
+      draft.type === 'rechnung' || fixedAbschlag
         ? validation.blockingErrors
         : validation.blockingErrors.filter((e) => e.code === 'reverse_charge_unconfirmed');
     if (blockers.length > 0) {
@@ -439,19 +530,22 @@ export function buildInvoiceFinalizationCandidate(
   const totals = calculateInvoiceTotals(draft, setup);
   const now = new Date().toISOString();
   const issueDate = draft.issueDate || now.slice(0, 10);
+  const fixedAmount = isFixedAmountAbschlag(draft);
 
-  const positions: VorgangInvoiceLine[] = draft.positions
-    .filter((p) => p.quantity > 0)
-    .map((p) => ({
-      id: `inv-line-${clientInvoiceId}-${p.orderPositionId}`,
-      orderPositionId: p.orderPositionId,
-      description: p.description,
-      quantity: p.quantity,
-      unit: p.unit,
-      unitLabel: p.unitLabel,
-      unitPrice: roundMoney(p.unitPrice),
-      lineTotal: lineTotalMoney(p.quantity, p.unitPrice),
-    }));
+  const positions: VorgangInvoiceLine[] = fixedAmount
+    ? []
+    : draft.positions
+        .filter((p) => p.quantity > 0)
+        .map((p) => ({
+          id: `inv-line-${clientInvoiceId}-${p.orderPositionId}`,
+          orderPositionId: p.orderPositionId,
+          description: p.description,
+          quantity: p.quantity,
+          unit: p.unit,
+          unitLabel: p.unitLabel,
+          unitPrice: roundMoney(p.unitPrice),
+          lineTotal: lineTotalMoney(p.quantity, p.unitPrice),
+        }));
 
   const invoice: VorgangInvoice = {
     id: clientInvoiceId,
@@ -459,6 +553,12 @@ export function buildInvoiceFinalizationCandidate(
     type: draft.type,
     abschlagNumber: usesAbschlagNumber(draft.type) ? draft.abschlagNumber : undefined,
     positions,
+    calculationMode: fixedAmount
+      ? 'fixed_amount'
+      : draft.type === 'abschlag'
+        ? 'quantity_based'
+        : undefined,
+    fixedAmountNet: fixedAmount ? roundMoney(draft.fixedAmountNet ?? 0) : undefined,
     subtotal: totals.subtotal,
     taxStatus: draft.taxStatus ?? setup.taxStatus,
     amount: totals.total,
@@ -514,20 +614,26 @@ export function buildInvoiceFinalizationContentFingerprint(
     customerBilling: draft.customerBilling,
     subtotal: totals.subtotal,
     amount: totals.total,
+    calculationMode: resolveInvoiceCalculationMode(draft),
+    fixedAmountNet: isFixedAmountAbschlag(draft)
+      ? roundMoney(draft.fixedAmountNet ?? 0)
+      : null,
     expectedAmendmentSequence:
       draft.type === 'schluss' ? (draft.expectedAmendmentSequence ?? 0) : null,
-    positions: draft.positions
-      .filter((p) => p.quantity > 0)
-      .map((p) => ({
-        orderPositionId: p.orderPositionId,
-        description: p.description,
-        quantity: p.quantity,
-        unit: p.unit,
-        unitLabel: p.unitLabel ?? null,
-        unitPrice: roundMoney(p.unitPrice),
-        lineTotal: lineTotalMoney(p.quantity, p.unitPrice),
-        billable: p.billable,
-      })),
+    positions: isFixedAmountAbschlag(draft)
+      ? []
+      : draft.positions
+          .filter((p) => p.quantity > 0)
+          .map((p) => ({
+            orderPositionId: p.orderPositionId,
+            description: p.description,
+            quantity: p.quantity,
+            unit: p.unit,
+            unitLabel: p.unitLabel ?? null,
+            unitPrice: roundMoney(p.unitPrice),
+            lineTotal: lineTotalMoney(p.quantity, p.unitPrice),
+            billable: p.billable,
+          })),
   });
 }
 
@@ -561,18 +667,24 @@ export function buildInvoiceContentFingerprintFromInvoice(invoice: VorgangInvoic
     },
     subtotal: invoice.subtotal,
     amount: invoice.amount,
+    calculationMode: resolveInvoiceCalculationMode(invoice),
+    fixedAmountNet: isFixedAmountAbschlag(invoice)
+      ? roundMoney(invoice.fixedAmountNet ?? 0)
+      : null,
     expectedAmendmentSequence:
       invoice.type === 'schluss' ? (invoice.expectedAmendmentSequence ?? 0) : null,
-    positions: (invoice.positions ?? []).map((p) => ({
-      orderPositionId: p.orderPositionId,
-      description: p.description,
-      quantity: p.quantity,
-      unit: p.unit,
-      unitLabel: p.unitLabel ?? null,
-      unitPrice: roundMoney(p.unitPrice),
-      lineTotal: roundMoney(p.lineTotal),
-      billable: true,
-    })),
+    positions: isFixedAmountAbschlag(invoice)
+      ? []
+      : (invoice.positions ?? []).map((p) => ({
+          orderPositionId: p.orderPositionId,
+          description: p.description,
+          quantity: p.quantity,
+          unit: p.unit,
+          unitLabel: p.unitLabel ?? null,
+          unitPrice: roundMoney(p.unitPrice),
+          lineTotal: roundMoney(p.lineTotal),
+          billable: true,
+        })),
   });
 }
 
@@ -593,6 +705,8 @@ function buildInvoiceContentFingerprintPayload(payload: {
   customerBilling: CustomerBilling;
   subtotal: number;
   amount: number;
+  calculationMode: InvoiceCalculationMode;
+  fixedAmountNet: number | null;
   expectedAmendmentSequence: number | null;
   positions: Array<{
     orderPositionId: string;
