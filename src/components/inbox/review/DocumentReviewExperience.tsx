@@ -44,6 +44,8 @@ interface DocumentReviewExperienceProps {
   onOpenArchive?: () => void;
   onNextDocument: () => void;
   moreOptionsContent: ReactNode;
+  /** Optional CTA rendered above „Weitere Optionen“ (e.g. archive import). */
+  beforeMoreOptions?: ReactNode;
   translate: (key: TranslationKey) => string;
   /** Session Fill-Confirm rows — same TruthView as Assist / Free-Question. */
   sessionFillConfirmRows?: DocumentFieldFillConfirmRow[] | null;
@@ -64,6 +66,7 @@ export function DocumentReviewExperience({
   onOpenArchive,
   onNextDocument,
   moreOptionsContent,
+  beforeMoreOptions = null,
   translate,
   sessionFillConfirmRows = null,
 }: DocumentReviewExperienceProps) {
@@ -186,6 +189,8 @@ export function DocumentReviewExperience({
           </Button>
         </div>
       ) : null}
+
+      {beforeMoreOptions}
 
       <ReviewMoreOptionsShell
         expanded={moreOptionsExpanded}

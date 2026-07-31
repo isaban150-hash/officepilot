@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { shouldRevealArchiveImportFromState } from './eingangDetailNavigation';
 import { DocumentAssistantPanel } from '../components/documents/DocumentAssistantPanel';
 import { DocumentOriginalFilePanel } from '../components/documents/DocumentOriginalFilePanel';
 import { CompanyRelevancePanel } from '../components/inbox/CompanyRelevancePanel';
@@ -123,11 +124,15 @@ export function EingangDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { translate, showToast, setup } = useApp();
   const navigate = useNavigate();
+  const location = useLocation();
   const [item, setItem] = useState<InboxItem | undefined>(() =>
     id ? getInboxItemById(id) : undefined,
   );
-  const [moreOptionsExpanded, setMoreOptionsExpanded] = useState(false);
-  const [expandedSections, setExpandedSections] = useState<Partial<Record<ReviewSectionId, boolean>>>({});
+  const initialRevealArchive = shouldRevealArchiveImportFromState(location.state);
+  const [moreOptionsExpanded, setMoreOptionsExpanded] = useState(initialRevealArchive);
+  const [expandedSections, setExpandedSections] = useState<Partial<Record<ReviewSectionId, boolean>>>(
+    () => (initialRevealArchive ? { archive: true } : {}),
+  );
   const [isEditing, setIsEditing] = useState(false);
   const [editDraft, setEditDraft] = useState<InboxEditDraft | null>(null);
   const [duplicateDocument, setDuplicateDocument] = useState<CompanyDocument | null>(null);
@@ -155,17 +160,27 @@ export function EingangDetailPage() {
   const [replyCoreMessage, setReplyCoreMessage] = useState('');
   const [hasReplyDraft, setHasReplyDraft] = useState(false);
 
+  const revealArchiveImportUi = () => {
+    setMoreOptionsExpanded(true);
+    setExpandedSections((current) => ({ ...current, archive: true }));
+  };
+
   useEffect(() => {
-    if (id) {
-      setMoreOptionsExpanded(false);
-      setExpandedSections({});
-      setIntakeExecution(null);
-      setAnalysisRetryToken(0);
-      setFreeTextBridgeProposal(null);
-      freeTextBridgeSeqRef.current = 0;
-      setReplyCoreMessage('');
-      setHasReplyDraft(false);
+    if (!id) return;
+    const reveal = shouldRevealArchiveImportFromState(location.state);
+    setMoreOptionsExpanded(reveal);
+    setExpandedSections(reveal ? { archive: true } : {});
+    setIntakeExecution(null);
+    setAnalysisRetryToken(0);
+    setFreeTextBridgeProposal(null);
+    freeTextBridgeSeqRef.current = 0;
+    setReplyCoreMessage('');
+    setHasReplyDraft(false);
+    if (reveal) {
+      navigate(location.pathname, { replace: true, state: {} });
     }
+    // Only re-apply reveal when the inbox id changes (list → detail handoff).
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: id-scoped reset
   }, [id]);
 
   useEffect(() => {
@@ -449,6 +464,8 @@ export function EingangDetailPage() {
     showToast(formatInboxActionToast(result, translate));
     if (result.success) {
       goBack();
+    } else if (result.messageKey === 'inbox.toast.filingRequiresArchive') {
+      revealArchiveImportUi();
     }
   };
 
@@ -518,12 +535,14 @@ export function EingangDetailPage() {
 
       if (!result.success) {
         showToast(translate(result.errorKey as TranslationKey));
+        revealArchiveImportUi();
         return;
       }
 
       const archiveResult = markInboxImportedToArchive(item.id, result.document.id);
       if (!archiveResult) {
         showToast(translate('inbox.importToArchive.markFailed'));
+        revealArchiveImportUi();
         return;
       }
 
@@ -544,7 +563,7 @@ export function EingangDetailPage() {
   const handleImportToArchive = () => {
     if (!isDocumentFilingDecisionConfirmed(item)) {
       showToast(translate('filingDecision.confirmRequired'));
-      setExpandedSections((current) => ({ ...current, archive: true }));
+      revealArchiveImportUi();
       return;
     }
     const duplicate = isDuplicateDocument(item, setup.companyName);
@@ -563,7 +582,7 @@ export function EingangDetailPage() {
   const handleIntakeArchive = () => {
     if (!isDocumentFilingDecisionConfirmed(item)) {
       showToast(translate('filingDecision.confirmRequired'));
-      setExpandedSections((current) => ({ ...current, archive: true }));
+      revealArchiveImportUi();
       return;
     }
     handleImportToArchive();
@@ -646,7 +665,7 @@ export function EingangDetailPage() {
     if (!workflow) return;
     if (!isDocumentFilingDecisionConfirmed(item)) {
       showToast(translate('filingDecision.confirmRequired'));
-      setExpandedSections((current) => ({ ...current, archive: true }));
+      revealArchiveImportUi();
       return;
     }
     setIsExecutingIntake(true);
@@ -666,7 +685,7 @@ export function EingangDetailPage() {
       );
       if (filingBlocked) {
         showToast(translate('filingDecision.confirmRequired'));
-        setExpandedSections((current) => ({ ...current, archive: true }));
+        revealArchiveImportUi();
       } else if (result.completed) {
         showToast(translate('intake.execute.success'));
       } else if (result.failedSteps.length > 0) {
@@ -1166,6 +1185,24 @@ export function EingangDetailPage() {
       />
     </div>
   ) : null;
+  const archiveImportPrimaryCta =
+    !item.importedToArchive && analysisAllowed && !item.isAdvertisement ? (
+      <div
+        className="document-review-experience__archive-cta"
+        data-testid="inbox-import-to-archive-primary"
+      >
+        <Button
+          variant="outline"
+          fullWidth
+          disabled={isImporting}
+          data-testid="inbox-import-to-archive-primary-button"
+          onClick={handleImportToArchive}
+        >
+          {translate('inbox.importToArchive')}
+        </Button>
+      </div>
+    ) : null;
+
   const reviewExperience = (
     <DocumentReviewExperience
       item={item}
@@ -1182,6 +1219,7 @@ export function EingangDetailPage() {
       onOpenArchive={handleOpenArchive}
       onNextDocument={goBack}
       moreOptionsContent={moreOptionsContent}
+      beforeMoreOptions={archiveImportPrimaryCta}
       translate={translate}
       sessionFillConfirmRows={fillConfirmRows}
     />

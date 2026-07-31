@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom';
 import { Button } from '../ui/Button';
 import { Badge, Card, CardMeta, CardTitle, DataRow } from '../ui/Card';
 import { useApp } from '../../context/AppContext';
@@ -11,6 +12,7 @@ import {
 import { confirmFiling } from '../../services/inboxTaskService';
 import { formatPaperFilingInstruction } from '../../services/paperFolderService';
 import { formatInboxActionToast } from '../../utils/inboxActionToast';
+import { ABLAGE_REVEAL_ARCHIVE_IMPORT_STATE } from '../../pages/eingangDetailNavigation';
 import type { InboxItem } from '../../types/models';
 import type { TranslationKey } from '../../i18n';
 
@@ -29,6 +31,7 @@ const PRIORITY_TONE: Record<string, 'default' | 'info' | 'warning' | 'success'> 
 
 export function InboxCard({ item, onReview, onUpdated }: InboxCardProps) {
   const { translate, showToast } = useApp();
+  const navigate = useNavigate();
   const docTypeKey = `docType.${item.documentType}` as TranslationKey;
   const actionKey = `action.${item.recommendedAction}` as TranslationKey;
 
@@ -41,7 +44,14 @@ export function InboxCard({ item, onReview, onUpdated }: InboxCardProps) {
 
   const handleFiling = () => {
     const result = confirmFiling(item.id);
-    if (result) notify(result);
+    if (!result) return;
+    notify(result);
+    if (
+      !result.success &&
+      result.messageKey === 'inbox.toast.filingRequiresArchive'
+    ) {
+      navigate(`/ablage/${item.id}`, { state: ABLAGE_REVEAL_ARCHIVE_IMPORT_STATE });
+    }
   };
 
   const handleDefer = () => {
