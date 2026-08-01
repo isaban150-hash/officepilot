@@ -1,6 +1,8 @@
 # OfficePilot V1 – Foundation MVP
 
-KI-Büromitarbeiter für kleine Betriebe. Mobile-First Web-App mit lokaler Mock-Struktur.
+KI-Büromitarbeiter für kleine Betriebe. Mobile-First Web-App.
+
+OfficePilot benötigt eine Internetverbindung für KI-Funktionen, Synchronisation sowie die verbindliche Freigabe von Rechnungen und Nachträgen.
 
 ## Starten
 
