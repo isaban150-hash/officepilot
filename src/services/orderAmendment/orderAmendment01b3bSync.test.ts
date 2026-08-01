@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_SETUP } from '../../data/mockData';
 import { createOrderPosition, createTestVorgang } from '../../test/fixtures';
-import { resetTestStores } from '../../test/resetStores';
 import * as supabaseLib from '../../lib/supabase';
 import type { AppPersistedState, ConfirmedOrderAmendment, ContractConfirmationSnapshot, Vorgang } from '../../types/models';
 import * as persistenceService from '../persistenceService';
@@ -258,9 +257,7 @@ function remoteVorgangRow(vorgang: Vorgang): WorkspaceVorgangRowLike {
   };
 }
 
-beforeEach(() => {
-  resetTestStores();
-  resetOrderAmendmentConfirmIntentsForTests();
+beforeEach(() => {  resetOrderAmendmentConfirmIntentsForTests();
   resetSyncClientForTests();
   resetSyncCoordinatorForTests();
   resetWorkspaceCloudBootstrapForTests();

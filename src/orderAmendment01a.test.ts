@@ -397,9 +397,7 @@ describe('ORDER-AMENDMENT-01A integrity', () => {
 });
 
 describe('ORDER-AMENDMENT-01A persistenz und cloud', () => {
-  beforeEach(() => {
-    resetTestStores();
-    resetSyncOutboxForTests([]);
+  beforeEach(() => {    resetSyncOutboxForTests([]);
     resetSyncChangeTrackerForTests();
     resetSyncClientForTests();
   });

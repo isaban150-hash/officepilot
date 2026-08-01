@@ -230,6 +230,34 @@ describe('document field extraction and understanding', () => {
     expect(fields.Baustelle).toContain('Badezimmer');
   });
 
+  it('erkennt Absender aus ungelabeltem Letterhead (Institution / GmbH / Brand)', () => {
+    expect(
+      extractFieldsFromText(
+        'F Finanzamt Detmold Behördenschreiben Büchenstraße 6 · 32756 Detmold Cirmak Haustechnik GmbH',
+      ).Absender,
+    ).toBe('Finanzamt Detmold');
+    expect(
+      extractFieldsFromText(
+        'H Hotel Lipperland Hotelrechnung Parkstraße 10 · 32756 Detmold Cirmak Haustechnik GmbH',
+      ).Absender,
+    ).toBe('Hotel Lipperland');
+    expect(
+      extractFieldsFromText(
+        'C Cirmak Haustechnik GmbH SHK · Werkverträge Industriestraße 18 · 32105 Bad Salzuflen',
+      ).Absender,
+    ).toBe('Cirmak Haustechnik GmbH');
+    expect(
+      extractFieldsFromText(
+        'H Handwerk OWL — Newsletter 26.03.2026 Thema der Woche: Förderungen',
+      ).Absender,
+    ).toBe('Handwerk OWL');
+    expect(
+      extractFieldsFromText(
+        'A Aral Station Nord Tankstelle Vlothoer Str. 55 · 32105 Bad Salzuflen Kundenbeleg',
+      ).Absender,
+    ).toBe('Aral Station Nord');
+  });
+
   it('erzeugt Dokument-Zusammenfassung mit KI-Aktionen', () => {
     const item = createMockInboxItemFromUpload({
       sourceFileName: 'mahnung.pdf',

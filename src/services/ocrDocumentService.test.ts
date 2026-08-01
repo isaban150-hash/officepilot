@@ -13,6 +13,7 @@ import {
   OCR_TEXT_HINT_KEYS,
   setImageOcrExtractorForTests,
 } from './ocrDocumentService';
+import { setHeicToConverterForTests } from './heicUploadNormalizeService';
 import {
   extractTextFromPdfBytes,
   setPdfTextExtractorForTests,
@@ -40,6 +41,7 @@ describe('ocrDocumentService', () => {
   afterEach(() => {
     setImageOcrExtractorForTests(null);
     setPdfTextExtractorForTests(null);
+    setHeicToConverterForTests(null);
   });
 
   it('PDF-Text läuft weiter über extractDocumentText', async () => {
@@ -146,9 +148,23 @@ describe('ocrDocumentService', () => {
     expect(result.recognizedText).toBe('');
   });
 
-  it('HEIC/HEIF → früher Abbruch ohne OCR', async () => {
+  it('HEIC/HEIF → JPEG-Normalisierung dann OCR', async () => {
+    setHeicToConverterForTests(async () => new Blob(['jpeg-bytes'], { type: 'image/jpeg' }));
+    setImageOcrExtractorForTests(async () => ({
+      text: FREISTELLUNG_OCR_TEXT,
+      confidence: 80,
+    }));
     const result = await extractDocumentText(createFile('iphone.heic', 'image/heic'));
-    expect(result.errorCode).toBe('heic_unsupported');
+    expect(result.errorCode).toBeUndefined();
+    expect(result.recognizedText).toContain('Freistellungsbescheinigung');
+  });
+
+  it('defektes HEIC → heic_conversion_failed ohne OCR-Text', async () => {
+    setHeicToConverterForTests(async () => {
+      throw new Error('corrupt');
+    });
+    const result = await extractDocumentText(createFile('iphone.heic', 'image/heic'));
+    expect(result.errorCode).toBe('heic_conversion_failed');
     expect(result.recognizedText).toBe('');
   });
 

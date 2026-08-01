@@ -1,0 +1,9 @@
+{
+  "documentId": "DOC-00022",
+  "taxonomyTypeId": "DOCTYPE-047",
+  "documentType": "vehicle_document",
+  "subtype": "tuev",
+  "label": "TÜV / HU / AU",
+  "classifiedKind": "tuev_bericht",
+  "family": "generic"
+}

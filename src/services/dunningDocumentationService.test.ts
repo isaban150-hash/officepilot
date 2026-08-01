@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_COMPANY_PROFILE } from '../data/companyProfileDefaults';
 import { createTestVorgang } from '../test/fixtures';
-import { resetTestStores } from '../test/resetStores';
 import {
   analyzeInvoiceFinance,
   getDocumentedDunningLevel,
@@ -56,9 +55,7 @@ function createSentInvoice(overrides: Partial<VorgangInvoice> = {}): VorgangInvo
   };
 }
 
-beforeEach(() => {
-  resetTestStores();
-  resetDunningDocumentations();
+beforeEach(() => {  resetDunningDocumentations();
   hydrateVorgangStore([createTestVorgang({ invoices: [createSentInvoice()] })]);
   hydrateCommunicationHistory([]);
 });

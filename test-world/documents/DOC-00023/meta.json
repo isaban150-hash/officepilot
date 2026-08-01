@@ -1,0 +1,28 @@
+{
+  "id": "DOC-00023",
+  "companyId": "COMPANY-001",
+  "projectId": null,
+  "supplierId": "SUP-024",
+  "vehicleId": "VEH-004",
+  "taxonomyTypeId": "DOCTYPE-048",
+  "documentType": "vehicle_document",
+  "subtype": "werkstatt",
+  "title": "AutoService Teutoburger – Werkstattrechnung Bremsen",
+  "receivedAt": "2026-02-22",
+  "lifecyclePhase": "firm",
+  "qualityTag": "clean",
+  "sourceKind": "pdf",
+  "suiteTags": [
+    "commit",
+    "release"
+  ],
+  "notes": "GOLD 02B: Werkstatt Firma + Fahrzeug. Kein Projekt.",
+  "expected": {
+    "classifiedKind": "reparaturrechnung",
+    "caseMatchStatus": "none",
+    "matchedProjectId": null,
+    "primaryActionId": "create_vorgang",
+    "alertIds": []
+  },
+  "sourceFile": "source.pdf"
+}

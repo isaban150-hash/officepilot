@@ -133,9 +133,7 @@ function assertOrder(html: string, earlier: string, later: string) {
 }
 
 describe('CONTRACT-WORKSPACE-ASSISTANT-COMPACT-01', () => {
-  beforeEach(() => {
-    resetTestStores();
-    resetDeferredWorkflowAnalysisCacheForTests();
+  beforeEach(() => {    resetDeferredWorkflowAnalysisCacheForTests();
     hydrateCompanyProfileStore(testProfile);
     hydrateVorgangStore([]);
   });
@@ -144,7 +142,7 @@ describe('CONTRACT-WORKSPACE-ASSISTANT-COMPACT-01', () => {
     resetTestStores();
   });
 
-  it('Fall A: Contract-Proposal → Assistant startet kompakt', () => {
+  it('Fall A: Contract-Proposal → Assistant ausgeblendet (UX-02)', () => {
     const item = createContractItem();
     const html = renderToStaticMarkup(
       createElement(DocumentAssistantPanel, {
@@ -156,20 +154,13 @@ describe('CONTRACT-WORKSPACE-ASSISTANT-COMPACT-01', () => {
       }),
     );
 
-    expect(html).toContain('data-testid="document-assistant-panel"');
-    expect(html).toContain('data-compact="true"');
-    expect(html).toContain(translate('docAssistant.recognized'));
-    expect(html).toContain('Werkvertrag');
-    expect(html).toContain('data-testid="doc-assistant-details"');
-    expect(html).toContain('aria-expanded="false"');
-
-    expect(html).not.toContain('data-testid="review-section-content-assistant-details"');
+    expect(html).toBe('');
+    expect(html).not.toContain('data-testid="document-assistant-panel"');
+    expect(html).not.toContain(translate('docAssistant.recognized'));
     expect(html).not.toContain('data-testid="document-guidance-panel"');
-    expect(html).not.toContain(`>${translate('docAssistant.section.steuerberater')}<`);
-    expect(html).not.toContain(`>${translate('docAssistant.section.trust')}<`);
   });
 
-  it('Fall B: Details öffnen → alle Guidance-Abschnitte sichtbar', async () => {
+  it('Fall B: Contract-Compact rendert keinen aufklappbaren Assistant mehr', async () => {
     const item = createContractItem();
     const host = document.createElement('div');
     document.body.appendChild(host);
@@ -189,22 +180,10 @@ describe('CONTRACT-WORKSPACE-ASSISTANT-COMPACT-01', () => {
       );
     });
 
-    const toggle = host.querySelector(
-      '[data-testid="review-section-toggle-assistant-details"]',
-    ) as HTMLButtonElement | null;
-    expect(toggle).toBeTruthy();
-
-    await act(async () => {
-      toggle!.click();
-    });
-
-    const html = host.innerHTML;
-    expect(html).toContain('data-testid="review-section-content-assistant-details"');
-    expect(html).toContain('data-testid="document-guidance-panel"');
-    expect(html).toContain(translate('docGuidance.title'));
-    expect(html).toContain(translate('docAssistant.section.steuerberater'));
-    expect(html).toContain(translate('docAssistant.section.trust'));
-    expect(html).toContain('data-testid="doc-assistant-change-type"');
+    expect(host.querySelector('[data-testid="document-assistant-panel"]')).toBeNull();
+    expect(
+      host.querySelector('[data-testid="review-section-toggle-assistant-details"]'),
+    ).toBeNull();
 
     await act(async () => {
       root?.unmount();
@@ -256,25 +235,20 @@ describe('CONTRACT-WORKSPACE-ASSISTANT-COMPACT-01', () => {
     );
 
     expect(html).toContain('contract-order-proposal');
-    expect(html).toContain('data-testid="document-assistant-panel"');
-    expect(html).toContain('data-compact="true"');
-
-    assertOrder(html, 'data-testid="document-assistant-panel"', 'data-testid="operational-overview"');
-    assertOrder(html, 'data-testid="operational-overview"', 'contract-order-proposal');
-    assertOrder(html, 'data-testid="contract-chef-primary-action"', 'data-testid="contract-details-disclosure"');
-    expect(html).not.toMatch(/data-testid="contract-details-disclosure"[^>]*\sopen[\s>]/);
-    assertOrder(html, 'data-testid="contract-details-disclosure"', 'data-testid="contract-workspace-summary"');
-    assertOrder(html, 'data-testid="contract-workspace-summary"', 'data-testid="contract-order-lv-overview"');
-    assertOrder(
-      html,
-      'data-testid="contract-order-lv-overview"',
-      'data-testid="contract-lv-editor-disclosure"',
-    );
-    assertOrder(
-      html,
-      'data-testid="contract-lv-editor-disclosure"',
-      'data-testid="document-free-question-panel"',
-    );
-    assertOrder(html, 'data-testid="document-free-question-panel"', 'data-testid="ablage-original-file"');
+    expect(html).toContain('data-testid="auftragskarte"');
+    // UX-02: document assistant is hidden on contract first paint.
+    expect(html).not.toContain('data-testid="document-assistant-panel"');
+    expect(html).not.toContain('data-testid="operational-overview"');
+    expect(html).toContain('Werkvertrag');
+    expect(html).toContain('Kurz zusammengefasst');
+    expect(html).toContain('Vertrag anzeigen');
+    expect(html).toContain('Technische Details');
+    assertOrder(html, 'data-testid="contract-chef-primary-action"', 'data-testid="auftragskarte-contract"');
+    assertOrder(html, 'data-testid="auftragskarte-contract"', 'data-testid="auftragskarte-details"');
+    expect(html).not.toMatch(/data-testid="auftragskarte-contract"[^>]*\sopen[\s>]/);
+    expect(html).not.toMatch(/data-testid="auftragskarte-details"[^>]*\sopen[\s>]/);
+    assertOrder(html, 'data-testid="auftragskarte-contract"', 'data-testid="contract-workspace-summary"');
+    expect(html).not.toContain('data-testid="contract-order-lv-overview"');
+    assertOrder(html, 'data-testid="auftragskarte"', 'data-testid="ablage-original-file"');
   });
 });

@@ -8,7 +8,6 @@ import { BETA_TEST_COMPANY_PROFILE, BETA_TEST_SETUP } from './config/betaTestMod
 import { FirmendatenPage } from './pages/FirmendatenPage';
 import { getCompanyProfile, hydrateCompanyProfileStore } from './services/companyProfileService';
 import { validateCompanyProfileForSettings } from './services/setupValidationService';
-import { resetTestStores } from './test/resetStores';
 
 const VALID_IBAN = 'DE89370400440532013000';
 
@@ -42,9 +41,7 @@ function setNativeInputValue(input: HTMLInputElement, value: string): void {
 describe('BUGFIX-FIRMENDATEN-IBAN-01', () => {
   let mounted: Mount | null = null;
 
-  beforeEach(() => {
-    resetTestStores();
-    hydrateCompanyProfileStore({
+  beforeEach(() => {    hydrateCompanyProfileStore({
       ...BETA_TEST_COMPANY_PROFILE,
       iban: '',
     });

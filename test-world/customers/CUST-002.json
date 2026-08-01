@@ -1,0 +1,14 @@
+{
+  "id": "CUST-002",
+  "companyId": "COMPANY-001",
+  "name": "Stadt Lemgo – Gebäudemanagement",
+  "customerType": "public",
+  "street": "Marktplatz 1",
+  "zip": "32657",
+  "city": "Lemgo",
+  "country": "DE",
+  "contactPerson": "Frau Vogt",
+  "phone": "+49 5000 0000",
+  "email": "cust-002@kunde.example",
+  "notes": "TestWorld-Kunde"
+}

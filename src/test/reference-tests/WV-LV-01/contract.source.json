@@ -1,0 +1,9 @@
+{
+  "caseId": "WV-LV-01",
+  "role": "PDF/OCR source pointer for the reference journey",
+  "documentCaseId": "WV-LV-01",
+  "documentCasePath": "src/test/document-cases/contracts/WV-LV-01/",
+  "ocrSource": "werkvertragMultiSectionFixtures (scenario.textFixture)",
+  "binaryPdf": "contract.pdf",
+  "binaryPdfNote": "Placeholder PDF only — not the customer original. Authoritative text is the Document-Case OCR fixture."
+}

@@ -1,0 +1,26 @@
+{
+  "documentId": "DOC-00002",
+  "family": "offer",
+  "headline": "WEG Mehrfamilienhaus Bielefeld-Mitte · Angebot Sanitär – Mehrfamilienhaus Bielefeld",
+  "factOrder": [
+    "customer",
+    "subject",
+    "amount",
+    "deadline",
+    "site"
+  ],
+  "facts": [
+    {
+      "id": "customer",
+      "value": "WEG Mehrfamilienhaus Bielefeld-Mitte"
+    },
+    {
+      "id": "subject",
+      "value": "WEG Mehrfamilienhaus Bielefeld-Mitte · Angebot Sanitär – Mehrfamilienhaus Bielefeld"
+    },
+    {
+      "id": "site",
+      "value": "Niederwall 22, Bielefeld"
+    }
+  ]
+}

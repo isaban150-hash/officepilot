@@ -9,7 +9,8 @@ export const trPilot = {
   'pilot.hints.device': 'Firma verileri için tek cihaz ve tek tarayıcı profili kullanın.',
   'pilot.hints.backup': 'Düzenli olarak ZIP yedek indirin.',
   'pilot.hints.noAutoSend': 'OfficePilot e-posta veya posta otomatik göndermez.',
-  'pilot.hints.noCloud': 'İş verileri şu anda bulutla senkronize edilmiyor.',
+  'pilot.hints.noCloud':
+    'OfficePilot; YZ, senkronizasyon ve fatura/ek iş onayı için internet bağlantısı gerektirir.',
   'pilot.hints.noEInvoice': 'E-fatura bu pilotta henüz yok.',
   'pilot.hints.aiSuggestions': 'YZ yanıtları öneridir; kontrol edilmelidir.',
   'pilot.hints.legalDraft': 'Yasal metinler hâlâ taslak aşamasındadır.',

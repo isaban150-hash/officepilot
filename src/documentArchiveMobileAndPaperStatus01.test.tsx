@@ -1,4 +1,5 @@
 import { importInboxDocumentForTests } from './test/confirmFilingDecisionForTests';
+import { useDocumentBlobDatabaseReset } from './test/documentBlobTestReset';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -14,30 +15,24 @@ import { DocumentOriginalFilePanel } from './components/documents/DocumentOrigin
 import { DEFAULT_SETUP } from './data/mockData';
 import { t } from './i18n';
 import { createAuftragInboxItem } from './test/fixtures';
-import { resetTestStores } from './test/resetStores';
 import {
   getDocumentLifecycleStatusLabelKey,
-  resolveDocumentLifecycle,
-} from './services/documentLifecycleService';
+  resolveDocumentLifecycle } from './services/documentLifecycleService';
 import {
   getDocumentById,
   hydrateDocumentStore,
   importInboxDocument,
-  searchDocuments,
-} from './services/documentService';
+  searchDocuments } from './services/documentService';
 import {
   getDocumentMemoryByDocumentId,
   markDocumentPhysicallyFiled,
-  resetMemory,
-} from './services/officePilotMemoryService';
+  resetMemory } from './services/officePilotMemoryService';
 import { resetCommunicationHistoryStore } from './services/communicationHistoryStore';
 import {
   getDocumentFileRefById,
   getOriginalDocumentFileBytes,
   resetDocumentFileStoreForTests,
-  storeDocumentFileFromCachedPayload,
-} from './services/documentFileStoreService';
-import { resetDocumentBlobDatabaseForTests } from './services/storage/documentBlobIndexedDbService';
+  storeDocumentFileFromCachedPayload } from './services/documentFileStoreService';
 import { hydrateTaskStore } from './services/taskStore';
 import type { InboxItem } from './types/models';
 
@@ -53,10 +48,8 @@ function createLetterWithDeadline(overrides: Partial<InboxItem> = {}): InboxItem
     sender: 'Finanzamt München',
     deadline: '2026-07-10',
     recognizedData: {
-      Dokument: 'Bitte reichen Sie Unterlagen bis zum 10.07.2026 ein.',
-    },
-    ...overrides,
-  });
+      Dokument: 'Bitte reichen Sie Unterlagen bis zum 10.07.2026 ein.' },
+    ...overrides });
 }
 
 function createFreistellung(overrides: Partial<InboxItem> = {}): InboxItem {
@@ -68,11 +61,11 @@ function createFreistellung(overrides: Partial<InboxItem> = {}): InboxItem {
     sender: 'Finanzamt München',
     deadline: '2026-12-31',
     recognizedData: {
-      Dokument: 'Freistellungsbescheinigung nach §48b EStG',
-    },
-    ...overrides,
-  });
+      Dokument: 'Freistellungsbescheinigung nach §48b EStG' },
+    ...overrides });
 }
+
+useDocumentBlobDatabaseReset();
 
 describe('DOCUMENT-ARCHIVE-MOBILE-AND-PAPER-STATUS-01', () => {
   beforeEach(() => {
@@ -82,10 +75,7 @@ describe('DOCUMENT-ARCHIVE-MOBILE-AND-PAPER-STATUS-01', () => {
     hydrateTaskStore([]);
   });
 
-  afterEach(async () => {
-    resetTestStores();
-    resetDocumentFileStoreForTests();
-    await resetDocumentBlobDatabaseForTests();
+  afterEach(async () => {    resetDocumentFileStoreForTests();
   });
 
   it('Bildvorschau besitzt mobile Breitenbegrenzung', () => {
@@ -112,8 +102,7 @@ describe('DOCUMENT-ARCHIVE-MOBILE-AND-PAPER-STATUS-01', () => {
         fileName: 'iphone.jpg',
         mimeType: 'image/jpeg',
         fileSize: bytes.byteLength,
-        bytes,
-      },
+        bytes },
       { lifecycleIntent: 'committed' },
     );
     const fileRef = stored.fileRef;
@@ -131,8 +120,7 @@ describe('DOCUMENT-ARCHIVE-MOBILE-AND-PAPER-STATUS-01', () => {
           { style: { width: '390px', maxWidth: '390px', overflowX: 'auto' } },
           createElement(DocumentOriginalFilePanel, {
             fileRefId: fileRef.id,
-            translate: (key) => t(key, 'de'),
-          }),
+            translate: (key) => t(key, 'de') }),
         ),
       );
     });
@@ -161,8 +149,7 @@ describe('DOCUMENT-ARCHIVE-MOBILE-AND-PAPER-STATUS-01', () => {
         fileName: 'archiv.pdf',
         mimeType: 'application/pdf',
         fileSize: bytes.byteLength,
-        bytes,
-      },
+        bytes },
       { lifecycleIntent: 'committed' },
     );
     const fileRef = stored.fileRef;
@@ -224,8 +211,7 @@ describe('DOCUMENT-ARCHIVE-MOBILE-AND-PAPER-STATUS-01', () => {
         dedupeKey: `${inbox.id}:review`,
         autoCreated: false,
         createdAt: '2026-06-01T00:00:00.000Z',
-        type: 'dokument_pruefen',
-      },
+        type: 'dokument_pruefen' },
     ]);
 
     markDocumentPhysicallyFiled(result.document.id);

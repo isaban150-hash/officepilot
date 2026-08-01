@@ -22,7 +22,6 @@ import * as confirmOrchestrator from './services/orderAmendment/orderAmendmentCl
 import { resetOrderAmendmentConfirmIntentsForTests } from './services/orderAmendment/orderAmendmentConfirmIntentService';
 import { getVorgangById, hydrateVorgangStore } from './services/vorgangService';
 import { createOrderPosition, createTestVorgang } from './test/fixtures';
-import { resetTestStores } from './test/resetStores';
 import type { ContractConfirmationSnapshot, Vorgang } from './types/models';
 
 function translate(key: TranslationKey): string {
@@ -176,9 +175,7 @@ describe('ORDER-AMENDMENT-UI-UX-01B2A1', () => {
   let container: HTMLDivElement;
   let root: Root;
 
-  beforeEach(() => {
-    resetTestStores();
-    resetOrderAmendmentConfirmIntentsForTests();
+  beforeEach(() => {    resetOrderAmendmentConfirmIntentsForTests();
     vi.restoreAllMocks();
     container = document.createElement('div');
     document.body.appendChild(container);

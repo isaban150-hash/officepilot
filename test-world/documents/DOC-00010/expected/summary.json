@@ -1,0 +1,18 @@
+{
+  "documentId": "DOC-00010",
+  "family": "generic",
+  "headline": "Werkzeugkatalog Frühjahr 2026",
+  "factOrder": [
+    "sender",
+    "subject",
+    "amount",
+    "deadline",
+    "site"
+  ],
+  "facts": [
+    {
+      "id": "subject",
+      "value": "Werkzeugkatalog Frühjahr 2026"
+    }
+  ]
+}

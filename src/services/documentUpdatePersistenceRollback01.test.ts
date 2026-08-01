@@ -19,7 +19,6 @@ import * as persistenceService from './persistenceService';
 import { getInboxItemById, hydrateInboxStore } from './inboxService';
 import { confirmFilingDecisionForTests } from '../test/confirmFilingDecisionForTests';
 import { createAuftragInboxItem } from '../test/fixtures';
-import { resetTestStores } from '../test/resetStores';
 import { DOCUMENT_ARCHIVE_TRUTH_SNAPSHOT_SCHEMA_VERSION } from '../types/documentArchiveTruthSnapshot';
 import type { CompanyDocument } from '../types/models';
 
@@ -114,9 +113,7 @@ function seedDoc(overrides: Partial<CompanyDocument> = {}): CompanyDocument {
 }
 
 describe('DOCUMENT-UPDATE-PERSISTENCE-ROLLBACK-01', () => {
-  beforeEach(() => {
-    resetTestStores();
-    hydrateDocumentStore([]);
+  beforeEach(() => {    hydrateDocumentStore([]);
     localStorage.clear();
   });
 

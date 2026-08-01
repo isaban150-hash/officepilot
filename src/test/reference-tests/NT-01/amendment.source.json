@@ -1,0 +1,23 @@
+{
+  "caseId": "NT-01",
+  "role": "Source pointer for the amendment reference journey",
+  "baseOrderSource": "seeded-confirmed-order",
+  "productionServices": [
+    "src/services/orderAmendmentService.ts",
+    "src/services/orderAmendment/orderAmendmentCloudConfirmOrchestrator.ts",
+    "src/services/orderAmendment/orderAmendmentLocalApplyService.ts",
+    "src/services/orderPlanIntegrityService.ts",
+    "src/services/orderPlanCompositionService.ts"
+  ],
+  "uiSurfaces": [
+    "src/components/vorgang/VorgangOrderAmendmentPanel.tsx",
+    "src/components/vorgang/ConfirmedOrderAmendmentList.tsx",
+    "src/components/vorgang/OrderSummaryPanel.tsx"
+  ],
+  "patternTests": [
+    "src/services/orderAmendment/orderAmendment01b2Confirm.test.ts",
+    "src/orderAmendment01a.test.ts",
+    "src/orderAmendment01b2Ui.test.tsx"
+  ],
+  "note": "No parallel business logic — reference runner wraps existing confirm-first orchestration."
+}

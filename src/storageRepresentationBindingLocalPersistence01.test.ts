@@ -21,7 +21,6 @@ import {
   resetDocumentFileStoreForTests,
 } from './services/documentFileStoreService';
 import { countActiveReferencesToFileRef } from './services/documentFileReferenceService';
-import { resetTestStores } from './test/resetStores';
 import type { CompanyDocument } from './types/models';
 import type { DocumentFileRef } from './types/documentFileRef';
 import { withNewEntitySync } from './services/sync/syncMetaService';
@@ -84,9 +83,7 @@ function sourceReusePlan(sourceFileRefId: string) {
 }
 
 describe('STORAGE-REPRESENTATION-BINDING-LOCAL-PERSISTENCE-01', () => {
-  afterEach(() => {
-    resetTestStores();
-    resetDocumentFileStoreForTests();
+  afterEach(() => {    resetDocumentFileStoreForTests();
     resetDocumentFileRepresentationBindingStoreForTests();
   });
 

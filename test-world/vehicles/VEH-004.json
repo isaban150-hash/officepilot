@@ -1,0 +1,13 @@
+{
+  "id": "VEH-004",
+  "companyId": "COMPANY-001",
+  "branchId": "BRANCH-001",
+  "label": "Pkw Büro",
+  "licensePlate": "LIP-CH 2001",
+  "vehicleType": "car",
+  "make": "Skoda",
+  "model": "Octavia",
+  "defaultDriverEmployeeId": "EMP-009",
+  "active": true,
+  "notes": "TestWorld-Fahrzeug"
+}

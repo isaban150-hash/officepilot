@@ -1,4 +1,5 @@
 import { importInboxDocumentForTests } from './test/confirmFilingDecisionForTests';
+import { useDocumentBlobDatabaseReset } from './test/documentBlobTestReset';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as persistenceService from './services/persistenceService';
 import { buildDocumentFileRepresentationPlan } from './services/documentFileRepresentationPlanService';
@@ -28,7 +29,6 @@ import {
 import { hydrateInboxStore } from './services/inboxService';
 import { withNewEntitySync } from './services/sync/syncMetaService';
 import { createAuftragInboxItem } from './test/fixtures';
-import { resetTestStores } from './test/resetStores';
 import type { DocumentFileTransformPlan } from './types/documentFileTransformPlan';
 import type { CompanyDocument } from './types/models';
 
@@ -118,10 +118,11 @@ async function prepareDocumentWithSource(bytes: Uint8Array, fileName: string) {
   return source;
 }
 
+useDocumentBlobDatabaseReset();
+
 afterEach(() => {
   vi.restoreAllMocks();
   setDocumentFileRasterEncodeAdaptersForTests(null);
-  resetTestStores();
   resetDocumentFileStoreForTests();
   resetDocumentFileRepresentationBindingStoreForTests();
 });

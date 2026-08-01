@@ -22,6 +22,7 @@ export interface UploadErrorView {
 const INTAKE_ERROR_KEYS: Partial<Record<DocumentIntakeErrorCode, TranslationKey>> = {
   invalid_type: 'document.upload.error.invalidType',
   unsupported_photo_format: 'document.upload.error.unsupportedPhotoFormat',
+  heic_conversion_failed: 'document.upload.error.heicConversionFailed',
   file_too_large: 'document.upload.error.fileTooLarge',
   file_read_failed: 'docAssistant.error.fileReadFailed',
   storage_failed: 'docAssistant.error.storageFailed',
@@ -40,6 +41,7 @@ const INTAKE_ERROR_KEYS: Partial<Record<DocumentIntakeErrorCode, TranslationKey>
 
 const EXTRACTION_ERROR_KEYS: Partial<Record<DocumentTextErrorCode, TranslationKey>> = {
   heic_unsupported: 'document.upload.error.unsupportedPhotoFormat',
+  heic_conversion_failed: 'document.upload.error.heicConversionFailed',
   unsupported_format: 'document.upload.error.unsupportedPhotoFormat',
   ocr_failed: 'docAssistant.error.blurryPhoto',
   no_text: 'docAssistant.error.noReadableText',
@@ -49,6 +51,7 @@ const EXTRACTION_ERROR_KEYS: Partial<Record<DocumentTextErrorCode, TranslationKe
 
 const EXTRACTION_TITLE_KEYS: Partial<Record<DocumentTextErrorCode, TranslationKey>> = {
   heic_unsupported: 'docAssistant.error.title.unsupportedFormat',
+  heic_conversion_failed: 'docAssistant.error.title.unsupportedFormat',
   unsupported_format: 'docAssistant.error.title.unsupportedFormat',
   ocr_failed: 'docAssistant.error.title.blurryPhoto',
   no_text: 'docAssistant.error.title.noReadableText',
@@ -59,6 +62,7 @@ const EXTRACTION_TITLE_KEYS: Partial<Record<DocumentTextErrorCode, TranslationKe
 const INTAKE_TITLE_KEYS: Partial<Record<DocumentIntakeErrorCode, TranslationKey>> = {
   invalid_type: 'docAssistant.error.title.unsupportedFormat',
   unsupported_photo_format: 'docAssistant.error.title.unsupportedFormat',
+  heic_conversion_failed: 'docAssistant.error.title.unsupportedFormat',
   file_too_large: 'docAssistant.error.title.fileTooLarge',
   file_read_failed: 'docAssistant.error.title.fileReadFailed',
   storage_failed: 'docAssistant.error.title.storageFailed',
@@ -91,6 +95,7 @@ export function resolveExtractionErrorKey(
 export function isBlockingExtractionError(errorCode?: DocumentTextErrorCode): boolean {
   return (
     errorCode === 'heic_unsupported' ||
+    errorCode === 'heic_conversion_failed' ||
     errorCode === 'unsupported_format' ||
     errorCode === 'ocr_failed' ||
     errorCode === 'no_text' ||

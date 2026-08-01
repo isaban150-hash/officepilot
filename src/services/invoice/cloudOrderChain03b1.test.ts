@@ -2,7 +2,6 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createAbschlagInvoice, createTestVorgang, testSetup } from '../../test/fixtures';
-import { resetTestStores } from '../../test/resetStores';
 import * as supabaseLib from '../../lib/supabase';
 import * as persistenceService from '../persistenceService';
 import {
@@ -75,9 +74,7 @@ describe('CLOUD-ORDER-CHAIN-03B1 migration hardening', () => {
 });
 
 describe('CLOUD-ORDER-CHAIN-03B1 finalize cutover', () => {
-  beforeEach(() => {
-    resetTestStores();
-    resetInvoiceFinalizeIntentsForTests();
+  beforeEach(() => {    resetInvoiceFinalizeIntentsForTests();
     vi.restoreAllMocks();
     hydrateVorgangStore([createTestVorgang()]);
   });

@@ -1,0 +1,12 @@
+{
+  "id": "SUP-015",
+  "companyId": "COMPANY-001",
+  "name": "Sparkasse Lemgo",
+  "supplierType": "bank",
+  "city": "Lemgo",
+  "country": "DE",
+  "email": "sup-015@counterparty.example",
+  "notes": "Hausbank",
+  "street": "Mittelstraße 85",
+  "zip": "32657"
+}

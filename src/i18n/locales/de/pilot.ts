@@ -9,7 +9,8 @@ export const dePilot = {
   'pilot.hints.device': 'Nutze ein Gerät und ein Browser-Profil für deine Firmendaten.',
   'pilot.hints.backup': 'Lade regelmäßig eine ZIP-Datensicherung herunter.',
   'pilot.hints.noAutoSend': 'OfficePilot versendet keine E-Mails oder Post automatisch.',
-  'pilot.hints.noCloud': 'Geschäftsdaten werden derzeit nicht mit der Cloud synchronisiert.',
+  'pilot.hints.noCloud':
+    'OfficePilot benötigt Internet für KI, Synchronisation sowie die verbindliche Freigabe von Rechnungen und Nachträgen.',
   'pilot.hints.noEInvoice': 'E-Rechnung ist in diesem Pilot noch nicht enthalten.',
   'pilot.hints.aiSuggestions': 'KI-Antworten sind Vorschläge und müssen geprüft werden.',
   'pilot.hints.legalDraft': 'Rechtstexte befinden sich noch im Entwurfsstand.',

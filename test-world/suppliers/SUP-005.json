@@ -1,0 +1,12 @@
+{
+  "id": "SUP-005",
+  "companyId": "COMPANY-001",
+  "name": "Aral Station Nord",
+  "supplierType": "fuel",
+  "city": "Bad Salzuflen",
+  "country": "DE",
+  "email": "sup-005@counterparty.example",
+  "notes": "TestWorld-Counterparty",
+  "street": "Vlothoer Str. 55",
+  "zip": "32105"
+}

@@ -31,9 +31,13 @@ import { resetDocumentFileDerivativeStepInFlightLocksForTests } from '../service
 import { resetWorkspaceCloudBootstrapForTests } from '../services/workspace/workspaceCloudBootstrapService';
 import { resetStorageScopeForTests } from '../services/storage/storageScopeService';
 import { resetDocumentWorkResultStoreForTests } from '../services/documentWorkResultStoreService';
+import { resetUiSessionStoreForTests } from '../services/uiSession/uiSessionStore';
+import { resetUiSessionLiveState } from '../services/uiSession/uiSessionLiveState';
 
 export function resetTestStores(): void {
   resetStorageScopeForTests();
+  resetUiSessionStoreForTests();
+  resetUiSessionLiveState();
   hydrateInboxStore([]);
   hydrateVorgangStore([]);
   hydrateTaskStore([]);

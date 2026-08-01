@@ -1,0 +1,9 @@
+{
+  "documentId": "DOC-00014",
+  "taxonomyTypeId": "DOCTYPE-040",
+  "documentType": "utility",
+  "subtype": "strom",
+  "label": "Stromrechnung",
+  "classifiedKind": "rechnung",
+  "family": "invoice_in"
+}

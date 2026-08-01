@@ -1,0 +1,12 @@
+{
+  "id": "SUP-003",
+  "companyId": "COMPANY-001",
+  "name": "Heiztechnik Westfalen AG",
+  "supplierType": "wholesale",
+  "city": "Detmold",
+  "country": "DE",
+  "email": "sup-003@counterparty.example",
+  "notes": "TestWorld-Counterparty",
+  "street": "Industrieweg 21",
+  "zip": "32756"
+}

@@ -1,0 +1,9 @@
+{
+  "documentId": "DOC-00017",
+  "taxonomyTypeId": "DOCTYPE-043",
+  "documentType": "telecom",
+  "subtype": "mobilfunk",
+  "label": "Mobilfunkrechnung",
+  "classifiedKind": "eingangsrechnung",
+  "family": "invoice_in"
+}

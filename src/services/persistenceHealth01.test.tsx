@@ -15,12 +15,9 @@ import {
   resetPersistenceHealthForTests,
   subscribePersistenceHealth,
 } from './persistenceHealthService';
-import { resetTestStores } from '../test/resetStores';
 
 describe('persistence health + banner', () => {
-  beforeEach(() => {
-    resetTestStores();
-    resetLastPersistFailureForTests();
+  beforeEach(() => {    resetLastPersistFailureForTests();
     resetPersistenceHealthForTests();
   });
 

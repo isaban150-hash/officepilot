@@ -30,6 +30,13 @@ import {
   formatPaperLocation,
 } from './documentSummaryService';
 import { buildPremiumLetterExplanation } from './documentUnderstandingService';
+import {
+  buildSummaryForCompanyDocument,
+  buildSummaryForInboxItem,
+  createPresentationTranslate,
+  presentDocumentSummaryForSnippet,
+} from '../documentSummaryPresentation';
+import { getCachedSetup } from '../persistenceService';
 
 import { OFFICEPILOT_LEGAL_DISCLAIMER } from '../../config/legalDisclaimer';
 
@@ -387,8 +394,17 @@ export function buildDocumentExplanation(
     summary.sourceConfidence,
   );
 
+  const translate = createPresentationTranslate(getCachedSetup()?.language);
+  const presentationSummary = inboxItem
+    ? buildSummaryForInboxItem(inboxItem, { translate })
+    : buildSummaryForCompanyDocument(document, { translate });
+  const presentationSnippet = presentDocumentSummaryForSnippet(presentationSummary, translate);
+  const shortAnswerFromPresentation = [presentationSnippet.title, presentationSnippet.subtitle]
+    .filter(Boolean)
+    .join(' · ');
+
   return {
-    shortAnswer: letter.shortExplanation || summary.shortSummary,
+    shortAnswer: shortAnswerFromPresentation || letter.shortExplanation || summary.shortSummary,
     whatIsIt: letter.whatIsItAbout || summary.topic,
     whyImportant: buildWhyImportant(classifiedKind, document),
     actionRequired,

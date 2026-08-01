@@ -1,3 +1,4 @@
+import { useDocumentBlobDatabaseReset } from './test/documentBlobTestReset';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, createElement, useState } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -6,13 +7,11 @@ import { DocumentDerivativeRecoveryStatusPanel } from './components/documents/Do
 import { createDocumentFileRepresentationBinding } from './services/documentFileRepresentationBindingService';
 import {
   hydrateDocumentFileRepresentationBindingStore,
-  resetDocumentFileRepresentationBindingStoreForTests,
-} from './services/documentFileRepresentationBindingStoreService';
+  resetDocumentFileRepresentationBindingStoreForTests } from './services/documentFileRepresentationBindingStoreService';
 import { createDocumentFileDerivativeStepOutcome } from './services/documentFileDerivativeStepOutcomeService';
 import {
   hydrateDocumentFileDerivativeStepOutcomeStore,
-  resetDocumentFileDerivativeStepOutcomeStoreForTests,
-} from './services/documentFileDerivativeStepOutcomeStoreService';
+  resetDocumentFileDerivativeStepOutcomeStoreForTests } from './services/documentFileDerivativeStepOutcomeStoreService';
 import { upsertDocumentFileDerivativeRecoveryContext } from './services/documentFileDerivativeRecoveryContextService';
 import { resetDocumentFileDerivativeRecoveryContextStoreForTests } from './services/documentFileDerivativeRecoveryContextStoreService';
 import * as recoveryContextService from './services/documentFileDerivativeRecoveryContextService';
@@ -21,17 +20,13 @@ import { executeDocumentFileDerivativeRecoveryDetailRetry } from './services/doc
 import {
   resetDocumentFileDerivativeStepInFlightLocksForTests,
   tryAcquireDocumentFileDerivativeStepInFlightLock,
-  releaseDocumentFileDerivativeStepInFlightLock,
-} from './services/documentFileDerivativeStepInFlightLockService';
+  releaseDocumentFileDerivativeStepInFlightLock } from './services/documentFileDerivativeStepInFlightLockService';
 import { setPostImportDerivativeStepRunnersForTests } from './services/documentFilePostImportDerivativeOrchestrationService';
 import { hydrateDocumentStore } from './services/documentService';
 import {
   resetDocumentFileStoreForTests,
-  storeDocumentFileFromCachedPayload,
-} from './services/documentFileStoreService';
-import { resetDocumentBlobDatabaseForTests } from './services/storage/documentBlobIndexedDbService';
+  storeDocumentFileFromCachedPayload } from './services/documentFileStoreService';
 import { withNewEntitySync } from './services/sync/syncMetaService';
-import { resetTestStores } from './test/resetStores';
 import type { DocumentFileTransformPlan } from './types/documentFileTransformPlan';
 import type { CompanyDocument } from './types/models';
 import type { PostImportDerivativeStepId } from './types/documentFileDerivativeStepOutcome';
@@ -48,26 +43,21 @@ function samplePlan(): DocumentFileTransformPlan {
     hints: {
       metadataHandling: 'strip_nonessential',
       colorHandling: 'preserve',
-      preferredOutputKind: 'preserve_source',
-    },
+      preferredOutputKind: 'preserve_source' },
     intents: [
       {
         targetKind: 'preview',
         intent: 'create_preview',
-        executionIntent: 'preferred',
-      },
+        executionIntent: 'preferred' },
       {
         targetKind: 'thumbnail',
         intent: 'create_thumbnail',
-        executionIntent: 'preferred',
-      },
+        executionIntent: 'preferred' },
       {
         targetKind: 'archive',
         intent: 'create_archive',
-        executionIntent: 'preferred',
-      },
-    ],
-  };
+        executionIntent: 'preferred' },
+    ] };
 }
 
 function sampleDocument(id: string, fileRefId: string): CompanyDocument {
@@ -88,8 +78,7 @@ function sampleDocument(id: string, fileRefId: string): CompanyDocument {
       archived: false,
       createdAt: '2026-07-20T00:00:00.000Z',
       fileRefId,
-      mimeType: 'image/jpeg',
-    },
+      mimeType: 'image/jpeg' },
     '2026-07-20T00:00:00.000Z',
   );
 }
@@ -114,16 +103,14 @@ function putOutcome(input: {
       sourceMimeType: 'image/jpeg',
       createdFileRef: input.outcome === 'persisted',
       attempt: input.attempt ?? 1,
-      updatedAt: '2026-07-20T18:00:00.000Z',
-    }),
+      updatedAt: '2026-07-20T18:00:00.000Z' }),
   ]);
 }
 
 function seedRecoveryPlan(): void {
   upsertDocumentFileDerivativeRecoveryContext({
     documentId: DOC,
-    transformPlan: samplePlan(),
-  });
+    transformPlan: samplePlan() });
 }
 
 async function flushUi(): Promise<void> {
@@ -144,8 +131,7 @@ async function renderPanel(onRecovered?: () => void): Promise<{
     root.render(
       createElement(DocumentDerivativeRecoveryStatusPanel, {
         documentId: DOC,
-        onRecovered,
-      }),
+        onRecovered }),
     );
   });
   await flushUi();
@@ -157,16 +143,16 @@ async function renderPanel(onRecovered?: () => void): Promise<{
   return { container, root };
 }
 
+useDocumentBlobDatabaseReset();
+
 afterEach(async () => {
   vi.restoreAllMocks();
   setPostImportDerivativeStepRunnersForTests(null);
   resetDocumentFileDerivativeStepInFlightLocksForTests();
-  resetTestStores();
   resetDocumentFileStoreForTests();
   resetDocumentFileRepresentationBindingStoreForTests();
   resetDocumentFileDerivativeStepOutcomeStoreForTests();
   resetDocumentFileDerivativeRecoveryContextStoreForTests();
-  await resetDocumentBlobDatabaseForTests();
 });
 
 describe('STORAGE-DERIVATIVE-RECOVERY-DETAIL-RETRY-01', () => {
@@ -212,10 +198,8 @@ describe('STORAGE-DERIVATIVE-RECOVERY-DETAIL-RETRY-01', () => {
           sourceMimeType: 'image/jpeg',
           createdFileRef: true,
           attempt: 2,
-          updatedAt: '2026-07-20T19:00:00.000Z',
-        }),
-        orchestrationResult: { kind: 'persisted' },
-      });
+          updatedAt: '2026-07-20T19:00:00.000Z' }),
+        orchestrationResult: { kind: 'persisted' } });
 
     const { container, root } = await renderPanel();
     const button = container.querySelector(
@@ -233,8 +217,7 @@ describe('STORAGE-DERIVATIVE-RECOVERY-DETAIL-RETRY-01', () => {
     expect(planSpy).toHaveBeenCalledWith(DOC);
     expect(retrySpy.mock.calls[0]?.[0]).toMatchObject({
       documentId: DOC,
-      stepId: 'raster_preview',
-    });
+      stepId: 'raster_preview' });
     expect(retrySpy.mock.calls[0]?.[0]?.transformPlan).toEqual(samplePlan());
 
     await act(async () => {
@@ -253,21 +236,18 @@ describe('STORAGE-DERIVATIVE-RECOVERY-DETAIL-RETRY-01', () => {
       .mockResolvedValue({
         kind: 'retried',
         outcome: null,
-        orchestrationResult: null,
-      });
+        orchestrationResult: null });
 
     await executeDocumentFileDerivativeRecoveryDetailRetry({
       documentId: DOC,
-      selectedStepId: 'raster_preview',
-    });
+      selectedStepId: 'raster_preview' });
 
     expect(getPlan).toHaveBeenCalledTimes(1);
     expect(getPlan).toHaveBeenCalledWith(DOC);
     expect(retrySpy).toHaveBeenCalledWith({
       documentId: DOC,
       stepId: 'raster_preview',
-      transformPlan: plan,
-    });
+      transformPlan: plan });
   });
 
   it('fehlender Plan startet keinen Retry', async () => {
@@ -279,8 +259,7 @@ describe('STORAGE-DERIVATIVE-RECOVERY-DETAIL-RETRY-01', () => {
 
     const result = await executeDocumentFileDerivativeRecoveryDetailRetry({
       documentId: DOC,
-      selectedStepId: 'raster_preview',
-    });
+      selectedStepId: 'raster_preview' });
 
     expect(result).toEqual({ feedback: 'missing_plan', shouldRefreshPreview: false });
     expect(retrySpy).not.toHaveBeenCalled();
@@ -310,10 +289,8 @@ describe('STORAGE-DERIVATIVE-RECOVERY-DETAIL-RETRY-01', () => {
             sourceMimeType: 'image/jpeg',
             createdFileRef: false,
             attempt: 2,
-            updatedAt: '2026-07-20T19:00:00.000Z',
-          }),
-          orchestrationResult: null,
-        };
+            updatedAt: '2026-07-20T19:00:00.000Z' }),
+          orchestrationResult: null };
       });
 
     const { container, root } = await renderPanel();
@@ -351,8 +328,7 @@ describe('STORAGE-DERIVATIVE-RECOVERY-DETAIL-RETRY-01', () => {
     seedRecoveryPlan();
     vi.spyOn(manualRetryService, 'retryDocumentFileDerivativeStep').mockResolvedValue({
       kind: 'rejected',
-      reason: 'in_flight',
-    });
+      reason: 'in_flight' });
 
     const { container, root } = await renderPanel();
     const button = container.querySelector(
@@ -380,8 +356,7 @@ describe('STORAGE-DERIVATIVE-RECOVERY-DETAIL-RETRY-01', () => {
         fileName: 'preview.jpg',
         mimeType: 'image/jpeg',
         fileSize: JPEG.byteLength,
-        bytes: JPEG,
-      },
+        bytes: JPEG },
       { lifecycleIntent: 'committed' },
     );
     putOutcome({ stepId: 'raster_preview', kind: 'preview', outcome: 'error' });
@@ -394,8 +369,7 @@ describe('STORAGE-DERIVATIVE-RECOVERY-DETAIL-RETRY-01', () => {
           createDocumentFileRepresentationBinding({
             documentId: DOC,
             kind: 'preview',
-            fileRefId: preview.fileRef.id,
-          }),
+            fileRefId: preview.fileRef.id }),
         ]);
         hydrateDocumentFileDerivativeStepOutcomeStore([
           createDocumentFileDerivativeStepOutcome({
@@ -409,8 +383,7 @@ describe('STORAGE-DERIVATIVE-RECOVERY-DETAIL-RETRY-01', () => {
             sourceMimeType: 'image/jpeg',
             createdFileRef: true,
             attempt: 2,
-            updatedAt: '2026-07-20T19:00:00.000Z',
-          }),
+            updatedAt: '2026-07-20T19:00:00.000Z' }),
         ]);
         return {
           kind: 'retried',
@@ -425,10 +398,8 @@ describe('STORAGE-DERIVATIVE-RECOVERY-DETAIL-RETRY-01', () => {
             sourceMimeType: 'image/jpeg',
             createdFileRef: true,
             attempt: 2,
-            updatedAt: '2026-07-20T19:00:00.000Z',
-          }),
-          orchestrationResult: { kind: 'persisted' },
-        };
+            updatedAt: '2026-07-20T19:00:00.000Z' }),
+          orchestrationResult: { kind: 'persisted' } };
       },
     );
 
@@ -461,8 +432,7 @@ describe('STORAGE-DERIVATIVE-RECOVERY-DETAIL-RETRY-01', () => {
         fileName: 'preview-a.jpg',
         mimeType: 'image/jpeg',
         fileSize: JPEG.byteLength,
-        bytes: JPEG,
-      },
+        bytes: JPEG },
       { lifecycleIntent: 'committed' },
     );
     const second = await storeDocumentFileFromCachedPayload(
@@ -470,16 +440,14 @@ describe('STORAGE-DERIVATIVE-RECOVERY-DETAIL-RETRY-01', () => {
         fileName: 'preview-b.jpg',
         mimeType: 'image/jpeg',
         fileSize: JPEG.byteLength,
-        bytes: new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x55]),
-      },
+        bytes: new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x55]) },
       { lifecycleIntent: 'committed' },
     );
     hydrateDocumentFileRepresentationBindingStore([
       createDocumentFileRepresentationBinding({
         documentId: DOC,
         kind: 'preview',
-        fileRefId: first.fileRef.id,
-      }),
+        fileRefId: first.fileRef.id }),
     ]);
 
     function PreviewHarness() {
@@ -498,12 +466,10 @@ describe('STORAGE-DERIVATIVE-RECOVERY-DETAIL-RETRY-01', () => {
                 createDocumentFileRepresentationBinding({
                   documentId: DOC,
                   kind: 'preview',
-                  fileRefId: second.fileRef.id,
-                }),
+                  fileRefId: second.fileRef.id }),
               ]);
               setRevision((value) => value + 1);
-            },
-          },
+            } },
           'bump',
         ),
       );
@@ -552,9 +518,7 @@ describe('STORAGE-DERIVATIVE-RECOVERY-DETAIL-RETRY-01', () => {
     setPostImportDerivativeStepRunnersForTests({
       raster_preview: async () => ({
         kind: 'error',
-        errorCode: 'orchestrator_error',
-      }),
-    });
+        errorCode: 'orchestrator_error' }) });
 
     const { container, root } = await renderPanel();
     const button = container.querySelector(
@@ -595,20 +559,17 @@ describe('STORAGE-DERIVATIVE-RECOVERY-DETAIL-RETRY-01', () => {
         kind: 'preview',
         outcome: 'error',
         attempt: 5,
-        expectPanel: true,
-      },
+        expectPanel: true },
       {
         stepId: 'raster_preview',
         kind: 'preview',
         outcome: 'conflict',
-        expectPanel: true,
-      },
+        expectPanel: true },
       {
         stepId: 'raster_preview',
         kind: 'preview',
         outcome: 'noop',
-        expectPanel: false,
-      },
+        expectPanel: false },
     ];
 
     for (const entry of cases) {
@@ -618,8 +579,7 @@ describe('STORAGE-DERIVATIVE-RECOVERY-DETAIL-RETRY-01', () => {
         stepId: entry.stepId,
         kind: entry.kind,
         outcome: entry.outcome,
-        attempt: entry.attempt,
-      });
+        attempt: entry.attempt });
       seedRecoveryPlan();
 
       const container = document.createElement('div');
@@ -667,8 +627,7 @@ describe('STORAGE-DERIVATIVE-RECOVERY-DETAIL-RETRY-01', () => {
 
     const result = await executeDocumentFileDerivativeRecoveryDetailRetry({
       documentId: DOC,
-      selectedStepId: 'raster_preview',
-    });
+      selectedStepId: 'raster_preview' });
 
     expect(result.feedback).toBe('in_flight');
     releaseDocumentFileDerivativeStepInFlightLock(DOC, 'raster_preview');
@@ -680,8 +639,7 @@ describe('STORAGE-DERIVATIVE-RECOVERY-DETAIL-RETRY-01', () => {
     const onRecovered = vi.fn();
     vi.spyOn(manualRetryService, 'retryDocumentFileDerivativeStep').mockResolvedValue({
       kind: 'skipped',
-      reason: 'already_ready',
-    });
+      reason: 'already_ready' });
 
     const { container, root } = await renderPanel(onRecovered);
     await act(async () => {

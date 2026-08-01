@@ -1,26 +1,21 @@
+import { useDocumentBlobDatabaseReset } from './test/documentBlobTestReset';
 import { afterEach, describe, expect, it } from 'vitest';
 import { CLASSIFIED_DOCUMENT_KINDS } from './services/documentClassificationCatalog';
 import {
   assertStoragePolicyCatalogComplete,
   getStoragePolicyForKind,
-  STORAGE_POLICY_BY_KIND,
-} from './services/storagePolicyCatalog';
+  STORAGE_POLICY_BY_KIND } from './services/storagePolicyCatalog';
 import {
   resolveStorageMediaProfile,
-  resolveStoragePolicy,
-} from './services/storagePolicyService';
+  resolveStoragePolicy } from './services/storagePolicyService';
 import {
   confirmPendingDocumentIntake,
-  processDocumentFileForPreview,
-} from './services/pendingDocumentIntakeService';
+  processDocumentFileForPreview } from './services/pendingDocumentIntakeService';
 import {
   getDocumentFileRefStoreSnapshot,
-  resetDocumentFileStoreForTests,
-} from './services/documentFileStoreService';
+  resetDocumentFileStoreForTests } from './services/documentFileStoreService';
 import { setPdfTextExtractorForTests } from './services/uploadTextExtractionService';
 import { setImageOcrExtractorForTests } from './services/ocrDocumentService';
-import { resetTestStores } from './test/resetStores';
-import { resetDocumentBlobDatabaseForTests } from './services/storage/documentBlobIndexedDbService';
 import type { ClassifiedDocumentKind } from './types/models';
 import type { StoragePolicyId } from './types/storagePolicy';
 
@@ -53,6 +48,8 @@ const LEGAL_CONTRACT_KINDS: ClassifiedDocumentKind[] = [
   'subunternehmervertrag',
   'nachunternehmervertrag',
 ];
+
+useDocumentBlobDatabaseReset();
 
 describe('STORAGE-POLICY-FOUNDATION-01', () => {
   it('catalog covers every ClassifiedDocumentKind', () => {
@@ -104,8 +101,7 @@ describe('STORAGE-POLICY-FOUNDATION-01', () => {
           mimeType: 'application/pdf',
           fileName: 'rechnung.pdf',
           extractionMethod: 'pdf_direct',
-          sourceType: 'pdf',
-        }),
+          sourceType: 'pdf' }),
       ).toBe('native_pdf');
     });
 
@@ -115,8 +111,7 @@ describe('STORAGE-POLICY-FOUNDATION-01', () => {
           mimeType: 'application/pdf',
           fileName: 'scan.pdf',
           extractionMethod: 'pdf_ocr',
-          sourceType: 'pdf',
-        }),
+          sourceType: 'pdf' }),
       ).toBe('scanned_pdf');
     });
 
@@ -126,8 +121,7 @@ describe('STORAGE-POLICY-FOUNDATION-01', () => {
           mimeType: 'image/jpeg',
           fileName: 'beleg.jpg',
           extractionMethod: 'image_ocr',
-          sourceType: 'image',
-        }),
+          sourceType: 'image' }),
       ).toBe('raster_image');
     });
   });
@@ -141,8 +135,7 @@ describe('STORAGE-POLICY-FOUNDATION-01', () => {
         fileName: 'rechnung.pdf',
         extractionMethod: 'pdf_direct',
         sourceType: 'pdf',
-        ocrConfidence: 'high',
-      });
+        ocrConfidence: 'high' });
       const scanned = resolveStoragePolicy({
         classifiedKind: 'rechnung',
         detectionReasonKey: 'classification.detect.rechnung',
@@ -150,8 +143,7 @@ describe('STORAGE-POLICY-FOUNDATION-01', () => {
         fileName: 'scan.pdf',
         extractionMethod: 'pdf_ocr',
         sourceType: 'pdf',
-        ocrConfidence: 'medium',
-      });
+        ocrConfidence: 'medium' });
 
       expect(native.policyId).toBe('business_document');
       expect(native.mediaProfile).toBe('native_pdf');
@@ -168,8 +160,7 @@ describe('STORAGE-POLICY-FOUNDATION-01', () => {
         fileName: 'unklar.pdf',
         extractionMethod: 'pdf_direct',
         sourceType: 'pdf',
-        ocrConfidence: 'high',
-      });
+        ocrConfidence: 'high' });
 
       expect(resolved.catalogPolicyId).toBe('business_document');
       expect(resolved.policyId).toBe('temporary_unknown');
@@ -185,8 +176,7 @@ describe('STORAGE-POLICY-FOUNDATION-01', () => {
         extractionMethod: 'image_ocr',
         sourceType: 'image',
         ocrConfidence: 'high',
-        recognizedText: 'Baustelle Rohbau Fortschritt',
-      });
+        recognizedText: 'Baustelle Rohbau Fortschritt' });
 
       expect(resolved.catalogPolicyId).toBe('temporary_unknown');
       expect(resolved.policyId).toBe('construction_photo');
@@ -202,8 +192,7 @@ describe('STORAGE-POLICY-FOUNDATION-01', () => {
         fileName: 'bild.jpg',
         extractionMethod: 'image_ocr',
         sourceType: 'image',
-        ocrConfidence: 'low',
-      });
+        ocrConfidence: 'low' });
 
       expect(resolved.policyId).toBe('temporary_unknown');
     });
@@ -216,8 +205,7 @@ describe('STORAGE-POLICY-FOUNDATION-01', () => {
         business_document: 0,
         legal_document: 0,
         construction_photo: 0,
-        temporary_unknown: 0,
-      };
+        temporary_unknown: 0 };
 
       for (const kind of CLASSIFIED_DOCUMENT_KINDS) {
         counts[getStoragePolicyForKind(kind)] += 1;
@@ -235,16 +223,13 @@ describe('STORAGE-POLICY-FOUNDATION-01', () => {
     afterEach(async () => {
       setPdfTextExtractorForTests(null);
       setImageOcrExtractorForTests(null);
-      resetTestStores();
       resetDocumentFileStoreForTests();
-      await resetDocumentBlobDatabaseForTests();
     });
 
     it('führt aufgelöste Policy im Pending mit, ohne Persistenz vor Confirm', async () => {
       setPdfTextExtractorForTests(() => 'Rechnung Muster GmbH 1.250,00 EUR');
       const file = new File(['%PDF-1.4\nrechnung\n%%EOF'], 'rechnung.pdf', {
-        type: 'application/pdf',
-      });
+        type: 'application/pdf' });
 
       const preview = await processDocumentFileForPreview(file, { selectedKind: 'materialrechnung' });
       expect(preview.success).toBe(true);
@@ -256,8 +241,7 @@ describe('STORAGE-POLICY-FOUNDATION-01', () => {
 
       const confirm = await confirmPendingDocumentIntake(preview.pending, {
         importSource: 'upload',
-        userDecision: 'save_permanently',
-      });
+        userDecision: 'save_permanently' });
       expect(confirm.success).toBe(true);
       if (!confirm.success) return;
 

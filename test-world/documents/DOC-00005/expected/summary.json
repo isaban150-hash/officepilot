@@ -1,0 +1,30 @@
+{
+  "documentId": "DOC-00005",
+  "family": "delivery",
+  "headline": "Lieferschein – SanitärPartner Lemgo",
+  "factOrder": [
+    "supplier",
+    "date",
+    "site",
+    "vorgang",
+    "qty"
+  ],
+  "facts": [
+    {
+      "id": "supplier",
+      "value": "SanitärPartner Lemgo KG"
+    },
+    {
+      "id": "date",
+      "value": "2026-01-18"
+    },
+    {
+      "id": "site",
+      "value": "Werkstraße 12, Lemgo"
+    },
+    {
+      "id": "vorgang",
+      "value": "Sägewerk Ernst Flisch – Heizzentrale"
+    }
+  ]
+}

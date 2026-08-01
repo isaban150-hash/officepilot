@@ -21,6 +21,10 @@ import {
   formatDocumentValidUntil,
   resolveDocumentCardDate,
 } from '../utils/documentDateDisplay';
+import {
+  buildSummaryForCompanyDocument,
+  toDocumentSummaryCompactView,
+} from '../services/documentSummaryPresentation';
 import type { TranslationKey } from '../i18n';
 
 export function DokumentePage() {
@@ -150,19 +154,26 @@ export function DokumentePage() {
                 : 'document.area.paper.pending';
             const cardDate = resolveDocumentCardDate(doc, setup.language, unrecognizedDate);
             const validUntilLabel = formatDocumentValidUntil(doc.validUntil, setup.language);
+            const summaryView = toDocumentSummaryCompactView(
+              buildSummaryForCompanyDocument(doc, { translate, language: setup.language }),
+              translate,
+            );
             return (
               <Link key={doc.id} to={`/dokumente/${doc.id}`} className="card-link">
-                <Card>
+                <Card data-testid={`document-summary-list-${doc.id}`}>
                   <div className="document-card__header">
                     <DocumentCardThumbnail
                       documentId={doc.id}
                       placeholder={doc.imagePreview ?? ''}
                     />
                     <div>
-                      <CardTitle>{doc.title}</CardTitle>
+                      <CardTitle>{summaryView.title}</CardTitle>
                       <CardMeta>
                         <span data-testid={`document-card-date-${doc.id}`}>
-                          {doc.issuer || translate('document.noIssuer')} · {cardDate.formatted}
+                          {summaryView.subtitle ||
+                            doc.issuer ||
+                            translate('document.noIssuer')}{' '}
+                          · {cardDate.formatted}
                         </span>
                         {validUntilLabel ? (
                           <>
@@ -173,6 +184,14 @@ export function DokumentePage() {
                           </>
                         ) : null}
                       </CardMeta>
+                      {summaryView.factsLine ? (
+                        <p
+                          className="document-card__summary-facts"
+                          data-testid={`document-card-summary-facts-${doc.id}`}
+                        >
+                          {summaryView.facts.slice(0, 3).map((f) => f.value).join(' · ')}
+                        </p>
+                      ) : null}
                     </div>
                   </div>
                   <div className="badge-row">

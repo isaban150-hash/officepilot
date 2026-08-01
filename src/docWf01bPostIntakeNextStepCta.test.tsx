@@ -16,7 +16,6 @@ import {
   resetMemory,
 } from './services/officePilotMemoryService';
 import { createAuftragInboxItem } from './test/fixtures';
-import { resetTestStores } from './test/resetStores';
 import { t } from './i18n';
 import type { DocumentReviewSuccessStepView } from './services/documentReviewViewService';
 import * as documentLifecycleService from './services/documentLifecycleService';
@@ -82,9 +81,7 @@ function importArchiveDoc() {
 describe('DOC-WF-01B Post-Intake Next-Step CTA', () => {
   let mounted: Mount | undefined;
 
-  beforeEach(() => {
-    resetTestStores();
-    resetMemory();
+  beforeEach(() => {    resetMemory();
     resetCommunicationHistoryStore();
     hydrateDocumentStore([]);
     vi.restoreAllMocks();

@@ -41,9 +41,7 @@ function baseDoc(overrides: Partial<CompanyDocument> = {}): CompanyDocument {
 }
 
 describe('DOCUMENT-ARCHIVE-DATE-AND-NAV-LABELS-01', () => {
-  beforeEach(() => {
-    resetTestStores();
-    hydrateDocumentStore([]);
+  beforeEach(() => {    hydrateDocumentStore([]);
   });
 
   afterEach(() => {

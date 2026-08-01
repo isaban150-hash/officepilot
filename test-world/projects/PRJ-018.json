@@ -1,0 +1,18 @@
+{
+  "id": "PRJ-018",
+  "companyId": "COMPANY-001",
+  "branchId": "BRANCH-001",
+  "customerId": "CUST-013",
+  "title": "Wohnungsbau OWL – Detmold Q3",
+  "siteName": "Wohnungsbau OWL – Detmold Q3",
+  "siteStreet": "Rathausplatz 2",
+  "siteZip": "32756",
+  "siteCity": "Detmold",
+  "trade": "Sanitär",
+  "status": "offered",
+  "startDate": "2026-05-01",
+  "foremanEmployeeId": "EMP-010",
+  "timelineDocumentIds": [],
+  "notes": "TestWorld-Projekt 01C – noch ohne Dokumente",
+  "endDate": "2027-01-31"
+}

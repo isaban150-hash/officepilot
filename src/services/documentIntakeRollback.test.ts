@@ -1,3 +1,4 @@
+import { useDocumentBlobDatabaseReset } from '../test/documentBlobTestReset';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { intakeCachedDocumentFile } from './documentIntakeService';
 import {
@@ -7,7 +8,6 @@ import {
 } from './documentFileStoreService';
 import { getInboxStoreSnapshot, hydrateInboxStore } from './inboxService';
 import { setImageOcrExtractorForTests } from './ocrDocumentService';
-import { resetTestStores } from '../test/resetStores';
 import * as persistenceService from './persistenceService';
 import { buildPersistedStateSnapshot } from './persistenceService';
 import { hasDocumentBlob, readDocumentBlob } from './storage/documentBlobIndexedDbService';
@@ -58,11 +58,12 @@ function seedExistingFileRef(): { ref: DocumentFileRef; blob: string } {
   return { ref, blob: 'data:image/png;base64,ZXhpdA==' };
 }
 
+useDocumentBlobDatabaseReset();
+
 describe('MOBILE-PERSIST-DIAG-01 intake rollback', () => {
   afterEach(() => {
     setImageOcrExtractorForTests(null);
     vi.restoreAllMocks();
-    resetTestStores();
   });
 
   it('rolls back new file refs, blobs and inbox items on persist_failed', async () => {
@@ -155,7 +156,6 @@ describe('PHOTO-STORAGE-IDB-01 localStorage payload size', () => {
   afterEach(() => {
     setImageOcrExtractorForTests(null);
     vi.restoreAllMocks();
-    resetTestStores();
   });
 
   it('große Datei vergrößert serialisierten App-State nur um Metadaten', async () => {
@@ -186,7 +186,6 @@ describe('PHOTO-STORAGE-IDB-01 localStorage payload size', () => {
 
 describe('PHOTO-STORAGE-IDB-01 legacy compatibility', () => {
   afterEach(() => {
-    resetTestStores();
   });
 
   it('liest Legacy-Data-URL weiterhin', async () => {
@@ -204,7 +203,6 @@ describe('PHOTO-STORAGE-IDB-01 blob write failure', () => {
   afterEach(() => {
     setImageOcrExtractorForTests(null);
     vi.restoreAllMocks();
-    resetTestStores();
   });
 
   it('lässt bei IndexedDB-Schreibfehler kein FileRef/InboxItem zurück', async () => {
@@ -232,7 +230,6 @@ describe('PHOTO-STORAGE-IDB-01 delete GC', () => {
   afterEach(() => {
     setImageOcrExtractorForTests(null);
     vi.restoreAllMocks();
-    resetTestStores();
   });
 
   it('behält Blob solange noch eine Referenz existiert', async () => {

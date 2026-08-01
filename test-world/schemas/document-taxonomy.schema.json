@@ -1,0 +1,175 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://officepilot.local/test-world/schemas/document-taxonomy.schema.json",
+  "title": "TestWorld Document Taxonomy (frozen registry)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "status", "policy", "groups", "documentTypes", "types"],
+  "properties": {
+    "version": { "type": "string", "minLength": 1 },
+    "status": { "type": "string", "const": "frozen" },
+    "frozenAt": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rename", "remove", "extend"],
+      "properties": {
+        "rename": { "type": "string", "const": "forbidden" },
+        "remove": { "type": "string", "const": "forbidden" },
+        "extend": { "type": "string", "const": "allowed" },
+        "notes": { "type": "string" }
+      }
+    },
+    "groups": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "key", "label"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^DOCGROUP-[0-9]{3}$"
+          },
+          "key": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "label": { "type": "string", "minLength": 1 },
+          "description": { "type": "string" }
+        }
+      }
+    },
+    "documentTypes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["key", "label"],
+        "properties": {
+          "key": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "label": { "type": "string", "minLength": 1 },
+          "description": { "type": "string" }
+        }
+      }
+    },
+    "types": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "documentType",
+          "subtype",
+          "label",
+          "groupId",
+          "relations",
+          "fields"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^DOCTYPE-[0-9]{3}$"
+          },
+          "documentType": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "subtype": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "label": { "type": "string", "minLength": 1 },
+          "groupId": {
+            "type": "string",
+            "pattern": "^DOCGROUP-[0-9]{3}$"
+          },
+          "description": { "type": "string" },
+          "defaultLifecyclePhase": {
+            "type": "string",
+            "enum": [
+              "inquiry",
+              "offer",
+              "contract",
+              "execution",
+              "billing",
+              "warranty",
+              "archive",
+              "firm"
+            ]
+          },
+          "relations": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "project",
+              "company",
+              "employee",
+              "vehicle",
+              "customer",
+              "counterparty",
+              "unassigned"
+            ],
+            "properties": {
+              "project": { "$ref": "#/$defs/relationRule" },
+              "company": { "$ref": "#/$defs/relationRule" },
+              "employee": { "$ref": "#/$defs/relationRule" },
+              "vehicle": { "$ref": "#/$defs/relationRule" },
+              "customer": { "$ref": "#/$defs/relationRule" },
+              "counterparty": { "$ref": "#/$defs/relationRule" },
+              "unassigned": { "$ref": "#/$defs/relationRule" }
+            }
+          },
+          "fields": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["required", "optional", "forbidden"],
+            "properties": {
+              "required": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/metaField" }
+              },
+              "optional": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/metaField" }
+              },
+              "forbidden": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/metaField" },
+                "description": "Must be absent or null (projectId)."
+              }
+            }
+          },
+          "notes": { "type": "string" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "relationRule": {
+      "type": "string",
+      "enum": ["required", "typical", "optional", "forbidden", "allowed"],
+      "description": "required=must; typical=usually; optional=may; forbidden=must not; allowed=only for unassigned (bewusst ohne fachliche Zuordnung)."
+    },
+    "metaField": {
+      "type": "string",
+      "enum": [
+        "projectId",
+        "customerId",
+        "supplierId",
+        "employeeId",
+        "vehicleId"
+      ]
+    }
+  }
+}

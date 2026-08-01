@@ -1,0 +1,28 @@
+{
+  "id": "DOC-00021",
+  "companyId": "COMPANY-001",
+  "projectId": null,
+  "supplierId": "SUP-010",
+  "vehicleId": "VEH-003",
+  "taxonomyTypeId": "DOCTYPE-046",
+  "documentType": "vehicle_document",
+  "subtype": "leasing",
+  "title": "Alphabet – Leasingvertrag Transporter 3",
+  "receivedAt": "2025-11-20",
+  "lifecyclePhase": "firm",
+  "qualityTag": "clean",
+  "sourceKind": "pdf",
+  "suiteTags": [
+    "commit",
+    "release"
+  ],
+  "notes": "GOLD 02B: Leasing Firma + Fahrzeug. Kein Projekt.",
+  "expected": {
+    "classifiedKind": "leasingvertrag",
+    "caseMatchStatus": "none",
+    "matchedProjectId": null,
+    "primaryActionId": "create_vorgang",
+    "alertIds": []
+  },
+  "sourceFile": "source.pdf"
+}

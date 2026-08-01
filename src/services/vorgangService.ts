@@ -10,7 +10,12 @@ import {
   buildVorgangDraftFromInbox as buildDraftFromInbox,
   findSimilarVorgaenge as findSimilarInList,
 } from './vorgangMatchingService';
-import { resolveInboxItemForLinking, setInboxVorgangLink } from './inboxVorgangLinkService';
+import {
+  clearInboxVorgangLink,
+  resolveInboxItemForLinking,
+  setInboxVorgangLink,
+} from './inboxVorgangLinkService';
+import { getDocumentById, updateDocument } from './documentService';
 import {
   canTransitionVorgangStatus,
   migrateVorgangStatus,
@@ -475,6 +480,34 @@ export function isInboxLinkedToVorgang(item: InboxItem): boolean {
   );
 }
 
+/**
+ * DOC-LINK-AFTER-VORGANG-01 — bind existing CompanyDocument after Vorgang create/link.
+ * Uses updateDocument + attachCompanyDocumentToVorgang (no second archive document).
+ */
+function bindInboxArchiveDocumentToVorgang(
+  inbox: InboxItem,
+  vorgangId: string,
+  vorgangTitle: string,
+): boolean {
+  const archiveId = inbox.archiveDocumentId?.trim();
+  if (!archiveId) return true;
+
+  const archived = getDocumentById(archiveId);
+  if (!archived) return false;
+
+  let document = archived;
+  if (archived.linkedVorgang?.vorgangId !== vorgangId) {
+    const updated = updateDocument(archiveId, {
+      linkedVorgang: { vorgangId, vorgangTitle },
+    });
+    if (!updated.success) return false;
+    document = updated.document;
+  }
+
+  attachCompanyDocumentToVorgang(vorgangId, document, inbox);
+  return true;
+}
+
 export function createVorgangFromInbox(
   item: InboxItem,
   optionalDraft?: Partial<VorgangDraft>,
@@ -484,9 +517,14 @@ export function createVorgangFromInbox(
   const currentItem = resolveInboxItemForLinking(item);
   if (isInboxLinkedToVorgang(currentItem)) return null;
 
+  const archiveId = currentItem.archiveDocumentId?.trim() || undefined;
+  if (archiveId && !getDocumentById(archiveId)) {
+    return null;
+  }
+
   const baseDraft = buildVorgangDraftFromInbox(currentItem, defaultMaterial);
   const draft: VorgangDraft = { ...baseDraft, ...optionalDraft };
-  const doc = buildDocumentFromInbox(currentItem);
+  const doc = buildDocumentFromInbox(currentItem, archiveId);
 
   const newVorgang: Vorgang = withNewEntitySync(
     {
@@ -519,9 +557,21 @@ export function createVorgangFromInbox(
   persistAll();
 
   const linkedInbox = setInboxVorgangLink(currentItem.id, newVorgang.id, newVorgang.title, 'created');
-  if (!linkedInbox) return null;
+  if (!linkedInbox) {
+    deleteVorgang(newVorgang.id);
+    return null;
+  }
 
-  return { vorgang: cloneVorgang(newVorgang), inbox: linkedInbox };
+  if (!bindInboxArchiveDocumentToVorgang(linkedInbox, newVorgang.id, newVorgang.title)) {
+    deleteVorgang(newVorgang.id);
+    clearInboxVorgangLink(linkedInbox.id);
+    return null;
+  }
+
+  const freshVorgang = getVorgangById(newVorgang.id);
+  const freshInbox = resolveInboxItemForLinking(linkedInbox);
+  if (!freshVorgang) return null;
+  return { vorgang: freshVorgang, inbox: freshInbox };
 }
 
 export function updateVorgangStatus(
@@ -762,17 +812,39 @@ export function linkInboxToExistingVorgang(
   const currentItem = resolveInboxItemForLinking(item);
   if (isInboxLinkedToVorgang(currentItem)) return null;
 
-  const index = vorgaenge.findIndex((v) => v.id === vorgangId);
+  const index = vorgaenge.findIndex((v) => v.id === vorgangId && isEntitySyncActive(v));
   if (index === -1) return null;
 
+  const archiveId = currentItem.archiveDocumentId?.trim() || undefined;
+  if (archiveId && !getDocumentById(archiveId)) {
+    return null;
+  }
+
+  const previousDocuments = cloneVorgang(vorgaenge[index]).documents.map((d) => ({ ...d }));
   const vorgang = cloneVorgang(vorgaenge[index]);
-  appendDocumentIfNew(vorgang, buildDocumentFromInbox(currentItem));
+  appendDocumentIfNew(vorgang, buildDocumentFromInbox(currentItem, archiveId));
   updateVorgangInStore(vorgang);
 
   const linkedInbox = setInboxVorgangLink(currentItem.id, vorgang.id, vorgang.title, 'linked');
-  if (!linkedInbox) return null;
+  if (!linkedInbox) {
+    const restored = cloneVorgang(vorgaenge.find((v) => v.id === vorgangId)!);
+    restored.documents = previousDocuments;
+    updateVorgangInStore(restored);
+    return null;
+  }
 
-  return { vorgang, inbox: linkedInbox };
+  if (!bindInboxArchiveDocumentToVorgang(linkedInbox, vorgang.id, vorgang.title)) {
+    const restored = cloneVorgang(getVorgangById(vorgangId) ?? vorgang);
+    restored.documents = previousDocuments;
+    updateVorgangInStore(restored);
+    clearInboxVorgangLink(linkedInbox.id);
+    return null;
+  }
+
+  const freshVorgang = getVorgangById(vorgangId);
+  const freshInbox = resolveInboxItemForLinking(linkedInbox);
+  if (!freshVorgang) return null;
+  return { vorgang: freshVorgang, inbox: freshInbox };
 }
 
 export function addInvoiceToVorgang(vorgangId: string, invoice: VorgangInvoice): VorgangInvoice | null {
@@ -1357,6 +1429,60 @@ export function applyContractFieldsToVorgang(
   updated.customerBilling = billing;
 
   return { success: true, vorgang: updateVorgangInStore(updated) };
+}
+
+/**
+ * Accept-path: CI/proposal values overwrite inbox leftovers (e.g. project name stored as Baustelle).
+ * Objekt has no Vorgang field — reflected on the linked contract document name when provided.
+ */
+export function applyContractAcceptFieldsToVorgang(
+  vorgangId: string,
+  fields: ContractExtractedFields,
+  options?: { contractDate?: string; objekt?: string },
+): { success: true; vorgang: Vorgang } | { success: false; errorKey: string } {
+  const committed = commitVorgangMutation(vorgangId, (current) => {
+    const updated = cloneVorgang(current);
+    const title = fields.bauvorhaben ?? fields.projektname;
+    if (title) updated.title = title;
+    if (fields.baustellenadresse) updated.baustelle = fields.baustellenadresse;
+    if (fields.auftraggeber) updated.customer = fields.auftraggeber;
+
+    const billing = {
+      ...emptyCustomerBilling(updated.customer),
+      ...(updated.customerBilling ?? {}),
+    };
+    if (fields.ansprechpartner) billing.contactPerson = fields.ansprechpartner;
+    if (fields.telefon) billing.phone = fields.telefon;
+    if (fields.email) billing.email = fields.email;
+    if (fields.auftraggeber) billing.name = fields.auftraggeber;
+    updated.customerBilling = billing;
+
+    const contractDate = (options?.contractDate ?? fields.vertragsdatum)?.trim();
+    if (contractDate) {
+      updated.documents = updated.documents.map((doc) =>
+        doc.companyDocumentId || doc.type === 'kundenauftrag'
+          ? { ...doc, date: contractDate, type: 'kundenauftrag' as const }
+          : doc,
+      );
+    }
+
+    const objekt = options?.objekt?.trim();
+    if (objekt) {
+      updated.documents = updated.documents.map((doc) => {
+        if (!doc.companyDocumentId && doc.type !== 'kundenauftrag') return doc;
+        const base = doc.name?.trim() || 'Werkvertrag';
+        if (base.includes(objekt)) return doc;
+        return { ...doc, name: `${base} – ${objekt}` };
+      });
+    }
+
+    return updated;
+  });
+
+  if (!committed.ok) {
+    return { success: false, errorKey: committed.errorKey };
+  }
+  return { success: true, vorgang: committed.vorgang };
 }
 
 export function resetVorgaenge(): void {

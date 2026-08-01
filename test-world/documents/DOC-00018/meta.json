@@ -1,0 +1,27 @@
+{
+  "id": "DOC-00018",
+  "companyId": "COMPANY-001",
+  "projectId": null,
+  "supplierId": "SUP-008",
+  "taxonomyTypeId": "DOCTYPE-044",
+  "documentType": "telecom",
+  "subtype": "internet",
+  "title": "Telekom – Internet / Festnetz Büro",
+  "receivedAt": "2026-03-03",
+  "lifecyclePhase": "firm",
+  "qualityTag": "clean",
+  "sourceKind": "pdf",
+  "suiteTags": [
+    "commit",
+    "release"
+  ],
+  "notes": "GOLD 02B: Internet nur Firma.",
+  "expected": {
+    "classifiedKind": "eingangsrechnung",
+    "caseMatchStatus": "none",
+    "matchedProjectId": null,
+    "primaryActionId": "create_vorgang",
+    "alertIds": []
+  },
+  "sourceFile": "source.pdf"
+}

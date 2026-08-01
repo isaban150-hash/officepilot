@@ -1,0 +1,28 @@
+{
+  "id": "DOC-00001",
+  "companyId": "COMPANY-001",
+  "projectId": "PRJ-001",
+  "customerId": "CUST-001",
+  "taxonomyTypeId": "DOCTYPE-006",
+  "documentType": "contract",
+  "subtype": "werkvertrag",
+  "title": "Werkvertrag Heizzentrale – Sägewerk Ernst Flisch",
+  "receivedAt": "2025-09-12",
+  "lifecyclePhase": "contract",
+  "qualityTag": "clean",
+  "sourceKind": "pdf",
+  "suiteTags": [
+    "smoke",
+    "commit",
+    "release"
+  ],
+  "notes": "GOLD: Werkvertrag. Counterparty = Kunde CUST-001 (kein supplierId). Projekt PRJ-001.",
+  "expected": {
+    "classifiedKind": "werkvertrag",
+    "caseMatchStatus": "multiple",
+    "matchedProjectId": null,
+    "primaryActionId": "select_vorgang",
+    "alertIds": []
+  },
+  "sourceFile": "source.pdf"
+}

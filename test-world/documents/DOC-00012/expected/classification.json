@@ -1,0 +1,9 @@
+{
+  "documentId": "DOC-00012",
+  "taxonomyTypeId": "DOCTYPE-036",
+  "documentType": "advisor_letter",
+  "subtype": "steuerberater_rechnung",
+  "label": "Steuerberater-Rechnung",
+  "classifiedKind": "eingangsrechnung",
+  "family": "invoice_in"
+}

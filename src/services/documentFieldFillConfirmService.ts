@@ -42,6 +42,7 @@ const FIELD_LABELS: Record<DocumentFieldFillConfirmFieldKey, string> = {
   Ort: 'Ort',
   Lieferant: 'Lieferant',
   Betreff: 'Betreff',
+  Gewerk: 'Gewerk',
 };
 
 function contextValueForField(

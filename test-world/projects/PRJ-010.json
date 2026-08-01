@@ -1,0 +1,18 @@
+{
+  "id": "PRJ-010",
+  "companyId": "COMPANY-001",
+  "branchId": "BRANCH-001",
+  "customerId": "CUST-010",
+  "title": "Sporthalle Lockhausen",
+  "siteName": "Sporthalle Lockhausen",
+  "siteStreet": "Sportplatzweg 2",
+  "siteZip": "32107",
+  "siteCity": "Bad Salzuflen",
+  "trade": "Sanitär",
+  "status": "warranty",
+  "startDate": "2024-05-01",
+  "foremanEmployeeId": "EMP-005",
+  "timelineDocumentIds": [],
+  "notes": "TestWorld-Projekt 01C – noch ohne Dokumente",
+  "endDate": "2025-06-30"
+}

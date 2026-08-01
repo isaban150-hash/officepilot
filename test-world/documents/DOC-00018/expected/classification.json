@@ -1,0 +1,9 @@
+{
+  "documentId": "DOC-00018",
+  "taxonomyTypeId": "DOCTYPE-044",
+  "documentType": "telecom",
+  "subtype": "internet",
+  "label": "Internet / Festnetz",
+  "classifiedKind": "eingangsrechnung",
+  "family": "invoice_in"
+}

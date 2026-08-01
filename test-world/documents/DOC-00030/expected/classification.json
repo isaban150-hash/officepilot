@@ -1,0 +1,9 @@
+{
+  "documentId": "DOC-00030",
+  "taxonomyTypeId": "DOCTYPE-063",
+  "documentType": "legal_letter",
+  "subtype": "inkasso_eingehend",
+  "label": "Inkasso eingehend",
+  "classifiedKind": "mahnung",
+  "family": "invoice_in"
+}

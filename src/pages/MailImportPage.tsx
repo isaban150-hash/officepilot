@@ -114,7 +114,7 @@ export function MailImportPage() {
           <input
             ref={fileInputRef}
             type="file"
-            accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/*"
+            accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,application/pdf,image/*,image/heic,image/heif"
             className="form-field__input"
             onChange={(event) => setAttachment(event.target.files?.[0] ?? null)}
             data-testid="mail-import-attachment"

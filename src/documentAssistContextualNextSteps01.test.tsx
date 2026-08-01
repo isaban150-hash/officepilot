@@ -13,7 +13,6 @@ import { applyStoredOverlayToFillConfirmRows } from './services/documentFieldFil
 import { isConfirmedReplyDraftSupported } from './services/documentConfirmedReplyDraftService';
 import { withInboxExtractedDocumentText } from './services/inboxDocumentText';
 import { createAuftragInboxItem } from './test/fixtures';
-import { resetTestStores } from './test/resetStores';
 import type { DocumentFieldFillConfirmRow } from './types/documentFieldFillConfirm';
 import type { InboxItem } from './types/models';
 import * as documentAiService from './services/document/documentAiService';
@@ -111,7 +110,6 @@ function NextStepsHarness({ item }: { item: InboxItem }): ReactElement {
 afterEach(() => {
   vi.restoreAllMocks();
   resetDocumentWorkResultStoreForTests();
-  resetTestStores();
   document.body.innerHTML = '';
 });
 

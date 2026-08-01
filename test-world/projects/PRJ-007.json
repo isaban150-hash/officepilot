@@ -1,0 +1,18 @@
+{
+  "id": "PRJ-007",
+  "companyId": "COMPANY-001",
+  "branchId": "BRANCH-001",
+  "customerId": "CUST-007",
+  "title": "Hotel Teutoburger Hof",
+  "siteName": "Hotel Teutoburger Hof",
+  "siteStreet": "Kurparkstraße 5",
+  "siteZip": "32105",
+  "siteCity": "Bad Salzuflen",
+  "trade": "Lüftung",
+  "status": "billed",
+  "startDate": "2025-04-01",
+  "foremanEmployeeId": "EMP-005",
+  "timelineDocumentIds": [],
+  "notes": "TestWorld-Projekt 01C – noch ohne Dokumente",
+  "endDate": "2025-12-15"
+}

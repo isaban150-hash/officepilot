@@ -7,6 +7,7 @@ import { UserMenu } from './UserMenu';
 import { GlobalSearchBar } from '../search/GlobalSearchBar';
 import { Toast } from '../ui/Card';
 import { SafariResumeDebugOverlay } from '../system/SafariResumeDebugOverlay';
+import { UiSessionRecoveryHost } from '../system/UiSessionRecoveryHost';
 import { useApp } from '../../context/AppContext';
 
 export function AppShell() {
@@ -29,6 +30,7 @@ export function AppShell() {
       </div>
       <PersistenceFailureBanner />
       <BetaModeBanner />
+      <UiSessionRecoveryHost />
       <div className="app-shell__search" data-testid="app-shell-search">
         <GlobalSearchBar compact collapsibleOnMobile />
       </div>

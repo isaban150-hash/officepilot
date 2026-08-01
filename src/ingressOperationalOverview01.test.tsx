@@ -105,62 +105,39 @@ describe('INGRESS-OPERATIONAL-OVERVIEW-01', () => {
     expect(view.confirmRequirement).toBeTruthy();
 
     const html = renderDetail(item.id);
-    expect(html).toContain('data-testid="operational-overview"');
-    expect(html).toContain('data-testid="operational-overview-primary-case"');
-    expect(html).toContain('data-testid="operational-overview-meanings"');
-    expect(html).toContain('data-testid="operational-overview-next-step"');
-    expect(html).toContain('data-testid="operational-overview-confirm-requirement"');
-    if (view.moneyLabel) {
-      expect(html).toContain('data-testid="operational-overview-money"');
-    }
-    // Exactly one open chef primary (proposal); overview must not add a second apply.
+    // UX-01: contract proposal → Auftragskarte first (overview view still built, not shown).
+    expect(view.present).toBe(true);
+    expect(html).toContain('data-testid="auftragskarte"');
+    expect(html).not.toContain('data-testid="operational-overview"');
     expect((html.match(/data-testid="contract-chef-primary-action"/g) ?? []).length).toBe(1);
     expect(html).not.toContain('data-testid="document-review-apply-button"');
-    expect(html).toContain('data-testid="contract-details-disclosure"');
-    expect(html).not.toMatch(/data-testid="contract-details-disclosure"[^>]*\sopen[\s>]/);
+    expect(html).toContain('data-testid="auftragskarte-contract"');
+    expect(html).toContain('data-testid="auftragskarte-details"');
+    expect(html).not.toMatch(/data-testid="auftragskarte-contract"[^>]*\sopen[\s>]/);
+    expect(html).not.toMatch(/data-testid="auftragskarte-details"[^>]*\sopen[\s>]/);
     expect(html).toContain('data-testid="contract-workspace-summary"');
     assertOrder(
       html,
-      'data-testid="operational-overview"',
+      'data-testid="auftragskarte"',
       'data-testid="contract-chef-primary-action"',
     );
     assertOrder(
       html,
       'data-testid="contract-chef-primary-action"',
-      'data-testid="contract-details-disclosure"',
+      'data-testid="auftragskarte-contract"',
     );
-    expect(html).toMatch(/data-testid="operational-overview-details"/);
-    expect(html).not.toMatch(/data-testid="operational-overview-details"[^>]*\sopen[\s>]/);
     // No raw signature enums in the rendered tree.
     expect(html).not.toMatch(/>\s*(unclear|detected|partial|not_detected)\s*</i);
     assertOrder(
       html,
-      'data-testid="operational-overview"',
+      'data-testid="auftragskarte"',
       'data-testid="ablage-original-file"',
     );
   });
 
-  it('FA-FRIST: Primary Case, Frist, Next Step, Confirm Requirement', () => {
-    const { item, observation } = seedCase('FA-FRIST-01');
-    const view = buildOperationalOverviewView(observation.workflow);
-    expect(view.present).toBe(true);
-    expect(view.primaryCaseId).toMatch(/authority_/);
-    expect(view.deadlineTypeLabelKey || view.deadlineDate).toBeTruthy();
-    expect(view.nextStep).toBeTruthy();
-    expect(view.confirmRequirement).toBeTruthy();
+  // FA-FRIST Happy-Path Overview → REFERENCE FA-FRIST-01
 
-    const html = renderDetail(item.id);
-    expect(html).toContain('data-testid="operational-overview-primary-case"');
-    expect(html).toContain(t('operationalOverview.label.primaryCase' as TranslationKey, 'de'));
-    expect(html).toContain('data-testid="operational-overview-deadline"');
-    expect(html).toContain('data-testid="operational-overview-next-step"');
-    expect(html).toContain('data-testid="operational-overview-confirm-requirement"');
-    expect(html).toContain('data-testid="operational-overview-meanings"');
-    expect((html.match(/data-testid="document-review-apply-button"/g) ?? []).length).toBe(1);
-    expect(html).not.toMatch(/data-testid="operational-overview-details"[^>]*\sopen[\s>]/);
-  });
-
-  it('HOTEL: expense Primary Case und Geld; Details initial geschlossen', () => {
+  it('HOTEL: expense Primary Case in BI; Experience-Card zeigt Geld ohne BI-Jargon', () => {
     const { item, observation } = seedCase('HOTEL-01');
     const view = buildOperationalOverviewView(observation.workflow);
     expect(view.present).toBe(true);
@@ -168,39 +145,37 @@ describe('INGRESS-OPERATIONAL-OVERVIEW-01', () => {
     expect(view.moneyLabel).toBeTruthy();
 
     const html = renderDetail(item.id);
-    expect(html).toContain('data-testid="operational-overview-primary-case"');
-    expect(html).toContain('data-testid="operational-overview-money"');
-    expect(html).toContain('data-testid="operational-overview-meanings"');
-    expect(html).toContain('data-testid="operational-overview-next-step"');
+    // DOCUMENT-EXPERIENCE-02B: first screen is Experience Card, not BI overview.
+    expect(html).toContain('data-testid="document-experience-card"');
+    expect(html).not.toContain('data-testid="operational-overview-primary-case"');
+    expect(html).not.toContain('data-testid="operational-overview-meanings"');
     expect((html.match(/data-testid="document-review-apply-button"/g) ?? []).length).toBe(1);
     assertOrder(
       html,
-      'data-testid="operational-overview"',
+      'data-testid="document-experience-card"',
       'data-testid="ablage-original-file"',
     );
   });
 
-  it('MAIL: Kommunikationsfall; Overview vor Original; Details zu', () => {
+  it('MAIL: Kommunikationsfall in BI; Experience-Card vor Original; Details zu', () => {
     const { item, observation } = seedCase('MAIL-TERMIN-01');
     const view = buildOperationalOverviewView(observation.workflow);
     expect(view.present).toBe(true);
     expect(view.primaryCaseId).toMatch(/communication_/);
 
     const html = renderDetail(item.id);
-    expect(html).toContain('data-testid="operational-overview"');
-    expect(html).toContain('data-testid="operational-overview-primary-case"');
-    expect(html).toContain('data-testid="operational-overview-meanings"');
-    expect(html).toContain('data-testid="operational-overview-next-step"');
-    expect(html).toContain('data-testid="operational-overview-confirm-requirement"');
+    expect(html).toContain('data-testid="document-experience-card"');
+    expect(html).not.toContain('data-testid="operational-overview-primary-case"');
+    expect(html).not.toContain('data-testid="operational-overview-meanings"');
     assertOrder(
       html,
-      'data-testid="operational-overview"',
+      'data-testid="document-experience-card"',
       'data-testid="ablage-original-file"',
     );
 
     const { container, root } = mountDetail(item.id);
     const details = container.querySelector(
-      '[data-testid="operational-overview-details"]',
+      '[data-testid="document-experience-details"]',
     ) as HTMLDetailsElement | null;
     if (details) {
       expect(details.open).toBe(false);
@@ -210,7 +185,7 @@ describe('INGRESS-OPERATIONAL-OVERVIEW-01', () => {
     });
   });
 
-  it('UNSURE-01: Review-Zustand, Unsicherheit, eine Primary, keine erfundenen Fakten', () => {
+  it('UNSURE-01: Experience-Card mit einer Primary; kein BI-Jargon auf Start', () => {
     const { item, observation } = seedCase('UNSURE-01');
     expect(observation.bi).not.toBeNull();
     const view = buildOperationalOverviewView(observation.workflow);
@@ -218,26 +193,15 @@ describe('INGRESS-OPERATIONAL-OVERVIEW-01', () => {
     expect(view.primaryCaseId).toMatch(/review_required|information_only|communication_/);
 
     const html = renderDetail(item.id);
-    expect(html).toContain('data-testid="operational-overview"');
-    expect(html).toContain('data-testid="operational-overview-primary-case"');
-    expect(html).toContain(
-      t(view.primaryCaseLabelKey, 'de'),
-    );
-    if (view.uncertaintyLines.length > 0 || view.recognitionUncertain) {
-      expect(html).toContain('data-testid="operational-overview-uncertainty"');
-    }
-    if (!view.moneyLabel) {
-      expect(html).not.toContain('data-testid="operational-overview-money"');
-    }
-    if (!view.deadlineTypeLabelKey && !view.deadlineDate) {
-      expect(html).not.toContain('data-testid="operational-overview-deadline"');
-    }
+    expect(html).toContain('data-testid="document-experience-card"');
+    expect(html).not.toContain('data-testid="operational-overview-primary-case"');
+    expect(html).not.toContain(t(view.primaryCaseLabelKey, 'de'));
     expect((html.match(/data-testid="document-review-apply-button"/g) ?? []).length).toBe(1);
     expect(html).not.toContain('data-testid="contract-chef-primary-action"');
-    expect(html).not.toMatch(/data-testid="operational-overview-details"[^>]*\sopen[\s>]/);
+    expect(html).not.toMatch(/data-testid="document-experience-details"[^>]*\sopen[\s>]/);
     assertOrder(
       html,
-      'data-testid="operational-overview"',
+      'data-testid="document-experience-card"',
       'data-testid="ablage-original-file"',
     );
   });

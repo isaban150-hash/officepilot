@@ -1,0 +1,12 @@
+{
+  "id": "SUP-017",
+  "companyId": "COMPANY-001",
+  "name": "Kanzlei Weber & Partner",
+  "supplierType": "advisor",
+  "city": "Lemgo",
+  "country": "DE",
+  "email": "sup-017@counterparty.example",
+  "notes": "Rechtsanwalt",
+  "street": "Markt 4",
+  "zip": "32657"
+}

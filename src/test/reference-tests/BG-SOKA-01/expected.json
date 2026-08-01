@@ -1,0 +1,43 @@
+{
+  "caseId": "BG-SOKA-01",
+  "kind": "authority-letter",
+  "documentCaseId": "BG-SOKA-01",
+  "damagePrevented": [
+    "Nachweispflicht übersehen",
+    "falsche Organisation",
+    "falsche Dokumentenklasse",
+    "falsche Ablage",
+    "unbeabsichtigte Auftragserstellung",
+    "unbeabsichtigte Expense",
+    "Vertragswirkung ausgelöst",
+    "Hinweis in der UI nicht sichtbar"
+  ],
+  "layers": ["stable-pipeline", "authority-journey", "ui-visibility"],
+  "authorityJourney": {
+    "companyName": "Mustermann Sanitär GmbH",
+    "classifiedKindAllowed": ["bg_bau", "soka_bau", "berufsgenossenschaft", "sonstiges", "brief"],
+    "authorityContains": "BG BAU",
+    "deadlineContains": "30.04.2026",
+    "primaryCaseContains": "authority",
+    "meaningsRequired": ["obligation", "evidence", "deadline", "action_required"],
+    "nextStepContains": ["Unterlagen"],
+    "requireArchive": true,
+    "forbidVorgang": true,
+    "forbidExpense": true,
+    "forbidContractPositions": true,
+    "forbidBillingPrep": true
+  },
+  "authorityUiVisibility": {
+    "overviewVisible": true,
+    "authorityVisible": true,
+    "deadlineVisible": true,
+    "obligationVisible": true,
+    "nextStepVisible": true,
+    "understandingPanelVisible": true,
+    "documentKindVisible": true
+  },
+  "knownGaps": [
+    "SOKA-BAU als eigene strukturierte Condition/Meldepflicht ist nicht immer befüllt (Document-Case knownGap).",
+    "Wiederverwendet kind authority-letter + runAuthorityJourney — kein paralleler Nachweis-Runner."
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://officepilot.local/test-world/schemas/company.schema.json",
+  "title": "TestWorld Company",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "legalName", "city"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^COMPANY-[0-9]{3}$",
+      "description": "Stable company id, e.g. COMPANY-001"
+    },
+    "legalName": {
+      "type": "string",
+      "minLength": 1
+    },
+    "tradeName": { "type": "string" },
+    "street": { "type": "string" },
+    "zip": { "type": "string" },
+    "city": {
+      "type": "string",
+      "minLength": 1
+    },
+    "country": {
+      "type": "string",
+      "default": "DE"
+    },
+    "phone": { "type": "string" },
+    "email": { "type": "string" },
+    "website": { "type": "string" },
+    "vatId": { "type": "string" },
+    "taxNumber": { "type": "string" },
+    "commercialRegister": { "type": "string" },
+    "iban": { "type": "string" },
+    "bic": { "type": "string" },
+    "bankName": { "type": "string" },
+    "bgBauMemberNumber": { "type": "string" },
+    "sokaBauNumber": { "type": "string" },
+    "trades": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "e.g. Heizung, Sanitär, Lüftung"
+    },
+    "defaultBranchId": {
+      "type": "string",
+      "pattern": "^BRANCH-[0-9]{3}$"
+    },
+    "notes": { "type": "string" }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "id": "CUST-007",
+  "companyId": "COMPANY-001",
+  "name": "Hotel Teutoburger Hof GmbH",
+  "customerType": "business",
+  "street": "Kurparkstraße 5",
+  "zip": "32105",
+  "city": "Bad Salzuflen",
+  "country": "DE",
+  "contactPerson": "Frau Stein",
+  "phone": "+49 5000 0000",
+  "email": "cust-007@kunde.example",
+  "notes": "TestWorld-Kunde"
+}

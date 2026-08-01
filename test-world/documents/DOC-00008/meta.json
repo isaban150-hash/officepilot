@@ -1,0 +1,28 @@
+{
+  "id": "DOC-00008",
+  "companyId": "COMPANY-001",
+  "projectId": null,
+  "supplierId": "SUP-011",
+  "taxonomyTypeId": "DOCTYPE-023",
+  "documentType": "authority_letter",
+  "subtype": "finanzamt",
+  "title": "Finanzamt Detmold – Erinnerung Umsatzsteuer-Voranmeldung",
+  "receivedAt": "2026-03-01",
+  "lifecyclePhase": "firm",
+  "qualityTag": "clean",
+  "sourceKind": "pdf",
+  "suiteTags": [
+    "smoke",
+    "commit",
+    "release"
+  ],
+  "notes": "GOLD: Finanzamt ausschließlich Firma. Kein Projekt, kein Kunde, kein Fahrzeug. Counterparty SUP-011.",
+  "expected": {
+    "classifiedKind": "finanzamt",
+    "caseMatchStatus": "none",
+    "matchedProjectId": null,
+    "primaryActionId": "create_vorgang",
+    "alertIds": []
+  },
+  "sourceFile": "source.pdf"
+}

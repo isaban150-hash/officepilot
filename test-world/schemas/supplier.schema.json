@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://officepilot.local/test-world/schemas/supplier.schema.json",
+  "title": "TestWorld Counterparty (suppliers/ folder)",
+  "description": "Material suppliers AND firm counterparties (authorities, bank, advisors, etc.). Not only Einkauf.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "companyId", "name", "supplierType"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^SUP-[0-9]{3}$",
+      "description": "Stable counterparty id, e.g. SUP-001"
+    },
+    "companyId": {
+      "type": "string",
+      "pattern": "^COMPANY-[0-9]{3}$"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "supplierType": {
+      "type": "string",
+      "enum": [
+        "wholesale",
+        "retail",
+        "fuel",
+        "hotel",
+        "utility",
+        "telecom",
+        "insurance",
+        "leasing",
+        "authority",
+        "health_insurance",
+        "bank",
+        "advisor",
+        "disposal",
+        "other"
+      ]
+    },
+    "street": { "type": "string" },
+    "zip": { "type": "string" },
+    "city": { "type": "string" },
+    "country": {
+      "type": "string",
+      "default": "DE"
+    },
+    "phone": { "type": "string" },
+    "email": { "type": "string" },
+    "vatId": { "type": "string" },
+    "notes": { "type": "string" }
+  }
+}

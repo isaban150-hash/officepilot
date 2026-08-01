@@ -1,0 +1,12 @@
+{
+  "id": "SUP-024",
+  "companyId": "COMPANY-001",
+  "name": "AutoService Teutoburger GmbH",
+  "supplierType": "other",
+  "street": "Werkstattweg 7",
+  "zip": "32105",
+  "city": "Bad Salzuflen",
+  "country": "DE",
+  "email": "sup-024@counterparty.example",
+  "notes": "Werkstatt / TÜV"
+}

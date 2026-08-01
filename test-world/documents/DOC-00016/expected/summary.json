@@ -1,0 +1,23 @@
+{
+  "documentId": "DOC-00016",
+  "family": "invoice_in",
+  "headline": "Stadtwerke Bad Salzuflen – Wasser-/Abwasserrechnung",
+  "factOrder": [
+    "supplier",
+    "invoiceNumber",
+    "amount",
+    "date",
+    "deadline",
+    "site"
+  ],
+  "facts": [
+    {
+      "id": "supplier",
+      "value": "Stadtwerke Bad Salzuflen"
+    },
+    {
+      "id": "date",
+      "value": "2026-02-14"
+    }
+  ]
+}

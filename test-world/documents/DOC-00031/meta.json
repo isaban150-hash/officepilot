@@ -1,0 +1,29 @@
+{
+  "id": "DOC-00031",
+  "companyId": "COMPANY-001",
+  "projectId": "PRJ-001",
+  "customerId": "CUST-001",
+  "supplierId": "SUP-022",
+  "taxonomyTypeId": "DOCTYPE-062",
+  "documentType": "legal_letter",
+  "subtype": "gericht",
+  "title": "Amtsgericht Lemgo – Ladung / Schreiben Streit Heizzentrale",
+  "receivedAt": "2026-03-20",
+  "lifecyclePhase": "firm",
+  "qualityTag": "clean",
+  "sourceKind": "pdf",
+  "suiteTags": [
+    "commit",
+    "release",
+    "matching"
+  ],
+  "notes": "GOLD 02B: Gericht projektbezogen (PRJ-001) – Bauvorhaben eindeutig zuordenbar.",
+  "expected": {
+    "classifiedKind": "brief",
+    "caseMatchStatus": "exact",
+    "matchedProjectId": "PRJ-001",
+    "primaryActionId": "open_vorgang",
+    "alertIds": []
+  },
+  "sourceFile": "source.pdf"
+}

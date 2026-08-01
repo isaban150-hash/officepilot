@@ -19,3 +19,12 @@ export function setInboxVorgangLink(
     isNewUpload: false,
   });
 }
+
+/** Clears Vorgang link fields after a failed archive-document bind (rollback). */
+export function clearInboxVorgangLink(inboxId: string): InboxItem | null {
+  return patchInboxItem(inboxId, {
+    vorgangId: undefined,
+    vorgangTitle: undefined,
+    vorgangLinkStatus: undefined,
+  });
+}

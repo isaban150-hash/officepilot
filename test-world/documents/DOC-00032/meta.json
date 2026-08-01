@@ -1,0 +1,29 @@
+{
+  "id": "DOC-00032",
+  "companyId": "COMPANY-001",
+  "projectId": "PRJ-001",
+  "customerId": "CUST-001",
+  "supplierId": "SUP-001",
+  "taxonomyTypeId": "DOCTYPE-018",
+  "documentType": "credit_note",
+  "subtype": "gutschrift_lieferant",
+  "title": "GC-Großhandel OWL – Gutschrift Retoure Fittinge",
+  "receivedAt": "2026-02-05",
+  "lifecyclePhase": "execution",
+  "qualityTag": "clean",
+  "sourceKind": "pdf",
+  "suiteTags": [
+    "smoke",
+    "commit",
+    "release"
+  ],
+  "notes": "GOLD 02B: Gutschrift Lieferant ≠ Kunde. Counterparty SUP-001.",
+  "expected": {
+    "classifiedKind": "gutschrift",
+    "caseMatchStatus": "multiple",
+    "matchedProjectId": null,
+    "primaryActionId": "select_vorgang",
+    "alertIds": []
+  },
+  "sourceFile": "source.pdf"
+}

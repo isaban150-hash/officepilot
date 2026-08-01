@@ -148,9 +148,7 @@ describe('CLOUD-ORDER-CHAIN-03B2 pull mapping', () => {
 });
 
 describe('CLOUD-ORDER-CHAIN-03B2 merge', () => {
-  beforeEach(() => {
-    resetTestStores();
-    resetInvoiceFinalizeIntentsForTests();
+  beforeEach(() => {    resetInvoiceFinalizeIntentsForTests();
   });
 
   it('ergänzt neue Cloud-Rechnung einmal und hält Legacy lokal', () => {
@@ -339,9 +337,7 @@ describe('CLOUD-ORDER-CHAIN-03B2 Mehrgerät / Billing', () => {
 });
 
 describe('CLOUD-ORDER-CHAIN-03B2 Intent / Status / Fehler', () => {
-  beforeEach(() => {
-    resetTestStores();
-    resetInvoiceFinalizeIntentsForTests();
+  beforeEach(() => {    resetInvoiceFinalizeIntentsForTests();
     vi.restoreAllMocks();
   });
 
@@ -477,9 +473,7 @@ describe('CLOUD-ORDER-CHAIN-03B2 Intent / Status / Fehler', () => {
 });
 
 describe('CLOUD-ORDER-CHAIN-03B2 upsert reuse', () => {
-  beforeEach(() => {
-    resetTestStores();
-    hydrateVorgangStore([createTestVorgang()]);
+  beforeEach(() => {    hydrateVorgangStore([createTestVorgang()]);
   });
 
   it('upsertFinalizedInvoiceOnVorgang bleibt idempotent über Fingerprint', () => {

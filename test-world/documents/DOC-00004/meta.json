@@ -1,0 +1,28 @@
+{
+  "id": "DOC-00004",
+  "companyId": "COMPANY-001",
+  "projectId": "PRJ-001",
+  "customerId": "CUST-001",
+  "taxonomyTypeId": "DOCTYPE-014",
+  "documentType": "outgoing_invoice",
+  "subtype": "abschlag",
+  "title": "Ausgangsrechnung Abschlag 1 – Sägewerk Ernst Flisch",
+  "receivedAt": "2026-02-28",
+  "lifecyclePhase": "billing",
+  "qualityTag": "clean",
+  "sourceKind": "pdf",
+  "suiteTags": [
+    "smoke",
+    "commit",
+    "release"
+  ],
+  "notes": "GOLD: Ausgangsrechnung. Counterparty = Kunde CUST-001. Projekt PRJ-001.",
+  "expected": {
+    "classifiedKind": "ausgangsrechnung",
+    "caseMatchStatus": "multiple",
+    "matchedProjectId": null,
+    "primaryActionId": "select_vorgang",
+    "alertIds": []
+  },
+  "sourceFile": "source.pdf"
+}

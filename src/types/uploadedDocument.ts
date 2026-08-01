@@ -31,4 +31,5 @@ export interface UploadedDocumentInput {
 export type DocumentUploadValidationError =
   | 'invalid_type'
   | 'unsupported_photo_format'
+  | 'heic_conversion_failed'
   | 'file_too_large';

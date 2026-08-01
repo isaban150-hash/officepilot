@@ -1,5 +1,4 @@
 import { createMockInboxItemFromUpload } from './inboxUploadFactory';
-import { isHeicUploadFile } from './documentUploadValidation';
 import {
   loadCachedDocumentFileFromUpload,
   stableFileFromCachedPayload,
@@ -38,6 +37,7 @@ export type DocumentTextErrorCode =
   | 'no_text'
   | 'ocr_failed'
   | 'heic_unsupported'
+  | 'heic_conversion_failed'
   | 'password_required'
   | 'pdf_corrupt';
 
@@ -76,10 +76,6 @@ export function setImageOcrExtractorForTests(extractor: ImageOcrExtractor | null
 function fileExtension(name: string): string {
   const index = name.lastIndexOf('.');
   return index === -1 ? '' : name.slice(index).toLowerCase();
-}
-
-function isHeicFile(file: File): boolean {
-  return isHeicUploadFile(file);
 }
 
 function deriveConfidence(textLength: number, ocrScore?: number, qualityScore?: number): OcrConfidenceLevel {
@@ -313,16 +309,6 @@ async function extractFromImage(file: File): Promise<DocumentTextExtractionResul
       qualityHintKey: partialRecognition ? OCR_TEXT_HINT_KEYS.partial : undefined,
     });
   } catch {
-    if (isHeicFile(file)) {
-      return finalizeResult({
-        recognizedText: '',
-        displayText: '',
-        confidence: 'none',
-        sourceType: 'image',
-        errorCode: 'heic_unsupported',
-      });
-    }
-
     return finalizeResult({
       recognizedText: '',
       displayText: '',
@@ -338,16 +324,6 @@ export async function extractDocumentTextFromCache(
   payload: CachedDocumentFilePayload,
 ): Promise<DocumentTextExtractionResult> {
   const stableFile = stableFileFromCachedPayload(payload);
-
-  if (isHeicUploadFile(stableFile)) {
-    return finalizeResult({
-      recognizedText: '',
-      displayText: '',
-      confidence: 'none',
-      sourceType: 'image',
-      errorCode: 'heic_unsupported',
-    });
-  }
 
   const sourceType = resolveSourceTypeFromMeta(payload.fileName, payload.mimeType);
 
@@ -370,18 +346,17 @@ export async function extractDocumentTextFromCache(
 }
 
 export async function extractDocumentText(file: File): Promise<DocumentTextExtractionResult> {
-  if (isHeicUploadFile(file)) {
-    return finalizeResult({
-      recognizedText: '',
-      displayText: '',
-      confidence: 'none',
-      sourceType: 'image',
-      errorCode: 'heic_unsupported',
-    });
-  }
-
   const loaded = await loadCachedDocumentFileFromUpload(file);
   if (!loaded.success) {
+    if (loaded.error === 'heic_conversion_failed') {
+      return finalizeResult({
+        recognizedText: '',
+        displayText: '',
+        confidence: 'none',
+        sourceType: 'image',
+        errorCode: 'heic_conversion_failed',
+      });
+    }
     if (loaded.error === 'unsupported_photo_format') {
       return finalizeResult({
         recognizedText: '',

@@ -1,0 +1,28 @@
+{
+  "id": "DOC-00034",
+  "companyId": "COMPANY-001",
+  "projectId": null,
+  "taxonomyTypeId": "DOCTYPE-061",
+  "documentType": "spam",
+  "subtype": "spam",
+  "title": "Spam – Gewinnspiel / Phishing-PDF",
+  "receivedAt": "2026-03-25",
+  "lifecyclePhase": "firm",
+  "qualityTag": "clean",
+  "sourceKind": "pdf",
+  "suiteTags": [
+    "smoke",
+    "commit",
+    "release",
+    "matching"
+  ],
+  "notes": "GOLD 02B: Spam unzugeordnet. Keine fachliche Entität.",
+  "expected": {
+    "classifiedKind": "sonstiges",
+    "caseMatchStatus": "none",
+    "matchedProjectId": null,
+    "primaryActionId": "create_vorgang",
+    "alertIds": []
+  },
+  "sourceFile": "source.pdf"
+}

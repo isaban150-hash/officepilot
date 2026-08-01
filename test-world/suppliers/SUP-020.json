@@ -1,0 +1,12 @@
+{
+  "id": "SUP-020",
+  "companyId": "COMPANY-001",
+  "name": "Hotel Teuto View",
+  "supplierType": "hotel",
+  "city": "Lemgo",
+  "country": "DE",
+  "email": "sup-020@counterparty.example",
+  "notes": "zweites Hotel",
+  "street": "Bergstraße 8",
+  "zip": "32657"
+}

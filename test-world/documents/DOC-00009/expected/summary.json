@@ -1,0 +1,22 @@
+{
+  "documentId": "DOC-00009",
+  "family": "authority",
+  "headline": "BG BAU · Beitragsbescheid",
+  "factOrder": [
+    "authority",
+    "subject",
+    "reference",
+    "deadline",
+    "demand"
+  ],
+  "facts": [
+    {
+      "id": "authority",
+      "value": "BG BAU Bezirksverwaltung OWL"
+    },
+    {
+      "id": "subject",
+      "value": "BG BAU · Beitragsbescheid"
+    }
+  ]
+}

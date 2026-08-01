@@ -1,0 +1,31 @@
+{
+  "documentId": "DOC-00001",
+  "family": "contract",
+  "headline": "Werkvertrag Heizzentrale – Sägewerk Ernst Flisch",
+  "factOrder": [
+    "customer",
+    "project",
+    "orderValue",
+    "site",
+    "positions",
+    "gewerk"
+  ],
+  "facts": [
+    {
+      "id": "customer",
+      "value": "Sägewerk Ernst Flisch GmbH"
+    },
+    {
+      "id": "project",
+      "value": "Sägewerk Ernst Flisch – Heizzentrale"
+    },
+    {
+      "id": "site",
+      "value": "Werkstraße 12, Lemgo"
+    },
+    {
+      "id": "gewerk",
+      "value": "Heizung"
+    }
+  ]
+}

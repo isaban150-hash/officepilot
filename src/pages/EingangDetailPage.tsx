@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { shouldRevealArchiveImportFromState } from './eingangDetailNavigation';
-import { DocumentAssistantPanel } from '../components/documents/DocumentAssistantPanel';
+import { DocumentGuidancePanel } from '../components/documents/DocumentGuidancePanel';
 import { DocumentOriginalFilePanel } from '../components/documents/DocumentOriginalFilePanel';
+import { buildDocumentGuidance } from '../services/documentGuidanceService';
 import { CompanyRelevancePanel } from '../components/inbox/CompanyRelevancePanel';
 import { ContractAnalysisPanel } from '../components/inbox/ContractAnalysisPanel';
 import { DocumentActionSuggestionsPanel } from '../components/inbox/DocumentActionSuggestionsPanel';
@@ -41,24 +42,26 @@ import {
   FILING_DECISION_ARCHIVE_BLOCKED_MESSAGE,
   isDocumentFilingDecisionConfirmed,
 } from '../services/documentFilingDecisionService';
-import { letterExplanationFromWorkflow } from '../services/letterExplanationService';
+import {
+  getLetterExplanation,
+  letterExplanationFromWorkflow,
+} from '../services/letterExplanationService';
 import { getInboxExtractedDocumentText } from '../services/inboxDocumentText';
 import { isClassificationKindWithTasks } from '../services/taskEngineService';
 import { executeSmartIntake } from '../services/intakeExecutionService';
 import { getLastPersistSuccess } from '../services/persistenceService';
 import {
   acceptSuggestedTasks,
-  createVorgangFromInboxWithContract,
   createWorkflowVorgang,
   linkWorkflowVorgang,
   processUploadedDocument,
 } from '../services/intakeWorkflowService';
 import {
-  buildContractPositionKey,
   buildDefaultContractPositionSelections,
   confirmImportContractPositions,
   countSelectedContractPositions,
 } from '../services/contractPositionImportService';
+import { acceptContractOrderFromProposal } from '../services/contractOrderAcceptService';
 import { isContractPlanLocked } from '../services/orderPlanIntegrityService';
 import { getVorgangById } from '../services/vorgangService';
 import type { EnhancedDetectedOrderPosition } from '../types/documentIntelligence';
@@ -109,6 +112,8 @@ import type {
   WorkflowResultExecution,
 } from '../types/models';
 import type { TranslationKey } from '../i18n';
+import { useReportUiSession } from '../hooks/useReportUiSession';
+import { useUiSessionRestore } from '../hooks/useUiSessionRestore';
 
 type ReviewSectionId =
   | 'document-data'
@@ -128,13 +133,53 @@ export function EingangDetailPage() {
   const [item, setItem] = useState<InboxItem | undefined>(() =>
     id ? getInboxItemById(id) : undefined,
   );
+  const restoredSession = useUiSessionRestore();
+  const skipIdResetRef = useRef(Boolean(restoredSession));
   const initialRevealArchive = shouldRevealArchiveImportFromState(location.state);
-  const [moreOptionsExpanded, setMoreOptionsExpanded] = useState(initialRevealArchive);
-  const [expandedSections, setExpandedSections] = useState<Partial<Record<ReviewSectionId, boolean>>>(
-    () => (initialRevealArchive ? { archive: true } : {}),
+  const [moreOptionsExpanded, setMoreOptionsExpanded] = useState(
+    () => restoredSession?.panelState.moreOptionsExpanded ?? initialRevealArchive,
   );
-  const [isEditing, setIsEditing] = useState(false);
-  const [editDraft, setEditDraft] = useState<InboxEditDraft | null>(null);
+  const [expandedSections, setExpandedSections] = useState<Partial<Record<ReviewSectionId, boolean>>>(
+    () => {
+      if (restoredSession?.expandedSections?.length) {
+        const next: Partial<Record<ReviewSectionId, boolean>> = {};
+        for (const key of restoredSession.expandedSections) {
+          next[key as ReviewSectionId] = true;
+        }
+        return next;
+      }
+      return initialRevealArchive ? { archive: true } : {};
+    },
+  );
+  const [isEditing, setIsEditing] = useState(() => Boolean(restoredSession?.drafts.dirty));
+  const [editDraft, setEditDraft] = useState<InboxEditDraft | null>(() => {
+    if (!restoredSession?.drafts.dirty || !item) return null;
+    const base = createEditDraftFromItem(item);
+    const values = restoredSession.drafts.values;
+    return {
+      ...base,
+      sender: typeof values.sender === 'string' ? values.sender : base.sender,
+      deadline: typeof values.deadline === 'string' ? values.deadline : base.deadline,
+      vorgangTitle:
+        typeof values.vorgangTitle === 'string' ? values.vorgangTitle : base.vorgangTitle,
+      digitalFolderPath:
+        typeof values.digitalFolderPath === 'string'
+          ? values.digitalFolderPath
+          : base.digitalFolderPath,
+      digitalFolderName:
+        typeof values.digitalFolderName === 'string'
+          ? values.digitalFolderName
+          : base.digitalFolderName,
+      paperFilingFolderId:
+        typeof values.paperFilingFolderId === 'string'
+          ? values.paperFilingFolderId
+          : base.paperFilingFolderId,
+      paperFilingRegister:
+        typeof values.paperFilingRegister === 'string'
+          ? values.paperFilingRegister
+          : base.paperFilingRegister,
+    };
+  });
   const [duplicateDocument, setDuplicateDocument] = useState<CompanyDocument | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [vorgangDialogRequest, setVorgangDialogRequest] = useState(0);
@@ -150,6 +195,37 @@ export function EingangDetailPage() {
   const [freeTextBridgeProposal, setFreeTextBridgeProposal] =
     useState<DocumentFieldFillFreeTextBridgeProposal | null>(null);
   const freeTextBridgeSeqRef = useRef(0);
+
+  useReportUiSession({
+    workspaceType: 'document_review',
+    activeSection: Object.entries(expandedSections).find(([, open]) => open)?.[0] ?? null,
+    panelState: {
+      deepWorkspaceOpen: false,
+      moreOptionsExpanded,
+      detailsOpen: Boolean(Object.values(expandedSections).some(Boolean)),
+      assistOpen: false,
+    },
+    expandedSections: Object.entries(expandedSections)
+      .filter(([, open]) => open)
+      .map(([key]) => key),
+    drafts: {
+      values: editDraft
+        ? {
+            sender: editDraft.sender,
+            deadline: editDraft.deadline,
+            vorgangTitle: editDraft.vorgangTitle,
+            priority: editDraft.priority,
+            digitalFolderPath: editDraft.digitalFolderPath,
+            digitalFolderName: editDraft.digitalFolderName,
+            paperFilingFolderId: editDraft.paperFilingFolderId,
+            paperFilingRegister: editDraft.paperFilingRegister,
+            recommendedAction: editDraft.recommendedAction,
+          }
+        : {},
+      dirty: Boolean(isEditing && editDraft),
+    },
+  });
+
   const [fillConfirmRows, setFillConfirmRows] = useState<DocumentFieldFillConfirmRow[]>(() => {
     const initial = id ? getInboxItemById(id) : undefined;
     if (!initial) return [];
@@ -168,17 +244,25 @@ export function EingangDetailPage() {
   useEffect(() => {
     if (!id) return;
     const reveal = shouldRevealArchiveImportFromState(location.state);
-    setMoreOptionsExpanded(reveal);
-    setExpandedSections(reveal ? { archive: true } : {});
+    if (skipIdResetRef.current) {
+      if (reveal) {
+        setMoreOptionsExpanded(true);
+        setExpandedSections((current) => ({ ...current, archive: true }));
+        navigate(location.pathname, { replace: true, state: {} });
+      }
+    } else {
+      setMoreOptionsExpanded(reveal);
+      setExpandedSections(reveal ? { archive: true } : {});
+      if (reveal) {
+        navigate(location.pathname, { replace: true, state: {} });
+      }
+    }
     setIntakeExecution(null);
     setAnalysisRetryToken(0);
     setFreeTextBridgeProposal(null);
     freeTextBridgeSeqRef.current = 0;
     setReplyCoreMessage('');
     setHasReplyDraft(false);
-    if (reveal) {
-      navigate(location.pathname, { replace: true, state: {} });
-    }
     // Only re-apply reveal when the inbox id changes (list → detail handoff).
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: id-scoped reset
   }, [id]);
@@ -187,8 +271,12 @@ export function EingangDetailPage() {
     if (id) {
       const next = getInboxItemById(id);
       setItem(next);
-      setIsEditing(false);
-      setEditDraft(null);
+      if (skipIdResetRef.current) {
+        skipIdResetRef.current = false;
+      } else {
+        setIsEditing(false);
+        setEditDraft(null);
+      }
       setFillConfirmRows(() => {
         if (!next) return [];
         const base = [...buildDocumentFieldFillConfirmViewModel(next).rows];
@@ -383,7 +471,9 @@ export function EingangDetailPage() {
   const canCreateTask =
     analysisAllowed &&
     (Boolean(item.taskTemplate) || isClassificationKindWithTasks(classifiedKind));
-  const letterExplanation = letterExplanationFromWorkflow(workflow.documentExplanation);
+  const letterExplanation =
+    letterExplanationFromWorkflow(workflow.documentExplanation) ??
+    getLetterExplanation(item, setup.language);
   const prioritizeContractWorkspace = Boolean(workflow?.contractOrderProposal);
   /** Behörde / BG BAU / Mahnung / Zahlungserinnerung — consolidated assist lane. */
   const useAssistFlowConsolidate =
@@ -589,6 +679,12 @@ export function EingangDetailPage() {
   };
 
   const handleIntakeCreateVorgang = () => {
+    // UI-VALIDIERUNG-01: contract proposal → same Accept-Orchestrator (no parallel create).
+    if (workflow?.contractOrderProposal) {
+      handleCreateContractOrder(workflow.contractOrderProposal.positions);
+      return;
+    }
+
     if (workflow?.suggestedVorgang) {
       const linked = linkWorkflowVorgang(item, workflow.suggestedVorgang.vorgangId);
       if (linked) {
@@ -663,6 +759,11 @@ export function EingangDetailPage() {
 
   const handleExecuteAll = () => {
     if (!workflow) return;
+    // UI-VALIDIERUNG-01: contract proposal → Accept-Orchestrator (Sprint A–D), not Smart Intake.
+    if (workflow.contractOrderProposal) {
+      handleCreateContractOrder(workflow.contractOrderProposal.positions);
+      return;
+    }
     if (!isDocumentFilingDecisionConfirmed(item)) {
       showToast(translate('filingDecision.confirmRequired'));
       revealArchiveImportUi();
@@ -705,8 +806,9 @@ export function EingangDetailPage() {
     handleExecuteAll();
   };
 
-  const handleOpenVorgang = () => {
-    const vorgangId = intakeExecution?.vorgangId ?? item.vorgangId;
+  const handleOpenVorgang = (matchedVorgangId?: string) => {
+    const vorgangId =
+      matchedVorgangId ?? intakeExecution?.vorgangId ?? item.vorgangId;
     if (vorgangId) navigate(`/vorgaenge/${vorgangId}`);
   };
 
@@ -722,75 +824,57 @@ export function EingangDetailPage() {
       showToast(translate('order_plan_amendment_required'));
       return;
     }
-    if (selectedPositions.length === 0) {
+    if (!setup.companyName?.trim()) {
       showToast(translate('documentIntelligence.createOrderFailed'));
       return;
     }
-    const confirmedSelections = Object.fromEntries(
-      selectedPositions.map((position) => [buildContractPositionKey(position), 'selected' as const]),
-    );
     setIsCreatingContractOrder(true);
     try {
-      if (item.vorgangId) {
-        const importResult = confirmImportContractPositions(
-          item.vorgangId,
-          selectedPositions,
-          confirmedSelections,
-        );
-        if (importResult.errorKey === 'order_plan_amendment_required') {
+      const result = acceptContractOrderFromProposal({
+        item,
+        proposal: workflow.contractOrderProposal,
+        selectedPositions,
+        companyName: setup.companyName,
+        materialStandard: setup.materialStandard,
+      });
+      if (!result.success) {
+        if (result.errorKey === 'order_plan_amendment_required') {
           showToast(translate('order_plan_amendment_required'));
           return;
         }
-        if (importResult.added === 0 && importResult.skipped === 0) {
-          showToast(translate('documentIntelligence.createOrderFailed'));
+        if (
+          result.errorKey === FILING_DECISION_ARCHIVE_BLOCKED_MESSAGE ||
+          result.errorKey === 'document.filingDecisionRequired'
+        ) {
+          showToast(translate('filingDecision.confirmRequired'));
           return;
         }
-        setIntakeExecution({
-          completed: true,
-          successSteps: ['import_positions'],
-          failedSteps: [],
-          warnings: [],
-          vorgangId: item.vorgangId,
-          inboxItem: item,
-          tasksCreated: 0,
-          positionsAdded: importResult.added,
-          pendingSummary: null,
-        });
+        const maybeKey = result.errorKey as TranslationKey;
         showToast(
-          translate('documentIntelligence.createOrderSuccess').replace(
-            '{count}',
-            String(importResult.added),
-          ),
+          maybeKey.includes('.') ? translate(maybeKey) : result.errorKey,
         );
-        refreshWorkflowItem();
-        return;
-      }
-
-      const result = createVorgangFromInboxWithContract(item, undefined, setup.materialStandard, {
-        confirmedPositions: selectedPositions,
-      });
-      if (!result) {
-        showToast(translate('documentIntelligence.createOrderFailed'));
         return;
       }
       setItem(result.inbox);
       setIntakeExecution({
         completed: true,
-        successSteps: ['create_vorgang', 'import_positions'],
+        successSteps: result.successSteps,
         failedSteps: [],
         warnings: [],
         vorgangId: result.vorgang.id,
+        archiveDocumentId: result.archiveDocumentId,
         inboxItem: result.inbox,
         tasksCreated: 0,
-        positionsAdded: result.vorgang.orderPositions?.length ?? selectedPositions.length,
+        positionsAdded: result.positionsAdded,
         pendingSummary: null,
       });
       showToast(
         translate('documentIntelligence.createOrderSuccess').replace(
           '{count}',
-          String(result.vorgang.orderPositions?.length ?? selectedPositions.length),
+          String(result.positionsAdded),
         ),
       );
+      navigate(`/vorgaenge/${result.vorgang.id}`);
     } finally {
       setIsCreatingContractOrder(false);
     }
@@ -800,9 +884,15 @@ export function EingangDetailPage() {
     showToast(translate('documentIntelligence.proposal.discarded'));
   };
 
+  const handleContractInquiry = () => {
+    setMoreOptionsExpanded(true);
+    setExpandedSections((current) => ({ ...current, communication: true }));
+    showToast(translate('auftragskarte.inquiryHint'));
+  };
+
+  // DOCUMENT-EXPERIENCE-02B: LetterExplanation / Guidance live in Experience Details (E), not here.
   const overlappingHintPanels = analysisAllowed ? (
     <>
-      {letterExplanation ? <LetterExplanationPanel explanation={letterExplanation} /> : null}
       <DocumentActionSuggestionsPanel
         item={item}
         classification={workflow.classification ?? undefined}
@@ -1004,17 +1094,22 @@ export function EingangDetailPage() {
           />
           <DataRow label={translate('inbox.nextTask')} value={item.nextTaskLabel} />
           <DataRow label={translate('inbox.recommendedAction')} value={translate(actionKey)} />
-          {!item.importedToArchive && analysisAllowed && (
-            <Button
-              variant="outline"
-              fullWidth
-              disabled={isImporting || !isDocumentFilingDecisionConfirmed(item)}
-              data-testid="inbox-import-to-archive"
-              onClick={handleImportToArchive}
+          {!item.importedToArchive && analysisAllowed && !item.isAdvertisement ? (
+            <div
+              className="document-review-experience__archive-cta"
+              data-testid="inbox-import-to-archive-primary"
             >
-              {translate('inbox.importToArchive')}
-            </Button>
-          )}
+              <Button
+                variant="outline"
+                fullWidth
+                disabled={isImporting}
+                data-testid="inbox-import-to-archive-primary-button"
+                onClick={handleImportToArchive}
+              >
+                {translate('inbox.importToArchive')}
+              </Button>
+            </div>
+          ) : null}
           {!item.importedToArchive &&
             analysisAllowed &&
             !isDocumentFilingDecisionConfirmed(item) && (
@@ -1082,7 +1177,7 @@ export function EingangDetailPage() {
 
         {!useAssistFlowConsolidate && overlappingHintPanels}
 
-        {analysisAllowed && (
+        {analysisAllowed && !workflow?.contractOrderProposal && (
           <InboxVorgangPanel
             item={item}
             materialDefault={setup.materialStandard}
@@ -1185,23 +1280,23 @@ export function EingangDetailPage() {
       />
     </div>
   ) : null;
-  const archiveImportPrimaryCta =
-    !item.importedToArchive && analysisAllowed && !item.isAdvertisement ? (
-      <div
-        className="document-review-experience__archive-cta"
-        data-testid="inbox-import-to-archive-primary"
-      >
-        <Button
-          variant="outline"
-          fullWidth
-          disabled={isImporting}
-          data-testid="inbox-import-to-archive-primary-button"
-          onClick={handleImportToArchive}
-        >
-          {translate('inbox.importToArchive')}
-        </Button>
+  const experienceDetailsExtra = (
+    <div data-testid="document-experience-details-extra">
+      {letterExplanation ? (
+        <div data-testid="document-experience-letter">
+          <LetterExplanationPanel explanation={letterExplanation} />
+        </div>
+      ) : null}
+      <div data-testid="document-experience-guidance">
+        <DocumentGuidancePanel
+          guidance={buildDocumentGuidance(item, workflow, setup.language, {
+            sessionFillConfirmRows: fillConfirmRows,
+          })}
+          translate={translate}
+        />
       </div>
-    ) : null;
+    </div>
+  );
 
   const reviewExperience = (
     <DocumentReviewExperience
@@ -1214,12 +1309,17 @@ export function EingangDetailPage() {
       onApplySuggestion={handleApplySuggestion}
       onCreateContractOrder={handleCreateContractOrder}
       onDiscardContractProposal={handleDiscardContractProposal}
+      onContractInquiry={handleContractInquiry}
       isCreatingContractOrder={isCreatingContractOrder}
       onOpenVorgang={handleOpenVorgang}
       onOpenArchive={handleOpenArchive}
       onNextDocument={goBack}
+      onLinkVorgang={() => setVorgangDialogRequest((n) => n + 1)}
+      onCreateTask={handleCreateTask}
       moreOptionsContent={moreOptionsContent}
-      beforeMoreOptions={archiveImportPrimaryCta}
+      beforeMoreOptions={null}
+      experienceDetailsExtra={experienceDetailsExtra}
+      letterExplanation={letterExplanation}
       translate={translate}
       sessionFillConfirmRows={fillConfirmRows}
     />
@@ -1234,29 +1334,14 @@ export function EingangDetailPage() {
         ← {translate('common.back')}
       </button>
 
-      <DocumentAssistantPanel
-        key={`document-assistant-${assistSessionKey}`}
-        item={item}
-        workflow={workflow}
-        translate={translate}
-        language={setup.language}
-        compactForContractWorkspace={prioritizeContractWorkspace}
-        showChangeType
-        sessionFillConfirmRows={fillConfirmRows}
-        onChangeType={() => {
-          setMoreOptionsExpanded(true);
-          setExpandedSections((current) => ({ ...current, technical: true }));
-        }}
-      />
-
       {prioritizeContractWorkspace ? (
         <>
-          {/* INGRESS-OPERATIONAL-OVERVIEW-01: overview/primary first; original last */}
+          {/* DOCUMENT-EXPERIENCE-02: Experience first; Guidance/Letter in Details */}
           {reviewExperience}
+          {originalFilePanel}
           {freeQuestionPanel}
           {fieldFillConfirmPanel}
           {confirmedReplyDraftPanel}
-          {originalFilePanel}
         </>
       ) : useAssistFlowConsolidate ? (
         <div
@@ -1264,14 +1349,11 @@ export function EingangDetailPage() {
           data-testid="eingang-assist-flow"
           data-assist-flow="consolidated"
         >
-          {/* 1. Betriebliche Übersicht + Primary (in ReviewExperience) */}
           {reviewExperience}
-          {/* 2. Angaben prüfen / Assist */}
           {fieldFillConfirmPanel}
           {freeQuestionPanel}
           {contextualNextStepsPanel}
           {confirmedReplyDraftPanel}
-          {/* 3. Original / OCR zuletzt */}
           {originalFilePanel}
         </div>
       ) : (

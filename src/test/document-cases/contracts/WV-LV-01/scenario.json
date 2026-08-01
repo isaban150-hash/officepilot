@@ -2,7 +2,12 @@
   "caseId": "WV-LV-01",
   "damagePrevented": "Vertragsfamilie, Parteien, Geld, LV-Positionen gehen verloren oder Auftrag wird ohne Freigabe übernommen",
   "category": "contracts",
-  "layers": ["stable-pipeline", "persistence-smoke"],
+  "layers": [
+    "stable-pipeline",
+    "persistence-smoke",
+    "accept-journey",
+    "ui-visibility"
+  ],
   "channel": "pdf",
   "textFixture": "werkvertragMultiSection",
   "importSource": "upload",

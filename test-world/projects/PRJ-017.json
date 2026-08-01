@@ -1,0 +1,18 @@
+{
+  "id": "PRJ-017",
+  "companyId": "COMPANY-001",
+  "branchId": "BRANCH-001",
+  "customerId": "CUST-012",
+  "title": "Grundschule Schötmar – Heizungsanlage",
+  "siteName": "Grundschule Schötmar – Heizungsanlage",
+  "siteStreet": "Schulweg 3",
+  "siteZip": "32108",
+  "siteCity": "Bad Salzuflen",
+  "trade": "Heizung",
+  "status": "commissioned",
+  "startDate": "2026-02-20",
+  "foremanEmployeeId": "EMP-003",
+  "timelineDocumentIds": [],
+  "notes": "TestWorld-Projekt 01C – noch ohne Dokumente",
+  "endDate": "2026-09-15"
+}

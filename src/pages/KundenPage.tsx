@@ -5,6 +5,7 @@ import { Card, CardMeta, CardTitle, PageHeader } from '../components/ui/Card';
 import { EmptyStateBlock } from '../components/ui/EmptyStateBlock';
 import { useApp } from '../context/AppContext';
 import { getKundenOverview } from '../services/kundenOverviewService';
+import { buildKundenDetailPath } from '../services/kundenWorkspaceService';
 
 export function KundenPage() {
   const { translate } = useApp();
@@ -31,7 +32,12 @@ export function KundenPage() {
       ) : (
         <div className="card-list">
           {kunden.map((kunde) => (
-            <Link key={kunde.name} to="/vorgaenge" className="card-link" data-testid={`kunde-${kunde.name}`}>
+            <Link
+              key={kunde.name}
+              to={buildKundenDetailPath(kunde.name)}
+              className="card-link"
+              data-testid={`kunde-${kunde.name}`}
+            >
               <Card>
                 <CardTitle>{kunde.name}</CardTitle>
                 <CardMeta>

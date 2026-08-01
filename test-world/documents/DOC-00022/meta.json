@@ -1,0 +1,28 @@
+{
+  "id": "DOC-00022",
+  "companyId": "COMPANY-001",
+  "projectId": null,
+  "supplierId": "SUP-024",
+  "vehicleId": "VEH-001",
+  "taxonomyTypeId": "DOCTYPE-047",
+  "documentType": "vehicle_document",
+  "subtype": "tuev",
+  "title": "AutoService Teutoburger – HU/AU Bericht LIP-CH 1001",
+  "receivedAt": "2026-02-20",
+  "lifecyclePhase": "firm",
+  "qualityTag": "clean",
+  "sourceKind": "pdf",
+  "suiteTags": [
+    "commit",
+    "release"
+  ],
+  "notes": "GOLD 02B: TÜV Firma + Fahrzeug. Kein Projekt.",
+  "expected": {
+    "classifiedKind": "tuev_bericht",
+    "caseMatchStatus": "none",
+    "matchedProjectId": null,
+    "primaryActionId": "create_vorgang",
+    "alertIds": []
+  },
+  "sourceFile": "source.pdf"
+}

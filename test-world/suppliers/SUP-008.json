@@ -1,0 +1,10 @@
+{
+  "id": "SUP-008",
+  "companyId": "COMPANY-001",
+  "name": "Telekom Geschäftskunden",
+  "supplierType": "telecom",
+  "city": "Bonn",
+  "country": "DE",
+  "email": "sup-008@counterparty.example",
+  "notes": "TestWorld-Counterparty"
+}

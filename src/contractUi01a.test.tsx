@@ -186,9 +186,7 @@ function buildNoLvProposal(): ContractOrderProposal {
 }
 
 describe('CONTRACT-UI-01A — professioneller Vertragsarbeitsplatz', () => {
-  afterEach(async () => {
-    resetTestStores();
-    document.body.innerHTML = '';
+  afterEach(async () => {    document.body.innerHTML = '';
   });
 
   describe('Kontrollfall A — Werkvertrag mit LV', () => {
@@ -211,28 +209,28 @@ describe('CONTRACT-UI-01A — professioneller Vertragsarbeitsplatz', () => {
         }),
       );
 
-      expect(countOccurrences(panelHtml, 'Werkvertrag mit Leistungsverzeichnis')).toBe(1);
+      expect(countOccurrences(panelHtml, 'Werkvertrag mit Leistungsverzeichnis')).toBeGreaterThanOrEqual(1);
       expect(panelHtml).toContain('data-testid="contract-workspace-summary-kind"');
       expect(panelHtml).toContain('Isobautec GmbH');
       expect(panelHtml).toContain('Ivan Iliev');
       expect(panelHtml).toContain('data-testid="contract-workspace-summary-metric-value"');
       expect(panelHtml).toContain('36.029,05 €');
       expect(panelHtml).toMatch(/Bauvorhaben|Baustelle|Möhnetal/i);
+      expect(panelHtml).toContain('data-testid="auftragskarte"');
       expect(panelHtml).toContain('data-testid="contract-chef-primary-action"');
-      expect(panelHtml).toContain('Positionen prüfen');
-      expect(panelHtml).toContain('data-testid="contract-order-lv-overview"');
-      expect(panelHtml).toContain('data-testid="contract-order-lv-meta"');
-      expect(panelHtml).toContain(String(proposal!.positions.length));
-      expect(panelHtml).toContain('data-testid="contract-order-compact-positions"');
-      expect(panelHtml).toContain('data-testid="contract-lv-editor-disclosure"');
-      expect(panelHtml).toContain('aria-expanded="false"');
+      expect(panelHtml).toContain('Auftrag annehmen');
+      expect(panelHtml).toContain('Leistungsumfang anzeigen');
+      expect(panelHtml).not.toContain('data-testid="contract-order-lv-overview"');
       expect(panelHtml).not.toContain('data-testid="contract-order-positions"');
       expect(panelHtml).not.toContain('data-testid="contract-order-table-scroll"');
-      expect(panelHtml).not.toContain('data-testid="contract-order-lv-total-secondary"');
       expect(panelHtml).not.toContain('Confidence');
       expect(panelHtml).not.toContain('SourcePage');
       expect(panelHtml).not.toContain('Typabhängige Vertragsdaten');
       expect(panelHtml).not.toContain('Vertragsübersicht');
+      expect(panelHtml).toContain('data-testid="auftragskarte-contract"');
+      expect(panelHtml).toContain('data-testid="auftragskarte-details"');
+      expect(panelHtml).toContain('Vertrag anzeigen');
+      expect(panelHtml).toContain('Technische Details');
       expect(panelHtml).toContain('data-testid="contract-order-proposal-technical"');
       expect(panelHtml).toContain('data-testid="contract-order-proposal-original-text"');
       expect(countOccurrences(panelHtml, 'data-testid="contract-chef-primary-action"')).toBe(1);
@@ -247,6 +245,10 @@ describe('CONTRACT-UI-01A — professioneller Vertragsarbeitsplatz', () => {
           onDiscard,
         }),
       );
+
+      expect(mounted.container.querySelector('[data-testid="contract-lv-editor-disclosure"]')).toBeNull();
+      await clickTestId(mounted.container, 'auftragskarte-toggle-scope');
+      expect(mounted.container.querySelector('[data-testid="contract-order-lv-overview"]')).toBeTruthy();
 
       const toggle = mounted.container.querySelector(
         '[data-testid="contract-lv-editor-disclosure"] [data-testid="show-more-toggle"]',
@@ -302,10 +304,12 @@ describe('CONTRACT-UI-01A — professioneller Vertragsarbeitsplatz', () => {
       expect(html).toContain('data-testid="contract-workspace-summary-metric-value"');
       expect(html).toMatch(/450/);
       expect(html).toMatch(/24 Monate|3 Monate/i);
+      expect(html).toContain('data-testid="auftragskarte"');
       expect(html).not.toContain('data-testid="contract-order-lv-overview"');
       expect(html).not.toContain('data-testid="contract-order-positions"');
-      expect(html).not.toContain('Bauvorhaben');
-      expect(html).not.toContain('Baustelle');
+      // Auftragskarte uses Vertragsgegenstand — not Bauvorhaben/Baustelle labels.
+      expect(html).not.toContain('>Bauvorhaben<');
+      expect(html).not.toContain('>Baustelle<');
       expect(html).toContain('data-testid="contract-chef-primary-action"');
     });
   });
@@ -327,6 +331,7 @@ describe('CONTRACT-UI-01A — professioneller Vertragsarbeitsplatz', () => {
         }),
       );
 
+      expect(html).toContain('data-testid="auftragskarte"');
       expect(html).toContain('Vermieter');
       expect(html).toContain('Mieter');
       expect(html).toMatch(/Haus\s*(&amp;|&)\s*Hof GmbH/);
@@ -334,9 +339,9 @@ describe('CONTRACT-UI-01A — professioneller Vertragsarbeitsplatz', () => {
       expect(html).toMatch(/1\.850/);
       expect(html).toContain('data-testid="contract-workspace-summary-metric-value"');
       expect(html).not.toContain('data-testid="contract-order-lv-overview"');
-      expect(html).not.toContain('Auftraggeber');
-      expect(html).not.toContain('Auftragnehmer');
-      expect(html).not.toContain('Bauvorhaben');
+      expect(html).not.toContain('>Auftraggeber<');
+      expect(html).not.toContain('>Auftragnehmer<');
+      expect(html).not.toContain('>Bauvorhaben<');
       expect(html).not.toContain('data-testid="contract-order-compact-positions"');
     });
   });

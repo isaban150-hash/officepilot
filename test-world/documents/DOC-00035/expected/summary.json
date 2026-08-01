@@ -1,0 +1,18 @@
+{
+  "documentId": "DOC-00035",
+  "family": "generic",
+  "headline": "Handwerk OWL · Newsletter",
+  "factOrder": [
+    "sender",
+    "subject",
+    "amount",
+    "deadline",
+    "site"
+  ],
+  "facts": [
+    {
+      "id": "subject",
+      "value": "Handwerk OWL · Newsletter"
+    }
+  ]
+}

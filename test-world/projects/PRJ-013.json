@@ -1,0 +1,18 @@
+{
+  "id": "PRJ-013",
+  "companyId": "COMPANY-001",
+  "branchId": "BRANCH-001",
+  "customerId": "CUST-004",
+  "title": "Wohnpark Herford – Bauabschnitt B",
+  "siteName": "Wohnpark Herford – Bauabschnitt B",
+  "siteStreet": "Goebenstraße 12",
+  "siteZip": "32052",
+  "siteCity": "Herford",
+  "trade": "Heizung",
+  "status": "commissioned",
+  "startDate": "2026-03-01",
+  "foremanEmployeeId": "EMP-003",
+  "timelineDocumentIds": [],
+  "notes": "TestWorld-Projekt 01C – noch ohne Dokumente",
+  "endDate": "2027-02-28"
+}

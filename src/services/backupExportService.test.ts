@@ -1,3 +1,4 @@
+import { useDocumentBlobDatabaseReset } from '../test/documentBlobTestReset';
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import JSZip from 'jszip';
 import {
@@ -20,13 +21,12 @@ import {
 } from './documentFileRepresentationBindingStoreService';
 import { createDocumentFileRepresentationBinding } from './documentFileRepresentationBindingService';
 import { deleteDocumentBlob } from './storage/documentBlobIndexedDbService';
-import { resetTestStores } from '../test/resetStores';
 import { BACKUP_SCHEMA_VERSION } from '../types/backupExport';
 
+useDocumentBlobDatabaseReset();
+
 describe('backupExportService', () => {
-  beforeEach(() => {
-    resetTestStores();
-    vi.restoreAllMocks();
+  beforeEach(() => {    vi.restoreAllMocks();
   });
 
   afterEach(() => {

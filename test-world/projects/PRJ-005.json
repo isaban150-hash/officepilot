@@ -1,0 +1,18 @@
+{
+  "id": "PRJ-005",
+  "companyId": "COMPANY-001",
+  "branchId": "BRANCH-001",
+  "customerId": "CUST-005",
+  "title": "Mehrfamilienhaus Bielefeld",
+  "siteName": "Mehrfamilienhaus Bielefeld",
+  "siteStreet": "Niederwall 22",
+  "siteZip": "33602",
+  "siteCity": "Bielefeld",
+  "trade": "Sanitär",
+  "status": "offered",
+  "startDate": "2026-03-01",
+  "foremanEmployeeId": "EMP-004",
+  "timelineDocumentIds": [],
+  "notes": "TestWorld-Projekt 01C – noch ohne Dokumente",
+  "endDate": "2026-10-31"
+}

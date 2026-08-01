@@ -1,0 +1,13 @@
+{
+  "id": "EMP-009",
+  "companyId": "COMPANY-001",
+  "branchId": "BRANCH-001",
+  "firstName": "Omar",
+  "lastName": "Yilmaz",
+  "role": "driver",
+  "active": true,
+  "email": "omar.yilmaz@cirmak-haustechnik.example",
+  "phone": "+49 5222 9800-09",
+  "notes": "TestWorld-Mitarbeiter",
+  "defaultVehicleId": "VEH-004"
+}

@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createAbschlagInvoice, createOrderPosition, createTestVorgang, testSetup } from '../../test/fixtures';
-import { resetTestStores } from '../../test/resetStores';
 import * as supabaseLib from '../../lib/supabase';
 import * as persistenceService from '../persistenceService';
 import {
@@ -200,9 +199,7 @@ function mockSuccessfulRpc() {
   );
 }
 
-beforeEach(() => {
-  resetTestStores();
-  resetOrderAmendmentConfirmIntentsForTests();
+beforeEach(() => {  resetOrderAmendmentConfirmIntentsForTests();
   vi.restoreAllMocks();
   seedVorgang();
 });

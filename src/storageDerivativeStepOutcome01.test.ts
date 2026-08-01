@@ -1,3 +1,4 @@
+import { useDocumentBlobDatabaseReset } from './test/documentBlobTestReset';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as persistenceService from './services/persistenceService';
 import {
@@ -22,7 +23,6 @@ import {
   storeDocumentFileFromCachedPayload,
 } from './services/documentFileStoreService';
 import { withNewEntitySync } from './services/sync/syncMetaService';
-import { resetTestStores } from './test/resetStores';
 import type { CompanyDocument } from './types/models';
 import type { PostImportDerivativeStepId } from './types/documentFileDerivativeStepOutcome';
 
@@ -65,10 +65,11 @@ function noopRunners(
   return { ...base, ...overrides };
 }
 
+useDocumentBlobDatabaseReset();
+
 afterEach(() => {
   vi.restoreAllMocks();
   setPostImportDerivativeStepRunnersForTests(null);
-  resetTestStores();
   resetDocumentFileStoreForTests();
   resetDocumentFileDerivativeStepOutcomeStoreForTests();
 });

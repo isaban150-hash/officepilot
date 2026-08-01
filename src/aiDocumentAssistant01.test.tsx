@@ -1,3 +1,4 @@
+import { useDocumentBlobDatabaseReset } from './test/documentBlobTestReset';
 import { describe, expect, it, afterEach } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
@@ -27,12 +28,12 @@ import {
 } from './services/ocrDocumentService';
 import { addInboxItem } from './services/inboxService';
 import { createMockInboxItemFromUpload } from './services/inboxUploadFactory';
-import { resetTestStores } from './test/resetStores';
+
+useDocumentBlobDatabaseReset();
 
 describe('AI-DOCUMENT-ASSISTANT-01', () => {
   afterEach(() => {
     setImageOcrExtractorForTests(null);
-    resetTestStores();
   });
 
   it('JPG-Upload funktioniert', async () => {

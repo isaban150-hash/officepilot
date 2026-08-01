@@ -115,9 +115,7 @@ function legacyDoc(overrides: Partial<CompanyDocument> = {}): CompanyDocument {
   };
 }
 
-beforeEach(() => {
-  resetTestStores();
-  hydrateDocumentStore([]);
+beforeEach(() => {  hydrateDocumentStore([]);
 });
 
 afterEach(() => {

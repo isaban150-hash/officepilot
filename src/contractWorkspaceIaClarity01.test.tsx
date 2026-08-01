@@ -186,7 +186,7 @@ describe('CONTRACT-WORKSPACE-IA-CLARITY-01', () => {
     expect(html).not.toContain('data-testid="contract-order-lv-overview"');
   });
 
-  it('Fall C: Proposal-Intro hat genau einen Instruktionsabsatz ohne doppelte Übersicht', () => {
+  it('Fall C: Intro liegt in Details; Auftragskarte ohne doppelte Übersicht', () => {
     const proposal = buildProposal();
     const html = renderToStaticMarkup(
       createElement(ContractOrderProposalPanel, {
@@ -197,6 +197,9 @@ describe('CONTRACT-WORKSPACE-IA-CLARITY-01', () => {
       }),
     );
 
+    expect(html).toContain('data-testid="auftragskarte"');
+    expect(html).toContain('data-testid="auftragskarte-contract"');
+    expect(html).toContain('Vertrag anzeigen');
     const introMatch = html.match(
       /data-testid="contract-order-proposal-intro"[^>]*>([\s\S]*?)<\/div>/,
     );
@@ -211,12 +214,14 @@ describe('CONTRACT-WORKSPACE-IA-CLARITY-01', () => {
 
     expect(html).toContain('data-testid="contract-progress-billing-hint"');
     expect(html).toContain('data-testid="contract-technical-attachments-hint"');
+    expect(html).toContain('data-testid="auftragskarte-details"');
+    expect(html).toContain('Technische Details');
 
     const overviewMatches = html.match(/Vertragsübersicht/g) ?? [];
     expect(overviewMatches.length).toBe(0);
   });
 
-  it('Fall D: Kopf, Hints, kompakte Positionen und einklappbare Tabelle', async () => {
+  it('Fall D: LV und Tabelle erst nach Leistungsumfang / Editor', async () => {
     const proposal = buildProposal();
     const item = linkedItem();
     const vorgang = buildVorgang();
@@ -237,12 +242,9 @@ describe('CONTRACT-WORKSPACE-IA-CLARITY-01', () => {
         onDiscard: vi.fn(),
       }),
     );
-    expect(panelHtml).toContain('data-testid="contract-order-lv-overview"');
-    expect(panelHtml).toContain('data-testid="contract-order-compact-positions"');
-    expect(panelHtml).toContain('PE-Folie verlegen');
-    expect(panelHtml).toContain('data-testid="contract-lv-editor-disclosure"');
+    expect(panelHtml).toContain('data-testid="auftragskarte"');
+    expect(panelHtml).not.toContain('data-testid="contract-order-lv-overview"');
     expect(panelHtml).not.toContain('data-testid="contract-order-positions"');
-    expect(panelHtml).not.toContain('data-testid="contract-order-table-scroll"');
 
     const container = document.createElement('div');
     document.body.appendChild(container);
@@ -257,6 +259,17 @@ describe('CONTRACT-WORKSPACE-IA-CLARITY-01', () => {
         }),
       );
     });
+
+    const scopeToggle = container.querySelector(
+      '[data-testid="auftragskarte-toggle-scope"]',
+    ) as HTMLButtonElement | null;
+    expect(scopeToggle).toBeTruthy();
+    await act(async () => {
+      scopeToggle!.click();
+    });
+    expect(container.querySelector('[data-testid="contract-order-lv-overview"]')).toBeTruthy();
+    expect(container.textContent).toContain('PE-Folie verlegen');
+
     const toggle = container.querySelector(
       '[data-testid="contract-lv-editor-disclosure"] [data-testid="show-more-toggle"]',
     ) as HTMLButtonElement | null;

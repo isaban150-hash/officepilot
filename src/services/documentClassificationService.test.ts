@@ -75,6 +75,84 @@ describe('detectClassifiedKind', () => {
     expect(detectClassifiedKind({ recognizedText: 'Steuerbescheid Finanzamt' })).toBe('steuerbescheid');
   });
 
+  it('löst U15-Grenzfälle: ER mit Lieferschein-Ref, Ausgangs-Abschlag, AOK, Honorar, HU/AU', () => {
+    expect(
+      detectClassifiedKind({
+        recognizedText:
+          'GC-Großhandel OWL GmbH Rechnung RE-2026-11842 Lieferschein LS-11840 Netto 100,00 € USt 19,00 € Brutto 119,00 € Zahlungsziel 14 Tage',
+      }),
+    ).toBe('eingangsrechnung');
+    expect(
+      detectClassifiedKind({
+        recognizedText:
+          'Cirmak Haustechnik GmbH Ausgangsrechnung Abschlagsrechnung Nr. AR-2026-0028 zu Werkvertrag WV-2025-0912 Netto 5.000,00 € Brutto 5.950,00 €',
+      }),
+    ).toBe('ausgangsrechnung');
+    expect(
+      detectClassifiedKind({
+        recognizedText:
+          'AOK NordWest Behördenschreiben Beitragsnachweis Arbeitgeber Februar 2026 Forderung / Beitrag 6.120,15 €',
+      }),
+    ).toBe('aok');
+    expect(
+      detectClassifiedKind({
+        recognizedText:
+          'Steuerberatung Ostwestfalen GmbH Honorarrechnung StB-2026-041 Lohnabrechnung Feb. 2026 (10 MA) 320,00 € Netto 800,00 € USt 152,00 € Brutto 952,00 €',
+      }),
+    ).toBe('eingangsrechnung');
+    expect(
+      detectClassifiedKind({
+        recognizedText:
+          'AutoService Teutoburger GmbH HU / AU Prüfbericht Kennzeichen LIP-CH 1001 Ergebnis HU ohne Mangel Nächste HU 02/2028',
+      }),
+    ).toBe('tuev_bericht');
+    expect(
+      detectClassifiedKind({
+        recognizedText:
+          'AutoService Teutoburger GmbH Werkstattrechnung Rechnung WR-2026-0222 Netto 548,00 € USt 104,12 € Brutto 652,12 €',
+      }),
+    ).toBe('reparaturrechnung');
+  });
+
+  it('detects Utility-, Hotel- und Telekom-Rechnungen ohne Rechnungsnummer', () => {
+    expect(
+      detectClassifiedKind({
+        recognizedText:
+          'Stadtwerke Bad Salzuflen Energie / Versorgung Stromrechnung 02/2026 Netto 1.124,60 € USt 213,67 € Brutto 1.338,27 €',
+      }),
+    ).toBe('rechnung');
+    expect(
+      detectClassifiedKind({
+        recognizedText: 'Stadtwerke Musterstadt Gasrechnung 01/2026 Kundenkonto 123 Verbrauch 1200 kWh',
+      }),
+    ).toBe('rechnung');
+    expect(
+      detectClassifiedKind({
+        recognizedText: 'Stadtwerke Musterstadt Wasser-/Abwasserrechnung Zählerstand 8821',
+      }),
+    ).toBe('rechnung');
+    expect(
+      detectClassifiedKind({
+        recognizedText: 'Telekom Geschäftskunden Mobilfunkrechnung 03/2026 Rufnummer 0151 88421001',
+      }),
+    ).toBe('eingangsrechnung');
+    expect(
+      detectClassifiedKind({
+        recognizedText: 'Telekom Geschäftskunden Rechnung Internet & Festnetz Company Flex 250',
+      }),
+    ).toBe('eingangsrechnung');
+    expect(
+      detectClassifiedKind({
+        recognizedText: 'Hotel Lipperland Hotelrechnung Parkstraße 10 Aufenthalt 24.–25.01.2026',
+      }),
+    ).toBe('eingangsrechnung');
+    expect(
+      detectClassifiedKind({
+        recognizedText: 'Aral Station Nord Tankstelle Diesel 52,40 l Tankbeleg Betrag 92,95 €',
+      }),
+    ).toBe('tankbeleg');
+  });
+
   it('detects Werkvertrag and customer documents', () => {
     expect(detectClassifiedKind({ recognizedText: 'Werkvertrag Sanierung' })).toBe('werkvertrag');
     expect(detectClassifiedKind({ recognizedText: 'Subunternehmervertrag' })).toBe('subunternehmervertrag');

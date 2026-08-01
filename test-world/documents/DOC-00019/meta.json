@@ -1,0 +1,29 @@
+{
+  "id": "DOC-00019",
+  "companyId": "COMPANY-001",
+  "projectId": null,
+  "supplierId": "SUP-009",
+  "vehicleId": "VEH-002",
+  "taxonomyTypeId": "DOCTYPE-045",
+  "documentType": "vehicle_document",
+  "subtype": "kfz_versicherung",
+  "title": "VHV – Kfz-Versicherung LIP-CH 1002",
+  "receivedAt": "2026-01-08",
+  "lifecyclePhase": "firm",
+  "qualityTag": "clean",
+  "sourceKind": "pdf",
+  "suiteTags": [
+    "smoke",
+    "commit",
+    "release"
+  ],
+  "notes": "GOLD 02B: Kfz-Versicherung Firma + Fahrzeug. Kein Projekt.",
+  "expected": {
+    "classifiedKind": "fahrzeugversicherung",
+    "caseMatchStatus": "none",
+    "matchedProjectId": null,
+    "primaryActionId": "create_vorgang",
+    "alertIds": []
+  },
+  "sourceFile": "source.pdf"
+}

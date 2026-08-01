@@ -1,0 +1,48 @@
+{
+  "caseId": "ER-01",
+  "kind": "incoming-invoice",
+  "documentCaseId": "ER-01",
+  "damagePrevented": [
+    "falscher Lieferant",
+    "verlorene Rechnungsnummer",
+    "verlorenes Rechnungsdatum",
+    "falscher Betrag",
+    "verlorenes Fälligkeitsdatum",
+    "Rechnung nicht archiviert",
+    "fehlende Verknüpfung Ausgabe ↔ Inbox/Archiv",
+    "Zahlungsstatus falsch",
+    "Rechnung in falscher Akte / unerwünschte Vertragswirkung"
+  ],
+  "layers": ["stable-pipeline", "invoice-journey", "ui-visibility"],
+  "invoiceJourney": {
+    "companyName": "Mustermann Sanitär GmbH",
+    "classifiedKindAllowed": ["eingangsrechnung", "reparaturrechnung", "rechnung"],
+    "supplierContains": "Nordhandel",
+    "invoiceNumber": "RE-2026-9912",
+    "issueDateContains": "05.03.2026",
+    "amountApprox": 1475.6,
+    "dueDateContains": "19.03.2026",
+    "requireArchive": true,
+    "requireExpense": true,
+    "requireExpenseLinkedInbox": true,
+    "requireArchiveOnExpense": true,
+    "expectedPaymentStatus": "offen"
+  },
+  "invoiceUiVisibility": {
+    "understandingPanelVisible": true,
+    "supplierVisible": true,
+    "invoiceNumberVisible": true,
+    "issueDateVisible": true,
+    "amountVisible": true,
+    "dueDateVisible": true,
+    "paymentStatusVisible": true,
+    "archiveLinkVisible": true,
+    "expenseCardVisible": true
+  },
+  "knownGaps": [
+    "Eingangsrechnung wird produktively als Ausgabe (Expense) geführt, nicht als VorgangInvoice.",
+    "Vorgang-Verknüpfung nur wenn suggestedVorgang existiert — ER-01 hat typisch none_or_suggested; Goldpfad prüft Inbox/Archiv/Ausgabe-Link.",
+    "Lieferant als BI facts.parties.counterparty ist laut Document-Case knownGap nicht immer befüllt — Absender/Lieferant-Schutz bleibt.",
+    "OCR-Fixture enthält zusätzlich 'Datum:'/'Frist:'-Labels, weil die produktive Extraktion Rechnungsdatum:/Zahlbar-bis allein nicht zuverlässig als Datum/Frist mappt."
+  ]
+}

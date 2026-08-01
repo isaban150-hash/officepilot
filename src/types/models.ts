@@ -114,6 +114,9 @@ export type PendingItemKind =
   | 'invoice_due_today'
   | 'invoice_due_soon'
   | 'invoice_partial'
+  | 'expense_overdue'
+  | 'expense_due_today'
+  | 'authority_deadline'
   | 'contract_missing_proof'
   | 'document_lifecycle_reply'
   | 'document_lifecycle_filing'
@@ -127,7 +130,7 @@ export interface PendingItem {
   description?: string;
   priority: InboxPriority;
   route: string;
-  sourceType: 'inbox' | 'document' | 'invoice' | 'contract';
+  sourceType: 'inbox' | 'document' | 'invoice' | 'contract' | 'expense' | 'task';
   sourceId?: string;
   dueDate?: string;
   daysUntilDue?: number;
@@ -150,10 +153,14 @@ export interface PendingSummary {
   unlinkedInboxItems: number;
   unarchivedDocuments: number;
   openTasks: number;
+  dueTasksToday: number;
   overdueInvoices: number;
   dueTodayInvoices: number;
   dueSoonInvoices: number;
   partialInvoices: number;
+  overdueExpenses: number;
+  dueTodayExpenses: number;
+  authorityDeadlines: number;
   expiringDocuments: number;
   expiredDocuments: number;
   missingContractDocuments: number;

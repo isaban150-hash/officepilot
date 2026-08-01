@@ -1,0 +1,28 @@
+{
+  "id": "DOC-00002",
+  "companyId": "COMPANY-001",
+  "projectId": "PRJ-005",
+  "customerId": "CUST-005",
+  "taxonomyTypeId": "DOCTYPE-004",
+  "documentType": "offer",
+  "subtype": "angebot",
+  "title": "Angebot Sanitär – Mehrfamilienhaus Bielefeld",
+  "receivedAt": "2026-03-08",
+  "lifecyclePhase": "offer",
+  "qualityTag": "clean",
+  "sourceKind": "pdf",
+  "suiteTags": [
+    "smoke",
+    "commit",
+    "release"
+  ],
+  "notes": "GOLD: Angebot. Counterparty = Kunde CUST-005. Projekt PRJ-005 (offered).",
+  "expected": {
+    "classifiedKind": "angebot",
+    "caseMatchStatus": "exact",
+    "matchedProjectId": "PRJ-005",
+    "primaryActionId": "open_vorgang",
+    "alertIds": []
+  },
+  "sourceFile": "source.pdf"
+}

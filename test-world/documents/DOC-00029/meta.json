@@ -1,0 +1,27 @@
+{
+  "id": "DOC-00029",
+  "companyId": "COMPANY-001",
+  "projectId": null,
+  "supplierId": "SUP-017",
+  "taxonomyTypeId": "DOCTYPE-039",
+  "documentType": "legal_letter",
+  "subtype": "rechtsanwalt_schreiben",
+  "title": "Kanzlei Weber & Partner – anwaltliches Schreiben Forderung",
+  "receivedAt": "2026-03-14",
+  "lifecyclePhase": "firm",
+  "qualityTag": "clean",
+  "sourceKind": "pdf",
+  "suiteTags": [
+    "commit",
+    "release"
+  ],
+  "notes": "GOLD 02B: RA-Schreiben firmenbezogen (ohne Projekt).",
+  "expected": {
+    "classifiedKind": "brief",
+    "caseMatchStatus": "none",
+    "matchedProjectId": null,
+    "primaryActionId": "create_vorgang",
+    "alertIds": []
+  },
+  "sourceFile": "source.pdf"
+}

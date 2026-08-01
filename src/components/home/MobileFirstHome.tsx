@@ -1,4 +1,5 @@
 import { DeskPriorities } from './DeskPriorities';
+import { DeskDocumentAttention } from './DeskDocumentAttention';
 import { DeskRecommendation } from './DeskRecommendation';
 import { DeskSuccesses } from './DeskSuccesses';
 import { HomeDocumentAddCard } from './HomeDocumentAddCard';
@@ -11,6 +12,7 @@ export function MobileFirstHome() {
   return (
     <div className="mobile-first-home" data-testid="mobile-first-home">
       <DeskPriorities />
+      <DeskDocumentAttention />
       <DeskSuccesses />
       <div className="mobile-first-home__stack">
         <HomeDocumentAddCard />

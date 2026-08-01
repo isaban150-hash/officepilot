@@ -16,7 +16,6 @@ import { setAiGenerateTextForTests } from './services/ai/aiRequestRunner';
 import { AppProvider } from './context/AppContext';
 import { DEFAULT_SETUP } from './data/mockData';
 import { createAuftragInboxItem } from './test/fixtures';
-import { resetTestStores } from './test/resetStores';
 import type { DocumentFieldFillFreeTextBridgeProposal } from './types/documentFieldFillFreeTextBridge';
 import type { InboxItem } from './types/models';
 import { hydrateInboxStore } from './services/inboxService';
@@ -119,7 +118,6 @@ afterEach(async () => {
   vi.restoreAllMocks();
   setAiGenerateTextForTests(null);
   resetDocumentWorkResultStoreForTests();
-  resetTestStores();
   document.body.innerHTML = '';
 });
 

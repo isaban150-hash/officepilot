@@ -1,3 +1,4 @@
+import { useDocumentBlobDatabaseReset } from './test/documentBlobTestReset';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createDocumentFileRepresentationBinding } from './services/documentFileRepresentationBindingService';
 import {
@@ -16,7 +17,6 @@ import {
   resetDocumentFileStoreForTests,
   storeDocumentFileFromCachedPayload,
 } from './services/documentFileStoreService';
-import { resetTestStores } from './test/resetStores';
 import type { DocumentFileTransformPlan } from './types/documentFileTransformPlan';
 import type { PostImportDerivativeStepId } from './types/documentFileDerivativeStepOutcome';
 import type { DocumentFileRepresentationBindingKind } from './types/documentFileRepresentationBinding';
@@ -89,9 +89,9 @@ function seedRecoveryPlan(): void {
   });
 }
 
-afterEach(() => {
-  resetTestStores();
-  resetDocumentFileStoreForTests();
+useDocumentBlobDatabaseReset();
+
+afterEach(() => {  resetDocumentFileStoreForTests();
   resetDocumentFileRepresentationBindingStoreForTests();
   resetDocumentFileDerivativeStepOutcomeStoreForTests();
   resetDocumentFileDerivativeRecoveryContextStoreForTests();

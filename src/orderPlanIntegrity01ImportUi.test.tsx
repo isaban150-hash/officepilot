@@ -43,6 +43,14 @@ async function mountProposalPanel(props: {
 }
 
 async function expandLvEditor(container: HTMLElement): Promise<void> {
+  const scopeToggle = container.querySelector(
+    '[data-testid="auftragskarte-toggle-scope"]',
+  ) as HTMLButtonElement | null;
+  if (scopeToggle && scopeToggle.getAttribute('aria-expanded') !== 'true') {
+    await act(async () => {
+      scopeToggle.click();
+    });
+  }
   const toggle = container.querySelector(
     '[data-testid="contract-lv-editor-disclosure"] [data-testid="show-more-toggle"]',
   ) as HTMLButtonElement | null;

@@ -1,0 +1,14 @@
+{
+  "id": "CUST-010",
+  "companyId": "COMPANY-001",
+  "name": "Sporthalle Lockhausen e.V.",
+  "customerType": "public",
+  "street": "Sportplatzweg 2",
+  "zip": "32107",
+  "city": "Bad Salzuflen",
+  "country": "DE",
+  "contactPerson": "Vorstand Gebäude",
+  "phone": "+49 5000 0000",
+  "email": "cust-010@kunde.example",
+  "notes": "TestWorld-Kunde"
+}

@@ -1,0 +1,10 @@
+{
+  "id": "SUP-010",
+  "companyId": "COMPANY-001",
+  "name": "Alphabet Fuhrparkleasing",
+  "supplierType": "leasing",
+  "city": "München",
+  "country": "DE",
+  "email": "sup-010@counterparty.example",
+  "notes": "TestWorld-Counterparty"
+}

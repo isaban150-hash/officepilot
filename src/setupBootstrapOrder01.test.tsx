@@ -141,7 +141,6 @@ describe('SETUP-BOOTSTRAP-ORDER-01', () => {
     cloudResolve = null;
     cloudReject = null;
     cloudStarted = false;
-    resetTestStores();
     localStorage.clear();
     savePersistedStateToKey({ type: 'workspace', workspaceId: WORKSPACE_ID }, buildCompleteWorkspaceState());
     localStorage.removeItem(buildStorageKey({ type: 'user', userId: USER_ID }));

@@ -1,0 +1,1341 @@
+{
+  "generatedAt": "2026-08-01T14:42:45.677Z",
+  "checked": 35,
+  "pass": 35,
+  "fail": 0,
+  "error": 0,
+  "successRate": "100.0%",
+  "documents": [
+    {
+      "documentId": "DOC-00001",
+      "status": "PASS",
+      "extractionMethod": "pdf_direct",
+      "ocrAttempted": false,
+      "classifiedKind": {
+        "expected": "werkvertrag",
+        "actual": "werkvertrag",
+        "ok": true
+      },
+      "family": {
+        "expected": "contract",
+        "actual": "contract",
+        "ok": true
+      },
+      "summary": {
+        "ok": true,
+        "expected": "family=contract; facts=customer,project,site,gewerk",
+        "actual": "family=contract; facts=customer,project,site,gewerk",
+        "details": []
+      },
+      "caseMatch": {
+        "ok": true,
+        "expected": "exact/PRJ-001",
+        "actual": "exact/PRJ-001",
+        "details": []
+      },
+      "primaryAction": {
+        "ok": true,
+        "expected": "open_vorgang",
+        "actual": "open_vorgang"
+      },
+      "alerts": {
+        "ok": true,
+        "expected": "—",
+        "actual": "—"
+      }
+    },
+    {
+      "documentId": "DOC-00002",
+      "status": "PASS",
+      "extractionMethod": "pdf_direct",
+      "ocrAttempted": false,
+      "classifiedKind": {
+        "expected": "angebot",
+        "actual": "angebot",
+        "ok": true
+      },
+      "family": {
+        "expected": "offer",
+        "actual": "offer",
+        "ok": true
+      },
+      "summary": {
+        "ok": true,
+        "expected": "family=offer; facts=customer,subject,site",
+        "actual": "family=offer; facts=customer,subject,site",
+        "details": []
+      },
+      "caseMatch": {
+        "ok": true,
+        "expected": "exact/PRJ-005",
+        "actual": "exact/PRJ-005",
+        "details": []
+      },
+      "primaryAction": {
+        "ok": true,
+        "expected": "open_vorgang",
+        "actual": "open_vorgang"
+      },
+      "alerts": {
+        "ok": true,
+        "expected": "—",
+        "actual": "—"
+      }
+    },
+    {
+      "documentId": "DOC-00003",
+      "status": "PASS",
+      "extractionMethod": "pdf_direct",
+      "ocrAttempted": false,
+      "classifiedKind": {
+        "expected": "eingangsrechnung",
+        "actual": "eingangsrechnung",
+        "ok": true
+      },
+      "family": {
+        "expected": "invoice_in",
+        "actual": "invoice_in",
+        "ok": true
+      },
+      "summary": {
+        "ok": true,
+        "expected": "family=invoice_in; facts=supplier,date,site",
+        "actual": "family=invoice_in; facts=supplier,amount,date,site",
+        "details": []
+      },
+      "caseMatch": {
+        "ok": true,
+        "expected": "multiple/null",
+        "actual": "multiple/null",
+        "details": []
+      },
+      "primaryAction": {
+        "ok": true,
+        "expected": "select_vorgang",
+        "actual": "select_vorgang"
+      },
+      "alerts": {
+        "ok": true,
+        "expected": "—",
+        "actual": "—"
+      }
+    },
+    {
+      "documentId": "DOC-00004",
+      "status": "PASS",
+      "extractionMethod": "pdf_direct",
+      "ocrAttempted": false,
+      "classifiedKind": {
+        "expected": "ausgangsrechnung",
+        "actual": "ausgangsrechnung",
+        "ok": true
+      },
+      "family": {
+        "expected": "invoice_out",
+        "actual": "invoice_out",
+        "ok": true
+      },
+      "summary": {
+        "ok": true,
+        "expected": "family=invoice_out; facts=customer,date,vorgang",
+        "actual": "family=invoice_out; facts=customer,date,vorgang",
+        "details": []
+      },
+      "caseMatch": {
+        "ok": true,
+        "expected": "exact/PRJ-001",
+        "actual": "exact/PRJ-001",
+        "details": []
+      },
+      "primaryAction": {
+        "ok": true,
+        "expected": "open_vorgang",
+        "actual": "open_vorgang"
+      },
+      "alerts": {
+        "ok": true,
+        "expected": "—",
+        "actual": "—"
+      }
+    },
+    {
+      "documentId": "DOC-00005",
+      "status": "PASS",
+      "extractionMethod": "pdf_direct",
+      "ocrAttempted": false,
+      "classifiedKind": {
+        "expected": "lieferschein",
+        "actual": "lieferschein",
+        "ok": true
+      },
+      "family": {
+        "expected": "delivery",
+        "actual": "delivery",
+        "ok": true
+      },
+      "summary": {
+        "ok": true,
+        "expected": "family=delivery; facts=supplier,date,site,vorgang",
+        "actual": "family=delivery; facts=supplier,date,site,vorgang",
+        "details": []
+      },
+      "caseMatch": {
+        "ok": true,
+        "expected": "multiple/null",
+        "actual": "multiple/null",
+        "details": []
+      },
+      "primaryAction": {
+        "ok": true,
+        "expected": "select_vorgang",
+        "actual": "select_vorgang"
+      },
+      "alerts": {
+        "ok": true,
+        "expected": "delivery-qty",
+        "actual": "delivery-qty"
+      }
+    },
+    {
+      "documentId": "DOC-00006",
+      "status": "PASS",
+      "extractionMethod": "pdf_direct",
+      "ocrAttempted": false,
+      "classifiedKind": {
+        "expected": "tankbeleg",
+        "actual": "tankbeleg",
+        "ok": true
+      },
+      "family": {
+        "expected": "tank",
+        "actual": "tank",
+        "ok": true
+      },
+      "summary": {
+        "ok": true,
+        "expected": "family=tank; facts=station,date",
+        "actual": "family=tank; facts=station,date,amount",
+        "details": []
+      },
+      "caseMatch": {
+        "ok": true,
+        "expected": "none/null",
+        "actual": "none/null",
+        "details": []
+      },
+      "primaryAction": {
+        "ok": true,
+        "expected": "create_vorgang",
+        "actual": "create_vorgang"
+      },
+      "alerts": {
+        "ok": true,
+        "expected": "—",
+        "actual": "—"
+      }
+    },
+    {
+      "documentId": "DOC-00007",
+      "status": "PASS",
+      "extractionMethod": "pdf_direct",
+      "ocrAttempted": false,
+      "classifiedKind": {
+        "expected": "eingangsrechnung",
+        "actual": "eingangsrechnung",
+        "ok": true
+      },
+      "family": {
+        "expected": "invoice_in",
+        "actual": "invoice_in",
+        "ok": true
+      },
+      "summary": {
+        "ok": true,
+        "expected": "family=invoice_in; facts=supplier,date",
+        "actual": "family=invoice_in; facts=supplier,amount,date",
+        "details": []
+      },
+      "caseMatch": {
+        "ok": true,
+        "expected": "none/null",
+        "actual": "none/null",
+        "details": []
+      },
+      "primaryAction": {
+        "ok": true,
+        "expected": "create_vorgang",
+        "actual": "create_vorgang"
+      },
+      "alerts": {
+        "ok": true,
+        "expected": "—",
+        "actual": "—"
+      }
+    },
+    {
+      "documentId": "DOC-00008",
+      "status": "PASS",
+      "extractionMethod": "pdf_direct",
+      "ocrAttempted": false,
+      "classifiedKind": {
+        "expected": "finanzamt",
+        "actual": "finanzamt",
+        "ok": true
+      },
+      "family": {
+        "expected": "authority",
+        "actual": "authority",
+        "ok": true
+      },
+      "summary": {
+        "ok": true,
+        "expected": "family=authority; facts=authority,subject",
+        "actual": "family=authority; facts=authority,subject,reference",
+        "details": []
+      },
+      "caseMatch": {
+        "ok": true,
+        "expected": "none/null",
+        "actual": "none/null",
+        "details": []
+      },
+      "primaryAction": {
+        "ok": true,
+        "expected": "create_vorgang",
+        "actual": "create_vorgang"
+      },
+      "alerts": {
+        "ok": true,
+        "expected": "—",
+        "actual": "—"
+      }
+    },
+    {
+      "documentId": "DOC-00009",
+      "status": "PASS",
+      "extractionMethod": "pdf_direct",
+      "ocrAttempted": false,
+      "classifiedKind": {
+        "expected": "bg_bau",
+        "actual": "bg_bau",
+        "ok": true
+      },
+      "family": {
+        "expected": "authority",
+        "actual": "authority",
+        "ok": true
+      },
+      "summary": {
+        "ok": true,
+        "expected": "family=authority; facts=authority,subject",
+        "actual": "family=authority; facts=authority,subject,reference",
+        "details": []
+      },
+      "caseMatch": {
+        "ok": true,
+        "expected": "none/null",
+        "actual": "none/null",
+        "details": []
+      },
+      "primaryAction": {
+        "ok": true,
+        "expected": "create_vorgang",
+        "actual": "create_vorgang"
+      },
+      "alerts": {
+        "ok": true,
+        "expected": "—",
+        "actual": "—"
+      }
+    },
+    {
+      "documentId": "DOC-00010",
+      "status": "PASS",
+      "extractionMethod": "pdf_direct",
+      "ocrAttempted": false,
+      "classifiedKind": {
+        "expected": "sonstiges",
+        "actual": "sonstiges",
+        "ok": true
+      },
+      "family": {
+        "expected": "generic",
+        "actual": "generic",
+        "ok": true
+      },
+      "summary": {
+        "ok": true,
+        "expected": "family=generic; facts=subject",
+        "actual": "family=generic; facts=subject",
+        "details": []
+      },
+      "caseMatch": {
+        "ok": true,
+        "expected": "none/null",
+        "actual": "none/null",
+        "details": []
+      },
+      "primaryAction": {
+        "ok": true,
+        "expected": "create_vorgang",
+        "actual": "create_vorgang"
+      },
+      "alerts": {
+        "ok": true,
+        "expected": "sender-uncertain",
+        "actual": "sender-uncertain"
+      }
+    },
+    {
+      "documentId": "DOC-00011",
+      "status": "PASS",
+      "extractionMethod": "pdf_direct",
+      "ocrAttempted": false,
+      "classifiedKind": {
+        "expected": "aok",
+        "actual": "aok",
+        "ok": true
+      },
+      "family": {
+        "expected": "authority",
+        "actual": "authority",
+        "ok": true
+      },
+      "summary": {
+        "ok": true,
+        "expected": "family=authority; facts=authority,subject",
+        "actual": "family=authority; facts=authority,subject,reference",
+        "details": []
+      },
+      "caseMatch": {
+        "ok": true,
+        "expected": "none/null",
+        "actual": "none/null",
+        "details": []
+      },
+      "primaryAction": {
+        "ok": true,
+        "expected": "create_vorgang",
+        "actual": "create_vorgang"
+      },
+      "alerts": {
+        "ok": true,
+        "expected": "—",
+        "actual": "—"
+      }
+    },
+    {
+      "documentId": "DOC-00012",
+      "status": "PASS",
+      "extractionMethod": "pdf_direct",
+      "ocrAttempted": false,
+      "classifiedKind": {
+        "expected": "eingangsrechnung",
+        "actual": "eingangsrechnung",
+        "ok": true
+      },
+      "family": {
+        "expected": "invoice_in",
+        "actual": "invoice_in",
+        "ok": true
+      },
+      "summary": {
+        "ok": true,
+        "expected": "family=invoice_in; facts=supplier,date",
+        "actual": "family=invoice_in; facts=supplier,amount,date",
+        "details": []
+      },
+      "caseMatch": {
+        "ok": true,
+        "expected": "none/null",
+        "actual": "none/null",
+        "details": []
+      },
+      "primaryAction": {
+        "ok": true,
+        "expected": "create_vorgang",
+        "actual": "create_vorgang"
+      },
+      "alerts": {
+        "ok": true,
+        "expected": "—",
+        "actual": "—"
+      }
+    },
+    {
+      "documentId": "DOC-00013",
+      "status": "PASS",
+      "extractionMethod": "pdf_direct",
+      "ocrAttempted": false,
+      "classifiedKind": {
+        "expected": "brief",
+        "actual": "brief",
+        "ok": true
+      },
+      "family": {
+        "expected": "letter",
+        "actual": "letter",
+        "ok": true
+      },
+      "summary": {
+        "ok": true,
+        "expected": "family=letter; facts=sender,subject",
+        "actual": "family=letter; facts=sender,subject",
+        "details": []
+      },
+      "caseMatch": {
+        "ok": true,
+        "expected": "none/null",
+        "actual": "none/null",
+        "details": []
+      },
+      "primaryAction": {
+        "ok": true,
+        "expected": "create_vorgang",
+        "actual": "create_vorgang"
+      },
+      "alerts": {
+        "ok": true,
+        "expected": "—",
+        "actual": "—"
+      }
+    },
+    {
+      "documentId": "DOC-00014",
+      "status": "PASS",
+      "extractionMethod": "pdf_direct",
+      "ocrAttempted": false,
+      "classifiedKind": {
+        "expected": "rechnung",
+        "actual": "rechnung",
+        "ok": true
+      },
+      "family": {
+        "expected": "invoice_in",
+        "actual": "invoice_in",
+        "ok": true
+      },
+      "summary": {
+        "ok": true,
+        "expected": "family=invoice_in; facts=supplier,date",
+        "actual": "family=invoice_in; facts=supplier,invoiceNumber,amount,date",
+        "details": []
+      },
+      "caseMatch": {
+        "ok": true,
+        "expected": "none/null",
+        "actual": "none/null",
+        "details": []
+      },
+      "primaryAction": {
+        "ok": true,
+        "expected": "create_vorgang",
+        "actual": "create_vorgang"
+      },
+      "alerts": {
+        "ok": true,
+        "expected": "—",
+        "actual": "—"
+      }
+    },
+    {
+      "documentId": "DOC-00015",
+      "status": "PASS",
+      "extractionMethod": "pdf_direct",
+      "ocrAttempted": false,
+      "classifiedKind": {
+        "expected": "rechnung",
+        "actual": "rechnung",
+        "ok": true
+      },
+      "family": {
+        "expected": "invoice_in",
+        "actual": "invoice_in",
+        "ok": true
+      },
+      "summary": {
+        "ok": true,
+        "expected": "family=invoice_in; facts=supplier,date",
+        "actual": "family=invoice_in; facts=supplier,invoiceNumber,amount,date",
+        "details": []
+      },
+      "caseMatch": {
+        "ok": true,
+        "expected": "none/null",
+        "actual": "none/null",
+        "details": []
+      },
+      "primaryAction": {
+        "ok": true,
+        "expected": "create_vorgang",
+        "actual": "create_vorgang"
+      },
+      "alerts": {
+        "ok": true,
+        "expected": "—",
+        "actual": "—"
+      }
+    },
+    {
+      "documentId": "DOC-00016",
+      "status": "PASS",
+      "extractionMethod": "pdf_direct",
+      "ocrAttempted": false,
+      "classifiedKind": {
+        "expected": "rechnung",
+        "actual": "rechnung",
+        "ok": true
+      },
+      "family": {
+        "expected": "invoice_in",
+        "actual": "invoice_in",
+        "ok": true
+      },
+      "summary": {
+        "ok": true,
+        "expected": "family=invoice_in; facts=supplier,date",
+        "actual": "family=invoice_in; facts=supplier,invoiceNumber,amount,date",
+        "details": []
+      },
+      "caseMatch": {
+        "ok": true,
+        "expected": "none/null",
+        "actual": "none/null",
+        "details": []
+      },
+      "primaryAction": {
+        "ok": true,
+        "expected": "create_vorgang",
+        "actual": "create_vorgang"
+      },
+      "alerts": {
+        "ok": true,
+        "expected": "—",
+        "actual": "—"
+      }
+    },
+    {
+      "documentId": "DOC-00017",
+      "status": "PASS",
+      "extractionMethod": "pdf_direct",
+      "ocrAttempted": false,
+      "classifiedKind": {
+        "expected": "eingangsrechnung",
+        "actual": "eingangsrechnung",
+        "ok": true
+      },
+      "family": {
+        "expected": "invoice_in",
+        "actual": "invoice_in",
+        "ok": true
+      },
+      "summary": {
+        "ok": true,
+        "expected": "family=invoice_in; facts=supplier,date",
+        "actual": "family=invoice_in; facts=supplier,amount,date",
+        "details": []
+      },
+      "caseMatch": {
+        "ok": true,
+        "expected": "none/null",
+        "actual": "none/null",
+        "details": []
+      },
+      "primaryAction": {
+        "ok": true,
+        "expected": "create_vorgang",
+        "actual": "create_vorgang"
+      },
+      "alerts": {
+        "ok": true,
+        "expected": "—",
+        "actual": "—"
+      }
+    },
+    {
+      "documentId": "DOC-00018",
+      "status": "PASS",
+      "extractionMethod": "pdf_direct",
+      "ocrAttempted": false,
+      "classifiedKind": {
+        "expected": "eingangsrechnung",
+        "actual": "eingangsrechnung",
+        "ok": true
+      },
+      "family": {
+        "expected": "invoice_in",
+        "actual": "invoice_in",
+        "ok": true
+      },
+      "summary": {
+        "ok": true,
+        "expected": "family=invoice_in; facts=supplier,date",
+        "actual": "family=invoice_in; facts=supplier,amount,date",
+        "details": []
+      },
+      "caseMatch": {
+        "ok": true,
+        "expected": "none/null",
+        "actual": "none/null",
+        "details": []
+      },
+      "primaryAction": {
+        "ok": true,
+        "expected": "create_vorgang",
+        "actual": "create_vorgang"
+      },
+      "alerts": {
+        "ok": true,
+        "expected": "—",
+        "actual": "—"
+      }
+    },
+    {
+      "documentId": "DOC-00019",
+      "status": "PASS",
+      "extractionMethod": "pdf_direct",
+      "ocrAttempted": false,
+      "classifiedKind": {
+        "expected": "fahrzeugversicherung",
+        "actual": "fahrzeugversicherung",
+        "ok": true
+      },
+      "family": {
+        "expected": "authority",
+        "actual": "authority",
+        "ok": true
+      },
+      "summary": {
+        "ok": true,
+        "expected": "family=authority; facts=authority,subject,reference",
+        "actual": "family=authority; facts=authority,subject,reference,amount",
+        "details": []
+      },
+      "caseMatch": {
+        "ok": true,
+        "expected": "none/null",
+        "actual": "none/null",
+        "details": []
+      },
+      "primaryAction": {
+        "ok": true,
+        "expected": "create_vorgang",
+        "actual": "create_vorgang"
+      },
+      "alerts": {
+        "ok": true,
+        "expected": "—",
+        "actual": "—"
+      }
+    },
+    {
+      "documentId": "DOC-00020",
+      "status": "PASS",
+      "extractionMethod": "pdf_direct",
+      "ocrAttempted": false,
+      "classifiedKind": {
+        "expected": "betriebshaftpflicht",
+        "actual": "betriebshaftpflicht",
+        "ok": true
+      },
+      "family": {
+        "expected": "authority",
+        "actual": "authority",
+        "ok": true
+      },
+      "summary": {
+        "ok": true,
+        "expected": "family=authority; facts=authority,subject",
+        "actual": "family=authority; facts=authority,subject,amount",
+        "details": []
+      },
+      "caseMatch": {
+        "ok": true,
+        "expected": "none/null",
+        "actual": "none/null",
+        "details": []
+      },
+      "primaryAction": {
+        "ok": true,
+        "expected": "create_vorgang",
+        "actual": "create_vorgang"
+      },
+      "alerts": {
+        "ok": true,
+        "expected": "—",
+        "actual": "—"
+      }
+    },
+    {
+      "documentId": "DOC-00021",
+      "status": "PASS",
+      "extractionMethod": "pdf_direct",
+      "ocrAttempted": false,
+      "classifiedKind": {
+        "expected": "leasingvertrag",
+        "actual": "leasingvertrag",
+        "ok": true
+      },
+      "family": {
+        "expected": "generic",
+        "actual": "generic",
+        "ok": true
+      },
+      "summary": {
+        "ok": true,
+        "expected": "family=generic; facts=sender,subject",
+        "actual": "family=generic; facts=sender,subject",
+        "details": []
+      },
+      "caseMatch": {
+        "ok": true,
+        "expected": "none/null",
+        "actual": "none/null",
+        "details": []
+      },
+      "primaryAction": {
+        "ok": true,
+        "expected": "create_vorgang",
+        "actual": "create_vorgang"
+      },
+      "alerts": {
+        "ok": true,
+        "expected": "—",
+        "actual": "—"
+      }
+    },
+    {
+      "documentId": "DOC-00022",
+      "status": "PASS",
+      "extractionMethod": "pdf_direct",
+      "ocrAttempted": false,
+      "classifiedKind": {
+        "expected": "tuev_bericht",
+        "actual": "tuev_bericht",
+        "ok": true
+      },
+      "family": {
+        "expected": "generic",
+        "actual": "generic",
+        "ok": true
+      },
+      "summary": {
+        "ok": true,
+        "expected": "family=generic; facts=sender,subject",
+        "actual": "family=generic; facts=sender,subject,amount",
+        "details": []
+      },
+      "caseMatch": {
+        "ok": true,
+        "expected": "none/null",
+        "actual": "none/null",
+        "details": []
+      },
+      "primaryAction": {
+        "ok": true,
+        "expected": "create_vorgang",
+        "actual": "create_vorgang"
+      },
+      "alerts": {
+        "ok": true,
+        "expected": "—",
+        "actual": "—"
+      }
+    },
+    {
+      "documentId": "DOC-00023",
+      "status": "PASS",
+      "extractionMethod": "pdf_direct",
+      "ocrAttempted": false,
+      "classifiedKind": {
+        "expected": "reparaturrechnung",
+        "actual": "reparaturrechnung",
+        "ok": true
+      },
+      "family": {
+        "expected": "invoice_in",
+        "actual": "invoice_in",
+        "ok": true
+      },
+      "summary": {
+        "ok": true,
+        "expected": "family=invoice_in; facts=supplier,date",
+        "actual": "family=invoice_in; facts=supplier,amount,date",
+        "details": []
+      },
+      "caseMatch": {
+        "ok": true,
+        "expected": "none/null",
+        "actual": "none/null",
+        "details": []
+      },
+      "primaryAction": {
+        "ok": true,
+        "expected": "create_vorgang",
+        "actual": "create_vorgang"
+      },
+      "alerts": {
+        "ok": true,
+        "expected": "—",
+        "actual": "—"
+      }
+    },
+    {
+      "documentId": "DOC-00024",
+      "status": "PASS",
+      "extractionMethod": "pdf_direct",
+      "ocrAttempted": false,
+      "classifiedKind": {
+        "expected": "arbeitsvertrag",
+        "actual": "arbeitsvertrag",
+        "ok": true
+      },
+      "family": {
+        "expected": "generic",
+        "actual": "generic",
+        "ok": true
+      },
+      "summary": {
+        "ok": true,
+        "expected": "family=generic; facts=subject",
+        "actual": "family=generic; facts=sender,subject",
+        "details": []
+      },
+      "caseMatch": {
+        "ok": true,
+        "expected": "none/null",
+        "actual": "none/null",
+        "details": []
+      },
+      "primaryAction": {
+        "ok": true,
+        "expected": "create_vorgang",
+        "actual": "create_vorgang"
+      },
+      "alerts": {
+        "ok": true,
+        "expected": "—",
+        "actual": "—"
+      }
+    },
+    {
+      "documentId": "DOC-00025",
+      "status": "PASS",
+      "extractionMethod": "pdf_direct",
+      "ocrAttempted": false,
+      "classifiedKind": {
+        "expected": "krankmeldung",
+        "actual": "krankmeldung",
+        "ok": true
+      },
+      "family": {
+        "expected": "generic",
+        "actual": "generic",
+        "ok": true
+      },
+      "summary": {
+        "ok": true,
+        "expected": "family=generic; facts=sender,subject",
+        "actual": "family=generic; facts=sender,subject",
+        "details": []
+      },
+      "caseMatch": {
+        "ok": true,
+        "expected": "none/null",
+        "actual": "none/null",
+        "details": []
+      },
+      "primaryAction": {
+        "ok": true,
+        "expected": "create_vorgang",
+        "actual": "create_vorgang"
+      },
+      "alerts": {
+        "ok": true,
+        "expected": "—",
+        "actual": "—"
+      }
+    },
+    {
+      "documentId": "DOC-00026",
+      "status": "PASS",
+      "extractionMethod": "pdf_direct",
+      "ocrAttempted": false,
+      "classifiedKind": {
+        "expected": "urlaubsantrag",
+        "actual": "urlaubsantrag",
+        "ok": true
+      },
+      "family": {
+        "expected": "generic",
+        "actual": "generic",
+        "ok": true
+      },
+      "summary": {
+        "ok": true,
+        "expected": "family=generic; facts=subject",
+        "actual": "family=generic; facts=sender,subject",
+        "details": []
+      },
+      "caseMatch": {
+        "ok": true,
+        "expected": "none/null",
+        "actual": "none/null",
+        "details": []
+      },
+      "primaryAction": {
+        "ok": true,
+        "expected": "create_vorgang",
+        "actual": "create_vorgang"
+      },
+      "alerts": {
+        "ok": true,
+        "expected": "—",
+        "actual": "—"
+      }
+    },
+    {
+      "documentId": "DOC-00027",
+      "status": "PASS",
+      "extractionMethod": "pdf_direct",
+      "ocrAttempted": false,
+      "classifiedKind": {
+        "expected": "lohnabrechnung",
+        "actual": "lohnabrechnung",
+        "ok": true
+      },
+      "family": {
+        "expected": "generic",
+        "actual": "generic",
+        "ok": true
+      },
+      "summary": {
+        "ok": true,
+        "expected": "family=generic; facts=sender,subject",
+        "actual": "family=generic; facts=sender,subject",
+        "details": []
+      },
+      "caseMatch": {
+        "ok": true,
+        "expected": "none/null",
+        "actual": "none/null",
+        "details": []
+      },
+      "primaryAction": {
+        "ok": true,
+        "expected": "create_vorgang",
+        "actual": "create_vorgang"
+      },
+      "alerts": {
+        "ok": true,
+        "expected": "—",
+        "actual": "—"
+      }
+    },
+    {
+      "documentId": "DOC-00028",
+      "status": "PASS",
+      "extractionMethod": "pdf_direct",
+      "ocrAttempted": false,
+      "classifiedKind": {
+        "expected": "handwerkskammer",
+        "actual": "handwerkskammer",
+        "ok": true
+      },
+      "family": {
+        "expected": "authority",
+        "actual": "authority",
+        "ok": true
+      },
+      "summary": {
+        "ok": true,
+        "expected": "family=authority; facts=authority,subject",
+        "actual": "family=authority; facts=authority,subject,reference",
+        "details": []
+      },
+      "caseMatch": {
+        "ok": true,
+        "expected": "none/null",
+        "actual": "none/null",
+        "details": []
+      },
+      "primaryAction": {
+        "ok": true,
+        "expected": "create_vorgang",
+        "actual": "create_vorgang"
+      },
+      "alerts": {
+        "ok": true,
+        "expected": "—",
+        "actual": "—"
+      }
+    },
+    {
+      "documentId": "DOC-00029",
+      "status": "PASS",
+      "extractionMethod": "pdf_direct",
+      "ocrAttempted": false,
+      "classifiedKind": {
+        "expected": "brief",
+        "actual": "brief",
+        "ok": true
+      },
+      "family": {
+        "expected": "letter",
+        "actual": "letter",
+        "ok": true
+      },
+      "summary": {
+        "ok": true,
+        "expected": "family=letter; facts=sender,subject",
+        "actual": "family=letter; facts=sender,subject",
+        "details": []
+      },
+      "caseMatch": {
+        "ok": true,
+        "expected": "none/null",
+        "actual": "none/null",
+        "details": []
+      },
+      "primaryAction": {
+        "ok": true,
+        "expected": "create_vorgang",
+        "actual": "create_vorgang"
+      },
+      "alerts": {
+        "ok": true,
+        "expected": "—",
+        "actual": "—"
+      }
+    },
+    {
+      "documentId": "DOC-00030",
+      "status": "PASS",
+      "extractionMethod": "pdf_direct",
+      "ocrAttempted": false,
+      "classifiedKind": {
+        "expected": "mahnung",
+        "actual": "mahnung",
+        "ok": true
+      },
+      "family": {
+        "expected": "invoice_in",
+        "actual": "invoice_in",
+        "ok": true
+      },
+      "summary": {
+        "ok": true,
+        "expected": "family=invoice_in; facts=supplier,date",
+        "actual": "family=invoice_in; facts=supplier,amount,date",
+        "details": []
+      },
+      "caseMatch": {
+        "ok": true,
+        "expected": "none/null",
+        "actual": "none/null",
+        "details": []
+      },
+      "primaryAction": {
+        "ok": true,
+        "expected": "create_vorgang",
+        "actual": "create_vorgang"
+      },
+      "alerts": {
+        "ok": true,
+        "expected": "—",
+        "actual": "—"
+      }
+    },
+    {
+      "documentId": "DOC-00031",
+      "status": "PASS",
+      "extractionMethod": "pdf_direct",
+      "ocrAttempted": false,
+      "classifiedKind": {
+        "expected": "brief",
+        "actual": "brief",
+        "ok": true
+      },
+      "family": {
+        "expected": "letter",
+        "actual": "letter",
+        "ok": true
+      },
+      "summary": {
+        "ok": true,
+        "expected": "family=letter; facts=sender,subject",
+        "actual": "family=letter; facts=sender,subject",
+        "details": []
+      },
+      "caseMatch": {
+        "ok": true,
+        "expected": "exact/PRJ-001",
+        "actual": "exact/PRJ-001",
+        "details": []
+      },
+      "primaryAction": {
+        "ok": true,
+        "expected": "open_vorgang",
+        "actual": "open_vorgang"
+      },
+      "alerts": {
+        "ok": true,
+        "expected": "—",
+        "actual": "—"
+      }
+    },
+    {
+      "documentId": "DOC-00032",
+      "status": "PASS",
+      "extractionMethod": "pdf_direct",
+      "ocrAttempted": false,
+      "classifiedKind": {
+        "expected": "gutschrift",
+        "actual": "gutschrift",
+        "ok": true
+      },
+      "family": {
+        "expected": "invoice_in",
+        "actual": "invoice_in",
+        "ok": true
+      },
+      "summary": {
+        "ok": true,
+        "expected": "family=invoice_in; facts=supplier,date",
+        "actual": "family=invoice_in; facts=supplier,amount,date",
+        "details": []
+      },
+      "caseMatch": {
+        "ok": true,
+        "expected": "multiple/null",
+        "actual": "multiple/null",
+        "details": []
+      },
+      "primaryAction": {
+        "ok": true,
+        "expected": "select_vorgang",
+        "actual": "select_vorgang"
+      },
+      "alerts": {
+        "ok": true,
+        "expected": "—",
+        "actual": "—"
+      }
+    },
+    {
+      "documentId": "DOC-00033",
+      "status": "PASS",
+      "extractionMethod": "pdf_direct",
+      "ocrAttempted": false,
+      "classifiedKind": {
+        "expected": "gutschrift",
+        "actual": "gutschrift",
+        "ok": true
+      },
+      "family": {
+        "expected": "invoice_in",
+        "actual": "invoice_in",
+        "ok": true
+      },
+      "summary": {
+        "ok": true,
+        "expected": "family=invoice_in; facts=date,site",
+        "actual": "family=invoice_in; facts=supplier,amount,date,site",
+        "details": []
+      },
+      "caseMatch": {
+        "ok": true,
+        "expected": "exact/PRJ-001",
+        "actual": "exact/PRJ-001",
+        "details": []
+      },
+      "primaryAction": {
+        "ok": true,
+        "expected": "open_vorgang",
+        "actual": "open_vorgang"
+      },
+      "alerts": {
+        "ok": true,
+        "expected": "—",
+        "actual": "—"
+      }
+    },
+    {
+      "documentId": "DOC-00034",
+      "status": "PASS",
+      "extractionMethod": "pdf_direct",
+      "ocrAttempted": false,
+      "classifiedKind": {
+        "expected": "sonstiges",
+        "actual": "sonstiges",
+        "ok": true
+      },
+      "family": {
+        "expected": "generic",
+        "actual": "generic",
+        "ok": true
+      },
+      "summary": {
+        "ok": true,
+        "expected": "family=generic; facts=subject",
+        "actual": "family=generic; facts=sender,subject",
+        "details": []
+      },
+      "caseMatch": {
+        "ok": true,
+        "expected": "none/null",
+        "actual": "none/null",
+        "details": []
+      },
+      "primaryAction": {
+        "ok": true,
+        "expected": "create_vorgang",
+        "actual": "create_vorgang"
+      },
+      "alerts": {
+        "ok": true,
+        "expected": "—",
+        "actual": "—"
+      }
+    },
+    {
+      "documentId": "DOC-00035",
+      "status": "PASS",
+      "extractionMethod": "pdf_direct",
+      "ocrAttempted": false,
+      "classifiedKind": {
+        "expected": "sonstiges",
+        "actual": "sonstiges",
+        "ok": true
+      },
+      "family": {
+        "expected": "generic",
+        "actual": "generic",
+        "ok": true
+      },
+      "summary": {
+        "ok": true,
+        "expected": "family=generic; facts=subject",
+        "actual": "family=generic; facts=sender,subject",
+        "details": []
+      },
+      "caseMatch": {
+        "ok": true,
+        "expected": "none/null",
+        "actual": "none/null",
+        "details": []
+      },
+      "primaryAction": {
+        "ok": true,
+        "expected": "create_vorgang",
+        "actual": "create_vorgang"
+      },
+      "alerts": {
+        "ok": true,
+        "expected": "—",
+        "actual": "—"
+      }
+    }
+  ],
+  "deviations": []
+}

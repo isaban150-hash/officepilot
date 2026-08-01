@@ -1,0 +1,9 @@
+{
+  "documentId": "DOC-00006",
+  "taxonomyTypeId": "DOCTYPE-019",
+  "documentType": "fuel_receipt",
+  "subtype": "tankbeleg",
+  "label": "Tankbeleg",
+  "classifiedKind": "tankbeleg",
+  "family": "tank"
+}

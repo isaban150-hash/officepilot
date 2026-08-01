@@ -1,0 +1,18 @@
+{
+  "id": "PRJ-004",
+  "companyId": "COMPANY-001",
+  "branchId": "BRANCH-001",
+  "customerId": "CUST-004",
+  "title": "Wohnpark Herford – Bauabschnitt A",
+  "siteName": "Wohnpark Herford – Bauabschnitt A",
+  "siteStreet": "Goebenstraße 8",
+  "siteZip": "32052",
+  "siteCity": "Herford",
+  "trade": "Sanitär",
+  "status": "in_progress",
+  "startDate": "2025-08-01",
+  "foremanEmployeeId": "EMP-010",
+  "timelineDocumentIds": [],
+  "notes": "TestWorld-Projekt 01C – noch ohne Dokumente",
+  "endDate": "2026-12-31"
+}

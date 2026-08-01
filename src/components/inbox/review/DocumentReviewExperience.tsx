@@ -9,6 +9,7 @@ import {
   isDocumentReviewComplete,
 } from '../../../services/documentReviewViewService';
 import { buildOperationalOverviewView } from '../../../services/operationalOverviewView';
+import { buildDocumentSummary } from '../../../services/documentSummary';
 import {
   buildDocumentWorkTruthConflictDisplayLines,
 } from '../../../services/documentWorkResultResolveService';
@@ -20,14 +21,16 @@ import type {
 } from '../../../types/models';
 import type { DocumentFieldFillConfirmRow } from '../../../types/documentFieldFillConfirm';
 import type { EnhancedDetectedOrderPosition } from '../../../types/documentIntelligence';
+import type { LetterExplanation } from '../../../services/letterExplanationService';
 import type { TranslationKey } from '../../../i18n';
+import type { DocumentSummaryActionId } from '../../../types/documentSummary';
 import { DocumentReviewChecks } from './DocumentReviewChecks';
 import { DocumentReviewHero } from './DocumentReviewHero';
 import { DocumentReviewRecommendations } from './DocumentReviewRecommendations';
 import { DocumentReviewSuccess } from './DocumentReviewSuccess';
 import { ReviewMoreOptionsShell } from './CollapsibleReviewSection';
 import { ContractOrderProposalPanel } from './ContractOrderProposalPanel';
-import { OperationalOverview } from './OperationalOverview';
+import { DocumentExperienceCard } from './DocumentExperienceCard';
 
 interface DocumentReviewExperienceProps {
   item: InboxItem;
@@ -39,13 +42,27 @@ interface DocumentReviewExperienceProps {
   onApplySuggestion: () => void;
   onCreateContractOrder?: (selectedPositions: EnhancedDetectedOrderPosition[]) => void;
   onDiscardContractProposal?: () => void;
+  /** Secondary inquiry from Auftragskarte — opens more options / communication. */
+  onContractInquiry?: () => void;
   isCreatingContractOrder?: boolean;
-  onOpenVorgang?: () => void;
+  /** Optional vorgang id from case match — caller navigates; no auto-link. */
+  onOpenVorgang?: (vorgangId?: string) => void;
   onOpenArchive?: () => void;
   onNextDocument: () => void;
+  /** Secondary: open vorgang link dialog (invoice/delivery). */
+  onLinkVorgang?: () => void;
+  /** Secondary: create task without full intake. */
+  onCreateTask?: () => void;
   moreOptionsContent: ReactNode;
-  /** Optional CTA rendered above „Weitere Optionen“ (e.g. archive import). */
+  /**
+   * @deprecated DOCUMENT-EXPERIENCE-02A — archive/actions must not sit above zone D.
+   * Prefer content inside Weitere Optionen (F).
+   */
   beforeMoreOptions?: ReactNode;
+  /** Zone E for Experience Card (Guidance / Letter). */
+  experienceDetailsExtra?: ReactNode;
+  /** Letter explanation for authority/brief Experience facts (builder input only). */
+  letterExplanation?: LetterExplanation | null;
   translate: (key: TranslationKey) => string;
   /** Session Fill-Confirm rows — same TruthView as Assist / Free-Question. */
   sessionFillConfirmRows?: DocumentFieldFillConfirmRow[] | null;
@@ -61,12 +78,17 @@ export function DocumentReviewExperience({
   onApplySuggestion,
   onCreateContractOrder,
   onDiscardContractProposal,
+  onContractInquiry,
   isCreatingContractOrder = false,
   onOpenVorgang,
   onOpenArchive,
   onNextDocument,
+  onLinkVorgang,
+  onCreateTask,
   moreOptionsContent,
   beforeMoreOptions = null,
+  experienceDetailsExtra = null,
+  letterExplanation = null,
   translate,
   sessionFillConfirmRows = null,
 }: DocumentReviewExperienceProps) {
@@ -79,53 +101,119 @@ export function DocumentReviewExperience({
     ? buildDocumentReviewSuccessSteps(executionResult)
     : [];
 
-  // Display truth (overlay + session Fill-Confirm). Actions still use live `workflow` only.
   const truth = buildDocumentWorkTruthViewForInboxItem({
     item,
     liveWorkflow: workflow,
     sessionFillConfirmRows,
   });
+  const displayBi = truth?.businessInterpretation ?? workflow.businessInterpretation;
+
+  const summary = buildDocumentSummary(item, workflow, {
+    translate,
+    displayBusinessInterpretation: displayBi,
+    letter: letterExplanation,
+  });
+
+  // Keep overview builder for Details enrichment / conflict lines (not first paint).
   const overview = buildOperationalOverviewView(workflow, {
     senderFallback: item.sender,
     inboxItem: item,
-    displayBusinessInterpretation:
-      truth?.businessInterpretation ?? workflow.businessInterpretation,
+    displayBusinessInterpretation: displayBi,
     unresolvedConflictLines: truth
       ? buildDocumentWorkTruthConflictDisplayLines(truth)
       : undefined,
-    // Plan preview always from live workflow (never from snapshot-only truth).
     includePlanPreview: true,
   });
 
   const primaryDisabled = !item.isAdvertisement && !workflow.companyRelevant;
 
-  const primaryLabel = item.isAdvertisement
-    ? translate('reviewWorkflow.action.reviewAdvertisement')
-    : translate('reviewWorkflow.action.applySuggestion');
-
-  const showLegacySummary = !overview.present;
   const showContractProposal = Boolean(workflow.contractOrderProposal) && !executionResult?.completed;
-  const showOverviewPrimary =
-    overview.present && !executionResult?.completed && !showContractProposal;
+  const showExperience =
+    !showContractProposal && !executionResult?.completed && summary.family !== 'contract';
+  const showLegacySummary =
+    !showContractProposal && !executionResult?.completed && !showExperience && !overview.present;
   const showLegacyPrimary =
-    !overview.present && !executionResult?.completed && !showContractProposal;
+    !showContractProposal && !executionResult?.completed && !showExperience && !overview.present;
+
+  const nextStepDetail = summary.details.find((d) => d.id === 'nextStep');
+
+  const detailsBody = (
+    <>
+      {nextStepDetail?.proseText ? (
+        <p data-testid="document-experience-next-step">
+          <strong>{translate('documentExperience.details.nextStep')}: </strong>
+          {nextStepDetail.proseText}
+        </p>
+      ) : null}
+      {overview.uncertaintyLines.length > 0 || overview.recognitionUncertain ? (
+        <ul data-testid="document-experience-detail-uncertainty">
+          {overview.recognitionUncertain ? (
+            <li>{translate('operationalOverview.uncertainty.recognition')}</li>
+          ) : null}
+          {overview.uncertaintyLines.map((line) => (
+            <li key={line}>{line}</li>
+          ))}
+        </ul>
+      ) : null}
+      {experienceDetailsExtra}
+    </>
+  );
+
+  const handleExperienceAction = (actionId: DocumentSummaryActionId) => {
+    if (actionId === 'later') {
+      onNextDocument();
+      return;
+    }
+    if (actionId === 'open_vorgang') {
+      const matchedId = summary.caseMatch?.matchedCaseId ?? item.vorgangId;
+      onOpenVorgang?.(matchedId);
+      return;
+    }
+    if (actionId === 'link_vorgang' || actionId === 'select_vorgang') {
+      onLinkVorgang?.();
+      return;
+    }
+    if (actionId === 'create_vorgang') {
+      onApplySuggestion();
+      return;
+    }
+    if (actionId === 'create_task') {
+      onCreateTask?.();
+      return;
+    }
+    // Existing intake / family primary path — no domain match writes here.
+    if (actionId === summary.primaryAction.id) {
+      onApplySuggestion();
+      return;
+    }
+    onApplySuggestion();
+  };
 
   return (
     <div className="document-review-experience" data-testid="document-review-experience">
-      {overview.present ? (
-        <OperationalOverview
-          view={overview}
+      {showExperience ? (
+        <DocumentExperienceCard
+          summary={summary}
           translate={translate}
-          primaryAction={
-            showOverviewPrimary
-              ? {
-                  label: primaryLabel,
-                  disabled: primaryDisabled,
-                  loading: isExecuting || isCreatingContractOrder,
-                  onClick: onApplySuggestion,
-                }
-              : null
-          }
+          onAction={handleExperienceAction}
+          actionUi={{
+            [summary.primaryAction.id]: {
+              disabled: primaryDisabled || !summary.primaryAction.enabled,
+              loading: isExecuting || isCreatingContractOrder,
+              testId: 'document-review-apply-button',
+            },
+            later: {
+              testId: 'document-experience-secondary-later',
+              variant: 'ghost',
+            },
+            link_vorgang: {
+              testId: 'document-experience-secondary-link_vorgang',
+            },
+            create_task: {
+              testId: 'document-experience-secondary-create_task',
+            },
+          }}
+          details={detailsBody}
         />
       ) : null}
 
@@ -153,6 +241,7 @@ export function DocumentReviewExperience({
           item={item}
           onConfirmImport={(selected) => onCreateContractOrder?.(selected)}
           onDiscard={onDiscardContractProposal}
+          onInquiry={onContractInquiry}
           onApplySuggestion={
             primaryDisabled
               ? undefined
@@ -162,7 +251,7 @@ export function DocumentReviewExperience({
           }
           isCreating={isCreatingContractOrder}
           isApplying={isExecuting || isCreatingContractOrder}
-          collapseUnderOperationalOverview={overview.present}
+          detailsExtra={experienceDetailsExtra}
         />
       ) : null}
 
@@ -185,7 +274,7 @@ export function DocumentReviewExperience({
             onClick={onApplySuggestion}
             data-testid="document-review-apply-button"
           >
-            {primaryLabel}
+            {translate('reviewWorkflow.action.applySuggestion')}
           </Button>
         </div>
       ) : null}

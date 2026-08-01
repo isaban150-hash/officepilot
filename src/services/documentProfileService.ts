@@ -13,6 +13,7 @@ import type {
   DocumentSenderCategory,
 } from '../types/documentProfile';
 import type { ClassifiedDocumentKind } from '../types/models';
+import { inferUnlabeledSenderFromText } from './documentFieldExtractionService';
 import type { ReceiptAnalysisPipelineResult } from './documentReceiptAnalysisPipelineService';
 
 export type ProfileDetectionResult = {
@@ -51,7 +52,7 @@ const BA_AUTHORITY_NAME_PATTERN =
   /\b(?:bundesagentur(?:\s+für\s+arbeit)?|(?:bundes)?agentur\s+für\s+arbeit|arbeitsagentur)\b/i;
 
 const STRONG_HEALTH_INSURANCE_CORRESPONDENCE_PATTERN =
-  /\bkrankenkasse\b|\bgesetzliche\s+krankenversicherung\b|(?:\baok\b|\bbarmer\b|\bdak\b|\bikk\b|techniker\s+kranken)(?:[\s\S]{0,80})(?:beitrag|mitglied|bescheid|mahnung|zahlungsaufforderung)/i;
+  /\bkrankenkasse\b|\bgesetzliche\s+krankenversicherung\b|(?:\baok\b|\bbarmer\b|\bdak\b|\bikk\b|techniker\s+kranken)(?:[\s\S]{0,220})(?:beitrag(?:snachweis)?|mitglied|bescheid|mahnung|zahlungsaufforderung)|\bbeitragsnachweis\b(?:[\s\S]{0,220})(?:\baok\b|\bbarmer\b|\bdak\b|\bikk\b|krankenkasse)/i;
 
 const EMPLOYMENT_FORM_PATTERN =
   /arbeitsbescheinigung|arbeitgeberbescheinigung|§\s*312|sgb\s*iii|beschäftigungsverhältnis/i;
@@ -280,7 +281,8 @@ function deriveSenderEntity(
   if (typeof labeled?.value === 'string' && labeled.value.trim()) {
     return labeled.value.trim();
   }
-  return undefined;
+  // Unlabeled letterhead / issuer line (same general heuristic as field extraction).
+  return inferUnlabeledSenderFromText(recognizedText);
 }
 
 function buildTopCandidates(

@@ -1,0 +1,12 @@
+{
+  "id": "SUP-022",
+  "companyId": "COMPANY-001",
+  "name": "Amtsgericht Lemgo",
+  "supplierType": "authority",
+  "street": "Rampendal 2",
+  "zip": "32657",
+  "city": "Lemgo",
+  "country": "DE",
+  "email": "sup-022@counterparty.example",
+  "notes": "Gericht"
+}

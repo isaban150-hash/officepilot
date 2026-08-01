@@ -1,0 +1,23 @@
+{
+  "documentId": "DOC-00032",
+  "family": "invoice_in",
+  "headline": "GC-Großhandel OWL – Gutschrift Retoure Fittinge",
+  "factOrder": [
+    "supplier",
+    "invoiceNumber",
+    "amount",
+    "date",
+    "deadline",
+    "site"
+  ],
+  "facts": [
+    {
+      "id": "supplier",
+      "value": "GC-Großhandel OWL GmbH"
+    },
+    {
+      "id": "date",
+      "value": "2026-02-05"
+    }
+  ]
+}

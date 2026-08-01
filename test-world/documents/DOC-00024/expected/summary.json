@@ -1,0 +1,18 @@
+{
+  "documentId": "DOC-00024",
+  "family": "generic",
+  "headline": "Cirmak Haustechnik · Arbeitsvertrag – Monteur",
+  "factOrder": [
+    "sender",
+    "subject",
+    "amount",
+    "deadline",
+    "site"
+  ],
+  "facts": [
+    {
+      "id": "subject",
+      "value": "Cirmak Haustechnik · Arbeitsvertrag – Monteur"
+    }
+  ]
+}

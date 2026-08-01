@@ -3,6 +3,8 @@ import type { CompanySetup } from '../../types/models';
 import { useAuth } from '../../context/AuthContext';
 import { AppProvider } from '../../context/AppContext';
 import { bootstrapBusinessState, isolateBusinessStateOnLogout } from '../../services/storage/storageBootstrapService';
+import { clearUiSessionSnapshot } from '../../services/uiSession/uiSessionStore';
+import { resetUiSessionLiveState } from '../../services/uiSession/uiSessionLiveState';
 import {
   bootstrapWorkspaceCloudSyncIfNeeded,
   resetWorkspaceCloudBootstrapForTests,
@@ -42,6 +44,8 @@ export function BusinessStateGate({ children }: BusinessStateGateProps) {
       if (bootstrappedUserRef.current && !nextUserId) {
         isolateBusinessStateOnLogout();
         resetCompanySession();
+        clearUiSessionSnapshot();
+        resetUiSessionLiveState();
         resetWorkspaceCloudBootstrapForTests();
         const guestResult = bootstrapBusinessState();
         if (cancelled) return;

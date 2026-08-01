@@ -165,11 +165,14 @@ function runProofSyncAfterVorgangLink(input: {
   step: 'create_vorgang' | 'link_vorgang';
   failedSteps: WorkflowExecutionFailure[];
   warnings?: WorkflowWarning[];
+  /** From processUploadedDocument — avoids a second CI pass on Smart Intake. */
+  precomputedIntelligence?: WorkflowResult['contractIntelligence'];
 }): InboxItem {
   const fresh = getInboxItemById(input.inboxItem.id) ?? input.inboxItem;
   const syncResult = syncContractProofRequirementsAfterVorgangLink({
     vorgangId: input.vorgangId,
     inboxItem: fresh,
+    precomputedIntelligence: input.precomputedIntelligence,
   });
 
   if (isContractProofSyncHardFailure(syncResult)) {
@@ -218,6 +221,7 @@ export function executeVorgangAtom(
       step: 'link_vorgang',
       failedSteps,
       warnings,
+      precomputedIntelligence: workflow.contractIntelligence,
     });
     return { item: fresh, vorgangId: linked.vorgang.id };
   }
@@ -244,6 +248,7 @@ export function executeVorgangAtom(
       step: 'create_vorgang',
       failedSteps,
       warnings,
+      precomputedIntelligence: workflow.contractIntelligence,
     });
     return { item: fresh, vorgangId: created.vorgang.id };
   }

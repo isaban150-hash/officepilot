@@ -1,0 +1,9 @@
+{
+  "documentId": "DOC-00003",
+  "taxonomyTypeId": "DOCTYPE-011",
+  "documentType": "incoming_invoice",
+  "subtype": "material",
+  "label": "Eingangsrechnung Material",
+  "classifiedKind": "eingangsrechnung",
+  "family": "invoice_in"
+}

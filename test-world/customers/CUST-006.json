@@ -1,0 +1,14 @@
+{
+  "id": "CUST-006",
+  "companyId": "COMPANY-001",
+  "name": "Industriepark Detmold West GmbH",
+  "customerType": "industrial",
+  "street": "Siemensstraße 40",
+  "zip": "32756",
+  "city": "Detmold",
+  "country": "DE",
+  "contactPerson": "Technikleitung",
+  "phone": "+49 5000 0000",
+  "email": "cust-006@kunde.example",
+  "notes": "TestWorld-Kunde"
+}

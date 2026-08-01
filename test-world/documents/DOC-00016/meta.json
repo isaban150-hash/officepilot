@@ -1,0 +1,27 @@
+{
+  "id": "DOC-00016",
+  "companyId": "COMPANY-001",
+  "projectId": null,
+  "supplierId": "SUP-007",
+  "taxonomyTypeId": "DOCTYPE-042",
+  "documentType": "utility",
+  "subtype": "wasser",
+  "title": "Stadtwerke Bad Salzuflen – Wasser-/Abwasserrechnung",
+  "receivedAt": "2026-02-14",
+  "lifecyclePhase": "firm",
+  "qualityTag": "clean",
+  "sourceKind": "pdf",
+  "suiteTags": [
+    "commit",
+    "release"
+  ],
+  "notes": "GOLD 02B: Wasser nur Firma.",
+  "expected": {
+    "classifiedKind": "rechnung",
+    "caseMatchStatus": "none",
+    "matchedProjectId": null,
+    "primaryActionId": "create_vorgang",
+    "alertIds": []
+  },
+  "sourceFile": "source.pdf"
+}

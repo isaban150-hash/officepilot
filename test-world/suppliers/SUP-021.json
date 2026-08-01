@@ -1,0 +1,12 @@
+{
+  "id": "SUP-021",
+  "companyId": "COMPANY-001",
+  "name": "Handwerkskammer Ostwestfalen-Lippe zu Bielefeld",
+  "supplierType": "authority",
+  "street": "Campus Handwerk 1",
+  "zip": "33609",
+  "city": "Bielefeld",
+  "country": "DE",
+  "email": "sup-021@counterparty.example",
+  "notes": "HWK – Beitrag/Mitgliedschaft"
+}

@@ -1,6 +1,7 @@
+import { useDocumentBlobDatabaseReset } from './test/documentBlobTestReset';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { DocumentUploadPage } from './pages/DocumentUploadPage';
@@ -9,8 +10,8 @@ import { TestProviders } from './test/testProviders';
 import { DEFAULT_SETUP } from './data/mockData';
 import { intakeDocumentFile } from './services/documentIntakeService';
 import { getInboxStoreSnapshot } from './services/inboxService';
+import { setHeicToConverterForTests } from './services/heicUploadNormalizeService';
 import { setImageOcrExtractorForTests } from './services/ocrDocumentService';
-import { resetTestStores } from './test/resetStores';
 
 const completeSetup = { ...DEFAULT_SETUP, setupComplete: true, setupVersion: 1 };
 
@@ -32,10 +33,15 @@ function renderUploadPage() {
   return { container, root };
 }
 
+useDocumentBlobDatabaseReset();
+
 describe('DOCUMENT-01', () => {
   beforeEach(() => {
-    resetTestStores();
     setImageOcrExtractorForTests(async () => ({ text: '', confidence: 0 }));
+  });
+
+  afterEach(() => {
+    setHeicToConverterForTests(null);
   });
 
   it('Upload-Seite rendert', () => {
@@ -71,12 +77,14 @@ describe('DOCUMENT-01', () => {
     }
   });
 
-  it('HEIC wird mit unsupported_photo_format abgelehnt', async () => {
+  it('HEIC wird akzeptiert und als JPEG in den Eingang übernommen', async () => {
+    setHeicToConverterForTests(async () => new Blob(['jpeg-bytes'], { type: 'image/jpeg' }));
+    setImageOcrExtractorForTests(async () => ({ text: 'Foto Text', confidence: 70 }));
     const file = new File(['heic'], 'iphone.heic', { type: 'image/heic' });
     const result = await intakeDocumentFile(file, { importSource: 'upload' });
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error).toBe('unsupported_photo_format');
+    expect(result.success).toBe(true);
+    if (result.success && !result.duplicate) {
+      expect(result.inboxItem.sourceFileName).toBe('iphone.jpg');
     }
   });
 

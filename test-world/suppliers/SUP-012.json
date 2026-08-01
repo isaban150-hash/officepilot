@@ -1,0 +1,10 @@
+{
+  "id": "SUP-012",
+  "companyId": "COMPANY-001",
+  "name": "BG BAU Bezirksverwaltung OWL",
+  "supplierType": "authority",
+  "city": "Bielefeld",
+  "country": "DE",
+  "email": "sup-012@counterparty.example",
+  "notes": "Berufsgenossenschaft Bau"
+}

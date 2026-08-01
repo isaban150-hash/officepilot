@@ -1,0 +1,18 @@
+{
+  "id": "PRJ-001",
+  "companyId": "COMPANY-001",
+  "branchId": "BRANCH-001",
+  "customerId": "CUST-001",
+  "title": "Sägewerk Ernst Flisch – Heizzentrale",
+  "siteName": "Sägewerk Ernst Flisch – Heizzentrale",
+  "siteStreet": "Werkstraße 12",
+  "siteZip": "32657",
+  "siteCity": "Lemgo",
+  "trade": "Heizung",
+  "status": "in_progress",
+  "startDate": "2025-09-01",
+  "foremanEmployeeId": "EMP-003",
+  "timelineDocumentIds": [],
+  "notes": "TestWorld-Projekt 01C – noch ohne Dokumente",
+  "endDate": "2026-06-30"
+}

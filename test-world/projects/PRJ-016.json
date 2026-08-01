@@ -1,0 +1,18 @@
+{
+  "id": "PRJ-016",
+  "companyId": "COMPANY-001",
+  "branchId": "BRANCH-001",
+  "customerId": "CUST-011",
+  "title": "Logistikzentrum Lage – Sanitärkern",
+  "siteName": "Logistikzentrum Lage – Sanitärkern",
+  "siteStreet": "Autobahnstraße 1",
+  "siteZip": "32791",
+  "siteCity": "Lage",
+  "trade": "Sanitär",
+  "status": "in_progress",
+  "startDate": "2026-01-10",
+  "foremanEmployeeId": "EMP-006",
+  "timelineDocumentIds": [],
+  "notes": "TestWorld-Projekt 01C – noch ohne Dokumente",
+  "endDate": "2026-10-31"
+}

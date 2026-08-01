@@ -1,0 +1,18 @@
+{
+  "id": "PRJ-006",
+  "companyId": "COMPANY-001",
+  "branchId": "BRANCH-001",
+  "customerId": "CUST-006",
+  "title": "Industriehalle Detmold",
+  "siteName": "Industriehalle Detmold",
+  "siteStreet": "Siemensstraße 40",
+  "siteZip": "32756",
+  "siteCity": "Detmold",
+  "trade": "Heizung",
+  "status": "archived",
+  "startDate": "2024-02-01",
+  "foremanEmployeeId": "EMP-003",
+  "timelineDocumentIds": [],
+  "notes": "TestWorld-Projekt 01C – noch ohne Dokumente",
+  "endDate": "2025-01-31"
+}

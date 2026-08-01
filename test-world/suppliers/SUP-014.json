@@ -1,0 +1,10 @@
+{
+  "id": "SUP-014",
+  "companyId": "COMPANY-001",
+  "name": "AOK NordWest",
+  "supplierType": "health_insurance",
+  "city": "Dortmund",
+  "country": "DE",
+  "email": "sup-014@counterparty.example",
+  "notes": "Krankenkasse"
+}

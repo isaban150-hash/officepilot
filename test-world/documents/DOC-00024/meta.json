@@ -1,0 +1,28 @@
+{
+  "id": "DOC-00024",
+  "companyId": "COMPANY-001",
+  "projectId": null,
+  "employeeId": "EMP-007",
+  "taxonomyTypeId": "DOCTYPE-051",
+  "documentType": "hr",
+  "subtype": "arbeitsvertrag",
+  "title": "Arbeitsvertrag – Monteur EMP-007",
+  "receivedAt": "2025-08-01",
+  "lifecyclePhase": "firm",
+  "qualityTag": "clean",
+  "sourceKind": "pdf",
+  "suiteTags": [
+    "smoke",
+    "commit",
+    "release"
+  ],
+  "notes": "GOLD 02B: HR nur Firma + Mitarbeiter. Kein Projekt/Kunde.",
+  "expected": {
+    "classifiedKind": "arbeitsvertrag",
+    "caseMatchStatus": "none",
+    "matchedProjectId": null,
+    "primaryActionId": "create_vorgang",
+    "alertIds": []
+  },
+  "sourceFile": "source.pdf"
+}

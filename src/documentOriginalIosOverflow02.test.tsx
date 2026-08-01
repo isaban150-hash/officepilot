@@ -1,3 +1,4 @@
+import { useDocumentBlobDatabaseReset } from './test/documentBlobTestReset';
 import { afterEach, describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -6,12 +7,9 @@ import { createRoot } from 'react-dom/client';
 import { act } from 'react';
 import { DocumentOriginalFilePanel } from './components/documents/DocumentOriginalFilePanel';
 import { t } from './i18n';
-import { resetTestStores } from './test/resetStores';
 import {
   resetDocumentFileStoreForTests,
-  storeDocumentFileFromCachedPayload,
-} from './services/documentFileStoreService';
-import { resetDocumentBlobDatabaseForTests } from './services/storage/documentBlobIndexedDbService';
+  storeDocumentFileFromCachedPayload } from './services/documentFileStoreService';
 
 const CSS_PATH = resolve(__dirname, 'styles/document-upload.css');
 const VIEWPORT = 390;
@@ -69,12 +67,12 @@ function installStyles(): HTMLStyleElement {
   return style;
 }
 
+useDocumentBlobDatabaseReset();
+
 describe('DOCUMENT-ORIGINAL-IOS-OVERFLOW-02', () => {
   afterEach(async () => {
     document.body.innerHTML = '';
-    resetTestStores();
     resetDocumentFileStoreForTests();
-    await resetDocumentBlobDatabaseForTests();
   });
 
   it('CSS sichert Flex-Kinder und Preview mit min-width:0 sowie width:100%', () => {
@@ -171,8 +169,7 @@ describe('DOCUMENT-ORIGINAL-IOS-OVERFLOW-02', () => {
         fileName: 'ios.pdf',
         mimeType: 'application/pdf',
         fileSize: bytes.byteLength,
-        bytes,
-      },
+        bytes },
       { lifecycleIntent: 'committed' },
     );
 
@@ -185,8 +182,7 @@ describe('DOCUMENT-ORIGINAL-IOS-OVERFLOW-02', () => {
       root.render(
         createElement(DocumentOriginalFilePanel, {
           fileRefId: stored.fileRef.id,
-          translate: (key) => t(key, 'de'),
-        }),
+          translate: (key) => t(key, 'de') }),
       );
     });
 

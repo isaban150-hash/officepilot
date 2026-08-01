@@ -87,7 +87,7 @@ describe('SyncPage', () => {
     expect(html).toContain('data-testid="sync-page"');
     expect(html).toContain('data-testid="sync-status-badge"');
     expect(html).toContain('data-testid="sync-outbox-counts"');
-    expect(html).toContain('Lokale Synchronisation vorbereitet.');
+    expect(html).toContain('Cloud-Synchronisation für Ihren Arbeitsbereich.');
     expect(html).toContain('Jetzt synchronisieren');
   });
 
@@ -107,10 +107,10 @@ describe('SyncPage', () => {
 
     mounted = renderSyncPage();
     expect(mounted.container.querySelector('[data-testid="sync-offline-hint"]')?.textContent).toContain(
-      'OfficePilot arbeitet lokal weiter.',
+      'Einige Funktionen wie KI, Synchronisation und Freigaben',
     );
     expect(mounted.container.querySelector('[data-testid="sync-no-cloud-hint"]')?.textContent).toContain(
-      'nicht automatisch mit der Cloud',
+      'Internetverbindung für KI-Funktionen',
     );
   });
 

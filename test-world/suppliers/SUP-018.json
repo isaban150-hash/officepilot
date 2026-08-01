@@ -1,0 +1,12 @@
+{
+  "id": "SUP-018",
+  "companyId": "COMPANY-001",
+  "name": "OWL Container & Entsorgung GmbH",
+  "supplierType": "disposal",
+  "city": "Bielefeld",
+  "country": "DE",
+  "email": "sup-018@counterparty.example",
+  "notes": "Entsorgung/Container",
+  "street": "Deponieweg 3",
+  "zip": "33609"
+}

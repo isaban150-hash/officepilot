@@ -1,3 +1,4 @@
+import { useDocumentBlobDatabaseReset } from '../test/documentBlobTestReset';
 /**
  * DUPLIKAT-ABLAGE-GATE-01 — Inbox-Match ≠ Archivdokument; use_existing / confirmFiling Gates.
  */
@@ -29,7 +30,6 @@ import {
   resolvePrimarySuggestedUserStorageDecision,
   validateUserStorageDecision,
 } from './userStorageDecisionService';
-import { resetTestStores } from '../test/resetStores';
 import type { CachedDocumentFilePayload } from './cachedDocumentFileService';
 import type { CompanyDocument, InboxItem } from '../types/models';
 
@@ -93,10 +93,11 @@ function openInbox(overrides: Partial<InboxItem> = {}): InboxItem {
   };
 }
 
+useDocumentBlobDatabaseReset();
+
 describe('DUPLIKAT-ABLAGE-GATE-01', () => {
   afterEach(() => {
     setPdfTextExtractorForTests(null);
-    resetTestStores();
   });
 
   it('Inbox-Match: kein use_existing in verfügbaren Entscheidungen', async () => {

@@ -1,0 +1,9 @@
+{
+  "documentId": "DOC-00005",
+  "taxonomyTypeId": "DOCTYPE-010",
+  "documentType": "delivery_note",
+  "subtype": "material",
+  "label": "Lieferschein Material",
+  "classifiedKind": "lieferschein",
+  "family": "delivery"
+}

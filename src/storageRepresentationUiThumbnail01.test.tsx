@@ -1,3 +1,4 @@
+import { useDocumentBlobDatabaseReset } from './test/documentBlobTestReset';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, createElement, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -6,15 +7,11 @@ import { useDocumentFileRepresentationObjectUrl } from './hooks/useDocumentFileR
 import { createDocumentFileRepresentationBinding } from './services/documentFileRepresentationBindingService';
 import {
   hydrateDocumentFileRepresentationBindingStore,
-  resetDocumentFileRepresentationBindingStoreForTests,
-} from './services/documentFileRepresentationBindingStoreService';
+  resetDocumentFileRepresentationBindingStoreForTests } from './services/documentFileRepresentationBindingStoreService';
 import * as representationReadService from './services/documentFileRepresentationReadService';
 import {
   resetDocumentFileStoreForTests,
-  storeDocumentFileFromCachedPayload,
-} from './services/documentFileStoreService';
-import { resetDocumentBlobDatabaseForTests } from './services/storage/documentBlobIndexedDbService';
-import { resetTestStores } from './test/resetStores';
+  storeDocumentFileFromCachedPayload } from './services/documentFileStoreService';
 import type { DocumentFileObjectUrlState } from './hooks/useDocumentFileObjectUrl';
 
 const DOC_A = 'doc-ui-thumb-a';
@@ -28,16 +25,14 @@ async function storeCommittedJpeg(fileName: string) {
       fileName,
       mimeType: 'image/jpeg',
       fileSize: JPEG_BYTES.byteLength,
-      bytes: JPEG_BYTES,
-    },
+      bytes: JPEG_BYTES },
     { lifecycleIntent: 'committed' },
   );
 }
 
 function HookProbe({
   documentId,
-  onState,
-}: {
+  onState }: {
   documentId: string | undefined;
   onState: (state: DocumentFileObjectUrlState) => void;
 }) {
@@ -55,12 +50,12 @@ async function flushUi(): Promise<void> {
   });
 }
 
+useDocumentBlobDatabaseReset();
+
 afterEach(async () => {
   vi.restoreAllMocks();
-  resetTestStores();
   resetDocumentFileStoreForTests();
   resetDocumentFileRepresentationBindingStoreForTests();
-  await resetDocumentBlobDatabaseForTests();
 });
 
 describe('STORAGE-REPRESENTATION-UI-THUMBNAIL-01', () => {
@@ -70,8 +65,7 @@ describe('STORAGE-REPRESENTATION-UI-THUMBNAIL-01', () => {
       createDocumentFileRepresentationBinding({
         documentId: DOC_A,
         kind: 'thumbnail',
-        fileRefId: stored.fileRef.id,
-      }),
+        fileRefId: stored.fileRef.id }),
     ]);
 
     const container = document.createElement('div');
@@ -82,8 +76,7 @@ describe('STORAGE-REPRESENTATION-UI-THUMBNAIL-01', () => {
       root.render(
         createElement(DocumentCardThumbnail, {
           documentId: DOC_A,
-          placeholder: PLACEHOLDER,
-        }),
+          placeholder: PLACEHOLDER }),
       );
     });
     await flushUi();
@@ -115,8 +108,7 @@ describe('STORAGE-REPRESENTATION-UI-THUMBNAIL-01', () => {
       root.render(
         createElement(DocumentCardThumbnail, {
           documentId: DOC_A,
-          placeholder: PLACEHOLDER,
-        }),
+          placeholder: PLACEHOLDER }),
       );
     });
     await flushUi();
@@ -141,8 +133,7 @@ describe('STORAGE-REPRESENTATION-UI-THUMBNAIL-01', () => {
       createDocumentFileRepresentationBinding({
         documentId: DOC_A,
         kind: 'thumbnail',
-        fileRefId: stored.fileRef.id,
-      }),
+        fileRefId: stored.fileRef.id }),
     ]);
 
     const revokeSpy = vi.spyOn(URL, 'revokeObjectURL');
@@ -154,8 +145,7 @@ describe('STORAGE-REPRESENTATION-UI-THUMBNAIL-01', () => {
       root.render(
         createElement(DocumentCardThumbnail, {
           documentId: DOC_A,
-          placeholder: PLACEHOLDER,
-        }),
+          placeholder: PLACEHOLDER }),
       );
     });
     await vi.waitFor(() => {
@@ -194,8 +184,7 @@ describe('STORAGE-REPRESENTATION-UI-THUMBNAIL-01', () => {
             binding: createDocumentFileRepresentationBinding({
               documentId: DOC_A,
               kind: 'thumbnail',
-              fileRefId: 'file-a',
-            }),
+              fileRefId: 'file-a' }),
             fileRef: {
               id: 'file-a',
               originalFileName: 'a.jpg',
@@ -206,10 +195,8 @@ describe('STORAGE-REPRESENTATION-UI-THUMBNAIL-01', () => {
               localDataKey: 'file-a',
               createdAt: '2026-07-20T00:00:00.000Z',
               lifecycleStatus: 'committed' as const,
-              committedAt: '2026-07-20T00:00:01.000Z',
-            },
-            blob: new Blob([JPEG_BYTES], { type: 'image/jpeg' }),
-          });
+              committedAt: '2026-07-20T00:00:01.000Z' },
+            blob: new Blob([JPEG_BYTES], { type: 'image/jpeg' }) });
         }
         return Object.freeze({ kind: 'missing_binding' as const });
       },
@@ -226,8 +213,7 @@ describe('STORAGE-REPRESENTATION-UI-THUMBNAIL-01', () => {
           documentId: DOC_A,
           onState: (state) => {
             states.push(state);
-          },
-        }),
+          } }),
       );
     });
     await flushUi();
@@ -238,8 +224,7 @@ describe('STORAGE-REPRESENTATION-UI-THUMBNAIL-01', () => {
           documentId: DOC_B,
           onState: (state) => {
             states.push(state);
-          },
-        }),
+          } }),
       );
     });
     await flushUi();

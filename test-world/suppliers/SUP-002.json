@@ -1,0 +1,12 @@
+{
+  "id": "SUP-002",
+  "companyId": "COMPANY-001",
+  "name": "SanitärPartner Lemgo KG",
+  "supplierType": "wholesale",
+  "city": "Lemgo",
+  "country": "DE",
+  "email": "sup-002@counterparty.example",
+  "notes": "TestWorld-Counterparty",
+  "street": "Gewerbepark 9",
+  "zip": "32657"
+}

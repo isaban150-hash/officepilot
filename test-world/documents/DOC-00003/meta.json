@@ -1,0 +1,29 @@
+{
+  "id": "DOC-00003",
+  "companyId": "COMPANY-001",
+  "projectId": "PRJ-001",
+  "customerId": "CUST-001",
+  "supplierId": "SUP-001",
+  "taxonomyTypeId": "DOCTYPE-011",
+  "documentType": "incoming_invoice",
+  "subtype": "material",
+  "title": "Eingangsrechnung Material – GC-Großhandel OWL",
+  "receivedAt": "2026-01-20",
+  "lifecyclePhase": "execution",
+  "qualityTag": "clean",
+  "sourceKind": "pdf",
+  "suiteTags": [
+    "smoke",
+    "commit",
+    "release"
+  ],
+  "notes": "GOLD: Material-ER. Counterparty SUP-001. Baustellenbezug PRJ-001 / CUST-001.",
+  "expected": {
+    "classifiedKind": "eingangsrechnung",
+    "caseMatchStatus": "multiple",
+    "matchedProjectId": null,
+    "primaryActionId": "select_vorgang",
+    "alertIds": []
+  },
+  "sourceFile": "source.pdf"
+}

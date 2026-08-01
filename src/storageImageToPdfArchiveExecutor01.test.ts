@@ -1,4 +1,5 @@
 import { importInboxDocumentForTests } from './test/confirmFilingDecisionForTests';
+import { useDocumentBlobDatabaseReset } from './test/documentBlobTestReset';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as persistenceService from './services/persistenceService';
 import { createDocumentFileRepresentationBinding } from './services/documentFileRepresentationBindingService';
@@ -24,7 +25,6 @@ import {
 import { hydrateInboxStore } from './services/inboxService';
 import { withNewEntitySync } from './services/sync/syncMetaService';
 import { createAuftragInboxItem } from './test/fixtures';
-import { resetTestStores } from './test/resetStores';
 import {
   IMAGE_TO_PDF_PAGE_HEIGHT_PT,
   IMAGE_TO_PDF_PAGE_WIDTH_PT,
@@ -141,10 +141,11 @@ async function prepareDocumentWithRaster(
   return source;
 }
 
+useDocumentBlobDatabaseReset();
+
 afterEach(() => {
   vi.restoreAllMocks();
   setImageToPdfWriteForTests(null);
-  resetTestStores();
   resetDocumentFileStoreForTests();
   resetDocumentFileRepresentationBindingStoreForTests();
 });

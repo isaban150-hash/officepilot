@@ -1,0 +1,9 @@
+{
+  "documentId": "DOC-00019",
+  "taxonomyTypeId": "DOCTYPE-045",
+  "documentType": "vehicle_document",
+  "subtype": "kfz_versicherung",
+  "label": "Kfz-Versicherung",
+  "classifiedKind": "fahrzeugversicherung",
+  "family": "authority"
+}

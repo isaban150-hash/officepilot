@@ -18,7 +18,6 @@ import {
 import { hydrateInboxStore } from './services/inboxService';
 import { withNewEntitySync } from './services/sync/syncMetaService';
 import { createAuftragInboxItem } from './test/fixtures';
-import { resetTestStores } from './test/resetStores';
 import type { DocumentFileRef } from './types/documentFileRef';
 import type { CompanyDocument } from './types/models';
 
@@ -65,9 +64,7 @@ function sampleDocument(id: string, fileRefId: string): CompanyDocument {
   );
 }
 
-afterEach(() => {
-  resetTestStores();
-  resetDocumentFileStoreForTests();
+afterEach(() => {  resetDocumentFileStoreForTests();
   resetDocumentFileRepresentationBindingStoreForTests();
 });
 

@@ -1,0 +1,9 @@
+{
+  "documentId": "DOC-00007",
+  "taxonomyTypeId": "DOCTYPE-020",
+  "documentType": "hotel_invoice",
+  "subtype": "hotel",
+  "label": "Hotelrechnung",
+  "classifiedKind": "eingangsrechnung",
+  "family": "invoice_in"
+}

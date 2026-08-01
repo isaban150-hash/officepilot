@@ -1,0 +1,21 @@
+{
+  "documentId": "DOC-00031",
+  "family": "letter",
+  "headline": "Amtsgericht Lemgo · Ladung zum Termin / Hinweis – Heizzentrale",
+  "factOrder": [
+    "sender",
+    "subject",
+    "deadline",
+    "demand"
+  ],
+  "facts": [
+    {
+      "id": "sender",
+      "value": "Amtsgericht Lemgo"
+    },
+    {
+      "id": "subject",
+      "value": "Amtsgericht Lemgo · Ladung zum Termin / Hinweis – Heizzentrale"
+    }
+  ]
+}

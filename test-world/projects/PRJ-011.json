@@ -1,0 +1,18 @@
+{
+  "id": "PRJ-011",
+  "companyId": "COMPANY-001",
+  "branchId": "BRANCH-001",
+  "customerId": "CUST-001",
+  "title": "Sägewerk Ernst Flisch – Absaugung Halle 2",
+  "siteName": "Sägewerk Ernst Flisch – Absaugung Halle 2",
+  "siteStreet": "Werkstraße 12",
+  "siteZip": "32657",
+  "siteCity": "Lemgo",
+  "trade": "Lüftung",
+  "status": "commissioned",
+  "startDate": "2026-02-01",
+  "foremanEmployeeId": "EMP-005",
+  "timelineDocumentIds": [],
+  "notes": "TestWorld-Projekt 01C – noch ohne Dokumente",
+  "endDate": "2026-09-30"
+}

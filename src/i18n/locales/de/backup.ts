@@ -1,7 +1,7 @@
 export const deBackup = {
   'backup.title': 'Datensicherung',
   'backup.hint':
-    'Deine Daten liegen derzeit nur in diesem Browser. Am besten täglich am Ende des Arbeitstags eine Datensicherung herunterladen.',
+    'Zusätzlich zur Cloud-Synchronisation empfiehlt sich täglich am Ende des Arbeitstags eine ZIP-Datensicherung herunterzuladen.',
   'backup.download': 'Datensicherung herunterladen',
   'backup.loading': 'Datensicherung wird erstellt…',
   'backup.success': 'Datensicherung wurde heruntergeladen.',

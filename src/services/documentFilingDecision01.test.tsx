@@ -5,7 +5,6 @@ import { MemoryRouter } from 'react-router-dom';
 import { AppProvider } from '../context/AppContext';
 import { DocumentFilingDecisionPanel } from '../components/documents/DocumentFilingDecisionPanel';
 import { DEFAULT_SETUP } from '../data/mockData';
-import { resetTestStores } from '../test/resetStores';
 import { isCustomerDocumentKind } from './documentClassificationCatalog';
 import {
   buildDocumentFilingDecisionDraft,
@@ -110,7 +109,6 @@ describe('DOCUMENT-FILING-DECISION-01 / 01A', () => {
 
   beforeEach(() => {
     localStorage.clear();
-    resetTestStores();
     hydrateDocumentStore([]);
     hydrateInboxStore([]);
   });

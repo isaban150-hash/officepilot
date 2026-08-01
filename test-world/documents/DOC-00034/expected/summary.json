@@ -1,0 +1,18 @@
+{
+  "documentId": "DOC-00034",
+  "family": "generic",
+  "headline": "GEWINNSPIEL",
+  "factOrder": [
+    "sender",
+    "subject",
+    "amount",
+    "deadline",
+    "site"
+  ],
+  "facts": [
+    {
+      "id": "subject",
+      "value": "GEWINNSPIEL"
+    }
+  ]
+}

@@ -14,12 +14,25 @@ describe('REAL-DOCUMENT-TEST-FOUNDATION-01A — Stable-Pipeline Document Cases',
     hydrateVorgangStore([]);
   });
 
-  const cases = listDocumentCases().filter((c) =>
+  /**
+   * Goldpfad-Cases (WV/ER/FA/BG/LS) werden in reference-tests erneut über
+   * Stable-Pipeline + Journey abgesichert — hier nur Non-Gold-Cases.
+   */
+  const GOLD_PATH_CASE_IDS = new Set([
+    'WV-LV-01',
+    'ER-01',
+    'FA-FRIST-01',
+    'BG-SOKA-01',
+    'LS-01',
+  ]);
+
+  const allStableCases = listDocumentCases().filter((c) =>
     c.scenario.layers.includes('stable-pipeline'),
   );
+  const cases = allStableCases.filter((c) => !GOLD_PATH_CASE_IDS.has(c.caseId));
 
   it('registriert die erwarteten Referenzfälle', () => {
-    const ids = cases.map((c) => c.caseId).sort();
+    const ids = allStableCases.map((c) => c.caseId).sort();
     expect(ids).toEqual(
       [
         'BANK-RLS-01',
@@ -27,6 +40,7 @@ describe('REAL-DOCUMENT-TEST-FOUNDATION-01A — Stable-Pipeline Document Cases',
         'ER-01',
         'FA-FRIST-01',
         'HOTEL-01',
+        'LS-01',
         'MAIL-TERMIN-01',
         'UNSURE-01',
         'VS-BEITRAG-01',

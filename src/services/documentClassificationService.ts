@@ -54,11 +54,43 @@ const INVOICE_KINDS = new Set<ClassifiedDocumentKind>([
   'gutschrift',
 ]);
 
+/** Specific invoice subtypes evaluated on the strong-invoice fast path (before generic ER). */
+const INVOICE_FAST_PATH_KINDS = new Set<ClassifiedDocumentKind>([
+  ...INVOICE_KINDS,
+  'reparaturrechnung',
+]);
+
 const CONTRACT_PAYMENT_TERMS = /schlussrechnung|abschlagsrechnung|teilrechnung/i;
+
+/** Utility / telecom / hotel invoice titles — strong even without Rechnungsnummer. */
+const SECTOR_INVOICE_TITLE =
+  /(?:strom|gas|wasser|abwasser|energie|fernwärme|fernwaerme|mobilfunk|festnetz|internet|hotel|material)rechnung/i;
+const SECTOR_INVOICE_ISSUER =
+  /\b(?:stadtwerke|versorger|energieversorger|wasserwerke|telekom|vodafone|\bo2\b|1\s*&\s*1|congstar|hotel)\b/i;
 
 function hasStrongInvoiceSignals(haystack: string): boolean {
   if (/mahnung|zahlungserinnerung|inkasso/.test(haystack)) {
     return false;
+  }
+  if (SECTOR_INVOICE_TITLE.test(haystack)) {
+    return true;
+  }
+  if (SECTOR_INVOICE_ISSUER.test(haystack) && /\brechnung\b/.test(haystack)) {
+    return true;
+  }
+  if (/\b(?:ausgangsrechnung|eingangsrechnung|honorarrechnung|werkstattrechnung|reparaturrechnung)\b/i.test(haystack)) {
+    return true;
+  }
+  // Numbered progress/final invoices — not payment-term prose ("Schlussrechnung nach Abnahme").
+  if (/\b(?:abschlagsrechnung|schlussrechnung|teilrechnung)\s*(?:nr\.?|nummer|#)\s*[a-z0-9]/i.test(haystack)) {
+    return true;
+  }
+  // "Rechnung RE-2026-11842" / "Rechnung Nr. …" without the label "Rechnungsnummer"
+  if (/\brechnung\s+(?:nr\.?|nummer)?\s*[a-z0-9][\w./-]{2,}/i.test(haystack)) {
+    return true;
+  }
+  if (/\brechnung\b/i.test(haystack) && /(?:netto|ust|mwst|umsatzsteuer).*(?:brutto|gesamt)/i.test(haystack)) {
+    return true;
   }
   const invoiceMarkers = [
     /rechnungsnummer/i,
@@ -103,10 +135,25 @@ function hasBillOfQuantitiesSignals(
   );
 }
 
+/** True when the document itself is an invoice, not merely mentions invoice terms. */
+function isInvoiceDocumentTitle(haystack: string): boolean {
+  if (/\b(?:ausgangsrechnung|eingangsrechnung|honorarrechnung|werkstattrechnung|reparaturrechnung)\b/i.test(haystack)) {
+    return true;
+  }
+  return /\b(?:abschlagsrechnung|schlussrechnung|teilrechnung)\s*(?:nr\.?|nummer|#)\s*[a-z0-9]/i.test(
+    haystack,
+  );
+}
+
 function detectContractPriorityKind(
   haystack: string,
   pageTexts?: DocumentClassificationInput['pageTexts'],
 ): DetectionResult | null {
+  // Invoices that only *reference* a Werkvertrag must not become contracts.
+  if (isInvoiceDocumentTitle(haystack)) {
+    return null;
+  }
+
   if (!hasContractPrioritySignals(haystack, pageTexts)) return null;
 
   if (/subunternehmervertrag|subunternehmer/i.test(haystack)) {
@@ -136,12 +183,53 @@ function detectContractPriorityKind(
 function shouldSkipInvoiceRule(kind: ClassifiedDocumentKind, haystack: string): boolean {
   if (!INVOICE_KINDS.has(kind)) return false;
   if (hasStrongInvoiceSignals(haystack)) return false;
-  if (/eingangsrechnung|ausgangsrechnung|rechnungsnummer|materialrechnung|hotelrechnung|gutschrift/i.test(haystack)) {
+  if (
+    /eingangsrechnung|ausgangsrechnung|rechnungsnummer|materialrechnung|hotelrechnung|honorarrechnung|gutschrift|stromrechnung|gasrechnung|wasserrechnung|abwasserrechnung|energierechnung|mobilfunkrechnung|festnetzrechnung/i.test(
+      haystack,
+    )
+  ) {
     return false;
   }
   if (CONTRACT_PAYMENT_TERMS.test(haystack) && hasContractPrioritySignals(haystack)) return true;
   if (kind === 'rechnung' && /werkvertrag|leistungsverzeichnis|auftraggeber/i.test(haystack)) return true;
   return !hasStrongInvoiceSignals(haystack);
+}
+
+/** Delivery-note refs on invoices must not beat the invoice itself. */
+function shouldSkipDeliveryNoteRule(kind: ClassifiedDocumentKind, haystack: string): boolean {
+  if (kind !== 'lieferschein') return false;
+  if (hasStrongInvoiceSignals(haystack)) return true;
+  return (
+    /\brechnung\b/i.test(haystack) && /(?:netto|brutto|ust|zahlungsziel|\bre-\d)/i.test(haystack)
+  );
+}
+
+/** Payroll line-items on fee/advisor invoices must not become lohnabrechnung. */
+function shouldSkipPayrollRule(kind: ClassifiedDocumentKind, haystack: string): boolean {
+  if (kind !== 'lohnabrechnung') return false;
+  if (/\bhonorarrechnung\b/i.test(haystack)) return true;
+  return (
+    /\b(?:steuerberater|steuerberatung|buchführung|buchhaltung)\b/i.test(haystack) &&
+    /\brechnung\b/i.test(haystack) &&
+    /(?:netto|brutto|ust)/i.test(haystack)
+  );
+}
+
+/** Generic "Schreiben" must not beat named Krankenkasse correspondence. */
+function shouldSkipGenericBriefRule(kind: ClassifiedDocumentKind, haystack: string): boolean {
+  if (kind !== 'brief') return false;
+  return /\b(?:aok|barmer|dak|ikk|knappschaft|pflegekasse|krankenkasse|techniker\s+kranken)\b/i.test(
+    haystack,
+  );
+}
+
+/** Generic Prüfbericht must not beat HU/AU / TÜV vehicle reports. */
+function shouldSkipGenericPruefberichtRule(kind: ClassifiedDocumentKind, haystack: string): boolean {
+  if (kind !== 'pruefprotokoll') return false;
+  return (
+    /(?:tüv|tuev|hauptuntersuchung|\bhu\s*\/\s*au\b|\bnächste\s+hu\b)/i.test(haystack) &&
+    /(?:prüfbericht|fahrzeug|kennzeichen|\bhu\b|\bau\b)/i.test(haystack)
+  );
 }
 
 /** Skip legacy Mahnung/ZE when BA/employment docs lack a real payment demand. */
@@ -218,16 +306,25 @@ export function detectClassifiedKindWithReason(input: DocumentClassificationInpu
   }
 
   if (hasStrongInvoiceSignals(haystack)) {
-    for (const rule of CLASSIFICATION_RULES) {
-      if (!INVOICE_KINDS.has(rule.kind)) continue;
-      if (rule.pattern.test(haystack)) {
-        return { kind: rule.kind, reasonKey: rule.reasonKey };
+    // Contract docs with LV prices / payment-term prose must not take the invoice fast path.
+    const contractDoc =
+      hasContractPrioritySignals(haystack, input.pageTexts) && !isInvoiceDocumentTitle(haystack);
+    if (!contractDoc) {
+      for (const rule of CLASSIFICATION_RULES) {
+        if (!INVOICE_FAST_PATH_KINDS.has(rule.kind)) continue;
+        if (rule.pattern.test(haystack)) {
+          return { kind: rule.kind, reasonKey: rule.reasonKey };
+        }
       }
     }
   }
 
   for (const rule of CLASSIFICATION_RULES) {
     if (shouldSkipInvoiceRule(rule.kind, haystack)) continue;
+    if (shouldSkipDeliveryNoteRule(rule.kind, haystack)) continue;
+    if (shouldSkipPayrollRule(rule.kind, haystack)) continue;
+    if (shouldSkipGenericBriefRule(rule.kind, haystack)) continue;
+    if (shouldSkipGenericPruefberichtRule(rule.kind, haystack)) continue;
     if (shouldSkipPaymentRule(rule.kind, haystack)) continue;
     if (shouldSkipHealthInsuranceRule(rule.kind, haystack)) continue;
     if (rule.pattern.test(haystack)) {

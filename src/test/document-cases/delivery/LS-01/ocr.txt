@@ -1,0 +1,12 @@
+Lieferschein
+Lieferschein Nr. LS-2026-0142
+Lieferant: Sanitär Großhandel Nord GmbH
+Empfänger: Mustermann Sanitär GmbH
+Baustelle: Hauptstr. 12 Berlin
+Datum: 12.03.2026
+Lieferdatum: 12.03.2026
+
+Geliefert: Kupferrohr 15 mm — Menge: 12 Meter
+Geliefert: Fittinge Messing — Menge: 8 Stück
+
+Hinweis: Materiallieferung ohne Zahlungsanspruch.

@@ -1,0 +1,21 @@
+{
+  "documentId": "DOC-00006",
+  "family": "tank",
+  "headline": "Tankbeleg Aral Station Nord – LIP-CH 1001",
+  "factOrder": [
+    "station",
+    "date",
+    "amount",
+    "receipt"
+  ],
+  "facts": [
+    {
+      "id": "station",
+      "value": "Aral Station Nord"
+    },
+    {
+      "id": "date",
+      "value": "2026-02-10"
+    }
+  ]
+}

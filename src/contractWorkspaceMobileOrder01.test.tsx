@@ -101,9 +101,7 @@ function assertOrder(html: string, earlier: string, later: string) {
 }
 
 describe('CONTRACT-WORKSPACE-MOBILE-ORDER-01', () => {
-  beforeEach(() => {
-    resetTestStores();
-    resetDeferredWorkflowAnalysisCacheForTests();
+  beforeEach(() => {    resetDeferredWorkflowAnalysisCacheForTests();
     hydrateCompanyProfileStore(testProfile);
     hydrateVorgangStore([]);
   });
@@ -118,20 +116,25 @@ describe('CONTRACT-WORKSPACE-MOBILE-ORDER-01', () => {
     const html = renderDetail(item.id);
 
     expect(html).toContain('contract-order-proposal');
+    expect(html).toContain('data-testid="auftragskarte"');
     expect(html).toContain('data-testid="contract-workspace-summary"');
-    assertOrder(html, 'data-testid="contract-workspace-summary"', 'data-testid="document-free-question-panel"');
-    assertOrder(html, 'data-testid="document-free-question-panel"', 'data-testid="ablage-original-file"');
-    assertOrder(html, 'data-testid="document-assistant-panel"', 'data-testid="contract-workspace-summary"');
+    // UX-02: no document-assistant hero above the Auftragskarte.
+    expect(html).not.toContain('data-testid="document-assistant-panel"');
+    assertOrder(html, 'data-testid="auftragskarte"', 'data-testid="ablage-original-file"');
+    assertOrder(html, 'data-testid="ablage-original-file"', 'data-testid="document-free-question-panel"');
   });
 
-  it('Ohne Proposal: Review/Overview vor Free Question und Original', () => {
+  it('Ohne Proposal: Experience-Card vor Free Question und Original', () => {
     const item = createNonContractItem();
     hydrateInboxStore([item]);
     const html = renderDetail(item.id);
 
     expect(html).not.toContain('contract-order-proposal');
-    assertOrder(html, 'data-testid="document-review-experience"', 'data-testid="document-free-question-panel"');
+    // DOCUMENT-EXPERIENCE-02B: shared Experience Card; no Assistant hero.
+    expect(html).toContain('data-testid="document-experience-card"');
+    expect(html).not.toContain('data-testid="document-assistant-panel"');
+    expect(html).not.toContain('data-testid="operational-overview"');
+    assertOrder(html, 'data-testid="document-experience-card"', 'data-testid="document-free-question-panel"');
     assertOrder(html, 'data-testid="document-free-question-panel"', 'data-testid="ablage-original-file"');
-    assertOrder(html, 'data-testid="document-assistant-panel"', 'data-testid="document-review-experience"');
   });
 });

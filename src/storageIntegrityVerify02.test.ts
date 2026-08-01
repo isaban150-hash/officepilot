@@ -1,3 +1,4 @@
+import { useDocumentBlobDatabaseReset } from './test/documentBlobTestReset';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createElement } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -12,22 +13,18 @@ import {
   hydrateDocumentFileStore,
   resetDocumentFileStoreForTests,
   storeDocumentFileFromCachedPayload,
-  verifyDocumentFileIntegrity,
-} from './services/documentFileStoreService';
+  verifyDocumentFileIntegrity } from './services/documentFileStoreService';
 import { intakeCachedDocumentFile } from './services/documentIntakeService';
 import {
   confirmPendingDocumentIntake,
-  processDocumentFileForPreview,
-} from './services/pendingDocumentIntakeService';
+  processDocumentFileForPreview } from './services/pendingDocumentIntakeService';
 import { getInboxStoreSnapshot } from './services/inboxService';
 import { setPdfTextExtractorForTests } from './services/uploadTextExtractionService';
 import { setImageOcrExtractorForTests } from './services/ocrDocumentService';
-import { resetTestStores } from './test/resetStores';
 import * as blobDbService from './services/storage/documentBlobIndexedDbService';
 import {
   hasDocumentBlob,
   readDocumentBlob,
-  resetDocumentBlobDatabaseForTests,
   saveDocumentBlob,
 } from './services/storage/documentBlobIndexedDbService';
 import type { CachedDocumentFilePayload } from './services/cachedDocumentFileService';
@@ -43,22 +40,21 @@ function createPayload(
     fileName,
     mimeType,
     fileSize: bytes.byteLength,
-    bytes,
-  };
+    bytes };
 }
 
 function sampleBytes(marker: string): Uint8Array {
   return new TextEncoder().encode(`%PDF-1.4\n${marker}\n%%EOF`);
 }
 
+useDocumentBlobDatabaseReset();
+
 describe('STORAGE-INTEGRITY-VERIFY-02', () => {
   afterEach(async () => {
     setPdfTextExtractorForTests(null);
     setImageOcrExtractorForTests(null);
     vi.restoreAllMocks();
-    resetTestStores();
     resetDocumentFileStoreForTests();
-    await resetDocumentBlobDatabaseForTests();
   });
 
   it('erfolgreicher Write + Readback + Hash + Größe', async () => {
@@ -67,8 +63,7 @@ describe('STORAGE-INTEGRITY-VERIFY-02', () => {
 
     const result = await intakeCachedDocumentFile(payload, {
       importSource: 'upload',
-      userDecision: 'save_permanently',
-    });
+      userDecision: 'save_permanently' });
     expect(result.success).toBe(true);
     if (!result.success || result.duplicate) return;
 
@@ -91,8 +86,7 @@ describe('STORAGE-INTEGRITY-VERIFY-02', () => {
     });
 
     const result = await intakeCachedDocumentFile(payload, {
-      userDecision: 'save_permanently',
-    });
+      userDecision: 'save_permanently' });
     expect(result.success).toBe(false);
     if (result.success) return;
     expect(result.error).toBe('blob_missing_after_write');
@@ -110,13 +104,11 @@ describe('STORAGE-INTEGRITY-VERIFY-02', () => {
       return realSave({
         ...input,
         blob: new Blob([corrupted], { type: input.mimeType }),
-        fileSize: corrupted.byteLength,
-      });
+        fileSize: corrupted.byteLength });
     });
 
     const result = await intakeCachedDocumentFile(payload, {
-      userDecision: 'save_permanently',
-    });
+      userDecision: 'save_permanently' });
     expect(result.success).toBe(false);
     if (result.success) return;
     expect(result.error).toBe('blob_size_mismatch');
@@ -135,13 +127,11 @@ describe('STORAGE-INTEGRITY-VERIFY-02', () => {
       return realSave({
         ...input,
         blob: new Blob([sameLength], { type: input.mimeType }),
-        fileSize: sameLength.byteLength,
-      });
+        fileSize: sameLength.byteLength });
     });
 
     const result = await intakeCachedDocumentFile(payload, {
-      userDecision: 'save_permanently',
-    });
+      userDecision: 'save_permanently' });
     expect(result.success).toBe(false);
     if (result.success) return;
     expect(result.error).toBe('blob_hash_mismatch');
@@ -175,8 +165,7 @@ describe('STORAGE-INTEGRITY-VERIFY-02', () => {
     expect(firstPreview.success).toBe(true);
     if (!firstPreview.success) return;
     const first = await confirmPendingDocumentIntake(firstPreview.pending, {
-      userDecision: 'save_permanently',
-    });
+      userDecision: 'save_permanently' });
     expect(first.success).toBe(true);
     if (!first.success || first.duplicate) return;
 
@@ -184,8 +173,7 @@ describe('STORAGE-INTEGRITY-VERIFY-02', () => {
     expect(secondPreview.success).toBe(true);
     if (!secondPreview.success) return;
     const second = await confirmPendingDocumentIntake(secondPreview.pending, {
-      userDecision: 'save_duplicate_anyway',
-    });
+      userDecision: 'save_duplicate_anyway' });
     expect(second.success).toBe(true);
     if (!second.success || second.duplicate) return;
 
@@ -197,8 +185,7 @@ describe('STORAGE-INTEGRITY-VERIFY-02', () => {
   it('temp und committed verwenden denselben Integrity-Gate', async () => {
     setImageOcrExtractorForTests(async () => ({
       text: 'Baustellenfoto Rohbau',
-      confidence: 80,
-    }));
+      confidence: 80 }));
     const bytes = new TextEncoder().encode('temp-gate-photo');
     const preview = await processDocumentFileForPreview(
       new File([bytes], 'temp.jpg', { type: 'image/jpeg' }),
@@ -207,8 +194,7 @@ describe('STORAGE-INTEGRITY-VERIFY-02', () => {
     if (!preview.success) return;
 
     const tempResult = await confirmPendingDocumentIntake(preview.pending, {
-      userDecision: 'keep_temporarily',
-    });
+      userDecision: 'keep_temporarily' });
     expect(tempResult.success).toBe(true);
     if (!tempResult.success || tempResult.duplicate) return;
     expect(tempResult.fileRef.lifecycleStatus).toBe('temp');
@@ -230,12 +216,10 @@ describe('STORAGE-INTEGRITY-VERIFY-02', () => {
 
     const upload = await confirmPendingDocumentIntake(uploadPreview.pending, {
       importSource: 'upload',
-      userDecision: 'save_permanently',
-    });
+      userDecision: 'save_permanently' });
     const scan = await confirmPendingDocumentIntake(scanPreview.pending, {
       importSource: 'scan',
-      userDecision: 'save_permanently',
-    });
+      userDecision: 'save_permanently' });
     expect(upload.success).toBe(true);
     expect(scan.success).toBe(true);
     if (!upload.success || upload.duplicate || !scan.success || scan.duplicate) return;
@@ -254,8 +238,7 @@ describe('STORAGE-INTEGRITY-VERIFY-02', () => {
       localDataKey: 'file-ref-missing-blob',
       createdAt: '2026-07-15T10:00:00.000Z',
       lifecycleStatus: 'committed',
-      committedAt: '2026-07-15T10:00:00.000Z',
-    };
+      committedAt: '2026-07-15T10:00:00.000Z' };
     hydrateDocumentFileStore([ref], {});
     expect(await hasDocumentBlob(ref.id)).toBe(false);
 
@@ -268,8 +251,7 @@ describe('STORAGE-INTEGRITY-VERIFY-02', () => {
         createElement(DocumentOriginalFilePanel, {
           fileRefId: ref.id,
           translate: (key) => t(key, 'de'),
-          testId: 'integrity-panel',
-        }),
+          testId: 'integrity-panel' }),
       );
     });
 
@@ -290,15 +272,13 @@ describe('STORAGE-INTEGRITY-VERIFY-02', () => {
   it('keine automatische Löschung durch expiresAt', async () => {
     setImageOcrExtractorForTests(async () => ({
       text: 'Baustellenfoto Rohbau',
-      confidence: 80,
-    }));
+      confidence: 80 }));
     const preview = await processDocumentFileForPreview(
       new File([new TextEncoder().encode('expire-meta')], 'expire.jpg', { type: 'image/jpeg' }),
     );
     if (!preview.success) return;
     const result = await confirmPendingDocumentIntake(preview.pending, {
-      userDecision: 'keep_temporarily',
-    });
+      userDecision: 'keep_temporarily' });
     if (!result.success || result.duplicate) return;
 
     expect(result.fileRef.expiresAt).toBeDefined();

@@ -1,0 +1,27 @@
+{
+  "documentId": "DOC-00003",
+  "family": "invoice_in",
+  "headline": "Eingangsrechnung Material – GC-Großhandel OWL",
+  "factOrder": [
+    "supplier",
+    "invoiceNumber",
+    "amount",
+    "date",
+    "deadline",
+    "site"
+  ],
+  "facts": [
+    {
+      "id": "supplier",
+      "value": "GC-Großhandel OWL GmbH"
+    },
+    {
+      "id": "date",
+      "value": "2026-01-20"
+    },
+    {
+      "id": "site",
+      "value": "Werkstraße 12, Lemgo"
+    }
+  ]
+}

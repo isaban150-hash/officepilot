@@ -1,0 +1,58 @@
+{
+  "caseId": "LS-01",
+  "kind": "delivery-note",
+  "documentCaseId": "LS-01",
+  "damagePrevented": [
+    "Auftrag falsch zugeordnet",
+    "Mengen still geändert",
+    "Positionen überschrieben",
+    "Rechnung beeinflusst",
+    "Nachtrag automatisch erzeugt",
+    "Dokument nicht archiviert",
+    "Dokumentverknüpfung verloren",
+    "Lieferschein in der UI nicht sichtbar"
+  ],
+  "layers": ["stable-pipeline", "delivery-journey", "ui-visibility"],
+  "deliveryJourney": {
+    "companyName": "Mustermann Sanitär GmbH",
+    "classifiedKindAllowed": ["lieferschein"],
+    "supplierContains": "Sanitär Großhandel",
+    "deliveryNoteNumberContains": "LS-2026-0142",
+    "deliveryDateContains": "12.03.2026",
+    "baustelleContains": "Hauptstr. 12",
+    "vorgangId": "v-ls-01",
+    "vorgangTitleContains": "LS-01",
+    "positionDescriptionContains": ["Kupferrohr", "Fittinge"],
+    "quantityHintsContains": ["12 Meter", "8 Stück"],
+    "originalPositionId": "op-ls-01-copper",
+    "originalPlannedQuantity": 20,
+    "requireArchive": true,
+    "requireVorgangLink": true,
+    "requireConfirmFirst": true,
+    "forbidPlanChange": true,
+    "forbidInvoiceChange": true,
+    "forbidQuantityChange": true,
+    "forbidAmendment": true,
+    "forbidBillingPrep": true,
+    "forbidExpense": true
+  },
+  "deliveryUiVisibility": {
+    "overviewVisible": true,
+    "documentKindVisible": true,
+    "deliveryPrimaryCaseVisible": true,
+    "supplierVisible": true,
+    "deliveryDateVisible": true,
+    "orderVisible": true,
+    "positionHintsVisible": true,
+    "quantityHintsVisible": true,
+    "understandingPanelVisible": true,
+    "archiveVisible": true,
+    "orderLinkVisible": true
+  },
+  "knownGaps": [
+    "Gelieferte Zeilen sind noch nicht als BI-facts.positions / eigene Lieferschein-Positions-UI modelliert — Goldpfad prüft OCR-Mengen, Materialwirkung und unveränderte Planmengen.",
+    "Menge: wird produktiv nicht aus OCR in ExtractedDocumentFields gemappt; Journey hebt den ersten OCR-Mengenhinweis in recognizedData (wie BI-Unit-Test).",
+    "LV-ähnliche Pos.-Tabellen im OCR können CI reviewRequired auslösen — Fixture nutzt bewusst 'Geliefert:'-Zeilen.",
+    "OrderSummaryPanel zeigt Auftragsmetriken; Positionsbeschreibung erscheint in Overview/Understanding über Baustelle/Lieferant/Datum-Anker."
+  ]
+}

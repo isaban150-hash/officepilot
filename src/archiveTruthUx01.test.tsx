@@ -118,7 +118,36 @@ function unmount(mount: Mount) {
   mount.container.remove();
 }
 
+async function openMoreOptions(container: HTMLElement): Promise<void> {
+  if (container.querySelector('[data-testid="document-review-more-content"]')) return;
+  const toggle = container.querySelector(
+    '[data-testid="document-review-more-toggle"]',
+  ) as HTMLButtonElement | null;
+  if (!toggle) throw new Error('more-options toggle missing');
+  await act(async () => {
+    toggle.click();
+  });
+  await act(async () => {
+    await Promise.resolve();
+  });
+  const archiveToggle = container.querySelector(
+    '[data-testid="review-section-toggle-archive"]',
+  ) as HTMLButtonElement | null;
+  if (
+    archiveToggle &&
+    !container.querySelector('[data-testid="review-section-content-archive"]')
+  ) {
+    await act(async () => {
+      archiveToggle.click();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+  }
+}
+
 async function waitForPrimaryCta(container: HTMLElement): Promise<HTMLButtonElement> {
+  await openMoreOptions(container);
   for (let i = 0; i < 40; i += 1) {
     const button = container.querySelector(
       '[data-testid="inbox-import-to-archive-primary-button"]',
@@ -132,9 +161,7 @@ async function waitForPrimaryCta(container: HTMLElement): Promise<HTMLButtonElem
 }
 
 describe('ARCHIVE-TRUTH-UX-01', () => {
-  beforeEach(() => {
-    resetTestStores();
-    resetDeferredWorkflowAnalysisCacheForTests();
+  beforeEach(() => {    resetDeferredWorkflowAnalysisCacheForTests();
     hydrateCompanyProfileStore(testProfile);
     hydrateDocumentStore([]);
   });
@@ -156,10 +183,10 @@ describe('ARCHIVE-TRUTH-UX-01', () => {
       mount.container.querySelector('[data-testid="review-section-content-archive"]'),
     ).toBeTruthy();
     expect(
-      mount.container.querySelector('[data-testid="inbox-import-to-archive"]'),
+      mount.container.querySelector('[data-testid="inbox-import-to-archive-primary"]'),
     ).toBeTruthy();
     expect(
-      mount.container.querySelector('[data-testid="inbox-import-to-archive-primary"]'),
+      mount.container.querySelector('[data-testid="inbox-import-to-archive-primary-button"]'),
     ).toBeTruthy();
     unmount(mount);
   });

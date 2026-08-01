@@ -1,0 +1,27 @@
+{
+  "id": "DOC-00035",
+  "companyId": "COMPANY-001",
+  "projectId": null,
+  "taxonomyTypeId": "DOCTYPE-074",
+  "documentType": "marketing",
+  "subtype": "newsletter",
+  "title": "Newsletter – Branchenportal Handwerk OWL",
+  "receivedAt": "2026-03-26",
+  "lifecyclePhase": "firm",
+  "qualityTag": "clean",
+  "sourceKind": "pdf",
+  "suiteTags": [
+    "commit",
+    "release",
+    "matching"
+  ],
+  "notes": "GOLD 02B: Newsletter unzugeordnet (Taxonomie-Extend DOCTYPE-074).",
+  "expected": {
+    "classifiedKind": "sonstiges",
+    "caseMatchStatus": "none",
+    "matchedProjectId": null,
+    "primaryActionId": "create_vorgang",
+    "alertIds": []
+  },
+  "sourceFile": "source.pdf"
+}

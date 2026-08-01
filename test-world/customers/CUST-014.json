@@ -1,0 +1,14 @@
+{
+  "id": "CUST-014",
+  "companyId": "COMPANY-001",
+  "name": "Praxis Dr. Vogt",
+  "customerType": "business",
+  "street": "Lange Str. 40",
+  "zip": "32657",
+  "city": "Lemgo",
+  "country": "DE",
+  "contactPerson": "Dr. Vogt",
+  "phone": "+49 5000 0000",
+  "email": "cust-014@kunde.example",
+  "notes": "TestWorld-Kunde"
+}

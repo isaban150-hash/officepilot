@@ -1,0 +1,21 @@
+{
+  "documentId": "DOC-00029",
+  "family": "letter",
+  "headline": "Kanzlei Weber & Partner · Anwaltliches Schreiben — Forderungsangelegenheit",
+  "factOrder": [
+    "sender",
+    "subject",
+    "deadline",
+    "demand"
+  ],
+  "facts": [
+    {
+      "id": "sender",
+      "value": "Kanzlei Weber & Partner"
+    },
+    {
+      "id": "subject",
+      "value": "Kanzlei Weber & Partner · Anwaltliches Schreiben — Forderungsangelegenheit"
+    }
+  ]
+}

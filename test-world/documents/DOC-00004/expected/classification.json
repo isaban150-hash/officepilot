@@ -1,0 +1,9 @@
+{
+  "documentId": "DOC-00004",
+  "taxonomyTypeId": "DOCTYPE-014",
+  "documentType": "outgoing_invoice",
+  "subtype": "abschlag",
+  "label": "Ausgangsrechnung Abschlag",
+  "classifiedKind": "ausgangsrechnung",
+  "family": "invoice_out"
+}

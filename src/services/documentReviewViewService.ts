@@ -2,8 +2,9 @@ import { formatPaperFilingInstruction } from './paperFolderService';
 import {
   buildPresentationChecks,
   buildPresentationContext,
-  isUnknownPresentationValue,
 } from './documentResultPresentationService';
+import { buildDetailDocumentSummary } from './documentSummaryPresentation';
+import { getDocumentDisplayLabelKey } from './documentDisplayLabelService';
 import type {
   DocumentAiAction,
   InboxItem,
@@ -11,6 +12,8 @@ import type {
   WorkflowResultExecution,
 } from '../types/models';
 import type { TranslationKey } from '../i18n';
+import { t } from '../i18n';
+import { getCachedSetup } from './persistenceService';
 
 export const MAX_REVIEW_RECOMMENDATIONS = 6;
 
@@ -37,30 +40,25 @@ export interface DocumentReviewSuccessStepView {
 }
 
 
-function isUnknown(value?: string | null): boolean {
-  return isUnknownPresentationValue(value);
-}
-
-function resolveContext(item: InboxItem, workflow: WorkflowResult): {
+function resolveContextFromSummary(
+  item: InboxItem,
+  workflow: WorkflowResult,
+): {
   labelKey: TranslationKey;
   value: string;
 } {
-  const summary = workflow.documentUnderstanding;
-  const customer = summary?.customer ?? item.recognizedData.Kunde;
-  const site = summary?.constructionSite ?? item.recognizedData.Baustelle ?? item.vorgangTitle;
-
-  if (!isUnknown(customer)) {
-    return { labelKey: 'reviewWorkflow.hero.customer', value: customer!.trim() };
-  }
-  if (!isUnknown(site)) {
-    return { labelKey: 'reviewWorkflow.hero.site', value: site!.trim() };
-  }
-  if (
-    !isUnknown(item.sender) &&
-    item.sender !== 'Absender nicht eindeutig erkannt.' &&
-    item.sender !== 'Unbekannter Absender'
-  ) {
-    return { labelKey: 'reviewWorkflow.hero.sender', value: item.sender.trim() };
+  const lang = getCachedSetup()?.language ?? 'de';
+  const translate = (key: TranslationKey) => t(key, lang);
+  const documentSummary = buildDetailDocumentSummary(item, workflow, { translate, language: lang });
+  const preferred = ['customer', 'supplier', 'authority', 'sender', 'station', 'project', 'site'];
+  for (const id of preferred) {
+    const fact = documentSummary.facts.find((f) => f.id === id && f.value.trim());
+    if (!fact) continue;
+    if (id === 'customer') return { labelKey: 'reviewWorkflow.hero.customer', value: fact.value };
+    if (id === 'site' || id === 'project') {
+      return { labelKey: 'reviewWorkflow.hero.site', value: fact.value };
+    }
+    return { labelKey: 'reviewWorkflow.hero.sender', value: fact.value };
   }
 
   return { labelKey: 'reviewWorkflow.hero.unknown', value: '' };
@@ -71,10 +69,11 @@ export function buildDocumentReviewHero(
   workflow: WorkflowResult,
 ): DocumentReviewHeroView {
   const classifiedKind = workflow.classifiedKind;
-  const context = resolveContext(item, workflow);
+  const context = resolveContextFromSummary(item, workflow);
+  const documentTypeKey = getDocumentDisplayLabelKey(classifiedKind, item.documentType);
 
   return {
-    documentTypeKey: `classifiedKind.${classifiedKind}` as TranslationKey,
+    documentTypeKey,
     contextLabelKey: context.labelKey,
     contextValue: context.value,
     introKey: item.isAdvertisement

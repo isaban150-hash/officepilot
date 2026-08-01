@@ -1,0 +1,14 @@
+{
+  "id": "CUST-018",
+  "companyId": "COMPANY-001",
+  "name": "Café am Kurpark",
+  "customerType": "business",
+  "street": "Parkstraße 1",
+  "zip": "32105",
+  "city": "Bad Salzuflen",
+  "country": "DE",
+  "contactPerson": "Inhaber",
+  "phone": "+49 5000 0000",
+  "email": "cust-018@kunde.example",
+  "notes": "no project"
+}

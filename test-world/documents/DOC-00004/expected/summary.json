@@ -1,0 +1,26 @@
+{
+  "documentId": "DOC-00004",
+  "family": "invoice_out",
+  "headline": "Ausgangsrechnung Abschlag 1 – Sägewerk Ernst Flisch",
+  "factOrder": [
+    "customer",
+    "invoiceNumber",
+    "amount",
+    "date",
+    "vorgang"
+  ],
+  "facts": [
+    {
+      "id": "customer",
+      "value": "Sägewerk Ernst Flisch GmbH"
+    },
+    {
+      "id": "date",
+      "value": "2026-02-28"
+    },
+    {
+      "id": "vorgang",
+      "value": "Sägewerk Ernst Flisch – Heizzentrale"
+    }
+  ]
+}

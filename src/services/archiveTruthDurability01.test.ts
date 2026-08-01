@@ -30,7 +30,6 @@ import { buildDocumentAiContextFromDocument } from './document/documentAiContext
 import * as persistenceService from './persistenceService';
 import { confirmFilingDecisionForTests } from '../test/confirmFilingDecisionForTests';
 import { createAuftragInboxItem } from '../test/fixtures';
-import { resetTestStores } from '../test/resetStores';
 import { setWorkspace } from './workspace/workspaceStore';
 import {
   DOCUMENT_WORK_RESULT_ANALYSIS_VERSION,
@@ -81,9 +80,7 @@ function archiveFromInbox(item: InboxItem): CompanyDocument {
 }
 
 describe('ARCHIVE-TRUTH-DURABILITY-01', () => {
-  beforeEach(() => {
-    resetTestStores();
-    setWorkspace({
+  beforeEach(() => {    setWorkspace({
       id: 'ws-archive-truth',
       name: 'Archive Truth WS',
       createdAt: '2026-01-01T00:00:00.000Z',

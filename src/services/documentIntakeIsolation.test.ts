@@ -1,3 +1,4 @@
+import { useDocumentBlobDatabaseReset } from '../test/documentBlobTestReset';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { CachedDocumentFilePayload } from './cachedDocumentFileService';
 import { intakeCachedDocumentFile } from './documentIntakeService';
@@ -11,7 +12,6 @@ import {
   harvestPdfLiteralStringsFromBinary,
   setPdfTextExtractorForTests,
 } from './uploadTextExtractionService';
-import { resetTestStores } from '../test/resetStores';
 import { setImageOcrExtractorForTests } from './ocrDocumentService';
 
 const INVOICE_TEXT = `
@@ -48,11 +48,12 @@ function installPdfTextRouter(): void {
   });
 }
 
+useDocumentBlobDatabaseReset();
+
 describe('P1-DOCUMENT-UPLOAD-ISOLATION-01', () => {
   afterEach(() => {
     setPdfTextExtractorForTests(null);
     setImageOcrExtractorForTests(null);
-    resetTestStores();
   });
 
   it('reproduces whole-file binary harvest leaking ghost literals', () => {

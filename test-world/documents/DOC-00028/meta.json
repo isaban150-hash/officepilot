@@ -1,0 +1,28 @@
+{
+  "id": "DOC-00028",
+  "companyId": "COMPANY-001",
+  "projectId": null,
+  "supplierId": "SUP-021",
+  "taxonomyTypeId": "DOCTYPE-026",
+  "documentType": "authority_letter",
+  "subtype": "hwk",
+  "title": "HWK OWL – Beitragsbescheid 2026",
+  "receivedAt": "2026-01-28",
+  "lifecyclePhase": "firm",
+  "qualityTag": "clean",
+  "sourceKind": "pdf",
+  "suiteTags": [
+    "smoke",
+    "commit",
+    "release"
+  ],
+  "notes": "GOLD 02B: HWK nur Firma.",
+  "expected": {
+    "classifiedKind": "handwerkskammer",
+    "caseMatchStatus": "none",
+    "matchedProjectId": null,
+    "primaryActionId": "create_vorgang",
+    "alertIds": []
+  },
+  "sourceFile": "source.pdf"
+}

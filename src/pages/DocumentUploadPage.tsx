@@ -298,7 +298,7 @@ export function DocumentUploadPage() {
           <input
             ref={inputRef}
             type="file"
-            accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
+            accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif"
             className="document-upload-dropzone__input"
             data-testid="document-upload-input"
             onChange={onInputChange}

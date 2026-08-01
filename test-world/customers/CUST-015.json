@@ -1,0 +1,14 @@
+{
+  "id": "CUST-015",
+  "companyId": "COMPANY-001",
+  "name": "Sägewerk Ernst Flisch & Partner GmbH",
+  "customerType": "industrial",
+  "street": "Werkstraße 14",
+  "zip": "32657",
+  "city": "Lemgo",
+  "country": "DE",
+  "contactPerson": "M. Flisch",
+  "phone": "+49 5000 0000",
+  "email": "cust-015@kunde.example",
+  "notes": "MATCHING-STRESS vs CUST-001"
+}

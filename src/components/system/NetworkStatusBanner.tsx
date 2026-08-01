@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { t } from '../../i18n';
 
 export function NetworkStatusBanner() {
   const [offline, setOffline] = useState(() =>
@@ -20,7 +21,7 @@ export function NetworkStatusBanner() {
 
   return (
     <div className="network-status-banner" role="alert" data-testid="network-error-banner">
-      Keine Internetverbindung. Bitte prüfen Sie Ihre Verbindung und versuchen Sie es erneut.
+      {t('network.offlineBanner')}
     </div>
   );
 }

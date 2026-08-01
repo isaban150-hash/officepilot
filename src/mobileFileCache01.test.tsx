@@ -1,3 +1,4 @@
+import { useDocumentBlobDatabaseReset } from './test/documentBlobTestReset';
 import { describe, expect, it, afterEach, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -21,7 +22,6 @@ import {
   setImageOcrExtractorForTests,
 } from './services/ocrDocumentService';
 import { t } from './i18n';
-import { resetTestStores } from './test/resetStores';
 import * as persistenceService from './services/persistenceService';
 
 const AOK_TEXT = 'AOK Beitragsbescheid 250,00 EUR Frist 15.08.2026';
@@ -51,11 +51,12 @@ async function loadSingleUsePayload(content: string, name: string, type: string)
   return loaded.payload;
 }
 
+useDocumentBlobDatabaseReset();
+
 describe('MOBILE-FILE-CACHE-01', () => {
   afterEach(() => {
     setImageOcrExtractorForTests(null);
     vi.restoreAllMocks();
-    resetTestStores();
   });
 
   it('Single-use-File-Mock: erster Read funktioniert, zweiter Read wirft', async () => {

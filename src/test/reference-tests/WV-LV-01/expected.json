@@ -1,0 +1,55 @@
+{
+  "caseId": "WV-LV-01",
+  "kind": "contract-accept",
+  "documentCaseId": "WV-LV-01",
+  "damagePrevented": [
+    "Vertragsfamilie, Parteien, Geld und LV gehen bei der Analyse nicht verloren",
+    "Auftrag wird nicht ohne Freigabe automatisch übernommen",
+    "Gewerk verschwindet nicht nach Accept",
+    "Hauptleistungen verschwinden nicht nach Accept",
+    "Nachweise werden nicht vergessen",
+    "Abschläge / Schlussrechnung bleiben vorbereitet",
+    "Dokument bleibt im Archiv und mit dem Vorgang verknüpft (DOC-LINK)",
+    "Rolle (Subunternehmer) wird nicht mit dem Gewerk verwechselt",
+    "Gewerk, Nachweise und Abrechnung bleiben in der UI sichtbar"
+  ],
+  "layers": ["stable-pipeline", "accept-journey", "ui-visibility"],
+  "acceptJourney": {
+    "companyName": "Test GmbH",
+    "customerContains": "Isobautec",
+    "projectTitleMatch": "Sägewerk|Fisch",
+    "baustelleContains": "Möhnetal 55",
+    "orderValueApprox": 36029.05,
+    "minPositions": 10,
+    "gewerk": "Dachabdichtung",
+    "hauptleistungenMustInclude": ["PE-Folie", "Wärmedämmung", "PVC"],
+    "requireArchive": true,
+    "requireDocLink": true,
+    "requireProofsMin": 3,
+    "requireBillingPrep": true,
+    "progressBillingAllowed": true,
+    "finalInvoicePlanned": true
+  },
+  "uiVisibility": {
+    "auftragskarte": {
+      "gewerkContains": "Dachabdichtung",
+      "hauptleistungContains": "PE-Folie",
+      "roleLabelContains": "Subunternehmer",
+      "roleSeparatedFromGewerk": true
+    },
+    "vorgang": {
+      "scopeGewerkContains": "Dachabdichtung",
+      "hauptleistungContains": "PE-Folie",
+      "proofsNotEmpty": true,
+      "billingOverviewHint": true,
+      "billingPrepPanel": true
+    },
+    "archive": {
+      "documentLinkedVisible": true
+    }
+  },
+  "knownGaps": [
+    "Kein Kundenoriginal-PDF im Repo — OCR kommt aus Document-Case textFixture werkvertragMultiSection (siehe contract.source.json).",
+    "Voller processUploadedDocument mit Mehrseiten-Text hängt lokal; Ebene 1 nutzt denselben Specialist-Path wie document-cases."
+  ]
+}

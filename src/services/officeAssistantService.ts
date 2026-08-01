@@ -31,7 +31,21 @@ import {
 import { getCachedSetup } from './persistenceService';
 import { trySearchAssistantAnswer } from './officeSearchService';
 import { getAllVorgaenge } from './vorgangService';
+import {
+  buildSummaryForCompanyDocument,
+  createPresentationTranslate,
+  presentDocumentSummaryForSnippet,
+} from './documentSummaryPresentation';
 import type { AssistantAction, AssistantAnswer, CompanyDocument, Task, Vorgang } from '../types/models';
+
+function formatDocumentSummaryBullet(doc: CompanyDocument): string {
+  const translate = createPresentationTranslate(getCachedSetup()?.language);
+  const presented = presentDocumentSummaryForSnippet(
+    buildSummaryForCompanyDocument(doc, { translate }),
+    translate,
+  );
+  return [presented.title, presented.subtitle].filter(Boolean).join(' · ');
+}
 
 function getOpenTasks(): Task[] {
   return getAllTasksFromStore().filter(isTaskOpen);
@@ -435,7 +449,9 @@ function answerDocumentsMissing(): AssistantAnswer {
   return withBullets(
     'Fehlende Dokumente',
     `${missing.length} fehlende Vertragsunterlage${missing.length === 1 ? '' : 'n'}.`,
-    missing.map((item) => item.title + (item.description ? ` (${item.description})` : '')),
+    missing.map((item) =>
+      item.description ? `${item.title} – ${item.description}` : item.title,
+    ),
     [
       { id: 'inbox', label: 'Ablage öffnen', route: '/ablage' },
       ...missing.map((item) => ({
@@ -483,16 +499,24 @@ function answerFreistellungList(): AssistantAnswer {
     'Freistellungsbescheinigungen',
     `${docs.length} Freistellungsbescheinigung${docs.length === 1 ? '' : 'en'} im Archiv.`,
     docs.map((doc) => {
-      const valid = doc.validUntil ? `, gültig bis ${doc.validUntil}` : '';
-      return `${doc.title} – ${doc.issuer}${valid}`;
+      const bullet = formatDocumentSummaryBullet(doc);
+      const valid = doc.validUntil ? ` · gültig bis ${doc.validUntil}` : '';
+      return `${bullet}${valid}`;
     }),
     [
       { id: 'documents', label: 'Dokumente öffnen', route: '/dokumente' },
-      ...docs.map((doc) => ({
-        id: doc.id,
-        label: doc.title,
-        route: `/dokumente/${doc.id}`,
-      })),
+      ...docs.map((doc) => {
+        const translate = createPresentationTranslate(getCachedSetup()?.language);
+        const presented = presentDocumentSummaryForSnippet(
+          buildSummaryForCompanyDocument(doc, { translate }),
+          translate,
+        );
+        return {
+          id: doc.id,
+          label: presented.title,
+          route: `/dokumente/${doc.id}`,
+        };
+      }),
     ],
     '/dokumente',
   );

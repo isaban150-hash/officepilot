@@ -1,0 +1,17 @@
+{
+  "id": "PRJ-008",
+  "companyId": "COMPANY-001",
+  "branchId": "BRANCH-001",
+  "customerId": "CUST-008",
+  "title": "EFH Meyer Bad Salzuflen",
+  "siteName": "EFH Meyer Bad Salzuflen",
+  "siteStreet": "Birkenweg 7",
+  "siteZip": "32107",
+  "siteCity": "Bad Salzuflen",
+  "trade": "Heizung",
+  "status": "inquiry",
+  "startDate": "2026-04-01",
+  "foremanEmployeeId": "EMP-004",
+  "timelineDocumentIds": [],
+  "notes": "TestWorld-Projekt 01C – noch ohne Dokumente"
+}

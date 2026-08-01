@@ -1,0 +1,28 @@
+{
+  "id": "DOC-00033",
+  "companyId": "COMPANY-001",
+  "projectId": "PRJ-001",
+  "customerId": "CUST-001",
+  "taxonomyTypeId": "DOCTYPE-017",
+  "documentType": "credit_note",
+  "subtype": "gutschrift_kunde",
+  "title": "Gutschrift an Sägewerk Ernst Flisch – Mindermaß",
+  "receivedAt": "2026-03-22",
+  "lifecyclePhase": "billing",
+  "qualityTag": "clean",
+  "sourceKind": "pdf",
+  "suiteTags": [
+    "smoke",
+    "commit",
+    "release"
+  ],
+  "notes": "GOLD 02B: Gutschrift Kunde – Projekt + Kunde, kein supplierId.",
+  "expected": {
+    "classifiedKind": "gutschrift",
+    "caseMatchStatus": "multiple",
+    "matchedProjectId": null,
+    "primaryActionId": "select_vorgang",
+    "alertIds": []
+  },
+  "sourceFile": "source.pdf"
+}

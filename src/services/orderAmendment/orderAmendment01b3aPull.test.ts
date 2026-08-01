@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createOrderPosition, createTestVorgang } from '../../test/fixtures';
-import { resetTestStores } from '../../test/resetStores';
 import * as supabaseLib from '../../lib/supabase';
 import * as persistenceService from '../persistenceService';
 import {
@@ -179,9 +178,7 @@ function createDraftWithPosition(vorgangId = VORGANG_ID) {
   return created.amendment.id;
 }
 
-beforeEach(() => {
-  resetTestStores();
-  resetOrderAmendmentConfirmIntentsForTests();
+beforeEach(() => {  resetOrderAmendmentConfirmIntentsForTests();
   vi.restoreAllMocks();
   hydrateVorgangStore([seedVorgang()]);
 });

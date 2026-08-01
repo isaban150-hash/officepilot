@@ -1,0 +1,23 @@
+{
+  "documentId": "DOC-00012",
+  "family": "invoice_in",
+  "headline": "Steuerberatung Ostwestfalen – Honorarrechnung Q1/2026",
+  "factOrder": [
+    "supplier",
+    "invoiceNumber",
+    "amount",
+    "date",
+    "deadline",
+    "site"
+  ],
+  "facts": [
+    {
+      "id": "supplier",
+      "value": "Steuerberatung Ostwestfalen GmbH"
+    },
+    {
+      "id": "date",
+      "value": "2026-04-02"
+    }
+  ]
+}

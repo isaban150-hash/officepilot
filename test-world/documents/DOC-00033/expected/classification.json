@@ -1,0 +1,9 @@
+{
+  "documentId": "DOC-00033",
+  "taxonomyTypeId": "DOCTYPE-017",
+  "documentType": "credit_note",
+  "subtype": "gutschrift_kunde",
+  "label": "Gutschrift an Kunde",
+  "classifiedKind": "gutschrift",
+  "family": "invoice_in"
+}

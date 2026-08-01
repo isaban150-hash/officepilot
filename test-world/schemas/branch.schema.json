@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://officepilot.local/test-world/schemas/branch.schema.json",
+  "title": "TestWorld Branch",
+  "description": "Physical/org location of the company (Standort). NOT a trade/Gewerk. Gewerk lives on Project.trade / Company.trades.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "companyId", "name", "city"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^BRANCH-[0-9]{3}$",
+      "description": "Stable branch id, e.g. BRANCH-001 — Standort, nicht Gewerk"
+    },
+    "companyId": {
+      "type": "string",
+      "pattern": "^COMPANY-[0-9]{3}$"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "street": { "type": "string" },
+    "zip": { "type": "string" },
+    "city": {
+      "type": "string",
+      "minLength": 1
+    },
+    "country": {
+      "type": "string",
+      "default": "DE"
+    },
+    "phone": { "type": "string" },
+    "email": { "type": "string" },
+    "isHeadquarters": {
+      "type": "boolean",
+      "default": false
+    },
+    "notes": { "type": "string" }
+  }
+}

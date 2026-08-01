@@ -1,0 +1,12 @@
+{
+  "id": "SUP-004",
+  "companyId": "COMPANY-001",
+  "name": "BauMarkt Salzuflen",
+  "supplierType": "retail",
+  "city": "Bad Salzuflen",
+  "country": "DE",
+  "email": "sup-004@counterparty.example",
+  "notes": "TestWorld-Counterparty",
+  "street": "Herforder Str. 120",
+  "zip": "32105"
+}

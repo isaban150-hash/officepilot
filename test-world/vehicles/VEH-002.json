@@ -1,0 +1,13 @@
+{
+  "id": "VEH-002",
+  "companyId": "COMPANY-001",
+  "branchId": "BRANCH-001",
+  "label": "Transporter 2",
+  "licensePlate": "LIP-CH 1002",
+  "vehicleType": "van",
+  "make": "Mercedes-Benz",
+  "model": "Sprinter",
+  "defaultDriverEmployeeId": "EMP-004",
+  "active": true,
+  "notes": "TestWorld-Fahrzeug"
+}

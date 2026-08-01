@@ -1,0 +1,44 @@
+{
+  "caseId": "FA-FRIST-01",
+  "kind": "authority-letter",
+  "documentCaseId": "FA-FRIST-01",
+  "damagePrevented": [
+    "Frist übersehen",
+    "Behörde falsch erkannt",
+    "falsche Dokumentenklasse",
+    "falsche Ablage",
+    "Auftrag versehentlich erzeugt",
+    "Ausgabe versehentlich erzeugt",
+    "Vertragswirkung ausgelöst",
+    "Frist in der UI nicht sichtbar",
+    "Pflicht/Hinweis nicht erkannt"
+  ],
+  "layers": ["stable-pipeline", "authority-journey", "ui-visibility"],
+  "authorityJourney": {
+    "companyName": "Mustermann Sanitär GmbH",
+    "classifiedKindAllowed": ["finanzamt", "sonstiges", "brief"],
+    "authorityContains": "Finanzamt",
+    "deadlineContains": "15.04.2026",
+    "primaryCaseContains": "authority",
+    "meaningsRequired": ["obligation", "deadline", "action_required", "evidence"],
+    "nextStepContains": ["Unterlagen", "Frist"],
+    "requireArchive": true,
+    "forbidVorgang": true,
+    "forbidExpense": true,
+    "forbidContractPositions": true,
+    "forbidBillingPrep": true
+  },
+  "authorityUiVisibility": {
+    "overviewVisible": true,
+    "authorityVisible": true,
+    "deadlineVisible": true,
+    "obligationVisible": true,
+    "nextStepVisible": true,
+    "understandingPanelVisible": true,
+    "documentKindVisible": true
+  },
+  "knownGaps": [
+    "Aktenzeichen wird nicht als strukturiertes Feld in BI-facts geführt (Document-Case knownGap).",
+    "LetterExplanationPanel braucht AppContext — Goldpfad nutzt OperationalOverview + DocumentIntakeUnderstandingPanel."
+  ]
+}

@@ -20,7 +20,6 @@ import {
 import * as invoiceService from './services/invoiceService';
 import { getVorgangById, hydrateVorgangStore } from './services/vorgangService';
 import { createOrderPosition, createTestVorgang } from './test/fixtures';
-import { resetTestStores } from './test/resetStores';
 import type {
   ConfirmedOrderAmendment,
   ContractConfirmationSnapshot,
@@ -194,9 +193,7 @@ describe('ORDER-AMENDMENT-UI-UX-01B3A1 Confirm-Dialog', () => {
   let container: HTMLDivElement;
   let root: Root;
 
-  beforeEach(() => {
-    resetTestStores();
-    resetOrderAmendmentConfirmIntentsForTests();
+  beforeEach(() => {    resetOrderAmendmentConfirmIntentsForTests();
     vi.restoreAllMocks();
     container = document.createElement('div');
     document.body.appendChild(container);

@@ -3,7 +3,6 @@
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createTestVorgang, testSetup } from '../test/fixtures';
-import { resetTestStores } from '../test/resetStores';
 import {
   FIXED_AMOUNT_ABSCHLAG_PRINT_DESCRIPTION,
 } from './invoiceCalculationMode';
@@ -89,9 +88,7 @@ function prepareFixedAbschlag(amount: number, periodFrom: string, periodTo: stri
   return draft;
 }
 
-beforeEach(() => {
-  resetTestStores();
-  seedReadyVorgang();
+beforeEach(() => {  seedReadyVorgang();
 });
 
 describe('PAUSCHALER-ABSCHLAG-01', () => {

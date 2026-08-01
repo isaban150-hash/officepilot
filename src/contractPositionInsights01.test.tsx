@@ -164,10 +164,10 @@ describe('CONTRACT-POSITION-INSIGHTS-01', () => {
       }),
     );
 
-    expect(html).toContain('data-testid="contract-order-lv-overview"');
-    expect(html).toContain('data-testid="contract-order-lv-meta"');
-    expect(html).toContain('Importierbar');
-    expect(html).toMatch(/2\s+Importierbar|4\s+Positionen/);
+    // UX-01: LV overview is behind „Leistungsumfang anzeigen“; counts stay on the view model.
+    expect(html).toContain('data-testid="auftragskarte"');
+    expect(html).toContain('Leistungsumfang anzeigen');
+    expect(html).not.toContain('data-testid="contract-order-lv-overview"');
     expect(html.toLowerCase()).not.toContain('übernommen');
     expect(html).not.toContain('Importhistorie');
     expect(html).not.toContain('data-testid="contract-workspace-summary-position-insights"');
@@ -234,8 +234,9 @@ describe('CONTRACT-POSITION-INSIGHTS-01', () => {
         onConfirmImport: vi.fn(),
       }),
     );
-    expect(html).toContain('data-testid="contract-order-lv-overview"');
-    expect(html).toContain('Importierbar');
+    expect(html).toContain('data-testid="auftragskarte"');
+    expect(html).toContain('Leistungsumfang anzeigen');
+    expect(html).not.toContain('data-testid="contract-order-lv-overview"');
     expect(html).not.toContain('ohne erkannte Menge');
     expect(html).not.toContain('ohne erkannten Einzelpreis');
     expect(html).not.toContain('ohne erkannte Einheit');

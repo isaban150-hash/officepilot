@@ -1,0 +1,29 @@
+{
+  "id": "DOC-00007",
+  "companyId": "COMPANY-001",
+  "projectId": null,
+  "supplierId": "SUP-006",
+  "employeeId": "EMP-004",
+  "taxonomyTypeId": "DOCTYPE-020",
+  "documentType": "hotel_invoice",
+  "subtype": "hotel",
+  "title": "Hotelrechnung Lipperland – Übernachtung Monteur",
+  "receivedAt": "2026-01-25",
+  "lifecyclePhase": "firm",
+  "qualityTag": "clean",
+  "sourceKind": "pdf",
+  "suiteTags": [
+    "smoke",
+    "commit",
+    "release"
+  ],
+  "notes": "GOLD: Hotelrechnung bewusst OHNE Projekt. Counterparty SUP-006. Reisender EMP-004.",
+  "expected": {
+    "classifiedKind": "eingangsrechnung",
+    "caseMatchStatus": "none",
+    "matchedProjectId": null,
+    "primaryActionId": "create_vorgang",
+    "alertIds": []
+  },
+  "sourceFile": "source.pdf"
+}

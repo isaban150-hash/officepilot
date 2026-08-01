@@ -19,7 +19,6 @@ import { askDocumentAi } from './services/document/documentAiService';
 import { setAiGenerateTextForTests } from './services/ai/aiRequestRunner';
 import { getAllDocuments, hydrateDocumentStore } from './services/documentService';
 import { createMockInboxItemFromUpload } from './services/inboxUploadFactory';
-import { resetTestStores } from './test/resetStores';
 import type { CompanyDocument, InboxItem } from './types/models';
 import { getCommunicationEvents, hydrateCommunicationHistory } from './services/communicationHistoryService';
 import { hydrateInboxStore, getInboxItems } from './services/inboxService';
@@ -89,9 +88,7 @@ function mountAt(path: string, element: ReactElement): Mount {
 describe('DOCUMENT-FREE-QUESTION-01', () => {
   let mounted: Mount | null = null;
 
-  beforeEach(() => {
-    resetTestStores();
-    hydrateCommunicationHistory([]);
+  beforeEach(() => {    hydrateCommunicationHistory([]);
     hydrateTaskStore([]);
     vi.stubEnv('VITE_GEMINI_API_KEY', 'test-gemini-key');
     setAiGenerateTextForTests(

@@ -9,7 +9,8 @@ export const bgPilot = {
   'pilot.hints.device': 'Използвайте едно устройство и един браузър профил за фирмените данни.',
   'pilot.hints.backup': 'Редовно изтегляйте ZIP резервно копие.',
   'pilot.hints.noAutoSend': 'OfficePilot не изпраща автоматично имейли или поща.',
-  'pilot.hints.noCloud': 'Бизнес данните в момента не се синхронизират с облак.',
+  'pilot.hints.noCloud':
+    'OfficePilot изисква интернет за ИИ, синхронизация и окончателно одобрение на фактури и допълнения.',
   'pilot.hints.noEInvoice': 'Е-фактурата все още не е включена в този пилот.',
   'pilot.hints.aiSuggestions': 'Отговорите на ИИ са предложения и трябва да се проверят.',
   'pilot.hints.legalDraft': 'Правните текстове все още са в чернова.',

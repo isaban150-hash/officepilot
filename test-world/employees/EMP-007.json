@@ -1,0 +1,12 @@
+{
+  "id": "EMP-007",
+  "companyId": "COMPANY-001",
+  "branchId": "BRANCH-001",
+  "firstName": "Nina",
+  "lastName": "Bergmann",
+  "role": "office",
+  "active": true,
+  "email": "nina.bergmann@cirmak-haustechnik.example",
+  "phone": "+49 5222 9800-07",
+  "notes": "TestWorld-Mitarbeiter"
+}

@@ -15,7 +15,6 @@ import { getAllDocuments, hydrateDocumentStore } from '../documentService';
 import { getCommunicationEvents, hydrateCommunicationHistory } from '../communicationHistoryService';
 import { hydrateInboxStore, getInboxItems } from '../inboxService';
 import { getAllTasksFromStore, hydrateTaskStore } from '../taskStore';
-import { resetTestStores } from '../../test/resetStores';
 import type { CompanyDocument } from '../../types/models';
 
 const setupComplete = { ...DEFAULT_SETUP, setupComplete: true };
@@ -63,9 +62,7 @@ function mountAt(path: string, element: ReactElement): Mount {
 describe('DOCUMENT-FREE-QUESTION-QUALITY-01', () => {
   let mounted: Mount | null = null;
 
-  beforeEach(() => {
-    resetTestStores();
-    hydrateCommunicationHistory([]);
+  beforeEach(() => {    hydrateCommunicationHistory([]);
     hydrateTaskStore([]);
     hydrateInboxStore([]);
     vi.stubEnv('VITE_GEMINI_API_KEY', 'test-gemini-key');

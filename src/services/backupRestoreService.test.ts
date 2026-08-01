@@ -1,3 +1,4 @@
+import { useDocumentBlobDatabaseReset } from '../test/documentBlobTestReset';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   BACKUP_RESTORE_STAGING_PREFIX,
@@ -41,10 +42,10 @@ async function validatedFromCurrentStore(): Promise<ValidatedBackupBundle> {
   return validated;
 }
 
+useDocumentBlobDatabaseReset();
+
 describe('backupRestoreService', () => {
-  beforeEach(() => {
-    resetTestStores();
-    setActiveStorageScope({ type: 'guest' });
+  beforeEach(() => {    setActiveStorageScope({ type: 'guest' });
     liveClient();
     hydrateSyncOutbox([]);
   });

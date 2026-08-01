@@ -7,7 +7,6 @@ import { DEFAULT_SETUP } from '../data/mockData';
 import { DEFAULT_COMPANY_PROFILE } from '../data/companyProfileDefaults';
 import { InvoiceSentPanel } from '../components/invoice/InvoiceSentPanel';
 import { createTestVorgang } from '../test/fixtures';
-import { resetTestStores } from '../test/resetStores';
 import {
   calculatePaymentSummary,
   isInvoiceOverdue,
@@ -82,9 +81,7 @@ function createPreparedInvoice(overrides: Partial<VorgangInvoice> = {}): Vorgang
   };
 }
 
-beforeEach(() => {
-  resetTestStores();
-  hydrateVorgangStore([createTestVorgang({ invoices: [createPreparedInvoice()] })]);
+beforeEach(() => {  hydrateVorgangStore([createTestVorgang({ invoices: [createPreparedInvoice()] })]);
 });
 
 afterEach(() => {

@@ -87,16 +87,21 @@ describe('officeSearchService', () => {
       createAuftragInboxItem({
         id: 'inbox-ocr-search',
         title: 'Scan Eingang',
+        classifiedKind: 'werkvertrag',
         recognizedData: {
           _extractedText: 'Werkvertrag Subunternehmer Müller Bau',
+          Auftraggeber: 'Müller Bau',
         },
       }),
     ]);
 
     const results = searchOffice({ query: 'Werkvertrag', todayIso: TODAY });
-    expect(
-      results.some((item) => item.type === 'inbox' && item.snippet.toLowerCase().includes('werkvertrag')),
-    ).toBe(true);
+    // Match still uses OCR haystack; display comes from DocumentSummary
+    expect(results.some((item) => item.type === 'inbox' && item.route.includes('inbox-ocr-search'))).toBe(
+      true,
+    );
+    const hit = results.find((item) => item.route.includes('inbox-ocr-search'));
+    expect(hit?.title).toBe('Werkvertrag');
   });
 
   it('findet Mail-Import', () => {
@@ -240,12 +245,25 @@ describe('officeSearchService', () => {
 
   it('ranking bevorzugt exakte Titel-Treffer', () => {
     hydrateInboxStore([
-      createAuftragInboxItem({ id: 'inbox-rank-1', title: 'Finanzamt', sender: 'Sonstiges' }),
-      createAuftragInboxItem({ id: 'inbox-rank-2', title: 'Allgemeines Schreiben', sender: 'Finanzamt Berlin' }),
+      createAuftragInboxItem({
+        id: 'inbox-rank-1',
+        title: 'Finanzamt',
+        sender: 'Sonstiges',
+        classifiedKind: 'finanzamt',
+        documentType: 'behoerde',
+      }),
+      createAuftragInboxItem({
+        id: 'inbox-rank-2',
+        title: 'Allgemeines Schreiben',
+        sender: 'Finanzamt Berlin',
+        classifiedKind: 'brief',
+      }),
     ]);
 
     const results = rankSearchResults(searchOffice({ query: 'Finanzamt', todayIso: TODAY, limit: 20 }));
-    expect(results[0]?.title).toBe('Finanzamt');
+    // Ranking still uses stored title in haystack; visible title is DocumentSummary
+    expect(results[0]?.route).toContain('inbox-rank-1');
+    expect(results[0]?.title.toLowerCase()).toMatch(/finanzamt|behörde|behoerde|schreiben/i);
   });
 
   it('Filter nach Typ', () => {

@@ -1,0 +1,28 @@
+{
+  "id": "COMPANY-001",
+  "legalName": "Cirmak Haustechnik GmbH",
+  "tradeName": "Cirmak Haustechnik",
+  "street": "Industriestraße 18",
+  "zip": "32105",
+  "city": "Bad Salzuflen",
+  "country": "DE",
+  "phone": "+49 5222 9800-0",
+  "email": "info@cirmak-haustechnik.example",
+  "website": "https://www.cirmak-haustechnik.example",
+  "vatId": "DE312458790",
+  "taxNumber": "305/5803/1234",
+  "commercialRegister": "HRB 12345 Amtsgericht Lemgo",
+  "iban": "DE89 4765 0130 0001 2345 67",
+  "bic": "WELADED1LIP",
+  "bankName": "Sparkasse Lemgo",
+  "bgBauMemberNumber": "BG-OWL-88421",
+  "sokaBauNumber": "SOKA-OWL-55210",
+  "trades": [
+    "Heizung",
+    "Sanitär",
+    "Lüftung",
+    "Klima"
+  ],
+  "defaultBranchId": "BRANCH-001",
+  "notes": "Referenzfirma TestWorld Phase 1 (SHK). Gewerke stehen auf Company.trades / Project.trade — nicht auf Branch."
+}

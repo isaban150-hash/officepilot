@@ -1,0 +1,29 @@
+{
+  "id": "DOC-00017",
+  "companyId": "COMPANY-001",
+  "projectId": null,
+  "supplierId": "SUP-008",
+  "employeeId": "EMP-003",
+  "taxonomyTypeId": "DOCTYPE-043",
+  "documentType": "telecom",
+  "subtype": "mobilfunk",
+  "title": "Telekom – Mobilfunkrechnung Firmenflotte",
+  "receivedAt": "2026-03-03",
+  "lifecyclePhase": "firm",
+  "qualityTag": "clean",
+  "sourceKind": "pdf",
+  "suiteTags": [
+    "smoke",
+    "commit",
+    "release"
+  ],
+  "notes": "GOLD 02B: Mobilfunk Firma; optional Mitarbeiter EMP-003 (Hauptnutzer).",
+  "expected": {
+    "classifiedKind": "eingangsrechnung",
+    "caseMatchStatus": "none",
+    "matchedProjectId": null,
+    "primaryActionId": "create_vorgang",
+    "alertIds": []
+  },
+  "sourceFile": "source.pdf"
+}

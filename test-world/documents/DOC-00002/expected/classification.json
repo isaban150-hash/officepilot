@@ -1,0 +1,9 @@
+{
+  "documentId": "DOC-00002",
+  "taxonomyTypeId": "DOCTYPE-004",
+  "documentType": "offer",
+  "subtype": "angebot",
+  "label": "Angebot",
+  "classifiedKind": "angebot",
+  "family": "offer"
+}

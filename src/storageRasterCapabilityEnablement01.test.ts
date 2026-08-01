@@ -1,4 +1,5 @@
 import { importInboxDocumentForTests } from './test/confirmFilingDecisionForTests';
+import { useDocumentBlobDatabaseReset } from './test/documentBlobTestReset';
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildDocumentFileRepresentationPlan } from './services/documentFileRepresentationPlanService';
 import { buildDocumentFileTransformPlan } from './services/documentFileTransformPlanService';
@@ -20,7 +21,6 @@ import {
 import { hydrateInboxStore } from './services/inboxService';
 import { setDocumentFileRasterEncodeAdaptersForTests } from './services/documentFileRasterEncodeService';
 import { createAuftragInboxItem } from './test/fixtures';
-import { resetTestStores } from './test/resetStores';
 import type { DocumentFileTransformIntent } from './types/documentFileTransformPlan';
 
 function archiveIntent(): DocumentFileTransformIntent {
@@ -31,9 +31,10 @@ function archiveIntent(): DocumentFileTransformIntent {
   };
 }
 
+useDocumentBlobDatabaseReset();
+
 afterEach(() => {
   setDocumentFileRasterEncodeAdaptersForTests(null);
-  resetTestStores();
   resetDocumentFileStoreForTests();
   resetDocumentFileRepresentationBindingStoreForTests();
 });

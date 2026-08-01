@@ -39,7 +39,6 @@ import * as persistenceService from './persistenceService';
 import { SUPABASE_SYNC_ALLOWLIST } from './sync/cloudSyncAllowlist';
 import type { SyncEntityType } from '../types/sync';
 import { createAuftragInboxItem } from '../test/fixtures';
-import { resetTestStores } from '../test/resetStores';
 import { setWorkspace } from './workspace/workspaceStore';
 import type { DocumentFieldFillConfirmRow } from '../types/documentFieldFillConfirm';
 import type { DocumentWorkResult } from '../types/documentWorkResult';
@@ -93,15 +92,12 @@ async function flushUi(): Promise<void> {
   });
 }
 
-beforeEach(() => {
-  resetTestStores();
-  resetDocumentWorkResultStoreForTests();
+beforeEach(() => {  resetDocumentWorkResultStoreForTests();
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
   resetDocumentWorkResultStoreForTests();
-  resetTestStores();
   document.body.innerHTML = '';
 });
 

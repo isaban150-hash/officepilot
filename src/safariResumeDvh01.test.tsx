@@ -12,7 +12,6 @@ import { EingangDetailPage } from './pages/EingangDetailPage';
 import { createMockInboxItemFromUpload } from './services/inboxUploadFactory';
 import { hydrateInboxStore } from './services/inboxService';
 import { processUploadedDocument } from './services/intakeWorkflowService';
-import { resetTestStores } from './test/resetStores';
 
 const INDEX_CSS = resolve(__dirname, 'index.css');
 const SHELL_CSS = resolve(__dirname, 'styles/shell.css');
@@ -56,7 +55,6 @@ describe('FIX-SAFARI-RESUME-DVH-01', () => {
 
   afterEach(() => {
     mockViewport(1024);
-    resetTestStores();
     document.body.innerHTML = '';
   });
 

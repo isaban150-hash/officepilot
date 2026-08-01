@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { OrderPositionForm } from '../components/vorgang/OrderPositionForm';
@@ -38,6 +38,10 @@ import {
   type VorgangDetailSection,
 } from '../components/vorgang/VorgangSectionNav';
 import { OrderSummaryPanel } from '../components/vorgang/OrderSummaryPanel';
+import { VorgangNachweisePanel } from '../components/vorgang/VorgangNachweisePanel';
+import { VorgangScopePanel } from '../components/vorgang/VorgangScopePanel';
+import { VorgangBillingPreparationPanel } from '../components/vorgang/VorgangBillingPreparationPanel';
+import { VorgangBillingOverviewHint } from '../components/vorgang/VorgangBillingOverviewHint';
 import {
   formatAmendmentChangeTypeLabel,
   formatAmendmentMoney,
@@ -59,6 +63,8 @@ import { getLastPersistSuccess } from '../services/persistenceService';
 import type { VorgangNote } from '../types/communication';
 import type { OrderPosition, Vorgang, VorgangStatus } from '../types/models';
 import type { TranslationKey } from '../i18n';
+import { useReportUiSession } from '../hooks/useReportUiSession';
+import { useUiSessionRestore } from '../hooks/useUiSessionRestore';
 
 type FormMode = { type: 'add' } | { type: 'edit'; position: OrderPosition } | null;
 
@@ -66,16 +72,47 @@ export function VorgangDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { translate, showToast } = useApp();
   const navigate = useNavigate();
+  const restoredSession = useUiSessionRestore();
+  const skipChromeResetRef = useRef(Boolean(restoredSession));
   const [vorgang, setVorgang] = useState<Vorgang | undefined>(() =>
     id ? getVorgangById(id) : undefined,
   );
   const [formMode, setFormMode] = useState<FormMode>(null);
-  const [noteDraft, setNoteDraft] = useState('');
+  const [noteDraft, setNoteDraft] = useState(() => {
+    const note = restoredSession?.drafts.values.note;
+    return typeof note === 'string' ? note : '';
+  });
   const [notes, setNotes] = useState<VorgangNote[]>(() =>
     id ? getNotesForVorgang(id) : [],
   );
-  const [showDetails, setShowDetails] = useState(false);
-  const [activeSection, setActiveSection] = useState<VorgangDetailSection>('overview');
+  const [showDetails, setShowDetails] = useState(
+    () => restoredSession?.panelState.detailsOpen ?? false,
+  );
+  const [activeSection, setActiveSection] = useState<VorgangDetailSection>(
+    () => (restoredSession?.activeSection as VorgangDetailSection | undefined) ?? 'overview',
+  );
+
+  useReportUiSession({
+    workspaceType: 'vorgang',
+    activeSection,
+    panelState: {
+      deepWorkspaceOpen: false,
+      moreOptionsExpanded: false,
+      detailsOpen: showDetails,
+      assistOpen: false,
+    },
+    drafts: {
+      values: noteDraft.trim() ? { note: noteDraft } : {},
+      dirty: Boolean(noteDraft.trim()),
+    },
+    resumeLabel: vorgang
+      ? {
+          titleText: vorgang.title,
+          subtitleText: vorgang.customer,
+          entityHint: '',
+        }
+      : undefined,
+  });
 
   const refreshNotes = useCallback(() => {
     if (id) setNotes(getNotesForVorgang(id));
@@ -96,8 +133,13 @@ export function VorgangDetailPage() {
   useEffect(() => {
     refreshVorgang();
     refreshNotes();
+    if (skipChromeResetRef.current) {
+      skipChromeResetRef.current = false;
+      return;
+    }
     setShowDetails(false);
     setActiveSection('overview');
+    setNoteDraft('');
   }, [refreshVorgang, refreshNotes, id]);
 
   const handleAddNote = () => {
@@ -387,6 +429,16 @@ export function VorgangDetailPage() {
         </Card>
 
         <OrderSummaryPanel vorgang={vorgang} translate={translate} />
+
+        <VorgangScopePanel vorgang={vorgang} translate={translate} />
+
+        <VorgangNachweisePanel vorgangId={vorgang.id} translate={translate} />
+
+        <VorgangBillingOverviewHint
+          vorgang={vorgang}
+          translate={translate}
+          onOpenInvoices={() => setActiveSection('invoices')}
+        />
       </div>
 
       <div {...vorgangSectionPanelProps('order', activeSection)}>
@@ -544,6 +596,8 @@ export function VorgangDetailPage() {
       </div>
 
       <div {...vorgangSectionPanelProps('invoices', activeSection)}>
+        <VorgangBillingPreparationPanel vorgang={vorgang} translate={translate} />
+
         <section
           className="section vorgang-invoices-section"
           data-testid="vorgang-invoices-section"

@@ -334,11 +334,23 @@ function buildInvoiceRecognizedData(
   const supplier = plain.Absender ?? plain.Lieferant;
   if (supplier?.trim()) {
     result.Lieferant = supplier;
+    result.Absender = supplier;
   } else {
     const supplierFromHeader = inferSupplierFromHeader(text);
     if (supplierFromHeader) {
       result.Lieferant = supplierFromHeader;
     }
+  }
+
+  if (plain.Baustelle?.trim()) {
+    result.Baustelle = plain.Baustelle.trim();
+  }
+  if (plain.Projekt?.trim()) {
+    result.Projekt = plain.Projekt.trim();
+    result.Bauvorhaben = plain.Projekt.trim();
+  }
+  if (plain.Vorgang?.trim()) {
+    result.Vorgang = plain.Vorgang.trim();
   }
 
   return result;
@@ -689,7 +701,12 @@ function pickLabeledContractValue(text: string, pattern: RegExp): string | undef
       return match[1].trim();
     }
   }
-  return undefined;
+  // Flattened PDF text layers often lack line breaks — allow mid-string labels.
+  const flags = pattern.flags.includes('i') ? 'iu' : 'u';
+  const source = pattern.source.startsWith('^') ? pattern.source.slice(1) : pattern.source;
+  const inline = new RegExp(String.raw`(?:^|[\n\r]|[\s·|])${source}`, flags);
+  const match = text.match(inline);
+  return match?.[1]?.trim() || undefined;
 }
 
 function applyContractOcrReference(
@@ -739,17 +756,33 @@ function buildCustomerRecognizedData(
 
   const labeledCustomer =
     pickLabeledContractValue(text, CUSTOMER_PARTY_PATTERN) ??
-    extractDocumentFeaturesFromText(text, pageTexts).features.find(
-      (feature) => feature.id === 'identity.sender_labeled',
-    )?.value;
+    plain.Kunde?.trim() ??
+    plain.Empfänger?.trim() ??
+    undefined;
   if (typeof labeledCustomer === 'string' && labeledCustomer.trim()) {
     result.Kunde = labeledCustomer.trim();
     result.Auftraggeber = labeledCustomer.trim();
   }
 
-  const baustelle = pickLabeledContractValue(text, CUSTOMER_BAUSTELLE_PATTERN);
+  const baustelle =
+    pickLabeledContractValue(text, CUSTOMER_BAUSTELLE_PATTERN) ?? plain.Baustelle?.trim();
   if (baustelle) {
     result.Baustelle = baustelle;
+  }
+
+  if (plain.Projekt?.trim()) {
+    result.Projekt = plain.Projekt.trim();
+    result.Bauvorhaben = plain.Projekt.trim();
+  }
+  if (plain.Vorgang?.trim()) {
+    result.Vorgang = plain.Vorgang.trim();
+  }
+  if (plain.Gewerk?.trim()) {
+    result.Gewerk = plain.Gewerk.trim();
+  }
+  if (plain.Absender?.trim()) {
+    result.Absender = plain.Absender.trim();
+    result.Lieferant = plain.Absender.trim();
   }
 
   const features = extractDocumentFeaturesFromText(text, pageTexts);
@@ -801,13 +834,29 @@ function buildContractRecognizedData(
     result.Betreff = plain.Betreff;
   }
 
-  const auftraggeber = pickLabeledContractValue(text, CONTRACT_AUFTRAGGEBER_PATTERN);
+  const auftraggeber =
+    pickLabeledContractValue(text, CONTRACT_AUFTRAGGEBER_PATTERN) ??
+    plain.Kunde?.trim() ??
+    undefined;
   if (auftraggeber) {
     result.Kunde = auftraggeber;
     result.Auftraggeber = auftraggeber;
-  } else if (plain.Absender?.trim()) {
-    result.Kunde = plain.Absender;
-    result.Auftraggeber = plain.Absender;
+  }
+  // Do not fall back to Absender/letterhead as customer — that is the contractor/issuer.
+
+  if (plain.Projekt?.trim()) {
+    result.Projekt = plain.Projekt.trim();
+    result.Bauvorhaben = plain.Projekt.trim();
+  }
+  if (plain.Gewerk?.trim()) {
+    result.Gewerk = plain.Gewerk.trim();
+  }
+  if (plain.Vorgang?.trim()) {
+    result.Vorgang = plain.Vorgang.trim();
+  }
+  if (plain.Absender?.trim()) {
+    result.Absender = plain.Absender.trim();
+    result.Auftragnehmer = result.Auftragnehmer ?? plain.Absender.trim();
   }
 
   const auftragnehmer = pickLabeledContractValue(text, CONTRACT_AUFTRAGNEHMER_PATTERN);
@@ -825,10 +874,10 @@ function buildContractRecognizedData(
     result.Baustelle = plain.Baustelle;
   } else {
     const bauvorhaben = pickLabeledContractValue(text, /^bauvorhaben\s*[:]\s*(.+)$/i);
+    // Bauvorhaben is a project title — keep as Bauvorhaben/Projekt, not as site.
     if (bauvorhaben) {
-      result.Baustelle = bauvorhaben;
-    } else if (plain.Projekt?.trim()) {
-      result.Baustelle = plain.Projekt;
+      result.Bauvorhaben = result.Bauvorhaben ?? bauvorhaben;
+      result.Projekt = result.Projekt ?? bauvorhaben;
     }
   }
 
@@ -849,6 +898,13 @@ function buildAuthorityRecognizedData(
 
   if (plain.Betreff?.trim()) {
     result.Betreff = plain.Betreff;
+  }
+  if (plain.Absender?.trim()) {
+    result.Absender = plain.Absender.trim();
+    result.Lieferant = plain.Absender.trim();
+  }
+  if (plain.Aktenzeichen?.trim()) {
+    result.Aktenzeichen = plain.Aktenzeichen.trim();
   }
 
   applyAuthorityOcrReference(result, plain, text, pageTexts);

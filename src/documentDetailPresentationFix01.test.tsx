@@ -1,3 +1,4 @@
+import { useDocumentBlobDatabaseReset } from './test/documentBlobTestReset';
 import { afterEach, describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -14,8 +15,6 @@ import { createMockInboxItemFromUpload } from './services/inboxUploadFactory';
 import { processUploadedDocument } from './services/intakeWorkflowService';
 import { setImageOcrExtractorForTests } from './services/ocrDocumentService';
 import { resetDocumentFileStoreForTests } from './services/documentFileStoreService';
-import { resetDocumentBlobDatabaseForTests } from './services/storage/documentBlobIndexedDbService';
-import { resetTestStores } from './test/resetStores';
 import type { ClassifiedDocumentKind, DocumentUnderstandingSummary, InboxItem } from './types/models';
 
 function renderAblageDetail(itemId: string): string {
@@ -45,23 +44,21 @@ function emptySummary(overrides: Partial<DocumentUnderstandingSummary> = {}): Do
     deadline: undefined,
     nextStep: 'Dokument prüfen',
     partialRecognition: false,
-    ...overrides,
-  };
+    ...overrides };
 }
+
+useDocumentBlobDatabaseReset();
 
 describe('DOCUMENT-DETAIL-PRESENTATION-FIX-01', () => {
   afterEach(async () => {
     setImageOcrExtractorForTests(null);
-    resetTestStores();
     resetDocumentFileStoreForTests();
-    await resetDocumentBlobDatabaseForTests();
   });
 
   it('EingangDetailPage mit fileRefId zeigt Originalpanel ohne Weitere Optionen', async () => {
     setImageOcrExtractorForTests(async () => ({
       text: 'Eingangsrechnung RE-100 Lieferant Bau AG 120,00 EUR',
-      confidence: 85,
-    }));
+      confidence: 85 }));
     const bytes = new TextEncoder().encode('ORIGINAL-VISIBLE');
     const preview = await processDocumentFileForPreview(
       new File([bytes], 'eingang.jpg', { type: 'image/jpeg' }),
@@ -71,8 +68,7 @@ describe('DOCUMENT-DETAIL-PRESENTATION-FIX-01', () => {
 
     const intake = await confirmPendingDocumentIntake(preview.pending, {
       userDecision: 'save_permanently',
-      importSource: 'upload',
-    });
+      importSource: 'upload' });
     expect(intake.success).toBe(true);
     if (!intake.success || intake.duplicate) throw new Error('intake failed');
 
@@ -88,8 +84,7 @@ describe('DOCUMENT-DETAIL-PRESENTATION-FIX-01', () => {
     const item = createMockInboxItemFromUpload({
       sourceFileName: 'missing.pdf',
       recognizedText: 'Eingangsrechnung',
-      kind: 'materialrechnung',
-    });
+      kind: 'materialrechnung' });
     const withMissingRef: InboxItem = { ...item, fileRefId: 'missing-file-ref' };
     hydrateInboxStore([withMissingRef]);
 
@@ -130,8 +125,7 @@ describe('DOCUMENT-DETAIL-PRESENTATION-FIX-01', () => {
     const item = createMockInboxItemFromUpload({
       sourceFileName: 'lieferantenrechnung.pdf',
       recognizedText: 'Eingangsrechnung Nr. RE-2026-1 Betrag 500,00 EUR Lieferant: Holz AG',
-      kind: 'materialrechnung',
-    });
+      kind: 'materialrechnung' });
     hydrateInboxStore([item]);
     const workflow = processUploadedDocument(item.id)!;
     expect(workflow.classifiedKind).toBe('eingangsrechnung');
@@ -144,8 +138,7 @@ describe('DOCUMENT-DETAIL-PRESENTATION-FIX-01', () => {
     const item = createMockInboxItemFromUpload({
       sourceFileName: 'frage.pdf',
       recognizedText: 'BG BAU Beitragsbescheid',
-      kind: 'bg_bau',
-    });
+      kind: 'bg_bau' });
     const html = renderToStaticMarkup(
       <DocumentAssistantPanel
         item={item}
@@ -163,8 +156,7 @@ describe('DOCUMENT-DETAIL-PRESENTATION-FIX-01', () => {
   it('digitalFolder und paperFiling bleiben am gespeicherten Item erhalten', async () => {
     setImageOcrExtractorForTests(async () => ({
       text: 'Eingangsrechnung RE-55 Lieferant Bau AG 88,00 EUR',
-      confidence: 90,
-    }));
+      confidence: 90 }));
     const preview = await processDocumentFileForPreview(
       new File([new TextEncoder().encode('KEEP-FOLDERS')], 'ablage.jpg', { type: 'image/jpeg' }),
     );
@@ -173,8 +165,7 @@ describe('DOCUMENT-DETAIL-PRESENTATION-FIX-01', () => {
 
     const intake = await confirmPendingDocumentIntake(preview.pending, {
       userDecision: 'save_permanently',
-      importSource: 'upload',
-    });
+      importSource: 'upload' });
     expect(intake.success).toBe(true);
     if (!intake.success || intake.duplicate) throw new Error('intake failed');
 

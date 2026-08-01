@@ -1,0 +1,28 @@
+{
+  "id": "DOC-00025",
+  "companyId": "COMPANY-001",
+  "projectId": null,
+  "supplierId": "SUP-014",
+  "employeeId": "EMP-004",
+  "taxonomyTypeId": "DOCTYPE-054",
+  "documentType": "hr",
+  "subtype": "krankmeldung",
+  "title": "Krankmeldung / AU – Jonas Richter",
+  "receivedAt": "2026-03-10",
+  "lifecyclePhase": "firm",
+  "qualityTag": "clean",
+  "sourceKind": "pdf",
+  "suiteTags": [
+    "commit",
+    "release"
+  ],
+  "notes": "GOLD 02B: Krankmeldung Firma + Mitarbeiter; KK optional als Counterparty.",
+  "expected": {
+    "classifiedKind": "krankmeldung",
+    "caseMatchStatus": "none",
+    "matchedProjectId": null,
+    "primaryActionId": "create_vorgang",
+    "alertIds": []
+  },
+  "sourceFile": "source.pdf"
+}

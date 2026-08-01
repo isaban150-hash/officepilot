@@ -1,3 +1,4 @@
+import { useDocumentBlobDatabaseReset } from './test/documentBlobTestReset';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   applyStateToStores,
@@ -41,16 +42,16 @@ import {
 import { setPdfTextExtractorForTests } from './services/uploadTextExtractionService';
 import { setImageOcrExtractorForTests } from './services/ocrDocumentService';
 import { createAuftragInboxItem } from './test/fixtures';
-import { resetTestStores } from './test/resetStores';
 import { confirmFilingDecisionForTests, importInboxDocumentForTests, archiveMailInboxItemForTests } from './test/confirmFilingDecisionForTests';
 import { withNewEntitySync } from './services/sync/syncMetaService';
 import type { WorkflowResult } from './types/models';
+
+useDocumentBlobDatabaseReset();
 
 afterEach(async () => {
   vi.restoreAllMocks();
   setPdfTextExtractorForTests(null);
   setImageOcrExtractorForTests(null);
-  resetTestStores();
   resetDocumentFileStoreForTests();
   resetDocumentFileIntakeTransformPlanCarryContextStoreForTests();
 });

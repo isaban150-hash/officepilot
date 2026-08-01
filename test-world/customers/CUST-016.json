@@ -1,0 +1,14 @@
+{
+  "id": "CUST-016",
+  "companyId": "COMPANY-001",
+  "name": "Familie Meyer",
+  "customerType": "private",
+  "street": "Lindenweg 2",
+  "zip": "32107",
+  "city": "Bad Salzuflen",
+  "country": "DE",
+  "contactPerson": "Anna Meyer",
+  "phone": "+49 5000 0000",
+  "email": "cust-016@kunde.example",
+  "notes": "MATCHING-STRESS vs CUST-008"
+}

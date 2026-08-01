@@ -1,0 +1,28 @@
+{
+  "id": "DOC-00009",
+  "companyId": "COMPANY-001",
+  "projectId": null,
+  "supplierId": "SUP-012",
+  "taxonomyTypeId": "DOCTYPE-022",
+  "documentType": "authority_letter",
+  "subtype": "bg_bau",
+  "title": "BG BAU – Beitragsbescheid",
+  "receivedAt": "2026-02-15",
+  "lifecyclePhase": "firm",
+  "qualityTag": "clean",
+  "sourceKind": "pdf",
+  "suiteTags": [
+    "smoke",
+    "commit",
+    "release"
+  ],
+  "notes": "GOLD: BG BAU ausschließlich Firma. Kein Projekt, kein Kunde. Counterparty SUP-012.",
+  "expected": {
+    "classifiedKind": "bg_bau",
+    "caseMatchStatus": "none",
+    "matchedProjectId": null,
+    "primaryActionId": "create_vorgang",
+    "alertIds": []
+  },
+  "sourceFile": "source.pdf"
+}

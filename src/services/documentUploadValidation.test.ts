@@ -15,6 +15,15 @@ describe('documentUploadValidation', () => {
     expect(validateUploadFile(file)).toEqual({ valid: true });
   });
 
+  it('akzeptiert HEIC/HEIF', () => {
+    expect(
+      validateUploadFile(new File(['heic'], 'iphone.heic', { type: 'image/heic' })),
+    ).toEqual({ valid: true });
+    expect(
+      validateUploadFile(new File(['heif'], 'iphone.heif', { type: 'image/heif' })),
+    ).toEqual({ valid: true });
+  });
+
   it('lehnt falschen Dateityp ab', () => {
     const file = new File(['text'], 'notes.txt', { type: 'text/plain' });
     expect(validateUploadFile(file)).toEqual({ valid: false, error: 'invalid_type' });

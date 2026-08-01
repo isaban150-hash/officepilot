@@ -1,0 +1,12 @@
+{
+  "id": "EMP-002",
+  "companyId": "COMPANY-001",
+  "branchId": "BRANCH-001",
+  "firstName": "Sandra",
+  "lastName": "Keller",
+  "role": "office",
+  "active": true,
+  "email": "sandra.keller@cirmak-haustechnik.example",
+  "phone": "+49 5222 9800-02",
+  "notes": "TestWorld-Mitarbeiter"
+}

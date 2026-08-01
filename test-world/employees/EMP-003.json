@@ -1,0 +1,13 @@
+{
+  "id": "EMP-003",
+  "companyId": "COMPANY-001",
+  "branchId": "BRANCH-001",
+  "firstName": "Markus",
+  "lastName": "Brandt",
+  "role": "foreman",
+  "active": true,
+  "email": "markus.brandt@cirmak-haustechnik.example",
+  "phone": "+49 5222 9800-03",
+  "notes": "TestWorld-Mitarbeiter",
+  "defaultVehicleId": "VEH-001"
+}

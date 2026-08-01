@@ -1,0 +1,26 @@
+{
+  "documentId": "DOC-00019",
+  "family": "authority",
+  "headline": "VHV · Kfz-Versicherung LIP-CH 1002",
+  "factOrder": [
+    "authority",
+    "subject",
+    "reference",
+    "deadline",
+    "demand"
+  ],
+  "facts": [
+    {
+      "id": "authority",
+      "value": "VHV Gewerbeversicherung"
+    },
+    {
+      "id": "subject",
+      "value": "VHV · Kfz-Versicherung LIP-CH 1002"
+    },
+    {
+      "id": "reference",
+      "value": "LIP-CH 1002"
+    }
+  ]
+}

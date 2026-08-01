@@ -13,7 +13,7 @@ import { getSteuerberaterMonthOverview } from './steuerberaterOverviewService';
 import { getAllTasksFromStore } from './taskStore';
 import { getTodayIso, isTaskDone } from './taskNormalize';
 import { getAllVorgaenge } from './vorgangService';
-import type { PendingHighlight, PendingItemKind } from '../types/models';
+import type { PendingHighlight } from '../types/models';
 
 export type DayPhase = 'morning' | 'midday' | 'evening';
 
@@ -49,6 +49,21 @@ const PENDING_DESK_KEYS: Record<string, TranslationKey> = {
   'pending.highlight.overdueInvoicesMany': 'desk.priority.overdueInvoicesMany',
   'pending.highlight.dueTodayInvoiceOne': 'desk.priority.dueTodayInvoiceOne',
   'pending.highlight.dueTodayInvoicesMany': 'desk.priority.dueTodayInvoicesMany',
+  'pending.highlight.invoicesDueMany': 'desk.priority.invoicesDueMany',
+  'pending.highlight.authorityDeadlineOne': 'desk.priority.authorityDeadlineOne',
+  'pending.highlight.authorityDeadlinesMany': 'desk.priority.authorityDeadlinesMany',
+  'pending.highlight.overdueExpenseOne': 'desk.priority.overdueExpenseOne',
+  'pending.highlight.overdueExpensesMany': 'desk.priority.overdueExpensesMany',
+  'pending.highlight.dueTodayExpenseOne': 'desk.priority.dueTodayExpenseOne',
+  'pending.highlight.dueTodayExpensesMany': 'desk.priority.dueTodayExpensesMany',
+  'pending.highlight.expensesDueMany': 'desk.priority.expensesDueMany',
+  'pending.highlight.dueTasksToday': 'desk.priority.dueTasksToday',
+  'pending.highlight.openTasks': 'desk.priority.dueTasksToday',
+  'pending.highlight.missingProofs': 'desk.priority.missingProofs',
+  'pending.highlight.missingProofSingle': 'desk.priority.missingProofSingle',
+  'pending.highlight.expiredDocuments': 'desk.priority.expiredDocuments',
+  'pending.highlight.expiringDocuments': 'desk.priority.expiringDocuments',
+  'pending.highlight.documentExpiringSingle': 'desk.priority.documentExpiringSingle',
 };
 
 function isSameDay(iso: string | undefined, todayIso: string): boolean {
@@ -85,63 +100,65 @@ export function buildDeskGreeting(
 
 function highlightSeverity(kind: PendingHighlight['kind']): HomeHintSeverity {
   switch (kind) {
+    case 'authority_deadline':
     case 'invoice_overdue':
+    case 'expense_overdue':
     case 'document_expired':
     case 'invoice_due_today':
+    case 'expense_due_today':
       return 'critical';
     case 'inbox_new':
     case 'inbox_unlinked':
     case 'contract_missing_proof':
+    case 'open_tasks':
       return 'warning';
     default:
       return 'info';
   }
 }
 
-function pendingKindWeight(kind: PendingItemKind | 'open_tasks', phase: DayPhase): number {
-  if (phase === 'morning') {
-    if (kind === 'inbox_new') return -8;
-    if (kind === 'open_tasks') return -6;
-    if (kind === 'invoice_due_today') return -5;
-    if (kind === 'inbox_deferred') return 4;
+/**
+ * TODAY-DASHBOARD-01A topic order (lower = higher priority):
+ * 1 Behördenfristen → 2 Ausgangsrechnungen → 3 Ausgaben → 4 Pflichtnachweise
+ * → 5 Neue Dokumente → 6 Später klären → 7 Empfehlungen
+ * Due tasks sit with daily work after payments (before new docs).
+ */
+function deskTopicRank(hint: HomeHint, kind?: PendingHighlight['kind']): number {
+  if (kind === 'authority_deadline') return 10;
+  if (kind === 'invoice_overdue' || kind === 'invoice_due_today') return 20;
+  if (kind === 'expense_overdue' || kind === 'expense_due_today') return 30;
+  if (
+    kind === 'contract_missing_proof' ||
+    kind === 'document_expired' ||
+    kind === 'document_expiring'
+  ) {
+    return 40;
   }
-  if (phase === 'midday') {
-    if (kind === 'inbox_deferred') return -8;
-    if (kind === 'inbox_unfiled') return -6;
-    if (kind === 'inbox_unlinked') return -5;
-    if (kind === 'inbox_new') return 3;
+  if (kind === 'open_tasks') return 45;
+  if (kind === 'inbox_new') return 50;
+  if (kind === 'inbox_deferred') return 60;
+  if (kind === 'invoice_due_soon' || kind === 'invoice_partial') return 70;
+
+  const key = hint.messageKey;
+  if (
+    key.includes('steuerberater') ||
+    key.includes('recommend') ||
+    key.startsWith('hints.') ||
+    key.includes('material') ||
+    key.includes('Almost') ||
+    key.includes('Ready')
+  ) {
+    return 90;
   }
-  if (phase === 'evening') {
-    if (kind === 'document_expiring') return -4;
-    if (kind === 'inbox_new') return 5;
-  }
-  return 0;
+
+  return 80;
 }
 
-function hintSortWeight(hint: HomeHint, phase: DayPhase, highlightKind?: PendingHighlight['kind']): number {
+function hintSortWeight(hint: HomeHint, highlightKind?: PendingHighlight['kind']): number {
+  const topic = deskTopicRank(hint, highlightKind);
   const severityBase =
-    hint.severity === 'critical' ? 0 : hint.severity === 'warning' ? 10 : 20;
-  const key = hint.messageKey;
-  let phaseAdjust = highlightKind ? pendingKindWeight(highlightKind, phase) : 0;
-
-  if (phase === 'morning') {
-    if (key.includes('newDocuments') || key.includes('material') || key.includes('invoiceDue')) {
-      phaseAdjust -= 5;
-    }
-    if (key.includes('steuerberater')) phaseAdjust += 8;
-  } else if (phase === 'midday') {
-    if (key.includes('deferred') || key.includes('Missing') || key.includes('missing')) {
-      phaseAdjust -= 5;
-    }
-    if (key.includes('material') || key.includes('Matches')) phaseAdjust -= 3;
-  } else if (phase === 'evening') {
-    if (key.includes('steuerberater') || key.includes('Almost') || key.includes('Ready')) {
-      phaseAdjust -= 6;
-    }
-    if (key.includes('newDocuments')) phaseAdjust += 6;
-  }
-
-  return severityBase + phaseAdjust;
+    hint.severity === 'critical' ? 0 : hint.severity === 'warning' ? 1 : 2;
+  return topic * 10 + severityBase;
 }
 
 function highlightToHint(highlight: PendingHighlight): HomeHint | null {
@@ -159,7 +176,11 @@ function highlightToHint(highlight: PendingHighlight): HomeHint | null {
   };
 }
 
-function mergePriorities(base: HomeHint[], extras: HomeHint[], phase: DayPhase): HomeHint[] {
+function mergePriorities(
+  base: HomeHint[],
+  extras: HomeHint[],
+  pendingHighlights: PendingHighlight[],
+): HomeHint[] {
   const seen = new Set(base.map((hint) => hint.id));
   const merged = [...base];
   for (const hint of extras) {
@@ -169,7 +190,7 @@ function mergePriorities(base: HomeHint[], extras: HomeHint[], phase: DayPhase):
   }
 
   const highlightKinds = new Map<string, PendingHighlight['kind']>();
-  for (const highlight of scanPendingItems().summary.highlights) {
+  for (const highlight of pendingHighlights) {
     const deskKey = PENDING_DESK_KEYS[highlight.labelKey] ?? highlight.labelKey;
     highlightKinds.set(
       buildHomeHintId(deskKey, { count: highlight.count, ...highlight.params }),
@@ -180,20 +201,20 @@ function mergePriorities(base: HomeHint[], extras: HomeHint[], phase: DayPhase):
   return merged
     .sort(
       (a, b) =>
-        hintSortWeight(a, phase, highlightKinds.get(a.id)) -
-        hintSortWeight(b, phase, highlightKinds.get(b.id)),
+        hintSortWeight(a, highlightKinds.get(a.id)) -
+        hintSortWeight(b, highlightKinds.get(b.id)),
     )
     .slice(0, MAX_PRIORITIES);
 }
 
 export function buildDeskPriorities(now: Date | string = new Date()): HomeHint[] {
-  const phase = getDayPhase(now);
   const baseHints = buildHomeHints(now);
-  const pendingHints = scanPendingItems(now)
-    .summary.highlights.map(highlightToHint)
+  const pending = scanPendingItems(now);
+  const pendingHints = pending.summary.highlights
+    .map(highlightToHint)
     .filter((hint): hint is HomeHint => hint !== null);
 
-  return mergePriorities(baseHints, pendingHints, phase);
+  return mergePriorities(baseHints, pendingHints, pending.summary.highlights);
 }
 
 export function buildDeskSuccesses(now: Date | string = new Date()): DeskSuccess[] {

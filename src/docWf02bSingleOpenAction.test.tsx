@@ -19,7 +19,6 @@ import {
 } from './services/officePilotMemoryService';
 import { createAuftragInboxItem, createTestVorgang } from './test/fixtures';
 import { hydrateVorgangStore } from './services/vorgangService';
-import { resetTestStores } from './test/resetStores';
 import type { CompanyDocument } from './types/models';
 import { t } from './i18n';
 
@@ -90,9 +89,7 @@ function experiencePrimaryButtons(container: HTMLElement): HTMLButtonElement[] {
 describe('DOC-WF-02B Single Open Action on DokumentDetailPage', () => {
   let mounted: Mount | undefined;
 
-  beforeEach(() => {
-    resetTestStores();
-    resetMemory();
+  beforeEach(() => {    resetMemory();
     resetCommunicationHistoryStore();
     hydrateDocumentStore([]);
     hydrateVorgangStore([]);

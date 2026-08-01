@@ -15,15 +15,41 @@ export interface ClassificationRule {
 }
 
 export const CLASSIFICATION_RULES: ClassificationRule[] = [
+  // Outgoing invoices before Abschlag→incoming, so "Ausgangsrechnung / Abschlagsrechnung" stays ausgehend.
+  { kind: 'ausgangsrechnung', pattern: /ausgangsrechnung|rechnung an kunde/, reasonKey: 'classification.detect.ausgangsrechnung' },
   { kind: 'eingangsrechnung', pattern: /schlussrechnung/, reasonKey: 'classification.detect.schlussrechnung' },
   { kind: 'eingangsrechnung', pattern: /abschlagsrechnung|teilrechnung/, reasonKey: 'classification.detect.abschlagsrechnung' },
   { kind: 'stundenzettel', pattern: /leistungsnachweis|stundennachweis/, reasonKey: 'classification.detect.leistungsnachweis' },
   { kind: 'eingangsrechnung', pattern: /hotelrechnung|hotel[\s-]?bill|übernachtung|uebernachtung/, reasonKey: 'classification.detect.hotelrechnung' },
   { kind: 'eingangsrechnung', pattern: /materialrechnung|materiallieferung|baumaterial/, reasonKey: 'classification.detect.materialrechnung' },
+  {
+    kind: 'eingangsrechnung',
+    pattern: /honorarrechnung|steuerberater(?:rechnung)?|steuerberatung.*rechnung/,
+    reasonKey: 'classification.detect.honorarrechnung',
+  },
+  // Utility / energy invoices (incoming cost bills → rechnung)
+  {
+    kind: 'rechnung',
+    pattern:
+      /stromrechnung|gasrechnung|wasser[\s\-\/]*abwasserrechnung|abwasserrechnung|energierechnung|fernwärmerechnung|fernwaermerechnung|\bstadtwerke\b.*\brechnung\b|\brechnung\b.*\bstadtwerke\b/,
+    reasonKey: 'classification.detect.utilityRechnung',
+  },
+  // Telecom invoices (incoming → eingangsrechnung)
+  {
+    kind: 'eingangsrechnung',
+    pattern:
+      /mobilfunkrechnung|festnetzrechnung|rechnung\s+internet|\brechnung\b.*\b(?:internet|festnetz|mobilfunk)\b|\b(?:telekom|vodafone|\bo2\b|1\s*&\s*1)\b.*\brechnung\b/,
+    reasonKey: 'classification.detect.telecomRechnung',
+  },
   { kind: 'werkvertrag', pattern: /werkvertrag|werkvertrags/, reasonKey: 'classification.detect.werkvertrag' },
   { kind: 'subunternehmervertrag', pattern: /subunternehmervertrag|subunternehmer/, reasonKey: 'classification.detect.subunternehmer' },
   { kind: 'nachunternehmervertrag', pattern: /nachunternehmervertrag|nachunternehmer/, reasonKey: 'classification.detect.nachunternehmer' },
-  { kind: 'kontoauszug', pattern: /\bbank\b|sparkasse|volksbank|commerzbank|deutsche bank|ing[\s-]?di?ba|postbank/, reasonKey: 'classification.detect.bank' },
+  {
+    kind: 'kontoauszug',
+    pattern:
+      /kontoauszug|kontoumsätze|kontobewegungen|\bbank\b|sparkasse|volksbank|commerzbank|deutsche bank|ing[\s-]?di?ba|postbank/,
+    reasonKey: 'classification.detect.kontoauszug',
+  },
   { kind: 'mahnung', pattern: /mahnung|inkasso|zahlungsaufforderung/, reasonKey: 'classification.detect.mahnung' },
   { kind: 'zahlungserinnerung', pattern: /zahlungserinnerung/, reasonKey: 'classification.detect.zahlungserinnerung' },
   { kind: 'freistellungsbescheinigung', pattern: /freistellungsbescheinigung|§48b|§48 b/, reasonKey: 'classification.detect.freistellung' },
@@ -66,14 +92,12 @@ export const CLASSIFICATION_RULES: ClassificationRule[] = [
   { kind: 'betriebserlaubnis', pattern: /betriebserlaubnis/, reasonKey: 'classification.detect.betriebserlaubnis' },
   { kind: 'iso_nachweis', pattern: /iso[\s-]?9001|iso[\s-]?14001|iso-nachweis/, reasonKey: 'classification.detect.isoNachweis' },
   { kind: 'zertifikat', pattern: /zertifikat|zertifizierung/, reasonKey: 'classification.detect.zertifikat' },
-  { kind: 'ausgangsrechnung', pattern: /ausgangsrechnung|rechnung an kunde/, reasonKey: 'classification.detect.ausgangsrechnung' },
   { kind: 'gutschrift', pattern: /gutschrift/, reasonKey: 'classification.detect.gutschrift' },
   { kind: 'quittung', pattern: /quittung/, reasonKey: 'classification.detect.quittung' },
   { kind: 'kassenbeleg', pattern: /kassenbeleg|kassenbon/, reasonKey: 'classification.detect.kassenbeleg' },
   { kind: 'ec_beleg', pattern: /ec-beleg|ec beleg|kartenzahlung/, reasonKey: 'classification.detect.ecBeleg' },
   { kind: 'kreditkartenbeleg', pattern: /kreditkartenbeleg|kreditkarte/, reasonKey: 'classification.detect.kreditkartenbeleg' },
   { kind: 'tankbeleg', pattern: /tankbeleg|tankstelle|kraftstoff|diesel|benzin/, reasonKey: 'classification.detect.tankbeleg' },
-  { kind: 'kontoauszug', pattern: /kontoauszug|kontoumsätze|kontobewegungen|sparkasse|volksbank|commerzbank/, reasonKey: 'classification.detect.kontoauszug' },
   { kind: 'lohnabrechnung', pattern: /lohnabrechnung|gehaltsabrechnung|entgeltabrechnung/, reasonKey: 'classification.detect.lohnabrechnung' },
   { kind: 'lohnunterlagen', pattern: /lohnunterlagen/, reasonKey: 'classification.detect.lohnunterlagen' },
   { kind: 'stundenzettel', pattern: /stundenzettel|stundenliste|arbeitszeitnachweis/, reasonKey: 'classification.detect.stundenzettel' },
@@ -87,7 +111,11 @@ export const CLASSIFICATION_RULES: ClassificationRule[] = [
   { kind: 'gebaeudeversicherung', pattern: /gebäudeversicherung|gebaeudeversicherung/, reasonKey: 'classification.detect.gebaeudeversicherung' },
   { kind: 'versicherungsbescheid', pattern: /versicherungsbescheid/, reasonKey: 'classification.detect.versicherungsbescheid' },
   { kind: 'versicherung', pattern: /versicherung|haftpflicht|allianz|policy|versicherungsschreiben/, reasonKey: 'classification.detect.versicherung' },
-  { kind: 'tuev_bericht', pattern: /tüv|tuev|hauptuntersuchung/, reasonKey: 'classification.detect.tuev' },
+  {
+    kind: 'tuev_bericht',
+    pattern: /tüv|tuev|hauptuntersuchung|\bhu\s*\/\s*au\b|\bnächste\s+hu\b|\bhu\b[\s\S]{0,60}\bau\b/,
+    reasonKey: 'classification.detect.tuev',
+  },
   { kind: 'reparaturrechnung', pattern: /reparaturrechnung|werkstattrechnung/, reasonKey: 'classification.detect.reparaturrechnung' },
   { kind: 'leasingvertrag', pattern: /leasingvertrag|leasing/, reasonKey: 'classification.detect.leasing' },
   { kind: 'wartungsnachweis', pattern: /wartungsnachweis|wartungsprotokoll/, reasonKey: 'classification.detect.wartung' },
@@ -102,7 +130,11 @@ export const CLASSIFICATION_RULES: ClassificationRule[] = [
   { kind: 'auftrag', pattern: /\bauftrag\b|kundenauftrag|auftrag erteilt|auftragserteilung/, reasonKey: 'classification.detect.auftrag' },
   { kind: 'angebot', pattern: /angebot|kostenvoranschlag|offerte/, reasonKey: 'classification.detect.angebot' },
   { kind: 'lieferschein', pattern: /lieferschein|wareneingang|warenausgang/, reasonKey: 'classification.detect.lieferschein' },
-  { kind: 'eingangsrechnung', pattern: /eingangsrechnung|rechnungsnummer|invoice/, reasonKey: 'classification.detect.eingangsrechnung' },
+  {
+    kind: 'eingangsrechnung',
+    pattern: /eingangsrechnung|rechnungsnummer|invoice|\brechnung\s+(?:nr\.?|nummer)?\s*[a-z0-9][\w./-]{2,}/i,
+    reasonKey: 'classification.detect.eingangsrechnung',
+  },
   { kind: 'rechnung', pattern: /rechnung/, reasonKey: 'classification.detect.rechnung' },
   { kind: 'email_pdf', pattern: /e-mail|email|mail-anhang|betreff:|von:|gesendet:/, reasonKey: 'classification.detect.emailPdf' },
   { kind: 'schriftverkehr', pattern: /schriftverkehr|korrespondenz/, reasonKey: 'classification.detect.schriftverkehr' },

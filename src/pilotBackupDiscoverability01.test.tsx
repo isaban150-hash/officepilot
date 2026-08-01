@@ -17,14 +17,11 @@ import {
   FIRMENDATEN_BACKUP_HREF,
 } from './services/backupSectionNavigation';
 import { notifyPersistenceHealthChanged, resetPersistenceHealthForTests } from './services/persistenceHealthService';
-import { resetTestStores } from './test/resetStores';
 
 const completeSetup = { ...DEFAULT_SETUP, setupComplete: true };
 
 describe('PILOT-BACKUP-DISCOVERABILITY-01', () => {
-  beforeEach(() => {
-    resetTestStores();
-    resetPersistenceHealthForTests();
+  beforeEach(() => {    resetPersistenceHealthForTests();
   });
 
   afterEach(() => {

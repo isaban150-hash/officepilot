@@ -1,0 +1,44 @@
+{
+  "caseId": "NT-01",
+  "kind": "order-amendment",
+  "baseOrderSource": "seeded-confirmed-order",
+  "damagePrevented": [
+    "ursprüngliche Positionen werden durch den Nachtrag nicht überschrieben",
+    "stilles Einfügen von Positionen ohne Bestätigung (Confirm-first)",
+    "fehlerhafte Verknüpfung zwischen Auftrag und Nachtrag",
+    "doppelte Positionen im Plan nach Confirm",
+    "verlorener Nachtrag nach Bestätigung",
+    "inkonsistenter Plan (Hauptsnapshot vs. komponierte Positionen)",
+    "Nachtrag/Status/Positionen verschwinden in der UI"
+  ],
+  "layers": ["amendment-journey", "ui-visibility"],
+  "amendmentJourney": {
+    "vorgangId": "v-nt-01",
+    "draftTitle": "NT-01 Zusatzleistung Dach",
+    "draftReason": "Mehrbedarf Lichtkuppeln",
+    "newPositionDescription": "Zusätzliche Lichtkuppelmontage",
+    "newPositionQuantity": 2,
+    "newPositionUnit": "Stück",
+    "newPositionUnitPrice": 450,
+    "originalPositionId": "op-nt-01-main",
+    "originalPositionDescription": "Hauptleistung Abdichtung",
+    "originalPlannedQuantity": 10,
+    "requireConfirmFirst": true,
+    "requirePlanLockedAfterConfirm": true,
+    "requireLocalSourceDraftLink": true
+  },
+  "amendmentUiVisibility": {
+    "panelVisible": true,
+    "confirmedListVisible": true,
+    "confirmedBadgeVisible": true,
+    "statusBestaetigtVisible": true,
+    "amendmentTitleVisible": true,
+    "newPositionVisibleInDetails": true,
+    "orderSummaryAmendmentCount": 1,
+    "originTraceable": true
+  },
+  "knownGaps": [
+    "Cloud-Confirm wird wie in orderAmendment01b2Confirm über RPC-Mock abgesichert (kein Live-Supabase).",
+    "Ausgangsauftrag ist ein seeded bestätigter Vorgang (contractConfirmation), kein WV-LV-01-Accept-Chain — Fokus Nachtragspfad."
+  ]
+}

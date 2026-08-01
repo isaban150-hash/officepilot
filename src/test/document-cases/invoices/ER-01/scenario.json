@@ -2,7 +2,7 @@
   "caseId": "ER-01",
   "damagePrevented": "Eingangsrechnung erhält Vertragswirkung oder löst automatische Zahlung aus",
   "category": "invoices",
-  "layers": ["stable-pipeline"],
+  "layers": ["stable-pipeline", "invoice-journey", "ui-visibility"],
   "channel": "upload",
   "importSource": "upload",
   "titleHint": "Eingangsrechnung RE-2026-9912",

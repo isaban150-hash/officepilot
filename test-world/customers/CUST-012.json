@@ -1,0 +1,14 @@
+{
+  "id": "CUST-012",
+  "companyId": "COMPANY-001",
+  "name": "Grundschule Schötmar",
+  "customerType": "public",
+  "street": "Schulweg 3",
+  "zip": "32108",
+  "city": "Bad Salzuflen",
+  "country": "DE",
+  "contactPerson": "Hausmeisterei",
+  "phone": "+49 5000 0000",
+  "email": "cust-012@kunde.example",
+  "notes": "TestWorld-Kunde"
+}

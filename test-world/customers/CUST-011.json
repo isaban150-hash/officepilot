@@ -1,0 +1,14 @@
+{
+  "id": "CUST-011",
+  "companyId": "COMPANY-001",
+  "name": "Logistikzentrum Lage GmbH",
+  "customerType": "industrial",
+  "street": "Autobahnstraße 1",
+  "zip": "32791",
+  "city": "Lage",
+  "country": "DE",
+  "contactPerson": "Betriebsleiter",
+  "phone": "+49 5000 0000",
+  "email": "cust-011@kunde.example",
+  "notes": "TestWorld-Kunde"
+}

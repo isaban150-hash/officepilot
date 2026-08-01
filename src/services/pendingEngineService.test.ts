@@ -363,6 +363,7 @@ describe('pendingEngineService summary and dedupe', () => {
         category: 'dokumente',
         type: 'dokument_pruefen',
         done: false,
+        dueDate: '2026-06-27',
       }),
       normalizeTask({
         id: 't-2',
@@ -373,10 +374,11 @@ describe('pendingEngineService summary and dedupe', () => {
         category: 'dokumente',
         type: 'dokument_pruefen',
         done: false,
+        dueDate: '2026-06-20',
       }),
       normalizeTask({
         id: 't-3',
-        title: 'Dritte Aufgabe',
+        title: 'Ohne Due-Date',
         description: 'Test',
         status: 'open',
         priority: 'niedrig',
@@ -390,7 +392,29 @@ describe('pendingEngineService summary and dedupe', () => {
     expect(summary.newInboxItems).toBe(1);
     expect(summary.deferredInboxItems).toBe(1);
     expect(summary.openTasks).toBe(3);
-    expect(summary.highlights.some((h) => h.kind === 'open_tasks')).toBe(true);
+    expect(summary.dueTasksToday).toBe(2);
+    const taskHighlight = summary.highlights.find((h) => h.kind === 'open_tasks');
+    expect(taskHighlight?.count).toBe(2);
+    expect(taskHighlight?.labelKey).toBe('pending.highlight.dueTasksToday');
+  });
+
+  it('Aufgaben ohne Due-Date erscheinen nicht im Heute-Highlight', () => {
+    setTaskStoreForTests([
+      normalizeTask({
+        id: 't-no-due',
+        title: 'Ohne Termin',
+        description: 'Test',
+        status: 'open',
+        priority: 'mittel',
+        category: 'dokumente',
+        type: 'dokument_pruefen',
+        done: false,
+      }),
+    ]);
+    const { summary } = scanPendingItems('2026-06-27');
+    expect(summary.openTasks).toBe(1);
+    expect(summary.dueTasksToday).toBe(0);
+    expect(summary.highlights.some((h) => h.kind === 'open_tasks')).toBe(false);
   });
 
   it('dedupliziert Pending-Items', () => {

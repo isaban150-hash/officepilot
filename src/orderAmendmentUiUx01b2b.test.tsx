@@ -13,7 +13,6 @@ import * as vorgangService from './services/vorgangService';
 import { getVorgangById, hydrateVorgangStore } from './services/vorgangService';
 import * as confirmOrchestrator from './services/orderAmendment/orderAmendmentCloudConfirmOrchestrator';
 import { createAbschlagInvoice, createOrderPosition, createTestVorgang } from './test/fixtures';
-import { resetTestStores } from './test/resetStores';
 import type { ContractConfirmationSnapshot, Vorgang } from './types/models';
 
 function translate(key: TranslationKey): string {
@@ -203,9 +202,7 @@ describe('ORDER-AMENDMENT-UI-UX-01B2B', () => {
   let container: HTMLDivElement;
   let root: Root;
 
-  beforeEach(() => {
-    resetTestStores();
-    vi.restoreAllMocks();
+  beforeEach(() => {    vi.restoreAllMocks();
     container = document.createElement('div');
     document.body.appendChild(container);
   });

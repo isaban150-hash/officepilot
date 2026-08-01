@@ -37,9 +37,7 @@ function seedInbox(overrides: Partial<InboxItem> = {}): InboxItem {
 }
 
 describe('SERVICE-FILING-CONFIRM-GATE-01', () => {
-  beforeEach(() => {
-    resetTestStores();
-    hydrateDocumentStore([]);
+  beforeEach(() => {    hydrateDocumentStore([]);
   });
 
   afterEach(() => {

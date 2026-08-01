@@ -1,0 +1,13 @@
+{
+  "id": "VEH-001",
+  "companyId": "COMPANY-001",
+  "branchId": "BRANCH-001",
+  "label": "Transporter 1",
+  "licensePlate": "LIP-CH 1001",
+  "vehicleType": "van",
+  "make": "Volkswagen",
+  "model": "Transporter",
+  "defaultDriverEmployeeId": "EMP-003",
+  "active": true,
+  "notes": "TestWorld-Fahrzeug"
+}

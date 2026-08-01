@@ -1,0 +1,30 @@
+{
+  "id": "DOC-00006",
+  "companyId": "COMPANY-001",
+  "projectId": null,
+  "supplierId": "SUP-005",
+  "employeeId": "EMP-003",
+  "vehicleId": "VEH-001",
+  "taxonomyTypeId": "DOCTYPE-019",
+  "documentType": "fuel_receipt",
+  "subtype": "tankbeleg",
+  "title": "Tankbeleg Aral Station Nord – LIP-CH 1001",
+  "receivedAt": "2026-02-10",
+  "lifecyclePhase": "firm",
+  "qualityTag": "clean",
+  "sourceKind": "pdf",
+  "suiteTags": [
+    "smoke",
+    "commit",
+    "release"
+  ],
+  "notes": "GOLD: Tankbeleg. Nur Fahrzeug VEH-001 (+ Fahrer EMP-003). Kein Projekt. Counterparty SUP-005.",
+  "expected": {
+    "classifiedKind": "tankbeleg",
+    "caseMatchStatus": "none",
+    "matchedProjectId": null,
+    "primaryActionId": "create_vorgang",
+    "alertIds": []
+  },
+  "sourceFile": "source.pdf"
+}

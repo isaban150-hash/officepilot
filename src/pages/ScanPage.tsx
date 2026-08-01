@@ -38,7 +38,7 @@ import type { UserStorageDecision } from '../types/userStorageDecision';
 import type { UploadDocumentKind } from '../types/models';
 
 const SCAN_FILE_ACCEPT =
-  'image/jpeg,image/png,image/webp,application/pdf,.jpg,.jpeg,.png,.webp,.pdf';
+  'image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,.pdf';
 
 export function ScanPage() {
   const { translate, showToast } = useApp();

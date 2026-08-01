@@ -7,9 +7,19 @@ export const ACCEPTED_UPLOAD_MIME_TYPES = [
   'image/jpeg',
   'image/png',
   'image/webp',
+  'image/heic',
+  'image/heif',
 ] as const;
 
-export const ACCEPTED_UPLOAD_EXTENSIONS = ['.pdf', '.jpg', '.jpeg', '.png', '.webp'] as const;
+export const ACCEPTED_UPLOAD_EXTENSIONS = [
+  '.pdf',
+  '.jpg',
+  '.jpeg',
+  '.png',
+  '.webp',
+  '.heic',
+  '.heif',
+] as const;
 
 export type AcceptedUploadMimeType = (typeof ACCEPTED_UPLOAD_MIME_TYPES)[number];
 
@@ -41,13 +51,12 @@ export function validateUploadFile(file: File): {
   valid: false;
   error: DocumentUploadValidationError;
 } {
-  if (isHeicUploadFile(file)) {
-    return { valid: false, error: 'unsupported_photo_format' };
-  }
-
   if (file.size > MAX_UPLOAD_FILE_SIZE_BYTES) {
     return { valid: false, error: 'file_too_large' };
   }
+
+  // HEIC/HEIF pass validation here; prepareUploadFileForPipeline converts to JPEG
+  // before cache/OCR/storage (see loadCachedDocumentFileFromUpload).
   const mimeOk = file.type ? isAcceptedUploadMimeType(file.type) : false;
   const extOk = isAcceptedUploadFileName(file.name);
   if (!mimeOk && !extOk) {
@@ -72,7 +81,7 @@ export function isImageUpload(fileType: string, fileName: string): boolean {
   const mime = fileType.toLowerCase();
   if (mime.startsWith('image/')) return true;
   const ext = extensionFromFileName(fileName);
-  return ['.jpg', '.jpeg', '.png', '.webp'].includes(ext);
+  return ['.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif'].includes(ext);
 }
 
 export function isPdfUpload(fileType: string, fileName: string): boolean {

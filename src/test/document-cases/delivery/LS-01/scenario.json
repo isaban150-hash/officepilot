@@ -1,0 +1,12 @@
+{
+  "caseId": "LS-01",
+  "damagePrevented": "Lieferschein verändert still den Auftragsplan oder wird falsch zugeordnet",
+  "category": "delivery",
+  "layers": ["stable-pipeline", "delivery-journey", "ui-visibility"],
+  "channel": "upload",
+  "importSource": "upload",
+  "titleHint": "Lieferschein LS-2026-0142 Kupferrohr",
+  "senderHint": "Sanitär Großhandel Nord GmbH",
+  "markedAsCompanyDocument": true,
+  "tags": ["delivery_recorded", "confirm_first"]
+}

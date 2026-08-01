@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://officepilot.local/test-world/schemas/expected-primaryAction.schema.json",
+  "title": "TestWorld Expected PrimaryAction",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["documentId", "id"],
+  "properties": {
+    "documentId": { "type": "string", "pattern": "^DOC-[0-9]{5}$" },
+    "id": {
+      "type": "string",
+      "enum": [
+        "accept_contract_order",
+        "contract_inquiry",
+        "reject_contract_proposal",
+        "apply_intake",
+        "record_expense",
+        "create_vorgang",
+        "create_task",
+        "link_vorgang",
+        "open_vorgang",
+        "select_vorgang",
+        "review_document",
+        "later"
+      ]
+    }
+  }
+}

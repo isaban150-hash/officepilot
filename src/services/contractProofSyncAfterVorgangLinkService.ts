@@ -8,6 +8,11 @@ import {
   analyzeContract,
   analyzeContractFromInbox,
 } from './contractAnalysisService';
+import { analyzeContractIntelligenceFromInbox } from './contractIntelligenceService';
+import {
+  buildRequiredDocumentsFromContractIntelligence,
+  toRequiredDocuments,
+} from './contractProofRequirementsFromIntelligence';
 import { archiveTruthSnapshotWorkspaceMismatch } from './documentArchiveTruthSnapshotService';
 import { getInboxItemById } from './inboxService';
 import { syncContractProofRequirements } from './officePilotMemoryService';
@@ -15,6 +20,7 @@ import { persistAll } from './persistenceService';
 import { getSyncClient } from './sync/syncClientService';
 import { getVorgangById } from './vorgangService';
 import { getWorkspaceStoreSnapshot } from './workspace/workspaceStore';
+import type { ContractIntelligenceResult } from '../types/documentIntelligence';
 
 export type SyncContractProofAfterVorgangLinkStatus =
   | 'synced'
@@ -43,6 +49,11 @@ export type SyncContractProofAfterVorgangLinkInput = {
   workspaceId?: string | null;
   /** Default true — set false only when caller persists immediately after. */
   persist?: boolean;
+  /**
+   * When provided (including null), skips analyzeContractIntelligenceFromInbox.
+   * Omit to analyze from the inbox item (standalone callers / archive link).
+   */
+  precomputedIntelligence?: ContractIntelligenceResult | null;
 };
 
 const CONTRACT_CLASSIFIED_KINDS = new Set<ClassifiedDocumentKind>([
@@ -89,7 +100,19 @@ type ResolvedProofSource =
   | { kind: 'noop_no_requirements' }
   | { kind: 'source_unavailable'; message: string };
 
-function resolveFromInbox(item: InboxItem): ResolvedProofSource {
+function resolveContractIntelligence(
+  item: InboxItem,
+  precomputedIntelligence?: ContractIntelligenceResult | null,
+): ContractIntelligenceResult | null {
+  return precomputedIntelligence !== undefined
+    ? precomputedIntelligence
+    : analyzeContractIntelligenceFromInbox(item);
+}
+
+function resolveFromInbox(
+  item: InboxItem,
+  precomputedIntelligence?: ContractIntelligenceResult | null,
+): ResolvedProofSource {
   // Expected contract without payload text: do not treat title-only hints as success.
   if (isExpectedContractInbox(item) && !inboxPayloadText(item)) {
     return {
@@ -99,21 +122,33 @@ function resolveFromInbox(item: InboxItem): ResolvedProofSource {
   }
 
   const analysis = analyzeContractFromInbox(item);
-  if (analysis.isContract) {
-    if (analysis.requiredDocuments.length === 0) {
-      return { kind: 'noop_no_requirements' };
-    }
+  const intelligence = resolveContractIntelligence(item, precomputedIntelligence);
+  const requiredDocuments = toRequiredDocuments(
+    buildRequiredDocumentsFromContractIntelligence(
+      intelligence,
+      analysis.isContract ? analysis.requiredDocuments : [],
+    ),
+  );
+
+  if (requiredDocuments.length > 0) {
     return {
       kind: 'ready',
-      requiredDocuments: analysis.requiredDocuments,
+      requiredDocuments,
       sourceInboxId: item.id,
     };
+  }
+
+  if (analysis.isContract) {
+    return { kind: 'noop_no_requirements' };
   }
 
   return { kind: 'noop_not_contract' };
 }
 
-function resolveFromDocument(document: CompanyDocument): ResolvedProofSource {
+function resolveFromDocument(
+  document: CompanyDocument,
+  precomputedIntelligence?: ContractIntelligenceResult | null,
+): ResolvedProofSource {
   const recognizedText = (document.recognizedText ?? '').trim();
   // Expected contract without body text: title/kind alone is not a usable proof source.
   if (isExpectedContractDocument(document) && !recognizedText) {
@@ -132,12 +167,26 @@ function resolveFromDocument(document: CompanyDocument): ResolvedProofSource {
   });
 
   if (analysis.isContract) {
-    if (analysis.requiredDocuments.length === 0) {
+    const linkedInbox = document.sourceInboxItemId
+      ? getInboxItemById(document.sourceInboxItemId)
+      : null;
+    const intelligence = linkedInbox
+      ? resolveContractIntelligence(linkedInbox, precomputedIntelligence)
+      : precomputedIntelligence !== undefined
+        ? precomputedIntelligence
+        : null;
+    const requiredDocuments = toRequiredDocuments(
+      buildRequiredDocumentsFromContractIntelligence(
+        intelligence,
+        analysis.requiredDocuments,
+      ),
+    );
+    if (requiredDocuments.length === 0) {
       return { kind: 'noop_no_requirements' };
     }
     return {
       kind: 'ready',
-      requiredDocuments: analysis.requiredDocuments,
+      requiredDocuments,
       sourceInboxId: document.sourceInboxItemId?.trim() || document.id,
     };
   }
@@ -193,15 +242,16 @@ export function syncContractProofRequirementsAfterVorgangLink(
     inboxItem = getInboxItemById(document.sourceInboxItemId) ?? null;
   }
 
+  const precomputedIntelligence = input.precomputedIntelligence;
   let resolved: ResolvedProofSource | null = null;
 
   if (inboxItem) {
-    resolved = resolveFromInbox(inboxItem);
+    resolved = resolveFromInbox(inboxItem, precomputedIntelligence);
     if (resolved.kind === 'noop_not_contract' && document) {
-      resolved = resolveFromDocument(document);
+      resolved = resolveFromDocument(document, precomputedIntelligence);
     }
   } else if (document) {
-    resolved = resolveFromDocument(document);
+    resolved = resolveFromDocument(document, precomputedIntelligence);
   } else {
     return { status: 'noop_not_contract' };
   }

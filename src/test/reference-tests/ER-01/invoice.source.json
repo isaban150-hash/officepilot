@@ -1,0 +1,18 @@
+{
+  "caseId": "ER-01",
+  "role": "Source pointer for the incoming-invoice reference journey",
+  "documentCaseId": "ER-01",
+  "documentCasePath": "src/test/document-cases/invoices/ER-01/",
+  "ocrFile": "ocr.txt",
+  "productionServices": [
+    "src/services/intakeWorkflowService.ts (processUploadedDocument)",
+    "src/services/documentService.ts (importInboxDocument)",
+    "src/services/officeActionService.ts (buildExpenseInputFromInbox)",
+    "src/services/expenseService.ts (addExpense)"
+  ],
+  "uiSurfaces": [
+    "src/components/inbox/DocumentIntakeUnderstandingPanel.tsx",
+    "src/components/expenses/ExpenseOverviewCard.tsx"
+  ],
+  "note": "No parallel business logic — archive + expense use production APIs; Document-Case supplies OCR/Soll for Ebene 1."
+}

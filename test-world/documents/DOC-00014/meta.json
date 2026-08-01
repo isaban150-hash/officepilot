@@ -1,0 +1,28 @@
+{
+  "id": "DOC-00014",
+  "companyId": "COMPANY-001",
+  "projectId": null,
+  "supplierId": "SUP-007",
+  "taxonomyTypeId": "DOCTYPE-040",
+  "documentType": "utility",
+  "subtype": "strom",
+  "title": "Stadtwerke Bad Salzuflen – Stromrechnung Betriebsstätte",
+  "receivedAt": "2026-02-12",
+  "lifecyclePhase": "firm",
+  "qualityTag": "clean",
+  "sourceKind": "pdf",
+  "suiteTags": [
+    "smoke",
+    "commit",
+    "release"
+  ],
+  "notes": "GOLD 02B: Strom nur Firma. Kein Projekt.",
+  "expected": {
+    "classifiedKind": "rechnung",
+    "caseMatchStatus": "none",
+    "matchedProjectId": null,
+    "primaryActionId": "create_vorgang",
+    "alertIds": []
+  },
+  "sourceFile": "source.pdf"
+}

@@ -346,6 +346,46 @@ async function deleteDatabaseWithRetry(factory: IDBFactory, attempts = 8): Promi
   });
 }
 
+/**
+ * Clears all blob records without deleting the database (faster than deleteDatabase).
+ * Prefer this in test beforeEach hooks when suites write real IndexedDB blobs.
+ */
+export async function clearDocumentBlobStoreForTests(): Promise<void> {
+  resetQueue = resetQueue.then(async () => {
+    const factory = resolveIndexedDb();
+    if (!factory) return;
+
+    if (typeof factory.databases === 'function') {
+      try {
+        const existing = await factory.databases();
+        if (!existing.some((entry) => entry.name === DOCUMENT_BLOB_DB_NAME)) {
+          return;
+        }
+      } catch {
+        /* listing unsupported — fall through to open+clear */
+      }
+    }
+
+    try {
+      const db = await openDocumentBlobDatabase();
+      await new Promise<void>((resolve, reject) => {
+        const transaction = db.transaction(DOCUMENT_BLOB_STORE_NAME, 'readwrite');
+        transaction.objectStore(DOCUMENT_BLOB_STORE_NAME).clear();
+        transaction.oncomplete = () => resolve();
+        transaction.onabort = () => {
+          reject(transaction.error ?? new Error('Failed to clear document blob store'));
+        };
+        transaction.onerror = () => {
+          reject(transaction.error ?? new Error('Failed to clear document blob store'));
+        };
+      });
+    } catch {
+      /* DB unavailable or never usable — nothing to clear */
+    }
+  });
+  return resetQueue;
+}
+
 export async function resetDocumentBlobDatabaseForTests(): Promise<void> {
   resetQueue = resetQueue.then(async () => {
     if (activeDb) {

@@ -1,3 +1,4 @@
+import { useDocumentBlobDatabaseReset } from '../test/documentBlobTestReset';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CachedDocumentFilePayload } from './cachedDocumentFileService';
 import { intakeCachedDocumentFile } from './documentIntakeService';
@@ -46,6 +47,8 @@ function assertNoSensitiveLogContent(events: ReturnType<typeof getDocumentSaveTr
     }
   }
 }
+
+useDocumentBlobDatabaseReset();
 
 describe('CONTRACT-DOCUMENT-SAVE-TRACE-01', () => {
   beforeEach(() => {

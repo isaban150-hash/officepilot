@@ -1,0 +1,22 @@
+{
+  "documentId": "DOC-00027",
+  "family": "generic",
+  "headline": "Steuerberatung Ostwestfalen · Lohnabrechnung Februar 2026 – Sandra Keller",
+  "factOrder": [
+    "sender",
+    "subject",
+    "amount",
+    "deadline",
+    "site"
+  ],
+  "facts": [
+    {
+      "id": "sender",
+      "value": "Steuerberatung Ostwestfalen GmbH"
+    },
+    {
+      "id": "subject",
+      "value": "Steuerberatung Ostwestfalen · Lohnabrechnung Februar 2026 – Sandra Keller"
+    }
+  ]
+}

@@ -10,7 +10,6 @@ import {
   isBlockingExtractionError,
   type DocumentUploadErrorCode,
 } from './documentUploadErrorService';
-import { isHeicUploadFile } from './documentUploadValidation';
 import type { CreateInboxFromUploadOptions } from './inboxUploadFactory';
 import type { PersistingUserStorageDecision } from '../types/userStorageDecision';
 import type { StorageRecommendation } from '../types/storageRecommendation';
@@ -48,17 +47,16 @@ export async function processDocumentFileForPreview(
   file: File,
   options: { selectedKind?: UploadDocumentKind } = {},
 ): Promise<ProcessDocumentPreviewResult> {
-  if (isHeicUploadFile(file)) {
-    return { success: false, error: 'heic_unsupported' };
-  }
-
   const loaded = await loadCachedDocumentFileFromUpload(file);
   if (!loaded.success) {
-    if (loaded.error === 'unsupported_photo_format') {
-      return { success: false, error: 'heic_unsupported' };
+    if (loaded.error === 'heic_conversion_failed') {
+      return { success: false, error: 'heic_conversion_failed' };
     }
     if (loaded.error === 'file_too_large') {
       return { success: false, error: 'file_too_large' };
+    }
+    if (loaded.error === 'invalid_type' || loaded.error === 'unsupported_photo_format') {
+      return { success: false, error: loaded.error };
     }
     return { success: false, error: 'file_read_failed' };
   }

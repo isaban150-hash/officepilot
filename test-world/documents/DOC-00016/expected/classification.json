@@ -1,0 +1,9 @@
+{
+  "documentId": "DOC-00016",
+  "taxonomyTypeId": "DOCTYPE-042",
+  "documentType": "utility",
+  "subtype": "wasser",
+  "label": "Wasserrechnung",
+  "classifiedKind": "rechnung",
+  "family": "invoice_in"
+}

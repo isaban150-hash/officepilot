@@ -126,7 +126,11 @@ describe('FIX-MOBILE-MAIN-CLIP-01', () => {
       </MemoryRouter>,
     );
     expect(detail).toContain('data-testid="ablage-detail-page"');
-    expect(detail).toContain('data-testid="document-assistant-panel"');
     expect(detail).toContain('data-testid="document-review-experience"');
+    // DOCUMENT-EXPERIENCE / INBOX-SUMMARY: first paint is Experience Card, not Assistant hero
+    expect(detail).toContain('data-testid="document-experience-card"');
+    expect(ablage).toMatch(/data-testid="inbox-card-/);
+    expect(ablage).toContain('document-experience-card');
+    expect(ablage).toContain('Jetzt prüfen');
   });
 });

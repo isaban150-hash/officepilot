@@ -1,0 +1,2534 @@
+{
+  "version": "2A.1",
+  "status": "frozen",
+  "frozenAt": "2026-08-01",
+  "policy": {
+    "rename": "forbidden",
+    "remove": "forbidden",
+    "extend": "allowed",
+    "notes": "Nach TESTWORLD-IMPLEMENTATION-02A: groupId/key, documentType, subtype, DOCTYPE-IDs sind immutable. Neue Gruppen/Typen nur am Ende anfügen."
+  },
+  "groups": [
+    {
+      "id": "DOCGROUP-001",
+      "key": "auftrag",
+      "label": "Auftrag",
+      "description": "Kundenauftrag / Auftragsbestätigung"
+    },
+    {
+      "id": "DOCGROUP-002",
+      "key": "angebot",
+      "label": "Angebot",
+      "description": "Angebote und Nachtragsangebote an Kunden"
+    },
+    {
+      "id": "DOCGROUP-003",
+      "key": "vertrag",
+      "label": "Vertrag",
+      "description": "Werk- und Dienstleistungsverträge"
+    },
+    {
+      "id": "DOCGROUP-004",
+      "key": "nachtrag",
+      "label": "Nachtrag",
+      "description": "Vertragsänderungen und Nachträge"
+    },
+    {
+      "id": "DOCGROUP-005",
+      "key": "lieferschein",
+      "label": "Lieferschein",
+      "description": "Wareneingang/-ausgang Lieferscheine"
+    },
+    {
+      "id": "DOCGROUP-006",
+      "key": "eingangsrechnung",
+      "label": "Eingangsrechnung",
+      "description": "Kreditorenrechnungen"
+    },
+    {
+      "id": "DOCGROUP-007",
+      "key": "ausgangsrechnung",
+      "label": "Ausgangsrechnung",
+      "description": "Debitorenrechnungen"
+    },
+    {
+      "id": "DOCGROUP-008",
+      "key": "gutschrift",
+      "label": "Gutschrift",
+      "description": "Gutschriften Kunde oder Lieferant"
+    },
+    {
+      "id": "DOCGROUP-009",
+      "key": "tankbeleg",
+      "label": "Tankbeleg",
+      "description": "Kraftstoffbelege Fuhrpark"
+    },
+    {
+      "id": "DOCGROUP-010",
+      "key": "hotelrechnung",
+      "label": "Hotelrechnung",
+      "description": "Übernachtung Außendienst"
+    },
+    {
+      "id": "DOCGROUP-011",
+      "key": "behoerden",
+      "label": "Behörden",
+      "description": "Allgemeine Behördenkorrespondenz"
+    },
+    {
+      "id": "DOCGROUP-012",
+      "key": "bg_bau",
+      "label": "BG BAU",
+      "description": "Berufsgenossenschaft Bau"
+    },
+    {
+      "id": "DOCGROUP-013",
+      "key": "finanzamt",
+      "label": "Finanzamt",
+      "description": "Steuerbehörde"
+    },
+    {
+      "id": "DOCGROUP-014",
+      "key": "krankenkasse",
+      "label": "Krankenkasse",
+      "description": "Gesetzliche Krankenversicherung / Beiträge"
+    },
+    {
+      "id": "DOCGROUP-015",
+      "key": "hwk",
+      "label": "HWK",
+      "description": "Handwerkskammer"
+    },
+    {
+      "id": "DOCGROUP-016",
+      "key": "ihk",
+      "label": "IHK",
+      "description": "Industrie- und Handelskammer"
+    },
+    {
+      "id": "DOCGROUP-017",
+      "key": "versicherungen",
+      "label": "Versicherungen",
+      "description": "Betriebs- und Sachversicherungen"
+    },
+    {
+      "id": "DOCGROUP-018",
+      "key": "banken",
+      "label": "Banken",
+      "description": "Bank- und Finanzierungskorrespondenz"
+    },
+    {
+      "id": "DOCGROUP-019",
+      "key": "steuerberater",
+      "label": "Steuerberater",
+      "description": "Steuerberatung und Buchhaltungsextern"
+    },
+    {
+      "id": "DOCGROUP-020",
+      "key": "rechtsanwalt",
+      "label": "Rechtsanwalt",
+      "description": "Anwaltskorrespondenz und -rechnungen"
+    },
+    {
+      "id": "DOCGROUP-021",
+      "key": "energie",
+      "label": "Energie",
+      "description": "Strom, Gas, Wasser, Wärme"
+    },
+    {
+      "id": "DOCGROUP-022",
+      "key": "telekommunikation",
+      "label": "Telekommunikation",
+      "description": "Mobilfunk, Internet, Festnetz"
+    },
+    {
+      "id": "DOCGROUP-023",
+      "key": "fahrzeuge",
+      "label": "Fahrzeuge",
+      "description": "Fuhrpark ohne Tankbeleg"
+    },
+    {
+      "id": "DOCGROUP-024",
+      "key": "personal",
+      "label": "Personal",
+      "description": "HR- und Mitarbeiterdokumente"
+    },
+    {
+      "id": "DOCGROUP-025",
+      "key": "marketing",
+      "label": "Marketing",
+      "description": "Eigenes Marketing / Kampagnen"
+    },
+    {
+      "id": "DOCGROUP-026",
+      "key": "werbung",
+      "label": "Werbung",
+      "description": "Fremdwerbung / Prospekte"
+    },
+    {
+      "id": "DOCGROUP-027",
+      "key": "spam",
+      "label": "Spam",
+      "description": "Unerwünschte / irrelevante Post"
+    },
+    {
+      "id": "DOCGROUP-028",
+      "key": "sonstige",
+      "label": "Sonstige",
+      "description": "Restklasse und Baustellennebenarten"
+    },
+    {
+      "id": "DOCGROUP-029",
+      "key": "gericht",
+      "label": "Gericht",
+      "description": "Gerichtsunterlagen"
+    },
+    {
+      "id": "DOCGROUP-030",
+      "key": "inkasso",
+      "label": "Inkasso",
+      "description": "Inkasso ein- und ausgehend"
+    },
+    {
+      "id": "DOCGROUP-031",
+      "key": "datenschutz",
+      "label": "Datenschutz",
+      "description": "DSGVO / AV-Verträge / Datenschutz"
+    }
+  ],
+  "documentTypes": [
+    {
+      "key": "inquiry",
+      "label": "Anfrage",
+      "description": "Kunden- oder Lieferantenanfrage"
+    },
+    {
+      "key": "offer",
+      "label": "Angebot",
+      "description": "Angebot an Kunden"
+    },
+    {
+      "key": "order_confirmation",
+      "label": "Auftrag",
+      "description": "Auftrag / Auftragsbestätigung"
+    },
+    {
+      "key": "contract",
+      "label": "Vertrag",
+      "description": "Vertragswerk"
+    },
+    {
+      "key": "amendment",
+      "label": "Nachtrag",
+      "description": "Vertragsnachtrag"
+    },
+    {
+      "key": "delivery_note",
+      "label": "Lieferschein",
+      "description": "Lieferschein"
+    },
+    {
+      "key": "incoming_invoice",
+      "label": "Eingangsrechnung",
+      "description": "Eingangsrechnung"
+    },
+    {
+      "key": "outgoing_invoice",
+      "label": "Ausgangsrechnung",
+      "description": "Ausgangsrechnung"
+    },
+    {
+      "key": "credit_note",
+      "label": "Gutschrift",
+      "description": "Gutschrift"
+    },
+    {
+      "key": "fuel_receipt",
+      "label": "Tankbeleg",
+      "description": "Kraftstoffbeleg"
+    },
+    {
+      "key": "hotel_invoice",
+      "label": "Hotelrechnung",
+      "description": "Hotelrechnung"
+    },
+    {
+      "key": "authority_letter",
+      "label": "Behörde",
+      "description": "Behörden-/Kammer-/SV-Schreiben"
+    },
+    {
+      "key": "insurance_letter",
+      "label": "Versicherung",
+      "description": "Versicherungspolice/-rechnung/-schreiben"
+    },
+    {
+      "key": "bank_letter",
+      "label": "Bank",
+      "description": "Bankdokument"
+    },
+    {
+      "key": "advisor_letter",
+      "label": "Berater",
+      "description": "Steuerberater o. ä."
+    },
+    {
+      "key": "legal_letter",
+      "label": "Recht",
+      "description": "Anwalt / Gericht / Inkasso / Datenschutz"
+    },
+    {
+      "key": "utility",
+      "label": "Energie",
+      "description": "Versorgerrechnung"
+    },
+    {
+      "key": "telecom",
+      "label": "Telekommunikation",
+      "description": "Telco-Rechnung"
+    },
+    {
+      "key": "vehicle_document",
+      "label": "Fahrzeugdokument",
+      "description": "Fuhrparkdokument"
+    },
+    {
+      "key": "hr",
+      "label": "Personal",
+      "description": "HR-Dokument"
+    },
+    {
+      "key": "payment_reminder",
+      "label": "Zahlungserinnerung",
+      "description": "Zahlungserinnerung"
+    },
+    {
+      "key": "dunning",
+      "label": "Mahnung",
+      "description": "Mahnung"
+    },
+    {
+      "key": "acceptance",
+      "label": "Abnahme",
+      "description": "Abnahmeprotokoll"
+    },
+    {
+      "key": "inspection_protocol",
+      "label": "Protokoll",
+      "description": "Prüf-/Aufmaßprotokoll"
+    },
+    {
+      "key": "site_diary",
+      "label": "Bautagebuch",
+      "description": "Bautagebuch / Tagesbericht"
+    },
+    {
+      "key": "photo",
+      "label": "Foto",
+      "description": "Fotodokumentation"
+    },
+    {
+      "key": "marketing",
+      "label": "Marketing",
+      "description": "Marketingmaterial"
+    },
+    {
+      "key": "spam",
+      "label": "Spam",
+      "description": "Spam / Phishing / irrelevant"
+    },
+    {
+      "key": "other",
+      "label": "Sonstige",
+      "description": "Nicht näher klassifiziert"
+    }
+  ],
+  "types": [
+    {
+      "id": "DOCTYPE-001",
+      "documentType": "inquiry",
+      "subtype": "anfrage",
+      "label": "Anfrage",
+      "groupId": "DOCGROUP-001",
+      "defaultLifecyclePhase": "inquiry",
+      "relations": {
+        "project": "optional",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "typical",
+        "counterparty": "forbidden",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "customerId"
+        ],
+        "optional": [
+          "projectId"
+        ],
+        "forbidden": [
+          "supplierId",
+          "employeeId",
+          "vehicleId"
+        ]
+      },
+      "notes": "Kundenanfrage; Projekt oft noch nicht vorhanden."
+    },
+    {
+      "id": "DOCTYPE-002",
+      "documentType": "order_confirmation",
+      "subtype": "auftrag",
+      "label": "Auftrag",
+      "groupId": "DOCGROUP-001",
+      "defaultLifecyclePhase": "contract",
+      "relations": {
+        "project": "typical",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "required",
+        "counterparty": "forbidden",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "customerId"
+        ],
+        "optional": [
+          "projectId"
+        ],
+        "forbidden": [
+          "supplierId",
+          "employeeId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-003",
+      "documentType": "order_confirmation",
+      "subtype": "auftragsbestaetigung_kunde",
+      "label": "Auftragsbestätigung Kunde",
+      "groupId": "DOCGROUP-001",
+      "defaultLifecyclePhase": "contract",
+      "relations": {
+        "project": "typical",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "required",
+        "counterparty": "forbidden",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "customerId"
+        ],
+        "optional": [
+          "projectId"
+        ],
+        "forbidden": [
+          "supplierId",
+          "employeeId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-004",
+      "documentType": "offer",
+      "subtype": "angebot",
+      "label": "Angebot",
+      "groupId": "DOCGROUP-002",
+      "defaultLifecyclePhase": "offer",
+      "relations": {
+        "project": "typical",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "required",
+        "counterparty": "forbidden",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "customerId"
+        ],
+        "optional": [
+          "projectId"
+        ],
+        "forbidden": [
+          "supplierId",
+          "employeeId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-005",
+      "documentType": "offer",
+      "subtype": "nachtragsangebot",
+      "label": "Nachtragsangebot",
+      "groupId": "DOCGROUP-002",
+      "defaultLifecyclePhase": "offer",
+      "relations": {
+        "project": "required",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "required",
+        "counterparty": "forbidden",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "projectId",
+          "customerId"
+        ],
+        "optional": [],
+        "forbidden": [
+          "supplierId",
+          "employeeId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-006",
+      "documentType": "contract",
+      "subtype": "werkvertrag",
+      "label": "Werkvertrag",
+      "groupId": "DOCGROUP-003",
+      "defaultLifecyclePhase": "contract",
+      "relations": {
+        "project": "required",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "required",
+        "counterparty": "forbidden",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "projectId",
+          "customerId"
+        ],
+        "optional": [],
+        "forbidden": [
+          "supplierId",
+          "employeeId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-007",
+      "documentType": "contract",
+      "subtype": "dienstleistungsvertrag",
+      "label": "Dienstleistungsvertrag",
+      "groupId": "DOCGROUP-003",
+      "defaultLifecyclePhase": "contract",
+      "relations": {
+        "project": "optional",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "typical",
+        "counterparty": "optional",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [],
+        "optional": [
+          "projectId",
+          "customerId",
+          "supplierId"
+        ],
+        "forbidden": [
+          "employeeId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-008",
+      "documentType": "contract",
+      "subtype": "subunternehmervertrag",
+      "label": "Subunternehmervertrag",
+      "groupId": "DOCGROUP-003",
+      "defaultLifecyclePhase": "contract",
+      "relations": {
+        "project": "typical",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "optional",
+        "counterparty": "required",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "supplierId"
+        ],
+        "optional": [
+          "projectId",
+          "customerId"
+        ],
+        "forbidden": [
+          "employeeId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-009",
+      "documentType": "amendment",
+      "subtype": "nachtrag",
+      "label": "Nachtrag",
+      "groupId": "DOCGROUP-004",
+      "defaultLifecyclePhase": "contract",
+      "relations": {
+        "project": "required",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "required",
+        "counterparty": "forbidden",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "projectId",
+          "customerId"
+        ],
+        "optional": [],
+        "forbidden": [
+          "supplierId",
+          "employeeId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-010",
+      "documentType": "delivery_note",
+      "subtype": "material",
+      "label": "Lieferschein Material",
+      "groupId": "DOCGROUP-005",
+      "defaultLifecyclePhase": "execution",
+      "relations": {
+        "project": "typical",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "optional",
+        "counterparty": "required",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "supplierId"
+        ],
+        "optional": [
+          "projectId",
+          "customerId"
+        ],
+        "forbidden": [
+          "employeeId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-011",
+      "documentType": "incoming_invoice",
+      "subtype": "material",
+      "label": "Eingangsrechnung Material",
+      "groupId": "DOCGROUP-006",
+      "defaultLifecyclePhase": "execution",
+      "relations": {
+        "project": "typical",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "optional",
+        "counterparty": "required",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "supplierId"
+        ],
+        "optional": [
+          "projectId",
+          "customerId"
+        ],
+        "forbidden": [
+          "employeeId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-012",
+      "documentType": "incoming_invoice",
+      "subtype": "subunternehmer",
+      "label": "Eingangsrechnung Subunternehmer",
+      "groupId": "DOCGROUP-006",
+      "defaultLifecyclePhase": "execution",
+      "relations": {
+        "project": "required",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "optional",
+        "counterparty": "required",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "projectId",
+          "supplierId"
+        ],
+        "optional": [
+          "customerId"
+        ],
+        "forbidden": [
+          "employeeId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-013",
+      "documentType": "incoming_invoice",
+      "subtype": "betrieb",
+      "label": "Eingangsrechnung Betrieb",
+      "groupId": "DOCGROUP-006",
+      "defaultLifecyclePhase": "firm",
+      "relations": {
+        "project": "forbidden",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "forbidden",
+        "counterparty": "required",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "supplierId"
+        ],
+        "optional": [],
+        "forbidden": [
+          "projectId",
+          "customerId",
+          "employeeId",
+          "vehicleId"
+        ]
+      },
+      "notes": "Allgemeine Betriebsausgaben ohne Baustelle."
+    },
+    {
+      "id": "DOCTYPE-014",
+      "documentType": "outgoing_invoice",
+      "subtype": "abschlag",
+      "label": "Ausgangsrechnung Abschlag",
+      "groupId": "DOCGROUP-007",
+      "defaultLifecyclePhase": "billing",
+      "relations": {
+        "project": "required",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "required",
+        "counterparty": "forbidden",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "projectId",
+          "customerId"
+        ],
+        "optional": [],
+        "forbidden": [
+          "supplierId",
+          "employeeId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-015",
+      "documentType": "outgoing_invoice",
+      "subtype": "schlussrechnung",
+      "label": "Schlussrechnung",
+      "groupId": "DOCGROUP-007",
+      "defaultLifecyclePhase": "billing",
+      "relations": {
+        "project": "required",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "required",
+        "counterparty": "forbidden",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "projectId",
+          "customerId"
+        ],
+        "optional": [],
+        "forbidden": [
+          "supplierId",
+          "employeeId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-016",
+      "documentType": "outgoing_invoice",
+      "subtype": "rechnung",
+      "label": "Ausgangsrechnung",
+      "groupId": "DOCGROUP-007",
+      "defaultLifecyclePhase": "billing",
+      "relations": {
+        "project": "required",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "required",
+        "counterparty": "forbidden",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "projectId",
+          "customerId"
+        ],
+        "optional": [],
+        "forbidden": [
+          "supplierId",
+          "employeeId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-017",
+      "documentType": "credit_note",
+      "subtype": "gutschrift_kunde",
+      "label": "Gutschrift an Kunde",
+      "groupId": "DOCGROUP-008",
+      "defaultLifecyclePhase": "billing",
+      "relations": {
+        "project": "required",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "required",
+        "counterparty": "forbidden",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "projectId",
+          "customerId"
+        ],
+        "optional": [],
+        "forbidden": [
+          "supplierId",
+          "employeeId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-018",
+      "documentType": "credit_note",
+      "subtype": "gutschrift_lieferant",
+      "label": "Gutschrift vom Lieferanten",
+      "groupId": "DOCGROUP-008",
+      "defaultLifecyclePhase": "execution",
+      "relations": {
+        "project": "optional",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "optional",
+        "counterparty": "required",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "supplierId"
+        ],
+        "optional": [
+          "projectId",
+          "customerId"
+        ],
+        "forbidden": [
+          "employeeId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-019",
+      "documentType": "fuel_receipt",
+      "subtype": "tankbeleg",
+      "label": "Tankbeleg",
+      "groupId": "DOCGROUP-009",
+      "defaultLifecyclePhase": "firm",
+      "relations": {
+        "project": "forbidden",
+        "company": "required",
+        "employee": "typical",
+        "vehicle": "required",
+        "customer": "forbidden",
+        "counterparty": "typical",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "vehicleId"
+        ],
+        "optional": [
+          "employeeId",
+          "supplierId"
+        ],
+        "forbidden": [
+          "projectId",
+          "customerId"
+        ]
+      },
+      "notes": "Kein Projekt. Primär Fahrzeug; Fahrer optional."
+    },
+    {
+      "id": "DOCTYPE-020",
+      "documentType": "hotel_invoice",
+      "subtype": "hotel",
+      "label": "Hotelrechnung",
+      "groupId": "DOCGROUP-010",
+      "defaultLifecyclePhase": "firm",
+      "relations": {
+        "project": "forbidden",
+        "company": "required",
+        "employee": "optional",
+        "vehicle": "forbidden",
+        "customer": "forbidden",
+        "counterparty": "required",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "supplierId"
+        ],
+        "optional": [
+          "employeeId"
+        ],
+        "forbidden": [
+          "projectId",
+          "customerId",
+          "vehicleId"
+        ]
+      },
+      "notes": "Standard: kein Projekt erzwingen / zuordnen."
+    },
+    {
+      "id": "DOCTYPE-021",
+      "documentType": "authority_letter",
+      "subtype": "behoerde_allgemein",
+      "label": "Behördenschreiben",
+      "groupId": "DOCGROUP-011",
+      "defaultLifecyclePhase": "firm",
+      "relations": {
+        "project": "forbidden",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "forbidden",
+        "counterparty": "required",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "supplierId"
+        ],
+        "optional": [],
+        "forbidden": [
+          "projectId",
+          "customerId",
+          "employeeId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-022",
+      "documentType": "authority_letter",
+      "subtype": "bg_bau",
+      "label": "BG BAU",
+      "groupId": "DOCGROUP-012",
+      "defaultLifecyclePhase": "firm",
+      "relations": {
+        "project": "forbidden",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "forbidden",
+        "counterparty": "required",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "supplierId"
+        ],
+        "optional": [],
+        "forbidden": [
+          "projectId",
+          "customerId",
+          "employeeId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-023",
+      "documentType": "authority_letter",
+      "subtype": "finanzamt",
+      "label": "Finanzamt",
+      "groupId": "DOCGROUP-013",
+      "defaultLifecyclePhase": "firm",
+      "relations": {
+        "project": "forbidden",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "forbidden",
+        "counterparty": "required",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "supplierId"
+        ],
+        "optional": [],
+        "forbidden": [
+          "projectId",
+          "customerId",
+          "employeeId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-024",
+      "documentType": "authority_letter",
+      "subtype": "krankenkasse",
+      "label": "Krankenkasse",
+      "groupId": "DOCGROUP-014",
+      "defaultLifecyclePhase": "firm",
+      "relations": {
+        "project": "forbidden",
+        "company": "required",
+        "employee": "optional",
+        "vehicle": "forbidden",
+        "customer": "forbidden",
+        "counterparty": "required",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "supplierId"
+        ],
+        "optional": [
+          "employeeId"
+        ],
+        "forbidden": [
+          "projectId",
+          "customerId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-025",
+      "documentType": "authority_letter",
+      "subtype": "soka_bau",
+      "label": "SOKA-Bau",
+      "groupId": "DOCGROUP-011",
+      "defaultLifecyclePhase": "firm",
+      "relations": {
+        "project": "forbidden",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "forbidden",
+        "counterparty": "required",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "supplierId"
+        ],
+        "optional": [],
+        "forbidden": [
+          "projectId",
+          "customerId",
+          "employeeId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-026",
+      "documentType": "authority_letter",
+      "subtype": "hwk",
+      "label": "HWK",
+      "groupId": "DOCGROUP-015",
+      "defaultLifecyclePhase": "firm",
+      "relations": {
+        "project": "forbidden",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "forbidden",
+        "counterparty": "required",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "supplierId"
+        ],
+        "optional": [],
+        "forbidden": [
+          "projectId",
+          "customerId",
+          "employeeId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-027",
+      "documentType": "authority_letter",
+      "subtype": "ihk",
+      "label": "IHK",
+      "groupId": "DOCGROUP-016",
+      "defaultLifecyclePhase": "firm",
+      "relations": {
+        "project": "forbidden",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "forbidden",
+        "counterparty": "required",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "supplierId"
+        ],
+        "optional": [],
+        "forbidden": [
+          "projectId",
+          "customerId",
+          "employeeId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-028",
+      "documentType": "authority_letter",
+      "subtype": "gewerbeamt",
+      "label": "Gewerbeamt",
+      "groupId": "DOCGROUP-011",
+      "defaultLifecyclePhase": "firm",
+      "relations": {
+        "project": "forbidden",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "forbidden",
+        "counterparty": "required",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "supplierId"
+        ],
+        "optional": [],
+        "forbidden": [
+          "projectId",
+          "customerId",
+          "employeeId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-029",
+      "documentType": "insurance_letter",
+      "subtype": "betriebshaftpflicht",
+      "label": "Betriebshaftpflicht",
+      "groupId": "DOCGROUP-017",
+      "defaultLifecyclePhase": "firm",
+      "relations": {
+        "project": "forbidden",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "forbidden",
+        "counterparty": "required",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "supplierId"
+        ],
+        "optional": [],
+        "forbidden": [
+          "projectId",
+          "customerId",
+          "employeeId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-030",
+      "documentType": "insurance_letter",
+      "subtype": "inhaltsversicherung",
+      "label": "Inhaltsversicherung",
+      "groupId": "DOCGROUP-017",
+      "defaultLifecyclePhase": "firm",
+      "relations": {
+        "project": "forbidden",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "forbidden",
+        "counterparty": "required",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "supplierId"
+        ],
+        "optional": [],
+        "forbidden": [
+          "projectId",
+          "customerId",
+          "employeeId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-031",
+      "documentType": "insurance_letter",
+      "subtype": "bauleistung",
+      "label": "Bauleistungsversicherung",
+      "groupId": "DOCGROUP-017",
+      "defaultLifecyclePhase": "execution",
+      "relations": {
+        "project": "typical",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "optional",
+        "counterparty": "required",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "supplierId"
+        ],
+        "optional": [
+          "projectId",
+          "customerId"
+        ],
+        "forbidden": [
+          "employeeId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-032",
+      "documentType": "insurance_letter",
+      "subtype": "versicherung_allgemein",
+      "label": "Versicherung allgemein",
+      "groupId": "DOCGROUP-017",
+      "defaultLifecyclePhase": "firm",
+      "relations": {
+        "project": "forbidden",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "forbidden",
+        "counterparty": "required",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "supplierId"
+        ],
+        "optional": [],
+        "forbidden": [
+          "projectId",
+          "customerId",
+          "employeeId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-033",
+      "documentType": "bank_letter",
+      "subtype": "kontoauszug",
+      "label": "Kontoauszug",
+      "groupId": "DOCGROUP-018",
+      "defaultLifecyclePhase": "firm",
+      "relations": {
+        "project": "forbidden",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "forbidden",
+        "counterparty": "required",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "supplierId"
+        ],
+        "optional": [],
+        "forbidden": [
+          "projectId",
+          "customerId",
+          "employeeId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-034",
+      "documentType": "bank_letter",
+      "subtype": "kredit",
+      "label": "Kredit / Darlehen",
+      "groupId": "DOCGROUP-018",
+      "defaultLifecyclePhase": "firm",
+      "relations": {
+        "project": "forbidden",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "forbidden",
+        "counterparty": "required",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "supplierId"
+        ],
+        "optional": [],
+        "forbidden": [
+          "projectId",
+          "customerId",
+          "employeeId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-035",
+      "documentType": "bank_letter",
+      "subtype": "buergschaft",
+      "label": "Bürgschaft / Aval",
+      "groupId": "DOCGROUP-018",
+      "defaultLifecyclePhase": "contract",
+      "relations": {
+        "project": "typical",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "optional",
+        "counterparty": "required",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "supplierId"
+        ],
+        "optional": [
+          "projectId",
+          "customerId"
+        ],
+        "forbidden": [
+          "employeeId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-036",
+      "documentType": "advisor_letter",
+      "subtype": "steuerberater_rechnung",
+      "label": "Steuerberater-Rechnung",
+      "groupId": "DOCGROUP-019",
+      "defaultLifecyclePhase": "firm",
+      "relations": {
+        "project": "forbidden",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "forbidden",
+        "counterparty": "required",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "supplierId"
+        ],
+        "optional": [],
+        "forbidden": [
+          "projectId",
+          "customerId",
+          "employeeId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-037",
+      "documentType": "advisor_letter",
+      "subtype": "steuerberater_schreiben",
+      "label": "Steuerberater-Schreiben",
+      "groupId": "DOCGROUP-019",
+      "defaultLifecyclePhase": "firm",
+      "relations": {
+        "project": "forbidden",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "forbidden",
+        "counterparty": "required",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "supplierId"
+        ],
+        "optional": [],
+        "forbidden": [
+          "projectId",
+          "customerId",
+          "employeeId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-038",
+      "documentType": "legal_letter",
+      "subtype": "rechtsanwalt_rechnung",
+      "label": "Rechtsanwalt-Rechnung",
+      "groupId": "DOCGROUP-020",
+      "defaultLifecyclePhase": "firm",
+      "relations": {
+        "project": "optional",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "optional",
+        "counterparty": "required",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "supplierId"
+        ],
+        "optional": [
+          "projectId",
+          "customerId"
+        ],
+        "forbidden": [
+          "employeeId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-039",
+      "documentType": "legal_letter",
+      "subtype": "rechtsanwalt_schreiben",
+      "label": "Rechtsanwalt-Schreiben",
+      "groupId": "DOCGROUP-020",
+      "defaultLifecyclePhase": "firm",
+      "relations": {
+        "project": "optional",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "optional",
+        "counterparty": "required",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "supplierId"
+        ],
+        "optional": [
+          "projectId",
+          "customerId"
+        ],
+        "forbidden": [
+          "employeeId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-040",
+      "documentType": "utility",
+      "subtype": "strom",
+      "label": "Stromrechnung",
+      "groupId": "DOCGROUP-021",
+      "defaultLifecyclePhase": "firm",
+      "relations": {
+        "project": "forbidden",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "forbidden",
+        "counterparty": "required",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "supplierId"
+        ],
+        "optional": [],
+        "forbidden": [
+          "projectId",
+          "customerId",
+          "employeeId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-041",
+      "documentType": "utility",
+      "subtype": "gas",
+      "label": "Gasrechnung",
+      "groupId": "DOCGROUP-021",
+      "defaultLifecyclePhase": "firm",
+      "relations": {
+        "project": "forbidden",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "forbidden",
+        "counterparty": "required",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "supplierId"
+        ],
+        "optional": [],
+        "forbidden": [
+          "projectId",
+          "customerId",
+          "employeeId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-042",
+      "documentType": "utility",
+      "subtype": "wasser",
+      "label": "Wasserrechnung",
+      "groupId": "DOCGROUP-021",
+      "defaultLifecyclePhase": "firm",
+      "relations": {
+        "project": "forbidden",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "forbidden",
+        "counterparty": "required",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "supplierId"
+        ],
+        "optional": [],
+        "forbidden": [
+          "projectId",
+          "customerId",
+          "employeeId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-043",
+      "documentType": "telecom",
+      "subtype": "mobilfunk",
+      "label": "Mobilfunkrechnung",
+      "groupId": "DOCGROUP-022",
+      "defaultLifecyclePhase": "firm",
+      "relations": {
+        "project": "forbidden",
+        "company": "required",
+        "employee": "optional",
+        "vehicle": "forbidden",
+        "customer": "forbidden",
+        "counterparty": "required",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "supplierId"
+        ],
+        "optional": [
+          "employeeId"
+        ],
+        "forbidden": [
+          "projectId",
+          "customerId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-044",
+      "documentType": "telecom",
+      "subtype": "internet",
+      "label": "Internet / Festnetz",
+      "groupId": "DOCGROUP-022",
+      "defaultLifecyclePhase": "firm",
+      "relations": {
+        "project": "forbidden",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "forbidden",
+        "counterparty": "required",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "supplierId"
+        ],
+        "optional": [],
+        "forbidden": [
+          "projectId",
+          "customerId",
+          "employeeId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-045",
+      "documentType": "vehicle_document",
+      "subtype": "kfz_versicherung",
+      "label": "Kfz-Versicherung",
+      "groupId": "DOCGROUP-023",
+      "defaultLifecyclePhase": "firm",
+      "relations": {
+        "project": "forbidden",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "required",
+        "customer": "forbidden",
+        "counterparty": "required",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "vehicleId",
+          "supplierId"
+        ],
+        "optional": [
+          "employeeId"
+        ],
+        "forbidden": [
+          "projectId",
+          "customerId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-046",
+      "documentType": "vehicle_document",
+      "subtype": "leasing",
+      "label": "Leasing",
+      "groupId": "DOCGROUP-023",
+      "defaultLifecyclePhase": "firm",
+      "relations": {
+        "project": "forbidden",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "typical",
+        "customer": "forbidden",
+        "counterparty": "required",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "supplierId"
+        ],
+        "optional": [
+          "vehicleId",
+          "employeeId"
+        ],
+        "forbidden": [
+          "projectId",
+          "customerId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-047",
+      "documentType": "vehicle_document",
+      "subtype": "tuev",
+      "label": "TÜV / HU / AU",
+      "groupId": "DOCGROUP-023",
+      "defaultLifecyclePhase": "firm",
+      "relations": {
+        "project": "forbidden",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "required",
+        "customer": "forbidden",
+        "counterparty": "typical",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "vehicleId"
+        ],
+        "optional": [
+          "supplierId",
+          "employeeId"
+        ],
+        "forbidden": [
+          "projectId",
+          "customerId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-048",
+      "documentType": "vehicle_document",
+      "subtype": "werkstatt",
+      "label": "Werkstattrechnung",
+      "groupId": "DOCGROUP-023",
+      "defaultLifecyclePhase": "firm",
+      "relations": {
+        "project": "forbidden",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "required",
+        "customer": "forbidden",
+        "counterparty": "required",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "vehicleId",
+          "supplierId"
+        ],
+        "optional": [
+          "employeeId"
+        ],
+        "forbidden": [
+          "projectId",
+          "customerId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-049",
+      "documentType": "vehicle_document",
+      "subtype": "kfz_steuer",
+      "label": "Kfz-Steuer",
+      "groupId": "DOCGROUP-023",
+      "defaultLifecyclePhase": "firm",
+      "relations": {
+        "project": "forbidden",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "required",
+        "customer": "forbidden",
+        "counterparty": "required",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "vehicleId",
+          "supplierId"
+        ],
+        "optional": [],
+        "forbidden": [
+          "projectId",
+          "customerId",
+          "employeeId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-050",
+      "documentType": "vehicle_document",
+      "subtype": "bussgeld",
+      "label": "Bußgeld / Knöllchen",
+      "groupId": "DOCGROUP-023",
+      "defaultLifecyclePhase": "firm",
+      "relations": {
+        "project": "forbidden",
+        "company": "required",
+        "employee": "optional",
+        "vehicle": "required",
+        "customer": "forbidden",
+        "counterparty": "required",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "vehicleId",
+          "supplierId"
+        ],
+        "optional": [
+          "employeeId"
+        ],
+        "forbidden": [
+          "projectId",
+          "customerId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-051",
+      "documentType": "hr",
+      "subtype": "arbeitsvertrag",
+      "label": "Arbeitsvertrag",
+      "groupId": "DOCGROUP-024",
+      "defaultLifecyclePhase": "firm",
+      "relations": {
+        "project": "forbidden",
+        "company": "required",
+        "employee": "required",
+        "vehicle": "forbidden",
+        "customer": "forbidden",
+        "counterparty": "forbidden",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "employeeId"
+        ],
+        "optional": [],
+        "forbidden": [
+          "projectId",
+          "customerId",
+          "supplierId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-053",
+      "documentType": "hr",
+      "subtype": "kuendigung",
+      "label": "Kündigung",
+      "groupId": "DOCGROUP-024",
+      "defaultLifecyclePhase": "firm",
+      "relations": {
+        "project": "forbidden",
+        "company": "required",
+        "employee": "required",
+        "vehicle": "forbidden",
+        "customer": "forbidden",
+        "counterparty": "forbidden",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "employeeId"
+        ],
+        "optional": [],
+        "forbidden": [
+          "projectId",
+          "customerId",
+          "supplierId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-055",
+      "documentType": "hr",
+      "subtype": "urlaub",
+      "label": "Urlaub",
+      "groupId": "DOCGROUP-024",
+      "defaultLifecyclePhase": "firm",
+      "relations": {
+        "project": "forbidden",
+        "company": "required",
+        "employee": "required",
+        "vehicle": "forbidden",
+        "customer": "forbidden",
+        "counterparty": "forbidden",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "employeeId"
+        ],
+        "optional": [],
+        "forbidden": [
+          "projectId",
+          "customerId",
+          "supplierId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-058",
+      "documentType": "hr",
+      "subtype": "arbeitszeugnis",
+      "label": "Arbeitszeugnis",
+      "groupId": "DOCGROUP-024",
+      "defaultLifecyclePhase": "firm",
+      "relations": {
+        "project": "forbidden",
+        "company": "required",
+        "employee": "required",
+        "vehicle": "forbidden",
+        "customer": "forbidden",
+        "counterparty": "forbidden",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "employeeId"
+        ],
+        "optional": [],
+        "forbidden": [
+          "projectId",
+          "customerId",
+          "supplierId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-052",
+      "documentType": "hr",
+      "subtype": "bewerbung",
+      "label": "Bewerbung",
+      "groupId": "DOCGROUP-024",
+      "defaultLifecyclePhase": "firm",
+      "relations": {
+        "project": "forbidden",
+        "company": "required",
+        "employee": "optional",
+        "vehicle": "forbidden",
+        "customer": "forbidden",
+        "counterparty": "forbidden",
+        "unassigned": "allowed"
+      },
+      "fields": {
+        "required": [],
+        "optional": [
+          "employeeId"
+        ],
+        "forbidden": [
+          "projectId",
+          "customerId",
+          "supplierId",
+          "vehicleId"
+        ]
+      },
+      "notes": "Vor Einstellung oft ohne employeeId."
+    },
+    {
+      "id": "DOCTYPE-054",
+      "documentType": "hr",
+      "subtype": "krankmeldung",
+      "label": "Krankmeldung",
+      "groupId": "DOCGROUP-024",
+      "defaultLifecyclePhase": "firm",
+      "relations": {
+        "project": "forbidden",
+        "company": "required",
+        "employee": "required",
+        "vehicle": "forbidden",
+        "customer": "forbidden",
+        "counterparty": "optional",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "employeeId"
+        ],
+        "optional": [
+          "supplierId"
+        ],
+        "forbidden": [
+          "projectId",
+          "customerId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-056",
+      "documentType": "hr",
+      "subtype": "lohnabrechnung",
+      "label": "Lohnabrechnung",
+      "groupId": "DOCGROUP-024",
+      "defaultLifecyclePhase": "firm",
+      "relations": {
+        "project": "forbidden",
+        "company": "required",
+        "employee": "required",
+        "vehicle": "forbidden",
+        "customer": "forbidden",
+        "counterparty": "optional",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "employeeId"
+        ],
+        "optional": [
+          "supplierId"
+        ],
+        "forbidden": [
+          "projectId",
+          "customerId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-057",
+      "documentType": "hr",
+      "subtype": "stundennachweis",
+      "label": "Stundennachweis",
+      "groupId": "DOCGROUP-024",
+      "defaultLifecyclePhase": "firm",
+      "relations": {
+        "project": "optional",
+        "company": "required",
+        "employee": "required",
+        "vehicle": "forbidden",
+        "customer": "forbidden",
+        "counterparty": "forbidden",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "employeeId"
+        ],
+        "optional": [
+          "projectId"
+        ],
+        "forbidden": [
+          "customerId",
+          "supplierId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-059",
+      "documentType": "marketing",
+      "subtype": "kampagne",
+      "label": "Marketing Kampagne",
+      "groupId": "DOCGROUP-025",
+      "defaultLifecyclePhase": "firm",
+      "relations": {
+        "project": "forbidden",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "forbidden",
+        "counterparty": "optional",
+        "unassigned": "allowed"
+      },
+      "fields": {
+        "required": [],
+        "optional": [
+          "supplierId"
+        ],
+        "forbidden": [
+          "projectId",
+          "customerId",
+          "employeeId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-060",
+      "documentType": "marketing",
+      "subtype": "werbung",
+      "label": "Werbung",
+      "groupId": "DOCGROUP-026",
+      "defaultLifecyclePhase": "firm",
+      "relations": {
+        "project": "forbidden",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "forbidden",
+        "counterparty": "forbidden",
+        "unassigned": "allowed"
+      },
+      "fields": {
+        "required": [],
+        "optional": [],
+        "forbidden": [
+          "projectId",
+          "customerId",
+          "supplierId",
+          "employeeId",
+          "vehicleId"
+        ]
+      },
+      "notes": "Bewusst ohne fachliche Zuordnung."
+    },
+    {
+      "id": "DOCTYPE-061",
+      "documentType": "spam",
+      "subtype": "spam",
+      "label": "Spam",
+      "groupId": "DOCGROUP-027",
+      "defaultLifecyclePhase": "firm",
+      "relations": {
+        "project": "forbidden",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "forbidden",
+        "counterparty": "forbidden",
+        "unassigned": "allowed"
+      },
+      "fields": {
+        "required": [],
+        "optional": [],
+        "forbidden": [
+          "projectId",
+          "customerId",
+          "supplierId",
+          "employeeId",
+          "vehicleId"
+        ]
+      },
+      "notes": "Negativbeispiel Matching / Inbox."
+    },
+    {
+      "id": "DOCTYPE-062",
+      "documentType": "legal_letter",
+      "subtype": "gericht",
+      "label": "Gericht",
+      "groupId": "DOCGROUP-029",
+      "defaultLifecyclePhase": "firm",
+      "relations": {
+        "project": "optional",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "optional",
+        "counterparty": "required",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "supplierId"
+        ],
+        "optional": [
+          "projectId",
+          "customerId"
+        ],
+        "forbidden": [
+          "employeeId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-063",
+      "documentType": "legal_letter",
+      "subtype": "inkasso_eingehend",
+      "label": "Inkasso eingehend",
+      "groupId": "DOCGROUP-030",
+      "defaultLifecyclePhase": "firm",
+      "relations": {
+        "project": "optional",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "forbidden",
+        "counterparty": "required",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "supplierId"
+        ],
+        "optional": [
+          "projectId"
+        ],
+        "forbidden": [
+          "customerId",
+          "employeeId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-064",
+      "documentType": "legal_letter",
+      "subtype": "inkasso_ausgehend",
+      "label": "Inkasso ausgehend",
+      "groupId": "DOCGROUP-030",
+      "defaultLifecyclePhase": "billing",
+      "relations": {
+        "project": "typical",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "required",
+        "counterparty": "typical",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "customerId"
+        ],
+        "optional": [
+          "projectId",
+          "supplierId"
+        ],
+        "forbidden": [
+          "employeeId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-065",
+      "documentType": "legal_letter",
+      "subtype": "datenschutz",
+      "label": "Datenschutz",
+      "groupId": "DOCGROUP-031",
+      "defaultLifecyclePhase": "firm",
+      "relations": {
+        "project": "forbidden",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "forbidden",
+        "counterparty": "optional",
+        "unassigned": "allowed"
+      },
+      "fields": {
+        "required": [],
+        "optional": [
+          "supplierId"
+        ],
+        "forbidden": [
+          "projectId",
+          "customerId",
+          "employeeId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-066",
+      "documentType": "payment_reminder",
+      "subtype": "zahlungserinnerung_kunde",
+      "label": "Zahlungserinnerung an Kunde",
+      "groupId": "DOCGROUP-007",
+      "defaultLifecyclePhase": "billing",
+      "relations": {
+        "project": "typical",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "required",
+        "counterparty": "forbidden",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "customerId"
+        ],
+        "optional": [
+          "projectId"
+        ],
+        "forbidden": [
+          "supplierId",
+          "employeeId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-067",
+      "documentType": "dunning",
+      "subtype": "mahnung_kunde",
+      "label": "Mahnung an Kunde",
+      "groupId": "DOCGROUP-007",
+      "defaultLifecyclePhase": "billing",
+      "relations": {
+        "project": "typical",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "required",
+        "counterparty": "forbidden",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "customerId"
+        ],
+        "optional": [
+          "projectId"
+        ],
+        "forbidden": [
+          "supplierId",
+          "employeeId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-068",
+      "documentType": "dunning",
+      "subtype": "mahnung_lieferant",
+      "label": "Mahnung vom Lieferanten",
+      "groupId": "DOCGROUP-006",
+      "defaultLifecyclePhase": "firm",
+      "relations": {
+        "project": "optional",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "forbidden",
+        "counterparty": "required",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "supplierId"
+        ],
+        "optional": [
+          "projectId"
+        ],
+        "forbidden": [
+          "customerId",
+          "employeeId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-069",
+      "documentType": "acceptance",
+      "subtype": "abnahmeprotokoll",
+      "label": "Abnahmeprotokoll",
+      "groupId": "DOCGROUP-028",
+      "defaultLifecyclePhase": "billing",
+      "relations": {
+        "project": "required",
+        "company": "required",
+        "employee": "optional",
+        "vehicle": "forbidden",
+        "customer": "required",
+        "counterparty": "forbidden",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "projectId",
+          "customerId"
+        ],
+        "optional": [
+          "employeeId"
+        ],
+        "forbidden": [
+          "supplierId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-070",
+      "documentType": "inspection_protocol",
+      "subtype": "aufmass",
+      "label": "Aufmaßprotokoll",
+      "groupId": "DOCGROUP-028",
+      "defaultLifecyclePhase": "execution",
+      "relations": {
+        "project": "required",
+        "company": "required",
+        "employee": "optional",
+        "vehicle": "forbidden",
+        "customer": "typical",
+        "counterparty": "forbidden",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "projectId"
+        ],
+        "optional": [
+          "customerId",
+          "employeeId"
+        ],
+        "forbidden": [
+          "supplierId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-071",
+      "documentType": "site_diary",
+      "subtype": "bautagebuch",
+      "label": "Bautagebuch",
+      "groupId": "DOCGROUP-028",
+      "defaultLifecyclePhase": "execution",
+      "relations": {
+        "project": "required",
+        "company": "required",
+        "employee": "optional",
+        "vehicle": "forbidden",
+        "customer": "optional",
+        "counterparty": "forbidden",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "projectId"
+        ],
+        "optional": [
+          "customerId",
+          "employeeId"
+        ],
+        "forbidden": [
+          "supplierId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-072",
+      "documentType": "photo",
+      "subtype": "baustellenfoto",
+      "label": "Baustellenfoto",
+      "groupId": "DOCGROUP-028",
+      "defaultLifecyclePhase": "execution",
+      "relations": {
+        "project": "required",
+        "company": "required",
+        "employee": "optional",
+        "vehicle": "forbidden",
+        "customer": "optional",
+        "counterparty": "forbidden",
+        "unassigned": "forbidden"
+      },
+      "fields": {
+        "required": [
+          "projectId"
+        ],
+        "optional": [
+          "customerId",
+          "employeeId"
+        ],
+        "forbidden": [
+          "supplierId",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "id": "DOCTYPE-073",
+      "documentType": "other",
+      "subtype": "unklar",
+      "label": "Unklar / Sonstige",
+      "groupId": "DOCGROUP-028",
+      "defaultLifecyclePhase": "firm",
+      "relations": {
+        "project": "optional",
+        "company": "required",
+        "employee": "optional",
+        "vehicle": "optional",
+        "customer": "optional",
+        "counterparty": "optional",
+        "unassigned": "allowed"
+      },
+      "fields": {
+        "required": [],
+        "optional": [
+          "projectId",
+          "customerId",
+          "supplierId",
+          "employeeId",
+          "vehicleId"
+        ],
+        "forbidden": []
+      },
+      "notes": "Restklasse; Quality-Tags steuern Erwartung."
+    },
+    {
+      "id": "DOCTYPE-074",
+      "documentType": "marketing",
+      "subtype": "newsletter",
+      "label": "Newsletter",
+      "groupId": "DOCGROUP-025",
+      "defaultLifecyclePhase": "firm",
+      "relations": {
+        "project": "forbidden",
+        "company": "required",
+        "employee": "forbidden",
+        "vehicle": "forbidden",
+        "customer": "forbidden",
+        "counterparty": "forbidden",
+        "unassigned": "allowed"
+      },
+      "fields": {
+        "required": [],
+        "optional": [],
+        "forbidden": [
+          "projectId",
+          "customerId",
+          "supplierId",
+          "employeeId",
+          "vehicleId"
+        ]
+      },
+      "notes": "02B extend: Newsletter bewusst ohne fachliche Zuordnung."
+    }
+  ]
+}

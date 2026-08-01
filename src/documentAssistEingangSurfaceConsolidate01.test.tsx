@@ -13,7 +13,6 @@ import { hydrateInboxStore } from './services/inboxService';
 import { resetDeferredWorkflowAnalysisCacheForTests } from './services/inboxWorkflowAnalysisKey';
 import { hydrateVorgangStore } from './services/vorgangService';
 import { createAuftragInboxItem } from './test/fixtures';
-import { resetTestStores } from './test/resetStores';
 import type { InboxItem } from './types/models';
 import * as persistenceService from './services/persistenceService';
 import * as documentAiService from './services/document/documentAiService';
@@ -144,9 +143,7 @@ async function mountDetail(itemId: string): Promise<Mount> {
 }
 
 describe('DOCUMENT-ASSIST-EINGANG-SURFACE-CONSOLIDATE-01', () => {
-  beforeEach(() => {
-    resetTestStores();
-    resetDeferredWorkflowAnalysisCacheForTests();
+  beforeEach(() => {    resetDeferredWorkflowAnalysisCacheForTests();
     hydrateCompanyProfileStore(testProfile);
     hydrateVorgangStore([]);
     vi.stubEnv('VITE_GEMINI_API_KEY', 'test-gemini-key');
@@ -162,7 +159,6 @@ describe('DOCUMENT-ASSIST-EINGANG-SURFACE-CONSOLIDATE-01', () => {
     vi.unstubAllEnvs();
     setAiGenerateTextForTests(null);
     vi.restoreAllMocks();
-    resetTestStores();
     document.body.innerHTML = '';
   });
 

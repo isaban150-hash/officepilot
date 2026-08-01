@@ -1,0 +1,13 @@
+{
+  "id": "VEH-005",
+  "companyId": "COMPANY-001",
+  "branchId": "BRANCH-001",
+  "label": "Transporter 4",
+  "licensePlate": "LIP-CH 1004",
+  "vehicleType": "van",
+  "make": "Volkswagen",
+  "model": "Crafter",
+  "defaultDriverEmployeeId": "EMP-010",
+  "active": true,
+  "notes": "TestWorld-Fahrzeug"
+}

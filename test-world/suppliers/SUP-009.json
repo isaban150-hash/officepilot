@@ -1,0 +1,12 @@
+{
+  "id": "SUP-009",
+  "companyId": "COMPANY-001",
+  "name": "VHV Gewerbeversicherung",
+  "supplierType": "insurance",
+  "city": "Hannover",
+  "country": "DE",
+  "email": "sup-009@counterparty.example",
+  "notes": "TestWorld-Counterparty",
+  "street": "VHV-Platz 1",
+  "zip": "30159"
+}

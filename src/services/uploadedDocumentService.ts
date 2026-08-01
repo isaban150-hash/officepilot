@@ -77,6 +77,8 @@ export function getUploadErrorMessage(error: DocumentUploadValidationError): str
     invalid_type: 'Nur PDF, JPG, PNG und WEBP sind erlaubt.',
     unsupported_photo_format:
       'Dieses Fotoformat wird noch nicht unterstützt. Bitte als JPG, PNG oder PDF hochladen.',
+    heic_conversion_failed:
+      'Dieses iPhone-Foto (HEIC) konnte nicht verarbeitet werden. Bitte erneut versuchen oder als JPG speichern.',
     file_too_large: 'Die Datei ist zu groß (max. 10 MB).',
   };
   return messages[error];

@@ -1697,49 +1697,32 @@ body {
   line-height: 1.4;
 }
 
-.inbox-card {
+/* DOCUMENT-INBOX-SUMMARY-01 — list cards reuse Experience Card chrome */
+.inbox-card.document-experience-card--inbox {
   border-left-width: 4px;
-}
-
-.inbox-card--kritisch {
-  border-left-color: var(--color-danger);
-}
-
-.inbox-card--hoch {
-  border-left-color: var(--color-warning);
-}
-
-.inbox-card--mittel {
   border-left-color: var(--color-accent);
 }
 
-.inbox-card--niedrig {
-  border-left-color: var(--color-border);
+.inbox-card.document-experience-card--inbox .document-experience-card__headline {
+  margin: 0;
 }
 
-.inbox-card__header {
-  margin-bottom: 0.25rem;
-}
-
-.inbox-card__meta {
-  margin: 0.75rem 0;
-}
-
-.inbox-card__meta .data-row {
-  padding: 0.35rem 0;
-}
-
-.inbox-card__meta .data-row__value {
-  font-size: 0.85rem;
-}
-
-.inbox-card__actions {
+.desk-document-attention__list {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.75rem;
   margin-top: 0.75rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid var(--color-border);
+}
+
+.document-summary-compact {
+  box-shadow: none;
+}
+
+.document-card__summary-facts {
+  margin: 0.35rem 0 0;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  line-height: 1.35;
 }
 
 .inbox-suggestion p {
@@ -3610,6 +3593,73 @@ body {
   font-size: 1.5rem;
 }
 
+.vorgang-nachweise__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.vorgang-nachweise__item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.5rem 0.75rem;
+  align-items: baseline;
+  font-size: 0.95rem;
+}
+
+.vorgang-nachweise__marker {
+  line-height: 1.2;
+}
+
+.vorgang-nachweise__label {
+  color: var(--color-text);
+}
+
+.vorgang-nachweise__origin {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+}
+
+.vorgang-nachweise__empty,
+.auftragskarte__empty-hint,
+.vorgang-scope__empty-hint {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.92rem;
+}
+
+.vorgang-billing-hint {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.vorgang-billing-hint__text {
+  margin: 0 0 0.65rem;
+  color: var(--color-text);
+  font-size: 0.95rem;
+}
+
+.link-button {
+  appearance: none;
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--color-accent);
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.link-button:hover {
+  opacity: 0.85;
+}
+
 .link {
   color: var(--color-accent);
   font-size: 0.85rem;
@@ -4903,6 +4953,271 @@ body {
   }
 }
 
+.document-experience-card {
+  display: grid;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.document-experience-card__header {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.document-experience-card__type {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+.document-experience-card__headline {
+  margin: 0;
+  font-size: 1.45rem;
+  line-height: 1.2;
+  font-weight: 700;
+}
+
+.document-experience-card__subtitle {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.35;
+  color: var(--color-text-muted);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.document-experience-card__facts {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.document-experience-card__facts .data-row__label {
+  font-size: 0.82rem;
+}
+
+.document-experience-card__facts .data-row__value {
+  font-size: 1.02rem;
+  font-weight: 600;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.document-experience-card__alerts {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--color-warning, #f59e0b) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-warning, #f59e0b) 35%, transparent);
+}
+
+.document-experience-card__case-match {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--color-primary, #1d4ed8) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-primary, #1d4ed8) 28%, transparent);
+}
+
+.document-experience-card__case-match-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.document-experience-card__case-match-reason-label {
+  margin: 0.25rem 0 0;
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+}
+
+.document-experience-card__case-match-reasons ul,
+.document-experience-card__case-match-candidates {
+  margin: 0.15rem 0 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.15rem;
+}
+
+.document-experience-card__alerts ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.3rem;
+  font-weight: 500;
+}
+
+.document-experience-card__section-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.document-experience-card__section-title--warn {
+  color: var(--color-warning, #9a3412);
+}
+
+.document-experience-card__actions {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.document-experience-card__secondary {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.document-experience-card__details {
+  margin: 0.15rem 0 0;
+  border-top: 1px solid var(--color-border-subtle, #d7dde5);
+  padding-top: 0.45rem;
+}
+
+.document-experience-card__details summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.document-experience-card__details-body {
+  margin-top: 0.55rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.auftragskarte {
+  display: grid;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.auftragskarte__header {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.auftragskarte__kind {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+.auftragskarte__title {
+  margin: 0;
+  font-size: 1.45rem;
+  line-height: 1.2;
+  font-weight: 700;
+}
+
+.auftragskarte__facts {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.auftragskarte__facts .data-row__label {
+  font-size: 0.82rem;
+}
+
+.auftragskarte__facts .data-row__value {
+  font-size: 1.02rem;
+  font-weight: 600;
+}
+
+.auftragskarte__service,
+.auftragskarte__risks {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.auftragskarte__section-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.auftragskarte__section-title--warn {
+  color: var(--color-warning, #9a3412);
+}
+
+.auftragskarte__service-text {
+  margin: 0;
+  font-size: 1.05rem;
+  line-height: 1.45;
+  font-weight: 500;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  overflow: hidden;
+}
+
+.auftragskarte__scope {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 0.25rem;
+}
+
+.auftragskarte__hauptleistungen,
+.vorgang-scope__hauptleistungen {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.auftragskarte__hauptleistungen-label,
+.vorgang-scope__label {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.auftragskarte__hauptleistungen ul,
+.vorgang-scope__hauptleistungen ul {
+  margin: 0;
+  padding-left: 1.15rem;
+  display: grid;
+  gap: 0.2rem;
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+
+.auftragskarte__risks {
+  padding: 0.75rem 0.85rem;
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--color-warning, #f59e0b) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-warning, #f59e0b) 35%, transparent);
+}
+
+.auftragskarte__risks ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.3rem;
+  font-weight: 500;
+}
+
+.auftragskarte__actions {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.auftragskarte__secondary {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.contract-order-proposal__scope {
+  margin-bottom: 0.75rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
 .contract-order-proposal__open-primary {
   margin: 0.35rem 0 0.5rem;
 }
@@ -5936,6 +6251,23 @@ body {
   font-size: 0.98rem;
   font-weight: 650;
   color: var(--op-text, var(--color-text));
+}
+
+/* CUSTOMER-WORKSPACE-01A */
+.kunden-detail-section {
+  margin-top: 1.25rem;
+}
+
+.kunden-detail-section__title {
+  margin: 0 0 0.5rem;
+  font-size: 1.05rem;
+  font-weight: 650;
+}
+
+.kunden-detail-section__subtitle {
+  margin: 0.85rem 0 0.4rem;
+  font-size: 0.95rem;
+  font-weight: 600;
 }
 
 @media (min-width: 768px) {

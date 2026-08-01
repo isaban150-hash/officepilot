@@ -1,3 +1,4 @@
+import { useDocumentBlobDatabaseReset } from '../test/documentBlobTestReset';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import JSZip from 'jszip';
 import {
@@ -16,7 +17,6 @@ import {
   replaceDocumentFileRepresentationBindingStore,
 } from './documentFileRepresentationBindingStoreService';
 import { createDocumentFileRepresentationBinding } from './documentFileRepresentationBindingService';
-import { resetTestStores } from '../test/resetStores';
 import { BACKUP_SCHEMA_VERSION } from '../types/backupExport';
 import type { AppPersistedState } from '../types/models';
 
@@ -29,12 +29,12 @@ async function zipFromParts(parts: Record<string, string | Uint8Array>): Promise
   return blob;
 }
 
+useDocumentBlobDatabaseReset();
+
 describe('backupValidateService', () => {
   let refsBefore: string[];
 
-  beforeEach(() => {
-    resetTestStores();
-    refsBefore = [];
+  beforeEach(() => {    refsBefore = [];
   });
 
   afterEach(() => {

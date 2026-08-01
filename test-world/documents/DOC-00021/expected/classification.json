@@ -1,0 +1,9 @@
+{
+  "documentId": "DOC-00021",
+  "taxonomyTypeId": "DOCTYPE-046",
+  "documentType": "vehicle_document",
+  "subtype": "leasing",
+  "label": "Leasing",
+  "classifiedKind": "leasingvertrag",
+  "family": "generic"
+}

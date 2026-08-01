@@ -1,0 +1,38 @@
+{
+  "damagePrevented": "Lieferschein verändert still den Auftragsplan oder wird falsch zugeordnet",
+  "ingress": { "channel": "upload", "sourceKind": "delivery_note" },
+  "document": {
+    "coarseKind": "delivery_note",
+    "fineKindAllowed": ["lieferschein"],
+    "recognition": "certain"
+  },
+  "businessCase": {
+    "primaryCase": "delivery_recorded",
+    "biEventAllowed": ["delivery_recorded"],
+    "vorgangRef": "none_or_suggested"
+  },
+  "operational": {
+    "primaryCase": "delivery_recorded",
+    "meaningsRequired": ["information"],
+    "nextStepContains": ["prüfen"]
+  },
+  "actors": {
+    "senderContains": ["Sanitär Großhandel", "Großhandel Nord"]
+  },
+  "meaning": ["information", "action_required"],
+  "money": { "required": false },
+  "decisions": ["save_document", "assign_vorgang"],
+  "forbidden": [
+    "silent_plan_change",
+    "auto_create_order",
+    "auto_payment",
+    "performance_plan_on_non_performance_family"
+  ],
+  "positions": { "maxCount": 0 },
+  "classifiedKindAllowed": ["lieferschein"],
+  "knownGaps": [
+    "Gelieferte Positionen/Mengen sind noch nicht als strukturierte BI-facts.positions modelliert — Materialwirkung + OCR-Mengen + unveränderte Planmengen sind der produktive Schutz.",
+    "Menge: wird nicht in ExtractedDocumentFields gemappt; Journey hebt den ersten OCR-Mengenhinweis in recognizedData (wie BI-Unit-Test).",
+    "LV-ähnliche Pos.-Tabellen im OCR können Contract Intelligence reviewRequired auslösen — Fixture nutzt bewusst 'Geliefert:'-Zeilen."
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "id": "DOC-00030",
+  "companyId": "COMPANY-001",
+  "projectId": null,
+  "supplierId": "SUP-023",
+  "taxonomyTypeId": "DOCTYPE-063",
+  "documentType": "legal_letter",
+  "subtype": "inkasso_eingehend",
+  "title": "Creditreform – Inkasso-Ankündigung Lieferantenforderung",
+  "receivedAt": "2026-03-16",
+  "lifecyclePhase": "firm",
+  "qualityTag": "clean",
+  "sourceKind": "pdf",
+  "suiteTags": [
+    "commit",
+    "release",
+    "matching"
+  ],
+  "notes": "GOLD 02B: Inkasso eingehend firmenbezogen (Projekt optional, hier null).",
+  "expected": {
+    "classifiedKind": "mahnung",
+    "caseMatchStatus": "none",
+    "matchedProjectId": null,
+    "primaryActionId": "create_vorgang",
+    "alertIds": []
+  },
+  "sourceFile": "source.pdf"
+}

@@ -1,0 +1,22 @@
+{
+  "documentId": "DOC-00011",
+  "family": "authority",
+  "headline": "AOK NordWest · Beitragsnachweis Arbeitgeber",
+  "factOrder": [
+    "authority",
+    "subject",
+    "reference",
+    "deadline",
+    "demand"
+  ],
+  "facts": [
+    {
+      "id": "authority",
+      "value": "AOK NordWest"
+    },
+    {
+      "id": "subject",
+      "value": "AOK NordWest · Beitragsnachweis Arbeitgeber"
+    }
+  ]
+}

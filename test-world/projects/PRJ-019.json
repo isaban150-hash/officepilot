@@ -1,0 +1,17 @@
+{
+  "id": "PRJ-019",
+  "companyId": "COMPANY-001",
+  "branchId": "BRANCH-001",
+  "customerId": "CUST-014",
+  "title": "Praxis Dr. Vogt – Sanitärausstattung",
+  "siteName": "Praxis Dr. Vogt – Sanitärausstattung",
+  "siteStreet": "Lange Str. 40",
+  "siteZip": "32657",
+  "siteCity": "Lemgo",
+  "trade": "Sanitär",
+  "status": "inquiry",
+  "startDate": "2026-06-01",
+  "foremanEmployeeId": "EMP-004",
+  "timelineDocumentIds": [],
+  "notes": "TestWorld-Projekt 01C – noch ohne Dokumente"
+}

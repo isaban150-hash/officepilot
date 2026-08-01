@@ -1,0 +1,29 @@
+{
+  "id": "DOC-00005",
+  "companyId": "COMPANY-001",
+  "projectId": "PRJ-001",
+  "customerId": "CUST-001",
+  "supplierId": "SUP-002",
+  "taxonomyTypeId": "DOCTYPE-010",
+  "documentType": "delivery_note",
+  "subtype": "material",
+  "title": "Lieferschein – SanitärPartner Lemgo",
+  "receivedAt": "2026-01-18",
+  "lifecyclePhase": "execution",
+  "qualityTag": "clean",
+  "sourceKind": "pdf",
+  "suiteTags": [
+    "smoke",
+    "commit",
+    "release"
+  ],
+  "notes": "GOLD: Lieferschein. Counterparty SUP-002. Projekt PRJ-001.",
+  "expected": {
+    "classifiedKind": "lieferschein",
+    "caseMatchStatus": "multiple",
+    "matchedProjectId": null,
+    "primaryActionId": "select_vorgang",
+    "alertIds": []
+  },
+  "sourceFile": "source.pdf"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "VEH-003",
+  "companyId": "COMPANY-001",
+  "branchId": "BRANCH-001",
+  "label": "Transporter 3",
+  "licensePlate": "LIP-CH 1003",
+  "vehicleType": "van",
+  "make": "Ford",
+  "model": "Transit",
+  "defaultDriverEmployeeId": "EMP-005",
+  "active": true,
+  "notes": "TestWorld-Fahrzeug"
+}

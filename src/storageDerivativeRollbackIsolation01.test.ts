@@ -1,3 +1,4 @@
+import { useDocumentBlobDatabaseReset } from './test/documentBlobTestReset';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as persistenceService from './services/persistenceService';
 import { buildDocumentFileRepresentationPlan } from './services/documentFileRepresentationPlanService';
@@ -22,7 +23,6 @@ import {
 } from './services/documentFileStoreService';
 import { countActiveReferencesToFileRef } from './services/documentFileReferenceService';
 import { withNewEntitySync } from './services/sync/syncMetaService';
-import { resetTestStores } from './test/resetStores';
 import type { DocumentFileTransformPlan } from './types/documentFileTransformPlan';
 import type { CompanyDocument } from './types/models';
 
@@ -81,10 +81,11 @@ function installEncodeFake(outputBytes: Uint8Array): void {
   });
 }
 
+useDocumentBlobDatabaseReset();
+
 afterEach(() => {
   vi.restoreAllMocks();
   setDocumentFileRasterEncodeAdaptersForTests(null);
-  resetTestStores();
   resetDocumentFileStoreForTests();
   resetDocumentFileRepresentationBindingStoreForTests();
 });

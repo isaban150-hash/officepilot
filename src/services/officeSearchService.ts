@@ -33,6 +33,13 @@ import { getAllTasksFromStore } from './taskStore';
 import { getTodayIso, isTaskOpen } from './taskNormalize';
 import { getAllVorgaenge } from './vorgangService';
 import { resolveDocumentLifecycle } from './documentLifecycleService';
+import { getCachedSetup } from './persistenceService';
+import {
+  buildSummaryForCompanyDocument,
+  buildSummaryForInboxItem,
+  createPresentationTranslate,
+  presentDocumentSummaryForSnippet,
+} from './documentSummaryPresentation';
 
 const TYPE_BASE_SCORE: Record<SearchResultType, number> = {
   document: 70,
@@ -201,10 +208,13 @@ function includesType(filter: OfficeSearchFilter | undefined, type: SearchResult
 
 function collectDocumentResults(query: string, terms: string[], todayIso: string): SearchResult[] {
   const results: SearchResult[] = [];
+  const translate = createPresentationTranslate(getCachedSetup()?.language);
 
   for (const doc of searchDocuments(query, 'all')) {
     const memory = getDocumentMemoryByDocumentId(doc.id);
     const lifecycle = resolveDocumentLifecycle({ documentId: doc.id }, todayIso);
+    const summary = buildSummaryForCompanyDocument(doc, { translate });
+    const presentation = presentDocumentSummaryForSnippet(summary, translate);
     const haystack = buildHaystack([
       doc.title,
       doc.issuer,
@@ -216,6 +226,9 @@ function collectDocumentResults(query: string, terms: string[], todayIso: string
       doc.paperFolder?.register,
       doc.paperFolder?.label,
       ...doc.tags,
+      presentation.title,
+      presentation.subtitle,
+      presentation.snippet,
       memory?.summary?.shortSummary,
       memory?.summary?.topic,
       memory?.mailSubject,
@@ -236,13 +249,10 @@ function collectDocumentResults(query: string, terms: string[], todayIso: string
     pushResult(results, {
       id: `search-doc-${doc.id}`,
       type: 'document',
-      title: doc.title,
-      subtitle: doc.issuer || 'Dokument',
-      matchedField: match.matchedField || 'OCR-Text',
-      snippet: createSnippet(
-        memory?.summary?.shortSummary ?? doc.recognizedText ?? doc.title,
-        query || terms[0] || '',
-      ),
+      title: presentation.title,
+      subtitle: presentation.subtitle || TYPE_SOURCE_LABEL.document,
+      matchedField: match.matchedField || 'Dokument',
+      snippet: createSnippet(presentation.snippet, query || terms[0] || ''),
       score,
       route: `/dokumente/${doc.id}`,
       icon: TYPE_ICON.document,
@@ -301,9 +311,12 @@ function collectMemoryResults(query: string, terms: string[], todayIso: string):
 
 function collectInboxResults(query: string, terms: string[]): SearchResult[] {
   const results: SearchResult[] = [];
+  const translate = createPresentationTranslate(getCachedSetup()?.language);
 
   for (const item of filterActiveItems(getInboxItems())) {
     const extracted = getInboxExtractedDocumentText(item);
+    const summary = buildSummaryForInboxItem(item, { translate });
+    const presentation = presentDocumentSummaryForSnippet(summary, translate);
     const haystack = buildHaystack([
       item.title,
       item.sender,
@@ -313,6 +326,9 @@ function collectInboxResults(query: string, terms: string[]): SearchResult[] {
       item.paperFiling.register,
       item.digitalFolder.path,
       item.vorgangTitle,
+      presentation.title,
+      presentation.subtitle,
+      presentation.snippet,
       ...Object.values(item.recognizedData),
     ]);
 
@@ -322,10 +338,10 @@ function collectInboxResults(query: string, terms: string[]): SearchResult[] {
     pushResult(results, {
       id: `search-inbox-${item.id}`,
       type: 'inbox',
-      title: item.title,
-      subtitle: item.sender,
-      matchedField: match.matchedField || (extracted ? 'OCR-Text' : 'Eingang'),
-      snippet: createSnippet(extracted || item.officePilotSuggestion || item.title, query || terms[0] || ''),
+      title: presentation.title,
+      subtitle: presentation.subtitle || TYPE_SOURCE_LABEL.inbox,
+      matchedField: match.matchedField || 'Eingang',
+      snippet: createSnippet(presentation.snippet, query || terms[0] || ''),
       score: TYPE_BASE_SCORE.inbox + match.boost,
       route: `/ablage/${item.id}`,
       icon: TYPE_ICON.inbox,
@@ -772,16 +788,19 @@ export function trySearchAssistantAnswer(
     route: result.route,
   }));
 
+  // Titles/subtitles already come from DocumentSummary (inbox/document hits).
   return {
     title: 'Suchergebnisse',
     summary:
       results.length === 1
         ? `Ich habe 1 Treffer gefunden: ${results[0]!.title}.`
         : `Ich habe ${results.length} Treffer gefunden.`,
-    bullets: results.slice(0, 5).map(
-      (result) =>
-        `${result.title} – ${result.subtitle}${result.status ? ` (${result.status})` : ''}`,
-    ),
+    bullets: results.slice(0, 5).map((result) => {
+      const line = [result.title, result.subtitle, result.snippet]
+        .filter(Boolean)
+        .join(' · ');
+      return line;
+    }),
     actions,
     linkedRoute: results[0]?.route,
   };

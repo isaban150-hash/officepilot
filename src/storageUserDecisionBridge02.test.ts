@@ -1,37 +1,31 @@
+import { useDocumentBlobDatabaseReset } from './test/documentBlobTestReset';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { t } from './i18n';
 import { deUserStorageDecision } from './i18n/locales/de/userStorageDecision';
 import { trUserStorageDecision } from './i18n/locales/tr/userStorageDecision';
 import { bgUserStorageDecision } from './i18n/locales/bg/userStorageDecision';
 import {
-  buildStorageRecommendation,
-} from './services/storageRecommendationService';
+  buildStorageRecommendation } from './services/storageRecommendationService';
 import {
   confirmPendingDocumentIntake,
   discardPendingDocumentIntake,
-  processDocumentFileForPreview,
-} from './services/pendingDocumentIntakeService';
+  processDocumentFileForPreview } from './services/pendingDocumentIntakeService';
 import {
   buildPendingDocumentDecisionActions,
-  executePendingDocumentDecision,
-} from './services/pendingDocumentDecisionService';
+  executePendingDocumentDecision } from './services/pendingDocumentDecisionService';
 import {
   resolveAvailableUserStorageDecisions,
-  mapDecisionToLifecycleIntent,
-} from './services/userStorageDecisionService';
+  mapDecisionToLifecycleIntent } from './services/userStorageDecisionService';
 import {
   getDocumentFileRefStoreSnapshot,
-  resetDocumentFileStoreForTests,
-} from './services/documentFileStoreService';
+  resetDocumentFileStoreForTests } from './services/documentFileStoreService';
 import { countActiveReferencesToFileRef } from './services/documentFileReferenceService';
 import { getInboxStoreSnapshot, hydrateInboxStore } from './services/inboxService';
 import { computeBufferContentHash } from './services/documentFileHashService';
 import { setPdfTextExtractorForTests } from './services/uploadTextExtractionService';
 import { setImageOcrExtractorForTests } from './services/ocrDocumentService';
-import { resetTestStores } from './test/resetStores';
 import {
-  hasDocumentBlob,
-  resetDocumentBlobDatabaseForTests,
+  hasDocumentBlob
 } from './services/storage/documentBlobIndexedDbService';
 import type { CachedDocumentFilePayload } from './services/cachedDocumentFileService';
 import type { DocumentTextExtractionResult } from './services/ocrDocumentService';
@@ -57,22 +51,21 @@ function createExtraction(
     displayText: recognizedText,
     confidence,
     sourceType: 'pdf',
-    extractionMethod: 'pdf_direct',
-  };
+    extractionMethod: 'pdf_direct' };
 }
 
 function createFile(payload: CachedDocumentFilePayload): File {
   return new File([payload.bytes], payload.fileName, { type: payload.mimeType });
 }
 
+useDocumentBlobDatabaseReset();
+
 describe('STORAGE-USER-DECISION-BRIDGE-02', () => {
   afterEach(async () => {
     setPdfTextExtractorForTests(null);
     setImageOcrExtractorForTests(null);
     vi.restoreAllMocks();
-    resetTestStores();
     resetDocumentFileStoreForTests();
-    await resetDocumentBlobDatabaseForTests();
   });
 
   it('archive_required ohne Klick persistiert nichts', async () => {
@@ -91,8 +84,7 @@ describe('STORAGE-USER-DECISION-BRIDGE-02', () => {
   it('temporary_only + save_permanently ergibt committed', async () => {
     setImageOcrExtractorForTests(async () => ({
       text: 'Baustellenfoto Rohbau',
-      confidence: 80,
-    }));
+      confidence: 80 }));
     const payload = createPayload('photo-bytes', 'foto.jpg', 'image/jpeg');
     const preview = await processDocumentFileForPreview(createFile(payload));
     expect(preview.success).toBe(true);
@@ -101,8 +93,7 @@ describe('STORAGE-USER-DECISION-BRIDGE-02', () => {
 
     const result = await confirmPendingDocumentIntake(preview.pending, {
       importSource: 'upload',
-      userDecision: 'save_permanently',
-    });
+      userDecision: 'save_permanently' });
     expect(result.success).toBe(true);
     if (!result.success || result.duplicate) return;
     expect(result.fileRef.lifecycleStatus).toBe('committed');
@@ -112,8 +103,7 @@ describe('STORAGE-USER-DECISION-BRIDGE-02', () => {
   it('temporary_only + keep_temporarily ergibt temp mit expiresAt', async () => {
     setImageOcrExtractorForTests(async () => ({
       text: 'Baustellenfoto Rohbau',
-      confidence: 80,
-    }));
+      confidence: 80 }));
     const payload = createPayload('temp-photo', 'temp.jpg', 'image/jpeg');
     const preview = await processDocumentFileForPreview(createFile(payload));
     expect(preview.success).toBe(true);
@@ -121,8 +111,7 @@ describe('STORAGE-USER-DECISION-BRIDGE-02', () => {
 
     const result = await confirmPendingDocumentIntake(preview.pending, {
       importSource: 'scan',
-      userDecision: 'keep_temporarily',
-    });
+      userDecision: 'keep_temporarily' });
     expect(result.success).toBe(true);
     if (!result.success || result.duplicate) return;
     expect(result.fileRef.lifecycleStatus).toBe('temp');
@@ -134,8 +123,7 @@ describe('STORAGE-USER-DECISION-BRIDGE-02', () => {
     setPdfTextExtractorForTests(() => 'Rechnung Betrag: 200,00 EUR Summe gesamt');
     const payload = createPayload('%PDF-1.4\nrechnung\n%%EOF', 'rechnung.pdf');
     const preview = await processDocumentFileForPreview(createFile(payload), {
-      selectedKind: 'materialrechnung',
-    });
+      selectedKind: 'materialrechnung' });
     expect(preview.success).toBe(true);
     if (!preview.success) return;
 
@@ -146,8 +134,7 @@ describe('STORAGE-USER-DECISION-BRIDGE-02', () => {
     expect(available).not.toContain('keep_temporarily');
     await expect(
       confirmPendingDocumentIntake(preview.pending, {
-        userDecision: 'keep_temporarily',
-      }),
+        userDecision: 'keep_temporarily' }),
     ).resolves.toMatchObject({ success: false, error: 'navigation_failed' });
     discardPendingDocumentIntake(preview.pending);
   });
@@ -188,8 +175,7 @@ describe('STORAGE-USER-DECISION-BRIDGE-02', () => {
       recognizedData: {},
       officePilotSuggestion: '',
       nextTaskLabel: '',
-      securityHint: '',
-    };
+      securityHint: '' };
     hydrateInboxStore([existingInbox]);
 
     const preview = await processDocumentFileForPreview(
@@ -223,8 +209,7 @@ describe('STORAGE-USER-DECISION-BRIDGE-02', () => {
 
     const first = await confirmPendingDocumentIntake(firstPreview.pending, {
       importSource: 'upload',
-      userDecision: 'save_permanently',
-    });
+      userDecision: 'save_permanently' });
     expect(first.success).toBe(true);
     if (!first.success || first.duplicate) return;
 
@@ -235,8 +220,7 @@ describe('STORAGE-USER-DECISION-BRIDGE-02', () => {
 
     const result = await confirmPendingDocumentIntake(preview.pending, {
       importSource: 'upload',
-      userDecision: 'save_duplicate_anyway',
-    });
+      userDecision: 'save_duplicate_anyway' });
     expect(result.success).toBe(true);
     if (!result.success || result.duplicate) return;
 
@@ -255,14 +239,12 @@ describe('STORAGE-USER-DECISION-BRIDGE-02', () => {
     const firstPreview = await processDocumentFileForPreview(file);
     if (!firstPreview.success) throw new Error('preview failed');
     await confirmPendingDocumentIntake(firstPreview.pending, {
-      userDecision: 'save_permanently',
-    });
+      userDecision: 'save_permanently' });
 
     const secondPreview = await processDocumentFileForPreview(file);
     if (!secondPreview.success) throw new Error('preview failed');
     await confirmPendingDocumentIntake(secondPreview.pending, {
-      userDecision: 'save_duplicate_anyway',
-    });
+      userDecision: 'save_duplicate_anyway' });
 
     expect(getDocumentFileRefStoreSnapshot()).toHaveLength(1);
   });
@@ -275,8 +257,7 @@ describe('STORAGE-USER-DECISION-BRIDGE-02', () => {
     const firstPreview = await processDocumentFileForPreview(file);
     if (!firstPreview.success) throw new Error('preview failed');
     const first = await confirmPendingDocumentIntake(firstPreview.pending, {
-      userDecision: 'save_permanently',
-    });
+      userDecision: 'save_permanently' });
     if (!first.success || first.duplicate) throw new Error('first intake failed');
 
     expect(countActiveReferencesToFileRef(first.fileRef.id)).toBe(1);
@@ -284,8 +265,7 @@ describe('STORAGE-USER-DECISION-BRIDGE-02', () => {
     const secondPreview = await processDocumentFileForPreview(file);
     if (!secondPreview.success) throw new Error('preview failed');
     await confirmPendingDocumentIntake(secondPreview.pending, {
-      userDecision: 'save_duplicate_anyway',
-    });
+      userDecision: 'save_duplicate_anyway' });
 
     expect(countActiveReferencesToFileRef(first.fileRef.id)).toBe(2);
   });
@@ -307,8 +287,7 @@ describe('STORAGE-USER-DECISION-BRIDGE-02', () => {
   it('StoragePolicy bleibt von der Decision unabhängig', async () => {
     setImageOcrExtractorForTests(async () => ({
       text: 'Baustellenfoto Rohbau',
-      confidence: 80,
-    }));
+      confidence: 80 }));
     const preview = await processDocumentFileForPreview(
       createFile(createPayload('photo', 'site.jpg', 'image/jpeg')),
     );
@@ -316,8 +295,7 @@ describe('STORAGE-USER-DECISION-BRIDGE-02', () => {
     const policyBefore = preview.pending.storagePolicy;
 
     await confirmPendingDocumentIntake(preview.pending, {
-      userDecision: 'save_permanently',
-    });
+      userDecision: 'save_permanently' });
 
     expect(policyBefore.policyId).toBe(preview.pending.storagePolicy.policyId);
   });

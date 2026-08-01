@@ -91,9 +91,7 @@ function archiveDocFor(
   };
 }
 
-beforeEach(() => {
-  resetTestStores();
-  resetDocumentWorkResultStoreForTests();
+beforeEach(() => {  resetDocumentWorkResultStoreForTests();
   hydrateDocumentStore([]);
 });
 

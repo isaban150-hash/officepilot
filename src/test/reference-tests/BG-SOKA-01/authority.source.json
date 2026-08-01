@@ -1,0 +1,23 @@
+{
+  "caseId": "BG-SOKA-01",
+  "role": "Source pointer for the authority-letter reference journey (Nachweispflichten)",
+  "documentCaseId": "BG-SOKA-01",
+  "documentCasePath": "src/test/document-cases/authorities/BG-SOKA-01/",
+  "ocrFile": "ocr.txt",
+  "productionServices": [
+    "src/services/intakeWorkflowService.ts (processUploadedDocument)",
+    "src/services/businessInterpretationService.ts",
+    "src/services/operationalOverviewView.ts",
+    "src/services/documentService.ts (importInboxDocument)"
+  ],
+  "uiSurfaces": [
+    "src/components/inbox/review/OperationalOverview.tsx",
+    "src/components/inbox/DocumentIntakeUnderstandingPanel.tsx"
+  ],
+  "patternTests": [
+    "src/test/reference-tests/FA-FRIST-01/",
+    "src/ingressOperationalOverview01.test.tsx",
+    "src/test/document-cases/documentCases.stablePipeline.test.ts"
+  ],
+  "note": "Reuses kind authority-letter and runAuthorityJourney — no new kind; archive-only with evidence/obligation focus."
+}

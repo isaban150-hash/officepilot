@@ -1,0 +1,23 @@
+{
+  "documentId": "DOC-00033",
+  "family": "invoice_in",
+  "headline": "Gutschrift an Sägewerk Ernst Flisch – Mindermaß",
+  "factOrder": [
+    "supplier",
+    "invoiceNumber",
+    "amount",
+    "date",
+    "deadline",
+    "site"
+  ],
+  "facts": [
+    {
+      "id": "date",
+      "value": "2026-03-22"
+    },
+    {
+      "id": "site",
+      "value": "Werkstraße 12, Lemgo"
+    }
+  ]
+}

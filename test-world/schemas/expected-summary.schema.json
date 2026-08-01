@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://officepilot.local/test-world/schemas/expected-summary.schema.json",
+  "title": "TestWorld Expected Summary",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["documentId", "family", "headline", "factOrder", "facts"],
+  "properties": {
+    "documentId": { "type": "string", "pattern": "^DOC-[0-9]{5}$" },
+    "family": {
+      "type": "string",
+      "enum": [
+        "invoice_in",
+        "invoice_out",
+        "tank",
+        "delivery",
+        "authority",
+        "letter",
+        "offer",
+        "contract",
+        "generic"
+      ]
+    },
+    "headline": { "type": "string", "minLength": 1 },
+    "factOrder": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "minItems": 1
+    },
+    "facts": {
+      "type": "array",
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "value"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "value": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://officepilot.local/test-world/schemas/expected-classification.schema.json",
+  "title": "TestWorld Expected Classification",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "documentId",
+    "taxonomyTypeId",
+    "documentType",
+    "subtype",
+    "label",
+    "classifiedKind",
+    "family"
+  ],
+  "properties": {
+    "documentId": { "type": "string", "pattern": "^DOC-[0-9]{5}$" },
+    "taxonomyTypeId": { "type": "string", "pattern": "^DOCTYPE-[0-9]{3}$" },
+    "documentType": { "type": "string" },
+    "subtype": { "type": "string" },
+    "label": { "type": "string", "minLength": 1 },
+    "classifiedKind": { "type": "string", "minLength": 1 },
+    "family": {
+      "type": "string",
+      "enum": [
+        "invoice_in",
+        "invoice_out",
+        "tank",
+        "delivery",
+        "authority",
+        "letter",
+        "offer",
+        "contract",
+        "generic"
+      ]
+    }
+  }
+}

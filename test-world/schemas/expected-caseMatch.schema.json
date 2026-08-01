@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://officepilot.local/test-world/schemas/expected-caseMatch.schema.json",
+  "title": "TestWorld Expected CaseMatch",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["documentId", "matchStatus", "matchedProjectId", "reasons", "candidates"],
+  "properties": {
+    "documentId": { "type": "string", "pattern": "^DOC-[0-9]{5}$" },
+    "matchStatus": {
+      "type": "string",
+      "enum": ["exact", "likely", "multiple", "none"]
+    },
+    "matchedProjectId": {
+      "oneOf": [
+        { "type": "null" },
+        { "type": "string", "pattern": "^PRJ-[0-9]{3}$" }
+      ]
+    },
+    "reasons": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "same_customer",
+          "same_site",
+          "same_project",
+          "same_contract_number",
+          "same_invoice_number",
+          "same_supplier",
+          "same_subject",
+          "same_reference",
+          "known_link"
+        ]
+      }
+    },
+    "candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["projectId", "reasons"],
+        "properties": {
+          "projectId": { "type": "string", "pattern": "^PRJ-[0-9]{3}$" },
+          "reasons": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,4 +1,5 @@
 import { importInboxDocumentForTests } from './test/confirmFilingDecisionForTests';
+import { useDocumentBlobDatabaseReset } from './test/documentBlobTestReset';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as persistenceService from './services/persistenceService';
 import * as pdfDocumentService from './services/pdfDocumentService';
@@ -33,7 +34,6 @@ import {
 } from './services/pdfDocumentService';
 import { withNewEntitySync } from './services/sync/syncMetaService';
 import { createAuftragInboxItem } from './test/fixtures';
-import { resetTestStores } from './test/resetStores';
 import {
   RASTER_THUMBNAIL_ENCODE_JPEG_QUALITY,
   RASTER_THUMBNAIL_ENCODE_MAX_EDGE_PX,
@@ -201,13 +201,14 @@ async function prepareDocumentWithPdf(bytes: Uint8Array = PDF_BYTES, fileName = 
   return source;
 }
 
+useDocumentBlobDatabaseReset();
+
 afterEach(() => {
   vi.restoreAllMocks();
   setPdfDocumentLoaderForTests(null);
   setPdfPageRendererForTests(null);
   setPdfPageJpegEncodeForTests(null);
   setDocumentFileRasterEncodeAdaptersForTests(null);
-  resetTestStores();
   resetDocumentFileStoreForTests();
   resetDocumentFileRepresentationBindingStoreForTests();
 });

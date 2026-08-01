@@ -19,7 +19,6 @@ import { deleteDocument, importInboxDocument } from './services/documentService'
 import { resetDocumentFileStoreForTests } from './services/documentFileStoreService';
 import { hydrateInboxStore } from './services/inboxService';
 import { createAuftragInboxItem } from './test/fixtures';
-import { resetTestStores } from './test/resetStores';
 import type { DocumentFileTransformPlan } from './types/documentFileTransformPlan';
 
 function samplePlan(): DocumentFileTransformPlan {
@@ -48,7 +47,6 @@ function samplePlan(): DocumentFileTransformPlan {
 
 afterEach(() => {
   vi.restoreAllMocks();
-  resetTestStores();
   resetDocumentFileStoreForTests();
   resetDocumentFileDerivativeRecoveryContextStoreForTests();
 });

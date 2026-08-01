@@ -1,0 +1,14 @@
+{
+  "id": "CUST-004",
+  "companyId": "COMPANY-001",
+  "name": "Wohnpark Herford Projekt GmbH",
+  "customerType": "developer",
+  "street": "Goebenstraße 8",
+  "zip": "32052",
+  "city": "Herford",
+  "country": "DE",
+  "contactPerson": "Herr Kramer",
+  "phone": "+49 5000 0000",
+  "email": "cust-004@kunde.example",
+  "notes": "multi-project"
+}

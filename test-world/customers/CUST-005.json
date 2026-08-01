@@ -1,0 +1,14 @@
+{
+  "id": "CUST-005",
+  "companyId": "COMPANY-001",
+  "name": "WEG Mehrfamilienhaus Bielefeld-Mitte",
+  "customerType": "housing",
+  "street": "Niederwall 22",
+  "zip": "33602",
+  "city": "Bielefeld",
+  "country": "DE",
+  "contactPerson": "Hausverwaltung Nord",
+  "phone": "+49 5000 0000",
+  "email": "cust-005@kunde.example",
+  "notes": "TestWorld-Kunde"
+}

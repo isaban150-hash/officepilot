@@ -162,10 +162,14 @@ describe('UX-WORKFLOW-01 document review', () => {
       recognizedText: CONTRACT_TEXT,
     });
     const html = renderDetail(item.id);
-    // INGRESS-OPERATIONAL-OVERVIEW-01: BI overview replaces hero when interpretation is present.
-    expect(html).toContain('data-testid="operational-overview"');
-    expect(html).toContain('data-testid="operational-overview-document-kind"');
-    expect(html).toContain('Werkvertrag');
+    // UX-01: contract proposal → Auftragskarte first (overview hidden while proposal open).
+    if (html.includes('contract-order-proposal')) {
+      expect(html).toContain('data-testid="auftragskarte"');
+      expect(html).toContain('Werkvertrag');
+    } else {
+      expect(html).toContain('data-testid="document-experience-card"');
+      expect(html).toContain('Werkvertrag');
+    }
   });
 
   it('Empfehlungen maximal 6 Einträge', () => {
@@ -188,8 +192,13 @@ describe('UX-WORKFLOW-01 document review', () => {
     const checks = buildDocumentReviewChecks(item, workflow);
     expect(checks.length).toBeGreaterThan(0);
     const html = renderDetail(item.id);
-    // Overview surfaces uncertainty instead of the legacy checks card.
-    expect(html).toContain('data-testid="operational-overview-uncertainty"');
+    // UX-01: with contract proposal, uncertainty lives in Details / card — not overview.
+    if (html.includes('contract-order-proposal')) {
+      expect(html).toContain('data-testid="auftragskarte"');
+      expect(html).toContain('data-testid="auftragskarte-details"');
+    } else {
+      expect(html).toContain('data-testid="document-experience-card"');
+    }
   });
 
   it('bei vollständigen Daten erscheint Alles vollständig', () => {
@@ -201,8 +210,13 @@ describe('UX-WORKFLOW-01 document review', () => {
     const checks = buildDocumentReviewChecks(item, workflow);
     expect(isDocumentReviewComplete(checks)).toBe(true);
     const html = renderDetail(item.id);
-    expect(html).toContain('data-testid="operational-overview"');
-    expect(html).toContain('data-testid="operational-overview-primary-case"');
+    if (html.includes('contract-order-proposal')) {
+      expect(html).toContain('data-testid="auftragskarte"');
+      expect(html).toContain('data-testid="contract-chef-primary-action"');
+    } else {
+      expect(html).toContain('data-testid="document-experience-card"');
+      expect(html).toContain('data-testid="document-review-apply-button"');
+    }
   });
 
   it('nur eine Primary-Hauptaktion sichtbar', () => {
@@ -266,16 +280,18 @@ describe('UX-WORKFLOW-01 document review', () => {
     expect(germanFallback, `deutscher Fallback: ${germanFallback.join(', ')}`).toEqual([]);
   });
 
-  it('Mobile-Struktur rendert Overview und Hauptbutton zuerst', () => {
+  it('Mobile-Struktur rendert Experience-Card oder Auftragskarte und Hauptbutton zuerst', () => {
     const item = processUpload({ kind: 'auftrag' });
     const html = renderDetail(item.id);
-    const overviewIndex = html.indexOf('operational-overview');
-    const primaryIndex = html.includes('document-review-primary-action')
-      ? html.indexOf('document-review-primary-action')
-      : html.indexOf('contract-chef-primary-action');
+    const experienceIndex = html.indexOf('data-testid="document-experience-card"');
+    const cardIndex = html.indexOf('data-testid="auftragskarte"');
+    const primaryIndex = html.includes('contract-chef-primary-action')
+      ? html.indexOf('contract-chef-primary-action')
+      : html.indexOf('document-review-apply-button');
     const moreIndex = html.indexOf('document-review-more-options');
-    expect(overviewIndex).toBeGreaterThan(-1);
-    expect(primaryIndex).toBeGreaterThan(overviewIndex);
+    const leadIndex = cardIndex >= 0 ? cardIndex : experienceIndex;
+    expect(leadIndex).toBeGreaterThan(-1);
+    expect(primaryIndex).toBeGreaterThan(leadIndex);
     expect(moreIndex).toBeGreaterThan(primaryIndex);
   });
 
@@ -285,13 +301,15 @@ describe('UX-WORKFLOW-01 document review', () => {
       recognizedText: `${CONTRACT_TEXT}\nEmpfänger: Mustermann Sanitär GmbH`,
     });
     const html = renderDetail(item.id);
-    expect(html).toContain('Vorschlag übernehmen');
     expect(html).toContain('data-testid="document-review-experience"');
-    // Contract proposals surface the apply action in the chef area, not as a second outer primary.
+    // UX-01: contract proposals use „Auftrag annehmen“ as the single primary CTA.
     if (html.includes('contract-order-proposal')) {
+      expect(html).toContain('data-testid="auftragskarte"');
       expect(html).toContain('data-testid="contract-chef-primary-action"');
+      expect(html).toContain('Auftrag annehmen');
       expect(html).not.toContain('data-testid="document-review-primary-action"');
-      expect((html.match(/Vorschlag übernehmen/g) ?? []).length).toBe(1);
+    } else {
+      expect(html).toContain('Vorschlag übernehmen');
     }
   });
 

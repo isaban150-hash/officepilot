@@ -1,0 +1,28 @@
+{
+  "id": "DOC-00011",
+  "companyId": "COMPANY-001",
+  "projectId": null,
+  "supplierId": "SUP-014",
+  "taxonomyTypeId": "DOCTYPE-024",
+  "documentType": "authority_letter",
+  "subtype": "krankenkasse",
+  "title": "AOK NordWest – Beitragsnachweis Arbeitgeber",
+  "receivedAt": "2026-03-05",
+  "lifecyclePhase": "firm",
+  "qualityTag": "clean",
+  "sourceKind": "pdf",
+  "suiteTags": [
+    "smoke",
+    "commit",
+    "release"
+  ],
+  "notes": "GOLD 02B: Krankenkasse nur Firma (+ Counterparty). Kein Projekt.",
+  "expected": {
+    "classifiedKind": "aok",
+    "caseMatchStatus": "none",
+    "matchedProjectId": null,
+    "primaryActionId": "create_vorgang",
+    "alertIds": []
+  },
+  "sourceFile": "source.pdf"
+}

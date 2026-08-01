@@ -1,0 +1,12 @@
+{
+  "id": "SUP-019",
+  "companyId": "COMPANY-001",
+  "name": "Shell Station Ostwestfalen",
+  "supplierType": "fuel",
+  "city": "Bad Salzuflen",
+  "country": "DE",
+  "email": "sup-019@counterparty.example",
+  "notes": "zweite Tankstelle",
+  "street": "Herforder Str. 200",
+  "zip": "32105"
+}

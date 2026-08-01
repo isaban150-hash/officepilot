@@ -1,0 +1,28 @@
+{
+  "id": "DOC-00020",
+  "companyId": "COMPANY-001",
+  "projectId": null,
+  "supplierId": "SUP-009",
+  "taxonomyTypeId": "DOCTYPE-029",
+  "documentType": "insurance_letter",
+  "subtype": "betriebshaftpflicht",
+  "title": "VHV – Betriebshaftpflicht Beitragsrechnung",
+  "receivedAt": "2026-01-15",
+  "lifecyclePhase": "firm",
+  "qualityTag": "clean",
+  "sourceKind": "pdf",
+  "suiteTags": [
+    "smoke",
+    "commit",
+    "release"
+  ],
+  "notes": "GOLD 02B: Betriebshaftpflicht nur Firma.",
+  "expected": {
+    "classifiedKind": "betriebshaftpflicht",
+    "caseMatchStatus": "none",
+    "matchedProjectId": null,
+    "primaryActionId": "create_vorgang",
+    "alertIds": []
+  },
+  "sourceFile": "source.pdf"
+}

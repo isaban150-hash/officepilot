@@ -1,0 +1,21 @@
+{
+  "documentId": "DOC-00013",
+  "family": "letter",
+  "headline": "Steuerberatung Ostwestfalen · Checkliste Unterlagen Jahresabschluss 2025",
+  "factOrder": [
+    "sender",
+    "subject",
+    "deadline",
+    "demand"
+  ],
+  "facts": [
+    {
+      "id": "sender",
+      "value": "Steuerberatung Ostwestfalen GmbH"
+    },
+    {
+      "id": "subject",
+      "value": "Steuerberatung Ostwestfalen · Checkliste Unterlagen Jahresabschluss 2025"
+    }
+  ]
+}

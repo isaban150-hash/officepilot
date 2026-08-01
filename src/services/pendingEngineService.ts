@@ -2,13 +2,21 @@ import { analyzeContractFromInbox } from './contractAnalysisService';
 import { isDocumentAnalysisAllowed } from './companyRelevanceService';
 import { getCompanyProfile } from './companyProfileService';
 import { getAllDocuments } from './documentService';
+import { getAllExpenseOverview } from './expenseOverviewService';
 import { getAllInvoiceOverview, getOverdueInvoices, type InvoiceOverviewItem } from './invoiceOverviewService';
 import { buildInvoiceDetailPath } from './invoiceNavigation';
 import { isExpectingPayment } from './invoicePaymentService';
 import { filterActiveItems, getInboxItems } from './inboxService';
-import { getTodayIso } from './taskNormalize';
+import { getTodayIso, isTaskOpen } from './taskNormalize';
+import { getAllTasksFromStore } from './taskStore';
 import { getTaskSummary, syncOverdueInvoiceTasks } from './taskEngineService';
+import {
+  buildSummaryForCompanyDocument,
+  buildSummaryForInboxItem,
+  createPresentationTranslate,
+} from './documentSummaryPresentation';
 import type {
+  ClassifiedDocumentKind,
   CompanyDocument,
   InboxItem,
   PendingHighlight,
@@ -16,7 +24,19 @@ import type {
   PendingItemKind,
   PendingScanResult,
   PendingSummary,
+  Task,
 } from '../types/models';
+
+function pendingTitleForInbox(item: InboxItem): string {
+  const translate = createPresentationTranslate();
+  return buildSummaryForInboxItem(item, { translate }).headline;
+}
+
+function pendingTitleForDocument(doc: CompanyDocument): string {
+  const translate = createPresentationTranslate();
+  const summary = buildSummaryForCompanyDocument(doc, { translate });
+  return summary.headline || doc.title;
+}
 
 export const EXPIRY_WARNING_DAYS = 30;
 export const INVOICE_DUE_SOON_DAYS = 7;
@@ -84,12 +104,50 @@ function invoiceRoute(entry: InvoiceOverviewItem): string {
   return buildInvoiceDetailPath(entry.vorgangId, entry.invoice.id);
 }
 
+/** Behörden / Sozialversicherung — Fristen für den Schreibtisch. */
+export const AUTHORITY_DEADLINE_KINDS: ReadonlySet<ClassifiedDocumentKind> = new Set([
+  'finanzamt',
+  'bg_bau',
+  'berufsgenossenschaft',
+  'soka_bau',
+  'aok',
+  'barmer',
+  'tk',
+  'dak',
+  'ikk',
+  'knappschaft',
+  'pflegekasse',
+  'krankenkasse',
+  'zoll',
+  'handwerkskammer',
+  'ihk',
+  'gewerbeamt',
+  'bauamt',
+  'ordnungsamt',
+  'agentur_fuer_arbeit',
+  'deutsche_rentenversicherung',
+  'steuerbescheid',
+  'umsatzsteuerbescheid',
+]);
+
+function isAuthorityDeadlineKind(kind: ClassifiedDocumentKind | undefined): boolean {
+  return Boolean(kind && AUTHORITY_DEADLINE_KINDS.has(kind));
+}
+
+function isAuthorityTask(task: Task): boolean {
+  if (task.taskKind.startsWith('authority_review:')) return true;
+  return task.category === 'behoerden';
+}
+
 function pendingPriority(kind: PendingItemKind): PendingItem['priority'] {
   switch (kind) {
     case 'invoice_overdue':
+    case 'expense_overdue':
+    case 'authority_deadline':
     case 'document_expired':
       return 'kritisch';
     case 'invoice_due_today':
+    case 'expense_due_today':
     case 'document_expiring':
     case 'contract_missing_proof':
       return 'hoch';
@@ -138,12 +196,14 @@ export function scanPendingInboxItems(
   const pending: PendingItem[] = [];
 
   for (const item of items) {
+    const displayTitle = pendingTitleForInbox(item);
+
     if (item.status === 'neu') {
       pending.push(
         buildPendingItem(
           'inbox_new',
           item.id,
-          item.title,
+          displayTitle,
           `/ablage/${item.id}`,
           'inbox',
         ),
@@ -155,7 +215,7 @@ export function scanPendingInboxItems(
         buildPendingItem(
           'inbox_deferred',
           item.id,
-          item.title,
+          displayTitle,
           `/ablage/${item.id}`,
           'inbox',
         ),
@@ -167,7 +227,7 @@ export function scanPendingInboxItems(
         buildPendingItem(
           'inbox_unfiled',
           item.id,
-          item.title,
+          displayTitle,
           `/ablage/${item.id}`,
           'inbox',
         ),
@@ -179,7 +239,7 @@ export function scanPendingInboxItems(
         buildPendingItem(
           'inbox_unlinked',
           item.id,
-          item.title,
+          displayTitle,
           `/ablage/${item.id}`,
           'inbox',
         ),
@@ -198,12 +258,14 @@ export function scanExpiringDocuments(
   const pending: PendingItem[] = [];
 
   for (const doc of documents) {
+    const displayTitle = pendingTitleForDocument(doc);
+
     if (doc.archived === false) {
       pending.push(
         buildPendingItem(
           'document_unarchived',
           doc.id,
-          doc.title,
+          displayTitle,
           `/dokumente/${doc.id}`,
           'document',
         ),
@@ -219,13 +281,13 @@ export function scanExpiringDocuments(
         buildPendingItem(
           'document_expired',
           doc.id,
-          doc.title,
+          displayTitle,
           `/dokumente/${doc.id}`,
           'document',
           {
             dueDate: doc.validUntil,
             daysUntilDue: days,
-            description: `${doc.title} ist abgelaufen`,
+            description: `${displayTitle} ist abgelaufen`,
           },
         ),
       );
@@ -237,13 +299,13 @@ export function scanExpiringDocuments(
         buildPendingItem(
           'document_expiring',
           doc.id,
-          doc.title,
+          displayTitle,
           `/dokumente/${doc.id}`,
           'document',
           {
             dueDate: doc.validUntil,
             daysUntilDue: days,
-            description: `${doc.title} läuft in ${days} Tagen ab`,
+            description: `${displayTitle} läuft in ${days} Tagen ab`,
             metadata: { proofLabel: inferProofLabel(doc) },
           },
         ),
@@ -351,6 +413,115 @@ export function scanUpcomingInvoiceDueDates(today?: Date | string): PendingItem[
   return dedupePendingItems(pending);
 }
 
+export function scanAuthorityDeadlines(today?: Date | string): PendingItem[] {
+  const todayIso = getTodayIso(today);
+  const pending: PendingItem[] = [];
+  const seen = new Set<string>();
+
+  for (const task of getAllTasksFromStore()) {
+    if (!isTaskOpen(task) || !task.dueDate) continue;
+    const due = task.dueDate.slice(0, 10);
+    if (due > todayIso) continue;
+    if (!isAuthorityTask(task)) continue;
+
+    const dedupeKey = task.linkedInboxId ?? `task:${task.id}`;
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+
+    pending.push(
+      buildPendingItem(
+        'authority_deadline',
+        task.id,
+        task.title,
+        task.linkedInboxId ? `/ablage/${task.linkedInboxId}` : '/aufgaben',
+        'task',
+        {
+          dueDate: due,
+          daysUntilDue: daysUntil(due, todayIso),
+          description: task.description,
+        },
+      ),
+    );
+  }
+
+  for (const item of filterActiveItems(getInboxItems())) {
+    if (!item.deadline) continue;
+    const due = item.deadline.slice(0, 10);
+    if (due > todayIso) continue;
+    if (!isAuthorityDeadlineKind(item.classifiedKind)) continue;
+    if (seen.has(item.id)) continue;
+    seen.add(item.id);
+
+    pending.push(
+      buildPendingItem(
+        'authority_deadline',
+        item.id,
+        item.title,
+        `/ablage/${item.id}`,
+        'inbox',
+        {
+          dueDate: due,
+          daysUntilDue: daysUntil(due, todayIso),
+          metadata: { authorityKind: item.classifiedKind ?? 'behoerde' },
+        },
+      ),
+    );
+  }
+
+  return dedupePendingItems(pending);
+}
+
+export function scanExpenseDueDates(today?: Date | string): PendingItem[] {
+  const todayIso = getTodayIso(today);
+  const pending: PendingItem[] = [];
+
+  for (const entry of getAllExpenseOverview(todayIso)) {
+    const { expense, paymentSummary } = entry;
+    if (paymentSummary.status === 'bezahlt' || paymentSummary.status === 'storniert') {
+      continue;
+    }
+    if (paymentSummary.openAmount <= 0) continue;
+
+    const dueDate = expense.paymentDueDate?.slice(0, 10);
+    if (!dueDate) continue;
+
+    const days = daysUntil(dueDate, todayIso);
+
+    if (paymentSummary.status === 'ueberfaellig' || days < 0) {
+      pending.push(
+        buildPendingItem(
+          'expense_overdue',
+          expense.id,
+          `${expense.title || expense.supplierName} überfällig`,
+          `/ausgaben/${expense.id}`,
+          'expense',
+          {
+            dueDate,
+            daysUntilDue: days,
+            description: `Offen ${paymentSummary.openAmount.toLocaleString('de-DE', { minimumFractionDigits: 2 })} €`,
+          },
+        ),
+      );
+      continue;
+    }
+
+    if (days === 0) {
+      pending.push(
+        buildPendingItem(
+          'expense_due_today',
+          expense.id,
+          `${expense.title || expense.supplierName} heute fällig`,
+          `/ausgaben/${expense.id}`,
+          'expense',
+          { dueDate, daysUntilDue: 0 },
+        ),
+      );
+    }
+  }
+
+  return dedupePendingItems(pending);
+}
+
 export function scanRequiredContractDocuments(
   items: InboxItem[] = filterActiveItems(getInboxItems()),
   documents: CompanyDocument[] = getAllDocuments(),
@@ -397,6 +568,8 @@ export function scanPendingItems(today?: Date | string): PendingScanResult {
     ...scanExpiringDocuments(todayIso),
     ...scanOverdueInvoices(todayIso),
     ...scanUpcomingInvoiceDueDates(todayIso),
+    ...scanExpenseDueDates(todayIso),
+    ...scanAuthorityDeadlines(todayIso),
     ...scanRequiredContractDocuments(),
   ]);
 
@@ -435,31 +608,93 @@ export function buildPendingSummary(
   const dueTodayInvoices = countByKind(items, 'invoice_due_today');
   const dueSoonInvoices = countByKind(items, 'invoice_due_soon');
   const partialInvoices = countByKind(items, 'invoice_partial');
+  const overdueExpenses = countByKind(items, 'expense_overdue');
+  const dueTodayExpenses = countByKind(items, 'expense_due_today');
+  const authorityDeadlines = countByKind(items, 'authority_deadline');
   const expiringDocuments = countByKind(items, 'document_expiring');
   const expiredDocuments = countByKind(items, 'document_expired');
   const missingContractDocuments = countByKind(items, 'contract_missing_proof');
+  // Authority due tasks are surfaced as Behördenfristen — don't double-count them.
+  const dueTasksToday = getAllTasksFromStore().filter((task) => {
+    if (!isTaskOpen(task) || !task.dueDate) return false;
+    if (task.dueDate.slice(0, 10) > todayIso) return false;
+    return !isAuthorityTask(task);
+  }).length;
 
   pushHighlight(highlights, {
-    id: 'overdue-invoices',
-    kind: 'invoice_overdue',
+    id: 'authority-deadlines',
+    kind: 'authority_deadline',
     labelKey:
-      overdueInvoices === 1
-        ? 'pending.highlight.overdueInvoiceOne'
-        : 'pending.highlight.overdueInvoicesMany',
-    count: overdueInvoices,
-    route: '/rechnungen/offen',
+      authorityDeadlines === 1
+        ? 'pending.highlight.authorityDeadlineOne'
+        : 'pending.highlight.authorityDeadlinesMany',
+    count: authorityDeadlines,
+    route: '/aufgaben',
   });
 
-  pushHighlight(highlights, {
-    id: 'due-today-invoices',
-    kind: 'invoice_due_today',
-    labelKey:
-      dueTodayInvoices === 1
-        ? 'pending.highlight.dueTodayInvoiceOne'
-        : 'pending.highlight.dueTodayInvoicesMany',
-    count: dueTodayInvoices,
-    route: '/rechnungen/offen',
-  });
+  // One topic block for outgoing invoice payments (overdue + due today).
+  const criticalInvoices = overdueInvoices + dueTodayInvoices;
+  if (criticalInvoices > 0) {
+    let invoiceLabelKey = 'pending.highlight.dueTodayInvoicesMany';
+    let invoiceKind: PendingItemKind = 'invoice_due_today';
+    if (overdueInvoices > 0 && dueTodayInvoices === 0) {
+      invoiceKind = 'invoice_overdue';
+      invoiceLabelKey =
+        overdueInvoices === 1
+          ? 'pending.highlight.overdueInvoiceOne'
+          : 'pending.highlight.overdueInvoicesMany';
+    } else if (dueTodayInvoices > 0 && overdueInvoices === 0) {
+      invoiceLabelKey =
+        dueTodayInvoices === 1
+          ? 'pending.highlight.dueTodayInvoiceOne'
+          : 'pending.highlight.dueTodayInvoicesMany';
+    } else {
+      invoiceKind = 'invoice_overdue';
+      invoiceLabelKey =
+        criticalInvoices === 1
+          ? 'pending.highlight.overdueInvoiceOne'
+          : 'pending.highlight.invoicesDueMany';
+    }
+    pushHighlight(highlights, {
+      id: 'critical-invoices',
+      kind: invoiceKind,
+      labelKey: invoiceLabelKey,
+      count: criticalInvoices,
+      route: '/rechnungen/offen',
+    });
+  }
+
+  // One topic block for expense payments (overdue + due today).
+  const criticalExpenses = overdueExpenses + dueTodayExpenses;
+  if (criticalExpenses > 0) {
+    let expenseLabelKey = 'pending.highlight.expensesDueMany';
+    let expenseKind: PendingItemKind = 'expense_due_today';
+    if (overdueExpenses > 0 && dueTodayExpenses === 0) {
+      expenseKind = 'expense_overdue';
+      expenseLabelKey =
+        overdueExpenses === 1
+          ? 'pending.highlight.overdueExpenseOne'
+          : 'pending.highlight.overdueExpensesMany';
+    } else if (dueTodayExpenses > 0 && overdueExpenses === 0) {
+      expenseLabelKey =
+        dueTodayExpenses === 1
+          ? 'pending.highlight.dueTodayExpenseOne'
+          : 'pending.highlight.dueTodayExpensesMany';
+    } else {
+      expenseKind = 'expense_overdue';
+      expenseLabelKey =
+        criticalExpenses === 1
+          ? 'pending.highlight.overdueExpenseOne'
+          : 'pending.highlight.expensesDueMany';
+    }
+    pushHighlight(highlights, {
+      id: 'critical-expenses',
+      kind: expenseKind,
+      labelKey: expenseLabelKey,
+      count: criticalExpenses,
+      route: '/ausgaben/offen',
+    });
+  }
 
   pushHighlight(highlights, {
     id: 'new-inbox',
@@ -552,10 +787,10 @@ export function buildPendingSummary(
   });
 
   pushHighlight(highlights, {
-    id: 'open-tasks',
+    id: 'due-tasks-today',
     kind: 'open_tasks',
-    labelKey: 'pending.highlight.openTasks',
-    count: taskSummary.open,
+    labelKey: 'pending.highlight.dueTasksToday',
+    count: dueTasksToday,
     route: '/aufgaben',
   });
 
@@ -566,10 +801,14 @@ export function buildPendingSummary(
     unlinkedInboxItems,
     unarchivedDocuments,
     openTasks: taskSummary.open,
+    dueTasksToday,
     overdueInvoices,
     dueTodayInvoices,
     dueSoonInvoices,
     partialInvoices,
+    overdueExpenses,
+    dueTodayExpenses,
+    authorityDeadlines,
     expiringDocuments,
     expiredDocuments,
     missingContractDocuments,

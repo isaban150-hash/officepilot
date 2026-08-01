@@ -1,0 +1,23 @@
+{
+  "documentId": "DOC-00023",
+  "family": "invoice_in",
+  "headline": "AutoService Teutoburger – Werkstattrechnung Bremsen",
+  "factOrder": [
+    "supplier",
+    "invoiceNumber",
+    "amount",
+    "date",
+    "deadline",
+    "site"
+  ],
+  "facts": [
+    {
+      "id": "supplier",
+      "value": "AutoService Teutoburger GmbH"
+    },
+    {
+      "id": "date",
+      "value": "2026-02-22"
+    }
+  ]
+}

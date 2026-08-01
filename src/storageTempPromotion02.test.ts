@@ -1,3 +1,4 @@
+import { useDocumentBlobDatabaseReset } from './test/documentBlobTestReset';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createElement } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -14,18 +15,15 @@ import {
   hydrateDocumentFileStore,
   promoteDocumentFileRefToCommitted,
   resetDocumentFileStoreForTests,
-  storeDocumentFileFromCachedPayload,
-} from './services/documentFileStoreService';
+  storeDocumentFileFromCachedPayload } from './services/documentFileStoreService';
 import { countActiveReferencesToFileRef } from './services/documentFileReferenceService';
 import { confirmPendingDocumentIntake, processDocumentFileForPreview } from './services/pendingDocumentIntakeService';
 import { getInboxStoreSnapshot, stageInboxItem } from './services/inboxService';
 import { setImageOcrExtractorForTests } from './services/ocrDocumentService';
 import { setPdfTextExtractorForTests } from './services/uploadTextExtractionService';
-import { resetTestStores } from './test/resetStores';
 import * as blobDbService from './services/storage/documentBlobIndexedDbService';
 import {
-  hasDocumentBlob,
-  resetDocumentBlobDatabaseForTests,
+  hasDocumentBlob
 } from './services/storage/documentBlobIndexedDbService';
 import * as persistenceService from './services/persistenceService';
 import type { CachedDocumentFilePayload } from './services/cachedDocumentFileService';
@@ -40,21 +38,20 @@ function createPayload(
   return { fileName, mimeType, fileSize: bytes.byteLength, bytes };
 }
 
+useDocumentBlobDatabaseReset();
+
 describe('STORAGE-TEMP-PROMOTION-02', () => {
   afterEach(async () => {
     setPdfTextExtractorForTests(null);
     setImageOcrExtractorForTests(null);
     vi.restoreAllMocks();
-    resetTestStores();
     resetDocumentFileStoreForTests();
-    await resetDocumentBlobDatabaseForTests();
   });
 
   async function createTempFileRef(marker = 'TEMP-PROMOTION') {
     setImageOcrExtractorForTests(async () => ({
       text: 'Baustellenfoto Rohbau',
-      confidence: 80,
-    }));
+      confidence: 80 }));
     const bytes = new TextEncoder().encode(marker);
     const preview = await processDocumentFileForPreview(
       new File([bytes], `${marker}.jpg`, { type: 'image/jpeg' }),
@@ -64,8 +61,7 @@ describe('STORAGE-TEMP-PROMOTION-02', () => {
 
     const intake = await confirmPendingDocumentIntake(preview.pending, {
       userDecision: 'keep_temporarily',
-      importSource: 'upload',
-    });
+      importSource: 'upload' });
     expect(intake.success).toBe(true);
     if (!intake.success || intake.duplicate) throw new Error('intake failed');
     expect(intake.fileRef.lifecycleStatus).toBe('temp');
@@ -117,8 +113,7 @@ describe('STORAGE-TEMP-PROMOTION-02', () => {
       id: 'inbox-shared-second',
       title: 'Zweiter Eintrag',
       fileRefId: intake.fileRef.id,
-      sourceFileHash: intake.fileRef.contentHash,
-    });
+      sourceFileHash: intake.fileRef.contentHash });
 
     expect(countActiveReferencesToFileRef(intake.fileRef.id)).toBe(2);
     const result = promoteDocumentFileRefToCommitted(intake.fileRef.id);
@@ -136,8 +131,7 @@ describe('STORAGE-TEMP-PROMOTION-02', () => {
       id: 'inbox-shared-ui',
       title: 'Shared UI',
       fileRefId: intake.fileRef.id,
-      sourceFileHash: intake.fileRef.contentHash,
-    });
+      sourceFileHash: intake.fileRef.contentHash });
 
     const host = document.createElement('div');
     document.body.appendChild(host);
@@ -147,8 +141,7 @@ describe('STORAGE-TEMP-PROMOTION-02', () => {
         createElement(DocumentOriginalFilePanel, {
           fileRefId: intake.fileRef.id,
           translate: (key) => t(key, 'de'),
-          testId: 'promote-panel',
-        }),
+          testId: 'promote-panel' }),
       );
     });
 
@@ -176,9 +169,7 @@ describe('STORAGE-TEMP-PROMOTION-02', () => {
         errorMessage: 'fail',
         storageKey: 'test',
         payloadBytesApprox: 0,
-        payloadCharacters: 0,
-      },
-    } as ReturnType<typeof persistenceService.persistAll>);
+        payloadCharacters: 0 } } as ReturnType<typeof persistenceService.persistAll>);
 
     const result = promoteDocumentFileRefToCommitted(intake.fileRef.id);
     expect(result.success).toBe(false);
@@ -197,8 +188,7 @@ describe('STORAGE-TEMP-PROMOTION-02', () => {
     );
     const expiredRef = {
       ...stored.fileRef,
-      expiresAt: '2020-01-01T00:00:00.000Z',
-    };
+      expiresAt: '2020-01-01T00:00:00.000Z' };
     hydrateDocumentFileStore([expiredRef], {});
 
     expect(await hasDocumentBlob(expiredRef.id)).toBe(true);
@@ -211,8 +201,7 @@ describe('STORAGE-TEMP-PROMOTION-02', () => {
         createElement(DocumentOriginalFilePanel, {
           fileRefId: expiredRef.id,
           translate: (key) => t(key, 'de'),
-          testId: 'expired-panel',
-        }),
+          testId: 'expired-panel' }),
       );
     });
     await act(async () => {
@@ -233,13 +222,11 @@ describe('STORAGE-TEMP-PROMOTION-02', () => {
     setPdfTextExtractorForTests(() => 'Rechnung 10 EUR');
     const preview = await processDocumentFileForPreview(
       new File([new TextEncoder().encode('%PDF-1.4\ncommitted\n%%EOF')], 'c.pdf', {
-        type: 'application/pdf',
-      }),
+        type: 'application/pdf' }),
     );
     if (!preview.success) throw new Error('preview failed');
     const intake = await confirmPendingDocumentIntake(preview.pending, {
-      userDecision: 'save_permanently',
-    });
+      userDecision: 'save_permanently' });
     if (!intake.success || intake.duplicate) throw new Error('intake failed');
 
     const result = promoteDocumentFileRefToCommitted(intake.fileRef.id);
@@ -266,8 +253,7 @@ describe('STORAGE-TEMP-PROMOTION-02', () => {
       localDataKey: 'x',
       createdAt: '2026-07-15T10:00:00.000Z',
       lifecycleStatus: 'temp',
-      expiresAt: '2026-07-16T10:00:00.000Z',
-    }, '2026-07-15T12:00:00.000Z');
+      expiresAt: '2026-07-16T10:00:00.000Z' }, '2026-07-15T12:00:00.000Z');
 
     expect(promoted.lifecycleStatus).toBe('committed');
     expect(promoted.committedAt).toBe('2026-07-15T12:00:00.000Z');

@@ -1,0 +1,22 @@
+{
+  "documentId": "DOC-00025",
+  "family": "generic",
+  "headline": "AOK NordWest · Krankmeldung / AU – Jonas Richter",
+  "factOrder": [
+    "sender",
+    "subject",
+    "amount",
+    "deadline",
+    "site"
+  ],
+  "facts": [
+    {
+      "id": "sender",
+      "value": "AOK NordWest"
+    },
+    {
+      "id": "subject",
+      "value": "AOK NordWest · Krankmeldung / AU – Jonas Richter"
+    }
+  ]
+}

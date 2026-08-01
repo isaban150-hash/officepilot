@@ -62,8 +62,22 @@ export interface DocumentCaseScenario {
     | 'insurance'
     | 'banking'
     | 'communication'
+    | 'delivery'
     | 'uncertain';
-  layers: Array<'stable-pipeline' | 'persistence-smoke'>;
+  /**
+   * Ebene 1: stable-pipeline | persistence-smoke
+   * Ebene 2: accept-/invoice-/authority-/delivery-journey (Referenztests)
+   * Ebene 3: ui-visibility (Referenztests)
+   */
+  layers: Array<
+    | 'stable-pipeline'
+    | 'persistence-smoke'
+    | 'accept-journey'
+    | 'invoice-journey'
+    | 'authority-journey'
+    | 'delivery-journey'
+    | 'ui-visibility'
+  >;
   channel: DocumentCaseChannel;
   /** Optional: OCR aus bestehender Fixture statt Dateiinhalt. */
   textFixture?: 'werkvertragMultiSection';

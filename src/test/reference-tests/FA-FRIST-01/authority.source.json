@@ -1,0 +1,22 @@
+{
+  "caseId": "FA-FRIST-01",
+  "role": "Source pointer for the authority-letter reference journey",
+  "documentCaseId": "FA-FRIST-01",
+  "documentCasePath": "src/test/document-cases/authorities/FA-FRIST-01/",
+  "ocrFile": "ocr.txt",
+  "productionServices": [
+    "src/services/intakeWorkflowService.ts (processUploadedDocument)",
+    "src/services/businessInterpretationService.ts",
+    "src/services/operationalOverviewView.ts",
+    "src/services/documentService.ts (importInboxDocument)"
+  ],
+  "uiSurfaces": [
+    "src/components/inbox/review/OperationalOverview.tsx",
+    "src/components/inbox/DocumentIntakeUnderstandingPanel.tsx"
+  ],
+  "patternTests": [
+    "src/ingressOperationalOverview01.test.tsx",
+    "src/test/document-cases/documentCases.stablePipeline.test.ts"
+  ],
+  "note": "No parallel business logic — archive only; explicitly forbids order/expense/contract side effects."
+}

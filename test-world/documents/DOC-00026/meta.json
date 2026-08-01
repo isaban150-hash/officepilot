@@ -1,0 +1,27 @@
+{
+  "id": "DOC-00026",
+  "companyId": "COMPANY-001",
+  "projectId": null,
+  "employeeId": "EMP-005",
+  "taxonomyTypeId": "DOCTYPE-055",
+  "documentType": "hr",
+  "subtype": "urlaub",
+  "title": "Urlaubsantrag – EMP-005",
+  "receivedAt": "2026-03-01",
+  "lifecyclePhase": "firm",
+  "qualityTag": "clean",
+  "sourceKind": "pdf",
+  "suiteTags": [
+    "commit",
+    "release"
+  ],
+  "notes": "GOLD 02B: Urlaub nur Firma + Mitarbeiter.",
+  "expected": {
+    "classifiedKind": "urlaubsantrag",
+    "caseMatchStatus": "none",
+    "matchedProjectId": null,
+    "primaryActionId": "create_vorgang",
+    "alertIds": []
+  },
+  "sourceFile": "source.pdf"
+}

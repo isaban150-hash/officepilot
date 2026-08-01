@@ -1,3 +1,4 @@
+import { useDocumentBlobDatabaseReset } from './test/documentBlobTestReset';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { t } from './i18n';
 import { deStorageRecommendation } from './i18n/locales/de/storageRecommendation';
@@ -7,23 +8,18 @@ import {
   buildStorageRecommendation,
   findDuplicateByPayloadBytes,
   resetEvidenceCounterForTests,
-  TAX_DISCLAIMER_KEY,
-} from './services/storageRecommendationService';
+  TAX_DISCLAIMER_KEY } from './services/storageRecommendationService';
 import {
   confirmPendingDocumentIntake,
-  processDocumentFileForPreview,
-} from './services/pendingDocumentIntakeService';
+  processDocumentFileForPreview } from './services/pendingDocumentIntakeService';
 import {
   getDocumentFileRefStoreSnapshot,
-  resetDocumentFileStoreForTests,
-} from './services/documentFileStoreService';
+  resetDocumentFileStoreForTests } from './services/documentFileStoreService';
 import { getInboxStoreSnapshot, hydrateInboxStore } from './services/inboxService';
 import { computeBufferContentHash } from './services/documentFileHashService';
 import { setPdfTextExtractorForTests } from './services/uploadTextExtractionService';
-import { resetTestStores } from './test/resetStores';
 import {
-  hasDocumentBlob,
-  resetDocumentBlobDatabaseForTests,
+  hasDocumentBlob
 } from './services/storage/documentBlobIndexedDbService';
 import type { CachedDocumentFilePayload } from './services/cachedDocumentFileService';
 import type { DocumentTextExtractionResult } from './services/ocrDocumentService';
@@ -45,8 +41,7 @@ function createExtraction(
     displayText: recognizedText,
     confidence,
     sourceType: 'pdf',
-    extractionMethod: 'pdf_direct',
-  };
+    extractionMethod: 'pdf_direct' };
 }
 
 function seedInboxWithHash(contentHash: string, id = 'inbox-dup'): InboxItem {
@@ -61,19 +56,18 @@ function seedInboxWithHash(contentHash: string, id = 'inbox-dup'): InboxItem {
     recognizedData: { text: 'Alt' },
     createdAt: '2026-07-01T10:00:00.000Z',
     updatedAt: '2026-07-01T10:00:00.000Z',
-    sourceFileHash: contentHash,
-  };
+    sourceFileHash: contentHash };
 }
+
+useDocumentBlobDatabaseReset();
 
 describe('STORAGE-RECOMMENDATION-02 rule engine', () => {
   afterEach(() => {
     setPdfTextExtractorForTests(null);
     vi.restoreAllMocks();
     resetEvidenceCounterForTests();
-    resetTestStores();
     resetDocumentFileStoreForTests();
     hydrateVorgangStore([]);
-    void resetDocumentBlobDatabaseForTests();
   });
 
   it('Mahnung → archive_required', async () => {
@@ -81,8 +75,7 @@ describe('STORAGE-RECOMMENDATION-02 rule engine', () => {
     const rec = await buildStorageRecommendation({
       cachedFile: createPayload(text, 'mahnung.pdf'),
       recognizedText: text,
-      extraction: createExtraction(text),
-    });
+      extraction: createExtraction(text) });
     expect(rec.level).toBe('archive_required');
     expect(rec.reasonKeys).toContain('storageRecommendation.reason.kind.mahnung');
   });
@@ -92,8 +85,7 @@ describe('STORAGE-RECOMMENDATION-02 rule engine', () => {
     const rec = await buildStorageRecommendation({
       cachedFile: createPayload(text, 'rechnung.pdf'),
       recognizedText: text,
-      extraction: createExtraction(text),
-    });
+      extraction: createExtraction(text) });
     expect(rec.level).toBe('archive_recommended');
   });
 
@@ -102,8 +94,7 @@ describe('STORAGE-RECOMMENDATION-02 rule engine', () => {
     const rec = await buildStorageRecommendation({
       cachedFile: createPayload(text, 'tank.jpg', 'image/jpeg'),
       recognizedText: text,
-      extraction: createExtraction(text),
-    });
+      extraction: createExtraction(text) });
     expect(rec.level).toBe('archive_recommended');
   });
 
@@ -112,8 +103,7 @@ describe('STORAGE-RECOMMENDATION-02 rule engine', () => {
     const rec = await buildStorageRecommendation({
       cachedFile: createPayload(text, 'freistellung.pdf'),
       recognizedText: text,
-      extraction: createExtraction(text),
-    });
+      extraction: createExtraction(text) });
     expect(rec.level).toBe('archive_required');
     expect(rec.disclaimerKey).toBe(TAX_DISCLAIMER_KEY);
   });
@@ -123,8 +113,7 @@ describe('STORAGE-RECOMMENDATION-02 rule engine', () => {
     const rec = await buildStorageRecommendation({
       cachedFile: createPayload(text, 'auftrag.pdf'),
       recognizedText: text,
-      extraction: createExtraction(text),
-    });
+      extraction: createExtraction(text) });
     expect(rec.level).toBe('review_required');
     expect(rec.reasonKeys).toContain('storageRecommendation.reason.missingCustomer');
   });
@@ -134,8 +123,7 @@ describe('STORAGE-RECOMMENDATION-02 rule engine', () => {
     const rec = await buildStorageRecommendation({
       cachedFile: createPayload(text, 'auftrag-kunde.pdf'),
       recognizedText: text,
-      extraction: createExtraction(text),
-    });
+      extraction: createExtraction(text) });
     expect(rec.level).toBe('archive_recommended');
   });
 
@@ -144,8 +132,7 @@ describe('STORAGE-RECOMMENDATION-02 rule engine', () => {
     const rec = await buildStorageRecommendation({
       cachedFile: createPayload(text, 'foto.jpg', 'image/jpeg'),
       recognizedText: text,
-      extraction: createExtraction(text),
-    });
+      extraction: createExtraction(text) });
     expect(rec.level).toBe('temporary_only');
   });
 
@@ -155,15 +142,13 @@ describe('STORAGE-RECOMMENDATION-02 rule engine', () => {
         id: 'vorgang-neubau',
         title: 'Neubau Müller',
         customer: 'Müller GmbH',
-        baustelle: 'Hauptstraße 5',
-      }),
+        baustelle: 'Hauptstraße 5' }),
     ]);
     const text = 'Baustellenfoto\nVorgang: Neubau Müller\nKunde: Müller GmbH\nBaustelle: Hauptstraße 5';
     const rec = await buildStorageRecommendation({
       cachedFile: createPayload(text, 'baustelle.jpg', 'image/jpeg'),
       recognizedText: text,
-      extraction: createExtraction(text),
-    });
+      extraction: createExtraction(text) });
     expect(rec.level).toBe('archive_recommended');
   });
 
@@ -173,8 +158,7 @@ describe('STORAGE-RECOMMENDATION-02 rule engine', () => {
       cachedFile: createPayload(text, 'werbung.pdf'),
       recognizedText: text,
       extraction: createExtraction(text),
-      kindHint: 'werbung',
-    });
+      kindHint: 'werbung' });
     expect(rec.level).toBe('discard_recommended');
   });
 
@@ -183,8 +167,7 @@ describe('STORAGE-RECOMMENDATION-02 rule engine', () => {
     const rec = await buildStorageRecommendation({
       cachedFile: createPayload(text, 'unbekannt.pdf'),
       recognizedText: text,
-      extraction: createExtraction(text, 'low'),
-    });
+      extraction: createExtraction(text, 'low') });
     expect(rec.level).toBe('review_required');
   });
 
@@ -193,8 +176,7 @@ describe('STORAGE-RECOMMENDATION-02 rule engine', () => {
     const rec = await buildStorageRecommendation({
       cachedFile: createPayload(text, 'mahnung-low-ocr.pdf'),
       recognizedText: text,
-      extraction: createExtraction(text, 'low'),
-    });
+      extraction: createExtraction(text, 'low') });
     expect(rec.level).toBe('review_required');
     expect(rec.reasonKeys).toContain('storageRecommendation.reason.lowOcrQuality');
   });
@@ -207,8 +189,7 @@ describe('STORAGE-RECOMMENDATION-02 rule engine', () => {
     const rec = await buildStorageRecommendation({
       cachedFile: createPayload(bytes, 'duplicate.pdf'),
       recognizedText: 'Beliebiger Text',
-      extraction: createExtraction('Beliebiger Text'),
-    });
+      extraction: createExtraction('Beliebiger Text') });
     expect(rec.level).toBe('duplicate_detected');
     expect(rec.duplicateMatch?.id).toBe('inbox-dup');
     expect(rec.duplicateMatch?.type).toBe('inbox');
@@ -230,8 +211,7 @@ describe('STORAGE-RECOMMENDATION-02 rule engine', () => {
     await buildStorageRecommendation({
       cachedFile: createPayload(text, 'auto-save.pdf'),
       recognizedText: text,
-      extraction: createExtraction(text),
-    });
+      extraction: createExtraction(text) });
     expect(getInboxStoreSnapshot()).toHaveLength(0);
     expect(getDocumentFileRefStoreSnapshot()).toHaveLength(0);
   });
@@ -241,8 +221,7 @@ describe('STORAGE-RECOMMENDATION-02 rule engine', () => {
     const rec = await buildStorageRecommendation({
       cachedFile: createPayload(text, 'rechnung-folder.pdf'),
       recognizedText: text,
-      extraction: createExtraction(text),
-    });
+      extraction: createExtraction(text) });
     expect(rec.recommendedFolder?.path).toContain('Steuerberater');
     expect(rec.recommendedFolder?.path).toContain('Eingangsrechnungen');
   });
@@ -252,8 +231,7 @@ describe('STORAGE-RECOMMENDATION-02 rule engine', () => {
     const rec = await buildStorageRecommendation({
       cachedFile: createPayload(text, 'evidence.pdf'),
       recognizedText: text,
-      extraction: createExtraction(text),
-    });
+      extraction: createExtraction(text) });
     const fieldKeys = rec.evidenceRefs.map((ref) => ref.fieldKey).filter(Boolean);
     expect(fieldKeys).not.toContain('Betrag');
     expect(rec.evidenceRefs.some((ref) => ref.source === 'rules')).toBe(true);
@@ -291,8 +269,7 @@ describe('STORAGE-RECOMMENDATION-02 rule engine', () => {
 
     const result = await confirmPendingDocumentIntake(preview.pending, {
       importSource: 'upload',
-      userDecision: 'save_permanently',
-    });
+      userDecision: 'save_permanently' });
     expect(result.success).toBe(true);
     if (!result.success || result.duplicate) return;
     expect(getInboxStoreSnapshot()).toHaveLength(1);

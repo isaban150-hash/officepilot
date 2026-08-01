@@ -2,7 +2,7 @@
   "caseId": "FA-FRIST-01",
   "damagePrevented": "Finanzamtsschreiben wird als Rechnung oder Auftrag gedeutet; automatische Antwort",
   "category": "authorities",
-  "layers": ["stable-pipeline"],
+  "layers": ["stable-pipeline", "authority-journey", "ui-visibility"],
   "channel": "upload",
   "importSource": "scan",
   "titleHint": "Finanzamt Anforderung Unterlagen",

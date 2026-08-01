@@ -1,0 +1,9 @@
+{
+  "documentId": "DOC-00023",
+  "taxonomyTypeId": "DOCTYPE-048",
+  "documentType": "vehicle_document",
+  "subtype": "werkstatt",
+  "label": "Werkstattrechnung",
+  "classifiedKind": "reparaturrechnung",
+  "family": "invoice_in"
+}

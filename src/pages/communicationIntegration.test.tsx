@@ -20,7 +20,6 @@ import { hydrateExpenseStore } from '../services/expenseStore';
 import { hydrateCompanyProfileStore } from '../services/companyProfileService';
 import { hydrateInboxStore } from '../services/inboxService';
 import { createAbschlagInvoice, createTestVorgang } from '../test/fixtures';
-import { resetTestStores } from '../test/resetStores';
 import { hydrateVorgangStore } from '../services/vorgangService';
 import type { CompanyDocument, InboxItem, VorgangInvoice } from '../types/models';
 import type { Expense } from '../types/expense';
@@ -258,9 +257,7 @@ describe('communicationNavigation', () => {
 describe('communication detail page integration', () => {
   let mounted: PageMount | undefined;
 
-  beforeEach(() => {
-    resetTestStores();
-    hydrateCompanyProfileStore(companySnapshot);
+  beforeEach(() => {    hydrateCompanyProfileStore(companySnapshot);
   });
 
   afterEach(() => {

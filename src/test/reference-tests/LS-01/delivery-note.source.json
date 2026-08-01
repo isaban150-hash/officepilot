@@ -1,0 +1,32 @@
+{
+  "caseId": "LS-01",
+  "role": "Source pointer for the delivery-note reference journey",
+  "documentCaseId": "LS-01",
+  "documentCasePath": "src/test/document-cases/delivery/LS-01/",
+  "ocrFile": "ocr.txt",
+  "seededOrder": {
+    "vorgangId": "v-ls-01",
+    "title": "LS-01 Auftrag Hauptstr. 12",
+    "baustelle": "Hauptstr. 12 Berlin",
+    "positionId": "op-ls-01-copper",
+    "plannedQuantity": 20
+  },
+  "productionServices": [
+    "src/services/intakeWorkflowService.ts (processUploadedDocument)",
+    "src/services/businessInterpretationService.ts",
+    "src/services/vorgangService.ts (linkInboxToExistingVorgang)",
+    "src/services/documentService.ts (importInboxDocument)",
+    "src/services/operationalOverviewView.ts"
+  ],
+  "uiSurfaces": [
+    "src/components/inbox/review/OperationalOverview.tsx",
+    "src/components/inbox/DocumentIntakeUnderstandingPanel.tsx",
+    "src/components/vorgang/OrderSummaryPanel.tsx"
+  ],
+  "patternTests": [
+    "src/services/businessInterpretationService.test.ts (Lieferschein verändert keine Planmenge)",
+    "src/documentUnderstanding01.test.ts (erkennt Lieferschein)",
+    "src/test/document-cases/documentCases.stablePipeline.test.ts"
+  ],
+  "note": "No parallel business logic — confirm-first link + archive; explicitly forbids plan/quantity/invoice/amendment/billing side effects."
+}

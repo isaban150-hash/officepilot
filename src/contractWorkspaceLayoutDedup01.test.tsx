@@ -99,6 +99,7 @@ describe('CONTRACT-WORKSPACE-LAYOUT-DEDUP-01', () => {
       }),
     );
 
+    expect(html).toContain('data-testid="auftragskarte"');
     expect(html).toContain('data-testid="contract-workspace-summary"');
     expect(html).not.toContain('contract-order-proposal__summary');
     expect(html).not.toContain('data-testid="contract-review-hints"');
@@ -107,13 +108,14 @@ describe('CONTRACT-WORKSPACE-LAYOUT-DEDUP-01', () => {
     expect(hintOccurrences).toBe(1);
     expect(html).toContain('data-testid="contract-workspace-summary-review-hints"');
 
-    expect(html).toContain('data-testid="contract-order-lv-overview"');
-    expect(html).toContain('data-testid="contract-lv-editor-disclosure"');
+    // UX-01: LV only after „Leistungsumfang anzeigen“
+    expect(html).not.toContain('data-testid="contract-order-lv-overview"');
     expect(html).not.toContain('data-testid="contract-order-positions"');
     expect(html).toContain('data-testid="contract-chef-primary-action"');
     expect(html).toContain('data-testid="contract-discard-button"');
-    expect(html).toContain(
-      'Bitte prüfen Sie Vertragsdaten und Positionen und bestätigen oder verwerfen Sie den Vorschlag.',
-    );
+    expect(html).toContain('Auftrag annehmen');
+    expect(html).toContain('Werkvertrag');
+    expect(html).toContain('data-testid="auftragskarte-contract"');
+    expect(html).toContain('data-testid="auftragskarte-details"');
   });
 });

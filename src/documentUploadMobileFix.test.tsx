@@ -1,3 +1,4 @@
+import { useDocumentBlobDatabaseReset } from './test/documentBlobTestReset';
 import { describe, expect, it, afterEach } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
@@ -14,16 +15,20 @@ import {
   resolveExtractionErrorKey,
   resolveIntakeErrorKey,
 } from './services/documentUploadErrorService';
+import { setHeicToConverterForTests } from './services/heicUploadNormalizeService';
 import {
   extractDocumentText,
   setImageOcrExtractorForTests,
 } from './services/ocrDocumentService';
-import { resetTestStores } from './test/resetStores';
+import { loadCachedDocumentFileFromUpload } from './services/cachedDocumentFileService';
+import { processDocumentFileForPreview } from './services/pendingDocumentIntakeService';
+
+useDocumentBlobDatabaseReset();
 
 describe('DESIGN-SYSTEM-01A mobile upload fix', () => {
   afterEach(() => {
     setImageOcrExtractorForTests(null);
-    resetTestStores();
+    setHeicToConverterForTests(null);
   });
 
   it('erkennt HEIC/HEIF vor der Verarbeitung', () => {
@@ -32,40 +37,74 @@ describe('DESIGN-SYSTEM-01A mobile upload fix', () => {
     expect(isHeicUploadFile(new File(['x'], 'photo.jpg', { type: 'image/jpeg' }))).toBe(false);
   });
 
-  it('lehnt HEIC beim Intake mit unsupported_photo_format ab', async () => {
+  it('akzeptiert HEIC und normalisiert zu JPEG vor dem Intake', async () => {
+    setHeicToConverterForTests(async () => new Blob(['jpeg-bytes'], { type: 'image/jpeg' }));
+    setImageOcrExtractorForTests(async () => ({ text: 'Erkannter Text', confidence: 80 }));
+
     const file = new File(['heic-bytes'], 'iphone.heic', { type: 'image/heic' });
-    const validation = validateUploadFile(file);
-    expect(validation.valid).toBe(false);
-    if (!validation.valid) {
-      expect(validation.error).toBe('unsupported_photo_format');
+    expect(validateUploadFile(file).valid).toBe(true);
+
+    const cached = await loadCachedDocumentFileFromUpload(file);
+    expect(cached.success).toBe(true);
+    if (cached.success) {
+      expect(cached.payload.mimeType).toBe('image/jpeg');
+      expect(cached.payload.fileName).toBe('iphone.jpg');
     }
 
     const result = await intakeDocumentFile(file, { importSource: 'scan' });
+    expect(result.success).toBe(true);
+  });
+
+  it('defektes HEIC liefert heic_conversion_failed ohne Speichern', async () => {
+    setHeicToConverterForTests(async () => {
+      throw new Error('corrupt heic');
+    });
+
+    const file = new File(['heic-bytes'], 'iphone.heic', { type: 'image/heic' });
+    const result = await intakeDocumentFile(file, { importSource: 'scan' });
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error).toBe('unsupported_photo_format');
+      expect(result.error).toBe('heic_conversion_failed');
     }
   });
 
-  it('extractDocumentText meldet heic_unsupported ohne OCR-Lauf', async () => {
+  it('extractDocumentText läuft nach HEIC→JPEG über OCR', async () => {
+    setHeicToConverterForTests(async () => new Blob(['jpeg-bytes'], { type: 'image/jpeg' }));
+    setImageOcrExtractorForTests(async () => ({ text: 'Rechnung 123', confidence: 88 }));
+
     const file = new File(['heic-bytes'], 'iphone.heic', { type: 'image/heic' });
     const result = await extractDocumentText(file);
-    expect(result.errorCode).toBe('heic_unsupported');
-    expect(result.recognizedText).toBe('');
+    expect(result.errorCode).toBeUndefined();
+    expect(result.recognizedText).toContain('Rechnung');
   });
 
-  it('liefert verständliche DE-/TR-Fehlermeldung für HEIC', () => {
-    expect(t('document.upload.error.unsupportedPhotoFormat', 'de')).toBe(
-      'Dieses Fotoformat wird noch nicht unterstützt. Bitte als JPG, PNG oder PDF hochladen.',
+  it('Preview nach HEIC→JPEG nutzt bestehende Pipeline', async () => {
+    setHeicToConverterForTests(async () => new Blob(['jpeg-bytes'], { type: 'image/jpeg' }));
+    setImageOcrExtractorForTests(async () => ({ text: 'Lieferschein Position 1', confidence: 85 }));
+
+    const file = new File(['heic-bytes'], 'iphone.heic', { type: 'image/heic' });
+    const preview = await processDocumentFileForPreview(file);
+    expect(preview.success).toBe(true);
+    if (preview.success) {
+      expect(preview.pending.cachedFile.mimeType).toBe('image/jpeg');
+      expect(preview.pending.cachedFile.fileName).toBe('iphone.jpg');
+      expect(preview.pending.extraction.recognizedText).toContain('Lieferschein');
+      expect(preview.pending.preview.documentTypeLabelKey).toBeTruthy();
+    }
+  });
+
+  it('liefert verständliche DE-/TR-Fehlermeldung für HEIC-Konvertierungsfehler', () => {
+    expect(t('document.upload.error.heicConversionFailed', 'de')).toBe(
+      'Dieses iPhone-Foto (HEIC) konnte nicht verarbeitet werden. Bitte erneut versuchen oder als JPG speichern.',
     );
-    expect(t('document.upload.error.unsupportedPhotoFormat', 'tr')).toBe(
-      'Bu fotoğraf formatı henüz desteklenmiyor. Lütfen JPG, PNG veya PDF olarak yükleyin.',
+    expect(t('document.upload.error.heicConversionFailed', 'tr')).toBe(
+      'Bu iPhone fotoğrafı (HEIC) işlenemedi. Lütfen tekrar deneyin veya JPG olarak kaydedin.',
     );
-    expect(resolveIntakeErrorKey('unsupported_photo_format')).toBe(
-      'document.upload.error.unsupportedPhotoFormat',
+    expect(resolveIntakeErrorKey('heic_conversion_failed')).toBe(
+      'document.upload.error.heicConversionFailed',
     );
-    expect(resolveExtractionErrorKey('heic_unsupported')).toBe(
-      'document.upload.error.unsupportedPhotoFormat',
+    expect(resolveExtractionErrorKey('heic_conversion_failed')).toBe(
+      'document.upload.error.heicConversionFailed',
     );
   });
 

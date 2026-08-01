@@ -1,0 +1,27 @@
+{
+  "id": "DOC-00010",
+  "companyId": "COMPANY-001",
+  "projectId": null,
+  "taxonomyTypeId": "DOCTYPE-060",
+  "documentType": "marketing",
+  "subtype": "werbung",
+  "title": "Werbung – Werkzeugkatalog Prospekt",
+  "receivedAt": "2026-03-12",
+  "lifecyclePhase": "firm",
+  "qualityTag": "clean",
+  "sourceKind": "pdf",
+  "suiteTags": [
+    "smoke",
+    "commit",
+    "release"
+  ],
+  "notes": "GOLD: Werbung ohne fachliche Zuordnung. Kein Projekt, Kunde, Counterparty, Mitarbeiter, Fahrzeug.",
+  "expected": {
+    "classifiedKind": "sonstiges",
+    "caseMatchStatus": "none",
+    "matchedProjectId": null,
+    "primaryActionId": "create_vorgang",
+    "alertIds": []
+  },
+  "sourceFile": "source.pdf"
+}

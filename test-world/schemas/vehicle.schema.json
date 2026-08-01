@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://officepilot.local/test-world/schemas/vehicle.schema.json",
+  "title": "TestWorld Vehicle",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "companyId", "label", "vehicleType"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^VEH-[0-9]{3}$",
+      "description": "Stable vehicle id, e.g. VEH-001"
+    },
+    "companyId": {
+      "type": "string",
+      "pattern": "^COMPANY-[0-9]{3}$"
+    },
+    "branchId": {
+      "type": "string",
+      "pattern": "^BRANCH-[0-9]{3}$"
+    },
+    "label": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Internal label, e.g. Transporter 1"
+    },
+    "licensePlate": { "type": "string" },
+    "vehicleType": {
+      "type": "string",
+      "enum": ["van", "car", "truck", "trailer", "other"]
+    },
+    "make": { "type": "string" },
+    "model": { "type": "string" },
+    "defaultDriverEmployeeId": {
+      "type": "string",
+      "pattern": "^EMP-[0-9]{3}$"
+    },
+    "active": {
+      "type": "boolean",
+      "default": true
+    },
+    "notes": { "type": "string" }
+  }
+}

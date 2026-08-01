@@ -1,0 +1,28 @@
+{
+  "id": "DOC-00012",
+  "companyId": "COMPANY-001",
+  "projectId": null,
+  "supplierId": "SUP-016",
+  "taxonomyTypeId": "DOCTYPE-036",
+  "documentType": "advisor_letter",
+  "subtype": "steuerberater_rechnung",
+  "title": "Steuerberatung Ostwestfalen – Honorarrechnung Q1/2026",
+  "receivedAt": "2026-04-02",
+  "lifecyclePhase": "firm",
+  "qualityTag": "clean",
+  "sourceKind": "pdf",
+  "suiteTags": [
+    "smoke",
+    "commit",
+    "release"
+  ],
+  "notes": "GOLD 02B: StB-Rechnung nur Firma.",
+  "expected": {
+    "classifiedKind": "eingangsrechnung",
+    "caseMatchStatus": "none",
+    "matchedProjectId": null,
+    "primaryActionId": "create_vorgang",
+    "alertIds": []
+  },
+  "sourceFile": "source.pdf"
+}

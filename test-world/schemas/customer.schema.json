@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://officepilot.local/test-world/schemas/customer.schema.json",
+  "title": "TestWorld Customer",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "companyId", "name", "customerType"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^CUST-[0-9]{3}$",
+      "description": "Stable customer id, e.g. CUST-001"
+    },
+    "companyId": {
+      "type": "string",
+      "pattern": "^COMPANY-[0-9]{3}$",
+      "description": "Owning test company (Cirmak world)"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "customerType": {
+      "type": "string",
+      "enum": [
+        "private",
+        "business",
+        "public",
+        "developer",
+        "housing",
+        "industrial",
+        "other"
+      ]
+    },
+    "street": { "type": "string" },
+    "zip": { "type": "string" },
+    "city": { "type": "string" },
+    "country": {
+      "type": "string",
+      "default": "DE"
+    },
+    "contactPerson": { "type": "string" },
+    "phone": { "type": "string" },
+    "email": { "type": "string" },
+    "vatId": { "type": "string" },
+    "notes": { "type": "string" }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "id": "CUST-008",
+  "companyId": "COMPANY-001",
+  "name": "Familien Meyer",
+  "customerType": "private",
+  "street": "Birkenweg 7",
+  "zip": "32107",
+  "city": "Bad Salzuflen",
+  "country": "DE",
+  "contactPerson": "Thomas Meyer",
+  "phone": "+49 5000 0000",
+  "email": "cust-008@kunde.example",
+  "notes": "matching anchor"
+}

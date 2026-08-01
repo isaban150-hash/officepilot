@@ -1,0 +1,22 @@
+{
+  "documentId": "DOC-00021",
+  "family": "generic",
+  "headline": "Alphabet · Leasingvertrag Ford Transit",
+  "factOrder": [
+    "sender",
+    "subject",
+    "amount",
+    "deadline",
+    "site"
+  ],
+  "facts": [
+    {
+      "id": "sender",
+      "value": "Alphabet Fuhrparkleasing"
+    },
+    {
+      "id": "subject",
+      "value": "Alphabet · Leasingvertrag Ford Transit"
+    }
+  ]
+}

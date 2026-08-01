@@ -1,0 +1,27 @@
+{
+  "id": "DOC-00015",
+  "companyId": "COMPANY-001",
+  "projectId": null,
+  "supplierId": "SUP-007",
+  "taxonomyTypeId": "DOCTYPE-041",
+  "documentType": "utility",
+  "subtype": "gas",
+  "title": "Stadtwerke Bad Salzuflen – Gasrechnung Betriebsstätte",
+  "receivedAt": "2026-02-12",
+  "lifecyclePhase": "firm",
+  "qualityTag": "clean",
+  "sourceKind": "pdf",
+  "suiteTags": [
+    "commit",
+    "release"
+  ],
+  "notes": "GOLD 02B: Gas nur Firma.",
+  "expected": {
+    "classifiedKind": "rechnung",
+    "caseMatchStatus": "none",
+    "matchedProjectId": null,
+    "primaryActionId": "create_vorgang",
+    "alertIds": []
+  },
+  "sourceFile": "source.pdf"
+}

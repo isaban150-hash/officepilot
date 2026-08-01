@@ -1,7 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { DEFAULT_COMPANY_PROFILE } from '../data/companyProfileDefaults';
 import { createTestVorgang } from '../test/fixtures';
-import { resetTestStores } from '../test/resetStores';
 import {
   documentDunningDelivery,
   resetDunningDocumentations,
@@ -67,9 +66,7 @@ function failLocalStorageSetItem(): void {
 }
 
 describe('critical flows persist failure', () => {
-  beforeEach(() => {
-    resetTestStores();
-    resetDunningDocumentations();
+  beforeEach(() => {    resetDunningDocumentations();
     resetLastPersistFailureForTests();
     hydrateVorgangStore([createTestVorgang({ invoices: [createSentInvoice()] })]);
   });

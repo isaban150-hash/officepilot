@@ -1,0 +1,27 @@
+{
+  "id": "DOC-00013",
+  "companyId": "COMPANY-001",
+  "projectId": null,
+  "supplierId": "SUP-016",
+  "taxonomyTypeId": "DOCTYPE-037",
+  "documentType": "advisor_letter",
+  "subtype": "steuerberater_schreiben",
+  "title": "Steuerberatung Ostwestfalen – Unterlagenchecklist Jahresabschluss",
+  "receivedAt": "2026-03-18",
+  "lifecyclePhase": "firm",
+  "qualityTag": "clean",
+  "sourceKind": "pdf",
+  "suiteTags": [
+    "commit",
+    "release"
+  ],
+  "notes": "GOLD 02B: StB-Schreiben nur Firma.",
+  "expected": {
+    "classifiedKind": "brief",
+    "caseMatchStatus": "none",
+    "matchedProjectId": null,
+    "primaryActionId": "create_vorgang",
+    "alertIds": []
+  },
+  "sourceFile": "source.pdf"
+}

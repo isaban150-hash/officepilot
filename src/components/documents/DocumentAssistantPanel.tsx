@@ -116,11 +116,15 @@ export function DocumentAssistantPanel({
 
   const guidancePanel = <DocumentGuidancePanel guidance={guidance} translate={translate} />;
 
+  // UX-02: contract first paint is the Auftragskarte — hide document-assistant noise.
+  if (compactForContractWorkspace) {
+    return null;
+  }
+
   return (
     <section
       className="document-assistant-panel"
       data-testid="document-assistant-panel"
-      data-compact={compactForContractWorkspace ? 'true' : undefined}
     >
       <Card highlight className="document-assistant-panel__hero">
         <CardMeta>{translate('docAssistant.recognized')}</CardMeta>
@@ -130,33 +134,17 @@ export function DocumentAssistantPanel({
         </CardTitle>
       </Card>
 
-      {compactForContractWorkspace ? (
-        <CollapsibleReviewSection
-          id="assistant-details"
-          title={translate('docAssistant.section.details')}
-          expanded={detailsExpanded}
-          onToggle={() => setDetailsExpanded((open) => !open)}
-          testId="doc-assistant-details"
-        >
-          {guidancePanel}
-          {recognitionDetails}
-          {changeTypeButton}
-        </CollapsibleReviewSection>
-      ) : (
-        <>
-          {guidancePanel}
-          <CollapsibleReviewSection
-            id="assistant-details"
-            title={translate('docAssistant.section.details')}
-            expanded={detailsExpanded}
-            onToggle={() => setDetailsExpanded((open) => !open)}
-            testId="doc-assistant-details"
-          >
-            {recognitionDetails}
-            {changeTypeButton}
-          </CollapsibleReviewSection>
-        </>
-      )}
+      {guidancePanel}
+      <CollapsibleReviewSection
+        id="assistant-details"
+        title={translate('docAssistant.section.details')}
+        expanded={detailsExpanded}
+        onToggle={() => setDetailsExpanded((open) => !open)}
+        testId="doc-assistant-details"
+      >
+        {recognitionDetails}
+        {changeTypeButton}
+      </CollapsibleReviewSection>
     </section>
   );
 }

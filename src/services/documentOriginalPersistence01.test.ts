@@ -1,12 +1,11 @@
 import { importInboxDocumentForTests } from '../test/confirmFilingDecisionForTests';
+import { useDocumentBlobDatabaseReset } from '../test/documentBlobTestReset';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  getClassificationForItem,
-} from './documentClassificationService';
+  getClassificationForItem } from './documentClassificationService';
 import {
   deleteDocument,
-  importInboxDocument,
-} from './documentService';
+  importInboxDocument } from './documentService';
 import {
   ensureDocumentBlobsForActiveScope,
   getDocumentFileRefById,
@@ -14,8 +13,7 @@ import {
   getOriginalDocumentFileBytes,
   resetDocumentFileStoreForTests,
   storeDocumentFileFromUpload,
-  verifyDocumentFileIntegrity,
-} from './documentFileStoreService';
+  verifyDocumentFileIntegrity } from './documentFileStoreService';
 import { countActiveReferencesToFileRef, releaseDocumentFileIfUnreferenced } from './documentFileReferenceService';
 import { intakeCachedDocumentFile } from './documentIntakeService';
 import { getInboxStoreSnapshot, hydrateInboxStore } from './inboxService';
@@ -24,15 +22,12 @@ import { setPdfTextExtractorForTests } from './uploadTextExtractionService';
 import * as blobDbService from './storage/documentBlobIndexedDbService';
 import {
   hasDocumentBlob,
-  readDocumentBlob,
-  resetDocumentBlobDatabaseForTests,
+  readDocumentBlob
 } from './storage/documentBlobIndexedDbService';
 import {
   resetStorageScopeForTests,
-  setActiveStorageScope,
-} from './storage/storageScopeService';
+  setActiveStorageScope } from './storage/storageScopeService';
 import type { CachedDocumentFilePayload } from './cachedDocumentFileService';
-import { resetTestStores } from '../test/resetStores';
 import { computeBufferContentHash } from './documentFileHashService';
 
 const WORKSPACE_A = 'ws-original-a';
@@ -43,23 +38,22 @@ function createPayload(bytes: Uint8Array, fileName: string, mimeType = 'applicat
     fileName,
     mimeType,
     fileSize: bytes.length,
-    bytes,
-  };
+    bytes };
 }
 
 function sampleBytes(marker: string): Uint8Array {
   return new TextEncoder().encode(`%PDF-1.4\n${marker}\n%%EOF`);
 }
 
+useDocumentBlobDatabaseReset();
+
 describe('P1-DOCUMENT-ORIGINAL-PERSISTENCE-01', () => {
   afterEach(async () => {
     setImageOcrExtractorForTests(null);
     setPdfTextExtractorForTests(null);
     vi.restoreAllMocks();
-    resetTestStores();
     resetDocumentFileStoreForTests();
     resetStorageScopeForTests();
-    await resetDocumentBlobDatabaseForTests();
   });
 
   it('speichert Original-Bytes bytegenau in IndexedDB', async () => {
@@ -99,8 +93,7 @@ describe('P1-DOCUMENT-ORIGINAL-PERSISTENCE-01', () => {
   it('lädt Original nach erneutem Öffnen unverändert', async () => {
     const original = sampleBytes('REOPEN-ORIGINAL-01');
     const intake = await intakeCachedDocumentFile(createPayload(original, 'scan.pdf'), {
-      importSource: 'upload',
-    });
+      importSource: 'upload' });
     expect(intake.success).toBe(true);
     if (!intake.success || intake.duplicate) return;
 
@@ -138,8 +131,7 @@ describe('P1-DOCUMENT-ORIGINAL-PERSISTENCE-01', () => {
   it('ändert Re-Klassifikation keine Datei-Metadaten', async () => {
     const original = sampleBytes('RECLASSIFY-FILE');
     const intake = await intakeCachedDocumentFile(createPayload(original, 'doc.pdf'), {
-      importSource: 'upload',
-    });
+      importSource: 'upload' });
     expect(intake.success).toBe(true);
     if (!intake.success || intake.duplicate) return;
 
@@ -148,9 +140,7 @@ describe('P1-DOCUMENT-ORIGINAL-PERSISTENCE-01', () => {
       ...intake.inboxItem,
       recognizedData: {
         ...intake.inboxItem.recognizedData,
-        Betrag: '3.712,80 EUR',
-      },
-    };
+        Betrag: '3.712,80 EUR' } };
     getClassificationForItem(item);
     const after = getDocumentFileRefById(before.id)!;
 

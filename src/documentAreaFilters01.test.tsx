@@ -51,7 +51,6 @@ function baseDoc(overrides: Partial<CompanyDocument> = {}): CompanyDocument {
 describe('DOCUMENT-AREA-FILTERS-01', () => {
   beforeEach(() => {
     resetMemory();
-    resetTestStores();
     hydrateDocumentStore([]);
     hydrateVorgangStore([]);
   });

@@ -375,9 +375,13 @@ const AUTHORITY_INVOICE_EXCLUSION_GUARD =
 const AUTHORITY_CONTRACT_EXCLUSION_GUARD =
   /\bwerkvertrag\b|\bsubunternehmer(?:vertrag)?\b|\bleistungsverzeichnis\b|\bbau-?subunternehmer\b|\bunternehmervertrag\b/i;
 
-/** Employment / Bundesagentur signals that must not become payment without a real demand. */
+/**
+ * Employment / Bundesagentur signals that must not become payment without a real demand.
+ * Bare "Arbeitgeber" in KK phrases like "Beitragsnachweis Arbeitgeber" must NOT match —
+ * require labeled party fields (`Arbeitgeber:`) or explicit BA/employment form markers.
+ */
 const EMPLOYMENT_BA_EXCLUSION_PATTERN =
-  /arbeitsbescheinigung|arbeitgeberbescheinigung|bundesagentur|agentur\s+für\s+arbeit|arbeitsagentur|§\s*312|sgb\s*iii|arbeitgeber|arbeitnehmer|beschäftigungsverhältnis|versicherungsnummer/i;
+  /arbeitsbescheinigung|arbeitgeberbescheinigung|bundesagentur|agentur\s+für\s+arbeit|arbeitsagentur|§\s*312|sgb\s*iii|arbeitgeber\s*:|arbeitnehmer\s*:|beschäftigungsverhältnis|versicherungsnummer/i;
 
 /** Clear payment-demand markers (Mahnung / ZE / Inkasso / Zahlungsaufforderung). */
 const STRONG_PAYMENT_MARKER_PATTERN =

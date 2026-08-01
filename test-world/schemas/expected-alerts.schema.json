@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://officepilot.local/test-world/schemas/expected-alerts.schema.json",
+  "title": "TestWorld Expected Alerts",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["documentId", "alertIds"],
+  "properties": {
+    "documentId": { "type": "string", "pattern": "^DOC-[0-9]{5}$" },
+    "alertIds": {
+      "type": "array",
+      "maxItems": 3,
+      "items": { "type": "string", "minLength": 1 }
+    }
+  }
+}

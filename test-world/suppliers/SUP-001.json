@@ -1,0 +1,12 @@
+{
+  "id": "SUP-001",
+  "companyId": "COMPANY-001",
+  "name": "GC-Großhandel OWL GmbH",
+  "supplierType": "wholesale",
+  "city": "Bielefeld",
+  "country": "DE",
+  "email": "sup-001@counterparty.example",
+  "notes": "TestWorld-Counterparty",
+  "street": "Logistikring 4",
+  "zip": "33609"
+}

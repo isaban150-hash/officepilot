@@ -1,4 +1,5 @@
 import { importInboxDocumentForTests } from './test/confirmFilingDecisionForTests';
+import { useDocumentBlobDatabaseReset } from './test/documentBlobTestReset';
 import { PDFDocument, PDFName, PDFSignature } from 'pdf-lib';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as persistenceService from './services/persistenceService';
@@ -25,7 +26,6 @@ import {
 import { hydrateInboxStore } from './services/inboxService';
 import { withNewEntitySync } from './services/sync/syncMetaService';
 import { createAuftragInboxItem } from './test/fixtures';
-import { resetTestStores } from './test/resetStores';
 import { PDF_INFO_METADATA_STRIP_KEYS } from './types/documentFilePdfMetadataStrip';
 import type { DocumentFileTransformPlan } from './types/documentFileTransformPlan';
 import type { CompanyDocument } from './types/models';
@@ -185,10 +185,11 @@ async function prepareDocumentWithPdf(bytes: Uint8Array, fileName: string) {
   return source;
 }
 
+useDocumentBlobDatabaseReset();
+
 afterEach(() => {
   vi.restoreAllMocks();
   setPdfInfoMetadataStripForTests(null);
-  resetTestStores();
   resetDocumentFileStoreForTests();
   resetDocumentFileRepresentationBindingStoreForTests();
 });

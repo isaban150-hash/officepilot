@@ -1,0 +1,12 @@
+{
+  "id": "SUP-013",
+  "companyId": "COMPANY-001",
+  "name": "SOKA-BAU",
+  "supplierType": "authority",
+  "city": "Wiesbaden",
+  "country": "DE",
+  "email": "sup-013@counterparty.example",
+  "notes": "Sozialkasse Bau",
+  "street": "Wettinerstraße 7",
+  "zip": "65189"
+}

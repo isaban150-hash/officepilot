@@ -10,7 +10,6 @@ import { hydrateCompanyProfileStore } from './services/companyProfileService';
 import { hydrateInboxStore } from './services/inboxService';
 import { resetDeferredWorkflowAnalysisCacheForTests } from './services/inboxWorkflowAnalysisKey';
 import { hydrateVorgangStore } from './services/vorgangService';
-import { resetTestStores } from './test/resetStores';
 import type { AreaAiAnswer } from './types/areaAi';
 import type { InboxItem } from './types/models';
 import { readDocumentReplyDraftHandoffFromLocationState } from './services/documentReplyDraftHandoffService';
@@ -170,9 +169,7 @@ function makeAnswer(text: string): AreaAiAnswer {
 }
 
 describe('DOCUMENT-ASSIST-SESSION-ISOLATION-01', () => {
-  beforeEach(() => {
-    resetTestStores();
-    resetDeferredWorkflowAnalysisCacheForTests();
+  beforeEach(() => {    resetDeferredWorkflowAnalysisCacheForTests();
     hydrateCompanyProfileStore(testProfile);
     hydrateVorgangStore([]);
     hydrateInboxStore([
@@ -192,7 +189,6 @@ describe('DOCUMENT-ASSIST-SESSION-ISOLATION-01', () => {
     vi.unstubAllEnvs();
     setAiGenerateTextForTests(null);
     vi.restoreAllMocks();
-    resetTestStores();
     document.body.innerHTML = '';
   });
 

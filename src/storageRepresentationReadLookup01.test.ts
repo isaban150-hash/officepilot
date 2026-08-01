@@ -1,3 +1,4 @@
+import { useDocumentBlobDatabaseReset } from './test/documentBlobTestReset';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createDocumentFileRepresentationBinding } from './services/documentFileRepresentationBindingService';
 import {
@@ -13,7 +14,6 @@ import {
   resetDocumentFileStoreForTests,
   storeDocumentFileFromCachedPayload,
 } from './services/documentFileStoreService';
-import { resetTestStores } from './test/resetStores';
 import type { DocumentFileRepresentationBindingKind } from './types/documentFileRepresentationBinding';
 import type { DocumentFileLifecycleStatus, DocumentFileRef } from './types/documentFileRef';
 
@@ -71,9 +71,9 @@ function bind(
   return createDocumentFileRepresentationBinding({ documentId, kind, fileRefId });
 }
 
-afterEach(() => {
-  resetTestStores();
-  resetDocumentFileStoreForTests();
+useDocumentBlobDatabaseReset();
+
+afterEach(() => {  resetDocumentFileStoreForTests();
   resetDocumentFileRepresentationBindingStoreForTests();
 });
 

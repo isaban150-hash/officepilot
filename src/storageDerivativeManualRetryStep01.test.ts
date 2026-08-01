@@ -1,3 +1,4 @@
+import { useDocumentBlobDatabaseReset } from './test/documentBlobTestReset';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createDocumentFileRepresentationBinding } from './services/documentFileRepresentationBindingService';
 import {
@@ -33,7 +34,6 @@ import {
   storeDocumentFileFromCachedPayload,
 } from './services/documentFileStoreService';
 import { withNewEntitySync } from './services/sync/syncMetaService';
-import { resetTestStores } from './test/resetStores';
 import type { DocumentFileTransformPlan } from './types/documentFileTransformPlan';
 import type { CompanyDocument } from './types/models';
 import type { PostImportDerivativeStepId } from './types/documentFileDerivativeStepOutcome';
@@ -117,10 +117,11 @@ function deferred<T = void>() {
   return { promise, resolve };
 }
 
+useDocumentBlobDatabaseReset();
+
 afterEach(() => {
   vi.restoreAllMocks();
   setPostImportDerivativeStepRunnersForTests(null);
-  resetTestStores();
   resetDocumentFileStoreForTests();
   resetDocumentFileRepresentationBindingStoreForTests();
   resetDocumentFileDerivativeStepOutcomeStoreForTests();

@@ -3,7 +3,6 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createOrderPosition, createTestVorgang, testSetup } from '../test/fixtures';
-import { resetTestStores } from '../test/resetStores';
 import { createAuftragInboxItem } from '../test/fixtures';
 import {
   confirmFilingDecisionForTests,
@@ -116,9 +115,7 @@ function seedNegotiatingVorgang(id: string) {
 }
 
 describe('CRITICAL-WRITE-PERSIST-CHECK-01 — Invoice', () => {
-  beforeEach(() => {
-    resetTestStores();
-    resetInvoiceFinalizeIntentsForTests();
+  beforeEach(() => {    resetInvoiceFinalizeIntentsForTests();
     vi.restoreAllMocks();
     hydrateVorgangStore([createTestVorgang()]);
   });
@@ -292,9 +289,7 @@ describe('CRITICAL-WRITE-PERSIST-CHECK-01 — Invoice', () => {
 });
 
 describe('CRITICAL-WRITE-PERSIST-CHECK-01 — Contract Confirmation', () => {
-  beforeEach(() => {
-    resetTestStores();
-    vi.restoreAllMocks();
+  beforeEach(() => {    vi.restoreAllMocks();
   });
 
   afterEach(() => {
@@ -350,9 +345,7 @@ describe('CRITICAL-WRITE-PERSIST-CHECK-01 — Contract Confirmation', () => {
 });
 
 describe('CRITICAL-WRITE-PERSIST-CHECK-01 — Filing & Inbox', () => {
-  beforeEach(() => {
-    resetTestStores();
-    localStorage.clear();
+  beforeEach(() => {    localStorage.clear();
     vi.restoreAllMocks();
     hydrateDocumentStore([]);
   });

@@ -1,0 +1,12 @@
+{
+  "id": "SUP-016",
+  "companyId": "COMPANY-001",
+  "name": "Steuerberatung Ostwestfalen GmbH",
+  "supplierType": "advisor",
+  "city": "Bad Salzuflen",
+  "country": "DE",
+  "email": "sup-016@counterparty.example",
+  "notes": "Steuerberater",
+  "street": "Bahnhofstraße 2",
+  "zip": "32105"
+}

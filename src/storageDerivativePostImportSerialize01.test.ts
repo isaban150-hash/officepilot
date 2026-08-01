@@ -1,4 +1,5 @@
 import { importInboxDocumentForTests } from './test/confirmFilingDecisionForTests';
+import { useDocumentBlobDatabaseReset } from './test/documentBlobTestReset';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createDocumentFileRepresentationBinding } from './services/documentFileRepresentationBindingService';
 import {
@@ -23,7 +24,6 @@ import {
 import { hydrateInboxStore } from './services/inboxService';
 import { withNewEntitySync } from './services/sync/syncMetaService';
 import { createAuftragInboxItem } from './test/fixtures';
-import { resetTestStores } from './test/resetStores';
 import type { DocumentFileTransformPlan } from './types/documentFileTransformPlan';
 import type { CompanyDocument } from './types/models';
 import type { PostImportDerivativeStepId } from './services/documentFilePostImportDerivativeOrchestrationService';
@@ -81,11 +81,12 @@ function deferred<T = void>() {
   return { promise, resolve };
 }
 
+useDocumentBlobDatabaseReset();
+
 afterEach(() => {
   vi.restoreAllMocks();
   setPostImportDerivativeStepRunnersForTests(null);
   setImageToPdfWriteForTests(null);
-  resetTestStores();
   resetDocumentFileStoreForTests();
   resetDocumentFileRepresentationBindingStoreForTests();
 });

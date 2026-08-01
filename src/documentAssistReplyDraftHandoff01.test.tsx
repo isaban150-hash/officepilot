@@ -26,7 +26,6 @@ import {
   resetDocumentWorkResultStoreForTests,
 } from './services/documentWorkResultService';
 import { createAuftragInboxItem } from './test/fixtures';
-import { resetTestStores } from './test/resetStores';
 import type { DocumentFieldFillConfirmRow } from './types/documentFieldFillConfirm';
 import type { DocumentReplyDraftHandoffPayload } from './types/documentReplyDraftHandoff';
 import type { InboxItem } from './types/models';
@@ -126,7 +125,6 @@ async function prepareDraft(container: HTMLElement, core: string): Promise<void>
 afterEach(() => {
   vi.restoreAllMocks();
   resetDocumentWorkResultStoreForTests();
-  resetTestStores();
   document.body.innerHTML = '';
 });
 

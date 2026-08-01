@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://officepilot.local/test-world/schemas/project.schema.json",
+  "title": "TestWorld Project",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "companyId",
+    "customerId",
+    "title",
+    "status",
+    "trade"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^PRJ-[0-9]{3}$",
+      "description": "Stable project id, e.g. PRJ-001"
+    },
+    "companyId": {
+      "type": "string",
+      "pattern": "^COMPANY-[0-9]{3}$"
+    },
+    "branchId": {
+      "type": "string",
+      "pattern": "^BRANCH-[0-9]{3}$"
+    },
+    "customerId": {
+      "type": "string",
+      "pattern": "^CUST-[0-9]{3}$"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "description": "e.g. Sägewerk Ernst Flisch"
+    },
+    "siteName": { "type": "string" },
+    "siteStreet": { "type": "string" },
+    "siteZip": { "type": "string" },
+    "siteCity": { "type": "string" },
+    "trade": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Gewerk, e.g. Heizung, Sanitär"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "inquiry",
+        "offered",
+        "commissioned",
+        "in_progress",
+        "billed",
+        "warranty",
+        "archived",
+        "disputed",
+        "lost"
+      ]
+    },
+    "startDate": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    },
+    "endDate": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    },
+    "foremanEmployeeId": {
+      "type": "string",
+      "pattern": "^EMP-[0-9]{3}$"
+    },
+    "timelineDocumentIds": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^DOC-[0-9]{5}$"
+      },
+      "description": "Ordered document ids for lifecycle tests (DOC-00001 format)"
+    },
+    "notes": { "type": "string" }
+  }
+}

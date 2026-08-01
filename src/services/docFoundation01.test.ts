@@ -1,4 +1,5 @@
 import { importInboxDocumentForTests } from '../test/confirmFilingDecisionForTests';
+import { useDocumentBlobDatabaseReset } from '../test/documentBlobTestReset';
 import { describe, expect, it, beforeEach } from 'vitest';
 import { DEFAULT_SETUP } from '../data/mockData';
 import { computeFileContentHash } from './documentFileHashService';
@@ -29,11 +30,12 @@ import {
 } from './sync/syncMigrationService';
 import type { AppPersistedState } from '../types/models';
 import { attachCompanyDocumentToVorgang, getVorgangStoreSnapshot, hydrateVorgangStore } from './vorgangService';
-import { resetTestStores } from '../test/resetStores';
 
 function samplePdfFile(name: string, content: string): File {
   return new File([content], name, { type: 'application/pdf' });
 }
+
+useDocumentBlobDatabaseReset();
 
 describe('DOC-FOUNDATION-01 file ref', () => {
   beforeEach(() => {
@@ -78,9 +80,7 @@ describe('DOC-FOUNDATION-01 hash', () => {
 });
 
 describe('DOC-FOUNDATION-01 duplicates', () => {
-  beforeEach(() => {
-    resetTestStores();
-    resetDocumentFileStoreForTests();
+  beforeEach(() => {    resetDocumentFileStoreForTests();
     setImageOcrExtractorForTests(async () => ({ text: '', confidence: 0 }));
   });
 
@@ -113,9 +113,7 @@ describe('DOC-FOUNDATION-01 duplicates', () => {
 });
 
 describe('DOC-FOUNDATION-01 intake upload flow', () => {
-  beforeEach(() => {
-    resetTestStores();
-    resetDocumentFileStoreForTests();
+  beforeEach(() => {    resetDocumentFileStoreForTests();
     setImageOcrExtractorForTests(async () => ({ text: '', confidence: 0 }));
   });
 
@@ -139,9 +137,7 @@ describe('DOC-FOUNDATION-01 intake upload flow', () => {
 });
 
 describe('DOC-FOUNDATION-01 archive', () => {
-  beforeEach(() => {
-    resetTestStores();
-    resetDocumentFileStoreForTests();
+  beforeEach(() => {    resetDocumentFileStoreForTests();
     setImageOcrExtractorForTests(async () => ({ text: '', confidence: 0 }));
   });
 
@@ -183,9 +179,7 @@ describe('DOC-FOUNDATION-01 archive', () => {
 });
 
 describe('DOC-FOUNDATION-01 vorgang link', () => {
-  beforeEach(() => {
-    resetTestStores();
-    resetDocumentFileStoreForTests();
+  beforeEach(() => {    resetDocumentFileStoreForTests();
     setImageOcrExtractorForTests(async () => ({ text: '', confidence: 0 }));
   });
 

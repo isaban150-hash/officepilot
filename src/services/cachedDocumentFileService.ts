@@ -1,4 +1,5 @@
 import { validateUploadFile } from './documentUploadValidation';
+import { prepareUploadFileForPipeline } from './heicUploadNormalizeService';
 import type { DocumentUploadValidationError } from '../types/uploadedDocument';
 
 export interface CachedDocumentFilePayload {
@@ -40,14 +41,21 @@ export async function loadCachedDocumentFileFromUpload(file: File): Promise<Load
     return { success: false, error: validation.error };
   }
 
+  const prepared = await prepareUploadFileForPipeline(file);
+  if (!prepared.success) {
+    return { success: false, error: prepared.error };
+  }
+
+  const pipelineFile = prepared.file;
+
   try {
-    const arrayBuffer = await file.arrayBuffer();
+    const arrayBuffer = await pipelineFile.arrayBuffer();
     return {
       success: true,
       payload: {
-        fileName: file.name,
-        mimeType: file.type || 'application/octet-stream',
-        fileSize: file.size,
+        fileName: pipelineFile.name,
+        mimeType: pipelineFile.type || 'application/octet-stream',
+        fileSize: pipelineFile.size,
         bytes: new Uint8Array(arrayBuffer),
       },
     };

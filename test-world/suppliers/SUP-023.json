@@ -1,0 +1,12 @@
+{
+  "id": "SUP-023",
+  "companyId": "COMPANY-001",
+  "name": "Creditreform OWL Inkasso GmbH",
+  "supplierType": "other",
+  "street": "Niederwall 15",
+  "zip": "33602",
+  "city": "Bielefeld",
+  "country": "DE",
+  "email": "sup-023@counterparty.example",
+  "notes": "Inkasso eingehend"
+}

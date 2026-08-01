@@ -1,0 +1,9 @@
+{
+  "documentId": "DOC-00032",
+  "taxonomyTypeId": "DOCTYPE-018",
+  "documentType": "credit_note",
+  "subtype": "gutschrift_lieferant",
+  "label": "Gutschrift vom Lieferanten",
+  "classifiedKind": "gutschrift",
+  "family": "invoice_in"
+}

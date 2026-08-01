@@ -1,0 +1,17 @@
+{
+  "id": "PRJ-014",
+  "companyId": "COMPANY-001",
+  "branchId": "BRANCH-001",
+  "customerId": "CUST-003",
+  "title": "Feuerwehr Bad Salzuflen – Schulungsraum",
+  "siteName": "Feuerwehr Bad Salzuflen – Schulungsraum",
+  "siteStreet": "Feuerwehrstraße 3",
+  "siteZip": "32105",
+  "siteCity": "Bad Salzuflen",
+  "trade": "Sanitär",
+  "status": "inquiry",
+  "startDate": "2026-05-01",
+  "foremanEmployeeId": "EMP-010",
+  "timelineDocumentIds": [],
+  "notes": "TestWorld-Projekt 01C – noch ohne Dokumente"
+}

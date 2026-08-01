@@ -1,0 +1,12 @@
+{
+  "id": "SUP-007",
+  "companyId": "COMPANY-001",
+  "name": "Stadtwerke Bad Salzuflen",
+  "supplierType": "utility",
+  "city": "Bad Salzuflen",
+  "country": "DE",
+  "email": "sup-007@counterparty.example",
+  "notes": "TestWorld-Counterparty",
+  "street": "Energieallee 1",
+  "zip": "32105"
+}

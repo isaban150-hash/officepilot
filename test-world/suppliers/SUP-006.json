@@ -1,0 +1,12 @@
+{
+  "id": "SUP-006",
+  "companyId": "COMPANY-001",
+  "name": "Hotel Lipperland",
+  "supplierType": "hotel",
+  "city": "Detmold",
+  "country": "DE",
+  "email": "sup-006@counterparty.example",
+  "notes": "TestWorld-Counterparty",
+  "street": "Parkstraße 10",
+  "zip": "32756"
+}

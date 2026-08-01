@@ -1,0 +1,9 @@
+{
+  "documentId": "DOC-00015",
+  "taxonomyTypeId": "DOCTYPE-041",
+  "documentType": "utility",
+  "subtype": "gas",
+  "label": "Gasrechnung",
+  "classifiedKind": "rechnung",
+  "family": "invoice_in"
+}

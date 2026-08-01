@@ -16,7 +16,6 @@ import * as inboxService from './services/inboxService';
 import * as communicationDraftService from './services/communicationDraftService';
 import * as communicationOrchestrator from './services/communicationOrchestrator';
 import { createAuftragInboxItem } from './test/fixtures';
-import { resetTestStores } from './test/resetStores';
 import type { DocumentFieldFillConfirmRow } from './types/documentFieldFillConfirm';
 import type { InboxItem } from './types/models';
 import { hydrateInboxStore } from './services/inboxService';
@@ -117,7 +116,6 @@ async function confirmAbsender(container: HTMLElement): Promise<void> {
 afterEach(() => {
   vi.restoreAllMocks();
   resetDocumentWorkResultStoreForTests();
-  resetTestStores();
   document.body.innerHTML = '';
 });
 

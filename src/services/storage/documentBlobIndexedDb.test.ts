@@ -1,3 +1,4 @@
+import { useDocumentBlobDatabaseReset } from '../../test/documentBlobTestReset';
 import { describe, expect, it } from 'vitest';
 import {
   deleteDocumentBlob,
@@ -15,7 +16,10 @@ async function readBlobBytes(blob: Blob): Promise<Uint8Array> {
   return new Uint8Array(await new Response(blob).arrayBuffer());
 }
 
-describe('PHOTO-STORAGE-IDB-01 IndexedDB blob store', () => {  it('speichert und liest Blob mit identischem Inhalt und MIME-Type', async () => {
+useDocumentBlobDatabaseReset();
+
+describe('PHOTO-STORAGE-IDB-01 IndexedDB blob store', () => {
+  it('speichert und liest Blob mit identischem Inhalt und MIME-Type', async () => {
     const bytes = new Uint8Array([1, 2, 3, 4, 5]);
     const blob = new Blob([bytes], { type: 'image/jpeg' });
 

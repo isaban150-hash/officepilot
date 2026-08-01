@@ -13,7 +13,6 @@ import { processUploadedDocument } from './services/intakeWorkflowService';
 import * as persistenceService from './services/persistenceService';
 import * as inboxService from './services/inboxService';
 import { createAuftragInboxItem } from './test/fixtures';
-import { resetTestStores } from './test/resetStores';
 import type { InboxItem } from './types/models';
 
 const PREFIX = 'document-field-fill-confirm';
@@ -73,7 +72,6 @@ async function renderPanel(item: InboxItem): Promise<{
 afterEach(async () => {
   vi.restoreAllMocks();
   resetDocumentWorkResultStoreForTests();
-  resetTestStores();
   document.body.innerHTML = '';
 });
 

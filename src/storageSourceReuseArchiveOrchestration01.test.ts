@@ -16,7 +16,6 @@ import {
 } from './services/documentFileStoreService';
 import { hydrateInboxStore } from './services/inboxService';
 import { createAuftragInboxItem } from './test/fixtures';
-import { resetTestStores } from './test/resetStores';
 import type { DocumentFileRef } from './types/documentFileRef';
 import type { DocumentFileTransformPlan } from './types/documentFileTransformPlan';
 import type { StoragePolicyId } from './types/storagePolicy';
@@ -74,7 +73,6 @@ function prepareInbox(fileRefId: string, lifecycleStatus: DocumentFileRef['lifec
 describe('STORAGE-SOURCE-REUSE-ARCHIVE-ORCHESTRATION-01', () => {
   afterEach(() => {
     vi.restoreAllMocks();
-    resetTestStores();
     resetDocumentFileStoreForTests();
     resetDocumentFileRepresentationBindingStoreForTests();
   });

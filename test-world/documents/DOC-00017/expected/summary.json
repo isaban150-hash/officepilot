@@ -1,0 +1,23 @@
+{
+  "documentId": "DOC-00017",
+  "family": "invoice_in",
+  "headline": "Telekom – Mobilfunkrechnung Firmenflotte",
+  "factOrder": [
+    "supplier",
+    "invoiceNumber",
+    "amount",
+    "date",
+    "deadline",
+    "site"
+  ],
+  "facts": [
+    {
+      "id": "supplier",
+      "value": "Telekom Geschäftskunden"
+    },
+    {
+      "id": "date",
+      "value": "2026-03-03"
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "id": "CUST-019",
+  "companyId": "COMPANY-001",
+  "name": "Archivkunde Stillstand GmbH",
+  "customerType": "business",
+  "street": "Lagerstraße 8",
+  "zip": "33602",
+  "city": "Bielefeld",
+  "country": "DE",
+  "contactPerson": "Buchhaltung",
+  "phone": "+49 5000 0000",
+  "email": "cust-019@kunde.example",
+  "notes": "no project — archive/search only"
+}

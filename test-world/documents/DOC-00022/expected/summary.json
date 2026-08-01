@@ -1,0 +1,22 @@
+{
+  "documentId": "DOC-00022",
+  "family": "generic",
+  "headline": "AutoService Teutoburger · HU / AU Prüfbericht LIP-CH 1001",
+  "factOrder": [
+    "sender",
+    "subject",
+    "amount",
+    "deadline",
+    "site"
+  ],
+  "facts": [
+    {
+      "id": "sender",
+      "value": "AutoService Teutoburger GmbH"
+    },
+    {
+      "id": "subject",
+      "value": "AutoService Teutoburger · HU / AU Prüfbericht LIP-CH 1001"
+    }
+  ]
+}

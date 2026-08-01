@@ -1,0 +1,14 @@
+{
+  "id": "CUST-013",
+  "companyId": "COMPANY-001",
+  "name": "Wohnungsbaugesellschaft OWL mbH",
+  "customerType": "housing",
+  "street": "Rathausplatz 2",
+  "zip": "32756",
+  "city": "Detmold",
+  "country": "DE",
+  "contactPerson": "Technik",
+  "phone": "+49 5000 0000",
+  "email": "cust-013@kunde.example",
+  "notes": "TestWorld-Kunde"
+}

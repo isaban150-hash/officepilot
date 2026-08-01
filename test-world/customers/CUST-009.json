@@ -1,0 +1,14 @@
+{
+  "id": "CUST-009",
+  "companyId": "COMPANY-001",
+  "name": "Ärztehaus Ostwestfalen KG",
+  "customerType": "business",
+  "street": "Bahnhofstraße 15",
+  "zip": "32049",
+  "city": "Herford",
+  "country": "DE",
+  "contactPerson": "Praxisverwaltung",
+  "phone": "+49 5000 0000",
+  "email": "cust-009@kunde.example",
+  "notes": "TestWorld-Kunde"
+}

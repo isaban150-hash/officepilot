@@ -1,0 +1,12 @@
+{
+  "id": "SUP-011",
+  "companyId": "COMPANY-001",
+  "name": "Finanzamt Detmold",
+  "supplierType": "authority",
+  "city": "Detmold",
+  "country": "DE",
+  "email": "sup-011@counterparty.example",
+  "notes": "Behörde – USt/Lohn",
+  "street": "Büchenstraße 6",
+  "zip": "32756"
+}

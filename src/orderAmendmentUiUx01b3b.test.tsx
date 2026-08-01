@@ -22,7 +22,6 @@ import {
   createOrderPosition,
   createTestVorgang,
 } from './test/fixtures';
-import { resetTestStores } from './test/resetStores';
 import type {
   ConfirmedOrderAmendment,
   ContractConfirmationSnapshot,
@@ -153,9 +152,7 @@ describe('ORDER-AMENDMENT-UI-UX-01B3B1 Rechnungssegment', () => {
   let container: HTMLDivElement;
   let root: Root;
 
-  beforeEach(() => {
-    resetTestStores();
-    vi.restoreAllMocks();
+  beforeEach(() => {    vi.restoreAllMocks();
     container = document.createElement('div');
     document.body.appendChild(container);
   });

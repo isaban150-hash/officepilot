@@ -1,0 +1,9 @@
+{
+  "documentId": "DOC-00029",
+  "taxonomyTypeId": "DOCTYPE-039",
+  "documentType": "legal_letter",
+  "subtype": "rechtsanwalt_schreiben",
+  "label": "Rechtsanwalt-Schreiben",
+  "classifiedKind": "brief",
+  "family": "letter"
+}

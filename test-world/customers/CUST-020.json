@@ -1,0 +1,14 @@
+{
+  "id": "CUST-020",
+  "companyId": "COMPANY-001",
+  "name": "Interessent Neubau Kirchheide",
+  "customerType": "private",
+  "street": "Dorfstraße 11",
+  "zip": "32657",
+  "city": "Lemgo",
+  "country": "DE",
+  "contactPerson": "Frau Klein",
+  "phone": "+49 5000 0000",
+  "email": "cust-020@kunde.example",
+  "notes": "no project — inquiry lead only"
+}

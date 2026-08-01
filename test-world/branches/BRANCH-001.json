@@ -1,0 +1,13 @@
+{
+  "id": "BRANCH-001",
+  "companyId": "COMPANY-001",
+  "name": "Hauptsitz Bad Salzuflen",
+  "street": "Industriestraße 18",
+  "zip": "32105",
+  "city": "Bad Salzuflen",
+  "country": "DE",
+  "phone": "+49 5222 9800-0",
+  "email": "office@cirmak-haustechnik.example",
+  "isHeadquarters": true,
+  "notes": "Standort/Niederlassung. Branch ≠ Gewerk. SHK ist Firmenschwerpunkt (Company.trades), nicht der Branch-Name."
+}

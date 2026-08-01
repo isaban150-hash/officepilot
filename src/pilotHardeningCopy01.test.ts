@@ -15,7 +15,7 @@ describe('PILOT-HARDENING-01 copy', () => {
 
   it('pilot boundaries are visible as dedicated hints', () => {
     expect(dePilot['pilot.hints.title']).toBe('Hinweise zum Pilotbetrieb');
-    expect(dePilot['pilot.hints.noCloud']).toMatch(/Cloud/i);
+    expect(dePilot['pilot.hints.noCloud']).toMatch(/Internet|KI|Synchronisation|Freigabe/i);
     expect(dePilot['pilot.hints.noAutoSend']).toMatch(/nicht|keine/i);
     expect(dePilot['pilot.hints.backup']).toMatch(/ZIP|Datensicherung|Backup/i);
   });
