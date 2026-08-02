@@ -344,6 +344,11 @@ function stripAbsenderFromContent(content: string, absender: string | undefined)
       .trim();
     break;
   }
+  // Title/Betreff often uses "Absender – Topic"; after strip only the leading separator remains.
+  value = value
+    .replace(/^[\s·]*[\u2013\u2014\u2012\-–—]+(?:\s+|$)/u, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
   return value || content;
 }
 

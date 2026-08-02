@@ -75,6 +75,17 @@ describe('SUBJECT-CONTRACT-01', () => {
     expect(subject).not.toMatch(/\s·\s/);
   });
 
+  it('entfernt führenden Gedankenstrich nach Absender-Strip aus Titel', () => {
+    const subject = composeIntelligentDocumentSubject({
+      text: 'Seite 1',
+      sender: 'Finanzamt Detmold',
+      title: 'Finanzamt Detmold – Erinnerung Umsatzsteuer-Voranmeldung',
+      betreff: 'Finanzamt Detmold – Erinnerung Umsatzsteuer-Voranmeldung',
+    });
+    expect(subject).toBe('Finanzamt Detmold · Erinnerung Umsatzsteuer-Voranmeldung');
+    expect(subject).not.toMatch(/·\s*[–—\-]/);
+  });
+
   it('extrahiert Person und Kennzeichen als Signale', () => {
     const signals = extractDocumentSubjectSignals(
       'Krankmeldung / AU Versicherter Jonas Richter Kennzeichen LIP-CH 1001 Datum 10.03.2026',
