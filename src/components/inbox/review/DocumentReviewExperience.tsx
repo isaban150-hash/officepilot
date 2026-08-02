@@ -128,8 +128,10 @@ export function DocumentReviewExperience({
   const primaryDisabled = !item.isAdvertisement && !workflow.companyRelevant;
 
   const showContractProposal = Boolean(workflow.contractOrderProposal) && !executionResult?.completed;
-  const showExperience =
-    !showContractProposal && !executionResult?.completed && summary.family !== 'contract';
+  // Experience Card is the shared first paint for every family without an open proposal —
+  // including contract/auftrag. Excluding family==='contract' left a lead-surface hole
+  // (no Experience Card, no Auftragskarte, no legacy primary) when no proposal exists.
+  const showExperience = !showContractProposal && !executionResult?.completed;
   const showLegacySummary =
     !showContractProposal && !executionResult?.completed && !showExperience && !overview.present;
   const showLegacyPrimary =
