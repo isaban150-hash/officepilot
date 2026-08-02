@@ -40,8 +40,8 @@ describe('TESTWORLD gold regression 03B', () => {
     }
   });
 
-  it('validates classification, summary, caseMatch, primaryAction, alerts for every gold document', () => {
-    const results = validateAllGoldDocuments(bundles, masters);
+  it('validates classification, summary, caseMatch, primaryAction, alerts for every gold document', async () => {
+    const results = await validateAllGoldDocuments(bundles, masters, testWorldRoot);
     const failed = results.filter((r) => !r.ok);
     if (failed.length > 0) {
       expect.fail(formatGoldValidationReport(results));

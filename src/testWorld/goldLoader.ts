@@ -5,6 +5,11 @@
 import { readFileSync, readdirSync, existsSync, statSync } from 'fs';
 import { join } from 'path';
 import { mapKindToDocumentType } from '../services/documentClassificationCatalog';
+import {
+  extractFieldsFromText,
+  mergeExtractedFields,
+} from '../services/documentFieldExtractionService';
+import { withInboxExtractedDocumentText } from '../services/inboxDocumentText';
 import type { ClassifiedDocumentKind, DocumentType, InboxItem, Vorgang } from '../types/models';
 import { createAuftragInboxItem, createTestVorgang } from '../test/fixtures';
 
@@ -63,7 +68,10 @@ export type GoldMasterMaps = {
   customers: Map<string, { id: string; name: string }>;
   suppliers: Map<string, { id: string; name: string }>;
   employees: Map<string, { id: string; firstName: string; lastName: string }>;
-  vehicles: Map<string, { id: string; label: string; licensePlate?: string }>;
+  vehicles: Map<
+    string,
+    { id: string; label: string; licensePlate?: string; make?: string; model?: string }
+  >;
   projects: Map<
     string,
     {
@@ -180,12 +188,15 @@ function siteLine(project: {
 /**
  * Build InboxItem fixture from gold meta + expected classification.
  * Seeds RD enough for OfficePilot summary/match without OCR/PDF.
+ * When source.pdf text is provided, merges product field extraction so subject
+ * gets the same Betreff/Absender/cues as the PDF intake path (04B).
  * Noise-avoidance injections must not suppress alerts declared in expected/alerts.json
  * and must not invent unique project signals when expected caseMatch is multiple.
  */
 export function goldBundleToInboxItem(
   bundle: GoldDocumentBundle,
   masters: GoldMasterMaps,
+  options?: { extractedText?: string },
 ): InboxItem {
   const { meta, classification, alerts, caseMatch } = bundle;
   const expectedAlertIds = new Set(alerts.alertIds);
@@ -202,16 +213,25 @@ export function goldBundleToInboxItem(
   const supplier = meta.supplierId ? masters.suppliers.get(meta.supplierId) : undefined;
   const project = meta.projectId ? masters.projects.get(meta.projectId) : undefined;
   const vehicle = meta.vehicleId ? masters.vehicles.get(meta.vehicleId) : undefined;
+  const employee = meta.employeeId ? masters.employees.get(meta.employeeId) : undefined;
 
-  // When expected wants sender-uncertain, do not invent a party / Absender.
-  const partyName = expectSenderUncertain
-    ? ''
-    : supplier?.name || customer?.name || 'Cirmak Haustechnik';
-  const recognizedData: Record<string, string> = {
-    // Clear createAuftragInboxItem defaults that leak into money facts.
+  // PDF text layer + labeled master cues that the text layer may omit when flattened.
+  const masterSubjectCues: string[] = [];
+  if (employee) {
+    masterSubjectCues.push(`Mitarbeiter: ${employee.firstName} ${employee.lastName}`);
+  }
+  const extractedText = [options?.extractedText?.trim() ?? '', ...masterSubjectCues]
+    .filter(Boolean)
+    .join('\n')
+    .trim();
+  const hasPdfText = Boolean(options?.extractedText?.trim());
+
+  // When PDF text is present, do not seed meta.title as Betreff — that catalog title
+  // outranks document-head topics in subject ranking. Field extraction fills Betreff.
+  let recognizedData: Record<string, string> = {
     Leistung: '',
     Angebotssumme: '',
-    Betreff: meta.title,
+    Betreff: hasPdfText ? '' : meta.title,
     Datum: meta.receivedAt,
   };
 
@@ -234,14 +254,11 @@ export function goldBundleToInboxItem(
     recognizedData.Baustellenadresse = siteLine(project);
     if (project.trade) recognizedData.Gewerk = project.trade;
   } else if (project && expectMultipleCaseMatch) {
-    // Keep site / display Vorgang for summary facts, but do not seed Bauvorhaben/Projekt —
-    // those are the caseMatch project signals that would collapse siblings into exact.
     recognizedData.Baustelle = siteLine(project);
     recognizedData.Baustellenadresse = siteLine(project);
     recognizedData.Vorgang = project.title;
   }
 
-  // Avoid clean-gold alert noise — but never when expected declares that alert.
   if (
     !expectMoneyMissing &&
     (classification.family === 'invoice_in' ||
@@ -257,6 +274,54 @@ export function goldBundleToInboxItem(
   if (vehicle?.licensePlate) {
     recognizedData.Referenz = vehicle.licensePlate;
     recognizedData.Aktenzeichen = vehicle.licensePlate;
+  }
+
+  if (extractedText) {
+    const extractedFields = extractFieldsFromText(extractedText);
+    if (expectMultipleCaseMatch) {
+      delete extractedFields.Projekt;
+      delete extractedFields.Bauvorhaben;
+      delete extractedFields.Vorgang;
+    }
+    if (expectSenderUncertain) {
+      delete extractedFields.Absender;
+      delete extractedFields.Lieferant;
+    }
+    if (expectMoneyMissing) {
+      delete extractedFields.Betrag;
+    }
+    recognizedData = mergeExtractedFields(recognizedData, extractedFields);
+    // 03B expected dates stay ISO from meta — PDF extraction yields display dates.
+    recognizedData.Datum = meta.receivedAt;
+    // Preserve intentional multiple ambiguity after merge.
+    if (expectMultipleCaseMatch) {
+      delete recognizedData.Bauvorhaben;
+      delete recognizedData.Projekt;
+    }
+    if (expectSenderUncertain) {
+      delete recognizedData.Absender;
+      delete recognizedData.Lieferant;
+    }
+    if (expectDeliveryQty) {
+      delete recognizedData.Menge;
+      delete recognizedData.Mengen;
+    }
+    if (expectMoneyMissing) {
+      delete recognizedData.Betrag;
+    }
+    recognizedData = withInboxExtractedDocumentText(recognizedData, extractedText);
+  }
+
+  // Never invent a default company Absender (pollutes ads/spam/newsletter subjects).
+  const partyName = expectSenderUncertain
+    ? ''
+    : supplier?.name ||
+      customer?.name ||
+      recognizedData.Absender?.trim() ||
+      '';
+
+  if (partyName && !recognizedData.Absender && !expectSenderUncertain && !customer) {
+    recognizedData.Absender = partyName;
   }
 
   return createAuftragInboxItem({

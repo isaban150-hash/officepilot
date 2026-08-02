@@ -17,7 +17,9 @@ import {
   type GoldDocumentBundle,
   type GoldMasterMaps,
   goldBundleToInboxItem,
+  resolveTestWorldRoot,
 } from './goldLoader';
+import { extractGoldSourcePdfText } from './goldSourceText';
 
 export type GoldValidationIssue = {
   documentId: string;
@@ -66,9 +68,17 @@ export function validateGoldDocument(
   masters: GoldMasterMaps,
   itemOverride?: InboxItem,
 ): GoldValidationResult {
-  const documentId = bundle.meta.id;
   const issues: GoldValidationIssue[] = [];
   const item = itemOverride ?? goldBundleToInboxItem(bundle, masters);
+  return validateGoldDocumentWithItem(bundle, item, issues);
+}
+
+function validateGoldDocumentWithItem(
+  bundle: GoldDocumentBundle,
+  item: InboxItem,
+  issues: GoldValidationIssue[],
+): GoldValidationResult {
+  const documentId = bundle.meta.id;
   const stub = createInboxWorkflowStub(item);
   const family = resolveDocumentSummaryFamily(item, stub, null);
   const summary: DocumentSummary = buildInboxDocumentSummary(item, { translate });
@@ -234,9 +244,16 @@ export function formatGoldValidationReport(results: GoldValidationResult[]): str
   return lines.join('\n');
 }
 
-export function validateAllGoldDocuments(
+export async function validateAllGoldDocuments(
   bundles: GoldDocumentBundle[],
   masters: GoldMasterMaps,
-): GoldValidationResult[] {
-  return bundles.map((bundle) => validateGoldDocument(bundle, masters));
+  testWorldRoot: string = resolveTestWorldRoot(),
+): Promise<GoldValidationResult[]> {
+  const results: GoldValidationResult[] = [];
+  for (const bundle of bundles) {
+    const extractedText = await extractGoldSourcePdfText(bundle.meta.id, testWorldRoot);
+    const item = goldBundleToInboxItem(bundle, masters, { extractedText });
+    results.push(validateGoldDocument(bundle, masters, item));
+  }
+  return results;
 }
