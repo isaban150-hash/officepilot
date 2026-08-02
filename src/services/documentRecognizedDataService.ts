@@ -899,7 +899,7 @@ function buildAuthorityRecognizedData(
   if (plain.Betreff?.trim()) {
     result.Betreff = plain.Betreff;
   }
-  if (plain.Absender?.trim()) {
+  if (plain.Absender?.trim() && kind !== 'agentur_fuer_arbeit') {
     result.Absender = plain.Absender.trim();
     result.Lieferant = plain.Absender.trim();
   }

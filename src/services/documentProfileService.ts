@@ -261,6 +261,13 @@ function deriveFilingDomain(
   return 'eingang';
 }
 
+function isEmploymentFormWithoutBaAuthorityName(recognizedText: string): boolean {
+  return (
+    (EMPLOYMENT_FORM_PATTERN.test(recognizedText) || hasEmploymentBaSignals(recognizedText)) &&
+    !BA_AUTHORITY_NAME_PATTERN.test(recognizedText)
+  );
+}
+
 function deriveSenderEntity(
   features: ExtractedDocumentFeature[],
   recognizedText: string,
@@ -280,6 +287,9 @@ function deriveSenderEntity(
   const labeled = features.find((feature) => feature.id === 'identity.sender_labeled');
   if (typeof labeled?.value === 'string' && labeled.value.trim()) {
     return labeled.value.trim();
+  }
+  if (isEmploymentFormWithoutBaAuthorityName(recognizedText)) {
+    return undefined;
   }
   // Unlabeled letterhead / issuer line (same general heuristic as field extraction).
   return inferUnlabeledSenderFromText(recognizedText);
