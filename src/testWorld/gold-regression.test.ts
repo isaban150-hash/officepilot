@@ -16,6 +16,9 @@ import {
   validateAllGoldDocuments,
 } from './goldValidator';
 
+/** Full-suite load: async PDF text seeding per document exceeds Vitest default (5s). */
+const GOLD_REGRESSION_TIMEOUT_MS = 30_000;
+
 describe('TESTWORLD gold regression 03B', () => {
   const testWorldRoot = resolveTestWorldRoot();
   const masters = loadGoldMasterData(testWorldRoot);
@@ -40,13 +43,17 @@ describe('TESTWORLD gold regression 03B', () => {
     }
   });
 
-  it('validates classification, summary, caseMatch, primaryAction, alerts for every gold document', async () => {
-    const results = await validateAllGoldDocuments(bundles, masters, testWorldRoot);
-    const failed = results.filter((r) => !r.ok);
-    if (failed.length > 0) {
-      expect.fail(formatGoldValidationReport(results));
-    }
-    expect(results).toHaveLength(35);
-    expect(results.every((r) => r.ok)).toBe(true);
-  });
+  it(
+    'validates classification, summary, caseMatch, primaryAction, alerts for every gold document',
+    async () => {
+      const results = await validateAllGoldDocuments(bundles, masters, testWorldRoot);
+      const failed = results.filter((r) => !r.ok);
+      if (failed.length > 0) {
+        expect.fail(formatGoldValidationReport(results));
+      }
+      expect(results).toHaveLength(35);
+      expect(results.every((r) => r.ok)).toBe(true);
+    },
+    GOLD_REGRESSION_TIMEOUT_MS,
+  );
 });
