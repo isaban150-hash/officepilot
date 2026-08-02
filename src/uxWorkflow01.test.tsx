@@ -320,7 +320,9 @@ describe('UX-WORKFLOW-01 document review', () => {
     });
     const workflow = processUploadedDocument(item.id)!;
     const hero = buildDocumentReviewHero(item, workflow);
-    expect(hero.documentTypeKey).toContain('classifiedKind.');
+    // Friendly display keys (757bfae) — not internal classifiedKind.* enum keys.
+    expect(hero.documentTypeKey).toBe('docAssistant.display.contract');
+    expect(hero.documentTypeKey).not.toContain('classifiedKind.');
     expect(hero.introKey).toBe('reviewWorkflow.hero.intro');
   });
 });
