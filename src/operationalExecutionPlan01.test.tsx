@@ -538,9 +538,15 @@ describe('OPERATIONAL-EXECUTION-PLAN-01 — UI preview', () => {
   });
 
   it('UNSURE does not show review_document as executable preview step', () => {
-    const { item } = seedCase('UNSURE-01');
+    const { item, observation } = seedCase('UNSURE-01');
+    // Shadow plan still excludes review_document from executable preview rows.
+    const view = buildOperationalOverviewView(observation.workflow, { inboxItem: item });
+    expect(view.planPreviewRows.some((r) => r.stepId === 'review_document')).toBe(false);
+
     const html = renderDetail(item.id);
-    expect(html).toContain('data-testid="operational-overview"');
+    // DOCUMENT-EXPERIENCE-02B: Experience Card first paint (not OperationalOverview).
+    expect(html).toContain('data-testid="document-experience-card"');
+    expect(html).not.toContain('data-testid="operational-overview"');
     expect(html).not.toContain(t('operationalExecution.step.review_document', 'de'));
     expect(html).not.toContain('archive_document');
     expect(html.match(/data-testid="document-review-apply-button"/g)?.length ?? 0).toBeLessThanOrEqual(
@@ -549,12 +555,21 @@ describe('OPERATIONAL-EXECUTION-PLAN-01 — UI preview', () => {
   });
 
   it('preview sits before primary; details stay closed', () => {
-    const { item } = seedCase('FA-FRIST-01');
+    const { item, observation } = seedCase('FA-FRIST-01');
+    // Plan preview remains a view-model concern; not mounted as overview first paint.
+    const view = buildOperationalOverviewView(observation.workflow, { inboxItem: item });
+    expect(view.planPreviewRows.length).toBeGreaterThan(0);
+
     const html = renderDetail(item.id);
-    const preview = html.indexOf('operational-execution-plan-preview');
-    const primary = html.indexOf('document-review-primary-action');
-    expect(preview).toBeGreaterThanOrEqual(0);
-    expect(primary).toBeGreaterThan(preview);
-    expect(html).not.toMatch(/data-testid="operational-overview-details"[^>]*\sopen[\s>]/);
+    expect(html).toContain('data-testid="document-experience-card"');
+    expect(html).not.toContain('data-testid="operational-overview"');
+    expect(html).not.toContain('data-testid="operational-execution-plan-preview"');
+
+    // Lead surface before primary CTA; Experience Details (E) stay collapsed.
+    const experience = html.indexOf('data-testid="document-experience-card"');
+    const primary = html.indexOf('document-review-apply-button');
+    expect(experience).toBeGreaterThanOrEqual(0);
+    expect(primary).toBeGreaterThan(experience);
+    expect(html).not.toMatch(/data-testid="document-experience-details"[^>]*\sopen[\s>]/);
   });
 });

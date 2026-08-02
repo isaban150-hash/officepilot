@@ -171,7 +171,14 @@ describe('DOCUMENT-ASSIST-EINGANG-SURFACE-CONSOLIDATE-01', () => {
     expect(html).toContain('data-assist-flow="consolidated"');
     expect(html).toContain('eingang-assist-flow');
 
-    assertOrder(html, 'data-testid="document-assistant-panel"', 'data-testid="document-review-experience"');
+    // DOCUMENT-EXPERIENCE-02B: Experience Card is the lead surface (no Assistant hero).
+    expect(html).toContain('data-testid="document-experience-card"');
+    expect(html).not.toContain('data-testid="document-assistant-panel"');
+    assertOrder(
+      html,
+      'data-testid="document-experience-card"',
+      'data-testid="document-field-fill-confirm-panel"',
+    );
     assertOrder(
       html,
       'data-testid="document-review-experience"',
@@ -198,12 +205,12 @@ describe('DOCUMENT-ASSIST-EINGANG-SURFACE-CONSOLIDATE-01', () => {
       'data-testid="ablage-original-file"',
     );
 
-    // Non-compact understand: guidance visible; trust/details stay collapsed
+    // Guidance lives in Experience Details (E); details stay collapsed; no Assistant trust lane.
     expect(html).not.toContain('data-compact="true"');
     expect(html).toContain('data-testid="document-guidance-panel"');
     expect(html).toContain(translate('docGuidance.title'));
-    expect(html).toContain('data-testid="doc-assistant-details"');
-    expect(html).toContain('aria-expanded="false"');
+    expect(html).toContain('data-testid="document-experience-details"');
+    expect(html).not.toMatch(/data-testid="document-experience-details"[^>]*\sopen[\s>]/);
     expect(html).not.toContain('data-testid="review-section-content-assistant-details"');
     expect(html).not.toContain(`>${translate('docAssistant.section.steuerberater')}<`);
     expect(html).not.toContain(`>${translate('docAssistant.section.trust')}<`);

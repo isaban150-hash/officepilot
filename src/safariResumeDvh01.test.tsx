@@ -147,7 +147,9 @@ describe('FIX-SAFARI-RESUME-DVH-01', () => {
     );
 
     expect(main.querySelector('[data-testid="ablage-detail-page"]')).not.toBeNull();
-    expect(main.querySelector('[data-testid="document-assistant-panel"]')).not.toBeNull();
+    // DOCUMENT-EXPERIENCE-02B: durable first-paint probe is Experience Card (not Assistant).
+    expect(main.querySelector('[data-testid="document-review-experience"]')).not.toBeNull();
+    expect(main.querySelector('[data-testid="document-experience-card"]')).not.toBeNull();
     const detailMarkup = main.innerHTML;
 
     act(() => {
