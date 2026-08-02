@@ -71,3 +71,16 @@ export function stripDefinitelyMockDataFromState(state: AppPersistedState): AppP
 export function isDefinitelyMockVorgangId(vorgangId: string | undefined | null): boolean {
   return Boolean(vorgangId && DEFINITE_MOCK_VORGANG_IDS.has(vorgangId));
 }
+
+/**
+ * Cloud push / outbox guard — ID-only (v-001…v-003).
+ * Do not use title heuristics here; stripDefinitelyMockDataFromState keeps broader local cleanup.
+ */
+export function isCloudSyncBlockedMockVorgangId(vorgangId: string | undefined | null): boolean {
+  return isDefinitelyMockVorgangId(vorgangId);
+}
+
+/** Demo IDs that may pollute a real workspace and need explicit (manual) cloud cleanup. */
+export function listCloudCleanupMockVorgangIds(): readonly string[] {
+  return [...DEFINITE_MOCK_VORGANG_IDS];
+}

@@ -7,6 +7,7 @@ import { buildVorgangCloudContentKey } from '../vorgang/vorgangCloudService';
 import { resolveCloudWorkspaceId } from '../workspace/workspaceSyncPayloadService';
 import { buildCloudEntityId } from '../workspace/workspaceSyncPayloadService';
 import type { Vorgang } from '../../types/models';
+import { isCloudSyncBlockedMockVorgangId } from '../storage/mockDataDetectionService';
 
 export const TRACKED_SYNC_ENTITY_TYPES: SyncEntityType[] = [
   'inbox_item',
@@ -209,6 +210,11 @@ export function trackPersistedChanges(state: AppPersistedState): void {
   for (const [key, ref] of currentEntities.entries()) {
     const previous = trackedFingerprints.get(key);
     if (previous && !fingerprintChanged(previous, ref.fingerprint, ref.entityType)) {
+      continue;
+    }
+
+    // Demo seed IDs must never enter a real workspace outbox (ID-only guard).
+    if (ref.entityType === 'vorgang' && isCloudSyncBlockedMockVorgangId(ref.entityId)) {
       continue;
     }
 

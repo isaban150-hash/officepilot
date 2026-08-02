@@ -15,6 +15,7 @@ import type {
   SyncPushResult,
 } from './syncAdapter';
 import { isSupabaseSyncAllowed } from './cloudSyncAllowlist';
+import { isCloudSyncBlockedMockVorgangId } from '../storage/mockDataDetectionService';
 import {
   createEmptySyncSimulationReport,
   finalizeSyncSimulationReport,
@@ -274,6 +275,19 @@ export class SupabaseSyncAdapter implements SyncAdapter {
 
     for (const entry of pendingEntries) {
       if (!isSupabaseSyncAllowed(entry.entityType)) {
+        continue;
+      }
+
+      // Defense-in-depth: never upsert demo seed vorgänge (v-001…v-003) to a real workspace.
+      if (entry.entityType === 'vorgang' && isCloudSyncBlockedMockVorgangId(entry.entityId)) {
+        completedOutboxIds.push(entry.id);
+        outbox = updateOutboxEntryStatus(outbox, entry.id, 'completed');
+        report.completedOutboxCount += 1;
+        report.syncedEntities.push({
+          entityType: entry.entityType,
+          entityId: entry.entityId,
+          resolution: 'noop',
+        });
         continue;
       }
 
