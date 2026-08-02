@@ -180,12 +180,18 @@ function siteLine(project: {
 /**
  * Build InboxItem fixture from gold meta + expected classification.
  * Seeds RD enough for OfficePilot summary/match without OCR/PDF.
+ * Noise-avoidance injections must not suppress alerts declared in expected/alerts.json.
  */
 export function goldBundleToInboxItem(
   bundle: GoldDocumentBundle,
   masters: GoldMasterMaps,
 ): InboxItem {
-  const { meta, classification } = bundle;
+  const { meta, classification, alerts } = bundle;
+  const expectedAlertIds = new Set(alerts.alertIds);
+  const expectSenderUncertain = expectedAlertIds.has('sender-uncertain');
+  const expectDeliveryQty = expectedAlertIds.has('delivery-qty');
+  const expectMoneyMissing = expectedAlertIds.has('money-missing');
+
   const kind = classification.classifiedKind as ClassifiedDocumentKind;
   const documentType = mapKindToDocumentType(kind) as DocumentType;
   const customer = meta.customerId ? masters.customers.get(meta.customerId) : undefined;
@@ -193,7 +199,10 @@ export function goldBundleToInboxItem(
   const project = meta.projectId ? masters.projects.get(meta.projectId) : undefined;
   const vehicle = meta.vehicleId ? masters.vehicles.get(meta.vehicleId) : undefined;
 
-  const partyName = supplier?.name || customer?.name || 'Cirmak Haustechnik';
+  // When expected wants sender-uncertain, do not invent a party / Absender.
+  const partyName = expectSenderUncertain
+    ? ''
+    : supplier?.name || customer?.name || 'Cirmak Haustechnik';
   const recognizedData: Record<string, string> = {
     // Clear createAuftragInboxItem defaults that leak into money facts.
     Leistung: '',
@@ -206,11 +215,11 @@ export function goldBundleToInboxItem(
     recognizedData.Auftraggeber = customer.name;
     recognizedData.Kunde = customer.name;
   }
-  if (supplier) {
+  if (supplier && !expectSenderUncertain) {
     recognizedData.Lieferant = supplier.name;
     recognizedData.Absender = supplier.name;
   }
-  if (classification.family === 'tank' && supplier) {
+  if (classification.family === 'tank' && supplier && !expectSenderUncertain) {
     recognizedData.Tankstelle = supplier.name;
   }
   if (project) {
@@ -222,16 +231,17 @@ export function goldBundleToInboxItem(
     if (project.trade) recognizedData.Gewerk = project.trade;
   }
 
-  // Avoid clean-gold alert noise (money-missing / delivery-qty).
+  // Avoid clean-gold alert noise — but never when expected declares that alert.
   if (
-    classification.family === 'invoice_in' ||
-    classification.family === 'invoice_out' ||
-    classification.family === 'tank' ||
-    classification.family === 'offer'
+    !expectMoneyMissing &&
+    (classification.family === 'invoice_in' ||
+      classification.family === 'invoice_out' ||
+      classification.family === 'tank' ||
+      classification.family === 'offer')
   ) {
     recognizedData.Betrag = '100,00 EUR';
   }
-  if (classification.family === 'delivery') {
+  if (classification.family === 'delivery' && !expectDeliveryQty) {
     recognizedData.Menge = '1 Palette';
   }
   if (vehicle?.licensePlate) {
