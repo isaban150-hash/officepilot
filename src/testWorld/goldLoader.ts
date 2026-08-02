@@ -180,17 +180,21 @@ function siteLine(project: {
 /**
  * Build InboxItem fixture from gold meta + expected classification.
  * Seeds RD enough for OfficePilot summary/match without OCR/PDF.
- * Noise-avoidance injections must not suppress alerts declared in expected/alerts.json.
+ * Noise-avoidance injections must not suppress alerts declared in expected/alerts.json
+ * and must not invent unique project signals when expected caseMatch is multiple.
  */
 export function goldBundleToInboxItem(
   bundle: GoldDocumentBundle,
   masters: GoldMasterMaps,
 ): InboxItem {
-  const { meta, classification, alerts } = bundle;
+  const { meta, classification, alerts, caseMatch } = bundle;
   const expectedAlertIds = new Set(alerts.alertIds);
   const expectSenderUncertain = expectedAlertIds.has('sender-uncertain');
   const expectDeliveryQty = expectedAlertIds.has('delivery-qty');
   const expectMoneyMissing = expectedAlertIds.has('money-missing');
+  // When expected wants multiple, do not inject Bauvorhaben/Projekt (caseMatch project
+  // signals). Site + display Vorgang may still be seeded for summary facts.
+  const expectMultipleCaseMatch = caseMatch.matchStatus === 'multiple';
 
   const kind = classification.classifiedKind as ClassifiedDocumentKind;
   const documentType = mapKindToDocumentType(kind) as DocumentType;
@@ -222,13 +226,19 @@ export function goldBundleToInboxItem(
   if (classification.family === 'tank' && supplier && !expectSenderUncertain) {
     recognizedData.Tankstelle = supplier.name;
   }
-  if (project) {
+  if (project && !expectMultipleCaseMatch) {
     recognizedData.Bauvorhaben = project.title;
     recognizedData.Projekt = project.title;
     recognizedData.Vorgang = project.title;
     recognizedData.Baustelle = siteLine(project);
     recognizedData.Baustellenadresse = siteLine(project);
     if (project.trade) recognizedData.Gewerk = project.trade;
+  } else if (project && expectMultipleCaseMatch) {
+    // Keep site / display Vorgang for summary facts, but do not seed Bauvorhaben/Projekt —
+    // those are the caseMatch project signals that would collapse siblings into exact.
+    recognizedData.Baustelle = siteLine(project);
+    recognizedData.Baustellenadresse = siteLine(project);
+    recognizedData.Vorgang = project.title;
   }
 
   // Avoid clean-gold alert noise — but never when expected declares that alert.
