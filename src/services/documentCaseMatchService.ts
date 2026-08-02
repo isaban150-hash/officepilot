@@ -126,9 +126,12 @@ function scoreVorgang(
   if (signals.knownCaseId && signals.knownCaseId === vorgang.id) {
     reasons.push('known_link');
   }
-  if (signals.project && tokensOverlap(signals.project, vorgang.title)) {
+  // Prefer title identity (equalsLoose) over token-family overlap so sibling
+  // projects that share a customer prefix (e.g. "Sägewerk Ernst Flisch – …")
+  // do not all receive same_project from a unique Bauvorhaben string.
+  if (signals.project && equalsLoose(signals.project, vorgang.title)) {
     reasons.push('same_project');
-  } else if (signals.project && tokensOverlap(signals.project, vorgang.baustelle)) {
+  } else if (signals.project && equalsLoose(signals.project, vorgang.baustelle)) {
     reasons.push('same_project');
   }
 
@@ -181,6 +184,16 @@ function scoreVorgang(
   };
 }
 
+function isStrongExactCandidate(candidate: DocumentCaseMatchCandidate): boolean {
+  return (
+    candidate.score >= EXACT_SCORE ||
+    (candidate.reasons.includes('same_project') && candidate.reasons.includes('same_customer')) ||
+    (candidate.reasons.includes('same_site') && candidate.reasons.includes('same_customer')) ||
+    candidate.reasons.includes('same_contract_number') ||
+    candidate.reasons.includes('same_invoice_number')
+  );
+}
+
 function decideStatus(ranked: DocumentCaseMatchCandidate[]): {
   status: DocumentCaseMatchStatus;
   primary: DocumentCaseMatchCandidate | null;
@@ -197,19 +210,21 @@ function decideStatus(ranked: DocumentCaseMatchCandidate[]): {
     return { status: 'exact', primary: top, cluster: [top] };
   }
 
-  const strongExact =
-    top.score >= EXACT_SCORE ||
-    (top.reasons.includes('same_project') && top.reasons.includes('same_customer')) ||
-    (top.reasons.includes('same_site') && top.reasons.includes('same_customer')) ||
-    top.reasons.includes('same_contract_number') ||
-    top.reasons.includes('same_invoice_number');
+  const strongExact = isStrongExactCandidate(top);
+  const exactPeers = cluster.filter(isStrongExactCandidate);
 
-  if (cluster.length >= 2) {
+  // Ambiguous only when ≥2 exact-quality peers compete — a lone strongExact
+  // must not be downgraded just because weaker likely peers sit nearby.
+  if (exactPeers.length >= 2) {
     return { status: 'multiple', primary: top, cluster };
   }
 
   if (strongExact) {
     return { status: 'exact', primary: top, cluster: [top] };
+  }
+
+  if (cluster.length >= 2) {
+    return { status: 'multiple', primary: top, cluster };
   }
 
   if (top.score >= LIKELY_SCORE) {

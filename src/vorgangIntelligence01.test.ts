@@ -229,6 +229,75 @@ describe('VORGANG-INTELLIGENCE-01', () => {
     expect(html).toContain('Projekt Ost');
   });
 
+  it('exact: eindeutiges Bauvorhaben schlägt Geschwister-Cluster mit gleichem Kundenpräfix', () => {
+    hydrateVorgangStore([
+      createTestVorgang({
+        id: 'PRJ-001',
+        title: 'Sägewerk Ernst Flisch – Heizzentrale',
+        customer: 'Ernst Flisch',
+        baustelle: 'Werkstraße 12, Lemgo',
+      }),
+      createTestVorgang({
+        id: 'PRJ-011',
+        title: 'Sägewerk Ernst Flisch – Absaugung Halle 2',
+        customer: 'Ernst Flisch',
+        baustelle: 'Werkstraße 12, Lemgo',
+      }),
+      createTestVorgang({
+        id: 'PRJ-012',
+        title: 'Sägewerk Ernst Flisch – Sanitär Bürotrakt',
+        customer: 'Ernst Flisch',
+        baustelle: 'Werkstraße 12a, Lemgo',
+      }),
+    ]);
+    const item = createAuftragInboxItem({
+      id: 'inbox-unique-project',
+      classifiedKind: 'werkvertrag',
+      recognizedData: {
+        Auftraggeber: 'Ernst Flisch',
+        Baustelle: 'Werkstraße 12, Lemgo',
+        Bauvorhaben: 'Sägewerk Ernst Flisch – Heizzentrale',
+      },
+    });
+    const match = buildDocumentCaseMatch(item);
+    expect(match.matchStatus).toBe('exact');
+    expect(match.matchedCaseId).toBe('PRJ-001');
+    expect(match.reasons).toEqual(expect.arrayContaining(['same_project', 'same_customer']));
+
+    const summary = buildInboxDocumentSummary(item, { translate });
+    expect(summary.primaryAction.id).toBe('open_vorgang');
+  });
+
+  it('multiple: gemeinsamer Projekt-Präfix ohne eindeutigen Titel bleibt mehrdeutig', () => {
+    hydrateVorgangStore([
+      createTestVorgang({
+        id: 'PRJ-001',
+        title: 'Sägewerk Ernst Flisch – Heizzentrale',
+        customer: 'Ernst Flisch',
+        baustelle: 'Werkstraße 12, Lemgo',
+      }),
+      createTestVorgang({
+        id: 'PRJ-011',
+        title: 'Sägewerk Ernst Flisch – Absaugung Halle 2',
+        customer: 'Ernst Flisch',
+        baustelle: 'Werkstraße 12, Lemgo',
+      }),
+    ]);
+    const item = createAuftragInboxItem({
+      id: 'inbox-shared-prefix',
+      classifiedKind: 'eingangsrechnung',
+      recognizedData: {
+        Auftraggeber: 'Ernst Flisch',
+        Baustelle: 'Werkstraße 12, Lemgo',
+        Bauvorhaben: 'Sägewerk Ernst Flisch',
+      },
+    });
+    const match = buildDocumentCaseMatch(item);
+    expect(match.matchStatus).toBe('multiple');
+    expect(match.matchedCaseId).toBeNull();
+    expect(match.candidates.length).toBeGreaterThanOrEqual(2);
+  });
+
   it('none: kein Treffer', () => {
     hydrateVorgangStore([
       createTestVorgang({
