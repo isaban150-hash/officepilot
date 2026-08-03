@@ -9,8 +9,10 @@ import { HeutePage } from './pages/HeutePage';
 import { EingangPage } from './pages/EingangPage';
 import { EingangDetailPage } from './pages/EingangDetailPage';
 import { createMockInboxItemFromUpload } from './services/inboxUploadFactory';
-import { hydrateInboxStore } from './services/inboxService';
+import { getInboxItemById, hydrateInboxStore } from './services/inboxService';
 import { processUploadedDocument } from './services/intakeWorkflowService';
+import { buildInboxDocumentSummary } from './services/documentSummary';
+import { t } from './i18n';
 import { resetTestStores } from './test/resetStores';
 
 const INDEX_CSS = resolve(__dirname, 'index.css');
@@ -131,6 +133,8 @@ describe('FIX-MOBILE-MAIN-CLIP-01', () => {
     expect(detail).toContain('data-testid="document-experience-card"');
     expect(ablage).toMatch(/data-testid="inbox-card-/);
     expect(ablage).toContain('document-experience-card');
-    expect(ablage).toContain('Jetzt prüfen');
+    const storedItem = getInboxItemById(item.id)!;
+    const summary = buildInboxDocumentSummary(storedItem, { translate: (key) => t(key, 'de') });
+    expect(ablage).toContain(t(summary.primaryAction.labelKey, 'de'));
   });
 });
