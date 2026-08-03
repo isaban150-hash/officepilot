@@ -1,3 +1,5 @@
+import { pickBestConstructionSiteCandidate } from './documentSummaryContent';
+
 export interface ExtractedDocumentFields {
   Absender?: string;
   Empfänger?: string;
@@ -232,6 +234,10 @@ function isPlausibleSiteValue(value: string): boolean {
     return false;
   }
   return /[\p{L}]{3,}/u.test(trimmed);
+}
+
+function preferConstructionSiteMergeValue(existing: string | undefined, incoming: string): string {
+  return pickBestConstructionSiteCandidate(existing, incoming) ?? incoming;
 }
 
 function isPlausibleProjectValue(value: string): boolean {
@@ -670,6 +676,10 @@ export function mergeExtractedFields(
   >) {
     if (!value?.trim()) continue;
     const existing = merged[key];
+    if (key === 'Baustelle') {
+      merged.Baustelle = preferConstructionSiteMergeValue(existing, value.trim());
+      continue;
+    }
     const placeholder =
       !existing ||
       /^RE-2026|^ca\.|^Unbekannt|^Lieferant$|^Kunde$|^Absender$|^Interessent$|^Tankstelle$|^Baustelle laut|^Mitarbeiter$|^Dokument$/i.test(

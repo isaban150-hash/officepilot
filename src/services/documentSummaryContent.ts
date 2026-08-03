@@ -245,6 +245,39 @@ export function shortenConstructionSiteFact(value: string): string {
   return truncateSummaryFactText(first, 70);
 }
 
+/** Higher score = better construction-site evidence for summary facts. */
+export function constructionSiteFactQuality(value: string): number {
+  const trimmed = value.replace(/\s+/g, ' ').trim();
+  if (!trimmed) return 0;
+  const display = shortenConstructionSiteFact(trimmed);
+  if (display) {
+    if (/,/.test(display) && /\d/.test(display)) return 5;
+    if (/straße|strasse|weg|platz|allee/i.test(display)) return 4;
+    return 3;
+  }
+  if (/[–—]/.test(trimmed) && !/\d/.test(trimmed) && trimmed.length > 24) return 1;
+  if (/\d/.test(trimmed) && /straße|strasse|weg|platz|allee/i.test(trimmed)) return 4;
+  if (/^\d{4,5}\s+[\p{L}]/u.test(trimmed)) return 2;
+  return 1;
+}
+
+export function pickBestConstructionSiteCandidate(
+  ...candidates: Array<string | undefined | null>
+): string | undefined {
+  let best: string | undefined;
+  let bestScore = 0;
+  for (const candidate of candidates) {
+    const trimmed = candidate?.trim();
+    if (!trimmed) continue;
+    const score = constructionSiteFactQuality(trimmed);
+    if (score > bestScore) {
+      bestScore = score;
+      best = trimmed;
+    }
+  }
+  return best;
+}
+
 /**
  * Turn raw "Positionen" / counts into "N Positionen erkannt".
  * Long Leistungsbeschreibung is not a positions fact.

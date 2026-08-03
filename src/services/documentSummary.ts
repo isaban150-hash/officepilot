@@ -38,6 +38,7 @@ import {
   preferMeaningfulParty,
   preferProjectFactValue,
   preferVorgangFactValue,
+  pickBestConstructionSiteCandidate,
   sortContractSummaryFacts,
 } from './documentSummaryContent';
 import { composeIntelligentDocumentSubject } from './documentSubjectIntelligence';
@@ -486,11 +487,11 @@ function buildNonContractSummary(
     understanding?.date,
     bi?.facts.timeline.contractDate?.value,
   );
-  const site = firstNonEmpty(
+  const site = pickBestConstructionSiteCandidate(
     rd(item, 'Baustelle', 'Baustellenadresse'),
+    rd(item, 'Straße'),
     understanding?.constructionSite,
     bi?.facts.subject.site?.value,
-    // Bare Projekt only as last resort — often holds title/table bleed on flat PDFs.
     rd(item, 'Projekt'),
     bi?.facts.subject.project?.value,
   );
