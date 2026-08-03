@@ -55,7 +55,7 @@ const LETTERHEAD_BRAND =
 const DATE_PATTERN = /\b(\d{1,2}[./]\d{1,2}[./]\d{2,4})\b/;
 /** Labeled dates anywhere in flattened PDF text (not only line-start). */
 const DATE_LABELED_INLINE =
-  /\b(?:datum|vertragsdatum|belegdatum|lieferdatum|rechnungsdatum|aufenthalt)\s*[:.]?\s*(\d{1,2}[./]\d{1,2}[./]\d{2,4}|\d{4}-\d{2}-\d{2}|\d{1,2}\.?[–—-]\d{1,2}\.\d{1,2}\.\d{2,4})/i;
+  /(?<!(?:ohne|kein|keine|nicht)\s)\b(?:datum|vertragsdatum|belegdatum|lieferdatum|rechnungsdatum|aufenthalt)\s*[:.]?\s*(?!unbekannt|folgt|offen|tbd\b)(\d{1,2}[./]\d{1,2}[./]\d{2,4}|\d{4}-\d{2}-\d{2}|\d{1,2}\.?[–—-]\d{1,2}\.\d{1,2}\.\d{2,4})/i;
 const AMOUNT_PATTERN =
   /\b(?:betrag|summe|gesamt|total|brutto|gutschrift\s+brutto)\s*[:\s]*(-?\d{1,3}(?:[.\s]\d{3})*,\d{2}\s*€?|-?\d{1,3}(?:[.\s]\d{3})*,\d{2}\s*(?:EUR|eur))|\b(-?\d{1,3}(?:[.\s]\d{3})*,\d{2}\s*€|-?\d{1,3}(?:[.\s]\d{3})*,\d{2}\s*(?:EUR|eur))\b/i;
 const INVOICE_NUMBER_PATTERN =
@@ -472,7 +472,7 @@ export function extractFieldsWithConfidence(text: string): ExtractedDocumentFiel
   if (siteLine) {
     const match = siteLine.match(SITE_PATTERN);
     const value = match?.[1] ? cleanSiteCapture(match[1]) : undefined;
-    if (value && isPlausibleSiteValue(value)) {
+    if (value) {
       setField(fields, 'Baustelle', value, 'high');
     }
   }
