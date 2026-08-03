@@ -67,7 +67,7 @@ function fail(caseId: string, damage: string, detail: string): never {
 }
 
 /**
- * Ebene 3 — Sichtbarkeit in Auftragskarte + Vorgang-Panels + Archiv-Verknüpfung.
+ * Ebene 3 — Sichtbarkeit in Experience Card + Vorgang-Panels + Archiv-Verknüpfung.
  */
 export function assertUiVisibility(obs: AcceptJourneyObservation): void {
   const { reference, proposal, vorgang, inbox, archiveDocumentId, pipeline } = obs;
@@ -109,13 +109,44 @@ export function assertUiVisibility(obs: AcceptJourneyObservation): void {
     fail(caseId, 'Rolle und Gewerk klar getrennt', 'Rollenlabel fehlt');
   }
   if (exp.auftragskarte.roleSeparatedFromGewerk) {
-    const roleIdx = karteHtml.indexOf('Ihre Rolle');
-    const scopeIdx = karteHtml.indexOf('data-testid="auftragskarte-scope"');
-    if (roleIdx < 0 || scopeIdx < 0 || roleIdx >= scopeIdx) {
+    const factsStart = karteHtml.indexOf('data-testid="document-experience-facts"');
+    const detailsStart = karteHtml.indexOf('data-testid="document-experience-details"');
+    const roleLabel = 'Ihre Rolle';
+    if (factsStart < 0 || detailsStart < 0) {
       fail(
         caseId,
         'Rolle und Gewerk klar getrennt',
-        'Ihre Rolle muss vor dem Gewerk-Block stehen',
+        'Facts- oder Experience-Details-Zone fehlt',
+      );
+    }
+    const factsBlock = karteHtml.slice(factsStart, detailsStart);
+    const detailsBlock = karteHtml.slice(detailsStart);
+    if (!factsBlock.includes(exp.auftragskarte.gewerkContains)) {
+      fail(
+        caseId,
+        'Rolle und Gewerk klar getrennt',
+        'Gewerk muss in der sichtbaren Facts-Zone stehen',
+      );
+    }
+    if (!detailsBlock.includes(roleLabel)) {
+      fail(
+        caseId,
+        'Rolle und Gewerk klar getrennt',
+        'Ihre Rolle muss in den Experience-Details stehen',
+      );
+    }
+    if (factsBlock.includes(roleLabel)) {
+      fail(
+        caseId,
+        'Rolle und Gewerk klar getrennt',
+        'Rollenlabel darf nicht in der Facts-Zone stehen',
+      );
+    }
+    if (!detailsBlock.includes('data-testid="auftragskarte-hauptleistungen"')) {
+      fail(
+        caseId,
+        'Hauptleistungen verschwinden nicht',
+        'Hauptleistungen müssen in den Experience-Details stehen',
       );
     }
   }
