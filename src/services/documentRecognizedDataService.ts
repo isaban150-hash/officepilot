@@ -111,6 +111,16 @@ function isLikelyDateLine(line: string): boolean {
   return /\b\d{1,2}[./]\d{1,2}[./]\d{2,4}\b/.test(line);
 }
 
+/** Register/court footer lines must not become receipt merchants (e.g. HRB / Amtsgericht). */
+function isRegistryFooterMerchant(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+  return (
+    /\b(?:amtsgericht|landgericht|handelsregister|registergericht)\b/i.test(trimmed) ||
+    /\bhr[ab]\s*\d/i.test(trimmed)
+  );
+}
+
 function inferMerchantFromHeader(text: string): string | undefined {
   const lines = text
     .split(/\r?\n/)
@@ -120,6 +130,7 @@ function inferMerchantFromHeader(text: string): string | undefined {
   for (const line of lines.slice(0, 4)) {
     if (RECEIPT_HEADER_SKIP_PATTERN.test(line)) continue;
     if (/^kassenbeleg$/i.test(line)) continue;
+    if (isRegistryFooterMerchant(line)) continue;
     if (isLikelyAmountLine(line) && !/tankstelle|markt|bäckerei|baeckerei|shop|store/i.test(line)) {
       continue;
     }
@@ -128,6 +139,26 @@ function inferMerchantFromHeader(text: string): string | undefined {
   }
 
   return undefined;
+}
+
+function resolveReceiptMerchant(
+  kind: ReceiptCutoverKind,
+  plain: ReturnType<typeof toConfidentPlainFields>,
+  text: string,
+): string | undefined {
+  const headerMerchant = inferMerchantFromHeader(text);
+  const extractedMerchant = (plain.Absender ?? plain.Lieferant)?.trim();
+
+  if (kind === 'tankbeleg') {
+    if (headerMerchant) return headerMerchant;
+    if (extractedMerchant && !isRegistryFooterMerchant(extractedMerchant)) {
+      return extractedMerchant;
+    }
+    return undefined;
+  }
+
+  if (extractedMerchant) return extractedMerchant;
+  return headerMerchant;
 }
 
 function inferSupplierFromHeader(text: string): string | undefined {
@@ -301,14 +332,9 @@ function buildReceiptRecognizedData(
 
   applyOcrReceiptNumber(result, plain, text, pageTexts);
 
-  const merchant = plain.Absender ?? plain.Lieferant;
-  if (merchant?.trim()) {
+  const merchant = resolveReceiptMerchant(kind, plain, text);
+  if (merchant) {
     result[receiptConfig.merchantField] = merchant;
-  } else {
-    const merchantFromHeader = inferMerchantFromHeader(text);
-    if (merchantFromHeader) {
-      result[receiptConfig.merchantField] = merchantFromHeader;
-    }
   }
 
   return result;
