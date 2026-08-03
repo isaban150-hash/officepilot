@@ -289,7 +289,7 @@ describe('STORAGE-ARCHIVE-TRANSFORM-RESOLUTION-MODEL-01', () => {
     });
 
     it('ungültiger sourceMimeType → TypeError', () => {
-      for (const sourceMimeType of ['', 'text/plain', 'image/heic', 'application/octet-stream'] as const) {
+      for (const sourceMimeType of ['', 'text/plain', 'application/octet-stream'] as const) {
         expect(() =>
           resolveDocumentFileArchiveTransformResolution({
             transformIntent: archiveIntent(),

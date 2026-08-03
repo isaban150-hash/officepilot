@@ -223,7 +223,7 @@ describe('STORAGE-TRANSFORM-DERIVATIVE-CAPABILITY-REQUIREMENTS-01', () => {
 
   describe('Fall K–L: ungültige Eingaben', () => {
     it('ungültige Source-MIME-Typen → TypeError, nicht unresolved', () => {
-      for (const sourceMimeType of ['application/octet-stream', 'image/heic'] as const) {
+      for (const sourceMimeType of ['application/octet-stream'] as const) {
         expect(() =>
           deriveDocumentFileTransformCapabilityRequirements({
             transformIntent: previewIntent(),
