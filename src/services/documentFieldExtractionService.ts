@@ -84,8 +84,21 @@ const EMPFAENGER_INLINE =
   /\b(?:empfänger|empfaenger)\s*[:]\s*([^\n·]+?)(?=\s{2,}|\s*Absender|\s*Datum|$)/i;
 const AUFTRAGGEBER_ROLE =
   /\b(?:und\s+)?(?:der|die|das)\s+([\p{L}][\p{L}\d .&\-\/'’]{2,70}?(?:GmbH(?:\s*&\s*Co\.?\s*KG)?|AG|KG|OHG|GbR|UG|e\.?\s*V\.?|WEG\b[\p{L}\d .&\-]{0,40}))\s*(?:,[^()]{0,100})?\(\s*Auftraggeber\s*\)/iu;
-const RECIPIENT_ZHD =
-  /\b((?:WEG\s+[\p{L}][\p{L}\d .&\-]{2,50}?|[A-ZÄÖÜ][\p{L}](?:[\p{L}\d &\/'’-]|-(?=[A-ZÄÖÜ\d]))*(?:\s+[A-ZÄÖÜ\d][\p{L}\d &\/'’-]*){0,6}\s(?:GmbH(?:\s*&\s*Co\.?\s*KG)?|AG|KG|OHG|GbR|UG)))\s+z\.\s*Hd\./iu;
+/**
+ * Fast probe: skip recipient-zHd work when no attention marker exists.
+ * Matching still requires `z. Hd.` / `z.Hd.` (historical RECIPIENT_ZHD behavior).
+ */
+const RECIPIENT_ATTENTION_PROBE = /z\.\s*Hd\.|z\.\s*H\.|zu\s+H(?:ä|ae)nden|attn/i;
+/** Locates supported z. Hd. markers only (linear scan). */
+const RECIPIENT_ZHD_MARKER = /z\.\s*Hd\./giu;
+/**
+ * Company/WEG immediately before a z. Hd. marker.
+ * All quantifiers are bounded — safe on a short lookbehind window.
+ */
+const RECIPIENT_BEFORE_ZHD =
+  /((?:WEG\s+[\p{L}][\p{L}\d .&\-]{2,50}|[A-ZÄÖÜ][\p{L}][\p{L}\d &\/'’-]{0,60}(?:\s+[A-ZÄÖÜ\d][\p{L}\d &\/'’-]{0,40}){0,6}\s(?:GmbH(?:\s*&\s*Co\.?\s*KG)?|AG|KG|OHG|GbR|UG)))\s*$/u;
+/** Max characters inspected immediately before each z. Hd. marker. */
+const RECIPIENT_ZHD_LOOKBACK = 120;
 /** Street + PLZ/city that follow a "z. Hd." recipient block on flat PDF text. */
 const RECIPIENT_STREET =
   /\bz\.\s*Hd\.\s+[\p{L}.\s-]{1,40}?\b([A-ZÄÖÜ][\p{L}\-]*(?:straße|strasse|weg|platz|allee)\s+\d+)\s+(\d{5}\s+[A-ZÄÖÜ][\p{L}\-]+)/iu;
@@ -318,14 +331,36 @@ function inferRecipientFromAddressBlock(
   text: string,
   issuer?: string,
 ): string | undefined {
-  const match = text.match(RECIPIENT_ZHD)?.[1]?.trim();
-  if (!match) return undefined;
-  const cleaned = cleanPartyCapture(match);
-  if (!cleaned) return undefined;
-  if (issuer && cleaned.toLowerCase().includes(issuer.toLowerCase().slice(0, 12))) {
+  if (!text || !RECIPIENT_ATTENTION_PROBE.test(text)) {
     return undefined;
   }
-  return cleaned;
+
+  // Match only on the line segment immediately before each z. Hd. marker.
+  const markerRe = new RegExp(RECIPIENT_ZHD_MARKER.source, RECIPIENT_ZHD_MARKER.flags);
+  let marker: RegExpExecArray | null;
+  while ((marker = markerRe.exec(text)) !== null) {
+    if (marker[0].length === 0) {
+      markerRe.lastIndex += 1;
+      continue;
+    }
+
+    const end = marker.index;
+    const lookbackStart = Math.max(0, end - RECIPIENT_ZHD_LOOKBACK);
+    const rawWindow = text.slice(lookbackStart, end);
+    const lineBreak = Math.max(rawWindow.lastIndexOf('\n'), rawWindow.lastIndexOf('\r'));
+    const window = (lineBreak >= 0 ? rawWindow.slice(lineBreak + 1) : rawWindow).trimEnd();
+    const match = window.match(RECIPIENT_BEFORE_ZHD)?.[1]?.trim();
+    if (!match) continue;
+
+    const cleaned = cleanPartyCapture(match);
+    if (!cleaned) continue;
+    if (issuer && cleaned.toLowerCase().includes(issuer.toLowerCase().slice(0, 12))) {
+      continue;
+    }
+    return cleaned;
+  }
+
+  return undefined;
 }
 
 function inferBetreffFromText(text: string): string | undefined {
