@@ -505,7 +505,7 @@ export function analyzeVorgangWorkflow(vorgangId: string): WorkflowAnalysis | nu
   });
 }
 
-export function analyzeInboxWorkflow(inboxId: string): WorkflowAnalysis | null {
+export function analyzeInboxWorkflow(inboxId: string, workflow?: WorkflowResult | null): WorkflowAnalysis | null {
   const item = getInboxItemById(inboxId);
   if (!item) return null;
 
@@ -533,7 +533,6 @@ export function analyzeInboxWorkflow(inboxId: string): WorkflowAnalysis | null {
 
   if (isMaterialInbox(item)) {
     steps.push(step('material', 'completed', item.title));
-    const workflow = processUploadedDocument(item.id);
     const matches =
       workflow?.similarVorgaenge ?? findSimilarVorgaenge(buildVorgangDraftFromInbox(item), getAllVorgaenge());
     if (matches.length === 1) {

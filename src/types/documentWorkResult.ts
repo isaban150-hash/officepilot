@@ -1,5 +1,6 @@
 import type { BusinessInterpretationResult } from './businessInterpretation';
 import type { ClassifiedDocumentKind } from './models';
+import type { WorkflowDecision } from './workflowDecision';
 
 /** Bump when the persisted Document Work Result shape changes incompatibly. */
 export const DOCUMENT_WORK_RESULT_SCHEMA_VERSION = 1 as const;
@@ -55,6 +56,7 @@ export type DocumentWorkResult = {
   sourceFingerprint: string;
   /** Canonical core — projection of BusinessInterpretationResult (may be null if BI failed). */
   businessInterpretation: BusinessInterpretationResult | null;
+  workflowDecision?: WorkflowDecision | null;
   specialistRefs: DocumentWorkResultSpecialistRefs;
   overlay: DocumentWorkResultOverlayEntry[];
 };

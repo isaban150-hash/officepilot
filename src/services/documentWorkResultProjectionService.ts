@@ -6,6 +6,7 @@ import type {
   DocumentWorkResult,
   DocumentWorkResultSpecialistRefs,
 } from '../types/documentWorkResult';
+import type { WorkflowDecision } from '../types/workflowDecision';
 import {
   DOCUMENT_WORK_RESULT_ANALYSIS_VERSION,
   DOCUMENT_WORK_RESULT_SCHEMA_VERSION,
@@ -19,6 +20,11 @@ function cloneBusinessInterpretation(
   if (!value) return null;
   const cloned = JSON.parse(JSON.stringify(value)) as BusinessInterpretationResult;
   return { ...cloned, readOnly: true };
+}
+
+function cloneWorkflowDecision(value: WorkflowDecision | null | undefined): WorkflowDecision | null {
+  if (!value) return null;
+  return JSON.parse(JSON.stringify(value)) as WorkflowDecision;
 }
 
 export function buildDocumentWorkResultSourceFingerprint(item: InboxItem): string {
@@ -80,6 +86,7 @@ export function projectDocumentWorkResultFromWorkflow(
     analysisVersion: input.analysisVersion ?? DOCUMENT_WORK_RESULT_ANALYSIS_VERSION,
     sourceFingerprint: buildDocumentWorkResultSourceFingerprint(inboxItem),
     businessInterpretation: cloneBusinessInterpretation(workflow.businessInterpretation),
+    workflowDecision: cloneWorkflowDecision(workflow.workflowDecision),
     specialistRefs: buildSpecialistRefs(workflow),
     overlay: [],
   };

@@ -65,6 +65,7 @@ export type DocumentWorkTruthView = {
   sourceFingerprint: string;
   source: DocumentWorkTruthSource;
   businessInterpretation: BusinessInterpretationResult | null;
+  workflowDecision?: import('./workflowDecision').WorkflowDecision | null;
   slots: DocumentWorkTruthResolvedSlot[];
   unresolvedConflicts: DocumentWorkTruthUnresolvedConflict[];
   ignoredUnknownSlotIds: string[];

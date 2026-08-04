@@ -34,6 +34,7 @@ import {
 } from './taskEngineService';
 import { interpretBusinessFromWorkflow } from './businessInterpretationService';
 import { commitDocumentWorkResultFromAnalysis } from './documentWorkResultService';
+import { buildWorkflowDecisionForInboxItem } from './workflowDecisionService';
 import { assertContractPlanMutable } from './orderPlanIntegrityService';
 import {
   appendOrderPositionsBulk,
@@ -95,14 +96,20 @@ function withBusinessInterpretation(
     };
   }
 
+  const resultWithDecision = {
+    ...result,
+    workflowDecision: buildWorkflowDecisionForInboxItem(item, result),
+  };
+
   try {
     // Successful analysis: merge + upsert + durable flush (DOCUMENT-WORK-RESULT-PERSISTENCE-01).
     // Unusable / failed projections keep a previous valid DWR; persist failure rolls back.
-    commitDocumentWorkResultFromAnalysis(result, item);
+    commitDocumentWorkResultFromAnalysis(resultWithDecision, item);
   } catch (error) {
     // Snapshot commit must never abort the analysis return path.
     console.warn('[documentWorkResult] commit after analysis failed', error);
   }
+  return resultWithDecision;
   return result;
 }
 

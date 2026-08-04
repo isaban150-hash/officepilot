@@ -4,6 +4,7 @@ import type { SyncClientConfig, SyncMeta, SyncOutboxEntry } from './sync';
 import type { Workspace, WorkspaceMember, WorkspaceSettings } from './workspace';
 import type { BusinessInterpretationResult } from './businessInterpretation';
 import type { ContractIntelligenceResult, ContractOrderProposal } from './documentIntelligence';
+import type { WorkflowDecision } from './workflowDecision';
 
 export type AppLanguage = 'de' | 'tr' | 'bg' | 'ro' | 'ru';
 
@@ -674,6 +675,7 @@ export interface WorkflowResult {
   pendingSummary: PendingSummary | null;
   warnings: WorkflowWarning[];
   nextActions: WorkflowNextAction[];
+  workflowDecision?: WorkflowDecision | null;
   /**
    * BUSINESS-BRAIN-01A/01A1 type contract:
    * - Required field on every WorkflowResult.

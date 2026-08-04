@@ -7,6 +7,7 @@ import type {
   DocumentWorkResult,
   DocumentWorkResultOverlayEntry,
 } from '../types/documentWorkResult';
+import type { WorkflowDecision } from '../types/workflowDecision';
 import type {
   DocumentWorkTruthResolvedSlot,
   DocumentWorkTruthSource,
@@ -25,6 +26,7 @@ function cloneJson<T>(value: T): T {
 export type ResolveDocumentWorkResultInput = {
   documentWorkResult: DocumentWorkResult | null | undefined;
   liveBusinessInterpretation?: BusinessInterpretationResult | null;
+  liveWorkflowDecision?: WorkflowDecision | null;
   /**
    * Required when resolving live BI without a stored DWR
    * (empty overlay, source live_merged).
@@ -329,6 +331,7 @@ export function resolveDocumentWorkResult(
   let analysisVersion: string;
   let sourceFingerprint: string;
   let overlay: DocumentWorkResultOverlayEntry[];
+  let workflowDecision: WorkflowDecision | null = null;
 
   if (liveBi) {
     source = 'live_merged';
@@ -340,6 +343,7 @@ export function resolveDocumentWorkResult(
       dwr ? dwr.overlay : [],
       input.sessionOverlayEntries,
     );
+    workflowDecision = input.liveWorkflowDecision ?? dwr?.workflowDecision ?? null;
   } else if (dwr?.businessInterpretation) {
     source = 'snapshot';
     baseBi = cloneBusinessInterpretationForTruth(dwr.businessInterpretation);
@@ -350,6 +354,7 @@ export function resolveDocumentWorkResult(
       dwr.overlay,
       input.sessionOverlayEntries,
     );
+    workflowDecision = dwr.workflowDecision ?? null;
   } else {
     return null;
   }
@@ -379,6 +384,7 @@ export function resolveDocumentWorkResult(
     sourceFingerprint,
     source,
     businessInterpretation: effective ? { ...effective, readOnly: true } : null,
+    workflowDecision,
     slots,
     unresolvedConflicts,
     ignoredUnknownSlotIds,

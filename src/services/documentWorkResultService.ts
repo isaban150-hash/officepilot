@@ -286,6 +286,7 @@ export function buildWorkflowResultFromDocumentWorkResult(
     warnings,
     nextActions: [],
     businessInterpretation: bi,
+    workflowDecision: result.workflowDecision ?? null,
   };
 }
 
