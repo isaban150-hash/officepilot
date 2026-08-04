@@ -5,8 +5,9 @@ import {
   setPdfOcrExtractorForTests,
   shouldRunPdfOcr,
 } from './pdfOcrFallbackService';
-import { setPdfDocumentLoaderForTests } from './pdfDocumentService';
+import { setPdfDocumentLoaderForTests, setPdfPageRendererForTests } from './pdfDocumentService';
 import { setPdfTextExtractorForTests } from './uploadTextExtractionService';
+import { setOcrRecognizerForTests } from './tesseractOcrService';
 import { extractDocumentText } from './ocrDocumentService';
 
 const CLEAN_DIRECT = `
@@ -29,7 +30,9 @@ describe('pdfOcrFallbackService strategy', () => {
   afterEach(() => {
     setPdfOcrExtractorForTests(null);
     setPdfDocumentLoaderForTests(null);
+    setPdfPageRendererForTests(null);
     setPdfTextExtractorForTests(null);
+    setOcrRecognizerForTests(null);
   });
 
   it('shouldRunPdfOcr erkennt schlechten Direkttext', () => {
@@ -94,5 +97,36 @@ describe('pdfOcrFallbackService strategy', () => {
     expect(result.text).toContain('Seite 1');
     expect(result.confidence).toBe(88);
     expect(result.pagesProcessed).toBe(2);
+  });
+
+  it('PDF-OCR nutzt einen gemeinsamen Recognizer für alle Seiten', async () => {
+    let recognizeCalls = 0;
+    setOcrRecognizerForTests(async () => {
+      recognizeCalls += 1;
+      return { text: `Seite ${recognizeCalls}`, confidence: 70 + recognizeCalls };
+    });
+
+    setPdfDocumentLoaderForTests(async () => ({
+      pdf: {
+        numPages: 3,
+        destroy: async () => {},
+      },
+      pageCount: 3,
+    }));
+
+    setPdfPageRendererForTests(async (_pdf, pageNumber) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 20;
+      canvas.height = 20;
+      return { canvas, scale: 1 };
+    });
+
+    const result = await extractPdfTextViaOcr(createFile('multi.pdf', 'application/pdf'));
+
+    expect(recognizeCalls).toBe(3);
+    expect(result.pagesProcessed).toBe(3);
+    expect(result.pageTexts).toHaveLength(3);
+    expect(result.text).toContain('Seite 1');
+    expect(result.text).toContain('Seite 3');
   });
 });

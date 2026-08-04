@@ -8,7 +8,7 @@ import {
   type PdfDocumentError,
 } from './pdfDocumentService';
 import { buildPageMarker } from './documentSegmentationService';
-import { recognizeImageOrCanvas } from './tesseractOcrService';
+import { withSharedOcrWorker } from './tesseractOcrService';
 
 export interface PdfOcrResult {
   text: string;
@@ -49,10 +49,9 @@ export function shouldRunPdfOcr(directQuality: TextQualityReport): boolean {
 }
 
 async function ocrPdfPages(bytes: Uint8Array, options: PdfOcrOptions): Promise<PdfOcrResult> {
-  let pdf;
   try {
     const loaded = await loadPdfDocument(bytes);
-    pdf = loaded.pdf;
+    const pdf = loaded.pdf;
     const pageLimit = resolveOcrPageLimit(loaded.pageCount, options.maxPages);
     const pageTexts: Array<{ pageNumber: number; text: string }> = [];
     const textParts: string[] = [];
@@ -60,31 +59,33 @@ async function ocrPdfPages(bytes: Uint8Array, options: PdfOcrOptions): Promise<P
     let recognizedPages = 0;
 
     try {
-      for (let pageNumber = 1; pageNumber <= pageLimit; pageNumber += 1) {
-        options.onProgress?.(pageNumber - 1, pageLimit);
-        const rendered = await renderPdfPageToCanvas(pdf, pageNumber);
-        const ocr = await recognizeImageOrCanvas(rendered.canvas);
-        releaseCanvas(rendered.canvas);
-        const sanitized = ocr.text.trim();
-        pageTexts.push({ pageNumber, text: sanitized });
-        if (sanitized) {
-          textParts.push(`${buildPageMarker(pageNumber)}${sanitized}`);
-          totalConfidence += ocr.confidence;
-          recognizedPages += 1;
+      return await withSharedOcrWorker(async (recognize) => {
+        for (let pageNumber = 1; pageNumber <= pageLimit; pageNumber += 1) {
+          options.onProgress?.(pageNumber - 1, pageLimit);
+          const rendered = await renderPdfPageToCanvas(pdf, pageNumber);
+          const ocr = await recognize(rendered.canvas);
+          releaseCanvas(rendered.canvas);
+          const sanitized = ocr.text.trim();
+          pageTexts.push({ pageNumber, text: sanitized });
+          if (sanitized) {
+            textParts.push(`${buildPageMarker(pageNumber)}${sanitized}`);
+            totalConfidence += ocr.confidence;
+            recognizedPages += 1;
+          }
         }
-      }
 
-      options.onProgress?.(pageLimit, pageLimit);
-      const mergedText = textParts.join('');
-      const quality = assessTextQuality(mergedText);
+        options.onProgress?.(pageLimit, pageLimit);
+        const mergedText = textParts.join('');
+        const quality = assessTextQuality(mergedText);
 
-      return {
-        text: quality.sanitizedText || sanitizeExtractedText(mergedText),
-        confidence: recognizedPages > 0 ? totalConfidence / recognizedPages : 0,
-        pagesProcessed: pageTexts.length,
-        pageCount: loaded.pageCount,
-        pageTexts,
-      };
+        return {
+          text: quality.sanitizedText || sanitizeExtractedText(mergedText),
+          confidence: recognizedPages > 0 ? totalConfidence / recognizedPages : 0,
+          pagesProcessed: pageTexts.length,
+          pageCount: loaded.pageCount,
+          pageTexts,
+        };
+      });
     } finally {
       await pdf.destroy();
     }

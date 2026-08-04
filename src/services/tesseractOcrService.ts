@@ -6,6 +6,33 @@ export function setOcrRecognizerForTests(recognizer: OcrRecognizer | null): void
   ocrRecognizerOverride = recognizer;
 }
 
+/** One Tesseract worker for the whole run — used by the PDF OCR page loop. */
+export async function withSharedOcrWorker<T>(
+  run: (recognize: OcrRecognizer) => Promise<T>,
+): Promise<T> {
+  if (ocrRecognizerOverride) {
+    return run(ocrRecognizerOverride);
+  }
+
+  const { createWorker } = await import('tesseract.js');
+  const worker = await createWorker('deu', 1, {
+    logger: () => {},
+  });
+
+  try {
+    const recognize: OcrRecognizer = async (input) => {
+      const { data } = await worker.recognize(input);
+      return {
+        text: data.text ?? '',
+        confidence: data.confidence ?? 0,
+      };
+    };
+    return await run(recognize);
+  } finally {
+    await worker.terminate();
+  }
+}
+
 export async function recognizeImageOrCanvas(
   input: File | HTMLCanvasElement,
 ): Promise<{ text: string; confidence: number }> {
