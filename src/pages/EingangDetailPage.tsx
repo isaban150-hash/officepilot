@@ -749,8 +749,10 @@ export function EingangDetailPage() {
   };
 
   const handleIntakeAcceptTasks = () => {
-    if (!workflow || workflow.suggestedTasks.length === 0) return;
-    const created = acceptSuggestedTasks(workflow.suggestedTasks);
+    if (!workflow) return;
+    const taskProposals = workflow.workflowDecision!.taskProposals;
+    if (taskProposals.length === 0) return;
+    const created = acceptSuggestedTasks(taskProposals);
     if (created.length > 0) {
       showToast(translate('intake.tasksAccepted').replace('{count}', String(created.length)));
       refreshWorkflowItem();
@@ -897,6 +899,9 @@ export function EingangDetailPage() {
         item={item}
         classification={workflow.classification ?? undefined}
         suggestedVorgang={workflow.suggestedVorgang ?? undefined}
+        availableDocumentActions={
+          workflow.workflowDecision?.officeActionContext.availableDocumentActions ?? []
+        }
         translate={translate}
         onVorgangLinked={handleVorgangLinked}
         onConfirmFiling={handleFiling}

@@ -4,7 +4,6 @@ import { Card } from '../ui/Card';
 import {
   applyOfficeActionResult,
   executeDocumentAction,
-  filterAvailableDocumentActions,
   isDocumentActionAvailable,
 } from '../../services/officeActionService';
 import {
@@ -30,6 +29,7 @@ interface Props {
   item: InboxItem;
   classification?: DocumentClassificationResult;
   suggestedVorgang?: SuggestedVorgangLink;
+  availableDocumentActions: SuggestedDocumentAction[];
   translate: (key: TranslationKey) => string;
   onVorgangLinked: (item: InboxItem, vorgang: Vorgang) => void;
   onConfirmFiling: () => void;
@@ -45,6 +45,7 @@ export function DocumentActionSuggestionsPanel({
   item,
   classification: classificationProp,
   suggestedVorgang: suggestedVorgangProp,
+  availableDocumentActions,
   translate,
   onVorgangLinked,
   onConfirmFiling,
@@ -58,7 +59,7 @@ export function DocumentActionSuggestionsPanel({
   const [showAllActions, setShowAllActions] = useState(false);
   const classification = classificationProp ?? getClassificationForItem(item);
   const suggestedVorgang = suggestedVorgangProp ?? getSuggestedVorgangForItem(item);
-  const availableActions = filterAvailableDocumentActions(item);
+  const availableActions = availableDocumentActions;
   const primaryActions = availableActions.slice(0, MAX_PRIMARY_ACTIONS);
   const secondaryActions = availableActions.slice(MAX_PRIMARY_ACTIONS);
   const visibleActions = showAllActions ? availableActions : primaryActions;

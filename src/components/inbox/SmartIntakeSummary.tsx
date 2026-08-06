@@ -6,6 +6,7 @@ import type { TranslationKey } from '../../i18n';
 import { formatMessage } from '../../i18n/formatMessage';
 import type { ExplanationTextBlock } from '../../i18n/types';
 import { isDocumentFilingDecisionConfirmed } from '../../services/documentFilingDecisionService';
+import { getTaskProposals } from '../../services/workflowDecisionUtils';
 
 interface SmartIntakeSummaryProps {
   workflow: WorkflowResult;
@@ -61,6 +62,10 @@ export function SmartIntakeSummary({
   const kindKey = `classifiedKind.${workflow.classifiedKind}` as TranslationKey;
   const renderExplanationBlock = (block: ExplanationTextBlock) =>
     formatMessage((key) => translate(key as TranslationKey), block);
+
+  // Prefer `workflowDecision` when present (live path). Fall back to legacy `suggestedTasks` for
+  // legacy/restore/test fixtures where no decision was produced.
+  const taskProposals = getTaskProposals(workflow);
 
   const vorgangDetail = workflow.suggestedVorgang
     ? workflow.suggestedVorgang.vorgangTitle
@@ -153,14 +158,11 @@ export function SmartIntakeSummary({
         <CheckRow
           label={translate('intake.check.tasks')}
           detail={
-            workflow.suggestedTasks.length > 0
-              ? translate('intake.check.tasksCount').replace(
-                  '{count}',
-                  String(workflow.suggestedTasks.length),
-                )
+            taskProposals.length > 0
+              ? translate('intake.check.tasksCount').replace('{count}', String(taskProposals.length))
               : translate('intake.check.tasksNone')
           }
-          active={workflow.suggestedTasks.length > 0}
+          active={taskProposals.length > 0}
         />
         <CheckRow
           label={translate('intake.check.archiveFolder')}
@@ -252,7 +254,7 @@ export function SmartIntakeSummary({
         <Button
           type="button"
           variant="outline"
-          disabled={isExecuting || workflow.suggestedTasks.length === 0}
+          disabled={isExecuting || taskProposals.length === 0}
           onClick={onAcceptTasks}
         >
           {translate('intake.action.acceptTasks')}
