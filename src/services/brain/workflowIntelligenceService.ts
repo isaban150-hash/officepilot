@@ -7,10 +7,9 @@ import type {
   WorkflowStepStatus,
 } from '../../types/workflowIntelligence';
 import type { CompanySessionContext } from '../../types/companySession';
-import type { InboxItem, Vorgang } from '../../types/models';
+import type { InboxItem, Vorgang, WorkflowResult } from '../../types/models';
 import { analyzeContractIntelligenceFromInbox } from '../contractIntelligenceService';
 import { filterActiveItems, getInboxItemById, getInboxItems } from '../inboxService';
-import { processUploadedDocument } from '../intakeWorkflowService';
 import {
   getOpenQuantity,
   getPositionBillingStatus,

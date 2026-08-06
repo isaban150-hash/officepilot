@@ -55,7 +55,7 @@ export function buildWorkflowDecisionForInboxItem(
     deadlines: workflow.businessInterpretation?.facts.timeline ?? {},
     confirmations: workflow.businessInterpretation?.requiredConfirmations ?? [],
     archiveDecision: {
-      isArchived: item.importedToArchive,
+      isArchived: Boolean(item.importedToArchive),
       canArchive: !item.importedToArchive && workflow.companyRelevant,
       recommended: archiveAction !== undefined,
       enabled: archiveAction?.enabled ?? false,
@@ -64,7 +64,7 @@ export function buildWorkflowDecisionForInboxItem(
       availableDocumentActions,
     },
     executionStatus: {
-      importedToArchive: item.importedToArchive,
+      importedToArchive: Boolean(item.importedToArchive),
       archiveDocumentId: item.archiveDocumentId ?? null,
       linkedVorgangId,
       linkedVorgangTitle,

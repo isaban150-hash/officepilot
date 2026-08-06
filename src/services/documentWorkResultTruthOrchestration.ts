@@ -50,7 +50,7 @@ export function buildDocumentWorkTruthViewForInboxItem(input: {
     return resolveDocumentWorkResult({
       documentWorkResult: usableStored,
       liveBusinessInterpretation: liveBi,
-      liveWorkflowDecision: liveWorkflow.workflowDecision ?? null,
+      liveWorkflowDecision: liveWorkflow?.workflowDecision ?? null,
       inboxItemId: item.id,
       sessionOverlayEntries: bridge.sessionOverlayEntries,
       sessionConfirmedExtraFacts: bridge.sessionConfirmedExtraFacts,

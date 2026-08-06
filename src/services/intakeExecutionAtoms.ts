@@ -280,8 +280,9 @@ export function executeAcceptTasksAtom(
   successSteps: WorkflowExecutionStepId[],
   failedSteps: WorkflowExecutionFailure[],
 ): number {
-  if (workflow.suggestedTasks.length === 0) return 0;
-  const createdTasks = acceptSuggestedTasks(workflow.suggestedTasks);
+  const taskProposals = workflow.workflowDecision!.taskProposals;
+  if (taskProposals.length === 0) return 0;
+  const createdTasks = acceptSuggestedTasks(taskProposals);
   const tasksCreated = createdTasks.length;
   if (tasksCreated > 0) {
     markIntakeSuccess(successSteps, 'accept_tasks');

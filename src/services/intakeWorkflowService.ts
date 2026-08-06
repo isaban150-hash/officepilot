@@ -44,6 +44,10 @@ import {
   getVorgangById,
   linkInboxToExistingVorgang,
 } from './vorgangService';
+import {
+  resolvePrimaryTargetObjectForDocumentType,
+  resolvePrimaryTargetObjectForKind,
+} from './documentPrimaryTargetService';
 import type {
   AnalysisConfidence,
   DetectedOrderPosition,
@@ -230,6 +234,9 @@ function buildNextActions(
   },
 ): WorkflowNextAction[] {
   const actions: WorkflowNextAction[] = [];
+  const primaryTarget = input.classification?.classifiedKind
+    ? resolvePrimaryTargetObjectForKind(input.classification.classifiedKind)
+    : resolvePrimaryTargetObjectForDocumentType(item.documentType);
 
   if (!item.importedToArchive && input.companyRelevant) {
     actions.push({
@@ -251,8 +258,7 @@ function buildNextActions(
     !item.vorgangId &&
     input.companyRelevant &&
     (input.contractAnalysis?.isContract ||
-      input.classification?.processType === 'create_vorgang' ||
-      item.documentType === 'kundenauftrag');
+      primaryTarget === 'vorgang');
 
   if (canCreateVorgang) {
     actions.push({

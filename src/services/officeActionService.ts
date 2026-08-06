@@ -17,6 +17,10 @@ import { getTodayIso } from './taskNormalize';
 import { scanPendingItems } from './pendingEngineService';
 import { getAllVorgaenge } from './vorgangService';
 import { processUploadedDocument } from './intakeWorkflowService';
+import {
+  resolvePrimaryTargetObjectForDocumentType,
+  resolvePrimaryTargetObjectForKind,
+} from './documentPrimaryTargetService';
 
 function inboxKommunikationPath(inboxId: string): string {
   return `/kommunikation?context=inbox&id=${encodeURIComponent(inboxId)}`;
@@ -55,11 +59,6 @@ export type OfficeActionResult =
       errorKey: TranslationKey;
     };
 
-const EXPENSE_DOCUMENT_TYPES = new Set([
-  'eingangsrechnung',
-  'ausgangsrechnung',
-]);
-
 function parseGermanAmount(value: string | undefined): number | null {
   if (!value?.trim()) return null;
   const cleaned = value.replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.');
@@ -70,6 +69,14 @@ function parseGermanAmount(value: string | undefined): number | null {
 function resolveClassifiedKind(item: InboxItem): ClassifiedDocumentKind | undefined {
   const workflow = processUploadedDocument(item.id);
   return workflow?.classifiedKind ?? item.classifiedKind;
+}
+
+function resolvePrimaryTargetForInboxItem(
+  item: InboxItem,
+  kind?: ClassifiedDocumentKind,
+) {
+  if (kind) return resolvePrimaryTargetObjectForKind(kind);
+  return resolvePrimaryTargetObjectForDocumentType(item.documentType);
 }
 
 export function buildExpenseInputFromInbox(
@@ -154,6 +161,7 @@ export function isDocumentActionAvailable(
   classifiedKind?: ClassifiedDocumentKind,
 ): boolean {
   const kind = classifiedKind ?? resolveClassifiedKind(item);
+  const primaryTarget = resolvePrimaryTargetForInboxItem(item, kind);
 
   switch (actionId) {
     case 'confirm_filing':
@@ -164,9 +172,8 @@ export function isDocumentActionAvailable(
     case 'record_expense':
     case 'check_payment':
       return (
-        EXPENSE_DOCUMENT_TYPES.has(item.documentType) ||
+        primaryTarget === 'expense' ||
         (kind ? mapClassifiedKindToExpenseCategory(kind) !== 'sonstiges' : false) ||
-        item.documentType === 'eingangsrechnung' ||
         kind === 'mahnung' ||
         kind === 'zahlungserinnerung'
       );
@@ -313,11 +320,11 @@ export function executeContractAction(
 export function isScanResultActionAvailable(actionId: string, item: InboxItem): boolean {
   switch (actionId) {
     case 'payment':
-      return (
-        item.documentType === 'eingangsrechnung' ||
-        item.recommendedAction === 'zahlung_pruefen' ||
-        resolveClassifiedKind(item) === 'mahnung'
-      );
+      {
+        const kind = resolveClassifiedKind(item);
+        const primaryTarget = resolvePrimaryTargetForInboxItem(item, kind);
+        return primaryTarget === 'expense' || item.recommendedAction === 'zahlung_pruefen';
+      }
     case 'openOrder':
       return Boolean(item.vorgangId);
     case 'invoice':

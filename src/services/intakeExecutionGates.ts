@@ -7,6 +7,10 @@ import type {
   InboxItem,
   WorkflowResult,
 } from '../types/models';
+import {
+  resolvePrimaryTargetObjectForDocumentType,
+  resolvePrimaryTargetObjectForKind,
+} from './documentPrimaryTargetService';
 
 export type SmartIntakeVorgangGateItem = {
   vorgangId?: InboxItem['vorgangId'];
@@ -18,13 +22,18 @@ export function canCreateVorgangFromSmartIntakeGates(
   workflow: Pick<WorkflowResult, 'companyRelevant' | 'contractAnalysis' | 'classification'>,
   item: SmartIntakeVorgangGateItem,
 ): boolean {
+  const primaryTarget = workflow.classification?.classifiedKind
+    ? resolvePrimaryTargetObjectForKind(workflow.classification.classifiedKind)
+    : item.documentType
+      ? resolvePrimaryTargetObjectForDocumentType(item.documentType)
+      : null;
+
   return (
     !item.vorgangId &&
     workflow.companyRelevant &&
     Boolean(
       workflow.contractAnalysis?.isContract ||
-        workflow.classification?.processType === 'create_vorgang' ||
-        item.documentType === 'kundenauftrag',
+        primaryTarget === 'vorgang',
     )
   );
 }
@@ -90,9 +99,10 @@ export function wouldArchiveOnSmartIntake(
 }
 
 export function wouldAcceptTasksOnSmartIntake(
-  workflow: Pick<WorkflowResult, 'companyRelevant' | 'suggestedTasks'>,
+  workflow: Pick<WorkflowResult, 'companyRelevant' | 'suggestedTasks' | 'workflowDecision'>,
 ): boolean {
-  return workflow.companyRelevant && workflow.suggestedTasks.length > 0;
+  const taskProposals = workflow.workflowDecision?.taskProposals ?? workflow.suggestedTasks;
+  return workflow.companyRelevant && taskProposals.length > 0;
 }
 
 export function wouldFinalizeInboxOnSmartIntake(

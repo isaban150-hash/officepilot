@@ -55,6 +55,7 @@ import {
   assertContractPlanMutable,
   repairContractPlanFromSnapshot,
 } from './orderPlanIntegrityService';
+import { resolvePrimaryTargetObjectForDocumentType } from './documentPrimaryTargetService';
 
 export type OrderPositionMutationResult =
   | { success: true; vorgang: Vorgang }
@@ -1368,16 +1369,17 @@ export type VorgangCardMode = 'none' | 'create' | 'link' | 'open';
 export function getVorgangCardMode(item: InboxItem): VorgangCardMode {
   if (item.isAdvertisement) return 'none';
   if (isInboxLinkedToVorgang(item)) return 'open';
+  const primaryTarget = resolvePrimaryTargetObjectForDocumentType(item.documentType);
 
   if (
-    item.documentType === 'kundenauftrag' ||
+    primaryTarget === 'vorgang' ||
     item.recommendedAction === 'auftrag_annehmen'
   ) {
     return 'create';
   }
 
   if (
-    item.documentType === 'eingangsrechnung' ||
+    primaryTarget === 'expense' ||
     item.recommendedAction === 'zuordnen' ||
     item.recommendedAction === 'zahlung_pruefen'
   ) {
