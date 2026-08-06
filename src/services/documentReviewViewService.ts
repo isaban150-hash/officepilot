@@ -13,6 +13,7 @@ import type {
 } from '../types/models';
 import type { TranslationKey } from '../i18n';
 import { t } from '../i18n';
+import { getTaskProposals } from './workflowDecisionUtils';
 import { getCachedSetup } from './persistenceService';
 
 export const MAX_REVIEW_RECOMMENDATIONS = 6;
@@ -132,7 +133,10 @@ export function buildDocumentReviewRecommendations(
     push('import-positions', 'reviewWorkflow.recommend.importPositions');
   }
 
-  if (workflow.suggestedTasks.length > 0) {
+  // Prefer `workflowDecision` when present (live path). Fall back to legacy `suggestedTasks`
+  // for snapshots/fixtures where no decision exists.
+  const suggestedTasks = getTaskProposals(workflow);
+  if (suggestedTasks.length > 0) {
     push('accept-tasks', 'reviewWorkflow.recommend.acceptTasks');
   }
 

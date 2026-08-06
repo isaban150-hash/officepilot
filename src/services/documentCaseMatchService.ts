@@ -194,6 +194,34 @@ function isStrongExactCandidate(candidate: DocumentCaseMatchCandidate): boolean 
   );
 }
 
+function isInvoiceOrDeliveryLike(item: InboxItem): boolean {
+  const kind = item.classifiedKind;
+  const docType = item.documentType;
+  return (
+    kind === 'eingangsrechnung' ||
+    kind === 'rechnung' ||
+    kind === 'lieferschein' ||
+    docType === 'eingangsrechnung' ||
+    docType === 'lieferschein'
+  );
+}
+
+function shouldPromoteLikelyToMultiple(
+  item: InboxItem,
+  primary: DocumentCaseMatchCandidate,
+): boolean {
+  if (!isInvoiceOrDeliveryLike(item)) return false;
+  if (
+    primary.reasons.includes('known_link') ||
+    primary.reasons.includes('same_contract_number') ||
+    primary.reasons.includes('same_invoice_number')
+  ) {
+    return false;
+  }
+  // For invoice-/delivery-like documents, a non-deterministic link must be confirmed explicitly.
+  return primary.score >= LIKELY_SCORE;
+}
+
 function decideStatus(ranked: DocumentCaseMatchCandidate[]): {
   status: DocumentCaseMatchStatus;
   primary: DocumentCaseMatchCandidate | null;
@@ -285,6 +313,20 @@ export function buildDocumentCaseMatch(
     .sort((a, b) => b.score - a.score || a.caseTitle.localeCompare(b.caseTitle));
 
   const decision = decideStatus(ranked);
+
+  if (
+    decision.status === 'likely' &&
+    decision.primary &&
+    shouldPromoteLikelyToMultiple(item, decision.primary)
+  ) {
+    return {
+      matchStatus: 'multiple',
+      matchedCaseId: null,
+      matchedCaseTitle: null,
+      reasons: decision.primary.reasons,
+      candidates: ranked.filter((candidate) => candidate.score >= LIKELY_SCORE),
+    };
+  }
 
   if (decision.status === 'none' || !decision.primary) {
     return emptyDocumentCaseMatch();

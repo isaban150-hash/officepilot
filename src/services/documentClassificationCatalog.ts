@@ -7,6 +7,7 @@ import type {
   SuggestedDocumentAction,
 } from '../types/models';
 import { suggestPaperFolderId as resolvePaperFolderIdFromService } from './paperFolderService';
+import { resolvePrimaryTargetObjectForKind } from './documentPrimaryTargetService';
 
 export interface ClassificationRule {
   kind: ClassifiedDocumentKind;
@@ -220,8 +221,10 @@ const VEHICLE_KINDS = new Set<ClassifiedDocumentKind>([
 ]);
 
 export function mapKindToDocumentType(kind: ClassifiedDocumentKind): DocumentType {
-  if (kind === 'ausgangsrechnung') return 'ausgangsrechnung';
-  if (EXPENSE_KINDS.has(kind) || kind === 'mahnung' || kind === 'zahlungserinnerung') {
+  const primaryTarget = resolvePrimaryTargetObjectForKind(kind);
+
+  if (primaryTarget === 'vorgangInvoice') return 'ausgangsrechnung';
+  if (primaryTarget === 'expense') {
     return 'eingangsrechnung';
   }
   if (CUSTOMER_KINDS.has(kind)) return 'kundenauftrag';
@@ -285,8 +288,18 @@ const PROCESS_TYPE_MAP: Partial<Record<ClassifiedDocumentKind, ProcessType>> = {
   brief: 'review_required',
 };
 
-export function suggestProcessType(kind: ClassifiedDocumentKind): ProcessType {
-  return PROCESS_TYPE_MAP[kind] ?? 'archive_only';
+export function suggestProcessType(
+  kind: ClassifiedDocumentKind,
+  primaryTargetOverride?: ReturnType<typeof resolvePrimaryTargetObjectForKind>,
+): ProcessType {
+  const explicit = PROCESS_TYPE_MAP[kind];
+  if (explicit) return explicit;
+
+  const primaryTarget = primaryTargetOverride ?? resolvePrimaryTargetObjectForKind(kind);
+  if (primaryTarget === 'vorgang') return 'create_vorgang';
+  if (primaryTarget === 'expense') return 'record_expense';
+  if (primaryTarget === 'vorgangInvoice') return 'create_invoice';
+  return 'archive_only';
 }
 
 export function defaultPriority(kind: ClassifiedDocumentKind): InboxPriority {

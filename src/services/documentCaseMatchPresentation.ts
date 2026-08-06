@@ -9,6 +9,7 @@ import type {
 } from '../types/documentSummary';
 import type { InboxItem } from '../types/models';
 import { buildDocumentCaseMatch } from './documentCaseMatchService';
+import { getVorgangById } from './vorgangService';
 
 const REASON_LABEL_KEYS: Record<DocumentCaseMatchReasonId, TranslationKey> = {
   same_customer: 'vorgangIntelligence.reason.sameCustomer',
@@ -69,11 +70,29 @@ export function attachDocumentCaseMatch(
   options?: { preservePrimary?: boolean },
 ): DocumentSummary {
   const caseMatch = buildDocumentCaseMatch(item);
+  const shouldBackfillSite = summary.family === 'invoice_in' || summary.family === 'delivery';
+  const hasSiteFact = summary.facts.some((fact) => fact.id === 'site' && fact.value.trim());
+  const caseIdForSite =
+    caseMatch.matchStatus === 'exact' && caseMatch.matchedCaseId ? caseMatch.matchedCaseId : null;
+  const siteFromCase = caseIdForSite ? getVorgangById(caseIdForSite)?.baustelle?.trim() : '';
   const preservePrimary =
     options?.preservePrimary === true || summary.primaryAction.id === 'accept_contract_order';
 
+  const enrichedFacts =
+    shouldBackfillSite && !hasSiteFact && siteFromCase
+      ? [
+          ...summary.facts,
+          {
+            id: 'site',
+            labelKey: 'documentExperience.fact.site' as TranslationKey,
+            value: siteFromCase,
+          },
+        ]
+      : summary.facts;
+
   return {
     ...summary,
+    facts: enrichedFacts,
     caseMatch,
     primaryAction: preservePrimary
       ? summary.primaryAction

@@ -47,6 +47,10 @@ import {
   preferExistingArchiveTruthSnapshot,
 } from './documentArchiveTruthSnapshotService';
 import { resolveConfirmedFilingDecisionForInboxArchive } from './documentFilingDecisionService';
+import {
+  resolvePrimaryTargetObjectForDocumentType,
+  resolvePrimaryTargetObjectForKind,
+} from './documentPrimaryTargetService';
 
 export const COMPANY_DOCUMENT_CATEGORIES: CompanyDocumentCategory[] = [
   'vertrag',
@@ -408,6 +412,17 @@ function buildTagsFromInbox(item: InboxItem): string[] {
 
 function mapDocumentCategory(item: InboxItem): CompanyDocumentCategory {
   const text = `${item.sender} ${item.title} ${JSON.stringify(item.recognizedData)}`.toLowerCase();
+  const primaryTarget = item.classifiedKind
+    ? resolvePrimaryTargetObjectForKind(item.classifiedKind)
+    : resolvePrimaryTargetObjectForDocumentType(item.documentType);
+
+  if (primaryTarget === 'expense') return 'steuer';
+  if (primaryTarget === 'vorgangInvoice') return 'ausgangsrechnung';
+  if (primaryTarget === 'vorgang') return 'vertrag';
+  if (primaryTarget === 'proofMemory') {
+    if (/versicherung|allianz|haftpflicht|policy/.test(text)) return 'versicherung';
+    return 'behoerde';
+  }
 
   switch (item.documentType) {
     case 'behoerde':

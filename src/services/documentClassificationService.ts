@@ -25,6 +25,7 @@ import { getInboxExtractedDocumentText } from './inboxDocumentText';
 import { runLegacyDocumentAnalysisShadow } from './documentAnalysisShadowService';
 import { resolveHybridClassification } from './documentClassificationHybridService';
 import { extractFieldsFromText, mergeExtractedFields } from './documentFieldExtractionService';
+import { resolvePrimaryTargetObjectForKind } from './documentPrimaryTargetService';
 import {
   buildEvidenceBasedRecognizedData,
   shouldUseEvidenceBasedRecognizedData,
@@ -587,11 +588,12 @@ export function classifyDocument(input: DocumentClassificationInput): DocumentCl
     : needsKindReview
       ? 'klaeren'
       : defaultRecommendedAction(classifiedKind);
+  const primaryTargetObject = resolvePrimaryTargetObjectForKind(classifiedKind);
   const processType = isAdvertisement
     ? 'archive_only'
     : needsKindReview
       ? 'review_required'
-      : suggestProcessType(classifiedKind);
+      : suggestProcessType(classifiedKind, primaryTargetObject);
 
   const suggestedKinds = (documentProfile?.topCandidates ?? [])
     .map((candidate) => candidate.kind)

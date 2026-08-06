@@ -542,7 +542,13 @@ export function extractFieldsWithConfidence(text: string): ExtractedDocumentFiel
     const cleaned = cleanSiteCapture(lieferadresse);
     if (isPlausibleSiteValue(cleaned)) {
       setField(fields, 'Straße', cleaned, 'high');
-      setField(fields, 'Baustelle', cleaned, 'medium');
+      const existingSite = fields.Baustelle?.value;
+      if (!existingSite || !isPlausibleSiteValue(existingSite)) {
+        // Prefer explicit delivery-address evidence over earlier non-site project-title captures.
+        fields.Baustelle = { value: cleaned, confidence: 'high' };
+      } else {
+        setField(fields, 'Baustelle', cleaned, 'medium');
+      }
     }
   }
 
