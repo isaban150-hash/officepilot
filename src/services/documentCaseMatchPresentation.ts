@@ -9,6 +9,7 @@ import type {
 } from '../types/documentSummary';
 import type { InboxItem } from '../types/models';
 import { buildDocumentCaseMatch } from './documentCaseMatchService';
+import { resolveWorkflowActionForCaseMatch } from './documentPrimaryTargetResolver';
 import { getVorgangById } from './vorgangService';
 
 const REASON_LABEL_KEYS: Record<DocumentCaseMatchReasonId, TranslationKey> = {
@@ -31,26 +32,21 @@ export function resolveDocumentCaseMatchReasonLabel(
 }
 
 export function primaryActionForCaseMatch(match: DocumentCaseMatch): DocumentSummaryActionRef {
-  switch (match.matchStatus) {
-    case 'exact':
-      return {
-        id: 'open_vorgang',
-        labelKey: 'documentExperience.action.openCase',
-        enabled: true,
-      };
-    case 'likely':
+  const action = resolveWorkflowActionForCaseMatch(match.matchStatus);
+  switch (action) {
+    case 'link_vorgang':
       return {
         id: 'link_vorgang',
         labelKey: 'vorgangIntelligence.action.assign',
         enabled: true,
       };
-    case 'multiple':
+    case 'select_vorgang':
       return {
         id: 'select_vorgang',
         labelKey: 'vorgangIntelligence.action.select',
         enabled: true,
       };
-    case 'none':
+    case 'create_vorgang':
     default:
       return {
         id: 'create_vorgang',

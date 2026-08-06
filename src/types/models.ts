@@ -590,6 +590,7 @@ export interface CompanyRelevanceResult {
 export type WorkflowActionId =
   | 'archive_document'
   | 'link_vorgang'
+  | 'select_vorgang'
   | 'create_vorgang'
   | 'import_positions'
   | 'accept_tasks'

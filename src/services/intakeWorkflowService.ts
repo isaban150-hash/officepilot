@@ -11,6 +11,7 @@ import {
   getClassificationForItem,
   getSuggestedVorgangForItem,
 } from './documentClassificationService';
+import { resolvePrimaryTargetForInboxItem } from './documentPrimaryTargetResolver';
 import { getCompanyProfile } from './companyProfileService';
 import { getInboxItemById } from './inboxService';
 import { getCachedSetup } from './persistenceService';
@@ -48,6 +49,7 @@ import {
   resolvePrimaryTargetObjectForDocumentType,
   resolvePrimaryTargetObjectForKind,
 } from './documentPrimaryTargetService';
+import type { PrimaryTargetWorkflowAction } from './documentPrimaryTargetResolver';
 import type {
   AnalysisConfidence,
   DetectedOrderPosition,
@@ -226,6 +228,7 @@ function buildNextActions(
   item: InboxItem,
   input: {
     companyRelevant: boolean;
+    primaryTargetAction: PrimaryTargetWorkflowAction;
     suggestedVorgang: WorkflowResult['suggestedVorgang'];
     suggestedOrderPositions: DetectedOrderPosition[];
     suggestedTasks: TaskProposal[];
@@ -246,7 +249,7 @@ function buildNextActions(
     });
   }
 
-  if (input.suggestedVorgang && !item.vorgangId) {
+  if (input.primaryTargetAction === 'link_vorgang' && input.suggestedVorgang && !item.vorgangId) {
     actions.push({
       id: 'link_vorgang',
       labelKey: 'intake.action.linkVorgang',
@@ -254,9 +257,18 @@ function buildNextActions(
     });
   }
 
+  if (input.primaryTargetAction === 'select_vorgang' && !item.vorgangId) {
+    actions.push({
+      id: 'select_vorgang',
+      labelKey: 'vorgangIntelligence.action.select',
+      enabled: true,
+    });
+  }
+
   const canCreateVorgang =
     !item.vorgangId &&
     input.companyRelevant &&
+    input.primaryTargetAction === 'create_vorgang' &&
     (input.contractAnalysis?.isContract ||
       primaryTarget === 'vorgang');
 
@@ -381,7 +393,12 @@ export function processUploadedDocument(
   // Intelligence once — proposal reuses the same result (no second BOQ/JSON pass).
   const contractIntelligence = analyzeContractIntelligenceFromInbox(item);
   const contractOrderProposal = buildContractOrderProposal(item, contractIntelligence);
-  const suggestedVorgang = getSuggestedVorgangForItem(item) ?? classification.suggestedVorgang ?? null;
+  const primaryTarget = resolvePrimaryTargetForInboxItem(item);
+  let suggestedVorgang = primaryTarget.suggestedVorgang;
+  // Legacy heuristic remains only as fallback when no usable case match exists.
+  if (!primaryTarget.hasUsableCaseMatch) {
+    suggestedVorgang = getSuggestedVorgangForItem(item) ?? classification.suggestedVorgang ?? null;
+  }
   const materialDefault = getCachedSetup()?.materialStandard ?? 'unclear';
   const draft = buildVorgangDraftFromInbox(item, materialDefault);
   const similarVorgaenge = findSimilarVorgaenge(draft);
@@ -427,6 +444,7 @@ export function processUploadedDocument(
     warnings,
     nextActions: buildNextActions(item, {
       companyRelevant: true,
+      primaryTargetAction: primaryTarget.action,
       suggestedVorgang,
       suggestedOrderPositions,
       suggestedTasks,

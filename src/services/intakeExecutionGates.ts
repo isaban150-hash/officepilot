@@ -12,6 +12,14 @@ import {
   resolvePrimaryTargetObjectForKind,
 } from './documentPrimaryTargetService';
 
+function hasResolverAction(
+  workflow: { nextActions?: WorkflowResult['nextActions'] },
+  actionId: 'link_vorgang' | 'select_vorgang' | 'create_vorgang',
+): boolean {
+  const actions = workflow.nextActions ?? [];
+  return actions.some((action) => action.id === actionId && action.enabled);
+}
+
 export type SmartIntakeVorgangGateItem = {
   vorgangId?: InboxItem['vorgangId'];
   documentType?: InboxItem['documentType'];
@@ -19,9 +27,13 @@ export type SmartIntakeVorgangGateItem = {
 
 /** Same gate previously private as canCreateVorgang in intakeExecutionService. */
 export function canCreateVorgangFromSmartIntakeGates(
-  workflow: Pick<WorkflowResult, 'companyRelevant' | 'contractAnalysis' | 'classification'>,
+  workflow: Pick<WorkflowResult, 'companyRelevant' | 'contractAnalysis' | 'classification'> & {
+    nextActions?: WorkflowResult['nextActions'];
+  },
   item: SmartIntakeVorgangGateItem,
 ): boolean {
+  if (!hasResolverAction(workflow, 'create_vorgang')) return false;
+
   const primaryTarget = workflow.classification?.classifiedKind
     ? resolvePrimaryTargetObjectForKind(workflow.classification.classifiedKind)
     : item.documentType
@@ -59,10 +71,9 @@ export function hasApplyableContractFields(
  * (contract analysis + fields + a vorgang id after the vorgang step).
  */
 export function wouldApplyContractFieldsOnSmartIntake(
-  workflow: Pick<
-    WorkflowResult,
-    'companyRelevant' | 'contractAnalysis' | 'classification' | 'suggestedVorgang'
-  >,
+  workflow: Pick<WorkflowResult, 'companyRelevant' | 'contractAnalysis' | 'classification'> & {
+    nextActions?: WorkflowResult['nextActions'];
+  },
   item: SmartIntakeVorgangGateItem,
 ): boolean {
   if (!workflow.contractAnalysis?.isContract) return false;
@@ -70,20 +81,22 @@ export function wouldApplyContractFieldsOnSmartIntake(
 
   const willHaveVorgang =
     Boolean(item.vorgangId) ||
-    Boolean(workflow.suggestedVorgang) ||
+    hasResolverAction(workflow, 'link_vorgang') ||
     canCreateVorgangFromSmartIntakeGates(workflow, item);
 
   return willHaveVorgang;
 }
 
 export function wouldLinkVorgangOnSmartIntake(
-  workflow: Pick<WorkflowResult, 'companyRelevant' | 'suggestedVorgang'>,
+  workflow: Pick<WorkflowResult, 'companyRelevant'> & {
+    nextActions?: WorkflowResult['nextActions'];
+  },
   item: Pick<InboxItem, 'vorgangId'>,
 ): boolean {
   return (
     workflow.companyRelevant &&
     !item.vorgangId &&
-    Boolean(workflow.suggestedVorgang)
+    hasResolverAction(workflow, 'link_vorgang')
   );
 }
 

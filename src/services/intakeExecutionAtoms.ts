@@ -201,6 +201,13 @@ export function executeVorgangAtom(
   failedSteps: WorkflowExecutionFailure[],
   warnings?: WorkflowWarning[],
 ): { item: InboxItem; vorgangId?: string } {
+  const canLinkVorgang = workflow.nextActions.some(
+    (action) => action.id === 'link_vorgang' && action.enabled,
+  );
+  const canCreateVorgang = workflow.nextActions.some(
+    (action) => action.id === 'create_vorgang' && action.enabled,
+  );
+
   if (isInboxLinkedToVorgang(item)) {
     markIntakeSuccess(successSteps, workflow.suggestedVorgang ? 'link_vorgang' : 'create_vorgang');
     return { item, vorgangId: item.vorgangId };
@@ -208,7 +215,7 @@ export function executeVorgangAtom(
 
   const contractDraft = buildContractDraft(workflow.contractAnalysis);
 
-  if (workflow.suggestedVorgang) {
+  if (workflow.suggestedVorgang && canLinkVorgang) {
     const linked = linkWorkflowVorgang(item, workflow.suggestedVorgang.vorgangId);
     if (!linked) {
       markIntakeFailure(failedSteps, 'link_vorgang', 'Vorgang konnte nicht verknüpft werden.');
@@ -226,7 +233,7 @@ export function executeVorgangAtom(
     return { item: fresh, vorgangId: linked.vorgang.id };
   }
 
-  if (canCreateVorgangFromSmartIntakeGates(workflow, item)) {
+  if (canCreateVorgang && canCreateVorgangFromSmartIntakeGates(workflow, item)) {
     const materialDefault = options.materialStandard ?? getCachedSetup().materialStandard;
     const created = createVorgangFromInboxWithContract(
       item,
