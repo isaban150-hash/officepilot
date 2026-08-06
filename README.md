@@ -18,10 +18,11 @@ App öffnen: http://localhost:5173
 ```bash
 npm test
 npm run test:watch
+npm run test:full
 npm run build
 ```
 
-`npm test` führt alle Vitest-Service-Regressionstests einmal aus. `test:watch` startet Vitest im Watch-Modus während der Entwicklung.
+`npm test` führt die Core-Suite aus (15 Testdateien). `npm run test:full` bleibt die vollständige Regression. `test:watch` startet die Core-Suite im Watch-Modus.
 
 ## Screens
 
