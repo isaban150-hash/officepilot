@@ -1,6 +1,7 @@
 import type { TranslationKey } from '../i18n';
 import { t } from '../i18n';
 import { isDatevRelevantKind } from './brain/financeIntelligenceService';
+import { buildPrioritizedDocumentGuidance } from './documentGuidanceService';
 import {
   formatDigitalFolderBreadcrumb,
   getDocumentDisplayLabelKey,
@@ -153,63 +154,26 @@ function buildBriefLines(
 }
 
 function buildActionSteps(
+  prioritized: ReturnType<typeof buildPrioritizedDocumentGuidance>,
   item: InboxItem,
   summary: ReturnType<typeof buildDocumentUnderstandingSummary>,
   kind: ClassifiedDocumentKind,
 ): AssistantTextBlock[] {
-  const steps: AssistantTextBlock[] = [];
-
-  if (item.isAdvertisement) {
-    return [{ key: 'docAssistant.action.disposeAdvertisement' }];
+  if (prioritized.now.length > 0) {
+    return prioritized.now.slice(0, 5).map((line) => ({
+      key: line.text as TranslationKey,
+    }));
   }
-  if (kind === 'mahnung' || kind === 'zahlungserinnerung') {
-    if (summary.amount && (summary.deadline || item.deadline)) {
-      pushUnique(steps, {
-        key: 'docAssistant.action.payByDeadline',
-        params: {
-          amount: summary.amount,
-          deadline: summary.deadline ?? item.deadline ?? '—',
-        },
-      });
-    } else if (summary.amount) {
-      pushUnique(steps, {
-        key: 'docAssistant.action.checkAmount',
-        params: { amount: summary.amount },
-      });
-    } else {
-      pushUnique(steps, { key: 'docAssistant.action.checkPayment' });
-    }
-  } else if (summary.deadline || item.deadline) {
-    pushUnique(steps, {
-      key: 'docAssistant.action.monitorDeadline',
-      params: { deadline: summary.deadline ?? item.deadline ?? '—' },
-    });
-  }
-
-  if (isDatevRelevantKind(kind)) {
-    pushUnique(steps, { key: 'docAssistant.action.prepareForTaxAdvisor' });
-  }
-
-  if (steps.length === 0) {
-    pushUnique(steps, { key: 'docAssistant.action.reviewAndFile' });
-  }
-
-  return steps.slice(0, 5);
+  return [];
 }
 
 function buildInactionConsequence(
+  prioritized: ReturnType<typeof buildPrioritizedDocumentGuidance>,
   item: InboxItem,
   kind: ClassifiedDocumentKind,
 ): AssistantTextBlock | undefined {
-  if (item.isAdvertisement) return undefined;
-  if (kind === 'mahnung') {
-    return { key: 'docAssistant.inaction.mahnung' };
-  }
-  if (kind === 'zahlungserinnerung') {
-    return { key: 'docAssistant.inaction.paymentReminder' };
-  }
-  if (item.deadline || kind === 'finanzamt' || kind === 'steuerbescheid') {
-    return { key: 'docAssistant.inaction.deadlineRisk' };
+  if (prioritized.inaction[0]?.text) {
+    return { key: prioritized.inaction[0].text as TranslationKey };
   }
   return undefined;
 }
@@ -307,6 +271,7 @@ export function buildInboxDocumentAssistant(
     liveWorkflow: workflow ?? null,
     sessionFillConfirmRows: options?.sessionFillConfirmRows ?? null,
   });
+  const prioritized = buildPrioritizedDocumentGuidance(item, workflow, lang, options);
   const truthLines = truth ? buildDocumentWorkTruthAssistContextLines(truth) : null;
 
   // Prefer resolved counterparty / money / deadline in confident fields when present.
@@ -365,8 +330,8 @@ export function buildInboxDocumentAssistant(
       summary.sender ??
       item.sender,
     briefLines: buildBriefLines(item, summary, kind),
-    actionSteps: buildActionSteps(item, summary, kind),
-    inactionConsequence: buildInactionConsequence(item, kind),
+    actionSteps: buildActionSteps(prioritized, item, summary, kind),
+    inactionConsequence: buildInactionConsequence(prioritized, item, kind),
     digitalPath: formatDigitalFolderBreadcrumb(item),
     paperFolderLabel,
     originalGuidance: resolveOriginalGuidance(item, kind),

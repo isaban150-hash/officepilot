@@ -1,4 +1,5 @@
 import { formatPaperFilingInstruction } from './paperFolderService';
+import { buildPrioritizedDocumentGuidance } from './documentGuidanceService';
 import {
   buildPresentationChecks,
   buildPresentationContext,
@@ -100,6 +101,8 @@ export function buildDocumentReviewRecommendations(
 ): DocumentReviewRecommendationView[] {
   const recommendations: DocumentReviewRecommendationView[] = [];
   const seen = new Set<string>();
+  const lang = getCachedSetup()?.language ?? 'de';
+  const prioritized = buildPrioritizedDocumentGuidance(item, workflow, lang);
 
   const push = (id: string, labelKey: TranslationKey) => {
     if (seen.has(labelKey)) return;
@@ -110,6 +113,14 @@ export function buildDocumentReviewRecommendations(
   if (item.isAdvertisement) {
     push('dispose', 'reviewWorkflow.recommend.dispose');
     push('save', 'reviewWorkflow.recommend.saveAnyway');
+    return recommendations.slice(0, MAX_REVIEW_RECOMMENDATIONS);
+  }
+
+  for (const line of prioritized.now) {
+    push(line.id, line.text as TranslationKey);
+  }
+
+  if (recommendations.length > 0) {
     return recommendations.slice(0, MAX_REVIEW_RECOMMENDATIONS);
   }
 
@@ -152,10 +163,20 @@ export function buildDocumentReviewChecks(
   workflow: WorkflowResult,
 ): DocumentReviewCheckView[] {
   const checks: DocumentReviewCheckView[] = [];
+  const lang = getCachedSetup()?.language ?? 'de';
+  const prioritized = buildPrioritizedDocumentGuidance(item, workflow, lang);
   const summary = workflow.documentUnderstanding;
 
   if (item.isAdvertisement) {
     checks.push({ id: 'advertisement', labelKey: 'reviewWorkflow.check.advertisement' });
+    return checks;
+  }
+
+  for (const line of prioritized.missing) {
+    checks.push({ id: line.id, labelKey: line.text as TranslationKey });
+  }
+
+  if (checks.length > 0) {
     return checks;
   }
 

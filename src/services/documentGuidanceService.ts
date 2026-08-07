@@ -1,9 +1,9 @@
 import type { TranslationKey } from '../i18n';
 import {
-  buildInboxDocumentAssistant,
-  type AssistantTextBlock,
-  type OriginalGuidanceStatus,
-} from './documentAssistantService';
+  t,
+} from '../i18n';
+import type { OriginalGuidanceStatus } from './documentAssistantService';
+import { getDocumentDisplayLabelKey } from './documentDisplayLabelService';
 import { buildDocumentAiActions, buildDocumentUnderstandingSummary } from './documentIntakeUnderstandingService';
 import { getInboxExtractedDocumentText } from './inboxDocumentText';
 import {
@@ -12,11 +12,12 @@ import {
   type LetterExplanation,
 } from './letterExplanationService';
 import { getCachedSetup } from './persistenceService';
-import { resolvePaperFilingFromInbox } from './paperFolderService';
-import { buildDocumentReviewRecommendations } from './documentReviewViewService';
+import { formatPaperFilingInstruction, resolvePaperFilingFromInbox } from './paperFolderService';
 import { getStorageRecommendationLevelKey } from './storageRecommendationPresentationService';
 import { requiresCustomerAssignment } from './documentResultPresentationService';
+import { buildDocumentWorkTruthConflictDisplayLines } from './documentWorkResultResolveService';
 import { buildDocumentWorkTruthViewForInboxItem } from './documentWorkResultTruthOrchestration';
+import { getTaskProposals } from './workflowDecisionUtils';
 import type { DocumentFieldFillConfirmRow } from '../types/documentFieldFillConfirm';
 import type { StorageRecommendationLevel } from '../types/storageRecommendation';
 import type {
@@ -35,6 +36,19 @@ export interface GuidanceTextBlock {
 export interface DocumentGuidanceAction {
   id: string;
   labelKey: TranslationKey;
+}
+
+export interface DocumentGuidanceLine {
+  id: string;
+  text: string;
+}
+
+export interface PrioritizedDocumentGuidance {
+  now: DocumentGuidanceLine[];
+  missing: DocumentGuidanceLine[];
+  inaction: DocumentGuidanceLine[];
+  actions: DocumentGuidanceAction[];
+  usedWorkflow: boolean;
 }
 
 export interface DocumentGuidanceSources {
@@ -94,6 +108,27 @@ const REPLY_LIKELY_KINDS = new Set<ClassifiedDocumentKind>([
   'bg_bau',
   'soka_bau',
 ]);
+
+function resolveOriginalGuidance(
+  item: InboxItem,
+  kind: ClassifiedDocumentKind,
+): OriginalGuidanceStatus {
+  if (item.isAdvertisement) return 'dispose_after_digital';
+  if (
+    kind === 'freistellungsbescheinigung' ||
+    kind === 'lohnabrechnung' ||
+    kind === 'kontoauszug'
+  ) {
+    return 'keep_until_tax';
+  }
+  if (kind === 'mahnung' || kind === 'zahlungserinnerung' || item.deadline) {
+    return 'keep';
+  }
+  if (item.status === 'abgelegt' || item.importedToArchive) {
+    return 'dispose_after_digital';
+  }
+  return 'uncertain';
+}
 
 function resolveKind(item: InboxItem, workflow?: WorkflowResult | null): ClassifiedDocumentKind {
   return (item.classifiedKind ?? workflow?.classifiedKind ?? 'sonstiges') as ClassifiedDocumentKind;
@@ -165,17 +200,12 @@ function buildWhy(
 function buildMustAct(
   item: InboxItem,
   kind: ClassifiedDocumentKind,
-  actionSteps: AssistantTextBlock[],
   hasDeadline: boolean,
 ): GuidanceTextBlock {
   if (item.isAdvertisement) {
     return { key: 'docGuidance.act.probablyNot' };
   }
-  if (
-    REPLY_LIKELY_KINDS.has(kind) ||
-    hasDeadline ||
-    actionSteps.some((step) => step.key !== 'docAssistant.action.reviewAndFile')
-  ) {
+  if (REPLY_LIKELY_KINDS.has(kind) || hasDeadline) {
     return { key: 'docGuidance.act.likely' };
   }
   if (CONTRACT_KINDS.has(kind) || INVOICE_KINDS.has(kind) || kind === 'auftrag') {
@@ -242,6 +272,124 @@ function buildPaperFolder(
   };
 }
 
+function asDynamicTextBlock(text: string | undefined, fallback: GuidanceTextBlock): GuidanceTextBlock {
+  const trimmed = text?.trim();
+  if (!trimmed) return fallback;
+  return { key: trimmed as TranslationKey };
+}
+
+function pushUniqueLine(lines: DocumentGuidanceLine[], id: string, text: string | undefined): void {
+  const normalized = text?.trim();
+  if (!normalized) return;
+  const key = normalized.toLowerCase();
+  if (lines.some((line) => line.text.trim().toLowerCase() === key)) return;
+  lines.push({ id, text: normalized });
+}
+
+function pushUniqueAction(
+  actions: DocumentGuidanceAction[],
+  seen: Set<string>,
+  id: string,
+  labelKey: TranslationKey,
+): void {
+  const seenKey = `${id}::${labelKey}`;
+  if (seen.has(seenKey)) return;
+  seen.add(seenKey);
+  actions.push({ id, labelKey });
+}
+
+function translateLabel(labelKey: string | undefined, lang: AppLanguage): string | undefined {
+  const trimmed = labelKey?.trim();
+  if (!trimmed) return undefined;
+  return t(trimmed as TranslationKey, lang);
+}
+
+function resolveAssistantSender(
+  item: InboxItem,
+  workflow: WorkflowResult | null | undefined,
+  truthCounterparty?: string,
+  understandingSender?: string,
+): string {
+  return truthCounterparty?.trim() || workflow?.documentUnderstanding?.sender?.trim() || item.sender || understandingSender || '—';
+}
+
+export function buildPrioritizedDocumentGuidance(
+  item: InboxItem,
+  workflow?: WorkflowResult | null,
+  lang: AppLanguage = getCachedSetup()?.language ?? 'de',
+  options?: { sessionFillConfirmRows?: readonly DocumentFieldFillConfirmRow[] | null },
+): PrioritizedDocumentGuidance {
+  const truth = buildDocumentWorkTruthViewForInboxItem({
+    item,
+    liveWorkflow: workflow ?? null,
+    sessionFillConfirmRows: options?.sessionFillConfirmRows ?? null,
+  });
+  const businessInterpretation =
+    truth?.businessInterpretation ?? workflow?.businessInterpretation ?? null;
+  const workflowDecision = workflow?.workflowDecision ?? null;
+  const now: DocumentGuidanceLine[] = [];
+  const missing: DocumentGuidanceLine[] = [];
+  const inaction: DocumentGuidanceLine[] = [];
+  const actions: DocumentGuidanceAction[] = [];
+  const seenActions = new Set<string>();
+  const taskProposals = workflow ? getTaskProposals(workflow) : [];
+
+  const hasActionSupport =
+    (workflowDecision?.nextActions.some((action) => action.enabled && action.id !== 'cancel') ?? false) ||
+    taskProposals.length > 0 ||
+    (businessInterpretation?.requiredConfirmations.length ?? 0) > 0;
+
+  if (hasActionSupport && businessInterpretation?.operational.nextStep) {
+    pushUniqueLine(now, 'operational-next-step', businessInterpretation.operational.nextStep);
+  }
+
+  for (const action of workflowDecision?.nextActions ?? workflow?.nextActions ?? []) {
+    if (!action.enabled || action.id === 'cancel') continue;
+    const label = translateLabel(action.labelKey, lang);
+    pushUniqueLine(now, `next-action-${action.id}`, label);
+    pushUniqueAction(actions, seenActions, action.id, action.labelKey as TranslationKey);
+  }
+
+  for (const proposal of taskProposals) {
+    pushUniqueLine(now, `task-${proposal.dedupeKey ?? proposal.title}`, proposal.title);
+  }
+  if (taskProposals.length > 0) {
+    pushUniqueAction(actions, seenActions, 'accept-tasks', 'reviewWorkflow.recommend.acceptTasks');
+  }
+
+  for (const entry of businessInterpretation?.missingInformation ?? []) {
+    pushUniqueLine(missing, `missing-${entry.id}`, entry.summary);
+  }
+  for (const entry of businessInterpretation?.requiredConfirmations ?? []) {
+    pushUniqueLine(missing, `confirm-${entry.id}`, entry.summary);
+  }
+  for (const entry of workflow?.requiredDocuments ?? []) {
+    pushUniqueLine(missing, `required-doc-${entry.type}`, entry.reason);
+  }
+  for (const entry of businessInterpretation?.conflicts ?? []) {
+    pushUniqueLine(missing, `conflict-${entry.id}`, entry.summary);
+  }
+  for (const conflictLine of truth ? buildDocumentWorkTruthConflictDisplayLines(truth) : []) {
+    pushUniqueLine(missing, `truth-conflict-${conflictLine}`, conflictLine);
+  }
+
+  for (const risk of workflowDecision?.risks ?? []) {
+    pushUniqueLine(
+      inaction,
+      `risk-${risk.id}`,
+      t(risk.messageKey as TranslationKey, lang, risk.params),
+    );
+  }
+
+  return {
+    now: now.slice(0, 6),
+    missing: missing.slice(0, 6),
+    inaction: inaction.slice(0, 3),
+    actions: actions.slice(0, 6),
+    usedWorkflow: Boolean(workflow),
+  };
+}
+
 function mapAiActionLabel(
   action: DocumentAiAction,
   kind: ClassifiedDocumentKind,
@@ -266,7 +414,14 @@ function buildActions(
   kind: ClassifiedDocumentKind,
   workflow: WorkflowResult | null | undefined,
   understanding: ReturnType<typeof buildDocumentUnderstandingSummary>,
-): { actions: DocumentGuidanceAction[]; usedWorkflow: boolean } {
+  lang: AppLanguage,
+  options?: { sessionFillConfirmRows?: readonly DocumentFieldFillConfirmRow[] | null },
+): { actions: DocumentGuidanceAction[]; usedWorkflow: boolean; prioritized: PrioritizedDocumentGuidance } {
+  const prioritized = buildPrioritizedDocumentGuidance(item, workflow, lang, options);
+  if (prioritized.actions.length > 0) {
+    return { actions: prioritized.actions, usedWorkflow: prioritized.usedWorkflow, prioritized };
+  }
+
   const actions: DocumentGuidanceAction[] = [];
   const seen = new Set<string>();
   let usedWorkflow = false;
@@ -286,23 +441,8 @@ function buildActions(
 
   if (workflow) {
     usedWorkflow = true;
-    for (const rec of buildDocumentReviewRecommendations(item, workflow)) {
-      if (rec.id === 'create_order' || rec.labelKey === 'reviewWorkflow.recommend.createOrder') {
-        if (CONTRACT_KINDS.has(kind)) {
-          push('check-contract', 'docGuidance.action.checkContract');
-        }
-        push('create-vorgang', 'docGuidance.action.createVorgang');
-        continue;
-      }
-      if (rec.id === 'write_invoice' || rec.labelKey === 'reviewWorkflow.recommend.writeInvoice') {
-        push('check-invoice', 'docGuidance.action.checkInvoice');
-        continue;
-      }
-      if (rec.id === 'archive_document' || rec.labelKey === 'reviewWorkflow.recommend.archive') {
-        push('archive', 'docGuidance.action.archive');
-        continue;
-      }
-      push(rec.id, rec.labelKey);
+    for (const action of workflow.documentAiActions) {
+      push(action.id, mapAiActionLabel(action, kind));
     }
   } else {
     const aiActions = buildDocumentAiActions(kind, understanding);
@@ -337,7 +477,11 @@ function buildActions(
     push('review', 'reviewWorkflow.recommend.reviewDocument');
   }
 
-  return { actions: actions.slice(0, 6), usedWorkflow };
+  return {
+    actions: actions.slice(0, 6),
+    usedWorkflow,
+    prioritized,
+  };
 }
 
 /**
@@ -350,7 +494,6 @@ export function buildDocumentGuidance(
   lang: AppLanguage = getCachedSetup()?.language ?? 'de',
   options?: { sessionFillConfirmRows?: readonly DocumentFieldFillConfirmRow[] | null },
 ): DocumentGuidance {
-  const assistant = buildInboxDocumentAssistant(item, workflow, lang, options);
   const letter = resolveLetter(item, workflow);
   const recognizedText = getInboxExtractedDocumentText(item);
   const understanding =
@@ -367,24 +510,41 @@ export function buildDocumentGuidance(
     liveWorkflow: workflow ?? null,
     sessionFillConfirmRows: options?.sessionFillConfirmRows ?? null,
   });
+  const truthCounterparty = truth?.businessInterpretation?.facts.parties.counterparty?.name?.trim();
   const truthDeadline = truth?.businessInterpretation?.facts.timeline.deadline?.value?.trim();
   const understandingDeadline = truthDeadline || understanding.deadline;
+  const paperFolderLabel =
+    paper.skipPhysicalFiling
+      ? '—'
+      : paper.rule
+        ? formatPaperFilingInstruction(paper.rule, lang)
+        : '—';
 
   const hasDeadline = hasDeadlineSignal(item, understandingDeadline, letter);
-  const { actions, usedWorkflow } = buildActions(item, kind, workflow, understanding);
+  const { actions, usedWorkflow, prioritized } = buildActions(
+    item,
+    kind,
+    workflow,
+    understanding,
+    lang,
+    options,
+  );
 
   return {
     what: buildWhat(
-      assistant.documentTypeLabelKey,
-      assistant.sender || item.sender || understanding.sender || '—',
+      getDocumentDisplayLabelKey(kind, item.documentType),
+      resolveAssistantSender(item, workflow, truthCounterparty, understanding.sender),
       letter,
     ),
     whyReceived: buildWhy(item, kind, letter),
-    mustAct: buildMustAct(item, kind, assistant.actionSteps, hasDeadline),
+    mustAct: asDynamicTextBlock(
+      prioritized.now[0]?.text,
+      buildMustAct(item, kind, hasDeadline),
+    ),
     deadline: buildDeadline(item, understandingDeadline, letter),
     mustReply: buildMustReply(item, kind, hasDeadline),
-    retain: buildRetain(assistant.originalGuidance),
-    paperFolder: buildPaperFolder(paper.skipPhysicalFiling, assistant.paperFolderLabel),
+    retain: buildRetain(resolveOriginalGuidance(item, kind)),
+    paperFolder: buildPaperFolder(paper.skipPhysicalFiling, paperFolderLabel),
     actions,
     disclaimerKey: letter?.legalDisclaimerKey ?? 'legal.disclaimer',
     sources: {
