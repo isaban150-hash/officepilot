@@ -23,6 +23,10 @@ function pickFirstNonEmpty(...values: Array<string | undefined | null>): string 
   return undefined;
 }
 
+function capitalizeFirst(text: string): string {
+  return text ? `${text.charAt(0).toUpperCase()}${text.slice(1)}` : text;
+}
+
 function isUncertain(certainty: BusinessFactCertainty | undefined): boolean {
   return certainty === 'uncertain' || certainty === 'proposed' || certainty === 'conflicting';
 }
@@ -100,16 +104,54 @@ function resolvePurpose(input: DocumentNarrativeInput): {
   };
 }
 
-function resolveVorgangRef(input: DocumentNarrativeInput): string | undefined {
+function resolveContractFamilyLabel(input: DocumentNarrativeInput): string | undefined {
+  const family = input.truthBusinessInterpretation?.contractFamily ?? input.workflow?.businessInterpretation?.contractFamily;
+  if (!family) return undefined;
+
+  switch (family) {
+    case 'werkvertrag':
+      return 'Werkvertrag';
+    case 'wartungsvertrag':
+      return 'Wartungsvertrag';
+    case 'mietvertrag':
+      return 'Mietvertrag';
+    case 'dienstleistungsvertrag':
+      return 'Dienstleistungsvertrag';
+    case 'kaufvertrag':
+      return 'Kaufvertrag';
+    case 'subunternehmervertrag':
+      return 'Subunternehmervertrag';
+    default:
+      return undefined;
+  }
+}
+
+function resolveVorgangContext(input: DocumentNarrativeInput): string | undefined {
   const bi = input.truthBusinessInterpretation ?? input.workflow?.businessInterpretation ?? null;
   const ref = bi?.vorgangRef;
   if (!ref) return undefined;
 
+  const documentType = resolveDocumentType(input);
+  const normalizedType = documentType?.trim().toLowerCase();
+  const subject = normalizedType
+    ? normalizedType === 'eingangsrechnung' || normalizedType === 'rechnung'
+      ? 'Diese Rechnung'
+      : normalizedType === 'nachtrag'
+        ? 'Dieser Nachtrag'
+        : `Dieses ${documentType}`
+    : 'Dieses Dokument';
+
+  const contractFamilyLabel = resolveContractFamilyLabel(input);
+  const contractRelation =
+    normalizedType === 'nachtrag' && contractFamilyLabel
+      ? ` Er bezieht sich auf den bereits erkannten ${contractFamilyLabel}.`
+      : undefined;
+
   if (ref.status === 'linked' && ref.linkedVorgangTitle?.trim()) {
-    return `Der Vorgangsbezug ist bestätigt: ${ref.linkedVorgangTitle.trim()}.`;
+    return `${subject} gehört zum Vorgang „${ref.linkedVorgangTitle.trim()}“.${contractRelation ?? ''}`;
   }
   if (ref.status === 'suggested' && ref.suggested?.vorgangTitle?.trim()) {
-    return `Der Vorgangsbezug ist wahrscheinlich: ${ref.suggested.vorgangTitle.trim()}.`;
+    return `${subject} gehört wahrscheinlich zum Vorgang „${ref.suggested.vorgangTitle.trim()}“.${contractRelation ?? ''}`;
   }
   if (ref.status === 'ambiguous' && ref.similarCount > 0) {
     return `Der Vorgangsbezug ist noch nicht eindeutig (${ref.similarCount} mögliche Vorgänge).`;
@@ -141,7 +183,7 @@ export function buildDocumentNarrative(input: DocumentNarrativeInput): string {
   const amount = resolveAmount(input);
   const purpose = resolvePurpose(input);
   const deadline = resolveDeadline(input);
-  const vorgangRef = resolveVorgangRef(input);
+  const vorgangRef = resolveVorgangContext(input);
   const nextStep = resolveNextStep(input);
   const risk = resolveRisk(input);
 
@@ -180,7 +222,7 @@ export function buildDocumentNarrative(input: DocumentNarrativeInput): string {
 
   const lines: string[] = [];
   if (sentenceOneParts.length > 0) {
-    lines.push(withSentenceEnd(sentenceOneParts.join(', ')));
+    lines.push(withSentenceEnd(capitalizeFirst(sentenceOneParts.join(', '))));
   }
   if (sentenceTwoParts.length > 0) {
     lines.push(withSentenceEnd(sentenceTwoParts.join('. ')));

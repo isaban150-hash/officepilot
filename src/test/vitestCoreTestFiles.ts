@@ -19,6 +19,7 @@ export const CORE_UNIT_TEST_FILES = [
   'src/documentUnderstanding01a.test.ts',
   'src/documentUnderstanding01b.test.ts',
   'src/documentUnderstanding01c.test.ts',
+  'src/documentUnderstanding01d.test.ts',
   'src/storagePdfWriteImageCore01.test.ts',
   'src/storageRepresentationModel01.test.ts',
 ] as const;
