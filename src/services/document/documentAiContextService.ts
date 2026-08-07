@@ -11,6 +11,7 @@ import type { AppLanguage, CompanyDocument, InboxItem, WorkflowResult } from '..
 import type { DocumentAiContext } from '../../types/areaAi';
 import type { DocumentWorkTruthView } from '../../types/documentWorkTruth';
 import { buildDocumentWorkTruthAssistContextLines } from '../documentWorkResultResolveService';
+import { buildPrioritizedDocumentGuidance } from '../documentGuidanceService';
 import {
   buildDocumentWorkTruthViewForInboxItem,
   resolveDocumentWorkTruthViewForCompanyDocument,
@@ -153,6 +154,12 @@ function collectInboxQualityNotes(
   }
 
   return { uncertainFieldNotes, missingFieldNotes };
+}
+
+function pushUniqueText(target: string[], text: string | undefined): void {
+  const normalized = text?.trim();
+  if (!normalized) return;
+  if (!target.includes(normalized)) target.push(normalized);
 }
 
 function collectDocumentQualityNotes(
@@ -396,6 +403,14 @@ export function buildDocumentAiContextFromInbox(
     };
   }
 
+  const prioritized = buildPrioritizedDocumentGuidance(item, options?.liveWorkflow ?? null, lang, {
+    sessionFillConfirmRows: options?.sessionFillConfirmRows ?? null,
+  });
+  const missingFieldNotes = [...quality.missingFieldNotes];
+  for (const line of prioritized.missing) {
+    pushUniqueText(missingFieldNotes, line.text);
+  }
+
   return {
     sourceType: 'inbox',
     title: item.title,
@@ -417,7 +432,7 @@ export function buildDocumentAiContextFromInbox(
       : [],
     tags: [],
     uncertainFieldNotes: withTestNatureNote(quality.uncertainFieldNotes, documentNature, lang),
-    missingFieldNotes: quality.missingFieldNotes,
+    missingFieldNotes,
     documentWorkTruthFactLines: truthFields.documentWorkTruthFactLines,
     documentWorkTruthConflictLines: truthFields.documentWorkTruthConflictLines,
     confirmedUserFactLines: truthFields.confirmedUserFactLines,

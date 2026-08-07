@@ -104,6 +104,19 @@ export function DocumentAssistantPanel({
           </div>
         )}
       </Card>
+
+      {assistant.missingItems.length > 0 && (
+        <Card className="document-assistant-panel__section">
+          <h2 className="document-assistant-panel__heading">
+            {translate('docAssistant.section.missing')}
+          </h2>
+          <ul>
+            {assistant.missingItems.map((itemText) => (
+              <li key={itemText}>{itemText}</li>
+            ))}
+          </ul>
+        </Card>
+      )}
     </>
   );
 

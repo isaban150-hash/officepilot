@@ -48,6 +48,7 @@ export interface InboxDocumentAssistant {
   sender?: string;
   briefLines: AssistantTextBlock[];
   actionSteps: AssistantTextBlock[];
+  missingItems: string[];
   inactionConsequence?: AssistantTextBlock;
   digitalPath: string;
   paperFolderLabel: string;
@@ -331,6 +332,7 @@ export function buildInboxDocumentAssistant(
       item.sender,
     briefLines: buildBriefLines(item, summary, kind),
     actionSteps: buildActionSteps(prioritized, item, summary, kind),
+    missingItems: prioritized.missing.slice(0, 5).map((line) => line.text),
     inactionConsequence: buildInactionConsequence(prioritized, item, kind),
     digitalPath: formatDigitalFolderBreadcrumb(item),
     paperFolderLabel,

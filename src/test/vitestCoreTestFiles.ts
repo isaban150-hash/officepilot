@@ -17,6 +17,7 @@ export const CORE_UNIT_TEST_FILES = [
   'src/services/documentInvoiceCutoverService.test.ts',
   'src/documentPrimaryTarget02aCore.test.ts',
   'src/documentUnderstanding01a.test.ts',
+  'src/documentUnderstanding01b.test.ts',
   'src/storagePdfWriteImageCore01.test.ts',
   'src/storageRepresentationModel01.test.ts',
 ] as const;
