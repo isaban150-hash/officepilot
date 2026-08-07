@@ -19,6 +19,7 @@ import {
   type SteuerberaterRelevanceStatus,
 } from './documentResultPresentationService';
 import { getLetterExplanation } from './letterExplanationService';
+import { buildDocumentNarrative } from './documentNarrativeService';
 import { getInboxExtractedDocumentText } from './inboxDocumentText';
 import { resolvePaperFiling } from './paperFolderService';
 import { formatPaperFilingInstruction } from './paperFolderDisplayService';
@@ -46,6 +47,7 @@ export interface AssistantTextBlock {
 export interface InboxDocumentAssistant {
   documentTypeLabelKey: TranslationKey;
   sender?: string;
+  narrative?: string;
   briefLines: AssistantTextBlock[];
   actionSteps: AssistantTextBlock[];
   missingItems: string[];
@@ -274,6 +276,11 @@ export function buildInboxDocumentAssistant(
   });
   const prioritized = buildPrioritizedDocumentGuidance(item, workflow, lang, options);
   const truthLines = truth ? buildDocumentWorkTruthAssistContextLines(truth) : null;
+  const narrative = buildDocumentNarrative({
+    item,
+    workflow,
+    truthBusinessInterpretation: truth?.businessInterpretation ?? null,
+  });
 
   // Prefer resolved counterparty / money / deadline in confident fields when present.
   if (truth?.businessInterpretation) {
@@ -330,6 +337,7 @@ export function buildInboxDocumentAssistant(
       truth?.businessInterpretation?.facts.parties.counterparty?.name ??
       summary.sender ??
       item.sender,
+    narrative: narrative || undefined,
     briefLines: buildBriefLines(item, summary, kind),
     actionSteps: buildActionSteps(prioritized, item, summary, kind),
     missingItems: prioritized.missing.slice(0, 5).map((line) => line.text),

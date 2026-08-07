@@ -105,18 +105,6 @@ export function DocumentAssistantPanel({
         )}
       </Card>
 
-      {assistant.missingItems.length > 0 && (
-        <Card className="document-assistant-panel__section">
-          <h2 className="document-assistant-panel__heading">
-            {translate('docAssistant.section.missing')}
-          </h2>
-          <ul>
-            {assistant.missingItems.map((itemText) => (
-              <li key={itemText}>{itemText}</li>
-            ))}
-          </ul>
-        </Card>
-      )}
     </>
   );
 
@@ -145,9 +133,24 @@ export function DocumentAssistantPanel({
           {translate(assistant.documentTypeLabelKey)}
           {assistant.sender ? ` · ${assistant.sender}` : ''}
         </CardTitle>
+        {assistant.narrative ? (
+          <p data-testid="doc-assistant-narrative">{assistant.narrative}</p>
+        ) : null}
       </Card>
 
       {guidancePanel}
+      {assistant.missingItems.length > 0 && (
+        <Card className="document-assistant-panel__section" data-testid="doc-assistant-missing-items">
+          <h2 className="document-assistant-panel__heading">
+            {translate('docAssistant.section.missing')}
+          </h2>
+          <ul>
+            {assistant.missingItems.map((itemText) => (
+              <li key={itemText}>{itemText}</li>
+            ))}
+          </ul>
+        </Card>
+      )}
       <CollapsibleReviewSection
         id="assistant-details"
         title={translate('docAssistant.section.details')}
