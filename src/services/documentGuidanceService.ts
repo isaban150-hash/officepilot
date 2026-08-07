@@ -449,7 +449,7 @@ function buildActions(
   if (item.isAdvertisement) {
     push('dispose', 'reviewWorkflow.recommend.dispose');
     push('archive', 'docGuidance.action.archive');
-    return { actions: actions.slice(0, 6), usedWorkflow: Boolean(workflow) };
+    return { actions: actions.slice(0, 6), usedWorkflow: Boolean(workflow), prioritized };
   }
 
   if (workflow) {

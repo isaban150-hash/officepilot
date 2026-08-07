@@ -169,8 +169,6 @@ function buildActionSteps(
 
 function buildInactionConsequence(
   prioritized: ReturnType<typeof buildPrioritizedDocumentGuidance>,
-  item: InboxItem,
-  kind: ClassifiedDocumentKind,
 ): AssistantTextBlock | undefined {
   if (prioritized.inaction[0]?.text) {
     return { key: prioritized.inaction[0].text as TranslationKey };
@@ -339,7 +337,7 @@ export function buildInboxDocumentAssistant(
     briefLines: buildBriefLines(item, summary, kind),
     actionSteps: buildActionSteps(guidance.actions),
     missingItems: prioritized.missing.slice(0, 5).map((line) => line.text),
-    inactionConsequence: buildInactionConsequence(prioritized, item, kind),
+    inactionConsequence: buildInactionConsequence(prioritized),
     digitalPath: formatDigitalFolderBreadcrumb(item),
     paperFolderLabel,
     originalGuidance: resolveOriginalGuidance(item, kind),

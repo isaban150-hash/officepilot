@@ -201,8 +201,7 @@ function isInvoiceOrDeliveryLike(item: InboxItem): boolean {
     kind === 'eingangsrechnung' ||
     kind === 'rechnung' ||
     kind === 'lieferschein' ||
-    docType === 'eingangsrechnung' ||
-    docType === 'lieferschein'
+    docType === 'eingangsrechnung'
   );
 }
 
