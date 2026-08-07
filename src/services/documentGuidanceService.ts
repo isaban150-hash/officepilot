@@ -304,6 +304,19 @@ function translateLabel(labelKey: string | undefined, lang: AppLanguage): string
   return t(trimmed as TranslationKey, lang);
 }
 
+function buildTaskProposalReasonedActionLabel(input: {
+  labelKey: TranslationKey;
+  taskProposal: { description: string };
+  lang: AppLanguage;
+}): TranslationKey {
+  const baseLabel = translateLabel(input.labelKey, input.lang) ?? input.labelKey;
+  const reason = input.taskProposal.description?.trim();
+  if (!reason) return input.labelKey;
+  const trimmedReason = reason.replace(/[.!?]+$/g, '').trim();
+  if (!trimmedReason) return input.labelKey;
+  return `${baseLabel} – Grund: ${trimmedReason}.` as TranslationKey;
+}
+
 function resolveAssistantSender(
   item: InboxItem,
   workflow: WorkflowResult | null | undefined,
@@ -477,8 +490,21 @@ function buildActions(
     push('review', 'reviewWorkflow.recommend.reviewDocument');
   }
 
+  const taskProposals = workflow ? getTaskProposals(workflow) : [];
+  const taskReason = taskProposals[0];
+
   return {
-    actions: actions.slice(0, 6),
+    actions: actions.slice(0, 6).map((action) => {
+      if (!taskReason) return action;
+      return {
+        ...action,
+        labelKey: buildTaskProposalReasonedActionLabel({
+          labelKey: action.labelKey,
+          taskProposal: taskReason,
+          lang,
+        }),
+      };
+    }),
     usedWorkflow,
     prioritized,
   };

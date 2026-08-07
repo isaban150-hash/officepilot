@@ -1,7 +1,7 @@
 import type { TranslationKey } from '../i18n';
 import { t } from '../i18n';
 import { isDatevRelevantKind } from './brain/financeIntelligenceService';
-import { buildPrioritizedDocumentGuidance } from './documentGuidanceService';
+import { buildDocumentGuidance, buildPrioritizedDocumentGuidance } from './documentGuidanceService';
 import {
   formatDigitalFolderBreadcrumb,
   getDocumentDisplayLabelKey,
@@ -157,14 +157,11 @@ function buildBriefLines(
 }
 
 function buildActionSteps(
-  prioritized: ReturnType<typeof buildPrioritizedDocumentGuidance>,
-  item: InboxItem,
-  summary: ReturnType<typeof buildDocumentUnderstandingSummary>,
-  kind: ClassifiedDocumentKind,
+  guidanceActions: Array<{ labelKey: TranslationKey }>,
 ): AssistantTextBlock[] {
-  if (prioritized.now.length > 0) {
-    return prioritized.now.slice(0, 5).map((line) => ({
-      key: line.text as TranslationKey,
+  if (guidanceActions.length > 0) {
+    return guidanceActions.slice(0, 5).map((action) => ({
+      key: action.labelKey,
     }));
   }
   return [];
@@ -275,6 +272,7 @@ export function buildInboxDocumentAssistant(
     sessionFillConfirmRows: options?.sessionFillConfirmRows ?? null,
   });
   const prioritized = buildPrioritizedDocumentGuidance(item, workflow, lang, options);
+  const guidance = buildDocumentGuidance(item, workflow, lang, options);
   const truthLines = truth ? buildDocumentWorkTruthAssistContextLines(truth) : null;
   const narrative = buildDocumentNarrative({
     item,
@@ -339,7 +337,7 @@ export function buildInboxDocumentAssistant(
       item.sender,
     narrative: narrative || undefined,
     briefLines: buildBriefLines(item, summary, kind),
-    actionSteps: buildActionSteps(prioritized, item, summary, kind),
+    actionSteps: buildActionSteps(guidance.actions),
     missingItems: prioritized.missing.slice(0, 5).map((line) => line.text),
     inactionConsequence: buildInactionConsequence(prioritized, item, kind),
     digitalPath: formatDigitalFolderBreadcrumb(item),
