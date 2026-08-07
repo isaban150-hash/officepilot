@@ -1,6 +1,10 @@
 import { t } from '../i18n';
 import type { BusinessFactCertainty } from '../types/businessInterpretation';
 import type { InboxItem, WorkflowResult } from '../types/models';
+import {
+  buildDocumentRelationshipNarrative,
+  buildDocumentRelationships,
+} from './documentRelationshipService';
 
 export interface DocumentNarrativeInput {
   item: InboxItem;
@@ -184,6 +188,8 @@ export function buildDocumentNarrative(input: DocumentNarrativeInput): string {
   const purpose = resolvePurpose(input);
   const deadline = resolveDeadline(input);
   const vorgangRef = resolveVorgangContext(input);
+  const relationship = buildDocumentRelationships(input)[0];
+  const relationshipNarrative = buildDocumentRelationshipNarrative(relationship);
   const nextStep = resolveNextStep(input);
   const risk = resolveRisk(input);
 
@@ -228,6 +234,7 @@ export function buildDocumentNarrative(input: DocumentNarrativeInput): string {
     lines.push(withSentenceEnd(sentenceTwoParts.join('. ')));
   }
   if (vorgangRef) lines.push(withSentenceEnd(vorgangRef));
+  if (relationshipNarrative) lines.push(withSentenceEnd(relationshipNarrative));
   if (nextStep) lines.push(withSentenceEnd(nextStep));
   if (risk) lines.push(withSentenceEnd(risk));
 
