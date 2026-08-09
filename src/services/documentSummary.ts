@@ -123,21 +123,22 @@ export function resolveDocumentSummaryFamily(
   return 'generic';
 }
 
-/** Priority: Understanding → RD → BI (invoice/tank money). Never invent qty×price totals. */
+/** Priority: BI truth → Understanding → RD → generic fallback. Never invent qty×price totals. */
 function moneyNonContract(
   item: InboxItem,
   workflow: WorkflowResult | null | undefined,
   bi: BusinessInterpretationResult | null,
 ): string | undefined {
+  const biMoney = bi?.facts.money.find((m) => m.amountFormatted || m.amount != null);
   return firstNonEmpty(
-    workflow?.documentUnderstanding?.amount,
-    rd(item, 'Betrag', 'Rechnungsbetrag', 'Bruttobetrag', 'Angebotssumme'),
-    bi?.facts.money.find((m) => m.amountFormatted || m.amount != null)?.amountFormatted,
+    biMoney?.amountFormatted,
     (() => {
-      const entry = bi?.facts.money.find((m) => m.amount != null);
+      const entry = biMoney;
       if (entry?.amount == null) return undefined;
       return `${entry.amount.toLocaleString('de-DE')} ${entry.currency ?? 'EUR'}`;
     })(),
+    workflow?.documentUnderstanding?.amount,
+    rd(item, 'Betrag', 'Rechnungsbetrag', 'Bruttobetrag', 'Angebotssumme'),
   );
 }
 
@@ -466,34 +467,35 @@ function buildNonContractSummary(
   const typeLabel = translate(typeLabelKey);
   const understanding = workflow.documentUnderstanding;
 
-  // Priority: RD → Understanding → BI → item (skip placeholders; Absender before Lieferant seed)
+  // Priority: BI truth → Understanding → RD → generic fallback (skip placeholders; Absender before Lieferant seed)
   const supplier = preferMeaningfulParty(
-    rd(item, 'Absender', 'Lieferant', 'Tankstelle'),
-    understanding?.sender,
     bi?.facts.parties.counterparty?.name,
+    understanding?.sender,
+    rd(item, 'Absender', 'Lieferant', 'Tankstelle'),
     item.sender,
   );
   const customer = preferMeaningfulParty(
-    rd(item, 'Auftraggeber', 'Kunde', 'Empfänger'),
+    bi?.facts.parties.counterparty?.name,
     understanding?.customer,
     understanding?.recipient,
+    rd(item, 'Auftraggeber', 'Kunde', 'Empfänger'),
   );
   const invoiceNumber = firstNonEmpty(
     rd(item, 'Rechnungsnummer', 'Belegnummer'),
     understanding?.invoiceNumber,
   );
   const date = firstNonEmpty(
-    rd(item, 'Datum', 'Belegdatum', 'Vertragsdatum'),
-    understanding?.date,
     bi?.facts.timeline.contractDate?.value,
+    understanding?.date,
+    rd(item, 'Datum', 'Belegdatum', 'Vertragsdatum'),
   );
   const site = pickBestConstructionSiteCandidate(
+    bi?.facts.subject.site?.value,
+    bi?.facts.subject.project?.value,
+    understanding?.constructionSite,
     rd(item, 'Baustelle', 'Baustellenadresse'),
     rd(item, 'Straße'),
-    understanding?.constructionSite,
-    bi?.facts.subject.site?.value,
     rd(item, 'Projekt'),
-    bi?.facts.subject.project?.value,
   );
   const aktenzeichen = firstNonEmpty(
     rd(item, 'Aktenzeichen', 'Az', 'Beitragsnummer'),
@@ -517,10 +519,10 @@ function buildNonContractSummary(
   const subject = composeIntelligentDocumentSubject({
     text: getInboxExtractedDocumentText(item),
     typeLabel,
-    betreff: rd(item, 'Betreff'),
+    betreff: firstNonEmpty(bi?.facts.subject.subject?.value, rd(item, 'Betreff')),
     letterAbout,
-    vorgang: understanding?.vorgang ?? rd(item, 'Vorgang'),
-    project: rd(item, 'Bauvorhaben', 'Projekt'),
+    vorgang: firstNonEmpty(understanding?.vorgang, rd(item, 'Vorgang')),
+    project: firstNonEmpty(bi?.facts.subject.project?.value, rd(item, 'Bauvorhaben', 'Projekt')),
     sender: subjectSender,
     reference: aktenzeichen,
     title: item.title,

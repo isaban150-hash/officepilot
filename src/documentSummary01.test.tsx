@@ -332,11 +332,12 @@ describe('DOCUMENT-SUMMARY-IMPLEMENTATION-01', () => {
       }),
     );
     expect(html).toContain('data-testid="document-experience-card"');
-    expect(html).toContain('Lieferant X');
+    expect(html).toContain('R-9');
+    expect(html).toContain('9,00 €');
     expect(html).not.toContain('data-testid="operational-overview"');
   });
 
-  it('Priorität: Understanding-Betrag vor BI-Geld', () => {
+  it('Priorität: BI-Geld gewinnt vor Understanding/RD', () => {
     const item = createAuftragInboxItem({
       id: 'sum-prio',
       classifiedKind: 'eingangsrechnung',
@@ -370,6 +371,6 @@ describe('DOCUMENT-SUMMARY-IMPLEMENTATION-01', () => {
     };
     const summary = buildDocumentSummary(item, workflow, { translate });
     const amount = summary.facts.find((f) => f.id === 'amount')?.value;
-    expect(amount).toBe('111,00 €');
+    expect(amount).toBe('999,00 €');
   });
 });
