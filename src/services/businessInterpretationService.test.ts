@@ -236,6 +236,73 @@ describe('BUSINESS-BRAIN-01A — businessInterpretationService', () => {
     expect(vorgangService.getAllVorgaenge()).toHaveLength(beforeCount);
   });
 
+  it('2a) Priorisiert stärkere Quellen bei Fakten und füllt Lücken nur mit schwächeren Quellen', () => {
+    const item = baseInbox({
+      id: 'inbox-bbi-priority',
+      classifiedKind: 'werkvertrag',
+      documentType: 'kundenauftrag',
+      title: 'Werkvertrag Priorisierung',
+    });
+
+    const intelligence = emptyIntelligence({
+      contractType: {
+        family: 'werkvertrag',
+        labelKey: 'documentIntelligence.label.werkvertrag',
+        confidence: 'high',
+        status: 'confirmed',
+        evidence: ['Werkvertrag'],
+      },
+      parties: [
+        {
+          role: 'auftraggeber',
+          name: 'Müller Bau GmbH',
+          status: 'confirmed',
+          confidence: 'high',
+        },
+      ],
+    });
+
+    const proposal: ContractOrderProposal = {
+      customer: 'Müller GmbH',
+      contractor: 'Mustermann Sanitär GmbH',
+      constructionSite: 'Hauptstr. 12',
+      positionCount: 0,
+      contractTotalNet: '5.000,00 €',
+      paymentTermsSummary: '14 Tage',
+      reviewHints: [],
+      positions: [],
+      intelligence,
+    };
+
+    const strongResult = interpret(item, {
+      classifiedKind: 'werkvertrag',
+      contractIntelligence: intelligence,
+      contractOrderProposal: proposal,
+    });
+
+    expect(strongResult.facts.parties.counterparty?.name).toBe('Müller Bau GmbH');
+    expect(strongResult.facts.parties.counterparty?.source).toBe('contractIntelligence');
+
+    const fallbackIntelligence = emptyIntelligence({
+      contractType: {
+        family: 'werkvertrag',
+        labelKey: 'documentIntelligence.label.werkvertrag',
+        confidence: 'high',
+        status: 'confirmed',
+        evidence: ['Werkvertrag'],
+      },
+    });
+
+    const fallbackResult = interpret(item, {
+      classifiedKind: 'werkvertrag',
+      contractIntelligence: fallbackIntelligence,
+      contractOrderProposal: proposal,
+    });
+
+    expect(fallbackResult.facts.parties.counterparty?.name).toBe('Müller GmbH');
+    expect(fallbackResult.facts.parties.counterparty?.source).toBe('contractOrderProposal');
+  });
+
   it('2) Eingangsrechnung erzeugt keine Vertrags- oder Auftragswirkung', () => {
     const item = baseInbox({
       id: 'inbox-bbi-invoice',

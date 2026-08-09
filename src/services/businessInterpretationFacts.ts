@@ -150,6 +150,89 @@ function pickFirstLabeled(
   return candidates.find(Boolean);
 }
 
+function certaintyRank(certainty: BusinessFactCertainty): number {
+  switch (certainty) {
+    case 'confirmed_by_existing_state':
+      return 5;
+    case 'detected':
+      return 4;
+    case 'proposed':
+      return 3;
+    case 'uncertain':
+      return 2;
+    default:
+      return 1;
+  }
+}
+
+function sourceRank(source: BusinessFactSource): number {
+  switch (source) {
+    case 'contractIntelligence':
+      return 7;
+    case 'contractOrderProposal':
+      return 6;
+    case 'vorgangState':
+      return 5;
+    case 'companyProfile':
+      return 4;
+    case 'understanding':
+      return 3;
+    case 'recognizedData':
+      return 2;
+    case 'contractAnalysis':
+      return 1;
+    default:
+      return 0;
+  }
+}
+
+function isPreferredFactCandidate<T extends { certainty: BusinessFactCertainty; source: BusinessFactSource }>(
+  current: T | undefined,
+  candidate: T | undefined,
+): boolean {
+  if (!candidate) return false;
+  if (!current) return true;
+  const currentRank = sourceRank(current.source) * 10 + certaintyRank(current.certainty);
+  const candidateRank = sourceRank(candidate.source) * 10 + certaintyRank(candidate.certainty);
+  if (candidateRank !== currentRank) return candidateRank > currentRank;
+  return false;
+}
+
+function isMeaningfulPartyName(candidate: string | undefined): boolean {
+  if (!candidate) return false;
+  const cleaned = candidate.trim();
+  if (!cleaned) return false;
+  if (/^(allgemeine|besondere)\s+vertragsbedingungen\.?/i.test(cleaned)) return false;
+  return true;
+}
+
+function selectPreferredLabeledFact(
+  candidates: Array<BusinessLabeledFact | undefined>,
+): BusinessLabeledFact | undefined {
+  return candidates.reduce<BusinessLabeledFact | undefined>((best, candidate) => {
+    if (isPreferredFactCandidate(best, candidate)) return candidate;
+    return best;
+  }, undefined);
+}
+
+function selectPreferredParty(
+  candidates: Array<BusinessStructuredParty | undefined>,
+): BusinessStructuredParty | undefined {
+  return candidates.reduce<BusinessStructuredParty | undefined>((best, candidate) => {
+    if (isPreferredFactCandidate(best, candidate)) return candidate;
+    return best;
+  }, undefined);
+}
+
+function selectPreferredMoney(
+  candidates: Array<BusinessStructuredMoney | undefined>,
+): BusinessStructuredMoney | undefined {
+  return candidates.reduce<BusinessStructuredMoney | undefined>((best, candidate) => {
+    if (isPreferredFactCandidate(best, candidate)) return candidate;
+    return best;
+  }, undefined);
+}
+
 function resolveFamily(workflow: WorkflowCore): ContractFamily | undefined {
   return (
     workflow.contractIntelligence?.contractType?.family ??
@@ -241,8 +324,11 @@ function buildPartiesBlock(
     others.push(party);
   };
 
+  const counterpartyCandidates: Array<BusinessStructuredParty | undefined> = [];
+  const ownCompanyCandidates: Array<BusinessStructuredParty | undefined> = [];
+
   for (const party of intelligence?.parties ?? []) {
-    if (!party.name.trim()) continue;
+    if (!party.name.trim() || !isMeaningfulPartyName(party.name)) continue;
     const relation = mapRoleRelation(party.role, family);
     const structured = buildParty(
       party.name,
@@ -251,78 +337,58 @@ function buildPartiesBlock(
       fieldCertainty(party.status, party.confidence),
       party.role,
     );
-    if (relation === 'counterparty' && !counterparty) counterparty = structured;
-    else if (relation === 'own_company' && !ownCompany) ownCompany = structured;
-    else pushOther(structured);
+    if (relation === 'counterparty') {
+      counterpartyCandidates.push(structured);
+    } else if (relation === 'own_company') {
+      ownCompanyCandidates.push(structured);
+    } else {
+      pushOther(structured);
+    }
   }
 
   if (proposal?.customer?.trim()) {
-    if (!counterparty && isDirectedWorkFamily(family)) {
-      counterparty = buildParty(
-        proposal.customer,
-        'counterparty',
-        'contractOrderProposal',
-        'proposed',
-        'auftraggeber',
-      );
-    } else if (!counterparty) {
-      pushOther(
-        buildParty(
-          proposal.customer,
-          'other',
-          'contractOrderProposal',
-          'proposed',
-          'unknown',
-        ),
-      );
-    } else if (
-      isDirectedWorkFamily(family) &&
-      normalizeName(proposal.customer) !== normalizeName(counterparty.name) &&
-      !normalizeName(counterparty.name).includes(normalizeName(proposal.customer)) &&
-      !normalizeName(proposal.customer).includes(normalizeName(counterparty.name))
-    ) {
-      conflicts.push({
-        id: 'party_counterparty_source_mismatch',
-        summary: `Gegenpartei aus Proposal („${proposal.customer}“) weicht von Contract Intelligence („${counterparty.name}“) ab.`,
-        certainty: 'conflicting',
-      });
-      counterparty = { ...counterparty, certainty: 'conflicting' };
+    const proposalCounterparty = buildParty(
+      proposal.customer,
+      isDirectedWorkFamily(family) ? 'counterparty' : 'other',
+      'contractOrderProposal',
+      'proposed',
+      isDirectedWorkFamily(family) ? 'auftraggeber' : 'unknown',
+    );
+    if (isDirectedWorkFamily(family)) {
+      counterpartyCandidates.push(proposalCounterparty);
+    } else {
+      pushOther(proposalCounterparty);
     }
   }
 
   if (proposal?.contractor?.trim()) {
-    if (!ownCompany && isDirectedWorkFamily(family)) {
-      ownCompany = buildParty(
-        proposal.contractor,
-        'own_company',
-        'contractOrderProposal',
-        'proposed',
-        'auftragnehmer',
-      );
-    } else if (!ownCompany) {
-      pushOther(
-        buildParty(
-          proposal.contractor,
-          'other',
-          'contractOrderProposal',
-          'proposed',
-          'unknown',
-        ),
-      );
+    const proposalOwnCompany = buildParty(
+      proposal.contractor,
+      isDirectedWorkFamily(family) ? 'own_company' : 'other',
+      'contractOrderProposal',
+      'proposed',
+      isDirectedWorkFamily(family) ? 'auftragnehmer' : 'unknown',
+    );
+    if (isDirectedWorkFamily(family)) {
+      ownCompanyCandidates.push(proposalOwnCompany);
+    } else {
+      pushOther(proposalOwnCompany);
     }
   }
 
   const understandingCustomer = workflow.documentUnderstanding?.customer;
-  if (understandingCustomer?.trim() && !counterparty) {
+  if (understandingCustomer?.trim()) {
     if (isDirectedWorkFamily(family)) {
-      counterparty = buildParty(
-        understandingCustomer,
-        'counterparty',
-        'understanding',
-        workflow.documentUnderstanding?.uncertainFields?.includes('customer')
-          ? 'uncertain'
-          : 'detected',
-        'kunde',
+      counterpartyCandidates.push(
+        buildParty(
+          understandingCustomer,
+          'counterparty',
+          'understanding',
+          workflow.documentUnderstanding?.uncertainFields?.includes('customer')
+            ? 'uncertain'
+            : 'detected',
+          'kunde',
+        ),
       );
     } else {
       pushOther(
@@ -342,14 +408,16 @@ function buildPartiesBlock(
   const recognizedCustomer =
     workflow.classification?.recognizedData?.Kunde ||
     workflow.classification?.recognizedData?.Auftraggeber;
-  if (recognizedCustomer?.trim() && !counterparty) {
+  if (recognizedCustomer?.trim()) {
     if (isDirectedWorkFamily(family)) {
-      counterparty = buildParty(
-        recognizedCustomer,
-        'counterparty',
-        'recognizedData',
-        'detected',
-        'kunde',
+      counterpartyCandidates.push(
+        buildParty(
+          recognizedCustomer,
+          'counterparty',
+          'recognizedData',
+          'detected',
+          'kunde',
+        ),
       );
     } else {
       pushOther(
@@ -366,9 +434,44 @@ function buildPartiesBlock(
       'confirmed_by_existing_state',
       'kunde',
     );
-    if (!counterparty) {
-      counterparty = stateParty;
-    } else if (
+    counterpartyCandidates.push(stateParty);
+  }
+
+  counterparty = selectPreferredParty(counterpartyCandidates);
+  ownCompany = selectPreferredParty(ownCompanyCandidates);
+
+  if (!counterparty && !ownCompany && profile.companyName.trim()) {
+    const matchesContractor =
+      proposal?.contractor &&
+      normalizeName(proposal.contractor).includes(normalizeName(profile.companyName));
+    if (matchesContractor) {
+      ownCompany = buildParty(
+        profile.companyName,
+        'own_company',
+        'companyProfile',
+        'detected',
+        'auftragnehmer',
+      );
+    }
+  }
+
+  if (counterparty && proposal?.customer?.trim() && isDirectedWorkFamily(family)) {
+    if (
+      normalizeName(proposal.customer) !== normalizeName(counterparty.name) &&
+      !normalizeName(counterparty.name).includes(normalizeName(proposal.customer)) &&
+      !normalizeName(proposal.customer).includes(normalizeName(counterparty.name))
+    ) {
+      conflicts.push({
+        id: 'party_counterparty_source_mismatch',
+        summary: `Gegenpartei aus Proposal („${proposal.customer}“) weicht von der bevorzugten Quellwahrheit („${counterparty.name}“) ab.`,
+        certainty: 'conflicting',
+      });
+      counterparty = { ...counterparty, certainty: 'conflicting' };
+    }
+  }
+
+  if (counterparty && linkedVorgang?.customer?.trim()) {
+    if (
       normalizeName(linkedVorgang.customer) !== normalizeName(counterparty.name) &&
       !normalizeName(counterparty.name).includes(normalizeName(linkedVorgang.customer)) &&
       !normalizeName(linkedVorgang.customer).includes(normalizeName(counterparty.name))
@@ -416,14 +519,16 @@ function buildSubject(
   const fields = allContractFields(workflow);
   const proposal = workflow.contractOrderProposal;
 
-  const subject = pickFirstLabeled([
+  const subject = selectPreferredLabeledFact([
     labeledFromField(fields, 'vertragsgegenstand'),
     labeledFromField(fields, 'leistungsbeschreibung'),
   ]);
 
-  const project = labeledFromField(fields, 'bauvorhaben');
+  const project = selectPreferredLabeledFact([
+    labeledFromField(fields, 'bauvorhaben'),
+  ]);
 
-  const object = pickFirstLabeled([
+  const object = selectPreferredLabeledFact([
     labeledFromField(fields, 'mietobjekt'),
     labeledFromField(fields, 'leasingobjekt'),
     family === 'wartungsvertrag' || family === 'dienstleistungsvertrag'
@@ -431,7 +536,7 @@ function buildSubject(
       : undefined,
   ]);
 
-  let site = pickFirstLabeled([
+  let site = selectPreferredLabeledFact([
     labeledFromField(fields, 'baustelle'),
     labeledFromField(fields, 'leistungsort'),
     proposal?.constructionSite?.trim()
@@ -484,7 +589,7 @@ function buildTimeline(
   const fields = allContractFields(workflow);
   const proposal = workflow.contractOrderProposal;
 
-  const contractDate = pickFirstLabeled([
+  const contractDate = selectPreferredLabeledFact([
     labeledFromField(fields, 'vertragsdatum'),
     proposal?.contractDate
       ? {
@@ -496,35 +601,62 @@ function buildTimeline(
       : undefined,
   ]);
 
-  const start = pickFirstLabeled([
+  const start = selectPreferredLabeledFact([
     labeledFromField(fields, 'ausfuehrungsbeginn'),
     labeledFromField(fields, 'beginn'),
     labeledFromField(fields, 'mietbeginn'),
   ]);
 
-  const end = pickFirstLabeled([
+  const end = selectPreferredLabeledFact([
     labeledFromField(fields, 'fertigstellung'),
     labeledFromField(fields, 'ende'),
   ]);
 
   const duration = labeledFromField(fields, 'laufzeit');
 
-  const deadlineRaw =
-    workflow.documentUnderstanding?.deadline ||
-    workflow.classification?.deadline ||
-    item.deadline ||
-    item.recognizedData.Faelligkeit ||
-    item.recognizedData.Frist;
-  const deadline = deadlineRaw
-    ? {
-        value: String(deadlineRaw),
-        certainty: 'detected' as const,
-        source: (workflow.documentUnderstanding?.deadline
-          ? 'understanding'
-          : 'recognizedData') as BusinessFactSource,
-        fieldKey: 'deadline',
-      }
-    : undefined;
+  const deadlineCandidates: Array<BusinessLabeledFact | undefined> = [
+    workflow.documentUnderstanding?.deadline
+      ? {
+          value: workflow.documentUnderstanding.deadline,
+          certainty: 'detected' as const,
+          source: 'understanding' as const,
+          fieldKey: 'deadline',
+        }
+      : undefined,
+    workflow.classification?.deadline
+      ? {
+          value: workflow.classification.deadline,
+          certainty: 'detected' as const,
+          source: 'recognizedData' as const,
+          fieldKey: 'deadline',
+        }
+      : undefined,
+    item.deadline
+      ? {
+          value: item.deadline,
+          certainty: 'detected' as const,
+          source: 'recognizedData' as const,
+          fieldKey: 'deadline',
+        }
+      : undefined,
+    item.recognizedData.Faelligkeit
+      ? {
+          value: item.recognizedData.Faelligkeit,
+          certainty: 'detected' as const,
+          source: 'recognizedData' as const,
+          fieldKey: 'deadline',
+        }
+      : undefined,
+    item.recognizedData.Frist
+      ? {
+          value: item.recognizedData.Frist,
+          certainty: 'detected' as const,
+          source: 'recognizedData' as const,
+          fieldKey: 'deadline',
+        }
+      : undefined,
+  ];
+  const deadline = selectPreferredLabeledFact(deadlineCandidates);
 
   return { contractDate, start, end, duration, deadline };
 }
@@ -586,13 +718,14 @@ function buildMoney(
   }
 
   const total = intelligence?.contractTotalNet;
+  const contractTotalCandidates: Array<BusinessStructuredMoney | undefined> = [];
   if (total?.value != null) {
     const fromBoqSum = /summe der erkannten positionen/i.test(total.sourceText ?? '');
     const kind: BusinessMoneyKind = fromBoqSum ? 'boq_total' : 'contract_total';
     const amountFormatted =
       proposal?.contractTotalNet ??
       (typeof total.value === 'number' ? String(total.value) : undefined);
-    pushMoney(money, {
+    contractTotalCandidates.push({
       kind,
       amount: total.value,
       amountFormatted,
@@ -605,9 +738,10 @@ function buildMoney(
       certainty: fieldCertainty(total.status, total.confidence),
       source: 'contractIntelligence',
     });
-  } else if (proposal?.contractTotalNet?.trim()) {
+  }
+  if (proposal?.contractTotalNet?.trim()) {
     const amountFormatted = proposal.contractTotalNet.trim();
-    pushMoney(money, {
+    contractTotalCandidates.push({
       kind: 'contract_total',
       amount: parseAmountNumber(amountFormatted),
       amountFormatted,
@@ -616,6 +750,10 @@ function buildMoney(
       certainty: 'proposed',
       source: 'contractOrderProposal',
     });
+  }
+  const preferredContractTotal = selectPreferredMoney(contractTotalCandidates);
+  if (preferredContractTotal) {
+    pushMoney(money, preferredContractTotal);
   }
 
   const kaltmiete = labeledFromField(fields, 'kaltmiete');
