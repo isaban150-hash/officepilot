@@ -2,6 +2,7 @@ import type { TranslationKey } from '../i18n';
 import {
   t,
 } from '../i18n';
+import type { BusinessInterpretationResult } from '../types/businessInterpretation';
 import type { OriginalGuidanceStatus } from './documentAssistantService';
 import { getDocumentDisplayLabelKey } from './documentDisplayLabelService';
 import { buildDocumentAiActions, buildDocumentUnderstandingSummary } from './documentIntakeUnderstandingService';
@@ -298,6 +299,24 @@ function pushUniqueAction(
   actions.push({ id, labelKey });
 }
 
+function addBusinessInterpretationActions(
+  actions: DocumentGuidanceAction[],
+  seen: Set<string>,
+  businessInterpretation: BusinessInterpretationResult | null,
+): void {
+  for (const candidate of businessInterpretation?.nextActionCandidates ?? []) {
+    if (candidate.enabled === false) continue;
+    if (candidate.source === 'workflow.suggestedTasks') continue;
+    const labelKey = candidate.labelKey as TranslationKey | undefined;
+    if (!labelKey) continue;
+    pushUniqueAction(actions, seen, candidate.id, labelKey);
+  }
+
+  if (actions.length === 0 && businessInterpretation?.operational.nextStep) {
+    pushUniqueAction(actions, seen, 'review', 'reviewWorkflow.recommend.reviewDocument');
+  }
+}
+
 function translateLabel(labelKey: string | undefined, lang: AppLanguage): string | undefined {
   const trimmed = labelKey?.trim();
   if (!trimmed) return undefined;
@@ -348,6 +367,8 @@ export function buildPrioritizedDocumentGuidance(
   const taskProposals = workflow ? getTaskProposals(workflow) : [];
 
   const hasActionSupport =
+    Boolean(businessInterpretation?.operational.nextStep) ||
+    (businessInterpretation?.nextActionCandidates.some((candidate) => candidate.enabled !== false) ?? false) ||
     (workflowDecision?.nextActions.some((action) => action.enabled && action.id !== 'cancel') ?? false) ||
     taskProposals.length > 0 ||
     (businessInterpretation?.requiredConfirmations.length ?? 0) > 0;
@@ -355,6 +376,8 @@ export function buildPrioritizedDocumentGuidance(
   if (hasActionSupport && businessInterpretation?.operational.nextStep) {
     pushUniqueLine(now, 'operational-next-step', businessInterpretation.operational.nextStep);
   }
+
+  addBusinessInterpretationActions(actions, seenActions, businessInterpretation);
 
   for (const action of workflowDecision?.nextActions ?? workflow?.nextActions ?? []) {
     if (!action.enabled || action.id === 'cancel') continue;

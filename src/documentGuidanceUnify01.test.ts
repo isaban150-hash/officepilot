@@ -194,6 +194,54 @@ describe('DOC-GUIDANCE-UNIFY-01', () => {
     expect(guidance.mustAct.key).toBe('docGuidance.act.likely');
   });
 
+  it('stärkere BI-Aktion blockiert schwachen Rechnungs-Fallback', () => {
+    const item = createAuftragInboxItem({
+      id: 'guidance-rechnung-bi-priority',
+      title: 'Materialrechnung',
+      classifiedKind: 'eingangsrechnung',
+      documentType: 'eingangsrechnung',
+      sender: 'Großhandel GmbH',
+      recognizedData: { Rechnungsnummer: 'R-100', Betrag: '250,00 €' },
+    });
+    const workflow = minimalWorkflow(item, {
+      businessInterpretation: {
+        operational: {
+          nextStep: 'Rechnung und Leistung abgleichen.',
+          confirmRequirement: 'Keine automatische Ausführung.',
+          primaryCase: 'invoice_received',
+          meanings: ['money', 'action_required'],
+          certainty: 'detected',
+        },
+        nextActionCandidates: [
+          {
+            id: 'align_invoice',
+            labelKey: 'reviewWorkflow.recommend.reviewDocument',
+            enabled: true,
+            source: 'workflow.nextActions',
+          },
+        ],
+        requiredConfirmations: [],
+        missingInformation: [],
+        conflicts: [],
+        facts: {
+          parties: {},
+          subject: {},
+          timeline: {},
+          money: [],
+          positions: [],
+          conditions: [],
+          signatures: { status: 'not_detected' },
+          attachments: [],
+        },
+      } as any,
+    });
+
+    const guidance = buildDocumentGuidance(item, workflow, 'de');
+
+    expect(guidance.actions.some((a) => a.labelKey === 'reviewWorkflow.recommend.reviewDocument')).toBe(true);
+    expect(guidance.actions.some((a) => a.labelKey === 'docGuidance.action.checkInvoice')).toBe(false);
+  });
+
   it('Guidance ohne OCR', () => {
     const base = createAuftragInboxItem({
       id: 'guidance-no-ocr',
