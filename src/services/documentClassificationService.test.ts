@@ -408,6 +408,19 @@ describe('integration: upload → classification → inbox item', () => {
     expect(getClassifiedKindFromItem(item)).toBe('eingangsrechnung');
   });
 
+  it('does not persist a classification suggestion as inbox vorgang link', () => {
+    const item = classifyInboxItem({
+      kindHint: 'materialrechnung',
+      sourceFileName: 'hornbach_rechnung.jpg',
+      senderHint: 'Hornbach',
+      titleHint: 'Materialrechnung',
+      recognizedText: 'Kunde: Familie Müller\nVorgang: Badezimmer-Sanierung Müller',
+    });
+
+    expect(item.vorgangId).toBeUndefined();
+    expect(item.vorgangTitle).toBeUndefined();
+  });
+
   it('derives full classification for existing inbox item', () => {
     const item = createMockInboxItemFromUpload({ kind: 'bg_bau' });
     const classification = getClassificationForItem(item);

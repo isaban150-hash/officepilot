@@ -699,8 +699,8 @@ export function buildInboxItemFromClassification(
     taskTemplate: classification.taskTemplate ? { ...classification.taskTemplate } : undefined,
     isAdvertisement: classification.isAdvertisement,
     sourceFileName: options.sourceFileName,
-    vorgangId: classification.suggestedVorgang?.vorgangId,
-    vorgangTitle: classification.suggestedVorgang?.vorgangTitle,
+    vorgangId: undefined,
+    vorgangTitle: undefined,
   };
 }
 
