@@ -27,7 +27,7 @@ import {
 } from './intakeWorkflowService';
 import { syncContractProofRequirements } from './officePilotMemoryService';
 import { persistAll } from './persistenceService';
-import { buildVorgangDraftFromInbox } from './vorgangMatchingService';
+import { buildVorgangDraftFromInbox, resolveDraftTruthOverrides } from './vorgangMatchingService';
 import {
   applyContractAcceptFieldsToVorgang,
   getVorgangById,
@@ -74,17 +74,21 @@ export function buildVorgangDraftFromContractProposal(
   item: InboxItem,
   proposal: ContractOrderProposal,
   materialDefault: MaterialStandard = 'unclear',
+  truthOverrides?: Partial<Pick<VorgangDraft, 'customer' | 'title' | 'baustelle'>>,
 ): VorgangDraft {
-  const inboxDraft = buildVorgangDraftFromInbox(item, materialDefault);
+  const inboxDraft = buildVorgangDraftFromInbox(item, materialDefault, truthOverrides);
   const project =
+    trimOrUndefined(truthOverrides?.title) ||
     fieldValue(proposal, 'bauvorhaben') ||
     trimOrUndefined(item.recognizedData.Projekt) ||
     trimOrUndefined(item.vorgangTitle);
   const customer =
+    trimOrUndefined(truthOverrides?.customer) ||
     trimOrUndefined(proposal.customer) ||
     fieldValue(proposal, 'auftraggeber') ||
     trimOrUndefined(item.recognizedData.Kunde);
   const siteAddress =
+    trimOrUndefined(truthOverrides?.baustelle) ||
     fieldValue(proposal, 'baustelle') ||
     trimOrUndefined(proposal.constructionSite) ||
     trimOrUndefined(item.recognizedData.Baustellenadresse);
@@ -100,8 +104,9 @@ export function buildVorgangDraftFromContractProposal(
 export function buildContractFieldsFromProposal(
   item: InboxItem,
   proposal: ContractOrderProposal,
+  truthOverrides?: Partial<Pick<VorgangDraft, 'customer' | 'title' | 'baustelle'>>,
 ): ContractExtractedFields {
-  const draft = buildVorgangDraftFromContractProposal(item, proposal);
+  const draft = buildVorgangDraftFromContractProposal(item, proposal, 'unclear', truthOverrides);
   return {
     auftraggeber: trimOrUndefined(draft.customer),
     bauvorhaben: trimOrUndefined(draft.title),
@@ -273,8 +278,14 @@ export function acceptContractOrderFromProposal(input: {
   item = enrichInboxFromProposal(item, input.proposal);
   item = ensureFilingConfirmed(item);
 
-  const draft = buildVorgangDraftFromContractProposal(item, input.proposal, material);
-  const fields = buildContractFieldsFromProposal(item, input.proposal);
+  const truthOverrides = resolveDraftTruthOverrides(item);
+  const draft = buildVorgangDraftFromContractProposal(
+    item,
+    input.proposal,
+    material,
+    truthOverrides,
+  );
+  const fields = buildContractFieldsFromProposal(item, input.proposal, truthOverrides);
   const objekt = resolveObjekt(item, input.proposal);
   const successSteps: WorkflowExecutionStepId[] = [];
 

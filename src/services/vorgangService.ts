@@ -329,8 +329,9 @@ export function getVorgangById(id: string): Vorgang | undefined {
 export function buildVorgangDraftFromInbox(
   item: InboxItem,
   defaultMaterial: MaterialStandard = 'unclear',
+  truthOverrides?: Parameters<typeof buildDraftFromInbox>[2],
 ): VorgangDraft {
-  return buildDraftFromInbox(item, defaultMaterial);
+  return buildDraftFromInbox(item, defaultMaterial, truthOverrides);
 }
 
 export function findSimilarVorgaenge(draft: VorgangDraft): Vorgang[] {

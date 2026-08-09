@@ -144,12 +144,6 @@ function labeledFromField(
   };
 }
 
-function pickFirstLabeled(
-  candidates: Array<BusinessLabeledFact | undefined>,
-): BusinessLabeledFact | undefined {
-  return candidates.find(Boolean);
-}
-
 function certaintyRank(certainty: BusinessFactCertainty): number {
   switch (certainty) {
     case 'confirmed_by_existing_state':

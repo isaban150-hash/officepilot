@@ -1,18 +1,48 @@
 import type { InboxItem, MaterialStandard, Vorgang, VorgangDraft } from '../types/models';
+import { buildDocumentWorkTruthViewForInboxItem } from './documentWorkResultTruthOrchestration';
 
 function normalize(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
+function trimMeaningful(value: string | undefined | null): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+export type DraftTruthOverrideValues = Partial<Pick<VorgangDraft, 'customer' | 'title' | 'baustelle'>>;
+
+export function resolveDraftTruthOverrides(item: InboxItem): DraftTruthOverrideValues | undefined {
+  const truthView = buildDocumentWorkTruthViewForInboxItem({ item });
+  const bi = truthView?.businessInterpretation;
+
+  const overrides: DraftTruthOverrideValues = {};
+  const customer = trimMeaningful(bi?.facts.parties.counterparty?.name);
+  const title = trimMeaningful(bi?.facts.subject.project?.value)
+    ?? trimMeaningful(bi?.facts.subject.subject?.value);
+  const baustelle = trimMeaningful(bi?.facts.subject.site?.value);
+
+  if (customer) overrides.customer = customer;
+  if (title) overrides.title = title;
+  if (baustelle) overrides.baustelle = baustelle;
+
+  return Object.keys(overrides).length > 0 ? overrides : undefined;
+}
+
 export function buildVorgangDraftFromInbox(
   item: InboxItem,
   defaultMaterial: MaterialStandard = 'unclear',
+  truthOverrides?: DraftTruthOverrideValues,
 ): VorgangDraft {
   const leistung = item.recognizedData.Leistung;
-  const kunde = item.recognizedData.Kunde ?? item.sender;
-  const baustelle = item.recognizedData.Baustelle ?? 'Unbekannte Baustelle';
+  const kunde = trimMeaningful(truthOverrides?.customer)
+    ?? item.recognizedData.Kunde
+    ?? item.sender;
+  const baustelle = trimMeaningful(truthOverrides?.baustelle)
+    ?? item.recognizedData.Baustelle
+    ?? 'Unbekannte Baustelle';
 
-  let title = item.vorgangTitle?.trim();
+  let title = trimMeaningful(truthOverrides?.title) ?? item.vorgangTitle?.trim();
   if (!title) {
     title = leistung?.trim() || item.title.replace(/^Gerade erfasst: /, '');
   }

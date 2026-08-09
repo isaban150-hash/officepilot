@@ -112,6 +112,30 @@ describe('REFERENZVERTRAG V1 – SPRINT A – Accept vollständig', () => {
     expect(draft.baustelle).toBeTruthy();
   });
 
+  it('Truth-Werte haben Vorrang vor Proposal-Werten beim Draft', () => {
+    const item = seed(
+      createReferenceInbox({
+        sender: 'Falscher Sender',
+        recognizedData: {
+          Kunde: 'Falscher Kunde',
+          Baustelle: 'BV Sägewerk Fisch',
+          _vertragstext: buildSyntheticWerkvertragText(),
+          _pageTexts: JSON.stringify(buildSyntheticWerkvertragPages()),
+        },
+      }),
+    );
+    const proposal = buildContractOrderProposal(item)!;
+    const draft = buildVorgangDraftFromContractProposal(item, proposal, 'unclear', {
+      customer: 'Truth Kunde B',
+      title: 'Truth Projekt B',
+      baustelle: 'Truth Baustelle B',
+    });
+
+    expect(draft.customer).toBe('Truth Kunde B');
+    expect(draft.title).toBe('Truth Projekt B');
+    expect(draft.baustelle).toBe('Truth Baustelle B');
+  });
+
   // Happy-Path Accept+Archiv+DOC-LINK → REFERENCE WV-LV-01
 
   it('keine doppelte Archivierung bei erneutem Accept-Versuch', () => {

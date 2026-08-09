@@ -45,6 +45,7 @@ import {
   getVorgangById,
   linkInboxToExistingVorgang,
 } from './vorgangService';
+import { resolveDraftTruthOverrides } from './vorgangMatchingService';
 import {
   resolvePrimaryTargetObjectForDocumentType,
   resolvePrimaryTargetObjectForKind,
@@ -400,7 +401,8 @@ export function processUploadedDocument(
     suggestedVorgang = getSuggestedVorgangForItem(item) ?? classification.suggestedVorgang ?? null;
   }
   const materialDefault = getCachedSetup()?.materialStandard ?? 'unclear';
-  const draft = buildVorgangDraftFromInbox(item, materialDefault);
+  const truthOverrides = resolveDraftTruthOverrides(item);
+  const draft = buildVorgangDraftFromInbox(item, materialDefault, truthOverrides);
   const similarVorgaenge = findSimilarVorgaenge(draft);
   let suggestedOrderPositions = resolveSuggestedPositions(item, contractAnalysis);
   if (contractIntelligence?.positions.length) {
@@ -521,7 +523,11 @@ export function createVorgangFromInboxWithContract(
   options?: { confirmedPositions?: DetectedOrderPosition[] },
 ): { vorgang: Vorgang; inbox: InboxItem } | null {
   const confirmed = options?.confirmedPositions;
-  const result = createVorgangFromInbox(item, optionalDraft, materialDefault, {
+  const truthOverrides = resolveDraftTruthOverrides(item);
+  const effectiveOptionalDraft = truthOverrides
+    ? { ...optionalDraft, ...truthOverrides }
+    : optionalDraft;
+  const result = createVorgangFromInbox(item, effectiveOptionalDraft, materialDefault, {
     skipDefaultPositions: shouldSkipDefaultPositionsForContractCreate(item, confirmed),
   });
   if (!result) return null;
