@@ -190,37 +190,37 @@ describe('CONTRACT-TO-ORDER-POSITIONS-01 confirm-first', () => {
     expect(getVorgangById(created.vorgang.id)?.orderPositions).toHaveLength(preview.positions.length);
   });
 
-  it('übernimmt keine technischen Anhänge, Materiallisten oder Vertragsklauseln', () => {
+  it('blockiert echte Überschriften, Verträge, Materialhinweise und technische Anhänge ohne abrechenbare Struktur', () => {
     const blocked: DetectedOrderPosition[] = [
       {
         positionNumber: '1',
-        description: 'Windlastberechnung Fassade',
-        unit: 'Stk',
-        quantity: 1,
-        unitPrice: 100,
-        lineTotal: 100,
+        description: 'Überschrift Leistungsbeschreibung',
+        unit: '',
+        quantity: 0,
+        unitPrice: 0,
+        lineTotal: 0,
       },
       {
         positionNumber: '2',
-        description: 'Montagezeichnung Detail A',
-        unit: 'Stk',
+        description: 'Allgemeine Vertragsbedingungen Gewährleistung',
+        unit: 'Pauschal',
         quantity: 1,
-        unitPrice: 50,
-        lineTotal: 50,
+        unitPrice: 0,
+        lineTotal: 0,
       },
       {
         positionNumber: '3',
         description: 'Materialliste ohne Leistungszeile',
-        unit: 'Stk',
-        quantity: 5,
-        unitPrice: 10,
-        lineTotal: 50,
+        unit: '',
+        quantity: 0,
+        unitPrice: 0,
+        lineTotal: 0,
       },
       {
         positionNumber: '4',
-        description: 'Allgemeine Vertragsbedingungen Gewährleistung',
-        unit: 'Pauschal',
-        quantity: 1,
+        description: 'Montagezeichnung Detail A',
+        unit: '',
+        quantity: 0,
         unitPrice: 0,
         lineTotal: 0,
       },

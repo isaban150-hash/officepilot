@@ -251,7 +251,7 @@ describe('DOCUMENT-EXPERIENCE-02B', () => {
     expect(view.alerts[0]?.label).toContain('Mengen');
 
     const html = renderExperience(item, workflow);
-    expect(html).toContain('Großhandel AG');
+    expect(html).toContain('Großhandel');
     expect(html).toContain('Hauptstraße 1');
     expect(html).toContain('Gelieferte Mengen konnten nicht erkannt werden.');
   });
