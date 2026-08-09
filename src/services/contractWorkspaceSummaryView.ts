@@ -39,6 +39,7 @@ export type ContractWorkspacePartyRow = {
   name: string;
   address?: string;
   contact?: string;
+  isOwnCompany?: boolean;
 };
 
 export type ContractWorkspaceMoneyMetric = {
@@ -96,6 +97,10 @@ export type ContractWorkspaceSummaryContext = {
 
 const POSITION_SUM_SOURCE = 'Summe der erkannten Positionen';
 export const CONTRACT_COMPACT_POSITION_LIMIT = 5;
+
+function normalizeName(value: string | undefined | null): string {
+  return (value ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
 
 /** Party-name fields are shown in the parties section — not again under facts. */
 const PARTY_FIELD_KEYS = new Set([
@@ -599,6 +604,13 @@ function buildPartyRows(
 ): ContractWorkspacePartyRow[] {
   const contact = readField(fields.ansprechpartner)?.value;
   const parties = proposal.intelligence.parties ?? [];
+  const ownCompanyName = proposal.contractor?.trim();
+  const isOwnCompanyParty = (role: ContractPartyRole | undefined, name: string) => {
+    if (!ownCompanyName) return false;
+    const ownCompanyRoles = new Set(['auftragnehmer', 'subunternehmer', 'nachunternehmer', 'dienstleister']);
+    return ownCompanyRoles.has(role ?? 'unknown') && normalizeName(name) === normalizeName(ownCompanyName);
+  };
+
   if (parties.length > 0) {
     return parties.map((party) => ({
       id: `${party.role}-${party.name}`,
@@ -606,6 +618,7 @@ function buildPartyRows(
       name: party.name,
       address: party.address?.trim() || undefined,
       contact,
+      isOwnCompany: isOwnCompanyParty(party.role, party.name),
     }));
   }
 
@@ -625,6 +638,7 @@ function buildPartyRows(
       id: 'legacy-an',
       roleLabelKey: 'documentIntelligence.party.auftragnehmer',
       name: an.value,
+      isOwnCompany: isOwnCompanyParty('auftragnehmer', an.value),
     });
   }
   return rows;

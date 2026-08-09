@@ -242,6 +242,13 @@ export function ContractOrderProposalPanel({
 
   return (
     <div className="contract-order-proposal" data-testid="contract-order-proposal">
+      <ContractWorkspaceSummary
+        proposal={proposal}
+        translate={translate}
+        item={item}
+        vorgang={vorgang}
+      />
+
       <Auftragskarte
         summary={documentSummary}
         translate={translate}
@@ -551,13 +558,6 @@ export function ContractOrderProposalPanel({
           className="contract-order-proposal__details-disclosure-body"
           data-testid="auftragskarte-contract-body"
         >
-          <ContractWorkspaceSummary
-            proposal={proposal}
-            translate={translate}
-            item={item}
-            vorgang={vorgang}
-          />
-
           {summaryView.clauseRows.length > 0 ? (
             <div
               className="contract-order-proposal__clauses"

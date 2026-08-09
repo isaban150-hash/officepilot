@@ -91,6 +91,9 @@ export function ContractWorkspaceSummary({
                     {translate(party.roleLabelKey)}
                   </p>
                   <p className="contract-workspace-summary__party-name">{party.name}</p>
+                  {party.isOwnCompany ? (
+                    <p className="contract-workspace-summary__party-meta">Ihr Betrieb</p>
+                  ) : null}
                   {party.address ? (
                     <p className="contract-workspace-summary__party-meta">{party.address}</p>
                   ) : null}
@@ -137,6 +140,32 @@ export function ContractWorkspaceSummary({
                 translate,
               )}
             </strong>
+          </div>
+        ) : null}
+
+        {view.lvOverview ? (
+          <div
+            className="contract-workspace-summary__lv"
+            data-testid="contract-workspace-summary-lv"
+          >
+            <span className="contract-workspace-summary__metric-label">
+              {translate('documentIntelligence.workspace.section.lvOverview')}
+            </span>
+            <strong className="contract-workspace-summary__metric-value">
+              {view.lvOverview.positionCount}{' '}
+              {translate('documentIntelligence.field.positions')}
+            </strong>
+            {view.lvOverview.importableCount > 0 ? (
+              <p className="contract-workspace-summary__party-meta">
+                {view.lvOverview.importableCount}{' '}
+                {translate('documentIntelligence.workspace.positions.importable')}
+              </p>
+            ) : null}
+            {view.lvOverview.totalLabel ? (
+              <p className="contract-workspace-summary__party-meta">
+                {view.lvOverview.totalLabel}
+              </p>
+            ) : null}
           </div>
         ) : null}
 
