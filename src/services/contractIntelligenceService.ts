@@ -17,8 +17,12 @@ import {
   detectContractType,
   extractAllContractFields,
   extractContractParties,
+  extractContractTotalAmountFromText,
+  extractGenericBillOfQuantitiesFromText,
+  extractStructuredContractFields,
   looksLikeContractDocument,
   mapPartiesToLegacyFields,
+  mergeContractFieldMaps,
   partitionContractFields,
 } from './contractIntelligenceExtraction';
 import {
@@ -106,8 +110,13 @@ export function analyzeContractIntelligenceFromText(
     CONSTRUCTION_FAMILIES.has(contractType.family) ||
     /leistungsverzeichnis/i.test(recognizedText);
 
+  const structuredResult = extractStructuredContractFields(pageTexts);
+
   const positions: EnhancedDetectedOrderPosition[] = [];
-  if (allowBoqExtraction) {
+  if (structuredResult.positions.length > 0) {
+    positions.push(...structuredResult.positions);
+  }
+  if (allowBoqExtraction && positions.length === 0) {
     positions.push(
       ...extractBillOfQuantitiesFromPages(pageTexts, segmentation.billOfQuantitiesPages),
     );
@@ -128,7 +137,8 @@ export function analyzeContractIntelligenceFromText(
 
   const paymentTerms = detectPaymentTermsFromText(fullCommercialText);
   const parties = extractContractParties(fullCommercialText);
-  const allFields = extractAllContractFields(fullCommercialText, pageTexts);
+  const textFields = extractAllContractFields(fullCommercialText, pageTexts);
+  const allFields = mergeContractFieldMaps(textFields, structuredResult.fields);
   mapPartiesToLegacyFields(parties, allFields);
   const { commonFields, typeSpecificFields, visibleFields } = partitionContractFields(
     allFields,
@@ -141,7 +151,16 @@ export function analyzeContractIntelligenceFromText(
         ['kuendigung', 'abnahme'].includes(clause.id),
       );
 
-  const contractTotalNet = resolveContractTotalNet(fullCommercialText, pageTexts);
+  const contractTotalNet = structuredResult.contractTotalNet ?? resolveContractTotalNet(fullCommercialText, pageTexts);
+  if (contractTotalNet.status === 'not_found') {
+    const fallbackTotal = extractContractTotalAmountFromText(fullCommercialText);
+    if (fallbackTotal) {
+      contractTotalNet.value = fallbackTotal.value;
+      contractTotalNet.status = 'confirmed';
+      contractTotalNet.confidence = 'high';
+      contractTotalNet.sourceText = fallbackTotal.sourceText;
+    }
+  }
   if (contractTotalNet.status === 'not_found' && positions.length > 0) {
     const summed = sumPositionsNet(positions);
     if (summed > 0) {
@@ -158,6 +177,13 @@ export function analyzeContractIntelligenceFromText(
     recognizedText: fullCommercialText,
     pageTexts,
   });
+
+  if (positions.length === 0) {
+    const fallbackBoq = extractGenericBillOfQuantitiesFromText(fullCommercialText);
+    if (fallbackBoq.length > 0) {
+      positions.push(...fallbackBoq);
+    }
+  }
 
   const hasBoQ = positions.length > 0 || segmentation.billOfQuantitiesPages.length > 0;
   const classifiedKind = mapFamilyToClassifiedKind(contractType.family, classified.kind);

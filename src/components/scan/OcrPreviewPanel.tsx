@@ -5,7 +5,6 @@ import type { TranslationKey } from '../../i18n';
 import type { OcrPreviewSummary } from '../../services/ocrDocumentService';
 import type { DocumentTextExtractionResult } from '../../services/ocrDocumentService';
 import type { PersistFailureDiagnostic } from '../../services/persistenceService';
-import { parseGermanMoney } from '../../services/documentAmountExtractionService';
 import type { ContractOrderProposal } from '../../types/documentIntelligence';
 import {
   getRecognitionStatusKey,
@@ -23,70 +22,6 @@ function formatApproxStorageSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
-function isContractPreviewKind(kind?: string): boolean {
-  return ['werkvertrag', 'subunternehmervertrag', 'nachunternehmervertrag'].includes(kind ?? '');
-}
-
-function buildContractPreviewProposal(preview: OcrPreviewSummary): ContractOrderProposal | null {
-  const understanding = preview.understanding;
-  const kind = understanding?.documentType;
-  if (!understanding || !isContractPreviewKind(kind)) {
-    return null;
-  }
-
-  const customer = understanding.customer?.trim();
-  const contractor = understanding.sender?.trim() || understanding.recipient?.trim();
-  const site = understanding.constructionSite?.trim();
-  const amountText = understanding.amount?.trim();
-  const amountValue = amountText ? parseGermanMoney(amountText) : undefined;
-  const contractKind = kind ?? 'werkvertrag';
-
-  return {
-    customer: customer ?? '',
-    contractor: contractor ?? '',
-    constructionSite: site ?? '',
-    contractDate: understanding.date,
-    positionCount: 0,
-    contractTotalNet: amountText,
-    paymentTermsSummary: '',
-    reviewHints: [],
-    positions: [],
-    intelligence: {
-      documentLabelKey: contractKind,
-      classifiedKind: contractKind as ContractOrderProposal['intelligence']['classifiedKind'],
-      reviewRequired: false,
-      segmentation: {
-        pages: [],
-        contractCorePages: [1],
-        billOfQuantitiesPages: [],
-        technicalAttachmentPages: [],
-        commercialAttachmentPages: [],
-        unknownPages: [],
-      },
-      contractFields: {
-        ...(customer ? { auftraggeber: { value: customer, status: 'confirmed', confidence: 'high' } } : {}),
-        ...(contractor ? { auftragnehmer: { value: contractor, status: 'confirmed', confidence: 'high' } } : {}),
-        ...(site ? { bauvorhaben: { value: site, status: 'confirmed', confidence: 'high' } } : {}),
-      },
-      positions: [],
-      paymentTerms: [],
-      progressBillingAllowed: false,
-      finalInvoiceMentioned: false,
-      technicalAttachmentCount: 0,
-      openReviewHints: [],
-      ...(amountValue != null
-        ? {
-            contractTotalNet: {
-              value: amountValue,
-              status: 'confirmed',
-              confidence: 'medium',
-              sourceText: amountText,
-            },
-          }
-        : {}),
-    },
-  };
-}
 
 interface OcrPreviewPanelProps {
   fileName: string;
@@ -100,6 +35,7 @@ interface OcrPreviewPanelProps {
   senderLabel: string;
   previewTextLabel: string;
   aiActionsLabel: string;
+  contractProposal?: ContractOrderProposal | null;
   translate: (key: TranslationKey) => string;
   onDecision: (decision: UserStorageDecision) => void;
   isConfirming?: boolean;
@@ -124,6 +60,7 @@ export function OcrPreviewPanel({
   senderLabel,
   previewTextLabel,
   aiActionsLabel,
+  contractProposal,
   translate,
   onDecision,
   onChangeType,
@@ -137,8 +74,8 @@ export function OcrPreviewPanel({
   onSelectFile,
 }: OcrPreviewPanelProps) {
   const understanding = preview.understanding;
-  const contractProposal = buildContractPreviewProposal(preview);
-  const showContractSummary = Boolean(contractProposal);
+  const resolvedContractProposal = contractProposal ?? null;
+  const showContractSummary = Boolean(resolvedContractProposal);
   const showPreviewLines = preview.previewLines.length > 0 || preview.previewPartialHint;
   const ocrFastPath = decisionActions.some((action) => action.ocrFastPathPrimary);
   const persistingDecisions = new Set<UserStorageDecision>([
@@ -266,8 +203,8 @@ export function OcrPreviewPanel({
         </div>
       ) : null}
 
-      {showContractSummary && contractProposal ? (
-        <ContractWorkspaceSummary proposal={contractProposal} translate={translate} />
+      {showContractSummary && resolvedContractProposal ? (
+        <ContractWorkspaceSummary proposal={resolvedContractProposal} translate={translate} />
       ) : null}
 
       {understanding && !showContractSummary && (

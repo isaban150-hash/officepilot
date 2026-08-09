@@ -15,7 +15,7 @@ export interface PdfOcrResult {
   confidence: number;
   pagesProcessed: number;
   pageCount?: number;
-  pageTexts?: Array<{ pageNumber: number; text: string }>;
+  pageTexts?: Array<{ pageNumber: number; text: string; items?: Array<{ str?: string }> }>;
   errorCode?: PdfDocumentError['code'];
   message?: string;
 }

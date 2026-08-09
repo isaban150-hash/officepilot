@@ -10,7 +10,8 @@ const LV_SPACE_ROW =
 
 const LV_ALT_ROW =
   /^(\d{1,3})\s+(.+?)\s+(Stk|m²|m2|m|psch|Std|h|LE|qm|lfdm\.?|lfm|kg|pauschal)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s*$/gim;
-
+const LV_FLAT_SEQUENCE_ROW =
+  /([A-Za-zÄÖÜäöüß0-9/()\-.,]+?)\s+([\d.,]+)\s*(m²|m2|qm|lfdm\.?|lfm|m|st\.?|stk|stück|std\.?|kg|pauschal)\s+([\d.,]+)\s+([\d.,]+)\s*(?:€|eur)?/gi;
 const ROUNDING_TOLERANCE = 0.06;
 
 function roundMoney(value: number): number {
@@ -97,6 +98,14 @@ export function extractBillOfQuantitiesPositions(
     pushPosition(
       positions,
       buildPosition(match[1], match[2], match[3], match[4], match[5], match[6], sourcePage),
+    );
+  }
+
+  const flatRegex = new RegExp(LV_FLAT_SEQUENCE_ROW.source, LV_FLAT_SEQUENCE_ROW.flags);
+  while ((match = flatRegex.exec(text)) !== null) {
+    pushPosition(
+      positions,
+      buildPosition(`${positions.length + 1}`, match[1], match[3], match[2], match[4], match[5], sourcePage),
     );
   }
 

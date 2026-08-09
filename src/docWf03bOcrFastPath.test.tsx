@@ -374,7 +374,7 @@ describe('DOC-WF-03B — OCR Fast Path', () => {
     ).toBe(true);
   });
 
-  it('zeigt die ContractWorkspaceSummary im Upload-Preview für Werkverträge', () => {
+  it('verwendet echtes Contract-Intelligence-Ergebnis im Upload-Preview für Werkverträge', () => {
     const pending = createPending('archive_recommended', {
       recognizedText: SAMPLE_WERKVERTRAG_TEXT,
       classification: {
@@ -392,18 +392,71 @@ describe('DOC-WF-03B — OCR Fast Path', () => {
         <OcrPreviewPanel
           fileName={pending.cachedFile.fileName}
           extraction={pending.extraction}
-          preview={{
-            ...pending.preview,
-            understanding: {
-              documentType: 'werkvertrag',
-              sender: 'Müller Bau GmbH',
-              recipient: 'Mustermann Sanitär GmbH',
-              customer: 'Mustermann Sanitär GmbH',
-              constructionSite: 'Musterstraße 1',
-              amount: '12.500,00 €',
-              deadline: '2026-12-31',
-              nextStep: 'Prüfen',
-              partialRecognition: false,
+          preview={pending.preview}
+          contractProposal={{
+            customer: 'Cirmak GmbH',
+            contractor: 'Cirmak Haustechnik GmbH',
+            constructionSite: 'BV Rüthen',
+            contractDate: '01.01.2026',
+            positionCount: 1,
+            contractTotalNet: '36.029,05 €',
+            paymentTermsSummary: '',
+            reviewHints: [],
+            positions: [
+              {
+                id: 'pos-1',
+                description: 'Kellerabdichtung',
+                quantity: 1,
+                unitPrice: 1200,
+                unit: 'Stk',
+                reviewStatus: 'confirmed',
+              },
+            ],
+            intelligence: {
+              documentLabelKey: 'documentIntelligence.label.werkvertragMitLv',
+              classifiedKind: 'werkvertrag',
+              reviewRequired: false,
+              segmentation: {
+                pages: [],
+                contractCorePages: [1],
+                billOfQuantitiesPages: [2],
+                technicalAttachmentPages: [],
+                commercialAttachmentPages: [],
+                unknownPages: [],
+              },
+              contractFields: {
+                bauvorhaben: { value: 'BV Rüthen', status: 'confirmed', confidence: 'high' },
+                auftraggeber: { value: 'Cirmak GmbH', status: 'confirmed', confidence: 'high' },
+                auftragnehmer: { value: 'Cirmak Haustechnik GmbH', status: 'confirmed', confidence: 'high' },
+              },
+              parties: [
+                { role: 'auftraggeber', name: 'Cirmak GmbH', status: 'confirmed', confidence: 'high' },
+                { role: 'auftragnehmer', name: 'Cirmak Haustechnik GmbH', status: 'confirmed', confidence: 'high' },
+              ],
+              commonFields: {},
+              typeSpecificFields: {},
+              positions: [
+                {
+                  id: 'pos-1',
+                  description: 'Kellerabdichtung',
+                  quantity: 1,
+                  unitPrice: 1200,
+                  unit: 'Stk',
+                  reviewStatus: 'confirmed',
+                },
+              ],
+              contractTotalNet: {
+                value: 36029.05,
+                status: 'confirmed',
+                confidence: 'high',
+                sourceText: '36.029,05 €',
+              },
+              paymentTerms: [],
+              clauses: [],
+              progressBillingAllowed: false,
+              finalInvoiceMentioned: false,
+              technicalAttachmentCount: 0,
+              openReviewHints: [],
             },
           }}
           storageRecommendation={pending.storageRecommendation}
@@ -419,7 +472,11 @@ describe('DOC-WF-03B — OCR Fast Path', () => {
     });
 
     expect(mount.container.querySelector('[data-testid="contract-workspace-summary"]')).not.toBeNull();
-    expect(mount.container.textContent).toContain('Ihr Betrieb');
+    expect(mount.container.textContent).toContain('Cirmak GmbH');
+    expect(mount.container.textContent).toContain('Cirmak Haustechnik GmbH');
+    expect(mount.container.textContent).toContain('BV Rüthen');
+    expect(mount.container.textContent).toContain('36.029,05 €');
+    expect(mount.container.textContent).toContain('1 Positionen');
     unmount(mount);
   });
 

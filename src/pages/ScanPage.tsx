@@ -21,6 +21,7 @@ import {
   processDocumentFileForPreview,
   type PendingDocumentIntake,
 } from '../services/pendingDocumentIntakeService';
+import { resolvePendingDocumentContractProposal } from '../services/contractPreviewProposalService';
 import {
   buildPendingDocumentDecisionActions,
   executePendingDocumentDecision,
@@ -270,6 +271,7 @@ export function ScanPage() {
           fileName={pendingScan.cachedFile.fileName}
           extraction={pendingScan.extraction}
           preview={pendingScan.preview}
+          contractProposal={resolvePendingDocumentContractProposal(pendingScan)}
           storageRecommendation={pendingScan.storageRecommendation}
           decisionActions={buildPendingDocumentDecisionActions(pendingScan)}
           pendingNoticeLabel={translate('document.intakePreview.pendingNotice')}

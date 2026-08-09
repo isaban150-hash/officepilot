@@ -47,7 +47,7 @@ export interface DocumentTextExtractionResult {
   confidence: OcrConfidenceLevel;
   pageCount?: number;
   pagesProcessed?: number;
-  pageTexts?: Array<{ pageNumber: number; text: string }>;
+  pageTexts?: Array<{ pageNumber: number; text: string; items?: Array<{ str?: string }> }>;
   sourceType: DocumentTextSourceType;
   extractionMethod?: DocumentTextExtractionMethod;
   ocrAttempted?: boolean;

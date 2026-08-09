@@ -187,6 +187,7 @@ export function resolveOcrPageLimit(pageCount: number, maxPages = PDF_OCR_MAX_PA
 export interface PdfPageTextEntry {
   pageNumber: number;
   text: string;
+  items?: Array<{ str?: string }>;
 }
 
 export interface PdfPageTextExtraction {
@@ -220,7 +221,11 @@ export async function extractTextFromPdfPages(
       try {
         const textContent = await page.getTextContent();
         const pageText = textItemsToPageText(textContent.items as Array<{ str?: string }>);
-        pageTexts.push({ pageNumber, text: pageText });
+        pageTexts.push({
+          pageNumber,
+          text: pageText,
+          items: textContent.items as Array<{ str?: string }>,
+        });
         if (pageText) {
           mergedParts.push(pageText);
         }

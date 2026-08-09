@@ -7,8 +7,14 @@ import type {
   DetectedContractType,
   DocumentPageText,
   ExtractedContractField,
+  EnhancedDetectedOrderPosition,
   FieldConfidenceLevel,
 } from '../types/documentIntelligence';
+
+interface StructuredDocumentPageText extends DocumentPageText {
+  items?: Array<string | { str?: string }>;
+}
+import { parseGermanMoney } from './documentAmountExtractionService';
 import { joinSectionText } from './documentSegmentationService';
 
 export const CONSTRUCTION_FAMILIES = new Set<ContractFamily>([
@@ -252,6 +258,25 @@ const PARTY_PATTERNS: Array<{ role: ContractPartyRole; pattern: RegExp }> = [
   { role: 'kunde', pattern: /kunde\s*:\s*([^\n]+)/i },
 ];
 
+const PARTY_LABELS: Array<{ role: ContractPartyRole; labels: string[] }> = [
+  { role: 'auftraggeber', labels: ['auftraggeber'] },
+  { role: 'auftragnehmer', labels: ['auftragnehmer'] },
+  { role: 'subunternehmer', labels: ['subunternehmer', 'nachunternehmer'] },
+  { role: 'nachunternehmer', labels: ['nachunternehmer'] },
+  { role: 'vermieter', labels: ['vermieter'] },
+  { role: 'mieter', labels: ['mieter'] },
+  { role: 'leasinggeber', labels: ['leasinggeber'] },
+  { role: 'leasingnehmer', labels: ['leasingnehmer'] },
+  { role: 'verkaeufer', labels: ['verkäufer', 'verkäufer'] },
+  { role: 'kaeufer', labels: ['käufer', 'käufer'] },
+  { role: 'versicherer', labels: ['versicherer'] },
+  { role: 'versicherungsnehmer', labels: ['versicherungsnehmer'] },
+  { role: 'arbeitgeber', labels: ['arbeitgeber'] },
+  { role: 'arbeitnehmer', labels: ['arbeitnehmer'] },
+  { role: 'dienstleister', labels: ['dienstleister'] },
+  { role: 'kunde', labels: ['kunde'] },
+];
+
 const CLAUSE_RULES: Array<{
   id: DetectedContractClauseId;
   patterns: RegExp[];
@@ -325,6 +350,307 @@ const CLAUSE_RULES: Array<{
 
 function emptyField(): ExtractedContractField {
   return { status: 'not_found', confidence: 'low' };
+}
+
+function getStructuredPageItems(page: DocumentPageText): string[] {
+  const items = (page as Partial<StructuredDocumentPageText>).items;
+  if (!Array.isArray(items)) return [];
+  return items
+    .map((item) => (typeof item === 'string' ? item : item?.str ?? ''))
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+}
+
+function normalizeStructuredToken(value: string): string {
+  return value.replace(/\s+/g, ' ').trim();
+}
+
+function looksLikeMoneyToken(value: string): boolean {
+  return /\d{1,3}(?:[.\s]?\d{3})*,\d{2}|\d+,\d{2}/.test(value) || /€|eur/i.test(value);
+}
+
+function looksLikeUnitToken(value: string): boolean {
+  return /^(m²|m2|qm|lfdm|lfm|m|st\.?|stk|stück|std\.?|kg|pauschal|l|h)$/i.test(value);
+}
+
+function getNextStructuredValue(items: string[], startIndex: number): string | undefined {
+  for (let index = startIndex; index < items.length; index += 1) {
+    const candidate = items[index]?.trim();
+    if (!candidate) continue;
+    if (/^(auftraggeber|auftragnehmer|vertreten durch|bauvorhaben|baustelle|vertragsart|vertragsdatum|vertragssumme netto|vertragsumme|zahlungsziel|gewährleistung|gewaehrleistung)$/i.test(candidate)) {
+      return undefined;
+    }
+    return candidate;
+  }
+  return undefined;
+}
+
+function normalizeStructuredLabel(label: string): string | null {
+  const normalized = label.toLowerCase().trim();
+  if (normalized === 'auftraggeber') return 'auftraggeber';
+  if (normalized === 'auftragnehmer') return 'auftragnehmer';
+  if (normalized === 'bauvorhaben') return 'bauvorhaben';
+  if (normalized === 'baustelle') return 'baustelle';
+  if (normalized === 'vertragsdatum') return 'vertragsdatum';
+  if (normalized === 'vertragsart') return 'vertragsart';
+  if (normalized === 'zahlungsziel') return 'zahlungsbedingungen';
+  if (normalized === 'gewährleistung' || normalized === 'gewaehrleistung') return 'gewaehrleistung';
+  if (normalized === 'vertragssumme netto' || normalized === 'vertragsumme netto' || normalized === 'vertragssumme' || normalized === 'vertragsumme') return 'vertragsumme_netto';
+  return null;
+}
+
+export function extractStructuredContractFields(
+  pageTexts: DocumentPageText[],
+): { fields: Record<string, ExtractedContractField>; contractTotalNet: ExtractedContractField<number> | null; positions: EnhancedDetectedOrderPosition[] } {
+  const fields: Record<string, ExtractedContractField> = {};
+  let contractTotalNet: ExtractedContractField<number> | null = null;
+  const positions: EnhancedDetectedOrderPosition[] = [];
+
+  for (const page of pageTexts) {
+    const rawItems = getStructuredPageItems(page);
+    if (rawItems.length === 0) continue;
+
+    const items = rawItems.map(normalizeStructuredToken);
+    for (let index = 0; index < items.length; index += 1) {
+      const item = items[index] ?? '';
+      const fieldKey = normalizeStructuredLabel(item);
+      if (!fieldKey) continue;
+
+      const value = getNextStructuredValue(items, index + 1);
+      if (!value) continue;
+
+      if (fieldKey === 'vertragsumme_netto') {
+        contractTotalNet = {
+          value: parseGermanMoney(value),
+          status: 'confirmed',
+          confidence: 'high',
+          sourcePage: page.pageNumber,
+          sourceText: `${item}: ${value}`,
+        };
+        continue;
+      }
+
+      fields[fieldKey] = {
+        value,
+        status: 'confirmed',
+        confidence: 'high',
+        sourcePage: page.pageNumber,
+        sourceText: `${item}: ${value}`,
+      };
+    }
+
+    const headerIndex = items.findIndex((item) => /^pos\.?$/i.test(item));
+    if (headerIndex === -1) continue;
+
+    const rowTokens = items.slice(headerIndex + 1);
+    let cursor = 0;
+    while (cursor < rowTokens.length) {
+      const token = rowTokens[cursor] ?? '';
+      if (!/^\d+$/.test(token.trim())) {
+        cursor += 1;
+        continue;
+      }
+
+      const rowValues: string[] = [];
+      for (let lookahead = cursor + 1; lookahead < rowTokens.length; lookahead += 1) {
+        const candidate = rowTokens[lookahead] ?? '';
+        if (/^\d+$/.test(candidate.trim()) && rowValues.length > 0) {
+          break;
+        }
+        rowValues.push(candidate);
+        if (rowValues.length >= 5) {
+          break;
+        }
+      }
+
+      if (rowValues.length < 5) {
+        break;
+      }
+
+      const quantityToken = rowValues[0] ?? '';
+      const unitToken = rowValues[1] ?? '';
+      const unitPriceToken = rowValues[rowValues.length - 2] ?? '';
+      const lineTotalToken = rowValues[rowValues.length - 1] ?? '';
+      const descriptionTokens = rowValues.slice(2, rowValues.length - 2);
+
+      if (!looksLikeMoneyToken(quantityToken) || !looksLikeUnitToken(unitToken) || !looksLikeMoneyToken(unitPriceToken) || !looksLikeMoneyToken(lineTotalToken) || descriptionTokens.length === 0) {
+        cursor += 1;
+        continue;
+      }
+
+      positions.push({
+        positionNumber: token.trim(),
+        description: descriptionTokens.join(' '),
+        quantity: parseGermanMoney(quantityToken),
+        unit: unitToken.replace(/\./g, '').toLowerCase(),
+        unitPrice: parseGermanMoney(unitPriceToken),
+        lineTotal: parseGermanMoney(lineTotalToken),
+        sourcePage: page.pageNumber,
+        confidence: 'high',
+        reviewStatus: 'confirmed',
+      });
+
+      cursor += 1;
+    }
+  }
+
+  return { fields, contractTotalNet, positions };
+}
+
+export function mergeContractFieldMaps(
+  baseFields: Record<string, ExtractedContractField>,
+  overlayFields: Record<string, ExtractedContractField>,
+): Record<string, ExtractedContractField> {
+  const merged = { ...baseFields };
+  for (const [key, value] of Object.entries(overlayFields)) {
+    if (!value || value.status === 'not_found') continue;
+    merged[key] = value;
+  }
+  return merged;
+}
+
+function normalizeContractText(text: string): string {
+  return text
+    .replace(/\r\n?/g, '\n')
+    .replace(/\u00a0/g, ' ')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/([A-Za-zÄÖÜäöüß])\s*-\s*\n\s*/g, '$1')
+    .replace(/([A-Za-zÄÖÜäöüß])\s*-\s*([A-Za-zÄÖÜäöüß])/g, '$1$2')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function splitNormalizedLines(text: string): string[] {
+  return normalizeContractText(text)
+    .split('\n')
+    .map((line) => line.trim().replace(/\s+/g, ' '))
+    .filter((line) => line.length > 0);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function cleanValue(value: string): string {
+  return value.replace(/^[\s:;.,\-–—]+|[\s:;.,\-–—]+$/g, '').replace(/\s+/g, ' ').trim();
+}
+
+function extractValueAfterLabel(text: string, labels: string[], maxLength = 140): string | undefined {
+  const normalized = normalizeContractText(text).replace(/\s+/g, ' ');
+  for (const label of labels) {
+    const labelRegex = new RegExp(`\\b${escapeRegExp(label)}\\b`, 'i');
+    const match = labelRegex.exec(normalized);
+    if (!match) continue;
+
+    const remainder = normalized.slice(match.index + match[0].length);
+    const withoutPrefix = remainder.replace(/^[\s:;.,\-–—]+/, '');
+    const boundaryIndex = withoutPrefix.search(/\b(?:auftraggeber|auftragnehmer|subunternehmer|nachunternehmer|bauvorhaben|baustelle|vertragsdatum|vertragsnummer|vertragsart|vertragssumme|gesamtpreis|gesamtsumme|summe netto|leistungsverzeichnis|anlage|seite|§)\b/i);
+    const candidate = cleanValue(withoutPrefix.slice(0, boundaryIndex === -1 ? withoutPrefix.length : boundaryIndex));
+
+    if (!candidate) continue;
+    if (candidate.length > maxLength) continue;
+    if (/^(?:§|anlage|seite)\b/i.test(candidate)) continue;
+    if (/vertrag|gegenstand|leistungsverzeichnis|zahlung|termin|abnahme|skonto|stundenlohn|vertragsstrafe/i.test(candidate)) {
+      continue;
+    }
+    return candidate;
+  }
+
+  return undefined;
+}
+
+function extractValueFromLabelLines(lines: string[], labels: string[], maxLookahead = 2): string | undefined {
+  const joined = lines.join('\n');
+  const directValue = extractValueAfterLabel(joined, labels);
+  if (directValue) return directValue;
+
+  const patterns = labels.map((label) => new RegExp(`\\b${escapeRegExp(label)}\\b`, 'i'));
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index] ?? '';
+    if (!patterns.some((pattern) => pattern.test(line))) continue;
+
+    const directMatch = line.match(/^(?:[^:]*?:\s*)?(.*)$/i);
+    const directValue = directMatch?.[1]?.trim();
+    if (directValue && directValue.length > 1 && !patterns.some((pattern) => pattern.test(directValue))) {
+      return cleanValue(directValue);
+    }
+
+    const collected: string[] = [];
+    for (let lookahead = 1; lookahead <= maxLookahead; lookahead += 1) {
+      const nextLine = lines[index + lookahead] ?? '';
+      if (!nextLine) break;
+      if (patterns.some((pattern) => pattern.test(nextLine))) break;
+      if (/^(?:auftraggeber|auftragnehmer|subunternehmer|nachunternehmer|bauvorhaben|baustelle|vertragsdatum|vertragsnummer|vertragssumme|gesamtpreis|gesamtsumme|summe netto|leistungsverzeichnis)/i.test(nextLine)) {
+        break;
+      }
+      collected.push(nextLine);
+      if (collected.join(' ').length > 140) break;
+    }
+
+    if (collected.length > 0) {
+      return cleanValue(collected.join(' '));
+    }
+  }
+
+  return undefined;
+}
+
+function extractFieldByLabelFallback(
+  text: string,
+  labels: string[],
+  sourcePage?: number,
+): ExtractedContractField {
+  const lines = splitNormalizedLines(text);
+  const value = extractValueFromLabelLines(lines, labels);
+  if (value) {
+    return {
+      value,
+      status: 'confirmed',
+      confidence: 'medium',
+      sourcePage,
+      sourceText: value,
+    };
+  }
+
+  const normalized = normalizeContractText(text);
+  for (const label of labels) {
+    const directRegex = new RegExp(`\\b${escapeRegExp(label)}\\b\\s*[:\-]?\\s*(.+)`, 'i');
+    const match = directRegex.exec(normalized);
+    if (match?.[1]?.trim()) {
+      return {
+        value: cleanValue(match[1]),
+        status: 'confirmed',
+        confidence: 'medium',
+        sourcePage,
+        sourceText: match[0].trim(),
+      };
+    }
+  }
+
+  return emptyField();
+}
+
+function extractAmountAfterLabel(text: string, labels: string[]): string | undefined {
+  const normalized = normalizeContractText(text).replace(/\s+/g, ' ');
+  const amountRegex = /(\d{1,3}(?:\.\d{3})*,\d{2})\s*(?:€|eur)?/i;
+
+  for (const label of labels) {
+    const labelRegex = new RegExp(`\\b${escapeRegExp(label)}\\b`, 'i');
+    const match = labelRegex.exec(normalized);
+    if (!match) continue;
+
+    const remainder = normalized.slice(match.index + match[0].length);
+    const withoutPrefix = remainder.replace(/^[\s:;.,\-–—]+/, '');
+    const boundaryIndex = withoutPrefix.search(/\b(?:auftraggeber|auftragnehmer|subunternehmer|nachunternehmer|bauvorhaben|baustelle|vertragsdatum|vertragsnummer|vertragsart|leistungsverzeichnis|anlage|seite|§)\b/i);
+    const segment = withoutPrefix.slice(0, boundaryIndex === -1 ? withoutPrefix.length : boundaryIndex);
+    const segmentMatch = segment.match(amountRegex);
+    if (segmentMatch?.[1]) return segmentMatch[1];
+  }
+
+  const explicitRegex = new RegExp(`\\b(?:${labels.map((label) => escapeRegExp(label)).join('|')})\\b[^\n]{0,40}(\\d{1,3}(?:\\.\\d{3})*,\\d{2})\\s*(?:€|eur)?`, 'i');
+  const globalMatch = explicitRegex.exec(normalized);
+  return globalMatch?.[1];
 }
 
 export function extractLabeledField(
@@ -495,19 +821,36 @@ export function detectContractType(text: string): DetectedContractType {
 export function extractContractParties(text: string): DetectedContractParty[] {
   const parties: DetectedContractParty[] = [];
   const seenRoles = new Set<ContractPartyRole>();
+  const lines = splitNormalizedLines(text);
 
-  for (const rule of PARTY_PATTERNS) {
-    const match = rule.pattern.exec(text);
-    if (!match?.[1]?.trim()) continue;
+  for (const rule of PARTY_LABELS) {
+    const value = extractValueFromLabelLines(lines, rule.labels);
+    if (!value) continue;
     if (seenRoles.has(rule.role)) continue;
     seenRoles.add(rule.role);
     parties.push({
       role: rule.role,
-      name: match[1].trim().split('\n')[0].trim(),
+      name: cleanValue(value),
       status: 'confirmed',
       confidence: 'high',
-      sourceText: match[0].trim(),
+      sourceText: value,
     });
+  }
+
+  if (parties.length === 0) {
+    for (const rule of PARTY_PATTERNS) {
+      const match = rule.pattern.exec(text);
+      if (!match?.[1]?.trim()) continue;
+      if (seenRoles.has(rule.role)) continue;
+      seenRoles.add(rule.role);
+      parties.push({
+        role: rule.role,
+        name: cleanValue(match[1].trim().split('\n')[0].trim()),
+        status: 'confirmed',
+        confidence: 'high',
+        sourceText: match[0].trim(),
+      });
+    }
   }
 
   return parties;
@@ -523,14 +866,12 @@ export function extractAllContractFields(
     ansprechpartner: extractLabeledField(contractText, [
       /ansprechpartner(?:in)?\s*:\s*([^\n]+)/i,
     ], pageHint),
-    vertragsnummer: extractLabeledField(contractText, [
-      /vertragsnummer\s*:\s*([^\n]+)/i,
-      /vertrag\s*nr\.?\s*:\s*([^\n]+)/i,
-      /versicherungsschein(?:[- ]?nummer)?\s*:\s*([^\n]+)/i,
-    ], pageHint),
-    vertragsdatum: extractLabeledField(contractText, [
-      /vertragsdatum\s*:\s*([^\n]+)/i,
-    ], pageHint),
+    vertragsnummer: extractFieldByLabelFallback(
+      contractText,
+      ['vertragsnummer', 'vertrag nr', 'versicherungsschein'],
+      pageHint,
+    ),
+    vertragsdatum: extractFieldByLabelFallback(contractText, ['vertragsdatum'], pageHint),
     beginn: extractLabeledField(contractText, [
       /(?:vertrags)?beginn\s*:\s*([^\n]+)/i,
       /mietbeginn\s*:\s*([^\n]+)/i,
@@ -573,24 +914,22 @@ export function extractAllContractFields(
     haftung: extractLabeledField(contractText, [/haftung\s*:\s*([^\n]+)/i]),
 
     // Construction-oriented (filtered in UI by family)
-    auftraggeber: extractLabeledField(contractText, [/auftraggeber\s*:\s*([^\n]+)/i], pageHint),
-    auftragnehmer: extractLabeledField(
+    auftraggeber: extractFieldByLabelFallback(contractText, ['auftraggeber'], pageHint),
+    auftragnehmer: extractFieldByLabelFallback(
       contractText,
-      [
-        /subunternehmer\s*:\s*([^\n]+)/i,
-        /auftragnehmer\s*:\s*([^\n]+)/i,
-        /nachunternehmer\s*:\s*([^\n]+)/i,
-      ],
+      ['subunternehmer', 'auftragnehmer', 'nachunternehmer'],
       pageHint,
     ),
-    bauvorhaben: extractLabeledField(contractText, [
-      /bauvorhaben\s*:\s*([^\n]+)/i,
-      /baustellenbezeichnung\s*:\s*([^\n]+)/i,
-    ]),
-    baustelle: extractLabeledField(contractText, [
-      /baustellenadresse\s*:\s*([^\n]+)/i,
-      /baustelle(?!nbezeichnung)\s*:\s*([^\n]+)/i,
-    ]),
+    bauvorhaben: extractFieldByLabelFallback(
+      contractText,
+      ['bauvorhaben', 'baustellenbezeichnung', 'bv', 'baustelle'],
+      pageHint,
+    ),
+    baustelle: extractFieldByLabelFallback(
+      contractText,
+      ['baustellenadresse', 'baustelle', 'bauvorhaben', 'bv'],
+      pageHint,
+    ),
     stundenlohn: extractLabeledField(contractText, [
       /stundenlohn\s*:\s*([^\n]+)/i,
       /stundensatz\s*:\s*([^\n]+)/i,
@@ -769,6 +1108,68 @@ export function detectContractClauses(
   }
 
   return clauses;
+}
+
+export function extractContractTotalAmountFromText(text: string): ExtractedContractField<number> | null {
+  const amount = extractAmountAfterLabel(text, [
+    'vertragsumme',
+    'vertragssumme',
+    'gesamtsumme',
+    'gesamtpreis',
+    'summe netto',
+    'auftragssumme',
+  ]);
+  if (!amount) return null;
+  return {
+    value: parseGermanMoney(amount),
+    status: 'confirmed',
+    confidence: 'high',
+    sourceText: amount,
+  };
+}
+
+export function extractGenericBillOfQuantitiesFromText(
+  text: string,
+  sourcePage?: number,
+): EnhancedDetectedOrderPosition[] {
+  const lines = splitNormalizedLines(text);
+  const positions: EnhancedDetectedOrderPosition[] = [];
+  const quantityUnitPriceRegex =
+    /(.+?)\s+([\d.,]+)\s*(m²|m2|qm|lfdm|lfm|m|st\.?|stk|stück|std\.?|kg|pauschal)\s*(?:x|×)\s*([\d.,]+)\s*(?:€|eur)?(?:\s+([\d.,]+)\s*(?:€|eur)?)?/i;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const joined = [lines[index] ?? '', lines[index + 1] ?? ''].join(' ').trim();
+    const match = joined.match(quantityUnitPriceRegex);
+    if (!match) continue;
+
+    const description = cleanValue(match[1] ?? '').replace(/^(?:pos\.|nr\.|position)\s*/i, '');
+    const quantityRaw = match[2] ?? '';
+    const unitRaw = match[3] ?? '';
+    const unitPriceRaw = match[4] ?? '';
+    const lineTotalRaw = match[5] ?? '';
+
+    if (!description || !quantityRaw || !unitRaw || !unitPriceRaw) continue;
+
+    const quantity = parseGermanMoney(quantityRaw);
+    const unitPrice = parseGermanMoney(unitPriceRaw);
+    const lineTotal = lineTotalRaw ? parseGermanMoney(lineTotalRaw) : quantity * unitPrice;
+    if (!Number.isFinite(quantity) || !Number.isFinite(unitPrice) || quantity <= 0 || unitPrice <= 0) continue;
+
+    const unit = unitRaw.replace(/\./g, '').toLowerCase();
+    positions.push({
+      positionNumber: `${positions.length + 1}`,
+      description,
+      quantity,
+      unit,
+      unitPrice,
+      lineTotal,
+      sourcePage,
+      confidence: 'medium',
+      reviewStatus: 'confirmed',
+    });
+  }
+
+  return positions;
 }
 
 export function mapPartiesToLegacyFields(

@@ -9,6 +9,7 @@ import type {
 import type { DetectedOrderPosition, InboxItem, Vorgang } from '../types/models';
 import type { TranslationKey } from '../i18n';
 import { isImportableLvPosition } from './contractPositionImportService';
+import { cleanPartyFactValue } from './documentSummaryContent';
 import { hasAbschlagsrechnung, hasSchlussrechnung } from './orderBillingRules';
 
 export type ContractWorkspaceSummaryRow = {
@@ -598,9 +599,49 @@ function resolveDeadlineFact(
   return null;
 }
 
+function resolvePartyNameFromCandidates(
+  ...candidates: Array<string | undefined | null>
+): string | undefined {
+  for (const candidate of candidates) {
+    const cleaned = cleanPartyFactValue(candidate ?? '');
+    if (!cleaned) continue;
+    if (cleaned.length > 90) continue;
+    if (/[.;:]/.test(cleaned) && cleaned.split(/\s+/).length > 8) continue;
+    return cleaned;
+  }
+  return undefined;
+}
+
+function getPartyRolePriority(role: ContractPartyRole | undefined): number {
+  switch (role) {
+    case 'auftraggeber':
+    case 'auftragnehmer':
+    case 'subunternehmer':
+    case 'nachunternehmer':
+    case 'kunde':
+    case 'dienstleister':
+    case 'vermieter':
+    case 'mieter':
+    case 'leasinggeber':
+    case 'leasingnehmer':
+    case 'verkaeufer':
+    case 'kaeufer':
+    case 'versicherer':
+    case 'versicherungsnehmer':
+    case 'arbeitgeber':
+      return 100;
+    case 'arbeitnehmer':
+    case 'unknown':
+      return 50;
+    default:
+      return 0;
+  }
+}
+
 function buildPartyRows(
   proposal: ContractOrderProposal,
   fields: Record<string, ExtractedContractField>,
+  context?: ContractWorkspaceSummaryContext,
 ): ContractWorkspacePartyRow[] {
   const contact = readField(fields.ansprechpartner)?.value;
   const parties = proposal.intelligence.parties ?? [];
@@ -611,25 +652,77 @@ function buildPartyRows(
     return ownCompanyRoles.has(role ?? 'unknown') && normalizeName(name) === normalizeName(ownCompanyName);
   };
 
-  if (parties.length > 0) {
-    return parties.map((party) => ({
-      id: `${party.role}-${party.name}`,
-      roleLabelKey: PARTY_ROLE_LABEL_KEYS[party.role],
-      name: party.name,
-      address: party.address?.trim() || undefined,
+  const rows: ContractWorkspacePartyRow[] = [];
+  const seenRoles = new Set<ContractPartyRole>();
+  const rowRolesByName = new Map<string, ContractPartyRole>();
+
+  const addPartyRow = (role: ContractPartyRole, name: string | undefined, address?: string) => {
+    const resolvedName = resolvePartyNameFromCandidates(name);
+    if (!resolvedName || seenRoles.has(role)) return;
+
+    const normalizedName = normalizeName(resolvedName);
+    const currentPriority = getPartyRolePriority(role);
+    const existingIndex = rows.findIndex((row) => normalizeName(row.name) === normalizedName);
+    const existingRole = existingIndex >= 0 ? rowRolesByName.get(normalizedName) : undefined;
+
+    if (existingRole) {
+      const existingPriority = getPartyRolePriority(existingRole);
+      if (existingPriority >= currentPriority) return;
+      rows.splice(existingIndex, 1);
+      rowRolesByName.delete(normalizedName);
+    }
+
+    seenRoles.add(role);
+    rows.push({
+      id: `${role}-${resolvedName}`,
+      roleLabelKey: PARTY_ROLE_LABEL_KEYS[role],
+      name: resolvedName,
+      address: address?.trim() || undefined,
       contact,
-      isOwnCompany: isOwnCompanyParty(party.role, party.name),
-    }));
+      isOwnCompany: isOwnCompanyParty(role, resolvedName),
+    });
+    rowRolesByName.set(normalizedName, role);
+  };
+
+  addPartyRow(
+    'auftraggeber',
+    resolvePartyNameFromCandidates(
+      readField(fields.auftraggeber)?.value,
+      proposal.customer?.trim(),
+      context?.item?.recognizedData.Kunde?.trim(),
+      context?.item?.recognizedData.Empfänger?.trim(),
+      context?.item?.recognizedData.Empfaenger?.trim(),
+    ),
+  );
+
+  addPartyRow(
+    'auftragnehmer',
+    resolvePartyNameFromCandidates(
+      readField(fields.auftragnehmer)?.value,
+      proposal.contractor?.trim(),
+      context?.item?.sender?.trim(),
+      context?.item?.recognizedData.Lieferant?.trim(),
+    ),
+  );
+
+  for (const party of parties) {
+    const resolvedName = resolvePartyNameFromCandidates(party.name);
+    if (!resolvedName) continue;
+    if (party.role === 'auftraggeber' || party.role === 'auftragnehmer') continue;
+    addPartyRow(party.role, resolvedName, party.address);
   }
 
-  const rows: ContractWorkspacePartyRow[] = [];
+  if (rows.length > 0) {
+    return rows;
+  }
+
   const ag = readField(fields.auftraggeber);
   const an = readField(fields.auftragnehmer);
   if (ag) {
     rows.push({
       id: 'legacy-ag',
       roleLabelKey: 'documentIntelligence.party.auftraggeber',
-      name: ag.value,
+      name: resolvePartyNameFromCandidates(ag.value) ?? ag.value,
       contact,
     });
   }
@@ -637,7 +730,7 @@ function buildPartyRows(
     rows.push({
       id: 'legacy-an',
       roleLabelKey: 'documentIntelligence.party.auftragnehmer',
-      name: an.value,
+      name: resolvePartyNameFromCandidates(an.value) ?? an.value,
       isOwnCompany: isOwnCompanyParty('auftragnehmer', an.value),
     });
   }
@@ -726,7 +819,7 @@ export function buildContractWorkspaceSummaryView(
     });
   }
 
-  const partyRows = buildPartyRows(proposal, fields);
+  const partyRows = buildPartyRows(proposal, fields, context);
   const primaryPartyRows = partyRows.slice(0, 2);
   const extraPartyRows = partyRows.slice(2);
 

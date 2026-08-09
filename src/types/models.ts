@@ -431,7 +431,7 @@ export interface DocumentClassificationInput {
   titleHint?: string;
   senderHint?: string;
   recognizedText?: string;
-  pageTexts?: Array<{ pageNumber: number; text: string }>;
+  pageTexts?: Array<{ pageNumber: number; text: string; items?: Array<{ str?: string }> }>;
 }
 
 export interface SuggestedVorgangLink {

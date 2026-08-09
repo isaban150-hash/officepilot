@@ -11,7 +11,7 @@ export function setPdfTextExtractorForTests(extractor: PdfTextExtractor | null):
 
 export interface PdfDirectTextExtraction {
   text: string;
-  pageTexts?: Array<{ pageNumber: number; text: string }>;
+  pageTexts?: Array<{ pageNumber: number; text: string; items?: Array<{ str?: string }> }>;
 }
 
 function decodePdfLiteralValue(value: string): string {

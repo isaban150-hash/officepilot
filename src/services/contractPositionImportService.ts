@@ -34,13 +34,17 @@ export function isImportableLvPosition(
 ): boolean {
   const description = position.description?.trim() ?? '';
   if (!description) return false;
-  if (NON_BILLABLE_DESCRIPTION_PATTERN.test(description)) return false;
   if (!position.unit?.trim()) return false;
 
   const hasQuantity = Number.isFinite(position.quantity) && position.quantity > 0;
   const hasUnitPrice = Number.isFinite(position.unitPrice) && position.unitPrice > 0;
   const hasLineTotal = Number.isFinite(position.lineTotal) && position.lineTotal > 0;
   if (!hasQuantity && !hasUnitPrice && !hasLineTotal) return false;
+
+  const hasStructuredBillingEvidence = hasQuantity && (hasUnitPrice || hasLineTotal);
+  if (hasStructuredBillingEvidence) return true;
+
+  if (NON_BILLABLE_DESCRIPTION_PATTERN.test(description)) return false;
 
   return true;
 }

@@ -31,6 +31,7 @@ import {
   traceStepError,
 } from '../services/documentSaveTraceService';
 import type { UserStorageDecision } from '../types/userStorageDecision';
+import { resolvePendingDocumentContractProposal } from '../services/contractPreviewProposalService';
 
 export function DocumentUploadPage() {
   const { translate, showToast } = useApp();
@@ -223,6 +224,8 @@ export function DocumentUploadPage() {
     const persistErrorDiagnostic =
       confirmError === 'persist_failed' ? getPersistFailureDiagnosticForDev() : null;
 
+    const uploadContractProposal = resolvePendingDocumentContractProposal(pendingUpload);
+
     return (
       <div className="page document-upload-page" data-testid="document-upload-page">
         <button type="button" className="back-link" onClick={() => navigate('/dokumente')}>
@@ -236,6 +239,7 @@ export function DocumentUploadPage() {
           fileName={pendingUpload.cachedFile.fileName}
           extraction={pendingUpload.extraction}
           preview={pendingUpload.preview}
+          contractProposal={uploadContractProposal}
           storageRecommendation={pendingUpload.storageRecommendation}
           decisionActions={buildPendingDocumentDecisionActions(pendingUpload)}
           pendingNoticeLabel={translate('document.intakePreview.pendingNotice')}
