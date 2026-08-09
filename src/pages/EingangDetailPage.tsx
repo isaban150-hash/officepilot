@@ -93,6 +93,7 @@ import {
   itemNeedsDeferredWorkflowAnalysis,
 } from '../services/inboxWorkflowAnalysisKey';
 import {
+  buildWorkflowResultFromDocumentWorkResult,
   getDocumentWorkResultForItem,
   isDocumentWorkResultUsableForDisplay,
 } from '../services/documentWorkResultService';
@@ -124,6 +125,50 @@ type ReviewSectionId =
   | 'archive'
   | 'further-hints'
   | 'technical';
+
+export function mergeReviewWorkflowWithRestoredDocumentWorkResult(
+  restoredWorkflow: WorkflowResult | null | undefined,
+  liveWorkflow: WorkflowResult | null | undefined,
+): WorkflowResult | null {
+  if (!restoredWorkflow && !liveWorkflow) return null;
+  if (!restoredWorkflow) return liveWorkflow ?? null;
+  if (!liveWorkflow) return restoredWorkflow;
+
+  const mergedWarnings = [
+    ...(restoredWorkflow.warnings ?? []),
+    ...(liveWorkflow.warnings ?? []).filter(
+      (warning) => !restoredWorkflow.warnings?.some((existing) => existing.id === warning.id),
+    ),
+  ];
+
+  return {
+    ...restoredWorkflow,
+    ...liveWorkflow,
+    inboxItemId: restoredWorkflow.inboxItemId || liveWorkflow.inboxItemId,
+    companyRelevant: liveWorkflow.companyRelevant ?? restoredWorkflow.companyRelevant,
+    companyRelevance: liveWorkflow.companyRelevance ?? restoredWorkflow.companyRelevance,
+    classifiedKind: liveWorkflow.classifiedKind ?? restoredWorkflow.classifiedKind,
+    classificationConfidence: liveWorkflow.classificationConfidence ?? restoredWorkflow.classificationConfidence,
+    classification: liveWorkflow.classification ?? restoredWorkflow.classification,
+    documentExplanation: liveWorkflow.documentExplanation ?? restoredWorkflow.documentExplanation,
+    documentUnderstanding: liveWorkflow.documentUnderstanding ?? restoredWorkflow.documentUnderstanding,
+    documentAiActions: liveWorkflow.documentAiActions ?? restoredWorkflow.documentAiActions,
+    contractAnalysis: liveWorkflow.contractAnalysis ?? restoredWorkflow.contractAnalysis,
+    contractIntelligence: liveWorkflow.contractIntelligence ?? restoredWorkflow.contractIntelligence,
+    contractOrderProposal: liveWorkflow.contractOrderProposal ?? restoredWorkflow.contractOrderProposal,
+    suggestedVorgang: liveWorkflow.suggestedVorgang ?? restoredWorkflow.suggestedVorgang,
+    similarVorgaenge: liveWorkflow.similarVorgaenge ?? restoredWorkflow.similarVorgaenge,
+    suggestedOrderPositions: liveWorkflow.suggestedOrderPositions ?? restoredWorkflow.suggestedOrderPositions,
+    suggestedTasks: liveWorkflow.suggestedTasks ?? restoredWorkflow.suggestedTasks,
+    suggestedArchiveFolder: liveWorkflow.suggestedArchiveFolder ?? restoredWorkflow.suggestedArchiveFolder,
+    requiredDocuments: liveWorkflow.requiredDocuments ?? restoredWorkflow.requiredDocuments,
+    pendingSummary: liveWorkflow.pendingSummary ?? restoredWorkflow.pendingSummary,
+    warnings: mergedWarnings,
+    nextActions: liveWorkflow.nextActions ?? restoredWorkflow.nextActions,
+    businessInterpretation: liveWorkflow.businessInterpretation ?? restoredWorkflow.businessInterpretation,
+    workflowDecision: liveWorkflow.workflowDecision ?? restoredWorkflow.workflowDecision,
+  };
+}
 
 export function EingangDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -311,6 +356,13 @@ export function EingangDetailPage() {
     return snapshot;
   }, [item, workflowAnalysisKey]);
 
+  const restoredWorkflow = useMemo<WorkflowResult | null>(() => {
+    if (!item) return null;
+    const snapshot = getDocumentWorkResultForItem(item.id);
+    if (!snapshot || !isDocumentWorkResultUsableForDisplay(snapshot, item)) return null;
+    return buildWorkflowResultFromDocumentWorkResult(snapshot, item);
+  }, [item, workflowAnalysisKey]);
+
   // Small documents: sync workflow for first paint (no multi-page OCR payload).
   const syncWorkflow = useMemo(() => {
     if (!item || needsDeferredAnalysis) return null;
@@ -349,8 +401,9 @@ export function EingangDetailPage() {
     };
   }, [workflowAnalysisKey, needsDeferredAnalysis, analysisRetryToken]);
 
-  // Live analysis only — restored snapshots must not drive confirm/execution.
-  const workflow = syncWorkflow ?? deferredWorkflow;
+  const workflow = useMemo(() => {
+    return mergeReviewWorkflowWithRestoredDocumentWorkResult(restoredWorkflow, syncWorkflow ?? deferredWorkflow);
+  }, [restoredWorkflow, syncWorkflow, deferredWorkflow]);
   const goBack = () => navigate('/ablage');
 
   if (!item) {
