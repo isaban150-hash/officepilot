@@ -374,6 +374,55 @@ describe('DOC-WF-03B — OCR Fast Path', () => {
     ).toBe(true);
   });
 
+  it('zeigt die ContractWorkspaceSummary im Upload-Preview für Werkverträge', () => {
+    const pending = createPending('archive_recommended', {
+      recognizedText: SAMPLE_WERKVERTRAG_TEXT,
+      classification: {
+        classifiedKind: 'werkvertrag',
+        documentType: 'kundenauftrag',
+        title: 'Werkvertrag',
+        sender: 'Müller Bau GmbH',
+        recognizedData: { Dokumentart: 'werkvertrag' },
+      },
+    });
+    const mount = mountPreview('archive_recommended', pending, buildPendingDocumentDecisionActions(pending));
+
+    act(() => {
+      mount.root.render(
+        <OcrPreviewPanel
+          fileName={pending.cachedFile.fileName}
+          extraction={pending.extraction}
+          preview={{
+            ...pending.preview,
+            understanding: {
+              documentType: 'werkvertrag',
+              sender: 'Müller Bau GmbH',
+              recipient: 'Mustermann Sanitär GmbH',
+              customer: 'Mustermann Sanitär GmbH',
+              constructionSite: 'Musterstraße 1',
+              amount: '12.500,00 €',
+              deadline: '2026-12-31',
+              nextStep: 'Prüfen',
+              partialRecognition: false,
+            },
+          }}
+          storageRecommendation={pending.storageRecommendation}
+          decisionActions={buildPendingDocumentDecisionActions(pending)}
+          documentTypeLabel="Art"
+          senderLabel="Absender"
+          previewTextLabel="Text"
+          aiActionsLabel="Aktionen"
+          translate={translate}
+          onDecision={mount.onDecision}
+        />,
+      );
+    });
+
+    expect(mount.container.querySelector('[data-testid="contract-workspace-summary"]')).not.toBeNull();
+    expect(mount.container.textContent).toContain('Ihr Betrieb');
+    unmount(mount);
+  });
+
   it('Regression: Secondary-Aktionen bleiben, keine Auto-Ausführung, keine doppelte Primary', () => {
     const levels: StorageRecommendationLevel[] = [
       'archive_required',
