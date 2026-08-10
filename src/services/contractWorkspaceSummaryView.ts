@@ -316,6 +316,151 @@ function readField(field?: ExtractedContractField): { value: string; needsReview
   };
 }
 
+/**
+ * Date-/deadline-like fields. The extractor captures the whole remainder of an OCR
+ * line, so a wrapped contract clause can end up in these fields. Display is
+ * normalized here; the raw ContractIntelligenceResult stays untouched.
+ */
+const DATE_LIKE_FIELD_KEYS = new Set([
+  'vertragsdatum',
+  'beginn',
+  'ende',
+  'mietbeginn',
+  'liefertermin',
+  'eintrittsdatum',
+]);
+
+/** Upper bound for a value that still reads as a compact date/term, not a clause. */
+const DATE_LIKE_MAX_LENGTH = 40;
+const DATE_LIKE_MAX_WORDS = 6;
+
+const DAY_DATE = String.raw`\d{1,2}\.\s?\d{1,2}\.\s?\d{2,4}`;
+const DATE_CORE_PATTERNS: Array<{ pattern: RegExp; build: (m: RegExpExecArray) => string }> = [
+  // 01.09.2026 – 15.09.2026
+  {
+    pattern: new RegExp(String.raw`^(${DAY_DATE})\s*[–—-]\s*(${DAY_DATE})`),
+    build: (m) => `${m[1].replace(/\s/g, '')} – ${m[2].replace(/\s/g, '')}`,
+  },
+  // 2026-09-01
+  { pattern: /^(\d{4}-\d{2}-\d{2})/, build: (m) => m[1] },
+  // 31.08.2026
+  { pattern: new RegExp(String.raw`^(${DAY_DATE})`), build: (m) => m[1].replace(/\s/g, '') },
+  // KW 36/2026
+  {
+    pattern: /^(KW\s*\d{1,2}\s*\/\s*\d{2,4})/i,
+    build: (m) => m[1].replace(/\s*\/\s*/, '/').replace(/^KW\s*/i, 'KW '),
+  },
+];
+
+/** A short, clause-free answer such as "KW 36/2026" or "nach Abruf" stays as-is. */
+function isCompactDateLikeValue(value: string): boolean {
+  if (value.length > DATE_LIKE_MAX_LENGTH) return false;
+  if (/[;]/.test(value)) return false;
+  if (value.split(' ').length > DATE_LIKE_MAX_WORDS) return false;
+  return true;
+}
+
+function extractLeadingDateCore(value: string): { core: string; remainder: string } | null {
+  for (const { pattern, build } of DATE_CORE_PATTERNS) {
+    const match = pattern.exec(value);
+    if (match) return { core: build(match), remainder: value.slice(match[0].length).trim() };
+  }
+  return null;
+}
+
+/**
+ * Words that qualify the date itself: the shown core would then be only part of
+ * the answer. Deliberately about conditions, not about topic — a follow-up
+ * sentence on some other matter must not trip this.
+ */
+const DATE_CONDITION_PATTERN =
+  /\b(vorbehaltlich|vorbehalt|bedingung|sofern|soweit|sobald|falls|spätestens|spaetestens|frühestens|fruehestens|voraussichtlich|vorläufig|vorlaeufig|unverbindlich|abhängig|abhaengig|ca\.|etwa|ggf\.|gegebenenfalls|bzw\.|oder|nach\s+(vereinbarung|abruf|absprache|aufforderung|zuschlag|baufortschritt|bedarf))\b/i;
+
+/** A separate statement starts its own sentence or carries its own label. */
+const SEPARATE_STATEMENT_PATTERN = /^(?:[A-ZÄÖÜ][\wäöüßÄÖÜ-]*(?:\s+[\wäöüßÄÖÜ-]+)*\s*:|[A-ZÄÖÜ§])/;
+
+/**
+ * Where the text that still belongs to the date ends: the next labelled field,
+ * the next section mark, or the next sentence. Only a period followed by an
+ * upper-case word counts as a sentence break, so abbreviations such as "bzw."
+ * or "ca." stay inside the segment they qualify.
+ */
+const NEXT_SEGMENT_PATTERN =
+  /[A-ZÄÖÜ][\wäöüßÄÖÜ-]*(?:\s+[\wäöüßÄÖÜ-]+){0,3}\s*:|§|[.!?]\s+[A-ZÄÖÜ]/;
+
+/**
+ * The part of the dropped tail that still qualifies the date itself.
+ *
+ * Without this bound a wrapped OCR page would let an unrelated later clause
+ * decide the review status: page text can merge whole sections into one line.
+ */
+function localDateRemainder(remainder: string): string {
+  const rest = remainder.replace(/^[\s,;:–—-]+/, '').trim();
+  const boundary = rest.search(NEXT_SEGMENT_PATTERN);
+  return (boundary >= 0 ? rest.slice(0, boundary) : rest).trim();
+}
+
+/**
+ * Whether the part dropped from a date-like value still belongs to the date.
+ *
+ * Conservative by design: only clearly foreign follow-up text is treated as
+ * harmless. Anything else keeps the review flag, because a hidden qualifier
+ * would otherwise be presented as a firm date.
+ */
+export function isReviewRelevantDateRemainder(remainder: string): boolean {
+  const local = localDateRemainder(remainder);
+  // Nothing left once the next field/section starts — no qualifier on the date.
+  if (!local) return false;
+  if (DATE_CONDITION_PATTERN.test(local)) return true;
+  // A lower-case continuation reads as part of the same date phrase.
+  return !SEPARATE_STATEMENT_PATTERN.test(local);
+}
+
+/**
+ * null when no compact date/term can be shown safely — the field is then omitted
+ * from the compact view rather than rendering a contract paragraph as a date.
+ *
+ * `remainder` carries the dropped tail so callers can judge review relevance;
+ * truncation on its own says nothing about how reliable the date is.
+ */
+export function normalizeDateLikeDisplayValue(
+  raw: string,
+): { value: string; truncated: boolean; remainder: string } | null {
+  const cleaned = raw.replace(/\s+/g, ' ').trim();
+  if (!cleaned) return null;
+  // A concrete date wins over length: "01.04.2026 bzw. nach Baufortschritt" is short
+  // but still carries a qualifier that must not be shown as a firm date.
+  const core = extractLeadingDateCore(cleaned);
+  if (core) {
+    return { value: core.core, truncated: core.remainder.length > 0, remainder: core.remainder };
+  }
+  // No parsable date — a short answer such as "nach Abruf" stays verbatim.
+  if (isCompactDateLikeValue(cleaned)) return { value: cleaned, truncated: false, remainder: '' };
+  return null;
+}
+
+function readDateLikeField(
+  field?: ExtractedContractField,
+): { value: string; needsReview: boolean } | null {
+  const parsed = readField(field);
+  if (!parsed) return null;
+  const normalized = normalizeDateLikeDisplayValue(parsed.value);
+  if (!normalized) return null;
+  // Truncation alone is no defect — only a dropped qualifier makes the date unsure.
+  return {
+    value: normalized.value,
+    needsReview: parsed.needsReview || isReviewRelevantDateRemainder(normalized.remainder),
+  };
+}
+
+/** readField for every key; date-like keys additionally get display normalization. */
+function readViewField(
+  key: string,
+  field?: ExtractedContractField,
+): { value: string; needsReview: boolean } | null {
+  return DATE_LIKE_FIELD_KEYS.has(key) ? readDateLikeField(field) : readField(field);
+}
+
 function fieldMap(
   intelligence: ContractOrderProposal['intelligence'],
 ): Record<string, ExtractedContractField> {
@@ -335,7 +480,7 @@ function pushFieldRows(
   if (!fields) return;
   for (const key of keys) {
     if (skipIds?.has(key)) continue;
-    const parsed = readField(fields[key]);
+    const parsed = readViewField(key, fields[key]);
     const labelKey = FIELD_LABEL_KEYS[key];
     if (!parsed || !labelKey) continue;
     if (rows.some((row) => row.id === key)) continue;
@@ -586,7 +731,7 @@ function resolveDeadlineFact(
   fields: Record<string, ExtractedContractField>,
 ): ContractWorkspaceSummaryRow | null {
   for (const key of ['kuendigungsfrist', 'laufzeit', 'beginn', 'mietbeginn'] as const) {
-    const parsed = readField(fields[key]);
+    const parsed = readViewField(key, fields[key]);
     const labelKey = FIELD_LABEL_KEYS[key];
     if (!parsed || !labelKey) continue;
     return {
@@ -809,13 +954,17 @@ export function buildContractWorkspaceSummaryView(
       needsReview: moneyMetric.needsReview,
     });
   }
-  const date = readField(fields.vertragsdatum);
-  if (date || proposal.contractDate) {
+  const date = readViewField('vertragsdatum', fields.vertragsdatum);
+  const fallbackDate = proposal.contractDate
+    ? normalizeDateLikeDisplayValue(proposal.contractDate)
+    : null;
+  if (date || fallbackDate) {
     overviewRows.push({
       id: 'contractDate',
       labelKey: 'documentIntelligence.field.contractDate',
-      value: date?.value ?? proposal.contractDate!,
-      needsReview: date?.needsReview ?? false,
+      value: date?.value ?? fallbackDate!.value,
+      needsReview:
+        date?.needsReview ?? isReviewRelevantDateRemainder(fallbackDate!.remainder),
     });
   }
 
