@@ -677,7 +677,9 @@ export function createInboxWorkflowStub(item: InboxItem): WorkflowResult {
     documentExplanation: null,
     documentUnderstanding: {
       documentType: kind,
-      sender: item.sender,
+      // Seed from recognized party data first — item.sender is only a generic
+      // capture hint and must not outrank an extracted Absender/Lieferant.
+      sender: firstNonEmpty(rd(item, 'Absender', 'Lieferant', 'Tankstelle'), item.sender),
       recipient: item.recognizedData.Empfänger,
       date: item.recognizedData.Datum,
       referenceNumber:
