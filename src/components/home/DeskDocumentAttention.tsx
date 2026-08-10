@@ -4,6 +4,7 @@ import { useApp } from '../../context/AppContext';
 import { filterActiveItems, getInboxItems } from '../../services/inboxService';
 import { buildSummaryForInboxItem } from '../../services/documentSummaryPresentation';
 import { DocumentSummaryCompactCard } from '../documents/DocumentSummaryCompactCard';
+import { Button } from '../ui/Button';
 import { Card, CardTitle } from '../ui/Card';
 
 /**
@@ -36,34 +37,45 @@ export function DeskDocumentAttention() {
       <CardTitle>{translate('pending.title')}</CardTitle>
       <div className="desk-document-attention__list">
         {cards.map(({ item, summary }) => (
-          <DocumentSummaryCompactCard
-            key={item.id}
-            summary={summary}
-            translate={translate}
-            maxFacts={3}
-            cardTestId={`desk-attention-${item.id}`}
-            onPrimaryClick={() => {
-              if (
-                summary.primaryAction.id === 'open_vorgang' &&
-                summary.caseMatch?.matchedCaseId
-              ) {
-                navigate(`/vorgaenge/${summary.caseMatch.matchedCaseId}`);
-                return;
-              }
-              navigate(`/ablage/${item.id}`);
-            }}
-            onAction={(actionId) => {
-              if (actionId === 'later') {
-                navigate('/ablage');
-                return;
-              }
-              if (actionId === 'open_vorgang' && summary.caseMatch?.matchedCaseId) {
-                navigate(`/vorgaenge/${summary.caseMatch.matchedCaseId}`);
-                return;
-              }
-              navigate(`/ablage/${item.id}`);
-            }}
-          />
+          <div className="inbox-card-shell" key={item.id}>
+            <DocumentSummaryCompactCard
+              summary={summary}
+              translate={translate}
+              maxFacts={3}
+              cardTestId={`desk-attention-${item.id}`}
+              onPrimaryClick={() => {
+                if (
+                  summary.primaryAction.id === 'open_vorgang' &&
+                  summary.caseMatch?.matchedCaseId
+                ) {
+                  navigate(`/vorgaenge/${summary.caseMatch.matchedCaseId}`);
+                  return;
+                }
+                navigate(`/ablage/${item.id}`);
+              }}
+              onAction={(actionId) => {
+                if (actionId === 'later') {
+                  navigate('/ablage');
+                  return;
+                }
+                if (actionId === 'open_vorgang' && summary.caseMatch?.matchedCaseId) {
+                  navigate(`/vorgaenge/${summary.caseMatch.matchedCaseId}`);
+                  return;
+                }
+                navigate(`/ablage/${item.id}`);
+              }}
+            />
+            {/* DOCUMENT-INBOX-DELETE-01 — explicit way into the detail page. */}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="document-open-link"
+              onClick={() => navigate(`/ablage/${item.id}`)}
+              data-testid={`desk-open-document-${item.id}`}
+            >
+              {translate('inbox.openDocument')}
+            </Button>
+          </div>
         ))}
       </div>
     </Card>

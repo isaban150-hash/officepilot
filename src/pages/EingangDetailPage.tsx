@@ -34,6 +34,7 @@ import {
 } from '../components/inbox/InboxItemEditForm';
 import { Button } from '../components/ui/Button';
 import { Badge, Card, DataRow } from '../components/ui/Card';
+import { SimpleConfirmDialog } from '../components/ui/SimpleConfirmDialog';
 import { useApp } from '../context/AppContext';
 import { localizeStoredUserText } from '../i18n/resolveStoredText';
 import { formatInboxActionToast } from '../utils/inboxActionToast';
@@ -74,6 +75,7 @@ import { resolveImportInboxDocumentOptionsFromIntakeCarry } from '../services/do
 import {
   confirmDispose,
   deferItem,
+  deleteInboxItem,
   getInboxItemById,
   getPriorityLabel,
   getStatusLabel,
@@ -227,6 +229,9 @@ export function EingangDetailPage() {
   });
   const [duplicateDocument, setDuplicateDocument] = useState<CompanyDocument | null>(null);
   const [isImporting, setIsImporting] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteFailureMessage, setDeleteFailureMessage] = useState<string | null>(null);
+  const deleteTriggerRef = useRef<HTMLButtonElement>(null);
   const [vorgangDialogRequest, setVorgangDialogRequest] = useState(0);
   const [manualCategory, setManualCategory] = useState<ClassifiedDocumentKind>('sonstiges');
   const [intakeExecution, setIntakeExecution] = useState<WorkflowResultExecution | null>(null);
@@ -650,6 +655,24 @@ export function EingangDetailPage() {
       showToast(formatInboxActionToast(result, translate));
       goBack();
     }
+  };
+
+  /** DOCUMENT-INBOX-DELETE-01 — false keeps the dialog open and shows the reason. */
+  const handleConfirmDeleteInboxItem = async (): Promise<boolean> => {
+    const result = await deleteInboxItem(item.id);
+    if (!result) {
+      setDeleteFailureMessage(translate('inbox.delete.failed'));
+      return false;
+    }
+    if (!result.success) {
+      setDeleteFailureMessage(formatInboxActionToast(result, translate));
+      return false;
+    }
+    setDeleteConfirmOpen(false);
+    setDeleteFailureMessage(null);
+    showToast(formatInboxActionToast(result, translate));
+    goBack();
+    return true;
   };
 
   const handleSaveAnyway = () => {
@@ -1391,6 +1414,38 @@ export function EingangDetailPage() {
       <button type="button" className="back-link" onClick={goBack}>
         ← {translate('common.back')}
       </button>
+
+      <div className="eingang-detail-page__delete">
+        <Button
+          ref={deleteTriggerRef}
+          variant="ghost"
+          onClick={() => {
+            setDeleteFailureMessage(null);
+            setDeleteConfirmOpen(true);
+          }}
+          data-testid="inbox-delete-trigger"
+        >
+          {translate('inbox.delete.action')}
+        </Button>
+      </div>
+
+      <SimpleConfirmDialog
+        open={deleteConfirmOpen}
+        title={translate('inbox.delete.confirmTitle')}
+        message={translate('inbox.delete.confirmMessage')}
+        confirmLabel={translate('inbox.delete.confirmButton')}
+        cancelLabel={translate('common.cancel')}
+        failureMessage={deleteFailureMessage ?? undefined}
+        returnFocusRef={deleteTriggerRef}
+        dialogTestId="inbox-delete-dialog"
+        confirmTestId="inbox-delete-confirm"
+        cancelTestId="inbox-delete-cancel"
+        onConfirm={handleConfirmDeleteInboxItem}
+        onCancel={() => {
+          setDeleteConfirmOpen(false);
+          setDeleteFailureMessage(null);
+        }}
+      />
 
       {prioritizeContractWorkspace ? (
         <>

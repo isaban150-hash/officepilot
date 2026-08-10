@@ -1707,6 +1707,23 @@ body {
   margin: 0;
 }
 
+/* DOCUMENT-INBOX-DELETE-01 — explicit "Dokument öffnen" next to the card */
+.inbox-card-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.inbox-card-shell .document-open-link {
+  align-self: flex-start;
+}
+
+.eingang-detail-page__delete {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.75rem;
+}
+
 .desk-document-attention__list {
   display: flex;
   flex-direction: column;

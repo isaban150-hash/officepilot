@@ -13,10 +13,21 @@ import type {
 } from '../types/models';
 import { t, type TranslationKey } from '../i18n';
 import { getPaperFolderById } from './paperFolderService';
-import { removeDocumentFileIntakeTransformPlanCarryContextForInboxItem } from './documentFileIntakeTransformPlanCarryContextStoreService';
-import { removeDocumentWorkResultForInboxItem } from './documentWorkResultStoreService';
+import {
+  findDocumentFileIntakeTransformPlanCarryContext,
+  getDocumentFileIntakeTransformPlanCarryContextStoreSnapshot,
+  removeDocumentFileIntakeTransformPlanCarryContextForInboxItem,
+  replaceDocumentFileIntakeTransformPlanCarryContextStore,
+} from './documentFileIntakeTransformPlanCarryContextStoreService';
+import {
+  getDocumentWorkResult,
+  removeDocumentWorkResultForInboxItem,
+  upsertDocumentWorkResult,
+} from './documentWorkResultStoreService';
+import { getAllExpensesFromStore } from './expenseStore';
 import { getCachedSetup, persistAll } from './persistenceService';
-import { filterSyncActive, isEntitySyncActive, withUpdatedEntitySync } from './sync/syncMetaService';
+import { releaseDocumentFileIfUnreferenced } from './documentFileReferenceService';
+import { filterSyncActive, isEntitySyncActive, withTombstonedEntity, withUpdatedEntitySync } from './sync/syncMetaService';
 
 export type { CreateInboxFromUploadOptions };
 export { createMockInboxItemFromUpload } from './inboxUploadFactory';
@@ -143,7 +154,8 @@ export function sortInboxItems(items: InboxItem[]): InboxItem[] {
 }
 
 export function getInboxSummary(): { total: number; neu: number; urgent: number } {
-  const active = inboxItems.filter(
+  // Tombstoned / sync-inactive items never count towards the inbox badge.
+  const active = filterSyncActive(inboxItems).filter(
     (i) => i.status !== 'abgelegt' && !(i.isAdvertisement && i.status === 'geprueft'),
   );
   return {
@@ -184,6 +196,93 @@ export function confirmDispose(id: string): InboxActionResult | null {
     message:
       'Entsorgung bestätigt. Das Dokument wurde aus dem aktiven Eingang entfernt – nichts automatisch gelöscht.',
     item,
+  };
+}
+
+/**
+ * DOCUMENT-INBOX-DELETE-01 — reasons a document may no longer be deleted from the inbox.
+ * Deletion is only offered while the document is still purely an inbox entry.
+ */
+export type InboxDeleteBlockReason = 'vorgang' | 'archive' | 'expense';
+
+const INBOX_DELETE_BLOCK_MESSAGE_KEYS: Record<InboxDeleteBlockReason, TranslationKey> = {
+  vorgang: 'inbox.delete.blocked.vorgang',
+  archive: 'inbox.delete.blocked.archive',
+  expense: 'inbox.delete.blocked.expense',
+};
+
+/** null when the item is still unused and may be deleted. */
+export function getInboxDeleteBlockReason(item: InboxItem): InboxDeleteBlockReason | null {
+  if (item.vorgangId?.trim()) return 'vorgang';
+  if (item.archiveDocumentId?.trim() || item.importedToArchive) return 'archive';
+  if (getAllExpensesFromStore().some((expense) => expense.linkedInboxId === item.id)) {
+    return 'expense';
+  }
+  return null;
+}
+
+function buildInboxDeleteFailure(item: InboxItem, messageKey: TranslationKey): InboxActionResult {
+  return {
+    success: false,
+    messageKey,
+    message: t(messageKey, getCachedSetup()?.language ?? 'de'),
+    item: { ...item },
+  };
+}
+
+/**
+ * Tombstone delete for an inbox document that was never used elsewhere.
+ *
+ * Atomicity: the tombstone plus the DWR / carry-context removals are applied in
+ * memory and committed by a single persistAll(). A failed persist rolls all three
+ * back, so there is never a half-deleted state. The FileRef is only released after
+ * the delete is committed and only when no other active entity still references it.
+ */
+export async function deleteInboxItem(id: string): Promise<InboxActionResult | null> {
+  const index = inboxItems.findIndex((item) => item.id === id && isEntitySyncActive(item));
+  if (index === -1) return null;
+  const existing = inboxItems[index]!;
+
+  const blockReason = getInboxDeleteBlockReason(existing);
+  if (blockReason) {
+    return buildInboxDeleteFailure(existing, INBOX_DELETE_BLOCK_MESSAGE_KEYS[blockReason]);
+  }
+
+  // Captured for rollback — nothing is finally removed before persistAll() succeeded.
+  const previousCarryContext = findDocumentFileIntakeTransformPlanCarryContext(id);
+  const previousWorkResult = getDocumentWorkResult(id);
+
+  const tombstoned = withTombstonedEntity({ ...existing }, 'inbox_item');
+  inboxItems = [...inboxItems.slice(0, index), tombstoned, ...inboxItems.slice(index + 1)];
+  removeDocumentFileIntakeTransformPlanCarryContextForInboxItem(id);
+  removeDocumentWorkResultForInboxItem(id);
+
+  const persistResult = persistAll();
+  if (!persistResult.success) {
+    inboxItems = [...inboxItems.slice(0, index), existing, ...inboxItems.slice(index + 1)];
+    if (previousCarryContext) {
+      replaceDocumentFileIntakeTransformPlanCarryContextStore([
+        ...getDocumentFileIntakeTransformPlanCarryContextStoreSnapshot(),
+        previousCarryContext,
+      ]);
+    }
+    if (previousWorkResult) {
+      upsertDocumentWorkResult(previousWorkResult);
+    }
+    return buildInboxDeleteFailure(existing, 'inbox.delete.failed');
+  }
+
+  // Shared FileRefs survive: the reference counter still sees the other holders.
+  const released = await releaseDocumentFileIfUnreferenced(existing.fileRefId);
+  if (released) {
+    persistAll();
+  }
+
+  return {
+    success: true,
+    messageKey: 'inbox.toast.deleted',
+    message: t('inbox.toast.deleted', getCachedSetup()?.language ?? 'de'),
+    item: tombstoned,
   };
 }
 

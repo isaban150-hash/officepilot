@@ -479,6 +479,22 @@ const deLegacy = {
   'inbox.toast.contractTasks': '{count} Aufgabe(n) aus Vertrag erstellt',
   'inbox.toast.archived': 'Ins Dokumentenarchiv übernommen.',
   'inbox.toast.taskCreatedSuffix': 'Aufgabe: {title}',
+
+  // DOCUMENT-INBOX-DELETE-01
+  'inbox.openDocument': 'Dokument öffnen',
+  'inbox.delete.action': 'Dokument löschen',
+  'inbox.delete.confirmTitle': 'Dokument wirklich löschen?',
+  'inbox.delete.confirmMessage': 'Das Dokument wird aus dem Eingang entfernt.',
+  'inbox.delete.confirmButton': 'Löschen',
+  'inbox.toast.deleted': 'Das Dokument wurde aus dem Eingang entfernt.',
+  'inbox.delete.blocked.vorgang':
+    'Dieses Dokument gehört bereits zu einem Vorgang. Bitte lösen Sie dort zuerst die Verknüpfung.',
+  'inbox.delete.blocked.archive':
+    'Dieses Dokument liegt bereits im Dokumentenarchiv und kann hier nicht gelöscht werden.',
+  'inbox.delete.blocked.expense':
+    'Zu diesem Dokument gibt es bereits eine Ausgabe. Bitte entfernen Sie zuerst die Ausgabe.',
+  'inbox.delete.failed': 'Das Dokument konnte nicht gelöscht werden. Bitte erneut versuchen.',
+
   'inbox.uploadHint': 'Foto oder PDF – OfficePilot erkennt den Inhalt und legt ab.',
   'inbox.selectType': 'Dokumenttyp wählen (optional)',
   'inbox.typeRandom': 'Zufällig erkennen',

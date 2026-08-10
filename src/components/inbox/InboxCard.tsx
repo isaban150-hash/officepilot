@@ -6,6 +6,7 @@ import { buildSummaryForInboxItem } from '../../services/documentSummaryPresenta
 import { formatInboxActionToast } from '../../utils/inboxActionToast';
 import type { InboxItem } from '../../types/models';
 import type { DocumentSummaryActionId } from '../../types/documentSummary';
+import { Button } from '../ui/Button';
 import { DocumentExperienceCard } from './review/DocumentExperienceCard';
 
 interface InboxCardProps {
@@ -48,22 +49,34 @@ export function InboxCard({ item, onReview, onUpdated }: InboxCardProps) {
   };
 
   return (
-    <DocumentExperienceCard
-      summary={summary}
-      translate={translate}
-      onAction={handleAction}
-      headerMode="headline-only"
-      className="inbox-card document-experience-card--inbox"
-      cardTestId={`inbox-card-${item.id}`}
-      actionUi={{
-        [summary.primaryAction.id]: {
-          testId: `inbox-review-${item.id}`,
-        },
-        later: {
-          testId: `inbox-later-${item.id}`,
-          variant: 'ghost',
-        },
-      }}
-    />
+    <div className="inbox-card-shell">
+      <DocumentExperienceCard
+        summary={summary}
+        translate={translate}
+        onAction={handleAction}
+        headerMode="headline-only"
+        className="inbox-card document-experience-card--inbox"
+        cardTestId={`inbox-card-${item.id}`}
+        actionUi={{
+          [summary.primaryAction.id]: {
+            testId: `inbox-review-${item.id}`,
+          },
+          later: {
+            testId: `inbox-later-${item.id}`,
+            variant: 'ghost',
+          },
+        }}
+      />
+      {/* DOCUMENT-INBOX-DELETE-01 — explicit way into the detail page, no whole-card click. */}
+      <Button
+        variant="ghost"
+        size="sm"
+        className="document-open-link"
+        onClick={() => onReview(item.id)}
+        data-testid={`inbox-open-document-${item.id}`}
+      >
+        {translate('inbox.openDocument')}
+      </Button>
+    </div>
   );
 }
