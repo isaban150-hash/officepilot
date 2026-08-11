@@ -12,8 +12,24 @@ export type ContractPositionSelectionMap = Record<string, ContractPositionSelect
 
 const ROUNDING_TOLERANCE = 0.06;
 
-const NON_BILLABLE_DESCRIPTION_PATTERN =
-  /windlast|befestigungsplan|montagezeichnung|detailzeichnung|technische\s+berechnung|maßstab|grundriss|statik|tragwerk|\bcad\b|\bdwg\b|nachweispflicht|gewährleistung|vertragsstrafe|agb\b|allgemeine\s+vertragsbedingungen|besondere\s+vertragsbedingungen|lieferumfang|materialliste|stückliste|seitenzahl|seite\s+\d+/i;
+/**
+ * Structural non-service rows: contract clauses, totals, carry-overs and section
+ * headings. These are never billable, no matter how complete their numbers look —
+ * an LV prints them with quantity and price just like a real row.
+ *
+ * Anchored at the start of the description on purpose: a service text may well
+ * contain these words ("AGB-Abdichtung herstellen"), and a loose word search
+ * would block real work.
+ */
+const HARD_NON_BILLABLE_PATTERN =
+  /^\s*(?:agb(?![\w-])|(?:allgemeine|besondere)\s+(?:vertrags|geschäfts|geschaefts)bedingungen\b|zwischensumme\b|(?:gesamt|netto|brutto|end)?summe\b|(?:seiten)?übertrag\b|(?:seiten)?uebertrag\b|(?:titel|los|abschnitt|kapitel|gewerk)\s+\d)/i;
+
+/**
+ * Soft hints at technical attachments. A real service may legitimately reference
+ * them ("Abdichtung nach Statik ausführen"), so structured billing data wins here.
+ */
+const SOFT_NON_BILLABLE_PATTERN =
+  /windlast|befestigungsplan|montagezeichnung|detailzeichnung|technische\s+berechnung|maßstab|grundriss|statik|tragwerk|\bcad\b|\bdwg\b|nachweispflicht|gewährleistung|vertragsstrafe|lieferumfang|materialliste|stückliste|seitenzahl|seite\s+\d+/i;
 
 export function buildContractPositionKey(position: DetectedOrderPosition): string {
   return `${position.positionNumber ?? ''}::${position.description.trim().toLowerCase()}`;
@@ -41,10 +57,13 @@ export function isImportableLvPosition(
   const hasLineTotal = Number.isFinite(position.lineTotal) && position.lineTotal > 0;
   if (!hasQuantity && !hasUnitPrice && !hasLineTotal) return false;
 
+  // Structural non-service rows are rejected before any number can vouch for them.
+  if (HARD_NON_BILLABLE_PATTERN.test(description)) return false;
+
   const hasStructuredBillingEvidence = hasQuantity && (hasUnitPrice || hasLineTotal);
   if (hasStructuredBillingEvidence) return true;
 
-  if (NON_BILLABLE_DESCRIPTION_PATTERN.test(description)) return false;
+  if (SOFT_NON_BILLABLE_PATTERN.test(description)) return false;
 
   return true;
 }
