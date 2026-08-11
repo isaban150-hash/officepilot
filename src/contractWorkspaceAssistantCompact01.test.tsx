@@ -247,7 +247,12 @@ describe('CONTRACT-WORKSPACE-ASSISTANT-COMPACT-01', () => {
     assertOrder(html, 'data-testid="auftragskarte-contract"', 'data-testid="auftragskarte-details"');
     expect(html).not.toMatch(/data-testid="auftragskarte-contract"[^>]*\sopen[\s>]/);
     expect(html).not.toMatch(/data-testid="auftragskarte-details"[^>]*\sopen[\s>]/);
-    assertOrder(html, 'data-testid="auftragskarte-contract"', 'data-testid="contract-workspace-summary"');
+    // Seit be00133 steht die Workspace-Summary bewusst vor „Vertrag anzeigen“ und
+    // nicht mehr in dessen Detailsbereich. Diese Reihenfolge wird hier abgesichert.
+    assertOrder(html, 'data-testid="contract-workspace-summary"', 'data-testid="auftragskarte-contract"');
+    expect(html).not.toMatch(
+      /data-testid="auftragskarte-contract-body"[\s\S]*data-testid="contract-workspace-summary"/,
+    );
     expect(html).not.toContain('data-testid="contract-order-lv-overview"');
     assertOrder(html, 'data-testid="auftragskarte"', 'data-testid="ablage-original-file"');
   });
