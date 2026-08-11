@@ -184,10 +184,17 @@ export function resolveOcrPageLimit(pageCount: number, maxPages = PDF_OCR_MAX_PA
   return Math.max(1, Math.min(pageCount, maxPages));
 }
 
+/** Minimal view of a pdf.js TextItem — only what the page text needs. */
+export interface PdfTextItemLike {
+  str?: string;
+  /** pdf.js: the item is followed by a line break. */
+  hasEOL?: boolean;
+}
+
 export interface PdfPageTextEntry {
   pageNumber: number;
   text: string;
-  items?: Array<{ str?: string }>;
+  items?: PdfTextItemLike[];
 }
 
 export interface PdfPageTextExtraction {
@@ -196,14 +203,34 @@ export interface PdfPageTextExtraction {
   pageCount: number;
 }
 
-function textItemsToPageText(items: Array<{ str?: string }>): string {
-  const parts: string[] = [];
+/**
+ * Keeps the line structure pdf.js already reports via hasEOL.
+ *
+ * Items of the same visual line are joined with a space; hasEOL ends the line.
+ * Whitespace is normalized per line only — normalizing the assembled text would
+ * collapse the line breaks again. No semantics here: no sentence detection, no
+ * merging of wrapped values, no column reconstruction.
+ */
+export function textItemsToPageText(items: PdfTextItemLike[]): string {
+  const lines: string[] = [];
+  let current: string[] = [];
+
+  const endLine = () => {
+    const line = current.join(' ').replace(/\s+/g, ' ').trim();
+    if (line) lines.push(line);
+    current = [];
+  };
+
   for (const item of items) {
     if (typeof item.str === 'string' && item.str.trim()) {
-      parts.push(item.str);
+      current.push(item.str);
     }
+    // Also closes on an empty item: the collected line is finished either way.
+    if (item.hasEOL) endLine();
   }
-  return parts.join(' ').replace(/\s+/g, ' ').trim();
+  endLine();
+
+  return lines.join('\n');
 }
 
 export async function extractTextFromPdfPages(
@@ -220,11 +247,11 @@ export async function extractTextFromPdfPages(
       const page = await pdf.getPage(pageNumber);
       try {
         const textContent = await page.getTextContent();
-        const pageText = textItemsToPageText(textContent.items as Array<{ str?: string }>);
+        const pageText = textItemsToPageText(textContent.items as PdfTextItemLike[]);
         pageTexts.push({
           pageNumber,
           text: pageText,
-          items: textContent.items as Array<{ str?: string }>,
+          items: textContent.items as PdfTextItemLike[],
         });
         if (pageText) {
           mergedParts.push(pageText);
