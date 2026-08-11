@@ -332,8 +332,11 @@ describe('CONTRACT-UI-01A — professioneller Vertragsarbeitsplatz', () => {
       );
 
       expect(html).toContain('data-testid="auftragskarte"');
-      expect(html).toContain('Vermieter');
-      expect(html).toContain('Mieter');
+      // Party-Rows prüfen, nicht den Volltext: „Vermieter“ steht auch im Originaltext.
+      expect(html).toContain('data-testid="contract-workspace-summary-party-vermieter-');
+      expect(html).toContain('data-testid="contract-workspace-summary-party-mieter-');
+      expect(html).toContain('class="contract-workspace-summary__party-role">Vermieter</p>');
+      expect(html).toContain('class="contract-workspace-summary__party-role">Mieter</p>');
       expect(html).toMatch(/Haus\s*(&amp;|&)\s*Hof GmbH/);
       expect(html).toMatch(/Dortmund|Am Markt/i);
       expect(html).toMatch(/1\.850/);

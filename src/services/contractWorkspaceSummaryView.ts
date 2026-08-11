@@ -757,6 +757,33 @@ function resolvePartyNameFromCandidates(
   return undefined;
 }
 
+/**
+ * The two contract sides, mirroring how buildContractOrderProposal fills
+ * proposal.customer / proposal.contractor. Used to decide whether the generic
+ * fallback still has a gap to fill.
+ */
+const CUSTOMER_SIDE_ROLES: ReadonlySet<ContractPartyRole> = new Set([
+  'auftraggeber',
+  'kunde',
+  'vermieter',
+  'leasinggeber',
+  'kaeufer',
+  'versicherungsnehmer',
+  'arbeitgeber',
+]);
+
+const CONTRACTOR_SIDE_ROLES: ReadonlySet<ContractPartyRole> = new Set([
+  'auftragnehmer',
+  'subunternehmer',
+  'nachunternehmer',
+  'dienstleister',
+  'mieter',
+  'leasingnehmer',
+  'verkaeufer',
+  'versicherer',
+  'arbeitnehmer',
+]);
+
 function getPartyRolePriority(role: ContractPartyRole | undefined): number {
   switch (role) {
     case 'auftraggeber':
@@ -829,32 +856,41 @@ function buildPartyRows(
     rowRolesByName.set(normalizedName, role);
   };
 
-  addPartyRow(
-    'auftraggeber',
-    resolvePartyNameFromCandidates(
-      readField(fields.auftraggeber)?.value,
-      proposal.customer?.trim(),
-      context?.item?.recognizedData.Kunde?.trim(),
-      context?.item?.recognizedData.Empfänger?.trim(),
-      context?.item?.recognizedData.Empfaenger?.trim(),
-    ),
-  );
-
-  addPartyRow(
-    'auftragnehmer',
-    resolvePartyNameFromCandidates(
-      readField(fields.auftragnehmer)?.value,
-      proposal.contractor?.trim(),
-      context?.item?.sender?.trim(),
-      context?.item?.recognizedData.Lieferant?.trim(),
-    ),
-  );
-
+  // Recognized contract roles first — proposal.customer/contractor are generic
+  // counterparty slots and would otherwise label a Vermieter as Auftraggeber.
   for (const party of parties) {
     const resolvedName = resolvePartyNameFromCandidates(party.name);
     if (!resolvedName) continue;
-    if (party.role === 'auftraggeber' || party.role === 'auftragnehmer') continue;
     addPartyRow(party.role, resolvedName, party.address);
+  }
+
+  const hasSide = (roles: ReadonlySet<ContractPartyRole>) =>
+    [...seenRoles].some((role) => roles.has(role));
+
+  // Fallbacks fill a missing side only; a recognized role on that side wins.
+  if (!hasSide(CUSTOMER_SIDE_ROLES)) {
+    addPartyRow(
+      'auftraggeber',
+      resolvePartyNameFromCandidates(
+        readField(fields.auftraggeber)?.value,
+        proposal.customer?.trim(),
+        context?.item?.recognizedData.Kunde?.trim(),
+        context?.item?.recognizedData.Empfänger?.trim(),
+        context?.item?.recognizedData.Empfaenger?.trim(),
+      ),
+    );
+  }
+
+  if (!hasSide(CONTRACTOR_SIDE_ROLES)) {
+    addPartyRow(
+      'auftragnehmer',
+      resolvePartyNameFromCandidates(
+        readField(fields.auftragnehmer)?.value,
+        proposal.contractor?.trim(),
+        context?.item?.sender?.trim(),
+        context?.item?.recognizedData.Lieferant?.trim(),
+      ),
+    );
   }
 
   if (rows.length > 0) {
