@@ -6,8 +6,6 @@ import type { ContractOrderProposal, EnhancedDetectedOrderPosition } from '../..
 import type { InboxItem } from '../../../types/models';
 import type { TranslationKey } from '../../../i18n';
 import {
-  buildContractPositionKey,
-  buildDefaultContractPositionSelections,
   hasPositionMathConflict,
   isImportableLvPosition,
   type ContractPositionSelectionMap,
@@ -62,26 +60,112 @@ function selectionLabelKey(state: ContractPositionSelectionState): TranslationKe
   }
 }
 
-function buildSafeSelections(
+/**
+ * Selection identity inside the editor.
+ *
+ * The persisted identity (OrderPosition.id) does not exist yet at this point,
+ * and buildContractPositionKey() is derived from positionNumber + description —
+ * both editable here, and equal for two unnumbered rows with the same text.
+ * A position therefore keeps its slot in proposal.positions as identity for the
+ * lifetime of this panel. Nothing of this is persisted.
+ */
+function selectionKey(index: number): string {
+  return `lv-${index}`;
+}
+
+/** Mirrors buildDefaultContractPositionSelections on the local selection key. */
+function buildInitialSelections(
+  positions: EnhancedDetectedOrderPosition[],
+): ContractPositionSelectionMap {
+  const selections: ContractPositionSelectionMap = {};
+  positions.forEach((position, index) => {
+    const key = selectionKey(index);
+    if (!isImportableLvPosition(position)) {
+      selections[key] = 'rejected';
+      return;
+    }
+    if (position.reviewStatus === 'review_required') {
+      selections[key] = 'needs_review';
+      return;
+    }
+    selections[key] = 'selected';
+  });
+  return selections;
+}
+
+type PositionSafety = 'rejected' | 'needs_review' | 'safe';
+
+/** Re-evaluated against the draft, because an edit can invalidate a row. */
+function classifyPosition(position: EnhancedDetectedOrderPosition): PositionSafety {
+  if (!isImportableLvPosition(position)) return 'rejected';
+  if (position.reviewStatus === 'review_required' || hasPositionMathConflict(position)) {
+    return 'needs_review';
+  }
+  return 'safe';
+}
+
+/**
+ * „Auftrag annehmen“ — bestätigt, was der Nutzer sieht.
+ *
+ * Bestehende Zustände bleiben erhalten; eine bewusste Abwahl wird nicht
+ * zurückgenommen. Nur noch nie bewertete sichere Zeilen werden vorausgewählt.
+ */
+function normalizeSelections(
   positions: EnhancedDetectedOrderPosition[],
   drafts: Record<string, EnhancedDetectedOrderPosition>,
   current: ContractPositionSelectionMap,
 ): ContractPositionSelectionMap {
   const next = { ...current };
-  for (const original of positions) {
-    const key = buildContractPositionKey(original);
-    const position = drafts[key] ?? original;
-    if (!isImportableLvPosition(position)) {
+  for (const [index, original] of positions.entries()) {
+    const key = selectionKey(index);
+    const safety = classifyPosition(drafts[key] ?? original);
+    const state = next[key];
+
+    if (safety === 'rejected') {
       next[key] = 'rejected';
       continue;
     }
-    if (position.reviewStatus === 'review_required' || hasPositionMathConflict(position)) {
-      if (next[key] !== 'selected' && next[key] !== 'rejected') {
+    if (safety === 'needs_review') {
+      if (state !== 'selected' && state !== 'rejected') {
         next[key] = 'needs_review';
       }
       continue;
     }
-    if (next[key] !== 'rejected') {
+    if (state === undefined) {
+      next[key] = 'selected';
+    }
+  }
+  return next;
+}
+
+/**
+ * „Alle sicheren auswählen“ — ausdrücklicher Nutzerbefehl.
+ *
+ * Darf eine frühere Abwahl aufheben, aber niemals review_required oder eine
+ * verworfene Zeile freigeben. Importiert selbst nichts.
+ */
+function selectAllSafeSelections(
+  positions: EnhancedDetectedOrderPosition[],
+  drafts: Record<string, EnhancedDetectedOrderPosition>,
+  current: ContractPositionSelectionMap,
+): ContractPositionSelectionMap {
+  const next = { ...current };
+  for (const [index, original] of positions.entries()) {
+    const key = selectionKey(index);
+    const safety = classifyPosition(drafts[key] ?? original);
+    const state = next[key];
+
+    if (safety === 'rejected') {
+      next[key] = 'rejected';
+      continue;
+    }
+    if (safety === 'needs_review') {
+      if (state !== 'selected' && state !== 'rejected') {
+        next[key] = 'needs_review';
+      }
+      continue;
+    }
+    if (state !== 'rejected') {
       next[key] = 'selected';
     }
   }
@@ -136,7 +220,7 @@ export function ContractOrderProposalPanel({
   );
   const [drafts, setDrafts] = useState<Record<string, EnhancedDetectedOrderPosition>>({});
   const [selections, setSelections] = useState<ContractPositionSelectionMap>(() =>
-    buildDefaultContractPositionSelections(positions),
+    buildInitialSelections(positions),
   );
   const [scopeExpanded, setScopeExpanded] = useState(false);
   const [editorExpanded, setEditorExpanded] = useState(false);
@@ -156,15 +240,17 @@ export function ContractOrderProposalPanel({
     };
   }, []);
 
-  const resolvePosition = (original: EnhancedDetectedOrderPosition): EnhancedDetectedOrderPosition => {
-    const key = buildContractPositionKey(original);
-    return drafts[key] ?? original;
+  const resolvePosition = (
+    original: EnhancedDetectedOrderPosition,
+    index: number,
+  ): EnhancedDetectedOrderPosition => {
+    return drafts[selectionKey(index)] ?? original;
   };
 
   const selectedCount = useMemo(
     () =>
-      positions.filter((original) => {
-        const key = buildContractPositionKey(original);
+      positions.filter((original, index) => {
+        const key = selectionKey(index);
         const position = drafts[key] ?? original;
         return selections[key] === 'selected' && isImportableLvPosition(position);
       }).length,
@@ -177,9 +263,10 @@ export function ContractOrderProposalPanel({
 
   const updateDraft = (
     original: EnhancedDetectedOrderPosition,
+    index: number,
     patch: Partial<Pick<EnhancedDetectedOrderPosition, 'description' | 'quantity' | 'unit' | 'unitPrice'>>,
   ) => {
-    const key = buildContractPositionKey(original);
+    const key = selectionKey(index);
     setDrafts((current) => {
       const base = current[key] ?? { ...original };
       const next = { ...base, ...patch };
@@ -197,14 +284,15 @@ export function ContractOrderProposalPanel({
   const handleConfirm = () => {
     if (planLocked) return;
     const selected = positions
-      .filter((original) => selections[buildContractPositionKey(original)] === 'selected')
-      .map((original) => resolvePosition(original))
+      .map((original, index) => ({ original, index }))
+      .filter(({ index }) => selections[selectionKey(index)] === 'selected')
+      .map(({ original, index }) => resolvePosition(original, index))
       .filter((position) => isImportableLvPosition(position));
     onConfirmImport(selected);
   };
 
   const handleSelectAllSafe = () => {
-    setSelections((current) => buildSafeSelections(positions, drafts, current));
+    setSelections((current) => selectAllSafeSelections(positions, drafts, current));
   };
 
   /** Primary CTA — existing create/apply paths only, no new business logic. */
@@ -214,10 +302,11 @@ export function ContractOrderProposalPanel({
       onApplySuggestion?.();
       return;
     }
-    const nextSelections = buildSafeSelections(positions, drafts, selections);
+    const nextSelections = normalizeSelections(positions, drafts, selections);
     const selected = positions
-      .filter((original) => nextSelections[buildContractPositionKey(original)] === 'selected')
-      .map((original) => resolvePosition(original))
+      .map((original, index) => ({ original, index }))
+      .filter(({ index }) => nextSelections[selectionKey(index)] === 'selected')
+      .map(({ original, index }) => resolvePosition(original, index))
       .filter((position) => isImportableLvPosition(position));
     setSelections(nextSelections);
     if (selected.length === 0) {
@@ -297,9 +386,9 @@ export function ContractOrderProposalPanel({
                 className="contract-order-proposal__compact-list"
                 data-testid="contract-order-compact-positions"
               >
-                {summaryView.compactPositions.map((position) => (
+                {summaryView.compactPositions.map((position, index) => (
                   <article
-                    key={buildContractPositionKey(position)}
+                    key={selectionKey(index)}
                     className="contract-order-proposal__compact-item"
                     data-testid={`contract-compact-position-${position.positionNumber ?? 'x'}`}
                   >
@@ -354,8 +443,8 @@ export function ContractOrderProposalPanel({
                       </tr>
                     </thead>
                     <tbody>
-                      {visiblePositions.map((original) => {
-                        const key = buildContractPositionKey(original);
+                      {visiblePositions.map((original, index) => {
+                        const key = selectionKey(index);
                         const position = drafts[key] ?? original;
                         const state = selections[key] ?? 'deselected';
                         const checked = state === 'selected';
@@ -409,7 +498,7 @@ export function ContractOrderProposalPanel({
                                 aria-label={translate('documentIntelligence.table.quantity')}
                                 onChange={(event) => {
                                   const quantity = Number(event.target.value);
-                                  updateDraft(original, {
+                                  updateDraft(original, index, {
                                     quantity: Number.isFinite(quantity) ? quantity : 0,
                                   });
                                 }}
@@ -422,7 +511,7 @@ export function ContractOrderProposalPanel({
                                 value={position.unit || ''}
                                 disabled={state === 'rejected'}
                                 aria-label={translate('documentIntelligence.table.unit')}
-                                onChange={(event) => updateDraft(original, { unit: event.target.value })}
+                                onChange={(event) => updateDraft(original, index, { unit: event.target.value })}
                               />
                             </td>
                             <td>
@@ -433,7 +522,7 @@ export function ContractOrderProposalPanel({
                                 disabled={state === 'rejected'}
                                 aria-label={translate('documentIntelligence.table.description')}
                                 onChange={(event) =>
-                                  updateDraft(original, { description: event.target.value })
+                                  updateDraft(original, index, { description: event.target.value })
                                 }
                               />
                             </td>
@@ -448,7 +537,7 @@ export function ContractOrderProposalPanel({
                                 aria-label={translate('documentIntelligence.table.unitPrice')}
                                 onChange={(event) => {
                                   const unitPrice = Number(event.target.value);
-                                  updateDraft(original, {
+                                  updateDraft(original, index, {
                                     unitPrice: Number.isFinite(unitPrice) ? unitPrice : 0,
                                   });
                                 }}
