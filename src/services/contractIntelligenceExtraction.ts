@@ -535,61 +535,128 @@ function cleanValue(value: string): string {
   return value.replace(/^[\s:;.,\-–—]+|[\s:;.,\-–—]+$/g, '').replace(/\s+/g, ' ').trim();
 }
 
-function extractValueAfterLabel(text: string, labels: string[], maxLength = 140): string | undefined {
-  const normalized = normalizeContractText(text).replace(/\s+/g, ' ');
+/**
+ * Page markers, attachment markers, section marks and signature lines.
+ *
+ * Every alternative needs its structural form — a bare "Anlage" or "Seite" is a
+ * perfectly good first word of a company name ("Anlage Technik GmbH").
+ */
+const STRUCTURAL_LINE_PATTERN =
+  /^\s*(?:§|-{2,}|seite\s+\d|anlage\s*(?:\d|:)|unterschrift\b|(?:allgemeine|besondere)\s+(?:vertrags|gesch[äa]fts)bedingungen\b)/i;
+
+/** Start of another labelled field — ends a standalone label's lookahead. */
+const LABEL_STOP_LINE_PATTERN =
+  /^(?:auftraggeber|auftragnehmer|subunternehmer|nachunternehmer|vermieter|mieter|leasinggeber|leasingnehmer|verk[äa]ufer|k[äa]ufer|versicherer|versicherungsnehmer|arbeitgeber|arbeitnehmer|dienstleister|kunde|bauvorhaben|baustelle|vertragsdatum|vertragsnummer|vertragssumme|vertragsgegenstand|gesamtpreis|gesamtsumme|summe netto|leistungsverzeichnis|zahlungsbedingungen|gew[äa]hrleistung|stundenlohn|wartezeitregelung)/i;
+
+/** Colon, hyphen or dash between label and value. */
+const LABEL_SEPARATOR_PATTERN = '[:\\-–—]';
+
+/**
+ * A label owns a line only when it starts it.
+ *
+ * Returns the rest of the line (empty string for a standalone label line), or
+ * null when the line is not a label line. With `requireSeparator`, text on the
+ * same line counts as a value only behind a real separator — otherwise the line
+ * is prose ("Auftragnehmer führt die Leistungen aus."), not a label.
+ */
+function matchLabelAtLineStart(
+  line: string,
+  labels: string[],
+  requireSeparator = false,
+): string | null {
   for (const label of labels) {
-    const labelRegex = new RegExp(`\\b${escapeRegExp(label)}\\b`, 'i');
-    const match = labelRegex.exec(normalized);
+    const pattern = new RegExp(
+      `^\\s*${escapeRegExp(label)}(?:in)?\\b\\s*(?:(${LABEL_SEPARATOR_PATTERN})\\s*)?(.*)$`,
+      'i',
+    );
+    const match = pattern.exec(line);
     if (!match) continue;
 
-    const remainder = normalized.slice(match.index + match[0].length);
-    const withoutPrefix = remainder.replace(/^[\s:;.,\-–—]+/, '');
-    const boundaryIndex = withoutPrefix.search(/\b(?:auftraggeber|auftragnehmer|subunternehmer|nachunternehmer|bauvorhaben|baustelle|vertragsdatum|vertragsnummer|vertragsart|vertragssumme|gesamtpreis|gesamtsumme|summe netto|leistungsverzeichnis|anlage|seite|§)\b/i);
-    const candidate = cleanValue(withoutPrefix.slice(0, boundaryIndex === -1 ? withoutPrefix.length : boundaryIndex));
-
-    if (!candidate) continue;
-    if (candidate.length > maxLength) continue;
-    if (/^(?:§|anlage|seite)\b/i.test(candidate)) continue;
-    if (/vertrag|gegenstand|leistungsverzeichnis|zahlung|termin|abnahme|skonto|stundenlohn|vertragsstrafe/i.test(candidate)) {
-      continue;
-    }
-    return candidate;
+    const separator = match[1];
+    const rest = (match[2] ?? '').trim();
+    if (!rest) return '';
+    if (requireSeparator && !separator) return null;
+    return rest;
   }
-
-  return undefined;
+  return null;
 }
 
-function extractValueFromLabelLines(lines: string[], labels: string[], maxLookahead = 2): string | undefined {
-  const joined = lines.join('\n');
-  const directValue = extractValueAfterLabel(joined, labels);
-  if (directValue) return directValue;
+/**
+ * Next known field label inside the same line — the value ends there.
+ *
+ * Non-party fields keep the pre-existing behaviour: a line may carry several
+ * labels ("Bauvorhaben: … Baustelle: …"), and each value stops at the next one.
+ */
+const INLINE_FIELD_BOUNDARY_PATTERN =
+  /\b(?:auftraggeber|auftragnehmer|subunternehmer|nachunternehmer|bauvorhaben|baustelle|vertragsdatum|vertragsnummer|vertragsart|vertragssumme|gesamtpreis|gesamtsumme|summe netto|leistungsverzeichnis|anlage|seite)\b|§/i;
 
-  const patterns = labels.map((label) => new RegExp(`\\b${escapeRegExp(label)}\\b`, 'i'));
+function cutAtNextFieldLabel(value: string): string {
+  const boundary = value.search(INLINE_FIELD_BOUNDARY_PATTERN);
+  return boundary === -1 ? value : value.slice(0, boundary);
+}
 
-  for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index] ?? '';
-    if (!patterns.some((pattern) => pattern.test(line))) continue;
+/**
+ * Non-party fields: the label may sit anywhere in the line, as before. Party
+ * roles never use this path — they stay on the strict line-anchored rule.
+ */
+function matchLabelInLine(line: string, label: string): string | null {
+  const pattern = new RegExp(
+    `\\b${escapeRegExp(label)}(?:in)?\\b\\s*(?:${LABEL_SEPARATOR_PATTERN})?\\s*(.*)$`,
+    'i',
+  );
+  const match = pattern.exec(line);
+  if (!match) return null;
+  return (match[1] ?? '').trim();
+}
 
-    const directMatch = line.match(/^(?:[^:]*?:\s*)?(.*)$/i);
-    const directValue = directMatch?.[1]?.trim();
-    if (directValue && directValue.length > 1 && !patterns.some((pattern) => pattern.test(directValue))) {
-      return cleanValue(directValue);
-    }
+function isUsableLabelValue(value: string | undefined): value is string {
+  if (!value || value.length < 2) return false;
+  if (value.length > 140) return false;
+  if (STRUCTURAL_LINE_PATTERN.test(value)) return false;
+  if (/seite\s+\d/i.test(value)) return false;
+  return true;
+}
 
-    const collected: string[] = [];
-    for (let lookahead = 1; lookahead <= maxLookahead; lookahead += 1) {
-      const nextLine = lines[index + lookahead] ?? '';
-      if (!nextLine) break;
-      if (patterns.some((pattern) => pattern.test(nextLine))) break;
-      if (/^(?:auftraggeber|auftragnehmer|subunternehmer|nachunternehmer|bauvorhaben|baustelle|vertragsdatum|vertragsnummer|vertragssumme|gesamtpreis|gesamtsumme|summe netto|leistungsverzeichnis)/i.test(nextLine)) {
+type LabelLineOptions = {
+  /** Party roles: text on the label line counts only behind a separator. */
+  requireSeparator?: boolean;
+  maxLookahead?: number;
+};
+
+function extractValueFromLabelLines(
+  lines: string[],
+  labels: string[],
+  options: LabelLineOptions = {},
+): string | undefined {
+  const { requireSeparator = false, maxLookahead = 2 } = options;
+
+  // Labels are given in priority order — an earlier label wins over an earlier line.
+  for (const label of labels) {
+    for (let index = 0; index < lines.length; index += 1) {
+      const line = lines[index] ?? '';
+      const rest = requireSeparator
+        ? matchLabelAtLineStart(line, [label], true)
+        : matchLabelInLine(line, label);
+      if (rest === null) continue;
+
+      if (rest) {
+        // Party values are already isolated by the strict match; other fields
+        // may share a line and must stop at the next label.
+        const candidate = cleanValue(requireSeparator ? rest : cutAtNextFieldLabel(rest));
+        if (isUsableLabelValue(candidate)) return candidate;
+        continue;
+      }
+
+      // Standalone label line: take the next plausible value line, nothing beyond.
+      for (let lookahead = 1; lookahead <= maxLookahead; lookahead += 1) {
+        const nextLine = lines[index + lookahead];
+        if (!nextLine) break;
+        if (STRUCTURAL_LINE_PATTERN.test(nextLine)) break;
+        if (LABEL_STOP_LINE_PATTERN.test(nextLine)) break;
+        const candidate = cleanValue(nextLine);
+        if (isUsableLabelValue(candidate)) return candidate;
         break;
       }
-      collected.push(nextLine);
-      if (collected.join(' ').length > 140) break;
-    }
-
-    if (collected.length > 0) {
-      return cleanValue(collected.join(' '));
     }
   }
 
@@ -600,10 +667,12 @@ function extractFieldByLabelFallback(
   text: string,
   labels: string[],
   sourcePage?: number,
+  options: LabelLineOptions = {},
 ): ExtractedContractField {
+  const partyField = Boolean(options.requireSeparator);
   const lines = splitNormalizedLines(text);
-  const value = extractValueFromLabelLines(lines, labels);
-  if (value) {
+  const value = extractValueFromLabelLines(lines, labels, options);
+  if (value && (!partyField || isPlausiblePartyName(value))) {
     return {
       value,
       status: 'confirmed',
@@ -615,17 +684,22 @@ function extractFieldByLabelFallback(
 
   const normalized = normalizeContractText(text);
   for (const label of labels) {
-    const directRegex = new RegExp(`\\b${escapeRegExp(label)}\\b\\s*[:\-]?\\s*(.+)`, 'i');
+    // Party fields keep the strict rule here too: line-anchored, separator required.
+    const directRegex = partyField
+      ? new RegExp(`^\\s*${escapeRegExp(label)}(?:in)?\\b\\s*${LABEL_SEPARATOR_PATTERN}\\s*(.+)$`, 'im')
+      : new RegExp(`\\b${escapeRegExp(label)}\\b\\s*[:\\-]?\\s*(.+)`, 'i');
     const match = directRegex.exec(normalized);
-    if (match?.[1]?.trim()) {
-      return {
-        value: cleanValue(match[1]),
-        status: 'confirmed',
-        confidence: 'medium',
-        sourcePage,
-        sourceText: match[0].trim(),
-      };
-    }
+    if (!match?.[1]?.trim()) continue;
+
+    const candidate = cleanValue(match[1]);
+    if (partyField && !isPlausiblePartyName(candidate)) continue;
+    return {
+      value: candidate,
+      status: 'confirmed',
+      confidence: 'medium',
+      sourcePage,
+      sourceText: match[0].trim(),
+    };
   }
 
   return emptyField();
@@ -818,14 +892,30 @@ export function detectContractType(text: string): DetectedContractType {
   };
 }
 
+/**
+ * Clause headings, section titles and signature lines are no party names —
+ * even when they sit right where a name would be expected.
+ */
+const NON_PARTY_VALUE_PATTERN =
+  /^\s*(?:§|-{2,}|seite\s+\d|anlage\s*(?:\d|:)|unterschrift\b|(?:allgemeine|besondere)\s+(?:vertrags|gesch[äa]fts)bedingungen\b|behinderungs?anzeige|nachtr[äa]ge?\b|gew[äa]hrleistungsfrist|vertragsstrafe|zahlungsbedingungen|leistungsverzeichnis)/i;
+
+function isPlausiblePartyName(value: string): boolean {
+  const cleaned = value.trim();
+  if (cleaned.length < 2 || cleaned.length > 90) return false;
+  if (NON_PARTY_VALUE_PATTERN.test(cleaned)) return false;
+  // A name is not a sentence: several words plus sentence punctuation is prose.
+  if (/[.;:]/.test(cleaned) && cleaned.split(/\s+/).length > 8) return false;
+  return true;
+}
+
 export function extractContractParties(text: string): DetectedContractParty[] {
   const parties: DetectedContractParty[] = [];
   const seenRoles = new Set<ContractPartyRole>();
   const lines = splitNormalizedLines(text);
 
   for (const rule of PARTY_LABELS) {
-    const value = extractValueFromLabelLines(lines, rule.labels);
-    if (!value) continue;
+    const value = extractValueFromLabelLines(lines, rule.labels, { requireSeparator: true });
+    if (!value || !isPlausiblePartyName(value)) continue;
     if (seenRoles.has(rule.role)) continue;
     seenRoles.add(rule.role);
     parties.push({
@@ -842,10 +932,12 @@ export function extractContractParties(text: string): DetectedContractParty[] {
       const match = rule.pattern.exec(text);
       if (!match?.[1]?.trim()) continue;
       if (seenRoles.has(rule.role)) continue;
+      const fallbackName = cleanValue(match[1].trim().split('\n')[0].trim());
+      if (!isPlausiblePartyName(fallbackName)) continue;
       seenRoles.add(rule.role);
       parties.push({
         role: rule.role,
-        name: cleanValue(match[1].trim().split('\n')[0].trim()),
+        name: fallbackName,
         status: 'confirmed',
         confidence: 'high',
         sourceText: match[0].trim(),
@@ -914,11 +1006,14 @@ export function extractAllContractFields(
     haftung: extractLabeledField(contractText, [/haftung\s*:\s*([^\n]+)/i]),
 
     // Construction-oriented (filtered in UI by family)
-    auftraggeber: extractFieldByLabelFallback(contractText, ['auftraggeber'], pageHint),
+    auftraggeber: extractFieldByLabelFallback(contractText, ['auftraggeber'], pageHint, {
+      requireSeparator: true,
+    }),
     auftragnehmer: extractFieldByLabelFallback(
       contractText,
       ['subunternehmer', 'auftragnehmer', 'nachunternehmer'],
       pageHint,
+      { requireSeparator: true },
     ),
     bauvorhaben: extractFieldByLabelFallback(
       contractText,

@@ -142,6 +142,8 @@ describe('DOCUMENT-INTELLIGENCE-01 order proposal', () => {
     expect(proposal!.positionCount).toBe(11);
     expect(proposal!.customer).toContain('Isobautec');
     expect(proposal!.contractor).toContain('Ivan Iliev');
+    // Kein Folgefeld und kein Klauseltext am Namen (CONTRACT-CONTRACTOR-EXTRACTION-01).
+    expect(proposal!.contractor).not.toMatch(/Baustellen|Vertragsbedingungen|SEITE/i);
     expect(proposal!.contractTotalNet).toContain('36.029,05');
     expect(proposal!.progressBillingHint).toBe('documentIntelligence.hint.progressBilling');
   });
