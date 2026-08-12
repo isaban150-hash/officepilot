@@ -41,7 +41,8 @@
     "mustInclude": [
       {
         "descriptionContains": "PVC",
-        "quantity": 4799
+        "quantity": 4799,
+        "unitAliases": ["m²", "m2", "qm"]
       }
     ]
   },
@@ -49,6 +50,6 @@
   "knownGaps": [
     "Business Interpretation ist runtime-only und wird nicht als strukturierte facts persistiert — Persistenz-Smoke prüft OCR-Erhalt + Re-Analyse.",
     "Voller processUploadedDocument mit Mehrseiten-Fixture hängt lokal (>10 Min); Stable-Pipeline nutzt daher Contract Intelligence + BI direkt.",
-    "Einheiten aus CI können von OCR-Token abweichen (z. B. qm vs. Stück) — Menge und Beschreibung bleiben geprüft."
+    "Summe der elf Positionen (38.428,05 €) weicht von der ausgewiesenen Vertragssumme (36.029,05 €) ab — bewusst erhaltener Negativfall für den späteren Summenabgleich."
   ]
 }

@@ -1,34 +1,51 @@
-import type { EnhancedDetectedOrderPosition } from '../types/documentIntelligence';
-import { mapDetectedUnit } from './orderUnitMapper';
+import type {
+  EnhancedDetectedOrderPosition,
+  PositionReviewReason,
+} from '../types/documentIntelligence';
+import { isResolvedUnit, resolveOrderUnit } from './orderUnitMapper';
 import { parseGermanMoney } from './documentAmountExtractionService';
+import { lineTotalCents, roundMoney, toCents } from './invoiceMoney';
+
+/**
+ * Unit token shared by every row format. Deliberately open: a structurally
+ * valid LV row must be parsed even when the unit is not (yet) supported —
+ * otherwise the whole position, including quantity and price, disappears.
+ * Bounded so it cannot swallow ordinary description words.
+ */
+const UNIT_TOKEN = String.raw`[A-Za-zÄÖÜäöüß][A-Za-zÄÖÜäöüß0-9²³./]{0,11}`;
 
 const LV_PIPE_ROW =
   /^(\d{1,3})\s*[|]\s*(.+?)\s*[|]\s*(\S+)\s*[|]\s*([\d.,]+)\s*[|]\s*([\d.,]+)\s*[|]\s*([\d.,]+)\s*$/gm;
 
-const LV_SPACE_ROW =
-  /^(\d{1,3})\s+([\d.,]+)\s+(qm|m²|m2|lfdm\.?|lfm|m|st\.?|stk|stück|std\.?|kg|pauschal)\s+(.+?)\s+(?:ep|einzelpreis)\s*[:]?\s*([\d.,]+)\s*(?:€|eur)?(?:\s+(?:gp|gesamt(?:preis)?)\s*[:]?\s*([\d.,]+)\s*(?:€|eur)?)?\s*$/gim;
+const LV_SPACE_ROW = new RegExp(
+  String.raw`^(\d{1,3})\s+([\d.,]+)\s+(${UNIT_TOKEN})\s+(.+?)\s+(?:ep|einzelpreis)\s*[:]?\s*([\d.,]+)\s*(?:€|eur)?(?:\s+(?:gp|gesamt(?:preis)?)\s*[:]?\s*([\d.,]+)\s*(?:€|eur)?)?\s*$`,
+  'gim',
+);
 
-const LV_ALT_ROW =
-  /^(\d{1,3})\s+(.+?)\s+(Stk|m²|m2|m|psch|Std|h|LE|qm|lfdm\.?|lfm|kg|pauschal)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s*$/gim;
-const LV_FLAT_SEQUENCE_ROW =
-  /([A-Za-zÄÖÜäöüß0-9/()\-.,]+?)\s+([\d.,]+)\s*(m²|m2|qm|lfdm\.?|lfm|m|st\.?|stk|stück|std\.?|kg|pauschal)\s+([\d.,]+)\s+([\d.,]+)\s*(?:€|eur)?/gi;
-const ROUNDING_TOLERANCE = 0.06;
+const LV_ALT_ROW = new RegExp(
+  String.raw`^(\d{1,3})\s+(.+?)\s+(${UNIT_TOKEN})\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s*$`,
+  'gim',
+);
 
-function roundMoney(value: number): number {
-  return Math.round(value * 100) / 100;
-}
+const LV_FLAT_SEQUENCE_ROW = new RegExp(
+  String.raw`([A-Za-zÄÖÜäöüß0-9/()\-.,]+?)\s+([\d.,]+)\s*(${UNIT_TOKEN})\s+([\d.,]+)\s+([\d.,]+)\s*(?:€|eur)?`,
+  'gi',
+);
 
-function validatePositionMath(
+/**
+ * Exact cent comparison — the same rounding the invoice uses. No relative
+ * tolerance: a 2 % rule silently accepted ~270 € of error on a large line.
+ */
+function hasLineMathMismatch(
   quantity: number,
   unitPrice: number,
-  lineTotal: number,
-): 'confirmed' | 'review_required' {
-  if (quantity <= 0 || unitPrice <= 0) return 'review_required';
-  const expected = roundMoney(quantity * unitPrice);
-  const diff = Math.abs(expected - roundMoney(lineTotal));
-  if (diff <= ROUNDING_TOLERANCE) return 'confirmed';
-  if (lineTotal > 0 && diff / lineTotal <= 0.02) return 'confirmed';
-  return 'review_required';
+  lineTotal: number | undefined,
+  lineTotalStated: boolean,
+): boolean {
+  if (quantity <= 0 || unitPrice <= 0) return true;
+  // Without a stated GP there is nothing to contradict — no invented conflict.
+  if (!lineTotalStated || lineTotal === undefined) return false;
+  return lineTotalCents(quantity, unitPrice) !== toCents(lineTotal);
 }
 
 function pushPosition(
@@ -53,20 +70,32 @@ function buildPosition(
 ): EnhancedDetectedOrderPosition {
   const quantity = parseGermanMoney(quantityRaw);
   const unitPrice = parseGermanMoney(unitPriceRaw);
+  const lineTotalStated = Boolean(lineTotalRaw);
   const lineTotal = lineTotalRaw ? parseGermanMoney(lineTotalRaw) : roundMoney(quantity * unitPrice);
-  const mapped = mapDetectedUnit(rawUnit);
-  const reviewStatus = validatePositionMath(quantity, unitPrice, lineTotal);
+  const resolved = resolveOrderUnit(rawUnit);
+
+  const reviewReasons: PositionReviewReason[] = [];
+  if (resolved.state === 'unknown') reviewReasons.push('unit_unknown');
+  if (resolved.state === 'ambiguous') reviewReasons.push('unit_ambiguous');
+  if (hasLineMathMismatch(quantity, unitPrice, lineTotal, lineTotalStated)) {
+    reviewReasons.push('line_math_mismatch');
+  }
+
+  const reviewStatus = reviewReasons.length > 0 ? 'review_required' : 'confirmed';
 
   return {
     positionNumber,
     description: description.trim(),
-    unit: mapped.unitLabel ?? mapped.unit,
+    // Unresolved units keep their document text — never a substituted default.
+    unit: isResolvedUnit(resolved) ? resolved.unitLabel ?? resolved.unit : resolved.rawUnit,
+    rawUnit: resolved.rawUnit,
     quantity,
     unitPrice,
     lineTotal,
     sourcePage,
     confidence: reviewStatus === 'confirmed' ? 'high' : 'medium',
     reviewStatus,
+    reviewReasons: reviewReasons.length > 0 ? reviewReasons : undefined,
   };
 }
 

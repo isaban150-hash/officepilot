@@ -128,6 +128,18 @@ type ReviewSectionId =
   | 'further-hints'
   | 'technical';
 
+/**
+ * Shared wording for the blocked import — used by both the confirm-import and
+ * the accept path so the user sees the same message with the actual raw units.
+ */
+export function buildUnitUnresolvedToast(
+  translate: (key: TranslationKey) => string,
+  unresolvedUnits?: Array<{ rawUnit: string }>,
+): string {
+  const units = [...new Set((unresolvedUnits ?? []).map((entry) => entry.rawUnit))].join(', ');
+  return translate('position.unitUnresolved').replace('{units}', units);
+}
+
 export function mergeReviewWorkflowWithRestoredDocumentWorkResult(
   restoredWorkflow: WorkflowResult | null | undefined,
   liveWorkflow: WorkflowResult | null | undefined,
@@ -821,6 +833,9 @@ export function EingangDetailPage() {
       refreshWorkflowItem();
     } else if (result.errorKey === 'order_plan_amendment_required') {
       showToast(translate('order_plan_amendment_required'));
+    } else if (result.errorKey === 'position.unitUnresolved') {
+      // Import wurde vollständig blockiert — das darf nicht lautlos passieren.
+      showToast(buildUnitUnresolvedToast(translate, result.unresolvedUnits));
     }
   };
 
@@ -925,6 +940,10 @@ export function EingangDetailPage() {
           result.errorKey === 'document.filingDecisionRequired'
         ) {
           showToast(translate('filingDecision.confirmRequired'));
+          return;
+        }
+        if (result.errorKey === 'position.unitUnresolved') {
+          showToast(buildUnitUnresolvedToast(translate, result.unresolvedUnits));
           return;
         }
         const maybeKey = result.errorKey as TranslationKey;

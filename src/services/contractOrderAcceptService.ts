@@ -23,6 +23,7 @@ import {
 import { executeArchiveAtom } from './intakeExecutionAtoms';
 import {
   createVorgangFromInboxWithContract,
+  findUnresolvedUnitPositions,
   importSuggestedPositionsToVorgang,
 } from './intakeWorkflowService';
 import { syncContractProofRequirements } from './officePilotMemoryService';
@@ -57,7 +58,12 @@ export type AcceptContractOrderResult =
       createdNewVorgang: boolean;
       successSteps: WorkflowExecutionStepId[];
     }
-  | { success: false; errorKey: string };
+  | {
+      success: false;
+      errorKey: string;
+      /** Only set when the accept was blocked by an unresolved document unit. */
+      unresolvedUnits?: Array<{ positionNumber?: string; description: string; rawUnit: string }>;
+    };
 
 function trimOrUndefined(value: string | undefined | null): string | undefined {
   const trimmed = value?.trim();
@@ -272,6 +278,15 @@ export function acceptContractOrderFromProposal(input: {
   materialStandard?: MaterialStandard;
 }): AcceptContractOrderResult {
   const material = input.materialStandard ?? 'unclear';
+
+  // Fail closed before the first mutation: archiving, Vorgang creation and inbox
+  // linking all happen below, and none of them may run for a document whose unit
+  // cannot be billed. Uses the same check that guards the direct import.
+  const unresolvedUnits = findUnresolvedUnitPositions(input.selectedPositions);
+  if (unresolvedUnits.length > 0) {
+    return { success: false, errorKey: 'position.unitUnresolved', unresolvedUnits };
+  }
+
   // Empty positions allowed for contract accept without LV — still enrich / archive / proofs / billing.
 
   let item = getInboxItemById(input.item.id) ?? input.item;

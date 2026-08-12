@@ -1,3 +1,4 @@
+import type { EnhancedDetectedOrderPosition } from '../types/documentIntelligence';
 import { checkCompanyRelevanceFromInbox, isDocumentAnalysisAllowed } from './companyRelevanceService';
 import {
   buildUnderstandingFromItem,
@@ -24,7 +25,8 @@ import {
   buildPositionImportKey,
   computeContractPositionsTotal,
   formatDetectedPositionDescription,
-  mapDetectedUnit,
+  isResolvedUnit,
+  resolveOrderUnit,
 } from './orderUnitMapper';
 import {
   buildDedupeKey,
@@ -543,10 +545,49 @@ export function createVorgangFromInboxWithContract(
   return result;
 }
 
+/**
+ * Positions whose document unit could not be mapped onto a billable unit.
+ *
+ * Checks the authoritative signals, not just the possibly already normalized
+ * `unit`: a position may carry `unit: 'Stück'` from an older mapping while
+ * `rawUnit` still says "kg". Any of the three signals blocks.
+ */
+export function findUnresolvedUnitPositions(
+  positions: Array<DetectedOrderPosition | EnhancedDetectedOrderPosition>,
+): Array<{ positionNumber?: string; description: string; rawUnit: string }> {
+  const unresolved: Array<{ positionNumber?: string; description: string; rawUnit: string }> = [];
+
+  for (const position of positions) {
+    const enhanced = position as Partial<EnhancedDetectedOrderPosition>;
+    const rawUnit = enhanced.rawUnit ?? position.unit;
+    const flaggedByReason = (enhanced.reviewReasons ?? []).some(
+      (reason) => reason === 'unit_unknown' || reason === 'unit_ambiguous',
+    );
+    const unresolvedRaw = !isResolvedUnit(resolveOrderUnit(rawUnit));
+    const unresolvedUnit = !isResolvedUnit(resolveOrderUnit(position.unit));
+
+    if (flaggedByReason || unresolvedRaw || unresolvedUnit) {
+      unresolved.push({
+        positionNumber: position.positionNumber,
+        description: position.description,
+        rawUnit,
+      });
+    }
+  }
+
+  return unresolved;
+}
+
 export function importSuggestedPositionsToVorgang(
   vorgangId: string,
   positions: DetectedOrderPosition[],
-): { success: boolean; added: number; skipped: number; errorKey?: string } {
+): {
+  success: boolean;
+  added: number;
+  skipped: number;
+  errorKey?: string;
+  unresolvedUnits?: Array<{ positionNumber?: string; description: string; rawUnit: string }>;
+} {
   const vorgang = getVorgangById(vorgangId);
   if (!vorgang) {
     return { success: false, added: 0, skipped: 0 };
@@ -560,6 +601,19 @@ export function importSuggestedPositionsToVorgang(
       added: 0,
       skipped: positions.length,
       errorKey: planLock.errorKey,
+    };
+  }
+
+  // Checked before any mutation: an unresolved unit must never be stored as
+  // Stück, and a mixed batch must not import its clean neighbours either.
+  const unresolvedUnits = findUnresolvedUnitPositions(positions);
+  if (unresolvedUnits.length > 0) {
+    return {
+      success: false,
+      added: 0,
+      skipped: positions.length,
+      errorKey: 'position.unitUnresolved',
+      unresolvedUnits,
     };
   }
 
@@ -583,12 +637,13 @@ export function importSuggestedPositionsToVorgang(
       continue;
     }
 
-    const mappedUnit = mapDetectedUnit(position.unit);
+    const resolvedUnit = resolveOrderUnit(position.unit);
+    if (!isResolvedUnit(resolvedUnit)) continue;
     toAppend.push({
       description: formatDetectedPositionDescription(position),
       plannedQuantity: position.quantity,
-      unit: mappedUnit.unit,
-      unitLabel: mappedUnit.unitLabel,
+      unit: resolvedUnit.unit,
+      unitLabel: resolvedUnit.unitLabel,
       unitPrice: position.unitPrice,
       category: 'arbeit',
       billable: true,

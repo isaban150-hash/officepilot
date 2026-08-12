@@ -15,7 +15,7 @@ import {
   finalizeInvoiceDraft,
 } from './invoiceService';
 import { buildInvoicePrintModel } from './invoicePrintModel';
-import { mapDetectedUnit } from './orderUnitMapper';
+import { resolveOrderUnit } from './orderUnitMapper';
 import { hydrateInboxStore } from './inboxService';
 import { getVorgangById, hydrateVorgangStore } from './vorgangService';
 import type { DetectedOrderPosition, InboxItem } from '../types/models';
@@ -166,7 +166,12 @@ describe('invoice flow connect', () => {
       plannedQuantity: 12,
       unitPrice: 18,
     });
-    expect(mapDetectedUnit('lfm.')).toEqual({ unit: 'Meter', unitLabel: 'lfm' });
+    expect(resolveOrderUnit('lfm.')).toEqual({
+      rawUnit: 'lfm.',
+      state: 'known',
+      unit: 'Meter',
+      unitLabel: 'lfm',
+    });
   });
 
   it('erzeugt Rechnungsentwurf aus übernommenen Auftragspositionen', () => {

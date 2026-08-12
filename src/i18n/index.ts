@@ -985,6 +985,8 @@ const deLegacy = {
   'position.deleted': 'Position gelöscht.',
   'position.deleteConfirm': 'Position wirklich löschen?',
   'position.schlussLocked': 'Schlussrechnung existiert. Leistungspositionen sind gesperrt.',
+  'position.unitUnresolved':
+    'Einheit nicht eindeutig erkannt ({units}). Es wurde keine Position übernommen — bitte Einheit im Vertrag prüfen.',
   'order_plan_amendment_required':
     'Der Auftrag ist bereits bestätigt. Änderungen am vereinbarten Leistungsumfang müssen als Nachtrag erfasst werden.',
   'orderPlan.confirmedHint':
@@ -3209,6 +3211,8 @@ const deLegacy = {
 const de = { ...deLegacy, ...deModules } as const;
 
 const trLegacy: Partial<Record<keyof typeof de, string>> = {
+  'position.unitUnresolved':
+    'Birim kesin olarak tanınamadı ({units}). Hiçbir kalem aktarılmadı — lütfen sözleşmedeki birimi kontrol edin.',
   'app.name': 'OfficePilot',
   'setup.title': 'OfficePilot\'a Hoş Geldiniz',
   'nav.eingang': 'Giriş',

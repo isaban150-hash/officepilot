@@ -138,6 +138,8 @@ export function confirmImportContractPositions(
   skipped: number;
   selectedCount: number;
   errorKey?: string;
+  /** Set when the import was blocked by an unresolved document unit. */
+  unresolvedUnits?: Array<{ positionNumber?: string; description: string; rawUnit: string }>;
 } {
   const confirmed = filterConfirmedPositionsForImport(positions, selections);
   const result = importSuggestedPositionsToVorgang(vorgangId, confirmed);

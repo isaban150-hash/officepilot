@@ -48,11 +48,18 @@ export interface AmountCandidate {
   sourcePage?: number;
 }
 
+/** Machine-readable review reasons — several can apply to one position. */
+export type PositionReviewReason = 'unit_unknown' | 'unit_ambiguous' | 'line_math_mismatch';
+
 export interface EnhancedDetectedOrderPosition extends DetectedOrderPosition {
   sourcePage?: number;
   confidence: AnalysisConfidence;
   reviewStatus: ExtractedFieldStatus;
   constructionSection?: string;
+  /** Verbatim unit text from the document, kept even when it cannot be mapped. */
+  rawUnit?: string;
+  /** Empty or absent when the position is clean. */
+  reviewReasons?: PositionReviewReason[];
 }
 
 export type DetectedContractClauseId =
