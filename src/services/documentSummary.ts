@@ -467,9 +467,12 @@ function buildNonContractSummary(
   const typeLabel = translate(typeLabelKey);
   const understanding = workflow.documentUnderstanding;
 
-  // Priority: BI truth → Understanding → RD → generic fallback (skip placeholders; Absender before Lieferant seed)
+  // Issuer comes from the document itself only: Understanding → RD → generic fallback
+  // (skip placeholders; Absender before Lieferant seed).
+  // bi.facts.parties.counterparty is deliberately NOT a candidate here: on a linked
+  // document it carries the Vorgang customer, which is a recipient — never the issuer.
+  // It stays the first customer candidate below.
   const supplier = preferMeaningfulParty(
-    bi?.facts.parties.counterparty?.name,
     understanding?.sender,
     rd(item, 'Absender', 'Lieferant', 'Tankstelle'),
     item.sender,
