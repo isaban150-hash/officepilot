@@ -67,9 +67,8 @@ import { isContractPlanLocked } from '../services/orderPlanIntegrityService';
 import { getVorgangById } from '../services/vorgangService';
 import type { EnhancedDetectedOrderPosition } from '../types/documentIntelligence';
 import {
-  importInboxDocument,
+  handoffInboxItemToArchive,
   isDuplicateDocument,
-  updateDocumentFromInbox,
 } from '../services/documentService';
 import { resolveImportInboxDocumentOptionsFromIntakeCarry } from '../services/documentFileIntakeTransformPlanCarryContextService';
 import {
@@ -80,7 +79,6 @@ import {
   getPriorityLabel,
   getStatusLabel,
   markInboxAsCompanyDocument,
-  markInboxImportedToArchive,
   saveAdvertisementAnyway,
   updateInboxItemRecognizedData,
 } from '../services/inboxService';
@@ -702,14 +700,12 @@ export function EingangDetailPage() {
   const finishArchiveImport = (mode: 'create' | 'update', existingDocumentId?: string) => {
     setIsImporting(true);
     try {
-      const result =
-        mode === 'create'
-          ? importInboxDocument(
-              item,
-              setup.companyName,
-              resolveImportInboxDocumentOptionsFromIntakeCarry(item.id),
-            )
-          : updateDocumentFromInbox(existingDocumentId!, item, setup.companyName);
+      // R02: one shared handoff — archive write plus inbox marking. A repeated attempt
+      // reuses an existing archive document for this inbox item instead of duplicating.
+      const result = handoffInboxItemToArchive(item, setup.companyName, {
+        ...resolveImportInboxDocumentOptionsFromIntakeCarry(item.id),
+        ...(mode === 'update' && existingDocumentId ? { existingDocumentId } : {}),
+      });
 
       if (!result.success) {
         showToast(translate(result.errorKey as TranslationKey));
@@ -717,13 +713,7 @@ export function EingangDetailPage() {
         return;
       }
 
-      const archiveResult = markInboxImportedToArchive(item.id, result.document.id);
-      if (!archiveResult) {
-        showToast(translate('inbox.importToArchive.markFailed'));
-        revealArchiveImportUi();
-        return;
-      }
-
+      const archiveResult = { item: result.item };
       setItem(archiveResult.item);
       if (!getLastPersistSuccess()) {
         showToast(translate('persist.failed.userAction'));

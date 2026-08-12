@@ -51,6 +51,21 @@ export function countActiveReferencesToFileRef(fileRefId: string): number {
   return count;
 }
 
+/**
+ * R02 — active archive origin for an inbox item.
+ *
+ * Lives in this cross-store layer because it needs both stores and is already the
+ * module inboxService consults for document-side facts; no new import edge is added.
+ * Only active documents count: a tombstoned archive document must not block deletion.
+ */
+export function hasActiveArchiveDocumentForInboxItem(inboxItemId: string): boolean {
+  const id = inboxItemId.trim();
+  if (!id) return false;
+  return getDocumentStoreSnapshot().some(
+    (doc) => isEntitySyncActive(doc) && doc.sourceInboxItemId === id,
+  );
+}
+
 export async function releaseDocumentFileIfUnreferenced(
   fileRefId: string | undefined,
 ): Promise<boolean> {

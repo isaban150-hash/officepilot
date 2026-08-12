@@ -26,7 +26,10 @@ import {
 } from './documentWorkResultStoreService';
 import { getAllExpensesFromStore } from './expenseStore';
 import { getCachedSetup, persistAll } from './persistenceService';
-import { releaseDocumentFileIfUnreferenced } from './documentFileReferenceService';
+import {
+  hasActiveArchiveDocumentForInboxItem,
+  releaseDocumentFileIfUnreferenced,
+} from './documentFileReferenceService';
 import { filterSyncActive, isEntitySyncActive, withTombstonedEntity, withUpdatedEntitySync } from './sync/syncMetaService';
 
 export type { CreateInboxFromUploadOptions };
@@ -215,6 +218,10 @@ const INBOX_DELETE_BLOCK_MESSAGE_KEYS: Record<InboxDeleteBlockReason, Translatio
 export function getInboxDeleteBlockReason(item: InboxItem): InboxDeleteBlockReason | null {
   if (item.vorgangId?.trim()) return 'vorgang';
   if (item.archiveDocumentId?.trim() || item.importedToArchive) return 'archive';
+  // R02: the inbox flags can be missing when the archive write succeeded but the
+  // inbox marking failed to persist. The archive document itself is then the only
+  // proof of origin — deleting the inbox row would drop the DWR for a live document.
+  if (hasActiveArchiveDocumentForInboxItem(item.id)) return 'archive';
   if (getAllExpensesFromStore().some((expense) => expense.linkedInboxId === item.id)) {
     return 'expense';
   }

@@ -29,7 +29,7 @@ import {
   hydrateInboxStore,
   removeStagedInboxItemById,
 } from './services/inboxService';
-import { importInboxDocument } from './services/documentService';
+import { getDocumentById, importInboxDocument } from './services/documentService';
 import { executeSmartIntake } from './services/intakeExecutionService';
 import { archiveMailInboxItem } from './services/mailImportService';
 import { getDocumentFileDerivativeRecoveryContext } from './services/documentFileDerivativeRecoveryContextService';
@@ -194,8 +194,6 @@ describe('STORAGE-DERIVATIVE-INTAKE-PLAN-CONTEXT-CARRY-01', () => {
       kind: 'completed',
       steps: [],
     });
-    const importSpy = vi.spyOn(documentService, 'importInboxDocument');
-
     const workflow = {
       inboxItemId: item.id,
       companyRelevant: true,
@@ -229,21 +227,24 @@ describe('STORAGE-DERIVATIVE-INTAKE-PLAN-CONTEXT-CARRY-01', () => {
       companyName: 'Test GmbH',
     });
     expect(result.successSteps).toContain('archive_document');
-    expect(importSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ id: item.id }),
-      'Test GmbH',
-      expect.objectContaining({
-        transformPlan: expect.objectContaining({
-          policyId: 'business_document',
-          mediaProfile: 'native_pdf',
-        }),
-        transformPlanOrigin: expect.objectContaining({
-          policyId: 'business_document',
-          decision: 'save_permanently',
-          mediaProfile: 'native_pdf',
-        }),
-      }),
-    );
+
+    // Wirkung statt Aufrufbeobachtung: der Smart-Intake-Einstieg holt den Carry-Context
+    // selbst und reicht Plan und Origin bis in den produktiv gespeicherten
+    // Recovery-Context des tatsaechlich importierten Dokuments durch.
+    // (Der Nachbartest prueft denselben Speicher fuer den direkten Import mit
+    // ausdruecklich uebergebenen Optionen — hier zaehlt der automatische Carry.)
+    const archivedDocumentId = result.archiveDocumentId;
+    expect(archivedDocumentId).toBeTruthy();
+    expect(getDocumentById(archivedDocumentId!)?.sourceInboxItemId).toBe(item.id);
+
+    const recovery = getDocumentFileDerivativeRecoveryContext(archivedDocumentId!);
+    expect(recovery?.transformPlan.policyId).toBe('business_document');
+    expect(recovery?.transformPlan.mediaProfile).toBe('native_pdf');
+    expect(recovery?.origin).toEqual({
+      policyId: 'business_document',
+      decision: 'save_permanently',
+      mediaProfile: 'native_pdf',
+    });
   });
 
   it('Import mit Context erzeugt Recovery-Context', () => {

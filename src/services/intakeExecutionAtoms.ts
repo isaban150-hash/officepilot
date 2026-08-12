@@ -3,14 +3,10 @@
  * Behavior must stay identical to the former private helpers in intakeExecutionService.
  */
 import {
-  importInboxDocument,
+  handoffInboxItemToArchive,
   isDuplicateDocument,
-  updateDocumentFromInbox,
 } from './documentService';
-import {
-  finalizeInboxIntake,
-  markInboxImportedToArchive,
-} from './inboxService';
+import { finalizeInboxIntake } from './inboxService';
 import { resolveImportInboxDocumentOptionsFromIntakeCarry } from './documentFileIntakeTransformPlanCarryContextService';
 import {
   acceptSuggestedTasks,
@@ -132,31 +128,22 @@ export function executeArchiveAtom(
     return { item: workingItem };
   }
 
-  const archiveResult = duplicate
-    ? updateDocumentFromInbox(duplicate.id, workingItem, options.companyName)
-    : importInboxDocument(
-        workingItem,
-        options.companyName,
-        resolveImportInboxDocumentOptionsFromIntakeCarry(workingItem.id),
-      );
+  // R02: one shared handoff — archive write plus inbox marking, reusing an existing
+  // archive document for this inbox item instead of creating a duplicate.
+  const archiveResult = handoffInboxItemToArchive(workingItem, options.companyName, {
+    ...resolveImportInboxDocumentOptionsFromIntakeCarry(workingItem.id),
+    ...(duplicate ? { existingDocumentId: duplicate.id } : {}),
+  });
 
   if (!archiveResult.success) {
     markIntakeFailure(failedSteps, 'archive_document', archiveResult.errorKey);
-    return { item: workingItem };
-  }
-
-  const marked = markInboxImportedToArchive(workingItem.id, archiveResult.document.id);
-  if (!marked?.item) {
-    markIntakeFailure(
-      failedSteps,
-      'archive_document',
-      'Inbox-Status nach Archivimport nicht aktualisiert.',
-    );
-    return { item: workingItem, archiveDocumentId: archiveResult.document.id };
+    return archiveResult.document
+      ? { item: workingItem, archiveDocumentId: archiveResult.document.id }
+      : { item: workingItem };
   }
 
   markIntakeSuccess(successSteps, 'archive_document');
-  return { item: marked.item, archiveDocumentId: archiveResult.document.id };
+  return { item: archiveResult.item, archiveDocumentId: archiveResult.document.id };
 }
 
 function runProofSyncAfterVorgangLink(input: {

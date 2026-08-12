@@ -242,10 +242,15 @@ describe('ARCHIVE-TRUTH-UX-01', () => {
   it('Import-Fail lässt Inbox offen und Archivbereich sichtbar', async () => {
     const item = seedItem();
     confirmFilingDecisionForTests(item.id);
-    vi.spyOn(documentService, 'importInboxDocument').mockReturnValue({
+    // Die Seite ruft seit R02 den gemeinsamen Handoff — das ist die produktive Grenze,
+    // an der ein Importfehler entsteht.
+    vi.spyOn(documentService, 'handoffInboxItemToArchive').mockReturnValue({
       success: false,
       errorKey: 'document.titleRequired',
     });
+    const docsBefore = documentService
+      .getDocumentStoreSnapshot()
+      .filter((doc) => doc.sourceInboxItemId === item.id).length;
 
     const mount = await mountDetail(item.id, { revealArchiveImport: true });
     const primary = await waitForPrimaryCta(mount.container);
@@ -259,6 +264,13 @@ describe('ARCHIVE-TRUTH-UX-01', () => {
 
     expect(getInboxItemById(item.id)?.status).toBe('neu');
     expect(getInboxItemById(item.id)?.importedToArchive).not.toBe(true);
+    expect(getInboxItemById(item.id)?.archiveDocumentId).toBeUndefined();
+    // Kein Archivdokument als Nebenwirkung eines gescheiterten Handoffs.
+    expect(
+      documentService.getDocumentStoreSnapshot().filter(
+        (doc) => doc.sourceInboxItemId === item.id,
+      ).length,
+    ).toBe(docsBefore);
     expect(mount.container.querySelector('[data-testid="document-review-more-content"]')).toBeTruthy();
     expect(
       mount.container.querySelector('[data-testid="review-section-content-archive"]'),

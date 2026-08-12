@@ -22,7 +22,7 @@ import {
   syncContractProofRequirementsFromInbox,
   tombstoneMemoryForDocument,
 } from './officePilotMemoryService';
-import { getInboxItemById } from './inboxService';
+import { getInboxItemById, markInboxImportedToArchive } from './inboxService';
 import {
   filterSyncActive,
   generateEntityId,
@@ -621,6 +621,72 @@ export function importInboxDocument(
     transformPlan,
   });
   return result;
+}
+
+export type ArchiveHandoffResult =
+  | {
+      success: true;
+      document: CompanyDocument;
+      item: InboxItem;
+      /** True when an existing archive document for this inbox item was reused. */
+      reusedExistingDocument: boolean;
+    }
+  | { success: false; errorKey: string; document?: CompanyDocument };
+
+/**
+ * R02 — single archive handoff for both productive entry points.
+ *
+ * The archive write and the inbox marking sit behind separate persist boundaries.
+ * When the marking fails, the archive document stays and the inbox row keeps no
+ * archiveDocumentId. Re-running this function must therefore repair that state
+ * instead of creating a second document: an active CompanyDocument carrying
+ * sourceInboxItemId === item.id is the unique proof of an existing archive origin.
+ *
+ * Confirm-first is untouched — the filing gate inside importInboxDocument /
+ * updateDocumentFromInbox still decides, and no Vorgang link is created here.
+ */
+export function handoffInboxItemToArchive(
+  item: InboxItem,
+  linkedCompany: string,
+  options?: ImportInboxDocumentOptions & { existingDocumentId?: string },
+): ArchiveHandoffResult {
+  const existing =
+    (options?.existingDocumentId
+      ? documents.find(
+          (doc) => doc.id === options.existingDocumentId && isEntitySyncActive(doc),
+        )
+      : undefined) ??
+    documents.find((doc) => isEntitySyncActive(doc) && doc.sourceInboxItemId === item.id);
+
+  const importOptions = options
+    ? { transformPlan: options.transformPlan, transformPlanOrigin: options.transformPlanOrigin }
+    : undefined;
+
+  const result = existing
+    ? updateDocumentFromInbox(existing.id, item, linkedCompany)
+    : importInboxDocument(item, linkedCompany, importOptions);
+
+  if (!result.success) {
+    return { success: false, errorKey: result.errorKey };
+  }
+
+  const marked = markInboxImportedToArchive(item.id, result.document.id);
+  if (!marked?.item) {
+    // Archive document stays — getInboxDeleteBlockReason now protects it from a
+    // delete that would drop the DWR, and a repeated handoff reuses this document.
+    return {
+      success: false,
+      errorKey: 'inbox.importToArchive.markFailed',
+      document: result.document,
+    };
+  }
+
+  return {
+    success: true,
+    document: result.document,
+    item: marked.item,
+    reusedExistingDocument: Boolean(existing),
+  };
 }
 
 export function updateDocumentFromInbox(

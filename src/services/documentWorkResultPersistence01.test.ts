@@ -27,11 +27,16 @@ import {
 } from './persistenceService';
 import * as persistenceService from './persistenceService';
 import { setTaskStoreForTests } from './taskStore';
-import { hydrateVorgangStore } from './vorgangService';
+import {
+  hydrateVorgangStore,
+  isInboxLinkedToVorgang,
+  linkInboxToExistingVorgang,
+} from './vorgangService';
 import { getDocumentCase } from '../test/document-cases/_lib/loadCases';
 import { runStablePipeline, testProfile } from '../test/document-cases/_lib/runStablePipeline';
+import { createAuftragInboxItem, createTestVorgang } from '../test/fixtures';
 import { DOCUMENT_WORK_RESULT_ANALYSIS_VERSION } from '../types/documentWorkResult';
-import type { WorkflowResult } from '../types/models';
+import type { InboxItem, WorkflowResult } from '../types/models';
 
 function seedHotelInbox() {
   const docCase = getDocumentCase('HOTEL-01');
@@ -295,6 +300,86 @@ describe('DOCUMENT-WORK-RESULT-PERSISTENCE-01', () => {
     hydrateStoresFromStorage();
     expect(getDocumentWorkResult(item.id)?.sourceFingerprint).toBe(fingerprint);
     expect(getDocumentById(imported.document!.id)?.sourceInboxItemId).toBe(item.id);
+  });
+
+  /**
+   * R03-Restpunkt: der vorgeschlagene Vorgangskontext darf nach einem echten Reload
+   * nicht als bestaetigt erscheinen, und nach bestaetigter Verknuepfung muss der
+   * bestaetigte Zustand seinerseits einen Reload ueberleben.
+   * Aufbau wie in vorgangSuggestionConfirmFirst01: exact ueber Projekt + Baustelle,
+   * Dokumentkunde bewusst abweichend, keine Vorgangs-ID im Dokument.
+   */
+  it('13 — suggested bleibt nach Reload proposed, bestaetigt bleibt nach Reload linked', () => {
+    const VORGANG_ID = 'v-dwr-two-bootstraps';
+    const VORGANG_TITLE = 'Neubau Kirchheide Halle 3';
+    const VORGANG_SITE = 'Industriering 8, 32657 Lemgo';
+    const VORGANG_CUSTOMER = 'Nordwerk Immobilien GmbH';
+
+    hydrateVorgangStore([
+      createTestVorgang({
+        id: VORGANG_ID,
+        title: VORGANG_TITLE,
+        customer: VORGANG_CUSTOMER,
+        baustelle: VORGANG_SITE,
+      } as never),
+    ]);
+
+    const item = {
+      ...createAuftragInboxItem(),
+      id: 'inbox-dwr-two-bootstraps',
+      title: `Angebot ${VORGANG_TITLE}`,
+      classifiedKind: 'angebot',
+      documentType: 'angebot',
+      sender: testProfile.companyName,
+      vorgangId: undefined,
+      vorgangTitle: undefined,
+      vorgangLinkStatus: undefined,
+      recognizedData: {
+        Dokumentart: 'angebot',
+        Absender: testProfile.companyName,
+        Lieferant: testProfile.companyName,
+        Bauvorhaben: VORGANG_TITLE,
+        Baustelle: VORGANG_SITE,
+        Kunde: 'Bauherrengemeinschaft Kirchheide GbR',
+        Auftraggeber: 'Bauherrengemeinschaft Kirchheide GbR',
+        Datum: '01.04.2026',
+      },
+    } as unknown as InboxItem;
+    hydrateInboxStore([item]);
+
+    // 1) suggested-only analysieren und persistieren
+    expect(processUploadedDocument(item.id)).toBeTruthy();
+    expect(isInboxLinkedToVorgang(getInboxItemById(item.id)!)).toBe(false);
+
+    // 2) erster echter Reload
+    resetDocumentWorkResultStoreForTests();
+    expect(getDocumentWorkResult(item.id)).toBeNull();
+    hydrateStoresFromStorage();
+
+    const afterFirst = getDocumentWorkResult(item.id)!;
+    expect(afterFirst.businessInterpretation?.facts.parties.counterparty?.certainty).toBe(
+      'proposed',
+    );
+    expect(afterFirst.businessInterpretation?.vorgangRef.status).toBe('suggested');
+
+    // 3) produktive Verknuepfung ueber den Confirm-first-Pfad
+    expect(linkInboxToExistingVorgang(getInboxItemById(item.id)!, VORGANG_ID)).toBeTruthy();
+    expect(isInboxLinkedToVorgang(getInboxItemById(item.id)!)).toBe(true);
+
+    // 4) Analyse und DWR produktiv aktualisieren
+    expect(processUploadedDocument(item.id)).toBeTruthy();
+
+    // 5) zweiter echter Reload
+    resetDocumentWorkResultStoreForTests();
+    hydrateStoresFromStorage();
+
+    const afterSecond = getDocumentWorkResult(item.id)!;
+    expect(afterSecond.businessInterpretation?.facts.parties.counterparty?.certainty).toBe(
+      'confirmed_by_existing_state',
+    );
+    expect(afterSecond.businessInterpretation?.vorgangRef.status).toBe('linked');
+    expect(afterSecond.businessInterpretation?.vorgangRef.linkedVorgangId).toBe(VORGANG_ID);
+    expect(getInboxItemById(item.id)?.vorgangId).toBe(VORGANG_ID);
   });
 
   it('12 — Mehrfaches Speichern bleibt idempotent', () => {
