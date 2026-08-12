@@ -13,7 +13,10 @@ import type {
   DocumentSenderCategory,
 } from '../types/documentProfile';
 import type { ClassifiedDocumentKind } from '../types/models';
-import { inferUnlabeledSenderFromText } from './documentFieldExtractionService';
+import {
+  cleanLetterheadCandidate,
+  inferUnlabeledSenderFromText,
+} from './documentFieldExtractionService';
 import type { ReceiptAnalysisPipelineResult } from './documentReceiptAnalysisPipelineService';
 
 export type ProfileDetectionResult = {
@@ -282,7 +285,10 @@ function deriveSenderEntity(
     return 'Bundesagentur für Arbeit';
   }
   if (raw && !/seite\s+\d+|von\s+\d+|arbeitsbescheinigung/i.test(raw) && raw.length <= 80) {
-    return raw;
+    // Raw structure feature — normalise before use. Without a safe value fall through
+    // so the labeled and letterhead resolution below still runs.
+    const cleanedRaw = cleanLetterheadCandidate(raw);
+    if (cleanedRaw) return cleanedRaw;
   }
   const labeled = features.find((feature) => feature.id === 'identity.sender_labeled');
   if (typeof labeled?.value === 'string' && labeled.value.trim()) {

@@ -161,7 +161,11 @@ export function isFieldConfidentEnough(level: FieldConfidenceLevel): boolean {
   return level === 'high' || level === 'medium';
 }
 
-function cleanLetterheadCandidate(raw: string): string | undefined {
+/**
+ * Shared letterhead normalisation. Also used by the receipt merchant and authority
+ * sender paths so a raw header line never reaches an organisation field unnormalised.
+ */
+export function cleanLetterheadCandidate(raw: string): string | undefined {
   let value = raw.replace(/\s+/g, ' ').trim();
   // Drop lone logo glyphs ("C Cirmak …" / "F Finanzamt …").
   value = value.replace(/^[A-ZÄÖÜ]\s+(?=[A-ZÄÖÜ])/u, '');

@@ -10,6 +10,7 @@ import {
   resolveInvoiceAmount,
 } from './documentAmountExtractionService';
 import {
+  cleanLetterheadCandidate,
   extractFieldsWithConfidence,
   toConfidentPlainFields,
 } from './documentFieldExtractionService';
@@ -135,7 +136,11 @@ function inferMerchantFromHeader(text: string): string | undefined {
       continue;
     }
     if (isLikelyDateLine(line)) continue;
-    if (line.length >= 3) return line;
+    if (line.length < 3) continue;
+    // Normalise before returning — a raw header line may carry a lone logo glyph.
+    // If nothing safe remains, keep scanning instead of aborting the search.
+    const cleaned = cleanLetterheadCandidate(line);
+    if (cleaned) return cleaned;
   }
 
   return undefined;
@@ -576,8 +581,14 @@ function applyAuthorityOcrSender(
       result.Absender = BUNDESAGENTUR_CANONICAL_SENDER;
       return;
     }
-    result.Absender = authorityLetterValue;
-    return;
+    // The structure feature keeps the raw header line, so normalise here. Only a safe
+    // cleaned value may be written — never undefined or raw text over an already clean
+    // Absender that buildAuthorityRecognizedData set from the extracted fields.
+    const cleanedAuthority = cleanLetterheadCandidate(authorityLetterValue);
+    if (cleanedAuthority) {
+      result.Absender = cleanedAuthority;
+      return;
+    }
   }
 
   const labeledAuthority = plain.Absender ?? plain.Lieferant;
