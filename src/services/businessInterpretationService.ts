@@ -109,6 +109,12 @@ export interface InterpretBusinessFromWorkflowInput {
   workflow: WorkflowResultForInterpretation;
   /** Current vorgang when already linked or suggested — read-only comparison only. */
   linkedVorgang?: Vorgang | null;
+  /**
+   * How `linkedVorgang` was reached. 'linked' = confirmed per isInboxLinkedToVorgang,
+   * 'suggested' = computed proposal only. Undefined behaves like 'suggested' so a caller
+   * that omits it can never accidentally claim a confirmed state.
+   */
+  vorgangContextStatus?: 'linked' | 'suggested';
 }
 
 function normalizeName(value: string | undefined | null): string {
@@ -472,8 +478,11 @@ function buildVorgangRef(
   item: InboxItem,
   workflow: WorkflowResultForInterpretation,
   linkedVorgang: Vorgang | null | undefined,
+  confirmed: boolean,
 ): BusinessInterpretationVorgangRef {
-  if (item.vorgangId) {
+  // Only a confirmed link may report 'linked'. A legacy vorgangId without a valid
+  // vorgangLinkStatus falls through to the suggestion branches below.
+  if (confirmed && item.vorgangId) {
     return {
       status: 'linked',
       linkedVorgangId: item.vorgangId,
@@ -1079,15 +1088,17 @@ export function interpretBusinessFromWorkflow(
   input: InterpretBusinessFromWorkflowInput,
 ): BusinessInterpretationResult {
   const { item, workflow, linkedVorgang } = input;
+  const vorgangConfirmed = input.vorgangContextStatus === 'linked';
   const recognitionUncertain = isRecognitionUncertain(item, workflow);
   const meaning = resolveEvent(item, workflow, linkedVorgang, recognitionUncertain);
-  const vorgangRef = buildVorgangRef(item, workflow, linkedVorgang);
+  const vorgangRef = buildVorgangRef(item, workflow, linkedVorgang, vorgangConfirmed);
   const parties = buildParties(workflow);
   const effects = buildEffects(item, workflow, meaning.eventType);
   const structured = buildStructuredBusinessFacts({
     item,
     workflow,
     linkedVorgang,
+    vorgangConfirmed,
     eventType: meaning.eventType,
   });
   const missingInformation = enrichGapsFromFacts(

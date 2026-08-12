@@ -295,6 +295,7 @@ function buildPartiesBlock(
   linkedVorgang: Vorgang | null | undefined,
   conflicts: BusinessInterpretationConflict[],
   family: ContractFamily | undefined,
+  vorgangConfirmed: boolean,
 ): BusinessStructuredFacts['parties'] {
   const intelligence =
     workflow.contractIntelligence ?? workflow.contractOrderProposal?.intelligence ?? null;
@@ -421,11 +422,14 @@ function buildPartiesBlock(
   }
 
   if (linkedVorgang?.customer?.trim()) {
+    // Only a confirmed link is an existing state. A suggestion stays 'proposed' (rank 3),
+    // so document-own 'detected' values (rank 4) keep precedence while the Vorgang
+    // customer remains available as a fallback.
     const stateParty = buildParty(
       linkedVorgang.customer,
       'counterparty',
       'vorgangState',
-      'confirmed_by_existing_state',
+      vorgangConfirmed ? 'confirmed_by_existing_state' : 'proposed',
       'kunde',
     );
     counterpartyCandidates.push(stateParty);
@@ -464,7 +468,7 @@ function buildPartiesBlock(
     }
   }
 
-  if (counterparty && linkedVorgang?.customer?.trim()) {
+  if (vorgangConfirmed && counterparty && linkedVorgang?.customer?.trim()) {
     if (
       normalizeName(linkedVorgang.customer) !== normalizeName(counterparty.name) &&
       !normalizeName(counterparty.name).includes(normalizeName(linkedVorgang.customer)) &&
@@ -509,6 +513,7 @@ function buildSubject(
   linkedVorgang: Vorgang | null | undefined,
   family: ContractFamily | undefined,
   conflicts: BusinessInterpretationConflict[],
+  vorgangConfirmed: boolean,
 ): BusinessStructuredFacts['subject'] {
   const fields = allContractFields(workflow);
   const proposal = workflow.contractOrderProposal;
@@ -555,11 +560,14 @@ function buildSubject(
     if (!site) {
       site = {
         value: linkedVorgang.baustelle,
-        certainty: 'confirmed_by_existing_state',
+        certainty: vorgangConfirmed ? 'confirmed_by_existing_state' : 'proposed',
         source: 'vorgangState',
         fieldKey: 'baustelle',
       };
     } else if (
+      // A mismatch against a merely suggested Vorgang is not a conflict with an
+      // existing state — only a confirmed link justifies that claim.
+      vorgangConfirmed &&
       normalizeName(site.value) !== normalizeName(linkedVorgang.baustelle) &&
       !normalizeName(site.value).includes(normalizeName(linkedVorgang.baustelle)) &&
       !normalizeName(linkedVorgang.baustelle).includes(normalizeName(site.value))
@@ -1040,6 +1048,11 @@ export interface BuildStructuredBusinessFactsInput {
   item: InboxItem;
   workflow: WorkflowCore;
   linkedVorgang?: Vorgang | null;
+  /**
+   * True only for a confirmed link (isInboxLinkedToVorgang). Defaults to false so an
+   * omitted flag can never upgrade a mere suggestion to a confirmed state.
+   */
+  vorgangConfirmed?: boolean;
   eventType: BusinessEventType;
 }
 
@@ -1057,8 +1070,21 @@ export function buildStructuredBusinessFacts(
 ): BuildStructuredBusinessFactsResult {
   const conflicts: BusinessInterpretationConflict[] = [];
   const family = resolveFamily(input.workflow);
-  const parties = buildPartiesBlock(input.workflow, input.linkedVorgang, conflicts, family);
-  const subject = buildSubject(input.workflow, input.linkedVorgang, family, conflicts);
+  const vorgangConfirmed = input.vorgangConfirmed === true;
+  const parties = buildPartiesBlock(
+    input.workflow,
+    input.linkedVorgang,
+    conflicts,
+    family,
+    vorgangConfirmed,
+  );
+  const subject = buildSubject(
+    input.workflow,
+    input.linkedVorgang,
+    family,
+    conflicts,
+    vorgangConfirmed,
+  );
   const timeline = buildTimeline(input.workflow, input.item);
   const money = buildMoney(
     input.workflow,

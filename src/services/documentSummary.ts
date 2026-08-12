@@ -477,11 +477,14 @@ function buildNonContractSummary(
     rd(item, 'Absender', 'Lieferant', 'Tankstelle'),
     item.sender,
   );
+  // Recipient: what the document itself says wins. A linked or suggested Vorgang customer
+  // confirms the assignment but must not rewrite the recipient printed on the document —
+  // it stays available as the last fallback when the document names no party at all.
   const customer = preferMeaningfulParty(
-    bi?.facts.parties.counterparty?.name,
     understanding?.customer,
     understanding?.recipient,
     rd(item, 'Auftraggeber', 'Kunde', 'Empfänger'),
+    bi?.facts.parties.counterparty?.name,
   );
   const invoiceNumber = firstNonEmpty(
     rd(item, 'Rechnungsnummer', 'Belegnummer'),

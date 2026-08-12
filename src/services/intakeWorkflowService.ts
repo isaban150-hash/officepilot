@@ -77,8 +77,19 @@ function withBusinessInterpretation(
   item: InboxItem,
   core: WorkflowResultCore,
 ): WorkflowResult {
-  const linkedId = item.vorgangId ?? core.suggestedVorgang?.vorgangId ?? null;
+  // Confirm-first: a stored, confirmed link and a merely computed suggestion must not
+  // reach the interpretation as the same thing. The Vorgang data itself stays available
+  // either way — only its status differs, so downstream can label it honestly.
+  const confirmed = isInboxLinkedToVorgang(item);
+  const linkedId = confirmed
+    ? item.vorgangId ?? null
+    : core.suggestedVorgang?.vorgangId ?? item.vorgangId ?? null;
   const linkedVorgang = linkedId ? getVorgangById(linkedId) ?? null : null;
+  const vorgangContextStatus: 'linked' | 'suggested' | undefined = !linkedVorgang
+    ? undefined
+    : confirmed
+      ? 'linked'
+      : 'suggested';
   let result: WorkflowResult;
   try {
     result = {
@@ -87,6 +98,7 @@ function withBusinessInterpretation(
         item,
         workflow: core,
         linkedVorgang,
+        vorgangContextStatus,
       }),
     };
   } catch (error) {
