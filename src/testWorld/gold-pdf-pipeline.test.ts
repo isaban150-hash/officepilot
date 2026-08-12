@@ -92,10 +92,12 @@ describe('TESTWORLD gold PDF pipeline 04B', () => {
       // eslint-disable-next-line no-console
       console.log(`Report written: ${reportPath}`);
 
-      // Harness gate: all 35 PDFs must run through the pipeline (no ERROR).
-      // PASS/FAIL vs Expected is the measurement result — report is the deliverable.
+      // Regression gate on the live comparison: all 35 PDFs must run through the
+      // pipeline (no ERROR) and none may deviate from Expected (no FAIL). The written
+      // report stays a diagnostic artifact — it is never the source of truth.
       expect(report.checked).toBe(35);
       expect(report.error).toBe(0);
+      expect(report.fail, report.deviations.join('\n')).toBe(0);
       expect(existsSync(reportPath)).toBe(true);
     },
     300_000,
