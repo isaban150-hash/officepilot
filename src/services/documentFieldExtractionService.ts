@@ -335,7 +335,8 @@ function inferRecipientFromAddressBlock(
     return undefined;
   }
 
-  // Match only on the line segment immediately before each z. Hd. marker.
+  // Match on the line segment carrying each z. Hd. marker, or on the single
+  // non-empty line immediately before it.
   const markerRe = new RegExp(RECIPIENT_ZHD_MARKER.source, RECIPIENT_ZHD_MARKER.flags);
   let marker: RegExpExecArray | null;
   while ((marker = markerRe.exec(text)) !== null) {
@@ -347,9 +348,25 @@ function inferRecipientFromAddressBlock(
     const end = marker.index;
     const lookbackStart = Math.max(0, end - RECIPIENT_ZHD_LOOKBACK);
     const rawWindow = text.slice(lookbackStart, end);
-    const lineBreak = Math.max(rawWindow.lastIndexOf('\n'), rawWindow.lastIndexOf('\r'));
-    const window = (lineBreak >= 0 ? rawWindow.slice(lineBreak + 1) : rawWindow).trimEnd();
-    const match = window.match(RECIPIENT_BEFORE_ZHD)?.[1]?.trim();
+    // Native PDF text keeps the line break, so "z. Hd." can start its own line and the
+    // recipient sits on the line above; flat text keeps both on one line. Check the
+    // marker's own segment first, then exactly one preceding non-empty segment — never
+    // the whole letterhead. RECIPIENT_BEFORE_ZHD stays anchored at the segment end, so
+    // e-mail, address and heading lines cannot qualify.
+    // Bound to physical lines FIRST, then drop empties: a marker at the start of its own
+    // line leaves an empty trailing segment, and removing it before slicing would pull an
+    // extra older line into range.
+    const segments = rawWindow
+      .split(/\r?\n|\r/)
+      .slice(-2)
+      .reverse()
+      .map((segment) => segment.trim())
+      .filter((segment) => segment.length > 0);
+    let match: string | undefined;
+    for (const segment of segments) {
+      match = segment.match(RECIPIENT_BEFORE_ZHD)?.[1]?.trim();
+      if (match) break;
+    }
     if (!match) continue;
 
     const cleaned = cleanPartyCapture(match);

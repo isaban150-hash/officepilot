@@ -538,7 +538,10 @@ function buildNonContractSummary(
     pushFact(facts, 'deadline', 'documentExperience.fact.due', deadline);
     pushFact(facts, 'site', 'documentExperience.fact.site', site);
   } else if (family === 'invoice_out') {
-    pushFact(facts, 'customer', 'documentExperience.fact.recipient', customer || supplier);
+    // Outgoing document: recipient is Auftraggeber → Kunde → Empfänger only. The issuer
+    // (Absender → Lieferant → item.sender) must never stand in — showing the own company
+    // as recipient is a false statement; an omitted fact is not.
+    pushFact(facts, 'customer', 'documentExperience.fact.recipient', customer);
     pushFact(facts, 'invoiceNumber', 'documentExperience.fact.invoiceNumber', invoiceNumber);
     pushFact(facts, 'amount', 'documentExperience.fact.amount', money);
     pushFact(facts, 'date', 'documentExperience.fact.date', date);
@@ -587,7 +590,8 @@ function buildNonContractSummary(
       letterDemand || bi?.operational.nextStep,
     );
   } else if (family === 'offer') {
-    pushFact(facts, 'customer', 'documentExperience.fact.customer', customer || supplier);
+    // Same direction rule as invoice_out — the issuer is never the offer's customer.
+    pushFact(facts, 'customer', 'documentExperience.fact.customer', customer);
     pushFact(facts, 'subject', 'documentExperience.fact.subject', subject);
     pushFact(facts, 'amount', 'documentExperience.fact.amount', money);
     pushFact(facts, 'deadline', 'documentExperience.fact.validUntil', deadline);
