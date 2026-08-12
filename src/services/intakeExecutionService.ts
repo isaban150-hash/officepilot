@@ -137,8 +137,9 @@ export function executeLegacySmartIntakeSequence(
 
 /**
  * Central expense-runner eligibility (adapter only).
- * Same suggestedVorgang truthiness as executeVorgangAtom / wouldLinkVorgangOnSmartIntake:
- * if Legacy would attempt a link, stay on Legacy — runner has no link_vorgang scope.
+ * Single source of truth: the enabled link_vorgang action produced by buildNextActions.
+ * executeVorgangAtom and wouldLinkVorgangOnSmartIntake read the same action, so if
+ * Legacy would attempt a link we stay on Legacy — the runner has no link_vorgang scope.
  */
 function shouldUseExpensePlanRunner(
   workflow: WorkflowResult,

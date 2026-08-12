@@ -100,6 +100,9 @@ export const MOCK_INBOX_ITEMS: InboxItem[] = [
     receivedAt: '2026-03-25',
     vorgangId: 'v-001',
     vorgangTitle: 'Badezimmer-Sanierung Müller',
+    // Matches the only productive writer (setInboxVorgangLink), which always sets
+    // vorgangId, vorgangTitle and vorgangLinkStatus together.
+    vorgangLinkStatus: 'linked',
     recognizedData: {
       Rechnungsnummer: 'HB-9928471',
       Betrag: '342,16 €',

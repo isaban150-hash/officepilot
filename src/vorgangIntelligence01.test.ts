@@ -100,6 +100,9 @@ describe('VORGANG-INTELLIGENCE-01', () => {
       id: 'inbox-exact',
       classifiedKind: 'werkvertrag',
       vorgangId: 'v-exact',
+      // Confirmed link per isInboxLinkedToVorgang — vorgangId alone is not enough.
+      vorgangLinkStatus: 'linked',
+      vorgangTitle: 'Sägewerk Ernst Flisch',
       recognizedData: {
         Auftraggeber: 'Ernst Flisch',
         Baustelle: 'Werkstraße 1',
@@ -156,7 +159,14 @@ describe('VORGANG-INTELLIGENCE-01', () => {
     );
   });
 
-  it('likely: nur Kunde → likely', () => {
+  /**
+   * Confirm-first: Bei einem rechnungs-/lieferungsähnlichen Dokument ohne
+   * deterministisch bestätigte Verknüpfung wird auch ein einzelner Kandidat bewusst
+   * in den bestätigungspflichtigen Auswahlpfad versetzt. 'multiple' ist hier das
+   * technische Signal für manuelle Auswahl, nicht die Behauptung mehrerer Treffer —
+   * die sichtbare Mehrzahl-Aussage hängt getrennt an candidates.length.
+   */
+  it('Eingangsrechnung mit nur einem Kundentreffer bleibt bestätigungspflichtig', () => {
     hydrateVorgangStore([
       createTestVorgang({
         id: 'v-cust',
@@ -176,15 +186,21 @@ describe('VORGANG-INTELLIGENCE-01', () => {
       },
     });
     const match = buildDocumentCaseMatch(item);
-    expect(match.matchStatus).toBe('likely');
-    expect(match.matchedCaseId).toBe('v-cust');
+    expect(match.matchStatus).toBe('multiple');
+    // Genau ein Kandidat — und trotzdem keine automatische Zuordnung.
+    expect(match.candidates).toHaveLength(1);
+    expect(match.candidates[0]?.caseId).toBe('v-cust');
+    expect(match.matchedCaseId).toBeNull();
     expect(match.reasons).toContain('same_customer');
 
     const summary = buildDocumentSummary(item, workflowFor(item, minimalBi('eingangsrechnung')), {
       translate,
     });
-    expect(summary.primaryAction.id).toBe('link_vorgang');
-    expect(summary.primaryAction.labelKey).toBe('vorgangIntelligence.action.assign');
+    // Bestätigungspflichtig: weder Öffnen noch stilles Zuordnen.
+    expect(summary.primaryAction.id).toBe('select_vorgang');
+    expect(summary.primaryAction.labelKey).toBe('vorgangIntelligence.action.select');
+    expect(summary.primaryAction.id).not.toBe('open_vorgang');
+    expect(summary.primaryAction.id).not.toBe('link_vorgang');
   });
 
   it('multiple: mehrere gleich starke Treffer', () => {
@@ -265,7 +281,8 @@ describe('VORGANG-INTELLIGENCE-01', () => {
     expect(match.reasons).toEqual(expect.arrayContaining(['same_project', 'same_customer']));
 
     const summary = buildInboxDocumentSummary(item, { translate });
-    expect(summary.primaryAction.id).toBe('open_vorgang');
+    // Computed exact match without a confirmed stored link stays confirm-first.
+    expect(summary.primaryAction.id).toBe('link_vorgang');
   });
 
   it('multiple: gemeinsamer Projekt-Präfix ohne eindeutigen Titel bleibt mehrdeutig', () => {

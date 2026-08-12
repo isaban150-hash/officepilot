@@ -201,14 +201,23 @@ describe('UX-WORKFLOW-01 document review', () => {
     }
   });
 
-  it('bei vollständigen Daten erscheint Alles vollständig', () => {
+  it('offener Vorgangsbezug, offener Unterschriftenstatus oder offene Bestätigungen sind nicht vollständig', () => {
     const item = processUpload({
       sourceFileName: 'lieferschein.pdf',
       recognizedText: `${CONTRACT_TEXT}\nEmpfänger: Mustermann Sanitär GmbH`,
     });
     const workflow = processUploadedDocument(item.id)!;
     const checks = buildDocumentReviewChecks(item, workflow);
-    expect(isDocumentReviewComplete(checks)).toBe(true);
+
+    // Confirm-first: solange Vorgangsbezug, Unterschriftenstatus oder Bestätigungen
+    // offen sind, ist das Dokument nicht vollständig geprüft.
+    const ids = checks.map((check) => check.id);
+    expect(ids).toContain('missing-vorgang_unclear');
+    expect(ids).toContain('missing-signature_unclear');
+    expect(ids).toContain('confirm-assign_vorgang');
+    expect(ids).toContain('confirm-confirm_contract_parties');
+    expect(isDocumentReviewComplete(checks)).toBe(false);
+
     const html = renderDetail(item.id);
     if (html.includes('contract-order-proposal')) {
       expect(html).toContain('data-testid="auftragskarte"');

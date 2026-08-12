@@ -3193,6 +3193,7 @@ const deLegacy = {
 
   'vorgangIntelligence.match.title': 'Passender Vorgang gefunden',
   'vorgangIntelligence.match.multipleTitle': 'Mehrere passende Vorgänge',
+  'vorgangIntelligence.match.checkTitle': 'Vorgang prüfen',
   'vorgangIntelligence.match.reasonLabel': 'Grund:',
   'vorgangIntelligence.action.assign': 'Vorgang zuordnen',
   'vorgangIntelligence.action.select': 'Vorgang auswählen',
@@ -3849,6 +3850,7 @@ const trLegacy: Partial<Record<keyof typeof de, string>> = {
   'documentExperience.action.later': 'Sonra',
   'documentExperience.action.continue': 'Devam',
   'documentExperience.action.openCase': 'İşi aç',
+  'vorgangIntelligence.match.checkTitle': 'İşi kontrol et',
   'documentExperience.details.nextStep': 'Sonraki adım',
   'auftragskarte.field.ownRole': 'Rolünüz',
   'auftragskarte.field.service': 'Hizmetiniz',
@@ -4635,6 +4637,7 @@ const bgLegacy: Partial<Record<keyof typeof de, string>> = {
   'documentExperience.action.later': 'По-късно',
   'documentExperience.action.continue': 'Напред',
   'documentExperience.action.openCase': 'Отвори дело',
+  'vorgangIntelligence.match.checkTitle': 'Провери делото',
   'documentExperience.details.nextStep': 'Следваща стъпка',
   'auftragskarte.field.ownRole': 'Вашата роля',
   'auftragskarte.field.service': 'Вашата услуга',

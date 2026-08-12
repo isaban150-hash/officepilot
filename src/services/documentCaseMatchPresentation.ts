@@ -10,7 +10,7 @@ import type {
 import type { InboxItem } from '../types/models';
 import { buildDocumentCaseMatch } from './documentCaseMatchService';
 import { resolveWorkflowActionForCaseMatch } from './documentPrimaryTargetResolver';
-import { getVorgangById } from './vorgangService';
+import { getVorgangById, isInboxLinkedToVorgang } from './vorgangService';
 
 const REASON_LABEL_KEYS: Record<DocumentCaseMatchReasonId, TranslationKey> = {
   same_customer: 'vorgangIntelligence.reason.sameCustomer',
@@ -31,7 +31,32 @@ export function resolveDocumentCaseMatchReasonLabel(
   return translate(REASON_LABEL_KEYS[reason]);
 }
 
-export function primaryActionForCaseMatch(match: DocumentCaseMatch): DocumentSummaryActionRef {
+/**
+ * Confirmed link = isInboxLinkedToVorgang (vorgangId AND linked/created) and the
+ * target Vorgang still exists. known_link alone is NOT sufficient: it is derived
+ * from item.vorgangId and therefore also fires for legacy items that carry an id
+ * without a valid vorgangLinkStatus.
+ */
+export function resolveConfirmedLinkCaseId(item: InboxItem): string | null {
+  if (!isInboxLinkedToVorgang(item)) return null;
+  const id = item.vorgangId!;
+  return getVorgangById(id) ? id : null;
+}
+
+export function primaryActionForCaseMatch(
+  match: DocumentCaseMatch,
+  options?: { confirmedLinkCaseId?: string | null },
+): DocumentSummaryActionRef {
+  // Only a confirmed, still existing link may open the Vorgang without a further
+  // confirmation step. A computed exact match stays confirm-first.
+  if (options?.confirmedLinkCaseId) {
+    return {
+      id: 'open_vorgang',
+      labelKey: 'documentExperience.action.openCase',
+      enabled: true,
+    };
+  }
+
   const action = resolveWorkflowActionForCaseMatch(match.matchStatus);
   switch (action) {
     case 'link_vorgang':
@@ -92,6 +117,8 @@ export function attachDocumentCaseMatch(
     caseMatch,
     primaryAction: preservePrimary
       ? summary.primaryAction
-      : primaryActionForCaseMatch(caseMatch),
+      : primaryActionForCaseMatch(caseMatch, {
+          confirmedLinkCaseId: resolveConfirmedLinkCaseId(item),
+        }),
   };
 }

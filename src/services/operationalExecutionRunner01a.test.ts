@@ -45,6 +45,31 @@ function seedHotel() {
   return { observation, workflow, item };
 }
 
+/**
+ * ELIGIBILITY-01 — production fixture: the Vorgang is seeded BEFORE the pipeline runs,
+ * so suggestedVorgang and the enabled link_vorgang action both come from
+ * buildNextActions. The WorkflowResult is never patched by hand.
+ */
+function seedHotelWithLinkableVorgang(vorgangId: string) {
+  hydrateVorgangStore([
+    createTestVorgang({
+      id: vorgangId,
+      title: 'Hotelaufenthalt Berlin',
+      customer: 'City Lodge Berlin GmbH',
+    }),
+  ]);
+  return seedHotel();
+}
+
+/** ELIGIBILITY-01 — exakt eine aktivierte Verknüpfungsaktion, keine Anlage, keine Auswahl. */
+function expectSingleEnabledLinkAction(workflow: WorkflowResult) {
+  const enabled = (id: string) =>
+    workflow.nextActions.filter((action) => action.id === id && action.enabled);
+  expect(enabled('link_vorgang')).toHaveLength(1);
+  expect(enabled('create_vorgang')).toHaveLength(0);
+  expect(enabled('select_vorgang')).toHaveLength(0);
+}
+
 function spyAllProductiveAtoms() {
   return {
     archive: vi.spyOn(intakeExecutionAtoms, 'executeArchiveAtom'),
@@ -193,18 +218,10 @@ describe('OPERATIONAL-EXECUTION-RUNNER-01A', () => {
 
     it('B: Expense mit gültigem Vorgangsvorschlag → Legacy mit Link, kein Runner', () => {
       setOperationalExecutionRunnerEnabledForTests(true);
-      const { workflow, item } = seedHotel();
-      const vorgang = createTestVorgang({
-        id: 'v-expense-link',
-        title: 'Baustelle Müller',
-        customer: 'Familie Müller',
-      });
-      hydrateVorgangStore([vorgang]);
-      hydrateInboxStore([{ ...item, vorgangId: undefined }]);
-      const withSuggestion: WorkflowResult = {
-        ...workflow,
-        suggestedVorgang: linkSuggestion(vorgang.id),
-      };
+      const { workflow: withSuggestion, item } = seedHotelWithLinkableVorgang('v-expense-link');
+      const vorgang = getVorgangById('v-expense-link')!;
+      expect(withSuggestion.suggestedVorgang?.vorgangId).toBe(vorgang.id);
+      expectSingleEnabledLinkAction(withSuggestion);
       expect(wouldLinkVorgangOnSmartIntake(withSuggestion, item)).toBe(true);
 
       const runSpy = vi.spyOn(operationalExecutionRunner, 'runOperationalExecutionPlan');
@@ -219,23 +236,23 @@ describe('OPERATIONAL-EXECUTION-RUNNER-01A', () => {
       expect(vorgangSpy).toHaveBeenCalledTimes(1);
       expect(archiveSpy).toHaveBeenCalled();
       expect(result.successSteps).toContain('link_vorgang');
+      expect(result.successSteps).not.toContain('create_vorgang');
       expect(result.successSteps).toContain('archive_document');
       expect(result.successSteps).toContain('finalize_inbox');
       expect(result.vorgangId).toBe(vorgang.id);
       expect(getInboxItemById(item.id)?.vorgangId).toBe(vorgang.id);
+      // Complete write contract: id, title and a valid link status.
+      expect(getInboxItemById(item.id)?.vorgangTitle).toBeTruthy();
+      expect(['linked', 'created']).toContain(getInboxItemById(item.id)?.vorgangLinkStatus);
       expect(getVorgangById(vorgang.id)).toBeTruthy();
       expect(result.completed).toBe(true);
     });
 
     it('C: Flag aus + Expense mit Vorgangsvorschlag → Legacy unverändert', () => {
       setOperationalExecutionRunnerEnabledForTests(false);
-      const { workflow, item } = seedHotel();
-      const vorgang = createTestVorgang({ id: 'v-expense-link-off' });
-      hydrateVorgangStore([vorgang]);
-      const withSuggestion: WorkflowResult = {
-        ...workflow,
-        suggestedVorgang: linkSuggestion(vorgang.id),
-      };
+      const { workflow: withSuggestion, item } = seedHotelWithLinkableVorgang('v-expense-link-off');
+      const vorgang = getVorgangById('v-expense-link-off')!;
+      expectSingleEnabledLinkAction(withSuggestion);
 
       const runSpy = vi.spyOn(operationalExecutionRunner, 'runOperationalExecutionPlan');
       const result = executeSmartIntake(withSuggestion, {
@@ -244,7 +261,10 @@ describe('OPERATIONAL-EXECUTION-RUNNER-01A', () => {
 
       expect(runSpy).not.toHaveBeenCalled();
       expect(result.successSteps).toContain('link_vorgang');
+      expect(result.successSteps).not.toContain('create_vorgang');
       expect(getInboxItemById(item.id)?.vorgangId).toBe(vorgang.id);
+      expect(getInboxItemById(item.id)?.vorgangTitle).toBeTruthy();
+      expect(['linked', 'created']).toContain(getInboxItemById(item.id)?.vorgangLinkStatus);
     });
 
     it('D: null / undefined Vorgangsvorschlag → Runner (gleiche Semantik wie Legacy-Guard)', () => {
@@ -285,13 +305,7 @@ describe('OPERATIONAL-EXECUTION-RUNNER-01A', () => {
 
     it('E/F: Adapter mit Vorgangsvorschlag startet Runner nicht (Dual-Execution-Schutz)', () => {
       setOperationalExecutionRunnerEnabledForTests(true);
-      const { workflow, item } = seedHotel();
-      const vorgang = createTestVorgang({ id: 'v-expense-dual' });
-      hydrateVorgangStore([vorgang]);
-      const withSuggestion: WorkflowResult = {
-        ...workflow,
-        suggestedVorgang: linkSuggestion(vorgang.id),
-      };
+      const { workflow: withSuggestion, item } = seedHotelWithLinkableVorgang('v-expense-dual');
 
       const runSpy = vi.spyOn(operationalExecutionRunner, 'runOperationalExecutionPlan');
       const atoms = spyAllProductiveAtoms();

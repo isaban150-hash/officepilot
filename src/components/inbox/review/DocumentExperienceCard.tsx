@@ -177,7 +177,10 @@ export function DocumentExperienceCard({
         >
           <h3 className="document-experience-card__section-title">
             {summary.caseMatch.matchStatus === 'multiple'
-              ? translate('vorgangIntelligence.match.multipleTitle')
+              ? summary.caseMatch.candidates.length > 1
+                ? translate('vorgangIntelligence.match.multipleTitle')
+                : /* One candidate must never be announced as several. */
+                  translate('vorgangIntelligence.match.checkTitle')
               : translate('vorgangIntelligence.match.title')}
           </h3>
           {summary.caseMatch.matchedCaseTitle ? (

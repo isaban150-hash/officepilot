@@ -45,6 +45,7 @@ import {
   createVorgangFromInbox,
   findSimilarVorgaenge,
   getVorgangById,
+  isInboxLinkedToVorgang,
   linkInboxToExistingVorgang,
 } from './vorgangService';
 import { resolveDraftTruthOverrides } from './vorgangMatchingService';
@@ -252,7 +253,22 @@ function buildNextActions(
     });
   }
 
-  if (input.primaryTargetAction === 'link_vorgang' && input.suggestedVorgang && !item.vorgangId) {
+  // Canonical link decision: a productively resolved suggestedVorgang pointing at an
+  // existing Vorgang always yields an enabled link_vorgang action, not only when the
+  // case match already resolved to 'link_vorgang'. Otherwise a valid suggestion is
+  // silently dropped further down (gate, runner eligibility, executeVorgangAtom).
+  // 'select_vorgang' stays untouched: an ambiguous match must be selected, not linked.
+  // Legacy items with a vorgangId but no valid vorgangLinkStatus are NOT confirmed
+  // linked, so they keep an explicit, confirmation-bound repair path here.
+  const linkTargetExists =
+    input.suggestedVorgang && Boolean(getVorgangById(input.suggestedVorgang.vorgangId));
+
+  if (
+    input.primaryTargetAction !== 'select_vorgang' &&
+    input.suggestedVorgang &&
+    linkTargetExists &&
+    !isInboxLinkedToVorgang(item)
+  ) {
     actions.push({
       id: 'link_vorgang',
       labelKey: 'intake.action.linkVorgang',

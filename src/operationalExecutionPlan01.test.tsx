@@ -250,6 +250,11 @@ describe('OPERATIONAL-EXECUTION-PLAN-01-FIX-01 — legacy parity for visible rea
   });
 
   it('shared canCreate gate ignores proposal alone', () => {
+    const createAction = [
+      { id: 'create_vorgang' as const, labelKey: 'intake.action.createVorgang' as const, enabled: true },
+    ];
+
+    // No resolver action at all → never create.
     expect(
       canCreateVorgangFromSmartIntakeGates(
         {
@@ -260,6 +265,8 @@ describe('OPERATIONAL-EXECUTION-PLAN-01-FIX-01 — legacy parity for visible rea
         { vorgangId: undefined, documentType: undefined },
       ),
     ).toBe(false);
+
+    // Matching document type but still no enabled create_vorgang action → false.
     expect(
       canCreateVorgangFromSmartIntakeGates(
         {
@@ -269,7 +276,33 @@ describe('OPERATIONAL-EXECUTION-PLAN-01-FIX-01 — legacy parity for visible rea
         },
         { vorgangId: undefined, documentType: 'kundenauftrag' },
       ),
+    ).toBe(false);
+
+    // Enabled create_vorgang action plus matching document type → true.
+    expect(
+      canCreateVorgangFromSmartIntakeGates(
+        {
+          companyRelevant: true,
+          contractAnalysis: null,
+          classification: null,
+          nextActions: createAction,
+        },
+        { vorgangId: undefined, documentType: 'kundenauftrag' },
+      ),
     ).toBe(true);
+
+    // Action present but document type does not target a Vorgang → still false.
+    expect(
+      canCreateVorgangFromSmartIntakeGates(
+        {
+          companyRelevant: true,
+          contractAnalysis: null,
+          classification: null,
+          nextActions: createAction,
+        },
+        { vorgangId: undefined, documentType: undefined },
+      ),
+    ).toBe(false);
   });
 
   it('preview hides review_document and open_invoice_workflow', () => {

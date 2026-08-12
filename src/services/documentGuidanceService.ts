@@ -312,8 +312,12 @@ function addBusinessInterpretationActions(
     pushUniqueAction(actions, seen, candidate.id, labelKey);
   }
 
-  if (actions.length === 0 && businessInterpretation?.operational.nextStep) {
-    pushUniqueAction(actions, seen, 'review', 'reviewWorkflow.recommend.reviewDocument');
+  // A concrete operational next step must win over the generic review label — this is
+  // the same line buildPrioritizedDocumentGuidance puts first in `now`, so assistant
+  // and review stay on one wording. The generic key remains the fallback only.
+  const nextStep = businessInterpretation?.operational.nextStep?.trim();
+  if (actions.length === 0 && nextStep) {
+    pushUniqueAction(actions, seen, 'operational-next-step', nextStep as TranslationKey);
   }
 }
 

@@ -11,6 +11,7 @@ import {
   resolvePrimaryTargetObjectForDocumentType,
   resolvePrimaryTargetObjectForKind,
 } from './documentPrimaryTargetService';
+import { isInboxLinkedToVorgang } from './vorgangService';
 
 function hasResolverAction(
   workflow: { nextActions?: WorkflowResult['nextActions'] },
@@ -91,11 +92,14 @@ export function wouldLinkVorgangOnSmartIntake(
   workflow: Pick<WorkflowResult, 'companyRelevant'> & {
     nextActions?: WorkflowResult['nextActions'];
   },
-  item: Pick<InboxItem, 'vorgangId'>,
+  item: Pick<InboxItem, 'vorgangId' | 'vorgangLinkStatus'>,
 ): boolean {
+  // buildNextActions already withholds link_vorgang for confirmed links; the item
+  // check stays only as a guard and uses the authoritative confirmed-link rule, so
+  // a legacy vorgangId without a valid status still reaches the link path.
   return (
     workflow.companyRelevant &&
-    !item.vorgangId &&
+    !isInboxLinkedToVorgang(item as InboxItem) &&
     hasResolverAction(workflow, 'link_vorgang')
   );
 }
