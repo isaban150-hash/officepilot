@@ -76,6 +76,23 @@ describe('documentRecognizedDataService', () => {
       expect(recognizedData.Tankstelle).not.toBe('Tankstelle');
     });
 
+    it('entfernt die Logo-Initiale, ohne den Händlernamen zu kürzen', () => {
+      const recognizedData = buildEvidenceBasedRecognizedData({
+        classifiedKind: 'tankbeleg',
+        recognizedText: [
+          'A Aral Station Nord',
+          'Diesel 41,90 EUR',
+          'Kartenzahlung Girocard',
+        ].join('\n'),
+      });
+
+      // Initiale entfernt …
+      expect(recognizedData.Tankstelle).toBe('Aral Station Nord');
+      expect(recognizedData.Tankstelle).not.toMatch(/^A\s/);
+      // … und der Rest des Namens bleibt vollständig.
+      expect(recognizedData.Tankstelle).not.toBe('Aral');
+    });
+
     it('uses OCR-only fields for ec_beleg', () => {
       const recognizedData = buildEvidenceBasedRecognizedData({
         classifiedKind: 'ec_beleg',

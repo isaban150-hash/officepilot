@@ -162,13 +162,28 @@ export function isFieldConfidentEnough(level: FieldConfidenceLevel): boolean {
 }
 
 /**
- * Shared letterhead normalisation. Also used by the receipt merchant and authority
- * sender paths so a raw header line never reaches an organisation field unnormalised.
+ * Narrow normalisation: whitespace plus a single leading logo glyph ("A Aral …",
+ * "F Finanzamt …") — nothing else.
+ *
+ * Receipt merchants need exactly this and nothing more: on a receipt the header line
+ * is the merchant name, so rubric words like "Tankstelle" are part of the name and
+ * must survive. Letterhead callers keep the broad cleanup below.
+ */
+export function stripLetterheadLogoInitial(raw: string): string {
+  return raw
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^[A-ZÄÖÜ]\s+(?=[A-ZÄÖÜ])/u, '')
+    .trim();
+}
+
+/**
+ * Shared letterhead normalisation. Also used by the authority sender path so a raw
+ * header line never reaches an organisation field unnormalised. Starts from the narrow
+ * logo-initial rule and then applies the broad letterhead cleanup.
  */
 export function cleanLetterheadCandidate(raw: string): string | undefined {
-  let value = raw.replace(/\s+/g, ' ').trim();
-  // Drop lone logo glyphs ("C Cirmak …" / "F Finanzamt …").
-  value = value.replace(/^[A-ZÄÖÜ]\s+(?=[A-ZÄÖÜ])/u, '');
+  let value = stripLetterheadLogoInitial(raw);
   value = value.split(/\s*[·|]\s*/)[0]?.trim() ?? value;
   value = value
     .replace(

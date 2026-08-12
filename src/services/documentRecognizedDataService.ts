@@ -11,6 +11,7 @@ import {
 } from './documentAmountExtractionService';
 import {
   cleanLetterheadCandidate,
+  stripLetterheadLogoInitial,
   extractFieldsWithConfidence,
   toConfidentPlainFields,
 } from './documentFieldExtractionService';
@@ -137,10 +138,11 @@ function inferMerchantFromHeader(text: string): string | undefined {
     }
     if (isLikelyDateLine(line)) continue;
     if (line.length < 3) continue;
-    // Normalise before returning — a raw header line may carry a lone logo glyph.
-    // If nothing safe remains, keep scanning instead of aborting the search.
-    const cleaned = cleanLetterheadCandidate(line);
-    if (cleaned) return cleaned;
+    // Narrow normalisation only: a receipt header line IS the merchant name, so rubric
+    // words ("… Tankstelle München"), places and legal forms must stay. The broad
+    // letterhead cleanup would truncate them.
+    const cleaned = stripLetterheadLogoInitial(line);
+    if (cleaned.length >= 3) return cleaned;
   }
 
   return undefined;
