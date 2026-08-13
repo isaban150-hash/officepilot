@@ -53,7 +53,6 @@ import { executeSmartIntake } from '../services/intakeExecutionService';
 import { getLastPersistSuccess } from '../services/persistenceService';
 import {
   acceptSuggestedTasks,
-  createWorkflowVorgang,
   linkWorkflowVorgang,
   processUploadedDocument,
 } from '../services/intakeWorkflowService';
@@ -776,17 +775,9 @@ export function EingangDetailPage() {
       }
     }
 
-    const result = createWorkflowVorgang(item, setup.materialStandard);
-    if (result) {
-      setItem(result.inbox);
-      if (!getLastPersistSuccess()) {
-        showToast(translate('persist.failed.userAction'));
-      } else {
-        showToast(translate('vorgang.create.success'));
-      }
-    } else {
-      setVorgangDialogRequest((n) => n + 1);
-    }
+    // CUSTOMER-FACHOBJEKT-04B — a new Vorgang always goes through the dialog so
+    // the customer decision is made explicitly. Nothing is created before that.
+    setVorgangDialogRequest((n) => n + 1);
   };
 
   const handleIntakeImportPositions = () => {

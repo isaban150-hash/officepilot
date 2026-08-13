@@ -13,12 +13,33 @@ import {
   getAllVorgaenge,
   getVorgangById,
   getVorgangCardMode,
+  isInboxLinkedToVorgang,
   linkInboxToExistingVorgang,
   type VorgangCardMode,
 } from '../../services/vorgangService';
 import { getLastPersistSuccess } from '../../services/persistenceService';
-import type { InboxItem, MaterialStandard, Vorgang, VorgangDraft } from '../../types/models';
+import { isOwnCompanyName } from '../../services/customerOwnCompanyGuard';
+import { getCustomerById, getCustomerStoreSnapshot } from '../../services/customerStoreService';
+import {
+  buildCustomerSubline,
+  CustomerDecisionChoice,
+  type CustomerDecisionMode,
+} from '../customer/CustomerDecisionChoice';
+import type { CustomerDecision } from '../../services/customerService';
+import type { Customer, InboxItem, MaterialStandard, Vorgang, VorgangDraft } from '../../types/models';
 import type { TranslationKey } from '../../i18n';
+
+/** Selectable customers: no empty names, never the own company, deterministic order. */
+function loadSelectableCustomers(): Customer[] {
+  return getCustomerStoreSnapshot()
+    .filter((customer) => customer.name.trim() && !isOwnCompanyName(customer.name))
+    .sort(
+      (a, b) =>
+        a.name.localeCompare(b.name, 'de') ||
+        a.city.localeCompare(b.city, 'de') ||
+        a.createdAt.localeCompare(b.createdAt),
+    );
+}
 
 interface InboxVorgangPanelProps {
   item: InboxItem;
@@ -43,6 +64,11 @@ export function InboxVorgangPanel({
   );
   const [similar, setSimilar] = useState<Vorgang[]>([]);
   const [selectedVorgangId, setSelectedVorgangId] = useState<string>('');
+  const [customerMode, setCustomerMode] = useState<CustomerDecisionMode | null>(null);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  /** Runtime failures only (vanished customer). Static validation is derived below. */
+  const [customerError, setCustomerError] = useState<string | null>(null);
 
   if (mode === 'none') return null;
 
@@ -65,6 +91,12 @@ export function InboxVorgangPanel({
     setDraft(nextDraft);
     setSimilar(matches);
     setSelectedVorgangId(matches[0]?.id ?? item.vorgangId ?? '');
+
+    // Fresh snapshot per opening; no decision is carried over from a previous run.
+    setCustomers(loadSelectableCustomers());
+    setCustomerMode(null);
+    setSelectedCustomerId(null);
+    setCustomerError(null);
     setDialogOpen(true);
   };
 
@@ -90,8 +122,49 @@ export function InboxVorgangPanel({
     }
   };
 
+  const trimmedCustomerName = draft.customer.trim();
+  const isOwnCompanyCustomer = isOwnCompanyName(trimmedCustomerName);
+  const createDisabled =
+    customerMode === null ||
+    (customerMode === 'new' && (!trimmedCustomerName || isOwnCompanyCustomer)) ||
+    (customerMode === 'existing' && !selectedCustomerId);
+
+  // Derived from the current state so the reason is visible while the button is
+  // still disabled — a click on a disabled button never fires.
+  const customerValidationHint =
+    customerMode !== 'new'
+      ? null
+      : !trimmedCustomerName
+        ? translate('customerDecision.nameRequired')
+        : isOwnCompanyCustomer
+          ? translate('customerDecision.ownCompany')
+          : null;
+
+  const buildCustomerDecision = (): CustomerDecision | null => {
+    if (customerMode === 'new') {
+      if (!trimmedCustomerName || isOwnCompanyCustomer) return null;
+      return { kind: 'new', input: { name: draft.customer } };
+    }
+    if (customerMode === 'existing') {
+      if (!selectedCustomerId || !getCustomerById(selectedCustomerId)) {
+        setCustomerError(translate('customerDecision.missing'));
+        return null;
+      }
+      return { kind: 'existing', customerId: selectedCustomerId };
+    }
+    return { kind: 'none' };
+  };
+
   const handleCreate = () => {
-    const result = createVorgangFromInboxWithContract(item, draft, materialDefault);
+    if (customerMode === null) return;
+    setCustomerError(null);
+
+    const customerDecision = buildCustomerDecision();
+    if (!customerDecision) return;
+
+    const result = createVorgangFromInboxWithContract(item, draft, materialDefault, {
+      customerDecision,
+    });
     if (result) {
       onLinked(result.inbox, result.vorgang);
       closeDialog();
@@ -100,10 +173,33 @@ export function InboxVorgangPanel({
       } else {
         showToast(translate('vorgang.create.success'));
       }
-    } else {
+      return;
+    }
+
+    // Dialog stays open and keeps the selection; never report success on null.
+    if (!getLastPersistSuccess()) {
+      showToast(translate('persist.failed.userAction'));
+    } else if (isInboxLinkedToVorgang(item)) {
       showToast(translate('vorgang.alreadyLinked'));
+    } else {
+      showToast(translate('vorgang.createFailed'));
     }
   };
+
+  const customerPreview =
+    customerMode === 'none'
+      ? translate('customerDecision.previewNone')
+      : customerMode === 'existing' && selectedCustomerId
+        ? (() => {
+            const selected = customers.find((c) => c.id === selectedCustomerId);
+            return selected
+              ? `${selected.name} · ${buildCustomerSubline(
+                  selected,
+                  translate('customerDecision.noAddress'),
+                )}`
+              : draft.customer;
+          })()
+        : draft.customer;
 
   const formatCurrency = (value: number) =>
     `${value.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
@@ -164,7 +260,7 @@ export function InboxVorgangPanel({
 
             <div className="vorgang-dialog__preview">
               <DataRow label={translate('vorgang.fieldTitle')} value={draft.title} />
-              <DataRow label={translate('inbox.sender')} value={draft.customer} />
+              <DataRow label={translate('inbox.sender')} value={customerPreview} />
               <DataRow label={translate('analysis.baustelle')} value={draft.baustelle} />
               {isOrderCreate && contractPreview.hasContractPositions && (
                 <>
@@ -206,7 +302,12 @@ export function InboxVorgangPanel({
                     type="text"
                     className="input"
                     value={draft.customer}
-                    onChange={(e) => setDraft({ ...draft, customer: e.target.value })}
+                    disabled={customerMode === 'existing' || customerMode === 'none'}
+                    data-testid="vorgang-dialog-customer-input"
+                    onChange={(e) => {
+                      setDraft({ ...draft, customer: e.target.value });
+                      setCustomerError(null);
+                    }}
                   />
                 </label>
                 <label className="edit-field">
@@ -219,6 +320,24 @@ export function InboxVorgangPanel({
                   />
                 </label>
               </div>
+            )}
+
+            {mode === 'create' && (
+              <CustomerDecisionChoice
+                mode={customerMode}
+                onModeChange={(next) => {
+                  setCustomerMode(next);
+                  setSelectedCustomerId(null);
+                  setCustomerError(null);
+                }}
+                customers={customers}
+                selectedCustomerId={selectedCustomerId}
+                onSelectCustomer={(id) => {
+                  setSelectedCustomerId(id);
+                  setCustomerError(null);
+                }}
+                hint={customerValidationHint ?? customerError}
+              />
             )}
 
             {similar.length > 0 && (
@@ -258,7 +377,13 @@ export function InboxVorgangPanel({
                 </Button>
               )}
               {mode === 'create' && (
-                <Button variant={similar.length > 0 ? 'outline' : 'primary'} fullWidth onClick={handleCreate}>
+                <Button
+                  variant={similar.length > 0 ? 'outline' : 'primary'}
+                  fullWidth
+                  disabled={createDisabled}
+                  data-testid="vorgang-dialog-create"
+                  onClick={handleCreate}
+                >
                   {translate(
                     isOrderCreate && similar.length === 0
                       ? 'vorgang.createOrderConfirm'

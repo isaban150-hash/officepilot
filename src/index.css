@@ -1365,6 +1365,22 @@ body {
   flex-shrink: 0;
 }
 
+/* CUSTOMER-FACHOBJEKT-04B — reuses .similar-list / .similar-item, only scrolling added. */
+.vorgang-dialog__customer {
+  margin-bottom: 0.75rem;
+}
+
+.customer-decision__list {
+  max-height: 14rem;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.customer-decision__list .similar-item strong,
+.customer-decision__list .similar-item span {
+  overflow-wrap: anywhere;
+}
+
 .vorgang-dialog__actions {
   display: flex;
   flex-direction: column;

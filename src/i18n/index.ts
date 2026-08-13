@@ -1235,6 +1235,18 @@ const deLegacy = {
   'vorgang.create.success': 'Vorgang wurde angelegt.',
   'vorgang.link.success': 'Mit Vorgang verknüpft.',
   'vorgang.alreadyLinked': 'Bereits mit einem Vorgang verknüpft.',
+  'vorgang.createFailed': 'Vorgang konnte nicht angelegt werden.',
+  'customerDecision.question': 'Wie soll der Kunde zugeordnet werden?',
+  'customerDecision.new': 'Neuer Kunde',
+  'customerDecision.existing': 'Bestehenden Kunden auswählen',
+  'customerDecision.none': 'Kunde noch nicht bekannt',
+  'customerDecision.noneExplanation': 'Der erkannte Kundenname wird nicht gespeichert.',
+  'customerDecision.nameRequired': 'Kundenname erforderlich.',
+  'customerDecision.ownCompany': 'Eigene Firma kann nicht als Kunde angelegt werden.',
+  'customerDecision.missing': 'Gewählter Kunde ist nicht mehr vorhanden.',
+  'customerDecision.noCustomers': 'Keine bestehenden Kunden vorhanden.',
+  'customerDecision.noAddress': 'Anschrift nicht hinterlegt',
+  'customerDecision.previewNone': 'Kunde noch nicht bekannt',
   'vorgang.linkedBadge': 'Vorgang verknüpft',
   'vorgang.noSimilar': 'Kein passender Vorgang gefunden.',
 
@@ -4368,9 +4380,25 @@ const trLegacy: Partial<Record<keyof typeof de, string>> = {
   'uiSession.continue.unsaved': 'Kaydedilmemiş girişler var',
 };
 
+const trCustomerDecision: Partial<Record<keyof typeof de, string>> = {
+  'vorgang.createFailed': 'İşlem oluşturulamadı.',
+  'customerDecision.question': 'Müşteri nasıl atansın?',
+  'customerDecision.new': 'Yeni müşteri',
+  'customerDecision.existing': 'Mevcut müşteriyi seç',
+  'customerDecision.none': 'Müşteri henüz bilinmiyor',
+  'customerDecision.noneExplanation': 'Tanınan müşteri adı kaydedilmez.',
+  'customerDecision.nameRequired': 'Müşteri adı gerekli.',
+  'customerDecision.ownCompany': 'Kendi firmanız müşteri olarak eklenemez.',
+  'customerDecision.missing': 'Seçilen müşteri artık mevcut değil.',
+  'customerDecision.noCustomers': 'Kayıtlı müşteri yok.',
+  'customerDecision.noAddress': 'Adres kayıtlı değil',
+  'customerDecision.previewNone': 'Müşteri henüz bilinmiyor',
+};
+
 const tr: Partial<Record<keyof typeof de, string>> = {
   ...trLegacy,
   ...trModules,
+  ...trCustomerDecision,
 };
 
 const bgLegacy: Partial<Record<keyof typeof de, string>> = {
@@ -4830,9 +4858,25 @@ const bgLegacy: Partial<Record<keyof typeof de, string>> = {
   'uiSession.continue.unsaved': 'Има незапазени въвеждания',
 };
 
+const bgCustomerDecision: Partial<Record<keyof typeof de, string>> = {
+  'vorgang.createFailed': 'Процесът не можа да бъде създаден.',
+  'customerDecision.question': 'Как да бъде зададен клиентът?',
+  'customerDecision.new': 'Нов клиент',
+  'customerDecision.existing': 'Избор на съществуващ клиент',
+  'customerDecision.none': 'Клиентът още не е известен',
+  'customerDecision.noneExplanation': 'Разпознатото име на клиента няма да бъде запазено.',
+  'customerDecision.nameRequired': 'Необходимо е име на клиента.',
+  'customerDecision.ownCompany': 'Собствената фирма не може да бъде клиент.',
+  'customerDecision.missing': 'Избраният клиент вече не съществува.',
+  'customerDecision.noCustomers': 'Няма съществуващи клиенти.',
+  'customerDecision.noAddress': 'Няма записан адрес',
+  'customerDecision.previewNone': 'Клиентът още не е известен',
+};
+
 const bg: Partial<Record<keyof typeof de, string>> = {
   ...bgLegacy,
   ...bgModules,
+  ...bgCustomerDecision,
 };
 
 const ro: Partial<Record<TranslationKey, string>> = {
@@ -4848,6 +4892,18 @@ const ro: Partial<Record<TranslationKey, string>> = {
   'nav.scan': 'Scan',
   'nav.ablage': 'Arhivă',
   'nav.mehr': 'Mai mult',
+  'vorgang.createFailed': 'Procesul nu a putut fi creat.',
+  'customerDecision.question': 'Cum trebuie atribuit clientul?',
+  'customerDecision.new': 'Client nou',
+  'customerDecision.existing': 'Selectează un client existent',
+  'customerDecision.none': 'Clientul nu este încă cunoscut',
+  'customerDecision.noneExplanation': 'Numele de client recunoscut nu va fi salvat.',
+  'customerDecision.nameRequired': 'Numele clientului este obligatoriu.',
+  'customerDecision.ownCompany': 'Propria firmă nu poate fi adăugată ca client.',
+  'customerDecision.missing': 'Clientul selectat nu mai există.',
+  'customerDecision.noCustomers': 'Nu există clienți înregistrați.',
+  'customerDecision.noAddress': 'Nicio adresă înregistrată',
+  'customerDecision.previewNone': 'Clientul nu este încă cunoscut',
 };
 
 const ru: Partial<Record<TranslationKey, string>> = {
@@ -4863,6 +4919,18 @@ const ru: Partial<Record<TranslationKey, string>> = {
   'nav.scan': 'Скан',
   'nav.ablage': 'Архив',
   'nav.mehr': 'Ещё',
+  'vorgang.createFailed': 'Не удалось создать процесс.',
+  'customerDecision.question': 'Как назначить клиента?',
+  'customerDecision.new': 'Новый клиент',
+  'customerDecision.existing': 'Выбрать существующего клиента',
+  'customerDecision.none': 'Клиент пока неизвестен',
+  'customerDecision.noneExplanation': 'Распознанное имя клиента не будет сохранено.',
+  'customerDecision.nameRequired': 'Требуется имя клиента.',
+  'customerDecision.ownCompany': 'Собственная фирма не может быть клиентом.',
+  'customerDecision.missing': 'Выбранный клиент больше не существует.',
+  'customerDecision.noCustomers': 'Нет существующих клиентов.',
+  'customerDecision.noAddress': 'Адрес не указан',
+  'customerDecision.previewNone': 'Клиент пока неизвестен',
 };
 
 const locales: TranslateCatalog = {
