@@ -1191,6 +1191,12 @@ export interface Vorgang {
   baustelle: string;
   status: VorgangStatus;
   materialSource: MaterialStandard;
+  /**
+   * CUSTOMER-FACHOBJEKT-03B1 — link to a persistent Customer.
+   * Local-only for now: never pushed, never taken from a cloud row.
+   * Absent on legacy Vorgänge; never derived from `customer`.
+   */
+  customerId?: string;
   customerBilling?: CustomerBilling;
   orderPositions: OrderPosition[];
   documents: VorgangDocument[];
