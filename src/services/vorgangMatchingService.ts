@@ -1,5 +1,6 @@
 import type { InboxItem, MaterialStandard, Vorgang, VorgangDraft } from '../types/models';
 import { buildDocumentWorkTruthViewForInboxItem } from './documentWorkResultTruthOrchestration';
+import { pickExternalCustomerName } from './customerOwnCompanyGuard';
 
 function normalize(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, ' ');
@@ -35,9 +36,12 @@ export function buildVorgangDraftFromInbox(
   truthOverrides?: DraftTruthOverrideValues,
 ): VorgangDraft {
   const leistung = item.recognizedData.Leistung;
-  const kunde = trimMeaningful(truthOverrides?.customer)
-    ?? item.recognizedData.Kunde
-    ?? item.sender;
+  // Same source order as before — own-company candidates are skipped, not replaced.
+  const kunde = pickExternalCustomerName([
+    trimMeaningful(truthOverrides?.customer),
+    item.recognizedData.Kunde,
+    item.sender,
+  ]);
   const baustelle = trimMeaningful(truthOverrides?.baustelle)
     ?? item.recognizedData.Baustelle
     ?? 'Unbekannte Baustelle';

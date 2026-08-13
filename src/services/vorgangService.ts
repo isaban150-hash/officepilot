@@ -16,6 +16,7 @@ import {
   setInboxVorgangLink,
 } from './inboxVorgangLinkService';
 import { getDocumentById, updateDocument } from './documentService';
+import { isOwnCompanyName, pickExternalCustomerName } from './customerOwnCompanyGuard';
 import {
   canTransitionVorgangStatus,
   migrateVorgangStatus,
@@ -526,18 +527,21 @@ export function createVorgangFromInbox(
 
   const baseDraft = buildVorgangDraftFromInbox(currentItem, defaultMaterial);
   const draft: VorgangDraft = { ...baseDraft, ...optionalDraft };
+  // optionalDraft may carry an own-company name; fall back to the already guarded
+  // base candidate rather than storing our own company as the customer.
+  const customer = pickExternalCustomerName([draft.customer, baseDraft.customer]);
   const doc = buildDocumentFromInbox(currentItem, archiveId);
 
   const newVorgang: Vorgang = withNewEntitySync(
     {
       id: generateEntityId('v'),
       title: draft.title,
-      customer: draft.customer,
+      customer,
       baustelle: draft.baustelle,
       status: 'eingegangen' as const,
       materialSource: draft.materialSource,
       customerBilling: {
-        name: draft.customer,
+        name: customer,
         contactPerson: '',
         street: '',
         zip: '',
@@ -1420,15 +1424,21 @@ export function applyContractFieldsToVorgang(
   ) {
     updated.baustelle = fields.baustellenadresse;
   }
-  if (fields.auftraggeber && !updated.customer.trim()) {
-    updated.customer = fields.auftraggeber;
+  // Own company is never the customer. The contact fields belong to the same
+  // party, so they are discarded together — other contract fields stay unaffected.
+  const ownAuftraggeber = isOwnCompanyName(fields.auftraggeber);
+  const auftraggeber = ownAuftraggeber ? undefined : fields.auftraggeber;
+  if (auftraggeber && !updated.customer.trim()) {
+    updated.customer = auftraggeber;
   }
 
   const billing = { ...emptyCustomerBilling(updated.customer), ...(updated.customerBilling ?? {}) };
-  if (fields.ansprechpartner) billing.contactPerson = fields.ansprechpartner;
-  if (fields.telefon) billing.phone = fields.telefon;
-  if (fields.email) billing.email = fields.email;
-  if (fields.auftraggeber) billing.name = fields.auftraggeber;
+  if (!ownAuftraggeber) {
+    if (fields.ansprechpartner) billing.contactPerson = fields.ansprechpartner;
+    if (fields.telefon) billing.phone = fields.telefon;
+    if (fields.email) billing.email = fields.email;
+    if (auftraggeber) billing.name = auftraggeber;
+  }
   updated.customerBilling = billing;
 
   return { success: true, vorgang: updateVorgangInStore(updated) };
@@ -1448,16 +1458,22 @@ export function applyContractAcceptFieldsToVorgang(
     const title = fields.bauvorhaben ?? fields.projektname;
     if (title) updated.title = title;
     if (fields.baustellenadresse) updated.baustelle = fields.baustellenadresse;
-    if (fields.auftraggeber) updated.customer = fields.auftraggeber;
+    // Own company is never the customer. The contact fields belong to the same
+    // party, so they are discarded together — other contract fields stay unaffected.
+    const ownAuftraggeber = isOwnCompanyName(fields.auftraggeber);
+    const auftraggeber = ownAuftraggeber ? undefined : fields.auftraggeber;
+    if (auftraggeber) updated.customer = auftraggeber;
 
     const billing = {
       ...emptyCustomerBilling(updated.customer),
       ...(updated.customerBilling ?? {}),
     };
-    if (fields.ansprechpartner) billing.contactPerson = fields.ansprechpartner;
-    if (fields.telefon) billing.phone = fields.telefon;
-    if (fields.email) billing.email = fields.email;
-    if (fields.auftraggeber) billing.name = fields.auftraggeber;
+    if (!ownAuftraggeber) {
+      if (fields.ansprechpartner) billing.contactPerson = fields.ansprechpartner;
+      if (fields.telefon) billing.phone = fields.telefon;
+      if (fields.email) billing.email = fields.email;
+      if (auftraggeber) billing.name = auftraggeber;
+    }
     updated.customerBilling = billing;
 
     const contractDate = (options?.contractDate ?? fields.vertragsdatum)?.trim();
