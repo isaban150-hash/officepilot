@@ -126,6 +126,12 @@ import {
   resetTasks,
 } from './taskService';
 import { normalizeTask } from './taskNormalize';
+import {
+  cloneCustomer,
+  getCustomerStoreSnapshot,
+  hydrateCustomerStore,
+  resetCustomers,
+} from './customerStoreService';
 import { normalizeExpense } from './expenseNormalize';
 import { normalizeExpensePaymentFields } from './expensePaymentCalculations';
 import {
@@ -484,6 +490,8 @@ export function createSeedState(setupOverride?: CompanySetup): AppPersistedState
       documentFileIntakeTransformPlanCarryContexts: [],
       documentWorkResults: [],
       expenses: emptyBusinessData ? [] : MOCK_EXPENSES.map(cloneExpense),
+      // No seeded customers and no backfill from Vorgang.customer.
+      customers: [],
       vorgangNotes: [],
       dunningDocumentations: [],
       communicationHistory: [],
@@ -580,6 +588,7 @@ function finalizeLoadedPersistedState(normalized: AppPersistedState): AppPersist
     tasks: normalized.tasks.map(cloneTask),
     documents: (normalized.documents ?? []).map(cloneCompanyDocument),
     expenses: (normalized.expenses ?? []).map(cloneExpense),
+    customers: (normalized.customers ?? []).map(cloneCustomer),
     vorgangNotes: (normalized.vorgangNotes ?? []).map(cloneVorgangNote),
     dunningDocumentations: (normalized.dunningDocumentations ?? []).map((doc) => ({ ...doc })),
     communicationHistory: (normalized.communicationHistory ?? []).map(cloneCommunicationEvent),
@@ -690,6 +699,7 @@ export function clearInMemoryBusinessState(): void {
   resetDocumentFileIntakeTransformPlanCarryContextStoreForTests();
   resetDocumentWorkResultStoreForTests();
   resetExpenses();
+  resetCustomers();
   resetVorgangNotes();
   resetDunningDocumentations();
   resetCommunicationHistoryStore();
@@ -733,6 +743,7 @@ export function applyStateToStores(state: AppPersistedState): void {
   );
   hydrateDocumentWorkResultStore(state.documentWorkResults ?? []);
   hydrateExpenseStore(state.expenses ?? []);
+  hydrateCustomerStore(state.customers ?? []);
   hydrateVorgangNotes(state.vorgangNotes ?? []);
   hydrateDunningDocumentations(state.dunningDocumentations ?? []);
   hydrateCommunicationHistory(state.communicationHistory ?? []);
@@ -897,6 +908,7 @@ export function buildPersistedStateSnapshot(): AppPersistedState {
       getDocumentFileIntakeTransformPlanCarryContextStoreSnapshot(),
     documentWorkResults: getDocumentWorkResultStoreSnapshot(),
     expenses: getExpenseStoreSnapshot(),
+    customers: getCustomerStoreSnapshot(),
     vorgangNotes: getVorgangNoteStoreSnapshot(),
     dunningDocumentations: getDunningDocumentationStoreSnapshot(),
     communicationHistory: getCommunicationHistorySnapshot(),
@@ -928,6 +940,7 @@ export function resetDemoData(options?: { keepSetup?: boolean }): CompanySetup {
   resetDocumentFileIntakeTransformPlanCarryContextStoreForTests();
   resetDocumentWorkResultStoreForTests();
   resetExpenses();
+  resetCustomers();
   resetVorgangNotes();
   resetDunningDocumentations();
   resetCommunicationHistoryStore();

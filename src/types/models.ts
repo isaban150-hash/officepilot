@@ -768,6 +768,18 @@ export interface CustomerBilling {
   phone: string;
 }
 
+/**
+ * CUSTOMER-FACHOBJEKT-02A — persistent customer with a stable id.
+ * Reuses CustomerBilling so no second contact structure exists.
+ */
+export interface Customer extends CustomerBilling {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  /** Provenance only — never changed by a normal update. */
+  createdFromInboxId?: string;
+}
+
 export interface InvoiceNumberSequence {
   year: number;
   lastIssuedNumber: number;
@@ -1498,6 +1510,8 @@ export interface AppPersistedState {
   /** Canonical document work result snapshots (natural key: inboxItemId). */
   documentWorkResults?: DocumentWorkResult[];
   expenses?: Expense[];
+  /** Persistent customer objects (02A). Optional — old states hydrate as empty. */
+  customers?: Customer[];
   vorgangNotes?: VorgangNote[];
   /** Confirmed payment-reminder / dunning handoffs (local documentation only). */
   dunningDocumentations?: import('./dunningDocumentation').InvoiceDunningDocumentation[];

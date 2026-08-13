@@ -2,6 +2,7 @@ import { DEFAULT_SETUP } from '../data/mockData';
 import { DEFAULT_COMPANY_PROFILE } from '../data/companyProfileDefaults';
 import { hydrateDocumentStore } from '../services/documentService';
 import { hydrateExpenseStore } from '../services/expenseStore';
+import { resetCustomers } from '../services/customerStoreService';
 import {
   hydrateCompanyProfileStore,
 } from '../services/companyProfileService';
@@ -51,6 +52,7 @@ export function resetTestStores(): void {
   resetDocumentFileDerivativeStepInFlightLocksForTests();
   resetDocumentWorkResultStoreForTests();
   hydrateExpenseStore([]);
+  resetCustomers();
   hydrateVorgangNotes([]);
   resetDunningDocumentations();
   resetCommunicationHistoryStore();
