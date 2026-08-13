@@ -15,8 +15,26 @@ import {
   resolveInboxItemForLinking,
   setInboxVorgangLink,
 } from './inboxVorgangLinkService';
-import { getDocumentById, updateDocument } from './documentService';
+import {
+  getDocumentById,
+  getDocumentStoreSnapshot,
+  hydrateDocumentStore,
+  stageDocumentUpdate,
+  updateDocument,
+} from './documentService';
 import { isOwnCompanyName, pickExternalCustomerName } from './customerOwnCompanyGuard';
+import { buildValidatedCustomer, type CustomerDecision } from './customerService';
+import {
+  getCustomerById,
+  getCustomerStoreSnapshot,
+  restoreCustomerStore,
+  upsertCustomerInStore,
+} from './customerStoreService';
+import {
+  getInboxStoreSnapshot,
+  hydrateInboxStore,
+  stageInboxItemPatch,
+} from './inboxService';
 import {
   canTransitionVorgangStatus,
   migrateVorgangStatus,
@@ -26,6 +44,7 @@ import { generateEntityId, withNewEntitySync, withUpdatedEntitySync, withTombsto
 import type {
   ContractExtractedFields,
   CompanyDocument,
+  Customer,
   CustomerBilling,
   InboxItem,
   InvoicePayment,
@@ -362,7 +381,17 @@ export function attachCompanyDocumentToVorgang(
   const index = vorgaenge.findIndex((v) => v.id === vorgangId && isEntitySyncActive(v));
   if (index === -1) return;
 
-  const vorgang = cloneVorgang(vorgaenge[index]);
+  updateVorgangInStore(
+    applyCompanyDocumentToVorgang(cloneVorgang(vorgaenge[index]), companyDocument, inboxItem),
+  );
+}
+
+/** Pure document attach — no store write, no persist. Shared with the atomic handoff. */
+function applyCompanyDocumentToVorgang(
+  vorgang: Vorgang,
+  companyDocument: CompanyDocument,
+  inboxItem?: InboxItem,
+): Vorgang {
   const refDoc = buildDocumentFromInbox(
     inboxItem ?? {
       id: companyDocument.sourceInboxItemId ?? companyDocument.id,
@@ -408,7 +437,7 @@ export function attachCompanyDocumentToVorgang(
     appendDocumentIfNew(vorgang, refDoc);
   }
 
-  updateVorgangInStore(vorgang);
+  return vorgang;
 }
 
 function appendDocumentIfNew(vorgang: Vorgang, doc: VorgangDocument): void {
@@ -511,17 +540,79 @@ function bindInboxArchiveDocumentToVorgang(
   return true;
 }
 
+interface ResolvedCustomerDecision {
+  customer: string;
+  billing: CustomerBilling;
+  customerId?: string;
+  /** Only for kind 'new' — staged into the customer store by the handoff. */
+  pendingCustomer?: Customer;
+}
+
+function billingFromCustomer(customer: Customer): CustomerBilling {
+  return {
+    name: customer.name,
+    contactPerson: customer.contactPerson,
+    street: customer.street,
+    zip: customer.zip,
+    city: customer.city,
+    email: customer.email,
+    phone: customer.phone,
+  };
+}
+
+/**
+ * CUSTOMER-FACHOBJEKT-03B2 — resolves the call contract before any mutation.
+ * Returns null on every validation error; the caller must abort entirely and
+ * must never fall back to a different decision variant.
+ */
+function resolveCustomerDecision(
+  decision: CustomerDecision | undefined,
+  inboxId: string,
+  legacyCustomer: string,
+): ResolvedCustomerDecision | null {
+  if (!decision) {
+    return { customer: legacyCustomer, billing: emptyCustomerBilling(legacyCustomer) };
+  }
+
+  if (decision.kind === 'none') {
+    return { customer: '', billing: emptyCustomerBilling('') };
+  }
+
+  if (decision.kind === 'existing') {
+    const selected = getCustomerById(decision.customerId.trim());
+    if (!selected) return null;
+    if (!selected.name.trim()) return null;
+    if (isOwnCompanyName(selected.name)) return null;
+    return {
+      customer: selected.name,
+      billing: billingFromCustomer(selected),
+      customerId: selected.id,
+    };
+  }
+
+  const built = buildValidatedCustomer(decision.input, { createdFromInboxId: inboxId });
+  if (!built.ok) return null;
+  return {
+    customer: built.customer.name,
+    billing: billingFromCustomer(built.customer),
+    customerId: built.customer.id,
+    pendingCustomer: built.customer,
+  };
+}
+
 export function createVorgangFromInbox(
   item: InboxItem,
   optionalDraft?: Partial<VorgangDraft>,
   defaultMaterial: MaterialStandard = 'unclear',
-  options?: { skipDefaultPositions?: boolean },
+  options?: { skipDefaultPositions?: boolean; customerDecision?: CustomerDecision },
 ): { vorgang: Vorgang; inbox: InboxItem } | null {
+  // --- Guards and validation: no store is touched before this block completes.
   const currentItem = resolveInboxItemForLinking(item);
   if (isInboxLinkedToVorgang(currentItem)) return null;
 
   const archiveId = currentItem.archiveDocumentId?.trim() || undefined;
-  if (archiveId && !getDocumentById(archiveId)) {
+  const archiveDocument = archiveId ? getDocumentById(archiveId) : undefined;
+  if (archiveId && !archiveDocument) {
     return null;
   }
 
@@ -529,26 +620,23 @@ export function createVorgangFromInbox(
   const draft: VorgangDraft = { ...baseDraft, ...optionalDraft };
   // optionalDraft may carry an own-company name; fall back to the already guarded
   // base candidate rather than storing our own company as the customer.
-  const customer = pickExternalCustomerName([draft.customer, baseDraft.customer]);
+  const legacyCustomer = pickExternalCustomerName([draft.customer, baseDraft.customer]);
+
+  const resolved = resolveCustomerDecision(options?.customerDecision, item.id, legacyCustomer);
+  if (!resolved) return null;
+
   const doc = buildDocumentFromInbox(currentItem, archiveId);
 
-  const newVorgang: Vorgang = withNewEntitySync(
+  let newVorgang: Vorgang = withNewEntitySync(
     {
       id: generateEntityId('v'),
       title: draft.title,
-      customer,
+      customer: resolved.customer,
       baustelle: draft.baustelle,
       status: 'eingegangen' as const,
       materialSource: draft.materialSource,
-      customerBilling: {
-        name: customer,
-        contactPerson: '',
-        street: '',
-        zip: '',
-        city: '',
-        email: '',
-        phone: '',
-      },
+      customerId: resolved.customerId,
+      customerBilling: resolved.billing,
       orderPositions: options?.skipDefaultPositions ? [] : buildOrderPositionsFromInbox(currentItem),
       documents: [doc],
       tasks: [],
@@ -559,24 +647,56 @@ export function createVorgangFromInbox(
     'vorgang',
   );
 
+  // --- Snapshots of every store the handoff may touch.
+  const previousVorgaenge = vorgaenge;
+  const previousCustomers = getCustomerStoreSnapshot();
+  const previousInbox = getInboxStoreSnapshot();
+  const previousDocuments = getDocumentStoreSnapshot();
+
+  const rollback = (): null => {
+    vorgaenge = previousVorgaenge;
+    restoreCustomerStore(previousCustomers);
+    hydrateInboxStore(previousInbox);
+    hydrateDocumentStore(previousDocuments);
+    return null;
+  };
+
+  // --- In-memory staging only. No persist inside this block.
+  if (resolved.pendingCustomer) {
+    upsertCustomerInStore(resolved.pendingCustomer);
+  }
+
   vorgaenge = [newVorgang, ...vorgaenge];
-  persistAll();
 
-  const linkedInbox = setInboxVorgangLink(currentItem.id, newVorgang.id, newVorgang.title, 'created');
-  if (!linkedInbox) {
-    deleteVorgang(newVorgang.id);
-    return null;
+  const linkedInbox = stageInboxItemPatch(currentItem.id, {
+    vorgangId: newVorgang.id,
+    vorgangTitle: newVorgang.title,
+    vorgangLinkStatus: 'created',
+    status: 'geprueft',
+    isNewUpload: false,
+  });
+  if (!linkedInbox) return rollback();
+
+  if (archiveId && archiveDocument) {
+    let boundDocument = archiveDocument;
+    if (archiveDocument.linkedVorgang?.vorgangId !== newVorgang.id) {
+      const stagedDoc = stageDocumentUpdate(archiveId, {
+        linkedVorgang: { vorgangId: newVorgang.id, vorgangTitle: newVorgang.title },
+      });
+      if (!stagedDoc.success) return rollback();
+      boundDocument = stagedDoc.document;
+    }
+    newVorgang = applyCompanyDocumentToVorgang(newVorgang, boundDocument, linkedInbox);
+    vorgaenge = vorgaenge.map((v) => (v.id === newVorgang.id ? newVorgang : v));
   }
 
-  if (!bindInboxArchiveDocumentToVorgang(linkedInbox, newVorgang.id, newVorgang.title)) {
-    deleteVorgang(newVorgang.id);
-    clearInboxVorgangLink(linkedInbox.id);
-    return null;
-  }
+  // --- Exactly one persist for customer, Vorgang, inbox link and document binding.
+  const persisted = persistAll();
+  if (!persisted.success) return rollback();
 
   const freshVorgang = getVorgangById(newVorgang.id);
   const freshInbox = resolveInboxItemForLinking(linkedInbox);
-  if (!freshVorgang) return null;
+  if (!freshVorgang) return rollback();
   return { vorgang: freshVorgang, inbox: freshInbox };
 }
 

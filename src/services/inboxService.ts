@@ -87,18 +87,28 @@ function findItem(id: string): InboxItem | undefined {
   return item;
 }
 
-export function patchInboxItem(id: string, updates: Partial<InboxItem>): InboxItem | null {
+/**
+ * CUSTOMER-FACHOBJEKT-03B2 — same field patch and SyncMeta bump as patchInboxItem,
+ * but without persisting. The caller owns the persist and the rollback.
+ */
+export function stageInboxItemPatch(id: string, updates: Partial<InboxItem>): InboxItem | null {
   const index = inboxItems.findIndex((i) => i.id === id && isEntitySyncActive(i));
   if (index === -1) return null;
-  const previous = inboxItems[index]!;
   const updated = withUpdatedEntitySync(
-    { ...previous, ...updates },
+    { ...inboxItems[index]!, ...updates },
     'inbox_item',
   );
   inboxItems = [...inboxItems.slice(0, index), updated, ...inboxItems.slice(index + 1)];
+  return updated;
+}
+
+export function patchInboxItem(id: string, updates: Partial<InboxItem>): InboxItem | null {
+  const previous = inboxItems;
+  const updated = stageInboxItemPatch(id, updates);
+  if (!updated) return null;
   const persistResult = persistAll();
   if (!persistResult.success) {
-    inboxItems = [...inboxItems.slice(0, index), previous, ...inboxItems.slice(index + 1)];
+    inboxItems = previous;
     return null;
   }
   return updated;

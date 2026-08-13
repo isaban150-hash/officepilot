@@ -15,6 +15,7 @@ import {
 } from './inboxService';
 import {
   createVorgangFromInbox,
+  getAllVorgaenge,
   getVorgangById,
   hydrateVorgangStore,
   linkInboxToExistingVorgang,
@@ -159,17 +160,33 @@ describe('DOC-LINK-AFTER-VORGANG-01', () => {
     const seeded = seedInbox({ id: 'inbox-doc-link-05' });
     const { inbox, document } = archiveInbox(seeded);
 
-    vi.spyOn(documentService, 'updateDocument').mockReturnValue({
-      success: false,
-      errorKey: 'document.persistFailed',
-    });
+    // Seit dem atomaren Handoff (03B2) nutzt der Neuanlagepfad die persistfreie
+    // Staging-Grenze. Der Fehler muss vor dem einzigen persistAll entstehen.
+    const stageSpy = vi
+      .spyOn(documentService, 'stageDocumentUpdate')
+      .mockReturnValue({ success: false, errorKey: 'document.persistFailed' });
+    const setItemSpy = vi.spyOn(localStorage, 'setItem');
+
+    const documentsBefore = documentService.getDocumentStoreSnapshot();
+    const inboxBefore = getInboxItemById(inbox.id);
+    const vorgaengeBefore = getAllVorgaenge();
 
     const created = createVorgangFromInbox(inbox, undefined, 'betrieb');
     expect(created).toBeNull();
+
+    expect(stageSpy).toHaveBeenCalled();
+    expect(setItemSpy).not.toHaveBeenCalled();
 
     expect(getAllDocuments()).toHaveLength(1);
     expect(getDocumentById(document.id)?.linkedVorgang).toBeNull();
     expect(getInboxItemById(inbox.id)?.vorgangId).toBeUndefined();
     expect(getInboxItemById(inbox.id)?.archiveDocumentId).toBe(document.id);
+
+    expect(getAllVorgaenge()).toEqual(vorgaengeBefore);
+    expect(documentService.getDocumentStoreSnapshot()).toEqual(documentsBefore);
+    expect(getInboxItemById(inbox.id)).toEqual(inboxBefore);
+
+    stageSpy.mockRestore();
+    setItemSpy.mockRestore();
   });
 });

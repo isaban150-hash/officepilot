@@ -22,17 +22,31 @@ export type CustomerMutationResult =
 
 export type CustomerInput = Partial<CustomerBilling> & Pick<CustomerBilling, 'name'>;
 
+/**
+ * Call contract for the Vorgang handoff — never persisted, never stored.
+ * `undefined` (no decision at all) keeps the full legacy behaviour.
+ */
+export type CustomerDecision =
+  | { kind: 'existing'; customerId: string }
+  | { kind: 'new'; input: CustomerInput }
+  | { kind: 'none' };
+
 function text(value: string | undefined): string {
   return value?.trim() ?? '';
 }
 
-export function createCustomer(
+/**
+ * CUSTOMER-FACHOBJEKT-03B2 — the single validation + build step.
+ * Pure: touches no store and never persists. The id and both timestamps exist
+ * before any caller decides when to persist.
+ */
+export function buildValidatedCustomer(
   input: CustomerInput,
   options?: { createdFromInboxId?: string },
-): CustomerMutationResult {
+): { ok: true; customer: Customer } | { ok: false; errorKey: string } {
   const name = text(input.name);
-  if (!name) return { success: false, errorKey: 'customer.nameRequired' };
-  if (isOwnCompanyName(name)) return { success: false, errorKey: 'customer.ownCompanyNotAllowed' };
+  if (!name) return { ok: false, errorKey: 'customer.nameRequired' };
+  if (isOwnCompanyName(name)) return { ok: false, errorKey: 'customer.ownCompanyNotAllowed' };
 
   const now = new Date().toISOString();
   const customer: Customer = {
@@ -49,6 +63,17 @@ export function createCustomer(
   };
   const createdFromInboxId = text(options?.createdFromInboxId);
   if (createdFromInboxId) customer.createdFromInboxId = createdFromInboxId;
+
+  return { ok: true, customer };
+}
+
+export function createCustomer(
+  input: CustomerInput,
+  options?: { createdFromInboxId?: string },
+): CustomerMutationResult {
+  const built = buildValidatedCustomer(input, options);
+  if (!built.ok) return { success: false, errorKey: built.errorKey };
+  const customer = built.customer;
 
   const previous = getCustomerStoreSnapshot();
   upsertCustomerInStore(customer);

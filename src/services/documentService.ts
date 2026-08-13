@@ -264,7 +264,11 @@ export function addDocument(input: CompanyDocumentInput): DocumentMutationResult
   return { success: true, document: cloneDocument(document) };
 }
 
-export function updateDocument(
+/**
+ * CUSTOMER-FACHOBJEKT-03B2 — same merge, validation and SyncMeta bump as
+ * updateDocument, but without persisting. The caller owns persist and rollback.
+ */
+export function stageDocumentUpdate(
   id: string,
   changes: Partial<CompanyDocumentInput>,
 ): DocumentMutationResult {
@@ -307,18 +311,28 @@ export function updateDocument(
   const validationError = validateInput(merged);
   if (validationError) return { success: false, errorKey: validationError };
 
-  const previousDocuments = documents;
   const updated = withUpdatedEntitySync(
     buildDocumentFromInput(merged, current.id, current.createdAt),
     'document',
   );
   documents = [...documents.slice(0, index), updated, ...documents.slice(index + 1)];
+  return { success: true, document: cloneDocument(updated) };
+}
+
+export function updateDocument(
+  id: string,
+  changes: Partial<CompanyDocumentInput>,
+): DocumentMutationResult {
+  const previousDocuments = documents;
+  const staged = stageDocumentUpdate(id, changes);
+  if (!staged.success) return staged;
+
   const persistResult = persistAll();
   if (!persistResult.success) {
     documents = previousDocuments;
     return { success: false, errorKey: 'document.persistFailed' };
   }
-  return { success: true, document: cloneDocument(updated) };
+  return staged;
 }
 
 export function deleteDocument(id: string): DocumentMutationResult {

@@ -49,6 +49,7 @@ import {
   linkInboxToExistingVorgang,
 } from './vorgangService';
 import { resolveDraftTruthOverrides } from './vorgangMatchingService';
+import type { CustomerDecision } from './customerService';
 import {
   resolvePrimaryTargetObjectForDocumentType,
   resolvePrimaryTargetObjectForKind,
@@ -550,7 +551,7 @@ export function createVorgangFromInboxWithContract(
   item: InboxItem,
   optionalDraft?: Partial<VorgangDraft>,
   materialDefault: MaterialStandard = 'unclear',
-  options?: { confirmedPositions?: DetectedOrderPosition[] },
+  options?: { confirmedPositions?: DetectedOrderPosition[]; customerDecision?: CustomerDecision },
 ): { vorgang: Vorgang; inbox: InboxItem } | null {
   const confirmed = options?.confirmedPositions;
   const truthOverrides = resolveDraftTruthOverrides(item);
@@ -559,6 +560,8 @@ export function createVorgangFromInboxWithContract(
     : optionalDraft;
   const result = createVorgangFromInbox(item, effectiveOptionalDraft, materialDefault, {
     skipDefaultPositions: shouldSkipDefaultPositionsForContractCreate(item, confirmed),
+    // Passed through unchanged — never derived from BI or the draft.
+    customerDecision: options?.customerDecision,
   });
   if (!result) return null;
 
