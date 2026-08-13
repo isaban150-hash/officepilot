@@ -23,7 +23,24 @@ import {
   getAllowedVorgangStatusTransitions,
 } from '../services/vorgangLifecycleService';
 import { isContractPlanLocked } from '../services/orderPlanIntegrityService';
-import { getVorgangById, removeOrderPosition, updateVorgangStatus } from '../services/vorgangService';
+import {
+  assignCustomerToVorgang,
+  getVorgangById,
+  isVorgangCustomerAssignmentEligible,
+  removeOrderPosition,
+  updateVorgangStatus,
+} from '../services/vorgangService';
+import { getCustomerById } from '../services/customerStoreService';
+import {
+  CustomerDecisionChoice,
+  type CustomerDecisionMode,
+} from '../components/customer/CustomerDecisionChoice';
+import {
+  buildCustomerDecisionFromUi,
+  isCustomerDecisionIncomplete,
+  loadSelectableCustomers,
+  resolveNewCustomerHintKey,
+} from '../components/customer/customerDecisionUi';
 import { InvoiceListCard } from '../components/invoice/InvoiceListCard';
 import { CommunicationIntegrationPanel } from '../components/communication/CommunicationIntegrationPanel';
 import { VORGANG_COMMUNICATION_BUTTON_KEYS } from '../components/communication/communicationNavigation';
@@ -61,7 +78,7 @@ import { askVorgangAi } from '../services/vorgang/vorgangAiService';
 import { recordVorgangContext } from '../services/brain/companySessionService';
 import { getLastPersistSuccess } from '../services/persistenceService';
 import type { VorgangNote } from '../types/communication';
-import type { OrderPosition, Vorgang, VorgangStatus } from '../types/models';
+import type { Customer, OrderPosition, Vorgang, VorgangStatus } from '../types/models';
 import type { TranslationKey } from '../i18n';
 import { useReportUiSession } from '../hooks/useReportUiSession';
 import { useUiSessionRestore } from '../hooks/useUiSessionRestore';
@@ -78,6 +95,12 @@ export function VorgangDetailPage() {
     id ? getVorgangById(id) : undefined,
   );
   const [formMode, setFormMode] = useState<FormMode>(null);
+  const [customerMode, setCustomerMode] = useState<CustomerDecisionMode | null>(null);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
+  const [newCustomerName, setNewCustomerName] = useState('');
+  const [customerOptions, setCustomerOptions] = useState<Customer[]>([]);
+  const [customerError, setCustomerError] = useState<string | null>(null);
+  const [isAssigning, setIsAssigning] = useState(false);
   const [noteDraft, setNoteDraft] = useState(() => {
     const note = restoredSession?.drafts.values.note;
     return typeof note === 'string' ? note : '';
@@ -114,9 +137,64 @@ export function VorgangDetailPage() {
       : undefined,
   });
 
+  const handleAssignCustomer = () => {
+    if (!vorgang || assignDisabled || isAssigning) return;
+    setCustomerError(null);
+
+    const decision = buildCustomerDecisionFromUi(customerMode, newCustomerName, selectedCustomerId);
+    if (!decision || decision.kind === 'none') {
+      setCustomerError(translate('customerDecision.required'));
+      return;
+    }
+    if (decision.kind === 'existing' && !getCustomerById(decision.customerId)) {
+      setCustomerError(translate('customerDecision.missing'));
+      return;
+    }
+
+    setIsAssigning(true);
+    try {
+      const result = assignCustomerToVorgang(vorgang.id, decision);
+      if (!result.success) {
+        // Auswahl bleibt erhalten, damit der Nutzer korrigieren kann.
+        const key = result.errorKey as TranslationKey;
+        setCustomerError(key.includes('.') ? translate(key) : result.errorKey);
+        showToast(key.includes('.') ? translate(key) : result.errorKey);
+        return;
+      }
+      setCustomerMode(null);
+      setSelectedCustomerId(null);
+      setNewCustomerName('');
+      refreshVorgang();
+      showToast(translate('vorgang.assignCustomer.success'));
+    } finally {
+      setIsAssigning(false);
+    }
+  };
+
   const refreshNotes = useCallback(() => {
     if (id) setNotes(getNotesForVorgang(id));
   }, [id]);
+
+  // CUSTOMER-FACHOBJEKT-04D-U4 — later assignment, only in the exact unknown state.
+  const customerAssignmentVisible = Boolean(
+    vorgang && isVorgangCustomerAssignmentEligible(vorgang),
+  );
+  const assignHintKey = resolveNewCustomerHintKey(customerMode, newCustomerName);
+  const assignDisabled = isCustomerDecisionIncomplete(
+    customerMode,
+    newCustomerName,
+    selectedCustomerId,
+  );
+
+  // Beim Wechsel des angezeigten Vorgangs darf keine Auswahl übernommen werden.
+  useEffect(() => {
+    setCustomerMode(null);
+    setSelectedCustomerId(null);
+    setNewCustomerName('');
+    setCustomerError(null);
+    setCustomerOptions(customerAssignmentVisible ? loadSelectableCustomers() : []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customerAssignmentVisible, vorgang?.id]);
 
   const refreshVorgang = useCallback(() => {
     if (id) {
@@ -400,6 +478,50 @@ export function VorgangDetailPage() {
           actions={primaryActions}
           testId="vorgang-detail-experience"
         />
+
+        {customerAssignmentVisible && (
+          <Card data-testid="vorgang-assign-customer">
+            <h2 className="section__title">{translate('vorgang.assignCustomer.title')}</h2>
+            <CustomerDecisionChoice
+              mode={customerMode}
+              onModeChange={(next) => {
+                setCustomerMode(next);
+                setSelectedCustomerId(null);
+                setCustomerError(null);
+              }}
+              customers={customerOptions}
+              selectedCustomerId={selectedCustomerId}
+              onSelectCustomer={(id) => {
+                setSelectedCustomerId(id);
+                setCustomerError(null);
+              }}
+              hint={assignHintKey ? translate(assignHintKey) : customerError}
+            />
+            {customerMode === 'new' && (
+              <label className="edit-field">
+                <span className="edit-field__label">{translate('inbox.sender')}</span>
+                <input
+                  type="text"
+                  className="input"
+                  value={newCustomerName}
+                  data-testid="vorgang-assign-customer-name"
+                  onChange={(event) => {
+                    setNewCustomerName(event.target.value);
+                    setCustomerError(null);
+                  }}
+                />
+              </label>
+            )}
+            <Button
+              fullWidth
+              data-testid="vorgang-assign-customer-submit"
+              disabled={assignDisabled || isAssigning}
+              onClick={handleAssignCustomer}
+            >
+              {translate('vorgang.assignCustomer.action')}
+            </Button>
+          </Card>
+        )}
 
         <Card data-testid="vorgang-overview-status">
           <DataRow label={translate('vorgang.status.label')} value={translate(statusKey)} />

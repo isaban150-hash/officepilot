@@ -27,7 +27,11 @@ import {
   normalizeCompanyNameForComparison,
   pickExternalCustomerName,
 } from './customerOwnCompanyGuard';
-import { buildValidatedCustomer, type CustomerDecision } from './customerService';
+import {
+  buildValidatedCustomer,
+  validateCustomerDecisionForCreate,
+  type CustomerDecision,
+} from './customerService';
 import {
   getCustomerById,
   getCustomerStoreSnapshot,
@@ -604,6 +608,95 @@ function resolveCustomerDecision(
     customerId: built.customer.id,
     pendingCustomer: built.customer,
   };
+}
+
+/**
+ * CUSTOMER-FACHOBJEKT-04D-U4 — single eligibility rule shared by service and UI.
+ * Pure: no store access, no mutation. Any non-empty billing field counts as an
+ * existing (or inconsistent) customer identity and blocks the assignment.
+ */
+export function isVorgangCustomerAssignmentEligible(
+  vorgang: Pick<Vorgang, 'customer' | 'customerId' | 'customerBilling' | 'customerExplicitlyUnknown'>,
+): boolean {
+  if (vorgang.customerExplicitlyUnknown !== true) return false;
+  if (vorgang.customerId?.trim()) return false;
+  if (vorgang.customer.trim()) return false;
+
+  const billing = vorgang.customerBilling;
+  if (!billing) return true;
+  return ![
+    billing.name,
+    billing.contactPerson,
+    billing.street,
+    billing.zip,
+    billing.city,
+    billing.email,
+    billing.phone,
+  ].some((value) => value?.trim());
+}
+
+export type AssignCustomerToVorgangResult =
+  | { success: true; vorgang: Vorgang }
+  | { success: false; errorKey: string };
+
+/**
+ * CUSTOMER-FACHOBJEKT-04D-U4 — later, explicit customer assignment for a Vorgang
+ * that was deliberately created without one. Never automatic, never overwriting.
+ *
+ * Everything before the staging block is read-only: no id is generated and no
+ * store is touched until every gate has passed.
+ */
+export function assignCustomerToVorgang(
+  vorgangId: string,
+  customerDecision: CustomerDecision | undefined,
+): AssignCustomerToVorgangResult {
+  const vorgang = getVorgangById(vorgangId);
+  if (!vorgang) return { success: false, errorKey: 'vorgang.notFound' };
+
+  // Only the exact unknown state may be filled — any existing identity wins.
+  if (!isVorgangCustomerAssignmentEligible(vorgang)) {
+    return { success: false, errorKey: 'customer.alreadyAssigned' };
+  }
+
+  // 'none' is not an assignment — the Vorgang already carries that state.
+  if (!customerDecision || customerDecision.kind === 'none') {
+    return { success: false, errorKey: 'customerDecision.required' };
+  }
+
+  const decisionCheck = validateCustomerDecisionForCreate(customerDecision);
+  if (!decisionCheck.ok) return { success: false, errorKey: decisionCheck.errorKey };
+
+  let target: Customer;
+  let pendingCustomer: Customer | undefined;
+  if (customerDecision.kind === 'existing') {
+    const selected = getCustomerById(customerDecision.customerId.trim());
+    if (!selected) return { success: false, errorKey: 'customerDecision.missing' };
+    target = selected;
+  } else {
+    const built = buildValidatedCustomer(customerDecision.input);
+    if (!built.ok) return { success: false, errorKey: built.errorKey };
+    target = built.customer;
+    pendingCustomer = built.customer;
+  }
+
+  // --- Staging: customer store first (in memory), then one persisted Vorgang mutation.
+  const previousCustomers = getCustomerStoreSnapshot();
+  if (pendingCustomer) upsertCustomerInStore(pendingCustomer);
+
+  const committed = commitVorgangMutation(vorgangId, (current) => ({
+    ...cloneVorgang(current),
+    customer: target.name,
+    customerId: target.id,
+    customerBilling: billingFromCustomer(target),
+    customerExplicitlyUnknown: undefined,
+  }));
+
+  if (!committed.ok) {
+    if (pendingCustomer) restoreCustomerStore(previousCustomers);
+    return { success: false, errorKey: committed.errorKey };
+  }
+
+  return { success: true, vorgang: committed.vorgang };
 }
 
 export function createVorgangFromInbox(

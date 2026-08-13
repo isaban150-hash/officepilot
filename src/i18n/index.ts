@@ -1247,6 +1247,10 @@ const deLegacy = {
   'customerDecision.noCustomers': 'Keine bestehenden Kunden vorhanden.',
   'customerDecision.noAddress': 'Anschrift nicht hinterlegt',
   'customerDecision.required': 'Bitte zuerst die Kundenzuordnung wählen.',
+  'customer.alreadyAssigned': 'Dieser Vorgang hat bereits einen Kunden.',
+  'vorgang.assignCustomer.title': 'Kunde zuordnen',
+  'vorgang.assignCustomer.action': 'Kunde zuordnen',
+  'vorgang.assignCustomer.success': 'Kunde wurde zugeordnet.',
   'customerDecision.previewNone': 'Kunde noch nicht bekannt',
   'vorgang.linkedBadge': 'Vorgang verknüpft',
   'vorgang.noSimilar': 'Kein passender Vorgang gefunden.',
@@ -4394,6 +4398,10 @@ const trCustomerDecision: Partial<Record<keyof typeof de, string>> = {
   'customerDecision.noCustomers': 'Kayıtlı müşteri yok.',
   'customerDecision.noAddress': 'Adres kayıtlı değil',
   'customerDecision.required': 'Lütfen önce müşteri atamasını seçin.',
+  'customer.alreadyAssigned': 'Bu işlemin zaten bir müşterisi var.',
+  'vorgang.assignCustomer.title': 'Müşteri ata',
+  'vorgang.assignCustomer.action': 'Müşteri ata',
+  'vorgang.assignCustomer.success': 'Müşteri atandı.',
   'customerDecision.previewNone': 'Müşteri henüz bilinmiyor',
 };
 
@@ -4873,6 +4881,10 @@ const bgCustomerDecision: Partial<Record<keyof typeof de, string>> = {
   'customerDecision.noCustomers': 'Няма съществуващи клиенти.',
   'customerDecision.noAddress': 'Няма записан адрес',
   'customerDecision.required': 'Моля, първо изберете задаване на клиент.',
+  'customer.alreadyAssigned': 'Този процес вече има клиент.',
+  'vorgang.assignCustomer.title': 'Задаване на клиент',
+  'vorgang.assignCustomer.action': 'Задаване на клиент',
+  'vorgang.assignCustomer.success': 'Клиентът беше зададен.',
   'customerDecision.previewNone': 'Клиентът още не е известен',
 };
 
@@ -4907,6 +4919,10 @@ const ro: Partial<Record<TranslationKey, string>> = {
   'customerDecision.noCustomers': 'Nu există clienți înregistrați.',
   'customerDecision.noAddress': 'Nicio adresă înregistrată',
   'customerDecision.required': 'Alegeți mai întâi atribuirea clientului.',
+  'customer.alreadyAssigned': 'Acest proces are deja un client.',
+  'vorgang.assignCustomer.title': 'Atribuire client',
+  'vorgang.assignCustomer.action': 'Atribuire client',
+  'vorgang.assignCustomer.success': 'Clientul a fost atribuit.',
   'customerDecision.previewNone': 'Clientul nu este încă cunoscut',
 };
 
@@ -4935,6 +4951,10 @@ const ru: Partial<Record<TranslationKey, string>> = {
   'customerDecision.noCustomers': 'Нет существующих клиентов.',
   'customerDecision.noAddress': 'Адрес не указан',
   'customerDecision.required': 'Сначала выберите назначение клиента.',
+  'customer.alreadyAssigned': 'У этого процесса уже есть клиент.',
+  'vorgang.assignCustomer.title': 'Назначить клиента',
+  'vorgang.assignCustomer.action': 'Назначить клиента',
+  'vorgang.assignCustomer.success': 'Клиент назначен.',
   'customerDecision.previewNone': 'Клиент пока неизвестен',
 };
 
