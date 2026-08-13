@@ -336,6 +336,7 @@ function buildMergedVorgangFromFacts(
     // Local-only customer link (03B1) — the cloud payload does not carry it,
     // so a pull must never drop it. Cloud-created Vorgänge (local === null) get none.
     customerId: local?.customerId,
+    customerExplicitlyUnknown: local?.customerExplicitlyUnknown,
     negotiation: local?.negotiation,
     // Local-only Nachtragsentwürfe — never taken from cloud payload.
     orderAmendments: local?.orderAmendments,

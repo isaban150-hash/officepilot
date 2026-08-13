@@ -22,7 +22,11 @@ import {
   stageDocumentUpdate,
   updateDocument,
 } from './documentService';
-import { isOwnCompanyName, pickExternalCustomerName } from './customerOwnCompanyGuard';
+import {
+  isOwnCompanyName,
+  normalizeCompanyNameForComparison,
+  pickExternalCustomerName,
+} from './customerOwnCompanyGuard';
 import { buildValidatedCustomer, type CustomerDecision } from './customerService';
 import {
   getCustomerById,
@@ -544,6 +548,8 @@ interface ResolvedCustomerDecision {
   customer: string;
   billing: CustomerBilling;
   customerId?: string;
+  /** Only for kind 'none' — persisted in the same atomic snapshot. */
+  explicitlyUnknown?: true;
   /** Only for kind 'new' — staged into the customer store by the handoff. */
   pendingCustomer?: Customer;
 }
@@ -575,7 +581,7 @@ function resolveCustomerDecision(
   }
 
   if (decision.kind === 'none') {
-    return { customer: '', billing: emptyCustomerBilling('') };
+    return { customer: '', billing: emptyCustomerBilling(''), explicitlyUnknown: true };
   }
 
   if (decision.kind === 'existing') {
@@ -636,6 +642,7 @@ export function createVorgangFromInbox(
       status: 'eingegangen' as const,
       materialSource: draft.materialSource,
       customerId: resolved.customerId,
+      customerExplicitlyUnknown: resolved.explicitlyUnknown,
       customerBilling: resolved.billing,
       orderPositions: options?.skipDefaultPositions ? [] : buildOrderPositionsFromInbox(currentItem),
       documents: [doc],
@@ -1526,6 +1533,44 @@ function emptyCustomerBilling(customer: string): CustomerBilling {
   };
 }
 
+/**
+ * CUSTOMER-FACHOBJEKT-03B3 — single guard shared by both contract writers.
+ *
+ * `auftraggeber` is the name that may still be written (undefined = keep the
+ * stored one). `allowContactFields` covers ansprechpartner / telefon / email,
+ * which belong to the same detected party and are therefore never split off.
+ */
+function resolveContractCustomerFields(
+  vorgang: Vorgang,
+  fields: ContractExtractedFields,
+): { auftraggeber?: string; allowContactFields: boolean } {
+  // B — explicitly unknown: no document may fill the customer, ever.
+  if (vorgang.customerExplicitlyUnknown === true) {
+    return { allowContactFields: false };
+  }
+
+  // Own company is never the customer (unchanged).
+  if (isOwnCompanyName(fields.auftraggeber)) {
+    return { allowContactFields: false };
+  }
+
+  const auftraggeber = fields.auftraggeber?.trim() ? fields.auftraggeber : undefined;
+
+  // A — bound identity: the chosen Customer wins over any document name.
+  if (vorgang.customerId) {
+    if (!auftraggeber) return { allowContactFields: true };
+    const sameParty =
+      normalizeCompanyNameForComparison(auftraggeber) ===
+      normalizeCompanyNameForComparison(vorgang.customer);
+    // Same party: contacts may enrich, but the stored spelling stays.
+    // Different party: name and all three contact fields are discarded together.
+    return { allowContactFields: sameParty };
+  }
+
+  // C — legacy: unchanged behaviour.
+  return { auftraggeber, allowContactFields: true };
+}
+
 export function applyContractFieldsToVorgang(
   vorgangId: string,
   fields: ContractExtractedFields,
@@ -1544,16 +1589,13 @@ export function applyContractFieldsToVorgang(
   ) {
     updated.baustelle = fields.baustellenadresse;
   }
-  // Own company is never the customer. The contact fields belong to the same
-  // party, so they are discarded together — other contract fields stay unaffected.
-  const ownAuftraggeber = isOwnCompanyName(fields.auftraggeber);
-  const auftraggeber = ownAuftraggeber ? undefined : fields.auftraggeber;
+  const { auftraggeber, allowContactFields } = resolveContractCustomerFields(updated, fields);
   if (auftraggeber && !updated.customer.trim()) {
     updated.customer = auftraggeber;
   }
 
   const billing = { ...emptyCustomerBilling(updated.customer), ...(updated.customerBilling ?? {}) };
-  if (!ownAuftraggeber) {
+  if (allowContactFields) {
     if (fields.ansprechpartner) billing.contactPerson = fields.ansprechpartner;
     if (fields.telefon) billing.phone = fields.telefon;
     if (fields.email) billing.email = fields.email;
@@ -1578,17 +1620,14 @@ export function applyContractAcceptFieldsToVorgang(
     const title = fields.bauvorhaben ?? fields.projektname;
     if (title) updated.title = title;
     if (fields.baustellenadresse) updated.baustelle = fields.baustellenadresse;
-    // Own company is never the customer. The contact fields belong to the same
-    // party, so they are discarded together — other contract fields stay unaffected.
-    const ownAuftraggeber = isOwnCompanyName(fields.auftraggeber);
-    const auftraggeber = ownAuftraggeber ? undefined : fields.auftraggeber;
+    const { auftraggeber, allowContactFields } = resolveContractCustomerFields(updated, fields);
     if (auftraggeber) updated.customer = auftraggeber;
 
     const billing = {
       ...emptyCustomerBilling(updated.customer),
       ...(updated.customerBilling ?? {}),
     };
-    if (!ownAuftraggeber) {
+    if (allowContactFields) {
       if (fields.ansprechpartner) billing.contactPerson = fields.ansprechpartner;
       if (fields.telefon) billing.phone = fields.telefon;
       if (fields.email) billing.email = fields.email;

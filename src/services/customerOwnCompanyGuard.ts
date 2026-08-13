@@ -6,7 +6,7 @@
  */
 import { getCompanyProfile } from './companyProfileService';
 
-/** Trim, collapse inner whitespace, lowercase. Nothing else. */
+/** Trim, collapse inner whitespace, lowercase. Nothing else. Also used by the identity-drift guard. */
 export function normalizeCompanyNameForComparison(value: string | undefined | null): string {
   return (value ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
 }

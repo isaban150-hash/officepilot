@@ -1197,6 +1197,12 @@ export interface Vorgang {
    * Absent on legacy Vorgänge; never derived from `customer`.
    */
   customerId?: string;
+  /**
+   * CUSTOMER-FACHOBJEKT-03B3 — the user explicitly chose "no customer".
+   * Only `true` carries meaning; `undefined` is the legacy state and is never
+   * derived from an empty `customer`. Local-only, like `customerId`.
+   */
+  customerExplicitlyUnknown?: boolean;
   customerBilling?: CustomerBilling;
   orderPositions: OrderPosition[];
   documents: VorgangDocument[];
