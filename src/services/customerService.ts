@@ -40,6 +40,36 @@ function text(value: string | undefined): string {
  * Pure: touches no store and never persists. The id and both timestamps exist
  * before any caller decides when to persist.
  */
+/**
+ * CUSTOMER-FACHOBJEKT-04C — pure pre-check for a decision that will create a
+ * Vorgang. Reads the customer store, mutates nothing and creates no id.
+ */
+export function validateCustomerDecisionForCreate(
+  decision: CustomerDecision | undefined,
+): { ok: true } | { ok: false; errorKey: string } {
+  if (!decision) return { ok: false, errorKey: 'customerDecision.required' };
+
+  if (decision.kind === 'none') return { ok: true };
+
+  if (decision.kind === 'existing') {
+    const id = decision.customerId?.trim();
+    if (!id) return { ok: false, errorKey: 'customerDecision.missing' };
+    const selected = getCustomerById(id);
+    if (!selected || !selected.name.trim()) {
+      return { ok: false, errorKey: 'customerDecision.missing' };
+    }
+    if (isOwnCompanyName(selected.name)) {
+      return { ok: false, errorKey: 'customerDecision.ownCompany' };
+    }
+    return { ok: true };
+  }
+
+  const name = text(decision.input?.name);
+  if (!name) return { ok: false, errorKey: 'customer.nameRequired' };
+  if (isOwnCompanyName(name)) return { ok: false, errorKey: 'customer.ownCompanyNotAllowed' };
+  return { ok: true };
+}
+
 export function buildValidatedCustomer(
   input: CustomerInput,
   options?: { createdFromInboxId?: string },

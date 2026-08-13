@@ -41,6 +41,9 @@ interface DocumentReviewExperienceProps {
   onToggleMoreOptions: () => void;
   onApplySuggestion: () => void;
   onCreateContractOrder?: (selectedPositions: EnhancedDetectedOrderPosition[]) => void;
+  /** CUSTOMER-FACHOBJEKT-04C — customer decision rendered at the contract confirmation. */
+  customerDecisionSlot?: ReactNode;
+  customerDecisionBlocked?: boolean;
   onDiscardContractProposal?: () => void;
   /** Secondary inquiry from Auftragskarte — opens more options / communication. */
   onContractInquiry?: () => void;
@@ -77,6 +80,8 @@ export function DocumentReviewExperience({
   onToggleMoreOptions,
   onApplySuggestion,
   onCreateContractOrder,
+  customerDecisionSlot = null,
+  customerDecisionBlocked = false,
   onDiscardContractProposal,
   onContractInquiry,
   isCreatingContractOrder = false,
@@ -242,6 +247,8 @@ export function DocumentReviewExperience({
           translate={translate}
           item={item}
           onConfirmImport={(selected) => onCreateContractOrder?.(selected)}
+          customerDecisionSlot={customerDecisionSlot}
+          customerDecisionBlocked={customerDecisionBlocked}
           onDiscard={onDiscardContractProposal}
           onInquiry={onContractInquiry}
           onApplySuggestion={

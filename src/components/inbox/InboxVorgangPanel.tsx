@@ -18,28 +18,21 @@ import {
   type VorgangCardMode,
 } from '../../services/vorgangService';
 import { getLastPersistSuccess } from '../../services/persistenceService';
-import { isOwnCompanyName } from '../../services/customerOwnCompanyGuard';
-import { getCustomerById, getCustomerStoreSnapshot } from '../../services/customerStoreService';
+import { getCustomerById } from '../../services/customerStoreService';
+import type { CustomerDecision } from '../../services/customerService';
 import {
   buildCustomerSubline,
   CustomerDecisionChoice,
   type CustomerDecisionMode,
 } from '../customer/CustomerDecisionChoice';
-import type { CustomerDecision } from '../../services/customerService';
+import {
+  buildCustomerDecisionFromUi,
+  isCustomerDecisionIncomplete,
+  loadSelectableCustomers,
+  resolveNewCustomerHintKey,
+} from '../customer/customerDecisionUi';
 import type { Customer, InboxItem, MaterialStandard, Vorgang, VorgangDraft } from '../../types/models';
 import type { TranslationKey } from '../../i18n';
-
-/** Selectable customers: no empty names, never the own company, deterministic order. */
-function loadSelectableCustomers(): Customer[] {
-  return getCustomerStoreSnapshot()
-    .filter((customer) => customer.name.trim() && !isOwnCompanyName(customer.name))
-    .sort(
-      (a, b) =>
-        a.name.localeCompare(b.name, 'de') ||
-        a.city.localeCompare(b.city, 'de') ||
-        a.createdAt.localeCompare(b.createdAt),
-    );
-}
 
 interface InboxVorgangPanelProps {
   item: InboxItem;
@@ -122,37 +115,23 @@ export function InboxVorgangPanel({
     }
   };
 
-  const trimmedCustomerName = draft.customer.trim();
-  const isOwnCompanyCustomer = isOwnCompanyName(trimmedCustomerName);
-  const createDisabled =
-    customerMode === null ||
-    (customerMode === 'new' && (!trimmedCustomerName || isOwnCompanyCustomer)) ||
-    (customerMode === 'existing' && !selectedCustomerId);
+  const createDisabled = isCustomerDecisionIncomplete(
+    customerMode,
+    draft.customer,
+    selectedCustomerId,
+  );
 
   // Derived from the current state so the reason is visible while the button is
   // still disabled — a click on a disabled button never fires.
-  const customerValidationHint =
-    customerMode !== 'new'
-      ? null
-      : !trimmedCustomerName
-        ? translate('customerDecision.nameRequired')
-        : isOwnCompanyCustomer
-          ? translate('customerDecision.ownCompany')
-          : null;
+  const newCustomerHintKey = resolveNewCustomerHintKey(customerMode, draft.customer);
+  const customerValidationHint = newCustomerHintKey ? translate(newCustomerHintKey) : null;
 
   const buildCustomerDecision = (): CustomerDecision | null => {
-    if (customerMode === 'new') {
-      if (!trimmedCustomerName || isOwnCompanyCustomer) return null;
-      return { kind: 'new', input: { name: draft.customer } };
+    if (customerMode === 'existing' && selectedCustomerId && !getCustomerById(selectedCustomerId)) {
+      setCustomerError(translate('customerDecision.missing'));
+      return null;
     }
-    if (customerMode === 'existing') {
-      if (!selectedCustomerId || !getCustomerById(selectedCustomerId)) {
-        setCustomerError(translate('customerDecision.missing'));
-        return null;
-      }
-      return { kind: 'existing', customerId: selectedCustomerId };
-    }
-    return { kind: 'none' };
+    return buildCustomerDecisionFromUi(customerMode, draft.customer, selectedCustomerId);
   };
 
   const handleCreate = () => {

@@ -9,6 +9,19 @@ import { ContractAnalysisPanel } from '../components/inbox/ContractAnalysisPanel
 import { DocumentActionSuggestionsPanel } from '../components/inbox/DocumentActionSuggestionsPanel';
 import { ImportToArchiveDialog } from '../components/inbox/ImportToArchiveDialog';
 import { InboxVorgangPanel } from '../components/inbox/InboxVorgangPanel';
+import {
+  CustomerDecisionChoice,
+  type CustomerDecisionMode,
+} from '../components/customer/CustomerDecisionChoice';
+import {
+  buildCustomerDecisionFromUi,
+  isCustomerDecisionIncomplete,
+  loadSelectableCustomers,
+  resolveNewCustomerHintKey,
+} from '../components/customer/customerDecisionUi';
+import { getCustomerById } from '../services/customerStoreService';
+import type { CustomerDecision } from '../services/customerService';
+import type { Customer } from '../types/models';
 import { LetterExplanationPanel } from '../components/inbox/LetterExplanationPanel';
 import { CommunicationIntegrationPanel } from '../components/communication/CommunicationIntegrationPanel';
 import { INBOX_COMMUNICATION_BUTTON_KEYS } from '../components/communication/communicationNavigation';
@@ -64,7 +77,11 @@ import {
 import { acceptContractOrderFromProposal } from '../services/contractOrderAcceptService';
 import { isContractPlanLocked } from '../services/orderPlanIntegrityService';
 import { getVorgangById } from '../services/vorgangService';
-import type { EnhancedDetectedOrderPosition } from '../types/documentIntelligence';
+import type {
+  ContractOrderProposal,
+  EnhancedDetectedOrderPosition,
+} from '../types/documentIntelligence';
+import { pickExternalCustomerName } from '../services/customerOwnCompanyGuard';
 import {
   handoffInboxItemToArchive,
   isDuplicateDocument,
@@ -181,6 +198,43 @@ export function mergeReviewWorkflowWithRestoredDocumentWorkResult(
   };
 }
 
+/**
+ * CUSTOMER-FACHOBJEKT-04C — value-based reset key. Pure: no state, no store.
+ * Changes with any factual change of the proposal, stays stable for an
+ * identically-valued proposal that was rebuilt.
+ */
+export function buildContractDecisionResetKey(
+  inboxId: string | undefined,
+  proposal: ContractOrderProposal | null | undefined,
+): string {
+  let fingerprint = '';
+  if (proposal) {
+    try {
+      fingerprint = JSON.stringify(proposal);
+    } catch {
+      // Non-serializable proposal: fall back to a coarse but stable marker.
+      fingerprint = `unserializable:${proposal.positions.length}`;
+    }
+  }
+  return `${inboxId ?? ''}|${fingerprint}`;
+}
+
+/**
+ * CUSTOMER-FACHOBJEKT-04C — name suggestion for "new customer".
+ * Pure, own-company filtered, never an automatic link.
+ */
+export function resolveSuggestedCustomerName(
+  item: Pick<InboxItem, 'recognizedData' | 'sender'> | null | undefined,
+  proposal: ContractOrderProposal | null | undefined,
+): string {
+  return pickExternalCustomerName([
+    proposal?.customer,
+    item?.recognizedData?.Auftraggeber,
+    item?.recognizedData?.Kunde,
+    item?.sender,
+  ]);
+}
+
 export function EingangDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { translate, showToast, setup } = useApp();
@@ -242,6 +296,12 @@ export function EingangDetailPage() {
   const [deleteFailureMessage, setDeleteFailureMessage] = useState<string | null>(null);
   const deleteTriggerRef = useRef<HTMLButtonElement>(null);
   const [vorgangDialogRequest, setVorgangDialogRequest] = useState(0);
+  // CUSTOMER-FACHOBJEKT-04C — one decision state for all three manual accept entries.
+  const [customerMode, setCustomerMode] = useState<CustomerDecisionMode | null>(null);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
+  const [newCustomerName, setNewCustomerName] = useState('');
+  const [customerOptions, setCustomerOptions] = useState<Customer[]>([]);
+  const [customerError, setCustomerError] = useState<string | null>(null);
   const [manualCategory, setManualCategory] = useState<ClassifiedDocumentKind>('sonstiges');
   const [intakeExecution, setIntakeExecution] = useState<WorkflowResultExecution | null>(null);
   const [isExecutingIntake, setIsExecutingIntake] = useState(false);
@@ -542,6 +602,30 @@ export function EingangDetailPage() {
     letterExplanationFromWorkflow(workflow.documentExplanation) ??
     getLetterExplanation(item, setup.language);
   const prioritizeContractWorkspace = Boolean(workflow?.contractOrderProposal);
+
+  // A new Vorgang is only created when no valid link exists yet.
+  const contractLinkedVorgangId = item?.vorgangId?.trim() ?? '';
+  const contractCreatesNewVorgang =
+    Boolean(workflow?.contractOrderProposal) &&
+    (!contractLinkedVorgangId || !getVorgangById(contractLinkedVorgangId));
+  const customerDecisionBlocked =
+    contractCreatesNewVorgang &&
+    isCustomerDecisionIncomplete(customerMode, newCustomerName, selectedCustomerId);
+  const customerHintKey = resolveNewCustomerHintKey(customerMode, newCustomerName);
+
+  const contractDecisionKey = buildContractDecisionResetKey(
+    item?.id,
+    workflow?.contractOrderProposal,
+  );
+
+  useEffect(() => {
+    setCustomerMode(null);
+    setSelectedCustomerId(null);
+    setCustomerError(null);
+    setCustomerOptions(loadSelectableCustomers());
+    setNewCustomerName(resolveSuggestedCustomerName(item, workflow?.contractOrderProposal));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contractDecisionKey]);
   /** Behörde / BG BAU / Mahnung / Zahlungserinnerung — consolidated assist lane. */
   const useAssistFlowConsolidate =
     isConfirmedReplyDraftSupported(item) && !prioritizeContractWorkspace;
@@ -894,6 +978,27 @@ export function EingangDetailPage() {
 
   const handleCreateContractOrder = (selectedPositions: EnhancedDetectedOrderPosition[]) => {
     if (!item || !workflow?.contractOrderProposal) return;
+
+    // CUSTOMER-FACHOBJEKT-04C — shared gate for all three manual entries.
+    let customerDecision: CustomerDecision | undefined;
+    if (contractCreatesNewVorgang) {
+      if (customerDecisionBlocked) {
+        showToast(translate(customerHintKey ?? 'customerDecision.required'));
+        setMoreOptionsExpanded(true);
+        return;
+      }
+      const built = buildCustomerDecisionFromUi(customerMode, newCustomerName, selectedCustomerId);
+      if (!built) {
+        showToast(translate('customerDecision.required'));
+        return;
+      }
+      if (built.kind === 'existing' && !getCustomerById(built.customerId)) {
+        setCustomerError(translate('customerDecision.missing'));
+        showToast(translate('customerDecision.missing'));
+        return;
+      }
+      customerDecision = built;
+    }
     if (positionsImportLocked) {
       showToast(translate('order_plan_amendment_required'));
       return;
@@ -910,6 +1015,7 @@ export function EingangDetailPage() {
         selectedPositions,
         companyName: setup.companyName,
         materialStandard: setup.materialStandard,
+        customerDecision,
       });
       if (!result.success) {
         if (result.errorKey === 'order_plan_amendment_required') {
@@ -1389,6 +1495,43 @@ export function EingangDetailPage() {
       onToggleMoreOptions={() => setMoreOptionsExpanded((open) => !open)}
       onApplySuggestion={handleApplySuggestion}
       onCreateContractOrder={handleCreateContractOrder}
+      customerDecisionBlocked={customerDecisionBlocked}
+      customerDecisionSlot={
+        contractCreatesNewVorgang ? (
+          <div data-testid="contract-customer-decision">
+            <CustomerDecisionChoice
+              mode={customerMode}
+              onModeChange={(next) => {
+                setCustomerMode(next);
+                setSelectedCustomerId(null);
+                setCustomerError(null);
+              }}
+              customers={customerOptions}
+              selectedCustomerId={selectedCustomerId}
+              onSelectCustomer={(id) => {
+                setSelectedCustomerId(id);
+                setCustomerError(null);
+              }}
+              hint={customerHintKey ? translate(customerHintKey) : customerError}
+            />
+            {customerMode === 'new' && (
+              <label className="edit-field">
+                <span className="edit-field__label">{translate('inbox.sender')}</span>
+                <input
+                  type="text"
+                  className="input"
+                  value={newCustomerName}
+                  data-testid="contract-customer-name-input"
+                  onChange={(e) => {
+                    setNewCustomerName(e.target.value);
+                    setCustomerError(null);
+                  }}
+                />
+              </label>
+            )}
+          </div>
+        ) : null
+      }
       onDiscardContractProposal={handleDiscardContractProposal}
       onContractInquiry={handleContractInquiry}
       isCreatingContractOrder={isCreatingContractOrder}

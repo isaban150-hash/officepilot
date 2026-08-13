@@ -1246,6 +1246,7 @@ const deLegacy = {
   'customerDecision.missing': 'Gewählter Kunde ist nicht mehr vorhanden.',
   'customerDecision.noCustomers': 'Keine bestehenden Kunden vorhanden.',
   'customerDecision.noAddress': 'Anschrift nicht hinterlegt',
+  'customerDecision.required': 'Bitte zuerst die Kundenzuordnung wählen.',
   'customerDecision.previewNone': 'Kunde noch nicht bekannt',
   'vorgang.linkedBadge': 'Vorgang verknüpft',
   'vorgang.noSimilar': 'Kein passender Vorgang gefunden.',
@@ -4392,6 +4393,7 @@ const trCustomerDecision: Partial<Record<keyof typeof de, string>> = {
   'customerDecision.missing': 'Seçilen müşteri artık mevcut değil.',
   'customerDecision.noCustomers': 'Kayıtlı müşteri yok.',
   'customerDecision.noAddress': 'Adres kayıtlı değil',
+  'customerDecision.required': 'Lütfen önce müşteri atamasını seçin.',
   'customerDecision.previewNone': 'Müşteri henüz bilinmiyor',
 };
 
@@ -4870,6 +4872,7 @@ const bgCustomerDecision: Partial<Record<keyof typeof de, string>> = {
   'customerDecision.missing': 'Избраният клиент вече не съществува.',
   'customerDecision.noCustomers': 'Няма съществуващи клиенти.',
   'customerDecision.noAddress': 'Няма записан адрес',
+  'customerDecision.required': 'Моля, първо изберете задаване на клиент.',
   'customerDecision.previewNone': 'Клиентът още не е известен',
 };
 
@@ -4903,6 +4906,7 @@ const ro: Partial<Record<TranslationKey, string>> = {
   'customerDecision.missing': 'Clientul selectat nu mai există.',
   'customerDecision.noCustomers': 'Nu există clienți înregistrați.',
   'customerDecision.noAddress': 'Nicio adresă înregistrată',
+  'customerDecision.required': 'Alegeți mai întâi atribuirea clientului.',
   'customerDecision.previewNone': 'Clientul nu este încă cunoscut',
 };
 
@@ -4930,6 +4934,7 @@ const ru: Partial<Record<TranslationKey, string>> = {
   'customerDecision.missing': 'Выбранный клиент больше не существует.',
   'customerDecision.noCustomers': 'Нет существующих клиентов.',
   'customerDecision.noAddress': 'Адрес не указан',
+  'customerDecision.required': 'Сначала выберите назначение клиента.',
   'customerDecision.previewNone': 'Клиент пока неизвестен',
 };
 

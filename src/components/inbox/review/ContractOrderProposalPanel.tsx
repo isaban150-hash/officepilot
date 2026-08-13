@@ -34,6 +34,10 @@ interface ContractOrderProposalPanelProps {
   onApplySuggestion?: () => void;
   isCreating?: boolean;
   isApplying?: boolean;
+  /** CUSTOMER-FACHOBJEKT-04C — rendered right at the confirmation, no second dialog. */
+  customerDecisionSlot?: ReactNode;
+  /** Blocks the confirm CTAs while the customer decision is still incomplete. */
+  customerDecisionBlocked?: boolean;
   /** @deprecated UX-01: Auftragskarte is always primary; kept for call-site compat. */
   collapseUnderOperationalOverview?: boolean;
   /** Zone E extra (e.g. DocumentGuidance) — DOCUMENT-EXPERIENCE-02A. */
@@ -182,6 +186,8 @@ export function ContractOrderProposalPanel({
   onApplySuggestion,
   isCreating = false,
   isApplying = false,
+  customerDecisionSlot = null,
+  customerDecisionBlocked = false,
   detailsExtra = null,
 }: ContractOrderProposalPanelProps) {
   const positions = proposal.positions;
@@ -322,7 +328,7 @@ export function ContractOrderProposalPanel({
   const originalText = item ? getInboxExtractedDocumentText(item).trim() : '';
   const hasPositions = positions.length > 0;
   const acceptDisabled =
-    planLocked || (hasPositions ? false : !onApplySuggestion);
+    planLocked || customerDecisionBlocked || (hasPositions ? false : !onApplySuggestion);
 
   const chefMoneyValue = summaryView.moneyMetric?.value?.trim() ?? '';
   const lvTotalLabel = summaryView.lvOverview?.totalLabel?.trim() ?? '';
@@ -337,6 +343,10 @@ export function ContractOrderProposalPanel({
         item={item}
         vorgang={vorgang}
       />
+
+      {/* CUSTOMER-FACHOBJEKT-04C — must stay outside the collapsible LV editor:
+          the primary confirmation is the Auftragskarte, not the position editor. */}
+      {customerDecisionSlot}
 
       <Auftragskarte
         summary={documentSummary}
@@ -597,7 +607,7 @@ export function ContractOrderProposalPanel({
                   <Button
                     fullWidth
                     loading={isCreating}
-                    disabled={planLocked || selectedCount === 0}
+                    disabled={planLocked || selectedCount === 0 || customerDecisionBlocked}
                     onClick={handleConfirm}
                     data-testid="contract-create-order-button"
                   >

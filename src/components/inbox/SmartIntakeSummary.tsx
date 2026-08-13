@@ -222,6 +222,7 @@ export function SmartIntakeSummary({
           variant="outline"
           disabled={isExecuting || Boolean(item.vorgangId)}
           onClick={onCreateVorgang}
+          data-testid="smart-intake-create-vorgang"
         >
           {translate('intake.action.createVorgang')}
         </Button>

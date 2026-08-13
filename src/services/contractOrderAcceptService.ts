@@ -22,6 +22,10 @@ import {
 } from './inboxService';
 import { executeArchiveAtom } from './intakeExecutionAtoms';
 import {
+  validateCustomerDecisionForCreate,
+  type CustomerDecision,
+} from './customerService';
+import {
   createVorgangFromInboxWithContract,
   findUnresolvedUnitPositions,
   importSuggestedPositionsToVorgang,
@@ -276,6 +280,8 @@ export function acceptContractOrderFromProposal(input: {
   selectedPositions: EnhancedDetectedOrderPosition[];
   companyName: string;
   materialStandard?: MaterialStandard;
+  /** CUSTOMER-FACHOBJEKT-04C — required only when a new Vorgang is created. */
+  customerDecision?: CustomerDecision;
 }): AcceptContractOrderResult {
   const material = input.materialStandard ?? 'unclear';
 
@@ -289,7 +295,29 @@ export function acceptContractOrderFromProposal(input: {
 
   // Empty positions allowed for contract accept without LV — still enrich / archive / proofs / billing.
 
-  let item = getInboxItemById(input.item.id) ?? input.item;
+  // CUSTOMER-FACHOBJEKT-04C — read-only pre-check. Everything below this block
+  // mutates (inbox patch, filing, archive), so an invalid decision or a dangling
+  // Vorgang link must be rejected here and not one line later.
+  // Der Store ist die verbindliche Quelle; ohne Eintrag liefen alle folgenden
+  // Mutationen ohnehin ins Leere, also hier abbrechen statt mit input.item weiterzuarbeiten.
+  const currentItem = getInboxItemById(input.item.id);
+  if (!currentItem) {
+    return { success: false, errorKey: 'documentIntelligence.createOrderFailed' };
+  }
+
+  const linkedVorgangId = currentItem.vorgangId?.trim();
+  if (linkedVorgangId) {
+    if (!getVorgangById(linkedVorgangId)) {
+      return { success: false, errorKey: 'documentIntelligence.createOrderFailed' };
+    }
+  } else {
+    const decisionCheck = validateCustomerDecisionForCreate(input.customerDecision);
+    if (!decisionCheck.ok) {
+      return { success: false, errorKey: decisionCheck.errorKey };
+    }
+  }
+
+  let item = currentItem;
   item = enrichInboxFromProposal(item, input.proposal);
   item = ensureFilingConfirmed(item);
 
@@ -342,6 +370,8 @@ export function acceptContractOrderFromProposal(input: {
   } else {
     const created = createVorgangFromInboxWithContract(item, draft, material, {
       confirmedPositions: input.selectedPositions,
+      // Passed through unchanged; already validated before the first mutation.
+      customerDecision: input.customerDecision,
     });
     if (!created) {
       return { success: false, errorKey: 'documentIntelligence.createOrderFailed' };

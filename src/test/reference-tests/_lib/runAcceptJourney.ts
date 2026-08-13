@@ -2,7 +2,11 @@
  * Ebene 2 — Accept Journey Runner.
  * Wiederverwendet Document-Case OCR + Stable-Pipeline + Accept-Orchestrator.
  */
-import { acceptContractOrderFromProposal } from '../../../services/contractOrderAcceptService';
+import {
+  acceptContractOrderFromProposal,
+  buildVorgangDraftFromContractProposal,
+} from '../../../services/contractOrderAcceptService';
+import { resolveDraftTruthOverrides } from '../../../services/vorgangMatchingService';
 import { buildContractOrderProposal } from '../../../services/contractIntelligenceService';
 import { getDocumentById, hydrateDocumentStore } from '../../../services/documentService';
 import { getInboxItemById, hydrateInboxStore } from '../../../services/inboxService';
@@ -73,12 +77,25 @@ export function runAcceptJourney(reference: ContractAcceptReferenceCase): Accept
   }
 
   const expectJourney: AcceptJourneyExpected = reference.acceptJourney;
+  const acceptItem = getInboxItemById(item.id) ?? item;
+  // CUSTOMER-FACHOBJEKT-04C — the manual accept path now requires an explicit
+  // decision for a new Vorgang. The journey simulates the user picking
+  // "new customer" with exactly the name the service would have used anyway.
+  const journeyDraft = buildVorgangDraftFromContractProposal(
+    acceptItem,
+    proposal,
+    'betrieb',
+    resolveDraftTruthOverrides(acceptItem),
+  );
   const accept = acceptContractOrderFromProposal({
-    item: getInboxItemById(item.id) ?? item,
+    item: acceptItem,
     proposal,
     selectedPositions: proposal.positions,
     companyName: expectJourney.companyName,
-    materialStandard: 'betrieb' });
+    materialStandard: 'betrieb',
+    customerDecision: acceptItem.vorgangId
+      ? undefined
+      : { kind: 'new', input: { name: journeyDraft.customer } } });
 
   if (!accept.success) {
     throw new Error(
