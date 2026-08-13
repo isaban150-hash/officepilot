@@ -27,7 +27,7 @@ import { EingangDetailPage } from './pages/EingangDetailPage';
 import { EingangPage } from './pages/EingangPage';
 import { FirmendatenPage } from './pages/FirmendatenPage';
 import { HeutePage } from './pages/HeutePage';
-import { KundenDetailPage } from './pages/KundenDetailPage';
+import { KundenDetailPage, KundenLegacyLinkResolver } from './pages/KundenDetailPage';
 import { KundenPage } from './pages/KundenPage';
 import { SteuerberaterPage } from './pages/SteuerberaterPage';
 import { MailImportPage } from './pages/MailImportPage';
@@ -159,7 +159,11 @@ function AppRoutes() {
         <Route path="/" element={<HeutePage />} />
         <Route path="/start" element={<Navigate to="/" replace />} />
         <Route path="/kunden" element={<KundenPage />} />
-        <Route path="/kunden/:name" element={<KundenDetailPage />} />
+        {/* CUSTOMER-FACHOBJEKT-04E3 — specific identity routes before the legacy name path. */}
+        <Route path="/kunden/customer/:customerId" element={<KundenDetailPage kind="customer" />} />
+        <Route path="/kunden/legacy/:legacyKey" element={<KundenDetailPage kind="legacy" />} />
+        <Route path="/kunden/orphan/:customerId" element={<KundenDetailPage kind="orphan" />} />
+        <Route path="/kunden/:name" element={<KundenLegacyLinkResolver />} />
         <Route path="/steuerberater" element={<SteuerberaterPage />} />
         <Route path="/scan" element={<ScanPage />} />
         <Route path="/suche" element={<SearchPage />} />

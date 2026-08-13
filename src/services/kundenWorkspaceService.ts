@@ -1,9 +1,20 @@
 /**
- * CUSTOMER-WORKSPACE-01A — read-only customer work file.
- * Aggregates existing Vorgang / invoice / document / task data by customer name.
- * No CRM entity, no new persistence.
+ * CUSTOMER-WORKSPACE-01A / CUSTOMER-FACHOBJEKT-04E — read-only customer workspace.
+ * Resolved per identity kind: 'customer' via Customer.id, 'legacy' via the
+ * canonical name key of Vorgänge without customerId, 'orphan' via a customerId
+ * whose Customer is missing. Read-only: no new persistence and no mutation.
  */
+import { getCustomerById } from './customerStoreService';
 import { getAllDocuments } from './documentService';
+import {
+  buildCustomerAddressLine,
+  buildLegacyKundenKey,
+  getKundenOverview,
+  isUnknownCustomerVorgang,
+  kundenNamesMatch,
+  normalizeKundenName,
+  type KundenIdentityKind,
+} from './kundenOverviewService';
 import {
   getAllInvoiceOverview,
   summarizeInvoiceOverview,
@@ -88,16 +99,61 @@ export interface KundenWorkspace {
   tasks: KundenWorkspaceTaskRef[];
 }
 
-export function normalizeKundenName(value: string): string {
-  return value.trim().replace(/\s+/g, ' ');
+// Single implementation lives in kundenOverviewService; re-exported for existing callers.
+export { kundenNamesMatch, normalizeKundenName };
+
+/** CUSTOMER-FACHOBJEKT-04E3 — route per identity kind; the key is encoded exactly once. */
+export function buildKundenDetailPath(
+  target: { kind: KundenIdentityKind; key: string },
+): string {
+  const segment = encodeURIComponent(target.key);
+  if (target.kind === 'customer') return `/kunden/customer/${segment}`;
+  if (target.kind === 'orphan') return `/kunden/orphan/${segment}`;
+  return `/kunden/legacy/${segment}`;
 }
 
-export function kundenNamesMatch(a: string, b: string): boolean {
-  return normalizeKundenName(a).toLowerCase() === normalizeKundenName(b).toLowerCase();
+export interface KundenLinkTarget {
+  kind: KundenIdentityKind;
+  key: string;
+  name: string;
+  addressLine: string;
+  route: string;
 }
 
-export function buildKundenDetailPath(name: string): string {
-  return `/kunden/${encodeURIComponent(normalizeKundenName(name))}`;
+/**
+ * Legacy link resolution for /kunden/:name — counts every real target.
+ * Never picks one automatically when several exist.
+ */
+export function resolveKundenLinkTargets(rawName: string): KundenLinkTarget[] {
+  const name = normalizeKundenName(rawName);
+  if (!name) return [];
+
+  const targets: KundenLinkTarget[] = [];
+  for (const entry of getKundenOverview()) {
+    if (!kundenNamesMatch(entry.name, name)) continue;
+    targets.push({
+      kind: entry.kind,
+      key: entry.key,
+      name: entry.name,
+      addressLine: entry.addressLine,
+      route: buildKundenDetailPath(entry),
+    });
+  }
+
+  // A document-only legacy workspace has no Vorgang and therefore no overview row.
+  const legacyKey = buildLegacyKundenKey(name);
+  const hasLegacyRow = targets.some((t) => t.kind === 'legacy' && t.key === legacyKey);
+  if (!hasLegacyRow && hasNameOnlyDocuments(name)) {
+    targets.push({
+      kind: 'legacy',
+      key: legacyKey,
+      name,
+      addressLine: '',
+      route: buildKundenDetailPath({ kind: 'legacy', key: legacyKey }),
+    });
+  }
+
+  return targets;
 }
 
 function isClosedVorgang(status: VorgangStatus): boolean {
@@ -192,39 +248,112 @@ function toInvoiceRef(item: InvoiceOverviewItem): KundenWorkspaceInvoiceRef {
   };
 }
 
-function collectVorgaengeForCustomer(name: string): Vorgang[] {
-  const normalized = normalizeKundenName(name);
-  if (!normalized) return [];
-  return getAllVorgaenge().filter((vorgang) => kundenNamesMatch(vorgang.customer, normalized));
+/** Original spelling of the customer segment in a document folder path, if any. */
+function kundenPathSegment(path: string): string {
+  const parts = path.split('/').filter(Boolean);
+  const index = parts.findIndex((part) => part.toLowerCase() === 'kunden');
+  if (index < 0) return '';
+  return normalizeKundenName(parts[index + 1] ?? '');
+}
+
+/**
+ * CUSTOMER-FACHOBJEKT-04E5 — visible name of a legacy workspace.
+ * Never the canonical lowercase route key; empty when no original spelling
+ * can be recovered safely, so the UI can show a neutral legacy title.
+ */
+function resolveLegacyDisplayName(key: string, vorgaenge: Vorgang[]): string {
+  const fromVorgang = normalizeKundenName(vorgaenge[0]?.customer ?? '');
+  if (fromVorgang) return fromVorgang;
+
+  const documents = getAllDocuments();
+  for (const doc of documents) {
+    const linked = normalizeKundenName(doc.linkedCompany ?? '');
+    if (linked && buildLegacyKundenKey(linked) === key) return linked;
+  }
+  for (const doc of documents) {
+    const segment = kundenPathSegment(doc.digitalFolder.path);
+    // Only a segment that actually carries capitalisation proves an original spelling.
+    if (!segment || segment === segment.toLowerCase()) continue;
+    if (buildLegacyKundenKey(segment) === key) return segment;
+  }
+  return '';
+}
+
+function hasNameOnlyDocuments(name: string): boolean {
+  const lower = name.toLowerCase();
+  return getAllDocuments().some(
+    (doc) =>
+      kundenNamesMatch(doc.linkedCompany, name) ||
+      doc.digitalFolder.path.toLowerCase().includes(`/kunden/${lower}`),
+  );
+}
+
+/** Vorgänge per identity kind — never by name for an id-based customer. */
+function collectVorgaengeForTarget(kind: KundenIdentityKind, key: string): Vorgang[] {
+  const all = getAllVorgaenge();
+  if (kind === 'customer' || kind === 'orphan') {
+    return all.filter((vorgang) => vorgang.customerId?.trim() === key);
+  }
+  return all.filter(
+    (vorgang) =>
+      !vorgang.customerId?.trim() &&
+      !isUnknownCustomerVorgang(vorgang) &&
+      buildLegacyKundenKey(vorgang.customer) === key,
+  );
 }
 
 /**
  * Builds the read-only customer workspace, or null if no matching data exists.
  */
 export function getKundenWorkspace(
-  rawName: string,
+  kind: KundenIdentityKind,
+  rawKey: string,
   today?: Date | string,
 ): KundenWorkspace | null {
-  const name = normalizeKundenName(decodeURIComponent(rawName));
-  if (!name || name.toLowerCase() === 'unbekannt') return null;
+  const key = kind === 'legacy' ? buildLegacyKundenKey(rawKey) : rawKey.trim();
+  if (!key) return null;
 
-  const vorgaenge = collectVorgaengeForCustomer(name);
-  const invoices = getAllInvoiceOverview(today).filter((item) =>
-    kundenNamesMatch(item.customer, name),
-  );
+  // One store lookup per call; it decides both identity guards.
+  const storedCustomer = kind === 'legacy' ? undefined : getCustomerById(key);
+  if (kind === 'customer' && !storedCustomer) return null;
+  // An orphan exists only while no Customer carries this id.
+  if (kind === 'orphan' && storedCustomer) return null;
+  const customer = kind === 'customer' ? storedCustomer : undefined;
 
-  if (vorgaenge.length === 0 && invoices.length === 0) {
-    // Still allow workspace if archive docs match the name
-    const docsOnly = getAllDocuments().some(
-      (doc) =>
-        kundenNamesMatch(doc.linkedCompany, name) ||
-        doc.digitalFolder.path.toLowerCase().includes(`/kunden/${name.toLowerCase()}`),
-    );
-    if (!docsOnly) return null;
+  const vorgaenge = collectVorgaengeForTarget(kind, key);
+  const vorgangIds = new Set(vorgaenge.map((v) => v.id));
+  // Invoices strictly via vorgangId — never via invoice.customer.
+  const invoices = getAllInvoiceOverview(today).filter((item) => vorgangIds.has(item.vorgangId));
+
+  if (kind !== 'customer' && vorgaenge.length === 0 && invoices.length === 0) {
+    // Document-only legacy workspace stays reachable; orphan without data does not.
+    if (kind !== 'legacy' || !hasNameOnlyDocuments(rawKey)) return null;
   }
 
-  const vorgangIds = new Set(vorgaenge.map((v) => v.id));
-  const contact = mergeContact(name, vorgaenge);
+  const name =
+    kind === 'customer'
+      ? customer!.name
+      : kind === 'legacy'
+        ? resolveLegacyDisplayName(key, vorgaenge)
+        : // Orphan: only its own snapshots, never a same-named Customer.
+          pickNonEmpty(
+            ...vorgaenge.map((v) => v.customer),
+            ...vorgaenge.map((v) => v.customerBilling?.name),
+          );
+
+  const contact: KundenWorkspaceContact = customer
+    ? {
+        name: customer.name,
+        contactPerson: customer.contactPerson,
+        phone: customer.phone,
+        email: customer.email,
+        street: customer.street,
+        zip: customer.zip,
+        city: customer.city,
+        addressLine: buildCustomerAddressLine(customer),
+      }
+    // Never the route key — an unrecoverable name stays empty for the UI fallback.
+    : mergeContact(name, vorgaenge);
 
   const baustelleMap = new Map<string, KundenWorkspaceBaustelle>();
   for (const vorgang of [...vorgaenge].sort((a, b) =>
@@ -288,10 +417,14 @@ export function getKundenWorkspace(
   for (const doc of getAllDocuments()) {
     const linkedVorgangId = doc.linkedVorgang?.vorgangId;
     const linkedToCustomerVorgang = Boolean(linkedVorgangId) && vorgangIds.has(linkedVorgangId!);
-    const linkedCompanyMatch = kundenNamesMatch(doc.linkedCompany, name);
-    const pathMatch = doc.digitalFolder.path
-      .toLowerCase()
-      .includes(`/kunden/${name.toLowerCase()}`);
+    // Name and path only ever apply to a legacy workspace — never to an id-customer.
+    const nameKey = kind === 'legacy' ? rawKey : '';
+    const linkedCompanyMatch =
+      kind === 'legacy' && Boolean(nameKey) && kundenNamesMatch(doc.linkedCompany, nameKey);
+    const pathMatch =
+      kind === 'legacy' &&
+      Boolean(nameKey) &&
+      doc.digitalFolder.path.toLowerCase().includes(`/kunden/${nameKey.toLowerCase()}`);
     if (!linkedToCustomerVorgang && !linkedCompanyMatch && !pathMatch) continue;
     if (seenDocIds.has(doc.id)) continue;
     seenDocIds.add(doc.id);

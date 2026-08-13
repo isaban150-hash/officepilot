@@ -1,16 +1,82 @@
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { Badge, Card, CardMeta, CardTitle, DataRow, PageHeader } from '../components/ui/Card';
 import { EmptyStateBlock } from '../components/ui/EmptyStateBlock';
 import { useApp } from '../context/AppContext';
-import { getKundenWorkspace } from '../services/kundenWorkspaceService';
+import {
+  getKundenWorkspace,
+  resolveKundenLinkTargets,
+} from '../services/kundenWorkspaceService';
+import type { KundenIdentityKind } from '../services/kundenOverviewService';
 import type { TranslationKey } from '../i18n';
 
-export function KundenDetailPage() {
+/**
+ * CUSTOMER-FACHOBJEKT-04E3 — old /kunden/:name links.
+ * Redirects only when exactly one real target exists; never picks one of several.
+ */
+export function KundenLegacyLinkResolver() {
   const { translate } = useApp();
   const navigate = useNavigate();
   const { name: rawName } = useParams<{ name: string }>();
-  const workspace = rawName ? getKundenWorkspace(rawName) : null;
+  const targets = resolveKundenLinkTargets(rawName ?? '');
+
+  if (targets.length === 1) {
+    return <Navigate to={targets[0]!.route} replace />;
+  }
+
+  return (
+    <div className="page kunden-detail-page" data-testid="kunden-legacy-link">
+      <PageHeader
+        title={
+          targets.length === 0
+            ? translate('kunden.detail.notFoundTitle')
+            : translate('kunden.link.ambiguousTitle')
+        }
+        subtitle={
+          targets.length === 0
+            ? translate('kunden.detail.notFoundSubtitle')
+            : translate('kunden.link.ambiguousDesc')
+        }
+        backLabel={translate('common.back')}
+        onBack={() => navigate('/kunden')}
+      />
+
+      {targets.length > 0 && (
+        <div className="card-list" data-testid="kunden-legacy-link-targets">
+          {targets.map((target) => (
+            <Link
+              key={`${target.kind}:${target.key}`}
+              to={target.route}
+              className="card-link"
+              data-testid={`kunden-legacy-target-${target.kind}-${target.key}`}
+            >
+              <Card>
+                <CardTitle>{target.name}</CardTitle>
+                <CardMeta>
+                  {target.kind === 'legacy' ? `${translate('kunden.legacyBadge')} · ` : ''}
+                  {target.kind === 'orphan' ? `${translate('kunden.orphanBadge')} · ` : ''}
+                  {target.addressLine || '—'}
+                </CardMeta>
+              </Card>
+            </Link>
+          ))}
+        </div>
+      )}
+
+      <Link to="/kunden">
+        <Button fullWidth>{translate('kunden.detail.backToList')}</Button>
+      </Link>
+    </div>
+  );
+}
+
+export function KundenDetailPage({ kind }: { kind: KundenIdentityKind }) {
+  const { translate } = useApp();
+  const navigate = useNavigate();
+  const params = useParams<{ customerId?: string; legacyKey?: string }>();
+  // React Router already decodes the parameter — never decode a second time.
+  const rawKey = kind === 'legacy' ? params.legacyKey : params.customerId;
+  const workspace = rawKey ? getKundenWorkspace(kind, rawKey) : null;
 
   if (!workspace) {
     return (
@@ -39,8 +105,12 @@ export function KundenDetailPage() {
 
   return (
     <div className="page kunden-detail-page" data-testid="kunden-detail-page">
+      {/* No readable name stored: a neutral title per identity kind — never the key or id. */}
       <PageHeader
-        title={contact.name}
+        title={
+          contact.name ||
+          translate(kind === 'orphan' ? 'kunden.orphanBadge' : 'kunden.legacyBadge')
+        }
         subtitle={translate('kunden.detail.subtitle')}
         backLabel={translate('common.back')}
         onBack={() => navigate('/kunden')}
