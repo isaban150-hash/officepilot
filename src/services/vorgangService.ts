@@ -28,6 +28,7 @@ import {
   pickExternalCustomerName,
 } from './customerOwnCompanyGuard';
 import {
+  billingFromCustomer,
   buildValidatedCustomer,
   validateCustomerDecisionForCreate,
   type CustomerDecision,
@@ -556,18 +557,6 @@ interface ResolvedCustomerDecision {
   explicitlyUnknown?: true;
   /** Only for kind 'new' — staged into the customer store by the handoff. */
   pendingCustomer?: Customer;
-}
-
-function billingFromCustomer(customer: Customer): CustomerBilling {
-  return {
-    name: customer.name,
-    contactPerson: customer.contactPerson,
-    street: customer.street,
-    zip: customer.zip,
-    city: customer.city,
-    email: customer.email,
-    phone: customer.phone,
-  };
 }
 
 /**

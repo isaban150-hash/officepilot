@@ -5,6 +5,12 @@ import type { InvoiceDraftMetadataChanges } from '../../types/models';
 interface Props {
   draft: InvoiceDraft;
   onChange: (changes: InvoiceDraftMetadataChanges) => void;
+  /**
+   * CUSTOMER-FACHOBJEKT-05B — optional block above the customer fields that
+   * offers taking over the customer master data. Rendered by the page; this
+   * component stays pure presentation and knows no service.
+   */
+  customerMaster?: ReactNode;
 }
 
 function Field({
@@ -22,7 +28,7 @@ function Field({
   );
 }
 
-export function InvoiceDraftEditForm({ draft, onChange }: Props) {
+export function InvoiceDraftEditForm({ draft, onChange, customerMaster }: Props) {
   const billing = draft.customerBilling;
 
   return (
@@ -83,11 +89,13 @@ export function InvoiceDraftEditForm({ draft, onChange }: Props) {
 
       <fieldset className="invoice-edit__section">
         <legend>Kunde</legend>
+        {customerMaster}
         <Field label="Firma">
           <input
             type="text"
             className="input"
-            value={billing.name}
+            data-testid="invoice-edit-customer-name"
+              value={billing.name}
             onChange={(event) =>
               onChange({ customerBilling: { name: event.target.value } })
             }
@@ -97,7 +105,8 @@ export function InvoiceDraftEditForm({ draft, onChange }: Props) {
           <input
             type="text"
             className="input"
-            value={billing.contactPerson}
+            data-testid="invoice-edit-customer-contactPerson"
+              value={billing.contactPerson}
             onChange={(event) =>
               onChange({ customerBilling: { contactPerson: event.target.value } })
             }
@@ -107,7 +116,8 @@ export function InvoiceDraftEditForm({ draft, onChange }: Props) {
           <input
             type="text"
             className="input"
-            value={billing.street}
+            data-testid="invoice-edit-customer-street"
+              value={billing.street}
             onChange={(event) =>
               onChange({ customerBilling: { street: event.target.value } })
             }
@@ -118,6 +128,7 @@ export function InvoiceDraftEditForm({ draft, onChange }: Props) {
             <input
               type="text"
               className="input"
+              data-testid="invoice-edit-customer-zip"
               value={billing.zip}
               onChange={(event) =>
                 onChange({ customerBilling: { zip: event.target.value } })
@@ -128,6 +139,7 @@ export function InvoiceDraftEditForm({ draft, onChange }: Props) {
             <input
               type="text"
               className="input"
+              data-testid="invoice-edit-customer-city"
               value={billing.city}
               onChange={(event) =>
                 onChange({ customerBilling: { city: event.target.value } })
@@ -135,6 +147,28 @@ export function InvoiceDraftEditForm({ draft, onChange }: Props) {
             />
           </Field>
         </div>
+        <Field label="E-Mail">
+          <input
+            type="text"
+            className="input"
+            data-testid="invoice-edit-customer-email"
+            value={billing.email}
+            onChange={(event) =>
+              onChange({ customerBilling: { email: event.target.value } })
+            }
+          />
+        </Field>
+        <Field label="Telefon">
+          <input
+            type="text"
+            className="input"
+            data-testid="invoice-edit-customer-phone"
+            value={billing.phone}
+            onChange={(event) =>
+              onChange({ customerBilling: { phone: event.target.value } })
+            }
+          />
+        </Field>
       </fieldset>
 
       <fieldset className="invoice-edit__section">

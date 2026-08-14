@@ -10,7 +10,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as supabaseLib from './lib/supabase';
 import { getCompanyProfile, hydrateCompanyProfileStore } from './services/companyProfileService';
-import { createCustomer, updateCustomer } from './services/customerService';
+import { billingFromCustomer, createCustomer, updateCustomer } from './services/customerService';
 import { getCustomerById, getCustomerStoreSnapshot } from './services/customerStoreService';
 import { hydrateDocumentStore } from './services/documentService';
 import { getInboxItemById, hydrateInboxStore } from './services/inboxService';
@@ -29,12 +29,13 @@ import {
   assignCustomerToVorgang,
   createVorgangFromInbox,
   getVorgangById,
+  hydrateVorgangStore,
 } from './services/vorgangService';
 import { setWorkspace } from './services/workspace/workspaceStore';
 import { createAuftragInboxItem, testSetup } from './test/fixtures';
 import { resetTestStores } from './test/resetStores';
 import type { CustomerDecision } from './services/customerService';
-import type { CustomerBilling, InboxItem, Vorgang } from './types/models';
+import type { CustomerBilling, InboxItem, Vorgang, VorgangInvoice } from './types/models';
 
 const OWN = 'Cirmak Haustechnik GmbH';
 const WORKSPACE_ID = 'ws-golden-01b';
@@ -328,5 +329,128 @@ describe('CORE-COMPLETE-GOLDEN-PATH-01B', () => {
     );
     expect(getCustomerStoreSnapshot()).toHaveLength(1);
     expect(getCustomerById(customerId)?.city).toBe('Bochum');
+  });
+
+  it('Fall C — 05B: ausdrücklich übernommene Stammdaten frieren nur in der neuen Rechnung ein', async () => {
+    const created = createCustomer(NORDWEST);
+    expect(created.success).toBe(true);
+    if (!created.success) return;
+    const customerId = created.customer.id;
+
+    // Gemeinsamer Mapper liefert genau die sieben Felder.
+    expect(billingFromCustomer(created.customer)).toEqual({
+      name: NORDWEST.name,
+      contactPerson: NORDWEST.contactPerson,
+      street: NORDWEST.street,
+      zip: NORDWEST.zip,
+      city: NORDWEST.city,
+      email: NORDWEST.email,
+      phone: NORDWEST.phone,
+    });
+
+    // Vorgangserstellung verhält sich unverändert: Snapshot aus demselben Mapper.
+    const vorgang = createVorgangWithDecision({ kind: 'existing', customerId });
+    expect(vorgang.customerId).toBe(customerId);
+    expect(vorgang.customerBilling).toEqual(NORDWEST);
+
+    /**
+     * Bestehende pauschale Abschlagsrechnung: modellgültig, mit leerer
+     * Positionsliste — sie verbraucht daher keine Menge der Auftragsposition.
+     */
+    const firstBilling: CustomerBilling = { ...NORDWEST };
+    const existingInvoice: VorgangInvoice = {
+      id: 'inv-05b-alt',
+      number: '2026-0201',
+      type: 'abschlag',
+      abschlagNumber: 1,
+      calculationMode: 'fixed_amount',
+      fixedAmountNet: 1000,
+      positions: [],
+      subtotal: 1000,
+      taxStatus: 'standard_19',
+      amount: 1190,
+      status: 'versendet',
+      date: '2026-06-01',
+      createdAt: '2026-06-01T10:00:00.000Z',
+      issueDate: '2026-06-01',
+      paymentStatus: 'offen',
+      payments: [],
+      customerSnapshot: { ...firstBilling },
+      companySnapshot: getCompanyProfile(),
+      legalNotices: [],
+      previousAbschlagDeductions: [],
+    };
+    hydrateVorgangStore([{ ...getVorgangById(vorgang.id)!, invoices: [existingInvoice] }]);
+
+    const afterFirst = getVorgangById(vorgang.id)!;
+    expect(afterFirst.invoices).toHaveLength(1);
+    expect(afterFirst.invoices[0]!.customerSnapshot).toBeDefined();
+    expect(afterFirst.invoices[0]!.customerSnapshot).toEqual(firstBilling);
+
+    // Stammdaten ändern sich; Vorgang und erste Rechnung bleiben unberührt.
+    const renamed = updateCustomer(customerId, {
+      name: 'NordWest Dachbau Nord GmbH',
+      street: 'Ruhrallee 5',
+      zip: '44787',
+      city: 'Bochum',
+      contactPerson: 'Herr Nordmann',
+      email: 'neu@nordwest-dachbau.de',
+      phone: '0234 999999',
+    });
+    expect(renamed.success).toBe(true);
+    if (!renamed.success) return;
+    const masterBilling = billingFromCustomer(renamed.customer);
+    expect(getVorgangById(vorgang.id)!.customerBilling).toEqual(NORDWEST);
+
+    // Zweiter Entwurf: erst der Vorgangssnapshot, dann die ausdrückliche Übernahme.
+    // buildApprovableDraft belegt dabei die weiterhin offene Pauschalposition mit Menge 1.
+    const secondBase = buildApprovableDraft(vorgang.id);
+    expect(secondBase.customerBilling).toEqual(firstBilling);
+    const secondDraft = updateInvoiceDraftMetadata(secondBase, { customerBilling: masterBilling });
+    expect(secondDraft.customerBilling).toEqual(masterBilling);
+
+    mockCloudReady();
+    const secondRpc = mockRpcSuccess('2026-0202', 202);
+    const secondResult = await finalizeInvoiceDraftWithCloud(vorgang.id, secondDraft, testSetup);
+    expect(secondResult.ok, secondResult.ok ? '' : JSON.stringify(secondResult)).toBe(true);
+    expect(secondRpc).toHaveBeenCalledTimes(1);
+
+    const afterSecond = getVorgangById(vorgang.id)!;
+    expect(afterSecond.invoices).toHaveLength(2);
+    const firstInvoice = afterSecond.invoices.find((inv) => inv.number === '2026-0201')!;
+    const secondInvoice = afterSecond.invoices.find((inv) => inv.number === '2026-0202')!;
+    expect(firstInvoice.customerSnapshot).toBeDefined();
+    expect(secondInvoice.customerSnapshot).toBeDefined();
+    // Nur die neue Rechnung trägt die übernommenen Stammdaten.
+    expect(secondInvoice.customerSnapshot).toEqual(masterBilling);
+    expect(firstInvoice.customerSnapshot).toEqual(firstBilling);
+    expect(secondInvoice.customerSnapshot).not.toEqual(firstInvoice.customerSnapshot);
+    // Das Druckmodell folgt je Rechnung ihrem eigenen eingefrorenen Snapshot.
+    expect(buildInvoicePrintModelFromInvoice(firstInvoice).customer).toEqual(firstBilling);
+    expect(buildInvoicePrintModelFromInvoice(secondInvoice).customer).toEqual(masterBilling);
+    // Customer und Vorgangssnapshot bleiben unverändert.
+    expect(getCustomerById(customerId)).toEqual(renamed.customer);
+    expect(afterSecond.customerId).toBe(customerId);
+    expect(afterSecond.customer).toBe(NORDWEST.name);
+    expect(afterSecond.customerBilling).toEqual(NORDWEST);
+
+    // Bootstrap erhält beide eingefrorenen Snapshots.
+    clearInMemoryBusinessState();
+    expect(getVorgangById(vorgang.id)).toBeUndefined();
+    bootstrapBusinessState({ userId: USER_ID, workspaceId: WORKSPACE_ID });
+    const reloaded = getVorgangById(vorgang.id)!;
+    expect(reloaded.invoices).toHaveLength(2);
+    expect(
+      reloaded.invoices.find((inv) => inv.number === '2026-0201')!.customerSnapshot,
+    ).toEqual(firstBilling);
+    expect(
+      reloaded.invoices.find((inv) => inv.number === '2026-0202')!.customerSnapshot,
+    ).toEqual(masterBilling);
+    expect(
+      buildInvoicePrintModelFromInvoice(
+        reloaded.invoices.find((inv) => inv.number === '2026-0202')!,
+      ).customer,
+    ).toEqual(masterBilling);
+    expect(reloaded.customerBilling).toEqual(NORDWEST);
   });
 });

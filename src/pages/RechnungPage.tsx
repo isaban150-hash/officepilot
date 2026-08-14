@@ -32,6 +32,8 @@ import {
   getContractSkontoOfferForVorgang,
 } from '../services/contractIntelligenceService';
 import { getInboxItemById } from '../services/inboxService';
+import { billingFromCustomer } from '../services/customerService';
+import { getCustomerById } from '../services/customerStoreService';
 import { getVorgangById } from '../services/vorgangService';
 import type {
   InvoiceCalculationMode,
@@ -65,6 +67,8 @@ export function RechnungPage() {
   const [applyContractSkonto, setApplyContractSkonto] = useState(false);
   const [reverseCharge13bConfirmed, setReverseCharge13bConfirmed] = useState(false);
   const [approving, setApproving] = useState(false);
+  const [customerMasterConfirm, setCustomerMasterConfirm] = useState(false);
+  const [customerMasterError, setCustomerMasterError] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<TranslationKey[]>([]);
   const [validationWarnings, setValidationWarnings] = useState<TranslationKey[]>([]);
   const approveLockRef = useRef(false);
@@ -96,6 +100,8 @@ export function RechnungPage() {
     setValidationWarnings([]);
     approveLockRef.current = false;
     setApproving(false);
+    setCustomerMasterConfirm(false);
+    setCustomerMasterError(null);
   }, [id, invoiceType, setup]);
 
   useEffect(() => {
@@ -178,6 +184,41 @@ export function RechnungPage() {
 
   const handleMetadataChange = (changes: InvoiceDraftMetadataChanges) => {
     setDraft((prev) => (prev ? updateInvoiceDraftMetadata(prev, changes) : prev));
+  };
+
+  /**
+   * CUSTOMER-FACHOBJEKT-05B — explicit takeover of the current customer master
+   * data into this draft only. Strictly id-based: no name lookup, no fallback.
+   */
+  const customerIdOfVorgang = vorgang?.customerId?.trim() ?? '';
+  const masterCustomer = customerIdOfVorgang ? getCustomerById(customerIdOfVorgang) : undefined;
+  const masterBilling = masterCustomer ? billingFromCustomer(masterCustomer) : null;
+  const masterAddressComplete = Boolean(
+    masterCustomer?.street.trim() && masterCustomer.zip.trim() && masterCustomer.city.trim(),
+  );
+  const masterMatchesDraft = Boolean(
+    masterBilling &&
+      draft &&
+      (Object.keys(masterBilling) as Array<keyof typeof masterBilling>).every(
+        (field) => masterBilling[field] === draft.customerBilling[field],
+      ),
+  );
+
+  const applyMasterBilling = () => {
+    if (!vorgang) return;
+    // Read the source again — the store may have changed since rendering.
+    const current = customerIdOfVorgang ? getCustomerById(customerIdOfVorgang) : undefined;
+    if (!current) {
+      setCustomerMasterConfirm(false);
+      setCustomerMasterError(translate('invoice.customerMaster.missing'));
+      return;
+    }
+    setDraft((prev) =>
+      prev ? updateInvoiceDraftMetadata(prev, { customerBilling: billingFromCustomer(current) }) : prev,
+    );
+    setCustomerMasterConfirm(false);
+    setCustomerMasterError(null);
+    showToast(translate('invoice.customerMaster.applied'));
   };
 
   const handleAbschlagModeChange = (mode: InvoiceCalculationMode) => {
@@ -659,7 +700,89 @@ export function RechnungPage() {
                 ))}
               </div>
             </fieldset>
-            <InvoiceDraftEditForm draft={draft} onChange={handleMetadataChange} />
+            <InvoiceDraftEditForm
+              draft={draft}
+              onChange={handleMetadataChange}
+              customerMaster={
+                masterCustomer && masterBilling ? (
+                  <div className="invoice-customer-master" data-testid="invoice-customer-master">
+                    <p className="hint-text" data-testid="invoice-customer-master-source">
+                      {translate('invoice.customerMaster.source')}: {masterCustomer.name},{' '}
+                      {`${masterCustomer.street}, ${masterCustomer.zip} ${masterCustomer.city}`.trim()}
+                    </p>
+                    <p className="hint-text">{translate('invoice.customerMaster.scope')}</p>
+
+                    {customerMasterConfirm ? (
+                      <Card data-testid="invoice-customer-master-confirm">
+                        <p>{translate('invoice.customerMaster.confirmText')}</p>
+                        <p className="hint-text">{translate('invoice.customerMaster.scope')}</p>
+                        <div className="form-actions">
+                          <Button
+                            type="button"
+                            data-testid="invoice-customer-master-apply"
+                            onClick={applyMasterBilling}
+                          >
+                            {translate('invoice.customerMaster.confirmAction')}
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            type="button"
+                            data-testid="invoice-customer-master-cancel"
+                            onClick={() => {
+                              setCustomerMasterConfirm(false);
+                              setCustomerMasterError(null);
+                            }}
+                          >
+                            {translate('common.cancel')}
+                          </Button>
+                        </div>
+                      </Card>
+                    ) : (
+                      <Button
+                        variant="secondary"
+                        type="button"
+                        data-testid="invoice-customer-master-action"
+                        disabled={!masterAddressComplete || masterMatchesDraft}
+                        onClick={() => {
+                          setCustomerMasterError(null);
+                          if (masterMatchesDraft) return;
+                          setCustomerMasterConfirm(true);
+                        }}
+                      >
+                        {translate('invoice.customerMaster.action')}
+                      </Button>
+                    )}
+
+                    {!masterAddressComplete && (
+                      <p className="hint-text" data-testid="invoice-customer-master-incomplete">
+                        {translate('invoice.customerMaster.incomplete')}
+                      </p>
+                    )}
+                    {masterAddressComplete && masterMatchesDraft && (
+                      <p className="hint-text" data-testid="invoice-customer-master-identical">
+                        {translate('invoice.customerMaster.identical')}
+                      </p>
+                    )}
+                    {customerMasterError && (
+                      <p className="form-error" data-testid="invoice-customer-master-error">
+                        {customerMasterError}
+                      </p>
+                    )}
+                  </div>
+                ) : customerMasterError ? (
+                  // Source gone after the click: neither action nor source, but the
+                  // reason stays visible until the draft is rebuilt.
+                  <div
+                    className="invoice-customer-master"
+                    data-testid="invoice-customer-master-failed"
+                  >
+                    <p className="form-error" data-testid="invoice-customer-master-error">
+                      {customerMasterError}
+                    </p>
+                  </div>
+                ) : null
+              }
+            />
           </Card>
           <div className="action-stack">
             <Button fullWidth onClick={() => setStep('preview')} data-testid="invoice-back-preview">

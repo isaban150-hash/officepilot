@@ -36,6 +36,22 @@ function text(value: string | undefined): string {
 }
 
 /**
+ * CUSTOMER-FACHOBJEKT-05B — the single Customer → CustomerBilling mapping.
+ * Pure: no store access, no mutation, no persistence.
+ */
+export function billingFromCustomer(customer: Customer): CustomerBilling {
+  return {
+    name: customer.name,
+    contactPerson: customer.contactPerson,
+    street: customer.street,
+    zip: customer.zip,
+    city: customer.city,
+    email: customer.email,
+    phone: customer.phone,
+  };
+}
+
+/**
  * CUSTOMER-FACHOBJEKT-03B2 — the single validation + build step.
  * Pure: touches no store and never persists. The id and both timestamps exist
  * before any caller decides when to persist.
