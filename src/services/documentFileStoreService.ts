@@ -1,4 +1,4 @@
-import type { DocumentFileRef } from '../types/documentFileRef';
+import type { DocumentFileLifecycleStatus, DocumentFileRef } from '../types/documentFileRef';
 import {
   applyDocumentFileRefCommittedPromotion,
   buildCommittedLifecycleFields,
@@ -442,22 +442,41 @@ export type PromoteDocumentFileRefResult =
   | { success: true; fileRef: DocumentFileRef; alreadyCommitted: boolean }
   | { success: false; error: PromoteDocumentFileRefError };
 
+export type ApplyDocumentFileRefPromotionResult =
+  | {
+      success: true;
+      fileRef: DocumentFileRef;
+      alreadyCommitted: boolean;
+      /** Complete ref before the transition — pass to revert for an exact rollback. */
+      previous: DocumentFileRef;
+      previousLifecycleStatus: DocumentFileLifecycleStatus;
+    }
+  | { success: false; error: Exclude<PromoteDocumentFileRefError, 'persist_failed'> };
+
 /**
- * Promotes a temporary DocumentFileRef to committed without touching the blob.
- * Idempotent for already-committed refs (no-op success).
+ * UPLOAD-DRAFT-RESUME-01B0 — in-memory temp → committed transition.
+ *
+ * Never persists. Callers decide when to flush, so an intake can write the
+ * InboxItem and the committed FileRef through one single persistAll.
  */
-export function promoteDocumentFileRefToCommitted(fileRefId: string): PromoteDocumentFileRefResult {
+export function applyDocumentFileRefCommittedPromotionInMemory(
+  fileRefId: string,
+): ApplyDocumentFileRefPromotionResult {
   const index = fileRefs.findIndex((entry) => entry.id === fileRefId);
   if (index === -1) {
     return { success: false, error: 'file_ref_not_found' };
   }
 
   const current = fileRefs[index];
+  const previous = cloneRef(current);
+
   if (current.lifecycleStatus === 'committed') {
     return {
       success: true,
       fileRef: cloneRef(current),
       alreadyCommitted: true,
+      previous,
+      previousLifecycleStatus: 'committed',
     };
   }
 
@@ -465,7 +484,6 @@ export function promoteDocumentFileRefToCommitted(fileRefId: string): PromoteDoc
     return { success: false, error: 'lifecycle_not_temp' };
   }
 
-  const previous = cloneRef(current);
   const promoted = applyDocumentFileRefCommittedPromotion(current);
   fileRefs = [
     ...fileRefs.slice(0, index),
@@ -473,19 +491,56 @@ export function promoteDocumentFileRefToCommitted(fileRefId: string): PromoteDoc
     ...fileRefs.slice(index + 1),
   ];
 
+  return {
+    success: true,
+    fileRef: cloneRef(promoted),
+    alreadyCommitted: false,
+    previous,
+    previousLifecycleStatus: 'temp',
+  };
+}
+
+/**
+ * Restores a complete ref snapshot taken before a promotion — every field,
+ * including expiresAt and committedAt, not just lifecycleStatus. Never persists.
+ */
+export function revertDocumentFileRefPromotionInMemory(previous: DocumentFileRef): void {
+  const index = fileRefs.findIndex((entry) => entry.id === previous.id);
+  if (index === -1) return;
+  fileRefs = [
+    ...fileRefs.slice(0, index),
+    cloneRef(previous),
+    ...fileRefs.slice(index + 1),
+  ];
+}
+
+/**
+ * Promotes a temporary DocumentFileRef to committed without touching the blob.
+ * Idempotent for already-committed refs (no-op success).
+ */
+export function promoteDocumentFileRefToCommitted(fileRefId: string): PromoteDocumentFileRefResult {
+  const transition = applyDocumentFileRefCommittedPromotionInMemory(fileRefId);
+  if (!transition.success) {
+    return { success: false, error: transition.error };
+  }
+
+  if (transition.alreadyCommitted) {
+    return {
+      success: true,
+      fileRef: transition.fileRef,
+      alreadyCommitted: true,
+    };
+  }
+
   const persistResult = persistenceService.persistAll();
   if (!persistResult.success) {
-    fileRefs = [
-      ...fileRefs.slice(0, index),
-      previous,
-      ...fileRefs.slice(index + 1),
-    ];
+    revertDocumentFileRefPromotionInMemory(transition.previous);
     return { success: false, error: 'persist_failed' };
   }
 
   return {
     success: true,
-    fileRef: cloneRef(promoted),
+    fileRef: transition.fileRef,
     alreadyCommitted: false,
   };
 }

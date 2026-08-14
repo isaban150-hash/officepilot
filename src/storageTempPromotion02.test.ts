@@ -18,7 +18,8 @@ import {
   storeDocumentFileFromCachedPayload } from './services/documentFileStoreService';
 import { countActiveReferencesToFileRef } from './services/documentFileReferenceService';
 import { confirmPendingDocumentIntake, processDocumentFileForPreview } from './services/pendingDocumentIntakeService';
-import { getInboxStoreSnapshot, stageInboxItem } from './services/inboxService';
+import { getInboxStoreSnapshot, hydrateInboxStore, stageInboxItem } from './services/inboxService';
+import { intakeCachedDocumentFile } from './services/documentIntakeService';
 import { setImageOcrExtractorForTests } from './services/ocrDocumentService';
 import { setPdfTextExtractorForTests } from './services/uploadTextExtractionService';
 import * as blobDbService from './services/storage/documentBlobIndexedDbService';
@@ -258,6 +259,152 @@ describe('STORAGE-TEMP-PROMOTION-02', () => {
     expect(promoted.lifecycleStatus).toBe('committed');
     expect(promoted.committedAt).toBe('2026-07-15T12:00:00.000Z');
     expect(promoted.expiresAt).toBeUndefined();
+  });
+
+  /**
+   * UPLOAD-DRAFT-RESUME-01B0 — ein wiederverwendeter temp-Ref darf eine
+   * endgültige Speicherung nicht als temp überleben. InboxItem und committed
+   * FileRef gehen durch denselben einen persistAll.
+   */
+  describe('UPLOAD-DRAFT-RESUME-01B0 atomare Promotion im Intake', () => {
+    /** Temp-Ref ohne referenzierendes InboxItem — der Entwurfsfall. */
+    async function createUnreferencedTempRef(marker: string) {
+      hydrateInboxStore([]);
+      const payload = createPayload(marker, `${marker}.pdf`);
+      const stored = await storeDocumentFileFromCachedPayload(payload, {
+        lifecycleIntent: 'temp',
+      });
+      expect(stored.created).toBe(true);
+      expect(stored.fileRef.lifecycleStatus).toBe('temp');
+      expect(stored.fileRef.expiresAt).toBeDefined();
+      expect(getInboxStoreSnapshot()).toHaveLength(0);
+      return { payload, fileRef: stored.fileRef };
+    }
+
+    it('A — save_permanently promotet den wiederverwendeten temp-Ref', async () => {
+      const { payload, fileRef } = await createUnreferencedTempRef('REUSE-COMMIT');
+      const saveSpy = vi.spyOn(blobDbService, 'saveDocumentBlob');
+
+      const result = await intakeCachedDocumentFile(payload, {
+        userDecision: 'save_permanently',
+        importSource: 'upload',
+        recognizedText: 'Vertragstext',
+      });
+
+      expect(result.success).toBe(true);
+      if (!result.success || result.duplicate) throw new Error('intake failed');
+
+      // Gleiche Datei, keine zweiten Bytes.
+      expect(result.fileRef.id).toBe(fileRef.id);
+      expect(result.fileRef.contentHash).toBe(fileRef.contentHash);
+      expect(saveSpy).not.toHaveBeenCalled();
+      const bytes = await getOriginalDocumentFileBytes(result.fileRef);
+      expect(Array.from(bytes!)).toEqual(Array.from(payload.bytes));
+
+      // Das Result trägt den promoteten Ref, kein veralteter temp-Klon.
+      expect(result.fileRef.lifecycleStatus).toBe('committed');
+      expect(result.fileRef.expiresAt).toBeUndefined();
+      expect(result.fileRef.committedAt).toBeDefined();
+
+      const inStore = getDocumentFileRefById(fileRef.id);
+      expect(inStore?.lifecycleStatus).toBe('committed');
+      expect(inStore?.expiresAt).toBeUndefined();
+      expect(getInboxStoreSnapshot()).toHaveLength(1);
+      expect(getInboxStoreSnapshot()[0]?.fileRefId).toBe(fileRef.id);
+    });
+
+    it('B — Persistenzfehler rollt die Promotion vollständig zurück', async () => {
+      const { payload, fileRef } = await createUnreferencedTempRef('ROLLBACK-COMMIT');
+      const before = getDocumentFileRefById(fileRef.id)!;
+
+      const persistSpy = vi
+        .spyOn(persistenceService, 'persistAll')
+        .mockReturnValue({ success: false, error: 'quota_exceeded' });
+
+      const result = await intakeCachedDocumentFile(payload, {
+        userDecision: 'save_permanently',
+        importSource: 'upload',
+        recognizedText: 'Vertragstext',
+      });
+
+      expect(result.success).toBe(false);
+      if (result.success) throw new Error('expected persist failure');
+      expect(result.error).toBe('persist_failed');
+      expect(persistSpy).toHaveBeenCalled();
+
+      persistSpy.mockRestore();
+
+      expect(getInboxStoreSnapshot()).toHaveLength(0);
+
+      // Exakt der vorherige Ref, nicht nur der Status.
+      const after = getDocumentFileRefById(fileRef.id);
+      expect(after).toBeDefined();
+      expect(after).toEqual(before);
+      expect(after?.lifecycleStatus).toBe('temp');
+      expect(after?.expiresAt).toBe(before.expiresAt);
+      expect(after?.committedAt).toBeUndefined();
+
+      // Wiederverwendete Datei bleibt erhalten.
+      expect(await hasDocumentBlob(fileRef.id)).toBe(true);
+    });
+
+    it('C — Duplicate-Return ohne allowDuplicateIntake promotet nicht', async () => {
+      const { intake } = await createTempFileRef('DUP-NO-PROMOTE');
+      expect(intake.fileRef.lifecycleStatus).toBe('temp');
+      const payload = createPayload('DUP-NO-PROMOTE', 'DUP-NO-PROMOTE.jpg', 'image/jpeg');
+
+      const result = await intakeCachedDocumentFile(payload, {
+        userDecision: 'save_permanently',
+        importSource: 'upload',
+        recognizedText: 'Foto',
+      });
+
+      expect(result.success).toBe(true);
+      if (!result.success) throw new Error('intake failed');
+      expect(result.duplicate).toBe(true);
+
+      const inStore = getDocumentFileRefById(intake.fileRef.id);
+      expect(inStore?.lifecycleStatus).toBe('temp');
+      expect(inStore?.expiresAt).toBeDefined();
+    });
+
+    it('D — keep_temporarily bleibt temp', async () => {
+      const { payload, fileRef } = await createUnreferencedTempRef('KEEP-TEMP-INTAKE');
+
+      const result = await intakeCachedDocumentFile(payload, {
+        userDecision: 'keep_temporarily',
+        importSource: 'upload',
+        recognizedText: 'Notiz',
+      });
+
+      expect(result.success).toBe(true);
+      if (!result.success || result.duplicate) throw new Error('intake failed');
+      expect(result.fileRef.lifecycleStatus).toBe('temp');
+      expect(getDocumentFileRefById(fileRef.id)?.lifecycleStatus).toBe('temp');
+      expect(getDocumentFileRefById(fileRef.id)?.expiresAt).toBeDefined();
+    });
+
+    it('E — bereits committed bleibt idempotent committed', async () => {
+      hydrateInboxStore([]);
+      const payload = createPayload('ALREADY-COMMITTED', 'ALREADY-COMMITTED.pdf');
+      const stored = await storeDocumentFileFromCachedPayload(payload, {
+        lifecycleIntent: 'committed',
+      });
+      expect(stored.fileRef.lifecycleStatus).toBe('committed');
+      const committedAt = stored.fileRef.committedAt;
+
+      const result = await intakeCachedDocumentFile(payload, {
+        userDecision: 'save_permanently',
+        importSource: 'upload',
+        recognizedText: 'Vertragstext',
+      });
+
+      expect(result.success).toBe(true);
+      if (!result.success || result.duplicate) throw new Error('intake failed');
+      expect(result.fileRef.lifecycleStatus).toBe('committed');
+      expect(result.fileRef.committedAt).toBe(committedAt);
+      expect(result.fileRef.expiresAt).toBeUndefined();
+    });
   });
 });
 

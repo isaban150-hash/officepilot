@@ -12,8 +12,10 @@ import type { CreateInboxFromUploadOptions } from './inboxUploadFactory';
 import { buildInboxItemForDocumentIntake } from './documentIntakeInboxBuilder';
 import { stageInboxItem, removeStagedInboxItemById } from './inboxService';
 import {
+  applyDocumentFileRefCommittedPromotionInMemory,
   storeDocumentFileFromCachedPayload,
   removeDocumentFileStoreEntry,
+  revertDocumentFileRefPromotionInMemory,
   DocumentBlobStorageError,
   hasStoredOriginalDocumentFile,
 } from './documentFileStoreService';
@@ -77,10 +79,17 @@ async function rollbackFailedIntakeAttempt(input: {
   createdFileRef: boolean;
   fileRefId: string;
   localDataKey: string;
+  /** Complete pre-promotion ref when this intake promoted temp → committed. */
+  promotedFrom?: DocumentFileRef | null;
   saveTraceId?: string;
 }): Promise<void> {
   traceStepStart(input.saveTraceId, 'rollback_start');
   removeStagedInboxItemById(input.inboxItemId);
+  // Undo the in-memory promotion first: a reused ref must return to its exact
+  // previous state, and only a ref created here may be removed afterwards.
+  if (input.promotedFrom) {
+    revertDocumentFileRefPromotionInMemory(input.promotedFrom);
+  }
   if (input.createdFileRef) {
     await removeDocumentFileStoreEntry(input.fileRefId, input.localDataKey);
   }
@@ -248,6 +257,29 @@ export async function intakeCachedDocumentFile(
   });
   traceStepEnd(saveTraceId, 'stage_inbox_start', 'stage_inbox_done');
 
+  /**
+   * UPLOAD-DRAFT-RESUME-01B0 — a reused temp ref must not survive a final save.
+   * The transition runs in memory only, so the InboxItem and the committed
+   * FileRef reach storage through the single persistAll below.
+   */
+  let promotedFrom: DocumentFileRef | null = null;
+  if (lifecycleIntent === 'committed' && fileRef.lifecycleStatus !== 'committed') {
+    const transition = applyDocumentFileRefCommittedPromotionInMemory(fileRef.id);
+    if (!transition.success) {
+      removeStagedInboxItemById(inboxItem.id);
+      traceStep(saveTraceId, 'intake_failure', {
+        success: false,
+        errorName: 'storage_failed',
+        errorMessage: transition.error,
+      });
+      return { success: false, error: 'storage_failed' };
+    }
+    if (!transition.alreadyCommitted) {
+      promotedFrom = transition.previous;
+    }
+    fileRef = transition.fileRef;
+  }
+
   traceStepStart(saveTraceId, 'persist_all_start');
   const persistResult = persistenceService.persistAll();
   if (!persistResult.success) {
@@ -261,6 +293,7 @@ export async function intakeCachedDocumentFile(
       createdFileRef,
       fileRefId: fileRef.id,
       localDataKey: fileRef.localDataKey,
+      promotedFrom,
       saveTraceId,
     });
     return { success: false, error: 'persist_failed' };
