@@ -8,6 +8,7 @@ import {
 } from './companyProfileService';
 import { createCustomer, updateCustomer } from './customerService';
 import { getCustomerById, getCustomerStoreSnapshot } from './customerStoreService';
+import { clearInMemoryBusinessState } from './persistenceService';
 import { bootstrapBusinessState } from './storage/storageBootstrapService';
 import { hydrateInboxStore } from './inboxService';
 import { createVorgangFromInbox, getVorgangById } from './vorgangService';
@@ -185,6 +186,42 @@ describe('CUSTOMER-FACHOBJEKT-02A', () => {
     expect(reloaded?.createdFromInboxId).toBe('inbox-02a');
     expect(reloaded?.createdAt).toBe(created.customer.createdAt);
     expect(reloaded?.updatedAt).toBe(created.customer.updatedAt);
+  });
+
+  it('Fall F2 — vollständige Stammdatenänderung übersteht Speicherverlust und Bootstrap', () => {
+    bootstrapScope('ws-05a');
+    const created = createCustomer(NORDWEST, { createdFromInboxId: 'inbox-05a' });
+    expect(created.success).toBe(true);
+    if (!created.success) return;
+
+    const updated = updateCustomer(created.customer.id, {
+      name: 'NordWest Dachbau Nord GmbH',
+      contactPerson: 'Herr Nordmann',
+      street: 'Ruhrallee 5',
+      zip: '44787',
+      city: 'Bochum',
+      email: 'neu@nordwest-dachbau.de',
+      phone: '0234 999999',
+    });
+    expect(updated.success).toBe(true);
+    if (!updated.success) return;
+    expect(updated.customer.name).toBe('NordWest Dachbau Nord GmbH');
+    expect(updated.customer.city).toBe('Bochum');
+
+    // Nur der In-Memory-Zustand wird verworfen; localStorage bleibt bestehen.
+    const storedKeys = Object.keys(localStorage);
+    clearInMemoryBusinessState();
+    expect(getCustomerStoreSnapshot()).toHaveLength(0);
+    expect(getCustomerById(created.customer.id)).toBeUndefined();
+    expect(Object.keys(localStorage)).toEqual(storedKeys);
+
+    bootstrapScope('ws-05a');
+    const reloaded = getCustomerById(created.customer.id);
+    expect(reloaded).toBeDefined();
+    expect(reloaded).toEqual(updated.customer);
+    expect(reloaded?.id).toBe(created.customer.id);
+    expect(reloaded?.createdAt).toBe(created.customer.createdAt);
+    expect(reloaded?.createdFromInboxId).toBe('inbox-05a');
   });
 
   it('Fall G — Workspace-Isolation über den Storage-Scope', () => {

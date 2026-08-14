@@ -1,5 +1,10 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
+import { CustomerEditForm } from '../components/customer/CustomerEditForm';
+import { updateCustomer } from '../services/customerService';
+import { getCustomerById } from '../services/customerStoreService';
+import type { CustomerBilling } from '../types/models';
 import { Badge, Card, CardMeta, CardTitle, DataRow, PageHeader } from '../components/ui/Card';
 import { EmptyStateBlock } from '../components/ui/EmptyStateBlock';
 import { useApp } from '../context/AppContext';
@@ -71,12 +76,66 @@ export function KundenLegacyLinkResolver() {
 }
 
 export function KundenDetailPage({ kind }: { kind: KundenIdentityKind }) {
-  const { translate } = useApp();
+  const { translate, showToast } = useApp();
   const navigate = useNavigate();
   const params = useParams<{ customerId?: string; legacyKey?: string }>();
   // React Router already decodes the parameter — never decode a second time.
   const rawKey = kind === 'legacy' ? params.legacyKey : params.customerId;
-  const workspace = rawKey ? getKundenWorkspace(kind, rawKey) : null;
+
+  /**
+   * CUSTOMER-FACHOBJEKT-05A — master data editing for an id-customer only.
+   * `reloadToken` re-reads the stores after a successful save; no provider,
+   * no subscription and no page reload.
+   */
+  const [reloadToken, setReloadToken] = useState(0);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  /** Synchronous lock — a second submit in the same event turn must not save again. */
+  const savingRef = useRef(false);
+
+  // A real identity change resets the page-local edit state; reloadToken must not.
+  useEffect(() => {
+    savingRef.current = false;
+    setSaving(false);
+    setEditing(false);
+    setEditError(null);
+  }, [kind, rawKey]);
+
+  const workspace = useMemo(
+    () => (rawKey ? getKundenWorkspace(kind, rawKey) : null),
+    [kind, rawKey, reloadToken],
+  );
+  const editableCustomer = useMemo(
+    () => (kind === 'customer' && rawKey ? getCustomerById(rawKey.trim()) : undefined),
+    [kind, rawKey, reloadToken],
+  );
+
+  const handleSave = (changes: CustomerBilling) => {
+    // The ref blocks a second submit within the same event turn; it is released
+    // only after the turn, so a correction after an error stays possible.
+    if (!editableCustomer || savingRef.current) return;
+    savingRef.current = true;
+    setSaving(true);
+
+    const release = () => {
+      savingRef.current = false;
+      setSaving(false);
+    };
+
+    const result = updateCustomer(editableCustomer.id, changes);
+    if (!result.success) {
+      // Inputs stay untouched so the user can correct them.
+      setEditError(translate(result.errorKey as TranslationKey));
+      queueMicrotask(release);
+      return;
+    }
+    setEditError(null);
+    setEditing(false);
+    setReloadToken((value) => value + 1);
+    showToast(translate('kunden.edit.success'));
+    queueMicrotask(release);
+  };
 
   if (!workspace) {
     return (
@@ -118,12 +177,42 @@ export function KundenDetailPage({ kind }: { kind: KundenIdentityKind }) {
 
       <section className="kunden-detail-section" data-testid="kunden-contact">
         <h2 className="kunden-detail-section__title">{translate('kunden.detail.contactTitle')}</h2>
+
+        {/* Editing exists only for an id-customer; legacy and orphan stay read-only. */}
+        {editableCustomer && editing ? (
+          <CustomerEditForm
+            customer={editableCustomer}
+            busy={saving}
+            error={editError}
+            onSave={handleSave}
+            onCancel={() => {
+              setEditing(false);
+              setEditError(null);
+            }}
+          />
+        ) : null}
+
         <Card>
           <DataRow label={translate('kunden.detail.contactPerson')} value={contact.contactPerson || '—'} />
           <DataRow label={translate('kunden.detail.phone')} value={contact.phone || '—'} />
           <DataRow label={translate('kunden.detail.email')} value={contact.email || '—'} />
           <DataRow label={translate('kunden.detail.address')} value={contact.addressLine || '—'} />
         </Card>
+
+        {editableCustomer && !editing ? (
+          <Button
+            variant="secondary"
+            data-testid="kunden-edit-action"
+            onClick={() => {
+              savingRef.current = false;
+              setSaving(false);
+              setEditError(null);
+              setEditing(true);
+            }}
+          >
+            {translate('kunden.edit.action')}
+          </Button>
+        ) : null}
       </section>
 
       <section className="kunden-detail-section" data-testid="kunden-baustellen">
