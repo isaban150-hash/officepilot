@@ -489,6 +489,31 @@ export function EingangDetailPage() {
   }, [restoredWorkflow, syncWorkflow, deferredWorkflow]);
   const goBack = () => navigate('/ablage');
 
+  // Rein berechnet und optional-sicher — muss vor dem Reset-Effekt stehen.
+  const contractDecisionKey = buildContractDecisionResetKey(
+    item?.id,
+    workflow?.contractOrderProposal,
+  );
+
+  useEffect(() => {
+    setCustomerMode(null);
+    setSelectedCustomerId(null);
+    setCustomerError(null);
+    setCustomerOptions(loadSelectableCustomers());
+    setNewCustomerName(resolveSuggestedCustomerName(item, workflow?.contractOrderProposal));
+    // Never prefilled from recognized document data — always empty.
+    setCustomerExtra(createEmptyCustomerExtraFields());
+    contractCreateLockRef.current = false;
+    setIsCreatingContractOrder(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contractDecisionKey]);
+
+  /**
+   * CORE-REALTEST-BLOCKER-01D — ab hier beginnen die frühen Returns.
+   * Unterhalb dieser Stelle darf kein Hook mehr stehen: die Deferred-Shell
+   * beendet den ersten Render vorzeitig, ein späterer Render würde sonst mehr
+   * Hooks aufrufen und React mit „Rendered more hooks…“ abbrechen.
+   */
   if (!item) {
     return (
       <div className="page" data-testid="eingang-detail-missing">
@@ -622,23 +647,6 @@ export function EingangDetailPage() {
     isCustomerDecisionIncomplete(customerMode, newCustomerName, selectedCustomerId);
   const customerHintKey = resolveNewCustomerHintKey(customerMode, newCustomerName);
 
-  const contractDecisionKey = buildContractDecisionResetKey(
-    item?.id,
-    workflow?.contractOrderProposal,
-  );
-
-  useEffect(() => {
-    setCustomerMode(null);
-    setSelectedCustomerId(null);
-    setCustomerError(null);
-    setCustomerOptions(loadSelectableCustomers());
-    setNewCustomerName(resolveSuggestedCustomerName(item, workflow?.contractOrderProposal));
-    // Never prefilled from recognized document data — always empty.
-    setCustomerExtra(createEmptyCustomerExtraFields());
-    contractCreateLockRef.current = false;
-    setIsCreatingContractOrder(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [contractDecisionKey]);
   /** Behörde / BG BAU / Mahnung / Zahlungserinnerung — consolidated assist lane. */
   const useAssistFlowConsolidate =
     isConfirmedReplyDraftSupported(item) && !prioritizeContractWorkspace;

@@ -215,6 +215,61 @@ describe('CONTRACT-DETAIL-MAINTHREAD-YIELD-01', () => {
     container.remove();
   });
 
+  /**
+   * CORE-REALTEST-BLOCKER-01D — der Übergang von der Deferred-Shell zur fertigen
+   * Seite darf die Hook-Reihenfolge nicht verändern.
+   */
+  it('Übergang von Analyse-Shell zur fertigen Seite ohne Hook-Order-Fehler', async () => {
+    const item = createDeferredContractItem();
+    hydrateInboxStore([item]);
+    // Positive Vorbedingung: dieses Dokument nimmt den Deferred-Pfad.
+    expect(itemNeedsDeferredWorkflowAnalysis(item)).toBe(true);
+
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    vi.useFakeTimers();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    act(() => {
+      root.render(
+        <MemoryRouter initialEntries={[`/ablage/${item.id}`]}>
+          <AppProvider initialSetup={DEFAULT_SETUP}>
+            <Routes>
+              <Route path="/ablage/:id" element={<EingangDetailPage />} />
+            </Routes>
+          </AppProvider>
+        </MemoryRouter>,
+      );
+    });
+
+    // Erster Render: Analyse-Shell, fertige Seite noch nicht vorhanden.
+    expect(container.querySelector('[data-testid="eingang-detail-analysis-pending"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="ablage-detail-page"]')).toBeNull();
+
+    // Analyse vollständig durchlaufen lassen — vorhandener scheduleAfterPaint-Mechanismus.
+    await act(async () => {
+      vi.runAllTimers();
+    });
+
+    // Zweiter Render: fertige Detailseite, keine Shell, keine Fehlerseite.
+    expect(container.querySelector('[data-testid="ablage-detail-page"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="eingang-detail-analysis-pending"]')).toBeNull();
+    expect(container.querySelector('[data-testid="server-error-page"]')).toBeNull();
+
+    const loggedText = consoleErrorSpy.mock.calls
+      .map((call) => call.map((entry) => String(entry)).join(' '))
+      .join('\n');
+    expect(loggedText).not.toContain('Rendered more hooks than during the previous render');
+
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+    consoleErrorSpy.mockRestore();
+  });
+
   it('processUploadedDocument ruft analyzeContractIntelligenceFromInbox höchstens einmal', () => {
     const item = createSmallWerkvertragItem();
     hydrateInboxStore([item]);
