@@ -3,6 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { filterActiveItems, getInboxItems } from '../../services/inboxService';
 import { buildSummaryForInboxItem } from '../../services/documentSummaryPresentation';
+import {
+  getDocumentWorkResultForItem,
+  isDocumentWorkResultUsableForDisplay,
+} from '../../services/documentWorkResultService';
+import { getCustomerById } from '../../services/customerStoreService';
+import { getVorgangById } from '../../services/vorgangService';
 import { DocumentSummaryCompactCard } from '../documents/DocumentSummaryCompactCard';
 import { Button } from '../ui/Button';
 import { Card, CardTitle } from '../ui/Card';
@@ -21,12 +27,38 @@ export function DeskDocumentAttention() {
       .slice(0, 3);
   }, []);
 
+  /**
+   * DASHBOARD-CONTRACT-CARD-FIELD-MAPPING-01B1 — only already stored data.
+   * No analysis is started here: the stored snapshot's BusinessInterpretation is
+   * used as-is (a snapshot carries no proposal), and the customer is resolved
+   * strictly via Vorgang.customerId.
+   */
   const cards = useMemo(
     () =>
-      items.map((item) => ({
-        item,
-        summary: buildSummaryForInboxItem(item, { translate, language }),
-      })),
+      items.map((item) => {
+        const snapshot = getDocumentWorkResultForItem(item.id);
+        const displayBusinessInterpretation =
+          snapshot && isDocumentWorkResultUsableForDisplay(snapshot, item)
+            ? snapshot.businessInterpretation ?? null
+            : null;
+
+        const vorgang = item.vorgangId ? getVorgangById(item.vorgangId) ?? null : null;
+        const customerId = vorgang?.customerId?.trim();
+        // Confirm-first: only a linked customer that still exists counts.
+        const confirmedCustomerName = customerId
+          ? getCustomerById(customerId)?.name ?? null
+          : null;
+
+        return {
+          item,
+          summary: buildSummaryForInboxItem(item, {
+            translate,
+            language,
+            displayBusinessInterpretation,
+            confirmedCustomerName,
+          }),
+        };
+      }),
     [items, translate, language],
   );
 

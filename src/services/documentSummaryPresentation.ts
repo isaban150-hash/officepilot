@@ -4,6 +4,7 @@
  */
 import { t, type TranslationKey } from '../i18n';
 import type { DocumentSummary } from '../types/documentSummary';
+import type { BusinessInterpretationResult } from '../types/businessInterpretation';
 import type {
   AppLanguage,
   CompanyDocument,
@@ -98,12 +99,28 @@ export function companyDocumentToInboxCarrier(doc: CompanyDocument): InboxItem {
 
 export function buildSummaryForInboxItem(
   item: InboxItem,
-  options?: { language?: AppLanguage; translate?: (key: TranslationKey) => string },
+  options?: {
+    language?: AppLanguage;
+    translate?: (key: TranslationKey) => string;
+    /**
+     * DASHBOARD-CONTRACT-CARD-FIELD-MAPPING-01B1 — already stored analysis and a
+     * confirmed customer link. Resolved by the calling component; this service
+     * reads no store and starts no analysis.
+     */
+    displayBusinessInterpretation?: BusinessInterpretationResult | null;
+    confirmedCustomerName?: string | null;
+  },
 ): DocumentSummary {
   const translate = options?.translate ?? createPresentationTranslate(options?.language);
   const language = resolveLang(options?.language);
   const letter = getLetterExplanation(item, language);
-  return buildInboxDocumentSummary(item, { translate, letter, language });
+  return buildInboxDocumentSummary(item, {
+    translate,
+    letter,
+    language,
+    displayBusinessInterpretation: options?.displayBusinessInterpretation ?? null,
+    confirmedCustomerName: options?.confirmedCustomerName ?? null,
+  });
 }
 
 export function buildSummaryForCompanyDocument(

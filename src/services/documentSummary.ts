@@ -55,6 +55,12 @@ export type BuildDocumentSummaryOptions = {
   generatedAt?: string;
   /** inbox = list card (type as title, review/later actions). */
   presentation?: 'detail' | 'inbox';
+  /**
+   * DASHBOARD-CONTRACT-CARD-FIELD-MAPPING-01B — name of a customer that is
+   * actually linked and confirmed (Vorgang.customerId → Customer store).
+   * Resolved by the calling component; this service never reads a store.
+   */
+  confirmedCustomerName?: string | null;
 };
 
 function rd(item: InboxItem, ...keys: string[]): string | undefined {
@@ -738,20 +744,55 @@ function buildContractInboxSummary(
   const typeLabelKey = getDocumentDisplayLabelKey(kind, item.documentType);
   const facts: DocumentSummaryFact[] = [];
 
+  /**
+   * DASHBOARD-CONTRACT-CARD-FIELD-MAPPING-01B — Kunde, Bauvorhaben und Baustelle.
+   *
+   * Quelle sind ausschließlich die gespeicherte BusinessInterpretation und
+   * recognizedData — hier läuft nie eine Analyse.
+   *
+   * Confirm-first: nur eine bestätigte Verknüpfung darf „Kunde“ heißen. Ein
+   * erkannter Auftraggeber bleibt „Auftraggeber“. Ohne beides entsteht kein
+   * Fakt — der Absender bzw. Dokumenttitel ist niemals eine Vertragspartei.
+   */
+  const bi = options.displayBusinessInterpretation ?? null;
+  const confirmedCustomer = options.confirmedCustomerName?.trim();
+
+  /**
+   * Only a counterparty whose stored role really designates the client side may
+   * appear as a party. Any other relation (Auftragnehmer, Vermieter, unknown …)
+   * is left to recognizedData instead of being relabelled here.
+   */
+  const counterparty = bi?.facts.parties.counterparty;
+  const counterpartyRole = counterparty?.role;
+  const detectedClientParty =
+    counterpartyRole === 'auftraggeber' || counterpartyRole === 'kunde'
+      ? counterparty?.name?.trim() || undefined
+      : undefined;
+  const detectedPartyLabelKey: TranslationKey =
+    counterpartyRole === 'kunde' && detectedClientParty
+      ? 'documentIntelligence.party.kunde'
+      : 'auftragskarte.field.customer';
+
   // Order: Kunde → Projekt → Vertragssumme → Baustelle → Positionen → Gewerk
-  pushFact(
-    facts,
-    'customer',
-    'documentExperience.fact.customer',
-    preferMeaningfulParty(rd(item, 'Auftraggeber', 'Kunde', 'Empfänger'), item.sender),
-  );
+  if (confirmedCustomer) {
+    pushFact(facts, 'customer', 'documentIntelligence.party.kunde', confirmedCustomer);
+  } else {
+    pushFact(
+      facts,
+      'customer',
+      detectedPartyLabelKey,
+      // Never item.sender / item.title — a file name is not a contract party.
+      firstNonEmpty(detectedClientParty, rd(item, 'Auftraggeber', 'Kunde', 'Empfänger')),
+    );
+  }
   pushFact(
     facts,
     'project',
     'auftragskarte.field.project',
-    preferProjectFactValue(
+    // Never falls back to the construction site.
+    firstNonEmpty(
+      bi?.facts.subject.project?.value,
       rd(item, 'Bauvorhaben', 'Projekt'),
-      rd(item, 'Vertragsgegenstand'),
     ),
   );
   pushFact(
@@ -764,7 +805,11 @@ function buildContractInboxSummary(
     facts,
     'site',
     'auftragskarte.field.constructionSite',
-    rd(item, 'Baustelle', 'Baustellenadresse'),
+    // Never falls back to the project.
+    firstNonEmpty(
+      bi?.facts.subject.site?.value,
+      rd(item, 'Baustelle', 'Baustellenadresse'),
+    ),
   );
   const positionRaw = rd(item, 'Anzahl Positionen', 'Positionsanzahl', 'Positionen');
   const positionsValue = formatPositionsFactValue(positionRaw, (count) =>
