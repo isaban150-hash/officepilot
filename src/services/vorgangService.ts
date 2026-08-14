@@ -688,6 +688,84 @@ export function assignCustomerToVorgang(
   return { success: true, vorgang: committed.vorgang };
 }
 
+export interface VorgangCustomerMasterPreview {
+  /** Current master record of exactly vorgang.customerId. */
+  master: CustomerBilling;
+  /** What the Vorgang stores today. */
+  current: CustomerBilling;
+  /** Name currently stored on the Vorgang. */
+  currentName: string;
+  /** True when name or any of the seven fields differ. */
+  differs: boolean;
+}
+
+export type UpdateVorgangCustomerFromMasterResult =
+  | { success: true; changed: true; vorgang: Vorgang }
+  | { success: true; changed: false; vorgang: Vorgang }
+  | { success: false; errorKey: string };
+
+/**
+ * CUSTOMER-FACHOBJEKT-06B — read-only preview for the confirmation UI.
+ * Strictly id-based: no name lookup, no same-named substitute. Returns null
+ * when the Vorgang has no customerId or that Customer no longer exists.
+ */
+export function getVorgangCustomerMasterPreview(
+  vorgangId: string,
+): VorgangCustomerMasterPreview | null {
+  const vorgang = getVorgangById(vorgangId);
+  if (!vorgang) return null;
+  const customerId = vorgang.customerId?.trim();
+  if (!customerId) return null;
+  const customer = getCustomerById(customerId);
+  if (!customer) return null;
+
+  const master = billingFromCustomer(customer);
+  const current = vorgang.customerBilling
+    ? { ...vorgang.customerBilling }
+    : emptyCustomerBilling(vorgang.customer);
+  const differs =
+    vorgang.customer !== customer.name ||
+    (Object.keys(master) as Array<keyof CustomerBilling>).some(
+      (field) => master[field] !== current[field],
+    );
+
+  return { master, current, currentName: vorgang.customer, differs };
+}
+
+/**
+ * CUSTOMER-FACHOBJEKT-06B — explicit takeover of the current master data into
+ * this Vorgang. Updates only `customer` and `customerBilling`; customerId,
+ * invoices and every existing customerSnapshot stay untouched.
+ */
+export function updateVorgangCustomerFromMaster(
+  vorgangId: string,
+): UpdateVorgangCustomerFromMasterResult {
+  const vorgang = getVorgangById(vorgangId);
+  if (!vorgang) return { success: false, errorKey: 'vorgang.notFound' };
+
+  const customerId = vorgang.customerId?.trim();
+  if (!customerId) return { success: false, errorKey: 'customer.notFound' };
+
+  // Resolved again at confirmation time — never by name.
+  const customer = getCustomerById(customerId);
+  if (!customer) return { success: false, errorKey: 'customer.notFound' };
+
+  const preview = getVorgangCustomerMasterPreview(vorgangId);
+  if (preview && !preview.differs) {
+    // Nothing to write — no persist, and the result says so.
+    return { success: true, changed: false, vorgang };
+  }
+
+  const committed = commitVorgangMutation(vorgangId, (current) => ({
+    ...cloneVorgang(current),
+    customer: customer.name,
+    customerBilling: billingFromCustomer(customer),
+  }));
+
+  if (!committed.ok) return { success: false, errorKey: committed.errorKey };
+  return { success: true, changed: true, vorgang: committed.vorgang };
+}
+
 export function createVorgangFromInbox(
   item: InboxItem,
   optionalDraft?: Partial<VorgangDraft>,

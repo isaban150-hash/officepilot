@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { OrderPositionForm } from '../components/vorgang/OrderPositionForm';
@@ -26,6 +26,8 @@ import { isContractPlanLocked } from '../services/orderPlanIntegrityService';
 import {
   assignCustomerToVorgang,
   getVorgangById,
+  getVorgangCustomerMasterPreview,
+  updateVorgangCustomerFromMaster,
   isVorgangCustomerAssignmentEligible,
   removeOrderPosition,
   updateVorgangStatus,
@@ -81,7 +83,13 @@ import { askVorgangAi } from '../services/vorgang/vorgangAiService';
 import { recordVorgangContext } from '../services/brain/companySessionService';
 import { getLastPersistSuccess } from '../services/persistenceService';
 import type { VorgangNote } from '../types/communication';
-import type { Customer, OrderPosition, Vorgang, VorgangStatus } from '../types/models';
+import type {
+  Customer,
+  CustomerBilling,
+  OrderPosition,
+  Vorgang,
+  VorgangStatus,
+} from '../types/models';
 import type { TranslationKey } from '../i18n';
 import { useReportUiSession } from '../hooks/useReportUiSession';
 import { useUiSessionRestore } from '../hooks/useUiSessionRestore';
@@ -110,6 +118,12 @@ export function VorgangDetailPage() {
   );
   /** Synchronous lock — a second click in the same event turn must not assign again. */
   const assignLockRef = useRef(false);
+  // CUSTOMER-FACHOBJEKT-06B — explicit takeover of the master data into this Vorgang.
+  const [masterConfirmOpen, setMasterConfirmOpen] = useState(false);
+  const [masterSaving, setMasterSaving] = useState(false);
+  const [masterError, setMasterError] = useState<string | null>(null);
+  const masterLockRef = useRef(false);
+  const [masterReloadToken, setMasterReloadToken] = useState(0);
   const [noteDraft, setNoteDraft] = useState(() => {
     const note = restoredSession?.drafts.values.note;
     return typeof note === 'string' ? note : '';
@@ -157,6 +171,51 @@ export function VorgangDetailPage() {
       return translate('customer.persistFailed');
     }
     return errorKey.includes('.') ? translate(errorKey as TranslationKey) : errorKey;
+  };
+
+  const customerMasterPreview = useMemo(
+    () => (id ? getVorgangCustomerMasterPreview(id) : null),
+    [id, vorgang?.customer, vorgang?.customerId, vorgang?.customerBilling, masterReloadToken],
+  );
+
+  /** One readable line per stored field; empty values stay neutral. */
+  const billingLines = (name: string, billing: CustomerBilling) => (
+    <>
+      <DataRow label={translate('kunden.edit.name')} value={name || '—'} />
+      <DataRow
+        label={translate('kunden.detail.contactPerson')}
+        value={billing.contactPerson || '—'}
+      />
+      <DataRow label={translate('companyProfile.street')} value={billing.street || '—'} />
+      <DataRow label={translate('companyProfile.zip')} value={billing.zip || '—'} />
+      <DataRow label={translate('companyProfile.city')} value={billing.city || '—'} />
+      <DataRow label={translate('companyProfile.email')} value={billing.email || '—'} />
+      <DataRow label={translate('companyProfile.phone')} value={billing.phone || '—'} />
+    </>
+  );
+
+  const handleApplyCustomerMaster = () => {
+    if (!id || masterLockRef.current) return;
+    // Locked synchronously; released only after this event turn.
+    masterLockRef.current = true;
+    setMasterSaving(true);
+    const release = () => {
+      masterLockRef.current = false;
+      setMasterSaving(false);
+    };
+
+    const result = updateVorgangCustomerFromMaster(id);
+    if (!result.success) {
+      setMasterError(resolveAssignErrorMessage(result.errorKey));
+      queueMicrotask(release);
+      return;
+    }
+    setMasterError(null);
+    setMasterConfirmOpen(false);
+    setMasterReloadToken((value) => value + 1);
+    refreshVorgang();
+    if (result.changed) showToast(translate('vorgang.customerMaster.success'));
+    queueMicrotask(release);
   };
 
   const handleAssignCustomer = () => {
@@ -219,6 +278,19 @@ export function VorgangDetailPage() {
     newCustomerName,
     selectedCustomerId,
   );
+
+  /**
+   * CUSTOMER-FACHOBJEKT-06B3 — the 06B confirmation belongs to exactly one
+   * Vorgang. A real identity change closes it and clears error, busy state and
+   * the synchronous lock; normal renders, preview recalculations, reloadToken
+   * changes and form input never trigger this effect.
+   */
+  useEffect(() => {
+    masterLockRef.current = false;
+    setMasterSaving(false);
+    setMasterConfirmOpen(false);
+    setMasterError(null);
+  }, [id, vorgang?.id]);
 
   // Beim Wechsel des angezeigten Vorgangs darf keine Auswahl übernommen werden.
   useEffect(() => {
@@ -562,6 +634,75 @@ export function VorgangDetailPage() {
             >
               {translate('vorgang.assignCustomer.action')}
             </Button>
+          </Card>
+        )}
+
+        {customerMasterPreview?.differs && (
+          <Card data-testid="vorgang-customer-master">
+            <h2 className="section__title">{translate('vorgang.customerMaster.title')}</h2>
+            {!masterConfirmOpen ? (
+              <Button
+                type="button"
+                variant="secondary"
+                data-testid="vorgang-customer-master-action"
+                onClick={() => {
+                  masterLockRef.current = false;
+                  setMasterSaving(false);
+                  setMasterError(null);
+                  setMasterConfirmOpen(true);
+                }}
+              >
+                {translate('vorgang.customerMaster.action')}
+              </Button>
+            ) : (
+              <div data-testid="vorgang-customer-master-confirm">
+                <h3 className="section__subtitle">
+                  {translate('vorgang.customerMaster.currentTitle')}
+                </h3>
+                <div data-testid="vorgang-customer-master-current">
+                  {billingLines(customerMasterPreview.currentName, customerMasterPreview.current)}
+                </div>
+                <h3 className="section__subtitle">
+                  {translate('vorgang.customerMaster.masterTitle')}
+                </h3>
+                <div data-testid="vorgang-customer-master-next">
+                  {billingLines(customerMasterPreview.master.name, customerMasterPreview.master)}
+                </div>
+                <p className="hint-text">{translate('vorgang.customerMaster.scope')}</p>
+                <p className="hint-text">{translate('vorgang.customerMaster.futureDrafts')}</p>
+                <p className="hint-text">{translate('vorgang.customerMaster.existingInvoices')}</p>
+                <p className="hint-text">{translate('vorgang.customerMaster.overwrite')}</p>
+                {masterError && (
+                  <p className="form-error" data-testid="vorgang-customer-master-error">
+                    {masterError}
+                  </p>
+                )}
+                <div className="form-actions">
+                  <Button
+                    type="button"
+                    disabled={masterSaving}
+                    data-testid="vorgang-customer-master-apply"
+                    onClick={handleApplyCustomerMaster}
+                  >
+                    {translate('vorgang.customerMaster.confirmAction')}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={masterSaving}
+                    data-testid="vorgang-customer-master-cancel"
+                    onClick={() => {
+                      masterLockRef.current = false;
+                      setMasterSaving(false);
+                      setMasterError(null);
+                      setMasterConfirmOpen(false);
+                    }}
+                  >
+                    {translate('common.cancel')}
+                  </Button>
+                </div>
+              </div>
+            )}
           </Card>
         )}
 
