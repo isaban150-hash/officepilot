@@ -41,6 +41,21 @@ const CHANNEL_OPTIONS: { value: CommunicationChannel; labelKey: TranslationKey }
   { value: 'letter', labelKey: 'communication.channel.letter' },
 ];
 
+/**
+ * ONBOARDING-INVOICE-NUMBER-EMPTY-01B — Rohtext eines Ganzzahlfelds.
+ *
+ * Erlaubt sind nur der leere String und reine Ziffernfolgen; führende Nullen
+ * werden entfernt, damit aus "06" sichtbar "6" wird. Alles andere (Minus,
+ * Dezimaltrenner, Buchstaben, Exponent) wird verworfen, sodass der Draft
+ * jederzeit eine gültige nicht-negative Ganzzahl trägt — leer bedeutet 0.
+ */
+function normalizeIntegerInput(raw: string): { text: string; value: number } | null {
+  if (raw === '') return { text: '', value: 0 };
+  if (!/^\d+$/.test(raw)) return null;
+  const text = raw.replace(/^0+(?=\d)/, '');
+  return { text, value: Number(text) };
+}
+
 interface FirstRunWizardProps {
   initialDraft: SetupWizardDraft;
   onComplete: (draft: SetupWizardDraft) => SetupCompletionResult;
@@ -51,6 +66,14 @@ export function FirstRunWizard({ initialDraft, onComplete }: FirstRunWizardProps
   const [draft, setDraft] = useState<SetupWizardDraft>(initialDraft);
   const [stepIndex, setStepIndex] = useState(0);
   const [errors, setErrors] = useState<Partial<Record<string, TranslationKey>>>({});
+  /**
+   * Sichtbarer Rohtext der Ganzzahlfelder. Getrennt vom Draft, damit das Feld
+   * während der Bearbeitung leer bleiben kann, ohne dass eine 0 zurückspringt.
+   */
+  const [numericText, setNumericText] = useState({
+    lastInvoiceNumber: String(initialDraft.lastInvoiceNumber),
+    defaultPaymentDays: String(initialDraft.defaultPaymentDays),
+  });
 
   const step = SETUP_WIZARD_STEPS[stepIndex];
   const isLastStep = stepIndex === SETUP_WIZARD_STEPS.length - 1;
@@ -74,6 +97,18 @@ export function FirstRunWizard({ initialDraft, onComplete }: FirstRunWizardProps
       }
       return next;
     });
+  };
+
+  /** Gemeinsamer Eingabeweg beider Ganzzahlfelder. */
+  const handleIntegerInput = (
+    key: 'lastInvoiceNumber' | 'defaultPaymentDays',
+    raw: string,
+  ) => {
+    const normalized = normalizeIntegerInput(raw);
+    // Ungültige Eingabe wird verworfen: weder Anzeige noch Draft ändern sich.
+    if (!normalized) return;
+    setNumericText((current) => ({ ...current, [key]: normalized.text }));
+    updateDraft(key, normalized.value);
   };
 
   const validateCurrentStep = (): boolean => {
@@ -314,10 +349,12 @@ export function FirstRunWizard({ initialDraft, onComplete }: FirstRunWizardProps
                 id="setup-lastInvoiceNumber"
                 type="number"
                 min="0"
+                step="1"
+                inputMode="numeric"
                 className="input"
-                value={draft.lastInvoiceNumber}
+                value={numericText.lastInvoiceNumber}
                 onChange={(event) =>
-                  updateDraft('lastInvoiceNumber', Number(event.target.value) || 0)
+                  handleIntegerInput('lastInvoiceNumber', event.target.value)
                 }
                 data-testid="setup-lastInvoiceNumber"
               />
@@ -330,10 +367,12 @@ export function FirstRunWizard({ initialDraft, onComplete }: FirstRunWizardProps
                 id="setup-paymentDays"
                 type="number"
                 min="0"
+                step="1"
+                inputMode="numeric"
                 className="input"
-                value={draft.defaultPaymentDays}
+                value={numericText.defaultPaymentDays}
                 onChange={(event) =>
-                  updateDraft('defaultPaymentDays', Number(event.target.value) || 0)
+                  handleIntegerInput('defaultPaymentDays', event.target.value)
                 }
                 data-testid="setup-paymentDays"
               />
