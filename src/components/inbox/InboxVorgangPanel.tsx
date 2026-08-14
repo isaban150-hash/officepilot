@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '../ui/Button';
 import { Card, DataRow } from '../ui/Card';
@@ -27,9 +27,12 @@ import {
 } from '../customer/CustomerDecisionChoice';
 import {
   buildCustomerDecisionFromUi,
+  buildCustomerInputFromUi,
+  createEmptyCustomerExtraFields,
   isCustomerDecisionIncomplete,
   loadSelectableCustomers,
   resolveNewCustomerHintKey,
+  type CustomerExtraFields,
 } from '../customer/customerDecisionUi';
 import type { Customer, InboxItem, MaterialStandard, Vorgang, VorgangDraft } from '../../types/models';
 import type { TranslationKey } from '../../i18n';
@@ -62,6 +65,13 @@ export function InboxVorgangPanel({
   const [customers, setCustomers] = useState<Customer[]>([]);
   /** Runtime failures only (vanished customer). Static validation is derived below. */
   const [customerError, setCustomerError] = useState<string | null>(null);
+  /** CUSTOMER-FACHOBJEKT-05C — optional master data of a new customer. */
+  const [customerExtra, setCustomerExtra] = useState<CustomerExtraFields>(
+    createEmptyCustomerExtraFields,
+  );
+  const [creating, setCreating] = useState(false);
+  /** Synchronous lock — a second click in the same event turn must not create again. */
+  const creatingRef = useRef(false);
 
   if (mode === 'none') return null;
 
@@ -90,6 +100,9 @@ export function InboxVorgangPanel({
     setCustomerMode(null);
     setSelectedCustomerId(null);
     setCustomerError(null);
+    setCustomerExtra(createEmptyCustomerExtraFields());
+    creatingRef.current = false;
+    setCreating(false);
     setDialogOpen(true);
   };
 
@@ -131,19 +144,32 @@ export function InboxVorgangPanel({
       setCustomerError(translate('customerDecision.missing'));
       return null;
     }
-    return buildCustomerDecisionFromUi(customerMode, draft.customer, selectedCustomerId);
+    return buildCustomerDecisionFromUi(
+      customerMode,
+      buildCustomerInputFromUi(draft.customer, customerExtra),
+      selectedCustomerId,
+    );
   };
 
   const handleCreate = () => {
-    if (customerMode === null) return;
+    if (customerMode === null || creatingRef.current) return;
     setCustomerError(null);
 
     const customerDecision = buildCustomerDecision();
     if (!customerDecision) return;
 
+    // Locked synchronously, released only after this event turn.
+    creatingRef.current = true;
+    setCreating(true);
+    const release = () => {
+      creatingRef.current = false;
+      setCreating(false);
+    };
+
     const result = createVorgangFromInboxWithContract(item, draft, materialDefault, {
       customerDecision,
     });
+    queueMicrotask(release);
     if (result) {
       onLinked(result.inbox, result.vorgang);
       closeDialog();
@@ -276,7 +302,7 @@ export function InboxVorgangPanel({
                   />
                 </label>
                 <label className="edit-field">
-                  <span className="edit-field__label">{translate('inbox.sender')}</span>
+                  <span className="edit-field__label">{translate('kunden.edit.name')}</span>
                   <input
                     type="text"
                     className="input"
@@ -316,6 +342,11 @@ export function InboxVorgangPanel({
                   setCustomerError(null);
                 }}
                 hint={customerValidationHint ?? customerError}
+                extraFields={customerExtra}
+                onExtraFieldChange={(field, value) => {
+                  setCustomerExtra((prev) => ({ ...prev, [field]: value }));
+                  setCustomerError(null);
+                }}
               />
             )}
 
@@ -359,7 +390,7 @@ export function InboxVorgangPanel({
                 <Button
                   variant={similar.length > 0 ? 'outline' : 'primary'}
                   fullWidth
-                  disabled={createDisabled}
+                  disabled={createDisabled || creating}
                   data-testid="vorgang-dialog-create"
                   onClick={handleCreate}
                 >

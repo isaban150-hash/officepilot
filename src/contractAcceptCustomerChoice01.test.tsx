@@ -171,6 +171,37 @@ async function waitForSelector(mount: Mount, selector: string): Promise<Element>
   throw new Error(`waitForSelector: "${selector}" ist nach 200 Microtask-Runden nicht erschienen`);
 }
 
+const EXTRA_FIELDS = ['contactPerson', 'street', 'zip', 'city', 'email', 'phone'] as const;
+
+async function typeInto(mount: Mount, testId: string, value: string): Promise<void> {
+  const input = mount.container.querySelector(
+    `[data-testid="${testId}"]`,
+  ) as HTMLInputElement | null;
+  if (!input) throw new Error(`missing ${testId}`);
+  const setter = Object.getOwnPropertyDescriptor(
+    window.HTMLInputElement.prototype,
+    'value',
+  )!.set!;
+  await act(async () => {
+    setter.call(input, value);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+}
+
+async function fillExtraFields(mount: Mount): Promise<void> {
+  for (const field of EXTRA_FIELDS) {
+    await typeInto(mount, `customer-decision-${field}`, NORDWEST[field]);
+  }
+}
+
+function extraFieldValue(mount: Mount, field: (typeof EXTRA_FIELDS)[number]): string {
+  const input = mount.container.querySelector(
+    `[data-testid="customer-decision-${field}"]`,
+  ) as HTMLInputElement | null;
+  if (!input) throw new Error(`missing ${field}`);
+  return input.value;
+}
+
 async function click(element: Element | null | undefined): Promise<void> {
   if (!element) throw new Error('element missing');
   await act(async () => {
@@ -649,5 +680,100 @@ describe('CUSTOMER-FACHOBJEKT-04C', () => {
     if (second.success) {
       expect(second.createdNewVorgang).toBe(false);
     }
+  });
+
+  it('Fall O — 05C: vollständige Neuanlage über die Oberfläche', async () => {
+    const item = seedItem();
+    // Der vorbefüllte Name stammt aus dem echten Proposal, nicht aus der Fixture.
+    const proposal = proposalFor(item);
+    const expectedName = resolveSuggestedCustomerName(item, proposal);
+    expect(expectedName).not.toBe('');
+    expect(expectedName).not.toBe(OWN);
+    expect(expectedName).toBe('Müller Bau GmbH');
+
+    const acceptSpy = vi.spyOn(contractOrderAcceptService, 'acceptContractOrderFromProposal');
+    const mount = await mountDetailPage(item.id);
+
+    await click(mount.container.querySelector('[data-testid="customer-decision-new"] input'));
+
+    // Keine Vorbefüllung aus erkannten Dokumentdaten — alle sechs Felder leer.
+    for (const field of EXTRA_FIELDS) {
+      expect(extraFieldValue(mount, field), field).toBe('');
+    }
+    // Der Namensvorschlag der Produktion bleibt unverändert erhalten.
+    expect(
+      (mount.container.querySelector(
+        '[data-testid="contract-customer-name-input"]',
+      ) as HTMLInputElement).value,
+    ).toBe(expectedName);
+
+    await fillExtraFields(mount);
+    expect(acceptSpy).not.toHaveBeenCalled();
+    expect(getCustomerStoreSnapshot()).toHaveLength(0);
+
+    await click(mount.container.querySelector('[data-testid="contract-chef-primary-action"]'));
+
+    const expectedBilling = {
+      name: expectedName,
+      contactPerson: NORDWEST.contactPerson,
+      street: NORDWEST.street,
+      zip: NORDWEST.zip,
+      city: NORDWEST.city,
+      email: NORDWEST.email,
+      phone: NORDWEST.phone,
+    };
+
+    expect(acceptSpy).toHaveBeenCalledTimes(1);
+    expect(acceptSpy.mock.calls[0]![0]!.customerDecision).toEqual({
+      kind: 'new',
+      input: expectedBilling,
+    });
+
+    const customers = getCustomerStoreSnapshot();
+    expect(customers).toHaveLength(1);
+    const customer = customers[0]!;
+    expect(customer.name).toBe(expectedName);
+    expect(customer.contactPerson).toBe(NORDWEST.contactPerson);
+    expect(customer.street).toBe(NORDWEST.street);
+    expect(customer.zip).toBe(NORDWEST.zip);
+    expect(customer.city).toBe(NORDWEST.city);
+    expect(customer.email).toBe(NORDWEST.email);
+    expect(customer.phone).toBe(NORDWEST.phone);
+    expect(customer.createdFromInboxId).toBe(item.id);
+
+    const vorgang = getAllVorgaenge()[0]!;
+    expect(vorgang.customerId).toBe(customer.id);
+    expect(vorgang.customer).toBe(expectedName);
+    expect(vorgang.customerBilling).toEqual(expectedBilling);
+    acceptSpy.mockRestore();
+    unmount(mount);
+  });
+
+  it('Fall P — 05C: zwei unmittelbare Klicks lösen genau einen Accept-Aufruf aus', async () => {
+    const item = seedItem();
+    const acceptSpy = vi.spyOn(contractOrderAcceptService, 'acceptContractOrderFromProposal');
+    const mount = await mountDetailPage(item.id);
+
+    await click(mount.container.querySelector('[data-testid="customer-decision-new"] input'));
+    await fillExtraFields(mount);
+
+    const primary = mount.container.querySelector(
+      '[data-testid="contract-chef-primary-action"]',
+    ) as HTMLButtonElement;
+    expect(primary.disabled).toBe(false);
+
+    // Zwei Ereignisse im selben Turn, dazwischen kein Await und kein Flush.
+    await act(async () => {
+      primary.click();
+      primary.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(acceptSpy).toHaveBeenCalledTimes(1);
+    expect(getCustomerStoreSnapshot()).toHaveLength(1);
+    expect(getAllVorgaenge()).toHaveLength(1);
+    acceptSpy.mockRestore();
+    unmount(mount);
   });
 });

@@ -6,7 +6,9 @@
  * customer is ever matched automatically by name.
  */
 import { useApp } from '../../context/AppContext';
+import type { CustomerExtraFields } from './customerDecisionUi';
 import type { Customer } from '../../types/models';
+import type { TranslationKey } from '../../i18n';
 
 export type CustomerDecisionMode = 'new' | 'existing' | 'none';
 
@@ -18,7 +20,22 @@ interface CustomerDecisionChoiceProps {
   onSelectCustomer: (customerId: string) => void;
   /** Validation message shown below the choice; never a success statement. */
   hint?: string | null;
+  /**
+   * CUSTOMER-FACHOBJEKT-05C — optional master data of a new customer.
+   * Controlled by the parent; the name field stays where it already is.
+   */
+  extraFields?: CustomerExtraFields;
+  onExtraFieldChange?: (field: keyof CustomerExtraFields, value: string) => void;
 }
+
+const EXTRA_FIELD_LABELS: Array<{ field: keyof CustomerExtraFields; labelKey: TranslationKey }> = [
+  { field: 'contactPerson', labelKey: 'kunden.detail.contactPerson' },
+  { field: 'street', labelKey: 'companyProfile.street' },
+  { field: 'zip', labelKey: 'companyProfile.zip' },
+  { field: 'city', labelKey: 'companyProfile.city' },
+  { field: 'email', labelKey: 'companyProfile.email' },
+  { field: 'phone', labelKey: 'companyProfile.phone' },
+];
 
 /** Street / zip / city, or the creation date when no address is stored at all. */
 export function buildCustomerSubline(
@@ -40,6 +57,8 @@ export function CustomerDecisionChoice({
   selectedCustomerId,
   onSelectCustomer,
   hint,
+  extraFields,
+  onExtraFieldChange,
 }: CustomerDecisionChoiceProps) {
   const { translate } = useApp();
   const hasCustomers = customers.length > 0;
@@ -91,6 +110,26 @@ export function CustomerDecisionChoice({
           </label>
         ))}
       </div>
+
+      {mode === 'new' && extraFields && onExtraFieldChange && (
+        <div className="vorgang-dialog__edit" data-testid="customer-decision-extra-fields">
+          <p className="vorgang-dialog__review-hint" data-testid="customer-decision-optional-hint">
+            {translate('customerDecision.optionalHint')}
+          </p>
+          {EXTRA_FIELD_LABELS.map(({ field, labelKey }) => (
+            <label className="edit-field" key={field}>
+              <span className="edit-field__label">{translate(labelKey)}</span>
+              <input
+                type="text"
+                className="input"
+                data-testid={`customer-decision-${field}`}
+                value={extraFields[field]}
+                onChange={(event) => onExtraFieldChange(field, event.target.value)}
+              />
+            </label>
+          ))}
+        </div>
+      )}
 
       {mode === 'existing' && hasCustomers && (
         <div className="similar-list customer-decision__list" data-testid="customer-decision-list">

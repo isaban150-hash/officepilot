@@ -37,9 +37,12 @@ import {
 } from '../components/customer/CustomerDecisionChoice';
 import {
   buildCustomerDecisionFromUi,
+  buildCustomerInputFromUi,
+  createEmptyCustomerExtraFields,
   isCustomerDecisionIncomplete,
   loadSelectableCustomers,
   resolveNewCustomerHintKey,
+  type CustomerExtraFields,
 } from '../components/customer/customerDecisionUi';
 import { InvoiceListCard } from '../components/invoice/InvoiceListCard';
 import { CommunicationIntegrationPanel } from '../components/communication/CommunicationIntegrationPanel';
@@ -101,6 +104,12 @@ export function VorgangDetailPage() {
   const [customerOptions, setCustomerOptions] = useState<Customer[]>([]);
   const [customerError, setCustomerError] = useState<string | null>(null);
   const [isAssigning, setIsAssigning] = useState(false);
+  // CUSTOMER-FACHOBJEKT-05C — optional master data of a new customer.
+  const [customerExtra, setCustomerExtra] = useState<CustomerExtraFields>(
+    createEmptyCustomerExtraFields,
+  );
+  /** Synchronous lock — a second click in the same event turn must not assign again. */
+  const assignLockRef = useRef(false);
   const [noteDraft, setNoteDraft] = useState(() => {
     const note = restoredSession?.drafts.values.note;
     return typeof note === 'string' ? note : '';
@@ -137,11 +146,28 @@ export function VorgangDetailPage() {
       : undefined,
   });
 
+  /**
+   * CUSTOMER-FACHOBJEKT-05C — one visible message per failed assignment.
+   * The Vorgang mutation reports `order_amendment_local_persist_failed`, an
+   * internal key without a dot; the assignment rolls everything back, so the
+   * existing customer wording fits. Unknown free texts are never treated as keys.
+   */
+  const resolveAssignErrorMessage = (errorKey: string): string => {
+    if (errorKey === 'order_amendment_local_persist_failed') {
+      return translate('customer.persistFailed');
+    }
+    return errorKey.includes('.') ? translate(errorKey as TranslationKey) : errorKey;
+  };
+
   const handleAssignCustomer = () => {
-    if (!vorgang || assignDisabled || isAssigning) return;
+    if (!vorgang || assignDisabled || assignLockRef.current) return;
     setCustomerError(null);
 
-    const decision = buildCustomerDecisionFromUi(customerMode, newCustomerName, selectedCustomerId);
+    const decision = buildCustomerDecisionFromUi(
+      customerMode,
+      buildCustomerInputFromUi(newCustomerName, customerExtra),
+      selectedCustomerId,
+    );
     if (!decision || decision.kind === 'none') {
       setCustomerError(translate('customerDecision.required'));
       return;
@@ -151,23 +177,31 @@ export function VorgangDetailPage() {
       return;
     }
 
+    // Locked synchronously; released only after this event turn.
+    assignLockRef.current = true;
     setIsAssigning(true);
     try {
       const result = assignCustomerToVorgang(vorgang.id, decision);
       if (!result.success) {
         // Auswahl bleibt erhalten, damit der Nutzer korrigieren kann.
-        const key = result.errorKey as TranslationKey;
-        setCustomerError(key.includes('.') ? translate(key) : result.errorKey);
-        showToast(key.includes('.') ? translate(key) : result.errorKey);
+        // Genau einmal auflösen; interne Rohschlüssel werden nie sichtbar.
+        const message = resolveAssignErrorMessage(result.errorKey);
+        setCustomerError(message);
+        showToast(message);
         return;
       }
       setCustomerMode(null);
       setSelectedCustomerId(null);
       setNewCustomerName('');
+      setCustomerExtra(createEmptyCustomerExtraFields());
       refreshVorgang();
       showToast(translate('vorgang.assignCustomer.success'));
     } finally {
-      setIsAssigning(false);
+      // Never released synchronously — a second event of the same turn must not pass.
+      queueMicrotask(() => {
+        assignLockRef.current = false;
+        setIsAssigning(false);
+      });
     }
   };
 
@@ -192,6 +226,9 @@ export function VorgangDetailPage() {
     setSelectedCustomerId(null);
     setNewCustomerName('');
     setCustomerError(null);
+    setCustomerExtra(createEmptyCustomerExtraFields());
+    assignLockRef.current = false;
+    setIsAssigning(false);
     setCustomerOptions(customerAssignmentVisible ? loadSelectableCustomers() : []);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customerAssignmentVisible, vorgang?.id]);
@@ -496,10 +533,15 @@ export function VorgangDetailPage() {
                 setCustomerError(null);
               }}
               hint={assignHintKey ? translate(assignHintKey) : customerError}
+              extraFields={customerExtra}
+              onExtraFieldChange={(field, value) => {
+                setCustomerExtra((prev) => ({ ...prev, [field]: value }));
+                setCustomerError(null);
+              }}
             />
             {customerMode === 'new' && (
               <label className="edit-field">
-                <span className="edit-field__label">{translate('inbox.sender')}</span>
+                <span className="edit-field__label">{translate('kunden.edit.name')}</span>
                 <input
                   type="text"
                   className="input"

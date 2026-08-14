@@ -7,7 +7,7 @@
  */
 import { isOwnCompanyName } from '../../services/customerOwnCompanyGuard';
 import { getCustomerStoreSnapshot } from '../../services/customerStoreService';
-import type { CustomerDecision } from '../../services/customerService';
+import type { CustomerDecision, CustomerInput } from '../../services/customerService';
 import type { Customer } from '../../types/models';
 import type { TranslationKey } from '../../i18n';
 import type { CustomerDecisionMode } from './CustomerDecisionChoice';
@@ -52,15 +52,50 @@ export function isCustomerDecisionIncomplete(
   return false;
 }
 
+/**
+ * CUSTOMER-FACHOBJEKT-05C — the six optional master data fields of a new
+ * customer. The name is never held here; it stays in each parent's existing
+ * single source.
+ */
+export interface CustomerExtraFields {
+  contactPerson: string;
+  street: string;
+  zip: string;
+  city: string;
+  email: string;
+  phone: string;
+}
+
+/** A fresh object per call — never a shared mutable constant. */
+export function createEmptyCustomerExtraFields(): CustomerExtraFields {
+  return {
+    contactPerson: '',
+    street: '',
+    zip: '',
+    city: '',
+    email: '',
+    phone: '',
+  };
+}
+
+/** Joins the existing name source with the six optional fields. */
+export function buildCustomerInputFromUi(
+  name: string,
+  extra: CustomerExtraFields,
+): CustomerInput {
+  return { name, ...extra };
+}
+
 /** Builds the call contract; null when the current state is not decidable. */
 export function buildCustomerDecisionFromUi(
   mode: CustomerDecisionMode | null,
-  name: string,
+  input: CustomerInput,
   selectedCustomerId: string | null,
 ): CustomerDecision | null {
   if (mode === 'new') {
-    if (resolveNewCustomerHintKey(mode, name)) return null;
-    return { kind: 'new', input: { name } };
+    if (resolveNewCustomerHintKey(mode, input.name)) return null;
+    // A copy, so later typing cannot reach an already built decision.
+    return { kind: 'new', input: { ...input } };
   }
   if (mode === 'existing') {
     if (!selectedCustomerId) return null;

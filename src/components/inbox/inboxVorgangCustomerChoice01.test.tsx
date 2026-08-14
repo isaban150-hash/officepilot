@@ -1,7 +1,7 @@
 /**
  * CUSTOMER-FACHOBJEKT-04B — explicit customer decision in the Vorgang dialog.
  */
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
@@ -15,6 +15,7 @@ import {
   hydrateCustomerStore,
 } from '../../services/customerStoreService';
 import { getInboxItemById, hydrateInboxStore } from '../../services/inboxService';
+import * as intakeWorkflowService from '../../services/intakeWorkflowService';
 import {
   getAllVorgaenge,
   getVorgangCardMode,
@@ -109,6 +110,38 @@ function selectMode(mount: Mount, mode: 'new' | 'existing' | 'none'): Promise<vo
     `[data-testid="customer-decision-${mode}"] input`,
   );
   return click(input);
+}
+
+const EXTRA_FIELDS = ['contactPerson', 'street', 'zip', 'city', 'email', 'phone'] as const;
+
+/** Types into a controlled input like a user would. */
+async function typeInto(mount: Mount, testId: string, value: string): Promise<void> {
+  const input = mount.container.querySelector(
+    `[data-testid="${testId}"]`,
+  ) as HTMLInputElement | null;
+  if (!input) throw new Error(`missing ${testId}`);
+  const setter = Object.getOwnPropertyDescriptor(
+    window.HTMLInputElement.prototype,
+    'value',
+  )!.set!;
+  await act(async () => {
+    setter.call(input, value);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+}
+
+async function fillExtraFields(mount: Mount): Promise<void> {
+  for (const field of EXTRA_FIELDS) {
+    await typeInto(mount, `customer-decision-${field}`, NORDWEST[field]);
+  }
+}
+
+function extraFieldValue(mount: Mount, field: (typeof EXTRA_FIELDS)[number]): string {
+  const input = mount.container.querySelector(
+    `[data-testid="customer-decision-${field}"]`,
+  ) as HTMLInputElement | null;
+  if (!input) throw new Error(`missing ${field}`);
+  return input.value;
 }
 
 function customerPreview(mount: Mount): string {
@@ -392,6 +425,195 @@ describe('CUSTOMER-FACHOBJEKT-04B', () => {
     expect(after.customer).toBe(NORDWEST.name);
     expect(after.customerId).toBe('cust-04b-fixed');
     expect(getCustomerStoreSnapshot()).toHaveLength(0);
+    unmount(mount);
+  });
+
+  it('Fall L — 05C: Neuanlage mit allen sieben Feldern', async () => {
+    const item = seedItem({ sender: NORDWEST.name, recognizedData: { Kunde: NORDWEST.name } });
+    const mount = await mountPanel(item);
+    await openDialog(mount);
+    await selectMode(mount, 'new');
+
+    // Alle sechs Zusatzfelder sind direkt sichtbar und starten leer.
+    for (const field of EXTRA_FIELDS) {
+      expect(extraFieldValue(mount, field), field).toBe('');
+    }
+    expect(
+      mount.container.querySelector('[data-testid="customer-decision-optional-hint"]')!.textContent,
+    ).toBe('Nur der Kundenname ist erforderlich. Die übrigen Angaben sind optional.');
+
+    await fillExtraFields(mount);
+    // Tippen persistiert nichts.
+    expect(getCustomerStoreSnapshot()).toHaveLength(0);
+    expect(getAllVorgaenge()).toHaveLength(0);
+
+    await click(createButton(mount));
+
+    const customers = getCustomerStoreSnapshot();
+    expect(customers).toHaveLength(1);
+    const customer = customers[0]!;
+    expect(customer.name).toBe(NORDWEST.name);
+    expect(customer.contactPerson).toBe(NORDWEST.contactPerson);
+    expect(customer.street).toBe(NORDWEST.street);
+    expect(customer.zip).toBe(NORDWEST.zip);
+    expect(customer.city).toBe(NORDWEST.city);
+    expect(customer.email).toBe(NORDWEST.email);
+    expect(customer.phone).toBe(NORDWEST.phone);
+    // Provenienz positiv auf die konkrete Inbox-ID.
+    expect(customer.createdFromInboxId).toBe('inbox-04b');
+
+    const vorgang = getAllVorgaenge()[0]!;
+    expect(vorgang.customerId).toBe(customer.id);
+    expect(vorgang.customer).toBe(NORDWEST.name);
+    expect(vorgang.customerBilling).toEqual({
+      name: NORDWEST.name,
+      contactPerson: NORDWEST.contactPerson,
+      street: NORDWEST.street,
+      zip: NORDWEST.zip,
+      city: NORDWEST.city,
+      email: NORDWEST.email,
+      phone: NORDWEST.phone,
+    });
+    expect(mount.container.textContent).not.toContain(customer.id);
+    unmount(mount);
+  });
+
+  it('Fall M — 05C: nur Name bleibt möglich, existing und none ignorieren die Felder', async () => {
+    const item = seedItem({ sender: NORDWEST.name, recognizedData: { Kunde: NORDWEST.name } });
+    const mount = await mountPanel(item);
+    await openDialog(mount);
+    await selectMode(mount, 'new');
+    await click(createButton(mount));
+
+    const onlyName = getCustomerStoreSnapshot()[0]!;
+    expect(onlyName.name).toBe(NORDWEST.name);
+    expect(onlyName.street).toBe('');
+    expect(onlyName.city).toBe('');
+    expect(onlyName.phone).toBe('');
+    expect(getAllVorgaenge()[0]!.customerBilling).toEqual({
+      name: NORDWEST.name,
+      contactPerson: '',
+      street: '',
+      zip: '',
+      city: '',
+      email: '',
+      phone: '',
+    });
+    unmount(mount);
+
+    // Zweites Item: lokale Felder ausfüllen, dann auf existing wechseln.
+    resetTestStores();
+    localStorage.clear();
+    hydrateCompanyProfileStore({ ...getCompanyProfile(), companyName: OWN });
+    const existing = createCustomer({ ...NORDWEST, name: RHEINBAU, city: 'Köln' });
+    expect(existing.success).toBe(true);
+    if (!existing.success) return;
+
+    const mount2 = await mountPanel(seedItem());
+    await openDialog(mount2);
+    await selectMode(mount2, 'new');
+    await fillExtraFields(mount2);
+    await selectMode(mount2, 'existing');
+    await click(
+      mount2.container.querySelector(`[data-testid="customer-option-${existing.customer.id}"] input`),
+    );
+    await click(createButton(mount2));
+
+    // Kein zweiter Customer, Snapshot stammt aus dem gewählten Stamm.
+    expect(getCustomerStoreSnapshot()).toHaveLength(1);
+    const vorgangExisting = getAllVorgaenge()[0]!;
+    expect(vorgangExisting.customerId).toBe(existing.customer.id);
+    expect(vorgangExisting.customerBilling!.city).toBe('Köln');
+    expect(vorgangExisting.customerBilling!.street).toBe(NORDWEST.street);
+    expect(vorgangExisting.customer).toBe(RHEINBAU);
+    unmount(mount2);
+
+    // Drittes Item: none erzeugt keinen Customer aus den lokalen Feldern.
+    resetTestStores();
+    localStorage.clear();
+    hydrateCompanyProfileStore({ ...getCompanyProfile(), companyName: OWN });
+    const mount3 = await mountPanel(seedItem());
+    await openDialog(mount3);
+    await selectMode(mount3, 'new');
+    await fillExtraFields(mount3);
+    await selectMode(mount3, 'none');
+    await click(createButton(mount3));
+
+    expect(getCustomerStoreSnapshot()).toHaveLength(0);
+    const vorgangNone = getAllVorgaenge()[0]!;
+    expect(vorgangNone.customer).toBe('');
+    expect(vorgangNone.customerExplicitlyUnknown).toBe(true);
+    expect(vorgangNone.customerBilling).toEqual({
+      name: '',
+      contactPerson: '',
+      street: '',
+      zip: '',
+      city: '',
+      email: '',
+      phone: '',
+    });
+    unmount(mount3);
+  });
+
+  it('Fall N — 05C: erneutes Öffnen leert die Zusatzfelder', async () => {
+    const mount = await mountPanel(seedItem());
+    await openDialog(mount);
+    await selectMode(mount, 'new');
+    await fillExtraFields(mount);
+    expect(extraFieldValue(mount, 'street')).toBe(NORDWEST.street);
+
+    await click(mount.container.querySelector('.vorgang-dialog-backdrop'));
+    await openDialog(mount);
+    await selectMode(mount, 'new');
+
+    for (const field of EXTRA_FIELDS) {
+      expect(extraFieldValue(mount, field), field).toBe('');
+    }
+    expect(mount.container.querySelector('[data-testid="customer-decision-hint"]')).toBeNull();
+    unmount(mount);
+  });
+
+  it('Fall O — 05C: zwei unmittelbare Klicks erzeugen genau einen Serviceaufruf', async () => {
+    const spy = vi.spyOn(intakeWorkflowService, 'createVorgangFromInboxWithContract');
+    const item = seedItem({ sender: NORDWEST.name, recognizedData: { Kunde: NORDWEST.name } });
+    const mount = await mountPanel(item);
+    await openDialog(mount);
+    await selectMode(mount, 'new');
+    await fillExtraFields(mount);
+
+    const button = createButton(mount);
+    // Zwei Ereignisse im selben Turn, dazwischen kein Await und kein Flush.
+    await act(async () => {
+      button.click();
+      button.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(getCustomerStoreSnapshot()).toHaveLength(1);
+    expect(getAllVorgaenge()).toHaveLength(1);
+    spy.mockRestore();
+    unmount(mount);
+  });
+
+  it('Fall P — 05C: nach einem Fehler bleibt der Retry möglich', async () => {
+    const item = seedItem({ sender: NORDWEST.name, recognizedData: { Kunde: NORDWEST.name } });
+    const mount = await mountPanel(item);
+    await openDialog(mount);
+    await selectMode(mount, 'new');
+    await fillExtraFields(mount);
+
+    const setItemSpy = vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
+      throw new Error('quota exceeded');
+    });
+    await click(createButton(mount));
+    setItemSpy.mockRestore();
+
+    // Sperre ist nach der Microtask wieder frei; Eingaben stehen weiterhin.
+    const button = createButton(mount);
+    expect(button.disabled).toBe(false);
+    expect(extraFieldValue(mount, 'street')).toBe(NORDWEST.street);
     unmount(mount);
   });
 });

@@ -15,9 +15,12 @@ import {
 } from '../components/customer/CustomerDecisionChoice';
 import {
   buildCustomerDecisionFromUi,
+  buildCustomerInputFromUi,
+  createEmptyCustomerExtraFields,
   isCustomerDecisionIncomplete,
   loadSelectableCustomers,
   resolveNewCustomerHintKey,
+  type CustomerExtraFields,
 } from '../components/customer/customerDecisionUi';
 import { getCustomerById } from '../services/customerStoreService';
 import type { CustomerDecision } from '../services/customerService';
@@ -302,6 +305,12 @@ export function EingangDetailPage() {
   const [newCustomerName, setNewCustomerName] = useState('');
   const [customerOptions, setCustomerOptions] = useState<Customer[]>([]);
   const [customerError, setCustomerError] = useState<string | null>(null);
+  // CUSTOMER-FACHOBJEKT-05C — optional master data of a new customer.
+  const [customerExtra, setCustomerExtra] = useState<CustomerExtraFields>(
+    createEmptyCustomerExtraFields,
+  );
+  /** Synchronous lock — a second click in the same event turn must not create again. */
+  const contractCreateLockRef = useRef(false);
   const [manualCategory, setManualCategory] = useState<ClassifiedDocumentKind>('sonstiges');
   const [intakeExecution, setIntakeExecution] = useState<WorkflowResultExecution | null>(null);
   const [isExecutingIntake, setIsExecutingIntake] = useState(false);
@@ -624,6 +633,10 @@ export function EingangDetailPage() {
     setCustomerError(null);
     setCustomerOptions(loadSelectableCustomers());
     setNewCustomerName(resolveSuggestedCustomerName(item, workflow?.contractOrderProposal));
+    // Never prefilled from recognized document data — always empty.
+    setCustomerExtra(createEmptyCustomerExtraFields());
+    contractCreateLockRef.current = false;
+    setIsCreatingContractOrder(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contractDecisionKey]);
   /** Behörde / BG BAU / Mahnung / Zahlungserinnerung — consolidated assist lane. */
@@ -977,7 +990,7 @@ export function EingangDetailPage() {
   };
 
   const handleCreateContractOrder = (selectedPositions: EnhancedDetectedOrderPosition[]) => {
-    if (!item || !workflow?.contractOrderProposal) return;
+    if (!item || !workflow?.contractOrderProposal || contractCreateLockRef.current) return;
 
     // CUSTOMER-FACHOBJEKT-04C — shared gate for all three manual entries.
     let customerDecision: CustomerDecision | undefined;
@@ -987,7 +1000,11 @@ export function EingangDetailPage() {
         setMoreOptionsExpanded(true);
         return;
       }
-      const built = buildCustomerDecisionFromUi(customerMode, newCustomerName, selectedCustomerId);
+      const built = buildCustomerDecisionFromUi(
+        customerMode,
+        buildCustomerInputFromUi(newCustomerName, customerExtra),
+        selectedCustomerId,
+      );
       if (!built) {
         showToast(translate('customerDecision.required'));
         return;
@@ -1007,6 +1024,8 @@ export function EingangDetailPage() {
       showToast(translate('documentIntelligence.createOrderFailed'));
       return;
     }
+    // Locked synchronously; released only after this event turn.
+    contractCreateLockRef.current = true;
     setIsCreatingContractOrder(true);
     try {
       const result = acceptContractOrderFromProposal({
@@ -1060,7 +1079,11 @@ export function EingangDetailPage() {
       );
       navigate(`/vorgaenge/${result.vorgang.id}`);
     } finally {
-      setIsCreatingContractOrder(false);
+      // Never released synchronously — a second event of the same turn must not pass.
+      queueMicrotask(() => {
+        contractCreateLockRef.current = false;
+        setIsCreatingContractOrder(false);
+      });
     }
   };
 
@@ -1513,10 +1536,15 @@ export function EingangDetailPage() {
                 setCustomerError(null);
               }}
               hint={customerHintKey ? translate(customerHintKey) : customerError}
+              extraFields={customerExtra}
+              onExtraFieldChange={(field, value) => {
+                setCustomerExtra((prev) => ({ ...prev, [field]: value }));
+                setCustomerError(null);
+              }}
             />
             {customerMode === 'new' && (
               <label className="edit-field">
-                <span className="edit-field__label">{translate('inbox.sender')}</span>
+                <span className="edit-field__label">{translate('kunden.edit.name')}</span>
                 <input
                   type="text"
                   className="input"

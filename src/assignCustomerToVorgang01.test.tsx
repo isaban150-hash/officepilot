@@ -27,6 +27,7 @@ import {
   getVorgangById,
   hydrateVorgangStore,
 } from './services/vorgangService';
+import * as vorgangService from './services/vorgangService';
 import { createAbschlagInvoice, createOrderPosition, createTestVorgang } from './test/fixtures';
 import { resetTestStores } from './test/resetStores';
 import type { CustomerDecision } from './services/customerService';
@@ -191,6 +192,25 @@ async function typeInto(element: Element | null, value: string): Promise<void> {
     setter.call(element, value);
     element.dispatchEvent(new Event('input', { bubbles: true }));
   });
+}
+
+const EXTRA_FIELDS = ['contactPerson', 'street', 'zip', 'city', 'email', 'phone'] as const;
+
+async function fillExtraFields(mount: Mount): Promise<void> {
+  for (const field of EXTRA_FIELDS) {
+    await typeInto(
+      mount.container.querySelector(`[data-testid="customer-decision-${field}"]`),
+      NORDWEST[field],
+    );
+  }
+}
+
+function extraFieldValue(mount: Mount, field: (typeof EXTRA_FIELDS)[number]): string {
+  const input = mount.container.querySelector(
+    `[data-testid="customer-decision-${field}"]`,
+  ) as HTMLInputElement | null;
+  if (!input) throw new Error(`missing ${field}`);
+  return input.value;
 }
 
 describe('CUSTOMER-FACHOBJEKT-04D-U4', () => {
@@ -787,6 +807,198 @@ describe('CUSTOMER-FACHOBJEKT-04D-U4', () => {
         '[data-testid="customer-decision-existing"] input',
       ) as HTMLInputElement).checked,
     ).toBe(true);
+    unmount(mount);
+  });
+
+  it('Fall H — 05C: vollständige Neuanlage über das Zuordnungsformular', async () => {
+    const vorgang = seedUnknownVorgang();
+    const mount = await mountDetail(vorgang.id);
+
+    await click(mount.container.querySelector('[data-testid="customer-decision-new"] input'));
+    for (const field of EXTRA_FIELDS) {
+      expect(extraFieldValue(mount, field), field).toBe('');
+    }
+    await typeInto(
+      mount.container.querySelector('[data-testid="vorgang-assign-customer-name"]'),
+      NORDWEST.name,
+    );
+    await fillExtraFields(mount);
+    // Tippen persistiert nichts.
+    expect(getCustomerStoreSnapshot()).toHaveLength(0);
+
+    await click(mount.container.querySelector('[data-testid="vorgang-assign-customer-submit"]'));
+
+    const customers = getCustomerStoreSnapshot();
+    expect(customers).toHaveLength(1);
+    const customer = customers[0]!;
+    expect(customer.name).toBe(NORDWEST.name);
+    expect(customer.contactPerson).toBe(NORDWEST.contactPerson);
+    expect(customer.street).toBe(NORDWEST.street);
+    expect(customer.zip).toBe(NORDWEST.zip);
+    expect(customer.city).toBe(NORDWEST.city);
+    expect(customer.email).toBe(NORDWEST.email);
+    expect(customer.phone).toBe(NORDWEST.phone);
+    // U4 kennt keine Inbox-Provenienz — positiv geprüft, kein undefined-Vergleich.
+    expect('createdFromInboxId' in customer).toBe(false);
+
+    const stored = getVorgangById(vorgang.id)!;
+    expect(stored.customerId).toBe(customer.id);
+    expect(stored.customer).toBe(NORDWEST.name);
+    expect(stored.customerBilling).toEqual(NORDWEST);
+    expect(mount.container.textContent).not.toContain(customer.id);
+    unmount(mount);
+  });
+
+  it('Fall I — 05C: Vorgangswechsel im selben Root verwirft Eingaben und Fehler', async () => {
+    const [a] = seedTwoUnknownVorgaenge();
+    const mount = await mountDetail(a.id, ['v-u4-a', 'v-u4-b']);
+
+    await click(mount.container.querySelector('[data-testid="customer-decision-new"] input'));
+    await typeInto(
+      mount.container.querySelector('[data-testid="vorgang-assign-customer-name"]'),
+      NORDWEST.name,
+    );
+    await fillExtraFields(mount);
+    expect(extraFieldValue(mount, 'street')).toBe(NORDWEST.street);
+
+    // Sichtbaren Laufzeitfehler bei A erzeugen (Persistenz schlägt fehl).
+    const setItemSpy = vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
+      throw new Error('quota exceeded');
+    });
+    await click(mount.container.querySelector('[data-testid="vorgang-assign-customer-submit"]'));
+    setItemSpy.mockRestore();
+
+    const errorNodeA = mount.container.querySelector('[data-testid="customer-decision-hint"]');
+    expect(errorNodeA).not.toBeNull();
+    const errorTextA = errorNodeA!.textContent!;
+    expect(errorTextA).toBe('Speichern fehlgeschlagen. Es wurde nichts geändert.');
+    // Der interne Rohschlüssel bleibt unsichtbar.
+    expect(errorTextA).not.toContain('order_amendment_local_persist_failed');
+    expect(mount.container.textContent).not.toContain('order_amendment_local_persist_failed');
+    expect(getCustomerStoreSnapshot()).toHaveLength(0);
+    expect(getVorgangById('v-u4-a')?.customerExplicitlyUnknown).toBe(true);
+    expect(getVorgangById('v-u4-a')?.customerId).toBeUndefined();
+    // Eingaben bleiben erhalten, die Sperre ist nach der Microtask wieder frei.
+    expect(extraFieldValue(mount, 'street')).toBe(NORDWEST.street);
+    expect(
+      (mount.container.querySelector(
+        '[data-testid="vorgang-assign-customer-submit"]',
+      ) as HTMLButtonElement).disabled,
+    ).toBe(false);
+
+    await click(mount.container.querySelector('[data-testid="nav-to-v-u4-b"]'));
+
+    // Unmittelbar nach dem Wechsel, vor jeder neuen Auswahl.
+    expect(mount.container.querySelector('[data-testid="vorgang-assign-customer"]')).toBeTruthy();
+    for (const mode of ['new', 'existing', 'none']) {
+      const radio = mount.container.querySelector(
+        `[data-testid="customer-decision-${mode}"] input`,
+      ) as HTMLInputElement;
+      expect(radio.checked, mode).toBe(false);
+    }
+    expect(mount.container.textContent).not.toContain(errorTextA);
+    expect(mount.container.querySelector('[data-testid="customer-decision-hint"]')).toBeNull();
+    expect(getCustomerStoreSnapshot()).toHaveLength(0);
+
+    // Erst jetzt bei B „Neuer Kunde“ wählen.
+    await click(mount.container.querySelector('[data-testid="customer-decision-new"] input'));
+    expect(
+      (mount.container.querySelector(
+        '[data-testid="vorgang-assign-customer-name"]',
+      ) as HTMLInputElement).value,
+    ).toBe('');
+    for (const field of EXTRA_FIELDS) {
+      expect(extraFieldValue(mount, field), field).toBe('');
+    }
+    // Neu abgeleiteter Pflichtfeldhinweis — nicht der Laufzeitfehler von A.
+    const hintB = mount.container.querySelector('[data-testid="customer-decision-hint"]');
+    expect(hintB).not.toBeNull();
+    expect(hintB!.textContent).toBe('Kundenname erforderlich.');
+    expect(hintB!.textContent).not.toBe(errorTextA);
+    expect(mount.container.textContent).not.toContain(errorTextA);
+    expect(mount.container.textContent).not.toContain('order_amendment_local_persist_failed');
+    // Keine technische Customer-ID im sichtbaren Text — es existiert keine.
+    expect(mount.container.textContent).not.toContain('cust-');
+    expect(getCustomerStoreSnapshot()).toHaveLength(0);
+    unmount(mount);
+  });
+
+  it('Fall J — 05C: zwei unmittelbare Klicks lösen genau einen Serviceaufruf aus', async () => {
+    const spy = vi.spyOn(vorgangService, 'assignCustomerToVorgang');
+    const vorgang = seedUnknownVorgang();
+    const mount = await mountDetail(vorgang.id);
+
+    await click(mount.container.querySelector('[data-testid="customer-decision-new"] input'));
+    await typeInto(
+      mount.container.querySelector('[data-testid="vorgang-assign-customer-name"]'),
+      NORDWEST.name,
+    );
+    await fillExtraFields(mount);
+
+    const submit = mount.container.querySelector(
+      '[data-testid="vorgang-assign-customer-submit"]',
+    ) as HTMLButtonElement;
+    expect(submit.disabled).toBe(false);
+    await act(async () => {
+      submit.click();
+      submit.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(getCustomerStoreSnapshot()).toHaveLength(1);
+    spy.mockRestore();
+    unmount(mount);
+  });
+
+  it('Fall K — 05C: nach Persistenzfehler bleiben Eingaben erhalten und der Retry möglich', async () => {
+    const vorgang = seedUnknownVorgang();
+    const mount = await mountDetail(vorgang.id);
+
+    await click(mount.container.querySelector('[data-testid="customer-decision-new"] input'));
+    await typeInto(
+      mount.container.querySelector('[data-testid="vorgang-assign-customer-name"]'),
+      NORDWEST.name,
+    );
+    await fillExtraFields(mount);
+
+    const setItemSpy = vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
+      throw new Error('quota exceeded');
+    });
+    await click(mount.container.querySelector('[data-testid="vorgang-assign-customer-submit"]'));
+    setItemSpy.mockRestore();
+
+    expect(getCustomerStoreSnapshot()).toHaveLength(0);
+    expect(getVorgangById(vorgang.id)?.customerExplicitlyUnknown).toBe(true);
+    expect(extraFieldValue(mount, 'street')).toBe(NORDWEST.street);
+    expect(
+      (mount.container.querySelector(
+        '[data-testid="vorgang-assign-customer-name"]',
+      ) as HTMLInputElement).value,
+    ).toBe(NORDWEST.name);
+
+    // Menschliche Meldung statt internem Rohschlüssel.
+    const failureHint = mount.container.querySelector('[data-testid="customer-decision-hint"]');
+    expect(failureHint).not.toBeNull();
+    expect(failureHint!.textContent).toBe('Speichern fehlgeschlagen. Es wurde nichts geändert.');
+    expect(mount.container.textContent).not.toContain('order_amendment_local_persist_failed');
+
+    // Sperre nach der Microtask wieder frei.
+    const submit = mount.container.querySelector(
+      '[data-testid="vorgang-assign-customer-submit"]',
+    ) as HTMLButtonElement;
+    expect(submit.disabled).toBe(false);
+
+    // Späterer Retry gelingt vollständig — keine permanente Verriegelung.
+    await click(mount.container.querySelector('[data-testid="vorgang-assign-customer-submit"]'));
+    const customers = getCustomerStoreSnapshot();
+    expect(customers).toHaveLength(1);
+    const stored = getVorgangById(vorgang.id)!;
+    expect(stored.customerId).toBe(customers[0]!.id);
+    expect(stored.customer).toBe(NORDWEST.name);
+    expect(stored.customerBilling).toEqual(NORDWEST);
+    expect(stored.customerExplicitlyUnknown).toBeUndefined();
     unmount(mount);
   });
 });
