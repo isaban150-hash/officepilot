@@ -9,6 +9,7 @@ import { getInboxItemById } from './inboxService';
 import {
   extractBillOfQuantitiesFromPages,
   extractBillOfQuantitiesPositions,
+  extractMultilinePositionBlocks,
   sumPositionsNet,
 } from './billOfQuantitiesExtractionService';
 import {
@@ -116,6 +117,37 @@ export function analyzeContractIntelligenceFromText(
   if (structuredResult.positions.length > 0) {
     positions.push(...structuredResult.positions);
   }
+
+  /**
+   * CONTRACT-LV-POSITION-COMPLETENESS-01C — a partial structured result must no
+   * longer block the multi-line parser. Merged conservatively by document
+   * identity (sourcePage + real positionNumber), never by similar description.
+   */
+  if (allowBoqExtraction) {
+    const multiline = pageTexts.flatMap((page) =>
+      extractMultilinePositionBlocks(page.text, page.pageNumber),
+    );
+    for (const candidate of multiline) {
+      const identity = `${candidate.sourcePage ?? ''}:${candidate.positionNumber ?? ''}`;
+      const existingIndex = positions.findIndex(
+        (position) => `${position.sourcePage ?? ''}:${position.positionNumber ?? ''}` === identity,
+      );
+      if (existingIndex === -1) {
+        positions.push(candidate);
+        continue;
+      }
+      // Same document identity: the complete block replaces a truncated one.
+      const existing = positions[existingIndex]!;
+      const existingComplete =
+        Number.isFinite(existing.quantity) &&
+        existing.quantity > 0 &&
+        Number.isFinite(existing.unitPrice) &&
+        existing.unitPrice > 0 &&
+        existing.description.trim().length >= candidate.description.trim().length;
+      if (!existingComplete) positions[existingIndex] = candidate;
+    }
+  }
+
   if (allowBoqExtraction && positions.length === 0) {
     positions.push(
       ...extractBillOfQuantitiesFromPages(pageTexts, segmentation.billOfQuantitiesPages),
