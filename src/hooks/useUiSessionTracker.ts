@@ -5,7 +5,10 @@ import {
   captureAndPersistUiSession,
   readMainScrollTop,
 } from '../services/uiSession/uiSessionCapture';
-import { subscribeUiSessionLive } from '../services/uiSession/uiSessionLiveState';
+import {
+  resetUiSessionLiveChrome,
+  subscribeUiSessionLive,
+} from '../services/uiSession/uiSessionLiveState';
 
 const SCROLL_THROTTLE_MS = 200;
 
@@ -17,6 +20,8 @@ export function useUiSessionTracker(): void {
   const { user } = useAuth();
   const lastScrollFlush = useRef(0);
   const scrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** null until the first capture — the initial mount must not reset. */
+  const lastPathname = useRef<string | null>(null);
 
   const flush = (source: 'auto' | 'explicit' = 'auto') => {
     captureAndPersistUiSession({
@@ -32,6 +37,17 @@ export function useUiSessionTracker(): void {
 
   // Navigation / route change
   useEffect(() => {
+    /**
+     * UPLOAD-DRAFT-RESUME-01C2 — liveChrome is a module singleton. Without this
+     * reset the first capture of a new page inherits drafts/panels of the previous
+     * one, which fabricates deep work where there is none. Only on a real pathname
+     * change and only right before that first capture: the new page reports through
+     * the existing subscription afterwards and triggers a correct second capture.
+     */
+    if (lastPathname.current !== null && lastPathname.current !== location.pathname) {
+      resetUiSessionLiveChrome();
+    }
+    lastPathname.current = location.pathname;
     flush('auto');
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally on location identity
   }, [location.pathname, location.search, location.hash, location.key, user?.id]);

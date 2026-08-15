@@ -32,6 +32,7 @@ import {
 } from '../services/documentSaveTraceService';
 import type { UserStorageDecision } from '../types/userStorageDecision';
 import { resolvePendingDocumentContractProposal } from '../services/contractPreviewProposalService';
+import { useReportUiSession } from '../hooks/useReportUiSession';
 import {
   cleanupExpiredUploadDrafts,
   discardPendingDocumentIntakeDraft,
@@ -55,8 +56,6 @@ export function DocumentUploadPage() {
   const [pendingUpload, setPendingUpload] = useState<PendingDocumentIntake | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
-  /** Draft write in flight — decisions stay blocked through the existing loading path. */
-  const [isSavingDraft, setIsSavingDraft] = useState(false);
 
   const [searchParams, setSearchParams] = useSearchParams();
   const urlDraftId = searchParams.get(DRAFT_QUERY_PARAM);
@@ -65,6 +64,32 @@ export function DocumentUploadPage() {
   const restoreStartedRef = useRef(false);
   const savingDraftRef = useRef(false);
   const mountedRef = useRef(true);
+  /** Mirrors draftIdRef for rendering — only a durably stored draft is reported. */
+  const [reportedDraftId, setReportedDraftId] = useState<string | null>(null);
+
+  const rememberDraftId = (draftId: string | null) => {
+    draftIdRef.current = draftId;
+    if (mountedRef.current) setReportedDraftId(draftId);
+  };
+
+  /**
+   * UPLOAD-DRAFT-RESUME-01C2 — the only thing this page puts into the UI session
+   * is the opaque draft id plus a human label. Never bytes, OCR text, pageTexts,
+   * classification, recommendation, policy or contract data.
+   */
+  useReportUiSession(
+    reportedDraftId && pendingUpload
+      ? {
+          workspaceType: 'document_review',
+          drafts: { values: { pendingUploadDraftId: reportedDraftId }, dirty: true },
+          resumeLabel: {
+            titleText: translate(pendingUpload.preview.documentTypeLabelKey),
+            subtitleText: pendingUpload.cachedFile.fileName,
+            entityHint: '',
+          },
+        }
+      : { drafts: { values: {}, dirty: false } },
+  );
 
   useEffect(() => {
     mountedRef.current = true;
@@ -127,7 +152,7 @@ export function DocumentUploadPage() {
         if (!result.success) {
           // Missing, expired or damaged. A foreign draft reports `missing` and is
           // left completely untouched; only our own broken record is cleaned up.
-          draftIdRef.current = null;
+          rememberDraftId(null);
           if (result.reason !== 'missing') {
             await discardPendingDocumentIntakeDraft(urlDraftId);
           }
@@ -136,12 +161,12 @@ export function DocumentUploadPage() {
           setDraftQueryParam(null);
           return;
         }
-        draftIdRef.current = result.draftId;
+        rememberDraftId(result.draftId);
         setPendingUpload(result.pending);
       })
       .catch(() => {
         if (superseded()) return;
-        draftIdRef.current = null;
+        rememberDraftId(null);
         setPendingUpload(null);
         setDraftQueryParam(null);
       })
@@ -185,20 +210,20 @@ export function DocumentUploadPage() {
         return;
       }
 
-      setPendingUpload(result.pending);
-
-      // Store the draft right after the preview: iOS may abort async writes that
-      // only start on visibilitychange / pagehide. Decisions stay blocked while
-      // the write runs, so no confirmation can race an unsaved draft.
+      /**
+       * UPLOAD-DRAFT-RESUME-01C4 — a visible analysis must already be resumable.
+       *
+       * The draft is stored first; the preview is only rendered afterwards. Until
+       * then the existing processing state stays on screen, so leaving the page
+       * can never strand a finished-looking analysis without a resume pointer.
+       */
       const previousDraftId = draftIdRef.current;
       savingDraftRef.current = true;
-      setIsSavingDraft(true);
       let saved: Awaited<ReturnType<typeof savePendingDocumentIntakeDraft>>;
       try {
         saved = await savePendingDocumentIntakeDraft(result.pending);
       } finally {
         savingDraftRef.current = false;
-        if (processGenerationRef.current === generation) setIsSavingDraft(false);
       }
 
       if (processGenerationRef.current !== generation) {
@@ -207,21 +232,30 @@ export function DocumentUploadPage() {
         return;
       }
 
+      if (!mountedRef.current) {
+        // Page was left while the write ran: no analysis was ever shown, so this
+        // draft is unreachable. Remove it under the usual safety rules.
+        if (saved.success) void discardPendingDocumentIntakeDraft(saved.draftId);
+        return;
+      }
+
       if (saved.success) {
-        draftIdRef.current = saved.draftId;
+        rememberDraftId(saved.draftId);
         setDraftQueryParam(saved.draftId);
         if (previousDraftId && previousDraftId !== saved.draftId) {
           void discardPendingDocumentIntakeDraft(previousDraftId);
         }
       } else {
-        // The preview stays usable and the decision stays possible; only the
-        // resume capability is lost. UI and URL must not point at different
-        // documents, so the stale pointer goes with it.
-        draftIdRef.current = null;
+        // Documented exception to "visible means resumable": the analysis stays
+        // usable, but nothing is secured against leaving the page.
+        rememberDraftId(null);
         setDraftQueryParam(null);
         if (previousDraftId) void discardPendingDocumentIntakeDraft(previousDraftId);
         showToast(translate('persist.failed.userAction'));
       }
+
+      // Only now — the draft is durable, or its failure has been reported.
+      setPendingUpload(result.pending);
 
       if (result.pending.extraction.qualityHintKey) {
         showToast(translate(result.pending.extraction.qualityHintKey));
@@ -321,7 +355,7 @@ export function DocumentUploadPage() {
   /** Removes draft metadata and, when safe, the temporary file. */
   const releaseCurrentDraft = async () => {
     const draftId = draftIdRef.current;
-    draftIdRef.current = null;
+    rememberDraftId(null);
     setDraftQueryParam(null);
     if (draftId) await discardPendingDocumentIntakeDraft(draftId);
   };
@@ -329,7 +363,7 @@ export function DocumentUploadPage() {
   /** Removes only the draft metadata; the file stays (committed or shared). */
   const forgetCurrentDraftMetadata = async () => {
     const draftId = draftIdRef.current;
-    draftIdRef.current = null;
+    rememberDraftId(null);
     setDraftQueryParam(null);
     if (draftId) await forgetUploadDraftMetadata(draftId);
   };
@@ -438,7 +472,7 @@ export function DocumentUploadPage() {
           aiActionsLabel={translate('document.intakeUnderstanding.aiActions')}
           translate={translate}
           onDecision={(decision) => void handlePendingDecision(decision)}
-          isConfirming={isConfirming || isSavingDraft}
+          isConfirming={isConfirming}
           confirmErrorTitle={confirmErrorView ? translate(confirmErrorView.titleKey) : undefined}
           confirmErrorMessage={confirmErrorView ? translate(confirmErrorView.descriptionKey) : undefined}
           confirmErrorDiagnostic={persistErrorDiagnostic}

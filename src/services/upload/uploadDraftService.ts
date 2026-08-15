@@ -273,6 +273,24 @@ export async function discardPendingDocumentIntakeDraft(draftId: string): Promis
   return deleteUploadDraftRecordById(draftId);
 }
 
+export type DiscardUploadDraftOutcome = 'discarded' | 'not_found' | 'retry';
+
+/**
+ * UPLOAD-DRAFT-RESUME-01C2 — typed variant for the Continue Working card.
+ *
+ * Same safety rules as discardPendingDocumentIntakeDraft; only the result is
+ * richer so the caller can tell "already gone" from "try again". A draft of a
+ * foreign scope reads as not_found and is never touched.
+ */
+export async function discardUploadDraftForRecovery(
+  draftId: string,
+): Promise<DiscardUploadDraftOutcome> {
+  if (!draftId) return 'not_found';
+  const record = await getUploadDraftRecordById(draftId);
+  if (!record) return 'not_found';
+  return (await discardPendingDocumentIntakeDraft(draftId)) ? 'discarded' : 'retry';
+}
+
 /**
  * Removes the draft metadata but keeps the file — used after a successful intake,
  * a duplicate navigation or a switch to an existing document. Scope-safe.

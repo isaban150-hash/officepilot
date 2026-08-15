@@ -31,6 +31,7 @@ import { setImageOcrExtractorForTests } from './services/ocrDocumentService';
 import * as pendingDocumentIntakeService from './services/pendingDocumentIntakeService';
 import { processDocumentFileForPreview } from './services/pendingDocumentIntakeService';
 import * as persistenceService from './services/persistenceService';
+import * as uploadDraftDb from './services/storage/uploadDraftIndexedDbService';
 import {
   listUploadDraftRecordsForActiveScope,
   resetUploadDraftStoreForTests,
@@ -542,7 +543,7 @@ describe('UPLOAD-DRAFT-RESUME-01B1', () => {
     expectNoDomainObjects();
   });
 
-  it('N — Entscheidungen sind während der Entwurfssicherung gesperrt', async () => {
+  it('N — während der Sicherung bleibt die Analyse verborgen und erscheint danach bedienbar', async () => {
     let release: (() => void) | null = null;
     const gate = new Promise<void>((resolve) => {
       release = resolve;
@@ -563,19 +564,16 @@ describe('UPLOAD-DRAFT-RESUME-01B1', () => {
       input.dispatchEvent(new Event('change', { bubbles: true }));
       await Promise.resolve();
     });
-    await waitFor(
-      () => mounted!.container.querySelector('[data-testid="document-upload-dropzone"]') === null,
-      'preview visible while draft write pending',
-    );
+    await settle(4);
 
-    // Vorschau steht, Sicherung läuft noch: alle Entscheidungen deaktiviert.
+    // Sicherung läuft noch: die Analyse bleibt verborgen, es gibt nichts zu entscheiden.
     const decisionButtons = [...mounted.container.querySelectorAll('button')].filter((node) =>
       /dauerhaft|nicht speichern|vorübergehend/i.test(node.textContent ?? ''),
     );
-    expect(decisionButtons.length).toBeGreaterThan(0);
-    for (const button of decisionButtons) {
-      expect((button as HTMLButtonElement).disabled).toBe(true);
-    }
+    expect(decisionButtons).toHaveLength(0);
+    expect(
+      mounted.container.querySelector('[data-testid="document-upload-dropzone"]'),
+    ).not.toBeNull();
     expect(getInboxStoreSnapshot()).toHaveLength(0);
 
     release!();
@@ -812,6 +810,160 @@ describe('UPLOAD-DRAFT-RESUME-01B1', () => {
     ) as HTMLButtonElement;
     expect(selectButton.disabled).toBe(false);
     expect(selectButton.getAttribute('aria-busy')).not.toBe('true');
+  });
+
+  /** Gate auf den Blob-Write: der Entwurf bleibt kontrolliert unfertig. */
+  function gateDraftWrite() {
+    let release: (() => void) | null = null;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const realSave = blobDbService.saveDocumentBlob;
+    vi.spyOn(blobDbService, 'saveDocumentBlob').mockImplementation(async (input) => {
+      await gate;
+      return realSave(input);
+    });
+    return { release: () => release!() };
+  }
+
+  /** Datei auswählen, ohne auf den Entwurf zu warten. */
+  async function startUpload(container: ParentNode, file: File): Promise<void> {
+    const input = container.querySelector(
+      '[data-testid="document-upload-input"]',
+    ) as HTMLInputElement;
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    await act(async () => {
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      await Promise.resolve();
+    });
+    await settle(4);
+  }
+
+  it('T — die Analyse bleibt verborgen, solange der Entwurf nicht gesichert ist', async () => {
+    const gate = gateDraftWrite();
+    mounted = renderUploadPage();
+    await settle();
+    await startUpload(mounted.container, fileOf('DRAFT-T'));
+
+    // Die Vorschau ist fertig berechnet, der Entwurf aber noch nicht geschrieben.
+    expect(await listUploadDraftRecordsForActiveScope()).toHaveLength(0);
+
+    // Nichts davon darf sichtbar sein.
+    expect(mounted.container.querySelector('[data-testid="ocr-preview-panel"]')).toBeNull();
+    expect(mounted.container.textContent).not.toContain('DRAFT-T.jpg');
+    const decisionButtons = [...mounted.container.querySelectorAll('button')].filter((node) =>
+      /dauerhaft|nicht speichern|vorübergehend/i.test(node.textContent ?? ''),
+    );
+    expect(decisionButtons).toHaveLength(0);
+
+    // Verarbeitungszustand bleibt stehen.
+    expect(
+      mounted.container.querySelector('[data-testid="document-upload-dropzone"]'),
+    ).not.toBeNull();
+    const select = mounted.container.querySelector(
+      '[data-testid="document-upload-select"]',
+    ) as HTMLButtonElement;
+    expect(select.disabled).toBe(true);
+
+    // Kein Wiederaufnahme-Pointer.
+    expect(new URLSearchParams(mounted.location().search).get('draft')).toBeNull();
+    expectNoDomainObjects();
+
+    // Nach Freigabe erscheint die Analyse bedienbar.
+    gate.release();
+    await waitFor(
+      () => mounted!.container.querySelector('[data-testid="document-upload-dropzone"]') === null,
+      'analysis visible after durable write',
+    );
+    await settle(2);
+    expect(mounted.container.textContent).toContain('DRAFT-T.jpg');
+    expect(await listUploadDraftRecordsForActiveScope()).toHaveLength(1);
+    const draftId = (await listUploadDraftRecordsForActiveScope())[0]!.id;
+    expect(new URLSearchParams(mounted.location().search).get('draft')).toBe(draftId);
+    const enabled = [...mounted.container.querySelectorAll('button')].filter((node) =>
+      /dauerhaft/i.test(node.textContent ?? ''),
+    );
+    expect(enabled.some((node) => !(node as HTMLButtonElement).disabled)).toBe(true);
+  });
+
+  it('U — Unmount während des Writes lässt keinen unsichtbaren Entwurf zurück', async () => {
+    const gate = gateDraftWrite();
+    mounted = renderUploadPage();
+    await settle();
+    await startUpload(mounted.container, fileOf('DRAFT-U'));
+
+    // Seite verlassen, während der Write noch offen ist.
+    act(() => mounted!.root.unmount());
+    mounted.container.remove();
+    mounted = undefined;
+
+    gate.release();
+    await settle(12);
+
+    expect(await listUploadDraftRecordsForActiveScope()).toHaveLength(0);
+    expect(getDocumentFileRefStoreSnapshot()).toHaveLength(0);
+    expectNoDomainObjects();
+  });
+
+  it('V — Unmount während des Writes löscht keinen geteilten committed Ref', async () => {
+    const payload = payloadOf('DRAFT-V');
+    const committed = await storeDocumentFileFromCachedPayload(payload, {
+      lifecycleIntent: 'committed',
+    });
+    expect(committed.fileRef.lifecycleStatus).toBe('committed');
+
+    // Bei bereits committed Hash entfällt der Blob-Write — hier hängt der
+    // Metadaten-Write, damit der Unmount wirklich mitten hinein fällt.
+    let release: (() => void) | null = null;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const realSaveRecord = uploadDraftDb.saveUploadDraftRecord;
+    vi.spyOn(uploadDraftDb, 'saveUploadDraftRecord').mockImplementation(async (record) => {
+      await gate;
+      return realSaveRecord(record);
+    });
+
+    mounted = renderUploadPage();
+    await settle();
+    await startUpload(mounted.container, fileOf('DRAFT-V'));
+
+    act(() => mounted!.root.unmount());
+    mounted.container.remove();
+    mounted = undefined;
+
+    release!();
+    await settle(12);
+
+    expect(await listUploadDraftRecordsForActiveScope()).toHaveLength(0);
+    expect(getDocumentFileRefById(committed.fileRef.id)?.lifecycleStatus).toBe('committed');
+    expect(await hasDocumentBlob(committed.fileRef.id)).toBe(true);
+  });
+
+  it('W — fehlgeschlagene Sicherung zeigt die Analyse trotzdem, ohne Pointer', async () => {
+    mounted = renderUploadPage();
+    await settle();
+    const persistSpy = vi
+      .spyOn(persistenceService, 'persistAll')
+      .mockReturnValue({ success: false, error: 'quota_exceeded' });
+
+    await startUpload(mounted.container, fileOf('DRAFT-W'));
+    await waitFor(
+      () => mounted!.container.querySelector('[data-testid="document-upload-dropzone"]') === null,
+      'analysis visible after failed draft write',
+    );
+    await settle(2);
+    persistSpy.mockRestore();
+
+    expect(mounted.container.textContent).toContain('DRAFT-W.jpg');
+    const enabled = [...mounted.container.querySelectorAll('button')].filter((node) =>
+      /dauerhaft/i.test(node.textContent ?? ''),
+    );
+    expect(enabled.some((node) => !(node as HTMLButtonElement).disabled)).toBe(true);
+
+    expect(await listUploadDraftRecordsForActiveScope()).toHaveLength(0);
+    expect(new URLSearchParams(mounted.location().search).get('draft')).toBeNull();
+    expectNoDomainObjects();
   });
 
   it('Aufräumen entfernt nur abgelaufene Uploadentwürfe', async () => {
