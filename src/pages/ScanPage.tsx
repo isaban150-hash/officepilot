@@ -37,14 +37,25 @@ import {
 } from '../services/documentSaveTraceService';
 import type { UserStorageDecision } from '../types/userStorageDecision';
 import type { UploadDocumentKind } from '../types/models';
+import { useReportUiSession } from '../hooks/useReportUiSession';
+import {
+  cleanupExpiredUploadDrafts,
+  discardPendingDocumentIntakeDraft,
+  forgetUploadDraftMetadata,
+  loadPendingDocumentIntakeDraft,
+  savePendingDocumentIntakeDraft,
+} from '../services/upload/uploadDraftService';
 
 const SCAN_FILE_ACCEPT =
   'image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,.pdf';
 
+/** UPLOAD-DRAFT-RESUME-01D2 — opaque resume pointer; never file content. */
+const DRAFT_QUERY_PARAM = 'draft';
+
 export function ScanPage() {
   const { translate, showToast } = useApp();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const confirmInFlightRef = useRef(false);
@@ -57,14 +68,129 @@ export function ScanPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
   const inputMode = searchParams.get('input');
+  const urlDraftId = searchParams.get(DRAFT_QUERY_PARAM);
+
+  /** Draft currently shown; a ref so decisions never read a stale value. */
+  const draftIdRef = useRef<string | null>(null);
+  const [reportedDraftId, setReportedDraftId] = useState<string | null>(null);
+  const restoreStartedRef = useRef(false);
+  const autoPickerDoneRef = useRef(false);
+  const mountedRef = useRef(true);
 
   useEffect(() => {
-    if (inputMode === 'camera') {
-      cameraInputRef.current?.click();
-    } else if (inputMode === 'gallery') {
-      fileInputRef.current?.click();
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  const rememberDraftId = (draftId: string | null) => {
+    draftIdRef.current = draftId;
+    if (mountedRef.current) setReportedDraftId(draftId);
+  };
+
+  const setDraftQueryParam = (draftId: string | null) => {
+    if (!mountedRef.current) return;
+    setSearchParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        if (draftId) next.set(DRAFT_QUERY_PARAM, draftId);
+        else next.delete(DRAFT_QUERY_PARAM);
+        return next;
+      },
+      { replace: true },
+    );
+  };
+
+  /**
+   * UPLOAD-DRAFT-RESUME-01D2 — the UI session only ever carries the opaque draft
+   * id plus a human label. Never bytes, OCR text, pageTexts, classification,
+   * recommendation, policy or contract data.
+   */
+  useReportUiSession(
+    reportedDraftId && pendingScan
+      ? {
+          workspaceType: 'document_review',
+          drafts: { values: { pendingUploadDraftId: reportedDraftId }, dirty: true },
+          resumeLabel: {
+            titleText: translate(pendingScan.preview.documentTypeLabelKey),
+            subtitleText: pendingScan.cachedFile.fileName,
+            entityHint: '',
+          },
+        }
+      : { drafts: { values: {}, dirty: false } },
+  );
+
+  /** Opens the picker requested by ?input= exactly once. */
+  const runAutoPicker = () => {
+    if (autoPickerDoneRef.current) return;
+    autoPickerDoneRef.current = true;
+    if (inputMode === 'camera') cameraInputRef.current?.click();
+    else if (inputMode === 'gallery') fileInputRef.current?.click();
+  };
+
+  /**
+   * Restore a stored draft first; only without one does the requested picker open.
+   * A valid camera/gallery draft must never be overwritten by an auto-opened picker.
+   */
+  useEffect(() => {
+    if (restoreStartedRef.current) return;
+    restoreStartedRef.current = true;
+
+    let cancelled = false;
+    let completed = false;
+    const releaseGuardOnCleanup = () => {
+      cancelled = true;
+      if (!completed) restoreStartedRef.current = false;
+    };
+
+    void cleanupExpiredUploadDrafts();
+
+    if (!urlDraftId) {
+      completed = true;
+      runAutoPicker();
+      return releaseGuardOnCleanup;
     }
-  }, [inputMode]);
+
+    const generationAtStart = processGenerationRef.current;
+    const superseded = () =>
+      cancelled || !mountedRef.current || processGenerationRef.current !== generationAtStart;
+
+    setIsProcessing(true);
+    void loadPendingDocumentIntakeDraft(urlDraftId)
+      .then(async (result) => {
+        if (superseded()) return;
+        if (!result.success) {
+          rememberDraftId(null);
+          if (result.reason !== 'missing') {
+            await discardPendingDocumentIntakeDraft(urlDraftId);
+          }
+          if (superseded()) return;
+          setPendingScan(null);
+          // Drop the stale pointer, keep ?input=, then open the intended picker.
+          setDraftQueryParam(null);
+          runAutoPicker();
+          return;
+        }
+        rememberDraftId(result.draftId);
+        setPendingScan(result.pending);
+      })
+      .catch(() => {
+        if (superseded()) return;
+        rememberDraftId(null);
+        setPendingScan(null);
+        setDraftQueryParam(null);
+        runAutoPicker();
+      })
+      .finally(() => {
+        if (superseded()) return;
+        completed = true;
+        setIsProcessing(false);
+      });
+
+    return releaseGuardOnCleanup;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only restore
+  }, []);
 
   const handleUploadComplete = (itemId: string) => {
     showToast(translate('scanResult.toastRecognized'));
@@ -74,8 +200,9 @@ export function ScanPage() {
   const openFilePicker = (camera = false) => {
     setUploadError(null);
     setConfirmError(null);
-    discardPendingDocumentIntake(pendingScan);
-    setPendingScan(null);
+    // The current draft survives until a new preview has been stored: a cancelled
+    // picker must leave analysis, draft and URL untouched. Safari needs the click
+    // inside the user gesture, so nothing is awaited here.
     if (camera) {
       cameraInputRef.current?.click();
     } else {
@@ -103,15 +230,47 @@ export function ScanPage() {
         return;
       }
 
+      /**
+       * UPLOAD-DRAFT-RESUME-01D2 — a visible analysis must already be resumable.
+       * The draft is stored first; the preview is only rendered afterwards.
+       */
+      const previousDraftId = draftIdRef.current;
+      const saved = await savePendingDocumentIntakeDraft(result.pending);
+
+      if (processGenerationRef.current !== generation) {
+        if (saved.success) void discardPendingDocumentIntakeDraft(saved.draftId);
+        return;
+      }
+      if (!mountedRef.current) {
+        // Page was left mid-write: no analysis was ever shown, so this draft is
+        // unreachable. Remove it under the usual safety rules.
+        if (saved.success) void discardPendingDocumentIntakeDraft(saved.draftId);
+        return;
+      }
+
+      if (saved.success) {
+        rememberDraftId(saved.draftId);
+        setDraftQueryParam(saved.draftId);
+        if (previousDraftId && previousDraftId !== saved.draftId) {
+          void discardPendingDocumentIntakeDraft(previousDraftId);
+        }
+      } else {
+        // Documented exception: the analysis stays usable, but nothing is secured.
+        rememberDraftId(null);
+        setDraftQueryParam(null);
+        if (previousDraftId) void discardPendingDocumentIntakeDraft(previousDraftId);
+        showToast(translate('persist.failed.userAction'));
+      }
+
       setPendingScan(result.pending);
 
       if (result.pending.extraction.qualityHintKey) {
         showToast(translate(result.pending.extraction.qualityHintKey));
       }
     } catch {
-      setUploadError('ocr_failed');
+      if (processGenerationRef.current === generation) setUploadError('ocr_failed');
     } finally {
-      setIsProcessing(false);
+      if (processGenerationRef.current === generation) setIsProcessing(false);
     }
   };
 
@@ -140,12 +299,15 @@ export function ScanPage() {
       });
 
       if (isDiscardedPendingDocumentDecision(result)) {
+        await releaseCurrentDraft();
         setPendingScan(null);
         return;
       }
 
       if (isNavigateExistingPendingDocumentDecision(result)) {
         discardPendingDocumentIntake(pendingScan);
+        // Metadata only — an existing committed or shared ref is never removed.
+        await forgetCurrentDraftMetadata();
         setPendingScan(null);
         traceStep(saveTraceId, 'navigation_start');
         if (result.match.type === 'inbox') {
@@ -166,6 +328,7 @@ export function ScanPage() {
 
       if (result.duplicate) {
         discardPendingDocumentIntake(pendingScan);
+        await forgetCurrentDraftMetadata();
         setPendingScan(null);
         showToast(translate('document.upload.duplicateDetected'));
         traceStep(saveTraceId, 'navigation_start');
@@ -180,6 +343,8 @@ export function ScanPage() {
 
       const itemId = result.inboxItem.id;
       discardPendingDocumentIntake(pendingScan);
+      // The ref is now committed and referenced — drop the draft metadata only.
+      await forgetCurrentDraftMetadata();
       setPendingScan(null);
       traceStep(saveTraceId, 'navigation_start');
       handleUploadComplete(itemId);
@@ -195,8 +360,25 @@ export function ScanPage() {
     }
   };
 
+  /** Removes draft metadata and, when safe, the temporary file. */
+  const releaseCurrentDraft = async () => {
+    const draftId = draftIdRef.current;
+    rememberDraftId(null);
+    setDraftQueryParam(null);
+    if (draftId) await discardPendingDocumentIntakeDraft(draftId);
+  };
+
+  /** Removes only the draft metadata; the file stays (committed or shared). */
+  const forgetCurrentDraftMetadata = async () => {
+    const draftId = draftIdRef.current;
+    rememberDraftId(null);
+    setDraftQueryParam(null);
+    if (draftId) await forgetUploadDraftMetadata(draftId);
+  };
+
   const discardScan = () => {
     discardPendingDocumentIntake(pendingScan);
+    void releaseCurrentDraft();
     setPendingScan(null);
     setConfirmError(null);
   };
@@ -208,10 +390,37 @@ export function ScanPage() {
     await processFile(file);
   };
 
+  /**
+   * The same real inputs in every page state — only one branch renders at a time,
+   * so openFilePicker works in the preview and error views too.
+   */
+  const captureInputs = (
+    <>
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept={SCAN_FILE_ACCEPT}
+        capture="environment"
+        className="sr-only"
+        data-testid="scan-camera-input"
+        onChange={handleFileChange}
+      />
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept={SCAN_FILE_ACCEPT}
+        className="sr-only"
+        data-testid="scan-gallery-input"
+        onChange={handleFileChange}
+      />
+    </>
+  );
+
   if (uploadError) {
     return (
       <div className="page scan-page" data-testid="scan-page">
         <PageHeader title={translate('scan.title')} subtitle={translate('scan.subtitle')} />
+        {captureInputs}
         <DocumentUploadErrorPanel
           errorCode={uploadError}
           translate={translate}
@@ -240,6 +449,7 @@ export function ScanPage() {
     return (
       <div className="page scan-page" data-testid="scan-page">
         <PageHeader title={translate('scan.title')} subtitle={translate('scan.ocr.previewSubtitle')} />
+        {captureInputs}
         {showKindPicker ? (
           <Card className="upload-kind-picker-card">
             <CardTitle>{translate('docAssistant.changeType')}</CardTitle>
@@ -315,21 +525,7 @@ export function ScanPage() {
         <CardTitle>{translate('scan.captureTitle')}</CardTitle>
         <CardMeta>{translate('docAssistant.autoDetect')}</CardMeta>
 
-        <input
-          ref={cameraInputRef}
-          type="file"
-          accept={SCAN_FILE_ACCEPT}
-          capture="environment"
-          className="sr-only"
-          onChange={handleFileChange}
-        />
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept={SCAN_FILE_ACCEPT}
-          className="sr-only"
-          onChange={handleFileChange}
-        />
+        {captureInputs}
 
         <div className="upload-actions">
           <Button
