@@ -21,9 +21,13 @@ import { buildInvoicePrintModel, buildInvoicePrintModelFromInvoice } from './inv
 import { lineTotalMoney, roundMoney, taxCentsFromNet, toCents, fromCents } from './invoiceMoney';
 import { getInvoiceNumberSequenceSnapshot, resetInvoiceNumberSequence } from './invoiceNumberService';
 import { getVorgangById, hydrateVorgangStore } from './vorgangService';
+import { setActiveStorageScope } from './storage/storageScopeService';
+import { resetInvoiceDraftDurabilityDatabaseForTests } from './invoice/invoiceDraftDurabilityService';
+import * as workspaceSyncPayloadService from './workspace/workspaceSyncPayloadService';
 import type { InvoiceDraft } from '../types/models';
 
 const setupComplete = { ...DEFAULT_SETUP, setupComplete: true, taxStatus: 'standard_19' as const };
+const PILOT_WORKSPACE = 'ws-pilot-gate01';
 
 const companyOk = {
   ...DEFAULT_COMPANY_PROFILE,
@@ -211,11 +215,21 @@ describe('INVOICE-NORMAL-GATE-01 UI', () => {
   let root: Root;
   let host: HTMLDivElement;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     resetInvoiceNumberSequence();
     hydrateDocumentStore([]);
     hydrateCompanyProfileStore(companyOk);
     hydrateVorgangStore([createTestVorgang()]);
+    /*
+     * INVOICE-DURABILITY-PRODUCTION-WIRING-01B1 — das Rechnungsmodul setzt im
+     * Pilotbetrieb einen angemeldeten Firmen-Workspace voraus. Rein
+     * synthetischer Scope; alle fachlichen Prüfungen bleiben unverändert.
+     */
+    setActiveStorageScope({ type: 'workspace', workspaceId: PILOT_WORKSPACE });
+    vi.spyOn(workspaceSyncPayloadService, 'resolveCloudWorkspaceId').mockReturnValue(
+      PILOT_WORKSPACE,
+    );
+    await resetInvoiceDraftDurabilityDatabaseForTests();
     host = document.createElement('div');
     document.body.appendChild(host);
     root = createRoot(host);
@@ -239,6 +253,13 @@ describe('INVOICE-NORMAL-GATE-01 UI', () => {
         </MemoryRouter>,
       );
     });
+    // 01B1 — der Entwurf entsteht asynchron aus IndexedDB.
+    for (let attempt = 0; attempt < 60; attempt += 1) {
+      if (host.querySelector('[data-testid="rechnung-page"]')) break;
+      await act(async () => {
+        await new Promise((done) => setTimeout(done, 0));
+      });
+    }
 
     expect(host.querySelector('[data-testid="invoice-approve"]')).toBeNull();
     expect(host.textContent).not.toMatch(/Drucken|PDF speichern/i);

@@ -17,10 +17,18 @@ import { getCustomerById, hydrateCustomerStore } from './services/customerStoreS
 import { hydrateDocumentStore } from './services/documentService';
 import { setTaskStoreForTests } from './services/taskStore';
 import { getVorgangById, hydrateVorgangStore } from './services/vorgangService';
+import { setActiveStorageScope } from './services/storage/storageScopeService';
+import {
+  loadInvoiceDraftRecordByLocator,
+  resetInvoiceDraftDurabilityDatabaseForTests,
+} from './services/invoice/invoiceDraftDurabilityService';
+import type { InvoiceDraftRecord } from './types/invoiceDraftDurability';
+import * as workspaceSyncPayloadService from './services/workspace/workspaceSyncPayloadService';
 import { createTestVorgang } from './test/fixtures';
 import type { Customer, CustomerBilling, Vorgang, VorgangInvoice } from './types/models';
 
 const completeSetup = { ...DEFAULT_SETUP, setupComplete: true, setupVersion: 1 };
+const PILOT_WORKSPACE = 'ws-pilot-05b';
 const OWN = 'Cirmak Haustechnik GmbH';
 const SAME_NAME = 'NordWest Dachbau GmbH';
 
@@ -73,11 +81,16 @@ function TestHarness() {
   );
 }
 
-function mountInvoice(vorgangId: string) {
+/*
+ * 01B1 — der Entwurf entsteht seit der Durability-Anbindung asynchron aus
+ * IndexedDB. Der Mount wartet deshalb, bis die Seite steht; die fachlichen
+ * Prüfungen darunter bleiben unverändert.
+ */
+async function mountInvoice(vorgangId: string) {
   const container = document.createElement('div');
   document.body.appendChild(container);
   const root = createRoot(container);
-  act(() => {
+  await act(async () => {
     root.render(
       <MemoryRouter initialEntries={[`/vorgaenge/${vorgangId}/rechnung?type=rechnung`]}>
         <AppProvider initialSetup={completeSetup}>
@@ -85,7 +98,14 @@ function mountInvoice(vorgangId: string) {
         </AppProvider>
       </MemoryRouter>,
     );
+    await Promise.resolve();
   });
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    if (container.querySelector('[data-testid="rechnung-page"]')) break;
+    await act(async () => {
+      await new Promise((done) => setTimeout(done, 0));
+    });
+  }
   return {
     container,
     unmount: () => {
@@ -93,6 +113,29 @@ function mountInvoice(vorgangId: string) {
       container.remove();
     },
   };
+}
+
+/**
+ * Wartet auf einen vom Kern **bestätigten** Entwurfsstand — keine feste
+ * Wartezeit, kein `sleep`: es wird der gespeicherte Datensatz gelesen, bis die
+ * Bedingung gilt.
+ */
+async function waitForStoredDraft(
+  matches: (record: InvoiceDraftRecord) => boolean,
+): Promise<InvoiceDraftRecord> {
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    const stored = await loadInvoiceDraftRecordByLocator({
+      sourceScopeKey: `workspace:${PILOT_WORKSPACE}`,
+      workspaceId: PILOT_WORKSPACE,
+      vorgangId: 'v-05b',
+      invoiceType: 'rechnung',
+    });
+    if (stored.ok && matches(stored.record)) return stored.record;
+    await act(async () => {
+      await new Promise((done) => setTimeout(done, 0));
+    });
+  }
+  throw new Error('Kein bestätigter Entwurfsstand mit der erwarteten Anschrift.');
 }
 
 function click(container: HTMLElement, testId: string): void {
@@ -187,20 +230,30 @@ function seedVorgang(overrides: Partial<Vorgang> = {}): Vorgang {
 }
 
 describe('CUSTOMER-FACHOBJEKT-05B', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     localStorage.clear();
     hydrateCustomerStore([]);
     hydrateVorgangStore([]);
     hydrateDocumentStore([]);
     setTaskStoreForTests([]);
     hydrateCompanyProfileStore({ ...getCompanyProfile(), companyName: OWN });
+    /*
+     * INVOICE-DURABILITY-PRODUCTION-WIRING-01B1 — das Rechnungsmodul setzt im
+     * Pilotbetrieb einen angemeldeten Firmen-Workspace voraus. Rein
+     * synthetischer Scope, damit die Entwurfssitzung überhaupt entsteht.
+     */
+    setActiveStorageScope({ type: 'workspace', workspaceId: PILOT_WORKSPACE });
+    vi.spyOn(workspaceSyncPayloadService, 'resolveCloudWorkspaceId').mockReturnValue(
+      PILOT_WORKSPACE,
+    );
+    await resetInvoiceDraftDurabilityDatabaseForTests();
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it('Fall A — Quelle, Vorschau und Bestätigung ohne jede Änderung', () => {
+  it('Fall A — Quelle, Vorschau und Bestätigung ohne jede Änderung', async () => {
     const a = seedCustomer({ ...OLD_BILLING });
     const b = seedCustomer({ ...OLD_BILLING, street: 'Seeufer 9', zip: '88131', city: 'Lindau' });
     expect(a.id).not.toBe(b.id);
@@ -212,7 +265,7 @@ describe('CUSTOMER-FACHOBJEKT-05B', () => {
     expect(updated.success).toBe(true);
     expect(getVorgangById('v-05b')!.customerBilling).toEqual(OLD_BILLING);
 
-    const view = mountInvoice('v-05b');
+    const view = await mountInvoice('v-05b');
     const { container } = view;
     openEditStep(container);
 
@@ -269,7 +322,7 @@ describe('CUSTOMER-FACHOBJEKT-05B', () => {
     view.unmount();
   });
 
-  it('Fall B — Bestätigung übernimmt alle sieben Felder nur in den Entwurf', () => {
+  it('Fall B — Bestätigung übernimmt alle sieben Felder nur in den Entwurf', async () => {
     const a = seedCustomer({ ...OLD_BILLING });
     const b = seedCustomer({ ...OLD_BILLING, street: 'Seeufer 9', zip: '88131', city: 'Lindau' });
     seedVorgang({ customerId: a.id });
@@ -279,7 +332,7 @@ describe('CUSTOMER-FACHOBJEKT-05B', () => {
     const vorgangBefore = getVorgangById('v-05b')!;
     expect(vorgangBefore.invoices[0]!.customerSnapshot).toEqual(INVOICE_SNAPSHOT);
 
-    const view = mountInvoice('v-05b');
+    const view = await mountInvoice('v-05b');
     const { container } = view;
     openEditStep(container);
 
@@ -336,18 +389,26 @@ describe('CUSTOMER-FACHOBJEKT-05B', () => {
     view.unmount();
   });
 
-  it('Fall C — Legacy, Orphan und Unknown erhalten keine Aktion', () => {
+  it('Fall C — Legacy, Orphan und Unknown erhalten keine Aktion', async () => {
     // Legacy ohne customerId.
     seedVorgang({});
-    const legacy = mountInvoice('v-05b');
+    const legacy = await mountInvoice('v-05b');
     openEditStep(legacy.container);
     expect(draftFields(legacy.container)).toEqual(OLD_BILLING);
     expect(legacy.container.querySelector('[data-testid="invoice-customer-master"]')).toBeNull();
     legacy.unmount();
 
+    /*
+     * 01B1 — die drei Szenarien sind fachlich unabhängig, teilen sich aber
+     * Vorgang und Rechnungsart und damit denselben Entwurfs-Locator. Seit der
+     * Durability-Anbindung überlebt ein Entwurf den Unmount, deshalb wird die
+     * Isolation hier ausdrücklich wiederhergestellt. Keine Erwartung geändert.
+     */
+    await resetInvoiceDraftDurabilityDatabaseForTests();
+
     // Orphan: customerId ohne Customer im Store.
     seedVorgang({ customerId: 'cust-nicht-im-store' });
-    const orphan = mountInvoice('v-05b');
+    const orphan = await mountInvoice('v-05b');
     openEditStep(orphan.container);
     expect(draftFields(orphan.container)).toEqual(OLD_BILLING);
     expect(orphan.container.querySelector('[data-testid="invoice-customer-master"]')).toBeNull();
@@ -364,15 +425,16 @@ describe('CUSTOMER-FACHOBJEKT-05B', () => {
       email: '',
       phone: '',
     };
+    await resetInvoiceDraftDurabilityDatabaseForTests();
     seedVorgang({ customer: '', customerExplicitlyUnknown: true, customerBilling: unknownBilling });
-    const unknown = mountInvoice('v-05b');
+    const unknown = await mountInvoice('v-05b');
     openEditStep(unknown.container);
     expect(draftFields(unknown.container)).toEqual(unknownBilling);
     expect(unknown.container.querySelector('[data-testid="invoice-customer-master"]')).toBeNull();
     unknown.unmount();
   });
 
-  it('Fall D — unvollständige Stammanschrift deaktiviert die Aktion', () => {
+  it('Fall D — unvollständige Stammanschrift deaktiviert die Aktion', async () => {
     const a = seedCustomer({
       ...OLD_BILLING,
       name: 'Ohne Anschrift GmbH',
@@ -382,7 +444,7 @@ describe('CUSTOMER-FACHOBJEKT-05B', () => {
     });
     seedVorgang({ customerId: a.id });
 
-    const view = mountInvoice('v-05b');
+    const view = await mountInvoice('v-05b');
     const { container } = view;
     openEditStep(container);
 
@@ -404,11 +466,11 @@ describe('CUSTOMER-FACHOBJEKT-05B', () => {
     view.unmount();
   });
 
-  it('Fall E — zwischenzeitlich entfernter Customer wird sicher behandelt', () => {
+  it('Fall E — zwischenzeitlich entfernter Customer wird sicher behandelt', async () => {
     const a = seedCustomer({ ...MASTER });
     seedVorgang({ customerId: a.id });
 
-    const view = mountInvoice('v-05b');
+    const view = await mountInvoice('v-05b');
     const { container } = view;
     openEditStep(container);
     // Positive Vorbedingungen: Block, Quelle und Entwurfsstand.
@@ -445,26 +507,39 @@ describe('CUSTOMER-FACHOBJEKT-05B', () => {
     view.unmount();
   });
 
-  it('Fall F — erneutes Öffnen baut den Entwurf wieder aus dem Vorgang auf', () => {
+  it('Fall F — ein bestätigt gespeicherter Entwurf wird beim erneuten Öffnen nicht neu aus dem Vorgang aufgebaut', async () => {
     const a = seedCustomer({ ...OLD_BILLING });
     seedVorgang({ customerId: a.id });
     expect(updateCustomer(a.id, MASTER).success).toBe(true);
 
-    const first = mountInvoice('v-05b');
+    const first = await mountInvoice('v-05b');
     openEditStep(first.container);
     click(first.container, 'invoice-customer-master-action');
     click(first.container, 'invoice-customer-master-apply');
     expect(draftFields(first.container)).toEqual(MASTER);
+
+    /*
+     * INVOICE-DURABILITY-PRODUCTION-WIRING-01B2 — auf den **tatsächlich
+     * bestätigten** Speichervorgang warten, nicht auf eine feste Zeit: der
+     * Kerndatensatz wird gelesen, bis er die übernommene Stammanschrift
+     * wirklich enthält.
+     */
+    const saved = await waitForStoredDraft((record) =>
+      record.draftRawJson.includes(MASTER.street),
+    );
+    expect(saved.draftRawJson).toContain(MASTER.zip);
+    expect(saved.draftRawJson).toContain(MASTER.city);
     first.unmount();
 
-    const second = mountInvoice('v-05b');
+    // Derselbe Locator, neu geöffnet.
+    const second = await mountInvoice('v-05b');
     openEditStep(second.container);
-    // Keine automatische Wiederübernahme.
-    expect(draftFields(second.container)).toEqual(OLD_BILLING);
-    const action = second.container.querySelector(
-      '[data-testid="invoice-customer-master-action"]',
-    ) as HTMLButtonElement;
-    expect(action.disabled).toBe(false);
+
+    // Der bestätigte Stand bleibt vollständig erhalten …
+    expect(draftFields(second.container)).toEqual(MASTER);
+    // … und der alte Vorgangssnapshot wird nicht wiederhergestellt.
+    expect(draftFields(second.container)).not.toEqual(OLD_BILLING);
+    expect(second.container.textContent).not.toContain(OLD_BILLING.street);
     second.unmount();
   });
 });

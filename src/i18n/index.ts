@@ -2029,6 +2029,26 @@ const deLegacy = {
     'Cloud-Freigabe erfolgreich, lokale Speicherung fehlgeschlagen. Bitte erneut freigeben – keine zweite Rechnung.',
   'invoice.approve.archiveWarning': 'Rechnung freigegeben, Archiv/PDF konnte nicht erzeugt werden.',
   'invoice.approved': 'Rechnung freigegeben und gespeichert.',
+  'invoice.session.noWorkspaceTitle': 'Rechnung nur mit Firmen-Workspace',
+  'invoice.session.noWorkspace':
+    'Rechnungen können nur in einem angemeldeten Firmen-Workspace bearbeitet und freigegeben werden. Bitte anmelden und den Workspace auswählen.',
+  'invoice.session.conflict':
+    'Der Entwurf wurde an anderer Stelle geändert. Bitte die Seite neu laden, bevor weitergearbeitet wird.',
+  'invoice.session.storage':
+    'Der Entwurf kann derzeit nicht gespeichert werden. Änderungen sind gesperrt, damit nichts verloren geht.',
+  'invoice.session.finalizationPending':
+    'Eine Freigabe dieser Rechnung läuft noch. Der Entwurf ist bis zum Abschluss gesperrt.',
+  'invoice.session.alreadyFinalized':
+    'Diese Rechnung wurde bereits freigegeben. Der Entwurf ist abgeschlossen.',
+  'invoice.resume.reloadRequired':
+    'Der Cloud-Zustand dieser Freigabe ist ungewiss. Bitte die Seite neu laden – es wird kein zweiter Versuch gestartet.',
+  'invoice.resume.blocked':
+    'Die begonnene Freigabe konnte nicht abgeschlossen werden und bleibt gesperrt. Bitte den Vorgang prüfen.',
+  'invoice.resume.retry':
+    'Die begonnene Freigabe wurde unterbrochen. Sie kann erneut versucht werden.',
+  'invoice.resume.retryAction': 'Erneut versuchen',
+  'invoice.resume.reloadAction': 'Neu laden',
+  'invoice.session.openFinalized': 'Fertige Rechnung öffnen',
   'invoice.draftNumberLabel': 'Entwurf',
   'invoice.taxNoticeTitle': 'Steuerhinweis',
   'invoice.taxNotice.standard19': 'Umsatzsteuer wird zum regulären Steuersatz ausgewiesen.',
@@ -4259,6 +4279,24 @@ const trLegacy: Partial<Record<keyof typeof de, string>> = {
   'invoice.approve.conflict': 'Fatura onayında çakışma. Lütfen taslağı kontrol edin.',
   'invoice.approve.archiveWarning': 'Fatura onaylandı, arşiv/PDF oluşturulamadı.',
   'invoice.approved': 'Fatura onaylandı ve kaydedildi.',
+  'invoice.session.noWorkspaceTitle': 'Fatura yalnızca firma çalışma alanında',
+  'invoice.session.noWorkspace':
+    'Faturalar yalnızca oturum açılmış bir firma çalışma alanında düzenlenebilir ve onaylanabilir. Lütfen oturum açın ve çalışma alanını seçin.',
+  'invoice.session.conflict':
+    'Taslak başka bir yerde değiştirildi. Devam etmeden önce lütfen sayfayı yeniden yükleyin.',
+  'invoice.session.storage':
+    'Taslak şu anda kaydedilemiyor. Veri kaybını önlemek için değişiklikler kilitlendi.',
+  'invoice.session.finalizationPending':
+    'Bu faturanın onayı hâlâ sürüyor. Taslak tamamlanana kadar kilitli.',
+  'invoice.session.alreadyFinalized': 'Bu fatura zaten onaylandı. Taslak tamamlandı.',
+  'invoice.resume.reloadRequired':
+    'Bu onayın bulut durumu belirsiz. Lütfen sayfayı yeniden yükleyin – ikinci bir deneme başlatılmaz.',
+  'invoice.resume.blocked':
+    'Başlatılan onay tamamlanamadı ve kilitli kalıyor. Lütfen işlemi kontrol edin.',
+  'invoice.resume.retry': 'Başlatılan onay kesildi. Yeniden denenebilir.',
+  'invoice.resume.retryAction': 'Yeniden dene',
+  'invoice.resume.reloadAction': 'Yeniden yükle',
+  'invoice.session.openFinalized': 'Tamamlanan faturayı aç',
   'invoice.draftNumberLabel': 'Taslak',
   'invoice.taxNoticeTitle': 'Vergi notu',
   'invoice.taxNotice.standard19': 'KDV standart oran üzerinden gösterilir.',
@@ -5066,6 +5104,24 @@ const bgLegacy: Partial<Record<keyof typeof de, string>> = {
   'invoice.approve.conflict': 'Конфликт при одобрение на фактурата. Проверете черновата.',
   'invoice.approve.archiveWarning': 'Фактурата е одобрена, архив/PDF не можа да се създаде.',
   'invoice.approved': 'Фактурата е одобрена и записана.',
+  'invoice.session.noWorkspaceTitle': 'Фактури само с фирмен работен обхват',
+  'invoice.session.noWorkspace':
+    'Фактури могат да се редактират и одобряват само във фирмен работен обхват след вход. Моля, влезте и изберете обхвата.',
+  'invoice.session.conflict':
+    'Черновата е променена другаде. Моля, презаредете страницата, преди да продължите.',
+  'invoice.session.storage':
+    'Черновата не може да бъде записана в момента. Промените са заключени, за да не се загуби нищо.',
+  'invoice.session.finalizationPending':
+    'Одобрението на тази фактура още тече. Черновата е заключена до приключване.',
+  'invoice.session.alreadyFinalized': 'Тази фактура вече е одобрена. Черновата е приключена.',
+  'invoice.resume.reloadRequired':
+    'Облачното състояние на това одобрение е несигурно. Моля, презаредете страницата – втори опит не се стартира.',
+  'invoice.resume.blocked':
+    'Започнатото одобрение не можа да приключи и остава заключено. Моля, проверете процеса.',
+  'invoice.resume.retry': 'Започнатото одобрение беше прекъснато. Може да се опита отново.',
+  'invoice.resume.retryAction': 'Опитай отново',
+  'invoice.resume.reloadAction': 'Презареди',
+  'invoice.session.openFinalized': 'Отвори готовата фактура',
   'invoice.draftNumberLabel': 'Чернова',
   'invoice.taxNoticeTitle': 'Данъчна бележка',
   'invoice.taxNotice.standard19': 'ДДС се посочва по стандартната ставка.',

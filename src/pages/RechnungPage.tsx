@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { InvoiceDocumentView } from '../components/invoice/InvoiceDocumentView';
 import { InvoiceDraftEditForm } from '../components/invoice/InvoiceDraftEditForm';
@@ -20,7 +20,15 @@ import {
   updateInvoiceDraftTaxStatus,
   validateInvoiceDraftForApproval,
 } from '../services/invoiceService';
-import { finalizeInvoiceDraftWithCloud } from '../services/invoice/invoiceCloudFinalizeOrchestrator';
+import { useInvoiceDraftDurabilitySession } from '../services/invoice/useInvoiceDraftDurabilitySession';
+import {
+  resumeInvoiceDraftFinalization,
+  startInvoiceDraftFinalization,
+} from '../services/invoice/invoiceFinalizationCoordinator';
+import { buildDocumentBlobScopeKey } from '../services/storage/documentBlobScopeService';
+import { getActiveStorageScope } from '../services/storage/storageScopeService';
+import { buildPersistedStateSnapshot } from '../services/persistenceService';
+import { resolveCloudWorkspaceId } from '../services/workspace/workspaceSyncPayloadService';
 import { buildInvoicePrintModel } from '../services/invoicePrintModel';
 import {
   CONTRACT_ORDER_INVOICE_TYPES,
@@ -37,14 +45,38 @@ import { getCustomerById } from '../services/customerStoreService';
 import { getVorgangById } from '../services/vorgangService';
 import type {
   InvoiceCalculationMode,
-  InvoiceDraft,
   InvoiceDraftMetadataChanges,
   InvoiceDocumentType,
   TaxStatus,
 } from '../types/models';
+import type {
+  InvoiceDraftLocator,
+  InvoiceDraftRecord,
+} from '../types/invoiceDraftDurability';
+import type { InvoiceFinalizationRecovery } from '../services/invoice/invoiceFinalizationCoordinator';
 import type { TranslationKey } from '../i18n';
 
 type RechnungStep = 'positions' | 'preview' | 'edit';
+
+/*
+ * Beide Werte müssen exakt so entstehen wie im Preflight des Coordinators —
+ * eine abweichende Ableitung führte dort zu `scope_mismatch`.
+ */
+function resolveActiveScopeKey(): string {
+  try {
+    return buildDocumentBlobScopeKey(getActiveStorageScope());
+  } catch {
+    return '';
+  }
+}
+
+function resolveActiveWorkspaceId(): string {
+  try {
+    return resolveCloudWorkspaceId(buildPersistedStateSnapshot()).trim();
+  } catch {
+    return '';
+  }
+}
 
 const TAX_OPTIONS: TaxStatus[] = [
   'standard_19',
@@ -61,7 +93,6 @@ export function RechnungPage() {
   const navigate = useNavigate();
   const invoiceType = parseInvoiceDocumentType(searchParams.get('type'));
 
-  const [draft, setDraft] = useState<InvoiceDraft | null>(null);
   const [step, setStep] = useState<RechnungStep>('positions');
   const [showOverbillingConfirm, setShowOverbillingConfirm] = useState(false);
   const [applyContractSkonto, setApplyContractSkonto] = useState(false);
@@ -86,13 +117,38 @@ export function RechnungPage() {
     return intelligence?.progressBillingAllowed ?? false;
   }, [vorgang]);
 
+  /*
+   * INVOICE-DURABILITY-PRODUCTION-WIRING-01B — der Entwurf lebt nicht mehr im
+   * React-Zustand, sondern in der dauerhaften Sitzung. Der Locator entsteht
+   * aus aktivem Scope, Workspace, Vorgang und Rechnungsart; fehlt eines davon,
+   * meldet die Sitzung `blocked_no_identity` und es wird nichts gespeichert.
+   */
+  const locator = useMemo<InvoiceDraftLocator | null>(() => {
+    if (!id) return null;
+    const sourceScopeKey = resolveActiveScopeKey();
+    const workspaceId = resolveActiveWorkspaceId();
+    if (!sourceScopeKey || !workspaceId) return null;
+    return { sourceScopeKey, workspaceId, vorgangId: id, invoiceType };
+  }, [id, invoiceType]);
+
+  /*
+   * Der Aufbau hängt bewusst **nicht** am Setup: ein Profilwechsel darf einen
+   * bereits gespeicherten Entwurf nicht still neu erzeugen. `createDraft` wird
+   * nur aufgerufen, wenn noch kein Datensatz existiert.
+   */
+  const setupRef = useRef(setup);
+  setupRef.current = setup;
+  const createDraft = useCallback(
+    () => (id ? buildInvoiceDraftForType(id, setupRef.current, invoiceType) : null),
+    [id, invoiceType],
+  );
+
+  const session = useInvoiceDraftDurabilitySession({ locator, createDraft });
+  const draft = session.draft;
+  const sessionStatus = session.status;
+  const mutateDraft = session.mutateDraft;
+
   useEffect(() => {
-    if (!id) {
-      setDraft(null);
-      return;
-    }
-    const next = buildInvoiceDraftForType(id, setup, invoiceType);
-    setDraft(next);
     setStep('positions');
     setApplyContractSkonto(false);
     setReverseCharge13bConfirmed(false);
@@ -102,18 +158,94 @@ export function RechnungPage() {
     setApproving(false);
     setCustomerMasterConfirm(false);
     setCustomerMasterError(null);
-  }, [id, invoiceType, setup]);
+  }, [id, invoiceType]);
 
   useEffect(() => {
-    if (!draft) return;
+    if (!draft || session.readOnly) return;
     const skontoText =
       applyContractSkonto && contractSkontoOffer ? contractSkontoOffer.text : '';
-    setDraft((prev) =>
-      prev && prev.skontoText !== skontoText
-        ? updateInvoiceDraftMetadata(prev, { skontoText })
-        : prev,
+    if (draft.skontoText === skontoText) return;
+    mutateDraft((prev) =>
+      prev.skontoText === skontoText ? prev : updateInvoiceDraftMetadata(prev, { skontoText }),
     );
-  }, [applyContractSkonto, contractSkontoOffer, draft?.id]);
+  }, [applyContractSkonto, contractSkontoOffer, draft, mutateDraft, session.readOnly]);
+
+  /*
+   * Eine unterbrochene Finalisierung wird genau **einmal** wiederaufgenommen —
+   * auch unter StrictMode, weil der Wächter an der Datensatzidentität hängt
+   * und nicht am Effektlauf.
+   */
+  const resumedKeyRef = useRef<string | null>(null);
+  const retryLockRef = useRef(false);
+  const [resumeRecovery, setResumeRecovery] = useState<InvoiceFinalizationRecovery | null>(null);
+
+  /**
+   * Einziger Wiederaufnahmeweg. Er ruft **ausschließlich**
+   * `resumeInvoiceDraftFinalization` — niemals `startInvoiceDraftFinalization`,
+   * damit nach einer begonnenen Finalisierung keine zweite Rechnung entsteht.
+   */
+  const runResume = useCallback(
+    async (record: InvoiceDraftRecord): Promise<void> => {
+      if (retryLockRef.current) return;
+      retryLockRef.current = true;
+      try {
+        const result = await resumeInvoiceDraftFinalization({
+          identity: {
+            sourceScopeKey: record.sourceScopeKey,
+            workspaceId: record.workspaceId,
+            vorgangId: record.vorgangId,
+            invoiceType: record.invoiceType,
+            draftId: record.draftId,
+          },
+        });
+        if (result.ok) {
+          setResumeRecovery(null);
+          showToast(translate('invoice.approved'));
+          // Nur mit belegter Rechnung navigieren — sonst bleibt die Seite stehen.
+          if (result.invoice) {
+            navigate(`/vorgaenge/${record.vorgangId}/rechnungen/${result.invoice.id}`);
+          }
+          return;
+        }
+        /*
+         * Der Recovery-Zustand wird verständlich abgebildet und steuert die
+         * angebotene Aktion. Es wird nie selbsttätig erneut versucht.
+         */
+        setResumeRecovery(result.recovery);
+        showToast(
+          translate(
+            result.recovery === 'reload_required'
+              ? 'invoice.resume.reloadRequired'
+              : result.recovery === 'retry_allowed'
+                ? 'invoice.resume.retry'
+                : 'invoice.resume.blocked',
+          ),
+        );
+      } finally {
+        retryLockRef.current = false;
+      }
+    },
+    [navigate, showToast, translate],
+  );
+
+  useEffect(() => {
+    if (sessionStatus !== 'finalization_pending') return;
+    const record = session.record;
+    if (!record) return;
+    const key = `${record.recordKey}#${record.revision}`;
+    if (resumedKeyRef.current === key) return;
+    resumedKeyRef.current = key;
+    void runResume(record);
+  }, [sessionStatus, session.record, runResume]);
+
+  /** Ausdrückliche Nutzeraktion — dieselbe Sperre wie der automatische Lauf. */
+  const handleResumeRetry = () => {
+    const record = session.record;
+    if (!record) return;
+    void runResume(record);
+  };
+
+  const finalizedInvoiceId = session.record?.finalization?.finalizedInvoiceId ?? null;
 
   const totals = draft ? calculateInvoiceTotals(draft, setup) : null;
   const printModel = useMemo(
@@ -150,6 +282,46 @@ export function RechnungPage() {
     );
   }
 
+  /*
+   * INVOICE-DURABILITY-PRODUCTION-WIRING-01B1 — Pilotentscheidung: das
+   * Rechnungsmodul setzt einen angemeldeten Firmen-Workspace voraus. Ohne
+   * gültigen Workspace-Scope entsteht **kein** Locator, also auch kein
+   * Entwurf, kein Datenbankzugriff, kein Autosave und keine Freigabe. Das wird
+   * ausdrücklich als Sperre angezeigt — nie als dauerhaftes „Laden…".
+   */
+  if (!locator || sessionStatus === 'blocked_no_identity') {
+    return (
+      <div className="page" data-testid="rechnung-blocked-no-workspace">
+        <button type="button" className="back-link" onClick={() => navigate(`/vorgaenge/${id}`)}>
+          ← {translate('common.back')}
+        </button>
+        <EmptyStateBlock
+          title={translate('invoice.session.noWorkspaceTitle')}
+          description={translate('invoice.session.noWorkspace')}
+          testId="invoice-no-workspace"
+        />
+      </div>
+    );
+  }
+
+  if (sessionStatus === 'blocked_conflict' || sessionStatus === 'blocked_storage') {
+    const conflict = sessionStatus === 'blocked_conflict';
+    return (
+      <div className="page" data-testid="rechnung-blocked-session">
+        <button type="button" className="back-link" onClick={() => navigate(`/vorgaenge/${id}`)}>
+          ← {translate('common.back')}
+        </button>
+        <EmptyStateBlock
+          title={translate('invoice.title')}
+          description={translate(
+            conflict ? 'invoice.session.conflict' : 'invoice.session.storage',
+          )}
+          testId={conflict ? 'invoice-session-conflict' : 'invoice-session-storage'}
+        />
+      </div>
+    );
+  }
+
   if (!draft || !printModel) {
     return (
       <div className="page">
@@ -158,12 +330,19 @@ export function RechnungPage() {
     );
   }
 
+  /*
+   * Eine laufende oder bereits abgeschlossene Finalisierung sperrt Bearbeitung
+   * und Freigabe gleichermaßen.
+   */
+  const finalizationLocked =
+    sessionStatus === 'finalization_pending' || sessionStatus === 'already_finalized';
+
   const pageTitle = draft
     ? getInvoiceDocumentTitle(draft.type, draft.abschlagNumber)
     : translate('invoice.title');
 
   const handleApplyAllPositions = () => {
-    setDraft((prev) => (prev ? applyAllOpenPositionsToDraft(prev) : prev));
+    mutateDraft((prev) => applyAllOpenPositionsToDraft(prev));
   };
 
   const handleTypeChange = (type: InvoiceDocumentType) => {
@@ -174,16 +353,16 @@ export function RechnungPage() {
     if (taxStatus !== 'reverse_charge_13b') {
       setReverseCharge13bConfirmed(false);
     }
-    setDraft((prev) => (prev ? updateInvoiceDraftTaxStatus(prev, taxStatus) : prev));
+    mutateDraft((prev) => updateInvoiceDraftTaxStatus(prev, taxStatus));
   };
 
   const handleQuantityChange = (positionId: string, value: string) => {
     const qty = parseFloat(value) || 0;
-    setDraft((prev) => (prev ? updateDraftPositionQuantity(prev, positionId, qty) : prev));
+    mutateDraft((prev) => updateDraftPositionQuantity(prev, positionId, qty));
   };
 
   const handleMetadataChange = (changes: InvoiceDraftMetadataChanges) => {
-    setDraft((prev) => (prev ? updateInvoiceDraftMetadata(prev, changes) : prev));
+    mutateDraft((prev) => updateInvoiceDraftMetadata(prev, changes));
   };
 
   /**
@@ -213,8 +392,8 @@ export function RechnungPage() {
       setCustomerMasterError(translate('invoice.customerMaster.missing'));
       return;
     }
-    setDraft((prev) =>
-      prev ? updateInvoiceDraftMetadata(prev, { customerBilling: billingFromCustomer(current) }) : prev,
+    mutateDraft((prev) =>
+      updateInvoiceDraftMetadata(prev, { customerBilling: billingFromCustomer(current) }),
     );
     setCustomerMasterConfirm(false);
     setCustomerMasterError(null);
@@ -222,19 +401,25 @@ export function RechnungPage() {
   };
 
   const handleAbschlagModeChange = (mode: InvoiceCalculationMode) => {
-    setDraft((prev) => (prev ? setAbschlagDraftCalculationMode(prev, mode, setup) : prev));
+    mutateDraft((prev) => setAbschlagDraftCalculationMode(prev, mode, setup));
     setValidationErrors([]);
   };
 
   const handleFixedAmountChange = (value: string) => {
     const parsed = Number(String(value).replace(',', '.'));
-    setDraft((prev) =>
-      prev ? updateInvoiceDraftFixedAmountNet(prev, Number.isFinite(parsed) ? parsed : 0) : prev,
+    mutateDraft((prev) =>
+      updateInvoiceDraftFixedAmountNet(prev, Number.isFinite(parsed) ? parsed : 0),
     );
   };
 
   const runApproval = async () => {
     if (!id || !draft || approveLockRef.current || approving) return;
+    /*
+     * Gesperrte Sitzungszustände — `finalization_pending`, `already_finalized`,
+     * Speicherfehler, Konflikt und fehlende Identität — erlauben keine
+     * Finalisierung. Der Schreibschutz der Sitzung ist hier maßgeblich.
+     */
+    if (session.readOnly || session.blocked || !session.record) return;
     approveLockRef.current = true;
     setApproving(true);
 
@@ -257,31 +442,80 @@ export function RechnungPage() {
     }
 
     setValidationErrors([]);
-    const result = await finalizeInvoiceDraftWithCloud(id, draft, setup, {
-      reverseCharge13bConfirmed,
+
+    /*
+     * Der zuletzt bearbeitete Stand muss dauerhaft gespeichert sein, bevor die
+     * Finalisierung beginnt — der Coordinator arbeitet ausschließlich auf dem
+     * gespeicherten Datensatz.
+     */
+    const flushed = await session.flush();
+    if (!flushed.ok) {
+      showToast(
+        flushed.outcome === 'conflict'
+          ? translate('invoice.approve.conflict')
+          : translate('invoice.approve.localPersistPending'),
+      );
+      approveLockRef.current = false;
+      setApproving(false);
+      return;
+    }
+
+    const record = session.record;
+    if (!record) {
+      approveLockRef.current = false;
+      setApproving(false);
+      showToast(translate('invoice.approve.failed'));
+      return;
+    }
+
+    const result = await startInvoiceDraftFinalization({
+      identity: {
+        sourceScopeKey: record.sourceScopeKey,
+        workspaceId: record.workspaceId,
+        vorgangId: record.vorgangId,
+        invoiceType: record.invoiceType,
+        draftId: record.draftId,
+      },
+      expectedRevision: record.revision,
+      approvalOptions: { reverseCharge13bConfirmed },
+      overbillingAcknowledged: overbillingWarnings.length > 0,
     });
+
     if (!result.ok) {
-      if (result.reason === 'validation_failed' && result.validation) {
-        setValidationErrors(result.validation.blockingErrors.map((e) => e.messageKey));
-        showToast(translate('invoice.approve.blocked'));
-      } else if (result.reason === 'offline_or_unconfigured') {
+      if (result.reason === 'offline_or_unconfigured') {
         showToast(translate('invoice.approve.offline'));
       } else if (result.reason === 'auth_missing') {
         showToast(translate('invoice.approve.auth'));
-      } else if (result.reason === 'workspace_missing') {
+      } else if (
+        result.reason === 'workspace_missing' ||
+        result.reason === 'workspace_changed' ||
+        result.reason === 'scope_mismatch'
+      ) {
         showToast(translate('invoice.approve.workspace'));
       } else if (
+        result.reason === 'conflict' ||
         result.reason === 'idempotency_conflict' ||
-        result.reason === 'local_conflict'
+        result.reason === 'possible_existing_invoice'
       ) {
         showToast(translate('invoice.approve.conflict'));
-      } else if (result.reason === 'local_persist_failed') {
+      } else if (
+        result.reason === 'local_persist_failed' ||
+        result.reason === 'persist_failed'
+      ) {
         showToast(translate('invoice.approve.localPersistPending'));
       } else {
         showToast(translate('invoice.approve.failed'));
       }
-      approveLockRef.current = false;
-      setApproving(false);
+      /*
+       * Nur ein ausdrücklich wiederholbarer Ausgang gibt die Freigabe wieder
+       * frei. `reload_required` und `blocked` — darunter jeder ungewisse
+       * Cloudzustand — bleiben gesperrt; ein zweiter Versuch könnte sonst eine
+       * zweite Rechnung erzeugen.
+       */
+      if (result.recovery === 'retry_allowed') {
+        approveLockRef.current = false;
+        setApproving(false);
+      }
       return;
     }
 
@@ -657,18 +891,61 @@ export function RechnungPage() {
             </Card>
           )}
 
+          {finalizationLocked ? (
+            <Card className="invoice-validation" data-testid="invoice-session-locked">
+              <p>
+                {translate(
+                  sessionStatus === 'already_finalized'
+                    ? 'invoice.session.alreadyFinalized'
+                    : 'invoice.session.finalizationPending',
+                )}
+              </p>
+              {sessionStatus === 'already_finalized' && finalizedInvoiceId ? (
+                <Button
+                  onClick={() =>
+                    navigate(`/vorgaenge/${id}/rechnungen/${finalizedInvoiceId}`)
+                  }
+                  data-testid="invoice-open-finalized"
+                >
+                  {translate('invoice.session.openFinalized')}
+                </Button>
+              ) : null}
+              {sessionStatus === 'finalization_pending' && resumeRecovery === 'retry_allowed' ? (
+                <Button onClick={handleResumeRetry} data-testid="invoice-resume-retry">
+                  {translate('invoice.resume.retryAction')}
+                </Button>
+              ) : null}
+              {sessionStatus === 'finalization_pending' && resumeRecovery === 'reload_required' ? (
+                <Button
+                  variant="outline"
+                  onClick={() => window.location.reload()}
+                  data-testid="invoice-resume-reload"
+                >
+                  {translate('invoice.resume.reloadAction')}
+                </Button>
+              ) : null}
+            </Card>
+          ) : null}
+
           <div className="action-stack">
-            <Button fullWidth onClick={() => setStep('edit')} data-testid="invoice-edit">
-              {translate('invoice.edit')}
-            </Button>
             <Button
               fullWidth
-              onClick={handleApprove}
-              disabled={approving}
-              data-testid="invoice-approve"
+              onClick={() => setStep('edit')}
+              disabled={finalizationLocked}
+              data-testid="invoice-edit"
             >
-              {approving ? translate('invoice.approve.working') : translate('invoice.approve')}
+              {translate('invoice.edit')}
             </Button>
+            {finalizationLocked ? null : (
+              <Button
+                fullWidth
+                onClick={handleApprove}
+                disabled={approving}
+                data-testid="invoice-approve"
+              >
+                {approving ? translate('invoice.approve.working') : translate('invoice.approve')}
+              </Button>
+            )}
             <Button
               variant="outline"
               fullWidth
