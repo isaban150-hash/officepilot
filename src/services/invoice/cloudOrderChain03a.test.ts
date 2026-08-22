@@ -153,15 +153,23 @@ describe('CLOUD-ORDER-CHAIN-03A TypeScript binding', () => {
 
   it('rpcFinalizeWorkspaceInvoice mappt Erfolg und Idempotenz', async () => {
     const invoice = sampleInvoice();
+    /*
+     * 01P4E1C S4 — das Fixture lieferte bisher `payload: {}`. Das SQL gibt in
+     * allen drei Rückgaben `'invoice', v_existing.payload` und
+     * `'row', to_jsonb(v_existing)` zurück: `row.payload` **ist** derselbe
+     * JSONB-Inhalt wie `data.invoice`. Nur diese Fixture-Unwahrheit wird
+     * korrigiert; keine Produktionserwartung wird gelockert.
+     */
+    const cloudPayload = {
+      ...buildWorkspaceInvoiceFinalizePayload(invoice),
+      number: '2026-0003',
+      invoiceSequenceNumber: 3,
+      status: 'vorbereitet',
+    };
     const rpc = vi.fn().mockResolvedValue({
       data: {
         idempotent_replay: true,
-        invoice: {
-          ...buildWorkspaceInvoiceFinalizePayload(invoice),
-          number: '2026-0003',
-          invoiceSequenceNumber: 3,
-          status: 'vorbereitet',
-        },
+        invoice: cloudPayload,
         row: {
           id: 'cloud-row-1',
           workspace_id: 'ws-1',
@@ -172,7 +180,7 @@ describe('CLOUD-ORDER-CHAIN-03A TypeScript binding', () => {
           invoice_sequence_number: 3,
           invoice_type: 'abschlag',
           invoice_status: 'vorbereitet',
-          payload: {},
+          payload: cloudPayload,
           row_version: 1,
           created_at: '2026-07-23T10:00:00.000Z',
           updated_at: '2026-07-23T10:00:00.000Z',

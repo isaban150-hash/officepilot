@@ -32,8 +32,11 @@ import {
 } from './invoiceFinalizeIntentService';
 import * as workspaceInvoiceCloud from './workspaceInvoiceCloudService';
 import {
+  mapCloudPayloadToVorgangInvoice,
   mapWorkspaceInvoicePullRowToVorgangInvoice,
   parseWorkspaceInvoicePullRow,
+  rpcFinalizePreparedWorkspaceInvoice,
+  rpcFinalizeWorkspaceInvoice,
   rpcPullWorkspaceInvoiceRows,
   WorkspaceInvoiceCloudError,
 } from './workspaceInvoiceCloudService';
@@ -498,5 +501,1231 @@ describe('CLOUD-ORDER-CHAIN-03B2 RPC client errors', () => {
         } as never,
       }),
     ).rejects.toBeInstanceOf(WorkspaceInvoiceCloudError);
+  });
+});
+
+/* ========================================================================== *
+ * OFFICEPILOT-CROSS-PLATFORM-DRAFT-DURABILITY-01P4D2B2 — Falsy-Parität des
+ * Cloud-Payload-Mappings.
+ * ========================================================================== */
+
+/** Genau die optionalen Textfelder, die der Mapper heute abbildet. */
+const OPTIONAL_TEXT_FIELDS = [
+  'issueDate',
+  'servicePeriodFrom',
+  'servicePeriodTo',
+  'paymentDueDate',
+  'paymentTermsText',
+  'skontoText',
+  'introText',
+  'closingText',
+  'baustelle',
+  'vorgangTitle',
+  'sentAt',
+  'sentNote',
+] as const;
+
+function mapPayload(overrides: Record<string, unknown>): Record<string, unknown> {
+  const base = createAbschlagInvoice('op-test-1', 3, {
+    id: 'inv-cloud-1',
+    number: '2026-0001',
+    status: 'vorbereitet',
+  });
+  return mapCloudPayloadToVorgangInvoice({
+    ...(base as unknown as Record<string, unknown>),
+    ...overrides,
+  }) as unknown as Record<string, unknown>;
+}
+
+describe('01P4D2B2 — Falsy-Parität im Cloud-Payload-Mapping', () => {
+  it('Y1: ein leerer Textwert bleibt exakt leer', () => {
+    for (const field of OPTIONAL_TEXT_FIELDS) {
+      const mapped = mapPayload({ [field]: '' });
+      expect(field in mapped, field).toBe(true);
+      expect(mapped[field], field).toBe('');
+      expect(mapped[field], field).not.toBeUndefined();
+    }
+  });
+
+  it('Y2: fehlende, null- und ungültige Werte bleiben undefined', () => {
+    for (const field of OPTIONAL_TEXT_FIELDS) {
+      const missing = mapPayload({ [field]: undefined });
+      expect(missing[field], `${field}:missing`).toBeUndefined();
+
+      const nulled = mapPayload({ [field]: null });
+      expect(nulled[field], `${field}:null`).toBeUndefined();
+
+      // Keine Ersetzung durch '' und keine Trimmung.
+      const padded = mapPayload({ [field]: '  ' });
+      expect(padded[field], `${field}:padded`).toBe('  ');
+    }
+  });
+
+  it('Y3: gültige Null-Werte bleiben erhalten', () => {
+    const zeroed = mapPayload({
+      abschlagNumber: 0,
+      invoiceSequenceNumber: 0,
+      subtotal: 0,
+      amount: 0,
+      calculationMode: 'fixed_amount',
+      fixedAmountNet: 0,
+    });
+    expect(zeroed.abschlagNumber).toBe(0);
+    expect(zeroed.invoiceSequenceNumber).toBe(0);
+    expect(zeroed.subtotal).toBe(0);
+    expect(zeroed.amount).toBe(0);
+    expect(zeroed.fixedAmountNet).toBe(0);
+
+    const absent = mapPayload({
+      abschlagNumber: undefined,
+      invoiceSequenceNumber: undefined,
+      fixedAmountNet: undefined,
+    });
+    expect(absent.abschlagNumber).toBeUndefined();
+    expect(absent.invoiceSequenceNumber).toBeUndefined();
+    expect(absent.fixedAmountNet).toBeUndefined();
+  });
+
+  it('Y4: ungültige Typen werden nicht still in Text umgewandelt', () => {
+    for (const field of OPTIONAL_TEXT_FIELDS) {
+      for (const value of [5, true, false, { a: 1 }, ['x']]) {
+        const mapped = mapPayload({ [field]: value });
+        expect(mapped[field], `${field}:${JSON.stringify(value)}`).toBeUndefined();
+      }
+    }
+  });
+});
+
+/* ========================================================================== *
+ * OFFICEPILOT-CROSS-PLATFORM-DRAFT-DURABILITY-01P4D2B3 — vollständige
+ * Projektionsparität des Cloud-Payload-Mappings.
+ * ========================================================================== */
+
+describe('01P4D2B3 — vollständige Projektionsparität', () => {
+  it('Z1: expectedAmendmentSequence bleibt exakt erhalten', () => {
+    expect(mapPayload({ expectedAmendmentSequence: 0 }).expectedAmendmentSequence).toBe(0);
+    expect(mapPayload({ expectedAmendmentSequence: 7 }).expectedAmendmentSequence).toBe(7);
+
+    for (const invalid of [undefined, null, '0', 1.5, -1, true, {}, []]) {
+      const mapped = mapPayload({ expectedAmendmentSequence: invalid });
+      expect(
+        mapped.expectedAmendmentSequence,
+        `expectedAmendmentSequence:${JSON.stringify(invalid)}`,
+      ).toBeUndefined();
+    }
+  });
+
+  it('Z2: cancelledAt und cancelReason bleiben bytegenau erhalten', () => {
+    for (const field of ['cancelledAt', 'cancelReason'] as const) {
+      const kept = mapPayload({ [field]: '2026-08-01T10:00:00.000Z' });
+      expect(kept[field], field).toBe('2026-08-01T10:00:00.000Z');
+
+      // Ein leerer String ist ein gültiger Textwert und bleibt erhalten.
+      const empty = mapPayload({ [field]: '' });
+      expect(field in empty, `${field}:empty`).toBe(true);
+      expect(empty[field], `${field}:empty`).toBe('');
+
+      const padded = mapPayload({ [field]: '  ' });
+      expect(padded[field], `${field}:padded`).toBe('  ');
+
+      for (const invalid of [undefined, null, 5, true, {}, []]) {
+        const mapped = mapPayload({ [field]: invalid });
+        expect(mapped[field], `${field}:${JSON.stringify(invalid)}`).toBeUndefined();
+      }
+    }
+  });
+
+  it('Z3: Arrays werden nicht teilweise repariert', () => {
+    expect(mapPayload({ legalNotices: ['a', ''] }).legalNotices).toEqual(['a', '']);
+    expect(mapPayload({ legalNotices: [] }).legalNotices).toEqual([]);
+
+    // Keine String()-Umwandlung und keine Teilreparatur.
+    for (const invalid of [['a', 5], ['a', true], ['a', null], ['a', { b: 1 }], 'text', 5]) {
+      const mapped = mapPayload({ legalNotices: invalid });
+      expect(mapped.legalNotices, JSON.stringify(invalid)).toBeUndefined();
+    }
+
+    // Positionen bleiben unverändert; eine ungültige Liste wirft nicht.
+    const positions = mapPayload({ positions: 'kein Array' }).positions;
+    expect(positions).toEqual([]);
+  });
+
+  it('Z4: verbleibende Coercions sind fail-closed', () => {
+    // id, number, type und status stammen aus geprüften Zeilenspalten.
+    expect(parseWorkspaceInvoicePullRow({ ...cloudRow(), invoice_type: 'unbekannt' })).toBeNull();
+    expect(parseWorkspaceInvoicePullRow({ ...cloudRow(), invoice_status: 'bezahlt' })).toBeNull();
+    expect(parseWorkspaceInvoicePullRow({ ...cloudRow(), invoice_number: '' })).toBeNull();
+    expect(
+      parseWorkspaceInvoicePullRow({ ...cloudRow(), invoice_sequence_number: 0 }),
+    ).toBeNull();
+
+    // Der Parser prüft den Payload-Inhalt nicht — der Mapper muss es tun.
+    expect(mapPayload({ date: 5 }).date).toBe('');
+    expect(mapPayload({ createdAt: 5 }).createdAt).toBe('');
+    // Kein erfundener lokaler Zeitpunkt bei fehlendem createdAt.
+    expect(mapPayload({ createdAt: undefined }).createdAt).toBe('');
+    expect(mapPayload({ subtotal: '5' }).subtotal).toBeUndefined();
+    expect(mapPayload({ amount: '5' }).amount).toBeUndefined();
+    expect(mapPayload({ sentVia: 'fantasie' }).sentVia).toBeUndefined();
+    expect(mapPayload({ sentVia: 'email' }).sentVia).toBe('email');
+    expect(mapPayload({ customerSnapshot: 'text' }).customerSnapshot).toBeUndefined();
+    expect(mapPayload({ companySnapshot: ['x'] }).companySnapshot).toBeUndefined();
+    expect(mapPayload({ taxStatus: 5 }).taxStatus).toBeUndefined();
+  });
+});
+
+/* ========================================================================== *
+ * OFFICEPILOT-CROSS-PLATFORM-DRAFT-DURABILITY-01P4D2B4 — strenge Validierung
+ * vor Mapping, Merge und Persistenz.
+ * ========================================================================== */
+
+describe('01P4D2B4 — strenge Cloud-Pull-Validierung', () => {
+  it('P1: Rohzeilen werden ohne Coercion streng typgeprüft', () => {
+    const stringColumns = [
+      'id',
+      'workspace_id',
+      'vorgang_id',
+      'client_invoice_id',
+      'invoice_number',
+    ] as const;
+    for (const column of stringColumns) {
+      for (const invalid of [5, true, ['a'], { a: 1 }, null, undefined, '   ']) {
+        expect(
+          parseWorkspaceInvoicePullRow({ ...cloudRow(), [column]: invalid }),
+          `${column}:${JSON.stringify(invalid)}`,
+        ).toBeNull();
+      }
+    }
+
+    for (const column of ['invoice_type', 'invoice_status'] as const) {
+      for (const invalid of [['abschlag'], { toString: () => 'abschlag' }, 5, true]) {
+        expect(
+          parseWorkspaceInvoicePullRow({ ...cloudRow(), [column]: invalid }),
+          `${column}:${JSON.stringify(invalid)}`,
+        ).toBeNull();
+      }
+    }
+
+    for (const invalid of ['2026', null, 2026.5, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(
+        parseWorkspaceInvoicePullRow({ ...cloudRow(), invoice_year: invalid }),
+        `invoice_year:${String(invalid)}`,
+      ).toBeNull();
+    }
+
+    for (const invalid of ['1', 0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(
+        parseWorkspaceInvoicePullRow({ ...cloudRow(), invoice_sequence_number: invalid }),
+        `invoice_sequence_number:${String(invalid)}`,
+      ).toBeNull();
+    }
+
+    for (const invalid of ['1', 0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(
+        parseWorkspaceInvoicePullRow({ ...cloudRow(), row_version: invalid }),
+        `row_version:${String(invalid)}`,
+      ).toBeNull();
+    }
+
+    class Fremd {
+      readonly id = 'x';
+    }
+    for (const invalid of [[], new Fremd(), 'text', 5, null]) {
+      expect(
+        parseWorkspaceInvoicePullRow({ ...cloudRow(), payload: invalid }),
+        `payload:${JSON.stringify(String(invalid))}`,
+      ).toBeNull();
+    }
+
+    // Die gültige Zeile bleibt gültig.
+    expect(parseWorkspaceInvoicePullRow(cloudRow())).not.toBeNull();
+  });
+
+  it('P5: ungültiger Payload erhöht invalidCount vor jedem Mapping', () => {
+    const invalidPayloads: [string, Record<string, unknown>][] = [
+      ['date', { date: 5 }],
+      ['createdAt', { createdAt: {} }],
+      ['subtotal', { subtotal: '81' }],
+      ['amount', { amount: Number.NaN }],
+      ['taxStatus', { taxStatus: 'beliebig' }],
+      ['positions', { positions: {} }],
+      ['positionsfeld', { positions: [{ id: 'l', orderPositionId: 'o', description: 5 }] }],
+      ['snapshot', { customerSnapshot: { name: 5 } }],
+      ['abzuege', { previousAbschlagDeductions: [5] }],
+      ['legalNotices', { legalNotices: ['a', 5] }],
+    ];
+
+    const mapperSpy = vi.spyOn(workspaceInvoiceCloud, 'mapWorkspaceInvoicePullRowToVorgangInvoice');
+
+    for (const [label, overrides] of invalidPayloads) {
+      const base = cloudRow();
+      const row = {
+        ...base,
+        payload: { ...(base.payload as Record<string, unknown>), ...overrides },
+      };
+      expect(parseWorkspaceInvoicePullRow(row), label).toBeNull();
+
+      mapperSpy.mockClear();
+      const { mapped, invalidCount } = mapPullRowsIsolated([row], 'ws-1');
+      expect(invalidCount, label).toBe(1);
+      expect(mapped, label).toEqual([]);
+      expect(mapperSpy, label).not.toHaveBeenCalled();
+    }
+
+    // Ein Payload-Array wird ebenfalls abgewiesen.
+    expect(parseWorkspaceInvoicePullRow({ ...cloudRow(), payload: [] })).toBeNull();
+    mapperSpy.mockRestore();
+  });
+
+  it('P9: die Legacy-Finalisierungsantwort wird vor dem Mapping geprüft', async () => {
+    const invoice = createAbschlagInvoice('op-test-1', 3, {
+      id: 'inv-legacy-1',
+      number: '2026-0009',
+      invoiceSequenceNumber: 9,
+      status: 'vorbereitet',
+    });
+    const validPayload = { ...(invoice as unknown as Record<string, unknown>) };
+    delete validPayload.payments;
+    delete validPayload.paymentStatus;
+    delete validPayload.archiveDocumentId;
+
+    /*
+     * 01P4E1C S4 — das Fixture trug bisher nur fünf Spalten. Das SQL gibt mit
+     * `to_jsonb(v_existing)` die **vollständige** Tabellenzeile zurück,
+     * einschließlich `payload`, das mit `data.invoice` identisch ist.
+     */
+    const row = (invoicePayload: unknown) => ({
+      id: 'cloud-row-legacy',
+      workspace_id: 'ws-1',
+      vorgang_id: 'v-test-1',
+      client_invoice_id: 'inv-legacy-1',
+      invoice_number: '2026-0009',
+      invoice_year: 2026,
+      invoice_sequence_number: 9,
+      invoice_type: 'abschlag',
+      invoice_status: 'vorbereitet',
+      payload: invoicePayload,
+      row_version: 1,
+      created_at: '2026-08-21T10:00:00.000Z',
+      updated_at: '2026-08-21T10:00:00.000Z',
+    });
+
+    const respond = (invoicePayload: unknown) =>
+      ({
+        // 01P4E1B — die Hülle ist jetzt strikt; das Fixture liefert sie vollständig.
+        rpc: async () => ({
+          data: {
+            idempotent_replay: false,
+            invoice: invoicePayload,
+            row: row(invoicePayload),
+          },
+          error: null,
+        }),
+      }) as never;
+
+    // Gültige Antwort wird weiterhin exakt gemappt.
+    const ok = await rpcFinalizeWorkspaceInvoice(
+      {
+        workspaceId: 'ws-1',
+        vorgangId: 'v-test-1',
+        clientInvoiceId: 'inv-legacy-1',
+        invoice,
+      },
+      respond(validPayload),
+    );
+    expect(ok.invoice.id).toBe('inv-legacy-1');
+    expect(ok.invoice.amount).toBe(invoice.amount);
+    expect(ok.invoice.createdAt).toBe(invoice.createdAt);
+
+    // Ungültiger Pflichtfeldtyp wird typisiert abgelehnt — kein Teilergebnis.
+    for (const broken of [
+      { ...validPayload, amount: 'zwölf' },
+      { ...validPayload, createdAt: 5 },
+      { ...validPayload, positions: {} },
+      { ...validPayload, taxStatus: 'beliebig' },
+    ]) {
+      await expect(
+        rpcFinalizeWorkspaceInvoice(
+          {
+            workspaceId: 'ws-1',
+            vorgangId: 'v-test-1',
+            clientInvoiceId: 'inv-legacy-1',
+            invoice,
+          },
+          respond(broken),
+        ),
+      ).rejects.toBeInstanceOf(WorkspaceInvoiceCloudError);
+    }
+  });
+
+  it('P8: der normale Sync bleibt zeilenisoliert', () => {
+    const valid = cloudRow();
+    const base = cloudRow({ id: 'cloud-row-2', client_invoice_id: 'inv-cloud-2' });
+    const broken = {
+      ...base,
+      payload: { ...(base.payload as Record<string, unknown>), amount: 'zwölf' },
+    };
+
+    const { mapped, invalidCount } = mapPullRowsIsolated([valid, broken], 'ws-1');
+    expect(invalidCount).toBe(1);
+    expect(mapped.length).toBe(1);
+    expect(mapped[0]?.clientInvoiceId).toBe('inv-cloud-1');
+  });
+});
+
+/**
+ * OFFICEPILOT-CROSS-PLATFORM-DRAFT-DURABILITY-01P4E1B — strenge Hülle der
+ * Legacy-Finalisierungsantwort und Nachweis der Zeilenisolation am **echten**
+ * Pull-Orchestrator. Keine fachliche Identität, kein IDB- und kein
+ * Serververtrag wird hier verändert.
+ */
+describe('01P4E1B — strenge Legacy-RPC-Hülle', () => {
+  const legacyInvoice = () =>
+    createAbschlagInvoice('op-test-1', 3, {
+      id: 'inv-legacy-r1',
+      number: '2026-0011',
+      invoiceSequenceNumber: 11,
+      status: 'vorbereitet',
+    });
+
+  const legacyPayload = (): Record<string, unknown> => {
+    const payload = { ...(legacyInvoice() as unknown as Record<string, unknown>) };
+    delete payload.payments;
+    delete payload.paymentStatus;
+    delete payload.archiveDocumentId;
+    return payload;
+  };
+
+  const legacyRow = (overrides: Record<string, unknown> = {}) => ({
+    id: 'cloud-row-legacy-r1',
+    workspace_id: 'ws-1',
+    vorgang_id: 'v-test-1',
+    client_invoice_id: 'inv-legacy-r1',
+    invoice_number: '2026-0011',
+    invoice_year: 2026,
+    invoice_sequence_number: 11,
+    invoice_type: 'abschlag',
+    invoice_status: 'vorbereitet',
+    payload: legacyPayload(),
+    row_version: 4,
+    created_at: '2026-08-21T10:00:00.000Z',
+    updated_at: '2026-08-21T10:00:00.000Z',
+    ...overrides,
+  });
+
+  const respond = (data: unknown) => ({ rpc: async () => ({ data, error: null }) }) as never;
+
+  const finalize = (data: unknown) =>
+    rpcFinalizeWorkspaceInvoice(
+      {
+        workspaceId: 'ws-1',
+        vorgangId: 'v-test-1',
+        clientInvoiceId: 'inv-legacy-r1',
+        invoice: legacyInvoice(),
+      },
+      respond(data),
+    );
+
+  it('R1a: eine gültige Antwort bleibt in jedem Feld exakt erhalten', async () => {
+    const invoice = legacyInvoice();
+
+    const fresh = await finalize({
+      idempotent_replay: false,
+      invoice: legacyPayload(),
+      row: legacyRow(),
+    });
+    expect(fresh.idempotentReplay).toBe(false);
+    expect(fresh.cloudInvoiceId).toBe('cloud-row-legacy-r1');
+    expect(fresh.rowVersion).toBe(4);
+    expect(fresh.invoice.id).toBe('inv-legacy-r1');
+    expect(fresh.invoice.amount).toBe(invoice.amount);
+    expect(fresh.invoice.createdAt).toBe(invoice.createdAt);
+
+    const replay = await finalize({
+      idempotent_replay: true,
+      invoice: legacyPayload(),
+      row: legacyRow({ id: 'cloud-row-legacy-r2', row_version: 7 }),
+    });
+    expect(replay.idempotentReplay).toBe(true);
+    expect(replay.cloudInvoiceId).toBe('cloud-row-legacy-r2');
+    expect(replay.rowVersion).toBe(7);
+  });
+
+  it('R1b: der Payload wird weiterhin vor dem Mapper geprüft', async () => {
+    await expect(
+      finalize({
+        idempotent_replay: false,
+        invoice: { ...legacyPayload(), taxStatus: 'beliebig' },
+        row: legacyRow(),
+      }),
+    ).rejects.toBeInstanceOf(WorkspaceInvoiceCloudError);
+  });
+
+  it('R1c: idempotent_replay wird ausschließlich als echtes Boolean akzeptiert', async () => {
+    const broken: unknown[] = [0, 1, 'false', 'true', null, {}, [], undefined];
+    for (const value of broken) {
+      const data: Record<string, unknown> = { invoice: legacyPayload(), row: legacyRow() };
+      if (value !== undefined) data.idempotent_replay = value;
+      await expect(finalize(data), JSON.stringify(value ?? 'fehlend')).rejects.toBeInstanceOf(
+        WorkspaceInvoiceCloudError,
+      );
+    }
+  });
+
+  it('R1d: row muss ein reines Objekt sein', async () => {
+    for (const value of [undefined, null, [], 'row', 5, true]) {
+      const data: Record<string, unknown> = {
+        idempotent_replay: false,
+        invoice: legacyPayload(),
+      };
+      if (value !== undefined) data.row = value;
+      await expect(finalize(data), JSON.stringify(value ?? 'fehlend')).rejects.toBeInstanceOf(
+        WorkspaceInvoiceCloudError,
+      );
+    }
+  });
+
+  it('R1e: row.id muss ein nicht leerer echter String sein', async () => {
+    for (const value of [5, true, {}, [], '', '   ', null, undefined]) {
+      const row = legacyRow();
+      if (value === undefined) delete (row as Record<string, unknown>).id;
+      else (row as Record<string, unknown>).id = value;
+      await expect(
+        finalize({ idempotent_replay: false, invoice: legacyPayload(), row }),
+        JSON.stringify(value ?? 'fehlend'),
+      ).rejects.toBeInstanceOf(WorkspaceInvoiceCloudError);
+    }
+  });
+
+  it('R1f: row.row_version muss eine ganze Zahl grösser null sein', async () => {
+    for (const value of ['2', null, 0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, undefined]) {
+      const row = legacyRow();
+      if (value === undefined) delete (row as Record<string, unknown>).row_version;
+      else (row as Record<string, unknown>).row_version = value;
+      await expect(
+        finalize({ idempotent_replay: false, invoice: legacyPayload(), row }),
+        String(value ?? 'fehlend'),
+      ).rejects.toBeInstanceOf(WorkspaceInvoiceCloudError);
+    }
+  });
+
+  it('R1g: eine abgelehnte Hülle liefert niemals ein Teilergebnis', async () => {
+    const result = await finalize({
+      idempotent_replay: 1,
+      invoice: legacyPayload(),
+      row: legacyRow(),
+    }).then(
+      (value) => ({ resolved: true as const, value }),
+      (error: unknown) => ({ resolved: false as const, error }),
+    );
+    expect(result.resolved).toBe(false);
+    expect((result as { error: unknown }).error).toBeInstanceOf(WorkspaceInvoiceCloudError);
+    // Die bestehende fachliche Klassifikation bleibt erhalten.
+    expect((result as { error: WorkspaceInvoiceCloudError }).error.code).toBe('unknown');
+  });
+});
+
+describe('01P4E1B — Zeilenisolation im echten Pull-Orchestrator', () => {
+  beforeEach(() => {
+    resetInvoiceFinalizeIntentsForTests();
+  });
+
+  it('R3: eine ungültige Zeile wird gemeldet, die gültige normal übernommen', async () => {
+    const valid = cloudRow();
+    const base = cloudRow({ id: 'cloud-row-2', client_invoice_id: 'inv-cloud-2' });
+    const broken = {
+      ...base,
+      payload: { ...(base.payload as Record<string, unknown>), amount: 'zwölf' },
+    };
+
+    const vorgang = createTestVorgang({ invoices: [] });
+    const report = createEmptySyncSimulationReport();
+    const client = {
+      rpc: async (name: string) => {
+        if (name !== 'pull_workspace_invoices') throw new Error(`unerwarteter RPC: ${name}`);
+        return { data: [valid, broken], error: null };
+      },
+    } as never;
+
+    const result = await applyInvoicePullAfterVorgangMerge({
+      workspaceId: 'ws-1',
+      vorgaenge: [vorgang],
+      report,
+      client,
+    });
+
+    // Kein globaler Abbruch im normalen Sync.
+    expect(result.invoiceRpcFailed).toBe(false);
+    expect(result.merge).not.toBeNull();
+
+    // Die gültige Rechnung wird nach dem bestehenden Sync-Vertrag übernommen.
+    const invoices = result.vorgaenge[0]!.invoices;
+    expect(invoices.map((invoice) => invoice.id)).toEqual(['inv-cloud-1']);
+    expect(result.merge!.insertedCount).toBe(1);
+
+    // Kein Feld der ungültigen Rechnung erscheint lokal.
+    expect(invoices.some((invoice) => invoice.id === 'inv-cloud-2')).toBe(false);
+    expect(JSON.stringify(result.vorgaenge)).not.toContain('inv-cloud-2');
+    expect(JSON.stringify(result.vorgaenge)).not.toContain('cloud-row-2');
+
+    /*
+     * Die ungültige Zeile wird als invalid_row gemeldet — der tatsächliche
+     * Meldeweg des normalen Syncs ist der Simulationsbericht, nicht das
+     * Merge-Ergebnis. Der Merge sieht die Zeile nie.
+     */
+    expect(report.conflictCount).toBe(1);
+    expect(report.conflicts.map((conflict) => conflict.entityId)).toEqual([
+      'invoice:inv-cloud-2',
+    ]);
+    expect(result.merge!.conflicts).toEqual([]);
+  });
+
+  it('01P4E1C S7: eine widersprüchliche Zeile erreicht den Merge nicht', async () => {
+    const valid = cloudRow();
+    const base = cloudRow({ id: 'cloud-row-s7', client_invoice_id: 'inv-cloud-s7' });
+    // Typgültig, aber die Zeilenspalte widerspricht dem Payload.
+    const contradictory = {
+      ...base,
+      payload: { ...(base.payload as Record<string, unknown>), id: 'inv-cloud-s7-anders' },
+    };
+
+    const report = createEmptySyncSimulationReport();
+    const client = {
+      rpc: async () => ({ data: [valid, contradictory], error: null }),
+    } as never;
+
+    const result = await applyInvoicePullAfterVorgangMerge({
+      workspaceId: 'ws-1',
+      vorgaenge: [createTestVorgang({ invoices: [] })],
+      report,
+      client,
+    });
+
+    expect(result.invoiceRpcFailed).toBe(false);
+    expect(result.vorgaenge[0]!.invoices.map((invoice) => invoice.id)).toEqual(['inv-cloud-1']);
+    expect(result.merge!.insertedCount).toBe(1);
+    expect(result.merge!.conflicts).toEqual([]);
+    expect(report.conflictCount).toBe(1);
+    expect(report.conflicts.map((conflict) => conflict.entityId)).toEqual([
+      'invoice:inv-cloud-s7',
+    ]);
+    expect(JSON.stringify(result.vorgaenge)).not.toContain('inv-cloud-s7');
+  });
+
+  it('R4: die bestehende Schutzgrenze vor dem Merge bleibt unverändert', () => {
+    const base = cloudRow({ id: 'cloud-row-3', client_invoice_id: 'inv-cloud-3' });
+    const broken = {
+      ...base,
+      payload: { ...(base.payload as Record<string, unknown>), amount: 'zwölf' },
+    };
+    const { mapped, invalidCount } = mapPullRowsIsolated([cloudRow(), broken], 'ws-1');
+    expect(invalidCount).toBe(1);
+    expect(mapped.map((entry) => entry.clientInvoiceId)).toEqual(['inv-cloud-1']);
+  });
+});
+
+/**
+ * OFFICEPILOT-CROSS-PLATFORM-DRAFT-DURABILITY-01P4E1C — die autoritativen
+ * Zeilenspalten und ihre im Payload duplizierten Felder müssen exakt
+ * zusammenpassen. Ein typgültiger, aber widersprüchlicher Datensatz wird
+ * abgewiesen statt stillschweigend von den Spalten überschrieben.
+ */
+describe('01P4E1C — Zeilen-/Payload-Konsistenz beim Pull', () => {
+  const withPayload = (overrides: Record<string, unknown>) => {
+    const base = cloudRow();
+    return { ...base, payload: { ...(base.payload as Record<string, unknown>), ...overrides } };
+  };
+
+  it('S1: jede der fünf duplizierten Kernfelder muss übereinstimmen', () => {
+    // Kontrollfall: vollständig übereinstimmend bleibt gültig.
+    expect(parseWorkspaceInvoicePullRow(cloudRow())).not.toBeNull();
+
+    const contradictions: Array<[string, Record<string, unknown>]> = [
+      ['id', { id: 'inv-cloud-anders' }],
+      ['number', { number: '2026-9999' }],
+      ['invoiceSequenceNumber', { invoiceSequenceNumber: 42 }],
+      ['type', { type: 'rechnung' }],
+      ['status', { status: 'entwurf' }],
+    ];
+
+    const spy = vi.spyOn(workspaceInvoiceCloud, 'mapWorkspaceInvoicePullRowToVorgangInvoice');
+    for (const [label, overrides] of contradictions) {
+      const row = withPayload(overrides);
+      expect(parseWorkspaceInvoicePullRow(row), label).toBeNull();
+
+      const { mapped, invalidCount } = mapPullRowsIsolated([row], 'ws-1');
+      expect(invalidCount, label).toBe(1);
+      expect(mapped, label).toEqual([]);
+    }
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it('S2: Zeilenspalten mit Whitespace werden abgewiesen statt getrimmt', () => {
+    const columns = [
+      'id',
+      'workspace_id',
+      'vorgang_id',
+      'client_invoice_id',
+      'invoice_number',
+      'invoice_type',
+      'invoice_status',
+    ];
+    for (const column of columns) {
+      const original = String((cloudRow() as Record<string, unknown>)[column]);
+      for (const padded of [` ${original}`, `${original} `, ` ${original} `]) {
+        expect(
+          parseWorkspaceInvoicePullRow(cloudRow({ [column]: padded })),
+          `${column}:${JSON.stringify(padded)}`,
+        ).toBeNull();
+      }
+    }
+
+    // Whitespace innerhalb eines fachlich erlaubten Textes bleibt unangetastet.
+    const parsed = parseWorkspaceInvoicePullRow(
+      withPayload({ paymentTermsText: '  Zahlbar   in 14 Tagen  ' }),
+    );
+    expect(parsed).not.toBeNull();
+    expect((parsed!.payload as Record<string, unknown>).paymentTermsText).toBe(
+      '  Zahlbar   in 14 Tagen  ',
+    );
+  });
+});
+
+describe('01P4E1C — vollständige Bindung der Legacy-RPC-Antwort', () => {
+  const invoice = () =>
+    createAbschlagInvoice('op-test-1', 3, {
+      id: 'inv-legacy-s3',
+      number: '2026-0013',
+      invoiceSequenceNumber: 13,
+      status: 'vorbereitet',
+    });
+
+  const payload = (overrides: Record<string, unknown> = {}): Record<string, unknown> => {
+    const value = { ...(invoice() as unknown as Record<string, unknown>) };
+    delete value.payments;
+    delete value.paymentStatus;
+    delete value.archiveDocumentId;
+    return { ...value, ...overrides };
+  };
+
+  /**
+   * Der echte SQL-Vertrag ist in allen drei Rückgaben identisch:
+   * `'invoice', v_existing.payload` und `'row', to_jsonb(v_existing)`.
+   * `data.invoice` und `row.payload` sind deshalb dasselbe JSONB.
+   */
+  const envelope = (
+    rowOverrides: Record<string, unknown> = {},
+    payloadOverrides: Record<string, unknown> = {},
+  ) => {
+    const invoicePayload = payload(payloadOverrides);
+    return {
+      idempotent_replay: false,
+      invoice: invoicePayload,
+      row: {
+        id: 'cloud-row-s3',
+        workspace_id: 'ws-1',
+        vorgang_id: 'v-test-1',
+        client_invoice_id: 'inv-legacy-s3',
+        invoice_number: '2026-0013',
+        invoice_year: 2026,
+        invoice_sequence_number: 13,
+        invoice_type: 'abschlag',
+        invoice_status: 'vorbereitet',
+        payload: invoicePayload,
+        row_version: 3,
+        created_at: '2026-08-21T10:00:00.000Z',
+        updated_at: '2026-08-21T10:00:00.000Z',
+        ...rowOverrides,
+      },
+    };
+  };
+
+  const finalize = (data: unknown) =>
+    rpcFinalizeWorkspaceInvoice(
+      {
+        workspaceId: 'ws-1',
+        vorgangId: 'v-test-1',
+        clientInvoiceId: 'inv-legacy-s3',
+        invoice: invoice(),
+      },
+      { rpc: async () => ({ data, error: null }) } as never,
+    );
+
+  it('S3a: die vollständig gebundene Antwort bleibt gültig', async () => {
+    const result = await finalize(envelope());
+    expect(result.invoice.id).toBe('inv-legacy-s3');
+    expect(result.invoice.number).toBe('2026-0013');
+    expect(result.cloudInvoiceId).toBe('cloud-row-s3');
+    expect(result.rowVersion).toBe(3);
+    expect(result.idempotentReplay).toBe(false);
+  });
+
+  it('S3b: jede typgültige Abweichung zwischen Eingabe, Payload und Zeile wird abgewiesen', async () => {
+    const cases: Array<[string, unknown]> = [
+      ['row.workspace_id', envelope({ workspace_id: 'ws-2' })],
+      ['row.vorgang_id', envelope({ vorgang_id: 'v-test-2' })],
+      ['row.client_invoice_id', envelope({ client_invoice_id: 'inv-legacy-anders' })],
+      ['row.invoice_number', envelope({ invoice_number: '2026-9999' })],
+      ['row.invoice_sequence_number', envelope({ invoice_sequence_number: 99 })],
+      ['row.invoice_type', envelope({ invoice_type: 'rechnung' })],
+      ['row.invoice_status', envelope({ invoice_status: 'entwurf' })],
+      ['payload.id', envelope({}, { id: 'inv-legacy-anders' })],
+    ];
+
+    for (const [label, data] of cases) {
+      await expect(finalize(data), label).rejects.toBeInstanceOf(WorkspaceInvoiceCloudError);
+    }
+  });
+
+  it('S3c: row.payload muss strukturell gleich zu data.invoice sein', async () => {
+    const base = envelope();
+    const divergent = {
+      ...base,
+      row: { ...base.row, payload: { ...payload(), amount: 999 } },
+    };
+    await expect(finalize(divergent)).rejects.toBeInstanceOf(WorkspaceInvoiceCloudError);
+  });
+
+  it('S3d: row.id wird nicht getrimmt, sondern abgewiesen', async () => {
+    for (const padded of [' cloud-row-s3', 'cloud-row-s3 ', ' cloud-row-s3 ']) {
+      await expect(finalize(envelope({ id: padded })), padded).rejects.toBeInstanceOf(
+        WorkspaceInvoiceCloudError,
+      );
+    }
+  });
+});
+
+/**
+ * OFFICEPILOT-CROSS-PLATFORM-DRAFT-DURABILITY-01P4E1C1 — kanonische Anfrage und
+ * vollständige Antwortzeile im Legacy-Finalisierungspfad. Fehler **vor** dem
+ * RPC bleiben `validation`, Fehler in einer **erhaltenen** Antwort `unknown`.
+ */
+describe('01P4E1C1 — kanonische Legacy-RPC-Anfrage', () => {
+  const invoice = (overrides: Record<string, unknown> = {}) =>
+    ({
+      ...createAbschlagInvoice('op-test-1', 3, {
+        id: 'inv-legacy-t1',
+        number: '2026-0021',
+        invoiceSequenceNumber: 21,
+        status: 'vorbereitet',
+      }),
+      ...overrides,
+    }) as ReturnType<typeof createAbschlagInvoice>;
+
+  const expectRejectedBeforeRpc = async (
+    input: {
+      workspaceId: string;
+      vorgangId: string;
+      clientInvoiceId: string;
+      invoice: ReturnType<typeof createAbschlagInvoice>;
+    },
+    label: string,
+  ) => {
+    const rpc = vi.fn();
+    const outcome = await rpcFinalizeWorkspaceInvoice(input, { rpc } as never).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(outcome, label).toBeInstanceOf(WorkspaceInvoiceCloudError);
+    const failure = outcome as WorkspaceInvoiceCloudError;
+    expect(failure.code, label).toBe('validation');
+    expect(failure.retryable, label).toBe(false);
+    expect(rpc, label).not.toHaveBeenCalled();
+  };
+
+  it('T1: nichtkanonische Eingabetexte werden vor dem RPC abgewiesen', async () => {
+    const base = {
+      workspaceId: 'ws-1',
+      vorgangId: 'v-test-1',
+      clientInvoiceId: 'inv-legacy-t1',
+      invoice: invoice(),
+    };
+    const fields = ['workspaceId', 'vorgangId', 'clientInvoiceId'] as const;
+    for (const field of fields) {
+      const original = base[field];
+      for (const padded of [` ${original}`, `${original} `, `\t${original}`, `${original}\n`]) {
+        await expectRejectedBeforeRpc(
+          { ...base, [field]: padded },
+          `${field}:${JSON.stringify(padded)}`,
+        );
+      }
+    }
+  });
+
+  it('T2: eine Kennungsabweichung im lokalen Beleg wird vor dem RPC abgewiesen', async () => {
+    await expectRejectedBeforeRpc(
+      {
+        workspaceId: 'ws-1',
+        vorgangId: 'v-test-1',
+        clientInvoiceId: 'inv-legacy-t1',
+        invoice: invoice({ id: 'inv-legacy-anders' }),
+      },
+      'invoice.id',
+    );
+  });
+});
+
+describe('01P4E1C1 — vollständige Legacy-Antwortzeile', () => {
+  const invoice = () =>
+    createAbschlagInvoice('op-test-1', 3, {
+      id: 'inv-legacy-t3',
+      number: '2026-0023',
+      invoiceSequenceNumber: 23,
+      status: 'vorbereitet',
+    });
+
+  const payload = (overrides: Record<string, unknown> = {}): Record<string, unknown> => {
+    const value = { ...(invoice() as unknown as Record<string, unknown>) };
+    delete value.payments;
+    delete value.paymentStatus;
+    delete value.archiveDocumentId;
+    return { ...value, ...overrides };
+  };
+
+  const envelope = (
+    rowOverrides: Record<string, unknown> = {},
+    payloadOverrides: Record<string, unknown> = {},
+    options: { idempotentReplay?: boolean; rowPayload?: unknown } = {},
+  ) => {
+    const invoicePayload = payload(payloadOverrides);
+    const row: Record<string, unknown> = {
+      id: 'cloud-row-t3',
+      workspace_id: 'ws-1',
+      vorgang_id: 'v-test-1',
+      client_invoice_id: 'inv-legacy-t3',
+      invoice_number: '2026-0023',
+      invoice_year: 2026,
+      invoice_sequence_number: 23,
+      invoice_type: 'abschlag',
+      invoice_status: 'vorbereitet',
+      payload: 'rowPayload' in options ? options.rowPayload : invoicePayload,
+      row_version: 5,
+      created_at: '2026-08-21T10:00:00.000Z',
+      updated_at: '2026-08-21T10:00:00.000Z',
+      updated_by: null,
+    };
+    for (const [key, value] of Object.entries(rowOverrides)) {
+      if (value === undefined) delete row[key];
+      else row[key] = value;
+    }
+    return {
+      idempotent_replay: options.idempotentReplay ?? false,
+      invoice: invoicePayload,
+      row,
+    };
+  };
+
+  const finalize = (data: unknown) =>
+    rpcFinalizeWorkspaceInvoice(
+      {
+        workspaceId: 'ws-1',
+        vorgangId: 'v-test-1',
+        clientInvoiceId: 'inv-legacy-t3',
+        invoice: invoice(),
+      },
+      { rpc: async () => ({ data, error: null }) } as never,
+    );
+
+  const expectUnknown = async (data: unknown, label: string) => {
+    const outcome = await finalize(data).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(outcome, label).toBeInstanceOf(WorkspaceInvoiceCloudError);
+    expect((outcome as WorkspaceInvoiceCloudError).code, label).toBe('unknown');
+  };
+
+  it('T3: eine unvollständige oder ungültige Antwortzeile wird abgewiesen', async () => {
+    const cases: Array<[string, Record<string, unknown>]> = [
+      ['invoice_year fehlt', { invoice_year: undefined }],
+      ['invoice_year ungültig', { invoice_year: 1999 }],
+      ['invoice_year kein Integer', { invoice_year: 2026.5 }],
+      ['invoice_sequence_number fehlt', { invoice_sequence_number: undefined }],
+      ['invoice_sequence_number String', { invoice_sequence_number: '23' }],
+      ['invoice_sequence_number 0', { invoice_sequence_number: 0 }],
+      ['invoice_sequence_number Bruch', { invoice_sequence_number: 23.5 }],
+      ['invoice_number fehlt', { invoice_number: undefined }],
+      ['invoice_type fehlt', { invoice_type: undefined }],
+      ['invoice_status fehlt', { invoice_status: undefined }],
+      ['row.payload fehlt', { payload: undefined }],
+      ['row.payload Array', { payload: [] }],
+      ['row.payload String', { payload: 'nope' }],
+    ];
+
+    const mapperSpy = vi.spyOn(workspaceInvoiceCloud, 'mapWorkspaceInvoicePullRowToVorgangInvoice');
+    for (const [label, rowOverrides] of cases) {
+      await expectUnknown(envelope(rowOverrides), label);
+    }
+    expect(mapperSpy).not.toHaveBeenCalled();
+    mapperSpy.mockRestore();
+  });
+
+  it('T4a: der frische Legacy-RPC verlangt eine gültige invoiceSequenceNumber', async () => {
+    await expectUnknown(envelope({}, { invoiceSequenceNumber: undefined }), 'fehlt');
+    await expectUnknown(envelope({}, { invoiceSequenceNumber: 99 }), 'abweichend');
+  });
+
+  it('T4b: der normale Pull bleibt ohne invoiceSequenceNumber gültig', () => {
+    const base = cloudRow();
+    const legacyPayload = { ...(base.payload as Record<string, unknown>) };
+    delete legacyPayload.invoiceSequenceNumber;
+    const parsed = parseWorkspaceInvoicePullRow({ ...base, payload: legacyPayload });
+    expect(parsed).not.toBeNull();
+    // Die autoritative Zeilenspalte bleibt maßgeblich.
+    expect(parsed!.invoice_sequence_number).toBe(1);
+  });
+
+  it('T5: row.payload wird strukturell verglichen, nicht textuell', async () => {
+    const base = envelope();
+    // Gleiche Inhalte, andere Schlüsselreihenfolge — bleibt gültig.
+    const reordered = Object.fromEntries(
+      Object.entries(base.invoice as Record<string, unknown>).reverse(),
+    );
+    expect(JSON.stringify(reordered)).not.toBe(JSON.stringify(base.invoice));
+    const ok = await finalize({ ...base, row: { ...base.row, payload: reordered } });
+    expect(ok.invoice.id).toBe('inv-legacy-t3');
+
+    // Inhaltliche Abweichung wird abgewiesen.
+    await expectUnknown(
+      { ...base, row: { ...base.row, payload: { ...payload(), amount: 999 } } },
+      'amount',
+    );
+  });
+
+  it('T6: der vollständige Gutfall bleibt exakt erhalten', async () => {
+    const source = invoice();
+
+    for (const idempotentReplay of [false, true]) {
+      const result = await finalize(envelope({}, {}, { idempotentReplay }));
+      expect(result.idempotentReplay).toBe(idempotentReplay);
+      expect(result.cloudInvoiceId).toBe('cloud-row-t3');
+      expect(result.rowVersion).toBe(5);
+      expect(result.invoice.id).toBe('inv-legacy-t3');
+      expect(result.invoice.number).toBe('2026-0023');
+      expect(result.invoice.invoiceSequenceNumber).toBe(23);
+      expect(result.invoice.amount).toBe(source.amount);
+      expect(result.invoice.createdAt).toBe(source.createdAt);
+      expect(result.invoice.date).toBe(source.date);
+    }
+  });
+});
+
+/**
+ * OFFICEPILOT-CROSS-PLATFORM-DRAFT-DURABILITY-01P4E1E — der Prepared-RPC
+ * erhält dieselbe strikte Antwortgrenze wie der gehärtete Legacy-Pfad.
+ * Keine Coercion, keine Defaults, kein Teilergebnis.
+ */
+describe('01P4E1E — strikte Prepared-RPC-Hülle', () => {
+  const CLIENT_ID = 'inv-prepared-e1';
+
+  const preparedPayload = (overrides: Record<string, unknown> = {}): Record<string, unknown> => {
+    const invoice = createAbschlagInvoice('op-test-1', 3, {
+      id: CLIENT_ID,
+      number: '2026-0031',
+      invoiceSequenceNumber: 31,
+      status: 'vorbereitet',
+    });
+    const value = { ...(invoice as unknown as Record<string, unknown>) };
+    delete value.payments;
+    delete value.paymentStatus;
+    delete value.archiveDocumentId;
+    return { ...value, ...overrides };
+  };
+
+  const envelope = (
+    rowOverrides: Record<string, unknown> = {},
+    payloadOverrides: Record<string, unknown> = {},
+    options: { idempotentReplay?: unknown; rowPayload?: unknown } = {},
+  ) => {
+    const invoicePayload = preparedPayload(payloadOverrides);
+    const row: Record<string, unknown> = {
+      id: 'cloud-row-e1',
+      workspace_id: 'ws-1',
+      vorgang_id: 'v-test-1',
+      client_invoice_id: CLIENT_ID,
+      invoice_number: '2026-0031',
+      invoice_year: 2026,
+      invoice_sequence_number: 31,
+      invoice_type: 'abschlag',
+      invoice_status: 'vorbereitet',
+      payload: 'rowPayload' in options ? options.rowPayload : invoicePayload,
+      row_version: 6,
+      created_at: '2026-08-21T10:00:00.000Z',
+      updated_at: '2026-08-21T10:00:00.000Z',
+      updated_by: null,
+    };
+    for (const [key, value] of Object.entries(rowOverrides)) {
+      if (value === undefined) delete row[key];
+      else row[key] = value;
+    }
+    const data: Record<string, unknown> = { invoice: invoicePayload, row };
+    if (!('idempotentReplay' in options)) data.idempotent_replay = false;
+    else if (options.idempotentReplay !== undefined) {
+      data.idempotent_replay = options.idempotentReplay;
+    }
+    return data;
+  };
+
+  const call = (data: unknown) =>
+    rpcFinalizePreparedWorkspaceInvoice(
+      {
+        workspaceId: 'ws-1',
+        vorgangId: 'v-test-1',
+        clientInvoiceId: CLIENT_ID,
+        invoicePayload: preparedPayload(),
+      },
+      { rpc: async () => ({ data, error: null }) } as never,
+    );
+
+  const expectUnknown = async (data: unknown, label: string) => {
+    const outcome = await call(data).then(
+      (value) => ({ resolved: true as const, value }),
+      (error: unknown) => ({ resolved: false as const, error }),
+    );
+    expect(outcome.resolved, label).toBe(false);
+    const error = (outcome as { error: unknown }).error;
+    expect(error, label).toBeInstanceOf(WorkspaceInvoiceCloudError);
+    expect((error as WorkspaceInvoiceCloudError).code, label).toBe('unknown');
+    // Kein Teilergebnis: es existiert kein Rückgabewert.
+    expect((outcome as { value?: unknown }).value, label).toBeUndefined();
+  };
+
+  it('E1: der vollständige Gutfall bleibt für beide Replay-Werte exakt erhalten', async () => {
+    const expected = preparedPayload();
+    for (const idempotentReplay of [false, true]) {
+      const result = await call(envelope({}, {}, { idempotentReplay }));
+      expect(result.idempotentReplay).toBe(idempotentReplay);
+      expect(result.cloudInvoiceId).toBe('cloud-row-e1');
+      expect(result.rowVersion).toBe(6);
+      // Der Rohpayload wird weder gemappt noch normalisiert.
+      expect(result.rawInvoicePayload).toEqual(expected);
+      expect(result.rawInvoicePayload.amount).toBe(expected.amount);
+      expect(result.rawInvoicePayload.date).toBe(expected.date);
+      expect(result.rawInvoicePayload.number).toBe('2026-0031');
+      expect(result.rawInvoicePayload.invoiceSequenceNumber).toBe(31);
+    }
+  });
+
+  it('E2: idempotent_replay wird ausschließlich als echtes Boolean akzeptiert', async () => {
+    const broken: unknown[] = [undefined, null, 0, 1, 'false', 'true', [], {}];
+    for (const value of broken) {
+      await expectUnknown(
+        envelope({}, {}, { idempotentReplay: value }),
+        JSON.stringify(value ?? 'fehlend'),
+      );
+    }
+  });
+
+  it('E3: eine unvollständige Antwortzeile wird abgewiesen', async () => {
+    class FremdeZeile {
+      id = 'cloud-row-e1';
+    }
+    const rowCases: Array<[string, unknown]> = [
+      ['row fehlt', undefined],
+      ['row null', null],
+      ['row Array', []],
+      ['row Klasseninstanz', new FremdeZeile()],
+      ['row String', 'row'],
+    ];
+    for (const [label, value] of rowCases) {
+      const data = envelope();
+      if (value === undefined) delete data.row;
+      else data.row = value;
+      await expectUnknown(data, label);
+    }
+
+    const columnCases: Array<[string, Record<string, unknown>]> = [
+      ['invoice_year fehlt', { invoice_year: undefined }],
+      ['invoice_year ungültig', { invoice_year: 1999 }],
+      ['invoice_year Bruch', { invoice_year: 2026.5 }],
+      ['invoice_sequence_number fehlt', { invoice_sequence_number: undefined }],
+      ['invoice_sequence_number String', { invoice_sequence_number: '31' }],
+      ['invoice_sequence_number 0', { invoice_sequence_number: 0 }],
+      ['invoice_sequence_number negativ', { invoice_sequence_number: -1 }],
+      ['invoice_sequence_number Bruch', { invoice_sequence_number: 31.5 }],
+      ['invoice_number fehlt', { invoice_number: undefined }],
+      ['invoice_type fehlt', { invoice_type: undefined }],
+      ['invoice_status fehlt', { invoice_status: undefined }],
+      ['row.payload fehlt', { payload: undefined }],
+      ['row.payload null', { payload: null }],
+      ['row.payload Array', { payload: [] }],
+      ['row.payload String', { payload: 'nope' }],
+    ];
+    for (const [label, rowOverrides] of columnCases) {
+      await expectUnknown(envelope(rowOverrides), label);
+    }
+  });
+
+  it('E4: row.id und row.row_version werden ohne Coercion geprüft', async () => {
+    const idCases: unknown[] = [' cloud-row-e1', 'cloud-row-e1 ', '', '   ', 5, null, undefined];
+    for (const value of idCases) {
+      await expectUnknown(envelope({ id: value }), `id:${JSON.stringify(value ?? 'fehlend')}`);
+    }
+
+    const versionCases: unknown[] = [
+      '2',
+      null,
+      0,
+      -1,
+      1.5,
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      undefined,
+    ];
+    for (const value of versionCases) {
+      await expectUnknown(envelope({ row_version: value }), `row_version:${String(value)}`);
+    }
+  });
+
+  it('E5: row.payload wird unbedingt und strukturell verglichen', async () => {
+    // Andere Schlüsselreihenfolge, gleicher Inhalt — bleibt gültig.
+    const base = envelope();
+    const reordered = Object.fromEntries(
+      Object.entries(base.invoice as Record<string, unknown>).reverse(),
+    );
+    expect(JSON.stringify(reordered)).not.toBe(JSON.stringify(base.invoice));
+    const ok = await call({
+      ...base,
+      row: { ...(base.row as Record<string, unknown>), payload: reordered },
+    });
+    expect(ok.cloudInvoiceId).toBe('cloud-row-e1');
+
+    // Inhaltliche Abweichung wird abgewiesen.
+    await expectUnknown(
+      envelope({}, {}, { rowPayload: preparedPayload({ amount: 999 }) }),
+      'amount',
+    );
+    // Der Vergleich wird nie übersprungen.
+    await expectUnknown(envelope({}, {}, { rowPayload: undefined }), 'fehlend');
+    await expectUnknown(envelope({}, {}, { rowPayload: null }), 'null');
+  });
+
+  it('E6: Anfrage, Zeile und Payload werden exakt gebunden', async () => {
+    const cases: Array<[string, unknown]> = [
+      ['row.workspace_id', envelope({ workspace_id: 'ws-2' })],
+      ['row.vorgang_id', envelope({ vorgang_id: 'v-test-2' })],
+      ['row.client_invoice_id', envelope({ client_invoice_id: 'inv-fremd' })],
+      ['payload.id', envelope({}, { id: 'inv-fremd' })],
+      ['payload.number', envelope({ invoice_number: '2026-9999' })],
+      ['payload.type', envelope({ invoice_type: 'rechnung' })],
+      ['payload.status', envelope({ invoice_status: 'entwurf' })],
+    ];
+    for (const [label, data] of cases) {
+      await expectUnknown(data, label);
+    }
+  });
+
+  it('E7: die frische Sequenz im Antwortpayload ist Pflicht', async () => {
+    await expectUnknown(envelope({}, { invoiceSequenceNumber: undefined }), 'fehlt');
+    await expectUnknown(envelope({}, { invoiceSequenceNumber: 0 }), 'null');
+    await expectUnknown(envelope({}, { invoiceSequenceNumber: 31.5 }), 'Bruch');
+    await expectUnknown(envelope({ invoice_sequence_number: 99 }), 'abweichend');
+
+    // Der normale Pull bleibt ohne dieses optionale Payload-Feld gültig.
+    const base = cloudRow();
+    const legacyPayload = { ...(base.payload as Record<string, unknown>) };
+    delete legacyPayload.invoiceSequenceNumber;
+    expect(parseWorkspaceInvoicePullRow({ ...base, payload: legacyPayload })).not.toBeNull();
   });
 });
