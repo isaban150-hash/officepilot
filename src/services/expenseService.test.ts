@@ -128,3 +128,82 @@ describe('deduplication', () => {
     expect(updated.success).toBe(true);
   });
 });
+
+/*
+ * EXPENSE-IDENTIFIER-COMPLETENESS-01 — Teil A.
+ *
+ * Ohne erkannte Nummer entstand der Schlüssel `<lieferant>|`. Die vorhandene
+ * Tragfähigkeitsprüfung in `isDuplicateExpense` verwarf nur den vollständig
+ * leeren Fall `'|'` und behandelte `<lieferant>|` als belastbar. Damit sperrte
+ * der erste nummernlose Beleg jeden weiteren nummernlosen Beleg desselben
+ * Lieferanten.
+ */
+describe('EXPENSE-IDENTIFIER-COMPLETENESS-01 — nummernlose Belege', () => {
+  const TANKSTELLE = 'Testtankstelle Musterstadt';
+
+  function receiptInput(overrides: Partial<ReturnType<typeof validInput>> = {}) {
+    return {
+      ...validInput(),
+      title: 'Tankbeleg',
+      supplierName: TANKSTELLE,
+      invoiceNumber: '',
+      grossAmount: 70.51,
+      netAmount: 59.25,
+      taxAmount: 11.26,
+      ...overrides,
+    };
+  }
+
+  beforeEach(() => {
+    localStorage.clear();
+    hydrateExpenseStore([]);
+  });
+
+  it('A: zwei nummernlose Belege desselben Lieferanten sind beide anlegbar', () => {
+    const first = addExpense(receiptInput());
+    const second = addExpense(receiptInput({ grossAmount: 42.1 }));
+
+    expect(first.success, JSON.stringify(first)).toBe(true);
+    expect(second.success, JSON.stringify(second)).toBe(true);
+    expect(getAllExpenses()).toHaveLength(2);
+  });
+
+  it('A2: ohne Nummer trifft die Duplikatprüfung gar keine Entscheidung', () => {
+    expect(addExpense(receiptInput()).success).toBe(true);
+    expect(isDuplicateExpense(TANKSTELLE, '')).toBeNull();
+    // Auch reiner Whitespace ist keine belastbare Nummer.
+    expect(isDuplicateExpense(TANKSTELLE, '   ')).toBeNull();
+  });
+
+  it('B: ein echtes Duplikat MIT Nummer bleibt blockiert', () => {
+    const first = addExpense(receiptInput({ invoiceNumber: '123' }));
+    expect(first.success).toBe(true);
+
+    const second = addExpense(receiptInput({ invoiceNumber: '123' }));
+    expect(second.success).toBe(false);
+    if (!second.success) expect(second.errorKey).toBe('expense.duplicate');
+    expect(getAllExpenses()).toHaveLength(1);
+    expect(isDuplicateExpense(TANKSTELLE, '123')).not.toBeNull();
+  });
+
+  it('C: unterschiedliche Nummern desselben Lieferanten bleiben erlaubt', () => {
+    expect(addExpense(receiptInput({ invoiceNumber: '123' })).success).toBe(true);
+    expect(addExpense(receiptInput({ invoiceNumber: '124' })).success).toBe(true);
+    expect(getAllExpenses()).toHaveLength(2);
+  });
+
+  it('C2: das Schlüsselformat für Belege MIT Nummer bleibt unverändert', () => {
+    const created = addExpense(receiptInput({ invoiceNumber: '123' }));
+    expect(created.success).toBe(true);
+    if (created.success) {
+      expect(created.expense.dedupeKey).toBe('testtankstelle musterstadt|123');
+    }
+  });
+
+  it('C3: ein nummernloser Beleg blockiert keinen nummerierten und umgekehrt', () => {
+    expect(addExpense(receiptInput()).success).toBe(true);
+    expect(addExpense(receiptInput({ invoiceNumber: '123' })).success).toBe(true);
+    expect(addExpense(receiptInput()).success).toBe(true);
+    expect(getAllExpenses()).toHaveLength(3);
+  });
+});

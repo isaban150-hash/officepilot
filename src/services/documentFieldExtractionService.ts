@@ -81,7 +81,9 @@ const DATE_LABELED_INLINE =
 const AMOUNT_PATTERN =
   /\b(?:betrag|summe|gesamt|total|brutto|gutschrift\s+brutto)\s*[:\s]*(-?\d{1,3}(?:[.\s]\d{3})*,\d{2}\s*€?|-?\d{1,3}(?:[.\s]\d{3})*,\d{2}\s*(?:EUR|eur))|\b(-?\d{1,3}(?:[.\s]\d{3})*,\d{2}\s*€|-?\d{1,3}(?:[.\s]\d{3})*,\d{2}\s*(?:EUR|eur))\b/i;
 const INVOICE_NUMBER_PATTERN =
-  /\b(?:rechnungs(?:nummer|nr\.?)|invoice(?:\s*no\.?)?|beleg(?:nummer|nr\.?))\s*[:#]?\s*([A-Z0-9][\w./-]{2,})/i;
+  // `[\s-]*` nach der bereits vorhandenen Repository-Konvention (vgl.
+  // RECEIPT_NUMBER_PATTERN): auch `Rechnungs-Nr.` und `Beleg Nr.` sind gemeint.
+  /\b(?:rechnungs[\s-]*(?:nummer|nr\.?)|invoice(?:\s*no\.?)?|beleg[\s-]*(?:nummer|nr\.?))\s*[:#]?\s*([A-Z0-9][\w./-]{2,})/i;
 const REFERENCE_PATTERN =
   /\b(?:aktenzeichen|az\.?|vorgang(?:snummer|snr\.?)?|auftrags(?:nummer|nr\.?)|referenz)\s*[:#]?\s*([A-Z0-9][\w./-]{2,})/i;
 const DEADLINE_PATTERN =

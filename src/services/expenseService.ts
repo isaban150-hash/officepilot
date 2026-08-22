@@ -16,6 +16,7 @@ import {
 } from './expenseStore';
 import {
   buildExpenseDedupeKey,
+  normalizeDedupePart,
   normalizeExpense,
 } from './expenseNormalize';
 import { normalizeExpensePaymentFields } from './expensePaymentCalculations';
@@ -158,6 +159,13 @@ export function isDuplicateExpense(
   invoiceNumber: string,
   options?: { excludeExpenseId?: string },
 ): Expense | null {
+  // EXPENSE-IDENTIFIER-COMPLETENESS-01: Dieser Vergleich ist nummernbasiert.
+  // Ohne belastbare Rechnungs-/Belegnummer kollabierte der Schlüssel auf
+  // `<lieferant>|` und hätte jeden weiteren nummernlosen Beleg desselben
+  // Lieferanten gesperrt. Ohne Nummer wird daher gar keine Duplikatentscheidung
+  // getroffen — es tritt keine Ersatzregel an ihre Stelle.
+  if (!normalizeDedupePart(invoiceNumber)) return null;
+
   const dedupeKey = buildExpenseDedupeKey(supplierName, invoiceNumber);
   if (!dedupeKey || dedupeKey === '|') return null;
 

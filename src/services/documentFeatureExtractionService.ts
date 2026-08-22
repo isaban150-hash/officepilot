@@ -19,6 +19,17 @@ const LABELED_DATE_PATTERN =
 const DEADLINE_PATTERN =
   /\b(?:frist|fällig(?:keit| am)?|zahlbar bis|bis zum|zahlungsziel)\s*[:.]?\s*(\d{1,2}[./]\d{1,2}[./]\d{2,4})/i;
 const INVOICE_NUMBER_PATTERN =
+  // Gleicher Stand wie INVOICE_NUMBER_PATTERN in documentFieldExtractionService:
+  // `[\s-]*` deckt `Rechnungs-Nr.` und `Beleg Nr.` mit ab.
+  /\b(?:rechnungs[\s-]*(?:nummer|nr\.?)|invoice(?:\s*no\.?)?|beleg[\s-]*(?:nummer|nr\.?))\s*[:#]?\s*([A-Z0-9][\w./-]{2,})/i;
+/**
+ * Die Belegschicht-Heuristik `structure.receipt_layout` behandelt eine
+ * Nummernzeile als Gegenindiz. Sie behält bewusst den Stand vor
+ * EXPENSE-IDENTIFIER-COMPLETENESS-01: Ein Kassenbeleg trägt seinerseits eine
+ * `Beleg-Nr.`, die genau kein Gegenindiz ist. Die erweiterte Erkennung gilt
+ * daher nur für das Identifier-Feature, nicht für die Layout-Entscheidung.
+ */
+const RECEIPT_LAYOUT_INVOICE_NUMBER_PATTERN =
   /\b(?:rechnungs(?:nummer|nr\.?)|invoice(?:\s*no\.?)?|beleg(?:nummer|nr\.?))\s*[:#]?\s*([A-Z0-9][\w./-]{2,})/i;
 const CASE_REFERENCE_PATTERN =
   /\b(?:aktenzeichen|az\.?|vorgang(?:snummer|snr\.?)?|auftrags(?:nummer|nr\.?)|angebots(?:nummer|nr\.?)|beitrags(?:nummer|nr\.?)|referenz)\s*[:#]?\s*([A-Z0-9][\w./-]{2,})/i;
@@ -607,7 +618,7 @@ function extractStructureFeatures(
     zonedText.bodyLines.find((line) => MONETARY_VALUE_PATTERN.test(line.text)) ??
     zonedText.headerLines.find((line) => MONETARY_VALUE_PATTERN.test(line.text));
   const hasInvoiceNumberInBody = zonedText.bodyLines.some((line) =>
-    INVOICE_NUMBER_PATTERN.test(line.text),
+    RECEIPT_LAYOUT_INVOICE_NUMBER_PATTERN.test(line.text),
   );
   const isReceiptLayout =
     meaningfulLines.length <= 12 &&

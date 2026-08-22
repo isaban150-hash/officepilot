@@ -87,6 +87,30 @@ describe('documentFeatureExtractionService', () => {
     expect(caseReference?.zone).toBe('body');
   });
 
+  /*
+   * EXPENSE-IDENTIFIER-COMPLETENESS-01 — dasselbe Pattern wie im
+   * Field-Extraktionspfad muss die getrennten Schreibweisen erkennen.
+   */
+  it('extracts invoice references written with a separator (Rechnungs-Nr. / Beleg Nr.)', () => {
+    const separated = INVOICE_TEXT.replace('Rechnungsnummer: INV-2026-77', 'Rechnungs-Nr. INV-2026-77');
+    const result = extractDocumentFeatures(zoneText(separated));
+    const invoiceNumber = result.features.find((feature) => feature.id === 'reference.invoice_number');
+    expect(invoiceNumber?.value).toBe('INV-2026-77');
+
+    const beleg = INVOICE_TEXT.replace('Rechnungsnummer: INV-2026-77', 'Beleg Nr. TEST-000184');
+    const belegResult = extractDocumentFeatures(zoneText(beleg));
+    expect(
+      belegResult.features.find((feature) => feature.id === 'reference.invoice_number')?.value,
+    ).toBe('TEST-000184');
+
+    // Negativgrenze: Bon-Nr. bleibt außerhalb dieses Patterns.
+    const bon = INVOICE_TEXT.replace('Rechnungsnummer: INV-2026-77', 'Bon-Nr. 4711');
+    const bonResult = extractDocumentFeatures(zoneText(bon));
+    expect(
+      bonResult.features.find((feature) => feature.id === 'reference.invoice_number'),
+    ).toBeUndefined();
+  });
+
   it('extracts monetary values and labeled totals from OCR text', () => {
     const zoned = zoneText(INVOICE_TEXT);
     const result = extractDocumentFeatures(zoned);
