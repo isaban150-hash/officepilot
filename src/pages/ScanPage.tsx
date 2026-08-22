@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { DocumentUploadErrorPanel } from '../components/documents/DocumentUploadErrorPanel';
 import { OcrPreviewPanel } from '../components/scan/OcrPreviewPanel';
 import { Button } from '../components/ui/Button';
@@ -38,6 +38,7 @@ import {
 import type { UserStorageDecision } from '../types/userStorageDecision';
 import type { UploadDocumentKind } from '../types/models';
 import { useReportUiSession } from '../hooks/useReportUiSession';
+import { readSafeUiSessionDraftPointer } from '../services/uiSession/uiSessionRestore';
 import {
   cleanupExpiredUploadDrafts,
   discardPendingDocumentIntakeDraft,
@@ -69,6 +70,26 @@ export function ScanPage() {
   const [isConfirming, setIsConfirming] = useState(false);
   const inputMode = searchParams.get('input');
   const urlDraftId = searchParams.get(DRAFT_QUERY_PARAM);
+  /** Aktuelle Route für die Schnappschussprüfung — nie `window.location`. */
+  const routerLocation = useLocation();
+
+  /**
+   * MOBILE-SAFE-RESUME-01B — der Zeiger wird **während des Renderns** gelesen,
+   * nicht im Effekt: die eigene Sitzungsmeldung dieser Seite läuft vorher und
+   * würde den Schnappschuss mit leeren Entwürfen überschreiben. Ein reiner
+   * Lesezugriff ohne Seiteneffekt.
+   */
+  const snapshotDraftIdRef = useRef<string | null | undefined>(undefined);
+  if (snapshotDraftIdRef.current === undefined) {
+    snapshotDraftIdRef.current = urlDraftId
+      ? null
+      : readSafeUiSessionDraftPointer({
+          draftKey: 'pendingUploadDraftId',
+          userId: null,
+          currentPathname: routerLocation.pathname,
+          currentSearch: routerLocation.search,
+        });
+  }
 
   /** Draft currently shown; a ref so decisions never read a stale value. */
   const draftIdRef = useRef<string | null>(null);
@@ -146,24 +167,37 @@ export function ScanPage() {
 
     void cleanupExpiredUploadDrafts();
 
-    if (!urlDraftId) {
+    /*
+     * MOBILE-SAFE-RESUME-01B — Safari kann die Seite verwerfen, ohne dass der
+     * Query-Zeiger erhalten bleibt. Bevor Kamera oder Dateiauswahl automatisch
+     * öffnen, wird deshalb **immer** geprüft, ob der UiSession-Schnappschuss
+     * einen gültigen Entwurfszeiger für denselben Benutzer, Workspace und
+     * Storage-Scope trägt. Nur die undurchsichtige Kennung wird übernommen —
+     * kein Inhalt, keine Bestätigung.
+     */
+    const resumeDraftId = urlDraftId ?? snapshotDraftIdRef.current ?? null;
+
+    if (!resumeDraftId) {
       completed = true;
       runAutoPicker();
       return releaseGuardOnCleanup;
     }
+
+    // Der wiedergefundene Zeiger gehört in die Adresse — sonst geht er erneut verloren.
+    if (!urlDraftId) setDraftQueryParam(resumeDraftId);
 
     const generationAtStart = processGenerationRef.current;
     const superseded = () =>
       cancelled || !mountedRef.current || processGenerationRef.current !== generationAtStart;
 
     setIsProcessing(true);
-    void loadPendingDocumentIntakeDraft(urlDraftId)
+    void loadPendingDocumentIntakeDraft(resumeDraftId)
       .then(async (result) => {
         if (superseded()) return;
         if (!result.success) {
           rememberDraftId(null);
           if (result.reason !== 'missing') {
-            await discardPendingDocumentIntakeDraft(urlDraftId);
+            await discardPendingDocumentIntakeDraft(resumeDraftId);
           }
           if (superseded()) return;
           setPendingScan(null);

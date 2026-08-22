@@ -19,6 +19,7 @@ import { saveDocumentBlob, resetDocumentBlobDatabaseForTests } from './services/
 import * as QuarantineService from './services/storage/localScopeEmergencyQuarantineService';
 import { listQuarantineMarkers } from './services/storage/localScopeEmergencyQuarantineService';
 import { readScopeBlobRecord } from './services/storage/localScopeBlobInventoryService';
+import { readLocalRecoveryCheckpoint } from './services/storage/localRecoveryCheckpointService';
 import { computeBufferContentHash } from './services/documentFileHashService';
 import { STORAGE_VERSION } from './services/sync/syncMigrationService';
 import { getActiveStorageScope, resetStorageScopeForTests } from './services/storage/storageScopeService';
@@ -2052,6 +2053,85 @@ describe('02P3B/K — fremde ZIP verändert wirklich nichts', () => {
     expect(removeItem).not.toHaveBeenCalled();
     expect(put).not.toHaveBeenCalled();
     expect(del).not.toHaveBeenCalled();
+    download.restore();
+  });
+
+  /*
+   * MOBILE-SAFE-RESUME-01B — Safari verwirft die Seite nach dem Download. Der
+   * Ablauf muss auf einer **sicheren** Stufe zurückkehren: Zielbereich und
+   * erwartete Prüfsumme bekannt, aber keine Quarantäne und keine gültige
+   * Bestätigung.
+   */
+  it('U-Resume: nach Download und Remount kehrt der Ablauf sicher zurück', async () => {
+    await seedWorkspace(WS_ONE, KEY_ONE, COMPANY_ONE, await buildSeedFiles());
+    const download = captureDownload();
+
+    const first = await renderRoot('/local-recovery/import');
+    await click(first, `import-target-option-${KEY_ONE}`);
+    await click(first, 'import-prepare');
+    await click(first, 'import-download');
+    expect(download.blobs.length).toBe(1);
+
+    const checkpoint = readLocalRecoveryCheckpoint();
+    expect(checkpoint, 'kein Wiederaufsetzpunkt geschrieben').not.toBeNull();
+    expect(checkpoint?.stage).toBe('download_triggered');
+    expect(checkpoint?.sourceStorageKey).toBe(KEY_ONE);
+    expect(checkpoint?.workspaceId).toBe(WS_ONE);
+    expect(checkpoint?.archiveSha256).toMatch(/^[0-9a-f]{64}$/);
+
+    // Seite verworfen und neu montiert.
+    act(() => root!.unmount());
+    host!.remove();
+    root = null;
+    host = null;
+
+    const put = vi.spyOn(IDBObjectStore.prototype, 'put');
+    const second = await renderRoot('/local-recovery/import');
+
+    // Sichere Folgestufe: Ziel und Prüfsumme bekannt.
+    const resumed = byTestId(second, 'import-resumed');
+    expect(resumed, second.innerHTML.slice(0, 400)).not.toBeNull();
+    expect(resumed?.textContent).toContain(KEY_ONE);
+    expect(resumed?.textContent).toContain(checkpoint!.archiveSha256);
+
+    // Keine Quarantäne, keine Bestätigung, kein Schreibvorgang.
+    expect(listQuarantineMarkers()).toHaveLength(0);
+    expect(byTestId(second, 'import-start-quarantine')).toBeNull();
+    expect(byTestId(second, 'import-choose-file')).toBeNull();
+    expect(put).not.toHaveBeenCalled();
+    // Die Sicherung muss erneut vorbereitet werden — der Blob wurde nie gespeichert.
+    expect(byTestId(second, 'import-prepare')).not.toBeNull();
+
+    download.restore();
+  });
+
+  it('U-Resume-Changed: ein veränderter Zielbestand verwirft den Wiederaufsetzpunkt', async () => {
+    await seedWorkspace(WS_ONE, KEY_ONE, COMPANY_ONE, await buildSeedFiles());
+    const download = captureDownload();
+
+    const first = await renderRoot('/local-recovery/import');
+    await click(first, `import-target-option-${KEY_ONE}`);
+    await click(first, 'import-prepare');
+    await click(first, 'import-download');
+    expect(readLocalRecoveryCheckpoint()).not.toBeNull();
+
+    act(() => root!.unmount());
+    host!.remove();
+    root = null;
+    host = null;
+
+    // Der lokale Zielbestand ändert sich zwischen Download und Rückkehr.
+    const raw = localStorage.getItem(KEY_ONE)!;
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    parsed.savedAt = '2099-01-01T00:00:00.000Z';
+    localStorage.setItem(KEY_ONE, JSON.stringify(parsed));
+
+    const second = await renderRoot('/local-recovery/import');
+
+    expect(byTestId(second, 'import-resumed')).toBeNull();
+    expect(readLocalRecoveryCheckpoint()).toBeNull();
+    expect(listQuarantineMarkers()).toHaveLength(0);
+
     download.restore();
   });
 });

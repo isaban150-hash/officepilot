@@ -11,6 +11,13 @@ import {
 } from '../services/storage/localScopeEmergencyQuarantineService';
 import { triggerZipDownload } from '../services/storage/localRecoveryDownloadService';
 import {
+  clearLocalRecoveryCheckpoint,
+  matchLocalRecoveryCheckpoint,
+  readLocalRecoveryCheckpoint,
+  writeLocalRecoveryCheckpoint,
+  type LocalRecoveryCheckpoint,
+} from '../services/storage/localRecoveryCheckpointService';
+import {
   QUARANTINE_MARKER_PREFIX,
   type PreparedTargetBackupSession,
   type QuarantineMarker,
@@ -42,6 +49,8 @@ type UiState =
   | 'preparing'
   | 'prepared_validated'
   | 'download_triggered'
+  /** MOBILE-SAFE-RESUME-01B — Rückkehr nach verworfener Seite. */
+  | 'resumed_after_download'
   | 'reselect_checking'
   | 'reselect_mismatch'
   | 'reselect_confirmed'
@@ -91,6 +100,12 @@ export function LocalRecoveryImportPage() {
 
   const [state, setState] = useState<UiState>('inventory');
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  /** MOBILE-SAFE-RESUME-01B — nur Anzeigewerte des gewählten Zielbestands. */
+  const selectedCompanyNameRef = useRef<string>('');
+  const selectedSavedAtRef = useRef<string | null>(null);
+  const [resumedCheckpoint, setResumedCheckpoint] = useState<LocalRecoveryCheckpoint | null>(
+    null,
+  );
   const [prepared, setPrepared] = useState<PreparedTargetBackupSession | null>(null);
   const [verified, setVerified] = useState<VerifiedTargetBackupSession | null>(null);
   const [result, setResult] = useState<QuarantineSuccess | null>(null);
@@ -275,6 +290,11 @@ export function LocalRecoveryImportPage() {
     parallelMarkerDetected.current = false;
     if (fileInputRef.current) fileInputRef.current.value = '';
     selectedKeyRef.current = copy.storageKey;
+    // MOBILE-SAFE-RESUME-01B — Anzeigewerte für einen späteren Wiederaufsetzpunkt.
+    selectedCompanyNameRef.current = copy.setupCompanyName ?? copy.profileCompanyName ?? '';
+    selectedSavedAtRef.current = copy.savedAt ?? null;
+    // Eine neue Zielwahl macht jeden alten Wiederaufsetzpunkt ungültig.
+    clearLocalRecoveryCheckpoint();
     setSelectedKey(copy.storageKey);
     setState(stagingForKey(copy.storageKey) ? 'staging_blocked' : 'target_selected');
   };
@@ -297,6 +317,11 @@ export function LocalRecoveryImportPage() {
         return;
       }
       setPrepared(outcome.session);
+      /*
+       * MOBILE-SAFE-RESUME-01B — die Vorbereitung schreibt bewusst **nichts**;
+       * diese Zusicherung bleibt unangetastet. Der Wiederaufsetzpunkt entsteht
+       * erst nach einem erfolgreich ausgelösten Download.
+       */
       setState('prepared_validated');
     } catch {
       if (generation !== generationRef.current) return;
@@ -319,6 +344,18 @@ export function LocalRecoveryImportPage() {
     try {
       triggerZipDownload(prepared.zipBlob, prepared.suggestedFilename);
       downloadTriggeredRef.current = true;
+      // Erst nach erfolgreichem Auslösen — ein gescheiterter Download ändert nichts.
+      writeLocalRecoveryCheckpoint({
+        stage: 'download_triggered',
+        sourceStorageKey: prepared.sourceStorageKey,
+        sourceScopeKey: prepared.sourceScopeKey,
+        workspaceId: prepared.workspaceId,
+        companyName: selectedCompanyNameRef.current,
+        sourceRawTextSha256: prepared.sourceRawTextSha256,
+        archiveSha256: prepared.archiveSha256,
+        suggestedFilename: prepared.suggestedFilename,
+        targetSavedAt: selectedSavedAtRef.current,
+      });
       setDownloadError(null);
       setMessage(null);
       setState('download_triggered');
@@ -391,6 +428,9 @@ export function LocalRecoveryImportPage() {
       }
       resultRef.current = outcome;
       setResult(outcome);
+      // Die Quarantäne ist abgeschlossen — der Wiederaufsetzpunkt ist verbraucht.
+      clearLocalRecoveryCheckpoint();
+      setResumedCheckpoint(null);
       setMarkers(listQuarantineMarkers());
       setState(
         targetChangeDetected.current || parallelMarkerDetected.current
@@ -406,6 +446,49 @@ export function LocalRecoveryImportPage() {
   };
 
   const targets = inventory.copies.filter((copy) => copy.scopeType === 'workspace' && copy.valid);
+
+  /**
+   * MOBILE-SAFE-RESUME-01B — genau einmal beim Montieren. Der Punkt wird nur
+   * übernommen, wenn Speicherschlüssel und Ausgangszeitpunkt des Zielbestands
+   * noch übereinstimmen. Es wird **nichts** ausgeführt: keine Quarantäne, keine
+   * Bereinigung, kein Cloud-Zugriff, keine Prüfsummenprüfung. Der Ablauf endet
+   * auf einer sicheren Stufe, auf der die Sicherung neu vorbereitet und die
+   * Quarantäne ausdrücklich erneut bestätigt werden muss.
+   */
+  const checkpointStartedRef = useRef(false);
+  useEffect(() => {
+    if (checkpointStartedRef.current) return;
+    checkpointStartedRef.current = true;
+
+    const stored = readLocalRecoveryCheckpoint();
+    if (!stored) return;
+
+    const match = matchLocalRecoveryCheckpoint({
+      checkpoint: stored,
+      targets: targets.map((copy) => ({
+        storageKey: copy.storageKey,
+        savedAt: copy.savedAt,
+      })),
+    });
+    if (!match.ok) {
+      // Zielbestand fehlt oder hat sich verändert: der Punkt ist wertlos.
+      clearLocalRecoveryCheckpoint();
+      if (match.reason === 'target_changed') {
+        setMessage(
+          'Der lokale Zielbestand hat sich seit der letzten Sicherung verändert. Der Ablauf beginnt neu.',
+        );
+      }
+      return;
+    }
+
+    selectedKeyRef.current = match.checkpoint.sourceStorageKey;
+    selectedCompanyNameRef.current = match.checkpoint.companyName;
+    selectedSavedAtRef.current = match.checkpoint.targetSavedAt;
+    setSelectedKey(match.checkpoint.sourceStorageKey);
+    setResumedCheckpoint(match.checkpoint);
+    setState('resumed_after_download');
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only
+  }, []);
   const selectedCopy = targets.find((copy) => copy.storageKey === selectedKey) ?? null;
   const blockingMarker = selectedKey ? stagingForKey(selectedKey) : undefined;
   const finished = result !== null;
@@ -557,6 +640,49 @@ export function LocalRecoveryImportPage() {
               value={selectedCopy.storageKey}
             />
           </dl>
+        ) : null}
+
+        {state === 'resumed_after_download' && resumedCheckpoint ? (
+          <section className="local-recovery-import-resume" data-testid="import-resumed">
+            <p className="form-hint">
+              Die Seite wurde nach dem Herunterladen der Sicherung verworfen. Zielbereich und
+              erwartete Prüfsumme sind bekannt geblieben. Es wurde nichts quarantänisiert und
+              nichts geschrieben.
+            </p>
+            <dl className="local-recovery-import-details">
+              <DetailRow
+                field="storageKey"
+                label="Gewählter Bereich"
+                value={resumedCheckpoint.sourceStorageKey}
+              />
+              <DetailRow
+                field="workspaceId"
+                label="Arbeitsbereich"
+                value={resumedCheckpoint.workspaceId}
+              />
+              <DetailRow
+                field="archiveSha256"
+                label="Erwartetes Archiv-SHA-256"
+                value={resumedCheckpoint.archiveSha256}
+              />
+              <DetailRow
+                field="suggestedFilename"
+                label="Dateiname der Sicherung"
+                value={resumedCheckpoint.suggestedFilename}
+              />
+              <DetailRow
+                field="savedAt"
+                label="Stand des Zielbereichs"
+                value={resumedCheckpoint.targetSavedAt ?? 'ohne Angabe'}
+                technical={false}
+              />
+            </dl>
+            <p className="form-hint">
+              Die heruntergeladene Datei kann anhand dieser Prüfsumme verglichen werden. Für die
+              Quarantäne muss die Sicherung erneut vorbereitet, die Datei erneut ausgewählt und die
+              Quarantäne erneut bestätigt werden — die vorherige Bestätigung gilt nicht weiter.
+            </p>
+          </section>
         ) : null}
 
         {/* Während des eigenen Laufs wäre dieser Hinweis irreführend: der

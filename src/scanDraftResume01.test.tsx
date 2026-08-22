@@ -914,4 +914,70 @@ describe('UPLOAD-DRAFT-RESUME-01D2 Scan', () => {
     const restored = await loadPendingDocumentIntakeDraft(record.id);
     expect(restored.success).toBe(true);
   });
+
+  /*
+   * MOBILE-SAFE-RESUME-01B — Safari verwirft die Seite; der Query-Zeiger geht
+   * dabei verloren, der UiSession-Schnappschuss bleibt. Der Entwurf muss auch
+   * dann wiederkommen — und die Dateiauswahl darf sich nicht öffnen.
+   */
+  it('P — /scan ohne ?draft= übernimmt den Zeiger aus dem UiSession-Schnappschuss', async () => {
+    mounted = renderScan('/scan');
+    await settle();
+    await scanUntilVisible(mounted, 'SCAN-P');
+    const record = (await listUploadDraftRecordsForActiveScope())[0]!;
+
+    // Der Schnappschuss trägt den Zeiger — die Adresse gleich nicht mehr.
+    const snapshot = loadUiSessionSnapshot();
+    expect(snapshot?.drafts.values.pendingUploadDraftId, JSON.stringify(snapshot)).toBe(
+      record.id,
+    );
+
+    act(() => mounted!.root.unmount());
+    mounted.container.remove();
+    mounted = undefined;
+
+    const clicks: string[] = [];
+    const original = HTMLInputElement.prototype.click;
+    vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(function (
+      this: HTMLInputElement,
+    ) {
+      clicks.push(this.getAttribute('data-testid') ?? 'unknown');
+      return original.call(this);
+    });
+
+    // Nackte Scan-Adresse mit Auto-Picker-Wunsch — der Entwurf hat Vorrang.
+    mounted = renderScan('/scan?input=camera', { strict: true });
+    await waitFor(
+      () => analysisVisible(mounted!.container),
+      'restored from ui session pointer',
+    );
+    await settle(4);
+
+    // Kein leerer Scan-Zustand, kein Auto-Picker, kein zweites Dokument.
+    expect(mounted.container.textContent).toContain('SCAN-P.jpg');
+    expect(clicks).toHaveLength(0);
+    expect(getInboxStoreSnapshot()).toHaveLength(0);
+    // Der Zeiger steht wieder in der Adresse.
+    expect(new URLSearchParams(mounted.location().search).get('draft')).toBe(record.id);
+  });
+
+  it('Q — ohne passenden Schnappschuss bleibt der normale leere Zustand', async () => {
+    clearUiSessionSnapshot();
+
+    const clicks: string[] = [];
+    const original = HTMLInputElement.prototype.click;
+    vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(function (
+      this: HTMLInputElement,
+    ) {
+      clicks.push(this.getAttribute('data-testid') ?? 'unknown');
+      return original.call(this);
+    });
+
+    mounted = renderScan('/scan?input=gallery', { strict: true });
+    await settle(6);
+
+    expect(analysisVisible(mounted.container)).toBe(false);
+    expect(new URLSearchParams(mounted.location().search).get('draft')).toBeNull();
+    expect(clicks.filter((id) => id === 'scan-gallery-input')).toHaveLength(1);
+  });
 });

@@ -9,6 +9,10 @@ import {
   resetUiSessionLiveChrome,
   subscribeUiSessionLive,
 } from '../services/uiSession/uiSessionLiveState';
+import {
+  applyUiSessionChrome,
+  decideUiSessionRestore,
+} from '../services/uiSession/uiSessionRestore';
 
 const SCROLL_THROTTLE_MS = 200;
 
@@ -97,11 +101,33 @@ export function useUiSessionTracker(): void {
     const onPageHide = () => {
       flush('auto');
     };
+    /**
+     * MOBILE-SAFE-RESUME-01B — Rückkehr aus dem Safari-Cache. Der Schnappschuss
+     * wird **nur gelesen und nur auf sichere Oberflächenzustände angewandt**:
+     * Route, Zeiger, Chrome, Scrollposition. Es wird ausdrücklich **keine**
+     * Fachaktion wiederholt — kein Speichern, kein Archivieren, kein Sync, kein
+     * Finalisieren — und keine bereits angeklickte Bestätigung zurückgeholt.
+     * Benutzer-, Workspace- und Scope-Prüfung sowie TTL liegen unverändert in
+     * `decideUiSessionRestore`.
+     */
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (!event.persisted) return;
+      const decision = decideUiSessionRestore({
+        userId: user?.id ?? null,
+        currentPathname: location.pathname,
+        currentSearch: location.search,
+      });
+      if (decision.intent === 'silent' && decision.snapshot) {
+        applyUiSessionChrome(decision.snapshot);
+      }
+    };
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('pagehide', onPageHide);
+    window.addEventListener('pageshow', onPageShow);
     return () => {
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('pagehide', onPageHide);
+      window.removeEventListener('pageshow', onPageShow);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname, location.search, user?.id]);

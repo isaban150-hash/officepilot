@@ -15,6 +15,38 @@ export type UiSessionBootstrapDecision = {
   reason?: string;
 };
 
+/**
+ * MOBILE-SAFE-RESUME-01B — sicherer Lesezugriff auf **einen** Entwurfszeiger.
+ *
+ * Bewusst schmal: die Funktion gibt ausschließlich eine undurchsichtige
+ * Entwurfskennung zurück, niemals Inhalte, niemals Oberflächenzustände und
+ * niemals eine Bestätigung. Sie prüft vorher denselben Vertrag wie die
+ * reguläre Wiederaufnahme — Schema, Storage-Scope, Benutzer, Workspace, TTL,
+ * erlaubte Route und Existenz der Entität. Bei Verstoß gibt sie `null` zurück
+ * und rührt den Schnappschuss nicht an.
+ */
+export function readSafeUiSessionDraftPointer(input: {
+  draftKey: string;
+  userId: string | null;
+  currentPathname: string;
+  currentSearch: string;
+  nowMs?: number;
+}): string | null {
+  const snapshot = loadUiSessionSnapshot();
+  if (!snapshot) return null;
+
+  const result = validateUiSessionSnapshot(snapshot, {
+    userId: input.userId,
+    currentPathname: input.currentPathname,
+    currentSearch: input.currentSearch,
+    nowMs: input.nowMs,
+  });
+  if (!result.ok) return null;
+
+  const raw = snapshot.drafts.values[input.draftKey];
+  return typeof raw === 'string' && raw.trim() ? raw : null;
+}
+
 export function decideUiSessionRestore(input: {
   userId: string | null;
   currentPathname: string;
