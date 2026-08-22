@@ -39,7 +39,12 @@ export function CloudBackupPendingBanner() {
       data-testid="cloud-backup-pending-banner"
     >
       <p className="persistence-failure-banner__text">{translate('cloudBackup.pending.message')}</p>
-      <Link to="/sync" className="persistence-failure-banner__link" data-testid="cloud-backup-open-sync">
+      {/* Die produktive Synchronisierung liegt unter `/synchronisation`. */}
+      <Link
+        to="/synchronisation"
+        className="persistence-failure-banner__link"
+        data-testid="cloud-backup-open-sync"
+      >
         {translate('cloudBackup.pending.openSync')}
       </Link>
     </div>

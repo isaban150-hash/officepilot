@@ -355,6 +355,25 @@ describe('OFFICEPILOT-SETUP-CLOUD-PERSIST-01B — Assistent sichert in die Cloud
     expect(banner?.textContent).toContain('lokal gespeichert');
   });
 
+  /*
+   * REAL-DEVICE-CLOUD-BACKUP-LINK-01 — der Hinweis führte auf `/sync`. Diese
+   * Route existiert nicht und landete auf der 404-Seite; die vorhandene
+   * Synchronisierung liegt unter `/synchronisation`.
+   */
+  it('P7b: "Jetzt sichern" führt auf die vorhandene Synchronisationsroute', async () => {
+    upsertFails = true;
+    const container = await mountApp('/setup');
+    await completeWizard(container);
+
+    const link = container.querySelector<HTMLAnchorElement>(
+      '[data-testid="cloud-backup-open-sync"]',
+    );
+    expect(link, 'Handlungsaufforderung fehlt').not.toBeNull();
+    expect(link?.getAttribute('href')).toBe('/synchronisation');
+    // Der frühere Tippfehler darf auch nicht als Präfix zurückkehren.
+    expect(link?.getAttribute('href')).not.toBe('/sync');
+  });
+
   it('P8: ein Retry überträgt genau einmal je Entität, ohne zweiten Workspace', async () => {
     upsertFails = true;
     const container = await mountApp('/setup');
