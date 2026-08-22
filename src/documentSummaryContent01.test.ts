@@ -6,6 +6,7 @@ import { t, type TranslationKey } from './i18n';
 import {
   buildDocumentSummary,
   buildInboxDocumentSummary,
+  createInboxWorkflowStub,
 } from './services/documentSummary';
 import {
   CONTRACT_SUMMARY_FACT_ORDER,
@@ -221,5 +222,42 @@ describe('DOCUMENT-SUMMARY-CONTENT-01', () => {
     for (const fact of summary.facts) {
       expect(fact.value.length).toBeLessThanOrEqual(DOCUMENT_SUMMARY_FACT_MAX_CHARS);
     }
+  });
+
+  /*
+   * DOCUMENT-BELEGNUMMER-CONSISTENCY-01 — der Stub-Consumer las bisher nur
+   * `Rechnungsnummer` und lieferte für Belegarten `undefined`, während die
+   * Belegtatsache in derselben Datei bereits über `rd()` beide Schreibweisen
+   * berücksichtigte.
+   */
+  it('G: der Stub liefert für Belege denselben Identifikator wie die Belegtatsache', () => {
+    const item = createAuftragInboxItem({
+      id: 'inbox-summary-beleg',
+      documentType: 'eingangsrechnung',
+      classifiedKind: 'tankbeleg',
+      sender: 'Testtankstelle Musterstadt',
+      title: 'Tankbeleg',
+      recognizedData: { Betrag: '70,51', Belegnummer: 'TEST-000184' },
+    });
+
+    const stub = createInboxWorkflowStub(item);
+    // Bisher `undefined`, weil nur `Rechnungsnummer` gelesen wurde.
+    expect(stub.documentUnderstanding?.invoiceNumber).toBe('TEST-000184');
+    // Derselbe Wert, den die Belegtatsache in dieser Datei bereits nennt.
+    expect(stub.documentUnderstanding?.invoiceNumber).toBe(
+      item.recognizedData.Belegnummer,
+    );
+  });
+
+  it('G2: bei beiden Feldern gewinnt auch im Stub die Rechnungsnummer', () => {
+    const item = createAuftragInboxItem({
+      id: 'inbox-summary-beide',
+      documentType: 'eingangsrechnung',
+      classifiedKind: 'eingangsrechnung',
+      sender: 'Baustoff Müller',
+      recognizedData: { Rechnungsnummer: 'R-2026-77', Belegnummer: 'TEST-000184' },
+    });
+
+    expect(createInboxWorkflowStub(item).documentUnderstanding?.invoiceNumber).toBe('R-2026-77');
   });
 });

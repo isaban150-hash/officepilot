@@ -169,3 +169,128 @@ describe('officeActionService', () => {
     expect(resolveHeuteQuickActionRoute('heute.action.openOrder')).toBeNull();
   });
 });
+
+/*
+ * DOCUMENT-BELEGNUMMER-CONSISTENCY-01 — die fünf Belegarten führen ihren
+ * Identifikator unter `Belegnummer`. Ohne Rückfall ging er beim Anlegen einer
+ * Ausgabe verloren, und der Dedupe-Schlüssel kollabierte auf `<lieferant>|`.
+ */
+describe('DOCUMENT-BELEGNUMMER-CONSISTENCY-01 — Belegnummer in der Ausgabe', () => {
+  const TANKSTELLE = 'Testtankstelle Musterstadt';
+
+  function receipt(id: string, recognizedData: Record<string, string>): InboxItem {
+    return createAuftragInboxItem({
+      id,
+      documentType: 'eingangsrechnung',
+      classifiedKind: 'tankbeleg',
+      sender: TANKSTELLE,
+      title: 'Tankbeleg',
+      recognizedData: { Betrag: '70,51', ...recognizedData },
+    });
+  }
+
+  beforeEach(() => {
+    localStorage.clear();
+    hydrateDocumentStore([]);
+    hydrateInboxStore([]);
+  });
+
+  it('A: eine erkannte Belegnummer erreicht die Ausgabe', () => {
+    const item = receipt('inbox-beleg-a', { Belegnummer: 'TEST-000184' });
+    const input = buildExpenseInputFromInbox(item);
+
+    expect(input.invoiceNumber).toBe('TEST-000184');
+
+    const created = addExpense(input);
+    expect(created.success, JSON.stringify(created)).toBe(true);
+    if (created.success) {
+      expect(created.expense.invoiceNumber).toBe('TEST-000184');
+    }
+  });
+
+  it('B: zwei verschiedene Belege desselben Lieferanten sind beide anlegbar', () => {
+    const first = addExpense(
+      buildExpenseInputFromInbox(receipt('inbox-beleg-b1', { Belegnummer: 'TEST-000184' })),
+    );
+    const second = addExpense(
+      buildExpenseInputFromInbox(receipt('inbox-beleg-b2', { Belegnummer: 'TEST-000185' })),
+    );
+
+    expect(first.success, JSON.stringify(first)).toBe(true);
+    expect(second.success, JSON.stringify(second)).toBe(true);
+    if (first.success && second.success) {
+      expect(first.expense.dedupeKey).not.toBe(second.expense.dedupeKey);
+      // Der Schlüssel kollabiert nicht mehr auf `<lieferant>|`.
+      expect(first.expense.dedupeKey.endsWith('|')).toBe(false);
+      expect(second.expense.dedupeKey.endsWith('|')).toBe(false);
+    }
+    expect(getAllExpenses()).toHaveLength(2);
+  });
+
+  it('C: ein echtes Duplikat bleibt blockiert', () => {
+    const first = addExpense(
+      buildExpenseInputFromInbox(receipt('inbox-beleg-c1', { Belegnummer: 'TEST-000184' })),
+    );
+    expect(first.success).toBe(true);
+
+    const second = addExpense(
+      buildExpenseInputFromInbox(receipt('inbox-beleg-c2', { Belegnummer: 'TEST-000184' })),
+    );
+    expect(second.success).toBe(false);
+    if (!second.success) expect(second.errorKey).toBe('expense.duplicate');
+    expect(getAllExpenses()).toHaveLength(1);
+  });
+
+  it('D: sind beide Felder gesetzt, gewinnt die Rechnungsnummer — beide bleiben erhalten', () => {
+    const item = receipt('inbox-beleg-d', {
+      Rechnungsnummer: 'R-2026-77',
+      Belegnummer: 'TEST-000184',
+    });
+    const input = buildExpenseInputFromInbox(item);
+
+    expect(input.invoiceNumber).toBe('R-2026-77');
+    // Der Ursprungsbestand wird vollständig übernommen, nichts überschrieben.
+    expect(input.recognizedData?.Rechnungsnummer).toBe('R-2026-77');
+    expect(input.recognizedData?.Belegnummer).toBe('TEST-000184');
+    // Und die Quelle selbst bleibt unangetastet.
+    expect(item.recognizedData.Belegnummer).toBe('TEST-000184');
+  });
+
+  it('E: Whitespace blockiert den Rückfall nicht und erzeugt keinen Leeridentifikator', () => {
+    const withWhitespaceInvoice = buildExpenseInputFromInbox(
+      receipt('inbox-beleg-e1', { Rechnungsnummer: '   ', Belegnummer: 'TEST-000184' }),
+    );
+    expect(withWhitespaceInvoice.invoiceNumber).toBe('TEST-000184');
+
+    const legacyWhitespace = buildExpenseInputFromInbox(
+      receipt('inbox-beleg-e2', { rechnungsnummer: '  ', Belegnummer: 'TEST-000185' }),
+    );
+    expect(legacyWhitespace.invoiceNumber).toBe('TEST-000185');
+
+    const onlyWhitespace = buildExpenseInputFromInbox(
+      receipt('inbox-beleg-e3', { Belegnummer: '   ' }),
+    );
+    expect(onlyWhitespace.invoiceNumber).toBe('');
+
+    const created = addExpense(onlyWhitespace);
+    expect(created.success).toBe(true);
+    if (created.success) {
+      // Kein Whitespace-Identifikator in Ausgabe und Dedupe-Schlüssel.
+      expect(created.expense.invoiceNumber).toBe('');
+      expect(created.expense.dedupeKey).not.toMatch(/\|\s+$/);
+    }
+  });
+
+  it('F: eine normale Eingangsrechnung verhält sich unverändert', () => {
+    const item = createAuftragInboxItem({
+      id: 'inbox-beleg-f',
+      documentType: 'eingangsrechnung',
+      classifiedKind: 'eingangsrechnung',
+      sender: 'Baustoff Müller',
+      title: 'Materialrechnung',
+      recognizedData: { Betrag: '119,00', Rechnungsnummer: 'R-100' },
+    });
+
+    expect(buildExpenseInputFromInbox(item).invoiceNumber).toBe('R-100');
+  });
+});

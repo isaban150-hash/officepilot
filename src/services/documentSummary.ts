@@ -704,7 +704,9 @@ export function createInboxWorkflowStub(item: InboxItem): WorkflowResult {
         item.recognizedData.Baustelle ?? item.recognizedData.Baustellenadresse,
       customer: item.recognizedData.Kunde ?? item.recognizedData.Auftraggeber,
       vorgang: item.recognizedData.Vorgang ?? item.vorgangTitle,
-      invoiceNumber: item.recognizedData.Rechnungsnummer,
+      // DOCUMENT-BELEGNUMMER-CONSISTENCY-01 — dieselbe Vorrangregel wie oben:
+      // Belegarten führen ihren Identifikator unter `Belegnummer`.
+      invoiceNumber: rd(item, 'Rechnungsnummer', 'Belegnummer'),
       amount:
         item.recognizedData.Betrag ??
         item.recognizedData.Auftragssumme ??

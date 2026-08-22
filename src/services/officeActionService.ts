@@ -79,6 +79,33 @@ function resolvePrimaryTargetForInboxItem(
   return resolvePrimaryTargetObjectForDocumentType(item.documentType);
 }
 
+/**
+ * DOCUMENT-BELEGNUMMER-CONSISTENCY-01 — die fünf Belegarten (tankbeleg,
+ * ec_beleg, kassenbeleg, kreditkartenbeleg, quittung) legen ihren erkannten
+ * Identifikator bewusst unter `Belegnummer` ab; nur Rechnungsdokumente nutzen
+ * `Rechnungsnummer`. Ohne diesen Rückfall ging die erkannte Nummer beim
+ * Anlegen einer Ausgabe verloren und der Dedupe-Schlüssel kollabierte auf
+ * `<lieferant>|` — der **zweite** Beleg desselben Lieferanten wurde dann als
+ * Duplikat abgelehnt.
+ *
+ * Dieselbe Vorrangregel gilt bereits in `documentSummary.rd(item,
+ * 'Rechnungsnummer', 'Belegnummer')`. Bewusst lokal gehalten: kein neuer
+ * exportierter Helfer, keine globale Normalisierung.
+ */
+function resolveExpenseIdentifier(item: InboxItem): string {
+  const candidates = [
+    item.recognizedData.Rechnungsnummer,
+    item.recognizedData.rechnungsnummer,
+    item.recognizedData.Belegnummer,
+  ];
+  for (const candidate of candidates) {
+    const trimmed = candidate?.trim();
+    // Ein reiner Whitespace-Wert darf den nächsten sinnvollen Wert nicht blockieren.
+    if (trimmed) return trimmed;
+  }
+  return '';
+}
+
 export function buildExpenseInputFromInbox(
   item: InboxItem,
   classifiedKind?: ClassifiedDocumentKind,
@@ -93,10 +120,7 @@ export function buildExpenseInputFromInbox(
   return {
     title: item.title,
     supplierName: item.sender.trim() || 'Unbekannt',
-    invoiceNumber:
-      item.recognizedData.Rechnungsnummer ??
-      item.recognizedData.rechnungsnummer ??
-      '',
+    invoiceNumber: resolveExpenseIdentifier(item),
     description: item.officePilotSuggestion ?? '',
     issueDate:
       item.recognizedData.Datum?.slice(0, 10) ??
