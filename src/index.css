@@ -2457,7 +2457,6 @@ body {
 
 .invoice-footer__notes {
   margin-bottom: 0.5rem;
-}
   background: #f8fafc;
   border: 1px solid #e5e7eb;
   border-radius: var(--radius-md);
