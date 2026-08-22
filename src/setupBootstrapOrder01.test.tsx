@@ -47,11 +47,11 @@ vi.mock('./services/workspace/workspaceCloudBootstrapService', async (importOrig
     ...actual,
     bootstrapWorkspaceCloudSyncIfNeeded: vi.fn(
       () =>
-        new Promise<void>((resolve, reject) => {
+        new Promise<{ status: string; reason?: string }>((resolve, reject) => {
           cloudStarted = true;
           cloudResolve = () => {
             switchToWorkspaceScope(USER_ID, WORKSPACE_ID);
-            resolve();
+            resolve({ status: 'ready' });
           };
           cloudReject = reject;
         }),
@@ -190,7 +190,12 @@ describe('SETUP-BOOTSTRAP-ORDER-01', () => {
     expect(getCachedSetup().setupComplete).toBe(true);
   });
 
-  it('gibt nach fehlgeschlagenem Workspace-Bootstrap frei (ohne hängen zu bleiben)', async () => {
+  /**
+   * OFFICEPILOT-MULTI-ORIGIN-SETUP-01B2 — früher gab das Gate nach einem Fehler
+   * den lokalen Stand frei und schickte Bestandskunden in den leeren
+   * Assistenten. Jetzt bleibt es sichtbar bei der Wiederherstellungsansicht.
+   */
+  it('zeigt nach fehlgeschlagenem Workspace-Bootstrap die Wiederherstellungsansicht statt des Assistenten', async () => {
     host = document.createElement('div');
     document.body.appendChild(host);
     root = createRoot(host);
@@ -212,9 +217,7 @@ describe('SETUP-BOOTSTRAP-ORDER-01', () => {
     });
 
     expect(host.querySelector('[data-testid="bootstrap-loading"]')).toBeNull();
-    const probe = host.querySelector('[data-testid="routing-decision"]');
-    expect(probe).not.toBeNull();
-    // Ohne Scope-Wechsel bleibt User-Seed incomplete — Routing setup, aber Gate freigegeben
-    expect(probe?.getAttribute('data-decision')).toBe('setup');
+    expect(host.querySelector('[data-testid="workspace-restore-failure"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="routing-decision"]')).toBeNull();
   });
 });

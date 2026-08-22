@@ -320,6 +320,143 @@ export async function migrateDocumentBlobsToScope(
   return { migrated, missing };
 }
 
+/* ------------------------------------------------------------------------- *
+ * OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02P2 — Quarantäne-Blobs
+ *
+ * Bewusst getrennt von allem oberhalb: kein StorageScope, kein Default-
+ * Parameter, kein getActiveStorageScope, kein buildDocumentBlobScopeKey, kein
+ * parseDocumentBlobScopeKey, keine Fallback-Suche, keine Migration, keine
+ * Kopie. Der Namensraum `quarantine:` kann per Konstruktion nie mit
+ * `guest`, `user:*` oder `workspace:*` kollidieren.
+ *
+ * Gleiche Datenbank, gleicher Object Store, gleiche Datensatzform, keine
+ * Versionsänderung.
+ * ------------------------------------------------------------------------- */
+
+export const QUARANTINE_BLOB_SCOPE_PREFIX = 'quarantine:';
+
+export type QuarantineBlobScopeKey = `quarantine:${string}`;
+
+/**
+ * Streng geprüft — der Präfix allein genügt nicht. Zulässig ist ausschließlich
+ * `quarantine:q-<16 Hex Archivanteil>-<mindestens 16 Hex Zufall>`; damit ist ein
+ * Quarantäneschlüssel weder als `guest`, `user:*` noch `workspace:*` lesbar und
+ * auch kein frei gewählter Name.
+ */
+const QUARANTINE_SCOPE_KEY_PATTERN = /^quarantine:q-[0-9a-f]{16}-[0-9a-f]{16,}$/;
+
+export function isQuarantineBlobScopeKey(value: unknown): value is QuarantineBlobScopeKey {
+  return typeof value === 'string' && QUARANTINE_SCOPE_KEY_PATTERN.test(value);
+}
+
+function assertQuarantineScopeKey(value: unknown): asserts value is QuarantineBlobScopeKey {
+  if (!isQuarantineBlobScopeKey(value)) {
+    throw new TypeError('quarantine_scope_key_invalid');
+  }
+}
+
+function assertQuarantineFileRefId(value: unknown): asserts value is string {
+  if (typeof value !== 'string' || !value || value.includes('::')) {
+    throw new TypeError('quarantine_file_ref_id_invalid');
+  }
+}
+
+export interface WriteQuarantineBlobInput {
+  scopeKey: QuarantineBlobScopeKey;
+  fileRefId: string;
+  bytes: Uint8Array;
+  mimeType: string;
+  fileSize: number;
+  contentHash: string;
+  createdAt: string;
+}
+
+export async function writeQuarantineBlob(input: WriteQuarantineBlobInput): Promise<void> {
+  assertQuarantineScopeKey(input.scopeKey);
+  assertQuarantineFileRefId(input.fileRefId);
+
+  const copy = new Uint8Array(input.bytes);
+  const record: DocumentBlobRecord = {
+    id: `${input.scopeKey}::${input.fileRefId}`,
+    scopeKey: input.scopeKey,
+    fileRefId: input.fileRefId,
+    blobData: copy.buffer.slice(0, copy.byteLength) as ArrayBuffer,
+    mimeType: input.mimeType,
+    fileSize: input.fileSize,
+    contentHash: input.contentHash,
+    createdAt: input.createdAt,
+  };
+  await runTransaction('readwrite', (store) => store.put(record));
+}
+
+export async function readQuarantineBlob(
+  scopeKey: QuarantineBlobScopeKey,
+  fileRefId: string,
+): Promise<{ bytes: Uint8Array; mimeType: string; fileSize: number; contentHash: string } | null> {
+  assertQuarantineScopeKey(scopeKey);
+  assertQuarantineFileRefId(fileRefId);
+
+  const record = await runTransaction<DocumentBlobRecord | undefined>('readonly', (store) =>
+    store.get(`${scopeKey}::${fileRefId}`),
+  );
+  if (!record) return null;
+  // Die Datensatzidentität muss zum angeforderten Bereich passen.
+  if (record.scopeKey !== scopeKey || record.fileRefId !== fileRefId) return null;
+  return {
+    bytes: new Uint8Array(normalizeBlobData(record.blobData)),
+    mimeType: record.mimeType,
+    fileSize: record.fileSize,
+    contentHash: record.contentHash,
+  };
+}
+
+export async function deleteQuarantineBlob(
+  scopeKey: QuarantineBlobScopeKey,
+  fileRefId: string,
+): Promise<void> {
+  assertQuarantineScopeKey(scopeKey);
+  assertQuarantineFileRefId(fileRefId);
+  await runTransaction('readwrite', (store) => store.delete(`${scopeKey}::${fileRefId}`));
+}
+
+/**
+ * Listet ausschließlich die Datensätze genau eines Quarantäne-Tokens.
+ * Bewusst über einen Cursor statt über den `scopeKey`-Index: so ist die
+ * Funktion unabhängig davon, ob eine bereits vorhandene Datenbank den Index
+ * trägt — und es bleibt bei Version 1.
+ */
+export async function listQuarantineBlobRecords(
+  scopeKey: QuarantineBlobScopeKey,
+): Promise<{ fileRefId: string; fileSize: number; contentHash: string; mimeType: string }[]> {
+  assertQuarantineScopeKey(scopeKey);
+  const db = await openDocumentBlobDatabase();
+  return new Promise((resolve, reject) => {
+    const found: { fileRefId: string; fileSize: number; contentHash: string; mimeType: string }[] = [];
+    const transaction = db.transaction(DOCUMENT_BLOB_STORE_NAME, 'readonly');
+    const request = transaction.objectStore(DOCUMENT_BLOB_STORE_NAME).openCursor();
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) {
+        found.sort((a, b) => a.fileRefId.localeCompare(b.fileRefId));
+        resolve(found);
+        return;
+      }
+      const record = cursor.value as DocumentBlobRecord;
+      if (record?.scopeKey === scopeKey) {
+        found.push({
+          fileRefId: record.fileRefId,
+          fileSize: record.fileSize,
+          contentHash: record.contentHash,
+          mimeType: record.mimeType,
+        });
+      }
+      cursor.continue();
+    };
+    request.onerror = () => reject(request.error ?? new Error('quarantine_list_failed'));
+    transaction.onabort = () => reject(transaction.error ?? new Error('quarantine_list_aborted'));
+  });
+}
+
 async function deleteDatabaseWithRetry(factory: IDBFactory, attempts = 8): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const request = factory.deleteDatabase(DOCUMENT_BLOB_DB_NAME);

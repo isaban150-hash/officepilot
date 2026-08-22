@@ -6,7 +6,7 @@ import { deDocumentExplanation, deLetterExplanation } from './letterExplanation'
 import { deLanguage } from './language';
 import { deOverlay } from './overlay';
 import { deScan } from './scan';
-import { deIntakePreview } from './intakePreview';
+import { deIntakePreview, deDocumentFacts } from './intakePreview';
 import { deStorageRecommendation } from './storageRecommendation';
 import { deUserStorageDecision } from './userStorageDecision';
 import { deDocumentOriginal } from './documentOriginal';
@@ -24,6 +24,7 @@ export const deModules = {
   ...deOverlay,
   ...deScan,
   ...deIntakePreview,
+  ...deDocumentFacts,
   ...deStorageRecommendation,
   ...deUserStorageDecision,
   ...deDocumentOriginal,

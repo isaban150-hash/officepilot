@@ -10,6 +10,29 @@ import type { DetectedOrderPosition, InboxItem, Vorgang } from '../types/models'
 import type { TranslationKey } from '../i18n';
 import { isImportableLvPosition } from './contractPositionImportService';
 import { cleanPartyFactValue } from './documentSummaryContent';
+import { isOwnCompanyName } from './customerOwnCompanyGuard';
+import type { DocumentVisibleFact } from './documentSpatialFieldExtractionService';
+import {
+  DOCUMENT_FACT_LABEL_ALIASES,
+  resolveAssignedValue,
+  type DocumentFactAssignment,
+} from './document/documentFactAiService';
+
+/** Roles that may appear as an unresolved row, with their visible labels. */
+const PARTY_ROLE_FACT_ALIASES: Array<{ role: ContractPartyRole; labels: readonly string[] }> = [
+  'auftraggeber',
+  'auftragnehmer',
+  'subunternehmer',
+  'nachunternehmer',
+  'vermieter',
+  'mieter',
+  'arbeitgeber',
+  'arbeitnehmer',
+  'dienstleister',
+].map((role) => ({
+  role: role as ContractPartyRole,
+  labels: DOCUMENT_FACT_LABEL_ALIASES[role] ?? [],
+}));
 import { hasAbschlagsrechnung, hasSchlussrechnung } from './orderBillingRules';
 
 export type ContractWorkspaceSummaryRow = {
@@ -41,6 +64,21 @@ export type ContractWorkspacePartyRow = {
   address?: string;
   contact?: string;
   isOwnCompany?: boolean;
+  /**
+   * SCAN-OCR-EVIDENCE-01B2 — why this role carries no confirmed value, or that
+   * its value is only a model suggestion. Empty for a proven value.
+   */
+  statusLabelKey?: TranslationKey;
+  /** Display-only text of an unconfirmed suggestion — never a business value. */
+  suggestedName?: string;
+};
+
+/** Visible fact status → user facing message. */
+const FACT_STATUS_LABEL_KEYS: Record<string, TranslationKey> = {
+  missing_value: 'documentFacts.status.missingValue',
+  unreadable: 'documentFacts.status.unreadable',
+  ambiguous: 'documentFacts.status.ambiguous',
+  partial: 'documentFacts.status.partial',
 };
 
 export type ContractWorkspaceMoneyMetric = {
@@ -94,6 +132,9 @@ export type ContractWorkspaceSummaryView = {
 export type ContractWorkspaceSummaryContext = {
   item?: InboxItem;
   vorgang?: Vorgang | null;
+  /** SCAN-OCR-EVIDENCE-01B2 — proven OCR facts and their assignments. */
+  visibleFacts?: readonly DocumentVisibleFact[];
+  factAssignments?: readonly DocumentFactAssignment[];
 };
 
 const POSITION_SUM_SOURCE = 'Summe der erkannten Positionen';
@@ -810,6 +851,44 @@ function getPartyRolePriority(role: ContractPartyRole | undefined): number {
   }
 }
 
+/**
+ * SCAN-OCR-EVIDENCE-01B3 — unsichere sichtbare Fakten außerhalb der Parteien.
+ *
+ * Nutzt die vorhandene Statuszeilen-Sektion; es entsteht keine zweite Karte.
+ * Bereits als Partei dargestellte Angaben werden nicht doppelt gezeigt.
+ */
+function buildFactStatusRows(
+  context: ContractWorkspaceSummaryContext | undefined,
+  partyRows: readonly ContractWorkspacePartyRow[],
+): ContractWorkspaceStatusRow[] {
+  const facts = context?.visibleFacts ?? [];
+  if (facts.length === 0) return [];
+
+  const shownRoleLabels = new Set(
+    partyRows.map((row) => normalizeName(String(row.roleLabelKey))),
+  );
+  const partyAliases = new Set(
+    PARTY_ROLE_FACT_ALIASES.flatMap((rule) => rule.labels.map((label) => normalizeName(label))),
+  );
+
+  const rows: ContractWorkspaceStatusRow[] = [];
+  for (const fact of facts) {
+    if (fact.status === 'recognized') continue;
+    const label = normalizeName(fact.labelText.replace(/[:：]\s*$/, ''));
+    // Parteien haben ihre eigene Zeile — hier nur alles Übrige.
+    if (partyAliases.has(label) || shownRoleLabels.has(label)) continue;
+    const valueKey = FACT_STATUS_LABEL_KEYS[fact.status];
+    if (!valueKey) continue;
+    rows.push({
+      id: `fact-status-${fact.id}`,
+      labelKey: 'documentIntelligence.workspace.factStatusLabel',
+      valueKey,
+      valueParams: { label: fact.labelText.replace(/[:：]\s*$/, '') },
+    });
+  }
+  return rows;
+}
+
 function buildPartyRows(
   proposal: ContractOrderProposal,
   fields: Record<string, ExtractedContractField>,
@@ -817,20 +896,39 @@ function buildPartyRows(
 ): ContractWorkspacePartyRow[] {
   const contact = readField(fields.ansprechpartner)?.value;
   const parties = proposal.intelligence.parties ?? [];
-  const ownCompanyName = proposal.contractor?.trim();
+  /**
+   * SCAN-CONTRACT-PARTY-ROLE-01B — the truth about "our company" is the company
+   * profile, never proposal.contractor: comparing a value against the very slot
+   * it was copied from is tautological and marked a customer as "Ihr Betrieb".
+   */
   const isOwnCompanyParty = (role: ContractPartyRole | undefined, name: string) => {
-    if (!ownCompanyName) return false;
     const ownCompanyRoles = new Set(['auftragnehmer', 'subunternehmer', 'nachunternehmer', 'dienstleister']);
-    return ownCompanyRoles.has(role ?? 'unknown') && normalizeName(name) === normalizeName(ownCompanyName);
+    if (!ownCompanyRoles.has(role ?? 'unknown')) return false;
+    return isOwnCompanyName(name);
   };
 
   const rows: ContractWorkspacePartyRow[] = [];
   const seenRoles = new Set<ContractPartyRole>();
   const rowRolesByName = new Map<string, ContractPartyRole>();
 
+  /**
+   * A value that still carries the opposite role word — typical for flat OCR
+   * lines like "Auftraggeber NordWest Dachbau GmbH" — must never be placed on
+   * this side, no matter which generic slot delivered it.
+   */
+  const carriesOppositeRoleWord = (role: ContractPartyRole, name: string): boolean => {
+    const opposite = CUSTOMER_SIDE_ROLES.has(role)
+      ? /^\s*auftragnehmer(?:in)?\b/i
+      : CONTRACTOR_SIDE_ROLES.has(role)
+        ? /^\s*auftraggeber(?:in)?\b/i
+        : null;
+    return opposite !== null && opposite.test(name);
+  };
+
   const addPartyRow = (role: ContractPartyRole, name: string | undefined, address?: string) => {
     const resolvedName = resolvePartyNameFromCandidates(name);
     if (!resolvedName || seenRoles.has(role)) return;
+    if (carriesOppositeRoleWord(role, resolvedName)) return;
 
     const normalizedName = normalizeName(resolvedName);
     const currentPriority = getPartyRolePriority(role);
@@ -867,8 +965,15 @@ function buildPartyRows(
   const hasSide = (roles: ReadonlySet<ContractPartyRole>) =>
     [...seenRoles].some((role) => roles.has(role));
 
+  /**
+   * SCAN-CONTRACT-PARTY-ROLE-01B — as soon as one role was recognised, the other
+   * side must not be invented from generic fields. A missing party is safer than
+   * a swapped one.
+   */
+  const hasExplicitParty = rows.length > 0;
+
   // Fallbacks fill a missing side only; a recognized role on that side wins.
-  if (!hasSide(CUSTOMER_SIDE_ROLES)) {
+  if (!hasExplicitParty && !hasSide(CUSTOMER_SIDE_ROLES)) {
     addPartyRow(
       'auftraggeber',
       resolvePartyNameFromCandidates(
@@ -881,7 +986,7 @@ function buildPartyRows(
     );
   }
 
-  if (!hasSide(CONTRACTOR_SIDE_ROLES)) {
+  if (!hasExplicitParty && !hasSide(CONTRACTOR_SIDE_ROLES)) {
     addPartyRow(
       'auftragnehmer',
       resolvePartyNameFromCandidates(
@@ -891,6 +996,43 @@ function buildPartyRows(
         context?.item?.recognizedData.Lieferant?.trim(),
       ),
     );
+  }
+
+  /**
+   * SCAN-OCR-EVIDENCE-01B2 — a visible role label without a confirmed value stays
+   * visible as a role row carrying its reason. A role that is not in the document
+   * at all is never invented.
+   */
+  const facts = context?.visibleFacts ?? [];
+  if (facts.length > 0) {
+    for (const rule of PARTY_ROLE_FACT_ALIASES) {
+      if (seenRoles.has(rule.role)) continue;
+      const fact = facts.find((entry) =>
+        rule.labels.some(
+          (label) =>
+            normalizeName(label) === normalizeName(entry.labelText.replace(/[:：]\s*$/, '')),
+        ),
+      );
+      const suggestion = context?.factAssignments
+        ? resolveAssignedValue(context.factAssignments, facts, rule.role)
+        : null;
+      // A model suggestion may name a role whose label is not in the document.
+      if (!fact && !suggestion?.suggestedValue) continue;
+      const statusLabelKey = suggestion?.suggestedValue
+        ? 'documentFacts.status.aiSuggestion'
+        : fact
+          ? FACT_STATUS_LABEL_KEYS[fact.status]
+          : undefined;
+      if (!statusLabelKey) continue;
+      seenRoles.add(rule.role);
+      rows.push({
+        id: `${rule.role}-unresolved`,
+        roleLabelKey: PARTY_ROLE_LABEL_KEYS[rule.role],
+        name: '',
+        statusLabelKey,
+        suggestedName: suggestion?.suggestedValue ?? undefined,
+      });
+    }
   }
 
   if (rows.length > 0) {
@@ -1111,7 +1253,7 @@ export function buildContractWorkspaceSummaryView(
     typeSpecificRows,
     rows,
     clauseRows: buildClauseRows(proposal),
-    statusRows: buildStatusRows(context),
+    statusRows: [...buildStatusRows(context), ...buildFactStatusRows(context, partyRows)],
     positionInsightRows: buildPositionInsightRows(proposal),
     lvOverview: buildLvOverview(proposal),
     compactPositions: proposal.positions.slice(0, CONTRACT_COMPACT_POSITION_LIMIT),

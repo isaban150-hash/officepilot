@@ -24,7 +24,10 @@ import { getVorgangStoreSnapshot, hydrateVorgangStore } from './services/vorgang
 import { getCustomerStoreSnapshot, hydrateCustomerStore } from './services/customerStoreService';
 import * as blobDbService from './services/storage/documentBlobIndexedDbService';
 import { hasDocumentBlob } from './services/storage/documentBlobIndexedDbService';
+
 import * as ocrDocumentService from './services/ocrDocumentService';
+import { setOcrImageRecognizerForTests } from './services/tesseractOcrService';
+import * as aiRequestRunner from './services/ai/aiRequestRunner';
 import { setImageOcrExtractorForTests } from './services/ocrDocumentService';
 import * as pendingDocumentIntakeService from './services/pendingDocumentIntakeService';
 import * as persistenceService from './services/persistenceService';
@@ -180,7 +183,7 @@ function card(container: ParentNode): HTMLElement | null {
 function setMainScroll(container: ParentNode, top: number): void {
   const main = container.querySelector('.app-shell__main') as HTMLElement | null;
   if (!main) return;
-  Object.defineProperty(main, 'scrollTop', { value: top, configurable: true });
+  Object.defineProperty(main, 'scrollTop', { value: top, configurable: true, writable: true });
 }
 
 function expectNoDomainObjects(): void {
@@ -253,6 +256,7 @@ describe('UPLOAD-DRAFT-RESUME-01D2 Scan', () => {
       mounted = undefined;
     }
     setImageOcrExtractorForTests(null);
+    setOcrImageRecognizerForTests(null);
     vi.restoreAllMocks();
     resetUiSessionLiveState();
     clearUiSessionSnapshot();
@@ -760,6 +764,135 @@ describe('UPLOAD-DRAFT-RESUME-01D2 Scan', () => {
     expect(serialized).not.toContain('pageTexts');
     expect(serialized).not.toContain('data:');
     expect(serialized).not.toContain('storageRecommendation');
+  });
+
+  it('R — Layout, Fakten und Zuordnungen überstehen Reload ohne OCR und ohne KI', async () => {
+    // Bild-OCR mit Layout; ein fremdes Label erzwingt genau einen KI-Aufruf.
+    const layoutPage = {
+      version: 1,
+      pageNumber: 1,
+      width: 1200,
+      height: 1700,
+      truncated: false,
+      tokens: [
+        ...['Auftraggeber', 'NordWest', 'Dachbau', 'GmbH'].map((text, index) => ({
+          id: `p1-t${index}`,
+          text,
+          x0: index === 0 ? 0.08 : 0.45 + (index - 1) * 0.1,
+          y0: 0.2,
+          x1: (index === 0 ? 0.08 : 0.45 + (index - 1) * 0.1) + text.length * 0.012,
+          y1: 0.22,
+          confidence: 93,
+          blockId: index === 0 ? 'b0' : 'b1',
+          lineId: index === 0 ? 'b0-l0' : 'b1-l0',
+        })),
+        ...['Vertragspartner', 'Cirmak', 'Haustechnik'].map((text, index) => ({
+          id: `p1-t${index + 4}`,
+          text,
+          x0: index === 0 ? 0.08 : 0.45 + (index - 1) * 0.1,
+          y0: 0.26,
+          x1: (index === 0 ? 0.08 : 0.45 + (index - 1) * 0.1) + text.length * 0.012,
+          y1: 0.28,
+          confidence: 93,
+          blockId: index === 0 ? 'b0' : 'b1',
+          lineId: index === 0 ? 'b0-l1' : 'b1-l1',
+        })),
+      ],
+    };
+    // Der textbasierte Stub aus beforeEach hat Vorrang — hier wird der
+    // layoutfähige Recognizer gebraucht.
+    setImageOcrExtractorForTests(null);
+    setOcrImageRecognizerForTests(async () => ({
+      text: 'Werkvertrag Auftraggeber Vertragspartner',
+      confidence: 90,
+      layout: layoutPage,
+    }));
+    vi.spyOn(aiRequestRunner, 'isAiProviderConfigured').mockReturnValue(true);
+    const aiSpy = vi
+      .spyOn(aiRequestRunner, 'runAiRequest')
+      .mockResolvedValue({ success: true, source: 'ai', text: '{"assignments":[]}' });
+
+    mounted = renderScan('/scan');
+    await settle();
+    await scanUntilVisible(mounted, 'SCAN-R');
+    const record = (await listUploadDraftRecordsForActiveScope())[0]!;
+
+    // Alles Belegte liegt im Entwurf.
+    expect(record.extraction.layout?.tokens.length).toBeGreaterThan(0);
+    expect(record.extraction.visibleFacts?.length).toBeGreaterThan(0);
+    expect(record.extraction.semanticFactAssignments?.length).toBeGreaterThan(0);
+    expect(aiSpy).toHaveBeenCalledTimes(1);
+
+    act(() => mounted!.root.unmount());
+    mounted.container.remove();
+    mounted = undefined;
+
+    // Ab hier darf weder OCR noch das Modell erneut laufen.
+    const ocrSpy = vi.spyOn(ocrDocumentService, 'extractDocumentTextFromCache');
+    const previewSpy = vi.spyOn(pendingDocumentIntakeService, 'processDocumentFileForPreview');
+    aiSpy.mockClear();
+    const clicks: string[] = [];
+    const originalClick = HTMLInputElement.prototype.click;
+    vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(function (
+      this: HTMLInputElement,
+    ) {
+      clicks.push(this.getAttribute('data-testid') ?? '');
+      return originalClick.call(this);
+    });
+
+    mounted = renderScan(`/scan?draft=${record.id}`, { strict: true });
+    await waitFor(() => analysisVisible(mounted!.container), 'restored');
+    await settle(4);
+
+    expect(ocrSpy).not.toHaveBeenCalled();
+    expect(previewSpy).not.toHaveBeenCalled();
+    expect(aiSpy).not.toHaveBeenCalled();
+    expect(clicks).toHaveLength(0);
+
+    const restored = await loadPendingDocumentIntakeDraft(record.id);
+    expect(restored.success).toBe(true);
+    if (!restored.success) return;
+    expect(restored.pending.extraction.visibleFacts).toEqual(record.extraction.visibleFacts);
+    expect(restored.pending.extraction.semanticFactAssignments).toEqual(
+      record.extraction.semanticFactAssignments,
+    );
+    expectNoDomainObjects();
+  });
+
+  it('S — ohne konfigurierte KI bleiben die lokalen Fakten vollständig', async () => {
+    setImageOcrExtractorForTests(null);
+    setOcrImageRecognizerForTests(async () => ({
+      text: 'Werkvertrag Auftraggeber',
+      confidence: 90,
+      layout: {
+        version: 1,
+        pageNumber: 1,
+        width: 1200,
+        height: 1700,
+        truncated: false,
+        tokens: ['Auftraggeber', 'NordWest', 'Dachbau', 'GmbH'].map((text, index) => ({
+          id: `p1-t${index}`,
+          text,
+          x0: index === 0 ? 0.08 : 0.45 + (index - 1) * 0.1,
+          y0: 0.2,
+          x1: (index === 0 ? 0.08 : 0.45 + (index - 1) * 0.1) + text.length * 0.012,
+          y1: 0.22,
+          confidence: 93,
+          blockId: index === 0 ? 'b0' : 'b1',
+          lineId: index === 0 ? 'b0-l0' : 'b1-l0',
+        })),
+      },
+    }));
+    vi.spyOn(aiRequestRunner, 'isAiProviderConfigured').mockReturnValue(false);
+    const aiSpy = vi.spyOn(aiRequestRunner, 'runAiRequest');
+
+    mounted = renderScan('/scan');
+    await settle();
+    await scanUntilVisible(mounted, 'SCAN-S');
+
+    expect(aiSpy).not.toHaveBeenCalled();
+    const record = (await listUploadDraftRecordsForActiveScope())[0]!;
+    expect(record.extraction.semanticFactAssignments).toBeDefined();
   });
 
   it('O — StrictMode-Restore hängt nicht', async () => {

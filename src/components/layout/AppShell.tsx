@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom';
 import { BetaModeBanner } from './BetaModeBanner';
 import { PersistenceFailureBanner } from '../system/PersistenceFailureBanner';
+import { CloudBackupPendingBanner } from '../system/CloudBackupPendingBanner';
 import { BottomNav } from './BottomNav';
 import { SidebarNav } from './SidebarNav';
 import { UserMenu } from './UserMenu';
@@ -29,6 +30,7 @@ export function AppShell() {
         </div>
       </div>
       <PersistenceFailureBanner />
+      <CloudBackupPendingBanner />
       <BetaModeBanner />
       <UiSessionRecoveryHost />
       <div className="app-shell__search" data-testid="app-shell-search">

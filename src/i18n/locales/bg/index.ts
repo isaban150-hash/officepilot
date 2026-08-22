@@ -8,7 +8,7 @@ import { bgIntakeUnderstanding } from './intakeUnderstanding';
 import { bgLanguage } from './language';
 import { bgReviewWorkflow } from './reviewWorkflow';
 import { bgScan } from './scan';
-import { bgIntakePreview } from './intakePreview';
+import { bgIntakePreview, bgDocumentFacts } from './intakePreview';
 import { bgStorageRecommendation } from './storageRecommendation';
 import { bgUserStorageDecision } from './userStorageDecision';
 import { bgDocumentOriginal } from './documentOriginal';
@@ -31,6 +31,7 @@ export const bgModules = {
   ...bgReviewWorkflow,
   ...bgScan,
   ...bgIntakePreview,
+  ...bgDocumentFacts,
   ...bgStorageRecommendation,
   ...bgUserStorageDecision,
   ...bgDocumentOriginal,

@@ -26,6 +26,11 @@ import {
   type OcrPreviewSummary,
 } from './ocrDocumentService';
 import { validateUserStorageDecision } from './userStorageDecisionService';
+import {
+  assignDocumentFacts,
+  DOCUMENT_FACT_FIELD_KEYS,
+  DOCUMENT_FACT_LABEL_ALIASES,
+} from './document/documentFactAiService';
 import { traceStep, traceStepStart } from './documentSaveTraceService';
 import { persistDocumentFileIntakeTransformPlanCarryContextAfterConfirm } from './documentFileIntakeTransformPlanCarryContextService';
 
@@ -64,6 +69,20 @@ export async function processDocumentFileForPreview(
   const extraction = await extractDocumentTextFromCache(loaded.payload);
   if (isBlockingExtractionError(extraction.errorCode)) {
     return { success: false, error: extraction.errorCode ?? 'ocr_failed' };
+  }
+
+  /**
+   * SCAN-OCR-EVIDENCE-01B1 — the single production point where visible facts get
+   * their meaning. Runs once per newly analysed image; a restored draft reuses
+   * the stored assignments and never comes through here again.
+   */
+  if (extraction.visibleFacts?.length && !extraction.semanticFactAssignments) {
+    const assignment = await assignDocumentFacts({
+      facts: extraction.visibleFacts,
+      allowedFieldKeys: DOCUMENT_FACT_FIELD_KEYS,
+      aliasesByFieldKey: DOCUMENT_FACT_LABEL_ALIASES,
+    });
+    extraction.semanticFactAssignments = assignment.assignments;
   }
 
   const preview = buildOcrPreviewSummary(

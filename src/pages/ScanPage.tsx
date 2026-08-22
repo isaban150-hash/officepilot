@@ -482,6 +482,8 @@ export function ScanPage() {
           extraction={pendingScan.extraction}
           preview={pendingScan.preview}
           contractProposal={resolvePendingDocumentContractProposal(pendingScan)}
+          visibleFacts={pendingScan.extraction.visibleFacts}
+          factAssignments={pendingScan.extraction.semanticFactAssignments}
           storageRecommendation={pendingScan.storageRecommendation}
           decisionActions={buildPendingDocumentDecisionActions(pendingScan)}
           pendingNoticeLabel={translate('document.intakePreview.pendingNotice')}

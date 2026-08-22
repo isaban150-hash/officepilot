@@ -155,6 +155,8 @@ export async function rpcEnsurePersonalWorkspace(
       workspaceId: workspaceRow.id,
       workspace: mapWorkspaceRow(workspaceRow),
       member: mapMemberRow(memberRow),
+      // ensure_personal_workspace liefert false, wenn die Mitgliedschaft schon bestand.
+      created: (data as { created?: boolean } | null)?.created === true,
     };
   } catch (error) {
     if (error instanceof WorkspaceCloudError) {

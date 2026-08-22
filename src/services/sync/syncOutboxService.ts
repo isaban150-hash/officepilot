@@ -10,6 +10,25 @@ import { getSyncClient } from './syncClientService';
 
 let outbox: SyncOutboxEntry[] = [];
 
+/**
+ * OFFICEPILOT-SETUP-CLOUD-PERSIST-01C — der Hinweis „Cloud-Sicherung steht aus"
+ * muss verschwinden, sobald die Übertragung geglückt ist. Dafür meldet die
+ * Outbox jede Änderung; keine zweite Sync-Architektur, nur eine Benachrichtigung.
+ */
+type OutboxListener = () => void;
+const outboxListeners = new Set<OutboxListener>();
+
+export function subscribeSyncOutbox(listener: OutboxListener): () => void {
+  outboxListeners.add(listener);
+  return () => {
+    outboxListeners.delete(listener);
+  };
+}
+
+function notifyOutboxChanged(): void {
+  for (const listener of [...outboxListeners]) listener();
+}
+
 const ACTIVE_OUTBOX_STATUSES: SyncOutboxStatus[] = ['pending', 'blocked', 'error'];
 
 function resolveOutboxStatus(): SyncOutboxStatus {
@@ -37,6 +56,7 @@ function mergeOutboxEntry(
 
 export function hydrateSyncOutbox(entries: SyncOutboxEntry[]): void {
   outbox = entries.map((entry) => ({ ...entry }));
+  notifyOutboxChanged();
 }
 
 export function getSyncOutboxSnapshot(): SyncOutboxEntry[] {
@@ -45,6 +65,7 @@ export function getSyncOutboxSnapshot(): SyncOutboxEntry[] {
 
 export function resetSyncOutboxForTests(entries: SyncOutboxEntry[] = []): void {
   outbox = entries.map((entry) => ({ ...entry }));
+  notifyOutboxChanged();
 }
 
 export interface EnqueueSyncOutboxInput {
@@ -66,6 +87,7 @@ export function enqueueSyncOutbox(input: EnqueueSyncOutboxInput): SyncOutboxEntr
   if (existingIndex >= 0) {
     const merged = mergeOutboxEntry(outbox[existingIndex], input, status);
     outbox = [merged, ...outbox.filter((_, index) => index !== existingIndex)];
+    notifyOutboxChanged();
     return { ...merged };
   }
 
@@ -81,7 +103,20 @@ export function enqueueSyncOutbox(input: EnqueueSyncOutboxInput): SyncOutboxEntr
     blockedReason: isBetaTestMode() ? 'beta_mode' : undefined,
   };
   outbox = [entry, ...outbox];
+  notifyOutboxChanged();
   return { ...entry };
+}
+
+/**
+ * OFFICEPILOT-SETUP-CLOUD-PERSIST-01B — true, solange Firmendaten noch nicht in
+ * der Cloud liegen. Grundlage für den sichtbaren Hinweis „nur lokal gespeichert“.
+ */
+export function hasPendingCompanyCloudBackup(): boolean {
+  return outbox.some(
+    (entry) =>
+      (entry.entityType === 'company_setup' || entry.entityType === 'company_profile') &&
+      ACTIVE_OUTBOX_STATUSES.includes(entry.status),
+  );
 }
 
 export function markOutboxEntriesCompleted(outboxIds: string[]): void {
@@ -90,6 +125,7 @@ export function markOutboxEntriesCompleted(outboxIds: string[]): void {
   outbox = outbox.map((entry) =>
     completedIds.has(entry.id) ? { ...entry, status: 'completed' } : entry,
   );
+  notifyOutboxChanged();
 }
 
 export function markOutboxEntriesFailed(outboxIds: string[], reason?: string): void {
@@ -105,6 +141,7 @@ export function markOutboxEntriesFailed(outboxIds: string[], reason?: string): v
         }
       : entry,
   );
+  notifyOutboxChanged();
 }
 
 export function isSyncOutboxEnabled(): boolean {

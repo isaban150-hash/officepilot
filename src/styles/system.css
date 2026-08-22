@@ -153,3 +153,175 @@
 .app-shell__main .system-page__card {
   margin: 0 auto;
 }
+
+/* OFFICEPILOT-LOCAL-SCOPE-RECOVERY-01B — Notfallansicht, mobil lesbar.
+   Nutzt die vorhandene auth-page/auth-card-Struktur; hier nur die Liste. */
+.local-recovery-list {
+  list-style: none;
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.local-recovery-item {
+  border: 1px solid var(--op-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.local-recovery-item__headline {
+  margin: 0;
+  font-weight: 600;
+  font-size: var(--text-body-small);
+  color: var(--op-text);
+  word-break: break-word;
+}
+
+.local-recovery-item__key {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: var(--text-meta-size);
+  word-break: break-all;
+  color: var(--op-text-muted);
+}
+
+.local-recovery-item__facts {
+  margin: 0;
+  display: grid;
+  gap: var(--space-2);
+  font-size: var(--text-body-small);
+}
+
+.local-recovery-item__facts > div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.local-recovery-item__facts dt {
+  color: var(--op-text-muted);
+}
+
+.local-recovery-item__facts dd {
+  margin: 0;
+  text-align: right;
+  word-break: break-word;
+}
+
+/* OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02P3E — Zielauswahl unter
+   /local-recovery/import, ausschließlich für diesen einen Knopf.
+
+   Die globale Regel `.btn` setzt display:inline-flex mit
+   justify-content:center und ohne Umbruch. Sechs Angaben landeten dadurch in
+   einer zentrierten Zeile und liefen auf dem Smartphone beidseitig aus der
+   Karte. Der kombinierte Selektor überstimmt das nur hier — `.btn`,
+   `.btn--full`, `.auth-page` und `.auth-card` bleiben unverändert, und es wird
+   kein !important verwendet. */
+.btn.local-recovery-import-target {
+  display: grid;
+  grid-template-columns: 1fr;
+  justify-items: start;
+  align-items: start;
+  align-content: start;
+  gap: var(--space-2);
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  white-space: normal;
+  text-align: left;
+}
+
+.local-recovery-import-target__row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.15rem;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.local-recovery-import-target__label {
+  font-size: var(--text-meta-size);
+  font-weight: 400;
+  color: var(--op-text-muted);
+  min-width: 0;
+}
+
+.local-recovery-import-target__value {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  /* Safari-Rückfall für ältere Fassungen ohne overflow-wrap: anywhere. */
+  word-break: break-word;
+  font-size: var(--text-body-small);
+  color: var(--op-text);
+}
+
+.local-recovery-import-target__value--technical {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: var(--text-meta-size);
+}
+
+/* OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02P3F — alle übrigen technischen
+   Prüfwerte unter /local-recovery/import.
+
+   Ein 64-stelliger Prüfwert ist ein einziges unteilbares Wort; ohne
+   ausdrückliches overflow-wrap läuft er aus der Karte. Sämtliche Regeln hängen
+   an der Wurzelklasse .local-recovery-import-page und wirken deshalb weder auf
+   /local-recovery noch auf die normale Anwendung. Die Zielkarte aus 02P3E
+   bleibt unberührt, .local-recovery-item__facts wird nicht angefasst. */
+.local-recovery-import-page .local-recovery-import-details {
+  margin: var(--space-3) 0 0;
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.local-recovery-import-page .local-recovery-import-detail-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.15rem;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.local-recovery-import-page .local-recovery-import-detail-label {
+  margin: 0;
+  font-size: var(--text-meta-size);
+  color: var(--op-text-muted);
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.local-recovery-import-page .local-recovery-import-technical-value {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  /* Rückfall für ältere Safari-Fassungen — niemals alleinige Absicherung. */
+  word-break: break-word;
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: var(--text-meta-size);
+  color: var(--op-text);
+}
+
+.local-recovery-import-page .local-recovery-import-detail-row dd {
+  margin: 0;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}

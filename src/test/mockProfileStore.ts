@@ -91,7 +91,27 @@ export function mockProfileSelectOwn(userId: string): ProfileRow | null {
   return profile ? cloneProfile(profile) : null;
 }
 
-export function mockRpc(name: string, args: Record<string, unknown>): ProfileRow | ProfileRow[] | null {
+/**
+ * Zusätzliche RPC-Antworten für Tests, die nicht das Profil betreffen
+ * (z. B. Workspace-Provisionierung). Kein Netzwerk, nur lokale Stubs.
+ */
+const extraRpcHandlers = new Map<string, (args: Record<string, unknown>) => unknown>();
+
+export function registerMockRpcHandler(
+  name: string,
+  handler: (args: Record<string, unknown>) => unknown,
+): void {
+  extraRpcHandlers.set(name, handler);
+}
+
+export function clearMockRpcHandlers(): void {
+  extraRpcHandlers.clear();
+}
+
+export function mockRpc(name: string, args: Record<string, unknown>): unknown {
+  const extra = extraRpcHandlers.get(name);
+  if (extra) return extra(args);
+
   switch (name) {
     case 'update_own_profile': {
       if (!currentUserId) throw new Error('Nicht angemeldet');

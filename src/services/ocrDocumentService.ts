@@ -8,6 +8,12 @@ import { extractTextFromPdfBytes } from './uploadTextExtractionService';
 import { extractPdfTextViaOcr, shouldRunPdfOcr } from './pdfOcrFallbackService';
 import { getPdfPageCount } from './pdfDocumentService';
 import { recognizeImageOrCanvas } from './tesseractOcrService';
+import type { DocumentLayoutPage } from '../types/documentLayout';
+import {
+  extractVisibleFactsFromLayout,
+  type DocumentVisibleFact,
+} from './documentSpatialFieldExtractionService';
+import type { DocumentFactAssignment } from './document/documentFactAiService';
 import {
   assessTextQuality,
   buildDisplayPreviewLines,
@@ -54,6 +60,13 @@ export interface DocumentTextExtractionResult {
   errorCode?: DocumentTextErrorCode;
   messageKey?: TranslationKey;
   qualityHintKey?: TranslationKey;
+  /**
+   * SCAN-OCR-EVIDENCE-01B — optional; only the image path fills these. Older
+   * drafts without them keep working on the flat-text path.
+   */
+  layout?: DocumentLayoutPage;
+  visibleFacts?: DocumentVisibleFact[];
+  semanticFactAssignments?: DocumentFactAssignment[];
 }
 
 export interface OcrPreviewSummary {
@@ -280,6 +293,7 @@ async function extractFromImage(file: File): Promise<DocumentTextExtractionResul
   try {
     let text = '';
     let score = 0;
+    let layout: DocumentLayoutPage | undefined;
 
     if (imageOcrExtractorOverride) {
       const result = await imageOcrExtractorOverride(file);
@@ -289,7 +303,11 @@ async function extractFromImage(file: File): Promise<DocumentTextExtractionResul
       const result = await recognizeImageOrCanvas(file);
       text = result.text;
       score = result.confidence;
+      layout = result.layout;
     }
+
+    // Visible facts are derived once, right here — no second analysis path.
+    const visibleFacts = layout ? extractVisibleFactsFromLayout(layout) : undefined;
 
     const quality = assessTextQuality(text);
     const recognizedText = quality.sanitizedText || text.trim();
@@ -304,6 +322,8 @@ async function extractFromImage(file: File): Promise<DocumentTextExtractionResul
       sourceType: 'image',
       extractionMethod: 'image_ocr',
       partialRecognition,
+      layout,
+      visibleFacts,
       errorCode: recognizedText ? undefined : 'no_text',
       messageKey: recognizedText ? undefined : OCR_TEXT_HINT_KEYS.noText,
       qualityHintKey: partialRecognition ? OCR_TEXT_HINT_KEYS.partial : undefined,

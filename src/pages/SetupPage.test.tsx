@@ -65,12 +65,14 @@ function renderSetupPage(initialSetup = incompleteSetup): Mount {
     root = createRoot(container);
     root.render(
       <MemoryRouter initialEntries={['/setup']}>
-        <AppProvider initialSetup={initialSetup}>
-          <Routes>
-            <Route path="/setup" element={<SetupPage />} />
-            <Route path="/" element={<div data-testid="heute-page">Heute</div>} />
-          </Routes>
-        </AppProvider>
+        <AuthProvider>
+          <AppProvider initialSetup={initialSetup}>
+            <Routes>
+              <Route path="/setup" element={<SetupPage />} />
+              <Route path="/" element={<div data-testid="heute-page">Heute</div>} />
+            </Routes>
+          </AppProvider>
+        </AuthProvider>
       </MemoryRouter>,
     );
   });

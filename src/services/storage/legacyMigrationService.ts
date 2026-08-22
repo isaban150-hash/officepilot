@@ -114,21 +114,106 @@ export function tryMigrateLegacyGlobalState(
   return { action: 'migrated', targetKey };
 }
 
+export type UserScopeMigrationResult =
+  /** Kein User-Zustand vorhanden — nichts zu tun. */
+  | { action: 'none' }
+  /** Kein Workspace-Zustand vorhanden: vollständig übernommen. */
+  | { action: 'moved' }
+  /** Workspace-Zustand war ohne Firmendaten: Firmendaten übernommen, Identität behalten. */
+  | { action: 'merged' }
+  /** Workspace hat echte Firmendaten, der User-Zustand nicht: Workspace bleibt. */
+  | { action: 'kept_workspace' }
+  /** Beide Seiten tragen echte, unterschiedliche Firmendaten. */
+  | { action: 'conflict' }
+  /** Schreiben oder Rücklesen fehlgeschlagen — beide Kopien bleiben. */
+  | { action: 'write_failed' };
+
+function parseState(raw: string | null): AppPersistedState | null {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as AppPersistedState;
+  } catch {
+    return null;
+  }
+}
+
+/** Echte Firmendaten liegen vor, wenn Setup abgeschlossen ist oder ein Name gesetzt wurde. */
+function hasRealCompanyData(state: AppPersistedState | null): boolean {
+  if (!state) return false;
+  const setup = state.setup;
+  const profileName = state.companyProfile?.companyName?.trim() ?? '';
+  return Boolean(setup?.setupComplete || setup?.companyName?.trim() || profileName);
+}
+
+function sameCompany(a: AppPersistedState, b: AppPersistedState): boolean {
+  const nameA = (a.setup?.companyName ?? a.companyProfile?.companyName ?? '').trim();
+  const nameB = (b.setup?.companyName ?? b.companyProfile?.companyName ?? '').trim();
+  return nameA !== '' && nameA === nameB;
+}
+
+/**
+ * OFFICEPILOT-SETUP-CLOUD-PERSIST-01B/01C — früher wurde die User-Kopie gelöscht,
+ * sobald ein Workspace-Schlüssel existierte; ein leerer Workspace-Eintrag hat so
+ * vollständige Firmendaten vernichtet.
+ *
+ * Jetzt gilt: nie ohne Ersatz löschen, den Workspace-Zustand nicht blind
+ * überschreiben (Workspace- und Serveridentität bleiben erhalten) und bei zwei
+ * echten, unterschiedlichen Beständen nichts anfassen.
+ */
 export function migrateUserScopeToWorkspaceScope(
   userId: string,
   workspaceId: string,
-): boolean {
+): UserScopeMigrationResult {
   const userKey = buildStorageKey({ type: 'user', userId });
   const workspaceKey = buildStorageKey({ type: 'workspace', workspaceId });
 
   const userRaw = readRawStorage(userKey);
-  if (!userRaw) return false;
-  if (readRawStorage(workspaceKey)) {
+  if (!userRaw) return { action: 'none' };
+
+  const workspaceRaw = readRawStorage(workspaceKey);
+  if (!workspaceRaw) {
+    if (!writeAndVerify(workspaceKey, userRaw)) return { action: 'write_failed' };
     removeRawStorage(userKey);
-    return false;
+    return { action: 'moved' };
   }
 
-  writeRawStorage(workspaceKey, userRaw);
-  removeRawStorage(userKey);
-  return true;
+  const userState = parseState(userRaw);
+  const workspaceState = parseState(workspaceRaw);
+  if (!userState || !workspaceState) return { action: 'write_failed' };
+
+  const userHasData = hasRealCompanyData(userState);
+  const workspaceHasData = hasRealCompanyData(workspaceState);
+
+  if (!userHasData) return { action: 'kept_workspace' };
+  if (workspaceHasData && !sameCompany(userState, workspaceState)) {
+    // Zwei echte, widersprüchliche Bestände: nichts überschreiben, nichts löschen.
+    return { action: 'conflict' };
+  }
+  if (workspaceHasData) return { action: 'kept_workspace' };
+
+  /**
+   * Der Workspace-Eintrag ist leer: nur die Firmendaten übernehmen. Workspace,
+   * Mitglieder, Einstellungen und der Sync-Client (serverWorkspaceId) bleiben,
+   * damit die Serveridentität nicht verloren geht.
+   */
+  const merged: AppPersistedState = {
+    ...workspaceState,
+    setup: userState.setup,
+    companyProfile: userState.companyProfile ?? workspaceState.companyProfile,
+    savedAt: new Date().toISOString(),
+  };
+
+  if (!writeAndVerify(workspaceKey, JSON.stringify(merged))) return { action: 'write_failed' };
+  // Die User-Kopie bleibt: sie kann weitere Bestände tragen, die hier nicht wandern.
+  return { action: 'merged' };
+}
+
+/** Schreibt und liest zurück; erst danach gilt ein Zielzustand als gesichert. */
+function writeAndVerify(key: string, raw: string): boolean {
+  try {
+    writeRawStorage(key, raw);
+  } catch {
+    return false;
+  }
+  return readRawStorage(key) === raw;
 }

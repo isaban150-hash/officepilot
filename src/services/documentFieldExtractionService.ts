@@ -39,6 +39,26 @@ const LABEL_VALUE =
 const LETTERHEAD_HEAD_CHARS = 520;
 const LETTERHEAD_SKIP =
   /^(?:seite|datum|betreff|rechnung|rechnungsnummer|vertrag|werkvertrag|angebot|mahnung|gutschrift|newsletter|leistung|netto|brutto|ust|pos\.?|artikel|dokument|sehr|geehrte|damen|herren)$/i;
+/**
+ * SCAN-OCR-EVIDENCE-01B — a field or role word is never part of a sender name.
+ * Flat OCR merges "Auftraggeber" and the company into one line; without this the
+ * letterhead heuristic would return the label plus a foreign company. Generic
+ * vocabulary only — no company names, no position based rule, so a real
+ * letterhead at the top of the page keeps working.
+ */
+const LEADING_FIELD_LABEL =
+  /^(?:auftraggeber|auftragnehmer|subunternehmer|nachunternehmer|vermieter|mieter|leasinggeber|leasingnehmer|verk[äa]ufer|k[äa]ufer|versicherer|versicherungsnehmer|arbeitgeber|arbeitnehmer|dienstleister|kunde|empf[äa]nger|absender|lieferant|bauvorhaben|baustelle|firma)(?:in)?\b[\s:–—-]*/i;
+
+/** Strips a leading role or field label from a candidate name. */
+export function stripLeadingFieldLabel(value: string): string {
+  let current = value.trim();
+  for (let guard = 0; guard < 3; guard += 1) {
+    const next = current.replace(LEADING_FIELD_LABEL, '').trim();
+    if (next === current) break;
+    current = next;
+  }
+  return current;
+}
 const LETTERHEAD_INSTITUTION =
   /\b((?:Finanzamt|Stadtwerke|Handwerkskammer|Industrie-?\s*und\s*Handelskammer|Amtsgericht|Landgericht|Arbeitsgericht|BG\s*BAU|Berufsgenossenschaft(?:\s+der\s+Bauwirtschaft)?|SOKA-?BAU|Agentur\s+für\s+Arbeit|Bundesagentur(?:\s+für\s+Arbeit)?|AOK|Barmer|Techniker\s+Krankenkasse|DAK|IKK|Sparkasse|Volksbank|Commerzbank|Deutsche\s+Bank|Hotel|Steuerberatung|Kanzlei|AutoService)(?:\s+[\p{L}][\p{L}\d .&\-\/']{1,40})?)/iu;
 /** Standalone issuer brands that should not swallow the recipient address block. */
@@ -242,7 +262,10 @@ export function inferUnlabeledSenderFromText(text: string): string | undefined {
   if (cleanedTankstelle) return cleanedTankstelle;
 
   const legal = head.match(LETTERHEAD_LEGAL_ENTITY)?.[1];
-  const cleanedLegal = legal ? cleanLetterheadCandidate(legal) : undefined;
+  // A role or field label in front of the entity means this is a labelled field,
+  // not a letterhead — strip it and keep only the actual name.
+  const legalWithoutLabel = legal ? stripLeadingFieldLabel(legal) : undefined;
+  const cleanedLegal = legalWithoutLabel ? cleanLetterheadCandidate(legalWithoutLabel) : undefined;
   if (cleanedLegal) return cleanedLegal;
 
   const brand = text.match(LETTERHEAD_BRAND)?.[1];

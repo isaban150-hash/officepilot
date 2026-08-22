@@ -162,6 +162,18 @@ function fingerprintChanged(
       previous.contentKey !== current.contentKey
     );
   }
+  /**
+   * OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02D — Firmendaten: eine reine
+   * Server-Metaänderung (Version, Zeitstempel, Gerät, Workspace) ist keine
+   * fachliche Änderung. Sonst erzeugt jede zurückgeschriebene Serverversion
+   * einen neuen Auftrag — und damit einen Push, der die nächste Version
+   * auslöst. Echte Inhaltsänderungen ändern den contentKey und werden erfasst.
+   */
+  if (entityType === 'company_setup' || entityType === 'company_profile') {
+    return (
+      previous.deleted !== current.deleted || previous.contentKey !== current.contentKey
+    );
+  }
   return (
     previous.version !== current.version ||
     previous.deleted !== current.deleted ||

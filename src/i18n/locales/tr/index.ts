@@ -6,7 +6,7 @@ import { trDocumentExplanation, trLetterExplanation, trLetterLabels, trDocAssist
 import { trIntakeUnderstanding } from './intakeUnderstanding';
 import { trLanguage } from './language';
 import { trScan } from './scan';
-import { trIntakePreview } from './intakePreview';
+import { trIntakePreview, trDocumentFacts } from './intakePreview';
 import { trStorageRecommendation } from './storageRecommendation';
 import { trUserStorageDecision } from './userStorageDecision';
 import { trDocumentOriginal } from './documentOriginal';
@@ -26,6 +26,7 @@ export const trModules = {
   ...trDocAssistantCore,
   ...trScan,
   ...trIntakePreview,
+  ...trDocumentFacts,
   ...trStorageRecommendation,
   ...trUserStorageDecision,
   ...trDocumentOriginal,

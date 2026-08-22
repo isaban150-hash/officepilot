@@ -1,6 +1,7 @@
-import { hydrateCompanyProfileStore } from './companyProfileService';
+import { getCompanyProfile, hydrateCompanyProfileStore } from './companyProfileService';
 import {
   getCurrentInvoiceYear,
+  getInvoiceNumberSequenceSnapshot,
   hydrateInvoiceNumberSequence,
 } from './invoiceNumberService';
 import { persistAll } from './persistenceService';
@@ -65,12 +66,31 @@ export function completeSetupWizard(
   const profile = buildProfileFromDraft(draft);
   const nextSetup = buildSetupFromDraft(draft, currentSetup);
 
+  /**
+   * OFFICEPILOT-SETUP-CLOUD-PERSIST-01C — vor dem Hydrieren den bisherigen Stand
+   * merken. Scheitert das lokale Speichern, darf kein halb abgeschlossener
+   * Zustand in den Stores zurückbleiben.
+   */
+  const previousProfile = getCompanyProfile();
+  const previousSequence = getInvoiceNumberSequenceSnapshot();
+
   hydrateCompanyProfileStore(profile);
   hydrateInvoiceNumberSequence({
     year: getCurrentInvoiceYear(),
     lastIssuedNumber: Math.round(draft.lastInvoiceNumber),
   });
-  persistAll(nextSetup);
+  /**
+   * OFFICEPILOT-SETUP-CLOUD-PERSIST-01B — die lokale Speicherung ist maßgeblich.
+   * Schlägt sie fehl, gilt der Assistent nicht als abgeschlossen; erst danach
+   * darf überhaupt an eine Cloud-Sicherung gedacht werden.
+   */
+  const persisted = persistAll(nextSetup);
+  if (!persisted.success) {
+    // Stores auf den Stand vor dem Abschluss zurücksetzen.
+    hydrateCompanyProfileStore(previousProfile);
+    hydrateInvoiceNumberSequence(previousSequence);
+    return { success: false, errorKey: 'persist.banner.message' };
+  }
 
   return { success: true, setup: nextSetup, profile };
 }

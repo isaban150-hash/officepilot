@@ -18,6 +18,7 @@ import {
   detectContractType,
   extractAllContractFields,
   extractContractParties,
+  extractContractPartiesFromVisibleFacts,
   extractContractTotalAmountFromText,
   extractGenericBillOfQuantitiesFromText,
   extractStructuredContractFields,
@@ -36,6 +37,8 @@ import {
   splitTextIntoPages,
 } from './documentSegmentationService';
 import { getInboxExtractedDocumentText } from './inboxDocumentText';
+import type { DocumentVisibleFact } from './documentSpatialFieldExtractionService';
+import type { DocumentFactAssignment } from './document/documentFactAiService';
 import { detectClassifiedKindWithReason } from './documentClassificationService';
 
 function resolveDocumentLabel(
@@ -86,6 +89,9 @@ function mapFamilyToClassifiedKind(
 export function analyzeContractIntelligenceFromText(
   recognizedText: string,
   pageTextsInput?: DocumentPageText[],
+  /** SCAN-OCR-EVIDENCE-01B — optional spatial evidence from image OCR. */
+  visibleFacts?: readonly DocumentVisibleFact[],
+  factAssignments?: readonly DocumentFactAssignment[],
 ): ContractIntelligenceResult | null {
   const pageTexts = pageTextsInput ?? splitTextIntoPages(recognizedText);
   if (pageTexts.length === 0 || !recognizedText.trim()) return null;
@@ -168,7 +174,16 @@ export function analyzeContractIntelligenceFromText(
   }
 
   const paymentTerms = detectPaymentTermsFromText(fullCommercialText);
-  const parties = extractContractParties(fullCommercialText);
+  /**
+   * SCAN-OCR-EVIDENCE-01B — spatially proven facts win over the flat-text
+   * heuristics; without layout nothing changes for existing documents.
+   */
+  const spatialParties = visibleFacts?.length
+    ? extractContractPartiesFromVisibleFacts(visibleFacts, factAssignments)
+    : [];
+  const parties = spatialParties.length
+    ? spatialParties
+    : extractContractParties(fullCommercialText);
   const textFields = extractAllContractFields(fullCommercialText, pageTexts);
   const allFields = mergeContractFieldMaps(textFields, structuredResult.fields);
   mapPartiesToLegacyFields(parties, allFields);
@@ -308,9 +323,23 @@ export function buildContractOrderProposal(
       ].includes(party.role),
     ) ?? null;
 
+  /**
+   * SCAN-CONTRACT-PARTY-ROLE-01B — once any role was recognised explicitly, a
+   * missing side must stay empty. Generic classification fields (item.sender,
+   * recognizedData.Kunde) would otherwise put the counterparty on the wrong side
+   * — a missing party is safer than a swapped one.
+   */
+  const hasExplicitParty = (intelligence.parties?.length ?? 0) > 0;
+
   return {
-    customer: customerParty?.name ?? fields.auftraggeber?.value ?? item.recognizedData.Kunde ?? '',
-    contractor: contractorParty?.name ?? fields.auftragnehmer?.value ?? item.sender ?? '',
+    customer:
+      customerParty?.name ??
+      fields.auftraggeber?.value ??
+      (hasExplicitParty ? '' : item.recognizedData.Kunde ?? ''),
+    contractor:
+      contractorParty?.name ??
+      fields.auftragnehmer?.value ??
+      (hasExplicitParty ? '' : item.sender ?? ''),
     constructionSite: fields.baustelle?.value ?? item.recognizedData.Baustelle ?? '',
     contractDate: fields.vertragsdatum?.value,
     positionCount: intelligence.positions.length,

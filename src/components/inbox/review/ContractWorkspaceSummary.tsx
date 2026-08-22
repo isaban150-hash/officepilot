@@ -5,6 +5,8 @@ import type { ContractOrderProposal } from '../../../types/documentIntelligence'
 import type { InboxItem, Vorgang } from '../../../types/models';
 import type { TranslationKey } from '../../../i18n';
 import { interpolateParams } from '../../../i18n';
+import type { DocumentVisibleFact } from '../../../services/documentSpatialFieldExtractionService';
+import type { DocumentFactAssignment } from '../../../services/document/documentFactAiService';
 import { buildContractWorkspaceSummaryView } from '../../../services/contractWorkspaceSummaryView';
 
 interface ContractWorkspaceSummaryProps {
@@ -12,6 +14,9 @@ interface ContractWorkspaceSummaryProps {
   translate: (key: TranslationKey) => string;
   item?: InboxItem;
   vorgang?: Vorgang | null;
+  /** SCAN-OCR-EVIDENCE-01B3 — belegte OCR-Fakten und ihre Zuordnungen. */
+  visibleFacts?: readonly DocumentVisibleFact[];
+  factAssignments?: readonly DocumentFactAssignment[];
   /** Primary action rendered inside the chef summary (no duplicate outside). */
   primaryAction?: {
     label: string;
@@ -34,8 +39,17 @@ export function ContractWorkspaceSummary({
   item,
   vorgang,
   primaryAction,
+  visibleFacts,
+  factAssignments,
 }: ContractWorkspaceSummaryProps) {
-  const view = buildContractWorkspaceSummaryView(proposal, { item, vorgang });
+  // SCAN-OCR-EVIDENCE-01B3 — die belegten Fakten kommen aus dem Scan-Pfad und
+  // machen unsichere Angaben sichtbar. Ohne sie bleibt alles wie bisher.
+  const view = buildContractWorkspaceSummaryView(proposal, {
+    item,
+    vorgang,
+    visibleFacts,
+    factAssignments,
+  });
   const showFacts = view.factRows.length > 0;
   const showStatusSection = view.statusRows.length > 0;
   const badgeTone = view.contractKindNeedsReview ? 'warning' : 'success';
@@ -90,7 +104,21 @@ export function ContractWorkspaceSummary({
                   <p className="contract-workspace-summary__party-role">
                     {translate(party.roleLabelKey)}
                   </p>
-                  <p className="contract-workspace-summary__party-name">{party.name}</p>
+                  {party.name ? (
+                    <p className="contract-workspace-summary__party-name">{party.name}</p>
+                  ) : null}
+                  {/* SCAN-OCR-EVIDENCE-01B2 — sichtbarer Grund statt stiller Lücke. */}
+                  {party.statusLabelKey ? (
+                    <p
+                      className="contract-workspace-summary__party-status"
+                      data-testid={`contract-party-status-${party.id}`}
+                    >
+                      {translate(party.statusLabelKey)}
+                    </p>
+                  ) : null}
+                  {party.suggestedName ? (
+                    <p className="contract-workspace-summary__party-meta">{party.suggestedName}</p>
+                  ) : null}
                   {party.isOwnCompany ? (
                     <p className="contract-workspace-summary__party-meta">Ihr Betrieb</p>
                   ) : null}

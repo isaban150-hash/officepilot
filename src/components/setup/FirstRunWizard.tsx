@@ -66,6 +66,7 @@ export function FirstRunWizard({ initialDraft, onComplete }: FirstRunWizardProps
   const [draft, setDraft] = useState<SetupWizardDraft>(initialDraft);
   const [stepIndex, setStepIndex] = useState(0);
   const [errors, setErrors] = useState<Partial<Record<string, TranslationKey>>>({});
+  const [formError, setFormError] = useState<TranslationKey | null>(null);
   /**
    * Sichtbarer Rohtext der Ganzzahlfelder. Getrennt vom Draft, damit das Feld
    * während der Bearbeitung leer bleiben kann, ohne dass eine 0 zurückspringt.
@@ -123,7 +124,15 @@ export function FirstRunWizard({ initialDraft, onComplete }: FirstRunWizardProps
       const result = onComplete(draft);
       if (!result.success) {
         setErrors(result.errors ?? {});
+        /**
+         * OFFICEPILOT-SETUP-CLOUD-PERSIST-01C — ein Fehler ohne Feldbezug (z. B.
+         * fehlgeschlagenes lokales Speichern) darf nicht stumm bleiben. Die
+         * Eingaben bleiben im Assistenten stehen.
+         */
+        setFormError(result.errorKey ?? null);
+        return;
       }
+      setFormError(null);
       return;
     }
     setErrors({});
@@ -478,6 +487,11 @@ export function FirstRunWizard({ initialDraft, onComplete }: FirstRunWizardProps
           handleNext();
         }}
       >
+        {formError ? (
+          <p className="form-error" role="alert" data-testid="setup-form-error">
+            {translate(formError)}
+          </p>
+        ) : null}
         {renderStep(step)}
 
         <div className="setup-form-actions">

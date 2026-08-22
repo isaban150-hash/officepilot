@@ -1,5 +1,7 @@
 import { Button } from '../ui/Button';
 import { Card, CardMeta, CardTitle } from '../ui/Card';
+import type { DocumentVisibleFact } from '../../services/documentSpatialFieldExtractionService';
+import type { DocumentFactAssignment } from '../../services/document/documentFactAiService';
 import { ContractWorkspaceSummary } from '../inbox/review/ContractWorkspaceSummary';
 import type { TranslationKey } from '../../i18n';
 import type { OcrPreviewSummary } from '../../services/ocrDocumentService';
@@ -36,6 +38,9 @@ interface OcrPreviewPanelProps {
   previewTextLabel: string;
   aiActionsLabel: string;
   contractProposal?: ContractOrderProposal | null;
+  /** SCAN-OCR-EVIDENCE-01B3 — belegte Fakten aus dem Bildpfad. */
+  visibleFacts?: readonly DocumentVisibleFact[];
+  factAssignments?: readonly DocumentFactAssignment[];
   translate: (key: TranslationKey) => string;
   onDecision: (decision: UserStorageDecision) => void;
   isConfirming?: boolean;
@@ -61,6 +66,8 @@ export function OcrPreviewPanel({
   previewTextLabel,
   aiActionsLabel,
   contractProposal,
+  visibleFacts,
+  factAssignments,
   translate,
   onDecision,
   onChangeType,
@@ -204,7 +211,12 @@ export function OcrPreviewPanel({
       ) : null}
 
       {showContractSummary && resolvedContractProposal ? (
-        <ContractWorkspaceSummary proposal={resolvedContractProposal} translate={translate} />
+        <ContractWorkspaceSummary
+          proposal={resolvedContractProposal}
+          translate={translate}
+          visibleFacts={visibleFacts}
+          factAssignments={factAssignments}
+        />
       ) : null}
 
       {understanding && !showContractSummary && (

@@ -10,6 +10,9 @@ export function resolvePendingDocumentContractProposal(
   const intelligence = analyzeContractIntelligenceFromText(
     pendingDocument.extraction.recognizedText,
     pendingDocument.extraction.pageTexts,
+    // SCAN-OCR-EVIDENCE-01B — spatial evidence when the image path produced it.
+    pendingDocument.extraction.visibleFacts,
+    pendingDocument.extraction.semanticFactAssignments,
   );
 
   if (!intelligence) return null;

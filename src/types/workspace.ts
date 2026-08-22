@@ -59,6 +59,8 @@ export interface EnsurePersonalWorkspaceResult {
   workspaceId?: string;
   workspace?: Workspace;
   member?: WorkspaceMember;
+  /** True only when the server created the workspace in this call. */
+  created?: boolean;
   error?: string;
   errorCode?: 'auth' | 'rls' | 'network' | 'unknown';
 }

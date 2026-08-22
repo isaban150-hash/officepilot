@@ -2,9 +2,13 @@ import type { SyncCoordinatorReport, SyncOutboxEntry } from '../../types/sync';
 import type { SyncAdapterStatus } from './syncAdapter';
 import { buildPersistedStateSnapshot } from '../persistenceService';
 import { getSyncClient } from './syncClientService';
-import { getSyncOutboxSnapshot } from './syncOutboxService';
+import { getSyncOutboxSnapshot, hasPendingCompanyCloudBackup } from './syncOutboxService';
 import { getSyncCoordinator } from './syncCoordinator';
 import { applySyncPullCandidateSafely } from './syncPullPersistService';
+import { runQueuedSyncOperation } from './syncOperationQueue';
+import { createSyncAdapter, isSyncProviderAvailable } from './syncAdapterFactory';
+import { isSupabaseConfigured } from '../../lib/supabase';
+import { bootstrapWorkspaceCloudSyncIfNeeded } from '../workspace/workspaceCloudBootstrapService';
 
 export interface SyncOutboxCounts {
   pending: number;
@@ -68,29 +72,81 @@ export function getSyncUiSnapshot(): SyncUiSnapshot {
 }
 
 export async function runSyncFromUi(): Promise<SyncCoordinatorReport> {
-  const result = await getSyncCoordinator().runSync(buildPersistedStateSnapshot());
-  if (result.skipPersist) {
-    return result.report;
+  // 01P4C: Netzwerk und anschließende Persistenz sind ein Queue-Lauf; der
+  // Snapshot entsteht erst beim tatsächlichen Start.
+  return runQueuedSyncOperation(async () => {
+    const result = await getSyncCoordinator().runSync(buildPersistedStateSnapshot());
+    if (result.skipPersist) {
+      return result.report;
+    }
+    return applySyncPullCandidateSafely({
+      state: result.state,
+      report: result.report,
+      pendingInvoiceIntentClears: result.pendingInvoiceIntentClears,
+      pendingAmendmentIntentClears: result.pendingAmendmentIntentClears,
+    }).report;
+  });
+}
+
+/**
+ * OFFICEPILOT-SETUP-CLOUD-PERSIST-01B — direkt nach dem Einrichtungsassistenten
+ * einmalig in die Cloud sichern. Reihenfolge bleibt: Workspace ermitteln und
+ * pullen (Bootstrap), erst danach die lokalen Firmendaten hochladen.
+ *
+ * Ein Doppelklick startet keinen zweiten Lauf: der laufende Versuch wird geteilt.
+ */
+let afterSetupSyncPromise: Promise<CloudBackupOutcome> | null = null;
+
+export interface CloudBackupOutcome {
+  /** True, wenn Firmendaten weiterhin nur lokal liegen. */
+  pending: boolean;
+  reason?: string;
+}
+
+export async function syncCompanyDataAfterSetup(): Promise<CloudBackupOutcome> {
+  if (afterSetupSyncPromise) return afterSetupSyncPromise;
+
+  afterSetupSyncPromise = (async (): Promise<CloudBackupOutcome> => {
+    if (!isSupabaseConfigured()) {
+      return { pending: hasPendingCompanyCloudBackup(), reason: 'not_configured' };
+    }
+    const bootstrap = await bootstrapWorkspaceCloudSyncIfNeeded();
+    if (bootstrap.status === 'failed') {
+      return { pending: hasPendingCompanyCloudBackup(), reason: bootstrap.reason ?? 'bootstrap' };
+    }
+    if (isSyncProviderAvailable('supabase')) {
+      getSyncCoordinator().setAdapter(createSyncAdapter({ provider: 'supabase' }));
+    }
+    await runSyncFromUi();
+    return { pending: hasPendingCompanyCloudBackup() };
+  })();
+
+  try {
+    return await afterSetupSyncPromise;
+  } catch (error) {
+    return {
+      pending: hasPendingCompanyCloudBackup(),
+      reason: error instanceof Error ? error.message : 'unknown',
+    };
+  } finally {
+    afterSetupSyncPromise = null;
   }
-  return applySyncPullCandidateSafely({
-    state: result.state,
-    report: result.report,
-    pendingInvoiceIntentClears: result.pendingInvoiceIntentClears,
-    pendingAmendmentIntentClears: result.pendingAmendmentIntentClears,
-  }).report;
 }
 
 export async function retrySyncFromUi(): Promise<SyncCoordinatorReport> {
-  const result = await getSyncCoordinator().retrySync(buildPersistedStateSnapshot());
-  if (result.skipPersist) {
-    return result.report;
-  }
-  return applySyncPullCandidateSafely({
-    state: result.state,
-    report: result.report,
-    pendingInvoiceIntentClears: result.pendingInvoiceIntentClears,
-    pendingAmendmentIntentClears: result.pendingAmendmentIntentClears,
-  }).report;
+  // 01P4C: derselbe Queue-Vertrag wie in runSyncFromUi.
+  return runQueuedSyncOperation(async () => {
+    const result = await getSyncCoordinator().retrySync(buildPersistedStateSnapshot());
+    if (result.skipPersist) {
+      return result.report;
+    }
+    return applySyncPullCandidateSafely({
+      state: result.state,
+      report: result.report,
+      pendingInvoiceIntentClears: result.pendingInvoiceIntentClears,
+      pendingAmendmentIntentClears: result.pendingAmendmentIntentClears,
+    }).report;
+  });
 }
 
 export function shortenSyncId(id: string): string {

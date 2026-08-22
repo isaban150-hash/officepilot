@@ -16,6 +16,14 @@ interface StructuredDocumentPageText extends DocumentPageText {
 }
 import { parseGermanMoney } from './documentAmountExtractionService';
 import { joinSectionText } from './documentSegmentationService';
+import {
+  findFactByLabelAliases,
+  type DocumentVisibleFact,
+} from './documentSpatialFieldExtractionService';
+import {
+  resolveAssignedValue,
+  type DocumentFactAssignment,
+} from './document/documentFactAiService';
 
 export const CONSTRUCTION_FAMILIES = new Set<ContractFamily>([
   'werkvertrag',
@@ -908,13 +916,94 @@ function isPlausiblePartyName(value: string): boolean {
   return true;
 }
 
+/**
+ * SCAN-CONTRACT-PARTY-ROLE-01B — photo OCR often drops the colon after a role
+ * word. A role word at the very start of a line is a strong enough signal on its
+ * own; the value must still look like a name, not like a clause.
+ *
+ * Deliberately line-start bound: no search inside running text.
+ */
+function isSeparatorlessPartyValue(value: string): boolean {
+  const cleaned = value.trim();
+  // "verpflichtet sich zur Zahlung", "und Auftragnehmer vereinbaren …" — prose
+  // continues in lower case, a company name does not.
+  if (!/^[A-ZÄÖÜ0-9]/.test(cleaned)) return false;
+  if (cleaned.split(/\s+/).length > 8) return false;
+  return isPlausiblePartyName(cleaned);
+}
+
+function extractPartyValueAtLineStart(lines: string[], labels: string[]): string | undefined {
+  for (const label of labels) {
+    for (const line of lines) {
+      const rest = matchLabelAtLineStart(line, [label], false);
+      // null = label not at line start; '' = standalone label (handled by the
+      // separator-based pass with its look-ahead).
+      if (!rest) continue;
+      const candidate = cleanValue(rest);
+      if (isUsableLabelValue(candidate) && isSeparatorlessPartyValue(candidate)) {
+        return candidate;
+      }
+    }
+  }
+  return undefined;
+}
+
+/**
+ * SCAN-OCR-EVIDENCE-01B — parties from spatially proven visible facts.
+ *
+ * Preferred over the flat-text passes whenever layout exists: the value comes
+ * from the OCR fact, the role from the visible label. Only `recognized` facts
+ * qualify; ambiguous, unreadable, missing or partial ones deliberately produce
+ * no party at all.
+ */
+export function extractContractPartiesFromVisibleFacts(
+  facts: readonly DocumentVisibleFact[],
+  /**
+   * SCAN-OCR-EVIDENCE-01B2 — when assignments exist, only a locally confirmed
+   * one may become a party. An ai_suggestion never reaches the contract model.
+   */
+  assignments?: readonly DocumentFactAssignment[],
+): DetectedContractParty[] {
+  const parties: DetectedContractParty[] = [];
+  const seenRoles = new Set<ContractPartyRole>();
+
+  for (const rule of PARTY_LABELS) {
+    if (seenRoles.has(rule.role)) continue;
+    let fact: DocumentVisibleFact | undefined;
+    if (assignments?.length) {
+      const resolved = resolveAssignedValue(assignments, facts, rule.role);
+      // confirmedValue is null for every suggestion — nothing to fall back to.
+      if (!resolved.confirmedValue) continue;
+      fact = resolved.fact ?? undefined;
+    } else {
+      fact = findFactByLabelAliases(facts, rule.labels);
+    }
+    if (!fact) continue;
+    if (fact.status !== 'recognized' || !fact.valueText) continue;
+    const name = cleanValue(fact.valueText);
+    if (!isPlausiblePartyName(name)) continue;
+    seenRoles.add(rule.role);
+    parties.push({
+      role: rule.role,
+      name,
+      status: 'confirmed',
+      confidence: 'high',
+      sourceText: `${fact.labelText}: ${fact.valueText}`,
+    });
+  }
+
+  return parties;
+}
+
 export function extractContractParties(text: string): DetectedContractParty[] {
   const parties: DetectedContractParty[] = [];
   const seenRoles = new Set<ContractPartyRole>();
   const lines = splitNormalizedLines(text);
 
   for (const rule of PARTY_LABELS) {
-    const value = extractValueFromLabelLines(lines, rule.labels, { requireSeparator: true });
+    const value =
+      extractValueFromLabelLines(lines, rule.labels, { requireSeparator: true }) ??
+      extractPartyValueAtLineStart(lines, rule.labels);
     if (!value || !isPlausiblePartyName(value)) continue;
     if (seenRoles.has(rule.role)) continue;
     seenRoles.add(rule.role);
