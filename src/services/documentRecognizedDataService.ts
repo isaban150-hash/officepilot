@@ -96,6 +96,21 @@ const PAYMENT_HINT_PATTERN =
 const RECEIPT_HEADER_SKIP_PATTERN =
   /^(?:HRB|Amtsgericht|Geschäftsf|Geschaeftsf|Kartenzahlung|Vielen Dank|Danke|Girocard|Mastercard|Visa|EC-Karte|Terminal|Summe|Bar\s+gezahlt|Barzahlung)/i;
 
+/**
+ * DOCUMENT-RECEIPT-MERCHANT-HEADER-01 — eindeutig ungeeignete Kopfzeilen.
+ *
+ * Ausschließlich am Zeilenanfang verankert und jeweils durch eine
+ * Wortgrenze bzw. das erwartete Folgezeichen abgeschlossen: ein Firmenname
+ * darf nicht verschwinden, nur weil „Kasse", „Filiale" oder „Tel" irgendwo in
+ * ihm vorkommt („Kassenhaus Meier", „Tellerhaus GmbH", „Filialbäckerei Nord").
+ *
+ * Bewusst eng gehalten: keine Bewertung von Kandidaten, keine Slogan- oder
+ * Adresserkennung. Werbetexte und Straßenzeilen ohne PLZ bleiben eine
+ * bekannte, hier nicht gelöste Restlücke.
+ */
+const RECEIPT_HEADER_CONTACT_SKIP_PATTERN =
+  /^(?:tel\.?|telefon|fax|e-?mail|www\.|https?:\/\/|kassierer(?:in)?|kasse|bediener(?:in)?|filiale)\b/i;
+
 const INVOICE_HEADER_SKIP_PATTERN =
   /^(?:Rechnungs(?:nummer|nr)|Invoice|Inv\.|Eingangsrechnung|Datum|Leistung|IBAN|USt|MwSt|Gesamtbetrag|Summe|zu\s+zahlen|zahlbar|Netto|Brutto)/i;
 
@@ -131,6 +146,10 @@ function inferMerchantFromHeader(text: string): string | undefined {
 
   for (const line of lines.slice(0, 4)) {
     if (RECEIPT_HEADER_SKIP_PATTERN.test(line)) continue;
+    if (RECEIPT_HEADER_CONTACT_SKIP_PATTERN.test(line)) continue;
+    // Wie in `inferSupplierFromHeader`: eine Zeile, die mit einer deutschen PLZ
+    // beginnt, ist eine Anschrift und niemals der Händlername.
+    if (/^\d{5}\b/.test(line)) continue;
     if (/^kassenbeleg$/i.test(line)) continue;
     if (isRegistryFooterMerchant(line)) continue;
     if (isLikelyAmountLine(line) && !/tankstelle|markt|bäckerei|baeckerei|shop|store/i.test(line)) {

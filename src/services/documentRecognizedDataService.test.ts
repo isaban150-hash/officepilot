@@ -197,6 +197,136 @@ describe('documentRecognizedDataService', () => {
       expect(shouldUseEvidenceBasedRecognizedData('kreditkartenbeleg')).toBe(true);
       expect(shouldUseEvidenceBasedRecognizedData('quittung')).toBe(true);
     });
+
+    /*
+     * DOCUMENT-RECEIPT-MERCHANT-HEADER-01 — die Kopfzeilensuche nahm bisher die
+     * erste Zeile, die die vorhandenen Filter überlebte. Anschrift, Kontakt-,
+     * Kassen-, Bediener- und Filialzeilen kamen damit als Händler durch.
+     * Ausgeschlossen wird ausschließlich am Zeilenanfang; die Prioritätsregeln
+     * der fünf Belegarten bleiben unverändert.
+     */
+    describe('DOCUMENT-RECEIPT-MERCHANT-HEADER-01 — ungeeignete Kopfzeilen', () => {
+      const tankstelle = (lines: string[]): string | undefined =>
+        buildEvidenceBasedRecognizedData({
+          classifiedKind: 'tankbeleg',
+          recognizedText: lines.join('\n'),
+        }).Tankstelle;
+
+      it('A: eine PLZ-/Ortszeile wird nicht zum Händler', () => {
+        expect(
+          tankstelle(['12345 Musterstadt', 'ARAL Tankstelle München', 'Diesel 41,90 EUR']),
+        ).toBe('ARAL Tankstelle München');
+      });
+
+      it('B: eine Kontaktzeile wird nicht zum Händler', () => {
+        for (const contact of [
+          'Tel. 030 1234567',
+          'Telefon 030 1234567',
+          'Fax 030 7654321',
+          'E-Mail info@aral.example',
+          'www.aral.example',
+        ]) {
+          expect(tankstelle([contact, 'ARAL Tankstelle München']), contact).toBe(
+            'ARAL Tankstelle München',
+          );
+        }
+      });
+
+      it('C: eine Kassierer-/Bedienerzeile wird nicht zum Händler', () => {
+        expect(tankstelle(['Kassierer: Max Mustermann', 'ARAL Tankstelle München'])).toBe(
+          'ARAL Tankstelle München',
+        );
+        expect(tankstelle(['Bediener 7', 'ARAL Tankstelle München'])).toBe(
+          'ARAL Tankstelle München',
+        );
+        expect(tankstelle(['Kasse 3', 'ARAL Tankstelle München'])).toBe(
+          'ARAL Tankstelle München',
+        );
+      });
+
+      it('D: eine Filialzeile wird nicht zum Händler', () => {
+        expect(tankstelle(['Filiale 123', 'ARAL Tankstelle München'])).toBe(
+          'ARAL Tankstelle München',
+        );
+      });
+
+      it('E: die Regeln wirken nur am Zeilenanfang und mit Wortgrenze', () => {
+        // Firmennamen, die einen Filterbegriff enthalten, bleiben erhalten.
+        expect(tankstelle(['Kassenhaus Meier GmbH', 'Diesel 41,90 EUR'])).toBe(
+          'Kassenhaus Meier GmbH',
+        );
+        expect(tankstelle(['Filialbäckerei Nord', 'Diesel 41,90 EUR'])).toBe(
+          'Filialbäckerei Nord',
+        );
+        expect(tankstelle(['Tellerhaus GmbH', 'Diesel 41,90 EUR'])).toBe('Tellerhaus GmbH');
+        // Auch mitten in der Zeile darf ein Begriff nichts auslösen.
+        expect(tankstelle(['Autohof Nord Filiale 4', 'Diesel 41,90 EUR'])).toBe(
+          'Autohof Nord Filiale 4',
+        );
+      });
+
+      it('F: ein echter Händlername in Zeile 1 bleibt unverändert', () => {
+        expect(tankstelle(['ARAL Tankstelle München', 'Diesel 41,90 EUR'])).toBe(
+          'ARAL Tankstelle München',
+        );
+      });
+
+      it('G: bei kassenbeleg gewinnt weiterhin der extrahierte Lieferant', () => {
+        const recognizedData = buildEvidenceBasedRecognizedData({
+          classifiedKind: 'kassenbeleg',
+          recognizedText: [
+            'Filiale 123',
+            'Kopfzeile Markt Nord',
+            'Lieferant: REWE Markt München',
+            'Summe 18,42 EUR',
+          ].join('\n'),
+        });
+        expect(recognizedData.Lieferant).toBe('REWE Markt München');
+      });
+
+      it('H: bei tankbeleg gewinnt weiterhin die Kopfzeile vor dem Absender', () => {
+        const recognizedData = buildEvidenceBasedRecognizedData({
+          classifiedKind: 'tankbeleg',
+          recognizedText: [
+            'ARAL Tankstelle München',
+            'Absender: ARAL AG Zentrale',
+            'Diesel 41,90 EUR',
+          ].join('\n'),
+        });
+        expect(recognizedData.Tankstelle).toBe('ARAL Tankstelle München');
+      });
+
+      it('I: leerer oder reiner Whitespace-Text erfindet keinen Händler', () => {
+        expect(tankstelle([''])).toBeUndefined();
+        expect(tankstelle(['   ', '\t'])).toBeUndefined();
+      });
+
+      it('J: eine Eingangsrechnung bleibt unbeeinflusst', () => {
+        const recognizedData = buildEvidenceBasedRecognizedData({
+          classifiedKind: 'eingangsrechnung',
+          recognizedText: [
+            '12345 Musterstadt',
+            'Müller Bau GmbH',
+            'Rechnungsnummer RE-2026-0001',
+            'Gesamtbetrag 342,16 EUR',
+          ].join('\n'),
+        });
+        expect(recognizedData.Lieferant).toBe('Müller Bau GmbH');
+      });
+
+      it('K: bekannte Restlücke — ein Werbeslogan wird weiterhin übernommen', () => {
+        /*
+         * Bewusst als Ist-Zustand festgeschrieben, nicht künstlich grün
+         * gemacht: Slogans und freie Straßenzeilen ohne PLZ ließen sich nur
+         * über eine Kandidatenbewertung erkennen, die dieser Sprint
+         * ausdrücklich nicht einführt.
+         */
+        expect(tankstelle(['24 Stunden geöffnet', 'ARAL Tankstelle München'])).toBe(
+          '24 Stunden geöffnet',
+        );
+        expect(tankstelle(['Musterweg 1', 'ARAL Tankstelle München'])).toBe('Musterweg 1');
+      });
+    });
   });
 
   describe('eingangsrechnung', () => {
