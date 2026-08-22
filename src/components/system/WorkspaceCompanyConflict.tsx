@@ -101,6 +101,19 @@ export function WorkspaceCompanyConflict({
 
       <p className="form-hint">{t('companyConflict.sameWorkspace', lang)}</p>
 
+      {/*
+       * WORKSPACE-COMPANY-CONFLICT-SAFE-EXIT-01 — der bestehende Rettungsweg
+       * wird benannt. Er sichert ausschließlich lokale Daten und löst den
+       * Konflikt ausdrücklich **nicht** auf. Die Adresse ist auch bei aktiver
+       * Sperre erreichbar, weil `RootShell` sie vor Anmeldung und Gate prüft.
+       */}
+      <p className="form-hint" data-testid="workspace-company-conflict-local-recovery">
+        {t('companyConflict.localRecoveryHint', lang)}{' '}
+        <a href="/local-recovery" data-testid="workspace-company-conflict-local-recovery-link">
+          /local-recovery
+        </a>
+      </p>
+
       {changed ? (
         <p className="form-error" role="alert" data-testid="workspace-company-conflict-changed">
           {t('companyConflict.changed', lang)}

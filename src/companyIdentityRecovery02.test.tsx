@@ -20,6 +20,7 @@ import { resetSyncCoordinatorForTests } from './services/sync/syncCoordinator';
 import { resetTestStores } from './test/resetStores';
 import { clearMockRpcHandlers, registerMockRpcHandler } from './test/mockProfileStore';
 import { loginAsDefaultAdmin } from './test/authFixtures';
+import { isLocalRecoveryPath } from './RootShell';
 import { getMockCurrentSession } from './test/mockSupabaseAuth';
 import {
   buildCompanyProfileCloudPayload,
@@ -624,16 +625,99 @@ describe('OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02B', () => {
     ).toEqual([WORKSPACE_KEY]);
   });
 
-  it('C2: Abbrechen verändert nichts', async () => {
+  /*
+   * WORKSPACE-COMPANY-CONFLICT-SAFE-EXIT-01 — Abbrechen ließ den Nutzer bisher
+   * auf der Sperrfläche stehen; der einzige sichtbare Ausweg war der
+   * cloud-überschreibende Knopf. Die beiden Sicherheitsinvarianten (kein
+   * Upsert, gespeicherter Bestand unangetastet) bleiben unverändert; die zwei
+   * Assertions, die das Steckenbleiben festschrieben, werden ersetzt.
+   */
+  it('C2: Abbrechen meldet ab, ohne gespeicherte Daten oder die Cloud zu verändern', async () => {
     const container = await mountApp();
-    const beforeCancel = snapshotStorage();
+    const workspaceBefore = localStorage.getItem(WORKSPACE_KEY);
+    const workspaceScopeKeysBefore = storageKeys().filter((key) =>
+      key.startsWith('officepilot-state:workspace:'),
+    );
 
     await click(container, 'workspace-company-conflict-cancel');
 
+    // Sicherheitsinvariante: kein einziger Cloud-Schreibvorgang.
     expect(countOf('upsert_workspace_sync_entity')).toBe(0);
-    // Nach dem Abbrechen ist kein einziger Speicherwert angefasst worden.
-    expect(snapshotStorage()).toEqual(beforeCancel);
+
+    // Sicherheitsinvariante: der gespeicherte Workspace-Bestand bleibt vollständig.
+    expect(localStorage.getItem(WORKSPACE_KEY)).toBe(workspaceBefore);
+    // Keine zusätzliche Workspace-Scope-Kopie.
+    expect(
+      storageKeys().filter((key) => key.startsWith('officepilot-state:workspace:')),
+    ).toEqual(workspaceScopeKeysBefore);
+
+    // Neu: die Sperre ist verlassen und der abgemeldete Zustand erreichbar.
+    expect(container.querySelector('[data-testid="workspace-company-conflict"]')).toBeNull();
+    expect(container.querySelector('[data-testid="app-shell"]')).toBeNull();
+  });
+
+  it('C2a: nach dem Abbrechen erscheint derselbe Konflikt bei erneuter Anmeldung', async () => {
+    const container = await mountApp();
+    const workspaceBefore = localStorage.getItem(WORKSPACE_KEY);
+
+    await click(container, 'workspace-company-conflict-cancel');
+    expect(container.querySelector('[data-testid="workspace-company-conflict"]')).toBeNull();
+    await unmountApp();
+
+    // Derselbe unveränderte lokale Bestand trifft auf denselben Cloud-Stand.
+    expect(localStorage.getItem(WORKSPACE_KEY)).toBe(workspaceBefore);
+    resetWorkspaceCloudBootstrapForTests();
+    await loginAsDefaultAdmin();
+
+    const again = await mountApp();
+    expect(
+      again.querySelector('[data-testid="workspace-company-conflict"]'),
+      'Konflikt wurde durch Abbrechen vorgetäuscht gelöst',
+    ).not.toBeNull();
+    expect(again.querySelector('[data-testid="workspace-company-conflict-cloud"]')?.textContent).toBe(
+      CLOUD_COMPANY,
+    );
+    // Auch der zweite Durchlauf schreibt nichts.
+    expect(countOf('upsert_workspace_sync_entity')).toBe(0);
+  });
+
+  it('C2b: die Sperrfläche nennt den Rettungsweg, ohne etwas zu senden', async () => {
+    const container = await mountApp();
+
+    const hint = container.querySelector(
+      '[data-testid="workspace-company-conflict-local-recovery"]',
+    );
+    expect(hint, 'Hinweis auf den Rettungsweg fehlt').not.toBeNull();
+    const link = container.querySelector(
+      '[data-testid="workspace-company-conflict-local-recovery-link"]',
+    ) as HTMLAnchorElement | null;
+    expect(link?.getAttribute('href')).toBe('/local-recovery');
+
+    // Fachlich korrekt: sichern, nicht auflösen.
+    expect(hint?.textContent).toContain('/local-recovery');
+    expect(hint?.textContent?.toLowerCase()).not.toContain('wiederherstell');
+
+    // Die Route bleibt trotz Sperre erreichbar — geprüft an der Erkennung selbst.
+    expect(isLocalRecoveryPath('/local-recovery')).toBe(true);
+
+    // Reines Anzeigen sendet nichts.
+    expect(countOf('upsert_workspace_sync_entity')).toBe(0);
+  });
+
+  it('C2c: ein ungelöster Konflikt gibt den Merge-/Sync-Pfad nicht frei', async () => {
+    const container = await mountApp();
+
     expect(container.querySelector('[data-testid="workspace-company-conflict"]')).not.toBeNull();
+    // Kein Fachbestand wird abgeglichen oder gesendet, solange der Konflikt steht.
+    expect(countOf('upsert_workspace_sync_entity')).toBe(0);
+    expect(upsertsFor('vorgang')).toEqual([]);
+    expect(upsertsFor('inbox_item')).toEqual([]);
+    expect(container.querySelector('[data-testid="app-shell"]')).toBeNull();
+
+    // Auch das Abbrechen gibt ihn nicht frei.
+    await click(container, 'workspace-company-conflict-cancel');
+    expect(countOf('upsert_workspace_sync_entity')).toBe(0);
+    expect(upsertsFor('vorgang')).toEqual([]);
     expect(container.querySelector('[data-testid="app-shell"]')).toBeNull();
   });
 

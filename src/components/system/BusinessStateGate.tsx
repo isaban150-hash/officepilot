@@ -169,9 +169,32 @@ export function BusinessStateGate({ children }: BusinessStateGateProps) {
         changed={conflictChanged}
         errorMessage={conflictError}
         onCancel={() => {
-          // Abbrechen verändert nichts — die Ansicht bleibt stehen.
+          /**
+           * WORKSPACE-COMPANY-CONFLICT-SAFE-EXIT-01 — Abbrechen war bisher
+           * wirkungslos: der Nutzer blieb auf der Sperrfläche, und der einzige
+           * sichtbare Ausweg war der cloud-überschreibende Knopf.
+           *
+           * Jetzt führt Abbrechen über den **bestehenden** Auth-Logout-Pfad
+           * hinaus: `logout()` ruft `isolateBusinessStateOnLogout()`, das nur
+           * den Arbeitsspeicher isoliert und den Scope auf `guest` setzt — es
+           * löscht **keinen** gespeicherten Bestand. Der Konflikt wird damit
+           * nicht aufgelöst, sondern verlassen; bei der nächsten Anmeldung
+           * erscheint er unverändert wieder.
+           */
+          if (conflictBusy) return;
           setConflictChanged(false);
           setConflictError(null);
+          setConflictBusy(true);
+          void logout()
+            .then(() => {
+              // Nur der UI-Zustand des Gates — keine gespeicherten Daten.
+              setCompanyConflict(null);
+              conflictRawRef.current = null;
+              appliedEntitiesRef.current = {};
+            })
+            .finally(() => {
+              setConflictBusy(false);
+            });
         }}
         onConfirmUseLocal={() => {
           if (conflictBusy) return;
