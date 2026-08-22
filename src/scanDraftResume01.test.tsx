@@ -745,6 +745,163 @@ describe('UPLOAD-DRAFT-RESUME-01D2 Scan', () => {
     expect(await listUploadDraftRecordsForActiveScope()).toHaveLength(0);
   });
 
+  /*
+   * REAL-DEVICE-PERMANENT-SAVE-MISSING-01 — auf dem iPhone blieb ein
+   * fehlgeschlagenes „Dauerhaft speichern" vollständig unsichtbar: der Handler
+   * warf weiter, der Aufrufer verwarf die Rejection mit `void`, und der Nutzer
+   * sah weder Dokument noch Fehler. Der Entwurf blieb dabei stets erhalten.
+   */
+  async function clickSavePermanently(mount: Mount): Promise<void> {
+    const save = decisionButtons(mount.container).find((node) =>
+      /dauerhaft/i.test(node.textContent ?? ''),
+    );
+    expect(save, 'Speichern-Aktion fehlt').toBeTruthy();
+    await act(async () => {
+      save!.click();
+      await Promise.resolve();
+    });
+    await settle(4);
+  }
+
+  function confirmErrorBox(container: ParentNode): HTMLElement | null {
+    return container.querySelector('[data-testid="ocr-confirm-error"]');
+  }
+
+  it('M2 — geworfene Ausnahme beim Speichern wird sichtbar, der Entwurf bleibt', async () => {
+    mounted = renderScan('/scan');
+    await settle();
+    await scanUntilVisible(mounted, 'SCAN-M2');
+    const record = (await listUploadDraftRecordsForActiveScope())[0]!;
+
+    const throwingSpy = vi
+      .spyOn(pendingDocumentIntakeService, 'confirmPendingDocumentIntake')
+      .mockRejectedValue(new Error('unerwarteter Fehler beim Speichern'));
+
+    await clickSavePermanently(mounted);
+    throwingSpy.mockRestore();
+
+    // Der Nutzer sieht den Fehlschlag — keine still verworfene Rejection mehr.
+    expect(confirmErrorBox(mounted.container), 'Fehlermeldung fehlt').not.toBeNull();
+    expect(confirmErrorBox(mounted.container)?.textContent).toContain('Speichern fehlgeschlagen');
+
+    // Vorschau, Entwurf, Datei und Blob sind unverändert vorhanden.
+    expect(analysisVisible(mounted.container)).toBe(true);
+    expect(mounted.container.textContent).toContain('SCAN-M2.jpg');
+    expect(await listUploadDraftRecordsForActiveScope()).toHaveLength(1);
+    expect(new URLSearchParams(mounted.location().search).get('draft')).toBe(record.id);
+    expect(getDocumentFileRefById(record.fileRefId)).toBeDefined();
+    expect(await hasDocumentBlob(record.fileRefId)).toBe(true);
+
+    // Keine Navigation auf Erfolg, kein angelegtes Dokument.
+    expect(mounted.location().pathname).toBe('/scan');
+    expectNoDomainObjects();
+    expect(getInboxStoreSnapshot()).toHaveLength(0);
+  });
+
+  it('M2b — nach dem Fehlschlag ist ein erneuter Versuch möglich und erfolgreich', async () => {
+    mounted = renderScan('/scan');
+    await settle();
+    await scanUntilVisible(mounted, 'SCAN-M2B');
+    const record = (await listUploadDraftRecordsForActiveScope())[0]!;
+
+    const throwingSpy = vi
+      .spyOn(pendingDocumentIntakeService, 'confirmPendingDocumentIntake')
+      .mockRejectedValue(new Error('unerwarteter Fehler beim Speichern'));
+    await clickSavePermanently(mounted);
+    throwingSpy.mockRestore();
+
+    expect(confirmErrorBox(mounted.container)).not.toBeNull();
+    expect(getInboxStoreSnapshot()).toHaveLength(0);
+
+    // Die Busy-Sperre ist wieder frei: derselbe Knopf trägt jetzt bis zum Ende.
+    await clickSavePermanently(mounted);
+    await waitFor(() => getInboxStoreSnapshot().length === 1, 'inbox item after retry');
+    await settle(4);
+
+    expect(getInboxStoreSnapshot()).toHaveLength(1);
+    expect(getInboxStoreSnapshot()[0]?.fileRefId).toBe(record.fileRefId);
+    expect(await listUploadDraftRecordsForActiveScope()).toHaveLength(0);
+    expect(getDocumentFileRefById(record.fileRefId)?.lifecycleStatus).toBe('committed');
+  });
+
+  it('M2c — ein zurückgegebener persist_failed bleibt sichtbar und behält den Entwurf', async () => {
+    mounted = renderScan('/scan');
+    await settle();
+    await scanUntilVisible(mounted, 'SCAN-M2C');
+    const record = (await listUploadDraftRecordsForActiveScope())[0]!;
+
+    const persistSpy = vi
+      .spyOn(persistenceService, 'persistAll')
+      .mockReturnValue({ success: false, error: 'quota_exceeded' });
+    await clickSavePermanently(mounted);
+    persistSpy.mockRestore();
+
+    expect(confirmErrorBox(mounted.container), 'bestehende Fehlermeldung fehlt').not.toBeNull();
+    expect(analysisVisible(mounted.container)).toBe(true);
+    expect(await listUploadDraftRecordsForActiveScope()).toHaveLength(1);
+    expect(new URLSearchParams(mounted.location().search).get('draft')).toBe(record.id);
+    expect(mounted.location().pathname).toBe('/scan');
+    expect(getInboxStoreSnapshot()).toHaveLength(0);
+  });
+
+  it('M2d — reale Sequenz: Entwurf, Reload, Wiederaufnahme, dann erfolgreich speichern', async () => {
+    mounted = renderScan('/scan?input=camera');
+    await settle();
+    await scanUntilVisible(mounted, 'SCAN-M2D', true);
+    const record = (await listUploadDraftRecordsForActiveScope())[0]!;
+
+    // Erster Reload — wie Safari-Neustart: Unmount, dann Wiedereintritt.
+    act(() => mounted!.root.unmount());
+    mounted.container.remove();
+    mounted = renderScan(`/scan?input=camera&draft=${record.id}`);
+    await waitFor(() => analysisVisible(mounted!.container), 'restored once');
+
+    // Zweiter Reload auf demselben Entwurf.
+    act(() => mounted!.root.unmount());
+    mounted.container.remove();
+    mounted = renderScan(`/scan?input=camera&draft=${record.id}`);
+    await waitFor(() => analysisVisible(mounted!.container), 'restored twice');
+    await settle(2);
+
+    // Die Wiederaufnahme erzeugt keinen zweiten Entwurf.
+    expect(await listUploadDraftRecordsForActiveScope()).toHaveLength(1);
+    expect(mounted.container.textContent).toContain('SCAN-M2D.jpg');
+
+    await clickSavePermanently(mounted);
+    await waitFor(() => getInboxStoreSnapshot().length === 1, 'inbox item after resume save');
+    await settle(4);
+
+    expect(getInboxStoreSnapshot()[0]?.fileRefId).toBe(record.fileRefId);
+    expect(getDocumentFileRefById(record.fileRefId)?.lifecycleStatus).toBe('committed');
+    expect(await listUploadDraftRecordsForActiveScope()).toHaveLength(0);
+  });
+
+  it('M2e — reale Sequenz mit Ausnahme: sichtbarer Fehler, Entwurf bleibt erhalten', async () => {
+    mounted = renderScan('/scan?input=camera');
+    await settle();
+    await scanUntilVisible(mounted, 'SCAN-M2E', true);
+    const record = (await listUploadDraftRecordsForActiveScope())[0]!;
+
+    act(() => mounted!.root.unmount());
+    mounted.container.remove();
+    mounted = renderScan(`/scan?input=camera&draft=${record.id}`);
+    await waitFor(() => analysisVisible(mounted!.container), 'restored');
+    await settle(2);
+
+    const throwingSpy = vi
+      .spyOn(pendingDocumentIntakeService, 'confirmPendingDocumentIntake')
+      .mockRejectedValue(new Error('unerwarteter Fehler beim Speichern'));
+    await clickSavePermanently(mounted);
+    throwingSpy.mockRestore();
+
+    expect(confirmErrorBox(mounted.container), 'Fehlermeldung fehlt').not.toBeNull();
+    expect(analysisVisible(mounted.container)).toBe(true);
+    expect(await listUploadDraftRecordsForActiveScope()).toHaveLength(1);
+    expect(await hasDocumentBlob(record.fileRefId)).toBe(true);
+    expect(mounted.location().pathname).toBe('/scan');
+    expect(getInboxStoreSnapshot()).toHaveLength(0);
+  });
+
   it('N — UiSession trägt ausschließlich die Draft-ID', async () => {
     mounted = renderScan('/scan');
     await settle();

@@ -385,7 +385,18 @@ export function ScanPage() {
       traceStep(saveTraceId, 'navigation_done');
     } catch (error) {
       traceStepError(saveTraceId, 'execute_decision_rejected', error);
-      throw error;
+      /**
+       * REAL-DEVICE-PERMANENT-SAVE-MISSING-01 — bis hierher wurde weitergeworfen.
+       * Der Aufrufer verwirft die Rejection mit `void`, und Error Boundaries
+       * fangen keine Promise-Rejections: der Nutzer sah weder Dokument noch
+       * Fehler. Eine unerwartete Ausnahme kommt jetzt auf denselben sichtbaren
+       * Vertrag wie ein zurückgegebener Fehler — mit dem bestehenden
+       * `confirmError`-Bereich und ohne den Entwurf anzufassen. Weder
+       * `discardPendingDocumentIntake` noch `forgetCurrentDraftMetadata`
+       * laufen auf diesem Weg, `pendingScan` bleibt stehen, und es wird nicht
+       * navigiert.
+       */
+      setConfirmError('storage_failed');
     } finally {
       traceStep(saveTraceId, 'finally_reset_loading');
       finishDocumentSaveTrace(saveTraceId);
