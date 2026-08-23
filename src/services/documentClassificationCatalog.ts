@@ -386,7 +386,13 @@ export function buildDigitalFolderSpec(
     betriebshaftpflicht: { name: 'Betriebshaftpflicht', path: `/Versicherungen/Betriebshaftpflicht/${year}/` },
     fahrzeugversicherung: { name: 'Fahrzeugversicherung', path: `/Versicherungen/Fahrzeug/${year}/` },
     versicherung: { name: 'Versicherungen', path: `/Versicherungen/${year}/` },
-    tankbeleg: { name: 'Tankbelege', path: `/Fahrzeuge/Tankbelege/${year}/${month}/` },
+    /**
+     * OFFICEPILOT-TANKBELEG-ABLAGEPFAD-FIX-01 — Tankbelege liegen direkt unter
+     * „Tankbelege". Die Zeile muss bestehen bleiben: ohne sie fiele `tankbeleg`
+     * über VEHICLE_KINDS wieder auf `/Fahrzeuge/...` zurück. Der Papierordner
+     * und eine spätere Fahrzeugzuordnung sind davon unabhängig.
+     */
+    tankbeleg: { name: 'Tankbelege', path: `/Tankbelege/${year}/${month}/` },
     tuev_bericht: { name: 'TÜV', path: `/Fahrzeuge/TÜV/${year}/` },
     baustellenfoto: { name: 'Baustellenfotos', path: `/Baustelle/${vorgangSlug}/Fotos/` },
     foto: { name: 'Fotos', path: `/Baustelle/${vorgangSlug}/Fotos/` },

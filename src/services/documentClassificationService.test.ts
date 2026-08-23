@@ -444,12 +444,30 @@ describe('classifyDocument', () => {
     expect(result.actions.map((a) => a.id)).toContain('import_hours');
   });
 
+  /*
+   * OFFICEPILOT-TANKBELEG-ABLAGEPFAD-FIX-01 — Tankbelege liegen künftig direkt
+   * unter „Tankbelege", ohne den Umweg über „Fahrzeuge". Kleine Betriebe finden
+   * sie damit unmittelbar; eine spätere Fahrzeugzuordnung bleibt davon als
+   * Metadatum unberührt.
+   */
   it('classifies Tankbeleg with expense folder', () => {
+    const now = new Date();
+    const year = String(now.getFullYear());
+    const month = String(now.getMonth() + 1).padStart(2, '0');
     const result = classifyDocument({ recognizedText: 'Tankstelle Diesel Beleg' });
 
     expect(result.classifiedKind).toBe('tankbeleg');
-    expect(result.digitalFolder.path).toContain('Fahrzeuge/Tankbelege');
+    expect(result.digitalFolder.name).toBe('Tankbelege');
+    expect(result.digitalFolder.path).toBe(`/Tankbelege/${year}/${month}/`);
+    expect(result.digitalFolder.path).not.toContain('/Fahrzeuge/');
     expect(result.actions.map((a) => a.id)).toContain('record_expense');
+  });
+
+  it('keeps other vehicle documents under Fahrzeuge', () => {
+    const result = classifyDocument({ recognizedText: 'TÜV-Bericht Hauptuntersuchung' });
+
+    expect(result.classifiedKind).toBe('tuev_bericht');
+    expect(result.digitalFolder.path).toContain('/Fahrzeuge/TÜV/');
   });
 
   it('marks werbung as advertisement', () => {
