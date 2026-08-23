@@ -119,6 +119,44 @@ export function hasPendingCompanyCloudBackup(): boolean {
   );
 }
 
+/**
+ * REAL-DEVICE-CLOUD-COMPANY-IDENTICAL-COMPLETE-01 — schließt genau einen
+ * gegenstandslosen Firmen-Auftrag ab: lokaler und Cloud-Payload sind bereits
+ * identisch, es bleibt nur eine Versionshistorie.
+ *
+ * Bewusst eng: nur `company_setup`/`company_profile`, nur der übergebene
+ * Workspace, und nur der Status `blocked`. `blocked` heißt, dass der letzte
+ * Push an einem Versionskonflikt scheiterte und seither **keine** neue lokale
+ * Inhaltsänderung kam — denn jede solche Änderung setzt den vorhandenen
+ * aktiven Eintrag über `enqueueSyncOutbox`/`mergeOutboxEntry` wieder auf
+ * `pending`. Damit kann ein neuerer lokaler Stand hier nicht verloren gehen.
+ *
+ * Kein „complete all blocked", keine local-only-Entitäten, kein Löschen.
+ *
+ * 01C — bewusst **seiteneffektfrei**: reine Transformation über ein übergebenes
+ * Array. Kein Schreiben in `outbox`, kein `notifyOutboxChanged`, keine
+ * Persistenz, keine Hydrierung. Das Ergebnis reist im Persisted-State-Kandidaten
+ * und wird erst an der bestehenden Persistenzgrenze wirksam.
+ */
+export function completeIdenticalCompanyCloudOutboxEntry(
+  entries: SyncOutboxEntry[],
+  entityType: 'company_setup' | 'company_profile',
+  entityId: string,
+): { outbox: SyncOutboxEntry[]; completed: boolean } {
+  const target = entries.find(
+    (entry) =>
+      entry.entityType === entityType && entry.entityId === entityId && entry.status === 'blocked',
+  );
+  if (!target) return { outbox: entries, completed: false };
+
+  return {
+    outbox: entries.map((entry) =>
+      entry.id === target.id ? { ...entry, status: 'completed', blockedReason: undefined } : entry,
+    ),
+    completed: true,
+  };
+}
+
 export function markOutboxEntriesCompleted(outboxIds: string[]): void {
   if (outboxIds.length === 0) return;
   const completedIds = new Set(outboxIds);

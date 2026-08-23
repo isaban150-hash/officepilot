@@ -3,9 +3,15 @@ import type { SyncClientConfig } from '../../types/sync';
 import { hydrateCompanyProfileStore } from '../companyProfileService';
 import { persistAll } from '../persistenceService';
 import { ensureSyncClientFromState, hydrateSyncClient } from '../sync/syncClientService';
-import { enqueueSyncOutbox, getSyncOutboxSnapshot } from '../sync/syncOutboxService';
+import {
+  completeIdenticalCompanyCloudOutboxEntry,
+  enqueueSyncOutbox,
+  getSyncOutboxSnapshot,
+} from '../sync/syncOutboxService';
 import { filterSyncActive } from '../sync/syncMetaService';
 import {
+  buildCompanyProfileCloudPayload,
+  buildCompanySetupCloudPayload,
   parseCompanyProfileFromCloud,
   parseCompanySetupFromCloud,
   rpcEnsurePersonalWorkspace,
@@ -152,11 +158,35 @@ export function applyWorkspaceStateToStores(state: AppPersistedState): void {
   }
 }
 
+/**
+ * REAL-DEVICE-CLOUD-COMPANY-IDENTICAL-COMPLETE-01 — stabiler, feldweiser
+ * Vergleich über genau die Builder, mit denen auch gepusht wird. Damit gelten
+ * dieselben Regeln wie im Cloud-Vertrag — insbesondere entfernt
+ * `buildCompanyProfileCloudPayload` das Logo auf beiden Seiten, sodass ein rein
+ * lokales Logo weder eine Scheinabweichung noch eine Scheingleichheit erzeugt.
+ * Die Schlüssel werden sortiert, weil lokal aufgebaute und aus der Cloud
+ * geparste Objekte dieselben Felder in anderer Reihenfolge tragen können.
+ */
+function canonicalCloudPayloadKey(payload: Record<string, unknown>): string {
+  return JSON.stringify(payload, (_key, value: unknown) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+    const record = value as Record<string, unknown>;
+    return Object.keys(record)
+      .sort()
+      .reduce<Record<string, unknown>>((sorted, key) => {
+        sorted[key] = record[key];
+        return sorted;
+      }, {});
+  });
+}
+
 export function mergeRemoteWorkspacePullIntoState(
   state: AppPersistedState,
   pull: Awaited<ReturnType<typeof rpcPullWorkspaceSyncState>>,
 ): { state: AppPersistedState; conflicts: string[] } {
   const conflicts: string[] = [];
+  /** 01C — Firmenentitäten, deren Versionsdrift ohne Datenkonflikt geschlossen wird. */
+  const identicalStateResolved: Array<'company_setup' | 'company_profile'> = [];
   const workspaceId = state.syncClient?.serverWorkspaceId ?? state.workspace?.id ?? '';
   let next: AppPersistedState = { ...state };
 
@@ -223,7 +253,36 @@ export function mergeRemoteWorkspacePullIntoState(
       pull.setupRowVersion > 0 &&
       localVersion !== pull.setupRowVersion
     ) {
-      conflicts.push('company_setup');
+      /**
+       * REAL-DEVICE-CLOUD-COMPANY-IDENTICAL-COMPLETE-01 — sind beide Seiten
+       * fachlich identisch, gibt es keinen Datenkonflikt, sondern nur eine
+       * Versionshistorie. Dann wird ausschließlich die Serverversion
+       * übernommen und der gegenstandslose Auftrag abgeschlossen: kein Push,
+       * kein Überschreiben lokaler oder entfernter Firmendaten. Der Abschluss
+       * selbst trägt den Race-Guard (nur `blocked`).
+       */
+      const identical =
+        canonicalCloudPayloadKey(buildCompanySetupCloudPayload(state.setup)) ===
+        canonicalCloudPayloadKey(buildCompanySetupCloudPayload(remoteSetup));
+      if (
+        identical &&
+        completeIdenticalCompanyCloudOutboxEntry(
+          getSyncOutboxSnapshot(),
+          'company_setup',
+          workspaceId,
+        ).completed
+      ) {
+        identicalStateResolved.push('company_setup');
+        next.setupSync = {
+          version: pull.setupRowVersion,
+          updatedAt: pull.setupUpdatedAt ?? new Date().toISOString(),
+          deleted: false,
+          deviceId: state.syncClient!.deviceId,
+          workspaceId,
+        };
+      } else {
+        conflicts.push('company_setup');
+      }
     } else if (localSetupIsDefault || pull.setupRowVersion >= localVersion) {
       next.setup = remoteSetup;
       applyRemoteSetupSyncMeta(pull.setupRowVersion, pull.setupUpdatedAt ?? new Date().toISOString());
@@ -287,7 +346,30 @@ export function mergeRemoteWorkspacePullIntoState(
       pull.companyProfileRowVersion > 0 &&
       localVersion !== pull.companyProfileRowVersion
     ) {
-      conflicts.push('company_profile');
+      // Gleiche Identical-State-Regel wie beim Setup, unabhängig geprüft.
+      const identical =
+        state.companyProfile !== undefined &&
+        canonicalCloudPayloadKey(buildCompanyProfileCloudPayload(state.companyProfile)) ===
+          canonicalCloudPayloadKey(buildCompanyProfileCloudPayload(remoteProfile));
+      if (
+        identical &&
+        completeIdenticalCompanyCloudOutboxEntry(
+          getSyncOutboxSnapshot(),
+          'company_profile',
+          workspaceId,
+        ).completed
+      ) {
+        identicalStateResolved.push('company_profile');
+        next.companyProfileSync = {
+          version: pull.companyProfileRowVersion,
+          updatedAt: pull.companyProfileUpdatedAt ?? new Date().toISOString(),
+          deleted: false,
+          deviceId: state.syncClient!.deviceId,
+          workspaceId,
+        };
+      } else {
+        conflicts.push('company_profile');
+      }
     } else if (localProfileIsDefault || pull.companyProfileRowVersion >= localVersion) {
       next.companyProfile = remoteProfile;
       applyRemoteCompanyProfileSyncMeta(
@@ -350,6 +432,22 @@ export function mergeRemoteWorkspacePullIntoState(
    * Einträge durch einen alten state.syncOutbox wieder verschwinden.
    */
   next.syncOutbox = getSyncOutboxSnapshot();
+
+  /**
+   * REAL-DEVICE-CLOUD-COMPANY-IDENTICAL-COMPLETE-01C — der Abschluss der
+   * gegenstandslosen Firmenaufträge wird erst hier, nach dem Snapshot, in den
+   * Kandidaten geschrieben. Damit reisen neue Sync-Metaversion und Abschluss im
+   * selben `AppPersistedState` und werden von derselben Persistenzgrenze
+   * übernommen. Der globale Outbox-Zustand bleibt bis dahin unverändert.
+   */
+  for (const entityType of identicalStateResolved) {
+    next.syncOutbox = completeIdenticalCompanyCloudOutboxEntry(
+      next.syncOutbox,
+      entityType,
+      workspaceId,
+    ).outbox;
+  }
+
   next.savedAt = new Date().toISOString();
   return { state: next, conflicts };
 }
