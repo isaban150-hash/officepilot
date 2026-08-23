@@ -12,8 +12,11 @@ import {
 import {
   cleanLetterheadCandidate,
   stripLetterheadLogoInitial,
+  containsMerchantToken,
   extractFieldsWithConfidence,
+  isAllFragmentTokens,
   pickCleanerMerchantVariant,
+  stripLeadingMerchantNoise,
   toConfidentPlainFields,
 } from './documentFieldExtractionService';
 import { extractDocumentFeatures } from './documentFeatureExtractionService';
@@ -179,6 +182,20 @@ function inferMerchantFromHeader(text: string): string | undefined {
   return pickCleanerMerchantVariant(first, candidates.slice(1));
 }
 
+/**
+ * OFFICEPILOT-TANKBELEG-TANKSTELLE-FIELD-FIX-01 — bestätigt einen Wert nur, wenn
+ * er als eigene Kopfzeile im Dokument steht. Verwendet dieselbe
+ * Leading-Noise-Normalisierung wie der Merchant-Vergleich, damit „= NAME" als
+ * Bestätigung für „NAME" zählt. Keine zweite Bereinigungslogik.
+ */
+function isMerchantConfirmedInHeaderLines(value: string, text: string): boolean {
+  return text
+    .split(/\r?\n/)
+    .slice(0, 6)
+    .map((line) => stripLeadingMerchantNoise(line.trim()))
+    .some((line) => line?.toLowerCase() === value.toLowerCase());
+}
+
 function resolveReceiptMerchant(
   kind: ReceiptCutoverKind,
   plain: ReturnType<typeof toConfidentPlainFields>,
@@ -188,7 +205,31 @@ function resolveReceiptMerchant(
   const extractedMerchant = (plain.Absender ?? plain.Lieferant)?.trim();
 
   if (kind === 'tankbeleg') {
-    if (headerMerchant) return headerMerchant;
+    if (headerMerchant) {
+      /**
+       * OFFICEPILOT-TANKBELEG-TANKSTELLE-FIELD-FIX-01 — der Kopfvorrang bleibt
+       * die Regel. Er weicht nur, wenn drei Nachweise zusammenkommen: der
+       * bereits bereinigte Absender ist brauchbar, derselbe Name steht als
+       * eigene Kopfzeile im Dokument, und der gewählte Kopfkandidat besteht
+       * ausschließlich aus Fragmenten und teilt mit ihm kein einziges Wort.
+       * Damit gewinnt weder ein zufällig abweichender Absender noch entscheidet
+       * die Wortlänge allein — „ABC Bau Ost" gegen „ABC" bleibt der Kopf.
+       */
+      const confirmedByHeader =
+        extractedMerchant &&
+        !isRegistryFooterMerchant(extractedMerchant) &&
+        !isAllFragmentTokens(extractedMerchant) &&
+        isMerchantConfirmedInHeaderLines(extractedMerchant, text);
+
+      if (
+        confirmedByHeader &&
+        isAllFragmentTokens(headerMerchant) &&
+        !containsMerchantToken(headerMerchant, extractedMerchant)
+      ) {
+        return extractedMerchant;
+      }
+      return headerMerchant;
+    }
     if (extractedMerchant && !isRegistryFooterMerchant(extractedMerchant)) {
       return extractedMerchant;
     }

@@ -475,6 +475,56 @@ describe('documentRecognizedDataService', () => {
         );
       });
 
+      /*
+       * OFFICEPILOT-TANKBELEG-TANKSTELLE-FIELD-FIX-01 — bei `tankbeleg` gewann
+       * der Kopfkandidat bedingungslos, obwohl im selben Aufruf bereits ein
+       * bereinigter Absender vorlag und derselbe Name als eigene Kopfzeile im
+       * Dokument steht. Die Präfixregel des Merchant-Fixes kann diesen Fall
+       * nicht lösen, weil die beiden Werte keinen gemeinsamen Wortstamm haben.
+       */
+      it('X: eine reine Rauschkopfzeile verliert gegen den im Kopf bestätigten Absender', () => {
+        expect(
+          tankstelleOf([
+            'Sep EEE ae Zn',
+            '= ARAL',
+            'EEE nn Ef Enz',
+            'Musterstraße 1',
+            '12345 Musterstadt',
+          ]),
+        ).toBe('ARAL');
+      });
+
+      it('Y: ein sauberer Kopfkandidat behält den Vorrang', () => {
+        // Bestehender Vertrag aus DOCUMENT-RECEIPT-MERCHANT-HEADER-01.
+        expect(
+          tankstelleOf(['Muster Tankstelle München', 'Absender: Muster GmbH', 'Diesel 41,90 EUR']),
+        ).toBe('Muster Tankstelle München');
+      });
+
+      it('Z: kurze mehrteilige Kopfnamen werden nicht verdrängt', () => {
+        // `ABC` ist Bestandteil des Kopfnamens — dann ist der Kopf die
+        // vollständigere Form desselben Namens, nicht Rauschen.
+        expect(tankstelleOf(['ABC Bau Ost', 'Absender: ABC', 'Diesel 41,90 EUR'])).toBe(
+          'ABC Bau Ost',
+        );
+        for (const name of ['A & O Bau', 'T.Bau', 'H&M', 'C&A', 'Muster Bau GmbH']) {
+          expect(tankstelleOf([name, 'Musterstraße 1', '12345 Musterstadt']), name).toBe(name);
+        }
+      });
+
+      it('Z2: ohne Absender bleibt der Kopfkandidat erhalten', () => {
+        expect(tankstelleOf(['Sep EEE ae Zn', 'Musterstraße 1', '12345 Musterstadt'])).toBe(
+          'Sep EEE ae Zn',
+        );
+      });
+
+      it('Z3: ist auch der Absender unbrauchbar, bleibt es beim Kopfkandidaten', () => {
+        // Kein im Kopf bestätigter, brauchbarer Alternativwert → nicht raten.
+        expect(
+          tankstelleOf(['Sep EEE ae Zn', 'EEE nn Ef Enz', 'Musterstraße 1', '12345 Musterstadt']),
+        ).toBe('Sep EEE ae Zn');
+      });
+
       it('W: realer Gerätekopf — Händler, Absender und Betreff sind sauber', () => {
         const REAL_DEVICE_HEAD = [
           'Sep EEE ae Zn',

@@ -264,6 +264,28 @@ function isFragmentToken(token: string): boolean {
 }
 
 /**
+ * OFFICEPILOT-TANKBELEG-TANKSTELLE-FIELD-FIX-01 — wahr, wenn ein Wert
+ * ausschließlich aus einer Kette kurzer Fragmente besteht. Bewusst dieselbe
+ * Schwelle wie `MIN_GARBLED_TOKENS`: ein oder zwei kurze Wörter sind alltäglich,
+ * eine ganze Reihe davon nicht. Für sich allein ist das **kein** hinreichender
+ * Beweis — der Aufrufer muss zusätzlich einen im Dokument bestätigten, davon
+ * unabhängigen Alternativwert vorweisen.
+ */
+export function isAllFragmentTokens(value: string): boolean {
+  const tokens = value.split(/\s+/).filter(Boolean);
+  if (tokens.length < MIN_GARBLED_TOKENS) return false;
+  return tokens.every((token) => isFragmentToken(token));
+}
+
+/** Wahr, wenn `part` als vollständiges Wort in `value` vorkommt. */
+export function containsMerchantToken(value: string, part: string): boolean {
+  const tokens = value.split(/\s+/).filter(Boolean).map((token) => token.toLowerCase());
+  const partTokens = part.split(/\s+/).filter(Boolean).map((token) => token.toLowerCase());
+  if (partTokens.length === 0) return false;
+  return partTokens.every((token) => tokens.includes(token));
+}
+
+/**
  * OFFICEPILOT-RECEIPT-MERCHANT-SELECTION-FIX-01B — Mindestzahl kurzer Resttoken,
  * ab der ein Anhang als OCR-Müll gilt. Bewusst hoch angesetzt: ein oder zwei
  * kurze Wörter hinter einem Namen sind alltäglich („Muster Bau", „Muster Bau
@@ -305,7 +327,7 @@ function isGarbledExtensionOf(longer: string, shorter: string): boolean {
 const LEADING_MERCHANT_NOISE = /^[=:|*~•·]+\s*/u;
 
 /** Liefert den Namen ohne führendes Scan-Rauschen — oder nichts, wenn keiner bleibt. */
-function stripLeadingMerchantNoise(line: string): string | undefined {
+export function stripLeadingMerchantNoise(line: string): string | undefined {
   const stripped = line.replace(LEADING_MERCHANT_NOISE, '').trim();
   if (!stripped || !/[\p{L}\d]/u.test(stripped)) return undefined;
   return stripped;
