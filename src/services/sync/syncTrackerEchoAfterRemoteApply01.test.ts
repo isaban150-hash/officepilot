@@ -24,6 +24,7 @@ import {
 } from '../persistenceService';
 import * as persistenceService from '../persistenceService';
 import { applySyncPullCandidateSafely } from './syncPullPersistService';
+import { applyWorkspaceStateToStores } from '../workspace/workspaceProvisioningService';
 import { createEmptySyncSimulationReport } from './syncSimulationReportService';
 import { resetSyncChangeTrackerForTests } from './syncChangeTrackerService';
 import {
@@ -308,6 +309,104 @@ describe('REAL-DEVICE-CLOUD-COMPANY-TRACKER-ECHO-FIX-01', () => {
     expect(created[0]?.entityType).toBe('company_setup');
     expect(created[0]?.operation).toBe('update');
     expect(created[0]?.status).toBe('pending');
+  });
+
+  /*
+   * REAL-DEVICE-CLOUD-COMPANY-POST-SEED-MUTATION-FIX-01 — der Bootstrap ruft
+   * nach jedem Remote-Apply `applyWorkspaceStateToStores(state)`, und diese
+   * Funktion schreibt über `persistAll(state.setup)` den **rohen** Setup in den
+   * Store. `applyStateToStores` setzt denselben Store dagegen als
+   * `{ ...DEFAULT_SETUP, ...state.setup }`. Die soeben geseedete Baseline wird
+   * dadurch überholt, und derselbe `persistAll` meldet eine Firmenänderung,
+   * die es nie gab.
+   */
+  it('I: Pull-Apply gefolgt von applyWorkspaceStateToStores erzeugt kein Echo', () => {
+    establishLocalBaseline();
+
+    const finalState = buildState({
+      setup: reversedKeys(withoutField({ ...BASE_SETUP }, 'communicationChannel')),
+      companyProfile: reversedKeys({ ...BASE_PROFILE }),
+    } as Partial<AppPersistedState>);
+
+    expect(
+      applySyncPullCandidateSafely({ state: finalState, report: emptyReport() }).persisted,
+    ).toBe(true);
+    resetSyncOutboxForTests();
+
+    // Exakt der nächste Bootstrap-Schritt.
+    applyWorkspaceStateToStores(finalState);
+
+    expect(companyEntries(), 'Post-Seed-Echo nach Pull-Apply').toEqual([]);
+    expect(hasPendingCompanyCloudBackup()).toBe(false);
+
+    persistAll();
+    expect(companyEntries(), 'Echo beim nächsten persistAll').toEqual([]);
+  });
+
+  it('J: Bootstrap-Apply gefolgt von applyWorkspaceStateToStores erzeugt kein Echo', () => {
+    establishLocalBaseline();
+
+    const remote = buildState({
+      setup: reversedKeys(withoutField({ ...BASE_SETUP }, 'communicationChannel')),
+      companyProfile: reversedKeys({ ...BASE_PROFILE }),
+    } as Partial<AppPersistedState>);
+
+    applyPersistedStateFromSync(remote);
+    resetSyncOutboxForTests();
+    applyWorkspaceStateToStores(remote);
+
+    expect(companyEntries(), 'Post-Seed-Echo im Bootstrap-Pfad').toEqual([]);
+    expect(hasPendingCompanyCloudBackup()).toBe(false);
+
+    persistAll();
+    expect(companyEntries()).toEqual([]);
+  });
+
+  it('K: nach dem Post-Seed-Schritt wirkt eine echte Setup-Änderung weiter', () => {
+    establishLocalBaseline();
+    const finalState = buildState({
+      setup: reversedKeys(withoutField({ ...BASE_SETUP }, 'communicationChannel')),
+    } as Partial<AppPersistedState>);
+    applySyncPullCandidateSafely({ state: finalState, report: emptyReport() });
+    applyWorkspaceStateToStores(finalState);
+    resetSyncOutboxForTests();
+    persistAll();
+    expect(companyEntries()).toEqual([]);
+
+    persistenceService.setCachedSetup({ ...BASE_SETUP, industry: 'Elektro' });
+    persistAll();
+
+    const created = companyEntries();
+    expect(created).toHaveLength(1);
+    expect(created[0]?.entityType).toBe('company_setup');
+    expect(created[0]?.operation).toBe('update');
+    expect(created[0]?.status).toBe('pending');
+    expect(hasPendingCompanyCloudBackup()).toBe(true);
+
+    // Ohne weitere Änderung entsteht kein zweiter Eintrag.
+    persistAll();
+    persistAll();
+    expect(companyEntries()).toHaveLength(1);
+  });
+
+  it('L: das Firmenprofil bleibt vom Post-Seed-Schritt unberührt', () => {
+    establishLocalBaseline();
+    const finalState = buildState({
+      companyProfile: reversedKeys(withoutField({ ...BASE_PROFILE }, 'skontoDays')),
+    } as Partial<AppPersistedState>);
+
+    applySyncPullCandidateSafely({ state: finalState, report: emptyReport() });
+    resetSyncOutboxForTests();
+    applyWorkspaceStateToStores(finalState);
+    persistAll();
+
+    expect(
+      companyEntries().filter((entry) => entry.entityType === 'company_profile'),
+    ).toEqual([]);
+    expect(buildPersistedStateSnapshot().companyProfile?.companyName).toBe(COMPANY);
+    expect(buildPersistedStateSnapshot().companyProfile?.skontoDays).toBe(
+      DEFAULT_COMPANY_PROFILE.skontoDays,
+    );
   });
 
   it('F: ein weiterer persistAll ohne Änderung erzeugt keinen zweiten Eintrag', () => {

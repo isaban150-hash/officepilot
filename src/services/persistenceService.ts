@@ -831,7 +831,15 @@ export function resetLastPersistFailureForTests(): void {
 
 export function persistAll(setupOverride?: CompanySetup): PersistResult {
   if (setupOverride) {
-    cachedSetup = { ...setupOverride };
+    /**
+     * REAL-DEVICE-CLOUD-COMPANY-POST-SEED-MUTATION-FIX-01 — dieselbe
+     * Normalisierung wie in `applyStateToStores`. Vorher setzte dieser Pfad den
+     * Override roh; ein aus der Cloud stammender Setup verlor damit die
+     * Default-Auffüllung und die Schlüsselreihenfolge des Stores. Der
+     * unmittelbar folgende `trackPersistedChanges` meldete das als
+     * `company_setup`-Änderung, obwohl sich fachlich nichts geändert hatte.
+     */
+    cachedSetup = { ...DEFAULT_SETUP, ...setupOverride };
   }
 
   const storageKey = buildStorageKey(getActiveStorageScope());
