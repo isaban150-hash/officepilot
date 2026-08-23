@@ -7,6 +7,7 @@ import {
   applyStateToStores,
   buildPersistedStateSnapshot,
   savePersistedState,
+  seedSyncChangeTrackerFromCurrentStores,
 } from '../persistenceService';
 import { getSyncCoordinator } from './syncCoordinator';
 
@@ -73,6 +74,16 @@ export function applySyncPullCandidateSafely(input: {
       coordinator.markLocalPersistFailed(message, report);
       return { persisted: false, report };
     }
+    /**
+     * REAL-DEVICE-CLOUD-COMPANY-TRACKER-ECHO-FIX-01 — erst nach bestätigter
+     * Persistierung: die Tracker-Baseline muss den tatsächlich hydrierten
+     * Store-Zustand abbilden, nicht den rohen Remote-Kandidaten. Sonst meldet
+     * der nächste `persistAll()` die reine Normalisierung als Firmenänderung.
+     * Im Fehlerfall stellt `applyStateToStores(previous)` die Baseline
+     * unverändert wieder her — `previous` stammt bereits aus
+     * `buildPersistedStateSnapshot()` und ist damit normalisiert.
+     */
+    seedSyncChangeTrackerFromCurrentStores();
   } catch (error) {
     try {
       applyStateToStores(previous);

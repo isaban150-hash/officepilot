@@ -922,6 +922,21 @@ export function buildPersistedStateSnapshot(): AppPersistedState {
 export function applyPersistedStateFromSync(state: AppPersistedState): void {
   applyStateToStores(state);
   savePersistedState(state);
+  /**
+   * REAL-DEVICE-CLOUD-COMPANY-TRACKER-ECHO-FIX-01/01C — der Cloud-Bootstrap
+   * wendet einen **rohen** Remote-Kandidaten an. `applyStateToStores` hydriert
+   * ihn mit Default-Auffüllung und fester Schlüsselreihenfolge, setzt die
+   * Tracker-Baseline aber aus genau diesem Rohzustand. Ein späterer
+   * `persistAll()` vergleicht dagegen den store-normalisierten Snapshot und
+   * meldete bisher eine Firmenänderung, die es nie gab.
+   *
+   * Die Baseline folgt deshalb dem Zustand, der tatsächlich in den Stores
+   * aktiv ist — unabhängig vom Persistenzergebnis. Dieser Pfad rollt bewusst
+   * **nicht** zurück: nach einem fehlgeschlagenen `savePersistedState` tragen
+   * die Stores weiterhin den angewendeten Kandidaten, und genau gegen diesen
+   * Zustand misst der nächste `persistAll()`.
+   */
+  seedSyncChangeTrackerFromCurrentStores();
 }
 
 export function resetDemoData(options?: { keepSetup?: boolean }): CompanySetup {
