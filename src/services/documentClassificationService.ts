@@ -240,6 +240,79 @@ function shouldSkipPaymentRule(kind: ClassifiedDocumentKind, haystack: string): 
   return !hasStrongPaymentDemandEvidence(haystack);
 }
 
+/**
+ * OFFICEPILOT-RECEIPT-PRIMARY-DOCUMENT-TYPE-FIX-01 — `ec_beleg` und
+ * `kreditkartenbeleg` beschreiben nur die Zahlungsart. Da `CLASSIFICATION_RULES`
+ * per First-Match arbeitet und beide vor `tankbeleg` stehen, verdrängte ein
+ * eingebetteter Terminalblock die vorhandene fachliche Hauptart.
+ */
+const GENERIC_PAYMENT_RECEIPT_KINDS = new Set<ClassifiedDocumentKind>([
+  'ec_beleg',
+  'kreditkartenbeleg',
+]);
+
+/**
+ * OFFICEPILOT-RECEIPT-PRIMARY-DOCUMENT-TYPE-FIX-01D — echte Kraftstoff-Sachevidenz.
+ * Dieselbe Wortmenge wie `FUEL_MARKER_PATTERN` in der Feature-Extraktion und wie
+ * der Tankbeleg-Cutover-Guard; bewusst lokal gehalten, um keinen Importzyklus
+ * zwischen Klassifikation und Feature-Extraktion zu erzeugen. Ein gezielter Test
+ * hält beide Wege auf demselben fachlichen Vertrag.
+ */
+const STRONG_FUEL_EVIDENCE = /\b(kraftstoff|diesel|benzin|super|e10|adblue|erdgas|cng|lpg)\b/i;
+
+/**
+ * Manche Regelmuster enthalten neben fachlichen Begriffen auch reine Standort-
+ * oder Händlerwörter — `tankstelle` ist ein solches. Gegen eine generische
+ * Zahlungsart zählt ein Treffer daher nur mit zusätzlicher Sachevidenz.
+ */
+function hasStrongPrimaryEvidenceAgainstPayment(
+  kind: ClassifiedDocumentKind,
+  haystack: string,
+): boolean {
+  if (kind === 'tankbeleg') {
+    return STRONG_FUEL_EVIDENCE.test(haystack);
+  }
+  return true;
+}
+
+/**
+ * Prüft, ob derselbe Text von einer konkreten Nicht-Zahlungsart klassifiziert
+ * werden kann. Bewusst kein rekursiver Aufruf des Klassifizierers: dieselbe
+ * Regelliste wird einmal ohne die Zahlungsarten ausgewertet, unter denselben
+ * bestehenden Skip-Verträgen. `sonstiges` gilt nicht als Kandidat.
+ */
+function hasSpecificNonPaymentCandidate(haystack: string): boolean {
+  for (const rule of CLASSIFICATION_RULES) {
+    if (GENERIC_PAYMENT_RECEIPT_KINDS.has(rule.kind)) continue;
+    if (rule.kind === 'sonstiges') continue;
+    if (!hasStrongPrimaryEvidenceAgainstPayment(rule.kind, haystack)) continue;
+    if (shouldSkipInvoiceRule(rule.kind, haystack)) continue;
+    if (shouldSkipDeliveryNoteRule(rule.kind, haystack)) continue;
+    if (shouldSkipPayrollRule(rule.kind, haystack)) continue;
+    if (shouldSkipGenericBriefRule(rule.kind, haystack)) continue;
+    if (shouldSkipGenericPruefberichtRule(rule.kind, haystack)) continue;
+    if (shouldSkipPaymentRule(rule.kind, haystack)) continue;
+    if (shouldSkipHealthInsuranceRule(rule.kind, haystack)) continue;
+    if (rule.pattern.test(haystack)) return true;
+  }
+  return false;
+}
+
+/**
+ * Eine generische Zahlungsart wird nur übersprungen, wenn tatsächlich eine
+ * fachliche Zielart existiert, die anschließend gewinnt. Fehlt sie — etwa bei
+ * Waren-, Restaurant- oder Baumarktbons ohne eigene Regel —, bleibt der
+ * Zahlungsbeleg das Ergebnis; er darf nicht auf `sonstiges` verschlechtert
+ * werden.
+ */
+function shouldSkipGenericPaymentReceiptRule(
+  kind: ClassifiedDocumentKind,
+  haystack: string,
+): boolean {
+  if (!GENERIC_PAYMENT_RECEIPT_KINDS.has(kind)) return false;
+  return hasSpecificNonPaymentCandidate(haystack);
+}
+
 /** Skip generic KK / Knappschaft legacy hits on BA employment forms without KK correspondence. */
 function shouldSkipHealthInsuranceRule(kind: ClassifiedDocumentKind, haystack: string): boolean {
   return shouldBlockHealthInsuranceKind(kind, haystack);
@@ -327,6 +400,7 @@ export function detectClassifiedKindWithReason(input: DocumentClassificationInpu
     if (shouldSkipGenericBriefRule(rule.kind, haystack)) continue;
     if (shouldSkipGenericPruefberichtRule(rule.kind, haystack)) continue;
     if (shouldSkipPaymentRule(rule.kind, haystack)) continue;
+    if (shouldSkipGenericPaymentReceiptRule(rule.kind, haystack)) continue;
     if (shouldSkipHealthInsuranceRule(rule.kind, haystack)) continue;
     if (rule.pattern.test(haystack)) {
       return { kind: rule.kind, reasonKey: rule.reasonKey };

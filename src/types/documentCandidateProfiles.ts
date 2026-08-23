@@ -22,8 +22,17 @@ export const RECEIPT_CANDIDATE_PROFILES: ReceiptCandidateProfile[] = [
   {
     kind: 'tankbeleg',
     family: 'eingangsrechnung',
+    /**
+     * OFFICEPILOT-RECEIPT-PRIMARY-DOCUMENT-TYPE-FIX-01 — `structure.receipt_layout`
+     * verlangt <= 12 bedeutsame Zeilen und misst damit Kompaktheit, keine
+     * fachliche Dokumentidentität. Als einziges Profil führte `tankbeleg` es als
+     * Pflichtmerkmal; ein langer, realistischer Beleg mit Terminalblock verlor
+     * dadurch zusätzlich die Gesamtstrafe für fehlende Pflichtmerkmale, während
+     * die Zahlungsprofile straffrei blieben. Die Gewichtung bleibt, die
+     * Pflichtidentität tragen weiterhin `fuel_marker` und `monetary_value`.
+     */
     structural: [
-      { featureId: 'structure.receipt_layout', weight: 3, zones: ['body', 'header'], required: true },
+      { featureId: 'structure.receipt_layout', weight: 3, zones: ['body', 'header'] },
     ],
     positive: [
       {

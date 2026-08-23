@@ -73,6 +73,76 @@ describe('documentReceiptCandidateScoringService', () => {
     expect(result.margin).toBeGreaterThan(0.12);
   });
 
+  /*
+   * OFFICEPILOT-RECEIPT-PRIMARY-DOCUMENT-TYPE-FIX-01 — `structure.receipt_layout`
+   * verlangt <= 12 bedeutsame Zeilen und misst damit Kompaktheit, nicht
+   * fachliche Dokumentidentität. Als einziges Profil behandelte `tankbeleg` es
+   * als Pflichtmerkmal und kassierte bei einem langen, realistischen Beleg mit
+   * Terminalblock die 0.55-Gesamtstrafe — die konkurrierenden Zahlungsprofile
+   * nicht. Neutrale Beispieldaten, kein Händlerbezug.
+   */
+  it('does not penalize a long fuel receipt merely for missing the compact receipt layout', () => {
+    const longFuelReceipt = [
+      'Musterstadt Tankstelle',
+      'Musterstr. 1',
+      '12345 Musterstadt',
+      'Datum: 23.08.2026',
+      'Kasse 3',
+      'Beleg-Nr. 987654',
+      'Diesel B7',
+      '39,32 L x 1,789 EUR/L',
+      'Gesamtbetrag 70,51 EUR',
+      '19 % MwSt.',
+      'Kartenzahlung Girocard',
+      'Terminal-ID 12345678',
+      'Trace-Nr. 004711',
+      'Genehmigungs-Nr. 123456',
+      'Autorisierungs-Code ABC123',
+      'AID A0000000031010',
+      'TVR 0000008001',
+      'TSI E800',
+      'APPROVED',
+      'Vielen Dank',
+    ].join('\n');
+
+    const result = scoreText(longFuelReceipt);
+    const tankCandidate = result.candidates.find((candidate) => candidate.kind === 'tankbeleg');
+
+    // Die fachliche Evidenz ist vorhanden — nur das Layoutmerkmal fehlt.
+    expect(tankCandidate?.positiveEvidenceRefs.length).toBeGreaterThan(0);
+    expect(tankCandidate?.missingRequiredFeatures ?? []).not.toContain(
+      'structure.receipt_layout',
+    );
+  });
+
+  /*
+   * OFFICEPILOT-RECEIPT-PRIMARY-DOCUMENT-TYPE-FIX-01D — das Standortwort
+   * „Tankstelle" ist keine Kraftstoffevidenz mehr. Ein eigenständiger
+   * Terminalbeleg darf dadurch kein `structure.fuel_marker` erhalten.
+   */
+  it('does not derive fuel evidence from a station name alone', () => {
+    const terminalOnly = [
+      'Musterstadt Tankstelle',
+      'Musterstrasse 10',
+      'EC-Beleg',
+      'Kartenzahlung Girocard',
+      'Betrag 70,51 EUR',
+      'APPROVED',
+    ].join('\n');
+
+    const features = extractDocumentFeatures(zoneText(terminalOnly)).features;
+    expect(features.some((feature) => feature.id === 'structure.fuel_marker')).toBe(false);
+    expect(scoreText(terminalOnly).winnerKind).toBe('ec_beleg');
+
+    // Eine echte Kraftstoffposition erzeugt das Merkmal weiterhin.
+    const withFuel = [...terminalOnly.split('\n'), 'Diesel B7', '39,32 Liter'].join('\n');
+    expect(
+      extractDocumentFeatures(zoneText(withFuel)).features.some(
+        (feature) => feature.id === 'structure.fuel_marker',
+      ),
+    ).toBe(true);
+  });
+
   it('ranks handelsregister highest on a register-focused document', () => {
     const result = scoreText(PURE_HANDELSREGISTER);
 

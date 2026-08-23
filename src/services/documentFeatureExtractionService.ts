@@ -56,8 +56,15 @@ const EC_MARKER_PATTERN = /\b(ec-beleg|ec beleg|girocard|ec-cash|ec\s+zahlung)\b
 const KREDITKARTEN_MARKER_PATTERN =
   /\b(kreditkartenbeleg|visa|mastercard|contactless|kreditkarte)\b/i;
 const QUITTUNG_MARKER_PATTERN = /\b(quittung|bar erhalten|quittung über)\b/i;
+/**
+ * OFFICEPILOT-RECEIPT-PRIMARY-DOCUMENT-TYPE-FIX-01D — nur echte
+ * Kraftstoff-Sachevidenz. `tankstelle` stand hier bisher mit drin und ist ein
+ * reines Standort-/Händlerwort: ein Terminalbeleg, der an einer Tankstelle
+ * gedruckt wurde, belegt eine Zahlung, keine Kraftstofftransaktion. Dieselbe
+ * Wortmenge gilt im Tankbeleg-Cutover-Guard und im Legacy-Klassifizierer.
+ */
 const FUEL_MARKER_PATTERN =
-  /\b(kraftstoff|diesel|benzin|super|e10|adblue|erdgas|cng|lpg|tankstelle)\b/i;
+  /\b(kraftstoff|diesel|benzin|super|e10|adblue|erdgas|cng|lpg)\b/i;
 const AUTHORITY_MARKER_PATTERN =
   /\b(finanzamt|steueramt|steuerbescheid|bg[\s-]?bau|berufsgenossenschaft|krankenkasse|soka[\s-]?bau|zollamt|sozialversicherung|(?:bundes)?agentur\s+für\s+arbeit|bundesagentur|arbeitsagentur|arbeitsbescheinigung|jobcenter|stadtverwaltung|gemeindeverwaltung|landratsamt|ordnungsamt)\b/i;
 const AGENTUR_FUER_ARBEIT_MARKER_PATTERN =

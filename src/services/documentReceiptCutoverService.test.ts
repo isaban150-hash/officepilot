@@ -331,6 +331,136 @@ describe('documentClassificationHybridService', () => {
     expect(result.processType).toBe('record_expense');
   });
 
+  /*
+   * OFFICEPILOT-RECEIPT-PRIMARY-DOCUMENT-TYPE-FIX-01D — Zahlungsevidenz belegt,
+   * WIE bezahlt wurde; Kraftstoffevidenz belegt, WAS gekauft wurde. Das reine
+   * Standortwort „Tankstelle" im Händlerkopf gehört zu keinem von beidem und
+   * darf einen eigenständigen Terminalbeleg nicht zum Tankbeleg machen.
+   * Geprüft wird die finale Dokumentart inklusive Cutover und Legacy-Fallback.
+   */
+  describe('OFFICEPILOT-RECEIPT-PRIMARY-DOCUMENT-TYPE-FIX-01D — Standortwort ist keine Kraftstoffevidenz', () => {
+    const STATION_HEAD = ['Musterstadt Tankstelle', 'Musterstrasse 10', '32108 Musterstadt'];
+
+    const LONG_TERMINAL = [
+      'Terminal-ID 12345678',
+      'Trace-Nr. 004821',
+      'Genehmigungs-Nr. 999999',
+      'AID A0000000041010',
+      'TVR 0000008000',
+      'TSI E800',
+      'Zahlung erfolgt',
+      'APPROVED',
+    ];
+
+    const of = (lines: string[]): string => lines.join('\n');
+
+    it('S1: kurzer eigenständiger EC-Terminalbeleg einer Tankstelle bleibt ec_beleg', () => {
+      const result = classifyDocument({
+        recognizedText: of([
+          ...STATION_HEAD,
+          'EC-Beleg',
+          'Kartenzahlung Girocard',
+          'Betrag 70,51 EUR',
+          'APPROVED',
+        ]),
+      });
+      expect(result.classifiedKind).toBe('ec_beleg');
+    });
+
+    it('S2: langer eigenständiger EC-Terminalbeleg einer Tankstelle bleibt ec_beleg', () => {
+      const result = classifyDocument({
+        recognizedText: of([
+          ...STATION_HEAD,
+          'EC-Beleg',
+          'Kartenzahlung Girocard',
+          ...LONG_TERMINAL,
+          'Betrag 70,51 EUR',
+        ]),
+      });
+      expect(result.classifiedKind).toBe('ec_beleg');
+    });
+
+    it('S3: kurzer eigenständiger Kreditkartenbeleg einer Tankstelle bleibt kreditkartenbeleg', () => {
+      const result = classifyDocument({
+        recognizedText: of([
+          ...STATION_HEAD,
+          'Kreditkarte Mastercard',
+          'Betrag 70,51 EUR',
+          'APPROVED',
+        ]),
+      });
+      expect(result.classifiedKind).toBe('kreditkartenbeleg');
+    });
+
+    it('S4: langer eigenständiger Kreditkartenbeleg einer Tankstelle bleibt kreditkartenbeleg', () => {
+      const result = classifyDocument({
+        recognizedText: of([
+          ...STATION_HEAD,
+          'Kreditkarte Mastercard',
+          ...LONG_TERMINAL,
+          'Betrag 70,51 EUR',
+        ]),
+      });
+      expect(result.classifiedKind).toBe('kreditkartenbeleg');
+    });
+
+    it('S5: vollständiger Kraftstoffbeleg mit langem EC-Terminalblock bleibt tankbeleg', () => {
+      const result = classifyDocument({
+        recognizedText: of([
+          ...STATION_HEAD,
+          'Datum: 23.08.2026',
+          'Diesel B7',
+          '39,32 Liter',
+          '1,789 EUR/L',
+          'Gesamtbetrag 70,51 EUR',
+          'EC-Beleg',
+          'Kartenzahlung Girocard',
+          ...LONG_TERMINAL,
+        ]),
+      });
+      expect(result.classifiedKind).toBe('tankbeleg');
+    });
+
+    it('S6: vollständiger Kraftstoffbeleg mit langem Kreditkartenblock bleibt tankbeleg', () => {
+      const result = classifyDocument({
+        recognizedText: of([
+          ...STATION_HEAD,
+          'Datum: 23.08.2026',
+          'Super E10',
+          '41,10 Liter',
+          '1,859 EUR/L',
+          'Gesamtbetrag 76,40 EUR',
+          'Kreditkarte Mastercard',
+          ...LONG_TERMINAL,
+        ]),
+      });
+      expect(result.classifiedKind).toBe('tankbeleg');
+    });
+
+    it('S7: Kraftstoffbeleg ohne jeden Zahlungsblock bleibt tankbeleg', () => {
+      const result = classifyDocument({
+        recognizedText: of([
+          ...STATION_HEAD,
+          'Datum: 23.08.2026',
+          'Diesel B7',
+          '39,32 Liter',
+          '1,789 EUR/L',
+          'Gesamtbetrag 70,51 EUR',
+        ]),
+      });
+      expect(result.classifiedKind).toBe('tankbeleg');
+    });
+
+    it('S8: nur Standortwort und Betrag — bestehendes Verhalten wird festgeschrieben', () => {
+      // Weder Zahlungs- noch Kraftstoffevidenz: die Legacy-Katalogregel greift
+      // weiterhin über das Standortwort. Bewusst keine neue Produktentscheidung.
+      const result = classifyDocument({
+        recognizedText: of([...STATION_HEAD, 'Gesamtbetrag 70,51 EUR']),
+      });
+      expect(result.classifiedKind).toBe('tankbeleg');
+    });
+  });
+
   it('falls back to legacy when OCR text is missing', () => {
     const legacy = detectClassifiedKindWithReason({});
     const result = classifyDocument({});

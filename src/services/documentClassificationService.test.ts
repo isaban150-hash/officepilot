@@ -51,6 +51,157 @@ describe('detectClassifiedKind', () => {
     expect(detectClassifiedKind({ kindHint: 'kontoauszug' })).toBe('kontoauszug');
   });
 
+  /*
+   * OFFICEPILOT-RECEIPT-PRIMARY-DOCUMENT-TYPE-FIX-01 — ein eingebetteter
+   * Zahlungsabschnitt beschreibt nur die Zahlungsart. `CLASSIFICATION_RULES`
+   * arbeitet per First-Match, und `ec_beleg`/`kreditkartenbeleg` stehen vor
+   * `tankbeleg` — dadurch verdrängte die generische Zahlungsart die vorhandene
+   * fachliche Hauptart. Neutrale Beispieldaten, kein Händlerbezug.
+   */
+  describe('Primary-Dokumentart vs. eingebetteter Zahlungsblock', () => {
+    const FUEL_RECEIPT_CORE = [
+      'Musterstadt Tankstelle',
+      'Musterstr. 1',
+      '12345 Musterstadt',
+      'Datum: 23.08.2026',
+      'Kasse 3',
+      'Beleg-Nr. 987654',
+      'Diesel B7',
+      '39,32 L x 1,789 EUR/L',
+      'Gesamtbetrag 70,51 EUR',
+      '19 % MwSt.',
+    ];
+
+    const EC_TERMINAL_BLOCK = [
+      'EC Beleg',
+      'Kartenzahlung',
+      'Terminal-ID 12345678',
+      'Trace-Nr. 004711',
+      'Genehmigungs-Nr. 123456',
+      'Autorisierungs-Code ABC123',
+      'AID A0000000031010',
+      'TVR 0000008001',
+      'TSI E800',
+      'APPROVED',
+    ];
+
+    const CREDIT_TERMINAL_BLOCK = [
+      'Kreditkarte',
+      'Terminal-ID 12345678',
+      'Trace-Nr. 004711',
+      'Genehmigungs-Nr. 123456',
+      'AID A0000000041010',
+      'APPROVED',
+    ];
+
+    const of = (lines: string[]): string => lines.join('\n');
+
+    it('A: Tankbeleg mit EC-Terminalblock bleibt Tankbeleg', () => {
+      expect(
+        detectClassifiedKind({ recognizedText: of([...FUEL_RECEIPT_CORE, ...EC_TERMINAL_BLOCK]) }),
+      ).toBe('tankbeleg');
+    });
+
+    it('B: Tankbeleg mit Kreditkartenblock bleibt Tankbeleg', () => {
+      expect(
+        detectClassifiedKind({
+          recognizedText: of([...FUEL_RECEIPT_CORE, ...CREDIT_TERMINAL_BLOCK]),
+        }),
+      ).toBe('tankbeleg');
+    });
+
+    it('C: Tankbeleg ohne Zahlungsblock bleibt unverändert Tankbeleg', () => {
+      expect(detectClassifiedKind({ recognizedText: of(FUEL_RECEIPT_CORE) })).toBe('tankbeleg');
+    });
+
+    it('D: ein reiner EC-Terminalbeleg bleibt EC-Beleg', () => {
+      expect(
+        detectClassifiedKind({
+          recognizedText: of(['Zahlungsnachweis', ...EC_TERMINAL_BLOCK, 'Betrag 70,51 EUR']),
+        }),
+      ).toBe('ec_beleg');
+    });
+
+    it('E: ein reiner Kreditkartenbeleg bleibt Kreditkartenbeleg', () => {
+      expect(
+        detectClassifiedKind({
+          recognizedText: of(['Zahlungsnachweis', ...CREDIT_TERMINAL_BLOCK, 'Betrag 70,51 EUR']),
+        }),
+      ).toBe('kreditkartenbeleg');
+    });
+
+    it('F: ein Kassenbon mit vorhandenem Marker bleibt Kassenbeleg', () => {
+      expect(
+        detectClassifiedKind({
+          recognizedText: of([
+            'Musterhandel GmbH',
+            'Kassenbon',
+            'Ware 12,90 EUR',
+            'Gesamtbetrag 12,90 EUR',
+            ...EC_TERMINAL_BLOCK,
+          ]),
+        }),
+      ).toBe('kassenbeleg');
+    });
+
+    it('G: ein Warenbon ohne vorhandene Primary-Regel wird nicht auf sonstiges verschlechtert', () => {
+      // Bewusst kein neuer Dokumenttyp: der Zahlungsbeleg bleibt das bisherige
+      // Ergebnis, weil OfficePilot für solche Bons keine fachliche Zielart kennt.
+      const kind = detectClassifiedKind({
+        recognizedText: of([
+          'Musterrestaurant',
+          'Tisch 4',
+          'Speisen 24,80 EUR',
+          'Getraenke 9,60 EUR',
+          'Gesamtbetrag 34,40 EUR',
+          ...EC_TERMINAL_BLOCK,
+        ]),
+      });
+      expect(kind).not.toBe('sonstiges');
+      expect(kind).toBe('ec_beleg');
+    });
+
+    it('H: eine Reparaturrechnung mit Kartenzahlung bleibt Reparaturrechnung', () => {
+      expect(
+        detectClassifiedKind({
+          recognizedText: of([
+            'Werkstattrechnung',
+            'Reparaturrechnung Nr. R-2026-88',
+            'Arbeitslohn 240,00 EUR',
+            'Gesamtbetrag 285,60 EUR',
+            ...EC_TERMINAL_BLOCK,
+          ]),
+        }),
+      ).toBe('reparaturrechnung');
+    });
+
+    it('I: eine Hotelrechnung mit Kartenzahlung bleibt Rechnung', () => {
+      expect(
+        detectClassifiedKind({
+          recognizedText: of([
+            'Hotelrechnung',
+            'Übernachtung 2 Nächte',
+            'Gesamtbetrag 198,00 EUR',
+            ...EC_TERMINAL_BLOCK,
+          ]),
+        }),
+      ).toBe('eingangsrechnung');
+    });
+
+    it('J: eine Quittung mit Kartenzahlung bleibt Quittung', () => {
+      expect(
+        detectClassifiedKind({
+          recognizedText: of([
+            'Quittung',
+            'Betrag dankend erhalten',
+            'Gesamtbetrag 45,00 EUR',
+            ...EC_TERMINAL_BLOCK,
+          ]),
+        }),
+      ).toBe('quittung');
+    });
+  });
+
   it('detects Behörden from text patterns', () => {
     expect(detectClassifiedKind({ recognizedText: 'Hauptzollamt Mitteilung' })).toBe('zoll');
     expect(detectClassifiedKind({ recognizedText: 'Handwerkskammer München' })).toBe('handwerkskammer');

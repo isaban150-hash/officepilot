@@ -672,7 +672,13 @@ export function getReceiptCutoverKindThresholds(
 }
 
 const RECEIPT_KIND_TEXT_GUARDS: Record<ReceiptCutoverKind, RegExp> = {
-  tankbeleg: /tankbeleg|tankstelle|kraftstoff|diesel|benzin|super|e10|adblue/i,
+  /**
+   * OFFICEPILOT-RECEIPT-PRIMARY-DOCUMENT-TYPE-FIX-01D — `tankstelle` entfernt:
+   * das Standortwort allein ist keine Kraftstoffevidenz und darf den
+   * Tankbeleg-Cutover nicht freigeben. Gleiche Wortmenge wie
+   * FUEL_MARKER_PATTERN, ergänzt um die Dokumentbezeichnung selbst.
+   */
+  tankbeleg: /tankbeleg|kraftstoff|diesel|benzin|super|e10|adblue|erdgas|cng|lpg/i,
   ec_beleg: /ec-beleg|ec beleg|girocard|ec-cash|ec\s+zahlung/i,
   kassenbeleg: /kassenbeleg|kassenbon/i,
   kreditkartenbeleg: /kreditkartenbeleg|visa|mastercard|contactless|\bkreditkarte\b/i,
@@ -691,11 +697,36 @@ export function hasReceiptCutoverInvoiceExclusion(recognizedText: string): boole
   return RECEIPT_INVOICE_EXCLUSION_GUARD.test(recognizedText) && RECEIPT_IBAN_PATTERN.test(recognizedText);
 }
 
+/**
+ * OFFICEPILOT-RECEIPT-PRIMARY-DOCUMENT-TYPE-FIX-01D — echte Kraftstoff-Sachevidenz.
+ * Gleiche Wortmenge wie FUEL_MARKER_PATTERN in der Feature-Extraktion und wie der
+ * Strong-Evidence-Vertrag im Legacy-Klassifizierer. Das Standortwort `tankstelle`
+ * gehört bewusst nicht dazu.
+ */
+const RECEIPT_STRONG_FUEL_EVIDENCE =
+  /\b(kraftstoff|diesel|benzin|super|e10|adblue|erdgas|cng|lpg)\b/i;
+
+const GENERIC_PAYMENT_CUTOVER_KINDS: ReadonlySet<ClassifiedDocumentKind> = new Set([
+  'ec_beleg',
+  'kreditkartenbeleg',
+]);
+
 export function hasReceiptCutoverKindTextGuard(
   kind: ClassifiedDocumentKind,
   recognizedText: string,
 ): boolean {
   if (!isReceiptScoringCutoverKind(kind)) {
+    return false;
+  }
+  /**
+   * Ein Terminalblock liefert seine Zahlungsmerkmale vielfach, eine
+   * Kraftstoffposition dagegen meist nur einmal — im Rohscore gewinnt deshalb
+   * die Zahlungsart, obwohl der Beleg fachlich ein Kraftstoffbeleg ist. Liegt
+   * echte Kraftstoffevidenz vor, wird der Cutover auf eine generische
+   * Zahlungsart daher nicht freigegeben; es entscheidet der Legacy-Weg mit
+   * seinem Primary-vs-Payment-Vertrag. Kein Eingriff in das Scoring selbst.
+   */
+  if (GENERIC_PAYMENT_CUTOVER_KINDS.has(kind) && RECEIPT_STRONG_FUEL_EVIDENCE.test(recognizedText)) {
     return false;
   }
   return RECEIPT_KIND_TEXT_GUARDS[kind].test(recognizedText);
