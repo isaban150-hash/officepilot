@@ -13,6 +13,7 @@ import {
   cleanLetterheadCandidate,
   stripLetterheadLogoInitial,
   extractFieldsWithConfidence,
+  pickCleanerMerchantVariant,
   toConfidentPlainFields,
 } from './documentFieldExtractionService';
 import { extractDocumentFeatures } from './documentFeatureExtractionService';
@@ -144,6 +145,8 @@ function inferMerchantFromHeader(text: string): string | undefined {
     .map((line) => line.trim())
     .filter(Boolean);
 
+  const candidates: string[] = [];
+
   for (const line of lines.slice(0, 4)) {
     if (RECEIPT_HEADER_SKIP_PATTERN.test(line)) continue;
     if (RECEIPT_HEADER_CONTACT_SKIP_PATTERN.test(line)) continue;
@@ -161,10 +164,19 @@ function inferMerchantFromHeader(text: string): string | undefined {
     // words ("… Tankstelle München"), places and legal forms must stay. The broad
     // letterhead cleanup would truncate them.
     const cleaned = stripLetterheadLogoInitial(line);
-    if (cleaned.length >= 3) return cleaned;
+    if (cleaned.length >= 3) candidates.push(cleaned);
   }
 
-  return undefined;
+  const [first] = candidates;
+  if (!first) return undefined;
+
+  /**
+   * OFFICEPILOT-RECEIPT-MERCHANT-SELECTION-FIX-01 — der erste brauchbare
+   * Kandidat bleibt das Ergebnis, außer ein späterer ist nachweislich derselbe
+   * Name ohne den angehängten OCR-Müll. Ohne solchen Kandidaten verschlechtert
+   * sich nichts. Derselbe Vertrag gilt im Absenderpfad.
+   */
+  return pickCleanerMerchantVariant(first, candidates.slice(1));
 }
 
 function resolveReceiptMerchant(

@@ -243,7 +243,103 @@ export function cleanLetterheadCandidate(raw: string): string | undefined {
  * Infer issuer/sender from unlabeled letterhead text (common in scans / text-layer PDFs).
  * Prefer institutions, then legal entities, then brand heads — never invent placeholders.
  */
+/**
+ * OFFICEPILOT-RECEIPT-MERCHANT-SELECTION-FIX-01 — Strukturwörter, die in echten
+ * Firmennamen regelmäßig als Kurz-Token auftreten. Sie dürfen einen Namen nicht
+ * als Fragment erscheinen lassen: „Müller GmbH & Co. KG", „Firma 24 GmbH".
+ * Keine Händler- oder Markenliste — ausschließlich Rechtsformen, Bindewörter
+ * und Zahlen.
+ */
+const MERCHANT_STRUCTURE_TOKEN =
+  /^(?:&|\+|und|co\.?|gmbh|mbh|ag|kg|ohg|gbr|ug|e\.?\s?k\.?|se|ltd\.?|inc\.?|\d+[.,]?)$/i;
+
+/**
+ * Ein sehr kurzes Token. Für sich genommen **kein** Beweis für OCR-Müll:
+ * „Bau", „Ost", „Pro", „Top", „Max" sind gewöhnliche Namensbestandteile.
+ * Erst eine ganze Kette davon trägt die Beweislast — siehe MIN_GARBLED_TOKENS.
+ */
+function isFragmentToken(token: string): boolean {
+  if (MERCHANT_STRUCTURE_TOKEN.test(token)) return false;
+  return token.replace(/[^\p{L}\d]/gu, '').length <= 3;
+}
+
+/**
+ * OFFICEPILOT-RECEIPT-MERCHANT-SELECTION-FIX-01B — Mindestzahl kurzer Resttoken,
+ * ab der ein Anhang als OCR-Müll gilt. Bewusst hoch angesetzt: ein oder zwei
+ * kurze Wörter hinter einem Namen sind alltäglich („Muster Bau", „Muster Bau
+ * Ost"), drei und mehr aneinandergereihte Fragmente sind es nicht. Ohne diese
+ * Schwelle hätte bereits ein einzelnes echtes Namenswort zur Kürzung geführt.
+ */
+const MIN_GARBLED_TOKENS = 3;
+
+/**
+ * Wahr, wenn `longer` derselbe Name wie `shorter` ist, ergänzt um reinen
+ * OCR-Müll: `shorter` ist vollständiges Wortpräfix, und der Rest besteht
+ * ausschließlich aus Fragmenten — etwa eine als Logo gelesene Kopfzeile
+ * „NAME EEE nn Ef Enz" gegenüber der sauberen Zeile „NAME".
+ */
+function isGarbledExtensionOf(longer: string, shorter: string): boolean {
+  const longerTokens = longer.split(/\s+/).filter(Boolean);
+  const shorterTokens = shorter.split(/\s+/).filter(Boolean);
+  if (shorterTokens.length === 0 || longerTokens.length <= shorterTokens.length) return false;
+
+  const isPrefix = shorterTokens.every(
+    (token, index) => longerTokens[index]?.toLowerCase() === token.toLowerCase(),
+  );
+  if (!isPrefix) return false;
+
+  const rest = longerTokens.slice(shorterTokens.length);
+  // Beweislast: eine ganze Kette von Fragmenten, nicht ein einzelnes kurzes Wort.
+  if (rest.length < MIN_GARBLED_TOKENS) return false;
+  return rest.every((token) => isFragmentToken(token));
+}
+
+/**
+ * OFFICEPILOT-RECEIPT-MERCHANT-SELECTION-FIX-01D — führende Scan-Artefakte vor
+ * dem eigentlichen Namen („= NAME"). Bewusst nur diese wenigen Zeichen und
+ * ausschließlich **vor** dem ersten alphanumerischen Zeichen: interne Zeichen
+ * bleiben unangetastet, damit „H&M", „T.Bau" oder „A & O Bau" unverändert
+ * bleiben. Absichtlich lokal auf den Merchant-Vergleich begrenzt statt in
+ * `stripLetterheadLogoInitial` — jene Funktion hat weitere Aufrufer.
+ */
+const LEADING_MERCHANT_NOISE = /^[=:|*~•·]+\s*/u;
+
+/** Liefert den Namen ohne führendes Scan-Rauschen — oder nichts, wenn keiner bleibt. */
+function stripLeadingMerchantNoise(line: string): string | undefined {
+  const stripped = line.replace(LEADING_MERCHANT_NOISE, '').trim();
+  if (!stripped || !/[\p{L}\d]/u.test(stripped)) return undefined;
+  return stripped;
+}
+
+/**
+ * Bewusst eng: ersetzt einen Kandidaten nur durch eine Kopfzeile, die
+ * nachweislich derselbe Name ohne angehängten OCR-Müll ist. Findet sich keine
+ * solche Zeile, bleibt der übergebene Kandidat unverändert — der Fix kann also
+ * verbessern, aber nichts verschlechtern.
+ *
+ * Verglichen und zurückgegeben wird die um führendes Rauschen bereinigte Form,
+ * damit nicht „= NAME" als Händlername erscheint.
+ */
+export function pickCleanerMerchantVariant(candidate: string, lines: string[]): string {
+  const cleaner = lines
+    .map((line) => stripLeadingMerchantNoise(line.trim()))
+    .filter((line): line is string => Boolean(line))
+    .find((line) => line !== candidate && isGarbledExtensionOf(candidate, line));
+  return cleaner ?? candidate;
+}
+
 export function inferUnlabeledSenderFromText(text: string): string | undefined {
+  const sender = resolveUnlabeledSenderFromText(text);
+  if (!sender) return sender;
+  /**
+   * OFFICEPILOT-RECEIPT-MERCHANT-SELECTION-FIX-01 — derselbe Auswahlvertrag wie
+   * im Belegkopf. Sonst trüge der Absender — und daraus der Betreff — den
+   * OCR-Müll weiter, während das Händlerfeld bereits sauber ist.
+   */
+  return pickCleanerMerchantVariant(sender, text.split(/\r?\n/).slice(0, 6));
+}
+
+function resolveUnlabeledSenderFromText(text: string): string | undefined {
   if (!text?.trim()) return undefined;
   const head = text.slice(0, LETTERHEAD_HEAD_CHARS);
 

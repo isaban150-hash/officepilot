@@ -327,6 +327,207 @@ describe('documentRecognizedDataService', () => {
         expect(tankstelle(['Musterweg 1', 'ARAL Tankstelle München'])).toBe('Musterweg 1');
       });
     });
+
+    /*
+     * OFFICEPILOT-RECEIPT-MERCHANT-SELECTION-FIX-01 — auf dem realen Beleg las
+     * das OCR die Logofläche als verstümmelte erste Kopfzeile, während wenige
+     * Zeilen darunter ein sauberer Händlername stand. Bisher gewann die erste
+     * Zeile, die die Ausschlussfilter überlebte — es gab keinen Vergleich.
+     *
+     * Der Vertrag ist bewusst eng: ein sauberer Kandidat verdrängt einen
+     * längeren nur dann, wenn er dessen vollständiges Wortpräfix ist und der
+     * Rest überwiegend aus Fragmenten besteht. Gibt es keinen besseren
+     * Kandidaten, bleibt das bisherige Ergebnis erhalten.
+     */
+    describe('OFFICEPILOT-RECEIPT-MERCHANT-SELECTION-FIX-01 — Kandidatenauswahl', () => {
+      const merchantOf = (kind: 'tankbeleg' | 'kassenbeleg', lines: string[]) =>
+        buildEvidenceBasedRecognizedData({
+          classifiedKind: kind,
+          recognizedText: lines.join('\n'),
+        });
+
+      const tankstelleOf = (lines: string[]) => merchantOf('tankbeleg', lines).Tankstelle;
+
+      const REAL_HEAD = [
+        'ARAL EEE nn Ef Enz',
+        'ARAL',
+        'Aral Tankstelle',
+        'Musterstraße 1',
+        '12345 Musterstadt',
+      ];
+
+      it('A: ein sauberer Kandidat verdrängt die verstümmelte erste Kopfzeile', () => {
+        expect(tankstelleOf(REAL_HEAD)).toBe('ARAL');
+      });
+
+      it('B: steht der saubere Händler bereits oben, ändert sich nichts', () => {
+        expect(
+          tankstelleOf(['ARAL', 'Aral Tankstelle', 'Musterstraße 1', '12345 Musterstadt']),
+        ).toBe('ARAL');
+      });
+
+      it('C: ein mehrteiliger Firmenname bleibt vollständig', () => {
+        expect(
+          tankstelleOf(['Musterstadt Baustoffhandel GmbH', 'Musterstraße 1', '12345 Musterstadt']),
+        ).toBe('Musterstadt Baustoffhandel GmbH');
+      });
+
+      it('D–I: legitime kurze und gemischte Firmennamen bleiben unverändert', () => {
+        for (const name of [
+          'H&M',
+          'C&A',
+          'ATU',
+          'OBI',
+          'IKEA',
+          'T.Bau',
+          'Müller GmbH & Co. KG',
+          'Firma 24 GmbH',
+          'A & O Bau',
+        ]) {
+          expect(tankstelleOf([name, 'Musterstraße 1', '12345 Musterstadt']), name).toBe(name);
+        }
+      });
+
+      it('J: eine Adresse wird nicht Bestandteil des Händlernamens', () => {
+        expect(tankstelleOf(REAL_HEAD)).not.toContain('Musterstraße');
+        expect(tankstelleOf(REAL_HEAD)).not.toContain('12345');
+      });
+
+      it('K: Terminaldaten werden nicht Bestandteil des Händlernamens', () => {
+        const value = tankstelleOf([
+          'ARAL EEE nn Ef Enz',
+          'ARAL',
+          'Terminal-ID 12345678',
+          'Trace-Nr. 004821',
+        ]);
+        expect(value).toBe('ARAL');
+      });
+
+      it('L: ohne besseren Kandidaten bleibt der bisherige erhalten', () => {
+        // Kein Präfixkandidat vorhanden — das bisherige Ergebnis bleibt stehen,
+        // statt auf leer zu verschlechtern.
+        expect(tankstelleOf(['ARAL EEE nn Ef Enz', 'Musterstraße 1', '12345 Musterstadt'])).toBe(
+          'ARAL EEE nn Ef Enz',
+        );
+      });
+
+      /*
+       * 01B — Tokenlänge allein beweist keinen OCR-Müll. „Bau", „Pro", „Ost",
+       * „Max" sind gewöhnliche Namensbestandteile; ein Kandidat darf nicht
+       * gekürzt werden, nur weil ein Präfix zufällig als eigene Kopfzeile
+       * auftaucht.
+       */
+      it('Q: ein echtes kurzes Namenswort wird nicht als OCR-Müll gekürzt', () => {
+        expect(tankstelleOf(['Muster Bau GmbH', 'Muster', 'Musterstraße 1'])).toBe(
+          'Muster Bau GmbH',
+        );
+        expect(tankstelleOf(['Max Bau GmbH', 'Max', 'Musterstraße 1'])).toBe('Max Bau GmbH');
+        expect(tankstelleOf(['ABC Pro Service GmbH', 'ABC', 'Musterstraße 1'])).toBe(
+          'ABC Pro Service GmbH',
+        );
+        expect(tankstelleOf(['Bau & Co. KG', 'Bau', 'Musterstraße 1'])).toBe('Bau & Co. KG');
+      });
+
+      it('R: auch ein einzelnes Restwort mit Rechtsform bleibt erhalten', () => {
+        expect(tankstelleOf(['Nordtal Ost GmbH', 'Nordtal', 'Musterstraße 1'])).toBe(
+          'Nordtal Ost GmbH',
+        );
+        expect(tankstelleOf(['Muster Top Handel', 'Muster', 'Musterstraße 1'])).toBe(
+          'Muster Top Handel',
+        );
+      });
+
+      /*
+       * 01B — die eigentliche Lücke: ein zweiteiliger Name ohne Rechtsform.
+       * Hier bricht kein Strukturwort die Prüfung ab, und ein einzelnes kurzes
+       * Namenswort galt allein schon als Beweis für OCR-Müll.
+       */
+      it('S: ein zweiteiliger Name ohne Rechtsform wird nicht gekürzt', () => {
+        expect(tankstelleOf(['Muster Bau', 'Muster', 'Musterstraße 1'])).toBe('Muster Bau');
+        expect(tankstelleOf(['Nordtal Ost', 'Nordtal', 'Musterstraße 1'])).toBe('Nordtal Ost');
+        expect(tankstelleOf(['Muster Top', 'Muster', 'Musterstraße 1'])).toBe('Muster Top');
+      });
+
+      it('T: auch zwei kurze Restwörter genügen nicht als Beweis', () => {
+        expect(tankstelleOf(['Muster Bau Ost', 'Muster', 'Musterstraße 1'])).toBe(
+          'Muster Bau Ost',
+        );
+      });
+
+      /*
+       * 01D — der reale Scan liest die Logofläche als eigene Rauschzeile und
+       * stellt dem sauberen Namen ein OCR-Zeichen voran („= ARAL"). Die
+       * Präfixprüfung scheiterte bisher an genau diesem Zeichen.
+       */
+      it('U: eine führende OCR-Punktion blockiert den sauberen Kandidaten nicht mehr', () => {
+        for (const alternative of ['= ARAL', '=ARAL', ': ARAL', '| ARAL', '* ARAL', '~ ARAL']) {
+          expect(
+            tankstelleOf(['ARAL EEE nn Ef Enz', alternative, 'Musterstraße 1']),
+            alternative,
+          ).toBe('ARAL');
+        }
+      });
+
+      it('V: eine Zeile aus reinem Rauschen wird nicht zum Händler', () => {
+        // Nach dem Abschneiden bliebe kein Name übrig — der bisherige Wert bleibt.
+        expect(tankstelleOf(['ARAL EEE nn Ef Enz', '=====', 'Musterstraße 1'])).toBe(
+          'ARAL EEE nn Ef Enz',
+        );
+      });
+
+      it('W: realer Gerätekopf — Händler, Absender und Betreff sind sauber', () => {
+        const REAL_DEVICE_HEAD = [
+          'Sep EEE ae Zn',
+          '= ARAL',
+          'EEE nn Ef Enz',
+          'Musterstraße 1',
+          '12345 Musterstadt',
+        ];
+
+        const result = classifyDocument({
+          recognizedText: [
+            ...REAL_DEVICE_HEAD,
+            'Datum: 22.08.2026',
+            'Diesel B7',
+            '39,32 Liter',
+            'Gesamtbetrag 70,51 EUR',
+          ].join('\n'),
+        });
+
+        expect(result.classifiedKind).toBe('tankbeleg');
+        expect(result.sender).toContain('ARAL');
+        expect(result.sender).not.toContain('EEE');
+        expect(result.title).toContain('ARAL');
+        expect(result.title).not.toContain('EEE');
+      });
+
+      it('O/P: Absender und der daraus erzeugte Betreff tragen den sauberen Namen', () => {
+        const result = classifyDocument({
+          recognizedText: [
+            ...REAL_HEAD,
+            'Datum: 22.08.2026',
+            'Diesel B7',
+            '39,32 Liter',
+            'Gesamtbetrag 70,51 EUR',
+          ].join('\n'),
+        });
+
+        expect(result.classifiedKind).toBe('tankbeleg');
+        expect(result.sender).not.toContain('EEE');
+        expect(result.sender).toContain('ARAL');
+        // Der Betreff ist reines Downstream aus `sender` — keine eigene Logik.
+        expect(result.title).not.toContain('EEE');
+        expect(result.title).toContain(result.sender);
+      });
+
+      it('N: der allgemeine Kassenbeleg-Pfad verhält sich gleich', () => {
+        expect(merchantOf('kassenbeleg', REAL_HEAD).Lieferant).toBe('ARAL');
+        expect(
+          merchantOf('kassenbeleg', ['Bäckerei Schmidt', 'Musterstraße 1', '12345 Musterstadt'])
+            .Lieferant,
+        ).toBe('Bäckerei Schmidt');
+      });
+    });
   });
 
   describe('eingangsrechnung', () => {
