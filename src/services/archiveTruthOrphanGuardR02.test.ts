@@ -22,6 +22,7 @@ import {
   getDocumentById,
   getDocumentStoreSnapshot,
   handoffInboxItemToArchive,
+  hydrateDocumentStore,
   importInboxDocument,
 } from './documentService';
 import {
@@ -299,8 +300,16 @@ describe('ARCHIVE-TRUTH-ORPHAN-GUARD-R02', () => {
     if (!handoff.success) throw new Error('handoff fehlgeschlagen');
     expect(getInboxItemById(itemId)!.importedToArchive).toBe(true);
 
-    // Dokument produktiv entfernen — das Flag am Item bleibt und blockiert weiterhin.
-    expect(deleteDocument(handoff.document.id).success).toBe(true);
+    /**
+     * Der Dokumentstore weiss nichts mehr von diesem Item — das Flag am Item
+     * blockiert die Inbox-Loeschung trotzdem. Genau das ist die R02-Zusicherung.
+     *
+     * Geprueft ohne deleteDocument(): seit 01I nimmt der Final-Delete-Pfad die
+     * unsichtbare Herkunftszeile mit, sodass danach gar keine aktive Zeile mehr
+     * existiert, an der sich das Flag messen liesse. Die Zusicherung selbst
+     * bleibt unveraendert — nur die Herstellung des Zustands.
+     */
+    hydrateDocumentStore([]);
     expect(hasActiveArchiveDocumentForInboxItem(itemId)).toBe(false);
     expect(getInboxDeleteBlockReason(getInboxItemById(itemId)!)).toBe('archive');
 

@@ -12,6 +12,8 @@ import type {
   RecommendedAction,
 } from '../types/models';
 import { t, type TranslationKey } from '../i18n';
+import type { DocumentFileIntakeTransformPlanCarryContext } from '../types/documentFileIntakeTransformPlanCarryContext';
+import type { DocumentWorkResult } from '../types/documentWorkResult';
 import { getPaperFolderById } from './paperFolderService';
 import {
   findDocumentFileIntakeTransformPlanCarryContext,
@@ -130,6 +132,63 @@ export function removeStagedInboxItemById(id: string): boolean {
   removeDocumentFileIntakeTransformPlanCarryContextForInboxItem(id);
   removeDocumentWorkResultForInboxItem(id);
   return true;
+}
+
+/**
+ * DOCUMENT-DELETE-SEMANTICS-01I — everything a staged tombstone has to give
+ * back if the commit fails. The item is captured *before* `clearFields` is
+ * applied, so the restore is exact rather than approximate.
+ */
+export type StagedInboxItemTombstone = {
+  item: InboxItem;
+  workResult: DocumentWorkResult | null;
+  carryContext: DocumentFileIntakeTransformPlanCarryContext | null;
+};
+
+/**
+ * Tombstones one intake row and drops its side stores — without persisting.
+ * The caller owns the persist and the rollback, exactly like stageInboxItemPatch.
+ *
+ * `clearFields` is applied to the row before it is tombstoned, so a tombstone
+ * never carries an active-looking pointer. Historical facts (importedToArchive)
+ * are not touched here — on an inactive row they are only history.
+ */
+export function stageInboxItemTombstone(
+  id: string,
+  clearFields: Partial<InboxItem> = {},
+): StagedInboxItemTombstone | null {
+  const index = inboxItems.findIndex((i) => i.id === id && isEntitySyncActive(i));
+  if (index === -1) return null;
+  const existing = inboxItems[index]!;
+
+  const workResult = getDocumentWorkResult(id);
+  const carryContext = findDocumentFileIntakeTransformPlanCarryContext(id);
+
+  const tombstoned = withTombstonedEntity({ ...existing, ...clearFields }, 'inbox_item');
+  inboxItems = [...inboxItems.slice(0, index), tombstoned, ...inboxItems.slice(index + 1)];
+  removeDocumentFileIntakeTransformPlanCarryContextForInboxItem(id);
+  removeDocumentWorkResultForInboxItem(id);
+
+  return { item: { ...existing }, workResult, carryContext };
+}
+
+/** Undoes stageInboxItemTombstone — row, work result and carry context. */
+export function restoreStagedInboxItemTombstone(staged: StagedInboxItemTombstone): void {
+  const index = inboxItems.findIndex((i) => i.id === staged.item.id);
+  if (index === -1) {
+    inboxItems = [staged.item, ...inboxItems];
+  } else {
+    inboxItems = [...inboxItems.slice(0, index), staged.item, ...inboxItems.slice(index + 1)];
+  }
+  if (staged.carryContext) {
+    replaceDocumentFileIntakeTransformPlanCarryContextStore([
+      ...getDocumentFileIntakeTransformPlanCarryContextStoreSnapshot(),
+      staged.carryContext,
+    ]);
+  }
+  if (staged.workResult) {
+    upsertDocumentWorkResult(staged.workResult);
+  }
 }
 
 export function addInboxItem(item: InboxItem): InboxItem {

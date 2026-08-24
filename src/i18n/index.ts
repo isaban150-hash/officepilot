@@ -550,10 +550,29 @@ const deLegacy = {
   'inbox.delete.confirmMessage': 'Das Dokument wird aus dem Eingang entfernt.',
   'inbox.delete.confirmButton': 'Löschen',
   'inbox.toast.deleted': 'Das Dokument wurde aus dem Eingang entfernt.',
+  // Verweist auf die Aktion „Verknüpfung lösen“ auf dieser Seite — nicht mehr
+  // auf einen Weg über den Vorgang, den es dort nie gab.
   'inbox.delete.blocked.vorgang':
-    'Dieses Dokument gehört bereits zu einem Vorgang. Bitte lösen Sie dort zuerst die Verknüpfung.',
+    'Dieses Dokument gehört zu einem Vorgang. Lösen Sie zuerst die Verknüpfung.',
   'inbox.delete.blocked.archive':
-    'Dieses Dokument liegt bereits im Dokumentenarchiv und kann hier nicht gelöscht werden.',
+    'Dieses Dokument liegt im Dokumentenarchiv und wird dort verwaltet.',
+  'inbox.unlinkVorgang.action': 'Verknüpfung zum Vorgang lösen',
+  'inbox.unlinkVorgang.confirmTitle': 'Verknüpfung lösen?',
+  'inbox.unlinkVorgang.confirmMessage':
+    'Die Zuordnung zwischen Dokument und Vorgang wird entfernt. Der Vorgang, seine Positionen und ein bestätigter Auftrag bleiben unverändert erhalten.',
+  'inbox.unlinkVorgang.confirmButton': 'Verknüpfung lösen',
+  'inbox.unlinkVorgang.success': 'Die Verknüpfung zum Vorgang wurde gelöst.',
+  'inbox.unlinkVorgang.failed': 'Die Verknüpfung konnte nicht gelöst werden. Bitte erneut versuchen.',
+  'inbox.openArchiveDocument': 'Im Dokumentenarchiv öffnen',
+  'vorgang.unlink.notLinked': 'Dieses Dokument ist keinem Vorgang zugeordnet.',
+  'vorgang.unlink.persistFailed':
+    'Die Verknüpfung konnte nicht gespeichert werden. Es wurde nichts geändert.',
+  'document.delete.blocked.vorgang':
+    'Dieses Dokument gehört zu einem Vorgang. Lösen Sie die Verknüpfung zuerst im Eingang.',
+  'document.delete.blocked.confirmedOrder':
+    'Dieses Dokument ist die Grundlage eines bestätigten Auftrags und bleibt als Nachweis erhalten.',
+  'document.delete.blocked.expense':
+    'Dieses Dokument ist der Beleg einer bestehenden Ausgabe und kann deshalb nicht gelöscht werden.',
   'inbox.delete.blocked.expense':
     'Zu diesem Dokument gibt es bereits eine Ausgabe. Bitte entfernen Sie zuerst die Ausgabe.',
   'inbox.delete.failed': 'Das Dokument konnte nicht gelöscht werden. Bitte erneut versuchen.',

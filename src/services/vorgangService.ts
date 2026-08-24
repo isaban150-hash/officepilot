@@ -40,6 +40,7 @@ import {
   upsertCustomerInStore,
 } from './customerStoreService';
 import {
+  getInboxItemById,
   getInboxStoreSnapshot,
   hydrateInboxStore,
   stageInboxItemPatch,
@@ -1154,6 +1155,133 @@ export function linkInboxToExistingVorgang(
   const freshInbox = resolveInboxItemForLinking(linkedInbox);
   if (!freshVorgang) return null;
   return { vorgang: freshVorgang, inbox: freshInbox };
+}
+
+/** DOCUMENT-DELETE-SEMANTICS-01I — the Vorgänge changed by a staged detach. */
+export type StagedVorgangDocumentDetach = { previous: Vorgang[] };
+
+/**
+ * Removes every active document entry pointing at `documentId` — without
+ * persisting. The caller owns the persist and the rollback.
+ *
+ * Only `documents[]` is touched. Positions, confirmation, customer, invoices,
+ * amendments, status and `createdFromInboxId` are left exactly as they are:
+ * deleting a file is not a business event.
+ *
+ * All matching Vorgänge are handled, not just the first. An inconsistent legacy
+ * state where two Vorgänge list the same document must not leave one of them
+ * pointing at a tombstone.
+ */
+export function stageVorgangDocumentDetach(documentId: string): StagedVorgangDocumentDetach {
+  const id = documentId.trim();
+  const previous: Vorgang[] = [];
+  if (!id) return { previous };
+
+  vorgaenge = vorgaenge.map((vorgang) => {
+    if (!isEntitySyncActive(vorgang)) return vorgang;
+    const documents = vorgang.documents ?? [];
+    if (!documents.some((doc) => doc.companyDocumentId === id)) return vorgang;
+    previous.push(cloneVorgang(vorgang));
+    return withUpdatedEntitySync(
+      {
+        ...cloneVorgang(vorgang),
+        documents: documents.filter((doc) => doc.companyDocumentId !== id),
+      },
+      'vorgang',
+    );
+  });
+
+  return { previous };
+}
+
+/** Undoes stageVorgangDocumentDetach for every Vorgang it changed. */
+export function restoreStagedVorgangDocumentDetach(staged: StagedVorgangDocumentDetach): void {
+  if (staged.previous.length === 0) return;
+  const byId = new Map(staged.previous.map((vorgang) => [vorgang.id, vorgang]));
+  vorgaenge = vorgaenge.map((vorgang) => byId.get(vorgang.id) ?? vorgang);
+}
+
+export type UnlinkInboxItemResult =
+  | { success: true; vorgang: Vorgang; inbox: InboxItem }
+  | { success: false; errorKey: string };
+
+/**
+ * DOCUMENT-UNLINK-DELETE-01E — releases the active document↔Vorgang link.
+ *
+ * A link is three things at once: the fields on the intake row, the entry in
+ * `vorgang.documents[]` and `document.linkedVorgang`. Releasing only one of
+ * them leaves the other two pointing at nothing, which is why this is a single
+ * operation with a single commit point.
+ *
+ * Only the active assignment is released. Provenance — `sourceInboxItemId`,
+ * `createdFromInboxId` — stays, as does everything the order is made of: the
+ * confirmation snapshot, positions, customer, invoices and status. Nothing here
+ * deletes; the user has to ask for this explicitly.
+ */
+export function unlinkInboxItemFromVorgang(inboxId: string): UnlinkInboxItemResult {
+  const item = getInboxItemById(inboxId);
+  if (!item) return { success: false, errorKey: 'inbox.notFound' };
+
+  const vorgangId = item.vorgangId?.trim();
+  if (!vorgangId) return { success: false, errorKey: 'vorgang.unlink.notLinked' };
+
+  const index = vorgaenge.findIndex((v) => v.id === vorgangId && isEntitySyncActive(v));
+  if (index === -1) return { success: false, errorKey: 'vorgang.notFound' };
+
+  // Snapshots for the rollback — taken before the first staged change.
+  const previousVorgaenge = vorgaenge;
+  const previousInboxLink = {
+    vorgangId: item.vorgangId,
+    vorgangTitle: item.vorgangTitle,
+    vorgangLinkStatus: item.vorgangLinkStatus,
+  };
+  const archiveId = item.archiveDocumentId?.trim();
+  const previousDocumentLink = archiveId ? getDocumentById(archiveId)?.linkedVorgang : undefined;
+
+  // 1. The intake row.
+  const stagedInbox = stageInboxItemPatch(inboxId, {
+    vorgangId: undefined,
+    vorgangTitle: undefined,
+    vorgangLinkStatus: undefined,
+  });
+  if (!stagedInbox) return { success: false, errorKey: 'inbox.notFound' };
+
+  /**
+   * 2. The entry in the Vorgang — identified by this item's archive document,
+   * never by position. A Vorgang may carry several documents.
+   */
+  const current = cloneVorgang(vorgaenge[index]!);
+  const nextDocuments = archiveId
+    ? current.documents.filter((doc) => doc.companyDocumentId !== archiveId)
+    : current.documents;
+  const nextVorgang = withUpdatedEntitySync({ ...current, documents: nextDocuments }, 'vorgang');
+  vorgaenge = vorgaenge.map((v) => (v.id === vorgangId ? nextVorgang : v));
+
+  // 3. The archive document's back-reference.
+  if (archiveId && previousDocumentLink) {
+    const staged = stageDocumentUpdate(archiveId, { linkedVorgang: null });
+    if (!staged.success) {
+      vorgaenge = previousVorgaenge;
+      stageInboxItemPatch(inboxId, previousInboxLink);
+      return { success: false, errorKey: staged.errorKey };
+    }
+  }
+
+  const persistResult = persistAll();
+  if (!persistResult.success) {
+    vorgaenge = previousVorgaenge;
+    stageInboxItemPatch(inboxId, previousInboxLink);
+    if (archiveId && previousDocumentLink) {
+      stageDocumentUpdate(archiveId, { linkedVorgang: previousDocumentLink });
+    }
+    return { success: false, errorKey: 'vorgang.unlink.persistFailed' };
+  }
+
+  return {
+    success: true,
+    vorgang: cloneVorgang(nextVorgang),
+    inbox: getInboxItemById(inboxId) ?? stagedInbox,
+  };
 }
 
 export function addInvoiceToVorgang(vorgangId: string, invoice: VorgangInvoice): VorgangInvoice | null {

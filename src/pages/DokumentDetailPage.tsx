@@ -19,6 +19,8 @@ import { ShowMoreSection } from '../components/ui/ShowMoreSection';
 import { useApp } from '../context/AppContext';
 import { formatPaperFilingInstruction } from '../services/paperFolderService';
 import { deleteDocument, getDocumentById } from '../services/documentService';
+import { unlinkInboxItemFromVorgang } from '../services/vorgangService';
+import { SimpleConfirmDialog } from '../components/ui/SimpleConfirmDialog';
 import { resolveDocumentLifecycle } from '../services/documentLifecycleService';
 import { recordDocumentContext } from '../services/brain/companySessionService';
 import type { CompanyDocument } from '../types/models';
@@ -37,6 +39,9 @@ export function DokumentDetailPage() {
   );
   const [isEditing, setIsEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [unlinkConfirmOpen, setUnlinkConfirmOpen] = useState(false);
+  const [unlinkError, setUnlinkError] = useState<string | null>(null);
   const [showDetails, setShowDetails] = useState(false);
   const [detailRevision, setDetailRevision] = useState(0);
   const [previewRevision, setPreviewRevision] = useState(0);
@@ -68,12 +73,39 @@ export function DokumentDetailPage() {
   const categoryLabel = translate(categoryKey);
   const paperInstruction = formatPaperFilingInstruction(document.paperFolder);
 
+  /**
+   * DOCUMENT-UNLINK-DELETE-01G — derselbe atomare Service wie im Eingang, nur
+   * hier erreichbar: ein archiviertes Dokument ist dort ausgeblendet, der
+   * Nutzer steht auf dieser Seite. Gelöst wird nur die Zuordnung; der Vorgang
+   * und ein bestätigter Auftrag bleiben unverändert, gelöscht wird nichts.
+   */
+  const handleConfirmUnlinkVorgang = (): boolean => {
+    const origin = document.sourceInboxItemId?.trim();
+    if (!origin) return false;
+
+    const result = unlinkInboxItemFromVorgang(origin);
+    if (!result.success) {
+      setUnlinkError(translate(result.errorKey as TranslationKey));
+      return false;
+    }
+    // Der Store ist die Wahrheit — die Seite liest ihn neu, statt zu raten.
+    setDocument(getDocumentById(document.id));
+    setUnlinkConfirmOpen(false);
+    setUnlinkError(null);
+    showToast(translate('inbox.unlinkVorgang.success'));
+    return true;
+  };
+
   const handleDelete = () => {
     const result = deleteDocument(document.id);
     if (result.success) {
       showToast(translate('document.deleted'));
       navigate('/dokumente', { replace: true });
+      return;
     }
+    // Der Guard im Service ist die Wahrheit — hier wird sein Grund nur sichtbar.
+    setDeleteError(translate(result.errorKey as TranslationKey));
+    setConfirmDelete(false);
   };
 
   if (isEditing) {
@@ -268,12 +300,55 @@ export function DokumentDetailPage() {
         testIdPrefix="dokument"
       />
 
+      {deleteError ? (
+        <p className="error-text" data-testid="document-delete-blocked">
+          {deleteError}
+        </p>
+      ) : null}
+      {/* Nur wenn es eine aktive Zuordnung gibt und der Eingangsbezug bekannt ist. */}
+      {document.linkedVorgang && document.sourceInboxItemId?.trim() ? (
+        <div className="form-actions document-detail__unlink">
+          <Button
+            variant="ghost"
+            onClick={() => {
+              setUnlinkError(null);
+              setUnlinkConfirmOpen(true);
+            }}
+            data-testid="document-unlink-vorgang-trigger"
+          >
+            {translate('inbox.unlinkVorgang.action')}
+          </Button>
+        </div>
+      ) : null}
+      <SimpleConfirmDialog
+        open={unlinkConfirmOpen}
+        title={translate('inbox.unlinkVorgang.confirmTitle')}
+        message={translate('inbox.unlinkVorgang.confirmMessage')}
+        confirmLabel={translate('inbox.unlinkVorgang.confirmButton')}
+        cancelLabel={translate('common.cancel')}
+        failureMessage={unlinkError ?? undefined}
+        dialogTestId="document-unlink-dialog"
+        confirmTestId="document-unlink-confirm"
+        cancelTestId="document-unlink-cancel"
+        onConfirm={handleConfirmUnlinkVorgang}
+        onCancel={() => {
+          setUnlinkConfirmOpen(false);
+          setUnlinkError(null);
+        }}
+      />
       <div className="form-actions document-detail__actions">
         <Button variant="outline" onClick={() => setIsEditing(true)}>
           {translate('document.edit')}
         </Button>
         {!confirmDelete ? (
-          <Button variant="danger" onClick={() => setConfirmDelete(true)}>
+          <Button
+            variant="danger"
+            data-testid="document-detail-delete-trigger"
+            onClick={() => {
+              setDeleteError(null);
+              setConfirmDelete(true);
+            }}
+          >
             {translate('document.delete')}
           </Button>
         ) : (
@@ -281,7 +356,11 @@ export function DokumentDetailPage() {
             <Button variant="ghost" onClick={() => setConfirmDelete(false)}>
               {translate('common.cancel')}
             </Button>
-            <Button variant="danger" onClick={handleDelete}>
+            <Button
+              variant="danger"
+              data-testid="document-detail-delete-confirm"
+              onClick={handleDelete}
+            >
               {translate('document.deleteConfirm')}
             </Button>
           </>

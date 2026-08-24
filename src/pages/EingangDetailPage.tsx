@@ -82,7 +82,7 @@ import {
 } from '../services/contractPositionImportService';
 import { acceptContractOrderFromProposal } from '../services/contractOrderAcceptService';
 import { isContractPlanLocked } from '../services/orderPlanIntegrityService';
-import { getVorgangById } from '../services/vorgangService';
+import { getVorgangById, unlinkInboxItemFromVorgang } from '../services/vorgangService';
 import type {
   ContractOrderProposal,
   EnhancedDetectedOrderPosition,
@@ -317,6 +317,9 @@ export function EingangDetailPage() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteFailureMessage, setDeleteFailureMessage] = useState<string | null>(null);
   const deleteTriggerRef = useRef<HTMLButtonElement>(null);
+  const [unlinkConfirmOpen, setUnlinkConfirmOpen] = useState(false);
+  const [unlinkFailureMessage, setUnlinkFailureMessage] = useState<string | null>(null);
+  const unlinkTriggerRef = useRef<HTMLButtonElement>(null);
   const [vorgangDialogRequest, setVorgangDialogRequest] = useState(0);
   // CUSTOMER-FACHOBJEKT-04C — one decision state for all three manual accept entries.
   const [customerMode, setCustomerMode] = useState<CustomerDecisionMode | null>(null);
@@ -819,6 +822,24 @@ export function EingangDetailPage() {
     setDeleteFailureMessage(null);
     showToast(formatInboxActionToast(result, translate));
     goBack();
+    return true;
+  };
+
+  /**
+   * DOCUMENT-UNLINK-DELETE-01E — löst nur die aktive Zuordnung. Der Vorgang,
+   * seine Positionen und ein bestätigter Auftrag bleiben unverändert; gelöscht
+   * wird nichts. Erst nach ausdrücklicher Bestätigung.
+   */
+  const handleConfirmUnlinkVorgang = (): boolean => {
+    const result = unlinkInboxItemFromVorgang(item.id);
+    if (!result.success) {
+      setUnlinkFailureMessage(translate(result.errorKey as TranslationKey));
+      return false;
+    }
+    setItem(result.inbox);
+    setUnlinkConfirmOpen(false);
+    setUnlinkFailureMessage(null);
+    showToast(translate('inbox.unlinkVorgang.success'));
     return true;
   };
 
@@ -1627,6 +1648,31 @@ export function EingangDetailPage() {
         ← {translate('common.back')}
       </button>
 
+      {/* DOCUMENT-UNLINK-DELETE-01E — die Wege, auf die der Löschhinweis verweist. */}
+      {item.vorgangId?.trim() ? (
+        <div className="eingang-detail-page__unlink">
+          <Button
+            ref={unlinkTriggerRef}
+            variant="ghost"
+            onClick={() => {
+              setUnlinkFailureMessage(null);
+              setUnlinkConfirmOpen(true);
+            }}
+            data-testid="inbox-unlink-vorgang-trigger"
+          >
+            {translate('inbox.unlinkVorgang.action')}
+          </Button>
+        </div>
+      ) : null}
+
+      {item.archiveDocumentId?.trim() ? (
+        <div className="eingang-detail-page__archive-link">
+          <Link to={`/dokumente/${item.archiveDocumentId}`} data-testid="inbox-open-archive-document">
+            {translate('inbox.openArchiveDocument')}
+          </Link>
+        </div>
+      ) : null}
+
       <div className="eingang-detail-page__delete">
         <Button
           ref={deleteTriggerRef}
@@ -1656,6 +1702,24 @@ export function EingangDetailPage() {
         onCancel={() => {
           setDeleteConfirmOpen(false);
           setDeleteFailureMessage(null);
+        }}
+      />
+
+      <SimpleConfirmDialog
+        open={unlinkConfirmOpen}
+        title={translate('inbox.unlinkVorgang.confirmTitle')}
+        message={translate('inbox.unlinkVorgang.confirmMessage')}
+        confirmLabel={translate('inbox.unlinkVorgang.confirmButton')}
+        cancelLabel={translate('common.cancel')}
+        failureMessage={unlinkFailureMessage ?? undefined}
+        returnFocusRef={unlinkTriggerRef}
+        dialogTestId="inbox-unlink-dialog"
+        confirmTestId="inbox-unlink-confirm"
+        cancelTestId="inbox-unlink-cancel"
+        onConfirm={handleConfirmUnlinkVorgang}
+        onCancel={() => {
+          setUnlinkConfirmOpen(false);
+          setUnlinkFailureMessage(null);
         }}
       />
 

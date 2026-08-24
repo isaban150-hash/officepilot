@@ -6,9 +6,24 @@ import { getDocumentFileRefById } from './documentFileStoreService';
 import {
   getDocumentFileRepresentationBindingStoreSnapshot,
   removeDocumentFileRepresentationBindingsForDocument,
+  replaceDocumentFileRepresentationBindingStore,
 } from './documentFileRepresentationBindingStoreService';
-import { removeDocumentFileDerivativeStepOutcomesForDocument } from './documentFileDerivativeStepOutcomeStoreService';
-import { removeDocumentFileDerivativeRecoveryContextsForDocument } from './documentFileDerivativeRecoveryContextStoreService';
+import {
+  getDocumentFileDerivativeStepOutcomeStoreSnapshot,
+  removeDocumentFileDerivativeStepOutcomesForDocument,
+  replaceDocumentFileDerivativeStepOutcomeStore,
+} from './documentFileDerivativeStepOutcomeStoreService';
+import {
+  getDocumentFileDerivativeRecoveryContextStoreSnapshot,
+  removeDocumentFileDerivativeRecoveryContextsForDocument,
+  replaceDocumentFileDerivativeRecoveryContextStore,
+} from './documentFileDerivativeRecoveryContextStoreService';
+import { getAllExpensesFromStore } from './expenseStore';
+import {
+  getAllVorgaenge,
+  restoreStagedVorgangDocumentDetach,
+  stageVorgangDocumentDetach,
+} from './vorgangService';
 import { persistDocumentFileDerivativeRecoveryContextAfterImport } from './documentFileDerivativeRecoveryContextService';
 import { documentMatchesArea } from './documentAreaCatalog';
 import type { DocumentAreaFilterId } from '../types/documentArea';
@@ -17,12 +32,19 @@ import {
   syncContractProofRequirementsAfterVorgangLink,
 } from './contractProofSyncAfterVorgangLinkService';
 import {
+  getOfficePilotMemorySnapshot,
+  hydrateMemory,
   isContractInboxItem,
   recordArchivedDocumentMemory,
   syncContractProofRequirementsFromInbox,
   tombstoneMemoryForDocument,
 } from './officePilotMemoryService';
-import { getInboxItemById, markInboxImportedToArchive } from './inboxService';
+import {
+  getInboxItemById,
+  markInboxImportedToArchive,
+  restoreStagedInboxItemTombstone,
+  stageInboxItemTombstone,
+} from './inboxService';
 import {
   filterSyncActive,
   generateEntityId,
@@ -40,6 +62,7 @@ import type {
   DocumentType,
   InboxItem,
   PaperFilingRule,
+  Vorgang,
 } from '../types/models';
 import {
   buildDocumentArchiveTruthSnapshotFromInbox,
@@ -335,11 +358,98 @@ export function updateDocument(
   return staged;
 }
 
+/** Why an archive document may not be deleted — null when it may. */
+export type DocumentDeleteBlockReason = 'confirmed_order' | 'expense' | 'vorgang';
+
+const DOCUMENT_DELETE_BLOCK_ERROR_KEYS: Record<DocumentDeleteBlockReason, string> = {
+  confirmed_order: 'document.delete.blocked.confirmedOrder',
+  expense: 'document.delete.blocked.expense',
+  vorgang: 'document.delete.blocked.vorgang',
+};
+
+/** Active Vorgänge that still list this document in their document section. */
+function vorgaengeListingDocument(documentId: string): Vorgang[] {
+  return getAllVorgaenge().filter((vorgang) =>
+    (vorgang.documents ?? []).some((doc) => doc.companyDocumentId === documentId),
+  );
+}
+
+/**
+ * DOCUMENT-DELETE-SEMANTICS-01I — the one state that still stops a final delete.
+ *
+ * A receipt behind a booked expense is not the user's to drop as a side effect
+ * of tidying the archive; the expense has to go first. Evaluated on its own
+ * rather than through the ordered reason below, because a document can be both
+ * a confirmed order's contract and an expense receipt — and then the expense
+ * must win.
+ */
+function isExpenseReceipt(document: CompanyDocument): boolean {
+  const origin = document.sourceInboxItemId?.trim();
+  return getAllExpensesFromStore().some(
+    (expense) =>
+      expense.archiveDocumentId === document.id ||
+      (Boolean(origin) && expense.linkedInboxId === origin),
+  );
+}
+
+/**
+ * Describes what the document is still involved in — a diagnosis, not a veto.
+ *
+ * Since 01I only `expense` stops the final delete (see `deleteDocument`); the
+ * Vorgang states are reported so the UI can explain a document's role, and the
+ * ordering is unchanged so existing readers keep seeing the same answer.
+ *
+ * `sourceInboxItemId` alone never blocks — provenance is not an active claim.
+ */
+export function getDocumentDeleteBlockReason(
+  document: CompanyDocument,
+): DocumentDeleteBlockReason | null {
+  const origin = document.sourceInboxItemId?.trim();
+
+  // 1. Confirmed order via the active document reference.
+  if (vorgaengeListingDocument(document.id).some((vorgang) => vorgang.contractConfirmation)) {
+    return 'confirmed_order';
+  }
+
+  // 2. Confirmed order via origin — survives a completed unlink.
+  if (
+    origin &&
+    getAllVorgaenge().some(
+      (vorgang) => vorgang.createdFromInboxId === origin && vorgang.contractConfirmation,
+    )
+  ) {
+    return 'confirmed_order';
+  }
+
+  // 3. Receipt of an expense — via its own reference or the shared origin.
+  if (isExpenseReceipt(document)) return 'expense';
+
+  // 4. Active Vorgang link.
+  if (document.linkedVorgang?.vorgangId?.trim()) return 'vorgang';
+
+  // 5. Defense in depth: the counter-reference alone is enough.
+  if (vorgaengeListingDocument(document.id).length > 0) return 'vorgang';
+
+  return null;
+}
+
 export function deleteDocument(id: string): DocumentMutationResult {
   const index = documents.findIndex((d) => d.id === id && isEntitySyncActive(d));
   if (index === -1) return { success: false, errorKey: 'document.notFound' };
 
   const document = documents[index];
+
+  /**
+   * DOCUMENT-DELETE-SEMANTICS-01I — the user confirmed twice; this deletes.
+   *
+   * A Vorgang link or a confirmed order no longer stands in the way: the user
+   * should not have to release technical references by hand before being
+   * allowed to remove a file. Those references are cleaned up below, as part of
+   * this same commit. Only a booked expense still says no.
+   */
+  if (isExpenseReceipt(document)) {
+    return { success: false, errorKey: DOCUMENT_DELETE_BLOCK_ERROR_KEYS.expense };
+  }
   // Capture original + binding FileRefs before bindings are removed.
   const heldFileRefIds = new Set<string>();
   if (document.fileRefId) {
@@ -351,13 +461,68 @@ export function deleteDocument(id: string): DocumentMutationResult {
     }
   }
 
-  const tombstoned = withTombstonedEntity(cloneDocument(document), 'document');
+  /**
+   * Everything below is staged in memory and committed by the single
+   * persistAll() further down. A failed persist restores all of it, so a
+   * half-deleted document can no longer survive.
+   */
+  const previousDocuments = documents;
+  const previousMemory = getOfficePilotMemorySnapshot();
+  const previousBindings = getDocumentFileRepresentationBindingStoreSnapshot();
+  const previousStepOutcomes = getDocumentFileDerivativeStepOutcomeStoreSnapshot();
+  const previousRecoveryContexts = getDocumentFileDerivativeRecoveryContextStoreSnapshot();
+
+  /**
+   * The tombstone must not carry an active-looking relation, so the link is
+   * dropped before it is written. The provenance field stays — it is history.
+   */
+  const tombstoned = withTombstonedEntity(
+    cloneDocument({ ...document, linkedVorgang: null }),
+    'document',
+  );
   documents = [...documents.slice(0, index), tombstoned, ...documents.slice(index + 1)];
   tombstoneMemoryForDocument(id);
   removeDocumentFileRepresentationBindingsForDocument(id);
   removeDocumentFileDerivativeStepOutcomesForDocument(id);
   removeDocumentFileDerivativeRecoveryContextsForDocument(id);
-  persistAll();
+
+  // Every Vorgang that still lists this document loses exactly that entry.
+  const stagedDetach = stageVorgangDocumentDetach(id);
+
+  /**
+   * The invisible intake row goes with it. Clearing single fields would not be
+   * enough: an active row still counts as a holder of the shared FileRef, so
+   * the original file would silently survive a delete the user just confirmed.
+   * Only ever the row that actually refers to this document.
+   */
+  const origin = document.sourceInboxItemId?.trim();
+  const originItem = origin ? getInboxItemById(origin) : undefined;
+  const ownsThisDocument = Boolean(originItem && originItem.archiveDocumentId === id);
+  const stagedOriginTombstone =
+    origin && ownsThisDocument
+      ? stageInboxItemTombstone(origin, {
+          archiveDocumentId: undefined,
+          vorgangId: undefined,
+          vorgangTitle: undefined,
+          vorgangLinkStatus: undefined,
+        })
+      : null;
+
+  const persistResult = persistAll();
+  if (!persistResult.success) {
+    documents = previousDocuments;
+    hydrateMemory(previousMemory);
+    replaceDocumentFileRepresentationBindingStore(previousBindings);
+    replaceDocumentFileDerivativeStepOutcomeStore(previousStepOutcomes);
+    replaceDocumentFileDerivativeRecoveryContextStore(previousRecoveryContexts);
+    restoreStagedVorgangDocumentDetach(stagedDetach);
+    if (stagedOriginTombstone) {
+      restoreStagedInboxItemTombstone(stagedOriginTombstone);
+    }
+    return { success: false, errorKey: 'document.persistFailed' };
+  }
+
+  // Only after the commit — a failed delete must never release the file.
   queueMicrotask(() => {
     void import('./documentFileReferenceService')
       .then(async ({ releaseDocumentFileIfUnreferenced }) => {
