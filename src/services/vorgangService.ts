@@ -45,6 +45,7 @@ import {
   stageInboxItemPatch,
 } from './inboxService';
 import {
+  canConfirmOrderDirectlyFromStatus,
   canTransitionVorgangStatus,
   migrateVorgangStatus,
 } from './vorgangLifecycleService';
@@ -201,6 +202,7 @@ function cloneContractConfirmation(
     immutable: true,
     positions: snapshot.positions.map((p) => ({ ...p })),
     negotiation: {
+      conducted: snapshot.negotiation.conducted,
       notes: [...snapshot.negotiation.notes],
       generalHints: [...snapshot.negotiation.generalHints],
       priceProposals: snapshot.negotiation.priceProposals.map((p) => ({ ...p })),
@@ -300,6 +302,9 @@ function normalizeContractConfirmation(
     immutable: true,
     positions: snapshot.positions ?? [],
     negotiation: {
+      // Snapshots written before the direct path existed always went through a
+      // negotiation — an absent flag therefore means "conducted".
+      conducted: snapshot.negotiation?.conducted ?? true,
       notes: snapshot.negotiation?.notes ?? [],
       generalHints: snapshot.negotiation?.generalHints ?? [],
       priceProposals: snapshot.negotiation?.priceProposals ?? [],
@@ -1034,7 +1039,13 @@ export function saveVorgangOrderAmendments(
 export function saveVorgangContractConfirmation(
   vorgangId: string,
   snapshot: ContractConfirmationSnapshot,
-  negotiation: ContractNegotiationState,
+  negotiation: ContractNegotiationState | undefined,
+  /**
+   * BUSINESS-STATE-DIRECT-CONFIRMATION-01B — set only by the guarded direct
+   * review path. Replaces the linear transition check with the explicitly
+   * allowed direct sources; every other invariant below stays untouched.
+   */
+  options?: { allowDirectConfirmation?: boolean },
 ): VorgangConfirmationUpdateResult {
   const index = vorgaenge.findIndex((v) => v.id === vorgangId && isEntitySyncActive(v));
   if (index === -1) {
@@ -1046,7 +1057,12 @@ export function saveVorgangContractConfirmation(
   if (current.contractConfirmation) {
     return { success: false, errorKey: 'confirmation.alreadyExists' };
   }
-  if (!canTransitionVorgangStatus(migrateVorgangStatus(current.status), 'beauftragt')) {
+  const fromStatus = migrateVorgangStatus(current.status);
+  const transitionAllowed = options?.allowDirectConfirmation
+    ? canConfirmOrderDirectlyFromStatus(fromStatus) ||
+      canTransitionVorgangStatus(fromStatus, 'beauftragt')
+    : canTransitionVorgangStatus(fromStatus, 'beauftragt');
+  if (!transitionAllowed) {
     return { success: false, errorKey: 'vorgang.status.invalidTransition' };
   }
 

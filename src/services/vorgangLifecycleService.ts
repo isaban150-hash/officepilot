@@ -21,6 +21,24 @@ const ALLOWED_TRANSITIONS: Record<Exclude<VorgangStatus, 'neu'>, readonly Vorgan
   abgeschlossen: [],
 };
 
+/**
+ * BUSINESS-STATE-DIRECT-CONFIRMATION-01B — statuses from which a documented,
+ * already placed order may be confirmed without opening a negotiation first.
+ *
+ * Deliberately kept out of ALLOWED_TRANSITIONS: the general lifecycle stays
+ * strictly linear, and this shortcut is only ever reachable together with the
+ * business-state guard in confirmContractOrder.
+ */
+const DIRECT_CONFIRMATION_SOURCE_STATUSES: ReadonlySet<VorgangStatus> = new Set([
+  'eingegangen',
+  'in_pruefung',
+]);
+
+/** Whether `status` may go straight to `beauftragt` on an explicit direct confirmation. */
+export function canConfirmOrderDirectlyFromStatus(status: VorgangStatus): boolean {
+  return DIRECT_CONFIRMATION_SOURCE_STATUSES.has(status);
+}
+
 /** Maps persisted legacy status values onto the current lifecycle. */
 export function migrateVorgangStatus(status: VorgangStatus | string | undefined): VorgangStatus {
   if (status === 'neu' || status === undefined || status === '') {

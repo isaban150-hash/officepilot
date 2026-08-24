@@ -113,7 +113,7 @@ describe('CONTRACT-WORKSPACE-LAYOUT-DEDUP-01', () => {
     expect(html).not.toContain('data-testid="contract-order-positions"');
     expect(html).toContain('data-testid="contract-chef-primary-action"');
     expect(html).toContain('data-testid="contract-discard-button"');
-    expect(html).toContain('Auftrag annehmen');
+    expect(html).toContain('Als Auftrag erfassen');
     expect(html).toContain('Werkvertrag');
     expect(html).toContain('data-testid="auftragskarte-contract"');
     expect(html).toContain('data-testid="auftragskarte-details"');

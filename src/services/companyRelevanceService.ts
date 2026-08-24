@@ -12,6 +12,14 @@ const AUTHORITY_PATTERN = /bg[\s-]?bau|aok|soka[\s-]?bau|finanzamt|berufsgenosse
 const CUSTOMER_NUMBER_PATTERN = /kundennummer[:\s]+[\w-]+/i;
 const BETRIEBSNUMMER_PATTERN = /betriebsnummer[:\s]+[\w-]+/i;
 
+/**
+ * Shared with the own-company party resolution so no third name normalization
+ * exists. Behaviour unchanged — only the visibility.
+ */
+export function normalizeCompanyIdentityValue(value: string): string {
+  return normalize(value);
+}
+
 function normalize(value: string): string {
   return value
     .toLowerCase()

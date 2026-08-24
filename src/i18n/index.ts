@@ -1409,8 +1409,11 @@ const deLegacy = {
   'confirmation.title': 'Auftrag bestätigen',
   'confirmation.intro':
     'Erst nach Ihrer ausdrücklichen Bestätigung gilt der Auftrag als beauftragt. Der bestätigte Stand wird als unveränderlicher Snapshot gespeichert.',
-  'confirmation.acceptOrder': 'Auftrag annehmen',
-  'confirmation.confirmContract': 'Werkvertrag bestätigen',
+  'confirmation.directIntro':
+    'Dieser Auftragsstand stammt aus dem Dokument. Prüfen Sie ihn und bestätigen Sie ihn anschließend ausdrücklich – erst dann gilt der Auftrag als beauftragt.',
+  'confirmation.reviewAndConfirm': 'Auftrag prüfen und bestätigen',
+  'confirmation.positions': 'Positionen',
+  'confirmation.orderValue': 'Auftragswert',
   'confirmation.success': 'Auftrag bestätigt – Status Beauftragt, Snapshot gespeichert.',
   'confirmation.confirmed': 'Auftrag bestätigt',
   'confirmation.confirmedAt': 'Bestätigt am',
@@ -3017,7 +3020,9 @@ const deLegacy = {
   'auftragskarte.risk.termination': 'Kündigungsregeln beachten',
   'auftragskarte.risk.waiting': 'Wartezeitregelung beachten',
   'auftragskarte.risk.amendments': 'Nachtragsregeln beachten',
-  'auftragskarte.action.accept': 'Auftrag annehmen',
+  // Erfasst den Vorgang aus dem Dokument — die kaufmännische Bestätigung
+  // erfolgt später getrennt über 'confirmation.reviewAndConfirm'.
+  'auftragskarte.action.accept': 'Als Auftrag erfassen',
   'auftragskarte.action.inquiry': 'Rückfrage',
   'auftragskarte.action.reject': 'Ablehnen',
   'auftragskarte.action.showScope': 'Leistungsumfang anzeigen',
@@ -4066,7 +4071,7 @@ const trLegacy: Partial<Record<keyof typeof de, string>> = {
   'auftragskarte.risk.termination': 'Fesih kurallarına dikkat',
   'auftragskarte.risk.waiting': 'Bekleme süresi kurallarına dikkat',
   'auftragskarte.risk.amendments': 'Ek iş kurallarına dikkat',
-  'auftragskarte.action.accept': 'İşi kabul et',
+  'auftragskarte.action.accept': 'İş olarak kaydet',
   'auftragskarte.action.inquiry': 'Soru sor',
   'auftragskarte.action.reject': 'Reddet',
   'auftragskarte.action.showScope': 'Kapsamı göster',
@@ -4990,7 +4995,7 @@ const bgLegacy: Partial<Record<keyof typeof de, string>> = {
   'auftragskarte.risk.termination': 'Спазвайте правилата за прекратяване',
   'auftragskarte.risk.waiting': 'Спазвайте правилата за чакане',
   'auftragskarte.risk.amendments': 'Спазвайте правилата за допълнения',
-  'auftragskarte.action.accept': 'Приеми поръчката',
+  'auftragskarte.action.accept': 'Запиши като поръчка',
   'auftragskarte.action.inquiry': 'Въпрос',
   'auftragskarte.action.reject': 'Отказ',
   'auftragskarte.action.showScope': 'Покажи обхват',

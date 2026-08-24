@@ -1,6 +1,11 @@
 import { generateEntityId } from './sync/syncMetaService';
 import { isSnapshotAlignable } from './contractPositionAlignService';
 import {
+  allowsDirectConfirmationReview,
+  type OrderConfirmationPathSignals,
+} from './orderConfirmationPathService';
+import { canConfirmOrderDirectlyFromStatus } from './vorgangLifecycleService';
+import {
   getVorgangById,
   replaceVorgangContractConfirmation,
   saveVorgangContractConfirmation,
@@ -79,6 +84,8 @@ function buildConfirmationSnapshot(vorgang: Vorgang, confirmedAt: string): Contr
     title: vorgang.title,
     positions,
     negotiation: {
+      // Only a negotiation that was actually started counts as conducted.
+      conducted: Boolean(negotiation?.startedAt),
       notes: [...(negotiation?.notes ?? [])],
       generalHints: [...(negotiation?.generalHints ?? [])],
       priceProposals: priceProposals.map((p) => ({ ...p })),
@@ -93,7 +100,15 @@ function buildConfirmationSnapshot(vorgang: Vorgang, confirmedAt: string): Contr
  * Explicit user confirmation: freeze snapshot, close negotiation, set status beauftragt.
  * Does not mutate linked original contract documents.
  */
-export function confirmContractOrder(vorgangId: string): ContractConfirmationResult {
+export function confirmContractOrder(
+  vorgangId: string,
+  /**
+   * BUSINESS-STATE-DIRECT-CONFIRMATION-01B — the caller's business-state
+   * signals. Supplied only by the direct review path; omitting them keeps the
+   * original negotiation-only behaviour untouched.
+   */
+  options?: { path?: OrderConfirmationPathSignals },
+): ContractConfirmationResult {
   const current = getVorgangById(vorgangId);
   if (!current) {
     return { success: false, errorKey: 'vorgang.notFound' };
@@ -103,7 +118,18 @@ export function confirmContractOrder(vorgangId: string): ContractConfirmationRes
     return { success: false, errorKey: 'confirmation.alreadyExists' };
   }
 
-  if (current.status !== 'in_verhandlung') {
+  /**
+   * Two admissible routes, one set of invariants. Either the negotiation was
+   * conducted and is being closed, or the document itself already records a
+   * placed order and the user has just reviewed it. Everything else keeps the
+   * long route.
+   */
+  const directConfirmation =
+    current.status !== 'in_verhandlung' &&
+    allowsDirectConfirmationReview(options?.path) &&
+    canConfirmOrderDirectlyFromStatus(current.status);
+
+  if (current.status !== 'in_verhandlung' && !directConfirmation) {
     return { success: false, errorKey: 'confirmation.notInNegotiation' };
   }
 
@@ -118,6 +144,22 @@ export function confirmContractOrder(vorgangId: string): ContractConfirmationRes
   }
 
   const draftHistory = collectDraftHistory(current);
+
+  // No negotiation took place — record exactly that, rather than backdating a
+  // startedAt to the confirmation moment so the old model looks satisfied.
+  if (directConfirmation && !current.negotiation) {
+    const savedDirect = saveVorgangContractConfirmation(vorgangId, snapshot, undefined, {
+      allowDirectConfirmation: true,
+    });
+    if (!savedDirect.success) {
+      return { success: false, errorKey: savedDirect.errorKey };
+    }
+    return {
+      success: true,
+      vorgang: savedDirect.vorgang,
+      snapshot: savedDirect.vorgang.contractConfirmation!,
+    };
+  }
 
   const closedNegotiation = {
     startedAt: current.negotiation?.startedAt ?? confirmedAt,
@@ -134,7 +176,9 @@ export function confirmContractOrder(vorgangId: string): ContractConfirmationRes
   };
 
   // Atomic: snapshot + aligned orderPositions + closed negotiation + beauftragt
-  const saved = saveVorgangContractConfirmation(vorgangId, snapshot, closedNegotiation);
+  const saved = saveVorgangContractConfirmation(vorgangId, snapshot, closedNegotiation, {
+    allowDirectConfirmation: directConfirmation,
+  });
   if (!saved.success) {
     return { success: false, errorKey: saved.errorKey };
   }

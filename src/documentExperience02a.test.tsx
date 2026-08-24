@@ -230,7 +230,7 @@ describe('DOCUMENT-EXPERIENCE-02A', () => {
     expect(html).toContain('data-testid="document-experience-facts"');
     expect(html).toContain('data-testid="document-experience-details"');
     expect(html).toContain('data-testid="document-guidance-panel"');
-    expect(html).toContain('Auftrag annehmen');
+    expect(html).toContain('Als Auftrag erfassen');
     expect(html).toContain('Rückfrage');
     expect(html).toContain('Ablehnen');
     // Guidance lives under Details, not as a competing hero ahead of facts

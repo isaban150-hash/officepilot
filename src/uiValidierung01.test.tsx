@@ -26,7 +26,7 @@ function translate(key: TranslationKey): string {
     'auftragskarte.field.orderValue': 'Auftragswert',
     'auftragskarte.field.risks': 'Wichtige Hinweise',
     'auftragskarte.field.project': 'Bauvorhaben',
-    'auftragskarte.action.accept': 'Auftrag annehmen',
+    'auftragskarte.action.accept': 'Als Auftrag erfassen',
     'auftragskarte.action.showScope': 'Leistungsumfang anzeigen',
     'auftragskarte.action.hideScope': 'Leistungsumfang ausblenden',
     'auftragskarte.gewerk.unknown': 'Gewerk konnte nicht bestimmt werden.',

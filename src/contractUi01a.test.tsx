@@ -218,7 +218,7 @@ describe('CONTRACT-UI-01A — professioneller Vertragsarbeitsplatz', () => {
       expect(panelHtml).toMatch(/Bauvorhaben|Baustelle|Möhnetal/i);
       expect(panelHtml).toContain('data-testid="auftragskarte"');
       expect(panelHtml).toContain('data-testid="contract-chef-primary-action"');
-      expect(panelHtml).toContain('Auftrag annehmen');
+      expect(panelHtml).toContain('Als Auftrag erfassen');
       expect(panelHtml).toContain('Leistungsumfang anzeigen');
       expect(panelHtml).not.toContain('data-testid="contract-order-lv-overview"');
       expect(panelHtml).not.toContain('data-testid="contract-order-positions"');

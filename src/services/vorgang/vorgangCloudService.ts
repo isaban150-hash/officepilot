@@ -60,6 +60,7 @@ function cloneCloudContractConfirmation(
     immutable: true,
     positions: (snapshot.positions ?? []).map((p) => ({ ...p })),
     negotiation: {
+      conducted: snapshot.negotiation?.conducted ?? true,
       notes: [...(snapshot.negotiation?.notes ?? [])],
       generalHints: [...(snapshot.negotiation?.generalHints ?? [])],
       priceProposals: (snapshot.negotiation?.priceProposals ?? []).map((p) => ({ ...p })),
@@ -83,6 +84,7 @@ function readCloudContractConfirmation(
     immutable: true,
     positions: raw.positions ?? [],
     negotiation: {
+      conducted: raw.negotiation?.conducted ?? true,
       notes: raw.negotiation?.notes ?? [],
       generalHints: raw.negotiation?.generalHints ?? [],
       priceProposals: raw.negotiation?.priceProposals ?? [],

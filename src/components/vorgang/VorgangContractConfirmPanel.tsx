@@ -2,6 +2,7 @@ import { Button } from '../ui/Button';
 import { Card, CardMeta, CardTitle, DataRow } from '../ui/Card';
 import type { TranslationKey } from '../../i18n';
 import { confirmContractOrder } from '../../services/contractConfirmationService';
+import { resolveOrderConfirmationPathForVorgang } from '../../services/orderConfirmationPathService';
 import type { Vorgang } from '../../types/models';
 
 interface VorgangContractConfirmPanelProps {
@@ -30,14 +31,29 @@ export function VorgangContractConfirmPanel({
   onToast,
 }: VorgangContractConfirmPanelProps) {
   const snapshot = vorgang.contractConfirmation;
-  const canConfirm = vorgang.status === 'in_verhandlung' && !snapshot;
+  /**
+   * BUSINESS-STATE-DIRECT-CONFIRMATION-01B — a document that already records a
+   * placed order reaches the review directly; everything else keeps the
+   * negotiation route. The decision is recomputed here, never stored.
+   */
+  const direct = !snapshot ? resolveOrderConfirmationPathForVorgang(vorgang) : null;
+  const canReviewDirectly = direct?.path === 'direct_confirmation_review';
+  const canConfirm = (vorgang.status === 'in_verhandlung' || canReviewDirectly) && !snapshot;
 
   if (!canConfirm && !snapshot) {
     return null;
   }
 
+  const orderValue = vorgang.orderPositions.reduce(
+    (sum, position) => sum + position.plannedQuantity * position.unitPrice,
+    0,
+  );
+
   const handleConfirm = () => {
-    const result = confirmContractOrder(vorgang.id);
+    const result = confirmContractOrder(
+      vorgang.id,
+      canReviewDirectly ? { path: direct!.signals } : undefined,
+    );
     if (!result.success) {
       onToast(translate(`confirmation.error.${result.errorKey}` as TranslationKey));
       return;
@@ -51,18 +67,25 @@ export function VorgangContractConfirmPanel({
       <h2 className="section__title">{translate('confirmation.title')}</h2>
 
       {canConfirm ? (
-        <Card>
-          <p className="empty-state">{translate('confirmation.intro')}</p>
-          <Button fullWidth onClick={handleConfirm} data-testid="confirmation-accept-order">
-            {translate('confirmation.acceptOrder')}
-          </Button>
-          <Button
-            variant="outline"
-            fullWidth
-            onClick={handleConfirm}
-            data-testid="confirmation-confirm-contract"
-          >
-            {translate('confirmation.confirmContract')}
+        <Card data-testid="confirmation-review-card">
+          <p className="empty-state">
+            {translate(
+              canReviewDirectly ? 'confirmation.directIntro' : 'confirmation.intro',
+            )}
+          </p>
+          {/* What exactly gets frozen — visible before the click, never after. */}
+          <DataRow label={translate('confirmation.customer')} value={vorgang.customer} />
+          <DataRow label={translate('confirmation.baustelle')} value={vorgang.baustelle} />
+          <DataRow
+            label={translate('confirmation.positions')}
+            value={String(vorgang.orderPositions.length)}
+          />
+          <DataRow
+            label={translate('confirmation.orderValue')}
+            value={`${orderValue.toFixed(2).replace('.', ',')} €`}
+          />
+          <Button fullWidth onClick={handleConfirm} data-testid="confirmation-confirm-contract">
+            {translate('confirmation.reviewAndConfirm')}
           </Button>
         </Card>
       ) : null}

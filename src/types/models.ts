@@ -1160,6 +1160,12 @@ export interface ConfirmedContractPositionSnapshot {
 }
 
 export interface ContractConfirmationNegotiationSummary {
+  /**
+   * BUSINESS-STATE-DIRECT-CONFIRMATION-01B — whether a negotiation actually
+   * took place. `false` records "no negotiation conducted" honestly instead of
+   * inventing a history for a directly confirmed order.
+   */
+  conducted: boolean;
   notes: string[];
   generalHints: string[];
   priceProposals: NegotiationPriceProposal[];

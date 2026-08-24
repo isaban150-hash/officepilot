@@ -58,6 +58,7 @@ function confirmedSnapshot(reference: OrderAmendmentReferenceCase): ContractConf
         billable: true },
     ],
     negotiation: {
+      conducted: true,
       notes: [],
       generalHints: [],
       priceProposals: [],

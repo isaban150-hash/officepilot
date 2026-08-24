@@ -311,11 +311,12 @@ describe('UX-WORKFLOW-01 document review', () => {
     });
     const html = renderDetail(item.id);
     expect(html).toContain('data-testid="document-review-experience"');
-    // UX-01: contract proposals use „Auftrag annehmen“ as the single primary CTA.
+    // UX-01: contract proposals use „Als Auftrag erfassen“ as the single primary
+    // CTA — the commercial confirmation is a separate step on the Vorgang.
     if (html.includes('contract-order-proposal')) {
       expect(html).toContain('data-testid="auftragskarte"');
       expect(html).toContain('data-testid="contract-chef-primary-action"');
-      expect(html).toContain('Auftrag annehmen');
+      expect(html).toContain('Als Auftrag erfassen');
       expect(html).not.toContain('data-testid="document-review-primary-action"');
     } else {
       expect(html).toContain('Vorschlag übernehmen');

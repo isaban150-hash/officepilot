@@ -199,7 +199,7 @@ describe('UX-01 Auftragskarte', () => {
     expect(html).not.toContain('Neuer Auftrag');
     expect(html).toContain('Möhnetal 55');
     expect(html).toContain('4 Positionen erkannt');
-    expect(html).toContain('Auftrag annehmen');
+    expect(html).toContain('Als Auftrag erfassen');
     expect(html).toContain('Rückfrage');
     expect(html).toContain('Ablehnen');
     expect(html).toContain('data-testid="document-experience-details"');
@@ -236,7 +236,7 @@ describe('UX-01 Auftragskarte', () => {
       '[data-testid="contract-chef-primary-action"]',
     ) as HTMLButtonElement;
     expect(accept).toBeTruthy();
-    expect(accept.textContent).toContain('Auftrag annehmen');
+    expect(accept.textContent).toContain('Als Auftrag erfassen');
 
     await act(async () => {
       accept.click();
