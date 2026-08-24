@@ -41,6 +41,30 @@ const LV_ALT_ROW = new RegExp(
 );
 
 /**
+ * A money token in German notation: decimal comma, optional thousands dots.
+ * Deliberately strict — a bare integer would be indistinguishable from the
+ * numbers that legitimately appear inside a description ("DN 100", "Typ 300").
+ */
+const MONEY_TOKEN = String.raw`\d{1,3}(?:\.\d{3})*,\d{1,2}`;
+
+/**
+ * LV-STANDARD-SINGLE-LINE-ROW-01B — the ordinary construction bill-of-quantities
+ * row, all on one visual line:
+ *
+ *   01 950 m² PE-Dampfsperre luftdicht herstellen 3,80 3.610,00
+ *
+ * Anchored at both ends: position number, quantity and unit are read from the
+ * left, unit price and line total from the right, and whatever lies between
+ * them is the description — never searched for, only what remains. That is what
+ * keeps "DN 100", "160 mm" and "1,8 mm" inside the description instead of
+ * turning them into a price.
+ */
+const LV_STANDARD_ROW = new RegExp(
+  String.raw`^${H}*(\d{1,3}(?:[.\-]\d{1,3})*)${H}+([\d.][\d.,]*)${H}+(${UNIT_TOKEN})${H}+(\S.*?)${H}+(${MONEY_TOKEN})${H}*(?:€|eur|euro)?${H}+(${MONEY_TOKEN})${H}*(?:€|eur|euro)?${H}*$`,
+  'gim',
+);
+
+/**
  * Flat sequence inside a single visual line. Horizontal whitespace only:
  * with `\s` the match could span a line break and turn the transition between
  * two positions into a phantom row.
@@ -269,14 +293,35 @@ export function extractBillOfQuantitiesPositions(
     );
   }
 
-  const flatRegex = new RegExp(LV_FLAT_SEQUENCE_ROW.source, LV_FLAT_SEQUENCE_ROW.flags);
-  while ((match = flatRegex.exec(text)) !== null) {
-    // A currency states the money, never the measured unit — skip, keep scanning.
+  const standardRegex = new RegExp(LV_STANDARD_ROW.source, LV_STANDARD_ROW.flags);
+  while ((match = standardRegex.exec(text)) !== null) {
+    // A currency states the money, never the measured unit.
     if (isCurrencyToken(match[3] ?? '')) continue;
     pushPosition(
       positions,
-      buildPosition(`${positions.length + 1}`, match[1], match[3], match[2], match[4], match[5], sourcePage),
+      buildPosition(match[1], match[4], match[3], match[2], match[5], match[6], sourcePage),
     );
+  }
+
+  /**
+   * The flat fallback has no line anchor and would otherwise cut a phantom row
+   * out of the middle of a structured line ("… DN 100 einbauen 210,00 1.680,00"
+   * became DN / 100 / einbauen). A line that already opens with position
+   * number, quantity and unit is structured — it belongs to the anchored
+   * patterns above, never to this fallback.
+   */
+  const flatRegex = new RegExp(LV_FLAT_SEQUENCE_ROW.source, LV_FLAT_SEQUENCE_ROW.flags);
+  for (const line of text.split(/\r?\n/)) {
+    if (BLOCK_START_ROW.test(line)) continue;
+    flatRegex.lastIndex = 0;
+    while ((match = flatRegex.exec(line)) !== null) {
+      // A currency states the money, never the measured unit — skip, keep scanning.
+      if (isCurrencyToken(match[3] ?? '')) continue;
+      pushPosition(
+        positions,
+        buildPosition(`${positions.length + 1}`, match[1], match[3], match[2], match[4], match[5], sourcePage),
+      );
+    }
   }
 
   return positions;
