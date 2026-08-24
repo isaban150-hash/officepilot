@@ -3,6 +3,7 @@ import type {
   ContractOrderProposal,
   ContractPartyRole,
   DetectedContractClause,
+  DetectedContractParty,
   EnhancedDetectedOrderPosition,
   ExtractedContractField,
 } from '../types/documentIntelligence';
@@ -894,8 +895,21 @@ function buildPartyRows(
   fields: Record<string, ExtractedContractField>,
   context?: ContractWorkspaceSummaryContext,
 ): ContractWorkspacePartyRow[] {
-  const contact = readField(fields.ansprechpartner)?.value;
+  /**
+   * PARTY-CONTACT-SCOPING-01B — a contact belongs to one party, never to the
+   * document. This document-wide value used to be copied onto every row, so two
+   * parties showed the same Ansprechpartner. It now serves only as a fallback
+   * for a single recognised party, where there is nothing to confuse it with.
+   */
+  const documentWideContact = readField(fields.ansprechpartner)?.value;
   const parties = proposal.intelligence.parties ?? [];
+
+  /** "Industriestraße 27, 33689 Bielefeld" from the party's own block fields. */
+  const partyAddressLine = (party: DetectedContractParty): string | undefined => {
+    const cityLine = [party.zip, party.city].filter((part) => part?.trim()).join(' ').trim();
+    const line = [party.street?.trim(), cityLine].filter(Boolean).join(', ');
+    return line || party.address?.trim() || undefined;
+  };
   /**
    * SCAN-CONTRACT-PARTY-ROLE-01B — the truth about "our company" is the company
    * profile, never proposal.contractor: comparing a value against the very slot
@@ -925,7 +939,13 @@ function buildPartyRows(
     return opposite !== null && opposite.test(name);
   };
 
-  const addPartyRow = (role: ContractPartyRole, name: string | undefined, address?: string) => {
+  const addPartyRow = (
+    role: ContractPartyRole,
+    name: string | undefined,
+    address?: string,
+    /** The contact of exactly this party — undefined stays undefined. */
+    partyContact?: string,
+  ) => {
     const resolvedName = resolvePartyNameFromCandidates(name);
     if (!resolvedName || seenRoles.has(role)) return;
     if (carriesOppositeRoleWord(role, resolvedName)) return;
@@ -948,7 +968,7 @@ function buildPartyRows(
       roleLabelKey: PARTY_ROLE_LABEL_KEYS[role],
       name: resolvedName,
       address: address?.trim() || undefined,
-      contact,
+      contact: partyContact?.trim() || undefined,
       isOwnCompany: isOwnCompanyParty(role, resolvedName),
     });
     rowRolesByName.set(normalizedName, role);
@@ -959,7 +979,16 @@ function buildPartyRows(
   for (const party of parties) {
     const resolvedName = resolvePartyNameFromCandidates(party.name);
     if (!resolvedName) continue;
-    addPartyRow(party.role, resolvedName, party.address);
+    addPartyRow(party.role, resolvedName, partyAddressLine(party), party.contactPerson);
+  }
+
+  /**
+   * Only with a single recognised party can the document-wide Ansprechpartner
+   * be assigned without risk of putting it on the wrong side. From two parties
+   * on there is no safe assignment, and an empty field beats a wrong one.
+   */
+  if (rows.length === 1 && !rows[0]!.contact && documentWideContact?.trim()) {
+    rows[0]!.contact = documentWideContact.trim();
   }
 
   const hasSide = (roles: ReadonlySet<ContractPartyRole>) =>
@@ -1046,7 +1075,6 @@ function buildPartyRows(
       id: 'legacy-ag',
       roleLabelKey: 'documentIntelligence.party.auftraggeber',
       name: resolvePartyNameFromCandidates(ag.value) ?? ag.value,
-      contact,
     });
   }
   if (an) {
@@ -1056,6 +1084,10 @@ function buildPartyRows(
       name: resolvePartyNameFromCandidates(an.value) ?? an.value,
       isOwnCompany: isOwnCompanyParty('auftragnehmer', an.value),
     });
+  }
+  // Same rule as above: one party may take the document-wide contact, two may not.
+  if (rows.length === 1 && !rows[0]!.contact && documentWideContact?.trim()) {
+    rows[0]!.contact = documentWideContact.trim();
   }
   return rows;
 }

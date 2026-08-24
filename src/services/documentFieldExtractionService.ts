@@ -129,6 +129,53 @@ const LIEFERADRESSE_INLINE =
 const ADDRESS_PATTERN =
   /\b(?:baustellenadresse|adresse|straße|strasse)\s*[:]\s*(.+)$/i;
 const CITY_PATTERN = /\b(\d{5})\s+([A-ZÄÖÜ][\p{L}\-]+(?:\s+[A-ZÄÖÜ][\p{L}\-]+)*)/u;
+/**
+ * A street line standing on its own: name plus house number, nothing else.
+ * Deliberately shape-based rather than suffix-based, so "Westring 88" counts
+ * just like "Lindenweg 4" — the caller is responsible for handing in only lines
+ * that already belong to one address block.
+ */
+const STANDALONE_STREET_LINE =
+  /^([\p{Lu}][\p{L}.\-]*(?:\s+[\p{L}.\-]+){0,3}\s+\d{1,4}\s*[a-zA-Z]?)$/u;
+/** A PLZ/city line standing on its own, e.g. "33330 Gütersloh". */
+const STANDALONE_ZIP_CITY_LINE = /^(\d{5})\s+([A-ZÄÖÜ][\p{L}\-]+(?:\s+[A-ZÄÖÜ][\p{L}\-]+)*)$/u;
+
+/** Street, postal code and city as separate fields — none of them guessed. */
+export interface ExtractedPostalAddress {
+  street?: string;
+  zip?: string;
+  city?: string;
+}
+
+/**
+ * Reads a postal address out of a set of lines that are already known to belong
+ * together. Pure and reusable: it makes no assumption about who the address
+ * belongs to, so the caller must pass a block it has bound itself. Lines
+ * carrying a label ("Baustelle: …") are ignored — a labelled address describes
+ * something other than the block owner.
+ */
+export function extractPostalAddressFromLines(lines: readonly string[]): ExtractedPostalAddress {
+  const address: ExtractedPostalAddress = {};
+  for (const rawLine of lines) {
+    const line = rawLine.trim().replace(/\s+/g, ' ');
+    if (!line || line.includes(':')) continue;
+    if (!address.street) {
+      const street = STANDALONE_STREET_LINE.exec(line);
+      if (street) {
+        address.street = street[1].trim();
+        continue;
+      }
+    }
+    if (!address.zip) {
+      const cityLine = STANDALONE_ZIP_CITY_LINE.exec(line);
+      if (cityLine) {
+        address.zip = cityLine[1];
+        address.city = cityLine[2].trim();
+      }
+    }
+  }
+  return address;
+}
 const GEWERK_INLINE =
   /\b(?:gewerk|fachrichtung)\s*[:]\s*([^\n·]+?)(?=\s{2,}|\s*Pos\.|$)/i;
 /** Prefer specific trades over the umbrella "SHK" brand token in letterheads. */

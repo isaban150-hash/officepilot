@@ -8,6 +8,7 @@
 import { isOwnCompanyName } from '../../services/customerOwnCompanyGuard';
 import { getCustomerStoreSnapshot } from '../../services/customerStoreService';
 import type { CustomerDecision, CustomerInput } from '../../services/customerService';
+import type { BusinessStructuredParty } from '../../types/businessInterpretation';
 import type { Customer } from '../../types/models';
 import type { TranslationKey } from '../../i18n';
 import type { CustomerDecisionMode } from './CustomerDecisionChoice';
@@ -75,6 +76,32 @@ export function createEmptyCustomerExtraFields(): CustomerExtraFields {
     city: '',
     email: '',
     phone: '',
+  };
+}
+
+/**
+ * CUSTOMER-PREFILL-FROM-DOCUMENT-01B — turns the recognised counterparty into a
+ * prefill proposal for the "Neuer Kunde" form.
+ *
+ * The single input is the structured counterparty, independent of document
+ * type: no `kind === 'werkvertrag'` branch, no order proposal. Fields the
+ * document does not state (typically e-mail and phone) stay empty rather than
+ * being guessed, and no counterparty at all yields the same empty form as
+ * before.
+ */
+export function buildCustomerExtraFromParty(
+  party: BusinessStructuredParty | undefined,
+): CustomerExtraFields {
+  const extra = createEmptyCustomerExtraFields();
+  if (!party || party.relation !== 'counterparty') return extra;
+  return {
+    ...extra,
+    contactPerson: party.contactPerson?.trim() ?? '',
+    street: party.street?.trim() ?? '',
+    zip: party.zip?.trim() ?? '',
+    city: party.city?.trim() ?? '',
+    email: party.email?.trim() ?? '',
+    phone: party.phone?.trim() ?? '',
   };
 }
 

@@ -15,6 +15,7 @@ import {
 } from '../components/customer/CustomerDecisionChoice';
 import {
   buildCustomerDecisionFromUi,
+  buildCustomerExtraFromParty,
   buildCustomerInputFromUi,
   createEmptyCustomerExtraFields,
   isCustomerDecisionIncomplete,
@@ -22,6 +23,7 @@ import {
   resolveNewCustomerHintKey,
   type CustomerExtraFields,
 } from '../components/customer/customerDecisionUi';
+import { resolveCounterpartyFromWorkflow } from '../services/businessInterpretationFacts';
 import { getCustomerById } from '../services/customerStoreService';
 import type { CustomerDecision } from '../services/customerService';
 import type { Customer } from '../types/models';
@@ -501,8 +503,9 @@ export function EingangDetailPage() {
     setCustomerError(null);
     setCustomerOptions(loadSelectableCustomers());
     setNewCustomerName(resolveSuggestedCustomerName(item, workflow?.contractOrderProposal));
-    // Never prefilled from recognized document data — always empty.
-    setCustomerExtra(createEmptyCustomerExtraFields());
+    // CUSTOMER-PREFILL-FROM-DOCUMENT-01B — prefilled from the recognised
+    // counterparty, independent of document type. Empty when none was found.
+    setCustomerExtra(buildCustomerExtraFromParty(resolveCounterpartyFromWorkflow(workflow)));
     contractCreateLockRef.current = false;
     setIsCreatingContractOrder(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps

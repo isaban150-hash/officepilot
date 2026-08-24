@@ -273,6 +273,13 @@ export interface BusinessStructuredParty {
   role?: ContractPartyRole | 'unknown';
   relation: BusinessPartyRelation;
   contactPerson?: string;
+  /** Only ever the party's own address, taken from its own document block. */
+  street?: string;
+  zip?: string;
+  city?: string;
+  /** Contact data from this party's own block — never a document-wide value. */
+  email?: string;
+  phone?: string;
   certainty: BusinessFactCertainty;
   source: BusinessFactSource;
 }

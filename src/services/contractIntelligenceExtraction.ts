@@ -16,6 +16,7 @@ interface StructuredDocumentPageText extends DocumentPageText {
 }
 import { parseGermanMoney } from './documentAmountExtractionService';
 import { joinSectionText } from './documentSegmentationService';
+import { extractPostalAddressFromLines } from './documentFieldExtractionService';
 import {
   findFactByLabelAliases,
   type DocumentVisibleFact,
@@ -631,11 +632,19 @@ type LabelLineOptions = {
   maxLookahead?: number;
 };
 
-function extractValueFromLabelLines(
+/**
+ * CUSTOMER-PREFILL-PARTY-BLOCK-01D — a label hit together with the line it sat
+ * on. The line index is what binds a party to its own block; without it a
+ * caller would have to search the document again for the name, which finds the
+ * first mention (typically a heading) rather than the actual role line.
+ */
+type LabelLineHit = { value: string; lineIndex: number };
+
+function findValueInLabelLines(
   lines: string[],
   labels: string[],
   options: LabelLineOptions = {},
-): string | undefined {
+): LabelLineHit | undefined {
   const { requireSeparator = false, maxLookahead = 2 } = options;
 
   // Labels are given in priority order — an earlier label wins over an earlier line.
@@ -651,7 +660,7 @@ function extractValueFromLabelLines(
         // Party values are already isolated by the strict match; other fields
         // may share a line and must stop at the next label.
         const candidate = cleanValue(requireSeparator ? rest : cutAtNextFieldLabel(rest));
-        if (isUsableLabelValue(candidate)) return candidate;
+        if (isUsableLabelValue(candidate)) return { value: candidate, lineIndex: index };
         continue;
       }
 
@@ -662,13 +671,22 @@ function extractValueFromLabelLines(
         if (STRUCTURAL_LINE_PATTERN.test(nextLine)) break;
         if (LABEL_STOP_LINE_PATTERN.test(nextLine)) break;
         const candidate = cleanValue(nextLine);
-        if (isUsableLabelValue(candidate)) return candidate;
+        // The label line stays the anchor — the block belongs to the role.
+        if (isUsableLabelValue(candidate)) return { value: candidate, lineIndex: index };
         break;
       }
     }
   }
 
   return undefined;
+}
+
+function extractValueFromLabelLines(
+  lines: string[],
+  labels: string[],
+  options: LabelLineOptions = {},
+): string | undefined {
+  return findValueInLabelLines(lines, labels, options)?.value;
 }
 
 function extractFieldByLabelFallback(
@@ -932,16 +950,19 @@ function isSeparatorlessPartyValue(value: string): boolean {
   return isPlausiblePartyName(cleaned);
 }
 
-function extractPartyValueAtLineStart(lines: string[], labels: string[]): string | undefined {
+function extractPartyValueAtLineStart(
+  lines: string[],
+  labels: string[],
+): LabelLineHit | undefined {
   for (const label of labels) {
-    for (const line of lines) {
-      const rest = matchLabelAtLineStart(line, [label], false);
+    for (let index = 0; index < lines.length; index += 1) {
+      const rest = matchLabelAtLineStart(lines[index] ?? '', [label], false);
       // null = label not at line start; '' = standalone label (handled by the
       // separator-based pass with its look-ahead).
       if (!rest) continue;
       const candidate = cleanValue(rest);
       if (isUsableLabelValue(candidate) && isSeparatorlessPartyValue(candidate)) {
-        return candidate;
+        return { value: candidate, lineIndex: index };
       }
     }
   }
@@ -995,24 +1016,136 @@ export function extractContractPartiesFromVisibleFacts(
   return parties;
 }
 
+/** Any "Label: value" line — a new label ends the previous party's block. */
+const BLOCK_BOUNDARY_LABEL = /^[\p{L}][\p{L}\d .\-]{1,40}\s*:/u;
+/** Contact person inside a party block, e.g. "Geschäftsführer: Martin Voss". */
+const BLOCK_CONTACT_PERSON =
+  /^(?:Geschäftsführer(?:in)?|Inhaber(?:in)?|Ansprechpartner(?:in)?|Vertreten durch)\s*[:.]?\s*([\p{L}\-]{2,40}(?:\s+[\p{L}\-]{2,40}){0,3})$/iu;
+/** E-mail line inside a party block, e.g. "E-Mail: name@example.test". */
+const BLOCK_EMAIL =
+  /^(?:E[-\s]?Mail(?:[-\s]?Adresse)?|Mail)\s*[:.]?\s*([^\s@]+@[^\s@]+\.[A-Za-z]{2,})$/iu;
+/** Phone line inside a party block, e.g. "Telefon: 0521 555 0147". */
+const BLOCK_PHONE =
+  /^(?:Telefon(?:nummer)?|Tel\.?|Fon)\s*[:.]?\s*(\+?[\d][\d\s/().-]{4,29})$/iu;
+/**
+ * Emergency brake only — the real separation between two parties comes from
+ * `isPartyBlockBoundaryLine`, so this must never be the load-bearing guard.
+ */
+const MAX_PARTY_BLOCK_LINES = 6;
+
+/**
+ * Ends a party block. Built entirely from rules that already exist:
+ *
+ * - `PARTY_LABELS` via `matchLabelAtLineStart(…, false)` — the same match that
+ *   recognises "Auftragnehmer Cirmak Haustechnik GmbH" without a colon,
+ * - `INLINE_FIELD_BOUNDARY_PATTERN` at position 0 — a known field label such as
+ *   "Bauvorhaben" or "Baustelle" opening the line, again without a colon,
+ * - any generic "Label:" line.
+ *
+ * No document-type rule and no company name is involved.
+ */
+function isPartyBlockBoundaryLine(line: string): boolean {
+  if (PARTY_LABELS.some((rule) => matchLabelAtLineStart(line, rule.labels, false) !== null)) {
+    return true;
+  }
+  if (line.search(INLINE_FIELD_BOUNDARY_PATTERN) === 0) return true;
+  return BLOCK_BOUNDARY_LABEL.test(line);
+}
+
+/**
+ * Reads address and contact person out of the block below `anchorLine` — the
+ * very line the party was recognised on, never a re-search for its name.
+ *
+ * The block ends at the next role line, at the next known field label or at any
+ * "Label:" line. All three work without a colon, so two parties printed back to
+ * back without a blank line between them stay separated. Returns nothing at all
+ * when the block is empty: safety before completeness.
+ */
+/**
+ * `normalizeContractText` joins hyphenated words, which is right for wrapped
+ * syllables but destroys a hyphen inside a domain — "westfalen-projektbau"
+ * would silently become "westfalenprojektbau". A wrong address is worse than
+ * none, so the value is taken from the raw line that produced this one.
+ */
+function rawValueFor(line: string, rawLines: string[], pattern: RegExp): string | undefined {
+  for (const rawLine of rawLines) {
+    if (normalizeContractText(rawLine).replace(/\s+/g, ' ').trim() !== line) continue;
+    const match = pattern.exec(rawLine);
+    if (match?.[1]) return match[1].trim();
+  }
+  return undefined;
+}
+
+function resolvePartyBlockDetails(
+  lines: string[],
+  anchorLine: number,
+  /** Same lines before hyphen joining — only consulted for contact values. */
+  rawLines: string[] = [],
+): Pick<DetectedContractParty, 'street' | 'zip' | 'city' | 'contactPerson' | 'email' | 'phone'> {
+  if (anchorLine < 0) return {};
+
+  const addressLines: string[] = [];
+  let contactPerson: string | undefined;
+  let email: string | undefined;
+  let phone: string | undefined;
+  const limit = Math.min(lines.length, anchorLine + 1 + MAX_PARTY_BLOCK_LINES);
+  for (let index = anchorLine + 1; index < limit; index += 1) {
+    const line = lines[index];
+    if (!line) break;
+    /**
+     * Contact lines are recognised before the boundary check on purpose:
+     * "Ansprechpartner:", "E-Mail:" and "Telefon:" all look like a new label
+     * and would otherwise end the block they belong to. First hit wins in each
+     * case — a later line must never overwrite what the block already stated.
+     */
+    const contact = BLOCK_CONTACT_PERSON.exec(line);
+    if (contact) {
+      contactPerson ??= contact[1].trim();
+      continue;
+    }
+    const mail = BLOCK_EMAIL.exec(line);
+    if (mail) {
+      email ??= rawValueFor(line, rawLines, BLOCK_EMAIL) ?? mail[1].trim();
+      continue;
+    }
+    const tel = BLOCK_PHONE.exec(line);
+    if (tel) {
+      phone ??= tel[1].trim().replace(/\s+/g, ' ');
+      continue;
+    }
+    if (isPartyBlockBoundaryLine(line)) break;
+    addressLines.push(line);
+  }
+
+  const address = extractPostalAddressFromLines(addressLines);
+  return { ...address, contactPerson, email, phone };
+}
+
 export function extractContractParties(text: string): DetectedContractParty[] {
   const parties: DetectedContractParty[] = [];
   const seenRoles = new Set<ContractPartyRole>();
   const lines = splitNormalizedLines(text);
+  const rawLines = text
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map((line) => line.trim().replace(/\s+/g, ' '))
+    .filter((line) => line.length > 0);
 
   for (const rule of PARTY_LABELS) {
-    const value =
-      extractValueFromLabelLines(lines, rule.labels, { requireSeparator: true }) ??
+    const hit =
+      findValueInLabelLines(lines, rule.labels, { requireSeparator: true }) ??
       extractPartyValueAtLineStart(lines, rule.labels);
-    if (!value || !isPlausiblePartyName(value)) continue;
+    if (!hit || !isPlausiblePartyName(hit.value)) continue;
     if (seenRoles.has(rule.role)) continue;
     seenRoles.add(rule.role);
     parties.push({
       role: rule.role,
-      name: cleanValue(value),
+      name: cleanValue(hit.value),
+      // Anchored on the role line the party was found on — never re-searched.
+      ...resolvePartyBlockDetails(lines, hit.lineIndex, rawLines),
       status: 'confirmed',
       confidence: 'high',
-      sourceText: value,
+      sourceText: hit.value,
     });
   }
 
@@ -1024,6 +1157,9 @@ export function extractContractParties(text: string): DetectedContractParty[] {
       const fallbackName = cleanValue(match[1].trim().split('\n')[0].trim());
       if (!isPlausiblePartyName(fallbackName)) continue;
       seenRoles.add(rule.role);
+      // No block details here: this fallback only fires when the line-anchored
+      // pass found nothing, so there is no line that provably belongs to the
+      // party. Guessing one would be exactly the mistake the anchor prevents.
       parties.push({
         role: rule.role,
         name: fallbackName,

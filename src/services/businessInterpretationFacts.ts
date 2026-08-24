@@ -279,12 +279,22 @@ function buildParty(
   certainty: BusinessFactCertainty,
   role?: ContractPartyRole | 'unknown',
   contactPerson?: string,
+  /**
+   * Only ever the party's own block data — see resolvePartyBlockDetails.
+   * Address and contact travel together because they share the same block.
+   */
+  address?: Pick<BusinessStructuredParty, 'street' | 'zip' | 'city' | 'email' | 'phone'>,
 ): BusinessStructuredParty {
   return {
     name: name.trim(),
     role,
     relation,
     contactPerson,
+    street: address?.street,
+    zip: address?.zip,
+    city: address?.city,
+    email: address?.email,
+    phone: address?.phone,
     certainty,
     source,
   };
@@ -331,6 +341,14 @@ function buildPartiesBlock(
       'contractIntelligence',
       fieldCertainty(party.status, party.confidence),
       party.role,
+      party.contactPerson,
+      {
+        street: party.street,
+        zip: party.zip,
+        city: party.city,
+        email: party.email,
+        phone: party.phone,
+      },
     );
     if (relation === 'counterparty') {
       counterpartyCandidates.push(structured);
@@ -1042,6 +1060,30 @@ function buildSignatures(workflow: WorkflowCore): BusinessStructuredFacts['signa
     certainty: 'uncertain',
     source: 'recognizedData',
   };
+}
+
+/**
+ * CUSTOMER-PREFILL-FROM-DOCUMENT-01B — the recognised counterparty on its own.
+ *
+ * Reuses `buildPartiesBlock` unchanged, so the own-company exclusion and the
+ * relation mapping are exactly the ones the full fact set uses. Offered
+ * separately because a caller that only needs the counterparty must not have to
+ * supply an event type it does not know.
+ */
+export function resolveCounterpartyFromWorkflow(
+  workflow: WorkflowCore | null | undefined,
+  linkedVorgang?: Vorgang | null,
+  vorgangConfirmed?: boolean,
+): BusinessStructuredParty | undefined {
+  if (!workflow) return undefined;
+  const parties = buildPartiesBlock(
+    workflow,
+    linkedVorgang,
+    [],
+    resolveFamily(workflow),
+    vorgangConfirmed === true,
+  );
+  return parties.counterparty ?? undefined;
 }
 
 export interface BuildStructuredBusinessFactsInput {

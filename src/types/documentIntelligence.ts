@@ -123,6 +123,17 @@ export interface DetectedContractParty {
   role: ContractPartyRole;
   name: string;
   address?: string;
+  /**
+   * Street, postal code, city and contact person are only set when they were
+   * found inside this party's own block in the document. A document-wide
+   * address never lands here — safety before completeness.
+   */
+  street?: string;
+  zip?: string;
+  city?: string;
+  contactPerson?: string;
+  email?: string;
+  phone?: string;
   status: ExtractedFieldStatus;
   confidence: FieldConfidenceLevel;
   sourceText?: string;
