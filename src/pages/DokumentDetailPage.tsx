@@ -284,12 +284,14 @@ export function DokumentDetailPage() {
             ))}
           </div>
         )}
-        {document.recognizedText && (
-          <DataRow
-            label={translate('document.fieldRecognizedText')}
-            value={document.recognizedText}
-          />
-        )}
+        {/*
+          Der erkannte Rohtext wird hier bewusst nicht mehr ausgegeben: Er war
+          für den Nutzer keine Information, sondern eine Wand, durch die er bis
+          zu den Aktionen scrollen musste. Der Text bleibt vollständig auf der
+          Entität — Klassifikation, Suche, Contract Intelligence und die freien
+          Dokumentfragen lesen ihn dort. Korrigieren lässt er sich weiterhin im
+          Bearbeiten-Modus (DocumentForm).
+        */}
       </Card>
 
       <DocumentLifecycleCard documentId={document.id} revision={detailRevision} />
