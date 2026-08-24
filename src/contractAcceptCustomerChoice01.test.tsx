@@ -684,12 +684,14 @@ describe('CUSTOMER-FACHOBJEKT-04C', () => {
 
   it('Fall O — 05C: vollständige Neuanlage über die Oberfläche', async () => {
     const item = seedItem();
-    // Der vorbefüllte Name stammt aus dem echten Proposal, nicht aus der Fixture.
-    const proposal = proposalFor(item);
-    const expectedName = resolveSuggestedCustomerName(item, proposal);
-    expect(expectedName).not.toBe('');
-    expect(expectedName).not.toBe(OWN);
-    expect(expectedName).toBe('Müller Bau GmbH');
+    /**
+     * CUSTOMER-PREFILL-NAME-HANDOFF-02D — die Fixture nennt zwei Parteien
+     * (Müller Bau als Auftraggeber, Mustermann Sanitär als Subunternehmer), von
+     * denen keine die eigene Firma ist. Ohne sicher bestimmte Gegenpartei bleibt
+     * der Vorschlag jetzt bewusst leer, statt rollenbasiert zu raten — der
+     * Nutzer trägt den Namen wie die übrigen Felder selbst ein.
+     */
+    const expectedName = 'Müller Bau GmbH';
 
     const acceptSpy = vi.spyOn(contractOrderAcceptService, 'acceptContractOrderFromProposal');
     const mount = await mountDetailPage(item.id);
@@ -700,13 +702,14 @@ describe('CUSTOMER-FACHOBJEKT-04C', () => {
     for (const field of EXTRA_FIELDS) {
       expect(extraFieldValue(mount, field), field).toBe('');
     }
-    // Der Namensvorschlag der Produktion bleibt unverändert erhalten.
+    // Und ebenso wenig ein geratener Name.
     expect(
       (mount.container.querySelector(
         '[data-testid="contract-customer-name-input"]',
       ) as HTMLInputElement).value,
-    ).toBe(expectedName);
+    ).toBe('');
 
+    await typeInto(mount, 'contract-customer-name-input', expectedName);
     await fillExtraFields(mount);
     expect(acceptSpy).not.toHaveBeenCalled();
     expect(getCustomerStoreSnapshot()).toHaveLength(0);
@@ -755,6 +758,8 @@ describe('CUSTOMER-FACHOBJEKT-04C', () => {
     const mount = await mountDetailPage(item.id);
 
     await click(mount.container.querySelector('[data-testid="customer-decision-new"] input'));
+    // 02D: Ohne sichere Gegenpartei gibt es keinen Namensvorschlag mehr.
+    await typeInto(mount, 'contract-customer-name-input', 'Müller Bau GmbH');
     await fillExtraFields(mount);
 
     const primary = mount.container.querySelector(

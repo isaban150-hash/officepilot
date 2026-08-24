@@ -15,12 +15,15 @@ import type {
 import type {
   ContractFamily,
   ContractPartyRole,
+  DetectedContractParty,
   ExtractedContractField,
   ExtractedFieldStatus,
   FieldConfidenceLevel,
 } from '../types/documentIntelligence';
 import type { InboxItem, Vorgang, WorkflowResult } from '../types/models';
 import { getCompanyProfile } from './companyProfileService';
+import { isOwnCompanyName } from './customerOwnCompanyGuard';
+import { findOwnCompanyParty, isOwnCompanyParty } from './ownCompanyPartyResolver';
 
 type WorkflowCore = Omit<WorkflowResult, 'businessInterpretation'>;
 
@@ -1063,12 +1066,20 @@ function buildSignatures(workflow: WorkflowCore): BusinessStructuredFacts['signa
 }
 
 /**
- * CUSTOMER-PREFILL-FROM-DOCUMENT-01B — the recognised counterparty on its own.
+ * CUSTOMER-PREFILL-COUNTERPARTY-IDENTITY-02B — the counterparty for the customer
+ * form, determined by identity rather than by contractual role.
  *
- * Reuses `buildPartiesBlock` unchanged, so the own-company exclusion and the
- * relation mapping are exactly the ones the full fact set uses. Offered
- * separately because a caller that only needs the counterparty must not have to
- * supply an event type it does not know.
+ * `mapRoleRelation` reads a directed-work contract from the perspective of the
+ * commissioned trade: Auftragnehmer is us, Auftraggeber is the customer. That
+ * holds for the common case and stays untouched for the fact set and its
+ * conflict messages — but it is not generally true. Whoever commissions a
+ * subcontractor themselves would otherwise see their own address proposed as a
+ * new customer.
+ *
+ * So the own company is identified first, from its own data, and the remaining
+ * party is the counterparty — whichever role either of them happens to hold.
+ * Where that cannot be settled, no proposal is made at all: an empty form beats
+ * a wrong one, and the user confirms every customer either way.
  */
 export function resolveCounterpartyFromWorkflow(
   workflow: WorkflowCore | null | undefined,
@@ -1076,14 +1087,74 @@ export function resolveCounterpartyFromWorkflow(
   vorgangConfirmed?: boolean,
 ): BusinessStructuredParty | undefined {
   if (!workflow) return undefined;
-  const parties = buildPartiesBlock(
-    workflow,
-    linkedVorgang,
-    [],
-    resolveFamily(workflow),
-    vorgangConfirmed === true,
+  const family = resolveFamily(workflow);
+  const block = buildPartiesBlock(workflow, linkedVorgang, [], family, vorgangConfirmed === true);
+  const profile = getCompanyProfile();
+
+  const intelligence =
+    workflow.contractIntelligence ?? workflow.contractOrderProposal?.intelligence ?? null;
+  const detected = (intelligence?.parties ?? []).filter(
+    (party) => party.name.trim() && isMeaningfulPartyName(party.name),
   );
-  return parties.counterparty ?? undefined;
+
+  /** Every party the block produced, so no second buildParty mapping is needed. */
+  const structured = [block.counterparty, block.ownCompany, ...block.others].filter(
+    (party): party is BusinessStructuredParty => Boolean(party),
+  );
+  const asCounterparty = (party: DetectedContractParty): BusinessStructuredParty | undefined => {
+    const match = structured.find(
+      (candidate) => normalizeName(candidate.name) === normalizeName(party.name),
+    );
+    // The relation came from the role mapping; identity has just corrected it.
+    if (match) return { ...match, relation: 'counterparty' };
+    // selectPreferredParty keeps only one candidate per side, so a party can be
+    // absent from the block — build it here with the very same mapping.
+    return buildParty(
+      party.name,
+      'counterparty',
+      'contractIntelligence',
+      fieldCertainty(party.status, party.confidence),
+      party.role,
+      party.contactPerson,
+      {
+        street: party.street,
+        zip: party.zip,
+        city: party.city,
+        email: party.email,
+        phone: party.phone,
+      },
+    );
+  };
+
+  const ownParty = findOwnCompanyParty(detected, profile);
+
+  if (detected.length >= 2) {
+    // Without a securely identified own company there is no safe direction.
+    if (!ownParty) return undefined;
+
+    const external = detected.filter(
+      (party) => party !== ownParty && !isOwnCompanyParty(party, profile),
+    );
+    if (external.length === 1) return asCounterparty(external[0]!);
+    if (external.length === 0) return undefined;
+
+    // Several external parties: only an explicit customer candidate decides.
+    const proposedCustomer = workflow.contractOrderProposal?.customer?.trim();
+    if (!proposedCustomer) return undefined;
+    const named = external.filter(
+      (party) => normalizeName(party.name) === normalizeName(proposedCustomer),
+    );
+    return named.length === 1 ? asCounterparty(named[0]!) : undefined;
+  }
+
+  // One party only, and it is us — nothing to propose.
+  if (detected.length === 1 && ownParty) return undefined;
+
+  // Otherwise the established candidates stand, but never the own company.
+  const counterparty = block.counterparty;
+  if (!counterparty) return undefined;
+  if (isOwnCompanyName(counterparty.name, profile.companyName)) return undefined;
+  return counterparty;
 }
 
 export interface BuildStructuredBusinessFactsInput {

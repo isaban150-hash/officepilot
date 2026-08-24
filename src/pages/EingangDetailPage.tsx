@@ -24,6 +24,7 @@ import {
   type CustomerExtraFields,
 } from '../components/customer/customerDecisionUi';
 import { resolveCounterpartyFromWorkflow } from '../services/businessInterpretationFacts';
+import type { BusinessStructuredParty } from '../types/businessInterpretation';
 import { getCustomerById } from '../services/customerStoreService';
 import type { CustomerDecision } from '../services/customerService';
 import type { Customer } from '../types/models';
@@ -227,11 +228,27 @@ export function buildContractDecisionResetKey(
 /**
  * CUSTOMER-FACHOBJEKT-04C — name suggestion for "new customer".
  * Pure, own-company filtered, never an automatic link.
+ *
+ * CUSTOMER-PREFILL-NAME-HANDOFF-02D — the securely identified counterparty wins.
+ * The candidate chain below is role-based: on a contract the user commissioned
+ * themselves, `proposal.customer` is the own company. Name and the six address
+ * fields must therefore never come from different parties.
  */
 export function resolveSuggestedCustomerName(
   item: Pick<InboxItem, 'recognizedData' | 'sender'> | null | undefined,
   proposal: ContractOrderProposal | null | undefined,
+  /** The counterparty the identity-based resolver settled on, when it did. */
+  counterparty?: BusinessStructuredParty,
+  /**
+   * Only consulted without a counterparty. False for a document whose parties
+   * were recognised but could not be told apart — there an empty field beats a
+   * role-based guess that may well be the own company.
+   */
+  allowCandidateFallback = true,
 ): string {
+  const fromCounterparty = counterparty?.name?.trim();
+  if (fromCounterparty) return fromCounterparty;
+  if (!allowCandidateFallback) return '';
   return pickExternalCustomerName([
     proposal?.customer,
     item?.recognizedData?.Auftraggeber,
@@ -502,10 +519,23 @@ export function EingangDetailPage() {
     setSelectedCustomerId(null);
     setCustomerError(null);
     setCustomerOptions(loadSelectableCustomers());
-    setNewCustomerName(resolveSuggestedCustomerName(item, workflow?.contractOrderProposal));
-    // CUSTOMER-PREFILL-FROM-DOCUMENT-01B — prefilled from the recognised
-    // counterparty, independent of document type. Empty when none was found.
-    setCustomerExtra(buildCustomerExtraFromParty(resolveCounterpartyFromWorkflow(workflow)));
+    /**
+     * CUSTOMER-PREFILL-NAME-HANDOFF-02D — one counterparty per effect run feeds
+     * both setters, so the name can never belong to a different party than the
+     * address. Where several parties were recognised but none could be
+     * identified as the own company, the form stays empty on both sides.
+     */
+    const counterparty = resolveCounterpartyFromWorkflow(workflow);
+    const recognisedParties = workflow?.contractIntelligence?.parties ?? [];
+    setNewCustomerName(
+      resolveSuggestedCustomerName(
+        item,
+        workflow?.contractOrderProposal,
+        counterparty,
+        recognisedParties.length < 2,
+      ),
+    );
+    setCustomerExtra(buildCustomerExtraFromParty(counterparty));
     contractCreateLockRef.current = false;
     setIsCreatingContractOrder(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
