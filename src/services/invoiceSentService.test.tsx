@@ -338,3 +338,186 @@ describe('INVOICE-PILOT-MARK-SENT-01 — UI', () => {
     });
   });
 });
+
+/**
+ * OFFICEPILOT-INVOICE-SENT-PERSIST-01C — Erfolg heißt dauerhaft geschrieben.
+ *
+ * Auf dem Realgerät bestätigte der Nutzer den Versand, und die Rechnung stand
+ * danach weiterhin auf „vorbereitet“ — in der Detailansicht wie im
+ * Rechnungsreiter. Ursache war kein Rechenfehler, sondern ein Vertragsbruch:
+ * Die Mutation meldete Erfolg, ohne zu prüfen, ob der Schreibvorgang die
+ * Persistenz erreicht hat. Was nur im Arbeitsspeicher stand, war nach dem
+ * nächsten Rehydrieren wieder weg.
+ *
+ * Ab hier gilt: Erfolg wird nur gemeldet, wenn beides gelang.
+ */
+describe('OFFICEPILOT-INVOICE-SENT-PERSIST-01C', () => {
+  it('A: Erfolg ist im Store nachweisbar, nicht nur im Rückgabewert', () => {
+    const result = markInvoiceAsSent('v-test-1', 'inv-sent-1', {
+      sentAt: '2026-06-05',
+      sentVia: 'email',
+    });
+    expect(result.ok).toBe(true);
+
+    // Der Store ist die Wahrheit — nicht das zurückgegebene Objekt.
+    const stored = getVorgangInvoice('v-test-1', 'inv-sent-1')!;
+    expect(stored.status).toBe('versendet');
+    expect(stored.sentAt).toBe('2026-06-05');
+    expect(stored.sentVia).toBe('email');
+  });
+
+  it('B: bei Persistenzfehler kein Scheinerfolg und keine Teilmutation', () => {
+    vi.spyOn(persistenceService, 'persistAll').mockReturnValue({ success: false });
+
+    const result = markInvoiceAsSent('v-test-1', 'inv-sent-1', {
+      sentAt: '2026-06-05',
+      sentVia: 'email',
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toBe('persist_failed');
+
+    // Nichts darf zurückbleiben: der Versand hat nicht stattgefunden.
+    const stored = getVorgangInvoice('v-test-1', 'inv-sent-1')!;
+    expect(stored.status).toBe('vorbereitet');
+    expect(stored.sentAt).toBeUndefined();
+    expect(stored.sentVia).toBeUndefined();
+  });
+
+  it('C: nach erfolgreichem Versand übersteht der Status das Rehydrieren', () => {
+    expect(
+      markInvoiceAsSent('v-test-1', 'inv-sent-1', { sentAt: '2026-06-05', sentVia: 'email' }).ok,
+    ).toBe(true);
+
+    // Genau das, was mobiles Safari beim Wiederaufnehmen tut.
+    const snapshot = persistenceService.buildPersistedStateSnapshot();
+    hydrateVorgangStore(snapshot.vorgaenge);
+
+    const stored = getVorgangInvoice('v-test-1', 'inv-sent-1')!;
+    expect(stored.status).toBe('versendet');
+    expect(stored.sentAt).toBe('2026-06-05');
+    expect(stored.sentVia).toBe('email');
+  });
+
+  it('D: lokale Rechnungsfelder überleben die Versandmutation unverändert', () => {
+    hydrateVorgangStore([
+      createTestVorgang({
+        invoices: [
+          createPreparedInvoice({
+            archiveDocumentId: 'doc-archive-1',
+            paymentStatus: 'teilbezahlt',
+            payments: [
+              { id: 'pay-1', date: '2026-06-02', amount: 50, method: 'ueberweisung' },
+            ],
+          }),
+        ],
+      }),
+    ]);
+
+    expect(
+      markInvoiceAsSent('v-test-1', 'inv-sent-1', { sentAt: '2026-06-05', sentVia: 'email' }).ok,
+    ).toBe(true);
+
+    const stored = getVorgangInvoice('v-test-1', 'inv-sent-1')!;
+    expect(stored.status).toBe('versendet');
+    expect(stored.archiveDocumentId).toBe('doc-archive-1');
+    expect(stored.paymentStatus).toBe('teilbezahlt');
+    expect(stored.payments).toHaveLength(1);
+    expect(stored.payments?.[0]?.amount).toBe(50);
+    expect(stored.customerSnapshot?.name).toBe('Kunde Test');
+    expect(stored.number).toBe('2026-0500');
+    expect(stored.subtotal).toBe(100);
+  });
+
+  it('E: eine versendete Rechnung fällt nicht auf vorbereitet zurück', () => {
+    hydrateVorgangStore([
+      createTestVorgang({
+        invoices: [
+          createPreparedInvoice({ status: 'versendet', sentAt: '2026-06-04', sentVia: 'post' }),
+        ],
+      }),
+    ]);
+
+    const result = markInvoiceAsSent('v-test-1', 'inv-sent-1', {
+      sentAt: '2026-06-05',
+      sentVia: 'email',
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toBe('already_sent');
+
+    const stored = getVorgangInvoice('v-test-1', 'inv-sent-1')!;
+    expect(stored.status).toBe('versendet');
+    expect(stored.sentVia).toBe('post');
+  });
+
+  it('F: bei Persistenzfehler meldet die Oberfläche den Fehler und nichts wird übernommen', async () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const updates: VorgangInvoice[] = [];
+    const invoice = getVorgangInvoice('v-test-1', 'inv-sent-1')!;
+
+    await act(async () => {
+      root.render(
+        createElement(
+          MemoryRouter,
+          null,
+          createElement(
+            AppProvider,
+            { initialSetup: { ...DEFAULT_SETUP, setupComplete: true } },
+            createElement(InvoiceSentPanel, {
+              vorgangId: 'v-test-1',
+              invoice,
+              translate: (key: string) => key,
+              onUpdated: (next) => {
+                updates.push(next);
+              },
+            }),
+          ),
+        ),
+      );
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      (container.querySelector('[data-testid="invoice-sent-mark"]') as HTMLButtonElement).click();
+    });
+    await act(async () => {
+      (
+        container.querySelector('[data-testid="invoice-sent-continue"]') as HTMLButtonElement
+      ).click();
+    });
+
+    // Confirm-first: bis hierher ist nichts geschehen.
+    expect(container.querySelector('[data-testid="invoice-sent-confirm"]')).not.toBeNull();
+    expect(getVorgangInvoice('v-test-1', 'inv-sent-1')?.status).toBe('vorbereitet');
+
+    vi.spyOn(persistenceService, 'persistAll').mockReturnValue({ success: false });
+
+    await act(async () => {
+      (
+        container.querySelector(
+          '[data-testid="invoice-sent-confirm-submit"]',
+        ) as HTMLButtonElement
+      ).click();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    // Kein Scheinerfolg nach oben, keine Statusänderung, aber eine Erklärung.
+    expect(updates).toHaveLength(0);
+    expect(getVorgangInvoice('v-test-1', 'inv-sent-1')?.status).toBe('vorbereitet');
+    expect(container.querySelector('[data-testid="invoice-sent-error"]')).not.toBeNull();
+    // Der Nutzer bleibt stehen und kann es erneut versuchen.
+    expect(container.querySelector('[data-testid="invoice-sent-confirm"]')).not.toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+});

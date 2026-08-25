@@ -1491,6 +1491,24 @@ export function updateInvoiceArchiveDocumentId(
  * Controlled update of invoice send status / send metadata.
  * Callers must enforce business rules (mark vs correct).
  */
+/** INVOICE-SENT-PERSIST-01C — warum eine Versandmutation scheitern konnte. */
+export type UpdateInvoiceSentFieldsResult =
+  | { ok: true; invoice: VorgangInvoice }
+  | { ok: false; reason: 'not_found' | 'persist_failed' };
+
+/**
+ * INVOICE-SENT-PERSIST-01C — Erfolg heißt: geschrieben **und** persistiert.
+ *
+ * Vorher wurde der Vorgang über `updateVorgangInStore` gespeichert, dessen
+ * `persistAll()`-Ergebnis niemand auswertete — die aktualisierte Rechnung ging
+ * auch dann zurück, wenn nichts dauerhaft geschrieben wurde. Auf dem Gerät
+ * überlebte der Versandstatus dadurch das nächste Rehydrieren nicht.
+ *
+ * Deshalb läuft die Mutation jetzt über `commitVorgangMutation`: ein
+ * Commit-Punkt, und bei Persistenzfehler wird der vorherige Zustand
+ * wiederhergestellt. Nur `status`, `sentAt`, `sentVia` und `sentNote` werden
+ * angefasst; alles andere an der Rechnung bleibt durch den Spread erhalten.
+ */
 export function updateInvoiceSentFields(
   vorgangId: string,
   invoiceId: string,
@@ -1500,35 +1518,48 @@ export function updateInvoiceSentFields(
     sentVia: NonNullable<VorgangInvoice['sentVia']>;
     sentNote?: string;
   },
-): VorgangInvoice | null {
-  const index = vorgaenge.findIndex((v) => v.id === vorgangId);
-  if (index === -1) return null;
+): UpdateInvoiceSentFieldsResult {
+  let updatedInvoice: VorgangInvoice | null = null;
 
-  const vorgang = cloneVorgang(vorgaenge[index]);
-  const invoiceIndex = vorgang.invoices.findIndex((item) => item.id === invoiceId);
-  if (invoiceIndex === -1) return null;
+  const committed = commitVorgangMutation(vorgangId, (current) => {
+    const invoiceIndex = current.invoices.findIndex((item) => item.id === invoiceId);
+    if (invoiceIndex === -1) return { errorKey: 'invoice.notFound' };
 
-  const current = vorgang.invoices[invoiceIndex];
-  const note = fields.sentNote?.trim() ?? '';
-  const updatedInvoice: VorgangInvoice = {
-    ...current,
-    status: fields.status,
-    sentAt: fields.sentAt,
-    sentVia: fields.sentVia,
-  };
-  if (note) {
-    updatedInvoice.sentNote = note;
-  } else {
-    delete updatedInvoice.sentNote;
+    const note = fields.sentNote?.trim() ?? '';
+    const next: VorgangInvoice = {
+      ...current.invoices[invoiceIndex]!,
+      status: fields.status,
+      sentAt: fields.sentAt,
+      sentVia: fields.sentVia,
+    };
+    if (note) {
+      next.sentNote = note;
+    } else {
+      delete next.sentNote;
+    }
+
+    updatedInvoice = next;
+    return {
+      ...current,
+      invoices: [
+        ...current.invoices.slice(0, invoiceIndex),
+        next,
+        ...current.invoices.slice(invoiceIndex + 1),
+      ],
+    };
+  });
+
+  if (!committed.ok) {
+    return {
+      ok: false,
+      reason:
+        committed.errorKey === 'vorgang.notFound' || committed.errorKey === 'invoice.notFound'
+          ? 'not_found'
+          : 'persist_failed',
+    };
   }
-
-  vorgang.invoices = [
-    ...vorgang.invoices.slice(0, invoiceIndex),
-    updatedInvoice,
-    ...vorgang.invoices.slice(invoiceIndex + 1),
-  ];
-  updateVorgangInStore(vorgang);
-  return cloneVorgangInvoice(updatedInvoice);
+  if (!updatedInvoice) return { ok: false, reason: 'not_found' };
+  return { ok: true, invoice: cloneVorgangInvoice(updatedInvoice) };
 }
 
 function updateInvoicePaymentFields(

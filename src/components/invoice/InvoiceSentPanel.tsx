@@ -9,7 +9,6 @@ import {
   type InvoiceSentInput,
 } from '../../services/invoiceSentService';
 import { isSentDateAfterPaymentDue } from '../../services/invoicePaymentService';
-import { getLastPersistSuccess } from '../../services/persistenceService';
 import type { InvoiceSentVia, VorgangInvoice } from '../../types/models';
 import type { TranslationKey } from '../../i18n';
 
@@ -82,17 +81,22 @@ export function InvoiceSentPanel({ vorgangId, invoice, translate, onUpdated }: P
       } else if (result.reason === 'not_prepared' || result.reason === 'already_sent') {
         setErrorKey('invoice.sent.error.notPrepared');
       } else {
+        /*
+         * INVOICE-SENT-PERSIST-01C — `persist_failed` kommt jetzt aus dem
+         * Mutationsvertrag selbst. Der Dialog bleibt offen, der Status bleibt
+         * vorbereitet, und der Nutzer kann es unmittelbar erneut versuchen.
+         */
         setErrorKey('invoice.sent.error.failed');
       }
       return;
     }
 
+    /*
+     * Erst hier — der Erfolg ist dauerhaft geschrieben. Vorher wurde `onUpdated`
+     * bereits vor der Persistenzprüfung aufgerufen und die Oberfläche zeigte
+     * einen Versand, den es nach dem nächsten Rehydrieren nicht mehr gab.
+     */
     onUpdated(result.invoice);
-    if (!getLastPersistSuccess()) {
-      setErrorKey('persist.failed.userAction');
-      setMode('closed');
-      return;
-    }
     closeAll();
   };
 

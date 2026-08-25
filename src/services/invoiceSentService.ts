@@ -27,7 +27,9 @@ export type InvoiceSentMutationResult =
         | 'not_sent'
         | 'invalid_date'
         | 'invalid_via'
-        | 'update_failed';
+        | 'update_failed'
+        /** INVOICE-SENT-PERSIST-01C — im Speicher geändert, aber nicht dauerhaft. */
+        | 'persist_failed';
     };
 
 function isIsoDate(value: string): boolean {
@@ -97,10 +99,10 @@ export function markInvoiceAsSent(
     sentVia: parsed.value.sentVia,
     sentNote: parsed.value.sentNote,
   });
-  if (!updated) {
-    return { ok: false, reason: 'update_failed' };
+  if (!updated.ok) {
+    return { ok: false, reason: updated.reason === 'persist_failed' ? 'persist_failed' : 'update_failed' };
   }
-  return { ok: true, invoice: updated };
+  return { ok: true, invoice: updated.invoice };
 }
 
 /**
@@ -131,10 +133,10 @@ export function updateInvoiceSentDetails(
     sentVia: parsed.value.sentVia,
     sentNote: parsed.value.sentNote,
   });
-  if (!updated) {
-    return { ok: false, reason: 'update_failed' };
+  if (!updated.ok) {
+    return { ok: false, reason: updated.reason === 'persist_failed' ? 'persist_failed' : 'update_failed' };
   }
-  return { ok: true, invoice: updated };
+  return { ok: true, invoice: updated.invoice };
 }
 
 export function formatInvoiceSentViaLabel(
