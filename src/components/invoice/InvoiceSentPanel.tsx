@@ -4,7 +4,9 @@ import { Card, CardTitle } from '../ui/Card';
 import {
   formatInvoiceSentViaLabel,
   INVOICE_SENT_VIA_OPTIONS,
+  isInvoiceSentCloudSyncSilent,
   markInvoiceAsSent,
+  syncInvoiceSentToCloud,
   updateInvoiceSentDetails,
   type InvoiceSentInput,
 } from '../../services/invoiceSentService';
@@ -60,6 +62,8 @@ export function InvoiceSentPanel({ vorgangId, invoice, translate, onUpdated }: P
     setErrorKey(null);
   };
 
+  const [cloudWarning, setCloudWarning] = useState(false);
+
   const buildInput = (): InvoiceSentInput => ({
     sentAt,
     sentVia,
@@ -98,6 +102,23 @@ export function InvoiceSentPanel({ vorgangId, invoice, translate, onUpdated }: P
      */
     onUpdated(result.invoice);
     closeAll();
+
+    /*
+     * INVOICE-SENT-CLOUD-DURABILITY-04B1 — der lokale Stand steht bereits fest
+     * und wird nicht zurückgenommen. Gelingt die geräteübergreifende Sicherung
+     * nicht, darf die Oberfläche das aber nicht verschweigen: Auf einem anderen
+     * Gerät stünde die Rechnung sonst weiterhin auf „vorbereitet“.
+     */
+    void syncInvoiceSentToCloud(vorgangId, invoice.id)
+      .then((outcome) => {
+        setCloudWarning(!isInvoiceSentCloudSyncSilent(outcome));
+      })
+      /*
+       * 04B1S — doppelt abgesichert: Der Dienst ist zwar total, aber ein
+       * unbekannter technischer Fehler darf unter keinen Umständen als Erfolg
+       * durchgehen. Lieber eine Warnung zu viel als ein stiller Verlust.
+       */
+      .catch(() => setCloudWarning(true));
   };
 
   const showForm = mode === 'mark' || mode === 'correct';
@@ -113,6 +134,12 @@ export function InvoiceSentPanel({ vorgangId, invoice, translate, onUpdated }: P
         <p className="invoice-sent-panel__hint" data-testid="invoice-sent-hint">
           {translate('invoice.sent.hint')}
         </p>
+
+        {cloudWarning ? (
+          <p className="invoice-sent-panel__error" data-testid="invoice-sent-cloud-warning">
+            {translate('invoice.sent.cloudOnlyLocal')}
+          </p>
+        ) : null}
 
         {showLateSentHint && isSent && mode === 'closed' ? (
           <p className="invoice-sent-panel__late-due" data-testid="invoice-sent-late-due">

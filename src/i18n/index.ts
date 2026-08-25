@@ -2154,6 +2154,8 @@ const deLegacy = {
     'Hier halten Sie fest, dass die Rechnung an den Kunden übergeben wurde. OfficePilot verschickt nichts automatisch.',
   'invoice.sent.dueAlreadyPassed':
     'Das Versanddatum liegt nach dem Zahlungsziel ({due}). Die Fälligkeit wird nicht automatisch angepasst.',
+  'invoice.sent.cloudOnlyLocal':
+    'Der Versandstatus ist auf diesem Gerät gespeichert, konnte aber nicht in die Cloud übertragen werden. Auf anderen Geräten erscheint die Rechnung vorerst weiterhin als vorbereitet.',
   'invoice.sent.notSentYet': 'Noch nicht als versendet markiert.',
   'invoice.sent.mark': 'Als versendet markieren',
   'invoice.sent.correct': 'Versandangaben korrigieren',

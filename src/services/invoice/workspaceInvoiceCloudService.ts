@@ -488,6 +488,117 @@ export async function rpcPullWorkspaceInvoiceRows(
   }
 }
 
+/** INVOICE-SENT-CLOUD-DURABILITY-04B1 — die vom Nutzer bestätigten Versandangaben. */
+export interface WorkspaceInvoiceSentUpdateInput {
+  workspaceId: string;
+  /** Stabile Client-Kennung — nie die Rechnungsnummer. */
+  clientInvoiceId: string;
+  sentAt: string;
+  sentVia: NonNullable<VorgangInvoice['sentVia']>;
+  sentNote?: string;
+}
+
+/**
+ * INVOICE-SENT-CLOUD-DURABILITY-04B1 — schreibt die Versandwahrheit dauerhaft.
+ *
+ * Übertragen werden ausschließlich die drei bestätigten Versandfelder. Weder
+ * Positionen noch Beträge, Nummer, Typ oder Datum verlassen den Client — der
+ * Server kann sie deshalb nicht überschreiben, und der Finalisierungs-Fingerprint
+ * bleibt unberührt. Zahlungen sind nicht Teil dieses Wegs.
+ */
+export async function rpcUpdateWorkspaceInvoiceSent(
+  input: WorkspaceInvoiceSentUpdateInput,
+  options?: { client?: SupabaseClient | null },
+): Promise<MappedWorkspaceInvoicePull> {
+  if (!input.workspaceId.trim()) {
+    throw new WorkspaceInvoiceCloudError('workspace_id fehlt', 'validation', false);
+  }
+  if (!input.clientInvoiceId.trim()) {
+    throw new WorkspaceInvoiceCloudError('client_invoice_id fehlt', 'validation', false);
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.sentAt.trim())) {
+    throw new WorkspaceInvoiceCloudError('sent_at ungültig', 'validation', false);
+  }
+  if (!INVOICE_SENT_VIA.has(String(input.sentVia))) {
+    throw new WorkspaceInvoiceCloudError('sent_via ungültig', 'validation', false);
+  }
+
+  let data: unknown;
+  try {
+    const supabase = getClient(options?.client);
+    const response = await supabase.rpc('update_workspace_invoice_sent', {
+      p_workspace_id: input.workspaceId,
+      p_client_invoice_id: input.clientInvoiceId,
+      p_sent_at: input.sentAt.trim(),
+      p_sent_via: input.sentVia,
+      p_sent_note: input.sentNote?.trim() || null,
+    });
+    if (response.error) {
+      throw classifyInvoiceCloudError(response.error);
+    }
+    data = response.data;
+  } catch (error) {
+    if (error instanceof WorkspaceInvoiceCloudError) throw error;
+    throw classifyInvoiceCloudError(
+      error instanceof Error ? { message: error.message } : { message: 'Unbekannter Fehler' },
+    );
+  }
+
+  /**
+   * INVOICE-SENT-CLOUD-DURABILITY-04B1U — die Antwort muss die Mutation beweisen.
+   *
+   * Zuvor genügte eine gültige Zeile desselben Workspace. Auf dem Realgerät kam
+   * genau das zurück — eine unveränderte Zeile mit `vorbereitet` —, und der
+   * Client meldete Erfolg. Zwei Sprints lang blieb dadurch unsichtbar, dass die
+   * Cloud-Zeile nie geschrieben wurde.
+   *
+   * Erfolg heißt jetzt: genau eine Zeile, genau diese Rechnung, genau dieser
+   * Versandzustand.
+   */
+  const rows = Array.isArray(data) ? data : [data];
+  if (rows.length !== 1) {
+    throw new WorkspaceInvoiceCloudError(
+      'Sent-Update hat keine eindeutige Zeile geliefert',
+      'validation',
+      false,
+    );
+  }
+
+  const parsed = parseWorkspaceInvoicePullRow(rows[0]);
+  if (
+    !parsed ||
+    parsed.workspace_id !== input.workspaceId ||
+    parsed.client_invoice_id !== input.clientInvoiceId ||
+    parsed.invoice_status !== 'versendet' ||
+    parsed.payload.status !== 'versendet' ||
+    parsed.payload.sentAt !== input.sentAt.trim() ||
+    parsed.payload.sentVia !== input.sentVia
+  ) {
+    throw new WorkspaceInvoiceCloudError(
+      'Sent-Update wurde von der Cloud nicht bestätigt',
+      'validation',
+      false,
+    );
+  }
+
+  /*
+   * Die Notiz getrennt geprüft: Ohne Notiz darf der Schlüssel schlicht fehlen —
+   * ein gespeichertes `null` wäre für den Pull-Validator ohnehin ungültig und
+   * gilt hier deshalb nie als Erfolg.
+   */
+  const expectedNote = input.sentNote?.trim() || undefined;
+  const actualNote = parsed.payload.sentNote;
+  if (expectedNote === undefined ? actualNote !== undefined : actualNote !== expectedNote) {
+    throw new WorkspaceInvoiceCloudError(
+      'Sent-Update hat die Versandnotiz nicht bestätigt',
+      'validation',
+      false,
+    );
+  }
+
+  return mapWorkspaceInvoicePullRowToVorgangInvoice(parsed);
+}
+
 export async function rpcPullWorkspaceInvoices(
   workspaceId: string,
   options?: { since?: string | null; client?: SupabaseClient | null },
