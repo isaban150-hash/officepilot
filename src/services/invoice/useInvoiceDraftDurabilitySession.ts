@@ -27,8 +27,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   createInvoiceDraftRecord,
   loadInvoiceDraftRecordByLocator,
+  releaseFinalizedInvoiceDraftRecord,
   saveInvoiceDraftRecord,
 } from './invoiceDraftDurabilityService';
+import { getVorgangById } from '../vorgangService';
 import type {
   InvoiceDraftIdentity,
   InvoiceDraftLocator,
@@ -75,18 +77,36 @@ export interface InvoiceDraftDurabilityAdapter {
   loadByLocator: typeof loadInvoiceDraftRecordByLocator;
   create: typeof createInvoiceDraftRecord;
   save: typeof saveInvoiceDraftRecord;
+  releaseFinalized: typeof releaseFinalizedInvoiceDraftRecord;
 }
 
 export const defaultInvoiceDraftDurabilityAdapter: InvoiceDraftDurabilityAdapter = {
   loadByLocator: loadInvoiceDraftRecordByLocator,
   create: createInvoiceDraftRecord,
   save: saveInvoiceDraftRecord,
+  releaseFinalized: releaseFinalizedInvoiceDraftRecord,
 };
+
+/**
+ * INVOICE-DRAFT-ROLLOVER-03B — liegt die abgeschlossene Rechnung dauerhaft vor?
+ *
+ * Der Nachweis ist die Bedingung dafür, einen Grabstein freizugeben. Er wird
+ * hier gestellt und nicht im Kern: der Kern liest bewusst keinen
+ * Vorgangsspeicher. Injizierbar, damit Tests den inkonsistenten Fall prüfen
+ * können, ohne einen Store aufzubauen.
+ */
+export type FinalizedInvoicePresenceCheck = (vorgangId: string, invoiceId: string) => boolean;
+
+export const defaultFinalizedInvoicePresenceCheck: FinalizedInvoicePresenceCheck = (
+  vorgangId,
+  invoiceId,
+) => (getVorgangById(vorgangId)?.invoices ?? []).some((invoice) => invoice.id === invoiceId);
 
 export interface InvoiceDraftDurabilitySessionInput {
   locator: InvoiceDraftLocator | null;
   createDraft: () => InvoiceDraft | null;
   adapter?: InvoiceDraftDurabilityAdapter;
+  hasFinalizedInvoice?: FinalizedInvoicePresenceCheck;
   now?: () => string;
 }
 
@@ -193,6 +213,11 @@ export function useInvoiceDraftDurabilitySession(
 
   const adapterRef = useRef(input.adapter ?? defaultInvoiceDraftDurabilityAdapter);
   adapterRef.current = input.adapter ?? defaultInvoiceDraftDurabilityAdapter;
+  const hasFinalizedInvoiceRef = useRef(
+    input.hasFinalizedInvoice ?? defaultFinalizedInvoicePresenceCheck,
+  );
+  hasFinalizedInvoiceRef.current =
+    input.hasFinalizedInvoice ?? defaultFinalizedInvoicePresenceCheck;
   const createDraftRef = useRef(input.createDraft);
   createDraftRef.current = input.createDraft;
   const nowRef = useRef(input.now);
@@ -391,10 +416,49 @@ export function useInvoiceDraftDurabilitySession(
       if (!queue.active) return;
 
       if (loaded.ok) {
-        adopt(loaded.record, loaded.draft, true);
-        return;
-      }
-      if (loaded.reason !== 'not_found') {
+        /**
+         * INVOICE-DRAFT-ROLLOVER-03B — nach einer abgeschlossenen Rechnung darf
+         * derselbe Vorgang eine weitere desselben Typs beginnen. Der Grabstein
+         * belegt sonst dauerhaft den einzigen aktiven Locator und wird mit
+         * seinen eingefrorenen Mengen erneut angezeigt.
+         *
+         * Freigegeben wird ausschliesslich `finalized`, und nur mit Nachweis
+         * der fertigen Rechnung. `active` und `finalizing` bleiben unberührt;
+         * jeder Fehlschlag führt zurück in den bisherigen, sicheren Zustand.
+         */
+        const finalizedInvoiceId =
+          loaded.record.status === 'finalized'
+            ? (loaded.record.finalization?.finalizedInvoiceId?.trim() ?? '')
+            : '';
+        const releasable =
+          finalizedInvoiceId.length > 0 &&
+          hasFinalizedInvoiceRef.current(locator.vorgangId, finalizedInvoiceId);
+
+        if (!releasable) {
+          adopt(loaded.record, loaded.draft, true);
+          return;
+        }
+
+        let released: Awaited<ReturnType<typeof releaseFinalizedInvoiceDraftRecord>>;
+        try {
+          released = await adapter.releaseFinalized({
+            identity: { ...locator, draftId: loaded.record.draftId },
+            expectedRevision: loaded.record.revision,
+            finalizedInvoiceId,
+          });
+        } catch {
+          if (queue.active) blockStorage('release_threw');
+          return;
+        }
+        if (!queue.active) return;
+        if (!released.ok) {
+          // Revisionskonflikt, fremde Identität, Speicherfehler: nichts wurde
+          // gelöscht, nichts wird überschrieben — der alte Stand bleibt gültig.
+          adopt(loaded.record, loaded.draft, true);
+          return;
+        }
+        // Der Slot ist frei; ab hier läuft der reguläre Neuanlagepfad.
+      } else if (loaded.reason !== 'not_found') {
         // corrupt, identity_mismatch, unsupported_format, Speicherfehler:
         // nichts ersetzen, nichts löschen, kein createDraft als Rückfall.
         blockStorage(loaded.reason);

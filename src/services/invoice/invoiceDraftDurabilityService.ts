@@ -917,6 +917,92 @@ export async function deleteInvoiceDraftRecord(
   return { ok: true, deletedRevision: outcome.revision };
 }
 
+/**
+ * OFFICEPILOT-INVOICE-DRAFT-ROLLOVER-03B — gibt den aktiven Locator nach einer
+ * abgeschlossenen Rechnung wieder frei.
+ *
+ * Bewusst ein **eigener** Einstieg statt einer Lockerung von
+ * `deleteInvoiceDraftRecord`: dessen `active`-Regel ist die Invariante, die
+ * laufende Entwürfe und begonnene Abschlüsse vor Verlust schützt. Sie bleibt
+ * ausnahmslos bestehen; die Ausnahme steht hier sichtbar und einzeln prüfbar.
+ *
+ * Freigegeben wird nur, wenn der Grabstein zur genannten fertigen Rechnung
+ * gehört. **Der Aufrufer muss zuvor nachgewiesen haben, dass diese Rechnung
+ * dauerhaft vorliegt** — dieser Kern liest keinen Vorgangsspeicher. Ohne
+ * diesen Nachweis wäre `finalized` allein kein Grund, einen gespeicherten
+ * Entwurf zu vernichten.
+ *
+ * `active` und `finalizing` werden nie berührt.
+ */
+export async function releaseFinalizedInvoiceDraftRecord(
+  input: DeleteInvoiceDraftRecordInput & { finalizedInvoiceId: string },
+): Promise<InvoiceDraftDeleteResult> {
+  const { identity, expectedRevision, finalizedInvoiceId } = input;
+  if (!isCompleteIdentity(identity)) return { ok: false, reason: 'invalid_identity' };
+  if (!Number.isInteger(expectedRevision) || expectedRevision < 1) {
+    return { ok: false, reason: 'invalid_identity', detail: 'expectedRevision' };
+  }
+  if (!isNonEmptyString(finalizedInvoiceId)) {
+    return { ok: false, reason: 'invalid_identity', detail: 'finalizedInvoiceId' };
+  }
+
+  const recordKey = buildInvoiceDraftRecordKey(identity);
+
+  type ReleaseOutcome =
+    | { kind: 'deleted'; revision: number }
+    | { kind: 'not_found' }
+    | { kind: 'identity_mismatch' }
+    | { kind: 'status_conflict' }
+    | { kind: 'finalization_mismatch' }
+    | { kind: 'conflict'; currentRevision: number };
+
+  let outcome: ReleaseOutcome;
+  try {
+    outcome = await withStore<ReleaseOutcome>('readwrite', (store, finish) => {
+      const read = store.get(recordKey);
+      read.onsuccess = () => {
+        const current = read.result as InvoiceDraftRecord | undefined;
+        if (!current) {
+          finish({ kind: 'not_found' });
+          return;
+        }
+        if (!isSupportedRecord(current) || !recordMatchesIdentity(current, identity)) {
+          finish({ kind: 'identity_mismatch' });
+          return;
+        }
+        // Ausschliesslich ein abgeschlossener Grabstein — nichts anderes.
+        if (current.status !== 'finalized' || !current.finalization) {
+          finish({ kind: 'status_conflict' });
+          return;
+        }
+        if (current.finalization.finalizedInvoiceId !== finalizedInvoiceId) {
+          finish({ kind: 'finalization_mismatch' });
+          return;
+        }
+        if (current.revision !== expectedRevision) {
+          finish({ kind: 'conflict', currentRevision: current.revision });
+          return;
+        }
+        store.delete(recordKey);
+        finish({ kind: 'deleted', revision: current.revision });
+      };
+    });
+  } catch (error) {
+    return { ok: false, reason: storageReason(error) };
+  }
+
+  if (outcome.kind === 'not_found') return { ok: false, reason: 'not_found' };
+  if (outcome.kind === 'identity_mismatch') return { ok: false, reason: 'identity_mismatch' };
+  if (outcome.kind === 'status_conflict') return { ok: false, reason: 'status_conflict' };
+  if (outcome.kind === 'finalization_mismatch') {
+    return { ok: false, reason: 'identity_mismatch', detail: 'finalizedInvoiceId' };
+  }
+  if (outcome.kind === 'conflict') {
+    return { ok: false, reason: 'conflict', currentRevision: outcome.currentRevision };
+  }
+  return { ok: true, deletedRevision: outcome.revision };
+}
+
 /* -------------------------------------------------------------------------- */
 /* Finalisierungsübergänge                                                    */
 /* -------------------------------------------------------------------------- */
