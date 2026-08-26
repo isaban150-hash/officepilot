@@ -2249,6 +2249,17 @@ const deLegacy = {
   'payment.amountInvalid': 'Bitte einen Betrag größer als 0 eingeben.',
   'payment.dateRequired': 'Bitte ein Zahlungsdatum angeben.',
   'payment.notFound': 'Zahlung nicht gefunden.',
+  'payment.cloudNotSecured': 'Diese Zahlung ist noch nicht in der Cloud gesichert.',
+  'payment.cloudSecureAction': 'In der Cloud sichern',
+  'payment.cloudSecured': 'Die Zahlung ist jetzt in der Cloud gesichert.',
+  'payment.cloudOnlyLocal':
+    'Die Zahlung ist auf diesem Gerät gespeichert, konnte aber nicht in die Cloud übertragen werden. Auf anderen Geräten fehlt sie vorerst.',
+  'payment.cloudConflict':
+    'Für diese Zahlung ist in der Cloud bereits ein abweichender Betrag gespeichert. Bitte prüfen Sie den Zahlungseingang.',
+  'payment.cloudReversalUnavailable':
+    'Ohne Verbindung zur Cloud lässt sich nicht klären, ob diese Zahlung dort gesichert ist. Sie bleibt deshalb bestehen.',
+  'payment.cloudReversalFailed':
+    'Die Zahlung konnte in der Cloud nicht storniert werden. Sie bleibt deshalb bestehen – bitte erneut versuchen.',
   'payment.persistFailed':
     'Die Zahlung konnte nicht gespeichert werden. Es wurde nichts geändert – bitte erneut versuchen.',
 

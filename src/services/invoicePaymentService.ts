@@ -5,6 +5,7 @@ import {
 } from './vorgangService';
 import { isFinalizedInvoice } from './invoiceArchiveService';
 import { generateUuid } from './sync/syncMetaService';
+import type { InvoicePaymentCloudOutcome } from './invoice/workspaceInvoicePaymentCloudService';
 import type {
   InvoicePayment,
   InvoicePaymentInput,
@@ -255,6 +256,93 @@ export function removePayment(
   }
 
   return { success: true, invoice: updated.invoice };
+}
+
+/* -------------------------------------------------------------------------- */
+/* PAYMENT-CLOUD-DURABILITY-04B2B                                             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * PAYMENT-CLOUD-CLOSURE-04B2B1 — für eine Geldbewegung ist nur `synced` genug.
+ *
+ * Beim Versandstatus durfte `supabase_not_configured` schweigen: ohne Cloud
+ * gibt es dort nichts zu sichern. Bei einer Zahlung ist das anders — sie steht
+ * dann nachweislich nur auf diesem Gerät, und genau das muss der Nutzer wissen.
+ * Deshalb ein eigenes, strengeres Prädikat statt des geteilten `…Silent`.
+ */
+export function isInvoicePaymentCloudSynced(outcome: InvoicePaymentCloudOutcome): boolean {
+  return outcome === 'synced';
+}
+
+/**
+ * Sichert eine **bereits lokal gespeicherte** Zahlung in der Cloud.
+ *
+ * Bewusst ein eigener Schritt nach dem lokalen Commit: Die Zahlung ist damit
+ * bereits erfasst und wird bei einem Cloud-Fehler nicht zurückgenommen — der
+ * Nutzer hat sie schließlich gebucht. Gemeldet wird nur, ob sie auch
+ * geräteübergreifend gesichert ist.
+ *
+ * Es wird **nie** eine neue Kennung erzeugt: Ein Wiederholungsversuch nutzt
+ * dieselbe `payment.id` und trifft damit denselben Idempotenzschlüssel.
+ */
+export async function syncInvoicePaymentToCloud(
+  invoiceId: string,
+  payment: InvoicePayment,
+): Promise<InvoicePaymentCloudOutcome> {
+  try {
+    const { addInvoicePaymentToCloud } = await import(
+      './invoice/workspaceInvoicePaymentCloudService'
+    );
+    const result = await addInvoicePaymentToCloud({
+      clientInvoiceId: invoiceId,
+      clientPaymentId: payment.id,
+      amount: payment.amount,
+      paidOn: payment.date,
+      reference: payment.reference,
+      note: payment.note,
+    });
+    return result.outcome;
+  } catch {
+    return 'failed';
+  }
+}
+
+/**
+ * Storniert eine Zahlung in der Cloud. **Vor** dem lokalen Entfernen aufzurufen:
+ * Ein hartes lokales Löschen bei fehlgeschlagenem Reversal ließe die Zahlung
+ * beim nächsten Pull überraschend wieder erscheinen.
+ */
+export async function reverseInvoicePaymentInCloudForRemoval(
+  invoiceId: string,
+  paymentId: string,
+): Promise<InvoicePaymentCloudOutcome> {
+  try {
+    const { reverseInvoicePaymentInCloud } = await import(
+      './invoice/workspaceInvoicePaymentCloudService'
+    );
+    const result = await reverseInvoicePaymentInCloud({
+      clientInvoiceId: invoiceId,
+      clientPaymentId: paymentId,
+    });
+    return result.outcome;
+  } catch {
+    return 'failed';
+  }
+}
+
+/**
+ * Zahlungen, die lokal existieren, in der Cloud aber unbekannt sind.
+ *
+ * Grundlage des Confirm-first-Hinweises „noch nicht in der Cloud gesichert".
+ * **Nur nach einem nachweislich erfolgreichen Pull aufrufen** — unbekannt ist
+ * nicht dasselbe wie ungesichert.
+ */
+export function findLocallyOnlyPayments(
+  invoice: VorgangInvoice,
+  cloudPaymentIds: readonly string[],
+): InvoicePayment[] {
+  const known = new Set(cloudPaymentIds);
+  return getInvoicePayments(invoice).filter((payment) => !known.has(payment.id));
 }
 
 export function getOverdueDays(

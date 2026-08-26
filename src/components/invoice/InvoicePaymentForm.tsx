@@ -10,7 +10,11 @@ import {
   willPaymentNeedUnsentConfirm,
 } from '../../services/invoicePaymentService';
 import { getLastPersistSuccess } from '../../services/persistenceService';
-import type { InvoicePaymentInput, VorgangInvoice } from '../../types/models';
+import {
+  isInvoicePaymentCloudSynced,
+  syncInvoicePaymentToCloud,
+} from '../../services/invoicePaymentService';
+import type { InvoicePayment, InvoicePaymentInput, VorgangInvoice } from '../../types/models';
 import type { TranslationKey } from '../../i18n';
 
 interface Props {
@@ -47,6 +51,9 @@ export function InvoicePaymentForm({
   const [reference, setReference] = useState('');
   const [note, setNote] = useState('');
   const [errorKey, setErrorKey] = useState<string | null>(null);
+  /** 04B2B1 — gesetzt heißt: lokal gebucht, Cloud-Sicherung offen. */
+  const [pendingPayment, setPendingPayment] = useState<InvoicePayment | null>(null);
+  const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -56,6 +63,9 @@ export function InvoicePaymentForm({
     setReference('');
     setNote('');
     setErrorKey(null);
+    // Ein neu geöffnetes Formular kennt keine offene Sicherung.
+    setPendingPayment(null);
+    setSyncing(false);
   }, [open, openAmount, today]);
 
   const parsedAmount = parseFloat(amount.replace(',', '.')) || 0;
@@ -74,8 +84,52 @@ export function InvoicePaymentForm({
     note,
   });
 
+  /**
+   * PAYMENT-CLOUD-CLOSURE-04B2B1 — die Cloud-Sicherung einer bereits lokal
+   * gebuchten Zahlung.
+   *
+   * Getrennt vom Erfassen, damit ein zweiter Klick nach einem Cloud-Fehler
+   * niemals eine zweite Zahlung bucht: Übertragen wird ausschließlich das
+   * vorhandene Objekt mit seiner vorhandenen Kennung.
+   */
+  const syncRecordedPayment = (payment: InvoicePayment) => {
+    setSyncing(true);
+    void syncInvoicePaymentToCloud(invoice.id, payment)
+      .then((outcome) => {
+        setSyncing(false);
+        if (isInvoicePaymentCloudSynced(outcome)) {
+          setPendingPayment(null);
+          onClose();
+          return;
+        }
+        /*
+         * Die Zahlung bleibt lokal gebucht — der Nutzer hat sie erfasst. Aber
+         * sie steht nur hier, und das darf die Oberfläche nicht verschweigen.
+         * `supabase_not_configured` ist bei Geld kein stiller Normalfall.
+         */
+        setPendingPayment(payment);
+        setErrorKey(outcome === 'conflict' ? 'payment.cloudConflict' : 'payment.cloudOnlyLocal');
+      })
+      .catch(() => {
+        setSyncing(false);
+        setPendingPayment(payment);
+        setErrorKey('payment.cloudOnlyLocal');
+      });
+  };
+
   const submitPayment = (confirmed: boolean) => {
-    if (cancelled) return;
+    if (cancelled || syncing) return;
+
+    /*
+     * Zustand B: lokal erfasst, Cloud ausstehend. Ein erneuter Klick wiederholt
+     * ausschließlich die Sicherung — kein `recordPayment`, keine neue Kennung,
+     * keine zweite Buchung desselben Betrags.
+     */
+    if (pendingPayment) {
+      setErrorKey(null);
+      syncRecordedPayment(pendingPayment);
+      return;
+    }
 
     const needsUnsent = willPaymentNeedUnsentConfirm(invoice);
     const needsOverpay = overpayAmount > 0;
@@ -101,7 +155,9 @@ export function InvoicePaymentForm({
       setErrorKey('persist.failed.userAction');
       return;
     }
-    onClose();
+
+    // Der lokale Commit steht — ab hier geht es nur noch um die Cloud.
+    syncRecordedPayment(result.payment);
   };
 
   const handleSubmit = (event: React.FormEvent) => {

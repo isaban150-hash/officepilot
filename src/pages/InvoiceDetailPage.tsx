@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { InvoiceDocumentView } from '../components/invoice/InvoiceDocumentView';
 import { InvoicePrintActions } from '../components/invoice/InvoicePrintActions';
@@ -19,9 +19,18 @@ import { buildInvoicePrintModelFromInvoice } from '../services/invoicePrintModel
 import {
   calculatePaymentSummary,
   formatPaymentCurrency,
+  findLocallyOnlyPayments,
+  getInvoicePayments,
   isInvoiceCancelled,
+  isInvoicePaymentCloudSynced,
   removePayment,
+  reverseInvoicePaymentInCloudForRemoval,
+  syncInvoicePaymentToCloud,
 } from '../services/invoicePaymentService';
+import {
+  isInvoicePaymentCloudSilent,
+  pullInvoicePaymentsFromCloud,
+} from '../services/invoice/workspaceInvoicePaymentCloudService';
 import { getLastPersistSuccess } from '../services/persistenceService';
 import { printInvoice } from '../services/invoicePrintService';
 import { getVorgangById, getVorgangInvoice } from '../services/vorgangService';
@@ -77,8 +86,110 @@ export function InvoiceDetailPage() {
     showToast(translate(getPaymentSavedToastKey(updated)));
   };
 
-  const handleRemovePayment = (paymentId: string) => {
+  /**
+   * PAYMENT-CLOUD-SAFETY-04B2B2 — der zuletzt bewiesene Cloud-Stand.
+   *
+   * `null` heißt „unbekannt" und ist der Ausgangszustand: Solange kein Abgleich
+   * gelungen ist, behauptet OfficePilot nichts. Ein erfolgreicher Pull setzt
+   * eine Liste — **auch eine leere**. Eine frisch angelegte, leere Tabelle ist
+   * ein vollständig bekannter Stand, kein Zwischenzustand.
+   *
+   * Gespeichert werden die Cloud-Kennungen, nicht das Ergebnis des Vergleichs:
+   * So hängt der Abgleich nicht an der Objektreferenz der Rechnung, und sein
+   * eigenes Ergebnis kann ihn nicht erneut auslösen (04B2B2, Punkt 3).
+   */
+  const [cloudPaymentIds, setCloudPaymentIds] = useState<string[] | null>(null);
+  /** Zählt ausdrücklich gewünschte Abgleiche — nach Sicherung oder Stornierung. */
+  const [cloudRefreshToken, setCloudRefreshToken] = useState(0);
+
+  const pullCloudPaymentIds = useCallback(async (currentInvoiceId: string) => {
+    const pulled = await pullInvoicePaymentsFromCloud();
+    if (pulled.outcome !== 'synced') {
+      // Kein Beweis, keine Aussage.
+      setCloudPaymentIds(null);
+      return null;
+    }
+    /*
+     * Bewusst **alle** Kennungen, auch reversierte: Ein Grabstein beweist,
+     * dass die Zahlung in der Cloud bekannt ist. Sie als ungesichert
+     * anzubieten würde eine Stornierung wiederbeleben.
+     */
+    const known = pulled.rows
+      .filter((row) => row.clientInvoiceId === currentInvoiceId)
+      .map((row) => row.clientPaymentId);
+    setCloudPaymentIds(known);
+    return known;
+  }, []);
+
+  useEffect(() => {
     if (!vorgangId || !invoiceId) return;
+    setCloudPaymentIds(null);
+    void pullCloudPaymentIds(invoiceId);
+    // Bewusst ohne `invoice`: Die Objektreferenz wechselt bei jedem lokalen
+    // Commit, der Cloud-Stand hängt aber nur an der Rechnung selbst.
+  }, [vorgangId, invoiceId, cloudRefreshToken, pullCloudPaymentIds]);
+
+  /**
+   * Abgeleitet statt gespeichert: Der Hinweis folgt dem aktuellen lokalen Stand,
+   * ohne dafür einen neuen Abgleich zu brauchen.
+   */
+  const unsyncedPaymentIds = useMemo(() => {
+    if (!invoice || !cloudPaymentIds) return null;
+    return findLocallyOnlyPayments(invoice, cloudPaymentIds).map((payment) => payment.id);
+  }, [invoice, cloudPaymentIds]);
+
+  /** Überträgt eine vorhandene Zahlung — niemals eine neue. */
+  const handleSecurePayment = async (paymentId: string) => {
+    if (!invoice) return;
+    const payment = getInvoicePayments(invoice).find((item) => item.id === paymentId);
+    if (!payment) return;
+
+    const outcome = await syncInvoicePaymentToCloud(invoice.id, payment);
+    if (!isInvoicePaymentCloudSynced(outcome)) {
+      showToast(translate('payment.cloudOnlyLocal'));
+      return;
+    }
+    showToast(translate('payment.cloudSecured'));
+    // Ausdrücklicher Erfolg — hier ist ein neuer Abgleich gewollt.
+    setCloudRefreshToken((token) => token + 1);
+  };
+
+  /**
+   * PAYMENT-CLOUD-DURABILITY-04B2B — erst die Cloud, dann lokal.
+   *
+   * Umgekehrt entstünde der gefährlichste Zustand: lokal hart entfernt,
+   * Cloud-Stornierung fehlgeschlagen — und der nächste Abgleich brächte die
+   * Zahlung unangekündigt zurück. Scheitert die Stornierung, bleibt die Zahlung
+   * sichtbar stehen und der Nutzer erfährt den Grund.
+   *
+   * PAYMENT-CLOUD-SAFETY-04B2B2 — verschärft: Früher galt auch
+   * `supabase_not_configured` als still in Ordnung. Das war falsch. Eine
+   * fehlende Konfiguration beweist nicht, dass keine Cloud-Kopie existiert; sie
+   * heißt nur, dass wir nicht nachsehen können. Gelöscht wird lokal nur, wenn
+   * die Stornierung **bestätigt** ist — oder wenn ein erfolgreicher Pull
+   * beweist, dass diese Kennung in der Cloud gar nicht vorkommt. Das ist der
+   * einzige nachweisbare Local-only-Fall; fehlende Konfiguration ist keiner.
+   */
+  const handleRemovePayment = async (paymentId: string) => {
+    if (!vorgangId || !invoiceId) return;
+
+    const outcome = await reverseInvoicePaymentInCloudForRemoval(invoiceId, paymentId);
+    if (!isInvoicePaymentCloudSynced(outcome)) {
+      const known = await pullCloudPaymentIds(invoiceId);
+      if (!known || known.includes(paymentId)) {
+        showToast(
+          translate(
+            isInvoicePaymentCloudSilent(outcome)
+              ? 'payment.cloudReversalUnavailable'
+              : 'payment.cloudReversalFailed',
+          ),
+        );
+        return;
+      }
+      // Nachgewiesen: Diese Zahlung existiert in der Cloud nicht und kann
+      // deshalb auch nicht zurückkehren.
+    }
+
     const result = removePayment(vorgangId, invoiceId, paymentId);
     if (!result.success) {
       showToast(translate(result.errorKey as never));
@@ -170,6 +281,8 @@ export function InvoiceDetailPage() {
         invoice={invoice}
         translate={translate}
         onRemovePayment={handleRemovePayment}
+        unsyncedPaymentIds={unsyncedPaymentIds ?? undefined}
+        onSecurePayment={handleSecurePayment}
       />
 
       <CommunicationIntegrationPanel

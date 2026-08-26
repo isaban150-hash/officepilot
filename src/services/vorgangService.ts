@@ -1562,6 +1562,61 @@ export function updateInvoiceSentFields(
   return { ok: true, invoice: cloneVorgangInvoice(updatedInvoice) };
 }
 
+/** PAYMENT-CLOUD-DURABILITY-04B2B — eine Zahlungszeile aus der Cloud. */
+export interface CloudInvoicePaymentEntry {
+  clientInvoiceId: string;
+  clientPaymentId: string;
+  amount: number;
+  paidOn: string;
+  reference?: string;
+  note?: string;
+  createdAt: string;
+  /** Gesetzt heißt: storniert — die Zahlung zählt nicht mehr. */
+  reversedAt?: string;
+}
+
+/**
+ * PAYMENT-CLOUD-DURABILITY-04B2B — führt Cloud-Zahlungen mit den lokalen zusammen.
+ *
+ * Vereinigen, nicht ersetzen. Ein Array-Austausch wäre Last-Write-Wins und
+ * verlöre die Zahlung des jeweils anderen Geräts.
+ *
+ * Zusammengeführt wird ausschließlich über `clientPaymentId` — **niemals** über
+ * Betrag oder Datum. Zwei Abschläge über denselben Betrag am selben Tag sind ein
+ * normaler Vorgang und müssen zwei Zahlungen bleiben.
+ *
+ * Ein Cloud-Grabstein (`reversedAt`) entfernt die gleichnamige lokale Zahlung.
+ * Verschwiege der Pull ihn, würde ein Gerät mit alter Kopie sie wiederbeleben.
+ */
+export function mergeCloudPaymentsIntoInvoice(
+  invoice: VorgangInvoice,
+  entries: CloudInvoicePaymentEntry[],
+): InvoicePayment[] {
+  const local = (invoice.payments ?? []).map(cloneInvoicePayment);
+  const byId = new Map(local.map((payment) => [payment.id, payment]));
+
+  for (const entry of entries) {
+    if (entry.clientInvoiceId !== invoice.id) continue;
+
+    if (entry.reversedAt) {
+      byId.delete(entry.clientPaymentId);
+      continue;
+    }
+
+    // Für eine bereits synchronisierte Kennung gilt der Cloud-Stand.
+    byId.set(entry.clientPaymentId, {
+      id: entry.clientPaymentId,
+      date: entry.paidOn,
+      amount: entry.amount,
+      reference: entry.reference,
+      note: entry.note,
+      createdAt: entry.createdAt,
+    });
+  }
+
+  return [...byId.values()];
+}
+
 /** PAYMENT-FOUNDATION-04B2A — warum eine Zahlungsmutation scheitern konnte. */
 export type UpdateInvoicePaymentResult =
   | { ok: true; invoice: VorgangInvoice }

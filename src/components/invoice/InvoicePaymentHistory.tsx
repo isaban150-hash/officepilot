@@ -9,6 +9,16 @@ interface Props {
   translate: (key: TranslationKey) => string;
   onRemovePayment?: (paymentId: string) => void;
   allowRemove?: boolean;
+  /**
+   * PAYMENT-CLOUD-CLOSURE-04B2B1 — Kennungen der Zahlungen, die nachweislich
+   * noch nicht in der Cloud liegen.
+   *
+   * Sie darf **nur** aus einem erfolgreichen Cloud-Abgleich stammen. Bleibt sie
+   * leer oder ist der Abgleich gescheitert, wird nichts behauptet: Unbekannt
+   * ist nicht dasselbe wie ungesichert.
+   */
+  unsyncedPaymentIds?: readonly string[];
+  onSecurePayment?: (paymentId: string) => void;
 }
 
 export function InvoicePaymentHistory({
@@ -16,7 +26,10 @@ export function InvoicePaymentHistory({
   translate,
   onRemovePayment,
   allowRemove = true,
+  unsyncedPaymentIds,
+  onSecurePayment,
 }: Props) {
+  const unsynced = new Set(unsyncedPaymentIds ?? []);
   const payments = [...getInvoicePayments(invoice)].sort(
     (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
   );
@@ -48,6 +61,30 @@ export function InvoicePaymentHistory({
               </p>
             )}
             {payment.note && <p className="invoice-payment-history__note">{payment.note}</p>}
+            {/*
+              04B2B1 — Confirm-first: Der Hinweis nennt den Zustand, übertragen
+              wird ausschließlich auf ausdrückliche Aktion des Nutzers.
+            */}
+            {unsynced.has(payment.id) && (
+              <div
+                className="invoice-payment-history__unsynced"
+                data-testid={`payment-unsynced-${payment.id}`}
+              >
+                <p className="invoice-payment-history__note">
+                  {translate('payment.cloudNotSecured')}
+                </p>
+                {onSecurePayment && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => onSecurePayment(payment.id)}
+                    data-testid={`payment-secure-${payment.id}`}
+                  >
+                    {translate('payment.cloudSecureAction')}
+                  </Button>
+                )}
+              </div>
+            )}
             {allowRemove && onRemovePayment && (
               <Button
                 type="button"
