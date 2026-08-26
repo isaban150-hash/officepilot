@@ -1562,33 +1562,63 @@ export function updateInvoiceSentFields(
   return { ok: true, invoice: cloneVorgangInvoice(updatedInvoice) };
 }
 
+/** PAYMENT-FOUNDATION-04B2A — warum eine Zahlungsmutation scheitern konnte. */
+export type UpdateInvoicePaymentResult =
+  | { ok: true; invoice: VorgangInvoice }
+  | { ok: false; reason: 'not_found' | 'persist_failed' };
+
+/**
+ * PAYMENT-FOUNDATION-04B2A — Erfolg heißt: geschrieben **und** persistiert.
+ *
+ * Vorher lief die Mutation über `updateVorgangInStore`, dessen
+ * `persistAll()`-Ergebnis niemand auswertete — eine Zahlung konnte als
+ * gespeichert gelten, ohne es zu sein. Derselbe Vertragsbruch wie beim
+ * Versandstatus vor `94f338e`, nur bei Geldbeträgen.
+ *
+ * Deshalb jetzt über `commitVorgangMutation`: ein Commit-Punkt, und bei
+ * Persistenzfehler wird der vorherige Zustand wiederhergestellt. Angefasst
+ * werden ausschließlich `payments` und `paymentStatus`.
+ */
 function updateInvoicePaymentFields(
   vorgangId: string,
   invoiceId: string,
   payments: InvoicePayment[],
   paymentStatus: InvoicePaymentStatus,
-): VorgangInvoice | null {
-  const index = vorgaenge.findIndex((v) => v.id === vorgangId);
-  if (index === -1) return null;
+): UpdateInvoicePaymentResult {
+  let updatedInvoice: VorgangInvoice | null = null;
 
-  const vorgang = cloneVorgang(vorgaenge[index]);
-  const invoiceIndex = vorgang.invoices.findIndex((item) => item.id === invoiceId);
-  if (invoiceIndex === -1) return null;
+  const committed = commitVorgangMutation(vorgangId, (current) => {
+    const invoiceIndex = current.invoices.findIndex((item) => item.id === invoiceId);
+    if (invoiceIndex === -1) return { errorKey: 'invoice.notFound' };
 
-  const current = vorgang.invoices[invoiceIndex];
-  const updatedInvoice: VorgangInvoice = {
-    ...current,
-    payments: payments.map(cloneInvoicePayment),
-    paymentStatus,
-  };
+    const next: VorgangInvoice = {
+      ...current.invoices[invoiceIndex]!,
+      payments: payments.map(cloneInvoicePayment),
+      paymentStatus,
+    };
+    updatedInvoice = next;
 
-  vorgang.invoices = [
-    ...vorgang.invoices.slice(0, invoiceIndex),
-    updatedInvoice,
-    ...vorgang.invoices.slice(invoiceIndex + 1),
-  ];
-  updateVorgangInStore(vorgang);
-  return cloneVorgangInvoice(updatedInvoice);
+    return {
+      ...current,
+      invoices: [
+        ...current.invoices.slice(0, invoiceIndex),
+        next,
+        ...current.invoices.slice(invoiceIndex + 1),
+      ],
+    };
+  });
+
+  if (!committed.ok) {
+    return {
+      ok: false,
+      reason:
+        committed.errorKey === 'vorgang.notFound' || committed.errorKey === 'invoice.notFound'
+          ? 'not_found'
+          : 'persist_failed',
+    };
+  }
+  if (!updatedInvoice) return { ok: false, reason: 'not_found' };
+  return { ok: true, invoice: cloneVorgangInvoice(updatedInvoice) };
 }
 
 export function addPaymentToInvoice(
@@ -1596,9 +1626,9 @@ export function addPaymentToInvoice(
   invoiceId: string,
   payment: InvoicePayment,
   paymentStatus: InvoicePaymentStatus,
-): VorgangInvoice | null {
+): UpdateInvoicePaymentResult {
   const invoice = getVorgangInvoice(vorgangId, invoiceId);
-  if (!invoice) return null;
+  if (!invoice) return { ok: false, reason: 'not_found' };
 
   return updateInvoicePaymentFields(
     vorgangId,
@@ -1613,13 +1643,13 @@ export function removePaymentFromInvoice(
   invoiceId: string,
   paymentId: string,
   paymentStatus: InvoicePaymentStatus,
-): VorgangInvoice | null {
+): UpdateInvoicePaymentResult {
   const invoice = getVorgangInvoice(vorgangId, invoiceId);
-  if (!invoice) return null;
+  if (!invoice) return { ok: false, reason: 'not_found' };
 
   const payments = (invoice.payments ?? []).filter((payment) => payment.id !== paymentId);
   if (payments.length === (invoice.payments ?? []).length) {
-    return null;
+    return { ok: false, reason: 'not_found' };
   }
 
   return updateInvoicePaymentFields(vorgangId, invoiceId, payments, paymentStatus);

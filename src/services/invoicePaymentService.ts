@@ -4,6 +4,7 @@ import {
   removePaymentFromInvoice,
 } from './vorgangService';
 import { isFinalizedInvoice } from './invoiceArchiveService';
+import { generateUuid } from './sync/syncMetaService';
 import type {
   InvoicePayment,
   InvoicePaymentInput,
@@ -190,8 +191,18 @@ export function recordPayment(
     return { success: false, errorKey: 'payment.overpaymentConfirmationRequired' };
   }
 
+  /*
+   * PAYMENT-FOUNDATION-04B2A — die Kennung wird genau einmal erzeugt und ist
+   * eine echte UUID. Der frühere `pay-${Date.now()}` war zwischen zwei Geräten
+   * kein tragfähiger Idempotenzschlüssel: Zwei Zahlungen in derselben
+   * Millisekunde teilten sich eine Kennung, und ein späterer Abgleich hätte
+   * zwei echte Geldbewegungen zu einer verschmolzen.
+   *
+   * Bestehende `pay-…`-Kennungen bleiben unangetastet — eine gebuchte Zahlung
+   * ist ein Beleg, kein Formatproblem.
+   */
   const payment: InvoicePayment = {
-    id: `pay-${Date.now()}`,
+    id: generateUuid(),
     date: input.date.slice(0, 10),
     amount: input.amount,
     reference: input.reference?.trim() || undefined,
@@ -205,11 +216,15 @@ export function recordPayment(
   });
 
   const updated = addPaymentToInvoice(vorgangId, invoiceId, payment, summary.status);
-  if (!updated) {
-    return { success: false, errorKey: 'payment.invoiceNotFound' };
+  if (!updated.ok) {
+    return {
+      success: false,
+      errorKey:
+        updated.reason === 'persist_failed' ? 'payment.persistFailed' : 'payment.invoiceNotFound',
+    };
   }
 
-  return { success: true, invoice: updated, payment };
+  return { success: true, invoice: updated.invoice, payment };
 }
 
 export function removePayment(
@@ -231,11 +246,15 @@ export function removePayment(
   const summary = calculatePaymentSummary({ ...invoice, payments: remaining });
   const updated = removePaymentFromInvoice(vorgangId, invoiceId, paymentId, summary.status);
 
-  if (!updated) {
-    return { success: false, errorKey: 'payment.invoiceNotFound' };
+  if (!updated.ok) {
+    return {
+      success: false,
+      errorKey:
+        updated.reason === 'persist_failed' ? 'payment.persistFailed' : 'payment.invoiceNotFound',
+    };
   }
 
-  return { success: true, invoice: updated };
+  return { success: true, invoice: updated.invoice };
 }
 
 export function getOverdueDays(

@@ -2249,6 +2249,8 @@ const deLegacy = {
   'payment.amountInvalid': 'Bitte einen Betrag größer als 0 eingeben.',
   'payment.dateRequired': 'Bitte ein Zahlungsdatum angeben.',
   'payment.notFound': 'Zahlung nicht gefunden.',
+  'payment.persistFailed':
+    'Die Zahlung konnte nicht gespeichert werden. Es wurde nichts geändert – bitte erneut versuchen.',
 
   'overview.title': 'Offene Rechnungen',
   'overview.subtitle': 'Zahlungsstand aller Rechnungen auf einen Blick',
