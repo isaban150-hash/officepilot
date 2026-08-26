@@ -358,6 +358,20 @@ export function updateDocument(
   return staged;
 }
 
+/**
+ * GENERATED-INVOICE-UNDERSTANDING-02B — ein von OfficePilot selbst erzeugtes
+ * Ausgangsrechnungsdokument.
+ *
+ * Erkannt an vorhandenen autoritativen Feldern, nicht an einer neuen Markierung:
+ * die Kategorie sagt, *was* es ist, die Rechnungsverknüpfung, *dass* es aus
+ * einer eigenen Rechnung entstand. Fremdpost hat nie beides zugleich.
+ *
+ * Dient den Lesern, die sonst Fremddokument-Heuristik anwenden würden.
+ */
+export function isGeneratedOutgoingInvoiceDocument(document: CompanyDocument): boolean {
+  return document.category === 'ausgangsrechnung' && Boolean(document.linkedInvoiceId?.trim());
+}
+
 /** Why an archive document may not be deleted — null when it may. */
 export type DocumentDeleteBlockReason = 'confirmed_order' | 'expense' | 'vorgang';
 

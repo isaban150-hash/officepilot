@@ -49,10 +49,23 @@ export function buildOutgoingInvoiceDocumentInput(
   return {
     title: `${invoice.number} – ${invoiceTypeLabel(invoice)}`,
     category: 'ausgangsrechnung',
+    /*
+     * GENERATED-INVOICE-UNDERSTANDING-02B — OfficePilot hat dieses Dokument
+     * selbst erzeugt und weiß, was es ist. Ohne diese Angabe raten Verständnis,
+     * Guidance und Ablage anhand von Absender und Text und landen bei
+     * „Sonstiges“. Hier wird nicht klassifiziert, sondern festgehalten.
+     */
+    classifiedKind: 'ausgangsrechnung',
     issuer: companyName,
     recognizedText: buildRecognizedText(invoice, vorgang, companyName),
     issueDate: invoice.issueDate ?? invoice.date,
-    validUntil: invoice.paymentDueDate ?? null,
+    /*
+     * Kein `validUntil`: Das Zahlungsziel ist keine Dokumentgültigkeit. Es
+     * wurde hier früher eingetragen und deshalb als „Frist oder Gültigkeit
+     * beachten“ ausgelegt. Autoritativ bleibt es auf der Rechnung selbst
+     * (`invoice.paymentDueDate`) und wird von dort gelesen, nicht kopiert.
+     */
+    validUntil: null,
     digitalFolder: {
       id: `dig-inv-${invoice.id}`,
       name: 'Ausgangsrechnungen',

@@ -7,7 +7,7 @@ import type {
 } from '../../types/memory';
 import { getCommunicationReplyStatus } from '../communicationHistoryService';
 import { buildExplanation } from '../documentClassificationCatalog';
-import { getDocumentById } from '../documentService';
+import { getDocumentById, isGeneratedOutgoingInvoiceDocument } from '../documentService';
 import { getInboxItemById } from '../inboxService';
 import {
   formatPaperLocationSummary,
@@ -230,7 +230,12 @@ function buildNextSteps(
     return steps;
   }
 
-  if (communicationStatus === 'Antwort offen') {
+  /*
+   * 02D — an einer selbst gestellten Rechnung gibt es nichts zu beantworten.
+   * `needs_reply` ist der Standardwert jedes Dokuments ohne
+   * Kommunikationsereignis und passt nur zu eingehender Post.
+   */
+  if (communicationStatus === 'Antwort offen' && !isGeneratedOutgoingInvoiceDocument(document)) {
     steps.push('Antwort vorbereiten oder als erledigt markieren.');
   } else if (communicationStatus === 'Entwurf vorbereitet') {
     steps.push('Entwurf prüfen und versenden oder Status aktualisieren.');
@@ -238,7 +243,15 @@ function buildNextSteps(
 
   const entry = getPaperRegisterEntryForDocument(document.id);
   const physicalFiled = memory?.physicalFiled ?? entry?.physicalFiled ?? false;
-  if (!physicalFiled && (memory?.paperFolder?.folderId || document.paperFolder?.folderId)) {
+  /*
+   * Eine selbst erzeugte Rechnung hat kein Papieroriginal — die Aufforderung
+   * wäre nicht erfüllbar. Der digitale Ablageort bleibt davon unberührt.
+   */
+  if (
+    !physicalFiled &&
+    !isGeneratedOutgoingInvoiceDocument(document) &&
+    (memory?.paperFolder?.folderId || document.paperFolder?.folderId)
+  ) {
     steps.push('Original im Papierordner abheften und in OfficePilot bestätigen.');
   }
 
@@ -315,7 +328,14 @@ export function buildDocumentExplanation(
   if (!context) return null;
 
   const { document, memory, inboxItem } = context;
-  const classifiedKind = memory?.classifiedKind ?? inboxItem?.classifiedKind;
+  /*
+   * GENERATED-INVOICE-UNDERSTANDING-02B — das Dokument selbst ist die dritte
+   * legitime Quelle. Ein archiviertes Dokument ohne Eingangszeile und ohne
+   * Memory trug seine Klassifikation bisher umsonst.
+   */
+  const classifiedKind =
+    memory?.classifiedKind ?? inboxItem?.classifiedKind ?? document.classifiedKind;
+  const isGeneratedInvoice = isGeneratedOutgoingInvoiceDocument(document);
 
   if (isAdvertisementDocument(document, classifiedKind, inboxItem)) {
     return buildAdvertisementExplanation(document);
@@ -360,9 +380,14 @@ export function buildDocumentExplanation(
     paperResolution.rule?.register ??
     '—';
 
-  const missingProofs = collectMissingProofsForVorgang(
-    memory?.linkedVorgangId ?? document.linkedVorgang?.vorgangId,
-  );
+  /*
+   * Fehlende Nachweise sind eine Eigenschaft des Auftrags, nicht jedes daran
+   * hängenden Dokuments. Am Vertrag gehören sie hin — an der eigenen
+   * Ausgangsrechnung stand sonst „Benötigte Unterlagen: Betriebshaftpflicht“.
+   */
+  const missingProofs = isGeneratedInvoice
+    ? []
+    : collectMissingProofsForVorgang(memory?.linkedVorgangId ?? document.linkedVorgang?.vorgangId);
 
   const requiredDocuments = [
     ...new Set([
@@ -373,7 +398,13 @@ export function buildDocumentExplanation(
   ].filter((item) => item && !item.startsWith('Keine'));
 
   const communicationStatus = buildCommunicationStatus(document.id);
-  const originalFiledStatus = buildOriginalFiledStatus(document.id, memory);
+  /*
+   * 02D — kein Papieroriginal, also auch kein offener Papierstatus. Dieselbe
+   * Formulierung nutzt `buildAdvertisementExplanation` bereits für Werbung.
+   */
+  const originalFiledStatus = isGeneratedInvoice
+    ? 'Nicht erforderlich.'
+    : buildOriginalFiledStatus(document.id, memory);
   const uncertaintyNote = formatConfidenceNote(summary.sourceConfidence);
 
   const nextSteps = buildNextSteps(

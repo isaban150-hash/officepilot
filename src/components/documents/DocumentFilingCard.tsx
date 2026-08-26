@@ -11,7 +11,10 @@ import {
   getPaperRegisterEntryForDocument,
   markDocumentPhysicallyFiled,
 } from '../../services/officePilotMemoryService';
-import { getDocumentById } from '../../services/documentService';
+import {
+  getDocumentById,
+  isGeneratedOutgoingInvoiceDocument,
+} from '../../services/documentService';
 
 interface DocumentFilingCardProps {
   documentId: string;
@@ -53,6 +56,7 @@ export function DocumentFilingCard({
   const register =
     registerEntry?.register ?? paperFolder?.register ?? translate('document.filing.noRegister');
 
+  const isGeneratedInvoice = document ? isGeneratedOutgoingInvoiceDocument(document) : false;
   const physicalFiled = memory?.physicalFiled ?? registerEntry?.physicalFiled ?? false;
   const filedAt = memory?.filedAt ?? registerEntry?.filedAt;
   const statusInfo = getPhysicalFilingStatusLabel(physicalFiled, filedAt);
@@ -88,6 +92,12 @@ export function DocumentFilingCard({
           </p>
         </section>
 
+        {/*
+          GENERATED-INVOICE-UNDERSTANDING-02B — eine selbst erzeugte Rechnung
+          existiert nur digital. Ein Papierstatus wäre hier keine Information,
+          sondern eine Aufforderung, die niemand erfüllen kann.
+        */}
+        {isGeneratedInvoice ? null : (
         <section className="detail-experience-section document-understanding-meta">
           <div>
             <h3 className="detail-experience-section__label">
@@ -113,8 +123,9 @@ export function DocumentFilingCard({
             </p>
           </div>
         </section>
+        )}
 
-        {hasPaperFolder && !physicalFiled && (
+        {hasPaperFolder && !physicalFiled && !isGeneratedInvoice && (
           <div className="detail-experience-card__actions">
             <Button
               fullWidth

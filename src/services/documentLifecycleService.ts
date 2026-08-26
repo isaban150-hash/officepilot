@@ -10,7 +10,7 @@ import type { DocumentMemory, ProofMemory } from '../types/memory';
 import type { InboxItem, PendingItem, PendingItemKind } from '../types/models';
 import type { TranslationKey } from '../i18n';
 import { getCommunicationReplyStatus, getEventsForContext } from './communicationHistoryService';
-import { getDocumentById } from './documentService';
+import { getDocumentById, isGeneratedOutgoingInvoiceDocument } from './documentService';
 import { filterActiveItems, getInboxItemById, getInboxItems } from './inboxService';
 import {
   getAllDocumentMemories,
@@ -286,7 +286,19 @@ export function resolveDocumentLifecycle(
   const documentId = document?.id ?? memory?.documentId;
   const title = document?.title ?? memory?.title ?? inboxItem?.title ?? 'Dokument';
   const isAd = isAdvertisement(memory, inboxItem, document?.issuer, document?.recognizedText);
-  const needsPaper = needsPaperFolder(memory, inboxItem, document?.paperFolder?.folderId);
+  /**
+   * GENERATED-INVOICE-LIFECYCLE-02F — eine selbst erzeugte Ausgangsrechnung hat
+   * kein Papieroriginal. `needsPaper` ist der einzige Auslöser für den offenen
+   * Punkt „Original noch abheften“ und den daraus abgeleiteten nächsten Schritt;
+   * beides wären Aufgaben, die niemand erfüllen kann.
+   *
+   * Ausdrücklich **nicht** angetastet wird `replyStatus`: `resolveLifecycleReplyStatus`
+   * liefert ohne Kommunikationsereignisse ohnehin `no_reply_needed`. Ein Gate
+   * dort wäre wirkungslos (belegt in 02E).
+   */
+  const needsPaper =
+    (document ? !isGeneratedOutgoingInvoiceDocument(document) : true) &&
+    needsPaperFolder(memory, inboxItem, document?.paperFolder?.folderId);
   const physicalFiled = documentId ? isPhysicallyFiled(documentId, memory) : false;
   const replyStatus = resolveLifecycleReplyStatus({ documentId, inboxItem, memory });
   const openDeadline = hasOpenDeadline(memory, inboxItem, todayIso);

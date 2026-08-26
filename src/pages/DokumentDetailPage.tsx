@@ -18,7 +18,11 @@ import { FileTypeIcon } from '../components/ui/FileTypeIcon';
 import { ShowMoreSection } from '../components/ui/ShowMoreSection';
 import { useApp } from '../context/AppContext';
 import { formatPaperFilingInstruction } from '../services/paperFolderService';
-import { deleteDocument, getDocumentById } from '../services/documentService';
+import {
+  deleteDocument,
+  getDocumentById,
+  isGeneratedOutgoingInvoiceDocument,
+} from '../services/documentService';
 import { unlinkInboxItemFromVorgang } from '../services/vorgangService';
 import { SimpleConfirmDialog } from '../components/ui/SimpleConfirmDialog';
 import { resolveDocumentLifecycle } from '../services/documentLifecycleService';
@@ -71,7 +75,27 @@ export function DokumentDetailPage() {
 
   const categoryKey = `document.category.${document.category}` as TranslationKey;
   const categoryLabel = translate(categoryKey);
-  const paperInstruction = formatPaperFilingInstruction(document.paperFolder);
+  /**
+   * GENERATED-INVOICE-UNDERSTANDING-02D — die Aufforderung „Original ablegen"
+   * ganz oben gilt eingehender Post. Eine selbst erzeugte Ausgangsrechnung hat
+   * kein Papieroriginal; der Ablageort bleibt am Dokument und im aufgeklappten
+   * Bereich sichtbar, nur die Handlungspflicht entfällt.
+   */
+  const isGeneratedInvoice = isGeneratedOutgoingInvoiceDocument(document);
+  const paperInstruction = isGeneratedInvoice
+    ? undefined
+    : formatPaperFilingInstruction(document.paperFolder);
+
+  /**
+   * 02F — auf eine selbst gestellte Rechnung antwortet niemand. Gefiltert wird
+   * nur dieser eine Knopf: Frage, E-Mail und WhatsApp bleiben, und die
+   * gemeinsame Dokumentliste bleibt für alle anderen Dokumente unverändert.
+   */
+  const communicationButtonKeys = isGeneratedInvoice
+    ? DOCUMENT_COMMUNICATION_BUTTON_KEYS.filter(
+        (key) => key !== 'communication.integration.inbox.reply',
+      )
+    : DOCUMENT_COMMUNICATION_BUTTON_KEYS;
 
   /**
    * DOCUMENT-UNLINK-DELETE-01G — derselbe atomare Service wie im Eingang, nur
@@ -217,7 +241,14 @@ export function DokumentDetailPage() {
                 />
               )}
             </div>
-            <p className="document-detail__preview-hint">{translate('document.previewHint')}</p>
+            {/*
+              02F — bei Fremdpost heißt „keine Datei“ tatsächlich „das Original
+              liegt im Ordner“. Eine selbst erzeugte Rechnung hat schlicht kein
+              Papieroriginal; der Satz wäre dort eine falsche Auskunft.
+            */}
+            {isGeneratedInvoice ? null : (
+              <p className="document-detail__preview-hint">{translate('document.previewHint')}</p>
+            )}
           </>
         )}
       </Card>
@@ -298,7 +329,7 @@ export function DokumentDetailPage() {
 
       <CommunicationIntegrationPanel
         contextRef={{ type: 'document', id: document.id }}
-        buttonKeys={DOCUMENT_COMMUNICATION_BUTTON_KEYS}
+        buttonKeys={communicationButtonKeys}
         testIdPrefix="dokument"
       />
 
