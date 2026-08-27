@@ -292,11 +292,49 @@ export function documentMatchesArea(
   return resolveDocumentAreas(document).includes(area);
 }
 
-export type DocumentPaperListStatus = 'filed' | 'pending';
+/**
+ * GENERATED-INVOICE-PAPER-STATUS-01 — `not_required` ist ein eigener Zustand.
+ *
+ * Vorher gab es nur `filed | pending`: Alles ohne Ablagenachweis fiel auf
+ * „Papier offen". Für ein von OfficePilot selbst erzeugtes Dokument gibt es
+ * aber kein Original, das noch abzuheften wäre — die Liste behauptete eine
+ * Pflicht, die nicht besteht.
+ *
+ * Der dritte Wert ist rein abgeleitet: kein gespeichertes Feld, keine
+ * Migration, kein Backfill.
+ */
+export type DocumentPaperListStatus = 'filed' | 'pending' | 'not_required';
 
-export function resolveDocumentPaperListStatus(documentId: string): DocumentPaperListStatus {
-  const memory = getDocumentMemoryByDocumentId(documentId);
-  const entry = getPaperRegisterEntryForDocument(documentId);
+export interface DocumentPaperListStatusOptions {
+  /**
+   * Für dieses Dokument besteht keine physische Ablagepflicht.
+   *
+   * Der Aufrufer entscheidet das, nicht dieser Katalog: Die maßgebliche
+   * Erkennung erzeugter Ausgangsrechnungen lebt in `documentService`, und ein
+   * Import von dort hierher würde einen Zyklus schließen — `documentService`
+   * bezieht bereits `documentMatchesArea` aus dieser Datei.
+   */
+  skipPhysicalFiling?: boolean;
+}
+
+/**
+ * Der Papierstatus für die Listenanzeige.
+ *
+ * Das Dokument wird übergeben, nicht nachgeschlagen — die Liste hat es
+ * ohnehin, und je Zeile ein zusätzlicher Speicherzugriff wäre unnötig.
+ *
+ * Dieser Katalog enthält bewusst **keine** eigene Dokumenttyp-Erkennung. Ob
+ * ein Beleg physisch abzuheften ist, weiss der Aufrufer besser; hier wird nur
+ * daraus der Anzeigestatus gebildet.
+ */
+export function resolveDocumentPaperListStatus(
+  document: CompanyDocument,
+  options?: DocumentPaperListStatusOptions,
+): DocumentPaperListStatus {
+  if (options?.skipPhysicalFiling) return 'not_required';
+
+  const memory = getDocumentMemoryByDocumentId(document.id);
+  const entry = getPaperRegisterEntryForDocument(document.id);
   if (memory?.physicalFiled || entry?.physicalFiled) return 'filed';
   return 'pending';
 }

@@ -214,12 +214,18 @@ describe('DOCUMENT-AREA-FILTERS-01', () => {
     expect(created.success).toBe(true);
     if (!created.success) return;
 
-    expect(resolveDocumentPaperListStatus(created.document.id)).toBe('pending');
+    /*
+     * GENERATED-INVOICE-PAPER-STATUS-01 — die Funktion nimmt jetzt das
+     * Dokument statt nur seiner Kennung. Die Liste hat es ohnehin; so bleibt
+     * ein Speicherzugriff je Zeile erspart, und die generated-invoice-Regel
+     * kann dasselbe Dokument prüfen.
+     */
+    expect(resolveDocumentPaperListStatus(created.document)).toBe('pending');
     const before = searchDocuments('', { area: 'behoerden' }).map((d) => d.id);
     expect(before).toContain(created.document.id);
 
     markDocumentPhysicallyFiled(created.document.id);
-    expect(resolveDocumentPaperListStatus(created.document.id)).toBe('filed');
+    expect(resolveDocumentPaperListStatus(created.document)).toBe('filed');
     expect(searchDocuments('', { area: 'behoerden' }).map((d) => d.id)).toEqual(before);
   });
 

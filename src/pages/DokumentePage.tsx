@@ -4,7 +4,11 @@ import { Badge, Card, CardMeta, CardTitle, PageHeader } from '../components/ui/C
 import { Button } from '../components/ui/Button';
 import { EmptyStateBlock } from '../components/ui/EmptyStateBlock';
 import { useApp } from '../context/AppContext';
-import { getAllDocuments, searchDocuments } from '../services/documentService';
+import {
+  getAllDocuments,
+  isGeneratedOutgoingInvoiceDocument,
+  searchDocuments,
+} from '../services/documentService';
 import {
   getDocumentAreaLabelKey,
   resolveDocumentPaperListStatus,
@@ -147,7 +151,18 @@ export function DokumentePage() {
       ) : (
         <div className="card-list" data-testid="document-area-list">
           {filtered.map((doc) => {
-            const paperStatus = resolveDocumentPaperListStatus(doc.id);
+            /*
+             * Die maßgebliche Erkennung bleibt in `documentService` — dieselbe
+             * Funktion, die Detailseite und Lifecycle seit 02F verwenden. Sie
+             * wird hier ausgewertet, weil der Katalog `documentService` nicht
+             * importieren darf, ohne einen Importzyklus zu schliessen.
+             *
+             * `not_required` bekommt kein Abzeichen: Ein selbst erzeugtes
+             * Dokument hat keinen Papierzustand, über den etwas zu sagen wäre.
+             */
+            const paperStatus = resolveDocumentPaperListStatus(doc, {
+              skipPhysicalFiling: isGeneratedOutgoingInvoiceDocument(doc),
+            });
             const paperKey =
               paperStatus === 'filed'
                 ? 'document.area.paper.filed'
@@ -195,11 +210,13 @@ export function DokumentePage() {
                     </div>
                   </div>
                   <div className="badge-row">
-                    <span data-testid={`document-paper-status-${doc.id}`}>
-                      <Badge tone={paperStatus === 'filed' ? 'success' : 'warning'}>
-                        {translate(paperKey)}
-                      </Badge>
-                    </span>
+                    {paperStatus !== 'not_required' && (
+                      <span data-testid={`document-paper-status-${doc.id}`}>
+                        <Badge tone={paperStatus === 'filed' ? 'success' : 'warning'}>
+                          {translate(paperKey)}
+                        </Badge>
+                      </span>
+                    )}
                     {doc.linkedVorgang && <Badge>{doc.linkedVorgang.vorgangTitle}</Badge>}
                   </div>
                 </Card>
