@@ -220,7 +220,7 @@ describe('01P4D2B4 — strenger Cloud-Payload-Validator', () => {
     }
   });
 
-  it('P2: schluss verlangt expectedAmendmentSequence', () => {
+  it('P2: schluss akzeptiert expectedAmendmentSequence, verlangt es aber nicht', () => {
     const schluss = basePayload({
       type: 'schluss',
       abschlagNumber: undefined,
@@ -229,12 +229,35 @@ describe('01P4D2B4 — strenger Cloud-Payload-Validator', () => {
     });
     expect(validateWorkspaceInvoiceCloudPayload(schluss).ok, JSON.stringify(schluss)).toBe(true);
 
+    /*
+     * READER-AMENDMENT-OPTIONAL-01 — vorher stand hier `.toBe(false)`.
+     *
+     * Der Guard wird von `normalize_workspace_invoice_payload_for_idempotency`
+     * ausdrücklich aus dem gespeicherten Payload entfernt; eine
+     * servergespeicherte Schlussrechnung trägt ihn nie. Als Pflicht gelesen
+     * war jede Schlussrechnung originübergreifend unlesbar.
+     */
     const missing = basePayload({
       type: 'schluss',
       abschlagNumber: undefined,
       calculationMode: undefined,
     });
-    expect(validateWorkspaceInvoiceCloudPayload(missing).ok).toBe(false);
+    expect(validateWorkspaceInvoiceCloudPayload(missing).ok).toBe(true);
+
+    // Vorhanden bleibt streng: eine echte Folge oder gar nichts.
+    for (const invalid of [-1, 1.5, '0', null]) {
+      const broken = basePayload({
+        type: 'schluss',
+        abschlagNumber: undefined,
+        calculationMode: undefined,
+        expectedAmendmentSequence: invalid,
+      });
+      const result = validateWorkspaceInvoiceCloudPayload(broken);
+      expect(result.ok, JSON.stringify(invalid)).toBe(false);
+      if (!result.ok) {
+        expect(result.detail).toBe('payload.expectedAmendmentSequence:not_sequence');
+      }
+    }
 
     // Für andere Rechnungsarten ist das Feld nicht zulässig.
     expect(

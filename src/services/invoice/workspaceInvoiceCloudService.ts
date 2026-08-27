@@ -328,10 +328,32 @@ export function formatWorkspaceInvoiceNumber(year: number, sequence: number): st
   return formatInvoiceNumber(year, sequence);
 }
 
-export function parseWorkspaceInvoicePullRow(
+/**
+ * INVOICE-PULL-DIAGNOSTIC-VISIBILITY-01 — das Ergebnis einer Zeilenprüfung.
+ *
+ * Bisher gab es nur „gültig" oder `null`. Der Grund wurde berechnet und
+ * weggeworfen: Eine reale Rechnung verschwand zwischen Cloud und frischer
+ * Origin, und im Sync-Report stand nur „Ungültige Cloud-Rechnungszeile
+ * übersprungen." — ohne zu sagen, welches Feld.
+ *
+ * `detail` trägt jetzt denselben Pfad, den der Payload-Validator ohnehin
+ * erzeugt, etwa `payload.positions[7].unit:not_text`.
+ */
+export type WorkspaceInvoicePullRowInspection =
+  | { ok: true; row: WorkspaceInvoicePullRow }
+  | { ok: false; detail: string };
+
+/**
+ * Dieselbe Entscheidung wie `parseWorkspaceInvoicePullRow` — nur mit Begründung.
+ *
+ * Es wird nichts gelockert, nichts repariert, nichts umgewandelt. Jede Prüfung
+ * unten ist eine der Bedingungen, die vorher gemeinsam in einem `if` standen;
+ * die Menge der abgewiesenen Zeilen bleibt exakt dieselbe.
+ */
+export function inspectWorkspaceInvoicePullRow(
   raw: unknown,
-): WorkspaceInvoicePullRow | null {
-  if (!isPreparedJsonObject(raw)) return null;
+): WorkspaceInvoicePullRowInspection {
+  if (!isPreparedJsonObject(raw)) return { ok: false, detail: 'row:not_object' };
   const row = raw as Record<string, unknown>;
 
   /*
@@ -361,32 +383,39 @@ export function parseWorkspaceInvoicePullRow(
   const sequence = integerColumn(row.invoice_sequence_number);
   const rowVersion = row.row_version === undefined ? 1 : integerColumn(row.row_version);
 
-  if (
-    !id ||
-    !workspaceId ||
-    !vorgangId ||
-    !clientInvoiceId ||
-    !invoiceNumber ||
-    !invoiceType ||
-    !invoiceStatus ||
-    !payload ||
-    year === null ||
-    // Dieselben Grenzen wie die SQL-Bedingung workspace_invoices_year_check.
-    year < 2000 ||
-    year > 2100 ||
-    sequence === null ||
-    sequence <= 0 ||
-    rowVersion === null ||
-    rowVersion <= 0 ||
-    !INVOICE_TYPES.has(invoiceType) ||
-    !INVOICE_STATUSES.has(invoiceStatus)
-  ) {
-    return null;
+  /*
+   * Dieselben Bedingungen wie zuvor, nur einzeln benannt. Die Reihenfolge
+   * bestimmt allein, welcher Grund gemeldet wird — nicht, ob abgewiesen wird.
+   */
+  if (!id) return { ok: false, detail: 'row.id:not_text' };
+  if (!workspaceId) return { ok: false, detail: 'row.workspace_id:not_text' };
+  if (!vorgangId) return { ok: false, detail: 'row.vorgang_id:not_text' };
+  if (!clientInvoiceId) return { ok: false, detail: 'row.client_invoice_id:not_text' };
+  if (!invoiceNumber) return { ok: false, detail: 'row.invoice_number:not_text' };
+  if (!invoiceType) return { ok: false, detail: 'row.invoice_type:not_text' };
+  if (!invoiceStatus) return { ok: false, detail: 'row.invoice_status:not_text' };
+  if (!payload) return { ok: false, detail: 'row.payload:not_object' };
+  if (year === null) return { ok: false, detail: 'row.invoice_year:not_integer' };
+  // Dieselben Grenzen wie die SQL-Bedingung workspace_invoices_year_check.
+  if (year < 2000 || year > 2100) return { ok: false, detail: 'row.invoice_year:out_of_range' };
+  if (sequence === null || sequence <= 0) {
+    return { ok: false, detail: 'row.invoice_sequence_number:not_positive_integer' };
+  }
+  if (rowVersion === null || rowVersion <= 0) {
+    return { ok: false, detail: 'row.row_version:not_positive_integer' };
+  }
+  if (!INVOICE_TYPES.has(invoiceType)) {
+    return { ok: false, detail: 'row.invoice_type:unknown_value' };
+  }
+  if (!INVOICE_STATUSES.has(invoiceStatus)) {
+    return { ok: false, detail: 'row.invoice_status:unknown_value' };
   }
 
   // Der Payload wird streng geprüft — nicht repariert und nicht beschnitten.
-  if (!validateWorkspaceInvoiceCloudPayload(payload).ok) {
-    return null;
+  const payloadCheck = validateWorkspaceInvoiceCloudPayload(payload);
+  if (!payloadCheck.ok) {
+    // Der Grund existierte schon immer; bisher wurde er hier verworfen.
+    return { ok: false, detail: payloadCheck.detail };
   }
 
   /*
@@ -396,33 +425,47 @@ export function parseWorkspaceInvoicePullRow(
    * `invoiceSequenceNumber` wird geprüft, sobald es vorhanden ist — ein
    * Altbeleg ohne dieses optionale Feld bleibt gültig.
    */
+  if (payload.id !== clientInvoiceId) return { ok: false, detail: 'mismatch.id' };
+  if (payload.number !== invoiceNumber) return { ok: false, detail: 'mismatch.number' };
+  if (payload.type !== invoiceType) return { ok: false, detail: 'mismatch.type' };
+  if (payload.status !== invoiceStatus) return { ok: false, detail: 'mismatch.status' };
   if (
-    payload.id !== clientInvoiceId ||
-    payload.number !== invoiceNumber ||
-    payload.type !== invoiceType ||
-    payload.status !== invoiceStatus ||
-    (payload.invoiceSequenceNumber !== undefined &&
-      payload.invoiceSequenceNumber !== sequence)
+    payload.invoiceSequenceNumber !== undefined &&
+    payload.invoiceSequenceNumber !== sequence
   ) {
-    return null;
+    return { ok: false, detail: 'mismatch.invoiceSequenceNumber' };
   }
 
   return {
-    id,
-    workspace_id: workspaceId,
-    vorgang_id: vorgangId,
-    client_invoice_id: clientInvoiceId,
-    invoice_number: invoiceNumber,
-    invoice_year: year,
-    invoice_sequence_number: sequence,
-    invoice_type: invoiceType,
-    invoice_status: invoiceStatus,
-    payload,
-    row_version: Number.isFinite(rowVersion) ? rowVersion : 1,
-    created_at: String(row.created_at ?? ''),
-    updated_at: String(row.updated_at ?? ''),
-    updated_by: row.updated_by == null ? null : String(row.updated_by),
+    ok: true,
+    row: {
+      id,
+      workspace_id: workspaceId,
+      vorgang_id: vorgangId,
+      client_invoice_id: clientInvoiceId,
+      invoice_number: invoiceNumber,
+      invoice_year: year,
+      invoice_sequence_number: sequence,
+      invoice_type: invoiceType,
+      invoice_status: invoiceStatus,
+      payload,
+      row_version: Number.isFinite(rowVersion) ? rowVersion : 1,
+      created_at: String(row.created_at ?? ''),
+      updated_at: String(row.updated_at ?? ''),
+      updated_by: row.updated_by == null ? null : String(row.updated_by),
+    },
   };
+}
+
+/**
+ * Unveränderter öffentlicher Vertrag: gültige Zeile oder `null`.
+ *
+ * Die Entscheidung trifft ausschliesslich `inspectWorkspaceInvoicePullRow` —
+ * es gibt keine zweite Regelmenge, die auseinanderlaufen könnte.
+ */
+export function parseWorkspaceInvoicePullRow(raw: unknown): WorkspaceInvoicePullRow | null {
+  const inspected = inspectWorkspaceInvoicePullRow(raw);
+  return inspected.ok ? inspected.row : null;
 }
 
 /**

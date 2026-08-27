@@ -10,7 +10,10 @@ import {
   getInvoiceFinalizeIntent,
 } from './invoiceFinalizeIntentService';
 import type { MappedWorkspaceInvoicePull } from './workspaceInvoiceCloudService';
-import { parseWorkspaceInvoicePullRow, mapWorkspaceInvoicePullRowToVorgangInvoice } from './workspaceInvoiceCloudService';
+import {
+  inspectWorkspaceInvoicePullRow,
+  mapWorkspaceInvoicePullRowToVorgangInvoice,
+} from './workspaceInvoiceCloudService';
 
 export type InvoicePullMergeConflictReason =
   | 'id_content_conflict'
@@ -25,6 +28,12 @@ export interface InvoicePullMergeConflict {
   cloudInvoiceId?: string;
   vorgangId?: string;
   message: string;
+  /**
+   * INVOICE-PULL-DIAGNOSTIC-VISIBILITY-01 — maschinenlesbarer Grund, etwa
+   * `payload.positions[7].unit:not_text`. Additiv und optional; bestehende
+   * Auswertungen von `message` bleiben unberührt.
+   */
+  detail?: string;
 }
 
 export interface MergeCloudInvoicesResult {
@@ -232,22 +241,37 @@ export function mapPullRowsIsolated(
   let invalidCount = 0;
 
   for (const raw of rawRows) {
-    const parsed = parseWorkspaceInvoicePullRow(raw);
-    if (!parsed || parsed.workspace_id !== workspaceId) {
+    const inspected = inspectWorkspaceInvoicePullRow(raw);
+    const foreignWorkspace = inspected.ok && inspected.row.workspace_id !== workspaceId;
+
+    if (!inspected.ok || foreignWorkspace) {
       invalidCount += 1;
       const rawClientId =
         raw && typeof raw === 'object'
           ? String((raw as { client_invoice_id?: string }).client_invoice_id ?? '').trim()
           : '';
+      const clientInvoiceId =
+        (inspected.ok ? inspected.row.client_invoice_id : '') || rawClientId || undefined;
+      /*
+       * INVOICE-PULL-DIAGNOSTIC-VISIBILITY-01 — der Grund stand bisher nur
+       * für einen Augenblick im Speicher und wurde dann verworfen. Ohne ihn
+       * ist eine übersprungene Rechnung nicht auffindbar: Man sieht, dass
+       * etwas fehlt, aber nie warum.
+       */
+      // Gültig und trotzdem hier: Das kann nur der fremde Workspace sein.
+      const detail = inspected.ok ? 'row.workspace_id:foreign_workspace' : inspected.detail;
       const conflict: InvoicePullMergeConflict = {
         reason: 'invalid_row',
-        message: 'Ungültige Cloud-Rechnungszeile übersprungen.',
-        clientInvoiceId: parsed?.client_invoice_id || rawClientId || undefined,
+        message: `Ungültige Cloud-Rechnungszeile übersprungen${
+          clientInvoiceId ? ` (${clientInvoiceId})` : ''
+        }: ${detail}`,
+        detail,
+        clientInvoiceId,
       };
       recordInvoiceConflict(report, conflict);
       continue;
     }
-    mapped.push(mapWorkspaceInvoicePullRowToVorgangInvoice(parsed));
+    mapped.push(mapWorkspaceInvoicePullRowToVorgangInvoice(inspected.row));
   }
 
   return { mapped, invalidCount };

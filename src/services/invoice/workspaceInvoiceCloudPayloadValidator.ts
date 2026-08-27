@@ -373,10 +373,28 @@ export function validateWorkspaceInvoiceCloudPayload(
     checkCustomerSnapshot(value.customerSnapshot, 'payload.customerSnapshot');
     checkCompanySnapshot(value.companySnapshot, 'payload.companySnapshot');
 
-    /* Typabhängige Pflicht: die eingefrorene Nachtragsfolge der Schlussrechnung. */
+    /*
+     * READER-AMENDMENT-OPTIONAL-01 — `expectedAmendmentSequence` ist ein
+     * Finalisierungs-Guard, keine Rechnungseigenschaft.
+     *
+     * Der Client sendet ihn bei einer Schlussrechnung zwingend,
+     * `finalize_workspace_invoice` prüft ihn gegen den tatsächlichen
+     * Nachtragsstand — und `normalize_workspace_invoice_payload_for_idempotency`
+     * entfernt ihn danach ausdrücklich wieder:
+     *
+     *   -- Strip RPC meta fields that must never become stored invoice content.
+     *
+     * Eine servergespeicherte Schlussrechnung trägt ihn deshalb **nie**. Als
+     * Pflichtfeld gelesen war jede Schlussrechnung originübergreifend
+     * unlesbar — daran ist die reale Rechnung 2026-0003 gescheitert.
+     *
+     * Fehlend ist damit gültig. **Vorhanden bleibt streng**: Ein Wert, den
+     * jemand mitschickt, muss eine echte Folge sein. Es wird nichts
+     * normalisiert, nichts umgewandelt und kein Standardwert erfunden.
+     */
     const amendment = value.expectedAmendmentSequence;
     if (type === 'schluss') {
-      if (!Number.isInteger(amendment) || (amendment as number) < 0) {
+      if (amendment !== undefined && (!Number.isInteger(amendment) || (amendment as number) < 0)) {
         reject('payload.expectedAmendmentSequence:not_sequence');
       }
     } else if (amendment !== undefined) {
