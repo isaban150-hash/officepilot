@@ -11,6 +11,7 @@ import type {
 } from '../types/models';
 
 import { getInvoiceDocumentTitle } from './invoiceTypeService';
+import type { DocumentCloudOutcome } from './document/workspaceDocumentCloudService';
 
 function invoiceTypeLabel(invoice: VorgangInvoice): string {
   return getInvoiceDocumentTitle(invoice.type, invoice.abschlagNumber);
@@ -167,6 +168,74 @@ export function archiveOutgoingInvoice(
     document: result.document,
     created: true,
   };
+}
+
+/**
+ * 05C1B — `not_applicable` heisst: Hier war nie etwas zu sichern.
+ *
+ * Bewusst von `failed` getrennt. Ein Fremddokument oder ein älteres
+ * Archivdokument ohne Rechnungsbezug ist kein Fehlschlag, und eine Warnung
+ * darüber wäre schlicht falsch.
+ */
+export type GeneratedInvoiceDocumentSyncOutcome = DocumentCloudOutcome | 'not_applicable';
+
+/** Nur ein echter Fehlschlag darf den Nutzer warnen. */
+export function isGeneratedInvoiceDocumentSyncSilent(
+  outcome: GeneratedInvoiceDocumentSyncOutcome,
+): boolean {
+  return (
+    outcome === 'synced' ||
+    outcome === 'not_applicable' ||
+    outcome === 'supabase_not_configured'
+  );
+}
+
+/**
+ * GENERATED-INVOICE-DOCUMENT-CLOUD-05C1 — die Cloud kommt zuletzt.
+ *
+ * Erst das lokale Dokument, dann der lokale Link über den 05B-Vertrag, erst
+ * danach dieser Aufruf. Scheitert etwas davor, wird gar nicht gepusht: Ein
+ * Cloud-Dokument, dessen lokale Entsprechung nicht gespeichert werden konnte,
+ * wäre eine Behauptung ohne Deckung.
+ *
+ * Scheitert umgekehrt dieser Schritt, bleibt das lokale Dokument bestehen. Ein
+ * Wiederholungslauf verwendet dieselbe Kennung — `archiveOutgoingInvoice`
+ * findet das vorhandene Dokument über `linkedInvoiceId` wieder und legt kein
+ * zweites an.
+ *
+ * Total: kein Pfad wirft, jeder Ausgang ist benennbar.
+ */
+export async function syncGeneratedInvoiceDocumentToCloud(
+  document: CompanyDocument | undefined,
+): Promise<GeneratedInvoiceDocumentSyncOutcome> {
+  try {
+    // Nichts zu senden ist kein Fehlschlag — und keine Warnung wert.
+    if (!document) return 'not_applicable';
+
+    const [{ upsertGeneratedInvoiceDocumentToCloud }, orchestrator] = await Promise.all([
+      import('./document/workspaceDocumentCloudService'),
+      import('./document/documentCloudPullOrchestrator'),
+    ]);
+
+    /*
+     * Fremddokumente haben hier nichts verloren — die Prüfung steht vor dem
+     * Netz. Auch ein älteres Archivdokument ohne `classifiedKind` fällt
+     * hierunter: Es gibt nichts zu sichern, also gibt es auch nichts zu melden.
+     */
+    if (!orchestrator.isCloudEligibleGeneratedInvoiceDocument(document)) {
+      return 'not_applicable';
+    }
+
+    const result = await upsertGeneratedInvoiceDocumentToCloud({
+      clientDocumentId: document.id,
+      linkedInvoiceId: document.linkedInvoiceId!.trim(),
+      linkedVorgangId: document.linkedVorgang?.vorgangId,
+      payload: orchestrator.buildGeneratedInvoiceDocumentPayload(document),
+    });
+    return result.outcome;
+  } catch {
+    return 'failed';
+  }
 }
 
 export function isFinalizedInvoice(invoice: VorgangInvoice): boolean {

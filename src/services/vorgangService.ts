@@ -1484,21 +1484,32 @@ export type UpdateInvoiceArchiveLinkResult =
  *
  * Jetzt trägt `commitVorgangMutation` den Vertrag: ein `persistAll()`, bei
  * Fehlschlag die vorherige Zeile zurück, kein Scheinerfolg.
+ *
+ * 05C1B — `null` löscht den Verweis. Nötig geworden durch die Cloud-Grabsteine:
+ * Ist das Archivdokument gelöscht, darf die Rechnung nicht weiter auf eine
+ * verschwundene Projektion zeigen.
  */
 export function updateInvoiceArchiveDocumentId(
   vorgangId: string,
   invoiceId: string,
-  archiveDocumentId: string,
+  archiveDocumentId: string | null,
 ): UpdateInvoiceArchiveLinkResult {
   const result = commitVorgangMutation(vorgangId, (current) => {
     const invoiceIndex = current.invoices.findIndex((item) => item.id === invoiceId);
     if (invoiceIndex === -1) return { errorKey: 'not_found' };
 
+    const target = { ...current.invoices[invoiceIndex] };
+    if (archiveDocumentId === null) {
+      delete target.archiveDocumentId;
+    } else {
+      target.archiveDocumentId = archiveDocumentId;
+    }
+
     return {
       ...current,
       invoices: [
         ...current.invoices.slice(0, invoiceIndex),
-        { ...current.invoices[invoiceIndex], archiveDocumentId },
+        target,
         ...current.invoices.slice(invoiceIndex + 1),
       ],
     };

@@ -42,6 +42,7 @@ import {
   mergeVorgaengeFromPull,
 } from '../vorgang/vorgangCloudService';
 import { applyInvoicePullAfterVorgangMerge } from '../invoice/invoiceCloudPullOrchestrator';
+import { applyDocumentPullToState } from '../document/documentCloudPullOrchestrator';
 import { listOrderAmendmentConfirmIntents } from '../orderAmendment/orderAmendmentConfirmIntentService';
 import {
   type MergeCloudAmendmentsResult,
@@ -475,9 +476,26 @@ export class SupabaseSyncAdapter implements SyncAdapter {
 
       appendMissingInvoicePositionRefsToReport(invoicePull.vorgaenge, report);
 
+      /*
+       * GENERATED-DOCUMENT-CLOUD-WIRING-05C1B — Archivdokumente nach den
+       * Rechnungen. Die Reihenfolge ist zwingend: Die Rekonstruktion von
+       * `archiveDocumentId` arbeitet auf den bereits gemergten Vorgängen.
+       *
+       * Ein Fehlschlag darf den bis hierher gewonnenen Stand nicht verwerfen —
+       * ohne Dokumente ist er unvollständig, ohne Rechnungen wäre er leer.
+       */
+      const documentPull = await applyDocumentPullToState({
+        workspaceId,
+        documents: merged.state.documents ?? [],
+        vorgaenge: invoicePull.vorgaenge,
+        report,
+        client: this.client,
+      });
+
       const finalState = {
         ...merged.state,
-        vorgaenge: invoicePull.vorgaenge,
+        vorgaenge: documentPull.vorgaenge,
+        documents: documentPull.documents,
       };
 
       // Vorgang+amendment pull succeeded; invoice RPC failure is reported but does not roll back.

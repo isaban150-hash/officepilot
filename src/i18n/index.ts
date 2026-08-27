@@ -1604,6 +1604,8 @@ const deLegacy = {
   'document.delete': 'Löschen',
   'document.deleteConfirm': 'Endgültig löschen',
   'document.deleted': 'Dokument gelöscht.',
+  'document.delete.cloudUnconfirmed':
+    'Das Dokument konnte in der Cloud nicht gelöscht werden. Es bleibt deshalb bestehen – sonst käme es beim nächsten Abgleich zurück.',
   'document.added': 'Dokument gespeichert.',
   'document.saved': 'Änderungen gespeichert.',
   'document.empty': 'Keine Dokumente gefunden.',

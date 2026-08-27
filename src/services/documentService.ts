@@ -203,6 +203,28 @@ export function hydrateDocumentStore(items: CompanyDocument[]): void {
   documents = items.map(cloneDocument);
 }
 
+/**
+ * GENERATED-INVOICE-DOCUMENT-CLOUD-05C1 — atomarer Austausch nach einem Merge.
+ *
+ * Der Cloud-Merge rechnet den neuen Bestand ausserhalb aus und übergibt ihn
+ * hier in einem Stück. Ein `persistAll()`, bei Fehlschlag der vorherige
+ * Bestand zurück — derselbe Vertrag wie bei `commitVorgangMutation`.
+ *
+ * Bewusst kein zweiter Schreibweg neben `addDocument`/`updateDocument`: Diese
+ * Funktion setzt keine SyncMeta und validiert keine Eingabe, weil sie fertige
+ * Dokumente entgegennimmt. Sie ist ausschliesslich für den Cloud-Merge gedacht.
+ */
+export function commitDocumentStoreMerge(next: CompanyDocument[]): boolean {
+  const previous = documents;
+  documents = next.map(cloneDocument);
+  const result = persistAll();
+  if (!result.success) {
+    documents = previous;
+    return false;
+  }
+  return true;
+}
+
 export function resetDocuments(): void {
   documents = MOCK_COMPANY_DOCUMENTS.map(cloneDocument);
 }

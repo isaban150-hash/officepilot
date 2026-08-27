@@ -19,10 +19,10 @@ import { ShowMoreSection } from '../components/ui/ShowMoreSection';
 import { useApp } from '../context/AppContext';
 import { formatPaperFilingInstruction } from '../services/paperFolderService';
 import {
-  deleteDocument,
   getDocumentById,
   isGeneratedOutgoingInvoiceDocument,
 } from '../services/documentService';
+import { deleteGeneratedInvoiceDocumentWithCloud } from '../services/document/generatedInvoiceDocumentDeleteService';
 import { unlinkInboxItemFromVorgang } from '../services/vorgangService';
 import { SimpleConfirmDialog } from '../components/ui/SimpleConfirmDialog';
 import { resolveDocumentLifecycle } from '../services/documentLifecycleService';
@@ -120,9 +120,15 @@ export function DokumentDetailPage() {
     return true;
   };
 
-  const handleDelete = () => {
-    const result = deleteDocument(document.id);
-    if (result.success) {
+  /*
+   * 05C1B — für ein cloudbekanntes Ausgangsrechnungs-Dokument setzt der Dienst
+   * erst den Cloud-Grabstein und löscht danach lokal. Umgekehrt käme die aktive
+   * Cloud-Zeile beim nächsten Bootstrap zurück. Für alle anderen Dokumentarten
+   * läuft unverändert der rein lokale Weg aus fa953da.
+   */
+  const handleDelete = async () => {
+    const result = await deleteGeneratedInvoiceDocumentWithCloud(document.id);
+    if (result.ok) {
       showToast(translate('document.deleted'));
       navigate('/dokumente', { replace: true });
       return;
@@ -392,7 +398,7 @@ export function DokumentDetailPage() {
             <Button
               variant="danger"
               data-testid="document-detail-delete-confirm"
-              onClick={handleDelete}
+              onClick={() => void handleDelete()}
             >
               {translate('document.deleteConfirm')}
             </Button>

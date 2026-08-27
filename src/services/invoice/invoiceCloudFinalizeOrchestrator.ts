@@ -4,7 +4,11 @@ import { buildPersistedStateSnapshot } from '../persistenceService';
 import { resolveCloudWorkspaceId } from '../workspace/workspaceSyncPayloadService';
 import { getVorgangById } from '../vorgangService';
 import { upsertFinalizedInvoiceOnVorgang } from '../vorgangService';
-import { archiveOutgoingInvoice } from '../invoiceArchiveService';
+import {
+  archiveOutgoingInvoice,
+  isGeneratedInvoiceDocumentSyncSilent,
+  syncGeneratedInvoiceDocumentToCloud,
+} from '../invoiceArchiveService';
 import {
   buildInvoiceFinalizationCandidate,
   buildInvoiceFinalizationContentFingerprint,
@@ -190,10 +194,22 @@ export async function finalizeInvoiceDraftWithCloud(
 
   const archiveResult = archiveOutgoingInvoice(vorgangId, upsert.invoice, setup.companyName);
   if (archiveResult.success) {
+    /*
+     * 05C1 — lokal zuerst, Cloud danach. Erst ab hier steht fest, dass Dokument
+     * und Rechnungs-Link dauerhaft gespeichert sind.
+     *
+     * Scheitert die Cloud-Sicherung, ist die Finalisierung trotzdem gelungen —
+     * aber der Aufrufer erfährt über `archiveWarning`, dass das Archivdokument
+     * nur auf diesem Gerät liegt. Kein falscher Eindruck vollständiger Sicherung.
+     */
+    const cloudOutcome = await syncGeneratedInvoiceDocumentToCloud(archiveResult.document);
     return {
       ok: true,
       invoice: archiveResult.invoice,
       idempotentReplay,
+      ...(isGeneratedInvoiceDocumentSyncSilent(cloudOutcome)
+        ? {}
+        : { archiveWarning: true as const }),
     };
   }
 

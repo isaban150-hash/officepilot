@@ -9,7 +9,11 @@
 import type { AppPersistedState, VorgangInvoice } from '../../types/models';
 import { buildPersistedStateSnapshot } from '../persistenceService';
 import { buildInvoiceContentFingerprintFromInvoice } from '../invoiceService';
-import { archiveOutgoingInvoice } from '../invoiceArchiveService';
+import {
+  archiveOutgoingInvoice,
+  isGeneratedInvoiceDocumentSyncSilent,
+  syncGeneratedInvoiceDocumentToCloud,
+} from '../invoiceArchiveService';
 import { inspectInvoiceFinalizeIntentsForOrigin } from './invoiceFinalizeIntentService';
 import {
   buildInvoicePayloadV1,
@@ -623,6 +627,18 @@ async function finishFromProvenInvoice(input: {
     const result = archiveOutgoingInvoice(identity.vorgangId, invoice, archiveCompanyName);
     if (result.success) {
       archived = result.invoice;
+      /*
+       * 05C1B — dieser Pfad ist produktiv erreichbar (RechnungPage) und
+       * erzeugt selbst Archivdokumente. Er muss deshalb genauso pushen wie der
+       * delegierte Pfad; sonst bliebe genau hier ein Dokument lokal liegen.
+       *
+       * Lokal zuerst: An dieser Stelle steht bereits fest, dass Dokument und
+       * Rechnungs-Link dauerhaft gespeichert sind.
+       */
+      const cloudOutcome = await syncGeneratedInvoiceDocumentToCloud(result.document);
+      if (!isGeneratedInvoiceDocumentSyncSilent(cloudOutcome)) {
+        archiveWarning = true;
+      }
     } else {
       archiveWarning = true;
     }

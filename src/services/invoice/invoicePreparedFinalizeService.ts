@@ -20,7 +20,11 @@ import { resolveCloudWorkspaceId } from '../workspace/workspaceSyncPayloadServic
 import { getActiveStorageScope } from '../storage/storageScopeService';
 import { buildDocumentBlobScopeKey } from '../storage/documentBlobScopeService';
 import { getVorgangById, upsertFinalizedInvoiceOnVorgang } from '../vorgangService';
-import { archiveOutgoingInvoice } from '../invoiceArchiveService';
+import {
+  archiveOutgoingInvoice,
+  isGeneratedInvoiceDocumentSyncSilent,
+  syncGeneratedInvoiceDocumentToCloud,
+} from '../invoiceArchiveService';
 import {
   buildInvoiceContentFingerprintFromInvoice,
   buildInvoiceFinalizationCandidate,
@@ -669,6 +673,15 @@ async function runPreparedFinalization(
     );
     if (archiveResult.success) {
       archived = archiveResult.invoice;
+      /*
+       * 05C1 — lokal zuerst, Cloud danach. Bleibt das Archivdokument lokal,
+       * ist die Finalisierung dennoch gelungen; die Warnung sagt aber, dass es
+       * auf anderen Geräten vorerst fehlt.
+       */
+      const cloudOutcome = await syncGeneratedInvoiceDocumentToCloud(archiveResult.document);
+      if (!isGeneratedInvoiceDocumentSyncSilent(cloudOutcome)) {
+        archiveWarning = true;
+      }
     } else {
       archiveWarning = true;
     }
