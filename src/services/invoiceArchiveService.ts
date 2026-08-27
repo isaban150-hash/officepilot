@@ -89,7 +89,16 @@ export function buildOutgoingInvoiceDocumentInput(
 
 export type ArchiveOutgoingInvoiceResult =
   | { success: true; invoice: VorgangInvoice; document: CompanyDocument; created: boolean }
-  | { success: false; invoice: VorgangInvoice; reason: 'vorgang_not_found' | 'archive_failed' };
+  | {
+      success: false;
+      invoice: VorgangInvoice;
+      /**
+       * ARCHIVE-LINK-LOCAL-DURABILITY-05B — `archive_link_persist_failed` ist
+       * bewusst ein eigener Grund. „Vorgang nicht gefunden“ wäre eine falsche
+       * Diagnose: Der Vorgang existiert, gescheitert ist das Speichern.
+       */
+      reason: 'vorgang_not_found' | 'archive_failed' | 'archive_link_persist_failed';
+    };
 
 export function archiveOutgoingInvoice(
   vorgangId: string,
@@ -106,10 +115,16 @@ export function archiveOutgoingInvoice(
   const existingDocument = getDocumentByLinkedInvoiceId(invoice.id);
   if (existingDocument) {
     const linked = updateInvoiceArchiveDocumentId(vorgangId, invoice.id, existingDocument.id);
-    if (!linked) {
-      return { success: false, invoice, reason: 'vorgang_not_found' };
+    if (!linked.ok) {
+      return {
+        success: false,
+        invoice,
+        reason: linked.reason === 'persist_failed'
+          ? 'archive_link_persist_failed'
+          : 'vorgang_not_found',
+      };
     }
-    return { success: true, invoice: linked, document: existingDocument, created: false };
+    return { success: true, invoice: linked.invoice, document: existingDocument, created: false };
   }
 
   const resolvedVorgang = getVorgangById(vorgangId);
@@ -126,13 +141,29 @@ export function archiveOutgoingInvoice(
   }
 
   const linkedInvoice = updateInvoiceArchiveDocumentId(vorgangId, invoice.id, result.document.id);
-  if (!linkedInvoice) {
-    return { success: false, invoice, reason: 'vorgang_not_found' };
+  if (!linkedInvoice.ok) {
+    /*
+     * 05B — Das Dokument bleibt bestehen. Es ist durch `addDocument` bereits
+     * dauerhaft gespeichert, und ein nachträgliches Entfernen würde die
+     * Löschkaskade aus fa953da für einen reinen Speicherfehler auslösen.
+     *
+     * Es ist auch kein Waisenkind: `linkedInvoiceId` steht darauf, und der
+     * nächste Versuch findet es über `getDocumentByLinkedInvoiceId` wieder und
+     * verknüpft es — ohne ein zweites Dokument anzulegen. Was hier fehlschlägt,
+     * ist ausschließlich der Link, und genau das wird gemeldet.
+     */
+    return {
+      success: false,
+      invoice,
+      reason: linkedInvoice.reason === 'persist_failed'
+        ? 'archive_link_persist_failed'
+        : 'vorgang_not_found',
+    };
   }
 
   return {
     success: true,
-    invoice: linkedInvoice,
+    invoice: linkedInvoice.invoice,
     document: result.document,
     created: true,
   };

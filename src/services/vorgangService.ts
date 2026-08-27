@@ -1462,29 +1462,66 @@ export function getVorgangInvoice(
   return invoice ? { ...invoice } : undefined;
 }
 
+/**
+ * ARCHIVE-LINK-LOCAL-DURABILITY-05B — Ergebnis des Archiv-Link-Commits.
+ *
+ * Drei Ausgänge statt `VorgangInvoice | null`: Ein `null` konnte vorher
+ * „Rechnung nicht gefunden“ bedeuten — ein fehlgeschlagenes Speichern konnte es
+ * gar nicht bedeuten, weil es unbemerkt blieb.
+ */
+export type UpdateInvoiceArchiveLinkResult =
+  | { ok: true; invoice: VorgangInvoice }
+  | { ok: false; reason: 'not_found' | 'persist_failed' };
+
+/**
+ * Setzt den Verweis auf das Archivdokument einer Rechnung.
+ *
+ * Vorher lief das über `updateVorgangInStore`, und das ist die Funktion, die
+ * das Ergebnis von `persistAll()` verwirft. Das Archivdokument entstand, die
+ * Kennung stand im Arbeitsspeicher, der Aufrufer meldete Erfolg — und nach
+ * einem Reload war der Link weg. Dieselbe Fehlerklasse wie beim Versandstatus
+ * (94f338e) und bei den Zahlungen (52ae33f).
+ *
+ * Jetzt trägt `commitVorgangMutation` den Vertrag: ein `persistAll()`, bei
+ * Fehlschlag die vorherige Zeile zurück, kein Scheinerfolg.
+ */
 export function updateInvoiceArchiveDocumentId(
   vorgangId: string,
   invoiceId: string,
   archiveDocumentId: string,
-): VorgangInvoice | null {
-  const index = vorgaenge.findIndex((v) => v.id === vorgangId);
-  if (index === -1) return null;
+): UpdateInvoiceArchiveLinkResult {
+  const result = commitVorgangMutation(vorgangId, (current) => {
+    const invoiceIndex = current.invoices.findIndex((item) => item.id === invoiceId);
+    if (invoiceIndex === -1) return { errorKey: 'not_found' };
 
-  const vorgang = cloneVorgang(vorgaenge[index]);
-  const invoiceIndex = vorgang.invoices.findIndex((item) => item.id === invoiceId);
-  if (invoiceIndex === -1) return null;
+    return {
+      ...current,
+      invoices: [
+        ...current.invoices.slice(0, invoiceIndex),
+        { ...current.invoices[invoiceIndex], archiveDocumentId },
+        ...current.invoices.slice(invoiceIndex + 1),
+      ],
+    };
+  });
 
-  const updatedInvoice: VorgangInvoice = {
-    ...vorgang.invoices[invoiceIndex],
-    archiveDocumentId,
-  };
-  vorgang.invoices = [
-    ...vorgang.invoices.slice(0, invoiceIndex),
-    updatedInvoice,
-    ...vorgang.invoices.slice(invoiceIndex + 1),
-  ];
-  updateVorgangInStore(vorgang);
-  return { ...updatedInvoice };
+  if (!result.ok) {
+    // `vorgang.notFound` und `not_found` meinen dasselbe: Es gibt nichts zu verknüpfen.
+    return {
+      ok: false,
+      reason: result.errorKey === 'order_amendment_local_persist_failed'
+        ? 'persist_failed'
+        : 'not_found',
+    };
+  }
+
+  /*
+   * Zurückgegeben wird die Rechnung aus dem committeten Vorgang — nicht eine
+   * nebenher gebaute Kopie. Was der Aufrufer erhält, ist damit dasselbe, was
+   * gespeichert wurde.
+   */
+  const committed = result.vorgang.invoices.find((item) => item.id === invoiceId);
+  if (!committed) return { ok: false, reason: 'not_found' };
+  return { ok: true, invoice: { ...committed } };
 }
 
 /**
