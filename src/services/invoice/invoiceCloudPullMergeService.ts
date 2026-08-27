@@ -1,6 +1,9 @@
 import type { Vorgang, VorgangInvoice } from '../../types/models';
 import type { SyncSimulationReport } from '../../types/sync';
-import { buildInvoiceContentFingerprintFromInvoice } from '../invoiceService';
+import {
+  buildInvoiceContentFingerprintFromInvoice,
+  matchesPersistedInvoiceContentFingerprint,
+} from '../invoiceService';
 import {
   applyFinalizedInvoiceToVorgang,
   immutableInvoiceFingerprint,
@@ -198,8 +201,13 @@ export function matchInvoiceFinalizeIntentForClear(input: {
   if (intent.workspaceId !== input.workspaceId) return 'kept';
   if (intent.clientInvoiceId !== input.invoice.id) return 'kept';
 
+  /*
+   * 01C: Der Intent stammt womöglich von vor der Fingerprint-Umstellung. Genau
+   * dieser Vergleich hat dieselbe Rechnung bisher für zwei gehalten, sobald der
+   * Vorgang bestätigte Nachträge hatte.
+   */
   const cloudFingerprint = buildInvoiceContentFingerprintFromInvoice(input.invoice);
-  if (intent.contentFingerprint !== cloudFingerprint) {
+  if (!matchesPersistedInvoiceContentFingerprint(intent.contentFingerprint, cloudFingerprint)) {
     return 'fingerprint_conflict';
   }
 

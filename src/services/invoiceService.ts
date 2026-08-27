@@ -618,8 +618,6 @@ export function buildInvoiceFinalizationContentFingerprint(
     fixedAmountNet: isFixedAmountAbschlag(draft)
       ? roundMoney(draft.fixedAmountNet ?? 0)
       : null,
-    expectedAmendmentSequence:
-      draft.type === 'schluss' ? (draft.expectedAmendmentSequence ?? 0) : null,
     positions: isFixedAmountAbschlag(draft)
       ? []
       : draft.positions
@@ -671,8 +669,6 @@ export function buildInvoiceContentFingerprintFromInvoice(invoice: VorgangInvoic
     fixedAmountNet: isFixedAmountAbschlag(invoice)
       ? roundMoney(invoice.fixedAmountNet ?? 0)
       : null,
-    expectedAmendmentSequence:
-      invoice.type === 'schluss' ? (invoice.expectedAmendmentSequence ?? 0) : null,
     positions: isFixedAmountAbschlag(invoice)
       ? []
       : (invoice.positions ?? []).map((p) => ({
@@ -707,7 +703,6 @@ function buildInvoiceContentFingerprintPayload(payload: {
   amount: number;
   calculationMode: InvoiceCalculationMode;
   fixedAmountNet: number | null;
-  expectedAmendmentSequence: number | null;
   positions: Array<{
     orderPositionId: string;
     description: string;
@@ -720,6 +715,81 @@ function buildInvoiceContentFingerprintPayload(payload: {
   }>;
 }): string {
   return JSON.stringify(payload);
+}
+
+/**
+ * CONTENT-FINGERPRINT-PARITY-01C — Rückwärtskompatibilität ohne Rekonstruktion.
+ *
+ * Vor diesem Stand trug der Inhalts-Fingerabdruck `expectedAmendmentSequence`
+ * — bei `schluss` als nichtnegative Ganzzahl, sonst als `null`. Der Wert ist
+ * ein Concurrency-Guard der Finalisierung; der Server entfernt ihn ausdrücklich
+ * aus der gespeicherten Rechnung. Eine aus der Cloud gezogene Schlussrechnung
+ * trägt ihn deshalb nie, und dieselbe Rechnung bekam lokal und aus der Cloud
+ * zwei verschiedene Abdrücke.
+ *
+ * Ein zweiter, „alter" Erzeuger könnte das nicht heilen: Aus einer Rechnung
+ * ohne das Feld ließe sich nur `0` bilden, nie die tatsächlich gespeicherte
+ * `3`. **Die persistierte Zeichenkette ist die einzige Legacy-Quelle** — und
+ * weil der Abdruck roher JSON-Text ist, lässt sie sich lesen.
+ *
+ * Der Ablauf ist bewusst eng:
+ *
+ *   1. Exakte Gleichheit — der Normalfall, kostet nichts.
+ *   2. Sonst parsen; alles, was kein einfaches Objekt ist, gilt als ungültig.
+ *   3. Der Legacy-Schlüssel muss als **eigene** Eigenschaft vorhanden sein.
+ *      Sonst wäre dies ein Parse-Stringify-Rückfall, der jede beliebige
+ *      Formatabweichung tolerieren würde.
+ *   4. Der alte Wert muss zu einer Form passen, die der frühere Erzeuger
+ *      tatsächlich schreiben konnte — sonst ist der Abdruck nicht von ihm.
+ *   5. Genau diesen einen Schlüssel streichen, sonst nichts, und bitgenau
+ *      vergleichen.
+ *
+ * Nichts wird repariert, sortiert, ergänzt oder umgeschrieben; die Funktion ist
+ * rein lesend. Bei jedem Zweifel: `false`.
+ */
+const LEGACY_FINGERPRINT_AMENDMENT_KEY = 'expectedAmendmentSequence';
+
+/** Genau die Rechnungsarten, die der frühere Erzeuger kannte. */
+const LEGACY_FINGERPRINT_NULL_AMENDMENT_TYPES = new Set(['rechnung', 'abschlag', 'teilrechnung']);
+
+function isPlainFingerprintObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** War dieser Altwert für diesen Rechnungstyp überhaupt erzeugbar? */
+function isProducibleLegacyAmendmentValue(type: unknown, value: unknown): boolean {
+  if (type === 'schluss') {
+    return typeof value === 'number' && Number.isInteger(value) && value >= 0;
+  }
+  if (typeof type === 'string' && LEGACY_FINGERPRINT_NULL_AMENDMENT_TYPES.has(type)) {
+    return value === null;
+  }
+  return false;
+}
+
+export function matchesPersistedInvoiceContentFingerprint(
+  persisted: string,
+  current: string,
+): boolean {
+  if (persisted === current) return true;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(persisted);
+  } catch {
+    return false;
+  }
+  if (!isPlainFingerprintObject(parsed)) return false;
+
+  if (!Object.prototype.hasOwnProperty.call(parsed, LEGACY_FINGERPRINT_AMENDMENT_KEY)) {
+    return false;
+  }
+  if (!isProducibleLegacyAmendmentValue(parsed.type, parsed[LEGACY_FINGERPRINT_AMENDMENT_KEY])) {
+    return false;
+  }
+
+  delete parsed[LEGACY_FINGERPRINT_AMENDMENT_KEY];
+  return JSON.stringify(parsed) === current;
 }
 
 export function getOverbillingWarnings(draft: InvoiceDraft): string[] {

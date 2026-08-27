@@ -2045,9 +2045,16 @@ describe('01P4E3B — Prepared-Schluss-Projektionsparität', () => {
     if (!prepared.ok) return;
 
     /*
-     * (a) Der Geschäfts-Fingerprint bindet das Metafeld weiterhin: eine
-     * manipulierte Sequenz erzeugt einen anderen Fingerprint und kann den
-     * gespeicherten Beweis nicht erfüllen.
+     * (a) CONTENT-FINGERPRINT-PARITY-01C — der Geschäfts-Fingerprint bindet das
+     * Metafeld **nicht mehr**, und das ist Absicht.
+     *
+     * Vorher stand hier `.not.toBe(...)`: eine veränderte Sequenz musste einen
+     * anderen Fingerprint ergeben. Genau daran ist dieselbe Rechnung lokal und
+     * aus der Cloud auseinandergefallen — der Server speichert den Guard
+     * ausdrücklich nicht, eine gezogene Schlussrechnung trägt ihn nie.
+     *
+     * Der Schutz wandert dadurch nicht weg; er lag nie hier. Er sitzt in (b),
+     * dem Request-Validator, und im SQL-Guard `invoice_amendment_state_stale`.
      */
     expect(buildInvoiceContentFingerprintFromInvoice(prepared.request.invoice)).toBe(
       prepared.contentFingerprint,
@@ -2056,9 +2063,10 @@ describe('01P4E3B — Prepared-Schluss-Projektionsparität', () => {
       ...prepared.request.invoice,
       expectedAmendmentSequence: SCHLUSS_AMENDMENT_SEQUENCE + 1,
     };
-    expect(buildInvoiceContentFingerprintFromInvoice(tampered)).not.toBe(
+    expect(buildInvoiceContentFingerprintFromInvoice(tampered)).toBe(
       prepared.contentFingerprint,
     );
+    expect(prepared.contentFingerprint).not.toContain('expectedAmendmentSequence');
 
     // (b) Der Request-Validator verlangt das Feld im Schluss-Payload weiterhin.
     const withoutMeta = JSON.parse(JSON.stringify(prepared.request)) as Record<string, unknown>;

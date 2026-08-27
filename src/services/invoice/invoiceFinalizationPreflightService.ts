@@ -27,6 +27,7 @@ import { buildDocumentBlobScopeKey } from '../storage/documentBlobScopeService';
 import {
   buildInvoiceContentFingerprintFromInvoice,
   buildInvoiceFinalizationContentFingerprint,
+  matchesPersistedInvoiceContentFingerprint,
 } from '../invoiceService';
 import {
   isActiveSyncOperationLease,
@@ -676,16 +677,21 @@ function classifyLegacyIntents(input: {
     const localFingerprint = invoiceFingerprints.get(clientInvoiceId);
 
     if (localFingerprint === undefined) {
-      // Gleicher Fingerprint bei anderer Rechnungs-ID bleibt ein Verdacht.
+      /*
+       * Gleicher Fingerprint bei anderer Rechnungs-ID bleibt ein Verdacht.
+       * 01C: auch dann, wenn der Intent noch die Altform trägt — sonst
+       * verlöre der Verdacht bei Altbeständen seine Wirkung.
+       */
       for (const fingerprint of invoiceFingerprints.values()) {
-        if (fingerprint === contentFingerprint) {
+        if (matchesPersistedInvoiceContentFingerprint(contentFingerprint, fingerprint)) {
           return { ok: false, reason: 'legacy_intent_conflict', detail: 'foreign_invoice_id' };
         }
       }
       return { ok: false, reason: 'legacy_intent_unresolved', detail: clientInvoiceId };
     }
 
-    if (localFingerprint !== contentFingerprint) {
+    // 01C: Der Intent kann vor der Fingerprint-Umstellung geschrieben worden sein.
+    if (!matchesPersistedInvoiceContentFingerprint(contentFingerprint, localFingerprint)) {
       return { ok: false, reason: 'legacy_intent_conflict', detail: clientInvoiceId };
     }
 

@@ -29,6 +29,7 @@ import {
   buildInvoiceContentFingerprintFromInvoice,
   buildInvoiceFinalizationCandidate,
   buildInvoiceFinalizationContentFingerprint,
+  matchesPersistedInvoiceContentFingerprint,
   getOverbillingWarnings,
 } from '../invoiceService';
 // Als Modul importiert, damit Tests `generateEntityId` gezielt ersetzen können
@@ -541,9 +542,18 @@ async function runPreparedFinalization(
     return fail('request_invalid', 'not_committed', { detail: 'record_binding' });
   }
 
-  // Zusätzlicher Geschäftsvergleich — kein Ersatz für den Antwortbeweis.
+  /*
+   * Zusätzlicher Geschäftsvergleich — kein Ersatz für den Antwortbeweis.
+   *
+   * 01C: `finalization.contentFingerprint` kann aus einem Datensatz stammen,
+   * der vor der Umstellung geschrieben wurde. Der Vergleich toleriert genau
+   * diese eine Altform, sonst nichts.
+   */
   if (
-    buildInvoiceContentFingerprintFromInvoice(request.invoice) !== finalization.contentFingerprint
+    !matchesPersistedInvoiceContentFingerprint(
+      finalization.contentFingerprint,
+      buildInvoiceContentFingerprintFromInvoice(request.invoice),
+    )
   ) {
     return fail('fingerprint_mismatch', 'not_committed', { detail: 'prepared_invoice' });
   }
@@ -640,7 +650,10 @@ async function runPreparedFinalization(
   };
 
   if (
-    buildInvoiceContentFingerprintFromInvoice(localInvoice) !== finalization.contentFingerprint
+    !matchesPersistedInvoiceContentFingerprint(
+      finalization.contentFingerprint,
+      buildInvoiceContentFingerprintFromInvoice(localInvoice),
+    )
   ) {
     return fail('fingerprint_mismatch', 'confirmed', { detail: 'local_invoice' });
   }

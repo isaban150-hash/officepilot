@@ -8,7 +8,10 @@
  */
 import type { AppPersistedState, VorgangInvoice } from '../../types/models';
 import { buildPersistedStateSnapshot } from '../persistenceService';
-import { buildInvoiceContentFingerprintFromInvoice } from '../invoiceService';
+import {
+  buildInvoiceContentFingerprintFromInvoice,
+  matchesPersistedInvoiceContentFingerprint,
+} from '../invoiceService';
 import {
   archiveOutgoingInvoice,
   isGeneratedInvoiceDocumentSyncSilent,
@@ -377,14 +380,18 @@ function checkResumeIntents(input: {
     if (intent.vorgangId !== identity.vorgangId) continue;
 
     if (intent.clientInvoiceId === clientInvoiceId) {
-      // Die eigene Kennung muss zum gespeicherten Inhalt passen.
-      if (intent.contentFingerprint !== contentFingerprint) {
+      /*
+       * Die eigene Kennung muss zum gespeicherten Inhalt passen.
+       * 01C: Ein vor der Umstellung geschriebener Intent trägt die Altform;
+       * genau diese eine Differenz wird toleriert, keine andere.
+       */
+      if (!matchesPersistedInvoiceContentFingerprint(intent.contentFingerprint, contentFingerprint)) {
         return { ok: false, reason: 'legacy_intent_conflict', detail: 'fingerprint' };
       }
       continue;
     }
 
-    if (intent.contentFingerprint === contentFingerprint) {
+    if (matchesPersistedInvoiceContentFingerprint(intent.contentFingerprint, contentFingerprint)) {
       return {
         ok: false,
         reason: 'possible_existing_invoice',
@@ -404,7 +411,7 @@ function checkResumeIntents(input: {
     } catch {
       return { ok: false, reason: 'fingerprint_failed', detail: intent.clientInvoiceId };
     }
-    if (matchFingerprint !== intent.contentFingerprint) {
+    if (!matchesPersistedInvoiceContentFingerprint(intent.contentFingerprint, matchFingerprint)) {
       return { ok: false, reason: 'legacy_intent_conflict', detail: intent.clientInvoiceId };
     }
   }
