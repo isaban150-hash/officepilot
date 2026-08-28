@@ -11,6 +11,7 @@ import { getClassificationForItem } from './documentClassificationService';
 import { mapClassifiedKindToExpenseCategory } from './expenseCategoryMapping';
 import { addExpense, getAllExpenses } from './expenseService';
 import { getInboxItemById, patchInboxItem } from './inboxService';
+import { buildInvoiceCreatePath } from './invoiceNavigation';
 import { createTaskForItem } from './inboxTaskService';
 import { isClassificationKindWithTasks } from './taskEngineService';
 import { getTodayIso } from './taskNormalize';
@@ -246,7 +247,7 @@ export function executeDocumentAction(
         return {
           ok: true,
           kind: 'navigate',
-          route: `/vorgaenge/${item.vorgangId}/rechnung?type=abschlag`,
+          route: buildInvoiceCreatePath(item.vorgangId, 'abschlag'),
         };
       }
       return { ok: true, kind: 'delegate', delegate: 'openVorgangDialog' };
@@ -260,7 +261,7 @@ export function executeDocumentAction(
         return {
           ok: true,
           kind: 'navigate',
-          route: `/vorgaenge/${item.vorgangId}/rechnung?type=schluss`,
+          route: buildInvoiceCreatePath(item.vorgangId, 'schluss'),
         };
       }
       return { ok: false, errorKey: 'intake.positionsNeedsVorgang' };
@@ -373,7 +374,7 @@ export function executeScanResultAction(actionId: string, item: InboxItem): Offi
         return {
           ok: true,
           kind: 'navigate',
-          route: `/vorgaenge/${item.vorgangId}/rechnung`,
+          route: buildInvoiceCreatePath(item.vorgangId, 'rechnung'),
         };
       }
       return { ok: true, kind: 'delegate', delegate: 'openVorgangDialog' };
@@ -408,7 +409,7 @@ export function resolveHeuteQuickActionRoute(key: TranslationKey): string | null
 
       const activeVorgang = getAllVorgaenge().find((entry) => entry.status === 'in_bearbeitung');
       if (activeVorgang) {
-        return `/vorgaenge/${activeVorgang.id}/rechnung?type=abschlag`;
+        return buildInvoiceCreatePath(activeVorgang.id, 'abschlag');
       }
       return '/rechnungen/offen';
     }

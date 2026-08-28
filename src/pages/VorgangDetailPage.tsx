@@ -32,6 +32,7 @@ import {
   removeOrderPosition,
   updateVorgangStatus,
 } from '../services/vorgangService';
+import { buildInvoiceCreatePath } from '../services/invoiceNavigation';
 import { getCustomerById } from '../services/customerStoreService';
 import {
   CustomerDecisionChoice,
@@ -455,7 +456,7 @@ export function VorgangDetailPage() {
   );
 
   const hasOpenAmendmentDraft = (vorgang.orderAmendments?.length ?? 0) > 0;
-  const prepareInvoicePath = `/vorgaenge/${vorgang.id}/rechnung?type=rechnung`;
+  const prepareInvoicePath = buildInvoiceCreatePath(vorgang.id, 'rechnung');
 
   const secondaryPanels = (
     <>
@@ -553,7 +554,7 @@ export function VorgangDetailPage() {
 
       <div className="action-stack">
         {hasOrderPositions && !schlussExists && (
-          <Link to={`/vorgaenge/${vorgang.id}/rechnung?type=schluss`}>
+          <Link to={buildInvoiceCreatePath(vorgang.id, 'schluss')}>
             <Button variant="outline" fullWidth>
               {translate('vorgang.prepareSchluss')}
             </Button>

@@ -9,6 +9,7 @@ import type {
 import type { CompanySessionContext } from '../../types/companySession';
 import type { InboxItem, Vorgang, WorkflowResult } from '../../types/models';
 import { analyzeContractIntelligenceFromInbox } from '../contractIntelligenceService';
+import { buildInvoiceCreatePath } from '../invoiceNavigation';
 import { filterActiveItems, getInboxItemById, getInboxItems } from '../inboxService';
 import {
   getOpenQuantity,
@@ -443,7 +444,7 @@ function buildRecommendationsForVorgang(vorgang: Vorgang, inbox: InboxItem[]): W
         priority: PRIORITY_NEXT,
         messageKey: 'workflowIntelligence.recommend.createAbschlag',
         params: { vorgang: vorgang.title },
-        route: `/vorgaenge/${vorgang.id}/rechnung`,
+        route: buildInvoiceCreatePath(vorgang.id, 'abschlag'),
         labelKey: 'workflowIntelligence.nextStep.createInvoice',
         reasonKey: 'workflowIntelligence.nextStep.invoiceReason',
       });
@@ -453,7 +454,7 @@ function buildRecommendationsForVorgang(vorgang: Vorgang, inbox: InboxItem[]): W
         priority: PRIORITY_NEXT,
         messageKey: 'workflowIntelligence.recommend.createInvoice',
         params: { vorgang: vorgang.title },
-        route: `/vorgaenge/${vorgang.id}/rechnung`,
+        route: buildInvoiceCreatePath(vorgang.id, 'rechnung'),
         labelKey: 'workflowIntelligence.nextStep.createInvoice',
         reasonKey: 'workflowIntelligence.nextStep.invoiceReason',
       });
@@ -466,7 +467,7 @@ function buildRecommendationsForVorgang(vorgang: Vorgang, inbox: InboxItem[]): W
       priority: PRIORITY_NEXT,
       messageKey: 'workflowIntelligence.recommend.createSchluss',
       params: { vorgang: vorgang.title },
-      route: `/vorgaenge/${vorgang.id}/rechnung`,
+      route: buildInvoiceCreatePath(vorgang.id, 'schluss'),
       labelKey: 'workflowIntelligence.nextStep.createSchluss',
       reasonKey: 'workflowIntelligence.nextStep.invoiceReason',
     });

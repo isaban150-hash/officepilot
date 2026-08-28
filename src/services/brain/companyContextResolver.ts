@@ -2,6 +2,7 @@ import type { CompanyContextResolution, CompanySessionContext } from '../../type
 import type { BrainSuggestedStep } from '../../types/brainOrchestration';
 import { buildKommunikationPath } from '../../components/communication/communicationNavigation';
 import { getInboxItemById } from '../inboxService';
+import { buildInvoiceCreatePath } from '../invoiceNavigation';
 import { getContractPreviewForInbox, processUploadedDocument } from '../intakeWorkflowService';
 import { getVorgangById } from '../vorgangService';
 import {
@@ -33,7 +34,7 @@ function invoiceNextStep(vorgangId: string): BrainSuggestedStep {
   return {
     id: 'open_invoice',
     labelKey: 'companyContext.nextStep.createInvoice',
-    route: `/vorgaenge/${vorgangId}/rechnung`,
+    route: buildInvoiceCreatePath(vorgangId, 'rechnung'),
     reasonKey: 'companyContext.nextStep.createInvoiceReason',
   };
 }
@@ -163,7 +164,7 @@ function resolveInvoiceCreation(session: CompanySessionContext): CompanyContextR
           `${vorgang.orderPositions.length} Positionen im Auftrag`,
         ],
         actions: [],
-        linkedRoute: `/vorgaenge/${vorgangId}/rechnung`,
+        linkedRoute: buildInvoiceCreatePath(vorgangId, 'rechnung'),
       },
       suggestedNextSteps: [invoiceNextStep(vorgangId)],
     };

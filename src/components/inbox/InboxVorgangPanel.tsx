@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Button } from '../ui/Button';
 import { Card, DataRow } from '../ui/Card';
 import { useApp } from '../../context/AppContext';
+import { buildInvoiceCreatePath } from '../../services/invoiceNavigation';
 import {
   createVorgangFromInboxWithContract,
   getContractPreviewForInbox,
@@ -235,7 +236,7 @@ export function InboxVorgangPanel({
             <Link to={`/vorgaenge/${item.vorgangId}`}>
               <Button fullWidth>{primaryLabel}</Button>
             </Link>
-            <Link to={`/vorgaenge/${item.vorgangId}/rechnung`}>
+            <Link to={buildInvoiceCreatePath(item.vorgangId, 'rechnung')}>
               <Button fullWidth variant="outline">
                 {translate('vorgang.prepareInvoice')}
               </Button>

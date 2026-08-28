@@ -2,6 +2,7 @@ import type { CompanySessionContext } from '../../types/companySession';
 import type { HandwerkKnowledgeResolution } from '../../types/handwerkKnowledge';
 import type { BrainSuggestedStep } from '../../types/brainOrchestration';
 import { getInboxItemById } from '../inboxService';
+import { buildInvoiceCreatePath, type InvoiceCreateType } from '../invoiceNavigation';
 import { processUploadedDocument } from '../intakeWorkflowService';
 import {
   getOpenQuantity,
@@ -21,7 +22,7 @@ import {
 } from './handwerkKnowledgeRegistry';
 import { getCompanySession, hasActiveCompanyContext } from './companySessionService';
 
-function invoiceStep(vorgangId: string, type: 'abschlag' | 'schluss' | 'rechnung'): BrainSuggestedStep {
+function invoiceStep(vorgangId: string, type: InvoiceCreateType): BrainSuggestedStep {
   return {
     id: `open_${type}`,
     labelKey:
@@ -30,7 +31,8 @@ function invoiceStep(vorgangId: string, type: 'abschlag' | 'schluss' | 'rechnung
         : type === 'abschlag'
           ? 'handwerkKnowledge.nextStep.abschlagsrechnung'
           : 'companyContext.nextStep.createInvoice',
-    route: `/vorgaenge/${vorgangId}/rechnung`,
+    // Der Typ war hier schon bekannt, wurde aber nicht an die Route gereicht.
+    route: buildInvoiceCreatePath(vorgangId, type),
     reasonKey: 'handwerkKnowledge.nextStep.invoiceReason',
   };
 }
@@ -135,7 +137,7 @@ function resolveSchlussrechnungQuestion(session: CompanySessionContext): Handwer
         summary: `Ja – für Auftrag „${vorgang.title}“ sind alle Positionen abgerechnet. Eine Schlussrechnung wäre jetzt sinnvoll.`,
         bullets: fullyBilled.slice(0, 3).map((p) => `Position vollständig: ${p.description}`),
         actions: [],
-        linkedRoute: `/vorgaenge/${vorgang.id}/rechnung`,
+        linkedRoute: buildInvoiceCreatePath(vorgang.id, 'schluss'),
       },
       suggestedNextSteps: [invoiceStep(vorgang.id, 'schluss')],
     };
@@ -219,7 +221,7 @@ function resolveAbschlagQuestion(session: CompanySessionContext): HandwerkKnowle
       summary: `Für Auftrag „${vorgang.title}“ wäre jetzt eine Abschlagsrechnung möglich.`,
       bullets,
       actions: [],
-      linkedRoute: `/vorgaenge/${vorgang.id}/rechnung`,
+      linkedRoute: buildInvoiceCreatePath(vorgang.id, 'abschlag'),
     },
     suggestedNextSteps: [invoiceStep(vorgang.id, 'abschlag')],
     uncertaintyNote: contractAllows ? undefined : 'brain.uncertainty.reviewRecommended',

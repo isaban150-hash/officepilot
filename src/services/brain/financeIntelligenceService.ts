@@ -735,7 +735,7 @@ function buildRecommendationsForVorgang(vorgang: Vorgang, today: Date | string):
       priority: PRIORITY_NEXT,
       messageKey: 'financeIntelligence.recommend.createInvoice',
       params: { vorgang: vorgang.title },
-      route: buildInvoiceCreatePath(vorgang.id),
+      route: buildInvoiceCreatePath(vorgang.id, 'rechnung'),
       labelKey: 'financeIntelligence.nextStep.openInvoice',
     });
   }
