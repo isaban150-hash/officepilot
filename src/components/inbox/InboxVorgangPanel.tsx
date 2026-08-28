@@ -4,6 +4,7 @@ import { Button } from '../ui/Button';
 import { Card, DataRow } from '../ui/Card';
 import { useApp } from '../../context/AppContext';
 import { buildInvoiceCreatePath } from '../../services/invoiceNavigation';
+import { hasSchlussrechnung } from '../../services/orderBillingRules';
 import {
   createVorgangFromInboxWithContract,
   getContractPreviewForInbox,
@@ -53,6 +54,17 @@ export function InboxVorgangPanel({
 }: InboxVorgangPanelProps) {
   const { translate, showToast } = useApp();
   const mode = getVorgangCardMode(item);
+  /*
+   * Der Rechnungs-Einstieg darf nach einer Schlussrechnung nicht mehr ins
+   * Leere führen — dieselbe Regel, die VorgangDetailPage bereits anwendet.
+   * Bewusst dieselbe zentrale Fachlogik statt einer zweiten Auslegung hier.
+   *
+   * Ohne State und ohne Effekt: der Store wird beim Rendern gelesen, so wie
+   * überall sonst in dieser Architektur. Fehlt der verknüpfte Vorgang, bleibt
+   * es beim bisherigen Verhalten.
+   */
+  const linkedVorgang = item.vorgangId ? getVorgangById(item.vorgangId) : undefined;
+  const schlussExists = linkedVorgang ? hasSchlussrechnung(linkedVorgang) : false;
   const contractPreview = getContractPreviewForInbox(item);
   const isOrderCreate = mode === 'create';
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -236,11 +248,17 @@ export function InboxVorgangPanel({
             <Link to={`/vorgaenge/${item.vorgangId}`}>
               <Button fullWidth>{primaryLabel}</Button>
             </Link>
-            <Link to={buildInvoiceCreatePath(item.vorgangId, 'rechnung')}>
-              <Button fullWidth variant="outline">
-                {translate('vorgang.prepareInvoice')}
-              </Button>
-            </Link>
+            {schlussExists ? (
+              <p className="vorgang-panel__hint" data-testid="inbox-vorgang-invoices-closed">
+                {translate('vorgang.invoicesClosedBySchluss')}
+              </p>
+            ) : (
+              <Link to={buildInvoiceCreatePath(item.vorgangId, 'rechnung')}>
+                <Button fullWidth variant="outline">
+                  {translate('vorgang.prepareInvoice')}
+                </Button>
+              </Link>
+            )}
           </div>
         ) : (
           <Button fullWidth onClick={openDialog}>
