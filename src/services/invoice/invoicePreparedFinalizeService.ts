@@ -40,6 +40,7 @@ import {
   buildWorkspaceInvoiceFinalizePayload,
   rpcFinalizePreparedWorkspaceInvoice,
   WorkspaceInvoiceCloudError,
+  type WorkspaceInvoiceCloudErrorCode,
 } from './workspaceInvoiceCloudService';
 import {
   buildActualPreparedResponseProjection,
@@ -124,6 +125,8 @@ export type ExecutePreparedFinalizationFailure =
   | 'rpc_failed'
   | 'idempotency_conflict'
   | 'amendment_state_stale'
+  /** 01D — für diesen Vorgang existiert bereits eine andere Schlussrechnung. */
+  | 'final_invoice_exists'
   | 'local_persist_failed'
   | 'local_conflict'
   | 'cloud_response_mismatch'
@@ -467,6 +470,17 @@ function mapCloudError(
   if (error.message.includes('invoice_amendment_state_stale')) {
     return { reason: 'amendment_state_stale', cloudState: 'not_committed' };
   }
+  /*
+   * 01D — nach dem Muster von `amendment_state_stale`.
+   *
+   * `not_committed` ist hier belegbar, nicht bloß plausibel: Der Guard läuft
+   * vor dem Insert der neuen Kennung, und der Backstop-Zweig löst aus, weil
+   * der Insert gescheitert ist. Für **diese** Finalisierung hat der Server
+   * nichts geschrieben. Ein `unknown` würde den Entwurf grundlos sperren.
+   */
+  if (error.code === 'final_invoice_exists') {
+    return { reason: 'final_invoice_exists', cloudState: 'not_committed' };
+  }
   if (error.code === 'auth') return { reason: 'auth_missing', cloudState: 'not_committed' };
   if (error.code === 'rls') return { reason: 'rpc_failed', cloudState: 'not_committed' };
   if (error.code === 'validation') return { reason: 'rpc_failed', cloudState: 'not_committed' };
@@ -475,6 +489,14 @@ function mapCloudError(
   }
   // Unbekannter Ausgang: der Server könnte bereits geschrieben haben.
   return { reason: 'rpc_failed', cloudState: 'unknown' };
+}
+
+/** Nur für Tests — dieselbe Abbildung, ohne RPC. */
+export function mapCloudErrorForTests(
+  code: WorkspaceInvoiceCloudErrorCode,
+  message: string,
+): { reason: ExecutePreparedFinalizationFailure; cloudState: PreparedFinalizeCloudState } {
+  return mapCloudError(new WorkspaceInvoiceCloudError(message, code, false));
 }
 
 /**

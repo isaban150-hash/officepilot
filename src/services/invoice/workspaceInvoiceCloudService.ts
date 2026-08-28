@@ -23,6 +23,12 @@ export type WorkspaceInvoiceCloudErrorCode =
   | 'rls'
   | 'validation'
   | 'idempotency_conflict'
+  /**
+   * SINGLE-FINAL-INVOICE-INVARIANT-01D — für diesen Vorgang existiert bereits
+   * eine andere Schlussrechnung. Der Guard läuft **vor** dem Insert der neuen
+   * Kennung; für diese Finalisierung wurde also sicher nichts geschrieben.
+   */
+  | 'final_invoice_exists'
   | 'network'
   | 'unknown';
 
@@ -128,6 +134,21 @@ function classifyInvoiceCloudError(error: { message?: string; code?: string }): 
   if (message.includes('Idempotenzkonflikt')) {
     return new WorkspaceInvoiceCloudError(message, 'idempotency_conflict', false);
   }
+  /*
+   * 01D — der benennbare Serverfehler und sein Backstop.
+   *
+   * Der RPC meldet den Konflikt ausdrücklich; greift bei einem echten Rennen
+   * stattdessen der partielle Unique-Index, trägt die Meldung dessen Namen.
+   * Beide Wege führen zu demselben fachlichen Ausgang. Ein **anderer**
+   * Unique-Verstoß — etwa auf der Rechnungsnummer — darf hier ausdrücklich
+   * nicht hineinlaufen.
+   */
+  if (
+    message.includes('invoice_final_already_exists') ||
+    message.includes('workspace_invoices_single_final_invoice')
+  ) {
+    return new WorkspaceInvoiceCloudError(message, 'final_invoice_exists', false);
+  }
   if (
     message.includes('fehlt') ||
     message.includes('positions') ||
@@ -149,6 +170,14 @@ function classifyInvoiceCloudError(error: { message?: string; code?: string }): 
     );
   }
   return new WorkspaceInvoiceCloudError(message, 'unknown', true);
+}
+
+/** Nur für Tests — dieselbe Klassifizierung, ohne Netz. */
+export function classifyInvoiceCloudErrorForTests(error: {
+  message?: string;
+  code?: string;
+}): WorkspaceInvoiceCloudError {
+  return classifyInvoiceCloudError(error);
 }
 
 const INVOICE_SENT_VIA = new Set(['email', 'post', 'persoenlich', 'portal', 'sonstige']);

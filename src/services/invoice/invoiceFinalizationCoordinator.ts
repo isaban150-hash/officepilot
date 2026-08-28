@@ -340,6 +340,37 @@ function proveLocalInvoice(input: {
 }
 
 /**
+ * SINGLE-FINAL-INVOICE-INVARIANT-01D — höchstens eine Schlussrechnung je Vorgang.
+ *
+ * Rein und ohne Speicherzugriff, damit die Regel einzeln prüfbar bleibt.
+ *
+ * Zwei Feinheiten, die den ganzen Guard tragen:
+ *
+ *   * **Die eigene Kennung ist ausgenommen.** Ein Wiederaufnahmelauf nach
+ *     erfolgreichem RPC findet die eben angelegte Rechnung im Vorgang — sie
+ *     darf nicht als „zweite" gelten, sonst bräche jedes Resume.
+ *   * **Keine Storno-Ausnahme.** `cancelledAt` verändert `status` nicht;
+ *     Client und Server bleiben konsistent zur heutigen Semantik.
+ *
+ * Der Statusfilter entspricht `hasSchlussrechnung` und dem Serverguard.
+ */
+export function findConflictingFinalInvoice(
+  invoices: readonly VorgangInvoice[],
+  invoiceType: VorgangInvoice['type'],
+  clientInvoiceId: string,
+): VorgangInvoice | null {
+  if (invoiceType !== 'schluss') return null;
+  return (
+    invoices.find(
+      (invoice) =>
+        invoice.type === 'schluss' &&
+        (invoice.status === 'vorbereitet' || invoice.status === 'versendet') &&
+        invoice.id !== clientInvoiceId,
+    ) ?? null
+  );
+}
+
+/**
  * Intent-Lage im Wiederaufnahmefall. Es wird ausschließlich
  * `inspectInvoiceFinalizeIntentsForOrigin` verwendet — keine zweite
  * Schlüsselsyntax, keine eigene LocalStorage-Auswertung, kein Schreiben.
@@ -840,6 +871,35 @@ async function runStart(
       currentRevision: guard.currentRevision,
       existingInvoiceId: guard.existingInvoiceId,
     });
+  }
+
+  /*
+   * 4b. SINGLE-FINAL-INVOICE-INVARIANT-01D — vor `begin` und damit vor jedem
+   * RPC. Existiert lokal bereits eine **andere** Schlussrechnung für diesen
+   * Vorgang, wird gar nicht erst gesendet.
+   *
+   * Der Server prüft dasselbe noch einmal — er muss es, weil eine zweite
+   * Origin die fremde Rechnung womöglich gar nicht kennt. Dieser Guard hier
+   * erspart den vergeblichen Netzgang und liefert den Grund lokal.
+   */
+  {
+    let localInvoices: VorgangInvoice[] = [];
+    try {
+      const snapshot = buildPersistedStateSnapshot();
+      localInvoices =
+        (snapshot.vorgaenge ?? []).find((entry) => entry.id === identity.vorgangId)?.invoices ?? [];
+    } catch {
+      return failBeforeBegin('storage_failed', { detail: 'snapshot' });
+    }
+
+    const conflict = findConflictingFinalInvoice(
+      localInvoices,
+      prepared.request.invoice.type,
+      prepared.clientInvoiceId,
+    );
+    if (conflict) {
+      return failBeforeBegin('final_invoice_exists', { existingInvoiceId: conflict.id });
+    }
   }
 
   /* 5. Begin — erst hier wird die Kennung dauerhaft. */
