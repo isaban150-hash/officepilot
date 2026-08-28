@@ -1045,6 +1045,8 @@ const deLegacy = {
     'Es gibt einen offenen Nachtragsentwurf. Er ist noch nicht Teil des bestätigten Auftrags.',
   'vorgang.materialSource': 'Materialquelle',
   'vorgang.prepareInvoice': 'Rechnung vorbereiten',
+  'vorgang.invoicesClosedBySchluss':
+    'Der Rechnungsstrang ist bereits mit einer Schlussrechnung abgeschlossen.',
   'vorgang.prepareAbschlag': 'Abschlag vorbereiten',
   'vorgang.prepareSchluss': 'Schlussrechnung vorbereiten',
   'vorgang.noOrderPositions': 'Für diesen Vorgang fehlen Leistungspositionen.',
@@ -2096,6 +2098,8 @@ const deLegacy = {
   'invoice.validation.paymentDueDate': 'Zahlungsziel fehlt oder ist ungültig.',
   'invoice.validation.paymentDueBeforeIssue': 'Zahlungsziel liegt vor dem Rechnungsdatum.',
   'invoice.validation.noPositions': 'Mindestens eine Position mit Menge größer 0 ist erforderlich.',
+  'invoice.validation.zeroBillableValue':
+    'Die abgerechneten Positionen ergeben 0,00 €. Bitte Mengen oder Einzelpreise prüfen.',
   'invoice.validation.fixedAmountNet': 'Der pauschale Nettobetrag muss größer als 0 sein.',
   'invoice.validation.fixedAmountType': 'Pauschalbetrag ist nur für Abschlagsrechnungen zulässig.',
   'invoice.validation.fixedAmountWithPositions':
@@ -4363,6 +4367,8 @@ const trLegacy: Partial<Record<keyof typeof de, string>> = {
   'invoice.validation.paymentDueDate': 'Vade tarihi eksik veya geçersiz.',
   'invoice.validation.paymentDueBeforeIssue': 'Vade, fatura tarihinden önce.',
   'invoice.validation.noPositions': 'Miktarı 0’dan büyük en az bir kalem gerekir.',
+  'invoice.validation.zeroBillableValue':
+    'Faturalanan kalemlerin toplamı 0,00 €. Lütfen miktarları veya birim fiyatları kontrol edin.',
   'invoice.validation.fixedAmountNet': 'Sabit net tutar 0’dan büyük olmalıdır.',
   'invoice.validation.fixedAmountType': 'Sabit tutar yalnızca ara faturalar için geçerlidir.',
   'invoice.validation.fixedAmountWithPositions':
@@ -5190,6 +5196,8 @@ const bgLegacy: Partial<Record<keyof typeof de, string>> = {
   'invoice.validation.paymentDueDate': 'Срокът за плащане липсва или е невалиден.',
   'invoice.validation.paymentDueBeforeIssue': 'Срокът за плащане е преди датата на фактурата.',
   'invoice.validation.noPositions': 'Нужна е поне една позиция с количество над 0.',
+  'invoice.validation.zeroBillableValue':
+    'Фактурираните позиции дават 0,00 €. Моля, проверете количествата или единичните цени.',
   'invoice.validation.positionDescription': 'Позиция без описание.',
   'invoice.validation.positionQuantity': 'Позиция с невалидно количество.',
   'invoice.validation.positionUnit': 'Позиция без единица.',

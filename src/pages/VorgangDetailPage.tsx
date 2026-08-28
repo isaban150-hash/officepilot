@@ -914,7 +914,14 @@ export function VorgangDetailPage() {
                 {translate('vorgang.invoicesSectionIntro')}
               </p>
             </div>
-            {hasOrderPositions ? (
+            {/*
+              Nach einer Schlussrechnung führt dieser Einstieg nur noch in einen
+              Editor ohne offene Mengen. Der Einstieg für Schlussrechnungen
+              (oben) prüft das längst — der allgemeine bislang nicht.
+              Bewusst ohne Mengenprüfung: solange keine Schlussrechnung
+              existiert, bleibt ein pauschaler Abschlag ein legitimer Weg.
+            */}
+            {hasOrderPositions && !schlussExists ? (
               <div className="vorgang-invoices-section__cta">
                 <Link
                   to={prepareInvoicePath}
@@ -924,6 +931,15 @@ export function VorgangDetailPage() {
                   <Button fullWidth>{translate('vorgang.prepareInvoice')}</Button>
                 </Link>
               </div>
+            ) : null}
+            {/* Bestehende Hinweis-Optik der Sektion; keine neue CSS-Regel nötig. */}
+            {hasOrderPositions && schlussExists ? (
+              <p
+                className="vorgang-invoices-section__draft-hint"
+                data-testid="vorgang-invoices-closed"
+              >
+                {translate('vorgang.invoicesClosedBySchluss')}
+              </p>
             ) : null}
           </div>
 

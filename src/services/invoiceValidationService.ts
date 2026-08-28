@@ -162,6 +162,29 @@ export function validateInvoiceDraftForApproval(
     const activePositions = draft.positions.filter((p) => p.billable && p.quantity > 0);
     if (activePositions.length === 0) {
       blockingErrors.push({ code: 'no_positions', messageKey: 'invoice.validation.noPositions' });
+    } else {
+      /*
+       * Es gibt abrechenbare Positionen — aber tragen sie auch einen Wert?
+       * Menge 1 zum Einzelpreis 0 kam bis hierher durch. Bewusst nur über
+       * `activePositions` gerechnet: das Gesamt-Subtotal weiter unten filtert
+       * nicht auf `billable` und könnte durch eine nicht abrechenbare Position
+       * fälschlich positiv werden.
+       *
+       * Nur der Leistungswert zählt, nicht der Restzahlbetrag: eine
+       * Schlussrechnung, die durch Abschlagsabzüge auf 0,00 € endet, ist ein
+       * gültiger Beleg und bleibt hier unberührt.
+       */
+      const billableSubtotalCents = sumCents(
+        activePositions
+          .map((p) => lineTotalCents(p.quantity, p.unitPrice))
+          .filter(Number.isFinite),
+      );
+      if (billableSubtotalCents <= 0) {
+        blockingErrors.push({
+          code: 'zero_billable_value',
+          messageKey: 'invoice.validation.zeroBillableValue',
+        });
+      }
     }
 
     for (const position of draft.positions) {
