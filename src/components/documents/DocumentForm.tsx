@@ -115,11 +115,12 @@ interface DocumentFormProps {
 }
 
 export function DocumentForm({ mode, document, onSaved, onCancel }: DocumentFormProps) {
-  const { translate, setup, showToast } = useApp();
+  // Die eigene Firma stammt aus dem Profil, nicht aus dem Setup-Legacy-Spiegel.
+  const { translate, companyProfile, showToast } = useApp();
   const [draft, setDraft] = useState<DocumentFormDraft>(() =>
     mode === 'edit' && document
       ? draftFromDocument(document)
-      : createEmptyDraft(setup.companyName),
+      : createEmptyDraft(companyProfile.companyName),
   );
   const [errorKey, setErrorKey] = useState<TranslationKey | null>(null);
 

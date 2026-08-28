@@ -720,6 +720,17 @@ export interface WorkflowResultExecution {
 import type { CommunicationChannel } from './communication';
 
 export interface CompanySetup {
+  /**
+   * PRODUCT-FOUNDATION-02A — Legacy-Spiegel, **nicht** die aktuelle
+   * Firmenidentität. Maßgeblich ist `CompanyProfile.companyName`.
+   *
+   * Das Feld bleibt erhalten, weil ältere Geräte es weiterhin senden, die
+   * Altbestandsrettung (`createCompanyProfileFromSetup`,
+   * `syncCompanyProfileFromSetup`) und der Bootstrap-Wächter `isDefaultSetup`
+   * darauf beruhen und es Bestandteil der `company_setup`-Cloudnutzlast ist.
+   * Es wird von `updateCompanyProfile` nachgeführt und darf ein bereits
+   * befülltes Profil niemals überschreiben. Neue Leser lesen das Profil.
+   */
   companyName: string;
   industry: string;
   taxStatus: TaxStatus;

@@ -259,7 +259,14 @@ export function resolveSuggestedCustomerName(
 
 export function EingangDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { translate, showToast, setup } = useApp();
+  const { translate, showToast, setup, companyProfile } = useApp();
+  /*
+   * Die eigene Firmenidentität kommt aus `CompanyProfile`.
+   * `setup.companyName` bleibt nur ein Legacy-Spiegel und wird hier nicht mehr
+   * als aktuelle Wahrheit gelesen. `setup` selbst wird weiterhin für
+   * Betriebseinstellungen wie `materialStandard` gebraucht.
+   */
+  const ownCompanyName = companyProfile.companyName;
   const navigate = useNavigate();
   const location = useLocation();
   const [item, setItem] = useState<InboxItem | undefined>(() =>
@@ -860,7 +867,7 @@ export function EingangDetailPage() {
     try {
       // R02: one shared handoff — archive write plus inbox marking. A repeated attempt
       // reuses an existing archive document for this inbox item instead of duplicating.
-      const result = handoffInboxItemToArchive(item, setup.companyName, {
+      const result = handoffInboxItemToArchive(item, ownCompanyName, {
         ...resolveImportInboxDocumentOptionsFromIntakeCarry(item.id),
         ...(mode === 'update' && existingDocumentId ? { existingDocumentId } : {}),
       });
@@ -892,7 +899,7 @@ export function EingangDetailPage() {
       revealArchiveImportUi();
       return;
     }
-    const duplicate = isDuplicateDocument(item, setup.companyName);
+    const duplicate = isDuplicateDocument(item, ownCompanyName);
     if (duplicate) {
       setDuplicateDocument(duplicate);
       return;
@@ -1004,9 +1011,9 @@ export function EingangDetailPage() {
     }
     setIsExecutingIntake(true);
     try {
-      const duplicate = isDuplicateDocument(item, setup.companyName);
+      const duplicate = isDuplicateDocument(item, ownCompanyName);
       const result = executeSmartIntake(workflow, {
-        companyName: setup.companyName,
+        companyName: ownCompanyName,
         materialStandard: setup.materialStandard,
         duplicateMode: duplicate ? 'update' : 'create',
       });
@@ -1082,7 +1089,7 @@ export function EingangDetailPage() {
       showToast(translate('order_plan_amendment_required'));
       return;
     }
-    if (!setup.companyName?.trim()) {
+    if (!ownCompanyName?.trim()) {
       showToast(translate('documentIntelligence.createOrderFailed'));
       return;
     }
@@ -1094,7 +1101,7 @@ export function EingangDetailPage() {
         item,
         proposal: workflow.contractOrderProposal,
         selectedPositions,
-        companyName: setup.companyName,
+        companyName: ownCompanyName,
         materialStandard: setup.materialStandard,
         customerDecision,
       });

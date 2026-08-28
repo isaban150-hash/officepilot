@@ -60,12 +60,16 @@ export function AppProvider({ children, initialSetup }: AppProviderProps) {
   }, []);
 
   const updateCompanyProfileState = useCallback((partial: Partial<CompanyProfile>) => {
+    /*
+     * `updateCompanyProfile` pflegt den Legacy-Spiegel `CompanySetup.companyName`
+     * bereits selbst und persistiert ihn. Ein zweites Nachziehen im React-State
+     * ist damit überflüssig — und wäre die einzige Stelle, die den Namen noch
+     * als Setup-Wahrheit behandelt. Die aktuelle Identität kommt aus
+     * `companyProfile`.
+     */
     const result = updateCompanyProfile(partial);
     if (result.success) {
       setCompanyProfile(result.profile);
-      if (partial.companyName) {
-        setSetup((prev) => ({ ...prev, companyName: result.profile.companyName }));
-      }
     }
     return result;
   }, []);

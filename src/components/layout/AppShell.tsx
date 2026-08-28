@@ -12,16 +12,22 @@ import { UiSessionRecoveryHost } from '../system/UiSessionRecoveryHost';
 import { useApp } from '../../context/AppContext';
 
 export function AppShell() {
-  const { setup, toast, clearToast, translate } = useApp();
+  /*
+   * Die Kopfzeile zeigt die **aktuelle** Firmenidentität. Die liegt in
+   * `CompanyProfile`; `CompanySetup.companyName` ist nur noch ein
+   * Legacy-Spiegel und kann nach einem Cloud-Pull veraltet sein.
+   */
+  const { companyProfile, toast, clearToast, translate } = useApp();
+  const companyName = companyProfile.companyName;
 
   return (
     <div className="app-shell" data-testid="app-shell">
       <div className="app-shell__top">
         <div className="app-shell__top-left">
           <span className="app-shell__brand">OfficePilot</span>
-          {setup.companyName ? (
-            <span className="app-shell__company" title={setup.companyName}>
-              {setup.companyName}
+          {companyName ? (
+            <span className="app-shell__company" title={companyName}>
+              {companyName}
             </span>
           ) : null}
         </div>
