@@ -5,10 +5,18 @@
  * only at call time. No store, no matching heuristics, no fuzzy substring check.
  */
 import { getCompanyProfile } from './companyProfileService';
+import { normalizeCompanyIdentityName } from './companyIdentityNormalization';
 
-/** Trim, collapse inner whitespace, lowercase. Nothing else. Also used by the identity-drift guard. */
+/**
+ * Kanonischer Vergleichswert — Rand, Leerraum, Schreibweise und Diakritika.
+ * Auch vom Identitäts-Drift-Guard genutzt.
+ *
+ * OWN-COMPANY-NAME-NORMALIZATION-01: Die Faltung kam hinzu, weil derselbe
+ * Betrieb im Dokument anders geschrieben steht als im Profil. Verglichen wird
+ * weiterhin auf vollständige Gleichheit — kein Fuzzy Matching.
+ */
 export function normalizeCompanyNameForComparison(value: string | undefined | null): string {
-  return (value ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+  return normalizeCompanyIdentityName(value);
 }
 
 /**

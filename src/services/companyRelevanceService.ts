@@ -1,4 +1,5 @@
 import { getCompanyProfile } from './companyProfileService';
+import { normalizeCompanyIdentityName } from './companyIdentityNormalization';
 import { getAllVorgaenge } from './vorgangService';
 import type {
   CompanyProfile,
@@ -14,10 +15,18 @@ const BETRIEBSNUMMER_PATTERN = /betriebsnummer[:\s]+[\w-]+/i;
 
 /**
  * Shared with the own-company party resolution so no third name normalization
- * exists. Behaviour unchanged — only the visibility.
+ * exists.
+ *
+ * OWN-COMPANY-NAME-NORMALIZATION-01: Zuerst wird kanonisch gefaltet, erst
+ * danach greift der Zeichenfilter. Vorher lief es umgekehrt — und weil `\w`
+ * ohne `u`-Flag nur ASCII kennt, wurden `Ç` und `ı` als Interpunktion behandelt
+ * und gelöscht: Aus „Çırmak Haustechnik GmbH" wurde „rmak haustechnik gmbh".
+ *
+ * Die interne `normalize` bleibt für die Relevanzprüfung unverändert; die
+ * Änderung gilt gezielt für die Firmenidentität.
  */
 export function normalizeCompanyIdentityValue(value: string): string {
-  return normalize(value);
+  return normalize(normalizeCompanyIdentityName(value));
 }
 
 function normalize(value: string): string {
