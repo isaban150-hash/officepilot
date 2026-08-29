@@ -9,6 +9,13 @@ import { FIRMENDATEN_BACKUP_HREF } from '../services/backupSectionNavigation';
 
 const MEHR_LINKS: { key: TranslationKey; route: string; descriptionKey: TranslationKey }[] = [
   { key: 'mehr.tasks', route: '/aufgaben', descriptionKey: 'mehr.tasksDesc' },
+  /*
+   * CUSTOMER-NAVIGATION-ENTRY-01 — bislang war `/kunden` über die Oberfläche
+   * gar nicht erreichbar: Der einzige Einstieg lag in der nirgends
+   * eingebundenen `HomeDeskTiles`. Der Eintrag steht bewusst bei den
+   * fachlichen Bereichen und nicht unten bei Firmendaten und Synchronisation.
+   */
+  { key: 'mehr.customers', route: '/kunden', descriptionKey: 'mehr.customersDesc' },
   { key: 'mehr.invoices', route: '/rechnungen/offen', descriptionKey: 'mehr.invoicesDesc' },
   { key: 'mehr.expenses', route: '/ausgaben', descriptionKey: 'mehr.expensesDesc' },
   { key: 'mehr.communication', route: '/kommunikation', descriptionKey: 'mehr.communicationDesc' },
