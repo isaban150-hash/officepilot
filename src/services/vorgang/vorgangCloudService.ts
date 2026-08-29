@@ -734,6 +734,86 @@ export function planVorgangCustomerRelationBackfill(
   return planned;
 }
 
+/**
+ * CREATE-RETRY-CONFLICT-02 — Wiederanlauf nach verlorener Create-Bestätigung.
+ *
+ * Ausgangslage: Der erste Push eines neuen Vorgangs sendet `p_row_version = 0`.
+ * Der Server fügt ein (`row_version = 1`), die Antwort erreicht den Client
+ * nicht. Lokal bleibt `sync` leer, der Outbox-Eintrag aktiv. Mit dem
+ * verschärften Serververtrag („0 heisst: darf noch nicht existieren") endet
+ * jeder Wiederholungsversuch in einem Versionskonflikt — der Vorgang käme nie
+ * mehr in die Cloud.
+ *
+ * Der Beweis, dass die Übernahme hier gefahrlos ist, steht im Serververtrag
+ * selbst: **Jeder** Schreibvorgang erhöht `row_version`, auch ein Grabstein.
+ * `row_version === 1` bedeutet daher zwingend, dass seit dem Einfügen kein
+ * weiterer Server-Write stattfand. Es kann also nichts überschrieben werden,
+ * was ein anderes Gerät geschrieben hätte — es existiert nichts.
+ *
+ * Bewusst **nicht** verlangt:
+ *  - Inhaltsgleichheit: Nach dem verlorenen Ack arbeitet der Nutzer weiter.
+ *    Genau dann unterscheiden sich die Inhalte — und genau dann wird die
+ *    Wiederherstellung gebraucht.
+ *  - `operation === 'create'`: Die Outbox überschreibt die Operation mit der
+ *    jeweils letzten (`create` → `update` → `delete`). Die Ursprungsabsicht ist
+ *    dort nicht mehr ablesbar. Stabil ist allein `sync.version === 0`.
+ */
+export interface LostAckAdoptionPlan {
+  /** Basisversion übernehmen, lokalen Fachstand behalten, erneut senden. */
+  adopt: string[];
+  /** Der gewünschte Remote-Zustand besteht bereits — nichts mehr zu senden. */
+  settle: string[];
+}
+
+function planLostAckAdoption<T extends { id: string; sync?: { version?: number; deleted?: boolean } }>(
+  locals: T[],
+  remotes: Map<string, { rowVersion: number; deleted: boolean }>,
+  activeOutboxIds: ReadonlySet<string>,
+): LostAckAdoptionPlan {
+  const adopt: string[] = [];
+  const settle: string[] = [];
+
+  for (const local of locals) {
+    if ((local.sync?.version ?? 0) !== 0) continue;
+    if (!activeOutboxIds.has(local.id)) continue;
+
+    const remote = remotes.get(local.id);
+    // Nur die unberührte Erstzeile beweist, dass kein fremder Write erfolgte.
+    if (!remote || remote.rowVersion !== 1) continue;
+
+    if (!remote.deleted) {
+      adopt.push(local.id);
+      continue;
+    }
+
+    /*
+     * Grabstein: Nur wenn auch lokal gelöscht werden sollte, ist der Wunsch
+     * bereits erfüllt. Gegen einen lokal **aktiven** Datensatz bleibt es beim
+     * regulären Konflikt — eine Übernahme führte beim nächsten Push zur
+     * stillen Wiederbelebung.
+     */
+    if (local.sync?.deleted === true) {
+      settle.push(local.id);
+    }
+  }
+
+  return { adopt, settle };
+}
+
+export function planVorgangLostAckAdoption(
+  localVorgaenge: Vorgang[],
+  remoteRows: WorkspaceVorgangRow[],
+  activeOutboxVorgangIds: ReadonlySet<string>,
+): LostAckAdoptionPlan {
+  const remotes = new Map(
+    remoteRows.map((row) => [
+      row.vorgang_id,
+      { rowVersion: Number(row.row_version), deleted: Boolean(row.deleted) },
+    ]),
+  );
+  return planLostAckAdoption(localVorgaenge, remotes, activeOutboxVorgangIds);
+}
+
 export function mergeVorgaengeFromPull(
   localVorgaenge: Vorgang[],
   remoteRows: WorkspaceVorgangRow[],

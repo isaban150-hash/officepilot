@@ -1,5 +1,5 @@
 import type { AppPersistedState } from '../../types/models';
-import type { SyncClientConfig } from '../../types/sync';
+import type { SyncClientConfig, SyncEntityType, SyncMeta } from '../../types/sync';
 import { hydrateCompanyProfileStore } from '../companyProfileService';
 import { persistAll } from '../persistenceService';
 import { ensureSyncClientFromState, hydrateSyncClient } from '../sync/syncClientService';
@@ -7,11 +7,13 @@ import {
   completeIdenticalCompanyCloudOutboxEntry,
   enqueueSyncOutbox,
   getSyncOutboxSnapshot,
+  markOutboxEntriesCompleted,
 } from '../sync/syncOutboxService';
 import { filterSyncActive } from '../sync/syncMetaService';
 import {
   mergeCustomersFromPull,
   planCustomerBackfill,
+  planCustomerLostAckAdoption,
 } from '../customer/customerCloudService';
 import {
   buildCompanyProfileCloudPayload,
@@ -25,6 +27,7 @@ import {
 import {
   mergeVorgaengeFromPull,
   planVorgangCustomerRelationBackfill,
+  planVorgangLostAckAdoption,
 } from '../vorgang/vorgangCloudService';
 import { isDefinitelyMockVorgang } from '../storage/mockDataDetectionService';
 import {
@@ -185,6 +188,93 @@ function canonicalCloudPayloadKey(payload: Record<string, unknown>): string {
         return sorted;
       }, {});
   });
+}
+
+/**
+ * Die Entitäten mit lokalen, noch nicht bestätigten Änderungen — abgelesen an
+ * der Outbox **dieses** Zustands. Der globale Store kennt die Push-Ergebnisse
+ * dieses Laufs noch nicht; OUTBOX-PRESERVE-ON-PULL hat gezeigt, dass beide
+ * Stände während eines Syncs auseinanderliegen.
+ */
+function activeOutboxEntityIds(
+  state: AppPersistedState,
+  entityType: SyncEntityType,
+): ReadonlySet<string> {
+  return new Set(
+    (state.syncOutbox ?? [])
+      .filter(
+        (entry) =>
+          entry.entityType === entityType &&
+          (entry.status === 'pending' || entry.status === 'error' || entry.status === 'blocked'),
+      )
+      .map((entry) => entry.entityId),
+  );
+}
+
+/**
+ * CREATE-RETRY-CONFLICT-02 — übernimmt **ausschliesslich** die bekannte
+ * Serverbasis. Fachwerte, Löschwunsch und alles Übrige bleiben unangetastet:
+ * Der lokale Stand ist der neuere, die Remote-Zeile trägt nur den eigenen,
+ * seither unberührten Create.
+ */
+function adoptLostAckBaseVersion<T extends { sync?: SyncMeta }>(
+  entity: T,
+  state: AppPersistedState,
+  workspaceId: string,
+): T {
+  return {
+    ...entity,
+    sync: {
+      ...entity.sync,
+      updatedAt: entity.sync?.updatedAt ?? new Date().toISOString(),
+      version: 1,
+      deleted: entity.sync?.deleted ?? false,
+      deviceId: state.syncClient!.deviceId,
+      workspaceId,
+    },
+  };
+}
+
+/**
+ * CREATE-RETRY-CONFLICT-02 — der zweite, unverzichtbare Teil der
+ * Wiederherstellung.
+ *
+ * Ein Versionskonflikt hat den Eintrag auf `blocked` gesetzt, und der Push
+ * verarbeitet nur `pending` und `error`. Die neue Basisversion allein liesse
+ * den Eintrag also für immer stumm. `enqueueSyncOutbox` führt ihn über die
+ * vorhandene Merge-Semantik zurück auf `pending` — `ACTIVE_OUTBOX_STATUSES`
+ * schliesst `blocked` ein, es entsteht kein zweiter Eintrag. Die bestehende
+ * Operation bleibt erhalten; sie taugt nicht als Create-Beweis, ist aber die
+ * korrekte Absicht für den nächsten Versuch.
+ *
+ * Für `settle` ist der gewünschte Remote-Zustand bereits erreicht (Grabstein
+ * gegen lokalen Löschwunsch). Dann wird der Auftrag über die vorhandene
+ * `markOutboxEntriesCompleted` abgeschlossen — kein zweiter Grabstein-Write.
+ */
+function applyLostAckAdoptionToOutbox(
+  state: AppPersistedState,
+  entityType: SyncEntityType,
+  plan: { adopt: string[]; settle: string[] },
+): void {
+  if (plan.adopt.length === 0 && plan.settle.length === 0) return;
+
+  const entries = state.syncOutbox ?? [];
+  for (const entityId of plan.adopt) {
+    const existing = entries.find(
+      (entry) => entry.entityType === entityType && entry.entityId === entityId,
+    );
+    enqueueSyncOutbox({
+      entityType,
+      entityId,
+      operation: existing?.operation ?? 'update',
+      version: 1,
+    });
+  }
+
+  const settled = entries
+    .filter((entry) => entry.entityType === entityType && plan.settle.includes(entry.entityId))
+    .map((entry) => entry.id);
+  markOutboxEntriesCompleted(settled);
 }
 
 export function mergeRemoteWorkspacePullIntoState(
@@ -427,24 +517,43 @@ export function mergeRemoteWorkspacePullIntoState(
      * Vorgang gilt damit als sauber und darf die neuere Serverfassung
      * übernehmen, statt einen Konflikt zu melden.
      */
-    const dirtyVorgangIds = new Set(
-      (state.syncOutbox ?? [])
-        .filter(
-          (entry) =>
-            entry.entityType === 'vorgang' &&
-            (entry.status === 'pending' ||
-              entry.status === 'error' ||
-              entry.status === 'blocked'),
-        )
-        .map((entry) => entry.entityId),
-    );
-    const vorgangMerge = mergeVorgaengeFromPull(
+    const dirtyVorgangIds = activeOutboxEntityIds(state, 'vorgang');
+
+    /*
+     * CREATE-RETRY-CONFLICT-02 — die Wiederherstellung nach verlorener
+     * Create-Bestätigung läuft **vor** der Merge-Bewertung. Sonst entstünde
+     * genau hier ein sachlich falscher Konflikt: lokal Version 0 und
+     * ungesendete Änderungen gegen eine vorhandene Remote-Zeile.
+     *
+     * Die betroffenen Zeilen werden aus dem Merge herausgenommen, statt den
+     * Konflikt hinterher zu entfernen. Das ist keine Kosmetik, sondern die
+     * sachlich richtige Beschreibung: Remote `row_version = 1` ist der eigene,
+     * seither unberührte Create — es gibt dort nichts zu übernehmen.
+     */
+    const vorgangAdoption = planVorgangLostAckAdoption(
       state.vorgaenge,
       pull.vorgaenge ?? [],
+      dirtyVorgangIds,
+    );
+    const adoptedVorgangIds = new Set([...vorgangAdoption.adopt, ...vorgangAdoption.settle]);
+
+    const vorgangMerge = mergeVorgaengeFromPull(
+      adoptedVorgangIds.size > 0
+        ? state.vorgaenge.map((vorgang) =>
+            adoptedVorgangIds.has(vorgang.id)
+              ? adoptLostAckBaseVersion(vorgang, state, workspaceId)
+              : vorgang,
+          )
+        : state.vorgaenge,
+      adoptedVorgangIds.size > 0
+        ? (pull.vorgaenge ?? []).filter((row) => !adoptedVorgangIds.has(row.vorgang_id))
+        : (pull.vorgaenge ?? []),
       deviceId,
       workspaceId,
       { dirtyVorgangIds },
     );
+
+    applyLostAckAdoptionToOutbox(state, 'vorgang', vorgangAdoption);
     if (vorgangMerge.conflicts.length > 0) {
       conflicts.push(...vorgangMerge.conflicts);
     } else {
@@ -488,12 +597,30 @@ export function mergeRemoteWorkspacePullIntoState(
    */
   const remoteCustomerRows = pull.customers ?? [];
   if (remoteCustomerRows.length > 0) {
-    const customerMerge = mergeCustomersFromPull(
+    // CREATE-RETRY-CONFLICT-02 — dieselbe Vorab-Wiederherstellung wie beim Vorgang.
+    const customerAdoption = planCustomerLostAckAdoption(
       state.customers ?? [],
       remoteCustomerRows,
+      activeOutboxEntityIds(state, 'customer'),
+    );
+    const adoptedCustomerIds = new Set([...customerAdoption.adopt, ...customerAdoption.settle]);
+
+    const customerMerge = mergeCustomersFromPull(
+      adoptedCustomerIds.size > 0
+        ? (state.customers ?? []).map((customer) =>
+            adoptedCustomerIds.has(customer.id)
+              ? adoptLostAckBaseVersion(customer, state, workspaceId)
+              : customer,
+          )
+        : (state.customers ?? []),
+      adoptedCustomerIds.size > 0
+        ? remoteCustomerRows.filter((row) => !adoptedCustomerIds.has(row.customer_id))
+        : remoteCustomerRows,
       state.syncClient!.deviceId,
       workspaceId,
     );
+
+    applyLostAckAdoptionToOutbox(state, 'customer', customerAdoption);
     if (customerMerge.conflicts.length > 0) {
       conflicts.push(...customerMerge.conflicts);
     } else {

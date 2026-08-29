@@ -265,6 +265,56 @@ export function planCustomerBackfill(
     .map((customer) => customer.id);
 }
 
+/**
+ * CREATE-RETRY-CONFLICT-02 — Wiederanlauf nach verlorener Create-Bestätigung.
+ *
+ * Regel, Beweis und Abgrenzung stehen ausführlich bei
+ * `planVorgangLostAckAdoption`; der Customer-Zweig der RPC ist strukturgleich,
+ * also gilt hier dieselbe Semantik. Die wenigen Zeilen sind bewusst doppelt
+ * geschrieben statt über eine der beiden Fachdateien geteilt: Eine Abhängigkeit
+ * zwischen Kunden- und Vorgangsdienst nur für diesen Sonderfall wöge schwerer
+ * als die Wiederholung.
+ *
+ * Kurzfassung: `sync.version === 0` beweist, dass dieser Client nie eine
+ * Bestätigung erhielt; `row_version === 1` beweist, dass seit dem Einfügen kein
+ * weiterer Server-Write erfolgte. Beides zusammen macht die Übernahme der
+ * Basisversion gefahrlos — ohne Inhaltsvergleich, ohne Blick auf die
+ * Outbox-Operation.
+ */
+export function planCustomerLostAckAdoption(
+  localCustomers: Customer[],
+  remoteRows: WorkspaceCustomerRow[],
+  activeOutboxCustomerIds: ReadonlySet<string>,
+): { adopt: string[]; settle: string[] } {
+  const remotes = new Map(
+    remoteRows.map((row) => [
+      row.customer_id,
+      { rowVersion: Number(row.row_version), deleted: Boolean(row.deleted) },
+    ]),
+  );
+  const adopt: string[] = [];
+  const settle: string[] = [];
+
+  for (const customer of localCustomers) {
+    if ((customer.sync?.version ?? 0) !== 0) continue;
+    if (!activeOutboxCustomerIds.has(customer.id)) continue;
+
+    const remote = remotes.get(customer.id);
+    if (!remote || remote.rowVersion !== 1) continue;
+
+    if (!remote.deleted) {
+      adopt.push(customer.id);
+      continue;
+    }
+    // Grabstein gegen aktiven lokalen Kunden: keine Übernahme, keine Wiederbelebung.
+    if (customer.sync?.deleted === true) {
+      settle.push(customer.id);
+    }
+  }
+
+  return { adopt, settle };
+}
+
 /** Setzt nach erfolgreichem Push die Serverversion — ohne Fachdaten anzufassen. */
 export function applyCustomerPushResultToState(
   customers: Customer[],

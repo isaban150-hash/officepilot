@@ -51,7 +51,12 @@ import {
   migrateVorgangStatus,
 } from './vorgangLifecycleService';
 import { persistAll } from './persistenceService';
-import { generateEntityId, withTombstonedEntity, filterSyncActive, isEntitySyncActive } from './sync/syncMetaService';
+import {
+  generateEntityId,
+  withTombstonedCloudEntityPreservingRemoteVersion,
+  filterSyncActive,
+  isEntitySyncActive,
+} from './sync/syncMetaService';
 import type {
   ContractExtractedFields,
   CompanyDocument,
@@ -525,7 +530,14 @@ export function deleteVorgang(
   const index = vorgaenge.findIndex((v) => v.id === vorgangId && isEntitySyncActive(v));
   if (index === -1) return { success: false, errorKey: 'vorgang.notFound' };
 
-  const tombstoned = withTombstonedEntity(cloneVorgang(vorgaenge[index]), 'vorgang');
+  /*
+   * TOMBSTONE-VERSION-CONTRACT-02 — die Löschung lässt die bestätigte
+   * Serverversion unberührt, genau wie jede andere lokale Fachänderung.
+   */
+  const tombstoned = withTombstonedCloudEntityPreservingRemoteVersion(
+    cloneVorgang(vorgaenge[index]),
+    'vorgang',
+  );
   vorgaenge = vorgaenge.map((v) => (v.id === vorgangId ? tombstoned : v));
   persistAll();
   return { success: true, vorgang: cloneVorgang(tombstoned) };

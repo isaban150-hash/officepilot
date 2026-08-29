@@ -103,3 +103,43 @@ export function withTombstonedEntity<T extends SyncableEntity & { id: string }>(
   const sync = applyTombstoneSyncMeta(base.sync);
   return { ...base, sync };
 }
+
+/**
+ * TOMBSTONE-VERSION-CONTRACT-02 — Löschen für Entitäten, die über
+ * `upsert_workspace_sync_entity` in die Cloud gehen.
+ *
+ * Dort ist `sync.version` seit SYNC-VERSION-CONTRACT-02 ausschliesslich die
+ * zuletzt vom **Server** bestätigte `row_version`. Eine Löschung ist eine
+ * lokale Fachänderung wie jede andere und darf diesen Wert deshalb nicht
+ * anfassen: Der Push sendet ihn als Erwartung, und der Server erhöht selbst.
+ *
+ * Bewusst **ohne** `ensureSyncMeta`, `createDefaultSyncMeta`, `bumpSyncMeta`
+ * oder `applyTombstoneSyncMeta` — jeder dieser Wege erzeugt eine Version, die
+ * der Server nie bestätigt hat: das `+ 1` des Tombstones ebenso wie der
+ * Startwert 1 der Default-Meta. Fehlt die Bestätigung, ist die einzig richtige
+ * Erwartung `0`, und genau die bedeutet serverseitig „diese Zeile darf noch
+ * nicht existieren" (CREATE-RETRY-CONFLICT-02).
+ *
+ * `withTombstonedEntity` bleibt unverändert: Alle übrigen Löschpfade —
+ * Dokumente, Inbox, Ausgaben, Wissen, Notizen, Memory — haben keinen
+ * versionsgeprüften Serververtrag und behalten ihr bisheriges Verhalten.
+ */
+export function withTombstonedCloudEntityPreservingRemoteVersion<
+  T extends SyncableEntity & { id: string },
+>(entity: T, _entityType: SyncEntityType): T & { sync: SyncMeta } {
+  const client = getSyncClient();
+  const now = new Date().toISOString();
+  return {
+    ...entity,
+    sync: {
+      ...entity.sync,
+      // Die bestätigte Serverversion bleibt stehen; ohne Bestätigung gilt 0.
+      version: entity.sync?.version ?? 0,
+      updatedAt: now,
+      deleted: true,
+      deletedAt: now,
+      deviceId: client.deviceId,
+      workspaceId: client.workspaceId,
+    },
+  };
+}
