@@ -11,10 +11,22 @@ import { BACKUP_SECTION_ID } from '../services/backupSectionNavigation';
 import { buildSkontoText } from '../services/invoiceTaxService';
 import { validateCompanyProfileForSettings } from '../services/setupValidationService';
 import { getInvoiceNumberSequenceSnapshot } from '../services/invoiceNumberService';
+import {
+  validateBrandingLogoFile,
+  type BrandingLogoValidationError,
+} from '../services/branding/brandingLogoValidation';
 import type { CompanyProfile } from '../types/models';
 import type { TranslationKey } from '../i18n';
 
 type ProfileField = keyof CompanyProfile;
+
+/** Fehlercodes des Validators werden hier — und nur hier — zu Nutzertexten. */
+const LOGO_ERROR_KEYS: Record<BrandingLogoValidationError, TranslationKey> = {
+  file_too_large: 'companyProfile.logoError.tooLarge',
+  unsupported_mime: 'companyProfile.logoError.unsupportedType',
+  signature_mismatch: 'companyProfile.logoError.contentMismatch',
+  invalid_file: 'companyProfile.logoError.unreadable',
+};
 
 const TEXT_FIELDS: { key: ProfileField; labelKey: TranslationKey; type?: string }[] = [
   { key: 'companyName', labelKey: 'companyProfile.companyName' },
@@ -51,6 +63,11 @@ export function FirmendatenPage() {
   const location = useLocation();
   const [draft, setDraft] = useState<CompanyProfile>(() => ({ ...companyProfile }));
   const [errorKey, setErrorKey] = useState<TranslationKey | null>(null);
+  /*
+   * Eigener Zustand: Ein Logo-Fehler darf einen offenen Firmendaten- oder
+   * IBAN-Fehler nicht überschreiben — und umgekehrt.
+   */
+  const [logoErrorKey, setLogoErrorKey] = useState<TranslationKey | null>(null);
 
   useEffect(() => {
     if (location.hash !== `#${BACKUP_SECTION_ID}`) return;
@@ -70,16 +87,47 @@ export function FirmendatenPage() {
     });
   };
 
-  const handleLogoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
+  /**
+   * BRANDING-01C — geprüft wird vor dem Lesen, nicht danach.
+   *
+   * Die Datei wird erst vollständig eingelesen, wenn Grösse, Typ und
+   * tatsächliche Anfangsbytes stimmen. Scheitert etwas, bleibt der Entwurf
+   * unangetastet: kein neues Logo, keine halbe Vorschau, nichts Gespeichertes.
+   * Persistiert wird ohnehin erst beim Absenden des Formulars.
+   */
+  const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const input = event.target;
+    const file = input.files?.[0] ?? null;
+    setLogoErrorKey(null);
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        handleChange('logoDataUrl', reader.result);
-      }
-    };
-    reader.readAsDataURL(file);
+
+    const validation = await validateBrandingLogoFile(file);
+    if (!validation.valid) {
+      setLogoErrorKey(LOGO_ERROR_KEYS[validation.error]);
+      // Dieselbe Datei soll erneut auswählbar sein.
+      input.value = '';
+      return;
+    }
+
+    const dataUrl = await new Promise<string | null>((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : null);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(file);
+    });
+
+    if (dataUrl === null) {
+      setLogoErrorKey('companyProfile.logoError.unreadable');
+      input.value = '';
+      return;
+    }
+
+    handleChange('logoDataUrl', dataUrl);
+  };
+
+  const handleLogoRemove = () => {
+    setLogoErrorKey(null);
+    handleChange('logoDataUrl', '');
   };
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -226,27 +274,40 @@ export function FirmendatenPage() {
           <input
             id="profile-logo-file"
             type="file"
-            accept="image/png,image/jpeg,image/webp,image/svg+xml"
+            accept="image/png,image/jpeg,image/webp"
             className="input"
             onChange={handleLogoUpload}
           />
-          {draft.logoDataUrl && (
-            <img
-              src={draft.logoDataUrl}
-              alt=""
-              className="company-profile-form__logo-preview"
-              data-testid="company-logo-preview"
-            />
+          <p className="hint-text">{translate('companyProfile.logoHint')}</p>
+          {logoErrorKey && (
+            <p className="form-error" data-testid="company-logo-error">
+              {translate(logoErrorKey)}
+            </p>
           )}
-          <label htmlFor="profile-logo">{translate('companyProfile.logoDataUrl')}</label>
-          <input
-            id="profile-logo"
-            type="text"
-            className="input"
-            placeholder={translate('companyProfile.logoPlaceholder')}
-            value={draft.logoDataUrl ?? ''}
-            onChange={(e) => handleChange('logoDataUrl', e.target.value)}
-          />
+          {draft.logoDataUrl && (
+            <>
+              <img
+                src={draft.logoDataUrl}
+                alt=""
+                className="company-profile-form__logo-preview"
+                data-testid="company-logo-preview"
+              />
+              {/*
+                * Das frühere Freitextfeld war der einzige Weg, ein Logo wieder
+                * loszuwerden — und zugleich ein Weg, jede Prüfung zu umgehen.
+                * Es entfällt; das Entfernen bleibt als eigene Schaltfläche.
+                * Wirksam wird es wie jede andere Änderung erst beim Speichern.
+                */}
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleLogoRemove}
+                data-testid="company-logo-remove"
+              >
+                {translate('companyProfile.logoRemove')}
+              </Button>
+            </>
+          )}
         </fieldset>
 
         {errorKey && <p className="form-error">{translate(errorKey)}</p>}

@@ -142,6 +142,12 @@ const deLegacy = {
   'companyProfile.invoiceFooterNotes': 'Rechnungs-Fußnoten',
   'companyProfile.logoDataUrl': 'Logo (optional)',
   'companyProfile.logoPlaceholder': 'Optional: Bild-URL oder eingebettetes Logo',
+  'companyProfile.logoRemove': 'Logo entfernen',
+  'companyProfile.logoHint': 'PNG, JPG oder WebP, höchstens 2 MB.',
+  'companyProfile.logoError.tooLarge': 'Das Logo ist zu groß (höchstens 2 MB).',
+  'companyProfile.logoError.unsupportedType': 'Dieses Dateiformat wird nicht unterstützt. Bitte PNG, JPG oder WebP verwenden.',
+  'companyProfile.logoError.contentMismatch': 'Der Dateiinhalt passt nicht zum Dateiformat.',
+  'companyProfile.logoError.unreadable': 'Das Logo konnte nicht gelesen werden.',
 
   'tax.standard_19': '19 % Regelbesteuerung',
   'tax.standard_7': '7 % Regelbesteuerung',
