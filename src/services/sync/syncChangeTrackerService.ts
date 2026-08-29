@@ -4,9 +4,10 @@ import { listEntitiesByType } from './syncEntityRegistry';
 import { enqueueSyncOutbox } from './syncOutboxService';
 import { stripLogoFromCompanyProfile } from '../workspace/workspaceStore';
 import { buildVorgangCloudContentKey } from '../vorgang/vorgangCloudService';
+import { buildCustomerCloudContentKey } from '../customer/customerCloudService';
 import { resolveCloudWorkspaceId } from '../workspace/workspaceSyncPayloadService';
 import { buildCloudEntityId } from '../workspace/workspaceSyncPayloadService';
-import type { Vorgang } from '../../types/models';
+import type { Customer, Vorgang } from '../../types/models';
 import { isCloudSyncBlockedMockVorgangId } from '../storage/mockDataDetectionService';
 
 export const TRACKED_SYNC_ENTITY_TYPES: SyncEntityType[] = [
@@ -20,6 +21,7 @@ export const TRACKED_SYNC_ENTITY_TYPES: SyncEntityType[] = [
   'task',
   'expense',
   'vorgang',
+  'customer',
   'vorgang_note',
   'communication_event',
   'knowledge_fact',
@@ -71,6 +73,17 @@ function buildFingerprint(entity: SyncableEntity & { id: string }): EntitySyncFi
   };
 }
 
+/** Fachlicher Fingerabdruck — `sync` bleibt aussen vor, siehe `fingerprintChanged`. */
+function buildCustomerFingerprint(customer: Customer): EntitySyncFingerprint {
+  const sync = customer.sync;
+  return {
+    version: sync?.version ?? 0,
+    deleted: sync?.deleted ?? false,
+    updatedAt: sync?.updatedAt ?? '',
+    contentKey: buildCustomerCloudContentKey(customer),
+  };
+}
+
 function buildVorgangFingerprint(vorgang: Vorgang): EntitySyncFingerprint {
   const sync = vorgang.sync;
   return {
@@ -92,7 +105,9 @@ function collectTrackedEntities(state: AppPersistedState): Map<string, TrackedEn
         fingerprint:
           entityType === 'vorgang'
             ? buildVorgangFingerprint(entity as Vorgang)
-            : buildFingerprint(entity),
+            : entityType === 'customer'
+              ? buildCustomerFingerprint(entity as Customer)
+              : buildFingerprint(entity),
       });
     }
   }
@@ -156,7 +171,13 @@ function fingerprintChanged(
   current: EntitySyncFingerprint,
   entityType?: SyncEntityType,
 ): boolean {
-  if (entityType === 'vorgang') {
+  /*
+   * PRODUCT-FOUNDATION-03A-C1 — Kunden folgen demselben Schutz wie Vorgang und
+   * Firmendaten: Eine zurückgeschriebene Serverversion ist keine fachliche
+   * Änderung und darf keinen neuen Auftrag erzeugen, der die nächste Version
+   * auslöst.
+   */
+  if (entityType === 'vorgang' || entityType === 'customer') {
     return (
       previous.deleted !== current.deleted ||
       previous.contentKey !== current.contentKey

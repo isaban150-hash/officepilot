@@ -18,6 +18,7 @@ export type SyncEntityType =
   | 'task'
   | 'expense'
   | 'vorgang'
+  | 'customer'
   | 'vorgang_note'
   | 'communication_event'
   | 'knowledge_fact';

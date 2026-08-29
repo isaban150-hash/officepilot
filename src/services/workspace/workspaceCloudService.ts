@@ -10,6 +10,7 @@ import type {
 import { getSupabaseClient } from '../../lib/supabase';
 import { stripLogoFromCompanyProfile } from './workspaceStore';
 import type { WorkspaceVorgangRow } from '../vorgang/vorgangCloudService';
+import type { WorkspaceCustomerRow } from '../customer/customerCloudService';
 
 interface WorkspaceRow {
   id: string;
@@ -191,6 +192,8 @@ export async function rpcPullWorkspaceSyncState(
   const profileRow = data?.company_profile as WorkspaceCompanyProfileRow | null;
 
   const vorgaengeRaw = (data?.vorgaenge as WorkspaceVorgangRow[] | null) ?? [];
+  // Enthält auch Grabsteine — der Backfill wertet sie aus.
+  const customersRaw = (data?.customers as WorkspaceCustomerRow[] | null) ?? [];
 
   return {
     workspace: workspaceRow ? mapWorkspaceRow(workspaceRow) : null,
@@ -203,6 +206,7 @@ export async function rpcPullWorkspaceSyncState(
     companyProfileRowVersion: profileRow ? Number(profileRow.row_version) : 0,
     companyProfileUpdatedAt: profileRow?.updated_at ?? null,
     vorgaenge: vorgaengeRaw,
+    customers: customersRaw,
   };
 }
 

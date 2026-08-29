@@ -172,6 +172,8 @@ export function listEntitiesByType(
       return [...(state.expenses ?? [])];
     case 'vorgang':
       return [...state.vorgaenge];
+    case 'customer':
+      return [...(state.customers ?? [])];
     case 'vorgang_note':
       return [...(state.vorgangNotes ?? [])];
     case 'communication_event':

@@ -789,6 +789,19 @@ export interface Customer extends CustomerBilling {
   updatedAt: string;
   /** Provenance only — never changed by a normal update. */
   createdFromInboxId?: string;
+  /**
+   * PRODUCT-FOUNDATION-03A-C1 — reine Cloud-Metadaten, kein Fachdatum.
+   *
+   * Bewusst hier und nicht auf `CustomerBilling`: die Snapshot-Typen
+   * (`Vorgang.customerBilling`, `InvoiceDraft.customerBilling`,
+   * `VorgangInvoice.customerSnapshot`) sind `CustomerBilling` und bleiben
+   * dadurch frei von Sync-Feldern.
+   *
+   * `sync.updatedAt` ist der Serverzeitstempel und gehört **nicht** in den
+   * fachlichen Content-Key — anders als `updatedAt` weiter oben, das eine
+   * echte Nutzeränderung markiert.
+   */
+  sync?: SyncMeta;
 }
 
 export interface InvoiceNumberSequence {

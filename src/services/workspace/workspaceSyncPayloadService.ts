@@ -1,4 +1,4 @@
-import type { AppPersistedState, Vorgang } from '../../types/models';
+import type { AppPersistedState, Customer, Vorgang } from '../../types/models';
 import type { SyncEntityType } from '../../types/sync';
 import type { Workspace, WorkspaceMember, WorkspaceSettings } from '../../types/workspace';
 import {
@@ -20,7 +20,8 @@ export type CloudSyncEntityPayload =
       entity: NonNullable<AppPersistedState['companyProfile']>;
       rowVersion: number;
     }
-  | { entityType: 'vorgang'; entityId: string; entity: Vorgang; rowVersion: number; deleted: boolean };
+  | { entityType: 'vorgang'; entityId: string; entity: Vorgang; rowVersion: number; deleted: boolean }
+  | { entityType: 'customer'; entityId: string; entity: Customer; rowVersion: number; deleted: boolean };
 
 export function resolveCloudWorkspaceId(state: AppPersistedState): string {
   return (
@@ -96,6 +97,17 @@ export function extractCloudSyncEntity(
         entity: vorgang,
         rowVersion: vorgang.sync?.version ?? 0,
         deleted: vorgang.sync?.deleted ?? false,
+      };
+    }
+    case 'customer': {
+      const customer = (state.customers ?? []).find((c) => c.id === entityId);
+      if (!customer) return null;
+      return {
+        entityType,
+        entityId,
+        entity: customer,
+        rowVersion: customer.sync?.version ?? 0,
+        deleted: customer.sync?.deleted ?? false,
       };
     }
     default:

@@ -10,6 +10,10 @@ import {
 } from '../sync/syncOutboxService';
 import { filterSyncActive } from '../sync/syncMetaService';
 import {
+  mergeCustomersFromPull,
+  planCustomerBackfill,
+} from '../customer/customerCloudService';
+import {
   buildCompanyProfileCloudPayload,
   buildCompanySetupCloudPayload,
   parseCompanyProfileFromCloud,
@@ -424,6 +428,48 @@ export function mergeRemoteWorkspacePullIntoState(
     } else {
       next.vorgaenge = vorgangMerge.vorgaenge;
     }
+  }
+
+  /*
+   * PRODUCT-FOUNDATION-03A-C1 — Kundenstamm.
+   *
+   * Erst der Merge, dann der Backfill: So zählt eine soeben eingetroffene
+   * Remote-ID bereits als vorhanden und wird nicht doppelt nachgemeldet.
+   */
+  const remoteCustomerRows = pull.customers ?? [];
+  if (remoteCustomerRows.length > 0) {
+    const customerMerge = mergeCustomersFromPull(
+      state.customers ?? [],
+      remoteCustomerRows,
+      state.syncClient!.deviceId,
+      workspaceId,
+    );
+    if (customerMerge.conflicts.length > 0) {
+      conflicts.push(...customerMerge.conflicts);
+    } else {
+      next.customers = customerMerge.customers;
+    }
+  }
+
+  /*
+   * Backfill B — der einzige Weg für Bestandskunden. Der Change-Tracker führt
+   * sie beim Start als Basislinie und meldet sie deshalb nie nach.
+   *
+   * Verglichen werden ausschliesslich IDs gegen **alle** Remote-IDs inklusive
+   * Grabsteine. Kein Vergleich von Firmenname, Anschrift oder E-Mail: Zwei
+   * gleichnamige Kunden mit verschiedenen IDs sind zwei Kunden, und eine
+   * falsche Zusammenführung wäre praktisch nicht rückgängig zu machen.
+   */
+  for (const customerId of planCustomerBackfill(
+    next.customers ?? state.customers ?? [],
+    remoteCustomerRows,
+  )) {
+    enqueueSyncOutbox({
+      entityType: 'customer',
+      entityId: customerId,
+      operation: 'create',
+      version: 0,
+    });
   }
 
   /**

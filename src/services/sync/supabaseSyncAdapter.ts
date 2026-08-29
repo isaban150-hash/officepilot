@@ -41,6 +41,10 @@ import {
   buildVorgangCloudPushPayload,
   mergeVorgaengeFromPull,
 } from '../vorgang/vorgangCloudService';
+import {
+  applyCustomerPushResultToState,
+  buildCustomerCloudPushPayload,
+} from '../customer/customerCloudService';
 import { applyInvoicePullAfterVorgangMerge } from '../invoice/invoiceCloudPullOrchestrator';
 import { applyDocumentPullToState } from '../document/documentCloudPullOrchestrator';
 import { listOrderAmendmentConfirmIntents } from '../orderAmendment/orderAmendmentConfirmIntentService';
@@ -159,6 +163,12 @@ function buildPushPayload(
         extracted.entity,
         operation === 'delete' || extracted.deleted,
       );
+    case 'customer':
+      // V1 kennt kein Löschen; `deleted` bleibt für aktive Kunden false.
+      return buildCustomerCloudPushPayload(
+        extracted.entity,
+        operation === 'delete' || extracted.deleted,
+      );
     default:
       return {};
   }
@@ -205,6 +215,17 @@ function applyPushResultToState(
       version: rowVersion,
       updatedAt,
     };
+  } else if (entityType === 'customer') {
+    // Nur die Serverversion wird übernommen — keine Fachdaten, keine Snapshots.
+    next.customers = applyCustomerPushResultToState(
+      next.customers ?? [],
+      entityId,
+      rowVersion,
+      updatedAt,
+      deleted,
+      state.syncClient!.deviceId,
+      workspaceId,
+    );
   } else if (entityType === 'vorgang') {
     next.vorgaenge = applyVorgangPushResultToState(
       next.vorgaenge,

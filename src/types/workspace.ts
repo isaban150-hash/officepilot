@@ -1,5 +1,6 @@
 import type { SyncMeta } from './sync';
 import type { WorkspaceVorgangRow } from '../services/vorgang/vorgangCloudService';
+import type { WorkspaceCustomerRow } from '../services/customer/customerCloudService';
 
 export type WorkspaceRole = 'owner' | 'admin' | 'member';
 
@@ -52,6 +53,12 @@ export interface WorkspaceSyncPullPayload {
   companyProfileRowVersion: number;
   companyProfileUpdatedAt: string | null;
   vorgaenge: WorkspaceVorgangRow[];
+  /**
+   * PRODUCT-FOUNDATION-03A-C1 — enthält bewusst auch Grabsteine
+   * (`deleted = true`). Der Backfill braucht sie, um eine anderswo gelöschte
+   * Kunden-ID nicht erneut anzulegen.
+   */
+  customers: WorkspaceCustomerRow[];
 }
 
 export interface EnsurePersonalWorkspaceResult {
