@@ -22,7 +22,10 @@ import {
   rpcPullWorkspaceSyncState,
   WorkspaceCloudError,
 } from './workspaceCloudService';
-import { mergeVorgaengeFromPull } from '../vorgang/vorgangCloudService';
+import {
+  mergeVorgaengeFromPull,
+  planVorgangCustomerRelationBackfill,
+} from '../vorgang/vorgangCloudService';
 import { isDefinitelyMockVorgang } from '../storage/mockDataDetectionService';
 import {
   applyRemoteCompanyProfileSyncMeta,
@@ -417,17 +420,64 @@ export function mergeRemoteWorkspacePullIntoState(
     next.vorgaenge = [];
   } else if ((pull.vorgaenge ?? []).length > 0) {
     const deviceId = state.syncClient!.deviceId;
+    /*
+     * SYNC-VERSION-CONTRACT-02 — der Dirty-Zustand stammt aus der Outbox
+     * **dieses** Zustands, nicht aus dem globalen Store: Der Push dieses Laufs
+     * hat seine Ergebnisse nur hier vermerkt. Ein soeben erfolgreich gesendeter
+     * Vorgang gilt damit als sauber und darf die neuere Serverfassung
+     * übernehmen, statt einen Konflikt zu melden.
+     */
+    const dirtyVorgangIds = new Set(
+      (state.syncOutbox ?? [])
+        .filter(
+          (entry) =>
+            entry.entityType === 'vorgang' &&
+            (entry.status === 'pending' ||
+              entry.status === 'error' ||
+              entry.status === 'blocked'),
+        )
+        .map((entry) => entry.entityId),
+    );
     const vorgangMerge = mergeVorgaengeFromPull(
       state.vorgaenge,
       pull.vorgaenge ?? [],
       deviceId,
       workspaceId,
+      { dirtyVorgangIds },
     );
     if (vorgangMerge.conflicts.length > 0) {
       conflicts.push(...vorgangMerge.conflicts);
     } else {
       next.vorgaenge = vorgangMerge.vorgaenge;
     }
+  }
+
+  /*
+   * PRODUCT-FOUNDATION-03B — Relation-Backfill für Bestandsvorgänge.
+   *
+   * Zeilen aus der Zeit vor 03B tragen keine `customerId`; der Change-Tracker
+   * meldet sie nicht nach, weil er den Bestand beim Start zur Basislinie macht.
+   *
+   * Geprüft wird gegen `next.vorgaenge`, also den bereits gemergten Stand:
+   * Eine soeben aus der Cloud übernommene Relation zählt damit als vorhanden.
+   *
+   * Die erwartete Serverversion stammt beim Push aus `vorgang.sync.version`.
+   * Damit daraus keine bereits veraltete Erwartung wird, plant
+   * `planVorgangCustomerRelationBackfill` nur bei Gleichstand von lokaler
+   * `sync.version` und Remote `row_version`. Bei Versionsdivergenz entsteht
+   * kein Eintrag — ein Push, dessen Zurückweisung feststeht, wird gar nicht
+   * erst erzeugt.
+   */
+  for (const vorgangId of planVorgangCustomerRelationBackfill(
+    next.vorgaenge ?? state.vorgaenge,
+    pull.vorgaenge ?? [],
+  )) {
+    enqueueSyncOutbox({
+      entityType: 'vorgang',
+      entityId: vorgangId,
+      operation: 'update',
+      version: 0,
+    });
   }
 
   /*

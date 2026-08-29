@@ -20,6 +20,15 @@ export interface VorgangCloudPayload {
   status: Vorgang['status'];
   materialSource: Vorgang['materialSource'];
   customerBilling?: Vorgang['customerBilling'];
+  /**
+   * PRODUCT-FOUNDATION-03B — die stabile Beziehung zum Kundenstamm.
+   *
+   * Bewusst nur der Zeiger, nicht die Auflösung: `customer` und
+   * `customerBilling` bleiben historische Snapshots und werden davon nie
+   * berührt. Legacy-Vorgänge ohne Relation lassen das Feld weg — kein leerer
+   * String.
+   */
+  customerId?: string;
   orderPositions: Vorgang['orderPositions'];
   createdFromInboxId?: string;
   /** CLOUD-ORDER-CHAIN-01: immutable confirm snapshot (write-once on merge). */
@@ -42,9 +51,28 @@ export interface WorkspaceVorgangRow {
 export interface ResolveVorgangStatusForCloudMergeInput {
   /** Local status before merge (undefined when creating from cloud only). */
   localStatus: VorgangStatus | undefined;
+  /**
+   * VORGANG-STATUS-CLOUD-PULL-01 — der Status aus der Cloud-Zeile.
+   *
+   * Er greift ausschliesslich dort, wo die Chain-Facts keinen Zustand
+   * erzwingen. Ohne ihn gehen genau die Status verloren, die sich nicht aus
+   * Facts rekonstruieren lassen: `in_pruefung` und `in_verhandlung`.
+   */
+  cloudStatus?: VorgangStatus | undefined;
   contractConfirmation: ContractConfirmationSnapshot | undefined;
   executionStartedAt: string | undefined;
 }
+
+/**
+ * Status ohne Chain-Fact-Grundlage. Nur diese dürfen aus dem Cloud-Payload
+ * übernommen werden: Alles ab `beauftragt` folgt den Facts, sonst entstünde
+ * ein Zustand, den die Invariantenprüfung unmittelbar wieder zurücknähme.
+ */
+const FACT_FREE_STATUSES: ReadonlySet<VorgangStatus> = new Set([
+  'eingegangen',
+  'in_pruefung',
+  'in_verhandlung',
+]);
 
 const EXECUTION_STATUSES: ReadonlySet<VorgangStatus> = new Set([
   'in_bearbeitung',
@@ -120,7 +148,13 @@ export function sanitizeOrderChainCloudFacts(
 
 /**
  * CLOUD-ORDER-CHAIN-02: derive merge status from lifecycle + chain facts.
- * Does not take cloud status as input. No UI events / updateVorgangStatus calls.
+ * No UI events / updateVorgangStatus calls.
+ *
+ * VORGANG-STATUS-CLOUD-PULL-01: Die Facts entscheiden weiterhin zuerst. Erst
+ * wenn sie keinen Zustand erzwingen, kommt der Cloud-Status zum Zug — und dann
+ * vor dem lokalen Status, weil eine neuere `row_version` den bestätigten
+ * neueren Stand darstellt. Ein Konflikt ist zu diesem Zeitpunkt bereits
+ * entschieden; hierher gelangt nur, was übernommen werden darf.
  */
 export function resolveVorgangStatusForCloudMerge(
   input: ResolveVorgangStatusForCloudMergeInput,
@@ -159,11 +193,30 @@ export function resolveVorgangStatusForCloudMerge(
   }
 
   // No chain facts: keep a pre-confirm local status when it does not require facts.
-  if (
-    localStatus &&
-    localStatus !== 'beauftragt' &&
-    !EXECUTION_STATUSES.has(localStatus)
-  ) {
+  const localIsPreConfirm =
+    localStatus !== undefined && localStatus !== 'beauftragt' && !EXECUTION_STATUSES.has(localStatus);
+
+  /*
+   * VORGANG-STATUS-CLOUD-PULL-01 — der Cloud-Status gilt, sofern er ohne Facts
+   * tragfähig ist. Ein lokaler Vorbestätigungsstatus tritt dahinter zurück:
+   * Der Aufrufer reicht `cloudStatus` nur bei einer berechtigten Übernahme
+   * herein, ein Versionskonflikt ist vorher abgefangen.
+   *
+   * Bewusst ohne zweite Übergangsprüfung: `ALLOWED_TRANSITIONS` gehört in den
+   * UI-Lebenszyklus. Hier steht kein Übergang zur Entscheidung, sondern ein
+   * bereits bestätigter fremder Zustand.
+   */
+  const cloudStatus =
+    input.cloudStatus !== undefined ? migrateVorgangStatus(input.cloudStatus) : undefined;
+  if (cloudStatus && FACT_FREE_STATUSES.has(cloudStatus)) {
+    // Ein terminaler oder in Ausführung befindlicher lokaler Zustand ohne Facts
+    // ist bereits defekt — er wird hier so wenig wiederhergestellt wie zuvor.
+    if (localIsPreConfirm || localStatus === undefined) {
+      return cloudStatus;
+    }
+  }
+
+  if (localIsPreConfirm) {
     return localStatus;
   }
 
@@ -195,7 +248,7 @@ export function resolveWriteOnceExecutionStartedAt(
  */
 export function applyOrderChainCloudInvariants(
   vorgang: Vorgang,
-  options: { protectLocalStatus?: VorgangStatus } = {},
+  options: { protectLocalStatus?: VorgangStatus; cloudStatus?: VorgangStatus } = {},
 ): Vorgang {
   const { contractConfirmation, executionStartedAt } = sanitizeOrderChainCloudFacts(
     vorgang.contractConfirmation,
@@ -204,6 +257,7 @@ export function applyOrderChainCloudInvariants(
 
   const status = resolveVorgangStatusForCloudMerge({
     localStatus: options.protectLocalStatus ?? vorgang.status,
+    cloudStatus: options.cloudStatus,
     contractConfirmation,
     executionStartedAt,
   });
@@ -231,6 +285,16 @@ export function stripVorgangForCloud(vorgang: Vorgang): VorgangCloudPayload {
     orderPositions: (planSource.orderPositions ?? []).map((p) => ({ ...p })),
     createdFromInboxId: planSource.createdFromInboxId,
   };
+
+  /*
+   * PRODUCT-FOUNDATION-03B — nur eine echte Relation reist mit. Ein leeres
+   * Feld für Legacy-Vorgänge würde deren Content-Key ohne fachlichen Anlass
+   * ändern und damit eine Push-Welle auslösen.
+   */
+  const customerId = planSource.customerId?.trim();
+  if (customerId) {
+    payload.customerId = customerId;
+  }
 
   if (planSource.contractConfirmation) {
     payload.contractConfirmation = cloneCloudContractConfirmation(planSource.contractConfirmation);
@@ -274,6 +338,10 @@ export function parseVorgangCloudPayload(payload: Record<string, unknown> | null
     status: migrateVorgangStatus(inner.status),
     materialSource: inner.materialSource,
     customerBilling: inner.customerBilling,
+    // 03B: ausschliesslich das ausdrückliche Feld — niemals über den Namen.
+    customerId: typeof inner.customerId === 'string' && inner.customerId.trim()
+      ? inner.customerId.trim()
+      : undefined,
     orderPositions: inner.orderPositions ?? [],
     createdFromInboxId: inner.createdFromInboxId,
     contractConfirmation: readCloudContractConfirmation(inner.contractConfirmation),
@@ -335,9 +403,18 @@ function buildMergedVorgangFromFacts(
     photos: local?.photos ?? [],
     invoices: local?.invoices ?? [],
     customerBilling: shell.customerBilling ?? local?.customerBilling,
-    // Local-only customer link (03B1) — the cloud payload does not carry it,
-    // so a pull must never drop it. Cloud-created Vorgänge (local === null) get none.
-    customerId: local?.customerId,
+    /*
+     * PRODUCT-FOUNDATION-03B — die Relation reist jetzt mit, die Vorrangregel
+     * ist aber bewusst asymmetrisch: Eine vorhandene lokale Relation gewinnt
+     * immer, Remote füllt ausschliesslich eine Lücke. So kann weder ein alter
+     * Client, der das Feld nicht kennt, noch eine fremde Fassung eine bereits
+     * getroffene Zuordnung stillschweigend ersetzen.
+     *
+     * Eine echte konkurrierende Umverknüpfung erzeugt einen Versionsunterschied
+     * und bleibt damit dem bestehenden `row_version`-Konflikt überlassen —
+     * kein Feld-Merge, keine Namensauflösung.
+     */
+    customerId: local?.customerId?.trim() ? local.customerId : cloudPayload.customerId,
     customerExplicitlyUnknown: local?.customerExplicitlyUnknown,
     negotiation: local?.negotiation,
     // Local-only Nachtragsentwürfe — never taken from cloud payload.
@@ -349,9 +426,17 @@ function buildMergedVorgangFromFacts(
     orderPositions: shell.orderPositions ?? [],
   };
 
-  // 5 resolve status from facts (ignore cloud/shell status)
+  /*
+   * 5 resolve status: facts first, then the cloud status.
+   *
+   * VORGANG-STATUS-CLOUD-PULL-01 — die einzige Stelle der Statusauflösung für
+   * Create **und** Merge. Der Shell-Status bleibt bewusst aussen vor; eine
+   * zweite Statuslogik im Create-Pfad soll nicht entstehen.
+   */
+  const cloudStatus = migrateVorgangStatus(cloudPayload.status);
   const resolvedStatus = resolveVorgangStatusForCloudMerge({
     localStatus: local?.status,
+    cloudStatus,
     contractConfirmation: confirmation,
     executionStartedAt,
   });
@@ -362,7 +447,7 @@ function buildMergedVorgangFromFacts(
       ...withFacts,
       status: resolvedStatus,
     },
-    { protectLocalStatus: local?.status },
+    { protectLocalStatus: local?.status, cloudStatus },
   );
 
   // 7 ORDER-PLAN-INTEGRITY-01 / ORDER-AMENDMENT-01B3B:
@@ -382,6 +467,13 @@ export function mergeCloudVorgangIntoLocal(
   deleted: boolean,
   deviceId: string,
   workspaceId: string,
+  /**
+   * SYNC-VERSION-CONTRACT-02 — trägt dieser Vorgang lokale, noch nicht
+   * bestätigte Änderungen? Fehlt die Angabe, wird der vorsichtige Altstand
+   * angenommen (jede Abweichung ist ein Konflikt), damit ein Aufrufer ohne
+   * diese Kenntnis nichts stillschweigend verlieren kann.
+   */
+  options?: { dirty?: boolean },
 ): { vorgang: Vorgang | null; conflict: boolean } {
   if (!local) {
     return {
@@ -397,9 +489,43 @@ export function mergeCloudVorgangIntoLocal(
     };
   }
 
+  /**
+   * `sync.version` ist die zuletzt vom Server bestätigte `row_version` — nicht
+   * eine lokale Revision. Lokale Fachänderungen lassen sie unberührt; ob etwas
+   * zu senden ist, sagt der Dirty-Zustand.
+   *
+   * Daraus folgen vier Fälle:
+   *   gleich                 → nichts hat sich entfernt getan, lokal behalten
+   *   Remote neuer, sauber   → Remote übernehmen und Version nachziehen
+   *   Remote neuer, dirty    → echter Konflikt zweier Geräte
+   *   Remote älter           → inkonsistenter Altstand (früheres lokales
+   *                            Hochzählen); lokal behalten, nichts automatisch
+   *                            normalisieren.
+   */
   const localVersion = local.sync?.version ?? 0;
-  if (localVersion > 0 && rowVersion > 0 && localVersion !== rowVersion) {
-    return { vorgang: local, conflict: true };
+  const dirty = options?.dirty;
+
+  if (dirty === undefined) {
+    // Ohne Kenntnis des lokalen Zustands bleibt es beim vorsichtigen
+    // Altverhalten: jede Versionsabweichung gilt als Konflikt.
+    if (localVersion > 0 && rowVersion > 0 && localVersion !== rowVersion) {
+      return { vorgang: local, conflict: true };
+    }
+  } else {
+    if (localVersion > 0 && rowVersion > 0 && localVersion > rowVersion) {
+      return { vorgang: local, conflict: true };
+    }
+    if (localVersion > 0 && rowVersion > localVersion && dirty) {
+      return { vorgang: local, conflict: true };
+    }
+    /*
+     * Ein lokal neu angelegter, noch nie bestätigter Vorgang (`localVersion`
+     * 0) mit ungesendeten Änderungen darf von einer überraschend vorhandenen
+     * Remote-Zeile nicht überschrieben werden.
+     */
+    if (localVersion === 0 && rowVersion > 0 && dirty) {
+      return { vorgang: local, conflict: true };
+    }
   }
 
   if (rowVersion < localVersion) {
@@ -511,7 +637,11 @@ export function createVorgangFromCloudRow(
     workspaceId,
   };
 
-  // Shell from cloud row (status ignored by resolver).
+  /*
+   * Shell aus der Cloud-Zeile. Der Status hier ist nur ein Platzhalter: Den
+   * endgültigen Wert bestimmt `buildMergedVorgangFromFacts` aus Facts und
+   * `cloudPayload.status` (VORGANG-STATUS-CLOUD-PULL-01).
+   */
   const shell: Vorgang = {
     id: cloudPayload.id,
     title: cloudPayload.title,
@@ -532,14 +662,95 @@ export function createVorgangFromCloudRow(
   return buildMergedVorgangFromFacts(shell, null, cloudPayload, sync);
 }
 
+/**
+ * PRODUCT-FOUNDATION-03B — Relation-Backfill für Bestandsvorgänge.
+ *
+ * Cloud-Zeilen aus der Zeit vor 03B tragen keine `customerId`, und der
+ * Change-Tracker meldet sie nicht nach: Er macht den vorhandenen Zustand beim
+ * Start zur Basislinie, sodass ein Bestandsvorgang als unverändert gilt.
+ *
+ * Geplant wird ausschliesslich der **fehlende Zeiger**:
+ *  - lokal existiert eine echte Relation,
+ *  - dieselbe Vorgangs-ID existiert entfernt,
+ *  - die Remote-Zeile ist kein Grabstein,
+ *  - und der Remote-Payload trägt keine Relation.
+ *
+ * Trägt die Remote-Zeile bereits eine **andere** Relation, ist das kein
+ * fehlender Zeiger, sondern ein fachlicher Unterschied — dann geschieht hier
+ * nichts. Das Überschreiben bliebe dem Nutzer und dem Versionskonflikt
+ * überlassen.
+ *
+ * Zusätzlich muss die lokale Version der Remote-Version entsprechen. Sonst
+ * stünde das Scheitern des Pushs bereits fest: Er sendet die lokale Version als
+ * Erwartung, und die RPC lehnt bei Abweichung mit `Versionskonflikt` ab. Weil
+ * ein erneut eingereihter Eintrag den `blocked`-Status wieder auf `pending`
+ * hebt, entstünde daraus eine Endlosschleife aus Nachmeldung und Zurückweisung.
+ *
+ * Bewusst zustandslos und ohne Migrationsmarker: Der Plan muss bei jedem Pull
+ * erneut greifen können, sobald die Bedingungen wieder erfüllt sind.
+ *
+ * Ausdrücklich **nicht** heilbar: Hat ein Client ohne 03B den Payload
+ * zurückgeschrieben, ist damit zwangsläufig auch die `row_version` gestiegen —
+ * der Fall fällt unter die Versionsdivergenz und bleibt dem bestehenden
+ * Konfliktmechanismus überlassen. Die lokale Relation bleibt erhalten, die
+ * lokale Version wird **nicht** angehoben. Eine aus der Cloud verschwundene
+ * Relation lässt sich nicht über den Firmennamen rekonstruieren.
+ */
+export function planVorgangCustomerRelationBackfill(
+  localVorgaenge: Vorgang[],
+  remoteRows: WorkspaceVorgangRow[],
+): string[] {
+  const remoteById = new Map(remoteRows.map((row) => [row.vorgang_id, row]));
+  const planned: string[] = [];
+
+  for (const vorgang of localVorgaenge) {
+    const localRelation = vorgang.customerId?.trim();
+    if (!localRelation) continue;
+
+    const row = remoteById.get(vorgang.id);
+    if (!row) continue;
+    // Ein Grabstein wird niemals wegen einer Relation wiederbelebt.
+    if (row.deleted) continue;
+
+    /*
+     * Nur bei Versionsgleichstand. Eine real existierende Zeile trägt immer
+     * `row_version >= 1` — der Insert der RPC beginnt bei 1 und jedes Update
+     * erhöht. Die Prüfung auf `> 0` schliesst deshalb aus, dass ein fehlender
+     * lokaler Sync-Stand (0) versehentlich als Gleichstand durchgeht.
+     */
+    const remoteVersion = Number(row.row_version);
+    const localVersion = Number(vorgang.sync?.version ?? 0);
+    if (!Number.isFinite(remoteVersion) || remoteVersion <= 0) continue;
+    if (localVersion !== remoteVersion) continue;
+
+    const parsed = parseVorgangCloudPayload(row.payload);
+    if (!parsed) continue;
+    // Nur der fehlende Zeiger — eine abweichende Relation bleibt unberührt.
+    if (parsed.customerId) continue;
+
+    planned.push(vorgang.id);
+  }
+
+  return planned;
+}
+
 export function mergeVorgaengeFromPull(
   localVorgaenge: Vorgang[],
   remoteRows: WorkspaceVorgangRow[],
   deviceId: string,
   workspaceId: string,
+  /**
+   * SYNC-VERSION-CONTRACT-02 — die Vorgänge mit lokalen, noch nicht
+   * bestätigten Änderungen. Der Aufrufer leitet sie aus **der Outbox
+   * desjenigen Zustands** ab, der im laufenden Sync weiterverarbeitet wird —
+   * nicht aus dem globalen Store, der die Push-Ergebnisse dieses Laufs noch
+   * nicht kennt. Ohne Angabe bleibt es beim vorsichtigen Altverhalten.
+   */
+  options?: { dirtyVorgangIds?: ReadonlySet<string> },
 ): { vorgaenge: Vorgang[]; conflicts: string[] } {
   const conflicts: string[] = [];
   const byId = new Map(localVorgaenge.map((v) => [v.id, v]));
+  const dirtyIds = options?.dirtyVorgangIds;
 
   for (const row of remoteRows) {
     const mapped = mapWorkspaceVorgangRow(row);
@@ -554,6 +765,7 @@ export function mergeVorgaengeFromPull(
       mapped.deleted,
       deviceId,
       workspaceId,
+      dirtyIds ? { dirty: dirtyIds.has(mapped.vorgangId) } : undefined,
     );
 
     if (conflict) {

@@ -1,6 +1,16 @@
 /**
- * CUSTOMER-FACHOBJEKT-03B1 — local customerId survives persistence and cloud merge,
- * is never pushed, and never appears on a cloud-created Vorgang.
+ * CUSTOMER-FACHOBJEKT-03B1 → PRODUCT-FOUNDATION-03B.
+ *
+ * Ursprünglich sicherte diese Datei zu, dass `customerId` **niemals** in die
+ * Cloud gelangt. Seit der Kundenstamm selbst synchronisiert (03A-C1) wäre das
+ * eine Lücke: Der Kunde erreicht das zweite Gerät, die Beziehung nicht.
+ *
+ * Die Fälle C und E kehren sich deshalb bewusst um — sie sichern jetzt das
+ * Gegenteil. **Unverändert erhalten** bleiben die vier Aussagen, die von 03B
+ * nicht berührt werden und weiterhin gelten müssen: Persistenz/Bootstrap (A),
+ * Legacy-Vorgänge ohne Relation (B), der Schutz einer lokalen Relation gegen
+ * einen alten Remote-Payload (D) und dass ein Pull niemals implizit einen
+ * Customer erzeugt (F).
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { getCustomerStoreSnapshot } from './customerStoreService';
@@ -90,13 +100,13 @@ describe('CUSTOMER-FACHOBJEKT-03B1', () => {
     expect(getCustomerStoreSnapshot()).toHaveLength(0);
   });
 
-  it('Fall C — Cloud-Payload enthält customerId nicht', () => {
+  it('Fall C — 03B: der Cloud-Payload trägt die Relation jetzt mit', () => {
+    // Umgekehrte Aussage gegenüber 03B1 — siehe Kopfkommentar.
     bootstrapScope('ws-03b1');
     const seeded = seedVorgang(CUSTOMER_ID);
 
     const stripped = stripVorgangForCloud(seeded);
-    expect(Object.keys(stripped)).not.toContain('customerId');
-    expect((stripped as Record<string, unknown>).customerId).toBeUndefined();
+    expect(stripped.customerId).toBe(CUSTOMER_ID);
     // Bestehende Felder bleiben unverändert vorhanden.
     expect(stripped.id).toBe('v-03b1');
     expect(stripped.title).toBe('Sanierung Nordwest');
@@ -106,16 +116,28 @@ describe('CUSTOMER-FACHOBJEKT-03B1', () => {
     expect(stripped.orderPositions).toHaveLength(seeded.orderPositions.length);
 
     const pushPayload = buildVorgangCloudPushPayload(seeded);
-    expect(JSON.stringify(pushPayload)).not.toContain('customerId');
-    expect(JSON.stringify(pushPayload)).not.toContain(CUSTOMER_ID);
+    expect(JSON.stringify(pushPayload)).toContain(CUSTOMER_ID);
   });
 
-  it('Fall D — lokales customerId überlebt Cloud-Merge und Reconcile', () => {
+  it('Fall C2 — ein Legacy-Vorgang erzeugt kein leeres Relationsfeld', () => {
+    bootstrapScope('ws-03b1-legacy');
+    const seeded = seedVorgang();
+    const stripped = stripVorgangForCloud(seeded);
+    expect(Object.keys(stripped)).not.toContain('customerId');
+  });
+
+  it('Fall D — lokales customerId überlebt einen alten Cloud-Payload', () => {
+    /*
+     * Unverändert gültige Aussage aus 03B1 — nach 03B sogar wichtiger: Der
+     * Payload bildet hier eine Zeile ab, die vor 03B geschrieben wurde oder
+     * von einem alten Client zurückgeschrieben wurde.
+     */
     bootstrapScope('ws-03b1');
     const local = seedVorgang(CUSTOMER_ID);
     const rowVersion = local.sync?.version ?? 1;
-    const cloudPayload = stripVorgangForCloud(local);
-    expect((cloudPayload as Record<string, unknown>).customerId).toBeUndefined();
+    const { customerId: _legacy, ...legacyPayload } = stripVorgangForCloud(local);
+    const cloudPayload = legacyPayload as typeof legacyPayload & { customerId?: string };
+    expect(cloudPayload.customerId).toBeUndefined();
 
     const merged = mergeCloudVorgangIntoLocal(
       local,
@@ -140,7 +162,8 @@ describe('CUSTOMER-FACHOBJEKT-03B1', () => {
     expect(reconciled.vorgaenge[0]?.customerId).toBe(CUSTOMER_ID);
   });
 
-  it('Fall E — aus der Cloud neu erzeugter Vorgang besitzt kein customerId', () => {
+  it('Fall E — 03B: ein frisches Gerät übernimmt die Relation aus der Cloud', () => {
+    // Umgekehrte Aussage gegenüber 03B1 — genau das war die fachliche Lücke.
     bootstrapScope('ws-03b1');
     const source = seedVorgang(CUSTOMER_ID);
     const row = buildRow(source, source.sync?.version ?? 1);
@@ -150,8 +173,25 @@ describe('CUSTOMER-FACHOBJEKT-03B1', () => {
     expect(created.conflicts).toEqual([]);
     expect(created.vorgaenge).toHaveLength(1);
     expect(created.vorgaenge[0]?.id).toBe('v-03b1');
-    expect(created.vorgaenge[0]?.customerId).toBeUndefined();
+    expect(created.vorgaenge[0]?.customerId).toBe(CUSTOMER_ID);
     expect(created.vorgaenge[0]?.customer).toBe(source.customer);
+  });
+
+  it('Fall E2 — ein Legacy-Remote-Payload erzeugt keine Relation aus dem Namen', () => {
+    /*
+     * Eine aus der Cloud entfernte Relation darf niemals über einen
+     * Namensvergleich rekonstruiert werden — ein frisches Gerät bleibt ohne.
+     */
+    bootstrapScope('ws-03b1-legacy');
+    const source = seedVorgang();
+    const created = mergeVorgaengeFromPull(
+      [],
+      [buildRow(source, source.sync?.version ?? 1)],
+      'fresh-device',
+      'ws-03b1-legacy',
+    );
+    expect(created.vorgaenge[0]?.customerId).toBeUndefined();
+    expect(getCustomerStoreSnapshot()).toHaveLength(0);
   });
 
   it('Fall F — weder Bootstrap noch Cloud-Merge erzeugen einen Customer', () => {

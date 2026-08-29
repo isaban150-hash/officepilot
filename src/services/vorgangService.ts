@@ -51,7 +51,7 @@ import {
   migrateVorgangStatus,
 } from './vorgangLifecycleService';
 import { persistAll } from './persistenceService';
-import { generateEntityId, withNewEntitySync, withUpdatedEntitySync, withTombstonedEntity, filterSyncActive, isEntitySyncActive } from './sync/syncMetaService';
+import { generateEntityId, withTombstonedEntity, filterSyncActive, isEntitySyncActive } from './sync/syncMetaService';
 import type {
   ContractExtractedFields,
   CompanyDocument,
@@ -466,10 +466,20 @@ function appendDocumentIfNew(vorgang: Vorgang, doc: VorgangDocument): void {
   }
 }
 
+/**
+ * SYNC-VERSION-CONTRACT-02 — eine lokale Fachänderung lässt `sync` unberührt.
+ *
+ * `sync.version` ist die zuletzt vom **Server** bestätigte `row_version`, und
+ * genau sie sendet der Push als erwarteten Serverstand. Sie lokal hochzuzählen
+ * hiesse zu behaupten, der Server habe bereits geschrieben — der nächste Push
+ * würde folgerichtig als Versionskonflikt abgelehnt.
+ *
+ * Dass etwas zu senden ist, erkennt der Change-Tracker am Content-Key; `sync`
+ * spielt dabei keine Rolle (`stripSyncField`). Gesetzt wird die Version
+ * ausschliesslich von der Serverantwort und vom Pull.
+ */
 function updateVorgangInStore(updated: Vorgang): Vorgang {
-  const next = isEntitySyncActive(updated)
-    ? withUpdatedEntitySync(updated, 'vorgang')
-    : updated;
+  const next = updated;
   vorgaenge = vorgaenge.map((v) => (v.id === next.id ? next : v));
   persistAll();
   return cloneVorgang(next);
@@ -498,7 +508,8 @@ export function commitVorgangMutation(
     return { ok: false, errorKey: built.errorKey };
   }
 
-  const next = isEntitySyncActive(built) ? withUpdatedEntitySync(built, 'vorgang') : built;
+  // 02: lokale Fachänderung — `sync` bleibt, siehe `updateVorgangInStore`.
+  const next = built;
   vorgaenge = vorgaenge.map((item) => (item.id === vorgangId ? next : item));
   const persistResult = persistAll();
   if (!persistResult.success) {
@@ -799,7 +810,16 @@ export function createVorgangFromInbox(
 
   const doc = buildDocumentFromInbox(currentItem, archiveId);
 
-  let newVorgang: Vorgang = withNewEntitySync(
+  /*
+   * SYNC-VERSION-CONTRACT-02 — ein neu angelegter Vorgang kennt noch keine vom
+   * Server bestätigte `row_version` und bekommt deshalb **keine** `sync`-Meta.
+   * Eine künstliche 1 würde behaupten, der Server habe bereits geschrieben, und
+   * könnte eine überraschend vorhandene Remote-Zeile als gültige Basis
+   * missdeuten. Der erste Push sendet damit `0` — die RPC fügt neu ein und
+   * liefert die echte Version zurück. Dieselbe Semantik nutzt der Kundenstamm
+   * bereits.
+   */
+  let newVorgang: Vorgang = (
     {
       id: generateEntityId('v'),
       title: draft.title,
@@ -816,8 +836,7 @@ export function createVorgangFromInbox(
       photos: [],
       invoices: [],
       createdFromInboxId: item.id,
-    },
-    'vorgang',
+    }
   );
 
   // --- Snapshots of every store the handoff may touch.
@@ -1088,9 +1107,8 @@ export function saveVorgangContractConfirmation(
     negotiation: normalizeNegotiation(negotiation),
     contractConfirmation: frozen,
   });
-  const next = isEntitySyncActive(updated)
-    ? withUpdatedEntitySync(updated, 'vorgang')
-    : updated;
+  // 02: lokale Fachänderung — `sync` bleibt, siehe `updateVorgangInStore`.
+  const next = updated;
   vorgaenge = vorgaenge.map((v) => (v.id === vorgangId ? next : v));
   const persistResult = persistAll();
   if (!persistResult.success) {
@@ -1182,13 +1200,11 @@ export function stageVorgangDocumentDetach(documentId: string): StagedVorgangDoc
     const documents = vorgang.documents ?? [];
     if (!documents.some((doc) => doc.companyDocumentId === id)) return vorgang;
     previous.push(cloneVorgang(vorgang));
-    return withUpdatedEntitySync(
-      {
-        ...cloneVorgang(vorgang),
-        documents: documents.filter((doc) => doc.companyDocumentId !== id),
-      },
-      'vorgang',
-    );
+    // 02: lokale Fachänderung — `sync` bleibt, siehe `updateVorgangInStore`.
+    return {
+      ...cloneVorgang(vorgang),
+      documents: documents.filter((doc) => doc.companyDocumentId !== id),
+    };
   });
 
   return { previous };
@@ -1254,7 +1270,8 @@ export function unlinkInboxItemFromVorgang(inboxId: string): UnlinkInboxItemResu
   const nextDocuments = archiveId
     ? current.documents.filter((doc) => doc.companyDocumentId !== archiveId)
     : current.documents;
-  const nextVorgang = withUpdatedEntitySync({ ...current, documents: nextDocuments }, 'vorgang');
+  // 02: lokale Fachänderung — `sync` bleibt, siehe `updateVorgangInStore`.
+  const nextVorgang: Vorgang = { ...current, documents: nextDocuments };
   vorgaenge = vorgaenge.map((v) => (v.id === vorgangId ? nextVorgang : v));
 
   // 3. The archive document's back-reference.
@@ -1440,9 +1457,8 @@ export function upsertFinalizedInvoiceOnVorgang(
     return { ok: true, invoice: applied.invoice, action: 'noop' };
   }
 
-  const next = isEntitySyncActive(applied.vorgang)
-    ? withUpdatedEntitySync(applied.vorgang, 'vorgang')
-    : applied.vorgang;
+  // 02: lokale Fachänderung — `sync` bleibt, siehe `updateVorgangInStore`.
+  const next = applied.vorgang;
   vorgaenge = vorgaenge.map((v) => (v.id === vorgangId ? next : v));
   const persistResult = persistAll();
   if (!persistResult.success) {

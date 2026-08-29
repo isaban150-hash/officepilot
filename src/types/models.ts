@@ -1222,9 +1222,13 @@ export interface Vorgang {
   status: VorgangStatus;
   materialSource: MaterialStandard;
   /**
-   * CUSTOMER-FACHOBJEKT-03B1 — link to a persistent Customer.
-   * Local-only for now: never pushed, never taken from a cloud row.
-   * Absent on legacy Vorgänge; never derived from `customer`.
+   * CUSTOMER-FACHOBJEKT-03B1 → PRODUCT-FOUNDATION-03B — Verknüpfung zu einem
+   * persistenten Customer.
+   *
+   * Seit 03B Teil des Vorgangs-Cloud-Payloads und damit geräteübergreifend
+   * stabil. Eine vorhandene lokale Relation gewinnt beim Merge; Remote füllt
+   * nur eine Lücke. Auf Legacy-Vorgängen abwesend und **niemals** aus
+   * `customer` abgeleitet.
    */
   customerId?: string;
   /**
