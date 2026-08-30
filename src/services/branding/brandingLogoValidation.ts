@@ -93,27 +93,48 @@ function signatureMatchesMime(mimeType: LogoMimeType, bytes: Uint8Array): boolea
 export async function validateBrandingLogoFile(
   file: File | null | undefined,
 ): Promise<BrandingLogoValidationResult> {
-  if (!file) {
+  return validateBrandingLogoBlob(file);
+}
+
+/**
+ * BRANDING-01D — dieselbe Prüfung für beliebige Binärdaten.
+ *
+ * `File` erweitert `Blob`; die Dateiprüfung aus 01C ist damit ein Sonderfall
+ * dieser Funktion und delegiert an sie. So gibt es genau **eine**
+ * Signaturtabelle, **eine** Grössengrenze und **eine** MIME-Liste — auch für
+ * den Cloud-Weg, der keine `File`-Objekte kennt.
+ *
+ * Der Abgleich gegen einen **erwarteten** Typ (etwa aus einer
+ * `LogoAssetReference`) gehört bewusst nicht hierher: Das ist ein Vergleich
+ * zweier Angaben, keine Prüfung der Datei. Der Aufrufer erledigt ihn und
+ * benennt den Fehler in seiner eigenen Sprache — so bleibt das Fehlermodell
+ * dieser Datei unverändert, und die Anzeige in den Firmendaten ist nicht
+ * betroffen.
+ */
+export async function validateBrandingLogoBlob(
+  blob: Blob | null | undefined,
+): Promise<BrandingLogoValidationResult> {
+  if (!blob) {
     return { valid: false, error: 'invalid_file' };
   }
-  if (file.size === 0) {
+  if (blob.size === 0) {
     return { valid: false, error: 'invalid_file' };
   }
-  if (file.size > MAX_BRANDING_LOGO_SIZE_BYTES) {
+  if (blob.size > MAX_BRANDING_LOGO_SIZE_BYTES) {
     return { valid: false, error: 'file_too_large' };
   }
-  if (!isLogoMimeType(file.type)) {
+  if (!isLogoMimeType(blob.type)) {
     return { valid: false, error: 'unsupported_mime' };
   }
 
   let bytes: Uint8Array;
   try {
-    bytes = new Uint8Array(await file.slice(0, SIGNATURE_BYTE_LENGTH).arrayBuffer());
+    bytes = new Uint8Array(await blob.slice(0, SIGNATURE_BYTE_LENGTH).arrayBuffer());
   } catch {
     return { valid: false, error: 'invalid_file' };
   }
 
-  if (!signatureMatchesMime(file.type, bytes)) {
+  if (!signatureMatchesMime(blob.type, bytes)) {
     return { valid: false, error: 'signature_mismatch' };
   }
 
