@@ -13,37 +13,49 @@ Kurzer Übergabestand für den Einstieg. Alles Ausführlichere gehört in
 - **Branch:** `main`
 - **Letzter abgeschlossener technischer Commit:** `1a297c7` —
   *feat(ai): secure Gemini behind edge function*
-- **Zustand bei Beginn von MASTER-DOCS-01B:** `main` und `origin/main` synchron,
-  Arbeitsbaum sauber
 
-> **Vor jeder Übergabe den echten Git-Stand prüfen:**
-> `git log -1` und `git status -sb`.
-> Der hier notierte Commit ist der letzte abgeschlossene **Produktblock**, nicht
-> zwingend der neueste Commit — Dokumentationsänderungen kommen danach.
+> **Der tatsächliche Git-Stand ist bei jeder Übergabe zu verifizieren:**
+> `git log --oneline -1` und `git status -sb`.
+> Diese Datei beschreibt den **fachlichen** Stand. Welche Änderungen bereits committet
+> sind, sagt allein das Repository — der hier notierte Commit ist der zuletzt
+> abgeschlossene **Produktblock**, nicht zwingend der neueste Commit.
 
 ---
 
 ## Letzter abgeschlossener Block
 
-**SECURITY-GEMINI-KEY-01B** — der Gemini-Schlüssel liegt nicht mehr im Browser.
+**BRANDING-01E-0** — Altclient-Schutz für `company_profile.branding`, serverseitig.
 
+Der `company_profile`-UPDATE-Zweig der RPC `upsert_workspace_sync_entity` bewahrt ein
+serverseitig vorhandenes `branding`-Objekt, wenn der eingehende Payload dort kein Objekt
+liefert. Nur dieser eine Schlüssel, kein allgemeines Deep-Merge; alle übrigen Felder
+behalten die vollständige Replace-Semantik.
+
+Migration `20250902120000_company_profile_branding_preserve.sql` ist **remote angewendet**
+und per **isoliertem Runtime-Test bestätigt** (siehe Realtest).
+
+Davor: **SECURITY-GEMINI-KEY-01B** — der Gemini-Schlüssel liegt nicht mehr im Browser.
 Browser → `aiProxyClient` → Supabase Edge Function `/functions/v1/ai` →
 Sitzung, Kontostatus, Lizenz, Workspace, Rate Limit → Gemini.
-Fünf erlaubte Operationen, Modell serverseitig bestimmt, kein Retry, Zeitlimit,
-fail closed bei technischen Fehlern.
 
 ---
 
 ## Remote angewendete Migrationen
 
-Zuletzt angewendet (KI-Block):
+Zuletzt angewendet:
 
-- `20250901120000_ai_usage_rate_limit.sql`
-- `20250901123000_ai_service_role_read_access.sql`
+- `20250902120000_company_profile_branding_preserve.sql` (BRANDING-01E-0)
 - `20250901130000_ai_usage_counter_security_definer.sql`
+- `20250901123000_ai_service_role_read_access.sql`
+- `20250901120000_ai_usage_rate_limit.sql`
+
+Anschließender Dry-Run: **Remote database is up to date.** — lokaler Migrationsstand und
+Remote-Datenbank sind synchron.
 
 Alle übrigen: siehe `supabase/migrations/` — die Reihenfolge im Verzeichnis entspricht
 der Anwendungsreihenfolge.
+
+**Lokal erstellt, remote noch nicht angewendet:** keine.
 
 ## Aktive Edge Functions
 
@@ -54,6 +66,30 @@ der Anwendungsreihenfolge.
 ## Realtest
 
 *Extern bestätigter Projektstand — nicht allein aus dem Repository ableitbar.*
+
+### BRANDING-01E-0 — Branding-Preserve (Remote-Datenbank)
+
+Die Remote-Funktionsprüfung bestätigte Branding-Typprüfung, Branding-Preserve-Code und
+weiterhin aktives `row_version`-Inkrement. Der isolierte Runtime-Test lief in einem
+**ausschließlich für den Test erzeugten Workspace**; **kein echtes Firmenprofil wurde
+verändert**.
+
+Alle sieben Laufzeitfälle bestanden, kein FAIL:
+
+1. bestehendes Branding + Incoming ohne `branding` → Branding blieb erhalten
+2. `branding: {}` → als bewusst leer übernommen
+3. neues gültiges Branding → übernommen
+4. `branding: null` → Branding blieb erhalten
+5. `branding` mit falschem Typ → Branding blieb erhalten
+6. serverseitig kein Branding + Incoming ohne Branding → kein Branding erfunden
+7. falsche `row_version` → Versionskonflikt weiterhin aktiv, Payload unverändert
+
+SQL-Ergebnis: `Success. No rows returned`.
+
+Aufräumkontrolle: Die Suche nach dem Workspace `BRANDING-01E-0 ROLLBACK TEST` lieferte
+`Success. No rows returned` — **keine Testdaten zurückgeblieben**.
+
+### SECURITY-GEMINI-KEY-01B — KI-Weg
 
 Vollständiger Weg getestet: Browser → Edge Function → Auth/Lizenz → Workspace →
 Rate Limit → Gemini → Browser.
@@ -79,17 +115,19 @@ Rate Limit → Gemini → Browser.
 
 ## Aktuell offener Block
 
-`MASTER-DOCS-01B` — Erstellung dieser Master-Dokumentation.
+Keiner. `BRANDING-01E-0` ist abgeschlossen, remote angewendet und bestätigt.
 
-## Nächster technischer Produktblock
+## Nächster geplanter Produktblock
 
-**`BRANDING-01E-0`** — den Schreibvertrag von `company_profile` so härten, dass ein
-älterer Client einen neuen `branding`-Block nicht löschen kann.
+**`BRANDING-01E-1` — CompanyProfile / Branding Cloud Contract.** Das `branding`-Feld in
+den `CompanyProfile`-Typ und in den Cloud-Vertrag aufnehmen. Wichtig dabei: `branding`
+muss ein abgegrenzter Unterblock bleiben — als flache Einzelfelder wäre der Schutz aus
+01E-0 wirkungslos.
 
-Danach: `01E-1` (Branding im Cloud-Vertrag) → `01E-2` (produktiver Logo-Upload auf
-Storage) → `01F` (BrandingSnapshot in Rechnung und PDF).
+Danach: `01E-2` (produktiver Logo-Upload auf Storage) → `01F` (BrandingSnapshot in
+Rechnung und PDF).
 
-`BRANDING-01E` ist **noch nicht begonnen**.
+`01E-1`, `01E-2` und `01F` sind **noch nicht begonnen**.
 
 ---
 
