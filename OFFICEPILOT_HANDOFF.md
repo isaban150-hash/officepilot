@@ -11,14 +11,12 @@ Kurzer Übergabestand für den Einstieg. Alles Ausführlichere gehört in
 - **Dokumentationsstand:** 2026-08-30
 - **Repository:** `C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot`
 - **Branch:** `main`
-- **Letzter abgeschlossener technischer Commit:** `1a297c7` —
-  *feat(ai): secure Gemini behind edge function*
+- **Letzter abgeschlossener Produktblock:** `BRANDING-01E-0`
 
 > **Der tatsächliche Git-Stand ist bei jeder Übergabe zu verifizieren:**
 > `git log --oneline -1` und `git status -sb`.
-> Diese Datei beschreibt den **fachlichen** Stand. Welche Änderungen bereits committet
-> sind, sagt allein das Repository — der hier notierte Commit ist der zuletzt
-> abgeschlossene **Produktblock**, nicht zwingend der neueste Commit.
+> Diese Datei beschreibt den **fachlichen** Stand und nennt bewusst keinen Commit —
+> welcher Commit gerade HEAD ist, sagt allein das Repository.
 
 ---
 
