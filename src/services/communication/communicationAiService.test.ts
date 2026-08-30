@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import * as supabaseLib from '../../lib/supabase';
 import { DEFAULT_COMPANY_PROFILE } from '../../data/companyProfileDefaults';
 import { hydrateCompanyProfileStore } from '../companyProfileService';
 import { getAllVorgaenge, hydrateVorgangStore } from '../vorgangService';
@@ -54,8 +55,12 @@ describe('communicationAiService', () => {
     vi.restoreAllMocks();
   });
 
-  it('ruft ohne API-Key keinen Provider auf', async () => {
-    vi.stubEnv('VITE_GEMINI_API_KEY', '');
+  it('ruft ohne eingerichtete Cloud-Verbindung keinen Provider auf', async () => {
+    /*
+     * SECURITY-GEMINI-KEY-01B: Der Browser kennt keinen Gemini-Schlüssel mehr.
+     * Die Zusicherung bleibt — ohne Verbindung wird nichts gesendet.
+     */
+    vi.spyOn(supabaseLib, 'isSupabaseConfigured').mockReturnValue(false);
     const generateMock = vi.fn().mockResolvedValue({ success: true, text: 'KI-Text' });
     setCommunicationAiGenerateTextForTests(generateMock);
 

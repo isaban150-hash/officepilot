@@ -24,6 +24,7 @@ import {
 } from './officePilotBrainService';
 import { buildBrainSnapshotCounts } from './brain/brainSnapshotService';
 import { setAiProviderFetchForTests } from './aiProviderService';
+import * as supabaseLib from '../lib/supabase';
 import type { CompanyDocument, InboxItem } from '../types/models';
 import type { KnowledgeFact } from '../types/knowledge';
 
@@ -246,8 +247,13 @@ describe('officePilotBrainService', () => {
     expect(prompt).toContain('Welche Rechnungen sind offen?');
   });
 
-  it('ruft ohne API-Key keinen Provider auf', async () => {
-    vi.stubEnv('VITE_GEMINI_API_KEY', '');
+  it('ruft ohne eingerichtete Cloud-Verbindung keinen Provider auf', async () => {
+    /*
+     * SECURITY-GEMINI-KEY-01B: Der Browser kennt keinen Gemini-Schlüssel mehr.
+     * Die Zusicherung bleibt dieselbe — ohne Verbindung wird nichts gesendet —
+     * nur die Voraussetzung ist jetzt die Cloud-Konfiguration.
+     */
+    vi.spyOn(supabaseLib, 'isSupabaseConfigured').mockReturnValue(false);
     const generateMock = vi.fn().mockResolvedValue({
       success: true,
       text: 'sollte nicht erscheinen',

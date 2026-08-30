@@ -120,6 +120,7 @@ export async function askDocumentAi(input: {
     .join('\n');
 
   const result = await runAiRequest({
+    operation: 'document_question',
     prompt,
     guardProfile: 'qa',
     guardContext: { allowedSourceText },

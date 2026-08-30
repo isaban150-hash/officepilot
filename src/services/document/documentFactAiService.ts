@@ -316,7 +316,7 @@ export async function assignDocumentFacts(
 
   let result;
   try {
-    result = await runAiRequest({ prompt, skipGuard: true });
+    result = await runAiRequest({ operation: 'document_facts', prompt, skipGuard: true });
   } catch {
     return { assignments: localAssignments, source: 'local', partial, rejected: ['ai_threw'] };
   }

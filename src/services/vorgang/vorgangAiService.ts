@@ -43,6 +43,7 @@ export async function askVorgangAi(input: {
   const allowedSourceText = buildVorgangAiAllowedSourceText(context);
 
   const result = await runAiRequest({
+    operation: 'vorgang_question',
     prompt,
     guardProfile: 'qa',
     guardContext: { allowedSourceText },

@@ -63,7 +63,7 @@ export async function askOfficePilotBrain(
   const lang = getCachedSetup().language;
   const prompt = buildBrainPrompt(trimmedQuestion, snapshot, session, lang);
 
-  const result = await runAiRequest({ prompt, skipGuard: true });
+  const result = await runAiRequest({ operation: 'assistant', prompt, skipGuard: true });
 
 
 

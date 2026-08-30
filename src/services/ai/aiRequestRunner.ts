@@ -4,17 +4,21 @@ import type { AiRequestInput, AiResult, GenerateTextResult } from '../../types/a
 
 type GenerateTextFn = (prompt: string) => Promise<GenerateTextResult>;
 
+
 let generateTextOverride: GenerateTextFn | null = null;
 
 export function setAiGenerateTextForTests(fn: GenerateTextFn | null): void {
   generateTextOverride = fn;
 }
 
-async function runGenerateText(prompt: string): Promise<GenerateTextResult> {
+async function runGenerateText(
+  operation: AiRequestInput['operation'],
+  prompt: string,
+): Promise<GenerateTextResult> {
   if (generateTextOverride) {
     return generateTextOverride(prompt);
   }
-  return generateText(prompt);
+  return generateText(operation, prompt);
 }
 
 export async function runAiRequest(input: AiRequestInput): Promise<AiResult> {
@@ -37,7 +41,7 @@ export async function runAiRequest(input: AiRequestInput): Promise<AiResult> {
     };
   }
 
-  const generation = await runGenerateText(trimmedPrompt);
+  const generation = await runGenerateText(input.operation, trimmedPrompt);
   if (!generation.success) {
     return {
       success: false,

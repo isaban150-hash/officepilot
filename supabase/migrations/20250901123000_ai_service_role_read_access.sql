@@ -1,0 +1,32 @@
+-- SECURITY-GEMINI-KEY-01B -- Leserechte fuer den KI-Endpunkt.
+--
+-- Remote bestaetigter Befund: Die Edge Function arbeitet mit dem
+-- service-role-Client und liest profiles sowie workspace_members, um
+-- Kontostatus, Lizenz und Mitgliedschaft zu pruefen. Diese Rechte hat die
+-- Rolle aber nicht --
+--
+--   has_table_privilege('service_role', 'public.profiles', 'SELECT')          -> false
+--   has_table_privilege('service_role', 'public.workspace_members', 'SELECT') -> false
+--
+-- Grund: 20250710120000 und 20250711140000 erteilen SELECT ausdruecklich nur
+-- an `authenticated`; service_role war dort nie vorgesehen, weil bis zu diesem
+-- Block keine Serverkomponente existierte.
+--
+-- Folge im Betrieb: Ein freigeschalteter Nutzer mit aktiver Lizenz erhielt
+-- `forbidden`, weil die fehlgeschlagene Abfrage wie ein fehlendes Profil
+-- aussah. Die zugehoerige Fehlerbehandlung in der Function wird im selben
+-- Block korrigiert -- ein Berechtigungsfehler darf nie als Nutzersperre
+-- erscheinen.
+--
+-- Vergeben wird ausschliesslich, was der Endpunkt tatsaechlich braucht:
+-- lesend, auf zwei Tabellen, nur fuer service_role.
+--
+-- KEINE Rechte fuer public, anon oder authenticated.
+-- KEINE Schreibrechte.
+-- KEINE Aenderung bestehender RLS-Regeln oder Policies.
+-- KEINE Freigabe der internen Membership-Helfer.
+--
+-- Die bereits angewendete Migration 20250901120000 bleibt unveraendert.
+
+grant select on public.profiles to service_role;
+grant select on public.workspace_members to service_role;

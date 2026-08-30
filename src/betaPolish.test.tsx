@@ -17,7 +17,9 @@ import { hydrateVorgangStore } from './services/vorgangService';
 import { hydrateTaskStore } from './services/taskStore';
 import { formatInboxActionToast } from './utils/inboxActionToast';
 import { confirmFiling } from './services/inboxTaskService';
-import { geminiGenerateText } from './services/ai/geminiProvider';
+import { callAiProxy, setAiProxyFetchForTests } from './services/ai/aiProxyClient';
+import { createSyncClient, hydrateSyncClient } from './services/sync/syncClientService';
+import { loginAsDefaultAdmin, seedDefaultAdminUser } from './test/authFixtures';
 import { MOCK_INBOX_ITEMS } from './data/inboxMockData';
 import { BetaModeBanner } from './components/layout/BetaModeBanner';
 import * as betaTestMode from './config/betaTestMode';
@@ -208,21 +210,36 @@ describe('BETA-TEST-01 polish', () => {
       expect(msg).not.toMatch(/Upload failed|error/i);
     });
 
-    it('liefert freundliche Gemini-Fehlermeldungen ohne Englisch', async () => {
-      const fetchFn = vi.fn().mockResolvedValue({
-        ok: false,
-        json: async () => ({ error: { message: 'API key not valid. Please pass a valid API key.' } }),
+    it('liefert freundliche KI-Fehlermeldungen ohne Englisch', async () => {
+      /*
+       * Dieselbe Zusicherung wie zuvor, jetzt am OfficePilot-Endpunkt statt am
+       * direkten Gemini-Aufruf: Ein technischer Fremdtext darf den Nutzer nicht
+       * erreichen. Der Server reicht ohnehin nur einen Code heraus.
+       */
+      await seedDefaultAdminUser();
+      await loginAsDefaultAdmin();
+      hydrateSyncClient({
+        ...createSyncClient(),
+        serverWorkspaceId: '123e4567-e89b-12d3-a456-426614174000',
       });
+      setAiProxyFetchForTests(
+        vi.fn().mockResolvedValue({
+          ok: false,
+          status: 502,
+          json: async () => ({ ok: false, error: 'ai_upstream_error' }),
+        }) as unknown as typeof fetch,
+      );
+      try {
+        const result = await callAiProxy('assistant', 'Test');
 
-      const result = await geminiGenerateText('Test', {
-        apiKey: 'invalid',
-        fetchFn: fetchFn as typeof fetch,
-      });
-
-      expect(result.success).toBe(false);
-      if (result.success) return;
-      expect(result.message).toContain('Bitte versuchen Sie');
-      expect(result.message).not.toContain('API key');
+        expect(result.success).toBe(false);
+        if (result.success) return;
+        expect(result.message).toContain('nicht erreichbar');
+        expect(result.message).not.toContain('API key');
+        expect(result.message).not.toMatch(/[A-Za-z]+ key not valid/);
+      } finally {
+        setAiProxyFetchForTests(null);
+      }
     });
 
     it('zeigt Sync-Fehler ohne technische Rohmeldung', () => {

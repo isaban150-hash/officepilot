@@ -1,9 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runAiRequest, setAiGenerateTextForTests } from './aiRequestRunner';
+import * as supabaseLib from '../../lib/supabase';
 
 describe('aiRequestRunner', () => {
   beforeEach(() => {
-    vi.stubEnv('VITE_GEMINI_API_KEY', 'test-gemini-key');
+    /*
+     * SECURITY-GEMINI-KEY-01B: „konfiguriert" hieß früher „ein Gemini-Schlüssel
+     * liegt im Browser". Der Schlüssel liegt jetzt beim Server; maßgeblich ist
+     * die Cloud-Verbindung.
+     */
     setAiGenerateTextForTests(null);
   });
 
@@ -13,15 +18,16 @@ describe('aiRequestRunner', () => {
     vi.restoreAllMocks();
   });
 
-  it('liefert unavailable ohne API-Key', async () => {
-    vi.stubEnv('VITE_GEMINI_API_KEY', '');
+  it('liefert unavailable ohne eingerichtete Cloud-Verbindung', async () => {
+    vi.spyOn(supabaseLib, 'isSupabaseConfigured').mockReturnValue(false);
     const generateMock = vi.fn();
     setAiGenerateTextForTests(generateMock);
 
-    const result = await runAiRequest({ prompt: 'Test' });
+    const result = await runAiRequest({ operation: 'assistant', prompt: 'Test' });
 
     expect(result.source).toBe('unavailable');
     expect(result.errorCode).toBe('missing_api_key');
+    // Entscheidend unverändert: Es wird nichts gesendet.
     expect(generateMock).not.toHaveBeenCalled();
   });
 
@@ -30,7 +36,7 @@ describe('aiRequestRunner', () => {
       vi.fn().mockResolvedValue({ success: true, text: 'Mock-Antwort' }),
     );
 
-    const result = await runAiRequest({ prompt: 'Test', skipGuard: true });
+    const result = await runAiRequest({ operation: 'assistant', prompt: 'Test', skipGuard: true });
 
     expect(result.success).toBe(true);
     expect(result.source).toBe('ai');
@@ -46,7 +52,7 @@ describe('aiRequestRunner', () => {
       }),
     );
 
-    const result = await runAiRequest({ prompt: 'Test', guardProfile: 'qa' });
+    const result = await runAiRequest({ operation: 'assistant', prompt: 'Test', guardProfile: 'qa' });
 
     expect(result.source).toBe('rule_fallback');
     expect(result.message).toContain('API nicht erreichbar');
@@ -61,6 +67,7 @@ describe('aiRequestRunner', () => {
     );
 
     const result = await runAiRequest({
+      operation: 'assistant',
       prompt: 'Test',
       guardProfile: 'qa',
       guardContext: { allowedSourceText: 'Original' },

@@ -86,6 +86,8 @@ export async function enhanceCommunicationDraft(
 
   const generation = await runAiRequest({
 
+    operation: 'communication_draft',
+
     prompt,
 
     guardProfile: 'enhance',
