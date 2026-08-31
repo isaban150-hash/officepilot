@@ -306,6 +306,26 @@ export function mergeRemoteWorkspacePullIntoState(
     }
   }
 
+  /*
+   * COMPANY-PROFILE-SYNC-LOSS-01B — derselbe Preserve-Schutz wie bei Vorgang
+   * und Kunde, jetzt auch für die beiden Firmen-Entitäten.
+   *
+   * Bisher entschied allein der Versionsvergleich, ob der Remote-Stand
+   * übernommen wird. Eine lokale Änderung, die noch in der Outbox lag, wurde
+   * dabei überschrieben — ohne Konflikt, ohne Meldung, ohne Spur. Danach setzte
+   * der Pull auch noch die Tracker-Basislinie neu, sodass die Änderung nicht
+   * einmal mehr als ausstehend galt.
+   *
+   * Der Schutz greift nur, solange ein aktiver Auftrag existiert
+   * (`pending`/`error`/`blocked`). Ist er abgeschlossen, gilt wieder das
+   * bisherige Verhalten — es gibt dann nichts mehr zu bewahren.
+   *
+   * Bewusst grob: geschützt wird der **gesamte** lokale Stand, kein Feldmerge
+   * und keine Sonderbehandlung einzelner Blöcke wie `branding`.
+   */
+  const companySetupDirty = activeOutboxEntityIds(state, 'company_setup').has(workspaceId);
+  const companyProfileDirty = activeOutboxEntityIds(state, 'company_profile').has(workspaceId);
+
   /**
    * OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02D — eine Remote-Zeile ohne echte
    * Firmenidentität (leerer Name) darf einen echten lokalen Betrieb niemals
@@ -380,7 +400,8 @@ export function mergeRemoteWorkspacePullIntoState(
       } else {
         conflicts.push('company_setup');
       }
-    } else if (localSetupIsDefault || pull.setupRowVersion >= localVersion) {
+    } else if (!companySetupDirty && (localSetupIsDefault || pull.setupRowVersion >= localVersion)) {
+      // COMPANY-PROFILE-SYNC-LOSS-01B: bei aktivem Auftrag bleibt der lokale Stand stehen.
       next.setup = remoteSetup;
       applyRemoteSetupSyncMeta(pull.setupRowVersion, pull.setupUpdatedAt ?? new Date().toISOString());
       next.setupSync = {
@@ -467,7 +488,11 @@ export function mergeRemoteWorkspacePullIntoState(
       } else {
         conflicts.push('company_profile');
       }
-    } else if (localProfileIsDefault || pull.companyProfileRowVersion >= localVersion) {
+    } else if (
+      !companyProfileDirty &&
+      (localProfileIsDefault || pull.companyProfileRowVersion >= localVersion)
+    ) {
+      // COMPANY-PROFILE-SYNC-LOSS-01B: bei aktivem Auftrag bleibt der lokale Stand stehen.
       next.companyProfile = remoteProfile;
       applyRemoteCompanyProfileSyncMeta(
         pull.companyProfileRowVersion,
