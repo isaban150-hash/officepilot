@@ -141,24 +141,43 @@ describe('BRANDING-01F-1 — Branding-Snapshot an der Rechnung', () => {
     expect('brandingSnapshot' in legacy).toBe(false);
   });
 
-  // TEST 9 — der bestehende Cloud-Vertrag bleibt unberührt.
-  it('sendet den Snapshot nicht an die bestehenden Rechnungs-Payloads', () => {
+  /*
+   * TEST 9 — in 01F-1 hielt dieser Fall fest, dass der Snapshot die
+   * Cloud-Grenzen **nicht** passiert. Seit BRANDING-01F-2 ist er ein
+   * kontrollierter Bestandteil des Rechnungsvertrags; die Grenzprüfung des
+   * Snapshots selbst liegt in
+   * `src/services/invoice/invoiceBrandingSnapshotCloudContract01.test.ts`.
+   *
+   * Was hier zu sichern bleibt, ist die Abgrenzung zum **veränderlichen**
+   * `companySnapshot.branding` — die gilt unverändert.
+   */
+  it('lässt companySnapshot.branding weiterhin aus den Rechnungs-Payloads heraus', () => {
     const invoice = {
       id: 'inv-1',
       type: 'schluss',
       brandingSnapshot: { version: 1, logo: { ...LOGO_A }, primaryColor: '#123456' },
-      companySnapshot: { ...DEFAULT_COMPANY_PROFILE, branding: { logo: { ...LOGO_A } } },
+      companySnapshot: {
+        ...DEFAULT_COMPANY_PROFILE,
+        logoDataUrl: 'data:image/png;base64,AAAA',
+        branding: { logo: { assetId: 'heutiges-asset', mimeType: 'image/png' } },
+      },
     } as unknown as VorgangInvoice;
 
     const cloud = buildWorkspaceInvoiceFinalizePayload(invoice);
-    const finalize = buildInvoicePayloadV1(invoice);
+    const finalize = buildInvoicePayloadV1(invoice)!;
 
-    expect('brandingSnapshot' in cloud).toBe(false);
-    expect(finalize && 'brandingSnapshot' in finalize).toBe(false);
-    // Und der Firmenblock bleibt wie seit 01E-1 branding-frei.
-    expect('branding' in (cloud.companySnapshot as Record<string, unknown>)).toBe(false);
-    for (const payload of [cloud, finalize ?? {}]) {
-      expect(JSON.stringify(payload)).not.toContain('asset-aaaa-1111');
+    for (const payload of [cloud, finalize]) {
+      const company = payload.companySnapshot as Record<string, unknown>;
+      expect('branding' in company).toBe(false);
+      expect('logoDataUrl' in company).toBe(false);
+      // Das heutige Firmenlogo darf den Vertrag nirgends erreichen.
+      expect(JSON.stringify(payload)).not.toContain('heutiges-asset');
+      // Der eingefrorene Snapshot dagegen schon — seit 01F-2.
+      expect(payload.brandingSnapshot).toEqual({
+        version: 1,
+        logo: LOGO_A,
+        primaryColor: '#123456',
+      });
     }
   });
 });

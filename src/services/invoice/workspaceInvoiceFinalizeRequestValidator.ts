@@ -15,6 +15,11 @@ import {
   isPlainJsonObject,
   FORBIDDEN_OBJECT_KEYS,
 } from './invoicePreparedResponseProjection';
+import { BRANDING_SNAPSHOT_VERSION } from '../../types/branding';
+import {
+  isLogoMimeType,
+  isValidBrandingPrimaryColor,
+} from '../branding/brandingSnapshotService';
 
 export const PREPARED_FINALIZE_REQUEST_KIND =
   'officepilot-workspace-invoice-finalize-request' as const;
@@ -29,7 +34,22 @@ export const PREPARED_FINALIZE_REQUEST_KIND =
  * Der **äußere** Vorbereitungsumschlag ist davon unberührt: seine Struktur hat
  * sich nicht geändert, `INVOICE_DRAFT_PREPARATION_FORMAT_VERSION` bleibt 1.
  */
-export const PREPARED_FINALIZE_REQUEST_FORMAT_VERSION = 2 as const;
+/*
+ * BRANDING-01F-2 — von 2 auf 3 erhöht.
+ *
+ * Der Kopf dieser Datei bindet die Feld-Whitelisten ausdrücklich an die
+ * Request-Formatversion: „Eine spätere Modellerweiterung verlangt eine bewusste
+ * neue Request-Version." `brandingSnapshot` ist genau eine solche Erweiterung —
+ * die Whitelist eines Version-3-Requests akzeptiert ein Feld, das ein
+ * Version-2-Leser abgelehnt hätte.
+ *
+ * Wie bei 01P4E3D gibt es **keinen dualen Leser**: Ein mit Version 2
+ * gespeicherter Request wird abgewiesen, nicht umgeschrieben. Er ist inhaltlich
+ * unschädlich — ihm fehlt lediglich das neue optionale Feld —, aber ein
+ * stillschweigend akzeptierter Fremdversions-Request wäre der Anfang genau der
+ * Unschärfe, die dieser Vertrag verhindern soll.
+ */
+export const PREPARED_FINALIZE_REQUEST_FORMAT_VERSION = 3 as const;
 
 export const INVOICE_APPROVAL_CONTEXT_KIND = 'officepilot-invoice-approval-context' as const;
 export const INVOICE_APPROVAL_CONTEXT_FORMAT_VERSION = 1 as const;
@@ -101,6 +121,8 @@ const INVOICE_KEYS = [
   'skontoText',
   'customerSnapshot',
   'companySnapshot',
+  // BRANDING-01F-2 — das eingefrorene Branding dieser Rechnung.
+  'brandingSnapshot',
   'legalNotices',
   'previousAbschlagDeductions',
   'introText',
@@ -174,6 +196,10 @@ const COMPANY_KEYS = [
   'taxFreeNotice',
   'invoiceFooterNotes',
 ] as const;
+
+/** BRANDING-01F-2 — geschlossener Vertrag, siehe `checkBrandingSnapshot`. */
+const BRANDING_SNAPSHOT_KEYS = ['version', 'logo', 'primaryColor'] as const;
+const BRANDING_LOGO_KEYS = ['assetId', 'mimeType'] as const;
 
 const DEDUCTION_KEYS = [
   'invoiceId',
@@ -295,6 +321,44 @@ function checkCustomerSnapshot(value: unknown, path: string): void {
   }
 }
 
+/**
+ * BRANDING-01F-2 — geschlossener Vertrag des eingefrorenen Brandings.
+ *
+ * Wie jeder Teilvertrag dieses Validators bewusst lokal formuliert: Er darf
+ * sich nie auf eine Builderfunktion stützen. Nur die beiden **Wertregeln**
+ * — erlaubte MIME-Typen und Farbform — stammen aus dem Branding-Vertrag, damit
+ * es sie genau einmal gibt.
+ */
+function checkBrandingSnapshot(value: unknown, path: string): void {
+  if (value === undefined) return;
+  const snapshot = object(value, path);
+  keysWithin(snapshot, BRANDING_SNAPSHOT_KEYS, path);
+
+  if (snapshot.version !== BRANDING_SNAPSHOT_VERSION) {
+    reject(`${path}.version:unsupported`);
+  }
+
+  if (snapshot.logo !== undefined) {
+    const logo = object(snapshot.logo, `${path}.logo`);
+    keysWithin(logo, BRANDING_LOGO_KEYS, `${path}.logo`);
+    if (typeof logo.assetId !== 'string' || logo.assetId.trim().length === 0) {
+      reject(`${path}.logo.assetId:not_string`);
+    }
+    if (typeof logo.mimeType !== 'string' || !isLogoMimeType(logo.mimeType)) {
+      reject(`${path}.logo.mimeType:unsupported`);
+    }
+  }
+
+  if (snapshot.primaryColor !== undefined) {
+    if (
+      typeof snapshot.primaryColor !== 'string' ||
+      !isValidBrandingPrimaryColor(snapshot.primaryColor)
+    ) {
+      reject(`${path}.primaryColor:invalid`);
+    }
+  }
+}
+
 function checkCompanySnapshot(value: unknown, path: string): void {
   if (value === undefined) return;
   const snapshot = object(value, path);
@@ -408,6 +472,7 @@ function checkInvoiceShape(
   }
   checkCustomerSnapshot(invoice.customerSnapshot, `${path}.customerSnapshot`);
   checkCompanySnapshot(invoice.companySnapshot, `${path}.companySnapshot`);
+  checkBrandingSnapshot(invoice.brandingSnapshot, `${path}.brandingSnapshot`);
 
   if (variant === 'invoice') {
     optionalString(invoice.archiveDocumentId, `${path}.archiveDocumentId`);
@@ -450,8 +515,6 @@ export function buildInvoicePayloadV1(invoice: unknown): Record<string, unknown>
   for (const key of Object.keys(invoice)) {
     if (FORBIDDEN.has(key)) return null;
     if (key === 'payments' || key === 'paymentStatus' || key === 'archiveDocumentId') continue;
-    // BRANDING-01F-1: bleibt lokal, bis 01F-2 den Rechnungsvertrag erweitert.
-    if (key === 'brandingSnapshot') continue;
     if (key === 'expected_amendment_sequence') return null;
     if (key === 'expectedAmendmentSequence') continue;
     const value = invoice[key];

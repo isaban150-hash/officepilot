@@ -11,6 +11,11 @@
  * Zeilenspalten des Pulls; hier wird nur geprüft, dass der Payload sie — falls
  * vorhanden — nicht in einer unbrauchbaren Form trägt.
  */
+import { BRANDING_SNAPSHOT_VERSION } from '../../types/branding';
+import {
+  isLogoMimeType,
+  isValidBrandingPrimaryColor,
+} from '../branding/brandingSnapshotService';
 
 import type {
   InvoiceCalculationMode,
@@ -48,6 +53,8 @@ const INVOICE_KEYS = new Set([
   'skontoText',
   'customerSnapshot',
   'companySnapshot',
+  // BRANDING-01F-2 — das eingefrorene Branding dieser Rechnung.
+  'brandingSnapshot',
   'legalNotices',
   'previousAbschlagDeductions',
   'introText',
@@ -113,6 +120,10 @@ const COMPANY_KEYS = new Set([
   'taxFreeNotice',
   'invoiceFooterNotes',
 ]);
+
+/** BRANDING-01F-2 — geschlossener Vertrag, siehe `checkBrandingSnapshot`. */
+const BRANDING_SNAPSHOT_KEYS = new Set(['version', 'logo', 'primaryColor']);
+const BRANDING_LOGO_KEYS = new Set(['assetId', 'mimeType']);
 
 const DEDUCTION_KEYS = new Set([
   'invoiceId',
@@ -294,6 +305,51 @@ function checkCompanySnapshot(value: unknown, path: string): void {
   optionalText(snapshot.taxFreeNotice, `${path}.taxFreeNotice`);
 }
 
+/**
+ * BRANDING-01F-2 — der geschlossene Vertrag des eingefrorenen Brandings.
+ *
+ * Die Regeln stehen hier lokal, wie bei jedem anderen Teilvertrag dieses
+ * Validators: Er darf sich nicht auf eine Builderfunktion stützen, die sich
+ * später ändern kann. Die beiden **Wertregeln** — erlaubte MIME-Typen und
+ * Farbform — kommen dagegen aus dem Branding-Vertrag selbst; sie zweimal zu
+ * schreiben hiesse, sie irgendwann auseinanderlaufen zu lassen.
+ *
+ * Erlaubt sind ausschliesslich `version`, `logo` und `primaryColor`; im Logo
+ * nur `assetId` und `mimeType`. Ein Speicherpfad, eine signierte URL oder
+ * Bildbytes werden damit als `unknown_field` abgelehnt, statt stillschweigend
+ * mitzureisen.
+ */
+function checkBrandingSnapshot(value: unknown, path: string): void {
+  if (value === undefined) return;
+  const snapshot = object(value, path);
+  keysWithin(snapshot, BRANDING_SNAPSHOT_KEYS, path);
+
+  if (snapshot.version !== BRANDING_SNAPSHOT_VERSION) {
+    reject(`${path}.version:unsupported`);
+  }
+
+  if (snapshot.logo !== undefined) {
+    const logo = object(snapshot.logo, `${path}.logo`);
+    keysWithin(logo, BRANDING_LOGO_KEYS, `${path}.logo`);
+    requiredText(logo.assetId, `${path}.logo.assetId`);
+    if (typeof logo.assetId === 'string' && logo.assetId.trim().length === 0) {
+      reject(`${path}.logo.assetId:not_text`);
+    }
+    if (typeof logo.mimeType !== 'string' || !isLogoMimeType(logo.mimeType)) {
+      reject(`${path}.logo.mimeType:unsupported`);
+    }
+  }
+
+  if (snapshot.primaryColor !== undefined) {
+    if (
+      typeof snapshot.primaryColor !== 'string' ||
+      !isValidBrandingPrimaryColor(snapshot.primaryColor)
+    ) {
+      reject(`${path}.primaryColor:invalid`);
+    }
+  }
+}
+
 function checkDeduction(value: unknown, path: string): void {
   const deduction = object(value, path);
   keysWithin(deduction, DEDUCTION_KEYS, path);
@@ -372,6 +428,7 @@ export function validateWorkspaceInvoiceCloudPayload(
     }
     checkCustomerSnapshot(value.customerSnapshot, 'payload.customerSnapshot');
     checkCompanySnapshot(value.companySnapshot, 'payload.companySnapshot');
+    checkBrandingSnapshot(value.brandingSnapshot, 'payload.brandingSnapshot');
 
     /*
      * READER-AMENDMENT-OPTIONAL-01 — `expectedAmendmentSequence` ist ein

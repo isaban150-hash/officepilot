@@ -9,6 +9,7 @@ import {
   isPlainJsonObject as isPreparedJsonObject,
 } from './invoicePreparedResponseProjection';
 import { validateWorkspaceInvoiceCloudPayload } from './workspaceInvoiceCloudPayloadValidator';
+import { parseBrandingSnapshotFromCloud } from '../branding/brandingSnapshotService';
 
 /**
  * CLOUD-ORDER-CHAIN-03A/03B2 – thin binding for finalize + pull workspace invoices.
@@ -206,13 +207,6 @@ export function buildWorkspaceInvoiceFinalizePayload(invoice: VorgangInvoice): R
     payments: _payments,
     paymentStatus: _paymentStatus,
     archiveDocumentId: _archiveDocumentId,
-    /*
-     * BRANDING-01F-1 — der Branding-Snapshot bleibt vorerst lokal. Der strenge
-     * Cloud-Validator kennt das Feld nicht und würde den gesamten Push mit
-     * `brandingSnapshot:unknown_field` ablehnen. Ob und wie er in den
-     * Rechnungsvertrag aufgenommen wird, entscheidet 01F-2.
-     */
-    brandingSnapshot: _brandingSnapshot,
     ...rest
   } = invoice;
 
@@ -346,6 +340,15 @@ export function mapCloudPayloadToVorgangInvoice(payload: Record<string, unknown>
     companySnapshot: optionalCloudObject<VorgangInvoice['companySnapshot']>(
       payload.companySnapshot,
     ),
+    /*
+     * BRANDING-01F-2 — der eingefrorene Snapshot kommt zurück, wie er kam.
+     *
+     * Der Parser prüft streng und gibt bei Verstoss `null` — daraus wird hier
+     * `undefined`, also „diese Rechnung trägt kein Branding". Ausdrücklich
+     * **kein** Rückfall auf das heutige Firmenbranding: Ein Dokument von damals
+     * mit dem Logo von heute wäre eine stille Fälschung.
+     */
+    brandingSnapshot: parseBrandingSnapshotFromCloud(payload.brandingSnapshot) ?? undefined,
     legalNotices: optionalCloudTextList(payload.legalNotices),
     previousAbschlagDeductions: Array.isArray(payload.previousAbschlagDeductions)
       ? (payload.previousAbschlagDeductions as VorgangInvoice['previousAbschlagDeductions'])

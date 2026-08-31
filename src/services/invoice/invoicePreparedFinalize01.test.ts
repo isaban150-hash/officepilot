@@ -2114,9 +2114,15 @@ describe('01P4E3B — Prepared-Schluss-Projektionsparität', () => {
  * unberührt und bleibt auf Version 1.
  * ========================================================================== */
 
-describe('01P4E3D — Prepared-Request-Formatversion 2', () => {
-  it('F1: die innere Request-Version ist 2, die äußere Vorbereitung bleibt 1', () => {
-    expect(PREPARED_FINALIZE_REQUEST_FORMAT_VERSION).toBe(2);
+describe('01P4E3D — Prepared-Request-Formatversion', () => {
+  /*
+   * BRANDING-01F-2 — die Version ist auf 3 gestiegen, weil die Feld-Whitelist
+   * um `brandingSnapshot` erweitert wurde. Die Zusicherungen bleiben dieselben:
+   * genau eine gültige Version, kein Default, kein dualer Leser — insbesondere
+   * wird die **vorherige** Version 2 weiterhin abgewiesen.
+   */
+  it('F1: die innere Request-Version ist 3, die äußere Vorbereitung bleibt 1', () => {
+    expect(PREPARED_FINALIZE_REQUEST_FORMAT_VERSION).toBe(3);
     expect(INVOICE_DRAFT_PREPARATION_FORMAT_VERSION).toBe(1);
     // Die Kennung des Requests bleibt unverändert.
     expect(PREPARED_FINALIZE_REQUEST_KIND).toBe(
@@ -2124,7 +2130,7 @@ describe('01P4E3D — Prepared-Request-Formatversion 2', () => {
     );
   });
 
-  it('F2: der Request-Validator akzeptiert ausschließlich Version 2', async () => {
+  it('F2: der Request-Validator akzeptiert ausschließlich Version 3', async () => {
     const prepared = await prepareInvoiceDraftFinalization(prepareInput());
     expect(prepared.ok, JSON.stringify(prepared)).toBe(true);
     if (!prepared.ok) return;
@@ -2132,7 +2138,8 @@ describe('01P4E3D — Prepared-Request-Formatversion 2', () => {
     const base = JSON.parse(JSON.stringify(prepared.request)) as Record<string, unknown>;
     expect(validatePreparedWorkspaceInvoiceFinalizeRequest(base).ok).toBe(true);
 
-    for (const version of [1, 0, 3, '2', null, true, 2.5] as unknown[]) {
+    // `2` steht bewusst in der Liste: Requests der Vorversion werden abgewiesen.
+    for (const version of [1, 0, 2, 4, '3', null, true, 2.5] as unknown[]) {
       const result = validatePreparedWorkspaceInvoiceFinalizeRequest({
         ...base,
         formatVersion: version,
@@ -2149,7 +2156,7 @@ describe('01P4E3D — Prepared-Request-Formatversion 2', () => {
     expect(validatePreparedWorkspaceInvoiceFinalizeRequest(withoutVersion).ok).toBe(false);
   });
 
-  it('F3: eine neue Vorbereitung trägt Version 2 und den E3B-Projektionsvertrag', async () => {
+  it('F3: eine neue Vorbereitung trägt Version 3 und den E3B-Projektionsvertrag', async () => {
     const prepared = await prepareInvoiceDraftFinalization(
       prepareInput({ draft: buildSchlussDraft() }),
     );
@@ -2157,7 +2164,7 @@ describe('01P4E3D — Prepared-Request-Formatversion 2', () => {
     if (!prepared.ok) return;
 
     expect(prepared.request.kind).toBe(PREPARED_FINALIZE_REQUEST_KIND);
-    expect(prepared.request.formatVersion).toBe(2);
+    expect(prepared.request.formatVersion).toBe(3);
     // Der Schluss-Payload trägt das Metafeld weiterhin.
     expect(prepared.request.invoicePayload.expectedAmendmentSequence).toBe(
       SCHLUSS_AMENDMENT_SEQUENCE,
@@ -2241,7 +2248,7 @@ describe('01P4E3D — Prepared-Request-Formatversion 2', () => {
     }
   });
 
-  it('F5: Abschlag und Schluss bleiben mit Version 2 erfolgreich', async () => {
+  it('F5: Abschlag und Schluss bleiben mit der aktuellen Version erfolgreich', async () => {
     // (a) Abschlag.
     const abschlagRequest = await seedPrepared();
     installServer();
@@ -2281,7 +2288,7 @@ describe('01P4E3D — Prepared-Request-Formatversion 2', () => {
     expect(localState.upsertCalls.length).toBe(1);
   });
 
-  it('F6: der gespeicherte Rohtext trägt Version 2 und bleibt unverändert', async () => {
+  it('F6: der gespeicherte Rohtext trägt Version 3 und bleibt unverändert', async () => {
     await seedPrepared();
 
     const before = await loadInvoiceDraftRecordByLocator({
@@ -2295,11 +2302,11 @@ describe('01P4E3D — Prepared-Request-Formatversion 2', () => {
 
     const rawJson = before.record.preparationRawJson!;
     const sha = before.record.preparationSha256!;
-    expect(rawJson).toContain('"formatVersion":2');
+    expect(rawJson).toContain('"formatVersion":3');
     expect(JSON.parse(rawJson).kind).toBe(INVOICE_DRAFT_PREPARATION_KIND);
     // Der äußere Umschlag bleibt Version 1.
     expect(JSON.parse(rawJson).formatVersion).toBe(1);
-    expect(JSON.parse(rawJson).request.formatVersion).toBe(2);
+    expect(JSON.parse(rawJson).request.formatVersion).toBe(3);
 
     // Der gespeicherte Hash passt exakt zum gespeicherten Rohtext.
     const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(rawJson));

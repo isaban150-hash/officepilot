@@ -69,6 +69,56 @@ function toLogoAssetReference(logo: LogoAssetReference): LogoAssetReference {
  * Ein leeres Profil ist gültig und ergibt `{ version: 1 }` — keine leeren
  * Platzhalterfelder.
  */
+/**
+ * BRANDING-01F-2 — die Gegenrichtung: einen aus der Cloud gelesenen Snapshot
+ * annehmen oder verwerfen.
+ *
+ * Bewusst **kein** Aufruf von `buildBrandingSnapshot`: Der ist ein Builder aus
+ * einem `BrandingProfile` und würde einen fremden Fremdwert erst in ein Profil
+ * umdeuten müssen. Ein Parser hat eine andere Aufgabe — er akzeptiert nichts,
+ * was er nicht kennt.
+ *
+ * Der Vertrag ist geschlossen: `version`, `logo`, `primaryColor` und sonst
+ * nichts; im Logo ausschliesslich `assetId` und `mimeType`. Alles andere macht
+ * den ganzen Snapshot ungültig, statt still gekürzt zu werden — im Zweifel
+ * lieber kein Branding als ein halbes, das nicht mehr dem Original entspricht.
+ *
+ * Rückgabe `null` heisst „nicht übernehmbar"; der Aufrufer entscheidet, ob das
+ * eine Ablehnung oder ein fehlendes Feld bedeutet.
+ */
+export function parseBrandingSnapshotFromCloud(value: unknown): BrandingSnapshot | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+  const raw = value as Record<string, unknown>;
+
+  for (const key of Object.keys(raw)) {
+    if (key !== 'version' && key !== 'logo' && key !== 'primaryColor') return null;
+  }
+
+  if (raw.version !== BRANDING_SNAPSHOT_VERSION) return null;
+  const snapshot: BrandingSnapshot = { version: BRANDING_SNAPSHOT_VERSION };
+
+  if (raw.logo !== undefined) {
+    const logo = raw.logo;
+    if (typeof logo !== 'object' || logo === null || Array.isArray(logo)) return null;
+    const logoRaw = logo as Record<string, unknown>;
+    for (const key of Object.keys(logoRaw)) {
+      if (key !== 'assetId' && key !== 'mimeType') return null;
+    }
+    const { assetId, mimeType } = logoRaw;
+    if (typeof assetId !== 'string' || assetId.trim().length === 0) return null;
+    if (typeof mimeType !== 'string' || !isLogoMimeType(mimeType)) return null;
+    snapshot.logo = { assetId, mimeType };
+  }
+
+  if (raw.primaryColor !== undefined) {
+    if (typeof raw.primaryColor !== 'string') return null;
+    if (!isValidBrandingPrimaryColor(raw.primaryColor)) return null;
+    snapshot.primaryColor = raw.primaryColor;
+  }
+
+  return snapshot;
+}
+
 export function buildBrandingSnapshot(profile: BrandingProfile): BrandingSnapshot {
   const snapshot: BrandingSnapshot = { version: BRANDING_SNAPSHOT_VERSION };
 
