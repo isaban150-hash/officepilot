@@ -450,6 +450,8 @@ export function buildInvoicePayloadV1(invoice: unknown): Record<string, unknown>
   for (const key of Object.keys(invoice)) {
     if (FORBIDDEN.has(key)) return null;
     if (key === 'payments' || key === 'paymentStatus' || key === 'archiveDocumentId') continue;
+    // BRANDING-01F-1: bleibt lokal, bis 01F-2 den Rechnungsvertrag erweitert.
+    if (key === 'brandingSnapshot') continue;
     if (key === 'expected_amendment_sequence') return null;
     if (key === 'expectedAmendmentSequence') continue;
     const value = invoice[key];

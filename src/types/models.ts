@@ -5,7 +5,7 @@ import type { Workspace, WorkspaceMember, WorkspaceSettings } from './workspace'
 import type { BusinessInterpretationResult } from './businessInterpretation';
 import type { ContractIntelligenceResult, ContractOrderProposal } from './documentIntelligence';
 import type { WorkflowDecision } from './workflowDecision';
-import type { BrandingProfile } from './branding';
+import type { BrandingProfile, BrandingSnapshot } from './branding';
 
 export type AppLanguage = 'de' | 'tr' | 'bg' | 'ro' | 'ru';
 
@@ -1098,6 +1098,18 @@ export interface VorgangInvoice {
   skontoText?: string;
   customerSnapshot?: CustomerBilling;
   companySnapshot?: CompanyProfile;
+  /**
+   * BRANDING-01F-1 — das Branding **zum Zeitpunkt dieser Rechnung**.
+   *
+   * Optional, weil Rechnungen aus der Zeit davor keines tragen und weiterhin
+   * gültig bleiben. Einmal beim Aufbau des Entwurfs erzeugt und danach nie
+   * wieder nachgeführt: Ein späterer Logowechsel darf ein bestehendes Dokument
+   * nicht rückwirkend verändern.
+   *
+   * Bewusst `BrandingSnapshot` und nicht `BrandingProfile` — der Snapshot trägt
+   * eine Version und beschreibt ein Damals, das Profil beschreibt das Heute.
+   */
+  brandingSnapshot?: BrandingSnapshot;
   legalNotices?: string[];
   previousAbschlagDeductions?: AbschlagDeduction[];
   introText?: string;
@@ -1346,6 +1358,8 @@ export interface InvoiceDraft {
   skontoText: string;
   customerBilling: CustomerBilling;
   companySnapshot: CompanyProfile;
+  /** BRANDING-01F-1 — siehe `VorgangInvoice.brandingSnapshot`. */
+  brandingSnapshot?: BrandingSnapshot;
   legalNotices: string[];
   previousAbschlagDeductions: AbschlagDeduction[];
   invoiceNumberPreview: string;

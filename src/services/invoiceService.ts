@@ -29,6 +29,9 @@ import type {
   VorgangInvoice,
   VorgangInvoiceLine,
 } from '../types/models';
+import type { BrandingSnapshot } from '../types/branding';
+import { BRANDING_SNAPSHOT_VERSION } from '../types/branding';
+import { buildBrandingSnapshot } from './branding/brandingSnapshotService';
 import {
   isFixedAmountAbschlag,
   resolveInvoiceCalculationMode,
@@ -111,6 +114,27 @@ export function getPreviousAbschlagDeductions(vorgang: Vorgang): AbschlagDeducti
     }));
 }
 
+/**
+ * BRANDING-01F-1 — das aktuelle Branding für genau diese Rechnung einfrieren.
+ *
+ * `buildBrandingSnapshot` prüft streng und **wirft** bei ungültigen Werten. Das
+ * ist für den Snapshot-Vertrag richtig, darf aber nicht dazu führen, dass ein
+ * beschädigter Branding-Block aus Alt- oder Importdaten das Erstellen einer
+ * Rechnung unmöglich macht: Eine Rechnung ohne Logo ist ein gültiges Dokument,
+ * eine nicht erstellbare Rechnung ist ein Betriebsausfall.
+ *
+ * Deshalb der leere Snapshot als Rückfallebene — und ausdrücklich **keine**
+ * stille Reparatur am `CompanyProfile`. Was dort kaputt ist, bleibt kaputt und
+ * sichtbar; nur dieses eine Dokument verzichtet auf das Branding.
+ */
+function freezeBrandingForInvoice(branding: CompanyProfile['branding']): BrandingSnapshot {
+  try {
+    return buildBrandingSnapshot(branding ?? {});
+  } catch {
+    return { version: BRANDING_SNAPSHOT_VERSION };
+  }
+}
+
 function buildDraftMetadata(
   vorgang: Vorgang,
   setup: CompanySetup,
@@ -125,6 +149,7 @@ function buildDraftMetadata(
   | 'skontoText'
   | 'customerBilling'
   | 'companySnapshot'
+  | 'brandingSnapshot'
   | 'legalNotices'
   | 'previousAbschlagDeductions'
   | 'invoiceNumberPreview'
@@ -141,6 +166,7 @@ function buildDraftMetadata(
     skontoText: '',
     customerBilling: getVorgangCustomerBilling(vorgang),
     companySnapshot: profile,
+    brandingSnapshot: freezeBrandingForInvoice(profile.branding),
     legalNotices: buildLegalNotices(setup.taxStatus, profile),
     previousAbschlagDeductions:
       usesAbschlagDeductions(type) ? getPreviousAbschlagDeductions(vorgang) : [],
@@ -575,6 +601,8 @@ export function buildInvoiceFinalizationCandidate(
     skontoText: draft.skontoText,
     customerSnapshot: cloneCustomerBilling(draft.customerBilling),
     companySnapshot: cloneCompanySnapshot(draft.companySnapshot),
+    // BRANDING-01F-1: durchreichen, nicht neu bilden — siehe cloneBrandingSnapshot.
+    brandingSnapshot: cloneBrandingSnapshot(draft.brandingSnapshot),
     legalNotices: [...draft.legalNotices],
     previousAbschlagDeductions: draft.previousAbschlagDeductions.map((item) => ({ ...item })),
     introText: draft.introText,
@@ -807,6 +835,27 @@ function cloneCustomerBilling(billing: CustomerBilling): CustomerBilling {
 
 function cloneCompanySnapshot(profile: CompanyProfile): CompanyProfile {
   return { ...profile, logoDataUrl: profile.logoDataUrl };
+}
+
+/**
+ * BRANDING-01F-1 — den bereits eingefrorenen Snapshot durchreichen, ohne
+ * Objektreferenzen mit dem Entwurf zu teilen.
+ *
+ * Ausdrücklich **kein** Neuaufbau aus dem aktuellen Firmenprofil: Ein Entwurf
+ * kann Tage vor der Finalisierung entstanden sein. Würde hier neu gebaut, trüge
+ * die Rechnung das Branding des Freigabetags statt des Erstellungstags — und
+ * ein Entwurf, der zwischenzeitlich mehrfach geladen wurde, könnte sein
+ * Aussehen unbemerkt wechseln.
+ */
+function cloneBrandingSnapshot(snapshot: BrandingSnapshot | undefined): BrandingSnapshot | undefined {
+  if (!snapshot) return undefined;
+  return {
+    version: snapshot.version,
+    ...(snapshot.logo
+      ? { logo: { assetId: snapshot.logo.assetId, mimeType: snapshot.logo.mimeType } }
+      : {}),
+    ...(snapshot.primaryColor !== undefined ? { primaryColor: snapshot.primaryColor } : {}),
+  };
 }
 
 export function finalizeInvoiceDraft(

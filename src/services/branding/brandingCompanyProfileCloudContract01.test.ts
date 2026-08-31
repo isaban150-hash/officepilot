@@ -484,10 +484,30 @@ describe('BRANDING-01E-1 — branding erreicht den Rechnungsvertrag nicht', () =
     expect(block).not.toContain("'branding'");
   });
 
+  /*
+   * BRANDING-01F-1 — die Zusicherung ist unverändert „kein BrandingSnapshot im
+   * Rechnungsvertrag", aber die reine Textsuche taugt dafür nicht mehr: Der
+   * Finalize-Builder **nennt** das Feld jetzt, um es auszuschliessen. Geprüft
+   * wird deshalb, was zählt — dass es in keiner Allowlist steht und dass es der
+   * Typprüfer nicht kennt.
+   */
   it('führt keinen BrandingSnapshot in den Rechnungsvertrag ein', () => {
     for (const source of [companyPayloadValidatorSource, finalizeValidatorSource]) {
+      // Kein Typ-Import, keine Snapshot-Prüfung — nur allenfalls ein Ausschluss.
       expect(source).not.toContain('BrandingSnapshot');
-      expect(source).not.toContain('brandingSnapshot');
+      expect(source).not.toContain('types/branding');
+    }
+
+    for (const [source, listName] of [
+      [companyPayloadValidatorSource, 'const INVOICE_KEYS'],
+      [finalizeValidatorSource, 'const INVOICE_KEYS'],
+      [companyPayloadValidatorSource, 'const COMPANY_KEYS'],
+      [finalizeValidatorSource, 'const COMPANY_KEYS'],
+    ] as const) {
+      const start = source.indexOf(listName);
+      if (start < 0) continue;
+      const block = source.slice(start, source.indexOf(']', start));
+      expect(block).not.toContain("'brandingSnapshot'");
     }
   });
 });

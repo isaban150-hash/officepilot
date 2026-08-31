@@ -206,6 +206,13 @@ export function buildWorkspaceInvoiceFinalizePayload(invoice: VorgangInvoice): R
     payments: _payments,
     paymentStatus: _paymentStatus,
     archiveDocumentId: _archiveDocumentId,
+    /*
+     * BRANDING-01F-1 — der Branding-Snapshot bleibt vorerst lokal. Der strenge
+     * Cloud-Validator kennt das Feld nicht und würde den gesamten Push mit
+     * `brandingSnapshot:unknown_field` ablehnen. Ob und wie er in den
+     * Rechnungsvertrag aufgenommen wird, entscheidet 01F-2.
+     */
+    brandingSnapshot: _brandingSnapshot,
     ...rest
   } = invoice;
 
