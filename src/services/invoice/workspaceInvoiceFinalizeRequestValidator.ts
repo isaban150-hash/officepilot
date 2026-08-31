@@ -462,6 +462,8 @@ export function buildInvoicePayloadV1(invoice: unknown): Record<string, unknown>
     for (const key of Object.keys(invoice.companySnapshot)) {
       if (FORBIDDEN.has(key)) return null;
       if (key === 'logoDataUrl') continue;
+      // BRANDING-01E-1: `branding` bleibt bis 01F aus dem Rechnungsvertrag.
+      if (key === 'branding') continue;
       const value = (invoice.companySnapshot as Record<string, unknown>)[key];
       if (value === undefined) continue;
       company[key] = value;

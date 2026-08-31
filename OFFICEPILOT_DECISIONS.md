@@ -347,3 +347,34 @@ sorgen dafür, dass meist nur ein bis zwei Dateien betroffen sind — sonst wird
 unrealistisch und unterbleibt.
 
 **Nachweis:** nicht im Code verankert (Arbeitsweise).
+
+---
+
+## D-022 – Branding-Löschsemantik
+
+**Typ:** Technische Entscheidung · **Status:** gültig
+
+**Entscheidung:** Ein gespeicherter `CompanyProfile`-Brandingblock wird ausdrücklich nur
+durch `branding: {}` geleert.
+
+Ein fehlender Schlüssel und `branding: undefined` bedeuten clientseitig **keinen**
+Löschvorgang und führen beim Cloud-Write zum Preserve-Verhalten aus BRANDING-01E-0.
+`branding: null` ist ebenfalls kein gültiges Löschsignal.
+
+**Begründung:** BRANDING-01E-0 unterscheidet serverseitig bewusst zwischen einem
+fehlenden Feld und einem leeren Objekt, um Altclients vor stillem Datenverlust zu
+schützen. Ein Client, der `branding` nicht kennt, sendet den Schlüssel nicht mit — würde
+das als „löschen" gelten, verschwände das Branding unbemerkt und ohne Konflikt.
+
+Die Fußangel liegt bei `undefined`: Es sieht im Code wie ein Löschbefehl aus,
+verschwindet aber in der JSON-Serialisierung und wirkt damit wie „nicht gesendet".
+
+Diese Regel gilt **ausschließlich für `branding`**. Alle übrigen `CompanyProfile`-Felder
+behalten ihre vollständige Replace-Semantik; es gibt keine allgemeine Regel, unbekannte
+oder fehlende Felder zu bewahren.
+
+**Nachweis:** `supabase/migrations/20250902120000_company_profile_branding_preserve.sql`
+(Serverseite, remote angewendet und per Runtime-Test bestätigt);
+`src/services/branding/brandingCompanyProfilePreserve01.test.ts` (Struktur der RPC);
+`src/services/branding/brandingCompanyProfileCloudContract01.test.ts` (Client-Vertrag,
+insbesondere `{}` gegenüber „fehlt" und `undefined`).

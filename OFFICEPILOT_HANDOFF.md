@@ -11,7 +11,7 @@ Kurzer Übergabestand für den Einstieg. Alles Ausführlichere gehört in
 - **Dokumentationsstand:** 2026-08-30
 - **Repository:** `C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot`
 - **Branch:** `main`
-- **Letzter abgeschlossener Produktblock:** `BRANDING-01E-0`
+- **Letzter abgeschlossener Produktblock:** `BRANDING-01E-1`
 
 > **Der tatsächliche Git-Stand ist bei jeder Übergabe zu verifizieren:**
 > `git log --oneline -1` und `git status -sb`.
@@ -22,7 +22,40 @@ Kurzer Übergabestand für den Einstieg. Alles Ausführlichere gehört in
 
 ## Letzter abgeschlossener Block
 
-**BRANDING-01E-0** — Altclient-Schutz für `company_profile.branding`, serverseitig.
+**BRANDING-01E-1** — der CompanyProfile-/Branding-Cloud-Contract.
+
+`CompanyProfile` trägt jetzt `branding?: BrandingProfile` und transportiert den Block
+durch die bestehende Sync-Kette. Der Contract ist **geschlossen**: erlaubt sind genau
+`branding.logo.assetId`, `branding.logo.mimeType` und `branding.primaryColor`. Dieselbe
+Regel läuft in **beide** Richtungen — Read wie Write —, weil ein Typ kein Laufzeitschutz
+ist. Sanitisiert wird feldweise: Ein kaputter Farbwert reißt keine gültige Logo-Referenz
+mit, und unbekannte Unterfelder (Speicherpfad, signierte URL, Zusatzfarben) werden
+verworfen statt stillschweigend mitgeführt.
+
+Löschen ausschließlich über `branding: {}`; fehlender Schlüssel, `undefined` und `null`
+bedeuten alle „bewahren" (**D-022**).
+
+`logoDataUrl` bleibt unverändert Legacy und **rein lokal** — nicht migriert, nicht
+hochgeladen, nicht gelöscht, nicht priorisiert.
+
+**Rechnungs-Regressionsschutz:** `branding` wird an denselben zwei Grenzen aus
+`companySnapshot` geschnitten wie `logoDataUrl` — sonst hätten die strengen
+Invoice-Validatoren jeden Push mit `companySnapshot.branding:unknown_field` abgelehnt.
+
+**Keine Migration nötig** — der Server behandelt `branding` seit 01E-0 vollständig.
+
+**Prüfstand — die beiden Teile sind unterschiedlich abgesichert:**
+
+- **CompanyProfile-Cloud-Contract: produktiv realgetestet, PASS.** Der echte
+  App-/Cloud-Roundtrip hat den geschlossenen Read-/Write-Contract bestätigt (siehe
+  Realtest-Abschnitt).
+- **Invoice-Regressionsschutz: fokussiert automatisiert getestet.** Ein separater
+  produktiver Finalisierungs-Realtest mit gesetztem Branding wurde **nicht** durchgeführt.
+  Das ist **kein Blocker und kein offener Fehler** — der Schnitt an beiden
+  Rechnungs-Payload-Grenzen ist durch Tests abgedeckt, inklusive der Zusicherung, dass
+  beide Grenzen denselben Schnitt führen.
+
+Davor: **BRANDING-01E-0** — Altclient-Schutz für `company_profile.branding`, serverseitig.
 
 Der `company_profile`-UPDATE-Zweig der RPC `upsert_workspace_sync_entity` bewahrt ein
 serverseitig vorhandenes `branding`-Objekt, wenn der eingehende Payload dort kein Objekt
@@ -64,6 +97,29 @@ der Anwendungsreihenfolge.
 ## Realtest
 
 *Extern bestätigter Projektstand — nicht allein aus dem Repository ableitbar.*
+
+### BRANDING-01E-1 — Branding-Cloud-Contract (echter App-Roundtrip)
+
+Serverseitig wurde ein Branding-Testwert gesetzt, der neben einer gültigen Farbe zwei
+ausdrücklich verbotene Metadatenfelder trug — `storagePath` und `signedUrl`. Danach lief
+ein echter OfficePilot-App-/Cloud-Roundtrip.
+
+Ergebnis in `workspace_company_profiles`:
+
+- `primaryColor` (`#13579B`) blieb **erhalten**
+- `storagePath` und `signedUrl` wurden beim produktiven Write **entfernt**
+- der Server-Write lief regulär, `row_version` stieg wie erwartet
+
+Damit ist der geschlossene Write-Contract nicht nur im Test, sondern **produktiv**
+belegt: Unbekannte Branding-Metadaten erreichen die Cloud nicht.
+
+Der Testwert wurde anschließend kontrolliert entfernt; das Firmenprofil steht wieder ohne
+`branding`-Schlüssel — **keine Testdaten zurückgeblieben**.
+
+*Hinweis zum Testaufbau:* Weil der Testwert direkt per SQL gesetzt wurde, stieg
+`row_version` an geöffneten Browserzuständen vorbei, was zunächst Sync-Konflikte auslöste.
+Das war ein Artefakt des Testaufbaus und **kein Fehler von BRANDING-01E-1**; der
+anschließende erfolgreiche Cloud-Write hat den Contract bestätigt.
 
 ### BRANDING-01E-0 — Branding-Preserve (Remote-Datenbank)
 
@@ -113,19 +169,20 @@ Rate Limit → Gemini → Browser.
 
 ## Aktuell offener Block
 
-Keiner. `BRANDING-01E-0` ist abgeschlossen, remote angewendet und bestätigt.
+Keiner. `BRANDING-01E-1` ist abgeschlossen: CompanyProfile-Cloud-Contract produktiv
+realgetestet, Invoice-Regressionsschutz fokussiert automatisiert getestet.
 
 ## Nächster geplanter Produktblock
 
-**`BRANDING-01E-1` — CompanyProfile / Branding Cloud Contract.** Das `branding`-Feld in
-den `CompanyProfile`-Typ und in den Cloud-Vertrag aufnehmen. Wichtig dabei: `branding`
-muss ein abgegrenzter Unterblock bleiben — als flache Einzelfelder wäre der Schutz aus
-01E-0 wirkungslos.
+**`BRANDING-01E-2` — produktiver Logo-Upload.** Datei validieren → unveränderliches
+Branding-Asset hochladen → `LogoAssetReference` erhalten → in
+`CompanyProfile.branding.logo` speichern → synchronisieren. Dort gehört auch die
+Anzeigepriorität `branding.logo` vor `logoDataUrl` hin; in 01E-1 wäre sie wirkungslos
+gewesen, weil noch kein Asset entstehen kann.
 
-Danach: `01E-2` (produktiver Logo-Upload auf Storage) → `01F` (BrandingSnapshot in
-Rechnung und PDF).
+Danach: `01F` (BrandingSnapshot in Rechnung und PDF).
 
-`01E-1`, `01E-2` und `01F` sind **noch nicht begonnen**.
+`01E-2` und `01F` sind **noch nicht begonnen**.
 
 ---
 

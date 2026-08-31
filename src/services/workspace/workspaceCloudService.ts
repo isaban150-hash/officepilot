@@ -9,6 +9,7 @@ import type {
 } from '../../types/workspace';
 import { getSupabaseClient } from '../../lib/supabase';
 import { stripLogoFromCompanyProfile } from './workspaceStore';
+import { applyBrandingContract } from '../branding/brandingProfileContract';
 import type { WorkspaceVorgangRow } from '../vorgang/vorgangCloudService';
 import type { WorkspaceCustomerRow } from '../customer/customerCloudService';
 
@@ -239,8 +240,20 @@ export function buildCompanySetupCloudPayload(setup: CompanySetup): Record<strin
 }
 
 export function buildCompanyProfileCloudPayload(profile: CompanyProfile): Record<string, unknown> {
+  /*
+   * BRANDING-01E-1 (R1) — der Contract gilt in **beide** Richtungen.
+   *
+   * Der Typ allein schützt hier nichts: Ein lokal verunreinigtes Branding —
+   * aus einem Import, einem älteren Bundle, einer fehlerhaften Zuweisung —
+   * käme ungeprüft in die Cloud und würde von dort als scheinbar gültiger
+   * Serverstand weitergereicht. Deshalb läuft ausgehend dieselbe Regel wie
+   * eingehend.
+   *
+   * `logoDataUrl` wird davon unabhängig weiterhin vollständig entfernt.
+   */
+  const stripped = stripLogoFromCompanyProfile(profile) as unknown as Record<string, unknown>;
   return {
-    payload: stripLogoFromCompanyProfile(profile),
+    payload: applyBrandingContract(stripped),
   };
 }
 
@@ -271,8 +284,25 @@ export function parseCompanyProfileFromCloud(
   const inner =
     (payload.payload as CompanyProfile | undefined) ?? (payload as unknown as CompanyProfile);
   if (!inner || typeof inner !== 'object') return null;
+
+  /*
+   * BRANDING-01E-1 — nur der Branding-Unterblock wird geprüft, nicht das
+   * gesamte Profil. Das übrige `CompanyProfile` kommt hier weiterhin ungeprüft
+   * an; das ist eine Altlast, aber keine, die dieser Block mitrepariert.
+   *
+   * Drei Zustände sind zu unterscheiden, und die Reihenfolge ist wesentlich:
+   *   - Schlüssel fehlt   → nichts anfassen, Feld bleibt weg
+   *   - `{}`              → bleibt `{}` (ausdrücklich leer, siehe D-022)
+   *   - ungültig/`null`   → Schlüssel entfernen, nicht auf `undefined` setzen
+   *
+   * Ein `branding: undefined` wäre hier falsch: `JSON.stringify` wirft es zwar
+   * weg, aber der lokale Store würde einen gesetzten Schlüssel mit leerem Wert
+   * tragen. Deshalb wird der Schlüssel gelöscht.
+   */
+  const withBranding = applyBrandingContract(inner as unknown as Record<string, unknown>) as unknown as CompanyProfile;
+
   if (existingLogo) {
-    return { ...inner, logoDataUrl: existingLogo };
+    return { ...withBranding, logoDataUrl: existingLogo };
   }
-  return inner;
+  return withBranding;
 }

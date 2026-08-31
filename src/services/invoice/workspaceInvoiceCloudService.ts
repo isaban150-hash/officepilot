@@ -217,7 +217,15 @@ export function buildWorkspaceInvoiceFinalizePayload(invoice: VorgangInvoice): R
     customerSnapshot: invoice.customerSnapshot ? { ...invoice.customerSnapshot } : undefined,
     companySnapshot: invoice.companySnapshot
       ? (() => {
-          const { logoDataUrl: _logo, ...profile } = invoice.companySnapshot;
+          /*
+           * BRANDING-01E-1 — `branding` verlässt den Rechnungsvertrag genauso
+           * wie `logoDataUrl`. Der Snapshot entsteht aus dem vollen
+           * `CompanyProfile`; ohne diesen Schnitt würde der strenge
+           * Cloud-Validator mit `companySnapshot.branding:unknown_field`
+           * ablehnen. Ob und wie Branding in einer Rechnung eingefroren wird,
+           * entscheidet 01F über `BrandingSnapshot` — nicht dieser Block.
+           */
+          const { logoDataUrl: _logo, branding: _branding, ...profile } = invoice.companySnapshot;
           return profile;
         })()
       : undefined,

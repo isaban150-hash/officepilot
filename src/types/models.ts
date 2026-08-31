@@ -5,6 +5,7 @@ import type { Workspace, WorkspaceMember, WorkspaceSettings } from './workspace'
 import type { BusinessInterpretationResult } from './businessInterpretation';
 import type { ContractIntelligenceResult, ContractOrderProposal } from './documentIntelligence';
 import type { WorkflowDecision } from './workflowDecision';
+import type { BrandingProfile } from './branding';
 
 export type AppLanguage = 'de' | 'tr' | 'bg' | 'ro' | 'ru';
 
@@ -767,6 +768,17 @@ export interface CompanyProfile {
   managingDirector?: string;
   taxFreeNotice?: string;
   invoiceFooterNotes: string;
+  /**
+   * BRANDING-01E-1 — der strukturierte Branding-Block. Bewusst ein geschlossener
+   * Unterblock und keine flachen Einzelfelder: Der Serverschutz aus BRANDING-01E-0
+   * bewahrt genau den Schlüssel `branding`; flache Felder wären ungeschützt.
+   *
+   * Löschen ausschließlich über `branding: {}` — ein fehlender Schlüssel,
+   * `undefined` und `null` bedeuten alle „bewahren", nicht „leeren" (D-022).
+   *
+   * `logoDataUrl` bleibt davon unberührt: Legacy, rein lokal, nie in der Cloud.
+   */
+  branding?: BrandingProfile;
 }
 
 export interface CustomerBilling {

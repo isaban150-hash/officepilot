@@ -164,18 +164,36 @@ serverseitiges Branding, falsche `row_version`) liefen ohne FAIL; der Test lief 
 eigens erzeugten Workspace, veränderte kein echtes Firmenprofil und hinterließ keine
 Testdaten.
 
-**Offene Lücken:** Das `branding`-Feld fehlt im `CompanyProfile`-Typ und im Cloud-Vertrag.
-Branding hat **keinen produktiven Aufrufer**: keine Cloud-Anbindung, kein produktiver
-Logo-Upload, kein `BrandingSnapshot` in Rechnung und PDF. `logoDataUrl` bleibt der
-Legacy-Weg und verlässt das Gerät nie. `primaryColor` hat keine Oberfläche.
-**Ein zentraler Einstellungsbereich existiert nicht** (D-012); Einstellungen liegen
-verstreut. Der Serverschutz greift damit heute für einen Block, den noch kein Client
-schreibt — er steht bereit, bevor er gebraucht wird.
+Der **Cloud-Contract ist umgesetzt** (BRANDING-01E-1):
+`CompanyProfile.branding?: BrandingProfile`, Transport durch die bestehende Sync-Kette,
+feldweise Sanitisierung in **beide** Richtungen (Read und Write) und ein
+**geschlossener** Contract aus genau
+`logo.assetId`, `logo.mimeType` und `primaryColor` — unbekannte Unterfelder werden
+verworfen. Löschen ausschließlich über `branding: {}` (D-022). Der
+Rechnungs-Regressionsschutz schneidet `branding` an denselben zwei Payload-Grenzen heraus
+wie `logoDataUrl`; ohne ihn hätten die strengen Invoice-Validatoren jeden Push abgelehnt.
+Keine Migration nötig.
+
+Der **CompanyProfile-Cloud-Roundtrip ist produktiv realgetestet**: Ein serverseitig
+gesetzter Testwert mit gültiger `primaryColor` und den verbotenen Feldern `storagePath`
+und `signedUrl` kam nach dem produktiven Write nur noch mit der Farbe zurück — die
+Metadaten waren entfernt. Der Testwert wurde danach vollständig bereinigt.
+
+Der **Rechnungs-Regressionsschutz ist fokussiert automatisiert getestet**, nicht
+produktiv realgetestet. Kein offener Produktfehler.
+
+**Offene Lücken:** Kein produktiver Upload, also entsteht noch keine
+`LogoAssetReference` — der Contract transportiert bislang etwas, das niemand erzeugt.
+Keine Logo-Anzeige aus `branding`, keine Anzeigepriorität gegenüber `logoDataUrl`, kein
+`BrandingSnapshot` in Rechnung und PDF. `logoDataUrl` bleibt der Legacy-Weg und verlässt
+das Gerät nie. `primaryColor` hat keine Oberfläche. **Ein zentraler Einstellungsbereich
+existiert nicht** (D-012); Einstellungen liegen verstreut.
 
 **Blocker:** keine.
-**Nächster Schritt:** `BRANDING-01E-1` — `CompanyProfile` / Branding Cloud Contract.
-`branding` muss dabei ein abgegrenzter Unterblock bleiben, sonst wird der Schutz aus
-01E-0 wirkungslos. Danach 01E-2, 01F. Alle drei sind **noch nicht begonnen**.
+**Nächster Schritt:** `BRANDING-01E-2` — produktiver Logo-Upload: Datei validieren,
+unveränderliches Asset hochladen, `LogoAssetReference` in `branding.logo` speichern,
+synchronisieren. Dort gehört auch die Anzeigepriorität hin. Danach `01F`.
+Beide sind **noch nicht begonnen**.
 
 ---
 
