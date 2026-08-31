@@ -148,6 +148,14 @@ const deLegacy = {
   'companyProfile.logoError.unsupportedType': 'Dieses Dateiformat wird nicht unterstützt. Bitte PNG, JPG oder WebP verwenden.',
   'companyProfile.logoError.contentMismatch': 'Der Dateiinhalt passt nicht zum Dateiformat.',
   'companyProfile.logoError.unreadable': 'Das Logo konnte nicht gelesen werden.',
+  'companyProfile.logoError.noWorkspace':
+    'Der Betrieb ist noch nicht mit der Cloud verbunden. Das neue Logo kann erst danach gespeichert werden.',
+  'companyProfile.logoError.uploadFailed':
+    'Das neue Logo konnte nicht gespeichert werden. Bitte später erneut versuchen — das bisherige Logo bleibt erhalten.',
+  'companyProfile.logoFallbackNotice':
+    'Das neue Logo konnte nicht geladen werden. Das bisherige Logo wird angezeigt.',
+  'companyProfile.logoMissingNotice': 'Das Logo konnte nicht geladen werden.',
+  'companyProfile.logoPendingHint': 'Neu ausgewählt — wird beim Speichern übernommen.',
 
   'tax.standard_19': '19 % Regelbesteuerung',
   'tax.standard_7': '7 % Regelbesteuerung',

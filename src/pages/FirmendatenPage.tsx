@@ -15,10 +15,47 @@ import {
   validateBrandingLogoFile,
   type BrandingLogoValidationError,
 } from '../services/branding/brandingLogoValidation';
+import { uploadBrandingAsset } from '../services/branding/brandingAssetCloudService';
+import { getSyncClient } from '../services/sync/syncClientService';
+import { useCompanyLogoObjectUrl } from '../hooks/useCompanyLogoObjectUrl';
+import type { BrandingProfile, LogoAssetReference, LogoMimeType } from '../types/branding';
+import { LOGO_MIME_TYPES } from '../types/branding';
 import type { CompanyProfile } from '../types/models';
 import type { TranslationKey } from '../i18n';
 
 type ProfileField = keyof CompanyProfile;
+
+function isLogoMimeType(value: string): value is LogoMimeType {
+  return (LOGO_MIME_TYPES as readonly string[]).includes(value);
+}
+
+/**
+ * BRANDING-01E-2 — die Logo-Referenz setzen, ohne den Branding-Block zu
+ * überschreiben. Eine gesetzte `primaryColor` darf ein Logowechsel nicht
+ * mitnehmen.
+ */
+function withLogoReference(
+  branding: BrandingProfile | undefined,
+  logo: LogoAssetReference,
+): BrandingProfile {
+  return { ...branding, logo };
+}
+
+/**
+ * Die Logo-Referenz entfernen.
+ *
+ * Bleibt danach kein gültiges Unterfeld übrig, wird `{}` gesetzt und **nicht**
+ * der Schlüssel weggelassen: Nur `{}` ist nach D-022 das ausdrückliche Leeren;
+ * ein fehlender Schlüssel bedeutet serverseitig „bewahren".
+ *
+ * Gab es vorher gar kein Branding, entsteht auch keines — es gibt dann nichts
+ * zu leeren.
+ */
+function withoutLogoReference(branding: BrandingProfile | undefined): BrandingProfile | undefined {
+  if (!branding) return undefined;
+  const { logo: _logo, ...rest } = branding;
+  return rest;
+}
 
 /** Fehlercodes des Validators werden hier — und nur hier — zu Nutzertexten. */
 const LOGO_ERROR_KEYS: Record<BrandingLogoValidationError, TranslationKey> = {
@@ -69,6 +106,44 @@ export function FirmendatenPage() {
    */
   const [logoErrorKey, setLogoErrorKey] = useState<TranslationKey | null>(null);
 
+  /*
+   * BRANDING-01E-2 — drei getrennte Zustände, weil sie drei verschiedene Dinge
+   * bedeuten:
+   *
+   *   selectedLogoFile   die gewählte, noch nicht hochgeladene Datei
+   *   selectedLogoUrl    ihre Vorschau (Object-URL, muss freigegeben werden)
+   *   pendingLogoRef     ein bereits erfolgreich hochgeladenes Asset, dessen
+   *                      Profil-Speicherung noch aussteht
+   *
+   * `pendingLogoRef` ist keine Bequemlichkeit, sondern notwendig: Assets sind
+   * unveränderlich und nicht löschbar. Ohne diesen Zustand erzeugte jeder
+   * erneute Speicherversuch nach einem Fehler ein weiteres totes Objekt im
+   * Bucket.
+   */
+  const [selectedLogoFile, setSelectedLogoFile] = useState<File | null>(null);
+  const [selectedLogoUrl, setSelectedLogoUrl] = useState<string | null>(null);
+  const [pendingLogoRef, setPendingLogoRef] = useState<LogoAssetReference | null>(null);
+
+  const workspaceId = getSyncClient().serverWorkspaceId;
+  const savedLogo = useCompanyLogoObjectUrl({
+    workspaceId,
+    logo: draft.branding?.logo,
+    logoDataUrl: draft.logoDataUrl,
+  });
+
+  /* Vorschau der gewählten Datei — eigener Lebenszyklus, eigene Freigabe. */
+  useEffect(() => {
+    if (!selectedLogoFile) {
+      setSelectedLogoUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(selectedLogoFile);
+    setSelectedLogoUrl(url);
+    return () => {
+      URL.revokeObjectURL(url);
+    };
+  }, [selectedLogoFile]);
+
   useEffect(() => {
     if (location.hash !== `#${BACKUP_SECTION_ID}`) return;
     const frame = window.requestAnimationFrame(() => {
@@ -109,28 +184,49 @@ export function FirmendatenPage() {
       return;
     }
 
-    const dataUrl = await new Promise<string | null>((resolve) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : null);
-      reader.onerror = () => resolve(null);
-      reader.readAsDataURL(file);
-    });
-
-    if (dataUrl === null) {
-      setLogoErrorKey('companyProfile.logoError.unreadable');
+    if (!isLogoMimeType(file.type)) {
+      // Sollte der Validator bereits ausschliessen; hier nur die Typgrenze.
+      setLogoErrorKey('companyProfile.logoError.unsupportedType');
       input.value = '';
       return;
     }
 
-    handleChange('logoDataUrl', dataUrl);
+    /*
+     * BRANDING-01E-2 — hier wird **nichts** hochgeladen und nichts am Entwurf
+     * geändert. Das Asset ist unveränderlich und nicht löschbar; ein Upload
+     * beim blossen Durchprobieren würde bleibende Objekte erzeugen. Auch die
+     * Formularzusage bleibt damit gültig: Wirksam wird alles erst beim
+     * Speichern.
+     *
+     * Eine andere Datei verwirft eine bereits hochgeladene, aber noch nicht
+     * gespeicherte Referenz. Das dazugehörige Asset bleibt als Waise im Bucket
+     * — löschen ist in V1 nicht möglich, und ein Löschversuch wäre nur ein
+     * weiterer Fehlerpfad.
+     */
+    setPendingLogoRef(null);
+    setSelectedLogoFile(file);
   };
 
   const handleLogoRemove = () => {
     setLogoErrorKey(null);
-    handleChange('logoDataUrl', '');
+    /*
+     * „Logo entfernen" heisst aus Nutzersicht: kein Logo mehr. Deshalb geht
+     * auch das Legacy-Logo — sonst erschiene nach dem Entfernen überraschend
+     * das alte wieder, und niemand könnte erklären, warum (D-023).
+     *
+     * Das hochgeladene Asset selbst bleibt im Bucket. Entfernt wird die
+     * Referenz, nicht die Datei.
+     */
+    setSelectedLogoFile(null);
+    setPendingLogoRef(null);
+    setDraft((prev) => ({
+      ...prev,
+      logoDataUrl: '',
+      branding: withoutLogoReference(prev.branding),
+    }));
   };
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setErrorKey(null);
 
@@ -157,11 +253,57 @@ export function FirmendatenPage() {
       return;
     }
 
+    /*
+     * BRANDING-01E-2 — der Upload steht bewusst **nach** der Profilvalidierung.
+     *
+     * Ein Asset ist unveränderlich und nicht löschbar. Wenn die IBAN nicht
+     * stimmt, darf dafür kein bleibendes Objekt im Bucket entstehen. Erst wenn
+     * das Profil grundsätzlich speicherbar ist, wird hochgeladen.
+     */
+    let logoReference = pendingLogoRef;
+    if (selectedLogoFile && !logoReference) {
+      if (!workspaceId) {
+        // Keine erfundene Kennung, keine halbe Referenz — die Datei bleibt gewählt.
+        setLogoErrorKey('companyProfile.logoError.noWorkspace');
+        return;
+      }
+      if (!isLogoMimeType(selectedLogoFile.type)) {
+        setLogoErrorKey('companyProfile.logoError.unsupportedType');
+        return;
+      }
+
+      const uploaded = await uploadBrandingAsset({
+        workspaceId,
+        blob: selectedLogoFile,
+        mimeType: selectedLogoFile.type,
+      });
+      if (!uploaded.ok) {
+        /*
+         * Nichts am Profil ändern: Das bestehende Logo bleibt, wie es war. Die
+         * gewählte Datei bleibt im Zustand, damit ein erneuter Versuch möglich
+         * ist, ohne sie neu auszuwählen.
+         */
+        setLogoErrorKey('companyProfile.logoError.uploadFailed');
+        return;
+      }
+      logoReference = uploaded.reference;
+      // Merken, damit ein Fehlschlag beim Speichern keinen zweiten Upload auslöst.
+      setPendingLogoRef(uploaded.reference);
+    }
+
+    if (logoReference) {
+      payload.branding = withLogoReference(payload.branding, logoReference);
+    }
+
     const result = updateCompanyProfile(payload);
     if (!result.success) {
+      // `pendingLogoRef` bleibt absichtlich stehen — der nächste Versuch nutzt dasselbe Asset.
       setErrorKey(result.errorKey as TranslationKey);
       return;
     }
+    setSelectedLogoFile(null);
+    setPendingLogoRef(null);
+    setLogoErrorKey(null);
     setDraft({ ...result.profile });
     if (!getLastPersistSuccess()) {
       showToast(translate('persist.failed.userAction'));
@@ -284,29 +426,61 @@ export function FirmendatenPage() {
               {translate(logoErrorKey)}
             </p>
           )}
-          {draft.logoDataUrl && (
+          {/*
+            * Anzeigereihenfolge: die eben gewählte Datei, dann das gespeicherte
+            * Branding-Asset, dann das Legacy-Logo. Die oberste Ebene ist reiner
+            * Formularzustand — sie zeigt, was beim Speichern übernommen würde.
+            */}
+          {selectedLogoUrl ? (
             <>
               <img
-                src={draft.logoDataUrl}
+                src={selectedLogoUrl}
                 alt=""
                 className="company-profile-form__logo-preview"
                 data-testid="company-logo-preview"
+                data-logo-source="selected"
               />
-              {/*
-                * Das frühere Freitextfeld war der einzige Weg, ein Logo wieder
-                * loszuwerden — und zugleich ein Weg, jede Prüfung zu umgehen.
-                * Es entfällt; das Entfernen bleibt als eigene Schaltfläche.
-                * Wirksam wird es wie jede andere Änderung erst beim Speichern.
-                */}
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleLogoRemove}
-                data-testid="company-logo-remove"
-              >
-                {translate('companyProfile.logoRemove')}
-              </Button>
+              <p className="hint-text" data-testid="company-logo-pending">
+                {translate('companyProfile.logoPendingHint')}
+              </p>
             </>
+          ) : (
+            savedLogo.url && (
+              <img
+                src={savedLogo.url}
+                alt=""
+                className="company-profile-form__logo-preview"
+                data-testid="company-logo-preview"
+                data-logo-source={savedLogo.source}
+              />
+            )
+          )}
+
+          {savedLogo.fallbackUsed && !selectedLogoUrl && (
+            <p className="hint-text" data-testid="company-logo-fallback">
+              {translate(
+                savedLogo.source === 'legacy'
+                  ? 'companyProfile.logoFallbackNotice'
+                  : 'companyProfile.logoMissingNotice',
+              )}
+            </p>
+          )}
+
+          {(selectedLogoUrl || savedLogo.url || draft.branding?.logo) && (
+            /*
+              * Das frühere Freitextfeld war der einzige Weg, ein Logo wieder
+              * loszuwerden — und zugleich ein Weg, jede Prüfung zu umgehen.
+              * Es entfällt; das Entfernen bleibt als eigene Schaltfläche.
+              * Wirksam wird es wie jede andere Änderung erst beim Speichern.
+              */
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleLogoRemove}
+              data-testid="company-logo-remove"
+            >
+              {translate('companyProfile.logoRemove')}
+            </Button>
           )}
         </fieldset>
 

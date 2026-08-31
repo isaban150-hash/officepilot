@@ -378,3 +378,44 @@ oder fehlende Felder zu bewahren.
 `src/services/branding/brandingCompanyProfilePreserve01.test.ts` (Struktur der RPC);
 `src/services/branding/brandingCompanyProfileCloudContract01.test.ts` (Client-Vertrag,
 insbesondere `{}` gegenüber „fehlt" und `undefined`).
+
+---
+
+## D-023 – Übergang vom Legacy-Logo zum Branding-Asset
+
+**Typ:** Technische Entscheidung · **Status:** gültig
+
+**Entscheidung:** Für die Übergangszeit, in der `CompanyProfile.logoDataUrl` und
+`CompanyProfile.branding.logo` nebeneinander existieren, gilt:
+
+1. **Anzeigepriorität in den Firmendaten:** `branding.logo` vor `logoDataUrl`.
+2. **Bei Resolver-Fehler** darf die Firmendatenseite auf `logoDataUrl` zurückfallen und
+   **informiert den Nutzer** darüber.
+3. Diese Fallbackregel gilt **nicht** für historische Rechnungen und PDFs. Dort bleibt es
+   dabei: Fehlt das damalige Logo, wird keines gezeigt.
+4. Nach einem erfolgreichen neuen Branding-Upload bleibt ein vorhandenes `logoDataUrl`
+   **lokal erhalten**.
+5. Es gibt **keine automatische Legacy-Migration**.
+6. „Logo entfernen" entfernt **beides**: `branding.logo` und das lokale `logoDataUrl`.
+7. `primaryColor` bleibt dabei erhalten.
+8. Ist `branding` danach leer, wird `branding: {}` gesetzt — gemäß D-022, nicht der
+   Schlüssel weggelassen.
+9. Das unveränderliche Asset selbst wird **nicht** gelöscht; entfernt wird die Referenz.
+
+**Begründung:** Punkt 3 ist der Kern. In den Firmendaten konkurrieren zwei Darstellungen
+desselben heutigen Logos — die ältere zu zeigen ist besser als eine leere Fläche. In einem
+historischen Dokument wäre genau dasselbe eine stille Fälschung.
+
+Punkt 6 folgt der Nutzersicht: Bliebe das Legacy-Logo stehen, erschiene nach dem Entfernen
+überraschend das alte wieder, und niemand könnte erklären, warum. Punkt 4 und 5 verhindern
+zugleich, dass daraus ein automatischer, unumkehrbarer Datenverlust wird — entfernt wird
+nur auf ausdrückliche Nutzeraktion.
+
+Punkt 9 folgt aus der Storage-Foundation: Es gibt bewusst keine DELETE-Policy, damit ein
+ersetztes Logo für historische Dokumente erhalten bleibt.
+
+Diese Regeln gelten **nur für das Firmenlogo**. Sie sind keine allgemeine Datei- oder
+Storage-Regel.
+
+**Nachweis:** `src/hooks/useCompanyLogoObjectUrl.ts`, `src/pages/FirmendatenPage.tsx`,
+`src/brandingLogoAssetUpload01.test.tsx`.

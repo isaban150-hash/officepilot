@@ -182,18 +182,22 @@ Metadaten waren entfernt. Der Testwert wurde danach vollständig bereinigt.
 Der **Rechnungs-Regressionsschutz ist fokussiert automatisiert getestet**, nicht
 produktiv realgetestet. Kein offener Produktfehler.
 
-**Offene Lücken:** Kein produktiver Upload, also entsteht noch keine
-`LogoAssetReference` — der Contract transportiert bislang etwas, das niemand erzeugt.
-Keine Logo-Anzeige aus `branding`, keine Anzeigepriorität gegenüber `logoDataUrl`, kein
-`BrandingSnapshot` in Rechnung und PDF. `logoDataUrl` bleibt der Legacy-Weg und verlässt
-das Gerät nie. `primaryColor` hat keine Oberfläche. **Ein zentraler Einstellungsbereich
-existiert nicht** (D-012); Einstellungen liegen verstreut.
+Der **produktive Logo-Upload ist lokal umgesetzt** (BRANDING-01E-2, Realtest offen): Die
+Firmendaten sind an den Branding-Asset-Storage angebunden, ein neues Logo entsteht als
+unveränderliches Asset, das `CompanyProfile` speichert nur die Referenz. Die Anzeige läuft
+über Resolver und Cache, mit sichtbarem Legacy-Fallback bei Fehlern. Die
+Entfernen-Semantik und der Pending-Reference-Retryschutz gegen doppelte unveränderliche
+Uploads sind umgesetzt (D-023). Keine Migration, keine Policy-Änderung.
+
+**Offene Lücken:** Der Realtest steht aus. `BrandingSnapshot` in Rechnung und PDF fehlt
+(01F) — die Firmendaten zeigen das neue Logo, Rechnungen noch nicht. `primaryColor` hat
+weiterhin keine Oberfläche. **Ein zentraler Einstellungsbereich existiert nicht** (D-012);
+Einstellungen liegen verstreut. Orphan-Assets können in seltenen Abbruchfällen
+zurückbleiben; eine Asset-Lifecycle-Strategie gibt es bewusst noch nicht.
 
 **Blocker:** keine.
-**Nächster Schritt:** `BRANDING-01E-2` — produktiver Logo-Upload: Datei validieren,
-unveränderliches Asset hochladen, `LogoAssetReference` in `branding.logo` speichern,
-synchronisieren. Dort gehört auch die Anzeigepriorität hin. Danach `01F`.
-Beide sind **noch nicht begonnen**.
+**Nächster Schritt:** Realtest von 01E-2, dann `01F` — BrandingSnapshot in Rechnung und
+PDF. `01F` ist **noch nicht begonnen**.
 
 ---
 

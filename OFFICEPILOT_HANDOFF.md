@@ -11,7 +11,7 @@ Kurzer Übergabestand für den Einstieg. Alles Ausführlichere gehört in
 - **Dokumentationsstand:** 2026-08-30
 - **Repository:** `C:\Users\Lenovo-ThinkPad-E590\Desktop\officepilot`
 - **Branch:** `main`
-- **Letzter abgeschlossener Produktblock:** `BRANDING-01E-1`
+- **Letzter abgeschlossener Produktblock:** `BRANDING-01E-2` (lokal; Realtest offen)
 
 > **Der tatsächliche Git-Stand ist bei jeder Übergabe zu verifizieren:**
 > `git log --oneline -1` und `git status -sb`.
@@ -22,7 +22,48 @@ Kurzer Übergabestand für den Einstieg. Alles Ausführlichere gehört in
 
 ## Letzter abgeschlossener Block
 
-**BRANDING-01E-1** — der CompanyProfile-/Branding-Cloud-Contract.
+**BRANDING-01E-2** — produktiver Branding-Asset-Upload in den Firmendaten, **lokal
+umgesetzt**.
+
+Der Branding-Unterbau hat erstmals einen produktiven Aufrufer. Ein neu gewähltes Logo
+wird nicht mehr als Data-URL gespeichert, sondern als unveränderliches Asset abgelegt;
+das Profil trägt nur noch `assetId` und `mimeType`.
+
+Die tragenden Entwurfsentscheidungen:
+
+- **Upload erst beim Speichern**, nicht bei der Dateiauswahl. Assets sind unveränderlich
+  und nicht löschbar — Durchprobieren darf keine bleibenden Objekte erzeugen. Wer die
+  Seite ohne Speichern verlässt, hinterlässt nichts.
+- **Profilvalidierung vor dem Upload.** Stimmt die IBAN nicht, entsteht kein Asset.
+- **Pending-Reference-Reuse:** Scheitert das Speichern *nach* einem erfolgreichen Upload,
+  wird dieselbe Referenz beim nächsten Versuch wiederverwendet — kein zweiter Upload.
+- **Anzeige** über `resolveBrandingAsset` (Cache zuerst); bei Resolver-Fehler sichtbarer
+  Rückfall auf das Legacy-Logo, nur in den Firmendaten (D-023).
+- **`logoDataUrl` bleibt lokal** — nicht migriert, nicht hochgeladen, nie in der Cloud.
+- **„Logo entfernen"** entfernt Referenz *und* Legacy-Logo, bewahrt `primaryColor` und
+  setzt `branding: {}`, wenn nichts übrig bleibt.
+
+Keine Migration, keine Policy-Änderung, kein Storage-Delete.
+
+**Bekannte Einschränkung — Orphan-Assets:** In seltenen Abbruchfällen kann ein
+hochgeladenes Asset ohne Referenz im Bucket zurückbleiben (Upload erfolgreich, danach
+Abbruch vor dem Speichern; oder eine hochgeladene Referenz wird durch eine andere
+Dateiauswahl bzw. „Logo entfernen" verworfen). Es gibt **keine Garbage Collection** und
+keine DELETE-Policy. Das Risiko ist durch die drei Entwurfsentscheidungen oben so klein
+wie ohne neue Infrastruktur möglich.
+
+**Übergangslücke bis 01F:** Die Firmendaten zeigen das neue Branding-Asset, **Rechnungen
+noch nicht** — sie nutzen weiterhin nur den Legacy-Weg. Wer „Logo entfernen" wählt,
+verliert damit bis 01F auch das Logo auf neuen Rechnungen. Bestehende Rechnungen bleiben
+unberührt. Das ist die bewusst getrennte Migration, kein Fehler — 01F sollte zeitnah
+folgen.
+
+**Realtest-Status: offen.** Nötig sind: Upload auf iPhone Safari mit Reload, Prüfung in
+Supabase (nur `assetId` + `mimeType` im Profil, kein `logoDataUrl`, keine URL), Prüfung
+des Storage-Pfads, ein zweites frisches Browserfenster für den Resolver-Weg und das
+Entfernen.
+
+Davor: **BRANDING-01E-1** — der CompanyProfile-/Branding-Cloud-Contract.
 
 `CompanyProfile` trägt jetzt `branding?: BrandingProfile` und transportiert den Block
 durch die bestehende Sync-Kette. Der Contract ist **geschlossen**: erlaubt sind genau
@@ -169,28 +210,21 @@ Rate Limit → Gemini → Browser.
 
 ## Aktuell offener Block
 
-Keiner. `BRANDING-01E-1` ist abgeschlossen: CompanyProfile-Cloud-Contract produktiv
-realgetestet, Invoice-Regressionsschutz fokussiert automatisiert getestet.
+`BRANDING-01E-2` ist lokal fertig; offen ist der Realtest (siehe oben).
 
 ## Nächster geplanter Produktblock
 
-**`BRANDING-01E-2` — produktiver Logo-Upload.** Datei validieren → unveränderliches
-Branding-Asset hochladen → `LogoAssetReference` erhalten → in
-`CompanyProfile.branding.logo` speichern → synchronisieren. Dort gehört auch die
-Anzeigepriorität `branding.logo` vor `logoDataUrl` hin; in 01E-1 wäre sie wirkungslos
-gewesen, weil noch kein Asset entstehen kann.
-
-Danach: `01F` (BrandingSnapshot in Rechnung und PDF).
-
-`01E-2` und `01F` sind **noch nicht begonnen**.
+**`01F` — BrandingSnapshot in Rechnung und PDF.** Schließt die oben beschriebene
+Übergangslücke: das Branding zum Zeitpunkt einer Rechnung einfrieren und im PDF anzeigen.
+`01F` ist **noch nicht begonnen**.
 
 ---
 
 ## Nicht zu verwechselnde Altstände
 
 - `CompanyProfile.logoDataUrl` ist der **Legacy-Weg** und weiterhin aktiv. Er verlässt
-  das Gerät nie. Branding-Assets (01D) sind vorbereitet, aber **ohne produktiven
-  Aufrufer**.
+  das Gerät nie. Seit 01E-2 haben die Branding-Assets einen produktiven Aufrufer in den
+  Firmendaten — in Rechnungen und PDF aber noch nicht.
 - `deleteVorgang` existiert vollständig, wird aber von **keiner Oberfläche** aufgerufen.
 - Der `SharedPresentationContext` ist gebaut, aber **noch nicht angebunden**.
 

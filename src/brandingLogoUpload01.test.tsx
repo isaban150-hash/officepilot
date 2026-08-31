@@ -150,8 +150,16 @@ describe('BRANDING-01C Logo-Upload', () => {
     await selectFile(input, imageFile(PNG_SIGNATURE, 'image/png', 'logo.png'));
 
     const src = preview(mounted.container)?.getAttribute('src') ?? '';
-    expect(src.startsWith('data:image/png')).toBe(true);
+    /*
+     * BRANDING-01E-2 — die Vorschau einer neu gewählten Datei ist jetzt eine
+     * Object-URL statt einer Data-URL. Die eigentliche Zusicherung dieses Falls
+     * bleibt unverändert: Die Auswahl ersetzt die Vorschau und wird noch nicht
+     * gespeichert. Zusätzlich wird nun belegt, dass **keine** Data-URL mehr
+     * entsteht — neue Uploads sollen nicht als Base64 im Profil landen.
+     */
+    expect(src.startsWith('data:')).toBe(false);
     expect(src).not.toBe(EXISTING_LOGO);
+    expect(src.length).toBeGreaterThan(0);
     expect(mounted.container.querySelector('[data-testid="company-logo-error"]')).toBeNull();
 
     // Noch nicht gespeichert — das geschieht erst beim Absenden des Formulars.
