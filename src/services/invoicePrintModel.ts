@@ -5,6 +5,7 @@ import { fromCents, taxCentsFromNet, toCents } from './invoiceMoney';
 import { formatOrderUnitDisplay } from './orderUnitMapper';
 import { getTaxRateForStatus } from './invoiceTaxService';
 import { getInvoiceDocumentTitle, usesAbschlagDeductions } from './invoiceTypeService';
+import { selectHistoricalInvoiceLogo } from './invoice/invoiceHistoricalLogo';
 import type {
   CompanySetup,
   InvoiceDraft,
@@ -106,6 +107,8 @@ export function buildInvoicePrintModelFromInvoice(invoice: VorgangInvoice): Invo
     invoiceNumber: invoice.number,
     issueDate: invoice.issueDate ?? invoice.date,
     company: { ...invoice.companySnapshot },
+    // BRANDING-01F-3 — die historische Quelle des Dokuments, keine Bytes.
+    logo: selectHistoricalInvoiceLogo(invoice),
     customer: { ...invoice.customerSnapshot },
     projectTitle: invoice.vorgangTitle ?? '—',
     projectSite: invoice.baustelle ?? '',
@@ -147,6 +150,8 @@ export function buildInvoicePrintModel(
     invoiceNumber: draft.invoiceNumberPreview || 'ENTWURF',
     issueDate: draft.issueDate,
     company: { ...draft.companySnapshot },
+    // BRANDING-01F-3 — im Entwurf dieselbe Regel wie in der fertigen Rechnung.
+    logo: selectHistoricalInvoiceLogo(draft),
     customer: { ...draft.customerBilling },
     projectTitle: draft.vorgangTitle,
     projectSite: draft.baustelle,

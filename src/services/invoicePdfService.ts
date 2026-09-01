@@ -9,6 +9,10 @@ import {
   validateFinalizedInvoiceForPdf,
   type InvoiceValidationResult,
 } from './invoiceValidationService';
+import { resolveBrandingAsset } from './branding/brandingAssetResolver';
+import { encodeDocumentFileRasterToJpeg } from './documentFileRasterEncodeService';
+import { getSyncClient } from './sync/syncClientService';
+import type { HistoricalInvoiceLogoSource } from '../types/branding';
 import type { InvoicePrintModel, VorgangInvoice } from '../types/models';
 
 const PAGE_WIDTH = 595.28;
@@ -16,6 +20,16 @@ const PAGE_HEIGHT = 841.89;
 const MARGIN = 48;
 const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2;
 const LINE_GAP = 4;
+
+/**
+ * BRANDING-01F-3 — Platz für das Logo oben rechts.
+ *
+ * Bewusst klein und fest: Das Bild wird in dieses Rechteck **eingepasst**, nie
+ * gestreckt und nie vergrössert. Der Absendertext links behält seine Position;
+ * ohne Logo entsteht kein Versatz, das Layout bleibt exakt wie bisher.
+ */
+const LOGO_MAX_WIDTH = 140;
+const LOGO_MAX_HEIGHT = 48;
 
 export type GenerateApprovedInvoicePdfResult =
   | {
@@ -225,6 +239,134 @@ function drawWrapped(
   }
 }
 
+/** Roh-Bytes plus tatsächlicher Typ — was `pdf-lib` zum Einbetten braucht. */
+interface PdfLogoBytes {
+  bytes: Uint8Array;
+  mimeType: 'image/png' | 'image/jpeg';
+}
+
+function decodeBase64ToBytes(base64: string): Uint8Array | null {
+  try {
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) {
+      bytes[index] = binary.charCodeAt(index);
+    }
+    return bytes;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Ein Alt-Logo aus einer Data-URL. Bewusst eng: nur Base64, nur PNG, JPEG und
+ * WebP. Kein SVG, kein Fremdinhalt, keine entfernte URL — was hier ankommt,
+ * wird eingebettet und muss deshalb ein Bild sein und nichts anderes.
+ */
+function parseLegacyLogoDataUrl(dataUrl: string): { bytes: Uint8Array; mimeType: string } | null {
+  const match = /^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=\s]+)$/.exec(dataUrl.trim());
+  if (!match) return null;
+  const bytes = decodeBase64ToBytes(match[2].replace(/\s+/g, ''));
+  if (!bytes || bytes.length === 0) return null;
+  return { bytes, mimeType: match[1] };
+}
+
+/**
+ * WebP kann `pdf-lib` nicht einbetten, der Branding-Vertrag erlaubt es aber.
+ * Deshalb wird es hier **temporär** nach JPEG umgewandelt — über denselben
+ * Dienst, der schon die Dokumentenablage bedient und auf iPhone Safari erprobt
+ * ist. Es entsteht dabei kein Asset, kein Upload und keine neue `assetId`; die
+ * Bytes leben nur für dieses eine PDF.
+ */
+async function toEmbeddableLogoBytes(
+  bytes: Uint8Array,
+  mimeType: string,
+): Promise<PdfLogoBytes | null> {
+  if (mimeType === 'image/png' || mimeType === 'image/jpeg') {
+    return { bytes, mimeType };
+  }
+  if (mimeType !== 'image/webp') return null;
+
+  try {
+    const encoded = await encodeDocumentFileRasterToJpeg({ bytes, sourceMimeType: 'image/webp' });
+    return { bytes: encoded.bytes, mimeType: 'image/jpeg' };
+  } catch {
+    // Kein Logo ist richtig; ein anderes Logo wäre falsch.
+    return null;
+  }
+}
+
+/**
+ * Beschafft das **historische** Logo dieser Rechnung — und nur dieses.
+ *
+ * Für eine strukturierte Referenz läuft der bestehende Resolver (Cache zuerst,
+ * dann Cloud). Scheitert er, gibt es kein Logo: kein Rückfall auf das
+ * eingebettete Alt-Bild und erst recht keiner auf die heutigen Firmendaten.
+ */
+async function loadHistoricalLogoBytes(
+  source: HistoricalInvoiceLogoSource,
+): Promise<PdfLogoBytes | null> {
+  if (source.kind === 'none') return null;
+
+  if (source.kind === 'legacy_data_url') {
+    const parsed = parseLegacyLogoDataUrl(source.dataUrl);
+    if (!parsed) return null;
+    return toEmbeddableLogoBytes(parsed.bytes, parsed.mimeType);
+  }
+
+  const workspaceId = getSyncClient().serverWorkspaceId;
+  if (!workspaceId) return null;
+
+  let resolved;
+  try {
+    resolved = await resolveBrandingAsset(workspaceId, source.reference);
+  } catch {
+    return null;
+  }
+  if (!resolved.ok) return null;
+
+  try {
+    const buffer = await resolved.blob.arrayBuffer();
+    return toEmbeddableLogoBytes(new Uint8Array(buffer), source.reference.mimeType);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Zeichnet das Logo oben rechts, eingepasst und ohne Verzerrung.
+ *
+ * Der Cursor wird **nicht** bewegt: Das Logo liegt neben dem Absenderblock, und
+ * ohne Logo bleibt das Layout unverändert. Ein Einbettungsfehler bleibt
+ * folgenlos — die Rechnung entsteht trotzdem, nur ohne Bild.
+ */
+async function drawHistoricalLogo(cursor: PdfCursor, logo: PdfLogoBytes): Promise<void> {
+  let embedded;
+  try {
+    embedded =
+      logo.mimeType === 'image/jpeg'
+        ? await cursor.pdfDoc.embedJpg(logo.bytes)
+        : await cursor.pdfDoc.embedPng(logo.bytes);
+  } catch {
+    return;
+  }
+
+  const { width, height } = embedded;
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return;
+
+  // Einpassen, nie vergrössern — das Seitenverhältnis bleibt erhalten.
+  const scale = Math.min(LOGO_MAX_WIDTH / width, LOGO_MAX_HEIGHT / height, 1);
+  const drawWidth = width * scale;
+  const drawHeight = height * scale;
+
+  cursor.page.drawImage(embedded, {
+    x: PAGE_WIDTH - MARGIN - drawWidth,
+    y: PAGE_HEIGHT - MARGIN - drawHeight,
+    width: drawWidth,
+    height: drawHeight,
+  });
+}
+
 async function renderInvoicePrintModelToPdf(model: InvoicePrintModel): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -236,6 +378,16 @@ async function renderInvoicePrintModelToPdf(model: InvoicePrintModel): Promise<U
     font,
     fontBold,
   };
+
+  /*
+   * BRANDING-01F-3 — das Logo zuerst, weil es oben rechts an einer festen
+   * Position liegt und den Textfluss links nicht berührt. Nur auf der ersten
+   * Seite: Es gehört zum Rechnungskopf, nicht auf jede Folgeseite.
+   */
+  const logoBytes = await loadHistoricalLogoBytes(model.logo);
+  if (logoBytes) {
+    await drawHistoricalLogo(cursor, logoBytes);
+  }
 
   const company = model.company;
   drawLine(cursor, [company.companyName, company.legalForm].filter(Boolean).join(' '), {

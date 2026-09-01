@@ -2,6 +2,8 @@ import { useApp } from '../../context/AppContext';
 import { INVOICE_DRAFT_LABEL } from '../../services/invoiceNumberService';
 import type { InvoicePrintModel } from '../../types/models';
 import { formatInvoiceDate } from '../../services/invoicePrintModel';
+import { getSyncClient } from '../../services/sync/syncClientService';
+import { useInvoiceLogoObjectUrl } from '../../hooks/useInvoiceLogoObjectUrl';
 
 interface Props {
   model: InvoicePrintModel;
@@ -18,6 +20,12 @@ function formatCompanyLine(model: InvoicePrintModel): string {
 export function InvoiceHeader({ model }: Props) {
   const { translate } = useApp();
   const { company } = model;
+  /*
+   * BRANDING-01F-3 — das Logo dieser Rechnung, nicht das des Betriebs von
+   * heute. Fehlt es oder lässt es sich nicht laden, bleibt die Stelle leer;
+   * die Rechnung wird davon nicht beeinträchtigt.
+   */
+  const logo = useInvoiceLogoObjectUrl(model.logo, getSyncClient().serverWorkspaceId);
   const companyLine = formatCompanyLine(model);
   const numberLabel =
     !model.invoiceNumber ||
@@ -29,11 +37,13 @@ export function InvoiceHeader({ model }: Props) {
   return (
     <header className="invoice-header">
       <div className="invoice-header__brand">
-        {company.logoDataUrl ? (
+        {logo.url ? (
           <img
-            src={company.logoDataUrl}
+            src={logo.url}
             alt=""
             className="invoice-header__logo"
+            data-testid="invoice-header-logo"
+            data-logo-kind={model.logo.kind}
           />
         ) : null}
         <div className="invoice-header__company">

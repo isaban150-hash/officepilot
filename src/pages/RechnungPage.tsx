@@ -53,6 +53,7 @@ import type {
   InvoiceDraftLocator,
   InvoiceDraftRecord,
 } from '../types/invoiceDraftDurability';
+import { selectHistoricalInvoiceLogo } from '../services/invoice/invoiceHistoricalLogo';
 import type { InvoiceFinalizationRecovery } from '../services/invoice/invoiceFinalizationCoordinator';
 import type { TranslationKey } from '../i18n';
 
@@ -423,6 +424,43 @@ export function RechnungPage() {
     approveLockRef.current = true;
     setApproving(true);
 
+    /*
+     * INVOICE-FINALIZE-HANG-01B — ab hier ist der Serverzustand ungewiss.
+     *
+     * Vor diesem Punkt kann ein unerwarteter Fehler nichts angerichtet haben;
+     * danach könnte eine Finalisierung bereits begonnen haben. Der Unterschied
+     * entscheidet, ob ein zweiter Versuch erlaubt sein darf.
+     */
+    let finalizationStarted = false;
+
+    try {
+      await runApprovalSteps(() => {
+        finalizationStarted = true;
+      });
+    } catch (error) {
+      console.warn('[OfficePilot] Freigabe unerwartet fehlgeschlagen:', error);
+      /*
+       * Der Ladezustand endet in jedem Fall — eine dauerhaft stehende Anzeige
+       * „wird freigegeben…" ist das, was dieser Block behebt.
+       *
+       * Die Sperre folgt dagegen dem Serverzustand: Vor dem Start gibt es
+       * nichts zu schützen, danach könnte ein zweiter Versuch eine zweite
+       * Rechnung erzeugen. Deshalb bleibt sie dort bewusst bestehen, und der
+       * Nutzer wird zum Neuladen geführt — der Entwurf überlebt das.
+       */
+      setApproving(false);
+      if (finalizationStarted) {
+        showToast(translate('invoice.approve.unexpectedReload'));
+      } else {
+        approveLockRef.current = false;
+        showToast(translate('invoice.approve.failed'));
+      }
+    }
+  };
+
+  const runApprovalSteps = async (markFinalizationStarted: () => void) => {
+    if (!id || !draft) return;
+
     const validation = validateInvoiceDraftForApproval(
       draft,
       draft.companySnapshot,
@@ -450,6 +488,12 @@ export function RechnungPage() {
      */
     const flushed = await session.flush();
     if (!flushed.ok) {
+      /*
+       * INVOICE-FINALIZE-HANG-01B — `timeout` ist hier ein sicherer Ausgang:
+       * Der Serverkontakt beginnt erst danach, es kann also weder eine halbe
+       * noch eine doppelte Rechnung entstanden sein. Der Entwurf bleibt
+       * unangetastet, und ein erneuter Versuch ist ausdrücklich erlaubt.
+       */
       showToast(
         flushed.outcome === 'conflict'
           ? translate('invoice.approve.conflict')
@@ -468,6 +512,7 @@ export function RechnungPage() {
       return;
     }
 
+    markFinalizationStarted();
     const result = await startInvoiceDraftFinalization({
       identity: {
         sourceScopeKey: record.sourceScopeKey,
@@ -507,12 +552,24 @@ export function RechnungPage() {
         showToast(translate('invoice.approve.failed'));
       }
       /*
-       * Nur ein ausdrücklich wiederholbarer Ausgang gibt die Freigabe wieder
-       * frei. `reload_required` und `blocked` — darunter jeder ungewisse
-       * Cloudzustand — bleiben gesperrt; ein zweiter Versuch könnte sonst eine
-       * zweite Rechnung erzeugen.
+       * Die Freigabe wird wieder geöffnet, wenn einer von zwei Nachweisen
+       * vorliegt — und nur dann.
+       *
+       * 1. `retry_allowed`: der Coordinator erklärt den Ausgang ausdrücklich
+       *    für wiederholbar.
+       * 2. INVOICE-FINALIZE-HANG-01C — `cloudState === 'not_committed'`: es ist
+       *    nachweislich **nichts** übertragen worden. Fast jeder Fehlschlag vor
+       *    `begin` trägt diesen Zustand, bekommt von `failBeforeBegin` aber die
+       *    Vorgabe `recovery: 'blocked'`. Wer nur auf `recovery` sieht, sperrt
+       *    damit einen völlig sicheren Zustand dauerhaft — im Realtest blieb
+       *    die Oberfläche deshalb auf „Rechnung wird freigegeben…" stehen,
+       *    obwohl gar kein Serverkontakt stattgefunden hatte.
+       *
+       * Alles andere — `confirmed`, `conflict` und vor allem `unknown` — bleibt
+       * gesperrt. Dort könnte serverseitig bereits eine Rechnung liegen, und
+       * ein zweiter Versuch würde eine zweite erzeugen.
        */
-      if (result.recovery === 'retry_allowed') {
+      if (result.recovery === 'retry_allowed' || result.cloudState === 'not_committed') {
         approveLockRef.current = false;
         setApproving(false);
       }
@@ -663,7 +720,8 @@ export function RechnungPage() {
             </Card>
           )}
 
-          {draft.companySnapshot.logoDataUrl && (
+          {/* BRANDING-01F-3 — dieselbe historische Logoerkennung wie Ansicht und PDF. */}
+          {selectHistoricalInvoiceLogo(draft).kind !== 'none' && (
             <p className="hint-text invoice-brand-hint" data-testid="invoice-brand-logo-hint">
               {translate('invoice.logoFromProfile')}
             </p>

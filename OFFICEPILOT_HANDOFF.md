@@ -210,7 +210,20 @@ Rate Limit → Gemini → Browser.
 
 ## Aktuell offener Block
 
-`BRANDING-01E-2` ist lokal fertig; offen ist der Realtest (siehe oben).
+`BRANDING-01F` ist in drei Teilblöcken umgesetzt, der Realtest steht aus:
+
+- **01F-1 Snapshot Foundation** — abgeschlossen: Eine Rechnung friert ihr Branding beim
+  Aufbau des Entwurfs ein und führt es nie nach.
+- **01F-2 Cloud-/Finalize-Vertrag** — abgeschlossen: `brandingSnapshot` läuft kontrolliert
+  durch Finalisierung, Cloud und Pull. `PREPARED_FINALIZE_REQUEST_FORMAT_VERSION` = 3.
+- **01F-3 Darstellung** — implementiert, **Realtest offen**: Bildschirmrechnung und PDF
+  zeigen erstmals das historische Logo (PNG, JPEG, WebP über temporäre Umwandlung).
+
+Offen bleibt außerdem der Realtest von `BRANDING-01E-2`.
+
+**Separater späterer Block:** `immutableInvoiceFingerprint` enthält `brandingSnapshot`
+bewusst **nicht**. Rechnungen aus der Zeit zwischen 01F-1 und 01F-2 tragen ihn lokal,
+ihre damalige Cloudfassung aber nicht — eine naive Aufnahme erzeugte falsche Konflikte.
 
 ## Nächster geplanter Produktblock
 

@@ -58,7 +58,30 @@ export type InvoiceDraftFlushOutcome =
   | 'conflict'
   | 'storage_error'
   | 'read_only'
-  | 'disposed';
+  | 'disposed'
+  /**
+   * INVOICE-FINALIZE-HANG-01B — der Speicherlauf hat sich nicht innerhalb der
+   * Frist gemeldet. Bewusst ein **eigener** Ausgang und nicht `storage_error`:
+   * Es ist kein bekannter Fehlschlag, sondern ein unbekannter Ausgang. Der
+   * Entwurf bleibt unangetastet, und ein erneuter Versuch ist erlaubt — es hat
+   * bis dahin keinen Serverkontakt gegeben.
+   */
+  | 'timeout';
+
+/**
+ * Frist für einen ausdrücklich abgewarteten Flush.
+ *
+ * Zehn Sekunden sind für einen IndexedDB-Schreibvorgang samt SHA-256 sehr
+ * grosszügig — auf einem älteren Telefon dauert er Bruchteile davon. Die Frist
+ * ist deshalb keine Leistungsgrenze, sondern eine Notbremse gegen einen
+ * Speicherlauf, der sich überhaupt nicht mehr meldet.
+ *
+ * Bewusst nicht kürzer: Ein Abbruch mitten in einem laufenden, gesunden
+ * Speichervorgang wäre schlechter als ein paar Sekunden Wartezeit. Und bewusst
+ * nicht länger: Ab etwa einer Viertelminute hält ein Mensch die Oberfläche für
+ * defekt und drückt erneut.
+ */
+export const INVOICE_DRAFT_FLUSH_TIMEOUT_MS = 10_000;
 
 export interface InvoiceDraftFlushResult {
   ok: boolean;
@@ -606,8 +629,39 @@ export function useInvoiceDraftDurabilitySession(
       if (queue.status === 'blocked_storage') return { ok: false, outcome: 'storage_error' };
       if (!EDITABLE.includes(queue.status)) return { ok: false, outcome: 'read_only' };
       if (!queue.saving && !queue.pendingSnapshot) return { ok: true, outcome: 'no_changes' };
+
+      /*
+       * INVOICE-FINALIZE-HANG-01B — ein Warten mit Frist.
+       *
+       * Bisher wartete dieser Promise ausschliesslich darauf, dass ein
+       * Speicherlauf die Warteliste leert. Meldete der sich nie, blieb der
+       * Aufrufer für immer stehen — im Realtest die dauerhafte Anzeige
+       * „Rechnung wird freigegeben…", ohne Meldung und ohne Serverkontakt.
+       *
+       * Nach Ablauf wird der eigene Waiter **aus der Liste entfernt**. Ein
+       * späterer Speicherlauf darf ihn nicht nachträglich noch auflösen: Der
+       * Aufrufer hat seine Entscheidung längst getroffen, und ein verspätetes
+       * Ergebnis würde Oberflächenzustand verändern, den niemand mehr erwartet.
+       */
       return new Promise<InvoiceDraftFlushResult>((resolve) => {
-        queue.waiters.push(resolve);
+        let settled = false;
+
+        const waiter = (result: InvoiceDraftFlushResult): void => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          resolve(result);
+        };
+
+        const timer = setTimeout(() => {
+          if (settled) return;
+          settled = true;
+          const index = queue.waiters.indexOf(waiter);
+          if (index >= 0) queue.waiters.splice(index, 1);
+          resolve({ ok: false, outcome: 'timeout' });
+        }, INVOICE_DRAFT_FLUSH_TIMEOUT_MS);
+
+        queue.waiters.push(waiter);
       });
     };
 

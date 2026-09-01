@@ -10,6 +10,7 @@ import {
 } from './invoiceMoney';
 import { INVOICE_DRAFT_LABEL } from './invoiceNumberService';
 import { getTaxRateForStatus } from './invoiceTaxService';
+import { selectHistoricalInvoiceLogo } from './invoice/invoiceHistoricalLogo';
 import { getAbschlagDeductionsTotal } from './invoiceDeductions';
 import type {
   CompanyProfile,
@@ -73,9 +74,6 @@ function companyWarnings(company: CompanyProfile, warnings: InvoiceValidationIss
   if (!company.phone?.trim() && !company.email?.trim()) {
     warnings.push({ code: 'company_contact', messageKey: 'invoice.validation.warn.contact' });
   }
-  if (!company.logoDataUrl?.trim()) {
-    warnings.push({ code: 'company_logo', messageKey: 'invoice.validation.warn.logo' });
-  }
   if (!company.skontoEnabled && !company.defaultSkonto?.trim()) {
     warnings.push({ code: 'skonto', messageKey: 'invoice.validation.warn.skonto' });
   }
@@ -98,6 +96,15 @@ export function validateInvoiceDraftForApproval(
   customerBlocks(draft.customerBilling, blockingErrors);
   companyBlocks(draft.companySnapshot, blockingErrors);
   companyWarnings(draft.companySnapshot, warnings);
+  /*
+   * BRANDING-01F-3 — die Logowarnung fragt nach dem Logo **dieser Rechnung**,
+   * nicht mehr nur nach dem Legacy-Feld. Seit 01E-2 kann ein Betrieb ein Logo
+   * ausschliesslich als strukturierte Referenz besitzen; die alte Prüfung hätte
+   * ihm dauerhaft „kein Logo" gemeldet.
+   */
+  if (selectHistoricalInvoiceLogo(draft).kind === 'none') {
+    warnings.push({ code: 'company_logo', messageKey: 'invoice.validation.warn.logo' });
+  }
 
   if (!draft.issueDate?.trim() || !isIsoDate(draft.issueDate)) {
     blockingErrors.push({ code: 'issue_date', messageKey: 'invoice.validation.issueDate' });

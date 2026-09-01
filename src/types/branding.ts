@@ -50,6 +50,18 @@ export interface BrandingProfile {
   primaryColor?: string;
 }
 
+/**
+ * BRANDING-01F-3 — die historische Logoquelle eines Dokuments.
+ *
+ * Bewusst ein Aufzählungstyp und kein optionales Bündel: Ein Dokument hat
+ * entweder eine unveränderliche Referenz, ein eingebettetes Alt-Bild oder gar
+ * nichts. Ein Speicherpfad, eine URL oder Bildbytes kommen hier nie vor.
+ */
+export type HistoricalInvoiceLogoSource =
+  | { kind: 'asset'; reference: LogoAssetReference }
+  | { kind: 'legacy_data_url'; dataUrl: string }
+  | { kind: 'none' };
+
 /** Feste Version des Snapshot-Vertrags. Kein Schema-/Cloud-Versionssystem. */
 export const BRANDING_SNAPSHOT_VERSION = 1;
 

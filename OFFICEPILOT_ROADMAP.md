@@ -196,8 +196,15 @@ Einstellungen liegen verstreut. Orphan-Assets können in seltenen Abbruchfällen
 zurückbleiben; eine Asset-Lifecycle-Strategie gibt es bewusst noch nicht.
 
 **Blocker:** keine.
-**Nächster Schritt:** Realtest von 01E-2, dann `01F` — BrandingSnapshot in Rechnung und
-PDF. `01F` ist **noch nicht begonnen**.
+`BRANDING-01F` ist in drei Teilblöcken **lokal umgesetzt**: 01F-1 friert das Branding je
+Rechnung ein, 01F-2 transportiert es durch Finalisierung, Cloud und Pull, 01F-3 zeigt es
+in Bildschirmrechnung und PDF — PNG, JPEG und WebP, letzteres über eine temporäre
+Umwandlung ohne neues Asset. Historische Rechnungen behalten dabei immer ihr eigenes
+Logo; lässt es sich nicht laden, erscheint keines statt eines falschen.
+
+**Nächster Schritt:** Realtest von 01E-2 und 01F-3. Danach offen: `primaryColor` im
+Layout, zentrale Einstellungen und die Aufnahme des Snapshots in den
+Rechnungs-Fingerprint (eigener Integritätsblock).
 
 ---
 

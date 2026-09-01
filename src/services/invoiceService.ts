@@ -833,8 +833,34 @@ function cloneCustomerBilling(billing: CustomerBilling): CustomerBilling {
   return { ...billing };
 }
 
+/**
+ * Der eingefrorene Firmenblock der fertigen Rechnung.
+ *
+ * INVOICE-FINALIZE-BRANDING-CANDIDATE-01B — `branding` wird hier entfernt.
+ *
+ * Seit BRANDING-01E-2 trägt das `CompanyProfile` einen `branding`-Block, und
+ * der Entwurf kopiert das Profil vollständig. Damit geriet das Feld in den
+ * Finalisierungskandidaten — und der strenge Request-Validator lehnte ihn mit
+ * `request.invoice.companySnapshot.branding:unknown_field` ab, noch bevor
+ * überhaupt ein Serveraufruf stattfand.
+ *
+ * Der Schnitt gehört genau hierher und nicht in den Cloud-Payload: Hier
+ * entsteht die **eine** eingefrorene Fassung, die lokal gespeichert **und**
+ * übertragen wird. Würde nur der Payload bereinigt, trüge die lokale Rechnung
+ * ein Feld, das die Cloudfassung nicht hat — und weil
+ * `immutableInvoiceFingerprint` zwar `logoDataUrl`, nicht aber `branding`
+ * ausschneidet, entstünde beim nächsten Pull ein `id_content_conflict`.
+ *
+ * Das historische Branding der Rechnung liegt seit BRANDING-01F-1 in
+ * `brandingSnapshot` — versioniert, geprüft und unveränderlich. `branding` im
+ * Firmenblock war der Übergangseffekt, den es ablöst.
+ *
+ * `logoDataUrl` bleibt unangetastet: Es ist die historische Logoquelle aller
+ * Rechnungen aus der Zeit davor.
+ */
 function cloneCompanySnapshot(profile: CompanyProfile): CompanyProfile {
-  return { ...profile, logoDataUrl: profile.logoDataUrl };
+  const { branding: _branding, ...rest } = profile;
+  return { ...rest, logoDataUrl: profile.logoDataUrl };
 }
 
 /**

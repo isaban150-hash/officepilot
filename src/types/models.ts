@@ -5,7 +5,11 @@ import type { Workspace, WorkspaceMember, WorkspaceSettings } from './workspace'
 import type { BusinessInterpretationResult } from './businessInterpretation';
 import type { ContractIntelligenceResult, ContractOrderProposal } from './documentIntelligence';
 import type { WorkflowDecision } from './workflowDecision';
-import type { BrandingProfile, BrandingSnapshot } from './branding';
+import type {
+  BrandingProfile,
+  BrandingSnapshot,
+  HistoricalInvoiceLogoSource,
+} from './branding';
 
 export type AppLanguage = 'de' | 'tr' | 'bg' | 'ro' | 'ru';
 
@@ -1403,6 +1407,13 @@ export interface InvoicePrintModel {
   invoiceNumber: string;
   issueDate: string;
   company: CompanyProfile;
+  /**
+   * BRANDING-01F-3 — die historische Logoquelle **dieser** Rechnung: eine
+   * Referenz oder ein Alt-Bild, niemals Bildbytes und niemals ein Pfad. Der
+   * Renderer soll sie aus dem Dokument bekommen und nicht aus den heutigen
+   * Firmendaten nachschlagen.
+   */
+  logo: HistoricalInvoiceLogoSource;
   customer: CustomerBilling;
   projectTitle: string;
   projectSite: string;

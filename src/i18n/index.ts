@@ -2072,6 +2072,8 @@ const deLegacy = {
   'invoice.approve.localPersistPending':
     'Cloud-Freigabe erfolgreich, lokale Speicherung fehlgeschlagen. Bitte erneut freigeben – keine zweite Rechnung.',
   'invoice.approve.archiveWarning': 'Rechnung freigegeben, Archiv/PDF konnte nicht erzeugt werden.',
+  'invoice.approve.unexpectedReload':
+    'Unerwarteter Fehler bei der Freigabe. Bitte die Seite neu laden – der Entwurf bleibt erhalten.',
   'invoice.approved': 'Rechnung freigegeben und gespeichert.',
   'invoice.session.noWorkspaceTitle': 'Rechnung nur mit Firmen-Workspace',
   'invoice.session.noWorkspace':
