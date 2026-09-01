@@ -1,4 +1,6 @@
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
+import { PDFDocument, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
+import fontkit from '@pdf-lib/fontkit';
+import { loadInvoicePdfFont } from './invoice/invoicePdfFonts';
 import { isFinalizedInvoice } from './invoiceArchiveService';
 import {
   buildInvoicePrintModelFromInvoice,
@@ -66,15 +68,39 @@ export function buildInvoicePdfFilename(invoiceNumber: string): string {
   return `Rechnung_${safe}.pdf`;
 }
 
-/** WinAnsi-safe text for StandardFonts (no invented content). */
+/**
+ * PDF-TEXT-RENDERING-01B \u2014 Schutz vor Steuerzeichen, **keine** Zeichensatzgrenze
+ * mehr.
+ *
+ * Bis hierher galt: Alles ausserhalb Latin-1 wird zu `?`. Das war f\u00fcr die
+ * WinAnsi-Standardschriften folgerichtig und f\u00fcr ein Rechnungsdokument trotzdem
+ * untragbar \u2014 aus `\u00c7\u0131rmak` wurde `\u00c7?rmak`, aus einem Halbgeviertstrich ein
+ * Fragezeichen. Mit der eingebetteten Unicode-Schrift entf\u00e4llt der Grund.
+ *
+ * Entfernt werden nur noch Zeichen, die kein Text sind: die C0-Steuerzeichen
+ * ohne Tab/LF/CR, DEL und die C1-Spanne. Sie tragen keine Bedeutung, k\u00f6nnen den
+ * Textstrom aber st\u00f6ren.
+ *
+ * Ausdr\u00fccklich **keine** Transliteration und kein Ersetzen von `\u20ac` durch `EUR`:
+ * Nutzdaten werden originalgetreu ausgegeben.
+ */
+/** Steuerzeichen ohne Tabulator, Zeilenumbruch und Wagenruecklauf. */
+function isControlCharacter(codePoint: number): boolean {
+  if (codePoint === 0x09 || codePoint === 0x0a || codePoint === 0x0d) return false;
+  return codePoint < 0x20 || (codePoint >= 0x7f && codePoint <= 0x9f);
+}
+
 export function toPdfSafeText(value: string): string {
-  return value
-    .replace(/\u20ac/g, 'EUR')
-    .replace(/[^\x09\x0A\x0D\x20-\x7E\xA0-\xFF]/g, '?');
+  let result = '';
+  for (const character of value) {
+    if (!isControlCharacter(character.codePointAt(0) ?? 0)) result += character;
+  }
+  return result;
 }
 
 function formatMoneyPdf(value: number): string {
-  return toPdfSafeText(formatInvoiceCurrency(value).replace('€', 'EUR'));
+  // Das Eurozeichen bleibt jetzt stehen — die eingebettete Schrift kennt es.
+  return toPdfSafeText(formatInvoiceCurrency(value));
 }
 
 /**
@@ -369,8 +395,22 @@ async function drawHistoricalLogo(cursor: PdfCursor, logo: PdfLogoBytes): Promis
 
 async function renderInvoicePrintModelToPdf(model: InvoicePrintModel): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  /*
+   * PDF-TEXT-RENDERING-01B — echte Unicode-Schriften statt der WinAnsi-Standard-
+   * schriften. `subset: true` bettet nur die tatsächlich benutzten Glyphen ein,
+   * die PDF-Grösse wächst dadurch nur um wenige Kilobyte.
+   *
+   * Beide Schnitte werden hier gebunden und über den Cursor an jede Zeichen- und
+   * jede Messfunktion weitergereicht — Umbruch und Spaltenbreiten rechnen damit
+   * mit genau der Schrift, die auch gezeichnet wird.
+   */
+  pdfDoc.registerFontkit(fontkit);
+  const [regularBytes, boldBytes] = await Promise.all([
+    loadInvoicePdfFont('regular'),
+    loadInvoicePdfFont('bold'),
+  ]);
+  const font = await pdfDoc.embedFont(regularBytes, { subset: true });
+  const fontBold = await pdfDoc.embedFont(boldBytes, { subset: true });
   const cursor: PdfCursor = {
     pdfDoc,
     page: pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]),
@@ -430,8 +470,19 @@ async function renderInvoicePrintModelToPdf(model: InvoicePrintModel): Promise<U
 
   cursor.y -= 4;
   drawLine(cursor, 'Projekt', { size: 11, bold: true });
-  if (model.projectTitle?.trim()) drawLine(cursor, model.projectTitle, { size: 10 });
-  if (model.projectSite?.trim()) drawLine(cursor, model.projectSite, { size: 9 });
+  const projectTitle = model.projectTitle?.trim() ?? '';
+  const projectSite = model.projectSite?.trim() ?? '';
+  if (projectTitle) drawLine(cursor, model.projectTitle, { size: 10 });
+  /*
+   * PDF-TEXT-RENDERING-01B — Baustelle nur, wenn sie etwas hinzufügt.
+   *
+   * In der Praxis tragen Vorgangstitel und Baustelle häufig denselben Text; die
+   * Zeile erschien dann zweimal untereinander. Verglichen wird getrimmt, gedruckt
+   * wird weiterhin der **unveränderte** Wert — hier wird nichts bereinigt.
+   */
+  if (projectSite && projectSite !== projectTitle) {
+    drawLine(cursor, model.projectSite, { size: 9 });
+  }
 
   drawLine(
     cursor,

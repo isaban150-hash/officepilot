@@ -70,11 +70,20 @@ function createFinalizedInvoice(overrides: Partial<VorgangInvoice> = {}): Vorgan
   };
 }
 
+/**
+ * PDF-TEXT-RENDERING-01B — zwei Microtasks reichen nicht mehr.
+ *
+ * Seit die PDF-Erzeugung ihre Unicode-Schriften lädt, liegt zwischen Klick und
+ * Download mindestens ein Makrotask. Gewartet wird deshalb über mehrere Runden
+ * der Ereignisschleife statt über eine feste Zahl aufgelöster Promises. Die
+ * Zusicherungen des Tests bleiben unverändert.
+ */
 async function flushUi(): Promise<void> {
-  await act(async () => {
-    await Promise.resolve();
-    await Promise.resolve();
-  });
+  for (let round = 0; round < 5; round += 1) {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  }
 }
 
 afterEach(() => {

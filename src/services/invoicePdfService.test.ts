@@ -175,7 +175,14 @@ describe('INVOICE-PILOT-PDF-GENERATION-01', () => {
     expect(buildInvoicePdfFilename('RE/../evil.pdf')).toBe('Rechnung_evil.pdf');
     expect(buildInvoicePdfFilename('RE 0042/A')).toBe('Rechnung_A.pdf');
     expect(buildInvoicePdfFilename('  ')).toBe('Rechnung_ohne_Nummer.pdf');
-    expect(toPdfSafeText('100 €')).toContain('EUR');
+    /*
+     * PDF-TEXT-RENDERING-01B — hier stand bis zu diesem Block
+     * `toContain('EUR')`. Das war für die WinAnsi-Standardschriften nötig und
+     * hat den Betrag verfälscht. Mit der eingebetteten Unicode-Schrift bleibt
+     * das Eurozeichen stehen; die Erwartung wird nicht abgeschwächt, sondern
+     * umgedreht.
+     */
+    expect(toPdfSafeText('100 €')).toBe('100 €');
   });
 
   it('Download erfolgt nur nach Aufruf; Object-URL wird freigegeben; kein Print-Fallback', async () => {
