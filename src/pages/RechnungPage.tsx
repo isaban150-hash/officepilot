@@ -20,7 +20,10 @@ import {
   updateInvoiceDraftTaxStatus,
   validateInvoiceDraftForApproval,
 } from '../services/invoiceService';
-import { useInvoiceDraftDurabilitySession } from '../services/invoice/useInvoiceDraftDurabilitySession';
+import {
+  useInvoiceDraftDurabilitySession,
+  type InvoiceDraftSessionStatus,
+} from '../services/invoice/useInvoiceDraftDurabilitySession';
 import {
   resumeInvoiceDraftFinalization,
   startInvoiceDraftFinalization,
@@ -59,6 +62,79 @@ import type { InvoiceFinalizationRecovery } from '../services/invoice/invoiceFin
 import type { TranslationKey } from '../i18n';
 
 type RechnungStep = 'positions' | 'preview' | 'edit';
+
+/**
+ * MOBILE-RESUME-STATE-01B — der Rechnungsschritt lebt in der Adresse.
+ *
+ * Auf dem Telefon verwirft das Betriebssystem den Safari-Tab, sobald der
+ * Nutzer die App wechselt. Der Entwurf überlebt das (IndexedDB), der Schritt
+ * lag bis hierher ausschliesslich in `useState` — wer aus der Vorschau
+ * zurückkam, landete wieder bei den Positionen.
+ *
+ * Der Schritt steht deshalb jetzt als Suchparameter in der Route: nichts
+ * zusätzlich zu speichern, nichts, das veralten kann, und er wirkt bei einem
+ * echten Neuaufbau ebenso wie bei einer Rückkehr aus dem Seitencache.
+ *
+ * Er ist **niemals eine Berechtigung**. Was aus der Adresse kommt, wird
+ * geprüft, nicht geglaubt — siehe `resolveResumableStep`.
+ */
+const STEP_PARAM = 'step';
+
+function isRechnungStep(value: string | null): value is RechnungStep {
+  return value === 'positions' || value === 'preview' || value === 'edit';
+}
+
+/**
+ * INVOICE-TAX-FLOW-01B/01D — die eine Steuerregel, jetzt an einer Stelle.
+ *
+ * Sie entscheidet, ob die Steuerentscheidung abgeschlossen ist: `unclear` ist
+ * es nie, §13b erst nach ausdrücklicher Bestätigung. Dieselbe Funktion sperrt
+ * den Weg zur Vorschau und entscheidet über eine Wiederaufnahme — es gibt
+ * bewusst keine zweite, abweichende Regel.
+ */
+function taxDecisionBlocker(
+  taxStatus: TaxStatus,
+  reverseCharge13bConfirmed: boolean,
+): TranslationKey | null {
+  if (taxStatus === 'unclear') return 'invoice.validation.taxStatus';
+  if (taxStatus === 'reverse_charge_13b' && !reverseCharge13bConfirmed) {
+    return 'invoice.validation.reverseChargeConfirmRequired';
+  }
+  return null;
+}
+
+/**
+ * Der Ladezustand der dauerhaften Sitzung ist belastbar entschieden.
+ *
+ * Der Entwurf kommt asynchron aus IndexedDB. Solange das läuft, darf ein
+ * `step=preview` aus der Adresse **nicht** verworfen werden — sonst würde
+ * jede Wiederaufnahme am ersten Render scheitern. Gewartet wird auf einen
+ * Zustand, nicht auf eine Zeitspanne.
+ */
+function isHydrationSettled(status: InvoiceDraftSessionStatus): boolean {
+  return status !== 'idle' && status !== 'loading' && status !== 'creating';
+}
+
+/**
+ * Welcher Schritt darf nach einem Neuaufbau tatsächlich wiederhergestellt werden?
+ *
+ * Ohne geladenen Entwurf gar keiner. `preview` nur, wenn die Steuerentscheidung
+ * abgeschlossen ist — nach einem Neuaufbau ist `reverseCharge13bConfirmed`
+ * wieder `false`, eine §13b-Rechnung fällt damit zwingend auf `positions`
+ * zurück und muss erneut bestätigt werden. `edit` nur, solange keine
+ * Finalisierung läuft oder abgeschlossen ist.
+ */
+function resolveResumableStep(input: {
+  requested: RechnungStep | null;
+  hasDraft: boolean;
+  taxDecisionSettled: boolean;
+  finalizationLocked: boolean;
+}): RechnungStep {
+  const { requested, hasDraft, taxDecisionSettled, finalizationLocked } = input;
+  if (!requested || requested === 'positions' || !hasDraft) return 'positions';
+  if (requested === 'preview') return taxDecisionSettled ? 'preview' : 'positions';
+  return taxDecisionSettled && !finalizationLocked ? 'edit' : 'positions';
+}
 
 /*
  * Beide Werte müssen exakt so entstehen wie im Preflight des Coordinators —
@@ -99,7 +175,7 @@ const TAX_OPTIONS: TaxStatus[] = [
 
 export function RechnungPage() {
   const { id } = useParams<{ id: string }>();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { translate, showToast, setup } = useApp();
   const navigate = useNavigate();
   const invoiceType = parseInvoiceDocumentType(searchParams.get('type'));
@@ -159,7 +235,34 @@ export function RechnungPage() {
   const sessionStatus = session.status;
   const mutateDraft = session.mutateDraft;
 
+  /*
+   * MOBILE-RESUME-STATE-01B — echter Wechsel, nicht Neuaufbau.
+   *
+   * Beim Wechsel von Vorgang oder Rechnungsart muss alles zurückgesetzt werden:
+   * Eine andere Rechnung darf keine Bestätigung und kein Prüfergebnis der
+   * vorherigen erben. Beim **ersten** Lauf — also bei Neuaufbau derselben
+   * Route nach einem verworfenen Tab — darf derselbe Effekt den Schritt aus der
+   * Adresse nicht überschreiben.
+   *
+   * Unterschieden wird an der zuletzt gesehenen Identität, nicht an einem
+   * Zeitfenster.
+   */
+  const seenIdentityRef = useRef<string | null>(null);
+  /*
+   * Bewusst Zustand und kein Ref: Das Anwenden der Wiederaufnahme muss einen
+   * Renderdurchlauf auslösen, sonst läuft die Normalisierung der Adresse nie an
+   * — etwa wenn der geprüfte Schritt derselbe ist wie der Ausgangsschritt und
+   * `setStep` deshalb nichts ändert.
+   */
+  const [resumeApplied, setResumeApplied] = useState(false);
   useEffect(() => {
+    const identity = `${id ?? ''}#${invoiceType}`;
+    const isInitialMount = seenIdentityRef.current === null;
+    seenIdentityRef.current = identity;
+    if (isInitialMount) return;
+
+    // Die neue Rechnung entscheidet ihre Wiederaufnahme selbst.
+    setResumeApplied(false);
     setStep('positions');
     setApplyContractSkonto(false);
     setReverseCharge13bConfirmed(false);
@@ -278,14 +381,59 @@ export function RechnungPage() {
    * Finalize-Prüfungen bleiben unverändert bestehen; sie sind die zweite Linie.
    */
   const taxDecisionBlockKey: TranslationKey | null =
-    draft == null
-      ? null
-      : draft.taxStatus === 'unclear'
-        ? 'invoice.validation.taxStatus'
-        : draft.taxStatus === 'reverse_charge_13b' && !reverseCharge13bConfirmed
-          ? 'invoice.validation.reverseChargeConfirmRequired'
-          : null;
+    draft == null ? null : taxDecisionBlocker(draft.taxStatus, reverseCharge13bConfirmed);
   const taxDecisionSettled = taxDecisionBlockKey === null;
+
+  /*
+   * Eine laufende oder bereits abgeschlossene Finalisierung sperrt Bearbeitung
+   * und Freigabe gleichermaßen. Sie stammt ausschliesslich aus dem gespeicherten
+   * Datensatz — niemals aus der Adresse.
+   */
+  const finalizationLocked =
+    sessionStatus === 'finalization_pending' || sessionStatus === 'already_finalized';
+
+  /*
+   * MOBILE-RESUME-STATE-01B — Wiederaufnahme genau einmal, nach der Hydration.
+   *
+   * Vorher wird nichts entschieden und nichts verworfen: Der Entwurf kommt
+   * asynchron, und ein `step=preview` aus der Adresse soll den ersten Render
+   * überleben.
+   */
+  const requestedStep = isRechnungStep(searchParams.get(STEP_PARAM))
+    ? (searchParams.get(STEP_PARAM) as RechnungStep)
+    : null;
+  const hydrationSettled = isHydrationSettled(sessionStatus);
+
+  useEffect(() => {
+    if (resumeApplied || !hydrationSettled) return;
+    setResumeApplied(true);
+    setStep(
+      resolveResumableStep({
+        requested: requestedStep,
+        hasDraft: draft != null,
+        taxDecisionSettled,
+        finalizationLocked,
+      }),
+    );
+    // Bewusst nur an der Hydration: die Wiederaufnahme ist ein einmaliger Vorgang.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrationSettled]);
+
+  /*
+   * Die Adresse folgt dem Schritt, nicht umgekehrt.
+   *
+   * `replace`, damit kein zusätzlicher Verlaufseintrag je Assistentenschritt
+   * entsteht — das Verhalten der Zurück-Taste bleibt in diesem Block unverändert.
+   * Vorhandene Parameter wie `type` bleiben erhalten, weil der bestehende
+   * Suchstring kopiert und nur ein Schlüssel gesetzt wird.
+   */
+  useEffect(() => {
+    if (!resumeApplied) return;
+    if (searchParams.get(STEP_PARAM) === step) return;
+    const next = new URLSearchParams(searchParams);
+    next.set(STEP_PARAM, step);
+    setSearchParams(next, { replace: true });
+  }, [resumeApplied, step, searchParams, setSearchParams]);
   const materialKey = draft ? (`material.${draft.materialSource}` as TranslationKey) : null;
 
   if (!id || !vorgang) {
@@ -361,13 +509,6 @@ export function RechnungPage() {
       </div>
     );
   }
-
-  /*
-   * Eine laufende oder bereits abgeschlossene Finalisierung sperrt Bearbeitung
-   * und Freigabe gleichermaßen.
-   */
-  const finalizationLocked =
-    sessionStatus === 'finalization_pending' || sessionStatus === 'already_finalized';
 
   const pageTitle = draft
     ? getInvoiceDocumentTitle(draft.type, draft.abschlagNumber)
