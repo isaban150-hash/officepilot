@@ -45,6 +45,7 @@ import { getCustomerById } from '../services/customerStoreService';
 import { getVorgangById } from '../services/vorgangService';
 import type {
   InvoiceCalculationMode,
+  InvoiceDraft,
   InvoiceDraftMetadataChanges,
   InvoiceDocumentType,
   TaxStatus,
@@ -79,12 +80,21 @@ function resolveActiveWorkspaceId(): string {
   }
 }
 
+/*
+ * INVOICE-TAX-FLOW-01B — eine einzige Optionsliste für beide Schritte.
+ *
+ * `unclear` steht jetzt mit in der Liste: Der Ersteinrichtungs-Assistent kann
+ * diesen Wert setzen, und ohne Eintrag liesse sich der Zustand in der Rechnung
+ * weder erkennen noch bewusst wieder herstellen. Er führt nicht weiter — siehe
+ * `taxDecisionBlockKey`.
+ */
 const TAX_OPTIONS: TaxStatus[] = [
   'standard_19',
   'standard_7',
   'kleinunternehmer_19',
   'reverse_charge_13b',
   'tax_free',
+  'unclear',
 ];
 
 export function RechnungPage() {
@@ -255,6 +265,27 @@ export function RechnungPage() {
   );
   const overbillingWarnings = draft ? getOverbillingWarnings(draft) : [];
   const taxKey = `tax.${draft?.taxStatus ?? setup.taxStatus}` as TranslationKey;
+
+  /*
+   * INVOICE-TAX-FLOW-01B — die Steuerentscheidung sperrt den Weg zur Vorschau.
+   *
+   * Bis hierher zeigte die Vorschau `0 %` und den §13b-Rechtshinweis, bevor der
+   * Nutzer bestätigt hatte, dass §13b überhaupt gelten soll — die Vorschau
+   * behauptete also eine Rechtsangabe, die noch offen war. Ebenso gelangte
+   * `unclear` bis in die fertige Vorschau und scheiterte erst an der Freigabe.
+   *
+   * Beides wird jetzt vorne abgefangen. Die bestehenden Freigabe- und
+   * Finalize-Prüfungen bleiben unverändert bestehen; sie sind die zweite Linie.
+   */
+  const taxDecisionBlockKey: TranslationKey | null =
+    draft == null
+      ? null
+      : draft.taxStatus === 'unclear'
+        ? 'invoice.validation.taxStatus'
+        : draft.taxStatus === 'reverse_charge_13b' && !reverseCharge13bConfirmed
+          ? 'invoice.validation.reverseChargeConfirmRequired'
+          : null;
+  const taxDecisionSettled = taxDecisionBlockKey === null;
   const materialKey = draft ? (`material.${draft.materialSource}` as TranslationKey) : null;
 
   if (!id || !vorgang) {
@@ -356,6 +387,71 @@ export function RechnungPage() {
     }
     mutateDraft((prev) => updateInvoiceDraftTaxStatus(prev, taxStatus));
   };
+
+  /*
+   * INVOICE-TAX-FLOW-01B — ein Baustein, zwei Einsatzorte.
+   *
+   * Derselbe Abschnitt erscheint im Positionsschritt (dort wird entschieden) und
+   * im Bearbeitungsschritt (dort wird korrigiert). Bewusst als lokale
+   * Renderfunktion und nicht als eigene Komponente: Es geht um denselben State
+   * derselben Seite, eine Extraktion würde Props durchreichen, ohne etwas zu
+   * klären.
+   *
+   * Die §13b-Bestätigung sitzt unmittelbar unter der Auswahl — sie gehört zur
+   * Entscheidung, nicht ans Ende einer langen Vorschau.
+   */
+  const renderTaxDecision = (currentDraft: InvoiceDraft) => (
+    <Card className="invoice-tax-decision" data-testid="invoice-tax-decision">
+      <fieldset className="invoice-edit__section">
+        <legend>{translate('invoice.taxStatus')}</legend>
+        <div className="chip-group">
+          {TAX_OPTIONS.map((status) => (
+            <button
+              key={status}
+              type="button"
+              className={`chip ${currentDraft.taxStatus === status ? 'chip--active' : ''}`}
+              data-testid={`invoice-tax-${status}`}
+              onClick={() => handleTaxChange(status)}
+            >
+              {translate(`tax.${status}` as TranslationKey)}
+            </button>
+          ))}
+        </div>
+      </fieldset>
+
+      {/*
+        * INVOICE-TAX-FLOW-01D — die getroffene Wahl im Klartext.
+        *
+        * Bewusst der übersetzte Name und niemals der technische Wert: Der
+        * Nutzer soll „§19 Kleinunternehmer" lesen, nicht `kleinunternehmer_19`.
+        */}
+      <p className="invoice-tax-decision__selected" data-testid="invoice-tax-selected">
+        {translate('invoice.taxStatusSelected')}:{' '}
+        <strong>{translate(`tax.${currentDraft.taxStatus}` as TranslationKey)}</strong>
+      </p>
+
+      {currentDraft.taxStatus === 'reverse_charge_13b' ? (
+        <div className="invoice-13b-confirm" data-testid="invoice-13b-confirm">
+          <label className="invoice-13b-confirm__label">
+            <input
+              type="checkbox"
+              checked={reverseCharge13bConfirmed}
+              onChange={(event) => setReverseCharge13bConfirmed(event.target.checked)}
+              data-testid="invoice-13b-confirm-checkbox"
+            />
+            <span>{translate('invoice.reverseCharge.confirmLabel')}</span>
+          </label>
+          <p className="hint-text">{translate('invoice.reverseCharge.confirmHelp')}</p>
+        </div>
+      ) : null}
+
+      {taxDecisionBlockKey ? (
+        <p className="hint-text" data-testid="invoice-tax-decision-blocked">
+          {translate(taxDecisionBlockKey)}
+        </p>
+      ) : null}
+    </Card>
+  );
 
   const handleQuantityChange = (positionId: string, value: string) => {
     const qty = parseFloat(value) || 0;
@@ -846,6 +942,17 @@ export function RechnungPage() {
             </section>
           )}
 
+          {/*
+            * INVOICE-TAX-FLOW-01D — die Steuerentscheidung steht **vor** der
+            * Summenkarte.
+            *
+            * Die Summenkarte blendet bei einem Steuersatz > 0 eine zusätzliche
+            * Zeile ein. Stand sie oberhalb, verschob sie im Moment der Auswahl
+            * genau die Schaltflächen, die gerade angetippt wurden. Die
+            * Berechnung selbst ist unverändert — nur die Reihenfolge.
+            */}
+          {renderTaxDecision(draft)}
+
           {totals && (
             <Card>
               <DataRow
@@ -881,7 +988,12 @@ export function RechnungPage() {
           )}
 
           <div className="action-stack">
-            <Button fullWidth onClick={() => setStep('preview')} data-testid="invoice-continue-preview">
+            <Button
+              fullWidth
+              disabled={!taxDecisionSettled}
+              onClick={() => setStep('preview')}
+              data-testid="invoice-continue-preview"
+            >
               {translate('invoice.continueToPreview')}
             </Button>
             <Button variant="outline" fullWidth onClick={() => navigate(`/vorgaenge/${id}`)}>
@@ -898,21 +1010,13 @@ export function RechnungPage() {
             {translate('invoice.previewHint')}
           </p>
 
-          {draft.taxStatus === 'reverse_charge_13b' ? (
-            <Card className="invoice-13b-confirm" data-testid="invoice-13b-confirm">
-              <label className="invoice-13b-confirm__label">
-                <input
-                  type="checkbox"
-                  checked={reverseCharge13bConfirmed}
-                  onChange={(event) => setReverseCharge13bConfirmed(event.target.checked)}
-                  data-testid="invoice-13b-confirm-checkbox"
-                />
-                <span>{translate('invoice.reverseCharge.confirmLabel')}</span>
-              </label>
-              <p className="hint-text">{translate('invoice.reverseCharge.confirmHelp')}</p>
-            </Card>
-          ) : null}
-
+          {/*
+            * INVOICE-TAX-FLOW-01B — die §13b-Bestätigung stand bis hierher an
+            * dieser Stelle, also unterhalb der vollständigen Vorschau. Sie ist
+            * jetzt Teil der Steuerentscheidung im Positionsschritt. Derselbe
+            * State, keine zweite Variable; die Freigabe- und Finalize-Prüfungen
+            * lesen ihn unverändert.
+            */}
           {validationErrors.length > 0 ? (
             <Card className="invoice-validation invoice-validation--errors" data-testid="invoice-validation-errors">
               <strong>{translate('invoice.validation.blockingTitle')}</strong>
@@ -1018,23 +1122,8 @@ export function RechnungPage() {
 
       {step === 'edit' && (
         <>
+          {renderTaxDecision(draft)}
           <Card>
-            <fieldset className="invoice-edit__section">
-              <legend>{translate('invoice.taxStatus')}</legend>
-              <div className="chip-group">
-                {TAX_OPTIONS.map((status) => (
-                  <button
-                    key={status}
-                    type="button"
-                    className={`chip ${draft.taxStatus === status ? 'chip--active' : ''}`}
-                    data-testid={`invoice-tax-${status}`}
-                    onClick={() => handleTaxChange(status)}
-                  >
-                    {translate(`tax.${status}` as TranslationKey)}
-                  </button>
-                ))}
-              </div>
-            </fieldset>
             <InvoiceDraftEditForm
               draft={draft}
               onChange={handleMetadataChange}
@@ -1120,7 +1209,14 @@ export function RechnungPage() {
             />
           </Card>
           <div className="action-stack">
-            <Button fullWidth onClick={() => setStep('preview')} data-testid="invoice-back-preview">
+            {/* Dieselbe Sperre wie im Positionsschritt: Wer hier §13b wählt,
+                kommt ohne erneute Bestätigung nicht in die Vorschau zurück. */}
+            <Button
+              fullWidth
+              disabled={!taxDecisionSettled}
+              onClick={() => setStep('preview')}
+              data-testid="invoice-back-preview"
+            >
               {translate('invoice.backToPreview')}
             </Button>
           </div>

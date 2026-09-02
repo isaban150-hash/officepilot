@@ -2049,6 +2049,15 @@ const deLegacy = {
   'invoice.tax': 'MwSt.',
   'invoice.total': 'Gesamt',
   'invoice.taxStatus': 'Steuerstatus',
+  /*
+   * INVOICE-TAX-FLOW-01D — Klartextkontrolle der getroffenen Steuerwahl.
+   *
+   * „19 % Regelbesteuerung" und „§19 Kleinunternehmer" sehen auf einem
+   * Telefondisplay ähnlich aus und liegen dicht beieinander. Diese Zeile
+   * benennt die tatsächlich gesetzte Steuerart, bevor die Vorschau geöffnet
+   * wird — ein Fehlgriff fällt damit sofort auf.
+   */
+  'invoice.taxStatusSelected': 'Gewählte Steuerart',
   'invoice.preview': 'Vorschau prüfen',
   'invoice.savePreview': 'Vorschau speichern',
   'invoice.saved': 'Rechnung als vorbereitet gespeichert.',

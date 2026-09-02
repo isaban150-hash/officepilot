@@ -1186,6 +1186,35 @@ body {
   box-shadow: var(--shadow-sm);
 }
 
+/*
+ * INVOICE-TAX-FLOW-01D — Trefferflächen der Steuerwahl.
+ *
+ * „19 % Regelbesteuerung" und „§19 Kleinunternehmer" sind ähnlich lang und
+ * lesen sich ähnlich. Auf einem Telefon landeten sie nebeneinander bzw. dicht
+ * untereinander — ein Fehlgriff war leicht möglich und blieb unbemerkt.
+ *
+ * Deshalb hier: eine Option pro Zeile, volle Breite, grösserer Abstand. Nur für
+ * die Steuerwahl, alle übrigen Chipgruppen der App bleiben unverändert.
+ */
+@media (max-width: 767px) {
+  .invoice-tax-decision .chip-group {
+    flex-direction: column;
+    gap: 0.65rem;
+  }
+
+  .invoice-tax-decision .chip {
+    width: 100%;
+    min-height: 48px;
+    text-align: left;
+  }
+}
+
+.invoice-tax-decision__selected {
+  margin: 0.75rem 0 0;
+  font-size: 0.9rem;
+  color: var(--color-text);
+}
+
 /* Data rows */
 .data-row {
   display: flex;
