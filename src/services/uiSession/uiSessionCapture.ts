@@ -166,23 +166,85 @@ export function captureAndPersistUiSession(input: CaptureUiSessionInput): UiSess
   return snapshot;
 }
 
-export function readMainScrollTop(): number {
-  if (typeof document === 'undefined') return 0;
+/**
+ * MOBILE-RESUME-STATE-02D — die Ebene, die tatsächlich scrollt.
+ *
+ * Bis hierher galt: Wenn `.app-shell__main` existiert, ist es der
+ * Scrollcontainer. Das Element existiert in der Shell immer — aber es scrollt
+ * nicht immer. Die Höhenkette `body → #root → .app-shell` arbeitet
+ * durchgehend mit `min-height`; nichts deckelt die Höhe. Bei Inhalt, der über
+ * den Viewport hinausgeht, wächst die Shell mit, `.app-shell__main` ist so hoch
+ * wie sein Inhalt, sein `overflow-y: auto` bleibt wirkungslos — und gescrollt
+ * wird das Dokument.
+ *
+ * Die Folge war beidseitig still: `readMainScrollTop` las `main.scrollTop` und
+ * bekam immer `0`, `applyMainScrollTop` klemmte auf `scrollHeight - clientHeight`,
+ * also ebenfalls `0`. Auf dem iPhone hiess das: Der ungespeicherte Entwurf kam
+ * nach einem Neuaufbau zurück, die Seite stand aber wieder ganz oben.
+ *
+ * Deshalb entscheidet jetzt **eine** Funktion über das Ziel, und Lesen wie
+ * Setzen benutzen sie. Was gemessen wurde, wird auf derselben Ebene wieder
+ * gesetzt — eine zweite, abweichende Annahme kann nicht mehr entstehen.
+ */
+type ScrollTarget =
+  | { kind: 'element'; element: HTMLElement }
+  | { kind: 'document'; element: Element | null };
+
+function resolveScrollTarget(): ScrollTarget | null {
+  if (typeof document === 'undefined') return null;
   const main = document.querySelector('.app-shell__main');
-  if (main instanceof HTMLElement) return main.scrollTop;
-  return window.scrollY || 0;
+  /*
+   * Nicht die Existenz entscheidet, sondern ob es überhaupt etwas zu scrollen
+   * gibt. Bleibt das Layout einmal so, dass `.app-shell__main` wirklich ein
+   * innerer Scrollbereich wird, greift dieser Zweig weiterhin.
+   */
+  if (main instanceof HTMLElement && main.scrollHeight > main.clientHeight) {
+    return { kind: 'element', element: main };
+  }
+  // `document.scrollingElement` ist die kanonische Dokumentebene der Plattform.
+  return { kind: 'document', element: document.scrollingElement ?? document.documentElement };
+}
+
+function readScrollTop(target: ScrollTarget): number {
+  if (target.kind === 'element') return target.element.scrollTop;
+  const fromElement = target.element?.scrollTop;
+  if (typeof fromElement === 'number' && fromElement > 0) return fromElement;
+  // Manche Umgebungen führen die Position nur am Fenster.
+  return typeof window !== 'undefined' ? window.scrollY || 0 : 0;
+}
+
+export function readMainScrollTop(): number {
+  const target = resolveScrollTarget();
+  if (!target) return 0;
+  return Math.max(0, readScrollTop(target));
 }
 
 export function applyMainScrollTop(top: number): void {
   if (typeof document === 'undefined') return;
   const clampApply = () => {
-    const main = document.querySelector('.app-shell__main');
-    if (main instanceof HTMLElement) {
-      const max = Math.max(0, main.scrollHeight - main.clientHeight);
-      main.scrollTop = Math.min(Math.max(0, top), max);
+    const target = resolveScrollTarget();
+    if (!target) return;
+    const wanted = Math.max(0, top);
+
+    if (target.kind === 'element') {
+      const max = Math.max(0, target.element.scrollHeight - target.element.clientHeight);
+      target.element.scrollTop = Math.min(wanted, max);
       return;
     }
-    window.scrollTo(0, Math.max(0, top));
+
+    /*
+     * Dokumentebene: Auf `scrollingElement` geklemmt, sofern dort belastbare
+     * Masse vorliegen. Ein `max` von 0 wird hier **nicht** als Grenze genommen
+     * — genau dieses falsche Klemmen war der zweite Teil des Fehlers.
+     */
+    const element = target.element;
+    if (element) {
+      const max = element.scrollHeight - element.clientHeight;
+      element.scrollTop = max > 0 ? Math.min(wanted, max) : wanted;
+      return;
+    }
+    // Nur wenn es keine Dokumentebene gibt — keine doppelte Anwendung.
+    if (typeof window !== 'undefined') window.scrollTo(0, wanted);
   };
   requestAnimationFrame(() => {
     requestAnimationFrame(clampApply);

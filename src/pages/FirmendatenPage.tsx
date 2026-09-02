@@ -18,6 +18,7 @@ import {
 import { uploadBrandingAsset } from '../services/branding/brandingAssetCloudService';
 import { getSyncClient } from '../services/sync/syncClientService';
 import { useCompanyLogoObjectUrl } from '../hooks/useCompanyLogoObjectUrl';
+import { useFormResume } from '../hooks/useFormResume';
 import type { BrandingProfile, LogoAssetReference, LogoMimeType } from '../types/branding';
 import { LOGO_MIME_TYPES } from '../types/branding';
 import type { CompanyProfile } from '../types/models';
@@ -95,10 +96,74 @@ function focusBackupSection(): void {
   }
 }
 
+/**
+ * MOBILE-RESUME-STATE-02B — genau diese Felder dürfen wiederaufgenommen werden.
+ *
+ * Eine ausdrückliche Liste, keine Ableitung aus dem Profil: `branding` ist ein
+ * geschlossener Unterblock mit eigenem Vertrag und hat in einem flachen
+ * Oberflächenzustand nichts zu suchen, `logoDataUrl` ist ein Altlastenbild.
+ * Was hier nicht steht, verlässt den Arbeitsspeicher nicht.
+ */
+const RESUMABLE_PROFILE_FIELDS = [
+  'companyName',
+  'legalForm',
+  'managingDirector',
+  'street',
+  'zip',
+  'city',
+  'country',
+  'contactPerson',
+  'phone',
+  'email',
+  'website',
+  'taxNumber',
+  'vatId',
+  'bankName',
+  'iban',
+  'bic',
+  'defaultPaymentDays',
+  'defaultPaymentTerms',
+  'defaultSkonto',
+  'skontoEnabled',
+  'skontoPercent',
+  'skontoDays',
+  'taxFreeNotice',
+  'invoiceFooterNotes',
+] as const satisfies readonly (keyof CompanyProfile & string)[];
+
+/**
+ * Das bereits hochgeladene, aber noch nicht gespeicherte Logo.
+ *
+ * Zwei einzeln benannte Primitive, kein serialisiertes Objekt. Ohne sie führt
+ * ein Neuaufbau nach einem gescheiterten Speicherversuch zu einem zweiten
+ * Upload — und da Assets unveränderlich und nicht löschbar sind, bliebe das
+ * erste für immer verwaist.
+ */
+const PENDING_LOGO_ASSET_KEY = 'pendingLogoAssetId';
+const PENDING_LOGO_MIME_KEY = 'pendingLogoMimeType';
+
 export function FirmendatenPage() {
   const { companyProfile, updateCompanyProfile, translate, showToast } = useApp();
   const location = useLocation();
-  const [draft, setDraft] = useState<CompanyProfile>(() => ({ ...companyProfile }));
+
+  const resume = useFormResume<CompanyProfile>({
+    namespace: 'companyProfile',
+    fields: RESUMABLE_PROFILE_FIELDS,
+    saved: companyProfile,
+    workspaceType: 'other',
+    extraKeys: [PENDING_LOGO_ASSET_KEY, PENDING_LOGO_MIME_KEY],
+  });
+
+  /*
+   * Der gespeicherte Stand ist die Grundlage; darüber liegen — nur wenn der
+   * Basisabgleich stimmt — die erlaubten ungespeicherten Werte. Die Struktur
+   * des Profils bleibt dabei vollständig, es werden ausschliesslich bekannte
+   * Felder überschrieben.
+   */
+  const [draft, setDraft] = useState<CompanyProfile>(() => ({
+    ...companyProfile,
+    ...resume.restored,
+  }));
   const [errorKey, setErrorKey] = useState<TranslationKey | null>(null);
   /*
    * Eigener Zustand: Ein Logo-Fehler darf einen offenen Firmendaten- oder
@@ -122,7 +187,26 @@ export function FirmendatenPage() {
    */
   const [selectedLogoFile, setSelectedLogoFile] = useState<File | null>(null);
   const [selectedLogoUrl, setSelectedLogoUrl] = useState<string | null>(null);
-  const [pendingLogoRef, setPendingLogoRef] = useState<LogoAssetReference | null>(null);
+  const [pendingLogoRef, setPendingLogoRef] = useState<LogoAssetReference | null>(() => {
+    const assetId = resume.restoredExtras[PENDING_LOGO_ASSET_KEY];
+    const mimeType = resume.restoredExtras[PENDING_LOGO_MIME_KEY];
+    // Nur ein vollständig gültiges Paar wird übernommen — nichts Halbes.
+    if (typeof assetId !== 'string' || !assetId.trim()) return null;
+    if (typeof mimeType !== 'string' || !isLogoMimeType(mimeType)) return null;
+    return { assetId, mimeType };
+  });
+
+  /*
+   * Der aktuelle Stand geht einmal je Render an die UI-Sitzung. `selectedLogoFile`
+   * und `selectedLogoUrl` bleiben bewusst draussen: Eine `File` lässt sich nach
+   * einem Neuaufbau nicht rekonstruieren, und eine vorgetäuschte Auswahl wäre
+   * schlimmer als gar keine. Fehlermeldungen ebenso wenig — sie entstehen bei
+   * der nächsten Prüfung neu.
+   */
+  resume.observe(draft, {
+    [PENDING_LOGO_ASSET_KEY]: pendingLogoRef?.assetId ?? null,
+    [PENDING_LOGO_MIME_KEY]: pendingLogoRef?.mimeType ?? null,
+  });
 
   const workspaceId = getSyncClient().serverWorkspaceId;
   const savedLogo = useCompanyLogoObjectUrl({
@@ -305,6 +389,12 @@ export function FirmendatenPage() {
     setPendingLogoRef(null);
     setLogoErrorKey(null);
     setDraft({ ...result.profile });
+    /*
+     * Der gespeicherte Stand ist jetzt die Wahrheit. Der Wiederaufnahmeentwurf
+     * wird verworfen, damit ein späterer Neuaufbau nicht die alten Werte
+     * darüberlegt — samt der Logo-Referenz, die nun im Profil steht.
+     */
+    resume.clearResume();
     if (!getLastPersistSuccess()) {
       showToast(translate('persist.failed.userAction'));
       return;
