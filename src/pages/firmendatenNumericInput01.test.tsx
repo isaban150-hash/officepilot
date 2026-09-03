@@ -431,3 +431,140 @@ describe('SKONTO-NUMERIC-INPUT-01B — Bausteine und Validator', () => {
     expect(badDays.valid).toBe(false);
   });
 });
+
+/**
+ * SKONTO-DUE-DATE-CONSISTENCY-01B — die Skontofrist darf das Zahlungsziel nicht
+ * überholen.
+ *
+ * Realbefund vom Gerät: gespeichert waren 7 Tage Zahlungsziel und 10 Tage
+ * Skontofrist. Die Rechnung bot damit einen Abzug für einen Zeitraum an, in dem
+ * die Forderung bereits fällig war. Jede der beiden Zahlen war für sich gültig —
+ * erst ihr Verhältnis ist der Fehler.
+ */
+describe('SKONTO-DUE-DATE-CONSISTENCY-01B — Frist gegen Zahlungsziel', () => {
+  function check(defaultPaymentDays: number, skontoDays: number, skontoEnabled = true) {
+    return validateCompanyProfileForSettings({
+      ...savedProfile,
+      defaultPaymentDays,
+      skontoEnabled,
+      skontoPercent: 2,
+      skontoDays,
+    });
+  }
+
+  // T1 — der Realbefund.
+  it('T1: 7 Tage Zahlungsziel und 10 Tage Skonto sind ungültig', () => {
+    const result = check(7, 10);
+    expect(result.valid).toBe(false);
+    expect(result.errors.skontoDays).toBe('companyProfile.skontoDaysExceedPaymentDays');
+    // Der Prozentsatz ist in Ordnung und wird nicht mitbeanstandet.
+    expect(result.errors.skontoPercent).toBeUndefined();
+  });
+
+  // T2 — der Normalfall: früher zahlen, Nachlass erhalten.
+  it('T2: 14 Tage Zahlungsziel und 10 Tage Skonto sind gültig', () => {
+    expect(check(14, 10).valid).toBe(true);
+  });
+
+  /*
+   * T3 — Gleichstand ist erlaubt.
+   *
+   * Ein Nachlass bis zum Fälligkeitstag ist wirtschaftlich schwach, aber nicht
+   * widersprüchlich. Ein `<`-Vergleich wäre hier zu streng.
+   */
+  it('T3: 10 Tage Zahlungsziel und 10 Tage Skonto sind gültig', () => {
+    expect(check(10, 10).valid).toBe(true);
+  });
+
+  // T4
+  it('T4: 1 Tag Zahlungsziel und 1 Tag Skonto sind gültig', () => {
+    expect(check(1, 1).valid).toBe(true);
+  });
+
+  /*
+   * T6 — Zahlungsziel 0 bedeutet „sofort fällig".
+   *
+   * Ein Skontozeitraum kann darin nicht liegen. Das ergibt sich ohne eigene
+   * Sonderregel aus `skontoDays >= 1`.
+   */
+  it('T6: aktiviertes Skonto bei Zahlungsziel 0 ist ungültig', () => {
+    const result = check(0, 1);
+    expect(result.valid).toBe(false);
+    expect(result.errors.skontoDays).toBe('companyProfile.skontoDaysExceedPaymentDays');
+  });
+
+  // T5 — ohne aktiviertes Skonto gibt es nichts zu vergleichen.
+  it('T5: bei ausgeschaltetem Skonto blockiert 7/10 nicht', () => {
+    expect(check(7, 10, false).valid).toBe(true);
+  });
+
+  // T7 — die Prozentregeln bleiben unverändert.
+  it('T7: Prozentsatz 0 und über 100 bleiben ungültig', () => {
+    const zero = validateCompanyProfileForSettings({
+      ...savedProfile,
+      skontoEnabled: true,
+      skontoPercent: 0,
+      skontoDays: 10,
+    });
+    expect(zero.errors.skontoPercent).toBe('companyProfile.skontoPercentInvalid');
+
+    const tooHigh = validateCompanyProfileForSettings({
+      ...savedProfile,
+      skontoEnabled: true,
+      skontoPercent: 120,
+      skontoDays: 10,
+    });
+    expect(tooHigh.errors.skontoPercent).toBe('companyProfile.skontoPercentInvalid');
+  });
+
+  /*
+   * T8 — die Untergrenze der Frist bleibt und behält ihre eigene Meldung.
+   *
+   * Bei `0` ist nicht das Verhältnis das Problem, sondern der Wert selbst.
+   */
+  it('T8: Skonto-Frist 0 meldet weiterhin die eigene Untergrenze', () => {
+    const result = check(14, 0);
+    expect(result.errors.skontoDays).toBe('companyProfile.skontoDaysInvalid');
+  });
+
+  // T9
+  it('T9: die bestehende Zahlungsziel-Prüfung bleibt unverändert', () => {
+    expect(validateCompanyProfileForSettings({ ...savedProfile, defaultPaymentDays: -1 }).valid)
+      .toBe(false);
+  });
+});
+
+describe('SKONTO-DUE-DATE-CONSISTENCY-01B — im Formular', () => {
+  // T10 — der Realbefund an der echten Seite.
+  it('T10: 7 Tage Zahlungsziel mit 10 Tagen Skonto blockiert das Speichern', async () => {
+    await renderPage();
+    await type(field('profile-payment-days'), '7');
+    await enableSkonto();
+    await type(field('profile-skonto-percent'), '7');
+    await type(field('profile-skonto-days'), '10');
+
+    const saveSpy = spyOnSave();
+    await submit();
+
+    expect(saveSpy).not.toHaveBeenCalled();
+    expect(host.textContent).toContain('Skonto-Frist darf nicht länger');
+  });
+
+  // T11
+  it('T11: 14 Tage Zahlungsziel mit 10 Tagen Skonto wird gespeichert', async () => {
+    await renderPage();
+    await type(field('profile-payment-days'), '14');
+    await enableSkonto();
+    await type(field('profile-skonto-percent'), '7');
+    await type(field('profile-skonto-days'), '10');
+
+    const saveSpy = spyOnSave();
+    await submit();
+
+    expect(saveSpy).toHaveBeenCalledTimes(1);
+    const payload = saveSpy.mock.calls[0]![0] as CompanyProfile;
+    expect(payload.defaultPaymentDays).toBe(14);
+    expect(payload.skontoDays).toBe(10);
+    expect(payload.skontoPercent).toBe(7);
+  });
+});

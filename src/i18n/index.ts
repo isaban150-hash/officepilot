@@ -119,6 +119,9 @@ const deLegacy = {
   'companyProfile.skontoPercentInvalid':
     'Skonto-Prozentsatz muss grösser als 0 und höchstens 100 sein.',
   'companyProfile.skontoDaysInvalid': 'Skonto-Frist muss mindestens 1 Tag betragen.',
+  /* SKONTO-DUE-DATE-CONSISTENCY-01B — beide Werte sind einzeln gültig, ihr Verhältnis nicht. */
+  'companyProfile.skontoDaysExceedPaymentDays':
+    'Die Skonto-Frist darf nicht länger als das Zahlungsziel sein.',
   'companyProfile.companyName': 'Firmenname',
   'companyProfile.legalForm': 'Rechtsform',
   'companyProfile.street': 'Straße',

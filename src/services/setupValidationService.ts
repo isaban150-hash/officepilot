@@ -139,6 +139,27 @@ function mergeSkontoErrors(
   }
   if (!Number.isFinite(days) || days <= 0) {
     errors.skontoDays = 'companyProfile.skontoDaysInvalid';
+  } else if (Number.isFinite(profile.defaultPaymentDays) && days > profile.defaultPaymentDays) {
+    /*
+     * SKONTO-DUE-DATE-CONSISTENCY-01B — die Frist darf das Zahlungsziel nicht
+     * überholen.
+     *
+     * Realbefund: gespeichert waren 7 Tage Zahlungsziel und 10 Tage Skontofrist.
+     * Die Rechnung versprach damit einen Abzug für einen Zeitraum, in dem die
+     * Forderung längst fällig war. Beide Zahlen waren für sich gültig; erst ihr
+     * Verhältnis ist der Fehler — deshalb steht die Prüfung hier, wo beide
+     * vorliegen, und nicht bei einem der Felder allein.
+     *
+     * Gleichstand ist erlaubt: Ein Nachlass bis zum Fälligkeitstag ist
+     * wirtschaftlich schwach, aber nicht widersprüchlich. Der Betrieb darf ihn
+     * wählen.
+     *
+     * Der Fehler hängt an `skontoDays`, weil die Frist die abhängige Grösse ist
+     * — das Zahlungsziel gilt für alle Rechnungen, das Skonto nur für dieses
+     * Angebot. Korrigieren kann der Nutzer trotzdem beides; automatisch wird
+     * nichts geändert.
+     */
+    errors.skontoDays = 'companyProfile.skontoDaysExceedPaymentDays';
   }
 
   return { valid: Object.keys(errors).length === 0, errors };
