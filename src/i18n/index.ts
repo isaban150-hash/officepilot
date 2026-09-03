@@ -115,6 +115,10 @@ const deLegacy = {
   'companyProfile.saved': 'Firmendaten gespeichert.',
   'companyProfile.nameRequired': 'Firmenname darf nicht leer sein.',
   'companyProfile.paymentDaysInvalid': 'Zahlungsziel muss eine gültige Zahl sein.',
+  /* SKONTO-NUMERIC-INPUT-01B — nur wenn Skonto ausdrücklich eingeschaltet ist. */
+  'companyProfile.skontoPercentInvalid':
+    'Skonto-Prozentsatz muss grösser als 0 und höchstens 100 sein.',
+  'companyProfile.skontoDaysInvalid': 'Skonto-Frist muss mindestens 1 Tag betragen.',
   'companyProfile.companyName': 'Firmenname',
   'companyProfile.legalForm': 'Rechtsform',
   'companyProfile.street': 'Straße',

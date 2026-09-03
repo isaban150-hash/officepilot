@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { PageHeader } from '../components/ui/Card';
+import { NumericInput } from '../components/ui/NumericInput';
 import { LanguageSwitcher } from '../components/settings/LanguageSwitcher';
 import { BackupExportPanel } from '../components/settings/BackupExportPanel';
 import { PilotHintsPanel } from '../components/settings/PilotHintsPanel';
@@ -438,13 +439,13 @@ export function FirmendatenPage() {
 
         <fieldset className="form-group">
           <label htmlFor="profile-payment-days">{translate('companyProfile.defaultPaymentDays')}</label>
-          <input
+          <NumericInput
             id="profile-payment-days"
-            type="number"
-            min="0"
+            mode="integer"
+            min={0}
             className="input"
             value={draft.defaultPaymentDays}
-            onChange={(e) => handleChange('defaultPaymentDays', Number(e.target.value) || 0)}
+            onChange={(next) => handleChange('defaultPaymentDays', next)}
           />
         </fieldset>
 
@@ -461,26 +462,25 @@ export function FirmendatenPage() {
             <div className="form-row">
               <div>
                 <label htmlFor="profile-skonto-percent">{translate('companyProfile.skontoPercent')}</label>
-                <input
+                <NumericInput
                   id="profile-skonto-percent"
-                  type="number"
-                  min="0"
-                  max="100"
-                  step="0.1"
+                  mode="decimal"
+                  min={0}
+                  max={100}
                   className="input"
                   value={draft.skontoPercent ?? 0}
-                  onChange={(e) => handleChange('skontoPercent', Number(e.target.value) || 0)}
+                  onChange={(next) => handleChange('skontoPercent', next)}
                 />
               </div>
               <div>
                 <label htmlFor="profile-skonto-days">{translate('companyProfile.skontoDays')}</label>
-                <input
+                <NumericInput
                   id="profile-skonto-days"
-                  type="number"
-                  min="1"
+                  mode="integer"
+                  min={1}
                   className="input"
                   value={draft.skontoDays ?? 0}
-                  onChange={(e) => handleChange('skontoDays', Number(e.target.value) || 0)}
+                  onChange={(next) => handleChange('skontoDays', next)}
                 />
               </div>
             </div>
