@@ -26,6 +26,12 @@ import {
 import { resolveCounterpartyFromWorkflow } from '../services/businessInterpretationFacts';
 import type { BusinessStructuredParty } from '../types/businessInterpretation';
 import { getCustomerById } from '../services/customerStoreService';
+import {
+  clearCustomerAssignmentDraft,
+  matchCustomerAssignmentDraft,
+  readCustomerAssignmentDraft,
+  writeCustomerAssignmentDraft,
+} from '../services/storage/customerAssignmentDraftService';
 import type { CustomerDecision } from '../services/customerService';
 import type { Customer } from '../types/models';
 import { LetterExplanationPanel } from '../components/inbox/LetterExplanationPanel';
@@ -344,6 +350,13 @@ export function EingangDetailPage() {
   const [intakeExecution, setIntakeExecution] = useState<WorkflowResultExecution | null>(null);
   const [isExecutingIntake, setIsExecutingIntake] = useState(false);
   const [isCreatingContractOrder, setIsCreatingContractOrder] = useState(false);
+  /*
+   * CONTRACT-CUSTOMER-ASSIGNMENT-RESUME-01B — gesetzt erst nach einem
+   * erfolgreichen produktiven Abschluss. Ein Validierungs- oder Speicherfehler
+   * lässt den Entwurf ausdrücklich stehen: Genau dann braucht der Nutzer seine
+   * Eingaben noch.
+   */
+  const [customerAssignmentDone, setCustomerAssignmentDone] = useState(false);
   const [deferredWorkflow, setDeferredWorkflow] = useState<WorkflowResult | null>(null);
   const [deferredStatus, setDeferredStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>(
     'idle',
@@ -353,35 +366,6 @@ export function EingangDetailPage() {
     useState<DocumentFieldFillFreeTextBridgeProposal | null>(null);
   const freeTextBridgeSeqRef = useRef(0);
 
-  useReportUiSession({
-    workspaceType: 'document_review',
-    activeSection: Object.entries(expandedSections).find(([, open]) => open)?.[0] ?? null,
-    panelState: {
-      deepWorkspaceOpen: false,
-      moreOptionsExpanded,
-      detailsOpen: Boolean(Object.values(expandedSections).some(Boolean)),
-      assistOpen: false,
-    },
-    expandedSections: Object.entries(expandedSections)
-      .filter(([, open]) => open)
-      .map(([key]) => key),
-    drafts: {
-      values: editDraft
-        ? {
-            sender: editDraft.sender,
-            deadline: editDraft.deadline,
-            vorgangTitle: editDraft.vorgangTitle,
-            priority: editDraft.priority,
-            digitalFolderPath: editDraft.digitalFolderPath,
-            digitalFolderName: editDraft.digitalFolderName,
-            paperFilingFolderId: editDraft.paperFilingFolderId,
-            paperFilingRegister: editDraft.paperFilingRegister,
-            recommendedAction: editDraft.recommendedAction,
-          }
-        : {},
-      dirty: Boolean(isEditing && editDraft),
-    },
-  });
 
   const [fillConfirmRows, setFillConfirmRows] = useState<DocumentFieldFillConfirmRow[]>(() => {
     const initial = id ? getInboxItemById(id) : undefined;
@@ -524,6 +508,17 @@ export function EingangDetailPage() {
     workflow?.contractOrderProposal,
   );
 
+  /**
+   * CONTRACT-CUSTOMER-ASSIGNMENT-RESUME-01D — der Entwurf hängt am Dokument.
+   *
+   * 01B legte ihn in den Schnappschuss der UI-Sitzung. Der besitzt genau einen
+   * Speicherplatz: Schon eine gescrollte Eingangsliste überschrieb ihn auf dem
+   * Weg zurück, und auf dem iPhone war nach „zurück und wieder öffnen" alles
+   * weg. Seitdem lebt er in einer eigenen, an Scope, Workspace und Dokument
+   * gebundenen Ablage — die UI-Sitzung trägt davon nichts mehr.
+   */
+  const customerDraftLocator = item?.id ? { itemId: item.id } : null;
+
   useEffect(() => {
     setCustomerMode(null);
     setSelectedCustomerId(null);
@@ -546,10 +541,127 @@ export function EingangDetailPage() {
       ),
     );
     setCustomerExtra(buildCustomerExtraFromParty(counterparty));
+
+    /*
+     * CONTRACT-CUSTOMER-ASSIGNMENT-RESUME-01B — ein gültiger Entwurf gewinnt.
+     *
+     * Er wird **nach** dem Ausgangsstand gesetzt, im selben Effektlauf: So
+     * entsteht kein sichtbares Wiederherstellen-und-sofort-Zurücksetzen. Passt
+     * der Ausgangsstand nicht mehr — anderes Dokument, neuer Auftragsvorschlag
+     * —, liefert `readCustomerAssignmentResume` `null`, und es bleibt beim
+     * frischen Vorschlag.
+     */
+    const match = customerDraftLocator
+      ? matchCustomerAssignmentDraft({
+          draft: readCustomerAssignmentDraft(customerDraftLocator),
+          contractDecisionKey,
+        })
+      : ({ ok: false, reason: 'missing' } as const);
+
+    if (match.ok) {
+      const draft = match.draft;
+      setCustomerMode(draft.mode);
+      /*
+       * Eine tote Kennung wird nicht wiederhergestellt: Der Kunde kann
+       * inzwischen gelöscht sein. Der Modus bleibt, die Auswahl wird leer —
+       * und es wird niemals ersatzweise ein anderer Kunde gewählt.
+       */
+      setSelectedCustomerId(
+        draft.selectedCustomerId && getCustomerById(draft.selectedCustomerId)
+          ? draft.selectedCustomerId
+          : null,
+      );
+      setNewCustomerName(draft.name);
+      setCustomerExtra({
+        contactPerson: draft.contactPerson,
+        street: draft.street,
+        zip: draft.zip,
+        city: draft.city,
+        email: draft.email,
+        phone: draft.phone,
+      });
+    }
+
     contractCreateLockRef.current = false;
     setIsCreatingContractOrder(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contractDecisionKey]);
+
+  /*
+   * CONTRACT-CUSTOMER-ASSIGNMENT-RESUME-01D — der Entwurf wird geschrieben,
+   * sobald eine Entscheidung vorliegt.
+   *
+   * Ohne gewählten Modus entsteht nichts; die blosse Auswahl „Neuer Kunde"
+   * genügt aber, auch wenn der vorgeschlagene Name unverändert bleibt. Nach
+   * einem erfolgreichen Abschluss wird nicht mehr geschrieben — dort ist der
+   * Datensatz bereits gelöscht, und ein erneutes Schreiben würde ihn
+   * wiederauferstehen lassen.
+   *
+   * Das ist ausdrücklich **kein** produktives Speichern: Es entsteht kein
+   * Kunde, kein Auftrag, keine Zuordnung und kein Cloud-Schreibvorgang.
+   */
+  useEffect(() => {
+    if (!customerDraftLocator || customerAssignmentDone) return;
+    if (!customerMode) return;
+    writeCustomerAssignmentDraft(customerDraftLocator, {
+      contractDecisionKey,
+      mode: customerMode,
+      selectedCustomerId: selectedCustomerId ?? '',
+      name: newCustomerName,
+      contactPerson: customerExtra.contactPerson,
+      street: customerExtra.street,
+      zip: customerExtra.zip,
+      city: customerExtra.city,
+      email: customerExtra.email,
+      phone: customerExtra.phone,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    customerAssignmentDone,
+    contractDecisionKey,
+    customerMode,
+    selectedCustomerId,
+    newCustomerName,
+    customerExtra,
+    item?.id,
+  ]);
+
+  useReportUiSession({
+    workspaceType: 'document_review',
+    activeSection: Object.entries(expandedSections).find(([, open]) => open)?.[0] ?? null,
+    panelState: {
+      deepWorkspaceOpen: false,
+      moreOptionsExpanded,
+      detailsOpen: Boolean(Object.values(expandedSections).some(Boolean)),
+      assistOpen: false,
+    },
+    expandedSections: Object.entries(expandedSections)
+      .filter(([, open]) => open)
+      .map(([key]) => key),
+    drafts: {
+      /*
+       * Zwei Entwürfe, ein Objekt: Der Metadaten-Entwurf und die
+       * Kundenzuordnung liegen nebeneinander; der eigene Namensraum
+       * `customerAssignment.` verhindert, dass einer den anderen überschreibt.
+       */
+      values: {
+        ...(editDraft
+          ? {
+              sender: editDraft.sender,
+              deadline: editDraft.deadline,
+              vorgangTitle: editDraft.vorgangTitle,
+              priority: editDraft.priority,
+              digitalFolderPath: editDraft.digitalFolderPath,
+              digitalFolderName: editDraft.digitalFolderName,
+              paperFilingFolderId: editDraft.paperFilingFolderId,
+              paperFilingRegister: editDraft.paperFilingRegister,
+              recommendedAction: editDraft.recommendedAction,
+            }
+          : {}),
+      },
+      dirty: Boolean(isEditing && editDraft),
+    },
+  });
 
   /**
    * CORE-REALTEST-BLOCKER-01D — ab hier beginnen die frühen Returns.
@@ -1128,6 +1240,9 @@ export function EingangDetailPage() {
         return;
       }
       setItem(result.inbox);
+      // Der Entwurf ist erledigt — er darf beim naechsten Oeffnen nicht wiederkommen.
+      setCustomerAssignmentDone(true);
+      if (customerDraftLocator) clearCustomerAssignmentDraft(customerDraftLocator);
       setIntakeExecution({
         completed: true,
         successSteps: result.successSteps,
