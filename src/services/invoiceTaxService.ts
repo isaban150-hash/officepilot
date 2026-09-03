@@ -37,17 +37,49 @@ export function buildLegalNotices(
   }
 }
 
+/**
+ * SKONTO-INVOICE-TEXT-01B — die strukturierten Felder sind die Wahrheit.
+ *
+ * Bis hierher hatte `defaultSkonto` Vorrang vor allem anderen. Das war eine
+ * stille Falle: `FirmendatenPage` leitet `defaultSkonto` selbst aus genau
+ * dieser Funktion ab, und weil sie den alten Text zurückgab, sobald er gefüllt
+ * war, blieb er nach einer Änderung von Prozentsatz oder Frist unverändert
+ * stehen. Wer von 2 % / 10 Tage auf 3 % / 14 Tage wechselte, behielt den alten
+ * Satz — in den Firmendaten und damit überall.
+ *
+ * Ein Eingabefeld für `defaultSkonto` gibt es heute nirgends; der Wert ist
+ * ausschliesslich abgeleitet. Deshalb gewinnen jetzt `skontoEnabled`,
+ * `skontoPercent` und `skontoDays`, und `defaultSkonto` bleibt nur noch das,
+ * was es faktisch ist: ein Bestandswert.
+ *
+ * Reihenfolge:
+ *  1. `skontoEnabled === false` — kein Skonto. Ein alter `defaultSkonto` darf
+ *     Skonto **niemals** wieder einschalten.
+ *  2. gültige strukturierte Felder — daraus wird der Satz gebildet.
+ *  3. Altbestand (`skontoEnabled` nicht gesetzt, aber `defaultSkonto` gefüllt)
+ *     — der gespeicherte Text bleibt erhalten, damit vorhandene Profile ihren
+ *     Satz nicht verlieren.
+ */
 export function buildSkontoText(profile: CompanyProfile): string {
-  if (profile.defaultSkonto.trim()) {
-    return profile.defaultSkonto.trim();
+  const legacyText = profile.defaultSkonto?.trim() ?? '';
+
+  if (profile.skontoEnabled === false) return '';
+
+  const percentValue = profile.skontoPercent ?? 0;
+  const daysValue = profile.skontoDays ?? 0;
+  if (profile.skontoEnabled === true && percentValue > 0 && daysValue > 0) {
+    const percent = Number.isInteger(percentValue)
+      ? String(percentValue)
+      : percentValue.toLocaleString('de-DE');
+    // „1 Tag", nicht „1 Tagen".
+    const days = daysValue === 1 ? '1 Tag' : `${daysValue} Tagen`;
+    return `Bei Zahlung innerhalb von ${days} gewähren wir ${percent} % Skonto.`;
   }
-  if (!profile.skontoEnabled || (profile.skontoPercent ?? 0) <= 0 || (profile.skontoDays ?? 0) <= 0) {
-    return '';
-  }
-  const percent = Number.isInteger(profile.skontoPercent ?? 0)
-    ? String(profile.skontoPercent ?? 0)
-    : (profile.skontoPercent ?? 0).toLocaleString('de-DE');
-  return `Bei Zahlung innerhalb von ${profile.skontoDays ?? 0} Tagen gewähren wir ${percent} % Skonto.`;
+
+  // Altbestand ohne gesetzten Schalter behält seinen gespeicherten Satz.
+  if (profile.skontoEnabled === undefined && legacyText) return legacyText;
+
+  return '';
 }
 
 export function getTaxStatusLabel(taxStatus: TaxStatus): string {

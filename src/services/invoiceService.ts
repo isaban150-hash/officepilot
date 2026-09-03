@@ -38,6 +38,7 @@ import {
 } from './invoiceCalculationMode';
 import {
   buildLegalNotices,
+  buildSkontoText,
   getTaxRateForStatus,
 } from './invoiceTaxService';
 import {
@@ -163,7 +164,19 @@ function buildDraftMetadata(
     servicePeriodTo: issueDate,
     paymentDueDate: addDays(issueDate, profile.defaultPaymentDays),
     paymentTermsText: buildDefaultPaymentTerms(profile),
-    skontoText: '',
+    /*
+     * SKONTO-INVOICE-TEXT-01B — der Firmenstandard kommt genau hier hinein.
+     *
+     * Zahlungsziel und Zahlungsbedingungen wurden schon immer aus dem Profil
+     * abgeleitet, Skonto als einziges nicht — ein Betrieb konnte 2 % / 10 Tage
+     * einrichten und bekam trotzdem eine Rechnung ohne Skontosatz.
+     *
+     * Der Wert wird **einmal** beim Aufbau des Entwurfs bestimmt und ist danach
+     * dessen eigener Stand. Es gibt bewusst keinen Effekt, der ihn bei einer
+     * späteren Profiländerung nachzieht: Der Entwurf gehört dem Zeitpunkt
+     * seiner Entstehung, und was der Nutzer hier ändert, bleibt geändert.
+     */
+    skontoText: buildSkontoText(profile),
     customerBilling: getVorgangCustomerBilling(vorgang),
     companySnapshot: profile,
     brandingSnapshot: freezeBrandingForInvoice(profile.branding),

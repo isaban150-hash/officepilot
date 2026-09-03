@@ -33,6 +33,7 @@ import { getActiveStorageScope } from '../services/storage/storageScopeService';
 import { buildPersistedStateSnapshot } from '../services/persistenceService';
 import { resolveCloudWorkspaceId } from '../services/workspace/workspaceSyncPayloadService';
 import { buildInvoicePrintModel } from '../services/invoicePrintModel';
+import { buildSkontoText } from '../services/invoiceTaxService';
 import {
   CONTRACT_ORDER_INVOICE_TYPES,
   getInvoiceDocumentTitle,
@@ -274,10 +275,37 @@ export function RechnungPage() {
     setCustomerMasterError(null);
   }, [id, invoiceType]);
 
+  /*
+   * SKONTO-INVOICE-TEXT-01B — die Vertragsauswahl schreibt nur noch, wenn sie
+   * sich tatsächlich ändert.
+   *
+   * Bis hierher lief dieser Effekt bei **jeder** Entwurfsänderung und setzte
+   * `skontoText` auf den Vertragstext oder auf den Leerstring. Zwei Folgen:
+   * Ein von Hand eingetragener Satz wurde beim nächsten Render gelöscht, und
+   * mit dem neuen Firmenstandard aus der Entwurfserzeugung wäre dieser sofort
+   * wieder verschwunden.
+   *
+   * Jetzt gilt: Ohne Vertragsangebot fasst der Effekt den Entwurf überhaupt
+   * nicht an. Mit Angebot wirkt er genau beim Umschalten — angenommen ergibt
+   * den Vertragstext, abgelehnt den Firmenstandard **dieses** Entwurfs, nicht
+   * den Leerstring.
+   *
+   * Der Firmenstandard stammt dabei aus `draft.companySnapshot`, also aus dem
+   * beim Aufbau eingefrorenen Profil. Eine spätere Änderung der Firmendaten
+   * verschiebt den Rückfallwert deshalb nicht — dafür braucht es kein neues
+   * Feld und keinen Herkunftsvermerk.
+   */
+  const lastContractChoiceRef = useRef<boolean | null>(null);
   useEffect(() => {
-    if (!draft || session.readOnly) return;
-    const skontoText =
-      applyContractSkonto && contractSkontoOffer ? contractSkontoOffer.text : '';
+    if (!draft || session.readOnly || !contractSkontoOffer) return;
+    if (lastContractChoiceRef.current === applyContractSkonto) return;
+    lastContractChoiceRef.current = applyContractSkonto;
+
+    const skontoText = applyContractSkonto
+      ? contractSkontoOffer.text
+      : draft.companySnapshot
+        ? buildSkontoText(draft.companySnapshot)
+        : '';
     if (draft.skontoText === skontoText) return;
     mutateDraft((prev) =>
       prev.skontoText === skontoText ? prev : updateInvoiceDraftMetadata(prev, { skontoText }),
