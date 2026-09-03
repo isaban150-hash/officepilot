@@ -132,7 +132,23 @@ export function DocumentReviewExperience({
 
   const primaryDisabled = !item.isAdvertisement && !workflow.companyRelevant;
 
-  const showContractProposal = Boolean(workflow.contractOrderProposal) && !executionResult?.completed;
+  /*
+   * CONTRACT-ORDER-ALREADY-LINKED-UX-01D — ein bereits erfasster Werkvertrag
+   * bietet die produktive Erfassung nicht erneut an.
+   *
+   * Die Entscheidung faellt an einer einzigen Stelle: `attachDocumentCaseMatch`
+   * zieht `accept_contract_order` zurueck, sobald das Dokument an einem Vorgang
+   * haengt. Bleibt die Aktion aus, darf auch die Auftragskarte nicht mehr
+   * erscheinen — sonst boete sie dieselbe Erfassung ein zweites Mal an, genau
+   * wie auf dem iPhone beobachtet.
+   *
+   * Der Auftragsvorschlag wird weiterhin berechnet und bleibt unangetastet.
+   */
+  const acceptOfferWithdrawn = summary.primaryAction.id !== 'accept_contract_order';
+  const showContractProposal =
+    Boolean(workflow.contractOrderProposal) &&
+    !executionResult?.completed &&
+    !acceptOfferWithdrawn;
   // Experience Card is the shared first paint for every family without an open proposal —
   // including contract/auftrag. Excluding family==='contract' left a lead-surface hole
   // (no Experience Card, no Auftragskarte, no legacy primary) when no proposal exists.

@@ -43,6 +43,30 @@ export function resolveConfirmedLinkCaseId(item: InboxItem): string | null {
   return getVorgangById(id) ? id : null;
 }
 
+/**
+ * CONTRACT-ORDER-ALREADY-LINKED-UX-01D — die persistente Wahrheit am Dokument.
+ *
+ * Bewusst schwaecher als `resolveConfirmedLinkCaseId`: Ein Werkvertrag, dessen
+ * Auftrag laengst existiert, traegt auf dem Geraet nicht zwingend einen
+ * `vorgangLinkStatus`. Fuer die Frage „darf hier ein **zweiter** Auftrag
+ * entstehen" genuegt `vorgangId` — ein noch nicht bestaetigter Auftrag ist
+ * trotzdem ein vorhandener Auftrag.
+ *
+ * `dangling` ist ausdruecklich **nicht** dasselbe wie `none`: Die Verknuepfung
+ * ist da, ihr Ziel fehlt. Das ist ein Pruefzustand und erst recht kein Grund
+ * fuer eine Neuanlage.
+ */
+export type PersistentVorgangLink =
+  | { state: 'none' }
+  | { state: 'linked'; caseId: string }
+  | { state: 'dangling'; caseId: string };
+
+export function resolvePersistentVorgangLink(item: InboxItem): PersistentVorgangLink {
+  const caseId = item.vorgangId?.trim();
+  if (!caseId) return { state: 'none' };
+  return getVorgangById(caseId) ? { state: 'linked', caseId } : { state: 'dangling', caseId };
+}
+
 export function primaryActionForCaseMatch(
   match: DocumentCaseMatch,
   options?: { confirmedLinkCaseId?: string | null },
@@ -83,7 +107,14 @@ export function primaryActionForCaseMatch(
 
 /**
  * Attach case match + (optionally) override primary CTA.
- * Never overrides Accept (contract order) — business path stays unchanged.
+ *
+ * Accept (contract order) bleibt die Primaeraktion, **solange das Dokument
+ * nicht bereits an einem Vorgang haengt**. Frueher galt der Schutz pauschal —
+ * damit ueberlebte „Als Auftrag erfassen" auch dann, wenn der Auftrag laengst
+ * existierte, und lud auf dem iPhone zur Doppelanlage ein.
+ *
+ * Ein blosser Treffer des Fallabgleichs (gleicher Kunde, gleiche Baustelle)
+ * aendert weiterhin nichts: Matching ist keine Verknuepfung.
  */
 export function attachDocumentCaseMatch(
   summary: DocumentSummary,
@@ -96,8 +127,10 @@ export function attachDocumentCaseMatch(
   const caseIdForSite =
     caseMatch.matchStatus === 'exact' && caseMatch.matchedCaseId ? caseMatch.matchedCaseId : null;
   const siteFromCase = caseIdForSite ? getVorgangById(caseIdForSite)?.baustelle?.trim() : '';
+  const persistentLink = resolvePersistentVorgangLink(item);
   const preservePrimary =
-    options?.preservePrimary === true || summary.primaryAction.id === 'accept_contract_order';
+    persistentLink.state === 'none' &&
+    (options?.preservePrimary === true || summary.primaryAction.id === 'accept_contract_order');
 
   const enrichedFacts =
     shouldBackfillSite && !hasSiteFact && siteFromCase
@@ -117,8 +150,15 @@ export function attachDocumentCaseMatch(
     caseMatch,
     primaryAction: preservePrimary
       ? summary.primaryAction
-      : primaryActionForCaseMatch(caseMatch, {
-          confirmedLinkCaseId: resolveConfirmedLinkCaseId(item),
-        }),
+      : persistentLink.state === 'dangling'
+        ? // Verknuepfung ohne Ziel: zuordnen statt anlegen — der Dialog ist der
+          // sichere Ausweg, eine Neuanlage waere hier der gefaehrlichste Weg.
+          { id: 'link_vorgang', labelKey: 'vorgangIntelligence.action.assign', enabled: true }
+        : // Wer den Vorgang ohne weitere Bestaetigung oeffnen darf, entscheidet
+          // weiterhin allein `resolveConfirmedLinkCaseId`. Die persistente
+          // Verknuepfung zieht die Erfassung zurueck — sie befoerdert nichts.
+          primaryActionForCaseMatch(caseMatch, {
+            confirmedLinkCaseId: resolveConfirmedLinkCaseId(item),
+          }),
   };
 }
