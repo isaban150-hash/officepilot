@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { OrderPositionForm } from '../components/vorgang/OrderPositionForm';
 import { DetailExperienceCard } from '../components/detail/DetailExperienceCard';
@@ -58,6 +58,8 @@ import { OrderPositionExecutedQuantityField } from '../components/vorgang/OrderP
 import {
   VorgangSectionNav,
   vorgangSectionPanelProps,
+  parseVorgangDetailSection,
+  VORGANG_SECTION_PARAM,
   type VorgangDetailSection,
 } from '../components/vorgang/VorgangSectionNav';
 import { OrderSummaryPanel } from '../components/vorgang/OrderSummaryPanel';
@@ -102,7 +104,7 @@ export function VorgangDetailPage() {
   const { translate, showToast } = useApp();
   const navigate = useNavigate();
   const restoredSession = useUiSessionRestore();
-  const skipChromeResetRef = useRef(Boolean(restoredSession));
+  const [searchParams, setSearchParams] = useSearchParams();
   const [vorgang, setVorgang] = useState<Vorgang | undefined>(() =>
     id ? getVorgangById(id) : undefined,
   );
@@ -135,8 +137,39 @@ export function VorgangDetailPage() {
   const [showDetails, setShowDetails] = useState(
     () => restoredSession?.panelState.detailsOpen ?? false,
   );
-  const [activeSection, setActiveSection] = useState<VorgangDetailSection>(
-    () => (restoredSession?.activeSection as VorgangDetailSection | undefined) ?? 'overview',
+  /*
+   * GLOBAL-WORKSPACE-CONTINUITY-01B — der Hauptbereich liegt in der Adresse.
+   *
+   * Vorher lebte er in `useState` und wurde aus der UI-Sitzung vorbelegt; ein
+   * Mount-Effekt setzte ihn danach über einen einmal verbrauchten Ref-Wächter
+   * wieder auf „Übersicht". Unter StrictMode läuft dieser Effekt zweimal — der
+   * gerade wiederhergestellte Tab überlebte exakt einen Lauf. Genau das war der
+   * auf dem iPhone beobachtete Rücksprung.
+   *
+   * Jetzt gilt eine Rangfolge ohne Zeitabhängigkeit:
+   *   1. ein gültiger Tab in der Adresse
+   *   2. ein gültiger Tab aus der Sitzung **dieses** Vorgangs
+   *   3. Übersicht
+   *
+   * Ein ausdrücklicher Tab in der Adresse gewinnt damit immer; ein Sitzungswert
+   * füllt nur die Lücke. Es gibt keinen Effekt mehr, der ihn zurücksetzt.
+   */
+  const urlSection = parseVorgangDetailSection(searchParams.get(VORGANG_SECTION_PARAM));
+  const sessionSection =
+    restoredSession && restoredSession.entityId === id
+      ? parseVorgangDetailSection(restoredSession.activeSection)
+      : null;
+  const activeSection: VorgangDetailSection = urlSection ?? sessionSection ?? 'overview';
+
+  const setActiveSection = useCallback(
+    (next: VorgangDetailSection) => {
+      const current = new URLSearchParams(searchParams);
+      if (current.get(VORGANG_SECTION_PARAM) === next) return;
+      current.set(VORGANG_SECTION_PARAM, next);
+      // Ein Bereichswechsel ist echte Navigation — Zurück/Vorwärts sollen ihn tragen.
+      setSearchParams(current);
+    },
+    [searchParams, setSearchParams],
   );
 
   useReportUiSession({
@@ -318,15 +351,19 @@ export function VorgangDetailPage() {
     }
   }, [id, vorgang?.status, vorgang?.invoices?.length]);
 
+  /*
+   * GLOBAL-WORKSPACE-CONTINUITY-01B — kein Zurücksetzen des Bereichs mehr.
+   *
+   * Der Bereich steht in der Adresse; ein Wechsel des Vorgangs bringt ohnehin
+   * eine neue Adresse mit und damit den dortigen Bereich. Der frühere
+   * `setActiveSection('overview')` war nicht nur überflüssig, sondern genau der
+   * Rücksprung — er ist ersatzlos entfallen. Was hier bleibt, ist das Laden der
+   * Daten und das Verwerfen seitenlokaler Eingaben beim Wechsel der Entität.
+   */
   useEffect(() => {
     refreshVorgang();
     refreshNotes();
-    if (skipChromeResetRef.current) {
-      skipChromeResetRef.current = false;
-      return;
-    }
     setShowDetails(false);
-    setActiveSection('overview');
     setNoteDraft('');
   }, [refreshVorgang, refreshNotes, id]);
 

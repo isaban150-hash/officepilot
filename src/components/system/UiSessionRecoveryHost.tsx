@@ -10,6 +10,7 @@ import {
   discardUiSessionRestore,
 } from '../../services/uiSession/uiSessionRestore';
 import { setPendingUiSessionApply } from '../../services/uiSession/uiSessionLiveState';
+import { buildUiSessionRouteKey } from '../../services/uiSession/uiSessionRoute';
 import {
   clearUiSessionSnapshot,
   loadUiSessionSnapshot,
@@ -46,6 +47,10 @@ export function UiSessionRecoveryHost() {
   const location = useLocation();
   const navigate = useNavigate();
   const bootRef = useRef<BootDecision | null>(null);
+  /** Der zuletzt entschiedene Arbeitsplatz — verhindert doppelte Entscheidungen. */
+  const decidedRouteKeyRef = useRef<string | null>(null);
+  /** Erst nach dem Commit angewandt, siehe Begründung an der Entscheidung. */
+  const chromeToApplyRef = useRef<UiSessionSnapshot | null>(null);
   /**
    * The host is not remounted on navigation, so a candidate must be captured
    * during render — the tracker effect runs afterwards and may overwrite the
@@ -70,23 +75,49 @@ export function UiSessionRecoveryHost() {
     return true;
   };
 
-  if (bootRef.current === null) {
+  /*
+   * GLOBAL-WORKSPACE-CONTINUITY-01B — entschieden wird jetzt je Arbeitsplatz,
+   * nicht mehr nur einmal beim Start.
+   *
+   * Vorher fiel die Entscheidung genau beim App-Boot. Wer innerhalb der App von
+   * Vorgang A nach B und zurück ging, bekam deshalb **nie** eine Wiederaufnahme
+   * — es gab keinen zweiten Entscheidungspunkt. Der Wächter hängt am
+   * Arbeitsplatzschlüssel und nicht am Renderlauf: Dieselbe Route entscheidet
+   * kein zweites Mal, eine Schleife kann also nicht entstehen.
+   */
+  const decisionRouteKey = buildUiSessionRouteKey(location.pathname, location.search);
+  if (decidedRouteKeyRef.current !== decisionRouteKey) {
+    decidedRouteKeyRef.current = decisionRouteKey;
     const decision = decideUiSessionRestore({
       userId: user?.id ?? null,
       currentPathname: location.pathname,
       currentSearch: location.search,
     });
+    const isBoot = bootRef.current === null;
     bootRef.current = {
       intent: decision.intent,
       snapshot: decision.snapshot,
     };
-    // Silent: stage pending apply before child pages mount/hydrate.
+    /*
+     * Still: den Zeiger noch im Render setzen, damit Kindseiten ihn beim ersten
+     * Rendern synchron abholen können.
+     *
+     * Das **Anwenden** des Chromes passiert dagegen erst im Effekt: Es
+     * benachrichtigt die Abonnenten sofort, und der Tracker würde dann mitten
+     * im Render mit seiner noch alten Adresse speichern — der Arbeitsstand der
+     * einen Seite landete unter dem Schlüssel der anderen. Genau das trat beim
+     * Wechsel zwischen zwei Vorgängen auf.
+     */
     if (decision.intent === 'silent' && decision.snapshot) {
       setPendingUiSessionApply(decision.snapshot);
-      applyUiSessionChrome(decision.snapshot);
+      chromeToApplyRef.current = decision.snapshot;
     }
-    // An upload draft offer must never be shown unvalidated, not even briefly.
-    if (decision.intent === 'offer') {
+    /*
+     * Die „Weiterarbeiten"-Karte bleibt eine Startentscheidung. Sie mitten in
+     * der Navigation einzublenden wäre eine neue, ungefragte Unterbrechung —
+     * dieser Block erweitert die stille Wiederaufnahme, nicht das Angebot.
+     */
+    if (isBoot && decision.intent === 'offer') {
       takeUploadCandidate(decision.snapshot);
     }
   }
@@ -115,6 +146,17 @@ export function UiSessionRecoveryHost() {
   }
 
   useUiSessionTracker();
+
+  /*
+   * GLOBAL-WORKSPACE-CONTINUITY-01B — Chrome und Scrollposition nach dem
+   * Commit anwenden, wenn Tracker und Adresse wieder übereinstimmen.
+   */
+  useEffect(() => {
+    const snapshot = chromeToApplyRef.current;
+    if (!snapshot) return;
+    chromeToApplyRef.current = null;
+    applyUiSessionChrome(snapshot);
+  });
 
   // Publish the render-time candidate into state without setState-in-render.
   useEffect(() => {

@@ -1,5 +1,10 @@
 import type { UiSessionRestoreIntent, UiSessionSnapshot } from '../../types/uiSessionSnapshot';
-import { clearUiSessionSnapshot, loadUiSessionSnapshot } from './uiSessionStore';
+import {
+  clearUiSessionSnapshot,
+  loadUiSessionSnapshot,
+  loadUiSessionSnapshotForRoute,
+  removeUiSessionSnapshot,
+} from './uiSessionStore';
 import { validateUiSessionSnapshot } from './uiSessionValidation';
 import {
   markContinueWorkingDismissed,
@@ -53,7 +58,18 @@ export function decideUiSessionRestore(input: {
   currentSearch: string;
   nowMs?: number;
 }): UiSessionBootstrapDecision {
-  const snapshot = loadUiSessionSnapshot();
+  /*
+   * GLOBAL-WORKSPACE-CONTINUITY-01B — zuerst der Arbeitsstand **dieses**
+   * Arbeitsplatzes, erst danach der zuletzt benutzte.
+   *
+   * Vorher gab es nur einen Platz; wer von Vorgang A nach B ging, verlor A. Die
+   * Reihenfolge hier ist der Grund, warum die Rückkehr jetzt trägt: Der Eintrag
+   * zur aktuellen Route führt zur stillen Wiederaufnahme, der zuletzt benutzte
+   * bleibt die Grundlage für „Weiterarbeiten" auf einer fremden Seite.
+   */
+  const snapshot =
+    loadUiSessionSnapshotForRoute(input.currentPathname, input.currentSearch) ??
+    loadUiSessionSnapshot();
   const result = validateUiSessionSnapshot(snapshot, {
     userId: input.userId,
     currentPathname: input.currentPathname,
@@ -62,8 +78,13 @@ export function decideUiSessionRestore(input: {
   });
 
   if (!result.ok || !snapshot) {
-    if (result.reason && result.reason !== 'missing' && result.reason !== 'trivial') {
-      clearUiSessionSnapshot();
+    /*
+     * Verworfen wird nur der geprüfte Eintrag, nicht die ganze Liste — ein
+     * abgelaufener Vorgang darf den Arbeitsstand einer anderen Seite nicht
+     * mitnehmen.
+     */
+    if (snapshot && result.reason && result.reason !== 'missing' && result.reason !== 'trivial') {
+      removeUiSessionSnapshot(snapshot);
     }
     return { intent: 'ignore', snapshot: null, reason: result.reason };
   }

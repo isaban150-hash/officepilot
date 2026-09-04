@@ -150,10 +150,46 @@ export function resolveUiSessionRouteContext(
   return base;
 }
 
+/**
+ * GLOBAL-WORKSPACE-CONTINUITY-01B — welche Suchparameter zur **Identität** eines
+ * Arbeitsplatzes gehören.
+ *
+ * Nur diese beiden benennen, *woran* gearbeitet wird: `type` unterscheidet
+ * Rechnung, Abschlag und Schlussrechnung desselben Vorgangs (es steckt im
+ * Entwurfs-Locator), `draft` benennt einen konkreten Upload-Entwurf.
+ *
+ * Alles andere — `vtab`, `step`, `from`, `auto` — ist Navigationszustand
+ * *innerhalb* desselben Arbeitsplatzes. Würde es in den Schlüssel eingehen,
+ * zerfiele eine Vorgangsseite in vier getrennte Arbeitsstände, und ein
+ * Tabwechsel liesse die Scrollposition des Nachbartabs auferstehen.
+ */
+export const UI_SESSION_IDENTITY_SEARCH_PARAMS = ['type', 'draft'] as const;
+
+/**
+ * Der stabile Schlüssel eines Arbeitsplatzes: Pfad plus identitätsstiftende
+ * Suchparameter in fester Reihenfolge.
+ */
+export function buildUiSessionRouteKey(pathname: string, search = ''): string {
+  const path = pathname || '/';
+  let params: URLSearchParams;
+  try {
+    params = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search);
+  } catch {
+    return path;
+  }
+  const identity = UI_SESSION_IDENTITY_SEARCH_PARAMS.map((name) => {
+    const value = params.get(name);
+    return value ? `${name}=${value}` : null;
+  }).filter((entry): entry is string => entry !== null);
+  return identity.length > 0 ? `${path}?${identity.join('&')}` : path;
+}
+
 export function routesMatch(
   a: { pathname: string; search: string },
   b: { pathname: string; search: string },
 ): boolean {
-  const norm = (s: string) => s.replace(/\?$/, '');
-  return a.pathname === b.pathname && norm(a.search) === norm(b.search);
+  return (
+    buildUiSessionRouteKey(a.pathname, a.search) ===
+    buildUiSessionRouteKey(b.pathname, b.search)
+  );
 }

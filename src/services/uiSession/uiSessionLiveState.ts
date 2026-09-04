@@ -3,6 +3,7 @@ import {
   type UiSessionLiveChrome,
   type UiSessionSnapshot,
 } from '../../types/uiSessionSnapshot';
+import { buildUiSessionRouteKey } from './uiSessionRoute';
 
 let liveChrome: UiSessionLiveChrome = createEmptyUiSessionLiveChrome();
 let pendingApply: UiSessionSnapshot | null = null;
@@ -56,9 +57,20 @@ export function getPendingUiSessionApply(): UiSessionSnapshot | null {
   return pendingApply;
 }
 
+/**
+ * GLOBAL-WORKSPACE-CONTINUITY-01B — verglichen wird der **Arbeitsplatz**, nicht
+ * die vollständige Adresse.
+ *
+ * Sonst verfehlte ein Schnappschuss von `/vorgaenge/A?vtab=order` die aktuelle
+ * Adresse `/vorgaenge/A` — obwohl es derselbe Arbeitsplatz ist und der Tab
+ * gerade aus dem Schnappschuss kommen soll.
+ */
 export function takePendingUiSessionApply(routeKey: string): UiSessionSnapshot | null {
   if (!pendingApply) return null;
-  const snapKey = `${pendingApply.route.pathname}${pendingApply.route.search}`;
+  const snapKey = buildUiSessionRouteKey(
+    pendingApply.route.pathname,
+    pendingApply.route.search,
+  );
   if (snapKey !== routeKey) return null;
   if (restoreConsumedKey === `${pendingApply.id}:${routeKey}`) return null;
   const snap = pendingApply;

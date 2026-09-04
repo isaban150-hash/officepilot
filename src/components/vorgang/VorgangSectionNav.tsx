@@ -4,6 +4,26 @@ export type VorgangDetailSection = 'overview' | 'order' | 'amendments' | 'invoic
 
 const SECTIONS: VorgangDetailSection[] = ['overview', 'order', 'amendments', 'invoices'];
 
+/**
+ * GLOBAL-WORKSPACE-CONTINUITY-01B — der Hauptbereich steht in der Adresse.
+ *
+ * Der Name folgt dem vorhandenen Stil kurzer, sprechender Parameter (`type`,
+ * `step`, `draft`, `area`). Die Werte sind die bereits vorhandenen Section-IDs
+ * — keine zweite Begriffswelt.
+ */
+export const VORGANG_SECTION_PARAM = 'vtab';
+
+/**
+ * Ein unbekannter Wert ist kein Fehler, sondern ein alter oder von Hand
+ * getippter Link: Er landet sicher auf der Übersicht, statt die Seite leer zu
+ * lassen.
+ */
+export function parseVorgangDetailSection(value: string | null): VorgangDetailSection | null {
+  return SECTIONS.includes(value as VorgangDetailSection)
+    ? (value as VorgangDetailSection)
+    : null;
+}
+
 const SECTION_LABEL_KEYS: Record<VorgangDetailSection, TranslationKey> = {
   overview: 'vorgang.section.overview',
   order: 'vorgang.section.order',
