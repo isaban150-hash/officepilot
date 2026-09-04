@@ -874,10 +874,22 @@ export function VorgangDetailPage() {
                       <Button
                         variant="ghost"
                         onClick={() => {
-                          if (window.confirm(translate('position.deleteConfirm'))) {
-                            const result = removeOrderPosition(vorgang.id, pos.id);
-                            if (result.success) setVorgang(result.vorgang);
+                          if (!window.confirm(translate('position.deleteConfirm'))) return;
+                          /*
+                           * ORDER-POSITION-EDIT-DELETE-PERSISTENCE-01B — dieser
+                           * Weg war bisher stumm: Bei fehlgeschlagener
+                           * Persistenz verschwand die Position aus der Anzeige
+                           * und kehrte nach dem Neustart zurueck, ohne dass der
+                           * Nutzer je einen Hinweis sah. Der Dienst stellt den
+                           * vorherigen Stand jetzt selbst wieder her; hier wird
+                           * er nur noch sichtbar gemacht.
+                           */
+                          const result = removeOrderPosition(vorgang.id, pos.id);
+                          if (!result.success) {
+                            showToast(translate(result.errorKey as TranslationKey));
+                            return;
                           }
+                          setVorgang(result.vorgang);
                         }}
                       >
                         {translate('position.delete')}

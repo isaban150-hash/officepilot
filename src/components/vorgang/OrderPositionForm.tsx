@@ -13,7 +13,6 @@ import {
   removeOrderPosition,
   updateOrderPosition,
 } from '../../services/vorgangService';
-import { getLastPersistSuccess } from '../../services/persistenceService';
 import type {
   OrderPosition,
   OrderPositionCategory,
@@ -125,23 +124,20 @@ export function OrderPositionForm({
     }
 
     /*
-     * ORDER-POSITION-CREATE-PERSIST-01B — beim Anlegen ist die dauerhafte
-     * Speicherung Bestandteil des Erfolgs (`addOrderPosition` rollt bei
-     * fehlgeschlagener Persistenz zurueck). Ein Fehler landet deshalb oben im
-     * `!result.success`-Zweig: Das Modal bleibt offen, die Eingaben bleiben
-     * stehen, und der Nutzer sieht, woran es lag. Vorher schloss sich das Modal
-     * zuerst und der Fehler war nur ein fluechtiger Toast.
+     * ORDER-POSITION-EDIT-DELETE-PERSISTENCE-01B — die dauerhafte Speicherung
+     * ist jetzt fuer **beide** Modi Bestandteil des Erfolgs: `addOrderPosition`
+     * und `updateOrderPosition` rollen bei fehlgeschlagener Persistenz zurueck
+     * und melden `success: false`.
      *
-     * Fuer `edit` bleibt die bisherige Nachpruefung unveraendert — dieser Block
-     * fasst `updateOrderPosition` nicht an.
+     * Ein Fehler landet deshalb oben im `!result.success`-Zweig: Das Modal
+     * bleibt offen, die Eingaben bleiben stehen, und der Nutzer sieht, woran es
+     * lag. Die frühere Nachpruefung mit `getLastPersistSuccess()` entfaellt —
+     * sie war ein zweiter, widerspruechlicher Persistenzanzeiger, der erst nach
+     * dem Schliessen des Modals griff.
      */
     onSaved(result.vorgang);
     onClose();
-    if (mode === 'add' || getLastPersistSuccess()) {
-      showToast(translate('position.saved'));
-    } else {
-      showToast(translate('persist.failed.userAction'));
-    }
+    showToast(translate('position.saved'));
   };
 
   const handleDelete = () => {
@@ -154,13 +150,10 @@ export function OrderPositionForm({
       return;
     }
 
+    // Ebenso beim Loeschen: Erfolg heisst dauerhaft entfernt.
     onSaved(result.vorgang);
     onClose();
-    if (!getLastPersistSuccess()) {
-      showToast(translate('persist.failed.userAction'));
-    } else {
-      showToast(translate('position.deleted'));
-    }
+    showToast(translate('position.deleted'));
   };
 
   const titleKey =

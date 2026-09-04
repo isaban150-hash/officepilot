@@ -1961,29 +1961,58 @@ export function updateOrderPosition(
     }
   }
 
-  const next: OrderPosition = {
-    ...current,
-    description:
-      changes.description !== undefined
-        ? normalizeDescription(changes.description)
-        : current.description,
-    plannedQuantity: changes.plannedQuantity ?? current.plannedQuantity,
-    unit: changes.unit ?? current.unit,
-    unitPrice: changes.unitPrice ?? current.unitPrice,
-    category: changes.category ?? current.category,
-    billable: changes.billable ?? current.billable,
-  };
+  const next = mergeOrderPositionChanges(current, changes);
 
   const validationError = validateOrderPositionInput(next, billedQuantity);
   if (validationError) return { success: false, errorKey: validationError };
 
-  const updated = cloneVorgang(vorgang);
-  updated.orderPositions = [
-    ...updated.orderPositions.slice(0, index),
-    next,
-    ...updated.orderPositions.slice(index + 1),
-  ];
-  return { success: true, vorgang: updateVorgangInStore(updated) };
+  /*
+   * ORDER-POSITION-EDIT-DELETE-PERSISTENCE-01B — Erfolg heisst dauerhaft
+   * gespeichert, genau wie beim Anlegen.
+   *
+   * Vorher lief das Ändern über `updateVorgangInStore`: Das ruft `persistAll()`
+   * auf, **prüft dessen Ergebnis aber nicht** und meldet in jedem Fall Erfolg.
+   * Die Oberfläche zeigte den neuen Wert, der Speicher behielt den alten — nach
+   * dem Reload war die Änderung fort.
+   *
+   * Die Zusammenführung geschieht bewusst **innerhalb** des Commits, aus dem
+   * dort gelieferten aktuellen Vorgang. Ein vorab erzeugter Schnappschuss würde
+   * zwischenzeitliche Änderungen an anderen Feldern desselben Vorgangs
+   * überschreiben.
+   */
+  const committed = commitVorgangMutation(vorgangId, (currentVorgang) => {
+    const at = currentVorgang.orderPositions.findIndex((p) => p.id === positionId);
+    if (at === -1) return { errorKey: 'position.notFound' };
+    return {
+      ...currentVorgang,
+      orderPositions: [
+        ...currentVorgang.orderPositions.slice(0, at),
+        mergeOrderPositionChanges(currentVorgang.orderPositions[at]!, changes),
+        ...currentVorgang.orderPositions.slice(at + 1),
+      ],
+    };
+  });
+  if (!committed.ok) return { success: false, errorKey: committed.errorKey };
+  return { success: true, vorgang: committed.vorgang };
+}
+
+/** Ein Feld bleibt, was es war, solange die Änderung es nicht ausdrücklich nennt. */
+function mergeOrderPositionChanges(
+  base: OrderPosition,
+  changes: Partial<OrderPositionInput>,
+): OrderPosition {
+  return {
+    ...base,
+    description:
+      changes.description !== undefined
+        ? normalizeDescription(changes.description)
+        : base.description,
+    plannedQuantity: changes.plannedQuantity ?? base.plannedQuantity,
+    unit: changes.unit ?? base.unit,
+    unitPrice: changes.unitPrice ?? base.unitPrice,
+    category: changes.category ?? base.category,
+    billable: changes.billable ?? base.billable,
+  };
 }
 
 export function removeOrderPosition(
@@ -2002,9 +2031,21 @@ export function removeOrderPosition(
     return { success: false, errorKey: 'position.deleteBlocked' };
   }
 
-  const updated = cloneVorgang(vorgang);
-  updated.orderPositions = updated.orderPositions.filter((p) => p.id !== positionId);
-  return { success: true, vorgang: updateVorgangInStore(updated) };
+  /*
+   * ORDER-POSITION-EDIT-DELETE-PERSISTENCE-01B — dieselbe Zusicherung wie beim
+   * Ändern. Eine Position, die aus der Anzeige verschwindet und nach dem
+   * Neustart zurückkehrt, ist die gefährlichste Form dieses Fehlers: Der Nutzer
+   * hält den Auftrag für aufgeräumt.
+   *
+   * Gefiltert wird aus dem im Commit gelieferten aktuellen Vorgang, nicht aus
+   * einem vorab gelesenen Schnappschuss.
+   */
+  const committed = commitVorgangMutation(vorgangId, (currentVorgang) => ({
+    ...currentVorgang,
+    orderPositions: currentVorgang.orderPositions.filter((p) => p.id !== positionId),
+  }));
+  if (!committed.ok) return { success: false, errorKey: committed.errorKey };
+  return { success: true, vorgang: committed.vorgang };
 }
 
 export type VorgangCardMode = 'none' | 'create' | 'link' | 'open';
