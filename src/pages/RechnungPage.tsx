@@ -86,6 +86,37 @@ function isRechnungStep(value: string | null): value is RechnungStep {
 }
 
 /**
+ * CONTRACT-SKONTO-DUE-DATE-CONSISTENCY-01B — Kalendertage zwischen zwei reinen
+ * Datumsangaben.
+ *
+ * Bewusst über `Date.UTC`: Beide Werte sind Datumsangaben ohne Uhrzeit. Würde
+ * man sie lokal parsen und mit `getDate`/`setDate` rechnen, hinge das Ergebnis
+ * an Zeitzone und Sommerzeit — westlich von UTC käme ein Tag zu wenig heraus.
+ * Zwei UTC-Mitternachten lassen sich dagegen exakt subtrahieren.
+ *
+ * `null` heisst „nicht bestimmbar". Der Aufrufer rät dann **nicht**, sondern
+ * unterlässt die Übernahme; die Prüfung ungültiger Rechnungsdaten bleibt Sache
+ * der bestehenden Freigabevalidierung.
+ */
+export function calendarDaysBetween(fromIso: string, toIso: string): number | null {
+  const from = parseIsoDateUtc(fromIso);
+  const to = parseIsoDateUtc(toIso);
+  if (from === null || to === null) return null;
+  return Math.round((to - from) / 86_400_000);
+}
+
+function parseIsoDateUtc(value: string): number | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value?.trim() ?? '');
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  const stamp = Date.UTC(year, month - 1, day);
+  return Number.isFinite(stamp) ? stamp : null;
+}
+
+/**
  * INVOICE-TAX-FLOW-01B/01D — die eine Steuerregel, jetzt an einer Stelle.
  *
  * Sie entscheidet, ob die Steuerentscheidung abgeschlossen ist: `unclear` ist
@@ -184,6 +215,11 @@ export function RechnungPage() {
   const [step, setStep] = useState<RechnungStep>('positions');
   const [showOverbillingConfirm, setShowOverbillingConfirm] = useState(false);
   const [applyContractSkonto, setApplyContractSkonto] = useState(false);
+  /*
+   * Reiner Darstellungszustand: „Der Nutzer hat die Übernahme versucht."
+   * Nichts davon geht in den Entwurf, in die Cloud oder in die Wiederaufnahme.
+   */
+  const [contractSkontoAttemptBlocked, setContractSkontoAttemptBlocked] = useState(false);
   const [reverseCharge13bConfirmed, setReverseCharge13bConfirmed] = useState(false);
   const [approving, setApproving] = useState(false);
   const [customerMasterConfirm, setCustomerMasterConfirm] = useState(false);
@@ -299,7 +335,38 @@ export function RechnungPage() {
   useEffect(() => {
     if (!draft || session.readOnly || !contractSkontoOffer) return;
     if (lastContractChoiceRef.current === applyContractSkonto) return;
+
+    /*
+     * CONTRACT-SKONTO-DUE-DATE-CONSISTENCY-01B — ein Vertragsskonto, das länger
+     * läuft als das Zahlungsziel dieser Rechnung, wird nicht übernommen.
+     *
+     * Verglichen wird gegen das **tatsächliche** Ziel des Entwurfs, also gegen
+     * `paymentDueDate` minus `issueDate` — nicht gegen den eingefrorenen
+     * Firmenwert. Wer das Fälligkeitsdatum bereits geändert hat, soll an seiner
+     * eigenen Rechnung gemessen werden, nicht an einer Einstellung.
+     *
+     * Blockiert wird nur der Übernahmeversuch. Zahlungsziel, Angebot und ein
+     * bereits vorhandener Skontotext bleiben unangetastet; OfficePilot
+     * entscheidet nicht, welche der beiden Konditionen gewinnt.
+     */
+    if (applyContractSkonto) {
+      const dueDays = calendarDaysBetween(draft.issueDate, draft.paymentDueDate);
+      if (dueDays === null || contractSkontoOffer.days > dueDays) {
+        /*
+         * Der Wächter wird auf `false` gesetzt, **bevor** die Auswahl
+         * zurückgenommen wird. Dadurch steigt der folgende Effektlauf gleich am
+         * Identitätsvergleich aus und schreibt nichts — der vorhandene Text
+         * überlebt den gescheiterten Versuch unverändert.
+         */
+        lastContractChoiceRef.current = false;
+        setApplyContractSkonto(false);
+        setContractSkontoAttemptBlocked(true);
+        return;
+      }
+    }
+
     lastContractChoiceRef.current = applyContractSkonto;
+    setContractSkontoAttemptBlocked(false);
 
     const skontoText = applyContractSkonto
       ? contractSkontoOffer.text
@@ -408,6 +475,26 @@ export function RechnungPage() {
    * Beides wird jetzt vorne abgefangen. Die bestehenden Freigabe- und
    * Finalize-Prüfungen bleiben unverändert bestehen; sie sind die zweite Linie.
    */
+  /*
+   * CONTRACT-SKONTO-DUE-DATE-CONSISTENCY-01B — der Hinweis wird abgeleitet,
+   * nicht gemerkt.
+   *
+   * Er erscheint nur, solange der Nutzer die Übernahme versucht hat **und** der
+   * Widerspruch noch besteht. Verlängert er anschliessend das Zahlungsziel,
+   * verschwindet der Hinweis von selbst — ohne zusätzlichen Effekt und ohne
+   * Sackgasse.
+   */
+  const contractSkontoDueDays =
+    draft && contractSkontoOffer
+      ? calendarDaysBetween(draft.issueDate, draft.paymentDueDate)
+      : null;
+  const contractSkontoConflict =
+    contractSkontoAttemptBlocked &&
+    contractSkontoOffer != null &&
+    (contractSkontoDueDays === null || contractSkontoOffer.days > contractSkontoDueDays)
+      ? { dueDays: contractSkontoDueDays ?? 0 }
+      : null;
+
   const taxDecisionBlockKey: TranslationKey | null =
     draft == null ? null : taxDecisionBlocker(draft.taxStatus, reverseCharge13bConfirmed);
   const taxDecisionSettled = taxDecisionBlockKey === null;
@@ -982,6 +1069,13 @@ export function RechnungPage() {
                     .replace('{days}', String(contractSkontoOffer.days))}
                 </button>
               </div>
+              {contractSkontoConflict ? (
+                <p className="hint-text" data-testid="invoice-skonto-due-conflict">
+                  {translate('invoice.skontoFromContractTooLong')
+                    .replace('{days}', String(contractSkontoOffer.days))
+                    .replace('{dueDays}', String(contractSkontoConflict.dueDays))}
+                </p>
+              ) : null}
             </Card>
           )}
 

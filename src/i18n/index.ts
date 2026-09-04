@@ -2038,6 +2038,14 @@ const deLegacy = {
   'invoice.skontoFromContractTitle': 'Skonto aus Vertrag übernehmen?',
   'invoice.skontoFromContractNo': 'Nein',
   'invoice.skontoFromContractYes': 'Ja, {percent} % innerhalb von {days} Tagen',
+  /*
+   * CONTRACT-SKONTO-DUE-DATE-CONSISTENCY-01B — neutral formuliert: Welche der
+   * beiden Konditionen falsch ist, entscheidet der Betrieb, nicht OfficePilot.
+   * Entscheidend ist der zweite Satz — sonst hält der Nutzer das Skonto für
+   * angewandt.
+   */
+  'invoice.skontoFromContractTooLong':
+    'Das Vertragsskonto mit {days} Tagen ist länger als das aktuelle Zahlungsziel dieser Rechnung ({dueDays} Tage). Es wurde nicht übernommen. Bitte prüfen Sie die Zahlungsbedingungen.',
   'invoice.applyAllPositions': 'Alle Positionen vollständig übernehmen',
   'invoice.progressBillingContractHint': 'Im Vertrag sind Abschlagsrechnungen vorgesehen.',
   'invoice.previousAbschlag': 'Bisherige Abschläge',

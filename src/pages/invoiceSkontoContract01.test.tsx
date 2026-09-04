@@ -21,7 +21,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { AppProvider } from '../context/AppContext';
 import { DEFAULT_SETUP } from '../data/mockData';
 import { DEFAULT_COMPANY_PROFILE } from '../data/companyProfileDefaults';
-import { RechnungPage } from './RechnungPage';
+import { RechnungPage, calendarDaysBetween } from './RechnungPage';
 import { createAuftragInboxItem } from '../test/fixtures';
 import {
   buildSyntheticWerkvertragPages,
@@ -239,5 +239,178 @@ describe('SKONTO-INVOICE-TEXT-01B — Vertragsskonto und Firmenstandard', () => 
     const preview = (host.textContent ?? '').replace(/\s+/g, ' ');
     expect(preview).toContain(manual);
     expect(preview).not.toContain(COMPANY_SKONTO);
+  });
+});
+
+/**
+ * CONTRACT-SKONTO-DUE-DATE-CONSISTENCY-01B — ein Vertragsskonto, das länger
+ * läuft als das Zahlungsziel dieser Rechnung, wird nicht übernommen.
+ *
+ * Der Erkenner liefert heute 2 % / 14 Tage. Steht das Zahlungsziel darunter,
+ * verspräche die Übernahme einen Abzug für einen Zeitraum, in dem die Forderung
+ * längst fällig ist. OfficePilot entscheidet dabei **nicht**, welche Kondition
+ * gewinnt — es stellt den Widerspruch fest und überlässt die kaufmännische
+ * Entscheidung dem Betrieb.
+ */
+describe('CONTRACT-SKONTO-DUE-DATE-CONSISTENCY-01B — Frist gegen Zahlungsziel', () => {
+  /** Das Zahlungsziel der Rechnung entsteht aus dem Firmenprofil. */
+  function withPaymentDays(days: number): void {
+    hydrateCompanyProfileStore({ ...company, defaultPaymentDays: days });
+  }
+
+  function contractTextNormalized(): string {
+    return contractText.replace(/\s+/g, ' ');
+  }
+
+  // T14 — die reine Tagesrechnung, unabhängig von Zeitzone und Sommerzeit.
+  it('T14: Kalendertage werden über UTC gezählt', () => {
+    expect(calendarDaysBetween('2026-09-01', '2026-09-08')).toBe(7);
+    // Beide mitteleuropäischen Zeitumstellungen 2026.
+    expect(calendarDaysBetween('2026-03-28', '2026-03-29')).toBe(1);
+    expect(calendarDaysBetween('2026-10-24', '2026-10-25')).toBe(1);
+    expect(calendarDaysBetween('2026-09-01', '2026-09-01')).toBe(0);
+    expect(calendarDaysBetween('', '2026-09-01')).toBeNull();
+    expect(calendarDaysBetween('2026-09-01', 'morgen')).toBeNull();
+  });
+
+  /*
+   * T1 / T12 — der Kern.
+   *
+   * Zahlungsziel 7 Tage, Vertragsskonto 14 Tage: Die Übernahme unterbleibt, und
+   * der bereits vorhandene Firmenstandard überlebt den Versuch unverändert.
+   */
+  it('T1/T12: 7 Tage Zahlungsziel nimmt 14 Tage Vertragsskonto nicht an', async () => {
+    withPaymentDays(7);
+    await renderPage();
+
+    await click(find('invoice-skonto-yes')!);
+
+    const preview = await skontoInPreview();
+    expect(preview).toContain(COMPANY_SKONTO);
+    expect(preview).not.toContain(contractTextNormalized());
+  });
+
+  // Der Hinweis nennt beide Zahlen und sagt ausdrücklich, dass nichts gilt.
+  it('T1b: der Hinweis benennt Frist, Zahlungsziel und die Nichtübernahme', async () => {
+    withPaymentDays(7);
+    await renderPage();
+    await click(find('invoice-skonto-yes')!);
+
+    const hint = find('invoice-skonto-due-conflict');
+    expect(hint, 'Konflikthinweis fehlt').not.toBeNull();
+    const text = hint!.textContent ?? '';
+    expect(text).toContain('14');
+    expect(text).toContain('7');
+    expect(text).toContain('nicht übernommen');
+  });
+
+  // Nach einem blockierten Versuch darf die Auswahl nicht als erfolgreich wirken.
+  it('T1c: die Auswahl kehrt sichtbar auf Nein zurück', async () => {
+    withPaymentDays(7);
+    await renderPage();
+    await click(find('invoice-skonto-yes')!);
+
+    expect(find('invoice-skonto-yes')?.className).not.toContain('chip--active');
+    expect(find('invoice-skonto-no')?.className).toContain('chip--active');
+  });
+
+  // T2
+  it('T2: 20 Tage Zahlungsziel nimmt das Vertragsskonto an', async () => {
+    withPaymentDays(20);
+    await renderPage();
+    await click(find('invoice-skonto-yes')!);
+
+    expect(find('invoice-skonto-due-conflict')).toBeNull();
+    expect(await skontoInPreview()).toContain(contractTextNormalized());
+  });
+
+  // T3 — Gleichstand ist gültig; verglichen wird mit `>`, nicht mit `>=`.
+  it('T3: 14 Tage Zahlungsziel und 14 Tage Vertragsskonto sind zulässig', async () => {
+    withPaymentDays(14);
+    await renderPage();
+    await click(find('invoice-skonto-yes')!);
+
+    expect(find('invoice-skonto-due-conflict')).toBeNull();
+    expect(await skontoInPreview()).toContain(contractTextNormalized());
+  });
+
+  // T5 — sofort fällig lässt keinen Skontozeitraum zu.
+  it('T5: Zahlungsziel 0 Tage nimmt das Vertragsskonto nicht an', async () => {
+    withPaymentDays(0);
+    await renderPage();
+    await click(find('invoice-skonto-yes')!);
+
+    expect(find('invoice-skonto-due-conflict')).not.toBeNull();
+    expect(await skontoInPreview()).not.toContain(contractTextNormalized());
+  });
+
+  /*
+   * T10 / T11 — es wird nichts automatisch verändert.
+   *
+   * Das Fälligkeitsdatum bleibt sieben Tage nach dem Rechnungsdatum, und das
+   * Angebot selbst behält Prozentsatz und Frist.
+   */
+  it('T10/T11: Fälligkeitsdatum und Angebot bleiben beim Konflikt unverändert', async () => {
+    withPaymentDays(7);
+    await renderPage();
+    const offerBefore = find('invoice-skonto-yes')?.textContent;
+
+    await click(find('invoice-skonto-yes')!);
+    expect(find('invoice-skonto-yes')?.textContent).toBe(offerBefore);
+
+    await click(find('invoice-continue-preview')!);
+    await click(find('invoice-edit')!);
+    const dates = Array.from(host.querySelectorAll('input[type="date"]')) as HTMLInputElement[];
+    expect(calendarDaysBetween(dates[0]!.value, dates.at(-1)!.value)).toBe(7);
+  });
+
+  /*
+   * T13 — der Konflikt ist auflösbar.
+   *
+   * Nach Verlängerung des Fälligkeitsdatums verschwindet der Hinweis von selbst
+   * und die Übernahme gelingt. Keine Sackgasse.
+   */
+  it('T13: nach Verlängerung des Zahlungsziels gelingt die Übernahme', async () => {
+    withPaymentDays(7);
+    await renderPage();
+    await click(find('invoice-skonto-yes')!);
+    expect(find('invoice-skonto-due-conflict')).not.toBeNull();
+
+    await click(find('invoice-continue-preview')!);
+    await click(find('invoice-edit')!);
+    const dates = Array.from(host.querySelectorAll('input[type="date"]')) as HTMLInputElement[];
+    const issue = dates[0]!.value;
+    const dueField = dates.at(-1)!;
+    const extended = new Date(
+      Date.UTC(
+        Number(issue.slice(0, 4)),
+        Number(issue.slice(5, 7)) - 1,
+        Number(issue.slice(8, 10)) + 30,
+      ),
+    )
+      .toISOString()
+      .slice(0, 10);
+
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(
+        dueField,
+        extended,
+      );
+      dueField.dispatchEvent(new Event('input', { bubbles: true }));
+      dueField.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      await act(async () => {
+        await new Promise((done) => setTimeout(done, 0));
+      });
+    }
+
+    await click(find('invoice-back-preview')!);
+    await click(find('invoice-back-positions')!);
+
+    expect(find('invoice-skonto-due-conflict')).toBeNull();
+    await click(find('invoice-skonto-yes')!);
+    expect(find('invoice-skonto-due-conflict')).toBeNull();
+    expect(await skontoInPreview()).toContain(contractTextNormalized());
   });
 });
