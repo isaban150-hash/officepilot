@@ -34,6 +34,14 @@ import { buildPersistedStateSnapshot } from '../services/persistenceService';
 import { resolveCloudWorkspaceId } from '../services/workspace/workspaceSyncPayloadService';
 import { buildInvoicePrintModel } from '../services/invoicePrintModel';
 import { buildSkontoText } from '../services/invoiceTaxService';
+/* INVOICE-WIZARD-FULL-SAFE-RESUME-01B — sichere Bedienzustände nach Neuaufbau. */
+import { useUiSessionRestore } from '../hooks/useUiSessionRestore';
+import { useReportUiSession } from '../hooks/useReportUiSession';
+import { applyMainScrollTop } from '../services/uiSession/uiSessionCapture';
+import {
+  buildInvoiceWizardResumeValues,
+  readInvoiceWizardContractSkontoChoice,
+} from '../services/uiSession/invoiceWizardResume';
 import {
   CONTRACT_ORDER_INVOICE_TYPES,
   getInvoiceDocumentTitle,
@@ -226,6 +234,22 @@ export function RechnungPage() {
   const [customerMasterError, setCustomerMasterError] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<TranslationKey[]>([]);
   const [validationWarnings, setValidationWarnings] = useState<TranslationKey[]>([]);
+  /*
+   * INVOICE-WIZARD-FULL-SAFE-RESUME-01B — der Schnappschuss der letzten Sitzung.
+   *
+   * Er wird genau einmal beim Mount entnommen; der Wiederaufnahme-Host hat ihn
+   * bereits während seines Renderns bereitgestellt. Die Scrollposition wendet
+   * diese Seite selbst an — erst wenn der Entwurf steht, sonst träfe sie eine
+   * noch kurze Seite.
+   */
+  const restoredSession = useUiSessionRestore({ deferScroll: true });
+  /*
+   * Der Wächter gegen Schreiben-vor-Wiederherstellen: Solange dieser Wert
+   * `false` ist, darf kein Effekt aus `applyContractSkonto` Entwurfswerte
+   * ableiten. Ohne ihn deutete der Ausgangswert `false` beim Neuaufbau als
+   * frische Ablehnung und überschrieb den gespeicherten Skontotext.
+   */
+  const [contractChoiceRestored, setContractChoiceRestored] = useState(false);
   const approveLockRef = useRef(false);
 
   const vorgang = id ? getVorgangById(id) : undefined;
@@ -334,6 +358,8 @@ export function RechnungPage() {
   const lastContractChoiceRef = useRef<boolean | null>(null);
   useEffect(() => {
     if (!draft || session.readOnly || !contractSkontoOffer) return;
+    // FULL-SAFE-RESUME-01B — erst wiederherstellen, dann schreiben.
+    if (!contractChoiceRestored) return;
     if (lastContractChoiceRef.current === applyContractSkonto) return;
 
     /*
@@ -377,7 +403,108 @@ export function RechnungPage() {
     mutateDraft((prev) =>
       prev.skontoText === skontoText ? prev : updateInvoiceDraftMetadata(prev, { skontoText }),
     );
-  }, [applyContractSkonto, contractSkontoOffer, draft, mutateDraft, session.readOnly]);
+  }, [
+    applyContractSkonto,
+    contractChoiceRestored,
+    contractSkontoOffer,
+    draft,
+    mutateDraft,
+    session.readOnly,
+  ]);
+
+  /*
+   * INVOICE-WIZARD-FULL-SAFE-RESUME-01B — die Bedienentscheidung kommt zurück,
+   * die Wahrheit bleibt der Entwurf.
+   *
+   * Wiederhergestellt wird ausschliesslich „Vertragsskonto ja/nein" — der
+   * einzige sichere Zustand dieser Seite, der nicht ohnehin im `InvoiceDraft`
+   * liegt. Mengen, Steuerart, Datumswerte und Skontotext kommen unverändert von
+   * dort; sie werden hier weder gelesen noch geschrieben.
+   *
+   * Die Auswahl wird **nicht** aus `draft.skontoText` erraten. Ein Freitext ist
+   * keine Entscheidung: Wer denselben Satz von Hand tippt, hat nichts gewählt.
+   *
+   * Ein gespeichertes „Ja" gilt nur weiter, wenn der Vertrag derselbe ist und
+   * das aktuelle Zahlungsziel es heute noch trägt. Der Guard aus
+   * CONTRACT-SKONTO-DUE-DATE-CONSISTENCY-01B bleibt massgeblich und wird hier
+   * nur gelesen — Fälligkeit, Angebot und vorhandener Text bleiben unangetastet.
+   */
+  const draftIdentity = locator
+    ? `${locator.sourceScopeKey}#${locator.workspaceId}#${locator.vorgangId}#${locator.invoiceType}`
+    : '';
+
+  useEffect(() => {
+    if (contractChoiceRestored) return;
+    if (!isHydrationSettled(sessionStatus) || !draft) return;
+
+    const restored = readInvoiceWizardContractSkontoChoice(restoredSession, {
+      draftIdentity,
+      offer: contractSkontoOffer,
+    });
+
+    if (restored === 'yes' && contractSkontoOffer) {
+      const dueDays = calendarDaysBetween(draft.issueDate, draft.paymentDueDate);
+      if (dueDays !== null && contractSkontoOffer.days <= dueDays) {
+        /*
+         * Der Wächter wird mitgesetzt: Der Vertragstext steht bereits im
+         * Entwurf, es gibt nichts zu schreiben.
+         */
+        lastContractChoiceRef.current = true;
+        setApplyContractSkonto(true);
+        setContractChoiceRestored(true);
+        return;
+      }
+    }
+
+    /*
+     * Alles andere — keine Sitzung, „Nein", ein anderer Vertrag oder ein heute
+     * zu kurzes Zahlungsziel — bleibt beim Ausgangszustand. Entscheidend ist,
+     * dass der Wächter dabei den **tatsächlichen** Stand übernimmt: Sonst
+     * verstünde der Skonto-Effekt den Ausgangswert als frische Ablehnung und
+     * ersetzte den gespeicherten Text durch den Firmenstandard.
+     */
+    lastContractChoiceRef.current = applyContractSkonto;
+    setContractChoiceRestored(true);
+  }, [
+    applyContractSkonto,
+    contractChoiceRestored,
+    contractSkontoOffer,
+    draft,
+    draftIdentity,
+    restoredSession,
+    sessionStatus,
+  ]);
+
+  /*
+   * Gemeldet wird nur die Bedienentscheidung samt ihrer Identität — kein
+   * fachlicher Rechnungswert und ausdrücklich keine Bestätigung. Die
+   * §13b-Bestätigung bleibt flüchtig.
+   */
+  useReportUiSession({
+    workspaceType: 'invoice',
+    activeSection: step,
+    drafts: {
+      values: buildInvoiceWizardResumeValues({
+        draftIdentity,
+        offer: contractSkontoOffer,
+        choice: applyContractSkonto ? 'yes' : 'no',
+      }),
+      dirty: false,
+    },
+  });
+
+  /*
+   * Die Scrollposition zuletzt: erst wenn Entwurf und Auswahl stehen, hat die
+   * Seite ihre endgültige Höhe. Früher angewandt würde sie am Seitenende
+   * geklemmt — genau der Sprung, über den Nutzer klagen.
+   */
+  const scrollAppliedRef = useRef(false);
+  useEffect(() => {
+    if (scrollAppliedRef.current || !restoredSession) return;
+    if (!contractChoiceRestored || !isHydrationSettled(sessionStatus)) return;
+    scrollAppliedRef.current = true;
+    applyMainScrollTop(restoredSession.scroll.mainTop);
+  }, [contractChoiceRestored, restoredSession, sessionStatus]);
 
   /*
    * Eine unterbrochene Finalisierung wird genau **einmal** wiederaufgenommen —
