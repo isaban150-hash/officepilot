@@ -11,6 +11,7 @@ import type { InboxItem } from '../types/models';
 import { buildDocumentCaseMatch } from './documentCaseMatchService';
 import { resolveWorkflowActionForCaseMatch } from './documentPrimaryTargetResolver';
 import { getVorgangById, isInboxLinkedToVorgang } from './vorgangService';
+import { isFinanceReferenceOnlyKind } from './documentFinanceReferenceService';
 
 const REASON_LABEL_KEYS: Record<DocumentCaseMatchReasonId, TranslationKey> = {
   same_customer: 'vorgangIntelligence.reason.sameCustomer',
@@ -128,9 +129,43 @@ export function attachDocumentCaseMatch(
     caseMatch.matchStatus === 'exact' && caseMatch.matchedCaseId ? caseMatch.matchedCaseId : null;
   const siteFromCase = caseIdForSite ? getVorgangById(caseIdForSite)?.baustelle?.trim() : '';
   const persistentLink = resolvePersistentVorgangLink(item);
+
+  /*
+   * DOCUMENT-INVOICE-PRIMARY-ACTION-01B — der Fallabgleich ergaenzt, er ersetzt
+   * nicht.
+   *
+   * Eine Lieferantenrechnung bot bis hierher „Neuen Vorgang anlegen" statt
+   * „Als Ausgabe erfassen": Der Fallabgleich ueberschrieb die Hauptaktion der
+   * Dokumentfamilie, und geschuetzt war allein `accept_contract_order`.
+   *
+   * Fachlich falsch — der Vorgangsbezug einer Ausgabe ist ein Feld der Ausgabe
+   * (`Expense.allocations`). Er setzt ihre Erfassung **voraus**, statt sie zu
+   * ersetzen; ohne `Expense` gibt es nichts zuzuordnen. Der Schutz gilt deshalb
+   * unabhaengig vom Trefferzustand und auch bei bestehender Verknuepfung.
+   *
+   * Gebunden an die tatsaechliche Hauptaktion, nicht an eine Familienliste:
+   * `invoice_in` enthaelt ueber `documentType` auch Belege und Bezugsdokumente,
+   * waehrend `tankbeleg` eine eigene Familie ist. `record_expense` ist das
+   * genauere Merkmal.
+   */
+  const isReferenceOnlyDocument = isFinanceReferenceOnlyKind(summary.documentKind);
+  /*
+   * Die eine Ausnahme: Mahnung und Zahlungserinnerung tragen wegen ihres
+   * `documentType` dieselbe Familie wie echte Rechnungen, verweisen aber nur
+   * auf einen bereits vorhandenen Beleg. Bekaemen sie hierueber die
+   * Erfassungsaktion zurueck, unterliefe eine Darstellungsentscheidung die
+   * Sperren aus DOCUMENT-ACCOUNTING-REFERENCE-SAFETY-01B — und aus einer
+   * Mahnung entstuende wieder eine zweite Verbindlichkeit. Die Wahrheit
+   * darueber liegt bewusst an genau einer Stelle; hier steht keine zweite Liste.
+   */
+  const keepFinancePrimary =
+    summary.primaryAction.id === 'record_expense' && !isReferenceOnlyDocument;
+
   const preservePrimary =
-    persistentLink.state === 'none' &&
-    (options?.preservePrimary === true || summary.primaryAction.id === 'accept_contract_order');
+    keepFinancePrimary ||
+    (persistentLink.state === 'none' &&
+      (options?.preservePrimary === true ||
+        summary.primaryAction.id === 'accept_contract_order'));
 
   const enrichedFacts =
     shouldBackfillSite && !hasSiteFact && siteFromCase

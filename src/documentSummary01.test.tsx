@@ -220,8 +220,19 @@ describe('DOCUMENT-SUMMARY-IMPLEMENTATION-01', () => {
     expect(resolveDocumentSummaryFamily(item, workflow)).toBe('invoice_in');
     const summary = buildDocumentSummary(item, workflow, { translate });
     assertCardLimits(summary);
-    // VORGANG-INTELLIGENCE: presentation primary follows case match (none → create).
-    expect(summary.primaryAction.id).toBe('create_vorgang');
+    /*
+     * DOCUMENT-INVOICE-PRIMARY-ACTION-01B — hier stand bis zu diesem Block
+     * `create_vorgang` mit der Begründung „presentation primary follows case
+     * match (none → create)". Genau diese Regel war der Realfehler: Eine
+     * Lieferantenrechnung bot „Neuen Vorgang anlegen" an, und die
+     * Ausgabenerfassung verschwand.
+     *
+     * Die Erwartung ist deshalb umgekehrt, nicht abgeschwächt: Der
+     * Vorgangsbezug einer Ausgabe ist ein Feld der Ausgabe und setzt ihre
+     * Erfassung voraus. Der Fallabgleich bleibt als `caseMatch` erhalten — die
+     * Zeile darunter prüft ihn unverändert.
+     */
+    expect(summary.primaryAction.id).toBe('record_expense');
     expect(summary.caseMatch?.matchStatus).toBe('none');
     expect(summary.facts.map((f) => f.id)).toEqual(
       expect.arrayContaining(['supplier', 'invoiceNumber', 'amount', 'date']),
