@@ -124,12 +124,23 @@ export function OrderPositionForm({
       return;
     }
 
+    /*
+     * ORDER-POSITION-CREATE-PERSIST-01B — beim Anlegen ist die dauerhafte
+     * Speicherung Bestandteil des Erfolgs (`addOrderPosition` rollt bei
+     * fehlgeschlagener Persistenz zurueck). Ein Fehler landet deshalb oben im
+     * `!result.success`-Zweig: Das Modal bleibt offen, die Eingaben bleiben
+     * stehen, und der Nutzer sieht, woran es lag. Vorher schloss sich das Modal
+     * zuerst und der Fehler war nur ein fluechtiger Toast.
+     *
+     * Fuer `edit` bleibt die bisherige Nachpruefung unveraendert — dieser Block
+     * fasst `updateOrderPosition` nicht an.
+     */
     onSaved(result.vorgang);
     onClose();
-    if (!getLastPersistSuccess()) {
-      showToast(translate('persist.failed.userAction'));
-    } else {
+    if (mode === 'add' || getLastPersistSuccess()) {
       showToast(translate('position.saved'));
+    } else {
+      showToast(translate('persist.failed.userAction'));
     }
   };
 

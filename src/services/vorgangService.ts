@@ -1829,9 +1829,24 @@ export function addOrderPosition(
     billable: input.billable ?? true,
   };
 
-  const updated = cloneVorgang(vorgang);
-  updated.orderPositions = [...updated.orderPositions, position];
-  return { success: true, vorgang: updateVorgangInStore(updated) };
+  /*
+   * ORDER-POSITION-CREATE-PERSIST-01B — Erfolg heisst dauerhaft gespeichert.
+   *
+   * Vorher lief das Anlegen ueber `updateVorgangInStore`: Das ruft `persistAll()`
+   * auf, **prueft dessen Ergebnis aber nicht** und meldet in jedem Fall Erfolg.
+   * Auf dem iPhone blieb die Position damit im Arbeitsspeicher haengen; nach dem
+   * Reload war sie weg, obwohl das Modal sich zufrieden geschlossen hatte.
+   *
+   * `commitVorgangMutation` traegt genau diesen Vertrag bereits: ein
+   * Commit-Punkt, und bei fehlgeschlagener Persistenz faellt der vorherige
+   * Zeilenstand zurueck. Damit entsteht kein Phantomstand.
+   */
+  const committed = commitVorgangMutation(vorgangId, (current) => ({
+    ...current,
+    orderPositions: [...current.orderPositions, position],
+  }));
+  if (!committed.ok) return { success: false, errorKey: committed.errorKey };
+  return { success: true, vorgang: committed.vorgang };
 }
 
 /**
