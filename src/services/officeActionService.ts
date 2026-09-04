@@ -10,6 +10,10 @@ import type { ExpenseInput } from '../types/expense';
 import { getClassificationForItem } from './documentClassificationService';
 import { mapClassifiedKindToExpenseCategory } from './expenseCategoryMapping';
 import { addExpense, getAllExpenses } from './expenseService';
+import {
+  isFinanceReferenceOnlyKind,
+  resolveDocumentFinanceReference,
+} from './documentFinanceReferenceService';
 import { getInboxItemById, patchInboxItem } from './inboxService';
 import { buildInvoiceCreatePath } from './invoiceNavigation';
 import { createTaskForItem } from './inboxTaskService';
@@ -139,7 +143,41 @@ export function buildExpenseInputFromInbox(
   };
 }
 
+/**
+ * DOCUMENT-ACCOUNTING-REFERENCE-SAFETY-01B — der sichere Weg für Dokumente, die
+ * auf einen bestehenden Beleg **verweisen**.
+ *
+ * Eine Mahnung ist kein Beleg. Sie erinnert an einen, der bereits existiert.
+ * Bis hierher landete „Zahlung prüfen" auf `createExpenseFromInbox` und legte
+ * eine zweite Verbindlichkeit an — eine stille finanzielle Änderung ohne
+ * Bestätigung. Der Weg endet jetzt in der Ansicht des gefundenen Belegs oder,
+ * wenn nichts eindeutig ist, in der Dokumentprüfung. Angelegt wird nichts.
+ */
+function openFinanceReferenceForInbox(item: InboxItem): OfficeActionResult {
+  const match = resolveDocumentFinanceReference(item);
+  if (
+    (match.status === 'exact' || match.status === 'already_linked') &&
+    match.matched
+  ) {
+    return { ok: true, kind: 'navigate', route: `/ausgaben/${match.matched.targetId}` };
+  }
+  // Alles Uneindeutige bleibt beim Dokument: prüfen, nicht buchen.
+  return { ok: true, kind: 'delegate', delegate: 'expandDetails' };
+}
+
 export function createExpenseFromInbox(item: InboxItem): OfficeActionResult {
+  /*
+   * Zweite Verteidigungslinie: Selbst wenn ein noch unbekannter Aufrufer diesen
+   * Weg für ein Bezugsdokument wählt, entsteht keine Ausgabe.
+   */
+  /*
+   * Zweite Verteidigungslinie: Selbst wenn ein noch unbekannter Aufrufer diesen
+   * Weg für ein Bezugsdokument wählt, entsteht keine Ausgabe.
+   */
+  if (isFinanceReferenceOnlyKind(resolveClassifiedKind(item))) {
+    return openFinanceReferenceForInbox(item);
+  }
+
   const input = buildExpenseInputFromInbox(item);
 
   if (!input.grossAmount) {
@@ -195,6 +233,16 @@ export function isDocumentActionAvailable(
     case 'monitor_validity':
       return Boolean(item.taskTemplate) || (kind ? isClassificationKindWithTasks(kind) : false);
     case 'record_expense':
+      /*
+       * Ein Bezugsdokument bietet die Ausgabenanlage gar nicht erst an — sonst
+       * bliebe der gefährliche Weg als Schaltfläche sichtbar. „Zahlung prüfen"
+       * bleibt verfügbar und führt zur Belegprüfung.
+       */
+      if (isFinanceReferenceOnlyKind(kind)) return false;
+      return (
+        primaryTarget === 'expense' ||
+        (kind ? mapClassifiedKindToExpenseCategory(kind) !== 'sonstiges' : false)
+      );
     case 'check_payment':
       return (
         primaryTarget === 'expense' ||
@@ -267,6 +315,14 @@ export function executeDocumentAction(
       return { ok: false, errorKey: 'intake.positionsNeedsVorgang' };
     case 'check_payment':
     case 'record_expense':
+      /*
+       * DOCUMENT-ACCOUNTING-REFERENCE-SAFETY-01B — „Zahlung prüfen" heisst
+       * prüfen, nicht buchen. Beide Aktionen führten bisher in dieselbe
+       * Ausgabenanlage; für Bezugsdokumente ist das der belegte Fehler.
+       */
+      if (isFinanceReferenceOnlyKind(classifiedKind)) {
+        return openFinanceReferenceForInbox(item);
+      }
       return createExpenseFromInbox(item);
     case 'archive':
       return { ok: true, kind: 'delegate', delegate: 'importArchive' };
@@ -384,6 +440,10 @@ export function executeScanResultAction(actionId: string, item: InboxItem): Offi
       }
       return { ok: false, errorKey: 'vorgang.notFound' };
     case 'payment':
+      // Derselbe Schutz auf dem Vertrags-Aktionsweg.
+      if (isFinanceReferenceOnlyKind(resolveClassifiedKind(item))) {
+        return openFinanceReferenceForInbox(item);
+      }
       return createExpenseFromInbox(item);
     case 'review':
       return { ok: true, kind: 'delegate', delegate: 'expandDetails' };

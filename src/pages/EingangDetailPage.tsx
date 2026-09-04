@@ -52,6 +52,12 @@ import type { DocumentFieldFillConfirmRow } from '../types/documentFieldFillConf
 import type { DocumentFieldFillFreeTextBridgeProposal } from '../types/documentFieldFillFreeTextBridge';
 import { CollapsibleReviewSection } from '../components/inbox/review/CollapsibleReviewSection';
 import { DocumentReviewExperience } from '../components/inbox/review/DocumentReviewExperience';
+import { DocumentFinanceReferencePanel } from '../components/inbox/DocumentFinanceReferencePanel';
+import {
+  confirmDocumentFinanceReference,
+  isFinanceReferenceOnlyKind,
+  resolveDocumentFinanceReference,
+} from '../services/documentFinanceReferenceService';
 import {
   createEditDraftFromItem,
   InboxItemEditForm,
@@ -1692,6 +1698,38 @@ export function EingangDetailPage() {
     </div>
   );
 
+  /*
+   * DOCUMENT-ACCOUNTING-REFERENCE-SAFETY-01B — Mahnung und Zahlungserinnerung
+   * verweisen auf einen bestehenden Beleg. Statt einer Erfassungsaktion zeigt
+   * die Seite, welcher Beleg gemeint ist und wie er dasteht. Verknüpft wird
+   * erst nach ausdrücklicher Bestätigung; gebucht wird hier nie.
+   */
+  const financeReferenceKind = isFinanceReferenceOnlyKind(
+    workflow?.classifiedKind ?? item.classifiedKind,
+  );
+  const financeReferenceMatch = financeReferenceKind
+    ? resolveDocumentFinanceReference(item)
+    : null;
+  const financeReferencePanel = financeReferenceMatch ? (
+    <DocumentFinanceReferencePanel
+      match={financeReferenceMatch}
+      translate={translate}
+      onOpenTarget={(targetId) => navigate(`/ausgaben/${targetId}`)}
+      onConfirmLink={(targetId) => {
+        const result = confirmDocumentFinanceReference(item.id, {
+          targetType: 'expense',
+          targetId,
+        });
+        if (!result.ok) {
+          showToast(translate('financeReference.conflict'));
+          return;
+        }
+        setItem(result.item);
+        showToast(translate('financeReference.linked'));
+      }}
+    />
+  ) : null;
+
   const reviewExperience = (
     <DocumentReviewExperience
       item={item}
@@ -1753,7 +1791,7 @@ export function EingangDetailPage() {
       onLinkVorgang={() => setVorgangDialogRequest((n) => n + 1)}
       onCreateTask={handleCreateTask}
       moreOptionsContent={moreOptionsContent}
-      beforeMoreOptions={null}
+      beforeMoreOptions={financeReferencePanel}
       experienceDetailsExtra={experienceDetailsExtra}
       letterExplanation={letterExplanation}
       translate={translate}

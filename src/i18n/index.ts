@@ -1949,6 +1949,25 @@ const deLegacy = {
   'expense.categoryRequired': 'Bitte eine Kategorie wählen.',
   'expense.notFound': 'Ausgabe nicht gefunden.',
   'expense.duplicate': 'Diese Ausgabe existiert bereits (Lieferant + Rechnungsnummer).',
+  // DOCUMENT-ACCOUNTING-REFERENCE-SAFETY-01B — Bezugsbeleg statt neuer Buchung.
+  'financeReference.title': 'Zugehörige Rechnung',
+  'financeReference.exact': 'Diese Rechnung ist in OfficePilot erfasst und noch offen.',
+  'financeReference.paidConflict':
+    'Die zugehörige Lieferantenrechnung ist in OfficePilot bereits als bezahlt erfasst. Mahnung bitte prüfen.',
+  'financeReference.alreadyLinked': 'Dieses Dokument ist bereits mit dieser Rechnung verknüpft.',
+  'financeReference.ambiguous':
+    'Mehrere Rechnungen passen zu diesem Schreiben. Bitte selbst prüfen.',
+  'financeReference.notFound':
+    'Keine passende Rechnung eindeutig gefunden – bitte prüfen. Es wurde keine neue Ausgabe angelegt.',
+  'financeReference.conflict':
+    'Die erkannten Angaben widersprechen der vorhandenen Zuordnung. Bitte prüfen.',
+  'financeReference.amountMismatch':
+    'Der Betrag im Schreiben weicht von der Rechnung ab (möglich bei Mahnkosten).',
+  'financeReference.openAmount': 'Offener Betrag',
+  'financeReference.paidAmount': 'Bereits gezahlt',
+  'financeReference.open': 'Rechnung öffnen',
+  'financeReference.link': 'Mit dieser Rechnung verknüpfen',
+  'financeReference.linked': 'Verknüpfung gespeichert.',
   'expense.fieldTitle': 'Titel',
   'expense.fieldCategory': 'Kategorie',
   'expense.fieldSupplier': 'Lieferant',

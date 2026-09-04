@@ -5,6 +5,7 @@ import type { Workspace, WorkspaceMember, WorkspaceSettings } from './workspace'
 import type { BusinessInterpretationResult } from './businessInterpretation';
 import type { ContractIntelligenceResult, ContractOrderProposal } from './documentIntelligence';
 import type { WorkflowDecision } from './workflowDecision';
+import type { DocumentFinanceReference } from './documentFinanceReference';
 import type {
   BrandingProfile,
   BrandingSnapshot,
@@ -243,6 +244,12 @@ export interface InboxItem {
   archiveDocumentId?: string;
   /** Detaillierte Dokumentart aus Klassifikations-Engine */
   classifiedKind?: ClassifiedDocumentKind;
+  /**
+   * DOCUMENT-ACCOUNTING-REFERENCE-SAFETY-01B — bestätigter Bezug auf einen
+   * bereits vorhandenen Finanzbeleg. Nur gesetzt, wenn ein Mensch die
+   * Verbindung ausdrücklich bestätigt hat; niemals aus einer Erkennung.
+   */
+  financeReference?: DocumentFinanceReference;
   /** Manuelle Freigabe für Analyse trotz fehlendem automatischem Firmenbezug */
   markedAsCompanyDocument?: boolean;
   /**
