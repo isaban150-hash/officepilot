@@ -379,8 +379,24 @@ describe('CONTRACT-UI-01A — professioneller Vertragsarbeitsplatz', () => {
     });
   });
 
-  describe('No-LV Primary und planLocked', () => {
-    it('sperrt Chef-Primary bei planLocked und lässt sie sonst den Handler ausführen', async () => {
+  /*
+   * CONTRACT-UI-01A-STALE-EXPECTATION-REALIGN
+   *
+   * Der frühere Einzeltest „sperrt Chef-Primary bei planLocked …" stammt aus der
+   * Zeit vor CONTRACT-ORDER-ALREADY-LINKED-UX-01D (`799c8e3`). Er erwartete die
+   * Vertragsannahme auch dann noch im DOM, wenn der Auftrag längst existierte —
+   * lediglich ausgegraut. Seit 01D wird sie in diesem Zustand **entfernt** und
+   * durch „Vorgang öffnen" ersetzt; ein nicht vorhandener Knopf kann erst recht
+   * keine Doppelanlage auslösen.
+   *
+   * `contract-chef-primary-action` ist dabei keine eigene Chef-Freigabe, sondern
+   * nur das Test-ID-Mapping der Aktion `accept_contract_order` (Auftragskarte).
+   *
+   * Entscheidend ist der **persistente Link**, nicht der Plan-Lock — deshalb
+   * drei getrennte Fälle.
+   */
+  describe('No-LV Primary, persistenter Link und planLocked', () => {
+    it('zeigt bei verknüpftem, planLocked Vertrag nur „Vorgang öffnen"', async () => {
       const proposal = buildNoLvProposal();
 
       hydrateVorgangStore([
@@ -396,25 +412,42 @@ describe('CONTRACT-UI-01A — professioneller Vertragsarbeitsplatz', () => {
         vorgangLinkStatus: 'linked',
       });
       const onApplyLocked = vi.fn();
+      const onConfirmLocked = vi.fn();
       const lockedMount = await mountPanel(
         createElement(ContractOrderProposalPanel, {
           proposal,
           translate,
           item: lockedItem,
-          onConfirmImport: vi.fn(),
+          onConfirmImport: onConfirmLocked,
           onApplySuggestion: onApplyLocked,
         }),
       );
+
+      // Keine erneute Vertragsannahme — auch nicht deaktiviert.
+      expect(
+        lockedMount.container.querySelector('[data-testid="contract-chef-primary-action"]'),
+      ).toBeNull();
+
       const lockedPrimary = lockedMount.container.querySelector(
-        '[data-testid="contract-chef-primary-action"]',
+        '[data-testid="document-experience-primary"]',
       ) as HTMLButtonElement | null;
       expect(lockedPrimary).toBeTruthy();
-      expect(lockedPrimary!.disabled).toBe(true);
+      expect(lockedPrimary!.textContent).toContain(
+        translate('documentExperience.action.openCase'),
+      );
+      expect(lockedPrimary!.disabled).toBe(false);
+
       await act(async () => {
         lockedPrimary!.click();
       });
+      // Weder Annahme noch Positionsübernahme: kein zweiter Auftrag.
       expect(onApplyLocked).not.toHaveBeenCalled();
+      expect(onConfirmLocked).not.toHaveBeenCalled();
       await unmountPanel(lockedMount);
+    });
+
+    it('zeigt auch bei verknüpftem, nicht planLocked Vertrag keine erneute Vertragsannahme', async () => {
+      const proposal = buildNoLvProposal();
 
       resetTestStores();
       hydrateVorgangStore([
@@ -424,30 +457,72 @@ describe('CONTRACT-UI-01A — professioneller Vertragsarbeitsplatz', () => {
           orderPositions: [],
         }),
       ]);
+      // Kein contractConfirmation → planLocked === false. Der Linkschutz gilt
+      // trotzdem: der Auftrag existiert bereits.
       const openItem = createAuftragInboxItem({
         vorgangId: 'v-nolv-open',
         vorgangLinkStatus: 'linked',
       });
       const onApplyOpen = vi.fn();
+      const onConfirmOpen = vi.fn();
       const openMount = await mountPanel(
         createElement(ContractOrderProposalPanel, {
           proposal,
           translate,
           item: openItem,
-          onConfirmImport: vi.fn(),
+          onConfirmImport: onConfirmOpen,
           onApplySuggestion: onApplyOpen,
         }),
       );
+
+      expect(
+        openMount.container.querySelector('[data-testid="contract-chef-primary-action"]'),
+      ).toBeNull();
+
       const openPrimary = openMount.container.querySelector(
-        '[data-testid="contract-chef-primary-action"]',
+        '[data-testid="document-experience-primary"]',
       ) as HTMLButtonElement | null;
       expect(openPrimary).toBeTruthy();
-      expect(openPrimary!.disabled).toBe(false);
+      expect(openPrimary!.textContent).toContain(translate('documentExperience.action.openCase'));
+
       await act(async () => {
         openPrimary!.click();
       });
-      expect(onApplyOpen).toHaveBeenCalledTimes(1);
+      expect(onApplyOpen).not.toHaveBeenCalled();
+      expect(onConfirmOpen).not.toHaveBeenCalled();
       await unmountPanel(openMount);
+    });
+
+    it('lässt einen unverknüpften, ungesperrten Vertrag weiterhin annehmen', async () => {
+      const proposal = buildNoLvProposal();
+
+      resetTestStores();
+      // Wirklich unverknüpft: kein vorgangId, kein Linkstatus, kein Vorgang im
+      // Store und damit auch kein contractConfirmation.
+      const freeItem = createAuftragInboxItem();
+      expect(freeItem.vorgangId).toBeUndefined();
+      expect(freeItem.vorgangLinkStatus).toBeUndefined();
+
+      const onApplyFree = vi.fn();
+      const freeMount = await mountPanel(
+        createElement(ContractOrderProposalPanel, {
+          proposal,
+          translate,
+          item: freeItem,
+          onConfirmImport: vi.fn(),
+          onApplySuggestion: onApplyFree,
+        }),
+      );
+      const freePrimary = freeMount.container.querySelector(
+        '[data-testid="contract-chef-primary-action"]',
+      ) as HTMLButtonElement | null;
+      expect(freePrimary).toBeTruthy();
+      expect(freePrimary!.disabled).toBe(false);
+      await act(async () => {
+        freePrimary!.click();
+      });
+      expect(onApplyFree).toHaveBeenCalledTimes(1);
+      await unmountPanel(freeMount);
     });
   });
 
