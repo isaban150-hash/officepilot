@@ -28,12 +28,44 @@ let bootstrapPromise: Promise<WorkspaceCloudBootstrapResult> | null = null;
 let bootstrapCompleted = false;
 
 /**
+ * BUSINESS-CONTEXT-FLASH-01C — an welchen Workspace welcher Nutzer zuletzt
+ * **erfolgreich** freigegeben wurde.
+ *
+ * Der Zustand liegt hier und nicht im Gate, weil seine Lebensdauer exakt die des
+ * Once-Guards oben ist: Beide gelten, solange dieselbe Seite läuft, und beide
+ * enden mit demselben Wiederholversuch. Ein `useRef` im Gate wäre nach einem
+ * Remount leer — genau dann trat der Fehler auf.
+ *
+ * Der zweite Grund ist die Importrichtung: `src/test/resetStores.ts` räumt
+ * ausschliesslich Dienste auf und darf keine React-Komponente importieren.
+ * Hier greift die vorhandene Reset-Kette ohne jede neue Verdrahtung.
+ */
+let lastSuccessfulBootstrap: { userId: string; workspaceId: string } | null = null;
+
+export function getLastSuccessfulWorkspaceBootstrap(): {
+  userId: string;
+  workspaceId: string;
+} | null {
+  return lastSuccessfulBootstrap ? { ...lastSuccessfulBootstrap } : null;
+}
+
+export function setLastSuccessfulWorkspaceBootstrap(
+  value: { userId: string; workspaceId: string } | null,
+): void {
+  lastSuccessfulBootstrap = value ? { ...value } : null;
+}
+
+/**
  * OFFICEPILOT-SETUP-CLOUD-PERSIST-01B — produktiver Name für den Wiederholversuch
  * aus der Wiederherstellungsansicht: der nächste Aufruf arbeitet wirklich neu.
+ *
+ * BUSINESS-CONTEXT-FLASH-01C — dazu gehört die Nutzer-Workspace-Bindung: Wer den
+ * Bootstrap neu laufen lässt, hat auch keine gültige Freigabe mehr.
  */
 export function prepareWorkspaceCloudBootstrapRetry(): void {
   bootstrapPromise = null;
   bootstrapCompleted = false;
+  lastSuccessfulBootstrap = null;
 }
 
 /** Test-Alias auf denselben Zustand. */
@@ -52,6 +84,15 @@ export function isWorkspaceCloudBootstrapCompleted(): boolean {
  */
 export type WorkspaceCloudBootstrapStatus =
   | 'ready'
+  /**
+   * BUSINESS-CONTEXT-FLASH-01B — der Once-Guard hat abgekürzt: In **diesem**
+   * Lauf wurde nichts hergestellt, weil es früher bereits geschah.
+   *
+   * `ready` war dafür mehrdeutig und wurde vom Gate als „dieser Lauf hat den
+   * Workspace hergestellt" gelesen. Fachlich sind das zwei verschiedene Dinge;
+   * genau daran entstand die Sperrfläche mitten im Betrieb.
+   */
+  | 'already_bootstrapped'
   | 'new_workspace'
   | 'failed'
   | 'company_conflict';
@@ -81,7 +122,7 @@ export interface WorkspaceCloudBootstrapResult {
 
 export async function bootstrapWorkspaceCloudSyncIfNeeded(): Promise<WorkspaceCloudBootstrapResult> {
   if (!isSupabaseConfigured()) return { status: 'ready' };
-  if (bootstrapCompleted) return { status: 'ready' };
+  if (bootstrapCompleted) return { status: 'already_bootstrapped' };
   if (bootstrapPromise) return bootstrapPromise;
 
   bootstrapPromise = (async (): Promise<WorkspaceCloudBootstrapResult> => {

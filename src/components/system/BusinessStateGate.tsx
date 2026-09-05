@@ -7,7 +7,9 @@ import { clearUiSessionSnapshot } from '../../services/uiSession/uiSessionStore'
 import { resetUiSessionLiveState } from '../../services/uiSession/uiSessionLiveState';
 import {
   bootstrapWorkspaceCloudSyncIfNeeded,
+  getLastSuccessfulWorkspaceBootstrap,
   prepareWorkspaceCloudBootstrapRetry,
+  setLastSuccessfulWorkspaceBootstrap,
   type WorkspaceCloudBootstrapResult,
 } from '../../services/workspace/workspaceCloudBootstrapService';
 import { resetCompanySession } from '../../services/brain/companySessionService';
@@ -72,6 +74,8 @@ export function BusinessStateGate({ children }: BusinessStateGateProps) {
         setSetup(guestResult.setup);
         setBootstrapKey('guest');
         bootstrappedUserRef.current = null;
+        // Beim Abmelden endet die Nutzer-Workspace-Bindung. Kein Übertrag.
+        setLastSuccessfulWorkspaceBootstrap(null);
         return;
       }
 
@@ -79,7 +83,29 @@ export function BusinessStateGate({ children }: BusinessStateGateProps) {
       setSetup(null);
       bootstrappedUserRef.current = nextUserId;
 
-      const result = bootstrapBusinessState(nextUserId ? { userId: nextUserId } : {});
+      /*
+       * BUSINESS-CONTEXT-FLASH-01B — ein Zweitlauf für denselben Nutzer bleibt
+       * im bereits freigegebenen Workspace-Scope.
+       *
+       * Die ID wird **vor** `bootstrapBusinessState` gelesen: Die Funktion ruft
+       * als Erstes `clearInMemoryBusinessState()`, danach wäre der
+       * Workspace-Store leer.
+       *
+       * Der Nutzervergleich ist die Sicherheitsbedingung, nicht eine
+       * Optimierung: Ohne ihn würde nach einem Kontowechsel der Workspace des
+       * vorherigen Nutzers weiterverwendet.
+       */
+      const lastBootstrap = getLastSuccessfulWorkspaceBootstrap();
+      const preservedWorkspaceId =
+        nextUserId && lastBootstrap?.userId === nextUserId ? lastBootstrap.workspaceId : null;
+
+      const result = bootstrapBusinessState(
+        nextUserId
+          ? preservedWorkspaceId
+            ? { userId: nextUserId, workspaceId: preservedWorkspaceId }
+            : { userId: nextUserId }
+          : {},
+      );
       const needsWorkspaceBootstrap =
         Boolean(nextUserId) && isAuthenticated && isAllowed && isSupabaseConfigured();
 
@@ -142,11 +168,24 @@ export function BusinessStateGate({ children }: BusinessStateGateProps) {
         ) {
           setSetupNotFound(true);
           setSetup(null);
+          /*
+           * BUSINESS-CONTEXT-FLASH-01B — kein freigegebener Betrieb, also auch
+           * keine Bindung. Eine ältere darf diesen Zustand nicht überdauern.
+           */
+          setLastSuccessfulWorkspaceBootstrap(null);
           return;
         }
         setSetupNotFound(false);
         setSetup(cloudSetup);
         setBootstrapKey(workspaceId ? `${nextUserId}:${workspaceId}` : (nextUserId ?? 'guest'));
+        /*
+         * BUSINESS-CONTEXT-FLASH-01B — erst hier, nach erfolgreicher Freigabe,
+         * gilt die Verknüpfung Nutzer ↔ Workspace. Ein gescheiterter oder
+         * abgebrochener Lauf hinterlässt sie nicht.
+         */
+        setLastSuccessfulWorkspaceBootstrap(
+          nextUserId && workspaceId ? { userId: nextUserId, workspaceId } : null,
+        );
         return;
       }
 
