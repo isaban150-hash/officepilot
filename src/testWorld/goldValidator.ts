@@ -205,7 +205,23 @@ function validateGoldDocumentWithItem(
     }
   }
 
-  // —— primaryAction (after case-match attach in inbox summary) ——
+  /*
+   * —— primaryAction ——
+   *
+   * Geprüft wird die **sichtbare Hauptaktion der kompakten Eingangskarte**, nicht
+   * die fachliche Aktion der Detailseite. `buildInboxDocumentSummary` schliesst
+   * mit `finalizeInboxPresentation` ab; dessen Regel gewinnt zuletzt.
+   *
+   * GOLD-INBOX-PRIMARY-ACTION-REALIGN-01B — bis hierher hielten die 35
+   * Erwartungen den Ausgang des Fallabgleichs fest (`none → create_vorgang`,
+   * `exact → link_vorgang`, `multiple → select_vorgang`). Das war die alte
+   * Reihenfolge, in der der Fallabgleich die Listenaktion bestimmte. Die Karte
+   * führt diese Aktionen aber nicht aus — ihr Klick öffnet das Dokument.
+   *
+   * Die fachlichen Hauptaktionen (`record_expense`, `check_payment`,
+   * `create_task`, `accept_contract_order`) sichern eigene Suiten; Gold prüft
+   * sie bewusst nicht.
+   */
   if (summary.primaryAction.id !== bundle.primaryAction.id) {
     pushIssue(
       issues,
