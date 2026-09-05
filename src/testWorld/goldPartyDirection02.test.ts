@@ -3,8 +3,9 @@
  *
  * Die PDFs laufen unveraendert durch die produktive Intake-Pipeline. WorkflowResult,
  * recognizedData und Summary werden nach ihrer Erzeugung nicht angefasst.
- * link_vorgang ist hier ausschliesslich eine bestaetigungspflichtige Aktion — es wird
- * waehrend Analyse und Vorschau keine Verknuepfung gespeichert.
+ * Der exact-Treffer ist hier ausschliesslich ein bestaetigungspflichtiger Vorschlag —
+ * es wird waehrend Analyse und Vorschau keine Verknuepfung gespeichert. Die kompakte
+ * Eingangskarte zeigt deshalb review_document; zugeordnet wird erst im Detail.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { useDocumentBlobDatabaseReset } from '../test/documentBlobTestReset';
@@ -56,7 +57,9 @@ describe('GOLD-PARTY-DIRECTION-02', () => {
     expect(match.matchedCaseId).toBe('PRJ-005');
     expect(match.candidates.map((candidate) => candidate.caseId)).toEqual(['PRJ-005']);
 
-    expect(summary.primaryAction.id).toBe('link_vorgang');
+    // Der exact-Treffer bleibt ein bestaetigungspflichtiger Vorschlag; die kompakte
+    // Eingangskarte fuehrt link_vorgang nicht aus, sie oeffnet die Pruefung.
+    expect(summary.primaryAction.id).toBe('review_document');
     expect(summary.primaryAction.id).not.toBe('open_vorgang');
     expect(summary.primaryAction.id).not.toBe('select_vorgang');
 
@@ -80,7 +83,9 @@ describe('GOLD-PARTY-DIRECTION-02', () => {
     );
     expect(match.matchedCaseId).toBe('PRJ-001');
 
-    expect(summary.primaryAction.id).toBe('link_vorgang');
+    // Wie DOC-00002: exact bleibt Vorschlag, die Karte fuehrt zur Pruefung.
+    // Die folgenden Zeilen belegen unveraendert, dass keine Verknuepfung entstand.
+    expect(summary.primaryAction.id).toBe('review_document');
 
     expect(isInboxLinkedToVorgang(item)).toBe(false);
     expect(item.vorgangId).toBeUndefined();

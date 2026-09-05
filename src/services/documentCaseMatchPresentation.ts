@@ -117,6 +117,52 @@ export function primaryActionForCaseMatch(
  * Ein blosser Treffer des Fallabgleichs (gleicher Kunde, gleiche Baustelle)
  * aendert weiterhin nichts: Matching ist keine Verknuepfung.
  */
+/**
+ * DOCUMENT-EXPERIENCE-GENERALITY-01B — welche Hauptaktionen der Fallabgleich
+ * nicht ersetzen darf.
+ *
+ * Klein und ausdrücklich, keine Policy-Engine und keine Liste über neunzig
+ * Dokumentarten: Entschieden wird an der Aktion und der Familie.
+ *
+ * **Geschützt:**
+ * - `create_task` bei Behörden- und Briefdokumenten — ein Schreiben mit Frist
+ *   bleibt ein Fristthema, auch ohne passenden Vorgang.
+ * - `apply_intake` bei noch nicht eingeordneten Dokumenten — ein unsicheres
+ *   Schreiben darf nicht als Aufforderung „Neuen Vorgang anlegen" erscheinen.
+ *
+ * **Nicht geschützt** und bewusst beim Fallabgleich belassen: Lieferschein und
+ * Angebot. Beide sind ihrer Natur nach vorgangsbezogen; dort ist
+ * `link_vorgang` / `select_vorgang` / `create_vorgang` die richtige Handlung.
+ */
+export function shouldKeepDocumentPrimaryAction(summary: DocumentSummary): boolean {
+  const { id } = summary.primaryAction;
+  if (id === 'create_task') {
+    return summary.family === 'authority' || summary.family === 'letter';
+  }
+  if (id === 'apply_intake') {
+    return summary.family === 'generic';
+  }
+  /*
+   * DUNNING-PRIMARY-ACTION-ROUTING-01B — die Zahlungsprüfung eines
+   * Bezugsdokuments überlebt jeden Trefferzustand, auch die bestätigte
+   * Verknüpfung.
+   *
+   * Ein vorhandener Vorgang beantwortet die Kernfrage einer Mahnung nicht:
+   * Ist die zugrunde liegende Rechnung bereits bezahlt? Der Vorgang bleibt über
+   * den Fallabgleich und die Nebenaktionen erreichbar — er ersetzt die Aufgabe
+   * aber nicht.
+   *
+   * Die Regel aus CONTRACT-ORDER-ALREADY-LINKED-UX-01D („verknüpfter Vertrag
+   * öffnet den Vorgang, statt erneut anzunehmen") bleibt ausdrücklich
+   * vertragsspezifisch: Dort verhindert sie eine **Doppelanlage**, hier gäbe es
+   * nichts doppelt anzulegen.
+   */
+  if (id === 'check_payment') {
+    return isFinanceReferenceOnlyKind(summary.documentKind);
+  }
+  return false;
+}
+
 export function attachDocumentCaseMatch(
   summary: DocumentSummary,
   item: InboxItem,
@@ -150,6 +196,18 @@ export function attachDocumentCaseMatch(
    */
   const isReferenceOnlyDocument = isFinanceReferenceOnlyKind(summary.documentKind);
   /*
+   * DOCUMENT-EXPERIENCE-GENERALITY-01B — der Fallabgleich darf fachfremde
+   * Hauptaktionen nicht verdrängen.
+   *
+   * Bewusst **keine** pauschale Regel: Bei Lieferschein und Angebot ist der
+   * Vorgangsbezug die richtige Haupthandlung, dort bleibt der Fallabgleich
+   * massgeblich. Geschützt sind nur die Fälle, in denen eine Vorgangsaktion
+   * fachlich am Dokument vorbeigeht — ein Behördenbrief bleibt ein Fristthema,
+   * auch wenn kein Vorgang gefunden wird, und ein noch unklares Schreiben darf
+   * nicht als „Neuen Vorgang anlegen" erscheinen.
+   */
+  const keepDocumentPrimary = shouldKeepDocumentPrimaryAction(summary);
+  /*
    * Die eine Ausnahme: Mahnung und Zahlungserinnerung tragen wegen ihres
    * `documentType` dieselbe Familie wie echte Rechnungen, verweisen aber nur
    * auf einen bereits vorhandenen Beleg. Bekaemen sie hierueber die
@@ -163,6 +221,7 @@ export function attachDocumentCaseMatch(
 
   const preservePrimary =
     keepFinancePrimary ||
+    keepDocumentPrimary ||
     (persistentLink.state === 'none' &&
       (options?.preservePrimary === true ||
         summary.primaryAction.id === 'accept_contract_order'));

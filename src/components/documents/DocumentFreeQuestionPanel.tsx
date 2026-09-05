@@ -140,9 +140,23 @@ export function DocumentFreeQuestionPanel({
     >
       <Card className="area-ai-panel__card">
         <CardTitle>{translate('document.freeQuestion.title')}</CardTitle>
-        <p className="document-free-question-panel__hint" data-testid={`${testIdPrefix}-scope-hint`}>
-          {translate('document.freeQuestion.scopeHint')}
-        </p>
+        {/*
+          * DOCUMENT-EXPERIENCE-SIMPLIFICATION-01C — im Ausgangszustand nur
+          * Überschrift und Eingabefeld.
+          *
+          * Der Geltungshinweis ist richtig und bleibt — er erscheint aber erst,
+          * wenn jemand tatsächlich fragt. Vorher füllte er auf dem Telefon eine
+          * halbe Bildschirmhöhe, bevor die erste Frage getippt war. Kontext,
+          * Datenübergabe und Antwortlogik sind unverändert.
+          */}
+        {question.trim() || loading || answer ? (
+          <p
+            className="document-free-question-panel__hint"
+            data-testid={`${testIdPrefix}-scope-hint`}
+          >
+            {translate('document.freeQuestion.scopeHint')}
+          </p>
+        ) : null}
         <div className="area-ai-panel__row">
           <input
             type="text"

@@ -31,6 +31,7 @@ import { DocumentReviewSuccess } from './DocumentReviewSuccess';
 import { ReviewMoreOptionsShell } from './CollapsibleReviewSection';
 import { ContractOrderProposalPanel } from './ContractOrderProposalPanel';
 import { DocumentExperienceCard } from './DocumentExperienceCard';
+import { buildDocumentLeadText } from '../../../services/documentLeadText';
 
 interface DocumentReviewExperienceProps {
   item: InboxItem;
@@ -56,6 +57,12 @@ interface DocumentReviewExperienceProps {
   onLinkVorgang?: () => void;
   /** Secondary: create task without full intake. */
   onCreateTask?: () => void;
+  /**
+   * DUNNING-PRIMARY-ACTION-ROUTING-01B — Hauptaktion der Bezugsdokumente.
+   * Führt den bereits vorhandenen `check_payment`-Weg aus; hier entsteht keine
+   * eigene Ausführungslogik.
+   */
+  onCheckPayment?: () => void;
   moreOptionsContent: ReactNode;
   /**
    * @deprecated DOCUMENT-EXPERIENCE-02A — archive/actions must not sit above zone D.
@@ -90,6 +97,7 @@ export function DocumentReviewExperience({
   onNextDocument,
   onLinkVorgang,
   onCreateTask,
+  onCheckPayment,
   moreOptionsContent,
   beforeMoreOptions = null,
   experienceDetailsExtra = null,
@@ -160,8 +168,24 @@ export function DocumentReviewExperience({
 
   const nextStepDetail = summary.details.find((d) => d.id === 'nextStep');
 
+  /*
+   * DOCUMENT-EXPERIENCE-SIMPLIFICATION-01D — „Worum geht es?" beschreibt das
+   * Dokument, nicht den Prozess.
+   *
+   * In 01B stand hier `nextStep.proseText`. Auf dem iPhone las sich das als
+   * „Rechnungsdaten prüfen und erst nach Freigabe finalisieren." — eine
+   * Handlungsanweisung, keine Erklärung. Der nächste Schritt bleibt erhalten,
+   * er steht nur nicht mehr an der Stelle der Inhaltszusammenfassung.
+   */
+  const leadText =
+    buildDocumentLeadText(summary, translate) ?? nextStepDetail?.proseText?.trim() ?? undefined;
+
   const detailsBody = (
     <>
+      {/*
+        * 01D — der vollständige Satz an Hinweisen bleibt hier erhalten,
+        * inklusive der Angaben, die oben bewusst nicht mehr prominent stehen.
+        */}
       {nextStepDetail?.proseText ? (
         <p data-testid="document-experience-next-step">
           <strong>{translate('documentExperience.details.nextStep')}: </strong>
@@ -204,6 +228,12 @@ export function DocumentReviewExperience({
       onCreateTask?.();
       return;
     }
+    if (actionId === 'check_payment') {
+      // Bewusst kein Rückfall auf `onApplySuggestion`: Smart Intake ist für ein
+      // Bezugsdokument der falsche Weg.
+      onCheckPayment?.();
+      return;
+    }
     // Existing intake / family primary path — no domain match writes here.
     if (actionId === summary.primaryAction.id) {
       onApplySuggestion();
@@ -218,6 +248,8 @@ export function DocumentReviewExperience({
         <DocumentExperienceCard
           summary={summary}
           translate={translate}
+          lead={leadText}
+          focus="detail"
           onAction={handleExperienceAction}
           actionUi={{
             [summary.primaryAction.id]: {
@@ -236,7 +268,7 @@ export function DocumentReviewExperience({
               testId: 'document-experience-secondary-create_task',
             },
           }}
-          details={detailsBody}
+          /* 01D — der Karteninhalt liegt jetzt im äusseren Details-Bereich. */
         />
       ) : null}
 
@@ -312,6 +344,14 @@ export function DocumentReviewExperience({
         toggleLabel={translate('reviewWorkflow.moreOptions.show')}
         hideLabel={translate('reviewWorkflow.moreOptions.hide')}
       >
+        {/*
+          * DOCUMENT-EXPERIENCE-SIMPLIFICATION-01D — nur **ein** Details-Einstieg.
+          *
+          * Auf dem iPhone standen zwei übereinander: das `<details>` der Karte
+          * und darunter „Weitere Optionen". Der Karteninhalt zieht deshalb hier
+          * ein — kein Inhalt geht verloren, es gibt nur noch eine Klappe.
+          */}
+        <div data-testid="document-experience-details-body">{detailsBody}</div>
         {moreOptionsContent}
       </ReviewMoreOptionsShell>
     </div>

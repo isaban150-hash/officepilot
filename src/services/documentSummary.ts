@@ -44,6 +44,7 @@ import {
 import { composeIntelligentDocumentSubject } from './documentSubjectIntelligence';
 import { getInboxExtractedDocumentText } from './inboxDocumentText';
 import { attachDocumentCaseMatch } from './documentCaseMatchPresentation';
+import { isFinanceReferenceOnlyKind } from './documentFinanceReferenceService';
 
 export type BuildDocumentSummaryOptions = {
   translate: (key: TranslationKey) => string;
@@ -647,7 +648,26 @@ function buildNonContractSummary(
       ]
     : [];
 
-  const primary = primaryActionForFamily(family);
+  /*
+   * DUNNING-PRIMARY-ACTION-ROUTING-01B — ein Bezugsdokument trägt von Anfang an
+   * die richtige Hauptaktion.
+   *
+   * Realbefund auf dem iPhone: Eine Mahnung zeigte „Neuen Vorgang anlegen".
+   * Ursache war nicht der Fallabgleich allein — die Mahnung startete als
+   * `record_expense`, verlor diese Aktion (richtigerweise) an die
+   * Bezugsdokument-Sperre und fiel danach in den Standardausgang des
+   * Fallabgleichs. Es fehlte also nicht der Schutz, sondern die Aktion.
+   *
+   * `isFinanceReferenceOnlyKind` bleibt die einzige Wahrheit darüber, welche
+   * Arten verweisen statt zu belegen. Hier steht bewusst keine zweite Liste.
+   */
+  const primary = isFinanceReferenceOnlyKind(kind)
+    ? {
+        id: 'check_payment' as const,
+        labelKey: 'documentExperience.action.checkPayment' as TranslationKey,
+        enabled: true,
+      }
+    : primaryActionForFamily(family);
   if (!item.isAdvertisement && !workflow.companyRelevant) {
     primary.enabled = false;
   }
@@ -914,16 +934,37 @@ function finalizeInboxPresentation(
     });
   }
 
+  /*
+   * INBOX-PRIMARY-ACTION-CONSISTENCY-01B — die Listenkarte verspricht nur, was
+   * sie tut.
+   *
+   * `InboxCard` und `DeskDocumentAttention` führen keine fachliche Aktion aus:
+   * `later` stellt zurück, `open_vorgang` navigiert zum vorhandenen Vorgang,
+   * **alles andere öffnet das Dokument**. Auf dem iPhone stand deshalb „Neuen
+   * Vorgang anlegen" auf einer Karte, deren Klick nur die Detailseite öffnete —
+   * und es entstand kein Vorgang.
+   *
+   * Die eine Ausnahme ist `open_vorgang`: Diese Aktion entsteht ausschliesslich
+   * über `resolveConfirmedLinkCaseId`, also bei bestätigter, noch existierender
+   * Verknüpfung — und genau diesen Klick führt die Karte wirklich aus. Ein
+   * blosser Treffer des Fallabgleichs erzeugt sie nicht; eine ins Leere zeigende
+   * Verknüpfung liefert `link_vorgang` und fällt damit hier heraus. Es wird
+   * keine neue Definition von „bestätigt verknüpft" eingeführt.
+   */
+  const navigatesDirectly = summary.primaryAction.id === 'open_vorgang';
+
   return {
     ...summary,
     headline: typeLabel,
     facts,
     alerts: alerts.slice(0, DOCUMENT_SUMMARY_MAX_ALERTS),
-    primaryAction: {
-      id: 'review_document',
-      labelKey: 'inbox.reviewNow',
-      enabled: true,
-    },
+    primaryAction: navigatesDirectly
+      ? summary.primaryAction
+      : {
+          id: 'review_document',
+          labelKey: 'inbox.reviewNow',
+          enabled: true,
+        },
     secondaryActions: [
       {
         id: 'later',
@@ -990,16 +1031,34 @@ export function buildInboxDocumentSummary(
 ): DocumentSummary {
   const stub = createInboxWorkflowStub(item);
   const family = resolveDocumentSummaryFamily(item, stub, null);
-  if (family === 'contract') {
-    return attachDocumentCaseMatch(buildContractInboxSummary(item, options), item);
-  }
-  const base = buildNonContractSummary(item, stub, {
-    ...options,
-    letter: options.letter,
-  });
-  return attachDocumentCaseMatch(
-    finalizeInboxPresentation(base, item, options.translate),
+  /*
+   * INBOX-PRIMARY-ACTION-CONSISTENCY-01B — die Listenregel gewinnt zuletzt.
+   *
+   * Bisher lief `finalizeInboxPresentation` **vor** dem Fallabgleich. Die dort
+   * bewusst gesetzte Listenaktion „Jetzt prüfen" wurde deshalb sofort wieder
+   * durch `create_vorgang` / `link_vorgang` / `select_vorgang` ersetzt — der
+   * Fallabgleich bestimmte die sichtbare Beschriftung, obwohl die Karte diese
+   * Aktionen gar nicht ausführt.
+   *
+   * Die Umkehrung löst das strukturell, statt eine vierte Ausnahme in der
+   * Preserve-Policy zu pflegen: Der Fallabgleich hängt weiterhin vollständig an
+   * (`summary.caseMatch` bleibt erhalten), aber die Darstellung der Liste ist
+   * der letzte Schritt.
+   *
+   * Auch der Vertrag läuft jetzt hindurch: Ein **unverknüpfter** Werkvertrag bot
+   * auf der Liste „Als Auftrag erfassen" an, obwohl dort keine Vertragsannahme
+   * stattfindet. Der verknüpfte Fall behält über die `open_vorgang`-Ausnahme
+   * seine 01D-Semantik.
+   */
+  const base =
+    family === 'contract'
+      ? buildContractInboxSummary(item, options)
+      : buildNonContractSummary(item, stub, { ...options, letter: options.letter });
+
+  return finalizeInboxPresentation(
+    attachDocumentCaseMatch(base, item),
     item,
+    options.translate,
   );
 }
 

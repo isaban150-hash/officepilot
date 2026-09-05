@@ -99,7 +99,15 @@ describe('DOCUMENT-SUMMARY-ROLL-OUT-01', () => {
     );
     expect(inboxHtml).toContain('Werkvertrag');
     expect(inboxHtml).toContain('Isobautec GmbH');
-    expect(inboxHtml).toContain('Neuen Vorgang anlegen');
+    /*
+     * INBOX-PRIMARY-ACTION-CONSISTENCY-01B — hier stand „Neuen Vorgang anlegen".
+     *
+     * Dieselbe veraltete Listenregel wie in `documentInboxSummary01`: Die Karte
+     * legt keinen Vorgang an, ihr Klick öffnet das Dokument. Die eigentliche
+     * Aussage dieses Tests — Eingang und Schreibtisch teilen Kopf und Fakten —
+     * bleibt unberührt.
+     */
+    expect(inboxHtml).toContain('Jetzt prüfen');
 
     const deskHtml = renderToStaticMarkup(
       createElement(

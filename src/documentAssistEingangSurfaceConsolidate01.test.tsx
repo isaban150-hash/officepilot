@@ -109,6 +109,27 @@ function assertOrder(html: string, earlier: string, later: string): void {
   expect(earlyIdx).toBeLessThan(lateIdx);
 }
 
+/**
+ * DOCUMENT-EXPERIENCE-SIMPLIFICATION-01B — öffnet „Weitere Optionen" und darin
+ * die genannten Untergruppen. Die verlagerten Flächen bleiben damit prüfbar.
+ */
+async function openDetailGroups(container: HTMLElement, groupIds: string[]): Promise<void> {
+  const clickById = async (testId: string) => {
+    const el = container.querySelector<HTMLElement>(`[data-testid="${testId}"]`);
+    if (!el) return;
+    await act(async () => {
+      el.click();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+  };
+  await clickById('document-review-more-toggle');
+  for (const groupId of groupIds) {
+    await clickById(`review-section-toggle-${groupId}`);
+  }
+}
+
 type Mount = { container: HTMLDivElement; root: Root };
 
 async function mountDetail(itemId: string): Promise<Mount> {
@@ -167,9 +188,26 @@ describe('DOCUMENT-ASSIST-EINGANG-SURFACE-CONSOLIDATE-01', () => {
     hydrateInboxStore([item]);
     const html = renderHtml(item.id);
 
+    /*
+     * DOCUMENT-EXPERIENCE-SIMPLIFICATION-01B — diese Suite sicherte bis hierher
+     * die **Variante** `data-assist-flow="consolidated"` und deren Kette
+     *   Experience → Feldbestätigung → Chat → Nächste Schritte
+     *              → Antwortentwurf → Originaldatei
+     * als sechs gleichrangige Flächen im Hauptfluss.
+     *
+     * Genau diese Variantenarchitektur ist durch die kanonische Ansicht
+     * ersetzt: Es gibt nur noch **eine** Reihenfolge für alle Dokumente, und
+     * Feldbestätigung, Antwortentwurf und Originaldatei sind keine Dauerflächen
+     * mehr, sondern liegen unter „Weitere Optionen".
+     *
+     * Zugesichert bleibt, was fachlich zählt: eine feste Reihenfolge, die
+     * Experience als führende Fläche, der dokumentgebundene Chat davor, die
+     * Details danach — und dass keine der drei verlagerten Flächen wieder im
+     * Hauptfluss auftaucht.
+     */
     expect(html).toContain('data-testid="eingang-assist-flow"');
-    expect(html).toContain('data-assist-flow="consolidated"');
-    expect(html).toContain('eingang-assist-flow');
+    expect(html).toContain('data-assist-flow="canonical"');
+    expect(html).not.toContain('data-assist-flow="consolidated"');
 
     // DOCUMENT-EXPERIENCE-02B: Experience Card is the lead surface (no Assistant hero).
     expect(html).toContain('data-testid="document-experience-card"');
@@ -177,40 +215,38 @@ describe('DOCUMENT-ASSIST-EINGANG-SURFACE-CONSOLIDATE-01', () => {
     assertOrder(
       html,
       'data-testid="document-experience-card"',
-      'data-testid="document-field-fill-confirm-panel"',
+      'data-testid="document-free-question-panel"',
     );
     assertOrder(
       html,
       'data-testid="document-review-experience"',
-      'data-testid="document-field-fill-confirm-panel"',
-    );
-    assertOrder(
-      html,
-      'data-testid="document-field-fill-confirm-panel"',
       'data-testid="document-free-question-panel"',
     );
     assertOrder(
       html,
       'data-testid="document-free-question-panel"',
-      'data-testid="document-contextual-next-steps-panel"',
+      'data-testid="document-review-more-toggle"',
     );
-    assertOrder(
-      html,
-      'data-testid="document-contextual-next-steps-panel"',
-      'data-testid="document-confirmed-reply-draft-panel"',
-    );
-    assertOrder(
-      html,
-      'data-testid="document-confirmed-reply-draft-panel"',
-      'data-testid="ablage-original-file"',
-    );
+    // Die drei verlagerten Flächen stehen nicht mehr im Hauptfluss.
+    expect(html).not.toContain('data-testid="document-field-fill-confirm-panel"');
+    expect(html).not.toContain('data-testid="document-contextual-next-steps-panel"');
+    expect(html).not.toContain('data-testid="document-confirmed-reply-draft-panel"');
+    expect(html).not.toContain('data-testid="ablage-original-file"');
 
     // Guidance lives in Experience Details (E); details stay collapsed; no Assistant trust lane.
     expect(html).not.toContain('data-compact="true"');
-    expect(html).toContain('data-testid="document-guidance-panel"');
-    expect(html).toContain(translate('docGuidance.title'));
-    expect(html).toContain('data-testid="document-experience-details"');
-    expect(html).not.toMatch(/data-testid="document-experience-details"[^>]*\sopen[\s>]/);
+    /*
+     * DOCUMENT-EXPERIENCE-SIMPLIFICATION-01D — es gibt nur noch **einen**
+     * Details-Einstieg. Die Guidance lag bisher im eigenen `<details>` der
+     * Karte; sie steht jetzt im äusseren „Details anzeigen"-Bereich und ist im
+     * eingeklappten Ausgangszustand folglich nicht im Markup.
+     *
+     * Zugesichert bleibt: kein zweiter Toggle, und der Bereich ist zu Beginn
+     * geschlossen.
+     */
+    expect(html).not.toContain('data-testid="document-experience-details-toggle"');
+    expect(html).not.toContain('data-testid="document-review-more-content"');
+    expect(html).toContain('data-testid="document-review-more-toggle"');
     expect(html).not.toContain('data-testid="review-section-content-assistant-details"');
     expect(html).not.toContain(`>${translate('docAssistant.section.steuerberater')}<`);
     expect(html).not.toContain(`>${translate('docAssistant.section.trust')}<`);
@@ -253,6 +289,18 @@ describe('DOCUMENT-ASSIST-EINGANG-SURFACE-CONSOLIDATE-01', () => {
     const item = createBgBauItem();
     hydrateInboxStore([item]);
     const { container, root } = await mountDetail(item.id);
+
+    /*
+     * DOCUMENT-EXPERIENCE-SIMPLIFICATION-01B — Feldbestätigung und
+     * Antwortentwurf sind keine Dauerflächen mehr. Ihre **Funktion** bleibt
+     * hier unverändert zugesichert; erreicht werden sie über „Weitere Optionen"
+     * und die jeweilige Untergruppe.
+     */
+    expect(
+      container.querySelector('[data-testid="document-field-fill-confirm-panel"]'),
+      'Feldbestätigung wieder im Hauptfluss',
+    ).toBeNull();
+    await openDetailGroups(container, ['field-confirm', 'reply-draft']);
 
     expect(container.querySelector('[data-testid="document-field-fill-confirm-panel"]')).not.toBeNull();
     expect(
@@ -354,15 +402,17 @@ describe('DOCUMENT-ASSIST-EINGANG-SURFACE-CONSOLIDATE-01', () => {
     hydrateInboxStore([item]);
     const { container, root } = await mountDetail(item.id);
 
-    expect(container.querySelector('[data-testid="ablage-original-file"]')).not.toBeNull();
+    /*
+     * DOCUMENT-EXPERIENCE-SIMPLIFICATION-01B — die Originaldatei liegt unter
+     * „Weitere Optionen → Originaldokument". Erreichbarkeit bleibt zugesichert,
+     * nur eben nicht mehr als Dauerfläche im Hauptfluss.
+     */
+    expect(container.querySelector('[data-testid="ablage-original-file"]')).toBeNull();
     expect(container.querySelector('[data-testid="document-review-experience"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="document-review-more-toggle"]')).not.toBeNull();
 
-    await act(async () => {
-      (
-        container.querySelector('[data-testid="document-review-more-toggle"]') as HTMLButtonElement
-      ).click();
-    });
+    await openDetailGroups(container, ['original-document']);
+    expect(container.querySelector('[data-testid="ablage-original-file"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="review-section-archive"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="review-section-technical"]')).not.toBeNull();
 
@@ -376,7 +426,13 @@ describe('DOCUMENT-ASSIST-EINGANG-SURFACE-CONSOLIDATE-01', () => {
     hydrateInboxStore([item]);
     const html = renderHtml(item.id);
 
-    expect(html).not.toContain('data-testid="eingang-assist-flow"');
+    /*
+     * DOCUMENT-EXPERIENCE-SIMPLIFICATION-01B — „andere Dokumentarten" hatten
+     * früher eine eigene Reihenfolge **ohne** die Assist-Hülle. Genau das ist
+     * aufgehoben: Es gibt eine kanonische Ansicht für alle Dokumente. Der Test
+     * sichert deshalb jetzt, dass auch dieser Fall derselben Kette folgt.
+     */
+    expect(html).toContain('data-assist-flow="canonical"');
     assertOrder(
       html,
       'data-testid="document-review-experience"',
@@ -385,13 +441,10 @@ describe('DOCUMENT-ASSIST-EINGANG-SURFACE-CONSOLIDATE-01', () => {
     assertOrder(
       html,
       'data-testid="document-free-question-panel"',
-      'data-testid="document-field-fill-confirm-panel"',
+      'data-testid="document-review-more-toggle"',
     );
-    assertOrder(
-      html,
-      'data-testid="document-field-fill-confirm-panel"',
-      'data-testid="ablage-original-file"',
-    );
+    expect(html).not.toContain('data-testid="document-field-fill-confirm-panel"');
+    expect(html).not.toContain('data-testid="ablage-original-file"');
   });
 
   it('keine Persistenz durch die UI-Konsolidierung (Analyse-Flush ausgenommen)', async () => {

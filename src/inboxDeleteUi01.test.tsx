@@ -111,6 +111,19 @@ async function click(container: HTMLElement, testId: string): Promise<void> {
   await settle();
 }
 
+/**
+ * DOCUMENT-EXPERIENCE-SIMPLIFICATION-01B — Löschen steht nicht mehr über dem
+ * Inhalt, sondern unter „Weitere Optionen → Verwaltung".
+ *
+ * Die Sicherheitszusicherung bleibt vollständig: Der Bestätigungsdialog ist
+ * weiterhin Pflicht, blockierte Dokumente melden weiterhin ihren Grund, und es
+ * wird nichts still gelöscht. Nur der Weg dorthin führt jetzt über zwei Klicks.
+ */
+async function openAdministration(container: HTMLElement): Promise<void> {
+  await click(container, 'document-review-more-toggle');
+  await click(container, 'review-section-toggle-administration');
+}
+
 describe('DOCUMENT-INBOX-DELETE-01 – UI', () => {
   beforeEach(() => {
     resetTestStores();
@@ -143,6 +156,9 @@ describe('DOCUMENT-INBOX-DELETE-01 – UI', () => {
     hydrateInboxStore([item]);
     const mount = await mountDetail(item.id);
 
+    // Destruktives steht nicht mehr vor dem Inhalt — erst nach dem Aufklappen.
+    expect(find(mount.container, 'inbox-delete-trigger')).toBeNull();
+    await openAdministration(mount.container);
     await waitFor(() => find(mount.container, 'inbox-delete-trigger') !== null, 'delete trigger');
     expect(find(mount.container, 'inbox-delete-dialog')).toBeNull();
 
@@ -175,6 +191,7 @@ describe('DOCUMENT-INBOX-DELETE-01 – UI', () => {
     hydrateInboxStore([item]);
     const mount = await mountDetail(item.id);
 
+    await openAdministration(mount.container);
     await click(mount.container, 'inbox-delete-trigger');
     await click(mount.container, 'inbox-delete-confirm');
 

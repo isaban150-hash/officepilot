@@ -1,5 +1,7 @@
 import { useDocumentBlobDatabaseReset } from './test/documentBlobTestReset';
 import { afterEach, describe, expect, it } from 'vitest';
+import { act } from 'react';
+import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { AppProvider } from './context/AppContext';
@@ -27,6 +29,51 @@ function renderAblageDetail(itemId: string): string {
       </AppProvider>
     </MemoryRouter>,
   );
+}
+
+/**
+ * DOCUMENT-EXPERIENCE-SIMPLIFICATION-01B — die Originaldatei liegt jetzt unter
+ * „Weitere Optionen → Originaldokument".
+ *
+ * Ein statischer Render zeigt eingeklappte Inhalte nicht. Damit die Zusicherung
+ * „das Original bleibt erreichbar und funktionsfähig" nicht verloren geht, wird
+ * hier zusätzlich echt gemountet und aufgeklappt.
+ */
+async function renderAblageDetailExpanded(itemId: string): Promise<HTMLElement> {
+  const host = document.createElement('div');
+  host.className = 'app-shell__main';
+  document.body.appendChild(host);
+  const root = createRoot(host);
+  await act(async () => {
+    root.render(
+      <MemoryRouter initialEntries={[`/ablage/${itemId}`]}>
+        <AppProvider initialSetup={DEFAULT_SETUP}>
+          <Routes>
+            <Route path="/ablage/:id" element={<EingangDetailPage />} />
+          </Routes>
+        </AppProvider>
+      </MemoryRouter>,
+    );
+  });
+  const settle = async () => {
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      await act(async () => {
+        await new Promise((done) => setTimeout(done, 0));
+      });
+    }
+  };
+  await settle();
+  const clickById = async (testId: string) => {
+    const el = host.querySelector<HTMLElement>(`[data-testid="${testId}"]`);
+    if (!el) return;
+    await act(async () => {
+      el.click();
+    });
+    await settle();
+  };
+  await clickById('document-review-more-toggle');
+  await clickById('review-section-toggle-original-document');
+  return host;
 }
 
 function emptySummary(overrides: Partial<DocumentUnderstandingSummary> = {}): DocumentUnderstandingSummary {
@@ -72,15 +119,28 @@ describe('DOCUMENT-DETAIL-PRESENTATION-FIX-01', () => {
     expect(intake.success).toBe(true);
     if (!intake.success || intake.duplicate) throw new Error('intake failed');
 
+    /*
+     * DOCUMENT-EXPERIENCE-SIMPLIFICATION-01B — vorher wurde hier zugesichert,
+     * dass das Originalpanel **ohne** „Weitere Optionen" dauerhaft im
+     * Hauptfluss steht. Die Originaldatei ist jetzt bewusst keine Dauerfläche
+     * mehr; sie liegt unter „Weitere Optionen → Originaldokument".
+     *
+     * Die eigentliche Zusicherung bleibt vollständig erhalten: Download und
+     * Dateiname werden weiterhin geprüft — nur nach dem Aufklappen.
+     */
     const html = renderAblageDetail(intake.inboxItem.id);
-    expect(html).toContain('data-testid="ablage-original-file"');
-    expect(html).toContain('data-testid="document-original-file-panel-download"');
-    expect(html).not.toContain('data-testid="document-review-more-content"');
-    expect(html).not.toContain('data-testid="document-review-original-section"');
-    expect(html).toContain('eingang.jpg');
+    expect(html).not.toContain('data-testid="ablage-original-file"');
+    expect(html).toContain('data-testid="document-review-more-toggle"');
+
+    const expanded = await renderAblageDetailExpanded(intake.inboxItem.id);
+    expect(expanded.querySelector('[data-testid="ablage-original-file"]')).not.toBeNull();
+    expect(
+      expanded.querySelector('[data-testid="document-original-file-panel-download"]'),
+    ).not.toBeNull();
+    expect(expanded.textContent).toContain('eingang.jpg');
   });
 
-  it('fehlender Blob zeigt weiterhin Fehlermeldung im Originalpanel', () => {
+  it('fehlender Blob zeigt weiterhin Fehlermeldung im Originalpanel', async () => {
     const item = createMockInboxItemFromUpload({
       sourceFileName: 'missing.pdf',
       recognizedText: 'Eingangsrechnung',
@@ -88,10 +148,17 @@ describe('DOCUMENT-DETAIL-PRESENTATION-FIX-01', () => {
     const withMissingRef: InboxItem = { ...item, fileRefId: 'missing-file-ref' };
     hydrateInboxStore([withMissingRef]);
 
+    /*
+     * DOCUMENT-EXPERIENCE-SIMPLIFICATION-01B — dieselbe Verlagerung. Die
+     * Fehlermeldung bei fehlendem Blob bleibt zugesichert, nur eben im
+     * aufgeklappten Bereich.
+     */
     const html = renderAblageDetail(withMissingRef.id);
-    expect(html).toContain('data-testid="ablage-original-file"');
-    expect(html).toContain(t('document.original.unavailable', 'de'));
-    expect(html).not.toContain('data-testid="document-review-more-content"');
+    expect(html).not.toContain('data-testid="ablage-original-file"');
+
+    const expanded = await renderAblageDetailExpanded(withMissingRef.id);
+    expect(expanded.querySelector('[data-testid="ablage-original-file"]')).not.toBeNull();
+    expect(expanded.textContent).toContain(t('document.original.unavailable', 'de'));
   });
 
   it('Eingangsrechnung enthält keine Aktion write_invoice', () => {

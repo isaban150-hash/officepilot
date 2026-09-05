@@ -74,8 +74,18 @@ describe('DOCUMENT-INBOX-SUMMARY-01', () => {
       expect.arrayContaining(['customer', 'project', 'site', 'orderValue', 'gewerk']),
     );
     expect(summary.alerts.some((a) => a.id === 'sender-uncertain')).toBe(true);
-    expect(summary.primaryAction.labelKey).toBe('vorgangIntelligence.action.create');
-    expect(summary.primaryAction.id).toBe('create_vorgang');
+    /*
+     * INBOX-PRIMARY-ACTION-CONSISTENCY-01B — hier stand `create_vorgang` samt
+     * „Neuen Vorgang anlegen".
+     *
+     * Die Erwartung stammt aus der Zeit, als `finalizeInboxPresentation` vor dem
+     * Fallabgleich lief und dessen Aktion die Listenbeschriftung bestimmte. Die
+     * Listenkarte führt aber keine produktive Vorgangsanlage aus: Ihr Klick
+     * öffnet das Dokument. Der Fallabgleich bleibt als Kontext erhalten — die
+     * Hauptaktion führt zur Prüfung.
+     */
+    expect(summary.primaryAction.labelKey).toBe('inbox.reviewNow');
+    expect(summary.primaryAction.id).toBe('review_document');
     expect(summary.caseMatch?.matchStatus).toBe('none');
     expect(summary.secondaryActions.map((a) => a.id)).toEqual(['later']);
 
@@ -84,7 +94,8 @@ describe('DOCUMENT-INBOX-SUMMARY-01', () => {
     expect(html).toContain('Werkvertrag');
     expect(html).toContain('Isobautec GmbH');
     expect(html).toContain('12.000,00 €');
-    expect(html).toContain('Neuen Vorgang anlegen');
+    expect(html).toContain('Jetzt prüfen');
+    expect(html).not.toContain('Neuen Vorgang anlegen');
     expect(html).toContain('Später');
     expect(html).toContain('Absender konnte nicht eindeutig erkannt werden.');
     expect(html).not.toContain('Gerade erfasst');

@@ -1968,6 +1968,13 @@ const deLegacy = {
   'financeReference.open': 'Rechnung öffnen',
   'financeReference.link': 'Mit dieser Rechnung verknüpfen',
   'financeReference.linked': 'Verknüpfung gespeichert.',
+  /*
+   * DUNNING-CHECK-PAYMENT-EXECUTION-01B — Nutzersprache, keine Fachbegriffe der
+   * Auflösung. Die bestehenden Statusaussagen bleiben wortgleich.
+   */
+  'financeReference.chooseInvoice': 'Bitte die zutreffende Rechnung auswählen:',
+  'financeReference.browseExpenses': 'Ausgaben durchsuchen',
+  'financeReference.checkHint': 'Zugehörige Rechnung prüfen',
   'expense.fieldTitle': 'Titel',
   'expense.fieldCategory': 'Kategorie',
   'expense.fieldSupplier': 'Lieferant',
@@ -3111,6 +3118,13 @@ const deLegacy = {
   'documentExperience.action.later': 'Später',
   'documentExperience.action.continue': 'Weiter',
   'documentExperience.action.openCase': 'Vorgang öffnen',
+  /*
+   * DUNNING-PRIMARY-ACTION-ROUTING-01B — eigener Präsentationstext für die
+   * kanonische Ansicht. `classification.action.checkPayment` („Zahlung prüfen")
+   * bleibt im Klassifikationskatalog unverändert; hier steht die Frage, die der
+   * Nutzer vor einer Mahnung tatsächlich hat.
+   */
+  'documentExperience.action.checkPayment': 'Prüfen, ob schon bezahlt',
   'documentExperience.details.nextStep': 'Nächster Schritt',
   'auftragskarte.risk.penalty': 'Vertragsstrafe vorhanden',
   'auftragskarte.risk.retention': 'Sicherheitseinbehalt vereinbart',
@@ -3295,6 +3309,36 @@ const deLegacy = {
   'reviewWorkflow.section.positions': 'Positionen',
   'reviewWorkflow.section.archive': 'Archivinformationen',
   'reviewWorkflow.section.technical': 'Technische Details',
+  // DOCUMENT-EXPERIENCE-SIMPLIFICATION-01B — Gruppen unter „Details anzeigen".
+  'reviewWorkflow.section.fieldConfirm': 'Angaben prüfen',
+  'reviewWorkflow.section.originalDocument': 'Originaldokument',
+  'reviewWorkflow.section.replyDraft': 'Antwortentwurf',
+  'reviewWorkflow.section.administration': 'Verwaltung',
+  // DOCUMENT-EXPERIENCE-SIMPLIFICATION-01D — „Worum geht es?" aus erkannten Fakten.
+  'documentLead.invoiceIn': '{supplier} stellt Ihnen mit der Rechnung {invoiceNumber} {amount} in Rechnung.',
+  'documentLead.invoiceInNoNumber': '{supplier} stellt Ihnen {amount} in Rechnung.',
+  'documentLead.dueOn': 'Die Rechnung ist am {deadline} fällig.',
+  'documentLead.dunning': '{sender} erinnert an die Zahlung der Rechnung {invoiceNumber} über {amount}.',
+  'documentLead.dunning.check': 'Bitte prüfen Sie, ob die Rechnung bereits bezahlt wurde.',
+  'documentLead.letterWithSubject': '{sender} hat Ihnen geschrieben: {subject}.',
+  'documentLead.letter': '{sender} hat Ihnen geschrieben.',
+  'documentLead.deadlineOn': 'Die Frist endet am {deadline}.',
+  // DOCUMENT-EXPERIENCE-GENERALITY-01B — dieselbe Regel für die übrigen Familien.
+  'documentLead.contract': 'Der Vertrag betrifft {project} mit {customer}.',
+  'documentLead.contractParty': 'Dieses Dokument ist ein Vertrag mit {customer}.',
+  'documentLead.contractSubject': 'Der Vertrag betrifft {project}.',
+  'documentLead.contractValue': 'Der vereinbarte Wert beträgt {orderValue}.',
+  'documentLead.offer': 'Dieses Dokument ist ein Angebot über {amount} für {subject}.',
+  'documentLead.offerAmount': 'Dieses Dokument ist ein Angebot über {amount}.',
+  'documentLead.offerSubject': 'Dieses Dokument ist ein Angebot für {subject}.',
+  'documentLead.offerValidUntil': 'Das Angebot gilt bis {deadline}.',
+  'documentLead.delivery': '{supplier} dokumentiert eine Lieferung vom {date}.',
+  'documentLead.deliverySupplier': '{supplier} dokumentiert eine Lieferung.',
+  'documentLead.deliveryDate': 'Dieses Dokument dokumentiert eine Lieferung vom {date}.',
+  'documentLead.deliveryQty': 'Die Lieferung umfasst {qty}.',
+  'documentLead.unclear': 'OfficePilot kann dieses Schreiben noch nicht eindeutig einordnen.',
+  'documentLead.knownSender': 'Erkannter Absender: {sender}.',
+  'documentLead.knownSubject': 'Betreff: {subject}.',
 
   'reviewWorkflow.success.title': 'Vorschlag übernommen',
   'reviewWorkflow.success.archived': 'Dokument archiviert',
@@ -4154,6 +4198,7 @@ const trLegacy: Partial<Record<keyof typeof de, string>> = {
   'documentExperience.action.later': 'Sonra',
   'documentExperience.action.continue': 'Devam',
   'documentExperience.action.openCase': 'İşi aç',
+  'documentExperience.action.checkPayment': 'Ödendi mi kontrol et',
   'vorgangIntelligence.match.checkTitle': 'İşi kontrol et',
   'documentExperience.details.nextStep': 'Sonraki adım',
   'auftragskarte.field.ownRole': 'Rolünüz',
@@ -5082,6 +5127,7 @@ const bgLegacy: Partial<Record<keyof typeof de, string>> = {
   'documentExperience.action.later': 'По-късно',
   'documentExperience.action.continue': 'Напред',
   'documentExperience.action.openCase': 'Отвори дело',
+  'documentExperience.action.checkPayment': 'Провери дали е платено',
   'vorgangIntelligence.match.checkTitle': 'Провери делото',
   'documentExperience.details.nextStep': 'Следваща стъпка',
   'auftragskarte.field.ownRole': 'Вашата роля',

@@ -26,6 +26,12 @@ interface DocumentFinanceReferencePanelProps {
   translate: (key: TranslationKey) => string;
   onOpenTarget: (targetId: string) => void;
   onConfirmLink: (targetId: string) => void;
+  /**
+   * DUNNING-CHECK-PAYMENT-EXECUTION-01B — der ehrliche nächste Schritt, wenn es
+   * nichts zu verknüpfen gibt: die vorhandene Ausgabenübersicht. Keine neue
+   * Suche.
+   */
+  onBrowseExpenses?: () => void;
 }
 
 function money(value: number): string {
@@ -40,10 +46,27 @@ export function DocumentFinanceReferencePanel({
   translate,
   onOpenTarget,
   onConfirmLink,
+  onBrowseExpenses,
 }: DocumentFinanceReferencePanelProps) {
   const { matched, status } = match;
   // Verknüpfen darf nur, was eindeutig **und** noch nicht verbunden ist.
   const canLink = status === 'exact' && matched !== null;
+  /*
+   * DUNNING-CHECK-PAYMENT-EXECUTION-01B — bei mehreren Treffern liegen die
+   * Kandidaten längst vor; sie wurden bisher nur nicht gezeigt. Der Nutzer sah
+   * „Mehrere Rechnungen passen" und hatte keinen Weg weiter.
+   *
+   * Gezeigt wird die vorhandene Reihenfolge des Resolvers — **keine** neue
+   * Rangfolge, keine Vorauswahl, keine automatische Verknüpfung. Wer zuordnet,
+   * tut das bewusst über denselben Confirm-first-Weg wie im eindeutigen Fall.
+   */
+  const showCandidates = status === 'ambiguous' && match.candidates.length > 0;
+  /*
+   * Wo es nichts zu verknüpfen gibt, ist die ehrliche Hilfe der Blick in die
+   * vorhandenen Ausgaben — nicht eine leere Auswahl.
+   */
+  const showBrowse =
+    Boolean(onBrowseExpenses) && (status === 'not_found' || status === 'conflict');
 
   return (
     <Card className="document-finance-reference" data-testid="document-finance-reference">
@@ -99,6 +122,64 @@ export function DocumentFinanceReferencePanel({
           onClick={() => onConfirmLink(matched!.targetId)}
         >
           {translate('financeReference.link')}
+        </Button>
+      ) : null}
+
+      {showCandidates ? (
+        <div data-testid="document-finance-reference-candidates">
+          <p className="document-finance-reference__hint">
+            {translate('financeReference.chooseInvoice')}
+          </p>
+          {match.candidates.map((candidate) => (
+            <div
+              key={candidate.targetId}
+              className="document-finance-reference__candidate"
+              data-testid={`document-finance-reference-candidate-${candidate.targetId}`}
+            >
+              <DataRow
+                label={translate('expense.fieldSupplier')}
+                value={candidate.supplierName}
+              />
+              <DataRow
+                label={translate('expense.fieldInvoiceNumber')}
+                value={candidate.invoiceNumber}
+              />
+              <DataRow
+                label={translate('expense.fieldGrossAmount')}
+                value={money(candidate.grossAmount)}
+              />
+              <DataRow
+                label={translate('financeReference.openAmount')}
+                value={money(candidate.openAmount)}
+              />
+              <Button
+                variant="outline"
+                fullWidth
+                data-testid={`document-finance-reference-candidate-open-${candidate.targetId}`}
+                onClick={() => onOpenTarget(candidate.targetId)}
+              >
+                {translate('financeReference.open')}
+              </Button>
+              <Button
+                fullWidth
+                data-testid={`document-finance-reference-candidate-link-${candidate.targetId}`}
+                onClick={() => onConfirmLink(candidate.targetId)}
+              >
+                {translate('financeReference.link')}
+              </Button>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {showBrowse ? (
+        <Button
+          variant="outline"
+          fullWidth
+          data-testid="document-finance-reference-browse"
+          onClick={() => onBrowseExpenses?.()}
+        >
+          {translate('financeReference.browseExpenses')}
         </Button>
       ) : null}
     </Card>

@@ -196,9 +196,14 @@ describe('VORGANG-INTELLIGENCE-01', () => {
     const summary = buildDocumentSummary(item, workflowFor(item, minimalBi('eingangsrechnung')), {
       translate,
     });
-    // Bestätigungspflichtig: weder Öffnen noch stilles Zuordnen.
-    expect(summary.primaryAction.id).toBe('select_vorgang');
-    expect(summary.primaryAction.labelKey).toBe('vorgangIntelligence.action.select');
+    /*
+     * DOCUMENT-INVOICE-PRIMARY-ACTION-01B — die Detailseite behält die fachliche
+     * Aktion der Rechnung; der Fallabgleich ergänzt sie, statt sie zu ersetzen.
+     * Der Vorgangsbezug einer Ausgabe setzt deren Erfassung voraus. Bestätigungs-
+     * pflichtig bleibt es trotzdem: weder Öffnen noch stilles Zuordnen.
+     */
+    expect(summary.primaryAction.id).toBe('record_expense');
+    expect(summary.primaryAction.labelKey).toBe('documentExperience.action.recordExpense');
     expect(summary.primaryAction.id).not.toBe('open_vorgang');
     expect(summary.primaryAction.id).not.toBe('link_vorgang');
   });
@@ -232,7 +237,9 @@ describe('VORGANG-INTELLIGENCE-01', () => {
     expect(match.candidates.length).toBeGreaterThanOrEqual(2);
 
     const summary = buildInboxDocumentSummary(item, { translate });
-    expect(summary.primaryAction.id).toBe('select_vorgang');
+    // Kompakte Eingangskarte: sie fuehrt select_vorgang nicht aus, sondern oeffnet
+    // die Pruefung. Der Trefferzustand bleibt oben unveraendert geprueft.
+    expect(summary.primaryAction.id).toBe('review_document');
     const html = renderToStaticMarkup(
       createElement(DocumentExperienceCard, {
         summary,
@@ -281,8 +288,9 @@ describe('VORGANG-INTELLIGENCE-01', () => {
     expect(match.reasons).toEqual(expect.arrayContaining(['same_project', 'same_customer']));
 
     const summary = buildInboxDocumentSummary(item, { translate });
-    // Computed exact match without a confirmed stored link stays confirm-first.
-    expect(summary.primaryAction.id).toBe('link_vorgang');
+    // Computed exact match without a confirmed stored link stays confirm-first — the
+    // compact inbox card opens review instead of executing link_vorgang.
+    expect(summary.primaryAction.id).toBe('review_document');
   });
 
   it('multiple: gemeinsamer Projekt-Präfix ohne eindeutigen Titel bleibt mehrdeutig', () => {
@@ -338,8 +346,13 @@ describe('VORGANG-INTELLIGENCE-01', () => {
       translate,
     });
     expect(summary.caseMatch?.matchStatus).toBe('none');
-    expect(summary.primaryAction.id).toBe('create_vorgang');
-    expect(summary.primaryAction.labelKey).toBe('vorgangIntelligence.action.create');
+    /*
+     * DOCUMENT-INVOICE-PRIMARY-ACTION-01B — ein Tankbeleg bleibt auch ohne passenden
+     * Vorgang ein Ausgabenbeleg. Ein fehlender Treffer ändert den Dokumentzweck nicht;
+     * der Fallabgleich bleibt als `caseMatch` erhalten (Zeile darüber).
+     */
+    expect(summary.primaryAction.id).toBe('record_expense');
+    expect(summary.primaryAction.labelKey).toBe('classification.action.recordExpense');
   });
 
   it('Familien: Werkvertrag, Rechnung, Lieferschein, Tank, Behörde, Brief', () => {

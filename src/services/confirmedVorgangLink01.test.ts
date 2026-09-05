@@ -78,7 +78,9 @@ describe('CONFIRMED-VORGANG-LINK-01 – open_vorgang haengt am bestaetigten Link
     expect(resolveConfirmedLinkCaseId(item)).toBeNull();
 
     const summary = buildInboxDocumentSummary(item, { translate });
-    expect(summary.primaryAction.id).toBe('link_vorgang');
+    // Errechneter Treffer ohne bestaetigte Verknuepfung: die kompakte Karte fuehrt
+    // link_vorgang nicht aus, sie oeffnet die Pruefung. Confirm-first bleibt oben belegt.
+    expect(summary.primaryAction.id).toBe('review_document');
   });
 
   it('vorgangId ohne gueltigen Linkstatus → nicht open_vorgang, kein stiller No-op', () => {
@@ -162,8 +164,8 @@ describe('CONFIRMED-VORGANG-LINK-01 – Kandidatenzahl in der Ueberschrift', () 
     expect(summary.caseMatch?.candidates).toHaveLength(1);
     expect(html).not.toContain('Mehrere passende Vorgänge');
     expect(html).toContain('Vorgang prüfen');
-    // Confirm-first bleibt unverändert.
-    expect(summary.primaryAction.id).toBe('select_vorgang');
+    // Confirm-first bleibt unverändert; die Listenkarte führt select_vorgang nicht aus.
+    expect(summary.primaryAction.id).toBe('review_document');
   });
 
   it('mehrere Kandidaten → bisherige Mehrzahl-Ueberschrift', () => {
@@ -185,6 +187,7 @@ describe('CONFIRMED-VORGANG-LINK-01 – Kandidatenzahl in der Ueberschrift', () 
     expect(summary.caseMatch?.matchStatus).toBe('multiple');
     expect(summary.caseMatch!.candidates.length).toBeGreaterThan(1);
     expect(html).toContain('Mehrere passende Vorgänge');
-    expect(summary.primaryAction.id).toBe('select_vorgang');
+    // Die Mehrzahl-Aussage bleibt sichtbar; die Auswahl selbst findet im Detail statt.
+    expect(summary.primaryAction.id).toBe('review_document');
   });
 });

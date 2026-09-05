@@ -254,6 +254,19 @@ describe('CONTRACT-WORKSPACE-ASSISTANT-COMPACT-01', () => {
       /data-testid="auftragskarte-contract-body"[\s\S]*data-testid="contract-workspace-summary"/,
     );
     expect(html).not.toContain('data-testid="contract-order-lv-overview"');
-    assertOrder(html, 'data-testid="auftragskarte"', 'data-testid="ablage-original-file"');
+    /*
+     * DOCUMENT-EXPERIENCE-SIMPLIFICATION-01B — hier stand:
+     *   assertOrder(html, 'auftragskarte', 'ablage-original-file')
+     * also die Zusicherung, dass die Originaldatei im Hauptfluss unterhalb der
+     * Auftragskarte liegt.
+     *
+     * Der Vertrag hat kein eigenes Seitenlayout mehr, und die Originaldatei ist
+     * keine Dauerfläche: Sie liegt unter „Weitere Optionen → Originaldokument".
+     * Geprüft wird deshalb, dass sie **nicht** im Hauptfluss steht und der
+     * Einstieg dorthin vorhanden ist. Die Vertragsreihenfolge oben bleibt
+     * unverändert abgesichert.
+     */
+    expect(html).not.toContain('data-testid="ablage-original-file"');
+    expect(html).toContain('data-testid="document-review-more-toggle"');
   });
 });

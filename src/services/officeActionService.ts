@@ -39,6 +39,14 @@ export type OfficeActionDelegate =
   | 'dispose'
   | 'saveAnyway'
   | 'expandDetails'
+  /**
+   * DUNNING-CHECK-PAYMENT-EXECUTION-01B — zeigt auf den Bezugsbeleg-Bereich.
+   *
+   * Bewusst ein eigener Wert statt einer Umdeutung von `expandDetails`: Der
+   * wird auch ausserhalb dieses Flusses genutzt (`executeScanResultAction`) und
+   * behält seine Bedeutung unverändert.
+   */
+  | 'focusFinanceReference'
   | 'goBack';
 
 export type OfficeActionResult =
@@ -161,8 +169,18 @@ function openFinanceReferenceForInbox(item: InboxItem): OfficeActionResult {
   ) {
     return { ok: true, kind: 'navigate', route: `/ausgaben/${match.matched.targetId}` };
   }
-  // Alles Uneindeutige bleibt beim Dokument: prüfen, nicht buchen.
-  return { ok: true, kind: 'delegate', delegate: 'expandDetails' };
+  /*
+   * DUNNING-CHECK-PAYMENT-EXECUTION-01B — alles Uneindeutige bleibt beim
+   * Dokument, führt den Nutzer aber sichtbar dorthin.
+   *
+   * Realbefund iPhone/Safari: `expandDetails` klappte „Weitere Optionen" auf —
+   * technisch aktiv, aber unterhalb des Sichtfelds und ohne Bezug zur
+   * Zahlungsfrage. Für den Nutzer wirkte der Knopf kaputt.
+   *
+   * Der berechnete Bezugszustand bleibt unverändert die Wahrheit; hier ändert
+   * sich nur, wohin die Oberfläche zeigt.
+   */
+  return { ok: true, kind: 'delegate', delegate: 'focusFinanceReference' };
 }
 
 export function createExpenseFromInbox(item: InboxItem): OfficeActionResult {

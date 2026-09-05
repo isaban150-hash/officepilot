@@ -120,8 +120,22 @@ describe('CONTRACT-WORKSPACE-MOBILE-ORDER-01', () => {
     expect(html).toContain('data-testid="contract-workspace-summary"');
     // UX-02: no document-assistant hero above the Auftragskarte.
     expect(html).not.toContain('data-testid="document-assistant-panel"');
-    assertOrder(html, 'data-testid="auftragskarte"', 'data-testid="ablage-original-file"');
-    assertOrder(html, 'data-testid="ablage-original-file"', 'data-testid="document-free-question-panel"');
+    /*
+     * DOCUMENT-EXPERIENCE-SIMPLIFICATION-01B — vorher:
+     *   auftragskarte → ablage-original-file → document-free-question-panel
+     *
+     * Diese Sonderreihenfolge galt nur für Vertragsdokumente. Es gibt jetzt
+     * eine kanonische Reihenfolge für alle Dokumente: Auftragskarte, dann
+     * Chat, dann „Weitere Optionen" — die Originaldatei liegt darin.
+     * Der Auftragsvorschlag selbst bleibt oben geprüft (siehe Zeilen davor).
+     */
+    assertOrder(html, 'data-testid="auftragskarte"', 'data-testid="document-free-question-panel"');
+    assertOrder(
+      html,
+      'data-testid="document-free-question-panel"',
+      'data-testid="document-review-more-toggle"',
+    );
+    expect(html).not.toContain('data-testid="ablage-original-file"');
   });
 
   it('Ohne Proposal: Experience-Card vor Free Question und Original', () => {
@@ -134,7 +148,18 @@ describe('CONTRACT-WORKSPACE-MOBILE-ORDER-01', () => {
     expect(html).toContain('data-testid="document-experience-card"');
     expect(html).not.toContain('data-testid="document-assistant-panel"');
     expect(html).not.toContain('data-testid="operational-overview"');
+    /*
+     * DOCUMENT-EXPERIENCE-SIMPLIFICATION-01B — vorher endete die Kette bei
+     * `ablage-original-file` im Hauptfluss. Die Originaldatei liegt jetzt unter
+     * „Weitere Optionen"; die Kette Experience → Chat → Details ist die
+     * kanonische Reihenfolge und gilt für alle Dokumentarten gleich.
+     */
     assertOrder(html, 'data-testid="document-experience-card"', 'data-testid="document-free-question-panel"');
-    assertOrder(html, 'data-testid="document-free-question-panel"', 'data-testid="ablage-original-file"');
+    assertOrder(
+      html,
+      'data-testid="document-free-question-panel"',
+      'data-testid="document-review-more-toggle"',
+    );
+    expect(html).not.toContain('data-testid="ablage-original-file"');
   });
 });

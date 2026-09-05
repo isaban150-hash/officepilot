@@ -42,7 +42,6 @@ import { DocumentFreeQuestionPanel } from '../components/documents/DocumentFreeQ
 import { DocumentFieldFillConfirmPanel } from '../components/documents/DocumentFieldFillConfirmPanel';
 import { DocumentFilingDecisionPanel } from '../components/documents/DocumentFilingDecisionPanel';
 import { DocumentConfirmedReplyDraftPanel } from '../components/documents/DocumentConfirmedReplyDraftPanel';
-import { DocumentContextualNextStepsPanel } from '../components/documents/DocumentContextualNextStepsPanel';
 import { buildKommunikationPath } from '../components/communication/communicationNavigation';
 import { buildDocumentFieldFillConfirmViewModel } from '../services/documentFieldFillConfirmService';
 import { applyStoredOverlayToFillConfirmRows } from '../services/documentFieldFillConfirmTruthBridge';
@@ -136,6 +135,7 @@ import { scheduleAfterPaint } from '../services/scheduleAfterPaint';
 import {
   applyOfficeActionResult,
   executeContractAction,
+  executeDocumentAction,
 } from '../services/officeActionService';
 import type {
   ClassifiedDocumentKind,
@@ -158,7 +158,12 @@ type ReviewSectionId =
   | 'positions'
   | 'archive'
   | 'further-hints'
-  | 'technical';
+  | 'technical'
+  // DOCUMENT-EXPERIENCE-SIMPLIFICATION-01B — aus dem Hauptfluss hierher verlegt.
+  | 'field-confirm'
+  | 'original-document'
+  | 'reply-draft'
+  | 'administration';
 
 /**
  * Shared wording for the blocked import — used by both the confirm-import and
@@ -339,6 +344,8 @@ export function EingangDetailPage() {
   const [unlinkConfirmOpen, setUnlinkConfirmOpen] = useState(false);
   const [unlinkFailureMessage, setUnlinkFailureMessage] = useState<string | null>(null);
   const unlinkTriggerRef = useRef<HTMLButtonElement>(null);
+  /** DUNNING-CHECK-PAYMENT-EXECUTION-01B — Ziel der Zahlungsprüfung. */
+  const financeReferenceSectionRef = useRef<HTMLDivElement>(null);
   const [vorgangDialogRequest, setVorgangDialogRequest] = useState(0);
   // CUSTOMER-FACHOBJEKT-04C — one decision state for all three manual accept entries.
   const [customerMode, setCustomerMode] = useState<CustomerDecisionMode | null>(null);
@@ -380,10 +387,33 @@ export function EingangDetailPage() {
     const dwr = getDocumentWorkResultForItem(initial.id);
     return applyStoredOverlayToFillConfirmRows(base, dwr?.overlay ?? null);
   });
-  const [replyCoreMessage, setReplyCoreMessage] = useState('');
-  const [hasReplyDraft, setHasReplyDraft] = useState(false);
+  /*
+   * DOCUMENT-EXPERIENCE-SIMPLIFICATION-01B — der Antwortentwurf meldet seinen
+   * Stand weiterhin hierher; gelesen wird er derzeit von niemandem mehr, weil
+   * die zweite Aktionskarte entfallen ist. Der Zustand bleibt bewusst erhalten:
+   * Er ist der Anknüpfungspunkt, wenn der Entwurf später aus dem Chat oder
+   * einer Aktion heraus geöffnet wird.
+   */
+  const [, setReplyCoreMessage] = useState('');
+  const [, setHasReplyDraft] = useState(false);
+
+  /*
+   * DOCUMENT-EXPERIENCE-SIMPLIFICATION-01C — die notwendige Bestätigung kommt
+   * zum Nutzer, nicht der Nutzer zur Bestätigung.
+   *
+   * Realbefund: Ein Klick auf „Ausgabe erfassen" meldete „Bitte zuerst die
+   * Ablageentscheidung bestätigen." — und danach musste man sie unter
+   * Weitere Optionen → Archiv selbst suchen. Jetzt erscheint dieselbe
+   * vorhandene Bestätigungsfläche unmittelbar unter den Aktionen.
+   *
+   * Confirm-first bleibt vollständig: Es wird nichts automatisch bestätigt,
+   * nichts automatisch archiviert, und die Ablageentscheidung behält ihre
+   * eigene Wahrheit — hier wird nur ein zweiter Anzeigeort geöffnet.
+   */
+  const [filingPromptOpen, setFilingPromptOpen] = useState(false);
 
   const revealArchiveImportUi = () => {
+    setFilingPromptOpen(true);
     setMoreOptionsExpanded(true);
     setExpandedSections((current) => ({ ...current, archive: true }));
   };
@@ -1164,6 +1194,47 @@ export function EingangDetailPage() {
     handleExecuteAll();
   };
 
+  /*
+   * DUNNING-PRIMARY-ACTION-ROUTING-01B — die Hauptaktion einer Mahnung führt
+   * exakt den bereits vorhandenen `check_payment`-Weg aus.
+   *
+   * Kein zweiter Handler, kein eigener Resolver: `executeDocumentAction` erkennt
+   * über `isFinanceReferenceOnlyKind` das Bezugsdokument und ruft
+   * `openFinanceReferenceForInbox` — eindeutiger Treffer öffnet den Beleg, alles
+   * Uneindeutige bleibt beim Dokument. Gebucht wird auf keinem Zweig.
+   */
+  const handleCheckPayment = () => {
+    applyOfficeActionResult(
+      executeDocumentAction('check_payment', item, {
+        classifiedKind: workflow?.classifiedKind ?? item.classifiedKind,
+      }),
+      {
+        navigate,
+        translate,
+        showToast,
+        onItemUpdated: setItem,
+        delegates: {
+          /*
+           * DUNNING-CHECK-PAYMENT-EXECUTION-01B — die Prüfung findet im
+           * Bezugsbeleg-Bereich statt, nicht unter „Weitere Optionen".
+           *
+           * Der Bereich gehört bereits zum Hauptfluss; er wird sichtbar in den
+           * Sichtbereich geholt und fokussiert. Das Aufklappen der weiteren
+           * Optionen entfällt hier bewusst — es beantwortete die Zahlungsfrage
+           * nicht und lag ausserhalb des Sichtfelds.
+           */
+          focusFinanceReference: () => {
+            const node = financeReferenceSectionRef.current;
+            if (!node) return;
+            node.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            node.focus({ preventScroll: true });
+            showToast(translate('financeReference.checkHint'));
+          },
+        },
+      },
+    );
+  };
+
   const handleOpenVorgang = (matchedVorgangId?: string) => {
     const vorgangId =
       matchedVorgangId ?? intakeExecution?.vorgangId ?? item.vorgangId;
@@ -1647,15 +1718,15 @@ export function EingangDetailPage() {
       onPersistFailed={(message) => showToast(message)}
     />
   );
-  const contextualNextStepsPanel = useAssistFlowConsolidate ? (
-    <DocumentContextualNextStepsPanel
-      key={`document-contextual-next-steps-${assistSessionKey}`}
-      rows={fillConfirmRows}
-      coreMessage={replyCoreMessage}
-      hasReplyDraft={hasReplyDraft}
-      testIdPrefix="document-contextual-next-steps"
-    />
-  ) : null;
+  /*
+   * DOCUMENT-EXPERIENCE-SIMPLIFICATION-01B — `DocumentContextualNextStepsPanel`
+   * ist aus dem Hauptfluss entfallen.
+   *
+   * „Was soll ich jetzt tun" ist die Aktionszeile der Experience Card — eine
+   * Hauptaktion, höchstens zwei Nebenaktionen. Eine zweite Karte daneben zeigte
+   * dieselbe Frage ein zweites Mal. Die Komponente bleibt im Repository für den
+   * späteren Ausbau der Mahnungszustände erhalten.
+   */
   const confirmedReplyDraftPanel = isConfirmedReplyDraftSupported(item) ? (
     <DocumentConfirmedReplyDraftPanel
       key={`document-confirmed-reply-draft-${assistSessionKey}`}
@@ -1710,11 +1781,45 @@ export function EingangDetailPage() {
   const financeReferenceMatch = financeReferenceKind
     ? resolveDocumentFinanceReference(item)
     : null;
+  /*
+   * Die Ablagebestätigung direkt im Aktionsfluss — dieselbe Komponente wie in
+   * „Weitere Optionen → Archiv", nur an der Stelle, an der sie gebraucht wird.
+   * Sie erscheint erst, wenn eine Hauptaktion daran gescheitert ist, und
+   * verschwindet, sobald bestätigt wurde.
+   */
+  const filingConfirmPrompt =
+    filingPromptOpen && !isDocumentFilingDecisionConfirmed(item) ? (
+      <Card data-testid="action-filing-confirm">
+        <p className="invoice-hint invoice-hint--warning">
+          {translate('filingDecision.confirmRequired')}
+        </p>
+        <DocumentFilingDecisionPanel
+          item={item}
+          onConfirmed={(updated) => {
+            setItem(updated);
+            setFilingPromptOpen(false);
+            showToast(translate('filingDecision.confirmedToast'));
+          }}
+        />
+      </Card>
+    ) : null;
+
   const financeReferencePanel = financeReferenceMatch ? (
+    /*
+     * DUNNING-CHECK-PAYMENT-EXECUTION-01B — ein Wrapper direkt um das Panel,
+     * damit „Prüfen, ob schon bezahlt" ein sichtbares Ziel hat. Keine
+     * zusätzliche Card, keine Ref-Kaskade durch mehrere Komponenten.
+     */
+    <div
+      ref={financeReferenceSectionRef}
+      tabIndex={-1}
+      data-testid="document-finance-reference-section"
+    >
     <DocumentFinanceReferencePanel
       match={financeReferenceMatch}
       translate={translate}
       onOpenTarget={(targetId) => navigate(`/ausgaben/${targetId}`)}
+      onBrowseExpenses={() => navigate('/ausgaben')}
       onConfirmLink={(targetId) => {
         const result = confirmDocumentFinanceReference(item.id, {
           targetType: 'expense',
@@ -1728,7 +1833,104 @@ export function EingangDetailPage() {
         showToast(translate('financeReference.linked'));
       }}
     />
+    </div>
   ) : null;
+
+  /*
+   * DOCUMENT-EXPERIENCE-SIMPLIFICATION-01B — alles Sekundäre wandert unter
+   * „Details anzeigen".
+   *
+   * Bis hierher standen Angabenprüfung, Antwortentwurf, Originaldatei und —
+   * noch vor dem Inhalt — Löschen und Verknüpfung lösen als gleichrangige
+   * Flächen im Hauptfluss. Die Seite fragte damit zuerst nach Bestätigungen und
+   * bot zwei destruktive Aktionen an, bevor sie überhaupt sagte, worum es geht.
+   *
+   * Die Bausteine bleiben unverändert; nur ihr Ort ändert sich. Bewusst als
+   * zweiter Block hinter `moreOptionsContent`, weil die Panels erst hier
+   * definiert sind — kein Umsortieren von 300 Zeilen.
+   */
+  const canonicalDetailsSections = (
+    <>
+      <CollapsibleReviewSection
+        id="field-confirm"
+        title={translate('reviewWorkflow.section.fieldConfirm')}
+        expanded={Boolean(expandedSections['field-confirm'])}
+        onToggle={() => toggleSection('field-confirm')}
+      >
+        {fieldFillConfirmPanel}
+      </CollapsibleReviewSection>
+
+      {originalFilePanel ? (
+        <CollapsibleReviewSection
+          id="original-document"
+          title={translate('reviewWorkflow.section.originalDocument')}
+          expanded={Boolean(expandedSections['original-document'])}
+          onToggle={() => toggleSection('original-document')}
+        >
+          {originalFilePanel}
+        </CollapsibleReviewSection>
+      ) : null}
+
+      {confirmedReplyDraftPanel ? (
+        <CollapsibleReviewSection
+          id="reply-draft"
+          title={translate('reviewWorkflow.section.replyDraft')}
+          expanded={Boolean(expandedSections['reply-draft'])}
+          onToggle={() => toggleSection('reply-draft')}
+        >
+          {confirmedReplyDraftPanel}
+        </CollapsibleReviewSection>
+      ) : null}
+
+      {/*
+        * Verwaltung: irreversible Wege gehören nach unten, nicht über den
+        * Inhalt. Die vorhandenen Bestätigungsdialoge bleiben unverändert.
+        */}
+      <CollapsibleReviewSection
+        id="administration"
+        title={translate('reviewWorkflow.section.administration')}
+        expanded={Boolean(expandedSections.administration)}
+        onToggle={() => toggleSection('administration')}
+      >
+        <div className="action-stack">
+          {item.archiveDocumentId?.trim() ? (
+            <Link
+              to={`/dokumente/${item.archiveDocumentId}`}
+              data-testid="inbox-open-archive-document"
+            >
+              {translate('inbox.openArchiveDocument')}
+            </Link>
+          ) : null}
+          {item.vorgangId?.trim() ? (
+            <Button
+              ref={unlinkTriggerRef}
+              variant="ghost"
+              fullWidth
+              onClick={() => {
+                setUnlinkFailureMessage(null);
+                setUnlinkConfirmOpen(true);
+              }}
+              data-testid="inbox-unlink-vorgang-trigger"
+            >
+              {translate('inbox.unlinkVorgang.action')}
+            </Button>
+          ) : null}
+          <Button
+            ref={deleteTriggerRef}
+            variant="ghost"
+            fullWidth
+            onClick={() => {
+              setDeleteFailureMessage(null);
+              setDeleteConfirmOpen(true);
+            }}
+            data-testid="inbox-delete-trigger"
+          >
+            {translate('inbox.delete.action')}
+          </Button>
+        </div>
+      </CollapsibleReviewSection>
+    </>
+  );
 
   const reviewExperience = (
     <DocumentReviewExperience
@@ -1790,8 +1992,26 @@ export function EingangDetailPage() {
       onNextDocument={goBack}
       onLinkVorgang={() => setVorgangDialogRequest((n) => n + 1)}
       onCreateTask={handleCreateTask}
-      moreOptionsContent={moreOptionsContent}
-      beforeMoreOptions={financeReferencePanel}
+      onCheckPayment={handleCheckPayment}
+      moreOptionsContent={
+        <>
+          {moreOptionsContent}
+          {canonicalDetailsSections}
+        </>
+      }
+      /*
+       * Die Zone zwischen Aktionen und „Details anzeigen": erst der
+       * Belegbezug (Mahnungszustand aus DOCUMENT-ACCOUNTING-REFERENCE-SAFETY),
+       * dann die Frage zum Dokument. Damit steht der Chat in **jedem**
+       * Dokumentfall an derselben Stelle — vor den Details, nach den Aktionen.
+       */
+      beforeMoreOptions={
+        <>
+          {filingConfirmPrompt}
+          {financeReferencePanel}
+          {freeQuestionPanel}
+        </>
+      }
       experienceDetailsExtra={experienceDetailsExtra}
       letterExplanation={letterExplanation}
       translate={translate}
@@ -1808,45 +2028,11 @@ export function EingangDetailPage() {
         ← {translate('common.back')}
       </button>
 
-      {/* DOCUMENT-UNLINK-DELETE-01E — die Wege, auf die der Löschhinweis verweist. */}
-      {item.vorgangId?.trim() ? (
-        <div className="eingang-detail-page__unlink">
-          <Button
-            ref={unlinkTriggerRef}
-            variant="ghost"
-            onClick={() => {
-              setUnlinkFailureMessage(null);
-              setUnlinkConfirmOpen(true);
-            }}
-            data-testid="inbox-unlink-vorgang-trigger"
-          >
-            {translate('inbox.unlinkVorgang.action')}
-          </Button>
-        </div>
-      ) : null}
-
-      {item.archiveDocumentId?.trim() ? (
-        <div className="eingang-detail-page__archive-link">
-          <Link to={`/dokumente/${item.archiveDocumentId}`} data-testid="inbox-open-archive-document">
-            {translate('inbox.openArchiveDocument')}
-          </Link>
-        </div>
-      ) : null}
-
-      <div className="eingang-detail-page__delete">
-        <Button
-          ref={deleteTriggerRef}
-          variant="ghost"
-          onClick={() => {
-            setDeleteFailureMessage(null);
-            setDeleteConfirmOpen(true);
-          }}
-          data-testid="inbox-delete-trigger"
-        >
-          {translate('inbox.delete.action')}
-        </Button>
-      </div>
-
+      {/*
+        * DOCUMENT-UNLINK-DELETE-01E — die Wege, auf die der Löschhinweis
+        * verweist, stehen jetzt unter „Details anzeigen → Verwaltung".
+        * Ihre Bestätigungsdialoge bleiben hier unverändert.
+        */}
       <SimpleConfirmDialog
         open={deleteConfirmOpen}
         title={translate('inbox.delete.confirmTitle')}
@@ -1883,37 +2069,27 @@ export function EingangDetailPage() {
         }}
       />
 
-      {prioritizeContractWorkspace ? (
-        <>
-          {/* DOCUMENT-EXPERIENCE-02: Experience first; Guidance/Letter in Details */}
-          {reviewExperience}
-          {originalFilePanel}
-          {freeQuestionPanel}
-          {fieldFillConfirmPanel}
-          {confirmedReplyDraftPanel}
-        </>
-      ) : useAssistFlowConsolidate ? (
-        <div
-          className="eingang-assist-flow"
-          data-testid="eingang-assist-flow"
-          data-assist-flow="consolidated"
-        >
-          {reviewExperience}
-          {fieldFillConfirmPanel}
-          {freeQuestionPanel}
-          {contextualNextStepsPanel}
-          {confirmedReplyDraftPanel}
-          {originalFilePanel}
-        </div>
-      ) : (
-        <>
-          {reviewExperience}
-          {freeQuestionPanel}
-          {fieldFillConfirmPanel}
-          {confirmedReplyDraftPanel}
-          {originalFilePanel}
-        </>
-      )}
+      {/*
+        * DOCUMENT-EXPERIENCE-SIMPLIFICATION-01B — eine kanonische Reihenfolge.
+        *
+        * Vorher entschieden `prioritizeContractWorkspace` und
+        * `useAssistFlowConsolidate` über **drei** verschiedene Anordnungen
+        * derselben Bausteine. Für den Nutzer bedeutete das: Dieselbe Frage
+        * stand je nach Dokument an einer anderen Stelle.
+        *
+        * Jetzt trägt `DocumentReviewExperience` die gesamte Reihenfolge —
+        * Was ist das · Worum geht es · Was jetzt tun · Frage zum Dokument
+        * (`beforeMoreOptions`) · Details (`moreOptionsContent`). Beide Flags
+        * beeinflussen weiterhin **Inhalte** (Auftragsvorschlag, Antwortentwurf),
+        * aber nicht mehr die Seitenstruktur.
+        */}
+      <div
+        className="eingang-assist-flow"
+        data-testid="eingang-assist-flow"
+        data-assist-flow="canonical"
+      >
+        {reviewExperience}
+      </div>
 
       {duplicateDocument && (
         <ImportToArchiveDialog

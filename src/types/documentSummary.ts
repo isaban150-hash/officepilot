@@ -29,6 +29,12 @@ export type DocumentSummaryActionId =
   | 'reject_contract_proposal'
   | 'apply_intake'
   | 'record_expense'
+  /**
+   * DUNNING-PRIMARY-ACTION-ROUTING-01B — bereits vorhandene Aktion, hier nur
+   * darstellbar gemacht. `check_payment` existiert seit jeher als
+   * `DocumentActionId` samt Handler; es entsteht keine zweite Semantik.
+   */
+  | 'check_payment'
   | 'create_vorgang'
   | 'create_task'
   | 'link_vorgang'
