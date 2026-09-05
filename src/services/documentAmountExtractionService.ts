@@ -6,8 +6,29 @@ const AMOUNT_PATTERN = /(\d{1,3}(?:\.\d{3})*,\d{2})\s*(?:€|eur)?/gi;
 const CONTRACT_TOTAL_LABELS =
   /gesamtsumme\s+netto|vertragssumme(?:\s+netto)?|gesamtpreis(?:\s+netto)?|summe\s+netto|auftragssumme\s+netto/i;
 
+/**
+ * INVOICE-TOTAL-EXTRACTION-01B — Beschriftungen, die einen Gesamtbetrag
+ * ankündigen.
+ *
+ * Ergänzt um die im deutschen Rechnungsalltag üblichen Zusammensetzungen
+ * `gesamtbetrag` und `gesamtsumme`. Sie fehlten, weshalb der Resolver bei
+ * mehreren konkurrierenden Gesamtbeträgen gar keinen Kandidaten sah und der
+ * Konflikt unentdeckt blieb.
+ *
+ * Bewusst ohne `\b` am Wortanfang: „Gesamtbetrag" und „Rechnungsbetrag" sind
+ * Komposita, an denen wortgrenzengebundene Muster scheitern.
+ *
+ * INVOICE-TOTAL-EXTRACTION-01B3 — hier stehen ausschließlich Beschriftungen der
+ * **Brutto-Rechnungssumme**. `zahlbetrag`, `zu zahlen` und `endbetrag` gehören
+ * bewusst nicht dazu: Sie bezeichnen den aktuell zu zahlenden Betrag nach
+ * Skonto oder Abschlag. `recognizedData.Betrag` ist aber die Rechnungssumme —
+ * den Skontobetrag leitet `financeIntelligenceService` später selbst daraus ab
+ * (`calculateSkontoPayableAmount`). Stünde der reduzierte Wert schon hier,
+ * würde Skonto zweimal abgezogen; als Konfliktkandidat wiederum würde er eine
+ * fachlich eindeutige Rechnung ganz ohne Betrag lassen.
+ */
 const INVOICE_TOTAL_LABELS =
-  /rechnungssumme|rechnungsbetrag|bruttobetrag|endsumme|zu\s+zahlen/i;
+  /rechnungssumme|rechnungsbetrag|bruttobetrag|gesamtbetrag|gesamtsumme|endsumme/i;
 
 const EXCLUDED_CONTEXT =
   /(?:%|prozent|skonto|vertragsstrafe|stunde|std\.?\/|€\/\s*std|mwst|umsatzsteuer|ust|einzelpreis|ep\b|gesamtpreis\s+position)/i;
@@ -134,6 +155,22 @@ export function resolveInvoiceAmount(text: string): ExtractedContractField<numbe
   }
 
   if (candidates.length > 1) {
+    /*
+     * INVOICE-TOTAL-EXTRACTION-01B3 — mehrere Fundstellen sind nur dann ein
+     * Konflikt, wenn sie sich widersprechen. „Gesamtbetrag 486,20" und
+     * „Rechnungsbetrag 486,20" nennen dieselbe Summe zweimal; daraus einen
+     * Prüffall zu machen, hieße eine eindeutige Rechnung ohne Betrag zu lassen.
+     * Dieselbe Regel wendet `resolveContractTotalNet` seit jeher an.
+     */
+    const uniqueValues = new Set(candidates.map((candidate) => candidate.value));
+    if (uniqueValues.size === 1) {
+      return {
+        value: candidates[0].value,
+        status: 'confirmed',
+        confidence: 'medium',
+        sourceText: candidates[0].context,
+      };
+    }
     return { status: 'review_required', confidence: 'low', sourceText: candidates.map((c) => c.context).join(' | ') };
   }
 

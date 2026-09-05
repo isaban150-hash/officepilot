@@ -121,8 +121,15 @@ const INVOICE_HEADER_SKIP_PATTERN =
 const RECEIPT_NUMBER_PATTERN =
   /\b(?:beleg[\s-]*nr\.?|belegnummer)\s*[:#]?\s*([A-Z0-9][\w./-]{2,})/i;
 
+/*
+ * INVOICE-TOTAL-EXTRACTION-01B3 — `zu\s+zahlen` ist hier entfallen. Der Ablauf
+ * erreicht diesen Fallback nur, wenn `resolveInvoiceAmount` keine
+ * Rechnungssumme fand; ein „Zu zahlen"-Betrag ist dann der Restbetrag nach
+ * Abschlag oder Skonto und darf nicht als Brutto-Rechnungsbetrag gelten.
+ * `zahlbetrag` und `endbetrag` standen hier nie.
+ */
 const INVOICE_TOTAL_LINE_PATTERN =
-  /\b(?:gesamtbetrag|rechnungssumme|rechnungsbetrag|endsumme|summe(?:\s+brutto)?|zu\s+zahlen)\s+(\d{1,3}(?:\.\d{3})*,\d{2})\s*(?:€|EUR|eur)?/i;
+  /\b(?:gesamtbetrag|rechnungssumme|rechnungsbetrag|endsumme|summe(?:\s+brutto)?)\s+(\d{1,3}(?:\.\d{3})*,\d{2})\s*(?:€|EUR|eur)?/i;
 
 function isLikelyAmountLine(line: string): boolean {
   return /\d{1,3}(?:[.\s]\d{3})*,\d{2}\s*(?:€|EUR|eur)?\b/i.test(line);
@@ -318,6 +325,25 @@ function applyInvoiceOcrAmount(
   const resolvedInvoiceAmount = resolveInvoiceAmount(text);
   if (resolvedInvoiceAmount.status === 'confirmed' && resolvedInvoiceAmount.value) {
     result.Betrag = formatGermanMoney(resolvedInvoiceAmount.value);
+    return;
+  }
+
+  /*
+   * INVOICE-TOTAL-EXTRACTION-01B — ein erkannter Konflikt darf nicht von einer
+   * einfacheren Regel überdeckt werden.
+   *
+   * `resolveInvoiceAmount` meldet `review_required`, wenn mehrere gleich starke
+   * Gesamtbeträge im Dokument stehen — etwa „Gesamtbetrag" und „Zahlbetrag".
+   * Bisher fiel der Ablauf danach auf `INVOICE_TOTAL_LINE_PATTERN` durch und
+   * setzte den **ersten** Treffer als bestätigten Betrag. Der Widerspruch
+   * verschwand damit still.
+   *
+   * `recognizedData` ist ein flaches Textmodell und kann keinen Prüfzustand
+   * tragen. Deshalb bleibt das Feld hier leer: Ein fehlender Betrag ist ehrlich,
+   * ein falscher wäre eine erfundene Wahrheit — und er flösse in Ausgaben und
+   * Belegabgleich weiter.
+   */
+  if (resolvedInvoiceAmount.status === 'review_required') {
     return;
   }
 
