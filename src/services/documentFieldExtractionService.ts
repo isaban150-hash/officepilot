@@ -59,8 +59,34 @@ export function stripLeadingFieldLabel(value: string): string {
   }
   return current;
 }
+/**
+ * DOCUMENT-INTELLIGENCE-SENDER-BOUNDARY-01B — zentrale Labelmenge für die
+ * Briefkopf-Bereinigung in `cleanLetterheadCandidate`.
+ *
+ * Ausschliesslich generische Kontakt- und Metadatenbegriffe, kein Institutions-,
+ * Orts- oder Strassenname: Die Regel gilt für Finanzamt, BG BAU, AOK, Kammer,
+ * Gericht und Stadtwerke gleichermassen.
+ */
+const LETTERHEAD_BOUNDARY_LABELS =
+  'Telefon(?:nummer)?|Tel|Fon|Telefax|Fax|E-?Mail|Mail|Durchwahl|Ansprechpartner' +
+  '|Internet|Web|Homepage|Aktenzeichen|Az|Steuernummer|Kundennummer|Datum|Postfach';
+
+/**
+ * Der Matcher erfasst bewusst **genug Kontext**, statt selbst zu begrenzen:
+ * Doppelpunkt in der Zeichenklasse, Fenster 80 statt 40 Zeichen. Vorher endete
+ * der Capture stumm an der ersten Beschriftung („Finanzamt Detmold Telefon"),
+ * und `cleanLetterheadCandidate` bekam die Kontaktangabe nie zu sehen.
+ *
+ * Er enthält deshalb **keine** eigene Boundary-Liste — abgetrennt wird
+ * ausschliesslich nachgelagert im Cleaner. Zu viel erfasster Text ist
+ * unkritisch; der Cleaner verwirft, was danach über 80 Zeichen bleibt.
+ *
+ * Der Fortsetzungsteil bleibt sonst unverändert (Leerzeichen und `&` in der
+ * Klasse), damit „Stadtwerke Bad Salzuflen Energie" und „Kanzlei Weber &
+ * Partner" vollständig bleiben.
+ */
 const LETTERHEAD_INSTITUTION =
-  /\b((?:Finanzamt|Stadtwerke|Handwerkskammer|Industrie-?\s*und\s*Handelskammer|Amtsgericht|Landgericht|Arbeitsgericht|BG\s*BAU|Berufsgenossenschaft(?:\s+der\s+Bauwirtschaft)?|SOKA-?BAU|Agentur\s+für\s+Arbeit|Bundesagentur(?:\s+für\s+Arbeit)?|AOK|Barmer|Techniker\s+Krankenkasse|DAK|IKK|Sparkasse|Volksbank|Commerzbank|Deutsche\s+Bank|Hotel|Steuerberatung|Kanzlei|AutoService)(?:\s+[\p{L}][\p{L}\d .&\-\/']{1,40})?)/iu;
+  /\b((?:Finanzamt|Stadtwerke|Handwerkskammer|Industrie-?\s*und\s*Handelskammer|Amtsgericht|Landgericht|Arbeitsgericht|BG\s*BAU|Berufsgenossenschaft(?:\s+der\s+Bauwirtschaft)?|SOKA-?BAU|Agentur\s+für\s+Arbeit|Bundesagentur(?:\s+für\s+Arbeit)?|AOK|Barmer|Techniker\s+Krankenkasse|DAK|IKK|Sparkasse|Volksbank|Commerzbank|Deutsche\s+Bank|Hotel|Steuerberatung|Kanzlei|AutoService)(?:\s+[\p{L}][\p{L}\d .&\-\/':]{1,80})?)/iu;
 /** Standalone issuer brands that should not swallow the recipient address block. */
 const LETTERHEAD_ISSUER_BRAND =
   /\b(VHV(?:\s+Gewerbeversicherung)?|Alphabet(?:\s+Fuhrparkleasing)?|Telekom(?:\s+Geschäftskunden)?)\b/iu;
@@ -247,6 +273,20 @@ export function stripLetterheadLogoInitial(raw: string): string {
 }
 
 /**
+ * Trennt die Kontakt-/Metadatenspalte vom Organisationsnamen ab.
+ *
+ * **Kontextgebunden, kein Stoppwort:** Das Label muss als Beschriftung
+ * auftreten, also von `:` oder `.` und einem Wert gefolgt sein — sonst verlöre
+ * „Muster Telefon GmbH" ihren Namen. `documentLetterheadInitials01` sichert
+ * diese Gegenprobe ab. Eine Webadresse trägt ihre Grenze selbst und wird
+ * separat behandelt.
+ */
+const LETTERHEAD_CONTACT_BOUNDARY = new RegExp(
+  `\\s+(?:${LETTERHEAD_BOUNDARY_LABELS})\\b\\s*[.:]\\s*\\S.*$`,
+  'iu',
+);
+
+/**
  * Shared letterhead normalisation. Also used by the authority sender path so a raw
  * header line never reaches an organisation field unnormalised. Starts from the narrow
  * logo-initial rule and then applies the broad letterhead cleanup.
@@ -254,6 +294,9 @@ export function stripLetterheadLogoInitial(raw: string): string {
 export function cleanLetterheadCandidate(raw: string): string | undefined {
   let value = stripLetterheadLogoInitial(raw);
   value = value.split(/\s*[·|]\s*/)[0]?.trim() ?? value;
+  value = value.replace(LETTERHEAD_CONTACT_BOUNDARY, '').trim();
+  // Eine Webadresse traegt ihre Grenze selbst — hier ohne Doppelpunkt.
+  value = value.replace(/\s+www\.\S+.*$/iu, '').trim();
   value = value
     .replace(
       /\s+(?:Industriestraße|IndustrieStrasse|Parkstraße|Büchenstraße|Energieallee|Werkstraße|Vlothoer|Straße|Strasse|Str\.)\b.*$/iu,
