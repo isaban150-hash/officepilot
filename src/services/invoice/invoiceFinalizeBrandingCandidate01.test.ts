@@ -75,7 +75,17 @@ function brandingDraft(): InvoiceDraft {
   // Vorbedingung des Realtests: der Entwurf trägt den Übergangsrest.
   expect(draft!.companySnapshot.branding).toEqual(BRANDING);
   expect(draft!.brandingSnapshot?.logo).toEqual(BRANDING.logo);
-  return draft!;
+  return {
+    ...draft!,
+    /*
+     * INVOICE-SERVICE-PERIOD-01B2 — gültige, bestätigte Metadatenbasis.
+     * Diese Suite prüft Branding-Schnitt und Fingerprint, nicht den
+     * Leistungszeitraum; bis 01B lieferte der Entwurfsbauer ihn selbst.
+     */
+    servicePeriodFrom: '2026-08-01',
+    servicePeriodTo: '2026-08-20',
+    servicePeriodConfirmed: true,
+  };
 }
 
 function candidateOf(draft: InvoiceDraft): VorgangInvoice {

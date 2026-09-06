@@ -86,6 +86,9 @@ function prepareFixedAbschlag(amount: number, periodFrom: string, periodTo: stri
     issueDate: '2026-06-01',
     servicePeriodFrom: periodFrom,
     servicePeriodTo: periodTo,
+    // INVOICE-SERVICE-PERIOD-01B2 — gültige Metadatenbasis; geprüft wird der
+    // pauschale Abschlag, nicht der Leistungszeitraum.
+    servicePeriodConfirmed: true,
     paymentDueDate: '2026-06-15',
   });
   draft = {

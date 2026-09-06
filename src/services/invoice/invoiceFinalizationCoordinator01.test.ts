@@ -115,6 +115,9 @@ function buildDraft(overrides: Partial<InvoiceDraft> = {}): InvoiceDraft {
     issueDate: '2026-08-21',
     servicePeriodFrom: '2026-08-01',
     servicePeriodTo: '2026-08-20',
+    // INVOICE-SERVICE-PERIOD-01B2 — gültige Metadatenbasis; geprüft werden
+    // Koordinator-Ablauf und Wiederaufnahme, nicht der Leistungszeitraum.
+    servicePeriodConfirmed: true,
     paymentDueDate: '2026-09-04',
     paymentTermsText: 'Zahlbar innerhalb von 14 Tagen ohne Abzug.',
     skontoText: '',

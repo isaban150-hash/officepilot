@@ -64,6 +64,9 @@ function draft(overrides: Partial<InvoiceDraft> = {}): InvoiceDraft {
     issueDate: '2026-08-28',
     servicePeriodFrom: '2026-08-01',
     servicePeriodTo: '2026-08-28',
+    // INVOICE-SERVICE-PERIOD-01B2 — gültige Metadatenbasis; geprüft wird der
+    // Null-Wert-Guard, nicht der Leistungszeitraum.
+    servicePeriodConfirmed: true,
     paymentDueDate: '2099-12-31',
     paymentTermsText: 'Zahlbar innerhalb 14 Tagen',
     skontoText: '',

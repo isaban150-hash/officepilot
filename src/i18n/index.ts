@@ -2163,6 +2163,13 @@ const deLegacy = {
   'invoice.validation.companyAddress': 'Aussteller: Firmenanschrift unvollständig.',
   'invoice.validation.issueDate': 'Rechnungsdatum fehlt oder ist ungültig.',
   'invoice.validation.servicePeriod': 'Leistungszeitraum fehlt oder ist ungültig.',
+  'invoice.validation.servicePeriodUnconfirmed':
+    'Bitte den tatsächlichen Leistungszeitraum bestätigen.',
+  'invoice.validation.servicePeriodOrder':
+    'Das Ende des Leistungszeitraums darf nicht vor dem Beginn liegen.',
+  'invoice.confirmServicePeriod': 'Zeitraum bestätigen',
+  'invoice.servicePeriodFrom': 'Leistungszeitraum von',
+  'invoice.servicePeriodTo': 'Leistungszeitraum bis',
   'invoice.validation.paymentDueDate': 'Zahlungsziel fehlt oder ist ungültig.',
   'invoice.validation.paymentDueBeforeIssue': 'Zahlungsziel liegt vor dem Rechnungsdatum.',
   'invoice.validation.noPositions': 'Mindestens eine Position mit Menge größer 0 ist erforderlich.',
@@ -4475,6 +4482,13 @@ const trLegacy: Partial<Record<keyof typeof de, string>> = {
   'invoice.validation.companyAddress': 'Düzenleyen: firma adresi eksik.',
   'invoice.validation.issueDate': 'Fatura tarihi eksik veya geçersiz.',
   'invoice.validation.servicePeriod': 'Hizmet dönemi eksik veya geçersiz.',
+  'invoice.validation.servicePeriodUnconfirmed':
+    'Lütfen gerçekleşen hizmet dönemini onaylayın.',
+  'invoice.validation.servicePeriodOrder':
+    'Hizmet döneminin bitişi başlangıcından önce olamaz.',
+  'invoice.confirmServicePeriod': 'Dönemi onayla',
+  'invoice.servicePeriodFrom': 'Hizmet dönemi başlangıcı',
+  'invoice.servicePeriodTo': 'Hizmet dönemi bitişi',
   'invoice.validation.paymentDueDate': 'Vade tarihi eksik veya geçersiz.',
   'invoice.validation.paymentDueBeforeIssue': 'Vade, fatura tarihinden önce.',
   'invoice.validation.noPositions': 'Miktarı 0’dan büyük en az bir kalem gerekir.',
@@ -5312,6 +5326,13 @@ const bgLegacy: Partial<Record<keyof typeof de, string>> = {
   'invoice.validation.companyAddress': 'Издател: адресът на фирмата е непълен.',
   'invoice.validation.issueDate': 'Датата на фактурата липсва или е невалидна.',
   'invoice.validation.servicePeriod': 'Периодът на услугата липсва или е невалиден.',
+  'invoice.validation.servicePeriodUnconfirmed':
+    'Моля, потвърдете действителния период на изпълнение.',
+  'invoice.validation.servicePeriodOrder':
+    'Краят на периода на изпълнение не може да бъде преди началото.',
+  'invoice.confirmServicePeriod': 'Потвърди периода',
+  'invoice.servicePeriodFrom': 'Период на изпълнение от',
+  'invoice.servicePeriodTo': 'Период на изпълнение до',
   'invoice.validation.paymentDueDate': 'Срокът за плащане липсва или е невалиден.',
   'invoice.validation.paymentDueBeforeIssue': 'Срокът за плащане е преди датата на фактурата.',
   'invoice.validation.noPositions': 'Нужна е поне една позиция с количество над 0.',

@@ -94,6 +94,14 @@ function order(netValue: number): OrderPosition[] {
 function withCompany(draft: InvoiceDraft): InvoiceDraft {
   return {
     ...draft,
+    /*
+     * INVOICE-SERVICE-PERIOD-01B2 — gültige, bestätigte Metadatenbasis.
+     * Diese Suite prüft die Abschlagsobergrenze, nicht den Leistungszeitraum;
+     * bis 01B lieferte der Entwurfsbauer ihn selbst.
+     */
+    servicePeriodFrom: '2026-08-01',
+    servicePeriodTo: '2026-08-20',
+    servicePeriodConfirmed: true,
     companySnapshot: {
       ...draft.companySnapshot,
       companyName: 'Muster GmbH',

@@ -31,6 +31,20 @@ function Field({
 export function InvoiceDraftEditForm({ draft, onChange, customerMaster }: Props) {
   const billing = draft.customerBilling;
 
+  /*
+   * INVOICE-SERVICE-PERIOD-01B — eine bewusste Datumseingabe ist die
+   * Bestätigung. Sobald beide Felder gefüllt sind, gilt der Zeitraum als
+   * gesetzt; wird eines geleert, ist er es nicht mehr.
+   *
+   * Die Entscheidung fällt hier im Oberflächenpfad, nicht im generischen
+   * Setter — sonst würde sich ein späterer Systemvorschlag selbst bestätigen.
+   */
+  const changeServicePeriod = (changes: InvoiceDraftMetadataChanges) => {
+    const from = changes.servicePeriodFrom ?? draft.servicePeriodFrom;
+    const to = changes.servicePeriodTo ?? draft.servicePeriodTo;
+    onChange({ ...changes, servicePeriodConfirmed: Boolean(from.trim() && to.trim()) });
+  };
+
   return (
     <form className="invoice-edit" onSubmit={(event) => event.preventDefault()}>
       <fieldset className="invoice-edit__section">
@@ -49,7 +63,7 @@ export function InvoiceDraftEditForm({ draft, onChange, customerMaster }: Props)
               type="date"
               className="input"
               value={draft.servicePeriodFrom}
-              onChange={(event) => onChange({ servicePeriodFrom: event.target.value })}
+              onChange={(event) => changeServicePeriod({ servicePeriodFrom: event.target.value })}
             />
           </Field>
           <Field label="Leistungszeitraum bis">
@@ -57,7 +71,7 @@ export function InvoiceDraftEditForm({ draft, onChange, customerMaster }: Props)
               type="date"
               className="input"
               value={draft.servicePeriodTo}
-              onChange={(event) => onChange({ servicePeriodTo: event.target.value })}
+              onChange={(event) => changeServicePeriod({ servicePeriodTo: event.target.value })}
             />
           </Field>
         </div>

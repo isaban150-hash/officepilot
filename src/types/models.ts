@@ -1364,6 +1364,20 @@ export interface InvoiceDraft {
   issueDate: string;
   servicePeriodFrom: string;
   servicePeriodTo: string;
+  /**
+   * INVOICE-SERVICE-PERIOD-01B — hat der Nutzer den **tatsächlichen**
+   * Leistungszeitraum bewusst gesetzt oder übernommen?
+   *
+   * Reine Entwurfs-/UX-Semantik: Das Feld erreicht weder `VorgangInvoice` noch
+   * den Cloud-Payload noch `immutableInvoiceFingerprint` — beide Builder
+   * arbeiten mit expliziten Feldlisten.
+   *
+   * **Optional und fail-closed:** Bestandsentwürfe kennen es nicht;
+   * `undefined` bedeutet „nicht bestätigt". Ihre Datumswerte stammen aus dem
+   * früheren `issueDate`-Default und sind von einer echten Nutzerangabe nicht
+   * unterscheidbar — ein eintägiger Einsatz am Rechnungstag sieht genauso aus.
+   */
+  servicePeriodConfirmed?: boolean;
   paymentDueDate: string;
   paymentTermsText: string;
   skontoText: string;
@@ -1442,6 +1456,8 @@ export interface InvoiceDraftMetadataChanges {
   issueDate?: string;
   servicePeriodFrom?: string;
   servicePeriodTo?: string;
+  /** Nur wenn ausdrücklich übergeben — nie aus einer Datumsänderung gefolgert. */
+  servicePeriodConfirmed?: boolean;
   paymentDueDate?: string;
   paymentTermsText?: string;
   skontoText?: string;

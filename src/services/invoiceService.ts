@@ -145,6 +145,7 @@ function buildDraftMetadata(
   | 'issueDate'
   | 'servicePeriodFrom'
   | 'servicePeriodTo'
+  | 'servicePeriodConfirmed'
   | 'paymentDueDate'
   | 'paymentTermsText'
   | 'skontoText'
@@ -160,8 +161,20 @@ function buildDraftMetadata(
 
   return {
     issueDate,
-    servicePeriodFrom: issueDate,
-    servicePeriodTo: issueDate,
+    /*
+     * INVOICE-SERVICE-PERIOD-01B — kein erfundener Leistungszeitraum.
+     *
+     * Bisher stand hier zweimal `issueDate`. Damit behauptete jede neue
+     * Rechnung, die Leistung sei am Tag der Rechnungsstellung erbracht worden —
+     * von–bis derselbe Tag, ungefragt und im Regelweg nur als Anzeigezeile
+     * sichtbar. In der Praxis wird abgerechnet, **nachdem** gearbeitet wurde.
+     *
+     * Leer statt `undefined`: Die Felder bleiben Pflicht-Strings, damit
+     * Eingabefelder kontrolliert bleiben und der Typradius klein.
+     */
+    servicePeriodFrom: '',
+    servicePeriodTo: '',
+    servicePeriodConfirmed: false,
     paymentDueDate: addDays(issueDate, profile.defaultPaymentDays),
     paymentTermsText: buildDefaultPaymentTerms(profile),
     /*
@@ -367,6 +380,15 @@ export function setAbschlagDraftCalculationMode(
     issueDate: draft.issueDate,
     servicePeriodFrom: draft.servicePeriodFrom,
     servicePeriodTo: draft.servicePeriodTo,
+    /*
+     * INVOICE-SERVICE-PERIOD-01B2 — die Bestätigung reist mit den Daten.
+     *
+     * Der Moduswechsel baut den Entwurf neu auf und übernimmt die Metadaten
+     * ausdrücklich. Ohne diese Zeile blieben Beginn und Ende stehen, während
+     * der Zustand auf „unbestätigt" zurückfiel — der Nutzer hätte einen
+     * scheinbar bestätigten Zeitraum vor sich gehabt.
+     */
+    servicePeriodConfirmed: draft.servicePeriodConfirmed,
     paymentDueDate: draft.paymentDueDate,
     paymentTermsText: draft.paymentTermsText,
     skontoText: draft.skontoText,
@@ -444,6 +466,17 @@ export function updateInvoiceDraftMetadata(
     next.servicePeriodFrom = changes.servicePeriodFrom;
   }
   if (changes.servicePeriodTo !== undefined) next.servicePeriodTo = changes.servicePeriodTo;
+  /*
+   * INVOICE-SERVICE-PERIOD-01B — nur ein ausdrücklich übergebener Wert zählt.
+   *
+   * Der Setter darf aus einer Datumsänderung **nicht** auf Bestätigung
+   * schliessen: Ein späterer Systemvorschlag würde denselben Pfad nutzen und
+   * sich damit selbst bestätigen. Die Zustimmung kommt aus der bewussten
+   * Oberflächenaktion.
+   */
+  if (changes.servicePeriodConfirmed !== undefined) {
+    next.servicePeriodConfirmed = changes.servicePeriodConfirmed;
+  }
   if (changes.paymentDueDate !== undefined) next.paymentDueDate = changes.paymentDueDate;
   if (changes.paymentTermsText !== undefined) next.paymentTermsText = changes.paymentTermsText;
   if (changes.skontoText !== undefined) next.skontoText = changes.skontoText;
@@ -543,13 +576,19 @@ function validateDraftForFinalize(
    * jetzt pauschal scharf zu schalten wäre ein weit grösserer, hier nicht
    * beauftragter Verhaltenswechsel.
    */
-  const guardsDeductionOverhang = usesAbschlagDeductions(draft.type);
-  if (
-    draft.type === 'rechnung' ||
-    fixedAbschlag ||
-    draft.taxStatus === 'reverse_charge_13b' ||
-    guardsDeductionOverhang
-  ) {
+  /*
+   * INVOICE-SERVICE-PERIOD-01B — die Prüfung läuft jetzt für **jeden**
+   * Rechnungstyp, weil der Leistungszeitraum bei allen auf dem Beleg steht.
+   * Die frühere Eintrittsbedingung liess mengenbasierte Abschläge und
+   * Teilrechnungen ganz an der Prüfung vorbei.
+   *
+   * Das verbreitert die Fachlogik nicht: Ausserhalb von `rechnung` und
+   * pauschalem Abschlag lässt der Filter unten weiterhin nur
+   * `reverse_charge_unconfirmed`, `deductions_exceed_total` und die drei
+   * Leistungszeitraum-Codes durch. Für die beiden bisher ausgenommenen Typen
+   * kommen damit exakt die drei neuen Blocker hinzu — sonst nichts.
+   */
+  {
     const validation = validateInvoiceDraftForApproval(
       draft,
       draft.companySnapshot,
@@ -560,7 +599,19 @@ function validateDraftForFinalize(
       draft.type === 'rechnung' || fixedAbschlag
         ? validation.blockingErrors
         : validation.blockingErrors.filter(
-            (e) => e.code === 'reverse_charge_unconfirmed' || e.code === 'deductions_exceed_total',
+            (e) =>
+              e.code === 'reverse_charge_unconfirmed' ||
+              e.code === 'deductions_exceed_total' ||
+              /*
+               * INVOICE-SERVICE-PERIOD-01B — der Leistungszeitraum ist eine
+               * Tatsachenbehauptung auf dem Beleg und muss auch dort greifen,
+               * wo historisch nicht voll validiert wird. Nur diese drei Codes
+               * kommen hinzu; die übrigen Approval-Regeln bleiben im
+               * mengenbasierten Pfad unverändert wirkungslos.
+               */
+              e.code === 'service_period' ||
+              e.code === 'service_period_unconfirmed' ||
+              e.code === 'service_period_order',
           );
     if (blockers.length > 0) {
       return {

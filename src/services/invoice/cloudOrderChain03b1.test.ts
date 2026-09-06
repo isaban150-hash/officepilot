@@ -15,6 +15,23 @@ import {
   getInvoiceNumberSequenceSnapshot,
   reserveNextInvoiceNumber,
 } from '../invoiceNumberService';
+import type { InvoiceDraft } from '../../types/models';
+
+/*
+ * INVOICE-SERVICE-PERIOD-01B2 — gültige, bestätigte Metadatenbasis.
+ *
+ * Bis 01B setzte der Entwurfsbauer den Leistungszeitraum selbst. Diese Suite
+ * prüft den Cloud-Finalisierungsschnitt, nicht den Leistungszeitraum; nur die
+ * Metadaten kommen hinzu, keine Assertion ändert sich.
+ */
+function withServicePeriod(draft: InvoiceDraft): InvoiceDraft {
+  return {
+    ...draft,
+    servicePeriodFrom: '2026-08-01',
+    servicePeriodTo: '2026-08-20',
+    servicePeriodConfirmed: true,
+  };
+}
 import {
   getVorgangById,
   hydrateVorgangStore,
@@ -80,7 +97,7 @@ describe('CLOUD-ORDER-CHAIN-03B1 finalize cutover', () => {
   });
 
   it('Candidate baut ohne lokale Nummernreserve', () => {
-    const draft = buildSchlussrechnungDraft('v-test-1', testSetup)!;
+    const draft = withServicePeriod(buildSchlussrechnungDraft('v-test-1', testSetup)!);
     const before = getInvoiceNumberSequenceSnapshot().lastIssuedNumber;
     const result = buildInvoiceFinalizationCandidate(
       'v-test-1',
@@ -97,7 +114,7 @@ describe('CLOUD-ORDER-CHAIN-03B1 finalize cutover', () => {
   });
 
   it('Intent bleibt über Reload und gleichen Fingerprint stabil', () => {
-    const draft = buildSchlussrechnungDraft('v-test-1', testSetup)!;
+    const draft = withServicePeriod(buildSchlussrechnungDraft('v-test-1', testSetup)!);
     const fp = buildInvoiceFinalizationContentFingerprint(draft, testSetup);
     const first = resolveInvoiceFinalizeIntent({
       workspaceId: 'ws-1',
@@ -114,7 +131,7 @@ describe('CLOUD-ORDER-CHAIN-03B1 finalize cutover', () => {
   });
 
   it('Inhaltsänderung erzeugt neue client_invoice_id', () => {
-    const draft = buildSchlussrechnungDraft('v-test-1', testSetup)!;
+    const draft = withServicePeriod(buildSchlussrechnungDraft('v-test-1', testSetup)!);
     const fp1 = buildInvoiceFinalizationContentFingerprint(draft, testSetup);
     const first = resolveInvoiceFinalizeIntent({
       workspaceId: 'ws-1',
@@ -185,7 +202,7 @@ describe('CLOUD-ORDER-CHAIN-03B1 finalize cutover', () => {
   });
 
   it('Cloud-Finalize übernimmt Servernummer und zählt Billing einmal', async () => {
-    const draft = buildSchlussrechnungDraft('v-test-1', testSetup)!;
+    const draft = withServicePeriod(buildSchlussrechnungDraft('v-test-1', testSetup)!);
     const beforeSeq = getInvoiceNumberSequenceSnapshot().lastIssuedNumber;
     mockCloudReady();
 
@@ -220,7 +237,7 @@ describe('CLOUD-ORDER-CHAIN-03B1 finalize cutover', () => {
   });
 
   it('Offline-Gate erzeugt keinen lokalen Finalbeleg', async () => {
-    const draft = buildSchlussrechnungDraft('v-test-1', testSetup)!;
+    const draft = withServicePeriod(buildSchlussrechnungDraft('v-test-1', testSetup)!);
     vi.spyOn(supabaseLib, 'isSupabaseConfigured').mockReturnValue(false);
     const beforeInvoices = getVorgangById('v-test-1')!.invoices.length;
 
@@ -233,7 +250,7 @@ describe('CLOUD-ORDER-CHAIN-03B1 finalize cutover', () => {
   });
 
   it('RPC-Fehler behält Intent und erzeugt keine lokale Rechnung', async () => {
-    const draft = buildSchlussrechnungDraft('v-test-1', testSetup)!;
+    const draft = withServicePeriod(buildSchlussrechnungDraft('v-test-1', testSetup)!);
     mockCloudReady();
 
     vi.spyOn(workspaceInvoiceCloud, 'rpcFinalizeWorkspaceInvoice').mockRejectedValue(
@@ -255,7 +272,7 @@ describe('CLOUD-ORDER-CHAIN-03B1 finalize cutover', () => {
   });
 
   it('lokales Upsert nach Erfolg ist noop (keine zweite Rechnung)', async () => {
-    const draft = buildSchlussrechnungDraft('v-test-1', testSetup)!;
+    const draft = withServicePeriod(buildSchlussrechnungDraft('v-test-1', testSetup)!);
     mockCloudReady();
 
     vi.spyOn(workspaceInvoiceCloud, 'rpcFinalizeWorkspaceInvoice').mockImplementation(
@@ -305,7 +322,7 @@ describe('CLOUD-ORDER-CHAIN-03B1 finalize cutover', () => {
   });
 
   it('Legacy lokale finalizeInvoiceDraft bleibt für Tests nutzbar', () => {
-    const draft = buildSchlussrechnungDraft('v-test-1', testSetup)!;
+    const draft = withServicePeriod(buildSchlussrechnungDraft('v-test-1', testSetup)!);
     const before = getInvoiceNumberSequenceSnapshot().lastIssuedNumber;
     const result = finalizeInvoiceDraft('v-test-1', draft, testSetup);
     expect(result.ok).toBe(true);

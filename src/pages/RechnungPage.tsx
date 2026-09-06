@@ -842,6 +842,23 @@ export function RechnungPage() {
     mutateDraft((prev) => updateDraftPositionQuantity(prev, positionId, qty));
   };
 
+  /*
+   * INVOICE-SERVICE-PERIOD-01B — bewusste Eingabe **ist** die Bestätigung.
+   * Sind beide Felder gefüllt, gilt der Zeitraum als gesetzt; wird eines
+   * geleert, fällt die Bestätigung zurück. Die Entscheidung fällt hier im
+   * Oberflächenpfad und nicht im generischen Setter.
+   */
+  const handleServicePeriodChange = (changes: InvoiceDraftMetadataChanges) => {
+    mutateDraft((prev) => {
+      const from = changes.servicePeriodFrom ?? prev.servicePeriodFrom;
+      const to = changes.servicePeriodTo ?? prev.servicePeriodTo;
+      return updateInvoiceDraftMetadata(prev, {
+        ...changes,
+        servicePeriodConfirmed: Boolean(from.trim() && to.trim()),
+      });
+    });
+  };
+
   const handleMetadataChange = (changes: InvoiceDraftMetadataChanges) => {
     mutateDraft((prev) => updateInvoiceDraftMetadata(prev, changes));
   };
@@ -1092,6 +1109,11 @@ export function RechnungPage() {
    * denselben Helper ungeklammert und blockiert den überzogenen Vorgang
    * weiterhin.
    */
+  /** Werte vorhanden, aber nie bestätigt — typischer Bestandsentwurf. */
+  const needsServicePeriodConfirmation =
+    Boolean(draft.servicePeriodFrom.trim() && draft.servicePeriodTo.trim()) &&
+    draft.servicePeriodConfirmed !== true;
+
   const remainingFixedAmountBillableNet = vorgang
     ? Math.max(0, getRemainingFixedAmountBillableNetCents(vorgang)) / 100
     : 0;
@@ -1402,6 +1424,60 @@ export function RechnungPage() {
               )}
             </Card>
           )}
+
+          {/*
+            * INVOICE-SERVICE-PERIOD-01B — der tatsächliche Leistungszeitraum
+            * gehört in den Hauptablauf. Vorher stand er nur als Anzeigezeile in
+            * der Vorschau, und geändert werden konnte er ausschliesslich über
+            * den Umweg „Rechnung bearbeiten" — bei einem Wert, den das System
+            * ungefragt gesetzt hatte.
+            */}
+          <section className="section" data-testid="invoice-service-period-section">
+            <h2 className="section__title">{translate('invoice.servicePeriod')}</h2>
+            <Card>
+              <div className="form-row">
+                <label className="invoice-edit__field">
+                  <span className="invoice-edit__label">{translate('invoice.servicePeriodFrom')}</span>
+                  <input
+                    type="date"
+                    className="input"
+                    value={draft.servicePeriodFrom}
+                    data-testid="invoice-service-period-from"
+                    onChange={(event) =>
+                      handleServicePeriodChange({ servicePeriodFrom: event.target.value })
+                    }
+                  />
+                </label>
+                <label className="invoice-edit__field">
+                  <span className="invoice-edit__label">{translate('invoice.servicePeriodTo')}</span>
+                  <input
+                    type="date"
+                    className="input"
+                    value={draft.servicePeriodTo}
+                    data-testid="invoice-service-period-to"
+                    onChange={(event) =>
+                      handleServicePeriodChange({ servicePeriodTo: event.target.value })
+                    }
+                  />
+                </label>
+              </div>
+              {/*
+                * Bestandsentwurf: Werte stehen da, wurden aber nie bestätigt.
+                * Der Nutzer soll sie nicht künstlich verändern müssen — eine
+                * bewusste Zustimmung genügt.
+                */}
+              {needsServicePeriodConfirmation ? (
+                <Button
+                  variant="outline"
+                  fullWidth
+                  onClick={() => handleMetadataChange({ servicePeriodConfirmed: true })}
+                  data-testid="invoice-confirm-service-period"
+                >
+                  {translate('invoice.confirmServicePeriod')}
+                </Button>
+              ) : null}
+            </Card>
+          </section>
 
           <div className="action-stack">
             <Button

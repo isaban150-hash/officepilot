@@ -64,7 +64,17 @@ function vorgangWith(deduction: VorgangInvoice): Vorgang {
 function schlussDraft(): InvoiceDraft {
   const draft = buildSchlussrechnungDraft(VORGANG_ID, testSetup);
   expect(draft, 'Schlussrechnungsentwurf konnte nicht gebaut werden').not.toBeNull();
-  return draft!;
+  return {
+    ...draft!,
+    /*
+     * INVOICE-SERVICE-PERIOD-01B2 — gültige, bestätigte Metadatenbasis.
+     * Diese Suite prüft die Überabrechnungssperre, nicht den
+     * Leistungszeitraum; bis 01B lieferte der Entwurfsbauer ihn selbst.
+     */
+    servicePeriodFrom: '2026-08-01',
+    servicePeriodTo: '2026-08-20',
+    servicePeriodConfirmed: true,
+  };
 }
 
 function blockingCodes(draft: InvoiceDraft): string[] {

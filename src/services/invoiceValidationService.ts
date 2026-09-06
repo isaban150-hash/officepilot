@@ -121,6 +121,34 @@ export function validateInvoiceDraftForApproval(
       code: 'service_period',
       messageKey: 'invoice.validation.servicePeriod',
     });
+  } else if (draft.servicePeriodFrom > draft.servicePeriodTo) {
+    /*
+     * INVOICE-SERVICE-PERIOD-01B — ISO-Daten sind lexikografisch vergleichbar.
+     * Kein stilles Tauschen: Wer Beginn und Ende verwechselt, soll es sehen.
+     */
+    blockingErrors.push({
+      code: 'service_period_order',
+      messageKey: 'invoice.validation.servicePeriodOrder',
+    });
+  } else if (draft.servicePeriodConfirmed !== true) {
+    /*
+     * 01B2 — Präzedenz: Der Bestätigungsfehler ist erst sinnvoll, wenn ein
+     * gültiger, plausibler Zeitraum dasteht. Bei fehlenden oder ungültigen
+     * Daten sagt `service_period` bereits alles; zwei Meldungen nebeneinander
+     * hätten den Nutzer nur auf die falsche Fährte geführt.
+     *
+     * Der tatsächliche Leistungszeitraum muss bestätigt sein. Bestandsentwürfe
+     * tragen den früheren `issueDate`-Default und werden aus `draftRawJson`
+     * verbatim wiederhergestellt; ihre Herkunft ist nicht rekonstruierbar.
+     * `undefined` gilt deshalb als **nicht bestätigt** — fail-closed durch
+     * Abwesenheit. Ein Rateversuch über die Werte wäre in beide Richtungen
+     * falsch: Ein echter Tageseinsatz am Rechnungsdatum sieht genauso aus wie
+     * der alte Automatismus.
+     */
+    blockingErrors.push({
+      code: 'service_period_unconfirmed',
+      messageKey: 'invoice.validation.servicePeriodUnconfirmed',
+    });
   }
   if (!draft.paymentDueDate?.trim() || !isIsoDate(draft.paymentDueDate)) {
     blockingErrors.push({

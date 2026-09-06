@@ -27,7 +27,24 @@ import {
   createTestVorgang,
   testSetup,
 } from '../test/fixtures';
-import type { OrderPosition } from '../types/models';
+import type { InvoiceDraft, OrderPosition } from '../types/models';
+
+/*
+ * INVOICE-SERVICE-PERIOD-01B2 — gültige, bestätigte Metadatenbasis.
+ *
+ * Bis 01B setzte der Entwurfsbauer den Leistungszeitraum selbst (auf das
+ * Rechnungsdatum). Diese Suite prüft Mengen, Nummernvergabe und Snapshots —
+ * nicht den Leistungszeitraum. Nur die Metadaten kommen hinzu, keine
+ * Assertion ändert sich.
+ */
+function withServicePeriod(draft: InvoiceDraft): InvoiceDraft {
+  return {
+    ...draft,
+    servicePeriodFrom: '2026-08-01',
+    servicePeriodTo: '2026-08-20',
+    servicePeriodConfirmed: true,
+  };
+}
 
 describe('getBilledQuantity / getOpenQuantity', () => {
   it('returns 0 billed and full open when no invoices exist', () => {
@@ -120,7 +137,7 @@ describe('finalizeInvoiceDraft', () => {
     const draft = buildSchlussrechnungDraft('v-test-1', testSetup)!;
     draft.positions[0].quantity = 5;
 
-    const result = finalizeInvoiceDraft('v-test-1', draft, testSetup);
+    const result = finalizeInvoiceDraft('v-test-1', withServicePeriod(draft), testSetup);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.invoice.positions).toHaveLength(1);
@@ -313,10 +330,10 @@ describe('finalizeInvoiceDraft', () => {
     const draft = buildAbschlagDraft('v-test-1', testSetup);
     expect(draft).not.toBeNull();
 
-    const result = finalizeInvoiceDraft('v-test-1', {
+    const result = finalizeInvoiceDraft('v-test-1', withServicePeriod({
       ...draft!,
       positions: draft!.positions.map((p) => ({ ...p, quantity: 1 })),
-    }, testSetup);
+    }), testSetup);
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -352,10 +369,10 @@ describe('finalizeInvoiceDraft', () => {
     });
 
     const draft = buildAbschlagDraft('v-test-1', testSetup);
-    const result = finalizeInvoiceDraft('v-test-1', {
+    const result = finalizeInvoiceDraft('v-test-1', withServicePeriod({
       ...draft!,
       positions: draft!.positions.map((p) => ({ ...p, quantity: 1 })),
-    }, testSetup);
+    }), testSetup);
 
     updateCompanyProfile({ companyName: 'Neu GmbH' });
     const saved = getVorgangById('v-test-1')?.invoices[0];
