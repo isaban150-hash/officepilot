@@ -55,7 +55,12 @@ function abschlag(amount: number, overrides: Partial<VorgangInvoice> = {}): Vorg
 
 function vorgangWith(deduction: VorgangInvoice): Vorgang {
   return createTestVorgang({
-    orderPositions: [createOrderPosition({ id: 'op-test-1' })],
+    /*
+     * INVOICE-ACTUAL-QUANTITY-01B — erfasste Ausführung, damit der Entwurf
+     * überhaupt einen Leistungswert trägt. Diese Suite prüft die
+     * Überabrechnungssperre, nicht die Mengenvorbelegung.
+     */
+    orderPositions: [createOrderPosition({ id: 'op-test-1', executedQuantity: 10 })],
     invoices: [deduction],
   });
 }

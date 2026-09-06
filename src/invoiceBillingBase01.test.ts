@@ -67,12 +67,23 @@ describe('INVOICE-BILLING-BASE-01', () => {
     return getVorgangById(vorgang.id)!;
   }
 
-  it('Draft ohne executedQuantity nutzt Fallback auf plannedQuantity', () => {
+  /*
+   * INVOICE-ACTUAL-QUANTITY-01B — bewusst umgedrehter Produktvertrag.
+   *
+   * Vorher erwartete dieser Test `quantity === 10`: Ohne erfasste Ausführung
+   * galt die Planmenge als abzurechnende Menge. Das war eine stille
+   * Behauptung über erbrachte Leistung und ist jetzt `0`.
+   *
+   * **Die Obergrenze bleibt unverändert die Planmenge** — `openQuantity` und
+   * `getBillableOpenQuantity` liefern weiterhin 10, damit der Nutzer bewusst
+   * bis dorthin eintragen kann. Genau diese Trennung prüft der Test jetzt.
+   */
+  it('Draft ohne executedQuantity belegt nichts vor, deckelt aber bei plannedQuantity', () => {
     seed();
     const draft = buildRechnungDraft('v-test-1', testSetup)!;
     expect(draft.positions[0].executedQuantity).toBeUndefined();
     expect(draft.positions[0].openQuantity).toBe(10);
-    expect(draft.positions[0].quantity).toBe(10);
+    expect(draft.positions[0].quantity).toBe(0);
     expect(getBillableOpenQuantity(getVorgangById('v-test-1')!, 'op-test-1')).toBe(10);
   });
 

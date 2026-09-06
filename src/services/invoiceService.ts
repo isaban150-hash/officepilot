@@ -286,6 +286,20 @@ function initialQuantityForType(
   type: InvoiceDocumentType,
 ): number {
   if (!prefillsOpenQuantity(type)) return 0;
+  /*
+   * INVOICE-ACTUAL-QUANTITY-01B — die Planmenge ist kein Aufmass.
+   *
+   * `getBillableOpenQuantity` fällt ohne erfasste Ausführung auf
+   * `plannedQuantity` zurück — im Code dort als „legacy fallback" benannt. Als
+   * **Obergrenze** ist das richtig: Der Nutzer muss auch ohne gepflegte
+   * Ausführung eine reale Menge eintragen können. Als **Vorbelegung** war es
+   * eine stille Behauptung über erbrachte Leistung: Ein Auftrag über 420 m²
+   * schlug 420 m² zur Abrechnung vor, am schwersten bei der Schlussrechnung.
+   *
+   * Deshalb wird hier nur vorbelegt, was tatsächlich erfasst wurde. Die
+   * Grenze bleibt unverändert `getBillableOpenQuantity`.
+   */
+  if (orderPosition.executedQuantity === undefined) return 0;
   return getBillableOpenQuantity(vorgang, orderPosition.id);
 }
 
@@ -450,7 +464,16 @@ export function applyAllOpenPositionsToDraft(draft: InvoiceDraft): InvoiceDraft 
     ...draft,
     positions: draft.positions.map((position) => ({
       ...position,
-      quantity: position.billable ? position.openQuantity : 0,
+      /*
+       * INVOICE-ACTUAL-QUANTITY-01B — dieselbe Regel wie bei der Vorbelegung.
+       * `openQuantity` fällt ohne erfasste Ausführung auf die Planmenge; der
+       * Sammelbutton hätte sie sonst als abzurechnende Menge übernommen.
+       * Position und `billable` bleiben unangetastet.
+       */
+      quantity:
+        position.billable && position.executedQuantity !== undefined
+          ? position.openQuantity
+          : 0,
     })),
   };
 }

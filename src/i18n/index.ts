@@ -2080,6 +2080,7 @@ const deLegacy = {
   'invoice.positions': 'Positionen',
   'invoice.planned': 'Geplant (Auftrag)',
   'invoice.executed': 'Ausgeführt',
+  'invoice.executedNotRecorded': 'noch nicht erfasst',
   'invoice.alreadyBilled': 'Bereits abgerechnet',
   'invoice.stillOpen': 'Noch offen',
   'invoice.quantityThisInvoice': 'Menge für diese Rechnung',
@@ -4819,6 +4820,7 @@ const trCustomerDecision: Partial<Record<keyof typeof de, string>> = {
 };
 
 const tr: Partial<Record<keyof typeof de, string>> = {
+  'invoice.executedNotRecorded': 'henüz kaydedilmedi',
   ...trLegacy,
   ...trModules,
   ...trCustomerDecision,
@@ -5435,6 +5437,7 @@ const bgCustomerDecision: Partial<Record<keyof typeof de, string>> = {
 };
 
 const bg: Partial<Record<keyof typeof de, string>> = {
+  'invoice.executedNotRecorded': 'все още не е отчетено',
   ...bgLegacy,
   ...bgModules,
   ...bgCustomerDecision,

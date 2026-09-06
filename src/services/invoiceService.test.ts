@@ -117,6 +117,10 @@ describe('isPositionBillable', () => {
 describe('buildSchlussrechnungDraft', () => {
   it('prefills open quantities', () => {
     const vorgang = createTestVorgang({
+      // INVOICE-ACTUAL-QUANTITY-01B — die Vorbelegung setzt eine erfasste
+      // Ausführung voraus. Geprüft wird hier die Offen-Mengen-Arithmetik
+      // (10 geplant, 4 abgerechnet → 6 offen), nicht der Fallback.
+      orderPositions: [createOrderPosition({ id: 'op-test-1', executedQuantity: 10 })],
       invoices: [createAbschlagInvoice('op-test-1', 4)],
     });
     hydrateVorgangStore([vorgang]);

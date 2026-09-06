@@ -1335,12 +1335,21 @@ export function RechnungPage() {
                       label={translate('invoice.planned')}
                       value={`${pos.plannedQuantity} ${pos.unit}`}
                     />
-                    {pos.executedQuantity !== undefined && (
-                      <DataRow
-                        label={translate('invoice.executed')}
-                        value={`${pos.executedQuantity} ${pos.unit}`}
-                      />
-                    )}
+                    {/*
+                      * INVOICE-ACTUAL-QUANTITY-01B — die fehlende Ausführung
+                      * ist eine Aussage, keine Leerstelle. Vorher verschwand
+                      * die Zeile ganz, und der Nutzer sah nur „Geplant 420"
+                      * neben einer vorbelegten 420 — ohne zu erkennen, dass
+                      * noch nichts erfasst war.
+                      */}
+                    <DataRow
+                      label={translate('invoice.executed')}
+                      value={
+                        pos.executedQuantity === undefined
+                          ? translate('invoice.executedNotRecorded')
+                          : `${pos.executedQuantity} ${pos.unit}`
+                      }
+                    />
                     <DataRow
                       label={translate('invoice.alreadyBilled')}
                       value={`${pos.billedQuantity} ${pos.unit}`}

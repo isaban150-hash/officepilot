@@ -1,7 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createAbschlagInvoice, createTestVorgang, testSetup } from '../../test/fixtures';
+import {
+  createAbschlagInvoice,
+  createOrderPosition,
+  createTestVorgang,
+  testSetup,
+} from '../../test/fixtures';
 import * as supabaseLib from '../../lib/supabase';
 import * as persistenceService from '../persistenceService';
 import {
@@ -93,7 +98,16 @@ describe('CLOUD-ORDER-CHAIN-03B1 migration hardening', () => {
 describe('CLOUD-ORDER-CHAIN-03B1 finalize cutover', () => {
   beforeEach(() => {    resetInvoiceFinalizeIntentsForTests();
     vi.restoreAllMocks();
-    hydrateVorgangStore([createTestVorgang()]);
+    /*
+     * INVOICE-ACTUAL-QUANTITY-01B — erfasste Ausführung, damit der Entwurf
+     * Positionen mit Menge trägt. Diese Suite prüft den Cloud-Finalisierungs-
+     * schnitt, nicht die Mengenvorbelegung.
+     */
+    hydrateVorgangStore([
+      createTestVorgang({
+        orderPositions: [createOrderPosition({ id: 'op-test-1', executedQuantity: 10 })],
+      }),
+    ]);
   });
 
   it('Candidate baut ohne lokale Nummernreserve', () => {
