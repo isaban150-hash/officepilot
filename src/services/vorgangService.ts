@@ -1349,6 +1349,57 @@ export function resolveMonotonicInvoiceStatus(
 }
 
 /**
+ * FIXED-AMOUNT-BILLING-INVARIANT-01K — kanonische Serialisierung für den
+ * Rechnungs-Fingerprint.
+ *
+ * `JSON.stringify` folgt der Einfügereihenfolge der Objektschlüssel. Die
+ * Cloud-Fassung einer Rechnung läuft aber durch eine PostgreSQL-`jsonb`-Spalte,
+ * und `jsonb` bewahrt diese Reihenfolge nicht — im Repository bereits
+ * festgehalten in `documentCloudPullOrchestrator.stableStringify`. Zwei
+ * feldweise identische Rechnungen ergaben dadurch verschiedene Fingerprints,
+ * und der Merge meldete `id_content_conflict`, obwohl kein einziges Feld
+ * abwich.
+ *
+ * Kanonisiert wird **ausschliesslich die Schlüsselreihenfolge**:
+ *
+ *   * **Arrays behalten ihre Reihenfolge** — bei `positions`, `legalNotices`
+ *     und `previousAbschlagDeductions` ist sie fachlich bedeutsam.
+ *   * **Werte bleiben unverändert** — keine Rundung, kein Trim, keine
+ *     Umwandlung.
+ *   * **`null` bleibt `null`** und wird nicht mit „Feld fehlt" gleichgesetzt.
+ *     Genau darin unterscheidet sich diese Fassung bewusst von
+ *     `stableStringify` im Dokumentpfad, das beides verschmilzt — für eine
+ *     Sicherheitsbarriere wäre das zu weit gegangen.
+ *   * **`undefined` verhält sich wie bei `JSON.stringify`**: als
+ *     Objekteigenschaft entfällt es, als Array-Element wird es `null`.
+ */
+function canonicalJsonStringifyValue(value: unknown): string | undefined {
+  if (Array.isArray(value)) {
+    const items = value.map((entry) => canonicalJsonStringifyValue(entry) ?? 'null');
+    return `[${items.join(',')}]`;
+  }
+
+  if (typeof value === 'object' && value !== null) {
+    const source = value as Record<string, unknown>;
+    const entries = Object.keys(source)
+      .sort()
+      .map((key) => {
+        const serialized = canonicalJsonStringifyValue(source[key]);
+        return serialized === undefined ? null : `${JSON.stringify(key)}:${serialized}`;
+      })
+      .filter((entry): entry is string => entry !== null);
+    return `{${entries.join(',')}}`;
+  }
+
+  return JSON.stringify(value);
+}
+
+/** Ein Objekt serialisiert immer — `undefined` liefert nur `undefined` selbst. */
+function canonicalJsonStringify(value: Record<string, unknown>): string {
+  return canonicalJsonStringifyValue(value) ?? '{}';
+}
+
+/**
  * Immutable invoice fingerprint for append-only merge conflicts.
  * Excludes payments, archiveDocumentId, sent UI metadata, and paymentStatus.
  */
@@ -1363,7 +1414,8 @@ export function immutableInvoiceFingerprint(
       })()
     : null;
 
-  return JSON.stringify({
+  // 01K — kanonisch statt roh: die Schlüsselreihenfolge darf nicht zählen.
+  return canonicalJsonStringify({
     id: invoice.id,
     vorgangId: vorgangId ?? null,
     number: invoice.number,
