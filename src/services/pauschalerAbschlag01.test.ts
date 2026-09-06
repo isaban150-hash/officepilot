@@ -55,7 +55,20 @@ function seedReadyVorgang() {
           plannedQuantity: 10,
           executedQuantity: 10,
           unit: 'Stunden',
-          unitPrice: 65,
+          /*
+           * FIXED-AMOUNT-BILLING-INVARIANT-01B2 — 2.000 statt 65.
+           *
+           * Diese Tests prüfen Mechanik (Persistenz, Cloud-Roundtrip,
+           * Fingerprint, Druckzeile) mit Pauschalbeträgen von 10.000 € und
+           * 5.000 €. Der Auftragswert betrug dabei 650 € — die Fixture schrieb
+           * damit eine 15-fache Überabrechnung als zulässig fest, genau den
+           * Defekt, den die neue Vorwärtssperre schliesst.
+           *
+           * Angehoben wird nur der Einzelpreis: Mengen, Zeiträume und alle
+           * geprüften Beträge bleiben unverändert. 10 × 2.000 = 20.000 € trägt
+           * die kumulierten 15.000 €.
+           */
+          unitPrice: 2000,
           category: 'arbeit',
         },
       ],

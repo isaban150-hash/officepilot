@@ -13,6 +13,7 @@ import { getTaxRateForStatus } from './invoiceTaxService';
 import { usesAbschlagDeductions } from './invoiceTypeService';
 import { selectHistoricalInvoiceLogo } from './invoice/invoiceHistoricalLogo';
 import { getAbschlagDeductionsTotal } from './invoiceDeductions';
+import { getRemainingFixedAmountBillableNetCents } from './orderBillingRules';
 import type {
   CompanyProfile,
   CustomerBilling,
@@ -159,6 +160,31 @@ export function validateInvoiceDraftForApproval(
         code: 'fixed_amount_with_positions',
         messageKey: 'invoice.validation.fixedAmountWithPositions',
       });
+    }
+    /*
+     * FIXED-AMOUNT-BILLING-INVARIANT-01B2 — die Vorwärtssperre.
+     *
+     * `quantity_based` ist über `getBillableOpenQuantity` mengenmässig
+     * gedeckelt; ein Pauschalabschlag kannte bis hierher nur `net > 0`. Ein
+     * Auftrag über 26.548 € nahm damit einen Abschlag über 30.000 € an, und
+     * erst die Schlussrechnung schlug fehl — da war der Vorgang bereits in
+     * der Sackgasse.
+     *
+     * Strikt `>`: Eine exakt ausgeschöpfte Abrechnungssumme ist zulässig, die
+     * spätere 0-EUR-Schlussrechnung ist ein gültiger Beleg.
+     *
+     * Der Restwert wird bewusst ungeklammert gelesen — bei einem bereits
+     * überzogenen Bestandsvorgang ist er negativ, und dann muss jeder weitere
+     * positive Abschlag scheitern.
+     */
+    if (vorgang && net != null && Number.isFinite(net) && net > 0) {
+      const remainingNetCents = getRemainingFixedAmountBillableNetCents(vorgang);
+      if (toCents(roundMoney(net)) > remainingNetCents) {
+        blockingErrors.push({
+          code: 'abschlag_exceeds_order_value',
+          messageKey: 'invoice.validation.abschlagExceedsOrderValue',
+        });
+      }
     }
   } else {
     if (draft.fixedAmountNet != null && Number.isFinite(draft.fixedAmountNet) && draft.fixedAmountNet !== 0) {

@@ -631,14 +631,20 @@ describe('01P4B — vorbereiteter Cloud-Request', () => {
           // Eine Schlussrechnung trägt keine Abschlagsnummer (usesAbschlagNumber).
           abschlagNumber: undefined,
           expectedAmendmentSequence: 3,
+          /*
+           * Die Abschläge bleiben bewusst unter dem endgültigen Leistungswert
+           * (96,39 € brutto). Dieser Test prüft Inhalts- und Fingerprinttreue
+           * des vorbereiteten Requests, nicht den Überabrechnungs-Guard
+           * `deductions_exceed_total`.
+           */
           previousAbschlagDeductions: [
             {
               invoiceId: 'inv-alt-1',
               invoiceNumber: '2026-0001',
               abschlagNumber: 1,
               date: '2026-07-01',
-              subtotal: 100,
-              amount: 119,
+              subtotal: 50,
+              amount: 59.5,
             },
           ],
         }),
@@ -1831,6 +1837,28 @@ describe('01P4B2 — Kandidaten-Fingerprint vor begin', () => {
   });
 
   it('M4: ein gültiger Pauschalabschlag ist fingerprintgleich', async () => {
+    /*
+     * Der Vorgang braucht eine abrechenbare Auftragsbasis über 1.500 €, sonst
+     * blockiert `abschlag_exceeds_order_value` — der Test prüft
+     * Fingerprinttreue, nicht die Abschlagsobergrenze. Der Robustheitsfall
+     * „Vorgang ohne orderPositions" liegt in fixedAmountBillingInvariant01 R10.
+     */
+    localState.vorgang = {
+      id: VORGANG,
+      materialSource: 'betrieb',
+      invoices: [],
+      orderPositions: [
+        {
+          id: 'op-1',
+          description: 'Beispielleistung',
+          plannedQuantity: 1,
+          unit: 'Pauschal',
+          unitPrice: 2000,
+          category: 'arbeit',
+        },
+      ],
+    };
+
     const draft = buildDraft({
       calculationMode: 'fixed_amount',
       fixedAmountNet: 1500,
@@ -1849,14 +1877,19 @@ describe('01P4B2 — Kandidaten-Fingerprint vor begin', () => {
   });
 
   it('M5: eine gültige Schlussrechnung ist fingerprintgleich und vollständig', async () => {
+    /*
+     * Wie bei B7: Die Abschläge bleiben unter dem endgültigen Leistungswert
+     * (96,39 € brutto), damit dieser Test die Fingerprinttreue prüft und nicht
+     * den Überabrechnungs-Guard `deductions_exceed_total`.
+     */
     const deductions = [
       {
         invoiceId: 'inv-alt-1',
         invoiceNumber: '2026-0001',
         abschlagNumber: 1,
         date: '2026-07-01',
-        subtotal: 100,
-        amount: 119,
+        subtotal: 50,
+        amount: 59.5,
       },
     ];
     const draft = buildDraft({

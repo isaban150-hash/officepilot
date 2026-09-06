@@ -2170,6 +2170,9 @@ const deLegacy = {
     'Die abgerechneten Positionen ergeben 0,00 €. Bitte Mengen oder Einzelpreise prüfen.',
   'invoice.validation.fixedAmountNet': 'Der pauschale Nettobetrag muss größer als 0 sein.',
   'invoice.validation.fixedAmountType': 'Pauschalbetrag ist nur für Abschlagsrechnungen zulässig.',
+  'invoice.validation.abschlagExceedsOrderValue':
+    'Der Abschlag ist zu hoch. Zusammen mit den bisherigen Abschlagsrechnungen würde er den aktuell abrechenbaren Auftragswert überschreiten. Bitte den Abschlagsbetrag reduzieren oder den Auftrag zuerst korrekt anpassen.',
+  'invoice.remainingFixedAmountBillable': 'Noch pauschal abrechenbar',
   'invoice.validation.fixedAmountWithPositions':
     'Pauschaler Abschlag darf keine Positionsmengen enthalten.',
   'invoice.validation.quantityWithFixedAmount':
@@ -4479,6 +4482,9 @@ const trLegacy: Partial<Record<keyof typeof de, string>> = {
     'Faturalanan kalemlerin toplamı 0,00 €. Lütfen miktarları veya birim fiyatları kontrol edin.',
   'invoice.validation.fixedAmountNet': 'Sabit net tutar 0’dan büyük olmalıdır.',
   'invoice.validation.fixedAmountType': 'Sabit tutar yalnızca ara faturalar için geçerlidir.',
+  'invoice.validation.abschlagExceedsOrderValue':
+    'Ara ödeme tutarı çok yüksek. Önceki ara faturalarla birlikte, hâlihazırda faturalandırılabilir sipariş değerini aşacaktır. Lütfen ara ödeme tutarını azaltın veya önce siparişi doğru şekilde düzenleyin.',
+  'invoice.remainingFixedAmountBillable': 'Sabit tutar olarak kalan faturalandırılabilir',
   'invoice.validation.fixedAmountWithPositions':
     'Sabit tutarlı ara fatura kalem miktarı içeremez.',
   'invoice.validation.quantityWithFixedAmount':
@@ -5311,6 +5317,9 @@ const bgLegacy: Partial<Record<keyof typeof de, string>> = {
   'invoice.validation.noPositions': 'Нужна е поне една позиция с количество над 0.',
   'invoice.validation.zeroBillableValue':
     'Фактурираните позиции дават 0,00 €. Моля, проверете количествата или единичните цени.',
+  'invoice.validation.abschlagExceedsOrderValue':
+    'Междинното плащане е твърде високо. Заедно с досегашните междинни фактури то би надвишило текущо фактурируемата стойност на поръчката. Моля, намалете сумата на междинното плащане или първо коригирайте поръчката правилно.',
+  'invoice.remainingFixedAmountBillable': 'Остава за фактуриране като обща сума',
   'invoice.validation.positionDescription': 'Позиция без описание.',
   'invoice.validation.positionQuantity': 'Позиция с невалидно количество.',
   'invoice.validation.positionUnit': 'Позиция без единица.',

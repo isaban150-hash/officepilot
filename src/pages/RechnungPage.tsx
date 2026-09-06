@@ -20,6 +20,7 @@ import {
   updateInvoiceDraftTaxStatus,
   validateInvoiceDraftForApproval,
 } from '../services/invoiceService';
+import { getRemainingFixedAmountBillableNetCents } from '../services/orderBillingRules';
 import {
   useInvoiceDraftDurabilitySession,
   type InvoiceDraftSessionStatus,
@@ -1085,6 +1086,15 @@ export function RechnungPage() {
 
   const isFixedAbschlag = isFixedAmountAbschlag(draft);
   const abschlagMode = resolveInvoiceCalculationMode(draft);
+  /*
+   * Anzeigewert: hier darf bei 0 abgeschnitten werden — ein negativer
+   * Restbetrag ist für den Nutzer keine Information. Die Validierung liest
+   * denselben Helper ungeklammert und blockiert den überzogenen Vorgang
+   * weiterhin.
+   */
+  const remainingFixedAmountBillableNet = vorgang
+    ? Math.max(0, getRemainingFixedAmountBillableNetCents(vorgang)) / 100
+    : 0;
 
   const backTarget =
     step === 'positions'
@@ -1252,6 +1262,22 @@ export function RechnungPage() {
                     onChange={(event) => handleFixedAmountChange(event.target.value)}
                   />
                 </label>
+                {/*
+                 * FIXED-AMOUNT-BILLING-INVARIANT-01B2 — die blockierende Grenze
+                 * sichtbar machen. Sie ist der **abrechenbare** Auftragswert
+                 * abzüglich der bisherigen Abschläge und kann deshalb unter dem
+                 * Vertragswert liegen, den die Auftragsansicht zeigt. Ohne
+                 * diese Zeile stünde der Nutzer vor einer Sperre gegen eine
+                 * Zahl, die nirgends steht. Derselbe SSOT wie die Validierung.
+                 */}
+                <p className="invoice-edit__hint" data-testid="invoice-fixed-amount-remaining">
+                  {translate('invoice.remainingFixedAmountBillable')}:{' '}
+                  {remainingFixedAmountBillableNet.toLocaleString('de-DE', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}{' '}
+                  € netto
+                </p>
                 <DataRow
                   label={translate('invoice.nextNumberPreview')}
                   value={draft.invoiceNumberPreview}
