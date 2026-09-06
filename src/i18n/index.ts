@@ -2188,6 +2188,8 @@ const deLegacy = {
     '§ 13b erfordert eine ausdrückliche Bestätigung vor der Freigabe.',
   'invoice.validation.totalsInvalid': 'Netto, Steuer oder Brutto sind ungültig.',
   'invoice.validation.totalsNegative': 'Der Gesamtbetrag darf nicht negativ sein.',
+  'invoice.validation.deductionsExceedTotal':
+    'Die bisherigen Abschlagsrechnungen übersteigen den endgültigen Leistungswert. Die Schlussrechnung kann so nicht abgeschlossen werden. Bitte Abschläge und Leistungswert prüfen. Falls die Angaben stimmen, ist eine Korrektur der Abrechnung erforderlich.',
   'invoice.validation.warn.iban': 'Bankverbindung (IBAN) fehlt – Rechnung kann freigegeben werden.',
   'invoice.validation.warn.contact': 'Telefon und E-Mail der Firma fehlen.',
   'invoice.validation.warn.logo': 'Kein Firmenlogo hinterlegt.',
@@ -4495,6 +4497,8 @@ const trLegacy: Partial<Record<keyof typeof de, string>> = {
     '§ 13b için onaydan önce açık teyit gerekir.',
   'invoice.validation.totalsInvalid': 'Net, vergi veya brüt geçersiz.',
   'invoice.validation.totalsNegative': 'Toplam tutar negatif olamaz.',
+  'invoice.validation.deductionsExceedTotal':
+    'Şimdiye kadarki hakediş faturaları nihai hizmet değerini aşıyor. Kapanış faturası bu haliyle tamamlanamaz. Lütfen hakedişleri ve hizmet değerini kontrol edin. Bilgiler doğruysa faturalandırmanın düzeltilmesi gerekir.',
   'invoice.validation.warn.iban': 'Banka bilgisi (IBAN) eksik – yine de onaylanabilir.',
   'invoice.validation.warn.contact': 'Firma telefonu ve e-postası eksik.',
   'invoice.validation.warn.logo': 'Firma logosu yok.',
@@ -5317,6 +5321,8 @@ const bgLegacy: Partial<Record<keyof typeof de, string>> = {
     '§ 13b изисква изрично потвърждение преди одобрение.',
   'invoice.validation.totalsInvalid': 'Нето, данък или бруто са невалидни.',
   'invoice.validation.totalsNegative': 'Общата сума не може да бъде отрицателна.',
+  'invoice.validation.deductionsExceedTotal':
+    'Досегашните междинни фактури надвишават окончателната стойност на изпълнението. Окончателната фактура не може да бъде приключена в този вид. Моля, проверете междинните фактури и стойността на изпълнението. Ако данните са верни, е необходима корекция на фактурирането.',
   'invoice.validation.warn.iban': 'Липсва банкова връзка (IBAN) – одобрението е възможно.',
   'invoice.validation.warn.contact': 'Липсват телефон и имейл на фирмата.',
   'invoice.validation.warn.logo': 'Няма фирмено лого.',

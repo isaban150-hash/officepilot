@@ -527,7 +527,29 @@ function validateDraftForFinalize(
   // Quantity-based Abschlag/Schluss keep prior finalize gate (reverse_charge only),
   // matching historical offline/test finalize behaviour.
   const fixedAbschlag = isFixedAmountAbschlag(draft);
-  if (draft.type === 'rechnung' || fixedAbschlag || draft.taxStatus === 'reverse_charge_13b') {
+  /*
+   * FINAL-INVOICE-OVERPAYMENT-INTEGRITY-01B2 — der Überabrechnungsschutz muss
+   * auch dort greifen, wo bisher gar nicht validiert wurde.
+   *
+   * Eine mengenbasierte Schlussrechnung lief an dieser Prüfung vollständig
+   * vorbei. Der neue `deductions_exceed_total` entstand damit zwar in der
+   * Validierung — die Oberfläche zeigte ihn auch —, aber `finalizeInvoiceDraft`
+   * und `buildInvoiceFinalizationCandidate` sahen ihn nie. Ein Aufruf an der
+   * Oberfläche vorbei hätte die 0-EUR-Schlussrechnung weiterhin angelegt.
+   *
+   * Bewusst **nur dieser eine Code** wird in den historischen Pfad gezogen.
+   * Die Baseline zeigt dort andere blockierende Fehler — etwa
+   * `company_address` —, die die Finalisierung noch nie verhindert haben. Sie
+   * jetzt pauschal scharf zu schalten wäre ein weit grösserer, hier nicht
+   * beauftragter Verhaltenswechsel.
+   */
+  const guardsDeductionOverhang = usesAbschlagDeductions(draft.type);
+  if (
+    draft.type === 'rechnung' ||
+    fixedAbschlag ||
+    draft.taxStatus === 'reverse_charge_13b' ||
+    guardsDeductionOverhang
+  ) {
     const validation = validateInvoiceDraftForApproval(
       draft,
       draft.companySnapshot,
@@ -537,7 +559,9 @@ function validateDraftForFinalize(
     const blockers =
       draft.type === 'rechnung' || fixedAbschlag
         ? validation.blockingErrors
-        : validation.blockingErrors.filter((e) => e.code === 'reverse_charge_unconfirmed');
+        : validation.blockingErrors.filter(
+            (e) => e.code === 'reverse_charge_unconfirmed' || e.code === 'deductions_exceed_total',
+          );
     if (blockers.length > 0) {
       return {
         ok: false,

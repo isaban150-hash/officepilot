@@ -231,7 +231,7 @@ describe('OFFICEPILOT-ZERO-VALUE-GUARD-01', () => {
     expect(result).not.toContain('totals_negative');
   });
 
-  it('L: eine überzahlte Schlussrechnung verhält sich unverändert', () => {
+  it('L: eine überabgerechnete Schlussrechnung wird blockiert', () => {
     const result = codes(
       draft({
         type: 'schluss',
@@ -248,7 +248,17 @@ describe('OFFICEPILOT-ZERO-VALUE-GUARD-01', () => {
         ],
       }),
     );
-    // Bestehendes Verhalten: `totals_negative` gilt nur für `rechnung`.
+    /*
+     * FINAL-INVOICE-OVERPAYMENT-INTEGRITY-01B — dieser Test hielt zuvor das
+     * alte Fehlverhalten fest („verhält sich unverändert"): Die Abschläge
+     * übersteigen den Leistungswert, und es entstand **kein** blockierender
+     * Fehler. Der Restbetrag wurde danach still auf 0,00 € geklemmt.
+     *
+     * Neue Erwartung: Der Überhang blockiert. `totals_negative` bleibt
+     * weiterhin aus — es gilt nur für normale Rechnungen; der Schlussfall hat
+     * jetzt seinen eigenen, sprechenden Code.
+     */
+    expect(result).toContain('deductions_exceed_total');
     expect(result).not.toContain('totals_negative');
     expect(result).not.toContain('zero_billable_value');
   });

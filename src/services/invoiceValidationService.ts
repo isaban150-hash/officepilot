@@ -10,6 +10,7 @@ import {
 } from './invoiceMoney';
 import { INVOICE_DRAFT_LABEL } from './invoiceNumberService';
 import { getTaxRateForStatus } from './invoiceTaxService';
+import { usesAbschlagDeductions } from './invoiceTypeService';
 import { selectHistoricalInvoiceLogo } from './invoice/invoiceHistoricalLogo';
 import { getAbschlagDeductionsTotal } from './invoiceDeductions';
 import type {
@@ -272,8 +273,30 @@ export function validateInvoiceDraftForApproval(
   if (!isValidMoneyNumber(subtotal) || !isValidMoneyNumber(tax) || !isValidMoneyNumber(total)) {
     blockingErrors.push({ code: 'totals_invalid', messageKey: 'invoice.validation.totalsInvalid' });
   } else if (draft.type === 'rechnung' && amountDueCents < 0) {
-    // Schluss/Abschlag keep existing clamp behaviour; only normal invoices hard-block.
     blockingErrors.push({ code: 'totals_negative', messageKey: 'invoice.validation.totalsNegative' });
+  } else if (usesAbschlagDeductions(draft.type) && amountDueCents < 0) {
+    /*
+     * FINAL-INVOICE-OVERPAYMENT-INTEGRITY-01B — Überabrechnung darf nicht
+     * still verschwinden.
+     *
+     * Übersteigen die bereits abgerechneten Abschläge den endgültigen
+     * Leistungswert, ist die Differenz hier negativ. Bisher wurde sie an
+     * dieser Stelle ignoriert und anschliessend in `calculateInvoiceTotals`
+     * auf 0,00 € geklemmt: Die Schlussrechnung liess sich finalisieren, der
+     * Vorgang galt danach über `hasSchlussrechnung` als vollständig
+     * abgerechnet, und der Fehlbetrag existierte an keiner Stelle mehr.
+     *
+     * Ein eigener Code statt `totals_negative`: Das ist ein anderer
+     * Sachverhalt als eine negative Rechnungssumme und braucht einen Text,
+     * der die Abschläge benennt.
+     *
+     * `amountDueCents === 0` bleibt ausdrücklich zulässig — eine durch volle
+     * Abschläge ausgeglichene Schlussrechnung ist ein gültiger Beleg.
+     */
+    blockingErrors.push({
+      code: 'deductions_exceed_total',
+      messageKey: 'invoice.validation.deductionsExceedTotal',
+    });
   }
 
   if (draft.type === 'rechnung' && !vorgang?.title?.trim()) {
