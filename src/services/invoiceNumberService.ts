@@ -1,4 +1,4 @@
-import { getVorgangStoreSnapshot } from './vorgangService';
+import { listInvoices } from './invoice/invoiceRegistryService';
 import { persistAll } from './persistenceService';
 import type { InvoiceNumberSequence, VorgangInvoice } from '../types/models';
 
@@ -46,8 +46,16 @@ export function collectIssuedInvoiceNumbers(invoices: VorgangInvoice[] = getAllI
   return new Set(invoices.map((inv) => inv.number));
 }
 
+/**
+ * INVOICE-REGISTRY-01B — dieselbe Menge, nur nicht mehr selbst zusammengesucht.
+ *
+ * Hier stand `getVorgangStoreSnapshot().flatMap((v) => v.invoices ?? [])`: Der
+ * Nummernkreis musste wissen, dass Rechnungen in Vorgängen liegen. Die Registry
+ * liefert exakt dieselben Rechnungen in exakt derselben Reihenfolge — die
+ * Ableitung von Jahr und Höchstnummer bleibt dadurch unberührt.
+ */
 export function getAllInvoices(): VorgangInvoice[] {
-  return getVorgangStoreSnapshot().flatMap((v) => v.invoices ?? []);
+  return listInvoices();
 }
 
 function getMaxSequenceNumberForYear(
