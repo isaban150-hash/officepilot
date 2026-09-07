@@ -23,7 +23,7 @@
  * eigenständiger Rechnungsspeicher, ändert sich der Inhalt dieser Datei — nicht
  * der ihrer Aufrufer.
  */
-import { getVorgangStoreSnapshot } from '../vorgangService';
+import { getInvoiceStoreSnapshot } from './invoiceStore';
 import type { VorgangInvoice } from '../../types/models';
 
 /**
@@ -46,13 +46,19 @@ export interface InvoiceRegistryEntry {
  * die dieser Dienst nicht zu treffen hat.
  */
 export function listInvoiceEntries(): InvoiceRegistryEntry[] {
-  const entries: InvoiceRegistryEntry[] = [];
-  for (const vorgang of getVorgangStoreSnapshot()) {
-    for (const invoice of vorgang.invoices ?? []) {
-      entries.push({ invoice, vorgangId: vorgang.id });
-    }
-  }
-  return entries;
+  /*
+   * FIRST-CLASS-LOCAL-INVOICE-STORE-01B — die Quelle ist gewechselt, der
+   * Vertrag nicht.
+   *
+   * Bis hierher lief die Registry über alle Vorgänge und sammelte deren
+   * Rechnungen ein. Jetzt liest sie den Rechnungsspeicher unmittelbar — dieselbe
+   * Menge, dieselbe Reihenfolge, unveränderte öffentliche API. Genau dafür
+   * wurde sie in `INVOICE-REGISTRY-01B` eingeführt: Ihr einziger Verbraucher,
+   * der Nummernkreis, merkt vom Umbau nichts.
+   */
+  return getInvoiceStoreSnapshot()
+    .filter((entry) => entry.vorgangId !== null)
+    .map((entry) => ({ invoice: entry.invoice, vorgangId: entry.vorgangId as string }));
 }
 
 /** Alle lokal bekannten Rechnungen, ohne Ablageort. */

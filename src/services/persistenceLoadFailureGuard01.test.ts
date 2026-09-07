@@ -30,6 +30,7 @@ import {
   type StorageScope,
 } from './storage/storageScopeService';
 import { getAllVorgaenge } from './vorgangService';
+import { STORAGE_VERSION } from './sync/syncMigrationService';
 import { getSyncClient, resetSyncClientForTests } from './sync/syncClientService';
 import { getSyncOutboxSnapshot, hydrateSyncOutbox } from './sync/syncOutboxService';
 import { createTestVorgang } from '../test/fixtures';
@@ -278,6 +279,9 @@ describe('PERSISTENCE-MIGRATION-FAILURE-GUARD-01B2 — Fehler nach der Migration
     expect(result.status).toBe('loaded');
     const rawAfter = localStorage.getItem(KEY);
     expect(rawAfter, 'Die gelungene Migration wurde nicht gespeichert').not.toBe(rawBefore);
-    expect(JSON.parse(rawAfter!).version, 'Der gespeicherte Stand ist nicht V5').toBe(5);
+    // FIRST-CLASS-LOCAL-INVOICE-STORE-01B — die Kette endet jetzt bei V6.
+    expect(JSON.parse(rawAfter!).version, 'Der gespeicherte Stand ist nicht aktuell').toBe(
+      STORAGE_VERSION,
+    );
   });
 });

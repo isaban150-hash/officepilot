@@ -192,6 +192,8 @@ function buildPullState(vorgaenge: Vorgang[] = []): AppPersistedState {
   const client = createSyncClient();
   return {
     version: STORAGE_VERSION,
+    // FIRST-CLASS-LOCAL-INVOICE-STORE-01B2 — ein V6-Zustand bringt die Rechnungen mit.
+    invoiceEntries: [],
     syncClient: {
       ...client,
       serverWorkspaceId: WORKSPACE_ID,

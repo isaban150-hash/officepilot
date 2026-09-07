@@ -146,12 +146,15 @@ import {
   isValidPersistedStateV3,
   isValidPersistedStateV4,
   isValidPersistedStateV5,
+  isValidPersistedStateV6,
   migratePersistedStateV1ToV2,
   migratePersistedStateV2ToV3,
   migratePersistedStateV3ToV4,
   migratePersistedStateV4ToV5,
+  migratePersistedStateV5ToV6,
   STORAGE_VERSION,
 } from './sync/syncMigrationService';
+import { getInvoiceStoreSnapshot, hydrateInvoiceStore } from './invoice/invoiceStore';
 import { ensureSyncClientFromState, hydrateSyncClient } from './sync/syncClientService';
 import { hydrateSyncOutbox, getSyncOutboxSnapshot } from './sync/syncOutboxService';
 import {
@@ -576,25 +579,38 @@ interface NormalizedLoadedState {
 }
 
 function normalizeLoadedState(parsed: unknown): NormalizedLoadedState | null {
-  if (isValidPersistedStateV5(parsed)) {
+  if (isValidPersistedStateV6(parsed)) {
     return { state: withLoadedSyncMetadata(parsed), migrated: null };
   }
+  /*
+   * FIRST-CLASS-LOCAL-INVOICE-STORE-01B — jede ältere Fassung endet über die
+   * bestehende Kette bei V5 und wird von dort ein einziges Mal nach V6
+   * gehoben. Die Fachlogik der Stufen V1–V5 bleibt unangetastet.
+   */
+  if (isValidPersistedStateV5(parsed)) {
+    const migrated = migratePersistedStateV5ToV6(parsed);
+    return { state: withLoadedSyncMetadata(migrated), migrated };
+  }
   if (isValidPersistedStateV4(parsed)) {
-    const migrated = migratePersistedStateV4ToV5(parsed);
+    const migrated = migratePersistedStateV5ToV6(migratePersistedStateV4ToV5(parsed));
     return { state: withLoadedSyncMetadata(migrated), migrated };
   }
   if (isValidPersistedStateV3(parsed)) {
-    const migrated = migratePersistedStateV4ToV5(migratePersistedStateV3ToV4(parsed));
+    const migrated = migratePersistedStateV5ToV6(
+      migratePersistedStateV4ToV5(migratePersistedStateV3ToV4(parsed)),
+    );
     return { state: withLoadedSyncMetadata(migrated), migrated };
   }
   if (isValidPersistedStateV2(parsed)) {
-    const migrated = migratePersistedStateV4ToV5(
-      migratePersistedStateV3ToV4(migratePersistedStateV2ToV3(parsed)),
+    const migrated = migratePersistedStateV5ToV6(
+      migratePersistedStateV4ToV5(migratePersistedStateV3ToV4(migratePersistedStateV2ToV3(parsed))),
     );
     return { state: withLoadedSyncMetadata(migrated), migrated };
   }
   if (isValidPersistedStateV1(parsed)) {
-    const migrated = migratePersistedStateV4ToV5(migratePersistedStateV1ToV2(parsed));
+    const migrated = migratePersistedStateV5ToV6(
+      migratePersistedStateV4ToV5(migratePersistedStateV1ToV2(parsed)),
+    );
     return { state: withLoadedSyncMetadata(migrated), migrated };
   }
   return null;
@@ -891,7 +907,18 @@ export function applyStateToStores(state: AppPersistedState): void {
     },
   );
   hydrateInboxStore(state.inboxItems);
+  /*
+   * FIRST-CLASS-LOCAL-INVOICE-STORE-01B — Reihenfolge zählt.
+   *
+   * `hydrateVorgangStore` übernimmt die Rechnungen, die noch an Vorgängen
+   * hängen (V5-Bestände, Testvorbereitungen). Ein V6-Zustand trägt sie dort
+   * nicht mehr, sondern in `invoiceEntries` — deshalb setzt der Aufruf danach
+   * den Bestand endgültig.
+   */
   hydrateVorgangStore(state.vorgaenge);
+  if (state.invoiceEntries) {
+    hydrateInvoiceStore(state.invoiceEntries);
+  }
   hydrateTaskStore(state.tasks);
   hydrateDocumentStore(state.documents ?? []);
   hydrateUploadedDocumentStore(state.uploadedDocuments ?? []);
@@ -1149,7 +1176,16 @@ export function buildPersistedStateSnapshot(): AppPersistedState {
     companyProfile: getCompanyProfileStoreSnapshot(),
     invoiceNumberSequence: getInvoiceNumberSequenceSnapshot(),
     inboxItems: getInboxStoreSnapshot(),
-    vorgaenge: getVorgangStoreSnapshot(),
+    /*
+     * FIRST-CLASS-LOCAL-INVOICE-STORE-01B — die Trennlinie zwischen Laufzeit
+     * und Persistenz.
+     *
+     * Zur Laufzeit trägt jeder Vorgang seine Rechnungen als Sicht; gespeichert
+     * wird er ohne sie. Ohne dieses Abstreifen stünde jede Rechnung zweimal im
+     * selben Datensatz — genau die zweite Wahrheit, die dieser Umbau beseitigt.
+     */
+    vorgaenge: getVorgangStoreSnapshot().map((vorgang) => ({ ...vorgang, invoices: [] })),
+    invoiceEntries: getInvoiceStoreSnapshot(),
     tasks: getTaskStoreSnapshot(),
     documents: getDocumentStoreSnapshot(),
     uploadedDocuments: getUploadedDocumentStoreSnapshot(),

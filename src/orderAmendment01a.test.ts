@@ -105,6 +105,8 @@ function buildState(vorgaenge: Vorgang[]): AppPersistedState {
   const client = createSyncClient();
   return {
     version: STORAGE_VERSION,
+    // FIRST-CLASS-LOCAL-INVOICE-STORE-01B2 — ein V6-Zustand bringt die Rechnungen mit.
+    invoiceEntries: [],
     syncClient: { ...client, serverWorkspaceId: 'ws-1', workspaceId: 'ws-1' },
     syncOutbox: [],
     setup: DEFAULT_SETUP,

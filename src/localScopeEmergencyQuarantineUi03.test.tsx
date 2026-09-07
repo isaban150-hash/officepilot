@@ -145,6 +145,8 @@ function buildRawState(
   };
   return JSON.stringify({
     version: STORAGE_VERSION,
+    // FIRST-CLASS-LOCAL-INVOICE-STORE-01B2 — ein V6-Zustand bringt die Rechnungen mit.
+    invoiceEntries: [],
     setup,
     companyProfile,
     workspace: { id: workspaceId, name: company, ownerUserId: 'user-ui' },

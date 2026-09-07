@@ -242,6 +242,8 @@ function buildInboxItem(): InboxItem {
 function workspaceStateRaw(): string {
   return JSON.stringify({
     version: STORAGE_VERSION,
+    // FIRST-CLASS-LOCAL-INVOICE-STORE-01B2 — ein V6-Zustand bringt die Rechnungen mit.
+    invoiceEntries: [],
     setup: {
       ...DEFAULT_SETUP,
       companyName: LOCAL_COMPANY,
@@ -297,6 +299,8 @@ function workspaceStateRaw(): string {
 function userStateRaw(): string {
   return JSON.stringify({
     version: STORAGE_VERSION,
+    // FIRST-CLASS-LOCAL-INVOICE-STORE-01B2 — ein V6-Zustand bringt die Rechnungen mit.
+    invoiceEntries: [],
     setup: { ...DEFAULT_SETUP, companyName: CLOUD_COMPANY, setupComplete: true, setupVersion: 1 },
     companyProfile: { ...DEFAULT_COMPANY_PROFILE, companyName: CLOUD_COMPANY },
     syncClient: {

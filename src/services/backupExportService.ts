@@ -78,6 +78,8 @@ function buildRecordCounts(state: AppPersistedState): BackupRecordCounts {
   return {
     inboxItems: state.inboxItems?.length ?? 0,
     vorgaenge: state.vorgaenge?.length ?? 0,
+    // FIRST-CLASS-LOCAL-INVOICE-STORE-01B — Rechnungen liegen nicht mehr in den Vorgängen.
+    invoiceEntries: state.invoiceEntries?.length ?? 0,
     tasks: state.tasks?.length ?? 0,
     documents: state.documents?.length ?? 0,
     expenses: state.expenses?.length ?? 0,

@@ -5,10 +5,12 @@ import {
   isValidPersistedStateV3,
   isValidPersistedStateV4,
   isValidPersistedStateV5,
+  isValidPersistedStateV6,
   migratePersistedStateV1ToV2,
   migratePersistedStateV2ToV3,
   migratePersistedStateV3ToV4,
   migratePersistedStateV4ToV5,
+  migratePersistedStateV5ToV6,
   STORAGE_VERSION,
 } from './sync/syncMigrationService';
 import { BACKUP_SCHEMA_VERSION } from '../types/backupExport';
@@ -37,6 +39,7 @@ const FILE_REF_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 const RECORD_COUNT_KEYS: (keyof BackupRecordCounts)[] = [
   'inboxItems',
   'vorgaenge',
+  'invoiceEntries',
   'tasks',
   'documents',
   'expenses',
@@ -151,31 +154,50 @@ export function normalizeBackupAppStateVersionReadOnly(
   // Never feed inline blobs into migration.
   delete forCheck.documentFileBlobs;
 
+  /*
+   * FIRST-CLASS-LOCAL-INVOICE-STORE-01B — dieselbe Kette wie im Ladepfad, nur
+   * lesend. Jede ältere Fassung endet bei V5 und wird von dort einmal nach V6
+   * gehoben; eine doppelte Rechnungskennung wirft und wird unten zu `null` —
+   * eine solche Sicherung gilt als ungültig, statt still halbiert zu werden.
+   */
   try {
-    if (isValidPersistedStateV5(forCheck)) {
+    if (isValidPersistedStateV6(forCheck)) {
       return cloneJson(forCheck as unknown as AppPersistedState);
     }
+    if (isValidPersistedStateV5(forCheck)) {
+      return cloneJson(migratePersistedStateV5ToV6(forCheck as unknown as AppPersistedState));
+    }
     if (isValidPersistedStateV4(forCheck)) {
-      return cloneJson(migratePersistedStateV4ToV5(forCheck as unknown as AppPersistedState));
+      return cloneJson(
+        migratePersistedStateV5ToV6(
+          migratePersistedStateV4ToV5(forCheck as unknown as AppPersistedState),
+        ),
+      );
     }
     if (isValidPersistedStateV3(forCheck)) {
       return cloneJson(
-        migratePersistedStateV4ToV5(
-          migratePersistedStateV3ToV4(forCheck as unknown as AppPersistedState),
+        migratePersistedStateV5ToV6(
+          migratePersistedStateV4ToV5(
+            migratePersistedStateV3ToV4(forCheck as unknown as AppPersistedState),
+          ),
         ),
       );
     }
     if (isValidPersistedStateV2(forCheck)) {
       return cloneJson(
-        migratePersistedStateV4ToV5(
-          migratePersistedStateV3ToV4(
-            migratePersistedStateV2ToV3(forCheck as never),
+        migratePersistedStateV5ToV6(
+          migratePersistedStateV4ToV5(
+            migratePersistedStateV3ToV4(migratePersistedStateV2ToV3(forCheck as never)),
           ),
         ),
       );
     }
     if (isValidPersistedStateV1(forCheck)) {
-      return cloneJson(migratePersistedStateV4ToV5(migratePersistedStateV1ToV2(forCheck as never)));
+      return cloneJson(
+        migratePersistedStateV5ToV6(
+          migratePersistedStateV4ToV5(migratePersistedStateV1ToV2(forCheck as never)),
+        ),
+      );
     }
   } catch {
     return null;
@@ -187,6 +209,8 @@ function buildRecordCountsFromState(state: AppPersistedState): BackupRecordCount
   return {
     inboxItems: state.inboxItems?.length ?? 0,
     vorgaenge: state.vorgaenge?.length ?? 0,
+    // FIRST-CLASS-LOCAL-INVOICE-STORE-01B — Rechnungen liegen nicht mehr in den Vorgängen.
+    invoiceEntries: state.invoiceEntries?.length ?? 0,
     tasks: state.tasks?.length ?? 0,
     documents: state.documents?.length ?? 0,
     expenses: state.expenses?.length ?? 0,

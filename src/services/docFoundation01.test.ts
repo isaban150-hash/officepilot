@@ -27,6 +27,7 @@ import {
   STORAGE_VERSION,
   STORAGE_VERSION_V3,
   STORAGE_VERSION_V4,
+  STORAGE_VERSION_V5,
 } from './sync/syncMigrationService';
 import type { AppPersistedState } from '../types/models';
 import { attachCompanyDocumentToVorgang, getVorgangStoreSnapshot, hydrateVorgangStore } from './vorgangService';
@@ -245,7 +246,8 @@ describe('DOC-FOUNDATION-01 migration', () => {
     expect(once.documentFileBlobs?.['legacy-blob-upl-1']).toContain('data:application/pdf');
 
     const v5 = migratePersistedStateV4ToV5(once);
-    expect(v5.version).toBe(STORAGE_VERSION);
+    // FIRST-CLASS-LOCAL-INVOICE-STORE-01B2 — diese Stufe endet bei V5; V6 folgt danach.
+    expect(v5.version).toBe(STORAGE_VERSION_V5);
     expect(v5.documentFileRefs?.[0].lifecycleStatus).toBe('committed');
 
     const twice = migratePersistedStateV3ToV4(v3);

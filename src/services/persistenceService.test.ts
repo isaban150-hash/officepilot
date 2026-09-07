@@ -25,6 +25,8 @@ function minimalState(overrides: Partial<AppPersistedState> = {}): AppPersistedS
     invoiceNumberSequence: { year: 2026, lastIssuedNumber: 0 },
     inboxItems: [],
     vorgaenge: [],
+    // FIRST-CLASS-LOCAL-INVOICE-STORE-01B2 — ein V6-Zustand bringt die Rechnungen mit.
+    invoiceEntries: [],
     tasks: [],
     documents: [],
     expenses: [],

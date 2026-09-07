@@ -1596,8 +1596,33 @@ import type { DocumentFileDerivativeRecoveryContext } from './documentFileDeriva
 import type { DocumentFileIntakeTransformPlanCarryContext } from './documentFileIntakeTransformPlanCarryContext';
 import type { DocumentWorkResult } from './documentWorkResult';
 
+/**
+ * FIRST-CLASS-LOCAL-INVOICE-STORE-01B — eine Rechnung samt ihrem Ablageort.
+ *
+ * Die Zuordnung steht bewusst in der Hülle und **nicht** in `VorgangInvoice`:
+ * Das Rechnungsobjekt ist zugleich das Cloud-Payload-Objekt. Ein zusätzliches
+ * Feld dort müsste an jeder Cloud-Grenze wieder entfernt werden, und ein
+ * Vergessen würde serverseitig als abweichender Inhalt gewertet — also als
+ * Idempotenzkonflikt auf dem Gerät des Nutzers, nicht als roter Test.
+ *
+ * `vorgangId: null` ist als spätere Fähigkeit vorgesehen (Rechnung ohne
+ * Auftrag). In diesem Stand erzeugt **kein** Pfad einen solchen Eintrag.
+ */
+export interface StoredInvoiceEntry {
+  invoice: VorgangInvoice;
+  vorgangId: string | null;
+}
+
 export interface AppPersistedState {
   version: number;
+  /**
+   * FIRST-CLASS-LOCAL-INVOICE-STORE-01B — die lokale Rechnungs-SSOT.
+   *
+   * Optional, weil V5-Bestände sie nicht kennen; die Migration füllt sie. Im
+   * gespeicherten V6-Zustand tragen die Vorgänge **keine** zweite
+   * Rechnungskopie — `vorgaenge[].invoices` ist dort leer.
+   */
+  invoiceEntries?: StoredInvoiceEntry[];
   syncClient?: SyncClientConfig;
   syncOutbox?: SyncOutboxEntry[];
   workspace?: Workspace;

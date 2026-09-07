@@ -14,6 +14,7 @@ import {
   resolvePaymentStatus,
 } from './invoicePaymentService';
 import {
+  applyStateToStores,
   loadPersistedState,
   persistAll,
   getActiveStorageKey,
@@ -432,14 +433,24 @@ describe('recordPayment / removePayment', () => {
     const raw = localStorage.getItem(getActiveStorageKey());
     expect(raw).not.toBeNull();
 
+    /*
+     * FIRST-CLASS-LOCAL-INVOICE-STORE-01B — der Ablageort hat sich geändert,
+     * die Zusage nicht: Die Zahlung überlebt das Speichern und Neuladen.
+     * Gespeichert wird sie jetzt zentral; die Vorgänge tragen keine zweite
+     * Rechnungskopie mehr.
+     */
     const parsed = JSON.parse(raw!);
-    expect(parsed.vorgaenge[0].invoices[0].payments).toHaveLength(1);
-    expect(parsed.vorgaenge[0].invoices[0].paymentStatus).toBe('teilbezahlt');
+    expect(parsed.invoiceEntries[0].invoice.payments).toHaveLength(1);
+    expect(parsed.invoiceEntries[0].invoice.paymentStatus).toBe('teilbezahlt');
+    expect(parsed.vorgaenge.flatMap((v: { invoices?: unknown[] }) => v.invoices ?? [])).toEqual([]);
 
     localStorage.setItem(getActiveStorageKey(), raw!);
     const reloaded = loadPersistedState();
-    expect(reloaded?.vorgaenge[0].invoices[0].payments).toHaveLength(1);
-    expect(reloaded?.vorgaenge[0].invoices[0].payments![0].amount).toBe(200);
+    expect(reloaded?.invoiceEntries?.[0]?.invoice.payments).toHaveLength(1);
+    expect(reloaded?.invoiceEntries?.[0]?.invoice.payments![0]!.amount).toBe(200);
+    // Nach dem Anwenden steht die Zahlung wieder an der Laufzeitsicht des Vorgangs.
+    applyStateToStores(reloaded!);
+    expect(getVorgangById('v-test-1')?.invoices[0]?.payments).toHaveLength(1);
   });
 
   it('detects sent date after payment due without changing due date', () => {

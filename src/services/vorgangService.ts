@@ -1,5 +1,11 @@
 import { buildOrderPositionsFromInbox } from './orderPositionFactory';
 import {
+  absorbInvoicesFromVorgaenge,
+  listInvoicesForVorgang,
+  resetInvoiceStore,
+  setInvoicesForVorgang,
+} from './invoice/invoiceStore';
+import {
   canAddOrderPosition,
   canDeleteOrderPosition,
   canEditOrderPositionField,
@@ -154,8 +160,20 @@ export function getVorgangStoreSnapshot(): Vorgang[] {
   return vorgaenge.map(cloneVorgang);
 }
 
+/**
+ * FIRST-CLASS-LOCAL-INVOICE-STORE-01B — die Rechnungen wandern in ihren
+ * Speicher, der Vorgangsbestand trägt sie nicht mehr selbst.
+ *
+ * Das ist zugleich der Weg, auf dem ein V5-Bestand und jede Testvorbereitung
+ * dort ankommen: Wer Vorgänge mit Rechnungen übergibt, füllt damit den
+ * Rechnungsspeicher. Ein V6-Zustand trägt an den Vorgängen keine mehr; dort
+ * setzt `applyStateToStores` den Bestand unmittelbar danach aus
+ * `invoiceEntries`.
+ */
 export function hydrateVorgangStore(items: Vorgang[]): void {
-  vorgaenge = items.map(normalizeVorgang);
+  const normalized = items.map(normalizeVorgang);
+  absorbInvoicesFromVorgaenge(normalized);
+  vorgaenge = normalized.map((vorgang) => ({ ...vorgang, invoices: [] }));
 }
 
 function cloneCustomerBilling(billing: CustomerBilling): CustomerBilling {
@@ -255,7 +273,17 @@ function cloneVorgang(v: Vorgang): Vorgang {
     documents: v.documents.map((d) => ({ ...d })),
     tasks: v.tasks.map((t) => ({ ...t })),
     photos: v.photos.map((p) => ({ ...p })),
-    invoices: (v.invoices ?? []).map(cloneVorgangInvoice),
+    /*
+     * FIRST-CLASS-LOCAL-INVOICE-STORE-01B — hier entsteht die Sicht.
+     *
+     * `cloneVorgang` ist die einzige Stelle, an der ein Vorgang den Speicher
+     * verlässt: `getVorgangById`, `getAllVorgaenge`, `getVorgangStoreSnapshot`
+     * und `updateVorgangInStore` gehen alle darüber. Weil die Rechnungen bei
+     * **jedem** dieser Zugriffe frisch aus ihrem Speicher gelesen werden, kann
+     * die Sicht nicht veralten — und es gibt keinen zweiten Ort, an den
+     * jemand sie schreiben könnte.
+     */
+    invoices: listInvoicesForVorgang(v.id).map(cloneVorgangInvoice),
     negotiation: v.negotiation ? cloneNegotiation(v.negotiation) : undefined,
     contractConfirmation: v.contractConfirmation
       ? cloneContractConfirmation(v.contractConfirmation)
@@ -321,6 +349,16 @@ function normalizeContractConfirmation(
 }
 
 function normalizeVorgang(v: Vorgang): Vorgang {
+  /*
+   * FIRST-CLASS-LOCAL-INVOICE-STORE-01B — die Normalisierung arbeitet auf dem
+   * **übergebenen** Rechnungsstand, nicht auf der Sicht.
+   *
+   * `cloneVorgang` projiziert die Rechnungen inzwischen aus ihrem Speicher.
+   * Hier ist das falsch: Zu normalisieren sind gerade die Rechnungen, die
+   * hereinkommen — sie sollen erst danach in den Speicher wandern. Deshalb
+   * werden sie nach dem Klonen ausdrücklich wieder eingesetzt.
+   */
+  const normalizedInvoices = (v.invoices ?? []).map(cloneVorgangInvoice);
   const normalized = cloneVorgang({
     ...v,
     status: migrateVorgangStatus(v.status),
@@ -329,24 +367,24 @@ function normalizeVorgang(v: Vorgang): Vorgang {
     contractConfirmation: normalizeContractConfirmation(v.contractConfirmation),
     orderAmendments: normalizeOrderAmendments(v.orderAmendments),
     confirmedOrderAmendments: normalizeConfirmedOrderAmendments(v.confirmedOrderAmendments),
-    invoices: (v.invoices ?? []).map((inv) => ({
-      ...inv,
-      type: inv.type ?? 'abschlag',
-      positions: inv.positions ?? [],
-      subtotal: inv.subtotal ?? inv.amount ?? 0,
-      taxStatus: inv.taxStatus ?? 'standard_19',
-      createdAt: inv.createdAt ?? inv.date,
-      legalNotices: inv.legalNotices ?? [],
-      previousAbschlagDeductions: inv.previousAbschlagDeductions ?? [],
-      payments: inv.payments ?? [],
-      expectedAmendmentSequence:
-        typeof inv.expectedAmendmentSequence === 'number' &&
-        Number.isInteger(inv.expectedAmendmentSequence) &&
-        inv.expectedAmendmentSequence >= 0
-          ? inv.expectedAmendmentSequence
-          : undefined,
-    })),
   });
+  normalized.invoices = normalizedInvoices.map((inv) => ({
+    ...inv,
+    type: inv.type ?? 'abschlag',
+    positions: inv.positions ?? [],
+    subtotal: inv.subtotal ?? inv.amount ?? 0,
+    taxStatus: inv.taxStatus ?? 'standard_19',
+    createdAt: inv.createdAt ?? inv.date,
+    legalNotices: inv.legalNotices ?? [],
+    previousAbschlagDeductions: inv.previousAbschlagDeductions ?? [],
+    payments: inv.payments ?? [],
+    expectedAmendmentSequence:
+      typeof inv.expectedAmendmentSequence === 'number' &&
+      Number.isInteger(inv.expectedAmendmentSequence) &&
+      inv.expectedAmendmentSequence >= 0
+        ? inv.expectedAmendmentSequence
+        : undefined,
+  }));
 
   if (!normalized.customerBilling) {
     normalized.customerBilling = defaultCustomerBilling(normalized);
@@ -483,10 +521,35 @@ function appendDocumentIfNew(vorgang: Vorgang, doc: VorgangDocument): void {
  * spielt dabei keine Rolle (`stripSyncField`). Gesetzt wird die Version
  * ausschliesslich von der Serverantwort und vom Pull.
  */
+/**
+ * FIRST-CLASS-LOCAL-INVOICE-STORE-01B — der Rechnungsteil eines Vorgangs geht
+ * in den Rechnungsspeicher, der Rest in den Vorgangsbestand.
+ *
+ * Die neun bestehenden Rechnungsmutationen bauen nach wie vor ein neues
+ * `invoices`-Array auf einer Kopie des Vorgangs — ihr Code und ihre Signaturen
+ * bleiben unverändert. Hier wird dieser Teil abgezweigt, statt ihn ein zweites
+ * Mal zu speichern.
+ *
+ * Der Rückgabewert ist der vorherige Rechnungsstand: Schlägt das Persistieren
+ * fehl, muss auch der Rechnungsspeicher zurück — sonst zeigte die Oberfläche
+ * eine Änderung, die den nächsten Neustart nicht überlebt.
+ */
+function applyVorgangInvoices(next: Vorgang): VorgangInvoice[] {
+  const previous = listInvoicesForVorgang(next.id);
+  setInvoicesForVorgang(next.id, next.invoices ?? []);
+  return previous;
+}
+
 function updateVorgangInStore(updated: Vorgang): Vorgang {
-  const next = updated;
+  const next = { ...updated, invoices: [] };
+  const previousInvoices = applyVorgangInvoices(updated);
+  const previousVorgaenge = vorgaenge;
+
   vorgaenge = vorgaenge.map((v) => (v.id === next.id ? next : v));
-  persistAll();
+  if (!persistAll().success) {
+    vorgaenge = previousVorgaenge;
+    setInvoicesForVorgang(updated.id, previousInvoices);
+  }
   return cloneVorgang(next);
 }
 
@@ -514,11 +577,14 @@ export function commitVorgangMutation(
   }
 
   // 02: lokale Fachänderung — `sync` bleibt, siehe `updateVorgangInStore`.
-  const next = built;
+  const next = { ...built, invoices: [] };
+  const previousInvoices = applyVorgangInvoices(built);
   vorgaenge = vorgaenge.map((item) => (item.id === vorgangId ? next : item));
   const persistResult = persistAll();
   if (!persistResult.success) {
     vorgaenge = vorgaenge.map((item) => (item.id === vorgangId ? previousRaw : item));
+    // FIRST-CLASS-LOCAL-INVOICE-STORE-01B — beide Teile fallen gemeinsam zurück.
+    setInvoicesForVorgang(vorgangId, previousInvoices);
     return { ok: false, errorKey: 'order_amendment_local_persist_failed' };
   }
   return { ok: true, vorgang: cloneVorgang(next) };
@@ -1462,7 +1528,19 @@ export function applyFinalizedInvoiceToVorgang(
   vorgang: Vorgang,
   invoice: VorgangInvoice,
 ): UpsertFinalizedInvoiceResult & { vorgang?: Vorgang } {
-  const next = cloneVorgang(vorgang);
+  /*
+   * FIRST-CLASS-LOCAL-INVOICE-STORE-01B — diese Funktion ist rein und arbeitet
+   * ausschliesslich auf dem **übergebenen** Vorgang.
+   *
+   * `cloneVorgang` projiziert die Rechnungen inzwischen aus dem Speicher. Hier
+   * wäre das falsch: Der Cloud-Merge reicht Vorgänge herein, die noch gar nicht
+   * im Speicher stehen — ihre Rechnungen kämen sonst abhanden. Deshalb wird der
+   * mitgegebene Rechnungsstand ausdrücklich beibehalten.
+   */
+  const next: Vorgang = {
+    ...cloneVorgang(vorgang),
+    invoices: (vorgang.invoices ?? []).map(cloneVorgangInvoice),
+  };
   const byId = next.invoices.find((item) => item.id === invoice.id);
   if (byId) {
     if (immutableInvoiceFingerprint(byId, next.id) !== immutableInvoiceFingerprint(invoice, next.id)) {
@@ -1510,7 +1588,8 @@ export function upsertFinalizedInvoiceOnVorgang(
   }
 
   const previousRaw = vorgaenge[index]!;
-  const applied = applyFinalizedInvoiceToVorgang(previousRaw, invoice);
+  // Die Projektion, nicht die Speicherzeile: Dort stehen die Rechnungen nicht mehr.
+  const applied = applyFinalizedInvoiceToVorgang(cloneVorgang(previousRaw), invoice);
   if (!applied.ok || !applied.vorgang) {
     return applied.ok
       ? { ok: true, invoice: applied.invoice, action: applied.action }
@@ -1522,11 +1601,14 @@ export function upsertFinalizedInvoiceOnVorgang(
   }
 
   // 02: lokale Fachänderung — `sync` bleibt, siehe `updateVorgangInStore`.
-  const next = applied.vorgang;
+  const next = { ...applied.vorgang, invoices: [] };
+  const previousInvoices = applyVorgangInvoices(applied.vorgang);
   vorgaenge = vorgaenge.map((v) => (v.id === vorgangId ? next : v));
   const persistResult = persistAll();
   if (!persistResult.success) {
     vorgaenge = vorgaenge.map((v) => (v.id === vorgangId ? previousRaw : v));
+    // FIRST-CLASS-LOCAL-INVOICE-STORE-01B — beide Teile fallen gemeinsam zurück.
+    setInvoicesForVorgang(vorgangId, previousInvoices);
     return { ok: false, reason: 'local_persist_failed' };
   }
   return { ok: true, invoice: applied.invoice, action: applied.action };
@@ -2269,6 +2351,8 @@ export function applyContractAcceptFieldsToVorgang(
 
 export function resetVorgaenge(): void {
   vorgaenge = [];
+  // Die Rechnungen gehören zu diesen Vorgängen — sie dürfen nicht zurückbleiben.
+  resetInvoiceStore();
 }
 
 export { buildOrderPositionsFromInbox, parseOfferAmount } from './orderPositionFactory';

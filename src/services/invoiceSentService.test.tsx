@@ -390,9 +390,17 @@ describe('OFFICEPILOT-INVOICE-SENT-PERSIST-01C', () => {
       markInvoiceAsSent('v-test-1', 'inv-sent-1', { sentAt: '2026-06-05', sentVia: 'email' }).ok,
     ).toBe(true);
 
-    // Genau das, was mobiles Safari beim Wiederaufnehmen tut.
+    /*
+     * Genau das, was mobiles Safari beim Wiederaufnehmen tut.
+     *
+     * FIRST-CLASS-LOCAL-INVOICE-STORE-01B2 — über `applyStateToStores`, den
+     * tatsächlichen Wiederaufnahmepunkt: Seit dem Cutover trägt der
+     * gespeicherte Vorgang die Rechnungen nicht mehr selbst, sie kommen aus
+     * `invoiceEntries`. `hydrateVorgangStore` allein bildete den Ladeweg nur
+     * noch halb ab.
+     */
     const snapshot = persistenceService.buildPersistedStateSnapshot();
-    hydrateVorgangStore(snapshot.vorgaenge);
+    persistenceService.applyStateToStores(snapshot);
 
     const stored = getVorgangInvoice('v-test-1', 'inv-sent-1')!;
     expect(stored.status).toBe('versendet');

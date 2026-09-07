@@ -14,6 +14,13 @@ export interface BackupFileManifestEntry {
 export interface BackupRecordCounts {
   inboxItems: number;
   vorgaenge: number;
+  /**
+   * FIRST-CLASS-LOCAL-INVOICE-STORE-01B — Rechnungen zählen eigenständig.
+   *
+   * Optional, weil Sicherungen aus der Zeit davor den Abschnitt nicht kennen.
+   * Ohne ihn meldete eine Sicherung „0 Rechnungen", obwohl sie welche enthält.
+   */
+  invoiceEntries?: number;
   tasks: number;
   documents: number;
   expenses: number;
