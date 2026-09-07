@@ -63,6 +63,14 @@ const deLegacy = {
   'localRecovery.field.counts': 'Vorgänge / Dokumente / Aufträge',
   'localRecovery.value.yes': 'ja',
   'localRecovery.value.no': 'nein',
+  /*
+   * LOAD_FAILED-UX-GUARD-01B — bewusst ohne Handlungsaufforderung: Jeder
+   * angebotene Weg wäre hier ein Weg, den geretteten Bestand zu überschreiben.
+   */
+  'localState.loadFailed.title': 'Gespeicherte Daten konnten nicht sicher geladen werden',
+  'localState.loadFailed.hint':
+    'OfficePilot hat keine Daten überschrieben. Änderungen sind vorübergehend gesperrt.',
+  'localState.loadFailed.note': 'Bitte hier nicht weiterarbeiten.',
   'workspaceRestore.failed.title': 'Ihre Firmendaten konnten nicht geladen werden',
   'workspaceRestore.failed.hint': 'OfficePilot startet deshalb keine neue Einrichtung. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.',
   'workspaceRestore.failed.retry': 'Erneut versuchen',
@@ -3569,6 +3577,10 @@ const trLegacy: Partial<Record<keyof typeof de, string>> = {
   'localRecovery.field.counts': 'Islemler / Belgeler / Siparisler',
   'localRecovery.value.yes': 'evet',
   'localRecovery.value.no': 'hayır',
+  'localState.loadFailed.title': 'Kayıtlı veriler güvenli şekilde yüklenemedi',
+  'localState.loadFailed.hint':
+    'OfficePilot hiçbir veriyi üzerine yazmadı. Değişiklikler geçici olarak kilitlendi.',
+  'localState.loadFailed.note': 'Lütfen burada çalışmaya devam etmeyin.',
   'workspaceRestore.failed.title': 'Firma bilgileriniz yüklenemedi',
   'workspaceRestore.failed.hint': 'Bu nedenle OfficePilot yeni bir kurulum başlatmaz. Bağlantınızı kontrol edip tekrar deneyin.',
   'workspaceRestore.failed.retry': 'Tekrar dene',
@@ -4885,6 +4897,10 @@ const bgLegacy: Partial<Record<keyof typeof de, string>> = {
   'localRecovery.field.counts': 'Случаи / Документи / Поръчки',
   'localRecovery.value.yes': 'да',
   'localRecovery.value.no': 'не',
+  'localState.loadFailed.title': 'Запазените данни не можаха да бъдат заредени сигурно',
+  'localState.loadFailed.hint':
+    'OfficePilot не е презаписал данни. Промените са временно заключени.',
+  'localState.loadFailed.note': 'Моля, не продължавайте работа тук.',
   'workspaceRestore.failed.title': 'Данните на фирмата ви не можаха да бъдат заредени',
   'workspaceRestore.failed.hint': 'Затова OfficePilot не започва нова настройка. Проверете връзката и опитайте отново.',
   'workspaceRestore.failed.retry': 'Опитайте отново',

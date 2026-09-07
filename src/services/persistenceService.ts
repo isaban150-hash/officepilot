@@ -194,7 +194,9 @@ export type PersistFailureReason =
   | 'quota_exceeded'
   | 'serialization_failed'
   | 'storage_unavailable'
-  | 'unknown_persist_error';
+  | 'unknown_persist_error'
+  /** LOAD_FAILED-UX-GUARD-01B — der Bereich ist wegen eines Ladefehlers gesperrt. */
+  | 'load_failed_lock';
 
 export interface PersistFailureDiagnostic {
   phase: PersistFailurePhase;
@@ -662,8 +664,8 @@ export type PersistedStateLoadFailureReason =
  * Eine fehlschlagende Migration darf blockieren, aber niemals überschreiben.
  */
 export type PersistedStateLoadResult =
-  | { status: 'loaded'; state: AppPersistedState }
-  | { status: 'absent' }
+  | { status: 'loaded'; state: AppPersistedState; storageKey: string }
+  | { status: 'absent'; storageKey: string }
   | { status: 'failed'; reason: PersistedStateLoadFailureReason; storageKey: string };
 
 export function loadPersistedStateResultFromKey(storageKey: string): PersistedStateLoadResult {
@@ -676,7 +678,7 @@ export function loadPersistedStateResultFromKey(storageKey: string): PersistedSt
   }
 
   // Der einzige Weg zu `absent`: Es liegt tatsächlich nichts vor.
-  if (!raw) return { status: 'absent' };
+  if (!raw) return { status: 'absent', storageKey };
 
   let parsed: unknown;
   try {
@@ -713,10 +715,20 @@ export function loadPersistedStateResultFromKey(storageKey: string): PersistedSt
    * fremder Schlüssel wird gelesen, aber nie überschrieben.
    */
   adoptLoadedSyncState(state);
+  /*
+   * LOAD_FAILED-UX-GUARD-01B — ein gelungener Ladevorgang **ist** die
+   * Freigabebedingung für genau diesen Bereich.
+   *
+   * Die Aufhebung steht hier und nicht erst beim Aufrufer: Sonst hinge sie
+   * daran, dass jeder Aufrufer `recordPersistedStateLoadOutcome` ruft — und ein
+   * anschliessendes Zurückschreiben der Migration liefe gegen eine Sperre, die
+   * in diesem Moment sachlich nicht mehr besteht.
+   */
+  writeLockedStorageKeys.delete(storageKey);
   if (normalized.migrated && storageKey === getActiveStorageKey()) {
     savePersistedState(normalized.migrated);
   }
-  return { status: 'loaded', state };
+  return { status: 'loaded', state, storageKey };
 }
 
 export function loadPersistedStateResult(): PersistedStateLoadResult {
@@ -745,6 +757,29 @@ export function savePersistedStateToKey(
   state: AppPersistedState,
 ): PersistSaveResult {
   const storageKey = buildStorageKey(scope);
+
+  /*
+   * LOAD_FAILED-UX-GUARD-01B — die zweite Schutzschicht.
+   *
+   * `PERSISTENCE-MIGRATION-FAILURE-GUARD-01B/01B2` bewahrt den Rohwert während
+   * des Ladens. Danach standen die Fachspeicher aber leer da, und dieser
+   * Schnappschuss entsteht **aus ihnen** — die erste beliebige Nutzeraktion
+   * hätte den geretteten Bestand überschrieben.
+   *
+   * Solange für diesen Schlüssel ein Ladefehler gilt, wird deshalb gar nicht
+   * erst serialisiert. Der Aufrufer bekommt ein Ergebnis, keine Ausnahme; ein
+   * Schreibversuch bleibt ohne Wirkung und hebt die Sperre nicht auf.
+   *
+   * Frei wird der Bereich erst, wenn wieder ein **vollständiger** Zustand in
+   * die Speicher übernommen wurde — durch einen gelungenen Ladevorgang oder
+   * durch eine ausdrückliche Wiederherstellung (`applyStateToStores`).
+   */
+  if (isBusinessStateWriteLocked(storageKey)) {
+    const failure: PersistFailureInfo = { reason: 'load_failed_lock' };
+    lastPersistFailure = failure;
+    return { success: false, failure };
+  }
+
   const existingStoredCharacters = readExistingStoredCharacters(storageKey);
 
   let serialized = '';
@@ -827,6 +862,20 @@ export function clearInMemoryBusinessState(): void {
 }
 
 export function applyStateToStores(state: AppPersistedState): void {
+  /*
+   * LOAD_FAILED-UX-GUARD-01B — die Übernahme eines vollständigen Zustands ist
+   * der einzige Weg zurück.
+   *
+   * Ein gelungener Ladevorgang, ein Cloud-Bootstrap und eine ausdrückliche
+   * Wiederherstellung enden alle hier. Genau das ist die Bedingung, unter der
+   * ein Schreibvorgang wieder unbedenklich ist: Die Speicher tragen wieder
+   * einen echten Bestand, nicht die Leere nach einem Ladefehler.
+   *
+   * Ein **Schreibversuch** löst die Sperre bewusst nicht — sonst genügte ein
+   * zweiter Anlauf, um den geretteten Bestand doch zu überschreiben.
+   */
+  writeLockedStorageKeys.delete(getActiveStorageKey());
+
   const client = ensureSyncClientFromState(state.syncClient);
   hydrateSyncClient(client);
   hydrateSyncOutbox(state.syncOutbox ?? []);
@@ -911,6 +960,15 @@ let lastPersistedStateLoadFailure: {
   storageKey: string;
 } | null = null;
 
+/**
+ * LOAD_FAILED-UX-GUARD-01B — die gesperrten Speicherbereiche, je Schlüssel.
+ *
+ * Bewusst eine Menge und kein globaler Schalter: Ein Ladefehler betrifft genau
+ * einen Bereich. Ein anderer Arbeitsbereich bleibt beschreibbar, und ein
+ * erfolgreicher Wechsel dorthin darf die Sperre des ersten nicht aufheben.
+ */
+const writeLockedStorageKeys = new Set<string>();
+
 export function getPersistedStateLoadFailure(): {
   reason: PersistedStateLoadFailureReason;
   storageKey: string;
@@ -918,11 +976,39 @@ export function getPersistedStateLoadFailure(): {
   return lastPersistedStateLoadFailure;
 }
 
+/**
+ * Ist dieser Speicherbereich wegen eines Ladefehlers für Fachdaten gesperrt?
+ *
+ * Solange das gilt, wird der gespeicherte Rohwert **nicht** überschrieben — auch
+ * nicht durch einen ganz normalen Speichervorgang im laufenden Betrieb.
+ */
+export function isBusinessStateWriteLocked(storageKey: string): boolean {
+  return writeLockedStorageKeys.has(storageKey);
+}
+
+/**
+ * Setzt oder löst die Sperre für **genau den** geladenen Bereich.
+ *
+ * `failed` sperrt, `loaded` und `absent` geben frei. Ein Ladevorgang für einen
+ * anderen Schlüssel lässt bestehende Sperren unberührt.
+ */
 export function recordPersistedStateLoadOutcome(result: PersistedStateLoadResult): void {
-  lastPersistedStateLoadFailure =
-    result.status === 'failed'
-      ? { reason: result.reason, storageKey: result.storageKey }
-      : null;
+  if (result.status === 'failed') {
+    writeLockedStorageKeys.add(result.storageKey);
+    lastPersistedStateLoadFailure = { reason: result.reason, storageKey: result.storageKey };
+    return;
+  }
+
+  writeLockedStorageKeys.delete(result.storageKey);
+  if (lastPersistedStateLoadFailure?.storageKey === result.storageKey) {
+    lastPersistedStateLoadFailure = null;
+  }
+}
+
+/** Nur für Tests: alle Sperren aufheben. */
+export function resetBusinessStateWriteLocksForTests(): void {
+  writeLockedStorageKeys.clear();
+  lastPersistedStateLoadFailure = null;
 }
 
 export function hydrateStoresFromStorage(): CompanySetup {

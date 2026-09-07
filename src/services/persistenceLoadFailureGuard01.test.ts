@@ -20,6 +20,7 @@ import {
   createSeedState,
   hydrateStoresFromStorage,
   loadPersistedStateResultFromKey,
+  resetBusinessStateWriteLocksForTests,
   savePersistedStateToKey,
 } from './persistenceService';
 import { bootstrapBusinessState } from './storage/storageBootstrapService';
@@ -47,6 +48,8 @@ function writeValidState(): string {
 
 beforeEach(() => {
   localStorage.clear();
+  // LOAD_FAILED-UX-GUARD-01B — Sperren sind Modulzustand; kein Fall erbt den anderen.
+  resetBusinessStateWriteLocksForTests();
   setActiveStorageScope(SCOPE);
 });
 
@@ -57,7 +60,7 @@ afterEach(() => {
 
 describe('PERSISTENCE-MIGRATION-FAILURE-GUARD-01B — die drei Ladezustände', () => {
   it('R1: ohne gespeicherten Zustand meldet der Ladepfad `absent`', () => {
-    expect(loadPersistedStateResultFromKey(KEY)).toEqual({ status: 'absent' });
+    expect(loadPersistedStateResultFromKey(KEY)).toEqual({ status: 'absent', storageKey: KEY });
   });
 
   it('R1b: `absent` darf weiterhin zu Seed-Daten führen', () => {

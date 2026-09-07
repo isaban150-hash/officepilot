@@ -18,6 +18,7 @@ import { getCachedSetup } from '../../services/persistenceService';
 import { t } from '../../i18n';
 import { getWorkspaceStoreSnapshot } from '../../services/workspace/workspaceStore';
 import { WorkspaceRestoreFailure, WorkspaceSetupNotFound } from './WorkspaceRestoreFailure';
+import { LocalStateLoadFailure } from './LocalStateLoadFailure';
 import { WorkspaceCompanyConflict } from './WorkspaceCompanyConflict';
 import { applyConfirmedLocalCompany } from '../../services/workspace/workspaceCompanyRecoveryService';
 import type { CompanyConflictInfo } from '../../services/workspace/workspaceCompanyConflictService';
@@ -41,6 +42,16 @@ export function BusinessStateGate({ children }: BusinessStateGateProps) {
   const [bootstrapKey, setBootstrapKey] = useState('guest');
   const bootstrappedUserRef = useRef<string | null | undefined>(undefined);
   const [restoreFailure, setRestoreFailure] = useState<string | null>(null);
+  /**
+   * LOAD_FAILED-UX-GUARD-01B — der aktive Speicherbereich enthält Daten, die
+   * nicht gelesen werden konnten.
+   *
+   * Der Persistenz-Guard hat sie bewahrt und sperrt weitere Schreibvorgänge.
+   * Hier fehlt nur noch, dass der Nutzer es sieht: Ohne diese Sperre erschiene
+   * ein normales, leeres OfficePilot — und die Neuerfassung von Daten wäre
+   * genau der Schritt, der den geretteten Bestand am Ende doch überschreibt.
+   */
+  const [localStateLoadFailed, setLocalStateLoadFailed] = useState(false);
   const [setupNotFound, setSetupNotFound] = useState(false);
   const [companyConflict, setCompanyConflict] = useState<CompanyConflictInfo | null>(null);
   const [conflictBusy, setConflictBusy] = useState(false);
@@ -71,6 +82,7 @@ export function BusinessStateGate({ children }: BusinessStateGateProps) {
         prepareWorkspaceCloudBootstrapRetry();
         const guestResult = bootstrapBusinessState();
         if (cancelled) return;
+        setLocalStateLoadFailed(guestResult.loadFailed === true);
         setSetup(guestResult.setup);
         setBootstrapKey('guest');
         bootstrappedUserRef.current = null;
@@ -106,6 +118,19 @@ export function BusinessStateGate({ children }: BusinessStateGateProps) {
             : { userId: nextUserId }
           : {},
       );
+      if (cancelled) return;
+      /*
+       * LOAD_FAILED-UX-GUARD-01B — vor jeder weiteren Entscheidung. Weder ein
+       * Cloud-Bootstrap noch der Einrichtungsassistent darf auf einem Bereich
+       * anlaufen, dessen gespeicherte Daten unlesbar sind.
+       */
+      if (result.loadFailed) {
+        setLocalStateLoadFailed(true);
+        setSetup(null);
+        return;
+      }
+      setLocalStateLoadFailed(false);
+
       const needsWorkspaceBootstrap =
         Boolean(nextUserId) && isAuthenticated && isAllowed && isSupabaseConfigured();
 
@@ -198,6 +223,18 @@ export function BusinessStateGate({ children }: BusinessStateGateProps) {
       cancelled = true;
     };
   }, [isAuthReady, isAuthenticated, isAllowed, user?.id, retryToken]);
+
+  /*
+   * LOAD_FAILED-UX-GUARD-01B — die höchste Sperre, vor allen anderen.
+   *
+   * Sie gilt auch ohne Anmeldung: Der Gastbereich trägt ebenso echte Daten.
+   * Es gibt bewusst keinen Ausweg auf dieser Ansicht — jeder angebotene Weg
+   * führte zu einem Schreibvorgang auf einem Bereich, dessen Bestand gerade
+   * geschützt wird.
+   */
+  if (localStateLoadFailed) {
+    return <LocalStateLoadFailure />;
+  }
 
   if (companyConflict && isAuthenticated) {
     return (
