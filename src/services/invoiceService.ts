@@ -476,6 +476,77 @@ export function getOverbillingReference(position: InvoiceDraftPosition): number 
   return getDraftPositionExecutedRemaining(position) ?? position.openQuantity;
 }
 
+/**
+ * INVOICE-DRAFT-ORDER-PROJECTION-REFRESH-01B — die Auftragsfakten eines
+ * wiederaufgenommenen Entwurfs nachholen.
+ *
+ * Ein dauerhafter Entwurf wird beim Wiederaufnehmen unverändert
+ * wiederhergestellt; `buildInvoiceDraftForType` läuft dann nicht mehr. Auf dem
+ * iPhone hiess das: Wer die Rechnung öffnete, bevor eine Ausführung erfasst
+ * war, sah danach dauerhaft „noch nicht erfasst" — obwohl der Auftrag längst
+ * 20 Stunden trug und diese auch einen Reload überlebten.
+ *
+ * Aufgefrischt werden ausschliesslich die **Ableitungen** aus dem Auftrag:
+ * Planmenge, Ausführungsstand, bereits abgerechnete Menge und Planrest. Sie
+ * sind Projektionen, keine Eingaben — ihr alter Stand ist schlicht falsch.
+ *
+ * 🔒 **`quantity` bleibt unangetastet.** Der Entwurf trägt keine Herkunft der
+ * Menge; ob eine 0 bewusst gewählt oder nur nie berührt wurde, ist nicht
+ * unterscheidbar. Jede Heuristik („sieht unbearbeitet aus") würde früher oder
+ * später eine bewusste Entscheidung überschreiben — und das wäre schlimmer als
+ * ein Vorschlag, der ausbleibt. Der Nutzer sieht nach dem Auffrischen die
+ * richtigen Zahlen und kann die Menge selbst setzen; „Alle Positionen
+ * übernehmen" rechnet dann mit dem aktuellen Stand.
+ *
+ * Eine Entwurfsposition ohne passende Auftragsposition bleibt **unverändert**
+ * erhalten: Sie zu entfernen wäre stiller Datenverlust, sie neu zuzuordnen
+ * geraten. Neue Auftragspositionen wandern **nicht** von selbst in den
+ * Entwurf — Positionen kommen nur auf ausdrückliche Entscheidung hinzu.
+ */
+export function refreshDraftOrderProjection(
+  draft: InvoiceDraft,
+  vorgang: Vorgang,
+): { draft: InvoiceDraft; changed: boolean } {
+  let changed = false;
+
+  const positions = draft.positions.map((position) => {
+    const orderPosition = vorgang.orderPositions?.find((p) => p.id === position.orderPositionId);
+    if (!orderPosition) return position;
+
+    const next: InvoiceDraftPosition = {
+      ...position,
+      plannedQuantity: orderPosition.plannedQuantity,
+      billedQuantity: getBilledQuantity(vorgang, orderPosition.id),
+      openQuantity: getBillableOpenQuantity(vorgang, orderPosition.id),
+    };
+    /*
+     * `executedQuantity` ist optional und `undefined` heisst „nicht erfasst".
+     * Ein `?? plannedQuantity` wäre genau die stille Behauptung, die
+     * INVOICE-ACTUAL-QUANTITY-01B beseitigt hat — der Wert wird deshalb
+     * gesetzt **oder entfernt**, nie ersetzt.
+     */
+    if (orderPosition.executedQuantity === undefined) {
+      delete next.executedQuantity;
+    } else {
+      next.executedQuantity = orderPosition.executedQuantity;
+    }
+
+    if (
+      next.plannedQuantity === position.plannedQuantity &&
+      next.billedQuantity === position.billedQuantity &&
+      next.openQuantity === position.openQuantity &&
+      next.executedQuantity === position.executedQuantity
+    ) {
+      return position;
+    }
+
+    changed = true;
+    return next;
+  });
+
+  return changed ? { draft: { ...draft, positions }, changed } : { draft, changed };
+}
+
 export function updateDraftPositionQuantity(
   draft: InvoiceDraft,
   positionId: string,

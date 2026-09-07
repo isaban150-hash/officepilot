@@ -31,6 +31,7 @@ import {
   saveInvoiceDraftRecord,
 } from './invoiceDraftDurabilityService';
 import { getVorgangById } from '../vorgangService';
+import { refreshDraftOrderProjection } from '../invoiceService';
 import type {
   InvoiceDraftIdentity,
   InvoiceDraftLocator,
@@ -395,8 +396,33 @@ export function useInvoiceDraftDurabilitySession(
         draftId: record.draftId,
       };
       queue.revision = record.revision;
+
+      /*
+       * INVOICE-DRAFT-ORDER-PROJECTION-REFRESH-01B — die Auftragsfakten
+       * nachholen, bevor der Entwurf zur Arbeitsgrundlage wird.
+       *
+       * Ein wiederhergestellter Entwurf trägt die Auftragsprojektion seines
+       * Erzeugungszeitpunkts. Wurde die Ausführung erst danach erfasst, zeigte
+       * die Rechnung dauerhaft „noch nicht erfasst" — der Realbefund vom
+       * iPhone. Die Auffrischung geschieht deshalb **hier**, vor dem ersten
+       * `applyView`: Es gibt keinen Renderdurchlauf mit dem alten Stand.
+       *
+       * Nur für einen wiederhergestellten, weiterhin bearbeitbaren Entwurf.
+       * Ein frisch erzeugter ist bereits aktuell; `finalizing` und `finalized`
+       * sind eingefroren und werden nicht angefasst.
+       */
+      const refreshable = restored && record.status === 'active';
+      const vorgang = refreshable ? getVorgangById(record.vorgangId) : undefined;
+      /*
+       * Ohne ladbaren Vorgang bleibt der gespeicherte Stand gültig: nicht
+       * leeren, nicht löschen, nicht zurücksetzen.
+       */
+      const projected =
+        refreshable && vorgang ? refreshDraftOrderProjection(draft, vorgang) : null;
+      const effective = projected?.draft ?? draft;
+
       // Interner und sichtbarer Stand sind getrennte Instanzen.
-      queue.draft = cloneDraft(draft);
+      queue.draft = cloneDraft(effective);
       queue.draftText = JSON.stringify(queue.draft);
       const status: InvoiceDraftSessionStatus =
         record.status === 'active'
@@ -404,6 +430,25 @@ export function useInvoiceDraftDurabilitySession(
           : record.status === 'finalizing'
             ? 'finalization_pending'
             : 'already_finalized';
+
+      if (projected?.changed) {
+        /*
+         * Der aufgefrischte Stand geht über den **regulären** Speicherweg —
+         * dieselbe Warteschlange, dieselbe Revisionsprüfung wie jede andere
+         * Änderung. Kein zweiter Speicher, kein Nur-im-Speicher-Zustand, der
+         * den nächsten Reload nicht überlebt.
+         *
+         * Keine Schleife: `refreshDraftOrderProjection` meldet nur eine
+         * tatsächliche Abweichung, und nach dem Schreiben stimmt die Projektion
+         * mit dem Auftrag überein.
+         */
+        queue.status = 'saving';
+        queue.pendingSnapshot = queue.draft;
+        applyView({ status: 'saving', draft: cloneDraft(queue.draft), record, restored, issue: null });
+        void queue.runQueue?.();
+        return;
+      }
+
       applyView({ status, draft: cloneDraft(queue.draft), record, restored, issue: null });
     };
 
