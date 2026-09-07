@@ -11,6 +11,7 @@ import {
   buildSchlussrechnungDraft,
   getBillableOpenQuantity,
   getBilledQuantity,
+  getExecutedRemainingQuantity,
   getOpenQuantity,
   updateDraftPositionQuantity,
 } from './services/invoiceService';
@@ -74,11 +75,10 @@ describe('INVOICE-BILLING-BASE-01', () => {
    * galt die Planmenge als abzurechnende Menge. Das war eine stille
    * Behauptung über erbrachte Leistung und ist jetzt `0`.
    *
-   * **Die Obergrenze bleibt unverändert die Planmenge** — `openQuantity` und
-   * `getBillableOpenQuantity` liefern weiterhin 10, damit der Nutzer bewusst
-   * bis dorthin eintragen kann. Genau diese Trennung prüft der Test jetzt.
+   * INVOICE-ACTUAL-MEASURE-VS-PLAN-01B — `openQuantity` liefert weiterhin 10,
+   * jetzt aber ausdrücklich als **Planrest** und nicht als Obergrenze.
    */
-  it('Draft ohne executedQuantity belegt nichts vor, deckelt aber bei plannedQuantity', () => {
+  it('Draft ohne executedQuantity belegt nichts vor; der Planrest bleibt sichtbar', () => {
     seed();
     const draft = buildRechnungDraft('v-test-1', testSetup)!;
     expect(draft.positions[0].executedQuantity).toBeUndefined();
@@ -87,7 +87,7 @@ describe('INVOICE-BILLING-BASE-01', () => {
     expect(getBillableOpenQuantity(getVorgangById('v-test-1')!, 'op-test-1')).toBe(10);
   });
 
-  it('Draft mit executedQuantity schlägt billableOpen vor', () => {
+  it('Draft mit executedQuantity schlägt den Ist-Rest vor; openQuantity bleibt Planrest', () => {
     seed({
       orderPositions: [
         createOrderPosition({
@@ -101,12 +101,13 @@ describe('INVOICE-BILLING-BASE-01', () => {
 
     const draft = buildRechnungDraft('v-test-1', testSetup)!;
     expect(draft.positions[0].executedQuantity).toBe(6);
-    expect(draft.positions[0].openQuantity).toBe(6);
+    expect(draft.positions[0].openQuantity).toBe(10);
     expect(draft.positions[0].quantity).toBe(6);
-    expect(getOpenQuantity(getVorgangById('v-test-1')!, 'op-test-1')).toBe(6);
+    expect(getOpenQuantity(getVorgangById('v-test-1')!, 'op-test-1')).toBe(10);
+    expect(getExecutedRemainingQuantity(getVorgangById('v-test-1')!, 'op-test-1')).toBe(6);
   });
 
-  it('Teilabrechnung: billableOpen = min(planned, executed) − billed', () => {
+  it('Teilabrechnung: Planrest = planned − billed, Ist-Rest = executed − billed', () => {
     seed({
       orderPositions: [
         createOrderPosition({
@@ -120,15 +121,16 @@ describe('INVOICE-BILLING-BASE-01', () => {
     });
 
     expect(getBilledQuantity(getVorgangById('v-test-1')!, 'op-test-1')).toBe(3);
-    expect(getBillableOpenQuantity(getVorgangById('v-test-1')!, 'op-test-1')).toBe(5);
+    expect(getBillableOpenQuantity(getVorgangById('v-test-1')!, 'op-test-1')).toBe(7);
+    expect(getExecutedRemainingQuantity(getVorgangById('v-test-1')!, 'op-test-1')).toBe(5);
 
     const draft = buildSchlussrechnungDraft('v-test-1', testSetup)!;
     expect(draft.positions[0].billedQuantity).toBe(3);
-    expect(draft.positions[0].openQuantity).toBe(5);
+    expect(draft.positions[0].openQuantity).toBe(7);
     expect(draft.positions[0].quantity).toBe(5);
   });
 
-  it('billableOpen ist niemals negativ', () => {
+  it('Planrest und Ist-Rest sind niemals negativ', () => {
     seed({
       orderPositions: [
         createOrderPosition({
@@ -138,13 +140,21 @@ describe('INVOICE-BILLING-BASE-01', () => {
           unitPrice: 65,
         }),
       ],
-      invoices: [createAbschlagInvoice('op-test-1', 5)],
+      invoices: [createAbschlagInvoice('op-test-1', 12)],
     });
 
     expect(getBillableOpenQuantity(getVorgangById('v-test-1')!, 'op-test-1')).toBe(0);
+    expect(getExecutedRemainingQuantity(getVorgangById('v-test-1')!, 'op-test-1')).toBe(0);
   });
 
-  it('executedQuantity über planned wird auf planned gekappt', () => {
+  /*
+   * INVOICE-ACTUAL-MEASURE-VS-PLAN-01B — bewusst umgedrehte Fachregel.
+   *
+   * Vorher hiess dieser Test „executedQuantity über planned wird auf planned
+   * gekappt" und erwartete 10. Das machte die Vertragsmenge zur Obergrenze des
+   * Aufmasses: 5 nachweislich ausgeführte Einheiten waren nicht abrechenbar.
+   */
+  it('executedQuantity über planned wird nicht mehr auf planned gekappt', () => {
     seed({
       orderPositions: [
         createOrderPosition({
@@ -156,10 +166,14 @@ describe('INVOICE-BILLING-BASE-01', () => {
       ],
     });
 
+    // Der Planrest bleibt der Planrest …
     expect(getBillableOpenQuantity(getVorgangById('v-test-1')!, 'op-test-1')).toBe(10);
+    // … der bekannte Ist-Rest ist davon unabhängig.
+    expect(getExecutedRemainingQuantity(getVorgangById('v-test-1')!, 'op-test-1')).toBe(15);
+    expect(buildRechnungDraft('v-test-1', testSetup)!.positions[0].quantity).toBe(15);
   });
 
-  it('quantity > billableOpen wird abgelehnt', () => {
+  it('quantity über dem Planrest wird bewusst angenommen', () => {
     seed({
       orderPositions: [
         createOrderPosition({
@@ -174,8 +188,9 @@ describe('INVOICE-BILLING-BASE-01', () => {
     const draft = buildRechnungDraft('v-test-1', testSetup)!;
     expect(draft.positions[0].quantity).toBe(4);
 
-    const rejected = updateDraftPositionQuantity(draft, draft.positions[0].id, 5);
-    expect(rejected.positions[0].quantity).toBe(4);
+    // Planrest 10, Ist-Rest 4 — 12 liegt über beidem und wird trotzdem übernommen.
+    const overPlan = updateDraftPositionQuantity(draft, draft.positions[0].id, 12);
+    expect(overPlan.positions[0].quantity).toBe(12);
 
     const accepted = updateDraftPositionQuantity(draft, draft.positions[0].id, 2);
     expect(accepted.positions[0].quantity).toBe(2);

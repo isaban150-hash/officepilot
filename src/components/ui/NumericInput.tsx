@@ -34,7 +34,44 @@ export interface NumericInputProps {
   className?: string;
   min?: number;
   max?: number;
+  disabled?: boolean;
   'data-testid'?: string;
+  /**
+   * INVOICE-QUANTITY-INPUT-UX-01B — strenger Modus für Werte, die eine
+   * Geldforderung tragen.
+   *
+   * Der Standardpfad bereinigt tolerant: `-1` wird zu `1`, `1,2,3` zu `1,23`,
+   * `1e3` zu `13`. Für Zahlungsziel und Skontosatz ist das vertretbar — der
+   * Wert ist klein, sichtbar und wird beim Speichern erneut geprüft. Für eine
+   * Rechnungsmenge wäre es eine stille Umdeutung dessen, was der Nutzer
+   * getippt hat.
+   *
+   * Mit `strict` wird eine ungültige Eingabe **abgewiesen statt umgedeutet**,
+   * und ein unvollständiger Zwischenstand wie `1,` schreibt **keine 0** in den
+   * Elternwert — sonst zerstörte ein halber Tastendruck eine bestätigte Menge.
+   */
+  strict?: boolean;
+  /**
+   * Nur der Bearbeitungszustand der Anzeige — `false`, solange der Text keine
+   * vollständige Zahl ergibt (`1,` oder `1.`). Der Baustein bleibt generisch:
+   * Er kennt weder Entwurf noch Obergrenze und trifft keine fachliche
+   * Entscheidung.
+   */
+  onEditingValidityChange?: (isComplete: boolean) => void;
+}
+
+/**
+ * INVOICE-QUANTITY-INPUT-UX-01B — im strengen Modus zulässige Anzeigetexte.
+ *
+ * Ziffern, höchstens ein Trennzeichen, kein Vorzeichen, kein Exponent. Ein
+ * leerer Text und ein offenes `1,` sind erlaubt — sie sind Zwischenstände,
+ * keine Fehler. Alles andere wird gar nicht erst übernommen.
+ */
+const STRICT_DECIMAL = /^\d*(?:[.,]\d*)?$/;
+const STRICT_INTEGER = /^\d*$/;
+
+function isStrictlyTypeable(raw: string, mode: NumericInputMode): boolean {
+  return (mode === 'integer' ? STRICT_INTEGER : STRICT_DECIMAL).test(raw);
 }
 
 /** Ganze Zahlen ohne Trennzeichen; Dezimalzahlen mit höchstens einem. */
@@ -87,7 +124,10 @@ export function NumericInput({
   className,
   min,
   max,
+  disabled,
   'data-testid': testId,
+  strict = false,
+  onEditingValidityChange,
 }: NumericInputProps) {
   /*
    * `null` heisst: Das Feld wird gerade nicht bearbeitet und zeigt den Wert des
@@ -99,6 +139,32 @@ export function NumericInput({
   const displayed = draftText ?? formatNumericValue(value, mode);
 
   const handleChange = (raw: string) => {
+    if (strict) {
+      /*
+       * Abweisen statt umdeuten: Ein ungültiger Tastendruck oder ein
+       * eingefügter ungültiger Text lässt den bisherigen Anzeigetext stehen.
+       * So kann aus `-1` nie `1` und aus `1e3` nie `13` werden.
+       */
+      if (!isStrictlyTypeable(raw, mode)) return;
+      setDraftText(raw);
+
+      const parsed = parseNumericInput(raw);
+      if (raw === '') {
+        // Leeren ist eine Aussage — sie darf sofort gelten.
+        onEditingValidityChange?.(true);
+        onChange(0);
+        return;
+      }
+      if (parsed === null) {
+        // `1,` ist noch keine Zahl. Der bestätigte Elternwert bleibt stehen.
+        onEditingValidityChange?.(false);
+        return;
+      }
+      onEditingValidityChange?.(true);
+      onChange(parsed);
+      return;
+    }
+
     const next = sanitize(raw, mode);
     setDraftText(next);
 
@@ -120,12 +186,20 @@ export function NumericInput({
       autoComplete="off"
       className={className}
       value={displayed}
+      disabled={disabled}
       data-testid={testId}
       aria-valuemin={min}
       aria-valuemax={max}
       onFocus={() => setDraftText(formatNumericValue(value, mode))}
       onChange={(event) => handleChange(event.target.value)}
-      // Zurück zur Darstellung des fachlichen Werts — erst jetzt normalisiert.
+      /*
+       * Zurück zur Darstellung des fachlichen Werts — erst jetzt normalisiert.
+       *
+       * Im strengen Modus wird der Bearbeitungszustand dabei **nicht** auf
+       * „vollständig" zurückgesetzt: Auf dem Telefon feuert `blur` vor dem
+       * `click`, und ein stilles Aufräumen hier würde eine gerade abgewiesene
+       * Eingabe im selben Tap zu einem gültigen Weiterklicken machen.
+       */
       onBlur={() => setDraftText(null)}
     />
   );

@@ -8,6 +8,7 @@ import {
   getOpenQuantity,
   getPositionBillingStatus,
   hasFinalSchlussrechnung,
+  isPositionStillOpen,
 } from '../orderBillingRules';
 import { analyzeContractIntelligenceFromInbox } from '../contractIntelligenceService';
 import { getVorgangById } from '../vorgangService';
@@ -120,8 +121,16 @@ function resolveSchlussrechnungQuestion(session: CompanySessionContext): Handwer
     };
   }
 
-  const openPositions = vorgang.orderPositions.filter(
-    (position) => getOpenQuantity(vorgang, position.id) > 0,
+  /*
+   * INVOICE-ACTUAL-MEASURE-VS-PLAN-01B4 — hier entsteht der Rat
+   * „Schlussrechnung fällig". Er braucht beide Maßstäbe: Bei erfassten 51.200
+   * von 50.000 geplanten und 50.000 abgerechneten Mengen ist der Planrest 0,
+   * aber 1.200 dokumentierte Leistung sind unfakturiert; umgekehrt sind bei
+   * 10.000 erfassten und 10.000 abgerechneten Mengen noch 40.000 beauftragt.
+   * In beiden Fällen wäre der Rat zum Abschluss verfrüht.
+   */
+  const openPositions = vorgang.orderPositions.filter((position) =>
+    isPositionStillOpen(vorgang, position.id),
   );
   const fullyBilled = vorgang.orderPositions.filter((position) => {
     const status = getPositionBillingStatus(vorgang, position.id);

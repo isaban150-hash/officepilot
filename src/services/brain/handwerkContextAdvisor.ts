@@ -6,10 +6,10 @@ import { getInboxItemById } from '../inboxService';
 import { processUploadedDocument } from '../intakeWorkflowService';
 import {
   getBilledQuantity,
-  getOpenQuantity,
   getPositionBillingStatus,
   hasFinalSchlussrechnung,
   hasSchlussrechnung,
+  isPositionStillOpen,
 } from '../orderBillingRules';
 import { getHandwerkTermForDocumentKind } from './handwerkKnowledgeRegistry';
 import { getVorgangById } from '../vorgangService';
@@ -31,9 +31,16 @@ function fullyBilledPositions(vorgang: Vorgang): string[] {
     .map((position) => position.description);
 }
 
+/*
+ * INVOICE-ACTUAL-MEASURE-VS-PLAN-01B4 — dieselbe Ableitung wie in
+ * `fullyBilledPositions` darüber, nur andersherum. Der reine Planrest hätte
+ * eine Position mit 51.200 erfassten von 50.000 geplanten und 50.000
+ * abgerechneten Einheiten aus der Liste verschwinden lassen — und der Hinweis
+ * darunter hätte sie zugleich als vollständig abgerechnet gemeldet.
+ */
 function openPositions(vorgang: Vorgang): string[] {
   return vorgang.orderPositions
-    .filter((position) => getOpenQuantity(vorgang, position.id) > 0)
+    .filter((position) => isPositionStillOpen(vorgang, position.id))
     .map((position) => position.description);
 }
 

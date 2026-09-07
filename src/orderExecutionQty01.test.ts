@@ -3,6 +3,7 @@ import { createAbschlagInvoice, createOrderPosition, createTestVorgang } from '.
 import { resetTestStores } from './test/resetStores';
 import {
   getBilledQuantity,
+  getExecutedRemainingQuantity,
   getOpenQuantity,
   getPositionBillingStatus,
 } from './services/orderBillingRules';
@@ -152,9 +153,15 @@ describe('ORDER-EXECUTION-QTY-01', () => {
     const after = getVorgangById('v-qty-inv')!;
     expect(after.invoices).toEqual(invoicesBefore);
     expect(getBilledQuantity(after, 'op-qty-1')).toBe(billedBefore);
-    // openQuantity = min(planned, executed) − billed (billed=2 from seed); no new invoice written.
-    expect(getOpenQuantity(after, 'op-qty-1')).toBe(6);
-    expect(getPositionBillingStatus(after, 'op-qty-1')?.openQuantity).toBe(6);
+    /*
+     * INVOICE-ACTUAL-MEASURE-VS-PLAN-01B — `openQuantity` ist der **Planrest**
+     * (planned 10 − billed 2 = 8) und folgt der erfassten Ausführung nicht
+     * mehr; der bekannte Ist-Rest (8 − 2 = 6) wird getrennt geführt. Beides
+     * unberührt davon, dass keine Rechnung geschrieben wurde.
+     */
+    expect(getOpenQuantity(after, 'op-qty-1')).toBe(8);
+    expect(getPositionBillingStatus(after, 'op-qty-1')?.openQuantity).toBe(8);
+    expect(getExecutedRemainingQuantity(after, 'op-qty-1')).toBe(6);
     expect(after.orderPositions[0]?.executedQuantity).toBe(8);
   });
 

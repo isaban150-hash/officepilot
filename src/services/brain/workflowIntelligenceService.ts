@@ -12,11 +12,11 @@ import { analyzeContractIntelligenceFromInbox } from '../contractIntelligenceSer
 import { buildInvoiceCreatePath } from '../invoiceNavigation';
 import { filterActiveItems, getInboxItemById, getInboxItems } from '../inboxService';
 import {
-  getOpenQuantity,
   getPositionBillingStatus,
   hasAbschlagsrechnung,
   hasFinalSchlussrechnung,
   hasSchlussrechnung,
+  isPositionStillOpen,
 } from '../orderBillingRules';
 import { buildVorgangDraftFromInbox, findSimilarVorgaenge } from '../vorgangMatchingService';
 import { getAllVorgaenge, getVorgangById } from '../vorgangService';
@@ -121,8 +121,16 @@ function allPositionsFullyBilled(vorgang: Vorgang): boolean {
   });
 }
 
+/**
+ * INVOICE-ACTUAL-MEASURE-VS-PLAN-01B4 — „ist noch etwas abzurechnen?"
+ *
+ * Diese Frage steuert `schlussStatus`, `aufmassStatus`, `abschlagStatus`, das
+ * Risiko `open_positions` und die Empfehlung zur Schlussrechnung. Sie nutzt
+ * deshalb dieselbe zentrale Ableitung wie `isFullyBilled` — Planrest **oder**
+ * bekannter Ist-Rest — statt einer eigenen Formel, die daneben liegen kann.
+ */
 function hasOpenPositions(vorgang: Vorgang): boolean {
-  return vorgang.orderPositions.some((position) => getOpenQuantity(vorgang, position.id) > 0);
+  return vorgang.orderPositions.some((position) => isPositionStillOpen(vorgang, position.id));
 }
 
 function isUnknownCustomer(customer: string): boolean {
@@ -391,7 +399,9 @@ function buildRisksForVorgang(vorgang: Vorgang, inbox: InboxItem[]): WorkflowRis
       severity: 'low',
       messageKey: 'workflowIntelligence.risk.openPositions',
       params: {
-        count: vorgang.orderPositions.filter((position) => getOpenQuantity(vorgang, position.id) > 0)
+        // Dieselbe Grundlage wie die Bedingung darüber — sonst meldete der
+        // Hinweis „0 offene Positionen", sobald nur der Ist-Rest offen ist.
+        count: vorgang.orderPositions.filter((position) => isPositionStillOpen(vorgang, position.id))
           .length,
       },
     });

@@ -30,6 +30,7 @@ import {
   buildInvoiceFinalizationCandidate,
   buildInvoiceFinalizationContentFingerprint,
   matchesPersistedInvoiceContentFingerprint,
+  getOverbillingEvidenceKeys,
   getOverbillingWarnings,
 } from '../invoiceService';
 // Als Modul importiert, damit Tests `generateEntityId` gezielt ersetzen können
@@ -300,14 +301,17 @@ function buildPreparationSynchronously(input: PrepareInvoiceFinalizationInput): 
    * verschweigen. Die Warnungstexte selbst sind übersetzte Fließtexte und
    * taugen nicht als Nachweis; deshalb eine kanonische Projektion genau der
    * stabilen Rohfelder, aus denen die Warnung entsteht.
+   *
+   * INVOICE-ACTUAL-MEASURE-VS-PLAN-01B — die Projektion stand bis hierher als
+   * Zwilling dieser Prüfung im Code und verglich fest mit `openQuantity`.
+   * Seit die Warnung bei erfasstem Aufmass gegen den Ist-Rest vergleicht,
+   * hätten die beiden Ableitungen auseinanderlaufen können — und die
+   * Längenprüfung darunter hätte eine korrekte Freigabe als
+   * `overbilling_evidence` abgewiesen. Beide stammen deshalb jetzt aus
+   * derselben Quelle; die Prüfung bleibt unverändert fail-closed.
    */
   const overbillingWarnings = getOverbillingWarnings(draft);
-  const overbillingEvidenceKeys = draft.positions
-    .filter((position) => position.billable && position.quantity > position.openQuantity)
-    .map(
-      (position) =>
-        `overbilling:${position.id}:${position.orderPositionId}:${position.quantity}:${position.openQuantity}`,
-    );
+  const overbillingEvidenceKeys = getOverbillingEvidenceKeys(draft);
   if (overbillingEvidenceKeys.length !== overbillingWarnings.length) {
     return { ok: false, reason: 'preparation_failed', detail: 'overbilling_evidence' };
   }

@@ -5,6 +5,7 @@ import {
   getNextAbschlagNumber,
   getBilledQuantity,
   getBillableOpenQuantity,
+  getExecutedRemainingQuantity,
   isPositionBillable,
 } from './orderBillingRules';
 import {
@@ -213,6 +214,7 @@ export {
   canEditOrderPositionField,
   getBilledQuantity,
   getBillableOpenQuantity,
+  getExecutedRemainingQuantity,
   getNextAbschlagNumber,
   getOpenQuantity,
   getPositionBillingStatus,
@@ -220,6 +222,7 @@ export {
   hasAbschlagsrechnung,
   hasSchlussrechnung,
   isPositionBillable,
+  isPositionStillOpen,
 } from './orderBillingRules';
 
 function buildDraftPosition(
@@ -287,20 +290,17 @@ function initialQuantityForType(
 ): number {
   if (!prefillsOpenQuantity(type)) return 0;
   /*
-   * INVOICE-ACTUAL-QUANTITY-01B — die Planmenge ist kein Aufmass.
+   * INVOICE-ACTUAL-QUANTITY-01B — die Planmenge ist kein Aufmass. Vorbelegt
+   * wird nur, was tatsächlich erfasst wurde; ohne Ausführungsstand bleibt das
+   * Feld bei 0, statt eine Leistung zu behaupten.
    *
-   * `getBillableOpenQuantity` fällt ohne erfasste Ausführung auf
-   * `plannedQuantity` zurück — im Code dort als „legacy fallback" benannt. Als
-   * **Obergrenze** ist das richtig: Der Nutzer muss auch ohne gepflegte
-   * Ausführung eine reale Menge eintragen können. Als **Vorbelegung** war es
-   * eine stille Behauptung über erbrachte Leistung: Ein Auftrag über 420 m²
-   * schlug 420 m² zur Abrechnung vor, am schwersten bei der Schlussrechnung.
-   *
-   * Deshalb wird hier nur vorbelegt, was tatsächlich erfasst wurde. Die
-   * Grenze bleibt unverändert `getBillableOpenQuantity`.
+   * INVOICE-ACTUAL-MEASURE-VS-PLAN-01B — und der erfasste Stand wird nicht
+   * mehr am Plan gekappt. Bis hierher lieferte `getBillableOpenQuantity` bei
+   * Plan 50.000 / erfasst 51.200 / abgerechnet 40.000 einen Vorschlag von
+   * 10.000 statt der realen 11.200. Der Vorschlag ist eine Hilfe, keine
+   * Entscheidung: Der Nutzer kann ihn jederzeit ändern.
    */
-  if (orderPosition.executedQuantity === undefined) return 0;
-  return getBillableOpenQuantity(vorgang, orderPosition.id);
+  return getExecutedRemainingQuantity(vorgang, orderPosition.id) ?? 0;
 }
 
 function buildPositionsForType(
@@ -440,6 +440,42 @@ export function updateInvoiceDraftTaxStatus(
     legalNotices: buildLegalNotices(taxStatus, draft.companySnapshot),
   };
 }
+/**
+ * INVOICE-ACTUAL-MEASURE-VS-PLAN-01B — der bekannte Ist-Rest einer
+ * Entwurfsposition, aus deren eigenen eingefrorenen Feldern.
+ *
+ * Dasselbe wie `getExecutedRemainingQuantity`, nur ohne Rückgriff auf den
+ * Vorgang: Ein Entwurf trägt `executedQuantity` und `billedQuantity` bereits
+ * bei sich und muss auch nach einem Neuaufbau ohne Vorgangskontext rechnen
+ * können. `undefined` heisst weiterhin **„unbekannt"**, nicht `0`.
+ */
+export function getDraftPositionExecutedRemaining(
+  position: InvoiceDraftPosition,
+): number | undefined {
+  if (position.executedQuantity === undefined) return undefined;
+  return Math.max(0, position.executedQuantity - position.billedQuantity);
+}
+
+/**
+ * INVOICE-ACTUAL-MEASURE-VS-PLAN-01B — die Vergleichsgrundlage der
+ * Überschreitungswarnung.
+ *
+ * Kennt OfficePilot ein Aufmass, ist **es** der Maßstab; sonst bleibt der
+ * Planrest die beste vorhandene Referenz. Damit warnt eine Rechnung über
+ * 11.200 m² bei erfassten 11.200 m² Ist-Rest nicht mehr nur deshalb, weil der
+ * Planrest 10.000 m² beträgt — gewarnt wird über das, was OfficePilot
+ * tatsächlich weiß.
+ *
+ * Beide Werte sind Referenzen, keine Grenzen: Die Warnung sagt „über dem
+ * derzeit dokumentierten Rest", nicht „unzulässig". Eine Position ganz ohne
+ * Auftragsbezug hätte keine Vergleichsgrundlage und dürfte auch nicht gewarnt
+ * werden — heute trägt jede Entwurfsposition einen Auftragsbezug, weshalb der
+ * Fall hier noch nicht entstehen kann.
+ */
+export function getOverbillingReference(position: InvoiceDraftPosition): number {
+  return getDraftPositionExecutedRemaining(position) ?? position.openQuantity;
+}
+
 export function updateDraftPositionQuantity(
   draft: InvoiceDraft,
   positionId: string,
@@ -450,8 +486,20 @@ export function updateDraftPositionQuantity(
     positions: draft.positions.map((p) => {
       if (p.id !== positionId) return p;
       if (!p.billable) return p;
-      // Confirm-first: accept only 0 ≤ quantity ≤ billableOpen (openQuantity).
-      if (!Number.isFinite(quantity) || quantity < 0 || quantity > p.openQuantity) {
+      /*
+       * INVOICE-ACTUAL-MEASURE-VS-PLAN-01B — hier stand bis zuletzt
+       * `quantity > p.openQuantity`, und das machte die Planmenge zur harten
+       * Obergrenze der Rechnung. Sie ist die Vertragsmenge, nicht das
+       * Aufmass: Ein Auftrag über 420 m² kann 1.420 m² abzurechnende Leistung
+       * hervorbringen, und eine bereits vollständig abgerechnete Position kann
+       * durch zusätzliche Ausführung erneut abrechenbar werden.
+       *
+       * Übrig bleiben die Bedingungen, die keine fachliche Grenze behaupten,
+       * sondern eine Zahl überhaupt erst zu einer machen. Eine bewusste
+       * Überschreitung ist kein Fehler, sondern ein Fall für den bestehenden
+       * Bestätigungspfad (`getOverbillingWarnings` → „Trotzdem freigeben").
+       */
+      if (!Number.isFinite(quantity) || quantity < 0) {
         return p;
       }
       return { ...p, quantity };
@@ -465,15 +513,15 @@ export function applyAllOpenPositionsToDraft(draft: InvoiceDraft): InvoiceDraft 
     positions: draft.positions.map((position) => ({
       ...position,
       /*
-       * INVOICE-ACTUAL-QUANTITY-01B — dieselbe Regel wie bei der Vorbelegung.
-       * `openQuantity` fällt ohne erfasste Ausführung auf die Planmenge; der
-       * Sammelbutton hätte sie sonst als abzurechnende Menge übernommen.
-       * Position und `billable` bleiben unangetastet.
+       * INVOICE-ACTUAL-QUANTITY-01B — dieselbe Regel wie bei der Vorbelegung:
+       * ohne erfasste Ausführung übernimmt der Sammelbutton nichts, statt die
+       * Planmenge als abzurechnende Leistung zu behaupten.
+       *
+       * INVOICE-ACTUAL-MEASURE-VS-PLAN-01B — mit erfasster Ausführung
+       * übernimmt er den vollen bekannten Ist-Rest, nicht den am Plan
+       * gekappten. Position und `billable` bleiben unangetastet.
        */
-      quantity:
-        position.billable && position.executedQuantity !== undefined
-          ? position.openQuantity
-          : 0,
+      quantity: position.billable ? (getDraftPositionExecutedRemaining(position) ?? 0) : 0,
     })),
   };
 }
@@ -931,13 +979,34 @@ export function matchesPersistedInvoiceContentFingerprint(
   return JSON.stringify(parsed) === current;
 }
 
+/**
+ * Die Positionen, deren Menge über dem derzeit dokumentierten Rest liegt.
+ *
+ * INVOICE-ACTUAL-MEASURE-VS-PLAN-01B — eine Stelle für beide Ableitungen,
+ * damit der Warntext und der kanonische Nachweis im Freigabepfad nicht
+ * auseinanderlaufen können.
+ */
+function getOverbilledPositions(draft: InvoiceDraft): InvoiceDraftPosition[] {
+  return draft.positions.filter((p) => p.billable && p.quantity > getOverbillingReference(p));
+}
+
 export function getOverbillingWarnings(draft: InvoiceDraft): string[] {
-  return draft.positions
-    .filter((p) => p.billable && p.quantity > p.openQuantity)
-    .map(
-      (p) =>
-        `${p.description}: ${p.quantity} eingegeben, aber nur ${p.openQuantity} ${p.unit} offen.`,
-    );
+  return getOverbilledPositions(draft).map(
+    (p) =>
+      `${p.description}: ${p.quantity} eingegeben, dokumentierter Rest ${getOverbillingReference(p)} ${p.unit}.`,
+  );
+}
+
+/**
+ * Der kanonische Nachweis derselben Überschreitungen — Rohfelder statt
+ * übersetzter Fließtexte, damit der Freigabepfad prüfen kann, dass die
+ * Bestätigung genau zu dem gehört, was gewarnt wurde.
+ */
+export function getOverbillingEvidenceKeys(draft: InvoiceDraft): string[] {
+  return getOverbilledPositions(draft).map(
+    (position) =>
+      `overbilling:${position.id}:${position.orderPositionId}:${position.quantity}:${getOverbillingReference(position)}`,
+  );
 }
 
 function cloneCustomerBilling(billing: CustomerBilling): CustomerBilling {

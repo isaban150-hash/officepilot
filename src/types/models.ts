@@ -1337,7 +1337,17 @@ export interface InvoiceDraftPosition {
   /** Read-only display of operative execution qty; never written back to the plan. */
   executedQuantity?: number;
   billedQuantity: number;
+  /**
+   * INVOICE-ACTUAL-MEASURE-VS-PLAN-01B — **Planrest**: was laut Auftrag noch
+   * nicht abgerechnet ist (`max(0, plannedQuantity − billedQuantity)`).
+   *
+   * Ausdrücklich **nicht** „maximal abrechenbar" und **keine Eingabegrenze**.
+   * Genau diese Verwechslung machte die Vertragsmenge zur Obergrenze der
+   * Rechnung. Der dokumentierte Ist-Rest ergibt sich aus `executedQuantity`
+   * und `billedQuantity`; die abzurechnende Menge entscheidet der Nutzer.
+   */
   openQuantity: number;
+  /** Die bewusst gewählte Menge dieser Rechnung. */
   quantity: number;
   unit: OrderUnit;
   unitLabel?: string;

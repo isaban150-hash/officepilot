@@ -2081,8 +2081,10 @@ const deLegacy = {
   'invoice.planned': 'Geplant (Auftrag)',
   'invoice.executed': 'Ausgeführt',
   'invoice.executedNotRecorded': 'noch nicht erfasst',
+  'invoice.quantityIncomplete': 'Bitte die Menge vollständig eingeben.',
   'invoice.alreadyBilled': 'Bereits abgerechnet',
-  'invoice.stillOpen': 'Noch offen',
+  // INVOICE-ACTUAL-MEASURE-VS-PLAN-01B — Planrest, keine Eingabegrenze.
+  'invoice.stillOpen': 'Offen laut Auftrag',
   'invoice.quantityThisInvoice': 'Menge für diese Rechnung',
   'invoice.quantity': 'Menge',
   'invoice.unit': 'Einheit',
@@ -2209,9 +2211,10 @@ const deLegacy = {
   'invoice.editSubtitle': 'Rechnungsdaten vor der Freigabe anpassen',
   'invoice.backToPreview': 'Zurück zur Vorschau',
   'invoice.backToPositions': 'Zurück zu Positionen',
-  'invoice.overbillingTitle': 'Hinweis: Menge übersteigt offenen Rest',
+  // INVOICE-ACTUAL-MEASURE-VS-PLAN-01B — Hinweis, keine Unzulässigkeit.
+  'invoice.overbillingTitle': 'Hinweis: Menge über dem dokumentierten Rest',
   'invoice.overbillingConfirm':
-    'Mindestens eine Position übersteigt die offene Menge. Trotzdem speichern?',
+    'Mindestens eine Position liegt über dem derzeit dokumentierten Rest. Trotzdem speichern?',
   'invoice.materialAuftraggeberHint':
     'Material wird laut Vorgang vom Auftraggeber gestellt.',
   'invoice.materialNotBillable': 'Materialposition – nicht abrechenbar bei dieser Materialquelle.',
@@ -4821,6 +4824,7 @@ const trCustomerDecision: Partial<Record<keyof typeof de, string>> = {
 
 const tr: Partial<Record<keyof typeof de, string>> = {
   'invoice.executedNotRecorded': 'henüz kaydedilmedi',
+  'invoice.quantityIncomplete': 'Lütfen miktarı eksiksiz girin.',
   ...trLegacy,
   ...trModules,
   ...trCustomerDecision,
@@ -5438,6 +5442,7 @@ const bgCustomerDecision: Partial<Record<keyof typeof de, string>> = {
 
 const bg: Partial<Record<keyof typeof de, string>> = {
   'invoice.executedNotRecorded': 'все още не е отчетено',
+  'invoice.quantityIncomplete': 'Моля, въведете количеството напълно.',
   ...bgLegacy,
   ...bgModules,
   ...bgCustomerDecision,

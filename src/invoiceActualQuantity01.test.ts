@@ -8,10 +8,13 @@
  * Ein Auftrag ueber 420 m² ohne erfasste Ausfuehrung schlug damit 420 m² als
  * abzurechnende Menge vor.
  *
- * **`getBillableOpenQuantity` bleibt unveraendert.** Sie ist zugleich die
- * Eingabe-Obergrenze: Ohne sie koennte der Nutzer bei fehlender Ausfuehrung
- * ueberhaupt keine Menge mehr eintragen. Geaendert wird ausschliesslich die
- * **Vorbelegung**, nicht die Grenze.
+ * Geaendert wurde ausschliesslich die **Vorbelegung**.
+ *
+ * INVOICE-ACTUAL-MEASURE-VS-PLAN-01B — inzwischen ist auch die Grenze
+ * gefallen: `getBillableOpenQuantity` ist der Planrest und keine
+ * Eingabe-Obergrenze mehr. Q7 und Q11 sind deshalb bewusst umgedreht; der
+ * Sicherheitsvertrag „ohne erfasste Ausfuehrung keine Vorbelegung" bleibt
+ * unangetastet.
  *
  * Neutrale Beispieldaten, kein Kundenbezug.
  */
@@ -95,13 +98,13 @@ function position(draft: InvoiceDraft) {
 }
 
 describe('INVOICE-ACTUAL-QUANTITY-01B — ohne erfasste Ausführung keine Vorbelegung', () => {
-  it('Q1: eine Rechnung startet mit 0, die Obergrenze bleibt die Planmenge', () => {
+  it('Q1: eine Rechnung startet mit 0, der Planrest bleibt sichtbar', () => {
     seed({});
     const pos = position(draftFor('rechnung'));
 
     expect(pos.quantity, 'Die Planmenge wurde als Rechnungsmenge vorbelegt').toBe(0);
-    // Entscheidend: Der Nutzer kann weiterhin bis 420 eintragen.
-    expect(pos.openQuantity, 'Die Eingabe-Obergrenze wurde mitverändert').toBe(420);
+    // Der Planrest bleibt als Referenz erhalten — er ist keine Eingabegrenze.
+    expect(pos.openQuantity, 'Der Planrest wurde mitverändert').toBe(420);
     expect(pos.plannedQuantity).toBe(420);
     expect(pos.executedQuantity).toBeUndefined();
   });
@@ -152,7 +155,8 @@ describe('INVOICE-ACTUAL-QUANTITY-01B — mit erfasster Ausführung unverändert
       const pos = position(draftFor(type));
 
       expect(pos.quantity, `${type} schlug nicht die ausgeführte Menge vor`).toBe(185);
-      expect(pos.openQuantity).toBe(185);
+      // `openQuantity` ist der Planrest und folgt der Ausführung nicht.
+      expect(pos.openQuantity).toBe(420);
     }
   });
 
@@ -161,16 +165,22 @@ describe('INVOICE-ACTUAL-QUANTITY-01B — mit erfasster Ausführung unverändert
     const pos = position(draftFor('rechnung'));
 
     expect(pos.quantity).toBe(115);
-    expect(pos.openQuantity).toBe(115);
+    expect(pos.openQuantity, 'Planrest 420 − 185').toBe(235);
     expect(pos.billedQuantity).toBe(185);
   });
 
-  it('Q7: eine Ausführung über der Planmenge bleibt auf den Plan gekappt', () => {
+  /*
+   * INVOICE-ACTUAL-MEASURE-VS-PLAN-01B — bewusst umgedreht. Q7 sicherte bis
+   * hierher die `Math.min`-Kappung („bleibt auf den Plan gekappt", erwartet
+   * 420). Die Planmenge ist die Vertragsmenge, nicht das Aufmass: Wer 500
+   * ausgeführte Einheiten dokumentiert hat, muss 500 abrechnen können.
+   */
+  it('Q7: eine Ausführung über der Planmenge wird vollständig vorgeschlagen', () => {
     seed({ executedQuantity: 500 });
     const pos = position(draftFor('rechnung'));
 
-    expect(pos.quantity, 'Die Math.min-Kappung wurde verändert').toBe(420);
-    expect(pos.openQuantity).toBe(420);
+    expect(pos.quantity, 'Die Ausführung wurde auf den Plan gekappt').toBe(500);
+    expect(pos.openQuantity, 'Der Planrest ist davon unabhängig').toBe(420);
   });
 
   it('Q9: „Alle Positionen übernehmen" nutzt weiterhin die offene Ist-Menge', () => {
@@ -184,8 +194,7 @@ describe('INVOICE-ACTUAL-QUANTITY-01B — mit erfasster Ausführung unverändert
 describe('INVOICE-ACTUAL-QUANTITY-01B — bewusste Eingabe bleibt möglich', () => {
   /*
    * Q10 — der Kern der Abgrenzung: Der Fix verhindert die automatische
-   * Vorbelegung, nicht die Eingabe. Ohne erfasste Ausführung bleibt die
-   * Planmenge die Obergrenze.
+   * Vorbelegung, nicht die Eingabe.
    */
   it('Q10: der Nutzer kann ohne erfasste Ausführung bewusst eine Menge setzen', () => {
     seed({});
@@ -197,12 +206,24 @@ describe('INVOICE-ACTUAL-QUANTITY-01B — bewusste Eingabe bleibt möglich', () 
     expect(position(updated).quantity, 'Die bewusste Eingabe wurde verworfen').toBe(185);
   });
 
-  it('Q11: die Obergrenze gilt unverändert weiter', () => {
+  /*
+   * INVOICE-ACTUAL-MEASURE-VS-PLAN-01B — bewusst umgedreht. Q11 hiess „die
+   * Obergrenze gilt unverändert weiter" und erwartete, dass 421 bei Plan 420
+   * verworfen wird. Ein Auftrag über 420 m² kann 1.420 m² Leistung
+   * hervorbringen; die Überschreitung ist ein Fall für den Bestätigungspfad,
+   * kein Eingabefehler.
+   */
+  it('Q11: eine bewusste Menge über der Planmenge wird angenommen', () => {
     seed({});
     const draft = draftFor('rechnung');
-    const updated = updateDraftPositionQuantity(draft, position(draft).id, 421);
 
-    expect(position(updated).quantity, 'Ein Wert über der Grenze wurde übernommen').toBe(0);
+    expect(
+      position(updateDraftPositionQuantity(draft, position(draft).id, 421)).quantity,
+      'Ein Wert über der Planmenge wurde verworfen',
+    ).toBe(421);
+    expect(position(updateDraftPositionQuantity(draft, position(draft).id, 1420)).quantity).toBe(
+      1420,
+    );
   });
 
   /*

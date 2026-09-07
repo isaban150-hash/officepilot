@@ -5,6 +5,7 @@ import { InvoiceDraftEditForm } from '../components/invoice/InvoiceDraftEditForm
 import { Button } from '../components/ui/Button';
 import { Card, DataRow, PageHeader } from '../components/ui/Card';
 import { EmptyStateBlock } from '../components/ui/EmptyStateBlock';
+import { NumericInput } from '../components/ui/NumericInput';
 import { useApp } from '../context/AppContext';
 import {
   applyAllOpenPositionsToDraft,
@@ -233,6 +234,14 @@ export function RechnungPage() {
   const [approving, setApproving] = useState(false);
   const [customerMasterConfirm, setCustomerMasterConfirm] = useState(false);
   const [customerMasterError, setCustomerMasterError] = useState<string | null>(null);
+  /**
+   * INVOICE-QUANTITY-INPUT-UX-01B — je Position, adressiert nach `pos.id`.
+   *
+   * INVOICE-ACTUAL-MEASURE-VS-PLAN-01B — nur noch `'incomplete'`: Eine
+   * Planüberschreitung ist keine ungültige Eingabe mehr, sondern ein Fall für
+   * den Bestätigungspfad.
+   */
+  const [quantityBlocked, setQuantityBlocked] = useState<Record<string, 'incomplete'>>({});
   const [validationErrors, setValidationErrors] = useState<TranslationKey[]>([]);
   const [validationWarnings, setValidationWarnings] = useState<TranslationKey[]>([]);
   /*
@@ -330,6 +339,9 @@ export function RechnungPage() {
     setReverseCharge13bConfirmed(false);
     setValidationErrors([]);
     setValidationWarnings([]);
+    // INVOICE-QUANTITY-INPUT-UX-01B — kein Mengenfehler der alten Rechnung
+    // darf die neue blockieren.
+    setQuantityBlocked({});
     approveLockRef.current = false;
     setApproving(false);
     setCustomerMasterConfirm(false);
@@ -758,6 +770,9 @@ export function RechnungPage() {
     : translate('invoice.title');
 
   const handleApplyAllPositions = () => {
+    // INVOICE-QUANTITY-INPUT-UX-01B — die programmgesteuerte Übernahme setzt
+    // gültige Mengen; offene Eingabefehler sind damit gegenstandslos.
+    setQuantityBlocked({});
     mutateDraft((prev) => applyAllOpenPositionsToDraft(prev));
   };
 
@@ -837,9 +852,43 @@ export function RechnungPage() {
     </Card>
   );
 
-  const handleQuantityChange = (positionId: string, value: string) => {
-    const qty = parseFloat(value) || 0;
-    mutateDraft((prev) => updateDraftPositionQuantity(prev, positionId, qty));
+  /*
+   * INVOICE-QUANTITY-INPUT-UX-01B — die Mengeneingabe trägt eine Geldforderung.
+   *
+   * `NumericInput` im strengen Modus liefert nur vollständige Zahlen; alles
+   * Ungültige erreicht diesen Handler gar nicht.
+   *
+   * INVOICE-ACTUAL-MEASURE-VS-PLAN-01B — eine Menge über dem Planrest wird
+   * hier **nicht mehr abgelehnt**. Die Planmenge ist die Vertragsmenge, nicht
+   * das Aufmass; eine bewusste Überschreitung ist kein Eingabefehler, sondern
+   * ein Fall für den bestehenden Bestätigungspfad („Trotzdem freigeben").
+   *
+   * `quantityBlocked` hält deshalb nur noch den einen Grund, der wirklich
+   * keine Zahl ist: `'incomplete'` für einen offenen Zwischenstand wie `1,`.
+   * Er wird ausschliesslich durch eine gültige Eingabe aufgelöst — niemals
+   * durch einen Fokuswechsel.
+   */
+  const handleQuantityChange = (positionId: string, quantity: number) => {
+    setQuantityBlocked((prev) => {
+      if (!prev[positionId]) return prev;
+      const next = { ...prev };
+      delete next[positionId];
+      return next;
+    });
+    mutateDraft((prev) => updateDraftPositionQuantity(prev, positionId, quantity));
+  };
+
+  const handleQuantityEditingValidity = (positionId: string, isComplete: boolean) => {
+    setQuantityBlocked((prev) => {
+      if (isComplete) {
+        if (prev[positionId] !== 'incomplete') return prev;
+        const next = { ...prev };
+        delete next[positionId];
+        return next;
+      }
+      if (prev[positionId]) return prev;
+      return { ...prev, [positionId]: 'incomplete' };
+    });
   };
 
   /*
@@ -1360,17 +1409,29 @@ export function RechnungPage() {
                     />
                   </div>
                   <div className="position-row">
-                    <label className="position-field">
+                    <label className="position-field" htmlFor={`invoice-qty-${pos.id}`}>
                       {translate('invoice.quantityThisInvoice')}
-                      <input
-                        type="number"
+                      <NumericInput
+                        id={`invoice-qty-${pos.id}`}
+                        mode="decimal"
+                        strict
                         className="input input--small"
-                        min="0"
-                        max={pos.openQuantity}
-                        step="0.5"
+                        min={0}
+                        /*
+                         * INVOICE-ACTUAL-MEASURE-VS-PLAN-01B — bewusst **kein**
+                         * `max`: Der Planrest ist eine Referenz, und ein
+                         * `aria-valuemax` daraus würde der Oberfläche eine
+                         * Obergrenze zuschreiben, die es fachlich nicht gibt.
+                         * Gesperrt wird nur, was wirklich nicht abrechenbar
+                         * ist — ein ausgeschöpfter Planrest gehört nicht dazu.
+                         */
                         value={pos.quantity}
                         disabled={!pos.billable}
-                        onChange={(e) => handleQuantityChange(pos.id, e.target.value)}
+                        data-testid={`invoice-qty-${pos.orderPositionId}`}
+                        onChange={(next) => handleQuantityChange(pos.id, next)}
+                        onEditingValidityChange={(isComplete) =>
+                          handleQuantityEditingValidity(pos.id, isComplete)
+                        }
                       />
                     </label>
                     <span className="position-meta">
@@ -1381,6 +1442,11 @@ export function RechnungPage() {
                       {(pos.quantity * pos.unitPrice).toLocaleString('de-DE')} €
                     </span>
                   </div>
+                  {quantityBlocked[pos.id] === 'incomplete' && (
+                    <p className="invoice-pos-hint" data-testid={`invoice-qty-incomplete-${pos.orderPositionId}`}>
+                      {translate('invoice.quantityIncomplete')}
+                    </p>
+                  )}
                   {!pos.billable && pos.category === 'material' && (
                     <p className="invoice-pos-hint">{translate('invoice.materialNotBillable')}</p>
                   )}
@@ -1489,9 +1555,16 @@ export function RechnungPage() {
           </section>
 
           <div className="action-stack">
+            {/*
+              * INVOICE-QUANTITY-INPUT-UX-01B — die Sperre sitzt in `disabled`,
+              * nicht im Klick-Handler. Auf dem Telefon feuert `blur` vor
+              * `click`; ein deaktivierter Knopf löst gar kein `click` aus und
+              * kann eine gerade abgewiesene Eingabe deshalb nicht im selben Tap
+              * überspringen.
+              */}
             <Button
               fullWidth
-              disabled={!taxDecisionSettled}
+              disabled={!taxDecisionSettled || Object.keys(quantityBlocked).length > 0}
               onClick={() => setStep('preview')}
               data-testid="invoice-continue-preview"
             >

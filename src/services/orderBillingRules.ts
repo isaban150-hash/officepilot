@@ -19,21 +19,60 @@ export function getBilledQuantity(vorgang: Vorgang, orderPositionId: string): nu
 }
 
 /**
- * Still-billable quantity for draft suggestions / openQuantity.
- * Caps at planned; uses executedQuantity when set, otherwise planned (legacy fallback).
+ * INVOICE-ACTUAL-MEASURE-VS-PLAN-01B — der **Planrest**: was laut Auftrag noch
+ * nicht abgerechnet ist.
+ *
+ * `max(0, plannedQuantity − billedQuantity)`. Bewusst **ohne** jeden Bezug auf
+ * `executedQuantity`: Bis hierher stand hier `Math.min(planned, executed ??
+ * planned)`, und diese eine Zeile beantwortete drei verschiedene Fragen
+ * gleichzeitig — „was ist laut Auftrag offen?", „was ist nachweislich erbracht
+ * und noch nicht berechnet?" und „was darf eingegeben werden?". Sobald das
+ * dokumentierte Aufmass über der Planmenge lag, war die zweite Antwort falsch:
+ * Ein Auftrag über 50.000 m² mit 51.200 m² erfasster Ausführung liess nach
+ * 40.000 m² Teilabrechnung nur noch 10.000 m² zu — die realen 11.200 m² waren
+ * nicht abrechenbar.
+ *
+ * **Dieser Wert ist eine Referenz, keine Obergrenze.** Die Planmenge ist die
+ * Vertragsmenge; eine bewusste Rechnungsmenge darf darüber wie darunter
+ * liegen, auch erheblich. Für den dokumentierten Ist-Stand gibt es
+ * `getExecutedRemainingQuantity`; für die abzurechnende Menge entscheidet
+ * allein der Nutzer.
  */
 export function getBillableOpenQuantity(vorgang: Vorgang, orderPositionId: string): number {
   const orderPosition = vorgang.orderPositions.find((p) => p.id === orderPositionId);
   if (!orderPosition) return 0;
 
-  const plannedQuantity = orderPosition.plannedQuantity;
-  const executedOrPlanned = orderPosition.executedQuantity ?? plannedQuantity;
-  const eligible = Math.min(plannedQuantity, executedOrPlanned);
-  return Math.max(0, eligible - getBilledQuantity(vorgang, orderPositionId));
+  return Math.max(0, orderPosition.plannedQuantity - getBilledQuantity(vorgang, orderPositionId));
 }
 
+/** Planrest — siehe `getBillableOpenQuantity`. */
 export function getOpenQuantity(vorgang: Vorgang, orderPositionId: string): number {
   return getBillableOpenQuantity(vorgang, orderPositionId);
+}
+
+/**
+ * INVOICE-ACTUAL-MEASURE-VS-PLAN-01B — der **bekannte Ist-Rest**: was
+ * nachweislich ausgeführt und noch nicht abgerechnet ist.
+ *
+ * `undefined` heisst **„Ist-Menge unbekannt"** und ist ausdrücklich nicht
+ * dasselbe wie `0`. Nur so bleibt die Regel aus `db2651c` erhalten — ohne
+ * erfasste Ausführung wird nichts vorbelegt, statt die Planmenge als Aufmass
+ * zu behaupten. Der Rückgabetyp zwingt jeden Aufrufer, diesen Fall zu
+ * entscheiden, statt ihn zu übersehen.
+ *
+ * **Kein Plan-Cap.** Liegt das erfasste Aufmass über der Planmenge, ist genau
+ * das die Wahrheit, die abgerechnet werden soll. Auch dieser Wert ist eine
+ * Vorschlagsgrundlage und keine Obergrenze: `executedQuantity` ist ein
+ * dokumentierter Fortschrittsstand, der veraltet sein kann.
+ */
+export function getExecutedRemainingQuantity(
+  vorgang: Vorgang,
+  orderPositionId: string,
+): number | undefined {
+  const orderPosition = vorgang.orderPositions.find((p) => p.id === orderPositionId);
+  if (!orderPosition || orderPosition.executedQuantity === undefined) return undefined;
+
+  return Math.max(0, orderPosition.executedQuantity - getBilledQuantity(vorgang, orderPositionId));
 }
 
 export function hasSchlussrechnung(vorgang: Vorgang): boolean {
@@ -52,6 +91,29 @@ export function hasFinalSchlussrechnung(vorgang: Vorgang): boolean {
   return hasSchlussrechnung(vorgang);
 }
 
+/**
+ * INVOICE-ACTUAL-MEASURE-VS-PLAN-01B4 — ist an dieser Position noch etwas
+ * abzurechnen?
+ *
+ * **Planrest ODER bekannter Ist-Rest.** Die beiden Größen beantworten
+ * verschiedene Teile derselben Frage, und keine ersetzt die andere: Der
+ * Planrest kennt den Vertrag, aber nicht die Baustelle; der Ist-Rest kennt die
+ * Baustelle, aber nicht den Vertrag.
+ *
+ * Eine frühere Fassung schrieb `executedRemaining ?? plannedRemaining`. Das
+ * `??` prüft auf `undefined`, nicht auf Aussagekraft — sobald ein Aufmass
+ * erfasst war, **auch die 0**, verschwand der Vertrag aus der Rechnung. Ein
+ * Auftrag über 50.000 mit 10.000 erfassten und 10.000 abgerechneten Einheiten
+ * galt damit als erledigt, und OfficePilot riet bei 20 % Baufortschritt zur
+ * Schlussrechnung.
+ */
+export function isPositionStillOpen(vorgang: Vorgang, orderPositionId: string): boolean {
+  const plannedRemaining = getBillableOpenQuantity(vorgang, orderPositionId);
+  const executedRemaining = getExecutedRemainingQuantity(vorgang, orderPositionId);
+
+  return plannedRemaining > 0 || (executedRemaining ?? 0) > 0;
+}
+
 export function getPositionBillingStatus(
   vorgang: Vorgang,
   orderPositionId: string,
@@ -68,7 +130,32 @@ export function getPositionBillingStatus(
     openQuantity,
     plannedQuantity: orderPosition.plannedQuantity,
     hasBilling: billedQuantity > 0,
-    isFullyBilled: billedQuantity >= orderPosition.plannedQuantity,
+    /*
+     * INVOICE-ACTUAL-MEASURE-VS-PLAN-01B4 — „vollständig abgerechnet" ist eine
+     * Aussage über die Position, nicht über den Vertrag. Die Aufrufer
+     * (Brain-Hinweise, Workflow-Abschlusslogik) lesen dieses Feld als „hier ist
+     * nichts mehr zu tun" und raten daraufhin zur Schlussrechnung.
+     *
+     * Zwei einfachere Fassungen sind daran gescheitert:
+     *
+     *   - `billed >= planned` hielt Plan 50.000 / erfasst 51.200 / abgerechnet
+     *     50.000 für erledigt und unterschlug 1.200 dokumentierte Einheiten.
+     *   - `billed >= (executed ?? planned)` hielt Plan 50.000 / erfasst 10.000 /
+     *     abgerechnet 10.000 für erledigt — also jede laufende Baustelle, deren
+     *     Fortschritt gepflegt und fakturiert wird.
+     *
+     * Erledigt ist deshalb nur, was **nach beiden Maßstäben** erledigt ist.
+     * Das ist die exakte Negation von `isPositionStillOpen`, damit die
+     * Statusaussage und die Offen-Frage nicht wieder auseinanderlaufen.
+     *
+     * Bewusst konservativ: Ist laut Plan noch etwas offen, gilt die Position
+     * auch dann nicht als abgeschlossen, wenn der erfasste Stand vollständig
+     * fakturiert ist — es gibt kein Feld, das ein Aufmass als **endgültig**
+     * ausweist, und `executedQuantity` ist ein Fortschrittsstand. Der Nutzer
+     * kann die Schlussrechnung jederzeit selbst erstellen; OfficePilot
+     * behauptet den Abschluss nur nicht von sich aus.
+     */
+    isFullyBilled: !isPositionStillOpen(vorgang, orderPositionId),
   };
 }
 
