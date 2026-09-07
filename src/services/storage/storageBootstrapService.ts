@@ -6,8 +6,9 @@ import {
   clearInMemoryBusinessState,
   createSeedState,
   getCachedSetup,
-  loadPersistedStateFromKey,
+  loadPersistedStateResultFromKey,
   persistAll,
+  recordPersistedStateLoadOutcome,
   savePersistedStateToKey,
   setActiveStorageScope,
 } from '../persistenceService';
@@ -41,6 +42,16 @@ export interface BusinessBootstrapResult {
   scope: StorageScope;
   legacyMigration: 'none' | 'migrated' | 'quarantined';
   strippedMockData: boolean;
+  /**
+   * PERSISTENCE-MIGRATION-FAILURE-GUARD-01B — für den Bereich lagen Daten vor,
+   * die nicht gelesen werden konnten.
+   *
+   * Additiv und optional: Bestehende Aufrufer bleiben unverändert. Wer den Fall
+   * behandeln will, prüft dieses Feld — der Grund steht in
+   * `getPersistedStateLoadFailure()`. Es wurde nichts angewendet und nichts
+   * gespeichert; der Rohwert ist unversehrt.
+   */
+  loadFailed?: boolean;
 }
 
 function resolveScope(input: BusinessBootstrapInput): StorageScope {
@@ -85,8 +96,10 @@ function loadOrSeedScopedState(scope: StorageScope, userId?: string): BusinessBo
   if (legacyResult.action === 'migrated') legacyMigration = 'migrated';
   if (legacyResult.action === 'quarantined') legacyMigration = 'quarantined';
 
-  const stored = loadPersistedStateFromKey(buildStorageKey(scope));
-  if (stored) {
+  const result = loadPersistedStateResultFromKey(buildStorageKey(scope));
+  recordPersistedStateLoadOutcome(result);
+  if (result.status === 'loaded') {
+    const stored = result.state;
     const stripped = stripDefinitelyMockDataFromState(stored);
     const strippedMockData = JSON.stringify(stripped) !== JSON.stringify(stored);
     applyStateToStores(stripped);
@@ -99,6 +112,30 @@ function loadOrSeedScopedState(scope: StorageScope, userId?: string): BusinessBo
       scope,
       legacyMigration,
       strippedMockData,
+    };
+  }
+
+  /*
+   * PERSISTENCE-MIGRATION-FAILURE-GUARD-01B — für diesen Bereich liegen Daten
+   * vor, die nicht gelesen werden konnten.
+   *
+   * Bis hierher war das vom leeren Speicher nicht unterscheidbar: Der Ladepfad
+   * lieferte beides Mal `null`, und der Seed unten wurde nicht nur angewendet,
+   * sondern **über den vorhandenen Schlüssel geschrieben**. Ein Parse- oder
+   * Migrationsfehler löschte damit den Bestand des Nutzers.
+   *
+   * Jetzt wird weder angewendet noch gespeichert. Der Rohwert bleibt
+   * zeichengenau erhalten, andere Bereiche bleiben unberührt, und der Grund ist
+   * über `getPersistedStateLoadFailure()` abrufbar. Es wird nichts repariert
+   * und nichts bereinigt — die Entscheidung darüber gehört nicht hierher.
+   */
+  if (result.status === 'failed') {
+    return {
+      setup: getCachedSetup(),
+      scope,
+      legacyMigration,
+      strippedMockData: false,
+      loadFailed: true,
     };
   }
 
@@ -124,8 +161,10 @@ export function bootstrapBusinessState(input: BusinessBootstrapInput = {}): Busi
 
   if (isBetaTestMode() && !input.userId) {
     setActiveStorageScope(scope);
-    const stored = loadPersistedStateFromKey(buildStorageKey(scope));
-    if (stored && stored.setup.setupComplete) {
+    const betaResult = loadPersistedStateResultFromKey(buildStorageKey(scope));
+    recordPersistedStateLoadOutcome(betaResult);
+    if (betaResult.status === 'loaded' && betaResult.state.setup.setupComplete) {
+      const stored = betaResult.state;
       const stripped = stripDefinitelyMockDataFromState(stored);
       applyStateToStores(stripped);
       return {
@@ -133,6 +172,19 @@ export function bootstrapBusinessState(input: BusinessBootstrapInput = {}): Busi
         scope,
         legacyMigration: 'none',
         strippedMockData: JSON.stringify(stripped) !== JSON.stringify(stored),
+      };
+    }
+    /*
+     * Auch im Testmodus gilt: Ein Ladefehler ist kein Erststart.
+     * `bootstrapBetaTestState` legt einen frischen Bestand an und speichert ihn.
+     */
+    if (betaResult.status === 'failed') {
+      return {
+        setup: getCachedSetup(),
+        scope,
+        legacyMigration: 'none',
+        strippedMockData: false,
+        loadFailed: true,
       };
     }
     return {

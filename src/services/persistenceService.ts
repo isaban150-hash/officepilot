@@ -509,9 +509,24 @@ export function createSeedState(setupOverride?: CompanySetup): AppPersistedState
   );
 }
 
-function finalizeLoadedState(state: AppPersistedState): AppPersistedState {
-  const client = ensureSyncClientFromState(state.syncClient);
-  const withSync = applySyncMetadataToState(
+/**
+ * PERSISTENCE-MIGRATION-FAILURE-GUARD-01B2 — Sync-Metadaten berechnen, ohne sie
+ * zu übernehmen.
+ *
+ * Bis hierher hydrierte diese Funktion `syncClient` und `syncOutbox` sofort —
+ * über `ensureSyncClientFromState(state.syncClient)` schon in ihrer ersten
+ * Zeile. Sie läuft aber **vor** der Aufbereitung, die noch scheitern kann. Ein
+ * später abgebrochener Ladevorgang hinterliess damit einen halb übernommenen
+ * Stand: Fachdaten unberührt, Sync-Zustand bereits der des fehlerhaften
+ * Datensatzes.
+ *
+ * Der Client wird deshalb nur noch **gelesen**: der gespeicherte, sonst der
+ * bereits vorhandene. Übernommen wird er erst, wenn die gesamte Kette steht —
+ * siehe `adoptLoadedSyncState`.
+ */
+function withLoadedSyncMetadata(state: AppPersistedState): AppPersistedState {
+  const client = state.syncClient ?? ensureSyncClientFromState();
+  return applySyncMetadataToState(
     {
       ...state,
       syncClient: client,
@@ -519,9 +534,12 @@ function finalizeLoadedState(state: AppPersistedState): AppPersistedState {
     },
     client,
   );
-  hydrateSyncClient(withSync.syncClient!);
-  hydrateSyncOutbox(withSync.syncOutbox ?? []);
-  return withSync;
+}
+
+/** Der Sync-Zustand eines vollständig geladenen Datensatzes — erst jetzt gültig. */
+function adoptLoadedSyncState(state: AppPersistedState): void {
+  if (state.syncClient) hydrateSyncClient(state.syncClient);
+  hydrateSyncOutbox(state.syncOutbox ?? []);
 }
 
 import {
@@ -540,31 +558,42 @@ function publishPersistenceHealth(): void {
   });
 }
 
-function normalizeLoadedState(parsed: unknown, persistMigrations = true): AppPersistedState | null {
+/**
+ * PERSISTENCE-MIGRATION-FAILURE-GUARD-01B2 — das Ergebnis der Versions- und
+ * Migrationsstufe.
+ *
+ * `migrated` ist der Stand, der **nach erfolgreichem Abschluss der gesamten
+ * Ladekette** zurückgeschrieben werden soll. Bis dahin wird nichts gespeichert:
+ * Der Rückschreibvorgang lag bisher direkt hier, also vor der Aufbereitung —
+ * scheiterte diese, war der Rohwert bereits durch den migrierten Stand ersetzt,
+ * obwohl der Ladevorgang als gescheitert galt.
+ */
+interface NormalizedLoadedState {
+  state: AppPersistedState;
+  migrated: AppPersistedState | null;
+}
+
+function normalizeLoadedState(parsed: unknown): NormalizedLoadedState | null {
   if (isValidPersistedStateV5(parsed)) {
-    return finalizeLoadedState(parsed);
+    return { state: withLoadedSyncMetadata(parsed), migrated: null };
   }
   if (isValidPersistedStateV4(parsed)) {
     const migrated = migratePersistedStateV4ToV5(parsed);
-    if (persistMigrations) savePersistedState(migrated);
-    return finalizeLoadedState(migrated);
+    return { state: withLoadedSyncMetadata(migrated), migrated };
   }
   if (isValidPersistedStateV3(parsed)) {
     const migrated = migratePersistedStateV4ToV5(migratePersistedStateV3ToV4(parsed));
-    if (persistMigrations) savePersistedState(migrated);
-    return finalizeLoadedState(migrated);
+    return { state: withLoadedSyncMetadata(migrated), migrated };
   }
   if (isValidPersistedStateV2(parsed)) {
     const migrated = migratePersistedStateV4ToV5(
       migratePersistedStateV3ToV4(migratePersistedStateV2ToV3(parsed)),
     );
-    if (persistMigrations) savePersistedState(migrated);
-    return finalizeLoadedState(migrated);
+    return { state: withLoadedSyncMetadata(migrated), migrated };
   }
   if (isValidPersistedStateV1(parsed)) {
     const migrated = migratePersistedStateV4ToV5(migratePersistedStateV1ToV2(parsed));
-    if (persistMigrations) savePersistedState(migrated);
-    return finalizeLoadedState(migrated);
+    return { state: withLoadedSyncMetadata(migrated), migrated };
   }
   return null;
 }
@@ -605,21 +634,106 @@ function finalizeLoadedPersistedState(normalized: AppPersistedState): AppPersist
   };
 }
 
-export function loadPersistedStateFromKey(storageKey: string): AppPersistedState | null {
+/**
+ * PERSISTENCE-MIGRATION-FAILURE-GUARD-01B — warum ein Ladeversuch scheiterte.
+ *
+ * Rein beschreibend; der Aufrufer entscheidet allein anhand von `status`.
+ */
+export type PersistedStateLoadFailureReason =
+  /** `localStorage` selbst war nicht lesbar. */
+  | 'storage_unavailable'
+  /** Der gespeicherte Text ist kein gültiges JSON. */
+  | 'parse_error'
+  /** Gültiges JSON, aber von keinem Versionsvalidator erkannt. */
+  | 'unrecognized_state'
+  /** Migration, Normalisierung oder Finalisierung hat geworfen. */
+  | 'migration_failed';
+
+/**
+ * PERSISTENCE-MIGRATION-FAILURE-GUARD-01B — **„keine Daten" und „Daten nicht
+ * lesbar" sind nicht dasselbe.**
+ *
+ * Der Ladepfad lieferte für beides `null`. Die Aufrufer schlossen daraus auf
+ * einen Erststart, wendeten leere Seed-Daten an und schrieben sie über den
+ * vorhandenen Schlüssel — ein Parse-, Migrations- oder Normalisierungsfehler
+ * löschte damit den gesamten lokalen Bestand.
+ *
+ * Diese Unterscheidung ist die Voraussetzung jeder weiteren Storage-Migration:
+ * Eine fehlschlagende Migration darf blockieren, aber niemals überschreiben.
+ */
+export type PersistedStateLoadResult =
+  | { status: 'loaded'; state: AppPersistedState }
+  | { status: 'absent' }
+  | { status: 'failed'; reason: PersistedStateLoadFailureReason; storageKey: string };
+
+export function loadPersistedStateResultFromKey(storageKey: string): PersistedStateLoadResult {
+  let raw: string | null;
   try {
-    const raw = localStorage.getItem(storageKey);
-    if (!raw) return null;
-    const parsed: unknown = JSON.parse(raw);
-    const normalized = normalizeLoadedState(parsed, storageKey === getActiveStorageKey());
-    if (!normalized) {
-      console.warn('[OfficePilot] Ungültiger gespeicherter Zustand – Seed-Daten werden verwendet.');
-      return null;
-    }
-    return finalizeLoadedPersistedState(normalized);
+    raw = localStorage.getItem(storageKey);
   } catch (error) {
     console.warn('[OfficePilot] localStorage konnte nicht gelesen werden:', error);
-    return null;
+    return { status: 'failed', reason: 'storage_unavailable', storageKey };
   }
+
+  // Der einzige Weg zu `absent`: Es liegt tatsächlich nichts vor.
+  if (!raw) return { status: 'absent' };
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    console.warn('[OfficePilot] Gespeicherter Zustand ist nicht lesbar:', error);
+    return { status: 'failed', reason: 'parse_error', storageKey };
+  }
+
+  let normalized: NormalizedLoadedState | null;
+  let state: AppPersistedState;
+  try {
+    normalized = normalizeLoadedState(parsed);
+    if (!normalized) {
+      console.warn('[OfficePilot] Gespeicherter Zustand wurde nicht erkannt.');
+      return { status: 'failed', reason: 'unrecognized_state', storageKey };
+    }
+    /*
+     * PERSISTENCE-MIGRATION-FAILURE-GUARD-01B2 — bis hierher ist noch nichts
+     * geschrieben und nichts übernommen. Erst wenn die vollständige Kette —
+     * Versionsprüfung, Migration, Sync-Metadaten, Aufbereitung — durchgelaufen
+     * ist, gilt der Zustand als geladen.
+     */
+    state = finalizeLoadedPersistedState(normalized.state);
+  } catch (error) {
+    console.warn('[OfficePilot] Gespeicherter Zustand konnte nicht aufbereitet werden:', error);
+    return { status: 'failed', reason: 'migration_failed', storageKey };
+  }
+
+  /*
+   * Ab hier steht der Erfolg fest. Jetzt — und nur jetzt — darf der Sync-Zustand
+   * dieses Datensatzes gelten, und ein migrierter Stand darf den alten ersetzen.
+   * Der Rückschreibvorgang bleibt auf den aktiven Bereich beschränkt: Ein
+   * fremder Schlüssel wird gelesen, aber nie überschrieben.
+   */
+  adoptLoadedSyncState(state);
+  if (normalized.migrated && storageKey === getActiveStorageKey()) {
+    savePersistedState(normalized.migrated);
+  }
+  return { status: 'loaded', state };
+}
+
+export function loadPersistedStateResult(): PersistedStateLoadResult {
+  return loadPersistedStateResultFromKey(getActiveStorageKey());
+}
+
+/**
+ * Bestandsform: `null` für „nicht geladen".
+ *
+ * Bewusst erhalten, damit Aufrufer, die nur den Erfolgsfall brauchen,
+ * unverändert bleiben. **Wer zwischen `absent` und `failed` unterscheiden muss
+ * — also jeder, der ersatzweise Seed-Daten schreiben würde —, nimmt
+ * `loadPersistedStateResultFromKey`.**
+ */
+export function loadPersistedStateFromKey(storageKey: string): AppPersistedState | null {
+  const result = loadPersistedStateResultFromKey(storageKey);
+  return result.status === 'loaded' ? result.state : null;
 }
 
 export function loadPersistedState(): AppPersistedState | null {
@@ -784,23 +898,70 @@ function bootstrapBetaTestState(): CompanySetup {
 }
 
 /** @deprecated Use bootstrapBusinessState() from storageBootstrapService after auth. */
+/**
+ * PERSISTENCE-MIGRATION-FAILURE-GUARD-01B — der letzte fehlgeschlagene
+ * Ladeversuch, damit ein Ladefehler nicht nur im Protokoll steht.
+ *
+ * Bewusst klein: kein Fehlerbildschirm, kein Wiederherstellungsablauf. Der
+ * Zustand bleibt im Servicevertrag abrufbar; die Oberfläche kann ihn später
+ * auswerten, ohne dass dieser Block sie umbaut.
+ */
+let lastPersistedStateLoadFailure: {
+  reason: PersistedStateLoadFailureReason;
+  storageKey: string;
+} | null = null;
+
+export function getPersistedStateLoadFailure(): {
+  reason: PersistedStateLoadFailureReason;
+  storageKey: string;
+} | null {
+  return lastPersistedStateLoadFailure;
+}
+
+export function recordPersistedStateLoadOutcome(result: PersistedStateLoadResult): void {
+  lastPersistedStateLoadFailure =
+    result.status === 'failed'
+      ? { reason: result.reason, storageKey: result.storageKey }
+      : null;
+}
+
 export function hydrateStoresFromStorage(): CompanySetup {
   if (isBetaTestMode()) {
-    const stored = loadPersistedState();
-    if (stored && stored.setup.setupComplete) {
-      applyStateToStores(stored);
+    const result = loadPersistedStateResult();
+    recordPersistedStateLoadOutcome(result);
+    if (result.status === 'loaded' && result.state.setup.setupComplete) {
+      applyStateToStores(result.state);
       return getCachedSetup();
     }
+    /*
+     * Ein Ladefehler darf auch hier nicht in einen Erststart münden:
+     * `bootstrapBetaTestState` legt einen frischen Bestand an und speichert ihn.
+     */
+    if (result.status === 'failed') return getCachedSetup();
     return bootstrapBetaTestState();
   }
 
   setActiveStorageScope({ type: 'guest' });
-  const stored = loadPersistedState();
-  if (stored) {
-    applyStateToStores(stored);
+  const result = loadPersistedStateResult();
+  recordPersistedStateLoadOutcome(result);
+  if (result.status === 'loaded') {
+    applyStateToStores(result.state);
     void backfillMissingFileRefHashes().then(() => persistAll());
     return getCachedSetup();
   }
+
+  /*
+   * PERSISTENCE-MIGRATION-FAILURE-GUARD-01B — Seed **nur** bei tatsächlich
+   * leerem Speicher.
+   *
+   * Bis hierher lieferte der Ladepfad für „nichts gespeichert" und „gespeichert,
+   * aber unlesbar" denselben `null`-Wert. Der Seed wurde deshalb auch dann
+   * angewendet **und geschrieben**, wenn Daten vorhanden waren — der Fehlerfall
+   * löschte den Bestand, den er schützen sollte. Bei `failed` wird jetzt weder
+   * angewendet noch gespeichert; der Rohwert bleibt unangetastet und der Grund
+   * bleibt über `getPersistedStateLoadFailure` abrufbar.
+   */
+  if (result.status === 'failed') return getCachedSetup();
 
   const seed = createSeedState();
   applyStateToStores(seed);
