@@ -58,6 +58,12 @@ let root: Root;
 let host: HTMLDivElement;
 
 beforeEach(async () => {
+  // INVOICE-MOBILE-RESUME-01B — die §13b-Bestätigung liegt in `localStorage`.
+  try {
+    localStorage.clear();
+  } catch {
+    // Ohne Speicher gibt es nichts zu leeren.
+  }
   resetInvoiceNumberSequence();
   hydrateDocumentStore([]);
   hydrateCompanyProfileStore(company);
@@ -269,26 +275,61 @@ describe('INVOICE-TAX-FLOW-01B — Steuerart im Positionsschritt', () => {
     });
   }
 
-  /*
-   * T9 — die Bestätigung wird bewusst nicht persistiert.
-   *
-   * Sie gehört in diesem Block nicht in den Draft-Vertrag. Nach einer neuen
-   * Komponenteninstanz ist sie wieder offen; das ist die sichere Richtung.
-   */
-  it('T9: eine neue Instanz verlangt die §13b-Bestätigung erneut', async () => {
-    await renderPage('reverse_charge_13b');
-    await toggleConfirmation();
-    expect(continueButton().disabled).toBe(false);
-
+  /** Ein vollständiger Neuaufbau — was ein verworfener Safari-Tab hinterlässt. */
+  async function remount(status: TaxStatus): Promise<void> {
     await act(async () => root.unmount());
     host.remove();
     host = document.createElement('div');
     document.body.appendChild(host);
     root = createRoot(host);
+    await renderPage(status);
+  }
 
+  /*
+   * T9 — bis INVOICE-MOBILE-RESUME-01B war die Bestätigung in **jedem** Fall
+   * flüchtig, und dieser Test sicherte genau das ab. Auf dem iPhone hiess das:
+   * Wer §13b bestätigte und kurz die App wechselte, musste von vorn beginnen.
+   *
+   * Die Regel ist deshalb aufgeteilt. Die sichere Richtung bleibt unverändert
+   * bestehen (T9a) — neu ist allein, dass eine **ausdrücklich gegebene**
+   * Bestätigung für denselben unveränderten Entwurf erhalten bleibt (T9b).
+   */
+  it('T9a: eine frische Rechnung verlangt die §13b-Bestätigung', async () => {
     await renderPage('reverse_charge_13b');
+
     const box = find('invoice-13b-confirm-checkbox') as HTMLInputElement;
-    expect(box.checked).toBe(false);
+    expect(box.checked, 'Die Bestätigung war ungefragt gesetzt').toBe(false);
+    expect(continueButton().disabled).toBe(true);
+
+    await remount('reverse_charge_13b');
+
+    const afterRemount = find('invoice-13b-confirm-checkbox') as HTMLInputElement;
+    expect(afterRemount.checked).toBe(false);
+    expect(continueButton().disabled).toBe(true);
+  });
+
+  it('T9b: eine gegebene Bestätigung überlebt eine neue Instanz', async () => {
+    await renderPage('reverse_charge_13b');
+    await toggleConfirmation();
+    expect(continueButton().disabled).toBe(false);
+
+    await remount('reverse_charge_13b');
+
+    const box = find('invoice-13b-confirm-checkbox') as HTMLInputElement;
+    expect(box.checked, 'Die Bestätigung ging beim Neuaufbau verloren').toBe(true);
+    expect(continueButton().disabled).toBe(false);
+  });
+
+  it('T9c: das Abwählen wirkt auch über eine neue Instanz hinweg', async () => {
+    await renderPage('reverse_charge_13b');
+    await toggleConfirmation();
+    await toggleConfirmation();
+    expect(continueButton().disabled).toBe(true);
+
+    await remount('reverse_charge_13b');
+
+    const box = find('invoice-13b-confirm-checkbox') as HTMLInputElement;
+    expect(box.checked, 'Eine abgewählte Bestätigung kam zurück').toBe(false);
     expect(continueButton().disabled).toBe(true);
   });
 

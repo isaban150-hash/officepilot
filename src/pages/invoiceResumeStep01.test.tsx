@@ -59,7 +59,23 @@ function SearchProbe() {
   return null;
 }
 
+/**
+ * Hält **jeden** gerenderten Suchstring fest, nicht nur den letzten. Nur so
+ * lässt sich beweisen, dass die Adresse während der Wiederaufnahme nicht
+ * zwischenzeitlich auf `step=positions` zurückfällt.
+ */
+function SearchRecorder({ onSearch }: { onSearch: (search: string) => void }) {
+  onSearch(useLocation().search);
+  return null;
+}
+
 beforeEach(async () => {
+  // Die §13b-Bestätigung liegt in `localStorage` — kein Fall darf den nächsten bestätigen.
+  try {
+    localStorage.clear();
+  } catch {
+    // Ohne Speicher gibt es nichts zu leeren.
+  }
   resetInvoiceNumberSequence();
   hydrateDocumentStore([]);
   hydrateCompanyProfileStore(company);
@@ -268,5 +284,326 @@ describe('MOBILE-RESUME-STATE-01B — Wiederaufnahme aus der Adresse', () => {
     expect(previewVisible()).toBe(false);
     expect(positionsVisible()).toBe(true);
     expect(currentSearch).not.toContain('step=preview');
+  });
+});
+
+/**
+ * INVOICE-MOBILE-RESUME-01B — eine gegebene §13b-Bestätigung überlebt den
+ * App-Wechsel, eine nicht gegebene entsteht nicht.
+ *
+ * R5 oben bleibt unverändert: Ohne Bestätigung führt keine Adresse in die
+ * Vorschau. Diese Suite ergänzt den zweiten Fall — der Nutzer **hat**
+ * bestätigt, und genau dieser unveränderte Entwurf soll nach einem
+ * vollständigen Neuaufbau dort weitermachen, wo er stand.
+ */
+describe('INVOICE-MOBILE-RESUME-01B — §13b über den App-Wechsel', () => {
+  function confirmCheckbox(): HTMLInputElement | null {
+    return find('invoice-13b-confirm-checkbox') as HTMLInputElement | null;
+  }
+
+  /** Ein vollständiger Neuaufbau — genau das, was ein verworfener Tab hinterlässt. */
+  async function remountAt(search: string, taxStatus: TaxStatus): Promise<void> {
+    await act(async () => root.unmount());
+    host.remove();
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    await renderAt(search, taxStatus);
+  }
+
+  /** Hakt §13b an und wartet, bis die Bestätigung geschrieben ist. */
+  async function confirm13b(): Promise<void> {
+    const box = confirmCheckbox();
+    expect(box, '§13b-Kästchen nicht gefunden').not.toBeNull();
+    await act(async () => {
+      box!.click();
+    });
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      await act(async () => {
+        await new Promise((done) => setTimeout(done, 0));
+      });
+    }
+  }
+
+  it('R13B-1: ohne gespeicherte Bestätigung bleibt es fail-closed', async () => {
+    await renderAt('?type=rechnung&step=preview', 'reverse_charge_13b');
+
+    expect(previewVisible()).toBe(false);
+    expect(positionsVisible()).toBe(true);
+    expect(confirmCheckbox()!.checked).toBe(false);
+  });
+
+  /*
+   * Der Realbefund in Testform: bestätigen, in die Vorschau, App wechseln,
+   * zurückkommen.
+   */
+  it('R13B-2: die bestätigte Vorschau überlebt einen vollständigen Neuaufbau', async () => {
+    await renderAt('?type=rechnung', 'reverse_charge_13b');
+    await confirm13b();
+    await click(find('invoice-continue-preview')!);
+    expect(previewVisible()).toBe(true);
+    const searchAfterStep = currentSearch;
+    expect(searchAfterStep).toContain('step=preview');
+
+    await remountAt(`?${searchAfterStep.replace(/^\?/, '')}`, 'reverse_charge_13b');
+
+    expect(previewVisible(), 'Der Neuaufbau fiel auf die Positionen zurück').toBe(true);
+    expect(currentSearch, 'Die Adresse wurde auf positions normalisiert').toContain(
+      'step=preview',
+    );
+  });
+
+  /*
+   * Die Anzeige darf nicht behaupten, was der Freigabekontext nicht trägt:
+   * Nach dem Resume muss das Kästchen denselben Zustand zeigen, mit dem die
+   * Vorschau wiederhergestellt wurde.
+   */
+  it('R13B-2b: das Kästchen zeigt nach dem Resume die Bestätigung', async () => {
+    await renderAt('?type=rechnung', 'reverse_charge_13b');
+    await confirm13b();
+    await remountAt('?type=rechnung&step=positions', 'reverse_charge_13b');
+
+    expect(confirmCheckbox()!.checked, 'Die Bestätigung wurde nicht wiederhergestellt').toBe(
+      true,
+    );
+  });
+
+  /** Trägt eine Menge ein und wartet, bis der Entwurf gespeichert ist. */
+  async function changeQuantity(value: string): Promise<void> {
+    const quantity = host.querySelector(
+      '[data-testid^="invoice-qty-"]',
+    ) as HTMLInputElement | null;
+    expect(quantity, 'Mengenfeld nicht gefunden').not.toBeNull();
+    await act(async () => {
+      quantity!.focus();
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        'value',
+      )!.set!;
+      setter.call(quantity!, value);
+      quantity!.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      await act(async () => {
+        await new Promise((done) => setTimeout(done, 0));
+      });
+    }
+  }
+
+  /*
+   * INVOICE-MOBILE-RESUME-01B2 — die Lücke innerhalb derselben Sitzung.
+   *
+   * Die Bestätigung ist an `draftSha256` gebunden, aber ohne Neuaufbau wurde
+   * diese Bindung nie geprüft: Wer §13b bestätigte, danach eine Menge änderte
+   * und ohne Zwischenschritt freigab, trug eine Bestätigung weiter, die zu
+   * einem anderen Rechnungsstand gehörte. Der Freigabe-Validator sieht nur
+   * `true`, nicht wofür.
+   */
+  it('R13B-INSESSION-1: eine fachliche Änderung entwertet die Bestätigung sofort', async () => {
+    await renderAt('?type=rechnung', 'reverse_charge_13b');
+    await confirm13b();
+    expect(confirmCheckbox()!.checked).toBe(true);
+    expect((find('invoice-continue-preview') as HTMLButtonElement).disabled).toBe(false);
+
+    await changeQuantity('7');
+
+    expect(confirmCheckbox()!.checked, 'Die Bestätigung überlebte die Änderung').toBe(false);
+    expect(
+      (find('invoice-continue-preview') as HTMLButtonElement).disabled,
+      'Der Weg zur Vorschau blieb offen',
+    ).toBe(true);
+    expect(find('invoice-tax-decision-blocked'), 'Kein Hinweis auf die offene Bestätigung')
+      .not.toBeNull();
+  });
+
+  it('R13B-INSESSION-2: die erneute Bestätigung gilt für den neuen Stand', async () => {
+    await renderAt('?type=rechnung', 'reverse_charge_13b');
+    await confirm13b();
+    await changeQuantity('7');
+    expect(confirmCheckbox()!.checked).toBe(false);
+
+    await confirm13b();
+    expect(confirmCheckbox()!.checked).toBe(true);
+    await click(find('invoice-continue-preview')!);
+    expect(previewVisible()).toBe(true);
+
+    // Der neue Punkt gehört zum geänderten Stand und trägt über den Neuaufbau.
+    await remountAt(`?${currentSearch.replace(/^\?/, '')}`, 'reverse_charge_13b');
+    expect(previewVisible(), 'Der neue Punkt wurde nicht wiederhergestellt').toBe(true);
+  });
+
+  it('R13B-INSESSION-3: reine Oberflächenwechsel entwerten nichts', async () => {
+    await renderAt('?type=rechnung', 'reverse_charge_13b');
+    await confirm13b();
+
+    await click(find('invoice-continue-preview')!);
+    expect(previewVisible()).toBe(true);
+    await click(find('invoice-back-positions')!);
+
+    expect(confirmCheckbox()!.checked, 'Ein Schrittwechsel entwertete die Bestätigung').toBe(
+      true,
+    );
+    expect((find('invoice-continue-preview') as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('R13B-3: eine fachliche Entwurfsänderung entwertet die Bestätigung', async () => {
+    await renderAt('?type=rechnung', 'reverse_charge_13b');
+    await confirm13b();
+    await click(find('invoice-continue-preview')!);
+    const searchAfterStep = currentSearch;
+
+    /*
+     * Der Entwurf wird nach der Bestätigung inhaltlich verändert — der
+     * gespeicherte Hash gehört danach zu einem anderen Stand.
+     */
+    await click(find('invoice-back-positions')!);
+    await changeQuantity('7');
+
+    await remountAt(`?${searchAfterStep.replace(/^\?/, '')}`, 'reverse_charge_13b');
+
+    expect(previewVisible(), 'Ein veralteter Punkt öffnete die Vorschau').toBe(false);
+    expect(positionsVisible()).toBe(true);
+    expect(confirmCheckbox()!.checked).toBe(false);
+  });
+
+  /** Neuaufbau auf einem anderen Vorgang — dessen Entwurf entsteht dort erstmals. */
+  async function remountOtherVorgangAt(search: string, taxStatus: TaxStatus): Promise<void> {
+    hydrateVorgangStore([createTestVorgang(), createTestVorgang({ id: 'v-test-2' })]);
+    await act(async () => root.unmount());
+    host.remove();
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <MemoryRouter initialEntries={[`/vorgaenge/v-test-2/rechnung${search}`]}>
+          <AppProvider initialSetup={setupWith(taxStatus)}>
+            <Routes>
+              <Route
+                path="/vorgaenge/:id/rechnung"
+                element={
+                  <>
+                    <RechnungPage />
+                    <SearchProbe />
+                  </>
+                }
+              />
+            </Routes>
+          </AppProvider>
+        </MemoryRouter>,
+      );
+    });
+    for (let attempt = 0; attempt < 60; attempt += 1) {
+      if (host.querySelector('[data-testid="rechnung-page"]')) break;
+      await act(async () => {
+        await new Promise((done) => setTimeout(done, 0));
+      });
+    }
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      await act(async () => {
+        await new Promise((done) => setTimeout(done, 0));
+      });
+    }
+  }
+
+  it('R13B-5: ein anderer Vorgang übernimmt die Bestätigung nicht', async () => {
+    await renderAt('?type=rechnung', 'reverse_charge_13b');
+    await confirm13b();
+
+    await remountOtherVorgangAt('?type=rechnung&step=preview', 'reverse_charge_13b');
+
+    expect(previewVisible(), 'Ein fremder Vorgang erbte die Bestätigung').toBe(false);
+    expect(confirmCheckbox()!.checked).toBe(false);
+  });
+
+  it('R13B-6: eine andere Rechnungsart übernimmt die Bestätigung nicht', async () => {
+    await renderAt('?type=rechnung', 'reverse_charge_13b');
+    await confirm13b();
+
+    await remountAt('?type=schluss&step=preview', 'reverse_charge_13b');
+
+    expect(previewVisible(), 'Die Schlussrechnung erbte die Bestätigung').toBe(false);
+    expect(confirmCheckbox()!.checked).toBe(false);
+  });
+
+  it('R13B-7: der Standardsteuerstatus resumt unverändert', async () => {
+    await renderAt('?type=rechnung&step=preview', 'standard_19');
+    expect(previewVisible()).toBe(true);
+    expect(currentSearch).toContain('step=preview');
+  });
+
+  /*
+   * Eine im Speicher liegende Bestätigung darf einen ungeklärten Steuerstatus
+   * nicht öffnen. Der zweite Vorgang bekommt einen frischen Entwurf mit
+   * `unclear` — die Bestätigung aus dem ersten liegt daneben und muss wirkungslos
+   * bleiben.
+   */
+  it('R13B-8: unclear bleibt trotz gespeicherter Bestätigung fail-closed', async () => {
+    await renderAt('?type=rechnung', 'reverse_charge_13b');
+    await confirm13b();
+
+    await remountOtherVorgangAt('?type=rechnung&step=preview', 'unclear');
+
+    expect(previewVisible(), 'Ein ungeklärter Steuerstatus erreichte die Vorschau').toBe(false);
+    expect(positionsVisible()).toBe(true);
+  });
+
+  /*
+   * Der eigentliche Bug: Der Rückfall wurde in die Adresse geschrieben und
+   * löschte damit die Information, dass der Nutzer schon in der Vorschau war.
+   * Geprüft wird deshalb nicht nur das Ergebnis, sondern dass `step=preview`
+   * die Wiederaufnahme zu **keinem** Zeitpunkt verlässt.
+   */
+  it('R13B-9: die Adresse wird während der Wiederaufnahme nicht auf positions überschrieben', async () => {
+    await renderAt('?type=rechnung', 'reverse_charge_13b');
+    await confirm13b();
+    await click(find('invoice-continue-preview')!);
+    const searchAfterStep = currentSearch;
+
+    await act(async () => root.unmount());
+    host.remove();
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+
+    const seen: string[] = [];
+    await act(async () => {
+      root.render(
+        <MemoryRouter initialEntries={[`/vorgaenge/v-test-1/rechnung${searchAfterStep}`]}>
+          <AppProvider initialSetup={setupWith('reverse_charge_13b')}>
+            <Routes>
+              <Route
+                path="/vorgaenge/:id/rechnung"
+                element={
+                  <>
+                    <RechnungPage />
+                    <SearchProbe />
+                    <SearchRecorder onSearch={(value) => seen.push(value)} />
+                  </>
+                }
+              />
+            </Routes>
+          </AppProvider>
+        </MemoryRouter>,
+      );
+    });
+    for (let attempt = 0; attempt < 60; attempt += 1) {
+      if (host.querySelector('[data-testid="rechnung-page"]')) break;
+      await act(async () => {
+        await new Promise((done) => setTimeout(done, 0));
+      });
+    }
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      await act(async () => {
+        await new Promise((done) => setTimeout(done, 0));
+      });
+    }
+
+    expect(
+      seen.some((value) => value.includes('step=positions')),
+      `Die Adresse fiel zwischenzeitlich zurück: ${seen.join(' | ')}`,
+    ).toBe(false);
+    expect(previewVisible()).toBe(true);
   });
 });

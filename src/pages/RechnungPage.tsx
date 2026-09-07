@@ -69,6 +69,12 @@ import type {
   InvoiceDraftRecord,
 } from '../types/invoiceDraftDurability';
 import { selectHistoricalInvoiceLogo } from '../services/invoice/invoiceHistoricalLogo';
+import {
+  clearReverseChargeConfirmation,
+  hasValidReverseChargeConfirmation,
+  writeReverseChargeConfirmation,
+  type ReverseChargeConfirmationContext,
+} from '../services/invoice/reverseChargeConfirmationService';
 import type { InvoiceFinalizationRecovery } from '../services/invoice/invoiceFinalizationCoordinator';
 import type { TranslationKey } from '../i18n';
 
@@ -231,6 +237,16 @@ export function RechnungPage() {
    */
   const [contractSkontoAttemptBlocked, setContractSkontoAttemptBlocked] = useState(false);
   const [reverseCharge13bConfirmed, setReverseCharge13bConfirmed] = useState(false);
+  /**
+   * INVOICE-MOBILE-RESUME-01B2 — der Entwurfsstand, **für den** §13b bestätigt
+   * wurde.
+   *
+   * Ohne ihn galt die Bindung an `draftSha256` nur über einen Neuaufbau
+   * hinweg: Wer bestätigte, danach eine Menge änderte und ohne Zwischenschritt
+   * freigab, trug eine Bestätigung weiter, die zu einem anderen Rechnungsstand
+   * gehörte. Der Freigabe-Validator sieht nur `true`, nicht wofür.
+   */
+  const [confirmedDraftSha256, setConfirmedDraftSha256] = useState<string | null>(null);
   const [approving, setApproving] = useState(false);
   const [customerMasterConfirm, setCustomerMasterConfirm] = useState(false);
   const [customerMasterError, setCustomerMasterError] = useState<string | null>(null);
@@ -337,6 +353,7 @@ export function RechnungPage() {
     setStep('positions');
     setApplyContractSkonto(false);
     setReverseCharge13bConfirmed(false);
+    setConfirmedDraftSha256(null);
     setValidationErrors([]);
     setValidationWarnings([]);
     // INVOICE-QUANTITY-INPUT-UX-01B — kein Mengenfehler der alten Rechnung
@@ -640,6 +657,69 @@ export function RechnungPage() {
   const taxDecisionSettled = taxDecisionBlockKey === null;
 
   /*
+   * INVOICE-MOBILE-RESUME-01B — die Identität, an der die §13b-Bestätigung
+   * hängt.
+   *
+   * Alles davon stammt aus dem **gespeicherten Datensatz**, nicht aus der
+   * Adresse: Scope und Workspace, Vorgang, Rechnungsart, `draftId` und der
+   * Inhaltshash des Entwurfs. Fehlt der Datensatz noch, gibt es keinen
+   * Kontext — und ohne Kontext wird weder geschrieben noch wiederhergestellt.
+   */
+  const draftRecord = session.record;
+  const reverseChargeContext = useMemo<ReverseChargeConfirmationContext | null>(() => {
+    if (!draftRecord) return null;
+    return {
+      sourceScopeKey: draftRecord.sourceScopeKey,
+      workspaceId: draftRecord.workspaceId,
+      vorgangId: draftRecord.vorgangId,
+      invoiceType: draftRecord.invoiceType,
+      draftId: draftRecord.draftId,
+      draftSha256: draftRecord.draftSha256,
+    };
+  }, [draftRecord]);
+
+  /*
+   * INVOICE-MOBILE-RESUME-01B2 — die Bestätigung gilt für genau einen
+   * Entwurfsstand, auch ohne Neuaufbau.
+   *
+   * Zwei Aufgaben in einem Effekt, weil beide dieselbe Frage beantworten
+   * („gehört die Bestätigung noch zum aktuellen Stand?") und getrennt
+   * auseinanderlaufen könnten:
+   *
+   *   1. **Binden** — nach dem ausdrücklichen Anhaken wird der dann gültige
+   *      Hash festgehalten und der Wiederaufnahmepunkt geschrieben.
+   *   2. **Entwerten** — weicht der Hash später ab, ist eine fachliche
+   *      Eigenschaft der Rechnung geändert worden; die Bestätigung fällt und
+   *      der gespeicherte Punkt verschwindet.
+   *
+   * `draftPersisted` hält einen laufenden Speicherlauf heraus: Während
+   * `saving` gehört der Hash des Datensatzes noch zum vorherigen Stand, und
+   * ein Vergleich damit würde eine gerade gegebene Bestätigung sofort wieder
+   * entwerten.
+   *
+   * Kein Kreis: Hier wird nur Oberflächenzustand gesetzt, der Entwurf selbst
+   * nie angefasst — reine UI-Vorgänge (Schritt, Dialoge, Scroll, offene
+   * Tastatureingaben) verändern `draftSha256` nicht und lösen deshalb nichts
+   * aus.
+   */
+  const draftPersisted = sessionStatus !== 'saving';
+  useEffect(() => {
+    if (!reverseCharge13bConfirmed || !draftPersisted) return;
+    if (!reverseChargeContext) return;
+
+    if (confirmedDraftSha256 === null) {
+      setConfirmedDraftSha256(reverseChargeContext.draftSha256);
+      writeReverseChargeConfirmation(reverseChargeContext);
+      return;
+    }
+    if (confirmedDraftSha256 === reverseChargeContext.draftSha256) return;
+
+    setReverseCharge13bConfirmed(false);
+    setConfirmedDraftSha256(null);
+    clearReverseChargeConfirmation(reverseChargeContext);
+  }, [reverseCharge13bConfirmed, draftPersisted, reverseChargeContext, confirmedDraftSha256]);
+
+  /*
    * Eine laufende oder bereits abgeschlossene Finalisierung sperrt Bearbeitung
    * und Freigabe gleichermaßen. Sie stammt ausschliesslich aus dem gespeicherten
    * Datensatz — niemals aus der Adresse.
@@ -661,12 +741,53 @@ export function RechnungPage() {
 
   useEffect(() => {
     if (resumeApplied || !hydrationSettled) return;
+
+    /*
+     * INVOICE-MOBILE-RESUME-01B — die Bestätigung wird **vor** der
+     * Schrittentscheidung wiederhergestellt, im selben Durchlauf.
+     *
+     * Genau hier lag der Fehler: `reverseCharge13bConfirmed` stammte aus dem
+     * gerade erst erzeugten React-Zustand und war `false`, also stufte
+     * `resolveResumableStep` ein `step=preview` auf `positions` zurück — und
+     * der Effekt darunter schrieb diesen Rückfall in die Adresse. Danach war
+     * nicht mehr feststellbar, dass der Nutzer schon weiter war.
+     *
+     * Der Speicherzugriff ist synchron, die Prüfung erfolgt deshalb im selben
+     * Effekt und beide `setState` landen im selben Renderdurchlauf: Es gibt
+     * kein Zwischenfenster, in dem die Adresse normalisiert werden könnte.
+     * `taxDecisionSettled` aus dem Render wäre hier veraltet — die Regel wird
+     * mit dem wiederhergestellten Wert neu ausgewertet, nicht nachgelesen.
+     */
+    const restoredConfirmation =
+      draft?.taxStatus === 'reverse_charge_13b' &&
+      reverseChargeContext !== null &&
+      hasValidReverseChargeConfirmation(reverseChargeContext);
+
+    if (restoredConfirmation) {
+      setReverseCharge13bConfirmed(true);
+      /*
+       * INVOICE-MOBILE-RESUME-01B2 — die Bindung wird mitgeführt. Ohne sie
+       * fände der Entwertungseffekt eine Bestätigung ohne Referenzstand,
+       * bände sie neu an den aktuellen Hash und schriebe den Punkt erneut —
+       * er wäre dann gültig, ohne je geprüft worden zu sein.
+       */
+      setConfirmedDraftSha256(reverseChargeContext!.draftSha256);
+    }
+
+    const resumedTaxDecisionSettled =
+      draft == null
+        ? taxDecisionSettled
+        : taxDecisionBlocker(
+            draft.taxStatus,
+            reverseCharge13bConfirmed || restoredConfirmation,
+          ) === null;
+
     setResumeApplied(true);
     setStep(
       resolveResumableStep({
         requested: requestedStep,
         hasDraft: draft != null,
-        taxDecisionSettled,
+        taxDecisionSettled: resumedTaxDecisionSettled,
         finalizationLocked,
       }),
     );
@@ -780,9 +901,37 @@ export function RechnungPage() {
     navigate(`/vorgaenge/${id}/rechnung?type=${type}`);
   };
 
+  /*
+   * INVOICE-MOBILE-RESUME-01B — die Bestätigung ist eine Aussage des Nutzers
+   * über genau diesen Entwurf, und sie wird hier zugleich in der Sitzung und
+   * für die Wiederaufnahme festgehalten.
+   *
+   * Das Anhaken ist die einzige Quelle — es gibt keinen Pfad, auf dem
+   * OfficePilot §13b von sich aus bestätigt. Geschrieben wird der
+   * Wiederaufnahmepunkt aber nicht hier, sondern im Bindungseffekt oben: Er
+   * kennt den Entwurfsstand, der beim Anhaken tatsächlich gespeichert ist.
+   * Beim Abwählen verschwindet der Eintrag sofort; eine stille
+   * Wiederbestätigung darf nicht entstehen.
+   */
+  const handleReverseCharge13bConfirm = (confirmed: boolean) => {
+    setReverseCharge13bConfirmed(confirmed);
+    if (confirmed) return;
+
+    setConfirmedDraftSha256(null);
+    if (reverseChargeContext) clearReverseChargeConfirmation(reverseChargeContext);
+  };
+
   const handleTaxChange = (taxStatus: TaxStatus) => {
     if (taxStatus !== 'reverse_charge_13b') {
       setReverseCharge13bConfirmed(false);
+      setConfirmedDraftSha256(null);
+      /*
+       * Der Entwurf verlässt §13b — die alte Bestätigung wird ungültig und
+       * darf nach einer späteren Rückkehr zu `reverse_charge_13b` nicht
+       * ungeprüft wieder auftauchen. Der Hash allein genügt dafür nicht: Ein
+       * Hin- und Herschalten kann denselben Inhalt wiederherstellen.
+       */
+      if (reverseChargeContext) clearReverseChargeConfirmation(reverseChargeContext);
     }
     mutateDraft((prev) => updateInvoiceDraftTaxStatus(prev, taxStatus));
   };
@@ -835,7 +984,7 @@ export function RechnungPage() {
             <input
               type="checkbox"
               checked={reverseCharge13bConfirmed}
-              onChange={(event) => setReverseCharge13bConfirmed(event.target.checked)}
+              onChange={(event) => handleReverseCharge13bConfirm(event.target.checked)}
               data-testid="invoice-13b-confirm-checkbox"
             />
             <span>{translate('invoice.reverseCharge.confirmLabel')}</span>
