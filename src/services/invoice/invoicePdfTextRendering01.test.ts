@@ -61,6 +61,8 @@ function finalizedInvoice(overrides: Partial<VorgangInvoice> = {}): VorgangInvoi
     issueDate: '2026-09-01',
     servicePeriodFrom: '2026-08-01',
     servicePeriodTo: '2026-08-31',
+    // SERVICE-PERIOD-01B — eine freigegebene Rechnung trägt das Approval-Faktum.
+    servicePeriodConfirmed: true,
     paymentDueDate: '2026-09-15',
     paymentTermsText: 'Zahlbar innerhalb von 14 Tagen.',
     customerSnapshot: {

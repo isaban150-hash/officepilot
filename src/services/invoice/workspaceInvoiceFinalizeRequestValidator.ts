@@ -116,6 +116,8 @@ const INVOICE_KEYS = [
   'issueDate',
   'servicePeriodFrom',
   'servicePeriodTo',
+  // SERVICE-PERIOD-01B — Approval-Faktum; fehlt bei Rechnungen von davor.
+  'servicePeriodConfirmed',
   'paymentDueDate',
   'paymentTermsText',
   'skontoText',
@@ -443,6 +445,7 @@ function checkInvoiceShape(
   optionalString(invoice.issueDate, `${path}.issueDate`);
   optionalString(invoice.servicePeriodFrom, `${path}.servicePeriodFrom`);
   optionalString(invoice.servicePeriodTo, `${path}.servicePeriodTo`);
+  optionalBoolean(invoice.servicePeriodConfirmed, `${path}.servicePeriodConfirmed`);
   optionalString(invoice.paymentDueDate, `${path}.paymentDueDate`);
   optionalString(invoice.paymentTermsText, `${path}.paymentTermsText`);
   optionalString(invoice.skontoText, `${path}.skontoText`);

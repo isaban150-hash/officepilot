@@ -331,6 +331,15 @@ export function mapCloudPayloadToVorgangInvoice(payload: Record<string, unknown>
     issueDate: optionalCloudText(payload.issueDate),
     servicePeriodFrom: optionalCloudText(payload.servicePeriodFrom),
     servicePeriodTo: optionalCloudText(payload.servicePeriodTo),
+    /*
+     * SERVICE-PERIOD-01B — nur ein echtes `true` gilt. Alles andere, auch ein
+     * alter Datensatz ohne den Schlüssel, bleibt `undefined` und damit
+     * unbestätigt. Der Wert wird nie ergänzt, nur wiederhergestellt.
+     */
+    servicePeriodConfirmed:
+      typeof payload.servicePeriodConfirmed === 'boolean'
+        ? payload.servicePeriodConfirmed
+        : undefined,
     paymentDueDate: optionalCloudText(payload.paymentDueDate),
     paymentTermsText: optionalCloudText(payload.paymentTermsText),
     skontoText: optionalCloudText(payload.skontoText),

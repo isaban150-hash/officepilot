@@ -445,6 +445,16 @@ function finalizedInvoiceToValidationDraft(invoice: VorgangInvoice): InvoiceDraf
     issueDate: invoice.issueDate ?? invoice.date,
     servicePeriodFrom: invoice.servicePeriodFrom ?? invoice.issueDate ?? invoice.date,
     servicePeriodTo: invoice.servicePeriodTo ?? invoice.issueDate ?? invoice.date,
+    /*
+     * FINALIZED-INVOICE-PDF-SERVICE-PERIOD-01B — der gespeicherte Wert, roh.
+     *
+     * Ausdrücklich **ohne** `?? true` und ohne Rückschluss aus dem Vorhandensein
+     * eines Zeitraums: Eine historische Rechnung ohne dieses Feld bleibt
+     * unbestätigt und damit im PDF-Pfad blockiert. Anders als bei §13B, das
+     * sich aus `taxStatus` ablesen lässt, hinterlässt diese Bestätigung keine
+     * Spur auf dem Beleg — es gibt nichts zu belegen, also wird nichts geraten.
+     */
+    servicePeriodConfirmed: invoice.servicePeriodConfirmed,
     paymentDueDate: invoice.paymentDueDate ?? '',
     paymentTermsText: invoice.paymentTermsText ?? '',
     skontoText: invoice.skontoText ?? '',

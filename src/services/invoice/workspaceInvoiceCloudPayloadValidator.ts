@@ -48,6 +48,8 @@ const INVOICE_KEYS = new Set([
   'issueDate',
   'servicePeriodFrom',
   'servicePeriodTo',
+  // SERVICE-PERIOD-01B — Approval-Faktum; fehlt bei Rechnungen von davor.
+  'servicePeriodConfirmed',
   'paymentDueDate',
   'paymentTermsText',
   'skontoText',
@@ -394,6 +396,7 @@ export function validateWorkspaceInvoiceCloudPayload(
     optionalText(value.issueDate, 'payload.issueDate');
     optionalText(value.servicePeriodFrom, 'payload.servicePeriodFrom');
     optionalText(value.servicePeriodTo, 'payload.servicePeriodTo');
+    optionalBoolean(value.servicePeriodConfirmed, 'payload.servicePeriodConfirmed');
     optionalText(value.paymentDueDate, 'payload.paymentDueDate');
     optionalText(value.paymentTermsText, 'payload.paymentTermsText');
     optionalText(value.skontoText, 'payload.skontoText');

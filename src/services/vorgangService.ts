@@ -1390,6 +1390,12 @@ export function addInvoiceToVorgang(vorgangId: string, invoice: VorgangInvoice):
 }
 
 export type UpsertFinalizedInvoiceResult =
+  /*
+   * SERVICE-PERIOD-01B — `status_raised` meint seither „ein monotoner Fakt
+   * dieser Rechnung wurde angehoben": der Versandstatus und/oder die
+   * Bestätigung des Leistungszeitraums. Bewusst kein eigener Aktionswert: Beide
+   * Fälle verlangen dieselbe Behandlung — den Merge übernehmen und speichern.
+   */
   | { ok: true; invoice: VorgangInvoice; action: 'inserted' | 'noop' | 'status_raised' }
   | {
       ok: false;
@@ -1548,11 +1554,34 @@ export function applyFinalizedInvoiceToVorgang(
     }
 
     const raisedStatus = resolveMonotonicInvoiceStatus(byId.status, invoice.status);
-    if (raisedStatus === byId.status) {
+
+    /*
+     * FINALIZED-INVOICE-PDF-SERVICE-PERIOD-01B — die Bestätigung des
+     * Leistungszeitraums ist ein **monotones** Faktum und wird wie der Status
+     * angehoben, nie gesenkt.
+     *
+     * Nötig, weil sie bewusst nicht im `immutableInvoiceFingerprint` liegt: Eine
+     * alte Cloud-Zeile ohne das Feld gilt oben als inhaltsgleich und käme sonst
+     * hier durch und würde ein lokales `true` verschlucken. Umgekehrt muss ein
+     * auf einem anderen Gerät bestätigtes `true` eine lokale Rechnung ohne das
+     * Feld erreichen.
+     *
+     * `false` senkt ein bestehendes `true` ausdrücklich nicht: Wer einmal
+     * bestätigt hat, hat bestätigt — ein Widerruf ist keine Merge-Operation.
+     */
+    const raisedConfirmation =
+      byId.servicePeriodConfirmed === true || invoice.servicePeriodConfirmed === true
+        ? true
+        : byId.servicePeriodConfirmed;
+
+    if (raisedStatus === byId.status && raisedConfirmation === byId.servicePeriodConfirmed) {
       return { ok: true, invoice: { ...byId }, action: 'noop', vorgang: next };
     }
 
     const updated: VorgangInvoice = { ...byId, status: raisedStatus };
+    if (raisedConfirmation !== undefined) {
+      updated.servicePeriodConfirmed = raisedConfirmation;
+    }
     next.invoices = next.invoices.map((item) => (item.id === updated.id ? updated : item));
     return { ok: true, invoice: { ...updated }, action: 'status_raised', vorgang: next };
   }

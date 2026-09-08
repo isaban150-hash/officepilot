@@ -826,6 +826,14 @@ export function buildInvoiceFinalizationCandidate(
     issueDate,
     servicePeriodFrom: draft.servicePeriodFrom,
     servicePeriodTo: draft.servicePeriodTo,
+    /*
+     * FINALIZED-INVOICE-PDF-SERVICE-PERIOD-01B — die Bestätigung wird exakt
+     * übernommen, nie abgeleitet. Der Freigabe-Gate oben hat sie bereits
+     * erzwungen; hier wird sie nur haltbar gemacht, damit der PDF-Pfad die
+     * Entscheidung später nicht erneut erfragen muss. Ein Rückschluss aus
+     * `servicePeriodFrom/To`, `issueDate`, Typ oder Status wäre geraten.
+     */
+    servicePeriodConfirmed: draft.servicePeriodConfirmed,
     paymentDueDate: draft.paymentDueDate,
     paymentTermsText: draft.paymentTermsText,
     skontoText: draft.skontoText,

@@ -56,6 +56,8 @@ function createPreparedInvoice(overrides: Partial<VorgangInvoice> = {}): Vorgang
     issueDate: '2026-06-01',
     servicePeriodFrom: '2026-05-01',
     servicePeriodTo: '2026-05-31',
+    // SERVICE-PERIOD-01B — eine freigegebene Rechnung trägt das Approval-Faktum.
+    servicePeriodConfirmed: true,
     paymentDueDate: '2026-06-10',
     paymentTermsText: '14 Tage',
     skontoText: '',

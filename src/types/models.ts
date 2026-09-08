@@ -1104,6 +1104,26 @@ export interface VorgangInvoice {
   issueDate?: string;
   servicePeriodFrom?: string;
   servicePeriodTo?: string;
+  /**
+   * FINALIZED-INVOICE-PDF-SERVICE-PERIOD-01B — der Leistungszeitraum wurde bei
+   * der Freigabe ausdrücklich bestätigt.
+   *
+   * Optional, weil Rechnungen aus der Zeit vor diesem Feld es nicht tragen und
+   * weiterhin gültig bleiben. Die Abwesenheit ist kein Mangel der Rechnung,
+   * sondern fehlendes Wissen über ihre Entstehung.
+   *
+   * `true`     — bestätigtes Faktum, dauerhaft Teil des Rechnungs-Snapshots.
+   * `false`    — ausdrücklich nicht bestätigt.
+   * `undefined`— historisch unbekannt. Gilt als **nicht** bestätigt: Es gibt
+   *              kein persistiertes Merkmal, aus dem sich rekonstruieren liesse,
+   *              ob der verpflichtende Gate je gelaufen ist. Kein Default `true`,
+   *              keine Ableitung aus Datum, Typ oder Status.
+   *
+   * Approval-Faktum, nicht Belegtext: gehört ausdrücklich **nicht** in
+   * `immutableInvoiceFingerprint` oder `buildInvoiceContentFingerprintFromInvoice`.
+   * Zwei Rechnungen, die sich nur hierin unterscheiden, sind derselbe Beleg.
+   */
+  servicePeriodConfirmed?: boolean;
   paymentDueDate?: string;
   paymentTermsText?: string;
   skontoText?: string;
