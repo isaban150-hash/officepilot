@@ -2179,6 +2179,16 @@ const deLegacy = {
   'invoice.validation.servicePeriodOrder':
     'Das Ende des Leistungszeitraums darf nicht vor dem Beginn liegen.',
   'invoice.confirmServicePeriod': 'Zeitraum bestätigen',
+  // LEGACY-INVOICE-SERVICE-PERIOD-RECOVERY-01B
+  'invoice.servicePeriodRecoveryTitle': 'Leistungszeitraum bestätigen',
+  'invoice.servicePeriodRecoveryHint':
+    'Diese ältere Rechnung enthält noch keine gespeicherte Bestätigung des Leistungszeitraums. Bitte prüfen Sie den Zeitraum und bestätigen Sie ihn, bevor Sie den Beleg ausgeben.',
+  'invoice.servicePeriodLabel': 'Leistungszeitraum',
+  'invoice.servicePeriodCloudPending':
+    'Der Leistungszeitraum ist auf diesem Gerät bestätigt, die Bestätigung wurde aber noch nicht online gesichert.',
+  'invoice.servicePeriodSecureNow': 'Jetzt sichern',
+  'invoice.servicePeriodConfirmFailed':
+    'Die Bestätigung konnte nicht gespeichert werden. Bitte erneut versuchen.',
   'invoice.servicePeriodFrom': 'Leistungszeitraum von',
   'invoice.servicePeriodTo': 'Leistungszeitraum bis',
   'invoice.validation.paymentDueDate': 'Zahlungsziel fehlt oder ist ungültig.',
@@ -4503,6 +4513,16 @@ const trLegacy: Partial<Record<keyof typeof de, string>> = {
   'invoice.validation.servicePeriodOrder':
     'Hizmet döneminin bitişi başlangıcından önce olamaz.',
   'invoice.confirmServicePeriod': 'Dönemi onayla',
+  // LEGACY-INVOICE-SERVICE-PERIOD-RECOVERY-01B
+  'invoice.servicePeriodRecoveryTitle': 'Hizmet dönemini onayla',
+  'invoice.servicePeriodRecoveryHint':
+    'Bu eski faturada hizmet dönemi için kayıtlı bir onay yok. Lütfen dönemi kontrol edin ve belgeyi çıkarmadan önce onaylayın.',
+  'invoice.servicePeriodLabel': 'Hizmet dönemi',
+  'invoice.servicePeriodCloudPending':
+    'Hizmet dönemi bu cihazda onaylandı, ancak onay henüz çevrimiçi olarak kaydedilmedi.',
+  'invoice.servicePeriodSecureNow': 'Şimdi kaydet',
+  'invoice.servicePeriodConfirmFailed':
+    'Onay kaydedilemedi. Lütfen tekrar deneyin.',
   'invoice.servicePeriodFrom': 'Hizmet dönemi başlangıcı',
   'invoice.servicePeriodTo': 'Hizmet dönemi bitişi',
   'invoice.validation.paymentDueDate': 'Vade tarihi eksik veya geçersiz.',
@@ -5353,6 +5373,16 @@ const bgLegacy: Partial<Record<keyof typeof de, string>> = {
   'invoice.validation.servicePeriodOrder':
     'Краят на периода на изпълнение не може да бъде преди началото.',
   'invoice.confirmServicePeriod': 'Потвърди периода',
+  // LEGACY-INVOICE-SERVICE-PERIOD-RECOVERY-01B
+  'invoice.servicePeriodRecoveryTitle': 'Потвърждаване на периода на изпълнение',
+  'invoice.servicePeriodRecoveryHint':
+    'Тази по-стара фактура още няма запазено потвърждение на периода на изпълнение. Моля, проверете периода и го потвърдете, преди да издадете документа.',
+  'invoice.servicePeriodLabel': 'Период на изпълнение',
+  'invoice.servicePeriodCloudPending':
+    'Периодът на изпълнение е потвърден на това устройство, но потвърждението още не е запазено онлайн.',
+  'invoice.servicePeriodSecureNow': 'Запази сега',
+  'invoice.servicePeriodConfirmFailed':
+    'Потвърждението не можа да бъде запазено. Моля, опитайте отново.',
   'invoice.servicePeriodFrom': 'Период на изпълнение от',
   'invoice.servicePeriodTo': 'Период на изпълнение до',
   'invoice.validation.paymentDueDate': 'Срокът за плащане липсва или е невалиден.',

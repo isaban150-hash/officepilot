@@ -5,7 +5,8 @@ import {
   downloadInvoicePdfBytes,
   generateApprovedInvoicePdf,
 } from '../../services/invoicePdfService';
-import { printInvoice } from '../../services/invoicePrintService';
+import * as invoicePrintService from '../../services/invoicePrintService';
+import { validateFinalizedInvoiceForPdf } from '../../services/invoiceValidationService';
 import type { InvoicePrintModel, VorgangInvoice } from '../../types/models';
 import type { TranslationKey } from '../../i18n';
 
@@ -65,6 +66,28 @@ export function InvoicePrintActions({
     }
   };
 
+  /**
+   * LEGACY-INVOICE-SERVICE-PERIOD-RECOVERY-01B — Druck und PDF an derselben Grenze.
+   *
+   * Bisher rief „Drucken" unmittelbar `window.print()` auf und umging damit
+   * jede Prüfung. Eine Rechnung, für die der PDF-Pfad `service_period_unconfirmed`
+   * meldete, liess sich über den Druckdialog trotzdem als Beleg ausgeben — und
+   * in Safari sogar als PDF sichern. Der Gate war damit eine Empfehlung.
+   *
+   * Bewusst **keine** eigene Prüfung und keine Abfrage auf einen einzelnen
+   * Fehlercode: Es gilt derselbe zentrale Validator wie für das PDF, mit allen
+   * seinen Blockern. Was der eine Weg verweigert, verweigert auch der andere.
+   */
+  const runPrint = (): void => {
+    setPdfError(null);
+    const validation = validateFinalizedInvoiceForPdf(invoiceRef.current);
+    if (validation.blockingErrors.length > 0) {
+      setPdfError(translate('invoice.pdf.error'));
+      return;
+    }
+    invoicePrintService.printInvoice({ title });
+  };
+
   useEffect(() => {
     if (!autoDownloadPdf || autoStartedRef.current) return;
     autoStartedRef.current = true;
@@ -76,7 +99,7 @@ export function InvoicePrintActions({
     <div className={`invoice-print-actions invoice-print-actions--${layout}`}>
       <Button
         type="button"
-        onClick={() => printInvoice({ title })}
+        onClick={runPrint}
         data-testid="invoice-print"
       >
         {translate('invoice.print')}

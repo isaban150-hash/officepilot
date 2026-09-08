@@ -35,6 +35,9 @@ import { getLastPersistSuccess } from '../services/persistenceService';
 import { printInvoice } from '../services/invoicePrintService';
 import { getVorgangById, getVorgangInvoice } from '../services/vorgangService';
 import { InvoiceSentPanel } from '../components/invoice/InvoiceSentPanel';
+import { InvoiceServicePeriodConfirmPanel } from '../components/invoice/InvoiceServicePeriodConfirmPanel';
+import { readInvoiceServicePeriodConfirmationFromCloud } from '../services/invoice/invoiceServicePeriodConfirmService';
+import { validateFinalizedInvoiceForPdf } from '../services/invoiceValidationService';
 import type { VorgangInvoice } from '../types/models';
 import type { TranslationKey } from '../i18n';
 
@@ -70,12 +73,57 @@ export function InvoiceDetailPage() {
   }, [invoice]);
 
   useEffect(() => {
-    if (!printModel) return;
+    if (!printModel || !invoice) return;
     const auto = searchParams.get('auto');
-    if (auto === 'print') {
-      printInvoice({ title: buildPrintTitle(printModel) });
+    if (auto !== 'print') return;
+    /*
+     * LEGACY-INVOICE-SERVICE-PERIOD-RECOVERY-01B — auch der Direktaufruf über
+     * `?auto=print` läuft durch denselben Validator wie das PDF. Ein Link darf
+     * kein Weg an einer Prüfung vorbei sein.
+     */
+    if (validateFinalizedInvoiceForPdf(invoice).blockingErrors.length > 0) return;
+    printInvoice({ title: buildPrintTitle(printModel) });
+  }, [printModel, invoice, searchParams]);
+
+  /**
+   * LEGACY-INVOICE-SERVICE-PERIOD-RECOVERY-01B — der zuletzt bewiesene
+   * Cloud-Stand der Leistungszeitraum-Bestätigung.
+   *
+   * `null` heißt „unbekannt" und ist der Ausgangszustand. Gelesen wird nur,
+   * wenn lokal überhaupt etwas zu sichern ist — eine unbestätigte Rechnung
+   * braucht Recovery, keinen Abgleich. Bewusst kein gespeicherter Marker: Der
+   * Zustand entsteht jedes Mal neu aus lokalem Wert plus Einzelread und kann
+   * deshalb auch nach einem Neustart nicht verloren gehen.
+   */
+  const [servicePeriodCloudConfirmed, setServicePeriodCloudConfirmed] = useState<boolean | null>(
+    null,
+  );
+
+  const localServicePeriodConfirmed = invoice?.servicePeriodConfirmed === true;
+
+  useEffect(() => {
+    if (!invoiceId || !localServicePeriodConfirmed) {
+      setServicePeriodCloudConfirmed(null);
+      return;
     }
-  }, [printModel, searchParams]);
+    let cancelled = false;
+    void readInvoiceServicePeriodConfirmationFromCloud(invoiceId).then((state) => {
+      if (cancelled) return;
+      /*
+       * Weder „gesichert" noch „nicht gesichert" ohne Beweis. `missing`,
+       * `unknown` und `not_configured` führen alle zu `null`: Im ersten Fall
+       * gibt es nichts zu ergänzen, in den anderen keinen Beweis — in keinem
+       * darf ein Sicherungsknopf erscheinen (01B2).
+       */
+      setServicePeriodCloudConfirmed(
+        state === 'confirmed' ? true : state === 'not_confirmed' ? false : null,
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
+    // Nach einer Sicherung meldet das Panel den neuen Stand selbst — kein Neulesen nötig.
+  }, [invoiceId, localServicePeriodConfirmed]);
 
   const handlePaymentSaved = (updated: VorgangInvoice) => {
     setInvoice(updated);
@@ -228,6 +276,19 @@ export function InvoiceDetailPage() {
 
   const primaryActions = (
     <>
+      {/*
+        * LEGACY-INVOICE-SERVICE-PERIOD-RECOVERY-01B — vor den Ausgabeaktionen:
+        * Solange der Leistungszeitraum unbestätigt ist, sind Druck und PDF
+        * gesperrt, und hier steht der Weg, das zu ändern.
+        */}
+      <InvoiceServicePeriodConfirmPanel
+        vorgangId={vorgangId}
+        invoice={invoice}
+        cloudConfirmed={servicePeriodCloudConfirmed}
+        translate={translate}
+        onUpdated={setInvoice}
+        onCloudStateChange={setServicePeriodCloudConfirmed}
+      />
       <InvoicePrintActions
         invoice={invoice}
         model={printModel}

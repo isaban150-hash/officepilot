@@ -698,6 +698,146 @@ export async function rpcUpdateWorkspaceInvoiceSent(
   return mapWorkspaceInvoicePullRowToVorgangInvoice(parsed);
 }
 
+/** LEGACY-INVOICE-SERVICE-PERIOD-RECOVERY-01B — Workspace + Rechnung, sonst nichts. */
+export interface WorkspaceInvoiceServicePeriodInput {
+  workspaceId: string;
+  /** Stabile Client-Kennung — nie die Rechnungsnummer. */
+  clientInvoiceId: string;
+}
+
+function assertServicePeriodInput(input: WorkspaceInvoiceServicePeriodInput): void {
+  if (!input.workspaceId.trim()) {
+    throw new WorkspaceInvoiceCloudError('workspace_id fehlt', 'validation', false);
+  }
+  if (!input.clientInvoiceId.trim()) {
+    throw new WorkspaceInvoiceCloudError('client_invoice_id fehlt', 'validation', false);
+  }
+}
+
+/**
+ * LEGACY-INVOICE-SERVICE-PERIOD-RECOVERY-01B — sichert die vom Nutzer
+ * ausgesprochene Bestätigung des Leistungszeitraums dauerhaft.
+ *
+ * Übertragen wird **kein** Wert, nur die Rechnung: Die Aktion selbst bedeutet
+ * „bestätigen". Damit kann über diesen Weg serverseitig weder `false` noch
+ * `null` geschrieben und keine bestehende Bestätigung zurückgenommen werden.
+ *
+ * Der Erfolgsbegriff folgt 04B1U: Eine Antwort beweist die Mutation erst,
+ * wenn sie genau diese Rechnung mit gesetzter Bestätigung zeigt. Ein „die RPC
+ * hat nicht geworfen" genügt nicht — genau daran ist der Sent-Pfad einmal
+ * zwei Sprints lang unbemerkt vorbeigelaufen.
+ */
+export async function rpcConfirmWorkspaceInvoiceServicePeriod(
+  input: WorkspaceInvoiceServicePeriodInput,
+  options?: { client?: SupabaseClient | null },
+): Promise<MappedWorkspaceInvoicePull> {
+  assertServicePeriodInput(input);
+
+  let data: unknown;
+  try {
+    const supabase = getClient(options?.client);
+    const response = await supabase.rpc('confirm_workspace_invoice_service_period', {
+      p_workspace_id: input.workspaceId,
+      p_client_invoice_id: input.clientInvoiceId,
+    });
+    if (response.error) {
+      throw classifyInvoiceCloudError(response.error);
+    }
+    data = response.data;
+  } catch (error) {
+    if (error instanceof WorkspaceInvoiceCloudError) throw error;
+    throw classifyInvoiceCloudError(
+      error instanceof Error ? { message: error.message } : { message: 'Unbekannter Fehler' },
+    );
+  }
+
+  const rows = Array.isArray(data) ? data : [data];
+  if (rows.length !== 1) {
+    throw new WorkspaceInvoiceCloudError(
+      'Bestätigung hat keine eindeutige Zeile geliefert',
+      'validation',
+      false,
+    );
+  }
+
+  const parsed = parseWorkspaceInvoicePullRow(rows[0]);
+  if (
+    !parsed ||
+    parsed.workspace_id !== input.workspaceId ||
+    parsed.client_invoice_id !== input.clientInvoiceId ||
+    parsed.payload.servicePeriodConfirmed !== true
+  ) {
+    throw new WorkspaceInvoiceCloudError(
+      'Bestätigung wurde von der Cloud nicht bestätigt',
+      'validation',
+      false,
+    );
+  }
+
+  return mapWorkspaceInvoicePullRowToVorgangInvoice(parsed);
+}
+
+/** Ergebnis des schmalen Einzelreads — bewusst ohne Rechnungsinhalt. */
+export interface WorkspaceInvoiceServicePeriodConfirmationState {
+  found: boolean;
+  confirmed: boolean;
+}
+
+/**
+ * LEGACY-INVOICE-SERVICE-PERIOD-RECOVERY-01B — liest **nur** den
+ * Bestätigungszustand einer einzelnen Rechnung.
+ *
+ * Ausdrücklich kein `pull_workspace_invoices`: Für die Prüfung eines einzigen
+ * Booleans den gesamten Rechnungsbestand eines Workspace zu übertragen, wäre
+ * ein O(N)-Transfer für eine O(1)-Frage.
+ *
+ * Nur ein echtes `true` zählt als bestätigt. Ein fehlender Schlüssel, `null`
+ * und jeder Nicht-Boolean ergeben `false` — der Zustand „unbekannt" entsteht
+ * ausschliesslich dadurch, dass dieser Aufruf gar nicht durchkommt, und wird
+ * deshalb als Fehler geworfen und nicht als `false` getarnt.
+ */
+export async function rpcGetWorkspaceInvoiceServicePeriodConfirmation(
+  input: WorkspaceInvoiceServicePeriodInput,
+  options?: { client?: SupabaseClient | null },
+): Promise<WorkspaceInvoiceServicePeriodConfirmationState> {
+  assertServicePeriodInput(input);
+
+  let data: unknown;
+  try {
+    const supabase = getClient(options?.client);
+    const response = await supabase.rpc(
+      'get_workspace_invoice_service_period_confirmation',
+      {
+        p_workspace_id: input.workspaceId,
+        p_client_invoice_id: input.clientInvoiceId,
+      },
+    );
+    if (response.error) {
+      throw classifyInvoiceCloudError(response.error);
+    }
+    data = response.data;
+  } catch (error) {
+    if (error instanceof WorkspaceInvoiceCloudError) throw error;
+    throw classifyInvoiceCloudError(
+      error instanceof Error ? { message: error.message } : { message: 'Unbekannter Fehler' },
+    );
+  }
+
+  if (typeof data !== 'object' || data === null || Array.isArray(data)) {
+    throw new WorkspaceInvoiceCloudError(
+      'Bestätigungsabfrage lieferte keine Antwort',
+      'validation',
+      false,
+    );
+  }
+
+  const raw = data as Record<string, unknown>;
+  return {
+    found: raw.found === true,
+    confirmed: raw.service_period_confirmed === true,
+  };
+}
+
 export async function rpcPullWorkspaceInvoices(
   workspaceId: string,
   options?: { since?: string | null; client?: SupabaseClient | null },

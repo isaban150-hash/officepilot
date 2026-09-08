@@ -1801,6 +1801,66 @@ export function updateInvoiceSentFields(
   return { ok: true, invoice: cloneVorgangInvoice(updatedInvoice) };
 }
 
+/**
+ * LEGACY-INVOICE-SERVICE-PERIOD-RECOVERY-01B — die nachträgliche Bestätigung
+ * des Leistungszeitraums auf einer bereits finalisierten Rechnung.
+ *
+ * Bewusst so schmal wie möglich: Die Funktion nimmt keinen Wert entgegen, weil
+ * es nur eine Richtung gibt. Sie prüft die Fachlage nicht — das tut der
+ * aufrufende Dienst; hier steht ausschliesslich die Schreibgrenze.
+ *
+ * `noop` bedeutet: Die Bestätigung stand bereits, es wurde nichts geschrieben
+ * und keine Persistenz angestossen.
+ */
+export type UpdateInvoiceServicePeriodConfirmationResult =
+  | { ok: true; invoice: VorgangInvoice; action: 'confirmed' | 'noop' }
+  | { ok: false; reason: 'not_found' | 'persist_failed' };
+
+export function updateInvoiceServicePeriodConfirmation(
+  vorgangId: string,
+  invoiceId: string,
+): UpdateInvoiceServicePeriodConfirmationResult {
+  const current = getVorgangInvoice(vorgangId, invoiceId);
+  if (!current) return { ok: false, reason: 'not_found' };
+  if (current.servicePeriodConfirmed === true) {
+    return { ok: true, invoice: current, action: 'noop' };
+  }
+
+  let updatedInvoice: VorgangInvoice | null = null;
+
+  const committed = commitVorgangMutation(vorgangId, (vorgang) => {
+    const index = vorgang.invoices.findIndex((item) => item.id === invoiceId);
+    if (index === -1) return { errorKey: 'invoice.notFound' };
+
+    /*
+     * Genau ein Feld. Alles andere — Zeitraum, Beträge, Positionen, Snapshots,
+     * Versand, Storno, Archivbezug — wird unverändert durchgereicht.
+     */
+    const next: VorgangInvoice = { ...vorgang.invoices[index]!, servicePeriodConfirmed: true };
+    updatedInvoice = next;
+    return {
+      ...vorgang,
+      invoices: [
+        ...vorgang.invoices.slice(0, index),
+        next,
+        ...vorgang.invoices.slice(index + 1),
+      ],
+    };
+  });
+
+  if (!committed.ok) {
+    return {
+      ok: false,
+      reason:
+        committed.errorKey === 'vorgang.notFound' || committed.errorKey === 'invoice.notFound'
+          ? 'not_found'
+          : 'persist_failed',
+    };
+  }
+  if (!updatedInvoice) return { ok: false, reason: 'not_found' };
+  return { ok: true, invoice: cloneVorgangInvoice(updatedInvoice), action: 'confirmed' };
+}
+
 /** PAYMENT-CLOUD-DURABILITY-04B2B — eine Zahlungszeile aus der Cloud. */
 export interface CloudInvoicePaymentEntry {
   clientInvoiceId: string;
