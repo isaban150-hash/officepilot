@@ -96,11 +96,88 @@ function addDays(isoDate: string, days: number): string {
   return date.toISOString().slice(0, 10);
 }
 
-function buildDefaultPaymentTerms(profile: CompanyProfile): string {
-  if (profile.defaultPaymentTerms.trim()) {
-    return profile.defaultPaymentTerms.trim();
+/**
+ * INVOICE-SKONTO-PAYMENT-TERMS-CONSISTENCY-01B — der Basissatz kennt jetzt das
+ * Skonto.
+ *
+ * Realbefund: Auf einer Rechnung standen nebeneinander „Zahlbar innerhalb von
+ * 14 Tagen **ohne Abzug**." und „Bei Zahlung innerhalb von 10 Tagen gewähren
+ * wir 7 % Skonto." Der erste Satz verneint wörtlich, was der zweite gewährt.
+ *
+ * Ursache waren zwei Textbauer, die nichts voneinander wussten: Diese Funktion
+ * las nur `defaultPaymentTerms`/`defaultPaymentDays`, `buildSkontoText` nur die
+ * Skontofelder. Beide landen im selben Entwurf — nebeneinander, ungeprüft.
+ *
+ * Angepasst wird ausschliesslich der **von OfficePilot erzeugte** Standardsatz.
+ * Ein selbst formulierter Text bleibt wortgleich stehen, auch wenn er „ohne
+ * Abzug" enthält: An fremder Prosa wird nicht herumgeschnitten, und eine
+ * Heuristik über beliebige deutsche Sätze wäre in beide Richtungen falsch.
+ */
+function standardPaymentTerms(days: number, withoutDeduction: boolean): string {
+  return withoutDeduction
+    ? `Zahlbar innerhalb von ${days} Tagen ohne Abzug.`
+    : `Zahlbar innerhalb von ${days} Tagen.`;
+}
+
+/**
+ * INVOICE-SKONTO-PAYMENT-TERMS-CONSISTENCY-01B2 — hält Basissatz und Skonto
+ * zusammen, wenn sich der Skontotext ändert.
+ *
+ * Angefasst werden **ausschliesslich** die beiden bekannten Standardsätze. Ein
+ * selbst formulierter Zahlungstext fällt durch beide Vergleiche und bleibt
+ * wortgleich — es wird nicht an fremder Prosa herumgeschnitten und kein „ohne
+ * Abzug" irgendwo herausgesucht.
+ *
+ * Die Regel ist symmetrisch: Kommt Skonto hinzu, verschwindet „ohne Abzug";
+ * fällt es weg, kehrt es zurück. Ohne die zweite Richtung bliebe eine Rechnung
+ * nach dem Ablehnen eines Vertragsangebots stumm darüber, dass sie abzugsfrei
+ * ist.
+ */
+export function reconcilePaymentTermsWithSkonto(
+  paymentTermsText: string,
+  skontoText: string,
+  defaultPaymentDays: number,
+): string {
+  const grantsSkonto = skontoText.trim().length > 0;
+  const current = paymentTermsText.trim();
+
+  if (grantsSkonto && current === standardPaymentTerms(defaultPaymentDays, true)) {
+    return standardPaymentTerms(defaultPaymentDays, false);
   }
-  return `Zahlbar innerhalb von ${profile.defaultPaymentDays} Tagen ohne Abzug.`;
+  if (!grantsSkonto && current === standardPaymentTerms(defaultPaymentDays, false)) {
+    return standardPaymentTerms(defaultPaymentDays, true);
+  }
+  return paymentTermsText;
+}
+
+function buildDefaultPaymentTerms(profile: CompanyProfile): string {
+  const days = profile.defaultPaymentDays;
+  const configured = profile.defaultPaymentTerms.trim();
+
+  /*
+   * Nicht `skontoEnabled` allein: Erst wenn `buildSkontoText` tatsächlich einen
+   * Satz liefert, steht auch einer auf der Rechnung. Ein eingeschalteter
+   * Schalter ohne gültige Prozent-/Tageswerte ergibt keinen Skontosatz — dann
+   * darf der Basissatz sein „ohne Abzug" behalten, sonst verspräche die
+   * Rechnung stillschweigend einen Nachlass, den sie nirgends beziffert.
+   */
+  const grantsSkonto = buildSkontoText(profile).trim().length > 0;
+
+  /*
+   * Herkunftserkennung über den bekannten Standardwortlaut. Der Wert entsteht
+   * an zwei Stellen genau so — als Vorgabe in `companyProfileDefaults` und im
+   * `FirstRunWizard`, der ihn bei geändertem Zahlungsziel neu bildet.
+   *
+   * Bewusst kein Herkunftsfeld im `CompanyProfile`: Das wäre eine
+   * Modellerweiterung für einen Textvergleich. Das Restrisiko ist benannt —
+   * wer den Vorgabesatz bewusst wortgleich selbst eingetippt hat, wird wie der
+   * Standard behandelt. Die Anpassung ist dann trotzdem die fachlich richtige.
+   */
+  if (configured && configured !== standardPaymentTerms(days, true)) {
+    return configured;
+  }
+
+  return standardPaymentTerms(days, !grantsSkonto);
 }
 
 export function getPreviousAbschlagDeductions(vorgang: Vorgang): AbschlagDeduction[] {
@@ -621,7 +698,28 @@ export function updateInvoiceDraftMetadata(
   }
   if (changes.paymentDueDate !== undefined) next.paymentDueDate = changes.paymentDueDate;
   if (changes.paymentTermsText !== undefined) next.paymentTermsText = changes.paymentTermsText;
-  if (changes.skontoText !== undefined) next.skontoText = changes.skontoText;
+  if (changes.skontoText !== undefined) {
+    next.skontoText = changes.skontoText;
+    /*
+     * INVOICE-SKONTO-PAYMENT-TERMS-CONSISTENCY-01B2 — der Basissatz folgt dem
+     * Skonto auch dann, wenn es erst später dazukommt.
+     *
+     * 01B hat den Widerspruch beim **Aufbau** des Entwurfs behoben. Das reicht
+     * für den Firmenstandard, nicht aber für das Vertragsskonto: Der Nutzer
+     * nimmt das Angebot des Werkvertrags erst auf der Rechnungsseite an, und
+     * `skontoText` wird hier nachgetragen — der Basissatz stand da längst.
+     *
+     * Deshalb wird er genau dann mitgeführt, wenn sich der Skontotext ändert.
+     * Symmetrisch in beide Richtungen: Wer das Angebot wieder ablehnt, bekommt
+     * seinen abzugsfreien Satz zurück. Alles andere bleibt unberührt —
+     * insbesondere ein selbst formulierter Zahlungstext.
+     */
+    next.paymentTermsText = reconcilePaymentTermsWithSkonto(
+      next.paymentTermsText,
+      next.skontoText,
+      next.companySnapshot.defaultPaymentDays,
+    );
+  }
   if (changes.introText !== undefined) next.introText = changes.introText;
   if (changes.closingText !== undefined) next.closingText = changes.closingText;
   if (changes.projectTitle !== undefined) next.vorgangTitle = changes.projectTitle;
