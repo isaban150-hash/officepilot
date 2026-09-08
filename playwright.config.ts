@@ -34,7 +34,11 @@ export default defineConfig({
    * `playwright.cloud.config.ts`; hier würden sie zwangsläufig scheitern und
    * einen grünen Beta-Lauf rot färben.
    */
-  testIgnore: [/auth\.setup\.ts/, /cloudSession\.spec\.ts/],
+  testIgnore: [
+    /auth\.setup\.ts/,
+    /cloudSession\.spec\.ts/,
+    /cloudReadOnlyVorgang\.spec\.ts/,
+  ],
   /* Ein Pilot — Parallelität bringt hier nichts und macht den Lauf unruhig. */
   workers: 1,
   fullyParallel: false,
