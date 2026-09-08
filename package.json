@@ -17,7 +17,10 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test --project=smoke",
     "test:e2e:live": "playwright test --project=live",
-    "test:e2e:debug": "playwright test --project=live --debug"
+    "test:e2e:debug": "playwright test --project=live --debug",
+    "test:e2e:auth": "playwright test --config=playwright.cloud.config.ts --project=auth-setup",
+    "test:e2e:cloud": "playwright test --config=playwright.cloud.config.ts --project=cloud",
+    "test:e2e:cloud:live": "playwright test --config=playwright.cloud.config.ts --project=cloud-live"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.2",

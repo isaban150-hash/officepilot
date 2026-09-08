@@ -26,6 +26,15 @@ const PORT = Number(process.env.E2E_PORT ?? 5199);
 
 export default defineConfig({
   testDir: './tests/e2e',
+  /*
+   * OFFICEPILOT-LIVE-AGENT-CLOUD-TEST-01B — der Beta-Pfad kennt keine Cloud.
+   *
+   * Diese Konfiguration startet Vite mit `--mode e2e` und damit ohne
+   * Supabase-Schlüssel. Die Cloud-Spezifikationen laufen ausschliesslich über
+   * `playwright.cloud.config.ts`; hier würden sie zwangsläufig scheitern und
+   * einen grünen Beta-Lauf rot färben.
+   */
+  testIgnore: [/auth\.setup\.ts/, /cloudSession\.spec\.ts/],
   /* Ein Pilot — Parallelität bringt hier nichts und macht den Lauf unruhig. */
   workers: 1,
   fullyParallel: false,
