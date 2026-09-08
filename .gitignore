@@ -7,3 +7,15 @@ dist
 supabase/.temp
 .vercel
 .env*
+
+# LIVE-AGENT-TEST-HARNESS-01B — Ausnahme: bewusst secret-freie E2E-Umgebung.
+# Enthält ausschliesslich VITE_BETA_TEST_MODE=true, keine Zugangsdaten.
+!.env.e2e
+
+# Playwright — lokale Läufe, Belege und Sitzungszustand.
+# `playwright/.auth/` ist heute leer und wird erst mit dem Cloud-Block gefüllt;
+# der Eintrag steht vorher da, damit ein Sitzungstoken gar nicht erst
+# versehentlich committed werden kann.
+test-results/
+playwright-report/
+playwright/.auth/
