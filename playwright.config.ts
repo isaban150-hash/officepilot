@@ -39,6 +39,9 @@ export default defineConfig({
     /cloudSession\.spec\.ts/,
     /cloudReadOnlyVorgang\.spec\.ts/,
     /cloudReadOnlyInvoice\.spec\.ts/,
+    /* WRITE-GATE-01B: beide setzen eine echte Cloud-Sitzung voraus. */
+    /authorizeCloudWriteWorkspace\.setup\.ts/,
+    /cloudWriteGate\.spec\.ts/,
   ],
   /* Ein Pilot — Parallelität bringt hier nichts und macht den Lauf unruhig. */
   workers: 1,

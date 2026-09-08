@@ -35,6 +35,25 @@ export default defineConfig({
   /* Nur Testnamen, keine Daten. */
   reporter: [['list']],
 
+  /*
+   * WRITE-GATE-01B2 — Ausgabehygiene.
+   *
+   * Playwright legt zu jedem fehlgeschlagenen Test einen `error-context.md` mit
+   * einem Accessibility-Abbild der Seite ab. Das geschieht **unabhängig** von
+   * `trace`, `screenshot` und `video` — die drei unten abzuschalten genügt also
+   * nicht, um Geschäftsdaten von der Platte fernzuhalten.
+   *
+   * `preserveOutput: 'never'` räumt das Verzeichnis nach jedem Lauf leer. Der
+   * eigene Unterpfad hält Testausgabe und die Sitzungsdateien unter
+   * `playwright/.auth/` strikt getrennt — dort darf nie automatisch aufgeräumt
+   * werden.
+   *
+   * Zweite Verteidigungslinie, nicht die erste: Das Gate räumt die Seite schon
+   * vor dem Fehler ab (`sanitizePage`), damit gar nichts Sensibles entsteht.
+   */
+  preserveOutput: 'never',
+  outputDir: 'test-results/cloud',
+
   use: {
     baseURL: `http://localhost:${PORT}`,
     channel: 'msedge',
@@ -79,6 +98,27 @@ export default defineConfig({
         launchOptions: { slowMo: 700 },
         storageState: CLOUD_AUTH_STATE,
       },
+    },
+    {
+      /*
+       * OFFICEPILOT-E2E-CLOUD-WRITE-GATE-01B — die einmalige Autorisierung.
+       *
+       * Ausdrücklich **ohne** `dependencies`, und kein anderes Projekt hängt an
+       * ihm. Ein Gate, das sich selbst die Erlaubnis ausstellen kann, ist kein
+       * Gate.
+       */
+      name: 'write-authorize',
+      testMatch: /authorizeCloudWriteWorkspace\.setup\.ts/,
+      use: { headless: true, storageState: CLOUD_AUTH_STATE },
+    },
+    {
+      /*
+       * Nachweis des Gates. Schreibt keine fachlichen Cloud-Daten und löst
+       * niemals eine Autorisierung aus — fehlt sie, wird rot.
+       */
+      name: 'write-gate',
+      testMatch: /cloudWriteGate\.spec\.ts/,
+      use: { headless: true, storageState: CLOUD_AUTH_STATE },
     },
   ],
 

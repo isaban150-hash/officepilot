@@ -20,7 +20,9 @@
     "test:e2e:debug": "playwright test --project=live --debug",
     "test:e2e:auth": "playwright test --config=playwright.cloud.config.ts --project=auth-setup",
     "test:e2e:cloud": "playwright test --config=playwright.cloud.config.ts --project=cloud",
-    "test:e2e:cloud:live": "playwright test --config=playwright.cloud.config.ts --project=cloud-live"
+    "test:e2e:cloud:live": "playwright test --config=playwright.cloud.config.ts --project=cloud-live",
+    "test:e2e:authorize-write-workspace": "playwright test --config=playwright.cloud.config.ts --project=write-authorize",
+    "test:e2e:cloud-write-gate": "playwright test --config=playwright.cloud.config.ts --project=write-gate"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.2",
