@@ -10,6 +10,10 @@ import {
 } from './invoicePreparedResponseProjection';
 import { validateWorkspaceInvoiceCloudPayload } from './workspaceInvoiceCloudPayloadValidator';
 import { parseBrandingSnapshotFromCloud } from '../branding/brandingSnapshotService';
+import {
+  buildInvoiceSentSnapshot,
+  type InvoiceSentSnapshot,
+} from './invoiceSentSnapshot';
 
 /**
  * CLOUD-ORDER-CHAIN-03A/03B2 – thin binding for finalize + pull workspace invoices.
@@ -696,6 +700,71 @@ export async function rpcUpdateWorkspaceInvoiceSent(
   }
 
   return mapWorkspaceInvoicePullRowToVorgangInvoice(parsed);
+}
+
+/** INVOICE-SENT-CLOUD-DURABILITY-01B — der Cloud-Versandstand einer Rechnung. */
+export interface WorkspaceInvoiceSentReadResult {
+  /** Existiert die Cloud-Zeile überhaupt? */
+  found: boolean;
+  /** Nur ein **vollständiger** Versandsatz; alles Halbe ist `null`. */
+  snapshot: InvoiceSentSnapshot | null;
+}
+
+/**
+ * INVOICE-SENT-CLOUD-DURABILITY-01B — liest **nur** den Versandzustand einer
+ * einzelnen Rechnung.
+ *
+ * Ausdrücklich kein `pull_workspace_invoices`: Für die Frage nach einer
+ * Rechnung den gesamten Bestand zu übertragen, wäre ein O(N)-Transfer für eine
+ * O(1)-Frage — dieselbe Entscheidung wie beim Leistungszeitraum.
+ *
+ * Die Bewertung „vollständig?" fällt hier im Client über dieselbe Prüfung, die
+ * auch den lokalen Stand bewertet. Ein halber Cloud-Versand — Status gesetzt,
+ * Datum oder Weg fehlt — kommt deshalb als `snapshot: null` zurück und kann
+ * lokal nichts anheben.
+ */
+export async function rpcGetWorkspaceInvoiceSent(
+  input: WorkspaceInvoiceServicePeriodInput,
+  options?: { client?: SupabaseClient | null },
+): Promise<WorkspaceInvoiceSentReadResult> {
+  assertServicePeriodInput(input);
+
+  let data: unknown;
+  try {
+    const supabase = getClient(options?.client);
+    const response = await supabase.rpc('get_workspace_invoice_sent', {
+      p_workspace_id: input.workspaceId,
+      p_client_invoice_id: input.clientInvoiceId,
+    });
+    if (response.error) {
+      throw classifyInvoiceCloudError(response.error);
+    }
+    data = response.data;
+  } catch (error) {
+    if (error instanceof WorkspaceInvoiceCloudError) throw error;
+    throw classifyInvoiceCloudError(
+      error instanceof Error ? { message: error.message } : { message: 'Unbekannter Fehler' },
+    );
+  }
+
+  if (typeof data !== 'object' || data === null || Array.isArray(data)) {
+    throw new WorkspaceInvoiceCloudError(
+      'Versandabfrage lieferte keine Antwort',
+      'validation',
+      false,
+    );
+  }
+
+  const raw = data as Record<string, unknown>;
+  return {
+    found: raw.found === true,
+    snapshot: buildInvoiceSentSnapshot({
+      status: raw.invoice_status,
+      sentAt: raw.sent_at,
+      sentVia: raw.sent_via,
+      sentNote: raw.sent_note,
+    }),
+  };
 }
 
 /** LEGACY-INVOICE-SERVICE-PERIOD-RECOVERY-01B — Workspace + Rechnung, sonst nichts. */

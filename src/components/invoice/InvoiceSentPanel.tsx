@@ -8,8 +8,11 @@ import {
   markInvoiceAsSent,
   syncInvoiceSentToCloud,
   updateInvoiceSentDetails,
+  type InvoiceSentCloudState,
   type InvoiceSentInput,
 } from '../../services/invoiceSentService';
+import { applyInvoiceSentSnapshotFromCloud } from '../../services/vorgangService';
+import type { InvoiceSentSnapshot } from '../../services/invoice/invoiceSentSnapshot';
 import { isSentDateAfterPaymentDue } from '../../services/invoicePaymentService';
 import type { InvoiceSentVia, VorgangInvoice } from '../../types/models';
 import type { TranslationKey } from '../../i18n';
@@ -19,6 +22,13 @@ interface Props {
   invoice: VorgangInvoice;
   translate: (key: TranslationKey) => string;
   onUpdated: (invoice: VorgangInvoice) => void;
+  /**
+   * INVOICE-SENT-CLOUD-DURABILITY-01B — der abgeleitete Cloud-Versandstand.
+   * `null` heisst „noch nicht abgefragt" und wird wie `unknown` behandelt:
+   * kein Beweis, keine Aussage.
+   */
+  cloudState?: InvoiceSentCloudState | null;
+  onCloudStateChange?: (state: InvoiceSentCloudState) => void;
 }
 
 type FormMode = 'closed' | 'mark' | 'correct' | 'confirm-mark' | 'confirm-correct';
@@ -36,7 +46,14 @@ function formatDisplayDate(value: string): string {
   }
 }
 
-export function InvoiceSentPanel({ vorgangId, invoice, translate, onUpdated }: Props) {
+export function InvoiceSentPanel({
+  vorgangId,
+  invoice,
+  translate,
+  onUpdated,
+  cloudState = null,
+  onCloudStateChange,
+}: Props) {
   const [mode, setMode] = useState<FormMode>('closed');
   const [sentAt, setSentAt] = useState(todayIso());
   const [sentVia, setSentVia] = useState<InvoiceSentVia>('email');
@@ -63,6 +80,7 @@ export function InvoiceSentPanel({ vorgangId, invoice, translate, onUpdated }: P
   };
 
   const [cloudWarning, setCloudWarning] = useState(false);
+  const [cloudBusy, setCloudBusy] = useState(false);
 
   const buildInput = (): InvoiceSentInput => ({
     sentAt,
@@ -112,6 +130,13 @@ export function InvoiceSentPanel({ vorgangId, invoice, translate, onUpdated }: P
     void syncInvoiceSentToCloud(vorgangId, invoice.id)
       .then((outcome) => {
         setCloudWarning(!isInvoiceSentCloudSyncSilent(outcome));
+        /*
+         * 01B — nur ein bewiesener Erfolg wird behauptet. Bei jedem anderen
+         * Ausgang bleibt die Aussage aus; der Einzelread beim nächsten Öffnen
+         * unterscheidet dann zuverlässig zwischen `pending`, `conflict` und
+         * `missing`. Der lokale Stand wird nie zurückgenommen.
+         */
+        if (outcome === 'synced') onCloudStateChange?.({ kind: 'synced' });
       })
       /*
        * 04B1S — doppelt abgesichert: Der Dienst ist zwar total, aber ein
@@ -119,6 +144,42 @@ export function InvoiceSentPanel({ vorgangId, invoice, translate, onUpdated }: P
        * durchgehen. Lieber eine Warnung zu viel als ein stiller Verlust.
        */
       .catch(() => setCloudWarning(true));
+  };
+
+  /**
+   * 01B — „Jetzt sichern" und „Lokalen Stand verwenden" sind dieselbe Handlung:
+   * den lokalen Versandsatz über die **bestehende** Write-RPC hochladen. Keine
+   * zweite Mutation, keine Sonderbehandlung.
+   */
+  const secureLocalToCloud = async (): Promise<void> => {
+    if (cloudBusy) return;
+    setCloudBusy(true);
+    setCloudWarning(false);
+    const outcome = await syncInvoiceSentToCloud(vorgangId, invoice.id);
+    if (outcome === 'synced') {
+      onCloudStateChange?.({ kind: 'synced' });
+    } else if (!isInvoiceSentCloudSyncSilent(outcome)) {
+      // Der Hinweis bleibt stehen; der nächste Read entscheidet erneut.
+      setCloudWarning(true);
+    }
+    setCloudBusy(false);
+  };
+
+  /**
+   * 01B — der ausdrücklich gewählte Online-Stand. Kein Cloud-Write nötig: Die
+   * Cloud trägt bereits genau den Stand, den der Nutzer will.
+   */
+  const adoptCloudSnapshot = (snapshot: InvoiceSentSnapshot): void => {
+    if (cloudBusy) return;
+    setCloudBusy(true);
+    const result = applyInvoiceSentSnapshotFromCloud(vorgangId, invoice.id, snapshot);
+    if (result.ok) {
+      onUpdated(result.invoice);
+      onCloudStateChange?.({ kind: 'synced' });
+    } else {
+      setErrorKey('invoice.sent.error.failed');
+    }
+    setCloudBusy(false);
   };
 
   const showForm = mode === 'mark' || mode === 'correct';
@@ -139,6 +200,88 @@ export function InvoiceSentPanel({ vorgangId, invoice, translate, onUpdated }: P
           <p className="invoice-sent-panel__error" data-testid="invoice-sent-cloud-warning">
             {translate('invoice.sent.cloudOnlyLocal')}
           </p>
+        ) : null}
+
+        {/*
+          * 01B — der dauerhaft rekonstruierbare Cloud-Zustand.
+          *
+          * `missing`, `unknown` und `not_configured` zeigen bewusst **nichts**:
+          * Bei der fehlenden Cloud-Zeile kann die Update-RPC nichts ausrichten,
+          * bei den anderen beiden gibt es keinen Beweis. Ein Knopf, der nie
+          * gelingen kann, wäre schlimmer als Schweigen.
+          */}
+        {cloudState?.kind === 'pending' ? (
+          <div className="invoice-sent-panel__cloud" data-testid="invoice-sent-cloud-pending">
+            <p className="invoice-sent-panel__error">{translate('invoice.sent.cloudPending')}</p>
+            <Button
+              type="button"
+              fullWidth
+              disabled={cloudBusy}
+              onClick={() => void secureLocalToCloud()}
+              data-testid="invoice-sent-secure-now"
+            >
+              {translate('invoice.sent.secureNow')}
+            </Button>
+          </div>
+        ) : null}
+
+        {cloudState?.kind === 'conflict' || cloudState?.kind === 'cloud_only' ? (
+          <div className="invoice-sent-panel__cloud" data-testid="invoice-sent-cloud-conflict">
+            <p className="invoice-sent-panel__error">
+              {translate(
+                cloudState.kind === 'conflict'
+                  ? 'invoice.sent.cloudConflict'
+                  : 'invoice.sent.cloudOnlyRemote',
+              )}
+            </p>
+
+            {cloudState.kind === 'conflict' ? (
+              <dl className="invoice-sent-panel__facts" data-testid="invoice-sent-local-side">
+                <div>
+                  <dt>{translate('invoice.sent.localSide')}</dt>
+                  <dd>
+                    {formatDisplayDate(invoice.sentAt ?? '')} ·{' '}
+                    {formatInvoiceSentViaLabel(invoice.sentVia, translate)}
+                    {invoice.sentNote?.trim() ? ` · ${invoice.sentNote}` : ''}
+                  </dd>
+                </div>
+              </dl>
+            ) : null}
+
+            <dl className="invoice-sent-panel__facts" data-testid="invoice-sent-cloud-side">
+              <div>
+                <dt>{translate('invoice.sent.cloudSide')}</dt>
+                <dd>
+                  {formatDisplayDate(cloudState.cloud.sentAt)} ·{' '}
+                  {formatInvoiceSentViaLabel(cloudState.cloud.sentVia, translate)}
+                  {cloudState.cloud.sentNote ? ` · ${cloudState.cloud.sentNote}` : ''}
+                </dd>
+              </div>
+            </dl>
+
+            {cloudState.kind === 'conflict' ? (
+              <Button
+                type="button"
+                fullWidth
+                disabled={cloudBusy}
+                onClick={() => void secureLocalToCloud()}
+                data-testid="invoice-sent-use-local"
+              >
+                {translate('invoice.sent.useLocal')}
+              </Button>
+            ) : null}
+
+            <Button
+              type="button"
+              variant="outline"
+              fullWidth
+              disabled={cloudBusy}
+              onClick={() => adoptCloudSnapshot(cloudState.cloud)}
+              data-testid="invoice-sent-use-cloud"
+            >
+              {translate('invoice.sent.useCloud')}
+            </Button>
+          </div>
         ) : null}
 
         {showLateSentHint && isSent && mode === 'closed' ? (

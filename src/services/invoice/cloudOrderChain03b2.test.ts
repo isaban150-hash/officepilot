@@ -412,15 +412,34 @@ describe('CLOUD-ORDER-CHAIN-03B2 Intent / Status / Fehler', () => {
     if (!applied.ok) return;
     expect(applied.invoice.status).toBe('versendet');
 
+    /*
+     * INVOICE-SENT-CLOUD-DURABILITY-01B — die Anhebung verlangt jetzt einen
+     * **vollständigen** Versandsatz. Zuvor genügte `status: 'versendet'`, und
+     * auf dem Zweitgerät entstand „Versendet — Datum —". Der Status trägt die
+     * Versanddaten mit, oder er wird nicht angehoben.
+     */
     const raise = applyFinalizedInvoiceToVorgang(
+      createTestVorgang({
+        invoices: [{ ...toMapped().invoice, status: 'vorbereitet' }],
+      }),
+      { ...toMapped().invoice, status: 'versendet', sentAt: '2026-09-10', sentVia: 'email' },
+    );
+    expect(raise.ok && raise.action === 'status_raised').toBe(true);
+    if (!raise.ok) return;
+    expect(raise.invoice.status).toBe('versendet');
+    expect(raise.invoice.sentAt).toBe('2026-09-10');
+    expect(raise.invoice.sentVia).toBe('email');
+
+    // Ohne Versanddaten bleibt die Rechnung vorbereitet — fail-closed.
+    const halfRaise = applyFinalizedInvoiceToVorgang(
       createTestVorgang({
         invoices: [{ ...toMapped().invoice, status: 'vorbereitet' }],
       }),
       { ...toMapped().invoice, status: 'versendet' },
     );
-    expect(raise.ok && raise.action === 'status_raised').toBe(true);
-    if (!raise.ok) return;
-    expect(raise.invoice.status).toBe('versendet');
+    expect(halfRaise.ok).toBe(true);
+    if (!halfRaise.ok) return;
+    expect(halfRaise.invoice.status).toBe('vorbereitet');
   });
 
   it('Invoice-RPC-Fehler verwirft Vorgang-Pull nicht', async () => {

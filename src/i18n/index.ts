@@ -2264,6 +2264,18 @@ const deLegacy = {
     'Das Versanddatum liegt nach dem Zahlungsziel ({due}). Die Fälligkeit wird nicht automatisch angepasst.',
   'invoice.sent.cloudOnlyLocal':
     'Der Versandstatus ist auf diesem Gerät gespeichert, konnte aber nicht in die Cloud übertragen werden. Auf anderen Geräten erscheint die Rechnung vorerst weiterhin als vorbereitet.',
+  // INVOICE-SENT-CLOUD-DURABILITY-01B
+  'invoice.sent.cloudPending':
+    'Der Versandstatus ist auf diesem Gerät gespeichert, aber noch nicht online gesichert.',
+  'invoice.sent.secureNow': 'Jetzt sichern',
+  'invoice.sent.cloudConflict':
+    'Der Versandstatus unterscheidet sich von dem, was online gespeichert ist. Bitte wählen Sie, welcher Stand gilt.',
+  'invoice.sent.cloudOnlyRemote':
+    'Online ist bereits ein Versand eingetragen, auf diesem Gerät noch nicht.',
+  'invoice.sent.localSide': 'Auf diesem Gerät',
+  'invoice.sent.cloudSide': 'Online',
+  'invoice.sent.useLocal': 'Stand dieses Geräts verwenden',
+  'invoice.sent.useCloud': 'Online-Stand verwenden',
   'invoice.sent.notSentYet': 'Noch nicht als versendet markiert.',
   'invoice.sent.mark': 'Als versendet markieren',
   'invoice.sent.correct': 'Versandangaben korrigieren',
@@ -4513,6 +4525,18 @@ const trLegacy: Partial<Record<keyof typeof de, string>> = {
   'invoice.validation.servicePeriodOrder':
     'Hizmet döneminin bitişi başlangıcından önce olamaz.',
   'invoice.confirmServicePeriod': 'Dönemi onayla',
+  // INVOICE-SENT-CLOUD-DURABILITY-01B
+  'invoice.sent.cloudPending':
+    'Gönderim durumu bu cihazda kayıtlı, ancak henüz çevrimiçi olarak kaydedilmedi.',
+  'invoice.sent.secureNow': 'Şimdi kaydet',
+  'invoice.sent.cloudConflict':
+    'Gönderim durumu çevrimiçi kayıtlı olandan farklı. Lütfen hangisinin geçerli olacağını seçin.',
+  'invoice.sent.cloudOnlyRemote':
+    'Çevrimiçi bir gönderim kayıtlı, bu cihazda ise henüz yok.',
+  'invoice.sent.localSide': 'Bu cihazda',
+  'invoice.sent.cloudSide': 'Çevrimiçi',
+  'invoice.sent.useLocal': 'Bu cihazdaki durumu kullan',
+  'invoice.sent.useCloud': 'Çevrimiçi durumu kullan',
   // LEGACY-INVOICE-SERVICE-PERIOD-RECOVERY-01B
   'invoice.servicePeriodRecoveryTitle': 'Hizmet dönemini onayla',
   'invoice.servicePeriodRecoveryHint':
@@ -5373,6 +5397,18 @@ const bgLegacy: Partial<Record<keyof typeof de, string>> = {
   'invoice.validation.servicePeriodOrder':
     'Краят на периода на изпълнение не може да бъде преди началото.',
   'invoice.confirmServicePeriod': 'Потвърди периода',
+  // INVOICE-SENT-CLOUD-DURABILITY-01B
+  'invoice.sent.cloudPending':
+    'Статусът на изпращане е запазен на това устройство, но още не е запазен онлайн.',
+  'invoice.sent.secureNow': 'Запази сега',
+  'invoice.sent.cloudConflict':
+    'Статусът на изпращане се различава от запазения онлайн. Моля, изберете кой да важи.',
+  'invoice.sent.cloudOnlyRemote':
+    'Онлайн вече е записано изпращане, а на това устройство още не.',
+  'invoice.sent.localSide': 'На това устройство',
+  'invoice.sent.cloudSide': 'Онлайн',
+  'invoice.sent.useLocal': 'Използвай състоянието на това устройство',
+  'invoice.sent.useCloud': 'Използвай онлайн състоянието',
   // LEGACY-INVOICE-SERVICE-PERIOD-RECOVERY-01B
   'invoice.servicePeriodRecoveryTitle': 'Потвърждаване на периода на изпълнение',
   'invoice.servicePeriodRecoveryHint':

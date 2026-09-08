@@ -35,6 +35,10 @@ import { getLastPersistSuccess } from '../services/persistenceService';
 import { printInvoice } from '../services/invoicePrintService';
 import { getVorgangById, getVorgangInvoice } from '../services/vorgangService';
 import { InvoiceSentPanel } from '../components/invoice/InvoiceSentPanel';
+import {
+  readInvoiceSentStateFromCloud,
+  type InvoiceSentCloudState,
+} from '../services/invoiceSentService';
 import { InvoiceServicePeriodConfirmPanel } from '../components/invoice/InvoiceServicePeriodConfirmPanel';
 import { readInvoiceServicePeriodConfirmationFromCloud } from '../services/invoice/invoiceServicePeriodConfirmService';
 import { validateFinalizedInvoiceForPdf } from '../services/invoiceValidationService';
@@ -124,6 +128,36 @@ export function InvoiceDetailPage() {
     };
     // Nach einer Sicherung meldet das Panel den neuen Stand selbst — kein Neulesen nötig.
   }, [invoiceId, localServicePeriodConfirmed]);
+
+  /**
+   * INVOICE-SENT-CLOUD-DURABILITY-01B — der abgeleitete Cloud-Versandstand.
+   *
+   * Anders als beim Leistungszeitraum wird **immer** gelesen, sobald die
+   * Rechnung finalisiert ist — nicht nur, wenn lokal etwas zu sichern wäre.
+   * Grund: Ein Versand, den es nur in der Cloud gibt, kommt real vor (ein
+   * anderes Gerät hat markiert), und genau dieser Fall wäre sonst unsichtbar.
+   *
+   * Kein gespeicherter Marker: Der Zustand entsteht jedes Mal neu aus lokalem
+   * Versandsatz und Einzelread und überlebt deshalb jeden Neustart.
+   */
+  const [sentCloudState, setSentCloudState] = useState<InvoiceSentCloudState | null>(null);
+  const invoiceFinalized = invoice ? isFinalizedInvoice(invoice) : false;
+
+  useEffect(() => {
+    if (!vorgangId || !invoiceId || !invoiceFinalized) {
+      setSentCloudState(null);
+      return;
+    }
+    let cancelled = false;
+    void readInvoiceSentStateFromCloud(vorgangId, invoiceId).then((state) => {
+      if (!cancelled) setSentCloudState(state);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // Bewusst ohne `invoice`: Die Objektreferenz wechselt bei jedem lokalen
+    // Commit; der Cloud-Stand hängt aber nur an der Rechnung selbst.
+  }, [vorgangId, invoiceId, invoiceFinalized]);
 
   const handlePaymentSaved = (updated: VorgangInvoice) => {
     setInvoice(updated);
@@ -301,6 +335,8 @@ export function InvoiceDetailPage() {
         invoice={invoice}
         translate={translate}
         onUpdated={setInvoice}
+        cloudState={sentCloudState}
+        onCloudStateChange={setSentCloudState}
       />
       {!isInvoiceCancelled(invoice) && (
         <Button type="button" fullWidth onClick={() => setShowPaymentForm(true)}>

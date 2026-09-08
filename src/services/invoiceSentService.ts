@@ -1,4 +1,9 @@
 import { getVorgangInvoice, updateInvoiceSentFields } from './vorgangService';
+import {
+  readInvoiceSentSnapshot,
+  sentSnapshotsEqual,
+  type InvoiceSentSnapshot,
+} from './invoice/invoiceSentSnapshot';
 import type { InvoiceSentVia, VorgangInvoice } from '../types/models';
 import type { TranslationKey } from '../i18n';
 
@@ -217,6 +222,89 @@ export async function syncInvoiceSentToCloud(
     return 'synced';
   } catch {
     return 'failed';
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* INVOICE-SENT-CLOUD-DURABILITY-01B — Reconciliation                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Der abgeleitete Cloud-Zustand des Versands.
+ *
+ * Rekonstruiert bei jedem Öffnen aus zwei persistierten Wahrheiten — lokalem
+ * Versandsatz und Cloud-Einzelread. Deshalb braucht es keinen gespeicherten
+ * Pending-Marker: Es gibt nichts, das ein Neustart verlieren könnte.
+ */
+export type InvoiceSentCloudState =
+  /** Beide Seiten gleich — oder beide ohne Versand. Nichts zu tun. */
+  | { kind: 'synced' }
+  /** Lokal versendet, die Cloud weiss nichts davon. Sicher nachreichbar. */
+  | { kind: 'pending' }
+  /** Beide Seiten versendet, aber verschieden. Nur der Mensch kann entscheiden. */
+  | { kind: 'conflict'; cloud: InvoiceSentSnapshot }
+  /** Nur die Cloud kennt einen Versand — lokal übernehmbar. */
+  | { kind: 'cloud_only'; cloud: InvoiceSentSnapshot }
+  /** Die Cloud kennt diese Rechnung nicht. Nichts zu sichern. */
+  | { kind: 'missing' }
+  /** Kein Beweis in die eine oder andere Richtung. */
+  | { kind: 'unknown' }
+  /** Bewusst lokaler Betrieb. */
+  | { kind: 'not_configured' };
+
+/**
+ * Die Konfliktmatrix, rein und ohne Seiteneffekte.
+ *
+ * ⚠️ Es gibt bewusst **keine** automatische Auflösung bei beidseitigen Werten.
+ * `sentAt` ist das fachliche Versanddatum, das der Nutzer eintippt — kein
+ * Schreibzeitpunkt. Der lokale Speicher kennt auch keine Cloud-`row_version`.
+ * „Der neuere gewinnt" wäre damit geraten, nicht bestimmt, und könnte eine
+ * legitime Korrektur eines anderen Geräts überschreiben.
+ */
+export function deriveInvoiceSentCloudState(
+  local: InvoiceSentSnapshot | null,
+  cloud: { found: boolean; snapshot: InvoiceSentSnapshot | null },
+): InvoiceSentCloudState {
+  if (!cloud.found) return { kind: 'missing' };
+  if (sentSnapshotsEqual(local, cloud.snapshot)) return { kind: 'synced' };
+  if (!local) {
+    // Nur möglich, wenn die Cloud etwas hat — sonst wären beide null gewesen.
+    return { kind: 'cloud_only', cloud: cloud.snapshot! };
+  }
+  if (!cloud.snapshot) return { kind: 'pending' };
+  return { kind: 'conflict', cloud: cloud.snapshot };
+}
+
+/**
+ * Liest den Cloud-Versandstand einer einzelnen Rechnung und leitet den Zustand
+ * ab. Verändert die lokale Rechnung nicht.
+ */
+export async function readInvoiceSentStateFromCloud(
+  vorgangId: string,
+  invoiceId: string,
+): Promise<InvoiceSentCloudState> {
+  try {
+    const invoice = getVorgangInvoice(vorgangId, invoiceId);
+    if (!invoice) return { kind: 'unknown' };
+
+    const { isSupabaseConfigured } = await import('../lib/supabase');
+    if (!isSupabaseConfigured()) return { kind: 'not_configured' };
+
+    const [{ rpcGetWorkspaceInvoiceSent }, { resolveCloudWorkspaceId }, persistence] =
+      await Promise.all([
+        import('./invoice/workspaceInvoiceCloudService'),
+        import('./workspace/workspaceSyncPayloadService'),
+        import('./persistenceService'),
+      ]);
+
+    const workspaceId = resolveCloudWorkspaceId(persistence.buildPersistedStateSnapshot()).trim();
+    if (!workspaceId) return { kind: 'unknown' };
+
+    const cloud = await rpcGetWorkspaceInvoiceSent({ workspaceId, clientInvoiceId: invoice.id });
+    return deriveInvoiceSentCloudState(readInvoiceSentSnapshot(invoice), cloud);
+  } catch {
+    // Kein Beweis, keine Aussage.
+    return { kind: 'unknown' };
   }
 }
 

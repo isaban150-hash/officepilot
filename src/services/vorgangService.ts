@@ -58,6 +58,11 @@ import {
 } from './vorgangLifecycleService';
 import { persistAll } from './persistenceService';
 import {
+  buildInvoiceSentSnapshot,
+  readInvoiceSentSnapshot,
+  type InvoiceSentSnapshot,
+} from './invoice/invoiceSentSnapshot';
+import {
   generateEntityId,
   withTombstonedCloudEntityPreservingRemoteVersion,
   filterSyncActive,
@@ -1556,6 +1561,40 @@ export function applyFinalizedInvoiceToVorgang(
     const raisedStatus = resolveMonotonicInvoiceStatus(byId.status, invoice.status);
 
     /*
+     * INVOICE-SENT-CLOUD-DURABILITY-01B — Versandstatus und Versanddaten
+     * bewegen sich nur **gemeinsam**.
+     *
+     * Bisher hob der Merge den Status monoton auf `versendet` an und liess
+     * `sentAt`/`sentVia` unangetastet. Auf einem Zweitgerät entstand dadurch
+     * „Versendet — Datum —": ein Status ohne die Tatsache, die ihn trägt.
+     *
+     * Neue Regel, in dieser Reihenfolge:
+     *   1. Hat die lokale Rechnung einen vollständigen Versandsatz, gewinnt er.
+     *      Ein abweichender Cloud-Stand wird hier **nicht** aufgelöst — das ist
+     *      Sache der Reconciliation und der ausdrücklichen Nutzerentscheidung.
+     *   2. Sonst darf ein **vollständiger** Cloud-Versandsatz übernommen werden,
+     *      inklusive Status und Notiz.
+     *   3. Ein unvollständiger Cloud-Versand hebt gar nichts an — lieber weiter
+     *      `vorbereitet` als ein halber Versand.
+     */
+    const localSent = readInvoiceSentSnapshot(byId);
+    const cloudSent = readInvoiceSentSnapshot(invoice);
+    let adoptedSent: InvoiceSentSnapshot | null = null;
+    let nextStatus = raisedStatus;
+
+    if (!localSent) {
+      if (cloudSent) {
+        // Deckt zwei Fälle ab: die reguläre Übernahme und die Heilung einer
+        // lokal bereits beschädigten Rechnung (`versendet` ohne Daten).
+        adoptedSent = cloudSent;
+        nextStatus = 'versendet';
+      } else if (raisedStatus === 'versendet') {
+        // Fail-closed: kein Versandsatz, also auch kein Versandstatus.
+        nextStatus = byId.status === 'versendet' ? byId.status : 'vorbereitet';
+      }
+    }
+
+    /*
      * FINALIZED-INVOICE-PDF-SERVICE-PERIOD-01B — die Bestätigung des
      * Leistungszeitraums ist ein **monotones** Faktum und wird wie der Status
      * angehoben, nie gesenkt.
@@ -1574,13 +1613,24 @@ export function applyFinalizedInvoiceToVorgang(
         ? true
         : byId.servicePeriodConfirmed;
 
-    if (raisedStatus === byId.status && raisedConfirmation === byId.servicePeriodConfirmed) {
+    if (
+      nextStatus === byId.status &&
+      raisedConfirmation === byId.servicePeriodConfirmed &&
+      !adoptedSent
+    ) {
       return { ok: true, invoice: { ...byId }, action: 'noop', vorgang: next };
     }
 
-    const updated: VorgangInvoice = { ...byId, status: raisedStatus };
+    const updated: VorgangInvoice = { ...byId, status: nextStatus };
     if (raisedConfirmation !== undefined) {
       updated.servicePeriodConfirmed = raisedConfirmation;
+    }
+    if (adoptedSent) {
+      updated.sentAt = adoptedSent.sentAt;
+      updated.sentVia = adoptedSent.sentVia;
+      // Fehlende Notiz heisst „keine Notiz" — nicht „alte behalten".
+      if (adoptedSent.sentNote) updated.sentNote = adoptedSent.sentNote;
+      else delete updated.sentNote;
     }
     next.invoices = next.invoices.map((item) => (item.id === updated.id ? updated : item));
     return { ok: true, invoice: { ...updated }, action: 'status_raised', vorgang: next };
@@ -1859,6 +1909,67 @@ export function updateInvoiceServicePeriodConfirmation(
   }
   if (!updatedInvoice) return { ok: false, reason: 'not_found' };
   return { ok: true, invoice: cloneVorgangInvoice(updatedInvoice), action: 'confirmed' };
+}
+
+/**
+ * INVOICE-SENT-CLOUD-DURABILITY-01B — übernimmt einen **ausdrücklich gewählten**
+ * Cloud-Versandsatz lokal.
+ *
+ * Wird nur nach einer bewussten Nutzerentscheidung im Konfliktfall aufgerufen.
+ * Sie ändert genau vier Felder und lässt alles andere — Positionen, Beträge,
+ * Steuer, Leistungszeitraum, Kunde, Nummer, Archivbezug, Zahlungen, Branding —
+ * unberührt.
+ */
+export type ApplyInvoiceSentSnapshotResult =
+  | { ok: true; invoice: VorgangInvoice }
+  | { ok: false; reason: 'not_found' | 'invalid_snapshot' | 'persist_failed' };
+
+export function applyInvoiceSentSnapshotFromCloud(
+  vorgangId: string,
+  invoiceId: string,
+  snapshot: InvoiceSentSnapshot,
+): ApplyInvoiceSentSnapshotResult {
+  // Auch der ausdrücklich gewählte Stand muss vollständig sein.
+  const validated = buildInvoiceSentSnapshot({ status: 'versendet', ...snapshot });
+  if (!validated) return { ok: false, reason: 'invalid_snapshot' };
+
+  let updatedInvoice: VorgangInvoice | null = null;
+
+  const committed = commitVorgangMutation(vorgangId, (vorgang) => {
+    const index = vorgang.invoices.findIndex((item) => item.id === invoiceId);
+    if (index === -1) return { errorKey: 'invoice.notFound' };
+
+    const next: VorgangInvoice = {
+      ...vorgang.invoices[index]!,
+      status: 'versendet',
+      sentAt: validated.sentAt,
+      sentVia: validated.sentVia,
+    };
+    if (validated.sentNote) next.sentNote = validated.sentNote;
+    else delete next.sentNote;
+
+    updatedInvoice = next;
+    return {
+      ...vorgang,
+      invoices: [
+        ...vorgang.invoices.slice(0, index),
+        next,
+        ...vorgang.invoices.slice(index + 1),
+      ],
+    };
+  });
+
+  if (!committed.ok) {
+    return {
+      ok: false,
+      reason:
+        committed.errorKey === 'vorgang.notFound' || committed.errorKey === 'invoice.notFound'
+          ? 'not_found'
+          : 'persist_failed',
+    };
+  }
+  if (!updatedInvoice) return { ok: false, reason: 'not_found' };
+  return { ok: true, invoice: cloneVorgangInvoice(updatedInvoice) };
 }
 
 /** PAYMENT-CLOUD-DURABILITY-04B2B — eine Zahlungszeile aus der Cloud. */
