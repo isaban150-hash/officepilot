@@ -38,6 +38,7 @@ export default defineConfig({
     /auth\.setup\.ts/,
     /cloudSession\.spec\.ts/,
     /cloudReadOnlyVorgang\.spec\.ts/,
+    /cloudReadOnlyInvoice\.spec\.ts/,
   ],
   /* Ein Pilot — Parallelität bringt hier nichts und macht den Lauf unruhig. */
   workers: 1,

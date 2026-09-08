@@ -59,13 +59,21 @@ export default defineConfig({
     {
       /* Alltag: nutzt die gespeicherte Sitzung, ohne Fenster. */
       name: 'cloud',
-      testMatch: [/cloudSession\.spec\.ts/, /cloudReadOnlyVorgang\.spec\.ts/],
+      testMatch: [
+        /cloudSession\.spec\.ts/,
+        /cloudReadOnlyVorgang\.spec\.ts/,
+        /cloudReadOnlyInvoice\.spec\.ts/,
+      ],
       use: { headless: true, storageState: CLOUD_AUTH_STATE },
     },
     {
       /* Vorführung desselben Lesetests, sichtbar und langsam. */
       name: 'cloud-live',
-      testMatch: [/cloudSession\.spec\.ts/, /cloudReadOnlyVorgang\.spec\.ts/],
+      testMatch: [
+        /cloudSession\.spec\.ts/,
+        /cloudReadOnlyVorgang\.spec\.ts/,
+        /cloudReadOnlyInvoice\.spec\.ts/,
+      ],
       use: {
         headless: false,
         launchOptions: { slowMo: 700 },
