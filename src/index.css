@@ -4696,6 +4696,15 @@ body {
   }
 
   .app-shell__top,
+  /*
+   * 01B — nachgetragen: Diese Bereiche entstanden nach der ursprünglichen
+   * Liste und wurden deshalb mitgedruckt. Sie bleiben hier ausdrücklich
+   * benannt, damit auch ein Druck über `Strg+P` ohne unsere Body-Klasse sie
+   * nicht zeigt.
+   */
+  .app-shell__search,
+  .sidebar-nav,
+  .persistence-failure-banner,
   .bottom-nav,
   .toast,
   .no-print,
@@ -4762,6 +4771,60 @@ body {
   body.invoice-print-active .page--invoice-detail .invoice-detail__toolbar {
     display: none !important;
   }
+
+  /*
+   * INVOICE-MOBILE-PRINT-RENDERING-01B — Isolation statt Ausschlussliste.
+   *
+   * Die Regeln oben sind eine **Positivliste**: Jede App-Chrome-Komponente
+   * musste einzeln eingetragen werden. Sie ist zwangsläufig veraltet — das
+   * Cloud-Banner, die globale Suche, der Beta-Hinweis und das Safari-Overlay
+   * sind nach ihr entstanden und wurden auf dem iPhone mitgedruckt.
+   *
+   * Deshalb wird im aktiven Rechnungsdruck erst **alles** ausgeblendet und
+   * danach ausschliesslich der Weg zum Rechnungsdokument wieder geöffnet. Eine
+   * künftige Chrome-Komponente ist damit von vornherein draussen, ohne dass
+   * jemand daran denken muss.
+   *
+   * Die Positivliste bleibt bewusst stehen: Sie greift auch beim Druck über
+   * `Strg+P` ohne unsere Body-Klasse.
+   */
+  body.invoice-print-active .app-shell > *,
+  body.invoice-print-active .app-shell__body > *,
+  body.invoice-print-active .page--invoice-detail > * {
+    display: none !important;
+  }
+
+  /*
+   * Der Pfad zurück zum Dokument. Nur diese Kette bleibt sichtbar; sie steht
+   * nach der Ausblendregel und gewinnt deshalb bei gleicher Spezifität.
+   */
+  body.invoice-print-active .app-shell,
+  body.invoice-print-active .app-shell__body,
+  body.invoice-print-active .app-shell__main,
+  body.invoice-print-active .page--invoice-detail,
+  body.invoice-print-active .invoice-print-document {
+    display: block !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: none !important;
+    background: #fff !important;
+  }
+
+  /*
+   * Am Bildschirm verborgen, im Druck sichtbar: Die Sichtbarkeit hängt an CSS,
+   * nicht mehr daran, ob jemand „Mehr anzeigen" geöffnet hat.
+   */
+  .invoice-print-document--screen-hidden {
+    display: block !important;
+  }
+}
+
+/*
+ * Bildschirm: Das Rechnungsdokument bleibt hinter „Mehr anzeigen" — unverändert
+ * zur bisherigen UX. Es ist nur immer im DOM, damit der Druck es findet.
+ */
+.invoice-print-document--screen-hidden {
+  display: none;
 }
 
 .doc-understanding__list,

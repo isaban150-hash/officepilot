@@ -356,10 +356,6 @@ export function InvoiceDetailPage() {
         testIdPrefix="invoice"
       />
 
-      <div className="invoice-detail__document">
-        <InvoiceDocumentView model={printModel} />
-      </div>
-
       <p className="hint-text">{translate('invoice.readOnlyHint')}</p>
     </>
   );
@@ -406,6 +402,29 @@ export function InvoiceDetailPage() {
         >
           {technicalPanels}
         </ShowMoreSection>
+      </div>
+
+      {/*
+        * INVOICE-MOBILE-PRINT-RENDERING-01B — das Rechnungsdokument steht
+        * **ausserhalb** der Werkzeugleiste und **ausserhalb** von
+        * `ShowMoreSection`.
+        *
+        * Beides war nötig: `ShowMoreSection` rendert eingeklappt gar keine
+        * Kinder, und `.invoice-detail__toolbar.no-print` wird im Druck auf
+        * `display:none` gesetzt — ein Nachfahre davon ist unrettbar. Solange
+        * das Dokument dort hing, druckte Safari die App statt der Rechnung.
+        *
+        * Am Bildschirm bleibt die bisherige UX: sichtbar erst über „Mehr
+        * anzeigen". Neu ist nur, dass die **DOM-Präsenz** davon nicht mehr
+        * abhängt — die Sichtbarkeit steuert CSS, nicht das Rendern.
+        */}
+      <div
+        className={`invoice-detail__document invoice-print-document${
+          showDetails ? '' : ' invoice-print-document--screen-hidden'
+        }`}
+        data-testid="invoice-print-document"
+      >
+        <InvoiceDocumentView model={printModel} />
       </div>
 
       <InvoicePaymentForm
