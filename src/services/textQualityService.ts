@@ -27,6 +27,38 @@ export function containsCrypticCharacters(text: string): boolean {
 
 const PDF_OPERATOR_INLINE = /\/(?:Type|Font|Page|XObject|Annots)\b|endobj|endstream|\bxref\b|\bstream\b/i;
 
+/** Zahl mit Dezimal- oder Tausendertrennung: `1.200,00`, `12,50`, `1,000.00`. */
+const FORMATTED_NUMBER = /\d{1,3}(?:[.,]\d{3})*[.,]\d{1,2}\b|\b\d+[.,]\d{1,2}\b/;
+
+/** Alles, was ein Betrag sein kann — mit oder ohne Trennzeichen. */
+const NUMERIC_TOKEN = /(?:[€$£]|\b(?:eur|chf|usd)\b)|\d[\d.,]*/gi;
+
+/**
+ * TEXT-QUALITY-STRUCTURED-NUMERIC-LINES-01B — eine Zahlenzeile ist Inhalt.
+ *
+ * In tabellarischen Belegen steht die tragende Information oft in einer Zeile
+ * ganz ohne Wörter: Einzelpreis und Gesamtpreis einer Position, eine
+ * Summenzeile, eine Mengenspalte. Bis hierher fielen genau diese Zeilen aus
+ * dem Text, weil „lesbar" an mindestens einem Wort hing — und mit ihnen die
+ * Beträge, auf die jede Positionserkennung angewiesen ist.
+ *
+ * Die Schwelle bleibt bewusst hoch: Verlangt werden **zwei** numerische Marken
+ * und **eine erkennbare Betragsform** — ein Dezimal- oder Tausendertrennzeichen
+ * oder ein Währungszeichen. Eine nackte Seitenzahl, eine Jahreszahl oder eine
+ * einzelne Ziffernfolge erfüllt das nicht und gilt weiterhin nicht als Inhalt.
+ */
+export function isStructuredNumericLine(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+
+  const hasCurrency = /[€$£]|\b(?:eur|euro|chf|usd)\b/i.test(trimmed);
+  if (!hasCurrency && !FORMATTED_NUMBER.test(trimmed)) return false;
+
+  NUMERIC_TOKEN.lastIndex = 0;
+  const tokens = trimmed.match(NUMERIC_TOKEN) ?? [];
+  return tokens.length >= 2;
+}
+
 export function isLikelyPdfGarbageChunk(text: string): boolean {
   const trimmed = text.trim();
   if (!trimmed || trimmed.length < 2) return true;
@@ -42,7 +74,14 @@ export function isLikelyPdfGarbageChunk(text: string): boolean {
   const meaningful = letters + digits;
 
   if (meaningful === 0) return true;
-  if (letters === 0 && digits > 0 && trimmed.length > 12) return true;
+  /*
+   * Eine lange Ziffernfolge ohne Buchstaben ist meistens Rauschen — aber nicht,
+   * wenn sie die Form eines Betrags hat. Genau daran scheiterten bisher die
+   * Preiszeilen tabellarischer Belege.
+   */
+  if (letters === 0 && digits > 0 && trimmed.length > 12 && !isStructuredNumericLine(trimmed)) {
+    return true;
+  }
 
   const ratio = meaningful / trimmed.length;
   if (ratio < 0.35 && trimmed.length > 6) return true;
@@ -56,7 +95,8 @@ export function isReadableLine(line: string): boolean {
   if (isLikelyPdfGarbageChunk(trimmed)) return false;
 
   const words = trimmed.match(/[\p{L}]{2,}/gu) ?? [];
-  if (words.length === 0) return false;
+  /* Ohne Wort nur, wenn die Zeile erkennbar Beträge trägt — siehe oben. */
+  if (words.length === 0 && !isStructuredNumericLine(trimmed)) return false;
 
   return !containsCrypticCharacters(trimmed);
 }
