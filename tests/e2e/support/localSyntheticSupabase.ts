@@ -1,4 +1,5 @@
 import type { BrowserContext } from '@playwright/test';
+import type { WorkspaceCompanyIdentity } from './localTestWorldCompany';
 
 /**
  * OFFICEPILOT-LOCAL-E2E-SYNTHETIC-AUTH-PROBE-01B — eine erfundene Cloud.
@@ -165,9 +166,20 @@ function syntheticMemberRow() {
  *
  * Fachbestand bleibt leer: keine Kunden, keine Vorgänge, keine Rechnungen.
  */
-function syntheticSetupPayload() {
+function syntheticSetupPayload(operator?: WorkspaceCompanyIdentity) {
   return {
-    companyName: 'E2E Probe GmbH',
+    /*
+     * Legacy-Spiegel, nicht die Identität: Massgeblich ist
+     * `CompanyProfile.companyName`. Er wird trotzdem mitgezogen, damit nicht
+     * zwei Felder auf zwei verschiedene Firmen zeigen — `isDefaultSetup` und
+     * die Altbestandsrettung lesen diesen Spiegel.
+     */
+    companyName: operator?.companyName ?? 'E2E Probe GmbH',
+    /*
+     * Alle fachlichen Einstellungen bleiben unberührt. Insbesondere
+     * `taxStatus`: Der §13b-Pfad ist eine bewusste Festlegung und wird
+     * niemals aus der Testwelt-Firmendatei abgeleitet.
+     */
     industry: 'Handwerk – Sanitär/Heizung',
     taxStatus: 'standard_19',
     materialStandard: 'betrieb',
@@ -178,7 +190,19 @@ function syntheticSetupPayload() {
   };
 }
 
-function syntheticCompanyProfilePayload() {
+/**
+ * Der Firmenstamm des Workspace.
+ *
+ * Ohne `operator` bleibt es bei der neutralen, frei erfundenen Firma — so
+ * laufen Auth-Probe und Cloud-Guard weiter ohne jede fachliche Identität.
+ *
+ * Mit `operator` übernimmt der Workspace die Betreiberfirma der Testwelt. Das
+ * ist **Stammdatenpflege**, kein Analyseergebnis: Ersetzt werden nur die
+ * Felder, die die Testwelt kennt; alles Übrige — Rechtsform, Ansprechpartner,
+ * Zahlungsbedingungen, Skonto, Fussnoten — bleibt neutral und wird
+ * ausdrücklich **nicht** aus dem Dokumentinhalt abgeleitet.
+ */
+function syntheticCompanyProfilePayload(operator?: WorkspaceCompanyIdentity) {
   return {
     companyName: 'E2E Probe GmbH',
     legalForm: 'GmbH',
@@ -189,6 +213,7 @@ function syntheticCompanyProfilePayload() {
     country: 'Deutschland',
     phone: '030 0000000',
     email: SYNTHETIC_EMAIL,
+    website: '',
     taxNumber: '00/000/00000',
     vatId: 'DE000000000',
     bankName: 'Testbank',
@@ -197,6 +222,7 @@ function syntheticCompanyProfilePayload() {
     defaultPaymentDays: 14,
     defaultPaymentTerms: 'Zahlbar innerhalb von 14 Tagen ohne Abzug.',
     defaultSkonto: '',
+    ...(operator ?? {}),
   };
 }
 
@@ -357,9 +383,23 @@ export async function seedSyntheticSession(context: BrowserContext): Promise<voi
  * macht die Probe rot. Sonst könnte ein unbemerkter Aufruf später gegen eine
  * echte Instanz laufen, sobald jemand die Adresse austauscht.
  */
+export interface SyntheticSupabaseOptions {
+  /**
+   * Wer den Testworkspace betreibt — und **nur** das.
+   *
+   * Bewusst eng typisiert statt eines beliebigen Zustandsobjekts: Über diesen
+   * Weg sollen Betreiber-Stammdaten hereinkommen, niemals Kunden, Vorgänge,
+   * Dokumente, Rechnungen oder sonstige Analyseergebnisse. Ohne die Option
+   * bleibt der Workspace neutral.
+   */
+  operatorCompany?: WorkspaceCompanyIdentity;
+}
+
 export async function installSyntheticSupabase(
   context: BrowserContext,
+  options: SyntheticSupabaseOptions = {},
 ): Promise<SyntheticSupabaseTracker> {
+  const operator = options.operatorCompany;
   const tracker: SyntheticSupabaseTracker = {
     answered: [],
     forbiddenWrites: [],
@@ -505,7 +545,7 @@ export async function installSyntheticSupabase(
         settings: null,
         setup: {
           workspace_id: SYNTHETIC_WORKSPACE_ID,
-          payload: syntheticSetupPayload(),
+          payload: syntheticSetupPayload(operator),
           setup_version: 1,
           row_version: 1,
           updated_at: FIXED_ISO,
@@ -513,7 +553,7 @@ export async function installSyntheticSupabase(
         },
         company_profile: {
           workspace_id: SYNTHETIC_WORKSPACE_ID,
-          payload: syntheticCompanyProfilePayload(),
+          payload: syntheticCompanyProfilePayload(operator),
           row_version: 1,
           updated_at: FIXED_ISO,
           updated_by: SYNTHETIC_USER_ID,

@@ -4,6 +4,7 @@ import {
   seedSyntheticSession,
   type SyntheticSupabaseTracker,
 } from './localSyntheticSupabase';
+import type { WorkspaceCompanyIdentity } from './localTestWorldCompany';
 
 /**
  * OFFICEPILOT-LOCAL-E2E-CLOUD-BLOCK-GUARD-01B — der verbindliche Einstieg für
@@ -20,7 +21,16 @@ import {
  * nie direkt aus `@playwright/test`.
  */
 
-interface LocalFachflowFixtures {
+export interface LocalFachflowFixtures {
+  /**
+   * COMPANY-ALIGNMENT-01B — wer den Testworkspace betreibt.
+   *
+   * Standard ist `undefined`: Die generische Infrastruktur bleibt neutral, und
+   * Auth-Probe wie Cloud-Guard laufen ohne jede fachliche Firmenidentität.
+   * Nur Testwelt-Fachflows überschreiben diese Fixture — siehe
+   * `localTestWorldFachflowFixture`.
+   */
+  operatorCompany: WorkspaceCompanyIdentity | undefined;
   /** Der Guard-Zustand des laufenden Tests — nur Pfade, Hostnamen, Anzahlen. */
   guard: SyntheticSupabaseTracker;
   /**
@@ -42,8 +52,11 @@ export const test = base.extend<LocalFachflowFixtures>({
     await context.close();
   },
 
-  guard: async ({ context }, use) => {
-    const tracker = await installSyntheticSupabase(context);
+  /* Neutral, solange niemand sie überschreibt. */
+  operatorCompany: undefined,
+
+  guard: async ({ context, operatorCompany }, use) => {
+    const tracker = await installSyntheticSupabase(context, { operatorCompany });
     await seedSyntheticSession(context);
     await use(tracker);
   },
