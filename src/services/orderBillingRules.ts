@@ -10,9 +10,31 @@ import type {
 
 const COUNTED_STATUSES: VorgangInvoice['status'][] = ['vorbereitet', 'versendet'];
 
+/**
+ * FINAL-INVOICE-CANCELLATION-REBILLING-01A — rechnet dieser Beleg noch ab?
+ *
+ * `status` beschreibt den Weg zum Kunden (Entwurf → vorbereitet → versendet)
+ * und wird durch ein Storno ausdrücklich **nicht** verändert; `cancelledAt`
+ * kommt als eigenes Feld aus der Cloud zurück und ist dort als
+ * „projektionsrelevant" erhalten. Gelesen hat es hier bisher niemand: Eine
+ * stornierte Schlussrechnung galt weiterhin als abgerechnet, ihre Mengen
+ * blieben verbraucht, und der Vorgang liess keine Ersatzrechnung mehr zu.
+ *
+ * Dieselbe Stornodefinition wie in `isInvoiceCancelled` des Zahlungsdienstes —
+ * bewusst hier wiederholt statt importiert: `invoicePaymentService` hängt über
+ * `vorgangService` an diesem Modul, ein Import zurück wäre ein Zyklus.
+ *
+ * Storniert heisst **nicht** gelöscht. Der Beleg bleibt im Vorgang stehen und
+ * nachvollziehbar; er wirkt nur nicht mehr abrechnend.
+ */
+export function isBillingEffective(invoice: VorgangInvoice): boolean {
+  if (invoice.paymentStatus === 'storniert' || invoice.cancelledAt) return false;
+  return COUNTED_STATUSES.includes(invoice.status);
+}
+
 export function getBilledQuantity(vorgang: Vorgang, orderPositionId: string): number {
   return vorgang.invoices
-    .filter((inv) => COUNTED_STATUSES.includes(inv.status))
+    .filter(isBillingEffective)
     .flatMap((inv) => inv.positions ?? [])
     .filter((p) => p.orderPositionId === orderPositionId)
     .reduce((sum, p) => sum + p.quantity, 0);
@@ -76,15 +98,11 @@ export function getExecutedRemainingQuantity(
 }
 
 export function hasSchlussrechnung(vorgang: Vorgang): boolean {
-  return vorgang.invoices.some(
-    (inv) => inv.type === 'schluss' && COUNTED_STATUSES.includes(inv.status),
-  );
+  return vorgang.invoices.some((inv) => inv.type === 'schluss' && isBillingEffective(inv));
 }
 
 export function hasAbschlagsrechnung(vorgang: Vorgang): boolean {
-  return vorgang.invoices.some(
-    (inv) => inv.type === 'abschlag' && COUNTED_STATUSES.includes(inv.status),
-  );
+  return vorgang.invoices.some((inv) => inv.type === 'abschlag' && isBillingEffective(inv));
 }
 
 export function hasFinalSchlussrechnung(vorgang: Vorgang): boolean {
@@ -200,7 +218,7 @@ export function getCountedAbschlagNetCents(vorgang: Vorgang): number {
     // `?? []` wie oben. Fehlen die Rechnungen, sind 0 € abgezogen — die
     // Auftragsbasis bleibt davon unberührt und begrenzt weiterhin allein.
     (vorgang.invoices ?? [])
-      .filter((invoice) => invoice.type === 'abschlag' && COUNTED_STATUSES.includes(invoice.status))
+      .filter((invoice) => invoice.type === 'abschlag' && isBillingEffective(invoice))
       // `subtotal` ist netto. `amount` wäre brutto und würde den Maßstab brechen.
       .map((invoice) => toCents(invoice.subtotal))
       .filter((cents) => Number.isFinite(cents)),
@@ -248,6 +266,12 @@ export function canEditOrderPositionField(
   return false;
 }
 
+/**
+ * FINAL-INVOICE-CANCELLATION-REBILLING-01A — hier bleibt es bewusst beim reinen
+ * Status: Eine stornierte Abschlagsrechnung hat ihre Nummer verbraucht. Sie
+ * wieder freizugeben hiesse, zwei Belege mit derselben Abschlagsnummer zu
+ * führen. Storniert wirkt nicht mehr abrechnend — vergeben bleibt vergeben.
+ */
 export function getNextAbschlagNumber(vorgang: Vorgang): number {
   const numbers = vorgang.invoices
     .filter(

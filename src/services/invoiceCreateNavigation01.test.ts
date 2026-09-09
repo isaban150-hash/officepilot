@@ -167,18 +167,23 @@ describe('OFFICEPILOT-INVOICE-CREATE-ROUTE-TYPE-01 — InboxVorgangPanel', () =>
   });
 
   /*
-   * `cancelledAt` verändert den Status nicht. Der Guard folgt damit exakt
-   * `hasSchlussrechnung` und bleibt mit VorgangDetailPage und dem Serverguard
-   * konsistent. Wiederabrechenbarkeit nach Storno ist ein eigener Fachpunkt.
+   * FINAL-INVOICE-CANCELLATION-REBILLING-01A — der hier vermerkte eigene
+   * Fachpunkt ist entschieden: Eine stornierte Schlussrechnung rechnet nicht
+   * mehr ab. `cancelledAt` verändert den `status` weiterhin nicht, aber die
+   * Abrechnungswirkung hängt jetzt an `isBillingEffective`, und der Guard folgt
+   * `hasSchlussrechnung` wie zuvor — samt VorgangDetailPage.
+   *
+   * Ohne diese Änderung blieb ein Vorgang nach einem Storno dauerhaft gesperrt:
+   * keine Ersatzrechnung, und die Mengen galten weiter als abgerechnet.
    */
-  it('F: eine stornierte, vorbereitete Schlussrechnung zählt weiterhin', () => {
+  it('F: eine stornierte, vorbereitete Schlussrechnung sperrt nicht mehr', () => {
     render([invoice({ cancelledAt: '2026-08-21T08:00:00.000Z' })]);
-    expectCtaClosed();
+    expectCtaVisible();
   });
 
-  it('G: eine stornierte, versendete Schlussrechnung zählt weiterhin', () => {
+  it('G: eine stornierte, versendete Schlussrechnung sperrt nicht mehr', () => {
     render([invoice({ status: 'versendet', cancelledAt: '2026-08-21T08:00:00.000Z' })]);
-    expectCtaClosed();
+    expectCtaVisible();
   });
 
   it('H: eine Gutschrift löst den Guard nicht aus', () => {

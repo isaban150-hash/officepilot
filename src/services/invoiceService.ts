@@ -6,6 +6,7 @@ import {
   getBilledQuantity,
   getBillableOpenQuantity,
   getExecutedRemainingQuantity,
+  isBillingEffective,
   isPositionBillable,
 } from './orderBillingRules';
 import {
@@ -63,8 +64,6 @@ import {
   type InvoiceApprovalOptions,
   type InvoiceValidationResult,
 } from './invoiceValidationService';
-
-const COUNTED_STATUSES: VorgangInvoice['status'][] = ['vorbereitet', 'versendet'];
 
 export { buildLegalNotices, getTaxRateForStatus } from './invoiceTaxService';
 export { getAbschlagDeductionsTotal } from './invoiceDeductions';
@@ -183,9 +182,14 @@ function buildDefaultPaymentTerms(profile: CompanyProfile): string {
   return standardPaymentTerms(days, !grantsSkonto);
 }
 
+/**
+ * FINAL-INVOICE-CANCELLATION-REBILLING-01A — ein stornierter Abschlag wird
+ * nicht mehr abgezogen. Sonst hielte die Schlussrechnung einen Abzug fest, den
+ * `hasAbschlagsrechnung` und die Mengenprojektion längst nicht mehr kennen.
+ */
 export function getPreviousAbschlagDeductions(vorgang: Vorgang): AbschlagDeduction[] {
   return vorgang.invoices
-    .filter((inv) => inv.type === 'abschlag' && COUNTED_STATUSES.includes(inv.status))
+    .filter((inv) => inv.type === 'abschlag' && isBillingEffective(inv))
     .map((inv) => ({
       invoiceId: inv.id,
       invoiceNumber: inv.number,
