@@ -82,6 +82,61 @@ export function buildSkontoText(profile: CompanyProfile): string {
   return '';
 }
 
+/**
+ * INVOICE-SKONTO-PAYMENT-RECONCILIATION-01 — die Gegenrichtung zu
+ * `buildSkontoText`: aus dem Satz zurück auf Prozentsatz und Frist.
+ *
+ * Beide Funktionen gehören zusammen und lagen bisher getrennt — das Lesen in
+ * `financeIntelligenceService`, das Schreiben hier. Getrennt konnte die
+ * Zahlungsabstimmung nicht an das Lesen heran, ohne einen Zyklus zu bauen
+ * (`financeIntelligenceService` importiert seinerseits den Zahlungsdienst).
+ * Verschoben, nicht verändert: dieselben zwei Muster wie zuvor.
+ *
+ * `null` heisst „kein belastbarer Skontosatz". Es wird nichts geraten und
+ * nichts ergänzt — ohne Prozentsatz **und** Frist gibt es kein Skonto.
+ */
+export function parseSkontoFromText(text: string): { percent: number; days: number } | null {
+  const percentFirst = text.match(/(\d+(?:[.,]\d+)?)\s*%.*?(\d+)\s*tage/i);
+  if (percentFirst) {
+    const percent = Number(percentFirst[1].replace(',', '.'));
+    const days = Number(percentFirst[2]);
+    if (Number.isFinite(percent) && Number.isFinite(days) && percent > 0 && days > 0) {
+      return { percent, days };
+    }
+  }
+
+  const daysFirst = text.match(/(\d+)\s*tage.*?(\d+(?:[.,]\d+)?)\s*%/i);
+  if (daysFirst) {
+    const days = Number(daysFirst[1]);
+    const percent = Number(daysFirst[2].replace(',', '.'));
+    if (Number.isFinite(percent) && Number.isFinite(days) && percent > 0 && days > 0) {
+      return { percent, days };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Letzter Tag, an dem das Skonto noch gilt — der Tag selbst zählt dazu.
+ *
+ * Gerechnet wird in UTC, und zwar seit der Zahlungsabstimmung notwendigerweise:
+ * `new Date('2026-03-20')` ist UTC-Mitternacht, `setDate` addiert aber in
+ * Ortszeit. Über die Sommerzeitumstellung hinweg verschob das die Frist um
+ * einen Tag nach vorn — gemessen ergab `2026-03-20 + 10 Tage` in Europe/Berlin
+ * den 29.03. statt des 30.03. Eine fristgerechte Zahlung am letzten Tag wäre
+ * damit als verspätet gewertet worden.
+ *
+ * Eine Skontofrist zählt Kalendertage, keine Stunden. Zeitzonen und
+ * Sommerzeit haben darin nichts zu suchen.
+ */
+export function buildSkontoDeadline(baseDate: string, days: number): string {
+  const deadlineDate = new Date(`${baseDate.slice(0, 10)}T00:00:00.000Z`);
+  if (Number.isNaN(deadlineDate.getTime())) return baseDate.slice(0, 10);
+  deadlineDate.setUTCDate(deadlineDate.getUTCDate() + days);
+  return deadlineDate.toISOString().slice(0, 10);
+}
+
 export function getTaxStatusLabel(taxStatus: TaxStatus): string {
   switch (taxStatus) {
     case 'standard_19':

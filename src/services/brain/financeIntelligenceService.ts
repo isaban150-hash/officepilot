@@ -31,7 +31,7 @@ import {
   isInvoiceOverdue,
   isSentInvoice,
 } from '../invoicePaymentService';
-import { buildLegalNotices } from '../invoiceTaxService';
+import { buildLegalNotices, buildSkontoDeadline, parseSkontoFromText } from '../invoiceTaxService';
 import { getNotesForVorgang } from '../vorgangNoteService';
 import { getAllVorgaenge, getVorgangById, getVorgangInvoice } from '../vorgangService';
 
@@ -130,34 +130,6 @@ export function countUnassignedDatevRelevantInbox(): number {
   return filterActiveItems(getInboxItems()).filter(
     (item) => isDatevRelevantKind(item.classifiedKind) && !item.vorgangId,
   ).length;
-}
-
-function parseSkontoFromText(text: string): { percent: number; days: number } | null {
-  const percentFirst = text.match(/(\d+(?:[.,]\d+)?)\s*%.*?(\d+)\s*tage/i);
-  if (percentFirst) {
-    const percent = Number(percentFirst[1].replace(',', '.'));
-    const days = Number(percentFirst[2]);
-    if (Number.isFinite(percent) && Number.isFinite(days) && percent > 0 && days > 0) {
-      return { percent, days };
-    }
-  }
-
-  const daysFirst = text.match(/(\d+)\s*tage.*?(\d+(?:[.,]\d+)?)\s*%/i);
-  if (daysFirst) {
-    const days = Number(daysFirst[1]);
-    const percent = Number(daysFirst[2].replace(',', '.'));
-    if (Number.isFinite(percent) && Number.isFinite(days) && percent > 0 && days > 0) {
-      return { percent, days };
-    }
-  }
-
-  return null;
-}
-
-function buildSkontoDeadline(baseDate: string, days: number): string {
-  const deadlineDate = new Date(baseDate);
-  deadlineDate.setDate(deadlineDate.getDate() + days);
-  return toDateOnly(deadlineDate);
 }
 
 function getOutgoingSkontoWindow(

@@ -4,6 +4,7 @@ import {
   removePaymentFromInvoice,
 } from './vorgangService';
 import { isFinalizedInvoice } from './invoiceArchiveService';
+import { buildSkontoDeadline, parseSkontoFromText } from './invoiceTaxService';
 import { generateUuid } from './sync/syncMetaService';
 import type { InvoicePaymentCloudOutcome } from './invoice/workspaceInvoicePaymentCloudService';
 import type {
@@ -37,9 +38,54 @@ export function getPaidAmount(invoice: VorgangInvoice): number {
   return getInvoicePayments(invoice).reduce((sum, payment) => sum + payment.amount, 0);
 }
 
+/**
+ * INVOICE-SKONTO-PAYMENT-RECONCILIATION-01 — der Betrag, der die Rechnung
+ * tatsächlich ausgleicht.
+ *
+ * Ein gewährtes Skonto ist ein zulässiger Nachlass, keine Restforderung. Zahlt
+ * der Kunde fristgerecht den verminderten Betrag, ist die Rechnung erledigt —
+ * bis hierher blieb die Differenz als offener Posten stehen und machte die
+ * Rechnung sogar überfällig, mit Mahnfolge.
+ *
+ * Drei Grenzen, die bewusst eng bleiben:
+ *
+ *  1. **Frist am Zahlungsdatum**, nicht am heutigen Tag. Eine fristgerechte
+ *     Zahlung bleibt fristgerecht, auch wenn sie erst später betrachtet wird;
+ *     eine verspätete wird durch Zeitablauf nicht nachträglich gültig.
+ *  2. **Nur der volle Skontobetrag heilt.** Wer weniger zahlt, hat weiterhin
+ *     eine Unterzahlung — Skonto ist kein Freibrief für einen beliebigen Abzug.
+ *  3. **Nichts wird geraten.** Ohne belastbaren Prozentsatz und Frist aus dem
+ *     Skontosatz der Rechnung gibt es kein Skonto; ohne Basisdatum keine Frist.
+ *
+ * Basis ist `invoice.amount`, also der Rechnungsbetrag nach Abzügen — dieselbe
+ * Basis, die `financeIntelligenceService` seinem Skontohinweis zugrunde legt.
+ * Der Rundungsspielraum von einem Cent fängt nur die Multiplikation ab.
+ */
+function resolveSkontoSettledAmount(invoice: VorgangInvoice): number | null {
+  const skontoText = invoice.skontoText?.trim();
+  if (!skontoText) return null;
+
+  const parsed = parseSkontoFromText(skontoText);
+  if (!parsed) return null;
+
+  const baseDate = invoice.issueDate ?? invoice.date;
+  if (!baseDate?.trim()) return null;
+
+  const deadline = buildSkontoDeadline(baseDate, parsed.days);
+  const timelyPaid = getInvoicePayments(invoice)
+    .filter((payment) => payment.date && toDateOnly(payment.date) <= deadline)
+    .reduce((sum, payment) => sum + payment.amount, 0);
+
+  const payable = Math.round(invoice.amount * (1 - parsed.percent / 100) * 100) / 100;
+  return timelyPaid + 0.01 >= payable ? payable : null;
+}
+
 export function getOpenAmount(invoice: VorgangInvoice): number {
-  const totalDue = invoice.amount;
-  return Math.max(0, totalDue - getPaidAmount(invoice));
+  const paidAmount = getPaidAmount(invoice);
+  if (paidAmount < invoice.amount && resolveSkontoSettledAmount(invoice) !== null) {
+    return 0;
+  }
+  return Math.max(0, invoice.amount - paidAmount);
 }
 
 export function isInvoiceCancelled(invoice: VorgangInvoice): boolean {
@@ -96,7 +142,9 @@ export function calculatePaymentSummary(
 ): PaymentSummary {
   const totalDue = invoice.amount;
   const paidAmount = getPaidAmount(invoice);
-  const openAmount = Math.max(0, totalDue - paidAmount);
+  /* Dieselbe Quelle wie überall — der Skontoausgleich darf nicht zweimal
+     unterschiedlich gerechnet werden. */
+  const openAmount = getOpenAmount(invoice);
   const overpaidAmount = Math.max(0, paidAmount - totalDue);
   const status = resolvePaymentStatus(invoice, today, {
     paidAmount,
