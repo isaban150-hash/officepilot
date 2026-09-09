@@ -38,6 +38,7 @@ import {
   resolveInvoiceCalculationMode,
 } from './invoiceCalculationMode';
 import {
+  addCalendarDays,
   buildLegalNotices,
   buildSkontoText,
   getTaxRateForStatus,
@@ -90,11 +91,13 @@ export function getVorgangCustomerBilling(vorgang: Vorgang): CustomerBilling {
   };
 }
 
-function addDays(isoDate: string, days: number): string {
-  const date = new Date(isoDate);
-  date.setDate(date.getDate() + days);
-  return date.toISOString().slice(0, 10);
-}
+/**
+ * INVOICE-PAYMENT-TERMS-DAYS-DRIFT-01A — dieselbe Fristrechnung wie beim
+ * Skonto. Vorher rechnete diese Stelle lokal und verlor über die
+ * Sommerzeitumstellung einen Tag; das Fälligkeitsdatum widersprach dann dem
+ * Zahlungsziel auf demselben Beleg.
+ */
+const addDays = addCalendarDays;
 
 /**
  * INVOICE-SKONTO-PAYMENT-TERMS-CONSISTENCY-01B — der Basissatz kennt jetzt das

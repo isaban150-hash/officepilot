@@ -118,23 +118,31 @@ export function parseSkontoFromText(text: string): { percent: number; days: numb
 }
 
 /**
- * Letzter Tag, an dem das Skonto noch gilt — der Tag selbst zählt dazu.
+ * INVOICE-PAYMENT-TERMS-DAYS-DRIFT-01A — die eine Datumsrechnung für Fristen.
  *
- * Gerechnet wird in UTC, und zwar seit der Zahlungsabstimmung notwendigerweise:
- * `new Date('2026-03-20')` ist UTC-Mitternacht, `setDate` addiert aber in
- * Ortszeit. Über die Sommerzeitumstellung hinweg verschob das die Frist um
- * einen Tag nach vorn — gemessen ergab `2026-03-20 + 10 Tage` in Europe/Berlin
- * den 29.03. statt des 30.03. Eine fristgerechte Zahlung am letzten Tag wäre
- * damit als verspätet gewertet worden.
+ * Gerechnet wird in UTC, und zwar zwingend: `new Date('2026-03-20')` ist
+ * UTC-Mitternacht, `setDate` addiert aber in Ortszeit. Über die
+ * Sommerzeitumstellung hinweg verschob das jede Frist um einen Tag nach vorn —
+ * gemessen ergab in Europe/Berlin `2026-03-20 + 14 Tage` den 02.04. statt des
+ * 03.04. Eine Rechnung wies damit „Zahlbar innerhalb von 14 Tagen" aus und
+ * nannte daneben ein Fälligkeitsdatum nach 13 Tagen.
  *
- * Eine Skontofrist zählt Kalendertage, keine Stunden. Zeitzonen und
- * Sommerzeit haben darin nichts zu suchen.
+ * Fristen zählen Kalendertage, keine Stunden. Zeitzone und Sommerzeit haben
+ * darin nichts zu suchen. Der Zieltag selbst zählt dazu.
+ *
+ * Unlesbares Basisdatum: der Wert bleibt, wie er ist. Es wird nichts geraten;
+ * ungültige Rechnungsdaten fängt die Freigabevalidierung ab.
  */
+export function addCalendarDays(baseDate: string, days: number): string {
+  const date = new Date(`${baseDate.slice(0, 10)}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime())) return baseDate.slice(0, 10);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+/** Letzter Tag, an dem das Skonto noch gilt — der Tag selbst zählt dazu. */
 export function buildSkontoDeadline(baseDate: string, days: number): string {
-  const deadlineDate = new Date(`${baseDate.slice(0, 10)}T00:00:00.000Z`);
-  if (Number.isNaN(deadlineDate.getTime())) return baseDate.slice(0, 10);
-  deadlineDate.setUTCDate(deadlineDate.getUTCDate() + days);
-  return deadlineDate.toISOString().slice(0, 10);
+  return addCalendarDays(baseDate, days);
 }
 
 export function getTaxStatusLabel(taxStatus: TaxStatus): string {
