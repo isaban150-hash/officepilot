@@ -731,28 +731,6 @@ function extractFieldByLabelFallback(
   return emptyField();
 }
 
-function extractAmountAfterLabel(text: string, labels: string[]): string | undefined {
-  const normalized = normalizeContractText(text).replace(/\s+/g, ' ');
-  const amountRegex = /(\d{1,3}(?:\.\d{3})*,\d{2})\s*(?:€|eur)?/i;
-
-  for (const label of labels) {
-    const labelRegex = new RegExp(`\\b${escapeRegExp(label)}\\b`, 'i');
-    const match = labelRegex.exec(normalized);
-    if (!match) continue;
-
-    const remainder = normalized.slice(match.index + match[0].length);
-    const withoutPrefix = remainder.replace(/^[\s:;.,\-–—]+/, '');
-    const boundaryIndex = withoutPrefix.search(/\b(?:auftraggeber|auftragnehmer|subunternehmer|nachunternehmer|bauvorhaben|baustelle|vertragsdatum|vertragsnummer|vertragsart|leistungsverzeichnis|anlage|seite|§)\b/i);
-    const segment = withoutPrefix.slice(0, boundaryIndex === -1 ? withoutPrefix.length : boundaryIndex);
-    const segmentMatch = segment.match(amountRegex);
-    if (segmentMatch?.[1]) return segmentMatch[1];
-  }
-
-  const explicitRegex = new RegExp(`\\b(?:${labels.map((label) => escapeRegExp(label)).join('|')})\\b[^\n]{0,40}(\\d{1,3}(?:\\.\\d{3})*,\\d{2})\\s*(?:€|eur)?`, 'i');
-  const globalMatch = explicitRegex.exec(normalized);
-  return globalMatch?.[1];
-}
-
 export function extractLabeledField(
   text: string,
   patterns: RegExp[],
@@ -1430,15 +1408,49 @@ export function detectContractClauses(
   return clauses;
 }
 
+/**
+ * CONTRACT-TOTAL-NET-EXTRACTION-01B — Beschriftung und Betrag müssen auf
+ * **derselben Zeile** stehen.
+ *
+ * Zuvor glättete diese Funktion den gesamten Text zu einer einzigen Zeile und
+ * nahm den ersten Betrag nach dem Stichwort. In einem Beleg mit
+ * Positionstabelle trifft das Stichwort `Gesamtpreis` jedoch die
+ * **Spaltenüberschrift** — und der nächste Betrag ist der Einzelpreis der
+ * ersten Position. Genau so wurde aus einer Auftragssumme von 9.206,40 € ein
+ * Wert von 12,50 €, gemeldet mit `confirmed` und `high`.
+ *
+ * Eine Summenbeschriftung steht in deutschen Belegen neben ihrem Betrag, nicht
+ * eine halbe Seite darüber. Diese Zeilenbindung ist deshalb keine Einengung,
+ * sondern die eigentliche Regel — und sie gilt allgemein, nicht für ein
+ * bestimmtes Dokument.
+ *
+ * Findet sich nichts, wird `null` zurückgegeben: Der Aufrufer greift dann auf
+ * die Summe der bestätigten Positionen zurück, die belastbarer ist als ein
+ * geratener Tabellenwert.
+ */
+const CONTRACT_TOTAL_FALLBACK_LABELS =
+  /(?:vertragsumme|vertragssumme|gesamtsumme|nettosumme|gesamtpreis|summe\s+netto|auftragssumme)/i;
+
+const CONTRACT_TOTAL_FALLBACK_AMOUNT = /(\d{1,3}(?:\.\d{3})*,\d{2})\s*(?:€|eur)?/gi;
+
 export function extractContractTotalAmountFromText(text: string): ExtractedContractField<number> | null {
-  const amount = extractAmountAfterLabel(text, [
-    'vertragsumme',
-    'vertragssumme',
-    'gesamtsumme',
-    'gesamtpreis',
-    'summe netto',
-    'auftragssumme',
-  ]);
+  let amount: string | undefined;
+
+  for (const line of normalizeContractText(text).split(/\r?\n/)) {
+    if (!CONTRACT_TOTAL_FALLBACK_LABELS.test(line)) continue;
+
+    /* Letzter Betrag der Zeile: Beschriftung links, Summe rechts. */
+    CONTRACT_TOTAL_FALLBACK_AMOUNT.lastIndex = 0;
+    const treffer = line.match(CONTRACT_TOTAL_FALLBACK_AMOUNT);
+    if (!treffer || treffer.length === 0) continue;
+
+    const letzter = treffer[treffer.length - 1]!.match(/(\d{1,3}(?:\.\d{3})*,\d{2})/);
+    if (letzter?.[1]) {
+      amount = letzter[1];
+      break;
+    }
+  }
+
   if (!amount) return null;
   return {
     value: parseGermanMoney(amount),

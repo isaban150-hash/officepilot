@@ -3,8 +3,20 @@ import type { DocumentPageText } from '../types/documentIntelligence';
 
 const AMOUNT_PATTERN = /(\d{1,3}(?:\.\d{3})*,\d{2})\s*(?:€|eur)?/gi;
 
+/**
+ * CONTRACT-TOTAL-NET-EXTRACTION-01B — `nettosumme` ergänzt.
+ *
+ * Die Liste kannte `summe netto`, aber nicht die im deutschen Handwerk
+ * mindestens ebenso übliche Zusammensetzung `Nettosumme`. Wo ein Beleg sie
+ * verwendete, fand der Resolver keinen Kandidaten und überliess das Feld einem
+ * Rückfall, der die Tabellenüberschrift traf und einen Positionsbetrag als
+ * Vertragssumme ausgab.
+ *
+ * Bewusst ohne führende Wortgrenze — `Nettosumme` ist ein Kompositum, genau wie
+ * `Gesamtbetrag` weiter unten.
+ */
 const CONTRACT_TOTAL_LABELS =
-  /gesamtsumme\s+netto|vertragssumme(?:\s+netto)?|gesamtpreis(?:\s+netto)?|summe\s+netto|auftragssumme\s+netto/i;
+  /gesamtsumme\s+netto|nettosumme|vertragssumme(?:\s+netto)?|gesamtpreis(?:\s+netto)?|summe\s+netto|auftragssumme\s+netto/i;
 
 /**
  * INVOICE-TOTAL-EXTRACTION-01B — Beschriftungen, die einen Gesamtbetrag
