@@ -1,5 +1,6 @@
 import { expect, test } from './support/localTestWorldFachflowFixture';
-import { chooseNewCustomer, uploadDoc00001ToAnalyzedDetail } from './support/localDoc00001Flow';
+import { uploadDoc00001ToAnalyzedDetail } from './support/localDoc00001Flow';
+import { acceptContractOrderThroughUi } from './support/localDoc00001VorgangFlow';
 
 /**
  * OFFICEPILOT-LOCAL-E2E-DOC-00001-VORGANG-01B2 — vom Dokument zum Vorgang.
@@ -47,45 +48,11 @@ test('Fachflow: DOC-00001 wird über den echten Bedienweg zum Vorgang', async ({
     await uploadDoc00001ToAnalyzedDetail(page);
   });
 
-  await test.step('Der Vertragsvorschlag steht bereit', async () => {
-    await expect(page.getByTestId('contract-order-proposal')).toBeVisible();
-    await expect(page.getByTestId('contract-customer-decision')).toBeVisible();
-  });
-
-  await test.step('Kundenentscheidung „neu" treffen', async () => {
-    /*
-     * Im frischen Kontext gibt es keinen Kundenbestand: „vorhanden" ist
-     * deaktiviert, „keiner" weist das Produkt beim Anlegen ab. „Neu" ist damit
-     * nicht bequem gewählt, sondern die einzig mögliche Entscheidung. Das
-     * vorbelegte Namensfeld bleibt unangetastet — sein Wert stammt aus der
-     * echten Dokumenterkennung.
-     */
-    await chooseNewCustomer(page);
-  });
-
-  await test.step('Auftragskarte bestätigen — genau einmal', async () => {
-    const primary = page.getByTestId('contract-chef-primary-action');
-    await expect(primary).toBeVisible();
-
-    /*
-     * Die Freigabe ist zugleich der Relevanznachweis: Der Knopf ist nur
-     * bedienbar, wenn `workflow.companyRelevant` wahr ist — entstanden im
-     * echten `checkCompanyRelevance` aus Dokumenttext und Firmenprofil.
-     */
-    await expect(primary).toBeEnabled();
-
-    /*
-     * Ein Klick. Der Produktcode sperrt zwar synchron gegen ein zweites
-     * Ereignis derselben Runde, aber Doppelklickverhalten ist nicht Gegenstand
-     * dieses Tests — hier soll genau ein Auftrag entstehen.
-     */
-    await primary.click();
+  await test.step('Kundenentscheidung und Auftragsannahme über die echte UI', async () => {
+    await acceptContractOrderThroughUi(page);
   });
 
   await test.step('Die Anwendung führt auf die Vorgangsdetailseite', async () => {
-    /* React-Router-Navigation, kein Neuladen — deshalb kein zweiter Bootstrap. */
-    await expect(page.getByTestId('vorgang-detail-page')).toBeVisible();
-
     /*
      * Die Adresse trägt die Vorgangskennung; nur ein Wahrheitswert verlässt
      * den Browser. `toHaveURL` schiede aus — sein Fehlertext zeigte die echte
