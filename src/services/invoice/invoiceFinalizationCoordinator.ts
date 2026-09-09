@@ -8,6 +8,7 @@
  */
 import type { AppPersistedState, VorgangInvoice } from '../../types/models';
 import { buildPersistedStateSnapshot } from '../persistenceService';
+import { isBillingEffective } from '../orderBillingRules';
 import {
   buildInvoiceContentFingerprintFromInvoice,
   matchesPersistedInvoiceContentFingerprint,
@@ -349,10 +350,15 @@ function proveLocalInvoice(input: {
  *   * **Die eigene Kennung ist ausgenommen.** Ein Wiederaufnahmelauf nach
  *     erfolgreichem RPC findet die eben angelegte Rechnung im Vorgang — sie
  *     darf nicht als „zweite" gelten, sonst bräche jedes Resume.
- *   * **Keine Storno-Ausnahme.** `cancelledAt` verändert `status` nicht;
- *     Client und Server bleiben konsistent zur heutigen Semantik.
+ *   * **Storno nimmt die Wirkung.** FINAL-INVOICE-CANCELLATION-SERVER-
+ *     FOUNDATION-01C — eine stornierte Schlussrechnung bleibt historisch
+ *     stehen, blockiert aber die notwendige Ersatzrechnung nicht mehr. Vorher
+ *     galt hier ausdrücklich das Gegenteil, und der Vorgang blieb nach einem
+ *     Storno dauerhaft gesperrt.
  *
- * Der Statusfilter entspricht `hasSchlussrechnung` und dem Serverguard.
+ * Der Filter entspricht `hasSchlussrechnung`/`isBillingEffective` und dem
+ * Serverguard (`cancelled_at is null`) — alle drei müssen dieselbe Antwort auf
+ * „wirksame Schlussrechnung" geben.
  */
 export function findConflictingFinalInvoice(
   invoices: readonly VorgangInvoice[],
@@ -364,7 +370,7 @@ export function findConflictingFinalInvoice(
     invoices.find(
       (invoice) =>
         invoice.type === 'schluss' &&
-        (invoice.status === 'vorbereitet' || invoice.status === 'versendet') &&
+        isBillingEffective(invoice) &&
         invoice.id !== clientInvoiceId,
     ) ?? null
   );

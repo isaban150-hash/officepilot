@@ -64,14 +64,37 @@ describe('OFFICEPILOT-SINGLE-FINAL-INVOICE-INVARIANT-01D', () => {
     ).toBeNull();
   });
 
-  it('E: eine stornierte Schlussrechnung zählt weiterhin als vorhanden', () => {
+  it('E: eine stornierte Schlussrechnung blockiert die Ersatzrechnung nicht mehr', () => {
     /*
-     * `cancelledAt` verändert den Status nicht — Client und Server bleiben in
-     * diesem Sprint bewusst konsistent zur heutigen Semantik. Eine
-     * Wiederabrechenbarkeit nach Storno ist ein eigener Fachpunkt.
+     * FINAL-INVOICE-CANCELLATION-SERVER-FOUNDATION-01C — der bis hierher
+     * vertagte Fachpunkt ist entschieden. `cancelledAt` verändert den `status`
+     * weiterhin nicht, aber die Abrechnungswirkung hängt nicht mehr am Status
+     * allein. Vorher blieb ein Vorgang nach einem Storno dauerhaft gesperrt:
+     * keine Ersatzrechnung, obwohl fachlich genau eine nötig war.
+     *
+     * Der Serverguard trägt dieselbe Bedingung (`cancelled_at is null`), und
+     * der partielle Unique-Index ebenfalls.
      */
+    expect(
+      findConflictingFinalInvoice(
+        [invoice({ cancelledAt: '2026-08-28T08:00:00.000Z' })],
+        'schluss',
+        OWN_ID,
+      ),
+    ).toBeNull();
+
+    /* Auch das reine Zahlungskennzeichen genügt. */
+    expect(
+      findConflictingFinalInvoice([invoice({ paymentStatus: 'storniert' })], 'schluss', OWN_ID),
+    ).toBeNull();
+  });
+
+  it('E2: neben einer stornierten blockiert eine wirksame Schlussrechnung weiterhin', () => {
     const conflict = findConflictingFinalInvoice(
-      [invoice({ cancelledAt: '2026-08-28T08:00:00.000Z' })],
+      [
+        invoice({ id: 'inv-storniert', cancelledAt: '2026-08-28T08:00:00.000Z' }),
+        invoice({ id: OTHER_ID }),
+      ],
       'schluss',
       OWN_ID,
     );

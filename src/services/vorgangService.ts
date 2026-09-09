@@ -1912,6 +1912,72 @@ export function updateInvoiceServicePeriodConfirmation(
 }
 
 /**
+ * FINAL-INVOICE-CANCELLATION-SERVER-FOUNDATION-01C — übernimmt eine
+ * **serverseitig vollzogene** Stornierung lokal.
+ *
+ * Die Entscheidung fällt in `cancel_workspace_invoice`; hier wird sie nur
+ * nachgeführt. Deshalb nimmt die Funktion Zeitpunkt und Grund entgegen, statt
+ * sie zu erzeugen — ein lokal erfundenes `cancelledAt` wäre eine zweite,
+ * unabgestimmte Wahrheit.
+ *
+ * Genau zwei Felder. Nummer, Status, Positionen, Beträge, Snapshots, Versand,
+ * Zahlungen und Archivbezug bleiben unverändert: Storno nimmt die
+ * Abrechnungswirkung zurück, es löscht nichts.
+ *
+ * `noop` bedeutet: Die Rechnung trug den Storno bereits — kein Schreibvorgang,
+ * keine Persistenz.
+ */
+export type ApplyInvoiceCancellationResult =
+  | { ok: true; invoice: VorgangInvoice; action: 'cancelled' | 'noop' }
+  | { ok: false; reason: 'not_found' | 'persist_failed' };
+
+export function applyInvoiceCancellationFromCloud(
+  vorgangId: string,
+  invoiceId: string,
+  cancellation: { cancelledAt: string; cancelReason?: string },
+): ApplyInvoiceCancellationResult {
+  const current = getVorgangInvoice(vorgangId, invoiceId);
+  if (!current) return { ok: false, reason: 'not_found' };
+  if (current.cancelledAt) {
+    return { ok: true, invoice: current, action: 'noop' };
+  }
+
+  let updatedInvoice: VorgangInvoice | null = null;
+
+  const committed = commitVorgangMutation(vorgangId, (vorgang) => {
+    const index = vorgang.invoices.findIndex((item) => item.id === invoiceId);
+    if (index === -1) return { errorKey: 'invoice.notFound' };
+
+    const next: VorgangInvoice = {
+      ...vorgang.invoices[index]!,
+      cancelledAt: cancellation.cancelledAt,
+      cancelReason: cancellation.cancelReason,
+    };
+    updatedInvoice = next;
+    return {
+      ...vorgang,
+      invoices: [
+        ...vorgang.invoices.slice(0, index),
+        next,
+        ...vorgang.invoices.slice(index + 1),
+      ],
+    };
+  });
+
+  if (!committed.ok) {
+    return {
+      ok: false,
+      reason:
+        committed.errorKey === 'vorgang.notFound' || committed.errorKey === 'invoice.notFound'
+          ? 'not_found'
+          : 'persist_failed',
+    };
+  }
+  if (!updatedInvoice) return { ok: false, reason: 'not_found' };
+  return { ok: true, invoice: cloneVorgangInvoice(updatedInvoice), action: 'cancelled' };
+}
+
+/**
  * INVOICE-SENT-CLOUD-DURABILITY-01B — übernimmt einen **ausdrücklich gewählten**
  * Cloud-Versandsatz lokal.
  *

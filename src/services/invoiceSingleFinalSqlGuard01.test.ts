@@ -20,9 +20,15 @@ import {
 } from './invoice/workspaceInvoiceCloudService';
 import { mapCloudErrorForTests } from './invoice/invoicePreparedFinalizeService';
 
+/*
+ * FINAL-INVOICE-CANCELLATION-SERVER-FOUNDATION-01C — massgeblich ist jetzt die
+ * Stornomigration: Sie schreibt Guard und Unique-Index fort. Die Datei von
+ * 01D bleibt unverändert im Repository stehen; geprüft wird immer die zuletzt
+ * gültige Fassung, sonst sichert dieser Test einen überholten Stand ab.
+ */
 const migrationPath = resolve(
   process.cwd(),
-  'supabase/migrations/20250828120000_workspace_single_final_invoice_guard.sql',
+  'supabase/migrations/20250905120000_workspace_invoice_cancellation.sql',
 );
 const sql = (() => {
   try {
@@ -39,11 +45,23 @@ const finalizeFunction = (() => {
 })();
 
 describe('OFFICEPILOT-SINGLE-FINAL-INVOICE-SQL-01D', () => {
-  it('A: der partielle Unique-Index lässt nur eine Schlussrechnung je Vorgang zu', () => {
+  it('A: der partielle Unique-Index lässt nur eine wirksame Schlussrechnung je Vorgang zu', () => {
     expect(sql).toContain('workspace_invoices_single_final_invoice');
     expect(sql).toContain('on public.workspace_invoices (workspace_id, vorgang_id)');
     expect(sql).toContain("invoice_type = 'schluss'");
     expect(sql).toContain("invoice_status in ('vorbereitet', 'versendet')");
+    // 01C — storniert zählt nicht mehr mit.
+    expect(sql).toContain('and cancelled_at is null');
+  });
+
+  it('A2: Serverguard und Unique-Index definieren „wirksam" gleich', () => {
+    /*
+     * Der Kern des Backstops: Wäre nur der RPC gelockert, scheiterte der
+     * Insert am strengeren Index — und der Exception-Handler übersetzte das in
+     * denselben Fehlernamen. Die Korrektur wäre wirkungslos, aber unauffällig.
+     */
+    expect(finalizeFunction).toContain('wi.cancelled_at is null');
+    expect(sql).toContain('and cancelled_at is null');
   });
 
   it('B: der Serverguard meldet einen benennbaren Fehler', () => {
@@ -82,16 +100,40 @@ describe('OFFICEPILOT-SINGLE-FINAL-INVOICE-SQL-01D', () => {
       'public.normalize_workspace_invoice_payload_for_idempotency',
     );
     expect(finalizeFunction).toContain('Nummernkreis konnte nicht gesperrt werden');
-    // Die Normalisierungsfunktion selbst wird nicht neu geschrieben.
-    expect(sql).not.toContain(
-      'create or replace function public.normalize_workspace_invoice_payload_for_idempotency',
-    );
+    /*
+     * 01C — die Normalisierungsfunktion wird ausdrücklich fortgeschrieben: Sie
+     * muss `cancelledAt`/`cancelReason` aus dem Payload entfernen, damit kein
+     * Client beim Finalisieren eine Stornowahrheit einschleusen kann. Alle
+     * bisherigen Ausschlüsse bleiben erhalten.
+     */
+    for (const key of [
+      "- 'payments'",
+      "- 'paymentStatus'",
+      "- 'archiveDocumentId'",
+      "- 'expectedAmendmentSequence'",
+      "- 'cancelledAt'",
+      "- 'cancelReason'",
+    ]) {
+      expect(sql, key).toContain(key);
+    }
   });
 
   it('F: die Migration repariert keine Altbestände', () => {
-    for (const forbidden of ['delete from public.workspace_invoices', 'update public.workspace_invoices set']) {
-      expect(sql.toLowerCase()).not.toContain(forbidden);
-    }
+    const lower = sql.toLowerCase();
+    // Nichts wird gelöscht — auch keine Rechnung, die doppelt erscheint.
+    expect(lower).not.toContain('delete from public.workspace_invoices');
+    /*
+     * 01C — es gibt genau einen UPDATE auf `workspace_invoices`, und der steht
+     * in `cancel_workspace_invoice`, adressiert über `where id = v_existing.id`.
+     * Kein Massenupdate, kein Backfill: Die vorhandenen
+     * `payload.cancelledAt`-Werte werden ausdrücklich **nicht** in die neue
+     * Spalte übernommen — sie stammen aus keinem legitimen Produktivpfad.
+     */
+    const updates = lower.split('update public.workspace_invoices').length - 1;
+    expect(updates).toBe(1);
+    expect(sql).toContain('where id = v_existing.id');
+    expect(lower).not.toContain("set cancelled_at = (payload->>'cancelledat')");
+    expect(lower).not.toContain('cancelled_at = payload');
   });
 
   /* ---------------------------------------------------------------------- */

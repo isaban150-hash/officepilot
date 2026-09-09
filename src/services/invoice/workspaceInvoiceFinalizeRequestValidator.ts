@@ -142,12 +142,25 @@ const INVOICE_KEYS = [
   'expectedAmendmentSequence',
 ] as const;
 
-/** Der Payload trägt niemals Zahlungs- oder Archivdaten. */
+/**
+ * Der Payload trägt niemals Zahlungs-, Archiv- oder Stornodaten.
+ *
+ * FINAL-INVOICE-CANCELLATION-SERVER-FOUNDATION-01C — `cancelledAt` und
+ * `cancelReason` kommen hinzu. Sie standen bis hierher in `INVOICE_KEYS`,
+ * fehlten hier, wurden von `buildInvoicePayloadV1` durchgereicht und vom
+ * SQL-Normalizer nicht entfernt: Ein manipulierter oder alter Client konnte
+ * eine Rechnung beim Finalisieren als storniert markieren. Die Stornowahrheit
+ * liegt jetzt in den Spalten `cancelled_at`/`cancelled_by`/`cancel_reason` und
+ * entsteht ausschliesslich in `cancel_workspace_invoice`.
+ */
 const PAYLOAD_FORBIDDEN_KEYS = new Set<string>([
   'payments',
   'paymentStatus',
   'archiveDocumentId',
   'expected_amendment_sequence',
+  'cancelledAt',
+  'cancelReason',
+  'cancelledBy',
 ]);
 
 const LINE_KEYS = [
@@ -518,6 +531,8 @@ export function buildInvoicePayloadV1(invoice: unknown): Record<string, unknown>
   for (const key of Object.keys(invoice)) {
     if (FORBIDDEN.has(key)) return null;
     if (key === 'payments' || key === 'paymentStatus' || key === 'archiveDocumentId') continue;
+    // 01C — Storno ist Serverwahrheit und verlässt den Client nie.
+    if (key === 'cancelledAt' || key === 'cancelReason' || key === 'cancelledBy') continue;
     if (key === 'expected_amendment_sequence') return null;
     if (key === 'expectedAmendmentSequence') continue;
     const value = invoice[key];

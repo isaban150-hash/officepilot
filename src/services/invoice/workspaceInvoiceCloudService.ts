@@ -34,6 +34,16 @@ export type WorkspaceInvoiceCloudErrorCode =
    * Kennung; für diese Finalisierung wurde also sicher nichts geschrieben.
    */
   | 'final_invoice_exists'
+  /*
+   * FINAL-INVOICE-CANCELLATION-SERVER-FOUNDATION-01C — die Stornogründe, die
+   * der Server benennt. Alle drei sind fail-closed: Es wurde nichts storniert,
+   * nichts zurückgebucht und nichts verändert.
+   */
+  | 'cancel_type_not_supported'
+  | 'cancel_not_finalized'
+  | 'cancel_has_active_payments'
+  | 'cancel_reason_required'
+  | 'not_found'
   | 'network'
   | 'unknown';
 
@@ -98,6 +108,14 @@ export interface WorkspaceInvoicePullRow {
   created_at: string;
   updated_at: string;
   updated_by?: string | null;
+  /*
+   * FINAL-INVOICE-CANCELLATION-SERVER-FOUNDATION-01C — die autoritative
+   * Stornowahrheit als Spalten. Optional, weil ein Server ohne diese Migration
+   * sie nicht liefert; dann bleibt der Payload-Spiegel die einzige Quelle.
+   */
+  cancelled_at?: string | null;
+  cancelled_by?: string | null;
+  cancel_reason?: string | null;
 }
 
 /*
@@ -153,6 +171,26 @@ function classifyInvoiceCloudError(error: { message?: string; code?: string }): 
     message.includes('workspace_invoices_single_final_invoice')
   ) {
     return new WorkspaceInvoiceCloudError(message, 'final_invoice_exists', false);
+  }
+  /*
+   * 01C — die Stornogründe stehen **vor** der allgemeinen Validierungsregel:
+   * `invoice_cancel_type_not_supported` enthält „type" und liefe sonst als
+   * unspezifischer Validierungsfehler durch.
+   */
+  if (message.includes('invoice_cancel_type_not_supported')) {
+    return new WorkspaceInvoiceCloudError(message, 'cancel_type_not_supported', false);
+  }
+  if (message.includes('invoice_cancel_not_finalized')) {
+    return new WorkspaceInvoiceCloudError(message, 'cancel_not_finalized', false);
+  }
+  if (message.includes('invoice_cancel_has_active_payments')) {
+    return new WorkspaceInvoiceCloudError(message, 'cancel_has_active_payments', false);
+  }
+  if (message.includes('invoice_cancel_reason_required')) {
+    return new WorkspaceInvoiceCloudError(message, 'cancel_reason_required', false);
+  }
+  if (message.includes('Rechnung nicht gefunden')) {
+    return new WorkspaceInvoiceCloudError(message, 'not_found', false);
   }
   if (
     message.includes('fehlt') ||
@@ -211,6 +249,17 @@ export function buildWorkspaceInvoiceFinalizePayload(invoice: VorgangInvoice): R
     payments: _payments,
     paymentStatus: _paymentStatus,
     archiveDocumentId: _archiveDocumentId,
+    /*
+     * FINAL-INVOICE-CANCELLATION-SERVER-FOUNDATION-01C — die Stornofelder
+     * verlassen den Client nicht. Sie sind Serverwahrheit
+     * (`workspace_invoices.cancelled_at/cancelled_by/cancel_reason`) und
+     * entstehen ausschliesslich in `cancel_workspace_invoice`. Hier wurden sie
+     * bis 01C über `...rest` mitgesendet — ein Weg, auf dem ein manipulierter
+     * Client eine Rechnung beim Finalisieren als storniert hätte ausgeben
+     * können.
+     */
+    cancelledAt: _cancelledAt,
+    cancelReason: _cancelReason,
     ...rest
   } = invoice;
 
@@ -513,6 +562,20 @@ export function inspectWorkspaceInvoicePullRow(
       created_at: String(row.created_at ?? ''),
       updated_at: String(row.updated_at ?? ''),
       updated_by: row.updated_by == null ? null : String(row.updated_by),
+      /*
+       * FINAL-INVOICE-CANCELLATION-SERVER-FOUNDATION-01C — die autoritativen
+       * Stornospalten. Fehlt der Schlüssel ganz, kennt der Server sie noch
+       * nicht: dann bleibt `undefined` und das Mapping rührt den aus dem
+       * Payload gelesenen Wert nicht an. `null` ist die klare Aussage „nicht
+       * storniert" und gewinnt gegen jeden Payload-Rest.
+       */
+      ...('cancelled_at' in row
+        ? {
+            cancelled_at: row.cancelled_at == null ? null : String(row.cancelled_at),
+            cancelled_by: row.cancelled_by == null ? null : String(row.cancelled_by),
+            cancel_reason: row.cancel_reason == null ? null : String(row.cancel_reason),
+          }
+        : {}),
     },
   };
 }
@@ -545,6 +608,29 @@ export function mapWorkspaceInvoicePullRowToVorgangInvoice(
     type: row.invoice_type as VorgangInvoice['type'],
     status: row.invoice_status as VorgangInvoice['status'],
   };
+  /*
+   * FINAL-INVOICE-CANCELLATION-SERVER-FOUNDATION-01C — die Spalte gewinnt.
+   *
+   * `cancelled_at` ist die autoritative Wahrheit; der Payload-Spiegel dient
+   * nur Clients, die die Spalten noch nicht kennen. Liefert ein Server die
+   * Spalte, entscheidet ausschliesslich sie — auch ihr Fehlen: Eine Rechnung,
+   * die serverseitig nicht storniert ist, darf durch einen Payload-Rest nicht
+   * als storniert erscheinen.
+   *
+   * `undefined` heisst „diese Antwort kennt die Spalten nicht" und lässt den
+   * aus dem Payload gelesenen Wert unberührt. `null` heisst „nicht storniert".
+   */
+  if (row.cancelled_at !== undefined) {
+    const cancelledAt = optionalCloudText(row.cancelled_at ?? undefined);
+    if (cancelledAt) {
+      invoice.cancelledAt = cancelledAt;
+      invoice.cancelReason = optionalCloudText(row.cancel_reason ?? undefined);
+    } else {
+      delete (invoice as { cancelledAt?: unknown }).cancelledAt;
+      delete (invoice as { cancelReason?: unknown }).cancelReason;
+    }
+  }
+
   // Explicitly drop comfort/local-only fields from cloud mapping.
   delete (invoice as { payments?: unknown }).payments;
   delete (invoice as { paymentStatus?: unknown }).paymentStatus;
@@ -919,6 +1005,68 @@ export async function rpcPullWorkspaceInvoices(
     mapped.push(mapWorkspaceInvoicePullRowToVorgangInvoice(parsed));
   }
   return mapped;
+}
+
+/**
+ * FINAL-INVOICE-CANCELLATION-SERVER-FOUNDATION-01C — Stornierung einer
+ * Schlussrechnung.
+ *
+ * Der Client liefert ausschliesslich die Adressierung und den Grund. Zeitpunkt
+ * und Urheber entstehen serverseitig (`now()`, `auth.uid()`); ein vom Client
+ * gelieferter Zeitstempel wäre manipulierbar und ist deshalb nicht Teil des
+ * Vertrags.
+ *
+ * Die Funktion entscheidet nichts selbst: Sie ruft auf, was der Nutzer
+ * ausdrücklich bestätigt hat. Eine bereits stornierte Rechnung kommt
+ * unverändert zurück — der Server behandelt den zweiten Aufruf als Replay,
+ * nicht als Fehler.
+ */
+export async function rpcCancelWorkspaceInvoice(
+  input: { workspaceId: string; clientInvoiceId: string; reason: string },
+  client?: SupabaseClient | null,
+): Promise<MappedWorkspaceInvoicePull> {
+  if (!input.workspaceId.trim()) {
+    throw new WorkspaceInvoiceCloudError('workspace_id fehlt', 'validation', false);
+  }
+  if (!input.clientInvoiceId.trim()) {
+    throw new WorkspaceInvoiceCloudError('client_invoice_id fehlt', 'validation', false);
+  }
+  if (!input.reason.trim()) {
+    throw new WorkspaceInvoiceCloudError(
+      'invoice_cancel_reason_required',
+      'cancel_reason_required',
+      false,
+    );
+  }
+
+  const supabase = getClient(client);
+  const { data, error } = await supabase.rpc('cancel_workspace_invoice', {
+    p_workspace_id: input.workspaceId,
+    p_client_invoice_id: input.clientInvoiceId,
+    p_reason: input.reason.trim(),
+  });
+
+  if (error) throw classifyInvoiceCloudError(error);
+
+  /* `returns setof` — genau eine Zeile, sonst ist die Antwort unbrauchbar. */
+  const rows = Array.isArray(data) ? data : data ? [data] : [];
+  if (rows.length !== 1) {
+    throw new WorkspaceInvoiceCloudError(
+      'Ungültige Server-Antwort bei Rechnungsstornierung.',
+      'unknown',
+      false,
+    );
+  }
+
+  const parsed = parseWorkspaceInvoicePullRow(rows[0]);
+  if (!parsed || parsed.workspace_id !== input.workspaceId) {
+    throw new WorkspaceInvoiceCloudError(
+      'Ungültige Server-Antwort bei Rechnungsstornierung.',
+      'unknown',
+      false,
+    );
+  }
+  return mapWorkspaceInvoicePullRowToVorgangInvoice(parsed);
 }
 
 /**
