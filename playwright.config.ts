@@ -42,6 +42,8 @@ export default defineConfig({
     /* WRITE-GATE-01B: beide setzen eine echte Cloud-Sitzung voraus. */
     /authorizeCloudWriteWorkspace\.setup\.ts/,
     /cloudWriteGate\.spec\.ts/,
+    /* SYNTHETIC-AUTH-PROBE-01B: braucht die eigene lokale Konfiguration. */
+    /localSyntheticAuthProbe\.spec\.ts/,
   ],
   /* Ein Pilot — Parallelität bringt hier nichts und macht den Lauf unruhig. */
   workers: 1,
