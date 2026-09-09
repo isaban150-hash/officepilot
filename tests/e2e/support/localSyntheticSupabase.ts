@@ -201,27 +201,123 @@ function syntheticCompanyProfilePayload() {
 }
 
 /**
- * 01B2 — Pfade, die dieser Helfer **niemals** erfolgreich beantwortet.
+ * OFFICEPILOT-LOCAL-E2E-CLOUD-BLOCK-GUARD-01B — die Klassifikation.
  *
- * `upsert_workspace_sync_entity` ist der generische Sync-Push. Er wird für den
- * Auth- und Workspace-Bootstrap nicht gebraucht — der grüne Probe belegt das —,
- * und ein Fachflow, der ihn auslöst, soll daran scheitern statt eine erfundene
- * Bestätigung zu bekommen.
+ * ⚠️ Die Sicherheit dieses Guards kommt **nicht** aus der Verbotsliste.
+ *
+ * Sie kommt aus dem Grundsatz: Was nicht ausdrücklich Auth-Infrastruktur, ein
+ * bekannter Lesezugriff oder die eine Bootstrap-Ausnahme ist, wird abgewiesen.
+ * Die Verbotsliste macht daraus nur eine bessere Diagnose — „gesperrter
+ * Cloud-Write" statt „unbekannter Aufruf". Wäre sie die einzige Verteidigung,
+ * genügte ein RPC, den heute noch niemand kennt, um sie zu umgehen.
+ */
+export type GuardRequestClass =
+  | 'app_origin'
+  | 'auth'
+  | 'allowed_read'
+  | 'bootstrap_exception'
+  | 'forbidden_write'
+  | 'unexpected'
+  | 'blocked_external';
+
+/**
+ * Reine Lesezugriffe. Exakte Pfade, keine Muster — `get_workspace_invoice_sent`
+ * liest, `update_workspace_invoice_sent` schreibt, und ein Präfix könnte beide
+ * nicht auseinanderhalten.
+ *
+ * `admin_list_profiles` fehlt bewusst, obwohl es liest: Ein lokaler Fachtest
+ * hat in der Nutzerverwaltung nichts zu suchen und soll dort auflaufen.
+ */
+const ALLOWED_READ_PATHS: ReadonlySet<string> = new Set([
+  '/rest/v1/rpc/pull_workspace_sync_state',
+  '/rest/v1/rpc/pull_workspace_invoices',
+  '/rest/v1/rpc/pull_workspace_documents',
+  '/rest/v1/rpc/pull_workspace_invoice_payments',
+  '/rest/v1/rpc/pull_workspace_order_amendments',
+  '/rest/v1/rpc/get_workspace_invoice_sent',
+  '/rest/v1/rpc/get_workspace_invoice_service_period_confirmation',
+]);
+
+/** Die vier Pulls antworten mit einer Liste, die übrigen mit einem Objekt. */
+const EMPTY_LIST_READ_PATHS: ReadonlySet<string> = new Set([
+  '/rest/v1/rpc/pull_workspace_invoices',
+  '/rest/v1/rpc/pull_workspace_documents',
+  '/rest/v1/rpc/pull_workspace_invoice_payments',
+  '/rest/v1/rpc/pull_workspace_order_amendments',
+]);
+
+/** Sitzungsinfrastruktur — ausdrücklich **keine** Freigabe für Business-Writes. */
+const AUTH_PATHS: ReadonlySet<string> = new Set([
+  '/auth/v1/token',
+  '/auth/v1/user',
+  '/auth/v1/logout',
+]);
+
+/**
+ * Die einzige schreibfähige Ausnahme — und sie heisst absichtlich nicht „Read".
+ *
+ * `ensure_personal_workspace` legt serverseitig einen Workspace samt
+ * Mitgliedschaft an. Ohne sie bricht `bootstrapWorkspaceCloudSyncIfNeeded` ab,
+ * `switchToWorkspaceScope` läuft nie, und der lokale Zustand bliebe
+ * guest-gebunden — der Nachweis „workspace == 1, guest == 0" wäre unmöglich.
+ *
+ * Gebunden ist sie an vier Achsen zugleich: Pfad, Methode POST, den
+ * `.invalid`-Host und **genau einen** Aufruf pro BrowserContext.
+ */
+const BOOTSTRAP_EXCEPTION_PATH = '/rest/v1/rpc/ensure_personal_workspace';
+
+/**
+ * Bekannte Schreibwege. Vollständig aus dem Inventar der 01A-Analyse, allein
+ * für die Fehlermeldung — abgewiesen würden sie ohnehin.
  */
 const FORBIDDEN_WRITE_PATHS: ReadonlySet<string> = new Set([
   '/rest/v1/rpc/upsert_workspace_sync_entity',
+  '/rest/v1/rpc/finalize_workspace_invoice',
+  '/rest/v1/rpc/confirm_workspace_invoice_service_period',
+  '/rest/v1/rpc/update_workspace_invoice_sent',
+  '/rest/v1/rpc/add_workspace_invoice_payment',
+  '/rest/v1/rpc/reverse_workspace_invoice_payment',
+  '/rest/v1/rpc/upsert_workspace_generated_invoice_document',
+  '/rest/v1/rpc/tombstone_workspace_document',
+  '/rest/v1/rpc/confirm_workspace_order_amendment',
+  '/rest/v1/rpc/update_own_profile',
+  '/rest/v1/rpc/admin_approve_user',
+  '/rest/v1/rpc/admin_block_user',
+  '/rest/v1/rpc/admin_activate_license',
+  '/rest/v1/rpc/admin_deactivate_license',
+  '/rest/v1/rpc/admin_expire_license',
+  '/rest/v1/rpc/admin_set_license_expiry',
+  '/rest/v1/rpc/admin_clear_license_expiry',
 ]);
 
-/** Was tatsächlich beantwortet bzw. abgewiesen wurde — nur Pfade, nie Werte. */
+const STORAGE_PREFIX = '/storage/v1/';
+const STORAGE_READ_METHODS: ReadonlySet<string> = new Set(['GET', 'HEAD']);
+
+/** Was geschah — ausschliesslich Pfade, Hostnamen und Anzahlen. */
 export interface SyntheticSupabaseTracker {
-  /** Pfade des synthetischen Hosts, die beantwortet wurden. */
+  /** Pfade, die synthetisch beantwortet wurden. */
   answered: string[];
-  /** Supabase-Pfade ohne Antwortregel — jeder einzelne macht die Probe rot. */
-  unexpected: string[];
-  /** Schreibversuche auf gesperrte Pfade — abgewiesen, nie bestätigt. */
+  /** Erkannte Schreibversuche — abgewiesen, nie bestätigt. Macht Tests rot. */
   forbiddenWrites: string[];
-  /** Fremde Hosts, die abgewiesen wurden (nur Hostname). */
-  blockedHosts: string[];
+  /** Supabase-Pfade ohne Regel — ebenfalls abgewiesen. Macht Tests rot. */
+  unexpected: string[];
+  /**
+   * Abgewiesene fremde Hosts (nur Hostname). Macht ausdrücklich **nicht** rot:
+   * Die Anwendung lädt Schriften von Google, und das ist reine Darstellung.
+   */
+  blockedExternal: string[];
+  /** Wie oft die Bootstrap-Ausnahme gewährt wurde. Mehr als 1 gibt es nicht. */
+  bootstrapExceptionCount: number;
+  /**
+   * Quittiert **einen** erwarteten Eintrag — nur für den Guard-Nachweis in
+   * `localCloudBlockGuard.spec.ts`.
+   *
+   * Bewusst kein Schalter, der den Guard abstellt, und kein „alles leeren":
+   * Es lässt sich nur ein namentlich genannter, tatsächlich vorhandener
+   * Eintrag entfernen, und der Aufruf schlägt fehl, wenn es ihn nicht gibt.
+   * Ein Test kann damit nichts verstecken, was er nicht selbst ausgelöst hat.
+   */
+  acknowledgeExpectedGuardEvent(path: string): void;
 }
 
 function jsonResponse(body: unknown) {
@@ -266,10 +362,30 @@ export async function installSyntheticSupabase(
 ): Promise<SyntheticSupabaseTracker> {
   const tracker: SyntheticSupabaseTracker = {
     answered: [],
-    unexpected: [],
     forbiddenWrites: [],
-    blockedHosts: [],
+    unexpected: [],
+    blockedExternal: [],
+    bootstrapExceptionCount: 0,
+    acknowledgeExpectedGuardEvent(path: string) {
+      const lists: Array<keyof Pick<SyntheticSupabaseTracker, 'forbiddenWrites' | 'unexpected'>> = [
+        'forbiddenWrites',
+        'unexpected',
+      ];
+      for (const list of lists) {
+        const index = tracker[list].indexOf(path);
+        if (index >= 0) {
+          tracker[list].splice(index, 1);
+          return;
+        }
+      }
+      throw new Error(
+        `Guard-Quittung ins Leere: Für "${path}" liegt kein erfasster Eintrag vor.`,
+      );
+    },
   };
+
+  /** Genau einmal pro BrowserContext — danach ist die Ausnahme geschlossen. */
+  let bootstrapExceptionUsed = false;
 
   await context.route('**/*', async (route) => {
     const url = new URL(route.request().url());
@@ -282,17 +398,24 @@ export async function installSyntheticSupabase(
 
     if (url.hostname !== SYNTHETIC_SUPABASE_HOST) {
       /* Nur der Hostname, nie der vollständige Pfad eines fremden Ziels. */
-      if (!tracker.blockedHosts.includes(url.hostname)) {
-        tracker.blockedHosts.push(url.hostname);
+      if (!tracker.blockedExternal.includes(url.hostname)) {
+        tracker.blockedExternal.push(url.hostname);
       }
       await route.abort('blockedbyclient');
       return;
     }
 
+    /* Ohne Query: Suchparameter können Kennungen tragen. */
     const path = url.pathname;
+    const method = route.request().method();
+
+    const block = async (list: 'forbiddenWrites' | 'unexpected') => {
+      if (!tracker[list].includes(path)) tracker[list].push(path);
+      await route.abort('blockedbyclient');
+    };
 
     /* Vorabfragen des Browsers: erlauben, aber nicht als Antwort zählen. */
-    if (route.request().method() === 'OPTIONS') {
+    if (method === 'OPTIONS') {
       await route.fulfill({
         status: 204,
         headers: {
@@ -310,16 +433,37 @@ export async function installSyntheticSupabase(
       return route.fulfill(jsonResponse(body));
     };
 
-    if (path === '/auth/v1/token') {
-      /* Falls der Client doch erneuern will: dieselbe Sitzung zurück. */
+    /*
+     * Storage vor allem anderen: Es ist kein RPC, und über die Methode
+     * entscheidet sich alles. Der Bucketname taugt nicht als Kriterium — ein
+     * zweiter Bucket wäre sonst unbemerkt frei.
+     */
+    if (path.startsWith(STORAGE_PREFIX)) {
+      if (STORAGE_READ_METHODS.has(method)) {
+        /*
+         * Auch Lesen bleibt hier gesperrt: Im lokalen Lauf existiert kein
+         * Asset, und ein stiller Erfolg wäre eine Erfindung. Wird ein
+         * Storage-Read je gebraucht, soll er sichtbar auflaufen.
+         */
+        return block('unexpected');
+      }
+      /* Upload, Update, Löschen — darunter der Branding-Upload. */
+      return block('forbiddenWrites');
+    }
+
+    if (AUTH_PATHS.has(path)) {
+      /* Falls der Client erneuern will: dieselbe Sitzung zurück. */
+      if (path === '/auth/v1/user') return answer(syntheticUser());
+      if (path === '/auth/v1/logout') return answer({});
       return answer(syntheticSession());
     }
 
-    if (path === '/auth/v1/user') {
-      return answer(syntheticUser());
+    /* Jeder andere Auth-Pfad ist eine Verhaltensänderung, die man sehen will. */
+    if (path.startsWith('/auth/v1/')) {
+      return block('unexpected');
     }
 
-    if (path === '/rest/v1/profiles') {
+    if (path === '/rest/v1/profiles' && method === 'GET') {
       /*
        * `maybeSingle()` fordert ein einzelnes Objekt an; PostgREST antwortet
        * dann nicht mit einer Liste. Genau das wird hier nachgebildet.
@@ -327,7 +471,21 @@ export async function installSyntheticSupabase(
       return answer(syntheticProfileRow());
     }
 
-    if (path === '/rest/v1/rpc/ensure_personal_workspace') {
+    if (path === BOOTSTRAP_EXCEPTION_PATH) {
+      /*
+       * Vier Bedingungen, alle zwingend: der `.invalid`-Host (oben bereits
+       * geprüft), dieser exakte Pfad, die Methode POST — und der erste
+       * Aufruf in diesem Kontext.
+       *
+       * Der Zähler ersetzt bewusst jedes Zeitfenster und jedes Signal aus dem
+       * Produktivcode: Der Bootstrap läuft einmal, alles Weitere gehört in den
+       * Fachflow und hat dort nichts verloren.
+       */
+      if (method !== 'POST' || bootstrapExceptionUsed) {
+        return block('forbiddenWrites');
+      }
+      bootstrapExceptionUsed = true;
+      tracker.bootstrapExceptionCount += 1;
       return answer({
         workspace: syntheticWorkspaceRow(),
         member: syntheticMemberRow(),
@@ -366,46 +524,34 @@ export async function installSyntheticSupabase(
       });
     }
 
-    if (
-      path === '/rest/v1/rpc/pull_workspace_order_amendments' ||
-      path === '/rest/v1/rpc/pull_workspace_invoices' ||
-      path === '/rest/v1/rpc/pull_workspace_documents' ||
-      path === '/rest/v1/rpc/pull_workspace_invoice_payments'
-    ) {
+    if (ALLOWED_READ_PATHS.has(path)) {
       /*
-       * Die vier Lese-Pulls, die die Vorgangsansicht beim Aufbau anstösst.
-       * Alle vier erwarten ausdrücklich ein Array und behandeln alles andere
-       * als Fehler — eine leere Liste ist deshalb die einzig richtige und
-       * zugleich kleinstmögliche Antwort. Sie passt auch zur Sache: Der
-       * Fachbestand dieser Probe ist leer.
+       * Die Pulls erwarten ausdrücklich ein Array und behandeln alles andere
+       * als Fehler; die beiden `get_*` liefern einen Einzelbefund. Eine leere
+       * Antwort ist die einzig richtige und zugleich kleinstmögliche — sie
+       * passt zur Sache: Der Fachbestand eines lokalen Laufs beginnt leer.
        */
-      return answer([]);
+      return answer(EMPTY_LIST_READ_PATHS.has(path) ? [] : null);
     }
 
+    /*
+     * Ab hier wird nichts mehr beantwortet.
+     *
+     * 01B2 — an dieser Stelle stand einmal eine erfolgreiche Antwort für den
+     * Sync-Push. Sie war der gefährlichste Teil dieses Helfers: Ein Fachflow
+     * hätte eine erfundene Bestätigung erhalten und wäre grün geblieben,
+     * obwohl die Anwendung in die Cloud zu schreiben versuchte. Ein
+     * gefälschtes „ist gespeichert" ist schlimmer als gar keine Antwort.
+     */
     if (FORBIDDEN_WRITE_PATHS.has(path)) {
-      /*
-       * 01B2 — hier stand einmal eine erfolgreiche Antwort.
-       *
-       * Sie war der gefährlichste Teil dieses Helfers: Ein künftiger Fachflow
-       * hätte einen Sync-Push ausgelöst und vom Harness eine erfundene
-       * Bestätigung erhalten — der Test wäre grün geblieben, obwohl die
-       * Anwendung in die Cloud zu schreiben versuchte. Ein gefälschtes „ist
-       * gespeichert" ist schlimmer als gar keine Antwort.
-       *
-       * Jetzt wird nichts bestätigt und nichts durchgelassen: Der Versuch wird
-       * vermerkt und macht den Test rot. Vermerkt wird ausschliesslich der
-       * Pfadname — niemals die gesendete Nutzlast.
-       */
-      if (!tracker.forbiddenWrites.includes(path)) {
-        tracker.forbiddenWrites.push(path);
-      }
-      await route.abort('blockedbyclient');
-      return;
+      return block('forbiddenWrites');
     }
 
-    /* Kein Fallback. Was hier ankommt, war nicht vorgesehen. */
-    tracker.unexpected.push(path);
-    await route.abort('blockedbyclient');
+    /*
+     * Kein Fallback — und das ist der eigentliche Schutz. Ein RPC, den es
+     * heute noch nicht gibt, landet hier und nicht in einer Erfolgsmeldung.
+     */
+    return block('unexpected');
   });
 
   return tracker;

@@ -53,8 +53,13 @@ export default defineConfig({
 
   projects: [
     {
+      /*
+       * Alle lokalen Specs tragen das Präfix `local`. Ein Muster statt einer
+       * Aufzählung: Ein künftiger Fachtest ist damit automatisch erfasst — und
+       * wer ihn hinzufügt, kann nicht vergessen, ihn einzutragen.
+       */
       name: 'local',
-      testMatch: /localSyntheticAuthProbe\.spec\.ts/,
+      testMatch: /local[A-Za-z0-9]*\.spec\.ts/,
       use: { headless: true },
     },
   ],

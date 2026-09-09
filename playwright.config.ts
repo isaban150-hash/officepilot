@@ -42,8 +42,12 @@ export default defineConfig({
     /* WRITE-GATE-01B: beide setzen eine echte Cloud-Sitzung voraus. */
     /authorizeCloudWriteWorkspace\.setup\.ts/,
     /cloudWriteGate\.spec\.ts/,
-    /* SYNTHETIC-AUTH-PROBE-01B: braucht die eigene lokale Konfiguration. */
-    /localSyntheticAuthProbe\.spec\.ts/,
+    /*
+     * Alle lokalen Specs brauchen `playwright.local.config.ts` — dort steht
+     * die synthetische Supabase-Adresse, ohne die sie an der Anmeldemaske
+     * scheitern würden.
+     */
+    /local[A-Za-z0-9]*\.spec\.ts/,
   ],
   /* Ein Pilot — Parallelität bringt hier nichts und macht den Lauf unruhig. */
   workers: 1,
