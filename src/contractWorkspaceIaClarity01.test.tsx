@@ -243,7 +243,11 @@ describe('CONTRACT-WORKSPACE-IA-CLARITY-01', () => {
       }),
     );
     expect(panelHtml).toContain('data-testid="auftragskarte"');
-    expect(panelHtml).not.toContain('data-testid="contract-order-lv-overview"');
+    /*
+     * CONTRACT-ORDER-POSITION-VISIBILITY-CONFIRM-FIRST-01B — der LV-Überblick
+     * ist bei vorhandenen Positionen sofort da, die Bearbeitungstabelle nicht.
+     */
+    expect(panelHtml).toContain('data-testid="contract-order-lv-overview"');
     expect(panelHtml).not.toContain('data-testid="contract-order-positions"');
 
     const container = document.createElement('div');
@@ -264,9 +268,8 @@ describe('CONTRACT-WORKSPACE-IA-CLARITY-01', () => {
       '[data-testid="auftragskarte-toggle-scope"]',
     ) as HTMLButtonElement | null;
     expect(scopeToggle).toBeTruthy();
-    await act(async () => {
-      scopeToggle!.click();
-    });
+    /* Bereits offen — der Umschalter bleibt für das Zuklappen zuständig. */
+    expect(scopeToggle!.getAttribute('aria-expanded')).toBe('true');
     expect(container.querySelector('[data-testid="contract-order-lv-overview"]')).toBeTruthy();
     expect(container.textContent).toContain('PE-Folie verlegen');
 

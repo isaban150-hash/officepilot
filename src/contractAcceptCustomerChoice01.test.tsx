@@ -522,13 +522,16 @@ describe('CUSTOMER-FACHOBJEKT-04C', () => {
     expect(primary!.disabled).toBe(true);
     await click(primary);
 
-    // Der LV-Editor liegt hinter der Scope-Disclosure (Panel: scopeExpanded && hasPositions).
+    /*
+     * CONTRACT-ORDER-POSITION-VISIBILITY-CONFIRM-FIRST-01B — der Umfang ist bei
+     * vorhandenen Positionen bereits offen; der Umschalter bleibt bedienbar.
+     */
     const scopeToggle = mount.container.querySelector(
       '[data-testid="auftragskarte-toggle-scope"]',
     ) as HTMLButtonElement | null;
     expect(scopeToggle).toBeTruthy();
     expect(scopeToggle!.disabled).toBe(false);
-    await click(scopeToggle);
+    expect(scopeToggle!.getAttribute('aria-expanded')).toBe('true');
 
     const disclosure = mount.container.querySelector(
       '[data-testid="contract-lv-editor-disclosure"]',

@@ -108,8 +108,10 @@ describe('CONTRACT-WORKSPACE-LAYOUT-DEDUP-01', () => {
     expect(hintOccurrences).toBe(1);
     expect(html).toContain('data-testid="contract-workspace-summary-review-hints"');
 
-    // UX-01: LV only after „Leistungsumfang anzeigen“
-    expect(html).not.toContain('data-testid="contract-order-lv-overview"');
+    // CONTRACT-ORDER-POSITION-VISIBILITY-CONFIRM-FIRST-01B: Der LV-Überblick
+    // steht bei vorhandenen Positionen von Anfang an; die Bearbeitungstabelle
+    // bleibt hinter „Leistungsverzeichnis bearbeiten“.
+    expect(html).toContain('data-testid="contract-order-lv-overview"');
     expect(html).not.toContain('data-testid="contract-order-positions"');
     expect(html).toContain('data-testid="contract-chef-primary-action"');
     expect(html).toContain('data-testid="contract-discard-button"');

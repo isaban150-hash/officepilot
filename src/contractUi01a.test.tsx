@@ -219,8 +219,12 @@ describe('CONTRACT-UI-01A — professioneller Vertragsarbeitsplatz', () => {
       expect(panelHtml).toContain('data-testid="auftragskarte"');
       expect(panelHtml).toContain('data-testid="contract-chef-primary-action"');
       expect(panelHtml).toContain('Als Auftrag erfassen');
-      expect(panelHtml).toContain('Leistungsumfang anzeigen');
-      expect(panelHtml).not.toContain('data-testid="contract-order-lv-overview"');
+      /*
+       * CONTRACT-ORDER-POSITION-VISIBILITY-CONFIRM-FIRST-01B — der Umfang ist
+       * offen (Umschalter zeigt „ausblenden“), die Tabelle bleibt zu.
+       */
+      expect(panelHtml).toContain('Leistungsumfang ausblenden');
+      expect(panelHtml).toContain('data-testid="contract-order-lv-overview"');
       expect(panelHtml).not.toContain('data-testid="contract-order-positions"');
       expect(panelHtml).not.toContain('data-testid="contract-order-table-scroll"');
       expect(panelHtml).not.toContain('Confidence');
@@ -246,8 +250,11 @@ describe('CONTRACT-UI-01A — professioneller Vertragsarbeitsplatz', () => {
         }),
       );
 
-      expect(mounted.container.querySelector('[data-testid="contract-lv-editor-disclosure"]')).toBeNull();
-      await clickTestId(mounted.container, 'auftragskarte-toggle-scope');
+      /*
+       * CONTRACT-ORDER-POSITION-VISIBILITY-CONFIRM-FIRST-01B — Umfang und
+       * Editor-Disclosure stehen sofort; der Editorinhalt weiterhin nicht.
+       */
+      expect(mounted.container.querySelector('[data-testid="contract-lv-editor-disclosure"]')).toBeTruthy();
       expect(mounted.container.querySelector('[data-testid="contract-order-lv-overview"]')).toBeTruthy();
 
       const toggle = mounted.container.querySelector(

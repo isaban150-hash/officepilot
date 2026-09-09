@@ -181,7 +181,15 @@ describe('UX-01 Auftragskarte', () => {
     expect(view.risks.length).toBeLessThanOrEqual(3);
   });
 
-  it('Erstansicht: Experience-Card statt LV-Tabelle; Details eingeklappt', () => {
+  /*
+   * CONTRACT-ORDER-POSITION-VISIBILITY-CONFIRM-FIRST-01B — bewusst geänderte
+   * Erwartung. Bisher war der Leistungsumfang auch bei vorhandenen Positionen
+   * zugeklappt. Gemessen: Der Nutzer bestätigte damit drei vorausgewählte
+   * Positionen, die er nie gesehen hatte. Die LV-Übersicht mit der kompakten
+   * Positionsliste ist deshalb jetzt von Anfang an offen; die Bearbeitungs-
+   * tabelle bleibt eine zusätzliche Vertiefung.
+   */
+  it('Erstansicht mit Positionen: Leistungsumfang offen, Editor zu', () => {
     const html = renderToStaticMarkup(
       createElement(ContractOrderProposalPanel, {
         proposal: buildProposal(),
@@ -204,14 +212,48 @@ describe('UX-01 Auftragskarte', () => {
     expect(html).toContain('Ablehnen');
     expect(html).toContain('data-testid="document-experience-details"');
     expect(html).toContain('Kurz zusammengefasst');
-    expect(html).toContain('Leistungsumfang anzeigen');
+    expect(html).toContain('Leistungsumfang ausblenden');
     expect(html).toContain('Vertrag anzeigen');
     expect(html).toContain('Technische Details');
     expect(html).toContain('data-testid="auftragskarte-contract"');
     expect(html).toContain('data-testid="auftragskarte-details"');
-    expect(html).not.toContain('data-testid="contract-order-lv-overview"');
-    expect(html).not.toContain('data-testid="contract-order-positions"');
     expect(html).toContain('data-testid="contract-workspace-summary"');
+
+    /* Der Leistungsumfang steht vor der Primäraktion offen … */
+    expect(html).toContain('data-testid="contract-order-lv-overview"');
+    expect(html).toContain('data-testid="contract-order-compact-positions"');
+
+    /* … und zwar mit Beschreibung, Menge, Einzelpreis und Zeilensumme. */
+    expect(html).toContain('data-testid="contract-compact-position-1"');
+    expect(html).toContain('data-testid="contract-compact-position-4"');
+
+    /* Der Bearbeitungseditor bleibt zunächst zu — keine Formularwand. */
+    expect(html).toContain('data-testid="contract-lv-editor-disclosure"');
+    expect(html).not.toContain('data-testid="contract-order-positions"');
+    expect(html).not.toContain('data-testid="contract-select-safe-button"');
+  });
+
+  it('Erstansicht ohne Positionen: kein Leistungsumfang, kein LV-Bereich', () => {
+    const proposal = buildProposal();
+    const html = renderToStaticMarkup(
+      createElement(ContractOrderProposalPanel, {
+        proposal: { ...proposal, positions: [], positionCount: 0 },
+        translate,
+        onConfirmImport: vi.fn(),
+        onDiscard: vi.fn(),
+        onInquiry: vi.fn(),
+        onApplySuggestion: vi.fn(),
+      }),
+    );
+
+    /* Ein Vertrag ohne Leistungsverzeichnis bekommt keinen künstlichen. */
+    expect(html).toContain('data-testid="auftragskarte"');
+    expect(html).toContain('Als Auftrag erfassen');
+    expect(html).not.toContain('data-testid="auftragskarte-toggle-scope"');
+    expect(html).not.toContain('data-testid="auftragskarte-lv-scope"');
+    expect(html).not.toContain('data-testid="contract-order-lv-overview"');
+    expect(html).not.toContain('data-testid="contract-order-compact-positions"');
+    expect(html).not.toContain('data-testid="contract-order-positions"');
   });
 
   it('Primär-CTA nimmt Auftrag mit sicheren Positionen an', async () => {
@@ -246,7 +288,7 @@ describe('UX-01 Auftragskarte', () => {
     expect(onConfirmImport.mock.calls[0]![0]).toHaveLength(4);
   });
 
-  it('Leistungsumfang aufklappen zeigt LV ohne Primärflächen-Tabelle vorher', async () => {
+  it('Leistungsumfang lässt sich zuklappen und bleibt zu', async () => {
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -262,7 +304,9 @@ describe('UX-01 Auftragskarte', () => {
       );
     });
 
-    expect(container.querySelector('[data-testid="contract-order-lv-overview"]')).toBeNull();
+    /* Offen, weil Positionen vorliegen. */
+    expect(container.querySelector('[data-testid="contract-order-lv-overview"]')).toBeTruthy();
+    expect(container.querySelector('[data-testid="contract-lv-editor-disclosure"]')).toBeTruthy();
 
     const toggle = container.querySelector(
       '[data-testid="auftragskarte-toggle-scope"]',
@@ -271,7 +315,29 @@ describe('UX-01 Auftragskarte', () => {
       toggle.click();
     });
 
+    /* Eine bewusste Abwahl der Ansicht bleibt bestehen … */
+    expect(container.querySelector('[data-testid="contract-order-lv-overview"]')).toBeNull();
+
+    /* … auch über ein erneutes Rendern desselben Vorschlags hinweg. */
+    await act(async () => {
+      root!.render(
+        createElement(ContractOrderProposalPanel, {
+          proposal: buildProposal(),
+          translate,
+          onConfirmImport: vi.fn(),
+          onDiscard: vi.fn(),
+        }),
+      );
+    });
+    expect(container.querySelector('[data-testid="contract-order-lv-overview"]')).toBeNull();
+
+    await act(async () => {
+      (
+        container.querySelector(
+          '[data-testid="auftragskarte-toggle-scope"]',
+        ) as HTMLButtonElement
+      ).click();
+    });
     expect(container.querySelector('[data-testid="contract-order-lv-overview"]')).toBeTruthy();
-    expect(container.querySelector('[data-testid="contract-lv-editor-disclosure"]')).toBeTruthy();
   });
 });

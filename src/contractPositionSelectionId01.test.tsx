@@ -94,12 +94,19 @@ function buildProposal(positions: EnhancedDetectedOrderPosition[]): ContractOrde
   };
 }
 
-/** Öffnet Umfang + LV-Editor, damit die Positionszeilen im DOM stehen. */
+/**
+ * Öffnet Umfang + LV-Editor, damit die Positionszeilen im DOM stehen.
+ *
+ * CONTRACT-ORDER-POSITION-VISIBILITY-CONFIRM-FIRST-01B — der Umfang ist bei
+ * vorhandenen Positionen bereits offen. Der Umschalter wird deshalb nur noch
+ * betätigt, wenn er tatsächlich zugeklappt ist; sonst würde er zuklappen.
+ */
 async function openEditor(container: HTMLElement): Promise<void> {
   const scopeToggle = container.querySelector(
     '[data-testid="auftragskarte-toggle-scope"]',
   ) as HTMLElement | null;
-  if (scopeToggle) {
+  const scopeOpen = Boolean(container.querySelector('[data-testid="auftragskarte-lv-scope"]'));
+  if (scopeToggle && !scopeOpen) {
     await act(async () => {
       scopeToggle.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
     });

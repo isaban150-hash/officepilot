@@ -228,7 +228,25 @@ export function ContractOrderProposalPanel({
   const [selections, setSelections] = useState<ContractPositionSelectionMap>(() =>
     buildInitialSelections(positions),
   );
-  const [scopeExpanded, setScopeExpanded] = useState(false);
+  /*
+   * CONTRACT-ORDER-POSITION-VISIBILITY-CONFIRM-FIRST-01B — der Leistungsumfang
+   * ist von Anfang an offen, sobald der Vorschlag Positionen trägt.
+   *
+   * Gemessener Anlass: Bei einem Werkvertrag mit drei Positionen waren alle
+   * drei bereits vorausgewählt und wurden von „Als Auftrag erfassen" importiert
+   * — sichtbar war vorher keine einzige. Bestätigt wurde damit etwas, das der
+   * Nutzer nie gesehen hatte.
+   *
+   * Der Initialwert genügt: Das Panel wird erst gemountet, wenn ein Vorschlag
+   * existiert (`DocumentReviewExperience` rendert es hinter
+   * `showContractProposal`), und dessen `positions` sind zu diesem Zeitpunkt
+   * vollständig. Bewusst kein Effekt, der später nachöffnet — klappt der Nutzer
+   * den Umfang zu, bleibt er zu.
+   *
+   * Ohne Positionen bleibt alles wie bisher: `hasPositions` ist false, der
+   * Umschalter erscheint nicht, der Bereich wird nie gerendert.
+   */
+  const [scopeExpanded, setScopeExpanded] = useState(() => positions.length > 0);
   const [editorExpanded, setEditorExpanded] = useState(false);
   const [contractOpen, setContractOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
