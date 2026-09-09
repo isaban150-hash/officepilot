@@ -6,6 +6,7 @@ import {
   getPaymentSavedToastKey,
   InvoicePaymentForm,
 } from '../components/invoice/InvoicePaymentForm';
+import { InvoiceCancelDialog } from '../components/invoice/InvoiceCancelDialog';
 import { InvoicePaymentHistory } from '../components/invoice/InvoicePaymentHistory';
 import { InvoicePaymentSummary } from '../components/invoice/InvoicePaymentSummary';
 import { DetailExperienceCard } from '../components/detail/DetailExperienceCard';
@@ -56,6 +57,7 @@ export function InvoiceDetailPage() {
     vorgangId && invoiceId ? getVorgangInvoice(vorgangId, invoiceId) : undefined,
   );
   const [showPaymentForm, setShowPaymentForm] = useState(false);
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
 
   const vorgang = vorgangId ? getVorgangById(vorgangId) : undefined;
@@ -306,6 +308,17 @@ export function InvoiceDetailPage() {
   const paymentSummary = calculatePaymentSummary(invoice);
   const statusKey = `payment.status.${paymentSummary.status}` as TranslationKey;
 
+  /*
+   * FINAL-INVOICE-CANCELLATION-UI-01A — wann die Stornoaktion überhaupt
+   * erscheint. Drei Bedingungen, alle drei notwendig; die endgültige Prüfung
+   * bleibt beim Server.
+   */
+  const invoiceCancelled = isInvoiceCancelled(invoice);
+  const canCancelInvoice =
+    invoice.type === 'schluss' &&
+    (invoice.status === 'vorbereitet' || invoice.status === 'versendet') &&
+    !invoiceCancelled;
+
   const autoDownloadPdf = searchParams.get('auto') === 'pdf';
 
   const primaryActions = (
@@ -330,6 +343,30 @@ export function InvoiceDetailPage() {
         layout="stack"
         autoDownloadPdf={autoDownloadPdf}
       />
+      {/*
+        * FINAL-INVOICE-CANCELLATION-UI-01A — der Storno steht **über** dem
+        * Versandpanel und ersetzt es nicht: „versendet" bleibt ein Faktum der
+        * Vergangenheit, auch wenn die Rechnung danach storniert wurde.
+        */}
+      {invoiceCancelled && (
+        <section className="invoice-cancelled-panel" data-testid="invoice-cancelled-panel">
+          <p className="invoice-hint invoice-hint--warning" data-testid="invoice-cancelled-notice">
+            {translate('invoice.cancel.cancelledNotice')}
+          </p>
+          {invoice.cancelledAt ? (
+            <div className="data-row" data-testid="invoice-cancelled-at">
+              <span className="data-row__label">{translate('invoice.cancel.cancelledAt')}</span>
+              <span className="data-row__value">{invoice.cancelledAt.slice(0, 10)}</span>
+            </div>
+          ) : null}
+          {invoice.cancelReason ? (
+            <div className="data-row" data-testid="invoice-cancelled-reason">
+              <span className="data-row__label">{translate('invoice.cancel.cancelledReason')}</span>
+              <span className="data-row__value">{invoice.cancelReason}</span>
+            </div>
+          ) : null}
+        </section>
+      )}
       <InvoiceSentPanel
         vorgangId={vorgangId}
         invoice={invoice}
@@ -352,6 +389,26 @@ export function InvoiceDetailPage() {
       >
         {translate('detail.action.writeMessage')}
       </Button>
+      {/*
+        * FINAL-INVOICE-CANCELLATION-UI-01A — Stornierung, bewusst als letzte
+        * Aktion und optisch als destruktiv gekennzeichnet.
+        *
+        * Sichtbar nur für eine **freigegebene Schlussrechnung, die noch nicht
+        * storniert ist**. Entwürfe, Abschläge und andere Belegarten bieten sie
+        * gar nicht erst an; der Server weist sie zusätzlich ab
+        * (`invoice_cancel_type_not_supported`). Der Klick storniert nichts — er
+        * öffnet den Bestätigungsdialog.
+        */}
+      {canCancelInvoice && (
+        <Button
+          variant="danger"
+          fullWidth
+          onClick={() => setShowCancelDialog(true)}
+          data-testid="invoice-cancel-action"
+        >
+          {translate('invoice.cancel.action')}
+        </Button>
+      )}
     </>
   );
 
@@ -471,6 +528,22 @@ export function InvoiceDetailPage() {
         onSaved={handlePaymentSaved}
         translate={translate}
       />
+
+      {/*
+        * Der Dialog wird nur montiert, wenn die Aktion fachlich zulässig ist.
+        * Damit gibt es keinen Weg, ihn über einen Zustandsrest an einer
+        * Rechnung zu öffnen, die gar nicht stornierbar ist.
+        */}
+      {canCancelInvoice && (
+        <InvoiceCancelDialog
+          vorgangId={vorgangId}
+          invoice={invoice}
+          open={showCancelDialog}
+          onClose={() => setShowCancelDialog(false)}
+          onCancelled={setInvoice}
+          translate={translate}
+        />
+      )}
     </div>
   );
 }

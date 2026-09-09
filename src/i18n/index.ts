@@ -2363,6 +2363,44 @@ const deLegacy = {
   'payment.status.bezahlt': 'Bezahlt',
   'payment.status.ueberfaellig': 'Überfällig',
   'payment.status.storniert': 'Storniert',
+  /*
+   * FINAL-INVOICE-CANCELLATION-UI-01A — Stornierung einer Schlussrechnung.
+   *
+   * Die Fehlertexte sagen, was der Nutzer tun kann, und nennen niemals den
+   * technischen Servercode.
+   */
+  'invoice.cancel.action': 'Rechnung stornieren',
+  'invoice.cancel.title': 'Schlussrechnung stornieren',
+  'invoice.cancel.confirm': 'Rechnung endgültig stornieren',
+  'invoice.cancel.notice':
+    'Die Rechnung bleibt mit ihrer Nummer und allen Beträgen erhalten und ist weiterhin einsehbar. '
+    + 'Sie zählt danach aber nicht mehr als abgerechnet. Die Stornierung lässt sich nicht rückgängig machen. '
+    + 'Anschliessend können Sie bei Bedarf eine neue Schlussrechnung vorbereiten.',
+  'invoice.cancel.reasonLabel': 'Grund der Stornierung (Pflichtangabe)',
+  'invoice.cancel.error.reasonRequired': 'Bitte geben Sie einen Grund für die Stornierung an.',
+  'invoice.cancel.error.activePayments':
+    'Zu dieser Rechnung ist bereits ein Zahlungseingang erfasst. '
+    + 'Nehmen Sie die Zahlung zuerst zurück; danach ist die Stornierung möglich.',
+  'invoice.cancel.error.typeNotSupported':
+    'Nur Schlussrechnungen können hier storniert werden.',
+  'invoice.cancel.error.notFinalized':
+    'Nur freigegebene Rechnungen können storniert werden. Ein Entwurf lässt sich stattdessen verwerfen.',
+  'invoice.cancel.error.notFound':
+    'Diese Rechnung wurde in der Cloud nicht gefunden. Bitte laden Sie die Ansicht neu.',
+  'invoice.cancel.error.forbidden': 'Sie haben keine Berechtigung, diese Rechnung zu stornieren.',
+  'invoice.cancel.error.offline':
+    'Keine Verbindung zur Cloud. Es wurde nichts storniert – bitte später erneut versuchen.',
+  'invoice.cancel.error.workspaceMissing':
+    'Kein aktiver Arbeitsbereich. Es wurde nichts storniert.',
+  'invoice.cancel.error.localPersistFailed':
+    'Die Rechnung wurde in der Cloud storniert, konnte auf diesem Gerät aber nicht gespeichert werden. '
+    + 'Bitte laden Sie die Ansicht neu – stornieren Sie nicht erneut.',
+  'invoice.cancel.error.unknown':
+    'Die Stornierung konnte nicht abgeschlossen werden. Es wurde nichts storniert.',
+  'invoice.cancel.cancelledAt': 'Storniert am',
+  'invoice.cancel.cancelledReason': 'Grund der Stornierung',
+  'invoice.cancel.cancelledNotice':
+    'Diese Rechnung ist storniert. Sie bleibt als Beleg erhalten und zählt nicht mehr als abgerechnet.',
   'payment.invoiceNotFound': 'Rechnung nicht gefunden.',
   'payment.invoiceNotFinalized': 'Nur finalisierte Rechnungen können Zahlungen erhalten.',
   'payment.invoiceCancelled': 'Stornierte Rechnung – keine Zahlung möglich.',
