@@ -25,7 +25,8 @@
     "test:e2e:cloud-write-gate": "playwright test --config=playwright.cloud.config.ts --project=write-gate",
     "test:e2e:local-auth-probe": "playwright test --config=playwright.local.config.ts --project=local localSyntheticAuthProbe",
     "test:e2e:local-cloud-guard": "playwright test --config=playwright.local.config.ts --project=local localCloudBlockGuard",
-    "test:e2e:local-doc-intake": "playwright test --config=playwright.local.config.ts --project=local localFachflowDoc00001"
+    "test:e2e:local-doc-intake": "playwright test --config=playwright.local.config.ts --project=local localFachflowDoc00001.spec",
+    "test:e2e:local-doc-vorgang": "playwright test --config=playwright.local.config.ts --project=local localFachflowDoc00001Vorgang"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.2",
