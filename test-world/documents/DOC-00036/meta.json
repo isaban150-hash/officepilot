@@ -1,0 +1,27 @@
+{
+  "id": "DOC-00036",
+  "companyId": "COMPANY-001",
+  "projectId": "PRJ-020",
+  "customerId": "CUST-015",
+  "taxonomyTypeId": "DOCTYPE-006",
+  "documentType": "contract",
+  "subtype": "werkvertrag",
+  "title": "Werkvertrag mit Leistungsverzeichnis – Heizungssanierung",
+  "receivedAt": "2026-02-09",
+  "lifecyclePhase": "contract",
+  "qualityTag": "clean",
+  "sourceKind": "pdf",
+  "suiteTags": [
+    "commit",
+    "release"
+  ],
+  "notes": "GOLD: Werkvertrag mit Leistungsverzeichnis. Drei saubere Arbeitspositionen, unterstuetzte Einheiten, stimmige Multiplikation. Kunde CUST-015 ohne bestehendes Projekt. Kein Material, kein 13b, kein Pruefbedarf. Basis fuer den Positions-Goldnachweis und spaetere Rechnungs-E2E.",
+  "expected": {
+    "classifiedKind": "werkvertrag",
+    "caseMatchStatus": "exact",
+    "matchedProjectId": "PRJ-020",
+    "primaryActionId": "review_document",
+    "alertIds": []
+  },
+  "sourceFile": "source.pdf"
+}

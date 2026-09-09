@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://officepilot.local/test-world/schemas/expected-positions.schema.json",
+  "title": "TestWorld Expected Positions",
+  "description": "Optionale Erwartung je Golddokument. Bewusst semantisch statt betragsgenau: Sie soll erkennen, wenn eine Position verloren geht, eine hinzukommt, eine Einheit nicht mehr aufloesbar ist, eine Position nicht mehr importierbar wird oder ein Rechenkonflikt neu entsteht. Exakte Mengen und Preise bleiben Sache der Unit-Tests des Extraktors.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["documentId", "positionCount", "positions"],
+  "properties": {
+    "documentId": { "type": "string", "pattern": "^DOC-[0-9]{5}$" },
+    "positionCount": { "type": "integer", "minimum": 0 },
+    "positions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["positionNumber", "unitResolved", "importable", "hasMathConflict"],
+        "properties": {
+          "positionNumber": { "type": "string", "minLength": 1 },
+          "unitResolved": { "type": "boolean" },
+          "importable": { "type": "boolean" },
+          "hasMathConflict": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}

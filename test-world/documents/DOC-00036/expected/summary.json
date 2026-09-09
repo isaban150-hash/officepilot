@@ -1,0 +1,14 @@
+{
+  "documentId": "DOC-00036",
+  "family": "contract",
+  "headline": "Werkvertrag",
+  "factOrder": [
+    "customer",
+    "project",
+    "orderValue",
+    "site",
+    "positions",
+    "gewerk"
+  ],
+  "facts": []
+}

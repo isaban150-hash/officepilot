@@ -1,0 +1,9 @@
+{
+  "documentId": "DOC-00036",
+  "positionCount": 3,
+  "positions": [
+    { "positionNumber": "01", "unitResolved": true, "importable": true, "hasMathConflict": false },
+    { "positionNumber": "02", "unitResolved": true, "importable": true, "hasMathConflict": false },
+    { "positionNumber": "03", "unitResolved": true, "importable": true, "hasMathConflict": false }
+  ]
+}

@@ -239,6 +239,25 @@ for (const [file, schemaFile] of expectedFiles) {
   expectedValidators.set(file, ajv.compile(schema));
 }
 
+/**
+ * Optionale Erwartungen: vorhanden werden sie geprüft, fehlend sind sie kein
+ * Mangel.
+ *
+ * `positions.json` gibt es erst, seit ein Fall ein Leistungsverzeichnis trägt.
+ * Sie in die Pflichtliste oben aufzunehmen hiesse, alle Altfälle für ungültig
+ * zu erklären — geprüft wird deshalb nur, was da ist.
+ *
+ * Ausschliesslich strukturelle Gültigkeit. Ob der Produktextraktor die
+ * erwarteten Positionen wirklich findet, entscheidet der Goldtest mit dem
+ * echten Extraktor; hier wird keine Fachlogik nachgebaut.
+ */
+const optionalExpectedFiles = [['positions.json', 'expected-positions.schema.json']];
+const optionalExpectedValidators = new Map();
+for (const [file, schemaFile] of optionalExpectedFiles) {
+  const schema = JSON.parse(readFileSync(join(root, 'schemas', schemaFile), 'utf8'));
+  optionalExpectedValidators.set(file, ajv.compile(schema));
+}
+
 let expectedCount = 0;
 const PRIMARY_BY_STATUS = {
   exact: 'open_vorgang',
@@ -273,6 +292,26 @@ for (const folder of docFolders) {
       console.error('FAIL expected documentId mismatch', folder, file, data.documentId);
     }
     bundle[file] = data;
+  }
+
+  for (const [file] of optionalExpectedFiles) {
+    const path = join(expectedDir, file);
+    // Fehlende optionale Erwartung ist kein Fehler — sie wird nur nicht geprüft.
+    if (!existsSync(path)) continue;
+
+    total += 1;
+    expectedCount += 1;
+    const data = JSON.parse(readFileSync(path, 'utf8'));
+    const validate = optionalExpectedValidators.get(file);
+    if (!validate(data)) {
+      failed += 1;
+      console.error('FAIL', `documents/${folder}/expected/${file}`, validate.errors);
+      continue;
+    }
+    if (data.documentId !== folder) {
+      failed += 1;
+      console.error('FAIL expected documentId mismatch', folder, file, data.documentId);
+    }
   }
 
   const classification = bundle['classification.json'];

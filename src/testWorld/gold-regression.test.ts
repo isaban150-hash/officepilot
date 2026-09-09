@@ -29,10 +29,11 @@ describe('TESTWORLD gold regression 03B', () => {
     hydrateVorgangStore(goldProjectsToVorgaenge(masters));
   });
 
-  it('loads all 35 gold documents with expected bundles', () => {
-    expect(bundles.length).toBe(35);
+  it('loads all 36 gold documents with expected bundles', () => {
+    /* ORDER-WITH-POSITIONS-01B — DOC-00036 kam als Werkvertrag mit LV hinzu. */
+    expect(bundles.length).toBe(36);
     expect(bundles.map((b) => b.meta.id)).toEqual(
-      Array.from({ length: 35 }, (_, i) => `DOC-${String(i + 1).padStart(5, '0')}`),
+      Array.from({ length: 36 }, (_, i) => `DOC-${String(i + 1).padStart(5, '0')}`),
     );
     for (const bundle of bundles) {
       expect(bundle.classification.documentId).toBe(bundle.meta.id);
@@ -51,7 +52,7 @@ describe('TESTWORLD gold regression 03B', () => {
       if (failed.length > 0) {
         expect.fail(formatGoldValidationReport(results));
       }
-      expect(results).toHaveLength(35);
+      expect(results).toHaveLength(36);
       expect(results.every((r) => r.ok)).toBe(true);
     },
     GOLD_REGRESSION_TIMEOUT_MS,

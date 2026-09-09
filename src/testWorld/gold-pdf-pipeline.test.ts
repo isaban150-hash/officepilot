@@ -48,9 +48,10 @@ describe('TESTWORLD gold PDF pipeline 04B', () => {
     hydrateVorgangStore(goldProjectsToVorgaenge(masters));
   });
 
-  it('has 35 gold source.pdf files', () => {
+  it('has 36 gold source.pdf files', () => {
+    /* ORDER-WITH-POSITIONS-01B — DOC-00036 kam als Werkvertrag mit LV hinzu. */
     const ids = listGoldDocumentIds(testWorldRoot);
-    expect(ids).toHaveLength(35);
+    expect(ids).toHaveLength(36);
     for (const id of ids) {
       expect(existsSync(join(testWorldRoot, 'documents', id, 'source.pdf')), id).toBe(true);
     }
@@ -76,7 +77,7 @@ describe('TESTWORLD gold PDF pipeline 04B', () => {
   });
 
   it(
-    'runs all 35 source.pdf through real OfficePilot pipeline and reports vs expected',
+    'runs all 36 source.pdf through real OfficePilot pipeline and reports vs expected',
     async () => {
       const report = await runAllGoldPdfPipeline(masters, bundles, testWorldRoot, {
         beforeEachDoc: () => {
@@ -92,10 +93,10 @@ describe('TESTWORLD gold PDF pipeline 04B', () => {
       // eslint-disable-next-line no-console
       console.log(`Report written: ${reportPath}`);
 
-      // Regression gate on the live comparison: all 35 PDFs must run through the
+      // Regression gate on the live comparison: all 36 PDFs must run through the
       // pipeline (no ERROR) and none may deviate from Expected (no FAIL). The written
       // report stays a diagnostic artifact — it is never the source of truth.
-      expect(report.checked).toBe(35);
+      expect(report.checked).toBe(36);
       expect(report.error).toBe(0);
       expect(report.fail, report.deviations.join('\n')).toBe(0);
       expect(existsSync(reportPath)).toBe(true);

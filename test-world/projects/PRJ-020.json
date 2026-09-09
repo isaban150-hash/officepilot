@@ -1,0 +1,20 @@
+{
+  "id": "PRJ-020",
+  "companyId": "COMPANY-001",
+  "branchId": "BRANCH-001",
+  "customerId": "CUST-015",
+  "title": "Sanierung Heizungsanlage – Bestandsgebäude",
+  "siteName": "Sägewerk Ernst Flisch & Partner GmbH",
+  "siteStreet": "Werkstraße 14",
+  "siteZip": "32657",
+  "siteCity": "Lemgo",
+  "trade": "Heizung",
+  "status": "commissioned",
+  "startDate": "2026-03-02",
+  "endDate": "2026-04-17",
+  "foremanEmployeeId": "EMP-003",
+  "timelineDocumentIds": [
+    "DOC-00036"
+  ],
+  "notes": "GOLD: Projekt zum Werkvertrag DOC-00036 (Leistungsverzeichnis mit drei Arbeitspositionen)."
+}
