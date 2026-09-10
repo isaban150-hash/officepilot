@@ -67,7 +67,21 @@ export function updateCompanyProfile(
    * auslösen, die nichts bedeutet. Weiter geht die Normalisierung bewusst
    * nicht: Gross-/Kleinschreibung und innere Zeichen sind Teil der Angabe.
    */
-  for (const field of ['registrationAuthority', 'registrationNumber'] as const) {
+  /*
+   * COMPANY-PROFILE-MANAGING-DIRECTOR-UX-01 — `managingDirector` folgt
+   * derselben Regel, und ausdrücklich **nur** dieser.
+   *
+   * Das Feld darf mehrere Namen tragen („Max Mustermann, Erika Beispiel"). Was
+   * innen steht, gehört dem Betrieb: Kommas, Semikolons, doppelte Leerzeichen
+   * und die Reihenfolge bleiben unangetastet. Nichts wird aufgeteilt und
+   * nichts einzeln nachgeputzt — eine Namensliste zu normalisieren hiesse zu
+   * raten, wo ein Name aufhört.
+   */
+  for (const field of [
+    'registrationAuthority',
+    'registrationNumber',
+    'managingDirector',
+  ] as const) {
     if (partial[field] !== undefined) {
       merged[field] = (partial[field] ?? '').trim();
     }

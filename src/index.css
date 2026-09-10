@@ -2622,6 +2622,21 @@ body {
   color: #374151;
 }
 
+/*
+ * COMPANY-PROFILE-MANAGING-DIRECTOR-UX-01 — der Feldhinweis in den Firmendaten.
+ *
+ * Bewusst auf dieses Formular begrenzt: `.form-hint` wird auch von der
+ * Wiederherstellungs- und der Konfliktseite verwendet, und eine globale Regel
+ * würde deren Darstellung mitverändern. `.hint-text` schied aus — es zentriert
+ * seinen Text, was unter einem linksbündigen Eingabefeld falsch aussähe.
+ */
+.company-profile-form .form-hint {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: var(--color-text-muted);
+}
+
 .company-profile-form__logo-preview {
   display: block;
   max-width: 120px;

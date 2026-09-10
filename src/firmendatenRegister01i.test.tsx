@@ -283,3 +283,124 @@ describe('01I — Rechnungs-Cloud-Vertrag kennt die Registerfelder', () => {
     expect(pulled?.companySnapshot?.registrationNumber).toBe('HRB 12345');
   });
 });
+
+/**
+ * COMPANY-PROFILE-MANAGING-DIRECTOR-UX-01 — mehrere Geschäftsführer im
+ * bestehenden Freitextfeld.
+ *
+ * Speichern und Drucken konnten das längst — nachgewiesen in
+ * `invoicePdfCompanyBlock01`. Was fehlte, war der Hinweis darauf, und ein
+ * sauberer Rand beim Speichern. Kein Array, kein Splitten: Was zwischen den
+ * Namen steht, gehört dem Betrieb.
+ */
+describe('01 — G: Geschäftsführer/Inhaber', () => {
+  let mounted: Mount | null = null;
+
+  beforeEach(() => {
+    hydrateCompanyProfileStore({ ...BETA_TEST_COMPANY_PROFILE, managingDirector: '' });
+  });
+
+  afterEach(() => {
+    if (mounted) {
+      act(() => {
+        mounted!.root.unmount();
+      });
+      mounted.container.remove();
+      mounted = null;
+    }
+  });
+
+  it('G1: der Hilfetext steht sichtbar beim richtigen Feld', () => {
+    mounted = mountFirmendaten();
+
+    const hint = mounted.container.querySelector(
+      '[data-testid="profile-managingDirector-hint"]',
+    ) as HTMLElement;
+    expect(hint).not.toBeNull();
+    expect(hint.textContent).toBe(
+      'Bei mehreren Geschäftsführern alle Namen angeben, durch Komma getrennt.',
+    );
+
+    /* „Beim richtigen Feld" heisst: im selben fieldset und verknüpft. */
+    const input = mounted.container.querySelector(
+      '#profile-managingDirector',
+    ) as HTMLInputElement;
+    expect(hint.closest('fieldset')).toBe(input.closest('fieldset'));
+    expect(input.getAttribute('aria-describedby')).toBe('profile-managingDirector-hint');
+    expect(hint.id).toBe('profile-managingDirector-hint');
+
+    /* Und nur dort — kein Hinweis unter jedem Feld. */
+    expect(mounted.container.querySelectorAll('.form-hint')).toHaveLength(1);
+  });
+
+  it('G2: ein einzelner Name wird gespeichert', () => {
+    mounted = mountFirmendaten();
+    setNativeInputValue(
+      mounted.container.querySelector('#profile-managingDirector') as HTMLInputElement,
+      'Max Mustermann',
+    );
+    act(() => {
+      (mounted!.container.querySelector('button[type="submit"]') as HTMLButtonElement).click();
+    });
+
+    expect(mounted.container.querySelector('.form-error')).toBeNull();
+    expect(getCompanyProfile().managingDirector).toBe('Max Mustermann');
+  });
+
+  it('G3: mehrere Namen mit Komma werden vollständig gespeichert', () => {
+    mounted = mountFirmendaten();
+    setNativeInputValue(
+      mounted.container.querySelector('#profile-managingDirector') as HTMLInputElement,
+      'Max Mustermann, Erika Beispiel',
+    );
+    act(() => {
+      (mounted!.container.querySelector('button[type="submit"]') as HTMLButtonElement).click();
+    });
+
+    expect(getCompanyProfile().managingDirector).toBe('Max Mustermann, Erika Beispiel');
+  });
+
+  it('G4/G5: aussen wird getrimmt, innen nichts verändert', () => {
+    const result = updateCompanyProfile({
+      managingDirector: '  Max Mustermann,  Erika Beispiel  ',
+    });
+
+    expect(result.success).toBe(true);
+    /* Die zwei Leerzeichen nach dem Komma bleiben stehen. */
+    expect(getCompanyProfile().managingDirector).toBe('Max Mustermann,  Erika Beispiel');
+  });
+
+  it('G5b: Semikolon und andere bestehende Schreibweisen bleiben unangetastet', () => {
+    updateCompanyProfile({ managingDirector: ' Max Mustermann; Erika Beispiel ' });
+    expect(getCompanyProfile().managingDirector).toBe('Max Mustermann; Erika Beispiel');
+
+    updateCompanyProfile({ managingDirector: 'Dr. Beispiel, Erika u. Mustermann, Max' });
+    expect(getCompanyProfile().managingDirector).toBe(
+      'Dr. Beispiel, Erika u. Mustermann, Max',
+    );
+  });
+
+  it('ein reiner Leerzeichenwert wird zum leeren Feld, nicht zu undefined', () => {
+    updateCompanyProfile({ managingDirector: '   ' });
+
+    expect(getCompanyProfile().managingDirector).toBe('');
+  });
+
+  it('G7: der gespeicherte Wert erreicht den Rechnungs-Snapshot unverändert', async () => {
+    const { buildInvoiceDraftForType } = await import('./services/invoiceService');
+    const { hydrateVorgangStore } = await import('./services/vorgangService');
+    const { createTestVorgangWithExecutedQuantity, testSetup } = await import('./test/fixtures');
+    const { resetTestStores } = await import('./test/resetStores');
+
+    resetTestStores();
+    hydrateCompanyProfileStore({
+      ...BETA_TEST_COMPANY_PROFILE,
+      managingDirector: 'Max Mustermann, Erika Beispiel',
+    });
+    hydrateVorgangStore([createTestVorgangWithExecutedQuantity()]);
+
+    const draft = buildInvoiceDraftForType('v-test-1', testSetup, 'rechnung');
+    expect(draft).not.toBeNull();
+    expect(draft!.companySnapshot.managingDirector).toBe('Max Mustermann, Erika Beispiel');
+  });
+});

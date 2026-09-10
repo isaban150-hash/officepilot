@@ -76,10 +76,24 @@ const TEXT_FIELDS: {
   labelKey: TranslationKey;
   type?: string;
   placeholderKey?: TranslationKey;
+  hintKey?: TranslationKey;
 }[] = [
   { key: 'companyName', labelKey: 'companyProfile.companyName' },
   { key: 'legalForm', labelKey: 'companyProfile.legalForm' },
-  { key: 'managingDirector', labelKey: 'companyProfile.managingDirector' },
+  /*
+   * COMPANY-PROFILE-MANAGING-DIRECTOR-UX-01 — dass mehrere Namen erlaubt sind,
+   * sah man dem Feld bisher nicht an.
+   *
+   * Speichern und Drucken konnten es längst; nur erfuhr es niemand, und ein
+   * Betrieb mit zwei Geschäftsführern trug im Zweifel einen ein. Der Hinweis
+   * nennt die empfohlene Eingabeform — er ist keine Vorschrift: Bestehende
+   * Werte mit Semikolon oder anderer Schreibweise bleiben gültig.
+   */
+  {
+    key: 'managingDirector',
+    labelKey: 'companyProfile.managingDirector',
+    hintKey: 'companyProfile.managingDirectorHint',
+  },
   { key: 'street', labelKey: 'companyProfile.street' },
   { key: 'zip', labelKey: 'companyProfile.zip' },
   { key: 'city', labelKey: 'companyProfile.city' },
@@ -471,7 +485,7 @@ export function FirmendatenPage() {
       <BackupExportPanel />
 
       <form className="company-profile-form" onSubmit={handleSubmit}>
-        {TEXT_FIELDS.map(({ key, labelKey, type = 'text', placeholderKey }) => (
+        {TEXT_FIELDS.map(({ key, labelKey, type = 'text', placeholderKey, hintKey }) => (
           <fieldset key={key} className="form-group">
             <label htmlFor={`profile-${key}`}>{translate(labelKey)}</label>
             <input
@@ -481,10 +495,17 @@ export function FirmendatenPage() {
               className="input"
               value={String(draft[key] ?? '')}
               placeholder={placeholderKey ? translate(placeholderKey) : undefined}
+              /* Der Hinweis wird vorgelesen, nicht nur gesehen. */
+              aria-describedby={hintKey ? `profile-${key}-hint` : undefined}
               onChange={(e) => handleChange(key, e.target.value)}
               autoComplete={key === 'iban' ? 'off' : undefined}
               required={key === 'companyName'}
             />
+            {hintKey && (
+              <p className="form-hint" id={`profile-${key}-hint`} data-testid={`profile-${key}-hint`}>
+                {translate(hintKey)}
+              </p>
+            )}
           </fieldset>
         ))}
 

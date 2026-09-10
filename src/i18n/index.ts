@@ -142,6 +142,8 @@ const deLegacy = {
   'companyProfile.website': 'Website',
   'companyProfile.taxNumber': 'Steuernummer',
   'companyProfile.vatId': 'USt-IdNr.',
+  'companyProfile.managingDirectorHint':
+    'Bei mehreren Geschäftsführern alle Namen angeben, durch Komma getrennt.',
   'companyProfile.registrationAuthority': 'Registergericht',
   'companyProfile.registrationNumber': 'Registernummer',
   'companyProfile.registrationAuthority.placeholder': 'Amtsgericht Lemgo',
