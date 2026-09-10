@@ -61,6 +61,25 @@ export function createOrderPosition(overrides: Partial<OrderPosition> = {}): Ord
 }
 
 /**
+ * Eine ausdrückliche Kundenentscheidung für die Vertragsannahme.
+ *
+ * CUSTOMER-FACHOBJEKT-04C — wer aus einem Vertrag einen Auftrag erzeugt, muss
+ * zuvor entscheiden, **wer der Kunde ist**. Ohne Entscheidung lehnt
+ * `acceptContractOrderFromProposal` mit `customerDecision.required` ab, und das
+ * ist Absicht: Es verhindert, dass still ein falscher — oder gar der eigene —
+ * Betrieb als Kunde entsteht.
+ *
+ * Der Name ist bewusst ein fremder Auftraggeber und **nie** der eigene
+ * Firmenname, damit die Own-company-Prüfung im Test scharf bleibt.
+ */
+export function createTestCustomerDecision(name = 'Müller Bau GmbH'): {
+  kind: 'new';
+  input: { name: string };
+} {
+  return { kind: 'new', input: { name } };
+}
+
+/**
  * Eine Auftragsposition, an der die Leistung **tatsächlich erfasst** wurde.
  *
  * INVOICE-ACTUAL-QUANTITY-01B — die Planmenge ist kein Aufmass. `quantity`

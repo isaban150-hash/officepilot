@@ -31,7 +31,11 @@ import {
 import { getInboxStoreSnapshot, hydrateInboxStore } from './inboxService';
 import { getAllVorgaenge, getVorgangById, hydrateVorgangStore } from './vorgangService';
 import { getAllDocuments } from './documentService';
-import { createAuftragInboxItem, createTestVorgang } from '../test/fixtures';
+import {
+  createAuftragInboxItem,
+  createTestCustomerDecision,
+  createTestVorgang,
+} from '../test/fixtures';
 import { resetTestStores } from '../test/resetStores';
 import type { InboxItem } from '../types/models';
 
@@ -225,6 +229,12 @@ describe('WV-LV-ROBUSTHEIT-01A-N2 – D: positiver Gegenfall', () => {
       proposal: proposal!,
       selectedPositions: proposal!.positions,
       companyName: 'Steinweg Montage GmbH',
+      /*
+       * CUSTOMER-FACHOBJEKT-04C — nur als notwendige Voraussetzung ergänzt.
+       * Geprüft wird hier weiterhin ausschliesslich, dass saubere
+       * qm-Positionen am Einheiten-Gate **nicht** blockiert werden.
+       */
+      customerDecision: createTestCustomerDecision(),
     });
 
     expect(result.success).toBe(true);

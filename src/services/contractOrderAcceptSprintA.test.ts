@@ -18,7 +18,7 @@ import {
   confirmFilingDecisionForTests,
   importInboxDocumentForTests,
 } from '../test/confirmFilingDecisionForTests';
-import { createAuftragInboxItem } from '../test/fixtures';
+import { createAuftragInboxItem, createTestCustomerDecision } from '../test/fixtures';
 import { resetTestStores } from '../test/resetStores';
 import {
   buildSyntheticWerkvertragPages,
@@ -147,6 +147,8 @@ describe('REFERENZVERTRAG V1 – SPRINT A – Accept vollständig', () => {
       proposal,
       selectedPositions: proposal.positions,
       companyName: COMPANY,
+      // CUSTOMER-FACHOBJEKT-04C — die Kundenentscheidung ist Pflicht.
+      customerDecision: createTestCustomerDecision(),
     });
     expect(first.success).toBe(true);
     if (!first.success) return;
@@ -158,6 +160,8 @@ describe('REFERENZVERTRAG V1 – SPRINT A – Accept vollständig', () => {
       proposal,
       selectedPositions: proposal.positions,
       companyName: COMPANY,
+      // CUSTOMER-FACHOBJEKT-04C — die Kundenentscheidung ist Pflicht.
+      customerDecision: createTestCustomerDecision(),
     });
     // Idempotenter Re-Accept: kein zweites Archivdokument.
     expect(second.success).toBe(true);
@@ -182,6 +186,8 @@ describe('REFERENZVERTRAG V1 – SPRINT A – Accept vollständig', () => {
       proposal,
       selectedPositions: proposal.positions,
       companyName: COMPANY,
+      // CUSTOMER-FACHOBJEKT-04C — die Kundenentscheidung ist Pflicht.
+      customerDecision: createTestCustomerDecision(),
     });
 
     expect(result.success).toBe(true);
@@ -204,6 +210,8 @@ describe('REFERENZVERTRAG V1 – SPRINT A – Accept vollständig', () => {
       proposal,
       selectedPositions: proposal.positions.slice(0, 3),
       companyName: COMPANY,
+      // CUSTOMER-FACHOBJEKT-04C — die Kundenentscheidung ist Pflicht.
+      customerDecision: createTestCustomerDecision(),
     });
     expect(result.success).toBe(true);
     if (!result.success) return;

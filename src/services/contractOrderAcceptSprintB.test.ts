@@ -19,7 +19,7 @@ import { buildVorgangProofRequirementRows } from './vorgangProofRequirementsView
 import { hydrateDocumentStore } from './documentService';
 import { getInboxItemById, hydrateInboxStore } from './inboxService';
 import { hydrateVorgangStore } from './vorgangService';
-import { createAuftragInboxItem } from '../test/fixtures';
+import { createAuftragInboxItem, createTestCustomerDecision } from '../test/fixtures';
 import { resetTestStores } from '../test/resetStores';
 import {
   buildSyntheticWerkvertragPages,
@@ -111,6 +111,8 @@ describe('REFERENZVERTRAG V1 – SPRINT B – Nachweise', () => {
       proposal,
       selectedPositions: proposal.positions,
       companyName: COMPANY,
+      // CUSTOMER-FACHOBJEKT-04C — die Kundenentscheidung ist Pflicht.
+      customerDecision: createTestCustomerDecision(),
     });
     expect(first.success).toBe(true);
     if (!first.success) return;
@@ -132,6 +134,8 @@ describe('REFERENZVERTRAG V1 – SPRINT B – Nachweise', () => {
       proposal,
       selectedPositions: proposal.positions,
       companyName: COMPANY,
+      // CUSTOMER-FACHOBJEKT-04C — die Kundenentscheidung ist Pflicht.
+      customerDecision: createTestCustomerDecision(),
     });
     expect(second.success).toBe(true);
     if (!second.success) return;
@@ -153,6 +157,8 @@ describe('REFERENZVERTRAG V1 – SPRINT B – Nachweise', () => {
       proposal,
       selectedPositions: proposal.positions,
       companyName: COMPANY,
+      // CUSTOMER-FACHOBJEKT-04C — die Kundenentscheidung ist Pflicht.
+      customerDecision: createTestCustomerDecision(),
     });
     expect(first.success).toBe(true);
     if (!first.success) return;
@@ -179,6 +185,8 @@ describe('REFERENZVERTRAG V1 – SPRINT B – Nachweise', () => {
       proposal,
       selectedPositions: proposal.positions,
       companyName: COMPANY,
+      // CUSTOMER-FACHOBJEKT-04C — die Kundenentscheidung ist Pflicht.
+      customerDecision: createTestCustomerDecision(),
     });
     expect(second.success).toBe(true);
     if (!second.success) return;
