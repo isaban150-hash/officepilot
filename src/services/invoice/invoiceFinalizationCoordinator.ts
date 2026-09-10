@@ -6,8 +6,16 @@
  * Es gibt in diesem Sprint **keinen** Resume-Pfad und **keine** Anbindung an
  * RechnungPage — die Startfunktion wird produktiv noch nicht aufgerufen.
  */
-import type { AppPersistedState, VorgangInvoice } from '../../types/models';
-import { buildPersistedStateSnapshot } from '../persistenceService';
+import type { Vorgang, VorgangInvoice } from '../../types/models';
+/*
+ * INVOICE-LOCAL-GUARD-SNAPSHOT-BLINDNESS-01B — die Rechnungssicht dieses
+ * Moduls stammt ab hier aus dem Laufzeitspeicher, nicht mehr aus dem
+ * Persistenz-Snapshot: dort sind die Rechnungen seit dem First-Class-Speicher
+ * absichtlich abgestreift, weshalb jede der drei Prüfungen unten ausnahmslos
+ * eine leere Liste erhielt. Die Regeln selbst bleiben unverändert.
+ */
+import { getVorgangById } from '../vorgangService';
+import { listInvoicesForVorgang } from './invoiceStore';
 import { isBillingEffective } from '../orderBillingRules';
 import {
   buildInvoiceContentFingerprintFromInvoice,
@@ -274,16 +282,16 @@ type LocalProof =
  * Vollständiger lokaler Nachweis: Kennung, Vorgang, Typ, Geschäfts-Fingerprint
  * **und** die exakt rekonstruierte Antwortprojektion.
  */
-function proveLocalInvoice(input: {
+export function proveLocalInvoice(input: {
   identity: InvoiceDraftIdentity;
   clientInvoiceId: string;
   contentFingerprint: string;
   request: PreparedWorkspaceInvoiceFinalizeRequest;
 }): LocalProof {
   const { identity, clientInvoiceId, contentFingerprint, request } = input;
-  let snapshot: AppPersistedState;
+  let vorgang: Vorgang | undefined;
   try {
-    snapshot = buildPersistedStateSnapshot();
+    vorgang = getVorgangById(identity.vorgangId);
   } catch (error) {
     return {
       kind: 'blocked',
@@ -291,7 +299,6 @@ function proveLocalInvoice(input: {
       detail: error instanceof Error ? error.message : 'snapshot',
     };
   }
-  const vorgang = (snapshot.vorgaenge ?? []).find((entry) => entry.id === identity.vorgangId);
   if (!vorgang) return { kind: 'blocked', reason: 'vorgang_missing' };
 
   const invoices = vorgang.invoices ?? [];
@@ -360,6 +367,28 @@ function proveLocalInvoice(input: {
  * Serverguard (`cancelled_at is null`) — alle drei müssen dieselbe Antwort auf
  * „wirksame Schlussrechnung" geben.
  */
+/**
+ * Die lokale Rechnungsseite für den Guard — genau **eine** Stelle, an der die
+ * Datenquelle steht.
+ *
+ * Sie ist eigens benannt und exportiert, damit die Regel und ihre Eingabe
+ * getrennt prüfbar sind. Genau diese Trennung fehlte bisher: `findConflicting-
+ * FinalInvoice` war fehlerfrei und wurde trotzdem nie fündig, weil die Eingabe
+ * aus einer Sicht stammte, die seit dem First-Class-Rechnungsspeicher
+ * ausnahmslos leer ist.
+ */
+export function findLocalFinalInvoiceConflict(
+  vorgangId: string,
+  invoiceType: VorgangInvoice['type'],
+  clientInvoiceId: string,
+): VorgangInvoice | null {
+  return findConflictingFinalInvoice(
+    listInvoicesForVorgang(vorgangId),
+    invoiceType,
+    clientInvoiceId,
+  );
+}
+
 export function findConflictingFinalInvoice(
   invoices: readonly VorgangInvoice[],
   invoiceType: VorgangInvoice['type'],
@@ -381,7 +410,7 @@ export function findConflictingFinalInvoice(
  * `inspectInvoiceFinalizeIntentsForOrigin` verwendet — keine zweite
  * Schlüsselsyntax, keine eigene LocalStorage-Auswertung, kein Schreiben.
  */
-function checkResumeIntents(input: {
+export function checkResumeIntents(input: {
   identity: InvoiceDraftIdentity;
   clientInvoiceId: string;
   contentFingerprint: string;
@@ -402,13 +431,12 @@ function checkResumeIntents(input: {
     return { ok: false, reason, detail: scan.detail };
   }
 
-  let snapshot: AppPersistedState;
+  let vorgang: Vorgang | undefined;
   try {
-    snapshot = buildPersistedStateSnapshot();
+    vorgang = getVorgangById(identity.vorgangId);
   } catch {
     return { ok: false, reason: 'storage_failed', detail: 'snapshot' };
   }
-  const vorgang = (snapshot.vorgaenge ?? []).find((entry) => entry.id === identity.vorgangId);
   const invoices = vorgang?.invoices ?? [];
 
   for (const entry of scan.entries) {
@@ -889,20 +917,17 @@ async function runStart(
    * erspart den vergeblichen Netzgang und liefert den Grund lokal.
    */
   {
-    let localInvoices: VorgangInvoice[] = [];
+    let conflict: VorgangInvoice | null;
     try {
-      const snapshot = buildPersistedStateSnapshot();
-      localInvoices =
-        (snapshot.vorgaenge ?? []).find((entry) => entry.id === identity.vorgangId)?.invoices ?? [];
+      conflict = findLocalFinalInvoiceConflict(
+        identity.vorgangId,
+        prepared.request.invoice.type,
+        prepared.clientInvoiceId,
+      );
     } catch {
       return failBeforeBegin('storage_failed', { detail: 'snapshot' });
     }
 
-    const conflict = findConflictingFinalInvoice(
-      localInvoices,
-      prepared.request.invoice.type,
-      prepared.clientInvoiceId,
-    );
     if (conflict) {
       return failBeforeBegin('final_invoice_exists', { existingInvoiceId: conflict.id });
     }

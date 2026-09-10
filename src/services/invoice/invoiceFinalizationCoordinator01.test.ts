@@ -17,6 +17,7 @@ import * as supabaseLib from '../../lib/supabase';
 import * as persistenceService from '../persistenceService';
 import * as workspaceSyncPayloadService from '../workspace/workspaceSyncPayloadService';
 import * as vorgangService from '../vorgangService';
+import * as invoiceStore from './invoiceStore';
 import * as archiveService from '../invoiceArchiveService';
 import * as syncMetaService from '../sync/syncMetaService';
 import * as intentService from './invoiceFinalizeIntentService';
@@ -304,8 +305,24 @@ function installEnvironment(): void {
     return true;
   });
   vi.spyOn(persistenceService, 'applyStateToStores').mockImplementation(() => undefined);
+  /*
+   * INVOICE-LOCAL-GUARD-SNAPSHOT-BLINDNESS-01B — die Laufzeitsicht auf
+   * Rechnungen liegt jetzt im Rechnungsspeicher, nicht mehr im Persistenz-
+   * Snapshot. Diese Hülle behält ihre **eine** Wahrheit (`appState.snapshot`)
+   * und reicht sie nun auch über die Laufzeit-APIs heraus. Ohne das prüften
+   * die Tests eine Datenquelle, die das Produkt gar nicht mehr liest — genau
+   * die Lücke, durch die der Fehler unentdeckt blieb.
+   */
+  const vorgangFromSnapshot = (id: string) =>
+    (appState.snapshot.vorgaenge ?? []).find((entry) => entry.id === id);
   vi.spyOn(vorgangService, 'getVorgangById').mockImplementation(
-    (id: string) => (id === VORGANG ? ({ id: VORGANG } as never) : undefined) as never,
+    (id: string) => vorgangFromSnapshot(id) as never,
+  );
+  vi.spyOn(vorgangService, 'getVorgangStoreSnapshot').mockImplementation(
+    () => (appState.snapshot.vorgaenge ?? []) as never,
+  );
+  vi.spyOn(invoiceStore, 'listInvoicesForVorgang').mockImplementation(
+    (id: string) => (vorgangFromSnapshot(id)?.invoices ?? []) as never,
   );
   vi.spyOn(vorgangService, 'upsertFinalizedInvoiceOnVorgang').mockImplementation(
     (_vorgangId: string, invoice: VorgangInvoice) => {

@@ -13,6 +13,8 @@ import type { InvoiceDraftIdentity } from '../../types/invoiceDraftDurability';
 
 import * as supabaseLib from '../../lib/supabase';
 import * as persistenceService from '../persistenceService';
+import * as vorgangStoreModule from '../vorgangService';
+import * as invoiceStore from './invoiceStore';
 import * as workspaceSyncPayloadService from '../workspace/workspaceSyncPayloadService';
 import * as queueModule from '../sync/syncOperationQueue';
 import * as syncUiService from '../sync/syncUiService';
@@ -252,6 +254,19 @@ function installEnvironment(): void {
   );
   vi.spyOn(persistenceService, 'buildPersistedStateSnapshot').mockImplementation(
     () => appState.snapshot,
+  );
+  /*
+   * INVOICE-LOCAL-GUARD-SNAPSHOT-BLINDNESS-01B — Rechnungsliste und
+   * Merge-Eingabe kommen jetzt aus der Laufzeitsicht. Die Hülle behält ihre
+   * eine Wahrheit (`appState.snapshot`) und reicht sie auch dort heraus.
+   */
+  vi.spyOn(vorgangStoreModule, 'getVorgangStoreSnapshot').mockImplementation(
+    () => (appState.snapshot.vorgaenge ?? []) as never,
+  );
+  vi.spyOn(invoiceStore, 'listInvoicesForVorgang').mockImplementation(
+    (id: string) =>
+      ((appState.snapshot.vorgaenge ?? []).find((entry) => entry.id === id)?.invoices ??
+        []) as never,
   );
   vi.spyOn(persistenceService, 'savePersistedState').mockImplementation((state) => {
     if (!appState.saveOk) return false;

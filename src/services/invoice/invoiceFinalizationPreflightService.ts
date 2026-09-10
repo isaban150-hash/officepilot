@@ -21,6 +21,8 @@ import type { SyncCoordinatorReport } from '../../types/sync';
 import type { InvoiceDraftIdentity } from '../../types/invoiceDraftDurability';
 import { isSupabaseConfigured, getSupabaseClient } from '../../lib/supabase';
 import { buildPersistedStateSnapshot } from '../persistenceService';
+import { getVorgangStoreSnapshot } from '../vorgangService';
+import { listInvoicesForVorgang } from './invoiceStore';
 import { resolveCloudWorkspaceId } from '../workspace/workspaceSyncPayloadService';
 import { buildStorageKey, getActiveStorageScope } from '../storage/storageScopeService';
 import { buildDocumentBlobScopeKey } from '../storage/documentBlobScopeService';
@@ -227,7 +229,17 @@ async function runCloudPhase(identity: InvoiceDraftIdentity): Promise<CloudPhase
   if (resolveActiveScopeKey() !== identity.sourceScopeKey) {
     return { ok: false, reason: 'scope_mismatch' };
   }
-  const vorgaenge = snapshot.vorgaenge ?? [];
+  /*
+   * INVOICE-LOCAL-GUARD-SNAPSHOT-BLINDNESS-01B — der Merge braucht **beide**
+   * Seiten. Aus dem Persistenz-Snapshot kämen die Vorgänge ohne ihre
+   * Rechnungen, und die Same-ID-Regeln von `applyFinalizedInvoiceToVorgang`
+   * — monotoner Status, vollständiger lokaler Versandstand, Monotonie von
+   * `servicePeriodConfirmed` — sähen die lokale Seite überhaupt nicht.
+   * `getVorgangStoreSnapshot` liefert dieselben Vorgänge samt projizierter
+   * Rechnungen; es entsteht keine zweite Wahrheit, weil die Projektion aus
+   * demselben Rechnungsspeicher stammt.
+   */
+  const vorgaenge = getVorgangStoreSnapshot();
   if (!vorgaenge.some((vorgang) => vorgang.id === identity.vorgangId)) {
     return { ok: false, reason: 'vorgang_missing' };
   }
@@ -598,7 +610,7 @@ type ClassificationResult =
  * Gemeinsame Bewertung der Vorgangsrechnungen und Altintents — von Preflight
  * **und** lokalem Guard verwendet, damit es nur einen Vertrag gibt.
  */
-function classifyVorgangInvoicesAndIntents(input: {
+export function classifyVorgangInvoicesAndIntents(input: {
   identity: InvoiceDraftIdentity;
   entries: InvoiceFinalizeIntentInspectionEntry[];
   latest: AppPersistedState;
@@ -608,7 +620,13 @@ function classifyVorgangInvoicesAndIntents(input: {
   const vorgang = (latest.vorgaenge ?? []).find((entry) => entry.id === identity.vorgangId);
   if (!vorgang) return { ok: false, reason: 'vorgang_missing' };
 
-  const invoices = vorgang.invoices ?? [];
+  /*
+   * INVOICE-LOCAL-GUARD-SNAPSHOT-BLINDNESS-01B — die Rechnungen kommen aus dem
+   * Laufzeitspeicher. `latest` bleibt die richtige Quelle für Vorgangsexistenz,
+   * Workspace, Scope und Setup; seine `invoices` sind seit dem
+   * First-Class-Speicher jedoch immer leer und damit als Eingabe unbrauchbar.
+   */
+  const invoices = listInvoicesForVorgang(identity.vorgangId);
   const invoiceFingerprints = new Map<string, string>();
   for (const invoice of invoices) {
     try {
