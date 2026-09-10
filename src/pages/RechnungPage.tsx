@@ -21,6 +21,14 @@ import {
   updateInvoiceDraftTaxStatus,
   validateInvoiceDraftForApproval,
 } from '../services/invoiceService';
+import { getCompanyProfile } from '../services/companyProfileService';
+import { loadInvoiceDraftRecordByLocator } from '../services/invoice/invoiceDraftDurabilityService';
+import {
+  applyCriticalCompanyProfileFields,
+  buildCriticalCompanyFingerprint,
+  findCriticalCompanyProfileDrift,
+  type CriticalCompanyField,
+} from '../services/invoice/companySnapshotDriftService';
 import { getRemainingFixedAmountBillableNetCents } from '../services/orderBillingRules';
 import {
   useInvoiceDraftDurabilitySession,
@@ -58,6 +66,7 @@ import { billingFromCustomer } from '../services/customerService';
 import { getCustomerById } from '../services/customerStoreService';
 import { getVorgangById } from '../services/vorgangService';
 import type {
+  CompanyProfile,
   InvoiceCalculationMode,
   InvoiceDraft,
   InvoiceDraftMetadataChanges,
@@ -230,6 +239,18 @@ export function RechnungPage() {
 
   const [step, setStep] = useState<RechnungStep>('positions');
   const [showOverbillingConfirm, setShowOverbillingConfirm] = useState(false);
+  /* COMPANY-PROFILE-DRAFT-DRIFT-01E — Rückfrage und der bestätigte Profilstand. */
+  const [showCompanyDriftConfirm, setShowCompanyDriftConfirm] = useState(false);
+  const [companyDriftFields, setCompanyDriftFields] = useState<CriticalCompanyField[]>([]);
+  /*
+   * COMPANY-PROFILE-DRAFT-DRIFT-01F — der Stand, den die Rückfrage zeigt, ist
+   * genau der, den „Übernehmen" schreibt. Deshalb wird er beim Öffnen der
+   * Karte festgehalten und nicht später erneut gelesen.
+   */
+  const [companyDriftProfile, setCompanyDriftProfile] = useState<CompanyProfile | null>(null);
+  const [acknowledgedCompanyFingerprint, setAcknowledgedCompanyFingerprint] = useState<string | null>(
+    null,
+  );
   const [applyContractSkonto, setApplyContractSkonto] = useState(false);
   /*
    * Reiner Darstellungszustand: „Der Nutzer hat die Übernahme versucht."
@@ -619,6 +640,7 @@ export function RechnungPage() {
     [draft, setup],
   );
   const overbillingWarnings = draft ? getOverbillingWarnings(draft) : [];
+
   const taxKey = `tax.${draft?.taxStatus ?? setup.taxStatus}` as TranslationKey;
 
   /*
@@ -1199,7 +1221,22 @@ export function RechnungPage() {
       return;
     }
 
-    const record = session.record;
+    /*
+     * COMPANY-PROFILE-DRAFT-DRIFT-01E2 — nach dem Flush ist der **gespeicherte**
+     * Datensatz die Wahrheit, nicht der Stand dieses Renderdurchlaufs.
+     *
+     * `session.record` stammt aus dem Render, in dem dieser Ablauf entstanden
+     * ist. Schreibt derselbe Klick vorher noch in den Entwurf — wie die
+     * Übernahme geänderter Firmendaten —, steigt die Revision im Speicher,
+     * während die Closure die alte behält. Der Coordinator prüft
+     * `expectedRevision` gegen den gespeicherten Stand und hätte die Freigabe
+     * mit `conflict` abgewiesen: gemessen 4 gegen 5.
+     *
+     * Deshalb wird die Identität hier einmal frisch geladen. Fail-closed:
+     * Ohne lesbaren Datensatz wird nicht finalisiert.
+     */
+    const reloaded = locator ? await loadInvoiceDraftRecordByLocator(locator) : null;
+    const record = reloaded?.ok ? reloaded.record : null;
     if (!record) {
       approveLockRef.current = false;
       setApproving(false);
@@ -1279,12 +1316,85 @@ export function RechnungPage() {
     navigate(`/vorgaenge/${id}/rechnungen/${result.invoice.id}`);
   };
 
-  const handleApprove = () => {
+  /**
+   * COMPANY-PROFILE-DRAFT-DRIFT-01E — die Rückfrage sitzt **vor** dem
+   * bestehenden Übermengen-Gate, nicht statt seiner.
+   *
+   * Beide Gates führen anschliessend in denselben Trichter: Wer die
+   * Firmendaten geklärt hat, bekommt danach — falls nötig — weiterhin die
+   * Übermengenfrage. So entsteht keine Reihenfolge, in der ein Gate das andere
+   * verschluckt.
+   */
+  const continueAfterCompanyDrift = () => {
     if (overbillingWarnings.length > 0) {
       setShowOverbillingConfirm(true);
       return;
     }
     runApproval();
+  };
+
+  /**
+   * Die Prüfung liest das Profil **im Augenblick des Klicks**, nicht beim
+   * letzten Render.
+   *
+   * Das ist keine Feinheit: Ein Betrieb ändert seine Bankverbindung in den
+   * Einstellungen und kehrt zur offenen Rechnung zurück. Würde die Abweichung
+   * aus einem älteren Renderdurchlauf stammen, entschiede die Rückfrage über
+   * einen Stand, den es nicht mehr gibt. Der Freigabeklick ist der einzige
+   * Zeitpunkt, an dem die Frage überhaupt zählt — also wird sie dort gestellt.
+   */
+  const handleApprove = () => {
+    const profile = getCompanyProfile();
+    const fingerprint = buildCriticalCompanyFingerprint(profile);
+    if (draft && acknowledgedCompanyFingerprint !== fingerprint) {
+      const drift = findCriticalCompanyProfileDrift(draft.companySnapshot, profile);
+      if (drift.length > 0) {
+        setCompanyDriftFields(drift);
+        setCompanyDriftProfile(profile);
+        setShowCompanyDriftConfirm(true);
+        return;
+      }
+      /* Keine kritische Abweichung — der Stand gilt als geklärt. */
+      setAcknowledgedCompanyFingerprint(fingerprint);
+    }
+    continueAfterCompanyDrift();
+  };
+
+  /**
+   * „Aktuelle Firmendaten übernehmen" — ausschliesslich die kritischen Felder.
+   *
+   * Geschrieben wird über `mutateDraft`, also über den **einzigen** dauerhaften
+   * Änderungsweg des Entwurfs. Die anschliessende Finalisierung wartet in
+   * `runApprovalSteps` ohnehin auf `session.flush()` und bricht ab, wenn der
+   * Speicherlauf nicht bestätigt — der Fall „übernommen, aber nicht
+   * gespeichert" kann damit nicht entstehen, ohne dass eine neue Persistenz
+   * nötig wäre.
+   */
+  const handleApplyCompanyDrift = () => {
+    /* Genau der Stand, den die Karte gezeigt hat — nicht ein inzwischen anderer. */
+    const current = companyDriftProfile ?? getCompanyProfile();
+    mutateDraft((prev) => ({
+      ...prev,
+      companySnapshot: applyCriticalCompanyProfileFields(prev.companySnapshot, current),
+    }));
+    setAcknowledgedCompanyFingerprint(buildCriticalCompanyFingerprint(current));
+    setShowCompanyDriftConfirm(false);
+    showToast(translate('invoice.companyDrift.applied'));
+    continueAfterCompanyDrift();
+  };
+
+  /**
+   * „Bisherigen Stand behalten" — der Entwurf wird nicht angefasst.
+   *
+   * Gemerkt wird nicht „bestätigt", sondern **wogegen** bestätigt wurde.
+   * Ändert der Betrieb danach erneut etwas, entsteht ein anderes Kennzeichen
+   * und die Rückfrage erscheint wieder. Eine Zusage auf ewig wäre hier genau
+   * das Gefährliche.
+   */
+  const handleKeepCompanySnapshot = () => {
+    setAcknowledgedCompanyFingerprint(buildCriticalCompanyFingerprint(getCompanyProfile()));
+    setShowCompanyDriftConfirm(false);
+    continueAfterCompanyDrift();
   };
 
   const handleConfirmOverbilling = () => {
@@ -1761,6 +1871,59 @@ export function RechnungPage() {
               </ul>
             </Card>
           ) : null}
+
+          {showCompanyDriftConfirm && (
+            <Card className="invoice-confirm" data-testid="invoice-company-drift-confirm">
+              <strong>{translate('invoice.companyDrift.title')}</strong>
+              <p>{translate('invoice.companyDrift.message')}</p>
+              {/*
+                * COMPANY-PROFILE-DRAFT-DRIFT-01F — Feldnamen allein tragen die
+                * Entscheidung nicht.
+                *
+                * „IBAN geändert" sagt einem Betrieb nicht, ob die Rechnung auf
+                * das alte oder das neue Konto zeigt. Deshalb steht hier der
+                * bisherige neben dem aktuellen Wert — nur für die tatsächlich
+                * abweichenden Felder, unveränderlich und ohne Eingabefelder.
+                */}
+              <dl className="invoice-drift-list" data-testid="invoice-company-drift-fields">
+                {companyDriftFields.map((field) => (
+                  <div className="invoice-drift-list__item" key={field}>
+                    <dt>{translate(`invoice.companyDrift.field.${field}` as TranslationKey)}</dt>
+                    <dd>
+                      <span className="invoice-drift-list__label">
+                        {translate('invoice.companyDrift.before')}
+                      </span>
+                      <span className="invoice-drift-list__value">
+                        {draft.companySnapshot[field]?.trim() ||
+                          translate('invoice.companyDrift.empty')}
+                      </span>
+                    </dd>
+                    <dd>
+                      <span className="invoice-drift-list__label">
+                        {translate('invoice.companyDrift.after')}
+                      </span>
+                      <span className="invoice-drift-list__value invoice-drift-list__value--next">
+                        {companyDriftProfile?.[field]?.trim() ||
+                          translate('invoice.companyDrift.empty')}
+                      </span>
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+              <div className="invoice-confirm__actions">
+                <Button
+                  variant="outline"
+                  onClick={handleKeepCompanySnapshot}
+                  data-testid="invoice-company-drift-keep"
+                >
+                  {translate('invoice.companyDrift.keep')}
+                </Button>
+                <Button onClick={handleApplyCompanyDrift} data-testid="invoice-company-drift-apply">
+                  {translate('invoice.companyDrift.apply')}
+                </Button>
+              </div>
+            </Card>
+          )}
 
           {showOverbillingConfirm && (
             <Card className="invoice-confirm">

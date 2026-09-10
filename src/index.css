@@ -453,6 +453,48 @@ body {
 }
 
 /*
+ * COMPANY-PROFILE-DRAFT-DRIFT-01F — die geänderten Firmendaten in der
+ * Freigaberückfrage: ruhig, unveränderlich, ohne Tabellenoptik.
+ */
+.invoice-drift-list {
+  margin: 0.75rem 0 1rem;
+}
+
+.invoice-drift-list__item + .invoice-drift-list__item {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--color-border, #e5e7eb);
+}
+
+.invoice-drift-list dt {
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.invoice-drift-list dd {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0;
+  /* Lange Firmenbezeichnungen und IBANs brechen um, statt zu schieben. */
+  flex-wrap: wrap;
+}
+
+.invoice-drift-list__label {
+  flex: 0 0 4.5rem;
+  color: var(--color-text-muted, #6b7280);
+  font-size: 0.875rem;
+}
+
+.invoice-drift-list__value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.invoice-drift-list__value--next {
+  font-weight: 600;
+}
+
+/*
  * COMPANY-SETTINGS-ENTRY-01B — ruhige Einstellungsliste.
  *
  * Bewusst keine Karten: Einstellungen werden gesucht, nicht durchstöbert. Eine

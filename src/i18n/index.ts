@@ -2233,6 +2233,27 @@ const deLegacy = {
   'invoice.overbillingTitle': 'Hinweis: Menge über dem dokumentierten Rest',
   'invoice.overbillingConfirm':
     'Mindestens eine Position liegt über dem derzeit dokumentierten Rest. Trotzdem speichern?',
+  /* COMPANY-PROFILE-DRAFT-DRIFT-01E — die Rückfrage gehört zur Rechnungsfreigabe. */
+  'invoice.companyDrift.title': 'Firmendaten haben sich geändert',
+  'invoice.companyDrift.message':
+    'Deine Firmendaten haben sich seit Erstellung dieses Rechnungsentwurfs geändert. Prüfe bitte, welche Daten für diese Rechnung verwendet werden sollen.',
+  'invoice.companyDrift.apply': 'Aktuelle Firmendaten übernehmen',
+  'invoice.companyDrift.keep': 'Bisherigen Stand behalten',
+  'invoice.companyDrift.applied': 'Aktuelle Firmendaten übernommen.',
+  'invoice.companyDrift.before': 'Bisher',
+  'invoice.companyDrift.after': 'Aktuell',
+  'invoice.companyDrift.empty': 'nicht angegeben',
+  'invoice.companyDrift.field.companyName': 'Firmenname',
+  'invoice.companyDrift.field.legalForm': 'Rechtsform',
+  'invoice.companyDrift.field.street': 'Straße',
+  'invoice.companyDrift.field.zip': 'PLZ',
+  'invoice.companyDrift.field.city': 'Ort',
+  'invoice.companyDrift.field.country': 'Land',
+  'invoice.companyDrift.field.taxNumber': 'Steuernummer',
+  'invoice.companyDrift.field.vatId': 'USt-IdNr.',
+  'invoice.companyDrift.field.bankName': 'Bank',
+  'invoice.companyDrift.field.iban': 'IBAN',
+  'invoice.companyDrift.field.bic': 'BIC',
   'invoice.materialAuftraggeberHint':
     'Material wird laut Vorgang vom Auftraggeber gestellt.',
   'invoice.materialNotBillable': 'Materialposition – nicht abrechenbar bei dieser Materialquelle.',
