@@ -21,7 +21,7 @@ import { DEFAULT_COMPANY_PROFILE } from '../data/companyProfileDefaults';
 import { hydrateCompanyProfileStore } from '../services/companyProfileService';
 import { AppProvider } from '../context/AppContext';
 import { RechnungPage } from './RechnungPage';
-import { createTestVorgang } from '../test/fixtures';
+import { createTestVorgangWithExecutedQuantity } from '../test/fixtures';
 import { hydrateVorgangStore } from '../services/vorgangService';
 import { resetInvoiceDraftDurabilityDatabaseForTests } from '../services/invoice/invoiceDraftDurabilityService';
 import * as durability from '../services/invoice/invoiceDraftDurabilityService';
@@ -78,6 +78,51 @@ async function renderPage(): Promise<Mount> {
   return mount;
 }
 
+/**
+ * Trägt den Leistungszeitraum ein und bestätigt ihn — wie ein Nutzer.
+ *
+ * INVOICE-SERVICE-PERIOD-01B — der Entwurfsbauer erfindet keinen Zeitraum
+ * mehr; er ist eine ausdrückliche Angabe im Hauptablauf. Ein Test, der die
+ * erfolgreiche Freigabe prüft, muss ihn deshalb wie ein Mensch setzen.
+ *
+ * Der native Setter ist nötig, weil React den Wert eines kontrollierten
+ * Feldes sonst nicht übernimmt.
+ */
+async function fillServicePeriod(mount: Mount): Promise<void> {
+  const setValue = (element: HTMLInputElement, value: string): void => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(
+      element,
+      value,
+    );
+    element.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  const from = mount.container.querySelector<HTMLInputElement>(
+    '[data-testid="invoice-service-period-from"]',
+  );
+  const to = mount.container.querySelector<HTMLInputElement>(
+    '[data-testid="invoice-service-period-to"]',
+  );
+  if (!from || !to) return;
+  await act(async () => {
+    setValue(from, '2026-08-01');
+    await Promise.resolve();
+  });
+  await act(async () => {
+    setValue(to, '2026-08-20');
+    await Promise.resolve();
+  });
+  await settle();
+  const confirm = mount.container.querySelector<HTMLButtonElement>(
+    '[data-testid="invoice-confirm-service-period"]',
+  );
+  if (!confirm) return;
+  await act(async () => {
+    confirm.click();
+    await Promise.resolve();
+  });
+  await settle();
+}
+
 async function gotoPreview(mount: Mount): Promise<void> {
   const applyAll = mount.container.querySelector<HTMLButtonElement>(
     '[data-testid="invoice-apply-all-positions"]',
@@ -89,6 +134,7 @@ async function gotoPreview(mount: Mount): Promise<void> {
     });
     await settle();
   }
+  await fillServicePeriod(mount);
   const next = mount.container.querySelector<HTMLButtonElement>(
     '[data-testid="invoice-continue-preview"]',
   );
@@ -142,7 +188,9 @@ beforeEach(async () => {
   vi.restoreAllMocks();
   localStorage.clear();
   await resetInvoiceDraftDurabilityDatabaseForTests();
-  hydrateVorgangStore([createTestVorgang({ id: VORGANG, invoices: [] })]);
+  // Diese Suite prüft den Freigabeverlauf — sie braucht einen Vorgang, an dem
+  // Leistung erfasst wurde, sonst blockiert die Validierung zu Recht vorher.
+  hydrateVorgangStore([createTestVorgangWithExecutedQuantity({ id: VORGANG, invoices: [] })]);
   scopeService.setActiveStorageScope({ type: 'workspace', workspaceId: WORKSPACE });
   hydrateCompanyProfileStore({
     ...DEFAULT_COMPANY_PROFILE,

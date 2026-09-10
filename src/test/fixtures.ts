@@ -60,6 +60,38 @@ export function createOrderPosition(overrides: Partial<OrderPosition> = {}): Ord
   };
 }
 
+/**
+ * Eine Auftragsposition, an der die Leistung **tatsächlich erfasst** wurde.
+ *
+ * INVOICE-ACTUAL-QUANTITY-01B — die Planmenge ist kein Aufmass. `quantity`
+ * einer Rechnungsposition wird deshalb aus dem **ausgeführten** Rest
+ * vorgeschlagen (`getExecutedRemainingQuantity`) und bleibt ohne
+ * Ausführungsstand bei 0. Ein Vorgang mit `plannedQuantity` allein ist damit
+ * fachlich noch nicht abrechenbar — genau so soll es sein.
+ *
+ * Diese Hilfe modelliert den Normalfall einer abrechnungsreifen Position:
+ * geplant **und** ausgeführt.
+ */
+export function createExecutedOrderPosition(overrides: Partial<OrderPosition> = {}): OrderPosition {
+  const base = createOrderPosition(overrides);
+  return { ...base, executedQuantity: overrides.executedQuantity ?? base.plannedQuantity };
+}
+
+/**
+ * Ein Vorgang, an dem Leistung erfasst wurde und der deshalb abgerechnet
+ * werden kann.
+ *
+ * Bewusst eine eigene Hilfe statt einer Änderung an `createTestVorgang`:
+ * Tests, die den Nullmengenfall prüfen — also dass ohne Aufmass nichts
+ * abgerechnet wird — brauchen weiterhin einen Vorgang **ohne**
+ * Ausführungsstand.
+ */
+export function createTestVorgangWithExecutedQuantity(
+  overrides: Partial<Vorgang> = {},
+): Vorgang {
+  return createTestVorgang({ orderPositions: [createExecutedOrderPosition()], ...overrides });
+}
+
 export function createTestVorgang(overrides: Partial<Vorgang> = {}): Vorgang {
   return {
     id: 'v-test-1',

@@ -1,6 +1,11 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 import { MOCK_INBOX_ITEMS } from '../data/inboxMockData';
-import { createAuftragInboxItem, createOrderPosition, createTestVorgang, testSetup } from '../test/fixtures';
+import {
+  createAuftragInboxItem,
+  createExecutedOrderPosition,
+  createTestVorgang,
+  testSetup,
+} from '../test/fixtures';
 import { hydrateCompanyProfileStore } from './companyProfileService';
 import { SAMPLE_WERKVERTRAG_TEXT } from './contractAnalysisService';
 import { confirmImportSafeContractPositions } from './contractPositionImportService';
@@ -190,7 +195,7 @@ describe('invoice flow connect', () => {
     hydrateVorgangStore([
       createTestVorgang({
         orderPositions: [
-          createOrderPosition({
+          createExecutedOrderPosition({
             id: 'op-qty-test',
             plannedQuantity: 10,
             unitPrice: 65,
@@ -238,6 +243,10 @@ describe('invoice flow connect', () => {
         ...p,
         quantity: p.quantity > 0 ? p.quantity : 1,
       })),
+      // INVOICE-SERVICE-PERIOD-01B — ausdrückliche Angabe, nicht mehr erfunden.
+      servicePeriodFrom: '2026-05-01',
+      servicePeriodTo: '2026-05-31',
+      servicePeriodConfirmed: true,
     };
     const result = finalizeInvoiceDraft(vorgang.id, withAddress, testSetup);
     expect(result.ok).toBe(true);

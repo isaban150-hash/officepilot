@@ -16,7 +16,7 @@ import { DEFAULT_COMPANY_PROFILE } from '../data/companyProfileDefaults';
 import { hydrateCompanyProfileStore } from '../services/companyProfileService';
 import { AppProvider } from '../context/AppContext';
 import { RechnungPage } from './RechnungPage';
-import { createTestVorgang } from '../test/fixtures';
+import { createTestVorgangWithExecutedQuantity } from '../test/fixtures';
 import { hydrateVorgangStore } from '../services/vorgangService';
 import {
   beginInvoiceDraftFinalization,
@@ -53,7 +53,7 @@ function locator(): InvoiceDraftLocator {
 
 function seedVorgang(): void {
   hydrateVorgangStore([
-    createTestVorgang({
+    createTestVorgangWithExecutedQuantity({
       id: VORGANG,
       invoices: [],
     }),
@@ -102,6 +102,48 @@ async function waitFor(check: () => boolean, rounds = 60): Promise<void> {
   }
 }
 
+/**
+ * Trägt den Leistungszeitraum ein und bestätigt ihn — wie ein Nutzer.
+ *
+ * INVOICE-SERVICE-PERIOD-01B — der Entwurfsbauer erfindet keinen Zeitraum
+ * mehr. Der native Setter ist nötig, weil React den Wert eines kontrollierten
+ * Feldes sonst nicht übernimmt.
+ */
+async function fillServicePeriod(mount: Mount): Promise<void> {
+  const setValue = (element: HTMLInputElement, value: string): void => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(
+      element,
+      value,
+    );
+    element.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  const from = mount.container.querySelector<HTMLInputElement>(
+    '[data-testid="invoice-service-period-from"]',
+  );
+  const to = mount.container.querySelector<HTMLInputElement>(
+    '[data-testid="invoice-service-period-to"]',
+  );
+  if (!from || !to) return;
+  await act(async () => {
+    setValue(from, '2026-08-01');
+    await Promise.resolve();
+  });
+  await act(async () => {
+    setValue(to, '2026-08-20');
+    await Promise.resolve();
+  });
+  await settle();
+  const confirm = mount.container.querySelector<HTMLButtonElement>(
+    '[data-testid="invoice-confirm-service-period"]',
+  );
+  if (!confirm) return;
+  await act(async () => {
+    confirm.click();
+    await Promise.resolve();
+  });
+  await settle();
+}
+
 /** Vom Positionsschritt in die Vorschau, wo die Freigabe liegt. */
 async function gotoPreview(mount: Mount): Promise<void> {
   const applyAll = mount.container.querySelector<HTMLButtonElement>(
@@ -114,6 +156,7 @@ async function gotoPreview(mount: Mount): Promise<void> {
     });
     await settle();
   }
+  await fillServicePeriod(mount);
   const next = mount.container.querySelector<HTMLButtonElement>(
     '[data-testid="invoice-continue-preview"]',
   );

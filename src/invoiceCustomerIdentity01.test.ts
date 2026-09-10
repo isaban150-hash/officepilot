@@ -171,7 +171,17 @@ function buildApprovableDraft(vorgangId: string) {
   expect(base).not.toBeNull();
   expectSinglePauschalPosition(base!);
 
-  const draft = updateInvoiceDraftMetadata(base!, { customerBilling: DRAFT_ADDRESS });
+  /*
+   * INVOICE-SERVICE-PERIOD-01B — der Leistungszeitraum ist eine ausdrückliche
+   * Angabe des Nutzers und wird nicht mehr erfunden. Diese Suite prüft die
+   * Kundenidentität, nicht den Zeitraum; er gehört hier zur Freigabereife.
+   */
+  const draft = updateInvoiceDraftMetadata(base!, {
+    customerBilling: DRAFT_ADDRESS,
+    servicePeriodFrom: '2026-05-01',
+    servicePeriodTo: '2026-05-31',
+    servicePeriodConfirmed: true,
+  });
   const validation = validateInvoiceDraftForApproval(draft, getCompanyProfile(), vorgang);
   expect(validation.blockingErrors, JSON.stringify(validation.blockingErrors)).toHaveLength(0);
   return draft;
@@ -227,7 +237,17 @@ describe('CORE-COMPLETE-GOLDEN-PATH-01B', () => {
     expect(beforeAddress.blockingErrors.some((issue) => issue.code === 'no_positions')).toBe(false);
 
     // Anschrift ausschließlich über die Produktionsfunktion ergänzen.
-    const draft = updateInvoiceDraftMetadata(base!, { customerBilling: DRAFT_ADDRESS });
+    /*
+   * INVOICE-SERVICE-PERIOD-01B — der Leistungszeitraum ist eine ausdrückliche
+   * Angabe des Nutzers und wird nicht mehr erfunden. Diese Suite prüft die
+   * Kundenidentität, nicht den Zeitraum; er gehört hier zur Freigabereife.
+   */
+  const draft = updateInvoiceDraftMetadata(base!, {
+    customerBilling: DRAFT_ADDRESS,
+    servicePeriodFrom: '2026-05-01',
+    servicePeriodTo: '2026-05-31',
+    servicePeriodConfirmed: true,
+  });
     expect(draft.customerBilling.name).toBe(NORDWEST.name);
     expect(draft.customerBilling.street).toBe('Hafenstraße 12');
     expect(draft.customerBilling.zip).toBe('45356');

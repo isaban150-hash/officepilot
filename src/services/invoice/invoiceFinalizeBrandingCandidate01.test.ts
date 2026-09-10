@@ -32,7 +32,7 @@ import { hydrateCompanyProfileStore } from '../companyProfileService';
 import { hydrateVorgangStore } from '../vorgangService';
 import { DEFAULT_SETUP } from '../../data/mockData';
 import { DEFAULT_COMPANY_PROFILE } from '../../data/companyProfileDefaults';
-import { createTestVorgang } from '../../test/fixtures';
+import { createTestVorgangWithExecutedQuantity } from '../../test/fixtures';
 import * as scopeService from '../storage/storageScopeService';
 import * as workspacePayload from '../workspace/workspaceSyncPayloadService';
 import { resetTestStores } from '../../test/resetStores';
@@ -136,7 +136,9 @@ function buildRequestEnvelope(rawInvoice: VorgangInvoice): Record<string, unknow
 beforeEach(() => {
   vi.restoreAllMocks();
   resetTestStores();
-  hydrateVorgangStore([createTestVorgang({ id: VORGANG_ID, invoices: [] })]);
+  // Diese Suite prüft Branding und Fingerprint — sie setzt eine abrechenbare
+  // Rechnung voraus, also einen Vorgang mit erfasstem Ausführungsstand.
+  hydrateVorgangStore([createTestVorgangWithExecutedQuantity({ id: VORGANG_ID, invoices: [] })]);
   // Die Vorbereitung verlangt einen aktiven Workspace-Scope.
   scopeService.setActiveStorageScope({ type: 'workspace', workspaceId: WORKSPACE_ID });
   vi.spyOn(workspacePayload, 'resolveCloudWorkspaceId').mockReturnValue(WORKSPACE_ID);

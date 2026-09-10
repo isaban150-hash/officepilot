@@ -2,7 +2,11 @@
  * CRITICAL-WRITE-PERSIST-CHECK-01 — persist result on invoice finalize, contract confirm, filing/inbox.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createOrderPosition, createTestVorgang, testSetup } from '../test/fixtures';
+import {
+  createExecutedOrderPosition,
+  createTestVorgangWithExecutedQuantity,
+  testSetup,
+} from '../test/fixtures';
 import { createAuftragInboxItem } from '../test/fixtures';
 import {
   confirmFilingDecisionForTests,
@@ -87,16 +91,35 @@ function mockRpcSuccess(number = '2026-0100', sequence = 100) {
   );
 }
 
+/**
+ * Eine freigabefähige Schlussrechnung.
+ *
+ * INVOICE-SERVICE-PERIOD-01B — der Leistungszeitraum ist eine ausdrückliche
+ * Angabe und wird nicht mehr erfunden. Diese Suite prüft Durability und
+ * Idempotenz der Finalisierung, nicht den Zeitraum; er ist hier reine
+ * Vorbedingung.
+ */
+function schlussDraft() {
+  const draft = buildSchlussrechnungDraft('v-test-1', testSetup);
+  expect(draft, 'Schlussrechnungsentwurf konnte nicht gebaut werden').not.toBeNull();
+  return {
+    ...draft!,
+    servicePeriodFrom: '2026-05-01',
+    servicePeriodTo: '2026-05-31',
+    servicePeriodConfirmed: true,
+  };
+}
+
 function seedNegotiatingVorgang(id: string) {
   hydrateVorgangStore([
-    createTestVorgang({
+    createTestVorgangWithExecutedQuantity({
       id,
       status: 'in_pruefung',
       customer: 'Müller Bau',
       baustelle: 'Hauptstr. 1',
       title: 'Werkvertrag Sanierung',
       orderPositions: [
-        createOrderPosition({
+        createExecutedOrderPosition({
           id: 'op-persist-1',
           description: 'Position 1',
           unitPrice: 22,
@@ -117,7 +140,7 @@ function seedNegotiatingVorgang(id: string) {
 describe('CRITICAL-WRITE-PERSIST-CHECK-01 — Invoice', () => {
   beforeEach(() => {    resetInvoiceFinalizeIntentsForTests();
     vi.restoreAllMocks();
-    hydrateVorgangStore([createTestVorgang()]);
+    hydrateVorgangStore([createTestVorgangWithExecutedQuantity()]);
   });
 
   afterEach(() => {
@@ -127,7 +150,7 @@ describe('CRITICAL-WRITE-PERSIST-CHECK-01 — Invoice', () => {
   it('1 — RPC + lokale Persistenz ok: Intent gelöscht, Invoice nach Reload', async () => {
     mockCloudReady();
     mockRpcSuccess('2026-0101', 101);
-    const draft = buildSchlussrechnungDraft('v-test-1', testSetup)!;
+    const draft = schlussDraft();
 
     const result = await finalizeInvoiceDraftWithCloud('v-test-1', draft, testSetup);
     expect(result.ok).toBe(true);
@@ -146,7 +169,7 @@ describe('CRITICAL-WRITE-PERSIST-CHECK-01 — Invoice', () => {
   it('2 — RPC ok, lokale Persistenz fail: kein ok:true, Intent bleibt, stabile ID', async () => {
     mockCloudReady();
     mockRpcSuccess('2026-0102', 102);
-    const draft = buildSchlussrechnungDraft('v-test-1', testSetup)!;
+    const draft = schlussDraft();
     const fingerprint = buildInvoiceFinalizationContentFingerprint(draft, testSetup);
     const intentBefore = resolveInvoiceFinalizeIntent({
       workspaceId: 'ws-1',
@@ -176,7 +199,7 @@ describe('CRITICAL-WRITE-PERSIST-CHECK-01 — Invoice', () => {
 
   it('3 — Retry nach lokalem Persist-Fail: gleiche Client-ID, keine zweite Rechnung', async () => {
     mockCloudReady();
-    const draft = buildSchlussrechnungDraft('v-test-1', testSetup)!;
+    const draft = schlussDraft();
     const fingerprint = buildInvoiceFinalizationContentFingerprint(draft, testSetup);
     const intent = resolveInvoiceFinalizeIntent({
       workspaceId: 'ws-1',
@@ -228,7 +251,7 @@ describe('CRITICAL-WRITE-PERSIST-CHECK-01 — Invoice', () => {
   it('4 — lokales Upsert mehrfach: keine doppelte Vorgang-Invoice', async () => {
     mockCloudReady();
     mockRpcSuccess('2026-0104', 104);
-    const draft = buildSchlussrechnungDraft('v-test-1', testSetup)!;
+    const draft = schlussDraft();
     const first = await finalizeInvoiceDraftWithCloud('v-test-1', draft, testSetup);
     expect(first.ok).toBe(true);
     if (!first.ok) return;
@@ -245,7 +268,7 @@ describe('CRITICAL-WRITE-PERSIST-CHECK-01 — Invoice', () => {
   it('5 — Reload nach Remote-ok / lokalem Persist-Fail: Intent bleibt, Wiederaufnahme', async () => {
     mockCloudReady();
     mockRpcSuccess('2026-0105', 105);
-    const draft = buildSchlussrechnungDraft('v-test-1', testSetup)!;
+    const draft = schlussDraft();
     const fingerprint = buildInvoiceFinalizationContentFingerprint(draft, testSetup);
     const intent = resolveInvoiceFinalizeIntent({
       workspaceId: 'ws-1',
@@ -263,7 +286,7 @@ describe('CRITICAL-WRITE-PERSIST-CHECK-01 — Invoice', () => {
     // Simulate app reload: intents are in separate localStorage key; vorgang store reset.
     vi.restoreAllMocks();
     mockCloudReady();
-    hydrateVorgangStore([createTestVorgang()]);
+    hydrateVorgangStore([createTestVorgangWithExecutedQuantity()]);
     const reloadedIntent = getInvoiceFinalizeIntent('v-test-1');
     expect(reloadedIntent?.clientInvoiceId).toBe(intent.clientInvoiceId);
 

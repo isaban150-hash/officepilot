@@ -24,7 +24,7 @@ import { hydrateCompanyProfileStore } from '../companyProfileService';
 import { hydrateVorgangStore } from '../vorgangService';
 import { DEFAULT_COMPANY_PROFILE } from '../../data/companyProfileDefaults';
 import { DEFAULT_SETUP } from '../../data/mockData';
-import { createTestVorgang } from '../../test/fixtures';
+import { createTestVorgangWithExecutedQuantity } from '../../test/fixtures';
 import { resetTestStores } from '../../test/resetStores';
 import type { BrandingProfile } from '../../types/branding';
 import type { InvoiceDraftIdentity, InvoiceDraftLocator } from '../../types/invoiceDraftDurability';
@@ -77,7 +77,7 @@ const LOCATOR: InvoiceDraftLocator = {
 
 beforeEach(async () => {
   resetTestStores();
-  hydrateVorgangStore([createTestVorgang({ id: VORGANG_ID })]);
+  hydrateVorgangStore([createTestVorgangWithExecutedQuantity({ id: VORGANG_ID })]);
   await resetInvoiceDraftDurabilityDatabaseForTests();
 });
 
@@ -85,13 +85,31 @@ afterEach(async () => {
   await resetInvoiceDraftDurabilityDatabaseForTests();
 });
 
+/**
+ * Ein Entwurf, der tatsächlich freigegeben werden kann.
+ *
+ * INVOICE-SERVICE-PERIOD-01B — der Entwurfsbauer erfindet keinen
+ * Leistungszeitraum mehr. Diese Suite prüft den Branding-Snapshot über den
+ * Speicherweg, nicht den Zeitraum; sie braucht ihn nur als gültige
+ * Vorbedingung der Finalisierung.
+ */
+function finalizableDraft() {
+  const draft = buildInvoiceDraftForType(VORGANG_ID, DEFAULT_SETUP, 'rechnung');
+  expect(draft, 'Entwurf konnte nicht gebaut werden').not.toBeNull();
+  return {
+    ...draft!,
+    servicePeriodFrom: '2026-08-01',
+    servicePeriodTo: '2026-08-20',
+    servicePeriodConfirmed: true,
+  };
+}
+
 describe('BRANDING-01F-1R — Snapshot über Persistenz, Reload und Finalisierung', () => {
   it('bewahrt den Snapshot über den echten Speicher- und Ladeweg', async () => {
     setBranding(BRANDING_A);
 
-    const draft = buildInvoiceDraftForType(VORGANG_ID, DEFAULT_SETUP, 'rechnung');
-    expect(draft).not.toBeNull();
-    expect(draft!.brandingSnapshot).toEqual({
+    const draft = finalizableDraft();
+    expect(draft.brandingSnapshot).toEqual({
       version: 1,
       logo: BRANDING_A.logo,
       primaryColor: '#111111',
@@ -133,7 +151,7 @@ describe('BRANDING-01F-1R — Snapshot über Persistenz, Reload und Finalisierun
 
   it('teilt nach dem Laden keine Objektinstanz mit dem Entwurf', async () => {
     setBranding(BRANDING_A);
-    const draft = buildInvoiceDraftForType(VORGANG_ID, DEFAULT_SETUP, 'rechnung')!;
+    const draft = finalizableDraft();
     await createInvoiceDraftRecord({ identity: identityFor(draft), draft });
 
     const loaded = await loadInvoiceDraftRecordByLocator(LOCATOR);

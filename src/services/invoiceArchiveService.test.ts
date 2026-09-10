@@ -1,6 +1,10 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 import { DEFAULT_COMPANY_PROFILE } from '../data/companyProfileDefaults';
-import { createTestVorgang, testSetup } from '../test/fixtures';
+import {
+  createTestVorgang,
+  createTestVorgangWithExecutedQuantity,
+  testSetup,
+} from '../test/fixtures';
 import {
   archiveOutgoingInvoice,
   buildOutgoingInvoiceDocumentInput,
@@ -147,7 +151,7 @@ describe('finalizeInvoiceDraft archive integration', () => {
   beforeEach(() => {
     hydrateDocumentStore([]);
     hydrateCompanyProfileStore(companySnapshot);
-    const vorgang = createTestVorgang();
+    const vorgang = createTestVorgangWithExecutedQuantity();
     hydrateVorgangStore([vorgang]);
   });
 
@@ -156,6 +160,10 @@ describe('finalizeInvoiceDraft archive integration', () => {
     expect(draft).not.toBeNull();
 
     draft!.positions[0].quantity = 4;
+    // INVOICE-SERVICE-PERIOD-01B — ausdrückliche Angabe, nicht mehr erfunden.
+    draft!.servicePeriodFrom = '2026-05-01';
+    draft!.servicePeriodTo = '2026-05-31';
+    draft!.servicePeriodConfirmed = true;
     const result = finalizeInvoiceDraft('v-test-1', draft!, testSetup);
 
     expect(result.ok).toBe(true);

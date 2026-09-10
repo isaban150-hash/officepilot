@@ -6,7 +6,11 @@ import { AppProvider } from '../context/AppContext';
 import { DEFAULT_SETUP } from '../data/mockData';
 import { t } from '../i18n';
 import { RechnungPage } from '../pages/RechnungPage';
-import { createTestVorgang, testSetup } from '../test/fixtures';
+import {
+  createTestVorgang,
+  createTestVorgangWithExecutedQuantity,
+  testSetup,
+} from '../test/fixtures';
 import { createNormalPrintSetup, createReverseChargePrintSetup } from '../test/invoicePrintFixtures';
 import { hydrateCompanyProfileStore } from './companyProfileService';
 import { DEFAULT_COMPANY_PROFILE } from '../data/companyProfileDefaults';
@@ -57,6 +61,14 @@ function withBillableDraft(overrides: Partial<InvoiceDraft> = {}): InvoiceDraft 
       ...overrides.customerBilling,
     },
     positions: draft.positions.map((p) => ({ ...p, quantity: 2, unitPrice: 10.005 })),
+    /*
+     * INVOICE-SERVICE-PERIOD-01B — freigabereif heisst heute auch: der
+     * Leistungszeitraum ist angegeben und ausdrücklich bestätigt. Er wird
+     * nicht mehr aus dem Rechnungsdatum erfunden.
+     */
+    servicePeriodFrom: '2026-05-01',
+    servicePeriodTo: '2026-05-31',
+    servicePeriodConfirmed: true,
     ...overrides,
   };
 }
@@ -76,7 +88,8 @@ describe('INVOICE-NORMAL-GATE-01 validation', () => {
     resetInvoiceNumberSequence();
     hydrateDocumentStore([]);
     hydrateCompanyProfileStore(companyOk);
-    hydrateVorgangStore([createTestVorgang()]);
+    // Abrechenbar heisst: es wurde Leistung erfasst, nicht nur geplant.
+    hydrateVorgangStore([createTestVorgangWithExecutedQuantity()]);
   });
 
   it('blockiert fehlenden Kunden, Anschrift, Firma, Positionen, Menge 0, Preis, Datum', () => {
@@ -143,7 +156,8 @@ describe('INVOICE-NORMAL-GATE-01 approval', () => {
     resetInvoiceNumberSequence();
     hydrateDocumentStore([]);
     hydrateCompanyProfileStore(companyOk);
-    hydrateVorgangStore([createTestVorgang()]);
+    // Abrechenbar heisst: es wurde Leistung erfasst, nicht nur geplant.
+    hydrateVorgangStore([createTestVorgangWithExecutedQuantity()]);
   });
 
   it('vergibt Nummer erst bei erfolgreicher Freigabe und erzeugt Archiv', () => {
@@ -219,7 +233,8 @@ describe('INVOICE-NORMAL-GATE-01 UI', () => {
     resetInvoiceNumberSequence();
     hydrateDocumentStore([]);
     hydrateCompanyProfileStore(companyOk);
-    hydrateVorgangStore([createTestVorgang()]);
+    // Abrechenbar heisst: es wurde Leistung erfasst, nicht nur geplant.
+    hydrateVorgangStore([createTestVorgangWithExecutedQuantity()]);
     /*
      * INVOICE-DURABILITY-PRODUCTION-WIRING-01B1 — das Rechnungsmodul setzt im
      * Pilotbetrieb einen angemeldeten Firmen-Workspace voraus. Rein
@@ -301,7 +316,8 @@ describe('INVOICE-NORMAL-GATE-01 UI', () => {
 
 describe('buildRechnungDraft still works', () => {
   it('erzeugt Draft ohne Nummer-Reservierung', () => {
-    hydrateVorgangStore([createTestVorgang()]);
+    // Abrechenbar heisst: es wurde Leistung erfasst, nicht nur geplant.
+    hydrateVorgangStore([createTestVorgangWithExecutedQuantity()]);
     hydrateCompanyProfileStore(companyOk);
     const before = getInvoiceNumberSequenceSnapshot().lastIssuedNumber;
     const draft = buildRechnungDraft('v-test-1', testSetup);

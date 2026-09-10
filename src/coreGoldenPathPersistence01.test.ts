@@ -32,7 +32,12 @@ import {
   updateVorgangCustomerFromMaster,
 } from './services/vorgangService';
 import { setWorkspace } from './services/workspace/workspaceStore';
-import { createAbschlagInvoice, createOrderPosition, createTestVorgang, testSetup } from './test/fixtures';
+import {
+  createAbschlagInvoice,
+  createExecutedOrderPosition,
+  createTestVorgang,
+  testSetup,
+} from './test/fixtures';
 import { resetTestStores } from './test/resetStores';
 import type { CompanyDocument, CustomerBilling, Vorgang, VorgangInvoice } from './types/models';
 
@@ -193,7 +198,7 @@ function seedVorgang(customerId: string): Vorgang {
       customerId,
       customerBilling: { ...OLD_MASTER },
       orderPositions: [
-        createOrderPosition({
+        createExecutedOrderPosition({
           id: POSITION_ID,
           description: 'Dacharbeiten',
           plannedQuantity: 10,
@@ -294,6 +299,10 @@ describe('CORE-REALTEST-01B — Snapshot- und Bootstrap-Golden-Path', () => {
     // Restmenge aus der Produktionsberechnung, keine umgangene Validierung.
     expect(draft!.positions).toHaveLength(1);
     expect(draft!.positions[0]!.quantity).toBe(6);
+    // INVOICE-SERVICE-PERIOD-01B — ausdrückliche Angabe, nicht mehr erfunden.
+    draft!.servicePeriodFrom = '2026-05-01';
+    draft!.servicePeriodTo = '2026-05-31';
+    draft!.servicePeriodConfirmed = true;
     const validation = validateInvoiceDraftForApproval(
       draft!,
       getCompanyProfile(),
