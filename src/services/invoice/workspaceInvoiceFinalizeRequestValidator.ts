@@ -16,6 +16,7 @@ import {
   FORBIDDEN_OBJECT_KEYS,
 } from './invoicePreparedResponseProjection';
 import { BRANDING_SNAPSHOT_VERSION } from '../../types/branding';
+import { COMPANY_SNAPSHOT_KEYS } from './companySnapshotFieldCatalog';
 import {
   isLogoMimeType,
   isValidBrandingPrimaryColor,
@@ -184,44 +185,17 @@ const CUSTOMER_KEYS = [
   'phone',
 ] as const;
 
-const COMPANY_KEYS = [
-  'companyName',
-  'legalForm',
-  'logoDataUrl',
-  'street',
-  'zip',
-  'city',
-  'country',
-  'contactPerson',
-  'phone',
-  'email',
-  'website',
-  'taxNumber',
-  'vatId',
-  /*
-   * COMPANY-PROFILE-REGISTER-01I (nachgezogen in INVOICE-PDF-COMPANY-BLOCK-01)
-   * — Registerstelle und Registernummer.
-   *
-   * 01I hatte nur die Liste des Cloud-Payload-Validators ergänzt; diese zweite
-   * geschlossene Liste blieb stehen und wies den Prepared-Finalize-Request
-   * eines eingetragenen Betriebs mit `unknown_field` ab. Zwei weitere optionale
-   * Textfelder desselben Snapshots — kein Formatwechsel.
-   */
-  'registrationAuthority',
-  'registrationNumber',
-  'bankName',
-  'iban',
-  'bic',
-  'defaultPaymentDays',
-  'defaultPaymentTerms',
-  'defaultSkonto',
-  'skontoEnabled',
-  'skontoPercent',
-  'skontoDays',
-  'managingDirector',
-  'taxFreeNotice',
-  'invoiceFooterNotes',
-] as const;
+/**
+ * COMPANY-SNAPSHOT-FIELD-CATALOG-01B — derselbe Schlüsselvertrag wie im
+ * Cloud-Payload-Validator, aus einer Quelle.
+ *
+ * Die Aussage des Dateikopfs bleibt unberührt: Die Whitelist gehört weiterhin
+ * zu **Request-Formatversion 1**, und eine Modellerweiterung ist weiterhin
+ * eine bewusste Entscheidung — sie wird nur nicht mehr an zwei Stellen
+ * getroffen, von denen eine übersehen werden kann. Genau das war beim
+ * Registerblock geschehen.
+ */
+const COMPANY_KEYS = COMPANY_SNAPSHOT_KEYS;
 
 /** BRANDING-01F-2 — geschlossener Vertrag, siehe `checkBrandingSnapshot`. */
 const BRANDING_SNAPSHOT_KEYS = ['version', 'logo', 'primaryColor'] as const;

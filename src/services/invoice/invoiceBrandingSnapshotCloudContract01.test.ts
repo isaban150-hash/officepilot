@@ -19,6 +19,8 @@ import { validateWorkspaceInvoiceCloudPayload } from './workspaceInvoiceCloudPay
 import { buildInvoicePayloadV1 } from './workspaceInvoiceFinalizeRequestValidator';
 import cloudValidatorSource from './workspaceInvoiceCloudPayloadValidator.ts?raw';
 import finalizeValidatorSource from './workspaceInvoiceFinalizeRequestValidator.ts?raw';
+import catalogSource from './companySnapshotFieldCatalog.ts?raw';
+import { COMPANY_SNAPSHOT_KEYS } from './companySnapshotFieldCatalog';
 import { DEFAULT_COMPANY_PROFILE } from '../../data/companyProfileDefaults';
 import type { BrandingSnapshot } from '../../types/branding';
 import type { VorgangInvoice } from '../../types/models';
@@ -281,12 +283,31 @@ describe('BRANDING-01F-2 — der veränderliche Branding-Block bleibt draussen',
   });
 
   it('nimmt branding in keine der Firmen-Allowlisten auf', () => {
+    /*
+     * COMPANY-SNAPSHOT-FIELD-CATALOG-01B — die geprüfte Eigenschaft ist
+     * unverändert, nur ihr Ort hat sich geändert: Beide Validatoren führen
+     * keine eigene Liste mehr, sondern beziehen sie aus einem gemeinsamen
+     * Katalog. Geprüft wird deshalb der Katalog — und zusätzlich, dass
+     * tatsächlich **beide** aus ihm speisen; sonst prüfte dieser Wächter nur
+     * noch die Hälfte.
+     */
+    const start = catalogSource.indexOf('COMPANY_SNAPSHOT_KEYS = [');
+    expect(start).toBeGreaterThanOrEqual(0);
+    const block = catalogSource.slice(start, catalogSource.indexOf('] as const', start));
+    expect(block).toContain("'logoDataUrl'");
+    expect(block).not.toContain("'branding'");
+
     for (const source of [cloudValidatorSource, finalizeValidatorSource]) {
-      const start = source.indexOf('const COMPANY_KEYS');
-      expect(start).toBeGreaterThanOrEqual(0);
-      const block = source.slice(start, source.indexOf(']', start));
-      expect(block).toContain("'logoDataUrl'");
-      expect(block).not.toContain("'branding'");
+      expect(source).toContain("from './companySnapshotFieldCatalog'");
+      const definition = source.indexOf('const COMPANY_KEYS');
+      expect(definition).toBeGreaterThanOrEqual(0);
+      expect(source.slice(definition, source.indexOf('\n', definition))).toContain(
+        'COMPANY_SNAPSHOT_KEYS',
+      );
     }
+
+    /* Und zur Laufzeit, nicht nur am Text. */
+    expect(COMPANY_SNAPSHOT_KEYS).toContain('logoDataUrl');
+    expect(COMPANY_SNAPSHOT_KEYS).not.toContain('branding');
   });
 });

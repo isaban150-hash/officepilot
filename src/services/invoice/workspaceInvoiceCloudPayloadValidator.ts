@@ -12,6 +12,7 @@
  * vorhanden — nicht in einer unbrauchbaren Form trägt.
  */
 import { BRANDING_SNAPSHOT_VERSION } from '../../types/branding';
+import { COMPANY_SNAPSHOT_KEYS } from './companySnapshotFieldCatalog';
 import {
   isLogoMimeType,
   isValidBrandingPrimaryColor,
@@ -95,42 +96,17 @@ const CUSTOMER_KEYS = new Set([
   'phone',
 ]);
 
-const COMPANY_KEYS = new Set([
-  'companyName',
-  'legalForm',
-  'logoDataUrl',
-  'street',
-  'zip',
-  'city',
-  'country',
-  'contactPerson',
-  'phone',
-  'email',
-  'website',
-  'taxNumber',
-  'vatId',
-  /*
-   * COMPANY-PROFILE-REGISTER-01I — Registerstelle und Registernummer.
-   *
-   * Die Liste ist geschlossen: Ohne diese beiden Einträge würde eine Rechnung
-   * mit Registerangaben vom eigenen Validator abgelehnt. Kein neues Format —
-   * zwei weitere optionale Textfelder desselben Snapshots.
-   */
-  'registrationAuthority',
-  'registrationNumber',
-  'bankName',
-  'iban',
-  'bic',
-  'defaultPaymentDays',
-  'defaultPaymentTerms',
-  'defaultSkonto',
-  'skontoEnabled',
-  'skontoPercent',
-  'skontoDays',
-  'managingDirector',
-  'taxFreeNotice',
-  'invoiceFooterNotes',
-]);
+/**
+ * COMPANY-SNAPSHOT-FIELD-CATALOG-01B — der Schlüsselvertrag kommt aus der
+ * gemeinsamen Quelle, die Prüfregeln bleiben hier.
+ *
+ * Vorher stand hier eine eigene Liste, und im Finalize-Request-Validator eine
+ * zweite mit demselben Inhalt. Beim Registerblock wurde nur eine davon
+ * ergänzt — der Fehler fiel erst auf, als die Finalisierung eines
+ * eingetragenen Betriebs abgewiesen wurde. Diese Möglichkeit gibt es nicht
+ * mehr; alles andere an diesem Validator ist unverändert.
+ */
+const COMPANY_KEYS = new Set<string>(COMPANY_SNAPSHOT_KEYS);
 
 /** BRANDING-01F-2 — geschlossener Vertrag, siehe `checkBrandingSnapshot`. */
 const BRANDING_SNAPSHOT_KEYS = new Set(['version', 'logo', 'primaryColor']);
