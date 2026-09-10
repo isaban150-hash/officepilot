@@ -1,6 +1,10 @@
 import { PDFDocument, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import { loadInvoicePdfFont } from './invoice/invoicePdfFonts';
+import {
+  formatManagingDirectorLine,
+  formatRegisterLine,
+} from './invoice/companyDocumentLines';
 import { isFinalizedInvoice } from './invoiceArchiveService';
 import {
   buildInvoicePrintModelFromInvoice,
@@ -438,6 +442,16 @@ async function renderInvoicePrintModelToPdf(model: InvoicePrintModel): Promise<U
     .filter(Boolean)
     .join(', ');
   if (companyAddress) drawWrapped(cursor, companyAddress, 9);
+  /*
+   * INVOICE-PDF-COMPANY-BLOCK-01 — die Vertretungszeile stand bislang nur in
+   * der Bildschirmansicht. Ein Beleg, den der Kunde als PDF bekommt, trug sie
+   * nicht; wer die Ansicht prüfte, hielt die Angabe für erledigt.
+   *
+   * `drawWrapped` statt `drawLine`: In `managingDirector` dürfen mehrere Namen
+   * stehen, und die Zeile muss dann umbrechen statt abzuschneiden.
+   */
+  const directorLine = formatManagingDirectorLine(company);
+  if (directorLine) drawWrapped(cursor, directorLine, 9);
   if (company.phone?.trim()) drawLine(cursor, `Tel.: ${company.phone}`, { size: 9 });
   if (company.email?.trim()) drawLine(cursor, `E-Mail: ${company.email}`, { size: 9 });
   if (company.website?.trim()) drawLine(cursor, company.website, { size: 9 });
@@ -445,6 +459,9 @@ async function renderInvoicePrintModelToPdf(model: InvoicePrintModel): Promise<U
     drawLine(cursor, `Steuernummer: ${company.taxNumber}`, { size: 9 });
   }
   if (company.vatId?.trim()) drawLine(cursor, `USt-IdNr.: ${company.vatId}`, { size: 9 });
+  /* Dieselbe Reihenfolge wie im `InvoiceFooter`: direkt hinter den Steuerangaben. */
+  const registerLine = formatRegisterLine(company);
+  if (registerLine) drawWrapped(cursor, registerLine, 9);
 
   cursor.y -= 8;
   drawLine(cursor, model.documentTitle, { size: 16, bold: true });

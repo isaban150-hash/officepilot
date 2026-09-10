@@ -198,6 +198,17 @@ const COMPANY_KEYS = [
   'website',
   'taxNumber',
   'vatId',
+  /*
+   * COMPANY-PROFILE-REGISTER-01I (nachgezogen in INVOICE-PDF-COMPANY-BLOCK-01)
+   * — Registerstelle und Registernummer.
+   *
+   * 01I hatte nur die Liste des Cloud-Payload-Validators ergänzt; diese zweite
+   * geschlossene Liste blieb stehen und wies den Prepared-Finalize-Request
+   * eines eingetragenen Betriebs mit `unknown_field` ab. Zwei weitere optionale
+   * Textfelder desselben Snapshots — kein Formatwechsel.
+   */
+  'registrationAuthority',
+  'registrationNumber',
   'bankName',
   'iban',
   'bic',
@@ -406,6 +417,8 @@ function checkCompanySnapshot(value: unknown, path: string): void {
   optionalFiniteNumber(snapshot.skontoPercent, `${path}.skontoPercent`);
   optionalFiniteNumber(snapshot.skontoDays, `${path}.skontoDays`);
   optionalString(snapshot.managingDirector, `${path}.managingDirector`);
+  optionalString(snapshot.registrationAuthority, `${path}.registrationAuthority`);
+  optionalString(snapshot.registrationNumber, `${path}.registrationNumber`);
   optionalString(snapshot.taxFreeNotice, `${path}.taxFreeNotice`);
 }
 

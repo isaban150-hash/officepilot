@@ -313,6 +313,9 @@ function checkCompanySnapshot(value: unknown, path: string): void {
   optionalFinite(snapshot.skontoPercent, `${path}.skontoPercent`);
   optionalFinite(snapshot.skontoDays, `${path}.skontoDays`);
   optionalText(snapshot.managingDirector, `${path}.managingDirector`);
+  /* 01I hatte die Schlüssel erlaubt, ihren Typ aber nicht geprüft. */
+  optionalText(snapshot.registrationAuthority, `${path}.registrationAuthority`);
+  optionalText(snapshot.registrationNumber, `${path}.registrationNumber`);
   optionalText(snapshot.taxFreeNotice, `${path}.taxFreeNotice`);
 }
 
