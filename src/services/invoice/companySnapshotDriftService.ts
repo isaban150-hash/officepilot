@@ -37,6 +37,21 @@ const LEGAL_IDENTITY_FIELDS = [
    */
   'registrationAuthority',
   'registrationNumber',
+  /*
+   * COMPANY-PROFILE-MANAGING-DIRECTOR-DRIFT-01 — die Vertretungsangabe.
+   *
+   * Sie steht seit dem PDF-Firmenblock auf jedem erzeugten Beleg, und für eine
+   * eingetragene Gesellschaft ist sie eine Pflichtangabe des Geschäftsbriefs.
+   * Wechselt die Geschäftsführung, während ein Entwurf offen liegt, trüge die
+   * Rechnung eine Person, die den Betrieb nicht mehr vertritt — dasselbe
+   * Gewicht wie eine veraltete Firmierung.
+   *
+   * Verglichen wird der **ganze** Wert, unverändert. Das Feld darf mehrere
+   * Namen tragen; es wird nicht aufgeteilt, nicht sortiert und nicht gedeutet.
+   * „Ein Name kam hinzu" und „ein Name fiel weg" sind für diesen Dienst
+   * dasselbe: eine sichtbare Änderung der Stammdaten.
+   */
+  'managingDirector',
 ] as const;
 
 /** Das Konto, auf das der Kunde zahlen soll. */

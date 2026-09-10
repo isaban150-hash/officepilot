@@ -409,3 +409,163 @@ describe('01I — Registerangaben als kritische Stammdaten', () => {
     expect(buildCriticalCompanyFingerprint(getCompanyProfile())).not.toBe(vorher);
   });
 });
+
+/**
+ * COMPANY-PROFILE-MANAGING-DIRECTOR-DRIFT-01 — die Vertretungsangabe.
+ *
+ * Sie steht seit dem PDF-Firmenblock auf jedem Beleg. Wechselt die
+ * Geschäftsführung, während ein Entwurf offen liegt, muss dieselbe Rückfrage
+ * kommen wie bei einer geänderten Firmierung — mehr nicht, und keine eigene
+ * Logik: derselbe Dienst, dieselbe Karte, dieselben zwei Wege.
+ *
+ * Der Wert wird als Ganzes verglichen. Ob ein Name hinzukam oder wegfiel, ist
+ * für diesen Dienst dieselbe Feststellung; er deutet nichts.
+ */
+describe('01 — M: Geschäftsführer/Inhaber als kritisches Feld', () => {
+  it('M1: A → B ist eine Abweichung', () => {
+    seedProfile({ managingDirector: 'Max Mustermann' });
+    const draft = draftNow();
+    seedProfile({ managingDirector: 'Erika Beispiel' });
+
+    expect(findCriticalCompanyProfileDrift(draft.companySnapshot, getCompanyProfile())).toEqual([
+      'managingDirector',
+    ]);
+  });
+
+  it('M2: unveränderte Namen erzeugen keine Abweichung', () => {
+    seedProfile({ managingDirector: 'Max Mustermann, Erika Beispiel' });
+    const draft = draftNow();
+    seedProfile({ managingDirector: 'Max Mustermann, Erika Beispiel' });
+
+    expect(findCriticalCompanyProfileDrift(draft.companySnapshot, getCompanyProfile())).toEqual([]);
+  });
+
+  it('M3: fehlend und leer sind dasselbe', () => {
+    const draft = draftNow();
+    /* PROFILE_A setzt das Feld nicht; der Default macht daraus ''. */
+    expect(draft.companySnapshot.managingDirector ?? '').toBe('');
+
+    seedProfile({ managingDirector: '' });
+    expect(findCriticalCompanyProfileDrift(draft.companySnapshot, getCompanyProfile())).toEqual([]);
+  });
+
+  it('M4: leer → Wert ist eine Abweichung', () => {
+    seedProfile({ managingDirector: '' });
+    const draft = draftNow();
+    seedProfile({ managingDirector: 'Max Mustermann' });
+
+    expect(findCriticalCompanyProfileDrift(draft.companySnapshot, getCompanyProfile())).toEqual([
+      'managingDirector',
+    ]);
+  });
+
+  it('M5: Wert → leer ist eine Abweichung', () => {
+    seedProfile({ managingDirector: 'Max Mustermann' });
+    const draft = draftNow();
+    seedProfile({ managingDirector: '' });
+
+    expect(findCriticalCompanyProfileDrift(draft.companySnapshot, getCompanyProfile())).toEqual([
+      'managingDirector',
+    ]);
+  });
+
+  it('M6: ein Name → zwei Namen ist eine Abweichung', () => {
+    seedProfile({ managingDirector: 'Max Mustermann' });
+    const draft = draftNow();
+    seedProfile({ managingDirector: 'Max Mustermann, Erika Beispiel' });
+
+    expect(findCriticalCompanyProfileDrift(draft.companySnapshot, getCompanyProfile())).toEqual([
+      'managingDirector',
+    ]);
+  });
+
+  it('M6b: zwei Namen → ein Name ebenso', () => {
+    seedProfile({ managingDirector: 'Max Mustermann, Erika Beispiel' });
+    const draft = draftNow();
+    seedProfile({ managingDirector: 'Max Mustermann' });
+
+    expect(findCriticalCompanyProfileDrift(draft.companySnapshot, getCompanyProfile())).toEqual([
+      'managingDirector',
+    ]);
+  });
+
+  it('äußere Leerzeichen allein sind keine Abweichung', () => {
+    seedProfile({ managingDirector: 'Max Mustermann, Erika Beispiel' });
+    const draft = draftNow();
+    seedProfile({ managingDirector: '  Max Mustermann, Erika Beispiel  ' });
+
+    expect(findCriticalCompanyProfileDrift(draft.companySnapshot, getCompanyProfile())).toEqual([]);
+  });
+
+  it('die Schreibweise zählt — nichts wird gedeutet', () => {
+    seedProfile({ managingDirector: 'Max Mustermann, Erika Beispiel' });
+    const draft = draftNow();
+    /* Dieselben Personen, andere Reihenfolge — trotzdem eine Änderung. */
+    seedProfile({ managingDirector: 'Erika Beispiel, Max Mustermann' });
+
+    expect(findCriticalCompanyProfileDrift(draft.companySnapshot, getCompanyProfile())).toEqual([
+      'managingDirector',
+    ]);
+  });
+
+  it('M10: IBAN und Geschäftsführer erscheinen zusammen in einer Feststellung', () => {
+    seedProfile({ managingDirector: 'Max Mustermann' });
+    const draft = draftNow();
+    seedProfile({
+      managingDirector: 'Erika Beispiel',
+      iban: 'DE02 1203 0000 0000 2020 51',
+    });
+
+    const drift = findCriticalCompanyProfileDrift(draft.companySnapshot, getCompanyProfile());
+    expect(drift).toContain('managingDirector');
+    expect(drift).toContain('iban');
+    expect(drift).toHaveLength(2);
+  });
+
+  it('M7/M8: Behalten lässt den Entwurf stehen, Übernehmen schreibt beide Felder', () => {
+    seedProfile({ managingDirector: 'Max Mustermann' });
+    const draft = draftNow();
+    const aktuell = seedProfile({
+      managingDirector: 'Erika Beispiel',
+      iban: 'DE02 1203 0000 0000 2020 51',
+    });
+
+    /* Behalten: am Entwurf passiert nichts. */
+    expect(draft.companySnapshot.managingDirector).toBe('Max Mustermann');
+
+    /* Übernehmen: beide kritischen Felder wandern mit. */
+    const next = applyCriticalCompanyProfileFields(draft.companySnapshot, aktuell);
+    expect(next.managingDirector).toBe('Erika Beispiel');
+    expect(next.iban).toBe('DE02 1203 0000 0000 2020 51');
+    /* Unkritisches bleibt beim Entwurfsstand. */
+    expect(next.defaultPaymentDays).toBe(draft.companySnapshot.defaultPaymentDays);
+  });
+
+  it('M12: eine finalisierte Rechnung behält ihre Vertretungsangabe', () => {
+    seedProfile({ managingDirector: 'Max Mustermann' });
+    const draft = draftNow();
+    const finalisierbar: typeof draft = {
+      ...draft,
+      positions: draft.positions.map((p) => ({ ...p, quantity: p.quantity > 0 ? p.quantity : 1 })),
+      servicePeriodFrom: '2026-08-01',
+      servicePeriodTo: '2026-08-20',
+      servicePeriodConfirmed: true,
+    };
+
+    const finalized = finalizeInvoiceDraft('v-test-1', finalisierbar, testSetup);
+    expect(finalized, JSON.stringify(finalized)).toMatchObject({ ok: true });
+    if (!finalized.ok) return;
+
+    seedProfile({ managingDirector: 'Erika Beispiel' });
+
+    expect(finalized.invoice.companySnapshot?.managingDirector).toBe('Max Mustermann');
+  });
+
+  it('das Kennzeichen ändert sich mit der Vertretungsangabe', () => {
+    seedProfile({ managingDirector: 'Max Mustermann' });
+    const vorher = buildCriticalCompanyFingerprint(getCompanyProfile());
+    seedProfile({ managingDirector: 'Erika Beispiel' });
+
+    expect(buildCriticalCompanyFingerprint(getCompanyProfile())).not.toBe(vorher);
+  });
+});

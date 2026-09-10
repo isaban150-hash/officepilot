@@ -2257,6 +2257,8 @@ const deLegacy = {
   'invoice.companyDrift.field.country': 'Land',
   'invoice.companyDrift.field.taxNumber': 'Steuernummer',
   'invoice.companyDrift.field.vatId': 'USt-IdNr.',
+  /* Derselbe Wortlaut wie in den Firmendaten — der Nutzer sucht dort danach. */
+  'invoice.companyDrift.field.managingDirector': 'Geschäftsführer / Inhaber',
   'invoice.companyDrift.field.registrationAuthority': 'Registergericht',
   'invoice.companyDrift.field.registrationNumber': 'Registernummer',
   'invoice.companyDrift.field.bankName': 'Bank',

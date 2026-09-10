@@ -5,7 +5,10 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
 import { DEFAULT_SETUP } from '../data/mockData';
 import { DEFAULT_COMPANY_PROFILE } from '../data/companyProfileDefaults';
-import { hydrateCompanyProfileStore } from '../services/companyProfileService';
+import {
+  getCompanyProfile,
+  hydrateCompanyProfileStore,
+} from '../services/companyProfileService';
 import { AppProvider } from '../context/AppContext';
 import { RechnungPage } from './RechnungPage';
 import { createTestVorgangWithExecutedQuantity } from '../test/fixtures';
@@ -51,6 +54,8 @@ const PROFILE_A: CompanyProfile = {
   bankName: 'Alpha Bank',
   iban: 'DE11 1111 1111 1111 1111 11',
   bic: 'ALPHADEFFXXX',
+  /* COMPANY-PROFILE-MANAGING-DIRECTOR-DRIFT-01 — seit diesem Block kritisch. */
+  managingDirector: 'Max Mustermann',
   defaultPaymentDays: 14,
 };
 
@@ -66,6 +71,7 @@ const PROFILE_B: CompanyProfile = {
   bankName: 'Beta Bank',
   iban: 'DE22 2222 2222 2222 2222 22',
   bic: 'BETADEFFXXX',
+  managingDirector: 'Erika Beispiel',
   /* Diese drei dürfen die Übernahme **nicht** mitziehen. */
   defaultPaymentDays: 30,
   phone: '0000 999999',
@@ -248,6 +254,8 @@ describe('01E2 — welcher Snapshot wird tatsächlich finalisiert?', () => {
     expect(draft!.companySnapshot.iban).toBe(PROFILE_B.iban);
     expect(draft!.companySnapshot.bankName).toBe(PROFILE_B.bankName);
     expect(draft!.companySnapshot.bic).toBe(PROFILE_B.bic);
+    /* M8/M9 — auch die Vertretungsangabe steht im tatsächlich finalisierten Entwurf. */
+    expect(draft!.companySnapshot.managingDirector).toBe(PROFILE_B.managingDirector);
 
     /* I3 — alles andere bleibt bei A. */
     expect(draft!.companySnapshot.defaultPaymentDays).toBe(PROFILE_A.defaultPaymentDays);
@@ -281,7 +289,12 @@ describe('01E2 — welcher Snapshot wird tatsächlich finalisiert?', () => {
     expect(snapshot.iban).toBe(PROFILE_A.iban);
     expect(snapshot.taxNumber).toBe(PROFILE_A.taxNumber);
     expect(snapshot.vatId).toBe(PROFILE_A.vatId);
+    /* M7 — die Vertretungsangabe bleibt beim Stand des Entwurfs. */
+    expect(snapshot.managingDirector).toBe(PROFILE_A.managingDirector);
     expect(snapshot.companyName).not.toBe(PROFILE_B.companyName);
+    expect(snapshot.managingDirector).not.toBe(PROFILE_B.managingDirector);
+    /* Und das lebende Profil wird nicht zurückmutiert. */
+    expect(getCompanyProfile().managingDirector).toBe(PROFILE_B.managingDirector);
     unmount(mount);
   }, 40_000);
 
