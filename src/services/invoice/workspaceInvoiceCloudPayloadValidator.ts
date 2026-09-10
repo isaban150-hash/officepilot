@@ -109,6 +109,15 @@ const COMPANY_KEYS = new Set([
   'website',
   'taxNumber',
   'vatId',
+  /*
+   * COMPANY-PROFILE-REGISTER-01I — Registerstelle und Registernummer.
+   *
+   * Die Liste ist geschlossen: Ohne diese beiden Einträge würde eine Rechnung
+   * mit Registerangaben vom eigenen Validator abgelehnt. Kein neues Format —
+   * zwei weitere optionale Textfelder desselben Snapshots.
+   */
+  'registrationAuthority',
+  'registrationNumber',
   'bankName',
   'iban',
   'bic',

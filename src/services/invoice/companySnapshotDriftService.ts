@@ -28,6 +28,15 @@ const LEGAL_IDENTITY_FIELDS = [
   'country',
   'taxNumber',
   'vatId',
+  /*
+   * COMPANY-PROFILE-REGISTER-01I — Registerstelle und Registernummer sind
+   * Pflichtangaben auf dem Geschäftsbrief, sobald der Betrieb eingetragen ist.
+   * Eine Rechnung, die nach einem Registerwechsel noch die alte Kennung trägt,
+   * enthält eine unrichtige Pflichtangabe — dasselbe Gewicht wie eine veraltete
+   * Firmierung.
+   */
+  'registrationAuthority',
+  'registrationNumber',
 ] as const;
 
 /** Das Konto, auf das der Kunde zahlen soll. */
@@ -93,7 +102,13 @@ export function applyCriticalCompanyProfileFields(
 ): CompanyProfile {
   const next: CompanyProfile = { ...snapshot };
   for (const field of CRITICAL_COMPANY_FIELDS) {
-    next[field] = profile[field];
+    /*
+     * `?? ''` wegen der optionalen Registerfelder: Ein Betrieb, der die
+     * Registerangabe gelöscht hat, muss sie auch aus dem Entwurf verlieren.
+     * Der fehlende Schlüssel würde beim Verteilen sonst nichts überschreiben
+     * und der alte Wert bliebe stehen — das Gegenteil von „übernehmen".
+     */
+    next[field] = profile[field] ?? '';
   }
   return next;
 }

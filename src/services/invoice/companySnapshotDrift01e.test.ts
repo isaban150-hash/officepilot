@@ -266,3 +266,146 @@ describe('01E — H: eine Bestätigung gilt nur für den verglichenen Stand', ()
     expect(buildCriticalCompanyFingerprint(getCompanyProfile())).toBe(vorher);
   });
 });
+
+/**
+ * COMPANY-PROFILE-REGISTER-01I — Registergericht und Registernummer.
+ *
+ * Sie stehen hier und nicht in einer eigenen Datei, weil sie fachlich genau
+ * dasselbe sind wie Firmierung und Steuernummer: rechtliche Absenderidentität.
+ * Eine zweite Driftarchitektur gäbe es damit nicht, nur zwei Listen, die
+ * auseinanderlaufen könnten.
+ */
+describe('01I — Registerangaben als kritische Stammdaten', () => {
+  const MIT_REGISTER: Partial<CompanyProfile> = {
+    registrationAuthority: 'Amtsgericht Lemgo',
+    registrationNumber: 'HRB 12345',
+  };
+
+  it('F1: ein neuer Entwurf übernimmt beide Registerfelder in den Snapshot', () => {
+    seedProfile(MIT_REGISTER);
+    const draft = draftNow();
+
+    expect(draft.companySnapshot.registrationAuthority).toBe('Amtsgericht Lemgo');
+    expect(draft.companySnapshot.registrationNumber).toBe('HRB 12345');
+  });
+
+  it('F2: eine finalisierte Rechnung behält ihre Registerangaben für immer', () => {
+    seedProfile(MIT_REGISTER);
+    const draft = draftNow();
+    const finalisierbar: typeof draft = {
+      ...draft,
+      positions: draft.positions.map((p) => ({ ...p, quantity: p.quantity > 0 ? p.quantity : 1 })),
+      servicePeriodFrom: '2026-08-01',
+      servicePeriodTo: '2026-08-20',
+      servicePeriodConfirmed: true,
+    };
+
+    const finalized = finalizeInvoiceDraft('v-test-1', finalisierbar, testSetup);
+    expect(finalized, JSON.stringify(finalized)).toMatchObject({ ok: true });
+    if (!finalized.ok) return;
+
+    /* Der Betrieb wechselt danach das Register — Sitzverlegung. */
+    seedProfile({
+      registrationAuthority: 'Amtsgericht Bielefeld',
+      registrationNumber: 'HRB 99999',
+    });
+
+    expect(finalized.invoice.companySnapshot?.registrationAuthority).toBe('Amtsgericht Lemgo');
+    expect(finalized.invoice.companySnapshot?.registrationNumber).toBe('HRB 12345');
+  });
+
+  it('L1: geändertes Registergericht ist eine Abweichung', () => {
+    seedProfile(MIT_REGISTER);
+    const draft = draftNow();
+    seedProfile({ ...MIT_REGISTER, registrationAuthority: 'Amtsgericht Bielefeld' });
+
+    expect(findCriticalCompanyProfileDrift(draft.companySnapshot, getCompanyProfile())).toEqual([
+      'registrationAuthority',
+    ]);
+  });
+
+  it('L2: geänderte Registernummer ist eine Abweichung', () => {
+    seedProfile(MIT_REGISTER);
+    const draft = draftNow();
+    seedProfile({ ...MIT_REGISTER, registrationNumber: 'HRB 12346' });
+
+    expect(findCriticalCompanyProfileDrift(draft.companySnapshot, getCompanyProfile())).toEqual([
+      'registrationNumber',
+    ]);
+  });
+
+  it('L3: nur äußere Leerzeichen sind keine Abweichung', () => {
+    seedProfile(MIT_REGISTER);
+    const draft = draftNow();
+    seedProfile({
+      registrationAuthority: '  Amtsgericht Lemgo  ',
+      registrationNumber: ' HRB 12345 ',
+    });
+
+    expect(findCriticalCompanyProfileDrift(draft.companySnapshot, getCompanyProfile())).toEqual([]);
+  });
+
+  it('L3b: ein nie befülltes Registerfeld erzeugt keine Abweichung', () => {
+    const draft = draftNow();
+
+    expect(findCriticalCompanyProfileDrift(draft.companySnapshot, getCompanyProfile())).toEqual([]);
+  });
+
+  it('L3c: die Schreibweise zählt — „HRB" und „hrb" sind nicht dasselbe', () => {
+    seedProfile(MIT_REGISTER);
+    const draft = draftNow();
+    seedProfile({ ...MIT_REGISTER, registrationNumber: 'hrb 12345' });
+
+    expect(findCriticalCompanyProfileDrift(draft.companySnapshot, getCompanyProfile())).toEqual([
+      'registrationNumber',
+    ]);
+  });
+
+  it('L4: Übernehmen setzt die aktuellen Registerwerte in den Snapshot', () => {
+    seedProfile(MIT_REGISTER);
+    const draft = draftNow();
+    const aktuell = seedProfile({
+      registrationAuthority: 'Amtsgericht Bielefeld',
+      registrationNumber: 'HRB 99999',
+    });
+
+    const next = applyCriticalCompanyProfileFields(draft.companySnapshot, aktuell);
+
+    expect(next.registrationAuthority).toBe('Amtsgericht Bielefeld');
+    expect(next.registrationNumber).toBe('HRB 99999');
+    /* Unkritisches bleibt beim Entwurfsstand. */
+    expect(next.defaultPaymentDays).toBe(draft.companySnapshot.defaultPaymentDays);
+  });
+
+  it('L4b: eine gelöschte Registerangabe verschwindet beim Übernehmen auch aus dem Entwurf', () => {
+    seedProfile(MIT_REGISTER);
+    const draft = draftNow();
+    const aktuell = seedProfile({ registrationAuthority: '', registrationNumber: '' });
+
+    const next = applyCriticalCompanyProfileFields(draft.companySnapshot, aktuell);
+
+    expect(next.registrationAuthority).toBe('');
+    expect(next.registrationNumber).toBe('');
+  });
+
+  it('L5: Behalten lässt die bisherigen Registerwerte unangetastet', () => {
+    seedProfile(MIT_REGISTER);
+    const draft = draftNow();
+    seedProfile({
+      registrationAuthority: 'Amtsgericht Bielefeld',
+      registrationNumber: 'HRB 99999',
+    });
+
+    /* „Behalten" heißt: am Entwurf passiert nichts. */
+    expect(draft.companySnapshot.registrationAuthority).toBe('Amtsgericht Lemgo');
+    expect(draft.companySnapshot.registrationNumber).toBe('HRB 12345');
+  });
+
+  it('das Kennzeichen ändert sich mit den Registerangaben', () => {
+    seedProfile(MIT_REGISTER);
+    const vorher = buildCriticalCompanyFingerprint(getCompanyProfile());
+    seedProfile({ ...MIT_REGISTER, registrationNumber: 'HRB 12346' });
+
+    expect(buildCriticalCompanyFingerprint(getCompanyProfile())).not.toBe(vorher);
+  });
+});

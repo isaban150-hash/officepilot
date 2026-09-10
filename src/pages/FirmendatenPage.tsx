@@ -71,7 +71,12 @@ const LOGO_ERROR_KEYS: Record<BrandingLogoValidationError, TranslationKey> = {
   invalid_file: 'companyProfile.logoError.unreadable',
 };
 
-const TEXT_FIELDS: { key: ProfileField; labelKey: TranslationKey; type?: string }[] = [
+const TEXT_FIELDS: {
+  key: ProfileField;
+  labelKey: TranslationKey;
+  type?: string;
+  placeholderKey?: TranslationKey;
+}[] = [
   { key: 'companyName', labelKey: 'companyProfile.companyName' },
   { key: 'legalForm', labelKey: 'companyProfile.legalForm' },
   { key: 'managingDirector', labelKey: 'companyProfile.managingDirector' },
@@ -85,6 +90,25 @@ const TEXT_FIELDS: { key: ProfileField; labelKey: TranslationKey; type?: string 
   { key: 'website', labelKey: 'companyProfile.website', type: 'url' },
   { key: 'taxNumber', labelKey: 'companyProfile.taxNumber' },
   { key: 'vatId', labelKey: 'companyProfile.vatId' },
+  /*
+   * COMPANY-PROFILE-REGISTER-01I — beide Angaben stehen am Ende des
+   * Unternehmensteils, direkt hinter den Steuernummern: dieselbe Art von
+   * Pflichtangabe, dieselbe Stelle im Rechnungsfuss.
+   *
+   * Der Platzhalter ist keine Zierde. Ohne Beispiel schreibt der eine
+   * „AG Lemgo", der andere „Amtsgericht Lemgo HRB 12345" in ein Feld — und die
+   * getrennte Struktur wäre wieder dahin.
+   */
+  {
+    key: 'registrationAuthority',
+    labelKey: 'companyProfile.registrationAuthority',
+    placeholderKey: 'companyProfile.registrationAuthority.placeholder',
+  },
+  {
+    key: 'registrationNumber',
+    labelKey: 'companyProfile.registrationNumber',
+    placeholderKey: 'companyProfile.registrationNumber.placeholder',
+  },
   { key: 'bankName', labelKey: 'companyProfile.bankName' },
   { key: 'iban', labelKey: 'companyProfile.iban' },
   { key: 'bic', labelKey: 'companyProfile.bic' },
@@ -142,6 +166,8 @@ const RESUMABLE_PROFILE_FIELDS = [
   'website',
   'taxNumber',
   'vatId',
+  'registrationAuthority',
+  'registrationNumber',
   'bankName',
   'iban',
   'bic',
@@ -445,7 +471,7 @@ export function FirmendatenPage() {
       <BackupExportPanel />
 
       <form className="company-profile-form" onSubmit={handleSubmit}>
-        {TEXT_FIELDS.map(({ key, labelKey, type = 'text' }) => (
+        {TEXT_FIELDS.map(({ key, labelKey, type = 'text', placeholderKey }) => (
           <fieldset key={key} className="form-group">
             <label htmlFor={`profile-${key}`}>{translate(labelKey)}</label>
             <input
@@ -454,6 +480,7 @@ export function FirmendatenPage() {
               type={type}
               className="input"
               value={String(draft[key] ?? '')}
+              placeholder={placeholderKey ? translate(placeholderKey) : undefined}
               onChange={(e) => handleChange(key, e.target.value)}
               autoComplete={key === 'iban' ? 'off' : undefined}
               required={key === 'companyName'}

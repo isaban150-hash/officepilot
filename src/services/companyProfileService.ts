@@ -58,6 +58,21 @@ export function updateCompanyProfile(
     merged.defaultPaymentDays = Math.round(days);
   }
 
+  /*
+   * COMPANY-PROFILE-REGISTER-01I — nur äussere Leerzeichen fallen weg.
+   *
+   * „ HRB 12345 " und „HRB 12345" sind dieselbe Registernummer; ein
+   * mitgeschlepptes Leerzeichen würde sonst als Änderung der rechtlichen
+   * Stammdaten gelten und beim nächsten Rechnungsentwurf eine Rückfrage
+   * auslösen, die nichts bedeutet. Weiter geht die Normalisierung bewusst
+   * nicht: Gross-/Kleinschreibung und innere Zeichen sind Teil der Angabe.
+   */
+  for (const field of ['registrationAuthority', 'registrationNumber'] as const) {
+    if (partial[field] !== undefined) {
+      merged[field] = (partial[field] ?? '').trim();
+    }
+  }
+
   companyProfile = cloneProfile(merged);
 
   const setup = getCachedSetup();

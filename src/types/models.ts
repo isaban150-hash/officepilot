@@ -767,6 +767,23 @@ export interface CompanyProfile {
   website: string;
   taxNumber: string;
   vatId: string;
+  /**
+   * COMPANY-PROFILE-REGISTER-01I — die zuständige Registerstelle, z. B.
+   * „Amtsgericht Lemgo".
+   *
+   * Bewusst zwei getrennte Felder statt einer kombinierten Freitextzeile:
+   * Registerstelle und Registernummer sind fachlich verschiedene Angaben, sie
+   * ändern sich unabhängig voneinander, die Driftprüfung kann exakt arbeiten,
+   * und eine spätere strukturierte E-Rechnung muss keine Freitextzeile wieder
+   * auseinandernehmen.
+   *
+   * Optional und ohne Formatregel: OfficePilot bedient auch Betriebe, die gar
+   * nicht im Handelsregister stehen, und „FN 123456a" ist so gültig wie
+   * „HRB 12345".
+   */
+  registrationAuthority?: string;
+  /** COMPANY-PROFILE-REGISTER-01I — die Registrierungskennung, z. B. „HRB 12345". */
+  registrationNumber?: string;
   bankName: string;
   iban: string;
   bic: string;

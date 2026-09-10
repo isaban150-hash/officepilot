@@ -13,6 +13,8 @@ export const DEFAULT_COMPANY_PROFILE: CompanyProfile = {
   website: '',
   taxNumber: '',
   vatId: '',
+  registrationAuthority: '',
+  registrationNumber: '',
   bankName: '',
   iban: '',
   bic: '',
