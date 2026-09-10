@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { AppPersistedState, Vorgang } from '../../types/models';
+import type { AppPersistedState, StoredInvoiceEntry, Vorgang, VorgangInvoice } from '../../types/models';
 import type { SyncOutboxEntry, SyncSimulationReport } from '../../types/sync';
 import { getSupabaseClient, isSupabaseConfigured } from '../../lib/supabase';
 import type {
@@ -239,6 +239,110 @@ function applyPushResultToState(
   }
 
   return next;
+}
+
+/**
+ * INVOICE-CLOUD-PULL-STORE-01B — der Rechnungsbestand nach einem Pull.
+ *
+ * Die gemergten Vorgänge tragen das Ergebnis des Cloud-Pulls; sie sind für jede
+ * Rechnung, die sie führen, die frischere Wahrheit. Der vorherige Bestand wird
+ * deshalb **nicht** verworfen, sondern ergänzt: Was der Pull nicht berührt hat,
+ * bleibt erhalten.
+ *
+ * Das ist der Punkt, an dem lokale, noch nicht synchronisierte Rechnungen
+ * überleben. Der Sync bekommt seinen Eingangszustand aus
+ * `buildPersistedStateSnapshot`, und der trägt die Rechnungen ausschliesslich in
+ * `invoiceEntries` — die Vorgänge, die in den Merge gehen, haben also gar keine.
+ * Würde der Endzustand allein aus ihnen abgeleitet, verschwände jeder Beleg, der
+ * die Cloud noch nie gesehen hat. Ebenso bleiben Einträge ohne Vorgangsbezug
+ * (`vorgangId: null`) unangetastet.
+ *
+ * Die Zuordnung läuft über `invoice.id` — dieselbe Kennung, die auch die Cloud
+ * als `client_invoice_id` führt. Eine doppelte Kennung innerhalb der Vorgänge
+ * wäre ein Widerspruch im Merge-Ergebnis; sie wird nicht stillschweigend
+ * zusammengeführt, sondern der erste Fund gewinnt und der zweite fällt auf.
+ */
+/**
+ * INVOICE-CLOUD-PULL-STORE-01C — der lokale Rechnungsstand geht in den Merge.
+ *
+ * `applyFinalizedInvoiceToVorgang` trägt bereits die gesamte Same-ID-Semantik:
+ * monotoner Status, ein vollständiger lokaler Versandsatz gewinnt, die
+ * Bestätigung des Leistungszeitraums wird angehoben und nie gesenkt, und ein
+ * abweichender Inhalt wird als Konflikt gemeldet statt still überschrieben.
+ *
+ * Diese Regeln liefen im Sync bisher ins Leere: Der Eingangszustand kommt aus
+ * `buildPersistedStateSnapshot` und trägt die Rechnungen ausschliesslich in
+ * `invoiceEntries` — die Vorgänge im Merge hatten also keine, und jede
+ * Cloud-Rechnung sah aus wie ein Neuzugang. Eine lokal als versendet markierte,
+ * noch nicht hochgeladene Rechnung wäre damit still auf den Cloud-Stand
+ * zurückgefallen.
+ *
+ * Hier wird der lokale Stand deshalb vor dem Rechnungs-Pull wieder an seine
+ * Vorgänge projiziert. Kein neuer Merge, keine neue Regel — nur die vorhandene
+ * bekommt endlich beide Seiten zu sehen.
+ */
+export function projectInvoiceEntriesOntoVorgaenge(
+  vorgaenge: Vorgang[],
+  entries: readonly StoredInvoiceEntry[] | undefined,
+): Vorgang[] {
+  if (!entries?.length) return vorgaenge;
+
+  const byVorgang = new Map<string, VorgangInvoice[]>();
+  for (const entry of entries) {
+    if (!entry.vorgangId) continue;
+    const list = byVorgang.get(entry.vorgangId);
+    if (list) list.push(entry.invoice);
+    else byVorgang.set(entry.vorgangId, [entry.invoice]);
+  }
+
+  return vorgaenge.map((vorgang) => {
+    const lokal = byVorgang.get(vorgang.id);
+    if (!lokal) return vorgang;
+    /* Ein bereits mitgeführter Stand hat Vorrang; doppelt wird nichts. */
+    const vorhanden = new Set((vorgang.invoices ?? []).map((invoice) => invoice.id));
+    const ergaenzt = lokal.filter((invoice) => !vorhanden.has(invoice.id));
+    if (ergaenzt.length === 0) return vorgang;
+    return { ...vorgang, invoices: [...(vorgang.invoices ?? []), ...ergaenzt] };
+  });
+}
+
+export function buildFinalStateAfterPull(
+  baseState: AppPersistedState,
+  vorgaenge: Vorgang[],
+  documents: AppPersistedState['documents'],
+): AppPersistedState {
+  return {
+    ...baseState,
+    /* Zur Laufzeit tragen die Vorgänge ihre Rechnungen; gespeichert wird ohne
+       sie — dieselbe Trennlinie wie in `buildPersistedStateSnapshot`. */
+    vorgaenge: vorgaenge.map((vorgang) => ({ ...vorgang, invoices: [] })),
+    invoiceEntries: buildInvoiceEntriesAfterPull(vorgaenge, baseState.invoiceEntries),
+    documents,
+  };
+}
+
+export function buildInvoiceEntriesAfterPull(
+  vorgaenge: readonly Vorgang[],
+  previousEntries: readonly StoredInvoiceEntry[] | undefined,
+): StoredInvoiceEntry[] {
+  const entries: StoredInvoiceEntry[] = [];
+  const seen = new Set<string>();
+
+  for (const vorgang of vorgaenge) {
+    for (const invoice of vorgang.invoices ?? []) {
+      if (seen.has(invoice.id)) continue;
+      seen.add(invoice.id);
+      entries.push({ invoice, vorgangId: vorgang.id });
+    }
+  }
+
+  for (const entry of previousEntries ?? []) {
+    if (seen.has(entry.invoice.id)) continue;
+    seen.add(entry.invoice.id);
+    entries.push(entry);
+  }
+
+  return entries;
 }
 
 export class SupabaseSyncAdapter implements SyncAdapter {
@@ -490,7 +594,12 @@ export class SupabaseSyncAdapter implements SyncAdapter {
       // Invoice RPC failure must not discard vorgang/amendment pull results.
       const invoicePull = await applyInvoicePullAfterVorgangMerge({
         workspaceId,
-        vorgaenge: amendmentPull.merge.vorgaenge,
+        /* 01C — der lokale Rechnungsstand muss im Merge sichtbar sein, sonst
+           laufen dessen Same-ID-Schutzregeln ins Leere. */
+        vorgaenge: projectInvoiceEntriesOntoVorgaenge(
+          amendmentPull.merge.vorgaenge,
+          merged.state.invoiceEntries,
+        ),
         report,
         client: this.client,
       });
@@ -513,11 +622,28 @@ export class SupabaseSyncAdapter implements SyncAdapter {
         client: this.client,
       });
 
-      const finalState = {
-        ...merged.state,
-        vorgaenge: documentPull.vorgaenge,
-        documents: documentPull.documents,
-      };
+      /*
+       * INVOICE-CLOUD-PULL-STORE-01B — die gezogenen Rechnungen erreichen ihren
+       * Speicher.
+       *
+       * Gemessener Fehler: Der Pull lieferte alle 12 Cloud-Rechnungen, das
+       * Mapping nahm sie an, der Merge hängte sie an `vorgaenge[].invoices` —
+       * und dort blieben sie liegen. `finalState` führte weiterhin das
+       * `invoiceEntries` von **vor** dem Pull mit, auf einem frischen Gerät also
+       * eine leere Liste. `applyStateToStores` absorbiert die Rechnungen aus den
+       * Vorgängen zwar korrekt, überschreibt den Speicher unmittelbar danach mit
+       * genau dieser leeren Liste. Ergebnis: kein einziger Beleg sichtbar,
+       * obwohl alles fehlerfrei übertragen wurde.
+       *
+       * Die Reihenfolge in `applyStateToStores` bleibt unangetastet — sie ist
+       * richtig. Korrigiert wird die Quelle: Der Endzustand trägt die Rechnungen
+       * dort, wo sie seit FIRST-CLASS-LOCAL-INVOICE-STORE-01B hingehören.
+       */
+      const finalState = buildFinalStateAfterPull(
+        merged.state,
+        documentPull.vorgaenge,
+        documentPull.documents,
+      );
 
       // Vorgang+amendment pull succeeded; invoice RPC failure is reported but does not roll back.
       this.syncState = invoicePull.invoiceRpcFailed ? 'error' : 'synced';
