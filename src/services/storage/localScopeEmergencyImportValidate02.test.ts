@@ -146,6 +146,17 @@ function buildRawState(overrides: Record<string, unknown> = {}): Record<string, 
     },
     inboxItems: [buildInboxItem()],
     vorgaenge: [],
+    /*
+     * FIRST-CLASS-LOCAL-INVOICE-STORE-01B — seit Storage V6 gehört
+     * `invoiceEntries` zu einem gültigen Zustand; `isValidPersistedStateV6`
+     * verlangt das Feld ausdrücklich. Ohne es wäre dieser Zustand kein
+     * heutiger Bestand, sondern ein beschädigter — der Notfallpfad lehnte ihn
+     * völlig zu Recht als `invalid_raw_state` ab.
+     *
+     * Bewusst vor `...overrides`: Ein Test, der einen kaputten Wert prüfen
+     * will, kann ihn weiterhin überschreiben.
+     */
+    invoiceEntries: [],
     tasks: [],
     documents: [],
     expenses: [],

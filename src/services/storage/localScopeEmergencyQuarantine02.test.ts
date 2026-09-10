@@ -136,6 +136,16 @@ function buildTargetRawState(
     },
     inboxItems: [],
     vorgaenge: [],
+    /*
+     * FIRST-CLASS-LOCAL-INVOICE-STORE-01B — seit Storage V6 gehört
+     * `invoiceEntries` zu einem gültigen Zustand. Ohne das Feld beschreibt
+     * diese Vorlage keinen heutigen Bestand, und die Quarantäne verweigerte
+     * die Vorbereitung zu Recht mit `backup_invalid`.
+     *
+     * Bewusst vor `...overrides`, damit ein Test einen ungültigen Wert
+     * weiterhin gezielt einsetzen kann.
+     */
+    invoiceEntries: [],
     tasks: [],
     documents: [],
     expenses: [],
