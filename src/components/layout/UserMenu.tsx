@@ -23,11 +23,20 @@ export function UserMenu() {
 
   const items = useMemo((): DropdownMenuItem[] => {
     const menuItems: DropdownMenuItem[] = [
+      /*
+       * COMPANY-SETTINGS-ENTRY-01B — „Einstellungen" ersetzt den bisherigen
+       * Direktsprung zu den Firmendaten.
+       *
+       * Die Firmendaten bleiben vollständig erreichbar, jetzt aber dort, wo ein
+       * Betrieb sie sucht: als erster Eintrag im Einstellungsbereich. Zwei
+       * konkurrierende Einstiege nebeneinander hätten genau die zerstreute
+       * Struktur fortgeschrieben, die dieser Block beseitigt.
+       */
       {
-        id: 'company',
-        label: translate('companyProfile.shortLink'),
-        href: '/firmendaten',
-        testId: 'user-menu-company',
+        id: 'einstellungen',
+        label: translate('settings.title'),
+        href: '/einstellungen',
+        testId: 'user-menu-einstellungen',
       },
       {
         id: 'settings',

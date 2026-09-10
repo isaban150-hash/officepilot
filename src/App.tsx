@@ -25,6 +25,7 @@ import { DocumentAddPage } from './pages/DocumentAddPage';
 import { DocumentUploadPage } from './pages/DocumentUploadPage';
 import { EingangDetailPage } from './pages/EingangDetailPage';
 import { EingangPage } from './pages/EingangPage';
+import { EinstellungenPage } from './pages/EinstellungenPage';
 import { FirmendatenPage } from './pages/FirmendatenPage';
 import { HeutePage } from './pages/HeutePage';
 import { KundenDetailPage, KundenLegacyLinkResolver } from './pages/KundenDetailPage';
@@ -193,6 +194,7 @@ function AppRoutes() {
         <Route path="/assistent" element={<AssistentPage />} />
         <Route path="/kommunikation" element={<KommunikationPage />} />
         <Route path="/wissen" element={<WissenPage />} />
+        <Route path="/einstellungen" element={<EinstellungenPage />} />
         <Route path="/firmendaten" element={<FirmendatenPage />} />
         <Route path="/synchronisation" element={<SyncPage />} />
         <Route path="/admin/users" element={<AdminUsersPage />} />

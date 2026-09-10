@@ -452,6 +452,78 @@ body {
   margin-top: 0.75rem;
 }
 
+/*
+ * COMPANY-SETTINGS-ENTRY-01B — ruhige Einstellungsliste.
+ *
+ * Bewusst keine Karten: Einstellungen werden gesucht, nicht durchstöbert. Eine
+ * Zeile trägt Titel, Beschreibung und Pfeil; getrennt wird mit einer feinen
+ * Linie statt mit Kacheln und Schatten.
+ */
+.settings-group {
+  margin-top: 1.5rem;
+}
+
+.settings-group__title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted, #6b7280);
+  margin: 0 0 0.5rem;
+}
+
+.settings-list {
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  background: var(--color-surface, #fff);
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  /* Grosszügig genug als Berührungsziel auf dem Telefon. */
+  padding: 0.875rem 1rem;
+  min-height: 3.25rem;
+  text-decoration: none;
+  color: inherit;
+}
+
+.settings-row + .settings-row {
+  border-top: 1px solid var(--color-border, #e5e7eb);
+}
+
+.settings-row:hover,
+.settings-row:focus-visible {
+  background: var(--color-surface-muted, #f9fafb);
+}
+
+.settings-row__text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  /* Lange Beschreibungen brechen um, statt die Zeile breit zu schieben. */
+  min-width: 0;
+}
+
+.settings-row__title {
+  font-weight: 600;
+}
+
+.settings-row__description {
+  font-size: 0.875rem;
+  color: var(--color-text-muted, #6b7280);
+}
+
+.settings-row__chevron {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex: none;
+  color: var(--color-text-muted, #9ca3af);
+}
+
 .mehr-link-card {
   text-decoration: none;
   color: inherit;

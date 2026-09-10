@@ -12,6 +12,7 @@ import { deUserStorageDecision } from './userStorageDecision';
 import { deDocumentOriginal } from './documentOriginal';
 import { deBackup } from './backup';
 import { dePilot } from './pilot';
+import { deSettings } from './settings';
 
 export const deModules = {
   ...deAuth,
@@ -30,4 +31,5 @@ export const deModules = {
   ...deDocumentOriginal,
   ...deBackup,
   ...dePilot,
+  ...deSettings,
 } as const;

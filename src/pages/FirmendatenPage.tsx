@@ -8,7 +8,11 @@ import { BackupExportPanel } from '../components/settings/BackupExportPanel';
 import { PilotHintsPanel } from '../components/settings/PilotHintsPanel';
 import { useApp } from '../context/AppContext';
 import { getLastPersistSuccess } from '../services/persistenceService';
-import { BACKUP_SECTION_ID } from '../services/backupSectionNavigation';
+import {
+  BACKUP_SECTION_ID,
+  INVOICE_TEXTS_SECTION_ID,
+  PAYMENT_TERMS_SECTION_ID,
+} from '../services/backupSectionNavigation';
 import { buildSkontoText } from '../services/invoiceTaxService';
 import { validateCompanyProfileForSettings } from '../services/setupValidationService';
 import { getInvoiceNumberSequenceSnapshot } from '../services/invoiceNumberService';
@@ -88,8 +92,27 @@ const TEXT_FIELDS: { key: ProfileField; labelKey: TranslationKey; type?: string 
   { key: 'taxFreeNotice', labelKey: 'companyProfile.taxFreeNotice' },
 ];
 
-function focusBackupSection(): void {
-  const el = document.getElementById(BACKUP_SECTION_ID);
+/**
+ * COMPANY-SETTINGS-VISUAL-CHECK-01C — dasselbe Verfahren für alle bekannten
+ * Abschnitte, nicht mehr nur für die Datensicherung.
+ *
+ * Der Sichttest hat gezeigt, dass ein Tiefenlink zwar die Adresse setzte, die
+ * Seite aber stehen blieb: Der Zielabschnitt lag rund 2.600 Pixel unterhalb des
+ * sichtbaren Bereichs. React Router scrollt bei einer client-seitigen
+ * Navigation nicht selbsttätig zu einem Hash — der bestehende Effekt kannte
+ * nur die eine fest verdrahtete Kennung.
+ *
+ * Bewusst nur die Verallgemeinerung des vorhandenen Musters: dieselbe
+ * `scrollIntoView`-Technik, dieselbe Frame-Verzögerung, derselbe Fokus.
+ */
+const DEEP_LINK_SECTION_IDS = [
+  BACKUP_SECTION_ID,
+  PAYMENT_TERMS_SECTION_ID,
+  INVOICE_TEXTS_SECTION_ID,
+];
+
+function focusSection(sectionId: string): void {
+  const el = document.getElementById(sectionId);
   if (!el) return;
   el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   if (typeof el.focus === 'function') {
@@ -230,9 +253,10 @@ export function FirmendatenPage() {
   }, [selectedLogoFile]);
 
   useEffect(() => {
-    if (location.hash !== `#${BACKUP_SECTION_ID}`) return;
+    const target = location.hash.replace(/^#/, '');
+    if (!DEEP_LINK_SECTION_IDS.includes(target)) return;
     const frame = window.requestAnimationFrame(() => {
-      focusBackupSection();
+      focusSection(target);
     });
     return () => window.cancelAnimationFrame(frame);
   }, [location.hash, location.key]);
@@ -437,7 +461,11 @@ export function FirmendatenPage() {
           </fieldset>
         ))}
 
-        <fieldset className="form-group">
+        {/*
+          * COMPANY-SETTINGS-ENTRY-01B — Ankerpunkt für den Tiefenlink aus den
+          * Einstellungen. Nur eine stabile Id, keine Umgestaltung.
+          */}
+        <fieldset className="form-group" id={PAYMENT_TERMS_SECTION_ID}>
           <label htmlFor="profile-payment-days">{translate('companyProfile.defaultPaymentDays')}</label>
           <NumericInput
             id="profile-payment-days"
@@ -490,7 +518,8 @@ export function FirmendatenPage() {
           )}
         </fieldset>
 
-        <fieldset className="form-group">
+        {/* COMPANY-SETTINGS-ENTRY-01B — Ankerpunkt, siehe oben. */}
+        <fieldset className="form-group" id={INVOICE_TEXTS_SECTION_ID}>
           <label htmlFor="profile-footer">{translate('companyProfile.invoiceFooterNotes')}</label>
           <textarea
             id="profile-footer"
