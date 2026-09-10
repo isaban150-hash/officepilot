@@ -191,6 +191,85 @@ export function stripLogoFromCompanyProfile(profile: CompanyProfile): CompanyPro
   return { ...rest };
 }
 
+/**
+ * Die im Typ optionalen Textfelder des Firmenprofils.
+ *
+ * Aus dem Typ abgeleitet, nicht abgeschrieben: Wer ein Feld später von
+ * optional auf Pflicht zieht, bekommt hier einen Übersetzungsfehler statt einer
+ * still falschen Gleichsetzung.
+ */
+type OptionalCompanyProfileStringKey = {
+  [K in keyof CompanyProfile]-?: undefined extends CompanyProfile[K]
+    ? NonNullable<CompanyProfile[K]> extends string
+      ? K
+      : never
+    : never;
+}[keyof CompanyProfile];
+
+/**
+ * COMPANY-PROFILE-CONTENT-KEY-CANONICAL-01C — die Felder, bei denen „fehlt"
+ * und „ist leer" **dasselbe** bedeuten.
+ *
+ * Bewusst eine kurze, ausdrückliche Liste statt einer Regel über alle Felder.
+ * Eine pauschale `value === ''`-Regel träfe auch `companyName`, `iban` oder
+ * `taxNumber` — Pflicht- und Identitätsangaben, bei denen ein fehlender
+ * Schlüssel und ein geleerter Wert eben **nicht** stillschweigend dasselbe sein
+ * dürfen. Genau diese Übergeneralisierung stand in der ersten Fassung und wird
+ * hier zurückgenommen.
+ *
+ * Aufgenommen ist nur, was im Typ optional und ein Text ist: Angaben, die ein
+ * Betrieb schlicht nicht macht. `logoDataUrl` steht nicht darin, weil es
+ * ohnehin vor dem Vergleich entfernt wird.
+ */
+const EMPTY_EQUIVALENT_PROFILE_FIELDS: ReadonlySet<string> = new Set(
+  [
+    'registrationAuthority',
+    'registrationNumber',
+    'managingDirector',
+    'taxFreeNotice',
+  ] as const satisfies readonly OptionalCompanyProfileStringKey[],
+);
+
+/**
+ * COMPANY-PROFILE-CONTENT-KEY-CANONICAL-01B — der Vergleichsschlüssel des
+ * Firmenprofils. **Nur** für die Frage „hat sich fachlich etwas geändert?".
+ *
+ * Er verändert nichts am gespeicherten Profil, nichts am Cloud-Payload und
+ * nichts an der Hydrierung — er beantwortet eine Frage, er formt keine Daten.
+ *
+ * Zwei Eigenschaften, beide aus einem gemessenen Vorfall:
+ *
+ *  1. **Die Schlüsselreihenfolge zählt nicht.** Ein lokal aufgebautes und ein
+ *     aus der Cloud geparstes Profil tragen dieselben Felder in anderer
+ *     Ordnung; ein roher `JSON.stringify` hielte das für eine Änderung.
+ *
+ *  2. **Ein exakt leerer String ist dasselbe wie ein fehlender Schlüssel.**
+ *     Beides heisst „nicht angegeben", und die Anwendung behandelt sie überall
+ *     gleich. Ohne diese Regel macht jede Schemaerweiterung aus jedem
+ *     bestehenden Profil eine Scheinänderung: Die Hydrierung ergänzt das neue
+ *     Feld als `''`, und der Betrieb bekommt einen Push, für den er nichts
+ *     getan hat.
+ *
+ * Bewusst **nicht** normalisiert wird alles andere. `'   '` ist nicht `''`,
+ * `null` ist nicht `''`, `0` und `false` bleiben Werte. Und der Übergang von
+ * einem echten Wert auf `''` bleibt eine Änderung — der Nutzer hat dann etwas
+ * gelöscht, und das darf nicht verschluckt werden.
+ */
+export function buildCompanyProfileContentKey(profile: CompanyProfile): string {
+  const stripped = stripLogoFromCompanyProfile(profile) as unknown as Record<string, unknown>;
+  const canonical: Record<string, unknown> = {};
+  for (const key of Object.keys(stripped).sort()) {
+    const value = stripped[key];
+    /*
+     * Exakt der leere String, und nur bei einem der oben genannten Felder.
+     * `'   '`, `null`, `0` und `false` sind Werte und bleiben stehen.
+     */
+    if (value === '' && EMPTY_EQUIVALENT_PROFILE_FIELDS.has(key)) continue;
+    canonical[key] = value;
+  }
+  return JSON.stringify(canonical);
+}
+
 export function isDefaultSetup(setup: CompanySetup): boolean {
   return !setup.setupComplete && !setup.companyName.trim();
 }

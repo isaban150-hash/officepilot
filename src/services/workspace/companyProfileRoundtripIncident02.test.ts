@@ -17,7 +17,7 @@ import {
 } from '../sync/syncChangeTrackerService';
 import { getSyncOutboxSnapshot, resetSyncOutboxForTests } from '../sync/syncOutboxService';
 import { createSyncClient } from '../sync/syncClientService';
-import { stripLogoFromCompanyProfile } from './workspaceStore';
+import { buildCompanyProfileContentKey, stripLogoFromCompanyProfile } from './workspaceStore';
 import { mergeRemoteWorkspacePullIntoState } from './workspaceProvisioningService';
 import { DEFAULT_SETUP } from '../../data/mockData';
 import { STORAGE_VERSION } from '../sync/syncMigrationService';
@@ -114,8 +114,17 @@ function buildPull(setupRowVersion: number, profileRowVersion: number, profile: 
   };
 }
 
+/*
+ * COMPANY-PROFILE-CONTENT-KEY-CANONICAL-01C — der Vergleichsschlüssel kommt aus
+ * dem Produktivcode.
+ *
+ * Vorher stand hier ein testeigener `JSON.stringify`. Er war damals identisch
+ * mit der Produktlogik und lief mit ihr auseinander, sobald diese kanonisch
+ * wurde — der Test hätte dann eine zweite, veraltete Wahrheit gepflegt und
+ * einen Fehler gemeldet, den es nicht mehr gibt.
+ */
 const contentKeyOf = (profile: CompanyProfile): string =>
-  JSON.stringify(stripLogoFromCompanyProfile(profile));
+  buildCompanyProfileContentKey(profile);
 
 const profileEntries = () =>
   getSyncOutboxSnapshot().filter((entry) => entry.entityType === 'company_profile');
@@ -159,7 +168,23 @@ describe('OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02M — Profil-Roundtrip', () =>
     expect(snapshot.companyProfile?.companyName).toBe(COMPANY);
   });
 
-  it('C: Hydrierung verändert Feldbestand oder Reihenfolge des Profils nicht', () => {
+  /*
+   * COMPANY-PROFILE-CONTENT-KEY-CANONICAL-01C — dieselbe Absicht, richtig
+   * formuliert.
+   *
+   * Vorher forderte dieser Test, dass die Hydrierung den **Feldbestand** eines
+   * gespeicherten Profils niemals verändert. Das war nie die Invariante des
+   * Vorfalls, und es ist seit dem Registerblock auch fachlich falsch: Die
+   * Hydrierung darf ein Altprofil auf den heutigen Schemastand bringen — sonst
+   * könnte OfficePilot nie wieder ein Feld ergänzen.
+   *
+   * Was den Vorfall ausgemacht hat, ist etwas anderes: dass diese
+   * Schemaergänzung als **fachliche Änderung** gewertet wurde. Genau das prüft
+   * der Test jetzt — und er wird dadurch strenger, nicht schwächer: Er verlangt
+   * ausdrücklich, dass die neuen Felder tatsächlich materialisiert werden, und
+   * erst danach, dass sie nichts auslösen.
+   */
+  it('C: Hydrierung darf das Schema ergänzen, ohne eine fachliche Änderung zu sein', () => {
     const before = { ...REAL_PROFILE };
     hydrateCompanyProfileStore(before);
     const after = buildPersistedStateSnapshot().companyProfile as CompanyProfile;
@@ -167,12 +192,27 @@ describe('OFFICEPILOT-COMPANY-IDENTITY-RECOVERY-02M — Profil-Roundtrip', () =>
     const beforeKeys = Object.keys(stripLogoFromCompanyProfile(before));
     const afterKeys = Object.keys(stripLogoFromCompanyProfile(after));
 
-    expect(afterKeys, `Feldreihenfolge: ${beforeKeys.join(',')} → ${afterKeys.join(',')}`).toEqual(
-      beforeKeys,
+    /*
+     * Der Schema-Evolution-Fall muss wirklich vorliegen. Ohne diese Prüfung
+     * wäre der Test auch dann grün, wenn die Fixture irgendwann klammheimlich
+     * um die neuen Felder ergänzt würde — und bewiese dann nichts mehr.
+     */
+    expect(beforeKeys, 'Fixture ist kein Altprofil mehr').not.toContain('registrationAuthority');
+    expect(afterKeys, 'Hydrierung ergänzt das Schema nicht mehr').toContain(
+      'registrationAuthority',
     );
-    expect(JSON.stringify(stripLogoFromCompanyProfile(after))).toBe(
-      JSON.stringify(stripLogoFromCompanyProfile(before)),
-    );
+    expect(after.registrationAuthority).toBe('');
+    expect(after.registrationNumber).toBe('');
+
+    /* Alle vorher vorhandenen Felder sind unverändert erhalten. */
+    for (const key of beforeKeys) {
+      expect(afterKeys, `Feld verloren: ${key}`).toContain(key);
+      expect((after as unknown as Record<string, unknown>)[key], `Wert geändert: ${key}`).toEqual(
+        (before as unknown as Record<string, unknown>)[key],
+      );
+    }
+
+    /* Und fachlich ist es derselbe Stand. */
     expect(contentKeyOf(after)).toBe(contentKeyOf(before));
   });
 

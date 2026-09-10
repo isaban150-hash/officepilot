@@ -2,7 +2,7 @@ import type { AppPersistedState } from '../../types/models';
 import type { SyncEntityType, SyncOutboxOperation, SyncableEntity } from '../../types/sync';
 import { listEntitiesByType } from './syncEntityRegistry';
 import { enqueueSyncOutbox } from './syncOutboxService';
-import { stripLogoFromCompanyProfile } from '../workspace/workspaceStore';
+import { buildCompanyProfileContentKey } from '../workspace/workspaceStore';
 import { buildVorgangCloudContentKey } from '../vorgang/vorgangCloudService';
 import { buildCustomerCloudContentKey } from '../customer/customerCloudService';
 import { resolveCloudWorkspaceId } from '../workspace/workspaceSyncPayloadService';
@@ -157,7 +157,20 @@ function collectTrackedEntities(state: AppPersistedState): Map<string, TrackedEn
           version: state.companyProfileSync?.version ?? 0,
           deleted: state.companyProfileSync?.deleted ?? false,
           updatedAt: state.companyProfileSync?.updatedAt ?? '',
-          contentKey: JSON.stringify(stripLogoFromCompanyProfile(state.companyProfile)),
+          /*
+           * COMPANY-PROFILE-CONTENT-KEY-CANONICAL-01B — kanonisch statt roh.
+           *
+           * Vorher stand hier ein blosser `JSON.stringify`. Er hing an der
+           * Schlüsselreihenfolge und hielt ein fehlendes Feld für etwas
+           * anderes als dasselbe Feld mit leerem Wert. Beides zusammen machte
+           * aus jeder Schemaerweiterung eine Scheinänderung — gemessen am
+           * Registerblock, der bei jedem bestehenden Profil einen Push
+           * erzeugte, für den niemand etwas geändert hatte.
+           *
+           * `company_setup` bleibt bewusst unangetastet; ob dort dasselbe
+           * gilt, ist eine eigene Frage.
+           */
+          contentKey: buildCompanyProfileContentKey(state.companyProfile),
         },
       });
     }
