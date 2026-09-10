@@ -81,6 +81,26 @@ function resolveSkontoSettledAmount(invoice: VorgangInvoice): number | null {
 }
 
 export function getOpenAmount(invoice: VorgangInvoice): number {
+  /*
+   * INVOICE-CANCELLED-OPEN-AMOUNT-01B — der Storno hat Vorrang vor jeder
+   * Betragsrechnung.
+   *
+   * Eine stornierte Rechnung ist keine Forderung mehr. Bis hierher rechnete
+   * diese Funktion stur `amount - paid` weiter, und weil **alle** Anzeigen der
+   * offenen Forderung über sie laufen, behauptete der Vorgang neben einer
+   * wirksamen Ersatzrechnung eine zweite, längst stornierte Forderung.
+   *
+   * Bewusst genau hier und nicht im Aggregat: Es soll **eine** Wahrheit für
+   * „offen" geben. Eine zweite Stornoregel in der Summenbildung könnte von
+   * dieser abweichen — und der Widerspruch fiele erst wieder einem Nutzer auf.
+   *
+   * Dieselbe Quelle, die `resolvePaymentStatus` längst benutzt; keine neue
+   * fachliche Regel. Die Geschichte bleibt unberührt: `invoice.amount`,
+   * `totalDue` und `getPaidAmount` ändern sich nicht — bereits geflossenes
+   * Geld bleibt sichtbar, nur der Forderungscharakter entfällt.
+   */
+  if (isInvoiceCancelled(invoice)) return 0;
+
   const paidAmount = getPaidAmount(invoice);
   if (paidAmount < invoice.amount && resolveSkontoSettledAmount(invoice) !== null) {
     return 0;
