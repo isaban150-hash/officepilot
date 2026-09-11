@@ -108,10 +108,35 @@ async function click(element: HTMLElement): Promise<void> {
   });
 }
 
+/** Tippt in ein React-gesteuertes Feld — echtes input-Event, kein State-Eingriff. */
+async function setInputValue(element: HTMLInputElement, value: string): Promise<void> {
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+  await act(async () => {
+    setter?.call(element, value);
+    element.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+}
+
 function positionRows(container: HTMLElement): HTMLTableRowElement[] {
   return Array.from(
     container.querySelectorAll('[data-testid="contract-order-positions"] tbody tr'),
   ) as HTMLTableRowElement[];
+}
+
+/**
+ * Öffnet den Leistungsumfang nur, wenn er zugeklappt ist — über den echten
+ * Umschalter, nie durch DOM-Eingriff. Danach steht er in jedem Fall offen.
+ */
+async function ensureScopeExpanded(container: HTMLElement): Promise<void> {
+  const toggle = container.querySelector(
+    '[data-testid="auftragskarte-toggle-scope"]',
+  ) as HTMLButtonElement | null;
+  if (!toggle) return;
+  if (toggle.getAttribute('aria-expanded') === 'false') await click(toggle);
+  expect(
+    toggle.getAttribute('aria-expanded'),
+    'Der Leistungsumfang liess sich nicht öffnen',
+  ).toBe('true');
 }
 
 /** Führt den echten Benutzerweg aus und liefert den gerenderten Toasttext. */
@@ -126,7 +151,26 @@ async function runBlockedAcceptFlow(language: AppLanguage): Promise<string | nul
   const scopeToggle = container.querySelector(
     '[data-testid="auftragskarte-toggle-scope"]',
   ) as HTMLElement | null;
-  if (scopeToggle) await click(scopeToggle);
+  /*
+   * CONTRACT-SCOPE-DEFAULT-STATE-01B — der Leistungsumfang steht heute offen.
+   *
+   * Hier stand ein bedingungsloses `if (scopeToggle) await click(scopeToggle)`.
+   * Das stammt aus der Zeit, als der Bereich zugeklappt startete; seit er
+   * standardmässig offen ist, **schloss** der Klick ihn — und nahm den
+   * LV-Editor mit, der in diesem Bereich liegt. Der Test scheiterte deshalb an
+   * einer Tür, die er sich selbst zugezogen hatte.
+   *
+   * Der Zustand wird jetzt gelesen, bevor geklickt wird. Zusätzlich wird der
+   * heutige Default ausdrücklich festgehalten: Fiele das Produkt auf
+   * „standardmässig geschlossen" zurück, würde das der tolerante Helfer sonst
+   * stillschweigend ausgleichen.
+   */
+  expect(scopeToggle, 'Umschalter für den Leistungsumfang fehlt').toBeTruthy();
+  expect(
+    scopeToggle!.getAttribute('aria-expanded'),
+    'Der Leistungsumfang startet nicht mehr offen',
+  ).toBe('true');
+  await ensureScopeExpanded(container);
 
   const editorToggle = container.querySelector(
     '[data-testid="contract-lv-editor-disclosure"] [data-testid="show-more-toggle"]',
@@ -150,10 +194,38 @@ async function runBlockedAcceptFlow(language: AppLanguage): Promise<string | nul
   expect(kgCheckbox!.disabled).toBe(false);
   await click(kgCheckbox!);
 
+  /*
+   * CONTRACT-SCOPE-DEFAULT-STATE-01B — die Kundenentscheidung steht vor der
+   * Auftragsanlage.
+   *
+   * Seit `3a8c20e` bleibt der Auftragsknopf gesperrt, solange nicht
+   * ausdrücklich entschieden ist, wer der Kunde wird. Ohne diesen Schritt
+   * wäre der Klick unten wirkungslos und der Toast erschiene nie — der Test
+   * hätte das Einheitenproblem also gar nicht mehr erreicht.
+   *
+   * Die Rollen sind dabei nicht vertauschbar: Kunde ist der **Auftraggeber**
+   * „Nordwind Bau GmbH", nicht der eigene Betrieb „Steinweg Montage GmbH".
+   */
+  const newCustomerRadio = container.querySelector(
+    '[data-testid="customer-decision-new"] input[type="radio"]',
+  ) as HTMLInputElement | null;
+  expect(newCustomerRadio, 'Kundenentscheidung „neu" fehlt').toBeTruthy();
+  await click(newCustomerRadio!);
+
+  const customerNameInput = container.querySelector(
+    '[data-testid="contract-customer-name-input"]',
+  ) as HTMLInputElement | null;
+  expect(customerNameInput, 'Kundennamensfeld fehlt').toBeTruthy();
+  await setInputValue(customerNameInput!, 'Nordwind Bau GmbH');
+
   const createButton = container.querySelector(
     '[data-testid="contract-create-order-button"]',
   ) as HTMLButtonElement | null;
   expect(createButton, 'Auftragserstellungsbutton fehlt').toBeTruthy();
+  expect(
+    createButton!.disabled,
+    'Der Auftragsknopf bleibt trotz getroffener Kundenentscheidung gesperrt',
+  ).toBe(false);
   await click(createButton!);
 
   const toast = container.querySelector('.toast[role="status"]');
