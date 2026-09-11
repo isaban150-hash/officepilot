@@ -9,7 +9,7 @@ import { DEFAULT_SETUP } from './data/mockData';
 import { t, type TranslationKey } from './i18n';
 import { createAuftragInboxItem, createOrderPosition, createTestVorgang } from './test/fixtures';
 import { resetTestStores } from './test/resetStores';
-import { hydrateVorgangStore } from './services/vorgangService';
+import { getAllVorgaenge, hydrateVorgangStore } from './services/vorgangService';
 import type {
   ContractConfirmationSnapshot,
   ContractIntelligenceResult,
@@ -222,13 +222,40 @@ describe('ORDER-PLAN-INTEGRITY-01 import UI lock', () => {
     });
 
     expect(mounted.container.querySelector('[data-testid="contract-import-plan-locked"]')).toBeTruthy();
+
+    /*
+     * ORDER-PLAN-IMPORT-LOCK-ALREADY-LINKED-01B — hier stand:
+     *   querySelector('[data-testid="contract-chef-primary-action"]').disabled === true
+     *
+     * Das setzte voraus, dass die Erfassungsaktion noch angeboten und nur
+     * gesperrt wird. Bei bestätigter Verknüpfung auf einen existierenden
+     * Vorgang ist die Hauptaktion heute `open_vorgang`, und die
+     * Erfassungsaktion `accept_contract_order` wird gar nicht mehr gerendert —
+     * der alte Zugriff lief deshalb auf `null.disabled`.
+     *
+     * Die heutige Regel ist die strengere: nicht „gesperrt", sondern „gibt es
+     * nicht". Genau das wird jetzt geprüft. `contract-chef-primary-action` ist
+     * die Kennung, die ausschliesslich an `accept_contract_order` hängt
+     * (Auftragskarte `actionUi`); ihre Abwesenheit ist damit eine Aussage über
+     * den Aktionsschlüssel, nicht über eine Beschriftung.
+     */
     expect(
-      (
-        mounted.container.querySelector(
-          '[data-testid="contract-chef-primary-action"]',
-        ) as HTMLButtonElement
-      ).disabled,
-    ).toBe(true);
+      mounted.container.querySelector('[data-testid="contract-chef-primary-action"]'),
+      'Die Vertragserfassung wird trotz bestehender Verknüpfung wieder angeboten',
+    ).toBeNull();
+
+    /*
+     * …und stattdessen wird der vorhandene Vorgang geöffnet. Der erwartete
+     * Text kommt aus dem Schlüssel, den das Produkt selbst für `open_vorgang`
+     * setzt (`documentCaseMatchPresentation`), nicht aus einer abgetippten
+     * Beschriftung.
+     */
+    const primary = mounted.container.querySelector(
+      '[data-testid="document-experience-primary"]',
+    ) as HTMLButtonElement | null;
+    expect(primary, 'Es wird gar keine Hauptaktion angeboten').toBeTruthy();
+    expect(primary!.textContent).toBe(translate('documentExperience.action.openCase'));
+    expect(primary!.disabled, 'Der verknüpfte Vorgang lässt sich nicht öffnen').toBe(false);
 
     await expandLvEditor(mounted.container);
     const createButton = mounted.container.querySelector(
@@ -236,6 +263,16 @@ describe('ORDER-PLAN-INTEGRITY-01 import UI lock', () => {
     ) as HTMLButtonElement | null;
     expect(createButton).toBeTruthy();
     expect(createButton!.disabled).toBe(true);
+
+    /*
+     * Der Kern der Regel: Am Ende dieses Wegs steht weiterhin genau ein
+     * Vorgang — der bereits verknüpfte. Die vollständige Mutationsprobe über
+     * den Dienst liegt in `eingangContractAlreadyLinked01`
+     * („Dienst: legt bei bestehender Verknüpfung keinen zweiten Vorgang an").
+     */
+    expect(getAllVorgaenge().map((v) => v.id), 'Es ist ein zweiter Vorgang entstanden').toEqual([
+      'v-locked',
+    ]);
     await unmountProposalPanel(mounted);
   });
 
