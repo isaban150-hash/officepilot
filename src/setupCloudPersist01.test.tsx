@@ -53,6 +53,56 @@ let ensureAnswer: () => unknown = () => ensureRpcData(false);
 let pullAnswer: () => unknown = () => pullRpcData({ empty: true });
 let upsertFails = false;
 
+/**
+ * SETUP-CLOUD-PERSIST-MOCK-READBACK-01D — der Mock merkt sich, was er
+ * gespeichert hat.
+ *
+ * Vorher antwortete `pull_workspace_sync_state` **statisch** mit
+ * `setup: null, company_profile: null` — auch unmittelbar nach einem
+ * erfolgreichen `upsert_workspace_sync_entity`. Der Produktivcode zog daraus
+ * den fachlich völlig richtigen Schluss: Die Cloud kennt keine Firmendaten,
+ * lokal liegt ein echter Betrieb, also nachmelden. Genau dieser Backfill
+ * erzeugte die zweiten Outbox-Einträge, an denen P8, S6, P15 und P16
+ * scheiterten.
+ *
+ * Ein echter Server kann das nicht: Was er gerade gespeichert hat, gibt er
+ * beim nächsten Lesen zurück. Der Mock bildet das jetzt ab — nicht mehr. Keine
+ * Datenbank, nur zwei Zeilen Erinnerung je Entität.
+ */
+interface CloudRow {
+  payload: Record<string, unknown>;
+  rowVersion: number;
+  updatedAt: string;
+}
+
+const cloudRows = new Map<string, CloudRow>();
+
+function resetCloudRows(): void {
+  cloudRows.clear();
+}
+
+/** Die Pull-Antwort eines Servers, der sich an seine eigenen Schreibvorgänge erinnert. */
+function serverPullRpcData() {
+  const row = (entity: string) => {
+    const stored = cloudRows.get(entity);
+    if (!stored) return null;
+    return {
+      workspace_id: WORKSPACE_ID,
+      payload: stored.payload,
+      row_version: stored.rowVersion,
+      updated_at: stored.updatedAt,
+    };
+  };
+  return {
+    workspace: workspaceRow(),
+    members: [],
+    settings: null,
+    vorgaenge: [],
+    setup: row('company_setup'),
+    company_profile: row('company_profile'),
+  };
+}
+
 function registerHandlers(): void {
   registerMockRpcHandler('ensure_personal_workspace', () => {
     rpcLog.push({ name: 'ensure_personal_workspace' });
@@ -78,9 +128,22 @@ function registerHandlers(): void {
       succeeded: false,
     };
     rpcLog.push(call);
+    /*
+     * 01D — der Fehlerfall hinterlässt **nichts**. Nur ein erfolgreicher
+     * Schreibvorgang wird erinnert; sonst könnte ein gescheiterter Push beim
+     * nächsten Pull als gespeichert erscheinen und der Retry verlöre seinen
+     * Sinn.
+     */
     if (upsertFails) throw new Error('Failed to fetch');
     call.succeeded = true;
-    return { row_version: 1, payload: args.p_payload ?? {} };
+    const payloadToStore = (args.p_payload ?? {}) as Record<string, unknown>;
+    cloudRows.set(entity, {
+      payload: payloadToStore,
+      /* Dieselbe Version, die der Aufrufer zurückbekommt — kein zweiter Zähler. */
+      rowVersion: 1,
+      updatedAt: '2026-05-05T08:00:00.000Z',
+    });
+    return { row_version: 1, payload: payloadToStore };
   });
 }
 
@@ -252,7 +315,14 @@ describe('OFFICEPILOT-SETUP-CLOUD-PERSIST-01B — Assistent sichert in die Cloud
     clearMockRpcHandlers();
     registerHandlers();
     ensureAnswer = () => ensureRpcData(true);
-    pullAnswer = () => pullRpcData({ empty: true });
+    /*
+     * 01D — serverähnlicher Standard: leer, solange nichts erfolgreich
+     * geschrieben wurde, und danach genau das Geschriebene. Tests, die
+     * ausdrücklich einen anderen Cloudstand brauchen, überschreiben
+     * `pullAnswer` weiterhin selbst.
+     */
+    resetCloudRows();
+    pullAnswer = () => serverPullRpcData();
     resetSyncOutboxForTests();
     resetWorkspaceCloudBootstrapForTests();
     resetSyncCoordinatorForTests();
@@ -616,7 +686,9 @@ describe('OFFICEPILOT-SETUP-CLOUD-PERSIST-01C', () => {
     clearMockRpcHandlers();
     registerHandlers();
     ensureAnswer = () => ensureRpcData(false);
-    pullAnswer = () => pullRpcData({ empty: true });
+    /* 01D — derselbe serverähnliche Standard wie in 01B. */
+    resetCloudRows();
+    pullAnswer = () => serverPullRpcData();
     resetSyncOutboxForTests();
     resetWorkspaceCloudBootstrapForTests();
     resetSyncCoordinatorForTests();
@@ -897,5 +969,96 @@ describe('OFFICEPILOT-SETUP-CLOUD-PERSIST-01C', () => {
     // Nach Abschluss ist das interne Promise wieder frei: ein neuer Aufruf läuft erneut.
     const outcome = await syncCompanyDataAfterSetup();
     expect(outcome.pending).toBe(false);
+  });
+
+  /*
+   * SETUP-CLOUD-PERSIST-MOCK-READBACK-01D — der Mock-Vertrag, ausdrücklich.
+   *
+   * P8, S6, P15 und P16 hängen alle daran, prüfen ihn aber nur mittelbar über
+   * ihr Endergebnis. Bricht die Lese-nach-Schreib-Eigenschaft des Mocks, sollen
+   * sie nicht rätselhaft rot werden — dieser Test nennt dann die Ursache beim
+   * Namen.
+   */
+  it('W1: was erfolgreich hochgeladen wurde, liefert der nächste Pull zurück', async () => {
+    savePersistedStateToKey({ type: 'user', userId }, completeLocalState());
+    await mountApp();
+    resetSyncOutboxForTests();
+    /*
+     * `mountApp` synchronisiert bereits erfolgreich; für diesen Vertragstest
+     * wird die Cloud danach ausdrücklich wieder auf „kennt nichts" gesetzt.
+     */
+    resetCloudRows();
+
+    const { syncCompanyDataAfterSetup } = await import('./services/sync/syncUiService');
+    const { enqueueSyncOutbox } = await import('./services/sync/syncOutboxService');
+    for (const entityType of ['company_setup', 'company_profile'] as const) {
+      enqueueSyncOutbox({ entityType, entityId: WORKSPACE_ID, operation: 'create', version: 1 });
+    }
+
+    /* Vor dem Schreiben kennt die Cloud nichts. */
+    const vorher = pullAnswer() as { setup: unknown; company_profile: unknown };
+    expect(vorher.setup, 'Cloud war vorher nicht leer').toBeNull();
+    expect(vorher.company_profile).toBeNull();
+
+    await act(async () => {
+      await syncCompanyDataAfterSetup();
+    });
+    await settle();
+
+    /* Danach genau das, was hochgeladen wurde — inhaltlich, nicht nur „irgendwas". */
+    const nachher = pullAnswer() as {
+      setup: { payload?: { payload?: { companyName?: string } }; row_version?: number } | null;
+      company_profile: { payload?: { payload?: { companyName?: string } } } | null;
+    };
+    expect(nachher.setup, 'Setup nicht zurückgelesen').not.toBeNull();
+    expect(nachher.company_profile, 'Profil nicht zurückgelesen').not.toBeNull();
+    expect(nachher.setup?.payload?.payload?.companyName).toBe(COMPANY_NAME);
+    expect(nachher.company_profile?.payload?.payload?.companyName).toBe(COMPANY_NAME);
+    expect(nachher.setup?.row_version).toBe(1);
+
+    /* Und deshalb entsteht kein Nachmelde-Duplikat. */
+    expect(pendingCompanyOutbox(), 'Backfill-Duplikat trotz Readback').toEqual([]);
+  });
+
+  it('W2: ein gescheiterter Upload hinterlässt in der Cloud nichts', async () => {
+    savePersistedStateToKey({ type: 'user', userId }, completeLocalState());
+    await mountApp();
+    resetSyncOutboxForTests();
+    /*
+     * `mountApp` synchronisiert bereits erfolgreich; für diesen Vertragstest
+     * wird die Cloud danach ausdrücklich wieder auf „kennt nichts" gesetzt.
+     */
+    resetCloudRows();
+
+    const { syncCompanyDataAfterSetup } = await import('./services/sync/syncUiService');
+    const { enqueueSyncOutbox } = await import('./services/sync/syncOutboxService');
+    for (const entityType of ['company_setup', 'company_profile'] as const) {
+      enqueueSyncOutbox({ entityType, entityId: WORKSPACE_ID, operation: 'create', version: 1 });
+    }
+
+    upsertFails = true;
+    await act(async () => {
+      await syncCompanyDataAfterSetup();
+    });
+    await settle();
+
+    const nachFehler = pullAnswer() as { setup: unknown; company_profile: unknown };
+    expect(nachFehler.setup, 'gescheiterter Push wurde gespeichert').toBeNull();
+    expect(nachFehler.company_profile).toBeNull();
+    /* Der Auftrag bleibt erhalten und wiederholbar. */
+    expect(pendingCompanyOutbox().length).toBeGreaterThan(0);
+
+    /* Der Retry gelingt — und erst dann kennt die Cloud die Daten. */
+    upsertFails = false;
+    await act(async () => {
+      await syncCompanyDataAfterSetup();
+    });
+    await settle();
+
+    const nachRetry = pullAnswer() as {
+      setup: { payload?: { payload?: { companyName?: string } } } | null;
+    };
+    expect(nachRetry.setup?.payload?.payload?.companyName).toBe(COMPANY_NAME);
+    expect(pendingCompanyOutbox(), 'Phantom nach erfolgreichem Retry').toEqual([]);
   });
 });
