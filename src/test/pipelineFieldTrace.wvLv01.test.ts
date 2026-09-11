@@ -232,6 +232,31 @@ describe('PIPELINE-FIELD-TRACE WV-LV-01', () => {
       }),
     });
 
+    /*
+     * CONTRACT-CONFIRM-FIRST-GUARD-REALIGN-01B — die Annahme verlangt eine
+     * ausdrückliche Kundenentscheidung.
+     *
+     * Seit `3a8c20e` bricht `acceptContractOrderFromProposal` ohne
+     * `customerDecision` mit `customerDecision.required` ab, und zwar
+     * fail-closed vor der ersten Mutation: kein Vorgang, keine Verknüpfung,
+     * keine Archivierung. Dieser Feldtrace rief die Annahme noch ohne
+     * Entscheidung auf und blieb deshalb an Schritt 6 stehen.
+     *
+     * Die Entscheidung wird hier bewusst gesetzt, nicht umgangen. Die Rollen
+     * sind dabei nicht vertauschbar: Beim Werkvertrag ist der eigene Betrieb
+     * der **Auftragnehmer** (`reference.acceptJourney.companyName`), die
+     * Gegenpartei der **Auftraggeber** und damit der Kunde
+     * (`proposal.customer`). Kunde wird also die Gegenpartei — niemals der
+     * eigene Betrieb.
+     */
+    const customerSideName = proposal!.customer;
+    expect(customerSideName, 'Kein Auftraggeber aus dem Vertrag').toBeTruthy();
+    expect(customerSideName).toContain(reference.acceptJourney.customerContains);
+    expect(
+      customerSideName,
+      'Der eigene Betrieb wurde als Kunde gesetzt',
+    ).not.toBe(reference.acceptJourney.companyName);
+
     // Step 6 — Accept → Vorgang
     const accept = acceptContractOrderFromProposal({
       item: getInboxItemById(item.id) ?? item,
@@ -239,6 +264,7 @@ describe('PIPELINE-FIELD-TRACE WV-LV-01', () => {
       selectedPositions: proposal!.positions,
       companyName: reference.acceptJourney.companyName,
       materialStandard: 'betrieb',
+      customerDecision: { kind: 'new', input: { name: customerSideName } },
     });
     expect(accept.success).toBe(true);
     if (!accept.success) return;

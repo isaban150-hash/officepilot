@@ -14,7 +14,7 @@ import { SAMPLE_WERKVERTRAG_TEXT } from './services/contractAnalysisService';
 import { hydrateCompanyProfileStore } from './services/companyProfileService';
 import { hydrateInboxStore } from './services/inboxService';
 import { resetDeferredWorkflowAnalysisCacheForTests } from './services/inboxWorkflowAnalysisKey';
-import { hydrateVorgangStore } from './services/vorgangService';
+import { getAllVorgaenge, hydrateVorgangStore } from './services/vorgangService';
 import { resetTestStores } from './test/resetStores';
 import { t, type TranslationKey } from './i18n';
 
@@ -253,7 +253,42 @@ describe('CONTRACT-WORKSPACE-ASSISTANT-COMPACT-01', () => {
     expect(html).not.toMatch(
       /data-testid="auftragskarte-contract-body"[\s\S]*data-testid="contract-workspace-summary"/,
     );
-    expect(html).not.toContain('data-testid="contract-order-lv-overview"');
+    /*
+     * CONTRACT-CONFIRM-FIRST-GUARD-REALIGN-01B — hier stand:
+     *   expect(html).not.toContain('data-testid="contract-order-lv-overview"');
+     *
+     * Das war die Umkehrung der heutigen Regel. `b1d88eb` („show positions
+     * before acceptance") zeigt die LV-Übersicht bewusst **vor** der Annahme:
+     * Wer einen Vertrag als Auftrag übernimmt, muss vorher sehen, welche
+     * Positionen dabei entstehen. Die alte Zeile hätte einen Rückbau dieser
+     * Confirm-first-Zusicherung grün gemeldet.
+     *
+     * Geprüft wird deshalb das Gegenteil, und zwar am Inhalt statt an der
+     * blossen Kennung: Die Übersicht steht im ersten Aufbau der Seite, trägt
+     * die zählbaren Positionen aus dem Vertragstext — und die Annahme ist zu
+     * diesem Zeitpunkt noch nicht erfolgt.
+     */
+    expect(html).toContain('data-testid="contract-order-lv-overview"');
+    expect(html).toContain('data-testid="contract-order-compact-positions"');
+    // Zählbarer Umfang: 3 erkannte, 3 importierbare Positionen.
+    expect(html).toContain('3 Positionen · 3 Importierbar');
+    /*
+     * Eine fachliche Position vollständig: Beschreibung, Menge und Einheit.
+     * „28 m²" ist die Menge, über die der Nutzer entscheidet — verschwände sie
+     * aus der Vorschau, entschiede er blind.
+     */
+    expect(html).toContain('data-testid="contract-compact-position-2"');
+    expect(html).toContain('Fliesenarbeiten Wand');
+    expect(html).toContain('28 m²');
+
+    /*
+     * …und das „bevor": Die Annahmeaktion wird noch angeboten, der
+     * Auftragserstellungsknopf ist noch nicht erreichbar, und es existiert
+     * kein Vorgang. Die Übersicht ist also eine Vorschau, keine Quittung.
+     */
+    expect(html).toContain('data-testid="contract-chef-primary-action"');
+    expect(html).not.toContain('data-testid="contract-create-order-button"');
+    expect(getAllVorgaenge(), 'Die Annahme hat bereits einen Vorgang erzeugt').toHaveLength(0);
     /*
      * DOCUMENT-EXPERIENCE-SIMPLIFICATION-01B — hier stand:
      *   assertOrder(html, 'auftragskarte', 'ablage-original-file')
