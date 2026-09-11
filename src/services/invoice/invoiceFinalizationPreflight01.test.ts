@@ -112,6 +112,21 @@ function buildDraft(overrides: Partial<InvoiceDraft> = {}): InvoiceDraft {
     issueDate: '2026-08-21',
     servicePeriodFrom: '2026-08-01',
     servicePeriodTo: '2026-08-20',
+    /*
+     * INVOICE-SERVICE-PERIOD-FIXTURE-01B — diese Fixture steht für einen
+     * Entwurf, der die Finalisierungsvoraussetzungen **erfüllt**; die Tests
+     * darin prüfen Fingerabdruck-Kollisionen, Setup-Wechsel und Recovery, nicht
+     * das Freigabe-Gate.
+     *
+     * Seit `48b1ed6` gehört die ausdrückliche Bestätigung des
+     * Leistungszeitraums zu diesen Voraussetzungen. Ohne sie blieben die Tests
+     * am Gate hängen, bevor sie ihre eigene Aussage überhaupt erreichen.
+     *
+     * Dass ein **fehlendes** `servicePeriodConfirmed` weiterhin mit
+     * `service_period_unconfirmed` blockiert, hält `invoiceServicePeriod01`
+     * (Fall S2) fest — dort gehört die Regel hin.
+     */
+    servicePeriodConfirmed: true,
     paymentDueDate: '2026-09-04',
     paymentTermsText: 'Zahlbar innerhalb von 14 Tagen ohne Abzug.',
     skontoText: '',

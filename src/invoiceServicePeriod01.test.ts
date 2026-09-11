@@ -316,7 +316,21 @@ describe('INVOICE-SERVICE-PERIOD-01B — Setter, Persistenz, Finalisierung', () 
    * Rechnung, den Cloud-Payload und damit auch den 01K-Fingerprint nicht
    * erreichen.
    */
-  it('S11: der Finalisierungskandidat trägt den Bestätigungszustand nicht', () => {
+  /*
+   * INVOICE-SERVICE-PERIOD-FIXTURE-01B — S11 hielt die frühere Semantik fest.
+   *
+   * Der Fall entstand in `48b1ed6` (06.09.2026), als die Bestätigung ein
+   * reiner Entwurfszustand war und im Kandidaten nichts zu suchen hatte. Zwei
+   * Tage später hat `ac8a85f` („preserve service period confirmation for pdf")
+   * das **bewusst** umgedreht: Die Entscheidung bleibt in der finalen Rechnung
+   * erhalten, damit der PDF-Pfad sie nicht erneut erfragen muss — ein
+   * Rückschluss aus Beginn, Ende, Datum, Typ oder Status wäre geraten.
+   *
+   * Der Fall prüft deshalb jetzt die Gegenrichtung: Die ausdrückliche
+   * Zustimmung darf auf dem Weg in die Rechnung **nicht verloren gehen**.
+   * Dass eine fehlende Zustimmung weiterhin blockiert, steht unverändert in S2.
+   */
+  it('S11: der Finalisierungskandidat bewahrt die ausdrückliche Bestätigung', () => {
     seed();
     const draft: InvoiceDraft = {
       ...billableDraft(),
@@ -335,8 +349,22 @@ describe('INVOICE-SERVICE-PERIOD-01B — Setter, Persistenz, Finalisierung', () 
     expect(candidate.invoice.servicePeriodTo).toBe('2026-09-05');
     expect(
       (candidate.invoice as unknown as Record<string, unknown>).servicePeriodConfirmed,
-      'Der Draft-only-Zustand ist in die finale Rechnung geraten',
-    ).toBeUndefined();
-    expect(Object.keys(candidate.invoice)).not.toContain('servicePeriodConfirmed');
+      'Die ausdrückliche Zustimmung ging auf dem Weg in die Rechnung verloren',
+    ).toBe(true);
+    expect(Object.keys(candidate.invoice)).toContain('servicePeriodConfirmed');
+
+    /*
+     * Und der Wert wird übernommen, nicht abgeleitet: Ein Entwurf mit
+     * demselben Zeitraum, aber ohne Zustimmung, kommt gar nicht erst bis
+     * hierher — er scheitert am Freigabe-Gate.
+     */
+    const ohneZustimmung = buildInvoiceFinalizationCandidate(
+      VORGANG_ID,
+      { ...draft, servicePeriodConfirmed: false },
+      testSetup,
+      'inv-sp-2',
+      { reverseCharge13bConfirmed: true },
+    );
+    expect(ohneZustimmung.ok, 'Ein unbestätigter Entwurf war finalisierbar').toBe(false);
   });
 });
