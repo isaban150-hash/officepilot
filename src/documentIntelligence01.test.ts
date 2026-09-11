@@ -190,7 +190,29 @@ describe('DOCUMENT-INTELLIGENCE-01 invoice flow', () => {
     expect(CONTRACT_ORDER_INVOICE_TYPES).toEqual(['rechnung', 'abschlag', 'schluss']);
   });
 
-  it('bietet Vertragsskonto optional an und übernimmt alle offenen Mengen', () => {
+  /*
+   * INVOICE-ACTUAL-QUANTITY-FIXTURE-01B — ein importierter Werkvertrag ist ein
+   * Plan, kein Aufmass.
+   *
+   * Diese Fixture trägt aus dem Vertrag 11 Positionen mit Planmengen (4.799 m²
+   * Folie, 255 m Traufe, …), aber **keine** dokumentierte Ausführung: Der
+   * Vertragsimport setzt `executedQuantity` bewusst nicht, und `undefined`
+   * heisst „Ist-Menge unbekannt", nicht „null".
+   *
+   * Die alte Erwartung `quantity === openQuantity` war genau die Behauptung,
+   * die `db2651c` und `b3cb1c3` beseitigt haben: `openQuantity` ist der
+   * **Planrest** (Plan − abgerechnet), und ihn zu übernehmen hiesse, eine nie
+   * erbrachte Leistung abzurechnen.
+   *
+   * Geprüft wird deshalb die Ist-Semantik: Plan vorhanden, Ist fehlt, also
+   * übernimmt der Sammelbutton nichts. Das ist zugleich die Gegenprobe „Plan
+   * allein reicht nicht" auf einer echten Vertragsfixture statt auf einer
+   * konstruierten Position.
+   *
+   * Keine Obergrenzen-Aussage: Dass eine Ausführung über der Planmenge
+   * vollständig abrechenbar bleibt, sichern Q7 und M9b.
+   */
+  it('bietet Vertragsskonto optional an und übernimmt ohne Aufmass keine Planmengen', () => {
     localStorage.clear();
     hydrateVorgangStore([]);
     const item = createSyntheticWerkvertragItem();
@@ -213,6 +235,29 @@ describe('DOCUMENT-INTELLIGENCE-01 invoice flow', () => {
       language: 'de',
     }, 'rechnung');
     const filled = applyAllOpenPositionsToDraft(draft);
-    expect(filled.positions.every((p) => p.quantity === p.openQuantity)).toBe(true);
+
+    // Der Vertrag liefert Planmengen — sonst wäre die Gegenprobe wertlos.
+    expect(filled.positions.length).toBeGreaterThan(0);
+    expect(
+      filled.positions.every((p) => p.plannedQuantity > 0 && p.openQuantity > 0),
+      'Die Fixture trägt keine Planmengen mehr — die Aussage des Tests entfällt',
+    ).toBe(true);
+
+    // Keine dokumentierte Ausführung: unbekannt, ausdrücklich nicht 0.
+    expect(
+      filled.positions.every((p) => p.executedQuantity === undefined),
+      'Der Vertragsimport hat eine Ist-Menge erfunden',
+    ).toBe(true);
+    expect(filled.positions.every((p) => p.billedQuantity === 0)).toBe(true);
+
+    // Plan allein reicht nicht: Der Sammelbutton übernimmt nichts.
+    expect(
+      filled.positions.every((p) => p.quantity === 0),
+      'Der Sammelbutton hat Planmengen als abrechenbare Leistung übernommen',
+    ).toBe(true);
+    expect(
+      filled.positions.some((p) => p.quantity === p.openQuantity),
+      'Eine Position wurde auf den Planrest gesetzt',
+    ).toBe(false);
   });
 });
