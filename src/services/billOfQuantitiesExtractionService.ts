@@ -65,12 +65,47 @@ const LV_STANDARD_ROW = new RegExp(
 );
 
 /**
- * Flat sequence inside a single visual line. Horizontal whitespace only:
- * with `\s` the match could span a line break and turn the transition between
- * two positions into a phantom row.
+ * LV-EXTRACTION-BOUNDED-TOKEN-01B — Obergrenze des Beschreibungstokens.
+ *
+ * Die erste Gruppe erfasst bauartbedingt **einen einzelnen Token**: Ihre
+ * Zeichenklasse enthält kein Leerzeichen, und direkt danach verlangt das
+ * Muster `${H}+`. Sie war bisher unbegrenzt lazy — in Verbindung damit, dass
+ * dies als einziges Muster **nicht** zeilenverankert ist, ergab das den
+ * gemessenen quadratischen Worst Case: Auf einer Zeile ohne Leerzeichen
+ * begann die Suche an jeder Position neu und dehnte die Gruppe jedes Mal bis
+ * zum Zeilenende (50.000 Zeichen ≈ 8,5 s, 75.000 ≈ 19 s).
+ *
+ * Die Grenze von 120 Zeichen macht den Scan linear, ohne fachlich etwas
+ * aufzugeben: Der längste über diesen Fallback erfasste Token im gesamten
+ * Testbestand ist 12 Zeichen lang, der längste Token in den realen
+ * Vertragsfixtures 31. Ein einzelnes Wort ohne Leerzeichen jenseits von 120
+ * Zeichen ist keine Leistungsbeschreibung, sondern Rauschen.
+ *
+ * LV-EXTRACTION-BOUNDED-TOKEN-01C — die Grenze gilt ab dem Tokenanfang.
+ *
+ * Die blosse Obergrenze reichte nicht: Das Muster ist nicht zeilenverankert,
+ * also setzte die Suche bei einem Token über 120 Zeichen einfach weiter rechts
+ * an und lieferte dessen **letzte** 120 Zeichen als Beschreibung — eine still
+ * gekürzte Angabe, die im Auftrag landet, ohne dass jemand es merkt. Eine
+ * halbe Beschreibung ist schlechter als gar keine, weil sie vertrauenswürdig
+ * aussieht.
+ *
+ * Der Lookbehind erzwingt deshalb, dass ein Treffer an einer echten
+ * Tokengrenze beginnt: am Zeilenanfang, nach Leerzeichen oder nach einem
+ * Zeichen, das ohnehin nicht zur Beschreibung gehören kann (etwa ":"). Ist das
+ * erste Token länger als die Grenze, findet dieser Fallback für diese Stelle
+ * gar nichts mehr — die vier zeilenverankerten Muster bleiben unberührt.
+ *
+ * Horizontal whitespace only: with `\s` the match could span a line break and
+ * turn the transition between two positions into a phantom row.
  */
+const LV_FLAT_DESCRIPTION_MAX = 120;
+
+/** Die Zeichen, aus denen eine Flat-Beschreibung bestehen darf. */
+const LV_FLAT_DESCRIPTION_CHAR = String.raw`[A-Za-zÄÖÜäöüß0-9/()\-.,]`;
+
 const LV_FLAT_SEQUENCE_ROW = new RegExp(
-  String.raw`([A-Za-zÄÖÜäöüß0-9/()\-.,]+?)${H}+([\d.,]+)${H}*(${UNIT_TOKEN})${H}+([\d.,]+)${H}+([\d.,]+)${H}*(?:€|eur)?`,
+  String.raw`(?<!${LV_FLAT_DESCRIPTION_CHAR})(${LV_FLAT_DESCRIPTION_CHAR}{1,${LV_FLAT_DESCRIPTION_MAX}}?)${H}+([\d.,]+)${H}*(${UNIT_TOKEN})${H}+([\d.,]+)${H}+([\d.,]+)${H}*(?:€|eur)?`,
   'gi',
 );
 
