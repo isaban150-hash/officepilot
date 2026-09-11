@@ -192,12 +192,47 @@ describe('DOCUMENT-ASSIST-SESSION-ISOLATION-01', () => {
     document.body.innerHTML = '';
   });
 
+  /**
+   * DOCUMENT-ASSIST-ISOLATION-01B — der heutige Weg zu den Assistenzbereichen.
+   *
+   * Seit `295fc27` liegen Feldbestätigung und Antwortentwurf in einklappbaren
+   * Prüfabschnitten, und die wiederum hinter „Mehr anzeigen"; eingeklappte
+   * Abschnitte rendern ihre Kinder nicht. Die Bereiche sind also nicht
+   * verschwunden — sie liegen zwei Bedienebenen tiefer.
+   *
+   * Der Helfer klickt ausschliesslich echte Schaltflächen und öffnet nur die
+   * beiden Abschnitte, die diese Tests brauchen. Er wird nach **jedem**
+   * Seitenwechsel erneut aufgerufen, weil ein Dokumentwechsel die Abschnitte
+   * wieder schliesst — genauso, wie ein Nutzer sie erneut öffnen müsste.
+   */
+  async function openAssistSections(container: HTMLElement): Promise<void> {
+    const more = container.querySelector<HTMLButtonElement>(
+      '[data-testid="document-review-more-toggle"]',
+    );
+    if (more) {
+      await act(async () => {
+        more.click();
+      });
+    }
+    for (const id of ['field-confirm', 'reply-draft'] as const) {
+      const toggle = container.querySelector<HTMLButtonElement>(
+        `[data-testid="review-section-toggle-${id}"]`,
+      );
+      if (toggle) {
+        await act(async () => {
+          toggle.click();
+        });
+      }
+    }
+  }
+
   it('SPA-Wechsel A→B leert Frage, AI-Antwort, Kernaussage, Entwurf und Fill/Next-Steps', async () => {
     const askSpy = vi
       .spyOn(documentAiService, 'askDocumentAi')
       .mockResolvedValue(makeAnswer('Antwort nur für Dokument A'));
 
     const { container, root } = await mountSessionApp(ID_A);
+    await openAssistSections(container);
     expect(container.querySelector('[data-testid="ablage-detail-page"]')).not.toBeNull();
 
     const questionInput = container.querySelector(
@@ -227,10 +262,20 @@ describe('DOCUMENT-ASSIST-SESSION-ISOLATION-01', () => {
       ).click();
     });
     await flushUi();
+    /*
+     * 01B — dieselbe Aussage am heutigen Signal: die bestätigte Feldangabe
+     * dieses Dokuments. Die alte „Nächste Schritte"-Karte ist mit `c5e477e`
+     * bewusst entfallen; den bestätigten Absender trägt heute die Feldzeile.
+     */
     expect(
-      container.querySelector('[data-testid="document-contextual-next-steps-considered"]')
+      container.querySelector('[data-testid="document-field-fill-confirm-value-Absender"]')
         ?.textContent,
     ).toContain('Absender A GmbH');
+    expect(
+      container
+        .querySelector('[data-testid="document-field-fill-confirm-row-Absender"]')
+        ?.getAttribute('data-status'),
+    ).toBe('confirmed');
 
     const core = container.querySelector(
       '[data-testid="document-confirmed-reply-draft-core"]',
@@ -254,6 +299,7 @@ describe('DOCUMENT-ASSIST-SESSION-ISOLATION-01', () => {
     ).toContain('Kernaussage nur A');
 
     await goTo(container, 'b');
+    await openAssistSections(container);
 
     expect(container.querySelector('[data-testid="ablage-detail-page"]')).not.toBeNull();
     expect(
@@ -278,10 +324,24 @@ describe('DOCUMENT-ASSIST-SESSION-ISOLATION-01', () => {
       container.querySelector('[data-testid="document-confirmed-reply-draft-result"]'),
     ).toBeNull();
 
+    /*
+     * 01B — die Isolationsaussage, schärfer als zuvor: Dokument B zeigt seinen
+     * **eigenen** Absender und ist **nicht** bestätigt. Damit ist zugleich
+     * ausgeschlossen, dass der bestätigte Stand von A herüberwirkt.
+     */
     expect(
-      container.querySelector('[data-testid="document-contextual-next-steps-considered"]')
+      container.querySelector('[data-testid="document-field-fill-confirm-value-Absender"]')
         ?.textContent,
-    ).toContain('Noch keine bestätigten Angaben');
+    ).toContain('Absender B GmbH');
+    expect(
+      container.querySelector('[data-testid="document-field-fill-confirm-value-Absender"]')
+        ?.textContent,
+    ).not.toContain('Absender A GmbH');
+    expect(
+      container
+        .querySelector('[data-testid="document-field-fill-confirm-row-Absender"]')
+        ?.getAttribute('data-status'),
+    ).not.toBe('confirmed');
     expect(
       container.querySelector('[data-testid="document-field-fill-confirm-row-Absender"]')
         ?.getAttribute('data-status'),
@@ -306,6 +366,7 @@ describe('DOCUMENT-ASSIST-SESSION-ISOLATION-01', () => {
     );
 
     const { container, root } = await mountSessionApp(ID_A);
+    await openAssistSections(container);
     await act(async () => {
       setInput(
         container.querySelector(
@@ -325,6 +386,7 @@ describe('DOCUMENT-ASSIST-SESSION-ISOLATION-01', () => {
     expect(container.querySelector('[data-testid="document-free-question-loading"]')).not.toBeNull();
 
     await goTo(container, 'b');
+    await openAssistSections(container);
     expect(container.querySelector('[data-testid="document-free-question-answer"]')).toBeNull();
     expect(container.querySelector('[data-testid="document-free-question-loading"]')).toBeNull();
 
@@ -345,6 +407,7 @@ describe('DOCUMENT-ASSIST-SESSION-ISOLATION-01', () => {
   it('Handoff bei B enthält ausschließlich Daten von B (nicht von A)', async () => {
     const persistSpy = vi.spyOn(persistenceService, 'persistAll');
     const { container, root } = await mountSessionApp(ID_A);
+    await openAssistSections(container);
 
     await act(async () => {
       (
@@ -375,6 +438,7 @@ describe('DOCUMENT-ASSIST-SESSION-ISOLATION-01', () => {
     ).not.toBeNull();
 
     await goTo(container, 'b');
+    await openAssistSections(container);
     expect(
       container.querySelector('[data-testid="document-confirmed-reply-draft-result"]'),
     ).toBeNull();
@@ -438,6 +502,7 @@ describe('DOCUMENT-ASSIST-SESSION-ISOLATION-01', () => {
 
   it('erster Freitext-Bridge-Vorschlag bei B wird nicht übersprungen', async () => {
     const { container, root } = await mountSessionApp(ID_A);
+    await openAssistSections(container);
 
     await act(async () => {
       setInput(
@@ -461,6 +526,7 @@ describe('DOCUMENT-ASSIST-SESSION-ISOLATION-01', () => {
     ).toContain('Bridge Firma A');
 
     await goTo(container, 'b');
+    await openAssistSections(container);
 
     await act(async () => {
       setInput(
@@ -498,6 +564,7 @@ describe('DOCUMENT-ASSIST-SESSION-ISOLATION-01', () => {
       makeAnswer('Gleiche-Dokument-Antwort'),
     );
     const { container, root } = await mountSessionApp(ID_A);
+    await openAssistSections(container);
 
     await act(async () => {
       setInput(
@@ -546,8 +613,12 @@ describe('DOCUMENT-ASSIST-SESSION-ISOLATION-01', () => {
     expect(
       container.querySelector('[data-testid="document-confirmed-reply-draft-result"]'),
     ).not.toBeNull();
+    /*
+     * 01B — der Hinweis auf den Kommunikationsbereich steht heute am Entwurf
+     * selbst, nicht mehr in einer eigenen Vorschlagskarte.
+     */
     expect(
-      container.querySelector('[data-testid="document-contextual-next-steps-suggestions"]')
+      container.querySelector('[data-testid="document-confirmed-reply-draft-handoff"]')
         ?.textContent,
     ).toContain('Kommunikationsbereich');
 
@@ -558,6 +629,7 @@ describe('DOCUMENT-ASSIST-SESSION-ISOLATION-01', () => {
 
   it('Wechsel zurück zu A ohne Remount stellt alten Session-State nicht wieder her', async () => {
     const { container, root } = await mountSessionApp(ID_A);
+    await openAssistSections(container);
 
     await act(async () => {
       (
@@ -585,7 +657,9 @@ describe('DOCUMENT-ASSIST-SESSION-ISOLATION-01', () => {
     await flushUi();
 
     await goTo(container, 'b');
+    await openAssistSections(container);
     await goTo(container, 'a');
+    await openAssistSections(container);
 
     // Ephemeral session UI (draft / prepared reply) must not leak across navigation.
     expect(
@@ -604,10 +678,20 @@ describe('DOCUMENT-ASSIST-SESSION-ISOLATION-01', () => {
         .querySelector('[data-testid="document-field-fill-confirm-row-Absender"]')
         ?.getAttribute('data-status'),
     ).toBe('confirmed');
+    /*
+     * 01B — dieselbe Aussage am heutigen Signal: die bestätigte Feldangabe
+     * dieses Dokuments. Die alte „Nächste Schritte"-Karte ist mit `c5e477e`
+     * bewusst entfallen; den bestätigten Absender trägt heute die Feldzeile.
+     */
     expect(
-      container.querySelector('[data-testid="document-contextual-next-steps-considered"]')
+      container.querySelector('[data-testid="document-field-fill-confirm-value-Absender"]')
         ?.textContent,
     ).toContain('Absender A GmbH');
+    expect(
+      container
+        .querySelector('[data-testid="document-field-fill-confirm-row-Absender"]')
+        ?.getAttribute('data-status'),
+    ).toBe('confirmed');
 
     await act(async () => {
       root.unmount();
