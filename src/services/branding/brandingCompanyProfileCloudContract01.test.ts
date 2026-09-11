@@ -23,6 +23,7 @@ import { buildWorkspaceInvoiceFinalizePayload } from '../invoice/workspaceInvoic
 import { buildInvoicePayloadV1 } from '../invoice/workspaceInvoiceFinalizeRequestValidator';
 import companyPayloadValidatorSource from '../invoice/workspaceInvoiceCloudPayloadValidator.ts?raw';
 import finalizeValidatorSource from '../invoice/workspaceInvoiceFinalizeRequestValidator.ts?raw';
+import { COMPANY_SNAPSHOT_KEYS } from '../invoice/companySnapshotFieldCatalog';
 
 function profile(overrides: Partial<CompanyProfile> = {}): CompanyProfile {
   return { ...DEFAULT_COMPANY_PROFILE, companyName: 'Muster GmbH', ...overrides };
@@ -472,16 +473,43 @@ describe('BRANDING-01E-1 — branding erreicht den Rechnungsvertrag nicht', () =
     expect(Object.keys(finalize).sort()).toEqual(Object.keys(cloud).sort());
   });
 
-  // 33 / 34 — die strengen Allowlists bleiben unangetastet.
+  /*
+   * 33 / 34 — die strengen Allowlists bleiben unangetastet.
+   *
+   * BRANDING-CONTRACT-GUARD-ALIGN-01B — dieselbe Invariante, an ihrem heutigen
+   * Ort geprüft. Bis `4858097` führte jeder der beiden Validatoren eine eigene
+   * `COMPANY_KEYS`-Liste, und dieser Wächter las sie als Quelltext. Seither
+   * beziehen beide denselben Katalog; die alte Textsuche fand nur noch die
+   * einzeilige Definition und wurde rot, ohne dass an der Sicherheitsregel
+   * etwas fehlte.
+   *
+   * Geprüft wird jetzt die Regel selbst, zur Laufzeit statt am Text — das ist
+   * die stärkere Aussage: Sie hält auch, wenn die Liste morgen wieder anders
+   * geschrieben wird.
+   */
+  it('nimmt branding nicht in den gemeinsamen CompanySnapshot-Katalog auf', () => {
+    expect(COMPANY_SNAPSHOT_KEYS).toContain('logoDataUrl');
+    expect(COMPANY_SNAPSHOT_KEYS).not.toContain('branding');
+  });
+
+  /*
+   * Und die Architekturgrenze, die eine Laufzeitprüfung nicht sehen kann:
+   * Beide Validatoren müssen weiterhin **aus dem Katalog** speisen. Schriebe
+   * jemand die Liste lokal zurück, könnten die beiden Allowlists erneut
+   * auseinanderlaufen — genau der Fehler, der den Registerblock einmal einen
+   * abgelehnten Finalize-Request gekostet hat.
+   */
   it.each([
     ['Cloud-Payload-Validator', companyPayloadValidatorSource],
     ['Finalize-Request-Validator', finalizeValidatorSource],
-  ])('nimmt branding nicht in die COMPANY_KEYS des %s auf', (_label, source) => {
+  ])('speist die COMPANY_KEYS des %s aus dem gemeinsamen Katalog', (_label, source) => {
+    expect(source).toContain("from './companySnapshotFieldCatalog'");
     const start = source.indexOf('const COMPANY_KEYS');
     expect(start).toBeGreaterThanOrEqual(0);
-    const block = source.slice(start, source.indexOf(']', start));
-    expect(block).toContain("'logoDataUrl'");
-    expect(block).not.toContain("'branding'");
+    /* Die Definition passt in eine Zeile — eine ausgeschriebene Liste nicht. */
+    const definition = source.slice(start, source.indexOf('\n', start));
+    expect(definition).toContain('COMPANY_SNAPSHOT_KEYS');
+    expect(definition).not.toContain("'branding'");
   });
 
   /*
@@ -493,12 +521,31 @@ describe('BRANDING-01E-1 — branding erreicht den Rechnungsvertrag nicht', () =
    * `src/services/invoice/invoiceBrandingSnapshotCloudContract01.test.ts`.
    */
   it('nimmt den veränderlichen Branding-Block in keine Firmen-Allowlist auf', () => {
-    for (const source of [companyPayloadValidatorSource, finalizeValidatorSource]) {
-      const start = source.indexOf('const COMPANY_KEYS');
-      expect(start).toBeGreaterThanOrEqual(0);
-      const block = source.slice(start, source.indexOf(']', start));
-      expect(block).toContain("'logoDataUrl'");
-      expect(block).not.toContain("'branding'");
+    /*
+     * BRANDING-CONTRACT-GUARD-ALIGN-01B — der Katalog ist die eine Allowlist
+     * beider Validatoren; die Prüfung gilt damit für beide Grenzen zugleich.
+     *
+     * Neben `branding` selbst stehen hier die technischen Werte, die ein
+     * Asset-Umbau versehentlich einschleusen könnte. Bewusst **keine** zweite
+     * Kopie des vollständigen Feldkatalogs: Ein neu hinzukommendes fachliches
+     * Feld darf diesen Wächter nicht rot machen — nur eine verletzte
+     * Branding-/Asset-Grenze darf das.
+     */
+    for (const verboten of [
+      'branding',
+      'storagePath',
+      'signedUrl',
+      'publicUrl',
+      'dataUrl',
+      'bucket',
+      'blob',
+      'bytes',
+      'arrayBuffer',
+    ]) {
+      expect(COMPANY_SNAPSHOT_KEYS, verboten).not.toContain(verboten);
     }
+
+    /* Das Altlastenbild bleibt erlaubt — die Builder entfernen es selbst. */
+    expect(COMPANY_SNAPSHOT_KEYS).toContain('logoDataUrl');
   });
 });
