@@ -26,6 +26,7 @@ import type {
   InvoiceDraftPosition,
   InvoiceTotals,
   OrderPosition,
+  OrderUnit,
   TaxStatus,
   Vorgang,
   VorgangInvoice,
@@ -285,6 +286,88 @@ function buildDraftMetadata(
   };
 }
 
+/**
+ * MANUAL-INVOICE-01B1 — der Entwurf einer Rechnung ohne Auftrag.
+ *
+ * Ein Handwerksbetrieb schreibt nicht jede Rechnung zu einem erfassten Auftrag:
+ * Eine Anfahrt, eine kleine Reparatur, eine Nachberechnung entstehen ohne
+ * vorherigen Vertrag und ohne Leistungsverzeichnis.
+ *
+ * Bewusst eine **eigene** Funktion statt eines weiteren Falls in
+ * `buildInvoiceDraftForType`: Dieser Weg kennt keinen Vorgang, keine
+ * Auftragspositionen, keine Abschlagshistorie und keine Planmengen. Ihn in den
+ * auftragsgebundenen Bauer zu falten hiesse, in jeder Zeile zu fragen, ob es
+ * den Auftrag gibt — und genau daraus entstehen die stillen Annahmen, die
+ * dieser Block vermeiden soll.
+ *
+ * Geteilt wird alles, was ohnehin nicht vom Auftrag kommt: Firmenstammdaten,
+ * Zahlungsbedingungen, Skonto, Rechtshinweise, Branding, Steuerstatus. Die
+ * Rechnungsnummer entsteht wie immer erst bei der Freigabe.
+ *
+ * Nur `type: 'rechnung'`: Ein Abschlag rechnet auf einen Auftragswert an, eine
+ * Schlussrechnung schliesst ihn ab — beide sind ohne Auftrag fachlich nicht
+ * definiert.
+ */
+export function buildManualInvoiceDraft(
+  customerBilling: CustomerBilling,
+  setup: CompanySetup,
+): InvoiceDraft {
+  const profile = createCompanyProfileSnapshot();
+  const issueDate = new Date().toISOString().slice(0, 10);
+
+  return {
+    id: `draft-${Date.now()}`,
+    vorgangId: null,
+    customer: customerBilling.name,
+    baustelle: '',
+    type: 'rechnung',
+    taxStatus: setup.taxStatus,
+    materialSource: 'betrieb',
+    positions: [],
+    introText: '',
+    closingText: '',
+    issueDate,
+    // Wie im Auftragsweg: kein erfundener Leistungszeitraum.
+    servicePeriodFrom: '',
+    servicePeriodTo: '',
+    servicePeriodConfirmed: false,
+    paymentDueDate: addDays(issueDate, profile.defaultPaymentDays),
+    paymentTermsText: buildDefaultPaymentTerms(profile),
+    skontoText: buildSkontoText(profile),
+    customerBilling,
+    companySnapshot: profile,
+    brandingSnapshot: freezeBrandingForInvoice(profile.branding),
+    legalNotices: buildLegalNotices(setup.taxStatus, profile),
+    previousAbschlagDeductions: [],
+    invoiceNumberPreview: INVOICE_DRAFT_LABEL,
+  };
+}
+
+/**
+ * MANUAL-INVOICE-01B1 — eine frei erfasste Rechnungsposition.
+ *
+ * Trägt ausschliesslich, was eine Rechnungszeile fachlich ausmacht. Auftragsfelder
+ * (`orderPositionId`, `plannedQuantity`, `billedQuantity`, `openQuantity`) bleiben
+ * **abwesend** statt mit `0` erfunden zu werden.
+ */
+export function buildManualInvoicePosition(input: {
+  description: string;
+  quantity: number;
+  unit: OrderUnit;
+  unitPrice: number;
+  unitLabel?: string;
+}): InvoiceDraftPosition {
+  return {
+    id: `manual-pos-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    description: input.description,
+    quantity: input.quantity,
+    unit: input.unit,
+    unitLabel: input.unitLabel,
+    unitPrice: input.unitPrice,
+    billable: true,
+  };
+}
+
 export function enrichDraftWithPreviewNumber(draft: InvoiceDraft): InvoiceDraft {
   return {
     ...draft,
@@ -461,7 +544,11 @@ export function setAbschlagDraftCalculationMode(
     };
   }
 
-  const rebuilt = buildAbschlagDraft(draft.vorgangId, setup);
+  /*
+   * MANUAL-INVOICE-01B1 — Abschläge bleiben auftragsgebunden: Sie rechnen auf
+   * einen Auftragswert an. Ohne Vorgang gibt es nichts neu aufzubauen.
+   */
+  const rebuilt = draft.vorgangId ? buildAbschlagDraft(draft.vorgangId, setup) : null;
   if (!rebuilt) {
     return {
       ...draft,
@@ -537,7 +624,8 @@ export function getDraftPositionExecutedRemaining(
   position: InvoiceDraftPosition,
 ): number | undefined {
   if (position.executedQuantity === undefined) return undefined;
-  return Math.max(0, position.executedQuantity - position.billedQuantity);
+  // MANUAL-INVOICE-01B1 — ohne Auftrag gibt es keine Abrechnungshistorie.
+  return Math.max(0, position.executedQuantity - (position.billedQuantity ?? 0));
 }
 
 /**
@@ -551,12 +639,14 @@ export function getDraftPositionExecutedRemaining(
  * tatsächlich weiß.
  *
  * Beide Werte sind Referenzen, keine Grenzen: Die Warnung sagt „über dem
- * derzeit dokumentierten Rest", nicht „unzulässig". Eine Position ganz ohne
- * Auftragsbezug hätte keine Vergleichsgrundlage und dürfte auch nicht gewarnt
- * werden — heute trägt jede Entwurfsposition einen Auftragsbezug, weshalb der
- * Fall hier noch nicht entstehen kann.
+ * derzeit dokumentierten Rest", nicht „unzulässig".
+ *
+ * MANUAL-INVOICE-01B1 — der oben vorausgesagte Fall ist eingetreten: Eine frei
+ * erfasste Position hat weder Aufmass noch Planrest, also **keine**
+ * Vergleichsgrundlage. `undefined` sagt genau das; gewarnt wird dann nicht.
+ * Ein Ersatzwert wie `0` würde jede freie Position als Überschreitung melden.
  */
-export function getOverbillingReference(position: InvoiceDraftPosition): number {
+export function getOverbillingReference(position: InvoiceDraftPosition): number | undefined {
   return getDraftPositionExecutedRemaining(position) ?? position.openQuantity;
 }
 
@@ -994,7 +1084,8 @@ export function buildInvoiceFinalizationContentFingerprint(
       : draft.positions
           .filter((p) => p.quantity > 0)
           .map((p) => ({
-            orderPositionId: p.orderPositionId,
+            // MANUAL-INVOICE-01B1 — dieselbe Kanonisierung wie im Inhalts-Fingerprint.
+            orderPositionId: p.orderPositionId ?? null,
             description: p.description,
             quantity: p.quantity,
             unit: p.unit,
@@ -1043,7 +1134,9 @@ export function buildInvoiceContentFingerprintFromInvoice(invoice: VorgangInvoic
     positions: isFixedAmountAbschlag(invoice)
       ? []
       : (invoice.positions ?? []).map((p) => ({
-          orderPositionId: p.orderPositionId,
+          // MANUAL-INVOICE-01B1 — siehe `immutableInvoiceFingerprint`: fehlender
+          // Auftragsbezug wird ausdrücklich `null`, nie ein fehlender Schlüssel.
+          orderPositionId: p.orderPositionId ?? null,
           description: p.description,
           quantity: p.quantity,
           unit: p.unit,
@@ -1075,7 +1168,8 @@ function buildInvoiceContentFingerprintPayload(payload: {
   calculationMode: InvoiceCalculationMode;
   fixedAmountNet: number | null;
   positions: Array<{
-    orderPositionId: string;
+    /** MANUAL-INVOICE-01B1 — `null` heisst „freie Position", nie fehlender Schlüssel. */
+    orderPositionId: string | null;
     description: string;
     quantity: number;
     unit: string;
@@ -1171,7 +1265,13 @@ export function matchesPersistedInvoiceContentFingerprint(
  * auseinanderlaufen können.
  */
 function getOverbilledPositions(draft: InvoiceDraft): InvoiceDraftPosition[] {
-  return draft.positions.filter((p) => p.billable && p.quantity > getOverbillingReference(p));
+  return draft.positions.filter((p) => {
+    if (!p.billable) return false;
+    const reference = getOverbillingReference(p);
+    // MANUAL-INVOICE-01B1 — ohne Vergleichsgrundlage gibt es nichts zu warnen.
+    if (reference === undefined) return false;
+    return p.quantity > reference;
+  });
 }
 
 export function getOverbillingWarnings(draft: InvoiceDraft): string[] {

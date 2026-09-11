@@ -103,6 +103,12 @@ export function appendMissingInvoicePositionRefsToReport(
     const planIds = new Set((vorgang.orderPositions ?? []).map((position) => position.id));
     for (const invoice of vorgang.invoices ?? []) {
       for (const line of invoice.positions ?? []) {
+        /*
+         * MANUAL-INVOICE-01B1 — eine frei erfasste Zeile trägt keinen
+         * Auftragsbezug. Sie verweist damit nicht ins Leere, sondern auf
+         * nichts — das ist kein Konflikt, sondern der vorgesehene Fall.
+         */
+        if (line.orderPositionId === undefined) continue;
         if (planIds.has(line.orderPositionId)) continue;
         const key = `${vorgang.id}::${line.orderPositionId}`;
         if (seen.has(key)) continue;

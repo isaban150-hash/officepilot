@@ -1048,7 +1048,8 @@ export interface ConfirmedOrderAmendment {
 
 export interface VorgangInvoiceLine {
   id: string;
-  orderPositionId: string;
+  /** MANUAL-INVOICE-01B1 — siehe `InvoiceDraftPosition.orderPositionId`. */
+  orderPositionId?: string;
   description: string;
   quantity: number;
   unit: OrderUnit;
@@ -1368,12 +1369,30 @@ export interface Task {
 
 export interface InvoiceDraftPosition {
   id: string;
-  orderPositionId: string;
+  /**
+   * MANUAL-INVOICE-01B1 — der Auftragsbezug, sofern es einen gibt.
+   *
+   * Eine frei erfasste Position („Anfahrt", „2 Std. Armatur montiert") stammt
+   * aus keinem Leistungsverzeichnis. Sie trägt das Feld deshalb **nicht** —
+   * statt einer erfundenen Kennung, die später in Snapshot, Cloud-Zeile und
+   * strukturierter Rechnung als echte Auftragsposition gelesen würde.
+   */
+  orderPositionId?: string;
   description: string;
-  plannedQuantity: number;
+  /**
+   * MANUAL-INVOICE-01B1 — Plan-, Abrechnungs- und Restmenge gehören zum
+   * Auftrag, nicht zur Rechnung.
+   *
+   * Ohne Auftrag existiert keine dieser Grössen. `0` wäre keine Vereinfachung,
+   * sondern eine Behauptung: „Plan null", „nichts abgerechnet", „Rest null" —
+   * und `openQuantity: 0` liest die Oberfläche als ausgeschöpften Planrest.
+   * Abwesenheit ist die ehrliche Darstellung.
+   */
+  plannedQuantity?: number;
   /** Read-only display of operative execution qty; never written back to the plan. */
   executedQuantity?: number;
-  billedQuantity: number;
+  /** Siehe `plannedQuantity` — ohne Auftrag gibt es keine Abrechnungshistorie. */
+  billedQuantity?: number;
   /**
    * INVOICE-ACTUAL-MEASURE-VS-PLAN-01B — **Planrest**: was laut Auftrag noch
    * nicht abgerechnet ist (`max(0, plannedQuantity − billedQuantity)`).
@@ -1383,7 +1402,7 @@ export interface InvoiceDraftPosition {
    * Rechnung. Der dokumentierte Ist-Rest ergibt sich aus `executedQuantity`
    * und `billedQuantity`; die abzurechnende Menge entscheidet der Nutzer.
    */
-  openQuantity: number;
+  openQuantity?: number;
   /** Die bewusst gewählte Menge dieser Rechnung. */
   quantity: number;
   unit: OrderUnit;
@@ -1395,8 +1414,16 @@ export interface InvoiceDraftPosition {
 
 export interface InvoiceDraft {
   id: string;
-  vorgangId: string;
-  vorgangTitle: string;
+  /**
+   * MANUAL-INVOICE-01B1 — `null` ist die Rechnung ohne Auftrag.
+   *
+   * Ausdrücklich `null` und nicht `''`: Der Leerstring ist von einem echten
+   * Bezug nicht unterscheidbar und rutscht durch jede `!== null`-Prüfung.
+   * Dieselbe Semantik führt `StoredInvoiceEntry.vorgangId` bereits.
+   */
+  vorgangId: string | null;
+  /** Nur mit Auftragsbezug gesetzt — eine freie Rechnung hat kein Projekt. */
+  vorgangTitle?: string;
   customer: string;
   baustelle: string;
   type: InvoiceDocumentType;

@@ -153,7 +153,8 @@ export function buildInvoicePrintModel(
     // BRANDING-01F-3 — im Entwurf dieselbe Regel wie in der fertigen Rechnung.
     logo: selectHistoricalInvoiceLogo(draft),
     customer: { ...draft.customerBilling },
-    projectTitle: draft.vorgangTitle,
+    // MANUAL-INVOICE-01B1 — eine freie Rechnung hat kein Projekt; leer statt erfunden.
+    projectTitle: draft.vorgangTitle ?? '',
     projectSite: draft.baustelle,
     servicePeriodFrom: draft.servicePeriodFrom,
     servicePeriodTo: draft.servicePeriodTo,

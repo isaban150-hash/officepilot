@@ -238,7 +238,13 @@ function checkLine(value: unknown, path: string): void {
   const line = object(value, path);
   keysWithin(line, LINE_KEYS, path);
   requiredText(line.id, `${path}.id`);
-  requiredText(line.orderPositionId, `${path}.orderPositionId`);
+  /*
+   * MANUAL-INVOICE-01B1 — siehe Finalize-Validator: Eine freie Zeile trägt
+   * keinen Auftragsbezug. Abwesend ja, Leerstring nein.
+   */
+  if (line.orderPositionId !== undefined) {
+    requiredText(line.orderPositionId, `${path}.orderPositionId`);
+  }
   optionalText(line.description, `${path}.description`);
   if (typeof line.description !== 'string') reject(`${path}.description:not_text`);
   requiredFinite(line.quantity, `${path}.quantity`);

@@ -34,7 +34,15 @@ import type { VorgangInvoice } from '../../types/models';
  */
 export interface InvoiceRegistryEntry {
   invoice: VorgangInvoice;
-  vorgangId: string;
+  /**
+   * MANUAL-INVOICE-01B1 — `null` heisst „ohne Auftrag", nicht „unbekannt".
+   *
+   * Der Rechnungsspeicher führt diesen Fall seit jeher (`StoredInvoiceEntry`),
+   * die Registry liess ihn bisher fallen. Das war folgenschwer: Sie ist die
+   * Quelle des Nummernkreises, eine unsichtbare Rechnung hätte ihre Nummer ein
+   * zweites Mal vergeben.
+   */
+  vorgangId: string | null;
 }
 
 /**
@@ -56,9 +64,17 @@ export function listInvoiceEntries(): InvoiceRegistryEntry[] {
    * wurde sie in `INVOICE-REGISTRY-01B` eingeführt: Ihr einziger Verbraucher,
    * der Nummernkreis, merkt vom Umbau nichts.
    */
-  return getInvoiceStoreSnapshot()
-    .filter((entry) => entry.vorgangId !== null)
-    .map((entry) => ({ invoice: entry.invoice, vorgangId: entry.vorgangId as string }));
+  /*
+   * MANUAL-INVOICE-01B1 — hier stand ein `.filter((e) => e.vorgangId !== null)`.
+   *
+   * Die globale Registry ist die Menge **aller** Rechnungen; der Ablageort ist
+   * eine Eigenschaft der einzelnen Rechnung, kein Aufnahmekriterium. Wer nur
+   * die Rechnungen eines Vorgangs braucht, fragt `listInvoicesForVorgang`.
+   */
+  return getInvoiceStoreSnapshot().map((entry) => ({
+    invoice: entry.invoice,
+    vorgangId: entry.vorgangId,
+  }));
 }
 
 /** Alle lokal bekannten Rechnungen, ohne Ablageort. */

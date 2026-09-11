@@ -1547,7 +1547,16 @@ export function immutableInvoiceFingerprint(
     positionCount: (invoice.positions ?? []).length,
     positions: (invoice.positions ?? []).map((p) => ({
       id: p.id,
-      orderPositionId: p.orderPositionId,
+      /*
+       * MANUAL-INVOICE-01B1 — „kein Auftragsbezug" ausdrücklich als `null`.
+       *
+       * Der Kodierer oben lässt `undefined` als Objekteigenschaft **entfallen**
+       * (wie `JSON.stringify`). Eine freie Position ohne `orderPositionId`
+       * würde den Schlüssel damit still verlieren — und derselbe Beleg ergäbe
+       * lokal und in der Cloud verschiedene Fingerprints. Das fiele nicht als
+       * roter Test auf, sondern beim Nutzer als Idempotenzkonflikt.
+       */
+      orderPositionId: p.orderPositionId ?? null,
       description: p.description,
       quantity: p.quantity,
       unit: p.unit,

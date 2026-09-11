@@ -59,7 +59,14 @@ export interface PreparedWorkspaceInvoiceFinalizeRequest {
   kind: typeof PREPARED_FINALIZE_REQUEST_KIND;
   formatVersion: typeof PREPARED_FINALIZE_REQUEST_FORMAT_VERSION;
   workspaceId: string;
-  vorgangId: string;
+  /**
+   * MANUAL-INVOICE-01B1 — `null` ist die Rechnung ohne Auftrag.
+   *
+   * Nur für die normale Rechnung: Ein Abschlag rechnet auf einen Auftragswert
+   * an, eine Schlussrechnung schliesst ihn ab — beide bleiben auftragsgebunden
+   * und werden ohne Vorgang weiterhin abgewiesen.
+   */
+  vorgangId: string | null;
   clientInvoiceId: string;
   invoice: VorgangInvoice;
   invoicePayload: Record<string, unknown>;
@@ -303,7 +310,15 @@ function checkLine(value: unknown, path: string): void {
   const line = object(value, path);
   keysWithin(line, LINE_KEYS, path);
   requiredString(line.id, `${path}.id`);
-  requiredString(line.orderPositionId, `${path}.orderPositionId`);
+  /*
+   * MANUAL-INVOICE-01B1 — eine frei erfasste Zeile hat keinen Auftragsbezug.
+   * Abwesend ist zulässig, ein Leerstring weiterhin nicht: Er sähe wie eine
+   * echte Kennung aus.
+   */
+  optionalString(line.orderPositionId, `${path}.orderPositionId`);
+  if (line.orderPositionId !== undefined) {
+    requiredString(line.orderPositionId, `${path}.orderPositionId`);
+  }
   if (typeof line.description !== 'string') reject(`${path}.description:not_string`);
   finiteNumber(line.quantity, `${path}.quantity`);
   enumValue(line.unit, ORDER_UNITS, `${path}.unit`);
@@ -565,7 +580,12 @@ export function validatePreparedWorkspaceInvoiceFinalizeRequest(
       reject('request.formatVersion:unsupported');
     }
     requiredString(request.workspaceId, 'request.workspaceId');
-    requiredString(request.vorgangId, 'request.vorgangId');
+    /*
+     * MANUAL-INVOICE-01B1 — `null` heisst „ohne Auftrag" und ist ausschliesslich
+     * für die normale Rechnung zulässig. Der Leerstring bleibt abgewiesen: Er
+     * wäre von einem echten Bezug nicht unterscheidbar.
+     */
+    if (request.vorgangId !== null) requiredString(request.vorgangId, 'request.vorgangId');
     const clientInvoiceId = requiredString(request.clientInvoiceId, 'request.clientInvoiceId');
     requiredString(
       request.expectedResponseProjectionRawJson,
@@ -573,6 +593,18 @@ export function validatePreparedWorkspaceInvoiceFinalizeRequest(
     );
 
     const invoice = checkInvoiceShape(request.invoice, clientInvoiceId, 'request.invoice', 'invoice');
+
+    /*
+     * MANUAL-INVOICE-01B1 — ohne Auftrag ist nur die normale Rechnung definiert.
+     *
+     * Ein Abschlag rechnet auf einen Auftragswert an (`abschlag_exceeds_order_value`,
+     * `previousAbschlagDeductions`), eine Schlussrechnung schliesst ihn ab. Beide
+     * ohne Vorgang anzunehmen hiesse, einen Auftragsbezug zu behaupten, den es
+     * nicht gibt.
+     */
+    if (request.vorgangId === null && invoice.type !== 'rechnung') {
+      reject('request.vorgangId:required_for_type');
+    }
     const payload = checkInvoiceShape(
       request.invoicePayload,
       clientInvoiceId,
