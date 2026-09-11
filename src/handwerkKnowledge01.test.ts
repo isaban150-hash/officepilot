@@ -4,6 +4,7 @@ import { hydrateInboxStore } from './services/inboxService';
 import { hydrateVorgangStore } from './services/vorgangService';
 import { setBrainGenerateTextForTests } from './services/officePilotBrainService';
 import { setAiProviderFetchForTests } from './services/aiProviderService';
+import { buildInvoiceCreatePath } from './services/invoiceNavigation';
 import {
   detectActiveCapabilities,
   processOfficePilotQuestion,
@@ -109,7 +110,17 @@ describe('AI-KNOWLEDGE-01 resolver', () => {
 
     const result = tryResolveHandwerkKnowledgeQuestion('Brauche ich hier eine Schlussrechnung?');
     expect(result?.assistantAnswer?.summary).toMatch(/Schlussrechnung wäre jetzt sinnvoll/);
-    expect(result?.suggestedNextSteps?.[0]?.route).toBe('/vorgaenge/v-schluss/rechnung');
+    /*
+     * DOCUMENT-ACTION-LABELS-01B — eine Schlussrechnung ist keine normale
+     * Rechnung.
+     *
+     * Seit `c37d4d8` trägt der Weg die Rechnungsart. Geprüft wird über
+     * dieselbe Baufunktion wie im Produkt, und zwar mit `'schluss'`: Würde der
+     * Resolver fälschlich eine normale Rechnung öffnen, wäre dieser Test rot.
+     */
+    expect(result?.suggestedNextSteps?.[0]?.route).toBe(
+      buildInvoiceCreatePath('v-schluss', 'schluss'),
+    );
   });
 
   it('erkennt Nachtrag im Dokumentkontext', () => {

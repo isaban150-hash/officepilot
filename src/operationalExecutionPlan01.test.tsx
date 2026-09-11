@@ -598,11 +598,24 @@ describe('OPERATIONAL-EXECUTION-PLAN-01 — UI preview', () => {
     expect(html).not.toContain('data-testid="operational-overview"');
     expect(html).not.toContain('data-testid="operational-execution-plan-preview"');
 
-    // Lead surface before primary CTA; Experience Details (E) stay collapsed.
+    /*
+     * DOCUMENT-ACTION-LABELS-01B — ein Fristbrief hat keine Hauptaktion.
+     *
+     * Der Fall suchte bisher `document-review-apply-button`, den generischen
+     * „Vorschlag übernehmen"-Knopf. Seit `c5e477e` bestimmt die Dokumentfamilie
+     * die Aktionszeile — „eine Hauptaktion, höchstens zwei Nebenaktionen" —,
+     * und für einen blossen Fristbrief gibt es **keine**: gemessen rendert
+     * dieser Fall Hinweise und Nebenaktionen, aber keine Primäraktion.
+     *
+     * Die fachliche Aussage bleibt: Die Lesefläche steht vor den Aktionen, und
+     * es wird keine Handlung erfunden, die das Dokument nicht hergibt.
+     */
     const experience = html.indexOf('data-testid="document-experience-card"');
-    const primary = html.indexOf('document-review-apply-button');
+    const actions = html.indexOf('data-testid="document-experience-actions"');
     expect(experience).toBeGreaterThanOrEqual(0);
-    expect(primary).toBeGreaterThan(experience);
+    expect(actions).toBeGreaterThan(experience);
+    expect(html).toContain('data-testid="document-experience-secondary"');
+    expect(html).not.toContain('data-testid="document-review-apply-button"');
     expect(html).not.toMatch(/data-testid="document-experience-details"[^>]*\sopen[\s>]/);
   });
 });

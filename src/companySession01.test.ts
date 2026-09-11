@@ -4,6 +4,7 @@ import { hydrateInboxStore } from './services/inboxService';
 import { hydrateVorgangStore } from './services/vorgangService';
 import { setBrainGenerateTextForTests } from './services/officePilotBrainService';
 import { setAiProviderFetchForTests } from './services/aiProviderService';
+import { buildInvoiceCreatePath } from './services/invoiceNavigation';
 import { processOfficePilotQuestion } from './services/brain/brainOrchestrator';
 import {
   isFollowUpQuestion,
@@ -116,7 +117,18 @@ describe('AI-COMPANY-01 context resolver', () => {
 
     const result = tryResolveCompanyContextQuestion('Schreib jetzt die Rechnung');
     expect(result?.assistantAnswer?.summary).toContain('Heizung Schmidt');
-    expect(result?.suggestedNextSteps?.[0]?.route).toBe('/vorgaenge/v-invoice/rechnung');
+    /*
+     * DOCUMENT-ACTION-LABELS-01B — die Rechnungsart gehört in den Weg.
+     *
+     * Seit `c37d4d8` („route create flows by invoice type") entstehen
+     * Erstellpfade über `buildInvoiceCreatePath`; der Typ unterscheidet
+     * Rechnung, Abschlag und Schlussrechnung. Der Vergleich nutzt dieselbe
+     * Baufunktion wie das Produkt — die URL wird nicht zweimal getippt —, und
+     * eine falsche Rechnungsart macht diesen Test rot.
+     */
+    expect(result?.suggestedNextSteps?.[0]?.route).toBe(
+      buildInvoiceCreatePath('v-invoice', 'rechnung'),
+    );
   });
 
   it('stellt Rückfrage bei mehreren passenden Aufträgen', () => {
@@ -190,7 +202,12 @@ describe('AI-COMPANY-01 orchestrator integration', () => {
     const invoice = await processOfficePilotQuestion('Schreib jetzt die Rechnung.', { mode: 'rules' });
     expect(invoice.source).toBe('rules');
     expect(invoice.assistantAnswer?.summary).toContain('Werkvertrag Müller');
-    expect(invoice.suggestedNextSteps.some((s) => s.route === '/vorgaenge/v-flow/rechnung')).toBe(true);
+    /* 01B — dieselbe Quelle wie oben; der Typparameter gehört dazu. */
+    expect(
+      invoice.suggestedNextSteps.some(
+        (s) => s.route === buildInvoiceCreatePath('v-flow', 'rechnung'),
+      ),
+    ).toBe(true);
     expect(invoice.companyContextUsed).toContain('vorgang');
   });
 

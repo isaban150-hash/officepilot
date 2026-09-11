@@ -10,6 +10,7 @@ import {
   buildDocumentExperienceView,
   resolveDocumentExperienceFamily,
 } from './services/documentExperienceView';
+import { buildDocumentSummary } from './services/documentSummary';
 import { getLetterExplanation } from './services/letterExplanationService';
 import { createAuftragInboxItem } from './test/fixtures';
 import type { InboxItem, WorkflowResult } from './types/models';
@@ -108,12 +109,25 @@ function workflowFor(item: InboxItem, bi: BusinessInterpretationResult): Workflo
   } as unknown as WorkflowResult;
 }
 
-function renderExperience(item: InboxItem, workflow: WorkflowResult): string {
+/*
+ * DOCUMENT-ACTION-LABELS-01B — „Mehr anzeigen" ist steuerbar.
+ *
+ * Seit `DOCUMENT-EXPERIENCE-SIMPLIFICATION-01D` gibt es nur **einen**
+ * Details-Einstieg: Der Karteninhalt ist in die „Weitere Optionen"-Klappe
+ * gezogen, weil auf dem iPhone zwei Klappen übereinander standen. Tests, die
+ * über Details oder den Briefbereich etwas aussagen, müssen diese Klappe
+ * deshalb geöffnet rendern — so, wie ein Nutzer sie öffnen würde.
+ */
+function renderExperience(
+  item: InboxItem,
+  workflow: WorkflowResult,
+  moreOptionsExpanded = false,
+): string {
   return renderToStaticMarkup(
     createElement(DocumentReviewExperience, {
       item,
       workflow,
-      moreOptionsExpanded: false,
+      moreOptionsExpanded,
       onToggleMoreOptions: () => undefined,
       onApplySuggestion: () => undefined,
       onNextDocument: () => undefined,
@@ -191,18 +205,38 @@ describe('DOCUMENT-EXPERIENCE-02B', () => {
       expect.arrayContaining(['supplier', 'invoiceNumber', 'amount', 'date', 'deadline']),
     );
     expect(view.facts.length).toBeLessThanOrEqual(6);
-    expect(view.primaryActionLabel).toBe('Neuen Vorgang anlegen');
+    /*
+     * DOCUMENT-ACTION-LABELS-01B — eine Eingangsrechnung ist eine Ausgabe.
+     *
+     * „Neuen Vorgang anlegen" war hier der **Fehler**, nicht das Soll:
+     * `8670b60` („preserve expense action across case matching") hält den
+     * Realbefund fest, dass der Fallabgleich die familiengebundene Hauptaktion
+     * `record_expense` überschrieb.
+     *
+     * Geprüft wird zuerst der **Aktionsschlüssel**, erst danach die
+     * Beschriftung: Eine reine Textänderung soll diesen Test nicht rot machen,
+     * eine Rückkehr zur generischen Vorgangsaktion sehr wohl.
+     */
+    expect(buildDocumentSummary(item, workflow, { translate }).primaryAction.id).toBe(
+      'record_expense',
+    );
+    expect(view.primaryActionLabel).toBe('Ausgabe erfassen');
 
     const html = renderExperience(item, workflow);
     expect(html).toContain('data-testid="document-experience-card"');
     expect(html).toContain('Baumarkt GmbH');
     expect(html).toContain('RE-9912');
     expect(html).toContain('1.250,00 €');
-    expect(html).toContain('Neuen Vorgang anlegen');
+    /* 01B — auf dem Blatt steht heute die Ausgabenaktion, nicht die Vorgangsaktion. */
+    expect(html).toContain('Ausgabe erfassen');
+    expect(html).not.toContain('Neuen Vorgang anlegen');
     expect(html).not.toContain('data-testid="operational-overview"');
     expect(html).not.toContain('Vorschlag übernehmen');
-    expect(html).toContain('data-testid="document-experience-details"');
-    expect(html).toContain('data-testid="document-experience-guidance"');
+
+    /* Details und Zusatzinhalte liegen heute in der geöffneten „Mehr anzeigen"-Klappe. */
+    const htmlOffen = renderExperience(item, workflow, true);
+    expect(htmlOffen).toContain('data-testid="document-experience-details-body"');
+    expect(htmlOffen).toContain('data-testid="document-experience-guidance"');
   });
 
   it('Tankbeleg: Tankstelle/Datum/Betrag; keine review_required-Labels', () => {
@@ -223,7 +257,11 @@ describe('DOCUMENT-EXPERIENCE-02B', () => {
     expect(view.facts.map((f) => f.id)).toEqual(
       expect.arrayContaining(['station', 'date', 'amount']),
     );
-    expect(view.primaryActionLabel).toBe('Neuen Vorgang anlegen');
+    /* 01B — ein Tankbeleg ist ebenfalls eine Ausgabe; Schlüssel vor Text. */
+    expect(buildDocumentSummary(item, workflow, { translate }).primaryAction.id).toBe(
+      'record_expense',
+    );
+    expect(view.primaryActionLabel).toBe('Als Ausgabe speichern');
 
     const html = renderExperience(item, workflow);
     expect(html).toContain('ARAL Station Nord');
@@ -285,7 +323,8 @@ describe('DOCUMENT-EXPERIENCE-02B', () => {
       createElement(DocumentReviewExperience, {
         item,
         workflow,
-        moreOptionsExpanded: false,
+        /* 01B — der Briefbereich liegt in der „Mehr anzeigen"-Klappe; geöffnet rendern. */
+        moreOptionsExpanded: true,
         onToggleMoreOptions: () => undefined,
         onApplySuggestion: () => undefined,
         onNextDocument: () => undefined,
@@ -302,11 +341,19 @@ describe('DOCUMENT-EXPERIENCE-02B', () => {
     expect(html).toContain('Finanzamt Musterstadt');
     expect(html).toContain('FA-12/345');
     expect(html).toContain('15.04.2026');
-    expect(html).toContain('Neuen Vorgang anlegen');
+    /*
+     * 01B — ein Behördenbrief erzeugt keinen Vorgang. Seine Hauptaktion ist
+     * `create_task`: Der Brief hat eine Frist, und daraus wird eine Aufgabe.
+     */
+    expect(buildDocumentSummary(item, workflow, { translate }).primaryAction.id).toBe(
+      'create_task',
+    );
+    expect(html).toContain('Aufgabe erzeugen');
+    expect(html).not.toContain('Neuen Vorgang anlegen');
     expect(html).toContain('data-testid="document-experience-letter"');
     const cardIdx = html.indexOf('data-testid="document-experience-card"');
     const letterIdx = html.indexOf('data-testid="document-experience-letter"');
-    const detailsIdx = html.indexOf('data-testid="document-experience-details"');
+    const detailsIdx = html.indexOf('data-testid="document-experience-details-body"');
     expect(cardIdx).toBeGreaterThanOrEqual(0);
     expect(detailsIdx).toBeGreaterThan(cardIdx);
     expect(letterIdx).toBeGreaterThan(detailsIdx);

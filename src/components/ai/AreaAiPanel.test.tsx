@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AreaAiPanel } from './AreaAiPanel';
 import { setAiGenerateTextForTests } from '../../services/ai/aiRequestRunner';
+import * as aiRequestRunner from '../../services/ai/aiRequestRunner';
 import type { AreaAiAnswer } from '../../types/areaAi';
 
 function setInputValue(element: HTMLInputElement, value: string): void {
@@ -75,8 +76,19 @@ describe('AreaAiPanel', () => {
     );
   });
 
-  it('deaktiviert Button ohne Gemini-Key', () => {
-    vi.stubEnv('VITE_GEMINI_API_KEY', '');
+  /*
+   * DOCUMENT-ACTION-LABELS-01B — der Gemini-Schlüssel steht nicht mehr im Browser.
+   *
+   * Seit `1a297c7` („secure Gemini behind edge function") liegt er serverseitig;
+   * `isAiProviderConfigured()` fragt heute `isSupabaseConfigured()`. Ein
+   * fehlender Browser-Schlüssel sagt über die KI-Verfügbarkeit deshalb nichts
+   * mehr aus — der Test würde die Sicherheitsverbesserung sonst zurückfordern.
+   *
+   * Der nicht eingerichtete Zustand wird deshalb über die **heutige** Quelle
+   * erzeugt: keine Supabase-Konfiguration.
+   */
+  it('deaktiviert Button ohne eingerichtete KI', () => {
+    vi.spyOn(aiRequestRunner, 'isAiProviderConfigured').mockReturnValue(false);
     act(() => {
       root.render(
         <AreaAiPanel

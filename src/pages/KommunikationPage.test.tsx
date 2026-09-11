@@ -10,6 +10,7 @@ import { AssistentPage } from './AssistentPage';
 import { KommunikationPage } from './KommunikationPage';
 import { formatCommunicationDraftText } from '../components/communication/CommunicationDraftView';
 import * as communicationOrchestrator from '../services/communicationOrchestrator';
+import * as aiProviderService from '../services/aiProviderService';
 import { hydrateCompanyProfileStore } from '../services/companyProfileService';
 import { hydrateInboxStore } from '../services/inboxService';
 import { createAbschlagInvoice, createTestVorgang } from '../test/fixtures';
@@ -366,6 +367,8 @@ describe('KommunikationPage Formulierung verbessern', () => {
 
   afterEach(() => {
     vi.unstubAllEnvs();
+    /* 01B — der Provider-Spy des „nicht eingerichtet"-Falls darf nicht nachwirken. */
+    vi.restoreAllMocks();
     setCommunicationAiGenerateTextForTests(null);
     if (mounted) {
       cleanupPage(mounted);
@@ -397,8 +400,16 @@ describe('KommunikationPage Formulierung verbessern', () => {
     expect(mounted!.container.querySelector('[data-testid="communication-ai-enhance"]')).not.toBeNull();
   });
 
-  it('deaktiviert Formulierung verbessern ohne API-Schlüssel', async () => {
-    vi.stubEnv('VITE_GEMINI_API_KEY', '');
+  /*
+   * DOCUMENT-ACTION-LABELS-01B — nicht der Browser-Schlüssel entscheidet.
+   *
+   * Seit `1a297c7` („secure Gemini behind edge function") liegt der Schlüssel
+   * serverseitig; die Seite fragt `isAiProviderConfigured()`. Ein leerer
+   * `VITE_GEMINI_API_KEY` im Browser sagt darüber nichts mehr aus — der Test
+   * forderte damit unausgesprochen die alte, unsichere Architektur zurück.
+   */
+  it('deaktiviert Formulierung verbessern ohne eingerichtete KI', async () => {
+    vi.spyOn(aiProviderService, 'isAiProviderConfigured').mockReturnValue(false);
     await createDelayDraft();
     const button = mounted!.container.querySelector(
       '[data-testid="communication-ai-enhance"]',
