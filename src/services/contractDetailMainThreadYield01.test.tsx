@@ -65,6 +65,31 @@ function installPaintSchedulerStubs() {
   vi.stubGlobal('cancelIdleCallback', (id: number) => clearTimeout(id));
 }
 
+/**
+ * CONTRACT-DETAIL-YIELD-FIXTURE-01B — grosser OCR-Text mit echter Struktur.
+ *
+ * Hier stand `'x'.repeat(50_000)`, mit der Begründung, das halte den Test
+ * schnell. Gemessen war das Gegenteil der Fall: 50.000 zusammenhängende
+ * Zeichen ohne Wort- oder Zeilengrenze sind der teuerste Eingabewert für
+ * `extractBillOfQuantitiesPositions` und kosteten dort allein ~6 Sekunden —
+ * realistischer Vertragstext derselben Länge kostet ~90 ms.
+ *
+ * Gebaut wird deshalb aus **ganzen** Kopien des vorhandenen Vertragsmusters,
+ * getrennt durch Zeilenumbrüche. Kein `slice`: Es wird nichts mitten in einem
+ * Wort oder einer LV-Zeile abgeschnitten, und die Länge bleibt über
+ * `LARGE_TEXT_THRESHOLD` (50.000), damit der Deferred-Pfad aus demselben Grund
+ * wie bisher greift.
+ */
+function buildLargeRealisticOcrText(minLength = 50_000): string {
+  const parts: string[] = [];
+  let length = 0;
+  while (length < minLength) {
+    parts.push(SAMPLE_WERKVERTRAG_TEXT);
+    length += SAMPLE_WERKVERTRAG_TEXT.length + 1;
+  }
+  return parts.join('\n');
+}
+
 /** Multipage signal without multi-megabyte OCR — keeps tests fast. */
 function createDeferredContractItem(): InboxItem {
   const pageTexts = [
@@ -85,7 +110,7 @@ function createDeferredContractItem(): InboxItem {
       Baustelle: 'Hauptstr. 12, Berlin',
       _vertragstext: SAMPLE_WERKVERTRAG_TEXT,
       Betreff: 'Mustermann Sanitär GmbH',
-      _extractedText: 'x'.repeat(50_000),
+      _extractedText: buildLargeRealisticOcrText(),
       _pageTexts: JSON.stringify(pageTexts),
     },
   };
@@ -224,6 +249,17 @@ describe('CONTRACT-DETAIL-MAINTHREAD-YIELD-01', () => {
     hydrateInboxStore([item]);
     // Positive Vorbedingung: dieses Dokument nimmt den Deferred-Pfad.
     expect(itemNeedsDeferredWorkflowAnalysis(item)).toBe(true);
+    /*
+     * …und zwar aus demselben Grund wie bisher: Der OCR-Text liegt über der
+     * Grosstext-Schwelle. Ohne diese Zusicherung könnte die Fixture später
+     * stillschweigend schrumpfen — der Test liefe dann schnell, aber am
+     * Deferred-Pfad vorbei und prüfte nichts mehr.
+     */
+    const extractedText = item.recognizedData._extractedText as string;
+    expect(extractedText.length).toBeGreaterThanOrEqual(50_000);
+    // Echte Struktur statt einer durchgehenden Zeichenkette.
+    expect(extractedText).toContain('\n');
+    expect(extractedText).toContain(' ');
 
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
