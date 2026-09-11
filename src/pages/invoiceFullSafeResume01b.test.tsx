@@ -297,13 +297,24 @@ describe('INVOICE-WIZARD-FULL-SAFE-RESUME-01B', () => {
   });
 
   /*
-   * R3 — die sensible Bestätigung bleibt flüchtig.
+   * INVOICE-13B-RESUME-CONFIRMATION-01B — R3 stand auf dem Kopf.
    *
-   * Die Steuerart §13b kommt aus dem Entwurf zurück; die ausdrückliche
-   * Bestätigung darf das ausdrücklich **nicht**. Ohne sie führt kein Weg in die
-   * Vorschau.
+   * Hier stand: „§13b kommt zurück, die ausdrückliche Bestätigung nicht."
+   * Genau das war der gemeldete Realfehler auf iPhone/Safari — der Nutzer
+   * bestätigt, wechselt kurz die App und findet die Bestätigung leer vor.
+   * `d7228fb` hat das behoben: `reverseChargeConfirmationService` hält die
+   * Aussage „für Entwurf X mit Inhalt Y wurde ausdrücklich bestätigt".
+   *
+   * Die Bestätigung ist dabei **nicht** global gemerkt, sondern an Scope,
+   * Workspace, Vorgang, Rechnungsart, `draftId` **und** `draftSha256` gebunden.
+   * Weicht eines davon ab, gilt sie als nicht vorhanden. Das Freigabegate
+   * (`workspaceInvoiceFinalizeRequestValidator`) bleibt davon unberührt.
+   *
+   * Geprüft wird deshalb beides: dass die erteilte Bestätigung den Neuaufbau
+   * übersteht **und** dass sie danach fachlich wirkt — der Weg in die Vorschau
+   * steht wieder offen. Der Gegenfall steht in R3b.
    */
-  it('R3: §13b kommt zurück, die ausdrückliche Bestätigung nicht', async () => {
+  it('R3: eine erteilte §13b-Bestätigung übersteht den Neuaufbau und wirkt', async () => {
     await renderApp('?type=rechnung');
     await click(find('invoice-tax-reverse_charge_13b')!);
     const confirm = find('invoice-13b-confirm-checkbox') as HTMLInputElement | null;
@@ -317,10 +328,52 @@ describe('INVOICE-WIZARD-FULL-SAFE-RESUME-01B', () => {
     await leaveToOtherApp();
     await safariRebuild();
 
+    // Die Steuerart kommt wie bisher aus dem Entwurf zurück.
     expect((await readDraft()).taxStatus).toBe('reverse_charge_13b');
+
     const after = find('invoice-13b-confirm-checkbox') as HTMLInputElement | null;
     expect(after, 'Die §13b-Bestätigung wird nicht mehr angeboten').not.toBeNull();
-    expect(after!.checked, 'Die §13b-Bestätigung wurde wiederhergestellt').toBe(false);
+    expect(after!.checked, 'Die erteilte Bestätigung ging beim Neuaufbau verloren').toBe(true);
+
+    /*
+     * Nicht nur das Kästchen: Die wiederhergestellte Bestätigung muss auch
+     * fachlich zählen. Ohne sie lässt der Weiter-Knopf die Vorschau nicht zu —
+     * dass sie jetzt erreichbar ist, beweist die tatsächliche Wirkung.
+     */
+    await click(find('invoice-continue-preview')!);
+    await settle(6);
+    expect(find('invoice-preview-hint'), 'Die Vorschau blieb trotz Bestätigung gesperrt').not.toBeNull();
+  });
+
+  /*
+   * R3b — die zwingende Gegenrichtung: Resume darf niemals eine Bestätigung
+   * erfinden.
+   *
+   * Die Steuerart darf zurückkommen, denn sie steht im Entwurf. Die
+   * ausdrückliche Zustimmung steht dort nicht und darf sich auch nicht aus ihr
+   * ableiten lassen — sonst würde eine gespeicherte Auswahl stillschweigend
+   * als Nutzerentscheidung gelten.
+   */
+  it('R3b: ohne erteilte Bestätigung entsteht durch den Neuaufbau keine', async () => {
+    await renderApp('?type=rechnung');
+    await click(find('invoice-tax-reverse_charge_13b')!);
+    const confirm = find('invoice-13b-confirm-checkbox') as HTMLInputElement | null;
+    expect(confirm, 'Die §13b-Bestätigung fehlt').not.toBeNull();
+    // Bewusst **nicht** angeklickt.
+    expect(confirm!.checked).toBe(false);
+
+    await leaveToOtherApp();
+    await safariRebuild();
+
+    expect((await readDraft()).taxStatus).toBe('reverse_charge_13b');
+
+    const after = find('invoice-13b-confirm-checkbox') as HTMLInputElement | null;
+    expect(after, 'Die §13b-Bestätigung wird nicht mehr angeboten').not.toBeNull();
+    expect(after!.checked, 'Der Neuaufbau hat eine Bestätigung erfunden').toBe(false);
+
+    // Und das Gate greift weiterhin: kein Weg in die Vorschau.
+    await click(find('invoice-continue-preview')!);
+    await settle(6);
     expect(find('invoice-preview-hint'), 'Vorschau ohne Bestätigung erreicht').toBeNull();
   });
 
