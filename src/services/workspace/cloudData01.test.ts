@@ -13,6 +13,7 @@ import {
   migratePersistedStateV2ToV3,
   migratePersistedStateV3ToV4,
   migratePersistedStateV4ToV5,
+  migratePersistedStateV5ToV6,
   STORAGE_VERSION,
   STORAGE_VERSION_V2,
   STORAGE_VERSION_V4,
@@ -111,7 +112,29 @@ describe('CLOUD-DATA-01 allowlist', () => {
     expect(isSupabaseSyncAllowed('vorgang')).toBe(true);
     expect(isSupabaseSyncAllowed('document')).toBe(false);
     expect(isSupabaseSyncAllowed('inbox_item')).toBe(false);
-    expect(SUPABASE_SYNC_ALLOWLIST.size).toBe(6);
+    /*
+     * CLOUD-COUNT-FIXTURES-01 — Namen statt Anzahl.
+     *
+     * Vorher stand hier `.size).toBe(6)`. Mit `087c156` („add customer cloud
+     * client sync") kam `customer` dazu, und die Zahl wurde falsch — obwohl die
+     * geschützte Aussage unverändert gilt: **genau diese** Entitäten dürfen in
+     * die Cloud, keine weitere.
+     *
+     * Eine blosse Zahl hätte auch dann weiter gestimmt, wenn jemand eine
+     * Entität gegen eine andere austauscht. Die vollständige Menge schlägt
+     * genau dann an, wenn sie es soll: bei jeder Erweiterung oder jedem Tausch.
+     */
+    expect([...SUPABASE_SYNC_ALLOWLIST].sort()).toEqual(
+      [
+        'company_profile',
+        'company_setup',
+        'customer',
+        'vorgang',
+        'workspace',
+        'workspace_member',
+        'workspace_settings',
+      ].sort(),
+    );
   });
 });
 
@@ -129,8 +152,18 @@ describe('CLOUD-DATA-01 migration v2 → v3', () => {
       savedAt: '2026-07-01T10:00:00.000Z',
     };
 
-    const migrated = migratePersistedStateV4ToV5(
-      migratePersistedStateV3ToV4(migratePersistedStateV2ToV3(v2State)),
+    /*
+     * CLOUD-COUNT-FIXTURES-01 — die Kette endet beim heutigen Stand.
+     *
+     * Der Fall prüft, dass ein alter V2-Zustand vollständig auf die aktuelle
+     * Speicherversion gehoben wird. Seit `1e0a590` („first-class local invoice
+     * store") gibt es dafür einen weiteren Schritt; ohne ihn blieb die Kette
+     * bei 5 stehen, während `STORAGE_VERSION` bereits 6 ist.
+     */
+    const migrated = migratePersistedStateV5ToV6(
+      migratePersistedStateV4ToV5(
+        migratePersistedStateV3ToV4(migratePersistedStateV2ToV3(v2State)),
+      ),
     );
     expect(migrated.version).toBe(STORAGE_VERSION);
     expect(migrated.setupSync?.version).toBeGreaterThanOrEqual(1);

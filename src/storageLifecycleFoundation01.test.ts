@@ -19,7 +19,8 @@ import type { DocumentFileRef } from './types/documentFileRef';
 import {
   migratePersistedStateV4ToV5,
   STORAGE_VERSION,
-  STORAGE_VERSION_V4 } from './services/sync/syncMigrationService';
+  STORAGE_VERSION_V4,
+  STORAGE_VERSION_V5 } from './services/sync/syncMigrationService';
 import { createSyncClient } from './services/sync/syncClientService';
 import { DEFAULT_SETUP } from './data/mockData';
 import type { AppPersistedState } from './types/models';
@@ -218,7 +219,15 @@ describe('STORAGE-LIFECYCLE-FOUNDATION-01', () => {
       createdAt: '2026-03-01T08:00:00.000Z' } satisfies Omit<DocumentFileRef, 'lifecycleStatus' | 'committedAt' | 'expiresAt'>;
 
     const migrated = migratePersistedStateV4ToV5(minimalV4State([legacyRef as DocumentFileRef]));
-    expect(migrated.version).toBe(STORAGE_VERSION);
+    /*
+     * CLOUD-COUNT-FIXTURES-01 — dieser Fall prüft **einen** Schritt.
+     *
+     * Er heisst „Migration v4→v5" und ruft genau diese eine Migration auf; sie
+     * setzt `STORAGE_VERSION_V5`. Der Vergleich gegen `STORAGE_VERSION` war
+     * solange richtig, wie die aktuelle Version 5 war — mit `1e0a590` wurde
+     * daraus 6, und der Test mass plötzlich etwas, das er gar nicht ausführt.
+     */
+    expect(migrated.version).toBe(STORAGE_VERSION_V5);
     expect(migrated.documentFileRefs).toHaveLength(1);
     expect(migrated.documentFileRefs![0].lifecycleStatus).toBe('committed');
     expect(migrated.documentFileRefs![0].committedAt).toBe('2026-03-01T08:00:00.000Z');
