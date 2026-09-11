@@ -10,6 +10,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { AppProvider } from './context/AppContext';
+import { AuthProvider } from './context/AuthContext';
 import { DEFAULT_COMPANY_PROFILE } from './data/companyProfileDefaults';
 import { DEFAULT_SETUP } from './data/mockData';
 import { FirstRunWizard } from './components/setup/FirstRunWizard';
@@ -100,7 +101,19 @@ function renderWizard(initialDraft: SetupWizardDraft) {
   return { container, root, completed };
 }
 
-/** Echter Abschlussweg über die SetupPage inklusive Persistenz. */
+/**
+ * Echter Abschlussweg über die SetupPage inklusive Persistenz.
+ *
+ * ONBOARDING-AUTH-WRAPPER-01B — `SetupPage` bezieht seit Längerem `logout` aus
+ * `useAuth`, weshalb hier ohne `AuthProvider` schon der Render abbrach und die
+ * beiden Rechnungsnummern-Prüfungen nie erreicht wurden. Die Reihenfolge
+ * Router → Auth → App entspricht den grünen Geschwistern (`authRouting`,
+ * `brandingLogoUpload01`) und dem produktiven Baum.
+ *
+ * Bewusst ohne Session-Fixture: Das Onboarding braucht keinen angemeldeten
+ * Benutzer, nur den vorhandenen Kontext. Ein künstlich eingesetzter Admin
+ * würde einen Zustand behaupten, den dieser Weg gar nicht voraussetzt.
+ */
 function renderSetupPage(): Mount {
   const container = document.createElement('div');
   document.body.appendChild(container);
@@ -109,12 +122,14 @@ function renderSetupPage(): Mount {
     root = createRoot(container);
     root.render(
       <MemoryRouter initialEntries={['/setup']}>
-        <AppProvider initialSetup={incompleteSetup}>
-          <Routes>
-            <Route path="/setup" element={<SetupPage />} />
-            <Route path="/" element={<div data-testid="heute-page">Heute</div>} />
-          </Routes>
-        </AppProvider>
+        <AuthProvider>
+          <AppProvider initialSetup={incompleteSetup}>
+            <Routes>
+              <Route path="/setup" element={<SetupPage />} />
+              <Route path="/" element={<div data-testid="heute-page">Heute</div>} />
+            </Routes>
+          </AppProvider>
+        </AuthProvider>
       </MemoryRouter>,
     );
   });
