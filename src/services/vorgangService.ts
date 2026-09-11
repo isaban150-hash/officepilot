@@ -17,16 +17,13 @@ import {
   findSimilarVorgaenge as findSimilarInList,
 } from './vorgangMatchingService';
 import {
-  clearInboxVorgangLink,
   resolveInboxItemForLinking,
-  setInboxVorgangLink,
 } from './inboxVorgangLinkService';
 import {
   getDocumentById,
   getDocumentStoreSnapshot,
   hydrateDocumentStore,
   stageDocumentUpdate,
-  updateDocument,
 } from './documentService';
 import {
   isOwnCompanyName,
@@ -621,33 +618,15 @@ export function isInboxLinkedToVorgang(item: InboxItem): boolean {
   );
 }
 
-/**
- * DOC-LINK-AFTER-VORGANG-01 — bind existing CompanyDocument after Vorgang create/link.
- * Uses updateDocument + attachCompanyDocumentToVorgang (no second archive document).
+/*
+ * DOC-LINK-AFTER-VORGANG-01 — hier stand `bindInboxArchiveDocumentToVorgang`.
+ *
+ * Der Helfer war die persistierende Fassung des Dokument-Rückverweises
+ * (`updateDocument` + `attachCompanyDocumentToVorgang`) und hatte nach
+ * VORGANG-LINK-ATOMICITY-01B keinen Aufrufer mehr: Beide Handoff-Wege binden
+ * das Archivdokument jetzt persistfrei über `stageDocumentUpdate` und
+ * `applyCompanyDocumentToVorgang` und schreiben genau einmal.
  */
-function bindInboxArchiveDocumentToVorgang(
-  inbox: InboxItem,
-  vorgangId: string,
-  vorgangTitle: string,
-): boolean {
-  const archiveId = inbox.archiveDocumentId?.trim();
-  if (!archiveId) return true;
-
-  const archived = getDocumentById(archiveId);
-  if (!archived) return false;
-
-  let document = archived;
-  if (archived.linkedVorgang?.vorgangId !== vorgangId) {
-    const updated = updateDocument(archiveId, {
-      linkedVorgang: { vorgangId, vorgangTitle },
-    });
-    if (!updated.success) return false;
-    document = updated.document;
-  }
-
-  attachCompanyDocumentToVorgang(vorgangId, document, inbox);
-  return true;
-}
 
 interface ResolvedCustomerDecision {
   customer: string;
@@ -1231,30 +1210,78 @@ export function linkInboxToExistingVorgang(
     return null;
   }
 
-  const previousDocuments = cloneVorgang(vorgaenge[index]).documents.map((d) => ({ ...d }));
-  const vorgang = cloneVorgang(vorgaenge[index]);
+  /*
+   * VORGANG-LINK-ATOMICITY-01B — alles oder nichts, wie beim Neuanlagepfad.
+   *
+   * Dieser Weg schrieb bis hierher in bis zu fünf getrennten Schritten und nahm
+   * Fehler von Hand zurück. Gefährlich war dabei nicht ein einzelner
+   * Fehlschlag — `persistAll` schreibt den Gesamtzustand —, sondern dass
+   * `updateVorgangInStore` einen Fehlschlag intern zurückrollt und trotzdem den
+   * gewünschten Vorgang **zurückgibt**: Der Ablauf lief weiter, der nächste
+   * Schreibvorgang gelang, und damit stand dauerhaft ein Posteingang, der auf
+   * einen Vorgang zeigt, der das Dokument nicht trägt — mit Erfolgsmeldung.
+   *
+   * Deshalb hier dasselbe Muster wie in `createVorgangFromInbox`: Snapshots
+   * aller berührten Stores, ausschliesslich speicherinternes Staging, **genau
+   * ein** `persistAll()` und ein persistfreier Rollback aus den Snapshots.
+   */
+  const archiveDocument = archiveId ? getDocumentById(archiveId) : undefined;
+
+  // --- Snapshots of every store the handoff may touch.
+  const previousVorgaenge = vorgaenge;
+  const previousInbox = getInboxStoreSnapshot();
+  const previousDocuments = getDocumentStoreSnapshot();
+
+  const rollback = (): null => {
+    vorgaenge = previousVorgaenge;
+    hydrateInboxStore(previousInbox);
+    hydrateDocumentStore(previousDocuments);
+    return null;
+  };
+
+  /*
+   * Die Store-Zeile hält `invoices: []`; die Rechnungen leben in ihrem eigenen
+   * Speicher und werden erst von `cloneVorgang` dazugelesen. Eine reine
+   * Verknüpfung fasst sie nicht an.
+   */
+  const stageVorgang = (next: Vorgang): void => {
+    const row: Vorgang = { ...next, invoices: [] };
+    vorgaenge = vorgaenge.map((v) => (v.id === row.id ? row : v));
+  };
+
+  // --- In-memory staging only. No persist inside this block.
+  let vorgang = cloneVorgang(vorgaenge[index]);
   appendDocumentIfNew(vorgang, buildDocumentFromInbox(currentItem, archiveId));
-  updateVorgangInStore(vorgang);
+  stageVorgang(vorgang);
 
-  const linkedInbox = setInboxVorgangLink(currentItem.id, vorgang.id, vorgang.title, 'linked');
-  if (!linkedInbox) {
-    const restored = cloneVorgang(vorgaenge.find((v) => v.id === vorgangId)!);
-    restored.documents = previousDocuments;
-    updateVorgangInStore(restored);
-    return null;
+  const linkedInbox = stageInboxItemPatch(currentItem.id, {
+    vorgangId: vorgang.id,
+    vorgangTitle: vorgang.title,
+    vorgangLinkStatus: 'linked',
+    status: 'geprueft',
+    isNewUpload: false,
+  });
+  if (!linkedInbox) return rollback();
+
+  if (archiveId && archiveDocument) {
+    let boundDocument = archiveDocument;
+    if (archiveDocument.linkedVorgang?.vorgangId !== vorgang.id) {
+      const stagedDoc = stageDocumentUpdate(archiveId, {
+        linkedVorgang: { vorgangId: vorgang.id, vorgangTitle: vorgang.title },
+      });
+      if (!stagedDoc.success) return rollback();
+      boundDocument = stagedDoc.document;
+    }
+    vorgang = applyCompanyDocumentToVorgang(vorgang, boundDocument, linkedInbox);
+    stageVorgang(vorgang);
   }
 
-  if (!bindInboxArchiveDocumentToVorgang(linkedInbox, vorgang.id, vorgang.title)) {
-    const restored = cloneVorgang(getVorgangById(vorgangId) ?? vorgang);
-    restored.documents = previousDocuments;
-    updateVorgangInStore(restored);
-    clearInboxVorgangLink(linkedInbox.id);
-    return null;
-  }
+  // --- Exactly one persist for Vorgang, inbox link and document binding.
+  if (!persistAll().success) return rollback();
 
   const freshVorgang = getVorgangById(vorgangId);
   const freshInbox = resolveInboxItemForLinking(linkedInbox);
-  if (!freshVorgang) return null;
+  if (!freshVorgang) return rollback();
   return { vorgang: freshVorgang, inbox: freshInbox };
 }
 
