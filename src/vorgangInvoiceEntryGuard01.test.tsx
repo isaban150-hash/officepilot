@@ -21,7 +21,12 @@ import { AppProvider } from './context/AppContext';
 import { DEFAULT_SETUP } from './data/mockData';
 import { VorgangDetailPage } from './pages/VorgangDetailPage';
 import { t, type TranslationKey } from './i18n';
-import { hydrateVorgangStore } from './services/vorgangService';
+import {
+  applyInvoiceCancellationFromCloud,
+  getVorgangById,
+  hydrateVorgangStore,
+} from './services/vorgangService';
+import { hasSchlussrechnung } from './services/orderBillingRules';
 import { createOrderPosition, createTestVorgang } from './test/fixtures';
 import { resetTestStores } from './test/resetStores';
 import type { Vorgang, VorgangInvoice } from './types/models';
@@ -159,16 +164,93 @@ describe('OFFICEPILOT-FINAL-INVOICE-SECOND-DRAFT-UX-01', () => {
     expect(section.textContent).toContain(translate('vorgang.invoicesClosedBySchluss'));
   });
 
-  it('Q: eine stornierte Schlussrechnung zählt weiterhin als vorhanden', () => {
+  /*
+   * INVOICE-CANCELLED-FINAL-GUARD-01B — ein Storno gibt den Weg wieder frei.
+   *
+   * Hier stand die Erwartung, eine stornierte Schlussrechnung zähle „weiterhin
+   * als vorhanden", mit dem Zusatz, die Wiederabrechenbarkeit sei „ein eigener
+   * Fachpunkt". Genau dieser Fachpunkt ist seither umgesetzt: `9018d9a` liest
+   * `cancelledAt` erstmals in `isBillingEffective`, und `hasSchlussrechnung`
+   * zählt seitdem nur noch abrechnungswirksame Belege.
+   *
+   * Beide Hälften der Regel gehören zusammen und werden deshalb in einem Test
+   * geprüft: Solange die Schlussrechnung wirkt, blockiert sie eine zweite;
+   * sobald sie storniert ist, darf ersetzt werden. Storniert heisst dabei
+   * nicht gelöscht — der Beleg bleibt im Vorgang stehen.
+   */
+  it('Q: eine wirksame Schlussrechnung blockiert, eine stornierte gibt wieder frei', () => {
+    seed([invoice()]);
+    root = renderPage(container);
+    const blocked = openInvoicesSection(container);
+
+    // 1. Die aktive Schlussrechnung sperrt den Einstieg — kein zweiter Abschluss.
+    expect(
+      blocked.querySelector('[data-testid="vorgang-prepare-invoice"]'),
+      'Eine aktive Schlussrechnung lässt eine zweite zu',
+    ).toBeNull();
+    expect(hasSchlussrechnung(getVorgangById(VORGANG_ID)!)).toBe(true);
+
     /*
-     * `cancelledAt` verändert den Status nicht. Client und Server bleiben in
-     * diesem Sprint konsistent; eine Wiederabrechenbarkeit nach Storno ist ein
-     * eigener Fachpunkt.
+     * 2. Storno über den Weg, den auch die Cloud-Antwort nimmt: Der Dienst
+     * `applyInvoiceCancellationFromCloud` setzt genau zwei Felder und lässt
+     * Status, Nummer und Beträge unangetastet. Ein von Hand kombinierter
+     * Zustand würde eine Lage behaupten, die produktiv nie entsteht.
      */
-    seed([invoice({ cancelledAt: '2026-08-28T08:00:00.000Z' })]);
+    const cancelled = applyInvoiceCancellationFromCloud(VORGANG_ID, 'inv-entry-1', {
+      cancelledAt: '2026-08-28T08:00:00.000Z',
+      cancelReason: 'Falscher Leistungszeitraum',
+    });
+    expect(cancelled.ok, 'Das Storno wurde nicht übernommen').toBe(true);
+
+    const afterCancel = getVorgangById(VORGANG_ID)!;
+    // Der Beleg bleibt stehen, nur seine Abrechnungswirkung entfällt.
+    expect(afterCancel.invoices).toHaveLength(1);
+    expect(afterCancel.invoices[0]!.status, 'Das Storno hat den Status verändert').toBe(
+      'vorbereitet',
+    );
+    expect(
+      hasSchlussrechnung(afterCancel),
+      'Die stornierte Schlussrechnung zählt weiterhin als wirksam',
+    ).toBe(false);
+
+    // 3. Damit ist der Einstieg für eine Ersatz-Schlussrechnung wieder offen.
+    act(() => root!.unmount());
+    root = renderPage(container);
+    const freed = openInvoicesSection(container);
+    expect(
+      freed.querySelector('[data-testid="vorgang-prepare-invoice"]'),
+      'Nach dem Storno bleibt der Einstieg gesperrt',
+    ).not.toBeNull();
+  });
+
+  /*
+   * Der zweite produktive Stornozustand: `paymentStatus: 'storniert'`.
+   * `isBillingEffective` kennt beide Wege, und der Guard muss beiden folgen —
+   * sonst hinge die Wiederabrechnung davon ab, über welchen Weg storniert wurde.
+   */
+  it('Q2: auch ein storniertes Zahlungskennzeichen gibt den Einstieg frei', () => {
+    seed([invoice({ paymentStatus: 'storniert' })]);
     root = renderPage(container);
     const section = openInvoicesSection(container);
 
+    expect(hasSchlussrechnung(getVorgangById(VORGANG_ID)!)).toBe(false);
+    expect(section.querySelector('[data-testid="vorgang-prepare-invoice"]')).not.toBeNull();
+  });
+
+  /*
+   * Abgrenzung: Ein Storno auf einer **Abschlagsrechnung** darf den
+   * Schlussrechnungs-Guard nicht bewegen — er hängt ausschliesslich an der
+   * Schlussrechnung.
+   */
+  it('Q3: ein storniertes Abschlags-Storno verschiebt den Schlussrechnungs-Guard nicht', () => {
+    seed([
+      invoice({ id: 'inv-abschlag', type: 'abschlag', cancelledAt: '2026-08-28T08:00:00.000Z' }),
+      invoice(),
+    ]);
+    root = renderPage(container);
+    const section = openInvoicesSection(container);
+
+    expect(hasSchlussrechnung(getVorgangById(VORGANG_ID)!)).toBe(true);
     expect(section.querySelector('[data-testid="vorgang-prepare-invoice"]')).toBeNull();
   });
 
