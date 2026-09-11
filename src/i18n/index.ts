@@ -4504,6 +4504,11 @@ const trLegacy: Partial<Record<keyof typeof de, string>> = {
   'reviewWorkflow.section.positions': 'Kalemler',
   'reviewWorkflow.section.archive': 'Arşiv bilgileri',
   'reviewWorkflow.section.technical': 'Teknik ayrıntılar',
+  // DOCUMENT-EXPERIENCE-SIMPLIFICATION-01B — Gruppen unter „Details anzeigen".
+  'reviewWorkflow.section.fieldConfirm': 'Bilgileri kontrol edin',
+  'reviewWorkflow.section.originalDocument': 'Orijinal belge',
+  'reviewWorkflow.section.replyDraft': 'Yanıt taslağı',
+  'reviewWorkflow.section.administration': 'Yönetim',
   'reviewWorkflow.success.title': 'Öneri uygulandı',
   'reviewWorkflow.success.archived': 'Belge arşivlendi',
   'reviewWorkflow.success.orderCreated': 'İş oluşturuldu',
