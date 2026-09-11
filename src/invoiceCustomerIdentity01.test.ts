@@ -19,6 +19,7 @@ import { resetInvoiceFinalizeIntentsForTests } from './services/invoice/invoiceF
 import * as workspaceInvoiceCloud from './services/invoice/workspaceInvoiceCloudService';
 import {
   buildRechnungDraft,
+  updateDraftPositionQuantity,
   updateInvoiceDraftMetadata,
   validateInvoiceDraftForApproval,
 } from './services/invoiceService';
@@ -148,19 +149,38 @@ function createVorgangWithDecision(decision: CustomerDecision): Vorgang {
   return vorgang;
 }
 
-/** Prüft die vorbefüllte Pauschalposition — schließt no_positions ausdrücklich aus. */
+/**
+ * Prüft die Pauschalposition im frischen Entwurf — schließt `no_positions`
+ * ausdrücklich aus.
+ *
+ * INVOICE-ACTUAL-QUANTITY-FIXTURE-01C — hier stand `quantity === 1`, also die
+ * Planmenge als abzurechnende Menge. Seit `db2651c`/`b3cb1c3` sind Plan und Ist
+ * getrennt: Der Auftrag trägt `plannedQuantity: 1`, aber **keine** erfasste
+ * Ausführung, und ohne die belegt der Entwurf nichts vor. Die Position ist da,
+ * ihre Menge ist 0 — genau so, wie ein Nutzer sie vorfindet, bevor er die
+ * tatsächlich erbrachte Leistung einträgt.
+ *
+ * Der Plan bleibt als Referenz sichtbar und wird hier mitgeprüft: Er darf
+ * weder verschwinden noch stillschweigend zur Rechnungsmenge werden.
+ */
 function expectSinglePauschalPosition(draft: { positions: readonly unknown[] }): void {
   const positions = draft.positions as Array<{
     billable: boolean;
     quantity: number;
+    plannedQuantity: number;
+    executedQuantity?: number;
     unit: string;
     unitPrice: number;
   }>;
   expect(positions).toHaveLength(1);
   expect(positions[0]!.billable).toBe(true);
-  expect(positions[0]!.quantity).toBe(1);
   expect(positions[0]!.unit).toBe('Pauschal');
   expect(positions[0]!.unitPrice).toBe(5000);
+
+  // Plan vorhanden, Ist unbekannt, also nichts vorbelegt.
+  expect(positions[0]!.plannedQuantity, 'Die Planmenge fehlt').toBe(1);
+  expect(positions[0]!.executedQuantity, 'Es wurde eine Ist-Menge erfunden').toBeUndefined();
+  expect(positions[0]!.quantity, 'Die Planmenge wurde als Rechnungsmenge übernommen').toBe(0);
 }
 
 /** Entwurf inkl. der vom Nutzer ergänzten Rechnungsanschrift. */
@@ -172,11 +192,23 @@ function buildApprovableDraft(vorgangId: string) {
   expectSinglePauschalPosition(base!);
 
   /*
+   * INVOICE-ACTUAL-QUANTITY-FIXTURE-01C — die abzurechnende Menge ist eine
+   * bewusste Eingabe.
+   *
+   * Der Entwurf startet bei 0, und die Freigabe blockt bei Menge 0. Diese
+   * Suite prüft die Kundenidentität, nicht die Mengenerfassung — der Nutzer
+   * trägt hier also über den Produktweg ein, was er abrechnet. Ein Entwurf,
+   * der die Menge schon mitbrächte, würde die Regel aus `db2651c` umgehen.
+   */
+  const withQuantity = updateDraftPositionQuantity(base!, base!.positions[0]!.id, 1);
+  expect(withQuantity.positions[0]!.quantity, 'Die Menge wurde verworfen').toBe(1);
+
+  /*
    * INVOICE-SERVICE-PERIOD-01B — der Leistungszeitraum ist eine ausdrückliche
    * Angabe des Nutzers und wird nicht mehr erfunden. Diese Suite prüft die
    * Kundenidentität, nicht den Zeitraum; er gehört hier zur Freigabereife.
    */
-  const draft = updateInvoiceDraftMetadata(base!, {
+  const draft = updateInvoiceDraftMetadata(withQuantity, {
     customerBilling: DRAFT_ADDRESS,
     servicePeriodFrom: '2026-05-01',
     servicePeriodTo: '2026-05-31',
@@ -234,7 +266,37 @@ describe('CORE-COMPLETE-GOLDEN-PATH-01B', () => {
     expect(beforeAddress.blockingErrors.some((issue) => issue.code === 'customer_address')).toBe(
       true,
     );
-    expect(beforeAddress.blockingErrors.some((issue) => issue.code === 'no_positions')).toBe(false);
+
+    /*
+     * INVOICE-ACTUAL-QUANTITY-FIXTURE-01C — hier stand, `no_positions` dürfe
+     * nicht gemeldet werden. Das setzte voraus, dass der Entwurf die Planmenge
+     * schon mitbringt.
+     *
+     * `no_positions` heisst „keine abrechenbare Position mit Menge > 0"
+     * (`invoiceValidationService`) — die Regel sieht die Planmenge gar nicht an.
+     * Solange der Nutzer nichts eingetragen hat, ist die Meldung also richtig.
+     *
+     * Geprüft wird deshalb die eigentliche Aussage des Tests — dass hier eine
+     * echte, nutzbare Position liegt und kein leerer Entwurf — auf dem Weg,
+     * der sie heute belegt: Mit der bewusst eingetragenen Menge verschwindet
+     * die Meldung, die Anschriftensperre bleibt davon unberührt.
+     */
+    expect(beforeAddress.blockingErrors.some((issue) => issue.code === 'no_positions')).toBe(true);
+
+    const withQuantity = updateDraftPositionQuantity(base!, base!.positions[0]!.id, 1);
+    const afterQuantity = validateInvoiceDraftForApproval(
+      withQuantity,
+      getCompanyProfile(),
+      vorgang,
+    );
+    expect(
+      afterQuantity.blockingErrors.some((issue) => issue.code === 'no_positions'),
+      'Die eingetragene Menge macht die Position nicht abrechenbar',
+    ).toBe(false);
+    expect(
+      afterQuantity.blockingErrors.some((issue) => issue.code === 'customer_address'),
+      'Die Anschriftensperre ist verschwunden',
+    ).toBe(true);
 
     // Anschrift ausschließlich über die Produktionsfunktion ergänzen.
     /*
@@ -242,7 +304,9 @@ describe('CORE-COMPLETE-GOLDEN-PATH-01B', () => {
    * Angabe des Nutzers und wird nicht mehr erfunden. Diese Suite prüft die
    * Kundenidentität, nicht den Zeitraum; er gehört hier zur Freigabereife.
    */
-  const draft = updateInvoiceDraftMetadata(base!, {
+  // Auf dem Entwurf mit bewusst eingetragener Menge — sonst bliebe die
+  // Freigabe zu Recht an `no_positions` hängen.
+  const draft = updateInvoiceDraftMetadata(withQuantity, {
     customerBilling: DRAFT_ADDRESS,
     servicePeriodFrom: '2026-05-01',
     servicePeriodTo: '2026-05-31',

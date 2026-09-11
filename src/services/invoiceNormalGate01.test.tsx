@@ -12,6 +12,29 @@ import {
   testSetup,
 } from '../test/fixtures';
 import { createNormalPrintSetup, createReverseChargePrintSetup } from '../test/invoicePrintFixtures';
+
+/**
+ * INVOICE-ACTUAL-QUANTITY-FIXTURE-01C — das Mengenfeld über seine Beschriftung
+ * finden.
+ *
+ * Hier stand zweimal `input[type="number"]`. Seit `b3cb1c3` rendert
+ * `NumericInput` ein `type="text"` mit `inputMode="decimal"` — der Selektor
+ * lieferte `null`, und der Test brach beim Feldzugriff ab, lange vor seiner
+ * eigentlichen Gate-Prüfung.
+ *
+ * Gesucht wird jetzt über die sichtbare Beschriftung, also den Weg, den auch
+ * ein Nutzer nimmt. Das überlebt weitere Änderungen am Eingabetyp — und genau
+ * daran ist der alte Selektor zerbrochen.
+ */
+function quantityField(host: ParentNode): HTMLInputElement {
+  const label = Array.from(host.querySelectorAll('label')).find((candidate) =>
+    candidate.textContent?.includes(t('invoice.quantityThisInvoice', 'de')),
+  );
+  expect(label, 'Mengenfeld „Menge für diese Rechnung" fehlt').toBeTruthy();
+  const input = label!.querySelector('input');
+  expect(input, 'Das Mengenfeld hat kein Eingabefeld').toBeTruthy();
+  return input as HTMLInputElement;
+}
 import { hydrateCompanyProfileStore } from './companyProfileService';
 import { DEFAULT_COMPANY_PROFILE } from '../data/companyProfileDefaults';
 import { getDocumentByLinkedInvoiceId, hydrateDocumentStore } from './documentService';
@@ -279,7 +302,20 @@ describe('INVOICE-NORMAL-GATE-01 UI', () => {
     expect(host.querySelector('[data-testid="invoice-approve"]')).toBeNull();
     expect(host.textContent).not.toMatch(/Drucken|PDF speichern/i);
 
-    const qty = host.querySelector('input[type="number"]') as HTMLInputElement;
+    /*
+     * INVOICE-ACTUAL-QUANTITY-FIXTURE-01C — das Mengenfeld über seine
+     * Beschriftung finden.
+     *
+     * Hier stand `input[type="number"]`. Seit `b3cb1c3` rendert `NumericInput`
+     * ein `type="text"` mit `inputMode="decimal"` — damit kam `null` zurück und
+     * der Test brach an dieser Zeile ab, lange vor seiner eigentlichen
+     * Gate-Prüfung.
+     *
+     * Gesucht wird jetzt über die sichtbare Beschriftung, also den Weg, den
+     * auch ein Nutzer nimmt. Das überlebt jede weitere Änderung am
+     * Eingabetyp — und genau daran ist der alte Selektor zerbrochen.
+     */
+    const qty = quantityField(host);
     await act(async () => {
       const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
       setter?.call(qty, '3');
@@ -300,7 +336,7 @@ describe('INVOICE-NORMAL-GATE-01 UI', () => {
     await act(async () => {
       (host.querySelector('[data-testid="invoice-back-positions"]') as HTMLButtonElement).click();
     });
-    const qtyAgain = host.querySelector('input[type="number"]') as HTMLInputElement;
+    const qtyAgain = quantityField(host);
     expect(qtyAgain.value).toBe('3');
   });
 
