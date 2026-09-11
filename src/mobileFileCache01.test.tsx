@@ -167,7 +167,27 @@ describe('MOBILE-FILE-CACHE-01', () => {
         </AppProvider>
       </MemoryRouter>,
     );
-    expect(html).toContain('document-assistant-panel');
+    /*
+     * MOBILE-FILE-CACHE-ASSIST-ASSERTION-01B — dieselbe Invariante, heutiges
+     * Signal.
+     *
+     * Bis `5b84e76` trug die Eingangsdetailseite ein `DocumentAssistantPanel`.
+     * Seit `295fc27` gibt es dafür die Review-Experience, und der alte Block
+     * wurde danach ausgebaut — eine geplante Ablösung, im Browser nachgesehen.
+     * Die Komponente existiert noch, wird aber von keiner Produktivdatei mehr
+     * gerendert; ihr Testid kann deshalb nicht mehr das Signal sein.
+     *
+     * Geprüft wird weiterhin dasselbe: Ein Dokument, das **aus dem Cache**
+     * aufgenommen wurde, erreicht die Detailseite und wird dort verstanden und
+     * mit Assistenz dargestellt. Drei genaue Kennungen statt einer, damit die
+     * Aussage nicht an einer einzelnen Umbenennung hängt und trotzdem klar
+     * scheitert, wenn die Darstellung ausbleibt.
+     */
+    expect(html, 'Review-Oberfläche fehlt').toContain('data-testid="document-review-experience"');
+    expect(html, 'Dokumentverständnis fehlt').toContain('data-testid="document-experience-card"');
+    expect(html, 'Assistenz zum Dokument fehlt').toContain(
+      'data-testid="document-free-question-panel"',
+    );
   });
 
   it('Scan-Seite rendert Vorschau mit Weiter-analysieren-Button', () => {
