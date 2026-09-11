@@ -74,6 +74,48 @@ function mountDetail(itemId: string) {
   return { container, root };
 }
 
+/**
+ * INGRESS-REVIEW-SECTION-EXPAND-01B — der Weg zum Originaldokument, wie ihn
+ * heute ein Nutzer geht.
+ *
+ * Seit `295fc27` liegt die Originaldatei in einem einklappbaren Prüfabschnitt,
+ * und `CollapsibleReviewSection` rendert ihre Kinder ausschliesslich im
+ * aufgeklappten Zustand. Ein statisch gerendertes Markup kann den Abschnitt
+ * nicht öffnen — deshalb wird hier montiert, der echte Umschalter geklickt und
+ * erst danach gelesen.
+ *
+ * Bewusst nur **dieser** eine Abschnitt: Was der Test über die
+ * Startdarstellung aussagt, soll er weiterhin an der Startdarstellung prüfen.
+ */
+function renderDetailWithOriginalDocumentOpen(itemId: string): string {
+  const mounted = mountDetail(itemId);
+  const click = (testId: string, label: string): void => {
+    const element = mounted.container.querySelector<HTMLButtonElement>(
+      `[data-testid="${testId}"]`,
+    );
+    expect(element, label).not.toBeNull();
+    act(() => {
+      element!.click();
+    });
+  };
+
+  /*
+   * Zwei Stufen, genau wie an der Oberfläche: Die Prüfabschnitte liegen hinter
+   * „Mehr anzeigen"; erst danach gibt es überhaupt einen Abschnittsumschalter.
+   */
+  click('document-review-more-toggle', 'Umschalter „Mehr anzeigen" fehlt');
+  click(
+    'review-section-toggle-original-document',
+    'Umschalter für den Originaldokument-Abschnitt fehlt',
+  );
+  const html = mounted.container.innerHTML;
+  act(() => {
+    mounted.root.unmount();
+  });
+  mounted.container.remove();
+  return html;
+}
+
 function assertOrder(html: string, earlier: string, later: string) {
   const a = html.indexOf(earlier);
   const b = html.indexOf(later);
@@ -128,8 +170,9 @@ describe('INGRESS-OPERATIONAL-OVERVIEW-01', () => {
     );
     // No raw signature enums in the rendered tree.
     expect(html).not.toMatch(/>\s*(unclear|detected|partial|not_detected)\s*</i);
+    /* Das Originaldokument liegt hinter dem Prüfabschnitt — Abschnitt öffnen, dann prüfen. */
     assertOrder(
-      html,
+      renderDetailWithOriginalDocumentOpen(item.id),
       'data-testid="auftragskarte"',
       'data-testid="ablage-original-file"',
     );
@@ -150,8 +193,9 @@ describe('INGRESS-OPERATIONAL-OVERVIEW-01', () => {
     expect(html).not.toContain('data-testid="operational-overview-primary-case"');
     expect(html).not.toContain('data-testid="operational-overview-meanings"');
     expect((html.match(/data-testid="document-review-apply-button"/g) ?? []).length).toBe(1);
+    /* Das Originaldokument liegt hinter dem Prüfabschnitt — Abschnitt öffnen, dann prüfen. */
     assertOrder(
-      html,
+      renderDetailWithOriginalDocumentOpen(item.id),
       'data-testid="document-experience-card"',
       'data-testid="ablage-original-file"',
     );
@@ -167,8 +211,9 @@ describe('INGRESS-OPERATIONAL-OVERVIEW-01', () => {
     expect(html).toContain('data-testid="document-experience-card"');
     expect(html).not.toContain('data-testid="operational-overview-primary-case"');
     expect(html).not.toContain('data-testid="operational-overview-meanings"');
+    /* Das Originaldokument liegt hinter dem Prüfabschnitt — Abschnitt öffnen, dann prüfen. */
     assertOrder(
-      html,
+      renderDetailWithOriginalDocumentOpen(item.id),
       'data-testid="document-experience-card"',
       'data-testid="ablage-original-file"',
     );
@@ -199,8 +244,9 @@ describe('INGRESS-OPERATIONAL-OVERVIEW-01', () => {
     expect((html.match(/data-testid="document-review-apply-button"/g) ?? []).length).toBe(1);
     expect(html).not.toContain('data-testid="contract-chef-primary-action"');
     expect(html).not.toMatch(/data-testid="document-experience-details"[^>]*\sopen[\s>]/);
+    /* Das Originaldokument liegt hinter dem Prüfabschnitt — Abschnitt öffnen, dann prüfen. */
     assertOrder(
-      html,
+      renderDetailWithOriginalDocumentOpen(item.id),
       'data-testid="document-experience-card"',
       'data-testid="ablage-original-file"',
     );

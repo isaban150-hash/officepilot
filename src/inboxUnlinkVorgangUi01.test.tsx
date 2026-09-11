@@ -146,6 +146,24 @@ async function mountDetail(): Promise<Mount> {
   return { container, root };
 }
 
+/**
+ * INGRESS-REVIEW-SECTION-EXPAND-01B — der Weg zur Verwaltung, wie ihn heute
+ * ein Nutzer geht.
+ *
+ * Seit `295fc27` liegen „Verknüpfung lösen" und der Archivlink im
+ * Verwaltungs-Prüfabschnitt, und der wiederum hinter „Mehr anzeigen".
+ * `CollapsibleReviewSection` rendert ihre Kinder ausschliesslich im
+ * aufgeklappten Zustand — die Aktionen sind also nicht verschwunden, sie
+ * liegen eine Bedienebene tiefer.
+ *
+ * Bewusst nur dieser eine Abschnitt, und bewusst über die echten Umschalter:
+ * kein Zugriff auf internen Zustand, keine zusätzlichen Testids im Produkt.
+ */
+async function openAdministration(mount: Mount): Promise<void> {
+  await click(mount.container, 'document-review-more-toggle');
+  await click(mount.container, 'review-section-toggle-administration');
+}
+
 describe('OFFICEPILOT-INBOX-UNLINK-VORGANG-UI-01E', () => {
   beforeEach(() => {
     resetTestStores();
@@ -159,6 +177,7 @@ describe('OFFICEPILOT-INBOX-UNLINK-VORGANG-UI-01E', () => {
 
   it('O1: die Aktion ist vorhanden und ändert vor der Bestätigung nichts', async () => {
     const mount = await mountDetail();
+    await openAdministration(mount);
 
     await click(mount.container, 'inbox-unlink-vorgang-trigger');
     await waitFor(() => find(mount.container, 'inbox-unlink-dialog') !== null, 'Dialog');
@@ -172,6 +191,7 @@ describe('OFFICEPILOT-INBOX-UNLINK-VORGANG-UI-01E', () => {
 
   it('O2: Abbrechen verändert nichts', async () => {
     const mount = await mountDetail();
+    await openAdministration(mount);
 
     await click(mount.container, 'inbox-unlink-vorgang-trigger');
     await click(mount.container, 'inbox-unlink-cancel');
@@ -184,6 +204,7 @@ describe('OFFICEPILOT-INBOX-UNLINK-VORGANG-UI-01E', () => {
 
   it('O3: Bestätigen löst genau die Zuordnung und löscht nichts', async () => {
     const mount = await mountDetail();
+    await openAdministration(mount);
 
     await click(mount.container, 'inbox-unlink-vorgang-trigger');
     await click(mount.container, 'inbox-unlink-confirm');
@@ -207,6 +228,7 @@ describe('OFFICEPILOT-INBOX-UNLINK-VORGANG-UI-01E', () => {
 
   it('O4: der Weg zum Archivoriginal ist vorhanden', async () => {
     const mount = await mountDetail();
+    await openAdministration(mount);
 
     await waitFor(
       () => find(mount.container, 'inbox-open-archive-document') !== null,
