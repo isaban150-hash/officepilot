@@ -139,6 +139,8 @@ const INVOICE_KEYS = [
   'closingText',
   'baustelle',
   'vorgangTitle',
+  // MANUAL-INVOICE-CUSTOMER-IDENTITY-01B — die stabile Kundenreferenz.
+  'customerId',
   'archiveDocumentId',
   'payments',
   'paymentStatus',
@@ -468,6 +470,17 @@ function checkInvoiceShape(
   optionalString(invoice.closingText, `${path}.closingText`);
   optionalString(invoice.baustelle, `${path}.baustelle`);
   optionalString(invoice.vorgangTitle, `${path}.vorgangTitle`);
+  /*
+   * 01B — abwesend ist gültig; vorhanden muss es ein nichtleerer, kanonischer
+   * String sein. `''`/Whitespace, Zahl, Objekt, `null` werden abgewiesen: Eine
+   * leere Referenz ist keine „keine Referenz", sondern ein kaputter Wert.
+   */
+  if (invoice.customerId !== undefined) {
+    const customerId = requiredString(invoice.customerId, `${path}.customerId`);
+    if (customerId.trim() !== customerId || customerId.trim().length === 0) {
+      reject(`${path}.customerId:not_canonical`);
+    }
+  }
   optionalString(invoice.cancelledAt, `${path}.cancelledAt`);
   optionalString(invoice.cancelReason, `${path}.cancelReason`);
   optionalString(invoice.sentAt, `${path}.sentAt`);

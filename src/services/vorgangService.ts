@@ -8,6 +8,7 @@ import {
   setInvoicesForVorgang,
   upsertInvoiceEntry,
 } from './invoice/invoiceStore';
+import { resolveInvoiceCustomerRelation } from './invoice/invoiceCustomerRelation';
 import {
   canAddOrderPosition,
   canDeleteOrderPosition,
@@ -1438,6 +1439,12 @@ export type UpsertFinalizedInvoiceResult =
         | 'vorgang_missing'
         | 'id_content_conflict'
         | 'number_id_conflict'
+        /*
+         * MANUAL-INVOICE-CUSTOMER-IDENTITY-01B — derselbe Beleg, aber zwei
+         * verschiedene Kundenreferenzen. Eigener Grund, weil der Inhalt
+         * gleich ist und `id_content_conflict` die falsche Diagnose wäre.
+         */
+        | 'customer_relation_conflict'
         | 'local_persist_failed';
     };
 
@@ -1543,6 +1550,13 @@ export function immutableInvoiceFingerprint(
     closingText: invoice.closingText ?? '',
     baustelle: invoice.baustelle ?? '',
     vorgangTitle: invoice.vorgangTitle ?? '',
+    /*
+     * MANUAL-INVOICE-CUSTOMER-IDENTITY-01B — bewusst **ohne** `customerId`:
+     * Der Fingerprint ist die historische Dokumentdarstellung; die Kunden-
+     * referenz ist interne relationale Identität und wird separat geprüft
+     * (`resolveInvoiceCustomerRelation`). Eine Zeile ohne das Feld — aus
+     * einem älteren Client oder Cloud-Stand — bleibt derselbe Beleg.
+     */
     customerSnapshot: invoice.customerSnapshot ?? null,
     companySnapshot: company,
     legalNotices: invoice.legalNotices ?? [],
@@ -1581,7 +1595,10 @@ export type ApplyFinalizedInvoiceToListResult =
       action: 'inserted' | 'noop' | 'status_raised';
       invoices: VorgangInvoice[];
     }
-  | { ok: false; reason: 'id_content_conflict' | 'number_id_conflict' };
+  | {
+      ok: false;
+      reason: 'id_content_conflict' | 'number_id_conflict' | 'customer_relation_conflict';
+    };
 
 /**
  * MANUAL-INVOICE-CLOUD-MIGRATION-01B2b — die Same-ID-Semantik einer
@@ -1667,10 +1684,23 @@ export function applyFinalizedInvoiceToList(
         ? true
         : byId.servicePeriodConfirmed;
 
+    /*
+     * MANUAL-INVOICE-CUSTOMER-IDENTITY-01B — die Kundenrelation wird
+     * **separat** geprüft. Der Fingerprint oben hat sie bewusst nicht gesehen;
+     * ein anderer Kunde bei gleichem Beleg ist trotzdem ein Konflikt und wird
+     * nie still entschieden. Eine fehlende lokale Referenz darf die entfernte
+     * übernehmen — das ist wie die Bestätigung oben ein monotones Auffüllen.
+     */
+    const relation = resolveInvoiceCustomerRelation(byId.customerId, invoice.customerId);
+    if (!relation.ok) {
+      return { ok: false, reason: 'customer_relation_conflict' };
+    }
+
     if (
       nextStatus === byId.status &&
       raisedConfirmation === byId.servicePeriodConfirmed &&
-      !adoptedSent
+      !adoptedSent &&
+      !relation.filledFromRemote
     ) {
       return { ok: true, invoice: { ...byId }, action: 'noop', invoices };
     }
@@ -1678,6 +1708,9 @@ export function applyFinalizedInvoiceToList(
     const updated: VorgangInvoice = { ...byId, status: nextStatus };
     if (raisedConfirmation !== undefined) {
       updated.servicePeriodConfirmed = raisedConfirmation;
+    }
+    if (relation.filledFromRemote && relation.customerId) {
+      updated.customerId = relation.customerId;
     }
     if (adoptedSent) {
       updated.sentAt = adoptedSent.sentAt;
@@ -1810,7 +1843,31 @@ export function upsertFinalizedManualInvoice(
       return { ok: false, reason: 'number_id_conflict' };
     }
     if (immutableInvoiceFingerprint(existing.invoice) === immutableInvoiceFingerprint(invoice)) {
-      return { ok: true, invoice: existing.invoice, action: 'noop' };
+      /*
+       * MANUAL-INVOICE-CUSTOMER-IDENTITY-01B — gleicher Beleg heisst noch
+       * nicht gleiche Relation. Dieselbe Regel wie in
+       * `applyFinalizedInvoiceToList`: Konflikt bei zwei Kunden, Lücke füllen
+       * bei einem — nie still, nie über den Namen.
+       */
+      const relation = resolveInvoiceCustomerRelation(
+        existing.invoice.customerId,
+        invoice.customerId,
+      );
+      if (!relation.ok) return { ok: false, reason: 'customer_relation_conflict' };
+      if (!relation.filledFromRemote) {
+        return { ok: true, invoice: existing.invoice, action: 'noop' };
+      }
+      const filled = commitManualInvoiceMutation(invoice.id, (current) => ({
+        ...current,
+        customerId: relation.customerId,
+      }));
+      if (!filled.ok) {
+        return {
+          ok: false,
+          reason: filled.reason === 'persist_failed' ? 'local_persist_failed' : 'number_id_conflict',
+        };
+      }
+      return { ok: true, invoice: filled.invoice, action: 'status_raised' };
     }
   }
 

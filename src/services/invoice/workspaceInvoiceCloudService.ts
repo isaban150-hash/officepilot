@@ -433,6 +433,11 @@ export function mapCloudPayloadToVorgangInvoice(payload: Record<string, unknown>
     closingText: optionalCloudText(payload.closingText),
     baustelle: optionalCloudText(payload.baustelle),
     vorgangTitle: optionalCloudText(payload.vorgangTitle),
+    // MANUAL-INVOICE-CUSTOMER-IDENTITY-01B — die Referenz reist mit; ein
+    // leerer oder fremdtypiger Wert wird nicht zur Referenz, sondern fehlt.
+    ...(optionalCloudText(payload.customerId)?.trim()
+      ? { customerId: (payload.customerId as string).trim() }
+      : {}),
     sentAt: optionalCloudText(payload.sentAt),
     sentVia: INVOICE_SENT_VIA.has(String(payload.sentVia))
       ? (payload.sentVia as VorgangInvoice['sentVia'])

@@ -109,13 +109,31 @@ begin
   if not (r->>'idempotent_replay')::boolean then raise exception 'R2 Vorgangspfad: Cross-Day-Replay nicht idempotent'; end if;
   raise notice 'OK  R2: Cross-Day-Replay auch ueber Vorgangspfad';
 
+  /* ---------------- CUSTOMER-IDENTITY-01B: customerId im Payload ---------------- */
+  -- Kein Schema, kein RPC: customerId reist im JSONB mit und ist Teil der
+  -- serverseitigen Payload-Gleichheit. Derselbe Request replayt; ein anderer
+  -- Kunde bei gleicher client_invoice_id ist ein Idempotenzkonflikt.
+  r := public.finalize_workspace_invoice(ws, null, 'cid-001', '{"type":"rechnung","issueDate":"2026-09-12","positions":[],"customerId":"cust-a"}');
+  if (r->>'idempotent_replay')::boolean then raise exception 'CID Erstlauf: unerwartet Replay'; end if;
+  if r->'invoice'->>'customerId' <> 'cust-a' then raise exception 'CID: customerId nicht gespeichert: %', r->'invoice'; end if;
+  raise notice 'OK  CID: freie Rechnung mit customerId gespeichert (%)', r->'row'->>'invoice_number';
+
+  r := public.finalize_workspace_invoice(ws, null, 'cid-001', '{"type":"rechnung","issueDate":"2026-09-12","positions":[],"customerId":"cust-a"}');
+  if not (r->>'idempotent_replay')::boolean then raise exception 'CID: identischer Replay nicht idempotent'; end if;
+  raise notice 'OK  CID: identischer Replay idempotent';
+
+  perform pg_temp.erwarte_fehler('CID anderer Kunde', null, 'cid-001', '{"type":"rechnung","issueDate":"2026-09-12","positions":[],"customerId":"cust-b"}', 'abweichender Rechnungsinhalt');
+
   /* ---------------- Invarianten, die unveraendert bleiben muessen ---------------- */
   perform pg_temp.erwarte_fehler('abschlag + NULL', null, 'x-abschlag', '{"type":"abschlag","positions":[]}', 'invoice_requires_vorgang_for_type');
   perform pg_temp.erwarte_fehler('schluss + NULL',  null, 'x-schluss',  '{"type":"schluss","positions":[]}',  'invoice_requires_vorgang_for_type');
   perform pg_temp.erwarte_fehler('Leerstring',      '  ', 'x-leer',     '{"type":"rechnung","positions":[]}', 'vorgang_id fehlt');
 
   select count(*) into n from public.workspace_invoices where workspace_id = ws;
-  if n <> 3 then raise exception 'Erwartet 3 Rechnungen (r1-001, r2-001, r2-order), gefunden %', n; end if;
+  if n <> 4 then raise exception 'Erwartet 4 Rechnungen (r1-001, r2-001, r2-order, cid-001), gefunden %', n; end if;
+  -- Der Nummernkreis ist unveraendert fortlaufend: 0001..0004, keine Luecke, kein zweiter Kreis.
+  select count(*) into n from public.workspace_invoices where workspace_id = ws and invoice_sequence_number between 1 and 4;
+  if n <> 4 then raise exception 'Nummernkreis nicht fortlaufend'; end if;
   raise notice 'OK  keine Doppelbelege, gemeinsamer Nummernkreis';
 end;
 $$;

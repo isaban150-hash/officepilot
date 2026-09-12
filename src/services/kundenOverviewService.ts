@@ -10,6 +10,7 @@
  */
 import { getCustomerStoreSnapshot } from './customerStoreService';
 import { getAllInvoiceOverview } from './invoiceOverviewService';
+import { resolveInvoiceCustomerId } from './invoice/invoiceCustomerRelation';
 import { getAllVorgaenge } from './vorgangService';
 import type { Customer, Vorgang } from '../types/models';
 
@@ -157,17 +158,40 @@ function buildIndex(): OverviewIndex {
 export function getKundenOverview(today?: Date | string): KundeOverviewEntry[] {
   const { entries, vorgangOwner } = buildIndex();
 
-  // Invoices are attributed via vorgangId only — never via invoice.customer.
+  /*
+   * MANUAL-INVOICE-CUSTOMER-IDENTITY-01B — eine Leseregel für Rechnung → Kunde
+   * (`resolveInvoiceCustomerId`): `invoice.customerId`, sonst
+   * `vorgang.customerId` (Altbestand), sonst der Legacy-Namensschlüssel des
+   * **Vorgangs**. Nie `invoice.customerSnapshot.name` — eine freie Rechnung
+   * ohne Referenz bleibt unzugeordnet. Jede Rechnung landet in genau einem
+   * Eintrag: Trägt sie eine Referenz, ist das derselbe Schlüssel, den ihr
+   * Vorgang bekäme — keine Doppelzählung.
+   */
+  const vorgaengeById = new Map(getAllVorgaenge().map((v) => [v.id, v]));
   for (const item of getAllInvoiceOverview(today)) {
-    /*
-     * MANUAL-INVOICE-01B2c — eine Rechnung ohne Auftrag trägt keine Kunden-
-     * kennung, nur einen Adress-Snapshot. Sie wird hier bewusst **nicht** über
-     * den Namen zugeordnet; das wäre genau die Namensheuristik, die diese
-     * Zuordnung ausschliesst.
-     */
-    if (item.vorgangId === null) continue;
-    const mapKey = vorgangOwner.get(item.vorgangId);
+    const vorgang = item.vorgangId === null ? null : vorgaengeById.get(item.vorgangId) ?? null;
+    const customerId = resolveInvoiceCustomerId(item.invoice, vorgang);
+
+    let mapKey: string | undefined;
+    if (customerId) {
+      const customerKey = entryMapKey('customer', customerId);
+      mapKey = entries.has(customerKey) ? customerKey : entryMapKey('orphan', customerId);
+      if (!entries.has(mapKey)) {
+        // Referenz ohne Stammsatz: sichtbar als Waise, nie über den Namen zusammengeführt.
+        entries.set(mapKey, {
+          kind: 'orphan',
+          key: customerId,
+          name: normalizeKundenName(item.invoice.customerSnapshot?.name ?? ''),
+          addressLine: buildCustomerAddressLine(item.invoice.customerSnapshot ?? {}),
+          orderCount: 0,
+          openInvoiceCount: 0,
+        });
+      }
+    } else if (item.vorgangId !== null) {
+      mapKey = vorgangOwner.get(item.vorgangId);
+    }
     if (!mapKey) continue;
+
     const entry = entries.get(mapKey);
     if (!entry) continue;
     if (OPEN_INVOICE_STATUSES.includes(item.paymentSummary.status)) {

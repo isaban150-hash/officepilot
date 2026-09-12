@@ -64,6 +64,8 @@ const INVOICE_KEYS = new Set([
   'closingText',
   'baustelle',
   'vorgangTitle',
+  // MANUAL-INVOICE-CUSTOMER-IDENTITY-01B — die stabile Kundenreferenz.
+  'customerId',
   'archiveDocumentId',
   'payments',
   'paymentStatus',
@@ -398,6 +400,14 @@ export function validateWorkspaceInvoiceCloudPayload(
     optionalText(value.closingText, 'payload.closingText');
     optionalText(value.baustelle, 'payload.baustelle');
     optionalText(value.vorgangTitle, 'payload.vorgangTitle');
+    // 01B — abwesend gültig; vorhanden nur als nichtleerer kanonischer String.
+    if (value.customerId !== undefined) {
+      requiredText(value.customerId, 'payload.customerId');
+      const customerId = value.customerId as string;
+      if (customerId.trim() !== customerId || customerId.trim().length === 0) {
+        reject('payload.customerId:not_canonical');
+      }
+    }
     optionalText(value.archiveDocumentId, 'payload.archiveDocumentId');
     optionalText(value.cancelledAt, 'payload.cancelledAt');
     optionalText(value.cancelReason, 'payload.cancelReason');

@@ -240,6 +240,7 @@ function buildDraftMetadata(
   | 'paymentTermsText'
   | 'skontoText'
   | 'customerBilling'
+  | 'customerId'
   | 'companySnapshot'
   | 'brandingSnapshot'
   | 'legalNotices'
@@ -248,8 +249,15 @@ function buildDraftMetadata(
 > {
   const profile = createCompanyProfileSnapshot();
   const issueDate = new Date().toISOString().slice(0, 10);
+  /*
+   * MANUAL-INVOICE-CUSTOMER-IDENTITY-01B — die Kundenreferenz kommt vom
+   * Vorgang, wenn er eine hat. Ein Legacy-Vorgang ohne `customerId` erzeugt
+   * eine Rechnung ohne Referenz; nichts wird aus `customer` abgeleitet.
+   */
+  const customerId = vorgang.customerId?.trim() ? vorgang.customerId : undefined;
 
   return {
+    ...(customerId ? { customerId } : {}),
     issueDate,
     /*
      * INVOICE-SERVICE-PERIOD-01B — kein erfundener Leistungszeitraum.
@@ -312,16 +320,32 @@ function buildDraftMetadata(
  * Schlussrechnung schliesst ihn ab — beide sind ohne Auftrag fachlich nicht
  * definiert.
  */
+/**
+ * MANUAL-INVOICE-CUSTOMER-IDENTITY-01B — der Kundenbezug einer freien Rechnung.
+ *
+ * Entweder ein **bestehender** Kunde (dann trägt der Entwurf `customer.id` als
+ * stabile Referenz und den Snapshot aus `billingFromCustomer`) oder nur frei
+ * eingegebene Rechnungsadressdaten (dann gibt es keine Referenz — und sie wird
+ * auch nicht aus dem Namen erraten).
+ */
+export type ManualInvoiceCustomerInput =
+  | { customerId: string; billing: CustomerBilling }
+  | { billing: CustomerBilling };
+
 export function buildManualInvoiceDraft(
-  customerBilling: CustomerBilling,
+  customer: ManualInvoiceCustomerInput,
   setup: CompanySetup,
 ): InvoiceDraft {
   const profile = createCompanyProfileSnapshot();
   const issueDate = new Date().toISOString().slice(0, 10);
+  const customerBilling = customer.billing;
+  const customerId =
+    'customerId' in customer && customer.customerId.trim() ? customer.customerId : undefined;
 
   return {
     id: `draft-${Date.now()}`,
     vorgangId: null,
+    ...(customerId ? { customerId } : {}),
     customer: customerBilling.name,
     baustelle: '',
     type: 'rechnung',
@@ -1051,6 +1075,12 @@ export function buildInvoiceFinalizationCandidate(
     paymentTermsText: draft.paymentTermsText,
     skontoText: draft.skontoText,
     customerSnapshot: cloneCustomerBilling(draft.customerBilling),
+    /*
+     * MANUAL-INVOICE-CUSTOMER-IDENTITY-01B — set-once: Die Referenz wandert
+     * hier vom Entwurf auf die Rechnung und bekommt danach keinen Änderungsweg.
+     * Abwesend bleibt abwesend; kein Rückschluss aus dem Snapshot.
+     */
+    ...(draft.customerId?.trim() ? { customerId: draft.customerId } : {}),
     companySnapshot: cloneCompanySnapshot(draft.companySnapshot),
     // BRANDING-01F-1: durchreichen, nicht neu bilden — siehe cloneBrandingSnapshot.
     brandingSnapshot: cloneBrandingSnapshot(draft.brandingSnapshot),
@@ -1090,6 +1120,7 @@ export function buildInvoiceFinalizationContentFingerprint(
     closingText: draft.closingText ?? '',
     baustelle: draft.baustelle ?? '',
     vorgangTitle: draft.vorgangTitle ?? '',
+    // 01B — `customerId` bewusst nicht: Relation, nicht Beleginhalt.
     customerBilling: draft.customerBilling,
     subtotal: totals.subtotal,
     amount: totals.total,

@@ -23,9 +23,36 @@ import {
 export type InvoicePullMergeConflictReason =
   | 'id_content_conflict'
   | 'number_id_conflict'
+  /*
+   * MANUAL-INVOICE-CUSTOMER-IDENTITY-01B — gleicher Beleg, zwei Kunden-
+   * referenzen. Nicht still entschieden, nicht als Inhaltskonflikt getarnt.
+   */
+  | 'customer_relation_conflict'
   | 'orphan'
   | 'invalid_row'
   | 'intent_fingerprint_conflict';
+
+/** Ein Merge-Fehlschlag als Pull-Konflikt — dieselbe Übersetzung für beide Wege. */
+function describeMergeFailure(
+  reason: 'id_content_conflict' | 'number_id_conflict' | 'customer_relation_conflict',
+  invoiceNumber: string,
+  clientInvoiceId: string,
+): { reason: InvoicePullMergeConflictReason; message: string } {
+  switch (reason) {
+    case 'number_id_conflict':
+      return {
+        reason,
+        message: `Nummernkonflikt für Rechnung ${invoiceNumber} (ID ${clientInvoiceId}).`,
+      };
+    case 'customer_relation_conflict':
+      return {
+        reason,
+        message: `Kundenkonflikt für Rechnung ${clientInvoiceId}: zwei verschiedene Kundenreferenzen.`,
+      };
+    default:
+      return { reason, message: `Inhaltskonflikt für Rechnung ${clientInvoiceId}.` };
+  }
+}
 
 export interface InvoicePullMergeConflict {
   reason: InvoicePullMergeConflictReason;
@@ -163,13 +190,9 @@ export function mergeCloudInvoicesIntoVorgaenge(
       );
       if (!appliedManual.ok) {
         const conflict: InvoicePullMergeConflict = {
-          reason: appliedManual.reason,
+          ...describeMergeFailure(appliedManual.reason, cloud.invoice.number, cloud.clientInvoiceId),
           clientInvoiceId: cloud.clientInvoiceId,
           cloudInvoiceId: cloud.cloudInvoiceId,
-          message:
-            appliedManual.reason === 'number_id_conflict'
-              ? `Nummernkonflikt für Rechnung ${cloud.invoice.number} (ID ${cloud.clientInvoiceId}).`
-              : `Inhaltskonflikt für Rechnung ${cloud.clientInvoiceId}.`,
         };
         conflicts.push(conflict);
         recordInvoiceConflict(options?.report, conflict);
@@ -214,19 +237,18 @@ export function mergeCloudInvoicesIntoVorgaenge(
 
     const applied = applyFinalizedInvoiceToVorgang(local, cloud.invoice);
     if (!applied.ok || !applied.vorgang) {
-      const reason: InvoicePullMergeConflictReason =
-        !applied.ok && applied.reason === 'number_id_conflict'
-          ? 'number_id_conflict'
-          : 'id_content_conflict';
+      const failure = !applied.ok ? applied.reason : 'id_content_conflict';
       const conflict: InvoicePullMergeConflict = {
-        reason,
+        ...describeMergeFailure(
+          failure === 'vorgang_missing' || failure === 'local_persist_failed'
+            ? 'id_content_conflict'
+            : failure,
+          cloud.invoice.number,
+          cloud.clientInvoiceId,
+        ),
         clientInvoiceId: cloud.clientInvoiceId,
         cloudInvoiceId: cloud.cloudInvoiceId,
         vorgangId: cloud.vorgangId,
-        message:
-          reason === 'number_id_conflict'
-            ? `Nummernkonflikt für Rechnung ${cloud.invoice.number} (ID ${cloud.clientInvoiceId}).`
-            : `Inhaltskonflikt für Rechnung ${cloud.clientInvoiceId}.`,
       };
       conflicts.push(conflict);
       recordInvoiceConflict(options?.report, conflict);

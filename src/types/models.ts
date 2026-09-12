@@ -1146,6 +1146,19 @@ export interface VorgangInvoice {
   paymentTermsText?: string;
   skontoText?: string;
   customerSnapshot?: CustomerBilling;
+  /**
+   * MANUAL-INVOICE-CUSTOMER-IDENTITY-01B — die stabile Kundenreferenz
+   * (`Customer.id`), set-once beim Finalisieren.
+   *
+   * Zwei getrennte Ebenen: `customerSnapshot` ist die historische
+   * Belegwahrheit (was auf dem Papier steht) und liegt im
+   * `immutableInvoiceFingerprint`; `customerId` ist eine interne relationale
+   * Identität, liegt **nicht** im Fingerprint und wird separat auf
+   * Verträglichkeit geprüft (`resolveInvoiceCustomerRelation`). Sie wird nie
+   * aus Name, Firma oder Adresse abgeleitet. Abwesend = keine Relation;
+   * Altbestand fällt auf `vorgang.customerId` zurück.
+   */
+  customerId?: string;
   companySnapshot?: CompanyProfile;
   /**
    * BRANDING-01F-1 — das Branding **zum Zeitpunkt dieser Rechnung**.
@@ -1456,6 +1469,13 @@ export interface InvoiceDraft {
   paymentTermsText: string;
   skontoText: string;
   customerBilling: CustomerBilling;
+  /**
+   * MANUAL-INVOICE-CUSTOMER-IDENTITY-01B — `Customer.id`, wenn ein bestehender
+   * Kunde gewählt wurde (frei) oder der Vorgang ihn trägt (Auftrag). Nie aus
+   * `customer`/`customerBilling` abgeleitet. Wandert beim Finalisieren
+   * unverändert auf `VorgangInvoice.customerId`.
+   */
+  customerId?: string;
   companySnapshot: CompanyProfile;
   /** BRANDING-01F-1 — siehe `VorgangInvoice.brandingSnapshot`. */
   brandingSnapshot?: BrandingSnapshot;

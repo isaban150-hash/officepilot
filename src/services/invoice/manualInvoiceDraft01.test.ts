@@ -63,7 +63,7 @@ describe('MANUAL-INVOICE-01B1 — Entwurf ohne Auftrag', () => {
   });
 
   it('D1: der Entwurf entsteht ohne Vorgang', () => {
-    const draft = buildManualInvoiceDraft(CUSTOMER, testSetup);
+    const draft = buildManualInvoiceDraft({ billing: CUSTOMER }, testSetup);
 
     expect(draft.vorgangId, 'Ein Vorgang wurde erfunden').toBeNull();
     expect(draft.vorgangTitle, 'Ein Projekttitel wurde erfunden').toBeUndefined();
@@ -74,7 +74,7 @@ describe('MANUAL-INVOICE-01B1 — Entwurf ohne Auftrag', () => {
   });
 
   it('D2: Firmenstandards werden wie im Auftragsweg übernommen', () => {
-    const draft = buildManualInvoiceDraft(CUSTOMER, testSetup);
+    const draft = buildManualInvoiceDraft({ billing: CUSTOMER }, testSetup);
     const profile = getCompanyProfile();
 
     expect(draft.companySnapshot.companyName).toBe(profile.companyName);
@@ -113,7 +113,7 @@ describe('MANUAL-INVOICE-01B1 — Entwurf ohne Auftrag', () => {
 
   it('D4: die bestehende Mengenbearbeitung wirkt auch auf freie Positionen', () => {
     const draft = {
-      ...buildManualInvoiceDraft(CUSTOMER, testSetup),
+      ...buildManualInvoiceDraft({ billing: CUSTOMER }, testSetup),
       positions: [
         buildManualInvoicePosition({
           description: 'Armatur montiert',
@@ -131,7 +131,7 @@ describe('MANUAL-INVOICE-01B1 — Entwurf ohne Auftrag', () => {
   });
 
   it('D5: Confirm-first bleibt unverändert scharf', () => {
-    const empty = buildManualInvoiceDraft(CUSTOMER, testSetup);
+    const empty = buildManualInvoiceDraft({ billing: CUSTOMER }, testSetup);
     const withoutPositions = validateInvoiceDraftForApproval(empty, getCompanyProfile(), undefined);
 
     expect(
@@ -172,7 +172,7 @@ describe('MANUAL-INVOICE-01B1 — Entwurf ohne Auftrag', () => {
   });
 
   it('D6: vollständig ausgefüllt ist die freie Rechnung freigabereif', () => {
-    const base = buildManualInvoiceDraft(CUSTOMER, testSetup);
+    const base = buildManualInvoiceDraft({ billing: CUSTOMER }, testSetup);
     const draft = updateInvoiceDraftMetadata(
       {
         ...base,

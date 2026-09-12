@@ -17,11 +17,11 @@ import {
 } from './kundenOverviewService';
 import {
   getAllInvoiceOverview,
-  hasVorgangRoute,
   summarizeInvoiceOverview,
   type InvoiceOverviewItem,
 } from './invoiceOverviewService';
-import { buildInvoiceDetailPath } from './invoiceNavigation';
+import { buildInvoiceReachPath } from './invoiceNavigation';
+import { resolveInvoiceCustomerId } from './invoice/invoiceCustomerRelation';
 import { formatPaymentCurrency } from './invoicePaymentService';
 import { getAllTasksFromStore } from './taskStore';
 import { isTaskOpen } from './taskNormalize';
@@ -61,7 +61,8 @@ export interface KundenWorkspaceVorgangRef {
 export interface KundenWorkspaceInvoiceRef {
   id: string;
   number: string;
-  vorgangId: string;
+  /** 01B — `null` ist die Rechnung ohne Auftrag; sie hängt direkt am Kunden. */
+  vorgangId: string | null;
   vorgangTitle: string;
   status: string;
   openAmount: number;
@@ -236,7 +237,7 @@ function documentKindLabel(type: DocumentType | string | undefined): string {
   }
 }
 
-function toInvoiceRef(item: InvoiceOverviewItem & { vorgangId: string }): KundenWorkspaceInvoiceRef {
+function toInvoiceRef(item: InvoiceOverviewItem): KundenWorkspaceInvoiceRef {
   return {
     id: item.invoice.id,
     number: item.invoice.number,
@@ -245,7 +246,8 @@ function toInvoiceRef(item: InvoiceOverviewItem & { vorgangId: string }): Kunden
     status: item.paymentSummary.status,
     openAmount: item.paymentSummary.openAmount,
     openAmountLabel: formatPaymentCurrency(item.paymentSummary.openAmount),
-    route: buildInvoiceDetailPath(item.vorgangId, item.invoice.id),
+    // 01B2c — ohne Auftrag führt der Weg in die Übersicht, nie nach /vorgaenge/null.
+    route: buildInvoiceReachPath(item.vorgangId, item.invoice.id),
   };
 }
 
@@ -324,14 +326,22 @@ export function getKundenWorkspace(
   const vorgaenge = collectVorgaengeForTarget(kind, key);
   const vorgangIds = new Set(vorgaenge.map((v) => v.id));
   /*
-   * Invoices strictly via vorgangId — never via invoice.customer.
-   * MANUAL-INVOICE-01B2c: Eine Rechnung ohne Auftrag fällt hier deshalb
-   * bewusst heraus — sie trägt keine Kundenkennung, und eine Zuordnung über
-   * den Namen ist genau das, was diese Zeile ausschliesst.
+   * MANUAL-INVOICE-CUSTOMER-IDENTITY-01B — eine Leseregel
+   * (`resolveInvoiceCustomerId`): Für einen id-basierten Kunden zählt
+   * `invoice.customerId`, sonst `vorgang.customerId` des zugehörigen Vorgangs.
+   * Für einen Legacy-Kunden (Namensschlüssel) weiterhin nur über die
+   * Vorgänge — nie über `invoice.customerSnapshot.name`. Jede Rechnung
+   * genau einmal: Die id-Regel und die Vorgangsmenge zeigen auf denselben
+   * Kunden, geprüft wird einmal pro Rechnung.
    */
-  const invoices = getAllInvoiceOverview(today)
-    .filter(hasVorgangRoute)
-    .filter((item) => vorgangIds.has(item.vorgangId));
+  const vorgaengeById = new Map(getAllVorgaenge().map((v) => [v.id, v]));
+  const invoices = getAllInvoiceOverview(today).filter((item) => {
+    if (kind === 'legacy') {
+      return item.vorgangId !== null && vorgangIds.has(item.vorgangId);
+    }
+    const vorgang = item.vorgangId === null ? null : vorgaengeById.get(item.vorgangId) ?? null;
+    return resolveInvoiceCustomerId(item.invoice, vorgang) === key;
+  });
 
   if (kind !== 'customer' && vorgaenge.length === 0 && invoices.length === 0) {
     // Document-only legacy workspace stays reachable; orphan without data does not.

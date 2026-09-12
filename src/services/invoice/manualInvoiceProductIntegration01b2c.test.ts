@@ -387,7 +387,7 @@ describe('MANUAL-INVOICE-01B2c — Rechnung ohne Auftrag im Produkt', () => {
       city: 'Essen',
     });
     expect(profile.success).toBe(true);
-    const draft = buildManualInvoiceDraft(CUSTOMER, SETUP);
+    const draft = buildManualInvoiceDraft({ billing: CUSTOMER }, SETUP);
     draft.positions = [
       buildManualInvoicePosition({ description: 'Anfahrt', quantity: 1, unit: 'Pauschal', unitPrice: 45 }),
     ];
@@ -408,7 +408,7 @@ describe('MANUAL-INVOICE-01B2c — Rechnung ohne Auftrag im Produkt', () => {
 
   it('F2: Abschlag und Schluss ohne Auftrag bleiben lokal unzulässig', () => {
     for (const type of ['abschlag', 'schluss'] as const) {
-      const draft = { ...buildManualInvoiceDraft(CUSTOMER, SETUP), type };
+      const draft = { ...buildManualInvoiceDraft({ billing: CUSTOMER }, SETUP), type };
       const result = finalizeInvoiceDraft(null, draft, SETUP);
       expect(result.ok, `${type} ohne Vorgang wurde finalisiert`).toBe(false);
       if (!result.ok) expect(result.reason).toBe('vorgang_missing');

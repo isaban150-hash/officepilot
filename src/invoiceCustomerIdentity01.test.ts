@@ -5,7 +5,14 @@
  * Zwei getrennte Wahrheiten:
  *  - der Vorgang hält customerId, customer und customerBilling
  *  - die finalisierte Rechnung friert den vollständigen CustomerBilling-Wert
- *    in customerSnapshot ein (die Rechnung speichert KEINE customerId)
+ *    in customerSnapshot ein
+ *
+ * MANUAL-INVOICE-CUSTOMER-IDENTITY-01B — revidiert: Die Rechnung trägt seither
+ * **zusätzlich** eine set-once-Kundenreferenz `customerId`, übernommen aus dem
+ * Vorgang (oder aus der Kundenauswahl einer freien Rechnung). Sie ist eine
+ * interne relationale Identität, liegt **nicht** im Fingerprint und wird nie
+ * aus dem Snapshot oder einem Namen abgeleitet. Der Snapshot bleibt die
+ * historische Belegwahrheit und ändert sich bei Stammdatenänderungen nicht.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as supabaseLib from './lib/supabase';
@@ -369,13 +376,21 @@ describe('CORE-COMPLETE-GOLDEN-PATH-01B', () => {
     expect(invoice.customerSnapshot).toEqual(approvedBilling);
     expect(invoice.customerSnapshot?.name).toBe(NORDWEST.name);
     expect(invoice.customerSnapshot?.city).toBe('Essen');
-    // Die Rechnung trägt keine Customer-ID — die Verbindung läuft über den Vorgang.
-    expect('customerId' in invoice).toBe(false);
+    /*
+     * 01B — revidierte Regel: Die Rechnung trägt die Kundenreferenz des
+     * Vorgangs als eigene, set-once Relation. Snapshot und Referenz sind
+     * getrennte Ebenen — die Referenz ist keine Belegangabe und steht deshalb
+     * weder im Snapshot noch im Druckmodell.
+     */
+    expect(invoice.customerId).toBe(customerId);
+    expect('customerId' in (invoice.customerSnapshot ?? {})).toBe(false);
     expect(afterFinalize.customerId).toBe(customerId);
     expect(getCustomerStoreSnapshot()).toHaveLength(1);
 
     const printModel = buildInvoicePrintModelFromInvoice(invoice);
     expect(printModel.customer).toEqual(approvedBilling);
+    // 01B — die Referenz erreicht das Druckmodell nirgends.
+    expect(JSON.stringify(printModel)).not.toContain(customerId);
 
     // --- Snapshot-Unveränderlichkeit nach produktiver Customer-Änderung.
     const billingBeforeChange: CustomerBilling = { ...afterFinalize.customerBilling! };
