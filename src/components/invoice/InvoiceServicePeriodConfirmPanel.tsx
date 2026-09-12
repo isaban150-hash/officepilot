@@ -29,7 +29,8 @@ import type { VorgangInvoice } from '../../types/models';
 import type { TranslationKey } from '../../i18n';
 
 interface Props {
-  vorgangId: string;
+  /** MANUAL-INVOICE-UI-01B2 — `null` ist die freie Rechnung ohne Auftrag. */
+  vorgangId: string | null;
   invoice: VorgangInvoice;
   /** true = in der Cloud bestätigt, false = nachweislich nicht, null = unbekannt. */
   cloudConfirmed: boolean | null;

@@ -75,7 +75,8 @@ function parseSentInput(
  * Never called by PDF generation.
  */
 export function markInvoiceAsSent(
-  vorgangId: string,
+  /** MANUAL-INVOICE-UI-01B2 — `null` ist die freie Rechnung ohne Auftrag. */
+  vorgangId: string | null,
   invoiceId: string,
   input: InvoiceSentInput,
 ): InvoiceSentMutationResult {
@@ -115,7 +116,7 @@ export function markInvoiceAsSent(
  * and does not change status away from versendet.
  */
 export function updateInvoiceSentDetails(
-  vorgangId: string,
+  vorgangId: string | null,
   invoiceId: string,
   input: InvoiceSentInput,
 ): InvoiceSentMutationResult {
@@ -180,7 +181,7 @@ export function isInvoiceSentCloudSyncSilent(result: InvoiceSentCloudSyncResult)
  * anzuschließen wäre mehr Schein als Sicherheit.
  */
 export async function syncInvoiceSentToCloud(
-  vorgangId: string,
+  vorgangId: string | null,
   invoiceId: string,
 ): Promise<InvoiceSentCloudSyncResult> {
   /*
@@ -280,7 +281,12 @@ export function deriveInvoiceSentCloudState(
  * ab. Verändert die lokale Rechnung nicht.
  */
 export async function readInvoiceSentStateFromCloud(
-  vorgangId: string,
+  /**
+   * MANUAL-INVOICE-UI-01B2 — `null` ist die freie Rechnung ohne Auftrag. Der
+   * Cloud-Vertrag (`get_workspace_invoice_sent`) adressiert ohnehin nur über
+   * `client_invoice_id`; der Vorgang dient allein der lokalen Auflösung.
+   */
+  vorgangId: string | null,
   invoiceId: string,
 ): Promise<InvoiceSentCloudState> {
   try {

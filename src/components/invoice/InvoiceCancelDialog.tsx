@@ -28,12 +28,26 @@ import type { TranslationKey } from '../../i18n';
  */
 
 interface Props {
-  vorgangId: string;
+  /** NORMAL-INVOICE-CANCELLATION-01B — `null` ist die freie Rechnung ohne Auftrag. */
+  vorgangId: string | null;
   invoice: VorgangInvoice;
   open: boolean;
   onClose: () => void;
-  onCancelled: (invoice: VorgangInvoice) => void;
+  /**
+   * Nach bestätigtem Storno: das nachgeführte Original. `alreadyCancelled`
+   * meldet ein Replay — der ursprüngliche Grund bleibt massgeblich.
+   */
+  onCancelled: (invoice: VorgangInvoice, outcome?: { alreadyCancelled: boolean }) => void;
   translate: (key: TranslationKey) => string;
+}
+
+/**
+ * Welche Art von Storno bevorsteht — dieselbe Ableitung wie serverseitig:
+ * versendet ⇒ Korrekturbeleg, sonst internes Storno. Die Entscheidung trifft
+ * der Server; hier wird sie nur angekündigt.
+ */
+export function expectedCancellationKind(invoice: VorgangInvoice): 'internal' | 'correction' {
+  return invoice.status === 'versendet' ? 'correction' : 'internal';
 }
 
 /** Serverantwort → Satz, den ein Mensch versteht. Kein technischer Code. */
@@ -47,6 +61,7 @@ const REASON_MESSAGE_KEYS: Record<CancelInvoiceFailureReason, TranslationKey> = 
   offline: 'invoice.cancel.error.offline',
   workspace_missing: 'invoice.cancel.error.workspaceMissing',
   local_persist_failed: 'invoice.cancel.error.localPersistFailed',
+  correction_document_missing: 'invoice.cancel.error.correctionDocumentMissing',
   unknown: 'invoice.cancel.error.unknown',
 };
 
@@ -142,18 +157,20 @@ export function InvoiceCancelDialog({
 
     /*
      * Der lokale Stand ist zu diesem Zeitpunkt bereits aus dem autoritativen
-     * Serverergebnis nachgeführt (`applyInvoiceCancellationFromCloud`). Die
-     * Ansicht liest ihn frisch, statt einen optimistischen Zustand zu bauen.
+     * Serverergebnis nachgeführt (`applyInvoiceCancellationFromCloud` und, bei
+     * Korrektur, die Archivprojektion). Die Ansicht liest ihn frisch, statt
+     * einen optimistischen Zustand zu bauen.
      */
     const { getVorgangInvoice } = await import('../../services/vorgangService');
-    const updated = getVorgangInvoice(vorgangId, invoice.id);
+    const updated = getVorgangInvoice(vorgangId, invoice.id) ?? result.invoice;
     setBusy(false);
-    if (updated) onCancelled(updated);
+    onCancelled(updated, { alreadyCancelled: result.action === 'already_cancelled' });
     onClose();
   };
 
   const documentTitle = getInvoiceDocumentTitle(invoice.type, invoice.abschlagNumber);
   const invoiceDate = invoice.issueDate ?? invoice.date;
+  const expectedKind = expectedCancellationKind(invoice);
 
   return (
     <div className="vorgang-dialog-backdrop" role="presentation" onClick={onClose}>
@@ -198,6 +215,21 @@ export function InvoiceCancelDialog({
 
         <p className="invoice-cancel-dialog__notice" data-testid="invoice-cancel-notice">
           {translate('invoice.cancel.notice')}
+        </p>
+        {/*
+          * 01B — D2: Was passieren wird, steht vor der Bestätigung. Vor Versand
+          * ein internes Storno, nach Versand ein Korrekturbeleg. Der Server
+          * entscheidet dasselbe aus `invoice_status`; hier wird es angekündigt.
+          */}
+        <p
+          className="invoice-cancel-dialog__notice"
+          data-testid={`invoice-cancel-kind-${expectedKind}`}
+        >
+          {translate(
+            expectedKind === 'correction'
+              ? 'invoice.cancel.notice.correction'
+              : 'invoice.cancel.notice.internal',
+          )}
         </p>
 
         {hasLocalPayments ? (

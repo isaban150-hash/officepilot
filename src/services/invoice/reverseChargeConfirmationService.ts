@@ -44,7 +44,13 @@ export const REVERSE_CHARGE_CONFIRMATION_VERSION = 1 as const;
 export interface ReverseChargeConfirmationContext {
   sourceScopeKey: string;
   workspaceId: string;
-  vorgangId: string;
+  /**
+   * MANUAL-INVOICE-UI-01B1A — `null` ist die Rechnung ohne Auftrag. Die
+   * §13b-Bestätigung ist eine Aussage über **diesen Entwurf** (Scope, Typ,
+   * `draftId`, `draftSha256`), nicht über einen Auftrag; sie gilt ohne
+   * Abschwächung auch ohne Vorgang.
+   */
+  vorgangId: string | null;
   invoiceType: InvoiceDocumentType;
   draftId: string;
   draftSha256: string;
@@ -76,6 +82,21 @@ export function buildReverseChargeConfirmationKey(
     'sourceScopeKey' | 'vorgangId' | 'invoiceType' | 'draftId'
   >,
 ): string {
+  /*
+   * 01B1A — der Schlüssel ohne Auftrag ist ein JSON-Array mit typisiertem
+   * Tupel an der Vorgangsstelle. Er beginnt mit `[`, der Vorgangsschlüssel
+   * mit dem Kind-Präfix — die beiden Formen können sich nicht überschneiden,
+   * und Bestandsschlüssel bleiben byteidentisch.
+   */
+  if (context.vorgangId === null) {
+    return JSON.stringify([
+      REVERSE_CHARGE_CONFIRMATION_KIND,
+      context.sourceScopeKey,
+      ['manual-invoice', 1],
+      context.invoiceType,
+      context.draftId,
+    ]);
+  }
   return [
     REVERSE_CHARGE_CONFIRMATION_KIND,
     context.sourceScopeKey,
@@ -95,7 +116,7 @@ export function isValidReverseChargeConfirmation(
   if (candidate.version !== REVERSE_CHARGE_CONFIRMATION_VERSION) return false;
   if (!isNonEmptyString(candidate.sourceScopeKey)) return false;
   if (!isNonEmptyString(candidate.workspaceId)) return false;
-  if (!isNonEmptyString(candidate.vorgangId)) return false;
+  if (!isValidVorgangRef(candidate.vorgangId, candidate.invoiceType)) return false;
   if (!isNonEmptyString(candidate.invoiceType)) return false;
   if (!isNonEmptyString(candidate.draftId)) return false;
   if (!isNonEmptyString(candidate.draftSha256) || !SHA256_HEX.test(candidate.draftSha256)) {
@@ -105,11 +126,17 @@ export function isValidReverseChargeConfirmation(
   return true;
 }
 
+/** 01B1A — `null` nur für die normale Rechnung; `''`/`undefined` bleiben ungültig. */
+function isValidVorgangRef(vorgangId: unknown, invoiceType: unknown): boolean {
+  if (vorgangId === null) return invoiceType === 'rechnung';
+  return isNonEmptyString(vorgangId);
+}
+
 function isCompleteContext(context: ReverseChargeConfirmationContext): boolean {
   return (
     isNonEmptyString(context.sourceScopeKey) &&
     isNonEmptyString(context.workspaceId) &&
-    isNonEmptyString(context.vorgangId) &&
+    isValidVorgangRef(context.vorgangId, context.invoiceType) &&
     isNonEmptyString(context.invoiceType) &&
     isNonEmptyString(context.draftId) &&
     isNonEmptyString(context.draftSha256) &&

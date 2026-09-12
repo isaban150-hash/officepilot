@@ -12,6 +12,7 @@ import {
   type InvoiceOverviewItem,
 } from '../services/invoiceOverviewService';
 import { formatPaymentCurrency } from '../services/invoicePaymentService';
+import { MANUAL_INVOICE_ROUTE } from '../services/invoice/manualInvoiceFlow';
 import type { TranslationKey } from '../i18n';
 
 const FILTER_OPTIONS: InvoiceOverviewFilter[] = [
@@ -61,6 +62,12 @@ export function OffeneRechnungenPage() {
         subtitle={translate('overview.subtitle')}
         backLabel={translate('common.back')}
         onBack={() => navigate('/vorgaenge')}
+        /* MANUAL-INVOICE-UI-01B1B — der eine Einstieg in die Rechnung ohne Auftrag. */
+        primaryAction={
+          <Button type="button" onClick={() => navigate(MANUAL_INVOICE_ROUTE)} data-testid="overview-new-invoice">
+            {translate('manualInvoice.entry')}
+          </Button>
+        }
       />
 
       {totals.overdueInvoiceCount > 0 && (

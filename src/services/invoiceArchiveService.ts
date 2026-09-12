@@ -46,6 +46,11 @@ function buildRecognizedText(
   ].join('\n');
 }
 
+/** Die Papierablage der Ausgangsrechnungen — auch für den Korrekturbeleg (01B). */
+export function buildOutgoingInvoicePaperFolder() {
+  return buildPaperFolder();
+}
+
 function buildPaperFolder() {
   const folder = PAPER_FOLDERS.find((item) => item.id === 'folder-3') ?? PAPER_FOLDERS[0];
   return {

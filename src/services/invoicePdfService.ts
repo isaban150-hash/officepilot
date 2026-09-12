@@ -161,6 +161,63 @@ export async function generateApprovedInvoicePdf(
   }
 }
 
+/**
+ * NORMAL-INVOICE-CANCELLATION-01B — das PDF des Korrekturbelegs.
+ *
+ * Dieselbe Engine, dasselbe Modell-Rendering; das Modell ist die kanonische
+ * Korrekturdarstellung des Originals (`buildInvoiceCorrectionModel`). Gleiche
+ * Validierung wie für das Original: Was das Original nicht drucken darf, darf
+ * auch seine Korrektur nicht.
+ */
+export async function generateInvoiceCorrectionPdf(
+  invoice: VorgangInvoice,
+): Promise<GenerateApprovedInvoicePdfResult> {
+  const statusBefore = invoice.status;
+  if (!isFinalizedInvoice(invoice)) return { ok: false, reason: 'not_finalized' };
+  if (invoice.cancellationKind !== 'correction' || !invoice.cancelledAt || !invoice.cancelReason) {
+    return { ok: false, reason: 'validation_failed', message: 'not_a_correction' };
+  }
+  const validation = validateFinalizedInvoiceForPdf(invoice);
+  if (validation.blockingErrors.length > 0) {
+    return { ok: false, reason: 'validation_failed', validation };
+  }
+
+  let model: InvoicePrintModel;
+  try {
+    const { buildInvoiceCorrectionModel } = await import('./invoice/invoiceCorrectionModel');
+    model = buildInvoiceCorrectionModel(invoice, {
+      cancelledAt: invoice.cancelledAt,
+      cancelReason: invoice.cancelReason,
+    });
+  } catch (error) {
+    return {
+      ok: false,
+      reason: 'encode_failed',
+      message: error instanceof Error ? error.message : 'print_model_failed',
+    };
+  }
+
+  try {
+    const bytes = await renderInvoicePrintModelToPdf(model);
+    if (!(bytes instanceof Uint8Array) || bytes.byteLength < 5) {
+      return { ok: false, reason: 'encode_failed', message: 'empty_pdf' };
+    }
+    return {
+      ok: true,
+      bytes,
+      filename: buildInvoicePdfFilename(`Rechnungskorrektur-${invoice.number}`),
+      mimeType: 'application/pdf',
+      statusUnchanged: statusBefore,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      reason: 'encode_failed',
+      message: error instanceof Error ? error.message : 'encode_failed',
+    };
+  }
+}
+
 export interface InvoicePdfDownloadHandle {
   objectUrl: string;
   revoke: () => void;
@@ -465,8 +522,19 @@ async function renderInvoicePrintModelToPdf(model: InvoicePrintModel): Promise<U
 
   cursor.y -= 8;
   drawLine(cursor, model.documentTitle, { size: 16, bold: true });
-  drawLine(cursor, `Rechnungsnummer: ${model.invoiceNumber}`, { size: 11, bold: true });
-  drawLine(cursor, `Rechnungsdatum: ${formatInvoiceDate(model.issueDate)}`, { size: 10 });
+  if (model.correction) {
+    // NORMAL-INVOICE-CANCELLATION-01B — Bezug statt eigener Rechnungsnummer.
+    drawLine(
+      cursor,
+      `Zu Rechnungsnummer: ${model.correction.originalInvoiceNumber} vom ${formatInvoiceDate(model.correction.originalIssueDate)}`,
+      { size: 11, bold: true },
+    );
+    drawLine(cursor, `Korrekturdatum: ${formatInvoiceDate(model.issueDate)}`, { size: 10 });
+    drawWrapped(cursor, `Grund: ${toPdfSafeText(model.correction.cancelReason)}`, 9);
+  } else {
+    drawLine(cursor, `Rechnungsnummer: ${model.invoiceNumber}`, { size: 11, bold: true });
+    drawLine(cursor, `Rechnungsdatum: ${formatInvoiceDate(model.issueDate)}`, { size: 10 });
+  }
 
   cursor.y -= 6;
   drawLine(cursor, 'Rechnungsempfänger', { size: 11, bold: true });

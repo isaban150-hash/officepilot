@@ -16,6 +16,7 @@ import {
 } from './documentFinanceReferenceService';
 import { getInboxItemById, patchInboxItem } from './inboxService';
 import { buildInvoiceCreatePath } from './invoiceNavigation';
+import { MANUAL_INVOICE_ROUTE } from './invoice/manualInvoiceFlow';
 import { createTaskForItem } from './inboxTaskService';
 import { isClassificationKindWithTasks } from './taskEngineService';
 import { getTodayIso } from './taskNormalize';
@@ -489,7 +490,12 @@ export function resolveHeuteQuickActionRoute(key: TranslationKey): string | null
       if (activeVorgang) {
         return buildInvoiceCreatePath(activeVorgang.id, 'abschlag');
       }
-      return '/rechnungen/offen';
+      /*
+       * MANUAL-INVOICE-UI-01B1B — „Rechnung schreiben" endet nicht mehr in der
+       * Übersicht, sondern beim Schreiben: die Rechnung ohne Auftrag. Laufende
+       * Rechnungen und aktive Vorgänge behalten ihren Vorrang.
+       */
+      return MANUAL_INVOICE_ROUTE;
     }
     case 'heute.action.openOrder': {
       const pending = scanPendingItems().items;

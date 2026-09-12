@@ -6550,3 +6550,240 @@ body {
   }
 }
 
+
+/* ------------------------------------------------------------------------ */
+/* MANUAL-INVOICE-UI-01B1B — Rechnung ohne Auftrag: Stepper, Positionen,    */
+/* Aktionen. Zeilen statt Kartenwand, eine Primary Action, Mobile zuerst.   */
+/* ------------------------------------------------------------------------ */
+
+.manual-invoice-stepper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.manual-invoice-stepper__progress {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+}
+
+.manual-invoice-stepper__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+.manual-invoice-stepper__button {
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.4rem 0.25rem;
+  border: 0;
+  border-top: 3px solid var(--color-border-subtle);
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: 0.74rem;
+  line-height: 1.2;
+  text-align: center;
+  cursor: pointer;
+}
+
+.manual-invoice-stepper__button:disabled {
+  cursor: default;
+}
+
+.manual-invoice-stepper__item--done .manual-invoice-stepper__button {
+  border-top-color: var(--color-primary);
+  color: var(--color-text);
+}
+
+.manual-invoice-stepper__item--current .manual-invoice-stepper__button {
+  border-top-color: var(--color-primary);
+  color: var(--color-primary);
+  font-weight: 700;
+}
+
+.manual-invoice-stepper__index {
+  font-weight: 700;
+}
+
+.manual-invoice-stepper__label {
+  overflow-wrap: anywhere;
+}
+
+.manual-invoice__step {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.manual-invoice__chosen-name {
+  margin: 0 0 0.25rem;
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+
+.manual-invoice__actions {
+  position: sticky;
+  bottom: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 0.5rem;
+  padding: 0.75rem 0 0.25rem;
+  background: linear-gradient(180deg, transparent 0%, var(--color-bg) 30%);
+  z-index: 2;
+}
+
+.manual-invoice__actions .btn {
+  width: 100%;
+  min-height: 48px;
+}
+
+.manual-positions {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.manual-positions__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.manual-positions__row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.35rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.manual-positions__row--editing {
+  background: var(--color-bg-soft);
+}
+
+.manual-positions__main {
+  display: flex;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.manual-positions__index {
+  flex: none;
+  color: var(--color-text-muted);
+}
+
+.manual-positions__description {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.manual-positions__meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+}
+
+.manual-positions__meta strong {
+  color: var(--color-text);
+}
+
+.manual-positions__actions {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.manual-positions__form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg, 12px);
+  background: var(--color-bg-soft);
+}
+
+.manual-positions__form-title {
+  margin: 0;
+  font-weight: 700;
+}
+
+.manual-positions__textarea {
+  resize: vertical;
+  min-height: 2.75rem;
+}
+
+.manual-positions__grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+}
+
+.manual-positions__issues {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.manual-positions__form-actions {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 0.5rem;
+}
+
+.manual-positions__form-actions .btn {
+  width: 100%;
+}
+
+@media (min-width: 768px) {
+  .manual-invoice__actions {
+    position: static;
+    flex-direction: row;
+    justify-content: flex-end;
+    background: none;
+  }
+
+  .manual-invoice__actions .btn {
+    width: auto;
+    min-width: 12rem;
+  }
+
+  .manual-positions__row {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .manual-positions__grid {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+
+  .manual-positions__form-actions {
+    flex-direction: row;
+    justify-content: flex-end;
+  }
+
+  .manual-positions__form-actions .btn {
+    width: auto;
+  }
+
+  .manual-invoice-stepper__button {
+    font-size: 0.85rem;
+  }
+}

@@ -54,11 +54,42 @@ export const INVOICE_DRAFT_STORE_NAME = 'invoice_drafts';
 export function buildInvoiceDraftRecordKey(
   identity: Pick<InvoiceDraftIdentity, 'sourceScopeKey' | 'vorgangId' | 'invoiceType'>,
 ): string {
+  /*
+   * MANUAL-INVOICE-UI-01B1A — die Rechnung ohne Auftrag bekommt einen eigenen
+   * Schlüssel; der Vorgangsschlüssel darunter bleibt byteidentisch.
+   */
+  if (identity.vorgangId === null) {
+    return buildManualInvoiceDraftRecordKey(identity);
+  }
   return JSON.stringify([
     INVOICE_DRAFT_RECORD_KIND,
     INVOICE_DRAFT_FORMAT_VERSION,
     identity.sourceScopeKey,
     identity.vorgangId,
+    identity.invoiceType,
+  ]);
+}
+
+/**
+ * MANUAL-INVOICE-UI-01B1A — der Schlüssel des Entwurfs ohne Auftrag.
+ *
+ * An der Stelle der Vorgangskennung steht ein **typisiertes Tupel**
+ * `['manual-invoice', 1]`, kein Text. Ein JSON-Array kann nie mit einem
+ * JSON-String gleich sein — damit ist eine Kollision mit einer echten
+ * Vorgangskennung (auch einer, die zufällig „manual" oder „null" hiesse)
+ * strukturell ausgeschlossen, und Bestandsschlüssel werden nicht angefasst.
+ * Genau ein solcher Schlüssel je Scope und Rechnungstyp (V1: nur `rechnung`).
+ */
+export const MANUAL_INVOICE_DRAFT_KEY_TAG = ['manual-invoice', 1] as const;
+
+export function buildManualInvoiceDraftRecordKey(
+  identity: Pick<InvoiceDraftIdentity, 'sourceScopeKey' | 'invoiceType'>,
+): string {
+  return JSON.stringify([
+    INVOICE_DRAFT_RECORD_KIND,
+    INVOICE_DRAFT_FORMAT_VERSION,
+    identity.sourceScopeKey,
+    MANUAL_INVOICE_DRAFT_KEY_TAG,
     identity.invoiceType,
   ]);
 }
@@ -241,10 +272,20 @@ function isConsistentScope(sourceScopeKey: unknown, workspaceId: unknown): boole
   return sourceScopeKey === buildDocumentBlobScopeKey({ type: 'workspace', workspaceId });
 }
 
+/**
+ * MANUAL-INVOICE-UI-01B1A — `null` ist die Rechnung ohne Auftrag und nur für
+ * `rechnung` zulässig; `''`, `undefined` oder ein anderer Typ bleiben ungültig.
+ * Abschlag und Schluss ohne Vorgang sind kein Entwurf, den es geben darf.
+ */
+function isValidVorgangRef(vorgangId: unknown, invoiceType: unknown): boolean {
+  if (vorgangId === null) return invoiceType === 'rechnung';
+  return isNonEmptyString(vorgangId);
+}
+
 function isCompleteLocator(locator: InvoiceDraftLocator): boolean {
   if (!locator || typeof locator !== 'object') return false;
-  if (!isNonEmptyString(locator.vorgangId)) return false;
   if (!isSupportedInvoiceType(locator.invoiceType)) return false;
+  if (!isValidVorgangRef(locator.vorgangId, locator.invoiceType)) return false;
   return isConsistentScope(locator.sourceScopeKey, locator.workspaceId);
 }
 
@@ -364,7 +405,7 @@ function isSupportedRecord(record: unknown): record is InvoiceDraftRecord {
   if (value.formatVersion !== INVOICE_DRAFT_FORMAT_VERSION) return false;
   if (!isNonEmptyString(value.recordKey)) return false;
   if (!isNonEmptyString(value.workspaceId)) return false;
-  if (!isNonEmptyString(value.vorgangId)) return false;
+  if (!isValidVorgangRef(value.vorgangId, value.invoiceType)) return false;
   if (!isNonEmptyString(value.draftId)) return false;
   if (!isNonEmptyString(value.createdAt)) return false;
   if (!isNonEmptyString(value.updatedAt)) return false;
@@ -510,7 +551,8 @@ function isPlainJsonObject(value: unknown): value is Record<string, unknown> {
 
 interface PreparationBinding {
   workspaceId: string;
-  vorgangId: string;
+  /** 01B1A — `null` ist die Rechnung ohne Auftrag; die Bindung bleibt exakt. */
+  vorgangId: string | null;
   invoiceType: string;
   clientInvoiceId: string;
   contentFingerprint: string;
@@ -560,11 +602,12 @@ function checkPreparation(parsed: unknown, binding: PreparationBinding): Prepara
   if (!isPlainJsonObject(preparation.request)) return invalid('request');
   const request = preparation.request as unknown as InvoiceDraftFinalizationRequest;
   if (!isNonEmptyString(request.workspaceId)) return invalid('request.workspaceId');
-  if (!isNonEmptyString(request.vorgangId)) return invalid('request.vorgangId');
   if (!isNonEmptyString(request.clientInvoiceId)) return invalid('request.clientInvoiceId');
   if (!isPlainJsonObject(request.invoice)) return invalid('request.invoice');
   if (!isNonEmptyString(request.invoice.id)) return invalid('request.invoice.id');
   if (!isSupportedInvoiceType(request.invoice.type)) return invalid('request.invoice.type');
+  // 01B1A — `null` nur für die normale Rechnung; sonst wie bisher ein Text.
+  if (!isValidVorgangRef(request.vorgangId, request.invoice.type)) return invalid('request.vorgangId');
 
   const mismatch = (detail: string): PreparationIssue => ({
     reason: 'identity_mismatch',

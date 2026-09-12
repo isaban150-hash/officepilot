@@ -324,6 +324,8 @@ export type ClassifiedDocumentKind =
   // Buchhaltung
   | 'eingangsrechnung'
   | 'rechnung'
+  /** NORMAL-INVOICE-CANCELLATION-01B — der von OfficePilot erzeugte Korrekturbeleg. */
+  | 'rechnungskorrektur'
   | 'ausgangsrechnung'
   | 'gutschrift'
   | 'quittung'
@@ -1099,6 +1101,9 @@ export type InvoiceSentVia =
 /** How an Abschlag draft/invoice computes its net total. Missing ⇒ quantity_based. */
 export type InvoiceCalculationMode = 'quantity_based' | 'fixed_amount';
 
+/** NORMAL-INVOICE-CANCELLATION-01B — siehe `VorgangInvoice.cancellationKind`. */
+export type InvoiceCancellationKind = 'internal' | 'correction';
+
 export interface VorgangInvoice {
   id: string;
   number: string;
@@ -1183,6 +1188,18 @@ export interface VorgangInvoice {
   paymentStatus?: InvoicePaymentStatus;
   cancelledAt?: string;
   cancelReason?: string;
+  /**
+   * NORMAL-INVOICE-CANCELLATION-01B — Art des Stornos, serverseitig bestimmt:
+   * `internal` (vor Versand, nur Markierung) oder `correction` (nach Versand,
+   * mit eigenem Korrekturbeleg). Fehlt bei Stornos aus der Zeit vor 01B.
+   */
+  cancellationKind?: InvoiceCancellationKind;
+  /** Cloud-Kennung des Korrekturbelegs (`workspace_documents.client_document_id`). */
+  correctionDocumentId?: string;
+  /** D4 — Vorbereitung, in diesem Block nie vergeben. */
+  correctionNumber?: string;
+  /** Lokale Archivkennung des Korrekturbelegs — Projektion, nie Wahrheit. */
+  correctionArchiveDocumentId?: string;
   /** ISO date (YYYY-MM-DD) when marked as sent — optional for legacy invoices. */
   sentAt?: string;
   /** How the invoice was handed to the customer — optional for legacy. */
@@ -1544,6 +1561,23 @@ export interface InvoicePrintModel {
   paymentTermsText: string;
   skontoText: string;
   footerNotes: string;
+  /**
+   * NORMAL-INVOICE-CANCELLATION-01B — nur auf einem Korrekturbeleg gesetzt.
+   * Ein Original-Rechnungsmodell trägt das Feld nicht; die bestehende
+   * Darstellung bleibt damit byteidentisch.
+   */
+  correction?: InvoicePrintCorrectionContext;
+}
+
+/** Bezug des Korrekturbelegs auf die Originalrechnung — alles historisch, nichts berechnet. */
+export interface InvoicePrintCorrectionContext {
+  originalInvoiceNumber: string;
+  originalIssueDate: string;
+  originalInvoiceId: string;
+  /** Datum des Korrekturbelegs (= Stornodatum, UTC-Tag). */
+  correctionIssueDate: string;
+  cancelledAt: string;
+  cancelReason: string;
 }
 
 export interface InvoiceDraftMetadataChanges {

@@ -22,7 +22,7 @@ import type { InvoiceDraftIdentity } from '../../types/invoiceDraftDurability';
 import { isSupabaseConfigured, getSupabaseClient } from '../../lib/supabase';
 import { buildPersistedStateSnapshot } from '../persistenceService';
 import { getVorgangStoreSnapshot } from '../vorgangService';
-import { listInvoicesForVorgang } from './invoiceStore';
+import { getInvoiceStoreSnapshot, listInvoicesForVorgang } from './invoiceStore';
 import { resolveCloudWorkspaceId } from '../workspace/workspaceSyncPayloadService';
 import { buildStorageKey, getActiveStorageScope } from '../storage/storageScopeService';
 import { buildDocumentBlobScopeKey } from '../storage/documentBlobScopeService';
@@ -47,6 +47,7 @@ import { loadInvoiceDraftRecord } from './invoiceDraftDurabilityService';
 import {
   INVOICE_FINALIZE_INTENT_STORAGE_SUFFIX,
   inspectInvoiceFinalizeIntentsForOrigin,
+  buildInvoiceFinalizeIntentKey,
   type InvoiceFinalizeIntentInspectionEntry,
 } from './invoiceFinalizeIntentService';
 
@@ -240,7 +241,8 @@ async function runCloudPhase(identity: InvoiceDraftIdentity): Promise<CloudPhase
    * demselben Rechnungsspeicher stammt.
    */
   const vorgaenge = getVorgangStoreSnapshot();
-  if (!vorgaenge.some((vorgang) => vorgang.id === identity.vorgangId)) {
+  // 01B1A — ohne Auftrag gibt es keinen Vorgang, dessen Existenz zu prüfen wäre.
+  if (identity.vorgangId !== null && !vorgaenge.some((vorgang) => vorgang.id === identity.vorgangId)) {
     return { ok: false, reason: 'vorgang_missing' };
   }
 
@@ -253,7 +255,24 @@ async function runCloudPhase(identity: InvoiceDraftIdentity): Promise<CloudPhase
 
   const warnings: string[] = [];
   for (const conflict of merge.conflicts) {
-    if (conflict.vorgangId === identity.vorgangId) {
+    /*
+     * Ein Konflikt „im eigenen Bereich" blockiert.
+     *
+     * Mit Auftrag ist der Bereich der Vorgang: Seine Rechnungen hängen
+     * fachlich zusammen (Abschlagsabzüge, Schlussrechnung), ein Konflikt dort
+     * darf keine weitere Rechnung durchlassen.
+     *
+     * MANUAL-INVOICE-UI-01B1B — ohne Auftrag gibt es diesen Zusammenhang
+     * nicht: Freie Rechnungen sind voneinander unabhängig, und die eigene
+     * Rechnung existiert im Preflight noch gar nicht (die Kennung entsteht
+     * erst in `prepare`). Ein Konflikt einer **anderen** freien Rechnung ist
+     * deshalb eine Warnung, kein Blocker — sonst sperrte ein fremder Fall den
+     * neuen Entwurf grundlos. Kein globales Fail-open: Der Vorgangsbereich
+     * bleibt scharf, und die Wiederaufnahme prüft die eigene Kennung in
+     * `proveLocalInvoice`.
+     */
+    const ownArea = identity.vorgangId !== null && conflict.vorgangId === identity.vorgangId;
+    if (ownArea) {
       return { ok: false, reason: 'merge_conflict', detail: conflict.reason };
     }
     warnings.push(`merge_conflict:${conflict.reason}`);
@@ -617,16 +636,27 @@ export function classifyVorgangInvoicesAndIntents(input: {
   contentFingerprint: string;
 }): ClassificationResult {
   const { identity, entries, latest, contentFingerprint } = input;
-  const vorgang = (latest.vorgaenge ?? []).find((entry) => entry.id === identity.vorgangId);
-  if (!vorgang) return { ok: false, reason: 'vorgang_missing' };
+  if (identity.vorgangId !== null) {
+    const vorgang = (latest.vorgaenge ?? []).find((entry) => entry.id === identity.vorgangId);
+    if (!vorgang) return { ok: false, reason: 'vorgang_missing' };
+  }
 
   /*
    * INVOICE-LOCAL-GUARD-SNAPSHOT-BLINDNESS-01B — die Rechnungen kommen aus dem
    * Laufzeitspeicher. `latest` bleibt die richtige Quelle für Vorgangsexistenz,
    * Workspace, Scope und Setup; seine `invoices` sind seit dem
    * First-Class-Speicher jedoch immer leer und damit als Eingabe unbrauchbar.
+   *
+   * 01B1A — der Vergleichsbereich der Rechnung ohne Auftrag sind die freien
+   * Rechnungen des Speichers; eine gleiche Rechnung an einem Vorgang wäre eine
+   * andere Rechnung.
    */
-  const invoices = listInvoicesForVorgang(identity.vorgangId);
+  const invoices =
+    identity.vorgangId === null
+      ? getInvoiceStoreSnapshot()
+          .filter((entry) => entry.vorgangId === null)
+          .map((entry) => entry.invoice)
+      : listInvoicesForVorgang(identity.vorgangId);
   const invoiceFingerprints = new Map<string, string>();
   for (const invoice of invoices) {
     try {
@@ -684,10 +714,11 @@ function classifyLegacyIntents(input: {
   const warnings: string[] = [];
   const resolvedIds = new Set<string>();
 
+  // 01B1A — der Intent ist über denselben Schlüssel adressiert wie beim Anlegen.
+  const intentKey = buildInvoiceFinalizeIntentKey(identity.vorgangId, identity.draftId);
   const relevant = entries.filter(
     (entry) =>
-      entry.intent.workspaceId === identity.workspaceId &&
-      entry.intent.vorgangId === identity.vorgangId,
+      entry.intent.workspaceId === identity.workspaceId && entry.intent.vorgangId === intentKey,
   );
 
   for (const entry of relevant) {

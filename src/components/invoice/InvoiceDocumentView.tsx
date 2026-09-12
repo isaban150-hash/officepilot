@@ -24,6 +24,31 @@ export function InvoiceDocumentView({ model }: Props) {
         <InvoiceHeader model={model} />
         <InvoiceCustomerBlock model={model} />
 
+        {/*
+          * NORMAL-INVOICE-CANCELLATION-01B — nur auf dem Korrekturbeleg: der
+          * eindeutige Bezug auf die Originalrechnung und der Stornogrund.
+          * Ein Original-Modell trägt `correction` nicht; sein Markup bleibt
+          * unverändert (geschützter Snapshot).
+          */}
+        {model.correction && (
+          <section className="invoice-block invoice-correction" data-testid="invoice-correction-block">
+            <h2 className="invoice-block__title">Rechnungskorrektur</h2>
+            <dl className="invoice-service-period__facts">
+              <div>
+                <dt>Bezug</dt>
+                <dd data-testid="invoice-correction-reference">
+                  Rechnung {model.correction.originalInvoiceNumber} vom{' '}
+                  {formatInvoiceDate(model.correction.originalIssueDate)}
+                </dd>
+              </div>
+              <div>
+                <dt>Grund</dt>
+                <dd data-testid="invoice-correction-reason">{model.correction.cancelReason}</dd>
+              </div>
+            </dl>
+          </section>
+        )}
+
         {model.introText.trim() && (
           <section className="invoice-block invoice-intro">
             <p>{model.introText}</p>
@@ -49,7 +74,8 @@ export function InvoiceDocumentView({ model }: Props) {
         <InvoicePositionTable model={model} />
         <InvoiceSummary model={model} />
         <InvoiceTaxNotice model={model} />
-        <InvoicePaymentBlock model={model} />
+        {/* Ein Korrekturbeleg hat kein Zahlungsziel — kein Zahlungsblock. */}
+        {!model.correction && <InvoicePaymentBlock model={model} />}
 
         {model.closingText.trim() && (
           <section className="invoice-block invoice-closing">

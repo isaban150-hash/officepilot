@@ -75,6 +75,7 @@ import type {
   Customer,
   CustomerBilling,
   InboxItem,
+  InvoiceCancellationKind,
   InvoicePayment,
   InvoicePaymentStatus,
   MaterialStandard,
@@ -1445,6 +1446,8 @@ export type UpsertFinalizedInvoiceResult =
          * gleich ist und `id_content_conflict` die falsche Diagnose wäre.
          */
         | 'customer_relation_conflict'
+        /** NORMAL-INVOICE-CANCELLATION-01B — zwei widersprechende Stornowahrheiten. */
+        | 'cancellation_conflict'
         | 'local_persist_failed';
     };
 
@@ -1597,8 +1600,78 @@ export type ApplyFinalizedInvoiceToListResult =
     }
   | {
       ok: false;
-      reason: 'id_content_conflict' | 'number_id_conflict' | 'customer_relation_conflict';
+      reason:
+        | 'id_content_conflict'
+        | 'number_id_conflict'
+        | 'customer_relation_conflict'
+        | 'cancellation_conflict';
     };
+
+/**
+ * NORMAL-INVOICE-CANCELLATION-01B — die Stornofakten einer Rechnung, wie sie
+ * der Merge vergleicht. Nur diese fünf Felder; alles andere ist Inhalt.
+ */
+export interface InvoiceCancellationFacts {
+  cancelledAt: string;
+  cancelReason?: string;
+  cancellationKind?: InvoiceCancellationKind;
+  correctionDocumentId?: string;
+  correctionNumber?: string;
+}
+
+function readInvoiceCancellationFacts(invoice: VorgangInvoice): InvoiceCancellationFacts | null {
+  if (!invoice.cancelledAt) return null;
+  const facts: InvoiceCancellationFacts = { cancelledAt: invoice.cancelledAt };
+  if (invoice.cancelReason) facts.cancelReason = invoice.cancelReason;
+  if (invoice.cancellationKind) facts.cancellationKind = invoice.cancellationKind;
+  if (invoice.correctionDocumentId) facts.correctionDocumentId = invoice.correctionDocumentId;
+  if (invoice.correctionNumber) facts.correctionNumber = invoice.correctionNumber;
+  return facts;
+}
+
+/**
+ * Monotones Auffüllen der Stornowahrheit — rein.
+ *
+ *   * beide ohne Storno → nichts;
+ *   * nur entfernt storniert → übernehmen;
+ *   * nur lokal storniert → behalten (die Cloud-Zeile kann älter sein);
+ *   * beide storniert: gleiche Fakten → nichts; entfernte Fakten ergänzen nur
+ *     fehlende lokale (Art/Beleg eines 01C-Stornos) → übernehmen; sonst Konflikt.
+ */
+export function resolveInvoiceCancellationFacts(
+  local: VorgangInvoice,
+  remote: VorgangInvoice,
+):
+  | { ok: true; filledFromRemote: false }
+  | { ok: true; filledFromRemote: true; facts: InvoiceCancellationFacts }
+  | { ok: false; reason: 'cancellation_conflict' } {
+  const mine = readInvoiceCancellationFacts(local);
+  const theirs = readInvoiceCancellationFacts(remote);
+  if (!theirs) return { ok: true, filledFromRemote: false };
+  if (!mine) return { ok: true, filledFromRemote: true, facts: theirs };
+
+  const keys: (keyof InvoiceCancellationFacts)[] = [
+    'cancelledAt',
+    'cancelReason',
+    'cancellationKind',
+    'correctionDocumentId',
+    'correctionNumber',
+  ];
+  let fills = false;
+  for (const key of keys) {
+    const a = mine[key];
+    const b = theirs[key];
+    if (a === undefined && b !== undefined) {
+      fills = true;
+      continue;
+    }
+    if (a !== undefined && b !== undefined && a !== b) {
+      return { ok: false, reason: 'cancellation_conflict' };
+    }
+  }
+  if (!fills) return { ok: true, filledFromRemote: false };
+  return { ok: true, filledFromRemote: true, facts: { ...mine, ...theirs } };
+}
 
 /**
  * MANUAL-INVOICE-CLOUD-MIGRATION-01B2b — die Same-ID-Semantik einer
@@ -1696,11 +1769,29 @@ export function applyFinalizedInvoiceToList(
       return { ok: false, reason: 'customer_relation_conflict' };
     }
 
+    /*
+     * NORMAL-INVOICE-CANCELLATION-01B — die Stornowahrheit ist **monoton**:
+     * Ein Storno aus der Cloud ergänzt eine lokal noch nicht stornierte
+     * Rechnung; ein lokal bekanntes Storno wird nie still entfernt (eine
+     * alte Cloud-Zeile ohne die Spalten gilt oben ohnehin als inhaltsgleich).
+     * Widersprechen sich zwei Stornofakten — anderer Zeitpunkt, anderer
+     * Grund, andere Art, anderer Korrekturbeleg —, ist das ein Konflikt und
+     * keine Entscheidung „lokal gewinnt"/„entfernt gewinnt".
+     *
+     * Bis hierher las der Merge diese Felder gar nicht: Ein auf einem anderen
+     * Gerät storniertes Schluss-/Rechnungsdokument blieb lokal wirksam.
+     */
+    const cancellation = resolveInvoiceCancellationFacts(byId, invoice);
+    if (!cancellation.ok) {
+      return { ok: false, reason: 'cancellation_conflict' };
+    }
+
     if (
       nextStatus === byId.status &&
       raisedConfirmation === byId.servicePeriodConfirmed &&
       !adoptedSent &&
-      !relation.filledFromRemote
+      !relation.filledFromRemote &&
+      !cancellation.filledFromRemote
     ) {
       return { ok: true, invoice: { ...byId }, action: 'noop', invoices };
     }
@@ -1711,6 +1802,9 @@ export function applyFinalizedInvoiceToList(
     }
     if (relation.filledFromRemote && relation.customerId) {
       updated.customerId = relation.customerId;
+    }
+    if (cancellation.filledFromRemote) {
+      Object.assign(updated, cancellation.facts);
     }
     if (adoptedSent) {
       updated.sentAt = adoptedSent.sentAt;
@@ -2039,7 +2133,8 @@ export type UpdateInvoiceSentFieldsResult =
  * angefasst; alles andere an der Rechnung bleibt durch den Spread erhalten.
  */
 export function updateInvoiceSentFields(
-  vorgangId: string,
+  /** MANUAL-INVOICE-UI-01B2 — `null` ist die freie Rechnung ohne Auftrag. */
+  vorgangId: string | null,
   invoiceId: string,
   fields: {
     status: VorgangInvoice['status'];
@@ -2048,15 +2143,10 @@ export function updateInvoiceSentFields(
     sentNote?: string;
   },
 ): UpdateInvoiceSentFieldsResult {
-  let updatedInvoice: VorgangInvoice | null = null;
-
-  const committed = commitVorgangMutation(vorgangId, (current) => {
-    const invoiceIndex = current.invoices.findIndex((item) => item.id === invoiceId);
-    if (invoiceIndex === -1) return { errorKey: 'invoice.notFound' };
-
+  const applySentFields = (current: VorgangInvoice): VorgangInvoice => {
     const note = fields.sentNote?.trim() ?? '';
     const next: VorgangInvoice = {
-      ...current.invoices[invoiceIndex]!,
+      ...current,
       status: fields.status,
       sentAt: fields.sentAt,
       sentVia: fields.sentVia,
@@ -2066,6 +2156,22 @@ export function updateInvoiceSentFields(
     } else {
       delete next.sentNote;
     }
+    return next;
+  };
+
+  if (vorgangId === null) {
+    // Gleiche Schreibgrenze, gleiche Felder — nur der Commit-Punkt ist der
+    // First-Class-Speicher statt des Vorgangs.
+    return commitManualInvoiceMutation(invoiceId, applySentFields);
+  }
+
+  let updatedInvoice: VorgangInvoice | null = null;
+
+  const committed = commitVorgangMutation(vorgangId, (current) => {
+    const invoiceIndex = current.invoices.findIndex((item) => item.id === invoiceId);
+    if (invoiceIndex === -1) return { errorKey: 'invoice.notFound' };
+
+    const next = applySentFields(current.invoices[invoiceIndex]!);
 
     updatedInvoice = next;
     return {
@@ -2107,13 +2213,23 @@ export type UpdateInvoiceServicePeriodConfirmationResult =
   | { ok: false; reason: 'not_found' | 'persist_failed' };
 
 export function updateInvoiceServicePeriodConfirmation(
-  vorgangId: string,
+  /** MANUAL-INVOICE-UI-01B2 — `null` ist die freie Rechnung ohne Auftrag. */
+  vorgangId: string | null,
   invoiceId: string,
 ): UpdateInvoiceServicePeriodConfirmationResult {
   const current = getVorgangInvoice(vorgangId, invoiceId);
   if (!current) return { ok: false, reason: 'not_found' };
   if (current.servicePeriodConfirmed === true) {
     return { ok: true, invoice: current, action: 'noop' };
+  }
+
+  if (vorgangId === null) {
+    const committedManual = commitManualInvoiceMutation(invoiceId, (invoice) => ({
+      ...invoice,
+      servicePeriodConfirmed: true,
+    }));
+    if (!committedManual.ok) return committedManual;
+    return { ok: true, invoice: committedManual.invoice, action: 'confirmed' };
   }
 
   let updatedInvoice: VorgangInvoice | null = null;
@@ -2169,17 +2285,41 @@ export function updateInvoiceServicePeriodConfirmation(
  */
 export type ApplyInvoiceCancellationResult =
   | { ok: true; invoice: VorgangInvoice; action: 'cancelled' | 'noop' }
-  | { ok: false; reason: 'not_found' | 'persist_failed' };
+  | { ok: false; reason: 'not_found' | 'persist_failed' | 'cancellation_conflict' };
 
 export function applyInvoiceCancellationFromCloud(
-  vorgangId: string,
+  /** NORMAL-INVOICE-CANCELLATION-01B — `null` ist die freie Rechnung ohne Auftrag. */
+  vorgangId: string | null,
   invoiceId: string,
-  cancellation: { cancelledAt: string; cancelReason?: string },
+  cancellation: InvoiceCancellationFacts,
 ): ApplyInvoiceCancellationResult {
   const current = getVorgangInvoice(vorgangId, invoiceId);
   if (!current) return { ok: false, reason: 'not_found' };
-  if (current.cancelledAt) {
+
+  /*
+   * 01B — Stornofakten sind monoton: Ein bereits storniertes Original nimmt
+   * nur noch fehlende Art/Beleg-Angaben an (01C-Storno, das die Cloud jetzt
+   * kennt); es wird nie ein zweites Mal storniert und nie umgeschrieben.
+   */
+  const facts = resolveInvoiceCancellationFacts(current, {
+    ...current,
+    cancelledAt: cancellation.cancelledAt,
+    cancelReason: cancellation.cancelReason,
+    cancellationKind: cancellation.cancellationKind,
+    correctionDocumentId: cancellation.correctionDocumentId,
+    correctionNumber: cancellation.correctionNumber,
+  });
+  if (!facts.ok) return { ok: false, reason: 'cancellation_conflict' };
+  if (!facts.filledFromRemote) {
     return { ok: true, invoice: current, action: 'noop' };
+  }
+  const apply = (invoice: VorgangInvoice): VorgangInvoice => ({ ...invoice, ...facts.facts });
+  const action = current.cancelledAt ? 'noop' : 'cancelled';
+
+  if (vorgangId === null) {
+    const committedManual = commitManualInvoiceMutation(invoiceId, apply);
+    if (!committedManual.ok) return committedManual;
+    return { ok: true, invoice: committedManual.invoice, action };
   }
 
   let updatedInvoice: VorgangInvoice | null = null;
@@ -2188,11 +2328,7 @@ export function applyInvoiceCancellationFromCloud(
     const index = vorgang.invoices.findIndex((item) => item.id === invoiceId);
     if (index === -1) return { errorKey: 'invoice.notFound' };
 
-    const next: VorgangInvoice = {
-      ...vorgang.invoices[index]!,
-      cancelledAt: cancellation.cancelledAt,
-      cancelReason: cancellation.cancelReason,
-    };
+    const next = apply(vorgang.invoices[index]!);
     updatedInvoice = next;
     return {
       ...vorgang,
@@ -2214,7 +2350,49 @@ export function applyInvoiceCancellationFromCloud(
     };
   }
   if (!updatedInvoice) return { ok: false, reason: 'not_found' };
-  return { ok: true, invoice: cloneVorgangInvoice(updatedInvoice), action: 'cancelled' };
+  return { ok: true, invoice: cloneVorgangInvoice(updatedInvoice), action };
+}
+
+/**
+ * NORMAL-INVOICE-CANCELLATION-01B — der lokale Archivlink des Korrekturbelegs.
+ *
+ * Wie `updateInvoiceArchiveDocumentId`, aber für das **zweite** Dokument der
+ * Rechnung. Das Original-`archiveDocumentId` wird hier nie berührt.
+ */
+export function updateInvoiceCorrectionArchiveDocumentId(
+  vorgangId: string | null,
+  invoiceId: string,
+  documentId: string | null,
+): UpdateInvoiceArchiveLinkResult {
+  const apply = (target: VorgangInvoice): VorgangInvoice => {
+    const next = { ...target };
+    if (documentId === null) delete next.correctionArchiveDocumentId;
+    else next.correctionArchiveDocumentId = documentId;
+    return next;
+  };
+  if (vorgangId === null) return commitManualInvoiceMutation(invoiceId, apply);
+
+  const result = commitVorgangMutation(vorgangId, (current) => {
+    const index = current.invoices.findIndex((item) => item.id === invoiceId);
+    if (index === -1) return { errorKey: 'not_found' };
+    return {
+      ...current,
+      invoices: [
+        ...current.invoices.slice(0, index),
+        apply(current.invoices[index]!),
+        ...current.invoices.slice(index + 1),
+      ],
+    };
+  });
+  if (!result.ok) {
+    return {
+      ok: false,
+      reason: result.errorKey === 'order_amendment_local_persist_failed' ? 'persist_failed' : 'not_found',
+    };
+  }
+  const committed = result.vorgang.invoices.find((item) => item.id === invoiceId);
+  if (!committed) return { ok: false, reason: 'not_found' };
+  return { ok: true, invoice: { ...committed } };
 }
 
 /**
@@ -2231,7 +2409,8 @@ export type ApplyInvoiceSentSnapshotResult =
   | { ok: false; reason: 'not_found' | 'invalid_snapshot' | 'persist_failed' };
 
 export function applyInvoiceSentSnapshotFromCloud(
-  vorgangId: string,
+  /** MANUAL-INVOICE-UI-01B2 — `null` ist die freie Rechnung ohne Auftrag. */
+  vorgangId: string | null,
   invoiceId: string,
   snapshot: InvoiceSentSnapshot,
 ): ApplyInvoiceSentSnapshotResult {
@@ -2239,20 +2418,29 @@ export function applyInvoiceSentSnapshotFromCloud(
   const validated = buildInvoiceSentSnapshot({ status: 'versendet', ...snapshot });
   if (!validated) return { ok: false, reason: 'invalid_snapshot' };
 
-  let updatedInvoice: VorgangInvoice | null = null;
-
-  const committed = commitVorgangMutation(vorgangId, (vorgang) => {
-    const index = vorgang.invoices.findIndex((item) => item.id === invoiceId);
-    if (index === -1) return { errorKey: 'invoice.notFound' };
-
+  const applySnapshot = (current: VorgangInvoice): VorgangInvoice => {
     const next: VorgangInvoice = {
-      ...vorgang.invoices[index]!,
+      ...current,
       status: 'versendet',
       sentAt: validated.sentAt,
       sentVia: validated.sentVia,
     };
     if (validated.sentNote) next.sentNote = validated.sentNote;
     else delete next.sentNote;
+    return next;
+  };
+
+  if (vorgangId === null) {
+    return commitManualInvoiceMutation(invoiceId, applySnapshot);
+  }
+
+  let updatedInvoice: VorgangInvoice | null = null;
+
+  const committed = commitVorgangMutation(vorgangId, (vorgang) => {
+    const index = vorgang.invoices.findIndex((item) => item.id === invoiceId);
+    if (index === -1) return { errorKey: 'invoice.notFound' };
+
+    const next = applySnapshot(vorgang.invoices[index]!);
 
     updatedInvoice = next;
     return {

@@ -13,6 +13,7 @@ import {
   isInvoiceCancelled,
 } from '../../services/invoicePaymentService';
 import { formatInvoiceDate } from '../../services/invoicePrintModel';
+import { buildInvoiceReachPath } from '../../services/invoiceNavigation';
 import type { InvoiceOverviewItem } from '../../services/invoiceOverviewService';
 import type { VorgangInvoice } from '../../types/models';
 import type { TranslationKey } from '../../i18n';
@@ -51,27 +52,28 @@ export function InvoiceOverviewCard({
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const { invoice, paymentSummary } = currentItem;
   /*
-   * MANUAL-INVOICE-01B2c — eine Rechnung ohne Auftrag hat noch keine
-   * Detailroute; Öffnen/Drucken/PDF führen dort ins Leere und werden nicht
-   * angeboten. Zahlung erfassen und Archivdokument funktionieren, weil sie
-   * über die Rechnungskennung laufen. Kein `/vorgaenge/null/…`.
+   * MANUAL-INVOICE-UI-01B2 — der Vorgangslink bleibt der Vorgangsrechnung
+   * vorbehalten; Öffnen/Drucken/PDF laufen für beide über den kanonischen
+   * Erreichpfad (`buildInvoiceReachPath`): Vorgangsdetailseite mit Auftrag,
+   * globale Detailseite `/rechnungen/:invoiceId` ohne. Kein `/vorgaenge/null/…`.
    */
-  const hasDetailRoute = currentItem.vorgangId !== null;
+  const hasVorgangLink = currentItem.vorgangId !== null;
+  const detailPath = buildInvoiceReachPath(currentItem.vorgangId, invoice.id);
 
   useEffect(() => {
     setCurrentItem(item);
   }, [item]);
 
   const openInvoice = () => {
-    navigate(`/vorgaenge/${currentItem.vorgangId}/rechnungen/${invoice.id}?from=overview`);
+    navigate(`${detailPath}?from=overview`);
   };
 
   const triggerPrint = () => {
-    navigate(`/vorgaenge/${currentItem.vorgangId}/rechnungen/${invoice.id}?auto=print`);
+    navigate(`${detailPath}?auto=print`);
   };
 
   const triggerPdf = () => {
-    navigate(`/vorgaenge/${currentItem.vorgangId}/rechnungen/${invoice.id}?auto=pdf`);
+    navigate(`${detailPath}?auto=pdf`);
   };
 
   const handlePaymentSaved = (updated: VorgangInvoice) => {
@@ -91,7 +93,7 @@ export function InvoiceOverviewCard({
           {invoice.number} · {invoiceTypeLabel(invoice, translate)}
         </CardTitle>
         <CardMeta>
-          {hasDetailRoute ? (
+          {hasVorgangLink ? (
             <>
               <Link to={`/vorgaenge/${currentItem.vorgangId}`}>{currentItem.vorgangTitle}</Link>
               {' · '}
@@ -124,11 +126,9 @@ export function InvoiceOverviewCard({
         />
 
         <div className="invoice-overview-card__actions" data-testid="invoice-overview-card-actions">
-          {hasDetailRoute && (
-            <Button type="button" onClick={openInvoice} data-testid="invoice-overview-card-open">
-              {translate('invoice.open')}
-            </Button>
-          )}
+          <Button type="button" onClick={openInvoice} data-testid="invoice-overview-card-open">
+            {translate('invoice.open')}
+          </Button>
           {!isInvoiceCancelled(invoice) && (
             <Button
               type="button"
@@ -139,7 +139,6 @@ export function InvoiceOverviewCard({
               {translate('payment.recordShort')}
             </Button>
           )}
-          {hasDetailRoute && (
           <DropdownMenu
             testId="invoice-overview-card-more"
             ariaLabel={translate('invoice.moreActions')}
@@ -160,7 +159,6 @@ export function InvoiceOverviewCard({
               },
             ]}
           />
-          )}
           {invoice.archiveDocumentId && (
             <Link to={`/dokumente/${invoice.archiveDocumentId}`}>
               <Button type="button" variant="outline">

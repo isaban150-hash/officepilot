@@ -84,7 +84,8 @@ export function needsServicePeriodRecovery(invoice: VorgangInvoice): boolean {
  * wäre eine Belegänderung und gehört nach Storno/Korrektur, nicht hierher.
  */
 export function confirmFinalizedInvoiceServicePeriod(
-  vorgangId: string,
+  /** MANUAL-INVOICE-UI-01B2 — `null` ist die freie Rechnung ohne Auftrag. */
+  vorgangId: string | null,
   invoiceId: string,
 ): ServicePeriodConfirmResult {
   const invoice = getVorgangInvoice(vorgangId, invoiceId);
@@ -135,7 +136,7 @@ export function isServicePeriodCloudSyncSilent(result: ServicePeriodCloudSyncRes
  * nächsten Öffnen der Rechnung neu erkannt.
  */
 export async function syncInvoiceServicePeriodConfirmationToCloud(
-  vorgangId: string,
+  vorgangId: string | null,
   invoiceId: string,
 ): Promise<ServicePeriodCloudSyncResult> {
   try {

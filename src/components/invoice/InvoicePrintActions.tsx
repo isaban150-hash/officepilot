@@ -4,6 +4,7 @@ import { buildPrintTitle } from '../../services/invoiceArchiveService';
 import {
   downloadInvoicePdfBytes,
   generateApprovedInvoicePdf,
+  type GenerateApprovedInvoicePdfResult,
 } from '../../services/invoicePdfService';
 import * as invoicePrintService from '../../services/invoicePrintService';
 import { validateFinalizedInvoiceForPdf } from '../../services/invoiceValidationService';
@@ -17,6 +18,12 @@ interface Props {
   layout?: 'stack' | 'inline';
   /** When true, start PDF download once after mount (e.g. ?auto=pdf). */
   autoDownloadPdf?: boolean;
+  /**
+   * NORMAL-INVOICE-CANCELLATION-01B — der PDF-Erzeuger für dieses Modell.
+   * Standard: die freigegebene Rechnung. Der Korrekturbeleg reicht
+   * `generateInvoiceCorrectionPdf` herein — dieselbe Engine, anderes Modell.
+   */
+  generatePdf?: (invoice: VorgangInvoice) => Promise<GenerateApprovedInvoicePdfResult>;
 }
 
 export function InvoicePrintActions({
@@ -25,6 +32,7 @@ export function InvoicePrintActions({
   translate,
   layout = 'stack',
   autoDownloadPdf = false,
+  generatePdf = generateApprovedInvoicePdf,
 }: Props) {
   const title = buildPrintTitle(model);
   const [pdfLoading, setPdfLoading] = useState(false);
@@ -47,7 +55,7 @@ export function InvoicePrintActions({
     setPdfError(null);
     const current = invoiceRef.current;
     try {
-      const result = await generateApprovedInvoicePdf(current);
+      const result = await generatePdf(current);
       if (!result.ok) {
         setPdfError(translate('invoice.pdf.error'));
         return;

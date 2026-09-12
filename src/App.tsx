@@ -37,6 +37,7 @@ import { PapierarchivPage } from './pages/PapierarchivPage';
 import { KommunikationPage } from './pages/KommunikationPage';
 import { InvoiceDetailPage } from './pages/InvoiceDetailPage';
 import { OffeneRechnungenPage } from './pages/OffeneRechnungenPage';
+import { ManualInvoicePage } from './pages/ManualInvoicePage';
 import { RechnungPage } from './pages/RechnungPage';
 import { SearchPage } from './pages/SearchPage';
 import { ScanPage } from './pages/ScanPage';
@@ -181,6 +182,14 @@ function AppRoutes() {
         <Route path="/vorgaenge/:id/rechnung" element={<RechnungPage />} />
         <Route path="/vorgaenge/:id/rechnungen/:invoiceId" element={<InvoiceDetailPage />} />
         <Route path="/rechnungen/offen" element={<OffeneRechnungenPage />} />
+        {/* MANUAL-INVOICE-UI-01B1B — die Rechnung ohne Auftrag. */}
+        <Route path="/rechnungen/neu" element={<ManualInvoicePage />} />
+        {/*
+          * MANUAL-INVOICE-UI-01B2 — globale Detailroute, dieselbe Seite wie der
+          * Vorgangsweg. Statische Pfade stehen davor und gewinnen im Router
+          * ohnehin durch ihren Rang; `neu`/`offen` sind nie eine Kennung.
+          */}
+        <Route path="/rechnungen/:invoiceId" element={<InvoiceDetailPage />} />
         <Route path="/dokumente" element={<DokumentePage />} />
         <Route path="/dokumente/upload" element={<DocumentUploadPage />} />
         <Route path="/dokumente/hinzufuegen" element={<DocumentAddPage />} />

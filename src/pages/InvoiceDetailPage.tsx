@@ -16,7 +16,7 @@ import { Button } from '../components/ui/Button';
 import { ShowMoreSection } from '../components/ui/ShowMoreSection';
 import { useApp } from '../context/AppContext';
 import { isFinalizedInvoice, buildPrintTitle } from '../services/invoiceArchiveService';
-import { buildInvoicePrintModelFromInvoice } from '../services/invoicePrintModel';
+import { buildInvoicePrintModelFromInvoice, formatInvoiceDate } from '../services/invoicePrintModel';
 import {
   calculatePaymentSummary,
   formatPaymentCurrency,
@@ -34,7 +34,11 @@ import {
 } from '../services/invoice/workspaceInvoicePaymentCloudService';
 import { getLastPersistSuccess } from '../services/persistenceService';
 import { printInvoice } from '../services/invoicePrintService';
-import { getVorgangById, getVorgangInvoice } from '../services/vorgangService';
+import { getVorgangById } from '../services/vorgangService';
+import { resolveInvoiceDetailRoute } from '../services/invoice/invoiceDetailRouteResolver';
+import { buildInvoiceReachPath, buildOpenInvoicesPath } from '../services/invoiceNavigation';
+import { buildInvoiceCorrectionModel } from '../services/invoice/invoiceCorrectionModel';
+import { generateInvoiceCorrectionPdf } from '../services/invoicePdfService';
 import { InvoiceSentPanel } from '../components/invoice/InvoiceSentPanel';
 import {
   readInvoiceSentStateFromCloud,
@@ -47,14 +51,29 @@ import type { VorgangInvoice } from '../types/models';
 import type { TranslationKey } from '../i18n';
 
 export function InvoiceDetailPage() {
-  const { id: vorgangId, invoiceId } = useParams<{ id: string; invoiceId: string }>();
+  /*
+   * MANUAL-INVOICE-UI-01B2 — eine Seite, zwei Routen. `id` ist nur auf dem
+   * Vorgangsweg gesetzt; die globale Route `/rechnungen/:invoiceId` kennt
+   * keinen Vorgang in der URL. Der Ablageort kommt aus der Auflösung.
+   */
+  const { id: routeVorgangId, invoiceId } = useParams<{ id?: string; invoiceId?: string }>();
   const [searchParams] = useSearchParams();
   const fromOverview = searchParams.get('from') === 'overview';
+  /** NORMAL-INVOICE-CANCELLATION-01B — `?doc=korrektur` zeigt den Korrekturbeleg. */
+  const correctionView = searchParams.get('doc') === 'korrektur';
   const { translate, showToast } = useApp();
   const navigate = useNavigate();
 
+  const resolution = useMemo(
+    () => resolveInvoiceDetailRoute({ routeVorgangId, invoiceId }),
+    [routeVorgangId, invoiceId],
+  );
+  /** `null` = freie Rechnung ohne Auftrag; `undefined` = nicht auflösbar. */
+  const vorgangId: string | null | undefined =
+    resolution.kind === 'found' ? resolution.vorgangId : undefined;
+
   const [invoice, setInvoice] = useState<VorgangInvoice | undefined>(() =>
-    vorgangId && invoiceId ? getVorgangInvoice(vorgangId, invoiceId) : undefined,
+    resolution.kind === 'found' ? resolution.invoice : undefined,
   );
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
@@ -63,11 +82,13 @@ export function InvoiceDetailPage() {
   const vorgang = vorgangId ? getVorgangById(vorgangId) : undefined;
 
   useEffect(() => {
-    if (vorgangId && invoiceId) {
-      setInvoice(getVorgangInvoice(vorgangId, invoiceId));
-      setShowDetails(false);
-    }
-  }, [vorgangId, invoiceId]);
+    setInvoice(resolution.kind === 'found' ? resolution.invoice : undefined);
+    setShowDetails(false);
+  }, [resolution]);
+
+  /** Wohin „Zurück" führt, wenn es keinen Vorgang gibt: die Übersicht. */
+  const backPath =
+    fromOverview || !vorgangId ? buildOpenInvoicesPath() : `/vorgaenge/${vorgangId}`;
 
   const printModel = useMemo(() => {
     if (!invoice || !isFinalizedInvoice(invoice)) return null;
@@ -88,8 +109,14 @@ export function InvoiceDetailPage() {
      * kein Weg an einer Prüfung vorbei sein.
      */
     if (validateFinalizedInvoiceForPdf(invoice).blockingErrors.length > 0) return;
+    // 01B — in der Korrekturansicht steht das Korrekturdokument im DOM; nur der Titel wechselt.
+    if (correctionView) {
+      if (invoice.cancellationKind !== 'correction') return;
+      printInvoice({ title: `Rechnungskorrektur ${invoice.number}` });
+      return;
+    }
     printInvoice({ title: buildPrintTitle(printModel) });
-  }, [printModel, invoice, searchParams]);
+  }, [printModel, invoice, searchParams, correctionView]);
 
   /**
    * LEGACY-INVOICE-SERVICE-PERIOD-RECOVERY-01B — der zuletzt bewiesene
@@ -146,7 +173,8 @@ export function InvoiceDetailPage() {
   const invoiceFinalized = invoice ? isFinalizedInvoice(invoice) : false;
 
   useEffect(() => {
-    if (!vorgangId || !invoiceId || !invoiceFinalized) {
+    // `vorgangId === null` ist die freie Rechnung — auch sie hat einen Versandstand.
+    if (vorgangId === undefined || !invoiceId || !invoiceFinalized) {
       setSentCloudState(null);
       return;
     }
@@ -206,7 +234,7 @@ export function InvoiceDetailPage() {
   }, []);
 
   useEffect(() => {
-    if (!vorgangId || !invoiceId) return;
+    if (vorgangId === undefined || !invoiceId) return;
     setCloudPaymentIds(null);
     void pullCloudPaymentIds(invoiceId);
     // Bewusst ohne `invoice`: Die Objektreferenz wechselt bei jedem lokalen
@@ -255,7 +283,7 @@ export function InvoiceDetailPage() {
    * einzige nachweisbare Local-only-Fall; fehlende Konfiguration ist keiner.
    */
   const handleRemovePayment = async (paymentId: string) => {
-    if (!vorgangId || !invoiceId) return;
+    if (vorgangId === undefined || !invoiceId) return;
 
     const outcome = await reverseInvoicePaymentInCloudForRemoval(invoiceId, paymentId);
     if (!isInvoicePaymentCloudSynced(outcome)) {
@@ -283,11 +311,21 @@ export function InvoiceDetailPage() {
     showToast(translate('payment.removedSuccess'));
   };
 
-  if (!vorgangId || !invoiceId || !vorgang || !invoice) {
+  /*
+   * Fail closed: nicht auflösbar, Vorgang der alten Route fehlt, oder die
+   * Rechnung gehört zu einem anderen Vorgang als die URL behauptet — in allen
+   * Fällen dasselbe „nicht gefunden", nie eine andere Rechnung.
+   */
+  if (vorgangId === undefined || !invoiceId || !invoice || (vorgangId !== null && !vorgang)) {
     return (
-      <div className="page">
+      <div className="page" data-testid="invoice-detail-not-found">
         <p className="empty-state">{translate('invoice.notFound')}</p>
-        <Button variant="outline" onClick={() => navigate(`/vorgaenge/${vorgangId ?? ''}`)}>
+        <Button
+          variant="outline"
+          onClick={() =>
+            navigate(routeVorgangId ? `/vorgaenge/${routeVorgangId}` : buildOpenInvoicesPath())
+          }
+        >
           {translate('common.back')}
         </Button>
       </div>
@@ -298,12 +336,15 @@ export function InvoiceDetailPage() {
     return (
       <div className="page">
         <p className="empty-state">{translate('invoice.readOnlyMissingSnapshots')}</p>
-        <Button variant="outline" onClick={() => navigate(`/vorgaenge/${vorgangId}`)}>
+        <Button variant="outline" onClick={() => navigate(backPath)}>
           {translate('common.back')}
         </Button>
       </div>
     );
   }
+
+  /** MANUAL-INVOICE-UI-01B2 — die freie Rechnung hat keinen Auftrag. */
+  const isFreeInvoice = vorgangId === null;
 
   const paymentSummary = calculatePaymentSummary(invoice);
   const statusKey = `payment.status.${paymentSummary.status}` as TranslationKey;
@@ -314,12 +355,89 @@ export function InvoiceDetailPage() {
    * bleibt beim Server.
    */
   const invoiceCancelled = isInvoiceCancelled(invoice);
+  /*
+   * NORMAL-INVOICE-CANCELLATION-01B — normale Rechnungen (mit und ohne
+   * Auftrag) und Schlussrechnungen; Abschläge bleiben ausgeschlossen. Ohne
+   * Auftrag ist nur `rechnung` möglich — dieselbe Regel wie im Server.
+   */
   const canCancelInvoice =
-    invoice.type === 'schluss' &&
+    (invoice.type === 'rechnung' || (invoice.type === 'schluss' && vorgangId !== null)) &&
     (invoice.status === 'vorbereitet' || invoice.status === 'versendet') &&
     !invoiceCancelled;
 
   const autoDownloadPdf = searchParams.get('auto') === 'pdf';
+  const correctionPath = `${buildInvoiceReachPath(vorgangId, invoice.id)}?doc=korrektur`;
+
+  /*
+   * 01B — die Korrekturansicht: dasselbe Dokument-Rendering mit dem
+   * kanonischen Korrekturmodell. Eigener Druck/PDF-Weg, kein Zahlungs-,
+   * Versand- oder Stornopanel; Zurück führt zur Originalrechnung.
+   */
+  if (correctionView) {
+    if (invoice.cancellationKind !== 'correction' || !invoice.cancelledAt || !invoice.cancelReason) {
+      return (
+        <div className="page" data-testid="invoice-correction-not-found">
+          <p className="empty-state">{translate('invoice.correction.notFound')}</p>
+          <Button variant="outline" onClick={() => navigate(buildInvoiceReachPath(vorgangId, invoice.id))}>
+            {translate('invoice.correction.backToOriginal')}
+          </Button>
+        </div>
+      );
+    }
+    const correctionModel = buildInvoiceCorrectionModel(invoice, {
+      cancelledAt: invoice.cancelledAt,
+      cancelReason: invoice.cancelReason,
+    });
+    return (
+      <div className="page page--invoice-detail" data-testid="invoice-correction-page">
+        <div className="invoice-detail__toolbar no-print">
+          <button
+            type="button"
+            className="back-link"
+            onClick={() => navigate(buildInvoiceReachPath(vorgangId, invoice.id))}
+            data-testid="invoice-correction-back"
+          >
+            ← {translate('invoice.correction.backToOriginal')}
+          </button>
+          <DetailExperienceCard
+            recognizedTitle={translate('invoice.correction.title')}
+            recognizedSummary={translate('invoice.correction.reference')
+              .replace('{number}', invoice.number)
+              .replace('{date}', formatInvoiceDate(invoice.issueDate ?? invoice.date))}
+            assistantMessage={`${translate('invoice.correction.reasonLabel')}: ${invoice.cancelReason}`}
+            highlights={[
+              `${translate('invoice.correction.issueDate')}: ${formatInvoiceDate(correctionModel.issueDate)}`,
+              formatPaymentCurrency(correctionModel.summary.grossTotal),
+            ]}
+            actions={
+              <InvoicePrintActions
+                invoice={invoice}
+                model={correctionModel}
+                translate={translate}
+                layout="stack"
+                autoDownloadPdf={autoDownloadPdf}
+                generatePdf={generateInvoiceCorrectionPdf}
+              />
+            }
+            testId="invoice-correction-experience"
+          />
+          {invoice.correctionArchiveDocumentId ? (
+            <p className="invoice-detail__archive-link">
+              <Link
+                to={`/dokumente/${invoice.correctionArchiveDocumentId}`}
+                data-testid="invoice-correction-archive-link"
+              >
+                {translate('invoice.openArchiveDocument')}
+              </Link>
+            </p>
+          ) : null}
+        </div>
+        <div className="invoice-detail__document invoice-print-document" data-testid="invoice-correction-document">
+          <InvoiceDocumentView model={correctionModel} />
+        </div>
+      </div>
+    );
+  }
 
   const primaryActions = (
     <>
@@ -365,6 +483,40 @@ export function InvoiceDetailPage() {
               <span className="data-row__value">{invoice.cancelReason}</span>
             </div>
           ) : null}
+          {/*
+            * NORMAL-INVOICE-CANCELLATION-01B — Art des Stornos und, nach
+            * Versand, der Weg zum Korrekturbeleg. Fehlt die lokale Projektion
+            * noch (Cloud vollständig, Pull steht aus), sagt die Seite das —
+            * sie erfindet keinen Link.
+            */}
+          {invoice.cancellationKind ? (
+            <div className="data-row" data-testid={`invoice-cancelled-kind-${invoice.cancellationKind}`}>
+              <span className="data-row__label">{translate('invoice.cancel.kindLabel')}</span>
+              <span className="data-row__value">
+                {translate(
+                  invoice.cancellationKind === 'correction'
+                    ? 'invoice.cancel.kind.correction'
+                    : 'invoice.cancel.kind.internal',
+                )}
+              </span>
+            </div>
+          ) : null}
+          {invoice.cancellationKind === 'correction' ? (
+            <Button
+              type="button"
+              variant="outline"
+              fullWidth
+              onClick={() => navigate(correctionPath)}
+              data-testid="invoice-open-correction"
+            >
+              {translate('invoice.cancel.openCorrection')}
+            </Button>
+          ) : null}
+          {invoice.cancellationKind === 'correction' && !invoice.correctionArchiveDocumentId ? (
+            <p className="hint-text" data-testid="invoice-correction-archive-pending">
+              {translate('invoice.cancel.correctionPending')}
+            </p>
+          ) : null}
         </section>
       )}
       <InvoiceSentPanel
@@ -380,15 +532,27 @@ export function InvoiceDetailPage() {
           {translate('detail.action.recordPayment')}
         </Button>
       )}
-      <Button
-        variant="outline"
-        fullWidth
-        onClick={() =>
-          navigate(`/kommunikation?context=invoice&id=${invoice.id}&vorgangId=${vorgangId}`)
-        }
-      >
-        {translate('detail.action.writeMessage')}
-      </Button>
+      {/*
+        * MANUAL-INVOICE-UI-01B2 — der Kommunikationskontext einer Rechnung
+        * braucht fachlich einen Vorgang (`communicationContextService`). Ohne
+        * ihn wird die Aktion nicht mit einer erfundenen Kennung aufgerufen,
+        * sondern bleibt weg; E-Mail-Versand ist ein späterer Block.
+        */}
+      {isFreeInvoice ? (
+        <p className="hint-text" data-testid="invoice-communication-unavailable">
+          {translate('invoice.communicationNeedsVorgang')}
+        </p>
+      ) : (
+        <Button
+          variant="outline"
+          fullWidth
+          onClick={() =>
+            navigate(`/kommunikation?context=invoice&id=${invoice.id}&vorgangId=${vorgangId}`)
+          }
+        >
+          {translate('detail.action.writeMessage')}
+        </Button>
+      )}
       {/*
         * FINAL-INVOICE-CANCELLATION-UI-01A — Stornierung, bewusst als letzte
         * Aktion und optisch als destruktiv gekennzeichnet.
@@ -423,7 +587,10 @@ export function InvoiceDetailPage() {
             </>
           )}
           {invoice.archiveDocumentId && (
-            <Link to={`/dokumente/${invoice.archiveDocumentId}`}>
+            <Link
+              to={`/dokumente/${invoice.archiveDocumentId}`}
+              data-testid="invoice-detail-archive-link"
+            >
               {translate('invoice.openArchiveDocument')}
             </Link>
           )}
@@ -439,15 +606,17 @@ export function InvoiceDetailPage() {
         onSecurePayment={handleSecurePayment}
       />
 
-      <CommunicationIntegrationPanel
-        contextRef={{
-          type: 'invoice',
-          id: invoice.id,
-          vorgangId: vorgangId ?? '',
-        }}
-        buttonKeys={INVOICE_COMMUNICATION_BUTTON_KEYS}
-        testIdPrefix="invoice"
-      />
+      {!isFreeInvoice && (
+        <CommunicationIntegrationPanel
+          contextRef={{
+            type: 'invoice',
+            id: invoice.id,
+            vorgangId,
+          }}
+          buttonKeys={INVOICE_COMMUNICATION_BUTTON_KEYS}
+          testIdPrefix="invoice"
+        />
+      )}
 
       <p className="hint-text">{translate('invoice.readOnlyHint')}</p>
     </>
@@ -459,14 +628,20 @@ export function InvoiceDetailPage() {
         <button
           type="button"
           className="back-link"
-          onClick={() => navigate(fromOverview ? '/rechnungen/offen' : `/vorgaenge/${vorgangId}`)}
+          onClick={() => navigate(backPath)}
+          data-testid="invoice-detail-back"
         >
-          ← {fromOverview ? translate('overview.backToOverview') : translate('common.back')}
+          ←{' '}
+          {fromOverview || isFreeInvoice
+            ? translate('overview.backToOverview')
+            : translate('common.back')}
         </button>
 
         <DetailExperienceCard
           recognizedTitle={printModel.documentTitle}
-          recognizedSummary={`${printModel.invoiceNumber} · ${vorgang.customer}`}
+          recognizedSummary={`${printModel.invoiceNumber} · ${
+            vorgang ? vorgang.customer : printModel.customer.name
+          }`}
           assistantMessage={translate('invoice.experience.finalized').replace(
             '{amount}',
             formatPaymentCurrency(paymentSummary.totalDue),
@@ -540,7 +715,11 @@ export function InvoiceDetailPage() {
           invoice={invoice}
           open={showCancelDialog}
           onClose={() => setShowCancelDialog(false)}
-          onCancelled={setInvoice}
+          onCancelled={(updated, outcome) => {
+            setInvoice(updated);
+            // 01B — ein Replay überschreibt nichts; der Nutzer erfährt es.
+            if (outcome?.alreadyCancelled) showToast(translate('invoice.cancel.alreadyCancelled'));
+          }}
           translate={translate}
         />
       )}

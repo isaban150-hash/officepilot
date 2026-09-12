@@ -26,6 +26,12 @@ interface CustomerDecisionChoiceProps {
    */
   extraFields?: CustomerExtraFields;
   onExtraFieldChange?: (field: keyof CustomerExtraFields, value: string) => void;
+  /**
+   * MANUAL-INVOICE-UI-01B1B — eine Rechnung braucht einen Empfänger. Mit
+   * `false` entfällt die Option „kein Kunde"; Standard bleibt `true`, damit der
+   * Vorgangsdialog unverändert bleibt.
+   */
+  allowNone?: boolean;
 }
 
 const EXTRA_FIELD_LABELS: Array<{ field: keyof CustomerExtraFields; labelKey: TranslationKey }> = [
@@ -59,6 +65,7 @@ export function CustomerDecisionChoice({
   hint,
   extraFields,
   onExtraFieldChange,
+  allowNone = true,
 }: CustomerDecisionChoiceProps) {
   const { translate } = useApp();
   const hasCustomers = customers.length > 0;
@@ -70,7 +77,7 @@ export function CustomerDecisionChoice({
       label: translate('customerDecision.existing'),
       disabled: !hasCustomers,
     },
-    { value: 'none', label: translate('customerDecision.none') },
+    ...(allowNone ? [{ value: 'none' as const, label: translate('customerDecision.none') }] : []),
   ];
 
   return (

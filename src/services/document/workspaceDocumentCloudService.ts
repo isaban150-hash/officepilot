@@ -18,6 +18,16 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 /** Die einzige Dokumentart, die 05C1 in die Cloud laesst. */
 export const GENERATED_INVOICE_DOCUMENT_KIND = 'generated_invoice';
+/**
+ * NORMAL-INVOICE-CANCELLATION-01B — der Korrekturbeleg. Er entsteht
+ * ausschliesslich serverseitig in `cancel_workspace_invoice`; der Client
+ * liest ihn nur (Pull) und lädt ihn nie hoch.
+ */
+export const GENERATED_INVOICE_CORRECTION_DOCUMENT_KIND = 'generated_invoice_correction';
+export const PULLED_DOCUMENT_KINDS: ReadonlySet<string> = new Set([
+  GENERATED_INVOICE_DOCUMENT_KIND,
+  GENERATED_INVOICE_CORRECTION_DOCUMENT_KIND,
+]);
 
 /** Eine Dokumentzeile, wie die Cloud sie fuehrt — inklusive Grabstein. */
 export interface WorkspaceDocumentRow {
@@ -325,7 +335,8 @@ export async function pullDocumentsFromCloud(
     const row = parseWorkspaceDocumentRow(raw);
     // Eine unbrauchbare oder fremdartige Zeile wird uebersprungen, nicht repariert.
     if (!row || row.workspaceId !== workspaceId) continue;
-    if (row.documentKind !== GENERATED_INVOICE_DOCUMENT_KIND) continue;
+    // 01B — beide erzeugten Dokumentarten; alles andere bleibt fremd.
+    if (!PULLED_DOCUMENT_KINDS.has(row.documentKind)) continue;
     rows.push(row);
   }
   return { outcome: 'synced', rows };

@@ -610,6 +610,9 @@ const deLegacy = {
     'Dieses Dokument ist die Grundlage eines bestätigten Auftrags und bleibt als Nachweis erhalten.',
   'document.delete.blocked.expense':
     'Dieses Dokument ist der Beleg einer bestehenden Ausgabe und kann deshalb nicht gelöscht werden.',
+  // NORMAL-INVOICE-CANCELLATION-01B
+  'document.delete.blocked.correction':
+    'Dieser Korrekturbeleg gehört zur Stornierung einer Rechnung und kann nicht gelöscht werden.',
   'inbox.delete.blocked.expense':
     'Zu diesem Dokument gibt es bereits eine Ausgabe. Bitte entfernen Sie zuerst die Ausgabe.',
   'inbox.delete.failed': 'Das Dokument konnte nicht gelöscht werden. Bitte erneut versuchen.',
@@ -737,6 +740,8 @@ const deLegacy = {
   'classifiedKind.rechnung': 'Rechnung',
   'classifiedKind.eingangsrechnung': 'Eingangsrechnung',
   'classifiedKind.ausgangsrechnung': 'Ausgangsrechnung',
+  // NORMAL-INVOICE-CANCELLATION-01B — der erzeugte Korrekturbeleg.
+  'classifiedKind.rechnungskorrektur': 'Rechnungskorrektur',
   'classifiedKind.gutschrift': 'Gutschrift',
   'classifiedKind.quittung': 'Quittung',
   'classifiedKind.kassenbeleg': 'Kassenbeleg',
@@ -2401,19 +2406,42 @@ const deLegacy = {
    * technischen Servercode.
    */
   'invoice.cancel.action': 'Rechnung stornieren',
-  'invoice.cancel.title': 'Schlussrechnung stornieren',
+  // NORMAL-INVOICE-CANCELLATION-01B — ein Dialog für normale Rechnungen und Schlussrechnungen.
+  'invoice.cancel.title': 'Rechnung stornieren',
   'invoice.cancel.confirm': 'Rechnung endgültig stornieren',
   'invoice.cancel.notice':
     'Die Rechnung bleibt mit ihrer Nummer und allen Beträgen erhalten und ist weiterhin einsehbar. '
     + 'Sie zählt danach aber nicht mehr als abgerechnet. Die Stornierung lässt sich nicht rückgängig machen. '
-    + 'Anschliessend können Sie bei Bedarf eine neue Schlussrechnung vorbereiten.',
+    + 'Anschliessend können Sie bei Bedarf eine neue Rechnung vorbereiten.',
+  'invoice.cancel.notice.internal':
+    'Diese Rechnung wurde noch nicht als versendet markiert. Sie wird intern storniert; '
+    + 'ein gesonderter Korrekturbeleg wird nicht erzeugt.',
+  'invoice.cancel.notice.correction':
+    'Diese Rechnung wurde bereits versendet. Zur Stornierung wird ein Korrekturbeleg mit Bezug auf '
+    + 'die Originalrechnung erzeugt und archiviert; die Originalrechnung bleibt unverändert.',
+  'invoice.cancel.kind.internal': 'Internes Storno (vor Versand)',
+  'invoice.cancel.kind.correction': 'Storno mit Korrekturbeleg (nach Versand)',
+  'invoice.cancel.kindLabel': 'Art der Stornierung',
+  'invoice.cancel.openCorrection': 'Korrekturbeleg öffnen',
+  'invoice.cancel.correctionPending':
+    'Der Korrekturbeleg ist in der Cloud angelegt und wird beim nächsten Abgleich auf dieses Gerät übernommen.',
+  'invoice.cancel.alreadyCancelled':
+    'Diese Rechnung war bereits storniert. Der ursprünglich erfasste Grund bleibt massgeblich.',
+  'invoice.cancel.error.correctionDocumentMissing':
+    'Die Cloud meldete eine Stornierung ohne Korrekturbeleg. Es wurde auf diesem Gerät nichts storniert – bitte laden Sie die Ansicht neu.',
+  'invoice.correction.title': 'Rechnungskorrektur',
+  'invoice.correction.backToOriginal': 'Zur Originalrechnung',
+  'invoice.correction.reference': 'Bezug: Rechnung {number} vom {date}',
+  'invoice.correction.reasonLabel': 'Grund der Stornierung',
+  'invoice.correction.issueDate': 'Korrekturdatum',
+  'invoice.correction.notFound': 'Zu dieser Rechnung gibt es keinen Korrekturbeleg.',
   'invoice.cancel.reasonLabel': 'Grund der Stornierung (Pflichtangabe)',
   'invoice.cancel.error.reasonRequired': 'Bitte geben Sie einen Grund für die Stornierung an.',
   'invoice.cancel.error.activePayments':
     'Zu dieser Rechnung ist bereits ein Zahlungseingang erfasst. '
     + 'Nehmen Sie die Zahlung zuerst zurück; danach ist die Stornierung möglich.',
   'invoice.cancel.error.typeNotSupported':
-    'Nur Schlussrechnungen können hier storniert werden.',
+    'Nur Rechnungen und Schlussrechnungen können hier storniert werden.',
   'invoice.cancel.error.notFinalized':
     'Nur freigegebene Rechnungen können storniert werden. Ein Entwurf lässt sich stattdessen verwerfen.',
   'invoice.cancel.error.notFound':
@@ -2451,6 +2479,43 @@ const deLegacy = {
     'Die Zahlung konnte in der Cloud nicht storniert werden. Sie bleibt deshalb bestehen – bitte erneut versuchen.',
   'payment.persistFailed':
     'Die Zahlung konnte nicht gespeichert werden. Es wurde nichts geändert – bitte erneut versuchen.',
+
+  // MANUAL-INVOICE-UI-01B2 — globale Detailseite der freien Rechnung.
+  'invoice.communicationNeedsVorgang':
+    'Nachrichten zu dieser Rechnung sind erst mit einem Vorgang möglich.',
+  // MANUAL-INVOICE-UI-01B1B — die Rechnung ohne Auftrag in vier Schritten.
+  'manualInvoice.title': 'Neue Rechnung',
+  'manualInvoice.entry': 'Neue Rechnung',
+  'manualInvoice.progress': 'Fortschritt',
+  'manualInvoice.step.customer': 'Kunde',
+  'manualInvoice.step.positions': 'Positionen',
+  'manualInvoice.step.details': 'Rechnungsdetails',
+  'manualInvoice.step.review': 'Prüfen und freigeben',
+  'manualInvoice.subtitle.customer': 'An wen geht die Rechnung?',
+  'manualInvoice.subtitle.positions': 'Was wird berechnet?',
+  'manualInvoice.subtitle.details': 'Datum, Zahlungsziel und Texte',
+  'manualInvoice.subtitle.review': 'Vorschau prüfen – erst „Rechnung freigeben“ vergibt die Nummer.',
+  'manualInvoice.next.positions': 'Weiter zu Positionen',
+  'manualInvoice.next.details': 'Weiter zu Rechnungsdetails',
+  'manualInvoice.next.review': 'Weiter zur Prüfung',
+  'manualInvoice.customer.name': 'Name des Kunden',
+  'manualInvoice.customer.change': 'Anderen Kunden wählen',
+  'manualInvoice.customer.missing': 'Der gewählte Kunde ist nicht mehr vorhanden. Bitte erneut wählen.',
+  'manualInvoice.positions.empty': 'Noch keine Position. Fügen Sie unten die erste Position hinzu.',
+  'manualInvoice.position.addTitle': 'Position hinzufügen',
+  'manualInvoice.position.editTitle': 'Position bearbeiten',
+  'manualInvoice.position.description': 'Beschreibung',
+  'manualInvoice.position.quantity': 'Menge',
+  'manualInvoice.position.unit': 'Einheit',
+  'manualInvoice.position.unitPrice': 'Einzelpreis (netto)',
+  'manualInvoice.position.add': 'Position hinzufügen',
+  'manualInvoice.position.apply': 'Änderung übernehmen',
+  'manualInvoice.position.issue.description': 'Bitte eine Beschreibung eingeben.',
+  'manualInvoice.position.issue.quantity': 'Die Menge muss größer als 0 sein.',
+  'manualInvoice.position.issue.unitPrice': 'Der Einzelpreis darf nicht negativ sein.',
+  'manualInvoice.position.issue.unit': 'Bitte eine gültige Einheit wählen.',
+  'manualInvoice.servicePeriod.confirmText':
+    'Bitte den Leistungszeitraum bestätigen, bevor die Rechnung freigegeben wird.',
 
   'overview.title': 'Offene Rechnungen',
   'overview.subtitle': 'Zahlungsstand aller Rechnungen auf einen Blick',
@@ -4599,6 +4664,42 @@ const trLegacy: Partial<Record<keyof typeof de, string>> = {
   'invoice.validation.servicePeriodOrder':
     'Hizmet döneminin bitişi başlangıcından önce olamaz.',
   'invoice.confirmServicePeriod': 'Dönemi onayla',
+  // MANUAL-INVOICE-UI-01B2
+  'invoice.communicationNeedsVorgang':
+    'Bu faturaya ilişkin mesajlar ancak bir işlemle mümkündür.',
+  // MANUAL-INVOICE-UI-01B1B
+  'manualInvoice.title': 'Yeni fatura',
+  'manualInvoice.entry': 'Yeni fatura',
+  'manualInvoice.progress': 'İlerleme',
+  'manualInvoice.step.customer': 'Müşteri',
+  'manualInvoice.step.positions': 'Kalemler',
+  'manualInvoice.step.details': 'Fatura bilgileri',
+  'manualInvoice.step.review': 'Kontrol et ve onayla',
+  'manualInvoice.subtitle.customer': 'Fatura kime gidiyor?',
+  'manualInvoice.subtitle.positions': 'Ne faturalandırılıyor?',
+  'manualInvoice.subtitle.details': 'Tarih, ödeme vadesi ve metinler',
+  'manualInvoice.subtitle.review': 'Önizlemeyi kontrol edin – numara ancak „Faturayı onayla“ ile verilir.',
+  'manualInvoice.next.positions': 'Kalemlere devam',
+  'manualInvoice.next.details': 'Fatura bilgilerine devam',
+  'manualInvoice.next.review': 'Kontrole devam',
+  'manualInvoice.customer.name': 'Müşteri adı',
+  'manualInvoice.customer.change': 'Başka müşteri seç',
+  'manualInvoice.customer.missing': 'Seçilen müşteri artık mevcut değil. Lütfen yeniden seçin.',
+  'manualInvoice.positions.empty': 'Henüz kalem yok. Aşağıdan ilk kalemi ekleyin.',
+  'manualInvoice.position.addTitle': 'Kalem ekle',
+  'manualInvoice.position.editTitle': 'Kalemi düzenle',
+  'manualInvoice.position.description': 'Açıklama',
+  'manualInvoice.position.quantity': 'Miktar',
+  'manualInvoice.position.unit': 'Birim',
+  'manualInvoice.position.unitPrice': 'Birim fiyat (net)',
+  'manualInvoice.position.add': 'Kalem ekle',
+  'manualInvoice.position.apply': 'Değişikliği uygula',
+  'manualInvoice.position.issue.description': 'Lütfen bir açıklama girin.',
+  'manualInvoice.position.issue.quantity': 'Miktar 0’dan büyük olmalıdır.',
+  'manualInvoice.position.issue.unitPrice': 'Birim fiyat negatif olamaz.',
+  'manualInvoice.position.issue.unit': 'Lütfen geçerli bir birim seçin.',
+  'manualInvoice.servicePeriod.confirmText':
+    'Faturayı onaylamadan önce lütfen hizmet dönemini onaylayın.',
   // INVOICE-SENT-CLOUD-DURABILITY-01B
   'invoice.sent.cloudPending':
     'Gönderim durumu bu cihazda kayıtlı, ancak henüz çevrimiçi olarak kaydedilmedi.',
@@ -5471,6 +5572,42 @@ const bgLegacy: Partial<Record<keyof typeof de, string>> = {
   'invoice.validation.servicePeriodOrder':
     'Краят на периода на изпълнение не може да бъде преди началото.',
   'invoice.confirmServicePeriod': 'Потвърди периода',
+  // MANUAL-INVOICE-UI-01B2
+  'invoice.communicationNeedsVorgang':
+    'Съобщения по тази фактура са възможни едва след свързване с процес.',
+  // MANUAL-INVOICE-UI-01B1B
+  'manualInvoice.title': 'Нова фактура',
+  'manualInvoice.entry': 'Нова фактура',
+  'manualInvoice.progress': 'Напредък',
+  'manualInvoice.step.customer': 'Клиент',
+  'manualInvoice.step.positions': 'Позиции',
+  'manualInvoice.step.details': 'Данни на фактурата',
+  'manualInvoice.step.review': 'Проверка и одобрение',
+  'manualInvoice.subtitle.customer': 'До кого е фактурата?',
+  'manualInvoice.subtitle.positions': 'Какво се фактурира?',
+  'manualInvoice.subtitle.details': 'Дата, срок за плащане и текстове',
+  'manualInvoice.subtitle.review': 'Проверете прегледа – номерът се дава едва с „Одобри фактурата“.',
+  'manualInvoice.next.positions': 'Напред към позициите',
+  'manualInvoice.next.details': 'Напред към данните',
+  'manualInvoice.next.review': 'Напред към проверката',
+  'manualInvoice.customer.name': 'Име на клиента',
+  'manualInvoice.customer.change': 'Избери друг клиент',
+  'manualInvoice.customer.missing': 'Избраният клиент вече не съществува. Моля, изберете отново.',
+  'manualInvoice.positions.empty': 'Все още няма позиция. Добавете първата позиция по-долу.',
+  'manualInvoice.position.addTitle': 'Добави позиция',
+  'manualInvoice.position.editTitle': 'Редактирай позиция',
+  'manualInvoice.position.description': 'Описание',
+  'manualInvoice.position.quantity': 'Количество',
+  'manualInvoice.position.unit': 'Единица',
+  'manualInvoice.position.unitPrice': 'Единична цена (нето)',
+  'manualInvoice.position.add': 'Добави позиция',
+  'manualInvoice.position.apply': 'Приложи промяната',
+  'manualInvoice.position.issue.description': 'Моля, въведете описание.',
+  'manualInvoice.position.issue.quantity': 'Количеството трябва да е по-голямо от 0.',
+  'manualInvoice.position.issue.unitPrice': 'Единичната цена не може да е отрицателна.',
+  'manualInvoice.position.issue.unit': 'Моля, изберете валидна единица.',
+  'manualInvoice.servicePeriod.confirmText':
+    'Моля, потвърдете периода на услугата, преди да одобрите фактурата.',
   // INVOICE-SENT-CLOUD-DURABILITY-01B
   'invoice.sent.cloudPending':
     'Статусът на изпращане е запазен на това устройство, но още не е запазен онлайн.',

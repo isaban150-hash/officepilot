@@ -382,7 +382,8 @@ describe('MANUAL-INVOICE-CUSTOMER-IDENTITY-01B', () => {
     const workspace = getKundenWorkspace('customer', customer.id);
     expect(workspace?.openInvoices.map((i) => i.id)).toEqual(['inv-1']);
     expect(workspace?.openInvoices[0]!.vorgangId).toBeNull();
-    expect(workspace?.openInvoices[0]!.route).toBe('/rechnungen/offen');
+    // 01B2 — die freie Rechnung hat jetzt ihre eigene globale Detailroute.
+    expect(workspace?.openInvoices[0]!.route).toBe('/rechnungen/inv-1');
   });
 
   it('T17: gleicher Name, andere customerId → keine falsche Zuordnung', () => {

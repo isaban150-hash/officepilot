@@ -22,6 +22,10 @@ import {
   validateInvoiceDraftForApproval,
 } from '../services/invoiceService';
 import { getCompanyProfile } from '../services/companyProfileService';
+import {
+  mapFinalizationFailureToUx,
+  taxDecisionBlocker as taxDecisionBlockerShared,
+} from '../services/invoice/invoiceApprovalUx';
 import { loadInvoiceDraftRecordByLocator } from '../services/invoice/invoiceDraftDurabilityService';
 import {
   applyCriticalCompanyProfileFields,
@@ -49,8 +53,10 @@ import { useUiSessionRestore } from '../hooks/useUiSessionRestore';
 import { useReportUiSession } from '../hooks/useReportUiSession';
 import { applyMainScrollTop } from '../services/uiSession/uiSessionCapture';
 import {
+  buildInvoiceWizardDraftIdentity,
   buildInvoiceWizardResumeValues,
   readInvoiceWizardContractSkontoChoice,
+  resolveResumableInvoiceWizardStep,
 } from '../services/uiSession/invoiceWizardResume';
 import {
   CONTRACT_ORDER_INVOICE_TYPES,
@@ -149,16 +155,8 @@ function parseIsoDateUtc(value: string): number | null {
  * den Weg zur Vorschau und entscheidet über eine Wiederaufnahme — es gibt
  * bewusst keine zweite, abweichende Regel.
  */
-function taxDecisionBlocker(
-  taxStatus: TaxStatus,
-  reverseCharge13bConfirmed: boolean,
-): TranslationKey | null {
-  if (taxStatus === 'unclear') return 'invoice.validation.taxStatus';
-  if (taxStatus === 'reverse_charge_13b' && !reverseCharge13bConfirmed) {
-    return 'invoice.validation.reverseChargeConfirmRequired';
-  }
-  return null;
-}
+// 01B1B — die Regel lebt jetzt in `invoiceApprovalUx`; hier nur der Name.
+const taxDecisionBlocker = taxDecisionBlockerShared;
 
 /**
  * Der Ladezustand der dauerhaften Sitzung ist belastbar entschieden.
@@ -181,17 +179,8 @@ function isHydrationSettled(status: InvoiceDraftSessionStatus): boolean {
  * zurück und muss erneut bestätigt werden. `edit` nur, solange keine
  * Finalisierung läuft oder abgeschlossen ist.
  */
-function resolveResumableStep(input: {
-  requested: RechnungStep | null;
-  hasDraft: boolean;
-  taxDecisionSettled: boolean;
-  finalizationLocked: boolean;
-}): RechnungStep {
-  const { requested, hasDraft, taxDecisionSettled, finalizationLocked } = input;
-  if (!requested || requested === 'positions' || !hasDraft) return 'positions';
-  if (requested === 'preview') return taxDecisionSettled ? 'preview' : 'positions';
-  return taxDecisionSettled && !finalizationLocked ? 'edit' : 'positions';
-}
+// 01B1A — die Regel lebt jetzt in `invoiceWizardResume`; hier nur der Name.
+const resolveResumableStep = resolveResumableInvoiceWizardStep;
 
 /*
  * Beide Werte müssen exakt so entstehen wie im Preflight des Coordinators —
@@ -480,9 +469,8 @@ export function RechnungPage() {
    * CONTRACT-SKONTO-DUE-DATE-CONSISTENCY-01B bleibt massgeblich und wird hier
    * nur gelesen — Fälligkeit, Angebot und vorhandener Text bleiben unangetastet.
    */
-  const draftIdentity = locator
-    ? `${locator.sourceScopeKey}#${locator.workspaceId}#${locator.vorgangId}#${locator.invoiceType}`
-    : '';
+  // 01B1A — kanonisch aus `invoiceWizardResume`; für Vorgänge byteidentisch zu vorher.
+  const draftIdentity = locator ? buildInvoiceWizardDraftIdentity(locator) : '';
 
   useEffect(() => {
     if (contractChoiceRestored) return;
@@ -1259,49 +1247,15 @@ export function RechnungPage() {
     });
 
     if (!result.ok) {
-      if (result.reason === 'offline_or_unconfigured') {
-        showToast(translate('invoice.approve.offline'));
-      } else if (result.reason === 'auth_missing') {
-        showToast(translate('invoice.approve.auth'));
-      } else if (
-        result.reason === 'workspace_missing' ||
-        result.reason === 'workspace_changed' ||
-        result.reason === 'scope_mismatch'
-      ) {
-        showToast(translate('invoice.approve.workspace'));
-      } else if (
-        result.reason === 'conflict' ||
-        result.reason === 'idempotency_conflict' ||
-        result.reason === 'possible_existing_invoice'
-      ) {
-        showToast(translate('invoice.approve.conflict'));
-      } else if (
-        result.reason === 'local_persist_failed' ||
-        result.reason === 'persist_failed'
-      ) {
-        showToast(translate('invoice.approve.localPersistPending'));
-      } else {
-        showToast(translate('invoice.approve.failed'));
-      }
       /*
-       * Die Freigabe wird wieder geöffnet, wenn einer von zwei Nachweisen
-       * vorliegt — und nur dann.
-       *
-       * 1. `retry_allowed`: der Coordinator erklärt den Ausgang ausdrücklich
-       *    für wiederholbar.
-       * 2. INVOICE-FINALIZE-HANG-01C — `cloudState === 'not_committed'`: es ist
-       *    nachweislich **nichts** übertragen worden. Fast jeder Fehlschlag vor
-       *    `begin` trägt diesen Zustand, bekommt von `failBeforeBegin` aber die
-       *    Vorgabe `recovery: 'blocked'`. Wer nur auf `recovery` sieht, sperrt
-       *    damit einen völlig sicheren Zustand dauerhaft — im Realtest blieb
-       *    die Oberfläche deshalb auf „Rechnung wird freigegeben…" stehen,
-       *    obwohl gar kein Serverkontakt stattgefunden hatte.
-       *
-       * Alles andere — `confirmed`, `conflict` und vor allem `unknown` — bleibt
-       * gesperrt. Dort könnte serverseitig bereits eine Rechnung liegen, und
-       * ein zweiter Versuch würde eine zweite erzeugen.
+       * 01B1B — Hinweis und Sperrverhalten kommen aus `mapFinalizationFailureToUx`
+       * (INVOICE-FINALIZE-HANG-01C: geöffnet nur bei `retry_allowed` oder
+       * nachweislich `not_committed`; `confirmed`/`conflict`/`unknown` bleiben
+       * gesperrt). Dieselbe Regel gilt für die Rechnung ohne Auftrag.
        */
-      if (result.recovery === 'retry_allowed' || result.cloudState === 'not_committed') {
+      const ux = mapFinalizationFailureToUx(result);
+      showToast(translate(ux.messageKey));
+      if (ux.unlock) {
         approveLockRef.current = false;
         setApproving(false);
       }

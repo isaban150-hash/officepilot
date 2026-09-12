@@ -40,6 +40,54 @@ export interface InvoiceWizardResumeContext {
 }
 
 /**
+ * MANUAL-INVOICE-UI-01B1A — die Sitzungsidentität eines Entwurfs, kanonisch
+ * an einer Stelle.
+ *
+ * Für Vorgangsentwürfe ist das byteidentisch die bisherige `#`-Verkettung aus
+ * `RechnungPage`. Für die Rechnung ohne Auftrag ein JSON-Array mit typisiertem
+ * Tupel an der Vorgangsstelle: Es beginnt mit `[`, die Verkettung mit dem
+ * Scope-Schlüssel — die beiden Formen können sich nicht überschneiden.
+ */
+export function buildInvoiceWizardDraftIdentity(locator: {
+  sourceScopeKey: string;
+  workspaceId: string;
+  vorgangId: string | null;
+  invoiceType: string;
+}): string {
+  if (locator.vorgangId === null) {
+    return JSON.stringify([
+      locator.sourceScopeKey,
+      locator.workspaceId,
+      ['manual-invoice', 1],
+      locator.invoiceType,
+    ]);
+  }
+  return `${locator.sourceScopeKey}#${locator.workspaceId}#${locator.vorgangId}#${locator.invoiceType}`;
+}
+
+export type InvoiceWizardStep = 'positions' | 'preview' | 'edit';
+
+/**
+ * MANUAL-INVOICE-UI-01B1A — aus `RechnungPage` herausgezogen, unverändert.
+ *
+ * Ein `?step=` aus der Adresse wird **geprüft**, nicht geglaubt: Ohne
+ * Entwurf gibt es nur den Einstieg; die Vorschau setzt eine getroffene
+ * Steuerentscheidung voraus; Bearbeiten ist nach Beginn der Finalisierung
+ * gesperrt. Gilt für Vorgangs- und freie Entwürfe gleich.
+ */
+export function resolveResumableInvoiceWizardStep(input: {
+  requested: InvoiceWizardStep | null;
+  hasDraft: boolean;
+  taxDecisionSettled: boolean;
+  finalizationLocked: boolean;
+}): InvoiceWizardStep {
+  const { requested, hasDraft, taxDecisionSettled, finalizationLocked } = input;
+  if (!requested || requested === 'positions' || !hasDraft) return 'positions';
+  if (requested === 'preview') return taxDecisionSettled ? 'preview' : 'positions';
+  return taxDecisionSettled && !finalizationLocked ? 'edit' : 'positions';
+}
+
+/**
  * Die sicheren Werte für die laufende Sitzung. Ohne Vertragsangebot gibt es
  * nichts zu merken — dann bleibt der Ablagebereich leer.
  */

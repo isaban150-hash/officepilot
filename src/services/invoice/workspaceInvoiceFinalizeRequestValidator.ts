@@ -171,6 +171,11 @@ const PAYLOAD_FORBIDDEN_KEYS = new Set<string>([
   'cancelledAt',
   'cancelReason',
   'cancelledBy',
+  // NORMAL-INVOICE-CANCELLATION-01B — Spaltenwahrheit und lokale Projektion, nie im Payload.
+  'cancellationKind',
+  'correctionDocumentId',
+  'correctionNumber',
+  'correctionArchiveDocumentId',
 ]);
 
 const LINE_KEYS = [

@@ -63,6 +63,18 @@ export function buildManualInvoiceFinalizeIntentKey(draftId: string): string {
   return `manual:${draftId}`;
 }
 
+/**
+ * MANUAL-INVOICE-UI-01B1A — der eine Intent-Schlüssel für beide Wege: die
+ * Vorgangskennung (byteidentisch zum Bestand) oder der Manual-Schlüssel des
+ * Entwurfs. Wer den Intent adressiert, ruft dies — niemand baut es nach.
+ */
+export function buildInvoiceFinalizeIntentKey(
+  vorgangId: string | null,
+  draftId: string,
+): string {
+  return vorgangId ?? buildManualInvoiceFinalizeIntentKey(draftId);
+}
+
 export function resolveInvoiceFinalizeIntent(input: {
   workspaceId: string;
   vorgangId: string;

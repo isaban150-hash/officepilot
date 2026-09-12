@@ -121,7 +121,13 @@ export interface InvoiceDraftFinalizationPreparation {
 export interface InvoiceDraftIdentity {
   sourceScopeKey: string;
   workspaceId: string;
-  vorgangId: string;
+  /**
+   * MANUAL-INVOICE-UI-01B1A — `null` ist die Rechnung ohne Auftrag. V1: genau
+   * ein solcher Entwurf je Workspace, nur für `invoiceType: 'rechnung'`. Der
+   * Datensatzschlüssel dafür ist eine eigene, kollisionsfreie Form; die
+   * Schlüssel bestehender Vorgangsentwürfe bleiben byteidentisch.
+   */
+  vorgangId: string | null;
   invoiceType: InvoiceDocumentType;
   draftId: string;
 }
@@ -134,7 +140,8 @@ export interface InvoiceDraftIdentity {
 export interface InvoiceDraftLocator {
   sourceScopeKey: string;
   workspaceId: string;
-  vorgangId: string;
+  /** 01B1A — `null` ist die Rechnung ohne Auftrag (siehe `InvoiceDraftIdentity`). */
+  vorgangId: string | null;
   invoiceType: InvoiceDocumentType;
 }
 
@@ -144,7 +151,8 @@ export interface InvoiceDraftRecord {
   recordKey: string;
   sourceScopeKey: string;
   workspaceId: string;
-  vorgangId: string;
+  /** 01B1A — `null` ist die Rechnung ohne Auftrag. */
+  vorgangId: string | null;
   invoiceType: InvoiceDocumentType;
   draftId: string;
   revision: number;

@@ -63,14 +63,38 @@ export function InvoiceHeader({ model }: Props) {
       <div className="invoice-header__meta">
         <h1 className="invoice-header__title">{model.documentTitle}</h1>
         <dl className="invoice-header__facts">
-          <div>
-            <dt>{translate('invoice.number')}</dt>
-            <dd data-testid="invoice-document-number">{numberLabel}</dd>
-          </div>
-          <div>
-            <dt>Rechnungsdatum</dt>
-            <dd>{formatInvoiceDate(model.issueDate)}</dd>
-          </div>
+          {/*
+            * NORMAL-INVOICE-CANCELLATION-01B — ein Korrekturbeleg verbraucht keine
+            * Rechnungsnummer; er nennt die Nummer und das Datum des Originals.
+            * Ohne `correction` bleibt die Darstellung byteidentisch.
+            */}
+          {model.correction ? (
+            <>
+              <div>
+                <dt>Zu Rechnung Nr.</dt>
+                <dd data-testid="invoice-document-number">{model.correction.originalInvoiceNumber}</dd>
+              </div>
+              <div>
+                <dt>Originaldatum</dt>
+                <dd>{formatInvoiceDate(model.correction.originalIssueDate)}</dd>
+              </div>
+              <div>
+                <dt>Korrekturdatum</dt>
+                <dd data-testid="invoice-correction-date">{formatInvoiceDate(model.issueDate)}</dd>
+              </div>
+            </>
+          ) : (
+            <>
+              <div>
+                <dt>{translate('invoice.number')}</dt>
+                <dd data-testid="invoice-document-number">{numberLabel}</dd>
+              </div>
+              <div>
+                <dt>Rechnungsdatum</dt>
+                <dd>{formatInvoiceDate(model.issueDate)}</dd>
+              </div>
+            </>
+          )}
           <div>
             <dt>Belegart</dt>
             <dd>{model.documentTitle}</dd>

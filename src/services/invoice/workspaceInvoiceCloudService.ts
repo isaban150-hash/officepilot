@@ -123,6 +123,10 @@ export interface WorkspaceInvoicePullRow {
   cancelled_at?: string | null;
   cancelled_by?: string | null;
   cancel_reason?: string | null;
+  /** NORMAL-INVOICE-CANCELLATION-01B — Art des Stornos und Korrekturbeleg-Relation. */
+  cancellation_kind?: string | null;
+  correction_document_id?: string | null;
+  correction_number?: string | null;
 }
 
 /*
@@ -268,6 +272,11 @@ export function buildWorkspaceInvoiceFinalizePayload(invoice: VorgangInvoice): R
      */
     cancelledAt: _cancelledAt,
     cancelReason: _cancelReason,
+    // NORMAL-INVOICE-CANCELLATION-01B — ebenfalls Serverwahrheit bzw. lokale Projektion.
+    cancellationKind: _cancellationKind,
+    correctionDocumentId: _correctionDocumentId,
+    correctionNumber: _correctionNumber,
+    correctionArchiveDocumentId: _correctionArchiveDocumentId,
     ...rest
   } = invoice;
 
@@ -601,6 +610,15 @@ export function inspectWorkspaceInvoicePullRow(
             cancel_reason: row.cancel_reason == null ? null : String(row.cancel_reason),
           }
         : {}),
+      // NORMAL-INVOICE-CANCELLATION-01B — dieselbe Regel: fehlt der Schlüssel, kennt der Server ihn nicht.
+      ...('cancellation_kind' in row
+        ? {
+            cancellation_kind: row.cancellation_kind == null ? null : String(row.cancellation_kind),
+            correction_document_id:
+              row.correction_document_id == null ? null : String(row.correction_document_id),
+            correction_number: row.correction_number == null ? null : String(row.correction_number),
+          }
+        : {}),
     },
   };
 }
@@ -654,6 +672,24 @@ export function mapWorkspaceInvoicePullRowToVorgangInvoice(
       delete (invoice as { cancelledAt?: unknown }).cancelledAt;
       delete (invoice as { cancelReason?: unknown }).cancelReason;
     }
+  }
+
+  /*
+   * NORMAL-INVOICE-CANCELLATION-01B — Art und Korrekturbeleg-Relation sind
+   * reine Spaltenwahrheit; sie haben keinen Payload-Spiegel. Ein unbekannter
+   * Wert wird nicht geraten, sondern weggelassen.
+   */
+  delete (invoice as { cancellationKind?: unknown }).cancellationKind;
+  delete (invoice as { correctionDocumentId?: unknown }).correctionDocumentId;
+  delete (invoice as { correctionNumber?: unknown }).correctionNumber;
+  delete (invoice as { correctionArchiveDocumentId?: unknown }).correctionArchiveDocumentId;
+  if (row.cancellation_kind !== undefined && invoice.cancelledAt) {
+    const kind = optionalCloudText(row.cancellation_kind ?? undefined);
+    if (kind === 'internal' || kind === 'correction') invoice.cancellationKind = kind;
+    const correctionDocumentId = optionalCloudText(row.correction_document_id ?? undefined);
+    if (correctionDocumentId) invoice.correctionDocumentId = correctionDocumentId;
+    const correctionNumber = optionalCloudText(row.correction_number ?? undefined);
+    if (correctionNumber) invoice.correctionNumber = correctionNumber;
   }
 
   // Explicitly drop comfort/local-only fields from cloud mapping.

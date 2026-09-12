@@ -17,12 +17,20 @@
 import {
   commitDocumentStoreMerge,
   getDocumentStoreSnapshot,
+  isInvoiceCorrectionDocument,
 } from '../documentService';
-import { getAllVorgaenge, updateInvoiceArchiveDocumentId } from '../vorgangService';
+import {
+  getAllVorgaenge,
+  updateInvoiceArchiveDocumentId,
+  updateInvoiceCorrectionArchiveDocumentId,
+} from '../vorgangService';
 import { getInvoiceStoreSnapshot } from '../invoice/invoiceStore';
+import { buildInvoiceCorrectionDocumentFromCloudRow } from '../invoice/invoiceCorrectionArchive';
 import { isEntitySyncActive, withTombstonedEntity } from '../sync/syncMetaService';
 import {
+  GENERATED_INVOICE_CORRECTION_DOCUMENT_KIND,
   GENERATED_INVOICE_DOCUMENT_KIND,
+  PULLED_DOCUMENT_KINDS,
   pullDocumentsFromCloud,
   type DocumentCloudOutcome,
   type WorkspaceDocumentRow,
@@ -199,40 +207,71 @@ export function buildDocumentFromCloudRow(row: WorkspaceDocumentRow): CompanyDoc
  *   * Ein Grabstein gewinnt immer, auch gegen eine aktive lokale Kopie.
  *   * Fremde Dokumentarten werden nicht angefasst.
  */
+/**
+ * NORMAL-INVOICE-CANCELLATION-01B — der fachliche Schlüssel eines erzeugten
+ * Dokuments: **Dokumentart + Rechnung**. Original und Korrekturbeleg tragen
+ * dieselbe `linkedInvoiceId` und dürfen nebeneinander bestehen; nur innerhalb
+ * einer Art gibt es genau ein Dokument je Rechnung.
+ */
+function documentMergeKey(kind: string, invoiceId: string): string {
+  return `${kind}:${invoiceId}`;
+}
+
+/** Die Cloud-Dokumentart eines lokalen erzeugten Dokuments — oder `null` für Fremdes. */
+export function localGeneratedDocumentKind(document: CompanyDocument): string | null {
+  if (!document.linkedInvoiceId?.trim()) return null;
+  if (isInvoiceCorrectionDocument(document)) return GENERATED_INVOICE_CORRECTION_DOCUMENT_KIND;
+  if (isCloudEligibleGeneratedInvoiceDocument(document)) return GENERATED_INVOICE_DOCUMENT_KIND;
+  return null;
+}
+
+/** Cloud-Zeile → lokales Dokument, je nach Art. */
+function buildAnyDocumentFromCloudRow(row: WorkspaceDocumentRow): CompanyDocument | null {
+  if (row.documentKind === GENERATED_INVOICE_CORRECTION_DOCUMENT_KIND) {
+    return buildInvoiceCorrectionDocumentFromCloudRow(row);
+  }
+  return buildDocumentFromCloudRow(row);
+}
+
 export function mergeCloudDocuments(
   local: readonly CompanyDocument[],
   rows: readonly WorkspaceDocumentRow[],
 ): CompanyDocument[] {
-  const relevant = rows.filter((row) => row.documentKind === GENERATED_INVOICE_DOCUMENT_KIND);
-  const tombstonedInvoiceIds = new Set(
-    relevant.filter((row) => row.deletedAt).map((row) => row.linkedInvoiceId),
+  const relevant = rows.filter((row) => PULLED_DOCUMENT_KINDS.has(row.documentKind));
+  const tombstonedKeys = new Set(
+    relevant
+      .filter((row) => row.deletedAt)
+      .map((row) => documentMergeKey(row.documentKind, row.linkedInvoiceId)),
   );
   const activeRows = relevant.filter((row) => !row.deletedAt);
-  const activeByInvoice = new Map(activeRows.map((row) => [row.linkedInvoiceId, row]));
+  const activeByKey = new Map(
+    activeRows.map((row) => [documentMergeKey(row.documentKind, row.linkedInvoiceId), row]),
+  );
 
   const next: CompanyDocument[] = [];
-  const consumedInvoiceIds = new Set<string>();
+  const consumedKeys = new Set<string>();
 
   for (const document of local) {
+    const kind = localGeneratedDocumentKind(document);
     const invoiceId = document.linkedInvoiceId?.trim();
-    const generated = isCloudEligibleGeneratedInvoiceDocument(document);
 
     // Fremde Dokumentarten bleiben unberührt — sie sind gar nicht Teil dieses Pfads.
-    if (!generated || !invoiceId) {
+    if (!kind || !invoiceId) {
       next.push(document);
       continue;
     }
 
-    const cloudRow = activeByInvoice.get(invoiceId);
+    const key = documentMergeKey(kind, invoiceId);
+    const cloudRow = activeByKey.get(key);
 
     if (!cloudRow) {
       /*
        * Kein aktives Cloud-Dokument. Gibt es einen Grabstein für diese
-       * Rechnung, gewinnt er — auch dann, wenn die lokale Kennung eine andere
-       * ist. Sonst bleibt das Dokument, wie es ist: Es ist schlicht noch nicht
-       * gesichert, und das wird hier nicht als Löschung missdeutet.
+       * Rechnung und Art, gewinnt er — auch dann, wenn die lokale Kennung eine
+       * andere ist. Sonst bleibt das Dokument, wie es ist: Es ist schlicht
+       * noch nicht gesichert, und das wird hier nicht als Löschung missdeutet.
        */
-      if (tombstonedInvoiceIds.has(invoiceId) && isEntitySyncActive(document)) {
+      if (tombstonedKeys.has(key) && isEntitySyncActive(document)) {
         next.push(withTombstonedEntity({ ...document }, 'document'));
       } else {
         next.push(document);
@@ -240,7 +279,7 @@ export function mergeCloudDocuments(
       continue;
     }
 
-    const canonical = buildDocumentFromCloudRow(cloudRow);
+    const canonical = buildAnyDocumentFromCloudRow(cloudRow);
     if (!canonical) {
       // Unbrauchbare Zeile: nicht reparieren, nichts zerstören.
       next.push(document);
@@ -250,17 +289,17 @@ export function mergeCloudDocuments(
     /*
      * Die kanonische Zeile ersetzt das lokale Dokument — auch wenn dessen
      * Kennung abweicht. Genau das verhindert zwei Karten für dieselbe
-     * Ausgangsrechnung.
+     * Ausgangsrechnung (und zwei Korrekturbelege für dieselbe Rechnung).
      */
-    consumedInvoiceIds.add(invoiceId);
+    consumedKeys.add(key);
     next.push(canonical);
   }
 
   // Cloud-Dokumente, die lokal noch gar nicht existieren.
   for (const row of activeRows) {
-    if (consumedInvoiceIds.has(row.linkedInvoiceId)) continue;
+    if (consumedKeys.has(documentMergeKey(row.documentKind, row.linkedInvoiceId))) continue;
     if (next.some((doc) => doc.id === row.clientDocumentId)) continue;
-    const created = buildDocumentFromCloudRow(row);
+    const created = buildAnyDocumentFromCloudRow(row);
     if (created) next.unshift(created);
   }
 
@@ -295,6 +334,20 @@ export function buildArchiveDocumentIdByInvoice(
 }
 
 /**
+ * NORMAL-INVOICE-CANCELLATION-01B — dieselbe Projektion für den zweiten
+ * Verweis: `invoice.correctionArchiveDocumentId` ← Korrekturbeleg.
+ */
+export function buildCorrectionArchiveDocumentIdByInvoice(
+  documents: readonly CompanyDocument[],
+): Map<string, string> {
+  const active = documents.filter(
+    (doc) =>
+      isEntitySyncActive(doc) && isInvoiceCorrectionDocument(doc) && Boolean(doc.linkedInvoiceId?.trim()),
+  );
+  return new Map(active.map((doc) => [doc.linkedInvoiceId!.trim(), doc.id]));
+}
+
+/**
  * Rein: rechnet die Projektion auf einer Vorgangsliste aus, ohne Speicher.
  *
  * Zwei Richtungen, und die zweite ist die neue: Ein Verweis wird gesetzt, wenn
@@ -309,23 +362,41 @@ export function buildArchiveDocumentIdByInvoice(
 export function reconcileArchiveLinksOnInvoices(
   invoices: readonly VorgangInvoice[],
   byInvoiceId: ReadonlyMap<string, string>,
+  /** NORMAL-INVOICE-CANCELLATION-01B — Korrekturbelege; fehlt sie, bleibt der zweite Verweis unangetastet. */
+  correctionByInvoiceId?: ReadonlyMap<string, string>,
 ): { invoices: VorgangInvoice[]; changed: number } {
   let changed = 0;
   const next = invoices.map((invoice) => {
+    let current = invoice;
     const documentId = byInvoiceId.get(invoice.id);
 
     if (documentId) {
-      if (invoice.archiveDocumentId === documentId) return invoice;
+      if (invoice.archiveDocumentId !== documentId) {
+        changed += 1;
+        current = { ...current, archiveDocumentId: documentId };
+      }
+    } else if (invoice.archiveDocumentId) {
+      // Kein aktives Dokument mehr — ein bestehender Verweis wäre tot.
       changed += 1;
-      return { ...invoice, archiveDocumentId: documentId };
+      current = { ...current };
+      delete current.archiveDocumentId;
     }
 
-    // Kein aktives Dokument mehr — ein bestehender Verweis wäre tot.
-    if (!invoice.archiveDocumentId) return invoice;
-    changed += 1;
-    const cleared = { ...invoice };
-    delete cleared.archiveDocumentId;
-    return cleared;
+    if (correctionByInvoiceId) {
+      const correctionId = correctionByInvoiceId.get(invoice.id);
+      if (correctionId) {
+        if (current.correctionArchiveDocumentId !== correctionId) {
+          changed += 1;
+          current = { ...current, correctionArchiveDocumentId: correctionId };
+        }
+      } else if (current.correctionArchiveDocumentId) {
+        changed += 1;
+        current = { ...current };
+        delete current.correctionArchiveDocumentId;
+      }
+    }
+
+    return current;
   });
   return { invoices: changed === 0 ? [...invoices] : next, changed };
 }
@@ -335,10 +406,15 @@ export function reconcileArchiveLinksOnVorgaenge(
   documents: readonly CompanyDocument[],
 ): { vorgaenge: Vorgang[]; changed: number } {
   const byInvoiceId = buildArchiveDocumentIdByInvoice(documents);
+  const correctionByInvoiceId = buildCorrectionArchiveDocumentIdByInvoice(documents);
   let changed = 0;
 
   const next = vorgaenge.map((vorgang) => {
-    const applied = reconcileArchiveLinksOnInvoices(vorgang.invoices, byInvoiceId);
+    const applied = reconcileArchiveLinksOnInvoices(
+      vorgang.invoices,
+      byInvoiceId,
+      correctionByInvoiceId,
+    );
     changed += applied.changed;
     return applied.changed > 0 ? { ...vorgang, invoices: applied.invoices } : vorgang;
   });
@@ -349,26 +425,31 @@ export function reconcileArchiveLinksOnVorgaenge(
 export function reconcileArchiveDocumentLinks(): number {
   const documents = getDocumentStoreSnapshot();
   const byInvoiceId = buildArchiveDocumentIdByInvoice(documents);
+  const correctionByInvoiceId = buildCorrectionArchiveDocumentIdByInvoice(documents);
   let relinked = 0;
 
-  for (const vorgang of getAllVorgaenge()) {
-    for (const invoice of vorgang.invoices) {
-      const documentId = byInvoiceId.get(invoice.id) ?? null;
-      if ((invoice.archiveDocumentId ?? null) === documentId) continue;
-
-      const result = updateInvoiceArchiveDocumentId(vorgang.id, invoice.id, documentId);
+  const relink = (vorgangId: string | null, invoice: VorgangInvoice): void => {
+    const documentId = byInvoiceId.get(invoice.id) ?? null;
+    if ((invoice.archiveDocumentId ?? null) !== documentId) {
+      const result = updateInvoiceArchiveDocumentId(vorgangId, invoice.id, documentId);
       if (result.ok) relinked += 1;
     }
+    // 01B — der Korrekturbeleg heilt sich über denselben Pull.
+    const correctionId = correctionByInvoiceId.get(invoice.id) ?? null;
+    if ((invoice.correctionArchiveDocumentId ?? null) !== correctionId) {
+      const result = updateInvoiceCorrectionArchiveDocumentId(vorgangId, invoice.id, correctionId);
+      if (result.ok) relinked += 1;
+    }
+  };
+
+  for (const vorgang of getAllVorgaenge()) {
+    for (const invoice of vorgang.invoices) relink(vorgang.id, invoice);
   }
 
   // MANUAL-INVOICE-01B2c — die Rechnungen ohne Auftrag hängen an keinem Vorgang.
   for (const entry of getInvoiceStoreSnapshot()) {
     if (entry.vorgangId !== null) continue;
-    const documentId = byInvoiceId.get(entry.invoice.id) ?? null;
-    if ((entry.invoice.archiveDocumentId ?? null) === documentId) continue;
-
-    const result = updateInvoiceArchiveDocumentId(null, entry.invoice.id, documentId);
-    if (result.ok) relinked += 1;
+    relink(null, entry.invoice);
   }
 
   return relinked;
@@ -466,6 +547,7 @@ export async function applyDocumentPullToState(input: {
   const reconciledManual = reconcileArchiveLinksOnInvoices(
     manualInvoices,
     buildArchiveDocumentIdByInvoice(documents),
+    buildCorrectionArchiveDocumentIdByInvoice(documents),
   );
 
   return {

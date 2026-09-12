@@ -32,6 +32,7 @@ import {
 } from './invoiceDraftDurabilityService';
 import { getVorgangById } from '../vorgangService';
 import { refreshDraftOrderProjection } from '../invoiceService';
+import { findInvoiceLocatorById } from './invoiceRegistryService';
 import type {
   InvoiceDraftIdentity,
   InvoiceDraftLocator,
@@ -119,12 +120,27 @@ export const defaultInvoiceDraftDurabilityAdapter: InvoiceDraftDurabilityAdapter
  * Vorgangsspeicher. Injizierbar, damit Tests den inkonsistenten Fall prüfen
  * können, ohne einen Store aufzubauen.
  */
-export type FinalizedInvoicePresenceCheck = (vorgangId: string, invoiceId: string) => boolean;
+export type FinalizedInvoicePresenceCheck = (
+  vorgangId: string | null,
+  invoiceId: string,
+) => boolean;
 
+/**
+ * MANUAL-INVOICE-UI-01B1A — die Rechnung ohne Auftrag wird über die
+ * First-Class-Registry gefunden, nicht über einen Vorgang. Ein Eintrag mit
+ * derselben Kennung, der an einem Vorgang hängt, zählt hier **nicht**: Das
+ * wäre eine andere Rechnung, und der Entwurf dürfte nicht als erledigt gelten.
+ */
 export const defaultFinalizedInvoicePresenceCheck: FinalizedInvoicePresenceCheck = (
   vorgangId,
   invoiceId,
-) => (getVorgangById(vorgangId)?.invoices ?? []).some((invoice) => invoice.id === invoiceId);
+) => {
+  if (vorgangId === null) {
+    const entry = findInvoiceLocatorById(invoiceId);
+    return entry !== undefined && entry.vorgangId === null;
+  }
+  return (getVorgangById(vorgangId)?.invoices ?? []).some((invoice) => invoice.id === invoiceId);
+};
 
 export interface InvoiceDraftDurabilitySessionInput {
   locator: InvoiceDraftLocator | null;
@@ -412,7 +428,9 @@ export function useInvoiceDraftDurabilitySession(
        * sind eingefroren und werden nicht angefasst.
        */
       const refreshable = restored && record.status === 'active';
-      const vorgang = refreshable ? getVorgangById(record.vorgangId) : undefined;
+      // 01B1A — ohne Auftrag gibt es keine Planprojektion aufzufrischen.
+      const vorgang =
+        refreshable && record.vorgangId !== null ? getVorgangById(record.vorgangId) : undefined;
       /*
        * Ohne ladbaren Vorgang bleibt der gespeicherte Stand gültig: nicht
        * leeren, nicht löschen, nicht zurücksetzen.

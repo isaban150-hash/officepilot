@@ -233,8 +233,8 @@ describe('MANUAL-INVOICE-01B2c — Rechnung ohne Auftrag im Produkt', () => {
     expect(totals.openReceivables).toBeCloseTo(53.55 * 2, 2);
   });
 
-  it('B2: ohne Detailroute führt der Weg in die Übersicht — nie nach /vorgaenge/null', () => {
-    expect(buildInvoiceReachPath(null, 'inv-free-1')).toBe('/rechnungen/offen');
+  it('B2: ohne Auftrag führt der Weg auf die globale Detailroute (01B2) — nie nach /vorgaenge/null', () => {
+    expect(buildInvoiceReachPath(null, 'inv-free-1')).toBe('/rechnungen/inv-free-1');
     expect(buildInvoiceReachPath('v-1', 'inv-order-1')).toBe('/vorgaenge/v-1/rechnungen/inv-order-1');
     expect(buildInvoiceReachPath(null, 'inv-free-1')).not.toContain('null');
   });

@@ -36,16 +36,25 @@ export function buildOpenInvoicesPath(): string {
 }
 
 /**
- * MANUAL-INVOICE-01B2c — der erreichbare Ort einer Rechnung.
+ * MANUAL-INVOICE-UI-01B2 — die globale Detailroute einer Rechnung, unabhängig
+ * vom Auftrag: `/rechnungen/:invoiceId`.
  *
- * Mit Auftrag ist das die Detailseite. Eine Rechnung ohne Auftrag hat heute
- * noch keine eigene Route; sie ist aber in der Rechnungsübersicht sichtbar,
- * und genau dorthin führt der Weg. Bewusst **kein** `/vorgaenge/null/…` und
- * kein erfundener Vorgang — der Pfad ist wahr, nur noch nicht spezifisch.
- * Die eigene Route ist Teil des UI-Blocks.
+ * Die statischen Nachbarn `/rechnungen/neu` und `/rechnungen/offen` sind im
+ * Router **vor** dieser Route deklariert und werden nie als Kennung gelesen.
+ */
+export function buildGlobalInvoiceDetailPath(invoiceId: string): string {
+  return `/rechnungen/${invoiceId}`;
+}
+
+/**
+ * MANUAL-INVOICE-01B2c / UI-01B2 — der erreichbare Ort einer Rechnung.
+ *
+ * Mit Auftrag bleibt es die bestehende Vorgangsdetailseite — unverändert.
+ * Ohne Auftrag führt der Weg auf die globale Detailseite. Bewusst **kein**
+ * `/vorgaenge/null/…` und kein erfundener Vorgang.
  */
 export function buildInvoiceReachPath(vorgangId: string | null, invoiceId: string): string {
   return vorgangId === null
-    ? buildOpenInvoicesPath()
+    ? buildGlobalInvoiceDetailPath(invoiceId)
     : buildInvoiceDetailPath(vorgangId, invoiceId);
 }

@@ -19,7 +19,11 @@ import { buildPersistedStateSnapshot } from '../persistenceService';
 import { resolveCloudWorkspaceId } from '../workspace/workspaceSyncPayloadService';
 import { getActiveStorageScope } from '../storage/storageScopeService';
 import { buildDocumentBlobScopeKey } from '../storage/documentBlobScopeService';
-import { getVorgangById, upsertFinalizedInvoiceOnVorgang } from '../vorgangService';
+import {
+  getVorgangById,
+  upsertFinalizedInvoiceOnVorgang,
+  upsertFinalizedManualInvoice,
+} from '../vorgangService';
 import {
   archiveOutgoingInvoice,
   isGeneratedInvoiceDocumentSyncSilent,
@@ -71,7 +75,11 @@ export type PrepareInvoiceFinalizationFailure =
   | 'preparation_failed';
 
 export interface PrepareInvoiceFinalizationInput {
-  vorgangId: string;
+  /**
+   * MANUAL-INVOICE-UI-01B1A — `null` ist die Rechnung ohne Auftrag (nur
+   * `type: 'rechnung'`). Mit Kennung bleibt alles wie bisher.
+   */
+  vorgangId: string | null;
   draft: InvoiceDraft;
   setup: CompanySetup;
   approvalOptions?: InvoiceApprovalOptions;
@@ -236,7 +244,15 @@ function buildPreparationSynchronously(input: PrepareInvoiceFinalizationInput): 
   const { vorgangId, draft, setup } = input;
   const approvalOptions: InvoiceApprovalOptions = { ...(input.approvalOptions ?? {}) };
 
-  if (!getVorgangById(vorgangId)) {
+  /*
+   * 01B1A — mit Kennung muss der Vorgang existieren; ohne Kennung ist nur die
+   * normale Rechnung definiert. Abschlag/Schluss ohne Auftrag fallen hier als
+   * `vorgang_missing`, weil ihnen genau das fehlt — kein neuer Grund.
+   */
+  if (vorgangId !== null && !getVorgangById(vorgangId)) {
+    return { ok: false, reason: 'vorgang_missing' };
+  }
+  if (vorgangId === null && draft.type !== 'rechnung') {
     return { ok: false, reason: 'vorgang_missing' };
   }
 
@@ -684,9 +700,17 @@ async function runPreparedFinalization(
     return fail('fingerprint_mismatch', 'confirmed', { detail: 'local_invoice' });
   }
 
+  /*
+   * MANUAL-INVOICE-UI-01B1A — beide Wege enden im First-Class-Speicher: mit
+   * Auftrag über den Vorgang, ohne Auftrag unmittelbar. Kein simulierter
+   * Vorgangsslot; dieselbe Konflikt- und Persist-Semantik.
+   */
   let upsert;
   try {
-    upsert = upsertFinalizedInvoiceOnVorgang(request.vorgangId, localInvoice);
+    upsert =
+      request.vorgangId === null
+        ? upsertFinalizedManualInvoice(localInvoice)
+        : upsertFinalizedInvoiceOnVorgang(request.vorgangId, localInvoice);
   } catch (error) {
     return fail('local_persist_failed', 'confirmed', {
       message: error instanceof Error ? error.message : 'Lokale Speicherung fehlgeschlagen.',

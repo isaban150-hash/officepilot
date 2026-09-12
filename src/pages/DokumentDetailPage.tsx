@@ -21,7 +21,9 @@ import { formatPaperFilingInstruction } from '../services/paperFolderService';
 import {
   getDocumentById,
   isGeneratedOutgoingInvoiceDocument,
+  isInvoiceCorrectionDocument,
 } from '../services/documentService';
+import { buildInvoiceReachPath } from '../services/invoiceNavigation';
 import { deleteGeneratedInvoiceDocumentWithCloud } from '../services/document/generatedInvoiceDocumentDeleteService';
 import { unlinkInboxItemFromVorgang } from '../services/vorgangService';
 import { SimpleConfirmDialog } from '../components/ui/SimpleConfirmDialog';
@@ -298,15 +300,28 @@ export function DokumentDetailPage() {
             }
           />
         )}
-        {document.linkedInvoiceId && document.linkedVorgang && (
+        {/*
+          * NORMAL-INVOICE-CANCELLATION-01B — kanonische Rechnungsnavigation:
+          * mit Auftrag der Vorgangsweg, ohne Auftrag die globale Detailroute.
+          * Ein Korrekturbeleg führt in seine eigene Ansicht (`?doc=korrektur`),
+          * das Original-Archivdokument zur Originalrechnung.
+          */}
+        {document.linkedInvoiceId && (
           <DataRow
             label={translate('document.fieldLinkedInvoice')}
             value={
               <>
                 <Link
-                  to={`/vorgaenge/${document.linkedVorgang.vorgangId}/rechnungen/${document.linkedInvoiceId}?from=overview`}
+                  to={`${buildInvoiceReachPath(document.linkedVorgang?.vorgangId ?? null, document.linkedInvoiceId)}${
+                    isInvoiceCorrectionDocument(document) ? '?doc=korrektur' : '?from=overview'
+                  }`}
+                  data-testid="document-open-invoice"
                 >
-                  {translate('document.openInvoice')}
+                  {translate(
+                    isInvoiceCorrectionDocument(document)
+                      ? 'invoice.cancel.openCorrection'
+                      : 'document.openInvoice',
+                  )}
                 </Link>
                 {' · '}
                 <Link to="/rechnungen/offen">{translate('overview.title')}</Link>

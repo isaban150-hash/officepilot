@@ -15,7 +15,7 @@ import type { Vorgang, VorgangInvoice } from '../../types/models';
  * eine leere Liste erhielt. Die Regeln selbst bleiben unverändert.
  */
 import { getVorgangById } from '../vorgangService';
-import { listInvoicesForVorgang } from './invoiceStore';
+import { getInvoiceStoreSnapshot, listInvoicesForVorgang } from './invoiceStore';
 import { isBillingEffective } from '../orderBillingRules';
 import {
   buildInvoiceContentFingerprintFromInvoice,
@@ -26,7 +26,10 @@ import {
   isGeneratedInvoiceDocumentSyncSilent,
   syncGeneratedInvoiceDocumentToCloud,
 } from '../invoiceArchiveService';
-import { inspectInvoiceFinalizeIntentsForOrigin } from './invoiceFinalizeIntentService';
+import {
+  inspectInvoiceFinalizeIntentsForOrigin,
+  buildInvoiceFinalizeIntentKey,
+} from './invoiceFinalizeIntentService';
 import {
   buildInvoicePayloadV1,
   validatePreparedWorkspaceInvoiceFinalizeRequest,
@@ -282,6 +285,38 @@ type LocalProof =
  * Vollständiger lokaler Nachweis: Kennung, Vorgang, Typ, Geschäfts-Fingerprint
  * **und** die exakt rekonstruierte Antwortprojektion.
  */
+/**
+ * MANUAL-INVOICE-UI-01B1A — der lokale Vergleichsbereich eines Entwurfs.
+ *
+ * Mit Auftrag sind das die Rechnungen des Vorgangs (der existieren muss).
+ * Ohne Auftrag sind es die freien Rechnungen des First-Class-Speichers — kein
+ * `getVorgangById`, kein erfundener Vorgang. Ein Lesefehler wird gemeldet,
+ * nie als „keine Rechnungen" gedeutet.
+ */
+function listLocalInvoicesForIdentity(
+  vorgangId: string | null,
+): { ok: true; invoices: VorgangInvoice[] } | { ok: false; reason: 'storage_failed' | 'vorgang_missing'; detail?: string } {
+  try {
+    if (vorgangId === null) {
+      return {
+        ok: true,
+        invoices: getInvoiceStoreSnapshot()
+          .filter((entry) => entry.vorgangId === null)
+          .map((entry) => entry.invoice),
+      };
+    }
+    const vorgang: Vorgang | undefined = getVorgangById(vorgangId);
+    if (!vorgang) return { ok: false, reason: 'vorgang_missing' };
+    return { ok: true, invoices: vorgang.invoices ?? [] };
+  } catch (error) {
+    return {
+      ok: false,
+      reason: 'storage_failed',
+      detail: error instanceof Error ? error.message : 'snapshot',
+    };
+  }
+}
+
 export function proveLocalInvoice(input: {
   identity: InvoiceDraftIdentity;
   clientInvoiceId: string;
@@ -289,19 +324,14 @@ export function proveLocalInvoice(input: {
   request: PreparedWorkspaceInvoiceFinalizeRequest;
 }): LocalProof {
   const { identity, clientInvoiceId, contentFingerprint, request } = input;
-  let vorgang: Vorgang | undefined;
-  try {
-    vorgang = getVorgangById(identity.vorgangId);
-  } catch (error) {
-    return {
-      kind: 'blocked',
-      reason: 'storage_failed',
-      detail: error instanceof Error ? error.message : 'snapshot',
-    };
+  const scoped = listLocalInvoicesForIdentity(identity.vorgangId);
+  if (!scoped.ok) {
+    return scoped.reason === 'vorgang_missing'
+      ? { kind: 'blocked', reason: 'vorgang_missing' }
+      : { kind: 'blocked', reason: 'storage_failed', detail: scoped.detail };
   }
-  if (!vorgang) return { kind: 'blocked', reason: 'vorgang_missing' };
 
-  const invoices = vorgang.invoices ?? [];
+  const invoices = scoped.invoices;
   for (const invoice of invoices) {
     let fingerprint: string;
     try {
@@ -378,15 +408,21 @@ export function proveLocalInvoice(input: {
  * ausnahmslos leer ist.
  */
 export function findLocalFinalInvoiceConflict(
-  vorgangId: string,
+  vorgangId: string | null,
   invoiceType: VorgangInvoice['type'],
   clientInvoiceId: string,
 ): VorgangInvoice | null {
-  return findConflictingFinalInvoice(
-    listInvoicesForVorgang(vorgangId),
-    invoiceType,
-    clientInvoiceId,
-  );
+  /*
+   * 01B1A — ohne Auftrag gibt es keine Schlussrechnung und damit keinen
+   * Single-Final-Konflikt; die Prüfung läuft leer, wird aber nicht umgangen.
+   */
+  const invoices =
+    vorgangId === null
+      ? getInvoiceStoreSnapshot()
+          .filter((entry) => entry.vorgangId === null)
+          .map((entry) => entry.invoice)
+      : listInvoicesForVorgang(vorgangId);
+  return findConflictingFinalInvoice(invoices, invoiceType, clientInvoiceId);
 }
 
 export function findConflictingFinalInvoice(
@@ -431,18 +467,19 @@ export function checkResumeIntents(input: {
     return { ok: false, reason, detail: scan.detail };
   }
 
-  let vorgang: Vorgang | undefined;
-  try {
-    vorgang = getVorgangById(identity.vorgangId);
-  } catch {
+  const scoped = listLocalInvoicesForIdentity(identity.vorgangId);
+  if (!scoped.ok && scoped.reason === 'storage_failed') {
     return { ok: false, reason: 'storage_failed', detail: 'snapshot' };
   }
-  const invoices = vorgang?.invoices ?? [];
+  // Ein fehlender Vorgang war hier schon immer „keine Rechnungen"; das bleibt so.
+  const invoices = scoped.ok ? scoped.invoices : [];
+  // 01B1A — derselbe Intent-Schlüssel wie beim Anlegen (Vorgang oder Manual).
+  const intentKey = buildInvoiceFinalizeIntentKey(identity.vorgangId, identity.draftId);
 
   for (const entry of scan.entries) {
     const intent = entry.intent;
     if (intent.workspaceId !== identity.workspaceId) continue;
-    if (intent.vorgangId !== identity.vorgangId) continue;
+    if (intent.vorgangId !== intentKey) continue;
 
     if (intent.clientInvoiceId === clientInvoiceId) {
       /*

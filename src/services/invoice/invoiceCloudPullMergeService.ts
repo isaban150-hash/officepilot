@@ -28,13 +28,19 @@ export type InvoicePullMergeConflictReason =
    * referenzen. Nicht still entschieden, nicht als Inhaltskonflikt getarnt.
    */
   | 'customer_relation_conflict'
+  /** NORMAL-INVOICE-CANCELLATION-01B — zwei widersprechende Stornowahrheiten. */
+  | 'cancellation_conflict'
   | 'orphan'
   | 'invalid_row'
   | 'intent_fingerprint_conflict';
 
 /** Ein Merge-Fehlschlag als Pull-Konflikt — dieselbe Übersetzung für beide Wege. */
 function describeMergeFailure(
-  reason: 'id_content_conflict' | 'number_id_conflict' | 'customer_relation_conflict',
+  reason:
+    | 'id_content_conflict'
+    | 'number_id_conflict'
+    | 'customer_relation_conflict'
+    | 'cancellation_conflict',
   invoiceNumber: string,
   clientInvoiceId: string,
 ): { reason: InvoicePullMergeConflictReason; message: string } {
@@ -43,6 +49,11 @@ function describeMergeFailure(
       return {
         reason,
         message: `Nummernkonflikt für Rechnung ${invoiceNumber} (ID ${clientInvoiceId}).`,
+      };
+    case 'cancellation_conflict':
+      return {
+        reason,
+        message: `Stornokonflikt für Rechnung ${clientInvoiceId}: zwei verschiedene Stornowahrheiten.`,
       };
     case 'customer_relation_conflict':
       return {

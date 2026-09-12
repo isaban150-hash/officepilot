@@ -238,8 +238,27 @@ export function getDocumentById(id: string): CompanyDocument | undefined {
   return doc ? cloneDocument(doc) : undefined;
 }
 
-export function getDocumentByLinkedInvoiceId(invoiceId: string): CompanyDocument | undefined {
-  const doc = documents.find((d) => d.linkedInvoiceId === invoiceId && isEntitySyncActive(d));
+/**
+ * NORMAL-INVOICE-CANCELLATION-01B — welches der beiden Rechnungsdokumente
+ * gemeint ist. Eine Rechnung kann gleichzeitig ihr Original-Archivdokument
+ * und einen Korrekturbeleg besitzen; beide tragen dieselbe `linkedInvoiceId`.
+ */
+export type LinkedInvoiceDocumentKind = 'original' | 'correction';
+
+export function isInvoiceCorrectionDocument(document: Pick<CompanyDocument, 'classifiedKind'>): boolean {
+  return document.classifiedKind === 'rechnungskorrektur';
+}
+
+export function getDocumentByLinkedInvoiceId(
+  invoiceId: string,
+  kind: LinkedInvoiceDocumentKind = 'original',
+): CompanyDocument | undefined {
+  const doc = documents.find(
+    (d) =>
+      d.linkedInvoiceId === invoiceId &&
+      isEntitySyncActive(d) &&
+      isInvoiceCorrectionDocument(d) === (kind === 'correction'),
+  );
   return doc ? cloneDocument(doc) : undefined;
 }
 
@@ -485,6 +504,14 @@ export function deleteDocument(id: string): DocumentMutationResult {
    */
   if (isExpenseReceipt(document)) {
     return { success: false, errorKey: DOCUMENT_DELETE_BLOCK_ERROR_KEYS.expense };
+  }
+  /*
+   * NORMAL-INVOICE-CANCELLATION-01B — der Korrekturbeleg ist Teil der
+   * Stornowahrheit einer Rechnung. Er wird nie gelöscht; die Cloud-Zeile
+   * bliebe ohnehin bestehen und käme beim nächsten Pull zurück.
+   */
+  if (isInvoiceCorrectionDocument(document)) {
+    return { success: false, errorKey: 'document.delete.blocked.correction' };
   }
   // Capture original + binding FileRefs before bindings are removed.
   const heldFileRefIds = new Set<string>();

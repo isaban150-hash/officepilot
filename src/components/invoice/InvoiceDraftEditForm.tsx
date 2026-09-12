@@ -54,6 +54,7 @@ export function InvoiceDraftEditForm({ draft, onChange, customerMaster }: Props)
             type="date"
             className="input"
             value={draft.issueDate}
+            data-testid="invoice-edit-issue-date"
             onChange={(event) => onChange({ issueDate: event.target.value })}
           />
         </Field>
@@ -63,6 +64,7 @@ export function InvoiceDraftEditForm({ draft, onChange, customerMaster }: Props)
               type="date"
               className="input"
               value={draft.servicePeriodFrom}
+              data-testid="invoice-edit-service-from"
               onChange={(event) => changeServicePeriod({ servicePeriodFrom: event.target.value })}
             />
           </Field>
@@ -71,6 +73,7 @@ export function InvoiceDraftEditForm({ draft, onChange, customerMaster }: Props)
               type="date"
               className="input"
               value={draft.servicePeriodTo}
+              data-testid="invoice-edit-service-to"
               onChange={(event) => changeServicePeriod({ servicePeriodTo: event.target.value })}
             />
           </Field>
@@ -80,6 +83,7 @@ export function InvoiceDraftEditForm({ draft, onChange, customerMaster }: Props)
             type="date"
             className="input"
             value={draft.paymentDueDate}
+            data-testid="invoice-edit-payment-due"
             onChange={(event) => onChange({ paymentDueDate: event.target.value })}
           />
         </Field>
@@ -96,6 +100,7 @@ export function InvoiceDraftEditForm({ draft, onChange, customerMaster }: Props)
             type="text"
             className="input"
             value={draft.skontoText}
+            data-testid="invoice-edit-skonto"
             onChange={(event) => onChange({ skontoText: event.target.value })}
           />
         </Field>
@@ -191,7 +196,8 @@ export function InvoiceDraftEditForm({ draft, onChange, customerMaster }: Props)
           <input
             type="text"
             className="input"
-            value={draft.vorgangTitle}
+            value={draft.vorgangTitle ?? ''}
+            data-testid="invoice-edit-title"
             onChange={(event) => onChange({ projectTitle: event.target.value })}
           />
         </Field>
@@ -200,6 +206,7 @@ export function InvoiceDraftEditForm({ draft, onChange, customerMaster }: Props)
             type="text"
             className="input"
             value={draft.baustelle}
+            data-testid="invoice-edit-baustelle"
             onChange={(event) => onChange({ projectSite: event.target.value })}
           />
         </Field>

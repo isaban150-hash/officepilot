@@ -1,31 +1,49 @@
 import { buildPersistedStateSnapshot } from '../persistenceService';
 import { resolveCloudWorkspaceId } from '../workspace/workspaceSyncPayloadService';
-import { getVorgangInvoice, applyInvoiceCancellationFromCloud } from '../vorgangService';
+import {
+  applyInvoiceCancellationFromCloud,
+  getVorgangById,
+  getVorgangInvoice,
+  updateInvoiceCorrectionArchiveDocumentId,
+} from '../vorgangService';
+import {
+  commitDocumentStoreMerge,
+  getDocumentByLinkedInvoiceId,
+  getDocumentStoreSnapshot,
+} from '../documentService';
+import { isEntitySyncActive } from '../sync/syncMetaService';
 import {
   WorkspaceInvoiceCloudError,
   rpcCancelWorkspaceInvoice,
 } from './workspaceInvoiceCloudService';
+import { projectInvoiceCorrectionDocument } from './invoiceCorrectionArchive';
+import type { VorgangInvoice } from '../../types/models';
 
 /**
- * FINAL-INVOICE-CANCELLATION-SERVER-FOUNDATION-01C — die technische Anbindung
- * der Stornierung einer Schlussrechnung.
+ * FINAL-INVOICE-CANCELLATION-SERVER-FOUNDATION-01C / NORMAL-INVOICE-CANCELLATION-01B
+ * — die technische Anbindung der Stornierung einer freigegebenen Rechnung.
  *
- * ⚠️ **Keine Benutzeraktion.** Dieser Dienst wird von keiner Oberfläche
- * aufgerufen. Er bereitet ausschliesslich die spätere Confirm-first-Bedienung
- * vor: Erst wenn ein Mensch die Stornierung samt Grund ausdrücklich bestätigt
- * hat, darf ein künftiger Aufrufer hierher kommen. Nichts an diesem Dienst
- * entscheidet selbst, und nichts läuft automatisch.
+ * ⚠️ Nur nach ausdrücklicher Bestätigung eines Menschen (Confirm-first im
+ * `InvoiceCancelDialog`). Nichts hier entscheidet selbst, nichts läuft
+ * automatisch.
  *
- * Die Reihenfolge ist bewusst „Cloud zuerst, lokal danach": Die Datenbank ist
- * die Stornowahrheit. Ein lokal vorweggenommener Storno, dem der Server
- * widerspricht, wäre genau die zweite Wahrheit, die dieser Block verhindert.
+ * Reihenfolge bewusst „Cloud zuerst, lokal danach": Die Datenbank ist die
+ * Stornowahrheit — und seit 01B auch die Wahrheit des Korrekturbelegs, der
+ * dort atomar mit dem Storno entsteht. Lokal wird nur projiziert:
  *
- * Alle Fehlerausgänge sind fail-closed — es wurde dann weder in der Cloud noch
- * lokal etwas verändert, keine Zahlung zurückgebucht und keine Rechnung
- * gelöscht.
+ *   1. Stornofakten auf das Original (`applyInvoiceCancellationFromCloud`),
+ *   2. bei `correction` das Archivdokument des Korrekturbelegs — dieselbe
+ *      Kennung wie die Cloud-Zeile, idempotent, nie ein zweites.
+ *
+ * Scheitert ein lokaler Schritt, bleibt die Cloud vollständig; der nächste
+ * Pull heilt die Projektion (`reconcileArchiveDocumentLinks`). Ein zweiter
+ * Stornoversuch ist dann ein Replay und erzeugt nichts Neues.
+ *
+ * Alle Fehlerausgänge vor dem Cloud-Aufruf sind fail-closed — es wurde dann
+ * weder in der Cloud noch lokal etwas verändert.
  */
 export type CancelInvoiceFailureReason =
-  /** Nur Schlussrechnungen — Abschläge und andere Belegarten sind ein eigener Fachpunkt. */
+  /** Nur normale Rechnungen und Schlussrechnungen — Abschläge sind ein eigener Fachpunkt. */
   | 'type_not_supported'
   /** Ein Entwurf ist nie hinausgegangen; es gibt nichts zu stornieren. */
   | 'not_finalized'
@@ -39,10 +57,25 @@ export type CancelInvoiceFailureReason =
   | 'workspace_missing'
   /** Die Cloud hat storniert, der lokale Nachtrag schlug fehl — der nächste Pull holt ihn nach. */
   | 'local_persist_failed'
+  /**
+   * 01B — der Server meldete eine Korrektur ohne Korrekturbeleg. Das darf es
+   * nicht geben; lokal wird nichts als storniert markiert.
+   */
+  | 'correction_document_missing'
   | 'unknown';
 
 export type CancelInvoiceResult =
-  | { ok: true; action: 'cancelled' | 'already_cancelled' }
+  | {
+      ok: true;
+      action: 'cancelled' | 'already_cancelled';
+      invoice: VorgangInvoice;
+      /** Der autoritative Grund — bei einem Replay der **erste**, nie der erneut gesendete. */
+      cancelReason: string;
+      /** Replay mit anderem Grund: nichts überschrieben, der Aufrufer darf es zeigen. */
+      reasonDiffers: boolean;
+      /** Lokale Archivkennung des Korrekturbelegs, wenn einer gehört. */
+      correctionArchiveDocumentId?: string;
+    }
   | { ok: false; reason: CancelInvoiceFailureReason; detail?: string };
 
 function mapCloudError(error: WorkspaceInvoiceCloudError): CancelInvoiceFailureReason {
@@ -67,8 +100,44 @@ function mapCloudError(error: WorkspaceInvoiceCloudError): CancelInvoiceFailureR
   }
 }
 
+/**
+ * Lokale Projektion des Korrekturbelegs — idempotent über Art + Rechnung.
+ * Gibt die lokale Dokumentkennung zurück, oder `null` bei Persistenzfehler.
+ */
+export function archiveInvoiceCorrectionLocally(
+  vorgangId: string | null,
+  invoice: VorgangInvoice,
+): { ok: true; documentId: string } | { ok: false } {
+  const existing = getDocumentByLinkedInvoiceId(invoice.id, 'correction');
+  let documentId = existing?.id ?? null;
+
+  if (!documentId) {
+    const vorgang = vorgangId === null ? null : (getVorgangById(vorgangId) ?? null);
+    const projected = projectInvoiceCorrectionDocument(
+      invoice,
+      vorgang ? { vorgangId: vorgang.id, vorgangTitle: vorgang.title } : null,
+    );
+    if (!projected) return { ok: false };
+    const snapshot = getDocumentStoreSnapshot();
+    if (snapshot.some((doc) => doc.id === projected.id && isEntitySyncActive(doc))) {
+      documentId = projected.id;
+    } else if (!commitDocumentStoreMerge([projected, ...snapshot])) {
+      return { ok: false };
+    } else {
+      documentId = projected.id;
+    }
+  }
+
+  if (invoice.correctionArchiveDocumentId !== documentId) {
+    const linked = updateInvoiceCorrectionArchiveDocumentId(vorgangId, invoice.id, documentId);
+    if (!linked.ok) return { ok: false };
+  }
+  return { ok: true, documentId };
+}
+
 export async function cancelFinalizedInvoice(input: {
-  vorgangId: string;
+  /** NORMAL-INVOICE-CANCELLATION-01B — `null` ist die freie Rechnung ohne Auftrag. */
+  vorgangId: string | null;
   invoiceId: string;
   /** Der vom Menschen formulierte Grund. Wird nicht erfunden und nicht ergänzt. */
   reason: string;
@@ -101,22 +170,31 @@ export async function cancelFinalizedInvoice(input: {
     return { ok: false, reason: 'unknown' };
   }
 
-  const cancelledAt = cancelled.invoice.cancelledAt;
+  const remote = cancelled.invoice;
+  const cancelledAt = remote.cancelledAt;
   if (!cancelledAt) {
-    /*
-     * Der Server meldete Erfolg, die Antwort trägt aber keinen Zeitpunkt.
-     * Dann ist der Zustand unklar — es wird nichts geraten und nichts lokal
-     * geschrieben.
-     */
+    // Erfolg ohne Zeitpunkt: unklarer Zustand — nichts raten, nichts schreiben.
     return { ok: false, reason: 'unknown', detail: 'response_without_cancelled_at' };
   }
 
-  /* War die Rechnung lokal schon storniert, ist der Serveraufruf ein Replay. */
+  /*
+   * 01B — Serverwahrheit prüfen, bevor sie lokal wird: Eine versendete
+   * Rechnung darf nur mit Korrekturbeleg als storniert gelten. Ein Server, der
+   * die Art kennt und `correction` ohne Beleg meldet, ist widersprüchlich.
+   */
+  if (remote.cancellationKind === 'correction' && !remote.correctionDocumentId) {
+    return { ok: false, reason: 'correction_document_missing' };
+  }
+
   const alreadyCancelled = Boolean(local.cancelledAt);
+  const authoritativeReason = remote.cancelReason ?? local.cancelReason ?? reason;
 
   const applied = applyInvoiceCancellationFromCloud(input.vorgangId, input.invoiceId, {
     cancelledAt,
-    cancelReason: cancelled.invoice.cancelReason,
+    cancelReason: remote.cancelReason,
+    cancellationKind: remote.cancellationKind,
+    correctionDocumentId: remote.correctionDocumentId,
+    correctionNumber: remote.correctionNumber,
   });
   if (!applied.ok) {
     return {
@@ -125,5 +203,24 @@ export async function cancelFinalizedInvoice(input: {
     };
   }
 
-  return { ok: true, action: alreadyCancelled ? 'already_cancelled' : 'cancelled' };
+  let correctionArchiveDocumentId: string | undefined;
+  let invoice = applied.invoice;
+  if (invoice.cancellationKind === 'correction') {
+    const archived = archiveInvoiceCorrectionLocally(input.vorgangId, invoice);
+    if (!archived.ok) {
+      // Cloud vollständig, lokale Projektion offen — der Pull heilt sie.
+      return { ok: false, reason: 'local_persist_failed', detail: 'correction_archive' };
+    }
+    correctionArchiveDocumentId = archived.documentId;
+    invoice = getVorgangInvoice(input.vorgangId, input.invoiceId) ?? invoice;
+  }
+
+  return {
+    ok: true,
+    action: alreadyCancelled ? 'already_cancelled' : 'cancelled',
+    invoice,
+    cancelReason: authoritativeReason,
+    reasonDiffers: authoritativeReason !== reason,
+    ...(correctionArchiveDocumentId ? { correctionArchiveDocumentId } : {}),
+  };
 }

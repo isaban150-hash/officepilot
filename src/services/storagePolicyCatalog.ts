@@ -18,6 +18,8 @@ export const STORAGE_POLICY_BY_KIND: Record<ClassifiedDocumentKind, StoragePolic
   eingangsrechnung: 'business_document',
   rechnung: 'business_document',
   ausgangsrechnung: 'business_document',
+  // NORMAL-INVOICE-CANCELLATION-01B — der Korrekturbeleg ist ein Geschäftsdokument wie die Rechnung.
+  rechnungskorrektur: 'business_document',
   gutschrift: 'business_document',
   mahnung: 'business_document',
   zahlungserinnerung: 'business_document',
