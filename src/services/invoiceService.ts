@@ -878,18 +878,27 @@ export type BuildInvoiceFinalizationCandidateResult =
     };
 
 function validateDraftForFinalize(
-  vorgangId: string,
+  vorgangId: string | null,
   draft: InvoiceDraft,
   options: InvoiceApprovalOptions = {},
 ):
-  | { ok: true; vorgang: Vorgang }
+  | { ok: true; vorgang: Vorgang | undefined }
   | {
       ok: false;
       reason: 'validation_failed' | 'vorgang_missing';
       validation?: InvoiceValidationResult;
     } {
-  const vorgang = getVorgangById(vorgangId);
-  if (!vorgang) {
+  /*
+   * MANUAL-INVOICE-01B2 — ohne Auftragsbezug gibt es nichts nachzuschlagen.
+   *
+   * `validateInvoiceDraftForApproval` führt den Vorgang ohnehin als optional:
+   * Von 36 blockierenden Regeln braucht ihn keine, nur die
+   * Abschlagsobergrenze wertet ihn aus — und Abschläge bleiben
+   * auftragsgebunden. Ein fehlender Vorgang bei gesetzter Kennung bleibt
+   * dagegen ein Fehler.
+   */
+  const vorgang = vorgangId === null ? undefined : getVorgangById(vorgangId);
+  if (vorgangId !== null && !vorgang) {
     return { ok: false, reason: 'vorgang_missing' };
   }
 
@@ -967,7 +976,7 @@ function validateDraftForFinalize(
  * and without persisting. Used by cloud finalize orchestrator.
  */
 export function buildInvoiceFinalizationCandidate(
-  vorgangId: string,
+  vorgangId: string | null,
   draft: InvoiceDraft,
   setup: CompanySetup,
   clientInvoiceId: string,
@@ -988,7 +997,12 @@ export function buildInvoiceFinalizationCandidate(
     : draft.positions
         .filter((p) => p.quantity > 0)
         .map((p) => ({
-          id: `inv-line-${clientInvoiceId}-${p.orderPositionId}`,
+          /*
+           * MANUAL-INVOICE-01B2 — die Zeilenkennung stammt aus der
+           * Entwurfsposition, nicht aus dem Auftrag. Ohne Auftragsbezug stünde
+           * dort sonst wörtlich `undefined`.
+           */
+          id: `inv-line-${clientInvoiceId}-${p.orderPositionId ?? p.id}`,
           orderPositionId: p.orderPositionId,
           description: p.description,
           quantity: p.quantity,

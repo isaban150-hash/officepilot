@@ -27,6 +27,12 @@ import {
 export type CloudFinalizeFailureReason =
   | 'validation_failed'
   | 'vorgang_missing'
+  /**
+   * MANUAL-INVOICE-01B2 — die Cloud-Freigabe einer Rechnung ohne Auftrag ist
+   * serverseitig noch nicht geöffnet. Eigener Grund statt `vorgang_missing`:
+   * Hier fehlt kein Vorgang, hier fehlt der Vertrag.
+   */
+  | 'cloud_requires_vorgang'
   | 'offline_or_unconfigured'
   | 'auth_missing'
   | 'workspace_missing'
@@ -66,13 +72,30 @@ function resolveActiveWorkspaceId(): string {
  * Does not call reserveNextInvoiceNumber.
  */
 export async function finalizeInvoiceDraftWithCloud(
-  vorgangId: string,
+  vorgangId: string | null,
   draft: InvoiceDraft,
   setup: CompanySetup,
   options: InvoiceApprovalOptions = {},
 ): Promise<CloudFinalizeInvoiceResult> {
-  const vorgang = getVorgangById(vorgangId);
-  if (!vorgang) {
+  /*
+   * MANUAL-INVOICE-01B2 — die Signatur nimmt die Rechnung ohne Auftrag an,
+   * der Cloud-Weg trägt sie aber noch nicht.
+   *
+   * `finalize_workspace_invoice` weist eine leere `p_vorgang_id` ab und
+   * verlangt darüber hinaus einen existierenden Eintrag in
+   * `workspace_vorgaenge`. Das zu öffnen ist eine Server-Migration, kein
+   * Client-Umbau — deshalb hier ein benannter Abbruch statt eines erfundenen
+   * Vorgangs. Der lokale Weg über `upsertFinalizedManualInvoice` bleibt davon
+   * unberührt.
+   */
+  if (vorgangId === null) {
+    return {
+      ok: false,
+      reason: 'cloud_requires_vorgang',
+      message: 'Rechnungen ohne Auftrag können noch nicht über die Cloud freigegeben werden.',
+    };
+  }
+  if (!getVorgangById(vorgangId)) {
     return { ok: false, reason: 'vorgang_missing' };
   }
 

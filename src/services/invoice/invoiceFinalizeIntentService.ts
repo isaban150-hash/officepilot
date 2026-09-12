@@ -46,6 +46,23 @@ export function clearInvoiceFinalizeIntent(vorgangId: string): void {
 /**
  * Reuse intent when workspace + fingerprint match; otherwise replace with a new client id.
  */
+/**
+ * MANUAL-INVOICE-01B2 — der Intent-Schlüssel einer Rechnung ohne Auftrag.
+ *
+ * Der Intent hält fest, welche `clientInvoiceId` für einen laufenden
+ * Freigabeversuch gilt, damit ein Wiederholungsversuch denselben Beleg trifft
+ * statt einen zweiten zu erzeugen. Adressiert wird er über den Vorgang — den es
+ * hier nicht gibt.
+ *
+ * Der Entwurf liefert die stabile Ersatzidentität: Seine Kennung überlebt
+ * Wiederaufnahme und Neuaufbau, und das Präfix schliesst eine Kollision mit
+ * einer Vorgangskennung aus. Bewusst **kein** erfundener Vorgang: Der Wert ist
+ * ein Schlüssel dieses Speichers, keine Behauptung über einen Auftrag.
+ */
+export function buildManualInvoiceFinalizeIntentKey(draftId: string): string {
+  return `manual:${draftId}`;
+}
+
 export function resolveInvoiceFinalizeIntent(input: {
   workspaceId: string;
   vorgangId: string;

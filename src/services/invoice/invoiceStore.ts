@@ -83,6 +83,35 @@ export function setInvoicesForVorgang(
 }
 
 /**
+ * MANUAL-INVOICE-01B2 — eine **einzelne** Rechnung schreiben, adressiert über
+ * ihre eigene Kennung.
+ *
+ * `setInvoicesForVorgang` ersetzt den Bestand **eines Vorgangs**; für eine
+ * Rechnung ohne Auftrag gibt es diesen Bestand nicht. Sie in einen fremden oder
+ * erfundenen Vorgangsslot zu schreiben wäre genau der Schattenvorgang, den
+ * dieser Weg vermeidet.
+ *
+ * Die Reihenfolge bleibt bedeutungstragend: Ein vorhandener Eintrag wird an
+ * seiner Stelle ersetzt, ein neuer vorn eingefügt — wie bisher bei neuen
+ * Rechnungen. Kein Persist: Den besitzt der Aufrufer, damit Rechnung, Archiv
+ * und Vorgang gemeinsam stehen oder gemeinsam fallen.
+ */
+export function upsertInvoiceEntry(
+  invoice: VorgangInvoice,
+  vorgangId: string | null,
+): void {
+  const next: StoredInvoiceEntry = { invoice: { ...invoice }, vorgangId };
+  const index = entries.findIndex((entry) => entry.invoice.id === invoice.id);
+
+  if (index === -1) {
+    entries = [next, ...entries];
+    return;
+  }
+
+  entries = [...entries.slice(0, index), next, ...entries.slice(index + 1)];
+}
+
+/**
  * Übernimmt die Rechnungen, die an Vorgängen hängen, in den zentralen Speicher.
  *
  * Der Weg, auf dem ein V5-Bestand und jede Testvorbereitung hier ankommen:

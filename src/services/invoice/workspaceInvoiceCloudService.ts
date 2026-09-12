@@ -298,6 +298,12 @@ export function buildWorkspaceInvoiceFinalizePayload(invoice: VorgangInvoice): R
 
 export function buildWorkspaceInvoiceFinalizeInput(
   workspaceId: string,
+  /**
+   * MANUAL-INVOICE-01B2 — bleibt bewusst Pflicht: `finalize_workspace_invoice`
+   * weist eine leere `p_vorgang_id` ab und verlangt zusätzlich einen in
+   * `workspace_vorgaenge` vorhandenen Vorgang. Ein Ersatzwert wäre eine
+   * Falschbehauptung über einen Auftrag.
+   */
   vorgangId: string,
   invoice: VorgangInvoice,
 ): WorkspaceInvoiceFinalizeInput {

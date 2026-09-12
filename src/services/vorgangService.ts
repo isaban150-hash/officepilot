@@ -1,9 +1,12 @@
 import { buildOrderPositionsFromInbox } from './orderPositionFactory';
 import {
   absorbInvoicesFromVorgaenge,
+  getInvoiceStoreSnapshot,
+  hydrateInvoiceStore,
   listInvoicesForVorgang,
   resetInvoiceStore,
   setInvoicesForVorgang,
+  upsertInvoiceEntry,
 } from './invoice/invoiceStore';
 import {
   canAddOrderPosition,
@@ -1737,6 +1740,44 @@ export function getVorgangInvoice(
   if (!vorgang) return undefined;
   const invoice = vorgang.invoices.find((item) => item.id === invoiceId);
   return invoice ? { ...invoice } : undefined;
+}
+
+/**
+ * MANUAL-INVOICE-01B2 — die freigegebene Rechnung **ohne** Auftrag speichern.
+ *
+ * Das Gegenstück zu `upsertFinalizedInvoiceOnVorgang`. Sie liegt hier, weil
+ * dieses Modul bereits der eine Ort ist, der Rechnungsspeicher und `persistAll`
+ * gemeinsam besitzt — ein zweiter Schreibweg wäre genau die Trennung, die der
+ * First-Class-Speicher beseitigen sollte.
+ *
+ * Kein Vorgang wird gesucht, angelegt oder verändert. Bei fehlgeschlagener
+ * Persistenz kehrt der Speicher vollständig zurück; ein zweiter
+ * Schreibversuch als Kompensation findet nicht statt.
+ */
+export function upsertFinalizedManualInvoice(
+  invoice: VorgangInvoice,
+): UpsertFinalizedInvoiceResult {
+  const existing = getInvoiceStoreSnapshot().find((entry) => entry.invoice.id === invoice.id);
+
+  if (existing) {
+    if (existing.vorgangId !== null) {
+      // Dieselbe Kennung gehört bereits zu einem Auftrag — kein stiller Umzug.
+      return { ok: false, reason: 'number_id_conflict' };
+    }
+    if (immutableInvoiceFingerprint(existing.invoice) === immutableInvoiceFingerprint(invoice)) {
+      return { ok: true, invoice: existing.invoice, action: 'noop' };
+    }
+  }
+
+  const previousEntries = getInvoiceStoreSnapshot();
+  upsertInvoiceEntry(invoice, null);
+
+  if (!persistAll().success) {
+    hydrateInvoiceStore(previousEntries);
+    return { ok: false, reason: 'local_persist_failed' };
+  }
+
+  return { ok: true, invoice: { ...invoice }, action: 'inserted' };
 }
 
 /**
