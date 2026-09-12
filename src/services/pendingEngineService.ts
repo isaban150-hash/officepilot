@@ -4,7 +4,7 @@ import { getCompanyProfile } from './companyProfileService';
 import { getAllDocuments } from './documentService';
 import { getAllExpenseOverview } from './expenseOverviewService';
 import { getAllInvoiceOverview, getOverdueInvoices, type InvoiceOverviewItem } from './invoiceOverviewService';
-import { buildInvoiceDetailPath } from './invoiceNavigation';
+import { buildInvoiceReachPath } from './invoiceNavigation';
 import { isExpectingPayment } from './invoicePaymentService';
 import { filterActiveItems, getInboxItems } from './inboxService';
 import { getTodayIso, isTaskOpen } from './taskNormalize';
@@ -101,7 +101,8 @@ function isInboxUnfiled(item: InboxItem): boolean {
 }
 
 function invoiceRoute(entry: InvoiceOverviewItem): string {
-  return buildInvoiceDetailPath(entry.vorgangId, entry.invoice.id);
+  // 01B2c — ohne Auftrag führt der Weg in die Übersicht, nicht ins Leere.
+  return buildInvoiceReachPath(entry.vorgangId, entry.invoice.id);
 }
 
 /** Behörden / Sozialversicherung — Fristen für den Schreibtisch. */

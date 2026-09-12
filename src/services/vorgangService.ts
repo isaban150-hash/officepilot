@@ -1771,9 +1771,16 @@ export function upsertFinalizedInvoiceOnVorgang(
 }
 
 export function getVorgangInvoice(
-  vorgangId: string,
+  /** MANUAL-INVOICE-01B2c — `null` ist die Rechnung ohne Auftrag. */
+  vorgangId: string | null,
   invoiceId: string,
 ): VorgangInvoice | undefined {
+  if (vorgangId === null) {
+    const entry = getInvoiceStoreSnapshot().find(
+      (item) => item.invoice.id === invoiceId && item.vorgangId === null,
+    );
+    return entry ? { ...entry.invoice } : undefined;
+  }
   const vorgang = getVorgangById(vorgangId);
   if (!vorgang) return undefined;
   const invoice = vorgang.invoices.find((item) => item.id === invoiceId);
@@ -1846,10 +1853,15 @@ export type UpdateInvoiceArchiveLinkResult =
  * verschwundene Projektion zeigen.
  */
 export function updateInvoiceArchiveDocumentId(
-  vorgangId: string,
+  /** MANUAL-INVOICE-01B2c — `null` ist die Rechnung ohne Auftrag. */
+  vorgangId: string | null,
   invoiceId: string,
   archiveDocumentId: string | null,
 ): UpdateInvoiceArchiveLinkResult {
+  if (vorgangId === null) {
+    return updateManualInvoiceArchiveDocumentId(invoiceId, archiveDocumentId);
+  }
+
   const result = commitVorgangMutation(vorgangId, (current) => {
     const invoiceIndex = current.invoices.findIndex((item) => item.id === invoiceId);
     if (invoiceIndex === -1) return { errorKey: 'not_found' };
@@ -1889,6 +1901,62 @@ export function updateInvoiceArchiveDocumentId(
   const committed = result.vorgang.invoices.find((item) => item.id === invoiceId);
   if (!committed) return { ok: false, reason: 'not_found' };
   return { ok: true, invoice: { ...committed } };
+}
+
+/**
+ * MANUAL-INVOICE-01B2c — der Archiv-Link einer Rechnung ohne Auftrag.
+ *
+ * Dieselben drei Ausgänge wie über den Vorgang, dieselbe Zusage: Was
+ * zurückkommt, ist das, was gespeichert wurde. Adressiert wird über
+ * `invoice.id` im First-Class-Speicher; ein auftragsgebundener Eintrag mit
+ * dieser Kennung ist hier `not_found` — er gehört dem Vorgangspfad.
+ *
+ * Ein Persist-Fehler lässt den Speicher unverändert (Snapshot-Rollback, wie
+ * in `upsertFinalizedManualInvoice`) und wird gemeldet, nie verschluckt.
+ */
+function updateManualInvoiceArchiveDocumentId(
+  invoiceId: string,
+  archiveDocumentId: string | null,
+): UpdateInvoiceArchiveLinkResult {
+  return commitManualInvoiceMutation(invoiceId, (current) => {
+    const target: VorgangInvoice = { ...current };
+    if (archiveDocumentId === null) {
+      delete target.archiveDocumentId;
+    } else {
+      target.archiveDocumentId = archiveDocumentId;
+    }
+    return target;
+  });
+}
+
+/**
+ * MANUAL-INVOICE-01B2c — das Gegenstück zu `commitVorgangMutation` für die
+ * Rechnung ohne Auftrag: eine Mutation, genau ein `persistAll()`, Snapshot-
+ * Rollback bei Fehlschlag, und zurück kommt das, was gespeichert wurde.
+ *
+ * Adressiert wird über `invoice.id` im First-Class-Speicher. Ein auftrags-
+ * gebundener Eintrag mit dieser Kennung ist hier `not_found` — er gehört dem
+ * Vorgangspfad, und die beiden Pfade greifen nie in denselben Eintrag.
+ */
+function commitManualInvoiceMutation(
+  invoiceId: string,
+  mutate: (current: VorgangInvoice) => VorgangInvoice,
+): { ok: true; invoice: VorgangInvoice } | { ok: false; reason: 'not_found' | 'persist_failed' } {
+  const previousEntries = getInvoiceStoreSnapshot();
+  const entry = previousEntries.find(
+    (item) => item.invoice.id === invoiceId && item.vorgangId === null,
+  );
+  if (!entry) return { ok: false, reason: 'not_found' };
+
+  upsertInvoiceEntry(mutate(cloneVorgangInvoice(entry.invoice)), null);
+  if (!persistAll().success) {
+    hydrateInvoiceStore(previousEntries);
+    return { ok: false, reason: 'persist_failed' };
+  }
+
+  const committed = getInvoiceStoreSnapshot().find((item) => item.invoice.id === invoiceId);
+  if (!committed) return { ok: false, reason: 'not_found' };
+  return { ok: true, invoice: cloneVorgangInvoice(committed.invoice) };
 }
 
 /**
@@ -2226,11 +2294,24 @@ export type UpdateInvoicePaymentResult =
  * werden ausschließlich `payments` und `paymentStatus`.
  */
 function updateInvoicePaymentFields(
-  vorgangId: string,
+  vorgangId: string | null,
   invoiceId: string,
   payments: InvoicePayment[],
   paymentStatus: InvoicePaymentStatus,
 ): UpdateInvoicePaymentResult {
+  /*
+   * MANUAL-INVOICE-01B2c — die Zahlung einer Rechnung ohne Auftrag geht über
+   * den First-Class-Speicher. Dieselben Felder, dieselbe Zusage; nur der
+   * Ablageort ist ein anderer.
+   */
+  if (vorgangId === null) {
+    return commitManualInvoiceMutation(invoiceId, (current) => ({
+      ...current,
+      payments: payments.map(cloneInvoicePayment),
+      paymentStatus,
+    }));
+  }
+
   let updatedInvoice: VorgangInvoice | null = null;
 
   const committed = commitVorgangMutation(vorgangId, (current) => {
@@ -2268,7 +2349,7 @@ function updateInvoicePaymentFields(
 }
 
 export function addPaymentToInvoice(
-  vorgangId: string,
+  vorgangId: string | null,
   invoiceId: string,
   payment: InvoicePayment,
   paymentStatus: InvoicePaymentStatus,
@@ -2285,7 +2366,7 @@ export function addPaymentToInvoice(
 }
 
 export function removePaymentFromInvoice(
-  vorgangId: string,
+  vorgangId: string | null,
   invoiceId: string,
   paymentId: string,
   paymentStatus: InvoicePaymentStatus,

@@ -19,6 +19,7 @@ import { isFinalizedInvoice } from '../invoiceArchiveService';
 import {
   getAllInvoiceOverview,
   getOverdueInvoices,
+  hasVorgangRoute,
   summarizeInvoiceOverview,
   type InvoiceOverviewItem,
 } from '../invoiceOverviewService';
@@ -773,8 +774,13 @@ export function analyzeGlobalFinance(today: Date | string = new Date()): Finance
   }
 
   for (const item of overdue.slice(0, 2)) {
-    const vorgang = getVorgangById(item.vorgangId);
-    if (!vorgang || !isSentInvoice(item.invoice)) continue;
+    /*
+     * MANUAL-INVOICE-01B2c — das Überfälligkeitsrisiko ist eine Aussage über
+     * die Rechnung, nicht über den Auftrag. Mit Kennung muss der Vorgang
+     * existieren; ohne Kennung gibt es nichts zu prüfen.
+     */
+    if (item.vorgangId !== null && !getVorgangById(item.vorgangId)) continue;
+    if (!isSentInvoice(item.invoice)) continue;
     const days = getOverdueDays(item.invoice, today);
     risks.push({
       id: `overdue_${item.invoice.id}`,
@@ -808,7 +814,14 @@ export function analyzeGlobalFinance(today: Date | string = new Date()): Finance
     });
   }
 
-  const topOverdue = overdue.find((item) => {
+  /*
+   * MANUAL-INVOICE-01B2c — die Mahnempfehlung liest den Vorgang
+   * (`resolveDunningAction(invoice, vorgang, …)`). Für eine Rechnung ohne
+   * Auftrag gibt es diesen Kontext nicht; sie bekommt hier bewusst keine
+   * Mahnempfehlung, statt eine mit erfundenem Bezug. Das Risiko oben zeigt sie
+   * trotzdem. Mahnwesen ohne Auftrag ist ein eigener Schnitt.
+   */
+  const topOverdue = overdue.filter(hasVorgangRoute).find((item) => {
     const vorgang = getVorgangById(item.vorgangId);
     return vorgang && resolveDunningAction(item.invoice, vorgang, today) !== 'none';
   });

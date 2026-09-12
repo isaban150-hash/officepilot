@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Vorgang } from '../../types/models';
+import type { Vorgang, VorgangInvoice } from '../../types/models';
 import type { SyncSimulationReport } from '../../types/sync';
 import {
   mapPullRowsIsolated,
@@ -39,12 +39,21 @@ export interface ApplyInvoicePullResult {
  */
 async function applyCloudPaymentsToVorgaenge(
   vorgaenge: Vorgang[],
+  /**
+   * MANUAL-INVOICE-01B2c — die Rechnungen ohne Auftrag bekommen ihre Cloud-
+   * Zahlungen über dieselbe Zusammenführung. Bisher liefen sie leer: Die
+   * Zahlungstabelle adressiert über `client_invoice_id`, hier wurde aber nur
+   * über die Vorgänge iteriert.
+   */
+  manualInvoices: readonly VorgangInvoice[],
   workspaceId: string,
   client?: SupabaseClient | null,
   since?: string | null,
-): Promise<Vorgang[]> {
+): Promise<{ vorgaenge: Vorgang[]; manualInvoices: VorgangInvoice[] }> {
   const pulled = await pullInvoicePaymentsFromCloud({ client, workspaceId, since });
-  if (pulled.outcome !== 'synced' || pulled.rows.length === 0) return vorgaenge;
+  if (pulled.outcome !== 'synced' || pulled.rows.length === 0) {
+    return { vorgaenge, manualInvoices: [...manualInvoices] };
+  }
 
   const byInvoice = new Map<string, CloudInvoicePaymentEntry[]>();
   for (const row of pulled.rows) {
@@ -62,19 +71,26 @@ async function applyCloudPaymentsToVorgaenge(
     byInvoice.set(row.clientInvoiceId, list);
   }
 
-  return vorgaenge.map((vorgang) => {
-    let changed = false;
-    const invoices = vorgang.invoices.map((invoice) => {
-      const entries = byInvoice.get(invoice.id);
-      if (!entries) return invoice;
+  const applyToInvoice = (invoice: VorgangInvoice): VorgangInvoice => {
+    const entries = byInvoice.get(invoice.id);
+    if (!entries) return invoice;
+    const payments = mergeCloudPaymentsIntoInvoice(invoice, entries);
+    const next = { ...invoice, payments };
+    return { ...next, paymentStatus: calculatePaymentSummary(next).status };
+  };
 
-      const payments = mergeCloudPaymentsIntoInvoice(invoice, entries);
-      const next = { ...invoice, payments };
-      changed = true;
-      return { ...next, paymentStatus: calculatePaymentSummary(next).status };
-    });
-    return changed ? { ...vorgang, invoices } : vorgang;
-  });
+  return {
+    vorgaenge: vorgaenge.map((vorgang) => {
+      let changed = false;
+      const invoices = vorgang.invoices.map((invoice) => {
+        const next = applyToInvoice(invoice);
+        if (next !== invoice) changed = true;
+        return next;
+      });
+      return changed ? { ...vorgang, invoices } : vorgang;
+    }),
+    manualInvoices: manualInvoices.map(applyToInvoice),
+  };
 }
 
 export async function applyInvoicePullAfterVorgangMerge(input: {
@@ -102,17 +118,20 @@ export async function applyInvoicePullAfterVorgangMerge(input: {
      * Rechnungs-Pull nicht scheitern lassen: Ohne Zahlungen ist der Stand
      * unvollständig, ohne Rechnungen wäre er leer.
      */
-    const vorgaengeWithPayments = await applyCloudPaymentsToVorgaenge(
+    const withPayments = await applyCloudPaymentsToVorgaenge(
       merge.vorgaenge,
+      merge.manualInvoices,
       input.workspaceId,
       input.client,
       input.since,
     );
 
     return {
-      vorgaenge: vorgaengeWithPayments,
+      vorgaenge: withPayments.vorgaenge,
       invoiceRpcFailed: false,
-      merge,
+      /* 01B2c — der Merge trägt die freien Rechnungen weiter, jetzt mit
+         eingeflochtenen Cloud-Zahlungen. */
+      merge: { ...merge, manualInvoices: withPayments.manualInvoices },
       pendingIntentClears: merge.pendingIntentClears,
     };
   } catch (invoiceError) {

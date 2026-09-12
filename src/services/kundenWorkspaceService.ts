@@ -17,6 +17,7 @@ import {
 } from './kundenOverviewService';
 import {
   getAllInvoiceOverview,
+  hasVorgangRoute,
   summarizeInvoiceOverview,
   type InvoiceOverviewItem,
 } from './invoiceOverviewService';
@@ -235,7 +236,7 @@ function documentKindLabel(type: DocumentType | string | undefined): string {
   }
 }
 
-function toInvoiceRef(item: InvoiceOverviewItem): KundenWorkspaceInvoiceRef {
+function toInvoiceRef(item: InvoiceOverviewItem & { vorgangId: string }): KundenWorkspaceInvoiceRef {
   return {
     id: item.invoice.id,
     number: item.invoice.number,
@@ -322,8 +323,15 @@ export function getKundenWorkspace(
 
   const vorgaenge = collectVorgaengeForTarget(kind, key);
   const vorgangIds = new Set(vorgaenge.map((v) => v.id));
-  // Invoices strictly via vorgangId — never via invoice.customer.
-  const invoices = getAllInvoiceOverview(today).filter((item) => vorgangIds.has(item.vorgangId));
+  /*
+   * Invoices strictly via vorgangId — never via invoice.customer.
+   * MANUAL-INVOICE-01B2c: Eine Rechnung ohne Auftrag fällt hier deshalb
+   * bewusst heraus — sie trägt keine Kundenkennung, und eine Zuordnung über
+   * den Namen ist genau das, was diese Zeile ausschliesst.
+   */
+  const invoices = getAllInvoiceOverview(today)
+    .filter(hasVorgangRoute)
+    .filter((item) => vorgangIds.has(item.vorgangId));
 
   if (kind !== 'customer' && vorgaenge.length === 0 && invoices.length === 0) {
     // Document-only legacy workspace stays reachable; orphan without data does not.

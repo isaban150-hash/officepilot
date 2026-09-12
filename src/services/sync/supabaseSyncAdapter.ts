@@ -647,6 +647,9 @@ export class SupabaseSyncAdapter implements SyncAdapter {
         workspaceId,
         documents: merged.state.documents ?? [],
         vorgaenge: invoicePull.vorgaenge,
+        /* MANUAL-INVOICE-01B2c — auch die Rechnungen ohne Auftrag bekommen
+           ihren Archiv-Link aus den Cloud-Dokumenten zurück. */
+        manualInvoices: invoicePull.merge?.manualInvoices ?? [],
         report,
         client: this.client,
       });
@@ -674,8 +677,9 @@ export class SupabaseSyncAdapter implements SyncAdapter {
         documentPull.documents,
         /* 01B2b — die gezogenen Rechnungen ohne Auftrag. Sie hängen an keinem
            Vorgang und wären sonst genau so verlorengegangen, wie es 01B den
-           auftragsgebundenen zuvor passiert ist. */
-        invoicePull.merge?.manualInvoices,
+           auftragsgebundenen zuvor passiert ist. 01B2c: in der Fassung nach dem
+           Dokument-Pull, mit rekonstruiertem Archiv-Link. */
+        invoicePull.merge ? documentPull.manualInvoices : undefined,
       );
 
       // Vorgang+amendment pull succeeded; invoice RPC failure is reported but does not roll back.

@@ -110,7 +110,12 @@ export function buildInvoicePrintModelFromInvoice(invoice: VorgangInvoice): Invo
     // BRANDING-01F-3 — die historische Quelle des Dokuments, keine Bytes.
     logo: selectHistoricalInvoiceLogo(invoice),
     customer: { ...invoice.customerSnapshot },
-    projectTitle: invoice.vorgangTitle ?? '—',
+    /*
+     * MANUAL-INVOICE-01B2c — ohne Auftrag gibt es kein Bauvorhaben. Leer
+     * heisst „nicht vorhanden", und der Block wird dann nicht gerendert; ein
+     * `'—'` wäre ein Platzhalter, der ein Projektfeld behauptet.
+     */
+    projectTitle: invoice.vorgangTitle ?? '',
     projectSite: invoice.baustelle ?? '',
     servicePeriodFrom: invoice.servicePeriodFrom ?? invoice.issueDate ?? invoice.date,
     servicePeriodTo: invoice.servicePeriodTo ?? invoice.issueDate ?? invoice.date,

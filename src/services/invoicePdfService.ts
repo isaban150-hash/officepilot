@@ -485,10 +485,17 @@ async function renderInvoicePrintModelToPdf(model: InvoicePrintModel): Promise<U
     drawWrapped(cursor, model.introText.trim(), 10);
   }
 
-  cursor.y -= 4;
-  drawLine(cursor, 'Projekt', { size: 11, bold: true });
   const projectTitle = model.projectTitle?.trim() ?? '';
   const projectSite = model.projectSite?.trim() ?? '';
+  /*
+   * MANUAL-INVOICE-01B2c — die Überschrift „Projekt" nur, wenn darunter etwas
+   * steht. Eine Rechnung ohne Auftrag hat kein Bauvorhaben; eine leere
+   * Überschrift wäre ein Platzhalter.
+   */
+  if (projectTitle || projectSite) {
+    cursor.y -= 4;
+    drawLine(cursor, 'Projekt', { size: 11, bold: true });
+  }
   if (projectTitle) drawLine(cursor, model.projectTitle, { size: 10 });
   /*
    * PDF-TEXT-RENDERING-01B — Baustelle nur, wenn sie etwas hinzufügt.

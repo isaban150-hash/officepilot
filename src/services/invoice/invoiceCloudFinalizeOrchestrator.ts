@@ -227,23 +227,12 @@ export async function finalizeInvoiceDraftWithCloud(
   clearInvoiceFinalizeIntent(intentKey);
 
   /*
-   * MANUAL-INVOICE-CLOUD-MIGRATION-01B2b — die Cloud trägt das Rechnungs-
-   * dokument einer freien Rechnung inzwischen (`linked_vorgang_id` darf NULL
-   * sein). Der **lokale** Archivweg tut es noch nicht:
-   * `archiveOutgoingInvoice` schlägt die Zuordnung über `getVorgangById` und
-   * `updateInvoiceArchiveDocumentId(vorgangId, …)` und ist durchgehend
-   * vorgangsgebunden.
-   *
-   * Deshalb hier kein Archivlauf und ausdrücklich kein erfundener Vorgang,
-   * sondern derselbe ehrliche Ausgang wie bei einem gescheiterten Archivieren:
-   * Die Finalisierung ist gelungen, `archiveWarning` sagt, dass das
-   * Archivdokument fehlt. Das lokale Archiv ohne Auftrag ist ein eigener
-   * Schnitt.
+   * MANUAL-INVOICE-01B2c — beide Wege archivieren über denselben Dienst. Für
+   * die Rechnung ohne Auftrag legt er das Dokument mit `linkedVorgang: null`
+   * an und verknüpft es über den First-Class-Speicher; die Cloud nimmt es seit
+   * 01B2b mit `linked_vorgang_id = NULL` an.
    */
-  const archiveResult =
-    vorgangId === null
-      ? ({ success: false, invoice: upsert.invoice } as const)
-      : archiveOutgoingInvoice(vorgangId, upsert.invoice, setup.companyName);
+  const archiveResult = archiveOutgoingInvoice(vorgangId, upsert.invoice, setup.companyName);
   if (archiveResult.success) {
     /*
      * 05C1 — lokal zuerst, Cloud danach. Erst ab hier steht fest, dass Dokument

@@ -17,7 +17,7 @@ import {
   searchInvoiceOverview,
   type InvoiceOverviewItem,
 } from './invoiceOverviewService';
-import { buildInvoiceDetailPath } from './invoiceNavigation';
+import { buildInvoiceDetailPath, buildInvoiceReachPath } from './invoiceNavigation';
 import { getMailImports } from './mailImportService';
 import {
   getAllDocumentMemories,
@@ -171,7 +171,8 @@ function resultKey(result: SearchResult): string {
 }
 
 function invoiceRoute(entry: InvoiceOverviewItem): string {
-  return buildInvoiceDetailPath(entry.vorgangId, entry.invoice.id);
+  // 01B2c — ohne Auftrag führt der Weg in die Übersicht, nicht ins Leere.
+  return buildInvoiceReachPath(entry.vorgangId, entry.invoice.id);
 }
 
 function taskRoute(task: {

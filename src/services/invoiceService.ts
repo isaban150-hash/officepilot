@@ -1,4 +1,8 @@
-import { addInvoiceToVorgang, getVorgangById } from './vorgangService';
+import {
+  addInvoiceToVorgang,
+  getVorgangById,
+  upsertFinalizedManualInvoice,
+} from './vorgangService';
 import { archiveOutgoingInvoice } from './invoiceArchiveService';
 import { createCompanyProfileSnapshot } from './companyProfileService';
 import {
@@ -1363,12 +1367,18 @@ function cloneBrandingSnapshot(snapshot: BrandingSnapshot | undefined): Branding
 }
 
 export function finalizeInvoiceDraft(
-  vorgangId: string,
+  /** MANUAL-INVOICE-01B2c — `null` ist die normale Rechnung ohne Auftrag. */
+  vorgangId: string | null,
   draft: InvoiceDraft,
   setup: CompanySetup,
   options: InvoiceApprovalOptions = {},
 ): FinalizeInvoiceResult {
   // Legacy local finalize path (tests / offline fallback). UI cloud path must not use this.
+  if (vorgangId === null && draft.type !== 'rechnung') {
+    // Dieselbe Regel wie Server und Cloud-Orchestrator: Abschlag und Schluss
+    // sind ohne Auftrag nicht definiert.
+    return { ok: false, reason: 'vorgang_missing' };
+  }
   const candidate = buildInvoiceFinalizationCandidate(
     vorgangId,
     draft,
@@ -1387,7 +1397,17 @@ export function finalizeInvoiceDraft(
     invoiceSequenceNumber: reservation.sequenceNumber,
   };
 
-  const saved = addInvoiceToVorgang(vorgangId, invoice);
+  /*
+   * 01B2c — beide Wege enden im First-Class-Rechnungsspeicher: mit Auftrag
+   * über den Vorgang, ohne Auftrag unmittelbar.
+   */
+  let saved: VorgangInvoice | null;
+  if (vorgangId === null) {
+    const manual = upsertFinalizedManualInvoice(invoice);
+    saved = manual.ok ? manual.invoice : null;
+  } else {
+    saved = addInvoiceToVorgang(vorgangId, invoice);
+  }
   if (!saved) {
     return { ok: false, reason: 'save_failed' };
   }

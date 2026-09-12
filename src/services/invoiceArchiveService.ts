@@ -17,13 +17,28 @@ function invoiceTypeLabel(invoice: VorgangInvoice): string {
   return getInvoiceDocumentTitle(invoice.type, invoice.abschlagNumber);
 }
 
-function buildRecognizedText(invoice: VorgangInvoice, vorgang: Vorgang, companyName: string): string {
-  const customerName = invoice.customerSnapshot?.name ?? vorgang.customer;
+/**
+ * MANUAL-INVOICE-01B2c — der Kundenname einer Rechnung ohne Auftrag kommt
+ * ausschliesslich aus ihrem Kunden-Snapshot; es gibt keinen Vorgang, aus dem
+ * er ersatzweise gelesen werden könnte. Ein fehlender Snapshot ist dann ein
+ * fehlender Name — kein erfundener.
+ */
+function resolveArchiveCustomerName(invoice: VorgangInvoice, vorgang: Vorgang | null): string {
+  return invoice.customerSnapshot?.name ?? vorgang?.customer ?? '';
+}
+
+function buildRecognizedText(
+  invoice: VorgangInvoice,
+  vorgang: Vorgang | null,
+  companyName: string,
+): string {
+  const vorgangTitle = invoice.vorgangTitle ?? vorgang?.title;
   return [
     `Rechnungsnummer: ${invoice.number}`,
     `Firma: ${companyName}`,
-    `Kunde: ${customerName}`,
-    `Vorgang: ${invoice.vorgangTitle ?? vorgang.title}`,
+    `Kunde: ${resolveArchiveCustomerName(invoice, vorgang)}`,
+    // Ohne Auftrag gibt es keine Vorgangszeile — kein Platzhalter.
+    ...(vorgangTitle ? [`Vorgang: ${vorgangTitle}`] : []),
     `Datum: ${invoice.issueDate ?? invoice.date}`,
     `Typ: ${invoiceTypeLabel(invoice)}`,
     `Invoice-ID: ${invoice.id}`,
@@ -42,10 +57,11 @@ function buildPaperFolder() {
 
 export function buildOutgoingInvoiceDocumentInput(
   invoice: VorgangInvoice,
-  vorgang: Vorgang,
+  /** MANUAL-INVOICE-01B2c — `null` ist die Rechnung ohne Auftrag. */
+  vorgang: Vorgang | null,
   companyName: string,
 ): CompanyDocumentInput {
-  const customerName = invoice.customerSnapshot?.name ?? vorgang.customer;
+  const customerName = resolveArchiveCustomerName(invoice, vorgang);
 
   return {
     title: `${invoice.number} – ${invoiceTypeLabel(invoice)}`,
@@ -70,18 +86,23 @@ export function buildOutgoingInvoiceDocumentInput(
     digitalFolder: {
       id: `dig-inv-${invoice.id}`,
       name: 'Ausgangsrechnungen',
-      path: `/Vorgänge/${vorgang.title}/Ausgangsrechnungen/`,
+      /*
+       * Ohne Auftrag liegt der Beleg direkt unter Ausgangsrechnungen. Kein
+       * Sammelordner „Ohne Vorgang" — das wäre ein erfundener Bezug.
+       */
+      path: vorgang ? `/Vorgänge/${vorgang.title}/Ausgangsrechnungen/` : '/Ausgangsrechnungen/',
     },
     paperFolder: buildPaperFolder(),
     tags: [
       'Ausgangsrechnung',
       invoice.number,
-      customerName,
-      vorgang.title,
+      ...(customerName ? [customerName] : []),
+      ...(vorgang ? [vorgang.title] : []),
       invoiceTypeLabel(invoice),
     ],
     linkedCompany: companyName,
-    linkedVorgang: { vorgangId: vorgang.id, vorgangTitle: vorgang.title },
+    // NULL ist die Wahrheit der freien Rechnung — auch cloudseitig (01B2b).
+    linkedVorgang: vorgang ? { vorgangId: vorgang.id, vorgangTitle: vorgang.title } : null,
     linkedInvoiceId: invoice.id,
     archived: true,
     imagePreview: '🧾',
@@ -102,7 +123,12 @@ export type ArchiveOutgoingInvoiceResult =
     };
 
 export function archiveOutgoingInvoice(
-  vorgangId: string,
+  /**
+   * MANUAL-INVOICE-01B2c — `null` ist die Rechnung ohne Auftrag. Sie
+   * archiviert über dieselben Schritte wie eine Auftragsrechnung; nur der
+   * Vorgang ist keiner, und das Dokument sagt das auch (`linkedVorgang: null`).
+   */
+  vorgangId: string | null,
   invoice: VorgangInvoice,
   companyName: string,
 ): ArchiveOutgoingInvoiceResult {
@@ -128,8 +154,13 @@ export function archiveOutgoingInvoice(
     return { success: true, invoice: linked.invoice, document: existingDocument, created: false };
   }
 
-  const resolvedVorgang = getVorgangById(vorgangId);
-  if (!resolvedVorgang) {
+  /*
+   * Mit Kennung muss der Vorgang existieren — eine Auftragsrechnung auf einen
+   * verschwundenen Vorgang bleibt ein Fehler. Ohne Kennung gibt es nichts zu
+   * prüfen, und es wird auch nichts erfunden.
+   */
+  const resolvedVorgang = vorgangId === null ? null : (getVorgangById(vorgangId) ?? null);
+  if (vorgangId !== null && !resolvedVorgang) {
     return { success: false, invoice, reason: 'vorgang_not_found' };
   }
 

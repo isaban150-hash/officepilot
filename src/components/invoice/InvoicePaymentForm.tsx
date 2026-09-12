@@ -18,7 +18,8 @@ import type { InvoicePayment, InvoicePaymentInput, VorgangInvoice } from '../../
 import type { TranslationKey } from '../../i18n';
 
 interface Props {
-  vorgangId: string;
+  /** MANUAL-INVOICE-01B2c — `null` ist die Rechnung ohne Auftrag. */
+  vorgangId: string | null;
   invoice: VorgangInvoice;
   open: boolean;
   onClose: () => void;

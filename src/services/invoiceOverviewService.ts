@@ -1,4 +1,5 @@
 import { getAllVorgaenge } from './vorgangService';
+import { getInvoiceStoreSnapshot } from './invoice/invoiceStore';
 import { isFinalizedInvoice } from './invoiceArchiveService';
 import {
   calculatePaymentSummary,
@@ -19,7 +20,12 @@ export type InvoiceOverviewFilter =
   | 'storniert';
 
 export interface InvoiceOverviewItem {
-  vorgangId: string;
+  /**
+   * MANUAL-INVOICE-01B2c — `null` ist die normale Rechnung ohne Auftrag. Sie
+   * ist ein vollwertiger Beleg im Bestand; nur der Auftrag ist keiner.
+   */
+  vorgangId: string | null;
+  /** Leer, wenn es keinen Auftrag gibt — kein Platzhaltertext. */
   vorgangTitle: string;
   customer: string;
   baustelle: string;
@@ -45,7 +51,7 @@ const STATUS_SORT_ORDER: Record<InvoicePaymentStatus, number> = {
 };
 
 function buildOverviewItem(
-  vorgangId: string,
+  vorgangId: string | null,
   vorgangTitle: string,
   customer: string,
   baustelle: string,
@@ -81,7 +87,33 @@ export function getAllInvoiceOverview(today?: Date | string): InvoiceOverviewIte
     }
   }
 
+  /*
+   * MANUAL-INVOICE-01B2c — die Rechnungen ohne Auftrag. Sie hängen an keinem
+   * Vorgang und fehlten deshalb in jeder Liste, jeder Summe und jedem offenen
+   * Posten, obwohl sie ein finalisierter Beleg mit Nummer sind. Kunde und
+   * Baustelle kommen allein aus der Rechnung; ein Auftragstitel existiert
+   * nicht und wird nicht erfunden.
+   */
+  for (const entry of getInvoiceStoreSnapshot()) {
+    if (entry.vorgangId !== null) continue;
+    if (!isFinalizedInvoice(entry.invoice)) continue;
+    items.push(buildOverviewItem(null, '', '', '', entry.invoice, today));
+  }
+
   return sortInvoiceOverviewItems(items);
+}
+
+/**
+ * MANUAL-INVOICE-01B2c — nur Rechnungen **mit** Auftrag haben heute eine
+ * Detailroute (`/vorgaenge/:vorgangId/rechnungen/:invoiceId`). Wer eine Route
+ * oder einen Vorgangsbezug braucht, filtert hiermit — und sagt damit auch
+ * ehrlich, dass die freie Rechnung dort noch keinen Weg hat. Summen, Listen
+ * und offene Posten brauchen den Filter nicht.
+ */
+export function hasVorgangRoute(
+  item: InvoiceOverviewItem,
+): item is InvoiceOverviewItem & { vorgangId: string } {
+  return item.vorgangId !== null;
 }
 
 export function sortInvoiceOverviewItems(items: InvoiceOverviewItem[]): InvoiceOverviewItem[] {

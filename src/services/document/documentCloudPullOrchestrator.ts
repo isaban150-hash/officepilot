@@ -19,6 +19,7 @@ import {
   getDocumentStoreSnapshot,
 } from '../documentService';
 import { getAllVorgaenge, updateInvoiceArchiveDocumentId } from '../vorgangService';
+import { getInvoiceStoreSnapshot } from '../invoice/invoiceStore';
 import { isEntitySyncActive, withTombstonedEntity } from '../sync/syncMetaService';
 import {
   GENERATED_INVOICE_DOCUMENT_KIND,
@@ -26,7 +27,7 @@ import {
   type DocumentCloudOutcome,
   type WorkspaceDocumentRow,
 } from './workspaceDocumentCloudService';
-import type { CompanyDocument, Vorgang } from '../../types/models';
+import type { CompanyDocument, Vorgang, VorgangInvoice } from '../../types/models';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 /**
@@ -300,6 +301,35 @@ export function buildArchiveDocumentIdByInvoice(
  * es ein aktives Dokument gibt — und **gelöscht**, wenn es keines mehr gibt.
  * Ohne das Löschen bliebe nach einem Cloud-Grabstein ein toter Link stehen.
  */
+/**
+ * MANUAL-INVOICE-01B2c — die Projektion auf einer **Rechnungsliste**, ohne
+ * Vorgang. Herausgezogen aus `reconcileArchiveLinksOnVorgaenge`, damit die
+ * Rechnung ohne Auftrag dieselbe Regel bekommt statt einer zweiten.
+ */
+export function reconcileArchiveLinksOnInvoices(
+  invoices: readonly VorgangInvoice[],
+  byInvoiceId: ReadonlyMap<string, string>,
+): { invoices: VorgangInvoice[]; changed: number } {
+  let changed = 0;
+  const next = invoices.map((invoice) => {
+    const documentId = byInvoiceId.get(invoice.id);
+
+    if (documentId) {
+      if (invoice.archiveDocumentId === documentId) return invoice;
+      changed += 1;
+      return { ...invoice, archiveDocumentId: documentId };
+    }
+
+    // Kein aktives Dokument mehr — ein bestehender Verweis wäre tot.
+    if (!invoice.archiveDocumentId) return invoice;
+    changed += 1;
+    const cleared = { ...invoice };
+    delete cleared.archiveDocumentId;
+    return cleared;
+  });
+  return { invoices: changed === 0 ? [...invoices] : next, changed };
+}
+
 export function reconcileArchiveLinksOnVorgaenge(
   vorgaenge: readonly Vorgang[],
   documents: readonly CompanyDocument[],
@@ -308,27 +338,9 @@ export function reconcileArchiveLinksOnVorgaenge(
   let changed = 0;
 
   const next = vorgaenge.map((vorgang) => {
-    let touched = false;
-    const invoices = vorgang.invoices.map((invoice) => {
-      const documentId = byInvoiceId.get(invoice.id);
-
-      if (documentId) {
-        if (invoice.archiveDocumentId === documentId) return invoice;
-        touched = true;
-        changed += 1;
-        return { ...invoice, archiveDocumentId: documentId };
-      }
-
-      // Kein aktives Dokument mehr — ein bestehender Verweis wäre tot.
-      if (!invoice.archiveDocumentId) return invoice;
-      touched = true;
-      changed += 1;
-      const cleared = { ...invoice };
-      delete cleared.archiveDocumentId;
-      return cleared;
-    });
-
-    return touched ? { ...vorgang, invoices } : vorgang;
+    const applied = reconcileArchiveLinksOnInvoices(vorgang.invoices, byInvoiceId);
+    changed += applied.changed;
+    return applied.changed > 0 ? { ...vorgang, invoices: applied.invoices } : vorgang;
   });
 
   return { vorgaenge: next, changed };
@@ -347,6 +359,16 @@ export function reconcileArchiveDocumentLinks(): number {
       const result = updateInvoiceArchiveDocumentId(vorgang.id, invoice.id, documentId);
       if (result.ok) relinked += 1;
     }
+  }
+
+  // MANUAL-INVOICE-01B2c — die Rechnungen ohne Auftrag hängen an keinem Vorgang.
+  for (const entry of getInvoiceStoreSnapshot()) {
+    if (entry.vorgangId !== null) continue;
+    const documentId = byInvoiceId.get(entry.invoice.id) ?? null;
+    if ((entry.invoice.archiveDocumentId ?? null) === documentId) continue;
+
+    const result = updateInvoiceArchiveDocumentId(null, entry.invoice.id, documentId);
+    if (result.ok) relinked += 1;
   }
 
   return relinked;
@@ -383,6 +405,8 @@ export async function applyDocumentCloudPull(
 export interface DocumentPullStateResult {
   documents: CompanyDocument[];
   vorgaenge: Vorgang[];
+  /** MANUAL-INVOICE-01B2c — die Rechnungen ohne Auftrag, mit abgeglichenem Archiv-Link. */
+  manualInvoices: VorgangInvoice[];
   documentRpcFailed: boolean;
 }
 
@@ -404,10 +428,13 @@ export async function applyDocumentPullToState(input: {
   workspaceId: string;
   documents: readonly CompanyDocument[];
   vorgaenge: readonly Vorgang[];
+  /** MANUAL-INVOICE-01B2c — die Rechnungen ohne Auftrag aus dem Rechnungs-Pull. */
+  manualInvoices?: readonly VorgangInvoice[];
   report?: { errorCount: number; errors: { outboxId: string; message: string }[] };
   client?: SupabaseClient | null;
   since?: string | null;
 }): Promise<DocumentPullStateResult> {
+  const manualInvoices = input.manualInvoices ?? [];
   const pulled = await pullDocumentsFromCloud({
     client: input.client,
     workspaceId: input.workspaceId,
@@ -429,12 +456,22 @@ export async function applyDocumentPullToState(input: {
     return {
       documents: [...input.documents],
       vorgaenge: [...input.vorgaenge],
+      manualInvoices: [...manualInvoices],
       documentRpcFailed: pulled.outcome !== 'supabase_not_configured',
     };
   }
 
   const documents = mergeCloudDocuments(input.documents, pulled.rows);
   const { vorgaenge } = reconcileArchiveLinksOnVorgaenge(input.vorgaenge, documents);
+  const reconciledManual = reconcileArchiveLinksOnInvoices(
+    manualInvoices,
+    buildArchiveDocumentIdByInvoice(documents),
+  );
 
-  return { documents, vorgaenge, documentRpcFailed: false };
+  return {
+    documents,
+    vorgaenge,
+    manualInvoices: reconciledManual.invoices,
+    documentRpcFailed: false,
+  };
 }

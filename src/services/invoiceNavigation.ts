@@ -34,3 +34,18 @@ export function buildInvoiceCreatePath(vorgangId: string, type: InvoiceCreateTyp
 export function buildOpenInvoicesPath(): string {
   return '/rechnungen/offen';
 }
+
+/**
+ * MANUAL-INVOICE-01B2c — der erreichbare Ort einer Rechnung.
+ *
+ * Mit Auftrag ist das die Detailseite. Eine Rechnung ohne Auftrag hat heute
+ * noch keine eigene Route; sie ist aber in der Rechnungsübersicht sichtbar,
+ * und genau dorthin führt der Weg. Bewusst **kein** `/vorgaenge/null/…` und
+ * kein erfundener Vorgang — der Pfad ist wahr, nur noch nicht spezifisch.
+ * Die eigene Route ist Teil des UI-Blocks.
+ */
+export function buildInvoiceReachPath(vorgangId: string | null, invoiceId: string): string {
+  return vorgangId === null
+    ? buildOpenInvoicesPath()
+    : buildInvoiceDetailPath(vorgangId, invoiceId);
+}

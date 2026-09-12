@@ -159,6 +159,13 @@ export function getKundenOverview(today?: Date | string): KundeOverviewEntry[] {
 
   // Invoices are attributed via vorgangId only — never via invoice.customer.
   for (const item of getAllInvoiceOverview(today)) {
+    /*
+     * MANUAL-INVOICE-01B2c — eine Rechnung ohne Auftrag trägt keine Kunden-
+     * kennung, nur einen Adress-Snapshot. Sie wird hier bewusst **nicht** über
+     * den Namen zugeordnet; das wäre genau die Namensheuristik, die diese
+     * Zuordnung ausschliesst.
+     */
+    if (item.vorgangId === null) continue;
     const mapKey = vorgangOwner.get(item.vorgangId);
     if (!mapKey) continue;
     const entry = entries.get(mapKey);

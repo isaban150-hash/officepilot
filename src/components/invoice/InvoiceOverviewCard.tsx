@@ -50,6 +50,13 @@ export function InvoiceOverviewCard({
   const [currentItem, setCurrentItem] = useState(item);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const { invoice, paymentSummary } = currentItem;
+  /*
+   * MANUAL-INVOICE-01B2c — eine Rechnung ohne Auftrag hat noch keine
+   * Detailroute; Öffnen/Drucken/PDF führen dort ins Leere und werden nicht
+   * angeboten. Zahlung erfassen und Archivdokument funktionieren, weil sie
+   * über die Rechnungskennung laufen. Kein `/vorgaenge/null/…`.
+   */
+  const hasDetailRoute = currentItem.vorgangId !== null;
 
   useEffect(() => {
     setCurrentItem(item);
@@ -84,8 +91,12 @@ export function InvoiceOverviewCard({
           {invoice.number} · {invoiceTypeLabel(invoice, translate)}
         </CardTitle>
         <CardMeta>
-          <Link to={`/vorgaenge/${currentItem.vorgangId}`}>{currentItem.vorgangTitle}</Link>
-          {' · '}
+          {hasDetailRoute ? (
+            <>
+              <Link to={`/vorgaenge/${currentItem.vorgangId}`}>{currentItem.vorgangTitle}</Link>
+              {' · '}
+            </>
+          ) : null}
           {currentItem.customer}
         </CardMeta>
         {currentItem.baustelle && (
@@ -113,9 +124,11 @@ export function InvoiceOverviewCard({
         />
 
         <div className="invoice-overview-card__actions" data-testid="invoice-overview-card-actions">
-          <Button type="button" onClick={openInvoice} data-testid="invoice-overview-card-open">
-            {translate('invoice.open')}
-          </Button>
+          {hasDetailRoute && (
+            <Button type="button" onClick={openInvoice} data-testid="invoice-overview-card-open">
+              {translate('invoice.open')}
+            </Button>
+          )}
           {!isInvoiceCancelled(invoice) && (
             <Button
               type="button"
@@ -126,6 +139,7 @@ export function InvoiceOverviewCard({
               {translate('payment.recordShort')}
             </Button>
           )}
+          {hasDetailRoute && (
           <DropdownMenu
             testId="invoice-overview-card-more"
             ariaLabel={translate('invoice.moreActions')}
@@ -146,6 +160,7 @@ export function InvoiceOverviewCard({
               },
             ]}
           />
+          )}
           {invoice.archiveDocumentId && (
             <Link to={`/dokumente/${invoice.archiveDocumentId}`}>
               <Button type="button" variant="outline">

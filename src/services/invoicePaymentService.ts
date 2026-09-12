@@ -224,7 +224,13 @@ export interface RecordPaymentOptions {
 }
 
 export function recordPayment(
-  vorgangId: string,
+  /**
+   * MANUAL-INVOICE-01B2c — `null` ist die Rechnung ohne Auftrag. Sämtliche
+   * Regeln darunter (finalisiert, nicht storniert, Betrag, Datum, Confirm-first
+   * bei unversendet und Überzahlung) gelten unverändert; nur der Ablageort
+   * der Zahlung ist ein anderer.
+   */
+  vorgangId: string | null,
   invoiceId: string,
   input: InvoicePaymentInput,
   options: RecordPaymentOptions = {},
@@ -297,7 +303,7 @@ export function recordPayment(
 }
 
 export function removePayment(
-  vorgangId: string,
+  vorgangId: string | null,
   invoiceId: string,
   paymentId: string,
 ): RemovePaymentResult {

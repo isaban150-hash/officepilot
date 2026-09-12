@@ -210,8 +210,10 @@ export function proposeTasksFromOverdueInvoices(today?: Date | string): TaskProp
     priority: entry.paymentSummary.openAmount >= 1000 ? ('kritisch' as const) : ('hoch' as const),
     category: 'zahlungen' as TaskCategory,
     dueDate: entry.invoice.paymentDueDate,
-    linkedVorgangId: entry.vorgangId,
-    linkedVorgangTitle: entry.vorgangTitle,
+    // 01B2c — ohne Auftrag bleibt der Vorgangsbezug der Aufgabe leer; die
+    // Rechnungskennung trägt den Bezug.
+    linkedVorgangId: entry.vorgangId ?? undefined,
+    linkedVorgangTitle: entry.vorgangId === null ? undefined : entry.vorgangTitle,
     linkedInvoiceId: entry.invoice.id,
     sourceType: 'invoice',
     sourceId: entry.invoice.id,
