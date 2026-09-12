@@ -1574,26 +1574,41 @@ export function immutableInvoiceFingerprint(
  * Pure append-only adoption of a cloud invoice onto a Vorgang clone.
  * Preserves local payments / archiveDocumentId; never LWW-overwrites content.
  */
-export function applyFinalizedInvoiceToVorgang(
-  vorgang: Vorgang,
+export type ApplyFinalizedInvoiceToListResult =
+  | {
+      ok: true;
+      invoice: VorgangInvoice;
+      action: 'inserted' | 'noop' | 'status_raised';
+      invoices: VorgangInvoice[];
+    }
+  | { ok: false; reason: 'id_content_conflict' | 'number_id_conflict' };
+
+/**
+ * MANUAL-INVOICE-CLOUD-MIGRATION-01B2b — die Same-ID-Semantik einer
+ * freigegebenen Rechnung, losgelöst vom Vorgang.
+ *
+ * Sie war bisher im Rumpf von `applyFinalizedInvoiceToVorgang` eingeschlossen
+ * und damit nur über einen Vorgang erreichbar. Die Rechnung ohne Auftrag
+ * braucht dieselben Regeln — monotoner Status, vollständiger Versandsatz
+ * gewinnt, bestätigter Leistungszeitraum wird angehoben und nie gesenkt,
+ * abweichender unveränderlicher Inhalt ist ein Konflikt.
+ *
+ * Herausgezogen statt nachgebaut: Eine zweite Regelmenge würde
+ * auseinanderlaufen, und genau das darf es hier nicht geben.
+ *
+ * `scopeId` ist der Fingerprint-Bezug — die Vorgangskennung, oder `null` für
+ * die freie Rechnung. Er ist **kein** Ablageort und erzeugt nichts.
+ */
+export function applyFinalizedInvoiceToList(
+  current: readonly VorgangInvoice[],
   invoice: VorgangInvoice,
-): UpsertFinalizedInvoiceResult & { vorgang?: Vorgang } {
-  /*
-   * FIRST-CLASS-LOCAL-INVOICE-STORE-01B — diese Funktion ist rein und arbeitet
-   * ausschliesslich auf dem **übergebenen** Vorgang.
-   *
-   * `cloneVorgang` projiziert die Rechnungen inzwischen aus dem Speicher. Hier
-   * wäre das falsch: Der Cloud-Merge reicht Vorgänge herein, die noch gar nicht
-   * im Speicher stehen — ihre Rechnungen kämen sonst abhanden. Deshalb wird der
-   * mitgegebene Rechnungsstand ausdrücklich beibehalten.
-   */
-  const next: Vorgang = {
-    ...cloneVorgang(vorgang),
-    invoices: (vorgang.invoices ?? []).map(cloneVorgangInvoice),
-  };
-  const byId = next.invoices.find((item) => item.id === invoice.id);
+  scopeId: string | null,
+): ApplyFinalizedInvoiceToListResult {
+  const scope = scopeId ?? undefined;
+  let invoices = current.map(cloneVorgangInvoice);
+  const byId = invoices.find((item) => item.id === invoice.id);
   if (byId) {
-    if (immutableInvoiceFingerprint(byId, next.id) !== immutableInvoiceFingerprint(invoice, next.id)) {
+    if (immutableInvoiceFingerprint(byId, scope) !== immutableInvoiceFingerprint(invoice, scope)) {
       return { ok: false, reason: 'id_content_conflict' };
     }
 
@@ -1657,7 +1672,7 @@ export function applyFinalizedInvoiceToVorgang(
       raisedConfirmation === byId.servicePeriodConfirmed &&
       !adoptedSent
     ) {
-      return { ok: true, invoice: { ...byId }, action: 'noop', vorgang: next };
+      return { ok: true, invoice: { ...byId }, action: 'noop', invoices };
     }
 
     const updated: VorgangInvoice = { ...byId, status: nextStatus };
@@ -1671,11 +1686,11 @@ export function applyFinalizedInvoiceToVorgang(
       if (adoptedSent.sentNote) updated.sentNote = adoptedSent.sentNote;
       else delete updated.sentNote;
     }
-    next.invoices = next.invoices.map((item) => (item.id === updated.id ? updated : item));
-    return { ok: true, invoice: { ...updated }, action: 'status_raised', vorgang: next };
+    invoices = invoices.map((item) => (item.id === updated.id ? updated : item));
+    return { ok: true, invoice: { ...updated }, action: 'status_raised', invoices };
   }
 
-  const byNumber = next.invoices.find(
+  const byNumber = invoices.find(
     (item) => item.number === invoice.number && item.id !== invoice.id,
   );
   if (byNumber) {
@@ -1688,8 +1703,31 @@ export function applyFinalizedInvoiceToVorgang(
     payments: invoice.payments ?? [],
     paymentStatus: invoice.paymentStatus ?? 'offen',
   };
-  next.invoices = [adopted, ...next.invoices];
-  return { ok: true, invoice: { ...adopted }, action: 'inserted', vorgang: next };
+  invoices = [adopted, ...invoices];
+  return { ok: true, invoice: { ...adopted }, action: 'inserted', invoices };
+}
+
+export function applyFinalizedInvoiceToVorgang(
+  vorgang: Vorgang,
+  invoice: VorgangInvoice,
+): UpsertFinalizedInvoiceResult & { vorgang?: Vorgang } {
+  /*
+   * FIRST-CLASS-LOCAL-INVOICE-STORE-01B — diese Funktion ist rein und arbeitet
+   * ausschliesslich auf dem **übergebenen** Vorgang.
+   *
+   * `cloneVorgang` projiziert die Rechnungen inzwischen aus dem Speicher. Hier
+   * wäre das falsch: Der Cloud-Merge reicht Vorgänge herein, die noch gar nicht
+   * im Speicher stehen — ihre Rechnungen kämen sonst abhanden. Deshalb wird der
+   * mitgegebene Rechnungsstand ausdrücklich beibehalten.
+   */
+  const next: Vorgang = {
+    ...cloneVorgang(vorgang),
+    invoices: (vorgang.invoices ?? []).map(cloneVorgangInvoice),
+  };
+  const applied = applyFinalizedInvoiceToList(next.invoices, invoice, next.id);
+  if (!applied.ok) return applied;
+  next.invoices = applied.invoices;
+  return { ok: true, invoice: applied.invoice, action: applied.action, vorgang: next };
 }
 
 /**

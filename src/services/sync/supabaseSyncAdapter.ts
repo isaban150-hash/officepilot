@@ -316,13 +316,23 @@ export function buildFinalStateAfterPull(
   baseState: AppPersistedState,
   vorgaenge: Vorgang[],
   documents: AppPersistedState['documents'],
+  /**
+   * MANUAL-INVOICE-CLOUD-MIGRATION-01B2b — der Sollstand der Rechnungen ohne
+   * Auftrag aus dem Merge. Sie hängen an keinem Vorgang und könnten deshalb
+   * nicht aus `vorgaenge` abgeleitet werden.
+   */
+  manualInvoices?: readonly VorgangInvoice[],
 ): AppPersistedState {
   return {
     ...baseState,
     /* Zur Laufzeit tragen die Vorgänge ihre Rechnungen; gespeichert wird ohne
        sie — dieselbe Trennlinie wie in `buildPersistedStateSnapshot`. */
     vorgaenge: vorgaenge.map((vorgang) => ({ ...vorgang, invoices: [] })),
-    invoiceEntries: buildInvoiceEntriesAfterPull(vorgaenge, baseState.invoiceEntries),
+    invoiceEntries: buildInvoiceEntriesAfterPull(
+      vorgaenge,
+      baseState.invoiceEntries,
+      manualInvoices,
+    ),
     documents,
   };
 }
@@ -330,6 +340,7 @@ export function buildFinalStateAfterPull(
 export function buildInvoiceEntriesAfterPull(
   vorgaenge: readonly Vorgang[],
   previousEntries: readonly StoredInvoiceEntry[] | undefined,
+  manualInvoices?: readonly VorgangInvoice[],
 ): StoredInvoiceEntry[] {
   const entries: StoredInvoiceEntry[] = [];
   const seen = new Set<string>();
@@ -340,6 +351,18 @@ export function buildInvoiceEntriesAfterPull(
       seen.add(invoice.id);
       entries.push({ invoice, vorgangId: vorgang.id });
     }
+  }
+
+  /*
+   * 01B2b — die Rechnungen ohne Auftrag, in der Fassung aus dem Merge. Sie
+   * stehen **vor** dem Altbestand, damit ein im Pull angehobener Stand gewinnt;
+   * ein lokal vorhandener, vom Pull nicht berührter Beleg fällt weiter unten
+   * durch und bleibt erhalten.
+   */
+  for (const invoice of manualInvoices ?? []) {
+    if (seen.has(invoice.id)) continue;
+    seen.add(invoice.id);
+    entries.push({ invoice, vorgangId: null });
   }
 
   for (const entry of previousEntries ?? []) {
@@ -649,6 +672,10 @@ export class SupabaseSyncAdapter implements SyncAdapter {
         merged.state,
         documentPull.vorgaenge,
         documentPull.documents,
+        /* 01B2b — die gezogenen Rechnungen ohne Auftrag. Sie hängen an keinem
+           Vorgang und wären sonst genau so verlorengegangen, wie es 01B den
+           auftragsgebundenen zuvor passiert ist. */
+        invoicePull.merge?.manualInvoices,
       );
 
       // Vorgang+amendment pull succeeded; invoice RPC failure is reported but does not roll back.

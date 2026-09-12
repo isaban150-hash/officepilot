@@ -3,7 +3,10 @@ import { isSupabaseConfigured, getSupabaseClient } from '../../lib/supabase';
 import { buildPersistedStateSnapshot } from '../persistenceService';
 import { resolveCloudWorkspaceId } from '../workspace/workspaceSyncPayloadService';
 import { getVorgangById } from '../vorgangService';
-import { upsertFinalizedInvoiceOnVorgang } from '../vorgangService';
+import {
+  upsertFinalizedInvoiceOnVorgang,
+  upsertFinalizedManualInvoice,
+} from '../vorgangService';
 import {
   archiveOutgoingInvoice,
   isGeneratedInvoiceDocumentSyncSilent,
@@ -15,6 +18,7 @@ import {
 } from '../invoiceService';
 import type { InvoiceApprovalOptions, InvoiceValidationResult } from '../invoiceValidationService';
 import {
+  buildManualInvoiceFinalizeIntentKey,
   clearInvoiceFinalizeIntent,
   resolveInvoiceFinalizeIntent,
 } from './invoiceFinalizeIntentService';
@@ -27,12 +31,6 @@ import {
 export type CloudFinalizeFailureReason =
   | 'validation_failed'
   | 'vorgang_missing'
-  /**
-   * MANUAL-INVOICE-01B2 — die Cloud-Freigabe einer Rechnung ohne Auftrag ist
-   * serverseitig noch nicht geöffnet. Eigener Grund statt `vorgang_missing`:
-   * Hier fehlt kein Vorgang, hier fehlt der Vertrag.
-   */
-  | 'cloud_requires_vorgang'
   | 'offline_or_unconfigured'
   | 'auth_missing'
   | 'workspace_missing'
@@ -78,24 +76,21 @@ export async function finalizeInvoiceDraftWithCloud(
   options: InvoiceApprovalOptions = {},
 ): Promise<CloudFinalizeInvoiceResult> {
   /*
-   * MANUAL-INVOICE-01B2 — die Signatur nimmt die Rechnung ohne Auftrag an,
-   * der Cloud-Weg trägt sie aber noch nicht.
+   * MANUAL-INVOICE-CLOUD-MIGRATION-01B2b — ohne Auftragsbezug gibt es keinen
+   * Vorgang zu prüfen; seit dieser Migration trägt ihn auch der Server nicht
+   * mehr als Pflichtfeld.
    *
-   * `finalize_workspace_invoice` weist eine leere `p_vorgang_id` ab und
-   * verlangt darüber hinaus einen existierenden Eintrag in
-   * `workspace_vorgaenge`. Das zu öffnen ist eine Server-Migration, kein
-   * Client-Umbau — deshalb hier ein benannter Abbruch statt eines erfundenen
-   * Vorgangs. Der lokale Weg über `upsertFinalizedManualInvoice` bleibt davon
-   * unberührt.
+   * Der Bezug bleibt aber Pflicht, sobald eine Kennung mitkommt: Eine
+   * Auftragsrechnung auf einen verschwundenen Vorgang bleibt ein Fehler.
+   * Abschlag und Schlussrechnung sind ohne Vorgang gar nicht erst definiert —
+   * `finalize_workspace_invoice` weist sie mit
+   * `invoice_requires_vorgang_for_type` ab; hier fallen sie schon vorher auf,
+   * ohne einen Netzweg zu belegen.
    */
-  if (vorgangId === null) {
-    return {
-      ok: false,
-      reason: 'cloud_requires_vorgang',
-      message: 'Rechnungen ohne Auftrag können noch nicht über die Cloud freigegeben werden.',
-    };
+  if (vorgangId !== null && !getVorgangById(vorgangId)) {
+    return { ok: false, reason: 'vorgang_missing' };
   }
-  if (!getVorgangById(vorgangId)) {
+  if (vorgangId === null && draft.type !== 'rechnung') {
     return { ok: false, reason: 'vorgang_missing' };
   }
 
@@ -118,9 +113,18 @@ export async function finalizeInvoiceDraftWithCloud(
     return { ok: false, reason: 'workspace_missing', message: 'Kein aktiver Workspace.' };
   }
 
+  /*
+   * 01B2b — der Intent adressiert den Freigabeversuch. Mit Auftrag ist das der
+   * Vorgang, ohne Auftrag der Entwurf: Seine Kennung überlebt Wiederaufnahme
+   * und Neuaufbau, und das Präfix schliesst eine Kollision mit einer
+   * Vorgangskennung aus. Kein erfundener Vorgang — der Wert ist ein Schlüssel
+   * dieses Speichers, keine Behauptung über einen Auftrag.
+   */
+  const intentKey = vorgangId ?? buildManualInvoiceFinalizeIntentKey(draft.id);
+
   const intent = resolveInvoiceFinalizeIntent({
     workspaceId,
-    vorgangId,
+    vorgangId: intentKey,
     contentFingerprint: fingerprint,
   });
 
@@ -189,7 +193,14 @@ export async function finalizeInvoiceDraftWithCloud(
     payments: cloudInvoice.payments ?? [],
   };
 
-  const upsert = upsertFinalizedInvoiceOnVorgang(vorgangId, finalized);
+  /*
+   * 01B2b — beide Wege enden im First-Class-Rechnungsspeicher. Mit Auftrag über
+   * den Vorgang, ohne Auftrag unmittelbar — kein simulierter Vorgangsslot.
+   */
+  const upsert =
+    vorgangId === null
+      ? upsertFinalizedManualInvoice(finalized)
+      : upsertFinalizedInvoiceOnVorgang(vorgangId, finalized);
   if (!upsert.ok) {
     // Keep intent for retry with same client_invoice_id (remote already succeeded).
     if (upsert.reason === 'local_persist_failed' || upsert.reason === 'vorgang_missing') {
@@ -213,9 +224,26 @@ export async function finalizeInvoiceDraftWithCloud(
   }
 
   // Intent only after proven local persist (remote success alone is not enough).
-  clearInvoiceFinalizeIntent(vorgangId);
+  clearInvoiceFinalizeIntent(intentKey);
 
-  const archiveResult = archiveOutgoingInvoice(vorgangId, upsert.invoice, setup.companyName);
+  /*
+   * MANUAL-INVOICE-CLOUD-MIGRATION-01B2b — die Cloud trägt das Rechnungs-
+   * dokument einer freien Rechnung inzwischen (`linked_vorgang_id` darf NULL
+   * sein). Der **lokale** Archivweg tut es noch nicht:
+   * `archiveOutgoingInvoice` schlägt die Zuordnung über `getVorgangById` und
+   * `updateInvoiceArchiveDocumentId(vorgangId, …)` und ist durchgehend
+   * vorgangsgebunden.
+   *
+   * Deshalb hier kein Archivlauf und ausdrücklich kein erfundener Vorgang,
+   * sondern derselbe ehrliche Ausgang wie bei einem gescheiterten Archivieren:
+   * Die Finalisierung ist gelungen, `archiveWarning` sagt, dass das
+   * Archivdokument fehlt. Das lokale Archiv ohne Auftrag ist ein eigener
+   * Schnitt.
+   */
+  const archiveResult =
+    vorgangId === null
+      ? ({ success: false, invoice: upsert.invoice } as const)
+      : archiveOutgoingInvoice(vorgangId, upsert.invoice, setup.companyName);
   if (archiveResult.success) {
     /*
      * 05C1 — lokal zuerst, Cloud danach. Erst ab hier steht fest, dass Dokument

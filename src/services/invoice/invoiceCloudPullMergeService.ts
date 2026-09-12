@@ -5,9 +5,11 @@ import {
   matchesPersistedInvoiceContentFingerprint,
 } from '../invoiceService';
 import {
+  applyFinalizedInvoiceToList,
   applyFinalizedInvoiceToVorgang,
   immutableInvoiceFingerprint,
 } from '../vorgangService';
+import { getInvoiceStoreSnapshot } from './invoiceStore';
 import {
   clearInvoiceFinalizeIntent,
   getInvoiceFinalizeIntent,
@@ -29,6 +31,7 @@ export interface InvoicePullMergeConflict {
   reason: InvoicePullMergeConflictReason;
   clientInvoiceId?: string;
   cloudInvoiceId?: string;
+  /** 01B2b — bei einer Rechnung ohne Auftrag bleibt das Feld leer. */
   vorgangId?: string;
   message: string;
   /**
@@ -45,6 +48,16 @@ export interface MergeCloudInvoicesResult {
   noopCount: number;
   statusRaisedCount: number;
   conflicts: InvoicePullMergeConflict[];
+  /**
+   * MANUAL-INVOICE-CLOUD-MIGRATION-01B2b — die gezogenen Rechnungen **ohne**
+   * Auftrag, in der Fassung, die lokal gelten soll.
+   *
+   * Sie stehen hier und nicht in `vorgaenge`, weil sie zu keinem Vorgang
+   * gehören — und sie werden hier nicht geschrieben, weil diese Funktion
+   * ausdrücklich nicht persistiert. Der Aufrufer übernimmt sie zusammen mit
+   * allem anderen in **einem** Zustandswechsel.
+   */
+  manualInvoices: VorgangInvoice[];
   /**
    * Intents that match adopted cloud invoices.
    * Cleared by the caller only after successful batch persist.
@@ -94,17 +107,94 @@ export function mergeCloudInvoicesIntoVorgaenge(
   const pendingIntentClears: string[] = [];
   const workspaceId = options?.workspaceId?.trim() ?? '';
 
+  /*
+   * 01B2b — der lokale Stand der Rechnungen ohne Auftrag. Er kommt aus dem
+   * First-Class-Speicher, weil es für ihn keinen Vorgang gibt, an dem er
+   * hängen könnte. Geschrieben wird er nicht; die Liste wandert als
+   * `manualInvoices` zum Aufrufer.
+   */
+  const manualLocal = new Map<string, VorgangInvoice>();
+  const manualHomedElsewhere = new Set<string>();
+  for (const entry of getInvoiceStoreSnapshot()) {
+    if (entry.vorgangId === null) manualLocal.set(entry.invoice.id, entry.invoice);
+    else manualHomedElsewhere.add(entry.invoice.id);
+  }
+
   for (const cloud of cloudInvoices) {
     if (workspaceId && cloud.workspaceId !== workspaceId) {
       const conflict: InvoicePullMergeConflict = {
         reason: 'orphan',
         clientInvoiceId: cloud.clientInvoiceId,
         cloudInvoiceId: cloud.cloudInvoiceId,
-        vorgangId: cloud.vorgangId,
+        ...(cloud.vorgangId === null ? {} : { vorgangId: cloud.vorgangId }),
         message: `Rechnung ${cloud.clientInvoiceId} gehört nicht zum aktiven Workspace.`,
       };
       conflicts.push(conflict);
       recordInvoiceConflict(options?.report, conflict);
+      continue;
+    }
+
+    /*
+     * 01B2b — die Rechnung ohne Auftrag. Sie ist keine Waise: Ihr fehlt kein
+     * Vorgang, sie hat ausdrücklich keinen. Sie über `byId` zu suchen hätte sie
+     * bisher zwangsläufig als verwaist gemeldet und verworfen.
+     *
+     * Gemergt wird mit **derselben** Regelmenge wie eine Auftragsrechnung —
+     * `applyFinalizedInvoiceToList`, nur mit `null` als Fingerprint-Bezug.
+     */
+    if (cloud.vorgangId === null) {
+      if (manualHomedElsewhere.has(cloud.clientInvoiceId)) {
+        // Dieselbe Kennung gehört lokal zu einem Auftrag — kein stiller Umzug.
+        const conflict: InvoicePullMergeConflict = {
+          reason: 'number_id_conflict',
+          clientInvoiceId: cloud.clientInvoiceId,
+          cloudInvoiceId: cloud.cloudInvoiceId,
+          message: `Rechnung ${cloud.clientInvoiceId} liegt lokal an einem Vorgang und kommt ohne an.`,
+        };
+        conflicts.push(conflict);
+        recordInvoiceConflict(options?.report, conflict);
+        continue;
+      }
+
+      const appliedManual = applyFinalizedInvoiceToList(
+        [...manualLocal.values()],
+        cloud.invoice,
+        null,
+      );
+      if (!appliedManual.ok) {
+        const conflict: InvoicePullMergeConflict = {
+          reason: appliedManual.reason,
+          clientInvoiceId: cloud.clientInvoiceId,
+          cloudInvoiceId: cloud.cloudInvoiceId,
+          message:
+            appliedManual.reason === 'number_id_conflict'
+              ? `Nummernkonflikt für Rechnung ${cloud.invoice.number} (ID ${cloud.clientInvoiceId}).`
+              : `Inhaltskonflikt für Rechnung ${cloud.clientInvoiceId}.`,
+        };
+        conflicts.push(conflict);
+        recordInvoiceConflict(options?.report, conflict);
+        continue;
+      }
+
+      manualLocal.clear();
+      for (const item of appliedManual.invoices) manualLocal.set(item.id, item);
+      if (appliedManual.action === 'inserted') insertedCount += 1;
+      else if (appliedManual.action === 'status_raised') statusRaisedCount += 1;
+      else noopCount += 1;
+
+      /*
+       * Bewusst **keine** Intent-Abgleichung hier.
+       *
+       * Der Intent einer freien Rechnung ist über die Entwurfskennung
+       * adressiert (`manual:<draftId>`); eine Cloud-Zeile trägt sie nicht. Ihn
+       * aus der `client_invoice_id` zu konstruieren wäre geraten und träfe
+       * einen anderen Schlüssel.
+       *
+       * Folgenlos: Bleibt der Intent stehen, liefert `resolveInvoiceFinalizeIntent`
+       * beim nächsten Versuch dieselbe `clientInvoiceId`, der Server antwortet
+       * idempotent, und der Orchestrator räumt ihn nach dem Erfolg ab. Kein
+       * zweiter Beleg, kein zweiter Nummernzug.
+       */
       continue;
     }
 
@@ -183,6 +273,13 @@ export function mergeCloudInvoicesIntoVorgaenge(
     noopCount,
     statusRaisedCount,
     conflicts,
+    /*
+     * Der vollständige Sollstand der Rechnungen ohne Auftrag — nicht nur die
+     * neu gezogenen. Der Aufrufer ersetzt damit genau diesen Teil des
+     * Speichers; hat der Pull nichts Freies gebracht, ist es der unveränderte
+     * lokale Stand und die Übernahme bleibt folgenlos.
+     */
+    manualInvoices: [...manualLocal.values()],
     pendingIntentClears,
   };
 }

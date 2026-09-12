@@ -703,7 +703,6 @@ describe('01P4D2B4 — strenge Cloud-Pull-Validierung', () => {
     const stringColumns = [
       'id',
       'workspace_id',
-      'vorgang_id',
       'client_invoice_id',
       'invoice_number',
     ] as const;
@@ -714,6 +713,25 @@ describe('01P4D2B4 — strenge Cloud-Pull-Validierung', () => {
           `${column}:${JSON.stringify(invalid)}`,
         ).toBeNull();
       }
+    }
+
+    /*
+     * MANUAL-INVOICE-CLOUD-MIGRATION-01B2b — `vorgang_id` ist seither
+     * dreiwertig und steht deshalb nicht mehr in der Liste oben: `null` und ein
+     * fehlender Schlüssel sind die normale Rechnung ohne Auftrag. Alles andere
+     * bleibt so streng wie zuvor — insbesondere der Leerstring, der sonst als
+     * fachliche Aussage durchginge.
+     */
+    for (const invalid of [5, true, ['a'], { a: 1 }, '   ', '']) {
+      expect(
+        parseWorkspaceInvoicePullRow({ ...cloudRow(), vorgang_id: invalid }),
+        `vorgang_id:${JSON.stringify(invalid)}`,
+      ).toBeNull();
+    }
+    for (const valid of [null, undefined]) {
+      const parsed = parseWorkspaceInvoicePullRow({ ...cloudRow(), vorgang_id: valid });
+      expect(parsed, `vorgang_id:${String(valid)}`).not.toBeNull();
+      expect(parsed!.vorgang_id).toBeNull();
     }
 
     for (const column of ['invoice_type', 'invoice_status'] as const) {

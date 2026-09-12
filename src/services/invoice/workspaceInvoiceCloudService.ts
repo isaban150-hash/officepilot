@@ -61,7 +61,8 @@ export class WorkspaceInvoiceCloudError extends Error {
 
 export interface WorkspaceInvoiceFinalizeInput {
   workspaceId: string;
-  vorgangId: string;
+  /** 01B2b — `null` ist die Rechnung ohne Auftrag. */
+  vorgangId: string | null;
   /** Stable idempotency key — typically VorgangInvoice.id */
   clientInvoiceId: string;
   invoice: VorgangInvoice;
@@ -73,7 +74,8 @@ export interface WorkspaceInvoiceFinalizeInput {
  */
 export interface WorkspaceInvoicePreparedFinalizeInput {
   workspaceId: string;
-  vorgangId: string;
+  /** 01B2b — `null` ist die Rechnung ohne Auftrag. */
+  vorgangId: string | null;
   clientInvoiceId: string;
   invoicePayload: Record<string, unknown>;
 }
@@ -96,7 +98,12 @@ export interface WorkspaceInvoiceFinalizeResult {
 export interface WorkspaceInvoicePullRow {
   id: string;
   workspace_id: string;
-  vorgang_id: string;
+  /**
+   * MANUAL-INVOICE-CLOUD-MIGRATION-01B2b — `null` ist die normale Rechnung ohne
+   * Auftrag. Der Leerstring bleibt ungültig: `null` heisst „ausdrücklich kein
+   * Auftrag", `''` heisst „kaputt".
+   */
+  vorgang_id: string | null;
   client_invoice_id: string;
   invoice_number: string;
   invoice_year: number;
@@ -127,7 +134,8 @@ export interface WorkspaceInvoicePullRow {
 
 export interface MappedWorkspaceInvoicePull {
   workspaceId: string;
-  vorgangId: string;
+  /** 01B2b — `null` ist die Rechnung ohne Auftrag. */
+  vorgangId: string | null;
   clientInvoiceId: string;
   cloudInvoiceId: string;
   rowVersion: number;
@@ -299,12 +307,12 @@ export function buildWorkspaceInvoiceFinalizePayload(invoice: VorgangInvoice): R
 export function buildWorkspaceInvoiceFinalizeInput(
   workspaceId: string,
   /**
-   * MANUAL-INVOICE-01B2 — bleibt bewusst Pflicht: `finalize_workspace_invoice`
-   * weist eine leere `p_vorgang_id` ab und verlangt zusätzlich einen in
-   * `workspace_vorgaenge` vorhandenen Vorgang. Ein Ersatzwert wäre eine
-   * Falschbehauptung über einen Auftrag.
+   * MANUAL-INVOICE-CLOUD-MIGRATION-01B2b — `null` ist die normale Rechnung ohne
+   * Auftrag und erreicht den Server als echtes SQL `NULL`. Mit Kennung bleibt
+   * der Bezug Pflicht: `finalize_workspace_invoice` verlangt dann einen in
+   * `workspace_vorgaenge` vorhandenen, nicht gelöschten Vorgang.
    */
-  vorgangId: string,
+  vorgangId: string | null,
   invoice: VorgangInvoice,
 ): WorkspaceInvoiceFinalizeInput {
   return {
@@ -488,7 +496,13 @@ export function inspectWorkspaceInvoicePullRow(
 
   const id = textColumn(row.id);
   const workspaceId = textColumn(row.workspace_id);
-  const vorgangId = textColumn(row.vorgang_id);
+  /*
+   * 01B2b — drei Ausgänge statt zwei: ein kanonischer Text ist ein echter
+   * Auftragsbezug, `null`/fehlend ist die Rechnung ohne Auftrag, alles andere
+   * — Leerstring, Zahl, Objekt — bleibt ein Fehler.
+   */
+  const vorgangIdMissing = row.vorgang_id === null || row.vorgang_id === undefined;
+  const vorgangId = vorgangIdMissing ? null : textColumn(row.vorgang_id);
   const clientInvoiceId = textColumn(row.client_invoice_id);
   const invoiceNumber = textColumn(row.invoice_number);
   const invoiceType = textColumn(row.invoice_type);
@@ -504,7 +518,7 @@ export function inspectWorkspaceInvoicePullRow(
    */
   if (!id) return { ok: false, detail: 'row.id:not_text' };
   if (!workspaceId) return { ok: false, detail: 'row.workspace_id:not_text' };
-  if (!vorgangId) return { ok: false, detail: 'row.vorgang_id:not_text' };
+  if (!vorgangIdMissing && !vorgangId) return { ok: false, detail: 'row.vorgang_id:not_text' };
   if (!clientInvoiceId) return { ok: false, detail: 'row.client_invoice_id:not_text' };
   if (!invoiceNumber) return { ok: false, detail: 'row.invoice_number:not_text' };
   if (!invoiceType) return { ok: false, detail: 'row.invoice_type:not_text' };
@@ -1148,7 +1162,7 @@ function readFinalizeEnvelope(data: unknown): {
 function readFinalizeResponseRowColumns(row: Record<string, unknown>): {
   id: string;
   workspace_id: string;
-  vorgang_id: string;
+  vorgang_id: string | null;
   client_invoice_id: string;
   invoice_number: string;
   invoice_sequence_number: number;
@@ -1174,7 +1188,11 @@ function readFinalizeResponseRowColumns(row: Record<string, unknown>): {
 
   const id = text(row.id, 'row.id');
   const workspaceId = text(row.workspace_id, 'row.workspace_id');
-  const vorgangId = text(row.vorgang_id, 'row.vorgang_id');
+  // 01B2b — wie im Pull-Parser: kanonischer Text, echtes `null`, sonst Fehler.
+  const vorgangId =
+    row.vorgang_id === null || row.vorgang_id === undefined
+      ? null
+      : text(row.vorgang_id, 'row.vorgang_id');
   const clientInvoiceId = text(row.client_invoice_id, 'row.client_invoice_id');
   const invoiceNumber = text(row.invoice_number, 'row.invoice_number');
   const invoiceType = text(row.invoice_type, 'row.invoice_type');
@@ -1219,7 +1237,12 @@ export async function rpcFinalizePreparedWorkspaceInvoice(
   if (!input.workspaceId.trim()) {
     throw new WorkspaceInvoiceCloudError('workspace_id fehlt', 'validation', false);
   }
-  if (!input.vorgangId.trim()) {
+  /*
+   * 01B2b — `null` ist die zulässige Aussage „kein Auftrag" und geht als echtes
+   * `null` an den RPC. Ein leerer oder nur aus Whitespace bestehender String
+   * bleibt ein lokaler Fehler; der Server wiese ihn ohnehin ab.
+   */
+  if (input.vorgangId !== null && !input.vorgangId.trim()) {
     throw new WorkspaceInvoiceCloudError('vorgang_id fehlt', 'validation', false);
   }
   if (!input.clientInvoiceId.trim()) {
@@ -1354,7 +1377,8 @@ export async function rpcFinalizeWorkspaceInvoice(
       false,
     );
   }
-  if (!canonicalInput(input.vorgangId)) {
+  // 01B2b — `null` ist zulässig; jeder andere nichtkanonische Wert nicht.
+  if (input.vorgangId !== null && !canonicalInput(input.vorgangId)) {
     throw new WorkspaceInvoiceCloudError(
       'vorgang_id fehlt oder ist nicht kanonisch',
       'validation',
