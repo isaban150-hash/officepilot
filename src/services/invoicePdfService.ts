@@ -625,6 +625,10 @@ async function renderInvoicePrintModelToPdf(model: InvoicePrintModel): Promise<U
   }
   if (model.paymentTermsText.trim()) drawWrapped(cursor, model.paymentTermsText.trim(), 9);
   if (model.skontoText.trim()) drawWrapped(cursor, model.skontoText.trim(), 9);
+  // SETTINGS-01B1 — Kontoinhaber nur, wenn vorhanden; sonst unveränderter Output.
+  if (company.accountHolder?.trim()) {
+    drawLine(cursor, `Kontoinhaber: ${toPdfSafeText(company.accountHolder)}`, { size: 9 });
+  }
   if (company.iban?.trim()) drawLine(cursor, `IBAN: ${company.iban}`, { size: 9 });
   if (company.bic?.trim()) drawLine(cursor, `BIC: ${company.bic}`, { size: 9 });
   if (company.bankName?.trim()) drawLine(cursor, `Bank: ${company.bankName}`, { size: 9 });

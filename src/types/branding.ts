@@ -45,9 +45,25 @@ export interface LogoAssetReference {
  * Das aktuelle Branding des Betriebs. Beide Felder sind optional — ein Betrieb
  * ohne Logo und ohne gesetzte Markenfarbe ist ein gültiger Zustand.
  */
+/**
+ * SETTINGS-01B1 — die Dokumentvorlage. V1 kennt genau `classic` (das heutige
+ * Rendering). Fehlt der Wert, gilt `classic` implizit — keine Migration.
+ * Spätere Vorlagen (`modern`, `compact`) werden hier ergänzt; bis dahin sind
+ * sie ungültig und werden fail-closed verworfen.
+ */
+export const DOCUMENT_TEMPLATE_IDS = ['classic'] as const;
+export type DocumentTemplateId = (typeof DOCUMENT_TEMPLATE_IDS)[number];
+export const DEFAULT_DOCUMENT_TEMPLATE: DocumentTemplateId = 'classic';
+
+export function isDocumentTemplateId(value: unknown): value is DocumentTemplateId {
+  return typeof value === 'string' && (DOCUMENT_TEMPLATE_IDS as readonly string[]).includes(value);
+}
+
 export interface BrandingProfile {
   logo?: LogoAssetReference;
   primaryColor?: string;
+  /** SETTINGS-01B1 — siehe `DocumentTemplateId`; fehlend = `classic`. */
+  documentTemplate?: DocumentTemplateId;
 }
 
 /**
@@ -79,4 +95,10 @@ export interface BrandingSnapshot {
   version: typeof BRANDING_SNAPSHOT_VERSION;
   logo?: LogoAssetReference;
   primaryColor?: string;
+  /**
+   * SETTINGS-01B1 — mit welcher Vorlage das Dokument erstellt wurde. Nur
+   * gesetzt, wenn das Profil sie ausdrücklich trug; fehlend = `classic`. Ein
+   * späterer Vorlagenwechsel verändert damit kein finalisiertes Dokument.
+   */
+  documentTemplate?: DocumentTemplateId;
 }

@@ -6,6 +6,7 @@ import { formatOrderUnitDisplay } from './orderUnitMapper';
 import { getTaxRateForStatus } from './invoiceTaxService';
 import { getInvoiceDocumentTitle, usesAbschlagDeductions } from './invoiceTypeService';
 import { selectHistoricalInvoiceLogo } from './invoice/invoiceHistoricalLogo';
+import { DEFAULT_DOCUMENT_TEMPLATE } from '../types/branding';
 import type {
   CompanySetup,
   InvoiceDraft,
@@ -137,6 +138,7 @@ export function buildInvoicePrintModelFromInvoice(invoice: VorgangInvoice): Invo
     paymentTermsText: invoice.paymentTermsText ?? '',
     skontoText: invoice.skontoText ?? '',
     footerNotes: invoice.companySnapshot.invoiceFooterNotes,
+    documentTemplate: invoice.brandingSnapshot?.documentTemplate ?? DEFAULT_DOCUMENT_TEMPLATE,
   };
 }
 
@@ -181,6 +183,7 @@ export function buildInvoicePrintModel(
     paymentTermsText: draft.paymentTermsText,
     skontoText: draft.skontoText,
     footerNotes: draft.companySnapshot.invoiceFooterNotes,
+    documentTemplate: draft.brandingSnapshot?.documentTemplate ?? DEFAULT_DOCUMENT_TEMPLATE,
   };
 }
 

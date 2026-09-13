@@ -17,6 +17,7 @@
 import {
   BRANDING_SNAPSHOT_VERSION,
   LOGO_MIME_TYPES,
+  isDocumentTemplateId,
   type BrandingProfile,
   type BrandingSnapshot,
   type LogoAssetReference,
@@ -91,7 +92,9 @@ export function parseBrandingSnapshotFromCloud(value: unknown): BrandingSnapshot
   const raw = value as Record<string, unknown>;
 
   for (const key of Object.keys(raw)) {
-    if (key !== 'version' && key !== 'logo' && key !== 'primaryColor') return null;
+    if (key !== 'version' && key !== 'logo' && key !== 'primaryColor' && key !== 'documentTemplate') {
+      return null;
+    }
   }
 
   if (raw.version !== BRANDING_SNAPSHOT_VERSION) return null;
@@ -116,6 +119,12 @@ export function parseBrandingSnapshotFromCloud(value: unknown): BrandingSnapshot
     snapshot.primaryColor = raw.primaryColor;
   }
 
+  // SETTINGS-01B1 — fail-closed: eine unbekannte Vorlage macht den Snapshot ungültig.
+  if (raw.documentTemplate !== undefined) {
+    if (!isDocumentTemplateId(raw.documentTemplate)) return null;
+    snapshot.documentTemplate = raw.documentTemplate;
+  }
+
   return snapshot;
 }
 
@@ -133,6 +142,20 @@ export function buildBrandingSnapshot(profile: BrandingProfile): BrandingSnapsho
       );
     }
     snapshot.primaryColor = profile.primaryColor;
+  }
+
+  /*
+   * SETTINGS-01B1 — die Vorlage wird nur eingefroren, wenn das Profil sie
+   * ausdrücklich trägt. Ein Profil ohne Feld erzeugt denselben Snapshot wie
+   * bisher (fehlend = `classic`); kein bestehender Fingerprint ändert sich.
+   */
+  if (profile.documentTemplate !== undefined) {
+    if (!isDocumentTemplateId(profile.documentTemplate)) {
+      throw new Error(
+        `BRANDING-SNAPSHOT: documentTemplate "${String(profile.documentTemplate)}" ist unbekannt.`,
+      );
+    }
+    snapshot.documentTemplate = profile.documentTemplate;
   }
 
   return snapshot;

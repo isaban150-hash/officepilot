@@ -21,6 +21,7 @@ import {
   isLogoMimeType,
   isValidBrandingPrimaryColor,
 } from '../branding/brandingSnapshotService';
+import { isDocumentTemplateId } from '../../types/branding';
 
 export const PREPARED_FINALIZE_REQUEST_KIND =
   'officepilot-workspace-invoice-finalize-request' as const;
@@ -212,7 +213,7 @@ const CUSTOMER_KEYS = [
 const COMPANY_KEYS = COMPANY_SNAPSHOT_KEYS;
 
 /** BRANDING-01F-2 — geschlossener Vertrag, siehe `checkBrandingSnapshot`. */
-const BRANDING_SNAPSHOT_KEYS = ['version', 'logo', 'primaryColor'] as const;
+const BRANDING_SNAPSHOT_KEYS = ['version', 'logo', 'primaryColor', 'documentTemplate'] as const;
 const BRANDING_LOGO_KEYS = ['assetId', 'mimeType'] as const;
 
 const DEDUCTION_KEYS = [
@@ -379,6 +380,11 @@ function checkBrandingSnapshot(value: unknown, path: string): void {
       reject(`${path}.primaryColor:invalid`);
     }
   }
+
+  // SETTINGS-01B1 — nur implementierte Vorlagen; fehlend = classic.
+  if (snapshot.documentTemplate !== undefined && !isDocumentTemplateId(snapshot.documentTemplate)) {
+    reject(`${path}.documentTemplate:invalid`);
+  }
 }
 
 function checkCompanySnapshot(value: unknown, path: string): void {
@@ -413,6 +419,8 @@ function checkCompanySnapshot(value: unknown, path: string): void {
   optionalFiniteNumber(snapshot.skontoPercent, `${path}.skontoPercent`);
   optionalFiniteNumber(snapshot.skontoDays, `${path}.skontoDays`);
   optionalString(snapshot.managingDirector, `${path}.managingDirector`);
+  // SETTINGS-01B1 — Kontoinhaber: optional, nur Text.
+  optionalString(snapshot.accountHolder, `${path}.accountHolder`);
   optionalString(snapshot.registrationAuthority, `${path}.registrationAuthority`);
   optionalString(snapshot.registrationNumber, `${path}.registrationNumber`);
   optionalString(snapshot.taxFreeNotice, `${path}.taxFreeNotice`);

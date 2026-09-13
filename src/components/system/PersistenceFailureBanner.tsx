@@ -6,7 +6,7 @@ import {
   subscribePersistenceHealth,
   type PersistenceHealthSnapshot,
 } from '../../services/persistenceHealthService';
-import { FIRMENDATEN_BACKUP_HREF } from '../../services/backupSectionNavigation';
+import { SETTINGS_BACKUP_HREF } from '../../services/backupSectionNavigation';
 
 export function PersistenceFailureBanner() {
   const { translate } = useApp();
@@ -26,7 +26,7 @@ export function PersistenceFailureBanner() {
     >
       <p className="persistence-failure-banner__text">{translate('persist.banner.message')}</p>
       <Link
-        to={FIRMENDATEN_BACKUP_HREF}
+        to={SETTINGS_BACKUP_HREF}
         className="persistence-failure-banner__link"
         data-testid="persistence-failure-backup-link"
       >

@@ -12,6 +12,7 @@ import { trUserStorageDecision } from './userStorageDecision';
 import { trDocumentOriginal } from './documentOriginal';
 import { trBackup } from './backup';
 import { trPilot } from './pilot';
+import { trSettings } from './settings';
 
 export const trModules = {
   ...trAuth,
@@ -32,4 +33,5 @@ export const trModules = {
   ...trDocumentOriginal,
   ...trBackup,
   ...trPilot,
+  ...trSettings,
 } as const;

@@ -58,10 +58,33 @@ body {
 
 .app-shell__top-right {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.15rem;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
   min-width: 0;
+}
+
+/* SETTINGS-01B2 — Zahnrad: sichtbar, nicht dominant, Berührungsziel 44px. */
+.app-shell__settings-gear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.85);
+  flex: none;
+}
+
+.app-shell__settings-gear svg {
+  width: 1.35rem;
+  height: 1.35rem;
+}
+
+.app-shell__settings-gear:hover,
+.app-shell__settings-gear:focus-visible {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
 }
 
 .app-shell__reset {
@@ -564,6 +587,325 @@ body {
   height: 1.25rem;
   flex: none;
   color: var(--color-text-muted, #9ca3af);
+}
+
+/* SETTINGS-01B2 — Zeilen-Icon im Hub, Unterseiten-Formular. */
+.settings-row__icon {
+  width: 1.4rem;
+  height: 1.4rem;
+  flex: none;
+  color: var(--color-primary, #1f3b73);
+}
+
+.settings-page {
+  max-width: 44rem;
+}
+
+.settings-subpage .back-link {
+  display: inline-block;
+  margin-bottom: 0.75rem;
+}
+
+.settings-form__section {
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 0.75rem;
+  background: var(--color-surface, #fff);
+  padding: 1rem 1rem 0.5rem;
+  margin: 0 0 1rem;
+  min-width: 0;
+}
+
+.settings-form__section:disabled {
+  opacity: 1;
+}
+
+.settings-form__section[disabled] .input {
+  background: var(--color-surface-muted, #f9fafb);
+}
+
+.settings-form__legend {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted, #6b7280);
+  padding: 0 0.25rem;
+}
+
+.settings-form__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-bottom: 0.85rem;
+  min-width: 0;
+}
+
+.settings-form__field label {
+  font-weight: 600;
+  font-size: 0.9375rem;
+}
+
+.settings-form__field .input {
+  width: 100%;
+  min-height: 2.75rem;
+  box-sizing: border-box;
+}
+
+.settings-form__field .input--error {
+  border-color: var(--color-danger, #b91c1c);
+}
+
+.settings-form__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 0 0.5rem;
+  flex-wrap: wrap;
+}
+
+.settings-form__dirty {
+  font-size: 0.875rem;
+  color: var(--color-text-muted, #6b7280);
+}
+
+@media (max-width: 767px) {
+  .settings-form__actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .settings-form__actions .btn {
+    width: 100%;
+  }
+}
+
+/* SETTINGS-01B3 — Design-Seite: Logo, Vorlage, skalierte Dokumentvorschau. */
+.settings-design__section {
+  padding-bottom: 1rem;
+}
+
+.settings-design__logo-row {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.settings-design__logo-frame {
+  width: 160px;
+  height: 120px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--color-border, #e5e7eb);
+  border-radius: 0.5rem;
+  background:
+    linear-gradient(45deg, #f3f4f6 25%, transparent 25%, transparent 75%, #f3f4f6 75%),
+    linear-gradient(45deg, #f3f4f6 25%, #fff 25%, #fff 75%, #f3f4f6 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 8px 8px;
+  overflow: hidden;
+}
+
+.settings-design__logo-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.settings-design__logo-empty {
+  font-size: 0.875rem;
+  color: var(--color-text-muted, #6b7280);
+  text-align: center;
+  padding: 0.5rem;
+}
+
+.settings-design__logo-meta {
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+
+.settings-design__logo-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.75rem;
+}
+
+.settings-design__file-label {
+  position: relative;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.settings-design__file-input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  width: 100%;
+  height: 100%;
+}
+
+.settings-design__preview-title {
+  font-weight: 600;
+  margin: 0.25rem 0 0.25rem;
+}
+
+/* Der Vorschauhost misst die Breite; das A4-breite Blatt wird proportional
+ * hineinskaliert — kein horizontaler Seitenoverflow, auf keinem Gerät. */
+.settings-preview {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  margin-top: 0.75rem;
+}
+
+.settings-preview__sheet {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: top left;
+}
+
+.settings-preview__sheet .invoice-document {
+  margin: 0;
+}
+
+@media (max-width: 767px) {
+  .settings-design__logo-actions .btn,
+  .settings-design__logo-actions .settings-design__file-label {
+    width: 100%;
+    text-align: center;
+  }
+}
+
+/* SETTINGS-01B4 — Rechnungen & Zahlungen: kompakte Zahlenfelder, Toggle, Beispielliste. */
+.settings-invoices__unit-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.settings-invoices__unit-row .settings-invoices__number {
+  width: 7rem;
+  max-width: 100%;
+}
+
+.settings-invoices__unit {
+  color: var(--color-text-muted, #6b7280);
+  font-size: 0.9375rem;
+}
+
+.settings-invoices__textarea {
+  min-height: 4.5rem;
+  resize: vertical;
+  line-height: 1.4;
+}
+
+.settings-invoices__toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 2.75rem;
+  cursor: pointer;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.settings-invoices__toggle input {
+  width: 1.4rem;
+  height: 1.4rem;
+  flex: none;
+  accent-color: var(--color-primary, #2563eb);
+}
+
+.settings-invoices__skonto-row {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.settings-invoices__skonto-row .settings-form__field {
+  flex: 1 1 10rem;
+}
+
+.settings-invoices__preview {
+  padding-bottom: 1rem;
+}
+
+.settings-invoices__preview-list {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.5rem 1rem;
+  margin: 0.75rem 0 0;
+  font-size: 0.9375rem;
+}
+
+.settings-invoices__preview-list > div {
+  display: contents;
+}
+
+.settings-invoices__preview-list dt {
+  color: var(--color-text-muted, #6b7280);
+  font-weight: 600;
+}
+
+.settings-invoices__preview-list dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 767px) {
+  .settings-invoices__preview-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-invoices__preview-list dt {
+    margin-top: 0.35rem;
+  }
+}
+
+/* SETTINGS-01B5 — Betriebsseite: Sprache, Datensicherung, Sync-Status, Verwaltung. */
+.settings-operating__section {
+  padding-bottom: 1rem;
+}
+
+.settings-operating__section .card,
+.settings-operating__section .language-switcher,
+.settings-operating__section .backup-export-panel {
+  box-shadow: none;
+  border: 0;
+  padding-left: 0;
+  padding-right: 0;
+  background: transparent;
+}
+
+.settings-operating__section .data-row {
+  margin-bottom: 0.5rem;
+}
+
+.settings-operating__link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  margin-top: 0.5rem;
+  margin-right: 0.5rem;
+  text-decoration: none;
+}
+
+@media (max-width: 767px) {
+  .settings-operating__link {
+    display: flex;
+    width: 100%;
+    margin-right: 0;
+  }
 }
 
 .mehr-link-card {

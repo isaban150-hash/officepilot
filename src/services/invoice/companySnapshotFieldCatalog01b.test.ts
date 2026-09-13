@@ -55,6 +55,8 @@ const FULL_SNAPSHOT: CompanyProfile = {
   bankName: 'Sparkasse Lemgo',
   iban: 'DE89 3704 0044 0532 0130 00',
   bic: 'WELADED1LIP',
+  // SETTINGS-01B1 — Kontoinhaber ist Teil des Katalogs.
+  accountHolder: 'Muster Haustechnik GmbH',
   defaultPaymentDays: 14,
   defaultPaymentTerms: 'Zahlbar innerhalb von 14 Tagen.',
   defaultSkonto: '',

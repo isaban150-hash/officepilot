@@ -17,6 +17,7 @@ import {
   isLogoMimeType,
   isValidBrandingPrimaryColor,
 } from '../branding/brandingSnapshotService';
+import { isDocumentTemplateId } from '../../types/branding';
 
 import type {
   InvoiceCalculationMode,
@@ -111,7 +112,7 @@ const CUSTOMER_KEYS = new Set([
 const COMPANY_KEYS = new Set<string>(COMPANY_SNAPSHOT_KEYS);
 
 /** BRANDING-01F-2 — geschlossener Vertrag, siehe `checkBrandingSnapshot`. */
-const BRANDING_SNAPSHOT_KEYS = new Set(['version', 'logo', 'primaryColor']);
+const BRANDING_SNAPSHOT_KEYS = new Set(['version', 'logo', 'primaryColor', 'documentTemplate']);
 const BRANDING_LOGO_KEYS = new Set(['assetId', 'mimeType']);
 
 const DEDUCTION_KEYS = new Set([
@@ -297,6 +298,8 @@ function checkCompanySnapshot(value: unknown, path: string): void {
   optionalFinite(snapshot.skontoPercent, `${path}.skontoPercent`);
   optionalFinite(snapshot.skontoDays, `${path}.skontoDays`);
   optionalText(snapshot.managingDirector, `${path}.managingDirector`);
+  // SETTINGS-01B1 — Kontoinhaber: optional, nur Text.
+  optionalText(snapshot.accountHolder, `${path}.accountHolder`);
   /* 01I hatte die Schlüssel erlaubt, ihren Typ aber nicht geprüft. */
   optionalText(snapshot.registrationAuthority, `${path}.registrationAuthority`);
   optionalText(snapshot.registrationNumber, `${path}.registrationNumber`);
@@ -345,6 +348,11 @@ function checkBrandingSnapshot(value: unknown, path: string): void {
     ) {
       reject(`${path}.primaryColor:invalid`);
     }
+  }
+
+  // SETTINGS-01B1 — nur implementierte Vorlagen; fehlend = classic.
+  if (snapshot.documentTemplate !== undefined && !isDocumentTemplateId(snapshot.documentTemplate)) {
+    reject(`${path}.documentTemplate:invalid`);
   }
 }
 

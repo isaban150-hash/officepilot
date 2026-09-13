@@ -12,6 +12,13 @@ export function InvoicePaymentBlock({ model }: Props) {
     <section className="invoice-block invoice-payment invoice-payment--highlight">
       <h2 className="invoice-block__title">Zahlungsinformationen</h2>
       <dl className="invoice-payment__facts">
+        {/* SETTINGS-01B1 — Kontoinhaber nur, wenn im Snapshot vorhanden; kein Platzhalter. */}
+        {company.accountHolder?.trim() && (
+          <div>
+            <dt>Kontoinhaber</dt>
+            <dd>{company.accountHolder}</dd>
+          </div>
+        )}
         {company.iban && (
           <div>
             <dt>IBAN</dt>

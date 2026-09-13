@@ -13,21 +13,22 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { AppProvider } from './context/AppContext';
-import { AuthProvider } from './context/AuthContext';
-import { BETA_TEST_COMPANY_PROFILE, BETA_TEST_SETUP } from './config/betaTestMode';
-import { FirmendatenPage } from './pages/FirmendatenPage';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import * as supabaseLib from '../../lib/supabase';
+import { AppProvider } from '../../context/AppContext';
+import { AuthProvider } from '../../context/AuthContext';
+import { BETA_TEST_COMPANY_PROFILE, BETA_TEST_SETUP } from '../../config/betaTestMode';
+import { CompanySettingsPage } from './CompanySettingsPage';
 import {
   getCompanyProfile,
   hydrateCompanyProfileStore,
   updateCompanyProfile,
-} from './services/companyProfileService';
+} from '../../services/companyProfileService';
 import {
   buildCompanyProfileCloudPayload,
   parseCompanyProfileFromCloud,
-} from './services/workspace/workspaceCloudService';
-import type { CompanyProfile } from './types/models';
+} from '../../services/workspace/workspaceCloudService';
+import type { CompanyProfile } from '../../types/models';
 
 type Mount = { container: HTMLDivElement; root: Root };
 
@@ -37,11 +38,11 @@ function mountFirmendaten(): Mount {
   const root = createRoot(container);
   act(() => {
     root.render(
-      <MemoryRouter initialEntries={['/firmendaten']}>
+      <MemoryRouter initialEntries={['/einstellungen/firma']}>
         <AuthProvider>
           <AppProvider initialSetup={BETA_TEST_SETUP}>
             <Routes>
-              <Route path="/firmendaten" element={<FirmendatenPage />} />
+              <Route path="/einstellungen/firma" element={<CompanySettingsPage />} />
             </Routes>
           </AppProvider>
         </AuthProvider>
@@ -59,10 +60,11 @@ function setNativeInputValue(input: HTMLInputElement, value: string): void {
   });
 }
 
-describe('01I — J: Firmendaten-Oberfläche', () => {
+describe('01I — J: Firmenprofil-Oberfläche (SETTINGS-01B5: von Firmendaten migriert)', () => {
   let mounted: Mount | null = null;
 
   beforeEach(() => {
+    vi.spyOn(supabaseLib, 'isSupabaseConfigured').mockReturnValue(false);
     hydrateCompanyProfileStore({ ...BETA_TEST_COMPANY_PROFILE });
   });
 
@@ -74,16 +76,17 @@ describe('01I — J: Firmendaten-Oberfläche', () => {
       mounted.container.remove();
       mounted = null;
     }
+    vi.restoreAllMocks();
   });
 
   it('J1/J2: beide Felder sind sichtbar und tragen ihre deutschen Bezeichnungen', () => {
     mounted = mountFirmendaten();
 
     const authority = mounted.container.querySelector(
-      '#profile-registrationAuthority',
+      '#settings-company-registrationAuthority',
     ) as HTMLInputElement;
     const number = mounted.container.querySelector(
-      '#profile-registrationNumber',
+      '#settings-company-registrationNumber',
     ) as HTMLInputElement;
 
     expect(authority).not.toBeNull();
@@ -110,11 +113,11 @@ describe('01I — J: Firmendaten-Oberfläche', () => {
     mounted = mountFirmendaten();
 
     setNativeInputValue(
-      mounted.container.querySelector('#profile-registrationAuthority') as HTMLInputElement,
+      mounted.container.querySelector('#settings-company-registrationAuthority') as HTMLInputElement,
       'Amtsgericht Lemgo',
     );
     setNativeInputValue(
-      mounted.container.querySelector('#profile-registrationNumber') as HTMLInputElement,
+      mounted.container.querySelector('#settings-company-registrationNumber') as HTMLInputElement,
       'HRB 12345',
     );
 
@@ -136,15 +139,19 @@ describe('01I — J: Firmendaten-Oberfläche', () => {
     mounted = mountFirmendaten();
 
     expect(
-      (mounted.container.querySelector('#profile-registrationAuthority') as HTMLInputElement).value,
+      (mounted.container.querySelector('#settings-company-registrationAuthority') as HTMLInputElement).value,
     ).toBe('Amtsgericht Lemgo');
     expect(
-      (mounted.container.querySelector('#profile-registrationNumber') as HTMLInputElement).value,
+      (mounted.container.querySelector('#settings-company-registrationNumber') as HTMLInputElement).value,
     ).toBe('HRB 12345');
   });
 
   it('J5: leer gelassene Registerfelder verhindern das Speichern nicht', () => {
     mounted = mountFirmendaten();
+    setNativeInputValue(
+      mounted.container.querySelector('#settings-company-phone') as HTMLInputElement,
+      '089 555',
+    );
 
     act(() => {
       (mounted!.container.querySelector('button[type="submit"]') as HTMLButtonElement).click();
@@ -252,10 +259,10 @@ describe('01I — Rechnungs-Cloud-Vertrag kennt die Registerfelder', () => {
 
   it('der Validator akzeptiert eine Rechnung mit Registerangaben', async () => {
     const { buildWorkspaceInvoiceFinalizePayload } = await import(
-      './services/invoice/workspaceInvoiceCloudService'
+      '../../services/invoice/workspaceInvoiceCloudService'
     );
     const { validateWorkspaceInvoiceCloudPayload } = await import(
-      './services/invoice/workspaceInvoiceCloudPayloadValidator'
+      '../../services/invoice/workspaceInvoiceCloudPayloadValidator'
     );
 
     const payload = buildWorkspaceInvoiceFinalizePayload(
@@ -271,7 +278,7 @@ describe('01I — Rechnungs-Cloud-Vertrag kennt die Registerfelder', () => {
 
   it('der Rückweg aus der Cloud trägt die Registerangaben zurück in den Snapshot', async () => {
     const { buildWorkspaceInvoiceFinalizePayload, mapCloudPayloadToVorgangInvoice } = await import(
-      './services/invoice/workspaceInvoiceCloudService'
+      '../../services/invoice/workspaceInvoiceCloudService'
     );
 
     const payload = JSON.parse(
@@ -297,6 +304,7 @@ describe('01 — G: Geschäftsführer/Inhaber', () => {
   let mounted: Mount | null = null;
 
   beforeEach(() => {
+    vi.spyOn(supabaseLib, 'isSupabaseConfigured').mockReturnValue(false);
     hydrateCompanyProfileStore({ ...BETA_TEST_COMPANY_PROFILE, managingDirector: '' });
   });
 
@@ -308,13 +316,14 @@ describe('01 — G: Geschäftsführer/Inhaber', () => {
       mounted.container.remove();
       mounted = null;
     }
+    vi.restoreAllMocks();
   });
 
   it('G1: der Hilfetext steht sichtbar beim richtigen Feld', () => {
     mounted = mountFirmendaten();
 
     const hint = mounted.container.querySelector(
-      '[data-testid="profile-managingDirector-hint"]',
+      '#settings-company-managingDirector-hint',
     ) as HTMLElement;
     expect(hint).not.toBeNull();
     expect(hint.textContent).toBe(
@@ -323,11 +332,11 @@ describe('01 — G: Geschäftsführer/Inhaber', () => {
 
     /* „Beim richtigen Feld" heisst: im selben fieldset und verknüpft. */
     const input = mounted.container.querySelector(
-      '#profile-managingDirector',
+      '#settings-company-managingDirector',
     ) as HTMLInputElement;
     expect(hint.closest('fieldset')).toBe(input.closest('fieldset'));
-    expect(input.getAttribute('aria-describedby')).toBe('profile-managingDirector-hint');
-    expect(hint.id).toBe('profile-managingDirector-hint');
+    expect(input.getAttribute('aria-describedby')).toBe('settings-company-managingDirector-hint');
+    expect(hint.id).toBe('settings-company-managingDirector-hint');
 
     /* Und nur dort — kein Hinweis unter jedem Feld. */
     expect(mounted.container.querySelectorAll('.form-hint')).toHaveLength(1);
@@ -336,7 +345,7 @@ describe('01 — G: Geschäftsführer/Inhaber', () => {
   it('G2: ein einzelner Name wird gespeichert', () => {
     mounted = mountFirmendaten();
     setNativeInputValue(
-      mounted.container.querySelector('#profile-managingDirector') as HTMLInputElement,
+      mounted.container.querySelector('#settings-company-managingDirector') as HTMLInputElement,
       'Max Mustermann',
     );
     act(() => {
@@ -350,7 +359,7 @@ describe('01 — G: Geschäftsführer/Inhaber', () => {
   it('G3: mehrere Namen mit Komma werden vollständig gespeichert', () => {
     mounted = mountFirmendaten();
     setNativeInputValue(
-      mounted.container.querySelector('#profile-managingDirector') as HTMLInputElement,
+      mounted.container.querySelector('#settings-company-managingDirector') as HTMLInputElement,
       'Max Mustermann, Erika Beispiel',
     );
     act(() => {
@@ -387,10 +396,10 @@ describe('01 — G: Geschäftsführer/Inhaber', () => {
   });
 
   it('G7: der gespeicherte Wert erreicht den Rechnungs-Snapshot unverändert', async () => {
-    const { buildInvoiceDraftForType } = await import('./services/invoiceService');
-    const { hydrateVorgangStore } = await import('./services/vorgangService');
-    const { createTestVorgangWithExecutedQuantity, testSetup } = await import('./test/fixtures');
-    const { resetTestStores } = await import('./test/resetStores');
+    const { buildInvoiceDraftForType } = await import('../../services/invoiceService');
+    const { hydrateVorgangStore } = await import('../../services/vorgangService');
+    const { createTestVorgangWithExecutedQuantity, testSetup } = await import('../../test/fixtures');
+    const { resetTestStores } = await import('../../test/resetStores');
 
     resetTestStores();
     hydrateCompanyProfileStore({

@@ -19,20 +19,22 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
-import { AppProvider } from '../context/AppContext';
-import { DEFAULT_SETUP } from '../data/mockData';
-import { DEFAULT_COMPANY_PROFILE } from '../data/companyProfileDefaults';
-import { FirmendatenPage } from './FirmendatenPage';
-import { formatNumericValue, parseNumericInput } from '../components/ui/NumericInput';
-import * as companyProfileService from '../services/companyProfileService';
-import { hydrateCompanyProfileStore } from '../services/companyProfileService';
-import { setActiveStorageScope } from '../services/storage/storageScopeService';
-import { resetUiSessionLiveState } from '../services/uiSession/uiSessionLiveState';
-import { clearUiSessionSnapshot } from '../services/uiSession/uiSessionStore';
-import { validateCompanyProfileForSettings } from '../services/setupValidationService';
-import type { CompanyProfile } from '../types/models';
+import { AppProvider } from '../../context/AppContext';
+import { AuthProvider } from '../../context/AuthContext';
+import { DEFAULT_SETUP } from '../../data/mockData';
+import { DEFAULT_COMPANY_PROFILE } from '../../data/companyProfileDefaults';
+import { InvoiceSettingsPage } from './InvoiceSettingsPage';
+import { formatNumericValue, parseNumericInput } from '../../components/ui/NumericInput';
+import * as companyProfileService from '../../services/companyProfileService';
+import { hydrateCompanyProfileStore } from '../../services/companyProfileService';
+import { setActiveStorageScope } from '../../services/storage/storageScopeService';
+import { resetUiSessionLiveState } from '../../services/uiSession/uiSessionLiveState';
+import { clearUiSessionSnapshot } from '../../services/uiSession/uiSessionStore';
+import { validateCompanyProfileForSettings } from '../../services/setupValidationService';
+import * as supabaseLib from '../../lib/supabase';
+import type { CompanyProfile } from '../../types/models';
 
-const ROUTE = '/firmendaten';
+const ROUTE = '/einstellungen/rechnungen';
 
 /** Ein Profil, das alle übrigen Pflichtprüfungen bereits erfüllt. */
 const savedProfile: CompanyProfile = {
@@ -56,6 +58,7 @@ let root: Root;
 let host: HTMLDivElement;
 
 beforeEach(() => {
+  vi.spyOn(supabaseLib, 'isSupabaseConfigured').mockReturnValue(false);
   setActiveStorageScope({ type: 'guest' });
   resetUiSessionLiveState();
   clearUiSessionSnapshot();
@@ -79,11 +82,13 @@ async function renderPage(): Promise<void> {
   await act(async () => {
     root.render(
       <MemoryRouter initialEntries={[ROUTE]}>
-        <AppProvider initialSetup={{ ...DEFAULT_SETUP, setupComplete: true }}>
-          <Routes>
-            <Route path={ROUTE} element={<FirmendatenPage />} />
-          </Routes>
-        </AppProvider>
+        <AuthProvider>
+          <AppProvider initialSetup={{ ...DEFAULT_SETUP, setupComplete: true }}>
+            <Routes>
+              <Route path={ROUTE} element={<InvoiceSettingsPage />} />
+            </Routes>
+          </AppProvider>
+        </AuthProvider>
       </MemoryRouter>,
     );
   });
@@ -124,9 +129,7 @@ async function blur(element: HTMLInputElement): Promise<void> {
 }
 
 async function enableSkonto(): Promise<void> {
-  const box = Array.from(host.querySelectorAll('input[type="checkbox"]')).find((el) =>
-    (el.closest('fieldset')?.textContent ?? '').toLowerCase().includes('skonto'),
-  ) as HTMLInputElement | undefined;
+  const box = host.querySelector<HTMLInputElement>('#settings-invoices-skontoEnabled') ?? undefined;
   if (!box) throw new Error('Skonto-Schalter nicht gefunden');
   if (!box.checked) {
     await act(async () => {
@@ -155,13 +158,14 @@ async function submit(): Promise<void> {
   }
 }
 
+/* SETTINGS-01B5 — von der abgelösten Firmendaten-Seite auf /einstellungen/rechnungen migriert. */
 describe('SKONTO-NUMERIC-INPUT-01B — Eingabe im Formular', () => {
   // R1 / R2 — der Realbefund.
   it('R1/R2: die Null im Prozentfeld lässt sich löschen, danach steht dort 2', async () => {
     await renderPage();
     await enableSkonto();
 
-    const percent = field('profile-skonto-percent');
+    const percent = field('settings-invoices-skontoPercent');
     expect(percent.value).toBe('0');
 
     await type(percent, '');
@@ -177,7 +181,7 @@ describe('SKONTO-NUMERIC-INPUT-01B — Eingabe im Formular', () => {
     await renderPage();
     await enableSkonto();
 
-    const days = field('profile-skonto-days');
+    const days = field('settings-invoices-skontoDays');
     await type(days, '');
     expect(days.value).toBe('');
 
@@ -190,7 +194,7 @@ describe('SKONTO-NUMERIC-INPUT-01B — Eingabe im Formular', () => {
   it('R4: das Zahlungsziel lässt sich leeren und neu setzen', async () => {
     await renderPage();
 
-    const paymentDays = field('profile-payment-days');
+    const paymentDays = field('settings-invoices-defaultPaymentDays');
     expect(paymentDays.value).toBe('14');
 
     await type(paymentDays, '');
@@ -206,7 +210,7 @@ describe('SKONTO-NUMERIC-INPUT-01B — Eingabe im Formular', () => {
     await renderPage();
     await enableSkonto();
 
-    const percent = field('profile-skonto-percent');
+    const percent = field('settings-invoices-skontoPercent');
     await type(percent, '2,5');
     expect(percent.value).toBe('2,5');
     expect(percent.value).not.toBe('0');
@@ -217,7 +221,7 @@ describe('SKONTO-NUMERIC-INPUT-01B — Eingabe im Formular', () => {
     await renderPage();
     await enableSkonto();
 
-    const percent = field('profile-skonto-percent');
+    const percent = field('settings-invoices-skontoPercent');
     await type(percent, '2.5');
     expect(percent.value).toBe('2.5');
   });
@@ -232,7 +236,7 @@ describe('SKONTO-NUMERIC-INPUT-01B — Eingabe im Formular', () => {
     await renderPage();
     await enableSkonto();
 
-    const percent = field('profile-skonto-percent');
+    const percent = field('settings-invoices-skontoPercent');
     await type(percent, '2,');
     expect(percent.value).toBe('2,');
 
@@ -245,11 +249,11 @@ describe('SKONTO-NUMERIC-INPUT-01B — Eingabe im Formular', () => {
     await renderPage();
     await enableSkonto();
 
-    const percent = field('profile-skonto-percent');
+    const percent = field('settings-invoices-skontoPercent');
     await type(percent, '2,5,7abc');
     expect(percent.value).toBe('2,57');
 
-    const days = field('profile-skonto-days');
+    const days = field('settings-invoices-skontoDays');
     await type(days, '1,0');
     expect(days.value).toBe('10');
   });
@@ -263,7 +267,7 @@ describe('SKONTO-NUMERIC-INPUT-01B — Eingabe im Formular', () => {
     await renderPage();
     await enableSkonto();
 
-    const percent = field('profile-skonto-percent');
+    const percent = field('settings-invoices-skontoPercent');
     await type(percent, '2');
     await type(percent, '');
     expect(percent.value).toBe('');
@@ -278,7 +282,7 @@ describe('SKONTO-NUMERIC-INPUT-01B — Speichern und Validierung', () => {
   it('R9: aktiviertes Skonto mit Prozent 0 blockiert das Speichern', async () => {
     await renderPage();
     await enableSkonto();
-    await type(field('profile-skonto-days'), '10');
+    await type(field('settings-invoices-skontoDays'), '10');
 
     const saveSpy = spyOnSave();
     await submit();
@@ -290,7 +294,7 @@ describe('SKONTO-NUMERIC-INPUT-01B — Speichern und Validierung', () => {
   it('R10: aktiviertes Skonto mit Frist 0 blockiert das Speichern', async () => {
     await renderPage();
     await enableSkonto();
-    await type(field('profile-skonto-percent'), '2');
+    await type(field('settings-invoices-skontoPercent'), '2');
 
     const saveSpy = spyOnSave();
     await submit();
@@ -302,8 +306,8 @@ describe('SKONTO-NUMERIC-INPUT-01B — Speichern und Validierung', () => {
   it('R11: ein Prozentsatz über 100 blockiert das Speichern', async () => {
     await renderPage();
     await enableSkonto();
-    await type(field('profile-skonto-percent'), '120');
-    await type(field('profile-skonto-days'), '10');
+    await type(field('settings-invoices-skontoPercent'), '120');
+    await type(field('settings-invoices-skontoDays'), '10');
 
     const saveSpy = spyOnSave();
     await submit();
@@ -319,8 +323,8 @@ describe('SKONTO-NUMERIC-INPUT-01B — Speichern und Validierung', () => {
   it('R12/R14: 2 % und 10 Tage werden als Zahlen gespeichert', async () => {
     await renderPage();
     await enableSkonto();
-    await type(field('profile-skonto-percent'), '2');
-    await type(field('profile-skonto-days'), '10');
+    await type(field('settings-invoices-skontoPercent'), '2');
+    await type(field('settings-invoices-skontoDays'), '10');
 
     const saveSpy = spyOnSave();
     await submit();
@@ -339,8 +343,8 @@ describe('SKONTO-NUMERIC-INPUT-01B — Speichern und Validierung', () => {
   it('R12b: 2,5 % landet als 2.5 im gespeicherten Stand', async () => {
     await renderPage();
     await enableSkonto();
-    await type(field('profile-skonto-percent'), '2,5');
-    await type(field('profile-skonto-days'), '14');
+    await type(field('settings-invoices-skontoPercent'), '2,5');
+    await type(field('settings-invoices-skontoDays'), '14');
 
     const saveSpy = spyOnSave();
     await submit();
@@ -352,6 +356,8 @@ describe('SKONTO-NUMERIC-INPUT-01B — Speichern und Validierung', () => {
   // R13
   it('R13: bei ausgeschaltetem Skonto blockieren 0/0 das Speichern nicht', async () => {
     await renderPage();
+    // Ohne Änderung gibt es nichts zu speichern — ein anderes Feld macht das Formular dirty.
+    await type(field('settings-invoices-defaultPaymentDays'), '21');
 
     const saveSpy = spyOnSave();
     await submit();
@@ -363,7 +369,7 @@ describe('SKONTO-NUMERIC-INPUT-01B — Speichern und Validierung', () => {
   it('R14b: nach Leeren und Neutippen enthält der Payload eine Zahl', async () => {
     await renderPage();
 
-    const paymentDays = field('profile-payment-days');
+    const paymentDays = field('settings-invoices-defaultPaymentDays');
     await type(paymentDays, '');
     await type(paymentDays, '7');
 
@@ -538,10 +544,10 @@ describe('SKONTO-DUE-DATE-CONSISTENCY-01B — im Formular', () => {
   // T10 — der Realbefund an der echten Seite.
   it('T10: 7 Tage Zahlungsziel mit 10 Tagen Skonto blockiert das Speichern', async () => {
     await renderPage();
-    await type(field('profile-payment-days'), '7');
+    await type(field('settings-invoices-defaultPaymentDays'), '7');
     await enableSkonto();
-    await type(field('profile-skonto-percent'), '7');
-    await type(field('profile-skonto-days'), '10');
+    await type(field('settings-invoices-skontoPercent'), '7');
+    await type(field('settings-invoices-skontoDays'), '10');
 
     const saveSpy = spyOnSave();
     await submit();
@@ -553,10 +559,10 @@ describe('SKONTO-DUE-DATE-CONSISTENCY-01B — im Formular', () => {
   // T11
   it('T11: 14 Tage Zahlungsziel mit 10 Tagen Skonto wird gespeichert', async () => {
     await renderPage();
-    await type(field('profile-payment-days'), '14');
+    await type(field('settings-invoices-defaultPaymentDays'), '14');
     await enableSkonto();
-    await type(field('profile-skonto-percent'), '7');
-    await type(field('profile-skonto-days'), '10');
+    await type(field('settings-invoices-skontoPercent'), '7');
+    await type(field('settings-invoices-skontoDays'), '10');
 
     const saveSpy = spyOnSave();
     await submit();

@@ -127,6 +127,16 @@ const deLegacy = {
   'companyProfile.skontoPercentInvalid':
     'Skonto-Prozentsatz muss grösser als 0 und höchstens 100 sein.',
   'companyProfile.skontoDaysInvalid': 'Skonto-Frist muss mindestens 1 Tag betragen.',
+  // SETTINGS-01B1 — neue Profilfelder.
+  'companyProfile.accountHolder': 'Kontoinhaber',
+  'companyProfile.accountHolderTooLong': 'Der Kontoinhaber darf höchstens 120 Zeichen lang sein.',
+  'companyProfile.defaultTaxStatus': 'Standard-Steuerstatus für neue Rechnungen',
+  'companyProfile.defaultTaxStatusInvalid': 'Bitte einen gültigen Steuerstatus wählen.',
+  'companyProfile.defaultIntroText': 'Standard-Einleitungstext',
+  'companyProfile.defaultIntroTextTooLong': 'Der Einleitungstext darf höchstens 2000 Zeichen lang sein.',
+  'companyProfile.defaultClosingText': 'Standard-Schlusstext',
+  'companyProfile.defaultClosingTextTooLong': 'Der Schlusstext darf höchstens 2000 Zeichen lang sein.',
+  'companyProfile.documentTemplateInvalid': 'Diese Dokumentvorlage ist nicht verfügbar.',
   /* SKONTO-DUE-DATE-CONSISTENCY-01B — beide Werte sind einzeln gültig, ihr Verhältnis nicht. */
   'companyProfile.skontoDaysExceedPaymentDays':
     'Die Skonto-Frist darf nicht länger als das Zahlungsziel sein.',
@@ -455,8 +465,8 @@ const deLegacy = {
   'mehr.paperArchiveDesc': 'Ordner und Register für Originale',
   'mehr.knowledge': 'Wissen',
   'mehr.knowledgeDesc': 'Betriebswissen und Vorlagen',
-  'mehr.company': 'Firmendaten',
-  'mehr.companyDesc': 'Firmendaten, Rechnungsangaben und Datensicherung',
+  'mehr.company': 'Einstellungen',
+  'mehr.companyDesc': 'Firmenprofil, Rechnungen, Design, Sprache und Datensicherung',
   'mehr.sync': 'Synchronisation',
   'mehr.syncDesc': 'Status, Outbox und Cloud-Synchronisation',
   'mehr.adminUsers': 'Benutzerverwaltung',
@@ -2269,6 +2279,7 @@ const deLegacy = {
   'invoice.companyDrift.field.bankName': 'Bank',
   'invoice.companyDrift.field.iban': 'IBAN',
   'invoice.companyDrift.field.bic': 'BIC',
+  'invoice.companyDrift.field.accountHolder': 'Kontoinhaber',
   'invoice.materialAuftraggeberHint':
     'Material wird laut Vorgang vom Auftraggeber gestellt.',
   'invoice.materialNotBillable': 'Materialposition – nicht abrechenbar bei dieser Materialquelle.',

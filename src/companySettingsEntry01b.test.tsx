@@ -16,15 +16,16 @@ import { AppProvider } from './context/AppContext';
 import { AuthProvider } from './context/AuthContext';
 import { BETA_TEST_SETUP } from './config/betaTestMode';
 import { EinstellungenPage } from './pages/EinstellungenPage';
-import { FirmendatenPage } from './pages/FirmendatenPage';
+import { FirmendatenLegacyRoute, resolveFirmendatenLegacyTarget } from './pages/settings/FirmendatenLegacyRoute';
+import { CompanySettingsPage } from './pages/settings/CompanySettingsPage';
+import { OperatingSettingsPage, OPERATING_SETTINGS_BACKUP_HREF } from './pages/settings/OperatingSettingsPage';
 import { UserMenu } from './components/layout/UserMenu';
 import { loginAsDefaultAdmin } from './test/authFixtures';
 import {
-  FIRMENDATEN_INVOICE_TEXTS_HREF,
-  FIRMENDATEN_PAYMENT_TERMS_HREF,
   INVOICE_TEXTS_SECTION_ID,
   PAYMENT_TERMS_SECTION_ID,
 } from './services/backupSectionNavigation';
+import { INVOICE_SETTINGS_ROUTE } from './pages/settings/InvoiceSettingsPage';
 
 type Mount = { container: HTMLDivElement; root: Root };
 
@@ -42,7 +43,11 @@ function mountAt(entry: string, element: React.ReactNode = <EinstellungenPage />
           <AppProvider initialSetup={BETA_TEST_SETUP}>
             <Routes>
               <Route path="/einstellungen" element={element} />
-              <Route path="/firmendaten" element={<FirmendatenPage />} />
+              <Route path="/firmendaten" element={<FirmendatenLegacyRoute />} />
+              <Route path="/einstellungen/firma" element={<CompanySettingsPage />} />
+              <Route path="/einstellungen/betrieb" element={<OperatingSettingsPage />} />
+              <Route path="/einstellungen/rechnungen" element={<div data-testid="invoice-settings-stub" />} />
+              <Route path="/einstellungen/design" element={<div data-testid="design-settings-stub" />} />
               <Route path="/mehr" element={<div data-testid="mehr-page-stub" />} />
               <Route path="/admin/users" element={<div data-testid="admin-users-stub" />} />
             </Routes>
@@ -85,7 +90,8 @@ describe('01B — Einstellungen als zentraler Einstieg', () => {
   it('M8: alle Kernbereiche sind vorhanden — auch in einer Spalte', () => {
     const mount = mountAt('/einstellungen');
 
-    for (const group of ['company', 'documents', 'payment', 'team']) {
+    // SETTINGS-01B2 — Firma, Rechnungen & Zahlungen, Dokumente & Design, Betrieb.
+    for (const group of ['company', 'documents', 'design', 'team']) {
       expect(
         mount.container.querySelector(`[data-testid="settings-group-${group}"]`),
         `Bereich fehlt: ${group}`,
@@ -96,33 +102,39 @@ describe('01B — Einstellungen als zentraler Einstieg', () => {
     expect(mount.container.querySelectorAll('.mehr-link-card').length).toBe(0);
   });
 
-  it('M4: der Firmenprofil-Eintrag führt in die bestehenden Firmendaten', () => {
+  it('M4: der Firmenprofil-Eintrag führt auf die kanonische Firmenprofil-Seite (SETTINGS-01B2)', () => {
     const mount = mountAt('/einstellungen');
 
-    expect(entryHref(mount, 'company-profile')).toBe('/firmendaten');
+    expect(entryHref(mount, 'company-profile')).toBe('/einstellungen/firma');
   });
 
-  it('M5: Zahlungsbedingungen führen zur bestehenden Quelle, nicht zu einem zweiten Formular', () => {
+  it('M5: Rechnungen & Zahlungen führen auf die eine Unterseite (SETTINGS-01B4), nicht zu einem zweiten Formular', () => {
     const mount = mountAt('/einstellungen');
 
-    expect(entryHref(mount, 'payment-terms')).toBe(FIRMENDATEN_PAYMENT_TERMS_HREF);
+    expect(entryHref(mount, 'invoices')).toBe(INVOICE_SETTINGS_ROUTE);
+    expect(entryHref(mount, 'payment-terms')).toBeNull();
+    expect(entryHref(mount, 'invoice-texts')).toBeNull();
     /* Auf der Einstellungsseite selbst wird nichts bearbeitet. */
     expect(mount.container.querySelector('input')).toBeNull();
     expect(mount.container.querySelector('form')).toBeNull();
   });
 
-  it('M5b: der Zielanker existiert in den Firmendaten wirklich', () => {
-    const mount = mountAt('/firmendaten', <div />);
-
-    expect(mount.container.querySelector(`#${PAYMENT_TERMS_SECTION_ID}`)).toBeTruthy();
-    expect(mount.container.querySelector(`#${INVOICE_TEXTS_SECTION_ID}`)).toBeTruthy();
+  it('M5b: die Legacy-Tiefenlinks laufen nicht ins Leere — jeder bekannte Hash hat ein kanonisches Ziel (SETTINGS-01B5)', () => {
+    expect(resolveFirmendatenLegacyTarget(`#${PAYMENT_TERMS_SECTION_ID}`)).toBe('/einstellungen/rechnungen');
+    expect(resolveFirmendatenLegacyTarget(`#${INVOICE_TEXTS_SECTION_ID}`)).toBe('/einstellungen/rechnungen');
+    expect(resolveFirmendatenLegacyTarget('#logo')).toBe('/einstellungen/design');
+    expect(resolveFirmendatenLegacyTarget('#datensicherung')).toBe(OPERATING_SETTINGS_BACKUP_HREF);
+    expect(resolveFirmendatenLegacyTarget('')).toBe('/einstellungen/firma');
+    expect(resolveFirmendatenLegacyTarget('#unbekannt')).toBe('/einstellungen/firma');
+    for (const target of ['', '#logo', '#zahlungsbedingungen', '#datensicherung', '#x']) {
+      expect(resolveFirmendatenLegacyTarget(target).startsWith('/firmendaten')).toBe(false);
+    }
   });
 
-  it('M6: Rechnungstexte und Betrieb führen auf bestehende Ziele', () => {
+  it('M6: Betrieb führt auf ein bestehendes Ziel', () => {
     const mount = mountAt('/einstellungen');
 
-    expect(entryHref(mount, 'invoice-texts')).toBe(FIRMENDATEN_INVOICE_TEXTS_HREF);
-    expect(entryHref(mount, 'operations')).toBe('/mehr');
+    expect(entryHref(mount, 'operations')).toBe('/einstellungen/betrieb'); // SETTINGS-01B5
   });
 
   it('M10: die Seite führt keine eigene Firmendatenquelle ein', () => {
@@ -137,12 +149,15 @@ describe('01B — Einstellungen als zentraler Einstieg', () => {
     expect(mount.container.querySelectorAll('input, textarea, select').length).toBe(0);
   });
 
-  it('M9: die bestehende Firmendatenseite bleibt funktionsfähig', () => {
+  it('M9: /firmendaten führt auf die kanonische Firmenprofil-Seite — keine alte Formularseite mehr (SETTINGS-01B5)', () => {
     const mount = mountAt('/firmendaten', <div />);
 
-    expect(mount.container.querySelector('#profile-companyName')).toBeTruthy();
-    expect(mount.container.querySelector('#profile-iban')).toBeTruthy();
-    expect(mount.container.querySelector('#profile-payment-days')).toBeTruthy();
+    expect(mount.container.querySelector('[data-testid="settings-company-page"]')).toBeTruthy();
+    expect(mount.container.querySelector('#settings-company-companyName')).toBeTruthy();
+    expect(mount.container.querySelector('#settings-company-iban')).toBeTruthy();
+    expect(mount.container.querySelector('.company-profile-form #profile-companyName')).toBeNull();
+    expect(mount.container.querySelector('#profile-payment-days')).toBeNull();
+    expect(mount.container.querySelector('input[type="file"]')).toBeNull();
   });
 });
 
@@ -156,7 +171,8 @@ describe('01C — Tiefenlinks springen sichtbar zum Abschnitt', () => {
    * Diese Regression hält die Verallgemeinerung fest, damit ein künftiger
    * Abschnitt nicht wieder still ins Leere zeigt.
    */
-  for (const sectionId of [PAYMENT_TERMS_SECTION_ID, INVOICE_TEXTS_SECTION_ID]) {
+  // SETTINGS-01B5 — der einzige verbliebene Abschnitts-Tiefenlink ist die Datensicherung auf der Betriebsseite.
+  for (const sectionId of ['datensicherung']) {
     it(`springt zu #${sectionId}`, async () => {
       const scrolled: string[] = [];
       const original = Element.prototype.scrollIntoView;
@@ -171,7 +187,7 @@ describe('01C — Tiefenlinks springen sichtbar zum Abschnitt', () => {
       }) as typeof window.requestAnimationFrame;
 
       try {
-        mountAt(`/firmendaten#${sectionId}`, <div />);
+        mountAt(`/einstellungen/betrieb#${sectionId}`, <div />);
         await act(async () => {
           for (const frame of frames.splice(0)) frame(0);
           await Promise.resolve();

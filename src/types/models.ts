@@ -789,12 +789,29 @@ export interface CompanyProfile {
   bankName: string;
   iban: string;
   bic: string;
+  /**
+   * SETTINGS-01B1 — Kontoinhaber. Historische Bankidentität wie `iban`/`bic`:
+   * Teil des `companySnapshot`, wird bei Finalisierung eingefroren und zählt
+   * als kritisches Bankfeld für die Driftprüfung. Leer heisst „nicht angegeben".
+   */
+  accountHolder?: string;
   defaultPaymentDays: number;
   defaultPaymentTerms: string;
   defaultSkonto: string;
   skontoEnabled?: boolean;
   skontoPercent?: number;
   skontoDays?: number;
+  /**
+   * SETTINGS-01B1 — reine Vorbelegungen für **neue** Rechnungsentwürfe. Sie
+   * gehören nicht zum historischen `companySnapshot` und nicht zum
+   * Drift-Fingerprint: Der konkrete Wert lebt nach dem Aufbau auf dem Entwurf.
+   * `defaultTaxStatus` fehlt bei Altprofilen — dann gilt `CompanySetup.taxStatus`
+   * als Legacy-Fallback beim Draft-Bau (kein Backfill, keine Profilmutation).
+   * Ein Steuerstatus-Default bestätigt nie eine §13b-Entscheidung.
+   */
+  defaultTaxStatus?: TaxStatus;
+  defaultIntroText?: string;
+  defaultClosingText?: string;
   managingDirector?: string;
   taxFreeNotice?: string;
   invoiceFooterNotes: string;
@@ -1567,6 +1584,12 @@ export interface InvoicePrintModel {
    * Darstellung bleibt damit byteidentisch.
    */
   correction?: InvoicePrintCorrectionContext;
+  /**
+   * SETTINGS-01B1 — die Vorlage, mit der das Dokument erstellt wurde
+   * (aus `brandingSnapshot`; fehlend = `classic`). In V1 rendert jeder Wert
+   * das heutige Layout; das Feld friert nur die Wahrheit ein.
+   */
+  documentTemplate: import('./branding').DocumentTemplateId;
 }
 
 /** Bezug des Korrekturbelegs auf die Originalrechnung — alles historisch, nichts berechnet. */

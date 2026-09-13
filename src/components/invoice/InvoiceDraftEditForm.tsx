@@ -93,6 +93,7 @@ export function InvoiceDraftEditForm({ draft, onChange, customerMaster }: Props)
             value={draft.paymentTermsText}
             onChange={(event) => onChange({ paymentTermsText: event.target.value })}
             rows={3}
+            data-testid="invoice-edit-payment-terms"
           />
         </Field>
         <Field label="Skonto">
@@ -220,6 +221,7 @@ export function InvoiceDraftEditForm({ draft, onChange, customerMaster }: Props)
             value={draft.introText}
             onChange={(event) => onChange({ introText: event.target.value })}
             rows={4}
+            data-testid="invoice-edit-intro"
           />
         </Field>
         <Field label="Schlusstext">
@@ -228,6 +230,7 @@ export function InvoiceDraftEditForm({ draft, onChange, customerMaster }: Props)
             value={draft.closingText}
             onChange={(event) => onChange({ closingText: event.target.value })}
             rows={4}
+            data-testid="invoice-edit-closing"
           />
         </Field>
       </fieldset>

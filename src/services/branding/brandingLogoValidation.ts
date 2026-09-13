@@ -113,6 +113,11 @@ export async function validateBrandingLogoFile(
  */
 export async function validateBrandingLogoBlob(
   blob: Blob | null | undefined,
+  /**
+   * SETTINGS-01B3 — die Auswahlgrenze vor dem Verkleinern darf höher liegen
+   * als die Uploadgrenze; Signatur- und Formatregeln bleiben identisch.
+   */
+  options?: { maxSizeBytes?: number },
 ): Promise<BrandingLogoValidationResult> {
   if (!blob) {
     return { valid: false, error: 'invalid_file' };
@@ -120,7 +125,7 @@ export async function validateBrandingLogoBlob(
   if (blob.size === 0) {
     return { valid: false, error: 'invalid_file' };
   }
-  if (blob.size > MAX_BRANDING_LOGO_SIZE_BYTES) {
+  if (blob.size > (options?.maxSizeBytes ?? MAX_BRANDING_LOGO_SIZE_BYTES)) {
     return { valid: false, error: 'file_too_large' };
   }
   if (!isLogoMimeType(blob.type)) {

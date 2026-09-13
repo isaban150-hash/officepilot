@@ -1,24 +1,31 @@
-/** Stable DOM id / URL hash for the Firmendaten backup panel. */
+/** Stable DOM id / URL hash for the backup panel (heute auf der Betriebsseite). */
 export const BACKUP_SECTION_ID = 'datensicherung';
 
-/** Deep link to Firmendaten scrolled to the backup panel. */
-export const FIRMENDATEN_BACKUP_HREF = `/firmendaten#${BACKUP_SECTION_ID}`;
+/**
+ * SETTINGS-01B5 — kanonischer Tiefenlink zur Datensicherung auf der
+ * Betriebsseite. `/firmendaten#datensicherung` bleibt als Legacy-URL
+ * redirectfähig (FirmendatenLegacyRoute), ist aber kein Linkziel mehr.
+ */
+export const SETTINGS_BACKUP_HREF = `/einstellungen/betrieb#${BACKUP_SECTION_ID}`;
 
 /*
- * COMPANY-SETTINGS-ENTRY-01B — dieselbe Technik für die beiden Abschnitte, auf
- * die der Einstellungsbereich zeigt.
- *
- * Bewusst Tiefenlinks statt eigener Formulare: Zahlungsziel, Skonto und
- * Rechnungsfußzeile liegen im `CompanyProfile` und werden in den Firmendaten
- * bearbeitet. Ein zweites Formular für dieselben Felder wäre eine zweite
- * UI-Wahrheit — genauso unerwünscht wie eine zweite Datenwahrheit.
+ * SETTINGS-01B5 — die Abschnitts-Ids der abgelösten Firmendaten-Seite leben
+ * nur noch als Legacy-Hashes: `FirmendatenLegacyRoute` bildet sie auf die
+ * kanonischen Settings-Seiten ab. Kein Link im Produkt zeigt mehr auf
+ * `/firmendaten#…`.
  */
 
-/** Stabile DOM-Id / URL-Hash des Zahlungsbedingungsblocks. */
+/** Legacy-Hash des früheren Zahlungsbedingungsblocks (→ /einstellungen/rechnungen). */
 export const PAYMENT_TERMS_SECTION_ID = 'zahlungsbedingungen';
 
-/** Stabile DOM-Id / URL-Hash der Rechnungstexte. */
+/** Legacy-Hash der früheren Rechnungstexte (→ /einstellungen/rechnungen). */
 export const INVOICE_TEXTS_SECTION_ID = 'rechnungstexte';
 
-export const FIRMENDATEN_PAYMENT_TERMS_HREF = `/firmendaten#${PAYMENT_TERMS_SECTION_ID}`;
-export const FIRMENDATEN_INVOICE_TEXTS_HREF = `/firmendaten#${INVOICE_TEXTS_SECTION_ID}`;
+/** Legacy-Hash des früheren Logo-Abschnitts (→ /einstellungen/design). */
+export const LOGO_SECTION_ID = 'logo';
+
+/** SETTINGS-01B4 — Hashes, die auf die Rechnungs-Unterseite umgeleitet werden. */
+export const FIRMENDATEN_INVOICE_SECTION_IDS: readonly string[] = [
+  PAYMENT_TERMS_SECTION_ID,
+  INVOICE_TEXTS_SECTION_ID,
+];

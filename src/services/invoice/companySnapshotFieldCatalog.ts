@@ -40,6 +40,8 @@ export const COMPANY_SNAPSHOT_KEYS = [
   'bankName',
   'iban',
   'bic',
+  // SETTINGS-01B1 — Kontoinhaber ist historische Bankidentität.
+  'accountHolder',
   'defaultPaymentDays',
   'defaultPaymentTerms',
   'defaultSkonto',

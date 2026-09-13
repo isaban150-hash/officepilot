@@ -26,7 +26,7 @@
  * **Dateien** und ist für einen reinen Referenz-Contract das falsche Werkzeug.
  */
 
-import { LOGO_MIME_TYPES } from '../../types/branding';
+import { LOGO_MIME_TYPES, isDocumentTemplateId } from '../../types/branding';
 import type { BrandingProfile, LogoMimeType } from '../../types/branding';
 
 /**
@@ -99,6 +99,16 @@ export function sanitizeBrandingProfile(value: unknown): BrandingProfile | undef
   const { primaryColor } = value;
   if (typeof primaryColor === 'string' && PRIMARY_COLOR_PATTERN.test(primaryColor)) {
     sanitized.primaryColor = primaryColor;
+  }
+
+  /*
+   * SETTINGS-01B1 — nur eine implementierte Vorlage überlebt den Vertrag.
+   * Ein gespeichertes „modern"/„compact" aus einem späteren Client fällt hier
+   * weg und liest sich als `classic` (fehlend), statt ein unbekanntes Layout
+   * zu behaupten.
+   */
+  if (isDocumentTemplateId(value.documentTemplate)) {
+    sanitized.documentTemplate = value.documentTemplate;
   }
 
   return sanitized;

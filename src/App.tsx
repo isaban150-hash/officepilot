@@ -26,7 +26,11 @@ import { DocumentUploadPage } from './pages/DocumentUploadPage';
 import { EingangDetailPage } from './pages/EingangDetailPage';
 import { EingangPage } from './pages/EingangPage';
 import { EinstellungenPage } from './pages/EinstellungenPage';
-import { FirmendatenPage } from './pages/FirmendatenPage';
+import { CompanySettingsPage } from './pages/settings/CompanySettingsPage';
+import { DesignSettingsPage } from './pages/settings/DesignSettingsPage';
+import { InvoiceSettingsPage } from './pages/settings/InvoiceSettingsPage';
+import { OperatingSettingsPage } from './pages/settings/OperatingSettingsPage';
+import { FirmendatenLegacyRoute } from './pages/settings/FirmendatenLegacyRoute';
 import { HeutePage } from './pages/HeutePage';
 import { KundenDetailPage, KundenLegacyLinkResolver } from './pages/KundenDetailPage';
 import { KundenPage } from './pages/KundenPage';
@@ -204,7 +208,14 @@ function AppRoutes() {
         <Route path="/kommunikation" element={<KommunikationPage />} />
         <Route path="/wissen" element={<WissenPage />} />
         <Route path="/einstellungen" element={<EinstellungenPage />} />
-        <Route path="/firmendaten" element={<FirmendatenPage />} />
+        {/* SETTINGS-01B2 — kanonische Firmenprofil-Seite; /firmendaten ist Alias (ohne Hash) bzw. Legacy (mit Hash). */}
+        <Route path="/einstellungen/firma" element={<CompanySettingsPage />} />
+        {/* SETTINGS-01B3 — Logo, Vorlage, Vorschau. */}
+        <Route path="/einstellungen/design" element={<DesignSettingsPage />} />
+        <Route path="/einstellungen/rechnungen" element={<InvoiceSettingsPage />} />
+        {/* SETTINGS-01B5 — Sprache, Datensicherung, Synchronisation, Verwaltung; /firmendaten ist nur noch Redirect. */}
+        <Route path="/einstellungen/betrieb" element={<OperatingSettingsPage />} />
+        <Route path="/firmendaten" element={<FirmendatenLegacyRoute />} />
         <Route path="/synchronisation" element={<SyncPage />} />
         <Route path="/admin/users" element={<AdminUsersPage />} />
         <Route path="/setup" element={<SetupPage />} />

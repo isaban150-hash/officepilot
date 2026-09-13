@@ -18,6 +18,10 @@ export const DEFAULT_COMPANY_PROFILE: CompanyProfile = {
   bankName: '',
   iban: '',
   bic: '',
+  // SETTINGS-01B1 — `accountHolder`, `defaultTaxStatus`, `defaultIntroText`,
+  // `defaultClosingText` und `branding.documentTemplate` bleiben hier bewusst
+  // abwesend: fehlend heisst leer / Legacy-Fallback / implizit classic, und ein
+  // Altprofil erzeugt weiterhin denselben companySnapshot wie bisher.
   defaultPaymentDays: 14,
   defaultPaymentTerms: 'Zahlbar innerhalb von 14 Tagen ohne Abzug.',
   defaultSkonto: '',

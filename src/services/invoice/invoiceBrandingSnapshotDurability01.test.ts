@@ -113,6 +113,7 @@ describe('BRANDING-01F-1R — Snapshot über Persistenz, Reload und Finalisierun
       version: 1,
       logo: BRANDING_A.logo,
       primaryColor: '#111111',
+      documentTemplate: 'classic',
     });
 
     const created = await createInvoiceDraftRecord({ identity: identityFor(draft!), draft: draft! });
@@ -127,6 +128,7 @@ describe('BRANDING-01F-1R — Snapshot über Persistenz, Reload und Finalisierun
       version: 1,
       logo: BRANDING_A.logo,
       primaryColor: '#111111',
+      documentTemplate: 'classic',
     });
 
     /*
@@ -144,6 +146,7 @@ describe('BRANDING-01F-1R — Snapshot über Persistenz, Reload und Finalisierun
       version: 1,
       logo: BRANDING_A.logo,
       primaryColor: '#111111',
+      documentTemplate: 'classic',
     });
     // Ausdrücklich nicht der neue Stand.
     expect(finalized.invoice.brandingSnapshot?.logo?.assetId).not.toBe('asset-b-2222');
@@ -169,13 +172,13 @@ describe('BRANDING-01F-1R — Snapshot über Persistenz, Reload und Finalisierun
   it('bewahrt auch einen leeren Snapshot über den Speicherweg', async () => {
     setBranding({});
     const draft = buildInvoiceDraftForType(VORGANG_ID, DEFAULT_SETUP, 'rechnung')!;
-    expect(draft.brandingSnapshot).toEqual({ version: 1 });
+    expect(draft.brandingSnapshot).toEqual({ version: 1, documentTemplate: 'classic' });
 
     await createInvoiceDraftRecord({ identity: identityFor(draft), draft });
     const loaded = await loadInvoiceDraftRecordByLocator(LOCATOR);
     expect(loaded.ok).toBe(true);
     if (!loaded.ok) return;
 
-    expect(loaded.draft.brandingSnapshot).toEqual({ version: 1 });
+    expect(loaded.draft.brandingSnapshot).toEqual({ version: 1, documentTemplate: 'classic' });
   });
 });

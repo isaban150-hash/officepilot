@@ -1,14 +1,16 @@
 import { DEFAULT_COMPANY_PROFILE } from '../data/companyProfileDefaults';
 import { getCachedSetup, persistAll } from './persistenceService';
+import { applyCompanyProfileSettingsContract } from './company/companyProfileSettingsContract';
 import type { CompanyProfile } from '../types/models';
 
 let companyProfile: CompanyProfile = { ...DEFAULT_COMPANY_PROFILE };
 
 function cloneProfile(profile: CompanyProfile): CompanyProfile {
-  return {
+  // SETTINGS-01B1 — dieselbe Lesesemantik wie Cloud und Ladepfad.
+  return applyCompanyProfileSettingsContract({
     ...profile,
     logoDataUrl: profile.logoDataUrl,
-  };
+  });
 }
 
 export function getCompanyProfileStoreSnapshot(): CompanyProfile {

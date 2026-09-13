@@ -158,6 +158,7 @@ describe('INVOICE-FINALIZE-BRANDING-CANDIDATE-01B — Kandidat und Request', () 
       version: 1,
       logo: BRANDING.logo,
       primaryColor: '#123456',
+      documentTemplate: 'classic',
     });
   });
 
@@ -195,6 +196,7 @@ describe('INVOICE-FINALIZE-BRANDING-CANDIDATE-01B — Kandidat und Request', () 
       version: 1,
       logo: BRANDING.logo,
       primaryColor: '#123456',
+      documentTemplate: 'classic',
     });
   });
 

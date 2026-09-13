@@ -1,5 +1,6 @@
 import { DEFAULT_SETUP, MOCK_TASKS, MOCK_VORGAENGE } from '../data/mockData';
 import { createCompanyProfileFromSetup } from '../data/companyProfileDefaults';
+import { applyCompanyProfileSettingsContract } from './company/companyProfileSettingsContract';
 import { MOCK_INBOX_ITEMS } from '../data/inboxMockData';
 import { MOCK_COMPANY_DOCUMENTS } from '../data/documentMockData';
 import { MOCK_EXPENSES } from '../data/expenseMockData';
@@ -346,7 +347,8 @@ function cloneCustomerBilling(billing: CustomerBilling): CustomerBilling {
 }
 
 function cloneCompanyProfile(profile: CompanyProfile): CompanyProfile {
-  return { ...profile, logoDataUrl: profile.logoDataUrl };
+  // SETTINGS-01B1 — Migration-on-read der neuen Felder (trim, gültiger Steuerstatus).
+  return applyCompanyProfileSettingsContract({ ...profile, logoDataUrl: profile.logoDataUrl });
 }
 
 function cloneInvoicePayment(payment: InvoicePayment): InvoicePayment {

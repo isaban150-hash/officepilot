@@ -5,16 +5,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { de } from './i18n';
 import { deBackup } from './i18n/locales/de/backup';
 import { PersistenceFailureBanner } from './components/system/PersistenceFailureBanner';
-import { PilotHintsPanel } from './components/settings/PilotHintsPanel';
 import { BackupExportPanel } from './components/settings/BackupExportPanel';
 import { AppProvider } from './context/AppContext';
 import { AuthProvider } from './context/AuthContext';
 import { DEFAULT_SETUP } from './data/mockData';
-import { FirmendatenPage } from './pages/FirmendatenPage';
+import { OperatingSettingsPage } from './pages/settings/OperatingSettingsPage';
+import { resolveFirmendatenLegacyTarget } from './pages/settings/FirmendatenLegacyRoute';
 import { MehrPage } from './pages/MehrPage';
 import {
   BACKUP_SECTION_ID,
-  FIRMENDATEN_BACKUP_HREF,
+  SETTINGS_BACKUP_HREF,
 } from './services/backupSectionNavigation';
 import { notifyPersistenceHealthChanged, resetPersistenceHealthForTests } from './services/persistenceHealthService';
 
@@ -30,7 +30,7 @@ describe('PILOT-BACKUP-DISCOVERABILITY-01', () => {
 
   it('Firmendaten description names Datensicherung', () => {
     expect(de['mehr.companyDesc']).toContain('Datensicherung');
-    expect(de['mehr.companyDesc']).toMatch(/Firmendaten.*Rechnungsangaben.*Datensicherung/);
+    expect(de['mehr.company']).toBe('Einstellungen');
   });
 
   it('backup hint mentions daily backup without alarmist tone', () => {
@@ -40,10 +40,13 @@ describe('PILOT-BACKUP-DISCOVERABILITY-01', () => {
 
   it('backup section anchor id is stable and unique', () => {
     expect(BACKUP_SECTION_ID).toBe('datensicherung');
-    expect(FIRMENDATEN_BACKUP_HREF).toBe('/firmendaten#datensicherung');
+    // SETTINGS-01B5 — kanonisch ist die Betriebsseite; die alte URL bleibt nur redirectfähig.
+    expect(SETTINGS_BACKUP_HREF).toBe('/einstellungen/betrieb#datensicherung');
+    // Die Legacy-URL bleibt redirectfähig — ohne eigene Konstante.
+    expect(resolveFirmendatenLegacyTarget('#datensicherung')).toBe(SETTINGS_BACKUP_HREF);
   });
 
-  it('Mehr Firmendaten link points at backup hash', () => {
+  it('Mehr „Einstellungen" link points at the settings hub (no second language switcher there)', () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
     const root = createRoot(container);
@@ -61,8 +64,9 @@ describe('PILOT-BACKUP-DISCOVERABILITY-01', () => {
 
     const html = container.innerHTML;
     expect(html).toContain('Datensicherung');
-    expect(html).toContain(FIRMENDATEN_BACKUP_HREF);
-    expect(html).toContain(`#${BACKUP_SECTION_ID}`);
+    expect(html).toContain('href="/einstellungen"');
+    expect(html).not.toContain('/firmendaten');
+    expect(container.querySelector('[data-testid="language-switcher"]')).toBeNull();
 
     act(() => {
       root.unmount();
@@ -98,7 +102,7 @@ describe('PILOT-BACKUP-DISCOVERABILITY-01', () => {
     container.remove();
   });
 
-  it('persistence banner and pilot hint link to backup section', () => {
+  it('persistence banner links to the backup section', () => {
     notifyPersistenceHealthChanged({ healthy: false, hasFailure: true });
 
     const container = document.createElement('div');
@@ -109,7 +113,6 @@ describe('PILOT-BACKUP-DISCOVERABILITY-01', () => {
         <MemoryRouter>
           <AppProvider initialSetup={completeSetup}>
             <PersistenceFailureBanner />
-            <PilotHintsPanel />
           </AppProvider>
         </MemoryRouter>,
       );
@@ -118,11 +121,7 @@ describe('PILOT-BACKUP-DISCOVERABILITY-01', () => {
     const bannerLink = container.querySelector(
       '[data-testid="persistence-failure-backup-link"]',
     ) as HTMLAnchorElement;
-    const pilotLink = container.querySelector(
-      '[data-testid="pilot-hints-backup-link"]',
-    ) as HTMLAnchorElement;
-    expect(bannerLink.getAttribute('href')).toBe(FIRMENDATEN_BACKUP_HREF);
-    expect(pilotLink.getAttribute('href')).toBe(FIRMENDATEN_BACKUP_HREF);
+    expect(bannerLink.getAttribute('href')).toBe(SETTINGS_BACKUP_HREF);
 
     act(() => {
       root.unmount();
@@ -130,7 +129,7 @@ describe('PILOT-BACKUP-DISCOVERABILITY-01', () => {
     container.remove();
   });
 
-  it('FirmendatenPage with backup hash scrolls and focuses backup section', async () => {
+  it('OperatingSettingsPage with backup hash scrolls and focuses backup section', async () => {
     const scrollIntoView = vi.fn();
     HTMLElement.prototype.scrollIntoView = scrollIntoView;
 
@@ -140,12 +139,14 @@ describe('PILOT-BACKUP-DISCOVERABILITY-01', () => {
 
     await act(async () => {
       root.render(
-        <MemoryRouter initialEntries={[FIRMENDATEN_BACKUP_HREF]}>
-          <AppProvider initialSetup={completeSetup}>
-            <Routes>
-              <Route path="/firmendaten" element={<FirmendatenPage />} />
-            </Routes>
-          </AppProvider>
+        <MemoryRouter initialEntries={[SETTINGS_BACKUP_HREF]}>
+          <AuthProvider>
+            <AppProvider initialSetup={completeSetup}>
+              <Routes>
+                <Route path="/einstellungen/betrieb" element={<OperatingSettingsPage />} />
+              </Routes>
+            </AppProvider>
+          </AuthProvider>
         </MemoryRouter>,
       );
     });

@@ -1,6 +1,11 @@
 import type { CompanyProfile } from '../types/models';
 import type { SetupWizardDraft, SetupWizardStep } from '../types/setup';
 import type { TranslationKey } from '../i18n';
+import { isDocumentTemplateId } from '../types/branding';
+import {
+  COMPANY_PROFILE_TEXT_LIMITS,
+  isTaxStatus,
+} from './company/companyProfileSettingsContract';
 
 export type SetupValidationErrors = Partial<Record<string, TranslationKey>>;
 
@@ -106,8 +111,42 @@ export function validateCompanyProfileForSettings(
   const result = validateSetupWizard(draft);
   return {
     ...result,
-    ...mergeSkontoErrors(profile, result),
+    ...mergeSettingsFieldErrors(profile, mergeSkontoErrors(profile, result)),
   };
+}
+
+/**
+ * SETTINGS-01B1 — die neuen Profilfelder. Längen wie bei vergleichbaren
+ * Feldern (Kontoinhaber wie ein Name, Standardtexte wie Fussnoten), ein
+ * Steuerstatus nur aus der bekannten Menge, eine Vorlage nur aus den
+ * implementierten. Leer ist überall erlaubt.
+ */
+function mergeSettingsFieldErrors(
+  profile: CompanyProfile,
+  result: SetupValidationResult,
+): SetupValidationResult {
+  const errors: SetupValidationErrors = { ...result.errors };
+
+  const accountHolder = profile.accountHolder ?? '';
+  if (accountHolder.trim().length > COMPANY_PROFILE_TEXT_LIMITS.accountHolder) {
+    errors.accountHolder = 'companyProfile.accountHolderTooLong';
+  }
+  if ((profile.defaultIntroText ?? '').trim().length > COMPANY_PROFILE_TEXT_LIMITS.defaultIntroText) {
+    errors.defaultIntroText = 'companyProfile.defaultIntroTextTooLong';
+  }
+  if ((profile.defaultClosingText ?? '').trim().length > COMPANY_PROFILE_TEXT_LIMITS.defaultClosingText) {
+    errors.defaultClosingText = 'companyProfile.defaultClosingTextTooLong';
+  }
+  if (profile.defaultTaxStatus !== undefined && !isTaxStatus(profile.defaultTaxStatus)) {
+    errors.defaultTaxStatus = 'companyProfile.defaultTaxStatusInvalid';
+  }
+  const template = profile.branding?.documentTemplate;
+  if (template !== undefined && !isDocumentTemplateId(template)) {
+    errors.documentTemplate = 'companyProfile.documentTemplateInvalid';
+  }
+
+  const valid = Object.keys(errors).length === 0;
+  return { ...result, valid, errors };
 }
 
 /**

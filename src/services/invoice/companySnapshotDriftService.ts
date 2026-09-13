@@ -55,7 +55,14 @@ const LEGAL_IDENTITY_FIELDS = [
 ] as const;
 
 /** Das Konto, auf das der Kunde zahlen soll. */
-const PAYMENT_ACCOUNT_FIELDS = ['bankName', 'iban', 'bic'] as const;
+/*
+ * SETTINGS-01B1 — `accountHolder` steht auf der Rechnung im Bankblock und
+ * gehört deshalb zu den kritischen Bankfeldern. Die reinen Vorbelegungen
+ * (`defaultTaxStatus`, `defaultIntroText`, `defaultClosingText`,
+ * `defaultPaymentDays`, Skonto, `defaultPaymentTerms`) sind bewusst **kein**
+ * Driftfeld — sie werden nur beim Aufbau eines Entwurfs gelesen.
+ */
+const PAYMENT_ACCOUNT_FIELDS = ['bankName', 'iban', 'bic', 'accountHolder'] as const;
 
 export const CRITICAL_COMPANY_FIELDS = [
   ...LEGAL_IDENTITY_FIELDS,

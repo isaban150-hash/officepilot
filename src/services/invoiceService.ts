@@ -37,18 +37,14 @@ import type {
   VorgangInvoiceLine,
 } from '../types/models';
 import type { BrandingSnapshot } from '../types/branding';
-import { BRANDING_SNAPSHOT_VERSION } from '../types/branding';
+import { BRANDING_SNAPSHOT_VERSION, DEFAULT_DOCUMENT_TEMPLATE } from '../types/branding';
 import { buildBrandingSnapshot } from './branding/brandingSnapshotService';
+import { resolveInvoiceDefaults, standardPaymentTerms } from './invoice/invoiceDefaults';
 import {
   isFixedAmountAbschlag,
   resolveInvoiceCalculationMode,
 } from './invoiceCalculationMode';
-import {
-  addCalendarDays,
-  buildLegalNotices,
-  buildSkontoText,
-  getTaxRateForStatus,
-} from './invoiceTaxService';
+import { buildLegalNotices, getTaxRateForStatus } from './invoiceTaxService';
 import {
   prefillsOpenQuantity,
   usesAbschlagDeductions,
@@ -95,13 +91,11 @@ export function getVorgangCustomerBilling(vorgang: Vorgang): CustomerBilling {
   };
 }
 
-/**
- * INVOICE-PAYMENT-TERMS-DAYS-DRIFT-01A — dieselbe Fristrechnung wie beim
- * Skonto. Vorher rechnete diese Stelle lokal und verlor über die
- * Sommerzeitumstellung einen Tag; das Fälligkeitsdatum widersprach dann dem
- * Zahlungsziel auf demselben Beleg.
+/*
+ * INVOICE-PAYMENT-TERMS-DAYS-DRIFT-01A — die Fälligkeitsrechnung läuft über
+ * `addCalendarDays` (UTC, keine Sommerzeitlücke); seit SETTINGS-01B1 im
+ * Default-Resolver `invoice/invoiceDefaults.ts`.
  */
-const addDays = addCalendarDays;
 
 /**
  * INVOICE-SKONTO-PAYMENT-TERMS-CONSISTENCY-01B — der Basissatz kennt jetzt das
@@ -120,12 +114,6 @@ const addDays = addCalendarDays;
  * Abzug" enthält: An fremder Prosa wird nicht herumgeschnitten, und eine
  * Heuristik über beliebige deutsche Sätze wäre in beide Richtungen falsch.
  */
-function standardPaymentTerms(days: number, withoutDeduction: boolean): string {
-  return withoutDeduction
-    ? `Zahlbar innerhalb von ${days} Tagen ohne Abzug.`
-    : `Zahlbar innerhalb von ${days} Tagen.`;
-}
-
 /**
  * INVOICE-SKONTO-PAYMENT-TERMS-CONSISTENCY-01B2 — hält Basissatz und Skonto
  * zusammen, wenn sich der Skontotext ändert.
@@ -157,35 +145,13 @@ export function reconcilePaymentTermsWithSkonto(
   return paymentTermsText;
 }
 
-function buildDefaultPaymentTerms(profile: CompanyProfile): string {
-  const days = profile.defaultPaymentDays;
-  const configured = profile.defaultPaymentTerms.trim();
-
-  /*
-   * Nicht `skontoEnabled` allein: Erst wenn `buildSkontoText` tatsächlich einen
-   * Satz liefert, steht auch einer auf der Rechnung. Ein eingeschalteter
-   * Schalter ohne gültige Prozent-/Tageswerte ergibt keinen Skontosatz — dann
-   * darf der Basissatz sein „ohne Abzug" behalten, sonst verspräche die
-   * Rechnung stillschweigend einen Nachlass, den sie nirgends beziffert.
-   */
-  const grantsSkonto = buildSkontoText(profile).trim().length > 0;
-
-  /*
-   * Herkunftserkennung über den bekannten Standardwortlaut. Der Wert entsteht
-   * an zwei Stellen genau so — als Vorgabe in `companyProfileDefaults` und im
-   * `FirstRunWizard`, der ihn bei geändertem Zahlungsziel neu bildet.
-   *
-   * Bewusst kein Herkunftsfeld im `CompanyProfile`: Das wäre eine
-   * Modellerweiterung für einen Textvergleich. Das Restrisiko ist benannt —
-   * wer den Vorgabesatz bewusst wortgleich selbst eingetippt hat, wird wie der
-   * Standard behandelt. Die Anpassung ist dann trotzdem die fachlich richtige.
-   */
-  if (configured && configured !== standardPaymentTerms(days, true)) {
-    return configured;
-  }
-
-  return standardPaymentTerms(days, !grantsSkonto);
-}
+/*
+ * SETTINGS-01B1 — `buildDefaultPaymentTerms` und `standardPaymentTerms` leben
+ * jetzt im kanonischen Default-Resolver (`invoice/invoiceDefaults.ts`), damit
+ * Vorgangs- und manuelle Rechnung dieselbe Vorbelegung bekommen. Die
+ * Skonto-Herkunftsregel (INVOICE-SKONTO-PAYMENT-TERMS-CONSISTENCY-01B) ist dort
+ * unverändert dokumentiert.
+ */
 
 /**
  * FINAL-INVOICE-CANCELLATION-REBILLING-01A — ein stornierter Abschlag wird
@@ -219,10 +185,16 @@ export function getPreviousAbschlagDeductions(vorgang: Vorgang): AbschlagDeducti
  * sichtbar; nur dieses eine Dokument verzichtet auf das Branding.
  */
 function freezeBrandingForInvoice(branding: CompanyProfile['branding']): BrandingSnapshot {
+  /*
+   * SETTINGS-01B2 — die Vorlage wird **explizit** eingefroren, auch wenn das
+   * Profil sie nicht trägt (fehlend = classic). Die historische Darstellung
+   * einer Rechnung darf nicht von einer späteren Leseregel abhängen.
+   */
+  const template = branding?.documentTemplate ?? DEFAULT_DOCUMENT_TEMPLATE;
   try {
-    return buildBrandingSnapshot(branding ?? {});
+    return { ...buildBrandingSnapshot(branding ?? {}), documentTemplate: template };
   } catch {
-    return { version: BRANDING_SNAPSHOT_VERSION };
+    return { version: BRANDING_SNAPSHOT_VERSION, documentTemplate: template };
   }
 }
 
@@ -246,9 +218,14 @@ function buildDraftMetadata(
   | 'legalNotices'
   | 'previousAbschlagDeductions'
   | 'invoiceNumberPreview'
+  | 'taxStatus'
+  | 'introText'
+  | 'closingText'
 > {
   const profile = createCompanyProfileSnapshot();
   const issueDate = new Date().toISOString().slice(0, 10);
+  // SETTINGS-01B1 — eine Vorbelegung für beide Rechnungswege.
+  const defaults = resolveInvoiceDefaults(profile, setup, issueDate);
   /*
    * MANUAL-INVOICE-CUSTOMER-IDENTITY-01B — die Kundenreferenz kommt vom
    * Vorgang, wenn er eine hat. Ein Legacy-Vorgang ohne `customerId` erzeugt
@@ -273,25 +250,21 @@ function buildDraftMetadata(
     servicePeriodFrom: '',
     servicePeriodTo: '',
     servicePeriodConfirmed: false,
-    paymentDueDate: addDays(issueDate, profile.defaultPaymentDays),
-    paymentTermsText: buildDefaultPaymentTerms(profile),
+    paymentDueDate: defaults.paymentDueDate,
+    paymentTermsText: defaults.paymentTermsText,
     /*
      * SKONTO-INVOICE-TEXT-01B — der Firmenstandard kommt genau hier hinein.
-     *
-     * Zahlungsziel und Zahlungsbedingungen wurden schon immer aus dem Profil
-     * abgeleitet, Skonto als einziges nicht — ein Betrieb konnte 2 % / 10 Tage
-     * einrichten und bekam trotzdem eine Rechnung ohne Skontosatz.
-     *
      * Der Wert wird **einmal** beim Aufbau des Entwurfs bestimmt und ist danach
-     * dessen eigener Stand. Es gibt bewusst keinen Effekt, der ihn bei einer
-     * späteren Profiländerung nachzieht: Der Entwurf gehört dem Zeitpunkt
-     * seiner Entstehung, und was der Nutzer hier ändert, bleibt geändert.
+     * dessen eigener Stand; eine spätere Profiländerung zieht ihn nicht nach.
      */
-    skontoText: buildSkontoText(profile),
+    skontoText: defaults.skontoText,
+    taxStatus: defaults.taxStatus,
+    introText: defaults.introText,
+    closingText: defaults.closingText,
     customerBilling: getVorgangCustomerBilling(vorgang),
-    companySnapshot: profile,
+    companySnapshot: toInvoiceCompanySnapshot(profile),
     brandingSnapshot: freezeBrandingForInvoice(profile.branding),
-    legalNotices: buildLegalNotices(setup.taxStatus, profile),
+    legalNotices: buildLegalNotices(defaults.taxStatus, profile),
     previousAbschlagDeductions:
       usesAbschlagDeductions(type) ? getPreviousAbschlagDeductions(vorgang) : [],
     invoiceNumberPreview: INVOICE_DRAFT_LABEL,
@@ -338,6 +311,8 @@ export function buildManualInvoiceDraft(
 ): InvoiceDraft {
   const profile = createCompanyProfileSnapshot();
   const issueDate = new Date().toISOString().slice(0, 10);
+  // SETTINGS-01B1 — derselbe Default-Resolver wie im Auftragsweg.
+  const defaults = resolveInvoiceDefaults(profile, setup, issueDate);
   const customerBilling = customer.billing;
   const customerId =
     'customerId' in customer && customer.customerId.trim() ? customer.customerId : undefined;
@@ -349,23 +324,23 @@ export function buildManualInvoiceDraft(
     customer: customerBilling.name,
     baustelle: '',
     type: 'rechnung',
-    taxStatus: setup.taxStatus,
+    taxStatus: defaults.taxStatus,
     materialSource: 'betrieb',
     positions: [],
-    introText: '',
-    closingText: '',
+    introText: defaults.introText,
+    closingText: defaults.closingText,
     issueDate,
     // Wie im Auftragsweg: kein erfundener Leistungszeitraum.
     servicePeriodFrom: '',
     servicePeriodTo: '',
     servicePeriodConfirmed: false,
-    paymentDueDate: addDays(issueDate, profile.defaultPaymentDays),
-    paymentTermsText: buildDefaultPaymentTerms(profile),
-    skontoText: buildSkontoText(profile),
+    paymentDueDate: defaults.paymentDueDate,
+    paymentTermsText: defaults.paymentTermsText,
+    skontoText: defaults.skontoText,
     customerBilling,
-    companySnapshot: profile,
+    companySnapshot: toInvoiceCompanySnapshot(profile),
     brandingSnapshot: freezeBrandingForInvoice(profile.branding),
-    legalNotices: buildLegalNotices(setup.taxStatus, profile),
+    legalNotices: buildLegalNotices(defaults.taxStatus, profile),
     previousAbschlagDeductions: [],
     invoiceNumberPreview: INVOICE_DRAFT_LABEL,
   };
@@ -461,12 +436,10 @@ function buildBaseDraft(
     baustelle: vorgang.baustelle,
     type,
     abschlagNumber,
-    taxStatus: setup.taxStatus,
     materialSource: vorgang.materialSource,
     positions,
     calculationMode: type === 'abschlag' ? 'quantity_based' : undefined,
-    introText: '',
-    closingText: '',
+    // SETTINGS-01B1 — taxStatus/introText/closingText kommen aus dem Default-Resolver.
     ...buildDraftMetadata(vorgang, setup, type),
   };
   // Freeze amendment revision at Schluss preparation time (ORDER-AMENDMENT-01B2).
@@ -1372,7 +1345,26 @@ function cloneCustomerBilling(billing: CustomerBilling): CustomerBilling {
  * Rechnungen aus der Zeit davor.
  */
 function cloneCompanySnapshot(profile: CompanyProfile): CompanyProfile {
-  const { branding: _branding, ...rest } = profile;
+  const { branding: _branding, ...rest } = toInvoiceCompanySnapshot(profile);
+  return { ...rest, logoDataUrl: profile.logoDataUrl };
+}
+
+/**
+ * SETTINGS-01B1 — was vom Profil in den `companySnapshot` eines Entwurfs
+ * gehört. Entfernt werden die reinen Vorbelegungen `defaultTaxStatus`/
+ * `defaultIntroText`/`defaultClosingText`: Ihr konkreter Wert lebt auf dem
+ * Entwurf; im Snapshot und damit im Fingerprint hätten sie nichts zu suchen,
+ * und eine geänderte Vorgabe darf keinen Drift für einen alten Entwurf
+ * erzeugen. `accountHolder` bleibt — er ist Bankidentität. `branding` bleibt
+ * hier wie bisher am Entwurf und fällt erst bei der Finalisierung weg (01F-1).
+ */
+export function toInvoiceCompanySnapshot(profile: CompanyProfile): CompanyProfile {
+  const {
+    defaultTaxStatus: _defaultTaxStatus,
+    defaultIntroText: _defaultIntroText,
+    defaultClosingText: _defaultClosingText,
+    ...rest
+  } = profile;
   return { ...rest, logoDataUrl: profile.logoDataUrl };
 }
 
@@ -1394,6 +1386,9 @@ function cloneBrandingSnapshot(snapshot: BrandingSnapshot | undefined): Branding
       ? { logo: { assetId: snapshot.logo.assetId, mimeType: snapshot.logo.mimeType } }
       : {}),
     ...(snapshot.primaryColor !== undefined ? { primaryColor: snapshot.primaryColor } : {}),
+    // SETTINGS-01B2 — die Vorlage wird bei der Finalisierung immer explizit
+    // festgeschrieben; ein älterer Entwurf ohne Feld ist classic.
+    documentTemplate: snapshot.documentTemplate ?? DEFAULT_DOCUMENT_TEMPLATE,
   };
 }
 

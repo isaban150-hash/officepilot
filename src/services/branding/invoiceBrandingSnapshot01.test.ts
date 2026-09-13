@@ -55,6 +55,7 @@ describe('BRANDING-01F-1 — Branding-Snapshot an der Rechnung', () => {
       version: 1,
       logo: { assetId: 'asset-aaaa-1111', mimeType: 'image/png' },
       primaryColor: '#123456',
+      documentTemplate: 'classic',
     });
   });
 
@@ -95,7 +96,7 @@ describe('BRANDING-01F-1 — Branding-Snapshot an der Rechnung', () => {
 
     expect(draftA.brandingSnapshot?.logo).toEqual(LOGO_A);
     expect(draftA.brandingSnapshot?.primaryColor).toBe('#123456');
-    expect(draftB.brandingSnapshot).toEqual({ version: 1 });
+    expect(draftB.brandingSnapshot).toEqual({ version: 1, documentTemplate: 'classic' });
   });
 
   // TEST 5
@@ -113,7 +114,7 @@ describe('BRANDING-01F-1 — Branding-Snapshot an der Rechnung', () => {
   // TEST 6
   it('erzeugt ohne Branding einen gültigen leeren Snapshot', () => {
     setBranding(undefined);
-    expect(newDraft().brandingSnapshot).toEqual({ version: 1 });
+    expect(newDraft().brandingSnapshot).toEqual({ version: 1, documentTemplate: 'classic' });
   });
 
   // TEST 7 — beschädigte Alt-/Importdaten dürfen die Erstellung nicht verhindern.
@@ -129,7 +130,7 @@ describe('BRANDING-01F-1 — Branding-Snapshot an der Rechnung', () => {
     expect(() => {
       draft = newDraft();
     }).not.toThrow();
-    expect(draft?.brandingSnapshot).toEqual({ version: 1 });
+    expect(draft?.brandingSnapshot).toEqual({ version: 1, documentTemplate: 'classic' });
     // Keine stille Reparatur: das Profil bleibt, wie es ist.
     expect(draft?.companySnapshot.branding).toEqual(branding);
   });

@@ -10,6 +10,7 @@ import type {
 import { getSupabaseClient } from '../../lib/supabase';
 import { stripLogoFromCompanyProfile } from './workspaceStore';
 import { applyBrandingContract } from '../branding/brandingProfileContract';
+import { applyCompanyProfileSettingsContract } from '../company/companyProfileSettingsContract';
 import type { WorkspaceVorgangRow } from '../vorgang/vorgangCloudService';
 import type { WorkspaceCustomerRow } from '../customer/customerCloudService';
 
@@ -253,7 +254,8 @@ export function buildCompanyProfileCloudPayload(profile: CompanyProfile): Record
    */
   const stripped = stripLogoFromCompanyProfile(profile) as unknown as Record<string, unknown>;
   return {
-    payload: applyBrandingContract(stripped),
+    // SETTINGS-01B1 — beide Verträge in beide Richtungen.
+    payload: applyCompanyProfileSettingsContract(applyBrandingContract(stripped)),
   };
 }
 
@@ -299,7 +301,9 @@ export function parseCompanyProfileFromCloud(
    * weg, aber der lokale Store würde einen gesetzten Schlüssel mit leerem Wert
    * tragen. Deshalb wird der Schlüssel gelöscht.
    */
-  const withBranding = applyBrandingContract(inner as unknown as Record<string, unknown>) as unknown as CompanyProfile;
+  const withBranding = applyCompanyProfileSettingsContract(
+    applyBrandingContract(inner as unknown as Record<string, unknown>),
+  ) as unknown as CompanyProfile;
 
   if (existingLogo) {
     return { ...withBranding, logoDataUrl: existingLogo };
