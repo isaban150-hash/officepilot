@@ -1384,6 +1384,16 @@ const deLegacy = {
   'customerDecision.missing': 'Gewählter Kunde ist nicht mehr vorhanden.',
   'customerDecision.noCustomers': 'Keine bestehenden Kunden vorhanden.',
   'customerDecision.noAddress': 'Anschrift nicht hinterlegt',
+  'customerDecision.createdAt': 'angelegt am {date}',
+  'customerDuplicate.title': 'Kunde existiert möglicherweise bereits',
+  'customerDuplicate.hint':
+    'Ein Kunde mit gleichem Namen und gleicher Anschrift ist bereits vorhanden. Bitte prüfen, ob es derselbe Kunde ist.',
+  'customerDuplicate.weakHint':
+    'Ein Kunde mit gleichem Namen ist bereits vorhanden, die Anschrift lässt sich nicht sicher vergleichen. Bitte prüfen, ob es derselbe Kunde ist.',
+  'customerDuplicate.useExisting': 'Vorhandenen Kunden verwenden',
+  'customerDuplicate.createAnyway': 'Trotzdem neuen Kunden anlegen',
+  'customer.duplicateCandidate':
+    'Kunde existiert möglicherweise bereits. Bitte den vorhandenen Kunden verwenden oder die Neuanlage ausdrücklich bestätigen.',
   'customerDecision.optionalHint': 'Nur der Kundenname ist erforderlich. Die übrigen Angaben sind optional.',
   'customerDecision.required': 'Bitte zuerst die Kundenzuordnung wählen.',
   'kunden.legacyBadge': 'Altbestand',
@@ -5027,6 +5037,16 @@ const trCustomerDecision: Partial<Record<keyof typeof de, string>> = {
   'customerDecision.missing': 'Seçilen müşteri artık mevcut değil.',
   'customerDecision.noCustomers': 'Kayıtlı müşteri yok.',
   'customerDecision.noAddress': 'Adres kayıtlı değil',
+  'customerDecision.createdAt': '{date} tarihinde oluşturuldu',
+  'customerDuplicate.title': 'Müşteri muhtemelen zaten mevcut',
+  'customerDuplicate.hint':
+    'Aynı ada ve aynı adrese sahip bir müşteri zaten kayıtlı. Lütfen aynı müşteri olup olmadığını kontrol edin.',
+  'customerDuplicate.weakHint':
+    'Aynı ada sahip bir müşteri zaten kayıtlı, adres güvenle karşılaştırılamıyor. Lütfen aynı müşteri olup olmadığını kontrol edin.',
+  'customerDuplicate.useExisting': 'Mevcut müşteriyi kullan',
+  'customerDuplicate.createAnyway': 'Yine de yeni müşteri oluştur',
+  'customer.duplicateCandidate':
+    'Müşteri muhtemelen zaten mevcut. Lütfen mevcut müşteriyi kullanın veya yeni kaydı açıkça onaylayın.',
   'customerDecision.optionalHint': 'Yalnızca müşteri adı gereklidir. Diğer bilgiler isteğe bağlıdır.',
   'customerDecision.required': 'Lütfen önce müşteri atamasını seçin.',
   'kunden.legacyBadge': 'Eski kayıt',
@@ -5709,6 +5729,16 @@ const bgCustomerDecision: Partial<Record<keyof typeof de, string>> = {
   'customerDecision.missing': 'Избраният клиент вече не съществува.',
   'customerDecision.noCustomers': 'Няма съществуващи клиенти.',
   'customerDecision.noAddress': 'Няма записан адрес',
+  'customerDecision.createdAt': 'създаден на {date}',
+  'customerDuplicate.title': 'Клиентът вероятно вече съществува',
+  'customerDuplicate.hint':
+    'Вече има клиент със същото име и същия адрес. Моля, проверете дали е същият клиент.',
+  'customerDuplicate.weakHint':
+    'Вече има клиент със същото име, адресът не може да бъде сравнен сигурно. Моля, проверете дали е същият клиент.',
+  'customerDuplicate.useExisting': 'Използвай съществуващия клиент',
+  'customerDuplicate.createAnyway': 'Все пак създай нов клиент',
+  'customer.duplicateCandidate':
+    'Клиентът вероятно вече съществува. Моля, използвайте съществуващия клиент или потвърдете изрично новия запис.',
   'customerDecision.optionalHint': 'Задължително е само името на клиента. Останалите данни са по избор.',
   'customerDecision.required': 'Моля, първо изберете задаване на клиент.',
   'kunden.legacyBadge': 'Стар запис',

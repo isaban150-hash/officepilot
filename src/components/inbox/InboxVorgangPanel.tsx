@@ -27,6 +27,11 @@ import {
   CustomerDecisionChoice,
   type CustomerDecisionMode,
 } from '../customer/CustomerDecisionChoice';
+import { CustomerDuplicateDecision } from '../customer/CustomerDuplicateDecision';
+import {
+  findCustomerDuplicateCandidates,
+  type CustomerDuplicateCandidate,
+} from '../../services/customer/customerDuplicateService';
 import {
   buildCustomerDecisionFromUi,
   buildCustomerInputFromUi,
@@ -83,6 +88,8 @@ export function InboxVorgangPanel({
     createEmptyCustomerExtraFields,
   );
   const [creating, setCreating] = useState(false);
+  /** CUSTOMER-IDENTITY-DUPLICATE-01A — wahrscheinliche Dubletten, vor der Anlage zu entscheiden. */
+  const [customerDuplicates, setCustomerDuplicates] = useState<CustomerDuplicateCandidate[]>([]);
   /** Synchronous lock — a second click in the same event turn must not create again. */
   const creatingRef = useRef(false);
 
@@ -113,6 +120,7 @@ export function InboxVorgangPanel({
     setCustomerMode(null);
     setSelectedCustomerId(null);
     setCustomerError(null);
+    setCustomerDuplicates([]);
     setCustomerExtra(createEmptyCustomerExtraFields());
     creatingRef.current = false;
     setCreating(false);
@@ -164,12 +172,25 @@ export function InboxVorgangPanel({
     );
   };
 
-  const handleCreate = () => {
+  const handleCreate = (options?: { allowDuplicateCustomer?: boolean }) => {
     if (customerMode === null || creatingRef.current) return;
     setCustomerError(null);
 
     const customerDecision = buildCustomerDecision();
     if (!customerDecision) return;
+    // CUSTOMER-IDENTITY-DUPLICATE-01A — confirm-first vor einer wahrscheinlich doppelten Kundenanlage.
+    if (customerDecision.kind === 'new') {
+      if (options?.allowDuplicateCustomer) {
+        customerDecision.allowDuplicate = true;
+      } else {
+        const duplicates = findCustomerDuplicateCandidates(customerDecision.input);
+        if (duplicates.length > 0) {
+          setCustomerDuplicates(duplicates);
+          return;
+        }
+      }
+    }
+    setCustomerDuplicates([]);
 
     // Locked synchronously, released only after this event turn.
     creatingRef.current = true;
@@ -353,6 +374,7 @@ export function InboxVorgangPanel({
                   setCustomerMode(next);
                   setSelectedCustomerId(null);
                   setCustomerError(null);
+                  setCustomerDuplicates([]);
                 }}
                 customers={customers}
                 selectedCustomerId={selectedCustomerId}
@@ -365,9 +387,26 @@ export function InboxVorgangPanel({
                 onExtraFieldChange={(field, value) => {
                   setCustomerExtra((prev) => ({ ...prev, [field]: value }));
                   setCustomerError(null);
+                  setCustomerDuplicates([]);
                 }}
               />
             )}
+            {mode === 'create' && customerMode === 'new' && customerDuplicates.length > 0 ? (
+              <CustomerDuplicateDecision
+                candidates={customerDuplicates}
+                busy={creating}
+                onUseExisting={(id) => {
+                  setCustomerDuplicates([]);
+                  setCustomerMode('existing');
+                  setSelectedCustomerId(id);
+                  setCustomerError(null);
+                }}
+                onCreateAnyway={() => {
+                  setCustomerDuplicates([]);
+                  handleCreate({ allowDuplicateCustomer: true });
+                }}
+              />
+            ) : null}
 
             {similar.length > 0 && (
               <div className="vorgang-dialog__similar">
@@ -411,7 +450,7 @@ export function InboxVorgangPanel({
                   fullWidth
                   disabled={createDisabled || creating}
                   data-testid="vorgang-dialog-create"
-                  onClick={handleCreate}
+                  onClick={() => handleCreate()}
                 >
                   {translate(
                     isOrderCreate && similar.length === 0

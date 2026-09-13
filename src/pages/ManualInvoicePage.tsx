@@ -15,6 +15,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CustomerDecisionChoice, type CustomerDecisionMode } from '../components/customer/CustomerDecisionChoice';
+import { CustomerDuplicateDecision } from '../components/customer/CustomerDuplicateDecision';
+import { CUSTOMER_DUPLICATE_ERROR_KEY } from '../services/customerService';
+import {
+  findCustomerDuplicateCandidates,
+  type CustomerDuplicateCandidate,
+} from '../services/customer/customerDuplicateService';
 import {
   buildCustomerInputFromUi,
   createEmptyCustomerExtraFields,
@@ -262,6 +268,8 @@ export function ManualInvoicePage() {
   const [newCustomerName, setNewCustomerName] = useState('');
   const [newCustomerExtra, setNewCustomerExtra] = useState<CustomerExtraFields>(createEmptyCustomerExtraFields);
   const [customerError, setCustomerError] = useState<TranslationKey | null>(null);
+  /** CUSTOMER-IDENTITY-DUPLICATE-01A — wahrscheinliche Dubletten, vor dem Weiter zu entscheiden. */
+  const [customerDuplicates, setCustomerDuplicates] = useState<CustomerDuplicateCandidate[]>([]);
   const customers = useMemo(() => loadSelectableCustomers(), [step]);
 
   const adoptCustomer = (customerId: string) => {
@@ -288,18 +296,32 @@ export function ManualInvoicePage() {
     setCustomerMode(null);
     writeStep('positions');
   };
-  const handleCustomerContinue = () => {
+  const handleCustomerContinue = (options?: { allowDuplicateCustomer?: boolean }) => {
     if (!draft || !editable) return;
     if (customerMode === 'existing' && selectedCustomerId) {
       if (adoptCustomer(selectedCustomerId)) advanceToPositions();
       return;
     }
     if (customerMode === 'new') {
-      const created = createCustomer(buildCustomerInputFromUi(newCustomerName, newCustomerExtra));
+      const input = buildCustomerInputFromUi(newCustomerName, newCustomerExtra);
+      if (!options?.allowDuplicateCustomer) {
+        const duplicates = findCustomerDuplicateCandidates(input);
+        if (duplicates.length > 0) {
+          setCustomerDuplicates(duplicates);
+          return;
+        }
+      }
+      const created = createCustomer(input, { allowDuplicate: options?.allowDuplicateCustomer });
       if (!created.success) {
+        // CUSTOMER-IDENTITY-DUPLICATE-01A — confirm-first: Entscheidung statt Fehlermeldung.
+        if (created.errorKey === CUSTOMER_DUPLICATE_ERROR_KEY && created.duplicates?.length) {
+          setCustomerDuplicates(created.duplicates);
+          return;
+        }
         setCustomerError(created.errorKey as TranslationKey);
         return;
       }
+      setCustomerDuplicates([]);
       if (adoptCustomer(created.customer.id)) advanceToPositions();
       return;
     }
@@ -544,7 +566,7 @@ export function ManualInvoicePage() {
       case 'customer':
         return {
           label: translate('manualInvoice.next.positions'),
-          onClick: handleCustomerContinue,
+          onClick: () => handleCustomerContinue(),
           disabled: !editable || (customerMode !== null ? customerIncomplete : !hasManualInvoiceCustomer(draft)),
         };
       case 'positions':
@@ -593,6 +615,7 @@ export function ManualInvoicePage() {
                 onModeChange={(mode) => {
                   setCustomerMode(mode);
                   setCustomerError(null);
+                  setCustomerDuplicates([]);
                 }}
                 customers={customers}
                 selectedCustomerId={selectedCustomerId}
@@ -602,9 +625,27 @@ export function ManualInvoicePage() {
                 }}
                 hint={customerError ? translate(customerError) : customerHint ? translate(customerHint) : null}
                 extraFields={newCustomerExtra}
-                onExtraFieldChange={(field, value) => setNewCustomerExtra((prev) => ({ ...prev, [field]: value }))}
+                onExtraFieldChange={(field, value) => {
+                  setNewCustomerExtra((prev) => ({ ...prev, [field]: value }));
+                  setCustomerDuplicates([]);
+                }}
                 allowNone={false}
               />
+              {customerMode === 'new' && customerDuplicates.length > 0 ? (
+                <CustomerDuplicateDecision
+                  candidates={customerDuplicates}
+                  onUseExisting={(id) => {
+                    setCustomerDuplicates([]);
+                    setCustomerMode('existing');
+                    setSelectedCustomerId(id);
+                    setCustomerError(null);
+                  }}
+                  onCreateAnyway={() => {
+                    setCustomerDuplicates([]);
+                    handleCustomerContinue({ allowDuplicateCustomer: true });
+                  }}
+                />
+              ) : null}
               {customerMode === 'new' && (
                 <label className="invoice-edit__field">
                   <span className="invoice-edit__label">{translate('manualInvoice.customer.name')}</span>

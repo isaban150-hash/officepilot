@@ -6,6 +6,7 @@
  * customer is ever matched automatically by name.
  */
 import { useApp } from '../../context/AppContext';
+import { normalizeCompanyNameForComparison } from '../../services/customerOwnCompanyGuard';
 import type { CustomerExtraFields } from './customerDecisionUi';
 import type { Customer } from '../../types/models';
 import type { TranslationKey } from '../../i18n';
@@ -56,6 +57,41 @@ export function buildCustomerSubline(
   return created ? `${fallbackLabel} · ${created}` : fallbackLabel;
 }
 
+/**
+ * CUSTOMER-IDENTITY-DUPLICATE-01A — gleichnamige Kunden unterscheidbar machen.
+ * Nur wenn ein Namensvetter in derselben Liste steht, kommen vorhandene
+ * Unterscheidungsmerkmale dazu (Kontakt, E-Mail, Anlagedatum) — keine internen
+ * IDs, keine erfundenen Daten. Ohne Namensvetter bleibt die Zeile wie bisher.
+ */
+export function buildCustomerDistinguisher(
+  customer: Customer,
+  siblings: Customer[],
+  createdAtLabel: (date: string) => string,
+  language: string,
+): string {
+  const key = normalizeCompanyNameForComparison(customer.name);
+  const namesakes = siblings.filter((other) => other.id !== customer.id && normalizeCompanyNameForComparison(other.name) === key);
+  if (namesakes.length === 0) return '';
+  const parts: string[] = [];
+  if (customer.contactPerson.trim()) parts.push(customer.contactPerson.trim());
+  if (customer.email.trim()) parts.push(customer.email.trim());
+  const created = new Date(customer.createdAt);
+  if (!Number.isNaN(created.getTime())) {
+    const locale = language === 'de' ? 'de-DE' : language;
+    // Am selben Tag angelegte Namensvettern: so fein wie noetig (Tag → Minute → Sekunde),
+    // damit die Eintraege auseinandergehalten werden koennen.
+    const sameDay = namesakes.some((other) => other.createdAt.slice(0, 10) === customer.createdAt.slice(0, 10));
+    const sameMinute = namesakes.some((other) => other.createdAt.slice(0, 16) === customer.createdAt.slice(0, 16));
+    const stamp = sameMinute
+      ? created.toLocaleString(locale, { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' })
+      : sameDay
+        ? created.toLocaleString(locale, { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+        : created.toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' });
+    parts.push(createdAtLabel(stamp));
+  }
+  return parts.join(' · ');
+}
+
 export function CustomerDecisionChoice({
   mode,
   onModeChange,
@@ -67,7 +103,7 @@ export function CustomerDecisionChoice({
   onExtraFieldChange,
   allowNone = true,
 }: CustomerDecisionChoiceProps) {
-  const { translate } = useApp();
+  const { translate, language } = useApp();
   const hasCustomers = customers.length > 0;
 
   const options: Array<{ value: CustomerDecisionMode; label: string; disabled?: boolean }> = [
@@ -157,6 +193,20 @@ export function CustomerDecisionChoice({
                 <strong>{customer.name}</strong>
                 <br />
                 {buildCustomerSubline(customer, translate('customerDecision.noAddress'))}
+                {(() => {
+                  const distinguisher = buildCustomerDistinguisher(
+                    customer,
+                    customers,
+                    (date) => translate('customerDecision.createdAt').replace('{date}', date),
+                    language,
+                  );
+                  return distinguisher ? (
+                    <>
+                      <br />
+                      <span className="customer-decision__distinguisher" data-testid={`customer-distinguisher-${customer.id}`}>{distinguisher}</span>
+                    </>
+                  ) : null;
+                })()}
               </span>
             </label>
           ))}

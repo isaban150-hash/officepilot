@@ -13,6 +13,11 @@ import {
   CustomerDecisionChoice,
   type CustomerDecisionMode,
 } from '../components/customer/CustomerDecisionChoice';
+import { CustomerDuplicateDecision } from '../components/customer/CustomerDuplicateDecision';
+import {
+  findCustomerDuplicateCandidates,
+  type CustomerDuplicateCandidate,
+} from '../services/customer/customerDuplicateService';
 import {
   buildCustomerDecisionFromUi,
   buildCustomerExtraFromParty,
@@ -353,6 +358,9 @@ export function EingangDetailPage() {
   const [newCustomerName, setNewCustomerName] = useState('');
   const [customerOptions, setCustomerOptions] = useState<Customer[]>([]);
   const [customerError, setCustomerError] = useState<string | null>(null);
+  /** CUSTOMER-IDENTITY-DUPLICATE-01A — wahrscheinliche Dubletten, die vor der Erfassung entschieden werden müssen. */
+  const [customerDuplicates, setCustomerDuplicates] = useState<CustomerDuplicateCandidate[]>([]);
+  const pendingContractPositionsRef = useRef<EnhancedDetectedOrderPosition[]>([]);
   // CUSTOMER-FACHOBJEKT-05C — optional master data of a new customer.
   const [customerExtra, setCustomerExtra] = useState<CustomerExtraFields>(
     createEmptyCustomerExtraFields,
@@ -1247,7 +1255,10 @@ export function EingangDetailPage() {
     if (archiveDocumentId) navigate(`/dokumente/${archiveDocumentId}`);
   };
 
-  const handleCreateContractOrder = (selectedPositions: EnhancedDetectedOrderPosition[]) => {
+  const handleCreateContractOrder = (
+    selectedPositions: EnhancedDetectedOrderPosition[],
+    options?: { allowDuplicateCustomer?: boolean },
+  ) => {
     if (!item || !workflow?.contractOrderProposal || contractCreateLockRef.current) return;
 
     // CUSTOMER-FACHOBJEKT-04C — shared gate for all three manual entries.
@@ -1272,6 +1283,25 @@ export function EingangDetailPage() {
         showToast(translate('customerDecision.missing'));
         return;
       }
+      /*
+       * CUSTOMER-IDENTITY-DUPLICATE-01A — confirm-first vor einer wahrscheinlich
+       * doppelten Kundenanlage. Kein Merge: der Nutzer waehlt den vorhandenen
+       * Kunden oder legt ausdruecklich trotzdem neu an.
+       */
+      if (built.kind === 'new') {
+        if (options?.allowDuplicateCustomer) {
+          built.allowDuplicate = true;
+        } else {
+          const duplicates = findCustomerDuplicateCandidates(built.input);
+          if (duplicates.length > 0) {
+            pendingContractPositionsRef.current = selectedPositions;
+            setCustomerDuplicates(duplicates);
+            setMoreOptionsExpanded(true);
+            return;
+          }
+        }
+      }
+      setCustomerDuplicates([]);
       customerDecision = built;
     }
     if (positionsImportLocked) {
@@ -1952,6 +1982,7 @@ export function EingangDetailPage() {
                 setCustomerMode(next);
                 setSelectedCustomerId(null);
                 setCustomerError(null);
+                setCustomerDuplicates([]);
               }}
               customers={customerOptions}
               selectedCustomerId={selectedCustomerId}
@@ -1977,10 +2008,28 @@ export function EingangDetailPage() {
                   onChange={(e) => {
                     setNewCustomerName(e.target.value);
                     setCustomerError(null);
+                    setCustomerDuplicates([]);
                   }}
                 />
               </label>
             )}
+            {customerMode === 'new' && customerDuplicates.length > 0 ? (
+              <CustomerDuplicateDecision
+                candidates={customerDuplicates}
+                busy={isCreatingContractOrder}
+                onUseExisting={(id) => {
+                  setCustomerDuplicates([]);
+                  setCustomerMode('existing');
+                  setSelectedCustomerId(id);
+                  setCustomerError(null);
+                }}
+                onCreateAnyway={() => {
+                  const positions = pendingContractPositionsRef.current;
+                  setCustomerDuplicates([]);
+                  handleCreateContractOrder(positions, { allowDuplicateCustomer: true });
+                }}
+              />
+            ) : null}
           </div>
         ) : null
       }

@@ -7245,3 +7245,53 @@ body {
     font-size: 0.85rem;
   }
 }
+
+/*
+ * CUSTOMER-IDENTITY-DUPLICATE-01A — Dubletten-Entscheidung vor der
+ * Kundenanlage: Kandidaten untereinander, Aktionen in voller Breite auf
+ * schmalen Bildschirmen, nichts laeuft horizontal ueber.
+ */
+.customer-duplicate {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.customer-duplicate__title {
+  margin: 0;
+  font-weight: 700;
+}
+
+.customer-duplicate__hint {
+  margin: 0;
+}
+
+.customer-duplicate__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.customer-duplicate__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: 0.5rem;
+  background: var(--color-surface, #fff);
+}
+
+.customer-duplicate__facts {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.customer-decision__distinguisher {
+  color: var(--color-text-muted);
+  font-size: 0.85em;
+}

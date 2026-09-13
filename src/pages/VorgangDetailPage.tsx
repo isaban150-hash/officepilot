@@ -38,6 +38,11 @@ import {
   CustomerDecisionChoice,
   type CustomerDecisionMode,
 } from '../components/customer/CustomerDecisionChoice';
+import { CustomerDuplicateDecision } from '../components/customer/CustomerDuplicateDecision';
+import {
+  findCustomerDuplicateCandidates,
+  type CustomerDuplicateCandidate,
+} from '../services/customer/customerDuplicateService';
 import {
   buildCustomerDecisionFromUi,
   buildCustomerInputFromUi,
@@ -114,6 +119,8 @@ export function VorgangDetailPage() {
   const [newCustomerName, setNewCustomerName] = useState('');
   const [customerOptions, setCustomerOptions] = useState<Customer[]>([]);
   const [customerError, setCustomerError] = useState<string | null>(null);
+  /** CUSTOMER-IDENTITY-DUPLICATE-01A — wahrscheinliche Dubletten, vor der Zuordnung zu entscheiden. */
+  const [customerDuplicates, setCustomerDuplicates] = useState<CustomerDuplicateCandidate[]>([]);
   const [isAssigning, setIsAssigning] = useState(false);
   // CUSTOMER-FACHOBJEKT-05C — optional master data of a new customer.
   const [customerExtra, setCustomerExtra] = useState<CustomerExtraFields>(
@@ -252,7 +259,7 @@ export function VorgangDetailPage() {
     queueMicrotask(release);
   };
 
-  const handleAssignCustomer = () => {
+  const handleAssignCustomer = (options?: { allowDuplicateCustomer?: boolean }) => {
     if (!vorgang || assignDisabled || assignLockRef.current) return;
     setCustomerError(null);
 
@@ -269,6 +276,19 @@ export function VorgangDetailPage() {
       setCustomerError(translate('customerDecision.missing'));
       return;
     }
+    // CUSTOMER-IDENTITY-DUPLICATE-01A — confirm-first vor einer wahrscheinlich doppelten Kundenanlage.
+    if (decision.kind === 'new') {
+      if (options?.allowDuplicateCustomer) {
+        decision.allowDuplicate = true;
+      } else {
+        const duplicates = findCustomerDuplicateCandidates(decision.input);
+        if (duplicates.length > 0) {
+          setCustomerDuplicates(duplicates);
+          return;
+        }
+      }
+    }
+    setCustomerDuplicates([]);
 
     // Locked synchronously; released only after this event turn.
     assignLockRef.current = true;
@@ -635,6 +655,7 @@ export function VorgangDetailPage() {
                 setCustomerMode(next);
                 setSelectedCustomerId(null);
                 setCustomerError(null);
+                setCustomerDuplicates([]);
               }}
               customers={customerOptions}
               selectedCustomerId={selectedCustomerId}
@@ -660,15 +681,32 @@ export function VorgangDetailPage() {
                   onChange={(event) => {
                     setNewCustomerName(event.target.value);
                     setCustomerError(null);
+                    setCustomerDuplicates([]);
                   }}
                 />
               </label>
             )}
+            {customerMode === 'new' && customerDuplicates.length > 0 ? (
+              <CustomerDuplicateDecision
+                candidates={customerDuplicates}
+                busy={isAssigning}
+                onUseExisting={(id) => {
+                  setCustomerDuplicates([]);
+                  setCustomerMode('existing');
+                  setSelectedCustomerId(id);
+                  setCustomerError(null);
+                }}
+                onCreateAnyway={() => {
+                  setCustomerDuplicates([]);
+                  handleAssignCustomer({ allowDuplicateCustomer: true });
+                }}
+              />
+            ) : null}
             <Button
               fullWidth
               data-testid="vorgang-assign-customer-submit"
               disabled={assignDisabled || isAssigning}
-              onClick={handleAssignCustomer}
+              onClick={() => handleAssignCustomer()}
             >
               {translate('vorgang.assignCustomer.action')}
             </Button>

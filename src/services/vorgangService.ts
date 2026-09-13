@@ -673,7 +673,10 @@ function resolveCustomerDecision(
     };
   }
 
-  const built = buildValidatedCustomer(decision.input, { createdFromInboxId: inboxId });
+  const built = buildValidatedCustomer(decision.input, {
+    createdFromInboxId: inboxId,
+    allowDuplicate: decision.allowDuplicate,
+  });
   if (!built.ok) return null;
   return {
     customer: built.customer.name,
@@ -746,7 +749,7 @@ export function assignCustomerToVorgang(
     if (!selected) return { success: false, errorKey: 'customerDecision.missing' };
     target = selected;
   } else {
-    const built = buildValidatedCustomer(customerDecision.input);
+    const built = buildValidatedCustomer(customerDecision.input, { allowDuplicate: customerDecision.allowDuplicate });
     if (!built.ok) return { success: false, errorKey: built.errorKey };
     target = built.customer;
     pendingCustomer = built.customer;

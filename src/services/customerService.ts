@@ -15,10 +15,21 @@ import {
 import { persistAll } from './persistenceService';
 import { generateEntityId } from './sync/syncMetaService';
 import type { Customer, CustomerBilling } from '../types/models';
+import {
+  findStrongCustomerDuplicateCandidates,
+  type CustomerDuplicateCandidate,
+} from './customer/customerDuplicateService';
 
+/**
+ * CUSTOMER-IDENTITY-DUPLICATE-01A — `customer.duplicateCandidate` traegt die
+ * wahrscheinlichen Dubletten mit; der Aufrufer zeigt sie und laesst den Nutzer
+ * entscheiden (vorhandenen verwenden / bewusst trotzdem anlegen).
+ */
 export type CustomerMutationResult =
   | { success: true; customer: Customer }
-  | { success: false; errorKey: string };
+  | { success: false; errorKey: string; duplicates?: CustomerDuplicateCandidate[] };
+
+export const CUSTOMER_DUPLICATE_ERROR_KEY = 'customer.duplicateCandidate';
 
 export type CustomerInput = Partial<CustomerBilling> & Pick<CustomerBilling, 'name'>;
 
@@ -28,7 +39,12 @@ export type CustomerInput = Partial<CustomerBilling> & Pick<CustomerBilling, 'na
  */
 export type CustomerDecision =
   | { kind: 'existing'; customerId: string }
-  | { kind: 'new'; input: CustomerInput }
+  | {
+      kind: 'new';
+      input: CustomerInput;
+      /** Bewusste Nutzerentscheidung: trotzdem neuen Kunden anlegen (nach Dublettenwarnung). */
+      allowDuplicate?: boolean;
+    }
   | { kind: 'none' };
 
 function text(value: string | undefined): string {
@@ -62,7 +78,7 @@ export function billingFromCustomer(customer: Customer): CustomerBilling {
  */
 export function validateCustomerDecisionForCreate(
   decision: CustomerDecision | undefined,
-): { ok: true } | { ok: false; errorKey: string } {
+): { ok: true } | { ok: false; errorKey: string; duplicates?: CustomerDuplicateCandidate[] } {
   if (!decision) return { ok: false, errorKey: 'customerDecision.required' };
 
   if (decision.kind === 'none') return { ok: true };
@@ -83,16 +99,25 @@ export function validateCustomerDecisionForCreate(
   const name = text(decision.input?.name);
   if (!name) return { ok: false, errorKey: 'customer.nameRequired' };
   if (isOwnCompanyName(name)) return { ok: false, errorKey: 'customer.ownCompanyNotAllowed' };
+  if (!decision.allowDuplicate) {
+    const duplicates = findStrongCustomerDuplicateCandidates(decision.input);
+    if (duplicates.length > 0) return { ok: false, errorKey: CUSTOMER_DUPLICATE_ERROR_KEY, duplicates };
+  }
   return { ok: true };
 }
 
 export function buildValidatedCustomer(
   input: CustomerInput,
-  options?: { createdFromInboxId?: string },
-): { ok: true; customer: Customer } | { ok: false; errorKey: string } {
+  options?: { createdFromInboxId?: string; allowDuplicate?: boolean },
+): { ok: true; customer: Customer } | { ok: false; errorKey: string; duplicates?: CustomerDuplicateCandidate[] } {
   const name = text(input.name);
   if (!name) return { ok: false, errorKey: 'customer.nameRequired' };
   if (isOwnCompanyName(name)) return { ok: false, errorKey: 'customer.ownCompanyNotAllowed' };
+  // Confirm-first: ohne bewusste Entscheidung entsteht kein wahrscheinlich doppelter Kunde.
+  if (!options?.allowDuplicate) {
+    const duplicates = findStrongCustomerDuplicateCandidates(input);
+    if (duplicates.length > 0) return { ok: false, errorKey: CUSTOMER_DUPLICATE_ERROR_KEY, duplicates };
+  }
 
   const now = new Date().toISOString();
   const customer: Customer = {
@@ -115,10 +140,10 @@ export function buildValidatedCustomer(
 
 export function createCustomer(
   input: CustomerInput,
-  options?: { createdFromInboxId?: string },
+  options?: { createdFromInboxId?: string; allowDuplicate?: boolean },
 ): CustomerMutationResult {
   const built = buildValidatedCustomer(input, options);
-  if (!built.ok) return { success: false, errorKey: built.errorKey };
+  if (!built.ok) return { success: false, errorKey: built.errorKey, duplicates: built.duplicates };
   const customer = built.customer;
 
   const previous = getCustomerStoreSnapshot();

@@ -1,10 +1,16 @@
 import { useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { Card, CardMeta, CardTitle, PageHeader } from '../components/ui/Card';
 import { EmptyStateBlock } from '../components/ui/EmptyStateBlock';
 import { useApp } from '../context/AppContext';
 import { buildCustomerSubline } from '../components/customer/CustomerDecisionChoice';
+import { CustomerDuplicateDecision } from '../components/customer/CustomerDuplicateDecision';
+import { CUSTOMER_DUPLICATE_ERROR_KEY } from '../services/customerService';
+import {
+  findCustomerDuplicateCandidates,
+  type CustomerDuplicateCandidate,
+} from '../services/customer/customerDuplicateService';
 import { CustomerEditForm } from '../components/customer/CustomerEditForm';
 import { createCustomer } from '../services/customerService';
 import { getCustomerById } from '../services/customerStoreService';
@@ -33,6 +39,7 @@ const NEW_CUSTOMER_DRAFT: Customer = Object.freeze({
 
 export function KundenPage() {
   const { translate, showToast } = useApp();
+  const navigate = useNavigate();
   const [kunden, setKunden] = useState(() => getKundenOverview());
   const [creating, setCreating] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -63,10 +70,14 @@ export function KundenPage() {
     savingRef.current = false;
     setSaving(false);
     setCreateError(null);
+    setDuplicateDecision(null);
     setCreating(false);
   };
 
-  const handleCreate = (values: CustomerBilling) => {
+  /** CUSTOMER-IDENTITY-DUPLICATE-01A — wahrscheinliche Dubletten samt den Eingaben, die sie ausgelöst haben. */
+  const [duplicateDecision, setDuplicateDecision] = useState<{ candidates: CustomerDuplicateCandidate[]; values: CustomerBilling } | null>(null);
+
+  const handleCreate = (values: CustomerBilling, options?: { allowDuplicate?: boolean }) => {
     if (savingRef.current) return;
     savingRef.current = true;
     setSaving(true);
@@ -76,14 +87,32 @@ export function KundenPage() {
       setSaving(false);
     };
 
+    // Confirm-first: auch unsichere Kandidaten (gleicher Name ohne belastbare Anschrift) fragen nach.
+    if (!options?.allowDuplicate) {
+      const duplicates = findCustomerDuplicateCandidates(values);
+      if (duplicates.length > 0) {
+        setDuplicateDecision({ candidates: duplicates, values });
+        setCreateError(null);
+        queueMicrotask(release);
+        return;
+      }
+    }
     // Only the form values reach the service — never the UI draft object.
-    const result = createCustomer(values);
+    const result = createCustomer(values, { allowDuplicate: options?.allowDuplicate });
     if (!result.success) {
+      // Confirm-first: wahrscheinliche Dublette → Entscheidung statt Fehlermeldung.
+      if (result.errorKey === CUSTOMER_DUPLICATE_ERROR_KEY && result.duplicates?.length) {
+        setDuplicateDecision({ candidates: result.duplicates, values });
+        setCreateError(null);
+        queueMicrotask(release);
+        return;
+      }
       // Inputs stay untouched so the user can correct them.
       setCreateError(translate(result.errorKey as TranslationKey));
       queueMicrotask(release);
       return;
     }
+    setDuplicateDecision(null);
     setCreateError(null);
     setCreating(false);
     setKunden(getKundenOverview());
@@ -111,9 +140,25 @@ export function KundenPage() {
             customer={NEW_CUSTOMER_DRAFT}
             busy={saving}
             error={createError}
-            onSave={handleCreate}
+            onSave={(values) => handleCreate(values)}
             onCancel={closeCreateForm}
           />
+          {duplicateDecision ? (
+            <CustomerDuplicateDecision
+              candidates={duplicateDecision.candidates}
+              busy={saving}
+              onUseExisting={(id) => {
+                // Kein neuer Datensatz: Formular schließen, vorhandenen Kunden öffnen.
+                closeCreateForm();
+                navigate(`/kunden/customer/${id}`);
+              }}
+              onCreateAnyway={() => {
+                const values = duplicateDecision.values;
+                setDuplicateDecision(null);
+                handleCreate(values, { allowDuplicate: true });
+              }}
+            />
+          ) : null}
         </section>
       ) : (
         createAction
