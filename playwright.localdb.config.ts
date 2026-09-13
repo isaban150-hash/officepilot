@@ -78,6 +78,8 @@ export default defineConfig({
     env: {
       VITE_SUPABASE_URL: SUPABASE_URL,
       VITE_SUPABASE_ANON_KEY: ANON_KEY,
+      // EMAIL-01B3 — lokale Testwelt sendet ausschliesslich ueber den Stub (Server: MAIL_PROVIDER=stub).
+      VITE_MAIL_PROVIDER: 'stub',
     },
   },
 });

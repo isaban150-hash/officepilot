@@ -2141,16 +2141,25 @@ export function updateInvoiceSentFields(
     sentAt: string;
     sentVia: NonNullable<VorgangInvoice['sentVia']>;
     sentNote?: string;
+    /** EMAIL-01B3 — Herkunft; fehlt → manuell, ein bestehendes officepilot wird nie zurückgestuft. */
+    sentSource?: VorgangInvoice['sentSource'];
+    sentDeliveryId?: string;
+    sentManualPrior?: VorgangInvoice['sentManualPrior'];
   },
 ): UpdateInvoiceSentFieldsResult {
   const applySentFields = (current: VorgangInvoice): VorgangInvoice => {
     const note = fields.sentNote?.trim() ?? '';
+    const source: VorgangInvoice['sentSource'] =
+      fields.sentSource === 'officepilot' || current.sentSource === 'officepilot' ? 'officepilot' : 'manual';
     const next: VorgangInvoice = {
       ...current,
       status: fields.status,
       sentAt: fields.sentAt,
       sentVia: fields.sentVia,
+      sentSource: source,
     };
+    if (fields.sentDeliveryId) next.sentDeliveryId = fields.sentDeliveryId;
+    if (fields.sentManualPrior) next.sentManualPrior = fields.sentManualPrior;
     if (note) {
       next.sentNote = note;
     } else {

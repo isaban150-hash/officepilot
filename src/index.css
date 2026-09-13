@@ -908,6 +908,114 @@ body {
   }
 }
 
+/* EMAIL-01B3 — Versanddialog und Versandpanel. */
+.send-document-dialog__body {
+  min-height: 9rem;
+  resize: vertical;
+  line-height: 1.4;
+  font-family: inherit;
+}
+
+.send-document-dialog__attachment {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin: 0.25rem 0 0.75rem;
+}
+
+.send-document-dialog__attachment .form-hint {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.send-document-dialog__filename {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.send-document-dialog__confirm {
+  margin: 0.5rem 0;
+}
+
+.send-document-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.invoice-delivery-panel {
+  margin-bottom: 1rem;
+}
+
+.invoice-delivery-panel__history-title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted, #6b7280);
+  margin: 0.75rem 0 0.35rem;
+}
+
+.invoice-delivery-panel__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.invoice-delivery-panel__item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.5rem 0;
+  border-top: 1px solid var(--color-border, #e5e7eb);
+  min-width: 0;
+}
+
+.invoice-delivery-panel__item .badge {
+  align-self: flex-start;
+}
+
+.invoice-delivery-panel__meta {
+  font-size: 0.875rem;
+  color: var(--color-text-muted, #6b7280);
+  overflow-wrap: anywhere;
+}
+
+.invoice-delivery-panel__actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 0.75rem;
+}
+
+@media (max-width: 767px) {
+  .send-document-dialog__actions {
+    flex-direction: column-reverse;
+  }
+
+  .send-document-dialog__actions .btn,
+  .invoice-delivery-panel__actions .btn {
+    width: 100%;
+  }
+}
+
+/* EMAIL-01B4 — Vorschau der Standard-Mailtexte. */
+.settings-invoices__mail-preview {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: inherit;
+  font-size: 0.9375rem;
+  margin: 0.25rem 0 0;
+  padding: 0.75rem;
+  background: var(--color-surface-muted, #f9fafb);
+  border-radius: 0.5rem;
+}
+
 .mehr-link-card {
   text-decoration: none;
   color: inherit;

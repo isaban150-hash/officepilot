@@ -452,6 +452,13 @@ export function mapCloudPayloadToVorgangInvoice(payload: Record<string, unknown>
       ? (payload.sentVia as VorgangInvoice['sentVia'])
       : undefined,
     sentNote: optionalCloudText(payload.sentNote),
+    // EMAIL-01B1 — Herkunft fail-closed: nur bekannte Werte, sonst fehlend (= manuell/Altbestand).
+    ...(payload.sentSource === 'manual' || payload.sentSource === 'officepilot'
+      ? { sentSource: payload.sentSource as VorgangInvoice['sentSource'] }
+      : {}),
+    ...(optionalCloudText(payload.sentDeliveryId)?.trim()
+      ? { sentDeliveryId: (payload.sentDeliveryId as string).trim() }
+      : {}),
     // 01P4D2B3 — projektionsrelevant und deshalb erhalten.
     cancelledAt: optionalCloudText(payload.cancelledAt),
     cancelReason: optionalCloudText(payload.cancelReason),

@@ -59,6 +59,12 @@ export const bgSettings = {
   'settings.invoices.preview.title': 'Пример за нова фактура',
   'settings.invoices.preview.hint': 'Така би била попълнена фактура, създадена днес. Нищо не се създава и не се дава номер.',
   'settings.invoices.preview.due': 'Срок за плащане',
+  'settings.invoices.section.email': 'Изпращане по имейл',
+  'settings.invoices.email.hint': 'Тези текстове се попълват предварително за нови имейли с фактури и могат да бъдат променени преди всяко изпращане. Заместители: {invoiceNumber}, {companyName}.',
+  'settings.invoices.email.subject': 'Стандартна тема',
+  'settings.invoices.email.body': 'Стандартно съобщение',
+  'settings.invoices.email.fallbackHint': 'Празно = стандартен текст на OfficePilot на избрания език.',
+  'settings.invoices.email.preview': 'Пример за фактура {invoiceNumber}',
 
 
   /* SETTINGS-01B5 — Страница „Фирмена дейност". */

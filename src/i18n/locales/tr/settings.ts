@@ -59,6 +59,12 @@ export const trSettings = {
   'settings.invoices.preview.title': 'Yeni fatura örneği',
   'settings.invoices.preview.hint': 'Bugün oluşturulan yeni bir fatura böyle ön doldurulurdu. Hiçbir şey oluşturulmaz, numara verilmez.',
   'settings.invoices.preview.due': 'Vade',
+  'settings.invoices.section.email': 'E-posta gönderimi',
+  'settings.invoices.email.hint': 'Bu metinler yeni fatura e-postaları için ön doldurulur ve her gönderimden önce değiştirilebilir. Yer tutucular: {invoiceNumber}, {companyName}.',
+  'settings.invoices.email.subject': 'Standart konu',
+  'settings.invoices.email.body': 'Standart mesaj',
+  'settings.invoices.email.fallbackHint': 'Boş = ayarlanan dilde OfficePilot standart metni.',
+  'settings.invoices.email.preview': '{invoiceNumber} numaralı fatura için örnek',
 
 
   /* SETTINGS-01B5 — İşletme sayfası. */

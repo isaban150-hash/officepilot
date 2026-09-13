@@ -1363,6 +1363,9 @@ export function toInvoiceCompanySnapshot(profile: CompanyProfile): CompanyProfil
     defaultTaxStatus: _defaultTaxStatus,
     defaultIntroText: _defaultIntroText,
     defaultClosingText: _defaultClosingText,
+    // EMAIL-01B4 — Mail-Vorbelegungen sind keine Rechnungsdaten.
+    defaultInvoiceEmailSubject: _defaultInvoiceEmailSubject,
+    defaultInvoiceEmailBody: _defaultInvoiceEmailBody,
     ...rest
   } = profile;
   return { ...rest, logoDataUrl: profile.logoDataUrl };

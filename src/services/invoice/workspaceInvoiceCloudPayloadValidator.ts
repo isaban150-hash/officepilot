@@ -75,6 +75,9 @@ const INVOICE_KEYS = new Set([
   'sentAt',
   'sentVia',
   'sentNote',
+  'sentSource',
+  'sentDeliveryId',
+  'sentManualPrior',
   'expectedAmendmentSequence',
 ]);
 
@@ -163,6 +166,7 @@ const CALCULATION_MODES = enumSet<InvoiceCalculationMode>({
   fixed_amount: true,
 });
 
+const SENT_SOURCE = new Set(['manual', 'officepilot']);
 const SENT_VIA = enumSet<InvoiceSentVia>({
   email: true,
   post: true,
@@ -422,6 +426,15 @@ export function validateWorkspaceInvoiceCloudPayload(
     optionalText(value.sentAt, 'payload.sentAt');
     optionalText(value.sentNote, 'payload.sentNote');
     optionalEnum(value.sentVia, SENT_VIA, 'payload.sentVia');
+    optionalEnum(value.sentSource, SENT_SOURCE, 'payload.sentSource');
+    optionalText(value.sentDeliveryId, 'payload.sentDeliveryId');
+    // EMAIL-01B2 — die vor einem OfficePilot-Versand manuell erfassten Angaben bleiben erhalten.
+    if (value.sentManualPrior !== undefined) {
+      const prior = object(value.sentManualPrior, 'payload.sentManualPrior');
+      optionalText(prior.sentAt, 'payload.sentManualPrior.sentAt');
+      optionalEnum(prior.sentVia, SENT_VIA, 'payload.sentManualPrior.sentVia');
+      optionalText(prior.sentNote, 'payload.sentManualPrior.sentNote');
+    }
     optionalEnum(value.paymentStatus, PAYMENT_STATUSES, 'payload.paymentStatus');
     if (value.payments !== undefined && !Array.isArray(value.payments)) {
       reject('payload.payments:not_array');

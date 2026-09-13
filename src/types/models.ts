@@ -812,6 +812,13 @@ export interface CompanyProfile {
   defaultTaxStatus?: TaxStatus;
   defaultIntroText?: string;
   defaultClosingText?: string;
+  /**
+   * EMAIL-01B4 — Standard-Betreff/-Nachricht für Rechnungs-E-Mails (nur
+   * Vorbelegung eines neuen Send-Entwurfs; Platzhalter {invoiceNumber},
+   * {companyName}). Fehlend → i18n-Fallback. Nie im Rechnungs-Snapshot.
+   */
+  defaultInvoiceEmailSubject?: string;
+  defaultInvoiceEmailBody?: string;
   managingDirector?: string;
   taxFreeNotice?: string;
   invoiceFooterNotes: string;
@@ -1223,6 +1230,15 @@ export interface VorgangInvoice {
   sentVia?: InvoiceSentVia;
   /** Optional free-text note (e.g. for sentVia=sonstige). */
   sentNote?: string;
+  /**
+   * EMAIL-01B1 — Herkunft der Versandwahrheit: manuell bestätigt (`manual`)
+   * oder durch einen OfficePilot-Versand gesetzt (`officepilot`, dann mit
+   * `sentDeliveryId`). Fehlend bei Altbestand = manuell. Nie „zugestellt".
+   */
+  sentSource?: 'manual' | 'officepilot';
+  sentDeliveryId?: string;
+  /** EMAIL-01B2 — manuelle Angaben, die vor einem OfficePilot-Versand galten (nur Historie). */
+  sentManualPrior?: { sentAt?: string; sentVia?: InvoiceSentVia; sentNote?: string };
   /**
    * Frozen amendment plan revision for Schluss finalize (ORDER-AMENDMENT-01B2).
    * Captured when the Schluss draft/invoice is prepared — not recomputed at finalize.

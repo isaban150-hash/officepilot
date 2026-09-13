@@ -292,6 +292,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
+/**
+ * EMAIL-01B3 — für Bausteine, die auch ohne Auth-Kontext gerendert werden
+ * (bestehende Detailseiten-Tests mounten ohne AuthProvider). Ohne Provider
+ * gibt es keinen Nutzer — und damit kein Schreibrecht.
+ */
+export function useOptionalAuth(): AuthContextValue | null {
+  return useContext(AuthContext);
+}
+
 export function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error('useAuth must be used within AuthProvider');

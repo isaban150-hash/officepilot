@@ -92,6 +92,13 @@ export const deSettings = {
   'settings.invoices.preview.title': 'Beispiel für eine neue Rechnung',
   'settings.invoices.preview.hint': 'So würde eine heute neu angelegte Rechnung vorbelegt. Es wird nichts angelegt und keine Nummer vergeben.',
   'settings.invoices.preview.due': 'Zahlungsziel',
+  /* EMAIL-01B4 — Standard-E-Mail-Texte. */
+  'settings.invoices.section.email': 'E-Mail-Versand',
+  'settings.invoices.email.hint': 'Diese Texte werden für neue Rechnungs-E-Mails vorbelegt und können vor jedem Versand geändert werden. Platzhalter: {invoiceNumber}, {companyName}.',
+  'settings.invoices.email.subject': 'Standard-Betreff',
+  'settings.invoices.email.body': 'Standard-Nachricht',
+  'settings.invoices.email.fallbackHint': 'Leer = OfficePilot-Standardtext in der eingestellten Sprache.',
+  'settings.invoices.email.preview': 'Beispiel für Rechnung {invoiceNumber}',
 
 
   /* SETTINGS-01B5 — Betriebsseite. */

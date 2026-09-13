@@ -24,6 +24,8 @@ import { buildSkontoText } from '../../services/invoiceTaxService';
 import { getLastPersistSuccess } from '../../services/persistenceService';
 import { validateCompanyProfileForSettings } from '../../services/setupValidationService';
 import { resolveWorkspaceWriteAccess } from '../../services/workspace/workspaceRoleService';
+import { resolveDeliveryBody, resolveDeliverySubject } from '../../services/delivery/documentDeliveryDefaults';
+import { PREVIEW_INVOICE_NUMBER } from '../../services/settings/settingsDocumentPreview';
 import type { TranslationKey } from '../../i18n';
 import type { CompanyProfile, TaxStatus } from '../../types/models';
 
@@ -55,6 +57,8 @@ export const INVOICE_SETTINGS_FIELDS = [
   'defaultIntroText',
   'defaultClosingText',
   'invoiceFooterNotes',
+  'defaultInvoiceEmailSubject',
+  'defaultInvoiceEmailBody',
 ] as const satisfies readonly (keyof CompanyProfile & string)[];
 
 export interface InvoiceSettingsDraft {
@@ -70,6 +74,9 @@ export interface InvoiceSettingsDraft {
   defaultIntroText: string;
   defaultClosingText: string;
   invoiceFooterNotes: string;
+  /** EMAIL-01B4 — Standard-E-Mail-Texte (leer = i18n-Fallback). */
+  defaultInvoiceEmailSubject: string;
+  defaultInvoiceEmailBody: string;
 }
 
 export function pickInvoiceSettings(profile: CompanyProfile): InvoiceSettingsDraft {
@@ -84,6 +91,8 @@ export function pickInvoiceSettings(profile: CompanyProfile): InvoiceSettingsDra
     defaultIntroText: profile.defaultIntroText ?? '',
     defaultClosingText: profile.defaultClosingText ?? '',
     invoiceFooterNotes: profile.invoiceFooterNotes ?? '',
+    defaultInvoiceEmailSubject: profile.defaultInvoiceEmailSubject ?? '',
+    defaultInvoiceEmailBody: profile.defaultInvoiceEmailBody ?? '',
   };
 }
 
@@ -109,6 +118,8 @@ export function buildInvoiceSettingsPayload(draft: InvoiceSettingsDraft): Partia
     defaultIntroText: draft.defaultIntroText,
     defaultClosingText: draft.defaultClosingText,
     invoiceFooterNotes: draft.invoiceFooterNotes,
+    defaultInvoiceEmailSubject: draft.defaultInvoiceEmailSubject,
+    defaultInvoiceEmailBody: draft.defaultInvoiceEmailBody,
   };
   if (draft.defaultTaxStatus && isTaxStatus(draft.defaultTaxStatus)) {
     payload.defaultTaxStatus = draft.defaultTaxStatus;
@@ -130,7 +141,7 @@ const TAX_HINT_KEYS: Record<TaxStatus, TranslationKey> = {
 type FieldErrors = Partial<Record<string, TranslationKey>>;
 
 export function InvoiceSettingsPage() {
-  const { companyProfile, setup, updateCompanyProfile, translate, showToast } = useApp();
+  const { companyProfile, setup, updateCompanyProfile, translate, showToast, language } = useApp();
   const { user } = useAuth();
 
   const access = useMemo(
@@ -197,6 +208,11 @@ export function InvoiceSettingsPage() {
     [candidate, setup, previewIssueDate],
   );
   const effectiveTaxStatus = resolveDefaultTaxStatus(candidate, setup);
+  /* Vorschau der Mailtexte: der Firmenname käme beim echten Versand aus dem Rechnungs-Snapshot. */
+  const previewInvoiceLike = useMemo(
+    () => ({ number: PREVIEW_INVOICE_NUMBER, companySnapshot: { companyName: companyProfile.companyName, legalForm: companyProfile.legalForm } as CompanyProfile }),
+    [companyProfile.companyName, companyProfile.legalForm],
+  );
   const skontoSentence = buildSkontoText(candidate);
   const standardSentence = standardPaymentTerms(draft.defaultPaymentDays, !skontoSentence);
   const usesStandardSentence = draft.defaultPaymentTerms.trim() === standardSentence;
@@ -462,6 +478,54 @@ export function InvoiceSettingsPage() {
             </div>
           ))}
           <p className="form-hint">{translate('settings.invoices.texts.hint')}</p>
+        </fieldset>
+
+        {/* ---------------- E-Mail-Versand (EMAIL-01B4) ---------------- */}
+        <fieldset className="form-group settings-form__section" data-testid="settings-invoices-section-email" disabled={disabled}>
+          <legend className="settings-form__legend">{translate('settings.invoices.section.email')}</legend>
+          <p className="hint-text">{translate('settings.invoices.email.hint')}</p>
+          <div className="settings-form__field">
+            <label htmlFor="settings-invoices-defaultInvoiceEmailSubject">{translate('settings.invoices.email.subject')}</label>
+            <input
+              id="settings-invoices-defaultInvoiceEmailSubject"
+              name="defaultInvoiceEmailSubject"
+              type="text"
+              className={`input${error('defaultInvoiceEmailSubject') ? ' input--error' : ''}`}
+              value={draft.defaultInvoiceEmailSubject}
+              maxLength={COMPANY_PROFILE_TEXT_LIMITS.defaultInvoiceEmailSubject}
+              placeholder={resolveDeliverySubject(previewInvoiceLike, language)}
+              readOnly={!editable}
+              onChange={(event) => setField('defaultInvoiceEmailSubject', event.target.value)}
+              data-testid="settings-invoices-defaultInvoiceEmailSubject"
+            />
+            {renderError('defaultInvoiceEmailSubject')}
+          </div>
+          <div className="settings-form__field">
+            <label htmlFor="settings-invoices-defaultInvoiceEmailBody">{translate('settings.invoices.email.body')}</label>
+            <textarea
+              id="settings-invoices-defaultInvoiceEmailBody"
+              name="defaultInvoiceEmailBody"
+              className={`input settings-invoices__textarea${error('defaultInvoiceEmailBody') ? ' input--error' : ''}`}
+              rows={6}
+              value={draft.defaultInvoiceEmailBody}
+              maxLength={COMPANY_PROFILE_TEXT_LIMITS.defaultInvoiceEmailBody}
+              placeholder={resolveDeliveryBody(previewInvoiceLike, language)}
+              readOnly={!editable}
+              onChange={(event) => setField('defaultInvoiceEmailBody', event.target.value)}
+              data-testid="settings-invoices-defaultInvoiceEmailBody"
+            />
+            {renderError('defaultInvoiceEmailBody')}
+          </div>
+          <p className="form-hint">{translate('settings.invoices.email.fallbackHint')}</p>
+          <div className="settings-invoices__preview" data-testid="settings-invoices-email-preview">
+            <p className="settings-form__legend">{translate('settings.invoices.email.preview').replace('{invoiceNumber}', PREVIEW_INVOICE_NUMBER)}</p>
+            <p className="data-row__value" data-testid="settings-invoices-email-preview-subject">
+              {resolveDeliverySubject(previewInvoiceLike, language, candidate)}
+            </p>
+            <pre className="settings-invoices__mail-preview" data-testid="settings-invoices-email-preview-body">
+              {resolveDeliveryBody(previewInvoiceLike, language, candidate)}
+            </pre>
+          </div>
         </fieldset>
 
         {/* ---------------- Beispiel für neue Rechnung ---------------- */}

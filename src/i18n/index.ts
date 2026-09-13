@@ -136,6 +136,8 @@ const deLegacy = {
   'companyProfile.defaultIntroTextTooLong': 'Der Einleitungstext darf höchstens 2000 Zeichen lang sein.',
   'companyProfile.defaultClosingText': 'Standard-Schlusstext',
   'companyProfile.defaultClosingTextTooLong': 'Der Schlusstext darf höchstens 2000 Zeichen lang sein.',
+  'companyProfile.defaultInvoiceEmailSubjectInvalid': 'Der Standard-Betreff darf höchstens 255 Zeichen lang sein und keine Zeilenumbrüche enthalten.',
+  'companyProfile.defaultInvoiceEmailBodyTooLong': 'Die Standard-Nachricht darf höchstens 20000 Zeichen lang sein.',
   'companyProfile.documentTemplateInvalid': 'Diese Dokumentvorlage ist nicht verfügbar.',
   /* SKONTO-DUE-DATE-CONSISTENCY-01B — beide Werte sind einzeln gültig, ihr Verhältnis nicht. */
   'companyProfile.skontoDaysExceedPaymentDays':
@@ -2304,7 +2306,7 @@ const deLegacy = {
   'invoice.status.vorbereitet': 'Vorbereitet',
   'invoice.status.versendet': 'Versendet',
 
-  'invoice.sent.title': 'Versand',
+  'invoice.sent.title': 'Versand (manuell)',
   'invoice.sent.hint':
     'Hier halten Sie fest, dass die Rechnung an den Kunden übergeben wurde. OfficePilot verschickt nichts automatisch.',
   'invoice.sent.dueAlreadyPassed':
@@ -2324,7 +2326,7 @@ const deLegacy = {
   'invoice.sent.useLocal': 'Stand dieses Geräts verwenden',
   'invoice.sent.useCloud': 'Online-Stand verwenden',
   'invoice.sent.notSentYet': 'Noch nicht als versendet markiert.',
-  'invoice.sent.mark': 'Als versendet markieren',
+  'invoice.sent.mark': 'Extern als versendet markieren',
   'invoice.sent.correct': 'Versandangaben korrigieren',
   'invoice.sent.date': 'Versanddatum',
   'invoice.sent.via': 'Versandweg',

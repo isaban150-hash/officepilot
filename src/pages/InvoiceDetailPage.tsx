@@ -40,6 +40,7 @@ import { buildInvoiceReachPath, buildOpenInvoicesPath } from '../services/invoic
 import { buildInvoiceCorrectionModel } from '../services/invoice/invoiceCorrectionModel';
 import { generateInvoiceCorrectionPdf } from '../services/invoicePdfService';
 import { InvoiceSentPanel } from '../components/invoice/InvoiceSentPanel';
+import { InvoiceDeliveryPanel } from '../components/invoice/InvoiceDeliveryPanel';
 import {
   readInvoiceSentStateFromCloud,
   type InvoiceSentCloudState,
@@ -519,6 +520,12 @@ export function InvoiceDetailPage() {
           ) : null}
         </section>
       )}
+      {/* EMAIL-01B3 — echter Versand per OfficePilot; die manuelle Markierung bleibt darunter getrennt. */}
+      <InvoiceDeliveryPanel vorgangId={vorgangId} invoice={invoice} onInvoiceUpdated={setInvoice} />
+      {/* EMAIL-01B4 — Korrekturbeleg der stornierten Rechnung: gleicher Unterbau, eigener Bereich, Original bleibt unberührt. */}
+      {invoice.cancellationKind === 'correction' && invoice.correctionDocumentId ? (
+        <InvoiceDeliveryPanel vorgangId={vorgangId} invoice={invoice} onInvoiceUpdated={setInvoice} documentKind="invoice_correction" />
+      ) : null}
       <InvoiceSentPanel
         vorgangId={vorgangId}
         invoice={invoice}

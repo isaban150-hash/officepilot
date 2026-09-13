@@ -19,6 +19,9 @@ export const COMPANY_PROFILE_TEXT_LIMITS = {
   /** Einleitungs-/Schlusstext — mehrzeilig, wie Fussnoten. */
   defaultIntroText: 2000,
   defaultClosingText: 2000,
+  /** EMAIL-01B4 — wie die Delivery-Grenzen des Servers (Betreff 255, Text 20000). */
+  defaultInvoiceEmailSubject: 255,
+  defaultInvoiceEmailBody: 20000,
 } as const;
 
 export const TAX_STATUS_VALUES: readonly TaxStatus[] = [
@@ -34,7 +37,7 @@ export function isTaxStatus(value: unknown): value is TaxStatus {
   return typeof value === 'string' && (TAX_STATUS_VALUES as readonly string[]).includes(value);
 }
 
-const TEXT_FIELDS = ['accountHolder', 'defaultIntroText', 'defaultClosingText'] as const;
+const TEXT_FIELDS = ['accountHolder', 'defaultIntroText', 'defaultClosingText', 'defaultInvoiceEmailSubject', 'defaultInvoiceEmailBody'] as const;
 
 /**
  * Wendet den Vertrag auf ein Profil-artiges Objekt an und gibt eine flache

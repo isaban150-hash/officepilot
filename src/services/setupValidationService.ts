@@ -137,6 +137,14 @@ function mergeSettingsFieldErrors(
   if ((profile.defaultClosingText ?? '').trim().length > COMPANY_PROFILE_TEXT_LIMITS.defaultClosingText) {
     errors.defaultClosingText = 'companyProfile.defaultClosingTextTooLong';
   }
+  // EMAIL-01B4 — Standard-E-Mail-Texte: Betreff einzeilig, Grenzen wie der Versandserver.
+  const emailSubject = (profile.defaultInvoiceEmailSubject ?? '').trim();
+  if (emailSubject.length > COMPANY_PROFILE_TEXT_LIMITS.defaultInvoiceEmailSubject || emailSubject.includes('\n') || emailSubject.includes('\r')) {
+    errors.defaultInvoiceEmailSubject = 'companyProfile.defaultInvoiceEmailSubjectInvalid';
+  }
+  if ((profile.defaultInvoiceEmailBody ?? '').trim().length > COMPANY_PROFILE_TEXT_LIMITS.defaultInvoiceEmailBody) {
+    errors.defaultInvoiceEmailBody = 'companyProfile.defaultInvoiceEmailBodyTooLong';
+  }
   if (profile.defaultTaxStatus !== undefined && !isTaxStatus(profile.defaultTaxStatus)) {
     errors.defaultTaxStatus = 'companyProfile.defaultTaxStatusInvalid';
   }

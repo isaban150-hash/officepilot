@@ -150,6 +150,9 @@ const INVOICE_KEYS = [
   'sentAt',
   'sentVia',
   'sentNote',
+  'sentSource',
+  'sentDeliveryId',
+  'sentManualPrior',
   'expectedAmendmentSequence',
 ] as const;
 
@@ -248,6 +251,7 @@ const ORDER_UNITS = new Set(['m²', 'Stück', 'Meter', 'Stunden', 'Pauschal']);
 
 const CALCULATION_MODES = new Set(['quantity_based', 'fixed_amount']);
 const SENT_VIA = new Set(['email', 'post', 'persoenlich', 'portal', 'sonstige']);
+const SENT_SOURCE = new Set(['manual', 'officepilot']);
 const PAYMENT_STATUSES = new Set(['offen', 'teilbezahlt', 'bezahlt', 'ueberfaellig', 'storniert']);
 const FORBIDDEN = new Set<string>(FORBIDDEN_OBJECT_KEYS);
 
@@ -499,6 +503,14 @@ function checkInvoiceShape(
   optionalString(invoice.sentAt, `${path}.sentAt`);
   optionalString(invoice.sentNote, `${path}.sentNote`);
   optionalEnum(invoice.sentVia, SENT_VIA, `${path}.sentVia`);
+  optionalEnum(invoice.sentSource, SENT_SOURCE, `${path}.sentSource`);
+  optionalString(invoice.sentDeliveryId, `${path}.sentDeliveryId`);
+  if (invoice.sentManualPrior !== undefined) {
+    const prior = object(invoice.sentManualPrior, `${path}.sentManualPrior`);
+    optionalString(prior.sentAt, `${path}.sentManualPrior.sentAt`);
+    optionalEnum(prior.sentVia, SENT_VIA, `${path}.sentManualPrior.sentVia`);
+    optionalString(prior.sentNote, `${path}.sentManualPrior.sentNote`);
+  }
 
   if (invoice.legalNotices !== undefined) {
     if (!Array.isArray(invoice.legalNotices)) reject(`${path}.legalNotices:not_array`);
