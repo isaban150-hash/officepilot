@@ -3306,6 +3306,8 @@ const deLegacy = {
   'documentExperience.alert.amountMissing': 'Betrag konnte nicht sicher erkannt werden.',
   'documentExperience.alert.senderUncertain':
     'Absender konnte nicht eindeutig erkannt werden.',
+  'documentExperience.alert.existingContractCase':
+    'Dieser Vertrag ist bereits als Auftrag erfasst. Es wird kein zweiter Auftrag angelegt.',
   'documentExperience.action.recordExpense': 'Ausgabe erfassen',
   'documentExperience.action.review': 'Prüfen',
   'documentExperience.action.later': 'Später',
@@ -4390,6 +4392,8 @@ const trLegacy: Partial<Record<keyof typeof de, string>> = {
   'documentExperience.alert.quantitiesMissing': 'Teslim miktarları tanınamadı.',
   'documentExperience.alert.amountMissing': 'Tutar güvenle tanınamadı.',
   'documentExperience.alert.senderUncertain': 'Gönderen net olarak tanınamadı.',
+  'documentExperience.alert.existingContractCase':
+    'Bu sözleşme zaten sipariş olarak kaydedildi. İkinci bir sipariş oluşturulmaz.',
   'documentExperience.action.recordExpense': 'Gider kaydet',
   'documentExperience.action.review': 'Kontrol et',
   'documentExperience.action.later': 'Sonra',
@@ -5400,6 +5404,8 @@ const bgLegacy: Partial<Record<keyof typeof de, string>> = {
   'documentExperience.alert.amountMissing': 'Сумата не беше разпозната сигурно.',
   'documentExperience.alert.senderUncertain':
     'Подателят не можа да бъде разпознат еднозначно.',
+  'documentExperience.alert.existingContractCase':
+    'Този договор вече е записан като поръчка. Втора поръчка няма да бъде създадена.',
   'documentExperience.action.recordExpense': 'Запиши разход',
   'documentExperience.action.review': 'Провери',
   'documentExperience.action.later': 'По-късно',

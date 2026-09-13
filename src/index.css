@@ -6171,7 +6171,15 @@ body {
   margin-top: 0.5rem;
 }
 
-.contract-workspace-summary__metric {
+/*
+ * INBOX-CONTRACT-REALDEVICE-LAYOUT-01C — die Leistungsverzeichnis-Zeile ist
+ * derselbe Label/Wert-Block wie die Auftragssumme. Ohne diese Regel standen
+ * Label und Wert als Inline-Geschwister in einer Zeile
+ * („Leistungsverzeichnis3 Positionen") und überlagerten sich bei größerer
+ * Schrift.
+ */
+.contract-workspace-summary__metric,
+.contract-workspace-summary__lv {
   display: grid;
   gap: 0.15rem;
   padding: 0.35rem 0;

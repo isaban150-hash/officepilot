@@ -8,8 +8,34 @@ import type {
   DocumentCaseMatchReasonId,
   DocumentCaseMatchStatus,
 } from '../types/documentCaseMatch';
-import type { InboxItem, Vorgang } from '../types/models';
+import type { ClassifiedDocumentKind, InboxItem, Vorgang } from '../types/models';
 import { getAllVorgaenge, getVorgangById } from './vorgangService';
+import { pickExternalCustomerName } from './customerOwnCompanyGuard';
+
+/**
+ * INBOX-CONTRACT-SECOND-UPLOAD-01B — Vertragsrollen im Fallabgleich.
+ *
+ * Bei einem Vertrag ist die Gegenpartei der Auftraggeber/Kunde; der Absender
+ * des Dokuments kann der Kunde **oder** die eigene Firma (Auftragnehmer) sein.
+ * Deshalb darf `item.sender` hier nicht pauschal „Lieferant" bedeuten, und die
+ * eigene Betreiberfirma ist nie die Gegenpartei. Die Own-Company-Erkennung
+ * ist dieselbe wie beim Vorgangsentwurf (`pickExternalCustomerName`).
+ * Lieferantensemantik (Eingangsrechnung, Lieferschein, Tankbeleg, …) bleibt
+ * unveraendert.
+ */
+const CONTRACT_CASE_KINDS: ReadonlySet<ClassifiedDocumentKind> = new Set([
+  'werkvertrag',
+  'subunternehmervertrag',
+  'nachunternehmervertrag',
+  'auftrag',
+]);
+
+export function isContractCaseItem(item: InboxItem): boolean {
+  return (
+    (item.classifiedKind !== undefined && CONTRACT_CASE_KINDS.has(item.classifiedKind)) ||
+    item.documentType === 'kundenauftrag'
+  );
+}
 
 /** Priority weights (Projekt → Baustelle → Kunde → …). */
 const WEIGHT: Record<DocumentCaseMatchReasonId, number> = {
@@ -87,10 +113,19 @@ function equalsLoose(a: string, b: string): boolean {
 /** Collect match signals from existing Inbox / RD fields only. */
 export function extractDocumentCaseSignals(item: InboxItem): DocumentCaseSignals {
   const rd = item.recognizedData;
+  const contract = isContractCaseItem(item);
+  // Vertrag: Gegenpartei aus den Vertragsrollen, eigene Firma nie; Absender als letzter Kandidat.
+  const customer = contract
+    ? pickExternalCustomerName([rd.Auftraggeber, rd.Kunde, rd.Empfänger, item.sender]) || undefined
+    : firstNonEmpty(rd.Auftraggeber, rd.Kunde, rd.Empfänger);
+  // Vertrag: nur ein ausdrueckliches Lieferantenfeld zaehlt — der Absender ist kein Lieferant.
+  const supplier = contract
+    ? firstNonEmpty(rd.Lieferant, rd.Tankstelle)
+    : firstNonEmpty(rd.Lieferant, rd.Absender, rd.Tankstelle, item.sender);
   return {
     project: firstNonEmpty(rd.Bauvorhaben, rd.Projekt),
     site: firstNonEmpty(rd.Baustelle, rd.Baustellenadresse),
-    customer: firstNonEmpty(rd.Auftraggeber, rd.Kunde, rd.Empfänger),
+    customer,
     contractNumber: firstNonEmpty(
       rd.Vertragsnummer,
       rd.Vertragsnr,
@@ -98,7 +133,7 @@ export function extractDocumentCaseSignals(item: InboxItem): DocumentCaseSignals
       rd.Auftragnummer,
     ),
     invoiceNumber: firstNonEmpty(rd.Rechnungsnummer, rd.Belegnummer),
-    supplier: firstNonEmpty(rd.Lieferant, rd.Absender, rd.Tankstelle, item.sender),
+    supplier,
     subject: firstNonEmpty(rd.Betreff, item.title),
     reference: firstNonEmpty(rd.Aktenzeichen, rd.Az, rd.Beitragsnummer, rd.Referenz),
     knownCaseId: item.vorgangId?.trim() || undefined,

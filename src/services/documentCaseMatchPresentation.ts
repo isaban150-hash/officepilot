@@ -8,7 +8,8 @@ import type {
   DocumentSummaryActionRef,
 } from '../types/documentSummary';
 import type { InboxItem } from '../types/models';
-import { buildDocumentCaseMatch } from './documentCaseMatchService';
+import { buildDocumentCaseMatch, isContractCaseItem } from './documentCaseMatchService';
+import { getInboxItemById } from './inboxService';
 import { resolveWorkflowActionForCaseMatch } from './documentPrimaryTargetResolver';
 import { getVorgangById, isInboxLinkedToVorgang } from './vorgangService';
 import { isFinanceReferenceOnlyKind } from './documentFinanceReferenceService';
@@ -163,6 +164,38 @@ export function shouldKeepDocumentPrimaryAction(summary: DocumentSummary): boole
   return false;
 }
 
+/**
+ * INBOX-CONTRACT-SECOND-UPLOAD-01B — FALL B: kein persistenter Link, aber ein
+ * sicherer Match auf einen bereits erfassten/bestaetigten Vertragsvorgang.
+ *
+ * Realbefund: Derselbe Werkvertrag, als zweiter Eintrag gespeichert, meldete
+ * „Passender Vorgang gefunden" und bot trotzdem erneut „Als Auftrag erfassen"
+ * samt Kundenentscheidung an — lokal entstand daraus ein zweiter Vorgang und
+ * ein zweiter Kunde, auf dem Realgeraet griff erst beim Ausfuehren die
+ * Bestaetigt-Sperre. Die Praesentation kannte bis hier nur Fall A
+ * (`item.vorgangId`).
+ *
+ * „Bestaetigter Vertragsvorgang" heisst: `contractConfirmation` liegt vor
+ * **oder** der Vorgang ist aus genau einer Vertragsannahme entstanden (sein
+ * Quelldokument ist ein persistent verknuepfter Vertrag). Ein nur aehnlicher
+ * Vorgang ohne diese Herkunft (Fall C) bleibt confirm-first — dort bleibt die
+ * Erfassung stehen.
+ *
+ * Bewusst nur `exact`: ein `likely`-Treffer ist kein sicherer Match.
+ * Es wird nichts persistiert — „Vorgang oeffnen" navigiert nur.
+ */
+export function resolveConfirmedContractCaseId(item: InboxItem, match: DocumentCaseMatch): string | null {
+  if (match.matchStatus !== 'exact' || !match.matchedCaseId) return null;
+  const vorgang = getVorgangById(match.matchedCaseId);
+  if (!vorgang) return null;
+  if (vorgang.contractConfirmation) return vorgang.id;
+  const sourceId = vorgang.createdFromInboxId?.trim();
+  if (!sourceId || sourceId === item.id) return null;
+  const source = getInboxItemById(sourceId);
+  if (!source || source.vorgangId !== vorgang.id || !isInboxLinkedToVorgang(source)) return null;
+  return isContractCaseItem(source) ? vorgang.id : null;
+}
+
 export function attachDocumentCaseMatch(
   summary: DocumentSummary,
   item: InboxItem,
@@ -219,10 +252,21 @@ export function attachDocumentCaseMatch(
   const keepFinancePrimary =
     summary.primaryAction.id === 'record_expense' && !isReferenceOnlyDocument;
 
+  /*
+   * FALL B (01B): Der Vertrag ist bereits als Auftrag erfasst — keine zweite
+   * Erfassung, sondern der bestehende Vorgang. Gilt nur fuer die Erfassung
+   * selbst; alle anderen geschuetzten Hauptaktionen bleiben unberuehrt.
+   */
+  const confirmedContractCaseId =
+    persistentLink.state === 'none' && summary.primaryAction.id === 'accept_contract_order'
+      ? resolveConfirmedContractCaseId(item, caseMatch)
+      : null;
+
   const preservePrimary =
     keepFinancePrimary ||
     keepDocumentPrimary ||
     (persistentLink.state === 'none' &&
+      !confirmedContractCaseId &&
       (options?.preservePrimary === true ||
         summary.primaryAction.id === 'accept_contract_order'));
 
@@ -237,6 +281,21 @@ export function attachDocumentCaseMatch(
           },
         ]
       : summary.facts;
+
+  if (confirmedContractCaseId) {
+    return {
+      ...summary,
+      facts: enrichedFacts,
+      caseMatch,
+      alerts: summary.alerts.some((alert) => alert.id === 'existing-contract-case')
+        ? summary.alerts
+        : [
+            { id: 'existing-contract-case', severity: 'info', labelKey: 'documentExperience.alert.existingContractCase' as TranslationKey },
+            ...summary.alerts,
+          ],
+      primaryAction: { id: 'open_vorgang', labelKey: 'documentExperience.action.openCase', enabled: true },
+    };
+  }
 
   return {
     ...summary,
