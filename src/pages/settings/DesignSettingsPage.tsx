@@ -218,6 +218,7 @@ export function DesignSettingsPage() {
       let branding = companyProfile.branding;
       // Entfernen nimmt auch das Alt-Bild mit — sonst erschiene es überraschend wieder (D-023).
       const removal = pendingRemoval && !prepared && !pendingLogoRef;
+      let newAssetSaved = false;
 
       if (removal) {
         branding = withoutLogoReference(branding) ?? {};
@@ -244,9 +245,16 @@ export function DesignSettingsPage() {
         }
         if (!reference) return;
         branding = withLogoReference(branding, reference);
+        newAssetSaved = true;
       }
 
-      const result = updateCompanyProfile(removal ? { branding, logoDataUrl: '' } : { branding });
+      /*
+       * FIRMENPROFIL-01D — ein neues Logo ist eine Asset-Referenz und wird die
+       * einzige aktive Branding-Wahrheit: Der Legacy-`logoDataUrl` wird dabei
+       * aus dem Profil genommen, damit er nicht in neue Rechnungs-Snapshots
+       * weitergeschrieben wird. Bestehende Snapshots tragen ihre eigene Kopie.
+       */
+      const result = updateCompanyProfile(removal || newAssetSaved ? { branding, logoDataUrl: '' } : { branding });
       if (!result.success) {
         setErrorKey(result.errorKey as TranslationKey);
         return;

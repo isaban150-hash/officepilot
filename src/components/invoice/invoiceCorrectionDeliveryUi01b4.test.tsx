@@ -24,7 +24,7 @@ import { buildInvoiceDraftForType, finalizeInvoiceDraft, updateDraftPositionQuan
 import { getVorgangInvoice, hydrateVorgangStore } from '../../services/vorgangService';
 import { setActiveStorageScope } from '../../services/storage/storageScopeService';
 import { hydrateWorkspaceStore } from '../../services/workspace/workspaceStore';
-import { InvoiceSettingsPage } from '../../pages/settings/InvoiceSettingsPage';
+import { CommunicationSettingsPage } from '../../pages/settings/CommunicationSettingsPage';
 import type { DocumentDelivery } from '../../types/documentDelivery';
 import type { CompanySetup, Vorgang, VorgangInvoice } from '../../types/models';
 import { InvoiceDeliveryPanel } from './InvoiceDeliveryPanel';
@@ -180,16 +180,16 @@ describe('EMAIL-01B4 — Korrekturbeleg-Versand', () => {
   });
 });
 
-describe('EMAIL-01B4 — Settings „E-Mail-Versand"', () => {
+describe('EMAIL-01B4 — Settings „E-Mail-Versand" (seit 01D unter E-Mail & Kommunikation)', () => {
   it('S1: Felder sichtbar, Speichern persistiert, Vorschau nutzt die Werte, Validierung blockiert, member read-only', async () => {
-    await mount(<InvoiceSettingsPage />);
-    expect(q('settings-invoices-section-email')).not.toBeNull();
-    expect((q('settings-invoices-defaultInvoiceEmailSubject') as HTMLInputElement).value).toBe('');
-    expect(q('settings-invoices-email-preview-subject')?.textContent).toBe('Rechnung VORSCHAU-0001 - Betrieb GmbH');
-    await type('settings-invoices-defaultInvoiceEmailSubject', 'Ihre Rechnung {invoiceNumber} von {companyName}');
-    await type('settings-invoices-defaultInvoiceEmailBody', 'Hallo,\n\nRechnung {invoiceNumber} anbei.\n\n{companyName}');
-    expect(q('settings-invoices-email-preview-subject')?.textContent).toBe('Ihre Rechnung VORSCHAU-0001 von Betrieb GmbH');
-    expect(q('settings-invoices-dirty')?.textContent).toBe('Ungespeicherte Änderungen');
+    await mount(<CommunicationSettingsPage />);
+    expect(q('settings-communication-section-email')).not.toBeNull();
+    expect((q('settings-communication-defaultInvoiceEmailSubject') as HTMLInputElement).value).toBe('');
+    expect(q('settings-communication-email-preview-subject')?.textContent).toBe('Rechnung VORSCHAU-0001 - Betrieb GmbH');
+    await type('settings-communication-defaultInvoiceEmailSubject', 'Ihre Rechnung {invoiceNumber} von {companyName}');
+    await type('settings-communication-defaultInvoiceEmailBody', 'Hallo,\n\nRechnung {invoiceNumber} anbei.\n\n{companyName}');
+    expect(q('settings-communication-email-preview-subject')?.textContent).toBe('Ihre Rechnung VORSCHAU-0001 von Betrieb GmbH');
+    expect(q('settings-communication-dirty')?.textContent).toBe('Ungespeicherte Änderungen');
     const form = host.querySelector('form.settings-form') as HTMLFormElement;
     await act(async () => { form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); });
     await settle();
@@ -198,11 +198,11 @@ describe('EMAIL-01B4 — Settings „E-Mail-Versand"', () => {
     await act(async () => root.unmount());
     host.remove();
 
-    await mount(<InvoiceSettingsPage />);
-    expect((q('settings-invoices-defaultInvoiceEmailSubject') as HTMLInputElement).value).toBe('Ihre Rechnung {invoiceNumber} von {companyName}');
+    await mount(<CommunicationSettingsPage />);
+    expect((q('settings-communication-defaultInvoiceEmailSubject') as HTMLInputElement).value).toBe('Ihre Rechnung {invoiceNumber} von {companyName}');
     // Längenschutz in der UI (maxLength) + zentrale Validierung (siehe emailDefaults01b4 M2).
-    expect((q('settings-invoices-defaultInvoiceEmailSubject') as HTMLInputElement).maxLength).toBe(255);
-    expect((q('settings-invoices-defaultInvoiceEmailBody') as HTMLTextAreaElement).maxLength).toBe(20000);
+    expect((q('settings-communication-defaultInvoiceEmailSubject') as HTMLInputElement).maxLength).toBe(255);
+    expect((q('settings-communication-defaultInvoiceEmailBody') as HTMLTextAreaElement).maxLength).toBe(20000);
     expect(getCompanyProfile().defaultInvoiceEmailSubject).toBe('Ihre Rechnung {invoiceNumber} von {companyName}');
     await act(async () => root.unmount());
     host.remove();
@@ -212,8 +212,8 @@ describe('EMAIL-01B4 — Settings „E-Mail-Versand"', () => {
       workspace: { id: WS, name: 'Betrieb', ownerUserId: 'usr-owner', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z', version: 1 },
       workspaceMembers: [{ workspaceId: WS, userId: 'usr-admin', role: 'member', status: 'active', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' }],
     });
-    await mount(<InvoiceSettingsPage />);
-    expect((q('settings-invoices-defaultInvoiceEmailSubject') as HTMLInputElement).readOnly).toBe(true);
-    expect(q('settings-invoices-save')).toBeNull();
+    await mount(<CommunicationSettingsPage />);
+    expect((q('settings-communication-defaultInvoiceEmailSubject') as HTMLInputElement).readOnly).toBe(true);
+    expect(q('settings-communication-save')).toBeNull();
   });
 });

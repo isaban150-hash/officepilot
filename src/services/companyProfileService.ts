@@ -1,6 +1,6 @@
 import { DEFAULT_COMPANY_PROFILE } from '../data/companyProfileDefaults';
 import { getCachedSetup, persistAll } from './persistenceService';
-import { applyCompanyProfileSettingsContract } from './company/companyProfileSettingsContract';
+import { applyCompanyProfileSettingsContract, validateCompanyProfileOptionalFields } from './company/companyProfileSettingsContract';
 import type { CompanyProfile } from '../types/models';
 
 let companyProfile: CompanyProfile = { ...DEFAULT_COMPANY_PROFILE };
@@ -52,6 +52,15 @@ export function updateCompanyProfile(
     return { success: false, errorKey: 'companyProfile.nameRequired' };
   }
 
+  /*
+   * 01B2 — ungueltig wird abgelehnt, nicht normalisiert: Ein abgelehnter Wert
+   * veraendert weder den Store noch den naechsten Sync-Payload; ein bestehender
+   * Remote-Wert bleibt. Leer ist bewusstes Loeschen (Schluessel entfaellt).
+   */
+  const optionalError = validateCompanyProfileOptionalFields(partial);
+  if (optionalError) return { success: false, errorKey: optionalError };
+  if ((partial.defaultTaxStatus as unknown) === '') delete (merged as { defaultTaxStatus?: unknown }).defaultTaxStatus;
+
   if (partial.defaultPaymentDays !== undefined) {
     const days = Number(partial.defaultPaymentDays);
     if (!Number.isFinite(days) || days < 0) {
@@ -91,9 +100,23 @@ export function updateCompanyProfile(
 
   companyProfile = cloneProfile(merged);
 
+  /*
+   * PRODUCT-BASIS-FIRMENPROFIL-01B — Legacy-Spiegel nachfuehren, nie entscheiden:
+   * `CompanySetup.companyName` und `CompanySetup.taxStatus` folgen dem Profil.
+   */
   const setup = getCachedSetup();
+  const mirroredSetup = { ...setup };
+  let mirrorChanged = false;
   if (companyProfile.companyName && companyProfile.companyName !== setup.companyName) {
-    persistAll({ ...setup, companyName: companyProfile.companyName });
+    mirroredSetup.companyName = companyProfile.companyName;
+    mirrorChanged = true;
+  }
+  if (companyProfile.defaultTaxStatus && companyProfile.defaultTaxStatus !== setup.taxStatus) {
+    mirroredSetup.taxStatus = companyProfile.defaultTaxStatus;
+    mirrorChanged = true;
+  }
+  if (mirrorChanged) {
+    persistAll(mirroredSetup);
   } else {
     persistAll();
   }

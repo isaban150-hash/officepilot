@@ -22,6 +22,7 @@ import {
   validateInvoiceDraftForApproval,
 } from '../services/invoiceService';
 import { getCompanyProfile } from '../services/companyProfileService';
+import { resolveDefaultTaxStatus } from '../services/invoice/invoiceDefaults';
 import {
   mapFinalizationFailureToUx,
   taxDecisionBlocker as taxDecisionBlockerShared,
@@ -629,7 +630,7 @@ export function RechnungPage() {
   );
   const overbillingWarnings = draft ? getOverbillingWarnings(draft) : [];
 
-  const taxKey = `tax.${draft?.taxStatus ?? setup.taxStatus}` as TranslationKey;
+  const taxKey = `tax.${draft?.taxStatus ?? resolveDefaultTaxStatus(getCompanyProfile(), setup)}` as TranslationKey;
 
   /*
    * INVOICE-TAX-FLOW-01B — die Steuerentscheidung sperrt den Weg zur Vorschau.

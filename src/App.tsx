@@ -30,6 +30,7 @@ import { CompanySettingsPage } from './pages/settings/CompanySettingsPage';
 import { DesignSettingsPage } from './pages/settings/DesignSettingsPage';
 import { InvoiceSettingsPage } from './pages/settings/InvoiceSettingsPage';
 import { OperatingSettingsPage } from './pages/settings/OperatingSettingsPage';
+import { CommunicationSettingsPage } from './pages/settings/CommunicationSettingsPage';
 import { FirmendatenLegacyRoute } from './pages/settings/FirmendatenLegacyRoute';
 import { HeutePage } from './pages/HeutePage';
 import { KundenDetailPage, KundenLegacyLinkResolver } from './pages/KundenDetailPage';
@@ -213,6 +214,8 @@ function AppRoutes() {
         {/* SETTINGS-01B3 — Logo, Vorlage, Vorschau. */}
         <Route path="/einstellungen/design" element={<DesignSettingsPage />} />
         <Route path="/einstellungen/rechnungen" element={<InvoiceSettingsPage />} />
+        {/* FIRMENPROFIL-01D — Absender, Reply-To, Standard-E-Mail-Texte. */}
+        <Route path="/einstellungen/kommunikation" element={<CommunicationSettingsPage />} />
         {/* SETTINGS-01B5 — Sprache, Datensicherung, Synchronisation, Verwaltung; /firmendaten ist nur noch Redirect. */}
         <Route path="/einstellungen/betrieb" element={<OperatingSettingsPage />} />
         <Route path="/firmendaten" element={<FirmendatenLegacyRoute />} />

@@ -10,7 +10,7 @@ import type {
 import { getSupabaseClient } from '../../lib/supabase';
 import { stripLogoFromCompanyProfile } from './workspaceStore';
 import { applyBrandingContract } from '../branding/brandingProfileContract';
-import { applyCompanyProfileSettingsContract } from '../company/companyProfileSettingsContract';
+import { COMPANY_PROFILE_SCHEMA_VERSION, applyCompanyProfileSettingsContract } from '../company/companyProfileSettingsContract';
 import type { WorkspaceVorgangRow } from '../vorgang/vorgangCloudService';
 import type { WorkspaceCustomerRow } from '../customer/customerCloudService';
 
@@ -256,6 +256,12 @@ export function buildCompanyProfileCloudPayload(profile: CompanyProfile): Record
   return {
     // SETTINGS-01B1 — beide Verträge in beide Richtungen.
     payload: applyCompanyProfileSettingsContract(applyBrandingContract(stripped)),
+    /*
+     * PRODUCT-BASIS-FIRMENPROFIL-01B — der Server bewahrt Felder spaeterer
+     * Schema-Versionen, wenn ein aelterer Client sie nicht mitsendet, und liest
+     * das Fehlen bei aktueller Version als bewusstes Loeschen.
+     */
+    profile_schema_version: COMPANY_PROFILE_SCHEMA_VERSION,
   };
 }
 

@@ -27,6 +27,9 @@ function buildProfileFromDraft(draft: SetupWizardDraft): CompanyProfile {
     contactPerson: draft.contactPerson.trim(),
     phone: draft.phone.trim(),
     email: draft.email.trim(),
+    // 01B — Onboarding-Entscheidungen landen im Profil (Wahrheit), das Setup bleibt Spiegel.
+    defaultTaxStatus: draft.taxStatus,
+    currency: 'EUR',
     website: '',
     taxNumber: draft.taxNumber.trim(),
     vatId: draft.vatId.trim(),

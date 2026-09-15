@@ -222,14 +222,14 @@ test.describe('EMAIL-01B4 — Korrekturbeleg und Standardtexte (lokal, Stub)', (
     await loginAndSetup(page);
 
     /* 1.–4. Einstellungen setzen */
-    await page.goto('/einstellungen/rechnungen', { waitUntil: 'domcontentloaded' });
-    await expect(page.getByTestId('settings-invoices-section-email')).toBeVisible({ timeout: 30_000 });
-    await page.getByTestId('settings-invoices-defaultInvoiceEmailSubject').fill('Ihre Rechnung {invoiceNumber} von {companyName}');
-    await page.getByTestId('settings-invoices-defaultInvoiceEmailBody').fill('Hallo,\n\nRechnung {invoiceNumber} anbei.\n\n{companyName}');
-    await expect(page.getByTestId('settings-invoices-email-preview-subject')).toHaveText('Ihre Rechnung VORSCHAU-0001 von Korrektur E2E GmbH');
-    await page.getByTestId('settings-invoices-save').scrollIntoViewIfNeeded();
-    await page.getByTestId('settings-invoices-save').click();
-    await expect(page.getByText('Rechnungseinstellungen gespeichert.')).toBeVisible();
+    await page.goto('/einstellungen/kommunikation', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByTestId('settings-communication-section-email')).toBeVisible({ timeout: 30_000 });
+    await page.getByTestId('settings-communication-defaultInvoiceEmailSubject').fill('Ihre Rechnung {invoiceNumber} von {companyName}');
+    await page.getByTestId('settings-communication-defaultInvoiceEmailBody').fill('Hallo,\n\nRechnung {invoiceNumber} anbei.\n\n{companyName}');
+    await expect(page.getByTestId('settings-communication-email-preview-subject')).toHaveText('Ihre Rechnung VORSCHAU-0001 von Korrektur E2E GmbH');
+    await page.getByTestId('settings-communication-save').scrollIntoViewIfNeeded();
+    await page.getByTestId('settings-communication-save').click();
+    await expect(page.getByText('Kommunikationseinstellungen gespeichert.')).toBeVisible();
     await expectNoOverflow(page, 'Settings E-Mail');
 
     /* 5.–7. Sendmaske mit Defaults, editieren */
@@ -257,10 +257,10 @@ test.describe('EMAIL-01B4 — Korrekturbeleg und Standardtexte (lokal, Stub)', (
     await expect(page.getByTestId('send-document-error')).toBeVisible({ timeout: 60_000 });
     await page.unroute('**/functions/v1/send-document');
     await page.goto('/einstellungen/rechnungen', { waitUntil: 'domcontentloaded' });
-    await page.getByTestId('settings-invoices-defaultInvoiceEmailSubject').fill('GEÄNDERT {invoiceNumber}');
-    await page.getByTestId('settings-invoices-save').scrollIntoViewIfNeeded();
-    await page.getByTestId('settings-invoices-save').click();
-    await expect(page.getByText('Rechnungseinstellungen gespeichert.')).toBeVisible();
+    await page.getByTestId('settings-communication-defaultInvoiceEmailSubject').fill('GEÄNDERT {invoiceNumber}');
+    await page.getByTestId('settings-communication-save').scrollIntoViewIfNeeded();
+    await page.getByTestId('settings-communication-save').click();
+    await expect(page.getByText('Kommunikationseinstellungen gespeichert.')).toBeVisible();
     await page.goto(`/rechnungen/${invoice2}`, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId('send-document-resume-hint')).toBeVisible({ timeout: 30_000 });
     await expect(page.getByTestId('send-document-subject')).toHaveValue('Entwurf-Betreff');

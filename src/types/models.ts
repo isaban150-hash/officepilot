@@ -805,11 +805,32 @@ export interface CompanyProfile {
    * SETTINGS-01B1 — reine Vorbelegungen für **neue** Rechnungsentwürfe. Sie
    * gehören nicht zum historischen `companySnapshot` und nicht zum
    * Drift-Fingerprint: Der konkrete Wert lebt nach dem Aufbau auf dem Entwurf.
-   * `defaultTaxStatus` fehlt bei Altprofilen — dann gilt `CompanySetup.taxStatus`
-   * als Legacy-Fallback beim Draft-Bau (kein Backfill, keine Profilmutation).
-   * Ein Steuerstatus-Default bestätigt nie eine §13b-Entscheidung.
+   * PRODUCT-BASIS-FIRMENPROFIL-01B — `defaultTaxStatus` ist die **eine**
+   * fachliche Wahrheit für den Steuerstatus neuer Vorgänge. `CompanySetup.taxStatus`
+   * ist nur noch Legacy-Spiegel (wird nachgeführt, nie unabhängig entschieden);
+   * Altprofile ohne Feld werden einmalig aus dem Spiegel migriert
+   * (`companyProfileLegacyMigrationService`). Ein Steuerstatus-Default bestätigt
+   * nie eine §13b-Entscheidung.
    */
   defaultTaxStatus?: TaxStatus;
+  /**
+   * PRODUCT-BASIS-FIRMENPROFIL-01B — kanonische Standardwährung des Betriebs
+   * (ISO 4217, z. B. `EUR`). Fehlend bei Altprofilen = noch nicht festgelegt;
+   * Leser nehmen `resolveProfileCurrency` (EUR). Nie Teil des historischen
+   * Rechnungs-Snapshots (kein Feld in `COMPANY_SNAPSHOT_KEYS`).
+   */
+  currency?: string;
+  /**
+   * 01B — optionale Antwortadresse für den Dokumentversand. Fehlend/leer =
+   * `email`. Bewusstes Löschen = Feld entfernen. Nie im Rechnungs-Snapshot;
+   * der Versand liest weiterhin den historischen Snapshot (fail-closed).
+   */
+  replyToEmail?: string;
+  /**
+   * 01B — optionaler Absender-Anzeigename. Fehlend/leer = bestehende Ableitung
+   * „Firmenname Rechtsform“. Keine zweite Absenderwahrheit: nur Vorbelegung.
+   */
+  senderDisplayName?: string;
   defaultIntroText?: string;
   defaultClosingText?: string;
   /**
@@ -870,9 +891,25 @@ export interface Customer extends CustomerBilling {
   sync?: SyncMeta;
 }
 
+/**
+ * PRODUCT-BASIS-FIRMENPROFIL-01C — Rechnungsnummernformat.
+ * Kanonisch serverseitig (`workspace_invoice_number_formats`, je Jahr eingefroren auf
+ * `workspace_invoice_sequences`). Lokal nur Vorschau-Cache bzw. die Einstellung im
+ * reinen Lokalbetrieb. Nummer = [prefix-][YYYY-]lpad(seq, padding).
+ */
+export interface InvoiceNumberFormat {
+  prefix: string;
+  yearInNumber: boolean;
+  padding: number;
+}
+
 export interface InvoiceNumberSequence {
   year: number;
   lastIssuedNumber: number;
+  /** 01C — Format-Cache (Cloud-Wahrheit) bzw. lokale Einstellung ohne Cloud. */
+  format?: InvoiceNumberFormat;
+  /** 01C2 — im Lokalbetrieb: das mit der ersten Nummer von `year` eingefrorene Format. */
+  lockedFormat?: InvoiceNumberFormat;
 }
 
 export interface AbschlagDeduction {

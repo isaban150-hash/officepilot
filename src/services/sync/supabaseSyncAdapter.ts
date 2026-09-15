@@ -61,6 +61,8 @@ import {
   rpcPullWorkspaceIntakeState,
 } from '../document/intakeCloudSyncService';
 import { pushIntakeEntity } from '../document/intakeCloudPushService';
+import { rpcReadWorkspaceInvoiceNumberFormat } from '../invoice/invoiceNumberFormatCloudService';
+import { withInvoiceNumberFormat } from '../invoiceNumberService';
 import {
   EXPENSE_PUSH_ORDER,
   applyExpensePullToState,
@@ -827,6 +829,23 @@ export class SupabaseSyncAdapter implements SyncAdapter {
           report.errorCount += 1;
           report.errors.push({ outboxId: 'expense-pull', message });
         }
+      }
+
+      /*
+       * FIRMENPROFIL-01C2 — Nummernformat-Vorschau mit dem Pull mitfuehren, damit
+       * ein Zweitgeraet ohne Settings-Besuch die richtige Vorschau zeigt. Reiner
+       * Cache; die verbindliche Nummer vergibt weiterhin der Server. Ein Fehler
+       * hier verwirft nichts.
+       */
+      try {
+        const numberFormat = await rpcReadWorkspaceInvoiceNumberFormat(workspaceId, this.client!);
+        intakeState = {
+          ...intakeState,
+          invoiceNumberSequence: withInvoiceNumberFormat(intakeState.invoiceNumberSequence, numberFormat.format, numberFormat.currentYear, numberFormat.currentYearLockedFormat),
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Nummernformat-Pull fehlgeschlagen';
+        report.errors.push({ outboxId: 'invoice-number-format-pull', message });
       }
 
       const finalState = buildFinalStateAfterPull(

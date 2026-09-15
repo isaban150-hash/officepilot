@@ -16,6 +16,8 @@ import { DEFAULT_DOCUMENT_TEMPLATE, isDocumentTemplateId, type DocumentTemplateI
 export const COMPANY_PROFILE_TEXT_LIMITS = {
   /** Kontoinhaber — wie ein Firmenname. */
   accountHolder: 120,
+  /** 01B — Absender-Anzeigename, wie ein Firmenname. */
+  senderDisplayName: 120,
   /** Einleitungs-/Schlusstext — mehrzeilig, wie Fussnoten. */
   defaultIntroText: 2000,
   defaultClosingText: 2000,
@@ -37,7 +39,34 @@ export function isTaxStatus(value: unknown): value is TaxStatus {
   return typeof value === 'string' && (TAX_STATUS_VALUES as readonly string[]).includes(value);
 }
 
-const TEXT_FIELDS = ['accountHolder', 'defaultIntroText', 'defaultClosingText', 'defaultInvoiceEmailSubject', 'defaultInvoiceEmailBody'] as const;
+const TEXT_FIELDS = ['accountHolder', 'defaultIntroText', 'defaultClosingText', 'defaultInvoiceEmailSubject', 'defaultInvoiceEmailBody', 'senderDisplayName'] as const;
+
+/**
+ * PRODUCT-BASIS-FIRMENPROFIL-01B — Schema-Version des Profil-Payloads.
+ *
+ * Der Client sendet sie mit jedem Ganzdokument (`profile_schema_version`). Der
+ * Server bewahrt Felder, die erst in einer **spaeteren** Version eingefuehrt
+ * wurden, wenn ein Client mit aelterer (oder ohne) Version sie weglaesst — und
+ * behandelt das Weglassen durch einen Client dieser Version als bewusstes
+ * Loeschen. Wer ein neues Profilfeld einfuehrt, erhoeht die Version hier und
+ * traegt das Feld serverseitig mit derselben Version in den Katalog ein.
+ */
+export const COMPANY_PROFILE_SCHEMA_VERSION = 2;
+
+/** ISO 4217: drei Grossbuchstaben. Fachlich unterstuetzt ist derzeit EUR. */
+export const CURRENCY_CODE_PATTERN = /^[A-Z]{3}$/;
+export const DEFAULT_PROFILE_CURRENCY = 'EUR';
+export const SUPPORTED_PROFILE_CURRENCIES: readonly string[] = ['EUR'];
+
+export function isCurrencyCode(value: unknown): value is string {
+  return typeof value === 'string' && CURRENCY_CODE_PATTERN.test(value);
+}
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+export function isProfileEmail(value: unknown): value is string {
+  return typeof value === 'string' && EMAIL_PATTERN.test(value.trim());
+}
 
 /**
  * Wendet den Vertrag auf ein Profil-artiges Objekt an und gibt eine flache
@@ -63,7 +92,85 @@ export function applyCompanyProfileSettingsContract<T extends Record<string, unk
     delete next.defaultTaxStatus;
   }
 
+  /*
+   * 01B/01B2 — optionale Felder, drei Zustaende, streng getrennt:
+   *   gueltig          -> normalisiert (Grossbuchstaben / Kleinbuchstaben / getrimmt)
+   *   bewusst leer     -> Schluessel entfernt (im v2-Payload = bewusstes Loeschen)
+   *   ungueltig        -> **unveraendert belassen**, nie entfernt. Ein ungueltiger
+   *                       Wert darf im Payload nicht wie eine Loeschung aussehen;
+   *                       abgelehnt wird er an der Schreibgrenze
+   *                       (`validateCompanyProfileOptionalFields`), Leser fallen
+   *                       ueber die `resolve*`-Helfer auf die Vorgabe zurueck.
+   */
+  if ('currency' in next) {
+    if (next.currency === '' || next.currency === null || next.currency === undefined) delete next.currency;
+    else if (typeof next.currency === 'string' && isCurrencyCode(next.currency.trim().toUpperCase())) {
+      next.currency = next.currency.trim().toUpperCase();
+    }
+  }
+  if ('replyToEmail' in next) {
+    const raw = typeof next.replyToEmail === 'string' ? next.replyToEmail.trim() : next.replyToEmail;
+    if (raw === '' || raw === null || raw === undefined) delete next.replyToEmail;
+    else if (typeof raw === 'string' && isProfileEmail(raw)) next.replyToEmail = raw.toLowerCase();
+  }
+  if ('senderDisplayName' in next) {
+    if (next.senderDisplayName === '' || next.senderDisplayName === null || next.senderDisplayName === undefined) {
+      delete next.senderDisplayName;
+    }
+  }
+
   return next as T;
+}
+
+export type CompanyProfileOptionalFieldError =
+  | 'companyProfile.currencyInvalid'
+  | 'companyProfile.currencyUnsupported'
+  | 'companyProfile.replyToEmailInvalid'
+  | 'companyProfile.senderDisplayNameTooLong'
+  | 'companyProfile.taxStatusInvalid';
+
+/**
+ * 01B2 — die Schreibgrenze: Was hier abgelehnt wird, erreicht weder Store noch
+ * Payload. Leer (`''`) ist erlaubt und bedeutet bewusstes Loeschen.
+ */
+export function validateCompanyProfileOptionalFields(
+  partial: Partial<Pick<CompanyProfile, 'currency' | 'replyToEmail' | 'senderDisplayName' | 'defaultTaxStatus'>>,
+): CompanyProfileOptionalFieldError | null {
+  if (partial.currency !== undefined && partial.currency !== '') {
+    const code = String(partial.currency).trim().toUpperCase();
+    if (!isCurrencyCode(code)) return 'companyProfile.currencyInvalid';
+    if (!SUPPORTED_PROFILE_CURRENCIES.includes(code)) return 'companyProfile.currencyUnsupported';
+  }
+  if (partial.replyToEmail !== undefined && String(partial.replyToEmail).trim() !== '' && !isProfileEmail(partial.replyToEmail)) {
+    return 'companyProfile.replyToEmailInvalid';
+  }
+  if (partial.senderDisplayName !== undefined && String(partial.senderDisplayName).trim().length > COMPANY_PROFILE_TEXT_LIMITS.senderDisplayName) {
+    return 'companyProfile.senderDisplayNameTooLong';
+  }
+  if (partial.defaultTaxStatus !== undefined && (partial.defaultTaxStatus as unknown) !== '' && !isTaxStatus(partial.defaultTaxStatus)) {
+    return 'companyProfile.taxStatusInvalid';
+  }
+  return null;
+}
+
+/** Fehlend → EUR (die bislang implizite Waehrung des Produkts). Nie eine Profilmutation. */
+export function resolveProfileCurrency(profile: Pick<CompanyProfile, 'currency'>): string {
+  return isCurrencyCode(profile.currency) ? profile.currency : DEFAULT_PROFILE_CURRENCY;
+}
+
+/** Fehlend/leer → Firmen-E-Mail (bestehende Versandlogik bleibt unveraendert). */
+export function resolveProfileReplyToEmail(profile: Pick<CompanyProfile, 'email' | 'replyToEmail'>): string {
+  const explicit = (profile.replyToEmail ?? '').trim().toLowerCase();
+  return isProfileEmail(explicit) ? explicit : (profile.email ?? '').trim().toLowerCase();
+}
+
+/** Fehlend/leer → „Firmenname Rechtsform" (dieselbe Ableitung wie der Versand). */
+export function resolveProfileSenderDisplayName(
+  profile: Pick<CompanyProfile, 'companyName' | 'legalForm' | 'senderDisplayName'>,
+): string {
+  const explicit = (profile.senderDisplayName ?? '').trim();
+  if (explicit) return explicit;
+  return [profile.companyName?.trim(), profile.legalForm?.trim()].filter(Boolean).join(' ');
 }
 
 /** Fehlend/leer → keine Vorgabe; der Aufrufer nimmt den Legacy-Fallback. */

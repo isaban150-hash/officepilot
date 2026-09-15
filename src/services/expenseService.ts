@@ -1,5 +1,7 @@
 import { PAPER_FOLDERS } from '../data/mockData';
 import { getCachedSetup, persistAll } from './persistenceService';
+import { getCompanyProfile } from './companyProfileService';
+import { resolveDefaultTaxStatus } from './invoice/invoiceDefaults';
 import {
   filterSyncActive,
   generateEntityId,
@@ -92,7 +94,8 @@ function buildExpenseFromInput(
     description: input.description?.trim() ?? '',
     issueDate: input.issueDate,
     paymentDueDate: input.paymentDueDate ?? null,
-    taxStatus: input.taxStatus ?? getCachedSetup().taxStatus,
+    // 01B — Steuerstatus-Default aus dem Firmenprofil (Setup nur Legacy-Spiegel).
+    taxStatus: input.taxStatus ?? resolveDefaultTaxStatus(getCompanyProfile(), getCachedSetup()),
     netAmount,
     taxAmount,
     grossAmount,

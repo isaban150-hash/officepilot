@@ -123,6 +123,11 @@ const deLegacy = {
   'companyProfile.saved': 'Firmendaten gespeichert.',
   'companyProfile.nameRequired': 'Firmenname darf nicht leer sein.',
   'companyProfile.paymentDaysInvalid': 'Zahlungsziel muss eine gültige Zahl sein.',
+  'companyProfile.currencyInvalid': 'Währung muss ein ISO-4217-Code sein (z. B. EUR).',
+  'companyProfile.currencyUnsupported': 'Diese Währung wird derzeit nicht unterstützt (nur EUR).',
+  'companyProfile.replyToEmailInvalid': 'Antwortadresse ist keine gültige E-Mail-Adresse.',
+  'companyProfile.senderDisplayNameTooLong': 'Absendername ist zu lang (max. 120 Zeichen).',
+  'companyProfile.taxStatusInvalid': 'Steuerstatus ist ungültig.',
   /* SKONTO-NUMERIC-INPUT-01B — nur wenn Skonto ausdrücklich eingeschaltet ist. */
   'companyProfile.skontoPercentInvalid':
     'Skonto-Prozentsatz muss grösser als 0 und höchstens 100 sein.',
@@ -3723,6 +3728,11 @@ const deLegacy = {
 const de = { ...deLegacy, ...deModules } as const;
 
 const trLegacy: Partial<Record<keyof typeof de, string>> = {
+  'companyProfile.currencyInvalid': 'Para birimi bir ISO-4217 kodu olmalıdır (ör. EUR).',
+  'companyProfile.currencyUnsupported': 'Bu para birimi şu anda desteklenmiyor (yalnızca EUR).',
+  'companyProfile.replyToEmailInvalid': 'Yanıt adresi geçerli bir e-posta adresi değil.',
+  'companyProfile.senderDisplayNameTooLong': 'Gönderen adı çok uzun (en fazla 120 karakter).',
+  'companyProfile.taxStatusInvalid': 'Vergi durumu geçersiz.',
   'position.unitUnresolved':
     'Birim kesin olarak tanınamadı ({units}). Hiçbir kalem aktarılmadı — lütfen sözleşmedeki birimi kontrol edin.',
   'app.name': 'OfficePilot',
@@ -5141,6 +5151,11 @@ const tr: Partial<Record<keyof typeof de, string>> = {
 };
 
 const bgLegacy: Partial<Record<keyof typeof de, string>> = {
+  'companyProfile.currencyInvalid': 'Валутата трябва да е ISO-4217 код (напр. EUR).',
+  'companyProfile.currencyUnsupported': 'Тази валута понастоящем не се поддържа (само EUR).',
+  'companyProfile.replyToEmailInvalid': 'Адресът за отговор не е валиден имейл адрес.',
+  'companyProfile.senderDisplayNameTooLong': 'Името на подателя е твърде дълго (макс. 120 знака).',
+  'companyProfile.taxStatusInvalid': 'Данъчният статус е невалиден.',
   'app.name': 'OfficePilot',
   'setup.title': 'Добре дошли в OfficePilot',
   'setup.existingCustomer.title': 'Използван е грешен акаунт?',

@@ -1,5 +1,6 @@
 import { DEFAULT_SETUP, MOCK_TASKS, MOCK_VORGAENGE } from '../data/mockData';
 import { createCompanyProfileFromSetup } from '../data/companyProfileDefaults';
+import { migrateCompanyProfileLegacyFields } from './company/companyProfileLegacyMigrationService';
 import { applyCompanyProfileSettingsContract } from './company/companyProfileSettingsContract';
 import { MOCK_INBOX_ITEMS } from '../data/inboxMockData';
 import { MOCK_COMPANY_DOCUMENTS } from '../data/documentMockData';
@@ -619,15 +620,28 @@ function normalizeLoadedState(parsed: unknown): NormalizedLoadedState | null {
 }
 
 function finalizeLoadedPersistedState(normalized: AppPersistedState): AppPersistedState {
+  const setup = { ...DEFAULT_SETUP, ...normalized.setup };
+  const loadedProfile = normalized.companyProfile
+    ? cloneCompanyProfile({
+        ...createCompanyProfileFromSetup(normalized.setup),
+        ...normalized.companyProfile,
+      })
+    : createCompanyProfileFromSetup(setup);
+  /*
+   * PRODUCT-BASIS-FIRMENPROFIL-01B — die eine Wahrheit beim Laden herstellen:
+   * `defaultTaxStatus` einmalig aus dem Legacy-Spiegel, `currency` nur ohne
+   * widersprechende Belege. Deterministisch und idempotent; ein Konflikt setzt
+   * nichts und bleibt sichtbar (Feld fehlt weiterhin).
+   */
+  const migrated = migrateCompanyProfileLegacyFields({
+    profile: loadedProfile,
+    setup,
+    documentCurrencies: (normalized.expenses ?? []).map((expense) => expense.currency),
+  });
   return {
     ...normalized,
-    setup: { ...DEFAULT_SETUP, ...normalized.setup },
-    companyProfile: normalized.companyProfile
-      ? cloneCompanyProfile({
-          ...createCompanyProfileFromSetup(normalized.setup),
-          ...normalized.companyProfile,
-        })
-      : createCompanyProfileFromSetup({ ...DEFAULT_SETUP, ...normalized.setup }),
+    setup,
+    companyProfile: migrated.profile,
     invoiceNumberSequence: normalized.invoiceNumberSequence ?? {
       year: new Date().getFullYear(),
       lastIssuedNumber: 0,

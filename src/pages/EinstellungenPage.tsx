@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import type { TranslationKey } from '../i18n';
 import { COMPANY_SETTINGS_ROUTE } from './settings/CompanySettingsPage';
 import { DESIGN_SETTINGS_ROUTE } from './settings/DesignSettingsPage';
+import { COMMUNICATION_SETTINGS_ROUTE } from './settings/CommunicationSettingsPage';
 import { INVOICE_SETTINGS_ROUTE } from './settings/InvoiceSettingsPage';
 import { OPERATING_SETTINGS_ROUTE } from './settings/OperatingSettingsPage';
 
@@ -23,7 +24,7 @@ import { OPERATING_SETTINGS_ROUTE } from './settings/OperatingSettingsPage';
  * Beschreibung und einen Pfeil — mehr braucht es nicht.
  */
 
-type SettingsIconId = 'company' | 'invoice' | 'design' | 'operations' | 'users';
+type SettingsIconId = 'company' | 'invoice' | 'design' | 'communication' | 'operations' | 'users';
 
 interface SettingsEntry {
   id: string;
@@ -59,6 +60,7 @@ function SettingsIcon({ id }: { id: SettingsIconId }) {
     design: 'M4 5a1 1 0 011-1h14a1 1 0 011 1v14a1 1 0 01-1 1H5a1 1 0 01-1-1V5zm4 3h3v3H8V8zm-1 9l4-4 3 3 2-2 3 3',
     operations: 'M12 3l1.5 3 3.3.5-2.4 2.3.6 3.3L12 10.6 9 12.1l.6-3.3L7.2 6.5l3.3-.5L12 3zM4 21v-2a4 4 0 014-4h8a4 4 0 014 4v2',
     users: 'M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zm13 10v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75',
+    communication: 'M3 6a2 2 0 012-2h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V6zm0 1l9 6 9-6',
   };
   return (
     <svg
@@ -118,6 +120,20 @@ export function EinstellungenPage() {
           titleKey: 'settings.design.title',
           descriptionKey: 'settings.design.description',
           href: DESIGN_SETTINGS_ROUTE,
+        },
+      ],
+    },
+    {
+      /* FIRMENPROFIL-01D — E-Mail & Kommunikation als eigener Bereich (vorher Teil der Rechnungsseite). */
+      id: 'communication',
+      titleKey: 'settings.group.communication',
+      entries: [
+        {
+          id: 'communication',
+          icon: 'communication',
+          titleKey: 'settings.communication.title',
+          descriptionKey: 'settings.communication.description',
+          href: COMMUNICATION_SETTINGS_ROUTE,
         },
       ],
     },

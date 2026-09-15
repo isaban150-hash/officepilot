@@ -1,3 +1,4 @@
+import { normalizeCompanyIdentityName } from '../companyIdentityNormalization';
 import type { AppPersistedState } from '../../types/models';
 import type { SyncClientConfig, SyncEntityType, SyncMeta } from '../../types/sync';
 import { hydrateCompanyProfileStore } from '../companyProfileService';
@@ -364,11 +365,23 @@ export function mergeRemoteWorkspacePullIntoState(
      * sonst bleibt der Bestandskunde ohne seine Firmendaten.
      */
     const localSetupIsDefault = isDefaultSetup(state.setup);
+    /*
+     * PRODUCT-BASIS-FIRMENPROFIL-01B — eine Versionsdrift ist nur dann ein
+     * Konflikt, wenn lokal ungesendete Aenderungen liegen oder die Cloud hinter
+     * dem lokalen Stand zurueckfaellt. Ein sauberes Geraet mit aelterem Stand
+     * uebernimmt den neueren Cloud-Stand (Geraet 1 aendert -> Geraet 2 erhaelt),
+     * ohne Recovery-Dialog und ohne local-wins — sofern es dieselbe Firma ist.
+     * Eine andere Firmenidentitaet in der Cloud bleibt immer ein Konflikt
+     * (Identity-Recovery-02D).
+     */
     if (
       !localSetupIsDefault &&
       localVersion > 0 &&
       pull.setupRowVersion > 0 &&
-      localVersion !== pull.setupRowVersion
+      localVersion !== pull.setupRowVersion &&
+      (companySetupDirty ||
+        pull.setupRowVersion < localVersion ||
+        normalizeCompanyIdentityName(remoteSetup.companyName) !== normalizeCompanyIdentityName(state.setup.companyName))
     ) {
       /**
        * REAL-DEVICE-CLOUD-COMPANY-IDENTICAL-COMPLETE-01 — sind beide Seiten
@@ -458,11 +471,15 @@ export function mergeRemoteWorkspacePullIntoState(
     const localVersion = state.companyProfileSync?.version ?? 0;
     // Gleiche Regel wie beim Setup: ein Default-Profil ist kein Konflikt.
     const localProfileIsDefault = isDefaultCompanyProfile(state.companyProfile);
+    // 01B — dieselbe Regel wie beim Setup: Drift ohne lokale Aenderung ist kein Konflikt.
     if (
       !localProfileIsDefault &&
       localVersion > 0 &&
       pull.companyProfileRowVersion > 0 &&
-      localVersion !== pull.companyProfileRowVersion
+      localVersion !== pull.companyProfileRowVersion &&
+      (companyProfileDirty ||
+        pull.companyProfileRowVersion < localVersion ||
+        normalizeCompanyIdentityName(remoteProfile.companyName) !== normalizeCompanyIdentityName(state.companyProfile?.companyName))
     ) {
       // Gleiche Identical-State-Regel wie beim Setup, unabhängig geprüft.
       const identical =

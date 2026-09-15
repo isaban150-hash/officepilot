@@ -10,6 +10,7 @@ import type {
   SyncPushResult,
 } from './syncAdapter';
 import { generateUuid } from './syncMetaService';
+import { buildInvoiceNumber, getEffectiveInvoiceNumberFormat } from '../invoiceNumberService';
 import {
   createEmptySyncSimulationReport,
   finalizeSyncSimulationReport,
@@ -24,8 +25,14 @@ import {
 const invoiceSequences = new Map<string, { year: number; lastIssuedNumber: number }>();
 const blobStore = new Map<string, Blob>();
 
+/*
+ * FIRMENPROFIL-01C2 — dieser Adapter ist reine Simulation (Provider 'local');
+ * `reserveInvoiceNumber` wird von keinem Produktpfad aufgerufen. Damit die
+ * Simulation trotzdem keinen zweiten Nummernstandard traegt, formatiert sie
+ * ueber denselben Vertrag wie Vorschau und Lokalbetrieb.
+ */
 function formatInvoiceNumber(year: number, number: number): string {
-  return `${year}-${String(number).padStart(4, '0')}`;
+  return buildInvoiceNumber(getEffectiveInvoiceNumberFormat(year), year, number);
 }
 
 function collectPushFailures(

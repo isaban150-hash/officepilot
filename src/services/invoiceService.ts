@@ -4,7 +4,7 @@ import {
   upsertFinalizedManualInvoice,
 } from './vorgangService';
 import { archiveOutgoingInvoice } from './invoiceArchiveService';
-import { createCompanyProfileSnapshot } from './companyProfileService';
+import { createCompanyProfileSnapshot, getCompanyProfile } from './companyProfileService';
 import {
   getNextAbschlagNumber,
   getBilledQuantity,
@@ -39,7 +39,7 @@ import type {
 import type { BrandingSnapshot } from '../types/branding';
 import { BRANDING_SNAPSHOT_VERSION, DEFAULT_DOCUMENT_TEMPLATE } from '../types/branding';
 import { buildBrandingSnapshot } from './branding/brandingSnapshotService';
-import { resolveInvoiceDefaults, standardPaymentTerms } from './invoice/invoiceDefaults';
+import { resolveDefaultTaxStatus, resolveInvoiceDefaults, standardPaymentTerms } from './invoice/invoiceDefaults';
 import {
   isFixedAmountAbschlag,
   resolveInvoiceCalculationMode,
@@ -830,7 +830,8 @@ export function updateInvoiceDraftMetadata(
 }
 
 export function calculateInvoiceTotals(draft: InvoiceDraft, setup: CompanySetup): InvoiceTotals {
-  const taxRate = getTaxRateForStatus(draft.taxStatus ?? setup.taxStatus);
+  // 01B — ein Altentwurf ohne Steuerstatus faellt auf die Profilwahrheit zurueck, nicht auf das Setup allein.
+  const taxRate = getTaxRateForStatus(draft.taxStatus ?? resolveDefaultTaxStatus(getCompanyProfile(), setup));
   let subtotalCents: number;
 
   if (isFixedAmountAbschlag(draft)) {
@@ -1026,7 +1027,7 @@ export function buildInvoiceFinalizationCandidate(
         : undefined,
     fixedAmountNet: fixedAmount ? roundMoney(draft.fixedAmountNet ?? 0) : undefined,
     subtotal: totals.subtotal,
-    taxStatus: draft.taxStatus ?? setup.taxStatus,
+    taxStatus: draft.taxStatus ?? resolveDefaultTaxStatus(getCompanyProfile(), setup),
     amount: totals.total,
     status: 'vorbereitet',
     paymentStatus: 'offen',
@@ -1082,7 +1083,7 @@ export function buildInvoiceFinalizationContentFingerprint(
   return buildInvoiceContentFingerprintPayload({
     type: draft.type,
     abschlagNumber: draft.abschlagNumber ?? null,
-    taxStatus: draft.taxStatus ?? setup.taxStatus,
+    taxStatus: draft.taxStatus ?? resolveDefaultTaxStatus(getCompanyProfile(), setup),
     issueDate: draft.issueDate ?? null,
     servicePeriodFrom: draft.servicePeriodFrom ?? null,
     servicePeriodTo: draft.servicePeriodTo ?? null,
@@ -1366,6 +1367,12 @@ export function toInvoiceCompanySnapshot(profile: CompanyProfile): CompanyProfil
     // EMAIL-01B4 — Mail-Vorbelegungen sind keine Rechnungsdaten.
     defaultInvoiceEmailSubject: _defaultInvoiceEmailSubject,
     defaultInvoiceEmailBody: _defaultInvoiceEmailBody,
+    // PRODUCT-BASIS-FIRMENPROFIL-01B — Waehrung/Antwortadresse/Absendername sind
+    // Profil-Vorbelegungen, keine historischen Rechnungsdaten (nicht im
+    // COMPANY_SNAPSHOT_KEYS-Vertrag). Sie sickern nie in einen Snapshot.
+    currency: _currency,
+    replyToEmail: _replyToEmail,
+    senderDisplayName: _senderDisplayName,
     ...rest
   } = profile;
   return { ...rest, logoDataUrl: profile.logoDataUrl };

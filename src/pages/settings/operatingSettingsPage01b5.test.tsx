@@ -182,8 +182,9 @@ describe('SETTINGS-01B5 — Betrieb, Legacy-Ablösung', () => {
     await renderAt('/einstellungen');
     expect(q('settings-entry-operations')?.getAttribute('href')).toBe(OPERATING_SETTINGS_ROUTE);
     expect(q('settings-entry-operations')?.textContent).toContain('Betrieb');
-    // Endzustand des Hubs: genau vier Gruppen, keine Links auf /firmendaten oder /mehr.
-    expect(host.querySelectorAll('.settings-group').length).toBe(4);
+    // Endzustand des Hubs (01D): fuenf Gruppen — Firma, Rechnungen & Zahlungen, Design, E-Mail & Kommunikation, Betrieb; keine Links auf /firmendaten oder /mehr.
+    expect(host.querySelectorAll('.settings-group').length).toBe(5);
+    expect(q('settings-entry-communication')?.getAttribute('href')).toBe('/einstellungen/kommunikation');
     for (const a of Array.from(host.querySelectorAll('.settings-row'))) {
       expect(a.getAttribute('href')?.startsWith('/firmendaten')).toBe(false);
       expect(a.getAttribute('href')).not.toBe('/mehr');

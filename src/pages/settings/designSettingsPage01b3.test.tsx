@@ -424,6 +424,28 @@ describe('SETTINGS-01B3 — Design-Seite: Routing, Logo, Vorlage, Rollen, Histor
 
   /* ---------------- Historische Sicherheit (34–36) ---------------- */
 
+  it('01D I/J: Legacy-Profil mit logoDataUrl — neues Asset wird die aktive Wahrheit, logoDataUrl wird nicht fortgeschrieben; alter Snapshot behaelt seine Kopie', async () => {
+    const LEGACY = 'data:image/png;base64,QUJD';
+    hydrateCompanyProfileStore({ ...SAVED, logoDataUrl: LEGACY });
+    seedVorgaenge(['v-legacy', 'v-neu2']);
+    const oldInvoice = finalizeSampleInvoice('v-legacy');
+    expect(oldInvoice.companySnapshot?.logoDataUrl).toBe(LEGACY);
+    expect(oldInvoice.brandingSnapshot?.logo).toBeUndefined();
+
+    await renderAt(DESIGN_SETTINGS_ROUTE);
+    // Legacy bleibt lesbar, solange kein Asset existiert
+    expect(q('invoice-header-logo')?.getAttribute('data-logo-kind')).toBe('legacy_data_url');
+    await selectFile(pngFile());
+    await click('settings-design-save');
+    expect(getCompanyProfile().branding?.logo).toEqual(REFERENCE_NEW);
+    expect(getCompanyProfile().logoDataUrl ?? '').toBe('');
+    // historischer Snapshot unveraendert; neue Rechnung traegt nur noch die Asset-Referenz
+    expect(getVorgangInvoice('v-legacy', oldInvoice.id)!.companySnapshot?.logoDataUrl).toBe(LEGACY);
+    const newInvoice = finalizeSampleInvoice('v-neu2');
+    expect(newInvoice.brandingSnapshot?.logo).toEqual(REFERENCE_NEW);
+    expect(newInvoice.companySnapshot?.logoDataUrl ?? '').toBe('');
+  });
+
   it('T34–T36: finalisierte Rechnung behält ihr Logo; neue Rechnung nimmt das neue; Entfernen ändert alte Rechnung nicht', async () => {
     hydrateCompanyProfileStore({ ...SAVED, branding: { logo: REFERENCE_OLD } });
     seedVorgaenge(['v-alt', 'v-neu']);
