@@ -1,6 +1,14 @@
-import { useEffect, useId, useRef, useState, type RefObject } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 import { Button, type ButtonVariant } from './Button';
+import { Dialog } from './Dialog';
 
+/**
+ * UIUX-FOUNDATION-01B — Referenzintegration der Dialog-Basis.
+ *
+ * API, Testids und Verhalten (Fokus auf „Abbrechen“, Escape gesperrt während
+ * der Bestätigung, Fehlertext bei `false`/Throw, Fokus-Rückgabe) sind
+ * unverändert; nur Rahmen, Fokusfalle und Styling kommen jetzt aus `Dialog`.
+ */
 interface SimpleConfirmDialogProps {
   open: boolean;
   title: string;
@@ -28,28 +36,6 @@ interface SimpleConfirmDialogProps {
   onCancel: () => void;
 }
 
-function tryFocus(element: HTMLElement | null | undefined): boolean {
-  if (!element || !element.isConnected) return false;
-  if ('disabled' in element && Boolean((element as HTMLButtonElement).disabled)) {
-    return false;
-  }
-  if (element.getAttribute('aria-disabled') === 'true') return false;
-  try {
-    element.focus({ preventScroll: true });
-    return document.activeElement === element;
-  } catch {
-    return false;
-  }
-}
-
-function restoreFocus(
-  previous: HTMLElement | null,
-  fallback: HTMLElement | null | undefined,
-): void {
-  if (tryFocus(previous)) return;
-  if (tryFocus(fallback)) return;
-}
-
 export function SimpleConfirmDialog({
   open,
   title,
@@ -66,63 +52,18 @@ export function SimpleConfirmDialog({
   onConfirm,
   onCancel,
 }: SimpleConfirmDialogProps) {
-  const titleId = useId();
-  const descriptionId = useId();
-  const errorId = useId();
-  const dialogRef = useRef<HTMLDivElement>(null);
-  const previousFocusRef = useRef<HTMLElement | null>(null);
-  const wasOpenRef = useRef(false);
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  const confirmRef = useRef<HTMLButtonElement>(null);
   const [confirming, setConfirming] = useState(false);
   const confirmingRef = useRef(false);
   const [errorVisible, setErrorVisible] = useState(false);
 
   useEffect(() => {
-    if (open) {
-      previousFocusRef.current =
-        returnFocusRef?.current ??
-        (document.activeElement instanceof HTMLElement ? document.activeElement : null);
-      wasOpenRef.current = true;
-      confirmingRef.current = false;
-      setConfirming(false);
-      setErrorVisible(false);
-      const focusCancel = () => {
-        const cancelButton = dialogRef.current?.querySelector<HTMLButtonElement>(
-          `[data-testid="${cancelTestId}"]`,
-        );
-        cancelButton?.focus();
-      };
-      // Prefer rAF so the dialog is committed before focusing.
-      const rafId = window.requestAnimationFrame(focusCancel);
-      return () => window.cancelAnimationFrame(rafId);
-    }
-
-    if (wasOpenRef.current) {
-      wasOpenRef.current = false;
-      const previous = previousFocusRef.current;
-      previousFocusRef.current = null;
-      const rafId = window.requestAnimationFrame(() => {
-        restoreFocus(previous, fallbackFocusRef?.current ?? null);
-      });
-      return () => window.cancelAnimationFrame(rafId);
-    }
-    return undefined;
-  }, [open, cancelTestId, returnFocusRef, fallbackFocusRef]);
-
-  useEffect(() => {
     if (!open) return;
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      if (confirmingRef.current || confirming) {
-        event.preventDefault();
-        return;
-      }
-      event.preventDefault();
-      onCancel();
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [open, onCancel, confirming]);
+    confirmingRef.current = false;
+    setConfirming(false);
+    setErrorVisible(false);
+  }, [open]);
 
   const handleConfirm = async () => {
     if (confirmingRef.current || confirming) return;
@@ -135,11 +76,7 @@ export function SimpleConfirmDialog({
         setErrorVisible(true);
         confirmingRef.current = false;
         setConfirming(false);
-        window.requestAnimationFrame(() => {
-          dialogRef.current
-            ?.querySelector<HTMLButtonElement>(`[data-testid="${confirmTestId}"]`)
-            ?.focus();
-        });
+        window.requestAnimationFrame(() => confirmRef.current?.focus());
       }
     } catch {
       setErrorVisible(true);
@@ -153,41 +90,22 @@ export function SimpleConfirmDialog({
     onCancel();
   };
 
-  if (!open) return null;
-
-  const describedBy =
-    errorVisible && failureMessage ? `${descriptionId} ${errorId}` : descriptionId;
-
   return (
-    <div className="vorgang-dialog-backdrop" role="presentation" onClick={handleCancel}>
-      <div
-        ref={dialogRef}
-        className="vorgang-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        aria-describedby={describedBy}
-        data-testid={dialogTestId}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <h3 id={titleId} className="vorgang-dialog__title">
-          {title}
-        </h3>
-        <p id={descriptionId} className="vorgang-dialog__subtitle">
-          {message}
-        </p>
-        {errorVisible && failureMessage ? (
-          <p
-            id={errorId}
-            className="invoice-hint invoice-hint--warning"
-            role="alert"
-            data-testid="simple-confirm-error"
-          >
-            {failureMessage}
-          </p>
-        ) : null}
-        <div className="vorgang-dialog__actions">
+    <Dialog
+      open={open}
+      title={title}
+      description={message}
+      onClose={handleCancel}
+      busy={confirming}
+      tone={confirmVariant === 'danger' ? 'critical' : 'default'}
+      initialFocusRef={cancelRef}
+      returnFocusRef={returnFocusRef}
+      fallbackFocusRef={fallbackFocusRef}
+      testId={dialogTestId}
+      actions={
+        <>
           <Button
+            ref={cancelRef}
             variant="outline"
             fullWidth
             disabled={confirming}
@@ -197,6 +115,7 @@ export function SimpleConfirmDialog({
             {cancelLabel}
           </Button>
           <Button
+            ref={confirmRef}
             variant={confirmVariant}
             fullWidth
             disabled={confirming}
@@ -206,8 +125,14 @@ export function SimpleConfirmDialog({
           >
             {confirmLabel}
           </Button>
-        </div>
-      </div>
-    </div>
+        </>
+      }
+    >
+      {errorVisible && failureMessage ? (
+        <p className="dialog__error" role="alert" data-testid="simple-confirm-error">
+          {failureMessage}
+        </p>
+      ) : null}
+    </Dialog>
   );
 }

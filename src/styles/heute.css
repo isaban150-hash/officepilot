@@ -948,8 +948,20 @@ a.home-hint-bar__text:hover {
   box-shadow: var(--shadow-card);
 }
 
-.document-add-actions__emoji {
-  font-size: 2rem;
+/* UIUX-FOUNDATION-01B — Icon-Fläche statt Emoji. */
+.document-add-actions__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: var(--radius-md);
+  background: var(--op-primary-subtle);
+  color: var(--op-primary);
+}
+
+.document-add-actions__inline-icon {
+  color: var(--op-primary);
 }
 
 .document-add-actions__label {

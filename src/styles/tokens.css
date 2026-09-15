@@ -133,10 +133,46 @@
   --nav-height: 72px;
   --top-height: 56px;
   --sidebar-width: 248px;
+  /*
+   * Breakpoints (UIUX-FOUNDATION-01B — kanonische Werte).
+   * Custom Properties sind in @media nicht nutzbar; die Werte hier sind die
+   * verbindliche Dokumentation für neue CSS:
+   *   Mobile   = Basis (kein Query)
+   *   Tablet   = @media (min-width: 768px)
+   *   Desktop  = @media (min-width: 1024px)
+   * Bestehende abweichende Queries (640/720/900/481) werden blockweise bei
+   * der Seitenmigration angeglichen, nicht hier.
+   */
   --breakpoint-tablet: 768px;
   --breakpoint-desktop: 1024px;
 
-  /* Legacy aliases (backward compatible – do not use in new components) */
+  /*
+   * z-index-Skala (UIUX-FOUNDATION-01B). Neue Komponenten verwenden nur
+   * diese Stufen; keine freien Zahlen mehr.
+   */
+  --z-base: 0;
+  --z-raised: 1;
+  --z-sticky: 20;
+  --z-header: 30;
+  --z-dropdown: 40;
+  --z-dialog: 50;
+  --z-toast: 60;
+
+  /*
+   * Semantischer Ton „critical“ ist die Statussprache für --op-danger.
+   * Kein neuer Farbwert — nur ein sprechender Name für das Statussystem.
+   */
+  --op-critical: var(--op-danger);
+  --op-critical-subtle: var(--op-danger-subtle);
+  --op-neutral: var(--op-text-muted);
+  --op-neutral-subtle: var(--op-surface-sunken);
+
+  /*
+   * Legacy aliases — DEPRECATED (UIUX-FOUNDATION-01B).
+   * Bleiben für bestehende Regeln in index.css erhalten. Neue Komponenten
+   * benutzen ausschließlich --op-*, --space-*, --radius-*, --shadow-*,
+   * --text-*, --z-*. Abbau erfolgt seitenweise mit der Migration.
+   */
   --color-bg: var(--op-bg);
   --color-bg-soft: var(--op-surface-sunken);
   --color-surface: var(--op-surface);

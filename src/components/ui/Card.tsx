@@ -59,15 +59,9 @@ export function DataRow({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-export function Badge({
-  children,
-  tone = 'default',
-}: {
-  children: ReactNode;
-  tone?: 'default' | 'success' | 'warning' | 'info' | 'danger';
-}) {
-  return <span className={`badge badge--${tone}`}>{children}</span>;
-}
+/* UIUX-FOUNDATION-01B — Badge lebt in Badge.tsx; Re-Export für bestehende Importe. */
+export { Badge, StatusBadge } from './Badge';
+export type { BadgeTone } from './Badge';
 
 export { PageHeader } from './PageHeader';
 

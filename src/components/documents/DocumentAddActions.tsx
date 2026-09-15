@@ -1,10 +1,12 @@
 import { Link } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import type { TranslationKey } from '../../i18n';
+import { Icon, type IconId } from '../ui/Icon';
 
 export interface DocumentAddAction {
   id: string;
-  emoji: string;
+  /** UIUX-FOUNDATION-01B — SVG-Icon statt Emoji (Referenzfall der Icon-Basis). */
+  icon: IconId;
   titleKey: TranslationKey;
   route: string;
   testId: string;
@@ -13,28 +15,28 @@ export interface DocumentAddAction {
 export const DOCUMENT_ADD_ACTIONS: DocumentAddAction[] = [
   {
     id: 'photo',
-    emoji: '📷',
+    icon: 'camera',
     titleKey: 'mobile.add.photo',
     route: '/scan?input=camera',
     testId: 'document-add-photo',
   },
   {
     id: 'pdf',
-    emoji: '📄',
+    icon: 'file',
     titleKey: 'mobile.add.pdf',
     route: '/dokumente/upload?type=pdf',
     testId: 'document-add-pdf',
   },
   {
     id: 'gallery',
-    emoji: '🖼',
+    icon: 'image',
     titleKey: 'mobile.add.gallery',
     route: '/scan?input=gallery',
     testId: 'document-add-gallery',
   },
   {
     id: 'scan',
-    emoji: '🖨',
+    icon: 'scanner',
     titleKey: 'mobile.add.scan',
     route: '/scan',
     testId: 'document-add-scan',
@@ -54,7 +56,7 @@ export function DocumentAddActions({ variant = 'page' }: DocumentAddActionsProps
         {DOCUMENT_ADD_ACTIONS.map((action) => (
           <li key={action.id}>
             <Link to={action.route} className="document-add-actions__inline-link">
-              {action.emoji} {translate(action.titleKey)}
+              <Icon id={action.icon} size="sm" className="document-add-actions__inline-icon" /> {translate(action.titleKey)}
             </Link>
           </li>
         ))}
@@ -74,8 +76,8 @@ export function DocumentAddActions({ variant = 'page' }: DocumentAddActionsProps
           className="document-add-actions__item"
           data-testid={action.testId}
         >
-          <span className="document-add-actions__emoji" aria-hidden>
-            {action.emoji}
+          <span className="document-add-actions__icon" aria-hidden>
+            <Icon id={action.icon} size="lg" />
           </span>
           <span className="document-add-actions__label">{translate(action.titleKey)}</span>
         </Link>
