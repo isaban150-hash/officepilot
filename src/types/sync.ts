@@ -10,6 +10,11 @@ export type SyncEntityType =
   | 'company_profile'
   | 'inbox_item'
   | 'document'
+  | 'document_file'
+  | 'document_file_binding'
+  | 'document_work_result'
+  /** FINANZ-CORE-DURABILITY-01C — Zahlung einer Ausgabe (append-only Cloud-Wahrheit). */
+  | 'expense_payment'
   | 'document_memory'
   | 'proof_memory'
   | 'memory_relation'

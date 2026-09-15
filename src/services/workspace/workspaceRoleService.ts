@@ -16,31 +16,32 @@ import type { WorkspaceRole } from '../../types/workspace';
  * die Daten gehören dem Gerät.
  */
 export type WorkspaceWriteAccess =
-  | { canWrite: true; role: WorkspaceRole; reason: 'owner_or_admin' }
-  | { canWrite: true; role: null; reason: 'local_only' }
-  | { canWrite: false; role: 'member'; reason: 'member' }
-  | { canWrite: false; role: null; reason: 'membership_unknown' };
+  | { canWrite: true; canIntake: true; role: WorkspaceRole; reason: 'owner_or_admin' }
+  | { canWrite: true; canIntake: true; role: null; reason: 'local_only' }
+  /** FINANZ-CORE-DURABILITY-01B — member: Upload/Intake ja, Finanz-/Einstellungs-/Loeschpfade nein. */
+  | { canWrite: false; canIntake: true; role: 'member'; reason: 'member' }
+  | { canWrite: false; canIntake: false; role: null; reason: 'membership_unknown' };
 
 export function resolveWorkspaceWriteAccess(input: {
   userId: string | null | undefined;
   cloudConfigured: boolean;
 }): WorkspaceWriteAccess {
-  if (!input.cloudConfigured) return { canWrite: true, role: null, reason: 'local_only' };
+  if (!input.cloudConfigured) return { canWrite: true, canIntake: true, role: null, reason: 'local_only' };
 
   const workspace = getWorkspaceStoreSnapshot();
   const userId = input.userId?.trim() ?? '';
-  if (!workspace || !userId) return { canWrite: false, role: null, reason: 'membership_unknown' };
+  if (!workspace || !userId) return { canWrite: false, canIntake: false, role: null, reason: 'membership_unknown' };
 
   const member = getWorkspaceMembersSnapshot().find(
     (item) => item.workspaceId === workspace.id && item.userId === userId && item.status === 'active',
   );
   if (!member) {
     // Der Eigentümer laut Workspace-Zeile ist auch ohne Mitgliedsliste eindeutig.
-    if (workspace.ownerUserId === userId) return { canWrite: true, role: 'owner', reason: 'owner_or_admin' };
-    return { canWrite: false, role: null, reason: 'membership_unknown' };
+    if (workspace.ownerUserId === userId) return { canWrite: true, canIntake: true, role: 'owner', reason: 'owner_or_admin' };
+    return { canWrite: false, canIntake: false, role: null, reason: 'membership_unknown' };
   }
   if (member.role === 'owner' || member.role === 'admin') {
-    return { canWrite: true, role: member.role, reason: 'owner_or_admin' };
+    return { canWrite: true, canIntake: true, role: member.role, reason: 'owner_or_admin' };
   }
-  return { canWrite: false, role: 'member', reason: 'member' };
+  return { canWrite: false, canIntake: true, role: 'member', reason: 'member' };
 }

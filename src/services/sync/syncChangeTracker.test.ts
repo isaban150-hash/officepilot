@@ -123,10 +123,15 @@ describe('syncChangeTrackerService', () => {
     });
     expect(result.success).toBe(true);
 
+    /*
+     * FINANZ-CORE-DURABILITY-01C — eine Zahlung ist keine Belegaenderung mehr:
+     * sie reist als eigener `expense_payment`-Auftrag (append-only), der Beleg
+     * selbst bleibt unangetastet und erzeugt keinen Push.
+     */
     const outbox = getSyncOutboxSnapshot();
     expect(outbox).toHaveLength(1);
-    expect(outbox[0].entityType).toBe('expense');
-    expect(outbox[0].operation).toBe('update');
+    expect(outbox[0].entityType).toBe('expense_payment');
+    expect(outbox[0].operation).toBe('create');
     expect(getExpenseStoreSnapshot()[0].payments?.length).toBe(1);
   });
 

@@ -13,12 +13,19 @@ import {
   shortenSyncId,
   type SyncUiSnapshot,
 } from '../services/sync/syncUiService';
+import { buildPersistedStateSnapshot } from '../services/persistenceService';
+import { enqueueIntakeBackfill, planIntakeBackfill } from '../services/document/intakeCloudBackfillService';
 
 const SYNCING_STATES: SyncState[] = ['checking', 'uploading', 'downloading', 'merging'];
 
 function entityTypeKey(entityType: string): TranslationKey {
   const map: Record<string, TranslationKey> = {
     document: 'sync.entity.document',
+    document_file: 'sync.entity.document_file',
+    document_file_binding: 'sync.entity.document_file_binding',
+    document_work_result: 'sync.entity.document_work_result',
+    expense: 'sync.entity.expense',
+    expense_payment: 'sync.entity.expense_payment',
     inbox_item: 'sync.entity.inbox_item',
     task: 'sync.entity.task',
     vorgang: 'sync.entity.vorgang',
@@ -92,6 +99,22 @@ export function SyncPage() {
     } finally {
       setBusy(false);
     }
+  };
+
+  /*
+   * FINANZ-CORE-DURABILITY-01B — Backfill: bestehende lokale Belege einmalig in
+   * die Outbox stellen und sofort synchronisieren. Idempotent; lokale Daten
+   * bleiben unveraendert.
+   */
+  const handleBackfill = async () => {
+    const plan = planIntakeBackfill(buildPersistedStateSnapshot());
+    if (plan.entries.length === 0) {
+      showToast(translate('sync.backfill.nothing'));
+      return;
+    }
+    const queued = enqueueIntakeBackfill(plan);
+    showToast(translate('sync.backfill.queued').replace('{count}', String(queued)));
+    await handleSync();
   };
 
   const handleRetry = async () => {
@@ -229,6 +252,19 @@ export function SyncPage() {
         >
           {isSyncing ? translate('sync.action.running') : translate('sync.action.run')}
         </Button>
+
+        {!isLocalOnlySyncMode(snapshot) && (
+          <Button
+            type="button"
+            variant="secondary"
+            fullWidth
+            disabled={isSyncing}
+            data-testid="sync-backfill-button"
+            onClick={() => void handleBackfill()}
+          >
+            {translate('sync.backfill.action')}
+          </Button>
+        )}
 
         {snapshot.hasRetryableErrors && (
           <Button

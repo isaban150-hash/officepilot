@@ -190,7 +190,44 @@ export async function getDocumentFileBlob(
   }
 
   const record = await readDocumentBlobWithFallback(resolved.id, fallbackScopes);
-  return record?.blob ?? null;
+  if (record) return record.blob;
+
+  /*
+   * FINANZ-CORE-DURABILITY-01B — Lazy Download: Die Zeile kam per Pull, die
+   * Bytes liegen noch nicht auf diesem Geraet. Erst nach verifiziertem Hash und
+   * verifizierter Groesse wird der Blob lokal abgelegt und die Referenz zu
+   * `indexeddb` befoerdert.
+   */
+  if (resolved.storageType === 'cloud') {
+    return materializeCloudDocumentFile(resolved);
+  }
+  return null;
+}
+
+/** Cloud-Bytes holen, verifizieren, lokal ablegen; ungepruefte Bytes werden nie gespeichert. */
+export async function materializeCloudDocumentFile(ref: DocumentFileRef): Promise<Blob | null> {
+  const storagePath = ref.cloud?.storagePath;
+  if (!storagePath) return null;
+  const { downloadWorkspaceFileBytes } = await import('./document/intakeCloudSyncService');
+  const bytes = await downloadWorkspaceFileBytes({
+    storagePath,
+    expectedHash: ref.contentHash,
+    expectedSize: ref.fileSize,
+  });
+  const blob = new Blob([bytes], { type: ref.mimeType || 'application/octet-stream' });
+  await saveDocumentBlob({
+    fileRefId: ref.id,
+    blob,
+    mimeType: ref.mimeType,
+    fileSize: ref.fileSize,
+    contentHash: ref.contentHash,
+    createdAt: ref.createdAt,
+  });
+  fileRefs = fileRefs.map((entry) =>
+    entry.id === ref.id ? { ...entry, storageType: 'indexeddb' as const, localDataKey: entry.localDataKey || entry.id } : entry,
+  );
+  persistenceService.persistAll();
+  return blob;
 }
 
 export async function hasStoredOriginalDocumentFile(

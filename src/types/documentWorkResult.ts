@@ -59,4 +59,6 @@ export type DocumentWorkResult = {
   workflowDecision?: WorkflowDecision | null;
   specialistRefs: DocumentWorkResultSpecialistRefs;
   overlay: DocumentWorkResultOverlayEntry[];
+  /** 01B — Cloud-Sync-Metadaten (row_version). Nie Teil der fachlichen Wahrheit. */
+  sync?: import('./sync').SyncMeta;
 };

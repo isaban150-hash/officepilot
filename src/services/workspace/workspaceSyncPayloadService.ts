@@ -1,4 +1,9 @@
-import type { AppPersistedState, Customer, Vorgang } from '../../types/models';
+import type { AppPersistedState, CompanyDocument, Customer, InboxItem, Vorgang } from '../../types/models';
+import type { DocumentFileRef } from '../../types/documentFileRef';
+import type { DocumentFileRepresentationBinding } from '../../types/documentFileRepresentationBinding';
+import type { DocumentWorkResult } from '../../types/documentWorkResult';
+import type { Expense } from '../../types/expense';
+import { parseExpensePaymentEntityId, type ExpensePaymentSyncEntity } from '../expense/expenseCloudSyncService';
 import type { SyncEntityType } from '../../types/sync';
 import type { Workspace, WorkspaceMember, WorkspaceSettings } from '../../types/workspace';
 import {
@@ -21,7 +26,14 @@ export type CloudSyncEntityPayload =
       rowVersion: number;
     }
   | { entityType: 'vorgang'; entityId: string; entity: Vorgang; rowVersion: number; deleted: boolean }
-  | { entityType: 'customer'; entityId: string; entity: Customer; rowVersion: number; deleted: boolean };
+  | { entityType: 'customer'; entityId: string; entity: Customer; rowVersion: number; deleted: boolean }
+  | { entityType: 'inbox_item'; entityId: string; entity: InboxItem; rowVersion: number; deleted: boolean }
+  | { entityType: 'document'; entityId: string; entity: CompanyDocument; rowVersion: number; deleted: boolean }
+  | { entityType: 'document_file'; entityId: string; entity: DocumentFileRef; rowVersion: number; deleted: boolean }
+  | { entityType: 'document_file_binding'; entityId: string; entity: DocumentFileRepresentationBinding; rowVersion: number; deleted: boolean }
+  | { entityType: 'document_work_result'; entityId: string; entity: DocumentWorkResult; rowVersion: number; deleted: boolean }
+  | { entityType: 'expense'; entityId: string; entity: Expense; rowVersion: number; deleted: boolean }
+  | { entityType: 'expense_payment'; entityId: string; entity: ExpensePaymentSyncEntity; rowVersion: number; deleted: boolean };
 
 export function resolveCloudWorkspaceId(state: AppPersistedState): string {
   return (
@@ -109,6 +121,48 @@ export function extractCloudSyncEntity(
         rowVersion: customer.sync?.version ?? 0,
         deleted: customer.sync?.deleted ?? false,
       };
+    }
+    // FINANZ-CORE-DURABILITY-01B — Intake-Entitaeten
+    case 'inbox_item': {
+      const item = state.inboxItems.find((i) => i.id === entityId);
+      if (!item) return null;
+      return { entityType, entityId, entity: item, rowVersion: item.sync?.version ?? 0, deleted: item.sync?.deleted ?? false };
+    }
+    case 'document': {
+      const document = (state.documents ?? []).find((d) => d.id === entityId);
+      if (!document) return null;
+      return { entityType, entityId, entity: document, rowVersion: document.sync?.version ?? 0, deleted: document.sync?.deleted ?? false };
+    }
+    case 'document_file': {
+      const ref = (state.documentFileRefs ?? []).find((r) => r.id === entityId);
+      if (!ref) return null;
+      return { entityType, entityId, entity: ref, rowVersion: ref.sync?.version ?? 0, deleted: ref.sync?.deleted ?? false };
+    }
+    case 'document_file_binding': {
+      const binding = (state.documentFileRepresentationBindings ?? []).find(
+        (b) => `${b.documentId}|${b.kind}|${(b as { part?: string | null }).part ?? ''}` === entityId,
+      );
+      if (!binding) return null;
+      return { entityType, entityId, entity: binding, rowVersion: binding.sync?.version ?? 0, deleted: binding.sync?.deleted ?? false };
+    }
+    case 'document_work_result': {
+      const result = (state.documentWorkResults ?? []).find((r) => r.inboxItemId === entityId);
+      if (!result) return null;
+      return { entityType, entityId, entity: result, rowVersion: result.sync?.version ?? 0, deleted: result.sync?.deleted ?? false };
+    }
+    // FINANZ-CORE-DURABILITY-01C — Ausgaben
+    case 'expense': {
+      const expense = (state.expenses ?? []).find((e) => e.id === entityId);
+      if (!expense) return null;
+      return { entityType, entityId, entity: expense, rowVersion: expense.sync?.version ?? 0, deleted: expense.sync?.deleted ?? false };
+    }
+    case 'expense_payment': {
+      const parsed = parseExpensePaymentEntityId(entityId);
+      if (!parsed) return null;
+      const expense = (state.expenses ?? []).find((e) => e.id === parsed.expenseId);
+      if (!expense) return null;
+      const payment = (expense.payments ?? []).find((p) => p.id === parsed.paymentId) ?? null;
+      return { entityType, entityId, entity: { id: entityId, expenseId: parsed.expenseId, paymentId: parsed.paymentId, payment }, rowVersion: 0, deleted: payment === null };
     }
     default:
       return null;

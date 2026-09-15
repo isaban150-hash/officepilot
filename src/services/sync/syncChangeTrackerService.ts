@@ -9,10 +9,25 @@ import { resolveCloudWorkspaceId } from '../workspace/workspaceSyncPayloadServic
 import { buildCloudEntityId } from '../workspace/workspaceSyncPayloadService';
 import type { Customer, Vorgang } from '../../types/models';
 import { isCloudSyncBlockedMockVorgangId } from '../storage/mockDataDetectionService';
+import {
+  buildBindingContentKey,
+  buildDocumentFileContentKey,
+  buildWorkResultContentKey,
+  isCloudSyncBlockedMockInboxId,
+  isCloudSyncedBindingKind,
+} from '../document/intakeCloudSyncService';
+import type { DocumentFileRef } from '../../types/documentFileRef';
+import type { DocumentFileRepresentationBinding } from '../../types/documentFileRepresentationBinding';
+import type { DocumentWorkResult } from '../../types/documentWorkResult';
+import { buildExpenseContentKey, isCloudSyncBlockedMockExpenseId } from '../expense/expenseCloudSyncService';
+import type { Expense } from '../../types/expense';
 
 export const TRACKED_SYNC_ENTITY_TYPES: SyncEntityType[] = [
   'inbox_item',
   'document',
+  'document_file',
+  'document_file_binding',
+  'document_work_result',
   'document_memory',
   'proof_memory',
   'memory_relation',
@@ -84,6 +99,38 @@ function buildCustomerFingerprint(customer: Customer): EntitySyncFingerprint {
   };
 }
 
+/*
+ * FINANZ-CORE-DURABILITY-01B — Content-Keys der Intake-Entitaeten: nur
+ * fachliche Felder, keine Server-Metadaten (sonst wuerde jede zurueckgeschriebene
+ * Version einen neuen Push ausloesen).
+ */
+function buildIntakeFingerprint(entityType: SyncEntityType, entity: SyncableEntity & { id: string }): EntitySyncFingerprint {
+  const sync = entity.sync;
+  const contentKey =
+    entityType === 'document_file'
+      ? buildDocumentFileContentKey(entity as unknown as DocumentFileRef)
+      : entityType === 'document_file_binding'
+        ? buildBindingContentKey(entity as unknown as DocumentFileRepresentationBinding)
+        : buildWorkResultContentKey(entity as unknown as DocumentWorkResult);
+  return {
+    version: sync?.version ?? 0,
+    deleted: sync?.deleted ?? false,
+    updatedAt: sync?.updatedAt ?? '',
+    contentKey,
+  };
+}
+
+/* FINANZ-CORE-DURABILITY-01C — Zahlungen/Zahlstatus ausgeklammert: eine Zahlung ist kein Beleg-Push. */
+function buildExpenseFingerprint(expense: Expense): EntitySyncFingerprint {
+  const sync = expense.sync;
+  return {
+    version: sync?.version ?? 0,
+    deleted: sync?.deleted ?? false,
+    updatedAt: sync?.updatedAt ?? '',
+    contentKey: buildExpenseContentKey(expense),
+  };
+}
+
 function buildVorgangFingerprint(vorgang: Vorgang): EntitySyncFingerprint {
   const sync = vorgang.sync;
   return {
@@ -99,6 +146,10 @@ function collectTrackedEntities(state: AppPersistedState): Map<string, TrackedEn
 
   for (const entityType of TRACKED_SYNC_ENTITY_TYPES) {
     for (const entity of listEntitiesByType(state, entityType)) {
+      // Vorschau/Thumbnail-Bindings sind lokal regenerierbar und werden nicht verfolgt.
+      if (entityType === 'document_file_binding' && !isCloudSyncedBindingKind((entity as unknown as DocumentFileRepresentationBinding).kind)) {
+        continue;
+      }
       refs.set(entityKey(entityType, entity.id), {
         entityType,
         entityId: entity.id,
@@ -107,7 +158,11 @@ function collectTrackedEntities(state: AppPersistedState): Map<string, TrackedEn
             ? buildVorgangFingerprint(entity as Vorgang)
             : entityType === 'customer'
               ? buildCustomerFingerprint(entity as Customer)
-              : buildFingerprint(entity),
+              : entityType === 'document_file' || entityType === 'document_file_binding' || entityType === 'document_work_result'
+                ? buildIntakeFingerprint(entityType, entity)
+                : entityType === 'expense'
+                  ? buildExpenseFingerprint(entity as Expense)
+                  : buildFingerprint(entity),
       });
     }
   }
@@ -190,7 +245,16 @@ function fingerprintChanged(
    * Änderung und darf keinen neuen Auftrag erzeugen, der die nächste Version
    * auslöst.
    */
-  if (entityType === 'vorgang' || entityType === 'customer') {
+  if (
+    entityType === 'vorgang' ||
+    entityType === 'customer' ||
+    entityType === 'inbox_item' ||
+    entityType === 'document' ||
+    entityType === 'document_file' ||
+    entityType === 'document_file_binding' ||
+    entityType === 'document_work_result' ||
+    entityType === 'expense'
+  ) {
     return (
       previous.deleted !== current.deleted ||
       previous.contentKey !== current.contentKey
@@ -261,6 +325,14 @@ export function trackPersistedChanges(state: AppPersistedState): void {
 
     // Demo seed IDs must never enter a real workspace outbox (ID-only guard).
     if (ref.entityType === 'vorgang' && isCloudSyncBlockedMockVorgangId(ref.entityId)) {
+      continue;
+    }
+    // 01B — Demo-Eingaenge (inbox-00N) und ihre Ergebnisse bleiben lokal.
+    if ((ref.entityType === 'inbox_item' || ref.entityType === 'document_work_result') && isCloudSyncBlockedMockInboxId(ref.entityId)) {
+      continue;
+    }
+    // 01C — Demo-Ausgaben (exp-00N) bleiben lokal.
+    if (ref.entityType === 'expense' && isCloudSyncBlockedMockExpenseId(ref.entityId)) {
       continue;
     }
 

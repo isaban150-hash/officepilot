@@ -1,5 +1,6 @@
 import type { CommunicationEvent } from '../../types/communicationHistory';
 import type { Expense } from '../../types/expense';
+import { parseExpensePaymentEntityId } from '../expense/expenseCloudSyncService';
 import type { KnowledgeFact } from '../../types/knowledge';
 import type { MailImport } from '../../types/mailImport';
 import type {
@@ -20,6 +21,23 @@ import type { VorgangNote } from '../../types/communication';
 import type { SyncEntityType, SyncableEntity } from '../../types/sync';
 
 type SyncEntity = SyncableEntity & { id: string };
+
+/*
+ * FINANZ-CORE-DURABILITY-01B — Bindings und WorkResults haben keine eigene `id`;
+ * fuer die Sync-Maschine bekommen sie eine abgeleitete Kennung (Binding:
+ * documentId|kind|part, WorkResult: inboxItemId). Die Kennung wird beim
+ * Zurueckschreiben wieder entfernt.
+ */
+function bindingEntityId(binding: { documentId: string; kind: string; part?: string | null }): string {
+  return `${binding.documentId}|${binding.kind}|${binding.part ?? ''}`;
+}
+function withId<T extends object>(entity: T, id: string): T & { id: string } {
+  return { ...entity, id };
+}
+function withoutId<T extends { id: string }>(entity: T): Omit<T, 'id'> {
+  const { id: _id, ...rest } = entity;
+  return rest;
+}
 
 function defaultMemory(): OfficePilotMemoryState {
   return {
@@ -50,10 +68,32 @@ export function findEntityInState(
       return state.inboxItems.find((item) => item.id === entityId) ?? null;
     case 'document':
       return state.documents?.find((item) => item.id === entityId) ?? null;
+    case 'document_file':
+      return (state.documentFileRefs ?? []).find((item) => item.id === entityId) ?? null;
+    case 'document_file_binding': {
+      const binding = (state.documentFileRepresentationBindings ?? []).find((item) => bindingEntityId(item) === entityId);
+      return binding ? withId(binding, entityId) : null;
+    }
+    case 'document_work_result': {
+      const result = (state.documentWorkResults ?? []).find((item) => item.inboxItemId === entityId);
+      return result ? withId(result, entityId) : null;
+    }
     case 'task':
       return state.tasks.find((item) => item.id === entityId) ?? null;
     case 'expense':
       return state.expenses?.find((item) => item.id === entityId) ?? null;
+    case 'expense_payment': {
+      /*
+       * FINANZ-CORE-DURABILITY-01C — synthetische Sicht `expenseId|paymentId`.
+       * Fehlt die Zahlung lokal (entfernt), bleibt die Kennung fuer das Reversal.
+       */
+      const parsed = parseExpensePaymentEntityId(entityId);
+      if (!parsed) return null;
+      const expense = state.expenses?.find((item) => item.id === parsed.expenseId);
+      if (!expense) return null;
+      const payment = (expense.payments ?? []).find((item) => item.id === parsed.paymentId) ?? null;
+      return { id: entityId, expenseId: parsed.expenseId, paymentId: parsed.paymentId, payment } as unknown as SyncEntity;
+    }
     case 'vorgang':
       return state.vorgaenge.find((item) => item.id === entityId) ?? null;
     case 'vorgang_note':
@@ -95,11 +135,31 @@ export function upsertEntityInState(
     case 'document':
       next.documents = upsertInArray(next.documents ?? [], entity as CompanyDocument);
       break;
+    case 'document_file':
+      next.documentFileRefs = upsertInArray(next.documentFileRefs ?? [], entity as unknown as NonNullable<AppPersistedState['documentFileRefs']>[number]);
+      break;
+    case 'document_file_binding': {
+      const incoming = withoutId(entity as { id: string; documentId: string; kind: string; fileRefId: string; part?: string | null });
+      const list = next.documentFileRepresentationBindings ?? [];
+      const index = list.findIndex((item) => bindingEntityId(item) === bindingEntityId(incoming));
+      next.documentFileRepresentationBindings = (index < 0 ? [...list, incoming] : [...list.slice(0, index), incoming, ...list.slice(index + 1)]) as NonNullable<AppPersistedState['documentFileRepresentationBindings']>;
+      break;
+    }
+    case 'document_work_result': {
+      const incoming = withoutId(entity as { id: string; inboxItemId: string });
+      const list = next.documentWorkResults ?? [];
+      const index = list.findIndex((item) => item.inboxItemId === incoming.inboxItemId);
+      next.documentWorkResults = (index < 0 ? [...list, incoming] : [...list.slice(0, index), incoming, ...list.slice(index + 1)]) as NonNullable<AppPersistedState['documentWorkResults']>;
+      break;
+    }
     case 'task':
       next.tasks = upsertInArray(next.tasks, entity as Task);
       break;
     case 'expense':
       next.expenses = upsertInArray(next.expenses ?? [], entity as Expense);
+      break;
+    case 'expense_payment':
+      // Zahlungen werden ueber den Pull-Merge in die Ausgabe eingeflochten, nie einzeln eingesetzt.
       break;
     case 'vorgang':
       next.vorgaenge = upsertInArray(next.vorgaenge, entity as Vorgang);
@@ -166,10 +226,18 @@ export function listEntitiesByType(
       return [...state.inboxItems];
     case 'document':
       return [...(state.documents ?? [])];
+    case 'document_file':
+      return [...(state.documentFileRefs ?? [])] as SyncEntity[];
+    case 'document_file_binding':
+      return (state.documentFileRepresentationBindings ?? []).map((binding) => withId(binding, bindingEntityId(binding))) as SyncEntity[];
+    case 'document_work_result':
+      return (state.documentWorkResults ?? []).map((result) => withId(result, result.inboxItemId)) as SyncEntity[];
     case 'task':
       return [...state.tasks];
     case 'expense':
       return [...(state.expenses ?? [])];
+    case 'expense_payment':
+      return []; // nicht verfolgt — explizit eingereiht beim Buchen/Entfernen
     case 'vorgang':
       return [...state.vorgaenge];
     case 'customer':

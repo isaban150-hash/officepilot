@@ -384,10 +384,12 @@ describe('DOCUMENT-ARCHIVE-TRUTH-03A1 Fill-Confirm DWR overlay', () => {
     const item = itemWithText('Betrag: 1 EUR');
     seedDwrForItem(item);
     const allowlistBefore = [...SUPABASE_SYNC_ALLOWLIST].sort().join(',');
-    expect(SUPABASE_SYNC_ALLOWLIST.has('document' as SyncEntityType)).toBe(false);
-    expect(
-      (SUPABASE_SYNC_ALLOWLIST as ReadonlySet<string>).has('document_work_result'),
-    ).toBe(false);
+    // FINANZ-CORE-DURABILITY-01B — Dokument und WorkResult sind Cloud-Entitaeten;
+    // die Bestaetigung selbst darf die Allowlist trotzdem nicht veraendern.
+    expect(SUPABASE_SYNC_ALLOWLIST.has('document' as SyncEntityType)).toBe(true);
+    expect((SUPABASE_SYNC_ALLOWLIST as ReadonlySet<string>).has('document_work_result')).toBe(true);
+    // 01C — Ausgaben sind Cloud-Entitaeten; Aufgaben bleiben lokal.
+    expect(SUPABASE_SYNC_ALLOWLIST.has('task' as SyncEntityType)).toBe(false);
 
     const rows = confirmRow(buildDocumentFieldFillConfirmViewModel(item).rows, 'Betrag');
     expect(

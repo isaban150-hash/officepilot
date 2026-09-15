@@ -23,6 +23,9 @@ export interface DocumentFileRepresentationBinding {
   readonly documentId: string;
   readonly kind: DocumentFileRepresentationBindingKind;
   readonly fileRefId: string;
+  /** 01B — Herkunft der Repraesentation (Cloud-Spiegel); lokal bisher immer `derived`. */
+  readonly provenance?: 'received' | 'extracted' | 'derived';
+  readonly sync?: import('./sync').SyncMeta;
 }
 
 /**

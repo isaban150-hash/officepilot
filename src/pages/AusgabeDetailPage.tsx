@@ -70,6 +70,8 @@ export function AusgabeDetailPage() {
     if (result.success) {
       showToast(translate('expense.deleted'));
       navigate('/ausgaben', { replace: true });
+    } else {
+      showToast(translate(result.errorKey as TranslationKey));
     }
   };
 

@@ -236,6 +236,14 @@ export function updateExpense(id: string, changes: Partial<ExpenseInput>): Expen
     buildExpenseFromInput(merged, current.id, current.createdAt, now),
     'expense',
   );
+  /*
+   * FINANZ-CORE-DURABILITY-01D2 — kanonisches Stornodatum. Der Uebergang nach
+   * `storniert` setzt `cancelledAt` genau einmal (Zeitpunkt der Entscheidung);
+   * die Ruecknahme loescht es. Altbestand ohne Datum wird nicht nachtraeglich
+   * erfunden — die Monatsmappe kennzeichnet ihn sichtbar.
+   */
+  const becomesCancelled = merged.status === 'storniert';
+  const cancelledAt = becomesCancelled ? current.cancelledAt ?? now : undefined;
   replaceExpenseInStore(
     id,
     normalizeExpensePaymentFields({
@@ -243,8 +251,8 @@ export function updateExpense(id: string, changes: Partial<ExpenseInput>): Expen
       payments: current.payments ?? [],
       positions: current.positions,
       allocations: current.allocations,
-      cancelledAt: current.cancelledAt,
-      cancelReason: current.cancelReason,
+      cancelledAt,
+      cancelReason: becomesCancelled ? current.cancelReason : undefined,
     }),
   );
   persistAll();
@@ -254,6 +262,8 @@ export function updateExpense(id: string, changes: Partial<ExpenseInput>): Expen
 export function deleteExpense(id: string): ExpenseMutationResult {
   const current = getExpenseFromStoreById(id);
   if (!current || !isEntitySyncActive(current)) return { success: false, errorKey: 'expense.notFound' };
+  // 01C — dieselbe Regel wie in der Cloud: gebuchte Zahlungen halten den Beleg.
+  if ((current.payments ?? []).length > 0) return { success: false, errorKey: 'expense.delete.hasPayments' };
   const tombstoned = withTombstonedEntity(current, 'expense');
   replaceExpenseInStore(id, tombstoned);
   persistAll();

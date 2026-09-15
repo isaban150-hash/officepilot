@@ -10,18 +10,24 @@ export const SUPABASE_SYNC_ALLOWLIST: ReadonlySet<SyncEntityType> = new Set([
   'company_profile',
   'vorgang',
   'customer',
+  // FINANZ-CORE-DURABILITY-01B — Eingang, Archivdokument, Datei, Binding, WorkResult
+  'inbox_item',
+  'document',
+  'document_file',
+  'document_file_binding',
+  'document_work_result',
+  // FINANZ-CORE-DURABILITY-01C — Ausgaben und ihre Zahlungen
+  'expense',
+  'expense_payment',
 ]);
 
 export const LOCAL_ONLY_SYNC_ENTITY_TYPES: ReadonlySet<SyncEntityType> = new Set([
-  'inbox_item',
-  'document',
   'document_memory',
   'proof_memory',
   'memory_relation',
   'paper_register_entry',
   'mail_import',
   'task',
-  'expense',
   'vorgang_note',
   'communication_event',
   'knowledge_fact',

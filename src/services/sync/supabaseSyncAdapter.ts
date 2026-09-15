@@ -53,6 +53,22 @@ import {
 } from '../orderAmendment/orderAmendmentCloudPullMergeService';
 import { pullAndMergeWorkspaceOrderAmendmentsInMemory } from '../orderAmendment/orderAmendmentCloudPullOrchestrator';
 import type { SyncOutboxOperation } from '../../types/sync';
+import {
+  INTAKE_PUSH_ORDER,
+  applyIntakePullToState,
+  collectDirtyIntakeKeys,
+  isIntakeSyncEntityType,
+  rpcPullWorkspaceIntakeState,
+} from '../document/intakeCloudSyncService';
+import { pushIntakeEntity } from '../document/intakeCloudPushService';
+import {
+  EXPENSE_PUSH_ORDER,
+  applyExpensePullToState,
+  collectDirtyExpenseKeys,
+  isExpenseSyncEntityType,
+  pushExpenseEntity,
+  rpcPullWorkspaceExpenses,
+} from '../expense/expenseCloudSyncService';
 
 function shortenSyncReportId(id: string): string {
   if (id.length <= 12) return id;
@@ -187,6 +203,7 @@ function applyPushResultToState(
   rowVersion: number,
   updatedAt: string,
   deleted = false,
+  storagePath?: string,
 ): AppPersistedState {
   const workspaceId = resolveCloudWorkspaceId(state);
   const next = { ...state };
@@ -231,6 +248,44 @@ function applyPushResultToState(
       deleted,
       state.syncClient!.deviceId,
       workspaceId,
+    );
+  } else if (isIntakeSyncEntityType(entityType as SyncOutboxEntry['entityType'])) {
+    /*
+     * FINANZ-CORE-DURABILITY-01B — nur die Serverversion wird uebernommen;
+     * Fachdaten bleiben unangetastet. Die Datei bekommt zusaetzlich ihren
+     * Cloud-Pfad, damit ein spaeterer Pull sie als bereits hochgeladen kennt.
+     */
+    const meta = {
+      updatedAt,
+      version: rowVersion,
+      deleted,
+      deletedAt: deleted ? updatedAt : undefined,
+      deviceId: state.syncClient!.deviceId,
+      workspaceId,
+    };
+    if (entityType === 'inbox_item') {
+      next.inboxItems = next.inboxItems.map((item) => (item.id === entityId ? { ...item, sync: meta } : item));
+    } else if (entityType === 'document') {
+      next.documents = (next.documents ?? []).map((document) => (document.id === entityId ? { ...document, sync: meta } : document));
+    } else if (entityType === 'document_file') {
+      next.documentFileRefs = (next.documentFileRefs ?? []).map((ref) =>
+        ref.id === entityId
+          ? { ...ref, sync: meta, cloud: storagePath ? { storagePath, uploadedAt: ref.cloud?.uploadedAt ?? updatedAt } : ref.cloud }
+          : ref,
+      );
+    } else if (entityType === 'document_file_binding') {
+      next.documentFileRepresentationBindings = (next.documentFileRepresentationBindings ?? []).map((binding) =>
+        `${binding.documentId}|${binding.kind}|${(binding as { part?: string | null }).part ?? ''}` === entityId ? { ...binding, sync: meta } : binding,
+      );
+    } else if (entityType === 'document_work_result') {
+      next.documentWorkResults = (next.documentWorkResults ?? []).map((result) => (result.inboxItemId === entityId ? { ...result, sync: meta } : result));
+    }
+  } else if (entityType === 'expense') {
+    // FINANZ-CORE-DURABILITY-01C — nur die Serverversion; Zahlungen sind eigene Wahrheit.
+    next.expenses = (next.expenses ?? []).map((expense) =>
+      expense.id === entityId
+        ? { ...expense, sync: { updatedAt, version: rowVersion, deleted, deletedAt: deleted ? updatedAt : undefined, deviceId: state.syncClient!.deviceId, workspaceId } }
+        : expense,
     );
   } else if (entityType === 'vorgang') {
     next.vorgaenge = applyVorgangPushResultToState(
@@ -426,7 +481,15 @@ export class SupabaseSyncAdapter implements SyncAdapter {
     const completedOutboxIds: string[] = [];
     const failedOutbox: SyncPushFailure[] = [];
 
-    const pendingEntries = outbox.filter((entry) => entry.status === 'pending' || entry.status === 'error');
+    const pendingEntries = outbox
+      .filter((entry) => entry.status === 'pending' || entry.status === 'error')
+      // 01B — Datei vor Dokument vor Binding vor Eingang vor WorkResult; alles andere behaelt seine Reihenfolge.
+      // 01C — Ausgabe vor ihrer Zahlung, nach den Intake-Entitaeten.
+      .sort(
+        (a, b) =>
+          (INTAKE_PUSH_ORDER[a.entityType] ?? EXPENSE_PUSH_ORDER[a.entityType] ?? -1) -
+          (INTAKE_PUSH_ORDER[b.entityType] ?? EXPENSE_PUSH_ORDER[b.entityType] ?? -1),
+      );
 
     for (const entry of pendingEntries) {
       if (!isSupabaseSyncAllowed(entry.entityType)) {
@@ -463,6 +526,44 @@ export class SupabaseSyncAdapter implements SyncAdapter {
         completedOutboxIds.push(entry.id);
         outbox = updateOutboxEntryStatus(outbox, entry.id, 'completed');
         report.completedOutboxCount += 1;
+        continue;
+      }
+
+      if (isIntakeSyncEntityType(entry.entityType) || isExpenseSyncEntityType(entry.entityType)) {
+        try {
+          this.assertClient();
+          const outcome =
+            extracted.entityType === 'expense' || extracted.entityType === 'expense_payment'
+              ? await pushExpenseEntity(extracted, entry.operation, workspaceId, this.client)
+              : await pushIntakeEntity(extracted, entry.operation, workspaceId, this.client);
+          if (outcome.kind === 'pushed') {
+            currentState = applyPushResultToState(
+              currentState,
+              entry.entityType,
+              entry.entityId,
+              outcome.rowVersion,
+              new Date().toISOString(),
+              outcome.deleted,
+              'storagePath' in outcome ? (outcome.storagePath as string | undefined) : undefined,
+            );
+          }
+          completedOutboxIds.push(entry.id);
+          outbox = updateOutboxEntryStatus(outbox, entry.id, 'completed');
+          report.completedOutboxCount += 1;
+          report.syncedEntities.push({ entityType: entry.entityType, entityId: entry.entityId, resolution: outcome.kind === 'pushed' ? 'local_wins' : 'noop' });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Push fehlgeschlagen';
+          const retryable = error instanceof WorkspaceCloudError ? error.retryable : true;
+          const isVersionConflict = error instanceof WorkspaceCloudError && error.code === 'version_conflict';
+          failedOutbox.push({ outboxId: entry.id, message, retryable });
+          outbox = updateOutboxEntryStatus(outbox, entry.id, isVersionConflict ? 'blocked' : 'error', entry.retryCount + 1);
+          report.errorCount += 1;
+          report.errors.push({ outboxId: entry.id, message });
+          if (isVersionConflict) {
+            report.conflictCount += 1;
+            report.conflicts.push({ entityType: entry.entityType, entityId: entry.entityId, resolution: 'conflict' });
+          }
+        }
         continue;
       }
 
@@ -671,10 +772,67 @@ export class SupabaseSyncAdapter implements SyncAdapter {
        * richtig. Korrigiert wird die Quelle: Der Endzustand trägt die Rechnungen
        * dort, wo sie seit FIRST-CLASS-LOCAL-INVOICE-STORE-01B hingehören.
        */
+      /*
+       * FINANZ-CORE-DURABILITY-01B — Eingang, Dateien, Bindings, WorkResults und
+       * archivierte Fremddokumente. Nach den Rechnungsdokumenten, weil deren
+       * Pull `documents` bereits gesetzt hat; ein Fehlschlag hier verwirft den
+       * bis dahin gewonnenen Stand nicht.
+       */
+      let intakeDocuments = documentPull.documents;
+      let intakeState: AppPersistedState = merged.state;
+      try {
+        const intake = await rpcPullWorkspaceIntakeState(workspaceId, this.client);
+        const applied = applyIntakePullToState(
+          { ...merged.state, documents: documentPull.documents },
+          intake,
+          { deviceId: input.state.syncClient!.deviceId, workspaceId, dirty: collectDirtyIntakeKeys(input.state.syncOutbox) },
+        );
+        intakeState = applied.state;
+        intakeDocuments = applied.state.documents ?? documentPull.documents;
+        report.mergedEntityCount += Object.values(applied.counts).reduce((sum, n) => sum + n, 0);
+        for (const conflict of applied.conflicts) {
+          const [entityType, entityId] = conflict.split(':');
+          report.conflictCount += 1;
+          report.conflicts.push({ entityType: entityType as SyncOutboxEntry['entityType'], entityId: entityId ?? conflict, resolution: 'conflict' });
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Intake-Pull fehlgeschlagen';
+        report.errorCount += 1;
+        report.errors.push({ outboxId: 'intake-pull', message });
+      }
+
+      /*
+       * FINANZ-CORE-DURABILITY-01C — Ausgaben und Zahlungen. Mitglieder ohne
+       * Finanzrecht bekommen hier "Kein Zugriff" — das ist kein Fehler des
+       * Pulls, sondern die Rollenregel; es wird still uebersprungen.
+       */
+      try {
+        const expensePull = await rpcPullWorkspaceExpenses(workspaceId, this.client);
+        const appliedExpenses = applyExpensePullToState(intakeState, expensePull, {
+          deviceId: input.state.syncClient!.deviceId,
+          workspaceId,
+          dirty: collectDirtyExpenseKeys(input.state.syncOutbox),
+        });
+        intakeState = appliedExpenses.state;
+        report.mergedEntityCount += appliedExpenses.counts.expenses + appliedExpenses.counts.payments;
+        for (const conflict of appliedExpenses.conflicts) {
+          const [entityType, entityId] = conflict.split(':');
+          report.conflictCount += 1;
+          report.conflicts.push({ entityType: entityType as SyncOutboxEntry['entityType'], entityId: entityId ?? conflict, resolution: 'conflict' });
+        }
+      } catch (error) {
+        const isRoleDenied = error instanceof WorkspaceCloudError && error.code === 'rls';
+        if (!isRoleDenied) {
+          const message = error instanceof Error ? error.message : 'Ausgaben-Pull fehlgeschlagen';
+          report.errorCount += 1;
+          report.errors.push({ outboxId: 'expense-pull', message });
+        }
+      }
+
       const finalState = buildFinalStateAfterPull(
-        merged.state,
+        intakeState,
         documentPull.vorgaenge,
-        documentPull.documents,
+        intakeDocuments,
         /* 01B2b — die gezogenen Rechnungen ohne Auftrag. Sie hängen an keinem
            Vorgang und wären sonst genau so verlorengegangen, wie es 01B den
            auftragsgebundenen zuvor passiert ist. 01B2c: in der Fassung nach dem

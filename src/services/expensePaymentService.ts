@@ -4,6 +4,8 @@ import {
   removePaymentFromExpense as removePaymentFromExpenseStore,
 } from './expenseStore';
 import { persistAll } from './persistenceService';
+import { enqueueSyncOutbox } from './sync/syncOutboxService';
+import { buildExpensePaymentEntityId } from './expense/expenseCloudSyncService';
 import {
   calculateExpensePaymentSummary,
   getExpensePayments,
@@ -77,6 +79,13 @@ export function recordExpensePayment(
     return { success: false, errorKey: 'expense.payment.notFound' };
   }
 
+  /*
+   * FINANZ-CORE-DURABILITY-01C — die Zahlung reist als eigene append-only
+   * Cloud-Wahrheit. Kennung bleibt stabil: ein Retry trifft denselben
+   * Idempotenzschluessel, nie eine zweite Zahlung. Vor persistAll(), damit
+   * der Auftrag mit der Zahlung zusammen gespeichert wird.
+   */
+  enqueueSyncOutbox({ entityType: 'expense_payment', entityId: buildExpensePaymentEntityId(expenseId, payment.id), operation: 'create', version: 1 });
   persistAll();
   return { success: true, expense: updated, payment };
 }
@@ -103,6 +112,8 @@ export function removeExpensePayment(
     return { success: false, errorKey: 'expense.payment.notFound' };
   }
 
+  // 01C — Reversal in der Cloud (Grabstein), sonst lebt die Zahlung beim naechsten Pull wieder auf.
+  enqueueSyncOutbox({ entityType: 'expense_payment', entityId: buildExpensePaymentEntityId(expenseId, paymentId), operation: 'delete', version: 1 });
   persistAll();
   return { success: true, expense: updated };
 }

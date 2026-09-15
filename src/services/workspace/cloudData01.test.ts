@@ -110,8 +110,13 @@ describe('CLOUD-DATA-01 allowlist', () => {
     expect(isSupabaseSyncAllowed('company_profile')).toBe(true);
     expect(isSupabaseSyncAllowed('workspace_settings')).toBe(true);
     expect(isSupabaseSyncAllowed('vorgang')).toBe(true);
-    expect(isSupabaseSyncAllowed('document')).toBe(false);
-    expect(isSupabaseSyncAllowed('inbox_item')).toBe(false);
+    // FINANZ-CORE-DURABILITY-01B — Eingang und Archivdokument sind jetzt Cloud-Entitaeten;
+    // 01C — Ausgaben und ihre Zahlungen ebenfalls; Aufgaben bleiben ausgeschlossen.
+    expect(isSupabaseSyncAllowed('document')).toBe(true);
+    expect(isSupabaseSyncAllowed('inbox_item')).toBe(true);
+    expect(isSupabaseSyncAllowed('task')).toBe(false);
+    expect(isSupabaseSyncAllowed('expense')).toBe(true);
+    expect(isSupabaseSyncAllowed('expense_payment')).toBe(true);
     /*
      * CLOUD-COUNT-FIXTURES-01 — Namen statt Anzahl.
      *
@@ -133,6 +138,15 @@ describe('CLOUD-DATA-01 allowlist', () => {
         'workspace',
         'workspace_member',
         'workspace_settings',
+        // FINANZ-CORE-DURABILITY-01B — Eingang, Archivdokument, Datei, Binding, WorkResult
+        'inbox_item',
+        'document',
+        'document_file',
+        'document_file_binding',
+        'document_work_result',
+        // FINANZ-CORE-DURABILITY-01C — Ausgaben und Zahlungen
+        'expense',
+        'expense_payment',
       ].sort(),
     );
   });
@@ -259,8 +273,9 @@ describe('CLOUD-DATA-01 SupabaseSyncAdapter', () => {
       outbox: [
         {
           id: outboxId,
-          entityType: 'document',
-          entityId: 'doc-1',
+          // 01B/01C: `document` und `expense` sind jetzt erlaubt — `task` bleibt lokal.
+          entityType: 'task',
+          entityId: 'task-1',
           operation: 'update',
           version: 1,
           queuedAt: new Date().toISOString(),
