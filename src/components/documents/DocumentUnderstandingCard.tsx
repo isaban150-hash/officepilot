@@ -53,7 +53,7 @@ export function DocumentUnderstandingCard({ documentId }: DocumentUnderstandingC
     >
       <Card className="detail-experience-card__inner">
         <CardTitle>{translate('document.understanding.title')}</CardTitle>
-        <CardMeta>{formatMemoryStatus(memory?.memoryStatus, translate)}</CardMeta>
+        <CardMeta>{formatMemoryStatus(explanation.understandingStatus ?? memory?.memoryStatus, translate)}</CardMeta>
 
         <section className="detail-experience-section">
           <h3 className="detail-experience-section__label">

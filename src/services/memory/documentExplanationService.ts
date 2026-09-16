@@ -9,6 +9,8 @@ import { getCommunicationReplyStatus } from '../communicationHistoryService';
 import { buildExplanation } from '../documentClassificationCatalog';
 import { getDocumentById, isGeneratedOutgoingInvoiceDocument } from '../documentService';
 import { getInboxItemById } from '../inboxService';
+import { findInvoiceById } from '../invoice/invoiceRegistryService';
+import { calculatePaymentSummary } from '../invoicePaymentService';
 import {
   formatPaperLocationSummary,
   getPhysicalFilingStatusLabel,
@@ -320,6 +322,93 @@ function resolveExplanationContext(ref: DocumentExplanationRef): {
   return null;
 }
 
+interface GeneratedInvoiceOverlay {
+  deadline: string;
+  actionRequired: string;
+  recommendation: string;
+  nextSteps: string[];
+  risk: string;
+  understandingStatus: NonNullable<DocumentExplanation['understandingStatus']>;
+}
+
+function formatDeadlineDate(iso: string, language: AppLanguage | undefined): string {
+  const date = new Date(`${iso.slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return iso.slice(0, 10);
+  const locale = language === 'tr' ? 'tr-TR' : language === 'bg' ? 'bg-BG' : 'de-DE';
+  return date.toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+/**
+ * REAL-PRODUCT-TEST-01C — eine von OfficePilot erzeugte Ausgangsrechnung wird
+ * aus ihrer Rechnungswahrheit erklärt, nicht wie ein eingehender Brief:
+ * Frist = Zahlungsziel der verknüpften Rechnung, Handlung und Empfehlung aus
+ * dem bestehenden Zahlungsstatus (`calculatePaymentSummary`). Nichts wird neu
+ * berechnet; Archivstatus und Rechnungsstatus bleiben getrennt.
+ *
+ * Ohne auffindbare Rechnung: verständlicher Rückfall, keine erfundene Frist.
+ */
+function buildGeneratedInvoiceOverlay(
+  document: CompanyDocument,
+  translate: (key: TranslationKey) => string,
+  language: AppLanguage | undefined,
+  todayIso: string,
+): GeneratedInvoiceOverlay {
+  const invoice = document.linkedInvoiceId ? findInvoiceById(document.linkedInvoiceId) : undefined;
+  if (!invoice) {
+    return {
+      deadline: translate('document.ownInvoice.deadline.unknown'),
+      actionRequired: translate('document.ownInvoice.action.unknown'),
+      recommendation: translate('document.ownInvoice.recommendation.unknown'),
+      nextSteps: [translate('document.ownInvoice.step.unknown')],
+      risk: translate('document.understanding.risk.unknown'),
+      understandingStatus: 'partial',
+    };
+  }
+
+  const status = calculatePaymentSummary(invoice, todayIso).status;
+  const dueDate = invoice.paymentDueDate?.trim() ? invoice.paymentDueDate : null;
+  const deadline = dueDate
+    ? translate('document.ownInvoice.deadline.due').replace('{date}', formatDeadlineDate(dueDate, language))
+    : translate('document.ownInvoice.deadline.none');
+
+  if (status === 'storniert') {
+    return {
+      deadline: translate('document.ownInvoice.deadline.cancelled'),
+      actionRequired: translate('document.ownInvoice.action.cancelled'),
+      recommendation: translate('document.ownInvoice.recommendation.cancelled'),
+      nextSteps: [translate('document.ownInvoice.step.cancelled')],
+      risk: translate('document.understanding.risk.low'),
+      understandingStatus: 'understood',
+    };
+  }
+  if (status === 'bezahlt') {
+    return {
+      deadline: translate('document.ownInvoice.deadline.paid'),
+      actionRequired: translate('document.ownInvoice.action.paid'),
+      recommendation: translate('document.ownInvoice.recommendation.paid'),
+      nextSteps: [translate('document.ownInvoice.step.paid')],
+      risk: translate('document.understanding.risk.low'),
+      understandingStatus: 'understood',
+    };
+  }
+  const overdue = status === 'ueberfaellig';
+  const partial = status === 'teilbezahlt';
+  return {
+    deadline,
+    actionRequired: overdue
+      ? translate('document.ownInvoice.action.overdue')
+      : partial
+        ? translate('document.ownInvoice.action.partial')
+        : translate('document.ownInvoice.action.open'),
+    recommendation: overdue
+      ? translate('document.ownInvoice.recommendation.overdue')
+      : translate('document.ownInvoice.recommendation.open'),
+    nextSteps: [overdue ? translate('document.ownInvoice.step.overdue') : translate('document.ownInvoice.step.open')],
+    risk: overdue ? translate('document.understanding.risk.medium') : translate('document.understanding.risk.low'),
+    understandingStatus: 'understood',
+  };
+}
+
 export function buildDocumentExplanation(
   ref: DocumentExplanationRef,
   todayIso: string = getTodayIso(),
@@ -425,7 +514,11 @@ export function buildDocumentExplanation(
     summary.sourceConfidence,
   );
 
-  const translate = createPresentationTranslate(getCachedSetup()?.language);
+  const language = getCachedSetup()?.language;
+  const translate = createPresentationTranslate(language);
+  const ownInvoice = isGeneratedInvoice
+    ? buildGeneratedInvoiceOverlay(document, translate, language, todayIso)
+    : null;
   const presentationSummary = inboxItem
     ? buildSummaryForInboxItem(inboxItem, { translate })
     : buildSummaryForCompanyDocument(document, { translate });
@@ -438,12 +531,12 @@ export function buildDocumentExplanation(
     shortAnswer: shortAnswerFromPresentation || letter.shortExplanation || summary.shortSummary,
     whatIsIt: letter.whatIsItAbout || summary.topic,
     whyImportant: buildWhyImportant(classifiedKind, document),
-    actionRequired,
-    deadline: deadline === 'Keine Frist erkannt.' ? 'Keine Frist erkannt.' : deadline,
+    actionRequired: ownInvoice?.actionRequired ?? actionRequired,
+    deadline: ownInvoice?.deadline ?? (deadline === 'Keine Frist erkannt.' ? 'Keine Frist erkannt.' : deadline),
     requiredDocuments:
       requiredDocuments.length > 0 ? requiredDocuments : ['Keine zusätzlichen Unterlagen erkannt.'],
-    risk: letter.risks || formatRiskLabel(summary.riskLevel ?? memory?.riskLevel),
-    recommendation: letter.recommendation || summary.nextAction,
+    risk: ownInvoice?.risk ?? (letter.risks || formatRiskLabel(summary.riskLevel ?? memory?.riskLevel)),
+    recommendation: ownInvoice?.recommendation ?? (letter.recommendation || summary.nextAction),
     digitalLocation: letter.digitalStorage || formatDigitalLocation(document),
     paperLocation:
       paperResolution.rule && !paperResolution.skipPhysicalFiling
@@ -452,11 +545,12 @@ export function buildDocumentExplanation(
     register,
     originalFiledStatus,
     communicationStatus,
-    nextSteps,
-    uncertaintyNote,
+    nextSteps: ownInvoice?.nextSteps ?? nextSteps,
+    uncertaintyNote: ownInvoice ? undefined : uncertaintyNote,
     disclaimer: EXPLANATION_DISCLAIMER,
     sourceDocumentId: document.id,
     sourceTitle: document.title,
+    ...(ownInvoice ? { understandingStatus: ownInvoice.understandingStatus } : {}),
   };
 }
 

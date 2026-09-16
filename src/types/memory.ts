@@ -97,6 +97,12 @@ export interface DocumentExplanation {
   disclaimer: string;
   sourceDocumentId?: string;
   sourceTitle?: string;
+  /**
+   * REAL-PRODUCT-TEST-01C — Verständnisstatus aus der Erklärung selbst. Gesetzt für
+   * eigene, von OfficePilot erzeugte Ausgangsrechnungen: Der Extraktionsstatus der
+   * Gedächtniszeile („Noch in Arbeit“) beschreibt sie nicht.
+   */
+  understandingStatus?: 'understood' | 'partial' | 'pending';
 }
 
 export interface PaperRegisterEntry {
