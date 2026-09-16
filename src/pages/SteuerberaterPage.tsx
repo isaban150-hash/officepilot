@@ -37,6 +37,9 @@ const EXPORT_OUTCOME_KEY: Record<Exclude<MonatsmappeExportResult['outcome'], 'ex
 
 export function SteuerberaterPage() {
   const { translate, language } = useApp();
+  /* 01B — natürliche Ein-/Mehrzahl ohne Klammerformen. */
+  const countLabel = (count: number, one: TranslationKey, many: TranslationKey): string =>
+    count === 1 ? translate(one) : translate(many).replace('{count}', String(count));
   const { user } = useAuth();
   const locale = language === 'tr' ? 'tr-TR' : 'de-DE';
   const defaultMonthKey = useMemo(() => getDefaultSteuerberaterMonthKey(), []);
@@ -82,12 +85,17 @@ export function SteuerberaterPage() {
         title={translate('steuerberater.title')}
         subtitle={translate('steuerberater.subtitle')}
         status={
+          /* REAL-PRODUCT-TEST-01B — drei Zustände aus dem kanonischen Monatsmodell: keine Belege / offen / vollständig. */
           <StatusBadge
-            tone={overview.isComplete ? 'success' : 'warning'}
+            tone={overview.state === 'ready' ? 'success' : overview.state === 'empty' ? 'neutral' : 'warning'}
             label={
-              overview.isComplete
+              overview.state === 'ready'
                 ? translate('steuerberater.status.complete')
-                : translate('steuerberater.status.missing').replace('{count}', String(overview.missingCount))
+                : overview.state === 'empty'
+                  ? translate('steuerberater.status.empty')
+                  : overview.openCount === 1
+                    ? translate('steuerberater.status.openOne')
+                    : translate('steuerberater.status.open').replace('{count}', String(overview.openCount))
             }
             data-testid="steuerberater-month-status"
           />
@@ -128,7 +136,23 @@ export function SteuerberaterPage() {
         {overview.isDefaultMonth ? <span className="sr-only" data-testid="steuerberater-default-month" /> : null}
       </section>
 
-      <DetailSection title={overview.monthLabel} description={translate('steuerberater.documentCount').replace('{count}', String(overview.documentCount))} surface testId="steuerberater-month">
+      <DetailSection
+        title={overview.monthLabel}
+        description={
+          overview.documentCount === 0
+            ? translate('steuerberater.noDocuments')
+            : [
+                overview.documentCount === 1
+                  ? translate('steuerberater.documentCountOne')
+                  : translate('steuerberater.documentCount').replace('{count}', String(overview.documentCount)),
+                countLabel(overview.invoiceCount, 'steuerberater.count.invoiceOne', 'steuerberater.count.invoiceMany'),
+                countLabel(overview.expenseCount, 'steuerberater.count.expenseOne', 'steuerberater.count.expenseMany'),
+                countLabel(overview.stornoCount, 'steuerberater.count.stornoOne', 'steuerberater.count.stornoMany'),
+              ].join(' · ')
+        }
+        surface
+        testId="steuerberater-month"
+      >
         <span className="sr-only">{overview.monthLabel}</span>
       </DetailSection>
 
@@ -140,7 +164,7 @@ export function SteuerberaterPage() {
             ) : (
               <RowList>
                 {overview.documents.map((doc) => (
-                  <RowListItem key={doc.id} to={`/ablage/${doc.id}`} icon="file" title={doc.title} description={doc.kind} />
+                  <RowListItem key={doc.id} to={doc.route} icon="file" title={doc.title} description={doc.kind} />
                 ))}
               </RowList>
             )}
@@ -160,7 +184,7 @@ export function SteuerberaterPage() {
             <DetailSection title={translate('steuerberater.unclearTitle')} testId="steuerberater-unclear">
               <RowList>
                 {overview.unclearDocuments.map((doc) => (
-                  <RowListItem key={doc.id} to={`/ablage/${doc.id}`} icon="info" title={doc.title} trailing={<StatusBadge tone="info" label={translate('steuerberater.unclearTitle')} icon={false} />} />
+                  <RowListItem key={doc.id} to={doc.route} icon="info" title={doc.title} trailing={<StatusBadge tone="info" label={translate('steuerberater.unclearTitle')} icon={false} />} />
                 ))}
               </RowList>
             </DetailSection>

@@ -14,11 +14,8 @@ import { isSupabaseConfigured, getSupabaseClient } from '../../lib/supabase';
 import { buildPersistedStateSnapshot } from '../persistenceService';
 import { resolveCloudWorkspaceId } from '../workspace/workspaceSyncPayloadService';
 import { resolveWorkspaceWriteAccess } from '../workspace/workspaceRoleService';
-import { listInvoiceEntries } from '../invoice/invoiceRegistryService';
-import { getAllExpensesFromStore } from '../expenseStore';
-import { getDocumentStoreSnapshot } from '../documentService';
-import { getInboxItems } from '../inboxService';
-import { getDocumentFileBlob, getDocumentFileRefStoreSnapshot } from '../documentFileStoreService';
+import { getDocumentFileBlob } from '../documentFileStoreService';
+import { collectMonatsmappeInput } from './monatsmappeInputService';
 import { generateApprovedInvoicePdf, generateInvoiceCorrectionPdf } from '../invoicePdfService';
 import { downloadBackupBlob } from '../backupExportService';
 import {
@@ -95,16 +92,8 @@ export async function assertMonatsmappeAllowed(input: {
   }
 }
 
-export function collectMonatsmappeInput(monthKey: string): MonatsmappeInput {
-  return {
-    monthKey,
-    invoices: listInvoiceEntries(),
-    expenses: getAllExpensesFromStore(),
-    documents: getDocumentStoreSnapshot(),
-    inboxItems: getInboxItems(),
-    fileRefs: getDocumentFileRefStoreSnapshot(),
-  };
-}
+/* REAL-PRODUCT-TEST-01B — die Eingabe kommt aus dem gemeinsamen Baustein (auch für die Übersicht). */
+export { collectMonatsmappeInput } from './monatsmappeInputService';
 
 export interface MonatsmappeDocumentLoaders {
   invoicePdf: (invoiceId: string) => Promise<Uint8Array>;

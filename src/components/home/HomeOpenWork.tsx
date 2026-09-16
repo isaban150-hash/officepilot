@@ -63,11 +63,18 @@ export function HomeOpenWork() {
         to="/steuerberater"
         icon={<NavIcon id="tax" />}
         title={translate('mobile.home.taxTitle')}
-        description={`${monthShort} · ${tax.completenessPercent} % ${translate('mobile.home.taxPercentLabel')} · ${
-          tax.missingCount > 0
-            ? translate('mobile.home.taxMissing').replace('{count}', String(tax.missingCount))
-            : translate('mobile.home.taxComplete')
-        }`}
+        /* REAL-PRODUCT-TEST-01B — „bereit" nur aus dem kanonischen Monatsstatus; ohne Belege neutral. */
+        description={
+          tax.state === 'empty'
+            ? `${monthShort} · ${translate('mobile.home.taxEmpty')}`
+            : `${monthShort} · ${tax.completenessPercent} % ${translate('mobile.home.taxPercentLabel')} · ${
+                tax.state === 'ready'
+                  ? translate('mobile.home.taxComplete')
+                  : tax.openCount === 1
+                    ? translate('mobile.home.taxOpenOne')
+                    : translate('mobile.home.taxOpen').replace('{count}', String(tax.openCount))
+              }`
+        }
         trailing={<span className="row-list__cta" data-testid="home-card-steuerberater-action">{translate('steuerberater.prepareFolderButton')}</span>}
         testId="home-card-steuerberater"
       />

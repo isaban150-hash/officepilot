@@ -1,7 +1,28 @@
+/**
+ * REAL-PRODUCT-TEST-01B — eine fachliche Wahrheit für die Monatsübersicht.
+ *
+ * Die sichtbaren Monatszahlen (Steuerberater-Seite, Heute-Karte, Hinweise)
+ * kommen aus demselben Modell wie die tatsächliche Monatsmappe
+ * (`collectMonatsmappeInput` → `buildMonatsmappeModel`): finalisierte
+ * Ausgangsrechnungen, gebuchte Ausgaben, Stornos/Korrekturen — je im Monat
+ * ihres kanonischen Datums. Vorher zählte diese Übersicht nur aktive
+ * Eingangsposten; archivierte Belege und erzeugte Rechnungen fehlten, und
+ * Vorschau und Export widersprachen einander.
+ *
+ * Der Eingang liefert nur noch das, was das Modell nicht kennt: steuerrelevante
+ * Posten, die noch nicht verbucht sind (`unclear`).
+ */
 import { getClassificationForItem } from './documentClassificationService';
 import { filterActiveItems, getInboxItems } from './inboxService';
 import { getAllTasksFromStore } from './taskStore';
 import { isTaskOpen } from './taskNormalize';
+import { collectMonatsmappeInput } from './steuerberater/monatsmappeInputService';
+import {
+  buildMonatsmappeModel,
+  type MonatsmappeBeleg,
+  type MonatsmappeInput,
+  type MonatsmappeModel,
+} from './steuerberater/monatsmappeModelService';
 
 const TAX_RELEVANT_KINDS = new Set([
   'eingangsrechnung',
@@ -22,7 +43,12 @@ export interface SteuerberaterDocumentEntry {
   kind: string;
   monthKey: string;
   status: 'included' | 'unclear';
+  /** Ziel in der App — Rechnung, Ausgabe oder Eingangsposten. */
+  route: string;
 }
+
+/** Sichtbarer Monatsstatus — drei Fälle, nie „bereit" ohne Belege. */
+export type SteuerberaterMonthState = 'empty' | 'open' | 'ready';
 
 export interface SteuerberaterMonthOverview {
   year: number;
@@ -37,6 +63,13 @@ export interface SteuerberaterMonthOverview {
   isComplete: boolean;
   isDefaultMonth: boolean;
   completenessPercent: number;
+  /** `empty`: keine Belege; `open`: Belege, aber fehlend/unklar; `ready`: vollständig. */
+  state: SteuerberaterMonthState;
+  invoiceCount: number;
+  expenseCount: number;
+  stornoCount: number;
+  /** Offene Punkte gesamt (fehlende Unterlagen/Dokumente + unklare Eingangsposten). */
+  openCount: number;
 }
 
 function monthKeyFromDate(iso: string): string {
@@ -79,9 +112,14 @@ export function buildMonthKeyOptions(count = 6, referenceDate: Date | string = n
   return keys;
 }
 
-function collectTaxDocuments(): SteuerberaterDocumentEntry[] {
+/**
+ * Steuerrelevante Eingangsposten, die das Monatsmodell noch nicht als Beleg
+ * führt (nicht als Ausgabe gebucht) — sie sind „unklar", nicht „enthalten".
+ */
+function collectUnclearInboxEntries(bookedIds: ReadonlySet<string>): SteuerberaterDocumentEntry[] {
   const entries: SteuerberaterDocumentEntry[] = [];
   for (const item of filterActiveItems(getInboxItems())) {
+    if (bookedIds.has(item.id)) continue;
     const classification = getClassificationForItem(item);
     const kind = classification.classifiedKind;
     const isTaxRelevant =
@@ -89,23 +127,45 @@ function collectTaxDocuments(): SteuerberaterDocumentEntry[] {
       item.recommendedAction === 'steuerberater_vorbereiten' ||
       item.documentType === 'eingangsrechnung';
     if (!isTaxRelevant) continue;
-    const monthKey = resolveItemMonth(item);
-    const unclear =
-      item.recommendedAction === 'steuerberater_vorbereiten' ||
-      !TAX_RELEVANT_KINDS.has(kind);
     entries.push({
       id: item.id,
       title: item.title,
       kind,
-      monthKey,
-      status: unclear ? 'unclear' : 'included',
+      monthKey: resolveItemMonth(item),
+      status: 'unclear',
+      route: `/ablage/${item.id}`,
     });
   }
   return entries;
 }
 
-function collectMissingForMonth(monthKey: string): { id: string; title: string }[] {
-  const missing: { id: string; title: string }[] = [];
+function belegRoute(beleg: MonatsmappeBeleg): string {
+  return beleg.belegart === 'eingangsbeleg' || beleg.belegart === 'ausgabenstorno'
+    ? `/ausgaben/${beleg.id}`
+    : `/rechnungen/${beleg.id}`;
+}
+
+function belegEntry(beleg: MonatsmappeBeleg, monthKey: string): SteuerberaterDocumentEntry {
+  const title = beleg.belegnummer ? `${beleg.belegnummer} · ${beleg.gegenpartei}` : beleg.gegenpartei;
+  return { id: beleg.id, title, kind: beleg.belegart, monthKey, status: 'included', route: belegRoute(beleg) };
+}
+
+/** Eingangsposten, die bereits als Ausgabe im Modell stehen — nie doppelt zählen. */
+function bookedInboxIds(model: MonatsmappeModel, input: MonatsmappeInput): Set<string> {
+  const belegIds = new Set([...model.eingangsbelege, ...model.stornos].map((beleg) => beleg.id));
+  const ids = new Set<string>();
+  for (const expense of input.expenses) {
+    if (belegIds.has(expense.id) && expense.linkedInboxId) ids.add(expense.linkedInboxId);
+  }
+  return ids;
+}
+
+function collectMissingForMonth(monthKey: string, model: MonatsmappeModel): { id: string; title: string }[] {
+  /* Belege ohne verfügbares Dokument zählen als fehlend — wie im Export sichtbar. */
+  const missing: { id: string; title: string }[] = model.fehlendeDokumente.map((entry) => ({
+    id: entry.id,
+    title: `Dokument fehlt: ${entry.belegnummer || entry.id}`,
+  }));
   for (const task of getAllTasksFromStore()) {
     if (!isTaskOpen(task)) continue;
     if (task.type !== 'steuerberater_export' && task.category !== 'steuern') continue;
@@ -123,24 +183,31 @@ export function getSteuerberaterMonthOverview(
   const defaultMonthKey = getDefaultSteuerberaterMonthKey(referenceDate);
   const monthKey = monthKeyOverride ?? defaultMonthKey;
   const [year, month] = monthKey.split('-').map(Number);
-  const allDocs = collectTaxDocuments().filter((doc) => doc.monthKey === monthKey);
-  const documents = allDocs.filter((doc) => doc.status === 'included');
-  const unclearDocuments = allDocs.filter((doc) => doc.status === 'unclear');
-  const missingItems = collectMissingForMonth(monthKey);
-  const missingCount = missingItems.length;
-  const isComplete = allDocs.length > 0 && missingCount === 0 && unclearDocuments.length === 0;
-  const totalExpected = Math.max(allDocs.length + missingCount, allDocs.length > 0 ? allDocs.length : 1);
-  const completenessPercent = Math.min(
-    100,
-    Math.round(((allDocs.length - unclearDocuments.length) / totalExpected) * 100),
+  const input = collectMonatsmappeInput(monthKey);
+  const model = buildMonatsmappeModel(input);
+
+  /* Belege = exakt das, was die Monatsmappe enthält. */
+  const documents = [...model.ausgangsrechnungen, ...model.eingangsbelege, ...model.stornos].map((beleg) =>
+    belegEntry(beleg, monthKey),
   );
+  const unclearDocuments = collectUnclearInboxEntries(bookedInboxIds(model, input)).filter(
+    (doc) => doc.monthKey === monthKey,
+  );
+  const missingItems = collectMissingForMonth(monthKey, model);
+  const missingCount = missingItems.length;
+  const documentCount = documents.length;
+  const openCount = missingCount + unclearDocuments.length;
+  const isComplete = documentCount > 0 && openCount === 0;
+  const state: SteuerberaterMonthState = documentCount === 0 ? 'empty' : isComplete ? 'ready' : 'open';
+  const completenessPercent =
+    documentCount === 0 ? 0 : Math.min(100, Math.round((documentCount / (documentCount + openCount)) * 100));
 
   return {
     year,
     month,
     monthKey,
     monthLabel: formatMonthLabel(monthKey, locale),
-    documentCount: allDocs.length,
+    documentCount,
     documents,
     unclearDocuments,
     missingItems,
@@ -148,5 +215,10 @@ export function getSteuerberaterMonthOverview(
     isComplete,
     isDefaultMonth: monthKey === defaultMonthKey,
     completenessPercent,
+    state,
+    invoiceCount: model.ausgangsrechnungen.length,
+    expenseCount: model.eingangsbelege.length,
+    stornoCount: model.stornos.length,
+    openCount,
   };
 }
