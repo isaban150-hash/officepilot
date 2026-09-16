@@ -18,6 +18,7 @@ import { provisionLocalDbUser, removeLocalDbUser, type LocalDbUser } from './sup
 import { loadTestWorldOperatorCompany, type WorkspaceCompanyIdentity } from './support/localTestWorldCompany';
 import { uploadDoc00001ToAnalyzedDetail } from './support/localDoc00001Flow';
 import { acceptContractOrderThroughUi } from './support/localDoc00001VorgangFlow';
+import { fillVerified } from './support/verifiedInput';
 
 const SUPABASE_URL = process.env.E2E_LOCALDB_SUPABASE_URL ?? '';
 const SERVICE_ROLE_KEY = process.env.E2E_LOCALDB_SERVICE_ROLE_KEY ?? '';
@@ -97,27 +98,50 @@ async function openNewInvoice(page: Page): Promise<void> {
 
 async function chooseNewCustomer(page: Page, name: string): Promise<void> {
   await page.getByTestId('customer-decision-new').locator('input').check();
-  await page.getByTestId('manual-invoice-customer-name').fill(name);
-  await page.getByTestId('customer-decision-street').fill('Hauptstraße 12');
-  await page.getByTestId('customer-decision-zip').fill('45356');
-  await page.getByTestId('customer-decision-city').fill('Essen');
+  await fillVerified(page.getByTestId('manual-invoice-customer-name'), name);
+  await fillVerified(page.getByTestId('customer-decision-street'), 'Hauptstraße 12');
+  await fillVerified(page.getByTestId('customer-decision-zip'), '45356');
+  await fillVerified(page.getByTestId('customer-decision-city'), 'Essen');
   await page.getByTestId('manual-invoice-next').click();
   await expect(page.getByTestId('manual-invoice-progress')).toHaveText('2/4');
 }
 
+/** NumericInput zeigt nach dem Verlassen des Feldes die deutsche Schreibweise (`2.5` → `2,5`). */
+const germanDecimal = (value: string): string => value.replace('.', ',');
+/** Anzeige eines Eurobetrags in der Positionszeile (`45` → `45,00 €`, Leerzeichen tolerant). */
+const euroPattern = (value: string): RegExp =>
+  new RegExp(`${Number(value).toFixed(2).replace('.', ',')}\\s?€`);
+
+/**
+ * 01B — jede Eingabe wird verifiziert (siehe `fillVerified`); die Übernahme wird
+ * fachlich an der neuen Zeile geprüft: Beschreibung, Menge und Einzelpreis.
+ */
 async function addPosition(page: Page, description: string, quantity: string, price: string): Promise<void> {
-  await page.getByTestId('manual-position-description').fill(description);
-  await page.getByTestId('manual-position-quantity').fill(quantity);
-  await page.getByTestId('manual-position-unit-price').fill(price);
+  const before = await page.getByTestId('manual-positions-list').locator('li').count().catch(() => 0);
+  await fillVerified(page.getByTestId('manual-position-description'), description, { label: 'Beschreibung' });
+  await fillVerified(page.getByTestId('manual-position-quantity'), quantity, {
+    label: 'Menge',
+    expectAfterBlur: germanDecimal(quantity),
+  });
+  await fillVerified(page.getByTestId('manual-position-unit-price'), price, {
+    label: 'Einzelpreis',
+    expectAfterBlur: germanDecimal(price),
+  });
   await page.getByTestId('manual-position-commit').click();
-  await expect(page.getByTestId('manual-positions-list')).toContainText(description.slice(0, 20));
+  const rows = page.getByTestId('manual-positions-list').locator('li');
+  await expect(rows).toHaveCount(before + 1);
+  const row = rows.nth(before);
+  await expect(row).toContainText(description.slice(0, 20));
+  // Die Zeile zeigt die Menge als Zahl (`2.5`), das Eingabefeld nach dem Blur deutsch (`2,5`).
+  await expect(row).toContainText(`${Number(quantity)} `);
+  await expect(row).toContainText(euroPattern(price));
 }
 
 async function fillDetails(page: Page): Promise<void> {
   await page.getByTestId('manual-invoice-next').click();
   await expect(page.getByTestId('manual-invoice-progress')).toHaveText('3/4');
-  await page.getByTestId('invoice-edit-service-from').fill('2026-09-01');
-  await page.getByTestId('invoice-edit-service-to').fill('2026-09-05');
+  await fillVerified(page.getByTestId('invoice-edit-service-from'), '2026-09-01');
+  await fillVerified(page.getByTestId('invoice-edit-service-to'), '2026-09-05');
   await page.getByTestId('manual-invoice-next').click();
   await expect(page.getByTestId('manual-invoice-progress')).toHaveText('4/4');
 }
@@ -311,7 +335,7 @@ test.describe('Rechnung ohne Auftrag — echte App, lokale Datenbank', () => {
     await expect(page.getByTestId('invoice-cancel-dialog')).toBeVisible();
     await expect(page.getByTestId('invoice-cancel-kind-correction')).toBeVisible();
     await expect(page.getByTestId('invoice-cancel-submit')).toBeDisabled();
-    await page.getByTestId('invoice-cancel-reason-input').fill('Leistung nicht erbracht');
+    await fillVerified(page.getByTestId('invoice-cancel-reason-input'), 'Leistung nicht erbracht');
     await page.getByTestId('invoice-cancel-submit').click();
 
     await expect(page.getByTestId('invoice-cancelled-panel')).toBeVisible({ timeout: 30_000 });
@@ -394,7 +418,7 @@ test.describe('Rechnung ohne Auftrag — echte App, lokale Datenbank', () => {
     await page.getByTestId('invoice-cancel-action').click();
     await expect(page.getByTestId('invoice-cancel-kind-internal')).toBeVisible();
     await expect(page.getByTestId('invoice-cancel-payment-block')).toHaveCount(0);
-    await page.getByTestId('invoice-cancel-reason-input').fill('Doppelt erfasst');
+    await fillVerified(page.getByTestId('invoice-cancel-reason-input'), 'Doppelt erfasst');
     await page.getByTestId('invoice-cancel-submit').click();
     await expect(page.getByTestId('invoice-cancelled-panel')).toBeVisible({ timeout: 30_000 });
     await expect(page.getByTestId('invoice-cancelled-kind-internal')).toBeVisible();
@@ -446,8 +470,8 @@ test.describe('Rechnung ohne Auftrag — echte App, lokale Datenbank', () => {
       await page.getByTestId('invoice-apply-all-positions').click();
       const tax = page.getByTestId('invoice-tax-standard_19');
       if (await tax.isVisible().catch(() => false)) await tax.click();
-      await page.getByTestId('invoice-service-period-from').fill('2026-09-01');
-      await page.getByTestId('invoice-service-period-to').fill('2026-09-05');
+      await fillVerified(page.getByTestId('invoice-service-period-from'), '2026-09-01');
+      await fillVerified(page.getByTestId('invoice-service-period-to'), '2026-09-05');
       const confirmPeriod = page.getByTestId('invoice-confirm-service-period');
       if (await confirmPeriod.isVisible().catch(() => false)) await confirmPeriod.click();
       await expect(page.getByTestId('invoice-continue-preview')).toBeEnabled();
@@ -478,7 +502,7 @@ test.describe('Rechnung ohne Auftrag — echte App, lokale Datenbank', () => {
       await markAsSent(page);
       await page.getByTestId('invoice-cancel-action').click();
       await expect(page.getByTestId('invoice-cancel-kind-correction')).toBeVisible();
-      await page.getByTestId('invoice-cancel-reason-input').fill('Auftrag storniert');
+      await fillVerified(page.getByTestId('invoice-cancel-reason-input'), 'Auftrag storniert');
       await page.getByTestId('invoice-cancel-submit').click();
       await expect(page.getByTestId('invoice-cancelled-kind-correction')).toBeVisible({ timeout: 30_000 });
       expect(await countCorrectionDocumentsOnServer(page)).toBe(1);
@@ -523,10 +547,12 @@ test.describe('Rechnung ohne Auftrag — echte App, lokale Datenbank', () => {
     /* ---- Rechnungsdetails: Leistungszeitraum, Zahlungsziel, Skonto, §13b Confirm-first ---- */
     await page.getByTestId('manual-invoice-next').click();
     await expect(page.getByTestId('manual-invoice-progress')).toHaveText('3/4');
-    await page.getByTestId('invoice-edit-service-from').fill('2026-09-01');
-    await page.getByTestId('invoice-edit-service-to').fill('2026-09-05');
-    await page.getByTestId('invoice-edit-payment-due').fill('2026-10-05');
-    await page.getByTestId('invoice-edit-skonto').fill('2 % Skonto bei Zahlung innerhalb von 7 Tagen');
+    await fillVerified(page.getByTestId('invoice-edit-service-from'), '2026-09-01');
+    await fillVerified(page.getByTestId('invoice-edit-service-to'), '2026-09-05');
+    await fillVerified(page.getByTestId('invoice-edit-payment-due'), '2026-10-05');
+    await fillVerified(page.getByTestId('invoice-edit-skonto'), '2 % Skonto bei Zahlung innerhalb von 7 Tagen', {
+      expectAfterBlur: '2 % Skonto bei Zahlung innerhalb von 7 Tagen',
+    });
     // §13b: erst bestätigen, dann weiter; danach zurück auf 19 % (Confirm-first sichtbar geprüft).
     await page.getByTestId('invoice-tax-reverse_charge_13b').click();
     await expect(page.getByTestId('invoice-13b-confirm')).toBeVisible();
@@ -582,7 +608,7 @@ test.describe('Rechnung ohne Auftrag — echte App, lokale Datenbank', () => {
     await markAsSent(page);
     await page.getByTestId('invoice-cancel-action').click();
     await expect(page.getByTestId('invoice-cancel-kind-correction')).toBeVisible();
-    await page.getByTestId('invoice-cancel-reason-input').fill('Abnahme: Leistung storniert');
+    await fillVerified(page.getByTestId('invoice-cancel-reason-input'), 'Abnahme: Leistung storniert');
     await page.getByTestId('invoice-cancel-submit').click();
     await expect(page.getByTestId('invoice-cancelled-kind-correction')).toBeVisible({ timeout: 30_000 });
     await expect(page.getByTestId('invoice-detail-experience')).toContainText('Storniert');
@@ -705,7 +731,7 @@ async function expectActionReachable(page: Page, testId: string): Promise<void> 
 async function markAsSent(page: Page): Promise<void> {
   await page.getByTestId('invoice-sent-mark').click();
   await expect(page.getByTestId('invoice-sent-form')).toBeVisible();
-  await page.getByTestId('invoice-sent-date-input').fill('2026-09-05');
+  await fillVerified(page.getByTestId('invoice-sent-date-input'), '2026-09-05');
   await page.getByTestId('invoice-sent-via-input').selectOption('email');
   await page.getByTestId('invoice-sent-continue').click();
   await expect(page.getByTestId('invoice-sent-confirm')).toBeVisible();
@@ -746,7 +772,7 @@ async function recordPartialPayment(page: Page, amount: string): Promise<void> {
   const form = page.locator('form.invoice-payment-form');
   await expect(form).toBeVisible();
   const amountInput = form.locator('input[type="number"]').first();
-  await amountInput.fill(amount);
+  await fillVerified(amountInput, amount, { label: 'Zahlungsbetrag' });
   await page.getByTestId('payment-save').click();
   // Bestehende Regel: noch nicht als versendet markiert → ausdrückliche Rückfrage.
   await expect(page.getByTestId('payment-confirm-submit')).toBeVisible();
