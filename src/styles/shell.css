@@ -437,3 +437,396 @@
     scroll-margin-bottom: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px) + var(--space-4));
   }
 }
+
+/* ======================================================================
+   VISUAL-POLISH-01B — Kopfzeile mit integrierter Suche, kompakter Resume-Hinweis
+   ====================================================================== */
+
+.app-shell__top {
+  position: relative;
+  flex-wrap: nowrap;
+}
+
+/* Suche im Kopf: kein eigener Balken, keine Sidebar-Einrückung, nicht sticky. */
+.app-shell__top .app-shell__search {
+  position: static;
+  order: 2;
+  flex: 0 1 360px;
+  min-width: 0;
+  margin-left: auto;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.app-shell__top .app-shell__top-right {
+  order: 3;
+}
+
+.app-shell__top .global-search__input,
+.app-shell__top .global-search--compact .input {
+  min-height: 38px;
+  padding: 0.4rem 0.75rem 0.4rem 2.25rem;
+  border-color: rgba(255, 255, 255, 0.22);
+  background:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='7'/><path d='m20 20-3.5-3.5'/></svg>")
+    no-repeat 0.7rem center / 16px 16px,
+    var(--op-surface);
+  color: var(--op-text);
+  font-size: var(--text-meta-size);
+}
+
+.app-shell__top .global-search__input::placeholder {
+  color: var(--op-text-subtle);
+}
+
+.app-shell__top .global-search__preview {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 30;
+}
+
+/* Mobil: nur das Suchsymbol im Kopf; das Feld klappt unter der Kopfzeile aus. */
+.global-search__mobile-trigger--icon {
+  width: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  padding: 0;
+  justify-content: center;
+  color: #fff;
+  border: 0;
+  background: transparent;
+  border-radius: var(--radius-sm);
+}
+
+.global-search__mobile-trigger--icon:hover:not(:disabled),
+.global-search__mobile-trigger--icon:focus-visible,
+.global-search__mobile-trigger--icon[aria-expanded="true"] {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.app-shell__top .global-search--mobile-collapsible .global-search__panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  background: var(--op-surface);
+  border-bottom: 1px solid var(--op-border);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+  z-index: 30;
+}
+
+.app-shell__top .global-search--mobile-collapsible .global-search__input {
+  padding-left: 0.75rem;
+  background: var(--op-surface);
+  border-color: var(--op-border);
+}
+
+@media (max-width: 767px) {
+  .app-shell__top .app-shell__search {
+    flex: 0 0 auto;
+    margin-left: 0;
+  }
+
+  .app-shell__top .app-shell__top-right {
+    gap: var(--space-1);
+  }
+
+  /* Marke darf nicht vom Suchsymbol überdeckt werden: Werkzeuge und Name geben nach, nicht das Logo. */
+  .app-shell__top .app-shell__top-left {
+    flex: 1 1 auto;
+  }
+
+  .app-shell__top .app-shell__brand {
+    flex-shrink: 0;
+  }
+
+  .app-shell__top .app-shell__tool {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+
+  .app-shell__top .user-menu__name {
+    max-width: 4rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .app-shell__top {
+    padding-left: var(--space-3);
+    padding-right: var(--space-3);
+    gap: var(--space-2);
+  }
+
+  .app-shell__top .user-menu__name {
+    max-width: 3rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .app-shell__top .app-shell__search {
+    padding-left: 0;
+  }
+}
+
+/* Resume-Hinweis: eine Zeile, kleine Aktionen, dominiert die Tagesarbeit nicht. */
+.ui-session-recovery-host {
+  position: static;
+  padding: var(--space-3) var(--space-4) 0;
+}
+
+.continue-working-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin: 0 auto var(--space-2);
+  max-width: 1120px;
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--op-border);
+  border-left: 3px solid var(--op-primary);
+  border-radius: var(--radius-sm);
+  background: var(--op-surface);
+}
+
+.continue-working-card__text {
+  min-width: 0;
+}
+
+.continue-working-card__eyebrow {
+  margin: 0;
+  font-size: var(--text-xs, 12px);
+  color: var(--op-text-subtle);
+}
+
+.continue-working-card__headline {
+  margin: 0;
+  font-size: var(--text-meta-size);
+  font-weight: 600;
+  color: var(--op-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.continue-working-card__subtitle,
+.continue-working-card__hint,
+.continue-working-card__drafts {
+  font-weight: 400;
+  color: var(--op-text-muted);
+}
+
+.continue-working-card__actions {
+  display: flex;
+  flex-direction: row;
+  gap: var(--space-2);
+  margin: 0;
+  flex-shrink: 0;
+}
+
+@media (max-width: 767px) {
+  .continue-working-card {
+    flex-wrap: wrap;
+  }
+
+  .continue-working-card__headline {
+    white-space: normal;
+  }
+}
+
+@media (min-width: 1024px) {
+  .ui-session-recovery-host {
+    padding-left: calc(var(--sidebar-width) + var(--space-8));
+    padding-right: var(--space-8);
+  }
+}
+
+/* ======================================================================
+   VISUAL-POLISH-01B — WOW-Pass: tiefes Navy, ruhige Kopfzeile, kompakte
+   Werkzeuge, Initialen statt breiter Benutzer-Pill auf dem Handy
+   ====================================================================== */
+
+.app-shell__top {
+  background: var(--op-primary-deep);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: none;
+  min-height: 56px;
+  padding-top: var(--space-2);
+  padding-bottom: var(--space-2);
+}
+
+.app-shell__brand {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #fff;
+}
+
+.app-shell__company {
+  position: relative;
+  padding-left: var(--space-3);
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.62);
+  opacity: 1;
+}
+
+.app-shell__company::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 1px;
+  height: 16px;
+  transform: translateY(-50%);
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.app-shell__tool {
+  width: 2.5rem;
+  height: 2.5rem;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.app-shell__tool .ui-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.app-shell__tool:hover,
+.app-shell__tool:focus-visible {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Suche auf dunklem Grund: eingelassenes Feld statt weißer Box */
+.app-shell__top .global-search__input,
+.app-shell__top .global-search--compact .input {
+  min-height: 36px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.6)' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='7'/><path d='m20 20-3.5-3.5'/></svg>")
+    no-repeat 0.7rem center / 15px 15px,
+    rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-size: 13px;
+  box-shadow: none;
+}
+
+.app-shell__top .global-search__input::placeholder {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.app-shell__top .global-search__input:focus,
+.app-shell__top .global-search--compact .input:focus {
+  background-color: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.35);
+  box-shadow: none;
+  outline: none;
+}
+
+.app-shell__top .app-shell__search {
+  flex: 0 1 320px;
+}
+
+/* Benutzermenü: Initialen-Kreis + Name (Desktop), nur Initialen (Handy) */
+.app-shell__top .user-menu .dropdown-menu__trigger {
+  gap: var(--space-2);
+  min-height: 36px;
+  padding: 2px var(--space-2) 2px 2px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  border-radius: var(--radius-pill);
+}
+
+.app-shell__top .user-menu .dropdown-menu__trigger:hover,
+.app-shell__top .user-menu .dropdown-menu__trigger[aria-expanded="true"] {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.user-menu__avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--op-secondary);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+
+.user-menu__name {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+@media (max-width: 767px) {
+  .app-shell__top {
+    padding-left: var(--space-3);
+    padding-right: var(--space-3);
+    gap: var(--space-1);
+  }
+
+  .app-shell__top .app-shell__top-right {
+    gap: 0;
+  }
+
+  .app-shell__top .app-shell__search {
+    flex: 0 0 auto;
+    margin-left: auto;
+  }
+
+  .app-shell__top .app-shell__tool {
+    width: 2.25rem;
+    height: 2.25rem;
+  }
+
+  .global-search__mobile-trigger--icon {
+    width: 36px;
+    min-width: 36px;
+    min-height: 36px;
+    color: rgba(255, 255, 255, 0.72);
+  }
+
+  /* Handy: kompaktes Profil — Initialen statt abgeschnittenem Namen */
+  .app-shell__top .user-menu .dropdown-menu__trigger {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    min-height: 36px;
+    width: 36px;
+    justify-content: center;
+  }
+
+  .user-menu__name,
+  .user-menu__chevron {
+    display: none;
+  }
+
+  .user-menu__avatar {
+    width: 32px;
+    height: 32px;
+  }
+}
+
+/* Bottom-Navigation: klarer lesbar */
+.bottom-nav__label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--op-text-muted);
+}
+
+.bottom-nav__item--active .bottom-nav__label,
+.bottom-nav__item[aria-current="page"] .bottom-nav__label {
+  color: var(--op-primary);
+}

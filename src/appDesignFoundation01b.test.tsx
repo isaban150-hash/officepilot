@@ -6,10 +6,10 @@ import { AppProvider } from './context/AppContext';
 import { DEFAULT_SETUP } from './data/mockData';
 import { MOCK_INBOX_ITEMS } from './data/inboxMockData';
 import { HeutePage } from './pages/HeutePage';
-import { HomeDocumentAddCard } from './components/home/HomeDocumentAddCard';
+import { HomeQuickActions } from './components/home/HomeQuickActions';
 import { HomeOpenWork } from './components/home/HomeOpenWork';
-import { HomeOfficePilotCard } from './components/home/HomeOfficePilotCard';
-import { HomeMoreCard } from './components/home/HomeMoreCard';
+import { HomeAssistantPrompt } from './components/home/HomeAssistantPrompt';
+import { HomeKpis } from './components/home/HomeKpis';
 import { DeskPriorities } from './components/home/DeskPriorities';
 import { hydrateInboxStore } from './services/inboxService';
 import { hydrateTaskStore } from './services/taskStore';
@@ -19,13 +19,13 @@ import { resetHomeHintDismissals } from './services/homeHintDismissalService';
 import { buildDeskPriorities } from './services/deskIntelligenceService';
 import { t } from './i18n';
 
-/* UIUX-FOUNDATION-01E — Reihenfolge nach Arbeitsbedarf: Hauptaktion, offene Arbeit, dann Schnellaktionen. */
+/* VISUAL-POLISH-01B — Reihenfolge im Markup: Hauptaktion, Hauptspalte (Prioritäten, offene Arbeit, OfficePilot-Eingang), Seitenspalte (Kennzahlen/Steuerberater, Schnellaktionen). Mobil ordnet CSS `order` die Blöcke um. */
 const HOME_CARD_ORDER = [
   'home-card-add-document',
   'home-card-orders',
-  'home-card-steuerberater',
   'home-card-officepilot',
-  'home-card-more',
+  'home-card-steuerberater',
+  'home-quick-add',
 ] as const;
 
 function renderHome() {
@@ -60,20 +60,22 @@ describe('APP-DESIGN-FOUNDATION-01B', () => {
     resetHomeHintDismissals();
   });
 
-  it('HomeDocumentAddCard rendert Aufnahmewege als SVG-Zeile', () => {
-    const html = renderCard(<HomeDocumentAddCard />);
+  it('HomeQuickActions rendert Aufnahmewege als kompakte SVG-Aktionen', () => {
+    const html = renderCard(<HomeQuickActions />);
     expect(html).toContain('data-testid="home-quick-add"');
-    expect(html).toContain('data-testid="document-add-inline"');
+    expect(html).toContain('data-testid="home-quick-scan"');
+    expect(html).not.toContain('document-add-actions--inline');
     expect(html).toContain('<svg');
     expect(html).not.toContain('mobile-home-card__emoji');
     expect(html).not.toContain('📥');
   });
 
-  it('HomeOpenWork rendert Eingang, Aufträge, Rechnungen, Steuerberater als Zeilen mit NavIcon', () => {
-    const html = renderCard(<HomeOpenWork />);
+  it('HomeOpenWork rendert Eingang, Aufträge, Rechnungen als Zeilen mit NavIcon; Steuerberater nur in HomeKpis', () => {
+    const html = renderCard(<HomeOpenWork />) + renderCard(<HomeKpis />);
     for (const id of ['home-card-inbox', 'home-card-orders', 'home-card-invoices', 'home-card-steuerberater']) {
       expect(html).toContain(`data-testid="${id}"`);
     }
+    expect((html.match(/data-testid="home-card-steuerberater"/g) ?? []).length).toBe(1);
     expect(html).toContain('row-list__icon');
     expect(html).toContain('<svg');
     expect(html).not.toContain('📂');
@@ -84,23 +86,23 @@ describe('APP-DESIGN-FOUNDATION-01B', () => {
     expect(html).toContain(t('mobile.home.taxTitle', 'de'));
   });
 
-  it('HomeOfficePilotCard rendert assistant-NavIcon ohne Emoji', () => {
-    const html = renderCard(<HomeOfficePilotCard />);
+  it('HomeAssistantPrompt rendert assistant-Icon ohne Emoji', () => {
+    const html = renderCard(<HomeAssistantPrompt />);
     expect(html).toContain('data-testid="home-card-officepilot"');
-    expect(html).toContain('home-assistant__icon');
+    expect(html).toContain('assistant-prompt__icon');
     expect(html).toContain('<svg');
     expect(html).not.toContain('🤖');
     expect(html).not.toContain('🎤');
     expect(html).toContain(t('mobile.home.assistantTitle', 'de'));
   });
 
-  it('HomeMoreCard rendert more-NavIcon als Zeile', () => {
-    const html = renderCard(<HomeMoreCard />);
-    expect(html).toContain('data-testid="home-card-more"');
-    expect(html).toContain('row-list__icon');
-    expect(html).toContain('<svg');
-    expect(html).toContain('href="/mehr"');
-    expect(html).toContain(t('mobile.home.moreTitle', 'de'));
+  it('HomeKpis rendert vier Kennzahlen mit Links', () => {
+    const html = renderCard(<HomeKpis />);
+    for (const id of ['home-kpi-receivables', 'home-kpi-inbox', 'home-kpi-orders', 'home-kpi-tax']) {
+      expect(html).toContain(`data-testid="${id}"`);
+    }
+    expect(html).toContain('href="/steuerberater"');
+    expect(html).toContain(t('heute.section.kpis', 'de').length > 0 ? 'kpi-tile__value' : '');
   });
 
   it('Schreibtisch behält Kartenreihenfolge, Links und Texte', () => {
@@ -114,12 +116,12 @@ describe('APP-DESIGN-FOUNDATION-01B', () => {
     expect(html).toContain('href="/dokumente/hinzufuegen"');
     expect(html).toContain('href="/vorgaenge"');
     expect(html).toContain('href="/steuerberater"');
-    expect(html).toContain('href="/mehr"');
+    // VISUAL-POLISH-01B — „Mehr“ ist Navigation (Bottom-Nav/Sidebar), keine Heute-Karte.
+    expect(html).not.toContain('href="/mehr"');
     expect(html).toContain(t('mobile.home.addDocument', 'de'));
     expect(html).toContain(t('mobile.home.ordersTitle', 'de'));
     expect(html).toContain(t('mobile.home.assistantTitle', 'de'));
     expect(html).toContain(t('mobile.home.taxTitle', 'de'));
-    expect(html).toContain(t('mobile.home.moreTitle', 'de'));
     expect(html).not.toContain('mobile-home-card__emoji');
   });
 
@@ -147,7 +149,9 @@ describe('APP-DESIGN-FOUNDATION-01B', () => {
       expect(html).toContain(`desk-priorities__severity--${severity}`);
       expect(html).toContain(`data-severity="${severity}"`);
     }
-    expect(html).toContain('desk-priorities__severity-dot');
+    // VISUAL-POLISH-01B — Statuswort (StatusBadge) statt farbigem Punkt.
+    expect(html).not.toContain('desk-priorities__severity-dot');
+    expect(html).toContain('status-badge');
     expect(html).toContain('sr-only');
 
     for (const hint of priorities.slice(0, 3)) {
@@ -187,6 +191,7 @@ describe('APP-DESIGN-FOUNDATION-01B', () => {
     expect(html).toContain('data-testid="home-card-orders"');
     expect(html).toContain('data-testid="home-card-officepilot"');
     expect(html).toContain('data-testid="home-card-steuerberater"');
-    expect(html).toContain('data-testid="home-card-more"');
+    // VISUAL-POLISH-01B — keine Mehr-Karte mehr auf Heute (Bottom-Nav/Sidebar führen dorthin).
+    expect(html).not.toContain('data-testid="home-card-more"');
   });
 });

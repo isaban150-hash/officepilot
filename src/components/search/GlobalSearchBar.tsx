@@ -9,6 +9,7 @@ import {
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Card, CardMeta, CardTitle, PageHeader } from '../ui/Card';
 import { Button } from '../ui/Button';
+import { Icon } from '../ui/Icon';
 import { EmptyStateBlock } from '../ui/EmptyStateBlock';
 import { useApp } from '../../context/AppContext';
 import { searchOffice } from '../../services/officeSearchService';
@@ -27,6 +28,8 @@ interface SearchResultsListProps {
   results: SearchResult[];
   onSelect?: (result: SearchResult) => void;
   compact?: boolean;
+  /** VISUAL-POLISH-01B — im Kopfbereich: mobil nur ein Suchsymbol als Auslöser. */
+  iconTrigger?: boolean;
   query?: string;
 }
 
@@ -87,6 +90,8 @@ export function SearchResultsList({
 interface GlobalSearchBarProps {
   autoFocus?: boolean;
   compact?: boolean;
+  /** VISUAL-POLISH-01B — im Kopfbereich: mobil nur ein Suchsymbol als Auslöser. */
+  iconTrigger?: boolean;
   /** When true, search starts collapsed below 768px and expands on demand. */
   collapsibleOnMobile?: boolean;
 }
@@ -95,6 +100,7 @@ export function GlobalSearchBar({
   autoFocus = false,
   compact = false,
   collapsibleOnMobile = false,
+  iconTrigger = false,
 }: GlobalSearchBarProps) {
   const { translate } = useApp();
   const navigate = useNavigate();
@@ -222,14 +228,16 @@ export function GlobalSearchBar({
           type="button"
           variant="ghost"
           size="md"
-          fullWidth
-          className="global-search__mobile-trigger"
+          fullWidth={!iconTrigger}
+          className={iconTrigger ? 'global-search__mobile-trigger global-search__mobile-trigger--icon' : 'global-search__mobile-trigger'}
           aria-expanded={mobileExpanded}
           aria-controls={panelId}
+          aria-label={translate('search.title')}
+          title={translate('search.title')}
           data-testid="global-search-trigger"
           onClick={() => setMobileExpanded((open) => !open)}
         >
-          {translate('search.title')}
+          {iconTrigger ? <Icon id={mobileExpanded ? 'close' : 'search'} size="md" /> : translate('search.title')}
         </Button>
       ) : null}
 

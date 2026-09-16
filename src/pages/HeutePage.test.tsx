@@ -57,7 +57,7 @@ describe('HeutePage MOBILE-FIRST-01', () => {
     expect(html).toContain('data-testid="home-card-orders"');
     expect(html).toContain('data-testid="home-card-officepilot"');
     expect(html).toContain('data-testid="home-card-steuerberater"');
-    expect(html).toContain('data-testid="home-card-more"');
+    expect(html).not.toContain('data-testid="home-card-more"');
     expect(html).toContain('Dokument hinzufügen');
     expect(html).toContain('data-testid="desk-greeting-header"');
     expect(html).toContain('Heute kümmere ich mich um Folgendes:');
@@ -90,7 +90,7 @@ describe('HeutePage MOBILE-FIRST-01', () => {
     expect(html).toContain('href="/dokumente/hinzufuegen"');
     expect(html).toContain('href="/vorgaenge"');
     expect(html).toContain('href="/steuerberater"');
-    expect(html).toContain('href="/mehr"');
+    expect(html).not.toContain('href="/mehr"');
     expect(html).toContain('data-testid="home-assistant-input"');
   });
 

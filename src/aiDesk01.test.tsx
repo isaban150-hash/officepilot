@@ -194,7 +194,7 @@ describe('AI-DESK-01', () => {
     expect(html).toContain('data-testid="home-card-orders"');
     expect(html).toContain('data-testid="home-card-officepilot"');
     expect(html).toContain('data-testid="home-card-steuerberater"');
-    expect(html).toContain('data-testid="home-card-more"');
+    expect(html).not.toContain('data-testid="home-card-more"');
   });
 
   it('DE/TR Desk-Texte', () => {

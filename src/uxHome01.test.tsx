@@ -58,7 +58,7 @@ describe('UX-HOME-01 ABSCHLUSSFIX', () => {
     expect(html).toContain('data-testid="home-card-orders"');
     expect(html).toContain('data-testid="home-card-officepilot"');
     expect(html).toContain('data-testid="home-card-steuerberater"');
-    expect(html).toContain('data-testid="home-card-more"');
+    expect(html).not.toContain('data-testid="home-card-more"');
   });
 
   it('Mobile Bottom-Nav hat maximal 5 Punkte ohne Steuerberater', () => {
@@ -115,7 +115,7 @@ describe('UX-HOME-01 ABSCHLUSSFIX', () => {
 
     expect(html).toContain('href="/steuerberater"');
     expect(html).not.toContain('href="/kunden"');
-    expect(html).toContain('href="/mehr"');
+    expect(html).not.toContain('href="/mehr"');
   });
 
   it('Steuerberater ohne echten Versand-Button', () => {

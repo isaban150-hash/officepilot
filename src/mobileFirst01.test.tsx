@@ -40,7 +40,9 @@ describe('MOBILE-FIRST-01', () => {
 
     /* UIUX-FOUNDATION-01E — Hauptaktion im Seitenkopf statt größter Karte. */
     expect(html).toContain('data-testid="home-card-add-document"');
-    expect(html).toContain('page-header__primary');
+    // VISUAL-POLISH-01B — Hauptaktion im Heute-Kopf, normal breit (kein fullWidth).
+    expect(html).toContain('heute-head__primary');
+    expect(html).not.toMatch(/heute-head__primary[^>]*>s*<button[^>]*btn--full/);
     expect(html).toContain('Foto');
     expect(html).toContain('PDF');
     expect(html).toContain('Galerie');

@@ -20,6 +20,8 @@ export function UserMenu() {
   const { user, logout, isAdmin } = useAuth();
 
   const displayName = user ? `${user.firstName} ${user.lastName}`.trim() : 'Benutzer';
+  // WOW-Pass: Initialen für die kompakte mobile Anzeige (Name bleibt für Desktop und Screenreader erhalten).
+  const initials = user ? `${user.firstName?.[0] ?? ''}${user.lastName?.[0] ?? ''}`.toUpperCase() || displayName.slice(0, 1).toUpperCase() : 'B';
 
   const items = useMemo((): DropdownMenuItem[] => {
     const menuItems: DropdownMenuItem[] = [
@@ -74,6 +76,9 @@ export function UserMenu() {
         align="end"
         trigger={
           <>
+            <span className="user-menu__avatar" aria-hidden>
+              {initials}
+            </span>
             <span className="user-menu__name" data-testid="app-shell-user">
               {displayName}
             </span>

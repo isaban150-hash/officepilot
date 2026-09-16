@@ -162,7 +162,9 @@ describe('APP-DESIGN-FOUNDATION-01D Mobile Search Collapse', () => {
     const input = getInput(container);
 
     expect(trigger).not.toBeNull();
-    expect(trigger?.textContent).toContain('Suche');
+    // VISUAL-POLISH-01B — mobil ist der Auslöser ein Suchsymbol; der Name bleibt zugänglich (aria-label).
+    expect(trigger?.getAttribute('aria-label')).toContain('Suche');
+    expect(trigger?.querySelector('svg')).not.toBeNull();
     expect(trigger?.getAttribute('aria-expanded')).toBe('false');
     expect(panel).not.toBeNull();
     expect(input).not.toBeNull();

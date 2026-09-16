@@ -64,14 +64,15 @@ export function AppShell() {
           </Link>
           <UserMenu />
         </div>
+        {/* VISUAL-POLISH-01B — Suche kompakt im Kopf (Desktop: Feld, mobil: Symbol), kein eigener Suchbalken. */}
+        <div className="app-shell__search" data-testid="app-shell-search">
+          <GlobalSearchBar compact collapsibleOnMobile iconTrigger />
+        </div>
       </div>
       <PersistenceFailureBanner />
       <CloudBackupPendingBanner />
       <BetaModeBanner />
       <UiSessionRecoveryHost />
-      <div className="app-shell__search" data-testid="app-shell-search">
-        <GlobalSearchBar compact collapsibleOnMobile />
-      </div>
       <div className="app-shell__body">
         <SidebarNav />
         <main className="app-shell__main" ref={mainRef} data-testid="app-shell-main">

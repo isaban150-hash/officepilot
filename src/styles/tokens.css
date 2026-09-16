@@ -6,6 +6,8 @@
 :root {
   /* Brand */
   --op-primary: #1f3c88;
+  /* WOW-Pass: tiefes, ruhiges Navy für Kopfzeile und Marke */
+  --op-primary-deep: #13264f;
   --op-primary-hover: #1a3170;
   --op-primary-active: #152a5c;
   --op-primary-subtle: #eef2ff;

@@ -1197,3 +1197,1250 @@ a.desk-recommendation__text:hover {
   box-shadow: none;
   border: none;
 }
+
+/* ======================================================================
+   VISUAL-POLISH-01B — Heute als Referenzseite (Navy Trust)
+   Kopfzeile · zweispaltiges Arbeitslayout · Prioritätenfläche · Kennzahlen ·
+   Schnellaktionen · kompakter OfficePilot-Eingang
+   ====================================================================== */
+
+.heute-page.mobile-first-page {
+  max-width: 1200px;
+}
+
+/* --- Kopf ------------------------------------------------------------ */
+.heute-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin: var(--space-2) 0 var(--space-6);
+}
+
+.heute-head__text {
+  min-width: 0;
+}
+
+.heute-head__title {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--op-text);
+}
+
+.heute-head__meta {
+  margin: var(--space-1) 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--op-text-muted);
+}
+
+.heute-head__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.heute-head__primary {
+  display: inline-flex;
+  text-decoration: none;
+}
+
+.heute-head__primary .btn {
+  width: auto;
+}
+
+/* --- Arbeitslayout --------------------------------------------------- */
+.heute-page .heute-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-6);
+}
+
+.heute-grid .ui-section-header {
+  margin-bottom: var(--space-3);
+}
+
+.heute-grid .ui-section-header__title {
+  font-size: 22px;
+  line-height: 1.3;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+
+/* Mobile Reihenfolge: Prioritaeten, Kennzahlen, Dokumente, Offene Arbeit, Schnell, Erledigt, OfficePilot */
+.heute-page .heute-grid__priorities { order: 1; }
+.heute-page .heute-grid__kpis { order: 2; }
+.heute-page .heute-grid__documents { order: 3; }
+.heute-page .heute-grid__work { order: 4; }
+.heute-page .heute-grid__quick { order: 5; }
+.heute-page .heute-grid__successes { order: 6; }
+.heute-page .heute-grid__assistant { order: 7; }
+
+.heute-grid__documents:empty,
+.heute-grid__successes:empty {
+  display: none;
+}
+
+/* Mobil: Spalten lösen sich auf, die Blöcke ordnen sich flach nach `order`. */
+.heute-page .heute-grid__col {
+  display: contents;
+}
+
+@media (min-width: 1024px) {
+  .heute-page .heute-grid {
+    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+    column-gap: var(--space-8);
+    align-items: start;
+  }
+
+  .heute-page .heute-grid__col {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    min-width: 0;
+  }
+
+  .heute-page .heute-grid__col--side {
+    position: sticky;
+    top: var(--space-6);
+  }
+}
+
+/* --- Heute wichtig: eine Flaeche, Statuswort, kleine Symbolaktionen ---- */
+.priority-list {
+  background: var(--op-surface);
+  border: 1px solid var(--op-border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.priority-list__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.priority-list__item {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 0;
+  border-top: 1px solid var(--op-border);
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+  margin: 0;
+}
+
+.priority-list__item:first-child {
+  border-top: 0;
+}
+
+.priority-list__content {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  flex: 1;
+}
+
+.priority-list__status {
+  flex-shrink: 0;
+  display: inline-flex;
+  width: auto;
+  height: auto;
+}
+
+.priority-list__content .desk-priorities__text {
+  font-size: 16px;
+  line-height: 1.45;
+  color: var(--op-text);
+  text-decoration: none;
+  padding: 0;
+  margin: 0;
+}
+
+.priority-list__content a.desk-priorities__text:hover {
+  color: var(--op-primary);
+  text-decoration: underline;
+}
+
+.priority-list__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
+
+.priority-list__icon-action {
+  font-family: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--op-text-subtle);
+  cursor: pointer;
+}
+
+.priority-list__icon-action:hover,
+.priority-list__icon-action:focus-visible {
+  color: var(--op-secondary);
+  background: var(--op-success-subtle);
+  border-color: var(--op-border);
+}
+
+.priority-list__actions .dropdown-menu__trigger {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  min-height: 0;
+  box-shadow: none;
+}
+
+.priority-list__more {
+  display: block;
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--op-border);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--op-primary);
+  text-decoration: none;
+}
+
+.priority-list__more:hover {
+  text-decoration: underline;
+}
+
+.desk-priorities--empty {
+  background: var(--op-surface);
+  border: 1px solid var(--op-border);
+  border-radius: 12px;
+  padding: var(--space-4);
+}
+
+/* Mobil: hoechstens drei Prioritaeten sichtbar, der Rest ueber "Alle anzeigen". */
+@media (max-width: 1023px) {
+  .priority-list__item:nth-child(n + 4) {
+    display: none;
+  }
+}
+
+/* Schmale Bildschirme: Statuswort ueber dem Text, damit der Text nicht zur Spalte wird. */
+@media (max-width: 767px) {
+  .priority-list__content {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-1);
+  }
+
+  .priority-list__content .desk-priorities__text {
+    font-size: 15px;
+  }
+}
+
+/* --- Kennzahlen ------------------------------------------------------ */
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.kpi-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-height: 96px;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--op-border);
+  border-radius: 12px;
+  background: var(--op-surface);
+  color: inherit;
+  text-decoration: none;
+}
+
+.kpi-tile--interactive:hover,
+.kpi-tile--interactive:focus-visible {
+  border-color: var(--op-border-strong);
+  background: var(--op-primary-subtle);
+}
+
+.kpi-tile__label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--op-text-subtle);
+  padding-right: 20px;
+}
+
+.kpi-tile__value {
+  font-size: 24px;
+  line-height: 1.15;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--op-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.kpi-tile--critical .kpi-tile__value {
+  color: var(--op-critical);
+}
+
+.kpi-tile--positive .kpi-tile__value {
+  color: var(--op-secondary);
+}
+
+.kpi-tile__hint {
+  font-size: 12px;
+  color: var(--op-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kpi-tile__progress {
+  display: block;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--op-surface-sunken);
+  overflow: hidden;
+  margin-top: var(--space-1);
+}
+
+.kpi-tile__progress-bar {
+  display: block;
+  height: 100%;
+  background: var(--op-secondary);
+  border-radius: 2px;
+}
+
+.kpi-tile__chevron {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  color: var(--op-text-subtle);
+}
+
+.home-kpis {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.home-kpis__tax .row-list__description {
+  overflow-wrap: anywhere;
+}
+
+.home-kpis__tax-trailing .row-list__cta {
+  font-size: 14px;
+}
+
+/* Mobil: Steuerberater-Zeile einzeilig (Text-CTA ausgeblendet, Chevron bleibt). */
+@media (max-width: 1023px) {
+  .home-kpis__tax .row-list__description {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+.home-kpis__tax-trailing {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  white-space: nowrap;
+}
+
+/* Mobil: horizontal scrollbare Kennzahlenreihe */
+@media (max-width: 1023px) {
+  .kpi-row {
+    display: flex;
+    gap: var(--space-3);
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    padding-bottom: var(--space-1);
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .kpi-row::-webkit-scrollbar {
+    display: none;
+  }
+
+  .kpi-tile {
+    flex: 0 0 148px;
+    scroll-snap-align: start;
+  }
+
+  .home-kpis__tax-trailing .row-list__cta {
+    display: none;
+  }
+}
+
+/* --- Schnell erledigen: vier kompakte Symbolaktionen ------------------ */
+.quick-actions {
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+
+.quick-actions__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.quick-actions__link {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  min-height: 64px;
+  padding: var(--space-2);
+  border: 1px solid var(--op-border);
+  border-radius: 12px;
+  background: var(--op-surface);
+  color: var(--op-text);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.quick-actions__link:hover,
+.quick-actions__link:focus-visible {
+  border-color: var(--op-secondary);
+  background: var(--op-success-subtle);
+}
+
+.quick-actions__icon {
+  display: inline-flex;
+  color: var(--op-secondary);
+}
+
+.quick-actions__hint {
+  margin: var(--space-2) 0 0;
+  font-size: 12px;
+  color: var(--op-text-subtle);
+}
+
+/* --- OfficePilot-Eingang: eine Zeile, drei Vorschlaege ----------------- */
+.assistant-prompt {
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+
+.assistant-prompt__form {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.assistant-prompt__icon,
+.assistant-prompt__send {
+  font-family: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border: 1px solid var(--op-border);
+  border-radius: 10px;
+  background: var(--op-surface);
+  color: var(--op-primary);
+  cursor: pointer;
+}
+
+.assistant-prompt__send {
+  background: var(--op-primary);
+  border-color: var(--op-primary);
+  color: #fff;
+}
+
+.assistant-prompt__send:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.assistant-prompt__input {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+}
+
+.assistant-prompt__suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.assistant-prompt__chip {
+  font-family: inherit;
+  padding: 6px 12px;
+  border: 1px solid var(--op-border);
+  border-radius: var(--radius-pill);
+  background: var(--op-surface);
+  color: var(--op-text-muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.assistant-prompt__chip:hover {
+  color: var(--op-primary);
+  border-color: var(--op-border-strong);
+}
+
+@media (max-width: 767px) {
+  .heute-head {
+    flex-direction: column;
+    align-items: flex-start;
+    margin-bottom: var(--space-5);
+  }
+
+  .heute-head__title {
+    font-size: 22px;
+  }
+
+  .heute-page .heute-grid {
+    gap: var(--space-5);
+  }
+
+  .quick-actions__link {
+    font-size: 12px;
+    min-height: 60px;
+  }
+
+  .assistant-prompt__chip:nth-child(n + 3) {
+    display: none;
+  }
+}
+
+/* ======================================================================
+   VISUAL-POLISH-01B — WOW-Pass: Typografie-Hierarchie, gemeinsame
+   Kennzahlenfläche, Prioritäten als stärkste Information, OfficePilot als
+   sichtbarer Assistent, weniger Rahmen auf der Arbeitsfläche
+   ====================================================================== */
+
+/* --- Arbeitsfläche --------------------------------------------------- */
+.heute-page.mobile-first-page {
+  max-width: 1180px;
+}
+
+.heute-page .heute-head {
+  align-items: center;
+  margin: var(--space-3) 0 var(--space-7);
+}
+
+.heute-page .heute-head__title {
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+
+.heute-page .heute-head__meta {
+  font-size: 13px;
+  color: var(--op-text-subtle);
+}
+
+.heute-page .heute-head__primary .btn {
+  min-height: 42px;
+  padding-left: var(--space-5);
+  padding-right: var(--space-5);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(19, 38, 79, 0.18);
+}
+
+.heute-page .heute-grid .ui-section-header {
+  margin-bottom: var(--space-3);
+  align-items: baseline;
+}
+
+.heute-page .heute-grid .ui-section-header__title {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--op-text);
+}
+
+@media (min-width: 1024px) {
+  .heute-page .heute-grid {
+    column-gap: 40px;
+  }
+
+  .heute-page .heute-grid__col {
+    gap: var(--space-8);
+  }
+}
+
+/* --- Heute wichtig: stärkste Arbeitsinformation --------------------- */
+.heute-page .priority-list {
+  border-radius: 14px;
+  border-color: var(--op-border);
+}
+
+.heute-page .priority-list__item {
+  position: relative;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4) var(--space-3) calc(var(--space-4) + 4px);
+}
+
+.heute-page .priority-list__item::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--op-border-strong);
+}
+
+.heute-page .priority-list__item--critical::before {
+  background: var(--op-critical);
+}
+
+.heute-page .priority-list__item--warning::before {
+  background: var(--op-warning);
+}
+
+.heute-page .priority-list__item--info::before {
+  background: var(--op-primary);
+}
+
+.heute-page .priority-list__item--critical {
+  background: #fffafa;
+}
+
+.heute-page .priority-list__content {
+  gap: var(--space-3);
+}
+
+.heute-page .priority-list__status .status-badge {
+  min-width: 64px;
+  justify-content: center;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-radius: 6px;
+}
+
+.heute-page .priority-list__content .desk-priorities__text {
+  font-size: 15px;
+  line-height: 1.4;
+  font-weight: 500;
+  color: var(--op-text);
+}
+
+.heute-page .priority-list__item--critical .desk-priorities__text {
+  font-weight: 600;
+}
+
+.heute-page .priority-list__icon-action {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  color: var(--op-text-subtle);
+}
+
+.heute-page .priority-list__icon-action:hover,
+.heute-page .priority-list__icon-action:focus-visible {
+  background: var(--op-surface-sunken);
+  color: var(--op-primary);
+  border-color: transparent;
+}
+
+.heute-page .priority-list__more {
+  padding: var(--space-2) var(--space-4);
+  font-size: 13px;
+}
+
+.heute-page .desk-priorities--empty {
+  border-radius: 14px;
+  color: var(--op-text-muted);
+  font-size: 14px;
+}
+
+/* --- Ihr Betrieb heute: eine Fläche, feine Teiler, Zahlen typografisch --- */
+.heute-page .home-kpis {
+  gap: 0;
+  background: var(--op-surface);
+  border: 1px solid var(--op-border);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.heute-page .kpi-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  overflow: visible;
+  padding: 0;
+}
+
+.heute-page .kpi-tile {
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 2px;
+  padding: var(--space-4) var(--space-4) var(--space-3);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  border-bottom: 1px solid var(--op-border);
+}
+
+.heute-page .kpi-tile:nth-child(odd) {
+  border-right: 1px solid var(--op-border);
+}
+
+.heute-page .kpi-tile--interactive:hover,
+.heute-page .kpi-tile--interactive:focus-visible {
+  background: var(--op-surface-sunken);
+  border-color: var(--op-border);
+}
+
+.heute-page .kpi-tile__label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--op-text-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 0;
+}
+
+.heute-page .kpi-tile__value {
+  margin-top: 2px;
+  font-size: 28px;
+  line-height: 1.1;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--op-text);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.heute-page .kpi-tile--critical .kpi-tile__value {
+  color: var(--op-critical);
+}
+
+.heute-page .kpi-tile--positive .kpi-tile__value {
+  color: var(--op-secondary);
+}
+
+.heute-page .kpi-tile__hint {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--op-text-subtle);
+}
+
+.heute-page .kpi-tile__progress {
+  height: 3px;
+  margin-top: var(--space-2);
+  background: var(--op-surface-sunken);
+}
+
+.heute-page .kpi-tile__chevron {
+  top: var(--space-4);
+  right: var(--space-3);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.heute-page .kpi-tile--interactive:hover .kpi-tile__chevron {
+  opacity: 1;
+}
+
+.heute-page .home-kpis__tax {
+  border: 0;
+  border-radius: 0;
+  background: var(--op-surface-sunken);
+}
+
+.heute-page .home-kpis__tax .row-list__row {
+  border: 0;
+}
+
+.heute-page .home-kpis__tax .row-list__item {
+  padding: var(--space-3) var(--space-4);
+  background: transparent;
+}
+
+.heute-page .home-kpis__tax .row-list__title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.heute-page .home-kpis__tax .row-list__description {
+  font-size: 12.5px;
+  color: var(--op-text-subtle);
+}
+
+.heute-page .home-kpis__tax-trailing .row-list__cta {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* --- Offene Arbeit: ruhige Zeilen --------------------------------- */
+.heute-page .heute-grid__work .row-list {
+  border-radius: 14px;
+}
+
+.heute-page .heute-grid__work .row-list__title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.heute-page .heute-grid__work .row-list__description {
+  font-size: 13px;
+  color: var(--op-text-subtle);
+}
+
+/* --- Schnell erledigen: eine Fläche, vier Wege ----------------------- */
+.heute-page .quick-actions__list {
+  gap: 0;
+  border: 1px solid var(--op-border);
+  border-radius: 14px;
+  background: var(--op-surface);
+  overflow: hidden;
+}
+
+.heute-page .quick-actions__link {
+  min-height: 72px;
+  gap: 6px;
+  border: 0;
+  border-radius: 0;
+  border-right: 1px solid var(--op-border);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--op-text);
+}
+
+.heute-page .quick-actions__list > li:last-child .quick-actions__link {
+  border-right: 0;
+}
+
+.heute-page .quick-actions__link:hover,
+.heute-page .quick-actions__link:focus-visible {
+  background: var(--op-surface-sunken);
+  border-color: var(--op-border);
+}
+
+.heute-page .quick-actions__icon {
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--op-success-subtle);
+  color: var(--op-secondary);
+}
+
+.heute-page .quick-actions__hint {
+  margin-top: var(--space-2);
+  font-size: 12px;
+  color: var(--op-text-subtle);
+}
+
+/* --- OfficePilot: sichtbarer Assistent, kompakt ---------------------- */
+.heute-page .assistant-prompt {
+  padding: var(--space-4);
+  border: 1px solid #d6def3;
+  border-radius: 14px;
+  background: var(--op-primary-subtle);
+}
+
+.heute-page .assistant-prompt__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.heute-page .assistant-prompt__mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--op-primary);
+  color: #fff;
+}
+
+.heute-page .assistant-prompt__title {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--op-text);
+}
+
+.heute-page .assistant-prompt__role {
+  font-size: 12px;
+  color: var(--op-text-subtle);
+}
+
+.heute-page .assistant-prompt__form {
+  gap: var(--space-2);
+}
+
+.heute-page .assistant-prompt__input {
+  min-height: 42px;
+  border-color: #c7d2ec;
+  background: var(--op-surface);
+  font-size: 14px;
+}
+
+.heute-page .assistant-prompt__icon {
+  width: 42px;
+  height: 42px;
+  border-color: #c7d2ec;
+  color: var(--op-text-subtle);
+}
+
+.heute-page .assistant-prompt__send {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+}
+
+.heute-page .assistant-prompt__suggestions {
+  margin-top: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.heute-page .assistant-prompt__suggestions::-webkit-scrollbar {
+  display: none;
+}
+
+.heute-page .assistant-prompt__chip {
+  flex-shrink: 0;
+  padding: 5px 11px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--op-primary);
+  border-color: #c7d2ec;
+  background: var(--op-surface);
+}
+
+.heute-page .assistant-prompt__chip:hover {
+  background: #fff;
+  border-color: var(--op-primary);
+}
+
+/* --- Handy 360 px: eigene App-Oberfläche ------------------------------ */
+@media (max-width: 767px) {
+  .heute-page .heute-head {
+    align-items: flex-start;
+    margin: var(--space-2) 0 var(--space-5);
+  }
+
+  .heute-page .heute-head__title {
+    font-size: 24px;
+  }
+
+  .heute-page .heute-head__meta {
+    font-size: 12.5px;
+  }
+
+  .heute-page .heute-head__primary .btn {
+    min-height: 40px;
+  }
+
+  .heute-page .heute-grid {
+    gap: var(--space-6);
+  }
+
+  .heute-page .heute-grid .ui-section-header__title {
+    font-size: 16px;
+  }
+
+  .heute-page .priority-list__item {
+    padding: var(--space-2) var(--space-2) var(--space-2) calc(var(--space-3) + 4px);
+    gap: var(--space-1);
+  }
+
+  .heute-page .priority-list__content {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .heute-page .priority-list__content .desk-priorities__text {
+    font-size: 14px;
+    line-height: 1.35;
+  }
+
+  .heute-page .priority-list__status .status-badge {
+    min-width: 0;
+    font-size: 10px;
+    padding: 1px 6px;
+  }
+
+  .heute-page .priority-list__icon-action {
+    width: 30px;
+    height: 30px;
+  }
+
+  /* Kennzahlen: gemeinsame Fläche 2×2, keine Scrollreihe, kein Umbruch im Betrag */
+  .heute-page .kpi-tile {
+    padding: var(--space-3) var(--space-3) var(--space-2);
+  }
+
+  .heute-page .kpi-tile__value {
+    font-size: 22px;
+  }
+
+  .heute-page .kpi-tile__label {
+    font-size: 10px;
+    letter-spacing: 0.05em;
+  }
+
+  .heute-page .kpi-tile__hint {
+    font-size: 11.5px;
+    white-space: normal;
+  }
+
+  .heute-page .quick-actions__link {
+    min-height: 68px;
+    font-size: 12px;
+  }
+
+  .heute-page .quick-actions__icon {
+    width: 30px;
+    height: 30px;
+  }
+
+  .heute-page .assistant-prompt {
+    padding: var(--space-3);
+  }
+
+  .heute-page .assistant-prompt__chip:nth-child(n + 3) {
+    display: inline-flex;
+  }
+
+  /* Handy: Vorschläge als eine wischbare Reihe */
+  .heute-page .assistant-prompt__suggestions {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    margin-right: calc(-1 * var(--space-3));
+    padding-right: var(--space-3);
+  }
+}
+
+/* ======================================================================
+   VISUAL-POLISH-01B — Premium-Finish: kompaktere mobile Hauptaktion,
+   Offene Arbeit als ruhige Fläche, Assistent in hellem Navy/Neutral,
+   etwas dichtere mobile Seite
+   ====================================================================== */
+
+/* --- Offene Arbeit: gemeinsame Fläche, Zeilentrenner, dezente Symbole --- */
+.heute-page .heute-grid__work .row-list {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  border-top: 1px solid var(--op-border);
+}
+
+.heute-page .heute-grid__work .row-list__row {
+  border-bottom: 1px solid var(--op-border);
+}
+
+.heute-page .heute-grid__work .row-list__row + .row-list__row {
+  border-top: 0;
+}
+
+.heute-page .heute-grid__work .row-list__item {
+  padding: var(--space-3) var(--space-2);
+  gap: var(--space-3);
+  border-radius: 8px;
+}
+
+.heute-page .heute-grid__work .row-list__item--interactive:hover,
+.heute-page .heute-grid__work .row-list__item--interactive:focus-visible {
+  background: var(--op-surface);
+}
+
+.heute-page .heute-grid__work .row-list__icon {
+  color: var(--op-text-subtle);
+}
+
+.heute-page .heute-grid__work .row-list__icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.heute-page .heute-grid__work .row-list__chevron {
+  color: var(--op-border-strong);
+}
+
+.heute-page .heute-grid__work .row-list__item--interactive:hover .row-list__chevron {
+  color: var(--op-primary);
+}
+
+.heute-page .heute-grid__work .row-list__title {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.heute-page .heute-grid__work .row-list__description {
+  font-size: 12.5px;
+  color: var(--op-text-subtle);
+}
+
+/* --- OfficePilot: helles Navy/Neutral statt lila Tönung ------------- */
+.heute-page .assistant-prompt {
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  border: 1px solid var(--op-border);
+  border-radius: 14px;
+  background: var(--op-surface);
+}
+
+.heute-page .assistant-prompt__head {
+  margin-bottom: var(--space-2);
+}
+
+.heute-page .assistant-prompt__mark {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: var(--op-primary-deep);
+}
+
+.heute-page .assistant-prompt__title {
+  font-size: 14px;
+}
+
+.heute-page .assistant-prompt__role {
+  font-size: 12px;
+}
+
+.heute-page .assistant-prompt__input {
+  min-height: 40px;
+  border-color: var(--op-border-strong);
+  background: var(--op-bg);
+  font-size: 14px;
+}
+
+.heute-page .assistant-prompt__input:focus {
+  background: var(--op-surface);
+  border-color: var(--op-primary);
+}
+
+.heute-page .assistant-prompt__icon {
+  width: 40px;
+  height: 40px;
+  border-color: var(--op-border);
+  background: var(--op-bg);
+  color: var(--op-text-subtle);
+}
+
+.heute-page .assistant-prompt__send {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--op-secondary);
+  border-color: var(--op-secondary);
+}
+
+.heute-page .assistant-prompt__send:disabled {
+  background: var(--op-surface-sunken);
+  border-color: var(--op-border);
+  color: var(--op-text-subtle);
+  opacity: 1;
+}
+
+.heute-page .assistant-prompt__suggestions {
+  margin-top: var(--space-2);
+  gap: var(--space-1);
+}
+
+.heute-page .assistant-prompt__chip {
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--op-text-muted);
+  border-color: var(--op-border);
+  background: transparent;
+}
+
+.heute-page .assistant-prompt__chip:hover {
+  color: var(--op-secondary);
+  border-color: var(--op-secondary);
+  background: var(--op-success-subtle);
+}
+
+/* --- Handy 360 px: kompakter, Touch-Ziele bleiben >= 40 px ---------- */
+@media (max-width: 767px) {
+  .heute-page .heute-head {
+    margin: var(--space-1) 0 var(--space-4);
+    gap: var(--space-3);
+  }
+
+  .heute-page .heute-head__title {
+    font-size: 23px;
+  }
+
+  .heute-page .heute-head__primary .btn {
+    min-height: 40px;
+    padding: 0 var(--space-4);
+    font-size: 14px;
+    font-weight: 600;
+    border-radius: 10px;
+    box-shadow: none;
+  }
+
+  .heute-page .heute-grid {
+    gap: var(--space-5);
+  }
+
+  .heute-page .heute-grid .ui-section-header {
+    margin-bottom: var(--space-2);
+  }
+
+  .heute-page .heute-grid__work .row-list__item {
+    padding: 10px var(--space-1);
+    min-height: 44px;
+  }
+
+  .heute-page .heute-grid__work .row-list__title {
+    font-size: 14.5px;
+  }
+
+  .heute-page .quick-actions__hint {
+    margin-top: var(--space-1);
+  }
+
+  .heute-page .assistant-prompt {
+    padding: var(--space-3);
+  }
+
+  .heute-page .assistant-prompt__suggestions {
+    margin-right: calc(-1 * var(--space-3));
+    padding-right: var(--space-3);
+  }
+}
