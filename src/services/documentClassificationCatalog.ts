@@ -150,7 +150,10 @@ export const CLASSIFIED_DOCUMENT_KINDS: ClassifiedDocumentKind[] = [
   'zoll', 'handwerkskammer', 'ihk', 'gewerbeamt', 'bauamt', 'ordnungsamt',
   'agentur_fuer_arbeit', 'deutsche_rentenversicherung', 'finanzamt', 'bg_bau', 'berufsgenossenschaft',
   'aok', 'barmer', 'tk', 'dak', 'ikk', 'knappschaft', 'pflegekasse', 'soka_bau', 'krankenkasse',
-  'eingangsrechnung', 'rechnung', 'ausgangsrechnung', 'gutschrift', 'quittung', 'kassenbeleg',
+  'eingangsrechnung', 'rechnung', 'ausgangsrechnung',
+  // DOCUMENT-KIND-CATALOG-01A — der von OfficePilot erzeugte Korrekturbeleg (NORMAL-INVOICE-CANCELLATION-01B).
+  'rechnungskorrektur',
+  'gutschrift', 'quittung', 'kassenbeleg',
   'ec_beleg', 'kreditkartenbeleg', 'kontoauszug', 'steuerbescheid', 'umsatzsteuerbescheid',
   'mahnung', 'zahlungserinnerung',
   'werkvertrag', 'subunternehmervertrag', 'nachunternehmervertrag', 'auftrag', 'angebot',
@@ -224,6 +227,9 @@ export function mapKindToDocumentType(kind: ClassifiedDocumentKind): DocumentTyp
   const primaryTarget = resolvePrimaryTargetObjectForKind(kind);
 
   if (primaryTarget === 'vorgangInvoice') return 'ausgangsrechnung';
+  // DOCUMENT-KIND-CATALOG-01A — der Korrekturbeleg gehört wie die Rechnung zu den Ausgangsrechnungen
+  // (so legt ihn `invoiceCorrectionArchive` ab); kein eigenes Primärziel, keine Klassifikationsheuristik.
+  if (kind === 'rechnungskorrektur') return 'ausgangsrechnung';
   if (primaryTarget === 'expense') {
     return 'eingangsrechnung';
   }

@@ -214,7 +214,8 @@ describe('STORAGE-POLICY-FOUNDATION-01', () => {
       expect(counts.receipt).toBe(5);
       expect(counts.construction_photo).toBe(1);
       expect(counts.temporary_unknown).toBe(2);
-      expect(counts.business_document).toBe(22);
+      // DOCUMENT-KIND-CATALOG-01A — `rechnungskorrektur` (business_document) ist jetzt Teil des Katalogs: 22 → 23.
+      expect(counts.business_document).toBe(23);
       expect(counts.legal_document).toBe(56);
     });
   });
