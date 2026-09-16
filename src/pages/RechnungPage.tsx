@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { InvoiceDocumentView } from '../components/invoice/InvoiceDocumentView';
 import { InvoiceDraftEditForm } from '../components/invoice/InvoiceDraftEditForm';
+import { BackLink } from '../components/ui/PageHeader';
 import { Button } from '../components/ui/Button';
 import { Card, DataRow, PageHeader } from '../components/ui/Card';
 import { EmptyStateBlock } from '../components/ui/EmptyStateBlock';
@@ -841,9 +842,7 @@ export function RechnungPage() {
   if (vorgang.orderPositions.length === 0) {
     return (
       <div className="page">
-        <button type="button" className="back-link" onClick={() => navigate(`/vorgaenge/${id}`)}>
-          ← {translate('common.back')}
-        </button>
+        <BackLink label={translate('common.back')} href={`/vorgaenge/${id}`} testId="rechnung-back" />
         <p className="empty-state">{translate('vorgang.noOrderPositions')}</p>
       </div>
     );
@@ -859,9 +858,7 @@ export function RechnungPage() {
   if (!locator || sessionStatus === 'blocked_no_identity') {
     return (
       <div className="page" data-testid="rechnung-blocked-no-workspace">
-        <button type="button" className="back-link" onClick={() => navigate(`/vorgaenge/${id}`)}>
-          ← {translate('common.back')}
-        </button>
+        <BackLink label={translate('common.back')} href={`/vorgaenge/${id}`} testId="rechnung-back" />
         <EmptyStateBlock
           title={translate('invoice.session.noWorkspaceTitle')}
           description={translate('invoice.session.noWorkspace')}
@@ -875,9 +872,7 @@ export function RechnungPage() {
     const conflict = sessionStatus === 'blocked_conflict';
     return (
       <div className="page" data-testid="rechnung-blocked-session">
-        <button type="button" className="back-link" onClick={() => navigate(`/vorgaenge/${id}`)}>
-          ← {translate('common.back')}
-        </button>
+        <BackLink label={translate('common.back')} href={`/vorgaenge/${id}`} testId="rechnung-back" />
         <EmptyStateBlock
           title={translate('invoice.title')}
           description={translate(
@@ -1402,9 +1397,8 @@ export function RechnungPage() {
 
   return (
     <div className="page" data-testid="rechnung-page">
-      <button type="button" className="back-link" onClick={handleBack}>
-        ← {translate('common.back')}
-      </button>
+      {/* UIUX-FOUNDATION-01E — Schritt-Back (Zustand), daher Button statt Link. */}
+      <BackLink label={translate('common.back')} onClick={handleBack} testId="rechnung-back" />
 
       <PageHeader
         title={pageTitle}

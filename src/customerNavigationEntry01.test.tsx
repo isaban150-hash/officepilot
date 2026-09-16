@@ -49,8 +49,9 @@ describe('CUSTOMER-NAVIGATION-ENTRY-01', () => {
      * Tagesgeschäft, nicht zu Firmendaten und Synchronisation.
      */
     const html = renderMehr();
+    /* UIUX-FOUNDATION-01C — „Mehr“ ist eine gruppierte Zeilenliste (settings-row), keine Kartenwand. */
     const customersAt = html.indexOf('href="/kunden"');
-    const companyAt = html.indexOf('mehr-link-card');
+    const companyAt = html.indexOf('data-testid="mehr-link-synchronisation"');
     expect(customersAt).toBeGreaterThan(-1);
     expect(companyAt).toBeGreaterThan(-1);
     expect(customersAt).toBeLessThan(html.indexOf('href="/synchronisation"'));

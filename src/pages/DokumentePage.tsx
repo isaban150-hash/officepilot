@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
-import { Badge, Card, CardMeta, CardTitle, PageHeader } from '../components/ui/Card';
+import { Badge, PageHeader, StatusBadge } from '../components/ui/Card';
+import { BusinessList, BusinessListItem } from '../components/ui/Lists';
+import { Page, PageToolbar } from '../components/ui/Page';
+import { FilterChips, SearchField } from '../components/ui/Toolbar';
 import { Button } from '../components/ui/Button';
 import { EmptyStateBlock } from '../components/ui/EmptyStateBlock';
 import { useApp } from '../context/AppContext';
@@ -72,8 +75,11 @@ export function DokumentePage() {
 
   const unrecognizedDate = translate('document.date.unrecognized');
 
+  const areaOptions = DOCUMENT_AREA_FILTER_IDS.map((id) => ({ id, label: translate(getDocumentAreaLabelKey(id) as TranslationKey) }));
+
+  /* UIUX-FOUNDATION-01F — Dokumentarchiv: PageHeader, Toolbar, Business-Liste mit Vorschau. */
   return (
-    <div className="page">
+    <Page testId="dokumente-page">
       <PageHeader
         title={translate('document.title')}
         subtitle={translate('document.subtitle')}
@@ -95,36 +101,27 @@ export function DokumentePage() {
 
       <UploadedDocumentsSection items={uploads} />
 
-      <div className="document-toolbar">
-        <input
-          type="search"
-          className="input document-search"
-          placeholder={translate('document.searchPlaceholder')}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          aria-label={translate('document.searchPlaceholder')}
-        />
-      </div>
-
-      <div
-        className="chip-group document-area-chips"
-        data-testid="document-area-chips"
-        role="toolbar"
-        aria-label={translate('document.area.toolbar')}
-      >
-        {DOCUMENT_AREA_FILTER_IDS.map((id) => (
-          <button
-            key={id}
-            type="button"
-            className={`chip ${area === id ? 'chip--active' : ''}`}
-            data-testid={`document-area-chip-${id}`}
-            aria-pressed={area === id}
-            onClick={() => setArea(id)}
-          >
-            {translate(getDocumentAreaLabelKey(id) as TranslationKey)}
-          </button>
-        ))}
-      </div>
+      <PageToolbar
+        search={
+          <SearchField
+            label={translate('document.searchPlaceholder')}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            testId="document-search"
+          />
+        }
+        filters={
+          <FilterChips
+            options={areaOptions}
+            value={area}
+            onChange={setArea}
+            label={translate('document.area.toolbar')}
+            testIdPrefix="document-area-chip"
+            testId="document-area-chips"
+            className="document-area-chips"
+          />
+        }
+      />
 
       {filtered.length === 0 && uploads.length === 0 ? (
         <EmptyStateBlock
@@ -145,11 +142,9 @@ export function DokumentePage() {
           }
         />
       ) : filtered.length === 0 ? (
-        <p className="document-archive-empty-hint" data-testid="document-area-empty">
-          {translate('document.area.empty')}
-        </p>
+        <EmptyStateBlock title={translate('document.area.empty')} description="" testId="document-area-empty" />
       ) : (
-        <div className="card-list" data-testid="document-area-list">
+        <BusinessList testId="document-area-list" ariaLabel={translate('document.title')}>
           {filtered.map((doc) => {
             /*
              * Die maßgebliche Erkennung bleibt in `documentService` — dieselbe
@@ -174,57 +169,51 @@ export function DokumentePage() {
               translate,
             );
             return (
-              <Link key={doc.id} to={`/dokumente/${doc.id}`} className="card-link">
-                <Card data-testid={`document-summary-list-${doc.id}`}>
-                  <div className="document-card__header">
-                    <DocumentCardThumbnail
-                      documentId={doc.id}
-                      placeholder={doc.imagePreview ?? ''}
-                    />
-                    <div>
-                      <CardTitle>{summaryView.title}</CardTitle>
-                      <CardMeta>
-                        <span data-testid={`document-card-date-${doc.id}`}>
-                          {summaryView.subtitle ||
-                            doc.issuer ||
-                            translate('document.noIssuer')}{' '}
-                          · {cardDate.formatted}
+              <BusinessListItem
+                key={doc.id}
+                to={`/dokumente/${doc.id}`}
+                testId={`document-summary-list-${doc.id}`}
+                leading={<DocumentCardThumbnail documentId={doc.id} placeholder={doc.imagePreview ?? ''} />}
+                title={summaryView.title}
+                subtitle={
+                  <>
+                    <span data-testid={`document-card-date-${doc.id}`}>
+                      {summaryView.subtitle || doc.issuer || translate('document.noIssuer')} · {cardDate.formatted}
+                    </span>
+                    {validUntilLabel ? (
+                      <>
+                        {' · '}
+                        <span data-testid={`document-card-deadline-${doc.id}`}>
+                          {translate('document.date.validUntil')}: {validUntilLabel}
                         </span>
-                        {validUntilLabel ? (
-                          <>
-                            {' · '}
-                            <span data-testid={`document-card-deadline-${doc.id}`}>
-                              {translate('document.date.validUntil')}: {validUntilLabel}
-                            </span>
-                          </>
-                        ) : null}
-                      </CardMeta>
-                      {summaryView.factsLine ? (
-                        <p
-                          className="document-card__summary-facts"
-                          data-testid={`document-card-summary-facts-${doc.id}`}
-                        >
-                          {summaryView.facts.slice(0, 3).map((f) => f.value).join(' · ')}
-                        </p>
-                      ) : null}
-                    </div>
-                  </div>
-                  <div className="badge-row">
-                    {paperStatus !== 'not_required' && (
-                      <span data-testid={`document-paper-status-${doc.id}`}>
-                        <Badge tone={paperStatus === 'filed' ? 'success' : 'warning'}>
-                          {translate(paperKey)}
-                        </Badge>
-                      </span>
-                    )}
-                    {doc.linkedVorgang && <Badge>{doc.linkedVorgang.vorgangTitle}</Badge>}
-                  </div>
-                </Card>
-              </Link>
+                      </>
+                    ) : null}
+                  </>
+                }
+                meta={
+                  summaryView.factsLine ? (
+                    <span data-testid={`document-card-summary-facts-${doc.id}`}>
+                      {summaryView.facts.slice(0, 3).map((f) => f.value).join(' · ')}
+                    </span>
+                  ) : undefined
+                }
+                status={
+                  paperStatus !== 'not_required' || doc.linkedVorgang ? (
+                    <>
+                      {paperStatus !== 'not_required' && (
+                        <span data-testid={`document-paper-status-${doc.id}`}>
+                          <StatusBadge tone={paperStatus === 'filed' ? 'success' : 'warning'} label={translate(paperKey)} icon={false} />
+                        </span>
+                      )}
+                      {doc.linkedVorgang && <Badge tone="neutral">{doc.linkedVorgang.vorgangTitle}</Badge>}
+                    </>
+                  ) : undefined
+                }
+              />
             );
           })}
-        </div>
+        </BusinessList>
       )}
-    </div>
+    </Page>
   );
 }

@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { Button } from '../../components/ui/Button';
 import { PageHeader } from '../../components/ui/Card';
+import { ReadOnlyNotice } from '../../components/ui/ReadOnlyNotice';
 import { InvoiceDocumentView } from '../../components/invoice/InvoiceDocumentView';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
@@ -279,15 +279,16 @@ export function DesignSettingsPage() {
 
   return (
     <div className="page settings-page settings-subpage" data-testid="settings-design-page">
-      <Link to="/einstellungen" className="back-link" data-testid="settings-design-back">
-        ← {translate('settings.backToHub')}
-      </Link>
-      <PageHeader title={translate('settings.design.title')} subtitle={translate('settings.design.page.subtitle')} />
+      <PageHeader
+        title={translate('settings.design.title')}
+        subtitle={translate('settings.design.page.subtitle')}
+        backLabel={translate('settings.backToHub')}
+        backHref="/einstellungen"
+        backTestId="settings-design-back"
+      />
 
       {!editable ? (
-        <p className="invoice-hint invoice-hint--warning" data-testid="settings-design-readonly">
-          {translate(access.reason === 'member' ? 'settings.design.readOnly' : 'settings.company.roleUnknown')}
-        </p>
+        <ReadOnlyNotice message={translate(access.reason === 'member' ? 'settings.design.readOnly' : 'settings.company.roleUnknown')} testId="settings-design-readonly" />
       ) : null}
 
       {/* ---------------- Firmenlogo ---------------- */}

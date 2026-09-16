@@ -1,7 +1,10 @@
 import { useCallback, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
-import { Badge, Card, CardTitle, DataRow, PageHeader } from '../components/ui/Card';
+import { Badge, DataRow, PageHeader } from '../components/ui/Card';
+import { Page } from '../components/ui/Page';
+import { DetailSection, SummaryList } from '../components/ui/Section';
+import { InlineNotice } from '../components/ui/States';
+import { RowList, RowListItem } from '../components/ui/Lists';
 import { useApp } from '../context/AppContext';
 import type { SyncOutboxEntry, SyncState } from '../types/sync';
 import type { TranslationKey } from '../i18n';
@@ -142,44 +145,49 @@ export function SyncPage() {
   const report = snapshot.lastReport;
 
   return (
-    <div className="page sync-page" data-testid="sync-page">
-      <Link to="/mehr" className="back-link">
-        ← {translate('common.back')}
-      </Link>
+    <Page className="sync-page" testId="sync-page">
+      <PageHeader
+        title={translate('sync.title')}
+        subtitle={translate('sync.subtitle')}
+        backLabel={translate('common.back')}
+        backHref="/mehr"
+        backTestId="sync-back"
+      />
 
-      <PageHeader title={translate('sync.title')} subtitle={translate('sync.subtitle')} />
-
-      <Card className="sync-page__banner" highlight={snapshot.isOffline}>
-        <p className="sync-page__mode" data-testid="sync-mode-label">
-          {translate('sync.mode.localPrepared')}
-        </p>
-        <p className="sync-page__no-cloud" data-testid="sync-no-cloud-hint">
-          {translate('sync.noCloudDataHint')}
-        </p>
+      {/* UIUX-FOUNDATION-01G — Sync-Seite auf Sections/Notices; Sync-Logik unverändert. */}
+      <InlineNotice tone={snapshot.isOffline ? 'warning' : 'info'} testId="sync-mode-notice">
+        <span data-testid="sync-mode-label">{translate('sync.mode.localPrepared')}</span>
+        <br />
+        <span data-testid="sync-no-cloud-hint">{translate('sync.noCloudDataHint')}</span>
         {snapshot.isOffline && (
-          <p className="sync-page__offline" data-testid="sync-offline-hint">
-            {translate('sync.offlineHint')}
-          </p>
+          <>
+            <br />
+            <span data-testid="sync-offline-hint">{translate('sync.offlineHint')}</span>
+          </>
         )}
-      </Card>
+      </InlineNotice>
 
-      <Card className="sync-page__section">
-        <div className="sync-page__status-row">
-          <CardTitle>{translate('sync.section.status')}</CardTitle>
+      <DetailSection
+        title={translate('sync.section.status')}
+        action={
           <span data-testid="sync-status-badge">
             <Badge tone={tone}>{statusLabel}</Badge>
           </span>
-        </div>
-        <DataRow label={translate('sync.lastSync')} value={formatTimestamp(snapshot.status.lastSyncedAt)} />
+        }
+        surface
+      >
+        <SummaryList columns={1}>
+          <DataRow label={translate('sync.lastSync')} value={formatTimestamp(snapshot.status.lastSyncedAt)} />
+        </SummaryList>
         {snapshot.status.lastError && (
-          <p className="sync-page__error" data-testid="sync-error-message">
+          <InlineNotice tone="critical" testId="sync-error-message">
             {translate('sync.error.userMessage')}
-          </p>
+          </InlineNotice>
         )}
-      </Card>
+      </DetailSection>
 
-      <Card className="sync-page__section">
-        <CardTitle>{translate('sync.section.device')}</CardTitle>
+      <DetailSection title={translate('sync.section.device')}>
+        <SummaryList>
         <DataRow
           label={translate('sync.deviceId')}
           value={
@@ -192,10 +200,10 @@ export function SyncPage() {
             <span data-testid="sync-workspace-id">{shortenSyncId(snapshot.workspaceId)}</span>
           }
         />
-      </Card>
+        </SummaryList>
+      </DetailSection>
 
-      <Card className="sync-page__section">
-        <CardTitle>{translate('sync.section.outbox')}</CardTitle>
+      <DetailSection title={translate('sync.section.outbox')}>
         <div className="sync-page__outbox-grid" data-testid="sync-outbox-counts">
           <div className="sync-page__outbox-stat">
             <span className="sync-page__outbox-value">{snapshot.outboxCounts.pending}</span>
@@ -211,35 +219,35 @@ export function SyncPage() {
           </div>
         </div>
         {snapshot.pendingOutboxEntries.length > 0 && (
-          <ul className="sync-page__outbox-list" data-testid="sync-outbox-pending-list">
+          <RowList testId="sync-outbox-pending-list">
             {snapshot.pendingOutboxEntries.map((entry) => (
-              <li key={entry.id} className="sync-page__outbox-item">
-                <span className="sync-page__outbox-item-type">{translate(entityTypeKey(entry.entityType))}</span>
-                <span className="sync-page__outbox-item-op">{translate(operationKey(entry.operation))}</span>
-                <Badge tone={entry.status === 'blocked' ? 'warning' : 'info'}>
-                  {translate(outboxStatusKey(entry.status))}
-                </Badge>
-              </li>
+              <RowListItem
+                key={entry.id}
+                title={translate(entityTypeKey(entry.entityType))}
+                description={translate(operationKey(entry.operation))}
+                trailing={
+                  <Badge tone={entry.status === 'blocked' ? 'warning' : 'info'}>
+                    {translate(outboxStatusKey(entry.status))}
+                  </Badge>
+                }
+              />
             ))}
-          </ul>
+          </RowList>
         )}
-      </Card>
+      </DetailSection>
 
       {(report || snapshot.status.lastError) && (
-        <Card className="sync-page__section">
-          <div data-testid="sync-report-section">
-            <CardTitle>{translate('sync.section.report')}</CardTitle>
-            {report && (
-              <>
-                <DataRow label={translate('sync.report.duration')} value={`${report.durationMs} ms`} />
-                <DataRow label={translate('sync.report.uploads')} value={report.uploadCount} />
-                <DataRow label={translate('sync.report.downloads')} value={report.downloadCount} />
-                <DataRow label={translate('sync.report.conflicts')} value={report.conflictCount} />
-                <DataRow label={translate('sync.report.retry')} value={report.retryAttempts} />
-              </>
-            )}
-          </div>
-        </Card>
+        <DetailSection title={translate('sync.section.report')} testId="sync-report-section">
+          {report && (
+            <SummaryList>
+              <DataRow label={translate('sync.report.duration')} value={`${report.durationMs} ms`} />
+              <DataRow label={translate('sync.report.uploads')} value={report.uploadCount} />
+              <DataRow label={translate('sync.report.downloads')} value={report.downloadCount} />
+              <DataRow label={translate('sync.report.conflicts')} value={report.conflictCount} />
+              <DataRow label={translate('sync.report.retry')} value={report.retryAttempts} />
+            </SummaryList>
+          )}
+        </DetailSection>
       )}
 
       <div className="sync-page__actions">
@@ -279,6 +287,6 @@ export function SyncPage() {
           </Button>
         )}
       </div>
-    </div>
+    </Page>
   );
 }

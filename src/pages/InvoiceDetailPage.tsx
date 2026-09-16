@@ -14,6 +14,11 @@ import { CommunicationIntegrationPanel } from '../components/communication/Commu
 import { INVOICE_COMMUNICATION_BUTTON_KEYS } from '../components/communication/communicationNavigation';
 import { Button } from '../components/ui/Button';
 import { ShowMoreSection } from '../components/ui/ShowMoreSection';
+import { StatusBadge } from '../components/ui/Badge';
+import { EmptyStateBlock } from '../components/ui/EmptyStateBlock';
+import { PageHeader } from '../components/ui/PageHeader';
+import { DetailSection } from '../components/ui/Section';
+import { paymentStatusTone } from '../services/ui/statusTone';
 import { useApp } from '../context/AppContext';
 import { isFinalizedInvoice, buildPrintTitle } from '../services/invoiceArchiveService';
 import { buildInvoicePrintModelFromInvoice, formatInvoiceDate } from '../services/invoicePrintModel';
@@ -320,15 +325,20 @@ export function InvoiceDetailPage() {
   if (vorgangId === undefined || !invoiceId || !invoice || (vorgangId !== null && !vorgang)) {
     return (
       <div className="page" data-testid="invoice-detail-not-found">
-        <p className="empty-state">{translate('invoice.notFound')}</p>
-        <Button
-          variant="outline"
-          onClick={() =>
-            navigate(routeVorgangId ? `/vorgaenge/${routeVorgangId}` : buildOpenInvoicesPath())
+        <EmptyStateBlock
+          title={translate('invoice.notFound')}
+          description=""
+          actions={
+            <Button
+              variant="outline"
+              onClick={() =>
+                navigate(routeVorgangId ? `/vorgaenge/${routeVorgangId}` : buildOpenInvoicesPath())
+              }
+            >
+              {translate('common.back')}
+            </Button>
           }
-        >
-          {translate('common.back')}
-        </Button>
+        />
       </div>
     );
   }
@@ -336,10 +346,15 @@ export function InvoiceDetailPage() {
   if (!isFinalizedInvoice(invoice) || !printModel) {
     return (
       <div className="page">
-        <p className="empty-state">{translate('invoice.readOnlyMissingSnapshots')}</p>
-        <Button variant="outline" onClick={() => navigate(backPath)}>
-          {translate('common.back')}
-        </Button>
+        <EmptyStateBlock
+          title={translate('invoice.readOnlyMissingSnapshots')}
+          description=""
+          actions={
+            <Button variant="outline" onClick={() => navigate(backPath)}>
+              {translate('common.back')}
+            </Button>
+          }
+        />
       </div>
     );
   }
@@ -378,10 +393,15 @@ export function InvoiceDetailPage() {
     if (invoice.cancellationKind !== 'correction' || !invoice.cancelledAt || !invoice.cancelReason) {
       return (
         <div className="page" data-testid="invoice-correction-not-found">
-          <p className="empty-state">{translate('invoice.correction.notFound')}</p>
-          <Button variant="outline" onClick={() => navigate(buildInvoiceReachPath(vorgangId, invoice.id))}>
-            {translate('invoice.correction.backToOriginal')}
-          </Button>
+          <EmptyStateBlock
+            title={translate('invoice.correction.notFound')}
+            description=""
+            actions={
+              <Button variant="outline" onClick={() => navigate(buildInvoiceReachPath(vorgangId, invoice.id))}>
+                {translate('invoice.correction.backToOriginal')}
+              </Button>
+            }
+          />
         </div>
       );
     }
@@ -392,14 +412,15 @@ export function InvoiceDetailPage() {
     return (
       <div className="page page--invoice-detail" data-testid="invoice-correction-page">
         <div className="invoice-detail__toolbar no-print">
-          <button
-            type="button"
-            className="back-link"
-            onClick={() => navigate(buildInvoiceReachPath(vorgangId, invoice.id))}
-            data-testid="invoice-correction-back"
-          >
-            ← {translate('invoice.correction.backToOriginal')}
-          </button>
+          <PageHeader
+            title={translate('invoice.correction.title')}
+            subtitle={translate('invoice.correction.reference')
+              .replace('{number}', invoice.number)
+              .replace('{date}', formatInvoiceDate(invoice.issueDate ?? invoice.date))}
+            backLabel={translate('invoice.correction.backToOriginal')}
+            backHref={buildInvoiceReachPath(vorgangId, invoice.id)}
+            backTestId="invoice-correction-back"
+          />
           <DetailExperienceCard
             recognizedTitle={translate('invoice.correction.title')}
             recognizedSummary={translate('invoice.correction.reference')
@@ -420,6 +441,7 @@ export function InvoiceDetailPage() {
                 generatePdf={generateInvoiceCorrectionPdf}
               />
             }
+            hideIdentity
             testId="invoice-correction-experience"
           />
           {invoice.correctionArchiveDocumentId ? (
@@ -604,15 +626,6 @@ export function InvoiceDetailPage() {
         </p>
       )}
 
-      <InvoicePaymentSummary invoice={invoice} translate={translate} />
-      <InvoicePaymentHistory
-        invoice={invoice}
-        translate={translate}
-        onRemovePayment={handleRemovePayment}
-        unsyncedPaymentIds={unsyncedPaymentIds ?? undefined}
-        onSecurePayment={handleSecurePayment}
-      />
-
       {!isFreeInvoice && (
         <CommunicationIntegrationPanel
           contextRef={{
@@ -632,17 +645,20 @@ export function InvoiceDetailPage() {
   return (
     <div className="page page--invoice-detail" data-testid="invoice-detail-page">
       <div className="invoice-detail__toolbar no-print">
-        <button
-          type="button"
-          className="back-link"
-          onClick={() => navigate(backPath)}
-          data-testid="invoice-detail-back"
-        >
-          ←{' '}
-          {fromOverview || isFreeInvoice
-            ? translate('overview.backToOverview')
-            : translate('common.back')}
-        </button>
+        {/*
+          * UIUX-FOUNDATION-01E — Detailmuster: Back (berechnetes Ziel aus
+          * from-Parameter/Freier Rechnung), Identität, Zahlungsstatus. Die
+          * fachlichen nächsten Schritte bleiben in der Experience-Card.
+          */}
+        <PageHeader
+          title={printModel.documentTitle}
+          subtitle={`${printModel.invoiceNumber} · ${vorgang ? vorgang.customer : printModel.customer.name}`}
+          status={<StatusBadge tone={paymentStatusTone(paymentSummary.status)} label={translate(statusKey)} data-testid="invoice-detail-status" />}
+          backLabel={fromOverview || isFreeInvoice ? translate('overview.backToOverview') : translate('common.back')}
+          backHref={backPath}
+          backTestId="invoice-detail-back"
+          testId="invoice-detail-header"
+        />
 
         <DetailExperienceCard
           recognizedTitle={printModel.documentTitle}
@@ -665,8 +681,20 @@ export function InvoiceDetailPage() {
               : [translate(statusKey)]
           }
           actions={primaryActions}
+          hideIdentity
           testId="invoice-detail-experience"
         />
+
+        <DetailSection title={translate('invoiceDetail.section.payment')} surface testId="invoice-detail-section-payment">
+          <InvoicePaymentSummary invoice={invoice} translate={translate} />
+          <InvoicePaymentHistory
+            invoice={invoice}
+            translate={translate}
+            onRemovePayment={handleRemovePayment}
+            unsyncedPaymentIds={unsyncedPaymentIds ?? undefined}
+            onSecurePayment={handleSecurePayment}
+          />
+        </DetailSection>
 
         <ShowMoreSection
           expanded={showDetails}

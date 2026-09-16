@@ -10,7 +10,7 @@
  * Nur sichere Zuordnungen: Die Semantik der Fachstatus wird hier nicht
  * verändert, lediglich gelesen. Unbekannte Werte fallen auf `neutral`.
  */
-import type { ExpensePaymentStatus } from '../../types/expense';
+import type { ExpensePaymentStatus, ExpenseStatus } from '../../types/expense';
 import type { InboxStatus, InvoicePaymentStatus, TaskStatus, VorgangStatus } from '../../types/models';
 
 export type StatusTone = 'neutral' | 'info' | 'success' | 'warning' | 'critical';
@@ -89,6 +89,17 @@ const REVIEW_TONE: Record<ReviewLikeState, StatusTone> = {
 
 export function reviewStateTone(state: ReviewLikeState): StatusTone {
   return REVIEW_TONE[state] ?? 'neutral';
+}
+
+/** Belegstatus einer Ausgabe: Entwurf ruhig, gebucht erledigt, storniert historisch. */
+const EXPENSE_TONE: Record<ExpenseStatus, StatusTone> = {
+  entwurf: 'neutral',
+  gebucht: 'success',
+  storniert: 'neutral',
+};
+
+export function expenseStatusTone(status: ExpenseStatus): StatusTone {
+  return EXPENSE_TONE[status] ?? 'neutral';
 }
 
 export function isStatusTone(value: unknown): value is StatusTone {

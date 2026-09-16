@@ -80,10 +80,13 @@ export function OperatingSettingsPage() {
 
   return (
     <div className="page settings-page settings-subpage" data-testid="settings-operating-page">
-      <Link to="/einstellungen" className="back-link" data-testid="settings-operating-back">
-        ← {translate('settings.backToHub')}
-      </Link>
-      <PageHeader title={translate('settings.operating.title')} subtitle={translate('settings.operating.page.subtitle')} />
+      <PageHeader
+        title={translate('settings.operating.title')}
+        subtitle={translate('settings.operating.page.subtitle')}
+        backLabel={translate('settings.backToHub')}
+        backHref="/einstellungen"
+        backTestId="settings-operating-back"
+      />
 
       {/* ---------------- Sprache ---------------- */}
       <section className="settings-form__section settings-operating__section" data-testid="settings-operating-language">

@@ -2,6 +2,7 @@ import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { AppProvider } from './context/AppContext';
+import { AuthProvider } from './context/AuthContext';
 import { DEFAULT_SETUP } from './data/mockData';
 import { MOCK_INBOX_ITEMS } from './data/inboxMockData';
 import { BottomNav } from './components/layout/BottomNav';
@@ -61,12 +62,13 @@ describe('UX-HOME-01 ABSCHLUSSFIX', () => {
   });
 
   it('Mobile Bottom-Nav hat maximal 5 Punkte ohne Steuerberater', () => {
+    /* UIUX-FOUNDATION-01C — Heute / Eingang / Aufträge / Rechnungen / Mehr. */
     expect(MOBILE_BOTTOM_NAV_ITEMS).toHaveLength(5);
     expect(MOBILE_BOTTOM_NAV_ITEMS.map((item) => item.to)).toEqual([
       '/',
       '/ablage',
       '/vorgaenge',
-      '/assistent',
+      '/rechnungen/offen',
       '/mehr',
     ]);
 
@@ -80,12 +82,14 @@ describe('UX-HOME-01 ABSCHLUSSFIX', () => {
 
     expect(html).not.toContain('Steuerberater');
     expect(html).not.toContain('Kunden');
-    expect(html).toContain('Schreibtisch');
+    expect(html).toContain('Heute');
     expect(html).toContain('Eingang');
   });
 
-  it('Desktop-Sidebar behält 6 Bereiche inkl. Steuerberater', () => {
+  it('Desktop-Sidebar hat 6 Arbeitsbereiche; Steuerberater liegt unter Finanzen', () => {
+    /* UIUX-FOUNDATION-01C — Hauptzone: Heute, Eingang, Aufträge, Rechnungen, Finanzen, Dokumente. */
     expect(DESKTOP_NAV_ITEMS).toHaveLength(6);
+    expect(DESKTOP_NAV_ITEMS.map((item) => item.to)).toEqual(['/', '/ablage', '/vorgaenge', '/rechnungen/offen', '/finanzen', '/dokumente']);
 
     const html = renderToStaticMarkup(
       <MemoryRouter>
@@ -95,7 +99,9 @@ describe('UX-HOME-01 ABSCHLUSSFIX', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Steuerberater');
+    expect(html).toContain('Finanzen');
+    expect(html).not.toContain('href="/steuerberater"');
+    expect(html).toContain('href="/kunden"');
   });
 
   it('Steuerberater über Startseite, Kunden nur über Mehr', () => {
@@ -113,11 +119,14 @@ describe('UX-HOME-01 ABSCHLUSSFIX', () => {
   });
 
   it('Steuerberater ohne echten Versand-Button', () => {
+    /* Die Seite liest seit dem Finanz-Export-Gate die Rolle; der Test braucht den AuthProvider. */
     const html = renderToStaticMarkup(
       <MemoryRouter>
-        <AppProvider initialSetup={DEFAULT_SETUP}>
-          <SteuerberaterPage />
-        </AppProvider>
+        <AuthProvider>
+          <AppProvider initialSetup={DEFAULT_SETUP}>
+            <SteuerberaterPage />
+          </AppProvider>
+        </AuthProvider>
       </MemoryRouter>,
     );
 

@@ -67,6 +67,9 @@ import {
   InboxItemEditForm,
   type InboxEditDraft,
 } from '../components/inbox/InboxItemEditForm';
+import { BackLink, PageHeader } from '../components/ui/PageHeader';
+import { StatusBadge } from '../components/ui/Badge';
+import { inboxStatusTone } from '../services/ui/statusTone';
 import { Button } from '../components/ui/Button';
 import { Badge, Card, DataRow } from '../components/ui/Card';
 import { SimpleConfirmDialog } from '../components/ui/SimpleConfirmDialog';
@@ -716,9 +719,7 @@ export function EingangDetailPage() {
   if (!item) {
     return (
       <div className="page" data-testid="eingang-detail-missing">
-        <button type="button" className="back-link" onClick={goBack}>
-          ← {translate('common.back')}
-        </button>
+        <BackLink label={translate('common.back')} href="/ablage" testId="eingang-detail-back" />
         <Card>
           <p data-testid="eingang-detail-missing-message">{translate('common.loading')}</p>
         </Card>
@@ -732,9 +733,7 @@ export function EingangDetailPage() {
   if (showDeferredShell) {
     return (
       <div className="page" data-testid="eingang-detail-analysis-pending">
-        <button type="button" className="back-link" onClick={goBack}>
-          ← {translate('common.back')}
-        </button>
+        <BackLink label={translate('common.back')} href="/ablage" testId="eingang-detail-back" />
         <Card>
           <DataRow label={translate('inbox.title')} value={item.title} />
           <DataRow
@@ -790,9 +789,7 @@ export function EingangDetailPage() {
   if (!workflow) {
     return (
       <div className="page" data-testid="eingang-detail-analysis-pending">
-        <button type="button" className="back-link" onClick={goBack}>
-          ← {translate('common.back')}
-        </button>
+        <BackLink label={translate('common.back')} href="/ablage" testId="eingang-detail-back" />
         <Card>
           <DataRow label={translate('inbox.title')} value={item.title} />
           <DataRow
@@ -2073,9 +2070,20 @@ export function EingangDetailPage() {
       className={`page eingang-detail-page ${isEditing ? 'page--editing' : ''}`}
       data-testid="ablage-detail-page"
     >
-      <button type="button" className="back-link" onClick={goBack}>
-        ← {translate('common.back')}
-      </button>
+      {/*
+        * UIUX-FOUNDATION-01G — eine dominante Identität: Titel + Dokumentart +
+        * Prüfstatus im Seitenkopf mit Back-Link; die Experience-Card darunter
+        * trägt nur noch die Zusammenfassung und die nächsten Schritte.
+        */}
+      <PageHeader
+        title={item.title}
+        subtitle={translate(classifiedKindKey)}
+        status={<StatusBadge tone={inboxStatusTone(item.status)} label={translate(`inboxStatus.${item.status}` as TranslationKey)} data-testid="eingang-detail-status" />}
+        backLabel={translate('common.back')}
+        backHref="/ablage"
+        backTestId="eingang-detail-back"
+        testId="eingang-detail-header"
+      />
 
       {/*
         * DOCUMENT-UNLINK-DELETE-01E — die Wege, auf die der Löschhinweis

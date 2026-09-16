@@ -1,8 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { ExpenseOverviewCard } from '../components/expenses/ExpenseOverviewCard';
 import { Button } from '../components/ui/Button';
-import { Card, DataRow, PageHeader } from '../components/ui/Card';
+import { DataRow, PageHeader } from '../components/ui/Card';
+import { MoneyDisplay } from '../components/ui/Display';
+import { EmptyStateBlock } from '../components/ui/EmptyStateBlock';
+import { BusinessList } from '../components/ui/Lists';
+import { Page, PageToolbar } from '../components/ui/Page';
+import { DetailSection, SummaryList } from '../components/ui/Section';
+import { InlineNotice } from '../components/ui/States';
+import { FilterChips, SearchField } from '../components/ui/Toolbar';
 import { useApp } from '../context/AppContext';
 import {
   applyExpenseOverviewFilters,
@@ -11,7 +18,6 @@ import {
   type ExpenseOverviewFilter,
 } from '../services/expenseOverviewService';
 import type { ExpenseOverviewItem } from '../types/expense';
-import { formatPaymentCurrency } from '../services/expensePaymentService';
 import type { TranslationKey } from '../i18n';
 
 const FILTER_OPTIONS: ExpenseOverviewFilter[] = [
@@ -25,7 +31,6 @@ const FILTER_OPTIONS: ExpenseOverviewFilter[] = [
 
 export function OffeneAusgabenPage() {
   const { translate, showToast } = useApp();
-  const navigate = useNavigate();
   const location = useLocation();
   const [items, setItems] = useState<ExpenseOverviewItem[]>(() => getAllExpenseOverview());
   const [filter, setFilter] = useState<ExpenseOverviewFilter>('all');
@@ -46,89 +51,56 @@ export function OffeneAusgabenPage() {
     [items, filter, query],
   );
 
+  const filterOptions = FILTER_OPTIONS.map((option) => ({ id: option, label: translate(`expenseOverview.filter.${option}` as TranslationKey) }));
+
+  /* UIUX-FOUNDATION-01F — dieselbe Struktur wie die Rechnungsübersicht. */
   return (
-    <div className="page">
+    <Page testId="offene-ausgaben-page">
       <PageHeader
         title={translate('expenseOverview.title')}
         subtitle={translate('expenseOverview.subtitle')}
         backLabel={translate('common.back')}
-        onBack={() => navigate('/ausgaben')}
+        backHref="/ausgaben"
+        backTestId="offene-ausgaben-back"
       />
 
       {totals.overdueExpenseCount > 0 && (
-        <p className="invoice-hint invoice-hint--warning">
-          {translate('expenseOverview.overdueWarning').replace(
-            '{count}',
-            String(totals.overdueExpenseCount),
-          )}
-        </p>
+        <InlineNotice tone="warning" testId="offene-ausgaben-overdue-notice">
+          {translate('expenseOverview.overdueWarning').replace('{count}', String(totals.overdueExpenseCount))}
+        </InlineNotice>
       )}
-
       {totals.totalExpenseCount > 0 && totals.openExpenseCount === 0 && (
-        <p className="invoice-hint invoice-hint--success">{translate('expenseOverview.allPaid')}</p>
+        <InlineNotice tone="success" testId="offene-ausgaben-allpaid-notice">
+          {translate('expenseOverview.allPaid')}
+        </InlineNotice>
       )}
 
-      <section className="overview-kpi-grid">
-        <Card className="overview-kpi-card">
-          <p className="overview-kpi-card__label">{translate('expenseOverview.openLiabilities')}</p>
-          <p className="overview-kpi-card__value">
-            {formatPaymentCurrency(totals.openLiabilities)}
-          </p>
-        </Card>
-        <Card className="overview-kpi-card overview-kpi-card--danger">
-          <p className="overview-kpi-card__label">{translate('expenseOverview.overdueLiabilities')}</p>
-          <p className="overview-kpi-card__value">
-            {formatPaymentCurrency(totals.overdueLiabilities)}
-          </p>
-        </Card>
-        <Card className="overview-kpi-card overview-kpi-card--success">
-          <p className="overview-kpi-card__label">{translate('expenseOverview.paidTotal')}</p>
-          <p className="overview-kpi-card__value">{formatPaymentCurrency(totals.paidTotal)}</p>
-        </Card>
-        <Card className="overview-kpi-card">
-          <p className="overview-kpi-card__label">{translate('expenseOverview.openExpenseCount')}</p>
-          <p className="overview-kpi-card__value">{totals.openExpenseCount}</p>
-        </Card>
-      </section>
+      <DetailSection title={translate('invoices.list.summaryTitle')} surface testId="offene-ausgaben-summary">
+        <SummaryList>
+          <DataRow label={translate('expenseOverview.openLiabilities')} value={<MoneyDisplay value={totals.openLiabilities} emphasis />} />
+          <DataRow label={translate('expenseOverview.overdueLiabilities')} value={<MoneyDisplay value={totals.overdueLiabilities} />} />
+          <DataRow label={translate('expenseOverview.paidTotal')} value={<MoneyDisplay value={totals.paidTotal} />} />
+          <DataRow label={translate('expenseOverview.openExpenseCount')} value={String(totals.openExpenseCount)} />
+          <DataRow label={translate('expenseOverview.totalExpenseCount')} value={String(totals.totalExpenseCount)} />
+        </SummaryList>
+      </DetailSection>
 
-      <Card className="overview-meta-card">
-        <DataRow
-          label={translate('expenseOverview.totalExpenseCount')}
-          value={String(totals.totalExpenseCount)}
-        />
-      </Card>
-
-      <div className="document-toolbar">
-        <input
-          type="search"
-          className="input document-search"
-          placeholder={translate('expenseOverview.searchPlaceholder')}
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          aria-label={translate('expenseOverview.searchPlaceholder')}
-        />
-      </div>
-
-      <div className="chip-group overview-filters">
-        {FILTER_OPTIONS.map((option) => {
-          const key = `expenseOverview.filter.${option}` as TranslationKey;
-          return (
-            <button
-              key={option}
-              type="button"
-              className={`chip ${filter === option ? 'chip--active' : ''}`}
-              onClick={() => setFilter(option)}
-            >
-              {translate(key)}
-            </button>
-          );
-        })}
-      </div>
+      <PageToolbar
+        search={
+          <SearchField
+            label={translate('expenseOverview.searchPlaceholder')}
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            testId="offene-ausgaben-search"
+          />
+        }
+        filters={<FilterChips options={filterOptions} value={filter} onChange={setFilter} label={translate('list.filter.label')} testIdPrefix="offene-ausgaben-filter" />}
+      />
 
       {filteredItems.length === 0 ? (
-        <p className="empty-state">{translate('expenseOverview.empty')}</p>
+        <EmptyStateBlock title={translate('expenseOverview.empty')} description="" testId="offene-ausgaben-empty" />
       ) : (
-        <div className="card-list">
+        <BusinessList testId="offene-ausgaben-list" ariaLabel={translate('expenseOverview.title')}>
           {filteredItems.map((item) => (
             <ExpenseOverviewCard
               key={item.expense.id}
@@ -138,16 +110,14 @@ export function OffeneAusgabenPage() {
               onPaymentToast={showToast}
             />
           ))}
-        </div>
+        </BusinessList>
       )}
 
-      <div className="page-header__actions">
+      <div className="detail-actions">
         <Link to="/ausgaben">
-          <Button variant="outline" fullWidth>
-            {translate('expenseOverview.backToAusgaben')}
-          </Button>
+          <Button variant="outline">{translate('expenseOverview.backToAusgaben')}</Button>
         </Link>
       </div>
-    </div>
+    </Page>
   );
 }

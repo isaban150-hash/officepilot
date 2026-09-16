@@ -17,14 +17,16 @@ describe('Navigation layout UX-HOME-01 ABSCHLUSSFIX', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Schreibtisch');
+    /* UIUX-FOUNDATION-01C — Heute / Eingang / Aufträge / Rechnungen / Mehr. */
+    expect(html).toContain('Heute');
     expect(html).toContain('Eingang');
     expect(html).toContain('Aufträge');
-    expect(html).toContain('OfficePilot');
+    expect(html).toContain('Rechnungen');
     expect(html).toContain('Mehr');
     expect(html).not.toContain('Steuerberater');
     expect(html).not.toContain('Kunden');
-    expect(html).not.toContain('Heute');
+    expect(html).not.toContain('OfficePilot</span>');
+    expect(html).not.toContain('Schreibtisch');
     expect(html).not.toContain('Scan');
     expect(html).not.toContain('Ablage');
   });

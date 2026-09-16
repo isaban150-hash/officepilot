@@ -539,8 +539,6 @@ describe('MANUAL-INVOICE-UI-01B2 — globale Rechnungsdetailseite', () => {
       if (name === 'get_workspace_invoice_sent') return { found: false };
       return null;
     });
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
-
     mounted = renderAt(buildGlobalInvoiceDetailPath(FREE_INVOICE_ID));
     await settle();
     expand(mounted);
@@ -549,6 +547,9 @@ describe('MANUAL-INVOICE-UI-01B2 — globale Rechnungsdetailseite', () => {
     ].find((node) => node.textContent?.trim() === 'Entfernen') as HTMLElement | undefined;
     expect(removeButton).toBeDefined();
     await act(async () => removeButton!.click());
+    await settle();
+    /* UIUX-01G — echte Dialoginteraktion statt window.confirm. */
+    await act(async () => (q(mounted!, 'payment-remove-confirm') as HTMLElement).click());
     await settle();
 
     expect(calls).toContain('reverse_workspace_invoice_payment');
@@ -561,7 +562,6 @@ describe('MANUAL-INVOICE-UI-01B2 — globale Rechnungsdetailseite', () => {
     expect(paid.success).toBe(true);
     const paymentId = paid.success ? paid.payment.id : '';
 
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     mounted = renderAt(buildGlobalInvoiceDetailPath(FREE_INVOICE_ID));
     await settle();
     expand(mounted);
@@ -569,6 +569,8 @@ describe('MANUAL-INVOICE-UI-01B2 — globale Rechnungsdetailseite', () => {
       ...mounted.container.querySelectorAll('.invoice-payment-history button'),
     ].find((node) => node.textContent?.trim() === 'Entfernen') as HTMLElement;
     await act(async () => removeButton.click());
+    await settle();
+    await act(async () => (q(mounted!, 'payment-remove-confirm') as HTMLElement).click());
     await settle();
     // Bestehende Regel: ohne Cloud-Beweis keine lokale Löschung.
     expect(getVorgangInvoice(null, FREE_INVOICE_ID)!.payments).toHaveLength(1);

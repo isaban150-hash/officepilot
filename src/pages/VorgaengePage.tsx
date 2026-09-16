@@ -1,36 +1,65 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
-import { Badge, Card, CardMeta, CardTitle } from '../components/ui/Card';
+import { StatusBadge } from '../components/ui/Badge';
 import { PageHeader } from '../components/ui/PageHeader';
 import { EmptyStateBlock } from '../components/ui/EmptyStateBlock';
+import { BusinessList, BusinessListItem } from '../components/ui/Lists';
+import { Page, PageToolbar } from '../components/ui/Page';
+import { FilterChips, SearchField } from '../components/ui/Toolbar';
 import { useApp } from '../context/AppContext';
 import { getAllVorgaenge } from '../services/vorgangService';
+import { vorgangStatusTone } from '../services/ui/statusTone';
 import type { TranslationKey } from '../i18n';
+import type { Vorgang } from '../types/models';
 
-const STATUS_TONE: Record<string, 'default' | 'info' | 'warning' | 'success'> = {
-  neu: 'info',
-  eingegangen: 'info',
-  in_pruefung: 'info',
-  in_verhandlung: 'warning',
-  beauftragt: 'warning',
-  in_bearbeitung: 'warning',
-  wartet: 'default',
-  abgeschlossen: 'success',
-};
+type VorgangFilter = 'active' | 'done' | 'all';
+
+/**
+ * UIUX-FOUNDATION-01E — Aufträge als Business-Liste.
+ *
+ * Vorher: Kartenwand mit zwei Badges und zwei Meta-Zeilen je Auftrag.
+ * Jetzt: eine Zeile = Auftrag · Kunde/Baustelle · Status · Dokumente/Aufgaben.
+ * Suche und Filter arbeiten nur auf dem geladenen Bestand (kein neuer Service).
+ */
+function matchesQuery(vorgang: Vorgang, query: string): boolean {
+  if (!query) return true;
+  const haystack = `${vorgang.title} ${vorgang.customer} ${vorgang.baustelle}`.toLowerCase();
+  return haystack.includes(query);
+}
 
 export function VorgaengePage() {
   const { translate } = useApp();
   const location = useLocation();
   const navigate = useNavigate();
   const [vorgaenge, setVorgaenge] = useState(getAllVorgaenge);
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState<VorgangFilter>('active');
 
   useEffect(() => {
     setVorgaenge(getAllVorgaenge());
   }, [location.pathname, location.key]);
 
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return vorgaenge.filter((v) => {
+      if (filter === 'active' && v.status === 'abgeschlossen') return false;
+      if (filter === 'done' && v.status !== 'abgeschlossen') return false;
+      return matchesQuery(v, q);
+    });
+  }, [vorgaenge, query, filter]);
+
+  const filterOptions = useMemo(
+    () => [
+      { id: 'active' as const, label: translate('list.filter.active'), count: vorgaenge.filter((v) => v.status !== 'abgeschlossen').length },
+      { id: 'done' as const, label: translate('list.filter.done'), count: vorgaenge.filter((v) => v.status === 'abgeschlossen').length },
+      { id: 'all' as const, label: translate('list.filter.all'), count: vorgaenge.length },
+    ],
+    [translate, vorgaenge],
+  );
+
   return (
-    <div className="page">
+    <Page testId="vorgaenge-page">
       <PageHeader
         title={translate('vorgaenge.title')}
         subtitle={translate('vorgaenge.subtitle')}
@@ -53,33 +82,43 @@ export function VorgaengePage() {
           }
         />
       ) : (
-        <div className="card-list">
-          {vorgaenge.map((v) => {
-            const statusKey = `status.${v.status}` as TranslationKey;
-            const materialKey = `material.${v.materialSource}` as TranslationKey;
-            return (
-              <Link key={v.id} to={`/vorgaenge/${v.id}`} className="card-link">
-                <Card>
-                  <CardTitle>{v.title}</CardTitle>
-                  <CardMeta>{v.customer} · {v.baustelle}</CardMeta>
-                  <div className="badge-row">
-                    <Badge tone={STATUS_TONE[v.status]}>{translate(statusKey)}</Badge>
-                    <Badge>{translate(materialKey)}</Badge>
-                  </div>
-                  <CardMeta>
-                    {translate('vorgaenge.meta.documents').replace('{count}', String(v.documents.length))}
-                    {' · '}
-                    {translate('vorgaenge.meta.tasks').replace(
-                      '{count}',
-                      String(v.tasks.filter((t) => !t.done).length),
-                    )}
-                  </CardMeta>
-                </Card>
-              </Link>
-            );
-          })}
-        </div>
+        <>
+          <PageToolbar
+            search={
+              <SearchField
+                label={translate('list.search')}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                testId="vorgaenge-search"
+              />
+            }
+            filters={
+              <FilterChips options={filterOptions} value={filter} onChange={setFilter} label={translate('list.filter.label')} testIdPrefix="vorgaenge-filter" />
+            }
+          />
+          {filtered.length === 0 ? (
+            <EmptyStateBlock title={translate('list.noMatches.title')} description={translate('list.noMatches.desc')} testId="vorgaenge-no-matches" />
+          ) : (
+            <BusinessList testId="vorgaenge-list" ariaLabel={translate('vorgaenge.title')}>
+              {filtered.map((v) => {
+                const statusKey = `status.${v.status}` as TranslationKey;
+                const openTasks = v.tasks.filter((t) => !t.done).length;
+                return (
+                  <BusinessListItem
+                    key={v.id}
+                    to={`/vorgaenge/${v.id}`}
+                    title={v.title}
+                    subtitle={[v.customer, v.baustelle].filter(Boolean).join(' · ')}
+                    meta={`${translate('vorgaenge.meta.documents').replace('{count}', String(v.documents.length))} · ${translate('vorgaenge.meta.tasks').replace('{count}', String(openTasks))}`}
+                    status={<StatusBadge tone={vorgangStatusTone(v.status)} label={translate(statusKey)} icon={false} />}
+                    testId={`vorgaenge-row-${v.id}`}
+                  />
+                );
+              })}
+            </BusinessList>
+          )}
+        </>
       )}
-    </div>
+    </Page>
   );
 }

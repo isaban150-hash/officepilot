@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Badge, Card, CardMeta, CardTitle, PageHeader } from '../components/ui/Card';
+import { Badge, PageHeader, StatusBadge } from '../components/ui/Card';
+import { BusinessList, BusinessListItem } from '../components/ui/Lists';
+import { Page, PageToolbar } from '../components/ui/Page';
+import { FilterChips } from '../components/ui/Toolbar';
+import type { StatusTone } from '../services/ui/statusTone';
 import { EmptyStateBlock } from '../components/ui/EmptyStateBlock';
 import { useApp } from '../context/AppContext';
 import {
@@ -15,11 +19,11 @@ import type { TranslationKey } from '../i18n';
 
 const FILTERS: TaskFilter[] = ['offen', 'heute', 'ueberfaellig', 'kritisch', 'erledigt'];
 
-function priorityTone(priority: Task['priority']): 'default' | 'info' | 'warning' | 'success' {
-  if (priority === 'kritisch') return 'warning';
+function priorityTone(priority: Task['priority']): StatusTone {
+  if (priority === 'kritisch') return 'critical';
   if (priority === 'hoch') return 'warning';
   if (priority === 'mittel') return 'info';
-  return 'default';
+  return 'neutral';
 }
 
 export function AufgabenPage() {
@@ -50,25 +54,17 @@ export function AufgabenPage() {
 
   const filterKey = (value: TaskFilter) => `aufgaben.filter.${value}` as TranslationKey;
 
+  const filterOptions = FILTERS.map((value) => ({ id: value, label: translate(filterKey(value)) }));
+
+  /* UIUX-FOUNDATION-01F — Aufgaben als Business-Liste; Erledigen ist die eine Zeilenaktion. */
   return (
-    <div className="page">
+    <Page testId="aufgaben-page">
       <PageHeader
         title={translate('aufgaben.title')}
         subtitle={`${summary.open} ${translate('aufgaben.open')}`}
       />
 
-      <div className="chip-group aufgaben-filters">
-        {FILTERS.map((value) => (
-          <button
-            key={value}
-            type="button"
-            className={`chip ${filter === value ? 'chip--active' : ''}`}
-            onClick={() => setFilter(value)}
-          >
-            {translate(filterKey(value))}
-          </button>
-        ))}
-      </div>
+      <PageToolbar filters={<FilterChips options={filterOptions} value={filter} onChange={setFilter} label={translate('list.filter.label')} testIdPrefix="aufgaben-filter" />} />
 
       {tasks.length === 0 ? (
         <EmptyStateBlock
@@ -77,64 +73,55 @@ export function AufgabenPage() {
           testId="aufgaben-empty-state"
         />
       ) : (
-        <div className="card-list">
+        <BusinessList testId="aufgaben-list" ariaLabel={translate('aufgaben.title')}>
           {tasks.map((task) => {
             const done = isTaskDone(task);
             const categoryKey = `taskCategory.${task.category}` as TranslationKey;
             const sourceKey = `taskSource.${task.sourceType}` as TranslationKey;
             const priorityKey = `priority.${task.priority}` as TranslationKey;
-
+            const links = [
+              task.linkedVorgangId && task.linkedVorgangTitle ? (
+                <Link key="v" to={`/vorgaenge/${task.linkedVorgangId}`} className="link">
+                  {task.linkedVorgangTitle}
+                </Link>
+              ) : null,
+              task.linkedInboxId ? (
+                <Link key="i" to={`/ablage/${task.linkedInboxId}`} className="link">
+                  {translate('aufgaben.linkInbox')}
+                </Link>
+              ) : null,
+              task.linkedInvoiceId && task.linkedVorgangId ? (
+                <Link key="r" to={`/vorgaenge/${task.linkedVorgangId}/rechnungen/${task.linkedInvoiceId}`} className="link">
+                  {translate('aufgaben.linkInvoice')}
+                </Link>
+              ) : null,
+              task.linkedDocumentId ? (
+                <Link key="d" to={`/dokumente/${task.linkedDocumentId}`} className="link">
+                  {translate('aufgaben.linkDocument')}
+                </Link>
+              ) : null,
+            ].filter(Boolean);
             return (
-              <Card key={task.id} className={done ? 'card--done' : ''}>
-                <label className="task-row">
-                  <input
-                    type="checkbox"
-                    checked={done}
-                    onChange={() => handleToggle(task.id)}
-                  />
-                  <div className="task-row__content">
-                    <CardTitle>{task.title}</CardTitle>
-                    <CardMeta>{task.description}</CardMeta>
-                    <div className="badge-row task-row__badges">
-                      <Badge tone={priorityTone(task.priority)}>{translate(priorityKey)}</Badge>
-                      <Badge>{translate(categoryKey)}</Badge>
-                      <Badge tone="info">{translate(sourceKey)}</Badge>
-                      {task.dueDate && (
-                        <Badge tone={done ? 'default' : 'warning'}>{task.dueDate}</Badge>
-                      )}
-                    </div>
-                    <div className="task-row__links">
-                      {task.linkedVorgangId && task.linkedVorgangTitle && (
-                        <Link to={`/vorgaenge/${task.linkedVorgangId}`} className="link">
-                          {task.linkedVorgangTitle}
-                        </Link>
-                      )}
-                      {task.linkedInboxId && (
-                        <Link to={`/ablage/${task.linkedInboxId}`} className="link">
-                          {translate('aufgaben.linkInbox')}
-                        </Link>
-                      )}
-                      {task.linkedInvoiceId && task.linkedVorgangId && (
-                        <Link
-                          to={`/vorgaenge/${task.linkedVorgangId}/rechnungen/${task.linkedInvoiceId}`}
-                          className="link"
-                        >
-                          {translate('aufgaben.linkInvoice')}
-                        </Link>
-                      )}
-                      {task.linkedDocumentId && (
-                        <Link to={`/dokumente/${task.linkedDocumentId}`} className="link">
-                          {translate('aufgaben.linkDocument')}
-                        </Link>
-                      )}
-                    </div>
-                  </div>
-                </label>
-              </Card>
+              <BusinessListItem
+                key={task.id}
+                className={done ? 'business-list__item--done' : ''}
+                testId={`aufgaben-row-${task.id}`}
+                leading={
+                  <label className="task-row__check">
+                    <input type="checkbox" checked={done} onChange={() => handleToggle(task.id)} aria-label={task.title} data-testid={`aufgaben-toggle-${task.id}`} />
+                  </label>
+                }
+                title={task.title}
+                subtitle={task.description}
+                meta={`${translate(categoryKey)} · ${translate(sourceKey)}`}
+                status={done ? <StatusBadge tone="success" label={translate('aufgaben.filter.erledigt')} icon={false} /> : <StatusBadge tone={priorityTone(task.priority)} label={translate(priorityKey)} icon={false} />}
+                date={task.dueDate ? <Badge tone={done ? 'neutral' : 'warning'}>{task.dueDate}</Badge> : undefined}
+                footer={links.length > 0 ? <div className="task-row__links">{links}</div> : undefined}
+              />
             );
           })}
-        </div>
+        </BusinessList>
       )}
-    </div>
+    </Page>
   );
 }

@@ -311,7 +311,7 @@ describe('OFFICEPILOT-PAYMENT-CLOUD-SAFETY-04B2B2', () => {
   it('B2-C: ohne Supabase wird die Zahlung nicht lokal entfernt', async () => {
     vi.spyOn(supabaseLib, 'isSupabaseConfigured').mockReturnValue(false);
     vi.spyOn(supabaseLib, 'getSupabaseClient').mockReturnValue(null);
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    /* UIUX-01G — Confirm-first über den kanonischen Dialog (kein window.confirm mehr). */
 
     mounted = renderPage(<InvoiceDetailPage />);
     await settle();
@@ -326,8 +326,12 @@ describe('OFFICEPILOT-PAYMENT-CLOUD-SAFETY-04B2B2', () => {
       removeButton!.click();
     });
     await settle();
-
-    expect(confirm).toHaveBeenCalled();
+    const confirmButton = mounted.container.querySelector('[data-testid="payment-remove-confirm"]') as HTMLElement | null;
+    expect(confirmButton).not.toBeNull();
+    await act(async () => {
+      confirmButton!.click();
+    });
+    await settle();
     // Die Zahlung bleibt — lokal wie in der Anzeige.
     expect(stored().payments).toHaveLength(1);
     expect(stored().payments?.[0].id).toBe(LEGACY_ID);

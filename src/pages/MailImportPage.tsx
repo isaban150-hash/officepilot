@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { Card, CardMeta, CardTitle, PageHeader } from '../components/ui/Card';
 import { useApp } from '../context/AppContext';
@@ -59,13 +59,12 @@ export function MailImportPage() {
 
   return (
     <div className="page mail-import-page" data-testid="mail-import-page">
-      <Link to="/mehr" className="back-link">
-        ← {translate('common.back')}
-      </Link>
-
       <PageHeader
         title={translate('mailImport.title')}
         subtitle={translate('mailImport.subtitle')}
+        backLabel={translate('common.back')}
+        backHref="/mehr"
+        backTestId="mail-import-back"
       />
 
       <section className="mail-import-form" data-testid="mail-import-form">

@@ -108,7 +108,8 @@ describe('OffeneRechnungenPage', () => {
 
   it('renders KPI cards and totals', () => {
     const html = renderPage();
-    expect(html).toContain('Offene Rechnungen');
+    /* 01E — Titel „Rechnungen“ (Gesamtübersicht), Zahlungsstand als SummaryList. */
+    expect(html).toContain('>Rechnungen</h1>');
     expect(html).toContain('Offene Forderungen');
     expect(html).toContain('Überfällige Forderungen');
     expect(html).toContain('Bereits bezahlt');

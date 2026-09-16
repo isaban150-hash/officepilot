@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
 import { buildDeskSuccesses } from '../../services/deskIntelligenceService';
 import type { TranslationKey } from '../../i18n';
+import { Icon } from '../ui/Icon';
 
 function interpolate(
   translate: (key: TranslationKey) => string,
@@ -24,7 +25,7 @@ export function DeskSuccesses() {
         {successes.map((entry) => (
           <li key={entry.id} className="desk-successes__item" data-testid={`desk-success-${entry.id}`}>
             <span className="desk-successes__check" aria-hidden>
-              ✓
+              <Icon id="check" size="sm" />
             </span>
             <span>{interpolate(translate, entry.messageKey, entry.count)}</span>
           </li>

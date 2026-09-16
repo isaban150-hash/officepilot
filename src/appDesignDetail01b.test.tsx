@@ -126,8 +126,9 @@ describe('APP-DESIGN-DETAIL-01B document detail work order', () => {
       'data-testid="document-detail-show-more"',
     );
 
-    expect(html).toContain('class="back-link"');
-    expect(html.indexOf('class="back-link"')).toBeLessThan(
+    /* 01E — Back im PageHeader. */
+    expect(html).toContain('class="page-header__back"');
+    expect(html.indexOf('class="page-header__back"')).toBeLessThan(
       html.indexOf('data-testid="document-detail-experience"'),
     );
   });

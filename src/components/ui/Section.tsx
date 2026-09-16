@@ -68,3 +68,16 @@ export function DetailSection({
     </section>
   );
 }
+
+/**
+ * UIUX-FOUNDATION-01D — Zusammenfassung als Schlüssel/Wert-Liste.
+ * Nimmt bestehende `DataRow`-Kinder auf; mobil gestapelt, ab Tablet zwei
+ * Spalten. Kein Kasten — die Section liefert die Gliederung.
+ */
+export function SummaryList({ children, columns = 2, className = '', testId }: { children: ReactNode; columns?: 1 | 2; className?: string; testId?: string }) {
+  return (
+    <div className={['summary-list', columns === 1 ? 'summary-list--single' : '', className].filter(Boolean).join(' ')} data-testid={testId}>
+      {children}
+    </div>
+  );
+}

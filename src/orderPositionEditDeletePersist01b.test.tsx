@@ -284,11 +284,12 @@ describe('ORDER-POSITION-EDIT-DELETE-PERSISTENCE-01B — Oberfläche', () => {
    * R3b — Löschen über den echten Handler des Modals.
    */
   it('R3b: bei Persistenzfehler meldet das Löschen im Modal den Fehler', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     await renderEditForm();
 
     failLocalStorage();
     await click(buttonWithText(t('position.delete', 'de'))!);
+    /* UIUX-01G — Löschen wird im kanonischen Dialog bestätigt. */
+    await click(document.querySelector('[data-testid="position-delete-confirm"]') as HTMLElement);
 
     expect(closed, 'Modal wurde trotz Persistenzfehler geschlossen').toBe(false);
     expect(savedVorgaenge).toEqual([]);
@@ -304,7 +305,6 @@ describe('ORDER-POSITION-EDIT-DELETE-PERSISTENCE-01B — Oberfläche', () => {
    * verschwand aus der Anzeige und kam nach dem Neustart zurück.
    */
   it('R4: der Karten-Löschweg meldet einen Persistenzfehler sichtbar', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     await act(async () => {
       root.render(
         createElement(
@@ -340,6 +340,8 @@ describe('ORDER-POSITION-EDIT-DELETE-PERSISTENCE-01B — Oberfläche', () => {
 
     failLocalStorage();
     await click(remove!);
+    /* UIUX-01G — Bestätigung im kanonischen Dialog. */
+    await click(host.querySelector<HTMLElement>('[data-testid="vorgang-delete-confirm"]')!);
 
     expect(
       host.querySelector(`[data-testid="order-position-card-${POSITION_ID}"]`),

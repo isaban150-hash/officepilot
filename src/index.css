@@ -1016,20 +1016,6 @@ body {
   border-radius: 0.5rem;
 }
 
-.mehr-link-card {
-  text-decoration: none;
-  color: inherit;
-  display: block;
-}
-
-.mehr-link-card .card {
-  transition: border-color 0.15s;
-}
-
-.mehr-link-card:hover .card {
-  border-color: var(--color-accent);
-}
-
 .show-more-section {
   display: flex;
   flex-direction: column;
@@ -1588,11 +1574,6 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
-}
-
-.card-link {
-  text-decoration: none;
-  color: inherit;
 }
 
 /* Buttons */
@@ -2192,44 +2173,6 @@ body {
   color: var(--color-text-muted);
 }
 
-.pending-attention-card {
-  margin-bottom: 1rem;
-  border-left: 3px solid var(--color-primary);
-}
-
-.pending-attention-list {
-  list-style: none;
-  margin: 0.5rem 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.pending-attention-item {
-  display: block;
-  width: 100%;
-  text-align: left;
-  padding: 0.35rem 0;
-  border: none;
-  background: none;
-  color: var(--color-text);
-  font-size: 0.92rem;
-  cursor: pointer;
-  line-height: 1.4;
-}
-
-.pending-attention-item::before {
-  content: '•';
-  margin-right: 0.5rem;
-  color: var(--color-primary);
-}
-
-.pending-attention-item:hover {
-  color: var(--color-primary);
-  text-decoration: underline;
-}
-
 .smart-intake-card {
   margin-bottom: 1.25rem;
   border-left: 3px solid var(--color-primary);
@@ -2344,13 +2287,6 @@ body {
   box-shadow: none;
 }
 
-.document-card__summary-facts {
-  margin: 0.35rem 0 0;
-  font-size: 0.85rem;
-  color: var(--color-text-muted);
-  line-height: 1.35;
-}
-
 .inbox-suggestion p {
   font-size: 0.95rem;
   line-height: 1.5;
@@ -2406,28 +2342,6 @@ body {
   border-radius: var(--radius-sm);
   font-size: 0.85rem;
   color: #92400e;
-}
-
-/* Tasks */
-.task-row {
-  display: flex;
-  gap: 0.75rem;
-  align-items: flex-start;
-  cursor: pointer;
-}
-
-.task-row input[type='checkbox'] {
-  width: 22px;
-  height: 22px;
-  margin-top: 0.15rem;
-  flex-shrink: 0;
-}
-
-.task-row__content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
 }
 
 /* Invoice */
@@ -2492,73 +2406,6 @@ body {
   background: #eef8f0;
   border: 1px solid #b8dfc4;
   color: #1e5a2e;
-}
-
-.overview-kpi-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.75rem;
-  margin-bottom: 1rem;
-}
-
-.overview-kpi-card {
-  padding: 1rem;
-}
-
-.overview-kpi-card__label {
-  margin: 0 0 0.35rem;
-  font-size: 0.8rem;
-  color: var(--color-text-muted);
-}
-
-.overview-kpi-card__value {
-  margin: 0;
-  font-size: 1.25rem;
-  font-weight: 600;
-}
-
-.overview-kpi-card--danger .overview-kpi-card__value {
-  color: #b42318;
-}
-
-.overview-kpi-card--success .overview-kpi-card__value {
-  color: #1e7a3a;
-}
-
-.overview-meta-card {
-  margin-bottom: 1rem;
-}
-
-.overview-filters {
-  margin-bottom: 1rem;
-}
-
-.invoice-overview-card__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-top: 0.75rem;
-  align-items: center;
-}
-
-.invoice-overview-card__actions a {
-  text-decoration: none;
-}
-
-.aufgaben-filters {
-  margin-bottom: 1rem;
-}
-
-.task-row__badges {
-  margin-top: 0.35rem;
-}
-
-.task-row__links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  margin-top: 0.35rem;
-  font-size: 0.9rem;
 }
 
 .classification-explanation__kind {
@@ -2679,9 +2526,6 @@ body {
 }
 
 @media (min-width: 768px) {
-  .overview-kpi-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
 }
 
 .invoice-warn-list {
@@ -4582,16 +4426,8 @@ body {
   margin-top: 0.5rem;
 }
 
-.document-toolbar {
-  margin-bottom: 0.75rem;
-}
-
 .document-search {
   width: 100%;
-}
-
-.document-categories {
-  margin-bottom: 1rem;
 }
 
 .document-area-chips {
@@ -4618,12 +4454,6 @@ body {
     flex-wrap: wrap;
     overflow-x: visible;
   }
-}
-
-.document-card__header {
-  display: flex;
-  gap: 0.75rem;
-  align-items: flex-start;
 }
 
 .document-card__preview {
@@ -5022,40 +4852,7 @@ body {
   margin-top: 0.5rem;
 }
 
-.invoice-payment-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.2rem 0.55rem;
-  border-radius: 999px;
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-}
-
-.invoice-payment-badge--offen {
-  background: #e5e7eb;
-  color: #374151;
-}
-
-.invoice-payment-badge--teilbezahlt {
-  background: #fef3c7;
-  color: #92400e;
-}
-
-.invoice-payment-badge--bezahlt {
-  background: #d1fae5;
-  color: #065f46;
-}
-
-.invoice-payment-badge--ueberfaellig {
-  background: #fee2e2;
-  color: #991b1b;
-}
-
-.invoice-payment-badge--storniert {
-  background: #4b5563;
-  color: #f9fafb;
-}
+/* UIUX-FOUNDATION-01E — .invoice-payment-badge* entfernt: Zahlungsstatus rendert über StatusBadge (components.css). */
 
 .invoice-payment-summary {
   margin-bottom: 1rem;
@@ -5097,20 +4894,6 @@ body {
   font-weight: 700;
 }
 
-.invoice-payment-summary__notice {
-  margin: 0 0 0.75rem;
-  font-size: 0.9rem;
-}
-
-.invoice-payment-summary__notice--danger {
-  color: #b91c1c;
-  font-weight: 600;
-}
-
-.invoice-payment-summary__notice--muted {
-  color: var(--color-text-muted);
-}
-
 .invoice-payment-summary__overdue-days {
   margin: 0.75rem 0 0;
   font-size: 0.85rem;
@@ -5130,13 +4913,6 @@ body {
   border: 1px solid #e5e7eb;
   border-radius: var(--radius-sm);
   padding: 0.75rem;
-}
-
-.invoice-payment-history__main {
-  display: flex;
-  justify-content: space-between;
-  gap: 0.75rem;
-  font-weight: 600;
 }
 
 .invoice-payment-history__reference,
@@ -6962,23 +6738,6 @@ body {
   font-size: 0.98rem;
   font-weight: 650;
   color: var(--op-text, var(--color-text));
-}
-
-/* CUSTOMER-WORKSPACE-01A */
-.kunden-detail-section {
-  margin-top: 1.25rem;
-}
-
-.kunden-detail-section__title {
-  margin: 0 0 0.5rem;
-  font-size: 1.05rem;
-  font-weight: 650;
-}
-
-.kunden-detail-section__subtitle {
-  margin: 0.85rem 0 0.4rem;
-  font-size: 0.95rem;
-  font-weight: 600;
 }
 
 @media (min-width: 768px) {

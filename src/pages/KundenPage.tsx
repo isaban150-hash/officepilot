@@ -1,7 +1,10 @@
 import { useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
-import { Card, CardMeta, CardTitle, PageHeader } from '../components/ui/Card';
+import { Badge, PageHeader } from '../components/ui/Card';
+import { BusinessList, BusinessListItem } from '../components/ui/Lists';
+import { Page } from '../components/ui/Page';
+import { DetailSection } from '../components/ui/Section';
 import { EmptyStateBlock } from '../components/ui/EmptyStateBlock';
 import { useApp } from '../context/AppContext';
 import { buildCustomerSubline } from '../components/customer/CustomerDecisionChoice';
@@ -126,16 +129,17 @@ export function KundenPage() {
     </Button>
   );
 
+  /* UIUX-FOUNDATION-01F — Header mit einer Hauptaktion, Kunden als Business-Liste. */
   return (
-    <div className="page kunden-page" data-testid="kunden-page">
+    <Page className="kunden-page" testId="kunden-page">
       <PageHeader
         title={translate('kunden.title')}
         subtitle={translate('kunden.subtitle')}
+        primaryAction={creating ? undefined : createAction}
       />
 
       {creating ? (
-        <section className="kunden-detail-section" data-testid="kunden-create-section">
-          <h2 className="kunden-detail-section__title">{translate('kunden.create.title')}</h2>
+        <DetailSection title={translate('kunden.create.title')} surface testId="kunden-create-section">
           <CustomerEditForm
             customer={NEW_CUSTOMER_DRAFT}
             busy={saving}
@@ -159,10 +163,8 @@ export function KundenPage() {
               }}
             />
           ) : null}
-        </section>
-      ) : (
-        createAction
-      )}
+        </DetailSection>
+      ) : null}
 
       {kunden.length === 0 ? (
         <EmptyStateBlock
@@ -176,38 +178,31 @@ export function KundenPage() {
           }
         />
       ) : (
-        <div className="card-list">
+        <BusinessList testId="kunden-list" ariaLabel={translate('kunden.title')}>
           {kunden.map((kunde) => (
-            <Link
+            <BusinessListItem
               key={`${kunde.kind}:${kunde.key}`}
               to={buildKundenDetailPath(kunde)}
-              className="card-link"
-              data-testid={`kunde-${kunde.kind}-${kunde.key}`}
-            >
-              <Card>
-                {/* A nameless orphan keeps a readable title — never its customerId. */}
-                <CardTitle>
-                  {kunde.name ||
-                    (kunde.kind === 'orphan' ? translate('kunden.orphanBadge') : kunde.name)}
-                </CardTitle>
-                {sublineFor(kunde) && (
-                  <p className="card__meta" data-testid="kunde-address">
-                    {sublineFor(kunde)}
-                  </p>
-                )}
-                <CardMeta>
-                  {kunde.kind === 'legacy' ? `${translate('kunden.legacyBadge')} · ` : ''}
-                  {kunde.kind === 'orphan' ? `${translate('kunden.orphanBadge')} · ` : ''}
-                  {translate('kunden.meta.orders').replace('{count}', String(kunde.orderCount))}
-                  {kunde.openInvoiceCount > 0
-                    ? ` · ${translate('kunden.meta.openInvoices').replace('{count}', String(kunde.openInvoiceCount))}`
-                    : ''}
-                </CardMeta>
-              </Card>
-            </Link>
+              linkTestId={`kunde-${kunde.kind}-${kunde.key}`}
+              /* A nameless orphan keeps a readable title — never its customerId. */
+              title={kunde.name || (kunde.kind === 'orphan' ? translate('kunden.orphanBadge') : kunde.name)}
+              subtitle={sublineFor(kunde) ? <span data-testid="kunde-address">{sublineFor(kunde)}</span> : undefined}
+              meta={`${translate('kunden.meta.orders').replace('{count}', String(kunde.orderCount))}${
+                kunde.openInvoiceCount > 0
+                  ? ` · ${translate('kunden.meta.openInvoices').replace('{count}', String(kunde.openInvoiceCount))}`
+                  : ''
+              }`}
+              status={
+                kunde.kind === 'legacy' ? (
+                  <Badge tone="neutral">{translate('kunden.legacyBadge')}</Badge>
+                ) : kunde.kind === 'orphan' ? (
+                  <Badge tone="warning">{translate('kunden.orphanBadge')}</Badge>
+                ) : undefined
+              }
+            />
           ))}
-        </div>
+        </BusinessList>
       )}
-    </div>
+    </Page>
   );
 }

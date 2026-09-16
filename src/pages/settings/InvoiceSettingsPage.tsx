@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '../../components/ui/Button';
 import { PageHeader } from '../../components/ui/Card';
+import { ReadOnlyNotice } from '../../components/ui/ReadOnlyNotice';
+import { InlineNotice } from '../../components/ui/States';
 import { NumericInput } from '../../components/ui/NumericInput';
 import { InvoiceNumberFormatSection } from '../../components/settings/InvoiceNumberFormatSection';
 import { useApp } from '../../context/AppContext';
@@ -267,15 +269,16 @@ export function InvoiceSettingsPage() {
 
   return (
     <div className="page settings-page settings-subpage" data-testid="settings-invoices-page">
-      <Link to="/einstellungen" className="back-link" data-testid="settings-invoices-back">
-        ← {translate('settings.backToHub')}
-      </Link>
-      <PageHeader title={translate('settings.invoices.title')} subtitle={translate('settings.invoices.page.subtitle')} />
+      <PageHeader
+        title={translate('settings.invoices.title')}
+        subtitle={translate('settings.invoices.page.subtitle')}
+        backLabel={translate('settings.backToHub')}
+        backHref="/einstellungen"
+        backTestId="settings-invoices-back"
+      />
 
       {!editable ? (
-        <p className="invoice-hint invoice-hint--warning" data-testid="settings-invoices-readonly">
-          {translate(access.reason === 'member' ? 'settings.invoices.readOnly' : 'settings.company.roleUnknown')}
-        </p>
+        <ReadOnlyNotice message={translate(access.reason === 'member' ? 'settings.invoices.readOnly' : 'settings.company.roleUnknown')} testId="settings-invoices-readonly" />
       ) : (
         <p className="hint-text" data-testid="settings-invoices-historical-hint">
           {translate('settings.invoices.historicalHint')}
@@ -436,9 +439,7 @@ export function InvoiceSettingsPage() {
               </p>
             ) : null}
             {effectiveTaxStatus === 'reverse_charge_13b' ? (
-              <p className="invoice-hint invoice-hint--warning" data-testid="settings-invoices-tax-13b-hint">
-                {translate('settings.invoices.taxStatus.reverseChargeHint')}
-              </p>
+              <InlineNotice tone="warning" testId="settings-invoices-tax-13b-hint">{translate('settings.invoices.taxStatus.reverseChargeHint')}</InlineNotice>
             ) : null}
             {renderError('defaultTaxStatus')}
           </div>
@@ -496,9 +497,7 @@ export function InvoiceSettingsPage() {
           </p>
           <p className="form-hint">{translate('settings.invoices.currency.hint')}</p>
           {currencyAmbiguous ? (
-            <p className="invoice-hint invoice-hint--warning" data-testid="settings-invoices-currency-ambiguous">
-              {translate('settings.invoices.currency.ambiguous')}
-            </p>
+            <InlineNotice tone="warning" testId="settings-invoices-currency-ambiguous">{translate('settings.invoices.currency.ambiguous')}</InlineNotice>
           ) : null}
         </section>
 

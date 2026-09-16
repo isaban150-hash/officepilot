@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { Button } from '../ui/Button';
 import { Card, DataRow } from '../ui/Card';
+import { SimpleConfirmDialog } from '../ui/SimpleConfirmDialog';
 import { useDocumentFileObjectUrl } from '../../hooks/useDocumentFileObjectUrl';
 import {
   downloadDocumentFile,
@@ -67,17 +68,18 @@ export function DocumentOriginalFilePanel({
     ? new Date(fileRef.createdAt).toLocaleString('de-DE')
     : '—';
 
+  /* UIUX-FOUNDATION-01G — geteilte Datei: Bestätigung im kanonischen Dialog statt window.confirm. */
+  const [sharedConfirmOpen, setSharedConfirmOpen] = useState(false);
   const promote = () => {
     if (!fileRefId || promoteInFlightRef.current || isPromoting) return;
-
     if (activeReferences > 1) {
-      const confirmed = window.confirm(
-        formatTemplate(translate('document.original.promote.confirmShared'), {
-          count: activeReferences,
-        }),
-      );
-      if (!confirmed) return;
+      setSharedConfirmOpen(true);
+      return;
     }
+    performPromote();
+  };
+  const performPromote = () => {
+    if (!fileRefId || promoteInFlightRef.current || isPromoting) return;
 
     promoteInFlightRef.current = true;
     setIsPromoting(true);
@@ -190,6 +192,23 @@ export function DocumentOriginalFilePanel({
           {translate('document.original.download')}
         </Button>
       </div>
+      <SimpleConfirmDialog
+        open={sharedConfirmOpen}
+        title={translate('document.original.action.promotePermanently')}
+        message={formatTemplate(translate('document.original.promote.confirmShared'), { count: activeReferences })}
+        confirmLabel={translate('document.original.action.promotePermanently')}
+        cancelLabel={translate('common.cancel')}
+        confirmVariant="primary"
+        dialogTestId="document-original-promote-dialog"
+        confirmTestId="document-original-promote-confirm"
+        cancelTestId="document-original-promote-cancel"
+        onConfirm={() => {
+          setSharedConfirmOpen(false);
+          performPromote();
+          return true;
+        }}
+        onCancel={() => setSharedConfirmOpen(false)}
+      />
     </Card>
   );
 }

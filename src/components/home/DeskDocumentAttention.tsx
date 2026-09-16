@@ -11,7 +11,7 @@ import { getCustomerById } from '../../services/customerStoreService';
 import { getVorgangById } from '../../services/vorgangService';
 import { DocumentSummaryCompactCard } from '../documents/DocumentSummaryCompactCard';
 import { Button } from '../ui/Button';
-import { Card, CardTitle } from '../ui/Card';
+import { DetailSection } from '../ui/Section';
 
 /**
  * DOCUMENT-SUMMARY-ROLL-OUT — "Heute beachten" document snippets.
@@ -65,8 +65,7 @@ export function DeskDocumentAttention() {
   if (cards.length === 0) return null;
 
   return (
-    <Card className="desk-document-attention" data-testid="desk-document-attention">
-      <CardTitle>{translate('pending.title')}</CardTitle>
+    <DetailSection title={translate('heute.section.documents')} className="desk-document-attention" testId="desk-document-attention">
       <div className="desk-document-attention__list">
         {cards.map(({ item, summary }) => (
           <div className="inbox-card-shell" key={item.id}>
@@ -110,6 +109,6 @@ export function DeskDocumentAttention() {
           </div>
         ))}
       </div>
-    </Card>
+    </DetailSection>
   );
 }

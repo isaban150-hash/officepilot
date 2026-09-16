@@ -12,9 +12,9 @@
  * **neue** Versandentwuerfe; bereits versendete Dokumente bleiben unveraendert.
  */
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { Button } from '../../components/ui/Button';
 import { PageHeader } from '../../components/ui/Card';
+import { ReadOnlyNotice } from '../../components/ui/ReadOnlyNotice';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { useFormResume } from '../../hooks/useFormResume';
@@ -140,15 +140,16 @@ export function CommunicationSettingsPage() {
 
   return (
     <div className="page settings-page settings-subpage" data-testid="settings-communication-page">
-      <Link to="/einstellungen" className="back-link" data-testid="settings-communication-back">
-        ← {translate('settings.backToHub')}
-      </Link>
-      <PageHeader title={translate('settings.communication.title')} subtitle={translate('settings.communication.page.subtitle')} />
+      <PageHeader
+        title={translate('settings.communication.title')}
+        subtitle={translate('settings.communication.page.subtitle')}
+        backLabel={translate('settings.backToHub')}
+        backHref="/einstellungen"
+        backTestId="settings-communication-back"
+      />
 
       {!editable ? (
-        <p className="invoice-hint invoice-hint--warning" data-testid="settings-communication-readonly">
-          {translate(access.reason === 'member' ? 'settings.communication.readOnly' : 'settings.company.roleUnknown')}
-        </p>
+        <ReadOnlyNotice message={translate(access.reason === 'member' ? 'settings.communication.readOnly' : 'settings.company.roleUnknown')} testId="settings-communication-readonly" />
       ) : (
         <p className="hint-text" data-testid="settings-communication-historical-hint">
           {translate('settings.communication.historicalHint')}

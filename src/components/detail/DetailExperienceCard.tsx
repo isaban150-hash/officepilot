@@ -4,6 +4,8 @@ import { useApp } from '../../context/AppContext';
 
 interface DetailExperienceCardProps {
   recognizedTitle: string;
+  /** UIUX-FOUNDATION-01F — Identität steht bereits im PageHeader; „Was ist das?“ nicht doppelt zeigen. */
+  hideIdentity?: boolean;
   recognizedSummary?: string;
   assistantMessage: string;
   paperInstruction?: string;
@@ -14,6 +16,7 @@ interface DetailExperienceCardProps {
 
 export function DetailExperienceCard({
   recognizedTitle,
+  hideIdentity = false,
   recognizedSummary,
   assistantMessage,
   paperInstruction,
@@ -28,11 +31,13 @@ export function DetailExperienceCard({
       <Card className="detail-experience-card__inner">
         <CardTitle>{translate('detail.experienceTitle')}</CardTitle>
 
+        {hideIdentity ? null : (
         <section className="detail-experience-section">
           <h3 className="detail-experience-section__label">{translate('detail.whatIs')}</h3>
           <p className="detail-experience-section__value">{recognizedTitle}</p>
           {recognizedSummary && <CardMeta>{recognizedSummary}</CardMeta>}
         </section>
+        )}
 
         <section className="detail-experience-section">
           <h3 className="detail-experience-section__label">{translate('detail.officePilotDid')}</h3>

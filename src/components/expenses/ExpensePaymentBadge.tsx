@@ -1,3 +1,5 @@
+import { StatusBadge } from '../ui/Badge';
+import { paymentStatusTone } from '../../services/ui/statusTone';
 import type { ExpensePaymentStatus } from '../../types/expense';
 import type { TranslationKey } from '../../i18n';
 
@@ -6,24 +8,20 @@ interface Props {
   translate: (key: TranslationKey) => string;
 }
 
-const STATUS_CLASS: Record<ExpensePaymentStatus, string> = {
-  offen: 'invoice-payment-badge--offen',
-  teilbezahlt: 'invoice-payment-badge--teilbezahlt',
-  bezahlt: 'invoice-payment-badge--bezahlt',
-  ueberfaellig: 'invoice-payment-badge--ueberfaellig',
-  storniert: 'invoice-payment-badge--storniert',
-};
-
+/** UIUX-FOUNDATION-01E — dieselbe Statussprache wie bei Rechnungen. */
 export function ExpensePaymentBadge({ status, translate }: Props) {
   const labelKey = `payment.status.${status}` as TranslationKey;
-
   return (
-    <span className={`invoice-payment-badge ${STATUS_CLASS[status]}`}>
-      {translate(labelKey)}
-    </span>
+    <StatusBadge
+      tone={paymentStatusTone(status)}
+      label={translate(labelKey)}
+      icon={false}
+      className={`invoice-payment-badge invoice-payment-badge--${status}`}
+    />
   );
 }
 
+/** @deprecated Ton kommt aus `paymentStatusTone`; nur noch für Alt-Selektoren. */
 export function getExpensePaymentBadgeClass(status: ExpensePaymentStatus): string {
-  return STATUS_CLASS[status];
+  return `invoice-payment-badge--${status}`;
 }

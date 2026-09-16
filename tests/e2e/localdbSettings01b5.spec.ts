@@ -89,11 +89,11 @@ test.describe('Einstellungen — Betrieb und Legacy-Ablösung (lokale Datenbank)
     test.setTimeout(240_000);
     await loginAndSetup(page);
 
-    /* 1./2. Benutzermenü → Einstellungen; vier Bereiche */
+    /* 1./2. Benutzermenü → Einstellungen; fünf Bereiche (seit FIRMENPROFIL-01D inkl. E-Mail & Kommunikation) */
     await page.getByTestId('user-menu').getByRole('button').first().click();
     await page.getByTestId('user-menu-einstellungen').click();
     await expect(page).toHaveURL(/\/einstellungen$/);
-    await expect(page.locator('.settings-group')).toHaveCount(4);
+    await expect(page.locator('.settings-group')).toHaveCount(5);
     await expect(page.getByTestId('settings-entry-company-profile')).toBeVisible();
     await expect(page.getByTestId('settings-entry-invoices')).toBeVisible();
     await expect(page.getByTestId('settings-entry-logo')).toBeVisible();

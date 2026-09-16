@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Badge, Card, CardMeta, CardTitle, PageHeader } from '../components/ui/Card';
+import { PageHeader, StatusBadge } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
+import { DateDisplay, MoneyDisplay } from '../components/ui/Display';
+import { EmptyStateBlock } from '../components/ui/EmptyStateBlock';
+import { BusinessList, BusinessListItem } from '../components/ui/Lists';
+import { Page, PageToolbar } from '../components/ui/Page';
+import { FilterChips, SearchField } from '../components/ui/Toolbar';
 import { useApp } from '../context/AppContext';
 import {
   EXPENSE_CATEGORIES,
@@ -9,22 +14,19 @@ import {
   getExpenseSummary,
   searchExpenses,
 } from '../services/expenseService';
+import { expenseStatusTone } from '../services/ui/statusTone';
+import { formatEuroAmount } from '../utils/displayFormat';
 import type { ExpenseCategory } from '../types/expense';
 import type { TranslationKey } from '../i18n';
 
-function formatDate(value: string | null): string {
-  if (!value) return '—';
-  try {
-    return new Date(value).toLocaleDateString('de-DE');
-  } catch {
-    return value;
-  }
-}
-
-function formatEuro(amount: number): string {
-  return `${amount.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
-}
-
+/**
+ * UIUX-FOUNDATION-01D — repräsentative Business-Liste.
+ *
+ * Vorher: Kartenwand mit drei Badges pro Karte (Kategorie, Status, Betrag).
+ * Jetzt: PageHeader + Toolbar (Suche, Kategorie-Chips) + `BusinessList`:
+ * Identität (Titel, Lieferant · Nummer), Datum, Status, Betrag — eine
+ * klickbare Zeile. Fachlogik (Suche, Summen, Kategorien) unverändert.
+ */
 export function AusgabenPage() {
   const { translate } = useApp();
   const location = useLocation();
@@ -42,11 +44,28 @@ export function AusgabenPage() {
     [query, category, expenses],
   );
 
+  const categoryOptions = useMemo(
+    () => [
+      { id: 'all' as const, label: translate('expense.categoryAll') },
+      ...EXPENSE_CATEGORIES.map((cat) => ({ id: cat, label: translate(`expense.category.${cat}` as TranslationKey) })),
+    ],
+    [translate],
+  );
+
   return (
-    <div className="page">
+    <Page testId="ausgaben-page">
       <PageHeader
         title={translate('expense.title')}
-        subtitle={translate('expense.subtitle')}
+        subtitle={
+          <>
+            {translate('expense.subtitle')}
+            <span className="page-header__summary" data-testid="ausgaben-summary">
+              {' · '}
+              {translate('expense.summaryCount').replace('{count}', String(summary.totalCount))} ·{' '}
+              {translate('expense.summaryTotal').replace('{amount}', formatEuroAmount(summary.totalGrossAmount))}
+            </span>
+          </>
+        }
         primaryAction={
           <Link to="/ausgaben/neu">
             <Button variant="primary" fullWidth>
@@ -63,71 +82,53 @@ export function AusgabenPage() {
         }
       />
 
-      <Card className="expense-summary-card">
-        <CardMeta>
-          {translate('expense.summaryCount').replace('{count}', String(summary.totalCount))} ·{' '}
-          {translate('expense.summaryTotal').replace('{amount}', formatEuro(summary.totalGrossAmount))}
-        </CardMeta>
-      </Card>
-
-      <div className="document-toolbar">
-        <input
-          type="search"
-          className="input document-search"
-          placeholder={translate('expense.searchPlaceholder')}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          aria-label={translate('expense.searchPlaceholder')}
-        />
-      </div>
-
-      <div className="chip-group document-categories">
-        <button
-          type="button"
-          className={`chip ${category === 'all' ? 'chip--active' : ''}`}
-          onClick={() => setCategory('all')}
-        >
-          {translate('expense.categoryAll')}
-        </button>
-        {EXPENSE_CATEGORIES.map((cat) => (
-          <button
-            key={cat}
-            type="button"
-            className={`chip ${category === cat ? 'chip--active' : ''}`}
-            onClick={() => setCategory(cat)}
-          >
-            {translate(`expense.category.${cat}` as TranslationKey)}
-          </button>
-        ))}
-      </div>
+      <PageToolbar
+        search={
+          <SearchField
+            label={translate('expense.searchPlaceholder')}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            testId="ausgaben-search"
+          />
+        }
+        filters={
+          <FilterChips
+            options={categoryOptions}
+            value={category}
+            onChange={setCategory}
+            label={translate('expense.categoryAll')}
+            testIdPrefix="ausgaben-category"
+          />
+        }
+      />
 
       {filtered.length === 0 ? (
-        <p className="empty-state">{translate('expense.empty')}</p>
+        <EmptyStateBlock
+          title={translate('expense.empty')}
+          description=""
+          testId="ausgaben-empty"
+        />
       ) : (
-        <div className="card-list">
+        <BusinessList testId="ausgaben-list" ariaLabel={translate('expense.title')}>
           {filtered.map((expense) => {
             const categoryKey = `expense.category.${expense.category}` as TranslationKey;
             const statusKey = `expense.status.${expense.status}` as TranslationKey;
             return (
-              <Link key={expense.id} to={`/ausgaben/${expense.id}`} className="card-link">
-                <Card>
-                  <CardTitle>{expense.title}</CardTitle>
-                  <CardMeta>
-                    {expense.supplierName}
-                    {expense.invoiceNumber ? ` · ${expense.invoiceNumber}` : ''} ·{' '}
-                    {formatDate(expense.issueDate)}
-                  </CardMeta>
-                  <div className="badge-row">
-                    <Badge tone="info">{translate(categoryKey)}</Badge>
-                    <Badge>{translate(statusKey)}</Badge>
-                    <Badge tone="warning">{formatEuro(expense.grossAmount)}</Badge>
-                  </div>
-                </Card>
-              </Link>
+              <BusinessListItem
+                key={expense.id}
+                to={`/ausgaben/${expense.id}`}
+                title={expense.title}
+                subtitle={`${expense.supplierName}${expense.invoiceNumber ? ` · ${expense.invoiceNumber}` : ''}`}
+                meta={translate(categoryKey)}
+                date={<DateDisplay value={expense.issueDate} />}
+                status={<StatusBadge tone={expenseStatusTone(expense.status)} label={translate(statusKey)} icon={false} />}
+                amount={<MoneyDisplay value={expense.grossAmount} />}
+                testId={`ausgaben-row-${expense.id}`}
+              />
             );
           })}
-        </div>
+        </BusinessList>
       )}
-    </div>
+    </Page>
   );
 }

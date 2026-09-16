@@ -2,7 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { InvoiceOverviewCard } from '../components/invoice/InvoiceOverviewCard';
 import { Button } from '../components/ui/Button';
-import { Card, DataRow, PageHeader } from '../components/ui/Card';
+import { DataRow, PageHeader } from '../components/ui/Card';
+import { MoneyDisplay } from '../components/ui/Display';
+import { EmptyStateBlock } from '../components/ui/EmptyStateBlock';
+import { BusinessList } from '../components/ui/Lists';
+import { Page, PageToolbar } from '../components/ui/Page';
+import { DetailSection, SummaryList } from '../components/ui/Section';
+import { InlineNotice } from '../components/ui/States';
+import { FilterChips, SearchField } from '../components/ui/Toolbar';
 import { useApp } from '../context/AppContext';
 import {
   applyInvoiceOverviewFilters,
@@ -11,7 +18,6 @@ import {
   type InvoiceOverviewFilter,
   type InvoiceOverviewItem,
 } from '../services/invoiceOverviewService';
-import { formatPaymentCurrency } from '../services/invoicePaymentService';
 import { MANUAL_INVOICE_ROUTE } from '../services/invoice/manualInvoiceFlow';
 import type { TranslationKey } from '../i18n';
 
@@ -24,6 +30,14 @@ const FILTER_OPTIONS: InvoiceOverviewFilter[] = [
   'storniert',
 ];
 
+/**
+ * UIUX-FOUNDATION-01E — Rechnungsübersicht.
+ *
+ * `getAllInvoiceOverview` liefert bereits alle Rechnungen (Filter „Alle“ ist
+ * Standard); die Seite heißt deshalb wie der Hauptbereich „Rechnungen“ —
+ * ohne neue Aggregation. Struktur: Header (Back = Aufträge, eine
+ * Hauptaktion) → Hinweise → Zahlungsstand → Toolbar → Business-Liste.
+ */
 export function OffeneRechnungenPage() {
   const { translate, showToast } = useApp();
   const navigate = useNavigate();
@@ -41,10 +55,14 @@ export function OffeneRechnungenPage() {
   }, [location.pathname, location.key]);
 
   const totals = useMemo(() => summarizeInvoiceOverview(items), [items]);
-
   const filteredItems = useMemo(
     () => applyInvoiceOverviewFilters(items, filter, query),
     [items, filter, query],
+  );
+
+  const filterOptions = useMemo(
+    () => FILTER_OPTIONS.map((option) => ({ id: option, label: translate(`overview.filter.${option}` as TranslationKey) })),
+    [translate],
   );
 
   const handleInvoiceUpdated = () => {
@@ -56,12 +74,13 @@ export function OffeneRechnungenPage() {
   };
 
   return (
-    <div className="page">
+    <Page testId="rechnungen-page">
       <PageHeader
-        title={translate('overview.title')}
+        title={translate('invoices.list.title')}
         subtitle={translate('overview.subtitle')}
         backLabel={translate('common.back')}
-        onBack={() => navigate('/vorgaenge')}
+        backHref="/vorgaenge"
+        backTestId="rechnungen-back"
         /* MANUAL-INVOICE-UI-01B1B — der eine Einstieg in die Rechnung ohne Auftrag. */
         primaryAction={
           <Button type="button" onClick={() => navigate(MANUAL_INVOICE_ROUTE)} data-testid="overview-new-invoice">
@@ -71,75 +90,42 @@ export function OffeneRechnungenPage() {
       />
 
       {totals.overdueInvoiceCount > 0 && (
-        <p className="invoice-hint invoice-hint--warning">
-          {translate('overview.overdueWarning').replace(
-            '{count}',
-            String(totals.overdueInvoiceCount),
-          )}
-        </p>
+        <InlineNotice tone="warning" testId="rechnungen-overdue-notice">
+          {translate('overview.overdueWarning').replace('{count}', String(totals.overdueInvoiceCount))}
+        </InlineNotice>
       )}
-
       {totals.totalInvoiceCount > 0 && totals.openInvoiceCount === 0 && (
-        <p className="invoice-hint invoice-hint--success">{translate('overview.allPaid')}</p>
+        <InlineNotice tone="success" testId="rechnungen-allpaid-notice">
+          {translate('overview.allPaid')}
+        </InlineNotice>
       )}
 
-      <section className="overview-kpi-grid">
-        <Card className="overview-kpi-card">
-          <p className="overview-kpi-card__label">{translate('overview.openReceivables')}</p>
-          <p className="overview-kpi-card__value">{formatPaymentCurrency(totals.openReceivables)}</p>
-        </Card>
-        <Card className="overview-kpi-card overview-kpi-card--danger">
-          <p className="overview-kpi-card__label">{translate('overview.overdueReceivables')}</p>
-          <p className="overview-kpi-card__value">{formatPaymentCurrency(totals.overdueReceivables)}</p>
-        </Card>
-        <Card className="overview-kpi-card overview-kpi-card--success">
-          <p className="overview-kpi-card__label">{translate('overview.paidTotal')}</p>
-          <p className="overview-kpi-card__value">{formatPaymentCurrency(totals.paidTotal)}</p>
-        </Card>
-        <Card className="overview-kpi-card">
-          <p className="overview-kpi-card__label">{translate('overview.openInvoiceCount')}</p>
-          <p className="overview-kpi-card__value">{totals.openInvoiceCount}</p>
-        </Card>
-      </section>
+      <DetailSection title={translate('invoices.list.summaryTitle')} surface testId="rechnungen-summary">
+        <SummaryList>
+          <DataRow label={translate('overview.openReceivables')} value={<MoneyDisplay value={totals.openReceivables} emphasis />} />
+          <DataRow label={translate('overview.overdueReceivables')} value={<MoneyDisplay value={totals.overdueReceivables} />} />
+          <DataRow label={translate('overview.paidTotal')} value={<MoneyDisplay value={totals.paidTotal} />} />
+          <DataRow label={translate('overview.openInvoiceCount')} value={String(totals.openInvoiceCount)} />
+          <DataRow label={translate('overview.totalInvoiceCount')} value={String(totals.totalInvoiceCount)} />
+        </SummaryList>
+      </DetailSection>
 
-      <Card className="overview-meta-card">
-        <DataRow
-          label={translate('overview.totalInvoiceCount')}
-          value={String(totals.totalInvoiceCount)}
-        />
-      </Card>
-
-      <div className="document-toolbar">
-        <input
-          type="search"
-          className="input document-search"
-          placeholder={translate('overview.searchPlaceholder')}
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          aria-label={translate('overview.searchPlaceholder')}
-        />
-      </div>
-
-      <div className="chip-group overview-filters">
-        {FILTER_OPTIONS.map((option) => {
-          const key = `overview.filter.${option}` as TranslationKey;
-          return (
-            <button
-              key={option}
-              type="button"
-              className={`chip ${filter === option ? 'chip--active' : ''}`}
-              onClick={() => setFilter(option)}
-            >
-              {translate(key)}
-            </button>
-          );
-        })}
-      </div>
+      <PageToolbar
+        search={
+          <SearchField
+            label={translate('overview.searchPlaceholder')}
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            testId="rechnungen-search"
+          />
+        }
+        filters={<FilterChips options={filterOptions} value={filter} onChange={setFilter} label={translate('list.filter.label')} testIdPrefix="rechnungen-filter" />}
+      />
 
       {filteredItems.length === 0 ? (
-        <p className="empty-state">{translate('overview.empty')}</p>
+        <EmptyStateBlock title={translate('overview.empty')} description="" testId="rechnungen-empty" />
       ) : (
-        <div className="card-list">
+        <BusinessList testId="rechnungen-list" ariaLabel={translate('invoices.list.title')}>
           {filteredItems.map((item) => (
             <InvoiceOverviewCard
               key={`${item.vorgangId}-${item.invoice.id}`}
@@ -149,16 +135,14 @@ export function OffeneRechnungenPage() {
               onPaymentToast={handlePaymentToast}
             />
           ))}
-        </div>
+        </BusinessList>
       )}
 
-      <div className="page-header__actions">
+      <div className="detail-actions">
         <Link to="/vorgaenge">
-          <Button variant="outline" fullWidth>
-            {translate('overview.backToVorgaenge')}
-          </Button>
+          <Button variant="outline">{translate('overview.backToVorgaenge')}</Button>
         </Link>
       </div>
-    </div>
+    </Page>
   );
 }

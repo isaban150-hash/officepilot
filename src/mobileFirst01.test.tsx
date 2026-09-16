@@ -38,7 +38,9 @@ describe('MOBILE-FIRST-01', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('mobile-home-card--primary');
+    /* UIUX-FOUNDATION-01E — Hauptaktion im Seitenkopf statt größter Karte. */
+    expect(html).toContain('data-testid="home-card-add-document"');
+    expect(html).toContain('page-header__primary');
     expect(html).toContain('Foto');
     expect(html).toContain('PDF');
     expect(html).toContain('Galerie');

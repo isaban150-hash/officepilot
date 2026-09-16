@@ -251,7 +251,7 @@ describe('CUSTOMER-WORKSPACE-01A', () => {
     expect(container.textContent).not.toContain('cust-nicht-im-store');
 
     // Unbekannter Vorgang erzeugt keine Zeile.
-    expect(container.querySelectorAll('.card-link')).toHaveLength(5);
+    expect(container.querySelectorAll('.business-list__item')).toHaveLength(5);
 
     view.unmount();
   });
@@ -319,7 +319,7 @@ describe('CUSTOMER-WORKSPACE-01A', () => {
     expect(container.querySelector('[data-testid="kunden-detail-page"]')).toBeNull();
     expect(container.querySelector('[data-testid="kunden-legacy-link"]')).not.toBeNull();
     const targets = container.querySelectorAll(
-      '[data-testid="kunden-legacy-link-targets"] .card-link',
+      '[data-testid="kunden-legacy-link-targets"] .business-list__item',
     );
     expect(targets).toHaveLength(2);
     view.unmount();
@@ -427,7 +427,7 @@ describe('CUSTOMER-WORKSPACE-01A', () => {
     const list = mountAt('/kunden');
     const row = list.container.querySelector('[data-testid="kunde-orphan-cust-verwaist-1"]');
     expect(row).not.toBeNull();
-    expect(row!.querySelector('.card__title')!.textContent).toBe('Kundenstamm fehlt');
+    expect(row!.querySelector('.business-list__title')!.textContent).toBe('Kundenstamm fehlt');
     expect(list.container.textContent).not.toContain('cust-verwaist-1');
     list.unmount();
 
@@ -466,7 +466,7 @@ describe('CUSTOMER-WORKSPACE-01A', () => {
     const list = mountAt('/kunden');
     const row = list.container.querySelector('[data-testid="kunde-orphan-cust-verwaist-2"]');
     expect(row).not.toBeNull();
-    expect(row!.querySelector('.card__title')!.textContent).toBe(SAME_NAME);
+    expect(row!.querySelector('.business-list__title')!.textContent).toBe(SAME_NAME);
     expect(list.container.textContent).not.toContain('cust-verwaist-2');
     list.unmount();
 

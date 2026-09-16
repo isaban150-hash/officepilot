@@ -1,11 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
+import { Link, Navigate, useParams } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { CustomerEditForm } from '../components/customer/CustomerEditForm';
 import { updateCustomer } from '../services/customerService';
 import { getCustomerById } from '../services/customerStoreService';
 import type { CustomerBilling } from '../types/models';
-import { Badge, Card, CardMeta, CardTitle, DataRow, PageHeader } from '../components/ui/Card';
+import { DataRow, PageHeader, StatusBadge } from '../components/ui/Card';
+import { Badge } from '../components/ui/Badge';
+import { BusinessList, BusinessListItem } from '../components/ui/Lists';
+import { Page } from '../components/ui/Page';
+import { DetailSection, SummaryList } from '../components/ui/Section';
+import { vorgangStatusTone } from '../services/ui/statusTone';
 import { EmptyStateBlock } from '../components/ui/EmptyStateBlock';
 import { useApp } from '../context/AppContext';
 import {
@@ -21,7 +26,6 @@ import type { TranslationKey } from '../i18n';
  */
 export function KundenLegacyLinkResolver() {
   const { translate } = useApp();
-  const navigate = useNavigate();
   const { name: rawName } = useParams<{ name: string }>();
   const targets = resolveKundenLinkTargets(rawName ?? '');
 
@@ -30,7 +34,7 @@ export function KundenLegacyLinkResolver() {
   }
 
   return (
-    <div className="page kunden-detail-page" data-testid="kunden-legacy-link">
+    <Page className="kunden-detail-page" testId="kunden-legacy-link">
       <PageHeader
         title={
           targets.length === 0
@@ -43,41 +47,41 @@ export function KundenLegacyLinkResolver() {
             : translate('kunden.link.ambiguousDesc')
         }
         backLabel={translate('common.back')}
-        onBack={() => navigate('/kunden')}
+        backHref="/kunden"
       />
 
       {targets.length > 0 && (
-        <div className="card-list" data-testid="kunden-legacy-link-targets">
+        <BusinessList testId="kunden-legacy-link-targets">
           {targets.map((target) => (
-            <Link
+            <BusinessListItem
               key={`${target.kind}:${target.key}`}
               to={target.route}
-              className="card-link"
-              data-testid={`kunden-legacy-target-${target.kind}-${target.key}`}
-            >
-              <Card>
-                <CardTitle>{target.name}</CardTitle>
-                <CardMeta>
-                  {target.kind === 'legacy' ? `${translate('kunden.legacyBadge')} · ` : ''}
-                  {target.kind === 'orphan' ? `${translate('kunden.orphanBadge')} · ` : ''}
-                  {target.addressLine || '—'}
-                </CardMeta>
-              </Card>
-            </Link>
+              linkTestId={`kunden-legacy-target-${target.kind}-${target.key}`}
+              title={target.name}
+              subtitle={target.addressLine || '—'}
+              status={
+                target.kind === 'legacy' ? (
+                  <Badge tone="neutral">{translate('kunden.legacyBadge')}</Badge>
+                ) : target.kind === 'orphan' ? (
+                  <Badge tone="warning">{translate('kunden.orphanBadge')}</Badge>
+                ) : undefined
+              }
+            />
           ))}
-        </div>
+        </BusinessList>
       )}
 
-      <Link to="/kunden">
-        <Button fullWidth>{translate('kunden.detail.backToList')}</Button>
-      </Link>
-    </div>
+      <div className="detail-actions">
+        <Link to="/kunden">
+          <Button variant="outline">{translate('kunden.detail.backToList')}</Button>
+        </Link>
+      </div>
+    </Page>
   );
 }
 
 export function KundenDetailPage({ kind }: { kind: KundenIdentityKind }) {
   const { translate, showToast } = useApp();
-  const navigate = useNavigate();
   const params = useParams<{ customerId?: string; legacyKey?: string }>();
   // React Router already decodes the parameter — never decode a second time.
   const rawKey = kind === 'legacy' ? params.legacyKey : params.customerId;
@@ -139,12 +143,12 @@ export function KundenDetailPage({ kind }: { kind: KundenIdentityKind }) {
 
   if (!workspace) {
     return (
-      <div className="page kunden-detail-page" data-testid="kunden-detail-page">
+      <Page className="kunden-detail-page" testId="kunden-detail-page">
         <PageHeader
           title={translate('kunden.detail.notFoundTitle')}
           subtitle={translate('kunden.detail.notFoundSubtitle')}
           backLabel={translate('common.back')}
-          onBack={() => navigate('/kunden')}
+          backHref="/kunden"
         />
         <EmptyStateBlock
           title={translate('kunden.detail.notFoundTitle')}
@@ -156,29 +160,58 @@ export function KundenDetailPage({ kind }: { kind: KundenIdentityKind }) {
             </Link>
           }
         />
-      </div>
+      </Page>
     );
   }
 
   const { contact } = workspace;
+  const identityBadge =
+    kind !== 'customer' ? (
+      <Badge tone={kind === 'orphan' ? 'warning' : 'neutral'}>
+        {translate(kind === 'orphan' ? 'kunden.orphanBadge' : 'kunden.legacyBadge')}
+      </Badge>
+    ) : undefined;
+  /* Editing exists only for an id-customer; legacy and orphan stay read-only. */
+  const editAction =
+    editableCustomer && !editing ? (
+      <Button
+        variant="secondary"
+        data-testid="kunden-edit-action"
+        onClick={() => {
+          savingRef.current = false;
+          setSaving(false);
+          setEditError(null);
+          setEditing(true);
+        }}
+      >
+        {translate('kunden.edit.action')}
+      </Button>
+    ) : undefined;
+  const statusFor = (status: string) => (
+    <StatusBadge tone={vorgangStatusTone(status as never)} label={translate(`status.${status}` as TranslationKey)} icon={false} />
+  );
 
+  /*
+   * UIUX-FOUNDATION-01F — Detailmuster: Back (Parent), Kundenidentität,
+   * Bearbeiten als Hauptaktion (nur id-Kunde), Sections mit Business-Listen.
+   * No readable name stored: a neutral title per identity kind — never the key or id.
+   */
   return (
-    <div className="page kunden-detail-page" data-testid="kunden-detail-page">
-      {/* No readable name stored: a neutral title per identity kind — never the key or id. */}
+    <Page className="kunden-detail-page" testId="kunden-detail-page">
       <PageHeader
         title={
           contact.name ||
           translate(kind === 'orphan' ? 'kunden.orphanBadge' : 'kunden.legacyBadge')
         }
-        subtitle={translate('kunden.detail.subtitle')}
+        subtitle={contact.addressLine || translate('kunden.detail.subtitle')}
+        status={identityBadge}
         backLabel={translate('common.back')}
-        onBack={() => navigate('/kunden')}
+        backHref="/kunden"
+        backTestId="kunden-detail-back"
+        primaryAction={editAction}
       />
 
-      <section className="kunden-detail-section" data-testid="kunden-contact">
-        <h2 className="kunden-detail-section__title">{translate('kunden.detail.contactTitle')}</h2>
-
-        {/* Editing exists only for an id-customer; legacy and orphan stay read-only. */}
+      <DetailSection title={translate('kunden.detail.contactTitle')} testId="kunden-contact">
         {editableCustomer && editing ? (
           <CustomerEditForm
             customer={editableCustomer}
@@ -191,177 +224,122 @@ export function KundenDetailPage({ kind }: { kind: KundenIdentityKind }) {
             }}
           />
         ) : null}
-
-        <Card>
+        <SummaryList>
           <DataRow label={translate('kunden.detail.contactPerson')} value={contact.contactPerson || '—'} />
           <DataRow label={translate('kunden.detail.phone')} value={contact.phone || '—'} />
           <DataRow label={translate('kunden.detail.email')} value={contact.email || '—'} />
           <DataRow label={translate('kunden.detail.address')} value={contact.addressLine || '—'} />
-        </Card>
+        </SummaryList>
+      </DetailSection>
 
-        {editableCustomer && !editing ? (
-          <Button
-            variant="secondary"
-            data-testid="kunden-edit-action"
-            onClick={() => {
-              savingRef.current = false;
-              setSaving(false);
-              setEditError(null);
-              setEditing(true);
-            }}
-          >
-            {translate('kunden.edit.action')}
-          </Button>
-        ) : null}
-      </section>
-
-      <section className="kunden-detail-section" data-testid="kunden-baustellen">
-        <h2 className="kunden-detail-section__title">{translate('kunden.detail.sitesTitle')}</h2>
+      <DetailSection title={translate('kunden.detail.sitesTitle')} testId="kunden-baustellen">
         {workspace.baustellen.length === 0 ? (
-          <CardMeta>{translate('kunden.detail.sitesEmpty')}</CardMeta>
+          <p className="detail-empty">{translate('kunden.detail.sitesEmpty')}</p>
         ) : (
-          <div className="card-list">
+          <BusinessList>
             {workspace.baustellen.map((site) => (
-              <Link
+              <BusinessListItem
                 key={site.label}
                 to={`/vorgaenge/${site.vorgangId}`}
-                className="card-link"
-                data-testid={`kunden-baustelle-${site.label}`}
-              >
-                <Card>
-                  <CardTitle>{site.label}</CardTitle>
-                  <CardMeta>{site.vorgangTitle}</CardMeta>
-                </Card>
-              </Link>
+                linkTestId={`kunden-baustelle-${site.label}`}
+                title={site.label}
+                subtitle={site.vorgangTitle}
+              />
             ))}
-          </div>
+          </BusinessList>
         )}
-      </section>
+      </DetailSection>
 
-      <section className="kunden-detail-section" data-testid="kunden-vorgaenge-open">
-        <h2 className="kunden-detail-section__title">{translate('kunden.detail.openOrdersTitle')}</h2>
+      <DetailSection title={translate('kunden.detail.openOrdersTitle')} testId="kunden-vorgaenge-open">
         {workspace.openVorgaenge.length === 0 ? (
-          <CardMeta>{translate('kunden.detail.openOrdersEmpty')}</CardMeta>
+          <p className="detail-empty">{translate('kunden.detail.openOrdersEmpty')}</p>
         ) : (
-          <div className="card-list">
+          <BusinessList>
             {workspace.openVorgaenge.map((vorgang) => (
-              <Link key={vorgang.id} to={vorgang.route} className="card-link" data-testid={`kunden-vorgang-${vorgang.id}`}>
-                <Card>
-                  <CardTitle>{vorgang.title}</CardTitle>
-                  <CardMeta>{vorgang.baustelle}</CardMeta>
-                  <Badge tone="warning">{translate(`status.${vorgang.status}` as TranslationKey)}</Badge>
-                </Card>
-              </Link>
+              <BusinessListItem key={vorgang.id} to={vorgang.route} linkTestId={`kunden-vorgang-${vorgang.id}`} title={vorgang.title} subtitle={vorgang.baustelle} status={statusFor(vorgang.status)} />
             ))}
-          </div>
+          </BusinessList>
         )}
-      </section>
+      </DetailSection>
 
-      <section className="kunden-detail-section" data-testid="kunden-vorgaenge-closed">
-        <h2 className="kunden-detail-section__title">{translate('kunden.detail.closedOrdersTitle')}</h2>
+      <DetailSection title={translate('kunden.detail.closedOrdersTitle')} testId="kunden-vorgaenge-closed">
         {workspace.closedVorgaenge.length === 0 ? (
-          <CardMeta>{translate('kunden.detail.closedOrdersEmpty')}</CardMeta>
+          <p className="detail-empty">{translate('kunden.detail.closedOrdersEmpty')}</p>
         ) : (
-          <div className="card-list">
+          <BusinessList>
             {workspace.closedVorgaenge.map((vorgang) => (
-              <Link key={vorgang.id} to={vorgang.route} className="card-link" data-testid={`kunden-vorgang-${vorgang.id}`}>
-                <Card>
-                  <CardTitle>{vorgang.title}</CardTitle>
-                  <CardMeta>{vorgang.baustelle}</CardMeta>
-                  <Badge tone="success">{translate(`status.${vorgang.status}` as TranslationKey)}</Badge>
-                </Card>
-              </Link>
+              <BusinessListItem key={vorgang.id} to={vorgang.route} linkTestId={`kunden-vorgang-${vorgang.id}`} title={vorgang.title} subtitle={vorgang.baustelle} status={statusFor(vorgang.status)} />
             ))}
-          </div>
+          </BusinessList>
         )}
-      </section>
+      </DetailSection>
 
-      <section className="kunden-detail-section" data-testid="kunden-invoices">
-        <h2 className="kunden-detail-section__title">{translate('kunden.detail.invoicesTitle')}</h2>
-        <Card data-testid="kunden-receivables">
-          <DataRow
-            label={translate('kunden.detail.openReceivable')}
-            value={workspace.openReceivableLabel}
-          />
-        </Card>
+      <DetailSection title={translate('kunden.detail.invoicesTitle')} testId="kunden-invoices">
+        <SummaryList columns={1} testId="kunden-receivables">
+          <DataRow label={translate('kunden.detail.openReceivable')} value={workspace.openReceivableLabel} />
+        </SummaryList>
 
-        <h3 className="kunden-detail-section__subtitle">{translate('kunden.detail.openInvoicesTitle')}</h3>
+        <h3 className="ui-section-header__title">{translate('kunden.detail.openInvoicesTitle')}</h3>
         {workspace.openInvoices.length === 0 ? (
-          <CardMeta>{translate('kunden.detail.openInvoicesEmpty')}</CardMeta>
+          <p className="detail-empty">{translate('kunden.detail.openInvoicesEmpty')}</p>
         ) : (
-          <div className="card-list">
+          <BusinessList>
             {workspace.openInvoices.map((invoice) => (
-              <Link key={invoice.id} to={invoice.route} className="card-link" data-testid={`kunden-invoice-${invoice.id}`}>
-                <Card>
-                  <CardTitle>{invoice.number}</CardTitle>
-                  <CardMeta>
-                    {invoice.vorgangTitle} · {invoice.openAmountLabel}
-                  </CardMeta>
-                </Card>
-              </Link>
+              <BusinessListItem
+                key={invoice.id}
+                to={invoice.route}
+                linkTestId={`kunden-invoice-${invoice.id}`}
+                title={invoice.number}
+                subtitle={invoice.vorgangTitle}
+                amount={<span className="money-display">{invoice.openAmountLabel}</span>}
+              />
             ))}
-          </div>
+          </BusinessList>
         )}
 
-        <h3 className="kunden-detail-section__subtitle">{translate('kunden.detail.paidInvoicesTitle')}</h3>
+        <h3 className="ui-section-header__title">{translate('kunden.detail.paidInvoicesTitle')}</h3>
         {workspace.paidInvoices.length === 0 ? (
-          <CardMeta>{translate('kunden.detail.paidInvoicesEmpty')}</CardMeta>
+          <p className="detail-empty">{translate('kunden.detail.paidInvoicesEmpty')}</p>
         ) : (
-          <div className="card-list">
+          <BusinessList>
             {workspace.paidInvoices.map((invoice) => (
-              <Link key={invoice.id} to={invoice.route} className="card-link" data-testid={`kunden-invoice-${invoice.id}`}>
-                <Card>
-                  <CardTitle>{invoice.number}</CardTitle>
-                  <CardMeta>{invoice.vorgangTitle}</CardMeta>
-                </Card>
-              </Link>
+              <BusinessListItem key={invoice.id} to={invoice.route} linkTestId={`kunden-invoice-${invoice.id}`} title={invoice.number} subtitle={invoice.vorgangTitle} />
             ))}
-          </div>
+          </BusinessList>
         )}
-      </section>
+      </DetailSection>
 
-      <section className="kunden-detail-section" data-testid="kunden-documents">
-        <h2 className="kunden-detail-section__title">{translate('kunden.detail.documentsTitle')}</h2>
+      <DetailSection title={translate('kunden.detail.documentsTitle')} testId="kunden-documents">
         {workspace.documents.length === 0 ? (
-          <CardMeta>{translate('kunden.detail.documentsEmpty')}</CardMeta>
+          <p className="detail-empty">{translate('kunden.detail.documentsEmpty')}</p>
         ) : (
-          <div className="card-list">
+          <BusinessList>
             {workspace.documents.map((doc) => (
-              <Link key={doc.id} to={doc.route} className="card-link" data-testid={`kunden-document-${doc.id}`}>
-                <Card>
-                  <CardTitle>{doc.title}</CardTitle>
-                  <CardMeta>
-                    {doc.kindLabel}
-                    {doc.date ? ` · ${doc.date}` : ''}
-                  </CardMeta>
-                </Card>
-              </Link>
+              <BusinessListItem key={doc.id} to={doc.route} linkTestId={`kunden-document-${doc.id}`} title={doc.title} subtitle={doc.kindLabel} date={doc.date || undefined} />
             ))}
-          </div>
+          </BusinessList>
         )}
-      </section>
+      </DetailSection>
 
-      <section className="kunden-detail-section" data-testid="kunden-tasks">
-        <h2 className="kunden-detail-section__title">{translate('kunden.detail.tasksTitle')}</h2>
+      <DetailSection title={translate('kunden.detail.tasksTitle')} testId="kunden-tasks">
         {workspace.tasks.length === 0 ? (
-          <CardMeta>{translate('kunden.detail.tasksEmpty')}</CardMeta>
+          <p className="detail-empty">{translate('kunden.detail.tasksEmpty')}</p>
         ) : (
-          <div className="card-list">
+          <BusinessList>
             {workspace.tasks.map((task) => (
-              <Link key={task.id} to={task.route} className="card-link" data-testid={`kunden-task-${task.id}`}>
-                <Card>
-                  <CardTitle>{task.title}</CardTitle>
-                  <CardMeta>
-                    {task.vorgangTitle ?? ''}
-                    {task.dueDate ? ` · ${task.dueDate}` : ''}
-                    {task.done ? ` · ${translate('kunden.detail.taskDone')}` : ''}
-                  </CardMeta>
-                </Card>
-              </Link>
+              <BusinessListItem
+                key={task.id}
+                to={task.route}
+                linkTestId={`kunden-task-${task.id}`}
+                title={task.title}
+                subtitle={task.vorgangTitle ?? undefined}
+                date={task.dueDate || undefined}
+                status={task.done ? <StatusBadge tone="success" label={translate('kunden.detail.taskDone')} icon={false} /> : undefined}
+              />
             ))}
-          </div>
+          </BusinessList>
         )}
-      </section>
-    </div>
+      </DetailSection>
+    </Page>
   );
 }

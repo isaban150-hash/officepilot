@@ -1,8 +1,13 @@
+import { useState } from 'react';
 import { Button } from '../ui/Button';
-import { formatPaymentCurrency, getInvoicePayments } from '../../services/invoicePaymentService';
-import { formatInvoiceDate } from '../../services/invoicePrintModel';
+import { SimpleConfirmDialog } from '../ui/SimpleConfirmDialog';
+import { formatDisplayDate, formatEuroAmount } from '../../utils/displayFormat';
+import { getInvoicePayments } from '../../services/invoicePaymentService';
 import type { VorgangInvoice } from '../../types/models';
 import type { TranslationKey } from '../../i18n';
+import { DateDisplay, MoneyDisplay } from '../ui/Display';
+import { BusinessList, BusinessListItem } from '../ui/Lists';
+import { InlineNotice } from '../ui/States';
 
 interface Props {
   invoice: VorgangInvoice;
@@ -29,6 +34,8 @@ export function InvoicePaymentHistory({
   unsyncedPaymentIds,
   onSecurePayment,
 }: Props) {
+  /* UIUX-FOUNDATION-01G — Confirm-first über den kanonischen Dialog statt window.confirm. */
+  const [pendingRemoveId, setPendingRemoveId] = useState<string | null>(null);
   const unsynced = new Set(unsyncedPaymentIds ?? []);
   const payments = [...getInvoicePayments(invoice)].sort(
     (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
@@ -46,21 +53,17 @@ export function InvoicePaymentHistory({
   return (
     <section className="invoice-payment-history">
       <h3 className="invoice-payment-history__title">{translate('payment.historyTitle')}</h3>
-      <ul className="invoice-payment-history__list">
+      <BusinessList className="invoice-payment-history__list">
         {payments.map((payment) => (
-          <li key={payment.id} className="invoice-payment-history__item">
-            <div className="invoice-payment-history__main">
-              <span className="invoice-payment-history__date">{formatInvoiceDate(payment.date)}</span>
-              <span className="invoice-payment-history__amount">
-                {formatPaymentCurrency(payment.amount)}
-              </span>
-            </div>
-            {payment.reference && (
-              <p className="invoice-payment-history__reference">
-                {translate('payment.reference')}: {payment.reference}
-              </p>
-            )}
-            {payment.note && <p className="invoice-payment-history__note">{payment.note}</p>}
+          <BusinessListItem
+            key={payment.id}
+            className="invoice-payment-history__item"
+            title={<DateDisplay value={payment.date} />}
+            amount={<MoneyDisplay value={payment.amount} />}
+            subtitle={payment.reference ? `${translate('payment.reference')}: ${payment.reference}` : undefined}
+            meta={payment.note || undefined}
+            footer={
+              <>
             {/*
               04B2B1 — Confirm-first: Der Hinweis nennt den Zustand, übertragen
               wird ausschließlich auf ausdrückliche Aktion des Nutzers.
@@ -70,9 +73,7 @@ export function InvoicePaymentHistory({
                 className="invoice-payment-history__unsynced"
                 data-testid={`payment-unsynced-${payment.id}`}
               >
-                <p className="invoice-payment-history__note">
-                  {translate('payment.cloudNotSecured')}
-                </p>
+                <InlineNotice tone="warning">{translate('payment.cloudNotSecured')}</InlineNotice>
                 {onSecurePayment && (
                   <Button
                     type="button"
@@ -89,18 +90,38 @@ export function InvoicePaymentHistory({
               <Button
                 type="button"
                 variant="ghost"
-                onClick={() => {
-                  if (window.confirm(translate('payment.removeConfirm'))) {
-                    onRemovePayment(payment.id);
-                  }
-                }}
+                onClick={() => setPendingRemoveId(payment.id)}
+                data-testid={`payment-remove-${payment.id}`}
               >
                 {translate('payment.remove')}
               </Button>
             )}
-          </li>
+              </>
+            }
+          />
         ))}
-      </ul>
+      </BusinessList>
+      {(() => {
+        const pending = payments.find((entry) => entry.id === pendingRemoveId);
+        return (
+          <SimpleConfirmDialog
+            open={Boolean(pending)}
+            title={translate('payment.remove')}
+            message={pending ? `${translate('payment.removeConfirm')} ${formatDisplayDate(pending.date)} · ${formatEuroAmount(pending.amount)}` : translate('payment.removeConfirm')}
+            confirmLabel={translate('payment.remove')}
+            cancelLabel={translate('common.cancel')}
+            dialogTestId="payment-remove-dialog"
+            confirmTestId="payment-remove-confirm"
+            cancelTestId="payment-remove-cancel"
+            onConfirm={() => {
+              if (pending && onRemovePayment) onRemovePayment(pending.id);
+              setPendingRemoveId(null);
+              return true;
+            }}
+            onCancel={() => setPendingRemoveId(null)}
+          />
+        );
+      })()}
     </section>
   );
 }

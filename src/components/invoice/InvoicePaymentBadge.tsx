@@ -1,3 +1,5 @@
+import { StatusBadge } from '../ui/Badge';
+import { paymentStatusTone } from '../../services/ui/statusTone';
 import type { InvoicePaymentStatus } from '../../types/models';
 import type { TranslationKey } from '../../i18n';
 
@@ -6,24 +8,24 @@ interface Props {
   translate: (key: TranslationKey) => string;
 }
 
-const STATUS_CLASS: Record<InvoicePaymentStatus, string> = {
-  offen: 'invoice-payment-badge--offen',
-  teilbezahlt: 'invoice-payment-badge--teilbezahlt',
-  bezahlt: 'invoice-payment-badge--bezahlt',
-  ueberfaellig: 'invoice-payment-badge--ueberfaellig',
-  storniert: 'invoice-payment-badge--storniert',
-};
-
+/**
+ * UIUX-FOUNDATION-01E — Zahlungsstatus über das kanonische Statussystem
+ * (`StatusBadge` + `paymentStatusTone`); keine eigenen Domain-Farben mehr.
+ * Die Zusatzklasse `invoice-payment-badge` bleibt als stabiler Selektor.
+ */
 export function InvoicePaymentBadge({ status, translate }: Props) {
   const labelKey = `payment.status.${status}` as TranslationKey;
-
   return (
-    <span className={`invoice-payment-badge ${STATUS_CLASS[status]}`}>
-      {translate(labelKey)}
-    </span>
+    <StatusBadge
+      tone={paymentStatusTone(status)}
+      label={translate(labelKey)}
+      icon={false}
+      className={`invoice-payment-badge invoice-payment-badge--${status}`}
+    />
   );
 }
 
+/** @deprecated Ton kommt aus `paymentStatusTone`; nur noch für Alt-Selektoren. */
 export function getPaymentBadgeClass(status: InvoicePaymentStatus): string {
-  return STATUS_CLASS[status];
+  return `invoice-payment-badge--${status}`;
 }

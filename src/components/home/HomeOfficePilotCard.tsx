@@ -4,6 +4,7 @@ import { useApp } from '../../context/AppContext';
 import { ASSISTANT_EXAMPLE_QUESTION_KEYS } from '../../services/officeAssistantService';
 import type { TranslationKey } from '../../i18n';
 import { NavIcon } from '../layout/NavIcon';
+import { Icon } from '../ui/Icon';
 
 export function HomeOfficePilotCard() {
   const { translate } = useApp();
@@ -22,10 +23,10 @@ export function HomeOfficePilotCard() {
   };
 
   return (
-    <section className="mobile-home-card mobile-home-card--assistant" data-testid="home-card-officepilot">
-      <div className="mobile-home-card__body">
-        <NavIcon id="assistant" className="mobile-home-card__icon" />
-        <span className="mobile-home-card__title">{translate('mobile.home.assistantTitle')}</span>
+    <section className="home-assistant" data-testid="home-card-officepilot" aria-label={translate('mobile.home.assistantTitle')}>
+      <div className="home-assistant__head">
+        <NavIcon id="assistant" className="home-assistant__icon" />
+        <span className="home-assistant__title">{translate('mobile.home.assistantTitle')}</span>
       </div>
 
       <form className="mobile-home-assistant" onSubmit={handleSubmit}>
@@ -37,7 +38,7 @@ export function HomeOfficePilotCard() {
             aria-label={translate('mobile.home.micLabel')}
             onClick={() => navigate('/assistent')}
           >
-            🎤
+            <Icon id="assistant" />
           </button>
           <input
             type="text"
@@ -51,9 +52,10 @@ export function HomeOfficePilotCard() {
             type="submit"
             className="mobile-home-assistant__send"
             data-testid="home-assistant-send"
+            aria-label={translate('mobile.home.assistantPlaceholder')}
             disabled={!input.trim()}
           >
-            →
+            <Icon id="arrow-right" />
           </button>
         </div>
       </form>

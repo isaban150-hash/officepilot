@@ -8,10 +8,15 @@ import { ExpensePaymentSummary } from '../components/expenses/ExpensePaymentSumm
 import { CommunicationIntegrationPanel } from '../components/communication/CommunicationIntegrationPanel';
 import { EXPENSE_COMMUNICATION_BUTTON_KEYS } from '../components/communication/communicationNavigation';
 import { Button } from '../components/ui/Button';
-import { Badge, Card, DataRow, PageHeader } from '../components/ui/Card';
+import { Badge, DataRow, PageHeader, StatusBadge } from '../components/ui/Card';
+import { DateDisplay, MoneyDisplay } from '../components/ui/Display';
+import { Page } from '../components/ui/Page';
+import { DetailSection, SummaryList } from '../components/ui/Section';
+import { expenseStatusTone, paymentStatusTone } from '../services/ui/statusTone';
 import { useApp } from '../context/AppContext';
 import { formatPaperFilingInstruction } from '../services/paperFolderService';
 import {
+  calculateExpensePaymentSummary,
   isExpenseCancelled,
   isExpensePayable,
   removeExpensePayment,
@@ -20,19 +25,12 @@ import { deleteExpense, getExpenseById } from '../services/expenseService';
 import type { Expense } from '../types/expense';
 import type { TranslationKey } from '../i18n';
 
-function formatDate(value: string | null): string {
-  if (!value) return '—';
-  try {
-    return new Date(value).toLocaleDateString('de-DE');
-  } catch {
-    return value;
-  }
-}
-
-function formatEuro(amount: number): string {
-  return `${amount.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
-}
-
+/**
+ * UIUX-FOUNDATION-01D — repräsentative Detailseite.
+ * Oben: Back (from-Parameter bleibt), Identität, Zahlungsstatus, eine
+ * Hauptaktion. Dann Zahlungsstand, Details als Schlüssel/Wert-Liste,
+ * Kommunikation, zuletzt Bearbeiten/Löschen. Fachlogik unverändert.
+ */
 export function AusgabeDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
@@ -92,11 +90,14 @@ export function AusgabeDetailPage() {
 
   if (isEditing) {
     return (
-      <div className="page">
-        <button type="button" className="back-link" onClick={() => setIsEditing(false)}>
-          ← {translate('common.back')}
-        </button>
-        <PageHeader title={translate('expense.editTitle')} subtitle={expense.title} />
+      <Page testId="ausgabe-detail-edit">
+        <PageHeader
+          title={translate('expense.editTitle')}
+          subtitle={expense.title}
+          backLabel={translate('common.back')}
+          onBack={() => setIsEditing(false)}
+          backTestId="ausgabe-edit-back"
+        />
         <ExpenseForm
           mode="edit"
           expense={expense}
@@ -106,69 +107,85 @@ export function AusgabeDetailPage() {
           }}
           onCancel={() => setIsEditing(false)}
         />
-      </div>
+      </Page>
     );
   }
 
+  const paymentSummary = calculateExpensePaymentSummary(expense);
+  const canRecordPayment = isExpensePayable(expense) && !isExpenseCancelled(expense);
+
   return (
-    <div className="page">
-      <button
-        type="button"
-        className="back-link"
-        onClick={() => navigate(fromOverview ? '/ausgaben/offen' : '/ausgaben')}
-      >
-        ← {fromOverview ? translate('expenseOverview.backToOverview') : translate('common.back')}
-      </button>
+    <Page testId="ausgabe-detail-page">
+      <PageHeader
+        title={expense.title}
+        subtitle={
+          <>
+            {expense.supplierName}
+            {' · '}
+            {translate(categoryKey)}
+            {expense.status !== 'gebucht' ? (
+              <>
+                {' · '}
+                <Badge tone={expenseStatusTone(expense.status)}>{translate(statusKey)}</Badge>
+              </>
+            ) : null}
+          </>
+        }
+        status={
+          <StatusBadge
+            tone={paymentStatusTone(paymentSummary.status)}
+            label={translate(`payment.status.${paymentSummary.status}` as TranslationKey)}
+            data-testid="ausgabe-payment-status"
+          />
+        }
+        backLabel={fromOverview ? translate('expenseOverview.backToOverview') : translate('common.back')}
+        backHref={fromOverview ? '/ausgaben/offen' : '/ausgaben'}
+        backTestId="ausgabe-detail-back"
+        primaryAction={
+          canRecordPayment ? (
+            <Button type="button" onClick={() => setShowPaymentForm(true)} data-testid="ausgabe-record-payment">
+              {translate('payment.record')}
+            </Button>
+          ) : undefined
+        }
+      />
 
-      <PageHeader title={expense.title} subtitle={expense.supplierName} />
-
-      <div className="badge-row">
-        <Badge tone="info">{translate(categoryKey)}</Badge>
-        <Badge>{translate(statusKey)}</Badge>
-      </div>
-
-      <div className="invoice-detail__actions">
-        {isExpensePayable(expense) && !isExpenseCancelled(expense) && (
-          <Button type="button" onClick={() => setShowPaymentForm(true)}>
-            {translate('payment.record')}
-          </Button>
-        )}
-      </div>
-
-      <Card className="invoice-detail__payment">
+      <DetailSection title={translate('payment.summaryTitle')} surface testId="ausgabe-section-payment">
         <ExpensePaymentSummary expense={expense} translate={translate} />
         <ExpensePaymentHistory
           expense={expense}
           translate={translate}
           onRemovePayment={handleRemovePayment}
         />
-      </Card>
+      </DetailSection>
 
-      <Card>
-        <DataRow label={translate('expense.fieldSupplier')} value={expense.supplierName} />
-        <DataRow
-          label={translate('expense.fieldInvoiceNumber')}
-          value={expense.invoiceNumber || '—'}
-        />
-        <DataRow label={translate('expense.fieldIssueDate')} value={formatDate(expense.issueDate)} />
-        <DataRow
-          label={translate('expense.fieldDueDate')}
-          value={formatDate(expense.paymentDueDate)}
-        />
-        <DataRow label={translate('expense.fieldGrossAmount')} value={formatEuro(expense.grossAmount)} />
-        <DataRow label={translate('expense.fieldNetAmount')} value={formatEuro(expense.netAmount)} />
-        <DataRow label={translate('expense.fieldTaxAmount')} value={formatEuro(expense.taxAmount)} />
-        {expense.description && (
-          <DataRow label={translate('expense.fieldDescription')} value={expense.description} />
-        )}
-        <DataRow
-          label={translate('expense.fieldPaperFolder')}
-          value={formatPaperFilingInstruction(expense.paperFolder)}
-        />
-        <DataRow
-          label={translate('expense.fieldDigitalFolder')}
-          value={`${expense.digitalFolder.name} (${expense.digitalFolder.path})`}
-        />
+      <DetailSection title={translate('documentExperience.details')} testId="ausgabe-section-details">
+        <SummaryList>
+          <DataRow label={translate('expense.fieldSupplier')} value={expense.supplierName} />
+          <DataRow
+            label={translate('expense.fieldInvoiceNumber')}
+            value={expense.invoiceNumber || '—'}
+          />
+          <DataRow label={translate('expense.fieldIssueDate')} value={<DateDisplay value={expense.issueDate} />} />
+          <DataRow
+            label={translate('expense.fieldDueDate')}
+            value={<DateDisplay value={expense.paymentDueDate} />}
+          />
+          <DataRow label={translate('expense.fieldGrossAmount')} value={<MoneyDisplay value={expense.grossAmount} emphasis />} />
+          <DataRow label={translate('expense.fieldNetAmount')} value={<MoneyDisplay value={expense.netAmount} />} />
+          <DataRow label={translate('expense.fieldTaxAmount')} value={<MoneyDisplay value={expense.taxAmount} />} />
+          {expense.description && (
+            <DataRow label={translate('expense.fieldDescription')} value={expense.description} />
+          )}
+          <DataRow
+            label={translate('expense.fieldPaperFolder')}
+            value={formatPaperFilingInstruction(expense.paperFolder)}
+          />
+          <DataRow
+            label={translate('expense.fieldDigitalFolder')}
+            value={`${expense.digitalFolder.name} (${expense.digitalFolder.path})`}
+          />
+        </SummaryList>
         {expense.tags.length > 0 && (
           <div className="badge-row document-detail__tags">
             {expense.tags.map((tag) => (
@@ -176,7 +193,7 @@ export function AusgabeDetailPage() {
             ))}
           </div>
         )}
-      </Card>
+      </DetailSection>
 
       <CommunicationIntegrationPanel
         contextRef={{ type: 'expense', id: expense.id }}
@@ -184,7 +201,7 @@ export function AusgabeDetailPage() {
         testIdPrefix="ausgabe"
       />
 
-      <div className="form-actions document-detail__actions">
+      <div className="detail-actions" data-testid="ausgabe-detail-actions">
         <Button variant="outline" onClick={() => setIsEditing(true)}>
           {translate('expense.edit')}
         </Button>
@@ -211,6 +228,6 @@ export function AusgabeDetailPage() {
         onSaved={handlePaymentSaved}
         translate={translate}
       />
-    </div>
+    </Page>
   );
 }

@@ -46,7 +46,7 @@ describe('PILOT-BACKUP-DISCOVERABILITY-01', () => {
     expect(resolveFirmendatenLegacyTarget('#datensicherung')).toBe(SETTINGS_BACKUP_HREF);
   });
 
-  it('Mehr „Einstellungen" link points at the settings hub (no second language switcher there)', () => {
+  it('Mehr enthält keinen zweiten Einstellungen-Einstieg und keinen Sprachumschalter (UIUX-01C)', () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
     const root = createRoot(container);
@@ -63,8 +63,9 @@ describe('PILOT-BACKUP-DISCOVERABILITY-01', () => {
     });
 
     const html = container.innerHTML;
-    expect(html).toContain('Datensicherung');
-    expect(html).toContain('href="/einstellungen"');
+    /* UIUX-01C — Einstellungen nur über Zahnrad/Benutzermenü; Mehr verlinkt Synchronisation, nicht die Datensicherung. */
+    expect(html).not.toContain('href="/einstellungen"');
+    expect(html).toContain('href="/synchronisation"');
     expect(html).not.toContain('/firmendaten');
     expect(container.querySelector('[data-testid="language-switcher"]')).toBeNull();
 

@@ -300,7 +300,7 @@ test.describe('Rechnung ohne Auftrag — echte App, lokale Datenbank', () => {
     await page.getByTestId('invoice-approve').click();
     await expect(page).toHaveURL(DETAIL_URL, { timeout: 45_000 });
     await expectFreeInvoiceDetail(page, 'Storno Kunde GmbH');
-    const invoiceNumber = (await page.getByTestId('invoice-detail-experience').textContent())?.match(/2026-\d{4}/)?.[0] ?? '';
+    const invoiceNumber = (await page.getByTestId('invoice-detail-header').textContent())?.match(/2026-\d{4}/)?.[0] ?? '';
     expect(invoiceNumber).not.toBe('');
 
     /* ---- als versendet markieren (bestehender lokaler Versandpfad, lokale Cloud) ---- */
@@ -385,9 +385,9 @@ test.describe('Rechnung ohne Auftrag — echte App, lokale Datenbank', () => {
     await page.getByTestId('invoice-cancel-abort').click();
 
     // Zahlung über den bestehenden Reversal-Weg zurücknehmen (lokale Cloud bestätigt).
-    page.once('dialog', (dialog) => void dialog.accept());
-    await page.getByTestId('invoice-detail-show-more').getByRole('button').click();
+    /* UIUX-01G — Confirm-first im kanonischen Dialog statt nativem window.confirm. */
     await page.locator('.invoice-payment-history').getByRole('button', { name: 'Entfernen' }).first().click();
+    await page.getByTestId('payment-remove-confirm').click();
     await expect(page.getByTestId('invoice-detail-experience')).not.toContainText('Teilbezahlt', { timeout: 20_000 });
 
     // Jetzt stornierbar: vorbereitet → internes Storno ohne Korrekturbeleg.
@@ -461,7 +461,7 @@ test.describe('Rechnung ohne Auftrag — echte App, lokale Datenbank', () => {
       const invoiceDetailUrl = page.url();
       // Vorgangsweg: Projektblock vorhanden.
       await expect(page.locator('.invoice-project')).toHaveCount(1);
-      const invoiceNumber = (await page.getByTestId('invoice-detail-experience').textContent())?.match(/2026-\d{4}/)?.[0] ?? '';
+      const invoiceNumber = (await page.getByTestId('invoice-detail-header').textContent())?.match(/2026-\d{4}/)?.[0] ?? '';
       expect(invoiceNumber).not.toBe('');
 
       /* ---- Billing vor dem Storno: Positionen sind abgerechnet ---- */
@@ -558,7 +558,7 @@ test.describe('Rechnung ohne Auftrag — echte App, lokale Datenbank', () => {
     expect((await countFinalizedOnServer()) - before).toBe(1);
     await expectFreeInvoiceDetail(page, customerName);
     const detailUrl = page.url();
-    const invoiceNumber = (await page.getByTestId('invoice-detail-experience').textContent())?.match(/2026-\d{4}/)?.[0] ?? '';
+    const invoiceNumber = (await page.getByTestId('invoice-detail-header').textContent())?.match(/2026-\d{4}/)?.[0] ?? '';
     expect(invoiceNumber).not.toBe('');
     await expectActionReachable(page, 'invoice-print');
     await expectActionReachable(page, 'invoice-download-pdf');
@@ -573,8 +573,8 @@ test.describe('Rechnung ohne Auftrag — echte App, lokale Datenbank', () => {
     await recordPartialPayment(page, '100');
     await expect(page.getByTestId('invoice-detail-experience')).toContainText('Teilbezahlt');
     await expect(page.getByTestId('invoice-detail-experience')).toContainText('126,10');
-    page.once('dialog', (dialog) => void dialog.accept());
     await page.locator('.invoice-payment-history').getByRole('button', { name: 'Entfernen' }).first().click();
+    await page.getByTestId('payment-remove-confirm').click();
     await expect(page.getByTestId('invoice-detail-experience')).not.toContainText('Teilbezahlt', { timeout: 20_000 });
     await expect(page.getByTestId('invoice-detail-experience')).toContainText('226,10');
 
@@ -621,7 +621,8 @@ test.describe('Rechnung ohne Auftrag — echte App, lokale Datenbank', () => {
     await page.getByTestId('invoice-open-correction').click();
     await page.getByTestId('invoice-correction-archive-link').click();
     await expect(page).toHaveURL(/\/dokumente\/corr-/);
-    await expect(page.getByText('Rechnungskorrektur zu Rechnung')).toBeVisible();
+    /* 01E — Titel steht jetzt im PageHeader und in der Experience-Card. */
+    await expect(page.getByRole('heading', { name: /Rechnungskorrektur zu Rechnung/ })).toBeVisible();
     await expect(page.getByText('classifiedKind.rechnungskorrektur')).toHaveCount(0);
     const showMore = page.getByTestId('document-detail-show-more').getByRole('button');
     if (await showMore.isVisible().catch(() => false)) await showMore.click();
@@ -677,9 +678,10 @@ const DETAIL_URL = /\/rechnungen\/inv-[0-9a-f-]{36}(\?.*)?$/;
 async function expectFreeInvoiceDetail(page: Page, customer: string): Promise<void> {
   await expect(page.getByTestId('invoice-detail-page')).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId('invoice-detail-not-found')).toHaveCount(0);
-  const experience = page.getByTestId('invoice-detail-experience');
-  await expect(experience).toContainText(/2026-\d{4}/);
-  await expect(experience).toContainText(customer);
+  /* UIUX-01F — Identität (Nummer · Kunde) steht im PageHeader, nicht mehr doppelt in der Experience-Card. */
+  const header = page.getByTestId('invoice-detail-header');
+  await expect(header).toContainText(/2026-\d{4}/);
+  await expect(header).toContainText(customer);
   // Ohne Vorgang: keine Kommunikationsaktion mit erfundener Kennung, kein Vorgangslink.
   // (Storno ist seit NORMAL-INVOICE-CANCELLATION-01B für die normale freie Rechnung erlaubt.)
   await expect(page.getByTestId('invoice-communication-unavailable')).toBeVisible();

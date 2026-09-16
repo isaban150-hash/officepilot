@@ -2,7 +2,10 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { BrainOrchestrationCard } from '../components/assistant/BrainOrchestrationCard';
 import { Button } from '../components/ui/Button';
-import { Card, PageHeader } from '../components/ui/Card';
+import { PageHeader } from '../components/ui/Card';
+import { Page } from '../components/ui/Page';
+import { DetailSection } from '../components/ui/Section';
+import { InlineNotice } from '../components/ui/States';
 import { useApp } from '../context/AppContext';
 import { isAiProviderConfigured } from '../services/aiProviderService';
 import { processOfficePilotQuestion } from '../services/brain/brainOrchestrator';
@@ -59,16 +62,16 @@ export function AssistentPage() {
   };
 
   return (
-    <div className="page assistant-page" data-testid="assistant-page">
+    <Page className="assistant-page" testId="assistant-page">
+      {/* UIUX-FOUNDATION-01G — kein Hero-Verlauf: ruhiger Hinweis, Eingabe als Abschnitt. */}
       <PageHeader title={translate('assistant.title')} subtitle={translate('assistant.subtitle')} />
 
-      <section className="assistant-employee-hero" data-testid="assistant-employee-hero">
-        <h2 className="assistant-employee-hero__title">{translate('assistant.employeeTitle')}</h2>
-        <p className="assistant-employee-hero__hint">{translate('assistant.employeeHint')}</p>
-      </section>
+      <InlineNotice tone="info" title={translate('assistant.employeeTitle')} testId="assistant-employee-hero">
+        {translate('assistant.employeeHint')}
+      </InlineNotice>
 
-      <Card className="assistant-input-card">
-        <label className="assistant-input-label" htmlFor="assistant-question">
+      <DetailSection title={translate('assistant.inputLabel')} surface className="assistant-input-card">
+        <label className="sr-only" htmlFor="assistant-question">
           {translate('assistant.inputLabel')}
         </label>
         <input
@@ -106,7 +109,7 @@ export function AssistentPage() {
             {translate('assistant.askDeep')}
           </Button>
         </div>
-      </Card>
+      </DetailSection>
 
       {result && lastQuestion && (
         <p className="assistant-last-question">
@@ -127,8 +130,7 @@ export function AssistentPage() {
         </section>
       )}
 
-      <section className="section">
-        <h2 className="section__title">{translate('communication.section.title')}</h2>
+      <DetailSection title={translate('communication.section.title')}>
         <div className="chip-group">
           <button
             type="button"
@@ -146,10 +148,9 @@ export function AssistentPage() {
             {translate('knowledge.openFromAssistant')}
           </button>
         </div>
-      </section>
+      </DetailSection>
 
-      <section className="section">
-        <h2 className="section__title">{translate('assistant.examples')}</h2>
+      <DetailSection title={translate('assistant.examples')}>
         <div className="chip-group">
           {ASSISTANT_EXAMPLE_QUESTION_KEYS.map((key) => (
             <button
@@ -162,7 +163,7 @@ export function AssistentPage() {
             </button>
           ))}
         </div>
-      </section>
-    </div>
+      </DetailSection>
+    </Page>
   );
 }

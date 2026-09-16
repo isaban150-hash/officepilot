@@ -282,3 +282,158 @@
     max-width: 10rem;
   }
 }
+
+/* ======================================================================
+   UIUX-FOUNDATION-01C — AppShell & Navigation (Navy Trust)
+   ====================================================================== */
+
+/* Header-Werkzeuge: Assistent, Einstellungen, Benutzermenü */
+.app-shell__tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: var(--radius-pill);
+  color: var(--op-on-primary-muted);
+  flex: none;
+  transition: background var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard);
+}
+
+.app-shell__tool .ui-icon {
+  width: 1.375rem;
+  height: 1.375rem;
+}
+
+.app-shell__tool:hover,
+.app-shell__tool:focus-visible {
+  background: var(--op-on-primary-hover);
+  color: var(--op-on-primary);
+}
+
+.app-shell__tool:focus-visible {
+  outline: 2px solid var(--op-on-primary);
+  outline-offset: 2px;
+}
+
+/* Bottom-Nav: Aktiver Zustand über Fläche, Farbe, Gewicht und Marker */
+.bottom-nav {
+  z-index: var(--z-header);
+}
+
+.bottom-nav__item {
+  position: relative;
+  min-height: 3.5rem;
+}
+
+.bottom-nav__item[aria-current='page'] .bottom-nav__label {
+  font-weight: 700;
+}
+
+.bottom-nav__item[aria-current='page']::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 25%;
+  right: 25%;
+  height: 3px;
+  border-radius: 0 0 var(--radius-pill) var(--radius-pill);
+  background: var(--op-primary);
+}
+
+/* Sidebar-Zonen (Desktop) */
+.sidebar-nav__primary,
+.sidebar-nav__secondary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.sidebar-nav__secondary {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--op-border);
+}
+
+.sidebar-nav__secondary-title {
+  margin: 0 0 var(--space-1);
+  padding: 0 var(--space-3);
+  font-size: var(--text-overline-size);
+  font-weight: var(--text-overline-weight);
+  letter-spacing: var(--text-overline-spacing);
+  line-height: var(--text-overline-line);
+  text-transform: uppercase;
+  color: var(--op-text-subtle);
+}
+
+@media (min-width: 1024px) {
+  .sidebar-nav {
+    z-index: var(--z-sticky);
+  }
+
+  .sidebar-nav__item {
+    position: relative;
+    color: var(--op-text-muted);
+  }
+
+  .sidebar-nav__item--secondary {
+    font-weight: 500;
+    padding-top: 0.55rem;
+    padding-bottom: 0.55rem;
+  }
+
+  .sidebar-nav__item--active {
+    background: var(--op-primary-subtle);
+    color: var(--op-primary);
+  }
+
+  .sidebar-nav__item--active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.5rem;
+    bottom: 0.5rem;
+    width: 3px;
+    border-radius: 0 var(--radius-pill) var(--radius-pill) 0;
+    background: var(--op-primary);
+  }
+}
+
+/* Gruppierte Navigationslisten (Mehr, Finanzen) — 01D: SectionHeader + RowList */
+.nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.nav-group + .nav-group {
+  margin-top: var(--space-4);
+}
+
+.nav-group__header .ui-section-header__title {
+  font-size: var(--text-overline-size);
+  font-weight: var(--text-overline-weight);
+  letter-spacing: var(--text-overline-spacing);
+  text-transform: uppercase;
+  color: var(--op-text-muted);
+}
+
+.mehr-page__dev-tools {
+  margin-top: var(--space-6);
+}
+
+/* UIUX-FOUNDATION-01G — fokussierte Felder/Aktionen landen beim Scrollen nicht hinter der Bottom-Nav. */
+@media (max-width: 1023px) {
+  html,
+  .app-shell__main {
+    scroll-padding-bottom: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px) + var(--space-4));
+  }
+
+  .input,
+  .select,
+  .textarea,
+  .btn,
+  .primary-action-bar {
+    scroll-margin-bottom: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px) + var(--space-4));
+  }
+}

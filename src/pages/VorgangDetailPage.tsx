@@ -5,6 +5,11 @@ import { OrderPositionForm } from '../components/vorgang/OrderPositionForm';
 import { DetailExperienceCard } from '../components/detail/DetailExperienceCard';
 import { Badge, Card, CardMeta, CardTitle, DataRow } from '../components/ui/Card';
 import { ShowMoreSection } from '../components/ui/ShowMoreSection';
+import { StatusBadge } from '../components/ui/Badge';
+import { EmptyStateBlock } from '../components/ui/EmptyStateBlock';
+import { SimpleConfirmDialog } from '../components/ui/SimpleConfirmDialog';
+import { PageHeader } from '../components/ui/PageHeader';
+import { vorgangStatusTone } from '../services/ui/statusTone';
 import { useApp } from '../context/AppContext';
 import { formatPaperFilingInstruction } from '../services/paperFolderService';
 import { resolveVorgangDocumentDisplayName } from '../services/vorgangDocumentLinkService';
@@ -402,8 +407,24 @@ export function VorgangDetailPage() {
     }
   };
 
+  /* UIUX-FOUNDATION-01G — destruktive Aktionen laufen über den kanonischen Confirm-Dialog; die Fachaufrufe sind unverändert. */
+  const [pendingDelete, setPendingDelete] = useState<{ kind: 'note' | 'position'; id: string } | null>(null);
+  /*
+   * ORDER-POSITION-EDIT-DELETE-PERSISTENCE-01B — dieser Weg war bisher stumm:
+   * Bei fehlgeschlagener Persistenz verschwand die Position aus der Anzeige
+   * und kehrte nach dem Neustart zurueck. Der Dienst stellt den vorherigen
+   * Stand selbst wieder her; hier wird er nur sichtbar gemacht.
+   */
+  const handleDeletePosition = (positionId: string) => {
+    if (!vorgang) return;
+    const result = removeOrderPosition(vorgang.id, positionId);
+    if (!result.success) {
+      showToast(translate(result.errorKey as TranslationKey));
+      return;
+    }
+    setVorgang(result.vorgang);
+  };
   const handleDeleteNote = (noteId: string) => {
-    if (!window.confirm(translate('vorgangNote.deleteConfirm'))) return;
     const result = deleteVorgangNote(noteId);
     if (result.success) {
       refreshNotes();
@@ -418,10 +439,15 @@ export function VorgangDetailPage() {
   if (!vorgang) {
     return (
       <div className="page">
-        <p className="empty-state">{translate('vorgang.notFound')}</p>
-        <Button variant="outline" onClick={() => navigate('/vorgaenge')}>
-          {translate('common.back')}
-        </Button>
+        <EmptyStateBlock
+          title={translate('vorgang.notFound')}
+          description=""
+          actions={
+            <Button variant="outline" onClick={() => navigate('/vorgaenge')}>
+              {translate('common.back')}
+            </Button>
+          }
+        />
       </div>
     );
   }
@@ -571,7 +597,7 @@ export function VorgangDetailPage() {
             <Card key={note.id}>
               <CardMeta>{note.occurredAt}</CardMeta>
               <CardTitle>{note.body}</CardTitle>
-              <Button type="button" variant="ghost" onClick={() => handleDeleteNote(note.id)}>
+              <Button type="button" variant="ghost" onClick={() => setPendingDelete({ kind: 'note', id: note.id })} data-testid={`vorgang-note-delete-${note.id}`}>
                 {translate('vorgangNote.delete')}
               </Button>
             </Card>
@@ -626,9 +652,20 @@ export function VorgangDetailPage() {
 
   return (
     <div className="page vorgang-detail-page" data-testid="vorgang-detail-page">
-      <button type="button" className="back-link" onClick={() => navigate('/vorgaenge')}>
-        ← {translate('common.back')}
-      </button>
+      {/*
+        * UIUX-FOUNDATION-01E — Detailmuster: Back (klarer Parent), Auftrag,
+        * Kunde · Baustelle, Status. Tabs (`vtab`) und die fachlichen nächsten
+        * Schritte in der Experience-Card bleiben unverändert.
+        */}
+      <PageHeader
+        title={vorgang.title}
+        subtitle={[vorgang.customer, vorgang.baustelle].filter(Boolean).join(' · ')}
+        status={<StatusBadge tone={vorgangStatusTone(vorgang.status)} label={translate(statusKey)} data-testid="vorgang-detail-status" />}
+        backLabel={translate('common.back')}
+        backHref="/vorgaenge"
+        backTestId="vorgang-detail-back"
+        testId="vorgang-detail-header"
+      />
 
       <VorgangSectionNav
         activeSection={activeSection}
@@ -643,6 +680,7 @@ export function VorgangDetailPage() {
           assistantMessage={translate('vorgang.experience.managed')}
           highlights={highlights.length > 0 ? highlights : undefined}
           actions={primaryActions}
+          hideIdentity
           testId="vorgang-detail-experience"
         />
 
@@ -948,24 +986,8 @@ export function VorgangDetailPage() {
                     {deletable && (
                       <Button
                         variant="ghost"
-                        onClick={() => {
-                          if (!window.confirm(translate('position.deleteConfirm'))) return;
-                          /*
-                           * ORDER-POSITION-EDIT-DELETE-PERSISTENCE-01B — dieser
-                           * Weg war bisher stumm: Bei fehlgeschlagener
-                           * Persistenz verschwand die Position aus der Anzeige
-                           * und kehrte nach dem Neustart zurueck, ohne dass der
-                           * Nutzer je einen Hinweis sah. Der Dienst stellt den
-                           * vorherigen Stand jetzt selbst wieder her; hier wird
-                           * er nur noch sichtbar gemacht.
-                           */
-                          const result = removeOrderPosition(vorgang.id, pos.id);
-                          if (!result.success) {
-                            showToast(translate(result.errorKey as TranslationKey));
-                            return;
-                          }
-                          setVorgang(result.vorgang);
-                        }}
+                        onClick={() => setPendingDelete({ kind: 'position', id: pos.id })}
+                        data-testid={`order-position-delete-${pos.id}`}
                       >
                         {translate('position.delete')}
                       </Button>
@@ -1063,18 +1085,13 @@ export function VorgangDetailPage() {
               data-testid="vorgang-invoices-empty"
             >
               {hasOrderPositions ? (
-                <>
-                  <p className="empty-state">
-                    {translate('vorgang.invoicesEmptyWithPositions')}
-                  </p>
-                  <p className="vorgang-invoices-section__empty-detail">
-                    {translate('vorgang.invoicesEmptyWithPositionsHint')}
-                  </p>
-                </>
+                <EmptyStateBlock
+                  title={translate('vorgang.invoicesEmptyWithPositions')}
+                  description={translate('vorgang.invoicesEmptyWithPositionsHint')}
+                  testId="vorgang-invoices-empty-block"
+                />
               ) : (
-                <p className="empty-state">
-                  {translate('vorgang.invoicesEmptyNoPositions')}
-                </p>
+                <EmptyStateBlock title={translate('vorgang.invoicesEmptyNoPositions')} description="" testId="vorgang-invoices-empty-block" />
               )}
             </div>
           ) : (
@@ -1111,6 +1128,25 @@ export function VorgangDetailPage() {
           onClose={() => setFormMode(null)}
         />
       )}
+      <SimpleConfirmDialog
+        open={pendingDelete !== null}
+        title={pendingDelete?.kind === 'note' ? translate('vorgangNote.delete') : translate('position.delete')}
+        message={pendingDelete?.kind === 'note' ? translate('vorgangNote.deleteConfirm') : translate('position.deleteConfirm')}
+        confirmLabel={pendingDelete?.kind === 'note' ? translate('vorgangNote.delete') : translate('position.delete')}
+        cancelLabel={translate('common.cancel')}
+        dialogTestId="vorgang-delete-dialog"
+        confirmTestId="vorgang-delete-confirm"
+        cancelTestId="vorgang-delete-cancel"
+        onConfirm={() => {
+          const pending = pendingDelete;
+          setPendingDelete(null);
+          if (!pending) return true;
+          if (pending.kind === 'note') handleDeleteNote(pending.id);
+          else handleDeletePosition(pending.id);
+          return true;
+        }}
+        onCancel={() => setPendingDelete(null)}
+      />
     </div>
   );
 }

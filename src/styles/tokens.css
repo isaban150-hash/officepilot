@@ -167,6 +167,11 @@
   --op-neutral: var(--op-text-muted);
   --op-neutral-subtle: var(--op-surface-sunken);
 
+  /* UIUX-FOUNDATION-01F — Inhalt auf Navy-/Primärflächen (Header, Primary-Button). Kein neuer Farbwert. */
+  --op-on-primary: #ffffff;
+  --op-on-primary-muted: rgba(255, 255, 255, 0.85);
+  --op-on-primary-hover: rgba(255, 255, 255, 0.12);
+
   /*
    * Legacy aliases — DEPRECATED (UIUX-FOUNDATION-01B).
    * Bleiben für bestehende Regeln in index.css erhalten. Neue Komponenten

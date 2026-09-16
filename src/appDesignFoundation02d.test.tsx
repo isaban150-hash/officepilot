@@ -53,10 +53,11 @@ function getHeader(container: HTMLElement): HTMLElement {
   return header as HTMLElement;
 }
 
-function getHeaderBack(container: HTMLElement): HTMLButtonElement {
+function getHeaderBack(container: HTMLElement): HTMLElement {
+  /* UIUX-FOUNDATION-01D/01E — Back ist Button (onBack) oder Link (backHref). */
   const back = getHeader(container).querySelector(
-    'button.page-header__back',
-  ) as HTMLButtonElement | null;
+    '.page-header__back',
+  ) as HTMLElement | null;
   expect(back).not.toBeNull();
   return back!;
 }
@@ -134,14 +135,15 @@ describe('APP-DESIGN-FOUNDATION-02D PageHeader back navigation', () => {
     const header = getHeader(mounted.container);
     const back = getHeaderBack(mounted.container);
 
-    expect(header.textContent).toContain(t('overview.title', 'de'));
+    /* 01E — die Übersicht heißt wie der Hauptbereich „Rechnungen“; Back ist ein klarer Parent-Link. */
+    expect(header.textContent).toContain(t('invoices.list.title', 'de'));
     expect(header.textContent).toContain(t('overview.subtitle', 'de'));
     expect(back.textContent).toContain(t('common.back', 'de'));
     expect(mounted.container.querySelectorAll('.back-link')).toHaveLength(0);
-    expect(mounted.container.querySelectorAll('button.page-header__back')).toHaveLength(1);
+    expect(mounted.container.querySelectorAll('a.page-header__back[href="/vorgaenge"]')).toHaveLength(1);
 
     const footerLink = mounted.container.querySelector(
-      'a[href="/vorgaenge"]',
+      '.detail-actions a[href="/vorgaenge"]',
     ) as HTMLAnchorElement | null;
     expect(footerLink).not.toBeNull();
     expect(footerLink!.textContent).toContain(t('overview.backToVorgaenge', 'de'));

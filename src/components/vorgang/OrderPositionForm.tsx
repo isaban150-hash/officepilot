@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Button } from '../ui/Button';
+import { SimpleConfirmDialog } from '../ui/SimpleConfirmDialog';
 import { useApp } from '../../context/AppContext';
 import {
   canDeleteOrderPosition,
@@ -140,9 +141,14 @@ export function OrderPositionForm({
     showToast(translate('position.saved'));
   };
 
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const handleDelete = () => {
     if (!positionId || !canDelete) return;
-    if (!window.confirm(translate('position.deleteConfirm'))) return;
+    setConfirmDeleteOpen(true);
+  };
+  /* UIUX-FOUNDATION-01G — Löschen erst nach Bestätigung im kanonischen Dialog. */
+  const performDelete = () => {
+    if (!positionId || !canDelete) return;
 
     const result = removeOrderPosition(vorgang.id, positionId);
     if (!result.success) {
@@ -299,6 +305,22 @@ export function OrderPositionForm({
           </Button>
         </div>
       </div>
+      <SimpleConfirmDialog
+        open={confirmDeleteOpen}
+        title={translate('position.delete')}
+        message={translate('position.deleteConfirm')}
+        confirmLabel={translate('position.delete')}
+        cancelLabel={translate('common.cancel')}
+        dialogTestId="position-delete-dialog"
+        confirmTestId="position-delete-confirm"
+        cancelTestId="position-delete-cancel"
+        onConfirm={() => {
+          setConfirmDeleteOpen(false);
+          performDelete();
+          return true;
+        }}
+        onCancel={() => setConfirmDeleteOpen(false)}
+      />
     </div>
   );
 }

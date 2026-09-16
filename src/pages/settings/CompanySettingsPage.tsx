@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { Button } from '../../components/ui/Button';
 import { PageHeader } from '../../components/ui/Card';
+import { ReadOnlyNotice } from '../../components/ui/ReadOnlyNotice';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { useFormResume } from '../../hooks/useFormResume';
@@ -274,20 +274,18 @@ export function CompanySettingsPage() {
 
   return (
     <div className="page settings-page settings-subpage" data-testid="settings-company-page">
-      <Link to="/einstellungen" className="back-link" data-testid="settings-company-back">
-        ← {translate('settings.backToHub')}
-      </Link>
       <PageHeader
         title={translate('settings.company.title')}
+        backLabel={translate('settings.backToHub')}
+        backHref="/einstellungen"
+        backTestId="settings-company-back"
         subtitle={translate('settings.company.page.subtitle')}
       />
 
       {!editable ? (
-        <p className="invoice-hint invoice-hint--warning" data-testid="settings-company-readonly">
-          {translate(
+        <ReadOnlyNotice message={translate(
             access.reason === 'member' ? 'settings.company.readOnly' : 'settings.company.roleUnknown',
-          )}
-        </p>
+          )} testId="settings-company-readonly" />
       ) : (
         <p className="hint-text" data-testid="settings-company-historical-hint">
           {translate('settings.company.historicalHint')}

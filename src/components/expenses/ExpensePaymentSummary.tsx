@@ -1,12 +1,13 @@
 import {
   calculateExpensePaymentSummary,
-  formatPaymentCurrency,
   getOverdueDays,
   isExpenseCancelled,
 } from '../../services/expensePaymentService';
 import { ExpensePaymentBadge } from './ExpensePaymentBadge';
 import type { Expense } from '../../types/expense';
 import type { TranslationKey } from '../../i18n';
+import { InlineNotice } from '../ui/States';
+import { MoneyDisplay } from '../ui/Display';
 
 interface Props {
   expense: Expense;
@@ -25,34 +26,30 @@ export function ExpensePaymentSummary({ expense, translate }: Props) {
       </div>
 
       {isExpenseCancelled(expense) && (
-        <p className="invoice-payment-summary__notice invoice-payment-summary__notice--muted">
-          {translate('expense.payment.cancelledNotice')}
-        </p>
+        <InlineNotice tone="neutral">{translate('expense.payment.cancelledNotice')}</InlineNotice>
       )}
 
       {summary.status === 'ueberfaellig' && !isExpenseCancelled(expense) && (
-        <p className="invoice-payment-summary__notice invoice-payment-summary__notice--danger">
-          {translate('expense.payment.overdueNotice')}
-        </p>
+        <InlineNotice tone="critical">{translate('expense.payment.overdueNotice')}</InlineNotice>
       )}
 
-      <dl className="invoice-payment-summary__rows">
+      <dl className="invoice-payment-summary__rows summary-list summary-list--single">
         <div className="invoice-payment-summary__row">
           <dt>{translate('payment.totalDue')}</dt>
-          <dd>{formatPaymentCurrency(summary.totalDue)}</dd>
+          <dd><MoneyDisplay value={summary.totalDue} /></dd>
         </div>
         <div className="invoice-payment-summary__row">
           <dt>{translate('payment.paidAmount')}</dt>
-          <dd>{formatPaymentCurrency(summary.paidAmount)}</dd>
+          <dd><MoneyDisplay value={summary.paidAmount} /></dd>
         </div>
         <div className="invoice-payment-summary__row">
           <dt>{translate('payment.openAmount')}</dt>
-          <dd>{formatPaymentCurrency(summary.openAmount)}</dd>
+          <dd><MoneyDisplay value={summary.openAmount} /></dd>
         </div>
         {summary.overpaidAmount > 0 && (
           <div className="invoice-payment-summary__row invoice-payment-summary__row--overpaid">
             <dt>{translate('payment.overpaidAmount')}</dt>
-            <dd>{formatPaymentCurrency(summary.overpaidAmount)}</dd>
+            <dd><MoneyDisplay value={summary.overpaidAmount} /></dd>
           </div>
         )}
       </dl>

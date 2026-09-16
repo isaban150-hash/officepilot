@@ -16,6 +16,8 @@ import { Button } from '../components/ui/Button';
 import { Badge, Card, DataRow } from '../components/ui/Card';
 import { FileTypeIcon } from '../components/ui/FileTypeIcon';
 import { ShowMoreSection } from '../components/ui/ShowMoreSection';
+import { PageHeader } from '../components/ui/PageHeader';
+import { DetailSection, SummaryList } from '../components/ui/Section';
 import { useApp } from '../context/AppContext';
 import { formatPaperFilingInstruction } from '../services/paperFolderService';
 import {
@@ -143,9 +145,13 @@ export function DokumentDetailPage() {
   if (isEditing) {
     return (
       <div className="page">
-        <button type="button" className="back-link" onClick={() => setIsEditing(false)}>
-          ← {translate('common.back')}
-        </button>
+        <PageHeader
+          title={document.title}
+          subtitle={categoryLabel}
+          backLabel={translate('common.back')}
+          onBack={() => setIsEditing(false)}
+          backTestId="document-detail-edit-back"
+        />
         <DetailExperienceCard
           recognizedTitle={document.title}
           recognizedSummary={categoryLabel}
@@ -266,7 +272,8 @@ export function DokumentDetailPage() {
         onRecovered={() => setPreviewRevision((value) => value + 1)}
       />
 
-      <Card>
+      <DetailSection title={translate('document.section.technical')} testId="document-detail-section-data">
+        <SummaryList>
         <DataRow label={translate('document.fieldCategory')} value={categoryLabel} />
         <DataRow label={translate('document.fieldIssuer')} value={document.issuer || '—'} />
         <DataRow
@@ -344,7 +351,8 @@ export function DokumentDetailPage() {
           Dokumentfragen lesen ihn dort. Korrigieren lässt er sich weiterhin im
           Bearbeiten-Modus (DocumentForm).
         */}
-      </Card>
+        </SummaryList>
+      </DetailSection>
 
       <DocumentLifecycleCard documentId={document.id} revision={detailRevision} />
 
@@ -390,7 +398,7 @@ export function DokumentDetailPage() {
           setUnlinkError(null);
         }}
       />
-      <div className="form-actions document-detail__actions">
+      <div className="detail-actions document-detail__actions">
         <Button variant="outline" onClick={() => setIsEditing(true)}>
           {translate('document.edit')}
         </Button>
@@ -425,9 +433,19 @@ export function DokumentDetailPage() {
 
   return (
     <div className="page document-detail-page" data-testid="document-detail-page">
-      <button type="button" className="back-link" onClick={() => navigate('/dokumente')}>
-        ← {translate('common.back')}
-      </button>
+      {/*
+        * UIUX-FOUNDATION-01E — Detailmuster: Back (klarer Parent /dokumente),
+        * Identität (Titel, Kategorie · Aussteller). Die fachlichen nächsten
+        * Schritte bleiben in der Experience-Card; Rohtext bleibt sekundär.
+        */}
+      <PageHeader
+        title={document.title}
+        subtitle={[categoryLabel, document.issuer].filter(Boolean).join(' · ')}
+        backLabel={translate('common.back')}
+        backHref="/dokumente"
+        backTestId="document-detail-back"
+        testId="document-detail-header"
+      />
 
       <DetailExperienceCard
         recognizedTitle={document.title}
@@ -435,6 +453,7 @@ export function DokumentDetailPage() {
         assistantMessage={translate('document.experience.saved')}
         paperInstruction={paperInstruction}
         actions={experienceActions}
+        hideIdentity
         testId="document-detail-experience"
       />
 

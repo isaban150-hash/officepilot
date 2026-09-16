@@ -6,7 +6,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Card, CardMeta, CardTitle, PageHeader } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { EmptyStateBlock } from '../ui/EmptyStateBlock';
@@ -283,11 +283,13 @@ export function SearchPage() {
 
   return (
     <div className="page search-page" data-testid="search-page">
-      <Link to="/" className="back-link">
-        ← {translate('common.back')}
-      </Link>
-
-      <PageHeader title={translate('search.title')} subtitle={translate('search.subtitle')} />
+      <PageHeader
+        title={translate('search.title')}
+        subtitle={translate('search.subtitle')}
+        backLabel={translate('common.back')}
+        backHref="/"
+        backTestId="search-back"
+      />
 
       <section className="search-page__bar" data-testid="search-page-bar">
         <GlobalSearchBar autoFocus />

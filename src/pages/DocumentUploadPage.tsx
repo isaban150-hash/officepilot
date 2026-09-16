@@ -408,12 +408,12 @@ export function DocumentUploadPage() {
   if (uploadError) {
     return (
       <div className="page document-upload-page" data-testid="document-upload-page">
-        <button type="button" className="back-link" onClick={() => navigate('/dokumente')}>
-          ← {translate('common.back')}
-        </button>
         <PageHeader
           title={translate('document.upload.title')}
           subtitle={translate('document.upload.subtitle')}
+          backLabel={translate('common.back')}
+          backHref="/dokumente"
+          backTestId="document-upload-back"
         />
         {fileInput}
         <DocumentUploadErrorPanel
@@ -445,12 +445,12 @@ export function DocumentUploadPage() {
 
     return (
       <div className="page document-upload-page" data-testid="document-upload-page">
-        <button type="button" className="back-link" onClick={() => navigate('/dokumente')}>
-          ← {translate('common.back')}
-        </button>
         <PageHeader
           title={translate('document.upload.title')}
           subtitle={translate('scan.ocr.previewSubtitle')}
+          backLabel={translate('common.back')}
+          backHref="/dokumente"
+          backTestId="document-upload-back"
         />
         {fileInput}
         <OcrPreviewPanel
@@ -489,12 +489,12 @@ export function DocumentUploadPage() {
 
   return (
     <div className="page document-upload-page" data-testid="document-upload-page">
-      <button type="button" className="back-link" onClick={() => navigate('/dokumente')}>
-        ← {translate('common.back')}
-      </button>
       <PageHeader
         title={translate('document.upload.title')}
         subtitle={translate('document.upload.subtitle')}
+        backLabel={translate('common.back')}
+        backHref="/dokumente"
+        backTestId="document-upload-back"
       />
 
       <Card>

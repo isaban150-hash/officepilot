@@ -90,7 +90,8 @@ test.describe('Einstellungen — Hub und Firmenprofil (lokale Datenbank)', () =>
     await expectNoOverflow(page, 'Hub');
 
     /* 2. Zahnrad → Einstellungen (von einer anderen Seite aus) */
-    await page.getByRole('link', { name: /Schreibtisch/ }).first().click();
+    /* UIUX-FOUNDATION-01C — der Startbereich heißt „Heute“. */
+    await page.getByRole('link', { name: /^Heute$/ }).locator('visible=true').first().click();
     await page.getByTestId('settings-gear').click();
     await expect(page).toHaveURL(/\/einstellungen$/);
 

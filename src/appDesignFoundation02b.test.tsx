@@ -87,9 +87,10 @@ describe('APP-DESIGN-FOUNDATION-02B PageHeader action slots', () => {
     expect(outsideHeader).not.toContain('href="/ausgaben/offen"');
     expect(html.match(/page-header__actions/g)).toHaveLength(1);
 
-    expect(html).toContain('expense-summary-card');
-    expect(html).toContain('document-search');
-    expect(html).toContain('document-categories');
+    expect(html).toContain('data-testid="ausgaben-summary"');
+    /* UIUX-FOUNDATION-01D — Toolbar-Pattern: SearchField + FilterChips statt Legacy-Klassen. */
+    expect(html).toContain('data-testid="ausgaben-search"');
+    expect(html).toContain('data-testid="ausgaben-category-all"');
   });
 
   it('keine doppelten Header-Aktionsbuttons auf beiden Seiten', () => {

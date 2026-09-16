@@ -179,8 +179,9 @@ test.describe('FINANZ-CORE-DURABILITY-01C (lokal)', () => {
 
       /* X4 — Reversal auf Geraet 1, Pull auf Geraet 2 */
       await page.goto(`/ausgaben/${expenseId}`, { waitUntil: 'domcontentloaded' });
-      page.once('dialog', (d) => void d.accept());
+      /* UIUX-01G — Confirm-first im kanonischen Dialog. */
       await page.getByRole('button', { name: 'Entfernen' }).first().click();
+      await page.getByTestId('payment-remove-confirm').click();
       await expect(page.getByText('Zahlung entfernt.')).toBeVisible({ timeout: 10_000 });
       await runSync(page);
       const cloud4 = await cloudExpenses(wsId);

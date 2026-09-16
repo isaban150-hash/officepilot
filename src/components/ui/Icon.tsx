@@ -43,7 +43,22 @@ export type IconId =
   | 'upload'
   | 'print'
   | 'clock'
-  | 'refresh';
+  | 'refresh'
+  /* UIUX-FOUNDATION-01C — Navigationsbereiche (aus NavIcon übernommen bzw. ergänzt). */
+  | 'home'
+  | 'inbox'
+  | 'orders'
+  | 'invoice'
+  | 'finance'
+  | 'folder'
+  | 'customers'
+  | 'tasks'
+  | 'messages'
+  | 'knowledge'
+  | 'assistant'
+  | 'tax'
+  | 'archive'
+  | 'scan';
 
 export type IconSize = 'sm' | 'md' | 'lg';
 
@@ -163,6 +178,91 @@ const ICONS: Record<IconId, ReactElement> = {
     </>
   ),
   refresh: <path d="M20 12a8 8 0 0 1-14.2 5M4 12a8 8 0 0 1 14.2-5M18 3v4h-4M6 21v-4h4" />,
+  home: <path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z" />,
+  inbox: (
+    <>
+      <path d="M4 13h4l1.5 2h5L16 13h4v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-6Z" />
+      <path d="M6 13V5h12v8M12 8v4M10 10l2 2 2-2" />
+    </>
+  ),
+  orders: (
+    <>
+      <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" />
+      <path d="M9 3h6v4H9V3Z" />
+      <path d="M9 12h6M9 16h6" />
+    </>
+  ),
+  invoice: (
+    <>
+      <path d="M7 3h7l4 4v14H7V3Z" />
+      <path d="M14 3v4h4" />
+      <path d="M10 11h5M10 14h5M10 17h3" />
+    </>
+  ),
+  finance: (
+    <>
+      <path d="M4 19h16M6 16V10M10 16V6M14 16v-4M18 16V8" />
+    </>
+  ),
+  folder: (
+    <>
+      <path d="M4 7h16v12a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7Z" />
+      <path d="M9 4h6l1 3H8l1-3Z" />
+    </>
+  ),
+  customers: (
+    <>
+      <circle cx="9" cy="8" r="3" />
+      <path d="M3 20a6 6 0 0 1 12 0M16 4.5a3 3 0 0 1 0 6M21 20a6 6 0 0 0-4-5.6" />
+    </>
+  ),
+  tasks: (
+    <>
+      <rect x="4" y="4" width="16" height="16" rx="2" />
+      <path d="m8 12 3 3 5-6" />
+    </>
+  ),
+  messages: (
+    <>
+      <path d="M4 5h16v11H9l-5 4V5Z" />
+      <path d="M8 9h8M8 12h5" />
+    </>
+  ),
+  knowledge: (
+    <>
+      <path d="M4 5a2 2 0 0 1 2-2h6v17H6a2 2 0 0 0-2 2V5Z" />
+      <path d="M20 5a2 2 0 0 0-2-2h-6v17h6a2 2 0 0 1 2 2V5Z" />
+    </>
+  ),
+  assistant: (
+    <>
+      <rect x="5" y="8" width="14" height="11" rx="2" />
+      <circle cx="9.5" cy="13" r="1" fill="currentColor" stroke="none" />
+      <circle cx="14.5" cy="13" r="1" fill="currentColor" stroke="none" />
+      <path d="M9 17h6M12 4v3" />
+      <circle cx="12" cy="3" r="1.25" />
+    </>
+  ),
+  tax: (
+    <>
+      <path d="M7 4h10v16H7z" />
+      <path d="M9 8h6M9 12h6M9 16h4" />
+      <path d="M14 4v3h3" />
+    </>
+  ),
+  archive: (
+    <>
+      <path d="M4 7h16v12a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7Z" />
+      <path d="M9 4h6l1 3H8l1-3Z" />
+      <path d="M9 12h6" />
+    </>
+  ),
+  scan: (
+    <>
+      <path d="M4 7V5a1 1 0 0 1 1-1h2M4 17v2a1 1 0 0 0 1 1h2M16 4h2a1 1 0 0 1 1 1v2M16 20h2a1 1 0 0 0 1-1v-2" />
+      <circle cx="12" cy="12" r="3.5" />
+    </>
+  ),
 };
 
 export const ICON_IDS = Object.keys(ICONS) as IconId[];

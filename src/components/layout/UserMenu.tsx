@@ -38,14 +38,12 @@ export function UserMenu() {
         href: '/einstellungen',
         testId: 'user-menu-einstellungen',
       },
-      {
-        id: 'settings',
-        label: translate('mehr.title'),
-        href: '/mehr',
-        testId: 'user-menu-settings',
-      },
+      /*
+       * UIUX-FOUNDATION-01C — kein „Mehr“-Eintrag mehr: Das Benutzermenü ist
+       * keine zweite Hauptnavigation, sondern nutzer-/systemnah (Einstellungen,
+       * Admin nach bestehender Berechtigung, Abmelden).
+       */
     ];
-
     if (isAdmin) {
       menuItems.push({
         id: 'admin',

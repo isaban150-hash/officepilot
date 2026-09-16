@@ -1,7 +1,12 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
-import { Card, CardMeta, CardTitle, PageHeader } from '../components/ui/Card';
+import { PageHeader, StatusBadge } from '../components/ui/Card';
+import { RowList, RowListItem } from '../components/ui/Lists';
+import { Page } from '../components/ui/Page';
+import { DetailSection } from '../components/ui/Section';
+import { InlineNotice, ErrorState } from '../components/ui/States';
+import { Select } from '../components/ui/Select';
+import { ReadOnlyNotice } from '../components/ui/ReadOnlyNotice';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { isSupabaseConfigured } from '../lib/supabase';
@@ -68,19 +73,43 @@ export function SteuerberaterPage() {
     getSteuerberaterMonthOverview(new Date(), locale, monthKey).monthLabel;
 
   return (
-    <div className="page steuerberater-page" data-testid="steuerberater-page">
+    <Page className="steuerberater-page" testId="steuerberater-page">
+      {/*
+        * UIUX-FOUNDATION-01F — Monatsmappe: Header mit Monatsstatus und einer
+        * Hauptaktion je Schritt, Sections statt Card-Stapel. Exportlogik unverändert.
+        */}
       <PageHeader
         title={translate('steuerberater.title')}
         subtitle={translate('steuerberater.subtitle')}
+        status={
+          <StatusBadge
+            tone={overview.isComplete ? 'success' : 'warning'}
+            label={
+              overview.isComplete
+                ? translate('steuerberater.status.complete')
+                : translate('steuerberater.status.missing').replace('{count}', String(overview.missingCount))
+            }
+            data-testid="steuerberater-month-status"
+          />
+        }
+        primaryAction={
+          step === 'overview' ? (
+            <Button data-testid="steuerberater-prepare-folder" onClick={() => setStep('review')}>
+              {translate('steuerberater.prepareFolderButton')}
+            </Button>
+          ) : financeAccess.canWrite ? (
+            <Button disabled={isExporting} data-testid="steuerberater-export-button" onClick={() => void handleExport()}>
+              {translate('steuerberater.exportButton')}
+            </Button>
+          ) : undefined
+        }
       />
 
       <section className="steuerberater-month-select" data-testid="steuerberater-month-select">
-        <label className="steuerberater-month-select__label" htmlFor="steuerberater-month">
-          {translate('steuerberater.monthSelect')}
-        </label>
-        <select
+        <Select
           id="steuerberater-month"
-          className="input steuerberater-month-select__input"
+          label={translate('steuerberater.monthSelect')}
+          helperText={overview.isDefaultMonth ? translate('steuerberater.defaultMonthHint').replace('{month}', overview.monthLabel) : undefined}
           value={selectedMonthKey}
           onChange={(e) => {
             setSelectedMonthKey(e.target.value);
@@ -95,128 +124,77 @@ export function SteuerberaterPage() {
               {key === defaultMonthKey ? ` (${translate('steuerberater.recommended')})` : ''}
             </option>
           ))}
-        </select>
-        {overview.isDefaultMonth ? (
-          <p className="steuerberater-month-select__hint" data-testid="steuerberater-default-month">
-            {translate('steuerberater.defaultMonthHint').replace('{month}', overview.monthLabel)}
-          </p>
-        ) : null}
+        </Select>
+        {overview.isDefaultMonth ? <span className="sr-only" data-testid="steuerberater-default-month" /> : null}
       </section>
 
-      <section data-testid="steuerberater-month">
-        <Card className="steuerberater-month-card">
-          <CardTitle>{overview.monthLabel}</CardTitle>
-          <CardMeta>
-            {overview.isComplete
-              ? translate('steuerberater.status.complete')
-              : translate('steuerberater.status.missing').replace('{count}', String(overview.missingCount))}
-          </CardMeta>
-          <p className="steuerberater-month-card__count">
-            {translate('steuerberater.documentCount').replace('{count}', String(overview.documentCount))}
-          </p>
-        </Card>
-      </section>
-
-      {step === 'overview' ? (
-        <section className="steuerberater-actions" data-testid="steuerberater-actions">
-          <Button
-            fullWidth
-            size="lg"
-            data-testid="steuerberater-prepare-folder"
-            onClick={() => setStep('review')}
-          >
-            {translate('steuerberater.prepareFolderButton')}
-          </Button>
-        </section>
-      ) : null}
+      <DetailSection title={overview.monthLabel} description={translate('steuerberater.documentCount').replace('{count}', String(overview.documentCount))} surface testId="steuerberater-month">
+        <span className="sr-only">{overview.monthLabel}</span>
+      </DetailSection>
 
       {step === 'review' || step === 'exported' ? (
         <>
-          <section className="section" data-testid="steuerberater-documents">
-            <h2 className="section__title">{translate('steuerberater.documentsIncluded')}</h2>
+          <DetailSection title={translate('steuerberater.documentsIncluded')} testId="steuerberater-documents">
             {overview.documents.length === 0 ? (
-              <p className="steuerberater-empty">{translate('steuerberater.noDocuments')}</p>
+              <p className="detail-empty">{translate('steuerberater.noDocuments')}</p>
             ) : (
-              <div className="card-list">
+              <RowList>
                 {overview.documents.map((doc) => (
-                  <Link key={doc.id} to={`/ablage/${doc.id}`} className="card-link">
-                    <Card>
-                      <CardTitle>{doc.title}</CardTitle>
-                      <CardMeta>{doc.kind}</CardMeta>
-                    </Card>
-                  </Link>
+                  <RowListItem key={doc.id} to={`/ablage/${doc.id}`} icon="file" title={doc.title} description={doc.kind} />
                 ))}
-              </div>
+              </RowList>
             )}
-          </section>
+          </DetailSection>
 
           {overview.missingItems.length > 0 ? (
-            <section className="section" data-testid="steuerberater-missing">
-              <h2 className="section__title">{translate('steuerberater.missingTitle')}</h2>
-              <ul className="steuerberater-mark-list">
+            <DetailSection title={translate('steuerberater.missingTitle')} testId="steuerberater-missing">
+              <RowList>
                 {overview.missingItems.map((item) => (
-                  <li key={item.id} className="steuerberater-mark-list__item steuerberater-mark-list__item--missing">
-                    ⚠ {item.title}
-                  </li>
+                  <RowListItem key={item.id} icon="warning" title={item.title} trailing={<StatusBadge tone="warning" label={translate('steuerberater.missingTitle')} icon={false} />} />
                 ))}
-              </ul>
-            </section>
+              </RowList>
+            </DetailSection>
           ) : null}
 
           {overview.unclearDocuments.length > 0 ? (
-            <section className="section" data-testid="steuerberater-unclear">
-              <h2 className="section__title">{translate('steuerberater.unclearTitle')}</h2>
-              <ul className="steuerberater-mark-list">
+            <DetailSection title={translate('steuerberater.unclearTitle')} testId="steuerberater-unclear">
+              <RowList>
                 {overview.unclearDocuments.map((doc) => (
-                  <li key={doc.id} className="steuerberater-mark-list__item steuerberater-mark-list__item--unclear">
-                    <Link to={`/ablage/${doc.id}`}>? {doc.title}</Link>
-                  </li>
+                  <RowListItem key={doc.id} to={`/ablage/${doc.id}`} icon="info" title={doc.title} trailing={<StatusBadge tone="info" label={translate('steuerberater.unclearTitle')} icon={false} />} />
                 ))}
-              </ul>
-            </section>
+              </RowList>
+            </DetailSection>
           ) : null}
 
-          {step === 'review' || step === 'exported' ? (
-            <section className="steuerberater-actions" data-testid="steuerberater-export-section">
-              {financeAccess.canWrite ? (
-                <Button
-                  fullWidth
-                  size="lg"
-                  disabled={isExporting}
-                  data-testid="steuerberater-export-button"
-                  onClick={() => void handleExport()}
-                >
-                  {translate('steuerberater.exportButton')}
-                </Button>
-              ) : (
-                <p className="steuerberater-empty" data-testid="steuerberater-export-forbidden">
-                  {translate('steuerberater.export.forbidden')}
-                </p>
-              )}
+          {!financeAccess.canWrite ? (
+            <section data-testid="steuerberater-export-section">
+              <ReadOnlyNotice message={translate('steuerberater.export.forbidden')} testId="steuerberater-export-forbidden" />
             </section>
           ) : null}
 
           {exportResult && exportResult.outcome !== 'exported' ? (
-            <Card className="steuerberater-export-result" data-testid={`steuerberater-export-${exportResult.outcome}`}>
-              <CardTitle>{translate(EXPORT_OUTCOME_KEY[exportResult.outcome])}</CardTitle>
-              {exportResult.outcome === 'document_load_failed' ? (
-                <ul className="steuerberater-mark-list">
-                  {exportResult.failed.map((entry) => (
-                    <li key={`${entry.id}-${entry.fileName}`} className="steuerberater-mark-list__item steuerberater-mark-list__item--missing">
-                      ⚠ {entry.belegnummer || entry.id} · {entry.fileName} · {entry.detail}
-                    </li>
-                  ))}
-                </ul>
-              ) : 'detail' in exportResult && exportResult.detail ? (
-                <CardMeta>{exportResult.detail}</CardMeta>
-              ) : null}
-            </Card>
+            <ErrorState
+              title={translate(EXPORT_OUTCOME_KEY[exportResult.outcome])}
+              description={
+                exportResult.outcome === 'document_load_failed' ? (
+                  <ul className="steuerberater-mark-list">
+                    {exportResult.failed.map((entry) => (
+                      <li key={`${entry.id}-${entry.fileName}`}>
+                        {entry.belegnummer || entry.id} · {entry.fileName} · {entry.detail}
+                      </li>
+                    ))}
+                  </ul>
+                ) : 'detail' in exportResult && exportResult.detail ? (
+                  exportResult.detail
+                ) : undefined
+              }
+              testId={`steuerberater-export-${exportResult.outcome}`}
+            />
           ) : null}
 
           {step === 'exported' && exportResult?.outcome === 'exported' ? (
-            <Card className="steuerberater-export-result" data-testid="steuerberater-export-result">
-              <CardTitle>{translate('steuerberater.packageReady')}</CardTitle>
-              <CardMeta>{translate('steuerberater.packageReadyDesc').replace('{month}', overview.monthLabel)}</CardMeta>
+            <InlineNotice tone="success" title={translate('steuerberater.packageReady')} testId="steuerberater-export-result">
+              <p>{translate('steuerberater.packageReadyDesc').replace('{month}', overview.monthLabel)}</p>
               <p data-testid="steuerberater-export-summary">
                 {translate('steuerberater.export.summary')
                   .replace('{invoices}', String(exportResult.summary.ausgangsrechnungen))
@@ -230,7 +208,7 @@ export function SteuerberaterPage() {
                 <ul className="steuerberater-mark-list" data-testid="steuerberater-export-missing-documents">
                   {exportResult.summary.fehlendeDokumente.map((entry) => (
                     <li key={entry.id} className="steuerberater-mark-list__item steuerberater-mark-list__item--missing">
-                      ⚠ {translate('steuerberater.export.missingDocument')} · {entry.belegnummer || entry.id}
+                      {translate('steuerberater.export.missingDocument')} · {entry.belegnummer || entry.id}
                     </li>
                   ))}
                 </ul>
@@ -239,7 +217,7 @@ export function SteuerberaterPage() {
                 <ul className="steuerberater-mark-list" data-testid="steuerberater-export-stornos-ohne-datum">
                   {exportResult.summary.stornosOhneDatum.map((entry) => (
                     <li key={entry.id} className="steuerberater-mark-list__item steuerberater-mark-list__item--unclear">
-                      ? {translate('steuerberater.export.stornoWithoutDate')} · {entry.belegnummer || entry.id}
+                      {translate('steuerberater.export.stornoWithoutDate')} · {entry.belegnummer || entry.id}
                     </li>
                   ))}
                 </ul>
@@ -247,13 +225,12 @@ export function SteuerberaterPage() {
               <p className="steuerberater-no-send" data-testid="steuerberater-no-direct-send">
                 {translate('steuerberater.noDirectSend')}
               </p>
-            </Card>
+            </InlineNotice>
           ) : null}
         </>
       ) : null}
 
-      <section className="steuerberater-categories" data-testid="steuerberater-categories">
-        <h2 className="section__title">{translate('steuerberater.categoriesTitle')}</h2>
+      <DetailSection title={translate('steuerberater.categoriesTitle')} className="steuerberater-categories" testId="steuerberater-categories">
         <ul className="steuerberater-categories__list">
           <li>{translate('steuerberater.cat.incoming')}</li>
           <li>{translate('steuerberater.cat.outgoing')}</li>
@@ -264,7 +241,7 @@ export function SteuerberaterPage() {
           <li>{translate('steuerberater.cat.tax')}</li>
         </ul>
         <p className="steuerberater-categories__hint">{translate('steuerberater.autoSortHint')}</p>
-      </section>
-    </div>
+      </DetailSection>
+    </Page>
   );
 }

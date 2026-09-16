@@ -249,8 +249,9 @@ describe('DOCUMENT-ARCHIVE-DATE-AND-NAV-LABELS-01', () => {
     });
 
     it('Upload-/Scan-Routen bleiben unverändert benannt in navConfig', () => {
+      /* UIUX-FOUNDATION-01C — Dokumente (Archiv) ist Desktop-Hauptbereich, mobil über „Mehr“. */
       expect(MOBILE_BOTTOM_NAV_ITEMS.some((item) => item.to === '/dokumente')).toBe(false);
-      expect(DESKTOP_NAV_ITEMS.some((item) => item.to === '/dokumente')).toBe(false);
+      expect(DESKTOP_NAV_ITEMS.find((item) => item.to === '/dokumente')?.key).toBe('nav.dokumente');
       expect(MOBILE_BOTTOM_NAV_ITEMS.find((item) => item.to === '/ablage')?.to).toBe('/ablage');
     });
   });

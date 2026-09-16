@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '../ui/Button';
-import { Card, CardMeta, CardTitle, DataRow } from '../ui/Card';
+import { DateDisplay, MoneyDisplay } from '../ui/Display';
+import { BusinessListItem } from '../ui/Lists';
 import { ExpensePaymentForm } from './ExpensePaymentForm';
 import { getExpensePaymentSavedToastKey } from './ExpensePaymentSummary';
 import { ExpensePaymentBadge } from './ExpensePaymentBadge';
 import {
   calculateExpensePaymentSummary,
-  formatPaymentCurrency,
   isExpenseCancelled,
   isExpensePayable,
 } from '../../services/expensePaymentService';
@@ -20,15 +20,6 @@ interface Props {
   translate: (key: TranslationKey) => string;
   onExpenseUpdated?: (item: ExpenseOverviewItem) => void;
   onPaymentToast?: (message: string) => void;
-}
-
-function formatDate(value: string | null): string {
-  if (!value) return '—';
-  try {
-    return new Date(value).toLocaleDateString('de-DE');
-  } catch {
-    return value;
-  }
 }
 
 export function ExpenseOverviewCard({
@@ -62,60 +53,78 @@ export function ExpenseOverviewCard({
 
   const categoryKey = `expense.category.${expense.category}` as TranslationKey;
 
+  /* UIUX-FOUNDATION-01F — Business-Zeile wie die Rechnungsübersicht; Aktionen unverändert. */
   return (
     <>
-      <Card className="invoice-overview-card">
-        <CardTitle>{expense.title}</CardTitle>
-        <CardMeta>
-          {expense.supplierName}
-          {expense.invoiceNumber ? ` · ${expense.invoiceNumber}` : ''}
-        </CardMeta>
-        <CardMeta>{translate(categoryKey)}</CardMeta>
-
-        <DataRow label={translate('expense.fieldIssueDate')} value={formatDate(expense.issueDate)} />
-        <DataRow
-          label={translate('expense.fieldDueDate')}
-          value={formatDate(expense.paymentDueDate)}
-        />
-        <DataRow
-          label={translate('payment.totalDue')}
-          value={formatPaymentCurrency(paymentSummary.totalDue)}
-        />
-        <DataRow
-          label={translate('payment.paidAmount')}
-          value={formatPaymentCurrency(paymentSummary.paidAmount)}
-        />
-        <DataRow
-          label={translate('payment.openAmount')}
-          value={formatPaymentCurrency(paymentSummary.openAmount)}
-        />
-        <DataRow
-          label={translate('expense.fieldBookingStatus')}
-          value={translate(`expense.status.${expense.status}` as TranslationKey)}
-        />
-        <DataRow
-          label={translate('payment.paymentStatus')}
-          value={<ExpensePaymentBadge status={paymentSummary.status} translate={translate} />}
-        />
-
-        <div className="invoice-overview-card__actions">
-          <Button type="button" onClick={openExpense}>
-            {translate('expense.open')}
-          </Button>
-          {isExpensePayable(expense) && !isExpenseCancelled(expense) && (
-            <Button type="button" variant="outline" onClick={() => setShowPaymentForm(true)}>
-              {translate('payment.recordShort')}
-            </Button>
-          )}
-          {expense.archiveDocumentId && (
-            <Link to={`/dokumente/${expense.archiveDocumentId}`}>
-              <Button type="button" variant="outline">
-                {translate('expenseOverview.archive')}
+      <BusinessListItem
+        className="expense-overview-card"
+        testId="expense-overview-card"
+        title={expense.title}
+        subtitle={`${expense.supplierName}${expense.invoiceNumber ? ` · ${expense.invoiceNumber}` : ''}`}
+        meta={translate(categoryKey)}
+        status={<ExpensePaymentBadge status={paymentSummary.status} translate={translate} />}
+        date={
+          <>
+            {translate('expense.fieldDueDate')}: <DateDisplay value={expense.paymentDueDate} />
+          </>
+        }
+        amount={<MoneyDisplay value={paymentSummary.openAmount} emphasis />}
+        footer={
+          <>
+            <dl className="business-list__figures">
+              <div>
+                <dt>{translate('expense.fieldIssueDate')}</dt>
+                <dd>
+                  <DateDisplay value={expense.issueDate} />
+                </dd>
+              </div>
+              <div>
+                <dt>{translate('payment.totalDue')}</dt>
+                <dd>
+                  <MoneyDisplay value={paymentSummary.totalDue} />
+                </dd>
+              </div>
+              <div>
+                <dt>{translate('payment.paidAmount')}</dt>
+                <dd>
+                  <MoneyDisplay value={paymentSummary.paidAmount} />
+                </dd>
+              </div>
+              <div>
+                <dt>{translate('payment.openAmount')}</dt>
+                <dd>
+                  <MoneyDisplay value={paymentSummary.openAmount} />
+                </dd>
+              </div>
+              <div>
+                <dt>{translate('expense.fieldBookingStatus')}</dt>
+                <dd>{translate(`expense.status.${expense.status}` as TranslationKey)}</dd>
+              </div>
+              <div>
+                <dt>{translate('payment.paymentStatus')}</dt>
+                <dd>{translate(`payment.status.${paymentSummary.status}` as TranslationKey)}</dd>
+              </div>
+            </dl>
+            <div className="invoice-overview-card__actions">
+              <Button type="button" size="sm" onClick={openExpense}>
+                {translate('expense.open')}
               </Button>
-            </Link>
-          )}
-        </div>
-      </Card>
+              {isExpensePayable(expense) && !isExpenseCancelled(expense) && (
+                <Button type="button" size="sm" variant="outline" onClick={() => setShowPaymentForm(true)}>
+                  {translate('payment.recordShort')}
+                </Button>
+              )}
+              {expense.archiveDocumentId && (
+                <Link to={`/dokumente/${expense.archiveDocumentId}`}>
+                  <Button type="button" size="sm" variant="outline">
+                    {translate('expenseOverview.archive')}
+                  </Button>
+                </Link>
+              )}
+            </div>
+          </>
+        }
+      />
 
       <ExpensePaymentForm
         expense={expense}

@@ -136,7 +136,8 @@ describe('DESIGN-SYSTEM-01A mobile upload fix', () => {
 
     expect(html).toContain('bottom-nav__label');
     expect(html).toContain('>Eingang</span>');
-    expect(html).toContain('>OfficePilot</span>');
+    /* UIUX-FOUNDATION-01C — Assistent ist Header-Werkzeug, Rechnungen ist Hauptbereich. */
+    expect(html).toContain('>Rechnungen</span>');
     expect(html).not.toMatch(/>\s*Sca\s*</);
   });
 });

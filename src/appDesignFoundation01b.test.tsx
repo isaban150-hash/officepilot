@@ -7,9 +7,8 @@ import { DEFAULT_SETUP } from './data/mockData';
 import { MOCK_INBOX_ITEMS } from './data/inboxMockData';
 import { HeutePage } from './pages/HeutePage';
 import { HomeDocumentAddCard } from './components/home/HomeDocumentAddCard';
-import { HomeOrdersCard } from './components/home/HomeOrdersCard';
+import { HomeOpenWork } from './components/home/HomeOpenWork';
 import { HomeOfficePilotCard } from './components/home/HomeOfficePilotCard';
-import { HomeSteuerberaterCard } from './components/home/HomeSteuerberaterCard';
 import { HomeMoreCard } from './components/home/HomeMoreCard';
 import { DeskPriorities } from './components/home/DeskPriorities';
 import { hydrateInboxStore } from './services/inboxService';
@@ -20,11 +19,12 @@ import { resetHomeHintDismissals } from './services/homeHintDismissalService';
 import { buildDeskPriorities } from './services/deskIntelligenceService';
 import { t } from './i18n';
 
+/* UIUX-FOUNDATION-01E — Reihenfolge nach Arbeitsbedarf: Hauptaktion, offene Arbeit, dann Schnellaktionen. */
 const HOME_CARD_ORDER = [
   'home-card-add-document',
   'home-card-orders',
-  'home-card-officepilot',
   'home-card-steuerberater',
+  'home-card-officepilot',
   'home-card-more',
 ] as const;
 
@@ -60,56 +60,45 @@ describe('APP-DESIGN-FOUNDATION-01B', () => {
     resetHomeHintDismissals();
   });
 
-  it('HomeDocumentAddCard rendert documents-NavIcon statt Emoji', () => {
+  it('HomeDocumentAddCard rendert Aufnahmewege als SVG-Zeile', () => {
     const html = renderCard(<HomeDocumentAddCard />);
-    expect(html).toContain('data-testid="home-card-add-document"');
-    expect(html).toContain('mobile-home-card__icon');
-    expect(html).toContain('nav-icon');
+    expect(html).toContain('data-testid="home-quick-add"');
+    expect(html).toContain('data-testid="document-add-inline"');
     expect(html).toContain('<svg');
     expect(html).not.toContain('mobile-home-card__emoji');
     expect(html).not.toContain('📥');
-    expect(html).toContain('href="/dokumente/hinzufuegen"');
-    expect(html).toContain(t('mobile.home.addDocument', 'de'));
   });
 
-  it('HomeOrdersCard rendert orders-NavIcon', () => {
-    const html = renderCard(<HomeOrdersCard />);
-    expect(html).toContain('data-testid="home-card-orders"');
-    expect(html).toContain('mobile-home-card__icon');
+  it('HomeOpenWork rendert Eingang, Aufträge, Rechnungen, Steuerberater als Zeilen mit NavIcon', () => {
+    const html = renderCard(<HomeOpenWork />);
+    for (const id of ['home-card-inbox', 'home-card-orders', 'home-card-invoices', 'home-card-steuerberater']) {
+      expect(html).toContain(`data-testid="${id}"`);
+    }
+    expect(html).toContain('row-list__icon');
     expect(html).toContain('<svg');
-    expect(html).not.toContain('mobile-home-card__emoji');
     expect(html).not.toContain('📂');
-    expect(html).toContain('href="/vorgaenge"');
-    expect(html).toContain(t('mobile.home.ordersTitle', 'de'));
-  });
-
-  it('HomeOfficePilotCard rendert assistant-NavIcon', () => {
-    const html = renderCard(<HomeOfficePilotCard />);
-    expect(html).toContain('data-testid="home-card-officepilot"');
-    expect(html).toContain('mobile-home-card__icon');
-    expect(html).toContain('<svg');
-    expect(html).not.toContain('mobile-home-card__emoji');
-    expect(html).not.toContain('🤖');
-    expect(html).toContain(t('mobile.home.assistantTitle', 'de'));
-  });
-
-  it('HomeSteuerberaterCard rendert tax-NavIcon', () => {
-    const html = renderCard(<HomeSteuerberaterCard />);
-    expect(html).toContain('data-testid="home-card-steuerberater"');
-    expect(html).toContain('mobile-home-card__icon');
-    expect(html).toContain('<svg');
-    expect(html).not.toContain('mobile-home-card__emoji');
     expect(html).not.toContain('🧾');
+    expect(html).toContain('href="/vorgaenge"');
     expect(html).toContain('href="/steuerberater"');
+    expect(html).toContain(t('mobile.home.ordersTitle', 'de'));
     expect(html).toContain(t('mobile.home.taxTitle', 'de'));
   });
 
-  it('HomeMoreCard rendert more-NavIcon', () => {
+  it('HomeOfficePilotCard rendert assistant-NavIcon ohne Emoji', () => {
+    const html = renderCard(<HomeOfficePilotCard />);
+    expect(html).toContain('data-testid="home-card-officepilot"');
+    expect(html).toContain('home-assistant__icon');
+    expect(html).toContain('<svg');
+    expect(html).not.toContain('🤖');
+    expect(html).not.toContain('🎤');
+    expect(html).toContain(t('mobile.home.assistantTitle', 'de'));
+  });
+
+  it('HomeMoreCard rendert more-NavIcon als Zeile', () => {
     const html = renderCard(<HomeMoreCard />);
     expect(html).toContain('data-testid="home-card-more"');
-    expect(html).toContain('mobile-home-card__icon');
+    expect(html).toContain('row-list__icon');
     expect(html).toContain('<svg');
-    expect(html).not.toContain('mobile-home-card__emoji');
     expect(html).toContain('href="/mehr"');
     expect(html).toContain(t('mobile.home.moreTitle', 'de'));
   });

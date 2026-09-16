@@ -1,18 +1,16 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '../ui/Button';
-import { Card, CardMeta, CardTitle, DataRow } from '../ui/Card';
+import { StatusBadge } from '../ui/Badge';
+import { DateDisplay, MoneyDisplay } from '../ui/Display';
+import { BusinessListItem } from '../ui/Lists';
 import { DropdownMenu } from '../ui/DropdownMenu';
 import {
   getPaymentSavedToastKey,
   InvoicePaymentForm,
 } from './InvoicePaymentForm';
-import { InvoicePaymentBadge } from './InvoicePaymentBadge';
-import {
-  formatPaymentCurrency,
-  isInvoiceCancelled,
-} from '../../services/invoicePaymentService';
-import { formatInvoiceDate } from '../../services/invoicePrintModel';
+import { paymentStatusTone } from '../../services/ui/statusTone';
+import { isInvoiceCancelled } from '../../services/invoicePaymentService';
 import { buildInvoiceReachPath } from '../../services/invoiceNavigation';
 import type { InvoiceOverviewItem } from '../../services/invoiceOverviewService';
 import type { VorgangInvoice } from '../../types/models';
@@ -86,89 +84,116 @@ export function InvoiceOverviewCard({
     onPaymentToast?.(translate(getPaymentSavedToastKey(updated)));
   };
 
+  /*
+   * UIUX-FOUNDATION-01E — Business-Zeile statt Karte: Identität (Nummer · Art,
+   * Vorgang · Kunde, Baustelle), Fakten (Fälligkeit, Zahlungsstatus, offener
+   * Betrag), darunter Kennzahlen und die bestehenden Aktionen. Testids und
+   * Aktionslogik unverändert.
+   */
+  const paymentStatusLabel = translate(`payment.status.${paymentSummary.status}` as TranslationKey);
   return (
     <>
-      <Card className="invoice-overview-card" data-testid="invoice-overview-card">
-        <CardTitle>
-          {invoice.number} · {invoiceTypeLabel(invoice, translate)}
-        </CardTitle>
-        <CardMeta>
-          {hasVorgangLink ? (
-            <>
-              <Link to={`/vorgaenge/${currentItem.vorgangId}`}>{currentItem.vorgangTitle}</Link>
-              {' · '}
-            </>
-          ) : null}
-          {currentItem.customer}
-        </CardMeta>
-        {currentItem.baustelle && (
-          <CardMeta>{currentItem.baustelle}</CardMeta>
-        )}
-
-        <DataRow
-          label={translate('invoice.issueDate')}
-          value={formatInvoiceDate(invoice.issueDate ?? invoice.date)}
-        />
-        <DataRow
-          label={translate('invoice.paymentDueDate')}
-          value={formatInvoiceDate(invoice.paymentDueDate ?? '')}
-        />
-        <DataRow label={translate('payment.totalDue')} value={formatPaymentCurrency(paymentSummary.totalDue)} />
-        <DataRow label={translate('payment.paidAmount')} value={formatPaymentCurrency(paymentSummary.paidAmount)} />
-        <DataRow label={translate('payment.openAmount')} value={formatPaymentCurrency(paymentSummary.openAmount)} />
-        <DataRow
-          label={translate('payment.workflowStatus')}
-          value={workflowStatusLabel(invoice.status, translate)}
-        />
-        <DataRow
-          label={translate('payment.paymentStatus')}
-          value={<InvoicePaymentBadge status={paymentSummary.status} translate={translate} />}
-        />
-
-        <div className="invoice-overview-card__actions" data-testid="invoice-overview-card-actions">
-          <Button type="button" onClick={openInvoice} data-testid="invoice-overview-card-open">
-            {translate('invoice.open')}
-          </Button>
-          {!isInvoiceCancelled(invoice) && (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setShowPaymentForm(true)}
-              data-testid="invoice-overview-card-payment"
-            >
-              {translate('payment.recordShort')}
-            </Button>
-          )}
-          <DropdownMenu
-            testId="invoice-overview-card-more"
-            ariaLabel={translate('invoice.moreActions')}
-            align="end"
-            trigger={<span>{translate('invoice.moreActions')}</span>}
-            items={[
-              {
-                id: 'print',
-                label: translate('invoice.print'),
-                onSelect: triggerPrint,
-                testId: 'invoice-overview-card-print',
-              },
-              {
-                id: 'pdf',
-                label: translate('invoice.savePdf'),
-                onSelect: triggerPdf,
-                testId: 'invoice-overview-card-pdf',
-              },
-            ]}
-          />
-          {invoice.archiveDocumentId && (
-            <Link to={`/dokumente/${invoice.archiveDocumentId}`}>
-              <Button type="button" variant="outline">
-                {translate('overview.archive')}
+      <BusinessListItem
+        className="invoice-overview-card"
+        testId="invoice-overview-card"
+        title={`${invoice.number} · ${invoiceTypeLabel(invoice, translate)}`}
+        subtitle={
+          <>
+            {hasVorgangLink ? (
+              <>
+                <Link to={`/vorgaenge/${currentItem.vorgangId}`}>{currentItem.vorgangTitle}</Link>
+                {' · '}
+              </>
+            ) : null}
+            {currentItem.customer}
+          </>
+        }
+        meta={currentItem.baustelle || undefined}
+        status={<StatusBadge tone={paymentStatusTone(paymentSummary.status)} label={paymentStatusLabel} icon={false} />}
+        date={
+          <>
+            {translate('invoice.paymentDueDate')}: <DateDisplay value={invoice.paymentDueDate ?? null} />
+          </>
+        }
+        amount={<MoneyDisplay value={paymentSummary.openAmount} emphasis />}
+        footer={
+          <>
+            <dl className="business-list__figures" data-testid="invoice-overview-card-figures">
+              <div>
+                <dt>{translate('invoice.issueDate')}</dt>
+                <dd>
+                  <DateDisplay value={invoice.issueDate ?? invoice.date} />
+                </dd>
+              </div>
+              <div>
+                <dt>{translate('payment.totalDue')}</dt>
+                <dd>
+                  <MoneyDisplay value={paymentSummary.totalDue} />
+                </dd>
+              </div>
+              <div>
+                <dt>{translate('payment.paidAmount')}</dt>
+                <dd>
+                  <MoneyDisplay value={paymentSummary.paidAmount} />
+                </dd>
+              </div>
+              <div>
+                <dt>{translate('payment.openAmount')}</dt>
+                <dd>
+                  <MoneyDisplay value={paymentSummary.openAmount} />
+                </dd>
+              </div>
+              <div>
+                <dt>{translate('payment.workflowStatus')}</dt>
+                <dd>{workflowStatusLabel(invoice.status, translate)}</dd>
+              </div>
+            </dl>
+            <div className="invoice-overview-card__actions" data-testid="invoice-overview-card-actions">
+              <Button type="button" size="sm" onClick={openInvoice} data-testid="invoice-overview-card-open">
+                {translate('invoice.open')}
               </Button>
-            </Link>
-          )}
-        </div>
-      </Card>
-
+              {!isInvoiceCancelled(invoice) && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setShowPaymentForm(true)}
+                  data-testid="invoice-overview-card-payment"
+                >
+                  {translate('payment.recordShort')}
+                </Button>
+              )}
+              <DropdownMenu
+                testId="invoice-overview-card-more"
+                ariaLabel={translate('invoice.moreActions')}
+                align="end"
+                trigger={<span>{translate('invoice.moreActions')}</span>}
+                items={[
+                  {
+                    id: 'print',
+                    label: translate('invoice.print'),
+                    onSelect: triggerPrint,
+                    testId: 'invoice-overview-card-print',
+                  },
+                  {
+                    id: 'pdf',
+                    label: translate('invoice.savePdf'),
+                    onSelect: triggerPdf,
+                    testId: 'invoice-overview-card-pdf',
+                  },
+                ]}
+              />
+              {invoice.archiveDocumentId && (
+                <Link to={`/dokumente/${invoice.archiveDocumentId}`}>
+                  <Button type="button" size="sm" variant="outline">
+                    {translate('overview.archive')}
+                  </Button>
+                </Link>
+              )}
+            </div>
+          </>
+        }
+      />
       <InvoicePaymentForm
         vorgangId={currentItem.vorgangId}
         invoice={invoice}
