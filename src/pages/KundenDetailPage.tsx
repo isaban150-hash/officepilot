@@ -211,6 +211,9 @@ export function KundenDetailPage({ kind }: { kind: KundenIdentityKind }) {
         primaryAction={editAction}
       />
 
+      {/* VISUAL-POLISH-01C — Desktop zweispaltig: Stammdaten und Baustellen links, Arbeit (Aufträge, Rechnungen, Dokumente, Aufgaben) rechts. */}
+      <div className="work-detail-grid work-detail-grid--side-first kunden-detail__grid">
+      <div className="work-detail-grid__side">
       <DetailSection title={translate('kunden.detail.contactTitle')} testId="kunden-contact">
         {editableCustomer && editing ? (
           <CustomerEditForm
@@ -249,7 +252,9 @@ export function KundenDetailPage({ kind }: { kind: KundenIdentityKind }) {
           </BusinessList>
         )}
       </DetailSection>
+      </div>
 
+      <div className="work-detail-grid__main">
       <DetailSection title={translate('kunden.detail.openOrdersTitle')} testId="kunden-vorgaenge-open">
         {workspace.openVorgaenge.length === 0 ? (
           <p className="detail-empty">{translate('kunden.detail.openOrdersEmpty')}</p>
@@ -340,6 +345,8 @@ export function KundenDetailPage({ kind }: { kind: KundenIdentityKind }) {
           </BusinessList>
         )}
       </DetailSection>
+      </div>
+      </div>
     </Page>
   );
 }

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Button } from '../../ui/Button';
 import {
   buildDocumentReviewChecks,
@@ -28,7 +28,7 @@ import { DocumentReviewChecks } from './DocumentReviewChecks';
 import { DocumentReviewHero } from './DocumentReviewHero';
 import { DocumentReviewRecommendations } from './DocumentReviewRecommendations';
 import { DocumentReviewSuccess } from './DocumentReviewSuccess';
-import { ReviewMoreOptionsShell } from './CollapsibleReviewSection';
+import { ReviewDetailsGroup, ReviewMoreOptionsShell } from './CollapsibleReviewSection';
 import { ContractOrderProposalPanel } from './ContractOrderProposalPanel';
 import { DocumentExperienceCard } from './DocumentExperienceCard';
 import { buildDocumentLeadText } from '../../../services/documentLeadText';
@@ -180,29 +180,50 @@ export function DocumentReviewExperience({
   const leadText =
     buildDocumentLeadText(summary, translate) ?? nextStepDetail?.proseText?.trim() ?? undefined;
 
+  /*
+   * VISUAL-POLISH-01C — die Details beantworten zuerst „Sind die Angaben
+   * plausibel?" (Bitte kurz prüfen) und legen die lange Empfehlung samt
+   * Hinweis unter „Warum diese Empfehlung?" ab. Inhalte und Datenquellen
+   * (nextStep, Unsicherheiten, Erklärung, Empfehlung) sind unverändert; die
+   * Gruppe bleibt im DOM, nur ausgeblendet.
+   */
+  const [whyExpanded, setWhyExpanded] = useState(false);
+  const hasUncertainty = overview.uncertaintyLines.length > 0 || overview.recognitionUncertain;
+  const checkList = hasUncertainty ? (
+    <section className="review-check-list" data-testid="document-experience-check-list">
+      <h3 className="review-check-list__title">{translate('reviewWorkflow.section.checkBriefly')}</h3>
+      <ul data-testid="document-experience-detail-uncertainty">
+        {overview.recognitionUncertain ? (
+          <li>{translate('operationalOverview.uncertainty.recognition')}</li>
+        ) : null}
+        {overview.uncertaintyLines.map((line) => (
+          <li key={line}>{line}</li>
+        ))}
+      </ul>
+    </section>
+  ) : null;
   const detailsBody = (
     <>
-      {/*
-        * 01D — der vollständige Satz an Hinweisen bleibt hier erhalten,
-        * inklusive der Angaben, die oben bewusst nicht mehr prominent stehen.
-        */}
-      {nextStepDetail?.proseText ? (
-        <p data-testid="document-experience-next-step">
-          <strong>{translate('documentExperience.details.nextStep')}: </strong>
-          {nextStepDetail.proseText}
-        </p>
-      ) : null}
-      {overview.uncertaintyLines.length > 0 || overview.recognitionUncertain ? (
-        <ul data-testid="document-experience-detail-uncertainty">
-          {overview.recognitionUncertain ? (
-            <li>{translate('operationalOverview.uncertainty.recognition')}</li>
-          ) : null}
-          {overview.uncertaintyLines.map((line) => (
-            <li key={line}>{line}</li>
-          ))}
-        </ul>
-      ) : null}
-      {experienceDetailsExtra}
+      {/* „Sind die Angaben plausibel?" — ein Bereich, ganz oben in den Details (R18: nicht im Hauptbereich). */}
+      {checkList}
+      <ReviewDetailsGroup
+        id="why-recommendation"
+        title={translate('reviewWorkflow.section.whyRecommendation')}
+        expanded={whyExpanded}
+        onToggle={() => setWhyExpanded((open) => !open)}
+      >
+        {/*
+          * 01D — der vollständige Satz an Hinweisen bleibt hier erhalten,
+          * inklusive der Angaben, die oben bewusst nicht mehr prominent stehen.
+          */}
+        {nextStepDetail?.proseText ? (
+          <p data-testid="document-experience-next-step">
+            <strong>{translate('documentExperience.details.nextStep')}: </strong>
+            {nextStepDetail.proseText}
+          </p>
+        ) : null}
+        {experienceDetailsExtra}
+      </ReviewDetailsGroup>
     </>
   );
 

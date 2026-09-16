@@ -3,7 +3,7 @@
 Kompakte Übergabedatei zwischen Claude Code, ChatGPT und dem Nutzer.
 Keine Projektdokumentation, keine Historie — nur der aktuelle Stand.
 
-Stand: 2026-09-16
+Stand: 2026-09-17
 
 ---
 
@@ -20,21 +20,21 @@ Stand: 2026-09-16
 ## 2. Aktueller Git-Stand
 
 - Branch: `main`
-- HEAD bei Erstellung dieser Datei: `6cb1611` — fix(product): harden sync tasks navigation and lists
-- origin/main: identisch mit lokalem `main` (`6cb1611`), nichts ausstehend
-- Arbeitskopie: VISUAL-POLISH-01B ist implementiert, aber noch nicht committet
+- Letzter bestätigter Commit (HEAD): `0886002` — feat(ui): polish today dashboard and shell (Block A)
+- origin/main: identisch mit lokalem `main` (`0886002`), nichts ausstehend
+- Arbeitskopie: VISUAL-POLISH-01C (Block B) ist implementiert, aber **noch nicht committet**
   (siehe Abschnitt 3)
 
 ## 3. Aktiver Arbeitsblock
 
-- Block: VISUAL-POLISH-01B — Block A des Visual-Polish
-- Ziel: „Heute“ als Referenzseite (Navy Trust), Kopfzeile mit integrierter
-  Suche, zweispaltiges Desktop-Layout, Prioritätenfläche, Kennzahlen,
-  Schnellaktionen, kompakter Assistent, kompakter Wiederaufnahme-Hinweis
-- Status: implementiert; gezielte Tests grün; tsc grün; Browser-Selbstabnahme
-  auf Desktop (1280), Android (Galaxy S24) und iOS (WebKit) durchgeführt
-- Noch offene Abnahme: Commit durch den Nutzer; danach unabhängiger
-  Produkttest (ChatGPT Work) auf dem committeten Stand
+- Block: VISUAL-POLISH-01C — Block B (Kernarbeitsseiten, Listen und Details) — **uncommittet**
+- Ziel: Eingang, Aufträge, Rechnungen, Dokumente, Finanzen, Kunden, Ausgaben sowie
+  Dokument-, Rechnungs-, Auftrags-, Eingangs- und Kundendetail auf das Niveau von „Heute"
+  (Zeilenlisten, Kennzahlenflächen, Zweispalten-Details, eine Hauptaktion, keine Kartenwand)
+- Status: implementiert (neues `src/styles/workpages.css` + gezielte Markup-Umbauten);
+  gezielte Tests grün, tsc grün; Browser-Selbstabnahme Desktop 1280 / Galaxy 360 / iOS ohne
+  horizontalen Überlauf
+- Noch offene Abnahme: Commit durch den Nutzer; danach unabhängiger Produkttest (ChatGPT Work)
 
 ## 4. Abgeschlossene wichtige Blöcke
 
@@ -48,7 +48,8 @@ Stand: 2026-09-16
 | Generated Invoice Document Explanation (REAL-PRODUCT-TEST-01C) | `ad65461` | eigene Ausgangsrechnung in der Dokumentansicht erklärt |
 | Real Product Test Hardening (REAL-PRODUCT-TEST-01D) | `6cb1611` | Sync-Status, Aufgaben heute/überfällig, Scroll-Wiederherstellung, Aufträge-Hauptaktion, Rechnungsidentifikation, Kunden-Unterscheidung |
 | Visual Polish Analyse (VISUAL-POLISH-01A) | ohne Commit (Analyse) | Zielbilder und Drei-Block-Plan A/B/C |
-| Visual Polish Block A (VISUAL-POLISH-01B) | noch nicht committet | Heute + Shell/Header/Suche + Kennzahlen/Prioritäten + kompakter Wiederaufnahme-Hinweis |
+| Visual Polish Block A (VISUAL-POLISH-01B) | `0886002` | Heute + Shell/Header/Suche + Kennzahlen/Prioritäten + kompakter Wiederaufnahme-Hinweis |
+| Visual Polish Block B (VISUAL-POLISH-01C) | noch nicht committet | Listen als Zeilen, Kennzahlenflächen (Rechnungen/Finanzen/Ausgaben), Dokumentdetail nach fünf Fragen, Rechnungs-/Auftrags-/Kundendetail zweispaltig |
 
 ## 5. Verbindliche Produkt-/Designregeln
 
@@ -99,10 +100,8 @@ committen. Nur der Nutzer entscheidet ausdrücklich darüber.
 
 ## 8. Offene Roadmap
 
-A. Visual Polish Block A — Heute, Shell/Header/Suche, zentrale Grundlagen,
-   kompakter Wiederaufnahme-Hinweis (implementiert, Commit offen)
-B. Visual Polish Block B — Listen- und Detailseiten (Eingang, Aufträge,
-   Rechnungen, Dokumente, Kunden) auf dieselbe Qualität heben
+A. Visual Polish Block A — committet (`0886002`)
+B. Visual Polish Block B — Listen- und Detailseiten (implementiert, Commit offen)
 C. Visual Polish Block C — Sekundärbereiche (Finanzen, Steuerberater,
    Einstellungen, Assistent, Wissen, Sync, Mehr)
 D. Erneuter echter Browser-Produkttest (ChatGPT Work) auf dem polierten Stand

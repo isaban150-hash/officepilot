@@ -2,12 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { InvoiceOverviewCard } from '../components/invoice/InvoiceOverviewCard';
 import { Button } from '../components/ui/Button';
-import { DataRow, PageHeader } from '../components/ui/Card';
+import { PageHeader } from '../components/ui/Card';
+import { KpiRow, KpiTile } from '../components/ui/Kpi';
 import { MoneyDisplay } from '../components/ui/Display';
 import { EmptyStateBlock } from '../components/ui/EmptyStateBlock';
 import { BusinessList } from '../components/ui/Lists';
 import { Page, PageToolbar } from '../components/ui/Page';
-import { DetailSection, SummaryList } from '../components/ui/Section';
 import { InlineNotice } from '../components/ui/States';
 import { FilterChips, SearchField } from '../components/ui/Toolbar';
 import { useApp } from '../context/AppContext';
@@ -100,15 +100,33 @@ export function OffeneRechnungenPage() {
         </InlineNotice>
       )}
 
-      <DetailSection title={translate('invoices.list.summaryTitle')} surface testId="rechnungen-summary">
-        <SummaryList>
-          <DataRow label={translate('overview.openReceivables')} value={<MoneyDisplay value={totals.openReceivables} emphasis />} />
-          <DataRow label={translate('overview.overdueReceivables')} value={<MoneyDisplay value={totals.overdueReceivables} />} />
-          <DataRow label={translate('overview.paidTotal')} value={<MoneyDisplay value={totals.paidTotal} />} />
-          <DataRow label={translate('overview.openInvoiceCount')} value={String(totals.openInvoiceCount)} />
-          <DataRow label={translate('overview.totalInvoiceCount')} value={String(totals.totalInvoiceCount)} />
-        </SummaryList>
-      </DetailSection>
+      {/* VISUAL-POLISH-01C — Zahlungsstand als Kennzahlenfläche (Kpi-Primitives aus Block A), keine Kartenwand. */}
+      <KpiRow testId="rechnungen-summary" ariaLabel={translate('invoices.list.summaryTitle')} className="work-kpis work-kpis--4">
+        <KpiTile
+          label={translate('overview.openReceivables')}
+          value={<MoneyDisplay value={totals.openReceivables} />}
+          hint={translate('heute.kpi.openInvoicesHint').replace('{count}', String(totals.openInvoiceCount))}
+          testId="rechnungen-kpi-open"
+        />
+        <KpiTile
+          label={translate('overview.overdueReceivables')}
+          value={<MoneyDisplay value={totals.overdueReceivables} />}
+          hint={translate('heute.kpi.overdueHint').replace('{count}', String(totals.overdueInvoiceCount))}
+          tone={totals.overdueInvoiceCount > 0 ? 'critical' : 'neutral'}
+          testId="rechnungen-kpi-overdue"
+        />
+        <KpiTile
+          label={translate('overview.paidTotal')}
+          value={<MoneyDisplay value={totals.paidTotal} />}
+          tone="positive"
+          testId="rechnungen-kpi-paid"
+        />
+        <KpiTile
+          label={translate('overview.totalInvoiceCount')}
+          value={String(totals.totalInvoiceCount)}
+          testId="rechnungen-kpi-total"
+        />
+      </KpiRow>
 
       <PageToolbar
         search={
@@ -138,9 +156,9 @@ export function OffeneRechnungenPage() {
         </BusinessList>
       )}
 
-      <div className="detail-actions">
+      <div className="detail-actions work-footer-link">
         <Link to="/vorgaenge">
-          <Button variant="outline">{translate('overview.backToVorgaenge')}</Button>
+          <Button variant="ghost" size="sm">{translate('overview.backToVorgaenge')}</Button>
         </Link>
       </div>
     </Page>

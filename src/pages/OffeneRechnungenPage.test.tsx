@@ -108,12 +108,13 @@ describe('OffeneRechnungenPage', () => {
 
   it('renders KPI cards and totals', () => {
     const html = renderPage();
-    /* 01E — Titel „Rechnungen“ (Gesamtübersicht), Zahlungsstand als SummaryList. */
+    /* 01E — Titel „Rechnungen“; VISUAL-POLISH-01C — Zahlungsstand als Kennzahlenfläche (KpiRow). */
     expect(html).toContain('>Rechnungen</h1>');
+    expect(html).toContain('data-testid="rechnungen-summary"');
     expect(html).toContain('Offene Forderungen');
     expect(html).toContain('Überfällige Forderungen');
     expect(html).toContain('Bereits bezahlt');
-    expect(html).toContain('Anzahl offener Rechnungen');
+    expect(html).toContain('offene Rechnungen');
     expect(html).toContain('Gesamtzahl Rechnungen');
   });
 
@@ -184,7 +185,8 @@ describe('InvoiceOverviewCard', () => {
     expect(html).toContain('Seiten Kunde');
     expect(html).toContain('href="/vorgaenge/v-card"');
     expect(html).toContain('payment.totalDue');
-    expect(html).toContain('payment.openAmount');
+    /* VISUAL-POLISH-01C — der offene Betrag ist die Hauptzahl rechts; Arbeitsstatus bleibt in den Kennzahlen. */
+    expect(html).toContain('payment.workflowStatus');
     expect(html).toContain('invoice.open');
     expect(html).toContain('payment.recordShort');
     expect(html).toContain('invoice.moreActions');

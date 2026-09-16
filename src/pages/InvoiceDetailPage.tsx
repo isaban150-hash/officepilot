@@ -660,6 +660,9 @@ export function InvoiceDetailPage() {
           testId="invoice-detail-header"
         />
 
+        {/* VISUAL-POLISH-01C — Desktop zweispaltig: links nächste Aktion und Versand, rechts Betrag & Zahlung. */}
+        <div className="work-detail-grid invoice-detail__grid">
+        <div className="work-detail-grid__main">
         <DetailExperienceCard
           recognizedTitle={printModel.documentTitle}
           recognizedSummary={`${printModel.invoiceNumber} · ${
@@ -684,7 +687,9 @@ export function InvoiceDetailPage() {
           hideIdentity
           testId="invoice-detail-experience"
         />
+        </div>
 
+        <div className="work-detail-grid__side">
         <DetailSection title={translate('invoiceDetail.section.payment')} surface testId="invoice-detail-section-payment">
           <InvoicePaymentSummary invoice={invoice} translate={translate} />
           <InvoicePaymentHistory
@@ -695,6 +700,8 @@ export function InvoiceDetailPage() {
             onSecurePayment={handleSecurePayment}
           />
         </DetailSection>
+        </div>
+        </div>
 
         <ShowMoreSection
           expanded={showDetails}

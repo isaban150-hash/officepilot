@@ -54,7 +54,7 @@ import { isConfirmedReplyDraftSupported } from '../services/documentConfirmedRep
 import { createDocumentReplyDraftHandoffLocationState } from '../services/documentReplyDraftHandoffService';
 import type { DocumentFieldFillConfirmRow } from '../types/documentFieldFillConfirm';
 import type { DocumentFieldFillFreeTextBridgeProposal } from '../types/documentFieldFillFreeTextBridge';
-import { CollapsibleReviewSection } from '../components/inbox/review/CollapsibleReviewSection';
+import { CollapsibleReviewSection, ReviewDetailsGroup } from '../components/inbox/review/CollapsibleReviewSection';
 import { DocumentReviewExperience } from '../components/inbox/review/DocumentReviewExperience';
 import { DocumentFinanceReferencePanel } from '../components/inbox/DocumentFinanceReferencePanel';
 import {
@@ -171,7 +171,9 @@ type ReviewSectionId =
   | 'field-confirm'
   | 'original-document'
   | 'reply-draft'
-  | 'administration';
+  | 'administration'
+  // VISUAL-POLISH-01C — Gruppe „Weitere Details" (technische/seltene Bereiche).
+  | 'more-details';
 
 /**
  * Shared wording for the blocked import — used by both the confirm-import and
@@ -1909,10 +1911,15 @@ export function EingangDetailPage() {
         </CollapsibleReviewSection>
       ) : null}
 
-      {/*
-        * Verwaltung: irreversible Wege gehören nach unten, nicht über den
-        * Inhalt. Die vorhandenen Bestätigungsdialoge bleiben unverändert.
-        */}
+    </>
+  );
+
+  /*
+   * VISUAL-POLISH-01C — Verwaltung (irreversible Wege) liegt mit den
+   * technischen Bereichen unter „Weitere Details"; die Bestätigungsdialoge
+   * bleiben unverändert.
+   */
+  const administrationSection = (
       <CollapsibleReviewSection
         id="administration"
         title={translate('reviewWorkflow.section.administration')}
@@ -1956,7 +1963,6 @@ export function EingangDetailPage() {
           </Button>
         </div>
       </CollapsibleReviewSection>
-    </>
   );
 
   const reviewExperience = (
@@ -2039,10 +2045,25 @@ export function EingangDetailPage() {
       onLinkVorgang={() => setVorgangDialogRequest((n) => n + 1)}
       onCreateTask={handleCreateTask}
       onCheckPayment={handleCheckPayment}
+      /*
+       * VISUAL-POLISH-01C — unter „Weitere Optionen" stehen primär nur
+       * Angaben prüfen, Originaldokument und (falls vorhanden) der
+       * Antwortentwurf. Dokumentdaten, Originaltext, Kommunikation, Aufgaben,
+       * Positionen, Archiv, Technik und Verwaltung liegen gebündelt unter
+       * „Weitere Details" — im DOM erhalten, nur ausgeblendet.
+       */
       moreOptionsContent={
         <>
-          {moreOptionsContent}
           {canonicalDetailsSections}
+          <ReviewDetailsGroup
+            id="more-details"
+            title={translate('reviewWorkflow.section.moreDetails')}
+            expanded={Boolean(expandedSections['more-details'])}
+            onToggle={() => toggleSection('more-details')}
+          >
+            {moreOptionsContent}
+            {administrationSection}
+          </ReviewDetailsGroup>
         </>
       }
       /*

@@ -118,6 +118,11 @@ export function InvoiceOverviewCard({
         amount={<MoneyDisplay value={paymentSummary.openAmount} emphasis />}
         footer={
           <>
+            {/*
+              * VISUAL-POLISH-01C — geschäftlich lesbar in einer Zeile: Rechnungsdatum,
+              * Gesamt, bezahlt (nur wenn etwas bezahlt ist), Arbeitsstatus. Der
+              * offene Betrag steht bereits rechts als Hauptzahl.
+              */}
             <dl className="business-list__figures" data-testid="invoice-overview-card-figures">
               <div>
                 <dt>{translate('invoice.issueDate')}</dt>
@@ -131,18 +136,14 @@ export function InvoiceOverviewCard({
                   <MoneyDisplay value={paymentSummary.totalDue} />
                 </dd>
               </div>
-              <div>
-                <dt>{translate('payment.paidAmount')}</dt>
-                <dd>
-                  <MoneyDisplay value={paymentSummary.paidAmount} />
-                </dd>
-              </div>
-              <div>
-                <dt>{translate('payment.openAmount')}</dt>
-                <dd>
-                  <MoneyDisplay value={paymentSummary.openAmount} />
-                </dd>
-              </div>
+              {paymentSummary.paidAmount > 0 ? (
+                <div>
+                  <dt>{translate('payment.paidAmount')}</dt>
+                  <dd>
+                    <MoneyDisplay value={paymentSummary.paidAmount} />
+                  </dd>
+                </div>
+              ) : null}
               <div>
                 <dt>{translate('payment.workflowStatus')}</dt>
                 <dd>{workflowStatusLabel(invoice.status, translate)}</dd>
@@ -184,8 +185,8 @@ export function InvoiceOverviewCard({
                 ]}
               />
               {invoice.archiveDocumentId && (
-                <Link to={`/dokumente/${invoice.archiveDocumentId}`}>
-                  <Button type="button" size="sm" variant="outline">
+                <Link to={`/dokumente/${invoice.archiveDocumentId}`} className="invoice-overview-card__archive">
+                  <Button type="button" size="sm" variant="ghost">
                     {translate('overview.archive')}
                   </Button>
                 </Link>

@@ -72,8 +72,9 @@ describe('UIUX-FOUNDATION-01E — Heute (A/O)', () => {
   it('PageHeader mit einer Hauptaktion, Sections, Offene Arbeit als Zeilen, keine Kacheln oder Emojis', () => {
     const html = renderToStaticMarkup(withProviders(<HeutePage />));
     expect(html).toContain('data-testid="heute-page"');
-    expect(html).toContain('<h1 class="page-header__title">');
-    expect(html.match(/page-header__actions/g)).toHaveLength(1);
+    /* VISUAL-POLISH-01B — Heute hat einen eigenen Kopf (Begrüßung) mit genau einer Hauptaktion. */
+    expect(html).toContain('<h1 class="heute-head__title">');
+    expect(html.match(/heute-head__actions/g)).toHaveLength(1);
     expect(html).toContain('data-testid="home-card-add-document"');
     for (const id of ['heute-section-attention', 'heute-section-open-work', 'heute-section-quick', 'home-open-work']) {
       expect(html).toContain(`data-testid="${id}"`);

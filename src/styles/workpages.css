@@ -1,0 +1,1941 @@
+/* ======================================================================
+   VISUAL-POLISH-01C — Block B: Kernarbeitsseiten, Listen und Details
+   Dieselbe Produktfamilie wie „Heute": tiefes Navy, Teal als Akzent,
+   klare Typografie-Hierarchie, wenige zusammenhängende Flächen, Zeilen statt
+   Karten, Desktop nutzt die Breite, Mobile ist eine eigene Anordnung.
+   Reine Darstellung — keine Fachlogik, keine Datenmodelle.
+   ====================================================================== */
+
+/* ----------------------------------------------------------------------
+   1. Seitenkopf (alle Arbeitsseiten)
+   ---------------------------------------------------------------------- */
+.app-shell__main .page-header {
+  margin-bottom: var(--space-5);
+}
+
+.app-shell__main .page-header__back {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--op-text-subtle);
+}
+
+.app-shell__main .page-header__back:hover {
+  color: var(--op-primary);
+}
+
+.app-shell__main .page-header__eyebrow {
+  margin: 0 0 2px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--op-secondary);
+}
+
+.app-shell__main .page-header__title {
+  font-size: 26px;
+  line-height: 1.2;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  color: var(--op-text);
+}
+
+.app-shell__main .page-header__subtitle {
+  margin: 2px 0 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--op-text-subtle);
+}
+
+.app-shell__main .page-header__summary {
+  color: var(--op-text-muted);
+  font-weight: 500;
+}
+
+.app-shell__main .page-header__status .status-badge {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-radius: 6px;
+}
+
+/* Eine Hauptaktion, normale Breite — keine Vollbreitenbuttons ab Tablet. */
+@media (min-width: 768px) {
+  .app-shell__main .page-header__primary .btn,
+  .app-shell__main .page-header__secondary .btn,
+  .app-shell__main .page-header__primary > a,
+  .app-shell__main .page-header__secondary > a {
+    width: auto;
+  }
+
+  .app-shell__main .page-header__primary .btn.btn--full,
+  .app-shell__main .page-header__secondary .btn.btn--full {
+    width: auto;
+  }
+
+  .app-shell__main .page-header__actions {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .app-shell__main .page-header__secondary .btn {
+    border-color: transparent;
+    background: transparent;
+    color: var(--op-primary);
+  }
+
+  .app-shell__main .page-header__secondary .btn:hover {
+    background: var(--op-primary-subtle);
+  }
+}
+
+@media (max-width: 767px) {
+  .app-shell__main .page-header__title {
+    font-size: 22px;
+  }
+
+  .app-shell__main .page-header__primary .btn,
+  .app-shell__main .page-header__secondary .btn {
+    width: auto;
+    min-height: 40px;
+    font-size: 14px;
+  }
+
+  .app-shell__main .page-header__actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+}
+
+/* ----------------------------------------------------------------------
+   2. Werkzeugzeile: kompakte Suche, ruhige Filter
+   ---------------------------------------------------------------------- */
+.app-shell__main .page-toolbar {
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.app-shell__main .search-field__input,
+.app-shell__main .search-field .input {
+  min-height: 40px;
+  font-size: 14px;
+  border-color: var(--op-border);
+  background: var(--op-surface);
+}
+
+.app-shell__main .search-field__input:focus,
+.app-shell__main .search-field .input:focus {
+  border-color: var(--op-primary);
+}
+
+.app-shell__main .filter-chips {
+  gap: var(--space-1);
+}
+
+.app-shell__main .filter-chips .chip {
+  min-height: 32px;
+  padding: 4px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--op-text-muted);
+  background: transparent;
+  border: 1px solid var(--op-border);
+  box-shadow: none;
+}
+
+.app-shell__main .filter-chips .chip:hover {
+  border-color: var(--op-border-strong);
+  color: var(--op-text);
+}
+
+.app-shell__main .filter-chips .chip--active {
+  color: var(--op-primary);
+  background: var(--op-primary-subtle);
+  border-color: #c7d2ec;
+}
+
+.work-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+}
+
+.work-filters__more {
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--op-primary);
+  background: transparent;
+  border: 0;
+  padding: 4px 6px;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.work-filters__more:hover {
+  background: var(--op-primary-subtle);
+}
+
+/* ----------------------------------------------------------------------
+   3. Kennzahlen auf Arbeitsseiten (dieselben Primitives wie „Heute")
+   ---------------------------------------------------------------------- */
+.work-kpis {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  margin-bottom: var(--space-5);
+  background: var(--op-surface);
+  border: 1px solid var(--op-border);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.work-kpis .kpi-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+  padding: var(--space-3) var(--space-4);
+  border: 0;
+  border-radius: 0;
+  border-bottom: 1px solid var(--op-border);
+  background: transparent;
+  color: inherit;
+  text-decoration: none;
+  position: relative;
+}
+
+.work-kpis .kpi-tile:nth-child(odd) {
+  border-right: 1px solid var(--op-border);
+}
+
+.work-kpis .kpi-tile:nth-last-child(-n + 2) {
+  border-bottom: 0;
+}
+
+.work-kpis .kpi-tile__label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--op-text-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.work-kpis .kpi-tile__value {
+  margin-top: 2px;
+  font-size: 24px;
+  line-height: 1.1;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--op-text);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.work-kpis .kpi-tile__value .money,
+.work-kpis .kpi-tile__value .money-display {
+  font: inherit;
+  color: inherit;
+  white-space: nowrap;
+}
+
+.work-kpis .kpi-tile--critical .kpi-tile__value {
+  color: var(--op-critical);
+}
+
+.work-kpis .kpi-tile--positive .kpi-tile__value {
+  color: var(--op-secondary);
+}
+
+.work-kpis .kpi-tile__hint {
+  font-size: 12px;
+  color: var(--op-text-subtle);
+}
+
+.work-kpis .kpi-tile__progress {
+  display: block;
+  height: 3px;
+  margin-top: var(--space-2);
+  border-radius: 2px;
+  background: var(--op-surface-sunken);
+  overflow: hidden;
+}
+
+.work-kpis .kpi-tile__progress-bar {
+  display: block;
+  height: 100%;
+  background: var(--op-secondary);
+}
+
+.work-kpis .kpi-tile__chevron {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  color: var(--op-text-subtle);
+  opacity: 0;
+}
+
+.work-kpis .kpi-tile--interactive:hover {
+  background: var(--op-surface-sunken);
+}
+
+.work-kpis .kpi-tile--interactive:hover .kpi-tile__chevron {
+  opacity: 1;
+}
+
+@media (min-width: 900px) {
+  .work-kpis--4 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .work-kpis--4 .kpi-tile {
+    border-bottom: 0;
+    border-right: 1px solid var(--op-border);
+  }
+
+  .work-kpis--4 .kpi-tile:nth-child(odd) {
+    border-right: 1px solid var(--op-border);
+  }
+
+  .work-kpis--4 .kpi-tile:last-child {
+    border-right: 0;
+  }
+}
+
+/* ----------------------------------------------------------------------
+   4. Hauptlisten: Zeilen statt Karten, Geschäftszahlen sofort vergleichbar
+   ---------------------------------------------------------------------- */
+.app-shell__main .business-list {
+  border-radius: 14px;
+}
+
+.app-shell__main .business-list__item {
+  padding: var(--space-3) var(--space-4);
+  row-gap: var(--space-1);
+}
+
+.app-shell__main .business-list__leading {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  color: var(--op-text-subtle);
+}
+
+.app-shell__main .business-list__title {
+  font-size: 15px;
+  letter-spacing: -0.01em;
+}
+
+.app-shell__main .business-list__title a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.app-shell__main .business-list__subtitle {
+  font-size: 13px;
+  color: var(--op-text-subtle);
+}
+
+.app-shell__main .business-list__subtitle a {
+  color: var(--op-text-muted);
+  text-decoration: none;
+}
+
+.app-shell__main .business-list__meta {
+  font-size: 12px;
+  color: var(--op-text-subtle);
+}
+
+.app-shell__main .business-list__date {
+  font-size: 12.5px;
+  color: var(--op-text-subtle);
+  white-space: nowrap;
+}
+
+.app-shell__main .business-list__amount {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--op-text);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.app-shell__main .business-list__amount .money,
+.app-shell__main .business-list__amount .money-display {
+  font: inherit;
+  color: inherit;
+}
+
+.app-shell__main .business-list__status .status-badge {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  border-radius: 6px;
+}
+
+.app-shell__main .business-list__chevron {
+  color: var(--op-border-strong);
+}
+
+.app-shell__main .business-list__item--interactive:hover .business-list__chevron {
+  color: var(--op-primary);
+}
+
+.app-shell__main .business-list__footer {
+  border-top: 0;
+  padding-top: var(--space-1);
+  gap: var(--space-2) var(--space-3);
+}
+
+.app-shell__main .business-list__figures {
+  font-size: 12.5px;
+  color: var(--op-text-subtle);
+  gap: 2px var(--space-3);
+}
+
+.app-shell__main .business-list__figures dd {
+  color: var(--op-text-muted);
+  font-weight: 500;
+}
+
+/* Kompakte Zeilenaktionen: eine kleine Hauptaktion, Rest dezent */
+.app-shell__main .invoice-overview-card__actions,
+.app-shell__main .expense-overview-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: auto;
+}
+
+.app-shell__main .invoice-overview-card__actions .btn,
+.app-shell__main .expense-overview-card__actions .btn {
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 12.5px;
+}
+
+.app-shell__main .invoice-overview-card__actions .dropdown-menu__trigger,
+.app-shell__main .expense-overview-card__actions .dropdown-menu__trigger {
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 12.5px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--op-text-muted);
+  box-shadow: none;
+}
+
+.app-shell__main .invoice-overview-card__actions .dropdown-menu__trigger:hover,
+.app-shell__main .expense-overview-card__actions .dropdown-menu__trigger:hover {
+  background: var(--op-surface-sunken);
+  color: var(--op-text);
+}
+
+.app-shell__main .invoice-overview-card__archive {
+  text-decoration: none;
+}
+
+/* Desktop: echte horizontale Informationsstruktur — Identität | Status · Datum · Betrag | Chevron */
+@media (min-width: 1024px) {
+  .app-shell__main .business-list__item {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas: 'identity facts chevron';
+    column-gap: var(--space-5);
+    padding: var(--space-3) var(--space-5);
+  }
+
+  .app-shell__main .business-list__item:has(.business-list__footer) {
+    grid-template-areas:
+      'identity facts chevron'
+      'footer footer footer';
+  }
+
+  .app-shell__main .business-list__facts {
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+    gap: var(--space-4);
+  }
+
+  .app-shell__main .business-list__date {
+    order: 1;
+  }
+
+  .app-shell__main .business-list__status {
+    order: 2;
+  }
+
+  .app-shell__main .business-list__amount {
+    order: 3;
+    min-width: 96px;
+    text-align: right;
+    font-size: 16px;
+  }
+
+  .app-shell__main .business-list__footer {
+    padding-top: 0;
+  }
+}
+
+/* Mobile: Titel, wichtigste Meta, Betrag/Status kompakt in einer Zeile */
+@media (max-width: 1023px) {
+  .app-shell__main .business-list__facts {
+    justify-content: space-between;
+  }
+
+  .app-shell__main .business-list__amount {
+    margin-left: auto;
+  }
+}
+
+/* Leere Zustände: ruhig, keine große Karte */
+.app-shell__main .empty-state-block {
+  border: 1px dashed var(--op-border-strong);
+  border-radius: 14px;
+  background: transparent;
+  box-shadow: none;
+  padding: var(--space-6) var(--space-4);
+  text-align: center;
+}
+
+.app-shell__main .empty-state-block__title {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.app-shell__main .empty-state-block__desc {
+  font-size: 13.5px;
+  color: var(--op-text-subtle);
+}
+
+@media (min-width: 768px) {
+  .app-shell__main .empty-state-block__actions {
+    display: flex;
+    justify-content: center;
+    gap: var(--space-2);
+  }
+
+  .app-shell__main .empty-state-block__actions .btn,
+  .app-shell__main .empty-state-block__actions a {
+    width: auto;
+  }
+}
+
+/* Fußzeilen-Link (z. B. „Zurück zu Vorgängen") klein und ruhig */
+.work-footer-link {
+  justify-content: flex-start;
+  margin-top: var(--space-2);
+}
+
+/* Abschnittsflächen innerhalb der Arbeitsseiten */
+.app-shell__main .ui-section--surface {
+  border-radius: 14px;
+}
+
+.app-shell__main .ui-section-header__title {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/* Eingang: eine ruhige Fläche je Dokument, keine Karte in der Karte */
+.app-shell__main .card-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.app-shell__main .inbox-card-shell {
+  border: 1px solid var(--op-border);
+  border-radius: 14px;
+  background: var(--op-surface);
+  padding: var(--space-4);
+}
+
+.app-shell__main .inbox-card-shell .card,
+.app-shell__main .inbox-card.document-experience-card--inbox {
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+  margin: 0;
+}
+
+.app-shell__main .document-experience-card__headline {
+  font-size: 17px;
+  letter-spacing: -0.015em;
+}
+
+.app-shell__main .document-experience-card__type {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--op-secondary);
+}
+
+.app-shell__main .document-experience-card__subtitle {
+  font-size: 13.5px;
+  color: var(--op-text-subtle);
+}
+
+@media (min-width: 768px) {
+  .app-shell__main .document-experience-card__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .app-shell__main .document-experience-card__actions .btn,
+  .app-shell__main .document-experience-card__secondary .btn {
+    width: auto;
+  }
+
+  .app-shell__main .document-experience-card__secondary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+}
+
+.app-shell__main .inbox-card-shell .document-open-link {
+  margin-top: var(--space-2);
+  padding-left: 0;
+}
+
+/* ----------------------------------------------------------------------
+   5. Detailseiten: Kopf, zwei Spalten, ruhige Flächen
+   ---------------------------------------------------------------------- */
+.work-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+}
+
+.work-detail-grid__main,
+.work-detail-grid__side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+@media (min-width: 1024px) {
+  .work-detail-grid {
+    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+    column-gap: var(--space-8);
+    align-items: start;
+  }
+}
+
+/* Die alten Erlebnis-Karten als ruhige Flächen: kein Schatten, ein Rand, 14 px */
+.app-shell__main .detail-experience-card {
+  margin: 0;
+}
+
+.app-shell__main .detail-experience-card__inner,
+.app-shell__main .detail-experience-card .card {
+  border: 1px solid var(--op-border);
+  border-radius: 14px;
+  box-shadow: none;
+  padding: var(--space-4);
+}
+
+.app-shell__main .detail-experience-card .card__title,
+.app-shell__main .detail-experience-card h2 {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+.app-shell__main .detail-experience-card .card__meta {
+  font-size: 12.5px;
+  color: var(--op-text-subtle);
+  margin-top: 2px;
+}
+
+.app-shell__main .detail-experience-section {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--op-border);
+}
+
+.app-shell__main .detail-experience-section:first-of-type {
+  margin-top: var(--space-3);
+}
+
+.app-shell__main .detail-experience-section__label {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--op-text-subtle);
+  margin-bottom: 4px;
+}
+
+.app-shell__main .detail-experience-section__value {
+  font-size: 15px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.app-shell__main .detail-experience-section__value--assistant {
+  color: var(--op-text);
+  font-weight: 600;
+}
+
+.app-shell__main .detail-experience-section--paper {
+  background: var(--op-surface-sunken);
+  border: 0;
+  border-radius: 10px;
+  padding: var(--space-3);
+}
+
+.app-shell__main .detail-experience-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+@media (min-width: 768px) {
+  .app-shell__main .detail-experience-actions .btn,
+  .app-shell__main .detail-experience-card__actions .btn {
+    width: auto;
+  }
+}
+
+/* Dokumentdetail — die fünf Fragen */
+.document-detail-page .work-detail-head {
+  margin-bottom: var(--space-5);
+}
+
+/* „Was OfficePilot erledigt hat: liegt im Archiv" ist im Stand-Badge abgebildet — kein eigener Block. */
+.document-detail-page [data-testid='document-detail-experience'] .detail-experience-section:first-of-type {
+  display: none;
+}
+
+.document-detail-page [data-testid='document-detail-experience'] .detail-experience-section:nth-of-type(2) {
+  margin-top: var(--space-3);
+  padding-top: 0;
+  border-top: 0;
+}
+
+/* Muss ich etwas tun? — als Überschrift des Blocks */
+.document-detail-page [data-testid='document-detail-experience'] > .detail-experience-card__inner > .card__title {
+  display: none;
+}
+
+.document-detail-page [data-testid='document-detail-experience'] .detail-experience-section__label {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-transform: none;
+  color: var(--op-text);
+  margin-bottom: var(--space-3);
+}
+
+.document-detail-page [data-testid='document-detail-experience'] .detail-experience-section__value--assistant {
+  font-size: 15px;
+  font-weight: 500;
+  margin-bottom: var(--space-3);
+}
+
+/* Fachliche Erklärung (01C): Inhalt unverändert; Ablage steht genau einmal — in der Ablagefläche. */
+.document-detail-page .document-understanding-card .detail-experience-section--paper {
+  display: none;
+}
+
+.document-detail-page .document-understanding-card .card__meta {
+  display: inline-flex;
+  padding: 1px 8px;
+  border-radius: 6px;
+  background: var(--op-success-subtle);
+  color: var(--op-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-left: var(--space-2);
+}
+
+.document-detail-page .document-understanding-card .card__title {
+  display: inline;
+}
+
+.document-detail-page .document-understanding-meta {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2) var(--space-4);
+}
+
+@media (min-width: 640px) {
+  .document-detail-page .document-understanding-meta {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.document-detail-page .document-understanding-meta__line {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.document-detail-page .document-understanding-meta__label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--op-text-subtle);
+}
+
+.document-detail-page .document-understanding-steps {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.document-detail-page .document-understanding-disclaimer {
+  margin: var(--space-3) 0 0;
+  font-size: 12px;
+  color: var(--op-text-subtle);
+}
+
+/* Auf einen Blick — Fakten als ruhiges Raster */
+.document-detail-page .document-archive-truth-card .card__meta {
+  display: none;
+}
+
+.document-detail-page .document-archive-truth-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.document-detail-page .document-archive-truth-list__item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.document-detail-page .document-archive-truth-badge {
+  flex-shrink: 0;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--op-text-subtle);
+  background: var(--op-surface-sunken);
+  border-radius: 6px;
+  padding: 1px 6px;
+}
+
+.document-detail-page .document-archive-truth-badge--confirmed,
+.document-detail-page .document-archive-truth-badge--corrected {
+  color: var(--op-secondary);
+  background: var(--op-success-subtle);
+}
+
+.document-detail-page .document-archive-truth-badge--conflict {
+  color: var(--op-warning);
+  background: var(--op-warning-subtle);
+}
+
+/* Original — kompakt */
+.document-detail-page .document-detail__original {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.document-detail-page .document-detail__original-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.document-detail-page .document-detail__preview {
+  border: 1px solid var(--op-border);
+  border-radius: 14px;
+  box-shadow: none;
+  padding: var(--space-3);
+}
+
+.document-detail-page .document-detail__preview-hint {
+  font-size: 12.5px;
+  color: var(--op-text-subtle);
+}
+
+/* Ablage — menschlich, einmal; technischer Pfad nur aufklappbar */
+.document-detail-page .document-filing-card .card__meta {
+  display: none;
+}
+
+.document-detail-page .document-filing-card .document-understanding-meta {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2);
+}
+
+.document-detail-page .document-filing-card .detail-experience-section__value {
+  font-size: 14px;
+}
+
+.document-detail-page .document-filing-card .detail-experience-card__actions .btn {
+  width: auto;
+}
+
+.document-detail-page .work-path-details {
+  margin-top: var(--space-1);
+  font-size: 12px;
+  color: var(--op-text-subtle);
+}
+
+.document-detail-page .work-path-details summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.document-detail-page .work-path-details code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11.5px;
+}
+
+/* Frage zum Dokument — kompakter OfficePilot-Eingang, keine große AI-Karte */
+.document-detail-page [data-testid='document-free-question-panel'] {
+  margin-top: var(--space-4);
+  border: 1px solid var(--op-border);
+  border-radius: 14px;
+  background: var(--op-surface);
+  box-shadow: none;
+  padding: var(--space-3) var(--space-4) var(--space-4);
+}
+
+.document-detail-page [data-testid='document-free-question-panel'] h2,
+.document-detail-page [data-testid='document-free-question-panel'] .card__title {
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0 0 var(--space-2);
+}
+
+.document-detail-page [data-testid='document-free-question-panel'] .input {
+  min-height: 40px;
+  font-size: 14px;
+}
+
+.document-detail-page [data-testid='document-free-question-panel'] .btn {
+  min-height: 40px;
+  width: auto;
+}
+
+/* Weitere Details — Textlink statt Vollbreitenbutton */
+.app-shell__main .show-more-section > .btn,
+.app-shell__main .show-more-section > button {
+  width: auto;
+  align-self: flex-start;
+  min-height: 36px;
+  padding: 0 var(--space-2);
+  border: 0;
+  background: transparent;
+  color: var(--op-primary);
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: none;
+}
+
+.app-shell__main .show-more-section > .btn:hover,
+.app-shell__main .show-more-section > button:hover {
+  background: var(--op-primary-subtle);
+}
+
+/* Karten in Detailseiten der Familie: ein Rand, 14 px, kein Schatten */
+.document-detail-page .card,
+.page--invoice-detail .card,
+.vorgang-detail-page .card,
+.kunden-detail-page .card,
+.eingang-detail-page .card,
+.ausgabe-detail-page .card,
+.rechnung-page .card {
+  box-shadow: none;
+  border: 1px solid var(--op-border);
+  border-radius: 14px;
+}
+
+.document-detail-page .detail-actions,
+.page--invoice-detail .detail-actions,
+.vorgang-detail-page .detail-actions,
+.kunden-detail-page .detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+@media (min-width: 768px) {
+  .document-detail-page .detail-actions .btn,
+  .page--invoice-detail .detail-actions .btn,
+  .vorgang-detail-page .detail-actions .btn,
+  .kunden-detail-page .detail-actions .btn {
+    width: auto;
+  }
+}
+
+/* ----------------------------------------------------------------------
+   6. Rechnungsdetail: Fokus Kunde · Nummer · Betrag · Zahlungsstand
+   ---------------------------------------------------------------------- */
+.work-detail-grid--side-first .work-detail-grid__side {
+  order: 0;
+}
+
+.work-detail-grid--side-first .work-detail-grid__main {
+  order: 1;
+}
+
+@media (min-width: 1024px) {
+  .work-detail-grid--side-first {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  }
+}
+
+.page--invoice-detail .invoice-detail__toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* Überblick-Karte: Nächste Schritte als Aktionsreihe, Versand als Abschnitte statt Karte in Karte */
+.page--invoice-detail [data-testid='invoice-detail-experience'] > .detail-experience-card__inner > .card__title {
+  display: none;
+}
+
+.page--invoice-detail [data-testid='invoice-detail-experience'] .detail-experience-section:first-of-type {
+  margin-top: 0;
+}
+
+.page--invoice-detail [data-testid='invoice-detail-experience'] .detail-experience-highlights {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.page--invoice-detail .detail-experience-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.page--invoice-detail .detail-experience-actions > .btn,
+.page--invoice-detail .detail-experience-actions > a > .btn,
+.page--invoice-detail .detail-experience-actions > a {
+  width: auto;
+}
+
+/* Die erste Zeile: Drucken · PDF nebeneinander in normaler Breite */
+@media (min-width: 768px) {
+  .page--invoice-detail .detail-experience-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .page--invoice-detail .detail-experience-actions > .card,
+  .page--invoice-detail .detail-experience-actions > section,
+  .page--invoice-detail .detail-experience-actions > div,
+  .page--invoice-detail .detail-experience-actions > p {
+    flex-basis: 100%;
+  }
+}
+
+.page--invoice-detail .detail-experience-actions .card,
+.page--invoice-detail .detail-experience-actions > section {
+  border: 0;
+  border-top: 1px solid var(--op-border);
+  border-radius: 0;
+  box-shadow: none;
+  padding: var(--space-3) 0 0;
+  margin: 0;
+  background: transparent;
+}
+
+.page--invoice-detail .detail-experience-actions .card__title,
+.page--invoice-detail .detail-experience-actions .card h3,
+.page--invoice-detail .detail-experience-actions .card h2 {
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0 0 2px;
+}
+
+.page--invoice-detail .detail-experience-actions .card p,
+.page--invoice-detail .detail-experience-actions .card .card__meta {
+  font-size: 13px;
+  color: var(--op-text-subtle);
+  text-align: left;
+  margin: 0 0 var(--space-2);
+}
+
+.page--invoice-detail .detail-experience-actions .card .btn,
+.page--invoice-detail .detail-experience-actions .btn--full {
+  width: auto;
+}
+
+.page--invoice-detail .detail-experience-actions .btn--danger,
+.page--invoice-detail .detail-experience-actions .btn[data-variant='danger'] {
+  background: transparent;
+  color: var(--op-critical);
+  border: 1px solid var(--op-border);
+  font-weight: 600;
+}
+
+.page--invoice-detail .detail-experience-actions .btn--danger:hover {
+  background: var(--op-danger-subtle);
+  border-color: var(--op-danger-subtle);
+}
+
+/* Betrag & Zahlung: Zahlen rechts, groß und ruhig */
+.page--invoice-detail .invoice-payment-summary__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.page--invoice-detail .invoice-payment-summary__title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--op-text-subtle);
+}
+
+.page--invoice-detail .invoice-payment-summary__rows {
+  margin: 0;
+  display: grid;
+  gap: 0;
+}
+
+.page--invoice-detail .invoice-payment-summary__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 8px 0;
+  border-top: 1px solid var(--op-border);
+  font-size: 14px;
+}
+
+.page--invoice-detail .invoice-payment-summary__row dt {
+  color: var(--op-text-muted);
+}
+
+.page--invoice-detail .invoice-payment-summary__row dd {
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.page--invoice-detail .invoice-payment-summary__row:last-child dd {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--op-primary);
+}
+
+.page--invoice-detail .invoice-payment-summary__overdue-days {
+  margin: var(--space-2) 0 0;
+  font-size: 13px;
+  color: var(--op-critical);
+  font-weight: 600;
+}
+
+/* ----------------------------------------------------------------------
+   7. Auftragsdetail: klarer Arbeitskontext, Positionen als Zeilen
+   ---------------------------------------------------------------------- */
+.vorgang-detail-page .vorgang-section-nav {
+  gap: var(--space-1);
+  margin-bottom: var(--space-4);
+  border-bottom: 1px solid var(--op-border);
+  padding-bottom: 0;
+}
+
+.vorgang-detail-page .vorgang-section-nav__tab {
+  min-height: 40px;
+  padding: 0 var(--space-3);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--op-text-muted);
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.vorgang-detail-page .vorgang-section-nav__tab--active {
+  color: var(--op-primary);
+  background: transparent;
+  border-bottom-color: var(--op-primary);
+}
+
+.vorgang-detail-page .section {
+  margin: 0 0 var(--space-4);
+}
+
+.vorgang-detail-page .section__title {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.vorgang-detail-page .section__header-row .btn {
+  width: auto;
+  min-height: 36px;
+  font-size: 13px;
+}
+
+.vorgang-detail-page .order-position-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-2) var(--space-5);
+  border: 0;
+  border-top: 1px solid var(--op-border);
+  border-radius: 0;
+  box-shadow: none;
+  padding: var(--space-3) 0;
+  background: transparent;
+}
+
+.vorgang-detail-page .order-position-card:first-of-type {
+  border-top: 0;
+}
+
+.vorgang-detail-page .order-position-card__header {
+  flex-basis: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.vorgang-detail-page .order-position-card__header .card__title {
+  font-size: 15px;
+  margin: 0;
+}
+
+.vorgang-detail-page .order-position-card .data-row {
+  flex: 1 1 120px;
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  gap: 2px;
+}
+
+.vorgang-detail-page .order-position-card .data-row__label {
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  color: var(--op-text-subtle);
+}
+
+.vorgang-detail-page .order-position-card .data-row__value {
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.vorgang-detail-page .order-position-card .invoice-pos-hint,
+.vorgang-detail-page .order-position-card__actions {
+  flex-basis: 100%;
+}
+
+.vorgang-detail-page .order-position-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.vorgang-detail-page .order-position-card__actions .btn {
+  width: auto;
+  min-height: 34px;
+  font-size: 13px;
+}
+
+@media (max-width: 767px) {
+  .vorgang-detail-page .order-position-card .data-row {
+    flex-basis: calc(50% - var(--space-5));
+  }
+}
+
+/* Überblick: Experience und Status nebeneinander ab Desktop */
+@media (min-width: 1024px) {
+  .vorgang-detail-page [data-testid='vorgang-section-panel-overview']:not([hidden]) {
+    display: grid;
+    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+    column-gap: var(--space-8);
+    row-gap: var(--space-4);
+    align-items: start;
+  }
+
+  .vorgang-detail-page [data-testid='vorgang-section-panel-overview'] > * {
+    min-width: 0;
+  }
+
+  .vorgang-detail-page [data-testid='vorgang-section-panel-overview'] > [data-testid='vorgang-detail-experience'] {
+    grid-column: 1;
+    grid-row: 1 / span 6;
+  }
+}
+
+.vorgang-detail-page [data-testid='vorgang-detail-experience'] > .detail-experience-card__inner > .card__title {
+  display: none;
+}
+
+.vorgang-detail-page [data-testid='vorgang-detail-experience'] .detail-experience-section:first-of-type {
+  margin-top: 0;
+}
+
+.vorgang-detail-page .invoice-list-card__actions .btn,
+.vorgang-detail-page .invoice-list-card__actions .dropdown-menu__trigger {
+  min-height: 32px;
+  font-size: 12.5px;
+  width: auto;
+}
+
+/* ----------------------------------------------------------------------
+   8. Eingangsdetail und Ausgabendetail: Aktionen in normaler Breite
+   ---------------------------------------------------------------------- */
+@media (min-width: 768px) {
+  .eingang-detail-page .document-experience-card__actions,
+  .eingang-detail-page .document-experience-card__secondary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .eingang-detail-page .document-experience-card__actions .btn,
+  .eingang-detail-page .document-experience-card__secondary .btn,
+  .eingang-detail-page .btn--full:not(.form-actions .btn) {
+    width: auto;
+  }
+
+  .eingang-detail-page .show-more-section > .btn {
+    width: auto;
+  }
+}
+
+.eingang-detail-page .card {
+  box-shadow: none;
+  border: 1px solid var(--op-border);
+  border-radius: 14px;
+}
+
+.eingang-detail-page .card .card {
+  border: 0;
+  border-top: 1px solid var(--op-border);
+  border-radius: 0;
+  padding: var(--space-3) 0 0;
+}
+
+/* ----------------------------------------------------------------------
+   9. Kunden: Namensgleiche unterscheidbar, Stammdaten ruhig
+   ---------------------------------------------------------------------- */
+.kunden-detail-page .summary-list .data-row {
+  flex-direction: row;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 8px 0;
+  border-bottom: 1px solid var(--op-border);
+}
+
+.kunden-detail-page .summary-list .data-row__label {
+  font-size: 12.5px;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--op-text-subtle);
+}
+
+.kunden-detail-page .summary-list .data-row__value {
+  font-size: 14px;
+  font-weight: 500;
+  text-align: right;
+}
+
+.kunden-detail-page [data-testid='kunden-receivables'] .data-row__value {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--op-primary);
+  letter-spacing: -0.02em;
+}
+
+/* ----------------------------------------------------------------------
+   10. Mobile 360 px: Beträge nie abgeschnitten, Aktionen kompakt
+   ---------------------------------------------------------------------- */
+@media (max-width: 767px) {
+  .app-shell__main .business-list__item {
+    padding: var(--space-3);
+  }
+
+  .app-shell__main .business-list__amount {
+    font-size: 15px;
+  }
+
+  .app-shell__main .business-list__figures {
+    font-size: 12px;
+  }
+
+  .app-shell__main .invoice-overview-card__actions {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .work-kpis .kpi-tile__value {
+    font-size: 20px;
+  }
+
+  .work-kpis .kpi-tile {
+    padding: var(--space-3);
+  }
+
+  .app-shell__main .detail-experience-card__inner,
+  .app-shell__main .detail-experience-card .card {
+    padding: var(--space-3);
+  }
+
+  .document-detail-page .document-detail__preview {
+    padding: var(--space-2);
+  }
+}
+
+/* ----------------------------------------------------------------------
+   11. Dokumentdetail — Original kompakt, Analysefakten ruhig
+   ---------------------------------------------------------------------- */
+.document-detail-page .document-detail__representation-preview {
+  max-height: 260px;
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+.document-detail-page .document-detail__representation-preview-image {
+  max-height: 260px;
+  width: 100%;
+  object-fit: contain;
+  object-position: top;
+}
+
+.document-detail-page .document-original-file-panel {
+  border: 0;
+  border-top: 1px solid var(--op-border);
+  border-radius: 0;
+  box-shadow: none;
+  padding: var(--space-3) 0 0;
+  margin-top: var(--space-3);
+  background: transparent;
+}
+
+.document-detail-page .document-original-file-panel .section__title {
+  font-size: 13px;
+  font-weight: 700;
+  margin: 0 0 var(--space-2);
+}
+
+/* Dateityp, Größe und Zeitpunkt sind technische Angaben — unter „Mehr anzeigen" bleiben sie erreichbar. */
+.document-detail-page .document-original-file-panel__meta .data-row:not(:first-child) {
+  display: none;
+}
+
+.document-detail-page .document-original-file-panel__meta .data-row {
+  border: 0;
+  padding: 0 0 var(--space-2);
+}
+
+.document-detail-page .document-original-file-panel__preview,
+.document-detail-page .document-original-file-panel__pdf {
+  display: none;
+}
+
+.document-detail-page .document-original-file-panel__actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.document-detail-page .document-original-file-panel__actions .btn {
+  width: auto;
+  min-height: 36px;
+  font-size: 13px;
+}
+
+/* Fakten aus der Analyse: der Abschnittstitel sagt es bereits — kein Abzeichen je Zeile. */
+.document-detail-page [data-testid='document-archive-truth-analysis'] .document-archive-truth-badge--analysis {
+  display: none;
+}
+
+/* Korrekturen: erste Sektion ohne Trennlinie; Aktionsreihen ab Tablet nebeneinander */
+.app-shell__main .detail-experience-section:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+
+@media (min-width: 768px) {
+  .app-shell__main .detail-experience-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .app-shell__main .detail-experience-actions > a,
+  .app-shell__main .detail-experience-actions > .btn,
+  .app-shell__main .detail-experience-actions > a > .btn {
+    width: auto;
+    flex: 0 0 auto;
+  }
+}
+
+/* Vorgang-Übersicht: Status-Karte als ruhige Faktenliste */
+.vorgang-detail-page [data-testid='vorgang-overview-status'] .data-row {
+  flex-direction: row;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 8px 0;
+  border-bottom: 1px solid var(--op-border);
+}
+
+.vorgang-detail-page [data-testid='vorgang-overview-status'] .data-row__label {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 13px;
+}
+
+.vorgang-detail-page [data-testid='vorgang-overview-status'] .data-row__value {
+  font-size: 14px;
+  font-weight: 600;
+  text-align: right;
+}
+
+.vorgang-detail-page [data-testid='vorgang-overview-status'] select,
+.vorgang-detail-page [data-testid='vorgang-overview-status'] .select {
+  min-height: 38px;
+  font-size: 14px;
+}
+
+/* Rechnungsdetail: nur eine Hauptaktion in Navy (Drucken); Versand-/Markieren-Aktionen ruhig */
+.page--invoice-detail .detail-experience-actions .card .btn--primary,
+.page--invoice-detail .detail-experience-actions > section .btn--primary {
+  background: var(--op-surface);
+  color: var(--op-primary);
+  border: 1px solid var(--op-border-strong);
+  box-shadow: none;
+}
+
+.page--invoice-detail .detail-experience-actions .card .btn--primary:hover,
+.page--invoice-detail .detail-experience-actions > section .btn--primary:hover {
+  background: var(--op-primary-subtle);
+}
+
+.page--invoice-detail .detail-experience-actions .card__title,
+.page--invoice-detail .detail-experience-actions .card h2,
+.page--invoice-detail .detail-experience-actions .card h3 {
+  display: block;
+}
+
+.page--invoice-detail .detail-experience-actions .hint-text {
+  font-size: 13px;
+  color: var(--op-text-subtle);
+  margin: 0;
+}
+
+/* ----------------------------------------------------------------------
+   12. Eingang: Aufnahmewege als kompakte Symbolreihe (wie „Schnell erledigen"), Dokumentfakten nebeneinander
+   ---------------------------------------------------------------------- */
+.ablage-page .document-add-actions,
+.ablage-page .document-add-actions--compact,
+.ablage-page .document-add-actions--page {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  border: 1px solid var(--op-border);
+  border-radius: 14px;
+  background: var(--op-surface);
+  overflow: hidden;
+}
+
+.ablage-page .document-add-actions__item {
+  min-height: 72px;
+  gap: 6px;
+  padding: var(--space-2);
+  border: 0;
+  border-right: 1px solid var(--op-border);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.ablage-page .document-add-actions__item:last-child {
+  border-right: 0;
+}
+
+.ablage-page .document-add-actions__item:hover {
+  background: var(--op-surface-sunken);
+}
+
+.ablage-page .document-add-actions__icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--op-success-subtle);
+  color: var(--op-secondary);
+}
+
+.ablage-page .document-add-actions__label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ablage-page .documents-capture__title {
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--op-text-subtle);
+}
+
+@media (min-width: 768px) {
+  .app-shell__main .inbox-card-shell .document-experience-card__facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: var(--space-2) var(--space-5);
+  }
+
+  .app-shell__main .inbox-card-shell .document-experience-card__facts .data-row {
+    border: 0;
+    padding: 0;
+  }
+}
+
+.app-shell__main .inbox-card-shell .data-row__label {
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  color: var(--op-text-subtle);
+}
+
+.app-shell__main .inbox-card-shell .data-row__value {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.app-shell__main .inbox-card-shell .document-experience-card__case-match {
+  background: var(--op-surface-sunken);
+  border: 0;
+  border-radius: 10px;
+  padding: var(--space-3);
+  font-size: 13.5px;
+}
+
+.app-shell__main .inbox-card-shell .document-experience-card__case-match-reasons ul {
+  margin: 4px 0 0;
+  padding-left: 1.1rem;
+  columns: 2;
+}
+
+.work-footer-link {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.ablage-page .documents-capture {
+  margin-bottom: var(--space-4);
+}
+
+.ablage-page .documents-capture__title {
+  margin: 0 0 var(--space-2);
+}
+
+@media (max-width: 767px) {
+  .work-kpis .kpi-tile__label {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    line-height: 1.3;
+  }
+
+  .document-detail-page [data-testid='document-free-question-panel'] form,
+  .document-detail-page [data-testid='document-free-question-panel'] .document-free-question-panel__form {
+    flex-wrap: wrap;
+  }
+
+  .document-detail-page [data-testid='document-free-question-panel'] .input {
+    flex: 1 1 100%;
+  }
+}
+
+.kunden-detail-page .work-detail-grid__side .summary-list {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.document-detail-page [data-testid='document-free-question-panel'] .card {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+}
+
+/* ----------------------------------------------------------------------
+   13. Eingangsdetail — vier Fragen in Sekunden: erkannt · plausibel · tun · Original
+   ---------------------------------------------------------------------- */
+.eingang-detail-page .page-header {
+  margin-bottom: var(--space-4);
+}
+
+/* Erkannt: Kernfakten als kompaktes Raster, kein Zeilenstapel */
+.eingang-detail-page .document-experience-card {
+  gap: var(--space-3);
+}
+
+.eingang-detail-page .document-experience-card__headline {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.eingang-detail-page .document-experience-card__facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--space-2) var(--space-4);
+}
+
+.eingang-detail-page .document-experience-card__facts .data-row {
+  border: 0;
+  padding: 0;
+  gap: 2px;
+}
+
+.eingang-detail-page .document-experience-card__facts .data-row__label {
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  color: var(--op-text-subtle);
+}
+
+.eingang-detail-page .document-experience-card__facts .data-row__value {
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.eingang-detail-page .document-experience-card__subtitle,
+.eingang-detail-page .document-experience-card__lead {
+  font-size: 14px;
+  color: var(--op-text-muted);
+}
+
+/* Tun: eine Hauptaktion, „Später" nur als Text */
+.eingang-detail-page .document-experience-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+
+.eingang-detail-page .document-experience-card__actions .btn--primary {
+  width: auto;
+  min-height: 42px;
+  padding-left: var(--space-5);
+  padding-right: var(--space-5);
+}
+
+.eingang-detail-page .document-experience-card__secondary {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.eingang-detail-page .document-experience-card__secondary .btn {
+  width: auto;
+  min-height: 36px;
+  font-size: 13.5px;
+  color: var(--op-text-muted);
+}
+
+/* Frage zum Dokument: kompakt, nach der Kernaktion */
+.eingang-detail-page [data-testid='document-free-question-panel'] {
+  border: 1px solid var(--op-border);
+  border-radius: 14px;
+  background: var(--op-surface);
+  padding: var(--space-3) var(--space-4);
+}
+
+.eingang-detail-page [data-testid='document-free-question-panel'] .card {
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none;
+}
+
+.eingang-detail-page [data-testid='document-free-question-panel'] h2,
+.eingang-detail-page [data-testid='document-free-question-panel'] h3,
+.eingang-detail-page [data-testid='document-free-question-panel'] .card__title {
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0 0 var(--space-2);
+}
+
+.eingang-detail-page [data-testid='document-free-question-panel'] .input {
+  min-height: 40px;
+  font-size: 14px;
+}
+
+.eingang-detail-page [data-testid='document-free-question-panel'] .btn {
+  width: auto;
+  min-height: 40px;
+}
+
+/* Details: Textlink statt Vollbreitenbutton; Abschnitte als ruhige Zeilen */
+.eingang-detail-page .review-more-options > .btn,
+.eingang-detail-page .review-more-options > button {
+  width: auto;
+  min-height: 36px;
+  padding: 0 var(--space-2);
+  border: 0;
+  background: transparent;
+  color: var(--op-primary);
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: none;
+}
+
+.eingang-detail-page .review-more-options__content {
+  gap: var(--space-2);
+}
+
+.eingang-detail-page .review-collapsible {
+  border-radius: 12px;
+  border-color: var(--op-border);
+}
+
+.eingang-detail-page .review-collapsible__trigger {
+  padding: 10px var(--space-4);
+  font-size: 14px;
+}
+
+.eingang-detail-page .review-collapsible__content {
+  padding: 0 var(--space-4) var(--space-3);
+}
+
+/* Bitte kurz prüfen — ein Bereich, ruhige Warnfläche */
+.review-check-list {
+  border: 1px solid #f3dcb8;
+  background: var(--op-warning-subtle);
+  border-radius: 12px;
+  padding: var(--space-3) var(--space-4);
+}
+
+.review-check-list__title {
+  margin: 0 0 var(--space-1);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--op-warning);
+}
+
+.review-check-list ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--op-text);
+}
+
+/* Gruppen (Warum diese Empfehlung? · Weitere Details): flacher Textschalter */
+.review-details-group {
+  border-top: 1px solid var(--op-border);
+  padding-top: var(--space-2);
+}
+
+.review-details-group__trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 8px 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--op-text-muted);
+  text-align: left;
+  cursor: pointer;
+}
+
+.review-details-group__trigger:hover {
+  color: var(--op-primary);
+}
+
+.review-details-group__chevron {
+  color: var(--op-text-subtle);
+}
+
+.review-details-group__content {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-1) 0 var(--space-2);
+}
+
+/* Empfehlung und Erklärung innerhalb der Gruppe: ruhig, ohne Karte in Karte */
+.review-details-group .card,
+.review-details-group .document-assistant-panel__section {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+  background: transparent;
+}
+
+.review-details-group .document-assistant-panel__heading {
+  font-size: 14px;
+  font-weight: 700;
+  margin: var(--space-2) 0;
+}
+
+.review-details-group .document-guidance-panel__row dt {
+  font-size: 12px;
+  color: var(--op-text-subtle);
+}
+
+.review-details-group .document-guidance-panel__row dd {
+  font-size: 13.5px;
+}
+
+.review-details-group .document-assistant-panel__muted,
+.review-details-group .letter-explanation__disclaimer {
+  font-size: 12px;
+  color: var(--op-text-subtle);
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin-top: var(--space-2);
+}
+
+@media (min-width: 1024px) {
+  .eingang-detail-page .eingang-assist-flow {
+    max-width: 880px;
+  }
+}
+
+.review-details-group__content[hidden] {
+  display: none !important;
+}

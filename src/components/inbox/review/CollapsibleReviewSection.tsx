@@ -82,3 +82,41 @@ export function ReviewMoreOptionsShell({
     </div>
   );
 }
+
+interface ReviewDetailsGroupProps {
+  id: string;
+  title: string;
+  expanded: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+}
+
+/**
+ * VISUAL-POLISH-01C — eine ruhige Gruppe für seltene/technische Bereiche.
+ *
+ * Anders als `CollapsibleReviewSection` bleiben die Kinder im DOM und werden
+ * nur ausgeblendet: Die enthaltenen Abschnitte (Dokumentdaten, Originaltext,
+ * Archiv, Verwaltung …) behalten damit ihre Test-IDs und ihr Verhalten; die
+ * Seite zeigt sie nur nicht mehr als gleichrangige Akkordeon-Wand.
+ */
+export function ReviewDetailsGroup({ id, title, expanded, onToggle, children }: ReviewDetailsGroupProps) {
+  return (
+    <div className="review-details-group" data-testid={`review-group-${id}`}>
+      <button
+        type="button"
+        className="review-details-group__trigger"
+        aria-expanded={expanded}
+        data-testid={`review-group-toggle-${id}`}
+        onClick={onToggle}
+      >
+        <span>{title}</span>
+        <span className="review-details-group__chevron" aria-hidden>
+          {expanded ? '▾' : '▸'}
+        </span>
+      </button>
+      <div className="review-details-group__content" data-testid={`review-group-content-${id}`} hidden={!expanded}>
+        {children}
+      </div>
+    </div>
+  );
+}

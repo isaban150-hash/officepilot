@@ -41,6 +41,12 @@ const ROWS: Array<{
 ];
 
 export function DocumentGuidancePanel({ guidance, translate }: DocumentGuidancePanelProps) {
+  /*
+   * VISUAL-POLISH-01C — „Abbrechen" ist eine Bedienaktion des Prüfschritts,
+   * keine fachliche Empfehlung; sie erscheint hier nicht. Die Empfehlungsdaten
+   * selbst (documentGuidanceService) bleiben unverändert.
+   */
+  const recommendedActions = guidance.actions.filter((action) => action.id !== 'cancel');
   return (
     <Card className="document-assistant-panel__section">
       <div data-testid="document-guidance-panel">
@@ -55,11 +61,15 @@ export function DocumentGuidancePanel({ guidance, translate }: DocumentGuidanceP
         <div className="document-guidance-panel__row" data-testid="doc-guidance-actions">
           <dt>{translate('docGuidance.q.actions')}</dt>
           <dd>
-            <ul className="document-assistant-panel__steps">
-              {guidance.actions.map((action) => (
-                <li key={action.id}>{translate(action.labelKey)}</li>
-              ))}
-            </ul>
+            {recommendedActions.length > 0 ? (
+              <ul className="document-assistant-panel__steps">
+                {recommendedActions.map((action) => (
+                  <li key={action.id}>{translate(action.labelKey)}</li>
+                ))}
+              </ul>
+            ) : (
+              '—'
+            )}
           </dd>
         </div>
       </dl>

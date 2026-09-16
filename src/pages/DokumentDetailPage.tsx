@@ -14,6 +14,10 @@ import { DetailExperienceCard } from '../components/detail/DetailExperienceCard'
 import { DocumentFreeQuestionPanel } from '../components/documents/DocumentFreeQuestionPanel';
 import { Button } from '../components/ui/Button';
 import { Badge, Card, DataRow } from '../components/ui/Card';
+import { StatusBadge } from '../components/ui/Badge';
+import type { StatusTone } from '../services/ui/statusTone';
+import { findInvoiceById } from '../services/invoice/invoiceRegistryService';
+import { formatInvoiceCurrency } from '../services/invoicePrintModel';
 import { FileTypeIcon } from '../components/ui/FileTypeIcon';
 import { ShowMoreSection } from '../components/ui/ShowMoreSection';
 import { PageHeader } from '../components/ui/PageHeader';
@@ -29,7 +33,7 @@ import { buildInvoiceReachPath } from '../services/invoiceNavigation';
 import { deleteGeneratedInvoiceDocumentWithCloud } from '../services/document/generatedInvoiceDocumentDeleteService';
 import { unlinkInboxItemFromVorgang } from '../services/vorgangService';
 import { SimpleConfirmDialog } from '../components/ui/SimpleConfirmDialog';
-import { resolveDocumentLifecycle } from '../services/documentLifecycleService';
+import { getDocumentLifecycleStatusLabelKey, resolveDocumentLifecycle } from '../services/documentLifecycleService';
 import { recordDocumentContext } from '../services/brain/companySessionService';
 import type { CompanyDocument } from '../types/models';
 import type { TranslationKey } from '../i18n';
@@ -174,6 +178,31 @@ export function DokumentDetailPage() {
 
   const lifecycle = resolveDocumentLifecycle({ documentId: document.id });
   const openReasons = lifecycle?.openReasons ?? [];
+  /*
+   * VISUAL-POLISH-01C — Kopf nach den fünf Fragen: Dokumentart als Eyebrow,
+   * Titel, „von wem/für wen · Datum · Betrag", Stand als StatusBadge. Der
+   * Betrag kommt bei eigenen Rechnungen aus der verknüpften Rechnung (01D),
+   * neue Daten entstehen nicht.
+   */
+  const lifecycleStatusKey = lifecycle ? getDocumentLifecycleStatusLabelKey(lifecycle.status) : null;
+  const lifecycleTone: StatusTone = !lifecycle
+    ? 'neutral'
+    : lifecycle.status === 'done' || lifecycle.status === 'filed' || lifecycle.status === 'answered'
+      ? 'success'
+      : lifecycle.status === 'needs_action'
+        ? 'warning'
+        : lifecycle.status === 'waiting'
+          ? 'info'
+          : 'neutral';
+  const linkedInvoice =
+    isGeneratedInvoice && document.linkedInvoiceId ? findInvoiceById(document.linkedInvoiceId) : undefined;
+  const headerMeta = [
+    linkedInvoice?.customerSnapshot?.name || document.issuer || null,
+    document.issueDate
+      ? formatSafeDocumentDate(document.issueDate, setup.language, translate('document.date.unrecognized'))
+      : null,
+    linkedInvoice ? formatInvoiceCurrency(linkedInvoice.amount) : null,
+  ].filter(Boolean);
   const lifecycleResolved = lifecycle != null;
   const replyOpen = lifecycleResolved && openReasons.includes('reply_open');
   const fileOriginalOpen = lifecycleResolved && openReasons.includes('file_original');
@@ -232,8 +261,7 @@ export function DokumentDetailPage() {
     experienceActions = openOrderButton;
   }
 
-  const technicalPanels = (
-    <>
+  const originalPanel = (
       <Card className="document-detail__preview">
         <DocumentDetailPreview documentId={document.id} revision={previewRevision} />
         {document.fileRefId ? (
@@ -266,7 +294,10 @@ export function DokumentDetailPage() {
           </>
         )}
       </Card>
+  );
 
+  const technicalPanels = (
+    <>
       <DocumentDerivativeRecoveryStatusPanel
         documentId={document.id}
         onRecovered={() => setPreviewRevision((value) => value + 1)}
@@ -439,33 +470,57 @@ export function DokumentDetailPage() {
         * Schritte bleiben in der Experience-Card; Rohtext bleibt sekundär.
         */}
       <PageHeader
+        eyebrow={categoryLabel}
         title={document.title}
-        subtitle={[categoryLabel, document.issuer].filter(Boolean).join(' · ')}
+        subtitle={headerMeta.length > 0 ? headerMeta.join(' · ') : undefined}
+        status={
+          lifecycleStatusKey ? (
+            <StatusBadge tone={lifecycleTone} label={translate(lifecycleStatusKey)} icon={false} />
+          ) : undefined
+        }
         backLabel={translate('common.back')}
         backHref="/dokumente"
         backTestId="document-detail-back"
         testId="document-detail-header"
+        className="work-detail-head"
       />
 
-      <DetailExperienceCard
-        recognizedTitle={document.title}
-        recognizedSummary={categoryLabel}
-        assistantMessage={translate('document.experience.saved')}
-        paperInstruction={paperInstruction}
-        actions={experienceActions}
-        hideIdentity
-        testId="document-detail-experience"
-      />
+      {/*
+        * Zwei Spalten ab 1024 px: links „Muss ich etwas tun?" und die fachliche
+        * Erklärung (01C, unverändert), rechts „Auf einen Blick", Original und
+        * Ablage. Die Markup-Reihenfolge (Experience → Understanding → Filing →
+        * Frage → Details) bleibt für Screenreader und Tests erhalten.
+        */}
+      <div className="work-detail-grid document-detail__grid">
+        <div className="work-detail-grid__main">
+          <DetailExperienceCard
+            recognizedTitle={document.title}
+            recognizedSummary={categoryLabel}
+            assistantMessage={translate('document.experience.saved')}
+            paperInstruction={paperInstruction}
+            actions={experienceActions}
+            hideIdentity
+            testId="document-detail-experience"
+          />
 
-      <DocumentArchiveTruthFactsCard document={document} />
+          <DocumentUnderstandingCard documentId={document.id} />
+        </div>
 
-      <DocumentUnderstandingCard documentId={document.id} />
+        <div className="work-detail-grid__side">
+          <DocumentArchiveTruthFactsCard document={document} />
 
-      <DocumentFilingCard
-        documentId={document.id}
-        markFiledVariant={filingMarkPrimary ? 'primary' : 'outline'}
-        onChanged={() => setDetailRevision((value) => value + 1)}
-      />
+          <section className="document-detail__original" data-testid="document-detail-original">
+            <h2 className="document-detail__original-title">{translate('document.section.original')}</h2>
+            {originalPanel}
+          </section>
+
+          <DocumentFilingCard
+            documentId={document.id}
+            markFiledVariant={filingMarkPrimary ? 'primary' : 'outline'}
+            onChanged={() => setDetailRevision((value) => value + 1)}
+          />
+        </div>
+      </div>
 
       <DocumentFreeQuestionPanel
         source={{ type: 'document', document }}

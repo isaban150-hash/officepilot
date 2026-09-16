@@ -2,12 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ExpenseOverviewCard } from '../components/expenses/ExpenseOverviewCard';
 import { Button } from '../components/ui/Button';
-import { DataRow, PageHeader } from '../components/ui/Card';
+import { PageHeader } from '../components/ui/Card';
+import { KpiRow, KpiTile } from '../components/ui/Kpi';
 import { MoneyDisplay } from '../components/ui/Display';
 import { EmptyStateBlock } from '../components/ui/EmptyStateBlock';
 import { BusinessList } from '../components/ui/Lists';
 import { Page, PageToolbar } from '../components/ui/Page';
-import { DetailSection, SummaryList } from '../components/ui/Section';
 import { InlineNotice } from '../components/ui/States';
 import { FilterChips, SearchField } from '../components/ui/Toolbar';
 import { useApp } from '../context/AppContext';
@@ -75,15 +75,32 @@ export function OffeneAusgabenPage() {
         </InlineNotice>
       )}
 
-      <DetailSection title={translate('invoices.list.summaryTitle')} surface testId="offene-ausgaben-summary">
-        <SummaryList>
-          <DataRow label={translate('expenseOverview.openLiabilities')} value={<MoneyDisplay value={totals.openLiabilities} emphasis />} />
-          <DataRow label={translate('expenseOverview.overdueLiabilities')} value={<MoneyDisplay value={totals.overdueLiabilities} />} />
-          <DataRow label={translate('expenseOverview.paidTotal')} value={<MoneyDisplay value={totals.paidTotal} />} />
-          <DataRow label={translate('expenseOverview.openExpenseCount')} value={String(totals.openExpenseCount)} />
-          <DataRow label={translate('expenseOverview.totalExpenseCount')} value={String(totals.totalExpenseCount)} />
-        </SummaryList>
-      </DetailSection>
+      {/* VISUAL-POLISH-01C — Zahlungssituation als Kennzahlenfläche (Kpi-Primitives aus Block A). */}
+      <KpiRow testId="offene-ausgaben-summary" ariaLabel={translate('invoices.list.summaryTitle')} className="work-kpis work-kpis--4">
+        <KpiTile
+          label={translate('expenseOverview.openLiabilities')}
+          value={<MoneyDisplay value={totals.openLiabilities} />}
+          hint={`${translate('expenseOverview.openExpenseCount')}: ${totals.openExpenseCount}`}
+          testId="offene-ausgaben-kpi-open"
+        />
+        <KpiTile
+          label={translate('expenseOverview.overdueLiabilities')}
+          value={<MoneyDisplay value={totals.overdueLiabilities} />}
+          tone={totals.overdueExpenseCount > 0 ? 'critical' : 'neutral'}
+          testId="offene-ausgaben-kpi-overdue"
+        />
+        <KpiTile
+          label={translate('expenseOverview.paidTotal')}
+          value={<MoneyDisplay value={totals.paidTotal} />}
+          tone="positive"
+          testId="offene-ausgaben-kpi-paid"
+        />
+        <KpiTile
+          label={translate('expenseOverview.totalExpenseCount')}
+          value={String(totals.totalExpenseCount)}
+          testId="offene-ausgaben-kpi-total"
+        />
+      </KpiRow>
 
       <PageToolbar
         search={

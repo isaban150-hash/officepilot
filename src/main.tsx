@@ -11,6 +11,7 @@ import './styles/shell.css';
 import './styles/layout.css';
 import './styles/components.css';
 import './styles/heute.css';
+import './styles/workpages.css';
 import './styles/auth.css';
 import './styles/document-upload.css';
 import './styles/system.css';

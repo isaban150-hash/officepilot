@@ -15,6 +15,8 @@ import { Link } from 'react-router-dom';
  * `backLabel` ist Pflicht, sobald eines von beiden gesetzt ist.
  */
 export interface PageHeaderProps {
+  /** Kleine Zeile über dem Titel, z. B. die Dokumentart (VISUAL-POLISH-01C). */
+  eyebrow?: ReactNode;
   title: string;
   subtitle?: ReactNode;
   backLabel?: string;
@@ -57,6 +59,7 @@ export function BackLink({
 }
 
 export function PageHeader({
+  eyebrow,
   title,
   subtitle,
   backLabel,
@@ -79,6 +82,7 @@ export function PageHeader({
       <div className="page-header__main">
         {hasBack ? <BackLink label={backLabel!} href={backHref} onClick={onBack} testId={backTestId} /> : null}
         <div className="page-header__text">
+          {eyebrow ? <p className="page-header__eyebrow">{eyebrow}</p> : null}
           <div className="page-header__title-row">
             <Heading className="page-header__title">{title}</Heading>
             {status ? <div className="page-header__status">{status}</div> : null}

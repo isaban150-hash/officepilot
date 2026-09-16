@@ -36,11 +36,15 @@ import {
 } from '../services/documentSummaryPresentation';
 import type { TranslationKey } from '../i18n';
 
+/** Hauptfilter, die immer sichtbar sind (Alle, Rechnungen, Belege, Kunden, Aufträge). */
+const PRIMARY_AREA_FILTER_COUNT = 5;
+
 export function DokumentePage() {
   const { translate, setup } = useApp();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [query, setQuery] = useState('');
+  const [moreFilters, setMoreFilters] = useState(false);
   const [documents, setDocuments] = useState(getAllDocuments);
   const [uploads, setUploads] = useState(getAllUploadedDocuments);
 
@@ -78,6 +82,16 @@ export function DokumentePage() {
   const unrecognizedDate = translate('document.date.unrecognized');
 
   const areaOptions = DOCUMENT_AREA_FILTER_IDS.map((id) => ({ id, label: translate(getDocumentAreaLabelKey(id) as TranslationKey) }));
+  /*
+   * VISUAL-POLISH-01C — keine Chip-Wand: die Hauptfilter stehen direkt, der
+   * Rest liegt hinter „Weitere Filter". Ein aktiver Nebenfilter hält die Reihe
+   * offen, damit die Auswahl nie unsichtbar wird. Filterlogik unverändert.
+   */
+  const primaryAreaOptions = areaOptions.slice(0, PRIMARY_AREA_FILTER_COUNT);
+  const secondaryAreaOptions = areaOptions.slice(PRIMARY_AREA_FILTER_COUNT);
+  const secondaryActive = secondaryAreaOptions.some((option) => option.id === area);
+  const showAllFilters = moreFilters || secondaryActive;
+  const visibleAreaOptions = showAllFilters ? areaOptions : primaryAreaOptions;
 
   /* UIUX-FOUNDATION-01F — Dokumentarchiv: PageHeader, Toolbar, Business-Liste mit Vorschau. */
   return (
@@ -113,15 +127,28 @@ export function DokumentePage() {
           />
         }
         filters={
-          <FilterChips
-            options={areaOptions}
-            value={area}
-            onChange={setArea}
-            label={translate('document.area.toolbar')}
-            testIdPrefix="document-area-chip"
-            testId="document-area-chips"
-            className="document-area-chips"
-          />
+          <div className="work-filters">
+            <FilterChips
+              options={visibleAreaOptions}
+              value={area}
+              onChange={setArea}
+              label={translate('document.area.toolbar')}
+              testIdPrefix="document-area-chip"
+              testId="document-area-chips"
+              className="document-area-chips"
+            />
+            {secondaryAreaOptions.length > 0 && !secondaryActive ? (
+              <button
+                type="button"
+                className="work-filters__more"
+                aria-expanded={showAllFilters}
+                onClick={() => setMoreFilters((open) => !open)}
+                data-testid="document-area-more-filters"
+              >
+                {translate(showAllFilters ? 'document.area.lessFilters' : 'document.area.moreFilters')}
+              </button>
+            ) : null}
+          </div>
         }
       />
 
@@ -215,10 +242,13 @@ export function DokumentePage() {
                     ) : null}
                   </>
                 }
-                meta={
+                amount={
                   invoiceView ? (
                     <span data-testid={`document-card-invoice-amount-${doc.id}`}>{invoiceView.amount}</span>
-                  ) : summaryView.factsLine ? (
+                  ) : undefined
+                }
+                meta={
+                  !invoiceView && summaryView.factsLine ? (
                     <span data-testid={`document-card-summary-facts-${doc.id}`}>
                       {summaryView.facts.slice(0, 3).map((f) => f.value).join(' · ')}
                     </span>

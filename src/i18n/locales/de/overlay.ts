@@ -6,7 +6,7 @@ export const deOverlay = {
   'docAssistant.section.actions': 'Was sollten Sie jetzt tun?',
   'docAssistant.section.inaction': 'Was passiert, wenn Sie nichts tun?',
   'reviewWorkflow.section.ocrText': 'Originaltext',
-  'reviewWorkflow.section.technical': 'Weitere Details',
+  'reviewWorkflow.section.technical': 'Technische Angaben',
   'classification.documentKind': 'Dokumentart',
   'classification.detectionReason': 'Warum erkannt?',
 } as const;

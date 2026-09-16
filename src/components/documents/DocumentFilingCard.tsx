@@ -41,11 +41,15 @@ export function DocumentFilingCard({
 
   void revision;
 
-  const digitalPath = memory
-    ? `${memory.digitalFolder.name} (${memory.digitalFolder.path})`
-    : document
-      ? `${document.digitalFolder.name} (${document.digitalFolder.path})`
-      : '—';
+  /*
+   * VISUAL-POLISH-01C — der Ablageort heißt für den Nutzer wie der Ordner;
+   * der technische Pfad bleibt erreichbar, aber aufklappbar. Werte und
+   * Quelle (Memory vor Dokument) sind unverändert.
+   */
+  const digitalFolder = memory?.digitalFolder ?? document?.digitalFolder;
+  const digitalName = digitalFolder?.name ?? '—';
+  const digitalPathRaw = digitalFolder?.path ?? '';
+  const digitalPath = digitalPathRaw ? `${digitalName} (${digitalPathRaw})` : digitalName;
 
   const paperFolder = memory?.paperFolder ?? document?.paperFolder;
   const hasPaperFolder = Boolean(paperFolder?.folderId || paperFolder?.label);
@@ -88,7 +92,14 @@ export function DocumentFilingCard({
             {translate('document.filing.digital')}
           </h3>
           <p className="detail-experience-section__value" data-testid="document-filing-digital-path">
-            {digitalPath}
+            <span className="document-filing-card__digital-name">{digitalName}</span>
+            {digitalPathRaw ? (
+              <details className="work-path-details">
+                <summary>{translate('document.filing.pathDetails')}</summary>
+                <code>{digitalPathRaw}</code>
+              </details>
+            ) : null}
+            <span className="sr-only">{digitalPath}</span>
           </p>
         </section>
 
