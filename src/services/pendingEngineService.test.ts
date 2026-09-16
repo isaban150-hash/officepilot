@@ -392,10 +392,12 @@ describe('pendingEngineService summary and dedupe', () => {
     expect(summary.newInboxItems).toBe(1);
     expect(summary.deferredInboxItems).toBe(1);
     expect(summary.openTasks).toBe(3);
-    expect(summary.dueTasksToday).toBe(2);
-    const taskHighlight = summary.highlights.find((h) => h.kind === 'open_tasks');
-    expect(taskHighlight?.count).toBe(2);
-    expect(taskHighlight?.labelKey).toBe('pending.highlight.dueTasksToday');
+    // 01D — heute fällig (t-1) und überfällig (t-2) werden getrennt gezählt und benannt.
+    expect(summary.dueTasksToday).toBe(1);
+    expect(summary.overdueTasks).toBe(1);
+    const taskHighlights = summary.highlights.filter((h) => h.kind === 'open_tasks');
+    expect(taskHighlights.map((h) => h.labelKey)).toEqual(['pending.highlight.overdueTaskOne', 'pending.highlight.dueTaskTodayOne']);
+    expect(taskHighlights.every((h) => h.count === 1)).toBe(true);
   });
 
   it('Aufgaben ohne Due-Date erscheinen nicht im Heute-Highlight', () => {

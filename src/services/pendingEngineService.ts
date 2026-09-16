@@ -616,11 +616,12 @@ export function buildPendingSummary(
   const expiredDocuments = countByKind(items, 'document_expired');
   const missingContractDocuments = countByKind(items, 'contract_missing_proof');
   // Authority due tasks are surfaced as Behördenfristen — don't double-count them.
-  const dueTasksToday = getAllTasksFromStore().filter((task) => {
-    if (!isTaskOpen(task) || !task.dueDate) return false;
-    if (task.dueDate.slice(0, 10) > todayIso) return false;
-    return !isAuthorityTask(task);
-  }).length;
+  // 01D — heute fällig und überfällig sind zwei Aussagen; keine Aufgabe wird doppelt gezählt.
+  const dueTaskCandidates = getAllTasksFromStore().filter(
+    (task) => isTaskOpen(task) && Boolean(task.dueDate) && !isAuthorityTask(task),
+  );
+  const dueTasksToday = dueTaskCandidates.filter((task) => task.dueDate!.slice(0, 10) === todayIso).length;
+  const overdueTasks = dueTaskCandidates.filter((task) => task.dueDate!.slice(0, 10) < todayIso).length;
 
   pushHighlight(highlights, {
     id: 'authority-deadlines',
@@ -788,9 +789,16 @@ export function buildPendingSummary(
   });
 
   pushHighlight(highlights, {
+    id: 'overdue-tasks',
+    kind: 'open_tasks',
+    labelKey: overdueTasks === 1 ? 'pending.highlight.overdueTaskOne' : 'pending.highlight.overdueTasks',
+    count: overdueTasks,
+    route: '/aufgaben',
+  });
+  pushHighlight(highlights, {
     id: 'due-tasks-today',
     kind: 'open_tasks',
-    labelKey: 'pending.highlight.dueTasksToday',
+    labelKey: dueTasksToday === 1 ? 'pending.highlight.dueTaskTodayOne' : 'pending.highlight.dueTasksToday',
     count: dueTasksToday,
     route: '/aufgaben',
   });
@@ -803,6 +811,7 @@ export function buildPendingSummary(
     unarchivedDocuments,
     openTasks: taskSummary.open,
     dueTasksToday,
+    overdueTasks,
     overdueInvoices,
     dueTodayInvoices,
     dueSoonInvoices,

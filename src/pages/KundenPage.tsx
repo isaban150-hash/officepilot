@@ -7,7 +7,7 @@ import { Page } from '../components/ui/Page';
 import { DetailSection } from '../components/ui/Section';
 import { EmptyStateBlock } from '../components/ui/EmptyStateBlock';
 import { useApp } from '../context/AppContext';
-import { buildCustomerSubline } from '../components/customer/CustomerDecisionChoice';
+import { buildCustomerDistinguisher, buildCustomerSubline } from '../components/customer/CustomerDecisionChoice';
 import { CustomerDuplicateDecision } from '../components/customer/CustomerDuplicateDecision';
 import { CUSTOMER_DUPLICATE_ERROR_KEY } from '../services/customerService';
 import {
@@ -16,7 +16,7 @@ import {
 } from '../services/customer/customerDuplicateService';
 import { CustomerEditForm } from '../components/customer/CustomerEditForm';
 import { createCustomer } from '../services/customerService';
-import { getCustomerById } from '../services/customerStoreService';
+import { getCustomerById, getCustomerStoreSnapshot } from '../services/customerStoreService';
 import { getKundenOverview, type KundeOverviewEntry } from '../services/kundenOverviewService';
 import { buildKundenDetailPath } from '../services/kundenWorkspaceService';
 import type { Customer, CustomerBilling } from '../types/models';
@@ -41,7 +41,7 @@ const NEW_CUSTOMER_DRAFT: Customer = Object.freeze({
 });
 
 export function KundenPage() {
-  const { translate, showToast } = useApp();
+  const { translate, showToast, language } = useApp();
   const navigate = useNavigate();
   const [kunden, setKunden] = useState(() => getKundenOverview());
   const [creating, setCreating] = useState(false);
@@ -60,6 +60,31 @@ export function KundenPage() {
     const customer = getCustomerById(kunde.key);
     if (!customer) return kunde.addressLine;
     return buildCustomerSubline(customer, translate('customerDecision.noAddress'));
+  };
+
+  /*
+   * 01D — gleiche Namen bleiben getrennte Einträge (kein Merge). Damit sie
+   * unterscheidbar sind, bekommt ein Kunde mit Namensvetter seine vorhandenen
+   * Merkmale (Ansprechpartner, E-Mail, Anlagedatum) über den bestehenden
+   * Helfer; Altbestand und fehlender Kundenstamm erklären ihre Sonderstellung.
+   */
+  const normalizedName = (value: string) => value.trim().toLocaleLowerCase('de-DE').replace(/s+/g, ' ');
+  const nameCount = new Map<string, number>();
+  for (const entry of kunden) nameCount.set(normalizedName(entry.name), (nameCount.get(normalizedName(entry.name)) ?? 0) + 1);
+  const hasNamesake = (kunde: KundeOverviewEntry) => (nameCount.get(normalizedName(kunde.name)) ?? 0) > 1;
+  const detailFor = (kunde: KundeOverviewEntry): string => {
+    if (kunde.kind === 'legacy') return translate('kunden.legacyHint');
+    if (kunde.kind === 'orphan') return translate('kunden.orphanHint');
+    const customer = getCustomerById(kunde.key);
+    if (!customer) return '';
+    const distinguisher = buildCustomerDistinguisher(
+      customer,
+      getCustomerStoreSnapshot(),
+      (date) => translate('customerDecision.createdAt').replace('{date}', date),
+      language,
+    );
+    if (distinguisher) return distinguisher;
+    return hasNamesake(kunde) ? translate('kunden.customerRecordHint') : '';
   };
 
   const openCreateForm = () => {
@@ -186,7 +211,19 @@ export function KundenPage() {
               linkTestId={`kunde-${kunde.kind}-${kunde.key}`}
               /* A nameless orphan keeps a readable title — never its customerId. */
               title={kunde.name || (kunde.kind === 'orphan' ? translate('kunden.orphanBadge') : kunde.name)}
-              subtitle={sublineFor(kunde) ? <span data-testid="kunde-address">{sublineFor(kunde)}</span> : undefined}
+              subtitle={
+                sublineFor(kunde) || detailFor(kunde) ? (
+                  <>
+                    {sublineFor(kunde) ? <span data-testid="kunde-address">{sublineFor(kunde)}</span> : null}
+                    {detailFor(kunde) ? (
+                      <>
+                        {sublineFor(kunde) ? ' · ' : ''}
+                        <span data-testid="kunde-identity-hint">{detailFor(kunde)}</span>
+                      </>
+                    ) : null}
+                  </>
+                ) : undefined
+              }
               meta={`${translate('kunden.meta.orders').replace('{count}', String(kunde.orderCount))}${
                 kunde.openInvoiceCount > 0
                   ? ` · ${translate('kunden.meta.openInvoices').replace('{count}', String(kunde.openInvoiceCount))}`

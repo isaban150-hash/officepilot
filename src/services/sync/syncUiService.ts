@@ -1,4 +1,4 @@
-import type { SyncCoordinatorReport, SyncOutboxEntry } from '../../types/sync';
+import type { SyncCoordinatorReport, SyncOutboxEntry, SyncState } from '../../types/sync';
 import type { SyncAdapterStatus } from './syncAdapter';
 import { buildPersistedStateSnapshot } from '../persistenceService';
 import { getSyncClient } from './syncClientService';
@@ -9,6 +9,7 @@ import { runQueuedSyncOperation } from './syncOperationQueue';
 import { createSyncAdapter, isSyncProviderAvailable } from './syncAdapterFactory';
 import { isSupabaseConfigured } from '../../lib/supabase';
 import { bootstrapWorkspaceCloudSyncIfNeeded } from '../workspace/workspaceCloudBootstrapService';
+import { isSupabaseSyncAllowed } from './cloudSyncAllowlist';
 
 export interface SyncOutboxCounts {
   pending: number;
@@ -152,4 +153,51 @@ export async function retrySyncFromUi(): Promise<SyncCoordinatorReport> {
 export function shortenSyncId(id: string): string {
   if (id.length <= 12) return id;
   return `${id.slice(0, 8)}…${id.slice(-4)}`;
+}
+
+/* -------------------------------------------------------------------------- */
+/* REAL-PRODUCT-TEST-01D — verständlicher Gesamtstatus                        */
+/* -------------------------------------------------------------------------- */
+
+export type SyncStatusKind = 'offline' | 'syncing' | 'failed' | 'waiting' | 'synced' | 'idle';
+
+export interface SyncStatusSummary {
+  kind: SyncStatusKind;
+  /** Änderungen, die noch nicht übertragen sind (ausstehend oder wartend). */
+  waitingCount: number;
+  /** Änderungen, deren Übertragung fehlgeschlagen ist. */
+  failedCount: number;
+  /** Im letzten Lauf automatisch behandelte Konflikte. */
+  mergedCount: number;
+}
+
+const SYNCING: SyncState[] = ['checking', 'uploading', 'downloading', 'merging'];
+
+/**
+ * Der Engine-Zustand `synced` heißt nur: Der letzte Lauf hatte keine
+ * fehlgeschlagene Sendung. Wartende Einträge und automatisch behandelte
+ * Konflikte sind davon unabhängig — der Nutzer muss sie trotzdem sehen.
+ * Reine Ableitung aus dem Snapshot, keine Änderung an der Engine.
+ */
+export function summarizeSyncStatus(
+  snapshot: Pick<SyncUiSnapshot, 'status' | 'outbox' | 'lastReport' | 'isOffline'>,
+): SyncStatusSummary {
+  /* Nur-lokale Entitäten (z. B. Papierregister, Gedächtnis) warten auf nichts — sie werden nie gesendet. */
+  const waitingCount = snapshot.outbox.filter(
+    (entry) => (entry.status === 'pending' || entry.status === 'blocked') && isSupabaseSyncAllowed(entry.entityType),
+  ).length;
+  const failedCount = snapshot.outbox.filter(
+    (entry) => entry.status === 'error' || entry.status === 'failed',
+  ).length;
+  const mergedCount = snapshot.lastReport?.conflictCount ?? 0;
+  const state = snapshot.status.syncState;
+
+  let kind: SyncStatusKind;
+  if (snapshot.isOffline) kind = 'offline';
+  else if (SYNCING.includes(state)) kind = 'syncing';
+  else if (state === 'error' || failedCount > 0) kind = 'failed';
+  else if (state === 'synced') kind = waitingCount > 0 ? 'waiting' : 'synced';
+  else kind = 'idle';
+
+  return { kind, waitingCount, failedCount, mergedCount };
 }

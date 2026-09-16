@@ -77,12 +77,20 @@ export function mapTaskTypeToCategory(type: TaskType): TaskCategory {
   }
 }
 
+/** REAL-PRODUCT-TEST-01D — lokales Kalenderdatum (kein UTC-Sprung nach Mitternacht). */
+function toLocalIsoDate(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 export function getTodayIso(referenceDate?: Date | string): string {
   if (referenceDate instanceof Date) {
-    return referenceDate.toISOString().slice(0, 10);
+    return toLocalIsoDate(referenceDate);
   }
   if (typeof referenceDate === 'string' && referenceDate.length >= 10) {
     return referenceDate.slice(0, 10);
   }
-  return new Date().toISOString().slice(0, 10);
+  return toLocalIsoDate(new Date());
 }

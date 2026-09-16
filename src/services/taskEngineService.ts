@@ -341,7 +341,8 @@ export function getTasksFiltered(
     case 'offen':
       return all.filter(isTaskOpen);
     case 'heute':
-      return all.filter((task) => isTaskOpen(task) && task.dueDate && task.dueDate <= todayIso);
+      // 01D — „Heute“ heißt heute fällig; Überfälliges hat seinen eigenen Filter.
+      return all.filter((task) => isTaskOpen(task) && task.dueDate && task.dueDate.slice(0, 10) === todayIso);
     case 'ueberfaellig':
       return all.filter((task) => isTaskOpen(task) && task.dueDate && task.dueDate < todayIso);
     case 'kritisch':

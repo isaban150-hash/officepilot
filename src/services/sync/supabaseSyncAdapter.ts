@@ -495,6 +495,16 @@ export class SupabaseSyncAdapter implements SyncAdapter {
 
     for (const entry of pendingEntries) {
       if (!isSupabaseSyncAllowed(entry.entityType)) {
+        /*
+         * REAL-PRODUCT-TEST-01D — nur-lokale Entitäten (Gedächtnis, Papierregister,
+         * Aufgaben …) werden bewusst nie in die Cloud gesendet. Bisher blieb ihr
+         * Outbox-Eintrag dauerhaft „ausstehend" und ließ die Warteschlange mit
+         * unsendbaren Aufträgen wachsen. Der Sendeauftrag ist damit gegenstandslos
+         * und wird abgeschlossen; die lokale Entität selbst bleibt unberührt.
+         */
+        completedOutboxIds.push(entry.id);
+        outbox = updateOutboxEntryStatus(outbox, entry.id, 'completed');
+        report.completedOutboxCount += 1;
         continue;
       }
 

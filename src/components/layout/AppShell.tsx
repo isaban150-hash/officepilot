@@ -1,4 +1,6 @@
 import { Link, Outlet } from 'react-router-dom';
+import { useRef } from 'react';
+import { useMainScrollRestoration } from './useMainScrollRestoration';
 import { BetaModeBanner } from './BetaModeBanner';
 import { PersistenceFailureBanner } from '../system/PersistenceFailureBanner';
 import { CloudBackupPendingBanner } from '../system/CloudBackupPendingBanner';
@@ -21,6 +23,9 @@ export function AppShell() {
    */
   const { companyProfile, toast, clearToast, translate } = useApp();
   const companyName = companyProfile.companyName;
+  /* 01D — Scrollregel: neue Seite oben, Rückweg an gemerkter Position. */
+  const mainRef = useRef<HTMLElement | null>(null);
+  useMainScrollRestoration(mainRef);
 
   return (
     <div className="app-shell" data-testid="app-shell">
@@ -69,7 +74,7 @@ export function AppShell() {
       </div>
       <div className="app-shell__body">
         <SidebarNav />
-        <main className="app-shell__main">
+        <main className="app-shell__main" ref={mainRef} data-testid="app-shell-main">
           <Outlet />
         </main>
       </div>

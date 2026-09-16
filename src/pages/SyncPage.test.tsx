@@ -249,8 +249,10 @@ describe('SyncPage', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('12 ms');
+    // 01D — Millisekunden sind keine Nutzerinformation mehr; Uploads/Downloads/Wiederholungen bleiben.
+    expect(html).not.toContain('12 ms');
     expect(html).toContain('Wiederholungen');
+    expect(html).toContain('Automatisch zusammengeführt');
   });
 });
 

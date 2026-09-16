@@ -63,9 +63,17 @@ export function VorgaengePage() {
       <PageHeader
         title={translate('vorgaenge.title')}
         subtitle={translate('vorgaenge.subtitle')}
+        /* 01D — Hauptzweck der Seite: Aufträge. Ein neuer Auftrag entsteht in OfficePilot aus dem
+           Auftragsdokument (Scan/PDF → Eingang → „Vorgang anlegen"); genau dieser Weg ist die Hauptaktion.
+           „Offene Rechnungen anzeigen" bleibt als Nebenweg erhalten. */
+        primaryAction={
+          <Link to="/dokumente/hinzufuegen" data-testid="vorgaenge-new-from-document">
+            <Button>{translate('vorgaenge.newFromDocument')}</Button>
+          </Link>
+        }
         secondaryAction={
-          <Link to="/rechnungen/offen">
-            <Button variant="outline">{translate('vorgaenge.openInvoices')}</Button>
+          <Link to="/rechnungen/offen" data-testid="vorgaenge-open-invoices">
+            <Button variant="ghost">{translate('vorgaenge.openInvoices')}</Button>
           </Link>
         }
       />

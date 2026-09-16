@@ -10,6 +10,8 @@ import type { SyncOutboxEntry, SyncState } from '../types/sync';
 import type { TranslationKey } from '../i18n';
 import {
   getSyncUiSnapshot,
+  summarizeSyncStatus,
+  type SyncStatusSummary,
   isLocalOnlySyncMode,
   retrySyncFromUi,
   runSyncFromUi,
@@ -17,9 +19,29 @@ import {
   type SyncUiSnapshot,
 } from '../services/sync/syncUiService';
 import { buildPersistedStateSnapshot } from '../services/persistenceService';
+import { isSupabaseSyncAllowed } from '../services/sync/cloudSyncAllowlist';
 import { enqueueIntakeBackfill, planIntakeBackfill } from '../services/document/intakeCloudBackfillService';
 
 const SYNCING_STATES: SyncState[] = ['checking', 'uploading', 'downloading', 'merging'];
+
+/* REAL-PRODUCT-TEST-01D — Gründe für wartende/fehlgeschlagene Einträge in Nutzersprache. */
+function blockedReasonKey(entry: SyncOutboxEntry): TranslationKey | null {
+  if (!isSupabaseSyncAllowed(entry.entityType)) return 'sync.outboxReason.localOnly';
+  if (entry.status === 'error' || entry.status === 'failed') return 'sync.outboxReason.failed';
+  if (entry.status !== 'blocked') return null;
+  return entry.blockedReason === 'beta_mode' ? 'sync.outboxReason.betaMode' : 'sync.outboxReason.versionConflict';
+}
+
+function resolutionKey(resolution: string): TranslationKey {
+  const map: Record<string, TranslationKey> = {
+    remote_wins: 'sync.resolution.remoteWins',
+    local_wins: 'sync.resolution.localWins',
+    union: 'sync.resolution.union',
+    conflict: 'sync.resolution.conflict',
+    noop: 'sync.resolution.noop',
+  };
+  return map[resolution] ?? 'sync.resolution.conflict';
+}
 
 function entityTypeKey(entityType: string): TranslationKey {
   const map: Record<string, TranslationKey> = {
@@ -56,15 +78,35 @@ function outboxStatusKey(status: SyncOutboxEntry['status']): TranslationKey {
   return map[status] ?? 'sync.outboxStatus.pending';
 }
 
-function statusTone(
-  syncState: SyncState,
-  isOffline: boolean,
-): 'default' | 'success' | 'warning' | 'info' {
-  if (isOffline) return 'info';
-  if (syncState === 'synced') return 'success';
-  if (syncState === 'error') return 'warning';
-  if (SYNCING_STATES.includes(syncState)) return 'info';
+function statusTone(kind: SyncStatusSummary['kind']): 'default' | 'success' | 'warning' | 'info' {
+  if (kind === 'offline' || kind === 'syncing') return 'info';
+  if (kind === 'synced') return 'success';
+  if (kind === 'failed' || kind === 'waiting') return 'warning';
   return 'default';
+}
+
+/** Verständlicher Gesamtstatus statt reinem Engine-Zustand. */
+function statusLabelFor(
+  summary: SyncStatusSummary,
+  syncState: SyncState,
+  translate: (key: TranslationKey) => string,
+): string {
+  switch (summary.kind) {
+    case 'synced':
+      return translate('sync.summary.synced');
+    case 'waiting':
+      return summary.waitingCount === 1
+        ? translate('sync.summary.waitingOne')
+        : translate('sync.summary.waiting').replace('{count}', String(summary.waitingCount));
+    case 'failed':
+      return summary.failedCount === 1
+        ? translate('sync.summary.failedOne')
+        : summary.failedCount > 1
+          ? translate('sync.summary.failed').replace('{count}', String(summary.failedCount))
+          : translate('sync.status.error');
+    default:
+      return translate(`sync.status.${syncState}` as TranslationKey);
+  }
 }
 
 function formatTimestamp(value?: string): string {
@@ -138,9 +180,9 @@ export function SyncPage() {
     }
   };
 
-  const statusKey = `sync.status.${snapshot.status.syncState}` as TranslationKey;
-  const statusLabel = translate(statusKey);
-  const tone = statusTone(snapshot.status.syncState, snapshot.isOffline);
+  const summary = summarizeSyncStatus(snapshot);
+  const statusLabel = statusLabelFor(summary, snapshot.status.syncState, translate);
+  const tone = statusTone(summary.kind);
   const isSyncing = busy || SYNCING_STATES.includes(snapshot.status.syncState);
   const report = snapshot.lastReport;
 
@@ -179,6 +221,20 @@ export function SyncPage() {
         <SummaryList columns={1}>
           <DataRow label={translate('sync.lastSync')} value={formatTimestamp(snapshot.status.lastSyncedAt)} />
         </SummaryList>
+        {summary.kind === 'waiting' && (
+          <InlineNotice tone="warning" testId="sync-waiting-notice">
+            {summary.waitingCount === 1
+              ? translate('sync.summary.waitingHintOne')
+              : translate('sync.summary.waitingHint').replace('{count}', String(summary.waitingCount))}
+          </InlineNotice>
+        )}
+        {summary.mergedCount > 0 && (
+          <InlineNotice tone="info" testId="sync-merged-notice">
+            {summary.mergedCount === 1
+              ? translate('sync.summary.mergedOne')
+              : translate('sync.summary.merged').replace('{count}', String(summary.mergedCount))}
+          </InlineNotice>
+        )}
         {snapshot.status.lastError && (
           <InlineNotice tone="critical" testId="sync-error-message">
             {translate('sync.error.userMessage')}
@@ -224,10 +280,12 @@ export function SyncPage() {
               <RowListItem
                 key={entry.id}
                 title={translate(entityTypeKey(entry.entityType))}
-                description={translate(operationKey(entry.operation))}
+                description={[translate(operationKey(entry.operation)), blockedReasonKey(entry) ? translate(blockedReasonKey(entry)!) : null]
+                  .filter(Boolean)
+                  .join(' · ')}
                 trailing={
-                  <Badge tone={entry.status === 'blocked' ? 'warning' : 'info'}>
-                    {translate(outboxStatusKey(entry.status))}
+                  <Badge tone={!isSupabaseSyncAllowed(entry.entityType) ? 'default' : entry.status === 'blocked' ? 'warning' : 'info'}>
+                    {!isSupabaseSyncAllowed(entry.entityType) ? translate('sync.outboxStatus.localOnly') : translate(outboxStatusKey(entry.status))}
                   </Badge>
                 }
               />
@@ -240,12 +298,23 @@ export function SyncPage() {
         <DetailSection title={translate('sync.section.report')} testId="sync-report-section">
           {report && (
             <SummaryList>
-              <DataRow label={translate('sync.report.duration')} value={`${report.durationMs} ms`} />
               <DataRow label={translate('sync.report.uploads')} value={report.uploadCount} />
               <DataRow label={translate('sync.report.downloads')} value={report.downloadCount} />
-              <DataRow label={translate('sync.report.conflicts')} value={report.conflictCount} />
+              <DataRow label={translate('sync.report.merged')} value={report.conflictCount} />
               <DataRow label={translate('sync.report.retry')} value={report.retryAttempts} />
             </SummaryList>
+          )}
+          {report && report.conflicts.length > 0 && (
+            /* Automatisch behandelte Konflikte verständlich: was, und wie entschieden. */
+            <RowList testId="sync-report-conflicts">
+              {report.conflicts.map((conflict, index) => (
+                <RowListItem
+                  key={`${conflict.entityType}-${conflict.entityId}-${index}`}
+                  title={translate(entityTypeKey(conflict.entityType))}
+                  description={translate(resolutionKey(conflict.resolution))}
+                />
+              ))}
+            </RowList>
           )}
         </DetailSection>
       )}

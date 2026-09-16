@@ -161,6 +161,8 @@ export interface PendingSummary {
   unarchivedDocuments: number;
   openTasks: number;
   dueTasksToday: number;
+  /** 01D — überfällige Aufgaben getrennt von „heute fällig“. */
+  overdueTasks: number;
   overdueInvoices: number;
   dueTodayInvoices: number;
   dueSoonInvoices: number;

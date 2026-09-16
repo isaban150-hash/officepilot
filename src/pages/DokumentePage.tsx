@@ -22,6 +22,8 @@ import {
   type DocumentAreaFilterId,
 } from '../types/documentArea';
 import { getAllUploadedDocuments } from '../services/uploadedDocumentService';
+import { findInvoiceById } from '../services/invoice/invoiceRegistryService';
+import { formatInvoiceCurrency, formatInvoiceDate } from '../services/invoicePrintModel';
 import { DocumentCardThumbnail } from '../components/documents/DocumentCardThumbnail';
 import { UploadedDocumentsSection } from '../components/documents/UploadedDocumentsSection';
 import {
@@ -168,17 +170,40 @@ export function DokumentePage() {
               buildSummaryForCompanyDocument(doc, { translate, language: setup.language }),
               translate,
             );
+            /*
+             * 01D — eigene Ausgangsrechnungen müssen in der Liste geschäftlich
+             * unterscheidbar sein: Nummer, Kunde, Rechnungsdatum, Betrag aus der
+             * verknüpften Rechnung (keine neue Datenhaltung). Der Projektname
+             * bleibt als Abzeichen. Andere Dokumentarten behalten ihre Darstellung.
+             */
+            const ownInvoice =
+              isGeneratedOutgoingInvoiceDocument(doc) && doc.linkedInvoiceId
+                ? findInvoiceById(doc.linkedInvoiceId)
+                : undefined;
+            const invoiceView = ownInvoice
+              ? {
+                  title:
+                    doc.classifiedKind === 'rechnungskorrektur'
+                      ? doc.title
+                      : `${translate('document.list.invoiceTitle')} ${ownInvoice.number}`,
+                  customer: ownInvoice.customerSnapshot?.name || doc.issuer || translate('document.noIssuer'),
+                  date: formatInvoiceDate(ownInvoice.issueDate ?? ownInvoice.date),
+                  amount: formatInvoiceCurrency(ownInvoice.amount),
+                }
+              : null;
             return (
               <BusinessListItem
                 key={doc.id}
                 to={`/dokumente/${doc.id}`}
                 testId={`document-summary-list-${doc.id}`}
                 leading={<DocumentCardThumbnail documentId={doc.id} placeholder={doc.imagePreview ?? ''} />}
-                title={summaryView.title}
+                title={invoiceView ? invoiceView.title : summaryView.title}
                 subtitle={
                   <>
                     <span data-testid={`document-card-date-${doc.id}`}>
-                      {summaryView.subtitle || doc.issuer || translate('document.noIssuer')} · {cardDate.formatted}
+                      {invoiceView
+                        ? `${invoiceView.customer} · ${invoiceView.date}`
+                        : `${summaryView.subtitle || doc.issuer || translate('document.noIssuer')} · ${cardDate.formatted}`}
                     </span>
                     {validUntilLabel ? (
                       <>
@@ -191,7 +216,9 @@ export function DokumentePage() {
                   </>
                 }
                 meta={
-                  summaryView.factsLine ? (
+                  invoiceView ? (
+                    <span data-testid={`document-card-invoice-amount-${doc.id}`}>{invoiceView.amount}</span>
+                  ) : summaryView.factsLine ? (
                     <span data-testid={`document-card-summary-facts-${doc.id}`}>
                       {summaryView.facts.slice(0, 3).map((f) => f.value).join(' · ')}
                     </span>
