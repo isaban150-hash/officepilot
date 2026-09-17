@@ -595,6 +595,7 @@ const deLegacy = {
   'sync.section.device': 'Gerät & Arbeitsbereich',
   'sync.section.outbox': 'Ausstehende Änderungen',
   'sync.section.report': 'Letzter Durchlauf',
+  'sync.section.technical': 'Technische Details',
   'sync.lastSync': 'Zuletzt synchronisiert',
   'sync.deviceId': 'Gerät',
   'sync.workspaceId': 'Arbeitsbereich',

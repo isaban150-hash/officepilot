@@ -1939,3 +1939,656 @@
 .review-details-group__content[hidden] {
   display: none !important;
 }
+
+/* ======================================================================
+   VISUAL-POLISH-01D — Block C: Assistent, Wissen und Nebenbereiche
+   Gleiche Familie wie Heute/Block B: ruhige Flächen, eine Hauptaktion,
+   Technik zurückgenommen, Desktop nutzt die Breite, Mobile bleibt kompakt.
+   ====================================================================== */
+
+/* --- Assistent --------------------------------------------------------- */
+.assistant-page {
+  max-width: 880px;
+}
+
+.assistant-page .assistant-ask {
+  padding: var(--space-4);
+  border: 1px solid var(--op-border);
+  border-radius: 14px;
+  background: var(--op-surface);
+}
+
+.assistant-page .assistant-prompt__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.assistant-page .assistant-prompt__mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--op-primary-deep);
+  color: #fff;
+}
+
+.assistant-page .assistant-prompt__title {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.assistant-page .assistant-prompt__role {
+  font-size: 12.5px;
+  color: var(--op-text-subtle);
+}
+
+.assistant-page .assistant-ask__form {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.assistant-page .assistant-ask__form .input {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  font-size: 15px;
+  border-color: var(--op-border-strong);
+  background: var(--op-bg);
+}
+
+.assistant-page .assistant-ask__form .input:focus {
+  background: var(--op-surface);
+  border-color: var(--op-primary);
+}
+
+.assistant-page .assistant-ask__primary {
+  width: auto;
+  min-height: 44px;
+  padding-left: var(--space-4);
+  padding-right: var(--space-4);
+  flex-shrink: 0;
+}
+
+.assistant-page .assistant-ask__modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+}
+
+.assistant-page .assistant-ask__modes .btn {
+  width: auto;
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 12.5px;
+  color: var(--op-text-muted);
+}
+
+.assistant-page .assistant-ask__modes .btn:hover:not(:disabled) {
+  color: var(--op-primary);
+  background: var(--op-primary-subtle);
+}
+
+.assistant-page .assistant-ask__examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--op-border);
+}
+
+.assistant-page .assistant-prompt__chip {
+  font-family: inherit;
+  padding: 5px 11px;
+  border: 1px solid var(--op-border);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--op-text-muted);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.assistant-page .assistant-prompt__chip:hover {
+  color: var(--op-secondary);
+  border-color: var(--op-secondary);
+  background: var(--op-success-subtle);
+}
+
+/* Der frühere Hinweiskasten wird zur ruhigen Fußnote unter dem Eingang. */
+.assistant-page [data-testid='assistant-employee-hero'] {
+  margin-top: var(--space-2);
+  padding: 0 var(--space-1);
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 12.5px;
+  color: var(--op-text-subtle);
+}
+
+.assistant-page [data-testid='assistant-employee-hero'] .inline-notice__icon {
+  display: none;
+}
+
+.assistant-page [data-testid='assistant-employee-hero'] .inline-notice__title,
+.assistant-page [data-testid='assistant-employee-hero'] strong {
+  font-weight: 600;
+  color: var(--op-text-muted);
+}
+
+/* Antwort: eine Fläche, Frage als Eyebrow */
+.assistant-page .assistant-last-question {
+  margin: var(--space-5) 0 var(--space-2);
+  font-size: 13px;
+  color: var(--op-text-subtle);
+}
+
+.assistant-page .assistant-last-question__label {
+  font-weight: 700;
+  color: var(--op-text-muted);
+  margin-right: 4px;
+}
+
+.assistant-page .assistant-answer-section {
+  margin: 0 0 var(--space-5);
+}
+
+.assistant-page .brain-orchestration-card {
+  gap: var(--space-3);
+}
+
+.assistant-page .brain-orchestration-meta {
+  font-size: 12px;
+  color: var(--op-text-subtle);
+}
+
+.assistant-page .brain-orchestration-card .card,
+.assistant-page .assistant-answer-card,
+.assistant-page .brain-answer-card {
+  border: 1px solid var(--op-border);
+  border-radius: 14px;
+  box-shadow: none;
+  padding: var(--space-4);
+}
+
+.assistant-page .brain-orchestration-clarification {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--op-warning);
+  margin: 0;
+}
+
+.assistant-page .brain-orchestration-hints__title,
+.assistant-page .brain-orchestration-next-steps__title {
+  font-size: 13px;
+  font-weight: 700;
+  margin: 0 0 4px;
+}
+
+.assistant-page .brain-orchestration-hints__list,
+.assistant-page .brain-orchestration-next-steps ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.assistant-page .assistant-answer-actions .btn {
+  width: auto;
+}
+
+/* Weitere Wege (Nachrichten, Wissen): klein, ganz unten */
+.assistant-page .ui-section .chip-group .chip {
+  min-height: 32px;
+  padding: 4px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--op-primary);
+  background: transparent;
+  border: 1px solid var(--op-border);
+  box-shadow: none;
+}
+
+.assistant-page .ui-section .chip-group .chip:hover {
+  background: var(--op-primary-subtle);
+}
+
+/* --- Wissen ------------------------------------------------------------ */
+.app-shell__main [data-testid='wissen-page'] {
+  max-width: 960px;
+}
+
+.app-shell__main [data-testid='wissen-page'] .inline-notice {
+  padding: var(--space-2) var(--space-3);
+  font-size: 13px;
+}
+
+.knowledge-panel .knowledge-toolbar {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.knowledge-panel .knowledge-search {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  font-size: 14px;
+}
+
+.knowledge-panel .knowledge-toolbar .btn {
+  width: auto;
+  flex-shrink: 0;
+  min-height: 40px;
+}
+
+.knowledge-panel .knowledge-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  margin-bottom: var(--space-2);
+}
+
+.knowledge-panel .knowledge-filters .chip {
+  min-height: 30px;
+  padding: 3px 11px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--op-text-muted);
+  background: transparent;
+  border: 1px solid var(--op-border);
+  box-shadow: none;
+}
+
+.knowledge-panel .knowledge-filters .chip--active {
+  color: var(--op-primary);
+  background: var(--op-primary-subtle);
+  border-color: #c7d2ec;
+}
+
+.knowledge-panel .knowledge-filters + .knowledge-filters {
+  padding-top: var(--space-1);
+}
+
+.knowledge-panel .knowledge-filters:last-of-type {
+  margin-bottom: var(--space-4);
+}
+
+.knowledge-panel [data-testid='knowledge-item'] .card {
+  border: 1px solid var(--op-border);
+  border-radius: 12px;
+  box-shadow: none;
+  padding: var(--space-3) var(--space-4);
+}
+
+.knowledge-panel [data-testid='knowledge-item'] + [data-testid='knowledge-item'] {
+  margin-top: var(--space-2);
+}
+
+.knowledge-panel .knowledge-item__header {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.knowledge-panel .knowledge-item__actions {
+  margin-top: var(--space-2);
+  display: flex;
+  gap: var(--space-2);
+}
+
+.knowledge-panel .knowledge-item__actions .btn {
+  width: auto;
+  min-height: 32px;
+  font-size: 12.5px;
+}
+
+.knowledge-panel .knowledge-form-card {
+  border: 1px solid var(--op-border);
+  border-radius: 14px;
+  box-shadow: none;
+}
+
+@media (min-width: 768px) {
+  .knowledge-panel .knowledge-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .knowledge-panel .form-actions .btn {
+    width: auto;
+  }
+}
+
+.knowledge-panel .empty-state {
+  border: 1px dashed var(--op-border-strong);
+  border-radius: 14px;
+  padding: var(--space-6) var(--space-4);
+  text-align: center;
+  color: var(--op-text-subtle);
+  font-size: 14px;
+}
+
+/* --- Einstellungen: Text linksbündig, ruhige Liste ---------------------- */
+.settings-page {
+  max-width: 880px;
+}
+
+.settings-page .settings-group + .settings-group {
+  margin-top: var(--space-4);
+}
+
+.settings-page .settings-group__title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--op-text-subtle);
+  margin: 0 0 var(--space-2);
+}
+
+.settings-page .settings-list {
+  border: 1px solid var(--op-border);
+  border-radius: 14px;
+  background: var(--op-surface);
+  overflow: hidden;
+}
+
+.settings-page .settings-row {
+  justify-content: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.settings-page .settings-row + .settings-row {
+  border-top: 1px solid var(--op-border);
+}
+
+.settings-page .settings-row__text {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+
+.settings-page .settings-row__title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.settings-page .settings-row__description {
+  font-size: 13px;
+  color: var(--op-text-subtle);
+}
+
+.settings-page .settings-row__icon {
+  color: var(--op-text-subtle);
+}
+
+.settings-page .settings-row__chevron {
+  color: var(--op-border-strong);
+  margin-left: auto;
+}
+
+/* --- Synchronisation: Status vorn, Technik aufklappbar ------------------ */
+[data-testid='sync-page'] {
+  max-width: 880px;
+}
+
+.sync-page__outbox-grid {
+  gap: 0;
+  border: 1px solid var(--op-border);
+  border-radius: 14px;
+  background: var(--op-surface);
+  overflow: hidden;
+}
+
+.sync-page__outbox-stat {
+  border: 0;
+  border-right: 1px solid var(--op-border);
+  border-radius: 0;
+  box-shadow: none;
+  padding: var(--space-3);
+}
+
+.sync-page__outbox-stat:last-child {
+  border-right: 0;
+}
+
+.sync-page__outbox-value {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.sync-page__outbox-label {
+  font-size: 12px;
+  color: var(--op-text-subtle);
+}
+
+.work-tech-details {
+  border-top: 1px solid var(--op-border);
+  padding-top: var(--space-2);
+}
+
+.work-tech-details > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 8px 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--op-text-muted);
+}
+
+.work-tech-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.work-tech-details > summary::before {
+  content: '▸';
+  display: inline-block;
+  width: 14px;
+  color: var(--op-text-subtle);
+}
+
+.work-tech-details[open] > summary::before {
+  content: '▾';
+}
+
+.work-tech-details > .ui-section {
+  margin-top: var(--space-3);
+}
+
+.work-tech-details .data-row__value {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  color: var(--op-text-muted);
+}
+
+@media (min-width: 768px) {
+  .sync-page__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .sync-page__actions .btn {
+    width: auto;
+  }
+
+  .sync-page__actions .btn--secondary,
+  .sync-page__actions .btn:not(:first-child) {
+    background: transparent;
+    color: var(--op-primary);
+    border: 1px solid var(--op-border-strong);
+  }
+}
+
+/* --- Steuerberater: Monat links, Sammelliste rechts ---------------------- */
+.steuerberater-page .steuerberater-categories__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.steuerberater-page .steuerberater-categories__list li {
+  padding: 3px 10px;
+  border: 1px solid var(--op-border);
+  border-radius: var(--radius-pill);
+  font-size: 12.5px;
+  color: var(--op-text-muted);
+}
+
+.steuerberater-page .steuerberater-categories__hint {
+  font-size: 12.5px;
+  color: var(--op-text-subtle);
+}
+
+.steuerberater-page .steuerberater-month-select {
+  max-width: 420px;
+  min-height: 42px;
+}
+
+.steuerberater-page .card {
+  border: 1px solid var(--op-border);
+  border-radius: 14px;
+  box-shadow: none;
+}
+
+/* --- Kommunikation: Entwurf-Eingabe als Fläche, eine Hauptaktion ------------ */
+[data-testid='kommunikation-page'] .communication-input-card {
+  border: 1px solid var(--op-border);
+  border-radius: 14px;
+  box-shadow: none;
+  padding: var(--space-4);
+}
+
+@media (min-width: 768px) {
+  [data-testid='kommunikation-page'] .communication-input-card .btn,
+  [data-testid='kommunikation-page'] .communication-ai-controls .btn,
+  [data-testid='kommunikation-page'] .communication-integration-actions .btn {
+    width: auto;
+  }
+
+  [data-testid='kommunikation-page'] .communication-input-row {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-2);
+  }
+
+  [data-testid='kommunikation-page'] .communication-input-row textarea,
+  [data-testid='kommunikation-page'] .communication-input-row .input {
+    width: 100%;
+  }
+}
+
+[data-testid='kommunikation-page'] .communication-history-item {
+  border: 1px solid var(--op-border);
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+/* --- Mehr: Bereichsliste in der Familie ------------------------------------ */
+.mehr-page {
+  max-width: 880px;
+}
+
+.mehr-page .nav-group__row,
+.mehr-page .row-list {
+  border-radius: 14px;
+}
+
+/* --- Ausgaben: Detail- und Erfassungsseiten ------------------------------- */
+[data-testid='ausgabe-detail-page'] .card,
+[data-testid='ausgabe-detail-edit'] .card {
+  border: 1px solid var(--op-border);
+  border-radius: 14px;
+  box-shadow: none;
+}
+
+@media (min-width: 768px) {
+  [data-testid='ausgabe-detail-page'] .detail-actions .btn,
+  [data-testid='ausgabe-detail-page'] .form-actions .btn {
+    width: auto;
+  }
+}
+
+/* --- Mobile 390: Assistent kompakt ------------------------------------------ */
+@media (max-width: 767px) {
+  .assistant-page .assistant-ask {
+    padding: var(--space-3);
+  }
+
+  .assistant-page .assistant-ask__form {
+    flex-wrap: wrap;
+  }
+
+  .assistant-page .assistant-ask__form .input {
+    flex-basis: 100%;
+  }
+
+  .assistant-page .assistant-ask__primary {
+    min-height: 40px;
+  }
+
+  .assistant-page .assistant-ask__examples {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    margin-right: calc(-1 * var(--space-3));
+    padding-right: var(--space-3);
+  }
+
+  .assistant-page .assistant-prompt__chip {
+    flex-shrink: 0;
+  }
+
+  .knowledge-panel .knowledge-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .knowledge-panel .knowledge-search {
+    flex-basis: 100%;
+  }
+
+  .sync-page__outbox-stat {
+    padding: var(--space-2);
+  }
+
+  .sync-page__outbox-value {
+    font-size: 20px;
+  }
+}
+
+.assistant-page [data-testid='assistant-employee-hero'] .inline-notice__title,
+.assistant-page [data-testid='assistant-employee-hero'] .inline-notice__message,
+.assistant-page [data-testid='assistant-employee-hero'] .inline-notice__body {
+  font-size: 12.5px;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.assistant-page [data-testid='assistant-employee-hero'] .inline-notice__title {
+  display: inline;
+  margin-right: 4px;
+}
+
+.assistant-page [data-testid='assistant-employee-hero'] .inline-notice__message {
+  display: inline;
+}

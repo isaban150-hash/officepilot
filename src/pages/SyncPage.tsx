@@ -242,22 +242,6 @@ export function SyncPage() {
         )}
       </DetailSection>
 
-      <DetailSection title={translate('sync.section.device')}>
-        <SummaryList>
-        <DataRow
-          label={translate('sync.deviceId')}
-          value={
-            <span data-testid="sync-device-id">{shortenSyncId(snapshot.deviceId)}</span>
-          }
-        />
-        <DataRow
-          label={translate('sync.workspaceId')}
-          value={
-            <span data-testid="sync-workspace-id">{shortenSyncId(snapshot.workspaceId)}</span>
-          }
-        />
-        </SummaryList>
-      </DetailSection>
 
       <DetailSection title={translate('sync.section.outbox')}>
         <div className="sync-page__outbox-grid" data-testid="sync-outbox-counts">
@@ -294,6 +278,30 @@ export function SyncPage() {
         )}
       </DetailSection>
 
+      {/*
+        * VISUAL-POLISH-01D — Geräte-/Arbeitsbereichskennungen und der letzte
+        * Durchlauf sind technische Angaben: aufklappbar, nicht im Hauptfluss.
+        * Inhalte und Test-IDs unverändert.
+        */}
+      <details className="work-tech-details" data-testid="sync-technical-details">
+        <summary>{translate('sync.section.technical')}</summary>
+      <DetailSection title={translate('sync.section.device')}>
+        <SummaryList>
+        <DataRow
+          label={translate('sync.deviceId')}
+          value={
+            <span data-testid="sync-device-id">{shortenSyncId(snapshot.deviceId)}</span>
+          }
+        />
+        <DataRow
+          label={translate('sync.workspaceId')}
+          value={
+            <span data-testid="sync-workspace-id">{shortenSyncId(snapshot.workspaceId)}</span>
+          }
+        />
+        </SummaryList>
+      </DetailSection>
+
       {(report || snapshot.status.lastError) && (
         <DetailSection title={translate('sync.section.report')} testId="sync-report-section">
           {report && (
@@ -318,6 +326,7 @@ export function SyncPage() {
           )}
         </DetailSection>
       )}
+      </details>
 
       <div className="sync-page__actions">
         <Button

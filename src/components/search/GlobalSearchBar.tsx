@@ -6,7 +6,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Card, CardMeta, CardTitle, PageHeader } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Icon } from '../ui/Icon';
@@ -105,7 +105,13 @@ export function GlobalSearchBar({
   const { translate } = useApp();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [query, setQuery] = useState(searchParams.get('q') ?? '');
+  const location = useLocation();
+  /*
+   * VISUAL-POLISH-01D — `?q=` gehört nur auf der Suchseite der Suche. Der
+   * Assistent nutzt denselben Parameter für seine Frage; vorher füllte er
+   * damit die Kopfzeilensuche und öffnete deren Vorschau über der Seite.
+   */
+  const [query, setQuery] = useState(location.pathname === '/suche' ? (searchParams.get('q') ?? '') : '');
   const [isMobile, setIsMobile] = useState(getIsMobileViewport);
   const [mobileExpanded, setMobileExpanded] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);

@@ -6,6 +6,7 @@ import { PageHeader } from '../components/ui/Card';
 import { Page } from '../components/ui/Page';
 import { DetailSection } from '../components/ui/Section';
 import { InlineNotice } from '../components/ui/States';
+import { Icon } from '../components/ui/Icon';
 import { useApp } from '../context/AppContext';
 import { isAiProviderConfigured } from '../services/aiProviderService';
 import { processOfficePilotQuestion } from '../services/brain/brainOrchestrator';
@@ -66,34 +67,46 @@ export function AssistentPage() {
       {/* UIUX-FOUNDATION-01G — kein Hero-Verlauf: ruhiger Hinweis, Eingabe als Abschnitt. */}
       <PageHeader title={translate('assistant.title')} subtitle={translate('assistant.subtitle')} />
 
-      <InlineNotice tone="info" title={translate('assistant.employeeTitle')} testId="assistant-employee-hero">
-        {translate('assistant.employeeHint')}
-      </InlineNotice>
-
-      <DetailSection title={translate('assistant.inputLabel')} surface className="assistant-input-card">
+      {/*
+        * VISUAL-POLISH-01D — derselbe Eingang wie auf „Heute": Marke, eine
+        * Eingabezeile, eine Hauptaktion. Die beiden Antwortarten bleiben als
+        * ruhige Textaktionen darunter; Test-IDs und Logik unverändert.
+        */}
+      <section className="assistant-ask assistant-prompt" data-testid="assistant-ask">
+        <div className="assistant-prompt__head">
+          <span className="assistant-prompt__mark" aria-hidden>
+            <Icon id="assistant" size="sm" />
+          </span>
+          <span className="assistant-prompt__title">{translate('mobile.home.assistantName')}</span>
+          <span className="assistant-prompt__role">{translate('mobile.home.assistantRole')}</span>
+        </div>
         <label className="sr-only" htmlFor="assistant-question">
           {translate('assistant.inputLabel')}
         </label>
-        <input
-          id="assistant-question"
-          type="text"
-          className="input assistant-input"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSmartAsk()}
-          placeholder={translate('assistant.placeholder')}
-          data-testid="assistant-input"
-        />
-        <div className="assistant-actions-row">
+        <div className="assistant-prompt__form assistant-ask__form">
+          <input
+            id="assistant-question"
+            type="text"
+            className="input assistant-input assistant-prompt__input"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSmartAsk()}
+            placeholder={translate('assistant.placeholder')}
+            data-testid="assistant-input"
+          />
           <Button
             onClick={handleSmartAsk}
             disabled={loading || !input.trim()}
             data-testid="assistant-ask-smart"
+            className="assistant-ask__primary"
           >
             {loading ? translate('assistant.thinking') : translate('brain.askSmart')}
           </Button>
+        </div>
+        <div className="assistant-actions-row assistant-ask__modes">
           <Button
-            variant="outline"
+            variant="ghost"
+            size="sm"
             onClick={handleQuickAsk}
             disabled={loading || !input.trim()}
             data-testid="assistant-ask-quick"
@@ -101,7 +114,8 @@ export function AssistentPage() {
             {translate('assistant.askQuick')}
           </Button>
           <Button
-            variant="outline"
+            variant="ghost"
+            size="sm"
             onClick={handleDeepAsk}
             disabled={loading || !input.trim() || !aiConfigured}
             data-testid="assistant-ask-deep"
@@ -109,7 +123,23 @@ export function AssistentPage() {
             {translate('assistant.askDeep')}
           </Button>
         </div>
-      </DetailSection>
+        <div className="assistant-prompt__suggestions assistant-ask__examples" data-testid="assistant-examples">
+          {ASSISTANT_EXAMPLE_QUESTION_KEYS.map((key) => (
+            <button
+              key={key}
+              type="button"
+              className="assistant-prompt__chip"
+              onClick={() => handleSuggestion(key)}
+            >
+              {translate(key)}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <InlineNotice tone="info" title={translate('assistant.employeeTitle')} testId="assistant-employee-hero">
+        {translate('assistant.employeeHint')}
+      </InlineNotice>
 
       {result && lastQuestion && (
         <p className="assistant-last-question">
@@ -150,20 +180,6 @@ export function AssistentPage() {
         </div>
       </DetailSection>
 
-      <DetailSection title={translate('assistant.examples')}>
-        <div className="chip-group">
-          {ASSISTANT_EXAMPLE_QUESTION_KEYS.map((key) => (
-            <button
-              key={key}
-              type="button"
-              className="chip"
-              onClick={() => handleSuggestion(key)}
-            >
-              {translate(key)}
-            </button>
-          ))}
-        </div>
-      </DetailSection>
     </Page>
   );
 }
