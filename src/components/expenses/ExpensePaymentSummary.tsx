@@ -42,10 +42,13 @@ export function ExpensePaymentSummary({ expense, translate }: Props) {
           <dt>{translate('payment.paidAmount')}</dt>
           <dd><MoneyDisplay value={summary.paidAmount} /></dd>
         </div>
-        <div className="invoice-payment-summary__row">
-          <dt>{translate('payment.openAmount')}</dt>
-          <dd><MoneyDisplay value={summary.openAmount} /></dd>
-        </div>
+        {/* V1-A — ein stornierter Beleg hat keinen offenen Betrag; die Zahl bleibt in der Rechnung, nicht in der Anzeige. */}
+        {!isExpenseCancelled(expense) && (
+          <div className="invoice-payment-summary__row">
+            <dt>{translate('payment.openAmount')}</dt>
+            <dd><MoneyDisplay value={summary.openAmount} /></dd>
+          </div>
+        )}
         {summary.overpaidAmount > 0 && (
           <div className="invoice-payment-summary__row invoice-payment-summary__row--overpaid">
             <dt>{translate('payment.overpaidAmount')}</dt>

@@ -25,7 +25,7 @@ import { processUpload } from './inboxService';
 import { getSteuerberaterMonthOverview } from './steuerberaterOverviewService';
 import { buildMonatsmappeModel } from './steuerberater/monatsmappeModelService';
 import { collectMonatsmappeInput } from './steuerberater/monatsmappeInputService';
-import { HomeOpenWork } from '../components/home/HomeOpenWork';
+import { HomeKpis } from '../components/home/HomeKpis';
 import { SteuerberaterPage } from '../pages/SteuerberaterPage';
 
 const MONTH = '2026-09';
@@ -104,11 +104,15 @@ function overview() {
   return getSteuerberaterMonthOverview(REF, 'de-DE', MONTH);
 }
 
+/*
+ * OFFICEPILOT-V1-A (Testkorrektur) — seit Visual Block A (0886002) liegt die
+ * Steuerberater-Zeile in „Ihr Betrieb heute“ (HomeKpis), nicht mehr in HomeOpenWork.
+ */
 function renderHome(): string {
   return renderToStaticMarkup(
     <MemoryRouter>
       <TestProviders initialSetup={DEFAULT_SETUP}>
-        <HomeOpenWork />
+        <HomeKpis />
       </TestProviders>
     </MemoryRouter>,
   );

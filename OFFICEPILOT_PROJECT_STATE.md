@@ -20,21 +20,29 @@ Stand: 2026-09-17
 ## 2. Aktueller Git-Stand
 
 - Branch: `main`
-- Letzter bestätigter Commit (HEAD): `0886002` — feat(ui): polish today dashboard and shell (Block A)
-- origin/main: identisch mit lokalem `main` (`0886002`), nichts ausstehend
-- Arbeitskopie: VISUAL-POLISH-01C (Block B) ist implementiert, aber **noch nicht committet**
-  (siehe Abschnitt 3)
+- Letzter bestätigter Commit (HEAD): `65542e8` — fix(product): harden assistant communication and knowledge flows (Block D2)
+- origin/main: identisch mit lokalem `main` (`65542e8`), nichts ausstehend
+- Arbeitskopie: OFFICEPILOT-V1-A (Ausgaben-Härtung) ist implementiert und abgenommen, aber
+  **noch nicht committet** (siehe Abschnitt 3)
 
 ## 3. Aktiver Arbeitsblock
 
-- Block: VISUAL-POLISH-01C — Block B (Kernarbeitsseiten, Listen und Details) — **uncommittet**
-- Ziel: Eingang, Aufträge, Rechnungen, Dokumente, Finanzen, Kunden, Ausgaben sowie
-  Dokument-, Rechnungs-, Auftrags-, Eingangs- und Kundendetail auf das Niveau von „Heute"
-  (Zeilenlisten, Kennzahlenflächen, Zweispalten-Details, eine Hauptaktion, keine Kartenwand)
-- Status: implementiert (neues `src/styles/workpages.css` + gezielte Markup-Umbauten);
-  gezielte Tests grün, tsc grün; Browser-Selbstabnahme Desktop 1280 / Galaxy 360 / iOS ohne
-  horizontalen Überlauf
-- Noch offene Abnahme: Commit durch den Nutzer; danach unabhängiger Produkttest (ChatGPT Work)
+- Ausgangspunkt: OFFICEPILOT-V1-GAP-AUDIT-01A (Analyse, ohne Commit) — V1-Matrix: Dokumenteingang,
+  Rechnungen (inkl. manuelle Rechnung), Einstellungen = A; Kunden, Steuerberater = A/B; Aufträge,
+  Kommunikation, Sync, Assistent, UI/Mobile = B; Ausgaben = C (Storno ohne Bedienoberfläche).
+  Geschätzt 80–85 % des V1-Umfangs vorhanden.
+- Block: OFFICEPILOT-V1-A — Ausgaben-Härtung — **uncommittet, fachlich abgeschlossen**
+- Inhalt: „Ausgabe stornieren“ im Ausgabendetail (Dialog mit Pflichtgrund, sekundäre Aktion,
+  idempotent, kein Löschen, Beleg bleibt erhalten; mit gebuchter Zahlung gesperrt — Zahlung
+  zuerst zurücknehmen); Bearbeiten: vor Zahlung alles änderbar, nach Zahlung Beträge fest
+  (Kategorie/Beschreibung/Datum bleiben änderbar), stornierte Ausgaben nicht mehr bearbeitbar;
+  Detail zeigt Status, Zahlungsstatus, Stornodatum/-grund und nächste Aktion; Texte de/tr/bg.
+  Monatsmappe und Cloud-Sync unverändert genutzt (Status/Stornodatum/Grund liegen im Payload).
+- Status: `src/expenseCancel01a.test.ts` + betroffene Tests grün, tsc grün; Browser-Selbstabnahme
+  Desktop 1280 / Galaxy 360 / iPhone 390 inkl. Gerät 2 (Storno kommt über die Cloud an).
+- Bekannt, nicht Teil von V1-A: `src/services/steuerberaterOverview01b.test.tsx` (Fall F) erwartet
+  die Steuerberater-Zeile in „Offene Arbeit“; seit Block A liegt sie in „Ihr Betrieb heute“ (Test veraltet).
+- Nächster Schritt: Commit durch den Nutzer, dann V1-B.
 
 ## 4. Abgeschlossene wichtige Blöcke
 
@@ -49,7 +57,12 @@ Stand: 2026-09-17
 | Real Product Test Hardening (REAL-PRODUCT-TEST-01D) | `6cb1611` | Sync-Status, Aufgaben heute/überfällig, Scroll-Wiederherstellung, Aufträge-Hauptaktion, Rechnungsidentifikation, Kunden-Unterscheidung |
 | Visual Polish Analyse (VISUAL-POLISH-01A) | ohne Commit (Analyse) | Zielbilder und Drei-Block-Plan A/B/C |
 | Visual Polish Block A (VISUAL-POLISH-01B) | `0886002` | Heute + Shell/Header/Suche + Kennzahlen/Prioritäten + kompakter Wiederaufnahme-Hinweis |
-| Visual Polish Block B (VISUAL-POLISH-01C) | noch nicht committet | Listen als Zeilen, Kennzahlenflächen (Rechnungen/Finanzen/Ausgaben), Dokumentdetail nach fünf Fragen, Rechnungs-/Auftrags-/Kundendetail zweispaltig |
+| Visual Polish Block B (VISUAL-POLISH-01C) | `990a2d2` | Listen als Zeilen, Kennzahlenflächen (Rechnungen/Finanzen/Ausgaben), Dokumentdetail nach fünf Fragen, Rechnungs-/Auftrags-/Kundendetail zweispaltig |
+| Visual Polish Block C (VISUAL-POLISH-01D) | `04441e1` | Sekundärbereiche: Finanzen, Steuerberater, Einstellungen, Assistent, Wissen, Sync, Mehr |
+| Product Acceptance Fix D1 (PRODUCT-ACCEPTANCE-FIX-01B) | `eddb70d` | Kernabläufe vervollständigt, u. a. „Als Ausgabe speichern“ aus dem Eingang (F-15) |
+| Product Acceptance Fix D2 (PRODUCT-ACCEPTANCE-FIX-01C) | `65542e8` | Assistent ohne Rohschlüssel, Tankbeleg keine Materialrechnung, Kommunikation ohne Sackgasse, Wissen einfach anlegen |
+| V1-Gap-Audit (OFFICEPILOT-V1-GAP-AUDIT-01A) | ohne Commit (Analyse) | V1-Matrix A/B/C/D, Restlücken, Rest-Roadmap V1-A…V1-E |
+| V1-A Ausgaben-Härtung (OFFICEPILOT-V1-A) | noch nicht committet | Ausgaben-Storno mit Grund, sichere Bearbeitung vor/nach Zahlung, Detail mit Status und nächster Aktion |
 
 ## 5. Verbindliche Produkt-/Designregeln
 
@@ -98,14 +111,16 @@ gelten als bekannt:
 Regel: nicht automatisch stagen, nicht restoren, nicht löschen, nicht
 committen. Nur der Nutzer entscheidet ausdrücklich darüber.
 
-## 8. Offene Roadmap
+## 8. Offene Roadmap (Weg zur ersten verkaufbaren Version)
 
-A. Visual Polish Block A — committet (`0886002`)
-B. Visual Polish Block B — Listen- und Detailseiten (implementiert, Commit offen)
-C. Visual Polish Block C — Sekundärbereiche (Finanzen, Steuerberater,
-   Einstellungen, Assistent, Wissen, Sync, Mehr)
-D. Erneuter echter Browser-Produkttest (ChatGPT Work) auf dem polierten Stand
-E. Danach Produktfertigstellung / verbleibende Fachbereiche
+V1-A Ausgaben-Härtung — implementiert, Commit offen
+V1-B Versand live: Brevo-Staging-Test (Rechnung, Korrektur, Dokument), Fehlerbilder verständlich
+V1-C Mehrgerät ehrlich: Aufgaben in die Cloud-Allowlist oder sichtbar „nur dieses Gerät“; Konflikthinweise abnehmen
+V1-D Navigation/Betrieb: technische Seiten (`/mail-import`, `/papierarchiv`, `/synchronisation`, `/admin/users`)
+     aus der Kern-Navigation, Aufträge-Statuswechsel abnehmen, optional „Auftrag ohne Dokument“
+V1-E Pilot-Belegtest: 20–30 echte Belege eines Betriebs durch Eingang → Ausgabe → Monatsmappe; Fehlerliste, dann Freigabe
+
+Nach V1: Mahnwesen, DATEV/Kontenrahmen, XRechnung/ZUGFeRD, Kontaktpersonen, Mail-Import, Konfliktdialoge, native Apps.
 
 ## 9. Aktuelles visuelles Ziel (freigegebenes Zielbild aus VISUAL-POLISH-01A)
 

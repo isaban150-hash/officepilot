@@ -97,17 +97,23 @@ describe('01D2 — kanonisches Ausgaben-Stornodatum', () => {
     createdAt: '2026-08-05T10:00:00.000Z', updatedAt: '2026-08-05T10:00:00.000Z',
   };
 
-  it('F: Uebergang nach storniert setzt cancelledAt einmal, Folge-Update behaelt es, Ruecknahme loescht es', () => {
+  /*
+   * OFFICEPILOT-V1-A — ein Storno ist endgültig: Eine stornierte Ausgabe wird
+   * nicht mehr bearbeitet und nicht wieder gebucht; cancelledAt bleibt.
+   * (Vorher erlaubte dieser Test die Rücknahme über updateExpense.)
+   */
+  it('F: Uebergang nach storniert setzt cancelledAt einmal; danach keine Bearbeitung und keine Ruecknahme', () => {
     hydrateExpenseStore([base]);
     expect(getExpenseFromStoreById('exp-real-x')?.cancelledAt).toBeUndefined();
     expect(updateExpense('exp-real-x', { status: 'storniert' }).success).toBe(true);
     const first = getExpenseFromStoreById('exp-real-x')!;
     expect(first.status).toBe('storniert');
     expect(first.cancelledAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
-    expect(updateExpense('exp-real-x', { title: 'Neu' }).success).toBe(true);
-    expect(getExpenseFromStoreById('exp-real-x')?.cancelledAt).toBe(first.cancelledAt);
-    expect(updateExpense('exp-real-x', { status: 'gebucht' }).success).toBe(true);
-    expect(getExpenseFromStoreById('exp-real-x')?.cancelledAt).toBeUndefined();
-    expect(getExpenseFromStoreById('exp-real-x')?.status).toBe('gebucht');
+    expect(updateExpense('exp-real-x', { title: 'Neu' })).toEqual({ success: false, errorKey: 'expense.edit.cancelled' });
+    expect(updateExpense('exp-real-x', { status: 'gebucht' })).toEqual({ success: false, errorKey: 'expense.edit.cancelled' });
+    const after = getExpenseFromStoreById('exp-real-x')!;
+    expect(after.cancelledAt).toBe(first.cancelledAt);
+    expect(after.status).toBe('storniert');
+    expect(after.title).toBe(base.title);
   });
 });

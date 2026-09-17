@@ -197,9 +197,34 @@ export function addExpense(input: ExpenseInput): ExpenseMutationResult {
   return { success: true, expense: getExpenseById(expense.id)! };
 }
 
+/**
+ * OFFICEPILOT-V1-A — Bearbeitungsregeln nach Buchung.
+ * Eine stornierte Ausgabe ist Historie und wird nicht mehr bearbeitet.
+ * Sobald eine Zahlung gebucht ist, bleiben die Beträge fest: Eine stille
+ * Betragsänderung würde den Zahlstatus (bezahlt/überzahlt) und die
+ * Monatsmappe verfälschen. Der saubere Weg ist Storno + Neu-Erfassung.
+ * Beschreibung, Kategorie, Datum, Lieferant, Nummer bleiben änderbar.
+ */
+export function hasBookedExpensePayments(expense: Expense): boolean {
+  return (expense.payments ?? []).length > 0;
+}
+
+function amountChanged(next: number | undefined, current: number): boolean {
+  return next !== undefined && Math.abs(next - current) > 0.004;
+}
+
 export function updateExpense(id: string, changes: Partial<ExpenseInput>): ExpenseMutationResult {
   const current = getExpenseFromStoreById(id);
   if (!current || !isEntitySyncActive(current)) return { success: false, errorKey: 'expense.notFound' };
+  if (current.status === 'storniert') return { success: false, errorKey: 'expense.edit.cancelled' };
+  if (
+    hasBookedExpensePayments(current) &&
+    (amountChanged(changes.grossAmount, current.grossAmount) ||
+      amountChanged(changes.netAmount, current.netAmount) ||
+      amountChanged(changes.taxAmount, current.taxAmount))
+  ) {
+    return { success: false, errorKey: 'expense.edit.amountLockedAfterPayment' };
+  }
 
   const merged: ExpenseInput = {
     title: changes.title ?? current.title,
@@ -258,6 +283,42 @@ export function updateExpense(id: string, changes: Partial<ExpenseInput>): Expen
       cancelReason: becomesCancelled ? current.cancelReason : undefined,
     }),
   );
+  persistAll();
+  return { success: true, expense: getExpenseById(id)! };
+}
+
+/**
+ * OFFICEPILOT-V1-A — Ausgabe stornieren.
+ * Kein Löschen: Der Beleg bleibt mit allen Daten erhalten und wird als
+ * `storniert` mit Stornodatum und Grund geführt — die Monatsmappe zeigt ihn
+ * als eigenen Storno-Beleg im Stornomonat (01D2). Regeln wie bei Rechnungen:
+ * genau einmal (idempotent: zweiter Aufruf ändert nichts), Grund ist Pflicht,
+ * gebuchte Zahlungen halten das Storno auf — sie werden nie still verändert;
+ * der Nutzer nimmt sie sichtbar zurück oder lässt den Beleg stehen.
+ * Die Cloud erhält den Zustand über den bestehenden Beleg-Weg
+ * (`status`, `cancelledAt`, `cancelReason` liegen im Payload).
+ */
+export function cancelExpense(id: string, reason: string): ExpenseMutationResult {
+  const current = getExpenseFromStoreById(id);
+  if (!current || !isEntitySyncActive(current)) return { success: false, errorKey: 'expense.notFound' };
+  if (current.status === 'storniert') return { success: false, errorKey: 'expense.cancel.alreadyCancelled' };
+  const trimmedReason = reason.trim();
+  if (!trimmedReason) return { success: false, errorKey: 'expense.cancel.reasonRequired' };
+  if (current.status !== 'gebucht') return { success: false, errorKey: 'expense.cancel.notBooked' };
+  if (hasBookedExpensePayments(current)) return { success: false, errorKey: 'expense.cancel.hasPayments' };
+
+  const now = new Date().toISOString();
+  const cancelled = withUpdatedEntitySync(
+    normalizeExpensePaymentFields({
+      ...current,
+      status: 'storniert',
+      cancelledAt: now,
+      cancelReason: trimmedReason,
+      updatedAt: now,
+    }),
+    'expense',
+  );
+  replaceExpenseInStore(id, cancelled);
   persistAll();
   return { success: true, expense: getExpenseById(id)! };
 }

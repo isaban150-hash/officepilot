@@ -3,6 +3,7 @@ import { useApp } from '../../context/AppContext';
 import {
   EXPENSE_CATEGORIES,
   addExpense,
+  hasBookedExpensePayments,
   updateExpense,
 } from '../../services/expenseService';
 import type { Expense, ExpenseCategory, ExpenseInput } from '../../types/expense';
@@ -111,6 +112,12 @@ export function ExpenseForm({ mode, expense, prefill, onSaved, onCancel }: Expen
     return emptyDraft();
   });
 
+  /*
+   * OFFICEPILOT-V1-A — nach einer gebuchten Zahlung bleiben die Beträge fest
+   * (Regel des Dienstes); die Felder zeigen das, statt beim Speichern zu scheitern.
+   */
+  const amountsLocked = mode === 'edit' && !!expense && hasBookedExpensePayments(expense);
+
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
     const input = toInput(draft, linkedInboxId);
@@ -144,6 +151,7 @@ export function ExpenseForm({ mode, expense, prefill, onSaved, onCancel }: Expen
         <select
           className="input"
           value={draft.category}
+          data-testid="expense-category-select"
           onChange={(e) =>
             setDraft((prev) => ({ ...prev, category: e.target.value as ExpenseCategory }))
           }
@@ -196,12 +204,20 @@ export function ExpenseForm({ mode, expense, prefill, onSaved, onCancel }: Expen
         />
       </label>
 
+      {amountsLocked ? (
+        <p className="form-hint" data-testid="expense-amounts-locked">
+          {translate('expense.edit.amountLockedHint')}
+        </p>
+      ) : null}
+
       <label className="form-group">
         <span>{translate('expense.fieldGrossAmount')}</span>
         <input
           className="input"
           inputMode="decimal"
           value={draft.grossAmount}
+          disabled={amountsLocked}
+          data-testid="expense-gross-input"
           onChange={(e) => setDraft((prev) => ({ ...prev, grossAmount: e.target.value }))}
           required
         />
@@ -213,6 +229,7 @@ export function ExpenseForm({ mode, expense, prefill, onSaved, onCancel }: Expen
           className="input"
           inputMode="decimal"
           value={draft.netAmount}
+          disabled={amountsLocked}
           onChange={(e) => setDraft((prev) => ({ ...prev, netAmount: e.target.value }))}
         />
       </label>
@@ -223,6 +240,7 @@ export function ExpenseForm({ mode, expense, prefill, onSaved, onCancel }: Expen
           className="input"
           inputMode="decimal"
           value={draft.taxAmount}
+          disabled={amountsLocked}
           onChange={(e) => setDraft((prev) => ({ ...prev, taxAmount: e.target.value }))}
         />
       </label>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { ExpenseCancelDialog } from '../components/expenses/ExpenseCancelDialog';
 import { ExpenseForm } from '../components/expenses/ExpenseForm';
 import { ExpensePaymentForm } from '../components/expenses/ExpensePaymentForm';
 import { getExpensePaymentSavedToastKey } from '../components/expenses/ExpensePaymentSummary';
@@ -15,13 +16,14 @@ import { DetailSection, SummaryList } from '../components/ui/Section';
 import { expenseStatusTone, paymentStatusTone } from '../services/ui/statusTone';
 import { useApp } from '../context/AppContext';
 import { formatPaperFilingInstruction } from '../services/paperFolderService';
+import { formatDisplayDate } from '../utils/displayFormat';
 import {
   calculateExpensePaymentSummary,
   isExpenseCancelled,
   isExpensePayable,
   removeExpensePayment,
 } from '../services/expensePaymentService';
-import { deleteExpense, getExpenseById } from '../services/expenseService';
+import { deleteExpense, getExpenseById, hasBookedExpensePayments } from '../services/expenseService';
 import { getInboxItemById } from '../services/inboxService';
 import type { Expense } from '../types/expense';
 import type { TranslationKey } from '../i18n';
@@ -44,6 +46,7 @@ export function AusgabeDetailPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -123,7 +126,22 @@ export function AusgabeDetailPage() {
   }
 
   const paymentSummary = calculateExpensePaymentSummary(expense);
-  const canRecordPayment = isExpensePayable(expense) && !isExpenseCancelled(expense);
+  const cancelled = isExpenseCancelled(expense);
+  const canRecordPayment = isExpensePayable(expense) && !cancelled;
+  /*
+   * OFFICEPILOT-V1-A — Storno und Bearbeiten nur für gebuchte, nicht stornierte
+   * Belege. Der Dienst prüft dasselbe; hier wird es nicht erst angeboten.
+   * Die nächste sinnvolle Aktion steht als ein Satz über den Details.
+   */
+  const canCancel = expense.status === 'gebucht' && !cancelled;
+  const paymentsBooked = hasBookedExpensePayments(expense);
+  const nextActionKey: TranslationKey = cancelled
+    ? 'expense.nextAction.cancelled'
+    : paymentSummary.status === 'bezahlt'
+      ? 'expense.nextAction.paid'
+      : paymentSummary.status === 'teilbezahlt'
+        ? 'expense.nextAction.partial'
+        : 'expense.nextAction.open';
 
   return (
     <Page testId="ausgabe-detail-page">
@@ -134,7 +152,8 @@ export function AusgabeDetailPage() {
             {expense.supplierName}
             {' · '}
             {translate(categoryKey)}
-            {expense.status !== 'gebucht' ? (
+            {/* V1-A — storniert steht bereits als Statusabzeichen im Kopf; kein zweites Abzeichen daneben. */}
+            {expense.status !== 'gebucht' && !cancelled ? (
               <>
                 {' · '}
                 <Badge tone={expenseStatusTone(expense.status)}>{translate(statusKey)}</Badge>
@@ -144,7 +163,7 @@ export function AusgabeDetailPage() {
         }
         status={
           <StatusBadge
-            tone={paymentStatusTone(paymentSummary.status)}
+            tone={cancelled ? expenseStatusTone('storniert') : paymentStatusTone(paymentSummary.status)}
             label={translate(`payment.status.${paymentSummary.status}` as TranslationKey)}
             data-testid="ausgabe-payment-status"
           />
@@ -160,6 +179,26 @@ export function AusgabeDetailPage() {
           ) : undefined
         }
       />
+
+      {cancelled ? (
+        <section className="invoice-cancelled-panel" data-testid="ausgabe-cancelled-panel">
+          <p className="invoice-hint invoice-hint--warning" data-testid="ausgabe-cancelled-notice">
+            {expense.cancelledAt
+              ? translate('expense.cancelledOn').replace('{date}', formatDisplayDate(expense.cancelledAt))
+              : translate('expense.payment.cancelledNotice')}
+          </p>
+          {expense.cancelReason ? (
+            <div className="data-row" data-testid="ausgabe-cancelled-reason">
+              <span className="data-row__label">{translate('expense.fieldCancelReason')}</span>
+              <span className="data-row__value">{expense.cancelReason}</span>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
+      <p className="invoice-hint" data-testid="ausgabe-next-action">
+        {translate(nextActionKey)}
+      </p>
 
       <DetailSection title={translate('payment.summaryTitle')} surface testId="ausgabe-section-payment">
         <ExpensePaymentSummary expense={expense} translate={translate} />
@@ -184,6 +223,15 @@ export function AusgabeDetailPage() {
             />
           ) : null}
           <DataRow label={translate('expense.fieldSupplier')} value={expense.supplierName} />
+          <DataRow label={translate('expense.fieldCategory')} value={translate(categoryKey)} />
+          <DataRow
+            label={translate('expense.fieldStatus')}
+            value={<Badge tone={expenseStatusTone(expense.status)}>{translate(statusKey)}</Badge>}
+          />
+          <DataRow
+            label={translate('expense.fieldPaymentStatus')}
+            value={translate(`payment.status.${paymentSummary.status}` as TranslationKey)}
+          />
           <DataRow
             label={translate('expense.fieldInvoiceNumber')}
             value={expense.invoiceNumber || '—'}
@@ -224,10 +272,23 @@ export function AusgabeDetailPage() {
       />
 
       <div className="detail-actions" data-testid="ausgabe-detail-actions">
-        <Button variant="outline" onClick={() => setIsEditing(true)}>
-          {translate('expense.edit')}
-        </Button>
-        {!confirmDelete ? (
+        {!cancelled ? (
+          <Button variant="outline" onClick={() => setIsEditing(true)} data-testid="ausgabe-edit">
+            {translate('expense.edit')}
+          </Button>
+        ) : null}
+        {/* V1-A — Storno sekundär (outline), bestätigt im Dialog; nie die Hauptaktion. */}
+        {canCancel ? (
+          <Button
+            variant="outline"
+            onClick={() => setShowCancelDialog(true)}
+            title={paymentsBooked ? translate('expense.cancel.hasPayments') : undefined}
+            data-testid="ausgabe-cancel-action"
+          >
+            {translate('expense.cancel')}
+          </Button>
+        ) : null}
+        {cancelled ? null : !confirmDelete ? (
           <Button variant="danger" onClick={() => setConfirmDelete(true)}>
             {translate('expense.delete')}
           </Button>
@@ -250,6 +311,18 @@ export function AusgabeDetailPage() {
         onSaved={handlePaymentSaved}
         translate={translate}
       />
+      {canCancel ? (
+        <ExpenseCancelDialog
+          expense={expense}
+          open={showCancelDialog}
+          onClose={() => setShowCancelDialog(false)}
+          onCancelled={(updated) => {
+            setExpense(updated);
+            showToast(translate('expense.cancel.success'));
+          }}
+          translate={translate}
+        />
+      ) : null}
     </Page>
   );
 }
