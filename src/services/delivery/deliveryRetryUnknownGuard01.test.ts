@@ -13,7 +13,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { rpcCreateWorkspaceDocumentDelivery, type CreateDocumentDeliveryInput } from './documentDeliveryCloudService';
 
 const original = readFileSync(resolve(process.cwd(), 'supabase/migrations/20260914120000_workspace_document_deliveries.sql'), 'utf8');
-const guard = readFileSync(resolve(process.cwd(), 'supabase/migrations/20260918120000_workspace_document_delivery_retry_unknown_guard.sql'), 'utf8');
+const guard = readFileSync(resolve(process.cwd(), 'supabase/migrations/20260921120000_workspace_document_delivery_retry_unknown_guard.sql'), 'utf8');
 
 function functionBody(sql: string): string {
   const start = sql.indexOf('create or replace function public.create_workspace_document_delivery(');

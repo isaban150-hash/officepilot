@@ -68,7 +68,7 @@ function delivery(overrides: Partial<DocumentDelivery>): DocumentDelivery {
   return { id: 'd-1', workspaceId: WS, clientDeliveryId: 'cd-1', documentKind: 'other', linkedDocumentId: 'doc-b2', recipientEmail: 'kunde@example.invalid', subject: 'S', bodyText: 'B', provider: 'stub', status: 'queued', requestedBy: 'u', requestedAt: '2026-09-14T10:00:00.000Z', attemptNumber: 1, createdAt: '', updatedAt: '', rowVersion: 1, ...overrides };
 }
 
-const migration = readFileSync(resolve(process.cwd(), 'supabase/migrations/20260920120000_workspace_document_delivery_documents.sql'), 'utf8');
+const migration = readFileSync(resolve(process.cwd(), 'supabase/migrations/20260922120000_workspace_document_delivery_documents.sql'), 'utf8');
 const original = readFileSync(resolve(process.cwd(), 'supabase/migrations/20260914120000_workspace_document_deliveries.sql'), 'utf8');
 
 describe('V1-B2 — SQL-Vertrag (S1)', () => {

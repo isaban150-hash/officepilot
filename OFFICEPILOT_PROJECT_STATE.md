@@ -30,7 +30,7 @@ Stand: 2026-09-17
 - Block: OFFICEPILOT-V1-B2 — Dokument-/Briefversand — **uncommittet, fachlich abgeschlossen**
 - Ergebnis: Die bestehende Delivery-Architektur trägt jetzt zusätzlich `letter` / `offer` / `other`
   für **archivierte Dokumente** (`workspace_documents.client_document_id`, document_kind
-  `archived_document`). Additive Migration `20260920120000`: `create_workspace_document_delivery`
+  `archived_document`). Additive Migration `20260922120000`: `create_workspace_document_delivery`
   prüft Dokument im Workspace, nicht gelöscht, Versandart passt zur erkannten Dokumentart
   (brief→letter, angebot→offer, sonst other), Anhang-Hash ist eine an das Dokument gebundene PDF-Datei;
   `linked_invoice_id` für Dokumente verboten. Neue Historien-RPC je Dokument; `get_…_for_send`
