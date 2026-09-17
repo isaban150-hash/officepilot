@@ -83,6 +83,22 @@ export const bgDelivery = {
   'delivery.correction.history.empty': 'Коригиращият документ още не е изпратен чрез OfficePilot.',
   'delivery.correction.confirmResend': 'Този коригиращ документ вече е изпратен чрез OfficePilot. Наистина ли да се изпрати отново?',
   'delivery.mail.correctionSubject': 'Корекция на фактура {invoiceNumber} - {companyName}',
+  /* V1-B2 — Изпращане на документ/писмо */
+  'delivery.document.panel.title': 'Изпращане по имейл',
+  'delivery.document.panel.hint': 'OfficePilot изпраща този документ като PDF. Изпращането се записва тук.',
+  'delivery.document.panel.notSendable': 'Този документ не може да бъде изпратен по имейл – няма PDF файл към него.',
+  'delivery.document.action.send': 'Изпращане по имейл',
+  'delivery.document.action.sendAgain': 'Повторно изпращане по имейл',
+  'delivery.document.dialog.title': 'Изпращане на документ по имейл',
+  'delivery.document.dialog.attachmentHint': 'Архивираният PDF файл на този документ – точно както е в архива.',
+  'delivery.document.confirmResend': 'Този документ вече е изпратен чрез OfficePilot. Наистина ли да се изпрати отново?',
+  'delivery.document.history.empty': 'Документът още не е изпращан чрез OfficePilot.',
+  'delivery.error.documentMissing': 'Документът вече не е наличен. Нищо не е изпратено.',
+  'delivery.error.documentNotSendable': 'За този документ няма PDF файл за изпращане. Нищо не е изпратено.',
+  'delivery.error.companyEmailMissing': 'В профила на фирмата липсва имейл адресът на предприятието. Моля, първо го допълнете в настройките.',
+  'delivery.mail.documentSubject': '{documentTitle} - {companyName}',
+  'delivery.mail.documentBody':
+    'Добър ден,\n\nприложено получавате документа „{documentTitle}“.\n\nС уважение\n{companyName}',
   'delivery.mail.correctionBody':
     'Здравейте,\n\nприложено ще намерите корекцията към нашата фактура {invoiceNumber}. Оригиналната фактура с това е обезсилена.\n\nС уважение\n{companyName}',
   'delivery.mail.subject': 'Фактура {invoiceNumber} - {companyName}',

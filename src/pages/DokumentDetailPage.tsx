@@ -5,6 +5,7 @@ import { DocumentUnderstandingCard } from '../components/documents/DocumentUnder
 import { DocumentDetailPreview } from '../components/documents/DocumentDetailPreview';
 import { DocumentDerivativeRecoveryStatusPanel } from '../components/documents/DocumentDerivativeRecoveryStatusPanel';
 import { DocumentOriginalFilePanel } from '../components/documents/DocumentOriginalFilePanel';
+import { DocumentDeliveryPanel } from '../components/documents/DocumentDeliveryPanel';
 import { DocumentFilingCard } from '../components/documents/DocumentFilingCard';
 import { DocumentLifecycleCard } from '../components/documents/DocumentLifecycleCard';
 import { DocumentForm } from '../components/documents/DocumentForm';
@@ -519,6 +520,16 @@ export function DokumentDetailPage() {
             markFiledVariant={filingMarkPrimary ? 'primary' : 'outline'}
             onChanged={() => setDetailRevision((value) => value + 1)}
           />
+
+          {/*
+            * V1-B2 — normales archiviertes Dokument per E-Mail senden (Brief,
+            * Angebot, sonstiges): sichtbar ohne „Weitere Details", als Fläche
+            * mit sekundärer Aktion. Eigene Rechnungen/Korrekturbelege laufen
+            * weiter über das Rechnungsdetail — hier kein zweiter Versandweg.
+            */}
+          {isGeneratedInvoice || isInvoiceCorrectionDocument(document) ? null : (
+            <DocumentDeliveryPanel document={document} />
+          )}
         </div>
       </div>
 

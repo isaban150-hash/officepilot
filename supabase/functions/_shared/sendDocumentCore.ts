@@ -21,6 +21,7 @@ export interface DeliveryRow {
   client_delivery_id: string;
   document_kind: string;
   linked_invoice_id: string | null;
+  linked_document_id?: string | null;
   recipient_email: string;
   subject: string;
   body_text: string;
@@ -50,9 +51,35 @@ export interface InvoiceContext {
   company_snapshot: { companyName?: unknown; legalForm?: unknown; email?: unknown } | null;
 }
 
+/** V1-B2 — normales archiviertes Dokument als Versandbezug. */
+export interface DocumentContext {
+  client_document_id: string;
+  deleted: boolean;
+  classified_kind: string | null;
+  title: string | null;
+  /** Der Anhang-Hash der Delivery ist eine an dieses Dokument gebundene PDF-Datei. */
+  attachment_bound: boolean;
+}
+
+/** V1-B2 — aktuelles Firmenprofil als Absenderkontext fuer normale Dokumente. */
+export interface CompanyContext {
+  companyName?: unknown;
+  legalForm?: unknown;
+  email?: unknown;
+}
+
+export interface LoadedDelivery {
+  delivery: DeliveryRow;
+  invoice: InvoiceContext | null;
+  document?: DocumentContext | null;
+  company?: CompanyContext | null;
+}
+
+export const DOCUMENT_DELIVERY_KINDS: ReadonlySet<string> = new Set(['letter', 'offer', 'other']);
+
 export interface SendDocumentDeps {
   userCanWrite(workspaceId: string, userId: string): Promise<boolean>;
-  loadDelivery(workspaceId: string, clientDeliveryId: string): Promise<{ delivery: DeliveryRow; invoice: InvoiceContext | null } | null>;
+  loadDelivery(workspaceId: string, clientDeliveryId: string): Promise<LoadedDelivery | null>;
   downloadAttachment(storagePath: string): Promise<Uint8Array | null>;
   sha256Hex(bytes: Uint8Array): Promise<string>;
   provider: EmailProviderAdapter;
@@ -118,6 +145,22 @@ export function resolveSenderIdentity(invoice: InvoiceContext | null):
   return { ok: true, fromName: name, replyTo };
 }
 
+/**
+ * V1-B2 — Absender fuer normale Dokumente: aktuelles Firmenprofil (Name,
+ * Reply-To = Firmen-E-Mail). Fail-closed ohne Name oder gueltige E-Mail; es
+ * wird nie eine technische Adresse erfunden.
+ */
+export function resolveCompanySenderIdentity(company: CompanyContext | null | undefined):
+  | { ok: true; fromName: string; replyTo: string }
+  | { ok: false; code: 'sender_company_missing' | 'sender_reply_to_missing' } {
+  if (!company) return { ok: false, code: 'sender_company_missing' };
+  const name = [text(company.companyName), text(company.legalForm)].filter(Boolean).join(' ');
+  const replyTo = text(company.email).toLowerCase();
+  if (!name) return { ok: false, code: 'sender_company_missing' };
+  if (!replyTo || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(replyTo)) return { ok: false, code: 'sender_reply_to_missing' };
+  return { ok: true, fromName: name, replyTo };
+}
+
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = '';
   const chunk = 0x8000;
@@ -141,6 +184,9 @@ export async function runSendDocument(
   const loaded = await deps.loadDelivery(input.workspaceId, input.clientDeliveryId);
   if (!loaded) return { ok: false, error: 'delivery_not_found' };
   const { delivery, invoice } = loaded;
+  const document = loaded.document ?? null;
+  const company = loaded.company ?? null;
+  const isDocumentKind = DOCUMENT_DELIVERY_KINDS.has(delivery.document_kind);
   const base = { deliveryId: delivery.id, workspaceId: delivery.workspace_id, provider: deps.provider.provider };
 
   // 4. Zustand: Replay/Unknown/Endzustände — kein zweiter Provider-Aufruf.
@@ -186,6 +232,12 @@ export async function runSendDocument(
       return fail('failed', 'unknown', 'correction_missing', 'Zu dieser Rechnung gibt es keinen Korrekturbeleg.');
     }
   }
+  // V1-B2 — normales Dokument: existiert, nicht geloescht, Anhang an das Dokument gebunden (Server glaubt dem Client nicht).
+  if (isDocumentKind) {
+    if (!delivery.linked_document_id) return fail('failed', 'unknown', 'document_missing', 'Das Dokument zu diesem Versand wurde nicht gefunden.');
+    if (!document || document.deleted) return fail('failed', 'unknown', 'document_missing', 'Das Dokument zu diesem Versand ist nicht mehr verfuegbar.');
+    if (!document.attachment_bound) return fail('failed', 'attachment', 'attachment_not_bound', 'Der Anhang gehoert nicht zu diesem Dokument.');
+  }
 
   // 5./6. Anhang laden und gegen die Delivery-Metadaten prüfen (O).
   const path = delivery.attachment_storage_path ?? '';
@@ -208,9 +260,11 @@ export async function runSendDocument(
     return fail('failed', 'attachment', 'attachment_sha256_mismatch', 'Der Anhang entspricht nicht dem hinterlegten Prüfwert.');
   }
 
-  // (N) Absender aus dem historischen Snapshot.
-  const sender = resolveSenderIdentity(invoice);
-  if (!sender.ok) return fail('failed', 'unknown', sender.code, 'Absenderdaten der Rechnung sind unvollständig.');
+  // (N) Absender: Rechnung aus dem historischen Snapshot; normales Dokument aus dem aktuellen Firmenprofil.
+  const sender = isDocumentKind ? resolveCompanySenderIdentity(company) : resolveSenderIdentity(invoice);
+  if (!sender.ok) {
+    return fail('failed', 'unknown', sender.code, isDocumentKind ? 'Absenderdaten des Betriebs sind unvollständig (Firmenname oder E-Mail fehlt).' : 'Absenderdaten der Rechnung sind unvollständig.');
+  }
 
   // 8. Provider.
   let result: SendTransactionalEmailResult;

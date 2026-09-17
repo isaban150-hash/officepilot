@@ -137,3 +137,28 @@ export function findAcceptedDelivery(deliveries: DocumentDelivery[]): DocumentDe
     (d) => d.status === 'provider_accepted' || d.status === 'delivered' || d.status === 'bounced' || d.status === 'complained',
   );
 }
+
+/*
+ * V1-B2 — Defaults für ein normales archiviertes Dokument.
+ * Empfänger: Kunde des verknüpften Auftrags (aktueller Kundenstamm), sonst
+ * leer — nie erfunden. Betreff/Nachricht: fester i18n-Text mit Dokumenttitel
+ * und Firmenname aus dem aktuellen Firmenprofil (Absender der Mail).
+ */
+export function resolveDocumentDeliveryRecipient(vorgangCustomerEmail: string | undefined | null): RecipientSuggestion {
+  const email = normalizeRecipientEmail(vorgangCustomerEmail ?? '');
+  if (email && isValidRecipientEmail(email)) return { email, source: 'customer' };
+  return { email: '', source: 'none' };
+}
+
+export function resolveDocumentDeliveryDraftDefaults(
+  input: { title: string; vorgangCustomerEmail?: string | null; profile: Pick<CompanyProfile, 'companyName' | 'legalForm'> },
+  language: AppLanguage,
+): DeliveryDraftDefaults {
+  const companyName = [input.profile.companyName?.trim(), input.profile.legalForm?.trim()].filter(Boolean).join(' ');
+  const values = { documentTitle: input.title.trim() || t('delivery.kind.other' as TranslationKey, language), companyName };
+  return {
+    recipient: resolveDocumentDeliveryRecipient(input.vorgangCustomerEmail),
+    subject: fillDeliveryPlaceholders(t('delivery.mail.documentSubject' as TranslationKey, language), values),
+    bodyText: fillDeliveryPlaceholders(t('delivery.mail.documentBody' as TranslationKey, language), values),
+  };
+}

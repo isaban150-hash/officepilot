@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Card, CardTitle } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { SendDocumentDialog } from './SendDocumentDialog';
+import { DeliveryHistoryList } from './DeliveryHistoryList';
 import { useApp } from '../../context/AppContext';
 import { useOptionalAuth } from '../../context/AuthContext';
 import { isSupabaseConfigured } from '../../lib/supabase';
@@ -10,9 +11,6 @@ import { isFinalizedInvoice } from '../../services/invoiceArchiveService';
 import { buildInvoicePdfFilename } from '../../services/invoicePdfService';
 import { formatInvoiceDate } from '../../services/invoicePrintModel';
 import {
-  deliveryErrorLabelKey,
-  deliveryKindLabelKey,
-  deliveryStatusLabelKey,
   findAcceptedDelivery,
   resolveDeliveryDraftDefaults,
 } from '../../services/delivery/documentDeliveryDefaults';
@@ -60,18 +58,13 @@ const CLIENT_ERROR_KEYS: Record<SendDocumentClientError, TranslationKey> = {
   idempotency_conflict: 'delivery.error.idempotencyConflict' as TranslationKey,
   forbidden: 'delivery.error.forbidden' as TranslationKey,
   not_sendable: 'delivery.error.notSendable' as TranslationKey,
+  document_missing: 'delivery.error.documentMissing' as TranslationKey,
+  document_not_sendable: 'delivery.error.documentNotSendable' as TranslationKey,
   uncertain_pending: 'delivery.error.uncertainPending' as TranslationKey,
   server_unavailable: 'delivery.error.serverUnavailable' as TranslationKey,
   unauthenticated: 'delivery.error.forbidden' as TranslationKey,
   rpc_failed: 'delivery.error.serverUnavailable' as TranslationKey,
 };
-
-function formatTimestamp(value?: string): string {
-  if (!value) return '—';
-  const parsed = Date.parse(value);
-  if (Number.isNaN(parsed)) return value;
-  return new Date(parsed).toLocaleString('de-DE');
-}
 
 export function InvoiceDeliveryPanel({ vorgangId, invoice, onInvoiceUpdated, documentKind = 'invoice' }: Props) {
   const { translate, language, showToast, companyProfile } = useApp();
@@ -250,32 +243,7 @@ export function InvoiceDeliveryPanel({ vorgangId, invoice, onInvoiceUpdated, doc
         ) : null}
 
         <h4 className="invoice-delivery-panel__history-title">{translate('delivery.history.title' as TranslationKey)}</h4>
-        {deliveries === null ? (
-          <p className="hint-text" data-testid="invoice-delivery-loading">{translate('delivery.phase.refreshing' as TranslationKey)}</p>
-        ) : deliveries.length === 0 ? (
-          <p className="hint-text" data-testid="invoice-delivery-empty">{translate((isCorrection ? 'delivery.correction.history.empty' : 'delivery.history.empty') as TranslationKey)}</p>
-        ) : (
-          <ul className="invoice-delivery-panel__list" data-testid="invoice-delivery-list">
-            {deliveries.map((d) => (
-              <li key={d.id} className="invoice-delivery-panel__item" data-testid="invoice-delivery-item" data-status={d.status} data-client-delivery-id={d.clientDeliveryId}>
-                <span className={`badge badge--${d.status === 'provider_accepted' || d.status === 'delivered' ? 'success' : d.status === 'failed' || d.status === 'rejected' || d.status === 'bounced' ? 'danger' : d.status === 'unknown' ? 'warning' : 'info'}`} data-testid="invoice-delivery-status">
-                  {translate(deliveryStatusLabelKey(d.status))}
-                </span>
-                <span className="invoice-delivery-panel__meta">
-                  <span data-testid="invoice-delivery-kind">{translate(deliveryKindLabelKey(d.documentKind))}</span> · {formatTimestamp(d.providerAcceptedAt ?? d.requestedAt)} · {d.recipientEmail}
-                  {d.attemptNumber > 1 ? ` · ${translate('delivery.history.attempt' as TranslationKey).replace('{n}', String(d.attemptNumber))}` : ''}
-                </span>
-                {d.status === 'failed' || d.status === 'rejected' ? (
-                  <span className="form-error" data-testid="invoice-delivery-error">{translate(deliveryErrorLabelKey(d))}</span>
-                ) : null}
-                {d.status === 'unknown' ? (
-                  <span className="hint-text" data-testid="invoice-delivery-unknown-hint">{translate('delivery.status.unknownHint' as TranslationKey)}</span>
-                ) : null}
-                {d.retryOfDeliveryId ? <span className="hint-text">{translate('delivery.history.retryOf' as TranslationKey)}</span> : null}
-              </li>
-            ))}
-          </ul>
-        )}
+        <DeliveryHistoryList deliveries={deliveries} emptyKey={(isCorrection ? 'delivery.correction.history.empty' : 'delivery.history.empty') as TranslationKey} translate={translate} />
 
         {canSend ? (
           <div className="invoice-delivery-panel__actions">

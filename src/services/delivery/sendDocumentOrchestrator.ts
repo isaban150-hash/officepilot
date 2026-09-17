@@ -5,10 +5,12 @@ import { resolveCloudWorkspaceId } from '../workspace/workspaceSyncPayloadServic
 import { getActiveStorageScope } from '../storage/storageScopeService';
 import { buildDocumentBlobScopeKey } from '../storage/documentBlobScopeService';
 import { getVorgangInvoice, updateInvoiceSentFields } from '../vorgangService';
-import type { DeliveryDocumentIdentity, DeliveryStatus, DocumentDelivery } from '../../types/documentDelivery';
+import { deliveryIdentityDocumentId, isInvoiceDeliveryIdentity, type DeliveryDocumentIdentity, type DeliveryStatus, type DocumentDelivery } from '../../types/documentDelivery';
+import { getDocumentById } from '../documentService';
 import type { VorgangInvoice } from '../../types/models';
 import { isValidRecipientEmail, normalizeRecipientEmail } from './documentDeliveryContract';
 import {
+  prepareArchivedDocumentDeliveryAttachment,
   prepareInvoiceDeliveryAttachment,
   rpcCreateWorkspaceDocumentDelivery,
   rpcListWorkspaceDocumentDeliveries,
@@ -60,7 +62,7 @@ export interface SendDraftState {
 const STORAGE_PREFIX = 'officepilot.sendDraft.v1';
 
 export function sendDraftStorageKey(scopeKey: string, identity: DeliveryDocumentIdentity): string {
-  return `${STORAGE_PREFIX}:${scopeKey}:${identity.kind}:${identity.clientInvoiceId}`;
+  return `${STORAGE_PREFIX}:${scopeKey}:${identity.kind}:${deliveryIdentityDocumentId(identity)}`;
 }
 
 function currentScopeKey(): string {
@@ -73,7 +75,7 @@ export function loadSendDraft(identity: DeliveryDocumentIdentity, scopeKey = cur
     if (!raw) return null;
     const parsed = JSON.parse(raw) as SendDraftState;
     if (parsed?.version !== 1 || parsed.scopeKey !== scopeKey) return null;
-    if (parsed.identity?.kind !== identity.kind || parsed.identity?.clientInvoiceId !== identity.clientInvoiceId) return null;
+    if (parsed.identity?.kind !== identity.kind || deliveryIdentityDocumentId(parsed.identity) !== deliveryIdentityDocumentId(identity)) return null;
     if (typeof parsed.clientDeliveryId !== 'string' || !parsed.clientDeliveryId) return null;
     return parsed;
   } catch {
@@ -139,6 +141,8 @@ export type SendDocumentClientError =
   | 'not_configured'
   | 'workspace_missing'
   | 'invoice_missing'
+  | 'document_missing'
+  | 'document_not_sendable'
   | 'invalid_recipient'
   | 'pdf_failed'
   | 'upload_failed'
@@ -208,6 +212,23 @@ export function applyAcceptedDeliveryToLocalInvoice(vorgangId: string | null, in
   return updated.ok ? updated.invoice : invoice;
 }
 
+/**
+ * V1-B2 — Historie eines normalen Dokuments. Keine Rechnung, keine Kopplung:
+ * Ein Dokumentversand verändert nie `sent_source`/`sent_delivery_id` einer Rechnung.
+ */
+export async function refreshDocumentDeliveries(
+  identity: Extract<DeliveryDocumentIdentity, { clientDocumentId: string }>,
+  deps: SendDocumentDeps = {},
+): Promise<{ ok: true; deliveries: DocumentDelivery[] } | { ok: false; error: SendDocumentClientError }> {
+  const client = deps.client ?? getSupabaseClient();
+  if (!client || !isSupabaseConfigured()) return { ok: false, error: 'not_configured' };
+  const workspaceId = resolveDeliveryWorkspaceId();
+  if (!workspaceId) return { ok: false, error: 'workspace_missing' };
+  const listed = await rpcListWorkspaceDocumentDeliveries({ workspaceId, identity }, client);
+  if (!listed.ok) return { ok: false, error: listed.error === 'forbidden' ? 'forbidden' : 'rpc_failed' };
+  return { ok: true, deliveries: listed.deliveries };
+}
+
 /** Historie laden und die lokale Rechnung aus der Serverwahrheit nachziehen. */
 export async function refreshDeliveries(
   input: { vorgangId: string | null; invoice: VorgangInvoice; identity: DeliveryDocumentIdentity },
@@ -220,8 +241,9 @@ export async function refreshDeliveries(
   const listed = await rpcListWorkspaceDocumentDeliveries({ workspaceId, identity: input.identity }, client);
   if (!listed.ok) return { ok: false, error: listed.error === 'forbidden' ? 'forbidden' : 'rpc_failed' };
   let invoice = getVorgangInvoice(input.vorgangId, input.invoice.id) ?? input.invoice;
+  // Kopplung nur für Rechnungsdokumente (applyAccepted… ignoriert andere Arten ohnehin).
   const accepted = listed.deliveries.find((d) => d.status === 'provider_accepted' || d.status === 'delivered' || d.status === 'bounced' || d.status === 'complained');
-  if (accepted) invoice = applyAcceptedDeliveryToLocalInvoice(input.vorgangId, invoice, accepted);
+  if (accepted && isInvoiceDeliveryIdentity(input.identity)) invoice = applyAcceptedDeliveryToLocalInvoice(input.vorgangId, invoice, accepted);
   return { ok: true, deliveries: listed.deliveries, invoice };
 }
 
@@ -247,14 +269,29 @@ export async function runSendDocument(
   if (!draft.workspaceId) return failWith('workspace_missing');
   if (!isValidRecipientEmail(draft.recipientEmail)) return failWith('invalid_recipient');
 
-  const invoice = getVorgangInvoice(input.vorgangId, draft.identity.clientInvoiceId);
-  if (!invoice) return failWith('invoice_missing');
+  /*
+   * V1-B2 — zwei Bezüge, eine Kette: Rechnung (historisches PDF aus der
+   * Engine) oder archiviertes Dokument (gebundene PDF-Datei). Alles danach
+   * (Upload, Create, Send, Refresh) ist identisch; nur die Rechnung wird
+   * nach dem Versand aus der Serverwahrheit nachgezogen.
+   */
+  const isInvoice = isInvoiceDeliveryIdentity(draft.identity);
+  const invoice = isInvoice ? getVorgangInvoice(input.vorgangId, deliveryIdentityDocumentId(draft.identity)) : null;
+  if (isInvoice && !invoice) return failWith('invoice_missing');
+  const archived = isInvoice ? undefined : getDocumentById(deliveryIdentityDocumentId(draft.identity));
+  if (!isInvoice && (!archived || archived.sync?.deleted)) return failWith('document_missing');
 
-  // 1–3: historisches PDF + Hash (nur wenn der Anhang dieses Versuchs noch nicht gesichert ist).
+  // 1–3: PDF + Hash (nur wenn der Anhang dieses Versuchs noch nicht gesichert ist).
   if (!draft.attachmentStoragePath || !draft.attachmentSha256) {
     phase('preparing');
-    const prepared = await prepareInvoiceDeliveryAttachment(invoice, draft.identity);
-    if (!prepared.ok) return failWith('pdf_failed', prepared.reason);
+    let prepared: Awaited<ReturnType<typeof prepareInvoiceDeliveryAttachment>> | Awaited<ReturnType<typeof prepareArchivedDocumentDeliveryAttachment>>;
+    if (isInvoice) {
+      prepared = await prepareInvoiceDeliveryAttachment(invoice!, draft.identity);
+      if (!prepared.ok) return failWith('pdf_failed', prepared.reason);
+    } else {
+      prepared = await prepareArchivedDocumentDeliveryAttachment(archived);
+      if (!prepared.ok) return failWith(prepared.reason === 'document_missing' ? 'document_missing' : 'document_not_sendable', prepared.reason);
+    }
     // 4: Upload — vorhandenes Objekt (gleicher Hash) gilt als Erfolg, kein zweiter Upload.
     phase('uploading');
     const uploaded = await uploadDeliveryAttachment({ workspaceId: draft.workspaceId, identity: draft.identity, attachment: prepared.attachment }, client);
@@ -311,7 +348,9 @@ export async function runSendDocument(
 
   // 7: autoritativen Status laden (auch nach verlorener Antwort).
   phase('refreshing');
-  const refreshed = await refreshDeliveries({ vorgangId: input.vorgangId, invoice, identity: draft.identity }, { client });
+  const refreshed = isInvoice
+    ? await refreshDeliveries({ vorgangId: input.vorgangId, invoice: invoice!, identity: draft.identity }, { client })
+    : await refreshDocumentDeliveries(draft.identity as Extract<DeliveryDocumentIdentity, { clientDocumentId: string }>, { client });
   if (!refreshed.ok) return failWith(refreshed.error);
   const delivery = refreshed.deliveries.find((d) => d.clientDeliveryId === draft.clientDeliveryId) ?? created.delivery;
 

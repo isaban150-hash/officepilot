@@ -84,6 +84,22 @@ export const deDelivery = {
   'delivery.correction.history.empty': 'Korrekturbeleg noch nicht per OfficePilot versendet.',
   'delivery.correction.confirmResend': 'Dieser Korrekturbeleg wurde bereits per OfficePilot versendet. Wirklich erneut senden?',
   'delivery.mail.correctionSubject': 'Rechnungskorrektur zu {invoiceNumber} - {companyName}',
+  /* V1-B2 — Dokument-/Briefversand */
+  'delivery.document.panel.title': 'Per E-Mail senden',
+  'delivery.document.panel.hint': 'OfficePilot sendet dieses Dokument als PDF. Der Versand wird hier festgehalten.',
+  'delivery.document.panel.notSendable': 'Dieses Dokument kann nicht per E-Mail gesendet werden – es liegt keine PDF-Datei dazu vor.',
+  'delivery.document.action.send': 'Per E-Mail senden',
+  'delivery.document.action.sendAgain': 'Erneut per E-Mail senden',
+  'delivery.document.dialog.title': 'Dokument per E-Mail senden',
+  'delivery.document.dialog.attachmentHint': 'Die abgelegte PDF-Datei dieses Dokuments – genau so, wie sie im Archiv liegt.',
+  'delivery.document.confirmResend': 'Dieses Dokument wurde bereits per OfficePilot versendet. Wirklich erneut senden?',
+  'delivery.document.history.empty': 'Dokument noch nicht per OfficePilot versendet.',
+  'delivery.error.documentMissing': 'Das Dokument ist nicht mehr verfügbar. Es wurde nichts gesendet.',
+  'delivery.error.documentNotSendable': 'Zu diesem Dokument liegt keine versendbare PDF-Datei vor. Es wurde nichts gesendet.',
+  'delivery.error.companyEmailMissing': 'Im Firmenprofil fehlt die E-Mail-Adresse des Betriebs. Bitte zuerst in den Einstellungen ergänzen.',
+  'delivery.mail.documentSubject': '{documentTitle} - {companyName}',
+  'delivery.mail.documentBody':
+    'Guten Tag,\n\nanbei erhalten Sie das Dokument „{documentTitle}“.\n\nMit freundlichen Grüßen\n{companyName}',
   'delivery.mail.correctionBody':
     'Guten Tag,\n\nanbei erhalten Sie die Rechnungskorrektur zu unserer Rechnung {invoiceNumber}. Die ursprüngliche Rechnung ist damit gegenstandslos.\n\nMit freundlichen Grüßen\n{companyName}',
   'delivery.mail.subject': 'Rechnung {invoiceNumber} - {companyName}',

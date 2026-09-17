@@ -75,7 +75,23 @@ export interface DocumentDelivery {
   rowVersion: number;
 }
 
-/** Identität des zu versendenden Dokuments — Rechnung frei oder mit Vorgang gleich adressiert. */
+/**
+ * Identität des zu versendenden Dokuments — Rechnung frei oder mit Vorgang
+ * gleich adressiert. V1-B2: normale archivierte Dokumente (Brief, Angebot,
+ * sonstiges) über ihre Dokument-Kennung, nie über eine Rechnung.
+ */
 export type DeliveryDocumentIdentity =
   | { kind: 'invoice'; clientInvoiceId: string }
-  | { kind: 'invoice_correction'; clientInvoiceId: string };
+  | { kind: 'invoice_correction'; clientInvoiceId: string }
+  | { kind: 'letter' | 'offer' | 'other'; clientDocumentId: string };
+
+export type ArchivedDocumentDeliveryKind = Extract<DeliveryDocumentIdentity, { clientDocumentId: string }>['kind'];
+
+export function isInvoiceDeliveryIdentity(identity: DeliveryDocumentIdentity): identity is Extract<DeliveryDocumentIdentity, { clientInvoiceId: string }> {
+  return identity.kind === 'invoice' || identity.kind === 'invoice_correction';
+}
+
+/** Stabile Kennung des Dokuments hinter der Identität (Rechnung oder Dokument). */
+export function deliveryIdentityDocumentId(identity: DeliveryDocumentIdentity): string {
+  return isInvoiceDeliveryIdentity(identity) ? identity.clientInvoiceId : identity.clientDocumentId;
+}

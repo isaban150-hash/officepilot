@@ -4,6 +4,7 @@ import { isValidRecipientEmail, normalizeRecipientEmail } from '../../services/d
 import { generateApprovedInvoicePdf, generateInvoiceCorrectionPdf, downloadInvoicePdfBytes } from '../../services/invoicePdfService';
 import type { SendPhase } from '../../services/delivery/sendDocumentOrchestrator';
 import type { VorgangInvoice } from '../../types/models';
+import type { DeliveryDocumentKind } from '../../types/documentDelivery';
 import type { TranslationKey } from '../../i18n';
 
 /**
@@ -17,7 +18,10 @@ import type { TranslationKey } from '../../i18n';
  */
 export interface SendDocumentDialogProps {
   open: boolean;
-  invoice: VorgangInvoice;
+  /** Rechnung/Korrektur: historisches PDF aus der Engine. V1-B2: bei normalen Dokumenten nicht gesetzt. */
+  invoice?: VorgangInvoice;
+  /** V1-B2 — normale Dokumente: Vorschau der gebundenen PDF-Datei. */
+  onPreviewPdf?: () => void | Promise<void>;
   initialRecipient: string;
   /** Kanonisch vorbelegte Kundenadresse — Abweichung verlangt eine bewusste Bestätigung. */
   canonicalRecipient: string;
@@ -27,8 +31,8 @@ export interface SendDocumentDialogProps {
   /** Diese Rechnung wurde bereits erfolgreich per OfficePilot versendet → Zweitversand bestätigen. */
   alreadySent: boolean;
   mode: 'send' | 'retry' | 'resume';
-  /** EMAIL-01B4 — Korrekturbeleg: eigener Titel und Zweitversand-Text; Regeln identisch. */
-  documentKind?: 'invoice' | 'invoice_correction';
+  /** EMAIL-01B4 — Korrekturbeleg: eigener Titel und Zweitversand-Text; Regeln identisch. V1-B2: letter/offer/other. */
+  documentKind?: DeliveryDocumentKind;
   phase: SendPhase | null;
   busy: boolean;
   errorKey: TranslationKey | null;
@@ -133,6 +137,12 @@ export function SendDocumentDialog(props: SendDocumentDialogProps) {
   };
 
   const handlePdf = async () => {
+    // V1-B2 — normales Dokument: Vorschau der gebundenen Datei kommt vom Aufrufer.
+    if (props.onPreviewPdf) {
+      await props.onPreviewPdf();
+      return;
+    }
+    if (!props.invoice) return;
     // Historischer Beleg: Rechnung bzw. Korrekturbeleg über die bestehende Engine.
     const result = isCorrection ? await generateInvoiceCorrectionPdf(props.invoice) : await generateApprovedInvoicePdf(props.invoice);
     if (result.ok) downloadInvoicePdfBytes(result.bytes, result.filename);
@@ -140,8 +150,10 @@ export function SendDocumentDialog(props: SendDocumentDialogProps) {
 
   const phaseKey = props.phase && props.phase !== 'draft' && props.phase !== 'done' ? PHASE_KEYS[props.phase] : null;
   const isCorrection = props.documentKind === 'invoice_correction';
-  const titleKey = (isCorrection ? 'delivery.correction.dialog.title' : 'delivery.dialog.title') as TranslationKey;
-  const resendKey = (isCorrection ? 'delivery.correction.confirmResend' : 'delivery.dialog.confirmResend') as TranslationKey;
+  const isPlainDocument = props.documentKind === 'letter' || props.documentKind === 'offer' || props.documentKind === 'other';
+  const titleKey = (isPlainDocument ? 'delivery.document.dialog.title' : isCorrection ? 'delivery.correction.dialog.title' : 'delivery.dialog.title') as TranslationKey;
+  const resendKey = (isPlainDocument ? 'delivery.document.confirmResend' : isCorrection ? 'delivery.correction.confirmResend' : 'delivery.dialog.confirmResend') as TranslationKey;
+  const attachmentHintKey = (isPlainDocument ? 'delivery.document.dialog.attachmentHint' : 'delivery.dialog.attachmentHint') as TranslationKey;
 
   return (
     <div className="vorgang-dialog-backdrop" role="presentation" onClick={() => !busy && props.onCancel()}>
@@ -228,7 +240,7 @@ export function SendDocumentDialog(props: SendDocumentDialogProps) {
           <Button type="button" variant="ghost" onClick={() => void handlePdf()} disabled={busy} data-testid="send-document-pdf">
             {translate('delivery.action.pdf' as TranslationKey)}
           </Button>
-          <p className="form-hint">{translate('delivery.dialog.attachmentHint' as TranslationKey)}</p>
+          <p className="form-hint">{translate(attachmentHintKey)}</p>
         </div>
 
         {fieldError ? (

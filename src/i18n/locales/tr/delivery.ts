@@ -83,6 +83,22 @@ export const trDelivery = {
   'delivery.correction.history.empty': 'Düzeltme belgesi henüz OfficePilot ile gönderilmedi.',
   'delivery.correction.confirmResend': 'Bu düzeltme belgesi zaten OfficePilot ile gönderildi. Gerçekten yeniden gönderilsin mi?',
   'delivery.mail.correctionSubject': '{invoiceNumber} numaralı faturaya fatura düzeltmesi - {companyName}',
+  /* V1-B2 — Belge/mektup gönderimi */
+  'delivery.document.panel.title': 'E-posta ile gönder',
+  'delivery.document.panel.hint': 'OfficePilot bu belgeyi PDF olarak gönderir. Gönderim burada kaydedilir.',
+  'delivery.document.panel.notSendable': 'Bu belge e-posta ile gönderilemez – buna ait bir PDF dosyası yok.',
+  'delivery.document.action.send': 'E-posta ile gönder',
+  'delivery.document.action.sendAgain': 'E-posta ile yeniden gönder',
+  'delivery.document.dialog.title': 'Belgeyi e-posta ile gönder',
+  'delivery.document.dialog.attachmentHint': 'Bu belgenin arşivlenmiş PDF dosyası – arşivde olduğu gibi.',
+  'delivery.document.confirmResend': 'Bu belge zaten OfficePilot ile gönderildi. Gerçekten yeniden gönderilsin mi?',
+  'delivery.document.history.empty': 'Belge henüz OfficePilot ile gönderilmedi.',
+  'delivery.error.documentMissing': 'Belge artık mevcut değil. Hiçbir şey gönderilmedi.',
+  'delivery.error.documentNotSendable': 'Bu belge için gönderilebilir bir PDF dosyası yok. Hiçbir şey gönderilmedi.',
+  'delivery.error.companyEmailMissing': 'Firma profilinde işletmenin e-posta adresi eksik. Lütfen önce ayarlarda tamamlayın.',
+  'delivery.mail.documentSubject': '{documentTitle} - {companyName}',
+  'delivery.mail.documentBody':
+    'Merhaba,\n\nekte „{documentTitle}“ belgesini bulabilirsiniz.\n\nSaygılarımızla\n{companyName}',
   'delivery.mail.correctionBody':
     'Merhaba,\n\nekte {invoiceNumber} numaralı faturamıza ait fatura düzeltmesini bulabilirsiniz. Orijinal fatura böylece geçersizdir.\n\nSaygılarımızla\n{companyName}',
   'delivery.mail.subject': 'Fatura {invoiceNumber} - {companyName}',

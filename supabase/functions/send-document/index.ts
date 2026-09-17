@@ -15,7 +15,7 @@
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { createMailProvider, resolveMailProviderName } from '../_shared/emailProvider.ts';
-import { runSendDocument, type DeliveryRow, type InvoiceContext, type SendDocumentErrorCode } from '../_shared/sendDocumentCore.ts';
+import { runSendDocument, type CompanyContext, type DeliveryRow, type DocumentContext, type InvoiceContext, type SendDocumentErrorCode } from '../_shared/sendDocumentCore.ts';
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -99,9 +99,10 @@ Deno.serve(async (request: Request): Promise<Response> => {
           const { data, error } = await admin.rpc('get_workspace_document_delivery_for_send', { p_workspace_id: ws, p_client_delivery_id: id });
           if (error) throw new Error(`load: ${error.message}`);
           if (!data || typeof data !== 'object') return null;
-          const envelope = data as { delivery?: DeliveryRow; invoice?: InvoiceContext | null };
+          const envelope = data as { delivery?: DeliveryRow; invoice?: InvoiceContext | null; document?: DocumentContext | null; company?: CompanyContext | null };
           if (!envelope.delivery) return null;
-          return { delivery: envelope.delivery, invoice: envelope.invoice ?? null };
+          // V1-B2 — Dokument- und Firmenkontext fuer normale Dokumente (letter/offer/other).
+          return { delivery: envelope.delivery, invoice: envelope.invoice ?? null, document: envelope.document ?? null, company: envelope.company ?? null };
         },
         async downloadAttachment(path) {
           const { data, error } = await admin.storage.from('document-deliveries').download(path);

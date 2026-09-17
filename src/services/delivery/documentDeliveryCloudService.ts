@@ -1,8 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getSupabaseClient } from '../../lib/supabase';
 import { generateApprovedInvoicePdf, generateInvoiceCorrectionPdf } from '../invoicePdfService';
-import type { DeliveryDocumentIdentity, DeliveryProvider, DocumentDelivery } from '../../types/documentDelivery';
-import type { VorgangInvoice } from '../../types/models';
+import { deliveryIdentityDocumentId, isInvoiceDeliveryIdentity, type ArchivedDocumentDeliveryKind, type DeliveryDocumentIdentity, type DeliveryProvider, type DocumentDelivery } from '../../types/documentDelivery';
+import type { CompanyDocument, VorgangInvoice } from '../../types/models';
+import { resolveDocumentFileRepresentation } from '../documentFileRepresentationReadService';
+import { getDocumentFileBlob, getDocumentFileRefById } from '../documentFileStoreService';
 import {
   DELIVERY_ATTACHMENT_BUCKET,
   DELIVERY_ATTACHMENT_MAX_BYTES,
@@ -78,13 +80,76 @@ function mapStorageError(error: { message?: string; statusCode?: string | number
  * ist inhaltsadressiert: derselbe Beleg landet nur einmal, ein bereits
  * vorhandenes Objekt (409) gilt als Erfolg (`reused`). Kein Überschreiben.
  */
+/**
+ * V1-B2 — Versandart eines archivierten Dokuments: dieselbe Ableitung wie
+ * serverseitig (brief → letter, angebot → offer, sonst other). Der Server
+ * lehnt eine abweichende Art ab.
+ */
+export function resolveArchivedDocumentDeliveryKind(document: Pick<CompanyDocument, 'classifiedKind'>): ArchivedDocumentDeliveryKind {
+  if (document.classifiedKind === 'brief') return 'letter';
+  if (document.classifiedKind === 'angebot') return 'offer';
+  return 'other';
+}
+
+export type PrepareArchivedDocumentAttachmentResult =
+  | { ok: true; attachment: PreparedDeliveryAttachment }
+  | { ok: false; reason: 'document_missing' | 'no_pdf' | 'file_unavailable' | 'too_large' };
+
+function attachmentFilenameFor(document: Pick<CompanyDocument, 'title' | 'originalFileName'>): string {
+  const base = (document.title || document.originalFileName || 'Dokument')
+    .replace(/\.pdf$/i, '')
+    .replace(/[^A-Za-z0-9 ._-]+/g, '_')
+    .replace(/^[^A-Za-z0-9]+/, '')
+    .slice(0, 120)
+    .trim();
+  return `${base || 'Dokument'}.pdf`;
+}
+
+/**
+ * V1-B2 — Welche PDF-Datei gehört zu einem archivierten Dokument?
+ * Reihenfolge: Archiv-PDF (aus Bild abgeleitet) → Original, wenn es ein PDF ist.
+ * Kein Rendern, keine Konvertierung hier — nur die bereits gebundene Datei-
+ * Wahrheit, die der Server über die Bindings gegenprüft. Synchron nutzbar
+ * für die Frage „versendbar?“, die Bytes lädt `prepareArchivedDocumentDeliveryAttachment`.
+ */
+export function findArchivedDocumentPdfFileRefId(document: Pick<CompanyDocument, 'id' | 'fileRefId' | 'mimeType'>): string | null {
+  const original = document.fileRefId ? getDocumentFileRefById(document.fileRefId) : undefined;
+  if (original && original.mimeType === 'application/pdf' && original.lifecycleStatus === 'committed') return original.id;
+  return null;
+}
+
+export async function prepareArchivedDocumentDeliveryAttachment(
+  document: CompanyDocument | undefined,
+): Promise<PrepareArchivedDocumentAttachmentResult> {
+  if (!document) return { ok: false, reason: 'document_missing' };
+  let blob: Blob | null = null;
+  // Archiv-PDF (abgeleitet, z. B. aus einem Foto) hat Vorrang — dieselbe Bindung kennt der Server.
+  const archive = await resolveDocumentFileRepresentation({ documentId: document.id, kind: 'archive' }).catch(() => null);
+  if (archive && archive.kind === 'ready' && archive.fileRef.mimeType === 'application/pdf') {
+    blob = archive.blob;
+  } else {
+    const refId = findArchivedDocumentPdfFileRefId(document);
+    if (!refId) return { ok: false, reason: 'no_pdf' };
+    blob = await getDocumentFileBlob(refId);
+    if (!blob) return { ok: false, reason: 'file_unavailable' };
+  }
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  if (bytes.byteLength === 0) return { ok: false, reason: 'file_unavailable' };
+  if (String.fromCharCode(...bytes.subarray(0, 5)) !== '%PDF-') return { ok: false, reason: 'no_pdf' };
+  if (bytes.byteLength > DELIVERY_ATTACHMENT_MAX_BYTES) return { ok: false, reason: 'too_large' };
+  return {
+    ok: true,
+    attachment: { bytes, filename: attachmentFilenameFor(document), sha256: await sha256Hex(bytes), sizeBytes: bytes.byteLength, mimeType: 'application/pdf' },
+  };
+}
+
 export async function uploadDeliveryAttachment(
   input: { workspaceId: string; identity: DeliveryDocumentIdentity; attachment: PreparedDeliveryAttachment },
   client?: SupabaseClient | null,
 ): Promise<DeliveryAttachmentUploadResult> {
   const supabase = client ?? getSupabaseClient();
   if (!supabase) return { ok: false, error: 'not_configured' };
-  const segment = `${input.identity.kind}-${input.identity.clientInvoiceId}`;
+  const segment = `${input.identity.kind}-${deliveryIdentityDocumentId(input.identity)}`;
   const storagePath = buildDeliveryAttachmentStoragePath(input.workspaceId, segment, input.attachment.sha256);
   try {
     const { error } = await supabase.storage
@@ -145,6 +210,8 @@ function classifyRpcError(message: string): Exclude<CreateDocumentDeliveryResult
   // V1-B1 — serverseitige Sperre: Retry auf einen Versuch mit ungewissem Handoff.
   if (lower.includes('versandstatus unklar')) return 'uncertain_pending';
   if (lower.includes('nicht gefunden')) return 'not_found';
+  // V1-B2 — Dokumentbezug/Anhang passen nicht: kein Versand.
+  if (lower.includes('gehoert nicht zu diesem dokument') || lower.includes('passt nicht zum dokument') || lower.includes('linked_document_id')) return 'not_sendable';
   if (lower.includes('nicht finalisiert') || lower.includes('storniert') || lower.includes('korrekturbeleg')) {
     return 'not_sendable';
   }
@@ -164,7 +231,8 @@ export async function rpcCreateWorkspaceDocumentDelivery(
     p_workspace_id: input.workspaceId,
     p_client_delivery_id: input.clientDeliveryId,
     p_document_kind: input.identity.kind,
-    p_linked_invoice_id: input.identity.clientInvoiceId,
+    // V1-B2 — Rechnung ODER Dokument, nie beides; der Server prüft den Bezug.
+    p_linked_invoice_id: isInvoiceDeliveryIdentity(input.identity) ? input.identity.clientInvoiceId : null,
     p_recipient_email: normalizeRecipientEmail(input.recipientEmail),
     p_subject: input.subject.trim(),
     p_body_text: input.bodyText,
@@ -175,7 +243,7 @@ export async function rpcCreateWorkspaceDocumentDelivery(
     p_attachment_mime_type: 'application/pdf',
     p_provider: input.provider,
     p_retry_of_delivery_id: input.retryOfDeliveryId ?? null,
-    p_linked_document_id: null,
+    p_linked_document_id: isInvoiceDeliveryIdentity(input.identity) ? null : input.identity.clientDocumentId,
   });
   if (error) return { ok: false, error: classifyRpcError(error.message ?? ''), message: error.message };
 
@@ -199,11 +267,18 @@ export async function rpcListWorkspaceDocumentDeliveries(
 ): Promise<ListDocumentDeliveriesResult> {
   const supabase = client ?? getSupabaseClient();
   if (!supabase) return { ok: false, error: 'not_configured' };
-  const { data, error } = await supabase.rpc('list_workspace_document_deliveries', {
-    p_workspace_id: input.workspaceId,
-    p_document_kind: input.identity.kind ?? null,
-    p_linked_invoice_id: input.identity.clientInvoiceId,
-  });
+  // V1-B2 — normale Dokumente haben ihre eigene Historienabfrage (über die Dokument-Kennung).
+  const documentIdentity = input.identity.kind && !isInvoiceDeliveryIdentity(input.identity as DeliveryDocumentIdentity) ? (input.identity as Extract<DeliveryDocumentIdentity, { clientDocumentId: string }>) : null;
+  const { data, error } = documentIdentity
+    ? await supabase.rpc('list_workspace_document_deliveries_for_document', {
+        p_workspace_id: input.workspaceId,
+        p_client_document_id: documentIdentity.clientDocumentId,
+      })
+    : await supabase.rpc('list_workspace_document_deliveries', {
+        p_workspace_id: input.workspaceId,
+        p_document_kind: input.identity.kind ?? null,
+        p_linked_invoice_id: (input.identity as { clientInvoiceId: string }).clientInvoiceId,
+      });
   if (error) {
     const lower = (error.message ?? '').toLowerCase();
     return {
