@@ -115,7 +115,7 @@ export const deSettings = {
   'settings.communication.readOnly': 'Nur Inhaber und Administratoren können die Kommunikationseinstellungen ändern.',
   'settings.communication.historicalHint': 'Diese Werte gelten für neue Sendungen. Bereits versendete Dokumente bleiben unverändert.',
   'settings.communication.section.sender': 'Absender',
-  'settings.communication.sender.hint': 'Der Empfänger sieht den Anzeigenamen und antwortet an die Antwortadresse. Die technische Absenderadresse wird vom Versanddienst von OfficePilot gesetzt und ist nicht frei wählbar.',
+  'settings.communication.sender.hint': 'Gilt für den E-Mail-Versand von Dokumenten (Briefe, Angebote, sonstige Dokumente): Der Empfänger sieht den Anzeigenamen und antwortet an die Antwortadresse. Rechnungen und Korrekturbelege verwenden Firmenname, Rechtsform und Firmen-E-Mail, wie sie bei der Freigabe der Rechnung festgehalten wurden. Die technische Absenderadresse wird vom Versanddienst von OfficePilot gesetzt und ist nicht frei wählbar.',
   'settings.communication.senderDisplayName': 'Absender-Anzeigename (optional)',
   'settings.communication.senderDisplayName.derived': 'Leer = Firmenname und Rechtsform: „{name}“',
   'settings.communication.senderDisplayName.custom': 'Eigener Anzeigename. Leer lassen, um Firmenname und Rechtsform zu verwenden.',

@@ -11,7 +11,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createStubEmailProvider } from '../../../supabase/functions/_shared/emailProvider';
 import {
-  OFFICEPILOT_SENDER_EMAIL,
   resolveCompanySenderIdentity,
   runSendDocument,
   type CompanyContext,
@@ -23,6 +22,7 @@ import {
 } from '../../../supabase/functions/_shared/sendDocumentCore';
 
 const WS = '00000000-0000-4000-8000-00000000b2b2';
+const SENDER = 'rechnung@send.officetakt.de';
 const PDF = new TextEncoder().encode('%PDF-1.4 archived-document');
 
 async function sha256Hex(bytes: Uint8Array): Promise<string> {
@@ -67,6 +67,7 @@ function deps(loaded: LoadedDelivery, options: { bytes?: Uint8Array | null } = {
   const calls = { accepted: [] as unknown[], status: [] as unknown[], sent: [] as unknown[] };
   const stub = createStubEmailProvider();
   const d: SendDocumentDeps = {
+    senderEmail: SENDER,
     userCanWrite: vi.fn(async () => true),
     loadDelivery: vi.fn(async (ws, id) => (ws === loaded.delivery.workspace_id && id === loaded.delivery.client_delivery_id ? loaded : null)),
     downloadAttachment: vi.fn(async () => (options.bytes === undefined ? PDF : options.bytes)),
@@ -95,7 +96,7 @@ describe('V1-B2 — Send-Kern normale Dokumente', () => {
       const outcome = await run(d);
       expect(outcome, kind).toMatchObject({ ok: true, action: 'sent', coupling: 'none', delivery: { status: 'provider_accepted' } });
       const sent = calls.sent[0] as { from: { email: string; name: string }; replyTo: { email: string }; attachment: { filename: string } };
-      expect(sent.from).toEqual({ email: OFFICEPILOT_SENDER_EMAIL, name: 'Betrieb GmbH' });
+      expect(sent.from).toEqual({ email: SENDER, name: 'Betrieb GmbH' });
       expect(sent.replyTo.email).toBe('info@betrieb.invalid');
       expect(sent.attachment.filename).toBe('Dokument.pdf');
       expect(calls.status).toHaveLength(0);

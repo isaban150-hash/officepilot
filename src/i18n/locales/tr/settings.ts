@@ -81,7 +81,7 @@ export const trSettings = {
   'settings.communication.readOnly': 'İletişim ayarlarını yalnızca sahipler ve yöneticiler değiştirebilir.',
   'settings.communication.historicalHint': 'Bu değerler yeni gönderimler için geçerlidir. Gönderilmiş belgeler değişmez.',
   'settings.communication.section.sender': 'Gönderen',
-  'settings.communication.sender.hint': 'Alıcı görünen adı görür ve yanıt adresine yanıt verir. Teknik gönderen adresi OfficePilot gönderim hizmeti tarafından belirlenir ve serbestçe seçilemez.',
+  'settings.communication.sender.hint': 'Belgelerin e-posta ile gönderimi için geçerlidir (mektuplar, teklifler, diğer belgeler): Alıcı görünen adı görür ve yanıt adresine yanıt verir. Faturalar ve düzeltme belgeleri, faturanın onayında kaydedilen firma adı, hukuki biçim ve firma e-postasını kullanır. Teknik gönderen adresi OfficePilot gönderim hizmeti tarafından belirlenir ve serbestçe seçilemez.',
   'settings.communication.senderDisplayName': 'Gönderen görünen adı (isteğe bağlı)',
   'settings.communication.senderDisplayName.derived': 'Boş = firma adı ve hukuki şekil: „{name}“',
   'settings.communication.senderDisplayName.custom': 'Özel görünen ad. Firma adı ve hukuki şekli kullanmak için boş bırakın.',

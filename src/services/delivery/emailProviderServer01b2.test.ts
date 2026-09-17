@@ -17,7 +17,7 @@ import {
 const TEST_KEY = 'test-key-not-real';
 
 const input = {
-  from: { email: 'rechnung@send.officepilot.de', name: 'Betrieb GmbH' },
+  from: { email: 'rechnung@send.officetakt.de', name: 'Betrieb GmbH' },
   replyTo: { email: 'info@betrieb.invalid', name: 'Betrieb GmbH' },
   to: { email: 'kunde@example.invalid' },
   subject: 'Rechnung 2026-0001',
@@ -58,7 +58,7 @@ describe('EMAIL-01B2 — Brevo-Kontrakt', () => {
     expect(headers['api-key'].length).toBeGreaterThan(0);
     expect(headers['Idempotency-Key']).toBe('ws:cd-1');
     const body = JSON.parse(String(init.body)) as Record<string, unknown>;
-    expect(body.sender).toEqual({ email: 'rechnung@send.officepilot.de', name: 'Betrieb GmbH' });
+    expect(body.sender).toEqual({ email: 'rechnung@send.officetakt.de', name: 'Betrieb GmbH' });
     expect(body.replyTo).toEqual({ email: 'info@betrieb.invalid', name: 'Betrieb GmbH' });
     expect(body.to).toEqual([{ email: 'kunde@example.invalid' }]);
     expect(body.subject).toBe('Rechnung 2026-0001');

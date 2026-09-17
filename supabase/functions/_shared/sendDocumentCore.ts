@@ -9,7 +9,19 @@
  */
 import type { DeliveryErrorCategory, EmailProviderAdapter, SendTransactionalEmailResult } from './emailProvider.ts';
 
-export const OFFICEPILOT_SENDER_EMAIL = 'rechnung@send.officepilot.de';
+/**
+ * BREVO-LIVE-CONFIG-01 — die technische Absenderadresse ist Serverkonfiguration
+ * (`MAIL_SENDER_EMAIL`, eine in Brevo authentifizierte Domain). Kein Default,
+ * kein Fallback: Die Edge Function validiert sie fail-closed und reicht sie als
+ * Abhängigkeit herein. Der Kern kennt keine feste Adresse mehr.
+ */
+const SENDER_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+export function resolveConfiguredSenderEmail(value: string | undefined | null): string | null {
+  const normalized = (value ?? '').trim().toLowerCase();
+  if (!normalized || normalized.length > 254 || !SENDER_EMAIL_PATTERN.test(normalized)) return null;
+  return normalized;
+}
 
 export type DeliveryStatus =
   | 'prepared' | 'queued' | 'provider_accepted' | 'failed' | 'unknown'
@@ -66,6 +78,10 @@ export interface CompanyContext {
   companyName?: unknown;
   legalForm?: unknown;
   email?: unknown;
+  /** Kommunikations-Einstellungen: eigener Anzeigename (leer = Firmenname Rechtsform). */
+  senderDisplayName?: unknown;
+  /** Kommunikations-Einstellungen: Antwortadresse (leer = Firmen-E-Mail). */
+  replyToEmail?: unknown;
 }
 
 export interface LoadedDelivery {
@@ -78,6 +94,8 @@ export interface LoadedDelivery {
 export const DOCUMENT_DELIVERY_KINDS: ReadonlySet<string> = new Set(['letter', 'offer', 'other']);
 
 export interface SendDocumentDeps {
+  /** Validierte technische Absenderadresse (Envelope-/Header-From) aus der Serverkonfiguration. */
+  senderEmail: string;
   userCanWrite(workspaceId: string, userId: string): Promise<boolean>;
   loadDelivery(workspaceId: string, clientDeliveryId: string): Promise<LoadedDelivery | null>;
   downloadAttachment(storagePath: string): Promise<Uint8Array | null>;
@@ -154,8 +172,10 @@ export function resolveCompanySenderIdentity(company: CompanyContext | null | un
   | { ok: true; fromName: string; replyTo: string }
   | { ok: false; code: 'sender_company_missing' | 'sender_reply_to_missing' } {
   if (!company) return { ok: false, code: 'sender_company_missing' };
-  const name = [text(company.companyName), text(company.legalForm)].filter(Boolean).join(' ');
-  const replyTo = text(company.email).toLowerCase();
+  // Dieselbe Ableitung wie in den Kommunikations-Einstellungen: Anzeigename bzw. Antwortadresse, sonst Firmenname/Firmen-E-Mail.
+  const name = text(company.senderDisplayName) || [text(company.companyName), text(company.legalForm)].filter(Boolean).join(' ');
+  const explicitReplyTo = text(company.replyToEmail).toLowerCase();
+  const replyTo = explicitReplyTo && SENDER_EMAIL_PATTERN.test(explicitReplyTo) ? explicitReplyTo : text(company.email).toLowerCase();
   if (!name) return { ok: false, code: 'sender_company_missing' };
   if (!replyTo || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(replyTo)) return { ok: false, code: 'sender_reply_to_missing' };
   return { ok: true, fromName: name, replyTo };
@@ -270,7 +290,7 @@ export async function runSendDocument(
   let result: SendTransactionalEmailResult;
   try {
     result = await deps.provider.sendTransactionalEmail({
-      from: { email: OFFICEPILOT_SENDER_EMAIL, name: sender.fromName },
+      from: { email: deps.senderEmail, name: sender.fromName },
       replyTo: { email: sender.replyTo, name: sender.fromName },
       to: { email: delivery.recipient_email },
       subject: delivery.subject,

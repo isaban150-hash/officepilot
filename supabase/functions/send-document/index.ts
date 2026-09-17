@@ -12,10 +12,12 @@
  *
  * Secrets: BREVO_API_KEY nur aus Deno.env; nie geloggt, nie zurückgegeben.
  * MAIL_PROVIDER muss explizit `stub` oder `brevo` sein (fail-closed).
+ * MAIL_SENDER_EMAIL ist die authentifizierte technische Absenderadresse —
+ * fehlend oder ungültig: server_misconfigured, kein Provider-Aufruf, Wert nie geloggt.
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { createMailProvider, resolveMailProviderName } from '../_shared/emailProvider.ts';
-import { runSendDocument, type CompanyContext, type DeliveryRow, type DocumentContext, type InvoiceContext, type SendDocumentErrorCode } from '../_shared/sendDocumentCore.ts';
+import { resolveConfiguredSenderEmail, runSendDocument, type CompanyContext, type DeliveryRow, type DocumentContext, type InvoiceContext, type SendDocumentErrorCode } from '../_shared/sendDocumentCore.ts';
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -59,8 +61,10 @@ Deno.serve(async (request: Request): Promise<Response> => {
   const supabaseUrl = Deno.env.get('SUPABASE_URL');
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
   const providerName = resolveMailProviderName(Deno.env.get('MAIL_PROVIDER'));
-  if (!supabaseUrl || !serviceRoleKey || !providerName) {
-    log({ outcome: 'server_misconfigured', providerConfigured: Boolean(providerName) });
+  const senderEmail = resolveConfiguredSenderEmail(Deno.env.get('MAIL_SENDER_EMAIL'));
+  if (!supabaseUrl || !serviceRoleKey || !providerName || !senderEmail) {
+    // Nur Flags, nie Werte: die Absenderadresse gehört nicht ins Log.
+    log({ outcome: 'server_misconfigured', providerConfigured: Boolean(providerName), senderConfigured: Boolean(senderEmail) });
     return fail('server_misconfigured');
   }
 
@@ -90,6 +94,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
     const outcome = await runSendDocument(
       { userId, workspaceId, clientDeliveryId },
       {
+        senderEmail,
         async userCanWrite(ws, user) {
           const { data, error } = await admin.rpc('workspace_user_can_write', { p_workspace_id: ws, p_user_id: user });
           if (error) throw new Error(`can_write: ${error.message}`);
