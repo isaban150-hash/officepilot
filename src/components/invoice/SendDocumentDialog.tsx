@@ -32,6 +32,10 @@ export interface SendDocumentDialogProps {
   phase: SendPhase | null;
   busy: boolean;
   errorKey: TranslationKey | null;
+  /**
+   * V1-B1 — technische Diagnose (RPC-/Storage-Rohtext). Nur für Logs/Debugging
+   * als data-Attribut am Fehlerelement; nie im sichtbaren Text.
+   */
   errorDetail?: string;
   translate: (key: TranslationKey) => string;
   onCancel: () => void;
@@ -231,9 +235,8 @@ export function SendDocumentDialog(props: SendDocumentDialogProps) {
           <p className="form-error" role="alert" data-testid="send-document-field-error">{translate(fieldError)}</p>
         ) : null}
         {props.errorKey ? (
-          <p className="form-error" role="alert" data-testid="send-document-error">
+          <p className="form-error" role="alert" data-testid="send-document-error" data-error-detail={props.errorDetail || undefined}>
             {translate(props.errorKey)}
-            {props.errorDetail ? ` (${props.errorDetail})` : ''}
           </p>
         ) : null}
         {phaseKey ? (

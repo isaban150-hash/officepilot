@@ -7,6 +7,15 @@ export function isProductionBuild(): boolean {
   return import.meta.env.PROD;
 }
 
+/**
+ * V1-B1 — Staging-Kennzeichnung. Nur ein ausdrückliches
+ * `VITE_APP_ENVIRONMENT=staging` markiert die App als Staging; Produktion
+ * und lokale Entwicklung ohne die Variable bleiben unmarkiert.
+ */
+export function isStagingEnvironment(): boolean {
+  return (import.meta.env.VITE_APP_ENVIRONMENT ?? '').toString().trim().toLowerCase() === 'staging';
+}
+
 export function isBetaTestModeEnabled(): boolean {
   return import.meta.env.VITE_BETA_TEST_MODE === 'true';
 }

@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { AppErrorBoundary } from './components/system/AppErrorBoundary';
 import { NetworkStatusBanner } from './components/system/NetworkStatusBanner';
+import { StagingBanner } from './components/system/StagingBanner';
 import { ProductionConfigBanner } from './components/system/ProductionConfigBanner';
 import { RootShell } from './RootShell';
 import './styles/tokens.css';
@@ -20,6 +21,7 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
       <AppErrorBoundary>
+        <StagingBanner />
         <ProductionConfigBanner />
         <NetworkStatusBanner />
         {/* RootShell entscheidet zuerst ueber /local-recovery - vor jedem Bootstrap. */}

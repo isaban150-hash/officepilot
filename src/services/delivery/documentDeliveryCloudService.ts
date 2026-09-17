@@ -130,6 +130,7 @@ export type CreateDocumentDeliveryResult =
         | 'forbidden'
         | 'not_found'
         | 'not_sendable'
+        | 'uncertain_pending'
         | 'invalid_response'
         | 'rpc_failed';
       message?: string;
@@ -141,6 +142,8 @@ function classifyRpcError(message: string): Exclude<CreateDocumentDeliveryResult
   if (lower.includes('kein zugriff') || lower.includes('schreibberechtigung') || lower.includes('nicht angemeldet')) {
     return 'forbidden';
   }
+  // V1-B1 — serverseitige Sperre: Retry auf einen Versuch mit ungewissem Handoff.
+  if (lower.includes('versandstatus unklar')) return 'uncertain_pending';
   if (lower.includes('nicht gefunden')) return 'not_found';
   if (lower.includes('nicht finalisiert') || lower.includes('storniert') || lower.includes('korrekturbeleg')) {
     return 'not_sendable';

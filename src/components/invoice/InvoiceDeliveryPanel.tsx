@@ -16,7 +16,7 @@ import {
   findAcceptedDelivery,
   resolveDeliveryDraftDefaults,
 } from '../../services/delivery/documentDeliveryDefaults';
-import { isDeliveryRetryable } from '../../services/delivery/documentDeliveryContract';
+import { hasUncertainDelivery, isDeliveryRetryable } from '../../services/delivery/documentDeliveryContract';
 import {
   clearSendDraft,
   createSendDraft,
@@ -60,6 +60,7 @@ const CLIENT_ERROR_KEYS: Record<SendDocumentClientError, TranslationKey> = {
   idempotency_conflict: 'delivery.error.idempotencyConflict' as TranslationKey,
   forbidden: 'delivery.error.forbidden' as TranslationKey,
   not_sendable: 'delivery.error.notSendable' as TranslationKey,
+  uncertain_pending: 'delivery.error.uncertainPending' as TranslationKey,
   server_unavailable: 'delivery.error.serverUnavailable' as TranslationKey,
   unauthenticated: 'delivery.error.forbidden' as TranslationKey,
   rpc_failed: 'delivery.error.serverUnavailable' as TranslationKey,
@@ -142,6 +143,13 @@ export function InvoiceDeliveryPanel({ vorgangId, invoice, onInvoiceUpdated, doc
   const accepted = deliveries ? findAcceptedDelivery(deliveries) : undefined;
   const latest = deliveries?.[0];
   const alreadySent = isCorrection ? Boolean(accepted) : invoice.sentSource === 'officepilot' || Boolean(accepted);
+  /*
+   * V1-B1 — solange irgendein Versuch dieses Dokuments `unknown` ist (Handoff
+   * ungewiss), gibt es weder „Erneut versuchen" noch „Per E-Mail senden":
+   * Der Provider könnte die Mail bereits angenommen haben; ein neuer Versand
+   * wäre eine mögliche Doppelzustellung. Nur „Status prüfen" bleibt.
+   */
+  const uncertain = deliveries ? hasUncertainDelivery(deliveries) : false;
 
   const runWith = async (draft: SendDraftState) => {
     if (inFlight.current) return;
@@ -179,6 +187,11 @@ export function InvoiceDeliveryPanel({ vorgangId, invoice, onInvoiceUpdated, doc
 
   const handleSend = (fields: { recipientEmail: string; subject: string; bodyText: string }) => {
     if (!dialog) return;
+    // V1-B1 — zweite Sperre hinter der Oberfläche: kein neuer Versuch bei ungewissem Handoff.
+    if (uncertain && !(dialog.mode === 'resume' && dialog.draft)) {
+      setErrorKey('delivery.error.uncertainPending' as TranslationKey);
+      return;
+    }
     // Resume mit vorhandenem Draft: dieselbe client_delivery_id (technischer Replay).
     if (dialog.draft && dialog.mode === 'resume' && dialog.draft.recipientEmail === fields.recipientEmail && dialog.draft.subject === fields.subject && dialog.draft.bodyText === fields.bodyText) {
       void runWith(dialog.draft);
@@ -266,7 +279,7 @@ export function InvoiceDeliveryPanel({ vorgangId, invoice, onInvoiceUpdated, doc
 
         {canSend ? (
           <div className="invoice-delivery-panel__actions">
-            {latest?.status === 'unknown' ? (
+            {uncertain ? (
               <Button type="button" variant="outline" onClick={() => void refresh()} disabled={busy} data-testid="invoice-delivery-check-status">
                 {translate('delivery.action.checkStatus' as TranslationKey)}
               </Button>

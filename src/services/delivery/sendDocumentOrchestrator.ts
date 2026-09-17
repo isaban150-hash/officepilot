@@ -145,6 +145,7 @@ export type SendDocumentClientError =
   | 'idempotency_conflict'
   | 'forbidden'
   | 'not_sendable'
+  | 'uncertain_pending'
   | 'server_unavailable'
   | 'unauthenticated'
   | 'rpc_failed';
@@ -294,6 +295,7 @@ export async function runSendDocument(
     if (created.error === 'forbidden') return failWith('forbidden', created.message);
     if (created.error === 'not_sendable' || created.error === 'not_found') return failWith('not_sendable', created.message);
     if (created.error === 'invalid_recipient') return failWith('invalid_recipient');
+    if (created.error === 'uncertain_pending') return failWith('uncertain_pending', created.message);
     return failWith('rpc_failed', created.message);
   }
 

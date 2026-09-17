@@ -75,7 +75,9 @@ describe('EMAIL-01B1 — Statusmaschine', () => {
     expect(isDeliveryConsideredSent('queued')).toBe(false);
     expect(isDeliveryConsideredSent('failed')).toBe(false);
     expect(isDeliveryRetryable('failed')).toBe(true);
-    expect(isDeliveryRetryable('unknown')).toBe(true);
+    expect(isDeliveryRetryable('unknown')).toBe(false); // V1-B1: Handoff ungewiss → kein Retry
+    expect(isDeliveryRetryable('bounced')).toBe(true);
+    expect(isDeliveryRetryable('rejected')).toBe(true);
     expect(isDeliveryRetryable('provider_accepted')).toBe(false);
     expect(isDeliveryRetryable('queued')).toBe(false);
   });

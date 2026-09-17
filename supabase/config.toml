@@ -412,3 +412,14 @@ enabled = true
 # declarative_schema_path = "./database"
 # JSON string passed through to pg-delta SQL formatting.
 # format_options = "{\"keywordCase\":\"upper\",\"indent\":2,\"maxWidth\":80,\"commaStyle\":\"trailing\"}"
+
+# V1-B1 — Edge Function "send-document" (E-Mail-Versand Rechnung/Korrektur).
+# verify_jwt = true ist der Standard; hier ausdruecklich gesetzt, damit das
+# Gateway ohne gueltiges Nutzer-JWT gar nicht erst an die Function durchreicht.
+# Die Function prueft den Bearer-Token zusaetzlich selbst (auth.getUser) und
+# das Schreibrecht im Workspace per RPC. Secrets (MAIL_PROVIDER, BREVO_API_KEY)
+# werden ausschliesslich ueber `supabase secrets set` gesetzt — nie hier.
+[functions.send-document]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/send-document/index.ts"

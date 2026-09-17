@@ -94,6 +94,7 @@ describe('EMAIL-01B1 — Create-RPC', () => {
     expect(create).toContain("split_part(v_path, '/', 3) <> v_sha || '.pdf'");
     expect(create).toContain('p_attachment_size_bytes > 10485760');
     expect(create).toContain("v_mime <> 'application/pdf'");
+    // V1-B1: Erstfassung erlaubte Retry aus unknown; die Guard-Migration ersetzt die Funktion (siehe deliveryRetryUnknownGuard01.test).
     expect(create).toContain("v_retry_of.status not in ('failed', 'rejected', 'unknown', 'bounced')");
     expect(create).toContain('v_attempt := v_retry_of.attempt_number + 1');
   });

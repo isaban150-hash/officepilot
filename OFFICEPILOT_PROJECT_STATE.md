@@ -20,29 +20,35 @@ Stand: 2026-09-17
 ## 2. Aktueller Git-Stand
 
 - Branch: `main`
-- Letzter bestätigter Commit (HEAD): `65542e8` — fix(product): harden assistant communication and knowledge flows (Block D2)
-- origin/main: identisch mit lokalem `main` (`65542e8`), nichts ausstehend
-- Arbeitskopie: OFFICEPILOT-V1-A (Ausgaben-Härtung) ist implementiert und abgenommen, aber
-  **noch nicht committet** (siehe Abschnitt 3)
+- Letzter bestätigter Commit (HEAD): `0086cdc` — feat(expenses): harden cancellation and editing flows (V1-A)
+- origin/main: identisch mit lokalem `main` (`0086cdc`), nichts ausstehend
+- Arbeitskopie: OFFICEPILOT-V1-B1 (E-Mail-Safety-Prep) ist implementiert, aber **noch nicht committet**
+  (siehe Abschnitt 3)
 
 ## 3. Aktiver Arbeitsblock
 
-- Ausgangspunkt: OFFICEPILOT-V1-GAP-AUDIT-01A (Analyse, ohne Commit) — V1-Matrix: Dokumenteingang,
-  Rechnungen (inkl. manuelle Rechnung), Einstellungen = A; Kunden, Steuerberater = A/B; Aufträge,
-  Kommunikation, Sync, Assistent, UI/Mobile = B; Ausgaben = C (Storno ohne Bedienoberfläche).
-  Geschätzt 80–85 % des V1-Umfangs vorhanden.
-- Block: OFFICEPILOT-V1-A — Ausgaben-Härtung — **uncommittet, fachlich abgeschlossen**
-- Inhalt: „Ausgabe stornieren“ im Ausgabendetail (Dialog mit Pflichtgrund, sekundäre Aktion,
-  idempotent, kein Löschen, Beleg bleibt erhalten; mit gebuchter Zahlung gesperrt — Zahlung
-  zuerst zurücknehmen); Bearbeiten: vor Zahlung alles änderbar, nach Zahlung Beträge fest
-  (Kategorie/Beschreibung/Datum bleiben änderbar), stornierte Ausgaben nicht mehr bearbeitbar;
-  Detail zeigt Status, Zahlungsstatus, Stornodatum/-grund und nächste Aktion; Texte de/tr/bg.
-  Monatsmappe und Cloud-Sync unverändert genutzt (Status/Stornodatum/Grund liegen im Payload).
-- Status: `src/expenseCancel01a.test.ts` + betroffene Tests grün, tsc grün; Browser-Selbstabnahme
-  Desktop 1280 / Galaxy 360 / iPhone 390 inkl. Gerät 2 (Storno kommt über die Cloud an).
-- Bekannt, nicht Teil von V1-A: `src/services/steuerberaterOverview01b.test.tsx` (Fall F) erwartet
-  die Steuerberater-Zeile in „Offene Arbeit“; seit Block A liegt sie in „Ihr Betrieb heute“ (Test veraltet).
-- Nächster Schritt: Commit durch den Nutzer, dann V1-B.
+- Ausgangspunkt: OFFICEPILOT-V1-GAP-AUDIT-01A (Analyse) → V1-A Ausgaben-Härtung (committet `0086cdc`)
+  → OFFICEPILOT-V1-B E-Mail-Versand/Brevo-Staging-Audit (Analyse, abgeschlossen, ohne Commit).
+  Audit-Ergebnis: Rechnungs- und Korrekturversand serverseitig sauber (Edge Function `send-document`,
+  Anhangprüfung, Idempotenz, Rechnungskopplung); **normaler Dokumentversand (letter/offer/other)
+  existiert nicht** (RPC lehnt ab, kein UI-Einstieg) — offene Lücke; `unknown` war ohne Auflösung.
+- Block: OFFICEPILOT-V1-B1 — E-Mail-Safety-Prep — **uncommittet, implementiert**
+  - `unknown` (Handoff ungewiss) ist kein Retry-Zustand mehr: Contract `isDeliveryRetryable` ohne
+    `unknown`, Panel bietet bei irgendeinem `unknown`-Versuch nur „Status prüfen“ (kein Senden/Retry),
+    zweite Sperre im Sende-Handler; serverseitig lehnt `create_workspace_document_delivery` (additive
+    Migration `20260918120000`) retry_of auf `unknown` ab → Client-Fehler `uncertain_pending`;
+    Hinweistext nennt die mögliche Doppelzustellung (de/tr/bg). Technische Fehlerdetails (RPC-/Storage-
+    Rohtext) erscheinen nicht mehr im Dialogtext.
+    failed/rejected → „Erneut versuchen“, bounced → neuer Versand: unverändert.
+  - `.env.example`: MAIL_PROVIDER (stub|brevo, fail-closed), BREVO_API_KEY (nur Server-Secret),
+    VITE_MAIL_PROVIDER (nur „stub“ schaltet um, sonst implizit brevo), VITE_APP_ENVIRONMENT.
+  - `supabase/config.toml`: expliziter Eintrag `[functions.send-document]` mit `verify_jwt = true`.
+  - STAGING-Banner (`StagingBanner`), nur bei `VITE_APP_ENVIRONMENT=staging`.
+  - Tests: Delivery-/Send-Tests, Contract, Panel-UI (neu U1/U2), StagingBanner, deployFoundation: grün; tsc grün.
+- **Brevo-Live-Test: noch nicht ausgeführt.** Kein echter Provider-Aufruf bisher; Staging-Supabase,
+  Brevo-Konto mit authentifizierter Absenderdomain (`rechnung@send.officepilot.de`) und Staging-Frontend
+  müssen vorher manuell eingerichtet werden (siehe V1-B-Audit, Live-Testplan Tests 1/2/4/5).
+- Nächster Schritt: Commit durch den Nutzer; danach Staging-Aufbau und V1-B Live-Test.
 
 ## 4. Abgeschlossene wichtige Blöcke
 
@@ -62,7 +68,9 @@ Stand: 2026-09-17
 | Product Acceptance Fix D1 (PRODUCT-ACCEPTANCE-FIX-01B) | `eddb70d` | Kernabläufe vervollständigt, u. a. „Als Ausgabe speichern“ aus dem Eingang (F-15) |
 | Product Acceptance Fix D2 (PRODUCT-ACCEPTANCE-FIX-01C) | `65542e8` | Assistent ohne Rohschlüssel, Tankbeleg keine Materialrechnung, Kommunikation ohne Sackgasse, Wissen einfach anlegen |
 | V1-Gap-Audit (OFFICEPILOT-V1-GAP-AUDIT-01A) | ohne Commit (Analyse) | V1-Matrix A/B/C/D, Restlücken, Rest-Roadmap V1-A…V1-E |
-| V1-A Ausgaben-Härtung (OFFICEPILOT-V1-A) | noch nicht committet | Ausgaben-Storno mit Grund, sichere Bearbeitung vor/nach Zahlung, Detail mit Status und nächster Aktion |
+| V1-A Ausgaben-Härtung (OFFICEPILOT-V1-A) | `0086cdc` | Ausgaben-Storno mit Grund, sichere Bearbeitung vor/nach Zahlung, Detail mit Status und nächster Aktion |
+| V1-B E-Mail-/Brevo-Staging-Audit | ohne Commit (Analyse) | Versandarchitektur, Brevo-Pfad, Sicherheit, Staging-Voraussetzungen, Live-Testplan; Dokumentversand fehlt |
+| V1-B1 E-Mail-Safety-Prep | noch nicht committet | unknown-Retry-Sperre, Env-Doku, send-document config, STAGING-Banner |
 
 ## 5. Verbindliche Produkt-/Designregeln
 
@@ -113,8 +121,10 @@ committen. Nur der Nutzer entscheidet ausdrücklich darüber.
 
 ## 8. Offene Roadmap (Weg zur ersten verkaufbaren Version)
 
-V1-A Ausgaben-Härtung — implementiert, Commit offen
-V1-B Versand live: Brevo-Staging-Test (Rechnung, Korrektur, Dokument), Fehlerbilder verständlich
+V1-A Ausgaben-Härtung — committet (`0086cdc`)
+V1-B Versand live: Audit erledigt, V1-B1 Safety-Prep implementiert (Commit offen); offen: Staging-Aufbau (Supabase,
+     Brevo-Domain-Authentifizierung, Staging-Frontend) und Live-Test Rechnung/Korrektur/Fehler/Retry — noch nicht ausgeführt.
+     Dokumentversand letter/offer/other ist nicht vorhanden (eigener Block nach dem Live-Test).
 V1-C Mehrgerät ehrlich: Aufgaben in die Cloud-Allowlist oder sichtbar „nur dieses Gerät“; Konflikthinweise abnehmen
 V1-D Navigation/Betrieb: technische Seiten (`/mail-import`, `/papierarchiv`, `/synchronisation`, `/admin/users`)
      aus der Kern-Navigation, Aufträge-Statuswechsel abnehmen, optional „Auftrag ohne Dokument“

@@ -148,6 +148,16 @@ describe('EMAIL-01B3 — SendDocumentDialog', () => {
     expect(q('send-document-error')?.textContent).toContain('nichts gesendet');
     expect((host.querySelector('[role="dialog"]') as HTMLElement).getAttribute('aria-busy')).toBe('true');
   });
+
+  /* V1-B1 — technische Diagnose (RPC-/Storage-/HTTP-Rohtext) nie im sichtbaren Dialogtext. */
+  it('D4: errorDetail erscheint nicht im sichtbaren Text — nur die lokalisierte Meldung', async () => {
+    const invoice = finalizeInvoice('v-d4');
+    const detail = 'HTTP 400 {"code":"PGRST301","message":"permission denied for table storage.objects"} edge function failed';
+    await mount(<SendDocumentDialog open invoice={invoice} initialRecipient="kunde@example.invalid" canonicalRecipient="kunde@example.invalid" initialSubject="S" initialBody="B" attachmentFilename="R.pdf" alreadySent={false} mode="send" phase={null} busy={false} errorKey={'delivery.error.serverUnavailable' as never} errorDetail={detail} translate={translate} onCancel={() => {}} onSend={() => {}} />);
+    const error = q('send-document-error')!;
+    expect(error.textContent).toBe('Der Versanddienst ist nicht erreichbar. Es wurde nichts gesendet.');
+    expect(host.textContent).not.toMatch(/HTTP|PGRST|JSON|{|storage.objects|edge function/i);
+  });
 });
 
 describe('EMAIL-01B3 — InvoiceDeliveryPanel', () => {
@@ -213,6 +223,60 @@ describe('EMAIL-01B3 — InvoiceDeliveryPanel', () => {
     expect(q('invoice-delivery-check-status')).not.toBeNull();
     expect(q('invoice-delivery-retry')).toBeNull();
     expect(q('invoice-delivery-send')).toBeNull();
+  });
+
+  /*
+   * V1-B1 — unknown ist kein Retry-Zustand: Handoff ungewiss, ein neuer Versand
+   * könnte den Empfänger doppelt erreichen. Gilt für jeden Versuch in der
+   * Historie (nicht nur den jüngsten) und für Rechnung wie Korrekturbeleg.
+   */
+  it('U1: unknown (auch älterer Versuch) → nur „Status prüfen", kein Retry, kein Senden, kein Orchestrator-Lauf; Hinweis nennt Doppelzustellung', async () => {
+    const invoice = finalizeInvoice('v-u1');
+    const run = vi.spyOn(orchestrator, 'runSendDocument');
+    withDeliveries([
+      delivery({ id: 'd-u2', clientDeliveryId: 'cd-u2', status: 'failed', errorCategory: 'provider', attemptNumber: 2, retryOfDeliveryId: 'd-u1' }),
+      delivery({ id: 'd-u1', clientDeliveryId: 'cd-u1', status: 'unknown', errorCategory: 'network' }),
+    ]);
+    await mount(<InvoiceDeliveryPanel vorgangId="v-u1" invoice={invoice} onInvoiceUpdated={() => {}} />);
+    expect(q('invoice-delivery-check-status')).not.toBeNull();
+    expect(q('invoice-delivery-retry')).toBeNull();
+    expect(q('invoice-delivery-send')).toBeNull();
+    expect(q('invoice-delivery-resume')).toBeNull();
+    expect(q('invoice-delivery-unknown-hint')?.textContent).toContain('doppelt');
+    expect(host.textContent).not.toMatch(/HTTP|JSON|provider rejected|edge function/i);
+    await click('invoice-delivery-check-status');
+    expect(run).not.toHaveBeenCalled();
+    expect(q('send-document-dialog')).toBeNull();
+    await act(async () => root.unmount());
+    host.remove();
+
+    /* Korrekturbeleg: dieselbe Sperre */
+    const corrected: VorgangInvoice = { ...invoice, status: 'versendet', sentSource: 'officepilot', sentDeliveryId: 'd-orig', cancelledAt: '2026-09-14T00:00:00Z', cancellationKind: 'correction', correctionDocumentId: `corr-${invoice.id}` };
+    withDeliveries([delivery({ id: 'd-u3', clientDeliveryId: 'cd-u3', documentKind: 'invoice_correction', status: 'unknown', errorCategory: 'network' })]);
+    await mount(<InvoiceDeliveryPanel vorgangId="v-u1" invoice={corrected} onInvoiceUpdated={() => {}} documentKind="invoice_correction" />);
+    expect(q('invoice-delivery-check-status')).not.toBeNull();
+    expect(q('invoice-delivery-retry')).toBeNull();
+    expect(q('invoice-delivery-send')).toBeNull();
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it('U2: failed/rejected → „Erneut versuchen" unverändert; bounced → neuer Versand über „Erneut per E-Mail senden"', async () => {
+    const invoice = finalizeInvoice('v-u2');
+    for (const status of ['failed', 'rejected'] as const) {
+      withDeliveries([delivery({ id: `d-${status}`, clientDeliveryId: `cd-${status}`, status, errorCategory: 'provider' })]);
+      await mount(<InvoiceDeliveryPanel vorgangId="v-u2" invoice={invoice} onInvoiceUpdated={() => {}} />);
+      expect(q('invoice-delivery-retry'), status).not.toBeNull();
+      expect(q('invoice-delivery-check-status'), status).toBeNull();
+      await click('invoice-delivery-retry');
+      expect(q('send-document-dialog'), status).not.toBeNull();
+      await act(async () => root.unmount());
+      host.remove();
+    }
+    withDeliveries([delivery({ id: 'd-b', clientDeliveryId: 'cd-b', status: 'bounced' })]);
+    await mount(<InvoiceDeliveryPanel vorgangId="v-u2" invoice={invoice} onInvoiceUpdated={() => {}} />);
+    expect(q('invoice-delivery-retry')).toBeNull();
+    expect(q('invoice-delivery-check-status')).toBeNull();
+    expect(q('invoice-delivery-send')).not.toBeNull();
   });
 
   it('P3: manual vs. officepilot — Herkunft sichtbar, sentManualPrior bleibt als Hinweis', async () => {
