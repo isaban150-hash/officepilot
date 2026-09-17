@@ -24,6 +24,12 @@ export interface DocumentFilingDecisionPanelProps {
   /** Called after durable confirm (folders + filingDecision on inbox). */
   onConfirmed: (item: InboxItem) => void;
   testIdPrefix?: string;
+  /**
+   * PRODUCT-ACCEPTANCE-FIX-01B (F-05) — im Aktionsfluss: Titel, Hinweis und
+   * Bestätigungsknopf nennen die Aktion, die der Nutzer gedrückt hat
+   * (z. B. „Als Ausgabe speichern"). Die Ablageregel selbst ist unverändert.
+   */
+  continueActionLabel?: string;
 }
 
 /**
@@ -34,6 +40,7 @@ export function DocumentFilingDecisionPanel({
   item,
   onConfirmed,
   testIdPrefix = 'document-filing-decision',
+  continueActionLabel,
 }: DocumentFilingDecisionPanelProps) {
   const { translate, setup, showToast } = useApp();
   const [draft, setDraft] = useState<DocumentFilingDecisionDraft>(() =>
@@ -56,6 +63,10 @@ export function DocumentFilingDecisionPanel({
   const confirmed = draft.status === 'confirmed';
   const documentKindLabel = translate(draft.documentKindLabelKey as TranslationKey);
   const companyAreaLabel = translate(draft.companyAreaLabelKey as TranslationKey);
+  // „Ablage bestätigen und als Ausgabe speichern" — die Aktion klein im Satz, groß im Titel.
+  const continueActionInline = continueActionLabel
+    ? continueActionLabel.charAt(0).toLocaleLowerCase('de-DE') + continueActionLabel.slice(1)
+    : '';
 
   const handleConfirm = () => {
     const updated = confirmDocumentFilingDecision(item.id, draft);
@@ -69,9 +80,15 @@ export function DocumentFilingDecisionPanel({
 
   return (
     <Card className="document-filing-decision" data-testid={testIdPrefix}>
-      <CardTitle>{translate('filingDecision.title')}</CardTitle>
+      <CardTitle>
+        {continueActionLabel
+          ? translate('filingDecision.stepTitle').replace('{action}', continueActionLabel)
+          : translate('filingDecision.title')}
+      </CardTitle>
       <p className="document-filing-decision__hint muted">
-        {translate('filingDecision.hint')}
+        {continueActionLabel
+          ? translate('filingDecision.stepHint').replace('{action}', continueActionLabel)
+          : translate('filingDecision.hint')}
       </p>
 
       <div
@@ -132,17 +149,10 @@ export function DocumentFilingDecisionPanel({
         </div>
       ) : (
         <div className="document-filing-decision__fields">
-          <div
-            className="document-filing-decision__field"
-            data-testid={`${testIdPrefix}-company-area-label`}
-          >
-            <span className="document-filing-decision__label">
-              {translate('filingDecision.companyArea')}
-            </span>
-            <p className="document-filing-decision__scope-current">{companyAreaLabel}</p>
-          </div>
-          <label className="document-filing-decision__field">
+          {/* F-05 — ein Feld „Unternehmensbereich": die Auswahl zeigt den erkannten Bereich; kein doppeltes Label. */}
+          <label className="document-filing-decision__field" data-testid={`${testIdPrefix}-company-area-label`}>
             <span>{translate('filingDecision.companyArea')}</span>
+            <span className="sr-only">{companyAreaLabel}</span>
             <select
               className="input"
               data-testid={`${testIdPrefix}-area`}
@@ -161,21 +171,28 @@ export function DocumentFilingDecisionPanel({
         </div>
       )}
 
-      <label className="document-filing-decision__field">
-        <span>{translate('filingDecision.digitalPath')}</span>
-        <input
-          className="input"
-          data-testid={`${testIdPrefix}-digital-path`}
-          value={draft.digitalFolder.path}
-          onChange={(event) => applyOverride({ digitalPath: event.target.value })}
-        />
-        <span
-          className="document-filing-decision__breadcrumb muted"
+      {/* F-05 — der Ablageort steht menschenlesbar; der technische Pfad bleibt bearbeitbar, aber aufklappbar. */}
+      <div className="document-filing-decision__field">
+        <span className="document-filing-decision__label">{translate('filingDecision.digitalPath')}</span>
+        <p
+          className="document-filing-decision__scope-current"
           data-testid={`${testIdPrefix}-digital-breadcrumb`}
         >
           {formatDigitalFolderBreadcrumb(draft.digitalFolder.path)}
-        </span>
-      </label>
+        </p>
+        <details className="work-path-details">
+          <summary>{translate('document.filing.pathDetails')}</summary>
+          <label className="document-filing-decision__field">
+            <span className="sr-only">{translate('filingDecision.digitalPath')}</span>
+            <input
+              className="input"
+              data-testid={`${testIdPrefix}-digital-path`}
+              value={draft.digitalFolder.path}
+              onChange={(event) => applyOverride({ digitalPath: event.target.value })}
+            />
+          </label>
+        </details>
+      </div>
 
       <div className="document-filing-decision__paper">
         <span className="document-filing-decision__label">
@@ -222,7 +239,9 @@ export function DocumentFilingDecisionPanel({
           data-testid={`${testIdPrefix}-confirm`}
           onClick={handleConfirm}
         >
-          {translate('filingDecision.confirm')}
+          {continueActionLabel
+            ? translate('filingDecision.confirmAndContinue').replace('{action}', continueActionInline)
+            : translate('filingDecision.confirm')}
         </Button>
       )}
     </Card>

@@ -5,6 +5,8 @@ import { getWorkspaceStoreSnapshot } from '../workspace/workspaceStore';
 import { getInboxItemById } from '../inboxService';
 import { getDocumentById } from '../documentService';
 import { getVorgangById } from '../vorgangService';
+import { getExpenseById } from '../expenseService';
+import { getCustomerById } from '../customerStoreService';
 import { getDocumentDisplayLabelKey } from '../documentDisplayLabelService';
 import { getCachedSetup } from '../persistenceService';
 import { t } from '../../i18n';
@@ -59,15 +61,78 @@ function buildResumeLabel(
       entityHint: '',
     };
   }
+  /*
+   * PRODUCT-ACCEPTANCE-FIX-01B (F-01) — Ausgaben und Kunden bekommen ein
+   * menschenlesbares Label aus ihren Stammdaten; vorher fielen Ausgaben in
+   * den Pfad-Fallback (`/ausgaben/exp-…`) und Kunden zeigten ihre ID.
+   */
+  const lang = getCachedSetup()?.language ?? 'de';
+  if (entityType === 'expense' && entityId) {
+    const expense = getExpenseById(entityId);
+    return {
+      titleText: expense?.title?.trim() || t('expense.title', lang),
+      subtitleText: expense?.supplierName?.trim() || '',
+      entityHint: '',
+    };
+  }
   if (entityType === 'customer' && entityId) {
-    return { titleText: 'Kunde', subtitleText: entityId, entityHint: '' };
+    // Legacy-Route `/kunden/<Name>`: der Parameter ist der Kundenname selbst.
+    const customer = getCustomerById(entityId);
+    return {
+      titleText: customer?.name?.trim() || (looksLikeInternalId(entityId) ? t('kunden.title', lang) : entityId),
+      subtitleText: customer?.city?.trim() || '',
+      entityHint: '',
+    };
+  }
+  // Kundenakte `/kunden/customer/<id>` — Name aus dem Kundenstamm.
+  const customerRoute = pathname.match(new RegExp("^/kunden/customer/([^/]+)/?$"));
+  if (customerRoute) {
+    const customer = getCustomerById(decodeURIComponent(customerRoute[1]!));
+    return {
+      titleText: customer?.name?.trim() || t('kunden.title', lang),
+      subtitleText: customer?.city?.trim() || '',
+      entityHint: '',
+    };
   }
 
   return {
-    titleText: pathname === '/' ? 'Schreibtisch' : pathname,
+    titleText: resumeAreaLabel(pathname, lang),
     subtitleText: '',
     entityHint: '',
   };
+}
+
+function looksLikeInternalId(value: string): boolean {
+  return /^[a-z]+-[0-9a-f-]{8,}$/i.test(value);
+}
+
+/**
+ * F-01 — der Fallback nennt den Bereich, nie den internen Pfad.
+ */
+const RESUME_AREA_KEYS: Array<[string, Parameters<typeof t>[0]]> = [
+  ['/ablage', 'nav.eingang'],
+  ['/vorgaenge', 'nav.auftraege'],
+  ['/rechnungen', 'nav.rechnungen'],
+  ['/finanzen', 'nav.finanzen'],
+  ['/dokumente', 'nav.dokumente'],
+  ['/kunden', 'kunden.title'],
+  ['/aufgaben', 'aufgaben.title'],
+  ['/kommunikation', 'communication.page.title'],
+  ['/wissen', 'knowledge.page.title'],
+  ['/assistent', 'nav.officepilot'],
+  ['/steuerberater', 'steuerberater.title'],
+  ['/ausgaben', 'expense.title'],
+  ['/einstellungen', 'settings.title'],
+  ['/synchronisation', 'sync.title'],
+  ['/suche', 'search.title'],
+  ['/scan', 'nav.scan'],
+  ['/mehr', 'nav.mehr'],
+];
+
+function resumeAreaLabel(pathname: string, lang: Parameters<typeof t>[1]): string {
+  if (pathname === '/' || pathname === '') return t('nav.heute', lang);
+  const hit = RESUME_AREA_KEYS.find(([prefix]) => pathname === prefix || pathname.startsWith(prefix + '/'));
+  return hit ? t(hit[1], lang) : t('nav.officepilot', lang);
 }
 
 export type CaptureUiSessionInput = {

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { buildDocumentSummary } from '../services/documentSummary';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { shouldRevealArchiveImportFromState } from './eingangDetailNavigation';
 import { DocumentGuidancePanel } from '../components/documents/DocumentGuidancePanel';
@@ -143,6 +144,7 @@ import { scheduleAfterPaint } from '../services/scheduleAfterPaint';
 import {
   applyOfficeActionResult,
   executeContractAction,
+  createExpenseFromInbox,
   executeDocumentAction,
 } from '../services/officeActionService';
 import type {
@@ -424,6 +426,14 @@ export function EingangDetailPage() {
    * eigene Wahrheit — hier wird nur ein zweiter Anzeigeort geöffnet.
    */
   const [filingPromptOpen, setFilingPromptOpen] = useState(false);
+  /*
+   * PRODUCT-ACCEPTANCE-FIX-01B (F-05) — der Nutzer hat eine Hauptaktion
+   * gedrückt („Als Ausgabe speichern"); die Ablagebestätigung ist deren erster
+   * Schritt. Nach dem Bestätigen läuft dieselbe Aktion automatisch weiter,
+   * statt ein zweites Drücken zu verlangen. Die Ablageregel (Store-bestätigte
+   * Entscheidung vor Inbox→Archiv) bleibt unverändert.
+   */
+  const [filingContinuePending, setFilingContinuePending] = useState<'intake' | 'record_expense' | null>(null);
 
   const revealArchiveImportUi = () => {
     setFilingPromptOpen(true);
@@ -1192,13 +1202,78 @@ export function EingangDetailPage() {
     }
   };
 
+  /*
+   * F-05 — sobald die Ablage bestätigt ist (neues `item` aus dem Store),
+   * wird die gemerkte Hauptaktion genau einmal fortgesetzt.
+   */
+  useEffect(() => {
+    if (!filingContinuePending) return;
+    if (!isDocumentFilingDecisionConfirmed(item)) return;
+    const pending = filingContinuePending;
+    setFilingContinuePending(null);
+    if (pending === 'record_expense') {
+      runRecordExpense();
+    } else {
+      handleExecuteAll();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filingContinuePending, item]);
+
   const handleApplySuggestion = () => {
     if (item.isAdvertisement) {
       setMoreOptionsExpanded(true);
       setExpandedSections((current) => ({ ...current, technical: true }));
       return;
     }
+    // F-05 — Hauptaktion gemerkt: Nach der Ablagebestätigung läuft sie von selbst weiter.
+    if (!workflow?.contractOrderProposal && !isDocumentFilingDecisionConfirmed(item)) {
+      setFilingContinuePending('intake');
+    }
     handleExecuteAll();
+  };
+
+  /*
+   * PRODUCT-ACCEPTANCE-FIX-01B (F-15) — „Als Ausgabe speichern".
+   *
+   * Vorher lief die Hauptaktion in den Smart Intake, der nur archiviert und den
+   * Eingang abschließt; eine Ausgabe entstand nie (der Plan-Runner kennt keinen
+   * Ausgabenschritt und ist per Cutover ohnehin aus). Jetzt gilt der Vertrag
+   * der Aktion: zuerst die Ablagebestätigung (bestehende Regel, kein stiller
+   * Umweg), dann **genau eine** Ausgabe über den kanonischen Dienst
+   * `createExpenseFromInbox` (idempotent am Eingangsbezug), danach der
+   * bestehende Eingangsabschluss (Archiv + Aufgaben + Abschluss). Schlägt die
+   * Ausgabe fehl, wird nichts archiviert und kein Erfolg gemeldet.
+   */
+  const runRecordExpense = () => {
+    if (isExecutingIntake) return;
+    const result = createExpenseFromInbox(item);
+    if (!result.ok) {
+      showToast(translate(result.errorKey));
+      return;
+    }
+    if (result.kind === 'navigate' && result.route.startsWith('/ausgaben/neu')) {
+      // Kein Betrag erkannt: Die Ausgabe wird mit den erkannten Angaben manuell vervollständigt.
+      navigate(result.route);
+      return;
+    }
+    if (result.kind === 'navigate' && result.messageKey) {
+      showToast(translate(result.messageKey));
+    }
+    handleExecuteAll();
+  };
+
+  const handleRecordExpense = () => {
+    if (item.isAdvertisement) {
+      handleApplySuggestion();
+      return;
+    }
+    if (!isDocumentFilingDecisionConfirmed(item)) {
+      setFilingContinuePending('record_expense');
+      showToast(translate('filingDecision.confirmRequired'));
+      revealArchiveImportUi();
+      return;
+    }
+    runRecordExpense();
   };
 
   /*
@@ -1816,14 +1891,16 @@ export function EingangDetailPage() {
    * Sie erscheint erst, wenn eine Hauptaktion daran gescheitert ist, und
    * verschwindet, sobald bestätigt wurde.
    */
+  const primaryActionLabel = workflow
+    ? translate(buildDocumentSummary(item, workflow, { translate }).primaryAction.labelKey as TranslationKey)
+    : '';
+
   const filingConfirmPrompt =
     filingPromptOpen && !isDocumentFilingDecisionConfirmed(item) ? (
       <Card data-testid="action-filing-confirm">
-        <p className="invoice-hint invoice-hint--warning">
-          {translate('filingDecision.confirmRequired')}
-        </p>
         <DocumentFilingDecisionPanel
           item={item}
+          continueActionLabel={primaryActionLabel || undefined}
           onConfirmed={(updated) => {
             setItem(updated);
             setFilingPromptOpen(false);
@@ -2045,6 +2122,7 @@ export function EingangDetailPage() {
       onLinkVorgang={() => setVorgangDialogRequest((n) => n + 1)}
       onCreateTask={handleCreateTask}
       onCheckPayment={handleCheckPayment}
+      onRecordExpense={handleRecordExpense}
       /*
        * VISUAL-POLISH-01C — unter „Weitere Optionen" stehen primär nur
        * Angaben prüfen, Originaldokument und (falls vorhanden) der

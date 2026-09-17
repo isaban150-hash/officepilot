@@ -2592,3 +2592,28 @@
 .assistant-page [data-testid='assistant-employee-hero'] .inline-notice__message {
   display: inline;
 }
+
+/* PRODUCT-ACCEPTANCE-FIX-01B (F-05) — Ablagebestätigung im Aktionsfluss: menschlicher Ort, Pfad aufklappbar */
+.document-filing-decision .work-path-details {
+  margin-top: var(--space-1);
+  font-size: 12px;
+  color: var(--op-text-subtle);
+}
+
+.document-filing-decision .work-path-details summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.document-filing-decision .work-path-details .input {
+  margin-top: var(--space-1);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+}
+
+.document-filing-decision__label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--op-text-muted);
+}

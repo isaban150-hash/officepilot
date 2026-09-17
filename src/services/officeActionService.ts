@@ -18,6 +18,7 @@ import { getInboxItemById, patchInboxItem } from './inboxService';
 import { buildInvoiceCreatePath } from './invoiceNavigation';
 import { MANUAL_INVOICE_ROUTE } from './invoice/manualInvoiceFlow';
 import { createTaskForItem } from './inboxTaskService';
+import { parseSafeDocumentDate } from '../utils/documentDateDisplay';
 import { isClassificationKindWithTasks } from './taskEngineService';
 import { getTodayIso } from './taskNormalize';
 import { scanPendingItems } from './pendingEngineService';
@@ -120,6 +121,14 @@ function resolveExpenseIdentifier(item: InboxItem): string {
   return '';
 }
 
+function toIsoDay(value: string | null | undefined): string | undefined {
+  const parsed = parseSafeDocumentDate(value);
+  if (!parsed) return undefined;
+  const month = String(parsed.getMonth() + 1).padStart(2, '0');
+  const day = String(parsed.getDate()).padStart(2, '0');
+  return `${parsed.getFullYear()}-${month}-${day}`;
+}
+
 export function buildExpenseInputFromInbox(
   item: InboxItem,
   classifiedKind?: ClassifiedDocumentKind,
@@ -137,9 +146,14 @@ export function buildExpenseInputFromInbox(
     invoiceNumber: resolveExpenseIdentifier(item),
     description: item.officePilotSuggestion ?? '',
     issueDate:
-      item.recognizedData.Datum?.slice(0, 10) ??
-      item.recognizedData.datum?.slice(0, 10) ??
-      item.deadline?.slice(0, 10) ??
+      /*
+       * F-15 — erkannte Daten kommen auch als TT.MM.JJJJ; `slice(0, 10)` gab
+       * sie ungeprüft als ISO weiter (10.02.2026 → „2.10.2026"). Nur eindeutige
+       * Werte (ISO / TT.MM.JJJJ) werden übernommen, sonst greift der Fallback.
+       */
+      toIsoDay(item.recognizedData.Datum) ??
+      toIsoDay(item.recognizedData.datum) ??
+      toIsoDay(item.deadline) ??
       getTodayIso().slice(0, 10),
     paymentDueDate: item.deadline,
     grossAmount,
@@ -195,6 +209,18 @@ export function createExpenseFromInbox(item: InboxItem): OfficeActionResult {
    */
   if (isFinanceReferenceOnlyKind(resolveClassifiedKind(item))) {
     return openFinanceReferenceForInbox(item);
+  }
+
+  /*
+   * PRODUCT-ACCEPTANCE-FIX-01B (F-15) — Idempotenz am Eingangsbezug: Für ein
+   * Eingangsdokument entsteht höchstens **eine** Ausgabe. Wiederholung
+   * (Doppelklick, erneuter Versuch, Reload, Wiederaufnahme) führt zum
+   * bestehenden Beleg statt zu einer Dublette — unabhängig davon, ob eine
+   * Belegnummer für den nummernbasierten Duplikatschlüssel vorliegt.
+   */
+  const alreadyCreated = getAllExpenses().find((expense) => expense.linkedInboxId === item.id);
+  if (alreadyCreated) {
+    return { ok: true, kind: 'navigate', route: `/ausgaben/${alreadyCreated.id}` };
   }
 
   const input = buildExpenseInputFromInbox(item);

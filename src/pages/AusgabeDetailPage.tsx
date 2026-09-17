@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ExpenseForm } from '../components/expenses/ExpenseForm';
 import { ExpensePaymentForm } from '../components/expenses/ExpensePaymentForm';
 import { getExpensePaymentSavedToastKey } from '../components/expenses/ExpensePaymentSummary';
@@ -22,6 +22,7 @@ import {
   removeExpensePayment,
 } from '../services/expensePaymentService';
 import { deleteExpense, getExpenseById } from '../services/expenseService';
+import { getInboxItemById } from '../services/inboxService';
 import type { Expense } from '../types/expense';
 import type { TranslationKey } from '../i18n';
 
@@ -62,6 +63,16 @@ export function AusgabeDetailPage() {
 
   const categoryKey = `expense.category.${expense.category}` as TranslationKey;
   const statusKey = `expense.status.${expense.status}` as TranslationKey;
+  /*
+   * F-15 — der Beleg hinter der Ausgabe: solange er im Eingang liegt, führt der
+   * Weg dorthin; nach der Archivierung zum Dokument. Nur Anzeige, keine neue Datenhaltung.
+   */
+  const sourceInbox = expense.linkedInboxId ? getInboxItemById(expense.linkedInboxId) : undefined;
+  const linkedDocument = sourceInbox
+    ? sourceInbox.archiveDocumentId?.trim()
+      ? { route: `/dokumente/${sourceInbox.archiveDocumentId}`, label: sourceInbox.title }
+      : { route: `/ablage/${sourceInbox.id}`, label: sourceInbox.title }
+    : null;
 
   const handleDelete = () => {
     const result = deleteExpense(expense.id);
@@ -161,6 +172,17 @@ export function AusgabeDetailPage() {
 
       <DetailSection title={translate('documentExperience.details')} testId="ausgabe-section-details">
         <SummaryList>
+          {/* PRODUCT-ACCEPTANCE-FIX-01B (F-15) — Dokumentbezug: aus dem Eingang erzeugte Ausgaben verweisen auf ihren Beleg. */}
+          {linkedDocument ? (
+            <DataRow
+              label={translate('expense.fieldSourceDocument')}
+              value={
+                <Link to={linkedDocument.route} data-testid="ausgabe-source-document">
+                  {linkedDocument.label}
+                </Link>
+              }
+            />
+          ) : null}
           <DataRow label={translate('expense.fieldSupplier')} value={expense.supplierName} />
           <DataRow
             label={translate('expense.fieldInvoiceNumber')}

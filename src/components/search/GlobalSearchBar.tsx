@@ -94,6 +94,8 @@ interface GlobalSearchBarProps {
   iconTrigger?: boolean;
   /** When true, search starts collapsed below 768px and expands on demand. */
   collapsibleOnMobile?: boolean;
+  /** PRODUCT-ACCEPTANCE-FIX-01B (F-04) — auf der Suchseite zeigt die Trefferliste die Ergebnisse; keine zweite Vorschau. */
+  showPreview?: boolean;
 }
 
 export function GlobalSearchBar({
@@ -101,6 +103,7 @@ export function GlobalSearchBar({
   compact = false,
   collapsibleOnMobile = false,
   iconTrigger = false,
+  showPreview = true,
 }: GlobalSearchBarProps) {
   const { translate } = useApp();
   const navigate = useNavigate();
@@ -112,6 +115,16 @@ export function GlobalSearchBar({
    * damit die Kopfzeilensuche und öffnete deren Vorschau über der Seite.
    */
   const [query, setQuery] = useState(location.pathname === '/suche' ? (searchParams.get('q') ?? '') : '');
+  /*
+   * F-04 — die Vorschau ist eine Eingabehilfe: Sie öffnet beim Tippen und
+   * schließt mit Enter, mit der Auswahl eines Treffers und bei jedem
+   * Routenwechsel. Vorher blieb sie nach Enter über der Ergebnisseite stehen.
+   */
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const routeKey = location.pathname + location.search;
+  useEffect(() => {
+    setPreviewOpen(false);
+  }, [routeKey]);
   const [isMobile, setIsMobile] = useState(getIsMobileViewport);
   const [mobileExpanded, setMobileExpanded] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -204,14 +217,21 @@ export function GlobalSearchBar({
     return searchOffice({ query: trimmed, limit: compact ? 5 : 8 });
   }, [query, compact]);
 
+  const closeAfterNavigation = () => {
+    setPreviewOpen(false);
+    setMobileExpanded(false);
+  };
+
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
     const trimmed = query.trim();
     if (!trimmed) return;
+    closeAfterNavigation();
     navigate(`/suche?q=${encodeURIComponent(trimmed)}`);
   };
 
   const handleSelect = (result: SearchResult) => {
+    closeAfterNavigation();
     navigate(result.route);
   };
 
@@ -260,20 +280,26 @@ export function GlobalSearchBar({
             className="input global-search__input"
             placeholder={translate('search.globalPlaceholder')}
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setPreviewOpen(true);
+            }}
             autoFocus={autoFocus && !collapsibleOnMobile}
             aria-label={translate('search.globalPlaceholder')}
             data-testid="global-search-input"
           />
         </form>
 
-        {previewResults.length > 0 && (
+        {showPreview && previewOpen && previewResults.length > 0 && (
           <div className="global-search__preview" data-testid="global-search-preview">
             <SearchResultsList results={previewResults} onSelect={handleSelect} compact={compact} />
             <button
               type="button"
               className="global-search__show-all"
-              onClick={() => navigate(`/suche?q=${encodeURIComponent(query.trim())}`)}
+              onClick={() => {
+                closeAfterNavigation();
+                navigate(`/suche?q=${encodeURIComponent(query.trim())}`);
+              }}
             >
               {translate('search.showAll')}
             </button>
@@ -306,7 +332,7 @@ export function SearchPage() {
       />
 
       <section className="search-page__bar" data-testid="search-page-bar">
-        <GlobalSearchBar autoFocus />
+        <GlobalSearchBar autoFocus showPreview={false} />
       </section>
 
       <Card className="search-page__results" data-testid="search-page-results">

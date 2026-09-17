@@ -63,6 +63,13 @@ interface DocumentReviewExperienceProps {
    * eigene Ausführungslogik.
    */
   onCheckPayment?: () => void;
+  /**
+   * PRODUCT-ACCEPTANCE-FIX-01B (F-15) — Hauptaktion „Als Ausgabe speichern".
+   * Führt den kanonischen `record_expense`-Weg aus (officeActionService) und
+   * danach den bestehenden Eingangsabschluss; ohne Handler bleibt der bisherige
+   * Weg (Smart Intake) erhalten.
+   */
+  onRecordExpense?: () => void;
   moreOptionsContent: ReactNode;
   /**
    * @deprecated DOCUMENT-EXPERIENCE-02A — archive/actions must not sit above zone D.
@@ -98,6 +105,7 @@ export function DocumentReviewExperience({
   onLinkVorgang,
   onCreateTask,
   onCheckPayment,
+  onRecordExpense,
   moreOptionsContent,
   beforeMoreOptions = null,
   experienceDetailsExtra = null,
@@ -253,6 +261,11 @@ export function DocumentReviewExperience({
       // Bewusst kein Rückfall auf `onApplySuggestion`: Smart Intake ist für ein
       // Bezugsdokument der falsche Weg.
       onCheckPayment?.();
+      return;
+    }
+    if (actionId === 'record_expense' && onRecordExpense) {
+      // F-15 — die Ausgabe entsteht über den kanonischen Dienst, nicht über Smart Intake.
+      onRecordExpense();
       return;
     }
     // Existing intake / family primary path — no domain match writes here.

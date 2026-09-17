@@ -864,6 +864,9 @@ const deLegacy = {
     'Ablageentscheidung konnte nicht gespeichert werden. Bitte erneut versuchen.',
   'filingDecision.confirmRequired':
     'Bitte zuerst die Ablageentscheidung bestätigen.',
+  'filingDecision.stepTitle': '{action} – zuerst Ablage bestätigen',
+  'filingDecision.stepHint': 'Bevor OfficePilot „{action}“ ausführt, bestätigen Sie kurz, wo das Dokument abgelegt wird. Danach läuft die Aktion direkt weiter.',
+  'filingDecision.confirmAndContinue': 'Ablage bestätigen und {action}',
   'filingDecision.kindLabel': 'Dokumentart',
   'filingDecision.kind.hotelrechnung': 'Hotelrechnung',
   'filingDecision.area.hotelTravel': 'Hotel / Reisekosten',
@@ -2173,6 +2176,7 @@ const deLegacy = {
   'expense.fieldDescription': 'Beschreibung',
   'expense.fieldPaperFolder': 'Papierordner',
   'expense.fieldDigitalFolder': 'Digitaler Ordner',
+  'expense.fieldSourceDocument': 'Beleg',
   'expense.status.entwurf': 'Entwurf',
   'expense.status.gebucht': 'Gebucht',
   'expense.status.storniert': 'Storniert',

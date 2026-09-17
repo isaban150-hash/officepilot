@@ -1,4 +1,4 @@
-import { Link, Outlet } from 'react-router-dom';
+import { Link, Outlet, useLocation } from 'react-router-dom';
 import { useRef } from 'react';
 import { useMainScrollRestoration } from './useMainScrollRestoration';
 import { BetaModeBanner } from './BetaModeBanner';
@@ -16,6 +16,8 @@ import { Icon } from '../ui/Icon';
 import { ASSISTENT_ROUTE } from './navConfig';
 
 export function AppShell() {
+  const location = useLocation();
+  const onSearchPage = location.pathname === '/suche' || location.pathname.startsWith('/suche/');
   /*
    * Die Kopfzeile zeigt die **aktuelle** Firmenidentität. Die liegt in
    * `CompanyProfile`; `CompanySetup.companyName` ist nur noch ein
@@ -64,10 +66,16 @@ export function AppShell() {
           </Link>
           <UserMenu />
         </div>
-        {/* VISUAL-POLISH-01B — Suche kompakt im Kopf (Desktop: Feld, mobil: Symbol), kein eigener Suchbalken. */}
-        <div className="app-shell__search" data-testid="app-shell-search">
-          <GlobalSearchBar compact collapsibleOnMobile iconTrigger />
-        </div>
+        {/*
+          * VISUAL-POLISH-01B — Suche kompakt im Kopf (Desktop: Feld, mobil: Symbol), kein eigener Suchbalken.
+          * PRODUCT-ACCEPTANCE-FIX-01B (F-04) — auf der Suchseite gehört der
+          * Suchzustand der Seite selbst; die Kopfzeilensuche entfällt dort.
+          */}
+        {onSearchPage ? null : (
+          <div className="app-shell__search" data-testid="app-shell-search">
+            <GlobalSearchBar compact collapsibleOnMobile iconTrigger />
+          </div>
+        )}
       </div>
       <PersistenceFailureBanner />
       <CloudBackupPendingBanner />
