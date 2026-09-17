@@ -172,7 +172,10 @@ describe('KommunikationPage', () => {
     submitCommunicationRequest(mounted.container, 'lorem ipsum dolor sit amet');
     await flushUiUpdates();
     expect(mounted.container.querySelector('[data-testid="communication-no-data"]')).not.toBeNull();
-    expect(mounted.container.textContent).toContain('Keine Informationen gefunden');
+    /* F-06 — kein technischer Text mehr: verständlicher Titel und Vorschläge statt Sackgasse. */
+    expect(mounted.container.textContent).toContain('Noch kein Entwurf möglich');
+    expect(mounted.container.textContent).not.toMatch(/Intent/);
+    expect(mounted.container.querySelector('[data-testid="communication-suggestions"]')).not.toBeNull();
   });
 
   it('shows needs_info for price_adjustment without details', async () => {

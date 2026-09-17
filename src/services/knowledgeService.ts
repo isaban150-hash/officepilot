@@ -51,6 +51,29 @@ function isDuplicateActiveFact(
   );
 }
 
+/**
+ * PRODUCT-ACCEPTANCE-FIX-01C (F-07) — der technische Schlüssel wird aus dem
+ * Wissenstext abgeleitet, wenn der Nutzer keinen vergibt: kleingeschrieben,
+ * Umlaute aufgelöst, Wörter mit Unterstrich, auf die ersten sechs Wörter
+ * begrenzt. Gleicher Text → gleicher Schlüssel (Duplikatprüfung bleibt wirksam).
+ */
+export function deriveKnowledgeKey(text: string): string {
+  const base = text
+    .trim()
+    .toLowerCase()
+    .replace(/ä/g, 'ae')
+    .replace(/ö/g, 'oe')
+    .replace(/ü/g, 'ue')
+    .replace(/ß/g, 'ss')
+    .split(/[:–—-]/)[0]!;
+  const words = base
+    .replace(/[^a-z0-9 ]+/g, ' ')
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 6);
+  return words.join('_');
+}
+
 export type KnowledgeMutationResult =
   | { success: true; fact: KnowledgeFact }
   | { success: false; errorKey: string };

@@ -5,6 +5,7 @@ import { useApp } from '../../context/AppContext';
 import {
   addKnowledgeFact,
   deleteKnowledgeFact,
+  deriveKnowledgeKey,
   searchKnowledgeFacts,
   updateKnowledgeFact,
 } from '../../services/knowledgeService';
@@ -63,6 +64,11 @@ export function KnowledgePanel() {
   const [form, setForm] = useState<KnowledgeFormState>(EMPTY_FORM);
   const [showForm, setShowForm] = useState(false);
   const [errorKey, setErrorKey] = useState<TranslationKey | null>(null);
+  /*
+   * PRODUCT-ACCEPTANCE-FIX-01C (F-07) — alle fehlenden Angaben auf einmal
+   * benennen, statt sie nacheinander beim Speichern zu entdecken.
+   */
+  const [errorKeys, setErrorKeys] = useState<TranslationKey[]>([]);
 
   const facts = useMemo(
     () =>
@@ -96,18 +102,34 @@ export function KnowledgePanel() {
     setEditingId(null);
     setForm(EMPTY_FORM);
     setErrorKey(null);
+    setErrorKeys([]);
   };
 
   const handleSubmit = () => {
     setErrorKey(null);
+    /*
+     * F-07 — im Hauptfluss genügt der Wissenstext. Schlüssel und Wert sind
+     * technische Angaben: Fehlen sie, werden sie aus dem Text abgeleitet
+     * (Schlüssel) bzw. übernommen (Wert). Datenmodell und Duplikatprüfung
+     * bleiben unverändert; Bestandseinträge behalten ihre Schlüssel.
+     */
+    const displayText = form.displayText.trim();
+    const missing: TranslationKey[] = [];
+    if (!displayText) missing.push('knowledge.displayTextRequired');
+    if (form.scope !== 'company' && !form.scopeId.trim() && !form.scopeLabel.trim()) {
+      missing.push('knowledge.scopeTargetRequired');
+    }
+    setErrorKeys(missing);
+    if (missing.length > 0) return;
+
     const payload = {
       scope: form.scope,
       scopeId: form.scopeId || undefined,
       scopeLabel: form.scopeLabel || undefined,
       category: form.category,
-      key: form.key,
-      value: form.value,
-      displayText: form.displayText,
+      key: form.key.trim() || deriveKnowledgeKey(displayText),
+      value: form.value.trim() || displayText,
+      displayText,
       active: form.active,
       sourceType: 'user' as const,
     };
@@ -250,25 +272,19 @@ export function KnowledgePanel() {
               </select>
             </label>
 
+            {/* F-07 — nur außerhalb der Firma nötig: für wen das Wissen gilt, als Name statt ID. */}
             {form.scope !== 'company' && (
               <label className="form-group">
-                <span>{translate('knowledge.field.scopeId')}</span>
+                <span>{translate(`knowledge.field.scopeTarget.${form.scope}` as TranslationKey)}</span>
                 <input
                   className="input"
-                  value={form.scopeId}
-                  onChange={(event) => setForm((current) => ({ ...current, scopeId: event.target.value }))}
+                  value={form.scopeLabel}
+                  placeholder={translate('knowledge.field.scopeTargetPlaceholder')}
+                  data-testid="knowledge-scope-target"
+                  onChange={(event) => setForm((current) => ({ ...current, scopeLabel: event.target.value }))}
                 />
               </label>
             )}
-
-            <label className="form-group">
-              <span>{translate('knowledge.field.scopeLabel')}</span>
-              <input
-                className="input"
-                value={form.scopeLabel}
-                onChange={(event) => setForm((current) => ({ ...current, scopeLabel: event.target.value }))}
-              />
-            </label>
 
             <label className="form-group">
               <span>{translate('knowledge.field.category')}</span>
@@ -290,33 +306,55 @@ export function KnowledgePanel() {
               </select>
             </label>
 
-            <label className="form-group">
-              <span>{translate('knowledge.field.key')}</span>
-              <input
-                className="input"
-                value={form.key}
-                onChange={(event) => setForm((current) => ({ ...current, key: event.target.value }))}
-              />
-            </label>
-
-            <label className="form-group">
-              <span>{translate('knowledge.field.value')}</span>
-              <input
-                className="input"
-                value={form.value}
-                onChange={(event) => setForm((current) => ({ ...current, value: event.target.value }))}
-              />
-            </label>
-
             <label className="form-group knowledge-form-grid__full">
               <span>{translate('knowledge.field.displayText')}</span>
               <textarea
                 className="input"
                 rows={3}
                 value={form.displayText}
+                placeholder={translate('knowledge.field.displayTextPlaceholder')}
+                data-testid="knowledge-text"
                 onChange={(event) => setForm((current) => ({ ...current, displayText: event.target.value }))}
               />
+              <span className="form-hint">{translate('knowledge.field.displayTextHint')}</span>
             </label>
+
+            {/* F-07 — technische Angaben nur bei Bedarf; leer = automatisch abgeleitet. */}
+            <details className="knowledge-form-grid__full work-tech-details" data-testid="knowledge-technical">
+              <summary>{translate('knowledge.field.technicalSection')}</summary>
+              <div className="knowledge-form-grid knowledge-form-grid--nested">
+                <label className="form-group">
+                  <span>{translate('knowledge.field.key')}</span>
+                  <input
+                    className="input"
+                    value={form.key}
+                    placeholder={form.displayText.trim() ? deriveKnowledgeKey(form.displayText) : ''}
+                    data-testid="knowledge-key"
+                    onChange={(event) => setForm((current) => ({ ...current, key: event.target.value }))}
+                  />
+                </label>
+                <label className="form-group">
+                  <span>{translate('knowledge.field.value')}</span>
+                  <input
+                    className="input"
+                    value={form.value}
+                    placeholder={form.displayText.trim()}
+                    data-testid="knowledge-value"
+                    onChange={(event) => setForm((current) => ({ ...current, value: event.target.value }))}
+                  />
+                </label>
+                {form.scope !== 'company' && (
+                  <label className="form-group">
+                    <span>{translate('knowledge.field.scopeId')}</span>
+                    <input
+                      className="input"
+                      value={form.scopeId}
+                      onChange={(event) => setForm((current) => ({ ...current, scopeId: event.target.value }))}
+                    />
+                  </label>
+                )}
+              </div>
+            </details>
 
             <label className="form-group knowledge-form-grid__checkbox">
               <input
@@ -328,6 +366,13 @@ export function KnowledgePanel() {
             </label>
           </div>
 
+          {errorKeys.length > 0 && (
+            <ul className="form-error knowledge-form__errors" data-testid="knowledge-form-errors">
+              {errorKeys.map((key) => (
+                <li key={key}>{translate(key)}</li>
+              ))}
+            </ul>
+          )}
           {errorKey && <p className="form-error">{translate(errorKey)}</p>}
 
           <div className="form-actions">

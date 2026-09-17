@@ -280,6 +280,11 @@ export function KommunikationPage() {
             missingValues={userAnswers}
             onMissingChange={handleMissingChange}
             onMissingSubmit={handleMissingSubmit}
+            onSuggestRequest={(text) => {
+              // F-06 — Beispielsatz übernehmen; der Nutzer ergänzt und erstellt den Entwurf selbst.
+              setUserText(text);
+              setResult(null);
+            }}
             translate={translate}
             onCopied={handleCopied}
             onMarkAnswered={handleMarkAnswered}

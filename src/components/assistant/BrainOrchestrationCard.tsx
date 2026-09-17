@@ -5,6 +5,7 @@ import { Button } from '../ui/Button';
 import { useApp } from '../../context/AppContext';
 import type { BrainOrchestrationResult } from '../../types/brainOrchestration';
 import type { TranslationKey } from '../../i18n';
+import { translateWorkflowMessage } from '../../services/brain/workflowKnowledgeResolver';
 
 interface BrainOrchestrationCardProps {
   result: BrainOrchestrationResult;
@@ -62,15 +63,13 @@ export function BrainOrchestrationCard({ result, onTryDeepAnswer }: BrainOrchest
         <div className="brain-orchestration-hints" data-testid="brain-orchestration-hints">
           <p className="brain-orchestration-hints__title">{translate('companyContext.hintsTitle')}</p>
           <ul className="brain-orchestration-hints__list">
-            {result.proactiveHints.map((hint) => {
-              let text = translate(hint.messageKey as TranslationKey);
-              if (hint.params) {
-                for (const [key, value] of Object.entries(hint.params)) {
-                  text = text.replace(`{${key}}`, String(value));
-                }
-              }
-              return <li key={hint.messageKey}>{text}</li>;
-            })}
+            {/* F-02/F-03 — übersetzt mit lesbarem Fallback, jeder Hinweis einmal. */}
+            {result.proactiveHints
+              .map((hint) => translateWorkflowMessage(hint.messageKey, hint.params))
+              .filter((text, index, all) => all.indexOf(text) === index)
+              .map((text) => (
+                <li key={text}>{text}</li>
+              ))}
           </ul>
         </div>
       )}
@@ -105,7 +104,7 @@ export function BrainOrchestrationCard({ result, onTryDeepAnswer }: BrainOrchest
                   }
                 }}
               >
-                {translate(step.labelKey as TranslationKey)}
+                {translateWorkflowMessage(step.labelKey)}
               </Button>
             ))}
           </div>

@@ -7,6 +7,32 @@ import {
   getWorkflowStepLabelDe,
 } from './workflowIntelligenceService';
 import { getCompanySession, hasActiveCompanyContext } from './companySessionService';
+import { t } from '../../i18n';
+import type { TranslationKey } from '../../i18n';
+import { getCachedSetup } from '../persistenceService';
+
+/**
+ * PRODUCT-ACCEPTANCE-FIX-01C (F-02) — Hinweise und Empfehlungen tragen
+ * Übersetzungsschlüssel; in die Antwortzeilen gehört der übersetzte Text.
+ * Vorher wanderte der Schlüssel selbst in die Aufzählung
+ * („workflowIntelligence.risk.materialWithoutVorgang"). Ein unbekannter
+ * Schlüssel wird nie roh gezeigt, sondern als allgemeiner Hinweis.
+ */
+export function translateWorkflowMessage(
+  messageKey: string,
+  params?: Record<string, string | number>,
+  lang = getCachedSetup()?.language ?? 'de',
+): string {
+  const text = t(messageKey as TranslationKey, lang, params);
+  if (text === messageKey || looksLikeMessageKey(text)) {
+    return t('workflowIntelligence.message.unknown', lang);
+  }
+  return text;
+}
+
+function looksLikeMessageKey(value: string): boolean {
+  return /^[a-z][a-zA-Z0-9]*([.][a-zA-Z0-9_]+){2,}$/.test(value.trim());
+}
 
 function summarizeAnalysis(analysis: WorkflowAnalysis): WorkflowAnalysisSummary {
   const completedSteps = analysis.steps
@@ -58,12 +84,12 @@ function buildWorkflowBullets(analysis: WorkflowAnalysis): string[] {
   }
 
   for (const risk of analysis.risks.slice(0, 3)) {
-    bullets.push(`⚠ ${risk.messageKey}`);
+    bullets.push(`⚠ ${translateWorkflowMessage(risk.messageKey, risk.params)}`);
   }
 
   const top = analysis.recommendations[0];
   if (top) {
-    bullets.push(`→ ${top.messageKey}`);
+    bullets.push(`→ ${translateWorkflowMessage(top.messageKey, top.params)}`);
   }
 
   if (analysis.relatedDocumentIds.length > 1) {

@@ -35,6 +35,7 @@ import {
 import { buildLegalNotices, buildSkontoDeadline, parseSkontoFromText } from '../invoiceTaxService';
 import { getNotesForVorgang } from '../vorgangNoteService';
 import { getAllVorgaenge, getVorgangById, getVorgangInvoice } from '../vorgangService';
+import { isMaterialInvoiceInbox } from './workflowIntelligenceService';
 
 export { isExpectingPayment, isSentInvoice };
 
@@ -91,20 +92,22 @@ function normalize(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
+// F-03 — eine Definition für „Materialrechnung" (siehe workflowIntelligenceService).
 function isMaterialInbox(item: InboxItem): boolean {
-  return (
-    item.classifiedKind === 'eingangsrechnung' ||
-    item.documentType === 'eingangsrechnung' ||
-    /material/i.test(item.title)
-  );
+  return isMaterialInvoiceInbox(item);
 }
 
+/**
+ * F-03 — Eingangsrechnung im Sinne der Finanzlogik: erkannte Art entscheidet
+ * (Tank-/Kassenbelege sind keine Rechnungen); der grobe Dokumenttyp zählt
+ * nur, wenn keine Art erkannt wurde.
+ */
+const INCOMING_INVOICE_KINDS = new Set<string>(['eingangsrechnung', 'rechnung', 'gutschrift']);
+
 function isIncomingInvoiceItem(item: InboxItem): boolean {
-  return (
-    item.classifiedKind === 'eingangsrechnung' ||
-    item.documentType === 'eingangsrechnung' ||
-    item.classifiedKind === 'gutschrift'
-  );
+  const kind = item.classifiedKind;
+  if (kind) return INCOMING_INVOICE_KINDS.has(kind);
+  return item.documentType === 'eingangsrechnung';
 }
 
 function getDueRelation(invoice: VorgangInvoice, today: Date | string): DueRelation {

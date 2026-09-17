@@ -6,7 +6,7 @@ import { isFinalizedInvoice } from '../invoiceArchiveService';
 import { getAllInvoiceOverview } from '../invoiceOverviewService';
 import { getAllVorgaenge, getVorgangById } from '../vorgangService';
 import { buildHandwerkAdviceForSession } from './handwerkContextAdvisor';
-import { buildWorkflowProactiveHints } from './workflowIntelligenceService';
+import { buildWorkflowProactiveHints, isMaterialInvoiceInbox } from './workflowIntelligenceService';
 import { buildFinanceProactiveHints } from './financeIntelligenceService';
 
 function normalize(value: string): string {
@@ -82,11 +82,8 @@ export function buildProactiveHints(session: CompanySessionContext): ProactiveHi
   if (uploadId) {
     const item = getInboxItemById(uploadId);
     if (item) {
-      const isMaterial =
-        item.classifiedKind === 'eingangsrechnung' ||
-        item.documentType === 'eingangsrechnung' ||
-        /material/i.test(item.title);
-      if (isMaterial) {
+      // F-03 — eine Definition für „Materialrechnung" (siehe workflowIntelligenceService).
+      if (isMaterialInvoiceInbox(item)) {
         const workflow = processUploadedDocument(uploadId);
         if (workflow && workflow.similarVorgaenge.length === 1) {
           hints.push({
@@ -113,5 +110,22 @@ export function buildProactiveHints(session: CompanySessionContext): ProactiveHi
     hints.push(financeHint);
   }
 
-  return hints;
+  /*
+   * PRODUCT-ACCEPTANCE-FIX-01C (F-03) — mehrere Quellen (Ablauf, Finanzen,
+   * Handwerk) können denselben Hinweis liefern; jeder Hinweis erscheint nur
+   * einmal (gleicher Schlüssel und gleiche Parameter).
+   */
+  return dedupeHints(hints);
+}
+
+function dedupeHints(hints: ProactiveHint[]): ProactiveHint[] {
+  const seen = new Set<string>();
+  const unique: ProactiveHint[] = [];
+  for (const hint of hints) {
+    const signature = `${hint.messageKey}|${JSON.stringify(hint.params ?? {})}`;
+    if (seen.has(signature)) continue;
+    seen.add(signature);
+    unique.push(hint);
+  }
+  return unique;
 }

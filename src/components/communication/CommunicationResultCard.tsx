@@ -19,6 +19,18 @@ import type { InvoiceDunningDocumentation } from '../../types/dunningDocumentati
 import type { CommunicationAiEnhanceStyle } from '../../types/communicationAi';
 import type { TranslationKey } from '../../i18n';
 
+/** F-06 — die bereits unterstützten Schreibarten mit eigenem Entwurfsweg. */
+const SUGGESTED_REQUESTS = [
+  'appointment_change',
+  'delay_notice',
+  'price_adjustment',
+  'additional_work',
+  'payment_reminder',
+  'invoice_followup',
+  'cancel_order',
+  'decline_offer',
+] as const;
+
 interface CommunicationResultCardProps {
   result: CommunicationResult;
   channel: CommunicationChannel;
@@ -26,6 +38,12 @@ interface CommunicationResultCardProps {
   missingValues: Record<string, string>;
   onMissingChange: (fieldId: string, value: string) => void;
   onMissingSubmit: () => void;
+  /**
+   * PRODUCT-ACCEPTANCE-FIX-01C (F-06) — wenn keine Schreibart erkannt wurde:
+   * Der Nutzer wählt eine der unterstützten Arten; der Beispielsatz wird in
+   * das Eingabefeld übernommen (kein Entwurf wird erzeugt, nichts erfunden).
+   */
+  onSuggestRequest?: (text: string) => void;
   translate: (key: TranslationKey) => string;
   onCopied?: () => void;
   onMarkAnswered?: () => void;
@@ -71,6 +89,7 @@ export function CommunicationResultCard({
   missingValues,
   onMissingChange,
   onMissingSubmit,
+  onSuggestRequest,
   translate,
   onCopied,
   onMarkAnswered,
@@ -105,11 +124,30 @@ export function CommunicationResultCard({
   }
 
   if (result.status === 'no_data') {
+    const showSuggestions = result.intent === 'unknown' && onSuggestRequest;
     return (
       <div data-testid="communication-no-data">
         <Card className="communication-result-card communication-result-card--empty">
           <CardTitle>{title}</CardTitle>
           <CardMeta>{summary}</CardMeta>
+          {showSuggestions ? (
+            <div className="communication-suggestions" data-testid="communication-suggestions">
+              <p className="communication-suggestions__label">{translate('communication.unknown.suggestionsLabel')}</p>
+              <div className="chip-group communication-suggestions__chips">
+                {SUGGESTED_REQUESTS.map((intent) => (
+                  <button
+                    key={intent}
+                    type="button"
+                    className="chip"
+                    data-testid={`communication-suggest-${intent}`}
+                    onClick={() => onSuggestRequest(translate(`communication.example.${intent}` as TranslationKey))}
+                  >
+                    {translate(`communication.intent.${intent}` as TranslationKey)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
           <p className="communication-disclaimer">{result.disclaimer}</p>
         </Card>
       </div>

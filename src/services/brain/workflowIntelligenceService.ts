@@ -62,12 +62,25 @@ function normalize(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
+/**
+ * PRODUCT-ACCEPTANCE-FIX-01C (F-03) — „Materialrechnung" ist eine
+ * Lieferantenrechnung im Projektablauf. Der grobe `documentType`
+ * (`eingangsrechnung`) gilt auch für Tank-, Kassen- und Hotelbelege; die
+ * Klassifikation ist feiner. Ist eine **andere** Art erkannt (z. B.
+ * `tankbeleg`), zählt sie nicht als Material — dieselbe Reihenfolge wie
+ * `resolveDocumentSummaryFamily` (tank vor invoice_in). Nur ohne erkannte
+ * Art greifen Dokumenttyp und Titel-Heuristik.
+ */
+const MATERIAL_INVOICE_KINDS = new Set<string>(['eingangsrechnung', 'rechnung']);
+
+export function isMaterialInvoiceInbox(item: InboxItem): boolean {
+  const kind = item.classifiedKind;
+  if (kind) return MATERIAL_INVOICE_KINDS.has(kind);
+  return item.documentType === 'eingangsrechnung' || /material/i.test(item.title);
+}
+
 function isMaterialInbox(item: InboxItem): boolean {
-  return (
-    item.classifiedKind === 'eingangsrechnung' ||
-    item.documentType === 'eingangsrechnung' ||
-    /material/i.test(item.title)
-  );
+  return isMaterialInvoiceInbox(item);
 }
 
 function isAufmassSignal(item: InboxItem): boolean {
@@ -574,6 +587,15 @@ export function analyzeInboxWorkflow(inboxId: string, workflow?: WorkflowResult 
         labelKey: 'workflowIntelligence.nextStep.linkMaterial',
       });
     }
+  }
+
+  /*
+   * F-03 — ohne Projektsignal (Vertrag/Material) hat die Ablauf-Intelligenz
+   * zu diesem Dokument nichts zu sagen. Ein Tankbeleg bekäme sonst „Werkvertrag
+   * fehlt / Auftrag fehlt" — ein Widerspruch für den Nutzer.
+   */
+  if (steps.length === 0 && risks.length === 0 && recommendations.length === 0) {
+    return null;
   }
 
   const filledSteps = WORKFLOW_ORDER.map((id) => {
