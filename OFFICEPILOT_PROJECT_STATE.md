@@ -1,169 +1,216 @@
-# OfficePilot — Projektstatus (gemeinsame Übergabe)
+# OfficeTakt — Projektstatus (gemeinsame Übergabe)
 
 Kompakte Übergabedatei zwischen Claude Code, ChatGPT und dem Nutzer.
-Keine Projektdokumentation, keine Historie — nur der aktuelle Stand.
+Keine Projektdokumentation, keine Commit-Chronik — nur der aktuelle Stand.
 
-Stand: 2026-09-17
+Stand: 2026-09-18
+
+> Produktname ist **OfficeTakt**. Repository, Pfade, Supabase-Projekt und
+> Codebezeichner heißen technisch weiterhin `officepilot` — das bleibt so und
+> wird nicht umbenannt.
 
 ---
 
 ## 1. Produkt
 
-- OfficePilot ist ein digitaler Büroassistent für kleine Handwerksbetriebe.
+- OfficeTakt ist ein digitaler Büroassistent für kleine Handwerksbetriebe.
 - Er nimmt Belege und Dokumente auf (Foto, PDF, Galerie, Scan), ordnet sie
-  automatisch zu, führt Aufträge, Rechnungen, Ausgaben und Kunden und
-  bereitet die Monatsmappe für den Steuerberater vor.
-- Aktuelles Produktziel: ein hochwertiges, ruhiges B2B-Werkzeug, das auf dem
-  Desktop und auf dem Handy jeweils eigenständig gut bedienbar ist und dessen
-  Startseite „Heute“ den Tagesbetrieb auf einen Blick zeigt.
+  automatisch zu, führt Aufträge, Rechnungen, Ausgaben und Kunden und bereitet
+  die Monatsmappe für den Steuerberater vor.
+- Produktziel: ein hochwertiges, ruhiges B2B-Werkzeug, das auf Desktop und Handy
+  jeweils eigenständig gut bedienbar ist; Startseite „Heute“ zeigt den
+  Tagesbetrieb auf einen Blick.
 
-## 2. Aktueller Git-Stand
+## 2. Git- und Migrationsstand
 
-- Branch: `main`
-- Letzter bestätigter Commit (HEAD): `4514bc3` — V1-B1 E-Mail-Safety-Prep (unknown-Sperre Client+Server, Env-Doku, send-document config, STAGING-Banner)
-- origin/main: identisch mit lokalem `main` (`4514bc3`), nichts ausstehend
-- Arbeitskopie: OFFICEPILOT-V1-B2 (Dokument-/Briefversand) ist implementiert und abgenommen, aber
-  **noch nicht committet** (siehe Abschnitt 3)
+- Branch: `main`, HEAD **`4bc716b`** — feat(orders): add expense cost allocation
+- origin/main identisch mit `main`, nichts ausstehend.
+- Arbeitskopie: nur die drei geschützten Testartefakte (Abschnitt 8).
+- Migrationen: keine doppelten Versionen mehr (Kollisionen mit `5321e7f` bereinigt);
+  `supabase migration list` zeigt **0 lokal-only** Migrationen, Remote-Stand bis
+  `20260922120000`. Neue Migrationen nur additiv und nur mit ausdrücklichem Auftrag.
 
-## 3. Aktiver Arbeitsblock
+## 3. Zuletzt abgeschlossene Produktblöcke
 
-- Block: OFFICEPILOT-V1-B2 — Dokument-/Briefversand — **uncommittet, fachlich abgeschlossen**
-- Ergebnis: Die bestehende Delivery-Architektur trägt jetzt zusätzlich `letter` / `offer` / `other`
-  für **archivierte Dokumente** (`workspace_documents.client_document_id`, document_kind
-  `archived_document`). Additive Migration `20260922120000`: `create_workspace_document_delivery`
-  prüft Dokument im Workspace, nicht gelöscht, Versandart passt zur erkannten Dokumentart
-  (brief→letter, angebot→offer, sonst other), Anhang-Hash ist eine an das Dokument gebundene PDF-Datei;
-  `linked_invoice_id` für Dokumente verboten. Neue Historien-RPC je Dokument; `get_…_for_send`
-  liefert Dokument- und Firmenprofil-Kontext. Edge Function: Absender aus dem aktuellen Firmenprofil
-  (fail-closed), keine Rechnungskopplung. Client: `DocumentDeliveryPanel` im Dokumentdetail
-  (sekundäre Aktion „Per E-Mail senden“, nur bei PDF-Datei), gemeinsamer `SendDocumentDialog`,
-  gemeinsame `DeliveryHistoryList`; B1-Regeln (unknown-Sperre, keine Rohfehler) gelten.
-- **Tatsächlich versendbar:** archivierte Dokumente mit PDF-Datei (Original-PDF; Archiv-PDF-Bindung,
-  falls vorhanden). Ein selbst geschriebener Brief oder ein eigenes Angebot als erzeugtes PDF existiert
-  im Produkt **nicht** — `letter`/`offer` bedeuten hier: empfangene Briefe/Angebote weiterleiten.
-  Bild-Dokumente ohne Archiv-PDF sind nicht versendbar (Panel erklärt es).
-- Rechnungs-/Korrekturversand unverändert (Tests A/B grün, Rechnungen ohne Kopplungsänderung).
-- Status: Vitest (delivery, Panels, Dokument-Tests, SQL-Vertrag) grün, tsc grün; Browser-Selbstabnahme
-  Desktop 1280 / Android 360 / iPhone 390 mit Stub-Provider: Brief senden (failed→Retry→übergeben),
-  Reload, Historie, unknown-Sperre, Rechnungen unberührt.
-- **Brevo-Live-Test: weiterhin NICHT durchgeführt.**
-- Nächster Schritt: Commit durch den Nutzer; danach Staging-Aufbau und Brevo-Live-Test
-  (Tests 1/2/4/5 aus dem V1-B-Audit, jetzt zusätzlich Test 3 Dokument möglich).
-
-## 4. Abgeschlossene wichtige Blöcke
-
-| Block | Commit | Inhalt |
+| Block | Commit | Fachlicher Stand |
 | --- | --- | --- |
-| Navy Trust UI (UIUX-FOUNDATION-01A–01H) | `d0f210a`, `44ebf71` | Design-Tokens, Primitives, App-Shell, alle Bereiche auf Navy Trust |
-| WebKit Input Hardening (MANUAL-INVOICE-IOS-NUMERIC-INPUT-01B) | `c37b7d8` | E2E-Helfer `fillVerified` gegen verlorene Eingaben in WebKit |
-| Delivery SHA256 (DELIVERY-SHA256-GUARD-01A) | `7e2b0a8` | sicherer Digest mit Fallback für den Dokumentversand |
-| Document Kind Catalog (DOCUMENT-KIND-CATALOG-01A) | `8e6dc88` | Rechnungskorrektur als klassifizierte Dokumentart |
-| Steuerberater Monatsmappe (REAL-PRODUCT-TEST-01B) | `13e6510` | Monatsübersicht aus dem Monatsmappen-Modell, Status leer/offen/vollständig |
-| Generated Invoice Document Explanation (REAL-PRODUCT-TEST-01C) | `ad65461` | eigene Ausgangsrechnung in der Dokumentansicht erklärt |
-| Real Product Test Hardening (REAL-PRODUCT-TEST-01D) | `6cb1611` | Sync-Status, Aufgaben heute/überfällig, Scroll-Wiederherstellung, Aufträge-Hauptaktion, Rechnungsidentifikation, Kunden-Unterscheidung |
-| Visual Polish Analyse (VISUAL-POLISH-01A) | ohne Commit (Analyse) | Zielbilder und Drei-Block-Plan A/B/C |
-| Visual Polish Block A (VISUAL-POLISH-01B) | `0886002` | Heute + Shell/Header/Suche + Kennzahlen/Prioritäten + kompakter Wiederaufnahme-Hinweis |
-| Visual Polish Block B (VISUAL-POLISH-01C) | `990a2d2` | Listen als Zeilen, Kennzahlenflächen (Rechnungen/Finanzen/Ausgaben), Dokumentdetail nach fünf Fragen, Rechnungs-/Auftrags-/Kundendetail zweispaltig |
-| Visual Polish Block C (VISUAL-POLISH-01D) | `04441e1` | Sekundärbereiche: Finanzen, Steuerberater, Einstellungen, Assistent, Wissen, Sync, Mehr |
-| Product Acceptance Fix D1 (PRODUCT-ACCEPTANCE-FIX-01B) | `eddb70d` | Kernabläufe vervollständigt, u. a. „Als Ausgabe speichern“ aus dem Eingang (F-15) |
-| Product Acceptance Fix D2 (PRODUCT-ACCEPTANCE-FIX-01C) | `65542e8` | Assistent ohne Rohschlüssel, Tankbeleg keine Materialrechnung, Kommunikation ohne Sackgasse, Wissen einfach anlegen |
-| V1-Gap-Audit (OFFICEPILOT-V1-GAP-AUDIT-01A) | ohne Commit (Analyse) | V1-Matrix A/B/C/D, Restlücken, Rest-Roadmap V1-A…V1-E |
-| V1-A Ausgaben-Härtung (OFFICEPILOT-V1-A) | `0086cdc` | Ausgaben-Storno mit Grund, sichere Bearbeitung vor/nach Zahlung, Detail mit Status und nächster Aktion |
-| V1-B E-Mail-/Brevo-Staging-Audit | ohne Commit (Analyse) | Versandarchitektur, Brevo-Pfad, Sicherheit, Staging-Voraussetzungen, Live-Testplan; Dokumentversand fehlt |
-| V1-B1 E-Mail-Safety-Prep | `4514bc3` | unknown-Retry-Sperre (Client+Server), Env-Doku, send-document config, STAGING-Banner |
-| V1-B2 Dokument-/Briefversand | noch nicht committet | letter/offer/other für archivierte PDF-Dokumente, Server-Validierung, DocumentDeliveryPanel |
+| Ausgaben-Härtung (V1-A) | `0086cdc` | Ausgaben-Storno mit Pflichtgrund, Beträge nach Zahlung fest, Detail mit Status und nächster Aktion |
+| E-Mail-Safety (V1-B1) | `4514bc3` | `unknown` ist kein Retry-Zustand (Client **und** Server), Env-Doku, `send-document`-Config, STAGING-Banner |
+| Dokument-/Briefversand (V1-B2) | `eeea050` | Versand archivierter PDF-Dokumente (letter/offer/other) mit Server-Validierung, `DocumentDeliveryPanel` |
+| Absenderadresse konfigurierbar | `46e6162` | `MAIL_SENDER_EMAIL` als Server-Secret, fail-closed, keine hartcodierte Domain |
+| Migrations-Kollisionen | `5321e7f` | eindeutige Versionsnummern, Delivery-Migrationen auf 20260921/20260922 |
+| Zahlungserinnerung ohne Auftrag | `42d2c3e` | siehe unten |
+| Auftragskosten / Ausgabenzuordnung | `4bc716b` | siehe unten |
 
-## 5. Verbindliche Produkt-/Designregeln
+**Zahlungserinnerung ohne Auftrag (`42d2c3e`)**
+- Zahlungserinnerung funktioniert auch für manuell erstellte Rechnungen ohne Vorgang.
+- Der Kommunikationskontext einer Rechnung braucht keine künstliche `vorgangId`;
+  Kunde, Nummer, Datum, Fälligkeit, Beträge kommen aus dem Rechnungssnapshot.
+- Mahndokumentation funktioniert für Rechnungen mit und ohne Vorgang
+  (`vorgangId: string | null`), Duplikate derselben Übergabe werden verhindert.
+- Mahnstand ist im Rechnungsdetail und in der Offene-Rechnungen-Übersicht sichtbar;
+  bei überfälligen Zeilen als sichtbare Aktion, sonst im vorhandenen „Weitere“-Menü.
+- Vollständig bezahlte, stornierte und nicht versendete Rechnungen sind nicht mahnbar.
+- Mahndokumentation ist weiterhin **lokal** und nicht cloud-durable.
 
-- Navy Trust: Navy `#1f3c88` als Führungsfarbe, Teal als Zweitfarbe, Tokens aus
-  `src/styles/tokens.css`; keine Verläufe, kein Glow, kein „KI-Lila“, keine Emojis.
-- Anmutung: hochwertiger B2B-Büroassistent, ruhig und verlässlich.
-- Keine Kartenwand: keine Karte in der Karte, Flächen mit 1px Rand und ~12px
-  Radius, Listen statt Kachelstapel.
-- Keine technischen Entwicklerbegriffe in der Nutzeroberfläche (kein „Sync-Queue“,
-  „Outbox“, „Snapshot“, „Draft-ID“ usw.); Sprache des Handwerksbetriebs.
-- Eine dominante Hauptaktion pro Seite; auf dem Desktop keine Vollbreiten-Buttons.
-- Desktop und Mobile eigenständig gestalten: Desktop zweispaltig und dicht,
-  Mobile mit eigener Reihenfolge — kein gestapelter Desktop.
-- Typografie-Stufen 28/22/16/14/12.
-- Sichtbarer Visual-Polish muss im Browser erkennbar sein — ein Block gilt
-  nur als fertig, wenn der Unterschied auf den ersten Blick zu sehen ist.
+**Auftragskosten / Ausgabenzuordnung (`4bc716b`)**
+- `Expense.allocations` wird produktiv verwendet; Bezug ist `vorgangId`.
+- Kostenbasis dieser Auswertung ist **netto**; Teilzuordnung möglich,
+  Überzuordnung (Summe > Nettobetrag) wird abgelehnt, max. eine Zuordnung je Auftrag.
+- Stornierte Ausgaben bleiben historisch zugeordnet, zählen aber nicht zu den
+  aktiven Auftragskosten und sind nicht mehr änderbar.
+- Auftrag zeigt: **Abgerechnet (netto) · Zugeordnete Kosten (netto) · Verbleibt**,
+  dazu die Belegliste und den Hinweis „Arbeitszeit und Löhne sind hier nicht enthalten.“
+- Der Begriff „Deckungsbeitrag“ wird bewusst **nicht** verwendet.
+- Abgerechnet nutzt die bestehende Billing-Semantik (`isBillingEffective`) und
+  rechnet Abschläge + Schlussrechnung ohne Doppelzählung
+  (`subtotal − Σ previousAbschlagDeductions.subtotal`); Zahlungen ändern den Wert nicht.
+- Zuordnungen reisen über den vorhandenen Expense-Payload/Fingerprint/Cloud-Sync;
+  keine Migration nötig.
+- Zuordnung erfolgt im **Ausgabendetail**; `ExpenseForm` hat bewusst noch kein
+  Auftragsfeld. `orderPositionId` bleibt für spätere Nachkalkulation ungenutzt.
 
-## 6. Verbindliche Entwicklungsregeln
+## 4. Produktfunktionen — heutiger Stand
 
-- Nur ein implementierender Agent gleichzeitig im Repository.
-- Agenten committen und pushen nicht selbst; keine Git-Schreibbefehle
-  (kein add/restore/checkout/reset/stash/clean). Der Nutzer macht Commit und Push.
-- Einen Fachbereich vollständig fertigstellen, dann committen — keine
-  halbfertigen Zwischenstände.
-- Keine breite Testspirale: während der Implementierung gezielte Tests
-  (betroffene Vitest-Dateien + `tsc`), größere Regression nur an echten Gates.
-- Volle Vitest-Suite nie parallel zu Playwright (Gold-Pipeline-Test schreibt
-  geschützte Berichte).
-- Nach größeren UI-/Funktionsblöcken Browser-Selbstabnahme mit Playwright
-  (lokale Docker-Supabase, synthetische Nutzer, Screenshots außerhalb des Repos).
-- Danach unabhängiger Produkttest mit ChatGPT Work auf dem committeten Stand.
-- Desktop + Android (Galaxy S24) + iOS (WebKit) berücksichtigen, sobald mobil relevant.
-- Nur lokale Supabase (`http://127.0.0.1:54321`), nie `--linked`/Produktion.
-- Passwörter werden nie gelesen, gespeichert oder protokolliert; der Agent
-  trägt nur die E-Mail ein, der Nutzer tippt das Passwort.
+| Bereich | Stand |
+| --- | --- |
+| Dokumenteingang / Dokumentverständnis | Foto/PDF/Scan, Klassifikation, Prüfung in fünf Fragen, Ablageentscheidung, „Als Ausgabe speichern“ |
+| Archiv | Dokumentdetail mit Originaldatei, Papier-/Digitalablage, Dokumentbezug zu Vorgang/Rechnung/Ausgabe |
+| Kunden | Kundenstamm, Zuordnung, Dubletten- und Altbestandsbehandlung |
+| Vorgänge/Aufträge | Auftrag aus Auftragsdokument, Positionen, Nachträge, Statuslebenszyklus |
+| Manuelle Rechnung | vollständig unabhängig von Vertrag/Dokument (Kunde → Positionen → Details → Freigabe) |
+| Abschlag/Schlussrechnung | Abschläge mit Abzügen in der Schlussrechnung, Mengen-/Überzahlungsprüfungen |
+| Rechnungskorrektur/Storno | Storno mit Grund, Korrekturbeleg, Originalbeleg bleibt unverändert |
+| Zahlungen / offene Posten | append-only mit Reversal, Teilzahlung, Skonto, eigene Übersichten für Rechnungen und Ausgaben |
+| Ausgaben | Erfassen, Kategorien, Zahlungen, Storno mit Grund, Bearbeitungsregeln nach Zahlung |
+| Auftragskosten-Zuordnung | Ausgabe → Auftrag (netto, Teilzuordnung), Kostenabschnitt im Auftrag |
+| Zahlungserinnerung / Mahndokumentation | Entwurfstext, Übergabe dokumentieren, Mahnstand sichtbar (lokal gespeichert) |
+| Steuerberater / Monatsmappe | Monatsübersicht mit Vollständigkeitsstatus, ZIP-Export mit CSVs, benannte Fehlausgänge |
+| Einstellungen / Firmenprofil / Branding | Firmendaten, Logo, Rechnungsnummernformat, Zahlungsbedingungen, Kommunikationsstandards |
+| Kommunikation | Antwortentwürfe je Anlass, Vorschläge statt Sackgasse, Kopieren/Übergeben, Verlauf (lokal) |
+| Assistent | Tagesüberblick, Workflow-/Finanzhinweise in verständlichem Deutsch, keine Rohschlüssel |
+| Sync | Cloud-Durability für Workspace, Firmenprofil, Kunden, Vorgänge, Eingang, Dokumente, Dateien, Bindings, Work-Results, Ausgaben, Ausgabenzahlungen, Rechnungen |
+| E-Mail-Versand | Rechnung, Korrekturbeleg und archivierte PDF-Dokumente über Edge Function `send-document`; produktiv **blockiert** (Abschnitt 5) |
 
-## 7. Geschützte Artefakte
+## 5. E-Mail / Brevo — externer Blocker
 
-Diese drei Dateien sind **geschützt**. Sie erscheinen als `M` im Arbeitsbaum und
-gelten als bekannt:
+- Versandkette implementiert: Client → Edge Function `send-document` → Provider.
+- Authentifizierter Absender: `rechnung@send.officetakt.de`; Domain
+  `send.officetakt.de` ist bei Brevo authentifiziert (DKIM/DMARC).
+- **Blocker:** Ein frisch erzeugter, aktiver Brevo-API-v3-Key wird von Brevos
+  eigenem `/v3/account`-Endpunkt mit HTTP 401 „Key not found“ abgewiesen; die
+  Function meldet entsprechend `auth` / `brevo_401_unauthorized`. Brevo-Support ist
+  kontaktiert.
+- Bis zur Supportantwort: keine weiteren Mail-/Provideränderungen, keine
+  Secret-Änderungen, keine realen Versandversuche.
+- Secrets/Key-Werte stehen nicht in dieser Datei und gehören nicht ins Repository.
+  Benötigte Secret-**Namen** der Function: `MAIL_PROVIDER`, `BREVO_API_KEY`,
+  `MAIL_SENDER_EMAIL`.
+
+## 6. Offene Produktpunkte
+
+**Cloud-Durability (heute ausschließlich lokal, gegen `cloudSyncAllowlist.ts` geprüft):**
+`task`, `vorgang_note`, `knowledge_fact`, `communication_event`,
+`paper_register_entry`, `document_memory`, `proof_memory`, `memory_relation`,
+`mail_import`. Zusätzlich: **Mahndokumentation** (`dunningDocumentations`) ist
+persistiert, aber gar kein `SyncEntityType` — sie reist nicht mit und wird auf der
+Sync-Seite auch nicht als „nur lokal“ geführt.
+
+Wirkung: Auf einem zweiten Gerät fehlen manuell angelegte Aufgaben, Vorgangsnotizen,
+Wissenseinträge, Kommunikationsverlauf, Papierarchiv-Einträge und der Mahnstand.
+Nur die Synchronisationsseite erwähnt „nur lokal“; die Fachseiten sagen nichts.
+
+**Weitere Lücken:**
+- Briefe/geschäftliche Schreiben: kein generierter Brief-PDF-Workflow; `letter`/`offer`
+  im Versand bedeutet „empfangenes Dokument weiterleiten“.
+- Auftragskosten vorhanden, aber keine vollständige Nachkalkulation
+  (Arbeitszeit, Lohn, Lager, Positionsgenauigkeit).
+- `ExpenseForm` ohne direkte Auftragsauswahl; `orderPositionId` ungenutzt.
+- E-Mail extern blockiert (Abschnitt 5).
+- Sekundärnavigation enthält weiterhin technische Ziele: `/mail-import`,
+  `/papierarchiv`, `/synchronisation`, `/admin/users`.
+- Product Acceptance: Im Code sind Korrekturen zu F-01…F-07 und F-15 markiert.
+  Die P3-Punkte F-08…F-14 sind nirgends im Repository dokumentiert und heute
+  **nicht verifizierbar** — bei Bedarf neu erheben.
+
+## 7. Nächster empfohlener Core-Block
+
+**Cloud-Durability für die wichtigsten heute noch lokalen betrieblichen Daten.**
+
+Priorität prüfen und umsetzen in dieser Reihenfolge:
+1. `task` — manuell angelegte Aufgaben und Erledigt-Status (größter sichtbarer Verlust)
+2. `vorgang_note` — Notizen am Auftrag
+3. `dunningDocumentation` — Mahnstand (braucht zuerst eine Entscheidung: eigene
+   Entität im Sync-Modell oder bewusst lokal mit sichtbarer Kennzeichnung)
+
+Separat und später einzuordnen: `knowledge_fact`, `communication_event`,
+`paper_register_entry`, `memories`, `mail_import` — teils Analyse-/Hilfsdaten,
+teils eigener Fachbereich; für V1 genügt zunächst eine ehrliche Kennzeichnung
+„nur auf diesem Gerät“ auf den betroffenen Fachseiten.
+
+Muster für die Umsetzung: additive Migration nach Vorbild `workspace_expenses`
+(versionierte Zeile, Tombstone, owner/admin-Rechte), Eintrag in Allowlist,
+Change-Tracker, Pull-Merge; Dedupe der Aufgaben-Engine beim Pull beachten.
+
+## 8. Geschützte Artefakte
+
+Diese drei Dateien erscheinen dauerhaft als `M` im Arbeitsbaum und gelten als bekannt:
 
 - `src/components/invoice/__snapshots__/InvoiceDocumentView.test.tsx.snap`
 - `test-world/reports/gold-pipeline-04b.json`
 - `test-world/reports/gold-pipeline-04b.md`
 
-Regel: nicht automatisch stagen, nicht restoren, nicht löschen, nicht
-committen. Nur der Nutzer entscheidet ausdrücklich darüber.
+Es sind lokale Test-Seiteneffekte. Regel: nicht automatisch stagen, nicht restoren,
+nicht löschen, nicht committen. Nur der Nutzer entscheidet ausdrücklich darüber.
 
-## 8. Offene Roadmap (Weg zur ersten verkaufbaren Version)
+## 9. Testregeln
 
-V1-A Ausgaben-Härtung — committet (`0086cdc`)
-V1-B Versand live: Audit, V1-B1 (committet) und V1-B2 Dokumentversand (Commit offen) erledigt; offen: Staging-Aufbau
-     (Supabase, Brevo-Domain-Authentifizierung, Staging-Frontend) und Live-Test Rechnung/Korrektur/Dokument/Fehler/Retry —
-     noch nicht ausgeführt.
-V1-C Mehrgerät ehrlich: Aufgaben in die Cloud-Allowlist oder sichtbar „nur dieses Gerät“; Konflikthinweise abnehmen
-V1-D Navigation/Betrieb: technische Seiten (`/mail-import`, `/papierarchiv`, `/synchronisation`, `/admin/users`)
-     aus der Kern-Navigation, Aufträge-Statuswechsel abnehmen, optional „Auftrag ohne Dokument“
-V1-E Pilot-Belegtest: 20–30 echte Belege eines Betriebs durch Eingang → Ausgabe → Monatsmappe; Fehlerliste, dann Freigabe
+- Während eines Produktblocks nur gezielte Tests (betroffene Vitest-Dateien) plus
+  unmittelbar angrenzende Regressionen und `npx tsc --noEmit`.
+- Kein `test:full` nach kleinen Änderungen; große Gesamtregression nur an einem
+  echten Release-Gate.
+- Die Gold-PDF-Pipeline nie versehentlich in normalen Läufen ausführen — sie
+  schreibt die geschützten Berichte.
+- Volle Vitest-Suite nie parallel zu Playwright.
+- Nach größeren UI-/Funktionsblöcken Browser-Selbstabnahme mit Playwright
+  (lokale Docker-Supabase, synthetische Nutzer, Screenshots außerhalb des Repos),
+  Desktop 1280 + Mobile 360/390.
+- Nur lokale Supabase (`http://127.0.0.1:54321`), nie `--linked`/Produktion.
+- Passwörter werden nie gelesen, gespeichert oder protokolliert; der Agent trägt
+  nur die E-Mail ein, der Nutzer tippt das Passwort.
 
-Nach V1: Mahnwesen, DATEV/Kontenrahmen, XRechnung/ZUGFeRD, Kontaktpersonen, Mail-Import, Konfliktdialoge, native Apps.
+## 10. Design — Navy Trust v1.0 (Master)
 
-## 9. Aktuelles visuelles Ziel (freigegebenes Zielbild aus VISUAL-POLISH-01A)
+- Navy `#1f3c88` als Führungsfarbe, Teal semantisch/sekundär; Tokens aus
+  `src/styles/tokens.css`. Keine Verläufe, kein Glow, kein „KI-Lila“, keine Emojis.
+- Ruhige, professionelle B2B-Anmutung; klare Hierarchie.
+- Wenige Karten, keine Karte in der Karte; Listen und Tabellen für Vergleich.
+- Eine dominante Hauptaktion pro Seite; auf dem Desktop keine Vollbreiten-Buttons.
+- Desktop und Mobile eigenständig gestalten — kein gestapelter Desktop;
+  kein horizontaler Überlauf.
+- Keine technischen IDs oder Entwicklerbegriffe in der Oberfläche
+  (kein „Sync-Queue“, „Outbox“, „Snapshot“, „Draft-ID“); Sprache des Handwerksbetriebs.
+- Typografie-Stufen 28/22/16/14/12.
+- „Heute“ bleibt die Referenzseite für alle weiteren Bereiche.
 
-- „Heute“ ist die Referenzseite für alle weiteren Bereiche.
-- Desktop ≥ 1024 px zweispaltig (≈ 7/5): links „Heute wichtig“ als eine
-  ruhige Prioritätenfläche, „Offene Arbeit“ als Zeilenliste, kompakter
-  Assistent-Eingang; rechts „Ihr Betrieb heute“ mit vier Kennzahlen,
-  Steuerberater-Zeile und „Schnell erledigen“ als Symbolaktionen.
-- Kompakter Kopf: Begrüßung, Datum/Betrieb, Suche im Header (kein zweiter
-  Suchbalken), eine Hauptaktion „Dokument hinzufügen“ in normaler Breite.
-- Keine Kartenwand, keine Mehr-Karte, keine große Assistentenkarte, keine
-  graue Kachelleiste, keine Erledigt/Weitere-Buttonpaare.
-- Mobile eigene Anordnung: Kopf → max. drei Prioritäten + „Alle anzeigen“ →
-  horizontal scrollbare Kennzahlen → Offene Arbeit → Schnell erledigen →
-  kompakter Assistent → Bottom-Navigation; kein horizontaler Überlauf.
-- Wiederaufnahme-Hinweis („Zuletzt hier gearbeitet“) kompakt in einer Zeile.
-- Sichtbarer Qualitätsunterschied ist Pflicht.
+## 11. Projektarbeitsregeln
 
-## 10. Update-Regel
+- Einen Fachbereich erst fachlich fertigstellen und prüfen, dann Commit/Push.
+- Nur ein schreibender Agent gleichzeitig im Repository; Analyse darf parallel laufen.
+- Agenten committen und pushen nicht selbst und führen keine Git-Schreibbefehle aus
+  (kein add/restore/checkout/reset/stash/clean) — der Nutzer macht Git-Writes manuell.
+- Geschützte Artefakte nie blind anfassen (Abschnitt 8).
+- Keine stillen fachlichen Übernahmen bei `needs_review`/`deselected`.
+- Terminal- und Git-Schritte explizit und nachvollziehbar halten.
+- Nach jedem größeren Block: unabhängiger Produkttest auf dem committeten Stand.
+
+## 12. Update-Regel
 
 Diese Datei wird nur aktualisiert:
 
-- nach einem abgeschlossenen größeren Arbeitsblock
-- nach einem Commit, der den Projektstand relevant verändert
-- wenn sich Roadmap oder verbindliche Regeln ändern
+- nach einem abgeschlossenen größeren Arbeitsblock,
+- nach einem Commit, der den Projektstand relevant verändert,
+- wenn sich Roadmap oder verbindliche Regeln ändern.
 
-Nicht nach jeder kleinen Änderung.
-
-Bei jeder Aktualisierung:
-
-- alten Stand ersetzen statt endlos anhängen
-- HEAD aktualisieren
-- aktiven Block aktualisieren
-- abgeschlossene Blöcke aktualisieren
-- nächste Schritte aktualisieren
+Bei jeder Aktualisierung veraltete Zustandsaussagen **ersetzen** statt anhängen:
+HEAD, abgeschlossene Blöcke, Produktstand, offene Punkte und nächster Block.
