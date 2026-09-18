@@ -13,6 +13,7 @@ import { applyBrandingContract } from '../branding/brandingProfileContract';
 import { COMPANY_PROFILE_SCHEMA_VERSION, applyCompanyProfileSettingsContract } from '../company/companyProfileSettingsContract';
 import type { WorkspaceVorgangRow } from '../vorgang/vorgangCloudService';
 import type { WorkspaceCustomerRow } from '../customer/customerCloudService';
+import type { WorkspaceVorgangNoteRow } from '../vorgang/vorgangNoteCloudService';
 
 interface WorkspaceRow {
   id: string;
@@ -196,6 +197,8 @@ export async function rpcPullWorkspaceSyncState(
   const vorgaengeRaw = (data?.vorgaenge as WorkspaceVorgangRow[] | null) ?? [];
   // Enthält auch Grabsteine — der Backfill wertet sie aus.
   const customersRaw = (data?.customers as WorkspaceCustomerRow[] | null) ?? [];
+  // CLOUD-DURABILITY-CORE-01B — ebenfalls inklusive Grabsteine.
+  const vorgangNotesRaw = (data?.vorgang_notes as WorkspaceVorgangNoteRow[] | null) ?? [];
 
   return {
     workspace: workspaceRow ? mapWorkspaceRow(workspaceRow) : null,
@@ -209,6 +212,7 @@ export async function rpcPullWorkspaceSyncState(
     companyProfileUpdatedAt: profileRow?.updated_at ?? null,
     vorgaenge: vorgaengeRaw,
     customers: customersRaw,
+    vorgangNotes: vorgangNotesRaw,
   };
 }
 

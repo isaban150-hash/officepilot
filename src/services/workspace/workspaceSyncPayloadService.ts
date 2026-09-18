@@ -5,6 +5,7 @@ import type { DocumentWorkResult } from '../../types/documentWorkResult';
 import type { Expense } from '../../types/expense';
 import { parseExpensePaymentEntityId, type ExpensePaymentSyncEntity } from '../expense/expenseCloudSyncService';
 import type { SyncEntityType } from '../../types/sync';
+import type { VorgangNote } from '../../types/communication';
 import type { Workspace, WorkspaceMember, WorkspaceSettings } from '../../types/workspace';
 import {
   getCompanyProfileSyncSnapshot,
@@ -33,7 +34,8 @@ export type CloudSyncEntityPayload =
   | { entityType: 'document_file_binding'; entityId: string; entity: DocumentFileRepresentationBinding; rowVersion: number; deleted: boolean }
   | { entityType: 'document_work_result'; entityId: string; entity: DocumentWorkResult; rowVersion: number; deleted: boolean }
   | { entityType: 'expense'; entityId: string; entity: Expense; rowVersion: number; deleted: boolean }
-  | { entityType: 'expense_payment'; entityId: string; entity: ExpensePaymentSyncEntity; rowVersion: number; deleted: boolean };
+  | { entityType: 'expense_payment'; entityId: string; entity: ExpensePaymentSyncEntity; rowVersion: number; deleted: boolean }
+  | { entityType: 'vorgang_note'; entityId: string; entity: VorgangNote; rowVersion: number; deleted: boolean };
 
 export function resolveCloudWorkspaceId(state: AppPersistedState): string {
   return (
@@ -149,6 +151,12 @@ export function extractCloudSyncEntity(
       const result = (state.documentWorkResults ?? []).find((r) => r.inboxItemId === entityId);
       if (!result) return null;
       return { entityType, entityId, entity: result, rowVersion: result.sync?.version ?? 0, deleted: result.sync?.deleted ?? false };
+    }
+    // CLOUD-DURABILITY-CORE-01B — Vorgangsnotizen
+    case 'vorgang_note': {
+      const note = (state.vorgangNotes ?? []).find((n) => n.id === entityId);
+      if (!note) return null;
+      return { entityType, entityId, entity: note, rowVersion: note.sync?.version ?? 0, deleted: note.sync?.deleted ?? false };
     }
     // FINANZ-CORE-DURABILITY-01C — Ausgaben
     case 'expense': {

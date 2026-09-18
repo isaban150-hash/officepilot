@@ -45,6 +45,10 @@ import {
   applyCustomerPushResultToState,
   buildCustomerCloudPushPayload,
 } from '../customer/customerCloudService';
+import {
+  applyVorgangNotePushResultToState,
+  buildVorgangNoteCloudPushPayload,
+} from '../vorgang/vorgangNoteCloudService';
 import { applyInvoicePullAfterVorgangMerge } from '../invoice/invoiceCloudPullOrchestrator';
 import { applyDocumentPullToState } from '../document/documentCloudPullOrchestrator';
 import { listOrderAmendmentConfirmIntents } from '../orderAmendment/orderAmendmentConfirmIntentService';
@@ -193,6 +197,11 @@ function buildPushPayload(
         extracted.entity,
         operation === 'delete' || extracted.deleted,
       );
+    case 'vorgang_note':
+      return buildVorgangNoteCloudPushPayload(
+        extracted.entity,
+        operation === 'delete' || extracted.deleted,
+      );
     default:
       return {};
   }
@@ -288,6 +297,17 @@ function applyPushResultToState(
       expense.id === entityId
         ? { ...expense, sync: { updatedAt, version: rowVersion, deleted, deletedAt: deleted ? updatedAt : undefined, deviceId: state.syncClient!.deviceId, workspaceId } }
         : expense,
+    );
+  } else if (entityType === 'vorgang_note') {
+    // CLOUD-DURABILITY-CORE-01B — nur die Serverversion; der Text bleibt unangetastet.
+    next.vorgangNotes = applyVorgangNotePushResultToState(
+      next.vorgangNotes ?? [],
+      entityId,
+      rowVersion,
+      updatedAt,
+      deleted,
+      state.syncClient!.deviceId,
+      workspaceId,
     );
   } else if (entityType === 'vorgang') {
     next.vorgaenge = applyVorgangPushResultToState(
@@ -588,9 +608,15 @@ export class SupabaseSyncAdapter implements SyncAdapter {
           extracted.rowVersion,
           this.client,
         );
+        /*
+         * CLOUD-DURABILITY-CORE-01B — der Grabstein muss auch lokal als solcher
+         * festgehalten werden. Bliebe `deleted` hier false, trüge die Notiz nach
+         * dem Push wieder eine aktive Sync-Meta und der nächste Pull könnte sie
+         * wiederbeleben.
+         */
         const pushDeleted =
-          entry.entityType === 'vorgang' &&
-          (entry.operation === 'delete' || extracted.entityType === 'vorgang' && extracted.deleted);
+          (entry.entityType === 'vorgang' || entry.entityType === 'vorgang_note') &&
+          (entry.operation === 'delete' || ('deleted' in extracted && extracted.deleted === true));
         currentState = applyPushResultToState(
           currentState,
           entry.entityType,

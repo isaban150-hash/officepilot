@@ -4,9 +4,7 @@ import {
   filterSyncActive,
   generateEntityId,
   isEntitySyncActive,
-  withNewEntitySync,
-  withTombstonedEntity,
-  withUpdatedEntitySync,
+  withTombstonedCloudEntityPreservingRemoteVersion,
 } from './sync/syncMetaService';
 import type { VorgangNote, VorgangNoteInput } from '../types/communication';
 
@@ -77,18 +75,26 @@ export function addVorgangNote(
     return { success: false, errorKey: 'vorgangNote.bodyRequired' };
   }
 
-  const note = withNewEntitySync(
-    normalizeNote({
-      id: generateEntityId('note'),
-      vorgangId,
-      body: input.body,
-      tags: input.tags,
-      occurredAt: input.occurredAt,
-      source: input.source ?? 'user',
-      linkedInboxId: input.linkedInboxId,
-    }),
-    'vorgang_note',
-  );
+  /*
+   * CLOUD-DURABILITY-CORE-01B / SYNC-VERSION-CONTRACT-02 — die neue Notiz
+   * bekommt **keine** Sync-Meta.
+   *
+   * `sync.version` ist seit dem Versionsvertrag ausschliesslich die zuletzt vom
+   * Server bestaetigte `row_version`. Eine frisch angelegte Notiz hat keine;
+   * der Startwert 1 aus `withNewEntitySync` waere eine Behauptung, die der
+   * Server nie bestaetigt hat, und liesse den ersten Push mit einer falschen
+   * Erwartung antreten. Der Weg in die Cloud fuehrt unveraendert ueber den
+   * Change-Tracker, der die Notiz am Content-Key erkennt.
+   */
+  const note = normalizeNote({
+    id: generateEntityId('note'),
+    vorgangId,
+    body: input.body,
+    tags: input.tags,
+    occurredAt: input.occurredAt,
+    source: input.source ?? 'user',
+    linkedInboxId: input.linkedInboxId,
+  });
 
   notes = [note, ...notes];
   persistAll();
@@ -107,16 +113,14 @@ export function updateVorgangNote(
     return { success: false, errorKey: 'vorgangNote.bodyRequired' };
   }
 
-  const updated = withUpdatedEntitySync(
-    normalizeNote({
-      ...current,
-      body: changes.body ?? current.body,
-      tags: changes.tags ?? current.tags,
-      occurredAt: changes.occurredAt ?? current.occurredAt,
-      updatedAt: new Date().toISOString(),
-    }),
-    'vorgang_note',
-  );
+  // 01B: lokale Fachaenderung -- `sync` bleibt, wie beim Vorgang und beim Kunden.
+  const updated = normalizeNote({
+    ...current,
+    body: changes.body ?? current.body,
+    tags: changes.tags ?? current.tags,
+    occurredAt: changes.occurredAt ?? current.occurredAt,
+    updatedAt: new Date().toISOString(),
+  });
 
   notes = [...notes.slice(0, index), updated, ...notes.slice(index + 1)];
   persistAll();
@@ -126,7 +130,17 @@ export function updateVorgangNote(
 export function deleteVorgangNote(noteId: string): VorgangNoteMutationResult {
   const index = notes.findIndex((note) => note.id === noteId && isEntitySyncActive(note));
   if (index === -1) return { success: false, errorKey: 'vorgangNote.notFound' };
-  const tombstoned = withTombstonedEntity(cloneNote(notes[index]), 'vorgang_note');
+  /*
+   * 01B — Notizen haben seit dieser Aenderung einen versionsgepruesten
+   * Serververtrag. Der Grabstein darf `sync.version` deshalb nicht mehr
+   * erhoehen: Der Push sendet sie als Erwartung, und ein selbst erhoehter Wert
+   * wuerde vom Server als Versionskonflikt abgewiesen -- die Loeschung bliebe
+   * auf dem zweiten Geraet aus.
+   */
+  const tombstoned = withTombstonedCloudEntityPreservingRemoteVersion(
+    cloneNote(notes[index]),
+    'vorgang_note',
+  );
   notes = [...notes.slice(0, index), tombstoned, ...notes.slice(index + 1)];
   persistAll();
   return { success: true, note: cloneNote(tombstoned) };

@@ -117,6 +117,8 @@ describe('CLOUD-DATA-01 allowlist', () => {
     expect(isSupabaseSyncAllowed('task')).toBe(false);
     expect(isSupabaseSyncAllowed('expense')).toBe(true);
     expect(isSupabaseSyncAllowed('expense_payment')).toBe(true);
+    // CLOUD-DURABILITY-CORE-01B — Vorgangsnotizen sind cloud-dauerhaft.
+    expect(isSupabaseSyncAllowed('vorgang_note')).toBe(true);
     /*
      * CLOUD-COUNT-FIXTURES-01 — Namen statt Anzahl.
      *
@@ -147,6 +149,8 @@ describe('CLOUD-DATA-01 allowlist', () => {
         // FINANZ-CORE-DURABILITY-01C — Ausgaben und Zahlungen
         'expense',
         'expense_payment',
+        // CLOUD-DURABILITY-CORE-01B — Vorgangsnotizen
+        'vorgang_note',
       ].sort(),
     );
   });

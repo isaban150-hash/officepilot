@@ -121,8 +121,12 @@ export function withTombstonedEntity<T extends SyncableEntity & { id: string }>(
  * nicht existieren" (CREATE-RETRY-CONFLICT-02).
  *
  * `withTombstonedEntity` bleibt unverändert: Alle übrigen Löschpfade —
- * Dokumente, Inbox, Ausgaben, Wissen, Notizen, Memory — haben keinen
- * versionsgeprüften Serververtrag und behalten ihr bisheriges Verhalten.
+ * Dokumente, Inbox, Ausgaben, Wissen, Memory — haben keinen versionsgeprüften
+ * Serververtrag und behalten ihr bisheriges Verhalten.
+ *
+ * CLOUD-DURABILITY-CORE-01B: Vorgangsnotizen sind seitdem **nicht** mehr in
+ * dieser Aufzählung — sie gehen über `upsert_workspace_sync_entity` und
+ * benutzen deshalb den versionserhaltenden Weg.
  */
 export function withTombstonedCloudEntityPreservingRemoteVersion<
   T extends SyncableEntity & { id: string },

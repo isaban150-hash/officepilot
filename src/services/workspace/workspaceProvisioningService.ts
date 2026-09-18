@@ -17,6 +17,10 @@ import {
   planCustomerLostAckAdoption,
 } from '../customer/customerCloudService';
 import {
+  mergeVorgangNotesFromPull,
+  planVorgangNoteBackfill,
+} from '../vorgang/vorgangNoteCloudService';
+import {
   buildCompanyProfileCloudPayload,
   buildCompanySetupCloudPayload,
   parseCompanyProfileFromCloud,
@@ -686,6 +690,50 @@ export function mergeRemoteWorkspacePullIntoState(
     enqueueSyncOutbox({
       entityType: 'customer',
       entityId: customerId,
+      operation: 'create',
+      version: 0,
+    });
+  }
+
+  /*
+   * CLOUD-DURABILITY-CORE-01B — Vorgangsnotizen.
+   *
+   * Dieselbe Reihenfolge wie beim Kundenstamm: erst der Merge, dann der
+   * Altbestand. So zählt eine soeben eingetroffene Remote-ID bereits als
+   * vorhanden und wird nicht doppelt nachgemeldet.
+   *
+   * Die Grabsteine aus dem Pull sind Teil des Merges; eine auf dem anderen
+   * Gerät gelöschte Notiz verschwindet hier und wird vom Backfill nicht erneut
+   * angelegt, weil er gegen **alle** Remote-IDs vergleicht.
+   */
+  const remoteNoteRows = pull.vorgangNotes ?? [];
+  if (remoteNoteRows.length > 0) {
+    const noteMerge = mergeVorgangNotesFromPull(
+      state.vorgangNotes ?? [],
+      remoteNoteRows,
+      state.syncClient!.deviceId,
+      workspaceId,
+    );
+    if (noteMerge.conflicts.length > 0) {
+      conflicts.push(...noteMerge.conflicts);
+    } else {
+      next.vorgangNotes = noteMerge.notes;
+    }
+  }
+
+  /*
+   * Altbestand — Notizen aus der Zeit vor 01B. Der Change-Tracker meldet sie
+   * nie nach, weil er den vorhandenen Stand beim Start zur Basislinie macht.
+   * Es entsteht trotzdem keine Sondermigration: Die geplanten IDs gehen durch
+   * dieselbe Outbox-Tür wie jede normale Änderung.
+   */
+  for (const noteId of planVorgangNoteBackfill(
+    next.vorgangNotes ?? state.vorgangNotes ?? [],
+    remoteNoteRows,
+  )) {
+    enqueueSyncOutbox({
+      entityType: 'vorgang_note',
+      entityId: noteId,
       operation: 'create',
       version: 0,
     });

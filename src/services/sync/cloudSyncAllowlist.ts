@@ -19,6 +19,9 @@ export const SUPABASE_SYNC_ALLOWLIST: ReadonlySet<SyncEntityType> = new Set([
   // FINANZ-CORE-DURABILITY-01C — Ausgaben und ihre Zahlungen
   'expense',
   'expense_payment',
+  // CLOUD-DURABILITY-CORE-01B — Vorgangsnotizen. Freigabe erst jetzt: Tabelle,
+  // Push, Pull, Merge, Grabstein und RLS sind vollstaendig vorhanden.
+  'vorgang_note',
 ]);
 
 export const LOCAL_ONLY_SYNC_ENTITY_TYPES: ReadonlySet<SyncEntityType> = new Set([
@@ -28,7 +31,6 @@ export const LOCAL_ONLY_SYNC_ENTITY_TYPES: ReadonlySet<SyncEntityType> = new Set
   'paper_register_entry',
   'mail_import',
   'task',
-  'vorgang_note',
   'communication_event',
   'knowledge_fact',
 ]);

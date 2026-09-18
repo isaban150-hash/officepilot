@@ -5,9 +5,11 @@ import { enqueueSyncOutbox } from './syncOutboxService';
 import { buildCompanyProfileContentKey } from '../workspace/workspaceStore';
 import { buildVorgangCloudContentKey } from '../vorgang/vorgangCloudService';
 import { buildCustomerCloudContentKey } from '../customer/customerCloudService';
+import { buildVorgangNoteCloudContentKey } from '../vorgang/vorgangNoteCloudService';
 import { resolveCloudWorkspaceId } from '../workspace/workspaceSyncPayloadService';
 import { buildCloudEntityId } from '../workspace/workspaceSyncPayloadService';
 import type { Customer, Vorgang } from '../../types/models';
+import type { VorgangNote } from '../../types/communication';
 import { isCloudSyncBlockedMockVorgangId } from '../storage/mockDataDetectionService';
 import {
   buildBindingContentKey,
@@ -131,6 +133,17 @@ function buildExpenseFingerprint(expense: Expense): EntitySyncFingerprint {
   };
 }
 
+/** CLOUD-DURABILITY-CORE-01B — fachlicher Fingerabdruck der Notiz, ohne `sync`. */
+function buildVorgangNoteFingerprint(note: VorgangNote): EntitySyncFingerprint {
+  const sync = note.sync;
+  return {
+    version: sync?.version ?? 0,
+    deleted: sync?.deleted ?? false,
+    updatedAt: sync?.updatedAt ?? '',
+    contentKey: buildVorgangNoteCloudContentKey(note),
+  };
+}
+
 function buildVorgangFingerprint(vorgang: Vorgang): EntitySyncFingerprint {
   const sync = vorgang.sync;
   return {
@@ -162,7 +175,9 @@ function collectTrackedEntities(state: AppPersistedState): Map<string, TrackedEn
                 ? buildIntakeFingerprint(entityType, entity)
                 : entityType === 'expense'
                   ? buildExpenseFingerprint(entity as Expense)
-                  : buildFingerprint(entity),
+                  : entityType === 'vorgang_note'
+                    ? buildVorgangNoteFingerprint(entity as unknown as VorgangNote)
+                    : buildFingerprint(entity),
       });
     }
   }
@@ -253,7 +268,8 @@ function fingerprintChanged(
     entityType === 'document_file' ||
     entityType === 'document_file_binding' ||
     entityType === 'document_work_result' ||
-    entityType === 'expense'
+    entityType === 'expense' ||
+    entityType === 'vorgang_note'
   ) {
     return (
       previous.deleted !== current.deleted ||

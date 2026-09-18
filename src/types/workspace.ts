@@ -1,6 +1,7 @@
 import type { SyncMeta } from './sync';
 import type { WorkspaceVorgangRow } from '../services/vorgang/vorgangCloudService';
 import type { WorkspaceCustomerRow } from '../services/customer/customerCloudService';
+import type { WorkspaceVorgangNoteRow } from '../services/vorgang/vorgangNoteCloudService';
 
 export type WorkspaceRole = 'owner' | 'admin' | 'member';
 
@@ -59,6 +60,12 @@ export interface WorkspaceSyncPullPayload {
    * Kunden-ID nicht erneut anzulegen.
    */
   customers: WorkspaceCustomerRow[];
+  /**
+   * CLOUD-DURABILITY-CORE-01B — ebenfalls inklusive Grabsteine: Ohne sie käme
+   * eine auf einem anderen Gerät gelöschte Notiz hier nie an, und der Backfill
+   * lüde sie wieder hoch.
+   */
+  vorgangNotes: WorkspaceVorgangNoteRow[];
 }
 
 export interface EnsurePersonalWorkspaceResult {
