@@ -14,6 +14,8 @@ import { COMPANY_PROFILE_SCHEMA_VERSION, applyCompanyProfileSettingsContract } f
 import type { WorkspaceVorgangRow } from '../vorgang/vorgangCloudService';
 import type { WorkspaceCustomerRow } from '../customer/customerCloudService';
 import type { WorkspaceVorgangNoteRow } from '../vorgang/vorgangNoteCloudService';
+import type { WorkspaceTaskRow } from '../task/taskCloudService';
+import type { WorkspaceDunningDocumentationRow } from '../invoice/dunningDocumentationCloudService';
 
 interface WorkspaceRow {
   id: string;
@@ -199,6 +201,11 @@ export async function rpcPullWorkspaceSyncState(
   const customersRaw = (data?.customers as WorkspaceCustomerRow[] | null) ?? [];
   // CLOUD-DURABILITY-CORE-01B — ebenfalls inklusive Grabsteine.
   const vorgangNotesRaw = (data?.vorgang_notes as WorkspaceVorgangNoteRow[] | null) ?? [];
+  // CLOUD-DURABILITY-CORE-01C — ebenfalls inklusive Grabsteine.
+  const tasksRaw = (data?.tasks as WorkspaceTaskRow[] | null) ?? [];
+  // CLOUD-DURABILITY-CORE-01D — Mahnnachweise.
+  const dunningRaw =
+    (data?.dunning_documentations as WorkspaceDunningDocumentationRow[] | null) ?? [];
 
   return {
     workspace: workspaceRow ? mapWorkspaceRow(workspaceRow) : null,
@@ -213,7 +220,18 @@ export async function rpcPullWorkspaceSyncState(
     vorgaenge: vorgaengeRaw,
     customers: customersRaw,
     vorgangNotes: vorgangNotesRaw,
+    tasks: tasksRaw,
+    dunningDocumentations: dunningRaw,
   };
+}
+
+export interface UpsertWorkspaceSyncEntityResult {
+  rowVersion: number;
+  payload: Record<string, unknown>;
+  /** Kennung der Zeile, die der Server tatsächlich geschrieben bzw. zurückgegeben hat. */
+  entityId: string | null;
+  /** True, wenn der Server den Push als fachlichen Replay auf eine andere Zeile aufgelöst hat. */
+  deduped: boolean;
 }
 
 export async function rpcUpsertWorkspaceSyncEntity(
@@ -222,7 +240,7 @@ export async function rpcUpsertWorkspaceSyncEntity(
   payload: Record<string, unknown>,
   rowVersion: number,
   client?: SupabaseClient | null,
-): Promise<{ rowVersion: number; payload: Record<string, unknown> }> {
+): Promise<UpsertWorkspaceSyncEntityResult> {
   const supabase = getClient(client);
   const { data, error } = await supabase.rpc('upsert_workspace_sync_entity', {
     p_workspace_id: workspaceId,
@@ -234,6 +252,14 @@ export async function rpcUpsertWorkspaceSyncEntity(
   return {
     rowVersion: Number(data?.row_version ?? rowVersion),
     payload: (data?.payload as Record<string, unknown>) ?? {},
+    /*
+     * CLOUD-DURABILITY-CORE-01C — zwei zusätzliche, rückwärtskompatible Felder.
+     * Sie sind nur beim Aufgaben-Replay belegt: Der Server hat den Push als
+     * fachliche Wiederholung erkannt und gibt die kanonische Zeile zurück.
+     * Jeder andere Entity-Typ liefert sie gar nicht erst.
+     */
+    entityId: typeof data?.entity_id === 'string' ? (data.entity_id as string) : null,
+    deduped: data?.deduped === true,
   };
 }
 

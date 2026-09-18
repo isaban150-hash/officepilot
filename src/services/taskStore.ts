@@ -2,7 +2,6 @@ import { MOCK_TASKS } from '../data/mockData';
 import type { Task } from '../types/models';
 import { normalizeTask } from './taskNormalize';
 import { persistAll } from './persistenceService';
-import { withUpdatedEntitySync } from './sync/syncMetaService';
 
 let tasks: Task[] = [];
 
@@ -22,6 +21,12 @@ export function getAllTasksFromStore(): Task[] {
   return tasks.filter((task) => !task.sync?.deleted).map((t) => ({ ...t }));
 }
 
+/** 01C — Ersetzt den gesamten Aufgabenbestand (Dedupe-Aufloesung nach Push/Pull). */
+export function replaceAllTasksInStore(items: Task[]): void {
+  tasks = items.map((item) => normalizeTask(item));
+  persistAll();
+}
+
 export function findTasksInStore(predicate: (task: Task) => boolean): Task[] {
   return tasks.filter(predicate).map((t) => ({ ...t }));
 }
@@ -37,10 +42,13 @@ export function replaceTaskInStore(
 ): Task | null {
   const index = tasks.findIndex((t) => t.id === taskId);
   if (index === -1) return null;
-  const updated = withUpdatedEntitySync(
-    normalizeTask(updater({ ...tasks[index] })),
-    'task',
-  );
+  /*
+   * 01C — lokale Fachaenderung (erledigen, wieder oeffnen, archivieren) laesst
+   * `sync` unberuehrt, wie bei Vorgang, Kunde und Vorgangsnotiz. Ein selbst
+   * erhoehter Wert wuerde vom Server als Versionskonflikt abgewiesen und die
+   * Statusaenderung nie auf dem zweiten Geraet ankommen lassen.
+   */
+  const updated = normalizeTask(updater({ ...tasks[index] }));
   tasks = [...tasks.slice(0, index), updated, ...tasks.slice(index + 1)];
   persistAll();
   return { ...updated };

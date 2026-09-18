@@ -1,4 +1,5 @@
 import { persistAll } from './persistenceService';
+import { generateEntityId } from './sync/syncMetaService';
 import {
   calculatePaymentSummary,
   isExpectingPayment,
@@ -214,8 +215,21 @@ export function documentDunningDelivery(
     return { ok: true, documentation: cloneDoc(existing), alreadyDocumented: true };
   }
 
+  /*
+   * CLOUD-DURABILITY-CORE-01D — die Kennung kommt jetzt aus `generateEntityId`.
+   *
+   * Bisher stand hier `dunning-doc-<Millisekunde>`. Lokal reichte das; als
+   * Cloud-Schlüssel nicht: Zwei Geräte — und in derselben Millisekunde sogar
+   * ein einzelnes — könnten dieselbe Kennung für **verschiedene** Nachweise
+   * vergeben, und die Cloud führt sie unter `client_documentation_id` zusammen.
+   * Ein Nachweis überschriebe den anderen.
+   *
+   * Vorhandene Kennungen bleiben unangetastet; es gibt keine Migration. Der
+   * Datensatz bekommt auch **keine** Sync-Meta: `sync.version` ist allein die
+   * vom Server bestätigte `row_version` (SYNC-VERSION-CONTRACT-02).
+   */
   const documentation: InvoiceDunningDocumentation = {
-    id: `dunning-doc-${Date.now()}`,
+    id: generateEntityId('dunning-doc'),
     vorgangId,
     invoiceId,
     invoiceNumber: invoice.number,

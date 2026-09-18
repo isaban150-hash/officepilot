@@ -1,4 +1,4 @@
-import type { AppPersistedState, CompanyDocument, Customer, InboxItem, Vorgang } from '../../types/models';
+import type { AppPersistedState, CompanyDocument, Customer, InboxItem, Task, Vorgang } from '../../types/models';
 import type { DocumentFileRef } from '../../types/documentFileRef';
 import type { DocumentFileRepresentationBinding } from '../../types/documentFileRepresentationBinding';
 import type { DocumentWorkResult } from '../../types/documentWorkResult';
@@ -6,6 +6,7 @@ import type { Expense } from '../../types/expense';
 import { parseExpensePaymentEntityId, type ExpensePaymentSyncEntity } from '../expense/expenseCloudSyncService';
 import type { SyncEntityType } from '../../types/sync';
 import type { VorgangNote } from '../../types/communication';
+import type { InvoiceDunningDocumentation } from '../../types/dunningDocumentation';
 import type { Workspace, WorkspaceMember, WorkspaceSettings } from '../../types/workspace';
 import {
   getCompanyProfileSyncSnapshot,
@@ -35,7 +36,15 @@ export type CloudSyncEntityPayload =
   | { entityType: 'document_work_result'; entityId: string; entity: DocumentWorkResult; rowVersion: number; deleted: boolean }
   | { entityType: 'expense'; entityId: string; entity: Expense; rowVersion: number; deleted: boolean }
   | { entityType: 'expense_payment'; entityId: string; entity: ExpensePaymentSyncEntity; rowVersion: number; deleted: boolean }
-  | { entityType: 'vorgang_note'; entityId: string; entity: VorgangNote; rowVersion: number; deleted: boolean };
+  | { entityType: 'vorgang_note'; entityId: string; entity: VorgangNote; rowVersion: number; deleted: boolean }
+  | { entityType: 'task'; entityId: string; entity: Task; rowVersion: number; deleted: boolean }
+  | {
+      entityType: 'dunning_documentation';
+      entityId: string;
+      entity: InvoiceDunningDocumentation;
+      rowVersion: number;
+      deleted: boolean;
+    };
 
 export function resolveCloudWorkspaceId(state: AppPersistedState): string {
   return (
@@ -151,6 +160,24 @@ export function extractCloudSyncEntity(
       const result = (state.documentWorkResults ?? []).find((r) => r.inboxItemId === entityId);
       if (!result) return null;
       return { entityType, entityId, entity: result, rowVersion: result.sync?.version ?? 0, deleted: result.sync?.deleted ?? false };
+    }
+    // CLOUD-DURABILITY-CORE-01D — Mahnnachweise (append-only, nie gelöscht)
+    case 'dunning_documentation': {
+      const documentation = (state.dunningDocumentations ?? []).find((item) => item.id === entityId);
+      if (!documentation) return null;
+      return {
+        entityType,
+        entityId,
+        entity: documentation,
+        rowVersion: documentation.sync?.version ?? 0,
+        deleted: false,
+      };
+    }
+    // CLOUD-DURABILITY-CORE-01C — Aufgaben
+    case 'task': {
+      const task = (state.tasks ?? []).find((item) => item.id === entityId);
+      if (!task) return null;
+      return { entityType, entityId, entity: task, rowVersion: task.sync?.version ?? 0, deleted: task.sync?.deleted ?? false };
     }
     // CLOUD-DURABILITY-CORE-01B — Vorgangsnotizen
     case 'vorgang_note': {

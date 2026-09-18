@@ -22,6 +22,13 @@ export const SUPABASE_SYNC_ALLOWLIST: ReadonlySet<SyncEntityType> = new Set([
   // CLOUD-DURABILITY-CORE-01B — Vorgangsnotizen. Freigabe erst jetzt: Tabelle,
   // Push, Pull, Merge, Grabstein und RLS sind vollstaendig vorhanden.
   'vorgang_note',
+  // CLOUD-DURABILITY-CORE-01C — Aufgaben. Freigabe erst nach Versionsvertrag,
+  // Mock-Guard, Tabelle, RLS, Push, Dedupe-Idempotenz, Pull, Merge, Backfill
+  // und Engine-Dedupe.
+  'task',
+  // CLOUD-DURABILITY-CORE-01D — Mahnnachweise (append-only). Freigabe erst nach
+  // Entity-Typ, Schema, RLS, Push, Pull, Merge, Backfill, Idempotenz und Tests.
+  'dunning_documentation',
 ]);
 
 export const LOCAL_ONLY_SYNC_ENTITY_TYPES: ReadonlySet<SyncEntityType> = new Set([
@@ -30,7 +37,6 @@ export const LOCAL_ONLY_SYNC_ENTITY_TYPES: ReadonlySet<SyncEntityType> = new Set
   'memory_relation',
   'paper_register_entry',
   'mail_import',
-  'task',
   'communication_event',
   'knowledge_fact',
 ]);

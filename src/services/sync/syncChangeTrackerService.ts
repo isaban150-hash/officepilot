@@ -6,11 +6,14 @@ import { buildCompanyProfileContentKey } from '../workspace/workspaceStore';
 import { buildVorgangCloudContentKey } from '../vorgang/vorgangCloudService';
 import { buildCustomerCloudContentKey } from '../customer/customerCloudService';
 import { buildVorgangNoteCloudContentKey } from '../vorgang/vorgangNoteCloudService';
+import { buildTaskCloudContentKey } from '../task/taskCloudService';
+import { buildDunningDocumentationCloudContentKey } from '../invoice/dunningDocumentationCloudService';
 import { resolveCloudWorkspaceId } from '../workspace/workspaceSyncPayloadService';
 import { buildCloudEntityId } from '../workspace/workspaceSyncPayloadService';
-import type { Customer, Vorgang } from '../../types/models';
+import type { Customer, Task, Vorgang } from '../../types/models';
 import type { VorgangNote } from '../../types/communication';
-import { isCloudSyncBlockedMockVorgangId } from '../storage/mockDataDetectionService';
+import type { InvoiceDunningDocumentation } from '../../types/dunningDocumentation';
+import { isCloudSyncBlockedMockTaskId, isCloudSyncBlockedMockVorgangId } from '../storage/mockDataDetectionService';
 import {
   buildBindingContentKey,
   buildDocumentFileContentKey,
@@ -42,6 +45,8 @@ export const TRACKED_SYNC_ENTITY_TYPES: SyncEntityType[] = [
   'vorgang_note',
   'communication_event',
   'knowledge_fact',
+  // CLOUD-DURABILITY-CORE-01D — Nachweis über eine übergebene Mahnung.
+  'dunning_documentation',
 ];
 
 export const TRACKED_CLOUD_SYNC_ENTITY_TYPES: SyncEntityType[] = [
@@ -133,6 +138,36 @@ function buildExpenseFingerprint(expense: Expense): EntitySyncFingerprint {
   };
 }
 
+/** CLOUD-DURABILITY-CORE-01D — fachlicher Fingerabdruck des Mahnnachweises. */
+function buildDunningDocumentationFingerprint(
+  documentation: InvoiceDunningDocumentation,
+): EntitySyncFingerprint {
+  const sync = documentation.sync;
+  return {
+    version: sync?.version ?? 0,
+    deleted: sync?.deleted ?? false,
+    updatedAt: sync?.updatedAt ?? '',
+    contentKey: buildDunningDocumentationCloudContentKey(documentation),
+  };
+}
+
+/**
+ * CLOUD-DURABILITY-CORE-01C — fachlicher Fingerabdruck der Aufgabe.
+ *
+ * Ohne `sync` und ohne die abgeleiteten Legacy-Spiegel: Sonst meldete jede
+ * zurückgeschriebene Serverversion eine Änderung, und der nächste Push erzeugte
+ * die nächste Version.
+ */
+function buildTaskFingerprint(task: Task): EntitySyncFingerprint {
+  const sync = task.sync;
+  return {
+    version: sync?.version ?? 0,
+    deleted: sync?.deleted ?? false,
+    updatedAt: sync?.updatedAt ?? '',
+    contentKey: buildTaskCloudContentKey(task),
+  };
+}
+
 /** CLOUD-DURABILITY-CORE-01B — fachlicher Fingerabdruck der Notiz, ohne `sync`. */
 function buildVorgangNoteFingerprint(note: VorgangNote): EntitySyncFingerprint {
   const sync = note.sync;
@@ -177,7 +212,13 @@ function collectTrackedEntities(state: AppPersistedState): Map<string, TrackedEn
                   ? buildExpenseFingerprint(entity as Expense)
                   : entityType === 'vorgang_note'
                     ? buildVorgangNoteFingerprint(entity as unknown as VorgangNote)
-                    : buildFingerprint(entity),
+                    : entityType === 'task'
+                      ? buildTaskFingerprint(entity as Task)
+                      : entityType === 'dunning_documentation'
+                        ? buildDunningDocumentationFingerprint(
+                            entity as unknown as InvoiceDunningDocumentation,
+                          )
+                        : buildFingerprint(entity),
       });
     }
   }
@@ -269,7 +310,9 @@ function fingerprintChanged(
     entityType === 'document_file_binding' ||
     entityType === 'document_work_result' ||
     entityType === 'expense' ||
-    entityType === 'vorgang_note'
+    entityType === 'vorgang_note' ||
+    entityType === 'task' ||
+    entityType === 'dunning_documentation'
   ) {
     return (
       previous.deleted !== current.deleted ||
@@ -349,6 +392,10 @@ export function trackPersistedChanges(state: AppPersistedState): void {
     }
     // 01C — Demo-Ausgaben (exp-00N) bleiben lokal.
     if (ref.entityType === 'expense' && isCloudSyncBlockedMockExpenseId(ref.entityId)) {
+      continue;
+    }
+    // CLOUD-DURABILITY-CORE-01C — Demo-Aufgaben (t-001…t-003) bleiben lokal.
+    if (ref.entityType === 'task' && isCloudSyncBlockedMockTaskId(ref.entityId)) {
       continue;
     }
 

@@ -26,6 +26,8 @@ export type SyncEntityType =
   | 'customer'
   | 'vorgang_note'
   | 'communication_event'
+  /** CLOUD-DURABILITY-CORE-01D — Nachweis einer übergebenen Zahlungserinnerung/Mahnung (append-only). */
+  | 'dunning_documentation'
   | 'knowledge_fact';
 
 export type SyncOutboxOperation = 'create' | 'update' | 'delete';

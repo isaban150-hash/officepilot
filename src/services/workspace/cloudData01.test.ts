@@ -114,7 +114,10 @@ describe('CLOUD-DATA-01 allowlist', () => {
     // 01C — Ausgaben und ihre Zahlungen ebenfalls; Aufgaben bleiben ausgeschlossen.
     expect(isSupabaseSyncAllowed('document')).toBe(true);
     expect(isSupabaseSyncAllowed('inbox_item')).toBe(true);
-    expect(isSupabaseSyncAllowed('task')).toBe(false);
+    // CLOUD-DURABILITY-CORE-01C — Aufgaben sind cloud-dauerhaft; Wissensfakten bleiben lokal.
+    expect(isSupabaseSyncAllowed('task')).toBe(true);
+    expect(isSupabaseSyncAllowed('dunning_documentation')).toBe(true);
+    expect(isSupabaseSyncAllowed('knowledge_fact')).toBe(false);
     expect(isSupabaseSyncAllowed('expense')).toBe(true);
     expect(isSupabaseSyncAllowed('expense_payment')).toBe(true);
     // CLOUD-DURABILITY-CORE-01B — Vorgangsnotizen sind cloud-dauerhaft.
@@ -151,6 +154,10 @@ describe('CLOUD-DATA-01 allowlist', () => {
         'expense_payment',
         // CLOUD-DURABILITY-CORE-01B — Vorgangsnotizen
         'vorgang_note',
+        // CLOUD-DURABILITY-CORE-01C — Aufgaben
+        'task',
+        // CLOUD-DURABILITY-CORE-01D — Mahnnachweise
+        'dunning_documentation',
       ].sort(),
     );
   });
@@ -265,7 +272,7 @@ describe('CLOUD-DATA-01 SupabaseSyncAdapter', () => {
     resetSyncOutboxForTests([]);
   });
 
-  it('bestätigt keine ausgeschlossenen Geschäftsdaten', async () => {
+  it('sendet ausgeschlossene Geschäftsdaten nie und lässt ihren Auftrag nicht liegen', async () => {
     const state = buildCloudTestState();
     const adapter = new SupabaseSyncAdapter(null);
     const outboxId = generateUuid();
@@ -277,9 +284,9 @@ describe('CLOUD-DATA-01 SupabaseSyncAdapter', () => {
       outbox: [
         {
           id: outboxId,
-          // 01B/01C: `document` und `expense` sind jetzt erlaubt — `task` bleibt lokal.
-          entityType: 'task',
-          entityId: 'task-1',
+          // 01B/01C: `document`, `expense` und `task` sind erlaubt — Wissensfakten bleiben lokal.
+          entityType: 'knowledge_fact',
+          entityId: 'fact-1',
           operation: 'update',
           version: 1,
           queuedAt: new Date().toISOString(),
@@ -299,8 +306,12 @@ describe('CLOUD-DATA-01 SupabaseSyncAdapter', () => {
       ],
     });
 
-    expect(result.completedOutboxIds).not.toContain(outboxId);
-    expect(result.state.syncOutbox?.find((entry) => entry.id === outboxId)?.status).toBe('pending');
+    expect(result.completedOutboxIds).toContain(outboxId);
+    expect(result.state.syncOutbox?.find((entry) => entry.id === outboxId)?.status).toBe('completed');
+    // Nie gesendet: die Entität taucht in keinem Sync-Ergebnis als übertragen auf.
+    expect(
+      result.report.syncedEntities.some((entity) => entity.entityType === 'knowledge_fact'),
+    ).toBe(false);
   });
 
   it('klassifiziert Auth-Fehler korrekt', () => {

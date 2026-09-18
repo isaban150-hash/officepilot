@@ -2,6 +2,8 @@ import type { SyncMeta } from './sync';
 import type { WorkspaceVorgangRow } from '../services/vorgang/vorgangCloudService';
 import type { WorkspaceCustomerRow } from '../services/customer/customerCloudService';
 import type { WorkspaceVorgangNoteRow } from '../services/vorgang/vorgangNoteCloudService';
+import type { WorkspaceTaskRow } from '../services/task/taskCloudService';
+import type { WorkspaceDunningDocumentationRow } from '../services/invoice/dunningDocumentationCloudService';
 
 export type WorkspaceRole = 'owner' | 'admin' | 'member';
 
@@ -66,6 +68,16 @@ export interface WorkspaceSyncPullPayload {
    * lüde sie wieder hoch.
    */
   vorgangNotes: WorkspaceVorgangNoteRow[];
+  /**
+   * CLOUD-DURABILITY-CORE-01C — ebenfalls inklusive Grabsteine: Sie tragen auch
+   * das Ergebnis der Dedupe-Auflösung auf das zweite Gerät.
+   */
+  tasks: WorkspaceTaskRow[];
+  /**
+   * CLOUD-DURABILITY-CORE-01D — Mahnnachweise. Append-only: keine Grabsteine,
+   * die mitreisen müssten.
+   */
+  dunningDocumentations: WorkspaceDunningDocumentationRow[];
 }
 
 export interface EnsurePersonalWorkspaceResult {

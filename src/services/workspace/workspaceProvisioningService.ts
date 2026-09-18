@@ -21,6 +21,16 @@ import {
   planVorgangNoteBackfill,
 } from '../vorgang/vorgangNoteCloudService';
 import {
+  mergeTasksFromPull,
+  planTaskBackfill,
+  resolveLocalAutoTaskDuplicates,
+} from '../task/taskCloudService';
+import {
+  mergeDunningDocumentationsFromPull,
+  planDunningDocumentationBackfill,
+  resolveLocalDunningDocumentationDuplicates,
+} from '../invoice/dunningDocumentationCloudService';
+import {
   buildCompanyProfileCloudPayload,
   buildCompanySetupCloudPayload,
   parseCompanyProfileFromCloud,
@@ -734,6 +744,113 @@ export function mergeRemoteWorkspacePullIntoState(
     enqueueSyncOutbox({
       entityType: 'vorgang_note',
       entityId: noteId,
+      operation: 'create',
+      version: 0,
+    });
+  }
+
+  /*
+   * CLOUD-DURABILITY-CORE-01C — Aufgaben.
+   *
+   * Reihenfolge wie bei Kunden und Notizen: erst der Merge, dann der Altbestand.
+   * Dazwischen liegt der Schritt, den nur die Aufgaben brauchen.
+   */
+  const remoteTaskRows = pull.tasks ?? [];
+  if (remoteTaskRows.length > 0) {
+    const taskMerge = mergeTasksFromPull(
+      state.tasks ?? [],
+      remoteTaskRows,
+      state.syncClient!.deviceId,
+      workspaceId,
+    );
+    if (taskMerge.conflicts.length > 0) {
+      conflicts.push(...taskMerge.conflicts);
+    } else {
+      next.tasks = taskMerge.tasks;
+    }
+  }
+
+  /*
+   * Doppelte automatische Aufgabe nach dem Pull.
+   *
+   * Beide Geräte haben dieselbe automatische Aufgabe erzeugt; dieses Gerät zieht
+   * gerade die kanonische Zeile des anderen und hätte danach zwei aktive
+   * Aufgaben derselben Sache in der Liste. Die unterlegene wird entfernt.
+   *
+   * Ausgenommen sind Kennungen mit offenem Sendeauftrag: Der Adapter fände die
+   * Entität sonst nicht mehr und liefe in eine endlose Wiederholung. Für sie
+   * erledigt die serverseitige Dedupe-Antwort dieselbe Auflösung beim Push.
+   */
+  const taskDuplicates = resolveLocalAutoTaskDuplicates(
+    next.tasks ?? state.tasks ?? [],
+    activeOutboxEntityIds(state, 'task'),
+  );
+  if (taskDuplicates.removedIds.length > 0) {
+    next.tasks = taskDuplicates.tasks;
+  }
+
+  /*
+   * Altbestand — Aufgaben aus der Zeit vor 01C meldet der Change-Tracker nie
+   * nach. Sie gehen durch dieselbe Outbox-Tür wie jede normale Änderung; die
+   * geräteübergreifende Entdopplung übernimmt danach der Server.
+   */
+  for (const taskId of planTaskBackfill(
+    next.tasks ?? state.tasks ?? [],
+    remoteTaskRows,
+  )) {
+    enqueueSyncOutbox({
+      entityType: 'task',
+      entityId: taskId,
+      operation: 'create',
+      version: 0,
+    });
+  }
+
+  /*
+   * CLOUD-DURABILITY-CORE-01D — Mahnnachweise.
+   *
+   * Dieselbe Reihenfolge wie bei Kunden, Notizen und Aufgaben: erst der Merge,
+   * dann die Entdopplung, dann der Altbestand.
+   */
+  const remoteDunningRows = pull.dunningDocumentations ?? [];
+  if (remoteDunningRows.length > 0) {
+    const dunningMerge = mergeDunningDocumentationsFromPull(
+      state.dunningDocumentations ?? [],
+      remoteDunningRows,
+      state.syncClient!.deviceId,
+      workspaceId,
+    );
+    if (dunningMerge.conflicts.length > 0) {
+      conflicts.push(...dunningMerge.conflicts);
+    } else {
+      next.dunningDocumentations = dunningMerge.documentations;
+    }
+  }
+
+  /*
+   * Zwei Geräte haben dieselbe Übergabe festgehalten: Die Historie am Beleg
+   * darf sie nicht zweimal behaupten. Kennungen mit offenem Sendeauftrag bleiben
+   * stehen — für sie erledigt die Server-Antwort dieselbe Auflösung beim Push.
+   */
+  const dunningDuplicates = resolveLocalDunningDocumentationDuplicates(
+    next.dunningDocumentations ?? state.dunningDocumentations ?? [],
+    activeOutboxEntityIds(state, 'dunning_documentation'),
+  );
+  if (dunningDuplicates.removedIds.length > 0) {
+    next.dunningDocumentations = dunningDuplicates.documentations;
+  }
+
+  /*
+   * Altbestand — Nachweise aus der Zeit vor 01D meldet der Change-Tracker nie
+   * nach. Sie gehen durch dieselbe Outbox-Tür wie jede normale Änderung.
+   */
+  for (const documentationId of planDunningDocumentationBackfill(
+    next.dunningDocumentations ?? state.dunningDocumentations ?? [],
+    remoteDunningRows,
+  )) {
+    enqueueSyncOutbox({
+      entityType: 'dunning_documentation',
+      entityId: documentationId,
       operation: 'create',
       version: 0,
     });

@@ -18,6 +18,7 @@ import type {
   Vorgang,
 } from '../../types/models';
 import type { VorgangNote } from '../../types/communication';
+import type { InvoiceDunningDocumentation } from '../../types/dunningDocumentation';
 import type { SyncEntityType, SyncableEntity } from '../../types/sync';
 
 type SyncEntity = SyncableEntity & { id: string };
@@ -80,6 +81,8 @@ export function findEntityInState(
     }
     case 'task':
       return state.tasks.find((item) => item.id === entityId) ?? null;
+    case 'dunning_documentation':
+      return (state.dunningDocumentations ?? []).find((item) => item.id === entityId) ?? null;
     case 'expense':
       return state.expenses?.find((item) => item.id === entityId) ?? null;
     case 'expense_payment': {
@@ -154,6 +157,12 @@ export function upsertEntityInState(
     }
     case 'task':
       next.tasks = upsertInArray(next.tasks, entity as Task);
+      break;
+    case 'dunning_documentation':
+      next.dunningDocumentations = upsertInArray(
+        next.dunningDocumentations ?? [],
+        entity as InvoiceDunningDocumentation,
+      );
       break;
     case 'expense':
       next.expenses = upsertInArray(next.expenses ?? [], entity as Expense);
@@ -234,6 +243,8 @@ export function listEntitiesByType(
       return (state.documentWorkResults ?? []).map((result) => withId(result, result.inboxItemId)) as SyncEntity[];
     case 'task':
       return [...state.tasks];
+    case 'dunning_documentation':
+      return [...(state.dunningDocumentations ?? [])];
     case 'expense':
       return [...(state.expenses ?? [])];
     case 'expense_payment':
@@ -263,4 +274,12 @@ export function listEntitiesByType(
   }
 }
 
-export const APPEND_ONLY_ENTITY_TYPES: SyncEntityType[] = ['communication_event'];
+/**
+ * CLOUD-DURABILITY-CORE-01D — die Mahndokumentation gehört hierher: Sie ist ein
+ * Nachweis, kein veränderlicher Datensatz. Das Produkt kennt für sie weder
+ * Bearbeiten noch Löschen.
+ */
+export const APPEND_ONLY_ENTITY_TYPES: SyncEntityType[] = [
+  'communication_event',
+  'dunning_documentation',
+];

@@ -55,6 +55,9 @@ function entityTypeKey(entityType: string): TranslationKey {
     task: 'sync.entity.task',
     vorgang: 'sync.entity.vorgang',
     invoice: 'sync.entity.invoice',
+    // CLOUD-DURABILITY-CORE-01B/01D — sonst stünde hier nur „Eintrag".
+    vorgang_note: 'sync.entity.vorgang_note',
+    dunning_documentation: 'sync.entity.dunning_documentation',
   };
   return map[entityType] ?? 'sync.entity.other';
 }

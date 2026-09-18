@@ -1,4 +1,5 @@
 import type { InvoiceSentVia } from './models';
+import type { SyncMeta } from './sync';
 
 /** Confirmed handoff of a payment reminder or dunning notice to the customer. */
 export type DunningDocumentationKind = 'payment_reminder' | 'dunning_notice';
@@ -20,6 +21,11 @@ export interface InvoiceDunningDocumentation {
   deliveryMethod: DunningDeliveryMethod;
   note?: string;
   createdAt: string;
+  /**
+   * CLOUD-DURABILITY-CORE-01D — vom Server bestätigte Version. Fehlt sie, hat
+   * dieser Nachweis die Cloud noch nie erreicht.
+   */
+  sync?: SyncMeta;
 }
 
 export interface DocumentDunningInput {

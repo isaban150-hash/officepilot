@@ -3,7 +3,7 @@
 Kompakte Übergabedatei zwischen Claude Code, ChatGPT und dem Nutzer.
 Keine Projektdokumentation, keine Commit-Chronik — nur der aktuelle Stand.
 
-Stand: 2026-09-18
+Stand: 2026-09-18 (Cloud-Durability-Bereich abgeschlossen, noch nicht committet)
 
 > Produktname ist **OfficeTakt**. Repository, Pfade, Supabase-Projekt und
 > Codebezeichner heißen technisch weiterhin `officepilot` — das bleibt so und
@@ -23,12 +23,19 @@ Stand: 2026-09-18
 
 ## 2. Git- und Migrationsstand
 
-- Branch: `main`, HEAD **`4bc716b`** — feat(orders): add expense cost allocation
-- origin/main identisch mit `main`, nichts ausstehend.
-- Arbeitskopie: nur die drei geschützten Testartefakte (Abschnitt 8).
-- Migrationen: keine doppelten Versionen mehr (Kollisionen mit `5321e7f` bereinigt);
-  `supabase migration list` zeigt **0 lokal-only** Migrationen, Remote-Stand bis
-  `20260922120000`. Neue Migrationen nur additiv und nur mit ausdrücklichem Auftrag.
+- Branch: `main`, HEAD **`3bd0f98`** — feat(sync): make vorgang notes cloud durable
+- origin/main identisch mit `main`.
+- **Arbeitskopie enthält fertige, noch nicht committete Arbeit:** die Blöcke
+  CLOUD DURABILITY CORE 01C (Aufgaben), 01D (Mahndokumentation) und 01E
+  (Transparenz) — jeweils als commit-reif bewertet. Dazu unverändert die drei
+  geschützten Testartefakte (Abschnitt 8). Commit und Push macht der Nutzer.
+- Migrationen: keine doppelten Versionen. **Remote angewandt bis
+  `20260923120000`** (Vorgangsnotizen, mit `3bd0f98` committet). Die beiden neuen
+  Migrationen `20260924120000_workspace_tasks_cloud.sql` und
+  `20260925120000_workspace_invoice_dunning_documentations.sql` sind **nur lokal
+  angewandt** (Docker) und müssen nach dem Commit noch auf die entfernte
+  Datenbank gebracht werden. Neue Migrationen nur additiv und nur mit
+  ausdrücklichem Auftrag.
 
 ## 3. Zuletzt abgeschlossene Produktblöcke
 
@@ -41,6 +48,10 @@ Stand: 2026-09-18
 | Migrations-Kollisionen | `5321e7f` | eindeutige Versionsnummern, Delivery-Migrationen auf 20260921/20260922 |
 | Zahlungserinnerung ohne Auftrag | `42d2c3e` | siehe unten |
 | Auftragskosten / Ausgabenzuordnung | `4bc716b` | siehe unten |
+| Cloud-Durability 01B — Vorgangsnotizen | `3bd0f98` | Notizen am Auftrag sind cloud-dauerhaft, inkl. Grabstein und Altbestand |
+| Cloud-Durability 01C — Aufgaben | **noch nicht committet** | siehe unten |
+| Cloud-Durability 01D — Mahndokumentation | **noch nicht committet** | siehe unten |
+| Cloud-Durability 01E — Transparenz | **noch nicht committet** | siehe unten |
 
 **Zahlungserinnerung ohne Auftrag (`42d2c3e`)**
 - Zahlungserinnerung funktioniert auch für manuell erstellte Rechnungen ohne Vorgang.
@@ -52,6 +63,41 @@ Stand: 2026-09-18
   bei überfälligen Zeilen als sichtbare Aktion, sonst im vorhandenen „Weitere“-Menü.
 - Vollständig bezahlte, stornierte und nicht versendete Rechnungen sind nicht mahnbar.
 - Mahndokumentation ist weiterhin **lokal** und nicht cloud-durable.
+
+**Cloud-Durability 01C — Aufgaben (noch nicht committet)**
+- Aufgaben sind cloud-dauerhaft; Kennungen bleiben zufällige Client-IDs.
+- Geräteübergreifende Identität ist der vorhandene fachliche `dedupeKey`, und zwar
+  **nur** für automatisch erzeugte, offene/in Arbeit befindliche Aufgaben.
+  Manuelle Aufgaben werden nie entdoppelt — zwei gleichnamige bleiben zwei.
+- Erledigte und archivierte Aufgaben blockieren keine spätere neue Episode
+  desselben Schlüssels (partieller Eindeutigkeitsindex).
+- Konkurrierende Anlage auf zwei Geräten ist ein serverseitiges Replay: Die RPC
+  gibt die kanonische Zeile zurück, der Client verwirft seine eigene Kennung, der
+  Sendeauftrag wird abgeschlossen — kein Dauerfehler, keine zweite Aufgabe.
+- Versionsvertrag repariert: Anlegen ohne erfundene Serverversion, Erledigen und
+  Wiederöffnen lassen die bestätigte Version unberührt.
+- Demo-Aufgaben `t-001…t-003` erreichen die Cloud nie (ID-Guard).
+
+**Cloud-Durability 01D — Mahndokumentation (noch nicht committet)**
+- Der Nachweis einer übergebenen Zahlungserinnerung/Mahnung ist cloud-dauerhaft
+  und bleibt **append-only**: kein Bearbeiten, kein Löschen, kein Grabstein.
+- Fachliche Identität unverändert aus dem Produkt: Rechnung, Auftragsbezug, Art,
+  Datum, Weg. Die Notiz gehört nicht dazu. Zwei Geräte, die dieselbe Übergabe
+  festhalten, ergeben einen Nachweis.
+- Funktioniert für die freie Rechnung ohne Auftrag (`vorgangId = null`); die
+  historische Rechnungsnummer reist als Kopie mit.
+- Keine Fremdschlüssel auf Rechnung oder Auftrag: Storno und gelöschter Auftrag
+  vernichten den Nachweis nicht.
+- Neue Kennungen kommen aus `generateEntityId` statt aus einem Zeitstempel;
+  Bestandskennungen bleiben unverändert.
+
+**Cloud-Durability 01E — Transparenz (noch nicht committet)**
+- Wo heute noch benutzersichtbare Daten nur auf einem Gerät liegen, sagt das
+  Produkt es ruhig: Wissen, Kommunikationsverlauf und der Haken für die
+  Papierablage tragen je einen kurzen Hinweis (de/tr/bg).
+- Die Synchronisationsseite benennt Notizen und dokumentierte
+  Zahlungserinnerungen jetzt verständlich statt als „Eintrag".
+- Keine neue Cloud-Tabelle, keine Migration, keine Allowlist-Erweiterung.
 
 **Auftragskosten / Ausgabenzuordnung (`4bc716b`)**
 - `Expense.allocations` wird produktiv verwendet; Bezug ist `vorgangId`.
@@ -89,7 +135,7 @@ Stand: 2026-09-18
 | Einstellungen / Firmenprofil / Branding | Firmendaten, Logo, Rechnungsnummernformat, Zahlungsbedingungen, Kommunikationsstandards |
 | Kommunikation | Antwortentwürfe je Anlass, Vorschläge statt Sackgasse, Kopieren/Übergeben, Verlauf (lokal) |
 | Assistent | Tagesüberblick, Workflow-/Finanzhinweise in verständlichem Deutsch, keine Rohschlüssel |
-| Sync | Cloud-Durability für Workspace, Firmenprofil, Kunden, Vorgänge, Eingang, Dokumente, Dateien, Bindings, Work-Results, Ausgaben, Ausgabenzahlungen, Rechnungen |
+| Sync | Cloud-Durability für Workspace, Firmenprofil, Kunden, Vorgänge, Eingang, Dokumente, Dateien, Bindings, Work-Results, Ausgaben, Ausgabenzahlungen, Rechnungen, **Vorgangsnotizen, Aufgaben, Mahndokumentation** (Matrix in Abschnitt 6) |
 | E-Mail-Versand | Rechnung, Korrekturbeleg und archivierte PDF-Dokumente über Edge Function `send-document`; produktiv **blockiert** (Abschnitt 5) |
 
 ## 5. E-Mail / Brevo — externer Blocker
@@ -109,16 +155,32 @@ Stand: 2026-09-18
 
 ## 6. Offene Produktpunkte
 
-**Cloud-Durability (heute ausschließlich lokal, gegen `cloudSyncAllowlist.ts` geprüft):**
-`task`, `vorgang_note`, `knowledge_fact`, `communication_event`,
-`paper_register_entry`, `document_memory`, `proof_memory`, `memory_relation`,
-`mail_import`. Zusätzlich: **Mahndokumentation** (`dunningDocumentations`) ist
-persistiert, aber gar kein `SyncEntityType` — sie reist nicht mit und wird auf der
-Sync-Seite auch nicht als „nur lokal“ geführt.
+**Cloud-/Geräte-Matrix (gegen den aktuellen Arbeitsstand geprüft):**
 
-Wirkung: Auf einem zweiten Gerät fehlen manuell angelegte Aufgaben, Vorgangsnotizen,
-Wissenseinträge, Kommunikationsverlauf, Papierarchiv-Einträge und der Mahnstand.
-Nur die Synchronisationsseite erwähnt „nur lokal“; die Fachseiten sagen nichts.
+*A — cloud-dauerhaft über die generische Sync-Engine:* `workspace`,
+`workspace_member`, `workspace_settings`, `company_setup`, `company_profile`,
+`vorgang`, `customer`, `inbox_item`, `document`, `document_file`,
+`document_file_binding`, `document_work_result`, `expense`, `expense_payment`,
+`vorgang_note` (01B), `task` (01C), `dunning_documentation` (01D).
+
+*B — bewusst noch nur auf diesem Gerät, mit sichtbarem Hinweis (01E):*
+`knowledge_fact` (Wissen), `communication_event` (Kommunikationsverlauf),
+`paper_register_entry`/Papierablage-Haken (Dokumentdetail).
+
+*C — intern oder abgeleitet, kein eigener Benutzerhinweis nötig:*
+`document_memory`, `proof_memory`, `memory_relation` (Analyse-/Gedächtnisdaten,
+vom Nutzer nicht direkt gepflegt; die eine Nutzerangabe darin — der
+Papierablage-Haken — ist unter B abgedeckt) und `mail_import` (Transportrecord;
+das fachliche Ergebnis landet als Eingang/Dokument in der Cloud).
+
+*D — eigene Cloud-Wege außerhalb der Allowlist:* Rechnungen und
+Rechnungszahlungen (`workspace_invoices`), Rechnungsnummernformat,
+Versandbelege (`workspace_document_deliveries`), Versandstatus der Rechnung,
+Dateiinhalte im Storage.
+
+Wirkung: Auf einem zweiten Gerät fehlen weiterhin Wissenseinträge,
+Kommunikationsverlauf und der Papierablage-Haken — das Produkt sagt es jetzt an
+Ort und Stelle, statt es dem Nutzer zu überlassen, es zu bemerken.
 
 **Weitere Lücken:**
 - Briefe/geschäftliche Schreiben: kein generierter Brief-PDF-Workflow; `letter`/`offer`
@@ -135,22 +197,26 @@ Nur die Synchronisationsseite erwähnt „nur lokal“; die Fachseiten sagen nic
 
 ## 7. Nächster empfohlener Core-Block
 
-**Cloud-Durability für die wichtigsten heute noch lokalen betrieblichen Daten.**
+Der Cloud-Durability-Bereich ist fachlich abgeschlossen. Vor neuen Funktionen
+stehen die Punkte, die aus 01C–01E offen geblieben sind:
 
-Priorität prüfen und umsetzen in dieser Reihenfolge:
-1. `task` — manuell angelegte Aufgaben und Erledigt-Status (größter sichtbarer Verlust)
-2. `vorgang_note` — Notizen am Auftrag
-3. `dunningDocumentation` — Mahnstand (braucht zuerst eine Entscheidung: eigene
-   Entität im Sync-Modell oder bewusst lokal mit sichtbarer Kennzeichnung)
+1. **Commit und Push** der Blöcke 01C, 01D, 01E — danach die beiden Migrationen
+   `20260924120000` und `20260925120000` auf die entfernte Datenbank bringen.
+   Bis dahin läuft die Cloud-Fassung von Aufgaben und Mahndokumentation nur
+   gegen die lokale Docker-Instanz.
+2. **`syncMigrationService.backfillMeta`**: stempelt `sync.version = 1` auf jede
+   Entität ohne Sync-Meta. Für den Insert-Zweig folgenlos, verhindert aber die
+   Lost-Ack-Übernahme aus CREATE-RETRY-CONFLICT-02. Eigene Entscheidung nötig.
+3. **Fachfremder Altfehler**: `manualInvoiceCustomerIdentity01b.test.ts` (T17,
+   T22b) scheitert am Dubletten-Guard aus `43ff9a5`, der nach der letzten
+   Änderung dieser Testdatei kam. Nicht Teil von 01C–01E.
+4. Erst danach die verbleibenden Local-only-Bereiche (Wissen, Kommunikation,
+   Papierablage) fachlich bewerten — cloud-fähig machen oder bewusst lokal
+   lassen. Der Hinweis aus 01E macht den Zustand solange ehrlich.
 
-Separat und später einzuordnen: `knowledge_fact`, `communication_event`,
-`paper_register_entry`, `memories`, `mail_import` — teils Analyse-/Hilfsdaten,
-teils eigener Fachbereich; für V1 genügt zunächst eine ehrliche Kennzeichnung
-„nur auf diesem Gerät“ auf den betroffenen Fachseiten.
-
-Muster für die Umsetzung: additive Migration nach Vorbild `workspace_expenses`
-(versionierte Zeile, Tombstone, owner/admin-Rechte), Eintrag in Allowlist,
-Change-Tracker, Pull-Merge; Dedupe der Aufgaben-Engine beim Pull beachten.
+Muster für spätere Cloud-Blöcke: additive Migration nach Vorbild
+`workspace_vorgang_notes`/`workspace_tasks`, Versionsvertrag zuerst, Allowlist
+zuletzt, Dedupe-Frage vor dem Schema klären.
 
 ## 8. Geschützte Artefakte
 

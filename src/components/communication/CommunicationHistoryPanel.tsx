@@ -47,6 +47,14 @@ export function CommunicationHistoryPanel({
   return (
     <section className="section communication-history-section" data-testid="communication-history">
       <h2 className="section__title">{translate('communication.history.title')}</h2>
+      {/*
+        CLOUD-DURABILITY-CORE-01E — der Verlauf ist ein Nachweis für den
+        Betrieb, reist aber noch nicht mit. Eine ruhige Zeile unter der
+        Überschrift, einmal je Bereich statt an jeder Zeile.
+      */}
+      <p className="device-only-hint" data-testid="communication-history-device-only">
+        {translate('deviceOnly.communicationHistory')}
+      </p>
       {events.length === 0 ? (
         <p className="empty-state">{translate('communication.history.empty')}</p>
       ) : (

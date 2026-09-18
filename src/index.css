@@ -4163,6 +4163,17 @@ body {
   text-align: center;
 }
 
+/*
+ * CLOUD-DURABILITY-CORE-01E — die ruhige Auskunft „bleibt auf diesem Gerät".
+ * Bewusst linksbündig und gedämpft: Sie erklärt, sie warnt nicht.
+ */
+.device-only-hint {
+  margin: var(--space-1, 4px) 0 0;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--op-text-muted, var(--color-text-muted));
+}
+
 .sr-only {
   position: absolute;
   width: 1px;

@@ -80,6 +80,15 @@ export function isCloudSyncBlockedMockVorgangId(vorgangId: string | undefined | 
   return isDefinitelyMockVorgangId(vorgangId);
 }
 
+/**
+ * CLOUD-DURABILITY-CORE-01C — Cloud-Push-Guard fuer die Demo-Aufgaben, ID-only
+ * (t-001…t-003), exakt wie beim Vorgang. Bewusst **kein** Praefixvergleich:
+ * Eine echte Aufgabe heisst `t-<uuid>` und begaenne sonst ebenfalls mit `t-`.
+ */
+export function isCloudSyncBlockedMockTaskId(taskId: string | undefined | null): boolean {
+  return Boolean(taskId && DEFINITE_MOCK_TASK_IDS.has(taskId));
+}
+
 /** Demo IDs that may pollute a real workspace and need explicit (manual) cloud cleanup. */
 export function listCloudCleanupMockVorgangIds(): readonly string[] {
   return [...DEFINITE_MOCK_VORGANG_IDS];

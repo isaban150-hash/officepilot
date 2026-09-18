@@ -132,6 +132,15 @@ export function DocumentFilingCard({
             >
               {paperStatusLabel}
             </p>
+            {/*
+              CLOUD-DURABILITY-CORE-01E — der Haken „im Ordner abgelegt" ist eine
+              Nutzerangabe und bleibt vorerst auf diesem Gerät. Der Hinweis steht
+              direkt beim Status, damit niemand ihn auf einem zweiten Gerät
+              vermisst, ohne den Grund zu kennen.
+            */}
+            <p className="device-only-hint" data-testid="document-filing-device-only">
+              {translate('deviceOnly.paperFiling')}
+            </p>
           </div>
         </section>
         )}

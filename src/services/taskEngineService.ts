@@ -15,7 +15,7 @@ import {
   mapTaskTypeToCategory,
   normalizeTask,
 } from './taskNormalize';
-import { generateEntityId, withNewEntitySync } from './sync/syncMetaService';
+import { generateEntityId } from './sync/syncMetaService';
 import type {
   ClassifiedDocumentKind,
   CompanyProfile,
@@ -52,9 +52,25 @@ function baseInboxLinks(item: InboxItem) {
   };
 }
 
+/**
+ * CLOUD-DURABILITY-CORE-01C — der Dedupe-Treffer der Engine.
+ *
+ * Zwei Ergänzungen gegenüber vorher, beide notwendig, damit die Cloud-Fassung
+ * sich richtig verhält:
+ *
+ *  * Ein Grabstein ist **kein** Treffer. Sonst hielte eine anderswo entfernte
+ *    Aufgabe die Neuanlage dauerhaft auf, und der Arbeitsvorrat verschwände
+ *    still.
+ *  * Eine bereits aus der Cloud gezogene kanonische Aufgabe ist einer: Sie
+ *    liegt mit demselben `dedupeKey` im Bestand, und genau daran erkennt die
+ *    Engine, dass sie nichts Neues erzeugen muss.
+ *
+ * Die fachliche Regel bleibt unangetastet: Erledigte und archivierte Aufgaben
+ * blockieren eine spätere neue Episode nicht.
+ */
 export function findExistingOpenTaskByDedupeKey(dedupeKey: string): Task | null {
   const match = findTasksInStore(
-    (task) => task.dedupeKey === dedupeKey && isTaskOpen(task),
+    (task) => task.dedupeKey === dedupeKey && isTaskOpen(task) && !task.sync?.deleted,
   );
   return match[0] ?? null;
 }
@@ -226,7 +242,17 @@ export function proposeTasksFromOverdueInvoices(today?: Date | string): TaskProp
 function proposalToTask(proposal: TaskProposal): Task {
   const dedupeKey = buildDedupeKey(proposal);
   const now = new Date().toISOString();
-  return withNewEntitySync(
+  /*
+   * CLOUD-DURABILITY-CORE-01C / SYNC-VERSION-CONTRACT-02 — die neue Aufgabe
+   * bekommt **keine** Sync-Meta.
+   *
+   * `sync.version` ist ausschliesslich die zuletzt vom Server bestaetigte
+   * `row_version`. Der bisherige Startwert 1 aus `withNewEntitySync` war eine
+   * Behauptung, die der Server nie bestaetigt hat; der erste Push traete damit
+   * mit einer falschen Erwartung an. Der Weg in die Cloud fuehrt unveraendert
+   * ueber den Change-Tracker.
+   */
+  return (
     normalizeTask({
       id: generateEntityId('t'),
       title: proposal.title,
@@ -247,8 +273,7 @@ function proposalToTask(proposal: TaskProposal): Task {
     autoCreated: proposal.autoCreated ?? false,
     createdAt: now,
     type: proposal.type ?? 'dokument_pruefen',
-    }),
-    'task',
+    })
   );
 }
 

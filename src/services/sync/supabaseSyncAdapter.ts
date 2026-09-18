@@ -49,6 +49,23 @@ import {
   applyVorgangNotePushResultToState,
   buildVorgangNoteCloudPushPayload,
 } from '../vorgang/vorgangNoteCloudService';
+import {
+  applyTaskDedupeResolutionToState,
+  applyTaskPushResultToState,
+  buildTaskCloudPushPayload,
+  mapWorkspaceTaskRow,
+  taskFromCloud,
+  type WorkspaceTaskRow,
+} from '../task/taskCloudService';
+import { isCloudSyncBlockedMockTaskId } from '../storage/mockDataDetectionService';
+import {
+  applyDunningDocumentationDedupeResolution,
+  applyDunningDocumentationPushResult,
+  buildDunningDocumentationCloudPushPayload,
+  dunningDocumentationFromCloud,
+  mapWorkspaceDunningDocumentationRow,
+  type WorkspaceDunningDocumentationRow,
+} from '../invoice/dunningDocumentationCloudService';
 import { applyInvoicePullAfterVorgangMerge } from '../invoice/invoiceCloudPullOrchestrator';
 import { applyDocumentPullToState } from '../document/documentCloudPullOrchestrator';
 import { listOrderAmendmentConfirmIntents } from '../orderAmendment/orderAmendmentConfirmIntentService';
@@ -202,6 +219,14 @@ function buildPushPayload(
         extracted.entity,
         operation === 'delete' || extracted.deleted,
       );
+    case 'task':
+      return buildTaskCloudPushPayload(
+        extracted.entity,
+        operation === 'delete' || extracted.deleted,
+      );
+    // 01D — append-only: kein Grabstein-Flag, weil es keine Löschung gibt.
+    case 'dunning_documentation':
+      return buildDunningDocumentationCloudPushPayload(extracted.entity);
     default:
       return {};
   }
@@ -297,6 +322,27 @@ function applyPushResultToState(
       expense.id === entityId
         ? { ...expense, sync: { updatedAt, version: rowVersion, deleted, deletedAt: deleted ? updatedAt : undefined, deviceId: state.syncClient!.deviceId, workspaceId } }
         : expense,
+    );
+  } else if (entityType === 'dunning_documentation') {
+    // CLOUD-DURABILITY-CORE-01D — nur die Serverversion; der Nachweis bleibt.
+    next.dunningDocumentations = applyDunningDocumentationPushResult(
+      next.dunningDocumentations ?? [],
+      entityId,
+      rowVersion,
+      updatedAt,
+      state.syncClient!.deviceId,
+      workspaceId,
+    );
+  } else if (entityType === 'task') {
+    // CLOUD-DURABILITY-CORE-01C — nur die Serverversion; Titel und Status bleiben.
+    next.tasks = applyTaskPushResultToState(
+      next.tasks ?? [],
+      entityId,
+      rowVersion,
+      updatedAt,
+      deleted,
+      state.syncClient!.deviceId,
+      workspaceId,
     );
   } else if (entityType === 'vorgang_note') {
     // CLOUD-DURABILITY-CORE-01B — nur die Serverversion; der Text bleibt unangetastet.
@@ -528,6 +574,19 @@ export class SupabaseSyncAdapter implements SyncAdapter {
         continue;
       }
 
+      // CLOUD-DURABILITY-CORE-01C — Demo-Aufgaben (t-001…t-003) erreichen die Cloud nie.
+      if (entry.entityType === 'task' && isCloudSyncBlockedMockTaskId(entry.entityId)) {
+        completedOutboxIds.push(entry.id);
+        outbox = updateOutboxEntryStatus(outbox, entry.id, 'completed');
+        report.completedOutboxCount += 1;
+        report.syncedEntities.push({
+          entityType: entry.entityType,
+          entityId: entry.entityId,
+          resolution: 'noop',
+        });
+        continue;
+      }
+
       // Defense-in-depth: never upsert demo seed vorgänge (v-001…v-003) to a real workspace.
       if (entry.entityType === 'vorgang' && isCloudSyncBlockedMockVorgangId(entry.entityId)) {
         completedOutboxIds.push(entry.id);
@@ -614,8 +673,104 @@ export class SupabaseSyncAdapter implements SyncAdapter {
          * dem Push wieder eine aktive Sync-Meta und der nächste Pull könnte sie
          * wiederbeleben.
          */
+        /*
+         * CLOUD-DURABILITY-CORE-01C — der Server hat diesen Push als fachliche
+         * Wiederholung erkannt: Für denselben `dedupeKey` existiert bereits eine
+         * aktive automatische Aufgabe eines anderen Geräts.
+         *
+         * Das ist **kein** Fehler und darf keinen Wiederholungslauf auslösen.
+         * Der Sendeauftrag wird erfolgreich abgeschlossen, die kanonische
+         * Cloud-Aufgabe übernommen und die eigene, unterlegene Kennung aus dem
+         * Bestand entfernt — sie hat die Cloud nie erreicht, es gibt dort nichts
+         * zu löschen, und ohne die Entfernung stünde dieselbe Aufgabe zweimal in
+         * der Liste.
+         */
+        /*
+         * CLOUD-DURABILITY-CORE-01D — dieselbe Wiederholungsantwort für den
+         * Mahnnachweis: Ein anderes Gerät hat dieselbe Übergabe bereits
+         * festgehalten. Der eigene Eintrag weicht der kanonischen Cloud-Zeile,
+         * der Sendeauftrag wird erfolgreich abgeschlossen.
+         */
+        if (
+          entry.entityType === 'dunning_documentation' &&
+          pushResult.deduped &&
+          pushResult.entityId &&
+          pushResult.entityId !== entry.entityId
+        ) {
+          const mapped = mapWorkspaceDunningDocumentationRow(
+            pushResult.payload as unknown as WorkspaceDunningDocumentationRow,
+          );
+          if (mapped) {
+            const canonical = dunningDocumentationFromCloud(
+              mapped.documentationId,
+              mapped.payload,
+              mapped.rowVersion,
+              mapped.updatedAt,
+              currentState.syncClient!.deviceId,
+              workspaceId,
+            );
+            currentState = {
+              ...currentState,
+              dunningDocumentations: applyDunningDocumentationDedupeResolution(
+                currentState.dunningDocumentations ?? [],
+                entry.entityId,
+                canonical,
+              ),
+            };
+          }
+          completedOutboxIds.push(entry.id);
+          outbox = updateOutboxEntryStatus(outbox, entry.id, 'completed');
+          report.completedOutboxCount += 1;
+          report.syncedEntities.push({
+            entityType: entry.entityType,
+            entityId: entry.entityId,
+            resolution: 'remote_wins',
+          });
+          continue;
+        }
+
+        if (
+          entry.entityType === 'task' &&
+          pushResult.deduped &&
+          pushResult.entityId &&
+          pushResult.entityId !== entry.entityId
+        ) {
+          const canonicalRow = pushResult.payload as unknown as WorkspaceTaskRow;
+          const mapped = mapWorkspaceTaskRow(canonicalRow);
+          if (mapped?.payload) {
+            const canonical = taskFromCloud(
+              mapped.taskId,
+              mapped.payload,
+              mapped.rowVersion,
+              mapped.updatedAt,
+              false,
+              currentState.syncClient!.deviceId,
+              workspaceId,
+            );
+            currentState = {
+              ...currentState,
+              tasks: applyTaskDedupeResolutionToState(
+                currentState.tasks ?? [],
+                entry.entityId,
+                canonical,
+              ),
+            };
+          }
+          completedOutboxIds.push(entry.id);
+          outbox = updateOutboxEntryStatus(outbox, entry.id, 'completed');
+          report.completedOutboxCount += 1;
+          report.syncedEntities.push({
+            entityType: entry.entityType,
+            entityId: entry.entityId,
+            resolution: 'remote_wins',
+          });
+          continue;
+        }
+
         const pushDeleted =
-          (entry.entityType === 'vorgang' || entry.entityType === 'vorgang_note') &&
+          (entry.entityType === 'vorgang' ||
+            entry.entityType === 'vorgang_note' ||
+            entry.entityType === 'task') &&
           (entry.operation === 'delete' || ('deleted' in extracted && extracted.deleted === true));
         currentState = applyPushResultToState(
           currentState,
