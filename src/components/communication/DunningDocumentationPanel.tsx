@@ -19,7 +19,8 @@ import type { CommunicationIntent } from '../../types/communication';
 import type { TranslationKey } from '../../i18n';
 
 interface Props {
-  vorgangId: string;
+  /** `null` = Rechnung ohne Auftrag (freie/manuelle Rechnung). */
+  vorgangId: string | null;
   invoiceId: string;
   /** Prefill kind from the current draft intent when available. */
   draftIntent?: CommunicationIntent;
@@ -109,6 +110,12 @@ export function DunningDocumentationPanel({
 
     setRecords(getDunningDocumentationsForInvoice(vorgangId, invoiceId));
     onDocumented?.(result.documentation);
+    if (result.alreadyDocumented) {
+      /* Dieselbe Übergabe war schon festgehalten — kein zweiter Eintrag, aber eine ehrliche Rückmeldung. */
+      setErrorKey('dunning.doc.alreadyDocumented');
+      setMode('closed');
+      return;
+    }
     if (!getLastPersistSuccess()) {
       setErrorKey('persist.failed.userAction');
       setMode('closed');

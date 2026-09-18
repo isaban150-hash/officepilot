@@ -62,8 +62,9 @@ export function parseContextRefFromSearchParams(
   if (context === 'vorgang' && id) {
     return { type: 'vorgang', id };
   }
-  if (context === 'invoice' && id && vorgangId) {
-    return { type: 'invoice', id, vorgangId };
+  if (context === 'invoice' && id) {
+    /* PAYMENT-REMINDER-01 — ohne vorgangId ist es die Rechnung ohne Auftrag. */
+    return vorgangId ? { type: 'invoice', id, vorgangId } : { type: 'invoice', id };
   }
   if (context === 'expense' && id) {
     return { type: 'expense', id };

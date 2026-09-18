@@ -664,15 +664,28 @@ describe('MANUAL-INVOICE-UI-01B2 — globale Rechnungsdetailseite', () => {
     expect(findInvoiceLocatorById(FREE_INVOICE_ID)?.vorgangId).toBeNull();
   });
 
-  it('P28/K: ohne Vorgang keine Kommunikationsaktion mit Fake-ID; Storno seit NORMAL-INVOICE-CANCELLATION-01B erlaubt', async () => {
+  /*
+   * PAYMENT-REMINDER-WITHOUT-VORGANG-01 — die freie Rechnung fuehrt jetzt in
+   * denselben Kommunikationsweg; der Kontext kommt aus ihrem eigenen Snapshot.
+   * Unveraendert gilt: keine erfundene Auftragskennung im Link.
+   */
+  it('P28/K: ohne Vorgang fuehrt die Kommunikationsaktion ohne Fake-ID in den Kommunikationsbereich; Storno erlaubt', async () => {
     mounted = renderAt(buildGlobalInvoiceDetailPath(FREE_INVOICE_ID));
     await settle();
-    expect(mounted.container.textContent).not.toContain('Nachricht schreiben');
-    expect(q(mounted, 'invoice-communication-unavailable')).not.toBeNull();
+    expect(mounted.container.textContent).toContain('Nachricht schreiben');
+    expect(q(mounted, 'invoice-write-message')).not.toBeNull();
+    expect(q(mounted, 'invoice-communication-unavailable')).toBeNull();
     // 01B — die normale freie Rechnung ist stornierbar (Server: vorgang_id null ⇒ rechnung).
     expect(q(mounted, 'invoice-cancel-action')).not.toBeNull();
     expand(mounted);
-    expect(q(mounted, 'invoice-communication')).toBeNull();
+    const panel = q(mounted, 'invoice-communication');
+    expect(panel).not.toBeNull();
+    const hrefs = Array.from(panel!.querySelectorAll('a')).map((a) => a.getAttribute('href') ?? '');
+    expect(hrefs.length).toBeGreaterThan(0);
+    for (const href of hrefs) {
+      expect(href).toContain(`context=invoice&id=${FREE_INVOICE_ID}`);
+      expect(href).not.toContain('vorgangId');
+    }
     expect(mounted.container.innerHTML).not.toContain('vorgangId=null');
     expect(mounted.container.innerHTML).not.toContain('/vorgaenge/null');
   });

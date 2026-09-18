@@ -12,6 +12,12 @@ import {
 import { paymentStatusTone } from '../../services/ui/statusTone';
 import { isInvoiceCancelled } from '../../services/invoicePaymentService';
 import { buildInvoiceReachPath } from '../../services/invoiceNavigation';
+import { buildKommunikationPath } from '../communication/communicationNavigation';
+import {
+  canDocumentDunningForInvoice,
+  formatDunningKindLabel,
+  getLatestDunningDocumentation,
+} from '../../services/dunningDocumentationService';
 import type { InvoiceOverviewItem } from '../../services/invoiceOverviewService';
 import type { VorgangInvoice } from '../../types/models';
 import type { TranslationKey } from '../../i18n';
@@ -64,6 +70,27 @@ export function InvoiceOverviewCard({
 
   const openInvoice = () => {
     navigate(`${detailPath}?from=overview`);
+  };
+
+  /*
+   * PAYMENT-REMINDER-WITHOUT-VORGANG-01 — eine Zeile, eine zusätzliche
+   * Handlung: Bei überfälligen Rechnungen steht „Erinnern" sichtbar neben der
+   * Zahlungserfassung, sonst liegt sie im vorhandenen „Mehr"-Menü. Der
+   * dokumentierte Mahnstand erscheint als Kennzahl in der Fußzeile — kein
+   * zusätzlicher Knopf, keine zweite Kartenebene. Ohne Auftrag entfällt nur
+   * der `vorgangId`-Parameter im Weg zur Kommunikation.
+   */
+  const canRemind = canDocumentDunningForInvoice(invoice);
+  const isOverdue = paymentSummary.status === 'ueberfaellig';
+  const latestDunning = getLatestDunningDocumentation(currentItem.vorgangId, invoice.id);
+  const remind = () => {
+    navigate(
+      buildKommunikationPath(
+        currentItem.vorgangId
+          ? { type: 'invoice', id: invoice.id, vorgangId: currentItem.vorgangId }
+          : { type: 'invoice', id: invoice.id },
+      ),
+    );
   };
 
   const triggerPrint = () => {
@@ -148,6 +175,12 @@ export function InvoiceOverviewCard({
                 <dt>{translate('payment.workflowStatus')}</dt>
                 <dd>{workflowStatusLabel(invoice.status, translate)}</dd>
               </div>
+              {latestDunning ? (
+                <div data-testid="invoice-overview-card-dunning-status">
+                  <dt>{translate('invoice.dunning.statusLabel')}</dt>
+                  <dd>{formatDunningKindLabel(latestDunning.kind, translate)}</dd>
+                </div>
+              ) : null}
             </dl>
             <div className="invoice-overview-card__actions" data-testid="invoice-overview-card-actions">
               <Button type="button" size="sm" onClick={openInvoice} data-testid="invoice-overview-card-open">
@@ -164,12 +197,33 @@ export function InvoiceOverviewCard({
                   {translate('payment.recordShort')}
                 </Button>
               )}
+              {canRemind && isOverdue ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={remind}
+                  data-testid="invoice-overview-card-remind"
+                >
+                  {translate('invoice.dunning.remindShort')}
+                </Button>
+              ) : null}
               <DropdownMenu
                 testId="invoice-overview-card-more"
                 ariaLabel={translate('invoice.moreActions')}
                 align="end"
                 trigger={<span>{translate('invoice.moreActions')}</span>}
                 items={[
+                  ...(canRemind && !isOverdue
+                    ? [
+                        {
+                          id: 'remind',
+                          label: translate('invoice.dunning.writeReminder'),
+                          onSelect: remind,
+                          testId: 'invoice-overview-card-remind-menu',
+                        },
+                      ]
+                    : []),
                   {
                     id: 'print',
                     label: translate('invoice.print'),

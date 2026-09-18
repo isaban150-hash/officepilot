@@ -5,6 +5,7 @@ import {
 } from './invoicePaymentService';
 import { isValidInvoiceSentVia, INVOICE_SENT_VIA_OPTIONS } from './invoiceSentService';
 import { getVorgangInvoice } from './vorgangService';
+import type { VorgangInvoice } from '../types/models';
 import type {
   DocumentDunningInput,
   DunningDeliveryMethod,
@@ -21,7 +22,16 @@ export const DUNNING_DOCUMENTATION_KINDS: readonly DunningDocumentationKind[] = 
 export const DUNNING_DELIVERY_METHODS = INVOICE_SENT_VIA_OPTIONS;
 
 export type DocumentDunningResult =
-  | { ok: true; documentation: InvoiceDunningDocumentation }
+  | {
+      ok: true;
+      documentation: InvoiceDunningDocumentation;
+      /**
+       * PAYMENT-REMINDER-01 — derselbe Vorgang (Rechnung, Art, Datum, Weg) war
+       * bereits dokumentiert. Es entsteht kein zweiter Eintrag; der Nutzer
+       * erfährt, dass seine Angabe schon festgehalten ist.
+       */
+      alreadyDocumented?: boolean;
+    }
   | {
       ok: false;
       reason:
@@ -71,25 +81,29 @@ export function setDunningDocumentationStoreForTests(
   documentations = items.map(cloneDoc);
 }
 
+/** `null` ist die Rechnung ohne Auftrag; Bestandsdaten behalten ihre Auftragskennung. */
+function sameScope(doc: InvoiceDunningDocumentation, vorgangId: string | null): boolean {
+  return (doc.vorgangId ?? null) === (vorgangId ?? null);
+}
+
 export function getDunningDocumentationsForInvoice(
-  vorgangId: string,
+  vorgangId: string | null,
   invoiceId: string,
 ): InvoiceDunningDocumentation[] {
   return documentations
-    .filter((doc) => doc.vorgangId === vorgangId && doc.invoiceId === invoiceId)
+    .filter((doc) => sameScope(doc, vorgangId) && doc.invoiceId === invoiceId)
     .sort((a, b) => b.documentedAt.localeCompare(a.documentedAt) || b.createdAt.localeCompare(a.createdAt))
     .map(cloneDoc);
 }
 
 export function getDunningDocumentationsByInvoiceNumber(
-  vorgangId: string,
+  vorgangId: string | null,
   invoiceNumber: string,
 ): InvoiceDunningDocumentation[] {
   const norm = invoiceNumber.trim().toLowerCase();
   return documentations
     .filter(
-      (doc) =>
-        doc.vorgangId === vorgangId && doc.invoiceNumber.trim().toLowerCase() === norm,
+      (doc) => sameScope(doc, vorgangId) && doc.invoiceNumber.trim().toLowerCase() === norm,
     )
     .sort((a, b) => b.documentedAt.localeCompare(a.documentedAt) || b.createdAt.localeCompare(a.createdAt))
     .map(cloneDoc);
@@ -110,12 +124,44 @@ export function resolveDocumentedDunningLevelFromRecords(
   return level;
 }
 
+/** Dokumentierte Mahnstufe einer Rechnung (0 = noch keine Erinnerung dokumentiert). */
+export function getDocumentedDunningLevel(
+  vorgangId: string | null,
+  invoiceId: string,
+): 0 | 1 | 2 {
+  return resolveDocumentedDunningLevelFromRecords(
+    getDunningDocumentationsForInvoice(vorgangId, invoiceId),
+  );
+}
+
+/** Die jüngste dokumentierte Erinnerung/Mahnung — für die Anzeige am Beleg. */
+export function getLatestDunningDocumentation(
+  vorgangId: string | null,
+  invoiceId: string,
+): InvoiceDunningDocumentation | undefined {
+  return getDunningDocumentationsForInvoice(vorgangId, invoiceId)[0];
+}
+
+/**
+ * PAYMENT-REMINDER-01 — darf zu dieser Rechnung überhaupt gemahnt werden?
+ * Dieselben Regeln wie `documentDunningDelivery`, damit die Oberfläche keine
+ * Aktion anbietet, die der Dienst anschließend ablehnt: nur eine versendete,
+ * nicht stornierte Rechnung mit offenem Betrag. Entwurf/vorbereitet, bezahlt
+ * und storniert sind nicht mahnbar.
+ */
+export function canDocumentDunningForInvoice(invoice: VorgangInvoice): boolean {
+  if (invoice.status === 'entwurf' || invoice.status === 'vorbereitet') return false;
+  if (!isExpectingPayment(invoice)) return false;
+  const summary = calculatePaymentSummary(invoice);
+  return summary.openAmount > 0 && summary.status !== 'bezahlt';
+}
+
 /**
  * Document that a payment reminder or dunning notice was handed to the customer.
  * Does not send email/post — records user confirmation only.
  */
 export function documentDunningDelivery(
-  vorgangId: string,
+  vorgangId: string | null,
   invoiceId: string,
   input: DocumentDunningInput,
 ): DocumentDunningResult {
@@ -148,6 +194,24 @@ export function documentDunningDelivery(
 
   if (!isValidInvoiceSentVia(input.deliveryMethod)) {
     return { ok: false, reason: 'invalid_delivery' };
+  }
+
+  /*
+   * Schutz gegen unbeabsichtigte Duplikate: Dieselbe Übergabe (Rechnung, Art,
+   * Datum, Weg) zweimal bestätigt — etwa durch Doppelklick oder erneutes
+   * Öffnen des Dialogs — erzeugt keinen zweiten Eintrag. Eine bewusst andere
+   * Angabe (anderes Datum, andere Art, anderer Weg) bleibt eine eigene Zeile.
+   */
+  const existing = documentations.find(
+    (doc) =>
+      sameScope(doc, vorgangId) &&
+      doc.invoiceId === invoiceId &&
+      doc.kind === input.kind &&
+      doc.documentedAt === documentedAt &&
+      doc.deliveryMethod === input.deliveryMethod,
+  );
+  if (existing) {
+    return { ok: true, documentation: cloneDoc(existing), alreadyDocumented: true };
   }
 
   const documentation: InvoiceDunningDocumentation = {

@@ -2550,6 +2550,13 @@ const deLegacy = {
   'dunning.doc.error.notSent':
     'Nur versendete Rechnungen mit offenem Betrag können dokumentiert werden.',
   'dunning.doc.error.failed': 'Übergabe konnte nicht gespeichert werden.',
+  /* PAYMENT-REMINDER-WITHOUT-VORGANG-01 */
+  'dunning.doc.alreadyDocumented': 'Diese Übergabe war bereits dokumentiert. Es wurde kein zweiter Eintrag angelegt.',
+  'invoice.dunning.statusLabel': 'Mahnstand',
+  'invoice.dunning.documented': '{kind} dokumentiert am {date}',
+  'invoice.dunning.none': 'Noch keine Zahlungserinnerung dokumentiert.',
+  'invoice.dunning.writeReminder': 'Zahlungserinnerung schreiben',
+  'invoice.dunning.remindShort': 'Erinnern',
 
   'payment.summaryTitle': 'Zahlungsstand',
   'payment.historyTitle': 'Zahlungshistorie',
@@ -5425,6 +5432,15 @@ const trCustomerDecision: Partial<Record<keyof typeof de, string>> = {
 };
 
 const tr: Partial<Record<keyof typeof de, string>> = {
+  /* PAYMENT-REMINDER-WITHOUT-VORGANG-01 — Mahnstand ohne Auftrag */
+  'dunning.doc.alreadyDocumented': 'Bu teslim zaten belgelenmişti. İkinci bir kayıt oluşturulmadı.',
+  'invoice.dunning.statusLabel': 'Hatırlatma durumu',
+  'invoice.dunning.documented': '{kind} {date} tarihinde belgelendi',
+  'invoice.dunning.none': 'Henüz ödeme hatırlatması belgelenmedi.',
+  'invoice.dunning.writeReminder': 'Ödeme hatırlatması yaz',
+  'invoice.dunning.remindShort': 'Hatırlat',
+  'dunning.doc.kind.payment_reminder': 'Ödeme hatırlatması',
+  'dunning.doc.kind.dunning_notice': 'İhtar',
   /* OFFICEPILOT-V1-A — Gider iptali / güvenli düzenleme */
   'expense.cancel': 'Gideri iptal et',
   'expense.cancel.intro': 'Gider silinmez, iptal edilmiş olarak tutulur. Artık açık sayılmaz ve aylık dosyada iptal olarak görünür.',
@@ -6268,6 +6284,15 @@ const bgCustomerDecision: Partial<Record<keyof typeof de, string>> = {
 };
 
 const bg: Partial<Record<keyof typeof de, string>> = {
+  /* PAYMENT-REMINDER-WITHOUT-VORGANG-01 — напомняне без поръчка */
+  'dunning.doc.alreadyDocumented': 'Това предаване вече е документирано. Не е създаден втори запис.',
+  'invoice.dunning.statusLabel': 'Състояние на напомнянето',
+  'invoice.dunning.documented': '{kind}, документирано на {date}',
+  'invoice.dunning.none': 'Още няма документирано напомняне за плащане.',
+  'invoice.dunning.writeReminder': 'Напиши напомняне за плащане',
+  'invoice.dunning.remindShort': 'Напомни',
+  'dunning.doc.kind.payment_reminder': 'Напомняне за плащане',
+  'dunning.doc.kind.dunning_notice': 'Покана за плащане',
   /* OFFICEPILOT-V1-A — Сторно на разход / безопасно редактиране */
   'expense.cancel': 'Сторниране на разхода',
   'expense.cancel.intro': 'Разходът не се изтрива, а се води като сторниран. Вече не се брои за открит и се показва в месечната папка като сторно.',

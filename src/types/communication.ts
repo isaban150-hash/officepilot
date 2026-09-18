@@ -71,7 +71,13 @@ export interface CommunicationInvoiceSummary {
   amount: number;
   openAmount: number;
   dueDate?: string;
+  /** Fehlt bei der Rechnung ohne Auftrag — kein Platzhaltertext. */
   vorgangTitle?: string;
+  /** PAYMENT-REMINDER-01 — bereits gezahlter Betrag; 0 wenn nichts gezahlt ist. */
+  paidAmount: number;
+  issueDate?: string;
+  currency?: string;
+  customerName?: string;
 }
 
 export interface CommunicationExpenseSummary {

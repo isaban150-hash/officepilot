@@ -11,6 +11,12 @@ import { InvoicePaymentHistory } from '../components/invoice/InvoicePaymentHisto
 import { InvoicePaymentSummary } from '../components/invoice/InvoicePaymentSummary';
 import { DetailExperienceCard } from '../components/detail/DetailExperienceCard';
 import { CommunicationIntegrationPanel } from '../components/communication/CommunicationIntegrationPanel';
+import { buildKommunikationPath } from '../components/communication/communicationNavigation';
+import {
+  canDocumentDunningForInvoice,
+  formatDunningKindLabel,
+  getLatestDunningDocumentation,
+} from '../services/dunningDocumentationService';
 import { INVOICE_COMMUNICATION_BUTTON_KEYS } from '../components/communication/communicationNavigation';
 import { Button } from '../components/ui/Button';
 import { ShowMoreSection } from '../components/ui/ShowMoreSection';
@@ -366,6 +372,20 @@ export function InvoiceDetailPage() {
   const statusKey = `payment.status.${paymentSummary.status}` as TranslationKey;
 
   /*
+   * PAYMENT-REMINDER-WITHOUT-VORGANG-01 — Mahnen hängt an der Rechnung, nicht
+   * am Auftrag. Die Aktion erscheint nur, wenn der Dienst sie auch annehmen
+   * würde (versendet, nicht storniert, offener Betrag); der dokumentierte
+   * Stand steht beim Zahlungsstand, damit er nach der Dokumentation sichtbar
+   * bleibt. Der Weg führt in den bestehenden Kommunikationsbereich — ohne
+   * Auftrag entfällt lediglich der `vorgangId`-Parameter.
+   */
+  const canRemind = canDocumentDunningForInvoice(invoice);
+  const latestDunning = getLatestDunningDocumentation(vorgangId ?? null, invoice.id);
+  const reminderPath = buildKommunikationPath(
+    vorgangId ? { type: 'invoice', id: invoice.id, vorgangId } : { type: 'invoice', id: invoice.id },
+  );
+
+  /*
    * FINAL-INVOICE-CANCELLATION-UI-01A — wann die Stornoaktion überhaupt
    * erscheint. Drei Bedingungen, alle drei notwendig; die endgültige Prüfung
    * bleibt beim Server.
@@ -562,26 +582,18 @@ export function InvoiceDetailPage() {
         </Button>
       )}
       {/*
-        * MANUAL-INVOICE-UI-01B2 — der Kommunikationskontext einer Rechnung
-        * braucht fachlich einen Vorgang (`communicationContextService`). Ohne
-        * ihn wird die Aktion nicht mit einer erfundenen Kennung aufgerufen,
-        * sondern bleibt weg; E-Mail-Versand ist ein späterer Block.
+        * PAYMENT-REMINDER-WITHOUT-VORGANG-01 — auch die Rechnung ohne Auftrag
+        * führt in den Kommunikationsbereich; ihr Kontext kommt aus dem
+        * eigenen Rechnungs-/Kundensnapshot. Kein künstlicher Auftrag.
         */}
-      {isFreeInvoice ? (
-        <p className="hint-text" data-testid="invoice-communication-unavailable">
-          {translate('invoice.communicationNeedsVorgang')}
-        </p>
-      ) : (
-        <Button
-          variant="outline"
-          fullWidth
-          onClick={() =>
-            navigate(`/kommunikation?context=invoice&id=${invoice.id}&vorgangId=${vorgangId}`)
-          }
-        >
-          {translate('detail.action.writeMessage')}
-        </Button>
-      )}
+      <Button
+        variant="outline"
+        fullWidth
+        onClick={() => navigate(reminderPath)}
+        data-testid="invoice-write-message"
+      >
+        {translate('detail.action.writeMessage')}
+      </Button>
       {/*
         * FINAL-INVOICE-CANCELLATION-UI-01A — Stornierung, bewusst als letzte
         * Aktion und optisch als destruktiv gekennzeichnet.
@@ -626,17 +638,11 @@ export function InvoiceDetailPage() {
         </p>
       )}
 
-      {!isFreeInvoice && (
-        <CommunicationIntegrationPanel
-          contextRef={{
-            type: 'invoice',
-            id: invoice.id,
-            vorgangId,
-          }}
-          buttonKeys={INVOICE_COMMUNICATION_BUTTON_KEYS}
-          testIdPrefix="invoice"
-        />
-      )}
+      <CommunicationIntegrationPanel
+        contextRef={vorgangId ? { type: 'invoice', id: invoice.id, vorgangId } : { type: 'invoice', id: invoice.id }}
+        buttonKeys={INVOICE_COMMUNICATION_BUTTON_KEYS}
+        testIdPrefix="invoice"
+      />
 
       <p className="hint-text">{translate('invoice.readOnlyHint')}</p>
     </>
@@ -692,6 +698,28 @@ export function InvoiceDetailPage() {
         <div className="work-detail-grid__side">
         <DetailSection title={translate('invoiceDetail.section.payment')} surface testId="invoice-detail-section-payment">
           <InvoicePaymentSummary invoice={invoice} translate={translate} />
+          {/* PAYMENT-REMINDER-01 — dokumentierter Mahnstand direkt beim Zahlungsstand, nicht versteckt. */}
+          <div className="data-row" data-testid="invoice-dunning-status">
+            <span className="data-row__label">{translate('invoice.dunning.statusLabel')}</span>
+            <span className="data-row__value" data-dunning-kind={latestDunning?.kind ?? 'none'}>
+              {latestDunning
+                ? translate('invoice.dunning.documented')
+                    .replace('{kind}', formatDunningKindLabel(latestDunning.kind, translate))
+                    .replace('{date}', formatInvoiceDate(latestDunning.documentedAt))
+                : translate('invoice.dunning.none')}
+            </span>
+          </div>
+          {canRemind ? (
+            <Button
+              type="button"
+              variant="outline"
+              fullWidth
+              onClick={() => navigate(reminderPath)}
+              data-testid="invoice-dunning-remind"
+            >
+              {translate('invoice.dunning.writeReminder')}
+            </Button>
+          ) : null}
           <InvoicePaymentHistory
             invoice={invoice}
             translate={translate}

@@ -50,7 +50,7 @@ interface CommunicationResultCardProps {
   onRemindLater?: () => void;
   onMarkNoReplyNeeded?: () => void;
   /** Invoice context for documenting reminder/dunning handoff. */
-  dunningContext?: { vorgangId: string; invoiceId: string } | null;
+  dunningContext?: { vorgangId: string | null; invoiceId: string } | null;
   onDunningDocumented?: (doc: InvoiceDunningDocumentation) => void;
   aiConfigured: boolean;
   aiLoading: boolean;

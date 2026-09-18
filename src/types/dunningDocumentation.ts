@@ -7,7 +7,11 @@ export type DunningDeliveryMethod = InvoiceSentVia;
 
 export interface InvoiceDunningDocumentation {
   id: string;
-  vorgangId: string;
+  /**
+   * PAYMENT-REMINDER-WITHOUT-VORGANG-01 — `null` ist die Rechnung ohne Auftrag
+   * (freie/manuelle Rechnung). Bestandsdaten tragen weiterhin die Auftragskennung.
+   */
+  vorgangId: string | null;
   invoiceId: string;
   invoiceNumber: string;
   kind: DunningDocumentationKind;

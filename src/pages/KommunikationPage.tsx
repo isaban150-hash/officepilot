@@ -179,9 +179,13 @@ export function KommunikationPage() {
     }
     showToast(translate('dunning.doc.savedToast'));
   };
+  /*
+   * PAYMENT-REMINDER-WITHOUT-VORGANG-01 — die Mahndokumentation hängt an der
+   * Rechnung, nicht am Auftrag. `vorgangId: null` ist die Rechnung ohne Auftrag.
+   */
   const dunningContext =
-    contextRef.type === 'invoice' && contextRef.id && contextRef.vorgangId
-      ? { vorgangId: contextRef.vorgangId, invoiceId: contextRef.id }
+    contextRef.type === 'invoice' && contextRef.id
+      ? { vorgangId: contextRef.vorgangId ?? null, invoiceId: contextRef.id }
       : null;
   const handleAiEnhance = async () => {
     if (!result?.drafts || aiLoading) return;

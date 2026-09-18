@@ -255,40 +255,70 @@ export function buildCommunicationContext(
     }
   }
 
-  if (ref.type === 'invoice' && ref.id && ref.vorgangId) {
-    const invoice = getVorgangInvoice(ref.vorgangId, ref.id);
-    const vorgang = getVorgangById(ref.vorgangId);
-    if (invoice && vorgang) {
-      const summary = calculatePaymentSummary(invoice);
-      invoiceSummary = {
-        id: invoice.id,
-        number: invoice.number,
-        amount: invoice.amount,
-        openAmount: summary.openAmount,
-        dueDate: invoice.paymentDueDate,
-        vorgangTitle: vorgang.title,
+  /*
+   * PAYMENT-REMINDER-WITHOUT-VORGANG-01 — eine Rechnung trägt ihren
+   * Kommunikationskontext selbst: Kunde, Nummer, Datum, Fälligkeit, Beträge
+   * stehen im eingefrorenen Rechnungs-/Kundensnapshot. Der Auftrag ist eine
+   * **Ergänzung**, keine Voraussetzung: Fehlt er (freie/manuelle Rechnung),
+   * entfällt nur die Auftragszeile — nichts wird erfunden und kein Auftrag
+   * künstlich erzeugt. `ref.vorgangId` fehlt genau dann.
+   */
+  if (ref.type === 'invoice' && ref.id) {
+    const scopeVorgangId = ref.vorgangId ?? null;
+    const invoice = getVorgangInvoice(scopeVorgangId, ref.id);
+    const vorgang = scopeVorgangId ? getVorgangById(scopeVorgangId) : undefined;
+    if (!invoice) {
+      return {
+        ref,
+        companyName: profile.companyName,
+        facts,
+        relevanceAllowed: false,
+        relevanceBlockReason: 'communication.block.invoiceNotFound',
+        disclaimer: COMMUNICATION_DISCLAIMER,
       };
+    }
+    const summary = calculatePaymentSummary(invoice);
+    const customerName = invoice.customerSnapshot?.name?.trim() || vorgang?.customer || '';
+    invoiceSummary = {
+      id: invoice.id,
+      number: invoice.number,
+      amount: invoice.amount,
+      openAmount: summary.openAmount,
+      paidAmount: summary.paidAmount,
+      dueDate: invoice.paymentDueDate,
+      issueDate: invoice.issueDate ?? invoice.date,
+      /* Rechnungen tragen keine eigene Waehrung; sie kommt aus dem Firmenprofil (leer = keine Angabe). */
+      currency: profile.currency?.trim() || undefined,
+      customerName: customerName || undefined,
+      vorgangTitle: vorgang?.title,
+    };
+    if (vorgang) {
       vorgangSummary = {
         id: vorgang.id,
         title: vorgang.title,
         customer: vorgang.customer,
         baustelle: vorgang.baustelle,
       };
-      recipient = {
-        name: invoice.customerSnapshot?.name ?? vorgang.customer,
-        organization: invoice.customerSnapshot?.name ?? vorgang.customer,
-      };
-      subject = `Rechnung ${invoice.number}`;
-      facts.push({
-        key: 'invoice:number',
-        value: invoice.number,
-        source: 'system',
-      });
-      facts.push({
-        key: 'invoice:openAmount',
-        value: String(summary.openAmount),
-        source: 'system',
-      });
+    }
+    if (customerName) {
+      recipient = { name: customerName, organization: customerName };
+    }
+    subject = `Rechnung ${invoice.number}`;
+    facts.push({
+      key: 'invoice:number',
+      value: invoice.number,
+      source: 'system',
+    });
+    facts.push({
+      key: 'invoice:openAmount',
+      value: String(summary.openAmount),
+      source: 'system',
+    });
+    if (summary.paidAmount > 0) {
+      facts.push({ key: 'invoice:paidAmount', value: String(summary.paidAmount), source: 'system' });
+    }
+    if (invoice.paymentDueDate) {
+      facts.push({ key: 'invoice:dueDate', value: invoice.paymentDueDate, source: 'system' });
     }
   }
 
