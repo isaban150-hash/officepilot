@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { ExpenseAllocationDialog } from '../components/expenses/ExpenseAllocationDialog';
 import { ExpenseCancelDialog } from '../components/expenses/ExpenseCancelDialog';
 import { ExpenseForm } from '../components/expenses/ExpenseForm';
 import { ExpensePaymentForm } from '../components/expenses/ExpensePaymentForm';
@@ -23,7 +24,14 @@ import {
   isExpensePayable,
   removeExpensePayment,
 } from '../services/expensePaymentService';
-import { deleteExpense, getExpenseById, hasBookedExpensePayments } from '../services/expenseService';
+import {
+  deleteExpense,
+  getExpenseById,
+  getUnallocatedAmount,
+  hasBookedExpensePayments,
+  removeExpenseAllocation,
+} from '../services/expenseService';
+import { formatPaymentCurrency } from '../services/expensePaymentService';
 import { getInboxItemById } from '../services/inboxService';
 import type { Expense } from '../types/expense';
 import type { TranslationKey } from '../i18n';
@@ -47,6 +55,7 @@ export function AusgabeDetailPage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [showAllocationDialog, setShowAllocationDialog] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -135,6 +144,22 @@ export function AusgabeDetailPage() {
    */
   const canCancel = expense.status === 'gebucht' && !cancelled;
   const paymentsBooked = hasBookedExpensePayments(expense);
+  /*
+   * ORDER-COST-ALLOCATION-01B — der Auftragsbezug der Ausgabe. Eine stornierte
+   * Ausgabe behält ihre Zuordnung als Historie, wird aber nicht mehr geändert.
+   */
+  const allocation = (expense.allocations ?? [])[0];
+  const unallocated = getUnallocatedAmount(expense);
+  const handleRemoveAllocation = () => {
+    if (!allocation) return;
+    const result = removeExpenseAllocation(expense.id, allocation.vorgangId);
+    if (!result.success) {
+      showToast(translate(result.errorKey as TranslationKey));
+      return;
+    }
+    setExpense(result.expense);
+    showToast(translate('expense.allocation.removed'));
+  };
   const nextActionKey: TranslationKey = cancelled
     ? 'expense.nextAction.cancelled'
     : paymentSummary.status === 'bezahlt'
@@ -224,6 +249,27 @@ export function AusgabeDetailPage() {
           ) : null}
           <DataRow label={translate('expense.fieldSupplier')} value={expense.supplierName} />
           <DataRow label={translate('expense.fieldCategory')} value={translate(categoryKey)} />
+          {/* V1-B2/01B — Auftragsbezug: Name des Auftrags, nie eine technische Kennung. */}
+          <DataRow
+            label={translate('expense.allocation.label')}
+            value={
+              allocation ? (
+                <span data-testid="ausgabe-allocation-value">
+                  <Link to={`/vorgaenge/${allocation.vorgangId}`}>{allocation.vorgangTitle}</Link>
+                  {' · '}
+                  {formatPaymentCurrency(allocation.amount)}
+                </span>
+              ) : (
+                <span data-testid="ausgabe-allocation-none">{translate('expense.allocation.none')}</span>
+              )
+            }
+          />
+          {allocation && unallocated > 0 ? (
+            <DataRow
+              label={translate('expense.allocation.unallocated').split(':')[0]}
+              value={formatPaymentCurrency(unallocated)}
+            />
+          ) : null}
           <DataRow
             label={translate('expense.fieldStatus')}
             value={<Badge tone={expenseStatusTone(expense.status)}>{translate(statusKey)}</Badge>}
@@ -278,6 +324,20 @@ export function AusgabeDetailPage() {
           </Button>
         ) : null}
         {/* V1-A — Storno sekundär (outline), bestätigt im Dialog; nie die Hauptaktion. */}
+        {!cancelled ? (
+          <Button
+            variant="outline"
+            onClick={() => setShowAllocationDialog(true)}
+            data-testid="ausgabe-allocation-assign"
+          >
+            {translate(allocation ? 'expense.allocation.change' : 'expense.allocation.assign')}
+          </Button>
+        ) : null}
+        {!cancelled && allocation ? (
+          <Button variant="ghost" onClick={handleRemoveAllocation} data-testid="ausgabe-allocation-remove">
+            {translate('expense.allocation.remove')}
+          </Button>
+        ) : null}
         {canCancel ? (
           <Button
             variant="outline"
@@ -311,6 +371,17 @@ export function AusgabeDetailPage() {
         onSaved={handlePaymentSaved}
         translate={translate}
       />
+      {!cancelled ? (
+        <ExpenseAllocationDialog
+          expense={expense}
+          open={showAllocationDialog}
+          onClose={() => setShowAllocationDialog(false)}
+          onSaved={(updated) => {
+            setExpense(updated);
+            showToast(translate('expense.allocation.saved'));
+          }}
+        />
+      ) : null}
       {canCancel ? (
         <ExpenseCancelDialog
           expense={expense}

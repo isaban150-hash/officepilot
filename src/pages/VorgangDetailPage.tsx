@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { OrderPositionForm } from '../components/vorgang/OrderPositionForm';
+import { VorgangCostPanel } from '../components/vorgang/VorgangCostPanel';
 import { DetailExperienceCard } from '../components/detail/DetailExperienceCard';
 import { Badge, Card, CardMeta, CardTitle, DataRow } from '../components/ui/Card';
 import { ShowMoreSection } from '../components/ui/ShowMoreSection';
@@ -1011,6 +1012,9 @@ export function VorgangDetailPage() {
       </div>
 
       <div {...vorgangSectionPanelProps('invoices', activeSection)}>
+        {/* ORDER-COST-ALLOCATION-01B — Abgerechnet, zugeordnete Kosten, Verbleibt. */}
+        <VorgangCostPanel vorgangId={vorgang.id} translate={translate} />
+
         <VorgangBillingPreparationPanel vorgang={vorgang} translate={translate} />
 
         <section

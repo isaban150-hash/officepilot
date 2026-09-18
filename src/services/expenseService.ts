@@ -22,6 +22,8 @@ import {
   normalizeExpense,
 } from './expenseNormalize';
 import { normalizeExpensePaymentFields } from './expensePaymentCalculations';
+import { fromCents, toCents } from './invoiceMoney';
+import { getVorgangById } from './vorgangService';
 import {
   recordExpensePayment,
   removeExpensePayment,
@@ -29,6 +31,7 @@ import {
 import { EXPENSE_CATEGORIES } from './expenseCategoryMapping';
 import type {
   Expense,
+  ExpenseAllocation,
   ExpenseCategory,
   ExpenseInput,
   ExpenseSummary,
@@ -225,6 +228,18 @@ export function updateExpense(id: string, changes: Partial<ExpenseInput>): Expen
   ) {
     return { success: false, errorKey: 'expense.edit.amountLockedAfterPayment' };
   }
+  /*
+   * ORDER-COST-ALLOCATION-01B — ein kleinerer Nettobetrag darf vorhandene
+   * Zuordnungen nicht ungültig machen. Statt sie still zu kürzen, lehnt der
+   * Dienst die Änderung ab; der Nutzer entscheidet, welche Zuordnung weicht.
+   */
+  const allocatedCents = allocationCents(current.allocations ?? []);
+  if (allocatedCents > 0 && changes.netAmount !== undefined) {
+    const nextNetCents = toCents(changes.netAmount);
+    if (!Number.isFinite(nextNetCents) || nextNetCents < allocatedCents) {
+      return { success: false, errorKey: 'expense.allocation.editBelowAllocated' };
+    }
+  }
 
   const merged: ExpenseInput = {
     title: changes.title ?? current.title,
@@ -321,6 +336,111 @@ export function cancelExpense(id: string, reason: string): ExpenseMutationResult
   replaceExpenseInStore(id, cancelled);
   persistAll();
   return { success: true, expense: getExpenseById(id)! };
+}
+
+/* ------------------------------------------------------------------------ */
+/* ORDER-COST-ALLOCATION-01B — Auftragszuordnung einer Ausgabe                */
+/* ------------------------------------------------------------------------ */
+
+/**
+ * Die Zuordnung ist eine rein betriebliche Auswertung: Sie verändert weder
+ * Steuerbeträge noch Kategorie, Zahlungen, Monatsmappe oder Storno-Belege.
+ * Sie lebt im vorhandenen Feld `Expense.allocations` und reist über denselben
+ * Persistenz-, Fingerprint- und Cloud-Weg wie der Beleg selbst.
+ *
+ * Verbindliche Regeln (fail-closed, keine stillen Reparaturen):
+ *   - Betrag > 0, in Cent gerechnet
+ *   - Summe aller Zuordnungen ≤ Nettobetrag des Belegs (Teilzuordnung erlaubt)
+ *   - höchstens eine Zuordnung je Auftrag; erneutes Zuordnen **ersetzt** sie
+ *   - der Auftrag muss existieren
+ *   - eine stornierte Ausgabe wird nicht mehr zugeordnet oder geändert
+ *   - vorhandene Zuordnungen anderer Aufträge bleiben unangetastet
+ */
+export function getExpenseAllocations(expenseId: string): ExpenseAllocation[] {
+  const expense = getExpenseFromStoreById(expenseId);
+  if (!expense || !isEntitySyncActive(expense)) return [];
+  return (expense.allocations ?? []).map((allocation) => ({ ...allocation }));
+}
+
+function allocationCents(allocations: readonly ExpenseAllocation[]): number {
+  return allocations.reduce((sum, allocation) => {
+    const cents = toCents(allocation.amount);
+    return Number.isFinite(cents) ? sum + cents : sum;
+  }, 0);
+}
+
+/** Summe aller Zuordnungen eines Belegs — für Anzeige und Prüfung. */
+export function getAllocatedAmount(expense: Expense): number {
+  return fromCents(allocationCents(expense.allocations ?? []));
+}
+
+export function getUnallocatedAmount(expense: Expense): number {
+  return fromCents(Math.max(0, toCents(expense.netAmount) - allocationCents(expense.allocations ?? [])));
+}
+
+export interface AssignExpenseToVorgangInput {
+  vorgangId: string;
+  /** Fehlt der Betrag, wird der noch nicht zugeordnete Rest verwendet. */
+  amount?: number;
+}
+
+export function assignExpenseToVorgang(
+  expenseId: string,
+  input: AssignExpenseToVorgangInput,
+): ExpenseMutationResult {
+  const current = getExpenseFromStoreById(expenseId);
+  if (!current || !isEntitySyncActive(current)) return { success: false, errorKey: 'expense.notFound' };
+  if (current.status === 'storniert') return { success: false, errorKey: 'expense.allocation.cancelled' };
+
+  const vorgangId = input.vorgangId?.trim() ?? '';
+  const vorgang = vorgangId ? getVorgangById(vorgangId) : undefined;
+  if (!vorgang) return { success: false, errorKey: 'expense.allocation.vorgangMissing' };
+
+  const others = (current.allocations ?? []).filter((allocation) => allocation.vorgangId !== vorgangId);
+  const netCents = toCents(current.netAmount);
+  if (!Number.isFinite(netCents) || netCents <= 0) {
+    return { success: false, errorKey: 'expense.allocation.noNetAmount' };
+  }
+  const remainingCents = netCents - allocationCents(others);
+  const requestedCents = input.amount === undefined ? remainingCents : toCents(input.amount);
+  if (!Number.isFinite(requestedCents) || requestedCents <= 0) {
+    return { success: false, errorKey: 'expense.allocation.amountInvalid' };
+  }
+  if (requestedCents > remainingCents) {
+    return { success: false, errorKey: 'expense.allocation.exceedsAmount' };
+  }
+
+  const allocation: ExpenseAllocation = {
+    vorgangId,
+    vorgangTitle: vorgang.title,
+    amount: fromCents(requestedCents),
+  };
+  const existing = (current.allocations ?? []).find((entry) => entry.vorgangId === vorgangId);
+  if (existing?.orderPositionId) {
+    /* Positionsbezug bleibt erhalten — 01B baut ihn nicht aus, zerstört ihn aber auch nicht. */
+    allocation.orderPositionId = existing.orderPositionId;
+  }
+
+  const now = new Date().toISOString();
+  const updated = withUpdatedEntitySync({ ...current, allocations: [...others, allocation], updatedAt: now }, 'expense');
+  replaceExpenseInStore(expenseId, updated);
+  persistAll();
+  return { success: true, expense: getExpenseById(expenseId)! };
+}
+
+export function removeExpenseAllocation(expenseId: string, vorgangId: string): ExpenseMutationResult {
+  const current = getExpenseFromStoreById(expenseId);
+  if (!current || !isEntitySyncActive(current)) return { success: false, errorKey: 'expense.notFound' };
+  if (current.status === 'storniert') return { success: false, errorKey: 'expense.allocation.cancelled' };
+  const remaining = (current.allocations ?? []).filter((allocation) => allocation.vorgangId !== vorgangId);
+  if (remaining.length === (current.allocations ?? []).length) {
+    return { success: false, errorKey: 'expense.allocation.notFound' };
+  }
+  const now = new Date().toISOString();
+  const updated = withUpdatedEntitySync({ ...current, allocations: remaining, updatedAt: now }, 'expense');
+  replaceExpenseInStore(expenseId, updated);
+  persistAll();
+  return { success: true, expense: getExpenseById(expenseId)! };
 }
 
 export function deleteExpense(id: string): ExpenseMutationResult {
