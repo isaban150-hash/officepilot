@@ -8,6 +8,7 @@ import {
   finalizeSyncSimulationReport,
 } from './syncSimulationReportService';
 import { retryFailedOutboxEntries, wrapStateAsVirtualDevice } from './syncSimulatorService';
+import { mergeOutboxAfterPull } from './syncOutboxMergeService';
 
 export type SyncRunResult = {
   state: AppPersistedState;
@@ -206,7 +207,11 @@ export class SyncCoordinator {
         return {
           state: {
             ...pullResult.state,
-            syncOutbox: currentState.syncOutbox,
+            syncOutbox: mergeOutboxAfterPull({
+              prePull: outbox,
+              afterPush: currentState.syncOutbox ?? [],
+              afterPull: pullResult.state.syncOutbox ?? [],
+            }),
             savedAt: new Date().toISOString(),
           },
           report: mergedReport,
@@ -220,10 +225,22 @@ export class SyncCoordinator {
       this.lastSyncedAt = new Date().toISOString();
       this.lastError = undefined;
 
+      /*
+       * SYNC-DURABILITY-HARDENING-01G — der Sendeauftrag kommt aus **beiden**
+       * Quellen. Vorher stand hier allein `currentState.syncOutbox`, also die
+       * Push-Kopie: Jede Korrektur, die der Pull an einem bereits bekannten
+       * Eintrag vorgenommen hatte — allen voran die Wiederherstellung nach
+       * verlorener CREATE-Bestätigung —, ging damit verloren, und der Auftrag
+       * blieb blockiert.
+       */
       return {
         state: {
           ...pullResult.state,
-          syncOutbox: currentState.syncOutbox,
+          syncOutbox: mergeOutboxAfterPull({
+            prePull: outbox,
+            afterPush: currentState.syncOutbox ?? [],
+            afterPull: pullResult.state.syncOutbox ?? [],
+          }),
           savedAt: new Date().toISOString(),
         },
         report: mergedReport,

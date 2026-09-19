@@ -13,6 +13,12 @@
  * `workspace_customers`-Muster.
  */
 import { mergeSyncEntities } from '../sync/syncMergeEngine';
+import {
+  planLostAckAdoption,
+  type LostAckAdoptionPlan,
+  type LostAckRemoteRow,
+  type LostAckSentWrite,
+} from '../sync/syncLostAckAdoptionService';
 import type { VorgangNote, VorgangNoteSource } from '../../types/communication';
 import type { SyncMeta } from '../../types/sync';
 
@@ -208,12 +214,25 @@ function noteFromCloud(
  * `mergeSyncEntities`-Engine. Kein Feld-Merge, keine Last-Write-Wins-Regel:
  * Gleiche Version mit abweichendem Inhalt meldet einen Konflikt, statt eine
  * ungesynchronisierte lokale Änderung stillschweigend zu verwerfen.
+ *
+ * SYNC-DURABILITY-HARDENING-01G — `dirtyIds` sind die Kennungen, für die ein
+ * **offener Sendeauftrag** in der Outbox liegt: lokale Arbeit, die der Server
+ * noch nicht gesehen hat. Sie ist der Grund, warum der Pull nicht einfach der
+ * höheren Serverversion folgen darf.
+ *
+ * `sync.version` ist ausschliesslich die zuletzt **bestätigte** Serverversion;
+ * eine lokale Änderung erhöht sie nicht. Eine ungesendete Änderung sieht damit
+ * aus wie ein unveränderter Datensatz — und wurde bisher von einer neueren
+ * Serverfassung stillschweigend ersetzt. Ist die Entität offen, meldet der Merge
+ * stattdessen einen Konflikt; der Aufrufer verwirft dann den gesamten
+ * Merge-Vorschlag und die lokale Fassung bleibt stehen, bis der Push sie sendet.
  */
 export function mergeVorgangNotesFromPull(
   localNotes: VorgangNote[],
   remoteRows: WorkspaceVorgangNoteRow[],
   deviceId: string,
   workspaceId: string,
+  dirtyIds: ReadonlySet<string> = new Set(),
 ): { notes: VorgangNote[]; conflicts: string[] } {
   const conflicts: string[] = [];
   const byId = new Map(localNotes.map((note) => [note.id, note]));
@@ -229,6 +248,16 @@ export function mergeVorgangNotesFromPull(
      * vorhandene ID zählt, wird sie auch nicht wieder hochgeladen.
      */
     if (mapped.deleted) {
+      /*
+       * 01G — eine ungesendete lokale Änderung wird auch von einer Löschung
+       * nicht stillschweigend mitgenommen. Der Grabstein bleibt die jüngere
+       * Absicht des anderen Geräts, aber der Nutzer erfährt davon, statt seine
+       * Arbeit zu verlieren.
+       */
+      if (dirtyIds.has(mapped.noteId) && byId.has(mapped.noteId)) {
+        conflicts.push(`vorgang_note:${mapped.noteId}`);
+        continue;
+      }
       byId.delete(mapped.noteId);
       continue;
     }
@@ -267,6 +296,28 @@ export function mergeVorgangNotesFromPull(
       } else {
         conflicts.push(`vorgang_note:${mapped.noteId}`);
       }
+      continue;
+    }
+
+    /*
+     * 01G/01G2 — offene lokale Änderung gegen eine abweichende Serverfassung.
+     *
+     * 01G meldete hier jeden Versionsunterschied als Konflikt. Die
+     * Produktreproduktion zeigte den Preis: Nach einem verlorenen ACK trägt der
+     * Server exakt **unsere** Fassung, nur mit höherer Version — ein Konflikt
+     * wäre dort eine Falschmeldung, die den ganzen Merge blockiert.
+     *
+     * Entscheidend ist deshalb nicht die Zahl, sondern der Inhalt: Stimmt die
+     * Serverfassung fachlich mit der lokalen überein, ist nichts strittig; die
+     * bestätigte Version wird übernommen. Nur ein wirklich abweichender
+     * Serverstand ist ein Konflikt — und dann bleibt die lokale Fassung stehen.
+     */
+    if (dirtyIds.has(mapped.noteId) && mapped.rowVersion !== (local.sync?.version ?? 0)) {
+      if (buildVorgangNoteCloudContentKey(local) !== buildVorgangNoteCloudContentKey(remote)) {
+        conflicts.push(`vorgang_note:${mapped.noteId}`);
+        continue;
+      }
+      byId.set(remote.id, remote);
       continue;
     }
 
@@ -329,5 +380,52 @@ export function applyVorgangNotePushResultToState(
       workspaceId,
     };
     return { ...note, sync };
+  });
+}
+
+/**
+ * SYNC-DURABILITY-HARDENING-01G4 — Wiederanlauf nach verlorener Bestätigung.
+ *
+ * Notizen hingen bisher nicht an diesem Vertrag. Das war der schwerste der drei
+ * Befunde: Ging die Bestätigung eines Anlegevorgangs verloren und arbeitete der
+ * Nutzer danach weiter, wich der lokale Inhalt von der Serverzeile ab. Der
+ * Merge meldete deshalb einen Konflikt, die bestätigte Basis blieb `0`, und der
+ * nächste Push wurde vom Serververtrag abgewiesen — der Auftrag stand still,
+ * und die Notiz erreichte die Cloud nie mehr.
+ *
+ * Die Bewertung selbst liegt in `planLostAckAdoption`; hier wird nur die
+ * Serverzeile in die dort erwartete Form gebracht.
+ */
+export function planVorgangNoteLostAckAdoption(
+  localNotes: VorgangNote[],
+  remoteRows: WorkspaceVorgangNoteRow[],
+  activeOutboxNoteIds: ReadonlySet<string>,
+  sentWrites?: ReadonlyMap<string, LostAckSentWrite>,
+): LostAckAdoptionPlan {
+  const remotes = new Map<string, LostAckRemoteRow>();
+  for (const row of remoteRows) {
+    const mapped = mapWorkspaceVorgangNoteRow(row);
+    if (!mapped) continue;
+    remotes.set(mapped.noteId, {
+      rowVersion: mapped.rowVersion,
+      deleted: mapped.deleted,
+      contentKey: mapped.payload
+        ? buildVorgangNoteCloudContentKey(
+            noteFromCloud(
+              mapped.noteId,
+              mapped.payload,
+              mapped.rowVersion,
+              mapped.updatedAt,
+              false,
+              '',
+              '',
+            ),
+          )
+        : undefined,
+    });
+  }
+  return planLostAckAdoption(localNotes, remotes, activeOutboxNoteIds, {
+    sentWrites,
+    localContentKey: buildVorgangNoteCloudContentKey,
   });
 }

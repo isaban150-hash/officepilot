@@ -47,17 +47,21 @@ import {
 } from '../customer/customerCloudService';
 import {
   applyVorgangNotePushResultToState,
+  buildVorgangNoteCloudContentKey,
   buildVorgangNoteCloudPushPayload,
 } from '../vorgang/vorgangNoteCloudService';
 import {
   applyTaskDedupeResolutionToState,
   applyTaskPushResultToState,
+  buildTaskCloudContentKey,
   buildTaskCloudPushPayload,
   mapWorkspaceTaskRow,
   taskFromCloud,
   type WorkspaceTaskRow,
 } from '../task/taskCloudService';
 import { isCloudSyncBlockedMockTaskId } from '../storage/mockDataDetectionService';
+import { getSyncOutboxSnapshot, recordOutboxSentProof } from './syncOutboxService';
+import { persistSyncOutboxNow } from '../persistenceService';
 import {
   applyDunningDocumentationDedupeResolution,
   applyDunningDocumentationPushResult,
@@ -186,6 +190,104 @@ function updateOutboxEntryStatus(
         }
       : entry,
   );
+}
+
+/**
+ * SYNC-DURABILITY-HARDENING-01G4 — den abgeschickten Stand festhalten.
+ *
+ * Geht die Bestätigung verloren, ist der Server weiter als der Client. Beim
+ * Wiederanlauf lässt sich dann nur noch anhand des **abgeschickten** Standes
+ * entscheiden, ob die neuere Serverfassung der eigene verlorene Schreibvorgang
+ * ist oder die Arbeit eines anderen Geräts — der aktuelle lokale Stand taugt
+ * dafür nicht, weil der Nutzer inzwischen weitergearbeitet haben kann.
+ *
+ * Festgehalten wird nur für die beiden Typen, deren Wiederanlauf diesen
+ * Nachweis braucht; alles Übrige bleibt unberührt.
+ */
+function buildSentWriteProof(
+  extracted: NonNullable<ReturnType<typeof extractCloudSyncEntity>>,
+  operation: SyncOutboxOperation,
+): { sentContentKey?: string; sentDeleted: boolean } | null {
+  switch (extracted.entityType) {
+    case 'vorgang_note':
+      return {
+        sentContentKey: buildVorgangNoteCloudContentKey(extracted.entity),
+        sentDeleted: operation === 'delete' || extracted.deleted === true,
+      };
+    case 'task':
+      return {
+        sentContentKey: buildTaskCloudContentKey(extracted.entity),
+        sentDeleted: operation === 'delete' || extracted.deleted === true,
+      };
+    default:
+      return null;
+  }
+}
+
+/**
+ * SYNC-DURABILITY-01G5 — der Nachweis wird dauerhaft festgehalten, **bevor**
+ * der Schreibvorgang das Gerät verlässt, und ein noch ungeklärter Nachweis wird
+ * dabei nicht ersetzt.
+ *
+ * Beides entscheidet der gemeinsame Bestand (`recordOutboxSentProof`); hier
+ * wird er gespeichert und anschliessend in die Arbeitskopie dieses Laufs
+ * übernommen, damit beide Stände dasselbe sagen.
+ */
+function markOutboxEntrySent(
+  outbox: SyncOutboxEntry[],
+  outboxId: string,
+  proof: { sentContentKey?: string; sentDeleted: boolean } | null,
+): { outbox: SyncOutboxEntry[]; secured: boolean } {
+  // Typen ohne Nachweispflicht senden unverändert.
+  if (!proof) return { outbox, secured: true };
+
+  /*
+   * SYNC-DURABILITY-01G6 — beide Schritte müssen gelingen, und beide melden es.
+   *
+   * Vorher wurde das Ergebnis beider Aufrufe verworfen: Konnte der Nachweis
+   * nicht abgelegt oder nicht gespeichert werden, ging der Schreibvorgang
+   * trotzdem hinaus. Genau dieser Fall — voller Speicher, fehlender Bestand,
+   * unlesbarer Inhalt — ist der, in dem der Nachweis am dringendsten gebraucht
+   * wird.
+   */
+  if (!recordOutboxSentProof(outboxId, proof)) return { outbox, secured: false };
+  if (!persistSyncOutboxNow()) return { outbox, secured: false };
+
+  const gespeichert = getSyncOutboxSnapshot().find((entry) => entry.id === outboxId);
+  if (!gespeichert) return { outbox, secured: false };
+  return {
+    outbox: outbox.map((entry) =>
+      entry.id === outboxId
+        ? {
+            ...entry,
+            sentContentKey: gespeichert.sentContentKey,
+            sentDeleted: gespeichert.sentDeleted,
+            sentAt: gespeichert.sentAt,
+          }
+        : entry,
+    ),
+    secured: true,
+  };
+}
+
+/**
+ * 01G5 — ein Schreibvorgang mit noch ungeklärtem Nachweis und inzwischen
+ * geändertem Inhalt wird zurückgestellt.
+ *
+ * Er würde mit der alten, unbestätigten Basis losgehen und vom Serververtrag
+ * abgewiesen. Schlimmer noch: Sein Ergebnis überdeckte die offene Frage, ob die
+ * Serverfassung aus dem ersten Schreibvorgang stammt. Erst klärt der Pull
+ * dieses Laufs den Nachweis, dann geht der neuere Stand auf bestätigter Basis
+ * hinaus.
+ */
+function hasUnresolvedDivergentProof(
+  entry: SyncOutboxEntry,
+  proof: { sentContentKey?: string; sentDeleted: boolean } | null,
+): boolean {
+  if (!proof) return false;
+  if (entry.sentContentKey === undefined && entry.sentDeleted === undefined) return false;
+  if (entry.sentDeleted === true && proof.sentDeleted) return false;
+  return entry.sentContentKey !== proof.sentContentKey || entry.sentDeleted !== proof.sentDeleted;
 }
 
 function buildPushPayload(
@@ -655,6 +757,37 @@ export class SupabaseSyncAdapter implements SyncAdapter {
             report.conflicts.push({ entityType: entry.entityType, entityId: entry.entityId, resolution: 'conflict' });
           }
         }
+        continue;
+      }
+
+      /*
+       * 01G4/01G5 — der Nachweis entsteht **vor** dem Aufruf, wird vor dem
+       * Aufruf gespeichert und bleibt am Auftrag stehen, wenn die Antwort
+       * ausbleibt. Danach ist er nicht mehr zu rekonstruieren.
+       */
+      const proof = buildSentWriteProof(extracted, entry.operation);
+      const aktuellerEintrag = outbox.find((item) => item.id === entry.id) ?? entry;
+      if (hasUnresolvedDivergentProof(aktuellerEintrag, proof)) {
+        /*
+         * Zurückgestellt, nicht verworfen: Der Auftrag bleibt sendebereit. Der
+         * Pull dieses Laufs klärt den offenen Nachweis, danach geht der neuere
+         * Stand auf bestätigter Basis hinaus.
+         */
+        continue;
+      }
+      const gesichert = markOutboxEntrySent(outbox, entry.id, proof);
+      outbox = gesichert.outbox;
+      if (!gesichert.secured) {
+        /*
+         * 01G6 — ohne gesicherten Nachweis findet der Schreibvorgang nicht
+         * statt. Der Auftrag bleibt bestehen und bleibt wiederholbar; verloren
+         * geht nichts, gesendet wird nichts.
+         */
+        const message = `Sendenachweis für ${entry.entityType}:${entry.entityId} konnte nicht gesichert werden`;
+        failedOutbox.push({ outboxId: entry.id, message, retryable: true });
+        outbox = updateOutboxEntryStatus(outbox, entry.id, 'error', entry.retryCount + 1);
+        report.errorCount += 1;
+        report.errors.push({ outboxId: entry.id, message });
         continue;
       }
 

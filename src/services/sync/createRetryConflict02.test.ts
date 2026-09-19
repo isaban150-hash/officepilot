@@ -272,7 +272,7 @@ describe('CREATE-RETRY-CONFLICT-02 Lost-Ack-Adoption', () => {
       new Set([local.id]),
     );
 
-    expect(plan).toEqual({ adopt: [local.id], settle: [] });
+    expect(plan).toMatchObject({ adopt: [local.id], settle: [] });
   });
 
   it('C7 — Remote-Grabstein v1 bei lokalem Löschwunsch: erledigt, kein zweiter Grabstein', () => {
@@ -295,7 +295,7 @@ describe('CREATE-RETRY-CONFLICT-02 Lost-Ack-Adoption', () => {
       [vorgangRow(localVorgang(), 1, true)],
       new Set([local.id]),
     );
-    expect(plan).toEqual({ adopt: [], settle: [local.id] });
+    expect(plan).toMatchObject({ adopt: [], settle: [local.id] });
 
     mergeRemoteWorkspacePullIntoState(
       state,
@@ -311,7 +311,7 @@ describe('CREATE-RETRY-CONFLICT-02 Lost-Ack-Adoption', () => {
       [vorgangRow(local, 1, true)],
       new Set([local.id]),
     );
-    expect(plan).toEqual({ adopt: [], settle: [] });
+    expect(plan).toMatchObject({ adopt: [], settle: [] });
   });
 
   it('C9 — Customer: Ack verloren, danach Adressänderung', () => {
@@ -342,7 +342,7 @@ describe('CREATE-RETRY-CONFLICT-02 Lost-Ack-Adoption', () => {
       [customerRow(localCustomer(), 2)],
       new Set([local.id]),
     );
-    expect(plan).toEqual({ adopt: [], settle: [] });
+    expect(plan).toMatchObject({ adopt: [], settle: [] });
   });
 
   it('C11 — Inhaltsgleichheit ist keine Voraussetzung', () => {
@@ -375,7 +375,7 @@ describe('CREATE-RETRY-CONFLICT-02 Lost-Ack-Adoption', () => {
      */
     const local = localVorgang();
     const plan = planVorgangLostAckAdoption([local], [vorgangRow(local, 1)], new Set<string>());
-    expect(plan).toEqual({ adopt: [], settle: [] });
+    expect(plan).toMatchObject({ adopt: [], settle: [] });
   });
 
   it('Backfill-Schutz: fehlende Remote-ID wird eingereiht, nicht adoptiert', () => {

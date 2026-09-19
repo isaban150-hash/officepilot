@@ -157,6 +157,84 @@ export function completeIdenticalCompanyCloudOutboxEntry(
   };
 }
 
+/**
+ * SYNC-DURABILITY-01G5 — ein ungeklärter Sendenachweis je aktivem
+ * Schreibvorgang.
+ *
+ * Der Nachweis beschreibt den fachlichen Stand, der gerade abgeschickt wird.
+ * Er wird gebraucht, wenn die Bestätigung im Funkloch verschwindet: Nur an ihm
+ * ist später erkennbar, ob die neuere Serverfassung der eigene Schreibvorgang
+ * war oder die Arbeit eines anderen Geräts.
+ *
+ * Deshalb gilt: **Solange er ungeklärt ist, bleibt er stehen.** Würde ein
+ * späterer Schreibvorgang ihn überschreiben, wäre die Serverfassung aus dem
+ * ersten nie mehr zuzuordnen — der Auftrag bliebe für immer liegen. Aufgelöst
+ * wird er allein durch die Klärung selbst (`clearOutboxSentProof`), nicht durch
+ * neue Arbeit.
+ */
+export function recordOutboxSentProof(
+  outboxId: string,
+  proof: { sentContentKey?: string; sentDeleted: boolean },
+): boolean {
+  const entry = outbox.find((item) => item.id === outboxId);
+  /*
+   * SYNC-DURABILITY-01G6 — kein stilles Scheitern.
+   *
+   * Ist der Auftrag hier nicht auffindbar, gibt es nichts, woran ein Nachweis
+   * haften könnte. Früher kehrte diese Funktion dann wortlos zurück und der
+   * Sendeweg schickte trotzdem los — der Server wäre weiter als der Client
+   * gewesen, ohne dass irgendetwas den eigenen Schreibvorgang später
+   * wiedererkennbar macht. Der Aufrufer erfährt es jetzt.
+   */
+  if (!entry) return false;
+
+  const ungeklaert =
+    entry.status !== 'completed' &&
+    entry.status !== 'failed' &&
+    (entry.sentContentKey !== undefined || entry.sentDeleted !== undefined);
+  // Ein noch ungeklärter Nachweis bleibt stehen — und er **ist** der Nachweis.
+  if (ungeklaert) return true;
+
+  outbox = outbox.map((item) =>
+    item.id === outboxId ? { ...item, ...proof, sentAt: new Date().toISOString() } : item,
+  );
+  notifyOutboxChanged();
+  return true;
+}
+
+/**
+ * 01G5 — die Klärung hebt den Nachweis auf: Der Wiederanlauf hat entschieden,
+ * ob die Serverfassung die eigene war. Danach beschreibt der Nachweis nichts
+ * Offenes mehr und darf einem neuen Schreibvorgang weichen.
+ */
+export function clearOutboxSentProof(entityType: SyncEntityType, entityIds: string[]): void {
+  if (entityIds.length === 0) return;
+  const ids = new Set(entityIds);
+  outbox = outbox.map((entry) =>
+    entry.entityType === entityType && ids.has(entry.entityId)
+      ? { ...entry, sentContentKey: undefined, sentDeleted: undefined, sentAt: undefined }
+      : entry,
+  );
+  notifyOutboxChanged();
+}
+
+/** Die noch ungeklärten Sendenachweise eines Typs. */
+export function getUnresolvedSentProofs(
+  entityType: SyncEntityType,
+): ReadonlyMap<string, { contentKey?: string; deleted: boolean }> {
+  const proofs = new Map<string, { contentKey?: string; deleted: boolean }>();
+  for (const entry of outbox) {
+    if (entry.entityType !== entityType) continue;
+    if (entry.status === 'completed' || entry.status === 'failed') continue;
+    if (entry.sentContentKey === undefined && entry.sentDeleted === undefined) continue;
+    proofs.set(entry.entityId, {
+      contentKey: entry.sentContentKey,
+      deleted: entry.sentDeleted === true,
+    });
+  }
+  return proofs;
+}
+
 export function markOutboxEntriesCompleted(outboxIds: string[]): void {
   if (outboxIds.length === 0) return;
   const completedIds = new Set(outboxIds);

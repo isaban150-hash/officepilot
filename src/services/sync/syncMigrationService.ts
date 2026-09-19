@@ -36,6 +36,29 @@ type PersistedStateV1 = Omit<AppPersistedState, 'syncClient' | 'syncOutbox'> & {
   syncOutbox?: undefined;
 };
 
+/**
+ * SYNC-DURABILITY-HARDENING-01G — fehlende Sync-Meta wird ergänzt, aber keine
+ * Serverbestätigung erfunden.
+ *
+ * Bisher stand hier `version: 1` (über `createDefaultSyncMeta` bzw. `?? 1`).
+ * Das behauptete für jeden Datensatz ohne Meta — Altbestand wie frisch
+ * angelegter, noch nie gesendeter Eintrag — der Server habe bereits Version 1
+ * bestätigt. Zwei Folgen: Der Push trat mit einer falschen Erwartung an, und die
+ * Wiederherstellung nach verlorener Bestätigung (CREATE-RETRY-CONFLICT-02), die
+ * `version === 0` voraussetzt, konnte einen Neustart nicht überleben.
+ *
+ * `version: 0` ist die ehrliche Aussage: **keine** bestätigte Serverversion.
+ * Gerät und Arbeitsbereich werden weiterhin ergänzt, damit der Datensatz
+ * vollständig bleibt; der Cloud-Backfill erkennt Altbestand unverändert an der
+ * Kennung und nicht an der Version.
+ */
+function unconfirmedSyncMeta(fallbackUpdatedAt: string, client: SyncClientConfig): SyncMeta {
+  return {
+    ...createDefaultSyncMeta(fallbackUpdatedAt, client),
+    version: 0,
+  };
+}
+
 function backfillMeta<T extends { sync?: SyncMeta }>(
   entity: T,
   fallbackUpdatedAt: string,
@@ -51,11 +74,11 @@ function backfillMeta<T extends { sync?: SyncMeta }>(
           ...entity.sync,
           deviceId: entity.sync.deviceId ?? client.deviceId,
           workspaceId: entity.sync.workspaceId ?? client.workspaceId,
-          version: entity.sync.version ?? 1,
+          version: entity.sync.version ?? 0,
           deleted: entity.sync.deleted ?? false,
           updatedAt: entity.sync.updatedAt ?? fallbackUpdatedAt,
         }
-      : createDefaultSyncMeta(fallbackUpdatedAt, client),
+      : unconfirmedSyncMeta(fallbackUpdatedAt, client),
   };
 }
 

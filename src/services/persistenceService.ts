@@ -855,6 +855,45 @@ export function clearPersistedState(): void {
   localStorage.removeItem(getActiveStorageKey());
 }
 
+/**
+ * SYNC-DURABILITY-01G5 — den Sendenachweis festhalten, **bevor** der
+ * Schreibvorgang das Gerät verlässt.
+ *
+ * Bisher entstand er nur in der Arbeitskopie des Sendewegs und wurde erst am
+ * Ende eines Laufs zurückgeschrieben. Stirbt die Seite zwischen „Server hat
+ * angenommen" und „Antwort verarbeitet" — Neustart, Absturz, geschlossener
+ * Reiter —, war er verloren, und mit ihm die einzige Möglichkeit, die neuere
+ * Serverfassung später als die eigene zu erkennen.
+ *
+ * Geschrieben wird gezielt nur der Sendeauftrag: Ein vollständiges Speichern
+ * mitten im Lauf würde den Stand der übrigen Bereiche aus den Arbeitsspeichern
+ * übernehmen, die während einer Synchronisation bewusst auseinanderlaufen.
+ * Hier wird der gespeicherte Stand gelesen, allein die Warteschlange ersetzt
+ * und wieder zurückgeschrieben.
+ */
+export function persistSyncOutboxNow(): boolean {
+  const storageKey = getActiveStorageKey();
+  try {
+    const raw = localStorage.getItem(storageKey);
+    if (!raw) return false;
+
+    /*
+     * Bewusst am Rohbestand und **ohne** die Schemaprüfung des Laders: Hier
+     * wird nichts gedeutet, sondern ein einziges Feld ausgetauscht. Hinge der
+     * Nachweis an der Prüfung, ginge er genau dort verloren, wo ein Bestand
+     * gerade nicht sauber lesbar ist — und das ist der Moment, in dem er am
+     * dringendsten gebraucht wird.
+     */
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    parsed.syncOutbox = getSyncOutboxSnapshot();
+    localStorage.setItem(storageKey, JSON.stringify(parsed));
+    return true;
+  } catch (error) {
+    console.warn('[OfficePilot] Sendenachweis konnte nicht gespeichert werden:', error);
+    return false;
+  }
+}
+
 export function clearPersistedStateForScope(scope: StorageScope): void {
   localStorage.removeItem(buildStorageKey(scope));
 }

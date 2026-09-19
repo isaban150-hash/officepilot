@@ -5,6 +5,14 @@ import type {
 } from '../../types/models';
 import type { SyncMeta } from '../../types/sync';
 import { mergeSyncEntities } from '../sync/syncMergeEngine';
+/*
+ * SYNC-DURABILITY-HARDENING-01G4 — die Bewertung des Wiederanlaufs lag hier und
+ * galt nur für Vorgänge und Kunden. Sie steht jetzt in einem eigenen Modul,
+ * damit Vorgangsnotizen und Aufgaben denselben, bereits bewiesenen Vertrag
+ * benutzen statt eines zweiten. Das Verhalten für Vorgänge ändert sich nicht.
+ */
+import { planLostAckAdoption, type LostAckAdoptionPlan } from '../sync/syncLostAckAdoptionService';
+export type { LostAckAdoptionPlan };
 import { repairContractPlanFromSnapshot } from '../orderPlanIntegrityService';
 import {
   canTransitionVorgangStatus,
@@ -758,48 +766,6 @@ export function planVorgangCustomerRelationBackfill(
  *    jeweils letzten (`create` → `update` → `delete`). Die Ursprungsabsicht ist
  *    dort nicht mehr ablesbar. Stabil ist allein `sync.version === 0`.
  */
-export interface LostAckAdoptionPlan {
-  /** Basisversion übernehmen, lokalen Fachstand behalten, erneut senden. */
-  adopt: string[];
-  /** Der gewünschte Remote-Zustand besteht bereits — nichts mehr zu senden. */
-  settle: string[];
-}
-
-function planLostAckAdoption<T extends { id: string; sync?: { version?: number; deleted?: boolean } }>(
-  locals: T[],
-  remotes: Map<string, { rowVersion: number; deleted: boolean }>,
-  activeOutboxIds: ReadonlySet<string>,
-): LostAckAdoptionPlan {
-  const adopt: string[] = [];
-  const settle: string[] = [];
-
-  for (const local of locals) {
-    if ((local.sync?.version ?? 0) !== 0) continue;
-    if (!activeOutboxIds.has(local.id)) continue;
-
-    const remote = remotes.get(local.id);
-    // Nur die unberührte Erstzeile beweist, dass kein fremder Write erfolgte.
-    if (!remote || remote.rowVersion !== 1) continue;
-
-    if (!remote.deleted) {
-      adopt.push(local.id);
-      continue;
-    }
-
-    /*
-     * Grabstein: Nur wenn auch lokal gelöscht werden sollte, ist der Wunsch
-     * bereits erfüllt. Gegen einen lokal **aktiven** Datensatz bleibt es beim
-     * regulären Konflikt — eine Übernahme führte beim nächsten Push zur
-     * stillen Wiederbelebung.
-     */
-    if (local.sync?.deleted === true) {
-      settle.push(local.id);
-    }
-  }
-
-  return { adopt, settle };
-}
-
 export function planVorgangLostAckAdoption(
   localVorgaenge: Vorgang[],
   remoteRows: WorkspaceVorgangRow[],

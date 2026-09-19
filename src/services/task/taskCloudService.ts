@@ -20,6 +20,12 @@
 import { isTaskOpen, normalizeTask } from '../taskNormalize';
 import { isCloudSyncBlockedMockTaskId } from '../storage/mockDataDetectionService';
 import { mergeSyncEntities } from '../sync/syncMergeEngine';
+import {
+  planLostAckAdoption,
+  type LostAckAdoptionPlan,
+  type LostAckRemoteRow,
+  type LostAckSentWrite,
+} from '../sync/syncLostAckAdoptionService';
 import type { Task, TaskCategory, TaskPriority, TaskSourceType, TaskStatus } from '../../types/models';
 import type { SyncMeta } from '../../types/sync';
 
@@ -294,12 +300,25 @@ export function taskFromCloud(
  * „erledigt gewinnt": Wiederöffnen bleibt möglich, die Serverversion
  * entscheidet. Gleiche Version mit abweichendem fachlichem Inhalt meldet einen
  * Konflikt, statt eine ungesynchronisierte lokale Änderung zu verwerfen.
+ *
+ * SYNC-DURABILITY-HARDENING-01G — `dirtyIds` sind die Kennungen, für die ein
+ * **offener Sendeauftrag** in der Outbox liegt: lokale Arbeit, die der Server
+ * noch nicht gesehen hat. Sie ist der Grund, warum der Pull nicht einfach der
+ * höheren Serverversion folgen darf.
+ *
+ * `sync.version` ist ausschliesslich die zuletzt **bestätigte** Serverversion;
+ * eine lokale Änderung erhöht sie nicht. Eine ungesendete Änderung sieht damit
+ * aus wie ein unveränderter Datensatz — und wurde bisher von einer neueren
+ * Serverfassung stillschweigend ersetzt. Ist die Entität offen, meldet der Merge
+ * stattdessen einen Konflikt; der Aufrufer verwirft dann den gesamten
+ * Merge-Vorschlag und die lokale Fassung bleibt stehen, bis der Push sie sendet.
  */
 export function mergeTasksFromPull(
   localTasks: Task[],
   remoteRows: WorkspaceTaskRow[],
   deviceId: string,
   workspaceId: string,
+  dirtyIds: ReadonlySet<string> = new Set(),
 ): { tasks: Task[]; conflicts: string[] } {
   const conflicts: string[] = [];
   const byId = new Map(localTasks.map((task) => [task.id, task]));
@@ -309,7 +328,12 @@ export function mergeTasksFromPull(
     if (!mapped) continue;
 
     if (mapped.deleted) {
-      // Anderswo aufgelöst oder gelöscht: hier verschwindet die Aufgabe.
+      // Anderswo aufgelöst oder gelöscht: hier verschwindet die Aufgabe —
+      // ausser sie trägt noch ungesendete lokale Arbeit (01G).
+      if (dirtyIds.has(mapped.taskId) && byId.has(mapped.taskId)) {
+        conflicts.push(`task:${mapped.taskId}`);
+        continue;
+      }
       byId.delete(mapped.taskId);
       continue;
     }
@@ -338,6 +362,21 @@ export function mergeTasksFromPull(
       } else {
         conflicts.push(`task:${mapped.taskId}`);
       }
+      continue;
+    }
+
+    /*
+     * 01G/01G2 — offene lokale Änderung gegen abweichende Serverfassung.
+     * Verglichen wird der fachliche Inhalt, nicht die Versionszahl: Nach einem
+     * verlorenen ACK steht dort unsere eigene Fassung mit höherer Version, und
+     * das ist kein Streit, sondern die fehlende Bestätigung.
+     */
+    if (dirtyIds.has(mapped.taskId) && mapped.rowVersion !== (local.sync?.version ?? 0)) {
+      if (buildTaskCloudContentKey(local) !== buildTaskCloudContentKey(remote)) {
+        conflicts.push(`task:${mapped.taskId}`);
+        continue;
+      }
+      byId.set(remote.id, remote);
       continue;
     }
 
@@ -472,5 +511,40 @@ export function applyTaskPushResultToState(
       workspaceId,
     };
     return { ...task, sync };
+  });
+}
+
+/**
+ * SYNC-DURABILITY-HARDENING-01G4 — Wiederanlauf nach verlorener Bestätigung.
+ *
+ * Gleiche Lage wie bei den Vorgangsnotizen: Ohne diesen Weg bliebe eine
+ * Aufgabe, deren Anlege- oder Änderungsbestätigung im Funkloch verschwand, mit
+ * einem stillgelegten Sendeauftrag zurück, sobald der Nutzer danach noch etwas
+ * an ihr geändert hat. Die Bewertung liegt in `planLostAckAdoption`; hier wird
+ * nur die Serverzeile in die dort erwartete Form gebracht.
+ */
+export function planTaskLostAckAdoption(
+  localTasks: Task[],
+  remoteRows: WorkspaceTaskRow[],
+  activeOutboxTaskIds: ReadonlySet<string>,
+  sentWrites?: ReadonlyMap<string, LostAckSentWrite>,
+): LostAckAdoptionPlan {
+  const remotes = new Map<string, LostAckRemoteRow>();
+  for (const row of remoteRows) {
+    const mapped = mapWorkspaceTaskRow(row);
+    if (!mapped) continue;
+    remotes.set(mapped.taskId, {
+      rowVersion: mapped.rowVersion,
+      deleted: mapped.deleted,
+      contentKey: mapped.payload
+        ? buildTaskCloudContentKey(
+            taskFromCloud(mapped.taskId, mapped.payload, mapped.rowVersion, mapped.updatedAt, false, '', ''),
+          )
+        : undefined,
+    });
+  }
+  return planLostAckAdoption(localTasks, remotes, activeOutboxTaskIds, {
+    sentWrites,
+    localContentKey: buildTaskCloudContentKey,
   });
 }

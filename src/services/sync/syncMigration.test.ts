@@ -83,8 +83,15 @@ describe('CLOUD-01B migration v1 → v2', () => {
     savePersistedState(minimalV1State());
     const loaded = loadPersistedState();
 
+    /*
+     * SYNC-DURABILITY-HARDENING-01G — die Migration ergaenzt Geraet und
+     * Arbeitsbereich, erfindet aber keine Serverbestaetigung mehr. `version: 0`
+     * heisst: noch keine vom Server bestaetigte Fassung. Vorher stand hier 1 —
+     * genau die Behauptung, die den Push mit falscher Erwartung antreten liess
+     * und die Wiederherstellung nach verlorener Bestaetigung verhinderte.
+     */
     expect(loaded!.inboxItems[0].sync).toMatchObject({
-      version: 1,
+      version: 0,
       deleted: false,
     });
     expect(loaded!.documents![0].sync?.updatedAt).toBe('2026-03-01T10:00:00.000Z');

@@ -223,6 +223,7 @@ export function mergeDunningDocumentationsFromPull(
   remoteRows: WorkspaceDunningDocumentationRow[],
   deviceId: string,
   workspaceId: string,
+  dirtyIds: ReadonlySet<string> = new Set(),
 ): { documentations: InvoiceDunningDocumentation[]; conflicts: string[] } {
   const conflicts: string[] = [];
   const byId = new Map(localDocs.map((doc) => [doc.id, doc]));
@@ -255,6 +256,24 @@ export function mergeDunningDocumentationsFromPull(
       } else {
         conflicts.push(`dunning_documentation:${mapped.documentationId}`);
       }
+      continue;
+    }
+
+    /*
+     * 01G/01G2 — ein Nachweis wird nie bearbeitet. Trägt der Server denselben
+     * Nachweis mit höherer Version, ist das die fehlende Bestätigung nach einem
+     * verlorenen ACK: übernehmen, nicht blockieren. Nur ein inhaltlich anderer
+     * Serverstand ist ein Konflikt — und dann bleibt der lokale Nachweis stehen.
+     */
+    if (dirtyIds.has(mapped.documentationId) && mapped.rowVersion !== (local.sync?.version ?? 0)) {
+      if (
+        buildDunningDocumentationCloudContentKey(local) !==
+        buildDunningDocumentationCloudContentKey(remote)
+      ) {
+        conflicts.push(`dunning_documentation:${mapped.documentationId}`);
+        continue;
+      }
+      byId.set(remote.id, remote);
       continue;
     }
 

@@ -10,6 +10,10 @@
  * folgt dem `workspace_vorgaenge`-Muster.
  */
 import { mergeSyncEntities } from '../sync/syncMergeEngine';
+import {
+  planLostAckAdoption,
+  type LostAckAdoptionPlan,
+} from '../sync/syncLostAckAdoptionService';
 import type { Customer } from '../../types/models';
 import type { SyncMeta } from '../../types/sync';
 
@@ -285,34 +289,19 @@ export function planCustomerLostAckAdoption(
   localCustomers: Customer[],
   remoteRows: WorkspaceCustomerRow[],
   activeOutboxCustomerIds: ReadonlySet<string>,
-): { adopt: string[]; settle: string[] } {
+): LostAckAdoptionPlan {
+  /*
+   * SYNC-DURABILITY-HARDENING-01G4 — die Bewertung stand hier ein drittes Mal
+   * wortgleich im Code. Sie liegt jetzt in einem eigenen Modul; Kunden benutzen
+   * unveraendert nur den Nachweis ueber die unberuehrte Erstzeile.
+   */
   const remotes = new Map(
     remoteRows.map((row) => [
       row.customer_id,
       { rowVersion: Number(row.row_version), deleted: Boolean(row.deleted) },
     ]),
   );
-  const adopt: string[] = [];
-  const settle: string[] = [];
-
-  for (const customer of localCustomers) {
-    if ((customer.sync?.version ?? 0) !== 0) continue;
-    if (!activeOutboxCustomerIds.has(customer.id)) continue;
-
-    const remote = remotes.get(customer.id);
-    if (!remote || remote.rowVersion !== 1) continue;
-
-    if (!remote.deleted) {
-      adopt.push(customer.id);
-      continue;
-    }
-    // Grabstein gegen aktiven lokalen Kunden: keine Übernahme, keine Wiederbelebung.
-    if (customer.sync?.deleted === true) {
-      settle.push(customer.id);
-    }
-  }
-
-  return { adopt, settle };
+  return planLostAckAdoption(localCustomers, remotes, activeOutboxCustomerIds);
 }
 
 /** Setzt nach erfolgreichem Push die Serverversion — ohne Fachdaten anzufassen. */

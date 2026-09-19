@@ -1,6 +1,10 @@
 import { normalizeCompanyIdentityName } from '../companyIdentityNormalization';
 import type { AppPersistedState } from '../../types/models';
 import type { SyncClientConfig, SyncEntityType, SyncMeta } from '../../types/sync';
+import type {
+  LostAckAdoptionPlan,
+  LostAckSentWrite,
+} from '../sync/syncLostAckAdoptionService';
 import { hydrateCompanyProfileStore } from '../companyProfileService';
 import { persistAll } from '../persistenceService';
 import { ensureSyncClientFromState, hydrateSyncClient } from '../sync/syncClientService';
@@ -9,6 +13,8 @@ import {
   enqueueSyncOutbox,
   getSyncOutboxSnapshot,
   markOutboxEntriesCompleted,
+  clearOutboxSentProof,
+  getUnresolvedSentProofs,
 } from '../sync/syncOutboxService';
 import { filterSyncActive } from '../sync/syncMetaService';
 import {
@@ -19,10 +25,12 @@ import {
 import {
   mergeVorgangNotesFromPull,
   planVorgangNoteBackfill,
+  planVorgangNoteLostAckAdoption,
 } from '../vorgang/vorgangNoteCloudService';
 import {
   mergeTasksFromPull,
   planTaskBackfill,
+  planTaskLostAckAdoption,
   resolveLocalAutoTaskDuplicates,
 } from '../task/taskCloudService';
 import {
@@ -227,6 +235,38 @@ function activeOutboxEntityIds(
 }
 
 /**
+ * SYNC-DURABILITY-HARDENING-01G4 — was für diese Entitäten zuletzt tatsächlich
+ * abgeschickt wurde, abgelesen an den noch offenen Sendeaufträgen.
+ *
+ * Nur ein offener Auftrag trägt einen ungeklärten Schreibvorgang; ein
+ * abgeschlossener ist bestätigt und darf nichts mehr rechtfertigen.
+ */
+function sentWritesFor(
+  state: AppPersistedState,
+  entityType: SyncEntityType,
+): ReadonlyMap<string, LostAckSentWrite> {
+  /*
+   * SYNC-DURABILITY-01G5 — der gemeinsame Bestand ist die Quelle.
+   *
+   * Der Nachweis wird vor dem Absenden dort festgehalten und überlebt so auch
+   * einen Absturz mitten im Vorgang. Der hier durchgereichte Zustand kann ihn
+   * dagegen noch gar nicht kennen, wenn er aus einem abgebrochenen Lauf stammt.
+   * Beide Quellen werden zusammengeführt; der gespeicherte Bestand gewinnt.
+   */
+  const sent = new Map<string, LostAckSentWrite>(getUnresolvedSentProofs(entityType));
+  for (const entry of state.syncOutbox ?? []) {
+    if (entry.entityType !== entityType) continue;
+    if (entry.status === 'completed' || entry.status === 'failed') continue;
+    if (entry.sentContentKey === undefined && entry.sentDeleted === undefined) continue;
+    sent.set(entry.entityId, {
+      contentKey: entry.sentContentKey,
+      deleted: entry.sentDeleted === true,
+    });
+  }
+  return sent;
+}
+
+/**
  * CREATE-RETRY-CONFLICT-02 — übernimmt **ausschliesslich** die bekannte
  * Serverbasis. Fachwerte, Löschwunsch und alles Übrige bleiben unangetastet:
  * Der lokale Stand ist der neuere, die Remote-Zeile trägt nur den eigenen,
@@ -236,13 +276,19 @@ function adoptLostAckBaseVersion<T extends { sync?: SyncMeta }>(
   entity: T,
   state: AppPersistedState,
   workspaceId: string,
+  /*
+   * 01G4 — beim Anlegevorgang ist die Basis immer die Erstzeile (`1`). Ging
+   * dagegen die Bestätigung einer **Änderung** verloren, steht der Server schon
+   * weiter; dann ist genau die vorgefundene Version die neue Basis.
+   */
+  baseVersion = 1,
 ): T {
   return {
     ...entity,
     sync: {
       ...entity.sync,
       updatedAt: entity.sync?.updatedAt ?? new Date().toISOString(),
-      version: 1,
+      version: baseVersion,
       deleted: entity.sync?.deleted ?? false,
       deviceId: state.syncClient!.deviceId,
       workspaceId,
@@ -269,12 +315,25 @@ function adoptLostAckBaseVersion<T extends { sync?: SyncMeta }>(
 function applyLostAckAdoptionToOutbox(
   state: AppPersistedState,
   entityType: SyncEntityType,
-  plan: { adopt: string[]; settle: string[] },
+  plan: LostAckAdoptionPlan,
 ): void {
-  if (plan.adopt.length === 0 && plan.settle.length === 0) return;
+  if (
+    plan.adopt.length === 0 &&
+    plan.settle.length === 0 &&
+    // 01G7 — eine Nichtannahme allein ist ebenfalls ein Ergebnis.
+    plan.notAccepted.length === 0
+  ) {
+    return;
+  }
 
   const entries = state.syncOutbox ?? [];
-  for (const entityId of plan.adopt) {
+  /*
+   * SYNC-DURABILITY-01G7 — Übernahme und Nichtannahme führen beide dazu, dass
+   * derselbe Auftrag wieder sendbar wird. Der Unterschied liegt allein in der
+   * Basis: übernommen wird die neue Serverversion, bei einer Nichtannahme
+   * bleibt die alte stehen. Beides steht in der Basisliste des Plans.
+   */
+  for (const entityId of [...plan.adopt, ...plan.notAccepted]) {
     const existing = entries.find(
       (entry) => entry.entityType === entityType && entry.entityId === entityId,
     );
@@ -282,7 +341,7 @@ function applyLostAckAdoptionToOutbox(
       entityType,
       entityId,
       operation: existing?.operation ?? 'update',
-      version: 1,
+      version: plan.baseVersions.get(entityId) ?? 1,
     });
   }
 
@@ -717,18 +776,90 @@ export function mergeRemoteWorkspacePullIntoState(
    * angelegt, weil er gegen **alle** Remote-IDs vergleicht.
    */
   const remoteNoteRows = pull.vorgangNotes ?? [];
-  if (remoteNoteRows.length > 0) {
-    const noteMerge = mergeVorgangNotesFromPull(
+  {
+    // 01G — ungesendete Notizänderungen dürfen der Cloud nicht weichen.
+    const dirtyNoteIds = activeOutboxEntityIds(state, 'vorgang_note');
+
+    /*
+     * SYNC-DURABILITY-HARDENING-01G4 — der Wiederanlauf läuft **vor** der
+     * Merge-Bewertung, genau wie bei Vorgängen und Kunden. Sonst entstünde hier
+     * der sachlich falsche Konflikt, der die Notiz dauerhaft festsetzte: Der
+     * Server trägt den eigenen, im Funkloch verlorenen Schreibvorgang, lokal
+     * wurde seither weitergearbeitet — und ohne die übernommene Basis wies der
+     * Serververtrag jeden weiteren Versuch ab.
+     *
+     * Die betroffenen Zeilen werden aus dem Merge herausgenommen, statt den
+     * Konflikt hinterher zu entfernen: Die Serverfassung ist die eigene, dort
+     * ist nichts zu übernehmen ausser der Version.
+     */
+    const noteAdoption = planVorgangNoteLostAckAdoption(
       state.vorgangNotes ?? [],
       remoteNoteRows,
+      dirtyNoteIds,
+      sentWritesFor(state, 'vorgang_note'),
+    );
+    const adoptedNoteIds = new Set([
+      ...noteAdoption.adopt,
+      ...noteAdoption.settle,
+      // 01G7 — auch die nie angekommene Fassung gehört nicht in den Abgleich:
+      // Die Serverzeile ist die eigene Ausgangsbasis, nicht der Stand eines
+      // anderen Geräts. Ohne diese Ausnahme entstünde ein Scheinstreit.
+      ...noteAdoption.notAccepted,
+    ]);
+
+    const noteMerge = mergeVorgangNotesFromPull(
+      adoptedNoteIds.size > 0
+        ? (state.vorgangNotes ?? []).map((note) =>
+            adoptedNoteIds.has(note.id)
+              ? adoptLostAckBaseVersion(
+                  note,
+                  state,
+                  workspaceId,
+                  noteAdoption.baseVersions.get(note.id) ?? 1,
+                )
+              : note,
+          )
+        : (state.vorgangNotes ?? []),
+      adoptedNoteIds.size > 0
+        ? remoteNoteRows.filter((row) => !adoptedNoteIds.has(row.client_note_id))
+        : remoteNoteRows,
       state.syncClient!.deviceId,
       workspaceId,
+      dirtyNoteIds,
     );
-    if (noteMerge.conflicts.length > 0) {
-      conflicts.push(...noteMerge.conflicts);
-    } else {
-      next.vorgangNotes = noteMerge.notes;
-    }
+
+    applyLostAckAdoptionToOutbox(state, 'vorgang_note', noteAdoption);
+    /*
+     * SYNC-DURABILITY-01G5 — Entscheidung und Ergebnis gehören zusammen.
+     *
+     * Bisher wurde das **gesamte** Merge-Ergebnis verworfen, sobald irgendeine
+     * Notiz in Streit lag. Der Wiederanlauf einer ganz anderen Notiz war da
+     * aber schon an ihrem Sendeauftrag vermerkt: Der Auftrag galt als
+     * sendebereit, während die Notiz noch die alte, unbestätigte Basis trug —
+     * und der nächste Versuch scheiterte aus genau demselben Grund erneut.
+     *
+     * Das Ergebnis wird deshalb immer übernommen. Das ist gefahrlos, weil der
+     * Merge eine strittige Notiz gar nicht anfasst: Er meldet sie und lässt den
+     * lokalen Stand unverändert stehen. Übernommen wird also nur, was
+     * unstrittig ist — und der Streit wird weiterhin gemeldet.
+     */
+    conflicts.push(...noteMerge.conflicts);
+    next.vorgangNotes = noteMerge.notes;
+
+    /*
+     * SYNC-DURABILITY-01G6 — aufgehoben wird nur, was auch bewertet wurde.
+     *
+     * Vorher verlor jede Kennung ihren Nachweis, die der Pull mitbrachte —
+     * auch dann, wenn der Wiederanlauf sie gar nicht geprüft hatte. Ein noch
+     * offener Schreibvorgang stand danach ohne Antwort da. Jetzt zählt allein
+     * die tatsächliche Bewertung; ihr Ausgang darf Übernahme, Abschluss oder
+     * Streit sein.
+     */
+    clearOutboxSentProof('vorgang_note', [
+      ...noteAdoption.adopt,
+      ...noteAdoption.settle,
+      ...noteAdoption.evaluatedProofs,
+    ]);
   }
 
   /*
@@ -756,18 +887,64 @@ export function mergeRemoteWorkspacePullIntoState(
    * Dazwischen liegt der Schritt, den nur die Aufgaben brauchen.
    */
   const remoteTaskRows = pull.tasks ?? [];
-  if (remoteTaskRows.length > 0) {
-    const taskMerge = mergeTasksFromPull(
+  {
+    /*
+     * SYNC-DURABILITY-01G7 — bewusst ohne Vorbedingung auf vorhandene Zeilen.
+     *
+     * Der Wiederanlauf muss gerade dann laufen, wenn der Abgleich **nichts**
+     * mitbringt: Genau daran ist ein nie angekommener Anlegevorgang zu
+     * erkennen. Der Abgleich selbst ist mit leerer Liste wirkungslos, er gibt
+     * den lokalen Bestand unverändert zurück.
+     */
+    // 01G — dasselbe für offene Statusänderungen an Aufgaben.
+    const dirtyTaskIds = activeOutboxEntityIds(state, 'task');
+
+    // 01G4 — Wiederanlauf vor der Merge-Bewertung, siehe Vorgangsnotizen.
+    const taskAdoption = planTaskLostAckAdoption(
       state.tasks ?? [],
       remoteTaskRows,
+      dirtyTaskIds,
+      sentWritesFor(state, 'task'),
+    );
+    const adoptedTaskIds = new Set([
+      ...taskAdoption.adopt,
+      ...taskAdoption.settle,
+      // 01G7 — siehe Vorgangsnotizen.
+      ...taskAdoption.notAccepted,
+    ]);
+
+    const taskMerge = mergeTasksFromPull(
+      adoptedTaskIds.size > 0
+        ? (state.tasks ?? []).map((task) =>
+            adoptedTaskIds.has(task.id)
+              ? adoptLostAckBaseVersion(
+                  task,
+                  state,
+                  workspaceId,
+                  taskAdoption.baseVersions.get(task.id) ?? 1,
+                )
+              : task,
+          )
+        : (state.tasks ?? []),
+      adoptedTaskIds.size > 0
+        ? remoteTaskRows.filter((row) => !adoptedTaskIds.has(row.client_task_id))
+        : remoteTaskRows,
       state.syncClient!.deviceId,
       workspaceId,
+      dirtyTaskIds,
     );
-    if (taskMerge.conflicts.length > 0) {
-      conflicts.push(...taskMerge.conflicts);
-    } else {
-      next.tasks = taskMerge.tasks;
-    }
+
+    applyLostAckAdoptionToOutbox(state, 'task', taskAdoption);
+    // 01G5 — siehe Vorgangsnotizen: Entscheidung und Ergebnis gehören zusammen.
+    conflicts.push(...taskMerge.conflicts);
+    next.tasks = taskMerge.tasks;
+
+    // 01G6 — siehe Vorgangsnotizen: aufgehoben wird nur, was bewertet wurde.
+    clearOutboxSentProof('task', [
+      ...taskAdoption.adopt,
+      ...taskAdoption.settle,
+      ...taskAdoption.evaluatedProofs,
+    ]);
   }
 
   /*
@@ -819,6 +996,7 @@ export function mergeRemoteWorkspacePullIntoState(
       remoteDunningRows,
       state.syncClient!.deviceId,
       workspaceId,
+      activeOutboxEntityIds(state, 'dunning_documentation'),
     );
     if (dunningMerge.conflicts.length > 0) {
       conflicts.push(...dunningMerge.conflicts);

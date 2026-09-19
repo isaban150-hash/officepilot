@@ -121,6 +121,21 @@ export interface SyncOutboxEntry {
   retryCount: number;
   status: SyncOutboxStatus;
   blockedReason?: string;
+  /**
+   * SYNC-DURABILITY-HARDENING-01G4 — was zuletzt tatsächlich abgeschickt wurde.
+   *
+   * Geht die Bestätigung eines Schreibvorgangs verloren, ist der Server weiter
+   * als der Client. Beim Wiederanlauf muss unterscheidbar sein, ob der neuere
+   * Serverstand der eigene verlorene Schreibvorgang ist oder die Arbeit eines
+   * anderen Geräts. Der **aktuelle** lokale Stand taugt dafür nicht: Der Nutzer
+   * kann inzwischen weitergearbeitet haben. Deshalb wird der abgeschickte Stand
+   * am Auftrag vermerkt und bleibt dort, bis er bestätigt ist.
+   */
+  sentContentKey?: string;
+  /** Ob der abgeschickte Schreibvorgang eine Löschung war. */
+  sentDeleted?: boolean;
+  /** Wann er abgeschickt wurde — nur zur Nachvollziehbarkeit. */
+  sentAt?: string;
 }
 
 export interface SyncableEntity {
