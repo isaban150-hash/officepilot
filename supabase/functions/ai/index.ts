@@ -14,6 +14,14 @@
  * im Client gebaut, Antworten dort geprüft (`aiOutputGuardService`,
  * `validateFactAssignments`, Parser). Diese Funktion ist Transport- und
  * Sicherheitsgrenze, kein zweiter Ort für Produktwissen.
+ *
+ * DOKUMENT-ASSISTENT-01H2B ergänzt genau eine Ausnahme, und sie bestätigt die
+ * Regel: die Prüfung auf verbindliche Rechts- und Steuerentscheidungen. Sie
+ * gehört hierher, weil sie eine **Sicherheitsgrenze** ist und keine
+ * Produktentscheidung — eine Schranke, die man durch Weglassen des Clients
+ * umgeht, ist keine. Die Regel selbst wird nicht hier geschrieben, sondern
+ * aus `_shared/legalClaimCore.ts` geholt, damit Browser und Server dieselbe
+ * verwenden. Die Clientprüfung bleibt zusätzlich bestehen.
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import {
@@ -29,6 +37,10 @@ import {
   validateAiRequest,
   type AiErrorCode,
 } from '../_shared/aiContract.ts';
+import {
+  guardAiAnswerText,
+  isServerClaimGuardedOperation,
+} from '../_shared/legalClaimCore.ts';
 
 /*
  * `apikey` und `x-client-info` gehören dazu, auch wenn der heutige Aufruf sie
@@ -244,6 +256,44 @@ Deno.serve(async (request: Request): Promise<Response> => {
       return fail('ai_empty_response');
     }
 
+    /*
+     * DOKUMENT-ASSISTENT-01H2B — die fachliche Grenze, serverseitig.
+     *
+     * Der kleinste mögliche Punkt: hier ist die Antwort vollständig und noch
+     * nicht herausgegeben. Alles davor — Sitzung, Lizenz, Mitgliedschaft,
+     * Zählung — bleibt unberührt; danach gibt es nichts mehr zu prüfen.
+     *
+     * Bis hierher galt der Satz im Kopf dieser Datei uneingeschränkt: keine
+     * Fachlogik auf dem Server. Er gilt weiter für Prompts, Parser und
+     * Produktwissen. Eine *Sicherheitsgrenze* ist aber keine Fachlogik: Was
+     * der Client prüft, kann umgangen werden, indem man den Client weglässt.
+     * Für eine Zusage über Recht oder Steuern darf das nicht gelten.
+     *
+     * Geprüft werden nur die Ketten, die dem Benutzer Fliesstext auf eine
+     * Frage liefern. Die strukturierte Feldzuordnung und der Briefentwurf
+     * bleiben unangetastet — ihnen dieselbe Behandlung zu geben, hiesse
+     * verschiedene Dinge gleich zu behandeln.
+     */
+    let antwort = text;
+    if (isServerClaimGuardedOperation(operation)) {
+      const geprueft = guardAiAnswerText(text);
+      antwort = geprueft.text;
+      if (geprueft.removed > 0) {
+        /*
+         * Der Grund gehört ins Protokoll, nicht in die Antwort. Nach aussen
+         * geht Fachsprache, nie Prüfsprache — und niemals der beanstandete
+         * Satz selbst, der hier im Klartext stünde.
+         */
+        logUsage({
+          operation,
+          userId,
+          workspaceId,
+          removedClaims: geprueft.removed,
+          outcome: geprueft.replaced ? 'claim_guard_replaced' : 'claim_guard_pruned',
+        });
+      }
+    }
+
     logUsage({
       operation,
       userId,
@@ -253,7 +303,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
       durationMs: Date.now() - startedAt,
       outcome: 'ok',
     });
-    return ok(text);
+    return ok(antwort);
   } catch (error) {
     const aborted = error instanceof DOMException && error.name === 'AbortError';
     logUsage({

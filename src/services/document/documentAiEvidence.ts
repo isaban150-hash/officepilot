@@ -14,6 +14,13 @@ const RESPONSE_DEMAND_PATTERN = new RegExp(
 
 /** Structured deadline evidence only — not issueDate/documentDate/OCR alone. */
 export function hasStructuredDeadlineEvidence(context: DocumentAiContext): boolean {
+  /*
+   * DOKUMENT-ASSISTENT-01E — die verstandene Bedeutung ist ebenfalls ein Beleg.
+   *
+   * Der Kern aus 01B führt jede Frist mit Typ und Belegstelle. Sie hier nicht
+   * zu zählen hiess, eine belegte Frist als unbelegt zu behandeln.
+   */
+  if (context.semantic && context.semantic.deadlines.length > 0) return true;
   return Boolean(context.deadline?.trim() || context.validUntil?.trim());
 }
 
@@ -28,6 +35,24 @@ export function hasResponseDemandEvidence(text: string | undefined): boolean {
 }
 
 export function hasDemandEvidence(context: DocumentAiContext): boolean {
+  /*
+   * DOKUMENT-ASSISTENT-01E — eine gelesene Pflicht ist eine Aufforderung.
+   *
+   * Die Muster oben suchen feste Wendungen wie „bitte antworten". „Wir fordern
+   * Sie auf, die Mängel bis zum 30.09.2026 zu beseitigen" steht in keiner von
+   * ihnen — die Aufforderung galt deshalb als unbelegt, und eine richtige
+   * Antwort wurde auf eine vorsichtige Schablone zurückgestuft.
+   *
+   * Der semantische Kern hat die Pflicht samt Belegstelle gelesen. Nur was er
+   * dem eigenen Betrieb zuschreibt, zählt hier; was die Gegenseite ankündigt,
+   * ist keine Aufforderung an uns.
+   */
+  const semantic = context.semantic;
+  if (semantic) {
+    if (semantic.obligations.some((pflicht) => pflicht.who === 'own_company')) return true;
+    if (semantic.deadlines.some((frist) => frist.actionRequired)) return true;
+  }
+
   const text = [
     context.recognizedText ?? '',
     ...context.recognizedDataLines,

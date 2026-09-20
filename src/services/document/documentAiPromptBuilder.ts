@@ -5,6 +5,7 @@ import { getCompanyProfile } from '../companyProfileService';
 import { sanitizeAiText } from '../ai/aiTextSanitizer';
 import type { DocumentAiContext, DocumentAiPriorTurn } from '../../types/areaAi';
 import { applyQuestionScopedQualityNotes } from './documentAiQuestionIntent';
+import { buildSemanticPromptLines } from './documentAiSemanticPromptLines';
 import {
   canClaimDocumentDemandWithDate,
   hasDemandEvidence,
@@ -20,6 +21,48 @@ function formatSection(title: string, lines: string[] | undefined): string {
   return `${title}:\n${lines.map((line) => `- ${line}`).join('\n')}`;
 }
 
+/**
+ * DOKUMENT-ASSISTENT-01H3 — der Abschnitt mit belegtem Fachwissen.
+ *
+ * Er steht bewusst **nach** den Dokumentdaten und trägt eine eigene
+ * Überschrift. Die Trennung ist der ganze Punkt: Eine allgemeine Regel darf
+ * nicht so klingen, als sei sie im Schreiben festgestellt worden.
+ *
+ * Jede Aussage kommt mit ihrer Kennung. Nur diese Kennungen darf das Modell
+ * später nennen — deshalb stehen sie hier und nicht nur der Text. Quelle und
+ * Stand stehen dabei, damit das Modell nicht in Versuchung gerät, sie
+ * auszudenken; angezeigt wird trotzdem nur, was der Bestand selbst hergibt.
+ *
+ * Fehlt der Abschnitt, gibt es kein Fachwissen — und dann gilt die Regel
+ * darunter erst recht: nichts aus dem eigenen Modellwissen ergänzen.
+ */
+function buildKnowledgeSection(context: DocumentAiContext): string | undefined {
+  const treffer = context.knowledge;
+  if (!treffer || treffer.length === 0) return undefined;
+
+  const zeilen = treffer.map((hit) =>
+    [
+      `[${hit.statement.id}]`,
+      sanitizeAiText(hit.statement.statement),
+      `(Quelle: ${sanitizeAiText(hit.source.title)}, ${sanitizeAiText(hit.source.publisher)}; Stand: ${hit.statement.reviewedAt})`,
+    ].join(' '),
+  );
+
+  return [
+    'BELEGTES FACHWISSEN (allgemeine Regeln aus amtlichen Quellen — NICHT aus diesem Dokument):',
+    ...zeilen.map((zeile) => `- ${zeile}`),
+    '',
+    'REGELN ZUM FACHWISSEN (verbindlich):',
+    '- Verwende fachliche Aussagen ausschliesslich aus dieser Liste. Ergaenze nichts aus eigenem Wissen.',
+    '- Steht die Antwort nicht in dieser Liste und nicht im Dokument, sage genau das.',
+    '- Aus dem Schweigen einer Quelle folgt nichts. Fehlt eine Angabe, sage „dazu enthalten die hinterlegten Quellen nichts" — behaupte nie, es gebe die Sache deshalb nicht.',
+    '- Trenne erkennbar: was im Schreiben steht, und was allgemein gilt.',
+    '- Wende eine allgemeine Regel nicht als Feststellung auf diesen Betrieb an. Ob die Voraussetzungen hier vorliegen, ist nicht geprueft.',
+    '- Erfinde keine Quelle, keine Adresse und keine Kennung.',
+    '- Nenne in usedKnowledgeStatementIds genau die Kennungen aus dieser Liste, deren Aussage du tatsaechlich verwendet hast. Keine anderen.',
+  ].join('\n');
+}
+
 function questionNeedsCompanyContext(question: string): boolean {
   return /\b(firma|unternehmen|betrieb|unser(?:e|er|es)?|wir|anschrift|adresse|umsatzsteuer|ust-?id|steuernummer|iban|kontaktperson)\b/i.test(
     question,
@@ -28,14 +71,30 @@ function questionNeedsCompanyContext(question: string): boolean {
 
 const ANSWER_FORMAT_RULES = `ANTWORTFORMAT (verbindlich):
 Gib ausschließlich ein JSON-Objekt in genau diesem Schema zurück (kein Text außerhalb):
-{"directAnswer":"...","explanation":"..."}
+{"directAnswer":"...","explanation":"...","usedKnowledgeStatementIds":["..."]}
+
+usedKnowledgeStatementIds bleibt leer, wenn dir keine belegten Fachaussagen vorgelegt wurden oder du keine verwendet hast. Zulässig sind ausschliesslich Kennungen, die dir in dieser Anfrage vorgelegt wurden.
 
 WAHRHEITS-PRIORITÄT (verbindlich, höchste zuerst):
 1. Bestätigte Nutzerdaten (Nutzerbestätigung/Nutzerkorrektur) — niemals durch OCR, KI-Schätzung oder Chat überschreiben.
-2. Aufgelöste DocumentWorkTruth (übrige TruthView-Fakten ohne Konflikt).
-3. Strukturierte Extraktion (Frist/Betrag/Sender nur wenn nicht durch 1 abgedeckt).
-4. OCR-Text ausschließlich als Beleg/Zitatgrundlage — nie als Korrektur bestätigter Fakten.
-5. Gesprächsverlauf nur als Dialogkontext — niemals als bestätigte Dokumentenwahrheit.
+2. VERSTANDENE DOKUMENTBEDEUTUNG — Betreff, Anliegen, Pflichten, Termine mit Bedeutung, Beträge mit Rolle, Buchführung, Vorschläge für Kunde/Auftrag.
+3. Aufgelöste DocumentWorkTruth (übrige TruthView-Fakten ohne Konflikt).
+4. Strukturierte Extraktion (Frist/Betrag/Sender nur wenn nicht durch 1–2 abgedeckt).
+5. OCR-Text ausschließlich als Beleg/Zitatgrundlage — nie als Korrektur bestätigter Fakten.
+6. Gesprächsverlauf nur als Dialogkontext — niemals als bestätigte Dokumentenwahrheit.
+
+VERSTANDENE DOKUMENTBEDEUTUNG (verbindlich):
+- Sagt sie, ein Betrag sei KEINE Forderung an uns, dann behaupte niemals eine Zahlungspflicht — auch nicht, wenn derselbe Betrag in der strukturierten Extraktion oder im OCR-Text auftaucht.
+- Sagt sie, ein Datum sei ein Gültigkeitsende oder ein blosser Termin, dann nenne es niemals als Frist, bis zu der wir handeln müssen.
+- Nennt sie mehrere Termine mit unterschiedlicher Bedeutung, halte sie auseinander und vermische sie nicht.
+- Führt sie Pflichten auf, dann sage nicht, es sei keine Aufforderung erkennbar.
+- Kunden- und Auftragsvorschläge sind Vorschläge. Sage ausdrücklich, dass die Zuordnung noch nicht bestätigt ist.
+
+OFFICETAKT-BESTAND (verbindlich):
+- Fragen nach Zahlungsstand, Zuordnung, Kommunikation oder Aufgaben beantwortest du ausschliesslich aus dem Abschnitt „OFFICETAKT-BESTAND".
+- Steht dort, dass kein Beleg, keine Zuordnung, keine Nachricht oder keine Aufgabe vorliegt, sage genau das — leite nichts aus dem Dokumenttext ab.
+- Aus einem im Schreiben genannten Betrag folgt niemals ein Zahlungsstand.
+- Mache kenntlich, was aus dem Schreiben stammt und was aus OfficeTakt.
 
 ENTSCHEIDUNG A–D (verbindlich, vor dem Formulieren):
 A. DIREKT ANTWORTEN — benötigte Angaben liegen eindeutig in Quelle 1–4 (höher vor niedriger) vor: direkt antworten; keine unnötige Rückfrage; keine bereits bekannte Information erneut abfragen.
@@ -174,9 +233,15 @@ export function buildDocumentAiPrompt(
           context.confirmedUserFactLines.map((line) => sanitizeAiText(line)),
         )
       : undefined,
+    buildSemanticPromptLines(context.semantic).length > 0
+      ? formatSection(
+          '2. VERSTANDENE DOKUMENTBEDEUTUNG (belegt; nachrangig nur zu bestaetigten Nutzerdaten, aber VORRANGIG vor strukturierter Extraktion und OCR)',
+          buildSemanticPromptLines(context.semantic).map((line) => sanitizeAiText(line)),
+        )
+      : undefined,
     nonConfirmedTruthLines(context)
       ? formatSection(
-          '2. Aufgelöste DocumentWorkTruth (ohne Konflikt; nachrangig zu bestätigten Nutzerdaten)',
+          '3. Aufgelöste DocumentWorkTruth (ohne Konflikt; nachrangig zu bestätigten Nutzerdaten und zur verstandenen Dokumentbedeutung)',
           nonConfirmedTruthLines(context)!.map((line) => sanitizeAiText(line)),
         )
       : undefined,
@@ -186,6 +251,13 @@ export function buildDocumentAiPrompt(
           context.documentWorkTruthConflictLines.map((line) => sanitizeAiText(line)),
         )
       : undefined,
+    context.operationalLines && context.operationalLines.length > 0
+      ? formatSection(
+          'OFFICETAKT-BESTAND (NICHT aus dem Dokument — tatsaechlicher Stand in der Anwendung)',
+          context.operationalLines.map((line) => sanitizeAiText(line)),
+        )
+      : undefined,
+    buildKnowledgeSection(context),
     formatSection('Evidence-Hinweise (verbindlich beachten)', evidenceLines(context)),
     !context.suppressIssuerHint
       ? `Aussteller/Sender (strukturiert, prüfen): ${sanitizeAiText(context.issuerOrSender)}`

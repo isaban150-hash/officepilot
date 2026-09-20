@@ -84,12 +84,72 @@ function buildStage1DateAnswer(context: DocumentAiContext, lang: AppLanguage): P
   return { directAnswer: unclear, explanation: '', text: unclear };
 }
 
+/**
+ * DOKUMENT-ASSISTENT-01E — die sichere Antwort für ein Schreiben, das etwas
+ * anderes als Geld verlangt.
+ *
+ * Alle bisherigen Schablonen sind auf Zahlung gemünzt. Verlangt ein Schreiben
+ * eine Leistung und eine Terminbestätigung, passte keine davon, und die
+ * Rückstufung landete bei „Im Dokument wird der 30.09.2026 genannt" — der
+ * gesamte gelesene Inhalt ging verloren.
+ *
+ * Diese Antwort erfindet nichts: Sie gibt die Pflichten wieder, die der Kern
+ * aus 01B mit Belegstelle gelesen hat, in deren eigener Formulierung.
+ */
+function buildSemanticObligationAnswer(
+  context: DocumentAiContext,
+): ParsedDocumentAiAnswer | null {
+  const eigene = context.semantic?.obligations.filter((p) => p.who === 'own_company') ?? [];
+  if (eigene.length === 0) return null;
+
+  const saetze = eigene.slice(0, 3).map((pflicht) => {
+    const wann = pflicht.byWhen ? ` (bis ${formatIsoDate(pflicht.byWhen)})` : '';
+    return `${pflicht.what}${wann}`;
+  });
+  const direct = `Das Schreiben verlangt: ${saetze.join(' ')}`;
+  const explanation =
+    context.semantic && !context.semantic.amounts.some((b) => b.isClaimAgainstUs)
+      ? 'Eine Zahlungspflicht ergibt sich daraus nicht.'
+      : '';
+  return { directAnswer: direct, explanation, text: combine(direct, explanation) };
+}
+
+function formatIsoDate(iso: string): string {
+  const t = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  return t ? `${t[3]}.${t[2]}.${t[1]}` : iso;
+}
+
 function buildSafeDemandAnswer(context: DocumentAiContext, lang: AppLanguage): ParsedDocumentAiAnswer {
   if (context.documentNature === 'test_or_sample') {
     return buildStage1DateAnswer(context, lang);
   }
   const date = context.deadline?.trim() || context.validUntil?.trim() || collectMentionableDates(context)[0];
-  if (canClaimDocumentDemandWithDate(context) && date) {
+  /*
+   * DOKUMENT-ASSISTENT-01E — diese Schablone behauptet eine **Zahlung**.
+   *
+   * Seit die verstandene Bedeutung als Aufforderungsbeleg zählt, trifft sie
+   * auch auf Schreiben zu, die etwas ganz anderes verlangen: Die Mängelanzeige
+   * fordert eine Leistung und einen Termin, kein Geld. Ohne diesen Riegel
+   * entstand daraus „Das Dokument fordert eine Zahlung bis zum 30.09.2026" —
+   * genau die erfundene Zahlungspflicht, die 01B ausschliessen soll.
+   *
+   * Sagt der Kern, dass kein Betrag eine Forderung an uns ist, wird hier nie
+   * von Zahlung gesprochen.
+   */
+  const semantic = context.semantic;
+  const zahlungBelegt =
+    !semantic ||
+    semantic.amounts.length === 0 ||
+    semantic.amounts.some((betrag) => betrag.isClaimAgainstUs);
+  /*
+   * Verlangt das Schreiben etwas anderes als Geld, gibt die Antwort genau das
+   * wieder — statt auf eine Datumsnennung zurückzufallen.
+   */
+  if (!zahlungBelegt) {
+    const ausPflichten = buildSemanticObligationAnswer(context);
+    if (ausPflichten) return ausPflichten;
+  }
+  if (zahlungBelegt && canClaimDocumentDemandWithDate(context) && date) {
     const direct = t('document.freeQuestion.direct.documentDemandsPayment', lang).replace(
       '{date}',
       date,

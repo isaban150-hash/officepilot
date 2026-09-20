@@ -118,6 +118,7 @@ export function resolvePaperFilingForDocument(
     documentType: context?.documentType,
     issuer: document.issuer,
     sender: document.issuer,
+    selfAuthored: document.category === 'geschaeftsschreiben',
     isAdvertisement: context?.isAdvertisement,
     linkedVorgangId: document.linkedVorgang?.vorgangId ?? context?.linkedVorgangId,
     year: context?.year,
@@ -535,6 +536,7 @@ export function recordArchivedDocumentMemory(
     documentType: options?.inboxItem?.documentType,
     issuer: document.issuer,
     sender: document.issuer,
+    selfAuthored: document.category === 'geschaeftsschreiben',
     isAdvertisement: options?.inboxItem?.isAdvertisement,
     linkedVorgangId,
   });

@@ -63,11 +63,18 @@ export async function runAiRequest(input: AiRequestInput): Promise<AiResult> {
 
   const guard = validateAiOutput(text, input.guardProfile, input.guardContext ?? {});
   if (!guard.valid) {
+    /*
+     * DOKUMENT-ASSISTENT-01H2 — ohne eigene Meldung.
+     *
+     * Hier stand „KI-Antwort verworfen – bitte Originaldaten prüfen." Das ist
+     * die Sprache der Prüfung, nicht die des Benutzers: Er hat nach seiner
+     * Mängelanzeige gefragt und bekam eine Auskunft über unsere Technik. Die
+     * Fachkette formuliert jetzt selbst, in der Sprache der Oberfläche.
+     */
     return {
       success: false,
       source: 'rule_fallback',
       text,
-      message: 'KI-Antwort verworfen – bitte Originaldaten prüfen.',
       errorCode: 'guard_rejected',
       warnings: guard.warnings,
     };
@@ -76,7 +83,13 @@ export async function runAiRequest(input: AiRequestInput): Promise<AiResult> {
   return {
     success: true,
     source: 'ai',
-    text,
+    /*
+     * Der geprüfte Text, falls ein Satz entfallen ist. Damit erreicht keine
+     * Einzelfallentscheidung die Oberfläche — auch nicht über die Ketten,
+     * die keine eigene Nachprüfung haben.
+     */
+    text: guard.safeText ?? text,
+    warnings: guard.warnings.length > 0 ? guard.warnings : undefined,
   };
 }
 

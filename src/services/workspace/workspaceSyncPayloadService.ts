@@ -6,6 +6,7 @@ import type { Expense } from '../../types/expense';
 import { parseExpensePaymentEntityId, type ExpensePaymentSyncEntity } from '../expense/expenseCloudSyncService';
 import type { SyncEntityType } from '../../types/sync';
 import type { VorgangNote } from '../../types/communication';
+import type { BusinessLetter } from '../../types/businessLetter';
 import type { InvoiceDunningDocumentation } from '../../types/dunningDocumentation';
 import type { Workspace, WorkspaceMember, WorkspaceSettings } from '../../types/workspace';
 import {
@@ -37,6 +38,7 @@ export type CloudSyncEntityPayload =
   | { entityType: 'expense'; entityId: string; entity: Expense; rowVersion: number; deleted: boolean }
   | { entityType: 'expense_payment'; entityId: string; entity: ExpensePaymentSyncEntity; rowVersion: number; deleted: boolean }
   | { entityType: 'vorgang_note'; entityId: string; entity: VorgangNote; rowVersion: number; deleted: boolean }
+  | { entityType: 'business_letter'; entityId: string; entity: BusinessLetter; rowVersion: number; deleted: boolean }
   | { entityType: 'task'; entityId: string; entity: Task; rowVersion: number; deleted: boolean }
   | {
       entityType: 'dunning_documentation';
@@ -184,6 +186,12 @@ export function extractCloudSyncEntity(
       const note = (state.vorgangNotes ?? []).find((n) => n.id === entityId);
       if (!note) return null;
       return { entityType, entityId, entity: note, rowVersion: note.sync?.version ?? 0, deleted: note.sync?.deleted ?? false };
+    }
+    // BRIEFE-01B — Geschaeftsschreiben
+    case 'business_letter': {
+      const letter = (state.businessLetters ?? []).find((l) => l.id === entityId);
+      if (!letter) return null;
+      return { entityType, entityId, entity: letter, rowVersion: letter.sync?.version ?? 0, deleted: letter.sync?.deleted ?? false };
     }
     // FINANZ-CORE-DURABILITY-01C — Ausgaben
     case 'expense': {

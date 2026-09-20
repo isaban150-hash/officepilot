@@ -21,6 +21,13 @@ import type {
   WorkflowResult,
 } from '../types/models';
 import { buildStructuredBusinessFacts } from './businessInterpretationFacts';
+import { buildDocumentSemanticCore } from './document/documentSemanticCoreService';
+import { findSemanticPartyCandidates } from './document/documentSemanticPartyMatchService';
+import { getInboxExtractedDocumentText } from './inboxDocumentText';
+import { getCompanyProfileStoreSnapshot } from './companyProfileService';
+import { getCustomerStoreSnapshot } from './customerStoreService';
+import { getAllVorgaenge } from './vorgangService';
+import type { DocumentSemanticCore } from '../types/documentSemanticCore';
 import {
   isAuthorityClassifiedKind,
   isBankClassifiedKind,
@@ -1084,6 +1091,37 @@ function enrichGapsFromFacts(
  * Read-only business coordination over existing specialist outputs.
  * Does not invent facts, mutate state, or call persistence/execution services.
  */
+/**
+ * DOKUMENTVERSTAENDNIS-01B — semantischer Kern samt Kunden- und
+ * Auftragskandidaten.
+ *
+ * Ohne Volltext bleibt der Kern aus: Ein leerer Kern waere eine Aussage, die
+ * niemand belegen kann. Die Kandidatensuche laeuft unabhaengig von der
+ * Dokumentart, denn genau daran scheiterte sie bisher.
+ */
+function buildSemanticCoreForItem(item: InboxItem): DocumentSemanticCore | undefined {
+  const text = getInboxExtractedDocumentText(item);
+  if (!text.trim()) return undefined;
+
+  const core = buildDocumentSemanticCore({
+    text,
+    companyProfile: getCompanyProfileStoreSnapshot() ?? null,
+  });
+
+  const kandidaten = findSemanticPartyCandidates({
+    text,
+    sender: item.sender,
+    customers: getCustomerStoreSnapshot(),
+    vorgaenge: getAllVorgaenge(),
+  });
+
+  return {
+    ...core,
+    customerCandidates: kandidaten.customerCandidates,
+    vorgangCandidates: kandidaten.vorgangCandidates,
+  };
+}
+
 export function interpretBusinessFromWorkflow(
   input: InterpretBusinessFromWorkflowInput,
 ): BusinessInterpretationResult {
@@ -1093,6 +1131,12 @@ export function interpretBusinessFromWorkflow(
   const meaning = resolveEvent(item, workflow, linkedVorgang, recognitionUncertain);
   const vorgangRef = buildVorgangRef(item, workflow, linkedVorgang, vorgangConfirmed);
   const parties = buildParties(workflow);
+  /*
+   * DOKUMENTVERSTAENDNIS-01B — der semantische Kern entsteht aus dem Volltext
+   * und kennt die Dokumentart bewusst nicht. Dadurch behaelt auch ein als
+   * „Sonstiges" eingestuftes Schreiben seine Bedeutung.
+   */
+  const semantic = buildSemanticCoreForItem(item);
   const effects = buildEffects(item, workflow, meaning.eventType);
   const structured = buildStructuredBusinessFacts({
     item,
@@ -1152,6 +1196,7 @@ export function interpretBusinessFromWorkflow(
     requiredConfirmations,
     nextActionCandidates,
     facts: structured.facts,
+    semantic,
     contractFamily: family,
     derivedFrom: {
       hasContractIntelligence: Boolean(workflow.contractIntelligence),

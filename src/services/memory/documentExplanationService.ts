@@ -453,6 +453,7 @@ export function buildDocumentExplanation(
     classifiedKind,
     documentType: inboxItem?.documentType,
     issuer: document.issuer,
+    selfAuthored: document.category === 'geschaeftsschreiben',
     linkedVorgangId: memory?.linkedVorgangId ?? document.linkedVorgang?.vorgangId,
     isAdvertisement: inboxItem?.isAdvertisement,
   });

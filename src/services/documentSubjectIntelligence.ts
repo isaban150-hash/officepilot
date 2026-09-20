@@ -356,7 +356,15 @@ function pickTopic(
   signals: DocumentSubjectSignals,
   input: ComposeDocumentSubjectInput,
 ): string | undefined {
-  const betreffRaw = preferSubjectFactValue(input.betreff, input.letterAbout);
+  /*
+   * DOKUMENTVERSTAENDNIS-01B — `letterAbout` ist ein **erzeugter Erklaersatz**,
+   * keine Betreffzeile. Als Rueckfallwert erzeugte er Betreffs wie „Westfalen
+   * Projektbau · Ein wichtiges Schreiben von GmbH: Gerade erfasst: Sonstiges",
+   * die aussahen, als staenden sie im Dokument. Ein fehlender Betreff ist
+   * ehrlicher als ein erfundener; die Erklaerung steht ohnehin an ihrem
+   * eigenen Platz.
+   */
+  const betreffRaw = preferSubjectFactValue(input.betreff);
   const betreff =
     betreffRaw && !looksLikePartyName(betreffRaw, input.sender) && !isGenericTopic(betreffRaw)
       ? cleanTopic(betreffRaw) ?? betreffRaw

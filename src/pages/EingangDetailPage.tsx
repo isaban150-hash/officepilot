@@ -57,6 +57,8 @@ import type { DocumentFieldFillConfirmRow } from '../types/documentFieldFillConf
 import type { DocumentFieldFillFreeTextBridgeProposal } from '../types/documentFieldFillFreeTextBridge';
 import { CollapsibleReviewSection, ReviewDetailsGroup } from '../components/inbox/review/CollapsibleReviewSection';
 import { DocumentReviewExperience } from '../components/inbox/review/DocumentReviewExperience';
+import { DocumentMeaningPanel } from '../components/documents/DocumentMeaningPanel';
+import { resolveInboxDocumentText } from '../services/document/documentSourceTextService';
 import { DocumentFinanceReferencePanel } from '../components/inbox/DocumentFinanceReferencePanel';
 import {
   confirmDocumentFinanceReference,
@@ -189,6 +191,19 @@ export function buildUnitUnresolvedToast(
   return translate('position.unitUnresolved').replace('{units}', units);
 }
 
+/**
+ * Die frische Auswertung bleibt massgeblich; nur ein Feld wird aus dem
+ * gespeicherten Stand nachgezogen, wenn sie es nicht hat.
+ */
+function mergeBusinessInterpretation(
+  live: WorkflowResult['businessInterpretation'],
+  restored: WorkflowResult['businessInterpretation'],
+): WorkflowResult['businessInterpretation'] {
+  if (!live) return restored ?? null;
+  if (live.semantic || !restored?.semantic) return live;
+  return { ...live, semantic: restored.semantic };
+}
+
 export function mergeReviewWorkflowWithRestoredDocumentWorkResult(
   restoredWorkflow: WorkflowResult | null | undefined,
   liveWorkflow: WorkflowResult | null | undefined,
@@ -228,7 +243,20 @@ export function mergeReviewWorkflowWithRestoredDocumentWorkResult(
     pendingSummary: liveWorkflow.pendingSummary ?? restoredWorkflow.pendingSummary,
     warnings: mergedWarnings,
     nextActions: liveWorkflow.nextActions ?? restoredWorkflow.nextActions,
-    businessInterpretation: liveWorkflow.businessInterpretation ?? restoredWorkflow.businessInterpretation,
+    /*
+     * DOKUMENTVERSTAENDNIS-01C — der semantische Kern überlebt die Rückkehr.
+     *
+     * Die frische Auswertung gewinnt wie bisher. Sie entsteht aber aus dem
+     * **gespeicherten** Eingangsposten, und der trägt den Volltext nicht mehr
+     * mit sich — ihr fehlt deshalb der Kern aus 01B, den die Analyse beim
+     * Hochladen bereits berechnet und abgelegt hat. Ohne diese Zeile wäre die
+     * gesamte Bedeutung eines Schreibens nach dem Speichern verschwunden,
+     * obwohl sie auf der Platte liegt.
+     */
+    businessInterpretation: mergeBusinessInterpretation(
+      liveWorkflow.businessInterpretation,
+      restoredWorkflow.businessInterpretation,
+    ),
     workflowDecision: liveWorkflow.workflowDecision ?? restoredWorkflow.workflowDecision,
   };
 }
@@ -2042,10 +2070,28 @@ export function EingangDetailPage() {
       </CollapsibleReviewSection>
   );
 
+  /*
+   * DOKUMENTVERSTAENDNIS-01C — der Verstehen-Bereich.
+   *
+   * Er entsteht aus dem Volltext des Schreibens und ist damit unabhängig davon,
+   * ob die Dokumentart getroffen wurde. Ohne Text zeigt er sich gar nicht.
+   */
+  /*
+   * Der gespeicherte Posten traegt den Volltext nicht mehr; die Analyse hat ihn
+   * aber aufbewahrt. `resolveInboxDocumentText` holt ihn von dort.
+   */
+  const bedeutungsText = resolveInboxDocumentText(item, workflow);
+  const meaningCore = workflow?.businessInterpretation?.semantic ?? null;
+  const meaningPanel =
+    bedeutungsText || meaningCore ? (
+      <DocumentMeaningPanel text={bedeutungsText} core={meaningCore} sender={item.sender} />
+    ) : null;
+
   const reviewExperience = (
     <DocumentReviewExperience
       item={item}
       workflow={workflow}
+      meaningSlot={meaningPanel}
       executionResult={intakeExecution}
       isExecuting={isExecutingIntake}
       moreOptionsExpanded={moreOptionsExpanded}

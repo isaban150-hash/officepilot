@@ -1,5 +1,19 @@
+/**
+ * DOKUMENT-ASSISTENT-01H2 — die Schranke bleibt, sie wird nur genauer.
+ *
+ * Vorher stand hier ein einziges pauschales Verbot. Das Modell zog daraus den
+ * naheliegenden Schluss, zu Rechts- und Steuerthemen lieber gar nichts zu
+ * sagen — und wich selbst bei einer harmlosen Frage aus („Kann ich beim
+ * Finanzamt Fristverlängerung beantragen?" wurde als Dokumentfrage
+ * beantwortet). Erlaubt bleiben muss, was ein aufmerksamer Bürokollege auch
+ * sagen würde: allgemein einordnen, benennen, wer zuständig ist, und offen
+ * sagen, was man nicht weiss.
+ *
+ * Verboten bleibt unverändert die Entscheidung über den Einzelfall, die
+ * angemasste Beraterrolle und jede Verbindlichkeitszusage.
+ */
 export const AI_NO_LEGAL_TAX_ADVICE_RULE =
-  'Keine Rechtsberatung und keine Steuerberatung. Keine rechtsverbindlichen oder steuerlichen Zusagen.';
+  'Keine Rechtsberatung und keine Steuerberatung: Entscheide keinen Einzelfall, gib dich nicht als Anwalt oder Steuerberater aus und mache keine rechtsverbindlichen oder steuerlichen Zusagen. Allgemeine Einordnung ist erlaubt, wenn sie im Kontext belegt ist und du den Vorbehalt dazusagst. Fehlt der Beleg, sage klar, dass du es nicht sicher sagen kannst, und nenne die zuständige Stelle.';
 
 export const AI_NO_INVENTED_FACTS_RULE =
   'Erfinde keine Fakten, Beträge, Namen, Fristen, Termine, Preise oder Gründe.';
@@ -35,16 +49,16 @@ STRENGE REGELN:
 - Behalte alle im Original genannten Preise, Termine und Gründe bei.
 - Wenn eine Verbesserung neue Informationen erfordern würde, gib den Originaltext unverändert zurück.`;
 
-export const FORBIDDEN_LEGAL_TAX_PHRASES = [
-  'rechtsberatung',
-  'steuerberatung',
-  'steuerlich absetzbar',
-  'steuerlich beraten',
-  'rechtsverbindlich',
-  'rechtsgültig',
-  'garantiere rechtlich',
-  'garantiert rechtlich',
-  'steuerrechtlich',
-  'anwaltlich',
-  'ohne steuerliche prüfung',
-] as const;
+/*
+ * DOKUMENT-ASSISTENT-01H2 — die Wortliste ist entfallen.
+ *
+ * Hier stand `FORBIDDEN_LEGAL_TAX_PHRASES`: elf Wörter, von denen jedes
+ * einzelne eine vollständige Antwort vernichtete. Sie traf zuverlässig die
+ * falschen Sätze — „Das ist keine Rechtsberatung" und „Diese Auskunft ist
+ * nicht rechtsverbindlich" enthalten dieselben Wörter wie die Zusagen, die
+ * verhindert werden sollten. Gefährlich ist nicht das Wort, sondern die Art
+ * der Behauptung; geprüft wird sie in `legalClaimGuard`.
+ *
+ * Die Liste wurde nicht ersetzt, sondern abgelöst. Wer sie wieder einführt,
+ * baut den Fehler wieder ein.
+ */

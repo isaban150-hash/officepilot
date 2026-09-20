@@ -18,6 +18,9 @@ import { AusgabeNeuPage } from './pages/AusgabeNeuPage';
 import { AusgabenPage } from './pages/AusgabenPage';
 import { AssistentPage } from './pages/AssistentPage';
 import { AufgabenPage } from './pages/AufgabenPage';
+import { SchreibenPage } from './pages/SchreibenPage';
+import { BriefEditorPage } from './pages/BriefEditorPage';
+import { BriefDetailPage } from './pages/BriefDetailPage';
 import { DokumentDetailPage } from './pages/DokumentDetailPage';
 import { DokumentePage } from './pages/DokumentePage';
 import { DokumentNeuPage } from './pages/DokumentNeuPage';
@@ -185,6 +188,10 @@ function AppRoutes() {
         <Route path="/eingang/:id" element={<LegacyInboxDetailRedirect />} />
         <Route path="/analyse" element={<Navigate to="/assistent" replace />} />
         <Route path="/aufgaben" element={<AufgabenPage />} />
+        <Route path="/schreiben" element={<SchreibenPage />} />
+        <Route path="/schreiben/neu" element={<BriefEditorPage />} />
+        <Route path="/schreiben/:letterId" element={<BriefDetailPage />} />
+        <Route path="/schreiben/:letterId/bearbeiten" element={<BriefEditorPage />} />
         <Route path="/vorgaenge" element={<VorgaengePage />} />
         <Route path="/vorgaenge/:id" element={<VorgangDetailPage />} />
         <Route path="/vorgaenge/:id/rechnung" element={<RechnungPage />} />

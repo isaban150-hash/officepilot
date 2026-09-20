@@ -29,6 +29,9 @@ export const SUPABASE_SYNC_ALLOWLIST: ReadonlySet<SyncEntityType> = new Set([
   // CLOUD-DURABILITY-CORE-01D — Mahnnachweise (append-only). Freigabe erst nach
   // Entity-Typ, Schema, RLS, Push, Pull, Merge, Backfill, Idempotenz und Tests.
   'dunning_documentation',
+  // BRIEFE-01B — Geschaeftsschreiben. Freigabe mit Tabelle, RLS, Push, Pull,
+  // Merge, Grabstein, Altbestand und Wiederanlauf nach 01G.
+  'business_letter',
 ]);
 
 export const LOCAL_ONLY_SYNC_ENTITY_TYPES: ReadonlySet<SyncEntityType> = new Set([

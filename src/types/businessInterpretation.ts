@@ -5,6 +5,7 @@ import type {
   WorkflowActionId,
   WorkflowNextAction,
 } from './models';
+import type { DocumentSemanticCore } from './documentSemanticCore';
 import type {
   ContractFamily,
   ContractPartyRole,
@@ -386,6 +387,15 @@ export interface BusinessInterpretationResult {
   nextActionCandidates: BusinessInterpretationNextActionCandidate[];
   /** Structured facts forwarded from specialists (BUSINESS-BRAIN-01A1). */
   facts: BusinessStructuredFacts;
+  /**
+   * DOKUMENTVERSTAENDNIS-01B — der semantische Kern des Schreibens.
+   *
+   * Bewusst hier und nicht in einer eigenen Struktur: Die Bedeutung eines
+   * Dokuments gehoert zu seiner Interpretation. Das Feld ist optional, weil
+   * nicht jeder Aufrufer einen Volltext hat; fehlt es, verhaelt sich alles wie
+   * bisher.
+   */
+  semantic?: DocumentSemanticCore;
   /** Optional contract family copied from intelligence when present. */
   contractFamily?: ContractFamily;
   /** Passthrough reference for tests / callers — never mutate via this result. */

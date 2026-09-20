@@ -44,6 +44,13 @@ interface DocumentReviewExperienceProps {
   onCreateContractOrder?: (selectedPositions: EnhancedDetectedOrderPosition[]) => void;
   /** CUSTOMER-FACHOBJEKT-04C — customer decision rendered at the contract confirmation. */
   customerDecisionSlot?: ReactNode;
+  /**
+   * DOKUMENTVERSTAENDNIS-01C — der Verstehen-Bereich.
+   *
+   * Er steht bewusst weit oben und nicht hinter „Weitere Details": Was im
+   * Schreiben steht, ist die erste Frage des Betriebs, nicht die letzte.
+   */
+  meaningSlot?: ReactNode;
   customerDecisionBlocked?: boolean;
   onDiscardContractProposal?: () => void;
   /** Secondary inquiry from Auftragskarte — opens more options / communication. */
@@ -95,6 +102,7 @@ export function DocumentReviewExperience({
   onApplySuggestion,
   onCreateContractOrder,
   customerDecisionSlot = null,
+  meaningSlot = null,
   customerDecisionBlocked = false,
   onDiscardContractProposal,
   onContractInquiry,
@@ -305,6 +313,8 @@ export function DocumentReviewExperience({
           /* 01D — der Karteninhalt liegt jetzt im äusseren Details-Bereich. */
         />
       ) : null}
+
+      {meaningSlot}
 
       {showLegacySummary ? (
         <div className="document-review-experience__layout">

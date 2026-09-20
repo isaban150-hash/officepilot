@@ -296,8 +296,15 @@ export function resolveDocumentLifecycle(
    * liefert ohne Kommunikationsereignisse ohnehin `no_reply_needed`. Ein Gate
    * dort wäre wirkungslos (belegt in 02E).
    */
+  /*
+   * BRIEFE-01D — dasselbe gilt für ein selbst verfasstes Geschäftsschreiben:
+   * Es kam nicht mit der Post herein, es gibt kein fremdes Original, und
+   * „Original noch abheften" wäre eine Aufgabe ohne Gegenstand.
+   */
+  const istEigenesSchreiben = document?.category === 'geschaeftsschreiben';
   const needsPaper =
     (document ? !isGeneratedOutgoingInvoiceDocument(document) : true) &&
+    !istEigenesSchreiben &&
     needsPaperFolder(memory, inboxItem, document?.paperFolder?.folderId);
   const physicalFiled = documentId ? isPhysicallyFiled(documentId, memory) : false;
   const replyStatus = resolveLifecycleReplyStatus({ documentId, inboxItem, memory });

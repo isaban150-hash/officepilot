@@ -2640,3 +2640,150 @@
   align-items: center;
   justify-content: flex-start;
 }
+
+/*
+ * BRIEFE-01C/01D — Geschäftsschreiben. Bewusst eng auf `.brief-detail`
+ * begrenzt: keine globalen Farben, keine geänderten Schaltflächen, nur das,
+ * was Anschrift, Brieftext und die PDF-Vorschau zum Atmen brauchen.
+ */
+.brief-detail__address {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-style: normal;
+  line-height: 1.5;
+}
+
+.brief-detail__body {
+  white-space: pre-wrap;
+  line-height: 1.6;
+}
+
+.brief-detail__preview {
+  width: 100%;
+  height: min(78vh, 900px);
+  border: 1px solid var(--border, #d9dde4);
+  border-radius: 8px;
+  background: #fff;
+}
+
+@media (max-width: 640px) {
+  .brief-detail__preview {
+    height: 62vh;
+  }
+}
+
+/*
+ * DOKUMENTVERSTAENDNIS-01C — der Verstehen-Bereich.
+ *
+ * Ein ruhiger Block statt einer Kartenwand: eine Fläche, klare Zwischen-
+ * überschriften, viel Luft zwischen den Abschnitten. Keine neuen Farben —
+ * es werden ausschliesslich die vorhandenen Token benutzt.
+ */
+.document-meaning {
+  margin: 16px 0;
+  padding: 18px 20px;
+  border: 1px solid var(--border, #d9dde4);
+  border-radius: 10px;
+  background: var(--surface, #fff);
+}
+
+.document-meaning__title {
+  margin: 0 0 14px;
+  font-size: 1.02rem;
+  font-weight: 600;
+}
+
+.document-meaning__section {
+  margin-bottom: 14px;
+}
+
+.document-meaning__section:last-of-type {
+  margin-bottom: 0;
+}
+
+.document-meaning__section--muted {
+  padding-top: 12px;
+  border-top: 1px solid var(--border, #d9dde4);
+}
+
+.document-meaning__label {
+  margin: 0 0 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted, #5b6472);
+}
+
+.document-meaning__value {
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* Die Antwort auf „Muss ich etwas tun?" darf man nicht überlesen. */
+.document-meaning__answer {
+  font-weight: 600;
+}
+
+.document-meaning__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.document-meaning__item,
+.document-meaning__candidate {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: baseline;
+  padding: 5px 0;
+  line-height: 1.45;
+}
+
+.document-meaning__item + .document-meaning__item,
+.document-meaning__candidate + .document-meaning__candidate {
+  border-top: 1px solid var(--border-subtle, #eef0f3);
+}
+
+/* Eine Handlungsfrist wird links markiert; ein blosser Termin nicht. */
+.document-meaning__item--action {
+  padding-left: 10px;
+  border-left: 2px solid var(--border, #d9dde4);
+}
+
+.document-meaning__item-due,
+.document-meaning__candidate-name {
+  font-weight: 600;
+}
+
+.document-meaning__amount {
+  min-width: 96px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.document-meaning__candidate-reason,
+.document-meaning__hint {
+  font-size: 0.86rem;
+  color: var(--text-muted, #5b6472);
+}
+
+.document-meaning__disclaimer {
+  margin: 14px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--border, #d9dde4);
+  font-size: 0.8rem;
+  color: var(--text-muted, #5b6472);
+}
+
+@media (max-width: 640px) {
+  .document-meaning {
+    padding: 14px 14px;
+  }
+
+  .document-meaning__amount {
+    min-width: 0;
+  }
+}

@@ -8,10 +8,12 @@ import { buildCustomerCloudContentKey } from '../customer/customerCloudService';
 import { buildVorgangNoteCloudContentKey } from '../vorgang/vorgangNoteCloudService';
 import { buildTaskCloudContentKey } from '../task/taskCloudService';
 import { buildDunningDocumentationCloudContentKey } from '../invoice/dunningDocumentationCloudService';
+import { buildBusinessLetterCloudContentKey } from '../letter/businessLetterCloudService';
 import { resolveCloudWorkspaceId } from '../workspace/workspaceSyncPayloadService';
 import { buildCloudEntityId } from '../workspace/workspaceSyncPayloadService';
 import type { Customer, Task, Vorgang } from '../../types/models';
 import type { VorgangNote } from '../../types/communication';
+import type { BusinessLetter } from '../../types/businessLetter';
 import type { InvoiceDunningDocumentation } from '../../types/dunningDocumentation';
 import { isCloudSyncBlockedMockTaskId, isCloudSyncBlockedMockVorgangId } from '../storage/mockDataDetectionService';
 import {
@@ -47,6 +49,8 @@ export const TRACKED_SYNC_ENTITY_TYPES: SyncEntityType[] = [
   'knowledge_fact',
   // CLOUD-DURABILITY-CORE-01D — Nachweis über eine übergebene Mahnung.
   'dunning_documentation',
+  // BRIEFE-01B — ausgehende Geschaeftsschreiben.
+  'business_letter',
 ];
 
 export const TRACKED_CLOUD_SYNC_ENTITY_TYPES: SyncEntityType[] = [
@@ -179,6 +183,17 @@ function buildVorgangNoteFingerprint(note: VorgangNote): EntitySyncFingerprint {
   };
 }
 
+/** BRIEFE-01B — fachlicher Fingerabdruck des Briefs, ohne `sync`. */
+function buildBusinessLetterFingerprint(letter: BusinessLetter): EntitySyncFingerprint {
+  const sync = letter.sync;
+  return {
+    version: sync?.version ?? 0,
+    deleted: sync?.deleted ?? false,
+    updatedAt: sync?.updatedAt ?? '',
+    contentKey: buildBusinessLetterCloudContentKey(letter),
+  };
+}
+
 function buildVorgangFingerprint(vorgang: Vorgang): EntitySyncFingerprint {
   const sync = vorgang.sync;
   return {
@@ -214,7 +229,9 @@ function collectTrackedEntities(state: AppPersistedState): Map<string, TrackedEn
                     ? buildVorgangNoteFingerprint(entity as unknown as VorgangNote)
                     : entityType === 'task'
                       ? buildTaskFingerprint(entity as Task)
-                      : entityType === 'dunning_documentation'
+                      : entityType === 'business_letter'
+                        ? buildBusinessLetterFingerprint(entity as unknown as BusinessLetter)
+                        : entityType === 'dunning_documentation'
                         ? buildDunningDocumentationFingerprint(
                             entity as unknown as InvoiceDunningDocumentation,
                           )
@@ -312,6 +329,7 @@ function fingerprintChanged(
     entityType === 'expense' ||
     entityType === 'vorgang_note' ||
     entityType === 'task' ||
+    entityType === 'business_letter' ||
     entityType === 'dunning_documentation'
   ) {
     return (

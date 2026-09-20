@@ -28,6 +28,8 @@ export type SyncEntityType =
   | 'communication_event'
   /** CLOUD-DURABILITY-CORE-01D — Nachweis einer übergebenen Zahlungserinnerung/Mahnung (append-only). */
   | 'dunning_documentation'
+  /** BRIEFE-01B — ausgehendes Geschäftsschreiben als eigenes Dokument. */
+  | 'business_letter'
   | 'knowledge_fact';
 
 export type SyncOutboxOperation = 'create' | 'update' | 'delete';

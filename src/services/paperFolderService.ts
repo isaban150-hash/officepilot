@@ -20,6 +20,14 @@ export interface PaperFilingContext {
   issuer?: string;
   sender?: string;
   isAdvertisement?: boolean;
+  /**
+   * BRIEFE-01D — ein Dokument, das der Betrieb selbst verfasst hat.
+   *
+   * Zu einem eigenen Geschaeftsschreiben gibt es kein fremdes Papier, das
+   * abgeheftet werden muesste. Dieselbe Regel gilt im Archiv bereits fuer die
+   * selbst erzeugte Ausgangsrechnung.
+   */
+  selfAuthored?: boolean;
   linkedVorgangId?: string;
   year?: number;
 }
@@ -136,6 +144,9 @@ function krankenkasseRegister(kind: ClassifiedDocumentKind, issuer?: string): st
 }
 
 export function resolvePaperFiling(context: PaperFilingContext): PaperFilingResolution {
+  if (context.selfAuthored) {
+    return { rule: null, skipPhysicalFiling: true };
+  }
   if (isAdvertisementContext(context)) {
     return { rule: null, skipPhysicalFiling: true };
   }

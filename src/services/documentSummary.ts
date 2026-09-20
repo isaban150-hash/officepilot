@@ -4,6 +4,7 @@
  * No new parsers, extraction, or AI.
  */
 import type { TranslationKey } from '../i18n';
+import type { DocumentSemanticCore } from '../types/documentSemanticCore';
 import { formatMessage } from '../i18n/formatMessage';
 import type {
   DocumentSummary,
@@ -130,6 +131,34 @@ export function resolveDocumentSummaryFamily(
   return 'generic';
 }
 
+/**
+ * DOKUMENT-ASSISTENT-01E — die alte Darstellung darf der verstandenen
+ * Bedeutung nicht widersprechen.
+ *
+ * Die Familie entsteht allein aus Dokumentart und Dokumenttyp. Fuer eine
+ * Gutschrift gibt es dort keinen Zweig, also landete sie bei `invoice_in` —
+ * mit dem Satz „stellt Ihnen … in Rechnung" und der Aktion „Ausgabe erfassen".
+ * Waehrend der semantische Bereich daneben korrekt „Gutschrift zu Ihren
+ * Gunsten, keine Zahlung von Ihnen" sagte.
+ *
+ * Hier wird die Familie nur **abgestuft**, nie erfunden: Sagt der Kern, dass
+ * keiner der Betraege eine Forderung an uns ist, ist das Dokument keine
+ * Eingangsrechnung. Die Klassifikation bleibt unangetastet; es entfaellt nur
+ * die falsche Zahlungsaussage. Die Buchungsschranke aus 01B bleibt die
+ * letzte Sicherheitsinstanz.
+ */
+export function downgradeFamilyAgainstSemanticTruth(
+  family: DocumentSummaryFamily,
+  semantic: DocumentSemanticCore | null | undefined,
+): DocumentSummaryFamily {
+  if (family !== 'invoice_in' || !semantic) return family;
+  /* Ohne gelesene Betraege gibt es nichts zu widerlegen. */
+  if (semantic.amounts.length === 0) return family;
+  if (semantic.amounts.some((betrag) => betrag.isClaimAgainstUs)) return family;
+  if (semantic.accounting.relevance === 'booking_candidate') return family;
+  return 'generic';
+}
+
 /** Priority: BI truth → Understanding → RD → generic fallback. Never invent qty×price totals. */
 function moneyNonContract(
   item: InboxItem,
@@ -149,12 +178,31 @@ function moneyNonContract(
   );
 }
 
-/** Priority: BI timeline → Understanding → item → RD */
+/**
+ * Priority: BI timeline → Understanding → item → RD
+ *
+ * DOKUMENTVERSTAENDNIS-01B — der semantische Kern geht allem voran, wenn er
+ * eine echte Handlungsfrist kennt. Und er **sperrt** die uebrigen Quellen,
+ * wenn er im Schreiben ausdruecklich keine gefunden hat: Eine
+ * Freistellungsbescheinigung zeigte bis hierher ihr Gueltigkeitsende
+ * (31.08.2029) als „Frist" — als muesse jemand bis dahin handeln. Das
+ * Gegenteil ist der Fall.
+ */
 function deadlineFromSources(
   item: InboxItem,
   workflow: WorkflowResult | null | undefined,
   bi: BusinessInterpretationResult | null,
 ): string | undefined {
+  const semantic = bi?.semantic;
+  if (semantic) {
+    if (semantic.primaryActionDeadline) {
+      /* Der Kern rechnet in ISO; angezeigt wird die gewohnte Schreibweise. */
+      const iso = semantic.primaryActionDeadline.date;
+      const teile = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+      return teile ? `${teile[3]}.${teile[2]}.${teile[1]}` : iso;
+    }
+    if (semantic.deadlines.length > 0) return undefined;
+  }
   return firstNonEmpty(
     bi?.facts.timeline.deadline?.value,
     workflow?.documentUnderstanding?.deadline,
@@ -468,7 +516,10 @@ function buildNonContractSummary(
     options.displayBusinessInterpretation !== undefined
       ? options.displayBusinessInterpretation
       : workflow.businessInterpretation;
-  const family = resolveDocumentSummaryFamily(item, workflow, null);
+  const family = downgradeFamilyAgainstSemanticTruth(
+    resolveDocumentSummaryFamily(item, workflow, null),
+    bi?.semantic,
+  );
   const kind = resolveKind(item, workflow, null);
   const typeLabelKey = getDocumentDisplayLabelKey(kind, item.documentType);
   const typeLabel = translate(typeLabelKey);
@@ -532,7 +583,12 @@ function buildNonContractSummary(
   const subject = composeIntelligentDocumentSubject({
     text: getInboxExtractedDocumentText(item),
     typeLabel,
-    betreff: firstNonEmpty(bi?.facts.subject.subject?.value, rd(item, 'Betreff')),
+    betreff: firstNonEmpty(
+      /* DOKUMENTVERSTAENDNIS-01B — die tatsaechlich gelesene Betreffzeile zuerst. */
+      bi?.semantic?.subject?.value,
+      bi?.facts.subject.subject?.value,
+      rd(item, 'Betreff'),
+    ),
     letterAbout,
     vorgang: firstNonEmpty(understanding?.vorgang, rd(item, 'Vorgang')),
     project: firstNonEmpty(bi?.facts.subject.project?.value, rd(item, 'Bauvorhaben', 'Projekt')),

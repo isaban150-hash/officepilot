@@ -14,6 +14,8 @@ import { deBackup } from './backup';
 import { dePilot } from './pilot';
 import { deSettings } from './settings';
 import { deDelivery } from './delivery';
+import { deBusinessLetter } from './businessLetter';
+import { deDocumentMeaning } from './documentMeaning';
 
 export const deModules = {
   ...deAuth,
@@ -34,4 +36,6 @@ export const deModules = {
   ...dePilot,
   ...deSettings,
   ...deDelivery,
+  ...deBusinessLetter,
+  ...deDocumentMeaning,
 } as const;

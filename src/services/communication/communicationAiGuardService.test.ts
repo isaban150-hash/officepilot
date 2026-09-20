@@ -44,7 +44,8 @@ describe('communicationAiGuardService', () => {
     });
 
     expect(result.valid).toBe(false);
-    expect(result.warnings[0]).toContain('Rechts-/Steuerformulierung');
+    /* 01H2: Der Grund heisst jetzt, was er ist — eine Entscheidung über den Einzelfall. */
+    expect(result.warnings[0]).toContain('Einzelfallentscheidung entfernt');
   });
 
   it('blockiert leere KI-Antwort', () => {

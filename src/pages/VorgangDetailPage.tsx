@@ -60,6 +60,7 @@ import {
 } from '../components/customer/customerDecisionUi';
 import { InvoiceListCard } from '../components/invoice/InvoiceListCard';
 import { CommunicationIntegrationPanel } from '../components/communication/CommunicationIntegrationPanel';
+import { getBusinessLettersForVorgang } from '../services/businessLetterService';
 import { VORGANG_COMMUNICATION_BUTTON_KEYS } from '../components/communication/communicationNavigation';
 import { VorgangNegotiationPanel } from '../components/vorgang/VorgangNegotiationPanel';
 import { VorgangContractConfirmPanel } from '../components/vorgang/VorgangContractConfirmPanel';
@@ -144,6 +145,8 @@ export function VorgangDetailPage() {
     const note = restoredSession?.drafts.values.note;
     return typeof note === 'string' ? note : '';
   });
+  /* BRIEFE-01C — Schreiben zu diesem Auftrag. */
+  const vorgangLetters = id ? getBusinessLettersForVorgang(id) : [];
   const [notes, setNotes] = useState<VorgangNote[]>(() =>
     id ? getNotesForVorgang(id) : [],
   );
@@ -536,6 +539,23 @@ export function VorgangDetailPage() {
       >
         {translate('detail.action.writeMessage')}
       </Button>
+      {/*
+       * GESAMTABNAHME-01J — der fehlende Einstieg zum Geschäftsschreiben.
+       *
+       * Der Briefeditor kennt `?vorgangId=` seit 01C und leitet daraus sogar
+       * den Kunden und dessen Anschrift ab — nur kam man vom Auftrag aus nie
+       * dorthin. Der Kunde hatte seinen Einstieg, der Auftrag nicht. Deshalb
+       * hier dieselbe Schaltfläche wie im Kundendetail; die Vorbelegung ist
+       * bereits vorhanden und wird nicht angefasst.
+       */}
+      <Button
+        variant="outline"
+        fullWidth
+        onClick={() => navigate(`/schreiben/neu?vorgangId=${vorgang.id}`)}
+        data-testid="vorgang-letter-create"
+      >
+        {translate('businessLetter.customer.create')}
+      </Button>
     </>
   );
 
@@ -572,6 +592,46 @@ export function VorgangDetailPage() {
             {task.dueDate && <CardMeta>Frist: {task.dueDate}</CardMeta>}
           </Card>
         ))}
+      </section>
+
+      {/*
+       * BRIEFE-01C — Geschäftsschreiben zu diesem Auftrag. Der Einstieg belegt
+       * Auftrag und Kunde vor; die Anschrift kommt aus dem Kundenstamm.
+       */}
+      <section className="section">
+        <h2 className="section__title">{translate('businessLetter.vorgang.section')}</h2>
+        <div className="form-actions">
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => navigate(`/schreiben/neu?vorgangId=${vorgang.id}`)}
+            data-testid="vorgang-letter-create"
+          >
+            {translate('businessLetter.vorgang.create')}
+          </Button>
+        </div>
+        {vorgangLetters.length === 0 ? (
+          <p className="empty-state">{translate('businessLetter.vorgang.empty')}</p>
+        ) : (
+          vorgangLetters.map((brief) => (
+            <Card key={brief.id}>
+              <CardTitle>
+                <Link to={`/schreiben/${brief.id}`} data-testid={`vorgang-letter-${brief.id}`}>
+                  {brief.subject}
+                </Link>
+              </CardTitle>
+              <CardMeta>
+                {brief.letterDate}
+                {' · '}
+                {translate(
+                  brief.status === 'finalized'
+                    ? 'businessLetter.status.finalized'
+                    : 'businessLetter.status.draft',
+                )}
+              </CardMeta>
+            </Card>
+          ))
+        )}
       </section>
 
       <section className="section">

@@ -1,9 +1,28 @@
+import type { DocumentSemanticCore } from './documentSemanticCore';
+import type { KnowledgeHit } from './domainKnowledge';
 import { OFFICEPILOT_LEGAL_DISCLAIMER } from '../config/legalDisclaimer';
 
 export const AREA_AI_DISCLAIMER =
   `${OFFICEPILOT_LEGAL_DISCLAIMER} Antworten basieren nur auf den lokal gespeicherten Daten und können unvollständig sein.`;
 
 export type AreaAiAnswerSource = 'ai' | 'unavailable';
+
+/**
+ * Ein Beleg, wie ihn die Oberflaeche zeigt: Aussage, Herausgeber, Stand, Adresse.
+ *
+ * Bewusst je **Aussage** und nicht je Antwort — sonst hiesse es am Ende „diese
+ * Antwort hat drei Quellen" statt „diese Tatsache stammt von dort".
+ */
+export interface AreaAiKnowledgeSource {
+  statementId: string;
+  statement: string;
+  sourceTitle: string;
+  publisher: string;
+  /** Nur https und nur aus dem Bestand; fehlt, wenn die Quelle keine Adresse hat. */
+  url?: string;
+  /** Der Prueftag des Eintrags, als ISO-Tag. */
+  reviewedAt: string;
+}
 
 export interface AreaAiAnswer {
   question: string;
@@ -21,6 +40,14 @@ export interface AreaAiAnswer {
   uncertain?: boolean;
   /** User-visible concrete uncertainty notes (not a generic disclaimer alone). */
   uncertaintyNotes?: string[];
+  /**
+   * DOKUMENT-ASSISTENT-01H3 — die Belege der tatsächlich verwendeten Aussagen.
+   *
+   * Nur gesetzt, wenn die Antwort belegtes Fachwissen benutzt hat, und nur mit
+   * Einträgen aus dem eigenen Bestand. Was das Modell an Quellen behauptet,
+   * kommt hier nie an: Es darf höchstens bekannte Kennungen nennen.
+   */
+  knowledgeSources?: AreaAiKnowledgeSource[];
 }
 
 /**
@@ -37,6 +64,40 @@ export type DocumentAiPriorTurn = {
 };
 
 export interface DocumentAiContext {
+  /**
+   * DOKUMENT-ASSISTENT-01E — der semantische Kern aus 01B.
+   *
+   * Bewusst das **vorhandene** Modell und keine Kopie: Was der Kern sagt, ist
+   * belegt und traegt seine Unsicherheit mit sich. Er steht in der
+   * Wahrheitsrangfolge direkt hinter den bestaetigten Nutzerwerten und vor
+   * allem, was aus `recognizedData` oder dem Volltext stammt.
+   *
+   * Fehlt er — Altdokumente vor 01B —, bleibt alles wie bisher.
+   */
+  semantic?: DocumentSemanticCore;
+  /**
+   * DOKUMENT-ASSISTENT-01F — Auskuenfte aus dem OfficeTakt-Bestand.
+   *
+   * Bewusst ein eigenes Feld und ein eigener Promptabschnitt: Was im
+   * Schreiben steht und was OfficeTakt weiss, sind zwei Wahrheiten. Das
+   * Dokument sagt, was gefordert wurde; der Bestand sagt, was tatsaechlich
+   * bezahlt, zugeordnet oder erledigt ist. Vermischt ergaebe das einen
+   * erfundenen Zahlungsstand.
+   *
+   * Gefuellt nur, wenn die Frage danach verlangt.
+   */
+  operationalLines?: string[];
+  /**
+   * DOKUMENT-ASSISTENT-01H3 — belegtes Fachwissen, sofern die Frage es braucht.
+   *
+   * Bewusst ein eigenes Feld und ein eigener Promptabschnitt: Was im Schreiben
+   * steht und was allgemein gilt, sind zwei verschiedene Dinge. Vermischt
+   * entstünde der gefährlichste Satz überhaupt — eine allgemeine Regel, die
+   * wie eine Feststellung über diesen Betrieb klingt.
+   *
+   * Leer, wenn die Frage kein Fachwissen braucht. Das ist der Normalfall.
+   */
+  knowledge?: KnowledgeHit[];
   sourceType: 'document' | 'inbox';
   title: string;
   issuerOrSender: string;

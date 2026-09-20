@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { DocumentArchiveTruthFactsCard } from '../components/documents/DocumentArchiveTruthFactsCard';
 import { DocumentUnderstandingCard } from '../components/documents/DocumentUnderstandingCard';
+import { DocumentMeaningPanel } from '../components/documents/DocumentMeaningPanel';
 import { DocumentDetailPreview } from '../components/documents/DocumentDetailPreview';
 import { DocumentDerivativeRecoveryStatusPanel } from '../components/documents/DocumentDerivativeRecoveryStatusPanel';
 import { DocumentOriginalFilePanel } from '../components/documents/DocumentOriginalFilePanel';
@@ -91,9 +92,16 @@ export function DokumentDetailPage() {
    * Bereich sichtbar, nur die Handlungspflicht entfällt.
    */
   const isGeneratedInvoice = isGeneratedOutgoingInvoiceDocument(document);
-  const paperInstruction = isGeneratedInvoice
-    ? undefined
-    : formatPaperFilingInstruction(document.paperFolder);
+  /*
+   * BRIEFE-01D — dieselbe Überlegung für ein selbst verfasstes
+   * Geschäftsschreiben: Der Betrieb hat es geschrieben, es kam nicht mit der
+   * Post herein, und es gibt kein fremdes Original zum Abheften.
+   */
+  const isOwnLetter = document.category === 'geschaeftsschreiben';
+  const paperInstruction =
+    isGeneratedInvoice || isOwnLetter
+      ? undefined
+      : formatPaperFilingInstruction(document.paperFolder);
 
   /**
    * 02F — auf eine selbst gestellte Rechnung antwortet niemand. Gefiltert wird
@@ -503,6 +511,9 @@ export function DokumentDetailPage() {
             hideIdentity
             testId="document-detail-experience"
           />
+
+          {/* DOKUMENTVERSTAENDNIS-01C — was im Schreiben steht, vor der technischen Einordnung. */}
+          <DocumentMeaningPanel text={document.recognizedText} sender={document.issuer} />
 
           <DocumentUnderstandingCard documentId={document.id} />
         </div>

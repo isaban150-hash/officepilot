@@ -6,6 +6,11 @@ import {
   buildDocumentAiContextFromInbox,
 } from './documentAiContextService';
 import { buildDocumentAiPrompt } from './documentAiPromptBuilder';
+import { buildOperationalLines } from './documentAiRetrievalService';
+import {
+  findDocumentKnowledge,
+  verifyUsedKnowledge,
+} from './documentKnowledgeService';
 import { parseDocumentAiAnswer } from './documentAiAnswerParser';
 import {
   applyDocumentAiAnswerPostCheck,
@@ -76,17 +81,26 @@ function buildContext(source: DocumentAiSource): DocumentAiContext {
   });
 }
 
+/**
+ * DOKUMENT-ASSISTENT-01H2 — Prüfmeldungen sind keine Hinweise für den Leser.
+ *
+ * Bisher wanderten die Warnungen der Prüfkette ungefiltert unter „Unsicher /
+ * unvollständig". Sichtbar wurde daraus im Betrieb: „Verbotene
+ * Rechts-/Steuerformulierung: rechtsberatung". Das ist kein Hinweis, das ist
+ * ein Blick in den Maschinenraum — und er sagt dem Benutzer über sein
+ * Dokument nichts.
+ *
+ * Die Warnungen bleiben erhalten; sie stehen weiter im Feld `warnings` und
+ * damit für Protokoll und Test zur Verfügung. Nur angezeigt werden sie nicht
+ * mehr.
+ */
 function collectAnswerUncertainty(
   question: string,
   context: DocumentAiContext,
-  warnings: string[] | undefined,
+  _warnings: string[] | undefined,
   lang: AppLanguage,
 ): string[] {
-  const notes = [
-    ...context.missingFieldNotes,
-    ...context.uncertainFieldNotes,
-    ...(warnings ?? []),
-  ];
+  const notes = [...context.missingFieldNotes, ...context.uncertainFieldNotes];
   if (!context.recognizedText?.trim()) {
     notes.push(t('document.freeQuestion.note.cannotAnswerFromDocument', lang));
   }
@@ -112,7 +126,45 @@ export async function askDocumentAi(input: {
   }
 
   const priorTurns = normalizeDocumentAiPriorTurns(input.priorTurns);
-  const context = buildContext(input.source);
+  const rohkontext = buildContext(input.source);
+  /*
+   * DOKUMENT-ASSISTENT-01F — gezielter Abruf.
+   *
+   * Erst jetzt, weil erst die Frage sagt, welche Auskunft gebraucht wird.
+   * Ohne passende Frage bleibt der Abschnitt leer; der Arbeitsbereich wird
+   * niemals vollstaendig in den Prompt geladen.
+   */
+  const mitBestand =
+    input.source.type === 'inbox'
+      ? {
+          ...rohkontext,
+          operationalLines: buildOperationalLines({
+            question: trimmedQuestion,
+            item: input.source.item,
+            core: rohkontext.semantic,
+          }),
+        }
+      : rohkontext;
+
+  /*
+   * DOKUMENT-ASSISTENT-01H3 — belegtes Fachwissen, aber nur wenn gefragt.
+   *
+   * Erst jetzt, aus demselben Grund wie beim Bestand: Erst die Frage sagt, ob
+   * eine allgemeine Regel überhaupt gebraucht wird. Der Normalfall ist eine
+   * leere Liste — dann sieht der Prompt aus wie bisher.
+   */
+  const asOf = new Date().toISOString().slice(0, 10);
+  const knowledge = findDocumentKnowledge({
+    question: trimmedQuestion,
+    classifiedKind: mitBestand.classifiedKind,
+    subject: mitBestand.semantic?.subject?.value ?? null,
+    purpose: mitBestand.semantic?.purpose?.value ?? null,
+    documentDates: [mitBestand.validUntil, mitBestand.deadline, mitBestand.issueDate],
+    /* 01I1 — die erkannte Bescheinigungsart darf ein fremdes Thema ausschliessen. */
+    certificate: mitBestand.semantic?.certificate,
+    asOf,
+  });
+  const context = knowledge.length > 0 ? { ...mitBestand, knowledge } : mitBestand;
   const prompt = buildDocumentAiPrompt(trimmedQuestion, context, lang, { priorTurns });
   const dialogGuardText = buildDocumentAiPriorTurnsGuardText(priorTurns);
   const allowedSourceText = [buildAllowedFromContext(context), dialogGuardText]
@@ -143,9 +195,20 @@ export async function askDocumentAi(input: {
   }
 
   if (result.source === 'rule_fallback' || !result.text) {
+    /*
+     * DOKUMENT-ASSISTENT-01H2 — der seltene Fall, dass nichts bleibt.
+     *
+     * Dann ist die ehrliche Absage besser als ein Trümmerstück: Sie sagt, was
+     * gilt, und wohin die Frage gehört. Was sie nicht mehr sagt, ist, dass
+     * intern etwas „verworfen" wurde.
+     */
+    const message =
+      result.errorCode === 'guard_rejected'
+        ? t('document.freeQuestion.error.notAnswerable', lang)
+        : result.message ?? t('document.freeQuestion.error.failed', lang);
     return unavailableAnswer(
       trimmedQuestion,
-      result.message ?? t('document.freeQuestion.error.failed', lang),
+      message,
       result.errorCode,
       uncertaintyNotes,
       result.warnings,
@@ -164,8 +227,18 @@ export async function askDocumentAi(input: {
     new Set([...(result.warnings ?? []), ...checked.warnings]),
   );
 
+  /*
+   * DOKUMENT-ASSISTENT-01H3 — die Belege entstehen hier, nicht im Modell.
+   *
+   * Das Modell darf sagen, welche Aussagen es verwendet hat. Titel, Herausgeber
+   * und Adresse holt OfficeTakt aus dem eigenen Bestand. Damit kann eine
+   * Quellenangabe nicht erfunden werden — schlimmstenfalls fehlt sie.
+   */
+  const knowledgeSources = verifyUsedKnowledge(parsed.usedKnowledgeStatementIds, knowledge);
+
   return {
     question: trimmedQuestion,
+    ...(knowledgeSources.length > 0 ? { knowledgeSources } : {}),
     text: checked.text,
     directAnswer: checked.directAnswer,
     explanation: checked.explanation || undefined,

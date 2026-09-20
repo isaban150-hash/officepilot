@@ -118,6 +118,11 @@ import {
   resetVorgangNotes,
 } from './vorgangNoteService';
 import {
+  getBusinessLetterStoreSnapshot,
+  hydrateBusinessLetters,
+  resetBusinessLetters,
+} from './businessLetterService';
+import {
   getDunningDocumentationStoreSnapshot,
   hydrateDunningDocumentations,
   resetDunningDocumentations,
@@ -501,6 +506,7 @@ export function createSeedState(setupOverride?: CompanySetup): AppPersistedState
       // No seeded customers and no backfill from Vorgang.customer.
       customers: [],
       vorgangNotes: [],
+      businessLetters: [],
       dunningDocumentations: [],
       communicationHistory: [],
       knowledgeFacts: [],
@@ -653,6 +659,7 @@ function finalizeLoadedPersistedState(normalized: AppPersistedState): AppPersist
     expenses: (normalized.expenses ?? []).map(cloneExpense),
     customers: (normalized.customers ?? []).map(cloneCustomer),
     vorgangNotes: (normalized.vorgangNotes ?? []).map(cloneVorgangNote),
+    businessLetters: (normalized.businessLetters ?? []).map((letter) => ({ ...letter })),
     dunningDocumentations: (normalized.dunningDocumentations ?? []).map((doc) => ({ ...doc })),
     communicationHistory: (normalized.communicationHistory ?? []).map(cloneCommunicationEvent),
     knowledgeFacts: (normalized.knowledgeFacts ?? []).map(cloneKnowledgeFact),
@@ -921,6 +928,7 @@ export function clearInMemoryBusinessState(): void {
   resetExpenses();
   resetCustomers();
   resetVorgangNotes();
+  resetBusinessLetters();
   resetDunningDocumentations();
   resetCommunicationHistoryStore();
   resetMailImports();
@@ -990,6 +998,7 @@ export function applyStateToStores(state: AppPersistedState): void {
   hydrateExpenseStore(state.expenses ?? []);
   hydrateCustomerStore(state.customers ?? []);
   hydrateVorgangNotes(state.vorgangNotes ?? []);
+  hydrateBusinessLetters(state.businessLetters ?? []);
   hydrateDunningDocumentations(state.dunningDocumentations ?? []);
   hydrateCommunicationHistory(state.communicationHistory ?? []);
   hydrateKnowledgeFacts(state.knowledgeFacts ?? []);
@@ -1256,6 +1265,7 @@ export function buildPersistedStateSnapshot(): AppPersistedState {
     expenses: getExpenseStoreSnapshot(),
     customers: getCustomerStoreSnapshot(),
     vorgangNotes: getVorgangNoteStoreSnapshot(),
+    businessLetters: getBusinessLetterStoreSnapshot(),
     dunningDocumentations: getDunningDocumentationStoreSnapshot(),
     communicationHistory: getCommunicationHistorySnapshot(),
     knowledgeFacts: getKnowledgeSnapshot(),
@@ -1303,6 +1313,7 @@ export function resetDemoData(options?: { keepSetup?: boolean }): CompanySetup {
   resetExpenses();
   resetCustomers();
   resetVorgangNotes();
+  resetBusinessLetters();
   resetDunningDocumentations();
   resetCommunicationHistoryStore();
   resetMailImports();

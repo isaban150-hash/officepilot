@@ -14,6 +14,8 @@ import { trBackup } from './backup';
 import { trPilot } from './pilot';
 import { trSettings } from './settings';
 import { trDelivery } from './delivery';
+import { trBusinessLetter } from './businessLetter';
+import { trDocumentMeaning } from './documentMeaning';
 
 export const trModules = {
   ...trAuth,
@@ -36,4 +38,6 @@ export const trModules = {
   ...trPilot,
   ...trSettings,
   ...trDelivery,
+  ...trBusinessLetter,
+  ...trDocumentMeaning,
 } as const;

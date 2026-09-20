@@ -2,6 +2,7 @@ import type { SyncMeta } from './sync';
 import type { WorkspaceVorgangRow } from '../services/vorgang/vorgangCloudService';
 import type { WorkspaceCustomerRow } from '../services/customer/customerCloudService';
 import type { WorkspaceVorgangNoteRow } from '../services/vorgang/vorgangNoteCloudService';
+import type { WorkspaceBusinessLetterRow } from '../services/letter/businessLetterCloudService';
 import type { WorkspaceTaskRow } from '../services/task/taskCloudService';
 import type { WorkspaceDunningDocumentationRow } from '../services/invoice/dunningDocumentationCloudService';
 
@@ -68,6 +69,8 @@ export interface WorkspaceSyncPullPayload {
    * lüde sie wieder hoch.
    */
   vorgangNotes: WorkspaceVorgangNoteRow[];
+  /** BRIEFE-01B — Geschaeftsschreiben. */
+  businessLetters: WorkspaceBusinessLetterRow[];
   /**
    * CLOUD-DURABILITY-CORE-01C — ebenfalls inklusive Grabsteine: Sie tragen auch
    * das Ergebnis der Dedupe-Auflösung auf das zweite Gerät.

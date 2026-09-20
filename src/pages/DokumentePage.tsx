@@ -185,7 +185,9 @@ export function DokumentePage() {
              * Dokument hat keinen Papierzustand, über den etwas zu sagen wäre.
              */
             const paperStatus = resolveDocumentPaperListStatus(doc, {
-              skipPhysicalFiling: isGeneratedOutgoingInvoiceDocument(doc),
+              skipPhysicalFiling:
+                isGeneratedOutgoingInvoiceDocument(doc) ||
+                doc.category === 'geschaeftsschreiben',
             });
             const paperKey =
               paperStatus === 'filed'
@@ -207,6 +209,19 @@ export function DokumentePage() {
               isGeneratedOutgoingInvoiceDocument(doc) && doc.linkedInvoiceId
                 ? findInvoiceById(doc.linkedInvoiceId)
                 : undefined;
+            /*
+             * BRIEFE-01D — ein selbst verfasstes Geschäftsschreiben trägt seinen
+             * Betreff als Titel und den Empfänger darunter. Die allgemeine
+             * Zusammenfassung ist auf eingehende Post gemünzt und nannte den Brief
+             * „Schriftverkehr", mit dem Rat, eine Zahlung zu prüfen.
+             */
+            const letterView =
+              doc.category === 'geschaeftsschreiben'
+                ? {
+                    title: doc.title,
+                    subtitle: doc.linkedCompany || doc.issuer || translate('document.noIssuer'),
+                  }
+                : null;
             const invoiceView = ownInvoice
               ? {
                   title:
@@ -224,13 +239,15 @@ export function DokumentePage() {
                 to={`/dokumente/${doc.id}`}
                 testId={`document-summary-list-${doc.id}`}
                 leading={<DocumentCardThumbnail documentId={doc.id} placeholder={doc.imagePreview ?? ''} />}
-                title={invoiceView ? invoiceView.title : summaryView.title}
+                title={invoiceView?.title ?? letterView?.title ?? summaryView.title}
                 subtitle={
                   <>
                     <span data-testid={`document-card-date-${doc.id}`}>
                       {invoiceView
                         ? `${invoiceView.customer} · ${invoiceView.date}`
-                        : `${summaryView.subtitle || doc.issuer || translate('document.noIssuer')} · ${cardDate.formatted}`}
+                        : letterView
+                          ? `${letterView.subtitle} · ${cardDate.formatted}`
+                          : `${summaryView.subtitle || doc.issuer || translate('document.noIssuer')} · ${cardDate.formatted}`}
                     </span>
                     {validUntilLabel ? (
                       <>
@@ -248,7 +265,7 @@ export function DokumentePage() {
                   ) : undefined
                 }
                 meta={
-                  !invoiceView && summaryView.factsLine ? (
+                  !invoiceView && !letterView && summaryView.factsLine ? (
                     <span data-testid={`document-card-summary-facts-${doc.id}`}>
                       {summaryView.facts.slice(0, 3).map((f) => f.value).join(' · ')}
                     </span>

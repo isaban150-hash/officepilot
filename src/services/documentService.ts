@@ -83,6 +83,7 @@ export const COMPANY_DOCUMENT_CATEGORIES: CompanyDocumentCategory[] = [
   'ausgangsrechnung',
   'behoerde',
   'personal',
+  'geschaeftsschreiben',
   'sonstiges',
 ];
 
@@ -100,6 +101,7 @@ function cloneDocument(doc: CompanyDocument): CompanyDocument {
     tags: [...doc.tags],
     linkedVorgang: doc.linkedVorgang ? { ...doc.linkedVorgang } : null,
     linkedInvoiceId: doc.linkedInvoiceId ?? null,
+    linkedLetterId: doc.linkedLetterId ?? null,
     archiveTruthSnapshot: doc.archiveTruthSnapshot
       ? cloneDocumentArchiveTruthSnapshot(doc.archiveTruthSnapshot)
       : undefined,
@@ -186,6 +188,7 @@ function buildDocumentFromInput(
     createdAt,
     imagePreview: input.imagePreview ?? '📄',
     linkedInvoiceId: input.linkedInvoiceId ?? null,
+    linkedLetterId: input.linkedLetterId ?? null,
     ...fileFieldsFromInput(input),
     ...(input.archiveTruthSnapshot
       ? {
@@ -259,6 +262,20 @@ export function getDocumentByLinkedInvoiceId(
       isEntitySyncActive(d) &&
       isInvoiceCorrectionDocument(d) === (kind === 'correction'),
   );
+  return doc ? cloneDocument(doc) : undefined;
+}
+
+/**
+ * BRIEFE-01D — das Archivdokument zu einem Geschäftsschreiben.
+ *
+ * Grundlage der Idempotenz: Vor dem Anlegen wird hier nachgesehen, ob es das
+ * Dokument schon gibt. Ein zweites Öffnen, Neuladen oder Herunterladen darf
+ * keinen zweiten Eintrag erzeugen.
+ */
+export function getDocumentByLinkedLetterId(letterId: string): CompanyDocument | undefined {
+  const gesucht = letterId.trim();
+  if (!gesucht) return undefined;
+  const doc = documents.find((d) => d.linkedLetterId === gesucht && isEntitySyncActive(d));
   return doc ? cloneDocument(doc) : undefined;
 }
 
@@ -357,6 +374,8 @@ export function stageDocumentUpdate(
     imagePreview: changes.imagePreview ?? current.imagePreview,
     linkedInvoiceId:
       changes.linkedInvoiceId !== undefined ? changes.linkedInvoiceId : current.linkedInvoiceId,
+    linkedLetterId:
+      changes.linkedLetterId !== undefined ? changes.linkedLetterId : current.linkedLetterId,
     fileRefId: changes.fileRefId ?? current.fileRefId,
     sourceFileHash: changes.sourceFileHash ?? current.sourceFileHash,
     originalFileName: changes.originalFileName ?? current.originalFileName,

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, Navigate, useParams } from 'react-router-dom';
+import { Link, Navigate, useParams, useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { CustomerEditForm } from '../components/customer/CustomerEditForm';
 import { updateCustomer } from '../services/customerService';
@@ -10,6 +10,7 @@ import { Badge } from '../components/ui/Badge';
 import { BusinessList, BusinessListItem } from '../components/ui/Lists';
 import { Page } from '../components/ui/Page';
 import { DetailSection, SummaryList } from '../components/ui/Section';
+import { getBusinessLettersForCustomer } from '../services/businessLetterService';
 import { vorgangStatusTone } from '../services/ui/statusTone';
 import { EmptyStateBlock } from '../components/ui/EmptyStateBlock';
 import { useApp } from '../context/AppContext';
@@ -83,6 +84,7 @@ export function KundenLegacyLinkResolver() {
 export function KundenDetailPage({ kind }: { kind: KundenIdentityKind }) {
   const { translate, showToast } = useApp();
   const params = useParams<{ customerId?: string; legacyKey?: string }>();
+  const navigate = useNavigate();
   // React Router already decodes the parameter — never decode a second time.
   const rawKey = kind === 'legacy' ? params.legacyKey : params.customerId;
 
@@ -113,6 +115,13 @@ export function KundenDetailPage({ kind }: { kind: KundenIdentityKind }) {
   const editableCustomer = useMemo(
     () => (kind === 'customer' && rawKey ? getCustomerById(rawKey.trim()) : undefined),
     [kind, rawKey, reloadToken],
+  );
+
+  /* BRIEFE-01C — Schreiben an diesen Kunden; nur ein echter Kundenstamm trägt sie. */
+  const letterCustomerId = kind === 'customer' && rawKey ? rawKey.trim() : '';
+  const customerLetters = useMemo(
+    () => (letterCustomerId ? getBusinessLettersForCustomer(letterCustomerId) : []),
+    [letterCustomerId, reloadToken],
   );
 
   const handleSave = (changes: CustomerBilling) => {
@@ -326,6 +335,45 @@ export function KundenDetailPage({ kind }: { kind: KundenIdentityKind }) {
         )}
       </DetailSection>
 
+
+      {/*
+        * BRIEFE-01C — Geschaeftsschreiben an diesen Kunden. Schlichte Liste,
+        * daneben der Einstieg mit bereits vorbelegtem Empfaenger.
+        */}
+      <DetailSection title={translate('businessLetter.customer.section')} testId="kunden-letters">
+        {letterCustomerId ? (
+          <div className="form-actions">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => navigate(`/schreiben/neu?customerId=${letterCustomerId}`)}
+              data-testid="kunden-letter-create"
+            >
+              {translate('businessLetter.customer.create')}
+            </Button>
+          </div>
+        ) : null}
+        {customerLetters.length === 0 ? (
+          <p className="detail-empty">{translate('businessLetter.customer.empty')}</p>
+        ) : (
+          <BusinessList>
+            {customerLetters.map((brief) => (
+              <BusinessListItem
+                key={brief.id}
+                to={`/schreiben/${brief.id}`}
+                linkTestId={`kunden-letter-${brief.id}`}
+                title={brief.subject}
+                subtitle={translate(
+                  brief.status === 'finalized'
+                    ? 'businessLetter.status.finalized'
+                    : 'businessLetter.status.draft',
+                )}
+                date={brief.letterDate || undefined}
+              />
+            ))}
+          </BusinessList>
+        )}
+      </DetailSection>
       <DetailSection title={translate('kunden.detail.tasksTitle')} testId="kunden-tasks">
         {workspace.tasks.length === 0 ? (
           <p className="detail-empty">{translate('kunden.detail.tasksEmpty')}</p>

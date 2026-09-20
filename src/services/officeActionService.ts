@@ -24,6 +24,10 @@ import { getTodayIso } from './taskNormalize';
 import { scanPendingItems } from './pendingEngineService';
 import { getAllVorgaenge } from './vorgangService';
 import { processUploadedDocument } from './intakeWorkflowService';
+import { resolveAccountingGate } from './document/documentAccountingGateService';
+import { buildDocumentSemanticCore } from './document/documentSemanticCoreService';
+import { getInboxExtractedDocumentText } from './inboxDocumentText';
+import { getCompanyProfileStoreSnapshot } from './companyProfileService';
 import {
   resolvePrimaryTargetObjectForDocumentType,
   resolvePrimaryTargetObjectForKind,
@@ -198,7 +202,40 @@ function openFinanceReferenceForInbox(item: InboxItem): OfficeActionResult {
   return { ok: true, kind: 'delegate', delegate: 'focusFinanceReference' };
 }
 
+/**
+ * DOKUMENTVERSTAENDNIS-01B — die bedeutungsbasierte Buchungsschranke (P0).
+ *
+ * Sie steht vor **jedem** Weg, der aus eingegangener Post eine neue Ausgabe
+ * macht. Der bisherige Schutz war eine Liste von zwei Dokumentarten und hing
+ * damit an der Klassifikation; ein als „Sonstiges" erkanntes Schreiben mit
+ * einem Betrag war ungeschuetzt.
+ *
+ * Gelesen wird jetzt zuerst der Text: Fordert das Schreiben ueberhaupt Geld von
+ * uns, oder kommt der Betrag nur vor? Die Artenliste bleibt daneben bestehen
+ * und kann die Entscheidung nur verschaerfen, nie lockern.
+ */
+function resolveInboxAccountingGate(item: InboxItem) {
+  const text = getInboxExtractedDocumentText(item);
+  const core = text.trim()
+    ? buildDocumentSemanticCore({ text, companyProfile: getCompanyProfileStoreSnapshot() ?? null })
+    : null;
+  return resolveAccountingGate({ core, classifiedKind: resolveClassifiedKind(item) });
+}
+
 export function createExpenseFromInbox(item: InboxItem): OfficeActionResult {
+  /*
+   * DOKUMENTVERSTAENDNIS-01B — erste und wichtigste Verteidigungslinie.
+   *
+   * Ein Schreiben ohne Forderung an uns wird hier nie zu einer Ausgabe, und
+   * ein Schreiben, das auf einen vorhandenen Beleg verweist, fuehrt zu diesem
+   * Beleg statt zu einem zweiten. Nur ein echter Belegkandidat darf weiter —
+   * und auch der nur bis zur Bestaetigung durch den Benutzer.
+   */
+  const schranke = resolveInboxAccountingGate(item);
+  if (schranke.decision === 'reference_only') return openFinanceReferenceForInbox(item);
+  if (schranke.decision === 'blocked') {
+    return { ok: false, errorKey: 'document.accounting.notABookingDocument' as TranslationKey };
+  }
   /*
    * Zweite Verteidigungslinie: Selbst wenn ein noch unbekannter Aufrufer diesen
    * Weg für ein Bezugsdokument wählt, entsteht keine Ausgabe.

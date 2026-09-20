@@ -3295,6 +3295,52 @@ body {
   color: var(--color-text-muted);
 }
 
+/*
+ * DOKUMENT-ASSISTENT-01H3 — die Belege unter der Antwort.
+ *
+ * Zurückhaltend: eine feine Linie, gedämpfte Schrift, keine Karte. Ein Beleg
+ * soll nachprüfbar sein, nicht um Aufmerksamkeit mit der Antwort wetteifern.
+ */
+.document-free-question-panel__sources {
+  margin-top: 0.85rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--color-border, #e2e8f0);
+}
+
+.document-free-question-panel__sources-title {
+  margin: 0 0 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--color-text-muted);
+}
+
+.document-free-question-panel__sources ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.document-free-question-panel__sources li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+}
+
+.document-free-question-panel__sources-meta {
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+}
+
+.document-free-question-panel__sources a {
+  font-size: 0.8rem;
+}
+
 .document-field-fill-confirm {
   margin: 1rem 0;
 }

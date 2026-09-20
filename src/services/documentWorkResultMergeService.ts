@@ -65,8 +65,43 @@ export function mergeDocumentWorkResultOnReanalysis(
     ...nextProjected,
     // Preserve workspace binding from previous when next omits it.
     workspaceId: nextProjected.workspaceId ?? previous.workspaceId ?? null,
+    businessInterpretation: preserveSemanticCore(previous, nextProjected, fingerprintChanged),
     overlay,
   };
+}
+
+/**
+ * DOKUMENTVERSTAENDNIS-01C — der semantische Kern überlebt eine erneute Analyse.
+ *
+ * Der belegte Fehler: Beim Öffnen eines gespeicherten Eingangsposten läuft die
+ * Analyse noch einmal. Sie arbeitet dann auf dem **gespeicherten** Posten, und
+ * der trägt seinen Volltext nicht mehr mit sich — ihr Ergebnis hat deshalb
+ * keinen semantischen Kern. Weil hier bisher `...nextProjected` vollständig
+ * gewann, überschrieb das leere Ergebnis den beim Hochladen berechneten Kern.
+ * Die Bedeutung eines Schreibens verschwand also beim ersten Wiederöffnen,
+ * obwohl sie auf der Platte lag.
+ *
+ * Übernommen wird ausschliesslich das fehlende Feld, und nur solange der
+ * Quelltext derselbe ist: Hat sich der Fingerabdruck geändert, gehört die alte
+ * Bedeutung zu einem anderen Inhalt und darf nicht weiterleben. Dasselbe
+ * Prinzip, nach dem direkt darüber schon die Arbeitsbereichsbindung erhalten
+ * bleibt.
+ */
+function preserveSemanticCore(
+  previous: DocumentWorkResult,
+  nextProjected: DocumentWorkResult,
+  fingerprintChanged: boolean,
+): DocumentWorkResult['businessInterpretation'] {
+  const next = nextProjected.businessInterpretation;
+  if (fingerprintChanged) return next;
+
+  const bewahrt = previous.businessInterpretation?.semantic;
+  if (!bewahrt) return next;
+  /* Die neue Auswertung hat einen eigenen Kern — sie ist die jüngere Wahrheit. */
+  if (next?.semantic) return next;
+  if (!next) return next;
+
+  return { ...next, semantic: bewahrt };
 }
 
 /** Upsert a single overlay entry (test / future confirm UI). */

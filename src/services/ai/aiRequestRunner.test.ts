@@ -75,6 +75,6 @@ describe('aiRequestRunner', () => {
 
     expect(result.source).toBe('rule_fallback');
     expect(result.errorCode).toBe('guard_rejected');
-    expect(result.warnings?.[0]).toContain('Rechts-/Steuerformulierung');
+    expect(result.warnings?.[0]).toContain('Einzelfallentscheidung entfernt');
   });
 });

@@ -23,6 +23,11 @@ import {
   planCustomerLostAckAdoption,
 } from '../customer/customerCloudService';
 import {
+  mergeBusinessLettersFromPull,
+  planBusinessLetterBackfill,
+  planBusinessLetterLostAckAdoption,
+} from '../letter/businessLetterCloudService';
+import {
   mergeVorgangNotesFromPull,
   planVorgangNoteBackfill,
   planVorgangNoteLostAckAdoption,
@@ -880,6 +885,81 @@ export function mergeRemoteWorkspacePullIntoState(
     });
   }
 
+  /*
+   * BRIEFE-01B — Geschaeftsschreiben.
+   *
+   * Aufgebaut wie die Vorgangsnotizen: erst der Wiederanlauf nach verlorener
+   * oder nie angekommener Bestaetigung, dann der Abgleich, dann der
+   * Altbestand. Bewusst ohne Vorbedingung auf vorhandene Serverzeilen — ein
+   * nie angekommener Anlegevorgang ist gerade daran zu erkennen, dass der
+   * Abzug nichts mitbringt (01G7).
+   */
+  const remoteLetterRows = pull.businessLetters ?? [];
+  {
+    const dirtyLetterIds = activeOutboxEntityIds(state, 'business_letter');
+
+    const letterAdoption = planBusinessLetterLostAckAdoption(
+      state.businessLetters ?? [],
+      remoteLetterRows,
+      dirtyLetterIds,
+      sentWritesFor(state, 'business_letter'),
+    );
+    const adoptedLetterIds = new Set([
+      ...letterAdoption.adopt,
+      ...letterAdoption.settle,
+      ...letterAdoption.notAccepted,
+    ]);
+
+    const letterMerge = mergeBusinessLettersFromPull(
+      adoptedLetterIds.size > 0
+        ? (state.businessLetters ?? []).map((letter) =>
+            adoptedLetterIds.has(letter.id)
+              ? adoptLostAckBaseVersion(
+                  letter,
+                  state,
+                  workspaceId,
+                  letterAdoption.baseVersions.get(letter.id) ?? 1,
+                )
+              : letter,
+          )
+        : (state.businessLetters ?? []),
+      adoptedLetterIds.size > 0
+        ? remoteLetterRows.filter((row) => !adoptedLetterIds.has(row.client_letter_id))
+        : remoteLetterRows,
+      state.syncClient!.deviceId,
+      workspaceId,
+      dirtyLetterIds,
+    );
+
+    applyLostAckAdoptionToOutbox(state, 'business_letter', letterAdoption);
+    // 01G5 — Entscheidung und Ergebnis gehoeren zusammen, siehe Vorgangsnotizen.
+    conflicts.push(...letterMerge.conflicts);
+    next.businessLetters = letterMerge.letters;
+
+    // 01G6 — aufgehoben wird nur, was auch bewertet wurde.
+    clearOutboxSentProof('business_letter', [
+      ...letterAdoption.adopt,
+      ...letterAdoption.settle,
+      ...letterAdoption.evaluatedProofs,
+    ]);
+  }
+
+  /*
+   * Altbestand — Briefe, die vor dieser Anbindung entstanden sind. Der
+   * Aenderungsverfolger meldet sie nie nach, weil er den vorhandenen Stand
+   * beim Start zur Grundlinie macht.
+   */
+  for (const letterId of planBusinessLetterBackfill(
+    next.businessLetters ?? state.businessLetters ?? [],
+    remoteLetterRows,
+  )) {
+    enqueueSyncOutbox({
+      entityType: 'business_letter',
+      entityId: letterId,
+      operation: 'create',
+      version: 0,
+    });
+  }
   /*
    * CLOUD-DURABILITY-CORE-01C — Aufgaben.
    *

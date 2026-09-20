@@ -26,6 +26,16 @@ function resolveNextStep(classification?: DocumentClassificationResult | null): 
   return classification?.nextTaskLabel || classification?.officePilotSuggestion || 'Dokument prüfen und passende Aktion wählen.';
 }
 
+import { buildDocumentSemanticCore, resolvePrimaryClaimAmount } from './document/documentSemanticCoreService';
+import { getCompanyProfileStoreSnapshot } from './companyProfileService';
+
+/** ISO nach deutscher Schreibweise; alles andere bleibt unveraendert. */
+function alsDeutschesDatum(iso: string | undefined): string | undefined {
+  if (!iso) return undefined;
+  const treffer = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  return treffer ? `${treffer[3]}.${treffer[2]}.${treffer[1]}` : iso;
+}
+
 export function buildDocumentUnderstandingSummary(
   item: InboxItem,
   options: {
@@ -48,6 +58,17 @@ export function buildDocumentUnderstandingSummary(
     intelligence?.contractTotalNet?.status === 'confirmed' && intelligence.contractTotalNet.value !== undefined
       ? formatGermanMoney(intelligence.contractTotalNet.value)
       : extracted.Betrag ?? recognizedData.Betrag;
+  /*
+   * DOKUMENTVERSTAENDNIS-01B — der semantische Kern entsteht hier aus demselben
+   * Text, der ohnehin schon vorliegt. Er kennt die Dokumentart nicht und
+   * korrigiert genau die zwei Angaben, die bisher am haeufigsten in die Irre
+   * fuehrten: welcher Betrag gemeint ist und ob ein Datum ueberhaupt eine Frist
+   * ist.
+   */
+  const semanticCore = text.trim()
+    ? buildDocumentSemanticCore({ text, companyProfile: getCompanyProfileStoreSnapshot() ?? null })
+    : null;
+  const semanticClaim = semanticCore ? resolvePrimaryClaimAmount(semanticCore) : undefined;
   const quality = assessTextQuality(text);
   const classification = options.classification;
   const kind = item.classifiedKind ?? classification?.classifiedKind ?? 'sonstiges';
@@ -74,9 +95,30 @@ export function buildDocumentUnderstandingSummary(
     customer: extracted.Kunde ?? extracted.Empfänger ?? recognizedData.Kunde,
     vorgang: extracted.Vorgang ?? item.vorgangTitle ?? extracted.Projekt ?? recognizedData.Vorgang,
     invoiceNumber: extracted.Rechnungsnummer ?? recognizedData.Rechnungsnummer,
-    amount: resolvedAmount,
-    deadline: profile?.deadlineEvidence
-      ? extracted.Frist ?? item.deadline ?? recognizedData.Frist ?? undefined
+    /*
+     * Bis hierher war der Betrag schlicht der erste, den der Text hergab: bei
+     * einer Rechnung ueber 4.188,80 EUR der Posten von 2.880,00 EUR. Ist eine
+     * Forderung an den eigenen Betrieb belegbar, steht jetzt sie hier.
+     */
+    amount: semanticClaim
+      ? formatGermanMoney(semanticClaim.value)
+      : semanticCore && semanticCore.amounts.length > 0
+        ? /*
+           * Der Kern hat Betraege gelesen, aber keiner ist eine Forderung an uns
+           * — ein Einbehalt des Kunden, ein Nettoteilbetrag, eine Gutschrift.
+           * Ihn hier als „Betrag" zu zeigen, legte eine Zahlungspflicht nahe,
+           * die es nicht gibt.
+           */
+          undefined
+        : resolvedAmount,
+    /*
+     * Eine Frist ist ein Termin, bis zu dem **wir** handeln muessen. Das
+     * Gueltigkeitsende einer Freistellungsbescheinigung ist das Gegenteil und
+     * stand bis hierher als „Frist 31.08.2029" da. Findet der Kern Termine,
+     * aber keine Handlungsfrist, bleibt das Feld bewusst leer.
+     */
+    deadline: semanticCore
+      ? alsDeutschesDatum(semanticCore.primaryActionDeadline?.date)
       : extracted.Frist ?? item.deadline ?? recognizedData.Frist ?? undefined,
     nextStep: resolveNextStep(classification),
     partialRecognition: !quality.readable && quality.wordCount > 0,

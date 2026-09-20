@@ -16,6 +16,8 @@ import { bgBackup } from './backup';
 import { bgPilot } from './pilot';
 import { bgSettings } from './settings';
 import { bgDelivery } from './delivery';
+import { bgBusinessLetter } from './businessLetter';
+import { bgDocumentMeaning } from './documentMeaning';
 
 export const bgModules = {
   ...bgAuth,
@@ -41,4 +43,6 @@ export const bgModules = {
   ...bgPilot,
   ...bgSettings,
   ...bgDelivery,
+  ...bgBusinessLetter,
+  ...bgDocumentMeaning,
 } as const;

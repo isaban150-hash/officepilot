@@ -17,6 +17,13 @@ import {
   resolveDocumentWorkTruthViewForCompanyDocument,
 } from '../documentWorkResultTruthOrchestration';
 import { detectDocumentNature } from './documentAiDocumentNature';
+import { buildDocumentSemanticCore } from './documentSemanticCoreService';
+import { buildSemanticAllowedSourceText } from './documentAiSemanticPromptLines';
+import { findSemanticPartyCandidates } from './documentSemanticPartyMatchService';
+import { getCompanyProfileStoreSnapshot } from '../companyProfileService';
+import { getCustomerStoreSnapshot } from '../customerStoreService';
+import { getAllVorgaenge } from '../vorgangService';
+import type { DocumentSemanticCore } from '../../types/documentSemanticCore';
 import { hasStructuredDeadlineEvidence } from './documentAiEvidence';
 
 function blockToPlainText(block: ExplanationTextBlock): string {
@@ -220,6 +227,8 @@ function buildLegacyDocumentAiContextFromDocument(
 
   return {
     sourceType: 'document',
+    /* 01E — Archivdokumente tragen keinen gespeicherten Kern; er wird aus dem erkannten Text gelesen. */
+    semantic: resolveSemanticCore({ text: document.recognizedText, sender: document.issuer }),
     title: document.title,
     issuerOrSender: document.issuer,
     category: document.category,
@@ -244,6 +253,39 @@ function buildLegacyDocumentAiContextFromDocument(
  * DOCUMENT-ARCHIVE-TRUTH-03A3 — archive free-question context with shared TruthView when usable.
  * Fallback: previous CompanyDocument / OCR context when adapter returns no truthView.
  */
+/**
+ * DOKUMENT-ASSISTENT-01E — der semantische Kern fuer den Assistenten.
+ *
+ * Beim Eingangsposten ist er bereits berechnet und liegt am Arbeitsstand; er
+ * wird nur durchgereicht. Beim Archivdokument gibt es keinen gespeicherten
+ * Kern, wohl aber den erkannten Text — daraus liest ihn derselbe Dienst aus
+ * 01B. Es entsteht keine zweite Auswertung und keine zweite Wahrheit.
+ */
+function resolveSemanticCore(input: {
+  fromInterpretation?: DocumentSemanticCore | null;
+  text?: string;
+  sender?: string;
+}): DocumentSemanticCore | undefined {
+  if (input.fromInterpretation) return input.fromInterpretation;
+  const text = input.text?.trim();
+  if (!text) return undefined;
+  const core = buildDocumentSemanticCore({
+    text,
+    companyProfile: getCompanyProfileStoreSnapshot() ?? null,
+  });
+  const kandidaten = findSemanticPartyCandidates({
+    text,
+    sender: input.sender,
+    customers: getCustomerStoreSnapshot(),
+    vorgaenge: getAllVorgaenge(),
+  });
+  return {
+    ...core,
+    customerCandidates: kandidaten.customerCandidates,
+    vorgangCandidates: kandidaten.vorgangCandidates,
+  };
+}
+
 export function buildDocumentAiContextFromDocument(document: CompanyDocument): DocumentAiContext {
   const lang = getCachedSetup()?.language ?? 'de';
   const { truthView: truth } = resolveDocumentWorkTruthViewForCompanyDocument({ document });
@@ -291,6 +333,8 @@ export function buildDocumentAiContextFromDocument(document: CompanyDocument): D
 
   return {
     sourceType: 'document',
+    /* 01E — Archivdokumente tragen keinen gespeicherten Kern; er wird aus dem erkannten Text gelesen. */
+    semantic: resolveSemanticCore({ text: document.recognizedText, sender: document.issuer }),
     title: document.title,
     issuerOrSender,
     category: document.category,
@@ -413,6 +457,12 @@ export function buildDocumentAiContextFromInbox(
 
   return {
     sourceType: 'inbox',
+    /* 01E — aus 01B berechnet, durch 01C ueber das Wiederoeffnen gerettet. */
+    semantic: resolveSemanticCore({
+      fromInterpretation: bi?.semantic ?? null,
+      text: item.recognizedData._extractedText ?? vertragstext,
+      sender: item.sender,
+    }),
     title: item.title,
     issuerOrSender,
     category: item.documentType,
@@ -444,6 +494,10 @@ export function buildDocumentAiContextFromInbox(
 
 export function buildDocumentAiAllowedSourceText(context: DocumentAiContext): string {
   return [
+    /* 01F — Betriebsdaten sind ebenfalls erlaubte Quelle. */
+    ...(context.operationalLines ?? []),
+    /* 01E — was der semantische Kern belegt, ist erlaubte Quelle. */
+    buildSemanticAllowedSourceText(context.semantic),
     context.title,
     context.issuerOrSender,
     context.category,

@@ -60,6 +60,11 @@ import {
   type WorkspaceTaskRow,
 } from '../task/taskCloudService';
 import { isCloudSyncBlockedMockTaskId } from '../storage/mockDataDetectionService';
+import {
+  applyBusinessLetterPushResultToState,
+  buildBusinessLetterCloudContentKey,
+  buildBusinessLetterCloudPushPayload,
+} from '../letter/businessLetterCloudService';
 import { getSyncOutboxSnapshot, recordOutboxSentProof } from './syncOutboxService';
 import { persistSyncOutboxNow } from '../persistenceService';
 import {
@@ -219,6 +224,11 @@ function buildSentWriteProof(
         sentContentKey: buildTaskCloudContentKey(extracted.entity),
         sentDeleted: operation === 'delete' || extracted.deleted === true,
       };
+    case 'business_letter':
+      return {
+        sentContentKey: buildBusinessLetterCloudContentKey(extracted.entity),
+        sentDeleted: operation === 'delete' || extracted.deleted === true,
+      };
     default:
       return null;
   }
@@ -318,6 +328,11 @@ function buildPushPayload(
       );
     case 'vorgang_note':
       return buildVorgangNoteCloudPushPayload(
+        extracted.entity,
+        operation === 'delete' || extracted.deleted,
+      );
+    case 'business_letter':
+      return buildBusinessLetterCloudPushPayload(
         extracted.entity,
         operation === 'delete' || extracted.deleted,
       );
@@ -439,6 +454,17 @@ function applyPushResultToState(
     // CLOUD-DURABILITY-CORE-01C — nur die Serverversion; Titel und Status bleiben.
     next.tasks = applyTaskPushResultToState(
       next.tasks ?? [],
+      entityId,
+      rowVersion,
+      updatedAt,
+      deleted,
+      state.syncClient!.deviceId,
+      workspaceId,
+    );
+  } else if (entityType === 'business_letter') {
+    // BRIEFE-01B — nur die Serverversion; der Briefinhalt bleibt unangetastet.
+    next.businessLetters = applyBusinessLetterPushResultToState(
+      next.businessLetters ?? [],
       entityId,
       rowVersion,
       updatedAt,
@@ -903,6 +929,7 @@ export class SupabaseSyncAdapter implements SyncAdapter {
         const pushDeleted =
           (entry.entityType === 'vorgang' ||
             entry.entityType === 'vorgang_note' ||
+            entry.entityType === 'business_letter' ||
             entry.entityType === 'task') &&
           (entry.operation === 'delete' || ('deleted' in extracted && extracted.deleted === true));
         currentState = applyPushResultToState(

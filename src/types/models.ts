@@ -1712,6 +1712,14 @@ export type CompanyDocumentCategory =
   | 'ausgangsrechnung'
   | 'behoerde'
   | 'personal'
+  /**
+   * BRIEFE-01D — ein selbst verfasstes Geschäftsschreiben im Archiv.
+   *
+   * Eigene Kategorie statt „Sonstiges": Der Betrieb soll im Archiv auf einen
+   * Blick sehen, dass er dieses Schreiben selbst verschickt hat, und nicht
+   * zwischen fremder Post danach suchen müssen.
+   */
+  | 'geschaeftsschreiben'
   | 'sonstiges';
 
 export interface CompanyDocumentVorgangLink {
@@ -1736,6 +1744,15 @@ export interface CompanyDocument {
   createdAt: string;
   imagePreview?: string;
   linkedInvoiceId?: string | null;
+  /**
+   * BRIEFE-01D — die Rückverknüpfung zum Geschäftsschreiben.
+   *
+   * Die führende Wahrheit ist `BusinessLetter.documentId`; dieses Feld ist der
+   * Rückweg, damit das Archiv ohne Suche über alle Briefe auskommt. Es reist im
+   * bestehenden JSON-Payload der Dokumentsynchronisation mit und braucht keine
+   * eigene Spalte.
+   */
+  linkedLetterId?: string | null;
   fileRefId?: string;
   sourceFileHash?: string;
   originalFileName?: string;
@@ -1768,6 +1785,7 @@ export interface CompanyDocumentInput {
   archived?: boolean;
   imagePreview?: string;
   linkedInvoiceId?: string | null;
+  linkedLetterId?: string | null;
   fileRefId?: string;
   sourceFileHash?: string;
   originalFileName?: string;
@@ -1850,6 +1868,8 @@ export interface AppPersistedState {
   /** Persistent customer objects (02A). Optional — old states hydrate as empty. */
   customers?: Customer[];
   vorgangNotes?: VorgangNote[];
+  /** BRIEFE-01B — ausgehende Geschaeftsschreiben. */
+  businessLetters?: import('./businessLetter').BusinessLetter[];
   /** Confirmed payment-reminder / dunning handoffs (local documentation only). */
   dunningDocumentations?: import('./dunningDocumentation').InvoiceDunningDocumentation[];
   communicationHistory?: CommunicationEvent[];
