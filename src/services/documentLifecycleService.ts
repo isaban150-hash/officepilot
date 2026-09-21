@@ -301,14 +301,23 @@ export function resolveDocumentLifecycle(
    * Es kam nicht mit der Post herein, es gibt kein fremdes Original, und
    * „Original noch abheften" wäre eine Aufgabe ohne Gegenstand.
    */
-  const istEigenesSchreiben = document?.category === 'geschaeftsschreiben';
+  const istEigenesSchreiben =
+    document?.category === 'geschaeftsschreiben' ||
+    // ANGEBOT-01B — eigenes Angebot: selbst erzeugt, kein Original zum Abheften.
+    (document?.classifiedKind === 'angebot' && Boolean(document.linkedOfferId));
   const needsPaper =
     (document ? !isGeneratedOutgoingInvoiceDocument(document) : true) &&
     !istEigenesSchreiben &&
     needsPaperFolder(memory, inboxItem, document?.paperFolder?.folderId);
   const physicalFiled = documentId ? isPhysicallyFiled(documentId, memory) : false;
   const replyStatus = resolveLifecycleReplyStatus({ documentId, inboxItem, memory });
-  const openDeadline = hasOpenDeadline(memory, inboxItem, todayIso);
+  /*
+   * ANGEBOT-01B — die Gueltigkeit eines eigenen Angebots ist keine Frist, die
+   * der Betrieb einhalten muss; sie liegt auf dem Angebot selbst. Als offene
+   * Frist gelesen wuerde sie einen Handlungsbedarf behaupten, den es nicht gibt.
+   */
+  const istEigenesAngebot = document?.classifiedKind === 'angebot' && Boolean(document.linkedOfferId);
+  const openDeadline = !istEigenesAngebot && hasOpenDeadline(memory, inboxItem, todayIso);
   const missingProofs = getMissingProofLabels(
     memory?.linkedVorgangId ?? document?.linkedVorgang?.vorgangId ?? inboxItem?.vorgangId,
   );

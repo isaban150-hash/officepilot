@@ -91,6 +91,8 @@ export const deDelivery = {
   'delivery.document.action.send': 'Per E-Mail senden',
   'delivery.document.action.sendAgain': 'Erneut per E-Mail senden',
   'delivery.document.dialog.title': 'Dokument per E-Mail senden',
+  'delivery.offer.dialog.recipientHint': 'Vorbelegt aus dem Angebot. Eine Änderung hier ändert den Kundenstamm nicht.',
+  'delivery.document.dialog.recipientHint': 'Vorbelegt aus dem Dokument. Eine Änderung hier ändert den Kundenstamm nicht.',
   'delivery.document.dialog.attachmentHint': 'Die abgelegte PDF-Datei dieses Dokuments – genau so, wie sie im Archiv liegt.',
   'delivery.document.confirmResend': 'Dieses Dokument wurde bereits per OfficePilot versendet. Wirklich erneut senden?',
   'delivery.document.history.empty': 'Dokument noch nicht per OfficePilot versendet.',

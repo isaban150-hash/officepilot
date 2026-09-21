@@ -184,7 +184,7 @@ export function getPreviousAbschlagDeductions(vorgang: Vorgang): AbschlagDeducti
  * stille Reparatur am `CompanyProfile`. Was dort kaputt ist, bleibt kaputt und
  * sichtbar; nur dieses eine Dokument verzichtet auf das Branding.
  */
-function freezeBrandingForInvoice(branding: CompanyProfile['branding']): BrandingSnapshot {
+export function freezeBrandingForInvoice(branding: CompanyProfile['branding']): BrandingSnapshot {
   /*
    * SETTINGS-01B2 — die Vorlage wird **explizit** eingefroren, auch wenn das
    * Profil sie nicht trägt (fehlend = classic). Die historische Darstellung
@@ -829,9 +829,38 @@ export function updateInvoiceDraftMetadata(
   return next;
 }
 
+/**
+ * ANGEBOT-01B — die **eine** Rechenbasis für Positionsdokumente.
+ *
+ * Angebot und Rechnung rechnen Netto, Steuer und Brutto aus Menge × Einzelpreis
+ * und dem Steuerstatus — hier und nirgends sonst. `calculateInvoiceTotals`
+ * setzt darauf nur noch die rechnungsspezifischen Teile (Pauschalabschlag,
+ * Abzüge) obendrauf. Zwei Rechner, die auseinanderlaufen könnten, gibt es
+ * damit nicht.
+ */
+export function calculateLineItemTotals(
+  positions: ReadonlyArray<{ quantity: number; unitPrice: number }>,
+  taxStatus: TaxStatus,
+): InvoiceTotals {
+  const taxRate = getTaxRateForStatus(taxStatus);
+  const lineCents = positions
+    .filter((p) => p.quantity > 0)
+    .map((p) => lineTotalCents(p.quantity, p.unitPrice))
+    .filter((cents) => Number.isFinite(cents));
+  const subtotalCents = sumCents(lineCents);
+  const taxCents = taxCentsFromNet(subtotalCents, taxRate);
+  return {
+    subtotal: fromCents(subtotalCents),
+    taxRate,
+    tax: fromCents(taxCents),
+    total: fromCents(subtotalCents + taxCents),
+  };
+}
+
 export function calculateInvoiceTotals(draft: InvoiceDraft, setup: CompanySetup): InvoiceTotals {
   // 01B — ein Altentwurf ohne Steuerstatus faellt auf die Profilwahrheit zurueck, nicht auf das Setup allein.
-  const taxRate = getTaxRateForStatus(draft.taxStatus ?? resolveDefaultTaxStatus(getCompanyProfile(), setup));
+  const effectiveTaxStatus = draft.taxStatus ?? resolveDefaultTaxStatus(getCompanyProfile(), setup);
+  const taxRate = getTaxRateForStatus(effectiveTaxStatus);
   let subtotalCents: number;
 
   if (isFixedAmountAbschlag(draft)) {
@@ -839,11 +868,7 @@ export function calculateInvoiceTotals(draft: InvoiceDraft, setup: CompanySetup)
     subtotalCents =
       net != null && Number.isFinite(net) && net > 0 ? toCents(roundMoney(net)) : 0;
   } else {
-    const lineCents = draft.positions
-      .filter((p) => p.quantity > 0)
-      .map((p) => lineTotalCents(p.quantity, p.unitPrice))
-      .filter((cents) => Number.isFinite(cents));
-    subtotalCents = sumCents(lineCents);
+    subtotalCents = toCents(calculateLineItemTotals(draft.positions, effectiveTaxStatus).subtotal);
   }
 
   const taxCents = taxCentsFromNet(subtotalCents, taxRate);

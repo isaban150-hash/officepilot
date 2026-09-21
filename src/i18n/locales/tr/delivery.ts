@@ -90,6 +90,8 @@ export const trDelivery = {
   'delivery.document.action.send': 'E-posta ile gönder',
   'delivery.document.action.sendAgain': 'E-posta ile yeniden gönder',
   'delivery.document.dialog.title': 'Belgeyi e-posta ile gönder',
+  'delivery.offer.dialog.recipientHint': 'Tekliften ön dolduruldu. Buradaki değişiklik müşteri kaydını değiştirmez.',
+  'delivery.document.dialog.recipientHint': 'Belgeden ön dolduruldu. Buradaki değişiklik müşteri kaydını değiştirmez.',
   'delivery.document.dialog.attachmentHint': 'Bu belgenin arşivlenmiş PDF dosyası – arşivde olduğu gibi.',
   'delivery.document.confirmResend': 'Bu belge zaten OfficePilot ile gönderildi. Gerçekten yeniden gönderilsin mi?',
   'delivery.document.history.empty': 'Belge henüz OfficePilot ile gönderilmedi.',

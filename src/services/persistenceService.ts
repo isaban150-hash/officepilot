@@ -122,6 +122,7 @@ import {
   hydrateBusinessLetters,
   resetBusinessLetters,
 } from './businessLetterService';
+import { getOfferStoreSnapshot, hydrateOffers, resetOffers } from './offer/offerService';
 import {
   getDunningDocumentationStoreSnapshot,
   hydrateDunningDocumentations,
@@ -507,6 +508,7 @@ export function createSeedState(setupOverride?: CompanySetup): AppPersistedState
       customers: [],
       vorgangNotes: [],
       businessLetters: [],
+      offers: [],
       dunningDocumentations: [],
       communicationHistory: [],
       knowledgeFacts: [],
@@ -660,6 +662,7 @@ function finalizeLoadedPersistedState(normalized: AppPersistedState): AppPersist
     customers: (normalized.customers ?? []).map(cloneCustomer),
     vorgangNotes: (normalized.vorgangNotes ?? []).map(cloneVorgangNote),
     businessLetters: (normalized.businessLetters ?? []).map((letter) => ({ ...letter })),
+    offers: (normalized.offers ?? []).map((offer) => ({ ...offer })),
     dunningDocumentations: (normalized.dunningDocumentations ?? []).map((doc) => ({ ...doc })),
     communicationHistory: (normalized.communicationHistory ?? []).map(cloneCommunicationEvent),
     knowledgeFacts: (normalized.knowledgeFacts ?? []).map(cloneKnowledgeFact),
@@ -929,6 +932,7 @@ export function clearInMemoryBusinessState(): void {
   resetCustomers();
   resetVorgangNotes();
   resetBusinessLetters();
+  resetOffers();
   resetDunningDocumentations();
   resetCommunicationHistoryStore();
   resetMailImports();
@@ -999,6 +1003,7 @@ export function applyStateToStores(state: AppPersistedState): void {
   hydrateCustomerStore(state.customers ?? []);
   hydrateVorgangNotes(state.vorgangNotes ?? []);
   hydrateBusinessLetters(state.businessLetters ?? []);
+  hydrateOffers(state.offers ?? []);
   hydrateDunningDocumentations(state.dunningDocumentations ?? []);
   hydrateCommunicationHistory(state.communicationHistory ?? []);
   hydrateKnowledgeFacts(state.knowledgeFacts ?? []);
@@ -1266,6 +1271,7 @@ export function buildPersistedStateSnapshot(): AppPersistedState {
     customers: getCustomerStoreSnapshot(),
     vorgangNotes: getVorgangNoteStoreSnapshot(),
     businessLetters: getBusinessLetterStoreSnapshot(),
+    offers: getOfferStoreSnapshot(),
     dunningDocumentations: getDunningDocumentationStoreSnapshot(),
     communicationHistory: getCommunicationHistorySnapshot(),
     knowledgeFacts: getKnowledgeSnapshot(),

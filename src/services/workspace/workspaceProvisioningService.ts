@@ -28,6 +28,11 @@ import {
   planBusinessLetterLostAckAdoption,
 } from '../letter/businessLetterCloudService';
 import {
+  mergeOffersFromPull,
+  planOfferBackfill,
+  planOfferLostAckAdoption,
+} from '../offer/offerCloudService';
+import {
   mergeVorgangNotesFromPull,
   planVorgangNoteBackfill,
   planVorgangNoteLostAckAdoption,
@@ -960,6 +965,88 @@ export function mergeRemoteWorkspacePullIntoState(
       version: 0,
     });
   }
+  /*
+   * ANGEBOT-01B — eigene Angebote. Derselbe Dreischritt wie bei den Briefen:
+   * Wiederanlauf nach verlorener Bestaetigung, Abgleich, Altbestand.
+   */
+  const remoteOfferRows = pull.offers ?? [];
+  {
+    const dirtyOfferIds = activeOutboxEntityIds(state, 'offer');
+
+    const offerAdoption = planOfferLostAckAdoption(
+      state.offers ?? [],
+      remoteOfferRows,
+      dirtyOfferIds,
+      sentWritesFor(state, 'offer'),
+    );
+    const adoptedOfferIds = new Set([
+      ...offerAdoption.adopt,
+      ...offerAdoption.settle,
+      ...offerAdoption.notAccepted,
+    ]);
+
+    const offerMerge = mergeOffersFromPull(
+      adoptedOfferIds.size > 0
+        ? (state.offers ?? []).map((offer) =>
+            adoptedOfferIds.has(offer.id)
+              ? adoptLostAckBaseVersion(
+                  offer,
+                  state,
+                  workspaceId,
+                  offerAdoption.baseVersions.get(offer.id) ?? 1,
+                )
+              : offer,
+          )
+        : (state.offers ?? []),
+      adoptedOfferIds.size > 0
+        ? remoteOfferRows.filter((row) => !adoptedOfferIds.has(row.client_offer_id))
+        : remoteOfferRows,
+      state.syncClient!.deviceId,
+      workspaceId,
+      dirtyOfferIds,
+    );
+
+    applyLostAckAdoptionToOutbox(state, 'offer', offerAdoption);
+    conflicts.push(...offerMerge.conflicts);
+    next.offers = offerMerge.offers;
+
+    /*
+     * ANGEBOT-01B (Recovery) — serverseitig freigegebene Angebote haben den
+     * lokalen Entwurf ersetzt. Ein noch offener Sendeauftrag dieses Entwurfs
+     * würde den Beleg nur noch (zu Recht) abgewiesen sehen; er ist überholt
+     * und wird abgeschlossen, damit nichts endlos wiederholt wird.
+     */
+    if (offerMerge.finalizedOverDraft.length > 0) {
+      const ueberholt = new Set(offerMerge.finalizedOverDraft);
+      markOutboxEntriesCompleted(
+        getSyncOutboxSnapshot()
+          .filter(
+            (entry) =>
+              entry.entityType === 'offer' &&
+              ueberholt.has(entry.entityId) &&
+              (entry.status === 'pending' || entry.status === 'error' || entry.status === 'blocked'),
+          )
+          .map((entry) => entry.id),
+      );
+      clearOutboxSentProof('offer', offerMerge.finalizedOverDraft);
+    }
+
+    clearOutboxSentProof('offer', [
+      ...offerAdoption.adopt,
+      ...offerAdoption.settle,
+      ...offerAdoption.evaluatedProofs,
+    ]);
+  }
+
+  for (const offerId of planOfferBackfill(next.offers ?? state.offers ?? [], remoteOfferRows)) {
+    enqueueSyncOutbox({
+      entityType: 'offer',
+      entityId: offerId,
+      operation: 'create',
+      version: 0,
+    });
+  }
+
   /*
    * CLOUD-DURABILITY-CORE-01C — Aufgaben.
    *

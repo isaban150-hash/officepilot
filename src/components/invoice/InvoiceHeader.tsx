@@ -83,6 +83,24 @@ export function InvoiceHeader({ model }: Props) {
                 <dd data-testid="invoice-correction-date">{formatInvoiceDate(model.issueDate)}</dd>
               </div>
             </>
+          ) : model.offer ? (
+            <>
+              {/* ANGEBOT-01B — Angebotskopf; ein Rechnungsmodell trägt `offer` nicht. */}
+              <div>
+                <dt>{translate('offer.number')}</dt>
+                <dd data-testid="offer-document-number">
+                  {model.offer.isDraft ? translate('offer.draftNumberLabel') : model.invoiceNumber}
+                </dd>
+              </div>
+              <div>
+                <dt>{translate('offer.date')}</dt>
+                <dd>{formatInvoiceDate(model.issueDate)}</dd>
+              </div>
+              <div>
+                <dt>{translate('offer.validUntil')}</dt>
+                <dd data-testid="offer-document-valid-until">{formatInvoiceDate(model.offer.validUntil)}</dd>
+              </div>
+            </>
           ) : (
             <>
               <div>

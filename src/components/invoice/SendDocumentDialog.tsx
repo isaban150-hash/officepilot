@@ -154,6 +154,12 @@ export function SendDocumentDialog(props: SendDocumentDialogProps) {
   const titleKey = (isPlainDocument ? 'delivery.document.dialog.title' : isCorrection ? 'delivery.correction.dialog.title' : 'delivery.dialog.title') as TranslationKey;
   const resendKey = (isPlainDocument ? 'delivery.document.confirmResend' : isCorrection ? 'delivery.correction.confirmResend' : 'delivery.dialog.confirmResend') as TranslationKey;
   const attachmentHintKey = (isPlainDocument ? 'delivery.document.dialog.attachmentHint' : 'delivery.dialog.attachmentHint') as TranslationKey;
+  // ANGEBOT-01B — der Empfängerhinweis nennt das Dokument, aus dem vorbelegt wurde; Rechnungen unverändert.
+  const recipientHintKey = (props.documentKind === 'offer'
+    ? 'delivery.offer.dialog.recipientHint'
+    : isPlainDocument
+      ? 'delivery.document.dialog.recipientHint'
+      : 'delivery.dialog.recipientHint') as TranslationKey;
 
   return (
     <div className="vorgang-dialog-backdrop" role="presentation" onClick={() => !busy && props.onCancel()}>
@@ -202,7 +208,7 @@ export function SendDocumentDialog(props: SendDocumentDialogProps) {
             data-testid="send-document-recipient"
           />
           <p className="form-hint" id="send-document-recipient-hint">
-            {props.initialRecipient ? translate('delivery.dialog.recipientHint' as TranslationKey) : translate('delivery.dialog.recipientMissing' as TranslationKey)}
+            {props.initialRecipient ? translate(recipientHintKey) : translate('delivery.dialog.recipientMissing' as TranslationKey)}
           </p>
         </div>
 

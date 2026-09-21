@@ -90,6 +90,8 @@ export const bgDelivery = {
   'delivery.document.action.send': 'Изпращане по имейл',
   'delivery.document.action.sendAgain': 'Повторно изпращане по имейл',
   'delivery.document.dialog.title': 'Изпращане на документ по имейл',
+  'delivery.offer.dialog.recipientHint': 'Попълнено от офертата. Промяна тук не променя данните на клиента.',
+  'delivery.document.dialog.recipientHint': 'Попълнено от документа. Промяна тук не променя данните на клиента.',
   'delivery.document.dialog.attachmentHint': 'Архивираният PDF файл на този документ – точно както е в архива.',
   'delivery.document.confirmResend': 'Този документ вече е изпратен чрез OfficePilot. Наистина ли да се изпрати отново?',
   'delivery.document.history.empty': 'Документът още не е изпращан чрез OfficePilot.',

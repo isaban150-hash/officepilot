@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { DocumentArchiveTruthFactsCard } from '../components/documents/DocumentArchiveTruthFactsCard';
 import { DocumentUnderstandingCard } from '../components/documents/DocumentUnderstandingCard';
 import { DocumentMeaningPanel } from '../components/documents/DocumentMeaningPanel';
+import { OwnOfferArchiveCard } from '../components/offer/OwnOfferArchiveCard';
 import { DocumentDetailPreview } from '../components/documents/DocumentDetailPreview';
 import { DocumentDerivativeRecoveryStatusPanel } from '../components/documents/DocumentDerivativeRecoveryStatusPanel';
 import { DocumentOriginalFilePanel } from '../components/documents/DocumentOriginalFilePanel';
@@ -97,7 +98,9 @@ export function DokumentDetailPage() {
    * Geschäftsschreiben: Der Betrieb hat es geschrieben, es kam nicht mit der
    * Post herein, und es gibt kein fremdes Original zum Abheften.
    */
-  const isOwnLetter = document.category === 'geschaeftsschreiben';
+  // ANGEBOT-01B — ein eigenes Angebot ebenso: selbst erzeugt, kein fremdes Original.
+  const isOwnOffer = document.classifiedKind === 'angebot' && Boolean(document.linkedOfferId);
+  const isOwnLetter = document.category === 'geschaeftsschreiben' || isOwnOffer;
   const paperInstruction =
     isGeneratedInvoice || isOwnLetter
       ? undefined
@@ -502,20 +505,35 @@ export function DokumentDetailPage() {
         */}
       <div className="work-detail-grid document-detail__grid">
         <div className="work-detail-grid__main">
-          <DetailExperienceCard
-            recognizedTitle={document.title}
-            recognizedSummary={categoryLabel}
-            assistantMessage={translate('document.experience.saved')}
-            paperInstruction={paperInstruction}
-            actions={experienceActions}
-            hideIdentity
-            testId="document-detail-experience"
-          />
+          {/* ANGEBOT-01B — fuer ein eigenes Angebot gibt es hier nichts zu tun; die Karte bliebe leer. */}
+          {isOwnOffer ? null : (
+            <DetailExperienceCard
+              recognizedTitle={document.title}
+              recognizedSummary={categoryLabel}
+              assistantMessage={translate('document.experience.saved')}
+              paperInstruction={paperInstruction}
+              actions={experienceActions}
+              hideIdentity
+              testId="document-detail-experience"
+            />
+          )}
 
-          {/* DOKUMENTVERSTAENDNIS-01C — was im Schreiben steht, vor der technischen Einordnung. */}
-          <DocumentMeaningPanel text={document.recognizedText} sender={document.issuer} />
+          {/*
+            * ANGEBOT-01B — ein eigenes Angebot wird nicht gedeutet: OfficeTakt hat es
+            * erzeugt und kennt Kunde, Nummer, Gueltigkeit und Zustand. Die
+            * Heuristik fuer eingehende Post (Fristen, Handlungsbedarf, mögliche
+            * Kunden) bleibt fuer alle anderen Dokumente unverändert.
+            */}
+          {isOwnOffer ? (
+            <OwnOfferArchiveCard offerId={document.linkedOfferId ?? ''} />
+          ) : (
+            <>
+              {/* DOKUMENTVERSTAENDNIS-01C — was im Schreiben steht, vor der technischen Einordnung. */}
+              <DocumentMeaningPanel text={document.recognizedText} sender={document.issuer} />
 
-          <DocumentUnderstandingCard documentId={document.id} />
+              <DocumentUnderstandingCard documentId={document.id} />
+            </>
+          )}
         </div>
 
         <div className="work-detail-grid__side">

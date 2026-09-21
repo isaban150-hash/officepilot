@@ -15,6 +15,7 @@ import { trPilot } from './pilot';
 import { trSettings } from './settings';
 import { trDelivery } from './delivery';
 import { trBusinessLetter } from './businessLetter';
+import { trOffer } from './offer';
 import { trDocumentMeaning } from './documentMeaning';
 
 export const trModules = {
@@ -39,5 +40,6 @@ export const trModules = {
   ...trSettings,
   ...trDelivery,
   ...trBusinessLetter,
+  ...trOffer,
   ...trDocumentMeaning,
 } as const;

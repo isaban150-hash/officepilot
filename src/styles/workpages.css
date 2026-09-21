@@ -2787,3 +2787,120 @@
     min-width: 0;
   }
 }
+
+/* ====================================================================
+ * ANGEBOT-01B — Angebotseditor und Angebotsdetail
+ * ==================================================================== */
+
+.offer-editor__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.offer-editor__field--wide {
+  grid-column: 1 / -1;
+}
+
+.offer-editor__positions {
+  list-style: none;
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  display: grid;
+  gap: var(--space-3);
+}
+
+.offer-editor__position {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr) 6rem 7rem 8rem auto auto;
+  gap: var(--space-3);
+  align-items: end;
+  padding: var(--space-3);
+  border: 1px solid var(--op-border, #e3ddd2);
+  border-radius: var(--radius-lg, 12px);
+  background: var(--op-surface, #fff);
+}
+
+.offer-editor__position .offer-editor__field--wide {
+  grid-column: auto;
+}
+
+.offer-editor__position-index {
+  font-weight: 700;
+  color: var(--op-text-subtle, #767b86);
+  padding-bottom: 0.6rem;
+}
+
+.offer-editor__position-total {
+  display: grid;
+  gap: 0.35rem;
+  padding-bottom: 0.45rem;
+  white-space: nowrap;
+}
+
+.offer-editor__totals {
+  margin: var(--space-5) 0 0;
+  display: grid;
+  gap: 0.35rem;
+  max-width: 22rem;
+  margin-left: auto;
+}
+
+.offer-editor__totals > div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.offer-editor__totals dt {
+  color: var(--op-text-muted, #545a66);
+}
+
+.offer-editor__totals dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.offer-editor__totals-gross {
+  border-top: 1px solid var(--op-border, #e3ddd2);
+  padding-top: 0.35rem;
+  font-size: 1.05rem;
+}
+
+.offer-detail__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-5);
+  align-items: center;
+  margin-bottom: var(--space-4);
+  color: var(--op-text-muted, #545a66);
+}
+
+@media (max-width: 767px) {
+  .offer-editor__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .offer-editor__position {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .offer-editor__position .offer-editor__field--wide,
+  .offer-editor__position-index,
+  .offer-editor__position-remove {
+    grid-column: 1 / -1;
+  }
+
+  .offer-editor__position-index {
+    padding-bottom: 0;
+  }
+
+  .offer-editor__totals {
+    max-width: none;
+    margin-left: 0;
+  }
+
+  .offer-editor__actions .btn {
+    width: 100%;
+  }
+}

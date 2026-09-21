@@ -42,6 +42,10 @@ import type { TranslationKey } from '../../i18n';
  */
 interface Props {
   document: CompanyDocument;
+  /** ANGEBOT-01B — Empfaenger aus dem Angebot, wenn das Dokument keinen Auftrag traegt. */
+  recipientEmail?: string | null;
+  /** ANGEBOT-01B — nach angenommenem Versand (sent/replayed): der Aufrufer fuehrt seinen Zustand nach. */
+  onAccepted?: () => void;
 }
 
 const CLIENT_ERROR_KEYS: Record<SendDocumentClientError, TranslationKey> = {
@@ -68,7 +72,7 @@ export function isArchivedDocumentEmailSendable(document: CompanyDocument): bool
   return Boolean(findArchivedDocumentPdfFileRefId(document));
 }
 
-export function DocumentDeliveryPanel({ document }: Props) {
+export function DocumentDeliveryPanel({ document, recipientEmail = null, onAccepted }: Props) {
   const { translate, language, showToast, companyProfile } = useApp();
   const user = useOptionalAuth()?.user ?? null;
   const kind = resolveArchivedDocumentDeliveryKind(document);
@@ -90,10 +94,10 @@ export function DocumentDeliveryPanel({ document }: Props) {
   const defaults = useMemo(() => {
     const vorgang = document.linkedVorgang ? getVorgangById(document.linkedVorgang.vorgangId) : undefined;
     return resolveDocumentDeliveryDraftDefaults(
-      { title: document.title, vorgangCustomerEmail: vorgang?.customerBilling?.email ?? null, profile: companyProfile },
+      { title: document.title, vorgangCustomerEmail: vorgang?.customerBilling?.email ?? recipientEmail ?? null, profile: companyProfile },
       language,
     );
-  }, [document.title, document.linkedVorgang, companyProfile, language]);
+  }, [document.title, document.linkedVorgang, companyProfile, language, recipientEmail]);
 
   const refresh = useCallback(async () => {
     if (!cloud) return;
@@ -149,7 +153,10 @@ export function DocumentDeliveryPanel({ document }: Props) {
       setPendingDraft(null);
       setDialog(null);
       await refresh();
-      if (result.action === 'sent' || result.action === 'replayed') showToast(translate('delivery.toast.accepted' as TranslationKey));
+      if (result.action === 'sent' || result.action === 'replayed') {
+        showToast(translate('delivery.toast.accepted' as TranslationKey));
+        onAccepted?.();
+      }
       else if (result.action === 'unknown_pending') showToast(translate('delivery.toast.unknown' as TranslationKey));
       else showToast(translate('delivery.toast.failed' as TranslationKey));
     } finally {

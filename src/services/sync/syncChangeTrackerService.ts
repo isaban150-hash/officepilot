@@ -14,6 +14,8 @@ import { buildCloudEntityId } from '../workspace/workspaceSyncPayloadService';
 import type { Customer, Task, Vorgang } from '../../types/models';
 import type { VorgangNote } from '../../types/communication';
 import type { BusinessLetter } from '../../types/businessLetter';
+import type { Offer } from '../../types/offer';
+import { buildOfferCloudContentKey } from '../offer/offerCloudService';
 import type { InvoiceDunningDocumentation } from '../../types/dunningDocumentation';
 import { isCloudSyncBlockedMockTaskId, isCloudSyncBlockedMockVorgangId } from '../storage/mockDataDetectionService';
 import {
@@ -51,6 +53,8 @@ export const TRACKED_SYNC_ENTITY_TYPES: SyncEntityType[] = [
   'dunning_documentation',
   // BRIEFE-01B — ausgehende Geschaeftsschreiben.
   'business_letter',
+  // ANGEBOT-01B — eigene Angebote.
+  'offer',
 ];
 
 export const TRACKED_CLOUD_SYNC_ENTITY_TYPES: SyncEntityType[] = [
@@ -194,6 +198,17 @@ function buildBusinessLetterFingerprint(letter: BusinessLetter): EntitySyncFinge
   };
 }
 
+/** ANGEBOT-01B — fachlicher Fingerabdruck des Angebots, ohne `sync`. */
+function buildOfferFingerprint(offer: Offer): EntitySyncFingerprint {
+  const sync = offer.sync;
+  return {
+    version: sync?.version ?? 0,
+    deleted: sync?.deleted ?? false,
+    updatedAt: sync?.updatedAt ?? '',
+    contentKey: buildOfferCloudContentKey(offer),
+  };
+}
+
 function buildVorgangFingerprint(vorgang: Vorgang): EntitySyncFingerprint {
   const sync = vorgang.sync;
   return {
@@ -231,6 +246,8 @@ function collectTrackedEntities(state: AppPersistedState): Map<string, TrackedEn
                       ? buildTaskFingerprint(entity as Task)
                       : entityType === 'business_letter'
                         ? buildBusinessLetterFingerprint(entity as unknown as BusinessLetter)
+                        : entityType === 'offer'
+                          ? buildOfferFingerprint(entity as unknown as Offer)
                         : entityType === 'dunning_documentation'
                         ? buildDunningDocumentationFingerprint(
                             entity as unknown as InvoiceDunningDocumentation,
@@ -330,6 +347,7 @@ function fingerprintChanged(
     entityType === 'vorgang_note' ||
     entityType === 'task' ||
     entityType === 'business_letter' ||
+    entityType === 'offer' ||
     entityType === 'dunning_documentation'
   ) {
     return (

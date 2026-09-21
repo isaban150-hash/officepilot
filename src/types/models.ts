@@ -1645,6 +1645,19 @@ export interface InvoicePrintModel {
    * das heutige Layout; das Feld friert nur die Wahrheit ein.
    */
   documentTemplate: import('./branding').DocumentTemplateId;
+  /**
+   * ANGEBOT-01B — nur auf einem Angebot gesetzt. Ein Rechnungsmodell trägt das
+   * Feld nicht; seine Darstellung bleibt byteidentisch (geschützter Snapshot).
+   * Renderer zeigen dann Angebotsnummer/-datum und „Gültig bis" statt
+   * Rechnungsnummer, Leistungszeitraum und Fälligkeit.
+   */
+  offer?: InvoicePrintOfferContext;
+}
+
+/** ANGEBOT-01B — die angebotsspezifischen Kopfangaben. */
+export interface InvoicePrintOfferContext {
+  validUntil: string;
+  isDraft: boolean;
 }
 
 /** Bezug des Korrekturbelegs auf die Originalrechnung — alles historisch, nichts berechnet. */
@@ -1753,6 +1766,8 @@ export interface CompanyDocument {
    * eigene Spalte.
    */
   linkedLetterId?: string | null;
+  /** ANGEBOT-01B — Rückweg vom Archivdokument zum eigenen Angebot; reist im JSON-Payload mit. */
+  linkedOfferId?: string | null;
   fileRefId?: string;
   sourceFileHash?: string;
   originalFileName?: string;
@@ -1786,6 +1801,8 @@ export interface CompanyDocumentInput {
   imagePreview?: string;
   linkedInvoiceId?: string | null;
   linkedLetterId?: string | null;
+  /** ANGEBOT-01B — Rückweg vom Archivdokument zum eigenen Angebot; reist im JSON-Payload mit. */
+  linkedOfferId?: string | null;
   fileRefId?: string;
   sourceFileHash?: string;
   originalFileName?: string;
@@ -1870,6 +1887,8 @@ export interface AppPersistedState {
   vorgangNotes?: VorgangNote[];
   /** BRIEFE-01B — ausgehende Geschaeftsschreiben. */
   businessLetters?: import('./businessLetter').BusinessLetter[];
+  /** ANGEBOT-01B — eigene Angebote des Betriebs. */
+  offers?: import('./offer').Offer[];
   /** Confirmed payment-reminder / dunning handoffs (local documentation only). */
   dunningDocumentations?: import('./dunningDocumentation').InvoiceDunningDocumentation[];
   communicationHistory?: CommunicationEvent[];

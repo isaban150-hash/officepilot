@@ -15,6 +15,7 @@ import { dePilot } from './pilot';
 import { deSettings } from './settings';
 import { deDelivery } from './delivery';
 import { deBusinessLetter } from './businessLetter';
+import { deOffer } from './offer';
 import { deDocumentMeaning } from './documentMeaning';
 
 export const deModules = {
@@ -37,5 +38,6 @@ export const deModules = {
   ...deSettings,
   ...deDelivery,
   ...deBusinessLetter,
+  ...deOffer,
   ...deDocumentMeaning,
 } as const;

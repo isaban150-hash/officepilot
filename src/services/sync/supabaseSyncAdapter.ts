@@ -65,6 +65,14 @@ import {
   buildBusinessLetterCloudContentKey,
   buildBusinessLetterCloudPushPayload,
 } from '../letter/businessLetterCloudService';
+import {
+  applyOfferPushResultToState,
+  buildOfferCloudContentKey,
+  buildOfferCloudPushPayload,
+} from '../offer/offerCloudService';
+
+/** ANGEBOT-01B — Angebote nach Dateien/Dokumenten/Ausgaben; alles Uebrige (-1) bleibt davor. */
+const OFFER_PUSH_ORDER: Record<string, number> = { offer: 20 };
 import { getSyncOutboxSnapshot, recordOutboxSentProof } from './syncOutboxService';
 import { persistSyncOutboxNow } from '../persistenceService';
 import {
@@ -229,6 +237,11 @@ function buildSentWriteProof(
         sentContentKey: buildBusinessLetterCloudContentKey(extracted.entity),
         sentDeleted: operation === 'delete' || extracted.deleted === true,
       };
+    case 'offer':
+      return {
+        sentContentKey: buildOfferCloudContentKey(extracted.entity),
+        sentDeleted: operation === 'delete' || extracted.deleted === true,
+      };
     default:
       return null;
   }
@@ -333,6 +346,11 @@ function buildPushPayload(
       );
     case 'business_letter':
       return buildBusinessLetterCloudPushPayload(
+        extracted.entity,
+        operation === 'delete' || extracted.deleted,
+      );
+    case 'offer':
+      return buildOfferCloudPushPayload(
         extracted.entity,
         operation === 'delete' || extracted.deleted,
       );
@@ -454,6 +472,17 @@ function applyPushResultToState(
     // CLOUD-DURABILITY-CORE-01C — nur die Serverversion; Titel und Status bleiben.
     next.tasks = applyTaskPushResultToState(
       next.tasks ?? [],
+      entityId,
+      rowVersion,
+      updatedAt,
+      deleted,
+      state.syncClient!.deviceId,
+      workspaceId,
+    );
+  } else if (entityType === 'offer') {
+    // ANGEBOT-01B — nur die Serverversion; der Angebotsinhalt bleibt unangetastet.
+    next.offers = applyOfferPushResultToState(
+      next.offers ?? [],
       entityId,
       rowVersion,
       updatedAt,
@@ -681,10 +710,11 @@ export class SupabaseSyncAdapter implements SyncAdapter {
       .filter((entry) => entry.status === 'pending' || entry.status === 'error')
       // 01B — Datei vor Dokument vor Binding vor Eingang vor WorkResult; alles andere behaelt seine Reihenfolge.
       // 01C — Ausgabe vor ihrer Zahlung, nach den Intake-Entitaeten.
+      // ANGEBOT-01B — das Angebot nach seinem Archivdokument: Der Server prueft die Ablage gegen die Dokumentzeile.
       .sort(
         (a, b) =>
-          (INTAKE_PUSH_ORDER[a.entityType] ?? EXPENSE_PUSH_ORDER[a.entityType] ?? -1) -
-          (INTAKE_PUSH_ORDER[b.entityType] ?? EXPENSE_PUSH_ORDER[b.entityType] ?? -1),
+          (INTAKE_PUSH_ORDER[a.entityType] ?? EXPENSE_PUSH_ORDER[a.entityType] ?? OFFER_PUSH_ORDER[a.entityType] ?? -1) -
+          (INTAKE_PUSH_ORDER[b.entityType] ?? EXPENSE_PUSH_ORDER[b.entityType] ?? OFFER_PUSH_ORDER[b.entityType] ?? -1),
       );
 
     for (const entry of pendingEntries) {
@@ -930,6 +960,7 @@ export class SupabaseSyncAdapter implements SyncAdapter {
           (entry.entityType === 'vorgang' ||
             entry.entityType === 'vorgang_note' ||
             entry.entityType === 'business_letter' ||
+            entry.entityType === 'offer' ||
             entry.entityType === 'task') &&
           (entry.operation === 'delete' || ('deleted' in extracted && extracted.deleted === true));
         currentState = applyPushResultToState(

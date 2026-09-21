@@ -72,9 +72,15 @@ export function VorgaengePage() {
           </Link>
         }
         secondaryAction={
-          <Link to="/rechnungen/offen" data-testid="vorgaenge-open-invoices">
-            <Button variant="ghost">{translate('vorgaenge.openInvoices')}</Button>
-          </Link>
+          <>
+            {/* ANGEBOT-01B — die Vorstufe des Auftrags lebt hier, ohne eigenen Hauptmenüpunkt. */}
+            <Link to="/angebote" data-testid="vorgaenge-offers">
+              <Button variant="secondary">{translate('offer.area.tabOffers')}</Button>
+            </Link>
+            <Link to="/rechnungen/offen" data-testid="vorgaenge-open-invoices">
+              <Button variant="ghost">{translate('vorgaenge.openInvoices')}</Button>
+            </Link>
+          </>
         }
       />
 

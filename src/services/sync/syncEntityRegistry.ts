@@ -1,6 +1,7 @@
 import type { CommunicationEvent } from '../../types/communicationHistory';
 import type { Expense } from '../../types/expense';
 import type { BusinessLetter } from '../../types/businessLetter';
+import type { Offer } from '../../types/offer';
 import { parseExpensePaymentEntityId } from '../expense/expenseCloudSyncService';
 import type { KnowledgeFact } from '../../types/knowledge';
 import type { MailImport } from '../../types/mailImport';
@@ -104,6 +105,8 @@ export function findEntityInState(
       return state.vorgangNotes?.find((item) => item.id === entityId) ?? null;
     case 'business_letter':
       return state.businessLetters?.find((item) => item.id === entityId) ?? null;
+    case 'offer':
+      return state.offers?.find((item) => item.id === entityId) ?? null;
     case 'communication_event':
       return state.communicationHistory?.find((item) => item.id === entityId) ?? null;
     case 'knowledge_fact':
@@ -181,6 +184,9 @@ export function upsertEntityInState(
       break;
     case 'business_letter':
       next.businessLetters = upsertInArray(next.businessLetters ?? [], entity as BusinessLetter);
+      break;
+    case 'offer':
+      next.offers = upsertInArray(next.offers ?? [], entity as Offer);
       break;
     case 'communication_event':
       next.communicationHistory = upsertInArray(
@@ -263,6 +269,8 @@ export function listEntitiesByType(
       return [...(state.vorgangNotes ?? [])];
     case 'business_letter':
       return [...(state.businessLetters ?? [])];
+    case 'offer':
+      return [...(state.offers ?? [])];
     case 'communication_event':
       return [...(state.communicationHistory ?? [])];
     case 'knowledge_fact':

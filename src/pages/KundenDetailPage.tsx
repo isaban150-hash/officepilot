@@ -11,6 +11,9 @@ import { BusinessList, BusinessListItem } from '../components/ui/Lists';
 import { Page } from '../components/ui/Page';
 import { DetailSection, SummaryList } from '../components/ui/Section';
 import { getBusinessLettersForCustomer } from '../services/businessLetterService';
+import { getOffersForCustomer, getOfferTotals } from '../services/offer/offerService';
+import { OfferStatusBadge } from '../components/offer/OfferStatusBadge';
+import { formatInvoiceCurrency } from '../services/invoicePrintModel';
 import { vorgangStatusTone } from '../services/ui/statusTone';
 import { EmptyStateBlock } from '../components/ui/EmptyStateBlock';
 import { useApp } from '../context/AppContext';
@@ -121,6 +124,11 @@ export function KundenDetailPage({ kind }: { kind: KundenIdentityKind }) {
   const letterCustomerId = kind === 'customer' && rawKey ? rawKey.trim() : '';
   const customerLetters = useMemo(
     () => (letterCustomerId ? getBusinessLettersForCustomer(letterCustomerId) : []),
+    [letterCustomerId, reloadToken],
+  );
+  /* ANGEBOT-01B — Angebote an diesen Kunden; derselbe Bezug wie bei den Schreiben. */
+  const customerOffers = useMemo(
+    () => (letterCustomerId ? getOffersForCustomer(letterCustomerId) : []),
     [letterCustomerId, reloadToken],
   );
 
@@ -335,6 +343,43 @@ export function KundenDetailPage({ kind }: { kind: KundenIdentityKind }) {
         )}
       </DetailSection>
 
+
+      {/*
+        * ANGEBOT-01B — Angebote an diesen Kunden, mit dem Einstieg „Angebot
+        * erstellen" (Kunde vorbelegt). Die Uebernahme in einen Auftrag folgt in
+        * Block B; hier steht nur der Bestand.
+        */}
+      <DetailSection title={translate('offer.kunden.title')} testId="kunden-offers">
+        {letterCustomerId ? (
+          <div className="form-actions">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => navigate(`/angebote/neu?customerId=${letterCustomerId}`)}
+              data-testid="kunden-offer-create"
+            >
+              {translate('offer.kunden.create')}
+            </Button>
+          </div>
+        ) : null}
+        {customerOffers.length === 0 ? (
+          <p className="detail-empty">{translate('offer.kunden.empty')}</p>
+        ) : (
+          <BusinessList>
+            {customerOffers.map((offer) => (
+              <BusinessListItem
+                key={offer.id}
+                to={`/angebote/${offer.id}`}
+                linkTestId={`kunden-offer-${offer.id}`}
+                title={`${offer.offerNumber ? `${offer.offerNumber} · ` : ''}${offer.title || translate('offer.status.entwurf')}`}
+                subtitle={formatInvoiceCurrency(getOfferTotals(offer).total)}
+                date={offer.offerDate || undefined}
+                status={<OfferStatusBadge offer={offer} />}
+              />
+            ))}
+          </BusinessList>
+        )}
+      </DetailSection>
 
       {/*
         * BRIEFE-01C — Geschaeftsschreiben an diesen Kunden. Schlichte Liste,

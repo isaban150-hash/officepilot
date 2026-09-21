@@ -102,6 +102,7 @@ function cloneDocument(doc: CompanyDocument): CompanyDocument {
     linkedVorgang: doc.linkedVorgang ? { ...doc.linkedVorgang } : null,
     linkedInvoiceId: doc.linkedInvoiceId ?? null,
     linkedLetterId: doc.linkedLetterId ?? null,
+    linkedOfferId: doc.linkedOfferId ?? null,
     archiveTruthSnapshot: doc.archiveTruthSnapshot
       ? cloneDocumentArchiveTruthSnapshot(doc.archiveTruthSnapshot)
       : undefined,
@@ -189,6 +190,7 @@ function buildDocumentFromInput(
     imagePreview: input.imagePreview ?? '📄',
     linkedInvoiceId: input.linkedInvoiceId ?? null,
     linkedLetterId: input.linkedLetterId ?? null,
+    linkedOfferId: input.linkedOfferId ?? null,
     ...fileFieldsFromInput(input),
     ...(input.archiveTruthSnapshot
       ? {
@@ -276,6 +278,14 @@ export function getDocumentByLinkedLetterId(letterId: string): CompanyDocument |
   const gesucht = letterId.trim();
   if (!gesucht) return undefined;
   const doc = documents.find((d) => d.linkedLetterId === gesucht && isEntitySyncActive(d));
+  return doc ? cloneDocument(doc) : undefined;
+}
+
+/** ANGEBOT-01B — der Rückweg vom Angebot zur Ablage; derselbe Zweck wie bei Briefen. */
+export function getDocumentByLinkedOfferId(offerId: string): CompanyDocument | undefined {
+  const gesucht = offerId.trim();
+  if (!gesucht) return undefined;
+  const doc = documents.find((d) => d.linkedOfferId === gesucht && isEntitySyncActive(d));
   return doc ? cloneDocument(doc) : undefined;
 }
 
@@ -376,6 +386,8 @@ export function stageDocumentUpdate(
       changes.linkedInvoiceId !== undefined ? changes.linkedInvoiceId : current.linkedInvoiceId,
     linkedLetterId:
       changes.linkedLetterId !== undefined ? changes.linkedLetterId : current.linkedLetterId,
+    linkedOfferId:
+      changes.linkedOfferId !== undefined ? changes.linkedOfferId : current.linkedOfferId,
     fileRefId: changes.fileRefId ?? current.fileRefId,
     sourceFileHash: changes.sourceFileHash ?? current.sourceFileHash,
     originalFileName: changes.originalFileName ?? current.originalFileName,

@@ -15,7 +15,7 @@ export function InvoiceCustomerBlock({ model }: Props) {
 
   return (
     <section className="invoice-block invoice-customer">
-      <h2 className="invoice-block__title">Rechnungsempfänger</h2>
+      <h2 className="invoice-block__title">{model.offer ? 'Angebot für' : 'Rechnungsempfänger'}</h2>
       <p className="invoice-customer__name">{model.customer.name}</p>
       {model.customer.contactPerson && (
         <p>Ansprechpartner: {model.customer.contactPerson}</p>

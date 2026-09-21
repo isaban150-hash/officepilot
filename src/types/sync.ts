@@ -30,6 +30,8 @@ export type SyncEntityType =
   | 'dunning_documentation'
   /** BRIEFE-01B — ausgehendes Geschäftsschreiben als eigenes Dokument. */
   | 'business_letter'
+  /** ANGEBOT-01B — eigenes Angebot des Betriebs. */
+  | 'offer'
   | 'knowledge_fact';
 
 export type SyncOutboxOperation = 'create' | 'update' | 'delete';

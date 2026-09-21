@@ -16,7 +16,8 @@ export function InvoiceTaxNotice({ model }: Props) {
       <p className="invoice-tax-notice__status">{getTaxStatusLabel(model.taxStatus)}</p>
       {isReverseCharge ? (
         <p className="invoice-tax-notice__review" data-testid="invoice-13b-preview-hint">
-          {translate('invoice.reverseCharge.previewHint')}
+          {/* ANGEBOT-01B — auf dem Angebot heisst es „Angebot", nicht „Rechnung"; Rechnungen bleiben byteidentisch. */}
+          {translate(model.offer ? 'offer.reverseCharge.previewHint' : 'invoice.reverseCharge.previewHint')}
         </p>
       ) : null}
       {model.taxNotices.length > 0 ? (

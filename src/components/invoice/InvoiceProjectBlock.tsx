@@ -17,17 +17,18 @@ export function InvoiceProjectBlock({ model }: Props) {
 
   return (
     <section className="invoice-block invoice-project">
-      <h2 className="invoice-block__title">Bauvorhaben</h2>
+      {/* ANGEBOT-01B — auf dem Angebot heisst der Block „Betreff"; Rechnungen bleiben byteidentisch. */}
+      <h2 className="invoice-block__title">{model.offer ? 'Betreff' : 'Bauvorhaben'}</h2>
       <dl className="invoice-project__facts">
         {title && (
           <div>
-            <dt>Titel</dt>
+            <dt>{model.offer ? 'Betreff' : 'Titel'}</dt>
             <dd>{model.projectTitle}</dd>
           </div>
         )}
         {site && (
           <div>
-            <dt>Baustelle</dt>
+            <dt>{model.offer ? 'Leistungsort' : 'Baustelle'}</dt>
             <dd>{model.projectSite}</dd>
           </div>
         )}

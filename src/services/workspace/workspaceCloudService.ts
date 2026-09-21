@@ -15,6 +15,7 @@ import type { WorkspaceVorgangRow } from '../vorgang/vorgangCloudService';
 import type { WorkspaceCustomerRow } from '../customer/customerCloudService';
 import type { WorkspaceVorgangNoteRow } from '../vorgang/vorgangNoteCloudService';
 import type { WorkspaceBusinessLetterRow } from '../letter/businessLetterCloudService';
+import type { WorkspaceOfferRow } from '../offer/offerCloudService';
 import type { WorkspaceTaskRow } from '../task/taskCloudService';
 import type { WorkspaceDunningDocumentationRow } from '../invoice/dunningDocumentationCloudService';
 
@@ -205,6 +206,7 @@ export async function rpcPullWorkspaceSyncState(
   // BRIEFE-01B — Geschaeftsschreiben reisen im selben Abzug mit.
   const businessLettersRaw =
     (data?.business_letters as WorkspaceBusinessLetterRow[] | null) ?? [];
+  const offersRaw = (data?.offers as WorkspaceOfferRow[] | null) ?? [];
   // CLOUD-DURABILITY-CORE-01C — ebenfalls inklusive Grabsteine.
   const tasksRaw = (data?.tasks as WorkspaceTaskRow[] | null) ?? [];
   // CLOUD-DURABILITY-CORE-01D — Mahnnachweise.
@@ -225,6 +227,7 @@ export async function rpcPullWorkspaceSyncState(
     customers: customersRaw,
     vorgangNotes: vorgangNotesRaw,
     businessLetters: businessLettersRaw,
+    offers: offersRaw,
     tasks: tasksRaw,
     dunningDocumentations: dunningRaw,
   };

@@ -3,6 +3,7 @@ import type { WorkspaceVorgangRow } from '../services/vorgang/vorgangCloudServic
 import type { WorkspaceCustomerRow } from '../services/customer/customerCloudService';
 import type { WorkspaceVorgangNoteRow } from '../services/vorgang/vorgangNoteCloudService';
 import type { WorkspaceBusinessLetterRow } from '../services/letter/businessLetterCloudService';
+import type { WorkspaceOfferRow } from '../services/offer/offerCloudService';
 import type { WorkspaceTaskRow } from '../services/task/taskCloudService';
 import type { WorkspaceDunningDocumentationRow } from '../services/invoice/dunningDocumentationCloudService';
 
@@ -71,6 +72,8 @@ export interface WorkspaceSyncPullPayload {
   vorgangNotes: WorkspaceVorgangNoteRow[];
   /** BRIEFE-01B — Geschaeftsschreiben. */
   businessLetters: WorkspaceBusinessLetterRow[];
+  /** ANGEBOT-01B — eigene Angebote, inklusive Grabsteine. */
+  offers: WorkspaceOfferRow[];
   /**
    * CLOUD-DURABILITY-CORE-01C — ebenfalls inklusive Grabsteine: Sie tragen auch
    * das Ergebnis der Dedupe-Auflösung auf das zweite Gerät.

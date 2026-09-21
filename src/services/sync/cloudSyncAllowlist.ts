@@ -32,6 +32,9 @@ export const SUPABASE_SYNC_ALLOWLIST: ReadonlySet<SyncEntityType> = new Set([
   // BRIEFE-01B — Geschaeftsschreiben. Freigabe mit Tabelle, RLS, Push, Pull,
   // Merge, Grabstein, Altbestand und Wiederanlauf nach 01G.
   'business_letter',
+  // ANGEBOT-01B — eigene Angebote. Tabelle, RLS, Push, Pull, Merge, Grabstein,
+  // Altbestand und Wiederanlauf wie bei Briefen; Freigabe ueber eigene RPC.
+  'offer',
 ]);
 
 export const LOCAL_ONLY_SYNC_ENTITY_TYPES: ReadonlySet<SyncEntityType> = new Set([

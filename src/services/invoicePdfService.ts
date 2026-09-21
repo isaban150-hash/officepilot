@@ -454,6 +454,16 @@ async function drawHistoricalLogo(cursor: PdfCursor, logo: PdfLogoBytes): Promis
   });
 }
 
+/**
+ * ANGEBOT-01B — die PDF-Bytes eines Angebots aus demselben Renderer.
+ * Bewusst nur ein schmaler Export: Aufbau des Modells, Ablage und Versand
+ * liegen im Angebotsbereich.
+ */
+export async function renderOfferPrintModelToPdf(model: InvoicePrintModel): Promise<Uint8Array> {
+  if (!model.offer) throw new Error('offer_context_missing');
+  return renderInvoicePrintModelToPdf(model);
+}
+
 async function renderInvoicePrintModelToPdf(model: InvoicePrintModel): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
   /*
@@ -531,13 +541,18 @@ async function renderInvoicePrintModelToPdf(model: InvoicePrintModel): Promise<U
     );
     drawLine(cursor, `Korrekturdatum: ${formatInvoiceDate(model.issueDate)}`, { size: 10 });
     drawWrapped(cursor, `Grund: ${toPdfSafeText(model.correction.cancelReason)}`, 9);
+  } else if (model.offer) {
+    // ANGEBOT-01B — Angebotskopf; ein Rechnungsmodell erreicht diesen Zweig nie.
+    drawLine(cursor, `Angebotsnummer: ${model.invoiceNumber}`, { size: 11, bold: true });
+    drawLine(cursor, `Angebotsdatum: ${formatInvoiceDate(model.issueDate)}`, { size: 10 });
+    drawLine(cursor, `Gültig bis: ${formatInvoiceDate(model.offer.validUntil)}`, { size: 10 });
   } else {
     drawLine(cursor, `Rechnungsnummer: ${model.invoiceNumber}`, { size: 11, bold: true });
     drawLine(cursor, `Rechnungsdatum: ${formatInvoiceDate(model.issueDate)}`, { size: 10 });
   }
 
   cursor.y -= 6;
-  drawLine(cursor, 'Rechnungsempfänger', { size: 11, bold: true });
+  drawLine(cursor, model.offer ? 'Angebot für' : 'Rechnungsempfänger', { size: 11, bold: true });
   const customer = model.customer;
   if (customer.name?.trim()) drawLine(cursor, customer.name, { size: 10 });
   if (customer.contactPerson?.trim()) drawLine(cursor, customer.contactPerson, { size: 9 });
@@ -562,7 +577,7 @@ async function renderInvoicePrintModelToPdf(model: InvoicePrintModel): Promise<U
    */
   if (projectTitle || projectSite) {
     cursor.y -= 4;
-    drawLine(cursor, 'Projekt', { size: 11, bold: true });
+    drawLine(cursor, model.offer ? 'Betreff' : 'Projekt', { size: 11, bold: true });
   }
   if (projectTitle) drawLine(cursor, model.projectTitle, { size: 10 });
   /*
@@ -576,11 +591,13 @@ async function renderInvoicePrintModelToPdf(model: InvoicePrintModel): Promise<U
     drawLine(cursor, model.projectSite, { size: 9 });
   }
 
-  drawLine(
-    cursor,
-    `Leistungszeitraum: ${formatInvoiceDate(model.servicePeriodFrom)} - ${formatInvoiceDate(model.servicePeriodTo)}`,
-    { size: 10 },
-  );
+  if (!model.offer) {
+    drawLine(
+      cursor,
+      `Leistungszeitraum: ${formatInvoiceDate(model.servicePeriodFrom)} - ${formatInvoiceDate(model.servicePeriodTo)}`,
+      { size: 10 },
+    );
+  }
 
   cursor.y -= 8;
   drawLine(cursor, 'Positionen', { size: 11, bold: true });
@@ -609,7 +626,7 @@ async function renderInvoicePrintModelToPdf(model: InvoicePrintModel): Promise<U
       size: 10,
     });
   }
-  drawLine(cursor, `Fälliger Betrag: ${formatMoneyPdf(summary.amountDue)}`, {
+  drawLine(cursor, `${model.offer ? 'Angebotssumme' : 'Fälliger Betrag'}: ${formatMoneyPdf(summary.amountDue)}`, {
     size: 12,
     bold: true,
   });
@@ -618,20 +635,33 @@ async function renderInvoicePrintModelToPdf(model: InvoicePrintModel): Promise<U
     if (notice.trim()) drawWrapped(cursor, notice.trim(), 9);
   }
 
-  cursor.y -= 4;
-  drawLine(cursor, 'Zahlungsinformationen', { size: 11, bold: true });
-  if (model.paymentDueDate) {
-    drawLine(cursor, `Fällig am: ${formatInvoiceDate(model.paymentDueDate)}`, { size: 10 });
+  if (model.offer) {
+    /*
+     * ANGEBOT-01B — Konditionen statt Zahlungsinformationen: kein
+     * Fälligkeitsdatum, kein Skonto, keine Bankverbindung. Ein Angebot fordert
+     * nichts ein; es nennt die Bedingungen, zu denen es gilt.
+     */
+    if (model.paymentTermsText.trim()) {
+      cursor.y -= 4;
+      drawLine(cursor, 'Konditionen', { size: 11, bold: true });
+      drawWrapped(cursor, model.paymentTermsText.trim(), 9);
+    }
+  } else {
+    cursor.y -= 4;
+    drawLine(cursor, 'Zahlungsinformationen', { size: 11, bold: true });
+    if (model.paymentDueDate) {
+      drawLine(cursor, `Fällig am: ${formatInvoiceDate(model.paymentDueDate)}`, { size: 10 });
+    }
+    if (model.paymentTermsText.trim()) drawWrapped(cursor, model.paymentTermsText.trim(), 9);
+    if (model.skontoText.trim()) drawWrapped(cursor, model.skontoText.trim(), 9);
+    // SETTINGS-01B1 — Kontoinhaber nur, wenn vorhanden; sonst unveränderter Output.
+    if (company.accountHolder?.trim()) {
+      drawLine(cursor, `Kontoinhaber: ${toPdfSafeText(company.accountHolder)}`, { size: 9 });
+    }
+    if (company.iban?.trim()) drawLine(cursor, `IBAN: ${company.iban}`, { size: 9 });
+    if (company.bic?.trim()) drawLine(cursor, `BIC: ${company.bic}`, { size: 9 });
+    if (company.bankName?.trim()) drawLine(cursor, `Bank: ${company.bankName}`, { size: 9 });
   }
-  if (model.paymentTermsText.trim()) drawWrapped(cursor, model.paymentTermsText.trim(), 9);
-  if (model.skontoText.trim()) drawWrapped(cursor, model.skontoText.trim(), 9);
-  // SETTINGS-01B1 — Kontoinhaber nur, wenn vorhanden; sonst unveränderter Output.
-  if (company.accountHolder?.trim()) {
-    drawLine(cursor, `Kontoinhaber: ${toPdfSafeText(company.accountHolder)}`, { size: 9 });
-  }
-  if (company.iban?.trim()) drawLine(cursor, `IBAN: ${company.iban}`, { size: 9 });
-  if (company.bic?.trim()) drawLine(cursor, `BIC: ${company.bic}`, { size: 9 });
-  if (company.bankName?.trim()) drawLine(cursor, `Bank: ${company.bankName}`, { size: 9 });
 
   if (model.closingText.trim()) {
     cursor.y -= 6;

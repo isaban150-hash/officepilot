@@ -17,6 +17,7 @@ import { bgPilot } from './pilot';
 import { bgSettings } from './settings';
 import { bgDelivery } from './delivery';
 import { bgBusinessLetter } from './businessLetter';
+import { bgOffer } from './offer';
 import { bgDocumentMeaning } from './documentMeaning';
 
 export const bgModules = {
@@ -44,5 +45,6 @@ export const bgModules = {
   ...bgSettings,
   ...bgDelivery,
   ...bgBusinessLetter,
+  ...bgOffer,
   ...bgDocumentMeaning,
 } as const;

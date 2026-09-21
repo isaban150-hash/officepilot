@@ -21,6 +21,9 @@ import { AufgabenPage } from './pages/AufgabenPage';
 import { SchreibenPage } from './pages/SchreibenPage';
 import { BriefEditorPage } from './pages/BriefEditorPage';
 import { BriefDetailPage } from './pages/BriefDetailPage';
+import { AngebotePage } from './pages/AngebotePage';
+import { AngebotEditorPage } from './pages/AngebotEditorPage';
+import { AngebotDetailPage } from './pages/AngebotDetailPage';
 import { DokumentDetailPage } from './pages/DokumentDetailPage';
 import { DokumentePage } from './pages/DokumentePage';
 import { DokumentNeuPage } from './pages/DokumentNeuPage';
@@ -192,6 +195,11 @@ function AppRoutes() {
         <Route path="/schreiben/neu" element={<BriefEditorPage />} />
         <Route path="/schreiben/:letterId" element={<BriefDetailPage />} />
         <Route path="/schreiben/:letterId/bearbeiten" element={<BriefEditorPage />} />
+        {/* ANGEBOT-01B — eigene Angebote; erreichbar aus Aufträgen und Kundenakte, kein Hauptmenüpunkt. */}
+        <Route path="/angebote" element={<AngebotePage />} />
+        <Route path="/angebote/neu" element={<AngebotEditorPage />} />
+        <Route path="/angebote/:offerId" element={<AngebotDetailPage />} />
+        <Route path="/angebote/:offerId/bearbeiten" element={<AngebotEditorPage />} />
         <Route path="/vorgaenge" element={<VorgaengePage />} />
         <Route path="/vorgaenge/:id" element={<VorgangDetailPage />} />
         <Route path="/vorgaenge/:id/rechnung" element={<RechnungPage />} />
