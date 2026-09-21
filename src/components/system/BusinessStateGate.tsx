@@ -20,7 +20,7 @@ import { getWorkspaceStoreSnapshot } from '../../services/workspace/workspaceSto
 import { WorkspaceRestoreFailure, WorkspaceSetupNotFound } from './WorkspaceRestoreFailure';
 import { LocalStateLoadFailure } from './LocalStateLoadFailure';
 import { WorkspaceCompanyConflict } from './WorkspaceCompanyConflict';
-import { applyConfirmedLocalCompany } from '../../services/workspace/workspaceCompanyRecoveryService';
+import { applyConfirmedCloudCompany, applyConfirmedLocalCompany } from '../../services/workspace/workspaceCompanyRecoveryService';
 import type { CompanyConflictInfo } from '../../services/workspace/workspaceCompanyConflictService';
 
 function BootstrapLoading() {
@@ -267,6 +267,53 @@ export function BusinessStateGate({ children }: BusinessStateGateProps) {
               setCompanyConflict(null);
               conflictRawRef.current = null;
               appliedEntitiesRef.current = {};
+            })
+            .finally(() => {
+              setConflictBusy(false);
+            });
+        }}
+        onConfirmUseCloud={() => {
+          /*
+           * OFFICETAKT-02B-F2 — Cloud behalten. Die Funktion sichert die
+           * lokale Kopie vollständig in die Quarantäne und gibt danach nur
+           * den einen Workspace-Schlüssel frei. Der anschliessende Bootstrap
+           * läuft wie auf einem neuen Gerät: Cloud lesen, leere Outbox —
+           * nichts Altes wird hochgeladen.
+           */
+          if (conflictBusy) return;
+          setConflictBusy(true);
+          setConflictChanged(false);
+          setConflictError(null);
+          void applyConfirmedCloudCompany({
+            workspaceId: companyConflict.workspaceId,
+            confirmedLocalCompanyName: companyConflict.localCompanyName,
+            confirmedCloudCompanyName: companyConflict.cloudCompanyName,
+            confirmedCloudSetupRowVersion: companyConflict.cloudSetupRowVersion,
+            confirmedCloudProfileRowVersion: companyConflict.cloudProfileRowVersion,
+            confirmedRawText: conflictRawRef.current ?? '',
+          })
+            .then((outcome) => {
+              if (outcome.status === 'changed') {
+                setCompanyConflict(outcome.conflict);
+                try {
+                  conflictRawRef.current = localStorage.getItem(outcome.conflict.storageKey);
+                } catch {
+                  conflictRawRef.current = null;
+                }
+                setConflictChanged(true);
+                setConflictStep((value) => value + 1);
+                return;
+              }
+              if (outcome.status === 'failed') {
+                setConflictError(outcome.message);
+                return;
+              }
+              // Gesichert und freigegeben: derselbe Neustart wie im Gegenweg.
+              appliedEntitiesRef.current = {};
+              conflictRawRef.current = null;
+              prepareWorkspaceCloudBootstrapRetry();
+              setCompanyConflict(null);
+              setRetryToken((value) => value + 1);
             })
             .finally(() => {
               setConflictBusy(false);

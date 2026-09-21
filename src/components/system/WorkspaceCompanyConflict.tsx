@@ -13,6 +13,8 @@ interface WorkspaceCompanyConflictProps {
   changed?: boolean;
   onCancel: () => void;
   onConfirmUseLocal: () => void;
+  /** 02B-F2 — Gegenweg: Cloud behalten, lokale Kopie in Quarantäne. */
+  onConfirmUseCloud: () => void;
 }
 
 /**
@@ -35,9 +37,11 @@ export function WorkspaceCompanyConflict({
   changed,
   onCancel,
   onConfirmUseLocal,
+  onConfirmUseCloud,
 }: WorkspaceCompanyConflictProps) {
   const lang = getCachedSetup()?.language ?? 'de';
-  const [confirming, setConfirming] = useState(false);
+  /* 02B-F2 — welcher Weg bestätigt wird; jeder hat seine eigene Stufe. */
+  const [confirming, setConfirming] = useState<false | 'local' | 'cloud'>(false);
   const [acknowledged, setAcknowledged] = useState(false);
   /**
    * Synchroner Riegel: der busy-Zustand des Elternteils steht beim zweiten
@@ -65,7 +69,8 @@ export function WorkspaceCompanyConflict({
     // Zusätzliche eigene Prüfung — unabhängig vom disabled-Zustand des Knopfes.
     if (!confirming || !acknowledged || busy || inFlightRef.current) return;
     inFlightRef.current = true;
-    onConfirmUseLocal();
+    if (confirming === 'cloud') onConfirmUseCloud();
+    else onConfirmUseLocal();
   };
 
   useEffect(() => {
@@ -150,11 +155,28 @@ export function WorkspaceCompanyConflict({
         <Button
           type="button"
           fullWidth
-          disabled={busy || confirming}
+          disabled={busy || confirming !== false}
           data-testid="workspace-company-conflict-use-local"
-          onClick={() => setConfirming(true)}
+          onClick={() => setConfirming('local')}
         >
           {t('companyConflict.useLocal', lang)}
+        </Button>
+
+        {/*
+          * 02B-F2 — der Gegenweg. Bisher gab es nur „lokal → Cloud"; wer die
+          * Cloud behalten wollte, konnte sich nur abmelden und stand beim
+          * nächsten Login wieder hier. Derselbe Schutz wie gegenüber:
+          * eigener Bereich, eigene Checkbox, eigener Abschlussknopf.
+          */}
+        <Button
+          type="button"
+          variant="secondary"
+          fullWidth
+          disabled={busy || confirming !== false}
+          data-testid="workspace-company-conflict-use-cloud"
+          onClick={() => setConfirming('cloud')}
+        >
+          {t('companyConflict.useCloud', lang)}
         </Button>
       </div>
 
@@ -170,7 +192,9 @@ export function WorkspaceCompanyConflict({
           <p className="company-conflict-final__text">
             {t('companyConflict.cloudLabel', lang)}: {conflict.cloudCompanyName}
           </p>
-          <p className="form-hint">{t('companyConflict.finalHint', lang)}</p>
+          <p className="form-hint" data-testid="workspace-company-conflict-final-hint">
+            {t(confirming === 'cloud' ? 'companyConflict.finalHintCloud' : 'companyConflict.finalHint', lang)}
+          </p>
 
           <label className="company-conflict-final__ack">
             <input
@@ -180,7 +204,7 @@ export function WorkspaceCompanyConflict({
               data-testid="workspace-company-conflict-ack"
               onChange={(event) => setAcknowledged(event.target.checked)}
             />
-            <span>{t('companyConflict.ackLabel', lang)}</span>
+            <span>{t(confirming === 'cloud' ? 'companyConflict.ackLabelCloud' : 'companyConflict.ackLabel', lang)}</span>
           </label>
 
           <Button
@@ -190,7 +214,7 @@ export function WorkspaceCompanyConflict({
             data-testid="workspace-company-conflict-confirm"
             onClick={handleFinalConfirm}
           >
-            {t('companyConflict.confirmUseLocal', lang)}
+            {t(confirming === 'cloud' ? 'companyConflict.confirmUseCloud' : 'companyConflict.confirmUseLocal', lang)}
           </Button>
         </section>
       ) : null}

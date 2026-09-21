@@ -20,6 +20,7 @@ import {
   normalizeCompanyName,
   type CompanyConflictInfo,
 } from './workspaceCompanyConflictService';
+import { createQuarantineFromLiveScope } from '../storage/localScopeEmergencyQuarantineService';
 
 export type CompanyRecoveryOutcome =
   | { status: 'applied'; setupRowVersion: number; profileRowVersion: number }
@@ -308,5 +309,136 @@ function buildConflictInfo(
     cloudProfileRowVersion: cloud.companyProfileRowVersion,
     workspaceId,
     storageKey: candidate.storageKey,
+  };
+}
+
+
+/* -------------------------------------------------------------------------- */
+/* OFFICETAKT-02B-F2 — der Gegenweg: Cloud-Firmendaten verwenden              */
+/* -------------------------------------------------------------------------- */
+
+export type CloudAdoptionOutcome =
+  | { status: 'applied'; quarantineToken: string; skippedFileRefIds: string[] }
+  | { status: 'changed'; conflict: CompanyConflictInfo }
+  | { status: 'failed'; message: string };
+
+export interface CloudAdoptionInput {
+  workspaceId: string;
+  /** Beide Namen und die Cloud-Versionen, wie sie dem Nutzer angezeigt wurden. */
+  confirmedLocalCompanyName: string;
+  confirmedCloudCompanyName: string;
+  confirmedCloudSetupRowVersion: number;
+  confirmedCloudProfileRowVersion: number;
+  /** Vollständiger Rohtext, wie er beim Anzeigen des Konflikts galt. */
+  confirmedRawText: string;
+}
+
+/**
+ * Löst den Firmenkonflikt zugunsten der **vorhandenen Cloud-Firma** auf.
+ *
+ * **Warum nicht einfach die beiden Namensfelder lokal angleichen.** Das wäre
+ * der kleinere Eingriff — und der gefährlichere. Nach dem Angleich liefe der
+ * normale Bootstrap weiter, und der schickt, was in der lokalen Sync-Outbox
+ * als `pending`, `error` oder `blocked` liegt. In einer veralteten Kopie kann
+ * das alles Mögliche sein: alte Testaufträge, Probedokumente, ein halb
+ * erfasster Eingang. Der Pull-Merge schützt zudem lokale Entitäten mit
+ * aktivem Outbox-Eintrag ausdrücklich vor dem Überschreiben — sie würden also
+ * stehen bleiben und anschliessend hochgeladen. Genau das darf hier nicht
+ * passieren; der Auftrag verlangt, dass die Cloud die massgebliche Quelle
+ * bleibt.
+ *
+ * **Deshalb der andere Weg:**
+ *
+ *   1. Die gesamte lokale Kopie — Rohzustand und alle Dateien — wird in
+ *      **Quarantäne** gesichert, im vorhandenen Format, mit Rücklesen und
+ *      Hash-Prüfung. Erst wenn `complete` zurückgelesen ist, geht es weiter.
+ *   2. Danach wird **ausschliesslich der eine Workspace-Schlüssel** aus dem
+ *      Speicher genommen. Keine Blobs, keine anderen Bereiche, kein Löschen
+ *      des Speichers. Der Inhalt liegt vollständig in der Quarantäne und ist
+ *      auf der Notfallseite sichtbar.
+ *   3. Der anschliessende Bootstrap findet keinen lokalen Kandidaten mehr und
+ *      läuft den Weg, den jedes neu angemeldete Gerät läuft: Cloud lesen,
+ *      anwenden, mit leerer Outbox synchronisieren. Es wird nichts gepusht,
+ *      was nicht aus der Cloud kam.
+ *
+ * Nichts davon berührt die Cloud vor der Bestätigung; und auch danach wird
+ * in die Cloud **nichts geschrieben** — der einzige Netzaufruf ist der
+ * Kontroll-Pull, der prüft, dass der angezeigte Cloud-Stand noch gilt.
+ */
+export async function applyConfirmedCloudCompany(
+  input: CloudAdoptionInput,
+): Promise<CloudAdoptionOutcome> {
+  const candidate = readLocalCompanyCandidate(input.workspaceId);
+  if (!candidate) return { status: 'failed', message: 'local_candidate_missing' };
+
+  /* Der bestätigte lokale Stand ist exakt gebunden — wie im Gegenweg. */
+  if (candidate.rawText !== input.confirmedRawText) {
+    let freshCloud = {
+      setupCompanyName: input.confirmedCloudCompanyName,
+      profileCompanyName: input.confirmedCloudCompanyName,
+      setupRowVersion: input.confirmedCloudSetupRowVersion,
+      companyProfileRowVersion: input.confirmedCloudProfileRowVersion,
+    };
+    try {
+      freshCloud = buildCloudCompanySnapshot(await rpcPullWorkspaceSyncState(input.workspaceId));
+    } catch {
+      // Ohne Cloud-Antwort bleiben die zuletzt bekannten Werte stehen.
+    }
+    return { status: 'changed', conflict: buildConflictInfo(candidate, freshCloud, input.workspaceId) };
+  }
+
+  /* Kontroll-Pull: Der Cloud-Stand muss noch der angezeigte sein. Nur lesen. */
+  let pull;
+  try {
+    pull = await rpcPullWorkspaceSyncState(input.workspaceId);
+  } catch (error) {
+    return { status: 'failed', message: error instanceof Error ? error.message : 'pull_failed' };
+  }
+  const cloud = buildCloudCompanySnapshot(pull);
+  const cloudName = cloud.setupCompanyName || cloud.profileCompanyName;
+  if (
+    cloud.setupRowVersion !== input.confirmedCloudSetupRowVersion ||
+    cloud.companyProfileRowVersion !== input.confirmedCloudProfileRowVersion ||
+    normalizeCompanyName(cloudName) !== normalizeCompanyName(input.confirmedCloudCompanyName)
+  ) {
+    return { status: 'changed', conflict: buildConflictInfo(candidate, cloud, input.workspaceId) };
+  }
+  if (!cloudName) return { status: 'failed', message: 'cloud_identity_missing' };
+
+  /* 1 — Quarantäne, vollständig und rückgelesen. Vorher wird nichts verändert. */
+  const quarantine = await createQuarantineFromLiveScope({
+    storageKey: candidate.storageKey,
+    workspaceId: input.workspaceId,
+  });
+  if (!quarantine.ok) {
+    return { status: 'failed', message: `quarantine_${quarantine.reason}` };
+  }
+
+  /* Die Hülle muss den gebundenen Rohtext tragen — sonst wird nichts entfernt. */
+  let envelopeRawText: string | undefined;
+  try {
+    const stored = localStorage.getItem(quarantine.stateKey);
+    envelopeRawText = stored ? (JSON.parse(stored) as { rawText?: unknown }).rawText as string | undefined : undefined;
+  } catch {
+    envelopeRawText = undefined;
+  }
+  if (envelopeRawText !== input.confirmedRawText || quarantine.marker.status !== 'complete') {
+    return { status: 'failed', message: 'quarantine_verify_failed' };
+  }
+
+  /* 2 — Genau ein Schlüssel. Nichts sonst. */
+  try {
+    localStorage.removeItem(candidate.storageKey);
+    if (localStorage.getItem(candidate.storageKey) !== null) {
+      return { status: 'failed', message: 'local_release_failed' };
+    }
+  } catch {
+    return { status: 'failed', message: 'local_release_failed' };
+  }
+
+  return {
+    status: 'applied',
+    quarantineToken: quarantine.token,
+    skippedFileRefIds: quarantine.skippedFileRefIds,
   };
 }

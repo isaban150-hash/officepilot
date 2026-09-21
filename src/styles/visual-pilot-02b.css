@@ -1,0 +1,1873 @@
+/**
+ * VISUAL-DESIGN-02B — Pilot: App-Shell und Startseite.
+ *
+ * Warum eine eigene Datei, die zuletzt geladen wird:
+ *
+ * Die heutige Kopfzeile ist an rund dreissig Stellen in `shell.css` auf
+ * „weiss auf dunklem Navy" festgelegt — Marke, Werkzeuge, Suche, Menü. Jede
+ * einzelne davon umzuschreiben hiesse, den Pilot über die ganze Anwendung zu
+ * verteilen. Hier steht er an einem Ort, überschreibt gezielt und lässt sich
+ * mit einer Zeile in `main.tsx` wieder abschalten. Was nicht zu Shell und
+ * Startseite gehört, wird hier nicht angefasst — insbesondere nichts, was in
+ * die Rechnungsansicht oder ein PDF einfliesst.
+ *
+ * Die Richtung: helle, warme Arbeitsfläche; Navigation als eigene ruhige
+ * Fläche in warmem Stein, weder weiss noch dunkel; ein tiefes, sattes Blau
+ * als einzige Aktionsfarbe. Amber nur für Hinweise, Grün nur für „erledigt",
+ * Rot nur für „kritisch". Keine dunkle Kopfzeile mehr.
+ */
+
+/* ------------------------------------------------------------------ *
+ * Tokens
+ * ------------------------------------------------------------------ */
+
+:root {
+  /* Flächen — warm statt kühlgrau */
+  --op-bg: #fbfaf7;
+  --op-surface: #ffffff;
+  --op-surface-raised: #ffffff;
+  --op-surface-sunken: #f1ede6;
+  --op-surface-soft: #f5f2ec;
+
+  /* Navigation — Stein/Greige */
+  --pilot-nav-bg: #d8d0c3;
+  --pilot-nav-text: #2b2f37;
+  --pilot-nav-muted: #5f636c;
+  --pilot-nav-border: #c7bdae;
+
+  /* Schrift — warmes Dunkelgrau, kein Blauschwarz */
+  --op-text: #1f2430;
+  --op-text-muted: #545a66;
+  --op-text-subtle: #767b86;
+
+  /* Linien */
+  --op-border: #e3ddd2;
+  --op-border-strong: #cfc7ba;
+  --op-divider: var(--op-border);
+  --op-control-border: #b9b1a3;
+
+  /* Aktion — tiefes, sattes Blau (kein Royal-, kein Bootstrap-Blau) */
+  --op-primary: #123a73;
+  --op-primary-deep: #0e2f5f;
+  --op-primary-hover: #0f3060;
+  --op-primary-active: #0b264c;
+  --op-primary-subtle: #e9eef7;
+  --op-focus: #123a73;
+  --op-focus-ring: 0 0 0 3px rgba(18, 58, 115, 0.2);
+
+  /* Bedeutungsfarben — unverändert in der Sache, nur mit weniger Fläche */
+  --op-warning: #a8630d;
+  --op-warning-subtle: #fbf3e4;
+  --op-success: #1f7a45;
+  --op-success-subtle: #e9f5ee;
+  --op-danger: #b3261e;
+  --op-danger-subtle: #fcecea;
+
+  /* Form — ruhiger, weniger rund */
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 14px;
+
+  /* Tiefe — nur wo etwas wirklich schwebt */
+  --shadow-sm: 0 1px 2px rgba(31, 36, 48, 0.05);
+  --shadow-md: 0 1px 3px rgba(31, 36, 48, 0.06);
+  --shadow-lg: 0 12px 32px rgba(31, 36, 48, 0.12);
+  --shadow-card: none;
+  --shadow-card-hover: 0 2px 8px rgba(31, 36, 48, 0.08);
+  --shadow-elevated: var(--shadow-lg);
+}
+
+/* ------------------------------------------------------------------ *
+ * Kopfzeile — hell, ruhig, ohne dunklen Balken
+ * ------------------------------------------------------------------ */
+
+.app-shell__top {
+  background: var(--op-surface);
+  border-bottom: 1px solid var(--op-border);
+  box-shadow: none;
+}
+
+.app-shell__brand {
+  color: var(--op-primary);
+  font-weight: 750;
+}
+
+.app-shell__company,
+.app-shell__company::before {
+  color: var(--op-text-muted);
+}
+
+.app-shell__company::before {
+  background: var(--op-border-strong);
+}
+
+.app-shell__tool,
+.app-shell__settings,
+.global-search__mobile-trigger--icon {
+  color: var(--op-text-muted);
+}
+
+.app-shell__tool:hover,
+.app-shell__tool:focus-visible,
+.global-search__mobile-trigger--icon:hover:not(:disabled),
+.global-search__mobile-trigger--icon:focus-visible,
+.global-search__mobile-trigger--icon[aria-expanded="true"] {
+  color: var(--op-text);
+  background: var(--op-surface-sunken);
+}
+
+.app-shell__tool:focus-visible {
+  outline: 2px solid var(--op-primary);
+}
+
+.app-shell__top .global-search__input,
+.app-shell__top .global-search--compact .input {
+  border: 1px solid var(--op-border);
+  background:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23767b86' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='7'/><path d='m20 20-3.5-3.5'/></svg>")
+    no-repeat 0.7rem center / 15px 15px,
+    var(--op-surface-soft);
+  color: var(--op-text);
+}
+
+.app-shell__top .global-search__input::placeholder {
+  color: var(--op-text-subtle);
+}
+
+/* Benutzermenü auf hellem Grund */
+.app-shell__top .user-menu__name,
+.app-shell__top .user-menu__trigger {
+  color: var(--op-text);
+}
+
+.app-shell__top .user-menu__trigger {
+  background: transparent;
+  border: 1px solid var(--op-border);
+}
+
+.app-shell__top .user-menu__trigger:hover,
+.app-shell__top .user-menu__trigger:focus-visible {
+  background: var(--op-surface-sunken);
+}
+
+/* ------------------------------------------------------------------ *
+ * Sidebar — eine eigene Fläche in warmem Stein
+ * ------------------------------------------------------------------ */
+
+@media (min-width: 1024px) {
+  .sidebar-nav {
+    background: var(--pilot-nav-bg);
+    border-right: 1px solid var(--pilot-nav-border);
+    padding: var(--space-5) var(--space-3);
+  }
+
+  .sidebar-nav__item {
+    color: var(--pilot-nav-text);
+    font-weight: 600;
+    border-radius: var(--radius-md);
+  }
+
+  .sidebar-nav__item:hover {
+    background: rgba(255, 255, 255, 0.45);
+    color: var(--op-text);
+  }
+
+  /*
+   * Aktiv: helle Fläche mit blauer Markierung. Die Alternative — ein
+   * blau gefüllter Eintrag — wirkte in der echten App wie ein zweiter
+   * Primärbutton neben dem eigentlichen. Die helle Fläche liegt ruhig auf
+   * dem Stein und lässt die Aktionsfarbe der Arbeitsfläche.
+   */
+  .sidebar-nav__item--active {
+    background: var(--op-surface);
+    color: var(--op-primary);
+    font-weight: 700;
+    box-shadow: inset 3px 0 0 var(--op-primary);
+  }
+
+  .sidebar-nav__secondary {
+    border-top: 1px solid var(--pilot-nav-border);
+  }
+
+  .sidebar-nav__secondary-title {
+    color: var(--pilot-nav-muted);
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Buttons — eine dominante Aktion, der Rest zurückhaltend
+ * ------------------------------------------------------------------ */
+
+.btn {
+  border-radius: var(--radius-sm);
+  box-shadow: none;
+  padding: 0.7rem 1.15rem;
+  min-height: 42px;
+}
+
+.btn--primary {
+  background: var(--op-primary);
+  box-shadow: none;
+}
+
+.btn--primary:hover:not(:disabled) {
+  background: var(--op-primary-hover);
+  box-shadow: none;
+}
+
+.btn--secondary {
+  background: var(--op-surface);
+  color: var(--op-text);
+  border: 1px solid var(--op-border-strong);
+  box-shadow: none;
+}
+
+.btn--secondary:hover:not(:disabled) {
+  background: var(--op-surface-soft);
+}
+
+.btn--outline {
+  border: 1px solid var(--op-border-strong);
+  color: var(--op-text);
+  box-shadow: none;
+}
+
+.btn--outline:hover:not(:disabled) {
+  border-color: var(--op-primary);
+  color: var(--op-primary);
+  background: var(--op-surface);
+}
+
+.btn--ghost {
+  color: var(--op-text-muted);
+}
+
+/* ------------------------------------------------------------------ *
+ * Startseite
+ * ------------------------------------------------------------------ */
+
+.heute-pilot__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
+.heute-pilot__title {
+  margin: 0;
+  font-size: clamp(1.75rem, 3vw, 2.125rem);
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: var(--op-text);
+}
+
+.heute-pilot__meta {
+  margin: 0.25rem 0 0;
+  color: var(--op-text-muted);
+  font-size: var(--text-meta-size);
+}
+
+/* Die Zusammenfassung: zwei kurze Sätze, keine Kennzahlenwand. */
+.heute-pilot__summary {
+  margin: var(--space-4) 0 0;
+  font-size: 1.0625rem;
+  line-height: 1.5;
+  color: var(--op-text);
+  max-width: 44rem;
+}
+
+.heute-pilot__summary strong {
+  font-weight: 700;
+}
+
+.heute-pilot__grid {
+  display: grid;
+  gap: var(--space-6);
+}
+
+@media (min-width: 1024px) {
+  .heute-pilot__grid {
+    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+    align-items: start;
+  }
+}
+
+.heute-pilot__col {
+  display: grid;
+  gap: var(--space-6);
+  min-width: 0;
+}
+
+.heute-pilot__section-title {
+  margin: 0 0 var(--space-1);
+  font-size: 1.125rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--op-text);
+}
+
+.heute-pilot__section-hint {
+  margin: 0 0 var(--space-3);
+  color: var(--op-text-muted);
+  font-size: var(--text-meta-size);
+}
+
+/*
+ * Ebene 2 — der Entscheidungsbereich. Er ist der einzige Bereich mit
+ * eigener Fläche: warmer Sandton, kein Rahmen, kein Schatten. Alles andere
+ * liegt direkt auf der Arbeitsfläche.
+ */
+.heute-pilot__decide {
+  background: #fbf7ef;
+  border: 1px solid #efe6d6;
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+}
+
+.heute-pilot__decide .desk-priorities,
+.heute-pilot__decide .desk-priorities__item {
+  background: transparent;
+  box-shadow: none;
+}
+
+.heute-pilot__decide .desk-priorities__item {
+  border-radius: var(--radius-md);
+  border: 0;
+  border-bottom: 1px solid #efe6d6;
+  background: var(--op-surface);
+  margin-bottom: var(--space-2);
+}
+
+.heute-pilot__decide .desk-priorities__item:last-child {
+  margin-bottom: 0;
+}
+
+.heute-pilot__decide-empty {
+  margin: 0;
+  color: var(--op-text-muted);
+}
+
+/* Ebene 3 — ruhige Informationsbereiche ohne Karten-in-Karten */
+.heute-pilot__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+}
+
+.heute-pilot__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  align-items: center;
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--op-border);
+}
+
+.heute-pilot__row:last-child {
+  border-bottom: 0;
+}
+
+.heute-pilot__row-title {
+  margin: 0;
+  font-weight: 600;
+  color: var(--op-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.heute-pilot__row-meta {
+  margin: 0.125rem 0 0;
+  color: var(--op-text-muted);
+  font-size: var(--text-meta-size);
+}
+
+.heute-pilot__row-link {
+  color: var(--op-primary);
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  font-size: var(--text-meta-size);
+}
+
+.heute-pilot__row-link:hover {
+  text-decoration: underline;
+}
+
+.heute-pilot__empty {
+  margin: 0;
+  color: var(--op-text-muted);
+  font-size: var(--text-meta-size);
+}
+
+/* „Heute erledigt" — die vorhandene Liste, ohne eigene Karte */
+.heute-pilot__done .desk-successes {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+}
+
+.heute-pilot__done .desk-successes__title {
+  display: none;
+}
+
+.heute-pilot__done .desk-successes__check {
+  color: var(--op-success);
+}
+
+/* Monatsmappe — Zustand, keine Aufforderung zur Handarbeit */
+.heute-pilot__folder {
+  border: 1px solid var(--op-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  background: var(--op-surface);
+}
+
+.heute-pilot__folder-state {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-2) 0 var(--space-3);
+  font-weight: 600;
+}
+
+.heute-pilot__folder-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--op-warning);
+  flex-shrink: 0;
+}
+
+.heute-pilot__folder-dot--ready {
+  background: var(--op-success);
+}
+
+.heute-pilot__folder-dot--empty {
+  background: var(--op-border-strong);
+}
+
+.heute-pilot__folder-text {
+  margin: 0 0 var(--space-4);
+  color: var(--op-text-muted);
+}
+
+/* Assistent-Aufforderung: bleibt, aber ohne schwere Fläche */
+.heute-pilot__assistant .home-assistant-prompt {
+  box-shadow: none;
+}
+
+/* Mobil: Hauptaktion in voller Breite, Reihenfolge nach Bedarf */
+@media (max-width: 1023px) {
+  .heute-pilot__head .btn,
+  .heute-pilot__head a {
+    width: 100%;
+  }
+
+  .heute-pilot__head .btn {
+    justify-content: center;
+  }
+}
+
+/*
+ * Die Navigationsfläche läuft bis zum Seitenende durch. Die Sidebar selbst
+ * ist nur so hoch wie der Bildschirm und bleibt beim Rollen stehen; ohne
+ * diese Regel endete der Stein-Ton auf langen Seiten in der Mitte.
+ */
+@media (min-width: 1024px) {
+  .app-shell__body {
+    background: linear-gradient(
+      90deg,
+      var(--pilot-nav-bg) 0,
+      var(--pilot-nav-bg) var(--sidebar-width),
+      transparent var(--sidebar-width)
+    );
+  }
+}
+
+/* ==================================================================== *
+ * 02B-F3 — Startseite nachgeschärft
+ *
+ * Der Pilot war verständlicher, aber blass: Sidebar, Fläche, Karten und
+ * Listen lagen farblich zu nah beieinander, und der Blick fand keine
+ * Führung. Hier wird nichts Neues erfunden — dieselbe Richtung, aber mit
+ * Kontrast dort, wo er Arbeit spart: die Navigation als eigene Fläche, die
+ * Arbeit auf Weiss, der Entscheidungsbereich als das eine, was hervortritt.
+ * ==================================================================== */
+
+/* Kopf: ein Satz, kein Vortrag; die Hauptaktion steht daneben, nicht darüber. */
+.heute-pilot__head {
+  margin-bottom: var(--space-5);
+  align-items: center;
+}
+
+.heute-pilot__head .heute-pilot__meta {
+  margin: 0 0 0.2rem;
+}
+
+.heute-pilot__summary {
+  margin: var(--space-2) 0 0;
+  font-size: 1.125rem;
+  font-weight: 650;
+  color: var(--op-text);
+}
+
+.heute-pilot__upload .btn {
+  min-height: 48px;
+  padding: 0.85rem 1.5rem;
+  font-size: 1rem;
+  box-shadow: 0 2px 6px rgba(18, 58, 115, 0.25);
+}
+
+/* Spalten: Arbeit links breiter, Assistent rechts als eigener Bereich. */
+@media (min-width: 1024px) {
+  .heute-pilot__grid {
+    grid-template-columns: minmax(0, 8fr) minmax(0, 5fr);
+    gap: var(--space-8);
+  }
+}
+
+/* Abschnittstitel: grösser und ohne Versalien, damit sie führen. */
+.heute-pilot__section-title {
+  font-size: 1.25rem;
+  margin-bottom: var(--space-3);
+}
+
+/*
+ * Der Entscheidungsbereich — der einzige Bereich mit eigener starker Fläche.
+ * Weiss auf der warmen Fläche, blaue Kante links, kein Schatten, kein
+ * Rahmen-Wald darin: Jede Zeile ist ein Satz mit einem Punkt davor.
+ */
+.heute-pilot__decide {
+  background: var(--op-surface);
+  border: 0;
+  border-left: 4px solid var(--op-primary);
+  border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
+  box-shadow: 0 1px 3px rgba(31, 36, 48, 0.08);
+  padding: var(--space-5) var(--space-6);
+}
+
+.heute-pilot__section-title--decide {
+  color: var(--op-primary);
+}
+
+.heute-pilot__decide .desk-priorities__item,
+.heute-pilot__decide .heute-page .priority-list__item {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--op-border);
+  border-radius: 0;
+  margin: 0;
+  padding: var(--space-3) 0 var(--space-3) var(--space-4);
+  box-shadow: none;
+}
+
+.heute-pilot__decide .desk-priorities__item:last-child {
+  border-bottom: 0;
+}
+
+/* Die farbige Kante der Zeile bleibt, aber schmal — sie ist der Status. */
+.heute-page .heute-pilot__decide .priority-list__item::before {
+  width: 3px;
+  border-radius: 999px;
+}
+
+.heute-page .heute-pilot__decide .priority-list__item--critical,
+.heute-page .heute-pilot__decide .priority-list__item--warning {
+  background: transparent;
+}
+
+/* Statuswort statt Versal-Badge: klein, ruhig, ohne Fläche. */
+.heute-pilot__decide .badge {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  border-radius: 0;
+}
+
+.heute-pilot__decide .desk-priorities__text {
+  font-size: 1.0625rem;
+  font-weight: 600;
+}
+
+/* Listen ohne Kartenoptik — Zeilen, Linien, ein Verb rechts. */
+.heute-pilot__new .heute-pilot__row {
+  padding: var(--space-3) 0;
+}
+
+.heute-pilot__row-title {
+  font-size: 1rem;
+}
+
+/*
+ * „OfficeTakt fragen" — ein Kernbereich, kein Widget.
+ * Eigene Fläche, grosses Feld, wenige echte Beispiele. Der bestehende Kopf
+ * (Marke + „Ihr Büroassistent") entfällt hier, weil der Abschnittstitel das
+ * bereits sagt.
+ */
+.heute-pilot__ask .home-assistant {
+  background: var(--op-surface);
+  border: 1px solid var(--op-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  box-shadow: none;
+}
+
+.heute-pilot__ask .assistant-prompt__head {
+  display: none;
+}
+
+.heute-page .heute-pilot__ask .assistant-prompt__input {
+  min-height: 52px;
+  font-size: 1rem;
+  padding-left: 1rem;
+}
+
+.heute-page .heute-pilot__ask .assistant-prompt__send {
+  min-height: 52px;
+  min-width: 52px;
+  background: var(--op-primary);
+  color: #fff;
+  border: 0;
+}
+
+.heute-page .heute-pilot__ask .assistant-prompt__chip {
+  font-size: 0.9rem;
+  padding: 0.45rem 0.8rem;
+  border-color: var(--op-border-strong);
+}
+
+/* Ruhige Bereiche darunter: kein Rahmen, nur Abstand und eine Linie. */
+.heute-pilot__quiet {
+  display: grid;
+  gap: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--op-border);
+}
+
+.heute-pilot__quiet-title {
+  margin: 0 0 var(--space-2);
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--op-text-muted);
+}
+
+.heute-pilot__folder {
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.heute-pilot__folder-state {
+  margin: 0 0 var(--space-2);
+  font-weight: 500;
+}
+
+/* Mobil: Reihenfolge Begrüssung → Hochladen → Entscheiden → Neu → Fragen → Ruhiges. */
+@media (max-width: 1023px) {
+  .heute-pilot__grid {
+    gap: var(--space-6);
+  }
+
+  .heute-pilot__decide {
+    border-radius: var(--radius-lg);
+    padding: var(--space-4);
+  }
+
+  .heute-pilot__upload .btn {
+    min-height: 52px;
+  }
+}
+
+/* Das Statuswort in Normalschrift — „Kritisch" statt „KRITISCH". */
+.heute-page .heute-pilot__decide .badge,
+.heute-page .heute-pilot__decide .badge__label {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.8125rem;
+}
+
+/* ====================================================================
+ * STARTSEITE-03B — die geführte Spalte
+ *
+ * Die Startseite ist kein Raster aus Bereichen mehr, sondern eine Folge:
+ * Ansprache, die eine Aufgabe, das Auftragsfeld, der Upload, dann Ruhiges.
+ * Blau gibt es an genau zwei Stellen — der Kante und dem Knopf der
+ * aktuellen Aufgabe (und dem Senden-Knopf des Auftragsfelds). Der Upload ist
+ * sekundär, Warnfarben kommen oben nicht vor: Priorität ist Reihenfolge.
+ * ==================================================================== */
+
+.heute-work__flow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  max-width: 58rem;
+}
+
+/* Nach dem Auftragsfeld etwas Luft, bevor der Upload kommt. */
+.heute-work__step--upload {
+  margin-top: var(--space-2);
+}
+
+/* Ansprache: drei kurze Zeilen, kein Datum, keine zweite Aktion daneben. */
+.heute-work__head {
+  display: block;
+}
+
+.heute-work__title {
+  margin: 0;
+  font-size: clamp(1.75rem, 3vw, 2.25rem);
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: var(--op-text);
+}
+
+.heute-work__checked {
+  margin: var(--space-2) 0 0;
+  color: var(--op-text-muted);
+  font-size: 1rem;
+}
+
+.heute-work__count {
+  margin: var(--space-1) 0 0;
+  font-size: 1.125rem;
+  font-weight: 650;
+  color: var(--op-text);
+}
+
+/* Die aktuelle Aufgabe — die einzige starke Fläche der Seite. */
+.heute-work__task {
+  background: var(--op-surface);
+  border-left: 4px solid var(--op-primary);
+  border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
+  box-shadow: 0 1px 3px rgba(31, 36, 48, 0.08);
+  padding: var(--space-5) var(--space-6);
+}
+
+.heute-work__task-label {
+  margin: 0 0 var(--space-2);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--op-primary);
+}
+
+.heute-work__task-text {
+  margin: 0 0 var(--space-4);
+  font-size: clamp(1.375rem, 2.4vw, 1.75rem);
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--op-text);
+}
+
+.heute-work__task-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.heute-work__task-go {
+  text-decoration: none;
+}
+
+.heute-work__task-go .btn {
+  min-height: 48px;
+  padding: 0.85rem 1.5rem;
+  font-size: 1rem;
+  box-shadow: 0 2px 6px rgba(18, 58, 115, 0.25);
+}
+
+/* Erledigt · Später: ruhige Textknöpfe, keine Symbolleiste. */
+.heute-work__task-quiet {
+  background: none;
+  border: 0;
+  padding: 0.5rem 0.25rem;
+  min-height: 44px;
+  font: inherit;
+  font-size: 0.95rem;
+  color: var(--op-text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+}
+
+.heute-work__task-quiet:hover {
+  color: var(--op-text);
+  text-decoration: underline;
+}
+
+.heute-work__task-dot {
+  color: var(--op-text-muted);
+}
+
+/* Danach: zwei Zeilen Text mit Pfeil, keine Karten, keine Statusspalte. */
+.heute-work__next {
+  margin-top: calc(-1 * var(--space-3));
+  padding-left: calc(4px + var(--space-6));
+}
+
+.heute-work__next-label {
+  margin: 0 0 var(--space-1);
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--op-text-muted);
+}
+
+.heute-work__next-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.heute-work__next-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  color: var(--op-text);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.heute-work__next-link:hover {
+  color: var(--op-primary);
+  text-decoration: underline;
+}
+
+/* Leerzustand: ein Satz, keine leere Fläche. */
+.heute-work__none-text {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--op-text);
+}
+
+/* Auftragsfeld: volle Breite, kein Kasten im Kasten. */
+.heute-work__ask-title {
+  margin: 0 0 var(--space-3);
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--op-text);
+}
+
+.heute-work__step--ask .home-assistant {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  box-shadow: none;
+}
+
+.heute-work__step--ask .assistant-prompt__head {
+  display: none;
+}
+
+.heute-page .heute-work__step--ask .assistant-prompt__form {
+  gap: var(--space-2);
+}
+
+.heute-page .heute-work__step--ask .assistant-prompt__input {
+  min-height: 56px;
+  font-size: 1.0625rem;
+  padding-left: 1rem;
+  background: var(--op-surface);
+}
+
+.heute-page .heute-work__step--ask .assistant-prompt__send {
+  min-height: 56px;
+  min-width: 56px;
+  background: var(--op-primary);
+  color: #fff;
+  border: 0;
+}
+
+.heute-page .heute-work__step--ask .assistant-prompt__chip {
+  font-size: 0.9375rem;
+  padding: 0.5rem 0.85rem;
+  min-height: 40px;
+  border-color: var(--op-border-strong);
+  background: var(--op-surface);
+}
+
+/* Upload: sekundär, eine Zeile, ein Knopf. */
+.heute-work__step--upload {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3) var(--space-4);
+}
+
+.heute-work__upload-lead {
+  color: var(--op-text-muted);
+  font-size: 1rem;
+}
+
+.heute-work__upload {
+  text-decoration: none;
+}
+
+.heute-work__upload .btn {
+  min-height: 48px;
+  padding: 0.8rem 1.4rem;
+  font-size: 1rem;
+  box-shadow: none;
+}
+
+/* Ruhige Bereiche: Linie darüber, kleine Überschrift, keine Rahmen. */
+.heute-work__quiet {
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--op-border);
+}
+
+.heute-work__quiet-title {
+  margin: 0 0 var(--space-3);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--op-text-muted);
+}
+
+.heute-work__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.heute-work__row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--op-border);
+}
+
+.heute-work__row:last-child {
+  border-bottom: 0;
+}
+
+.heute-work__row-body {
+  min-width: 0;
+}
+
+.heute-work__row-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--op-text);
+}
+
+.heute-work__row-meta,
+.heute-work__row-hint {
+  margin: 0.15rem 0 0;
+  font-size: 0.9rem;
+  color: var(--op-text-muted);
+}
+
+.heute-work__row-hint {
+  color: var(--op-text);
+}
+
+.heute-work__row-link {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  font-weight: 600;
+  color: var(--op-primary);
+  text-decoration: none;
+}
+
+.heute-work__row-link:hover {
+  text-decoration: underline;
+}
+
+.heute-work__empty {
+  margin: 0;
+  color: var(--op-text-muted);
+}
+
+/*
+ * Mobil: andere Reihenfolge — Hochladen direkt nach der aktuellen Aufgabe,
+ * dann „Danach", dann das Auftragsfeld. Alle Schritte sind eigene Kinder der
+ * Spalte, die Reihenfolge regelt order. Vierte Zeile der Vorbereitung entfällt.
+ */
+@media (max-width: 1023px) {
+  .heute-work__flow {
+    gap: var(--space-6);
+  }
+
+  .heute-work__head { order: 0; }
+  .heute-work__task,
+  .heute-work__none { order: 1; }
+  .heute-work__step--upload { order: 2; }
+  .heute-work__next { order: 3; margin-top: 0; }
+  .heute-work__step--ask { order: 4; }
+  .heute-work__step--prepared { order: 5; }
+  .heute-work__step--folder { order: 6; }
+  .heute-work__step--done { order: 7; }
+
+  .heute-work__task {
+    border-radius: var(--radius-lg);
+    padding: var(--space-4);
+  }
+
+  .heute-work__task-go,
+  .heute-work__task-go .btn,
+  .heute-work__upload,
+  .heute-work__upload .btn {
+    width: 100%;
+    justify-content: center;
+    min-height: 52px;
+  }
+
+  .heute-work__upload-lead {
+    display: none;
+  }
+
+  .heute-work__next {
+    padding-left: var(--space-2);
+  }
+
+  .heute-work__list .heute-work__row:nth-child(n + 4) {
+    display: none;
+  }
+}
+
+/* ====================================================================
+ * STARTSEITE-04B — Übertragung des freigegebenen Prototyps 04A
+ * (docs/prototypes/04a-startseite) in die echte Startseite.
+ *
+ * Tokens bleiben die F3-Tokens; hinzu kommt nur die Überschriftenschrift
+ * (Manrope) und etwas wärmerer, hellerer Stein für die Navigation. Die
+ * Startseite nutzt die Desktopbreite (bis 1280 px) mit einer echten
+ * Komposition: Fokusfläche links, Danach und Upload rechts, darunter der
+ * Auftrag an OfficeTakt, unten drei ruhige Statusfelder.
+ * ==================================================================== */
+
+:root {
+  --op-font-head: 'Manrope', 'Inter', system-ui, sans-serif;
+  --pilot-nav-bg: #f1eee8;
+  --pilot-nav-border: #e3ddd2;
+  --pilot-nav-text: #4a5260;
+  --pilot-nav-muted: #7b8290;
+  --shadow-panel: 0 1px 2px rgba(23, 32, 44, 0.05), 0 6px 20px -8px rgba(23, 32, 44, 0.12);
+  --shadow-focus: 0 2px 4px rgba(23, 32, 44, 0.06), 0 24px 48px -20px rgba(22, 61, 110, 0.28);
+}
+
+/* ---- Navigation: heller Stein, weisser aktiver Eintrag mit Schatten ---- */
+@media (min-width: 1024px) {
+  .sidebar-nav {
+    background: linear-gradient(180deg, #fbfaf7 0%, #f1eee8 100%);
+    padding: var(--space-5) var(--space-4);
+  }
+
+  .app-shell__body {
+    background: linear-gradient(90deg, #f1eee8 0, #f1eee8 var(--sidebar-width), transparent var(--sidebar-width));
+  }
+
+  .sidebar-nav__item {
+    font-weight: 500;
+    border-radius: 12px;
+    padding-top: 0.7rem;
+    padding-bottom: 0.7rem;
+  }
+
+  .sidebar-nav__item:hover {
+    background: rgba(23, 32, 44, 0.05);
+  }
+
+  .sidebar-nav__item--active {
+    background: var(--op-surface);
+    color: var(--op-primary);
+    font-weight: 600;
+    box-shadow: var(--shadow-panel);
+  }
+
+  .sidebar-nav__secondary-title {
+    font-size: 11px;
+    letter-spacing: 0.08em;
+  }
+}
+
+.app-shell__brand {
+  font-family: var(--op-font-head);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+/* Mobile Tab-Leiste: aktiver Eintrag in Markenblau */
+.bottom-nav__item--active,
+.bottom-nav__item[aria-current='page'] {
+  color: var(--op-primary);
+}
+
+/* ---- Startseite: Breite und Grundfluss ---- */
+.heute-04b {
+  max-width: 1280px;
+}
+
+.heute-04b h1,
+.heute-04b h2,
+.heute-04b h3 {
+  font-family: var(--op-font-head);
+  letter-spacing: -0.01em;
+}
+
+.heute-04b__flow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.heute-04b__date {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--op-text-subtle);
+}
+
+.heute-04b__greet {
+  margin-bottom: var(--space-2);
+}
+
+.heute-04b__greet h1 {
+  margin: 0;
+  font-size: clamp(1.9rem, 3vw, 2.5rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+.heute-04b__greet p {
+  margin: var(--space-2) 0 0;
+  font-size: 1.125rem;
+  color: var(--op-text-muted);
+}
+
+.heute-04b__greet p b {
+  color: var(--op-text);
+  font-weight: 600;
+}
+
+/* ---- Arbeitsbereich: Fokusfläche + Nebenspalte ---- */
+.heute-04b__work {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(280px, 0.85fr);
+  gap: var(--space-5);
+}
+
+.heute-04b__aside {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: var(--space-5);
+}
+
+.heute-focus {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafd 100%);
+  border: 1px solid var(--op-border);
+  border-radius: 28px;
+  padding: var(--space-8) 36px var(--space-8);
+  box-shadow: var(--shadow-focus);
+  display: flex;
+  flex-direction: column;
+  min-height: 320px;
+}
+
+.heute-focus::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 6px;
+  background: var(--op-primary);
+}
+
+.heute-focus::after {
+  content: '';
+  position: absolute;
+  right: -80px;
+  top: -80px;
+  width: 320px;
+  height: 320px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(22, 61, 110, 0.08), rgba(22, 61, 110, 0));
+  pointer-events: none;
+}
+
+.heute-focus--calm {
+  min-height: 0;
+}
+
+.heute-focus__kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--op-primary);
+}
+
+.heute-focus__kicker i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--op-warning);
+  box-shadow: 0 0 0 4px var(--op-warning-subtle);
+}
+
+.heute-focus--calm .heute-focus__kicker i {
+  background: var(--op-success);
+  box-shadow: 0 0 0 4px var(--op-success-subtle);
+}
+
+.heute-focus__title {
+  margin: var(--space-4) 0 0;
+  font-size: clamp(1.75rem, 3vw, 2.75rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  max-width: 14ch;
+  position: relative;
+}
+
+.heute-focus__sub {
+  margin: var(--space-3) 0 0;
+  font-size: 1.0625rem;
+  color: var(--op-text-muted);
+  position: relative;
+}
+
+.heute-focus__actions {
+  margin-top: auto;
+  padding-top: var(--space-6);
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  position: relative;
+  z-index: 1;
+}
+
+.heute-focus__go {
+  text-decoration: none;
+}
+
+.heute-focus__go .btn {
+  height: 52px;
+  padding: 0 22px;
+  border-radius: 14px;
+  font-size: 0.97rem;
+  gap: 10px;
+  box-shadow: 0 10px 24px -10px rgba(22, 61, 110, 0.7);
+}
+
+.heute-focus__quiet {
+  background: none;
+  border: 0;
+  padding: 0.5rem 0.4rem;
+  min-height: 44px;
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--op-text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+}
+
+.heute-focus__quiet:hover {
+  color: var(--op-text);
+}
+
+.heute-focus__stack {
+  position: absolute;
+  right: 28px;
+  bottom: 26px;
+  display: flex;
+  pointer-events: none;
+}
+
+.heute-focus__stack span {
+  width: 46px;
+  height: 58px;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid var(--op-border-strong);
+  box-shadow: var(--shadow-panel);
+  margin-left: -18px;
+  transform: rotate(var(--r));
+}
+
+.heute-focus__stack span:first-child {
+  margin-left: 0;
+}
+
+/* Danach */
+.heute-next {
+  background: var(--op-surface);
+  border: 1px solid var(--op-border);
+  border-radius: 20px;
+  padding: var(--space-4) var(--space-5) var(--space-2);
+  box-shadow: var(--shadow-panel);
+}
+
+.heute-next__label {
+  margin: 0 0 var(--space-1);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--op-text-subtle);
+}
+
+.heute-next__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--op-border);
+  color: inherit;
+  text-decoration: none;
+}
+
+.heute-next__row:first-of-type {
+  border-top: 0;
+}
+
+.heute-next__num {
+  font-family: var(--op-font-head);
+  font-weight: 800;
+  font-size: 1.6rem;
+  letter-spacing: -0.02em;
+  min-width: 34px;
+}
+
+.heute-next__txt {
+  font-size: 0.93rem;
+  font-weight: 500;
+  color: var(--op-text-muted);
+}
+
+.heute-next__txt small {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 400;
+  color: var(--op-text-subtle);
+  margin-top: 1px;
+}
+
+.heute-next__arrow {
+  margin-left: auto;
+  color: var(--op-text-subtle);
+  display: inline-flex;
+}
+
+a.heute-next__row:hover .heute-next__txt {
+  color: var(--op-primary);
+}
+
+/* Upload — sekundär, aber unübersehbar */
+.heute-drop {
+  border: 1.5px dashed var(--op-border-strong);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.55);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 6px;
+  padding: var(--space-5);
+  min-height: 140px;
+  color: inherit;
+  text-decoration: none;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.heute-drop:hover {
+  background: var(--op-surface);
+  border-color: var(--op-primary);
+}
+
+.heute-drop__icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  background: var(--op-primary-subtle);
+  color: var(--op-primary);
+  display: grid;
+  place-items: center;
+}
+
+.heute-drop b {
+  font-weight: 600;
+  font-size: 0.97rem;
+}
+
+.heute-drop > span:last-child {
+  font-size: 0.82rem;
+  color: var(--op-text-subtle);
+}
+
+/* ---- Auftrag an OfficeTakt ---- */
+.heute-command {
+  background: var(--op-surface);
+  border: 1px solid var(--op-border);
+  border-radius: 28px;
+  padding: var(--space-6) 28px;
+  box-shadow: var(--shadow-panel);
+}
+
+.heute-command__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.heute-command__head h2 {
+  margin: 0;
+  font-size: 1.375rem;
+  font-weight: 700;
+}
+
+.heute-command__hint {
+  font-size: 0.82rem;
+  color: var(--op-text-subtle);
+}
+
+.heute-command .home-assistant {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  box-shadow: none;
+}
+
+.heute-command .assistant-prompt__head {
+  display: none;
+}
+
+.heute-page .heute-command .assistant-prompt__form {
+  position: relative;
+  align-items: center;
+  gap: var(--space-2);
+  height: 64px;
+  padding: 0 8px 0 18px;
+  border-radius: 18px;
+  background: var(--op-bg);
+  border: 1px solid var(--op-border);
+}
+
+.heute-page .heute-command .assistant-prompt__form::before {
+  content: '';
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  flex-shrink: 0;
+  background: var(--op-primary)
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'><rect x='3' y='3' width='11' height='11' rx='3' fill='white' opacity='.95'/><rect x='10' y='10' width='11' height='11' rx='3' fill='white' opacity='.55'/></svg>")
+    no-repeat center / 16px 16px;
+}
+
+.heute-page .heute-command .assistant-prompt__form:focus-within {
+  border-color: var(--op-primary);
+  background: var(--op-surface);
+  box-shadow: 0 0 0 4px var(--op-primary-subtle);
+}
+
+.heute-page .heute-command .assistant-prompt__input {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  font-size: 1.0625rem;
+  padding-left: 0.5rem;
+  box-shadow: none;
+}
+
+.heute-page .heute-command .assistant-prompt__input:focus {
+  box-shadow: none;
+  outline: none;
+}
+
+.heute-page .heute-command .assistant-prompt__send {
+  width: auto;
+  height: 46px;
+  padding: 0 18px;
+  border-radius: 13px;
+  background: var(--op-text);
+  color: #fff;
+  border: 0;
+  font-weight: 600;
+  gap: 8px;
+}
+
+.heute-page .heute-command .assistant-prompt__send:disabled {
+  opacity: 0.45;
+}
+
+.heute-page .heute-command .assistant-prompt__suggestions {
+  margin-top: var(--space-4);
+  gap: var(--space-2);
+}
+
+.heute-page .heute-command .assistant-prompt__chip {
+  border: 1px solid var(--op-border-strong);
+  background: var(--op-surface);
+  border-radius: 999px;
+  padding: 9px 14px;
+  font-size: 0.86rem;
+  font-weight: 500;
+  color: var(--op-text-muted);
+}
+
+.heute-page .heute-command .assistant-prompt__chip:hover {
+  border-color: var(--op-primary);
+  color: var(--op-primary);
+  background: var(--op-primary-subtle);
+}
+
+/* ---- Statusfelder ---- */
+.heute-04b__status {
+  display: grid;
+  align-items: start;
+  grid-template-columns: 1.4fr 1fr 1fr;
+  gap: var(--space-5);
+}
+
+.heute-04b__status:has(> :nth-child(2):last-child) {
+  grid-template-columns: 1.4fr 1fr;
+}
+
+.heute-panel {
+  background: var(--op-surface);
+  border: 1px solid var(--op-border);
+  border-radius: 20px;
+  padding: var(--space-5) var(--space-5);
+  box-shadow: var(--shadow-panel);
+  min-width: 0;
+}
+
+.heute-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.heute-panel__head h3 {
+  margin: 0;
+  font-size: 0.97rem;
+  font-weight: 700;
+}
+
+.heute-panel__head a {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--op-primary);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.heute-panel__quiet {
+  margin: 0;
+  color: var(--op-text-subtle);
+  font-size: 0.9rem;
+}
+
+.heute-doclist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.heute-doclist li + li {
+  border-top: 1px solid var(--op-border);
+}
+
+.heute-doclist__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  color: inherit;
+  text-decoration: none;
+}
+
+.heute-doclist__ic {
+  width: 34px;
+  height: 40px;
+  border-radius: 7px;
+  background: var(--op-bg);
+  border: 1px solid var(--op-border);
+  display: grid;
+  place-items: center;
+  color: var(--op-text-subtle);
+  flex-shrink: 0;
+}
+
+.heute-doclist__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.heute-doclist__body b {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.heute-doclist__body span {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--op-text-subtle);
+}
+
+.heute-doclist__row:hover .heute-doclist__body b {
+  color: var(--op-primary);
+}
+
+.heute-tag {
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: var(--op-bg);
+  color: var(--op-text-muted);
+  white-space: nowrap;
+}
+
+.heute-tag--amber {
+  background: var(--op-warning-subtle);
+  color: var(--op-warning);
+}
+
+.heute-ring {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.heute-ring svg {
+  width: 72px;
+  height: 72px;
+  flex-shrink: 0;
+}
+
+.heute-ring__track {
+  fill: none;
+  stroke: var(--op-surface-sunken);
+  stroke-width: 8;
+}
+
+.heute-ring__value {
+  fill: none;
+  stroke: var(--op-primary);
+  stroke-width: 8;
+  stroke-linecap: round;
+}
+
+.heute-ring__value--ready {
+  stroke: var(--op-success);
+}
+
+.heute-ring__num {
+  font-family: var(--op-font-head);
+  font-weight: 800;
+  font-size: 15px;
+  fill: var(--op-text);
+}
+
+.heute-ring b {
+  display: block;
+  font-size: 0.93rem;
+  font-weight: 600;
+}
+
+.heute-ring span {
+  font-size: 0.82rem;
+  color: var(--op-text-subtle);
+}
+
+/* ---- Mobil: eigene App-Ansicht ---- */
+@media (max-width: 1023px) {
+  .heute-04b__flow {
+    gap: var(--space-4);
+  }
+
+  .heute-04b__date {
+    display: none;
+  }
+
+  .heute-04b__greet h1 {
+    font-size: 1.9rem;
+  }
+
+  .heute-04b__greet p {
+    font-size: 0.97rem;
+  }
+
+  .heute-04b__work {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-4);
+  }
+
+  .heute-focus {
+    padding: var(--space-6) var(--space-5) var(--space-5);
+    min-height: 0;
+    border-radius: 22px;
+  }
+
+  .heute-focus::after,
+  .heute-focus__stack {
+    display: none;
+  }
+
+  .heute-focus__title {
+    font-size: 2rem;
+  }
+
+  .heute-focus__sub {
+    font-size: 0.95rem;
+  }
+
+  .heute-focus__actions {
+    padding-top: var(--space-5);
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    justify-content: center;
+  }
+
+  .heute-focus__go,
+  .heute-focus__go .btn {
+    width: 100%;
+  }
+
+  .heute-04b__aside {
+    grid-template-rows: none;
+    gap: var(--space-4);
+  }
+
+  .heute-drop {
+    display: grid;
+    grid-template-columns: 44px 1fr;
+    column-gap: var(--space-4);
+    row-gap: 2px;
+    align-items: center;
+    text-align: left;
+    padding: var(--space-4) var(--space-5);
+    min-height: 0;
+    background: var(--op-surface);
+    border-style: solid;
+    border-color: var(--op-border);
+  }
+
+  .heute-drop__icon {
+    grid-row: 1 / 3;
+    width: 44px;
+    height: 44px;
+  }
+
+  .heute-command {
+    padding: var(--space-5) var(--space-4);
+    border-radius: 22px;
+  }
+
+  .heute-command__head h2 {
+    font-size: 1.125rem;
+  }
+
+  .heute-command__hint {
+    display: none;
+  }
+
+  .heute-page .heute-command .assistant-prompt__form {
+    height: 56px;
+    padding-left: 12px;
+  }
+
+  /* 04B-F1 — Platzhalter passt vollständig ins Feld: Markenzeichen im Feld entfällt mobil. */
+  .heute-page .heute-command .assistant-prompt__form::before {
+    display: none;
+  }
+
+  .heute-page .heute-command .assistant-prompt__input {
+    font-size: 0.9rem;
+    padding-left: 0.25rem;
+  }
+
+  .heute-page .heute-command .assistant-prompt__send {
+    padding: 0 12px;
+  }
+
+  .heute-page .heute-command .assistant-prompt__send {
+    padding: 0 14px;
+  }
+
+  .heute-page .heute-command .assistant-prompt__send-label {
+    display: none;
+  }
+
+  /* 04B-F1 — Chips brechen um; jeder bleibt vollständig lesbar, nichts läuft rechts hinaus. */
+  .heute-page .heute-command .assistant-prompt__suggestions {
+    display: flex;
+    flex-wrap: wrap;
+    overflow: visible;
+    margin: var(--space-4) 0 0;
+    padding: 0;
+  }
+
+  .heute-page .heute-command .assistant-prompt__chip,
+  .heute-page .heute-command .assistant-prompt__chip:nth-child(n + 3) {
+    display: inline-flex;
+    white-space: normal;
+    text-align: left;
+    flex: 0 1 auto;
+    max-width: 100%;
+  }
+
+  .heute-04b__status,
+  .heute-04b__status:has(> :nth-child(2):last-child) {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-4);
+  }
+
+  .heute-doclist li:nth-child(n + 4) {
+    display: none;
+  }
+
+  .heute-doclist__row {
+    display: grid;
+    grid-template-columns: 34px 1fr;
+    column-gap: var(--space-3);
+  }
+
+  .heute-doclist .heute-tag {
+    grid-column: 2;
+    justify-self: start;
+    margin-top: 4px;
+  }
+}

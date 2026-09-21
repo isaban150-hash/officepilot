@@ -75,7 +75,7 @@ describe('UIUX-FOUNDATION-01C — navConfig (A)', () => {
   });
 
   it('Sekundärzone kommt aus den Mehr-Gruppen; jede konfigurierte Route existiert in App.tsx', () => {
-    expect(DESKTOP_SECONDARY_NAV_ITEMS.map((i) => i.to)).toEqual(['/kunden', '/aufgaben', '/kommunikation', '/wissen']);
+    expect(DESKTOP_SECONDARY_NAV_ITEMS.map((i) => i.to)).toEqual(['/kunden', '/aufgaben', '/schreiben', '/kommunikation', '/wissen']);
     const all = [...PRIMARY_NAV, ...SECONDARY_NAV_GROUPS.flatMap((g) => g.items), ...FINANZEN_HUB_GROUPS.flatMap((g) => g.items)];
     /* Einstellungen und Assistent haben genau einen Ort: Zahnrad/UserMenu bzw. Header-Werkzeug. */
     for (const item of all) expect(['/einstellungen', '/assistent']).not.toContain(item.to);
@@ -150,7 +150,7 @@ describe('UIUX-FOUNDATION-01C — Header & Benutzermenü (E)', () => {
     const html = renderToStaticMarkup(withProviders(<AppShell />));
     expect(html).toContain('data-testid="assistant-entry"');
     expect(html).toContain('href="/assistent"');
-    expect(html).toContain('aria-label="OfficePilot-Assistent öffnen"');
+    expect(html).toContain('aria-label="OfficeTakt-Assistent öffnen"');
     expect(html).toContain('data-testid="settings-gear"');
     expect(html).toContain('data-testid="sidebar-nav"');
     expect(html).toContain('data-testid="bottom-nav"');

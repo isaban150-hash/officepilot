@@ -29,7 +29,8 @@ describe('MOBILE-FIRST-01', () => {
     resetHomeHintDismissals();
   });
 
-  it('Mobile Startseite: Dokument hinzufügen ist größte Karte', () => {
+  /* STARTSEITE-03B — der Upload ist die sekundäre Aktion unter dem Auftragsfeld, kein Kopf-Knopf mehr. */
+  it('Startseite: Dokument hochladen als klarer, sekundärer Weg', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
         <AppProvider initialSetup={DEFAULT_SETUP}>
@@ -38,15 +39,11 @@ describe('MOBILE-FIRST-01', () => {
       </MemoryRouter>,
     );
 
-    /* UIUX-FOUNDATION-01E — Hauptaktion im Seitenkopf statt größter Karte. */
     expect(html).toContain('data-testid="home-card-add-document"');
-    // VISUAL-POLISH-01B — Hauptaktion im Heute-Kopf, normal breit (kein fullWidth).
-    expect(html).toContain('heute-head__primary');
-    expect(html).not.toMatch(/heute-head__primary[^>]*>s*<button[^>]*btn--full/);
-    expect(html).toContain('Foto');
-    expect(html).toContain('PDF');
-    expect(html).toContain('Galerie');
-    expect(html).toContain('Scan');
+    expect(html).toContain('href="/dokumente/hinzufuegen"');
+    expect(html).toContain('Dokument hochladen');
+    /* STARTSEITE-04B — Upload als eigene Fläche neben der Fokusaufgabe, kein Primärknopf. */
+    expect(html).toContain('heute-drop');
   });
 
   it('Dokument hinzufügen: vier große Aktionen', () => {
@@ -85,7 +82,8 @@ describe('MOBILE-FIRST-01', () => {
     expect(priorities.length).toBeLessThanOrEqual(3);
   });
 
-  it('OfficePilot-Karte mit Mikrofon und Vorschlägen', () => {
+  /* STARTSEITE-03B — kein Mikrofon (es gibt keine Spracheingabe), nur Beispiele, die ohne Kontext antworten. */
+  it('Auftragsfeld ohne Mikrofon, mit echten Beispielen', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
         <AppProvider initialSetup={DEFAULT_SETUP}>
@@ -94,9 +92,11 @@ describe('MOBILE-FIRST-01', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('data-testid="home-assistant-mic"');
+    expect(html).not.toContain('data-testid="home-assistant-mic"');
     expect(html).toContain('data-testid="home-assistant-input"');
-    expect(html).toContain('data-testid="home-assistant-suggestion-assistant.q1"');
+    expect(html).toContain('data-testid="home-assistant-suggestion-heute.work.ask1"');
+    expect(html).not.toContain('Schreib eine Rechnung.');
+    expect(html).not.toContain('Ordne dieses Dokument zu.');
   });
 
   it('Steuerberater-Karte ohne Versand vortäuschen', () => {
@@ -108,8 +108,9 @@ describe('MOBILE-FIRST-01', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('data-testid="home-card-steuerberater"');
-    expect(html).toContain('Monatsmappe vorbereiten');
+    /* 02B/03B — die Monatsmappe ist ein ruhiger Zustand mit Weg in die Mappe, kein Versandknopf. */
+    expect(html).toContain('data-testid="home-monatsmappe"');
+    expect(html).toContain('href="/steuerberater"');
     expect(html).not.toContain('An Steuerberater senden');
   });
 

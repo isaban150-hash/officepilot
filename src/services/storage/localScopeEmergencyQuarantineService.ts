@@ -781,3 +781,224 @@ export async function cleanupStagingQuarantine(token: string): Promise<CleanupQu
   }
   return { ok: true, token, deletedBlobs };
 }
+
+
+/* -------------------------------------------------------------------------- */
+/* 6. 02B-F2 — Quarantäne unmittelbar aus dem lebenden Bestand                */
+/* -------------------------------------------------------------------------- */
+
+export interface LiveScopeQuarantineInput {
+  storageKey: string;
+  workspaceId: string;
+  now?: string;
+}
+
+export type LiveScopeQuarantineResult =
+  | {
+      ok: true;
+      token: string;
+      markerKey: string;
+      stateKey: string;
+      quarantineScopeKey: QuarantineBlobScopeKey;
+      marker: QuarantineMarker;
+      /** Dateien, deren Bytes im Bestand nicht auffindbar waren — der Rohzustand trägt sie trotzdem. */
+      skippedFileRefIds: string[];
+    }
+  | {
+      ok: false;
+      reason: QuarantineFailure | 'no_raw_state' | 'unsupported_scope';
+      detail?: string;
+      token?: string;
+      cleanedUp?: boolean;
+    };
+
+/**
+ * OFFICETAKT-02B-F2 — Sicherung des lebenden Workspace-Bestands vor einer
+ * Konfliktauflösung zugunsten der Cloud.
+ *
+ * Der bisherige Weg (`createTargetQuarantine`) verlangt, dass der Benutzer die
+ * heruntergeladene ZIP-Sicherung erneut auswählt. Für die Auflösung eines
+ * Firmenkonflikts ist das der falsche Moment: Die Sicherung muss **automatisch
+ * und vor der ersten Änderung** entstehen, sonst hängt die Sicherheit an einem
+ * Klick, der vergessen werden kann.
+ *
+ * Deshalb liest diese Funktion den Rohzustand und die Dateien direkt aus dem
+ * Zielbereich — und schreibt sie in **genau dasselbe Format**: derselbe Marker,
+ * dieselbe Hülle, dieselben Quarantäneblobs, dieselbe Auflistung auf der
+ * Notfallseite. Es ist kein zweiter Sicherungsweg, sondern derselbe mit einer
+ * anderen Quelle. Die Grundsätze dieses Dienstes gelten unverändert: Der
+ * Zielbereich wird hier **nur gelesen**; jeder Blob wird nach dem Schreiben
+ * zurückgelesen und per Hash geprüft; `complete` gilt erst nach der letzten
+ * Prüfung, und ein Fehlschlag räumt nur die eigenen Quarantänedaten auf.
+ *
+ * `archiveSha256` bezeichnet hier den Hash des Rohtextes selbst — es gibt
+ * kein Archiv, der Rohtext ist die Sicherung.
+ */
+export async function createQuarantineFromLiveScope(
+  input: LiveScopeQuarantineInput,
+): Promise<LiveScopeQuarantineResult> {
+  const rawText = readLocalScopeRawCopy(input.storageKey);
+  if (!rawText) return { ok: false, reason: 'no_raw_state' };
+
+  const sourceScopeKey = buildScopeKeyFromStorageKey(input.storageKey);
+  if (!sourceScopeKey) return { ok: false, reason: 'unsupported_scope' };
+  if (!hasSecureRandom()) return { ok: false, reason: 'insecure_random' };
+
+  const existing = listQuarantineMarkers().find(
+    (marker) => marker.status === 'staging' && marker.sourceStorageKey === input.storageKey,
+  );
+  if (existing) return { ok: false, reason: 'staging_exists', token: existing.token };
+
+  const rawTextSha256 = await computeBufferContentHash(textBytes(rawText));
+
+  /* Dateien: nur echte Blobs des Bereichs; eingebettete Altformate liegen im Rohtext. */
+  const refs = readFileRefsFromRawState(rawText) ?? [];
+  const files: QuarantineFileEntry[] = [];
+  const bytesByRef = new Map<string, Uint8Array>();
+  const skippedFileRefIds: string[] = [];
+  for (const ref of refs) {
+    const fileRefId = typeof ref?.id === 'string' ? ref.id : '';
+    if (!fileRefId || bytesByRef.has(fileRefId)) continue;
+    if (ref?.storageType === 'local_data_url') continue;
+    const read = await readScopeBlobRecord(sourceScopeKey, fileRefId);
+    if (read.status !== 'ok' || !read.bytes) {
+      skippedFileRefIds.push(fileRefId);
+      continue;
+    }
+    bytesByRef.set(fileRefId, read.bytes);
+    files.push({
+      fileRefId,
+      localDataKey: typeof ref?.localDataKey === 'string' ? ref.localDataKey : '',
+      mimeType: read.meta?.mimeType ?? (typeof ref?.mimeType === 'string' ? ref.mimeType : ''),
+      fileSize: read.bytes.byteLength,
+      sha256: await computeBufferContentHash(read.bytes),
+    });
+  }
+
+  const targetSnapshot = await readTargetScopeSnapshot(input.storageKey, sourceScopeKey);
+
+  let token = '';
+  try {
+    for (let attempt = 0; attempt < TOKEN_ATTEMPTS; attempt += 1) {
+      const candidate = `q-${rawTextSha256.slice(0, 16)}-${randomHex(8)}`;
+      if (!(await tokenIsTaken(candidate))) {
+        token = candidate;
+        break;
+      }
+    }
+  } catch {
+    return { ok: false, reason: 'insecure_random' };
+  }
+  if (!token) return { ok: false, reason: 'token_collision' };
+
+  const createdAt = input.now ?? new Date().toISOString();
+  const markerKey = buildQuarantineMarkerKey(token);
+  const stateKey = buildQuarantineStateKey(token);
+  const quarantineScopeKey = buildQuarantineBlobScopeKey(token);
+
+  let savedAt: string | undefined;
+  try {
+    const parsed = JSON.parse(rawText) as { savedAt?: unknown };
+    savedAt = typeof parsed.savedAt === 'string' ? parsed.savedAt : undefined;
+  } catch {
+    savedAt = undefined;
+  }
+
+  const marker: QuarantineMarker = {
+    kind: QUARANTINE_KIND,
+    formatVersion: QUARANTINE_FORMAT_VERSION,
+    token,
+    status: 'staging',
+    sourceStorageKey: input.storageKey,
+    sourceScopeKey,
+    workspaceId: input.workspaceId,
+    archiveSha256: rawTextSha256,
+    sourceRawTextSha256: rawTextSha256,
+    files: cloneJson(files),
+    createdAt,
+  };
+
+  const expectedEnvelope: QuarantineStateEnvelope = {
+    kind: QUARANTINE_KIND,
+    formatVersion: QUARANTINE_FORMAT_VERSION,
+    token,
+    sourceStorageKey: input.storageKey,
+    sourceScopeKey,
+    workspaceId: input.workspaceId,
+    savedAt,
+    rawText,
+    archiveSha256: rawTextSha256,
+    sourceRawTextSha256: rawTextSha256,
+    files: cloneJson(files),
+    quarantinedAt: createdAt,
+  };
+
+  let markerWritten = false;
+  try {
+    localStorage.setItem(markerKey, JSON.stringify(marker));
+    markerWritten = true;
+
+    for (const file of files) {
+      const bytes = bytesByRef.get(file.fileRefId);
+      if (!bytes) throw new QuarantineStepError('blob_write_failed', file.fileRefId);
+      await writeQuarantineBlob({
+        scopeKey: quarantineScopeKey,
+        fileRefId: file.fileRefId,
+        bytes,
+        mimeType: file.mimeType,
+        fileSize: file.fileSize,
+        contentHash: file.sha256,
+        createdAt,
+      });
+      const readBack = await readQuarantineBlob(quarantineScopeKey, file.fileRefId);
+      if (
+        !readBack ||
+        readBack.bytes.byteLength !== file.fileSize ||
+        (await computeBufferContentHash(readBack.bytes)) !== file.sha256
+      ) {
+        throw new QuarantineStepError('blob_verify_failed', file.fileRefId);
+      }
+    }
+
+    localStorage.setItem(stateKey, JSON.stringify(expectedEnvelope));
+    const storedEnvelope = localStorage.getItem(stateKey);
+    if (!storedEnvelope) throw new QuarantineStepError('envelope_failed', 'not_readable');
+    if (!sameEnvelope(JSON.parse(storedEnvelope) as unknown, expectedEnvelope)) {
+      throw new QuarantineStepError('envelope_failed', 'mismatch');
+    }
+
+    /* Der Zielbereich darf sich während der Sicherung nicht verändert haben. */
+    if (readLocalScopeRawCopy(input.storageKey) !== rawText) {
+      throw new QuarantineStepError('target_changed', 'während der Sicherung');
+    }
+
+    const completeMarker: QuarantineMarker = {
+      ...marker,
+      files: cloneJson(files),
+      status: 'complete',
+      completedAt: createdAt,
+      ...(targetSnapshot ? { targetSnapshot: cloneJson(targetSnapshot) } : {}),
+    };
+    localStorage.setItem(markerKey, JSON.stringify(completeMarker));
+    const storedMarker = readQuarantineMarker(token);
+    if (!sameMarker(storedMarker, completeMarker)) {
+      throw new QuarantineStepError('marker_failed', 'complete_mismatch');
+    }
+
+    return {
+      ok: true,
+      token,
+      markerKey,
+      stateKey,
+      quarantineScopeKey,
+      marker: storedMarker!,
+      skippedFileRefIds,
+    };
+  } catch (error) {
+    const reason =
+      error instanceof QuarantineStepError ? error.reason : ('blob_write_failed' as const);
+    const detail = error instanceof Error ? error.message : undefined;
+    const cleanedUp = await cleanupOwnQuarantine(quarantineScopeKey, stateKey, markerKey);
+    return { ok: false, reason, detail, token: markerWritten ? token : undefined, cleanedUp };
+  }
+}

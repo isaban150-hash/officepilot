@@ -33,7 +33,7 @@ export function AppShell() {
     <div className="app-shell" data-testid="app-shell">
       <div className="app-shell__top">
         <div className="app-shell__top-left">
-          <span className="app-shell__brand">OfficePilot</span>
+          <span className="app-shell__brand">{translate('app.name')}</span>
           {companyName ? (
             <span className="app-shell__company" title={companyName}>
               {companyName}

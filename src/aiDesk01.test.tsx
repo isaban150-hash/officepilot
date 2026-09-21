@@ -176,13 +176,15 @@ describe('AI-DESK-01', () => {
     );
 
     expect(html).toContain('data-testid="desk-greeting-header"');
-    expect(html).toContain('data-testid="desk-priorities"');
+    /* STARTSEITE-03B — die eine aktuelle Aufgabe statt der Prioritätenliste. */
+    expect(html).toContain('data-testid="heute-section-attention"');
     expect(html).toContain('data-testid="mobile-first-home"');
     expect(html).toContain('data-testid="home-card-add-document"');
     expect(html).toContain('Heute kümmere ich mich um Folgendes:');
   });
 
-  it('Desktop: 5 Hauptkarten bleiben erhalten', () => {
+  /* STARTSEITE-03B — eine geführte Spalte: Aufgabe, Auftragsfeld, Upload, Monatsmappe; keine Kartenreihe. */
+  it('Desktop: geführte Spalte statt Hauptkarten', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
         <AppProvider initialSetup={{ ...DEFAULT_SETUP, companyName: 'Test' }}>
@@ -191,9 +193,11 @@ describe('AI-DESK-01', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('data-testid="home-card-orders"');
+    expect(html).toContain('data-testid="heute-section-attention"');
     expect(html).toContain('data-testid="home-card-officepilot"');
-    expect(html).toContain('data-testid="home-card-steuerberater"');
+    expect(html).toContain('data-testid="home-card-add-document"');
+    expect(html).toContain('data-testid="home-monatsmappe"');
+    expect(html).not.toContain('data-testid="home-card-orders"');
     expect(html).not.toContain('data-testid="home-card-more"');
   });
 

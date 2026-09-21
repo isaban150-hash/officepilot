@@ -42,7 +42,8 @@ describe('HeutePage MOBILE-FIRST-01', () => {
     resetHomeHintDismissals();
   });
 
-  it('rendert Mobile-First Startseite mit 5 Hauptkarten', () => {
+  /* VISUAL-DESIGN-02B — die Startseite kennt eine Hauptaktion, den Entscheidungsbereich, die Monatsmappe und den Assistenten; Auftraege liegen in der Navigation. */
+  it('rendert die Startseite mit Hauptaktion, Entscheidungsbereich, Monatsmappe und Assistent', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
         <AppProvider initialSetup={DEFAULT_SETUP}>
@@ -54,11 +55,11 @@ describe('HeutePage MOBILE-FIRST-01', () => {
     expect(html).toContain('data-testid="heute-page"');
     expect(html).toContain('data-testid="mobile-first-home"');
     expect(html).toContain('data-testid="home-card-add-document"');
-    expect(html).toContain('data-testid="home-card-orders"');
     expect(html).toContain('data-testid="home-card-officepilot"');
-    expect(html).toContain('data-testid="home-card-steuerberater"');
+    expect(html).toContain('data-testid="heute-section-attention"');
+    expect(html).toContain('data-testid="home-monatsmappe"');
     expect(html).not.toContain('data-testid="home-card-more"');
-    expect(html).toContain('Dokument hinzufügen');
+    expect(html).toContain('Dokument hochladen');
     expect(html).toContain('data-testid="desk-greeting-header"');
     expect(html).toContain('Heute kümmere ich mich um Folgendes:');
   });
@@ -88,7 +89,7 @@ describe('HeutePage MOBILE-FIRST-01', () => {
     );
 
     expect(html).toContain('href="/dokumente/hinzufuegen"');
-    expect(html).toContain('href="/vorgaenge"');
+    /* 02B — Aufträge sind ein Klick in der Navigation; die Startseite wiederholt sie nicht. */
     expect(html).toContain('href="/steuerberater"');
     expect(html).not.toContain('href="/mehr"');
     expect(html).toContain('data-testid="home-assistant-input"');

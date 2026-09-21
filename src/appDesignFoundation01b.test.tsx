@@ -20,12 +20,13 @@ import { buildDeskPriorities } from './services/deskIntelligenceService';
 import { t } from './i18n';
 
 /* VISUAL-POLISH-01B — Reihenfolge im Markup: Hauptaktion, Hauptspalte (Prioritäten, offene Arbeit, OfficePilot-Eingang), Seitenspalte (Kennzahlen/Steuerberater, Schnellaktionen). Mobil ordnet CSS `order` die Blöcke um. */
+/* STARTSEITE-04B — Reihenfolge nach Prototyp 04A: Fokusaufgabe, Danach/Upload, Auftragsfeld, Eingang, Monatsmappe. */
 const HOME_CARD_ORDER = [
+  'heute-section-attention',
   'home-card-add-document',
-  'home-card-orders',
   'home-card-officepilot',
-  'home-card-steuerberater',
-  'home-quick-add',
+  'heute-section-new',
+  'home-monatsmappe',
 ] as const;
 
 function renderHome() {
@@ -114,14 +115,12 @@ describe('APP-DESIGN-FOUNDATION-01B', () => {
     }
 
     expect(html).toContain('href="/dokumente/hinzufuegen"');
-    expect(html).toContain('href="/vorgaenge"');
     expect(html).toContain('href="/steuerberater"');
     // VISUAL-POLISH-01B — „Mehr“ ist Navigation (Bottom-Nav/Sidebar), keine Heute-Karte.
     expect(html).not.toContain('href="/mehr"');
-    expect(html).toContain(t('mobile.home.addDocument', 'de'));
-    expect(html).toContain(t('mobile.home.ordersTitle', 'de'));
-    expect(html).toContain(t('mobile.home.assistantTitle', 'de'));
-    expect(html).toContain(t('mobile.home.taxTitle', 'de'));
+    expect(html).toContain(t('heute.pilot.upload', 'de'));
+    expect(html).toContain(t('heute.work.askTitle', 'de'));
+    expect(html).toContain(t('heute.work.inboxTitle', 'de'));
     expect(html).not.toContain('mobile-home-card__emoji');
   });
 
@@ -188,9 +187,9 @@ describe('APP-DESIGN-FOUNDATION-01B', () => {
     const html = renderHome();
     expect(html).toContain('data-testid="mobile-first-home"');
     expect(html).toContain('data-testid="home-card-add-document"');
-    expect(html).toContain('data-testid="home-card-orders"');
+    expect(html).toContain('data-testid="heute-section-attention"');
     expect(html).toContain('data-testid="home-card-officepilot"');
-    expect(html).toContain('data-testid="home-card-steuerberater"');
+    expect(html).toContain('data-testid="home-monatsmappe"');
     // VISUAL-POLISH-01B — keine Mehr-Karte mehr auf Heute (Bottom-Nav/Sidebar führen dorthin).
     expect(html).not.toContain('data-testid="home-card-more"');
   });
