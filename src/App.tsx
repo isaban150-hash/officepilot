@@ -55,6 +55,7 @@ import { SearchPage } from './pages/SearchPage';
 import { ScanPage } from './pages/ScanPage';
 import { SetupPage } from './pages/SetupPage';
 import { SyncPage } from './pages/SyncPage';
+import { AuftragEditorPage } from './pages/AuftragEditorPage';
 import { WissenPage } from './pages/WissenPage';
 import { VorgaengePage } from './pages/VorgaengePage';
 import { VorgangDetailPage } from './pages/VorgangDetailPage';
@@ -202,6 +203,9 @@ function AppRoutes() {
         <Route path="/angebote/:offerId/bearbeiten" element={<AngebotEditorPage />} />
         <Route path="/vorgaenge" element={<VorgaengePage />} />
         <Route path="/vorgaenge/:id" element={<VorgangDetailPage />} />
+        {/* AUFTRAG-02C — manuelle Auftragsanlage; der Auftrag selbst bleibt ein Vorgang. */}
+        <Route path="/auftraege/neu" element={<AuftragEditorPage />} />
+        <Route path="/auftraege/entwurf/:draftId" element={<AuftragEditorPage />} />
         <Route path="/vorgaenge/:id/rechnung" element={<RechnungPage />} />
         <Route path="/vorgaenge/:id/rechnungen/:invoiceId" element={<InvoiceDetailPage />} />
         <Route path="/rechnungen/offen" element={<OffeneRechnungenPage />} />

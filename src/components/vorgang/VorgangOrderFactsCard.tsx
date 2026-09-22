@@ -38,7 +38,10 @@ export function VorgangOrderFactsCard({ vorgang }: { vorgang: Vorgang }) {
           />
         ) : null}
       </SummaryList>
-      <p className="form-hint">{translate('vorgang.order.frozenHint')}</p>
+      {/* AUFTRAG-02C — der Hinweis nennt die tatsaechliche Herkunft des Stands. */}
+      <p className="form-hint">
+        {translate(vorgang.sourceOfferId ? 'vorgang.order.frozenHint' : 'vorgang.order.frozenHintManual')}
+      </p>
     </DetailSection>
   );
 }

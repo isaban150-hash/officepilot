@@ -18,6 +18,7 @@ import { bgSettings } from './settings';
 import { bgDelivery } from './delivery';
 import { bgBusinessLetter } from './businessLetter';
 import { bgOffer } from './offer';
+import { bgOrder } from './order';
 import { bgDocumentMeaning } from './documentMeaning';
 
 export const bgModules = {
@@ -46,5 +47,6 @@ export const bgModules = {
   ...bgDelivery,
   ...bgBusinessLetter,
   ...bgOffer,
+  ...bgOrder,
   ...bgDocumentMeaning,
 } as const;

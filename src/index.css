@@ -7111,3 +7111,30 @@ body {
   color: var(--color-text-muted);
   font-size: 0.85em;
 }
+
+/*
+ * AUFTRAG-02C2 — Zahlungsinformationen im schmalen Fenster.
+ *
+ * Die Beschriftungsspalte war mit `minmax(6rem, 8rem)` fest; lange deutsche
+ * Wörter wie „Zahlungsbedingungen" liefen aus ihrer Spur und schoben sich über
+ * den Wert. Unterhalb von 640 px stehen Beschriftung und Wert deshalb
+ * untereinander, und beide dürfen umbrechen statt zu überlappen.
+ */
+.invoice-project__facts dt,
+.invoice-service-period__facts dt,
+.invoice-payment__facts dt,
+.invoice-project__facts dd,
+.invoice-service-period__facts dd,
+.invoice-payment__facts dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 640px) {
+  .invoice-project__facts div,
+  .invoice-service-period__facts div,
+  .invoice-payment__facts div {
+    grid-template-columns: 1fr;
+    gap: 0.1rem;
+  }
+}

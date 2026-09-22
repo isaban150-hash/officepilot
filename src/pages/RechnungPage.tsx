@@ -900,7 +900,26 @@ export function RechnungPage() {
     // INVOICE-QUANTITY-INPUT-UX-01B — die programmgesteuerte Übernahme setzt
     // gültige Mengen; offene Eingabefehler sind damit gegenstandslos.
     setQuantityBlocked({});
-    mutateDraft((prev) => applyAllOpenPositionsToDraft(prev));
+    /*
+     * AUFTRAG-02C2 — der Auftrag entscheidet mit, was „offen" heisst: Bei einem
+     * eigenen bestätigten Auftrag ist der Planrest die vereinbarte Leistung.
+     * Und wenn nichts zu übernehmen ist, sagt OfficeTakt das, statt scheinbar
+     * nichts zu tun.
+     */
+    mutateDraft((prev) => {
+      const next = applyAllOpenPositionsToDraft(prev, vorgang);
+      const uebernommen = next.positions.filter(
+        (position, index) => position.quantity !== prev.positions[index]?.quantity,
+      ).length;
+      if (uebernommen === 0) {
+        showToast(
+          next.positions.some((position) => position.billable && position.quantity > 0)
+            ? translate('invoice.applyAllPositionsUnchanged')
+            : translate('invoice.applyAllPositionsNothingOpen'),
+        );
+      }
+      return next;
+    });
   };
 
   const handleTypeChange = (type: InvoiceDocumentType) => {

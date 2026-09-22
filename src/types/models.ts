@@ -1919,6 +1919,11 @@ export interface AppPersistedState {
   businessLetters?: import('./businessLetter').BusinessLetter[];
   /** ANGEBOT-01B — eigene Angebote des Betriebs. */
   offers?: import('./offer').Offer[];
+  /**
+   * AUFTRAG-02C — lokale Auftragsentwuerfe. Bewusst nur auf diesem Geraet:
+   * kein Vorgang, keine Auftragsnummer, kein Cloud-Entity-Typ.
+   */
+  orderDrafts?: import('./orderDraft').OrderDraft[];
   /** Confirmed payment-reminder / dunning handoffs (local documentation only). */
   dunningDocumentations?: import('./dunningDocumentation').InvoiceDunningDocumentation[];
   communicationHistory?: CommunicationEvent[];

@@ -151,6 +151,7 @@ export const bgOffer = {
   'vorgang.order.total': 'Сума на поръчката',
   'vorgang.order.sourceOffer': 'От оферта',
   'vorgang.order.frozenHint': 'Позиции, цени и данъчен статус идват от приетата оферта и се променят само чрез допълнение.',
+  'vorgang.order.frozenHintManual': 'Позиции, цени и данъчен статус се фиксират при създаването на поръчката и се променят само чрез допълнение.',
   'offer.kunden.title': 'Оферти',
   'offer.kunden.empty': 'Все още няма оферта за този клиент.',
   'offer.kunden.create': 'Създай оферта',

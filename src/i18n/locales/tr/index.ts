@@ -16,6 +16,7 @@ import { trSettings } from './settings';
 import { trDelivery } from './delivery';
 import { trBusinessLetter } from './businessLetter';
 import { trOffer } from './offer';
+import { trOrder } from './order';
 import { trDocumentMeaning } from './documentMeaning';
 
 export const trModules = {
@@ -41,5 +42,6 @@ export const trModules = {
   ...trDelivery,
   ...trBusinessLetter,
   ...trOffer,
+  ...trOrder,
   ...trDocumentMeaning,
 } as const;

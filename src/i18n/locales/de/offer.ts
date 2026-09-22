@@ -160,6 +160,7 @@ export const deOffer = {
   'vorgang.order.total': 'Auftragssumme',
   'vorgang.order.sourceOffer': 'Aus Angebot',
   'vorgang.order.frozenHint': 'Positionen, Preise und Steuerstatus stammen aus dem angenommenen Angebot und ändern sich nur über einen Nachtrag.',
+  'vorgang.order.frozenHintManual': 'Positionen, Preise und Steuerstatus sind mit der Auftragsanlage festgeschrieben und ändern sich nur über einen Nachtrag.',
   'offer.kunden.title': 'Angebote',
   'offer.kunden.empty': 'Noch kein Angebot für diesen Kunden.',
   'offer.kunden.create': 'Angebot erstellen',

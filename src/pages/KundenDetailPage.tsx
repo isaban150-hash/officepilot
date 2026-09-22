@@ -360,6 +360,15 @@ export function KundenDetailPage({ kind }: { kind: KundenIdentityKind }) {
             >
               {translate('offer.kunden.create')}
             </Button>
+            {/* AUFTRAG-02C — Auftrag ohne Angebot, Kunde vorbelegt. */}
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => navigate(`/auftraege/neu?customerId=${letterCustomerId}`)}
+              data-testid="kunden-order-create"
+            >
+              {translate('order.new.action')}
+            </Button>
           </div>
         ) : null}
         {customerOffers.length === 0 ? (

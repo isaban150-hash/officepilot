@@ -815,7 +815,12 @@ export function VorgangDetailPage() {
           </Card>
         )}
 
-        {customerMasterPreview?.differs && (
+        {/*
+          * AUFTRAG-02C — Bei einem bestaetigten Auftrag ist die Rechnungsanschrift
+          * Teil des eingefrorenen Ausgangsstands: Der Server weist eine Uebernahme
+          * ab, also wird sie hier gar nicht erst angeboten.
+          */}
+        {customerMasterPreview?.differs && !vorgang.orderNumber && (
           <Card data-testid="vorgang-customer-master">
             <h2 className="section__title">{translate('vorgang.customerMaster.title')}</h2>
             {!masterConfirmOpen ? (

@@ -16,6 +16,7 @@ import { deSettings } from './settings';
 import { deDelivery } from './delivery';
 import { deBusinessLetter } from './businessLetter';
 import { deOffer } from './offer';
+import { deOrder } from './order';
 import { deDocumentMeaning } from './documentMeaning';
 
 export const deModules = {
@@ -39,5 +40,6 @@ export const deModules = {
   ...deDelivery,
   ...deBusinessLetter,
   ...deOffer,
+  ...deOrder,
   ...deDocumentMeaning,
 } as const;

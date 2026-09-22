@@ -2392,6 +2392,8 @@ const deLegacy = {
   'invoice.skontoFromContractTooLong':
     'Das Vertragsskonto mit {days} Tagen ist länger als das aktuelle Zahlungsziel dieser Rechnung ({dueDays} Tage). Es wurde nicht übernommen. Bitte prüfen Sie die Zahlungsbedingungen.',
   'invoice.applyAllPositions': 'Alle Positionen vollständig übernehmen',
+  'invoice.applyAllPositionsUnchanged': 'Die Mengen stehen bereits auf den offenen Mengen.',
+  'invoice.applyAllPositionsNothingOpen': 'Für diesen Auftrag ist derzeit keine Menge offen. Bitte die abzurechnenden Mengen selbst eintragen.',
   'invoice.progressBillingContractHint': 'Im Vertrag sind Abschlagsrechnungen vorgesehen.',
   'invoice.previousAbschlag': 'Bisherige Abschläge',
   'invoice.abschlagLabel': 'Abschlag',
@@ -5138,6 +5140,8 @@ const trLegacy: Partial<Record<keyof typeof de, string>> = {
   'invoice.skontoFromContractNo': 'Hayır',
   'invoice.skontoFromContractYes': 'Evet, {days} gün içinde %{percent} indirim',
   'invoice.applyAllPositions': 'Tüm kalemleri tam olarak aktar',
+  'invoice.applyAllPositionsUnchanged': 'Miktarlar zaten açık miktarlara eşit.',
+  'invoice.applyAllPositionsNothingOpen': 'Bu sipariş için şu anda açık miktar yok. Lütfen faturalanacak miktarları kendiniz girin.',
   'invoice.progressBillingContractHint': 'Sözleşmede hakediş faturaları öngörülmüştür.',
   'invoice.approve': 'Faturayı onayla',
   'invoice.approve.working': 'Fatura onaylanıyor…',

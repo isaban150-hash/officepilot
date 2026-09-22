@@ -165,6 +165,7 @@ import {
 import { getInvoiceStoreSnapshot, hydrateInvoiceStore } from './invoice/invoiceStore';
 import { ensureSyncClientFromState, hydrateSyncClient } from './sync/syncClientService';
 import { hydrateSyncOutbox, getSyncOutboxSnapshot } from './sync/syncOutboxService';
+import { getOrderDraftStoreSnapshot, hydrateOrderDrafts } from './order/orderDraftService';
 import {
   resetSyncChangeTrackerFromState,
   trackPersistedChanges,
@@ -509,6 +510,7 @@ export function createSeedState(setupOverride?: CompanySetup): AppPersistedState
       vorgangNotes: [],
       businessLetters: [],
       offers: [],
+      orderDrafts: [],
       dunningDocumentations: [],
       communicationHistory: [],
       knowledgeFacts: [],
@@ -663,6 +665,11 @@ function finalizeLoadedPersistedState(normalized: AppPersistedState): AppPersist
     vorgangNotes: (normalized.vorgangNotes ?? []).map(cloneVorgangNote),
     businessLetters: (normalized.businessLetters ?? []).map((letter) => ({ ...letter })),
     offers: (normalized.offers ?? []).map((offer) => ({ ...offer })),
+    orderDrafts: (normalized.orderDrafts ?? []).map((draft) => ({
+      ...draft,
+      customerBilling: { ...draft.customerBilling },
+      positions: draft.positions.map((position) => ({ ...position })),
+    })),
     dunningDocumentations: (normalized.dunningDocumentations ?? []).map((doc) => ({ ...doc })),
     communicationHistory: (normalized.communicationHistory ?? []).map(cloneCommunicationEvent),
     knowledgeFacts: (normalized.knowledgeFacts ?? []).map(cloneKnowledgeFact),
@@ -1004,6 +1011,7 @@ export function applyStateToStores(state: AppPersistedState): void {
   hydrateVorgangNotes(state.vorgangNotes ?? []);
   hydrateBusinessLetters(state.businessLetters ?? []);
   hydrateOffers(state.offers ?? []);
+  hydrateOrderDrafts(state.orderDrafts ?? []);
   hydrateDunningDocumentations(state.dunningDocumentations ?? []);
   hydrateCommunicationHistory(state.communicationHistory ?? []);
   hydrateKnowledgeFacts(state.knowledgeFacts ?? []);
@@ -1272,6 +1280,7 @@ export function buildPersistedStateSnapshot(): AppPersistedState {
     vorgangNotes: getVorgangNoteStoreSnapshot(),
     businessLetters: getBusinessLetterStoreSnapshot(),
     offers: getOfferStoreSnapshot(),
+    orderDrafts: getOrderDraftStoreSnapshot(),
     dunningDocumentations: getDunningDocumentationStoreSnapshot(),
     communicationHistory: getCommunicationHistorySnapshot(),
     knowledgeFacts: getKnowledgeSnapshot(),

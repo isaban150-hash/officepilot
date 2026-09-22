@@ -39,7 +39,7 @@ import type {
 import type { BrandingSnapshot } from '../types/branding';
 import { BRANDING_SNAPSHOT_VERSION, DEFAULT_DOCUMENT_TEMPLATE } from '../types/branding';
 import { buildBrandingSnapshot } from './branding/brandingSnapshotService';
-import { resolveDefaultTaxStatus, resolveInvoiceDefaults, standardPaymentTerms } from './invoice/invoiceDefaults';
+import { isStandardPaymentTerms, resolveDefaultTaxStatus, resolveInvoiceDefaults, standardPaymentTerms } from './invoice/invoiceDefaults';
 import {
   isFixedAmountAbschlag,
   resolveInvoiceCalculationMode,
@@ -232,10 +232,29 @@ function buildDraftMetadata(
    * Schlussrechnung vor. Vorgänge ohne diese Felder bleiben beim Firmenstandard.
    * Nur Vorbelegung: Freigabe und Fingerabdruck der Rechnung bleiben unverändert.
    */
+  /*
+   * AUFTRAG-02C2 — eigene Auftragskonditionen gelten vollständig, nicht halb.
+   *
+   * Realbefund aus der Abnahme: Ein Auftrag mit „Zahlbar innerhalb von 21 Tagen
+   * ohne Abzug." erzeugte eine Rechnung, die daneben das Zahlungsziel des
+   * Firmenstandards (14 Tage) und dessen Skontosatz (7 % in 10 Tagen) zeigte —
+   * drei Aussagen, die einander widersprechen.
+   *
+   * Der Auftrag trägt nur den Text, keine Tage und keinen Skonto. Aus dem Text
+   * eine Zahl zu lesen wäre geraten, deshalb wird hier nichts abgeleitet:
+   * Trägt der Auftrag eigene Konditionen, übernimmt der Entwurf **seinen**
+   * Text, lässt das Zahlungsziel leer (der Nutzer setzt es bewusst — die
+   * Freigabeprüfung verlangt es ohnehin) und übernimmt keinen fremden
+   * Skontosatz. Sind die Auftragskonditionen wortgleich der Firmenstandard,
+   * ändert sich nichts.
+   */
+  const orderTerms = vorgang.paymentTermsText?.trim() ?? '';
+  const ownOrderTerms = orderTerms.length > 0 && !isStandardPaymentTerms(orderTerms, profile.defaultPaymentDays);
   const defaults = {
     ...profileDefaults,
     taxStatus: vorgang.taxStatus ?? profileDefaults.taxStatus,
-    paymentTermsText: vorgang.paymentTermsText?.trim() ? vorgang.paymentTermsText : profileDefaults.paymentTermsText,
+    paymentTermsText: orderTerms || profileDefaults.paymentTermsText,
+    ...(ownOrderTerms ? { paymentDueDate: '', skontoText: '' } : {}),
   };
   /*
    * MANUAL-INVOICE-CUSTOMER-IDENTITY-01B — die Kundenreferenz kommt vom
@@ -764,7 +783,35 @@ export function updateDraftPositionQuantity(
   };
 }
 
-export function applyAllOpenPositionsToDraft(draft: InvoiceDraft): InvoiceDraft {
+/**
+ * AUFTRAG-02C2 — was der Sammelbutton je Position übernimmt.
+ *
+ * Mit erfasster Ausführung ist der Ist-Rest der Maßstab (unverändert). Ohne
+ * erfasste Ausführung galt bisher für jeden Auftrag 0 — richtig für einen
+ * Vorgang aus einem fremden Auftragsdokument, wo die Planmenge kein Aufmaß
+ * ist. Für einen **eigenen** bestätigten Auftrag (AU-Nummer, eingefrorener
+ * kaufmännischer Stand) ist die Planmenge dagegen genau die vereinbarte
+ * Leistung; dort ist der offene Planrest die berechenbare Menge.
+ *
+ * Nie mehr als offen: bereits abgerechnete Mengen sind im offenen Planrest
+ * bereits abgezogen.
+ */
+export function getApplyAllQuantityForPosition(
+  position: InvoiceDraftPosition,
+  isOwnOrder: boolean,
+): number {
+  if (!position.billable) return 0;
+  const executedRemaining = getDraftPositionExecutedRemaining(position);
+  if (executedRemaining !== undefined) return executedRemaining;
+  return isOwnOrder ? Math.max(0, position.openQuantity ?? 0) : 0;
+}
+
+export function applyAllOpenPositionsToDraft(
+  draft: InvoiceDraft,
+  /** Der Auftrag, aus dem der Entwurf stammt — hier zählt nur seine Herkunft. */
+  vorgang?: Pick<Vorgang, 'orderNumber'>,
+): InvoiceDraft {
+  const isOwnOrder = Boolean(vorgang?.orderNumber);
   return {
     ...draft,
     positions: draft.positions.map((position) => ({
@@ -778,7 +825,7 @@ export function applyAllOpenPositionsToDraft(draft: InvoiceDraft): InvoiceDraft 
        * übernimmt er den vollen bekannten Ist-Rest, nicht den am Plan
        * gekappten. Position und `billable` bleiben unangetastet.
        */
-      quantity: position.billable ? (getDraftPositionExecutedRemaining(position) ?? 0) : 0,
+      quantity: getApplyAllQuantityForPosition(position, isOwnOrder),
     })),
   };
 }

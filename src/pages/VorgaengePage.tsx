@@ -9,6 +9,7 @@ import { Page, PageToolbar } from '../components/ui/Page';
 import { FilterChips, SearchField } from '../components/ui/Toolbar';
 import { useApp } from '../context/AppContext';
 import { getAllVorgaenge } from '../services/vorgangService';
+import { listOrderDrafts } from '../services/order/orderDraftService';
 import { vorgangStatusTone } from '../services/ui/statusTone';
 import type { TranslationKey } from '../i18n';
 import type { Vorgang } from '../types/models';
@@ -33,11 +34,14 @@ export function VorgaengePage() {
   const location = useLocation();
   const navigate = useNavigate();
   const [vorgaenge, setVorgaenge] = useState(getAllVorgaenge);
+  /* AUFTRAG-02C — begonnene, noch nicht verbindliche Auftraege dieses Geraets. */
+  const [entwuerfe, setEntwuerfe] = useState(listOrderDrafts);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<VorgangFilter>('active');
 
   useEffect(() => {
     setVorgaenge(getAllVorgaenge());
+    setEntwuerfe(listOrderDrafts());
   }, [location.pathname, location.key]);
 
   const filtered = useMemo(() => {
@@ -74,6 +78,10 @@ export function VorgaengePage() {
         secondaryAction={
           <>
             {/* ANGEBOT-01B — die Vorstufe des Auftrags lebt hier, ohne eigenen Hauptmenüpunkt. */}
+            {/* AUFTRAG-02C — Auftrag ohne Angebot, ohne eigenen Hauptmenuepunkt. */}
+            <Link to="/auftraege/neu" data-testid="vorgaenge-new-order">
+              <Button variant="secondary">{translate('order.new.action')}</Button>
+            </Link>
             <Link to="/angebote" data-testid="vorgaenge-offers">
               <Button variant="secondary">{translate('offer.area.tabOffers')}</Button>
             </Link>
@@ -83,6 +91,25 @@ export function VorgaengePage() {
           </>
         }
       />
+
+      {entwuerfe.length > 0 ? (
+        <section className="section" data-testid="vorgaenge-order-drafts">
+          <h2 className="section__title">{translate('order.draft.listTitle')}</h2>
+          <p className="form-hint">{translate('order.draft.listHint')}</p>
+          <BusinessList>
+            {entwuerfe.map((entwurf) => (
+              <BusinessListItem
+                key={entwurf.id}
+                to={`/auftraege/entwurf/${entwurf.id}`}
+                linkTestId={`order-draft-${entwurf.id}`}
+                title={entwurf.title.trim() || translate('order.draft.untitled')}
+                subtitle={entwurf.customerBilling.name}
+                status={<StatusBadge tone="neutral" label={translate('order.draft.badge')} />}
+              />
+            ))}
+          </BusinessList>
+        </section>
+      ) : null}
 
       {vorgaenge.length === 0 ? (
         <EmptyStateBlock

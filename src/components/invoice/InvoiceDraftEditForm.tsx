@@ -86,6 +86,16 @@ export function InvoiceDraftEditForm({ draft, onChange, customerMaster }: Props)
             data-testid="invoice-edit-payment-due"
             onChange={(event) => onChange({ paymentDueDate: event.target.value })}
           />
+          {/*
+            AUFTRAG-02C2 — Trägt der Auftrag eigene Zahlungsbedingungen, bleibt
+            das Fälligkeitsdatum leer: Aus „innerhalb von 21 Tagen" ein Datum zu
+            raten wäre erfunden. Der Hinweis sagt, warum hier nichts steht.
+          */}
+          {!draft.paymentDueDate?.trim() && draft.paymentTermsText?.trim() ? (
+            <p className="form-hint" data-testid="invoice-edit-payment-due-hint">
+              Dieser Auftrag hat eigene Zahlungsbedingungen. Bitte das Fälligkeitsdatum passend dazu eintragen.
+            </p>
+          ) : null}
         </Field>
         <Field label="Zahlungstext">
           <textarea

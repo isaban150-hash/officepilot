@@ -151,6 +151,7 @@ export const trOffer = {
   'vorgang.order.total': 'Sipariş tutarı',
   'vorgang.order.sourceOffer': 'Tekliften',
   'vorgang.order.frozenHint': 'Kalemler, fiyatlar ve vergi durumu kabul edilen tekliften gelir ve yalnızca ek anlaşmayla değişir.',
+  'vorgang.order.frozenHintManual': 'Kalemler, fiyatlar ve vergi durumu sipariş oluşturulurken sabitlenir ve yalnızca ek anlaşmayla değişir.',
   'offer.kunden.title': 'Teklifler',
   'offer.kunden.empty': 'Bu müşteri için henüz teklif yok.',
   'offer.kunden.create': 'Teklif oluştur',
