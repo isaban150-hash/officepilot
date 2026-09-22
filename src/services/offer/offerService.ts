@@ -435,6 +435,43 @@ export function applyConfirmedOfferFinalization(
   return { success: true, offer: cloneOffer(finalized) };
 }
 
+/**
+ * ANGEBOT->AUFTRAG-02B — den vom Server bestaetigten Stand nach der Annahme
+ * uebernehmen (Status `angenommen`, `resultingVorgangId`, Version). Ohne
+ * Persist — der Aufrufer speichert Angebot und Auftrag gemeinsam.
+ */
+export function adoptAcceptedOfferFromServer(
+  offerId: string,
+  serverOffer: Omit<Offer, 'sync'>,
+  sync: { rowVersion: number; updatedAt: string; deviceId: string; workspaceId: string },
+): OfferMutationResult {
+  const index = offers.findIndex((item) => item.id === offerId && isEntitySyncActive(item));
+  if (index === -1) return { success: false, errorKey: 'offer.error.notFound' };
+  if (serverOffer.status !== 'angenommen' || !serverOffer.resultingVorgangId) {
+    return { success: false, errorKey: 'offer.error.acceptFailed' };
+  }
+  const accepted = normalizeOffer({
+    ...serverOffer,
+    id: offerId,
+    workspaceId: serverOffer.workspaceId || offers[index].workspaceId,
+    sync: {
+      ...offers[index].sync,
+      updatedAt: sync.updatedAt,
+      version: sync.rowVersion,
+      deleted: false,
+      deviceId: sync.deviceId,
+      workspaceId: sync.workspaceId,
+    },
+  });
+  offers = [...offers.slice(0, index), accepted, ...offers.slice(index + 1)];
+  return { success: true, offer: cloneOffer(accepted) };
+}
+
+/** Annahme ist nur aus freigegeben/versendet moeglich — auch abgelaufen, mit ausdruecklicher Bestaetigung. */
+export function canAcceptOffer(offer: Pick<Offer, 'status'>): boolean {
+  return offer.status === 'freigegeben' || offer.status === 'versendet';
+}
+
 /* ------------------------------------------------------------------ */
 /* Status nach der Freigabe                                             */
 /* ------------------------------------------------------------------ */

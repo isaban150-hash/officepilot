@@ -329,6 +329,17 @@ export function mergeOffersFromPull(
       finalizedOverDraft.push(remote.id);
       continue;
     }
+    /*
+     * ANGEBOT->AUFTRAG-02B — dasselbe fuer die Annahme: Ist das Angebot
+     * serverseitig angenommen (Auftrag existiert), gewinnt dieser Zustand ueber
+     * einen lokalen Stand, der die Annahme noch nicht kennt. Ein lokaler
+     * Sendeauftrag dieses Stands ist ueberholt.
+     */
+    if (remote.status === 'angenommen' && remote.resultingVorgangId && local.status !== 'angenommen') {
+      byId.set(remote.id, remote);
+      finalizedOverDraft.push(remote.id);
+      continue;
+    }
 
     if (local.sync?.deleted === true) continue;
 

@@ -225,7 +225,18 @@ function buildDraftMetadata(
   const profile = createCompanyProfileSnapshot();
   const issueDate = new Date().toISOString().slice(0, 10);
   // SETTINGS-01B1 — eine Vorbelegung für beide Rechnungswege.
-  const defaults = resolveInvoiceDefaults(profile, setup, issueDate);
+  const profileDefaults = resolveInvoiceDefaults(profile, setup, issueDate);
+  /*
+   * ANGEBOT->AUFTRAG-02B — ein Auftrag aus Angebot trägt seinen eigenen
+   * Steuerstatus und seine Konditionen; sie belegen Rechnung, Abschlag und
+   * Schlussrechnung vor. Vorgänge ohne diese Felder bleiben beim Firmenstandard.
+   * Nur Vorbelegung: Freigabe und Fingerabdruck der Rechnung bleiben unverändert.
+   */
+  const defaults = {
+    ...profileDefaults,
+    taxStatus: vorgang.taxStatus ?? profileDefaults.taxStatus,
+    paymentTermsText: vorgang.paymentTermsText?.trim() ? vorgang.paymentTermsText : profileDefaults.paymentTermsText,
+  };
   /*
    * MANUAL-INVOICE-CUSTOMER-IDENTITY-01B — die Kundenreferenz kommt vom
    * Vorgang, wenn er eine hat. Ein Legacy-Vorgang ohne `customerId` erzeugt

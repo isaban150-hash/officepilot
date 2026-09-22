@@ -597,6 +597,23 @@ export function commitVorgangMutation(
   return { ok: true, vorgang: cloneVorgang(next) };
 }
 
+/**
+ * ANGEBOT->AUFTRAG-02B — den vom Server erzeugten Auftrag in den Speicher
+ * uebernehmen. Die Serverzeile ist die Wahrheit (Nummer, Herkunft, Snapshot);
+ * ein bereits vorhandener lokaler Stand derselben Kennung wird ersetzt.
+ * Bewusst **ohne** Persist: Der Aufrufer speichert Angebot und Auftrag in
+ * einem Schritt, nachdem er die Tracker-Grundlinie gesetzt hat.
+ */
+export function adoptServerVorgang(vorgang: Vorgang): Vorgang {
+  const normalized = normalizeVorgang({ ...vorgang, invoices: vorgang.invoices ?? [] });
+  const stored = { ...normalized, invoices: [] };
+  const exists = vorgaenge.some((item) => item.id === vorgang.id);
+  vorgaenge = exists
+    ? vorgaenge.map((item) => (item.id === vorgang.id ? stored : item))
+    : [stored, ...vorgaenge];
+  return cloneVorgang(stored);
+}
+
 export function deleteVorgang(
   vorgangId: string,
 ): { success: true; vorgang: Vorgang } | { success: false; errorKey: string } {

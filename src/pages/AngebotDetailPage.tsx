@@ -34,6 +34,12 @@ import {
 import { ensureOfferArchived } from '../services/offer/offerArchiveService';
 import { buildOfferPrintModel } from '../services/offer/offerPrintModel';
 import { downloadOfferPdf, generateOfferPdf } from '../services/offer/offerPdfService';
+import { canAcceptOffer } from '../services/offer/offerService';
+import { acceptOfferWithCloud } from '../services/offer/offerAcceptCloudService';
+import { useOptionalAuth } from '../context/AuthContext';
+import { isSupabaseConfigured } from '../lib/supabase';
+import { resolveWorkspaceWriteAccess } from '../services/workspace/workspaceRoleService';
+import { getVorgangById } from '../services/vorgangService';
 import type { OfferStatus } from '../types/offer';
 import type { CompanyDocument } from '../types/models';
 import type { TranslationKey } from '../i18n';
@@ -52,9 +58,15 @@ const AKTION_FRAGE: Record<Aktion, TranslationKey> = {
 };
 
 export function AngebotDetailPage() {
-  const { translate } = useApp();
+  const { translate, showToast } = useApp();
   const navigate = useNavigate();
   const { offerId } = useParams<{ offerId: string }>();
+  /* ANGEBOT->AUFTRAG-02B — Annahme legt einen Vorgang an: dieselbe Rolle wie jeder Vorgangs-Write. */
+  const user = useOptionalAuth()?.user ?? null;
+  const writeAccess = resolveWorkspaceWriteAccess({ userId: user?.id, cloudConfigured: isSupabaseConfigured() });
+  const [annahmeOffen, setAnnahmeOffen] = useState(false);
+  const [annahmeLaeuft, setAnnahmeLaeuft] = useState(false);
+  const [annahmeFehler, setAnnahmeFehler] = useState('');
   const [version, setVersion] = useState(0);
   const offer = offerId ? getOfferById(offerId) : null;
   const frozen = Boolean(offer && offer.status !== 'entwurf');
@@ -146,6 +158,39 @@ export function AngebotDetailPage() {
 
   const titel = offer.offerNumber ? `${translate('offer.detail.title')} ${offer.offerNumber}` : translate('offer.detail.title');
 
+  const annehmbar = canAcceptOffer(offer);
+  const angenommen = offer.status === 'angenommen' && Boolean(offer.resultingVorgangId);
+  const auftrag = angenommen ? getVorgangById(offer.resultingVorgangId ?? '') : undefined;
+  const annehmen = async (): Promise<boolean> => {
+    setAnnahmeOffen(false);
+    setAnnahmeFehler('');
+    setAnnahmeLaeuft(true);
+    try {
+      const r = await acceptOfferWithCloud(offer.id);
+      if (!r.ok) {
+        const key: TranslationKey =
+          r.reason === 'not_acceptable'
+            ? 'offer.accept.notAcceptable'
+            : r.reason === 'cloud_required'
+              ? 'offer.accept.cloudRequired'
+              : r.reason === 'sync_pending'
+                ? 'offer.accept.syncPending'
+                : r.reason === 'network'
+                  ? 'offer.accept.network'
+                  : r.reason === 'server_rejected'
+                    ? 'offer.accept.serverRejected'
+                    : 'offer.error.notFound';
+        setAnnahmeFehler(`${translate(key)}${'message' in r ? ` (${r.message})` : ''}`);
+        return true;
+      }
+      showToast(translate('offer.accept.success').replace('{number}', r.vorgang.orderNumber ?? ''));
+      navigate(`/vorgaenge/${r.vorgang.id}`);
+      return true;
+    } finally {
+      setAnnahmeLaeuft(false);
+    }
+  };
+
   return (
     <Page className="offer-detail" testId="offer-detail-page">
       <PageHeader
@@ -158,6 +203,15 @@ export function AngebotDetailPage() {
           !frozen ? (
             <Button onClick={() => navigate(`/angebote/${offer.id}/bearbeiten`)} data-testid="offer-detail-edit">
               {translate('offer.editor.editTitle')}
+            </Button>
+          ) : annehmbar && writeAccess.canWrite ? (
+            <Button onClick={() => setAnnahmeOffen(true)} disabled={annahmeLaeuft} data-testid="offer-accept">
+              {translate('offer.accept.action')}
+            </Button>
+          ) : angenommen ? (
+            <Button onClick={() => navigate(`/vorgaenge/${offer.resultingVorgangId}`)} data-testid="offer-open-order">
+              {translate('offer.detail.orderOpen')}
+              {auftrag?.orderNumber ? ` · ${auftrag.orderNumber}` : ''}
             </Button>
           ) : undefined
         }
@@ -187,6 +241,9 @@ export function AngebotDetailPage() {
       </div>
 
       {frozen ? <p className="form-hint" data-testid="offer-detail-frozen">{translate('offer.detail.frozenHint')}</p> : null}
+      {angenommen ? <p className="form-hint" data-testid="offer-detail-accepted">{translate('offer.detail.acceptedHint')}</p> : null}
+      {annehmbar && !writeAccess.canWrite ? <p className="form-hint" data-testid="offer-accept-role-hint">{translate('offer.accept.roleHint')}</p> : null}
+      {annahmeFehler ? <p className="form-error" data-testid="offer-accept-error">{annahmeFehler}</p> : null}
       {expired ? <p className="form-error" data-testid="offer-detail-expired">{translate('offer.detail.expiredHint')}</p> : null}
 
       {frozen ? (
@@ -240,8 +297,23 @@ export function AngebotDetailPage() {
         <OfferDocumentView model={model} />
       </DetailSection>
 
-      {frozen ? <p className="form-hint">{translate('offer.detail.acceptLater')}</p> : null}
-
+      <SimpleConfirmDialog
+        open={annahmeOffen}
+        title={translate('offer.accept.title')}
+        message={`${translate('offer.accept.text')
+          .replace('{number}', offer.offerNumber ?? '')
+          .replace('{customer}', offer.customer.name)
+          .replace('{total}', formatInvoiceCurrency(totals.total))}${
+          expired ? ` ${translate('offer.accept.expired').replace('{validUntil}', formatInvoiceDate(offer.validUntil))}` : ''
+        }`}
+        confirmLabel={translate(expired ? 'offer.accept.confirmExpired' : 'offer.accept.confirm')}
+        cancelLabel={translate('common.cancel')}
+        dialogTestId="offer-accept-dialog"
+        confirmTestId="offer-accept-confirm"
+        cancelTestId="offer-accept-cancel"
+        onConfirm={annehmen}
+        onCancel={() => setAnnahmeOffen(false)}
+      />
       <SimpleConfirmDialog
         open={aktion !== null}
         title={aktion ? translate(AKTION_LABEL[aktion]) : ''}

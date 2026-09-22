@@ -1435,7 +1435,37 @@ export interface Vorgang {
   confirmedOrderAmendments?: ConfirmedOrderAmendment[];
   /** Set when the user explicitly starts order execution (beauftragt → in_bearbeitung). */
   executionStartedAt?: string;
+  /**
+   * ANGEBOT->AUFTRAG-02B — der kaufmännische Auftrag im Vorgang.
+   *
+   * Nur für Aufträge, die aus einem eigenen, angenommenen Angebot entstanden
+   * sind: Herkunft (`sourceOfferId`, `sourceOfferNumber`), die serverseitig
+   * vergebene Auftragsnummer (`orderNumber`, AU-JJJJ-NNNN) und der
+   * eingefrorene kaufmännische Stand (Steuerstatus, Texte, Konditionen,
+   * Summen). Alles write-once — Serverspalten `source_offer_id` und
+   * `order_number` sind die Wahrheit, der Payload ist ihr Abbild. Bestehende
+   * Vorgänge aus Werkverträgen tragen keines dieser Felder.
+   */
+  sourceOfferId?: string;
+  sourceOfferNumber?: string;
+  orderNumber?: string;
+  /** Tag der Annahme (ISO, nur Tag). */
+  orderDate?: string;
+  /** Steuerstatus des Auftrags; Rechnungsentwürfe belegen ihn damit vor. */
+  taxStatus?: TaxStatus;
+  paymentTermsText?: string;
+  introText?: string;
+  closingText?: string;
+  contractTotals?: OrderContractTotals;
   sync?: SyncMeta;
+}
+
+/** ANGEBOT->AUFTRAG-02B — die bei der Annahme eingefrorenen Summen des Auftrags. */
+export interface OrderContractTotals {
+  subtotal: number;
+  taxRate: number;
+  tax: number;
+  total: number;
 }
 
 export interface Task {

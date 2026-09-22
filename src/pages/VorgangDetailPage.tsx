@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { OrderPositionForm } from '../components/vorgang/OrderPositionForm';
+import { VorgangOrderFactsCard } from '../components/vorgang/VorgangOrderFactsCard';
 import { VorgangCostPanel } from '../components/vorgang/VorgangCostPanel';
 import { DetailExperienceCard } from '../components/detail/DetailExperienceCard';
 import { Badge, Card, CardMeta, CardTitle, DataRow } from '../components/ui/Card';
@@ -719,7 +720,7 @@ export function VorgangDetailPage() {
         * Schritte in der Experience-Card bleiben unverändert.
         */}
       <PageHeader
-        title={vorgang.title}
+        title={vorgang.orderNumber ? `${vorgang.orderNumber} · ${vorgang.title}` : vorgang.title}
         subtitle={[vorgang.customer, vorgang.baustelle].filter(Boolean).join(' · ')}
         status={<StatusBadge tone={vorgangStatusTone(vorgang.status)} label={translate(statusKey)} data-testid="vorgang-detail-status" />}
         backLabel={translate('common.back')}
@@ -735,6 +736,8 @@ export function VorgangDetailPage() {
       />
 
       <div {...vorgangSectionPanelProps('overview', activeSection)}>
+        {/* ANGEBOT->AUFTRAG-02B — Auftragsnummer, Herkunft, Steuer: nur für Aufträge aus Angebot. */}
+        <VorgangOrderFactsCard vorgang={vorgang} />
         <DetailExperienceCard
           recognizedTitle={vorgang.title}
           recognizedSummary={`${vorgang.customer} · ${translate(statusKey)}`}

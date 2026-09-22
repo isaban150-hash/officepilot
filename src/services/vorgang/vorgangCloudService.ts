@@ -43,6 +43,72 @@ export interface VorgangCloudPayload {
   contractConfirmation?: ContractConfirmationSnapshot;
   /** CLOUD-ORDER-CHAIN-01: execution start timestamp (write-once on merge). */
   executionStartedAt?: string;
+  /** ANGEBOT->AUFTRAG-02B: Auftragsherkunft und eingefrorener kaufmaennischer Stand (write-once). */
+  sourceOfferId?: string;
+  sourceOfferNumber?: string;
+  orderNumber?: string;
+  orderDate?: string;
+  taxStatus?: Vorgang['taxStatus'];
+  paymentTermsText?: string;
+  introText?: string;
+  closingText?: string;
+  contractTotals?: Vorgang['contractTotals'];
+}
+
+/** ANGEBOT->AUFTRAG-02B — die Auftragsfelder, die gemeinsam reisen und gemeinsam write-once sind. */
+export const ORDER_FACT_KEYS = [
+  'sourceOfferId',
+  'sourceOfferNumber',
+  'orderNumber',
+  'orderDate',
+  'taxStatus',
+  'paymentTermsText',
+  'introText',
+  'closingText',
+  'contractTotals',
+] as const;
+export type OrderFactKey = (typeof ORDER_FACT_KEYS)[number];
+export type OrderFacts = Pick<Vorgang, OrderFactKey>;
+
+function readOrderFacts(source: Partial<Record<OrderFactKey, unknown>>): OrderFacts {
+  const out: OrderFacts = {};
+  const text = (v: unknown) => (typeof v === 'string' && v.trim().length > 0 ? v : undefined);
+  out.sourceOfferId = text(source.sourceOfferId);
+  out.sourceOfferNumber = text(source.sourceOfferNumber);
+  out.orderNumber = text(source.orderNumber);
+  out.orderDate = text(source.orderDate);
+  out.taxStatus = text(source.taxStatus) as Vorgang['taxStatus'];
+  out.paymentTermsText = typeof source.paymentTermsText === 'string' ? source.paymentTermsText : undefined;
+  out.introText = typeof source.introText === 'string' ? source.introText : undefined;
+  out.closingText = typeof source.closingText === 'string' ? source.closingText : undefined;
+  const t = source.contractTotals as Record<string, unknown> | undefined;
+  if (t && typeof t === 'object') {
+    const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : Number(v) || 0);
+    out.contractTotals = { subtotal: n(t.subtotal), taxRate: n(t.taxRate), tax: n(t.tax), total: n(t.total) };
+  }
+  for (const key of ORDER_FACT_KEYS) if (out[key] === undefined) delete out[key];
+  return out;
+}
+
+/** Nur belegte Felder — ein Bestandsvorgang ohne Auftrag aendert seinen Inhaltsschluessel nicht. */
+function assignOrderFacts(target: Partial<Record<OrderFactKey, unknown>>, facts: OrderFacts): void {
+  for (const key of ORDER_FACT_KEYS) {
+    const value = facts[key];
+    if (value === undefined) continue;
+    target[key] = key === 'contractTotals' ? { ...(value as Vorgang['contractTotals']) } : value;
+  }
+}
+
+/**
+ * Write-once wie die Kettenfakten: Was lokal steht, bleibt; die Cloud fuellt nur
+ * Luecken. Ein Auftrag aus Angebot entsteht ausschliesslich serverseitig, also
+ * kommt der erste Stand immer aus der Cloud-Zeile.
+ */
+export function resolveWriteOnceOrderFacts(local: OrderFacts | undefined, cloud: OrderFacts | undefined): OrderFacts {
+  const out: OrderFacts = {};
+  assignOrderFacts(out, cloud ?? {});
+  assignOrderFacts(out, local ?? {});
+  return out;
 }
 
 export interface WorkspaceVorgangRow {
@@ -310,6 +376,7 @@ export function stripVorgangForCloud(vorgang: Vorgang): VorgangCloudPayload {
   if (planSource.executionStartedAt) {
     payload.executionStartedAt = planSource.executionStartedAt;
   }
+  assignOrderFacts(payload, readOrderFacts(planSource));
 
   return payload;
 }
@@ -354,6 +421,7 @@ export function parseVorgangCloudPayload(payload: Record<string, unknown> | null
     createdFromInboxId: inner.createdFromInboxId,
     contractConfirmation: readCloudContractConfirmation(inner.contractConfirmation),
     executionStartedAt: readCloudExecutionStartedAt(inner.executionStartedAt),
+    ...readOrderFacts(inner as Partial<Record<OrderFactKey, unknown>>),
   };
 }
 
@@ -432,6 +500,8 @@ function buildMergedVorgangFromFacts(
     contractConfirmation: confirmation,
     executionStartedAt,
     orderPositions: shell.orderPositions ?? [],
+    // ANGEBOT->AUFTRAG-02B — Auftragsfakten write-once, Cloud fuellt Luecken.
+    ...resolveWriteOnceOrderFacts(local ? readOrderFacts(local) : undefined, readOrderFacts(cloudPayload)),
   };
 
   /*
