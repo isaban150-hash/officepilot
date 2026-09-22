@@ -134,6 +134,14 @@ export type ExecutePreparedFinalizationFailure =
   | 'rpc_failed'
   | 'idempotency_conflict'
   | 'amendment_state_stale'
+  /**
+   * RECHNUNGSINTEGRITAET-03B — der Server hat die Rechnung geprüft und
+   * abgelehnt. Getrennt gehalten, weil der Nutzer im Mengenfall etwas tun kann
+   * (Menge korrigieren oder die Überschreitung bewusst bestätigen), während
+   * die übrigen Befunde auf einen veralteten oder beschädigten Entwurf deuten.
+   */
+  | 'quantity_exceeds_available'
+  | 'server_integrity_rejected'
   /** 01D — für diesen Vorgang existiert bereits eine andere Schlussrechnung. */
   | 'final_invoice_exists'
   | 'local_persist_failed'
@@ -358,6 +366,8 @@ function buildPreparationSynchronously(input: PrepareInvoiceFinalizationInput): 
     clientInvoiceId,
     invoice: candidate.invoice,
     invoicePayload: rawPayload,
+    // 03B — dieselbe Aussage wie im Freigabekontext, nur fuer den Server.
+    overbillingAcknowledged: input.overbillingAcknowledged === true,
   });
   if (!carrier) return { ok: false, reason: 'preparation_failed', detail: 'serialize' };
 
@@ -501,6 +511,25 @@ function mapCloudError(
   if (error.code === 'final_invoice_exists') {
     return { reason: 'final_invoice_exists', cloudState: 'not_committed' };
   }
+  /*
+   * RECHNUNGSINTEGRITAET-03B — sämtliche Prüfbefunde laufen **vor** dem Insert;
+   * für diese Finalisierung hat der Server nachweislich nichts geschrieben und
+   * keine Nummer verbraucht. Deshalb `not_committed`: Der Entwurf bleibt
+   * bedienbar, der Nutzer kann korrigieren und erneut freigeben.
+   */
+  if (error.code === 'quantity_exceeds_available') {
+    return { reason: 'quantity_exceeds_available', cloudState: 'not_committed' };
+  }
+  if (
+    error.code === 'position_not_found' ||
+    error.code === 'position_not_billable' ||
+    error.code === 'position_mismatch' ||
+    error.code === 'tax_status_mismatch' ||
+    error.code === 'totals_mismatch' ||
+    error.code === 'customer_mismatch'
+  ) {
+    return { reason: 'server_integrity_rejected', cloudState: 'not_committed' };
+  }
   if (error.code === 'auth') return { reason: 'auth_missing', cloudState: 'not_committed' };
   if (error.code === 'rls') return { reason: 'rpc_failed', cloudState: 'not_committed' };
   if (error.code === 'validation') return { reason: 'rpc_failed', cloudState: 'not_committed' };
@@ -635,6 +664,7 @@ async function runPreparedFinalization(
       vorgangId: request.vorgangId,
       clientInvoiceId: request.clientInvoiceId,
       invoicePayload: request.invoicePayload,
+      overbillingAcknowledged: request.overbillingAcknowledged === true,
     });
   } catch (error) {
     if (error instanceof WorkspaceInvoiceCloudError) {

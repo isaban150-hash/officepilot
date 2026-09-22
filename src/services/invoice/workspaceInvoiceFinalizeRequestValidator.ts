@@ -71,6 +71,13 @@ export interface PreparedWorkspaceInvoiceFinalizeRequest {
   clientInvoiceId: string;
   invoice: VorgangInvoice;
   invoicePayload: Record<string, unknown>;
+  /**
+   * RECHNUNGSINTEGRITAET-03B — die bewusste Entscheidung des Nutzers, ueber den
+   * dokumentierten Rest hinaus abzurechnen. Sie reist getrennt vom Beleg: Sie
+   * ist eine Aussage ueber die Freigabe, kein Belegtext, und gehoert deshalb
+   * weder in den Payload noch in den Fingerabdruck.
+   */
+  overbillingAcknowledged?: boolean;
   expectedResponseProjectionRawJson: string;
 }
 
@@ -104,6 +111,7 @@ const REQUEST_KEYS = [
   'clientInvoiceId',
   'invoice',
   'invoicePayload',
+  'overbillingAcknowledged',
   'expectedResponseProjectionRawJson',
 ] as const;
 
@@ -629,6 +637,18 @@ export function validatePreparedWorkspaceInvoiceFinalizeRequest(
       request.expectedResponseProjectionRawJson,
       'request.expectedResponseProjectionRawJson',
     );
+    /*
+     * RECHNUNGSINTEGRITAET-03B — die Bestaetigung ist optional, aber wenn sie
+     * da ist, ein echtes Boolean: Ein 'true' als Zeichenkette waere kein
+     * bestaetigter Nutzerwille. Fehlt sie, gilt serverseitig 'false' —
+     * fail-closed, eine Ueberschreitung waere dann nicht erlaubt.
+     */
+    if (
+      request.overbillingAcknowledged !== undefined &&
+      typeof request.overbillingAcknowledged !== 'boolean'
+    ) {
+      reject('request.overbillingAcknowledged:not_boolean');
+    }
 
     const invoice = checkInvoiceShape(request.invoice, clientInvoiceId, 'request.invoice', 'invoice');
 

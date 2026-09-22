@@ -43,6 +43,18 @@ export type WorkspaceInvoiceCloudErrorCode =
   | 'cancel_not_finalized'
   | 'cancel_has_active_payments'
   | 'cancel_reason_required'
+  /*
+   * RECHNUNGSINTEGRITAET-03B — die fachlichen Befunde der serverseitigen
+   * Rechnungspruefung. Alle sind fail-closed: Es wurde keine Rechnung
+   * geschrieben und keine Nummer verbraucht.
+   */
+  | 'quantity_exceeds_available'
+  | 'position_not_found'
+  | 'position_not_billable'
+  | 'position_mismatch'
+  | 'tax_status_mismatch'
+  | 'totals_mismatch'
+  | 'customer_mismatch'
   | 'not_found'
   | 'network'
   | 'unknown';
@@ -78,6 +90,12 @@ export interface WorkspaceInvoicePreparedFinalizeInput {
   vorgangId: string | null;
   clientInvoiceId: string;
   invoicePayload: Record<string, unknown>;
+  /**
+   * RECHNUNGSINTEGRITAET-03B — bestaetigte Ueberschreitung des dokumentierten
+   * Rests. Der Server stellt die Ueberschreitung selbst fest; dieses Flag sagt
+   * nur, dass der Nutzer sie bewusst gewollt hat.
+   */
+  overbillingAcknowledged?: boolean;
 }
 
 export interface WorkspaceInvoicePreparedFinalizeResult {
@@ -168,6 +186,41 @@ function classifyInvoiceCloudError(error: { message?: string; code?: string }): 
   }
   if (message.includes('Idempotenzkonflikt')) {
     return new WorkspaceInvoiceCloudError(message, 'idempotency_conflict', false);
+  }
+  /*
+   * RECHNUNGSINTEGRITAET-03B — die fachlichen Serverbefunde.
+   *
+   * Sie stehen **vor** der allgemeinen Validierungsregel weiter unten: Mehrere
+   * dieser Meldungen enthalten „positions" oder „type" und liefen sonst als
+   * unspezifischer Validierungsfehler durch. Der Nutzer soll lesen, was der
+   * Server tatsaechlich gefunden hat.
+   */
+  if (message.includes('invoice_quantity_exceeds_available')) {
+    return new WorkspaceInvoiceCloudError(message, 'quantity_exceeds_available', false);
+  }
+  if (message.includes('invoice_position_not_found')) {
+    return new WorkspaceInvoiceCloudError(message, 'position_not_found', false);
+  }
+  if (message.includes('invoice_position_not_billable')) {
+    return new WorkspaceInvoiceCloudError(message, 'position_not_billable', false);
+  }
+  if (message.includes('invoice_position_mismatch')) {
+    return new WorkspaceInvoiceCloudError(message, 'position_mismatch', false);
+  }
+  if (message.includes('invoice_tax_status_mismatch') || message.includes('invoice_tax_status_invalid')) {
+    return new WorkspaceInvoiceCloudError(message, 'tax_status_mismatch', false);
+  }
+  if (
+    message.includes('invoice_totals_mismatch') ||
+    message.includes('invoice_deductions_mismatch') ||
+    message.includes('invoice_fixed_amount_invalid') ||
+    message.includes('invoice_fixed_amount_with_positions') ||
+    message.includes('invoice_quantity_invalid')
+  ) {
+    return new WorkspaceInvoiceCloudError(message, 'totals_mismatch', false);
+  }
+  if (message.includes('invoice_customer_mismatch')) {
+    return new WorkspaceInvoiceCloudError(message, 'customer_mismatch', false);
   }
   /*
    * 01D — der benennbare Serverfehler und sein Backstop.
@@ -1311,6 +1364,7 @@ export async function rpcFinalizePreparedWorkspaceInvoice(
       p_client_invoice_id: input.clientInvoiceId,
       // Unverändert — kein Builder, keine Normalisierung, keine Uhrzeit.
       p_invoice: input.invoicePayload,
+      p_overbilling_acknowledged: input.overbillingAcknowledged === true,
     });
 
     if (error) {

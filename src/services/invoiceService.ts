@@ -158,9 +158,38 @@ export function reconcilePaymentTermsWithSkonto(
  * nicht mehr abgezogen. Sonst hielte die Schlussrechnung einen Abzug fest, den
  * `hasAbschlagsrechnung` und die Mengenprojektion längst nicht mehr kennen.
  */
+/**
+ * RECHNUNGSINTEGRITAET-03B2 — ein Abschlag verbraucht **entweder** Menge
+ * **oder** Geld, nie beides.
+ *
+ * Realbefund aus der unabhängigen Abnahme: Ein mengenbasierter Abschlag über
+ * eine von zwei Einheiten reduzierte korrekt die offene Menge — und wurde in
+ * der Schlussrechnung **zusätzlich** monetär abgezogen. Die Schlussrechnung
+ * rechnete danach nur noch die verbleibende Einheit (5 €) ab und zog dieselben
+ * 5 € nochmals ab: Restbetrag 0 €, obwohl nur die Hälfte bezahlt war.
+ *
+ * Die Regel folgt dem bestehenden Hybrid des Modells:
+ *   • fixed_amount (und jeder Abschlag ohne Positionsmenge) nimmt keine
+ *     Auftragsmenge weg — sein Betrag muss abgezogen werden.
+ *   • ein mengenbasierter Abschlag hat seine Leistung bereits über
+ *     `billedQuantity` verbraucht; sie fehlt in den Positionen der
+ *     Schlussrechnung und darf nicht ein zweites Mal als Geld verschwinden.
+ *
+ * Geprüft wird die tatsächlich verbrauchte Menge, nicht allein der Modus:
+ * Altbestand ohne `calculationMode` ist dadurch richtig eingeordnet.
+ */
+export function abschlagConsumesOrderQuantity(invoice: VorgangInvoice): boolean {
+  if (invoice.calculationMode === 'fixed_amount') return false;
+  return (invoice.positions ?? []).some(
+    (position) => Number.isFinite(position.quantity) && position.quantity > 0,
+  );
+}
+
 export function getPreviousAbschlagDeductions(vorgang: Vorgang): AbschlagDeduction[] {
   return vorgang.invoices
-    .filter((inv) => inv.type === 'abschlag' && isBillingEffective(inv))
+    .filter(
+      (inv) => inv.type === 'abschlag' && isBillingEffective(inv) && !abschlagConsumesOrderQuantity(inv),
+    )
     .map((inv) => ({
       invoiceId: inv.id,
       invoiceNumber: inv.number,
@@ -707,6 +736,20 @@ export function getOverbillingReference(position: InvoiceDraftPosition): number 
  * erhalten: Sie zu entfernen wäre stiller Datenverlust, sie neu zuzuordnen
  * geraten. Neue Auftragspositionen wandern **nicht** von selbst in den
  * Entwurf — Positionen kommen nur auf ausdrückliche Entscheidung hinzu.
+ *
+ * RECHNUNGSINTEGRITAET-03B3 — dasselbe gilt für die Abschlagsabzüge.
+ *
+ * Realbefund der Nachabnahme: Eine Schlussrechnung zeigte 1 × 5 € offene
+ * Leistung **und** daneben weiterhin −5 € „Abschlag 1", Restbetrag 0 €. Die
+ * Abzugsliste war beim Erzeugen des Entwurfs einmal materialisiert worden —
+ * vor der 03B2-Regel — und überlebte jeden Reload, weil die Auffrischung nur
+ * Positionen kannte. Ein gespeicherter Entwurf muss aber dieselbe Rechnung
+ * ergeben wie ein frisch erzeugter.
+ *
+ * Abzüge sind eine **Projektion** des aktuellen Rechnungsbestands, keine
+ * Eingabe: Sie werden hier neu hergeleitet (storniert verschwindet, neu
+ * hinzugekommen erscheint). Bewusste Eingaben — Menge, Leistungszeitraum,
+ * Fälligkeit, Texte — bleiben unberührt.
  */
 export function refreshDraftOrderProjection(
   draft: InvoiceDraft,
@@ -749,7 +792,29 @@ export function refreshDraftOrderProjection(
     return next;
   });
 
-  return changed ? { draft: { ...draft, positions }, changed } : { draft, changed };
+  /*
+   * 03B3 — die Abzugsliste gehört dem aktuellen Stand, nicht dem
+   * Erzeugungszeitpunkt. Nur Belegarten, die überhaupt abziehen
+   * (`usesAbschlagDeductions`), tragen sie; alle anderen führen eine leere
+   * Liste — ein Altbestand mit Einträgen wird dort bereinigt.
+   */
+  const expectedDeductions = usesAbschlagDeductions(draft.type)
+    ? getPreviousAbschlagDeductions(vorgang)
+    : [];
+  const currentDeductions = draft.previousAbschlagDeductions ?? [];
+  const deductionsChanged =
+    JSON.stringify(currentDeductions) !== JSON.stringify(expectedDeductions);
+  if (deductionsChanged) changed = true;
+
+  if (!changed) return { draft, changed };
+  return {
+    draft: {
+      ...draft,
+      positions,
+      previousAbschlagDeductions: expectedDeductions,
+    },
+    changed,
+  };
 }
 
 export function updateDraftPositionQuantity(

@@ -1812,6 +1812,24 @@ export function RechnungPage() {
           </p>
 
           {/*
+            * RECHNUNGSINTEGRITAET-03B2 — die Übermengenwarnung bleibt bis zur
+            * Freigabe sichtbar. Bisher stand sie nur im Positionsschritt; wer
+            * zur Vorschau wechselte, sah vor dem Freigeben keinen Hinweis mehr
+            * darauf, dass eine Menge über dem dokumentierten Rest liegt.
+            * Dieselben Warntexte, keine zweite Quelle.
+            */}
+          {overbillingWarnings.length > 0 && (
+            <div className="invoice-hint invoice-hint--warning" data-testid="invoice-preview-overbilling">
+              <strong>{translate('invoice.overbillingTitle')}</strong>
+              <ul className="invoice-warn-list">
+                {overbillingWarnings.map((w) => (
+                  <li key={w}>{w}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/*
             * INVOICE-TAX-FLOW-01B — die §13b-Bestätigung stand bis hierher an
             * dieser Stelle, also unterhalb der vollständigen Vorschau. Sie ist
             * jetzt Teil der Steuerentscheidung im Positionsschritt. Derselbe

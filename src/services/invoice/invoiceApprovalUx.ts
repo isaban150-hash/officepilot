@@ -63,6 +63,27 @@ export function mapFinalizationFailureToUx(
     result.reason === 'possible_existing_invoice'
   ) {
     messageKey = 'invoice.approve.conflict';
+  } else if (
+    result.reason === 'pull_incomplete' ||
+    result.reason === 'pull_failed' ||
+    result.reason === 'merge_conflict'
+  ) {
+    /*
+     * RECHNUNGSINTEGRITAET-03B2 — der Preflight ist fail-closed: Solange der
+     * Abgleich mit der Cloud unvollständig ist, kennt OfficeTakt den aktuellen
+     * Abrechnungsstand nicht und gibt nichts frei. Das ist richtig — nur hiess
+     * es bisher „Freigabe fehlgeschlagen", und der Nutzer stand ohne Hinweis da.
+     */
+    messageKey = 'invoice.approve.syncIncomplete';
+  } else if (result.reason === 'quantity_exceeds_available') {
+    /*
+     * RECHNUNGSINTEGRITAET-03B — der Server kennt den aktuellen
+     * Abrechnungsstand; ein zweites Gerät kann die Menge inzwischen verbraucht
+     * haben. Die Meldung sagt, was zu tun ist, statt nur zu scheitern.
+     */
+    messageKey = 'invoice.approve.quantityExceeded';
+  } else if (result.reason === 'server_integrity_rejected') {
+    messageKey = 'invoice.approve.serverRejected';
   } else if (result.reason === 'local_persist_failed' || result.reason === 'persist_failed') {
     messageKey = 'invoice.approve.localPersistPending';
   } else {

@@ -2438,6 +2438,9 @@ const deLegacy = {
   'invoice.approve.working': 'Rechnung wird freigegeben…',
   'invoice.approve.blocked': 'Freigabe blockiert – bitte Pflichtangaben prüfen.',
   'invoice.approve.failed': 'Freigabe fehlgeschlagen. Es wurde keine Rechnung gespeichert.',
+  'invoice.approve.syncIncomplete': 'Der Abgleich mit der Cloud ist noch nicht vollständig. OfficeTakt gibt keine Rechnung frei, solange der aktuelle Abrechnungsstand unklar ist. Bitte die Verbindung prüfen und in einem Moment erneut freigeben.',
+  'invoice.approve.quantityExceeded': 'Für mindestens eine Leistung ist weniger offen, als abgerechnet werden soll. Bitte die Mengen prüfen – vielleicht wurde inzwischen auf einem anderen Gerät abgerechnet. Es wurde keine Rechnung gespeichert.',
+  'invoice.approve.serverRejected': 'Die Rechnung passt nicht mehr zum Auftrag (Leistungen, Preise, Steuer oder Kunde). Bitte die Rechnung neu aufbauen. Es wurde keine Rechnung gespeichert.',
   'invoice.approve.offline':
     'Rechnungsfreigabe benötigt eine Internetverbindung. Bitte Verbindung und Anmeldung prüfen.',
   'invoice.approve.auth': 'Bitte erneut anmelden, um die Rechnung freizugeben.',
@@ -2455,7 +2458,7 @@ const deLegacy = {
   'invoice.session.conflict':
     'Der Entwurf wurde an anderer Stelle geändert. Bitte die Seite neu laden, bevor weitergearbeitet wird.',
   'invoice.session.storage':
-    'Der Entwurf kann derzeit nicht gespeichert werden. Änderungen sind gesperrt, damit nichts verloren geht.',
+    'Der Entwurf kann derzeit nicht gespeichert werden. Der Abrechnungsstand wurde möglicherweise an anderer Stelle geändert — bitte die Seite neu laden; die offenen Mengen können sich geändert haben.',
   'invoice.session.finalizationPending':
     'Eine Freigabe dieser Rechnung läuft noch. Der Entwurf ist bis zum Abschluss gesperrt.',
   'invoice.session.alreadyFinalized':
@@ -5147,6 +5150,9 @@ const trLegacy: Partial<Record<keyof typeof de, string>> = {
   'invoice.approve.working': 'Fatura onaylanıyor…',
   'invoice.approve.blocked': 'Onay engellendi – lütfen zorunlu alanları kontrol edin.',
   'invoice.approve.failed': 'Onay başarısız. Fatura kaydedilmedi.',
+  'invoice.approve.syncIncomplete': 'Bulut ile eşitleme henüz tamamlanmadı. Güncel faturalama durumu belirsizken OfficeTakt fatura onaylamaz. Lütfen bağlantıyı kontrol edip biraz sonra tekrar onaylayın.',
+  'invoice.approve.quantityExceeded': 'En az bir hizmet için faturalanmak istenenden daha az açık miktar var. Lütfen miktarları kontrol edin. Fatura kaydedilmedi.',
+  'invoice.approve.serverRejected': 'Fatura artık siparişe uymuyor (hizmetler, fiyatlar, vergi veya müşteri). Lütfen faturayı yeniden oluşturun. Fatura kaydedilmedi.',
   'invoice.approve.offline':
     'Fatura onayı için internet bağlantısı gerekir. Lütfen bağlantı ve oturumu kontrol edin.',
   'invoice.approve.auth': 'Faturayı onaylamak için lütfen yeniden oturum açın.',
@@ -5160,7 +5166,7 @@ const trLegacy: Partial<Record<keyof typeof de, string>> = {
   'invoice.session.conflict':
     'Taslak başka bir yerde değiştirildi. Devam etmeden önce lütfen sayfayı yeniden yükleyin.',
   'invoice.session.storage':
-    'Taslak şu anda kaydedilemiyor. Veri kaybını önlemek için değişiklikler kilitlendi.',
+    'Taslak şu anda kaydedilemiyor. Faturalama durumu başka bir yerde değişmiş olabilir — lütfen sayfayı yeniden yükleyin; açık miktarlar değişmiş olabilir.',
   'invoice.session.finalizationPending':
     'Bu faturanın onayı hâlâ sürüyor. Taslak tamamlanana kadar kilitli.',
   'invoice.session.alreadyFinalized': 'Bu fatura zaten onaylandı. Taslak tamamlandı.',
@@ -6227,6 +6233,9 @@ const bgLegacy: Partial<Record<keyof typeof de, string>> = {
   'invoice.approve.working': 'Фактурата се одобрява…',
   'invoice.approve.blocked': 'Одобрението е блокирано – проверете задължителните полета.',
   'invoice.approve.failed': 'Одобрението неуспешно. Фактурата не е записана.',
+  'invoice.approve.syncIncomplete': 'Синхронизацията с облака още не е пълна. Докато текущото състояние на фактурирането е неясно, OfficeTakt не одобрява фактура. Моля, проверете връзката и опитайте отново след малко.',
+  'invoice.approve.quantityExceeded': 'За поне една услуга е открито по-малко, отколкото се фактурира. Моля, проверете количествата. Фактура не е записана.',
+  'invoice.approve.serverRejected': 'Фактурата вече не отговаря на поръчката (услуги, цени, данък или клиент). Моля, създайте я наново. Фактура не е записана.',
   'invoice.approve.offline':
     'Одобрението на фактура изисква интернет. Проверете връзка и вход.',
   'invoice.approve.auth': 'Моля, влезте отново, за да одобрите фактурата.',
@@ -6240,7 +6249,7 @@ const bgLegacy: Partial<Record<keyof typeof de, string>> = {
   'invoice.session.conflict':
     'Черновата е променена другаде. Моля, презаредете страницата, преди да продължите.',
   'invoice.session.storage':
-    'Черновата не може да бъде записана в момента. Промените са заключени, за да не се загуби нищо.',
+    'Черновата не може да бъде записана в момента. Състоянието на фактурирането може да е променено другаде — моля, презаредете страницата; откритите количества може да са се променили.',
   'invoice.session.finalizationPending':
     'Одобрението на тази фактура още тече. Черновата е заключена до приключване.',
   'invoice.session.alreadyFinalized': 'Тази фактура вече е одобрена. Черновата е приключена.',

@@ -274,14 +274,23 @@ describe('buildAbschlagDraft metadata', () => {
 });
 
 describe('getPreviousAbschlagDeductions', () => {
-  it('collects finalized abschlag invoices', () => {
+  /*
+   * RECHNUNGSINTEGRITAET-03B2 — abgezogen wird nur, was **kein** Auftragsmenge
+   * verbraucht hat. Bis dahin sammelte diese Funktion jeden wirksamen Abschlag;
+   * ein mengenbasierter Abschlag wurde dadurch doppelt wirksam (Menge weg und
+   * Geld abgezogen) und die Schlussrechnung endete bei 0 EUR.
+   */
+  it('collects finalized fixed-amount abschlag invoices', () => {
     const vorgang = createTestVorgang({
       invoices: [
-        createAbschlagInvoice('op-test-1', 2, {
+        createAbschlagInvoice('op-test-1', 0, {
           id: 'inv-a1',
           number: '2026-0001',
           amount: 238,
           subtotal: 200,
+          calculationMode: 'fixed_amount',
+          fixedAmountNet: 200,
+          positions: [],
         }),
       ],
     });
@@ -290,19 +299,53 @@ describe('getPreviousAbschlagDeductions', () => {
     expect(deductions[0].invoiceNumber).toBe('2026-0001');
     expect(deductions[0].amount).toBe(238);
   });
+
+  it('skips quantity-based abschlag invoices — their work is already billed by quantity', () => {
+    const vorgang = createTestVorgang({
+      invoices: [
+        createAbschlagInvoice('op-test-1', 2, {
+          id: 'inv-a2',
+          number: '2026-0002',
+          amount: 238,
+          subtotal: 200,
+        }),
+      ],
+    });
+    expect(getPreviousAbschlagDeductions(vorgang)).toEqual([]);
+  });
 });
 
 describe('buildSchlussrechnungDraft', () => {
-  it('includes previous abschlag deductions', () => {
+  it('includes previous fixed-amount abschlag deductions', () => {
     hydrateVorgangStore([
       createTestVorgang({
-        invoices: [createAbschlagInvoice('op-test-1', 2, { number: '2026-0001', amount: 100 })],
+        invoices: [
+          createAbschlagInvoice('op-test-1', 0, {
+            number: '2026-0001',
+            amount: 100,
+            calculationMode: 'fixed_amount',
+            fixedAmountNet: 100,
+            positions: [],
+          }),
+        ],
       }),
     ]);
 
     const draft = buildSchlussrechnungDraft('v-test-1', testSetup);
     expect(draft).not.toBeNull();
     expect(draft!.previousAbschlagDeductions).toHaveLength(1);
+  });
+
+  /* 03B2 — ein mengenbasierter Abschlag steckt bereits in den Mengen. */
+  it('leaves quantity-based abschlag invoices out of the deductions', () => {
+    hydrateVorgangStore([
+      createTestVorgang({
+        invoices: [createAbschlagInvoice('op-test-1', 2, { number: '2026-0002', amount: 100 })],
+      }),
+    ]);
+
+    const draft = buildSchlussrechnungDraft('v-test-1', testSetup);
+    expect(draft!.previousAbschlagDeductions).toEqual([]);
   });
 });
 
