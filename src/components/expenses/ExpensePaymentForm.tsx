@@ -9,6 +9,7 @@ import {
 } from '../../services/expensePaymentService';
 import type { Expense, ExpensePaymentInput } from '../../types/expense';
 import type { TranslationKey } from '../../i18n';
+import { getBusinessDay } from '../../services/businessDateService';
 
 interface Props {
   expense: Expense;
@@ -26,7 +27,7 @@ export function ExpensePaymentForm({ expense, open, onClose, onSaved, translate 
   const cancelled = isExpenseCancelled(expense);
   const payable = isExpensePayable(expense);
   const openAmount = getExpenseOpenAmount(expense);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getBusinessDay();
 
   const [date, setDate] = useState(today);
   const [amount, setAmount] = useState(() => String(Math.max(0, openAmount)));

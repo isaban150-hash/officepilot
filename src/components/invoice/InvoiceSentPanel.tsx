@@ -16,6 +16,7 @@ import type { InvoiceSentSnapshot } from '../../services/invoice/invoiceSentSnap
 import { isSentDateAfterPaymentDue } from '../../services/invoicePaymentService';
 import type { InvoiceSentVia, VorgangInvoice } from '../../types/models';
 import type { TranslationKey } from '../../i18n';
+import { getBusinessDay } from '../../services/businessDateService';
 
 interface Props {
   /** MANUAL-INVOICE-UI-01B2 — `null` ist die freie Rechnung ohne Auftrag. */
@@ -35,7 +36,7 @@ interface Props {
 type FormMode = 'closed' | 'mark' | 'correct' | 'confirm-mark' | 'confirm-correct';
 
 function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
+  return getBusinessDay();
 }
 
 function formatDisplayDate(value: string): string {

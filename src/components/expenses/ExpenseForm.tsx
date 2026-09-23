@@ -9,6 +9,7 @@ import {
 import type { Expense, ExpenseCategory, ExpenseInput } from '../../types/expense';
 import type { TranslationKey } from '../../i18n';
 import { Button } from '../ui/Button';
+import { getBusinessDay } from '../../services/businessDateService';
 
 export interface ExpenseFormDraft {
   title: string;
@@ -39,7 +40,7 @@ function draftFromExpense(expense: Expense): ExpenseFormDraft {
 }
 
 function emptyDraft(): ExpenseFormDraft {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getBusinessDay();
   return {
     title: '',
     category: 'material',

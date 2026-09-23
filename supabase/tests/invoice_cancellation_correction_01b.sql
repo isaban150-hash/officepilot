@@ -24,7 +24,11 @@ values ('00000000-0000-0000-0000-0000000000cc', 'Cancel-Test', '00000000-0000-00
 insert into public.workspace_members (workspace_id, user_id, role, status)
 values ('00000000-0000-0000-0000-0000000000cc', '00000000-0000-0000-0000-00000000bbbb', 'owner', 'active');
 insert into public.workspace_vorgaenge (workspace_id, vorgang_id, payload)
-values ('00000000-0000-0000-0000-0000000000cc', 'v-1', '{}'::jsonb);
+values ('00000000-0000-0000-0000-0000000000cc', 'v-1',
+        -- 03F2: Seit 03B prueft der Server jede Auftragszeile gegen diesen Plan.
+        -- Reichlich Planmenge, damit die mehrfachen Belege dieses Tests nicht an
+        -- der Ueberzahlungsgrenze haengenbleiben.
+        '{"orderPositions":[{"id":"p1","description":"Anfahrt","plannedQuantity":100,"unit":"Stunden","unitPrice":50,"billable":true}]}'::jsonb);
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-00000000bbbb","role":"authenticated"}', true);
 
 create function pg_temp.erwarte_storno_fehler(p_label text, p_id text, p_reason text, p_expected text)
@@ -55,12 +59,14 @@ declare
   seq_before integer;
   seq_after integer;
   pulled jsonb;
-  pos jsonb := '[{"id":"p1","description":"Anfahrt","quantity":2,"unit":"Std","unitPrice":50,"lineTotal":100}]';
+  -- 03F2: 'orderPositionId' fuer den Auftragspfad (03B), 'Stunden' statt 'Std'
+  -- als bekannte Einheit fuer die freie Rechnung (03F).
+  pos jsonb := '[{"id":"p1","orderPositionId":"p1","description":"Anfahrt","quantity":2,"unit":"Stunden","unitPrice":50,"lineTotal":100}]';
   base_free jsonb;
   base_order jsonb;
 begin
   base_free := jsonb_build_object('type','rechnung','issueDate','2026-09-01','positions',pos,'subtotal',100,'amount',119,'taxStatus','standard_19',
-    'companySnapshot', jsonb_build_object('companyName','Muster GmbH'), 'customerSnapshot', jsonb_build_object('name','Beispiel Projektbau GmbH'),
+    'companySnapshot', jsonb_build_object('companyName','Muster GmbH'), 'customerSnapshot', jsonb_build_object('name','Beispiel Projektbau GmbH','street','Beispielweg 3','zip','33602','city','Bielefeld'),
     'customerId','cust-1','servicePeriodFrom','2026-08-20','servicePeriodTo','2026-08-28');
   base_order := base_free || jsonb_build_object('vorgangTitle','Dachsanierung');
 
@@ -158,9 +164,21 @@ begin
   r := public.finalize_workspace_invoice(ws, 'v-1', 'inv-schluss-2', base_order || '{"type":"schluss"}'::jsonb);
   raise notice 'OK  T7: versendete Schlussrechnung -> Korrekturbeleg, Ersatz moeglich';
 
-  /* ---------- 8: Abschlag abgewiesen ---------- */
+  /* ---------- 8: Abschlag stornierbar (seit 03D) ---------- */
+  -- Frueher stand hier die Erwartung 'invoice_cancel_type_not_supported'.
+  -- RECHNUNGSBEREICH-03D (20261004120000, remote angewendet) hat den
+  -- Abschlagsstorno bewusst eingefuehrt. Die Zusicherung bleibt bestehen und
+  -- prueft jetzt die geltende Regel.
   r := public.finalize_workspace_invoice(ws, 'v-1', 'inv-abschlag', base_order || '{"type":"abschlag","abschlagNumber":1}'::jsonb);
-  perform pg_temp.erwarte_storno_fehler('T8 Abschlag', 'inv-abschlag', 'x', 'invoice_cancel_type_not_supported');
+  perform public.cancel_workspace_invoice(ws, 'inv-abschlag', 'Testabschlag zurueckgezogen');
+  if not exists (
+    select 1 from public.workspace_invoices
+    where workspace_id = ws and client_invoice_id = 'inv-abschlag'
+      and vorgang_id = 'v-1' and cancelled_at is not null
+  ) then
+    raise exception 'T8 — Abschlag wurde nicht storniert';
+  end if;
+  raise notice 'OK  T8: Abschlag stornierbar, Vorgangsbezug bleibt';
 
   /* ---------- 9/10: aktives Payment blockiert, nach Reversal stornierbar ---------- */
   r := public.finalize_workspace_invoice(ws, null, 'inv-paid', base_free);

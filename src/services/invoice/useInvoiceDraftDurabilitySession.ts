@@ -32,6 +32,7 @@ import {
 } from './invoiceDraftDurabilityService';
 import { getVorgangById } from '../vorgangService';
 import { refreshDraftOrderProjection } from '../invoiceService';
+import { repairLegacyDraftBusinessDates } from './invoiceDraftLegacyDateRepair';
 import { findInvoiceLocatorById } from './invoiceRegistryService';
 import type {
   InvoiceDraftIdentity,
@@ -437,7 +438,15 @@ export function useInvoiceDraftDurabilitySession(
        */
       const projected =
         refreshable && vorgang ? refreshDraftOrderProjection(draft, vorgang) : null;
-      const effective = projected?.draft ?? draft;
+      /*
+       * RECHNUNGSBEREICH-03D2 — der alte UTC-Tag in Entwürfen aus der
+       * Umstellungszeit. Die Heilung läuft **ohne** Auftrag, also auch für die
+       * freie Rechnung, und schreibt über denselben Weg wie die Projektion.
+       */
+      const dateRepair = refreshable
+        ? repairLegacyDraftBusinessDates(projected?.draft ?? draft, record.createdAt)
+        : null;
+      const effective = dateRepair?.draft ?? projected?.draft ?? draft;
 
       // Interner und sichtbarer Stand sind getrennte Instanzen.
       queue.draft = cloneDraft(effective);
@@ -449,7 +458,7 @@ export function useInvoiceDraftDurabilitySession(
             ? 'finalization_pending'
             : 'already_finalized';
 
-      if (projected?.changed) {
+      if (projected?.changed || dateRepair?.repaired) {
         /*
          * Der aufgefrischte Stand geht über den **regulären** Speicherweg —
          * dieselbe Warteschlange, dieselbe Revisionsprüfung wie jede andere

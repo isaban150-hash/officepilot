@@ -61,6 +61,7 @@ import { readInvoiceServicePeriodConfirmationFromCloud } from '../services/invoi
 import { validateFinalizedInvoiceForPdf } from '../services/invoiceValidationService';
 import type { VorgangInvoice } from '../types/models';
 import type { TranslationKey } from '../i18n';
+import { toBusinessDay } from '../services/businessDateService';
 
 export function InvoiceDetailPage() {
   /*
@@ -396,8 +397,21 @@ export function InvoiceDetailPage() {
    * Auftrag) und Schlussrechnungen; Abschläge bleiben ausgeschlossen. Ohne
    * Auftrag ist nur `rechnung` möglich — dieselbe Regel wie im Server.
    */
+  /*
+   * TEILRECHNUNG-03C — die Teilrechnung ist eine echte Forderung und verbraucht
+   * abgerechnete Menge. Sie muss sich wie jede Rechnung zurückholen lassen;
+   * ohne Auftrag gibt es sie ohnehin nicht.
+   *
+   * RECHNUNGSBEREICH-03D — dasselbe gilt für die Abschlagsrechnung: Der
+   * mengenbasierte Abschlag verbraucht Menge, der pauschale nimmt Geld vorweg,
+   * das die Schlussrechnung abzieht. Beides muss sich zurücknehmen lassen.
+   */
   const canCancelInvoice =
-    (invoice.type === 'rechnung' || (invoice.type === 'schluss' && vorgangId !== null)) &&
+    (invoice.type === 'rechnung' ||
+      ((invoice.type === 'teilrechnung' ||
+        invoice.type === 'abschlag' ||
+        invoice.type === 'schluss') &&
+        vorgangId !== null)) &&
     (invoice.status === 'vorbereitet' || invoice.status === 'versendet') &&
     !invoiceCancelled;
 
@@ -517,7 +531,8 @@ export function InvoiceDetailPage() {
           {invoice.cancelledAt ? (
             <div className="data-row" data-testid="invoice-cancelled-at">
               <span className="data-row__label">{translate('invoice.cancel.cancelledAt')}</span>
-              <span className="data-row__value">{invoice.cancelledAt.slice(0, 10)}</span>
+              {/* 03D — der Serverzeitpunkt ist UTC; gezeigt wird der lokale Tag. */}
+              <span className="data-row__value">{toBusinessDay(invoice.cancelledAt)}</span>
             </div>
           ) : null}
           {invoice.cancelReason ? (

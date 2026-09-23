@@ -12,12 +12,16 @@ export function buildInvoiceDetailPath(vorgangId: string, invoiceId: string): st
 /**
  * Rechnungsarten, die über die allgemeine Anlege-Route erreichbar sind.
  *
- * Bewusst schmaler als `InvoiceDocumentType`: `teilrechnung`, `gutschrift` und
- * `storno` entstehen nicht über diesen Weg. Der Typ-Picker der Rechnungsseite
+ * Bewusst schmaler als `InvoiceDocumentType`: `gutschrift` und `storno`
+ * entstehen nicht über diesen Weg, sondern ausschliesslich aus einem Storno.
+ *
+ * TEILRECHNUNG-03C — `teilrechnung` ist jetzt ein sichtbarer Weg: eine echte
+ * Rechnung über einen abgegrenzten Teil der Leistung, mengen- und
+ * nummernseitig wie jede andere Rechnung. Der Typ-Picker der Rechnungsseite
  * bietet ebenfalls genau diese drei an — was hier nicht steht, wäre eine
  * Sackgasse, aus der der Nutzer ohne URL-Änderung nicht mehr herausfindet.
  */
-export type InvoiceCreateType = 'rechnung' | 'abschlag' | 'schluss';
+export type InvoiceCreateType = 'rechnung' | 'teilrechnung' | 'abschlag' | 'schluss';
 
 /**
  * Der Typ ist verpflichtend — ohne Vorgabewert und ohne Laufzeit-Rückfall.

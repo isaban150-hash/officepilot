@@ -204,7 +204,23 @@ function classifyInvoiceCloudError(error: { message?: string; code?: string }): 
   if (message.includes('invoice_position_not_billable')) {
     return new WorkspaceInvoiceCloudError(message, 'position_not_billable', false);
   }
-  if (message.includes('invoice_position_mismatch')) {
+  /*
+   * MANUELLE-RECHNUNG-03F — die Positionsbefunde der Rechnung **ohne** Auftrag.
+   *
+   * Bei einer Auftragsrechnung ist eine Zeile falsch, weil sie nicht zum
+   * Auftragsplan passt (`invoice_position_mismatch`). Bei einer freien Rechnung
+   * gibt es keinen Plan; die Zeile ist in sich unvollständig — keine
+   * Beschreibung, keine bekannte Einheit, oder es gibt überhaupt keine Zeile.
+   * Fachlich ist das derselbe Ausgang: Der Server hat den Beleg vor dem Insert
+   * abgelehnt, nichts geschrieben und keine Nummer verbraucht. Deshalb
+   * dieselbe Klasse statt einer zweiten Fehler-UX.
+   */
+  if (
+    message.includes('invoice_position_mismatch') ||
+    message.includes('invoice_positions_missing') ||
+    message.includes('invoice_position_description_missing') ||
+    message.includes('invoice_position_unit_invalid')
+  ) {
     return new WorkspaceInvoiceCloudError(message, 'position_mismatch', false);
   }
   if (message.includes('invoice_tax_status_mismatch') || message.includes('invoice_tax_status_invalid')) {
@@ -219,7 +235,19 @@ function classifyInvoiceCloudError(error: { message?: string; code?: string }): 
   ) {
     return new WorkspaceInvoiceCloudError(message, 'totals_mismatch', false);
   }
-  if (message.includes('invoice_customer_mismatch')) {
+  /*
+   * MANUELLE-RECHNUNG-03F2 — die unvollständige Rechnungsanschrift.
+   *
+   * Derselbe fachliche Ausgang wie ein unpassender Kunde: Der Server hat den
+   * Beleg vor dem Insert abgelehnt, weil sein Empfänger nicht zustellbar ist.
+   * Die Oberfläche blockiert denselben Zustand bereits über
+   * `invoice.validation.customerAddress`; ein direkter Aufruf bekommt hier
+   * dieselbe Klasse und damit dieselbe verständliche Meldung.
+   */
+  if (
+    message.includes('invoice_customer_mismatch') ||
+    message.includes('invoice_customer_address_incomplete')
+  ) {
     return new WorkspaceInvoiceCloudError(message, 'customer_mismatch', false);
   }
   /*

@@ -16,6 +16,7 @@ import {
 } from '../../services/invoicePaymentService';
 import type { InvoicePayment, InvoicePaymentInput, VorgangInvoice } from '../../types/models';
 import type { TranslationKey } from '../../i18n';
+import { getBusinessDay } from '../../services/businessDateService';
 
 interface Props {
   /** MANUAL-INVOICE-01B2c — `null` ist die Rechnung ohne Auftrag. */
@@ -43,7 +44,7 @@ export function InvoicePaymentForm({
 }: Props) {
   const cancelled = isInvoiceCancelled(invoice);
   const openAmount = getOpenAmount(invoice);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getBusinessDay();
   const needsUnsentNotice = willPaymentNeedUnsentConfirm(invoice);
 
   const [phase, setPhase] = useState<FormPhase>('form');

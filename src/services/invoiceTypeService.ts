@@ -31,9 +31,16 @@ export const INVOICE_DOCUMENT_TYPES: InvoiceDocumentType[] = [
   'storno',
 ];
 
-/** Rechnungstypen für Aufträge aus Werkvertrag (ohne Gutschrift/Storno/Teilrechnung). */
+/**
+ * Rechnungstypen, die ein Auftrag anbietet (ohne Gutschrift/Storno — die
+ * entstehen nur aus einem Storno).
+ *
+ * TEILRECHNUNG-03C — Reihenfolge nach dem Weg durch den Auftrag: die ganze
+ * Leistung, ein abgegrenzter Teil, eine Vorauszahlung, der Abschluss.
+ */
 export const CONTRACT_ORDER_INVOICE_TYPES: InvoiceDocumentType[] = [
   'rechnung',
+  'teilrechnung',
   'abschlag',
   'schluss',
 ];

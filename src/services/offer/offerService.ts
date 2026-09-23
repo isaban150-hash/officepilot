@@ -27,6 +27,7 @@ import {
   toInvoiceCompanySnapshot,
 } from '../invoiceService';
 import type { CustomerBilling, TaxStatus } from '../../types/models';
+import { getBusinessDay } from '../businessDateService';
 import {
   OFFER_STATUSES,
   type Offer,
@@ -110,7 +111,8 @@ export function normalizeOfferPosition(position: Partial<OfferPosition>): OfferP
 }
 
 function today(): string {
-  return new Date().toISOString().slice(0, 10);
+  // 03D — der lokale Geschäftstag; ein Angebot vom 23. darf nicht den 22. tragen.
+  return getBusinessDay();
 }
 
 function normalizeOffer(

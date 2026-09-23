@@ -1447,6 +1447,15 @@ export function RechnungPage() {
                 </button>
               ))}
             </div>
+            {/*
+              * TEILRECHNUNG-03C — „Rechnung" und „Teilrechnung" rechnen gleich;
+              * der Unterschied ist die Aussage an den Kunden. Deshalb steht
+              * hier ein Satz zur **gewählten** Art statt einer Legende über
+              * alle vier.
+              */}
+            <p className="form-hint" data-testid="invoice-type-hint">
+              {translate(`invoice.typeHint.${draft.type}` as TranslationKey)}
+            </p>
           </Card>
 
           {draft.type === 'abschlag' && (

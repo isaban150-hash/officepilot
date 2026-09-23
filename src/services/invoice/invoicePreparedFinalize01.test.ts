@@ -529,10 +529,20 @@ describe('01P4B — vorbereiteter Cloud-Request', () => {
         'invoice',
         'invoicePayload',
         'kind',
+        /*
+         * RECHNUNGSINTEGRITAET-03B — die bewusste Bestätigung, über den
+         * dokumentierten Rest hinaus abzurechnen. Sie reist seit 03B mit dem
+         * eingefrorenen Request, damit ein Wiederaufnahmeversuch dieselbe
+         * Entscheidung trägt wie der erste Versuch. Der Server rechnet die
+         * Überschreitung weiterhin selbst nach; das Feld ersetzt keine Prüfung.
+         */
+        'overbillingAcknowledged',
         'vorgangId',
         'workspaceId',
       ].sort(),
     );
+    // Fail-closed: wer nichts bestätigt hat, bestätigt nichts.
+    expect(request.overbillingAcknowledged).toBe(false);
     expect(request.invoicePayload).toEqual(buildWorkspaceInvoiceFinalizePayload(request.invoice));
     expect(request.expectedResponseProjectionRawJson).toBe(
       buildExpectedPreparedResponseProjection(request.invoicePayload, request.clientInvoiceId),

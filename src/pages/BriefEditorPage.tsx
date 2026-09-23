@@ -26,6 +26,7 @@ import { buildPersistedStateSnapshot } from '../services/persistenceService';
 import { resolveCloudWorkspaceId } from '../services/workspace/workspaceSyncPayloadService';
 import type { BusinessLetterRecipient } from '../types/businessLetter';
 import type { TranslationKey } from '../i18n';
+import { getBusinessDay } from '../services/businessDateService';
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -111,7 +112,7 @@ export function BriefEditorPage() {
   const [betreff, setBetreff] = useState(vorhandener?.subject ?? vorbelegung?.subject ?? '');
   const [text, setText] = useState(vorhandener?.body ?? vorbelegung?.body ?? '');
   const [briefdatum, setBriefdatum] = useState(
-    vorhandener?.letterDate ?? new Date().toISOString().slice(0, 10),
+    vorhandener?.letterDate ?? getBusinessDay(),
   );
   const [fehler, setFehler] = useState<string | null>(null);
   const [gespeicherteId, setGespeicherteId] = useState(vorhandener?.id ?? '');

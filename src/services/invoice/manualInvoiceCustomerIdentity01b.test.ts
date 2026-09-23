@@ -99,7 +99,18 @@ const MUELLER = {
 };
 
 function newCustomer(overrides: Partial<Customer> = {}): Customer {
-  const created = createCustomer({ ...MUELLER, ...overrides });
+  /*
+   * 03F2 — `allowDuplicate`, weil dieser Test es darauf anlegt.
+   *
+   * Seine Fälle brauchen bewusst **zwei** Kunden mit denselben Stammdaten, um
+   * zu zeigen, dass die Zuordnung einer Rechnung über `customerId` läuft und
+   * nie über den Namen. Der später eingeführte Dublettenschutz
+   * (CUSTOMER-IDENTITY-DUPLICATE-01A) verhinderte genau das und liess die
+   * Anlage mit `customer.duplicateCandidate` scheitern — der Schutz ist
+   * richtig, er darf nur dieses absichtliche Szenario nicht blockieren. Im
+   * Produkt entscheidet der Nutzer dasselbe über „Trotzdem anlegen".
+   */
+  const created = createCustomer({ ...MUELLER, ...overrides }, { allowDuplicate: true });
   if (!created.success) throw new Error(`Kunde nicht angelegt: ${created.errorKey}`);
   return created.customer;
 }

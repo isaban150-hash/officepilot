@@ -3,6 +3,7 @@ import {
   getVorgangById,
   upsertFinalizedManualInvoice,
 } from './vorgangService';
+import { getBusinessDay } from './businessDateService';
 import { archiveOutgoingInvoice } from './invoiceArchiveService';
 import { createCompanyProfileSnapshot, getCompanyProfile } from './companyProfileService';
 import {
@@ -252,7 +253,8 @@ function buildDraftMetadata(
   | 'closingText'
 > {
   const profile = createCompanyProfileSnapshot();
-  const issueDate = new Date().toISOString().slice(0, 10);
+  // 03D — der lokale Geschäftstag, nicht der UTC-Tag.
+  const issueDate = getBusinessDay();
   // SETTINGS-01B1 — eine Vorbelegung für beide Rechnungswege.
   const profileDefaults = resolveInvoiceDefaults(profile, setup, issueDate);
   /*
@@ -369,7 +371,8 @@ export function buildManualInvoiceDraft(
   setup: CompanySetup,
 ): InvoiceDraft {
   const profile = createCompanyProfileSnapshot();
-  const issueDate = new Date().toISOString().slice(0, 10);
+  // 03D — der lokale Geschäftstag, nicht der UTC-Tag.
+  const issueDate = getBusinessDay();
   // SETTINGS-01B1 — derselbe Default-Resolver wie im Auftragsweg.
   const defaults = resolveInvoiceDefaults(profile, setup, issueDate);
   const customerBilling = customer.billing;

@@ -17,6 +17,7 @@ import type {
 } from '../../types/dunningDocumentation';
 import type { CommunicationIntent } from '../../types/communication';
 import type { TranslationKey } from '../../i18n';
+import { getBusinessDay } from '../../services/businessDateService';
 
 interface Props {
   /** `null` = Rechnung ohne Auftrag (freie/manuelle Rechnung). */
@@ -31,7 +32,7 @@ interface Props {
 type FormMode = 'closed' | 'form' | 'confirm';
 
 function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
+  return getBusinessDay();
 }
 
 function formatDisplayDate(value: string): string {
