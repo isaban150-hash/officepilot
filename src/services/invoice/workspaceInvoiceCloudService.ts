@@ -500,6 +500,8 @@ export function mapCloudPayloadToVorgangInvoice(payload: Record<string, unknown>
     paymentDueDate: optionalCloudText(payload.paymentDueDate),
     paymentTermsText: optionalCloudText(payload.paymentTermsText),
     skontoText: optionalCloudText(payload.skontoText),
+    // E-RECHNUNG-04B — die eingefrorene Währung kommt wieder zurück.
+    currencyCode: optionalCloudText(payload.currencyCode),
     customerSnapshot: optionalCloudObject<VorgangInvoice['customerSnapshot']>(
       payload.customerSnapshot,
     ),

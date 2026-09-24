@@ -28,6 +28,14 @@ function displayTitleForKind(kind: DocumentFileRepresentationBindingKind): strin
       return 'Vorschaubild fehlt';
     case 'archive':
       return 'Archivkopie fehlt';
+    case 'structured':
+      /*
+       * E-RECHNUNG-04D3 — die strukturierte Fassung wird nicht aus der Datei
+       * abgeleitet und kann deshalb hier nicht „fehlen". Sie entsteht aus dem
+       * Beleg, auf ausdrückliche Anforderung, und hat ihre eigene Anzeige im
+       * Rechnungsdetail.
+       */
+      return 'Strukturierte Fassung';
     default: {
       const _exhaustive: never = kind;
       return _exhaustive;

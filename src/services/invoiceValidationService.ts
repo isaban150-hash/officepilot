@@ -426,6 +426,23 @@ function finalizedInvoiceToValidationDraft(invoice: VorgangInvoice): InvoiceDraf
     baustelle: invoice.baustelle ?? '',
     type: invoice.type,
     abschlagNumber: invoice.abschlagNumber,
+    /*
+     * E-RECHNUNG-04E2 — die Abrechnungsart muss mitkommen.
+     *
+     * Ohne diese beiden Felder hielt die Revalidierung jeden pauschalen
+     * Abschlag für mengenbasiert. Da ein Pauschalabschlag fachlich **keine**
+     * Positionen führt, meldete sie `no_positions` — und ein finalisierter
+     * Pauschalabschlag liess sich überhaupt nicht als PDF ausgeben. Aufgefallen
+     * ist das bei der PDF/XML-Gleichheitsprüfung von 04E2, die genau diesen
+     * Belegtyp erzeugen wollte.
+     *
+     * Die Entwurfsvalidierung vor der Freigabe liest dieselben Felder und liess
+     * denselben Beleg anstandslos durch; erst die Rückwandlung verlor sie. Es
+     * ist also keine neue Erlaubnis, sondern die Wiederherstellung der Aussage,
+     * die vor der Freigabe bereits galt.
+     */
+    calculationMode: invoice.calculationMode,
+    fixedAmountNet: invoice.fixedAmountNet,
     taxStatus: invoice.taxStatus,
     materialSource: 'betrieb',
     positions: invoice.positions.map((position) => ({

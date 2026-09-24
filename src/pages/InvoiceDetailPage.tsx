@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { InvoiceDocumentView } from '../components/invoice/InvoiceDocumentView';
 import { InvoicePrintActions } from '../components/invoice/InvoicePrintActions';
+import { EInvoicePanel } from '../components/invoice/EInvoicePanel';
 import {
   getPaymentSavedToastKey,
   InvoicePaymentForm,
@@ -518,6 +519,14 @@ export function InvoiceDetailPage() {
         layout="stack"
         autoDownloadPdf={autoDownloadPdf}
       />
+      {/*
+        * E-RECHNUNG-04D — die strukturierte Rechnung neben dem PDF.
+        *
+        * Nur fuer einen freigegebenen Beleg und nur auf ausdrueckliche
+        * Anforderung. Eine eigene Seite braucht es dafuer nicht: Es ist
+        * dieselbe Rechnung in einer anderen Ausgabeform.
+        */}
+      {!invoiceCancelled && <EInvoicePanel invoice={invoice} />}
       {/*
         * FINAL-INVOICE-CANCELLATION-UI-01A — der Storno steht **über** dem
         * Versandpanel und ersetzt es nicht: „versendet" bleibt ein Faktum der

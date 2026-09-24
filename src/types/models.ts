@@ -765,6 +765,18 @@ export interface CompanyProfile {
   zip: string;
   city: string;
   country: string;
+  /**
+   * E-RECHNUNG-04B — der Ländercode des Betriebs, zweibuchstabig.
+   *
+   * Neben `country` und nicht an seiner Stelle: Der Freitext ist das, was auf
+   * dem Briefkopf steht („Deutschland"), der Code ist das, was eine
+   * strukturierte Rechnung braucht. Beides auseinanderzuhalten kostet ein Feld
+   * und erspart, dass eine Anzeigeänderung den Beleg verändert.
+   *
+   * Optional, weil bestehende Profile ihn nicht tragen; `resolveCountryCode`
+   * leitet ihn dann aus dem Freitext ab, ohne ihn zu erfinden.
+   */
+  countryCode?: string;
   contactPerson: string;
   phone: string;
   email: string;
@@ -866,6 +878,44 @@ export interface CustomerBilling {
   city: string;
   email: string;
   phone: string;
+  /**
+   * E-RECHNUNG-04B — was eine strukturierte Rechnung über ihren Empfänger
+   * wissen muss, als Teil des eingefrorenen Belegs.
+   *
+   * Alle vier sind optional, und das ist kein Mangel: Rechnungen aus der Zeit
+   * vor 04B tragen sie nicht und bleiben unverändert gültig. Sie werden
+   * ausdrücklich **nicht** nachträglich aus dem heutigen Kundenstamm
+   * aufgefüllt — ein Beleg mit Beträgen von damals und Kundendaten von heute
+   * wäre keine historische Wahrheit mehr. Ob ein Altbeleg sich als E-Rechnung
+   * ausgeben lässt, entscheidet später 04C und sagt es dann ehrlich.
+   *
+   * Zweibuchstabiger Ländercode des Rechnungsempfängers (`normalizeCountryCode`).
+   * Der Freitext steht weiterhin in der Anschrift — hier steht der Code.
+   */
+  countryCode?: string;
+  /** USt-IdNr. des Empfängers; relevant bei §13b und innergemeinschaftlich. */
+  vatId?: string;
+  /**
+   * Die Käuferreferenz **dieser** Rechnung.
+   *
+   * Rechnungsbezogen, nicht kundenbezogen: Der Kundenstamm liefert nur eine
+   * Vorbelegung (`Customer.buyerReferenceDefault`), der Nutzer kann sie je
+   * Beleg überschreiben, und der freigegebene Beleg behält seinen Wert für
+   * immer. Zwei Rechnungen an denselben Kunden dürfen verschiedene Referenzen
+   * tragen — genau dafür gibt es das Feld.
+   */
+  buyerReference?: string;
+  /**
+   * Die Leitweg-ID des Empfängers, sofern es sich um einen öffentlichen
+   * Auftraggeber handelt.
+   *
+   * Bewusst **getrennt** von `buyerReference` geführt, obwohl sie bei B2G
+   * deren Wert liefert: Die Leitweg-ID ist eine Routing-Kennung des
+   * Empfängers, die Käuferreferenz ist eine Angabe auf dem Beleg. Sie in ein
+   * Feld zu werfen hiesse, beim Export nicht mehr zu wissen, welches von
+   * beidem man in der Hand hält — und für ein Audit, an wen geroutet wurde.
+   */
+  leitwegId?: string;
 }
 
 /**
@@ -876,6 +926,17 @@ export interface Customer extends CustomerBilling {
   id: string;
   createdAt: string;
   updatedAt: string;
+  /**
+   * E-RECHNUNG-04B — die Vorbelegung der Käuferreferenz für neue Rechnungen
+   * an diesen Kunden.
+   *
+   * Bewusst ein **eigener** Schlüssel und nicht `buyerReference`: Am Kunden
+   * steht ein Standard, auf der Rechnung steht der tatsächlich verwendete
+   * Wert. Würden beide gleich heissen, liesse sich später nicht mehr sagen,
+   * ob eine Rechnung den Standard übernommen oder ihn bewusst bestätigt hat —
+   * und eine Änderung des Standards sähe aus wie eine Änderung des Belegs.
+   */
+  buyerReferenceDefault?: string;
   /** Provenance only — never changed by a normal update. */
   createdFromInboxId?: string;
   /**
@@ -1169,6 +1230,19 @@ export type InvoiceCancellationKind = 'internal' | 'correction';
 
 export interface VorgangInvoice {
   id: string;
+  /**
+   * E-RECHNUNG-04B — die Währung dieses Belegs, eingefroren.
+   *
+   * Bewusst am Beleg und nicht im Firmen-Snapshot: `toInvoiceCompanySnapshot`
+   * entfernt `currency` ausdrücklich aus dem Snapshot, weil es eine
+   * Profil-Vorbelegung ist und kein historisches Rechnungsdatum. Käme die
+   * Währung beim späteren Export aus dem heutigen Profil, wäre sie genau die
+   * nachträgliche Zusammensetzung, die 04B verhindert.
+   *
+   * Optional, weil Rechnungen von vor 04B sie nicht tragen. Neue Belege setzen
+   * sie ausnahmslos (`INVOICE_CURRENCY_CODE`).
+   */
+  currencyCode?: string;
   number: string;
   type: InvoiceDocumentType;
   abschlagNumber?: number;
@@ -1546,6 +1620,19 @@ export interface InvoiceDraftPosition {
 
 export interface InvoiceDraft {
   id: string;
+  /**
+   * E-RECHNUNG-04B — die Währung dieses Belegs, eingefroren.
+   *
+   * Bewusst am Beleg und nicht im Firmen-Snapshot: `toInvoiceCompanySnapshot`
+   * entfernt `currency` ausdrücklich aus dem Snapshot, weil es eine
+   * Profil-Vorbelegung ist und kein historisches Rechnungsdatum. Käme die
+   * Währung beim späteren Export aus dem heutigen Profil, wäre sie genau die
+   * nachträgliche Zusammensetzung, die 04B verhindert.
+   *
+   * Optional, weil Rechnungen von vor 04B sie nicht tragen. Neue Belege setzen
+   * sie ausnahmslos (`INVOICE_CURRENCY_CODE`).
+   */
+  currencyCode?: string;
   /**
    * MANUAL-INVOICE-01B1 — `null` ist die Rechnung ohne Auftrag.
    *

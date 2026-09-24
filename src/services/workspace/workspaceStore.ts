@@ -227,6 +227,8 @@ const EMPTY_EQUIVALENT_PROFILE_FIELDS: ReadonlySet<string> = new Set(
     'registrationNumber',
     'managingDirector',
     'taxFreeNotice',
+    // E-RECHNUNG-04B — gepflegt oder nicht gepflegt; ein Leerwert sagt dasselbe.
+    'countryCode',
   ] as const satisfies readonly OptionalCompanyProfileStringKey[],
 );
 

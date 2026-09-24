@@ -14,6 +14,10 @@
 import { BRANDING_SNAPSHOT_VERSION } from '../../types/branding';
 import { COMPANY_SNAPSHOT_KEYS } from './companySnapshotFieldCatalog';
 import {
+  CUSTOMER_SNAPSHOT_KEYS,
+  isRequiredCustomerSnapshotKey,
+} from './customerSnapshotFieldCatalog';
+import {
   isLogoMimeType,
   isValidBrandingPrimaryColor,
 } from '../branding/brandingSnapshotService';
@@ -55,6 +59,8 @@ const INVOICE_KEYS = new Set([
   'paymentDueDate',
   'paymentTermsText',
   'skontoText',
+  // E-RECHNUNG-04B — die eingefrorene Währung des Belegs.
+  'currencyCode',
   'customerSnapshot',
   'companySnapshot',
   // BRANDING-01F-2 — das eingefrorene Branding dieser Rechnung.
@@ -92,15 +98,12 @@ const LINE_KEYS = new Set([
   'lineTotal',
 ]);
 
-const CUSTOMER_KEYS = new Set([
-  'name',
-  'contactPerson',
-  'street',
-  'zip',
-  'city',
-  'email',
-  'phone',
-]);
+/**
+ * CUSTOMER-SNAPSHOT-FIELD-CATALOG-04B — derselbe Schlüsselvertrag wie im
+ * Prepared-Finalize-Request-Validator, aus einer Quelle. Die Prüfregeln
+ * bleiben hier.
+ */
+const CUSTOMER_KEYS = new Set<string>(CUSTOMER_SNAPSHOT_KEYS);
 
 /**
  * COMPANY-SNAPSHOT-FIELD-CATALOG-01B — der Schlüsselvertrag kommt aus der
@@ -266,6 +269,14 @@ function checkCustomerSnapshot(value: unknown, path: string): void {
   const snapshot = object(value, path);
   keysWithin(snapshot, CUSTOMER_KEYS, path);
   for (const key of CUSTOMER_KEYS) {
+    /*
+     * E-RECHNUNG-04B — die neuen Felder sind optional, und zwar für immer.
+     *
+     * Ein Beleg von vor 04B trägt sie nicht; ihn deshalb abzuweisen hiesse,
+     * gültige Bestandsrechnungen aus der Cloud unlesbar zu machen. Steht ein
+     * Wert da, muss er ein Text sein — nur das wird geprüft.
+     */
+    if (snapshot[key] === undefined && !isRequiredCustomerSnapshotKey(key)) continue;
     if (typeof snapshot[key] !== 'string') reject(`${path}.${key}:not_text`);
   }
 }

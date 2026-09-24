@@ -15,6 +15,7 @@ import {
   validateFinalizedInvoiceForPdf,
   type InvoiceValidationResult,
 } from './invoiceValidationService';
+import { applyPdfA3, attachPdfAFile, type PdfAAttachment } from './einvoice/pdfa/pdfaDocument';
 import { resolveBrandingAsset } from './branding/brandingAssetResolver';
 import { encodeDocumentFileRasterToJpeg } from './documentFileRasterEncodeService';
 import { getSyncClient } from './sync/syncClientService';
@@ -113,6 +114,76 @@ function formatMoneyPdf(value: number): string {
 export async function generateApprovedInvoicePdf(
   invoice: VorgangInvoice,
 ): Promise<GenerateApprovedInvoicePdfResult> {
+  return buildApprovedInvoicePdf(invoice, false);
+}
+
+/**
+ * E-RECHNUNG-04E1 — derselbe Beleg als PDF/A-3U.
+ *
+ * Gleiche Prüfungen, gleiches Druckmodell, gleicher Renderer — nur die
+ * Verpackung ist die archivfähige. Absichtlich ein **eigener** Einstiegspunkt
+ * und keine Umstellung von `generateApprovedInvoicePdf`: Solange die externe
+ * Konformität nicht an jedem Belegtyp nachgewiesen ist, soll der bestehende
+ * Ausgabeweg unangetastet bleiben. In 04E1 ruft das Produkt diese Funktion noch
+ * nirgends auf; sie existiert für den Nachweis und für 04E2.
+ *
+ * Der Zeitpunkt kommt aus dem Rechnungsdatum, nicht von der Uhr — siehe
+ * `resolveArchivalTimestamp`.
+ */
+export async function generateArchivalInvoicePdfA3(
+  invoice: VorgangInvoice,
+): Promise<GenerateApprovedInvoicePdfResult> {
+  return buildApprovedInvoicePdf(invoice, true);
+}
+
+/**
+ * E-RECHNUNG-04E2 — dasselbe Dokument mit eingebettetem Rechnungsdatensatz.
+ *
+ * Der Einstiegspunkt für ein hybrides Format wie ZUGFeRD. Er ist absichtlich
+ * **formatneutral**: Er nimmt Anhänge und XMP-Blöcke entgegen und weiss nicht,
+ * dass es sich um ZUGFeRD handelt. Was daraus eine ZUGFeRD-Rechnung macht,
+ * entscheidet `zugferd/zugferdArtifactService`.
+ *
+ * Der sichtbare Teil ist Byte für Byte derselbe Renderer wie sonst — das ist
+ * die Voraussetzung dafür, dass PDF und XML denselben Beleg zeigen können.
+ */
+export async function generateHybridInvoicePdfA3(
+  invoice: VorgangInvoice,
+  extras: {
+    readonly attachments: readonly PdfAAttachment[];
+    readonly xmpDescriptions: readonly string[];
+  },
+): Promise<GenerateApprovedInvoicePdfResult> {
+  return buildApprovedInvoicePdf(invoice, true, extras);
+}
+
+/**
+ * Der fachliche Zeitpunkt eines Archivbelegs.
+ *
+ * Das Ausstellungsdatum auf Mitternacht UTC — kein `new Date()`. Ein Beleg, der
+ * bei jedem Erzeugen eine neue Uhrzeit trägt, ist bei jedem Erzeugen eine andere
+ * Datei; genau das soll ein Archivbeleg nicht sein. Fehlt das Datum
+ * wider Erwarten, fällt die Ableitung auf den Anlagezeitpunkt zurück.
+ */
+function resolveArchivalTimestamp(invoice: VorgangInvoice): Date {
+  const candidate = invoice.issueDate?.trim() || invoice.date?.trim();
+  if (candidate) {
+    const parsed = new Date(`${candidate.slice(0, 10)}T00:00:00.000Z`);
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+  }
+  const created = invoice.createdAt ? new Date(invoice.createdAt) : null;
+  if (created && !Number.isNaN(created.getTime())) return created;
+  return new Date(0);
+}
+
+async function buildApprovedInvoicePdf(
+  invoice: VorgangInvoice,
+  archival: boolean,
+  extras?: {
+    readonly attachments: readonly PdfAAttachment[];
+    readonly xmpDescriptions: readonly string[];
+  },
+): Promise<GenerateApprovedInvoicePdfResult> {
   const statusBefore = invoice.status;
 
   if (!isFinalizedInvoice(invoice)) {
@@ -136,7 +207,16 @@ export async function generateApprovedInvoicePdf(
   }
 
   try {
-    const bytes = await renderInvoicePrintModelToPdf(model);
+    const bytes = await renderInvoicePrintModelToPdf(
+      model,
+      archival
+        ? {
+            createdAt: resolveArchivalTimestamp(invoice),
+            attachments: extras?.attachments,
+            xmpDescriptions: extras?.xmpDescriptions,
+          }
+        : undefined,
+    );
     if (!(bytes instanceof Uint8Array) || bytes.byteLength < 5) {
       return { ok: false, reason: 'encode_failed', message: 'empty_pdf' };
     }
@@ -464,7 +544,40 @@ export async function renderOfferPrintModelToPdf(model: InvoicePrintModel): Prom
   return renderInvoicePrintModelToPdf(model);
 }
 
-async function renderInvoicePrintModelToPdf(model: InvoicePrintModel): Promise<Uint8Array> {
+/**
+ * E-RECHNUNG-04E1 — die Archivfassung desselben Dokuments.
+ *
+ * Bewusst ein **optionaler** Parameter und kein zweiter Renderer: Ein PDF/A-3 ist
+ * keine andere Rechnung, sondern dieselbe in einer haltbareren Verpackung. Würde
+ * daneben ein eigener Zeichenpfad entstehen, liefen die beiden Darstellungen
+ * früher oder später auseinander — und ausgerechnet der Archivbeleg wäre der,
+ * der es niemandem auffällt.
+ *
+ * Ohne diesen Parameter ändert sich an der Ausgabe nichts.
+ */
+interface PdfArchiveRequest {
+  /**
+   * Der fachliche Zeitpunkt des Belegs, nicht die Uhr. Siehe `PdfAMetadata` —
+   * davon hängt ab, ob zweimaliges Erzeugen dieselben Bytes liefert.
+   */
+  readonly createdAt: Date;
+  /**
+   * E-RECHNUNG-04E2 — Anhänge des Hybriddokuments.
+   *
+   * Sie entstehen **in demselben Durchlauf** wie das Dokument und nicht durch
+   * nachträgliches Laden und erneutes Speichern. Ein zweiter Schreibvorgang
+   * würde Metadaten anfassen, die gerade erst gesetzt wurden, und die
+   * Byte-Gleichheit zweier Läufe gefährden.
+   */
+  readonly attachments?: readonly PdfAAttachment[];
+  /** Zusätzliche XMP-Blöcke, siehe `PdfAMetadata.additionalXmpDescriptions`. */
+  readonly xmpDescriptions?: readonly string[];
+}
+
+async function renderInvoicePrintModelToPdf(
+  model: InvoicePrintModel,
+  archive?: PdfArchiveRequest,
+): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
   /*
    * PDF-TEXT-RENDERING-01B — echte Unicode-Schriften statt der WinAnsi-Standard-
@@ -670,6 +783,35 @@ async function renderInvoicePrintModelToPdf(model: InvoicePrintModel): Promise<U
   if (model.footerNotes.trim()) {
     cursor.y -= 4;
     drawWrapped(cursor, model.footerNotes.trim(), 8);
+  }
+
+  /*
+   * E-RECHNUNG-04E1 — erst ganz am Schluss, wenn alles gezeichnet ist. Die
+   * PDF/A-Schicht ergänzt nur Metadaten, Farbprofil und Dokumentkennung; sie
+   * fasst keine Seite und kein Textobjekt an.
+   */
+  if (archive) {
+    /*
+     * E-RECHNUNG-04E2 — die Anhänge zuerst. Sie stehen dann im Dokument, wenn
+     * das XMP geschrieben wird, und das XMP kann sie benennen.
+     */
+    for (const attachment of archive.attachments ?? []) {
+      attachPdfAFile(pdfDoc, attachment);
+    }
+    await applyPdfA3(pdfDoc, {
+      title: `${model.documentTitle} ${model.invoiceNumber}`.trim(),
+      author: toPdfSafeText(model.company.companyName ?? ''),
+      subject: model.documentTitle,
+      creatorTool: 'OfficeTakt',
+      createdAt: archive.createdAt,
+      additionalXmpDescriptions: archive.xmpDescriptions,
+      /*
+       * Der Ausgangswert der `/ID` hängt an der Belegnummer, nicht am Titel:
+       * Sie ist das, was diesen Beleg eindeutig macht, und sie ändert sich
+       * nicht mehr.
+       */
+      idSeed: `officetakt:invoice:${model.invoiceNumber}:${model.issueDate}`,
+    });
   }
 
   return pdfDoc.save();

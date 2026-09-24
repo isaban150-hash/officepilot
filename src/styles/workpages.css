@@ -2904,3 +2904,63 @@
     width: 100%;
   }
 }
+
+/*
+ * E-RECHNUNG-04D-FIX2 — der Prüfwert der XRechnung.
+ *
+ * 64 Hexzeichen ohne Leerzeichen und ohne Bindestrich: Es gibt keine Stelle,
+ * an der ein normaler Umbruch greifen könnte, und auf einem Telefon lief der
+ * Wert rechts aus der Karte heraus. `anywhere` erlaubt den Umbruch an jeder
+ * Position — bei einer Zeichenfolge ohne Wortgrenzen die einzige Regel, die
+ * überhaupt wirkt.
+ *
+ * Zusätzlich eine Schrift mit fester Laufweite: Ein Prüfwert wird verglichen,
+ * nicht gelesen, und dabei hilft die gleichmässige Spaltenbreite.
+ */
+.invoice-einvoice__hash {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85em;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+
+/*
+ * E-RECHNUNG-04E3 — zwei Formate in einem Bereich.
+ *
+ * Sichtbar getrennt, aber erkennbar zusammengehoerig: eine duenne Linie
+ * zwischen den beiden Bloecken statt zweier Karten. Auf schmalen Bildschirmen
+ * stehen sie untereinander, auf breiten nebeneinander — die Aktionen bleiben
+ * damit ohne Scrollen erreichbar.
+ */
+.invoice-einvoice__formats {
+  display: grid;
+  gap: 20px;
+  margin-top: 12px;
+}
+
+@media (min-width: 900px) {
+  .invoice-einvoice__formats {
+    grid-template-columns: 1fr 1fr;
+    gap: 28px;
+  }
+}
+
+.invoice-einvoice__format + .invoice-einvoice__format {
+  border-top: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.1));
+  padding-top: 20px;
+}
+
+@media (min-width: 900px) {
+  .invoice-einvoice__format + .invoice-einvoice__format {
+    border-top: 0;
+    border-left: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.1));
+    padding-top: 0;
+    padding-left: 28px;
+  }
+}
+
+.invoice-einvoice__format-title {
+  margin: 0 0 4px;
+  font-size: 1rem;
+  font-weight: 600;
+}

@@ -29,6 +29,8 @@ export const COMPANY_SNAPSHOT_KEYS = [
   'zip',
   'city',
   'country',
+  // E-RECHNUNG-04B — der Ländercode des Betriebs, neben dem Freitext.
+  'countryCode',
   'contactPerson',
   'phone',
   'email',

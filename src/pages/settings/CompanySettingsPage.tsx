@@ -39,6 +39,8 @@ export const COMPANY_SETTINGS_FIELDS = [
   'zip',
   'city',
   'country',
+  // E-RECHNUNG-04B — der Code neben dem Freitext, nicht an seiner Stelle.
+  'countryCode',
   'phone',
   'email',
   'website',
@@ -112,6 +114,16 @@ const SECTIONS: SectionSpec[] = [
       { key: 'zip', labelKey: 'companyProfile.zip', autoComplete: 'postal-code' },
       { key: 'city', labelKey: 'companyProfile.city', autoComplete: 'address-level2' },
       { key: 'country', labelKey: 'companyProfile.country', autoComplete: 'country-name' },
+      /*
+       * E-RECHNUNG-04B — der Ländercode steht direkt unter dem Land.
+       *
+       * Zwei Felder statt eines: Oben steht, was auf dem Briefkopf erscheint,
+       * darunter der Code, den eine strukturierte Rechnung braucht. Den
+       * Freitext stillschweigend in einen Code zu verwandeln hiesse, die
+       * Anzeige zu verändern; ihn zu ersetzen hiesse, jedem Betrieb sein
+       * gewohntes Feld wegzunehmen.
+       */
+      { key: 'countryCode', labelKey: 'companyProfile.countryCode' },
     ],
   },
   {

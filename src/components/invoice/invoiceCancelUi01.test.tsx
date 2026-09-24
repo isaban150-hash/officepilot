@@ -491,9 +491,16 @@ describe('Darstellung nach dem Storno', () => {
     expect(html).not.toContain('data-testid="invoice-cancelled-panel"');
   });
 
-  it('T: bei Abschlagsrechnung und Entwurf fehlt die Aktion auf der Seite', () => {
+  it('T: beim Entwurf fehlt die Aktion, beim Abschlag gibt es sie seit 03D', () => {
+    /*
+     * RECHNUNGSBEREICH-03D — hier stand, dass auch der Abschlag keine
+     * Stornoaktion hat. Der Abschlagsstorno wurde mit 20261004120000 bewusst
+     * eingefuehrt und ist remote angewendet; `canCancelInvoice` laesst ihn
+     * seither mit Vorgangsbezug zu. Die Zusicherung bleibt bestehen und prueft
+     * jetzt die geltende Regel.
+     */
     expect(renderDetailPage(invoice({ id: 'inv-ab', type: 'abschlag', abschlagNumber: 1 })))
-      .not.toContain('data-testid="invoice-cancel-action"');
+      .toContain('data-testid="invoice-cancel-action"');
     expect(renderDetailPage(invoice({ id: 'inv-entw', status: 'entwurf' })))
       .not.toContain('data-testid="invoice-cancel-action"');
   });

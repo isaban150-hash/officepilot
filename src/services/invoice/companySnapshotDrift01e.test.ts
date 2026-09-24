@@ -116,10 +116,14 @@ describe('01E — J3 bis J12: was als Abweichung zählt', () => {
     ['J8: nur Logo', { logoDataUrl: 'data:image/png;base64,NEU' }],
     ['J8b: nur Primärfarbe', { branding: { primaryColor: '#ff0000' } }],
     ['J8c: nur Fußnoten', { invoiceFooterNotes: 'Neuer Hinweis' }],
-    ['J9a: nur Telefon', { phone: '0521 999999' }],
-    ['J9b: nur E-Mail', { email: 'neu@example.invalid' }],
+    /*
+     * E-RECHNUNG-04D-FIX1 — Telefon, E-Mail und Ansprechpartner sind hier
+     * ausgezogen. Sie stehen jetzt in der kritischen Liste unten, weil
+     * XRechnung die Gruppe "Seller contact" zwingend verlangt; ein Entwurf,
+     * der sie veraltet mitführt, ergibt einen nicht exportierbaren Beleg.
+     * Die Website bleibt unkritisch — sie steht auf keinem Pflichtfeld.
+     */
     ['J9c: nur Website', { website: 'https://neu.example.invalid' }],
-    ['J9d: nur Ansprechpartner', { contactPerson: 'Neue Person' }],
     ['J10: nur Zahlungsziel', { defaultPaymentDays: 30 }],
     ['J11a: nur Skonto-Prozent', { skontoPercent: 3 }],
     ['J11b: nur Skonto-Frist', { skontoDays: 5 }],
@@ -132,6 +136,26 @@ describe('01E — J3 bis J12: was als Abweichung zählt', () => {
       seedProfile(change);
 
       expect(findCriticalCompanyProfileDrift(draft.companySnapshot, getCompanyProfile())).toEqual([]);
+    });
+  }
+
+  /*
+   * E-RECHNUNG-04D-FIX1 — die Gegenprobe zu den oben ausgezogenen Feldern.
+   */
+  const kontaktfelder: [string, Partial<CompanyProfile>, string][] = [
+    ['J9a: nur Telefon', { phone: '0521 999999' }, 'phone'],
+    ['J9b: nur E-Mail', { email: 'neu@example.invalid' }, 'email'],
+    ['J9d: nur Ansprechpartner', { contactPerson: 'Neue Person' }, 'contactPerson'],
+  ];
+
+  for (const [label, change, field] of kontaktfelder) {
+    it(`${label} geändert → Abweichung (Seller contact ist Pflicht)`, () => {
+      const draft = draftNow();
+      seedProfile(change);
+
+      expect(findCriticalCompanyProfileDrift(draft.companySnapshot, getCompanyProfile())).toEqual([
+        field,
+      ]);
     });
   }
 
@@ -171,6 +195,7 @@ describe('01E — J13/J14: Übernahme betrifft nur die kritischen Felder', () =>
       skontoPercent: 3,
       skontoDays: 5,
       defaultPaymentTerms: 'Zahlbar in 30 Tagen.',
+      // E-RECHNUNG-04D-FIX1 — die Telefonnummer wird jetzt mit übernommen.
       phone: '0521 999999',
       invoiceFooterNotes: 'Neuer Hinweis',
       logoDataUrl: 'data:image/png;base64,NEU',
@@ -181,12 +206,17 @@ describe('01E — J13/J14: Übernahme betrifft nur die kritischen Felder', () =>
     /* Übernommen: */
     expect(updated.companyName).toBe('Çırmak Haustechnik GmbH & Co. KG');
     expect(updated.iban).toBe('DE02 1203 0000 0000 2020 51');
+    /*
+     * E-RECHNUNG-04D-FIX1 — auch die Kontaktangaben des Absenders: XRechnung
+     * verlangt sie zwingend, ein veralteter Wert macht den Beleg nicht
+     * exportierbar.
+     */
+    expect(updated.phone).toBe('0521 999999');
     /* Unberührt — Standardwerte des Betriebs sind keine Absenderidentität: */
     expect(updated.defaultPaymentDays).toBe(PROFILE_A.defaultPaymentDays);
     expect(updated.defaultPaymentTerms).toBe(draft.companySnapshot.defaultPaymentTerms);
     expect(updated.skontoPercent).toBe(draft.companySnapshot.skontoPercent);
     expect(updated.skontoDays).toBe(draft.companySnapshot.skontoDays);
-    expect(updated.phone).toBe(draft.companySnapshot.phone);
     expect(updated.invoiceFooterNotes).toBe(draft.companySnapshot.invoiceFooterNotes);
     expect(updated.logoDataUrl).toBe(draft.companySnapshot.logoDataUrl);
     expect(updated.branding).toEqual(draft.companySnapshot.branding);
@@ -261,9 +291,22 @@ describe('01E — H: eine Bestätigung gilt nur für den verglichenen Stand', ()
 
   it('unkritische Änderungen ändern das Kennzeichen nicht', () => {
     const vorher = buildCriticalCompanyFingerprint(getCompanyProfile());
-    seedProfile({ phone: '0521 999999', defaultPaymentDays: 30 });
+    // E-RECHNUNG-04D-FIX1 — das Telefon ist hier ausgezogen; es ist kritisch.
+    seedProfile({ defaultPaymentDays: 30, website: 'https://neu.example.invalid' });
 
     expect(buildCriticalCompanyFingerprint(getCompanyProfile())).toBe(vorher);
+  });
+
+  it('eine geänderte Telefonnummer ändert das Kennzeichen sehr wohl', () => {
+    /*
+     * E-RECHNUNG-04D-FIX1 — eine erteilte Bestätigung darf eine spätere
+     * Kontaktänderung nicht überdecken: Sonst finalisierte der Betrieb einen
+     * Beleg mit der alten Nummer, ohne gefragt zu werden.
+     */
+    const vorher = buildCriticalCompanyFingerprint(getCompanyProfile());
+    seedProfile({ phone: '0521 999999' });
+
+    expect(buildCriticalCompanyFingerprint(getCompanyProfile())).not.toBe(vorher);
   });
 });
 

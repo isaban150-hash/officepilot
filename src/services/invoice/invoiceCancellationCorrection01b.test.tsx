@@ -711,10 +711,17 @@ describe('NORMAL-INVOICE-CANCELLATION-01B', () => {
     act(() => mounted!.root.unmount());
     mounted.container.remove();
 
+    /*
+     * RECHNUNGSBEREICH-03D — hier stand die Erwartung „Abschlag: keine
+     * Stornoaktion". Der Abschlagsstorno wurde mit 20261004120000 bewusst
+     * eingeführt und ist remote angewendet; `canCancelInvoice` lässt ihn seither
+     * mit Vorgangsbezug zu. Die Zusicherung bleibt bestehen und prüft jetzt die
+     * geltende Regel.
+     */
     seed({ order: orderInvoice({ type: 'abschlag', abschlagNumber: 1 } as Partial<VorgangInvoice>) });
     mounted = renderAt(`/vorgaenge/${VORGANG_ID}/rechnungen/${ORDER_ID}`);
     await settle();
-    expect(q(mounted, 'invoice-cancel-action')).toBeNull();
+    expect(q(mounted, 'invoice-cancel-action')).not.toBeNull();
     act(() => mounted!.root.unmount());
     mounted.container.remove();
 

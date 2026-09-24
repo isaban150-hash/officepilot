@@ -46,6 +46,8 @@ import {
   resolveInvoiceCalculationMode,
 } from './invoiceCalculationMode';
 import { buildLegalNotices, getTaxRateForStatus } from './invoiceTaxService';
+// E-RECHNUNG-04B — die Währung, die jeder neue Beleg eingefroren trägt.
+import { INVOICE_CURRENCY_CODE } from './einvoice/einvoiceStandards';
 import {
   prefillsOpenQuantity,
   usesAbschlagDeductions,
@@ -248,6 +250,8 @@ function buildDraftMetadata(
   | 'legalNotices'
   | 'previousAbschlagDeductions'
   | 'invoiceNumberPreview'
+  // E-RECHNUNG-04B — die Währung ist Teil der Entwurfsvorbelegung.
+  | 'currencyCode'
   | 'taxStatus'
   | 'introText'
   | 'closingText'
@@ -328,6 +332,8 @@ function buildDraftMetadata(
     legalNotices: buildLegalNotices(defaults.taxStatus, profile),
     previousAbschlagDeductions:
       usesAbschlagDeductions(type) ? getPreviousAbschlagDeductions(vorgang) : [],
+    // E-RECHNUNG-04B — jeder neue Entwurf traegt seine Waehrung von Anfang an.
+    currencyCode: INVOICE_CURRENCY_CODE,
     invoiceNumberPreview: INVOICE_DRAFT_LABEL,
   };
 }
@@ -404,6 +410,8 @@ export function buildManualInvoiceDraft(
     brandingSnapshot: freezeBrandingForInvoice(profile.branding),
     legalNotices: buildLegalNotices(defaults.taxStatus, profile),
     previousAbschlagDeductions: [],
+    // E-RECHNUNG-04B — jeder neue Entwurf traegt seine Waehrung von Anfang an.
+    currencyCode: INVOICE_CURRENCY_CODE,
     invoiceNumberPreview: INVOICE_DRAFT_LABEL,
   };
 }
@@ -1199,6 +1207,15 @@ export function buildInvoiceFinalizationCandidate(
     paymentDueDate: draft.paymentDueDate,
     paymentTermsText: draft.paymentTermsText,
     skontoText: draft.skontoText,
+    /*
+     * E-RECHNUNG-04B — die Währung wird hier haltbar gemacht.
+     *
+     * Der Entwurf trägt sie bereits; abwesend ist sie nur bei einem Entwurf aus
+     * der Zeit vor 04B, der jetzt freigegeben wird. Dann greift der heutige
+     * Wert — das ist kein Rückgriff auf Stammdaten, sondern die einzige
+     * Währung, die das Produkt kennt.
+     */
+    currencyCode: draft.currencyCode ?? INVOICE_CURRENCY_CODE,
     customerSnapshot: cloneCustomerBilling(draft.customerBilling),
     /*
      * MANUAL-INVOICE-CUSTOMER-IDENTITY-01B — set-once: Die Referenz wandert
@@ -1336,6 +1353,23 @@ function buildInvoiceContentFingerprintPayload(payload: {
   closingText: string;
   baustelle: string;
   vorgangTitle: string;
+  /*
+   * E-RECHNUNG-04B — die Währung steht hier bewusst **nicht**.
+   *
+   * Dieser Abdruck beantwortet eine einzige Frage: Hat sich der Entwurf
+   * zwischen Preflight und Freigabe geändert? Die Währung kann sich nicht
+   * ändern — sie ist im Produkt konstant und hat keinen Änderungsweg. Sie
+   * trüge nichts bei, würde aber jeden vor 04B angelegten Intent entwerten,
+   * dessen gespeicherter Abdruck den Schlüssel nicht kennt.
+   *
+   * Die Käuferreferenz und die übrigen neuen Empfängerangaben sind dagegen
+   * sehr wohl enthalten: Sie reisen in `customerBilling` mit, sind
+   * editierbar, und eine Änderung soll auffallen.
+   *
+   * Der unveränderliche Abdruck der fertigen Rechnung
+   * (`immutableInvoiceFingerprint`) enthält die Währung — dort vergleicht er
+   * zwei Fassungen derselben gespeicherten Rechnung und wird nie persistiert.
+   */
   customerBilling: CustomerBilling;
   subtotal: number;
   amount: number;

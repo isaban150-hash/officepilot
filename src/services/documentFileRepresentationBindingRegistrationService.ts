@@ -22,7 +22,15 @@ function naturalKeysEqual(
 ): boolean {
   const a = toDocumentFileRepresentationBindingNaturalKey(left);
   const b = toDocumentFileRepresentationBindingNaturalKey(right);
-  return a.documentId === b.documentId && a.kind === b.kind;
+  /*
+   * E-RECHNUNG-04E3 — `part` gehört zum Schlüssel.
+   *
+   * Ohne diesen Vergleich verdrängte die ZUGFeRD-Bindung die XRechnung
+   * desselben Belegs, weil beide `structured` sind. Serverseitig wäre es
+   * erlaubt gewesen, der Client hätte es trotzdem überschrieben — und das
+   * wäre erst aufgefallen, wenn jemand die XRechnung wieder gebraucht hätte.
+   */
+  return a.documentId === b.documentId && a.kind === b.kind && a.part === b.part;
 }
 
 /**
@@ -45,6 +53,15 @@ export function registerDocumentFileRepresentationBinding(
     documentId: input.binding?.documentId,
     kind: input.binding?.kind,
     fileRefId: input.binding?.fileRefId,
+    /*
+     * E-RECHNUNG-04E3 — die Unterrolle muss mitkommen.
+     *
+     * Ohne diese Zeile fiel sie hier lautlos weg: Die Fabrik erhielt nur drei
+     * Felder, und jede erzeugte Bindung stand am Ende ohne `part` da. Sichtbar
+     * wurde das erst daran, dass die ZUGFeRD-Bindung die XRechnung desselben
+     * Belegs verdrängte — beide hatten denselben Schlüssel.
+     */
+    part: input.binding?.part,
   });
 
   const existingBinding = input.bindings.find((entry) =>

@@ -184,12 +184,16 @@ describe('01E — die Rückfrage erscheint nur, wenn sie muss', () => {
     unmount(mount);
   }, 30_000);
 
-  it('J9/J10: geänderte Kontakt- und Zahlungsstandards öffnen keine Rückfrage', async () => {
+  it('J10: geänderte Zahlungsstandards öffnen keine Rückfrage', async () => {
+    /*
+     * E-RECHNUNG-04D-FIX1 — die Telefonnummer ist hier ausgezogen. Sie ist
+     * seit XRechnung eine Pflichtangabe des Absenders und löst deshalb
+     * bewusst eine Rückfrage aus; die Gegenprobe steht weiter unten.
+     */
     const mount = await renderPage();
     await gotoPreview(mount);
     hydrateCompanyProfileStore({
       ...PROFILE_A,
-      phone: '0521 999999',
       defaultPaymentDays: 30,
       skontoPercent: 3,
     });
@@ -197,6 +201,22 @@ describe('01E — die Rückfrage erscheint nur, wenn sie muss', () => {
 
     expect(q(mount, 'invoice-company-drift-confirm')).toBeNull();
     expect(start).toHaveBeenCalledTimes(1);
+    unmount(mount);
+  }, 30_000);
+
+  it('J9: eine geänderte Telefonnummer öffnet die Rückfrage', async () => {
+    /*
+     * E-RECHNUNG-04D-FIX1 — Realbefund der unabhängigen Abnahme: Die Nummer
+     * wurde im Profil ergänzt, der offene Entwurf trug sie nicht, und der
+     * XRechnung-Export wies die fertige Rechnung ab. Die Rückfrage ist die
+     * Stelle, an der das auffällt — vor der Freigabe.
+     */
+    const mount = await renderPage();
+    await gotoPreview(mount);
+    hydrateCompanyProfileStore({ ...PROFILE_A, phone: '0521 999999' });
+    await click(mount, 'invoice-approve');
+
+    expect(q(mount, 'invoice-company-drift-confirm')).not.toBeNull();
     unmount(mount);
   }, 30_000);
 });
@@ -210,7 +230,6 @@ describe('01F — die Karte trägt die Entscheidung', () => {
       companyName: 'Beispiel Betrieb GmbH & Co. KG',
       iban: 'DE02 1203 0000 0000 2020 51',
       /* Unkritisch — darf in der Karte nicht auftauchen. */
-      phone: '0521 999999',
       defaultPaymentDays: 30,
     });
     await click(mount, 'invoice-approve');

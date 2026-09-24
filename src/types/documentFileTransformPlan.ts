@@ -18,8 +18,18 @@ export const DOCUMENT_FILE_TRANSFORM_INTENTS = [
 ] as const;
 export type DocumentFileTransformIntentKind = (typeof DOCUMENT_FILE_TRANSFORM_INTENTS)[number];
 
-/** Derivative representation kinds that may appear as transform targets. */
-export type DocumentFileTransformTargetKind = Exclude<DocumentFileRepresentationKind, 'original'>;
+/**
+ * Derivative representation kinds that may appear as transform targets.
+ *
+ * E-RECHNUNG-04D3 — `structured` ist ausgenommen: Es gibt keinen
+ * Umwandlungsschritt, der aus einer Datei eine XRechnung macht. Sie entsteht
+ * aus dem freigegebenen Beleg, nicht aus Bytes; sie teilt sich mit den
+ * Derivaten nur die Ablage, nicht den Erzeugungsweg.
+ */
+export type DocumentFileTransformTargetKind = Exclude<
+  DocumentFileRepresentationKind,
+  'original' | 'structured'
+>;
 
 export interface DocumentFileTransformHints {
   metadataHandling: StorageMetadataHandling;

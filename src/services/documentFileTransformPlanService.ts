@@ -16,7 +16,8 @@ export interface BuildDocumentFileTransformPlanInput {
 }
 
 const TRANSFORM_TARGET_KINDS = DOCUMENT_FILE_REPRESENTATION_KINDS.filter(
-  (kind): kind is DocumentFileTransformTargetKind => kind !== 'original',
+  (kind): kind is DocumentFileTransformTargetKind =>
+    kind !== 'original' && kind !== 'structured',
 );
 
 function intentKindForTarget(targetKind: DocumentFileTransformTargetKind): DocumentFileTransformIntentKind {

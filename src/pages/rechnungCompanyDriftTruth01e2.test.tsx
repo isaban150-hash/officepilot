@@ -72,9 +72,13 @@ const PROFILE_B: CompanyProfile = {
   iban: 'DE22 2222 2222 2222 2222 22',
   bic: 'BETADEFFXXX',
   managingDirector: 'Erika Beispiel',
-  /* Diese drei dürfen die Übernahme **nicht** mitziehen. */
-  defaultPaymentDays: 30,
+  /*
+   * E-RECHNUNG-04D-FIX1 — das Telefon ist hier ausgezogen: Es gehoert seit
+   * XRechnung zur Absenderidentitaet und wird bewusst mit uebernommen.
+   */
   phone: '0000 999999',
+  /* Diese zwei duerfen die Uebernahme **nicht** mitziehen. */
+  defaultPaymentDays: 30,
   invoiceFooterNotes: 'Beta-Fußnote',
 };
 
@@ -257,13 +261,20 @@ describe('01E2 — welcher Snapshot wird tatsächlich finalisiert?', () => {
     /* M8/M9 — auch die Vertretungsangabe steht im tatsächlich finalisierten Entwurf. */
     expect(draft!.companySnapshot.managingDirector).toBe(PROFILE_B.managingDirector);
 
+    /* 04D-FIX1 — die Kontaktangabe wird mit uebernommen. */
+    expect(draft!.companySnapshot.phone).toBe(PROFILE_B.phone);
+
     /* I3 — alles andere bleibt bei A. */
     expect(draft!.companySnapshot.defaultPaymentDays).toBe(PROFILE_A.defaultPaymentDays);
-    expect(draft!.companySnapshot.phone).toBe(PROFILE_A.phone);
     expect(draft!.companySnapshot.invoiceFooterNotes).toBe(PROFILE_A.invoiceFooterNotes);
 
     /* I4 und die Rechnungsentscheidungen des Entwurfs. */
-    expect(draft!.brandingSnapshot).toEqual({ version: 1 });
+    /*
+     * Der eingefrorene Branding-Block traegt seit dem Einstellungsblock
+     * (eee52a9) auch die Dokumentvorlage. Er wird von der Uebernahme der
+     * kritischen Firmenfelder nicht beruehrt — das ist hier die Aussage.
+     */
+    expect(draft!.brandingSnapshot).toEqual({ version: 1, documentTemplate: 'classic' });
     expect(draft!.servicePeriodFrom).toBe('2026-08-01');
     expect(draft!.servicePeriodTo).toBe('2026-08-20');
     expect(draft!.servicePeriodConfirmed).toBe(true);

@@ -18,6 +18,10 @@ import {
 import { BRANDING_SNAPSHOT_VERSION } from '../../types/branding';
 import { COMPANY_SNAPSHOT_KEYS } from './companySnapshotFieldCatalog';
 import {
+  CUSTOMER_SNAPSHOT_KEYS,
+  isRequiredCustomerSnapshotKey,
+} from './customerSnapshotFieldCatalog';
+import {
   isLogoMimeType,
   isValidBrandingPrimaryColor,
 } from '../branding/brandingSnapshotService';
@@ -138,6 +142,8 @@ const INVOICE_KEYS = [
   'paymentDueDate',
   'paymentTermsText',
   'skontoText',
+  // E-RECHNUNG-04B — die eingefrorene Währung des Belegs.
+  'currencyCode',
   'customerSnapshot',
   'companySnapshot',
   // BRANDING-01F-2 — das eingefrorene Branding dieser Rechnung.
@@ -201,15 +207,11 @@ const LINE_KEYS = [
   'lineTotal',
 ] as const;
 
-const CUSTOMER_KEYS = [
-  'name',
-  'contactPerson',
-  'street',
-  'zip',
-  'city',
-  'email',
-  'phone',
-] as const;
+/**
+ * CUSTOMER-SNAPSHOT-FIELD-CATALOG-04B — derselbe Schlüsselvertrag wie im
+ * Cloud-Payload-Validator, aus einer Quelle. Die Prüfregeln bleiben hier.
+ */
+const CUSTOMER_KEYS = CUSTOMER_SNAPSHOT_KEYS;
 
 /**
  * COMPANY-SNAPSHOT-FIELD-CATALOG-01B — derselbe Schlüsselvertrag wie im
@@ -352,6 +354,8 @@ function checkCustomerSnapshot(value: unknown, path: string): void {
   const snapshot = object(value, path);
   keysWithin(snapshot, CUSTOMER_KEYS, path);
   for (const key of CUSTOMER_KEYS) {
+    // E-RECHNUNG-04B — siehe Cloud-Payload-Validator: optional bleibt optional.
+    if (snapshot[key] === undefined && !isRequiredCustomerSnapshotKey(key)) continue;
     if (typeof snapshot[key] !== 'string') reject(`${path}.${key}:not_string`);
   }
 }

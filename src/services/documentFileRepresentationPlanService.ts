@@ -71,6 +71,13 @@ function buildPermanentPlanEntries(
   > = {
     // Persisting intake always stores original bytes; retainOriginal does not skip that.
     original: 'required',
+    /*
+     * E-RECHNUNG-04D3 — nie Teil des Ablageplans einer eingegangenen Datei.
+     * Eine XRechnung entsteht aus einem freigegebenen Beleg und wird vom
+     * Nutzer angefordert; die Ablagerichtlinie für Eingangsdateien hat dazu
+     * keine Meinung und soll auch keine bekommen.
+     */
+    structured: 'excluded',
     archive: mapArchiveDisposition(requirements.archiveRepresentation),
     preview: mapPreviewOrThumbnailDisposition(requirements.previewRequirement),
     thumbnail: mapPreviewOrThumbnailDisposition(requirements.thumbnailRequirement),

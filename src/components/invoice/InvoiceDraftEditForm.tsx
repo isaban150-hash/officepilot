@@ -199,6 +199,30 @@ export function InvoiceDraftEditForm({ draft, onChange, customerMaster }: Props)
             }
           />
         </Field>
+        {/*
+          * E-RECHNUNG-04B — die Käuferreferenz dieser Rechnung.
+          *
+          * Vorbelegt aus dem Kundenstamm, hier bewusst änderbar: Zwei
+          * Rechnungen an denselben Kunden dürfen verschiedene Referenzen
+          * tragen, und der freigegebene Beleg behält seine für immer.
+          *
+          * Die Leitweg-ID steht absichtlich **nicht** daneben. Sie ist eine
+          * Eigenschaft des Empfängers, nicht dieses Belegs; sie reist im
+          * Snapshot mit und gehört in den Kundenstamm. Zwei ähnlich aussehende
+          * Felder nebeneinander würden nur die Frage aufwerfen, welches von
+          * beiden auf der Rechnung landet.
+          */}
+        <Field label="Käuferreferenz (für E-Rechnung, optional)">
+          <input
+            type="text"
+            className="input"
+            data-testid="invoice-edit-buyer-reference"
+            value={billing.buyerReference ?? ''}
+            onChange={(event) =>
+              onChange({ customerBilling: { buyerReference: event.target.value } })
+            }
+          />
+        </Field>
       </fieldset>
 
       <fieldset className="invoice-edit__section">

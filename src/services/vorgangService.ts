@@ -1562,6 +1562,16 @@ export function immutableInvoiceFingerprint(
     subtotal: invoice.subtotal,
     amount: invoice.amount,
     taxStatus: invoice.taxStatus,
+    /*
+     * E-RECHNUNG-04B — die eingefrorene Währung des Belegs.
+     *
+     * `null` für Rechnungen von vor 04B, und ausdrücklich als Schlüssel: Der
+     * Kodierer lässt ein `undefined` entfallen, und derselbe Altbeleg ergäbe
+     * dann je nach Herkunft verschiedene Abdrücke. Beide Seiten dieses
+     * Vergleichs rechnen frisch, gespeichert wird nichts — ein Altbeleg bleibt
+     * damit sich selbst gleich.
+     */
+    currencyCode: invoice.currencyCode ?? null,
     date: invoice.date,
     issueDate: invoice.issueDate ?? null,
     servicePeriodFrom: invoice.servicePeriodFrom ?? null,

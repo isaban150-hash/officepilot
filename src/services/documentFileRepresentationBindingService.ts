@@ -1,5 +1,6 @@
 import {
   DOCUMENT_FILE_REPRESENTATION_BINDING_KINDS,
+  normalizeDocumentFileRepresentationBindingPart,
   type DocumentFileRepresentationBinding,
   type DocumentFileRepresentationBindingKind,
   type DocumentFileRepresentationBindingNaturalKey,
@@ -9,6 +10,8 @@ export interface CreateDocumentFileRepresentationBindingInput {
   documentId: string;
   kind: DocumentFileRepresentationBindingKind;
   fileRefId: string;
+  /** E-RECHNUNG-04E3 — optionale Unterrolle, siehe Typdokumentation. */
+  part?: string | null;
 }
 
 function assertNonEmptyId(value: unknown, label: string): asserts value is string {
@@ -44,11 +47,23 @@ export function createDocumentFileRepresentationBinding(
   assertNonEmptyId(input.documentId, 'documentId');
   assertBindingKind(input.kind);
   assertNonEmptyId(input.fileRefId, 'fileRefId');
+  if (input.part !== undefined && input.part !== null && typeof input.part !== 'string') {
+    throw new TypeError('Invalid representation binding part');
+  }
+
+  const part = normalizeDocumentFileRepresentationBindingPart(input.part);
 
   return Object.freeze({
     documentId: input.documentId,
     kind: input.kind,
     fileRefId: input.fileRefId,
+    /*
+     * E-RECHNUNG-04E3 — ohne Unterrolle bleibt das Feld **weg**, statt als
+     * `null` dazustehen. Damit sind die Bindungen aus 04D3 nach dem Speichern
+     * byteidentisch zu vorher: Es entsteht kein Scheinunterschied, der den
+     * Sync einen unveränderten Datensatz erneut hochladen liesse.
+     */
+    ...(part ? { part } : {}),
   });
 }
 
@@ -69,5 +84,7 @@ export function toDocumentFileRepresentationBindingNaturalKey(
   return Object.freeze({
     documentId: binding.documentId,
     kind: binding.kind,
+    // Normalisiert, damit `undefined`, `null` und `''` denselben Schlüssel ergeben.
+    part: normalizeDocumentFileRepresentationBindingPart(binding.part),
   });
 }

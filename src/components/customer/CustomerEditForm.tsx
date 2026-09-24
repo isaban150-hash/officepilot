@@ -11,15 +11,22 @@ import { Card } from '../ui/Card';
 import { useApp } from '../../context/AppContext';
 import type { Customer, CustomerBilling } from '../../types/models';
 
+/**
+ * E-RECHNUNG-04B — die Stammdaten, die eine spätere strukturierte Rechnung
+ * braucht, stehen im selben Formular. Keine zweite Kundenseite: Es sind
+ * Angaben zum Kunden, keine Angaben zu einem Verfahren.
+ */
+export type CustomerEditValues = CustomerBilling & { buyerReferenceDefault: string };
+
 interface CustomerEditFormProps {
   customer: Customer;
   busy: boolean;
   error: string | null;
-  onSave: (changes: CustomerBilling) => void;
+  onSave: (changes: CustomerEditValues) => void;
   onCancel: () => void;
 }
 
-function valuesOf(customer: Customer): CustomerBilling {
+function valuesOf(customer: Customer): CustomerEditValues {
   return {
     name: customer.name,
     contactPerson: customer.contactPerson,
@@ -28,6 +35,11 @@ function valuesOf(customer: Customer): CustomerBilling {
     city: customer.city,
     email: customer.email,
     phone: customer.phone,
+    // Leerer Text im Formular, Abwesenheit im Datensatz — der Dienst wandelt um.
+    countryCode: customer.countryCode ?? '',
+    vatId: customer.vatId ?? '',
+    buyerReferenceDefault: customer.buyerReferenceDefault ?? '',
+    leitwegId: customer.leitwegId ?? '',
   };
 }
 
@@ -48,14 +60,14 @@ export function CustomerEditForm({
   onCancel,
 }: CustomerEditFormProps) {
   const { translate } = useApp();
-  const [values, setValues] = useState<CustomerBilling>(() => valuesOf(customer));
+  const [values, setValues] = useState<CustomerEditValues>(() => valuesOf(customer));
 
   // Switching to another customer loads that customer's values; nothing is carried over.
   useEffect(() => {
     setValues(valuesOf(customer));
   }, [customer.id]);
 
-  const set = (field: keyof CustomerBilling) => (value: string) =>
+  const set = (field: keyof CustomerEditValues) => (value: string) =>
     setValues((prev) => ({ ...prev, [field]: value }));
 
   return (
@@ -128,6 +140,49 @@ export function CustomerEditForm({
               data-testid="kunden-edit-phone"
               value={values.phone}
               onChange={(event) => set('phone')(event.target.value)}
+            />
+          </Field>
+        </fieldset>
+
+        {/*
+          * E-RECHNUNG-04B — Angaben, die erst eine strukturierte Rechnung
+          * braucht. Bewusst als eigener Block und ausdrücklich als optional
+          * beschriftet: Für eine normale PDF-Rechnung ändert sich nichts, und
+          * niemand soll glauben, hier fehle etwas Pflichtiges.
+          */}
+        <fieldset className="invoice-edit__section" data-testid="kunden-edit-einvoice">
+          <legend>{translate('customer.einvoice.section')}</legend>
+          <p className="hint-text">{translate('customer.einvoice.hint')}</p>
+          <Field label={translate('customer.einvoice.countryCode')}>
+            <input
+              className="input"
+              data-testid="kunden-edit-country-code"
+              value={values.countryCode ?? ''}
+              onChange={(event) => set('countryCode')(event.target.value)}
+            />
+          </Field>
+          <Field label={translate('customer.einvoice.vatId')}>
+            <input
+              className="input"
+              data-testid="kunden-edit-vat-id"
+              value={values.vatId ?? ''}
+              onChange={(event) => set('vatId')(event.target.value)}
+            />
+          </Field>
+          <Field label={translate('customer.einvoice.buyerReferenceDefault')}>
+            <input
+              className="input"
+              data-testid="kunden-edit-buyer-reference"
+              value={values.buyerReferenceDefault}
+              onChange={(event) => set('buyerReferenceDefault')(event.target.value)}
+            />
+          </Field>
+          <Field label={translate('customer.einvoice.leitwegId')}>
+            <input
+              className="input"
+              data-testid="kunden-edit-leitweg-id"
+              value={values.leitwegId ?? ''}
+              onChange={(event) => set('leitwegId')(event.target.value)}
             />
           </Field>
         </fieldset>

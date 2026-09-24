@@ -42,6 +42,11 @@ export interface CustomerCloudPayload {
   createdAt: string;
   updatedAt: string;
   createdFromInboxId?: string;
+  /* E-RECHNUNG-04B — Stammdaten für die spätere strukturierte Rechnung. */
+  countryCode?: string;
+  vatId?: string;
+  buyerReferenceDefault?: string;
+  leitwegId?: string;
 }
 
 /**
@@ -67,6 +72,15 @@ export function stripCustomerForCloud(customer: Customer): CustomerCloudPayload 
   if (customer.createdFromInboxId) {
     payload.createdFromInboxId = customer.createdFromInboxId;
   }
+  /*
+   * E-RECHNUNG-04B — dieselbe Regel: nur gepflegte Angaben reisen mit. Ein
+   * leerer Schlüssel änderte den Content-Key und löste einen Push aus, ohne
+   * dass sich fachlich etwas geändert hätte.
+   */
+  if (customer.countryCode) payload.countryCode = customer.countryCode;
+  if (customer.vatId) payload.vatId = customer.vatId;
+  if (customer.buyerReferenceDefault) payload.buyerReferenceDefault = customer.buyerReferenceDefault;
+  if (customer.leitwegId) payload.leitwegId = customer.leitwegId;
   return payload;
 }
 
@@ -125,6 +139,13 @@ export function parseCustomerCloudPayload(
   if (isNonEmptyString(inner.createdFromInboxId)) {
     parsed.createdFromInboxId = inner.createdFromInboxId;
   }
+  // E-RECHNUNG-04B — Gegenstück zur Allowlist oben.
+  if (isNonEmptyString(inner.countryCode)) parsed.countryCode = inner.countryCode;
+  if (isNonEmptyString(inner.vatId)) parsed.vatId = inner.vatId;
+  if (isNonEmptyString(inner.buyerReferenceDefault)) {
+    parsed.buyerReferenceDefault = inner.buyerReferenceDefault;
+  }
+  if (isNonEmptyString(inner.leitwegId)) parsed.leitwegId = inner.leitwegId;
   return parsed;
 }
 

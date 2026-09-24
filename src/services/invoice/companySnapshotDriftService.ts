@@ -64,8 +64,47 @@ const LEGAL_IDENTITY_FIELDS = [
  */
 const PAYMENT_ACCOUNT_FIELDS = ['bankName', 'iban', 'bic', 'accountHolder'] as const;
 
+/**
+ * E-RECHNUNG-04D-FIX1 — der Ansprechpartner des Absenders.
+ *
+ * Aufgenommen aus einem gemessenen Befund der unabhängigen Abnahme: Ein
+ * Betrieb ergänzte die Telefonnummer im Firmenprofil, gab danach eine
+ * Rechnung frei — und der XRechnung-Export wies sie trotzdem mit „dem
+ * Absender fehlt eine Telefonnummer" ab.
+ *
+ * Die Ursache war nicht der Export, sondern der Zeitpunkt des Einfrierens:
+ * Der Firmen-Snapshot entsteht beim **Aufbau** des Entwurfs, und der
+ * Rechnungsentwurf ist dauerhaft. Wer die Seite erneut öffnet, nimmt den
+ * gespeicherten Entwurf wieder auf — samt seines damaligen Snapshots. Genau
+ * dafür gibt es diesen Dienst; die Kontaktangaben standen nur nicht in seiner
+ * Liste, weil sie bis dahin auf keinem Beleg Pflicht waren.
+ *
+ * Mit XRechnung sind sie es: Die Gruppe "Seller contact" (BG-6) ist nach
+ * BR-DE-2 zwingend, und BR-DE-5/6/7 verlangen darin Ansprechpartner, Telefon
+ * und E-Mail. Die E-Mail trägt zusätzlich die elektronische Adresse des
+ * Absenders (BT-43).
+ *
+ * Bewusst **nicht** gelöst, indem der Export das heutige Firmenprofil liest:
+ * Eine freigegebene Rechnung behält ihren Stand. Was sich ändert, ist allein,
+ * dass ein noch offener Entwurf die Änderung sichtbar zur Übernahme anbietet —
+ * vor der Freigabe, wie bei Firmierung und Bankverbindung auch.
+ */
+const SELLER_CONTACT_FIELDS = ['contactPerson', 'phone', 'email'] as const;
+
+/**
+ * E-RECHNUNG-04B — der Ländercode, aus demselben Grund.
+ *
+ * Er steht seit 04B im Snapshot und ist für eine strukturierte Rechnung
+ * Pflicht. Ohne ihn hier hätte ein offener Entwurf denselben Fehler wie die
+ * Telefonnummer: nachgepflegt, aber im Beleg nicht angekommen. Der Freitext
+ * `country` ist bereits kritisch; der Code gehört daneben.
+ */
+const SELLER_COUNTRY_CODE_FIELD = ['countryCode'] as const;
+
 export const CRITICAL_COMPANY_FIELDS = [
   ...LEGAL_IDENTITY_FIELDS,
+  ...SELLER_CONTACT_FIELDS,
+  ...SELLER_COUNTRY_CODE_FIELD,
   ...PAYMENT_ACCOUNT_FIELDS,
 ] as const;
 

@@ -44,6 +44,8 @@ const FULL_SNAPSHOT: CompanyProfile = {
   zip: '32657',
   city: 'Lemgo',
   country: 'Deutschland',
+  // E-RECHNUNG-04B — der Ländercode gehört seit 04B zum Belegvertrag.
+  countryCode: 'DE',
   contactPerson: 'A. Alpha',
   phone: '05261 123456',
   email: 'buero@alpha.invalid',

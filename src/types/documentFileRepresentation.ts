@@ -5,6 +5,19 @@ export const DOCUMENT_FILE_REPRESENTATION_KINDS = [
   'archive',
   'preview',
   'thumbnail',
+  /*
+   * E-RECHNUNG-04D3 — eine strukturierte, maschinenlesbare Fassung des Belegs.
+   *
+   * Heute genau ein Fall: die erzeugte XRechnung zu einer freigegebenen
+   * Rechnung. Sie gehört in dieselbe Datei- und Bindungsarchitektur wie die
+   * übrigen Repräsentationen — die Bindungstabelle kennt `structured`
+   * serverseitig bereits —, entsteht aber **nicht** in der Derivat-Pipeline:
+   * Vorschau, Archivkopie und Vorschaubild werden aus einer eingegangenen
+   * Datei gerechnet, die XRechnung aus dem eingefrorenen Beleg. Die drei
+   * Planungs- und Wiederherstellungsdienste schliessen sie deshalb
+   * ausdrücklich aus.
+   */
+  'structured',
 ] as const;
 
 export type DocumentFileRepresentationKind =

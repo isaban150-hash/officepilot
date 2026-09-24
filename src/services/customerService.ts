@@ -31,7 +31,11 @@ export type CustomerMutationResult =
 
 export const CUSTOMER_DUPLICATE_ERROR_KEY = 'customer.duplicateCandidate';
 
-export type CustomerInput = Partial<CustomerBilling> & Pick<CustomerBilling, 'name'>;
+export type CustomerInput = Partial<CustomerBilling> &
+  Pick<CustomerBilling, 'name'> & {
+    /** E-RECHNUNG-04B — Vorbelegung der Käuferreferenz; nur am Stammsatz. */
+    buyerReferenceDefault?: string;
+  };
 
 /**
  * Call contract for the Vorgang handoff — never persisted, never stored.
@@ -56,7 +60,18 @@ function text(value: string | undefined): string {
  * Pure: no store access, no mutation, no persistence.
  */
 export function billingFromCustomer(customer: Customer): CustomerBilling {
-  return {
+  /*
+   * E-RECHNUNG-04B — die neuen Felder reisen nur mit, wenn sie gepflegt sind.
+   *
+   * Ein leeres `countryCode: ''` im Beleg wäre schlechter als gar keines: Es
+   * sähe aus wie eine Angabe und wäre keine. Deshalb ausdrückliche Abwesenheit
+   * statt Leerwert — genau wie `createdFromInboxId` im Cloud-Payload.
+   *
+   * `buyerReference` entsteht hier aus dem Kundenstandard. Sie ist danach ein
+   * Wert **dieser** Rechnung und im Entwurf überschreibbar; der Stammsatz wird
+   * davon nie berührt.
+   */
+  const billing: CustomerBilling = {
     name: customer.name,
     contactPerson: customer.contactPerson,
     street: customer.street,
@@ -65,6 +80,21 @@ export function billingFromCustomer(customer: Customer): CustomerBilling {
     email: customer.email,
     phone: customer.phone,
   };
+  const countryCode = customer.countryCode?.trim();
+  if (countryCode) billing.countryCode = countryCode;
+  const vatId = customer.vatId?.trim();
+  if (vatId) billing.vatId = vatId;
+  const leitwegId = customer.leitwegId?.trim();
+  if (leitwegId) billing.leitwegId = leitwegId;
+  /*
+   * Vorbelegung der Käuferreferenz: der ausdrückliche Standard zuerst. Fehlt
+   * er und liegt eine Leitweg-ID vor, belegt sie den Wert vor — das ist der
+   * B2G-Fall, in dem die Leitweg-ID genau die Käuferreferenz ist. Gibt es
+   * beides nicht, bleibt das Feld leer; es wird nichts erfunden.
+   */
+  const buyerReference = customer.buyerReferenceDefault?.trim() || leitwegId || '';
+  if (buyerReference) billing.buyerReference = buyerReference;
+  return billing;
 }
 
 /**
@@ -132,6 +162,19 @@ export function buildValidatedCustomer(
     createdAt: now,
     updatedAt: now,
   };
+  /*
+   * E-RECHNUNG-04B — nur gepflegte Angaben werden zu Schlüsseln. Ein leerer
+   * Wert bedeutet „nicht angegeben", und das steht im Datensatz als
+   * Abwesenheit, nicht als leerer Text.
+   */
+  const countryCode = text(input.countryCode);
+  if (countryCode) customer.countryCode = countryCode;
+  const vatId = text(input.vatId);
+  if (vatId) customer.vatId = vatId;
+  const buyerReferenceDefault = text(input.buyerReferenceDefault);
+  if (buyerReferenceDefault) customer.buyerReferenceDefault = buyerReferenceDefault;
+  const leitwegId = text(input.leitwegId);
+  if (leitwegId) customer.leitwegId = leitwegId;
   const createdFromInboxId = text(options?.createdFromInboxId);
   if (createdFromInboxId) customer.createdFromInboxId = createdFromInboxId;
 
@@ -158,9 +201,20 @@ export function createCustomer(
   return { success: true, customer: cloneCustomer(customer) };
 }
 
+/**
+ * E-RECHNUNG-04B — was am Kundenstamm änderbar ist.
+ *
+ * `buyerReferenceDefault` steht neben den Rechnungsanschriftfeldern, gehört
+ * aber nicht zu ihnen: Es ist eine Vorbelegung für künftige Rechnungen, kein
+ * Bestandteil der Anschrift.
+ */
+export type CustomerMasterChanges = Partial<CustomerBilling> & {
+  buyerReferenceDefault?: string;
+};
+
 export function updateCustomer(
   customerId: string,
-  changes: Partial<CustomerBilling>,
+  changes: CustomerMasterChanges,
 ): CustomerMutationResult {
   const current = getCustomerById(customerId);
   if (!current) return { success: false, errorKey: 'customer.notFound' };
@@ -184,6 +238,26 @@ export function updateCustomer(
     phone: changes.phone === undefined ? current.phone : text(changes.phone),
     updatedAt: new Date().toISOString(),
   };
+
+  /*
+   * E-RECHNUNG-04B — die optionalen Stammfelder.
+   *
+   * Ein geleerter Wert entfernt den Schlüssel, statt einen leeren Text zu
+   * hinterlassen: „nicht angegeben" ist Abwesenheit. Ein `undefined` in
+   * `changes` heisst „nicht angefasst" und lässt den bisherigen Wert stehen.
+   */
+  const optional: Array<'countryCode' | 'vatId' | 'buyerReferenceDefault' | 'leitwegId'> = [
+    'countryCode',
+    'vatId',
+    'buyerReferenceDefault',
+    'leitwegId',
+  ];
+  for (const key of optional) {
+    if (changes[key] === undefined) continue;
+    const value = text(changes[key]);
+    if (value) updated[key] = value;
+    else delete updated[key];
+  }
 
   const previous = getCustomerStoreSnapshot();
   upsertCustomerInStore(updated);
