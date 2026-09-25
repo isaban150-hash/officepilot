@@ -262,7 +262,15 @@ const ORDER_UNITS = new Set(['m²', 'Stück', 'Meter', 'Stunden', 'Pauschal']);
 const CALCULATION_MODES = new Set(['quantity_based', 'fixed_amount']);
 const SENT_VIA = new Set(['email', 'post', 'persoenlich', 'portal', 'sonstige']);
 const SENT_SOURCE = new Set(['manual', 'officepilot']);
-const PAYMENT_STATUSES = new Set(['offen', 'teilbezahlt', 'bezahlt', 'ueberfaellig', 'storniert']);
+/* FINANZCORE-05C — `ueberbezahlt` muss mit, sonst scheitert die Freigabe einer ueberbezahlten Rechnung. */
+const PAYMENT_STATUSES = new Set([
+  'offen',
+  'teilbezahlt',
+  'bezahlt',
+  'ueberbezahlt',
+  'ueberfaellig',
+  'storniert',
+]);
 const FORBIDDEN = new Set<string>(FORBIDDEN_OBJECT_KEYS);
 
 /* -------------------------------------------------------------------------- */

@@ -234,7 +234,14 @@ describe('ORDER-AMENDMENT-UI-UX-01B3B1 Rechnungssegment', () => {
       translate('vorgang.invoicesEmptyWithPositionsHint'),
     );
     expect(container.querySelectorAll('[data-testid="vorgang-prepare-invoice"]')).toHaveLength(1);
-    expect(container.querySelector('[data-testid="vorgang-invoice-summary"]')).toBeNull();
+    /*
+     * FINANZCORE-05E — die Summenkarte bleibt auch ohne Rechnungen stehen:
+     * Sie zeigt jetzt den Auftragswert und den noch abzurechnenden Rest,
+     * und beides gilt unabhaengig davon, ob schon etwas gestellt wurde.
+     * Der handlungsorientierte Leerzustand der Sektion daneben bleibt
+     * unveraendert — er wird oben geprueft.
+     */
+    expect(container.querySelector('[data-testid="vorgang-financials-empty"]')).not.toBeNull();
     expect(getVorgangById('v-b3b1')!.invoices).toHaveLength(0);
 
     act(() => root.unmount());
@@ -264,11 +271,18 @@ describe('ORDER-AMENDMENT-UI-UX-01B3B1 Rechnungssegment', () => {
 
     const summary = container.querySelector('[data-testid="vorgang-invoice-summary"]');
     expect(summary).not.toBeNull();
-    expect(summary?.textContent).toContain(translate('vorgang.invoicesSummaryCount'));
+    /*
+     * FINANZCORE-05E — dieselben Zahlen, aber mit Massstab beschriftet:
+     * „Offener Rechnungsbetrag" heisst jetzt „Offen" im Block
+     * „Zahlungsstand (brutto)", daneben steht der Abrechnungsfortschritt
+     * in netto. Die Werte selbst sind unveraendert und kommen weiterhin
+     * aus derselben Payment-Summary.
+     */
+    expect(summary?.textContent).toContain(translate('order.financials.invoiceCount'));
     expect(summary?.textContent).toContain('1');
-    expect(summary?.textContent).toContain(translate('vorgang.invoicesSummaryOpen'));
+    expect(summary?.textContent).toContain(translate('order.financials.open'));
     expect(summary?.textContent).toContain(formatPaymentCurrency(expected.openTotal));
-    expect(summary?.textContent).toContain(translate('vorgang.invoicesSummaryPaid'));
+    expect(summary?.textContent).toContain(translate('order.financials.paid'));
     expect(summary?.textContent).toContain(formatPaymentCurrency(expected.paidTotal));
 
     expect(container.textContent).toContain('2026-0100');

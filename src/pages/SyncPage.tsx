@@ -7,12 +7,14 @@ import { InlineNotice } from '../components/ui/States';
 import { RowList, RowListItem } from '../components/ui/Lists';
 import { useApp } from '../context/AppContext';
 import type { SyncOutboxEntry, SyncState } from '../types/sync';
+import type { SyncFailureKind } from '../services/sync/syncOutboxDescriptionService';
 import type { TranslationKey } from '../i18n';
 import {
   getSyncUiSnapshot,
   summarizeSyncStatus,
   type SyncStatusSummary,
   isLocalOnlySyncMode,
+  resolveSettingsConflictFromUi,
   retrySyncFromUi,
   runSyncFromUi,
   shortenSyncId,
@@ -23,6 +25,29 @@ import { isSupabaseSyncAllowed } from '../services/sync/cloudSyncAllowlist';
 import { enqueueIntakeBackfill, planIntakeBackfill } from '../services/document/intakeCloudBackfillService';
 
 const SYNCING_STATES: SyncState[] = ['checking', 'uploading', 'downloading', 'merging'];
+
+/* FINANZ-SYNC-BLOCKER-01B — Fehler und Konflikt sind nicht dasselbe. */
+function failureKindKey(kind: SyncFailureKind): TranslationKey {
+  return `sync.failure.kind.${kind}` as TranslationKey;
+}
+
+function failureTone(kind: SyncFailureKind): 'critical' | 'warning' | 'default' {
+  if (kind === 'error') return 'critical';
+  if (kind === 'conflict') return 'warning';
+  return 'default';
+}
+
+/** Ein Einstellungswert für die Anzeige — kurz, und niemals `[object Object]`. */
+function formatSettingValue(value: unknown): string {
+  if (value === null || value === undefined) return '—';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return '—';
+  }
+}
 
 /* REAL-PRODUCT-TEST-01D — Gründe für wartende/fehlgeschlagene Einträge in Nutzersprache. */
 function blockedReasonKey(entry: SyncOutboxEntry): TranslationKey | null {
@@ -58,6 +83,10 @@ function entityTypeKey(entityType: string): TranslationKey {
     // CLOUD-DURABILITY-CORE-01B/01D — sonst stünde hier nur „Eintrag".
     vorgang_note: 'sync.entity.vorgang_note',
     dunning_documentation: 'sync.entity.dunning_documentation',
+    /* FINANZ-SYNC-BLOCKER-01B — ohne diese Zeilen stünde hier „Weitere Daten". */
+    accounting_assignment: 'sync.entity.accounting_assignment',
+    accounting_period_closure: 'sync.entity.accounting_period_closure',
+    workspace_settings: 'sync.entity.workspace_settings',
   };
   return map[entityType] ?? 'sync.entity.other';
 }
@@ -84,7 +113,8 @@ function outboxStatusKey(status: SyncOutboxEntry['status']): TranslationKey {
 function statusTone(kind: SyncStatusSummary['kind']): 'default' | 'success' | 'warning' | 'info' {
   if (kind === 'offline' || kind === 'syncing') return 'info';
   if (kind === 'synced') return 'success';
-  if (kind === 'failed' || kind === 'waiting') return 'warning';
+  /* 01G — eine ausstehende Entscheidung wird gewarnt, nicht als Fehler gefärbt. */
+  if (kind === 'failed' || kind === 'waiting' || kind === 'conflict') return 'warning';
   return 'default';
 }
 
@@ -97,6 +127,11 @@ function statusLabelFor(
   switch (summary.kind) {
     case 'synced':
       return translate('sync.summary.synced');
+    case 'conflict':
+      /* 01G — eine ausstehende Entscheidung ist kein Fehler und heisst auch nicht so. */
+      return summary.conflictCount === 1
+        ? translate('sync.summary.conflictOne')
+        : translate('sync.summary.conflict').replace('{count}', String(summary.conflictCount));
     case 'waiting':
       return summary.waitingCount === 1
         ? translate('sync.summary.waitingOne')
@@ -181,6 +216,18 @@ export function SyncPage() {
     } finally {
       setBusy(false);
     }
+  };
+
+  /*
+   * Die Entscheidung über die Einstellungen wirkt sofort lokal und gibt den
+   * blockierten Auftrag frei. Synchronisiert wird danach über den normalen
+   * Knopf — hier passiert nichts heimlich im Hintergrund.
+   */
+  const handleSettingsDecision = (decision: 'keep_local' | 'take_cloud') => {
+    if (resolveSettingsConflictFromUi(decision)) {
+      showToast(translate('sync.settingsConflict.resolved'));
+    }
+    refresh();
   };
 
   const summary = summarizeSyncStatus(snapshot);
@@ -280,6 +327,83 @@ export function SyncPage() {
           </RowList>
         )}
       </DetailSection>
+
+      {/*
+        * FINANZ-SYNC-BLOCKER-01B — nicht nur zählen, sondern benennen: welcher
+        * Datentyp, welcher Datensatz, welcher Grund, und ob ein erneuter
+        * Versuch überhaupt etwas ändern kann.
+        */}
+      {snapshot.failedOutboxEntries.length > 0 && (
+        <DetailSection title={translate('sync.failure.title')} testId="sync-failures">
+          <InlineNotice tone="info" testId="sync-failure-hint">
+            {translate('sync.failure.hint')}
+          </InlineNotice>
+          <RowList testId="sync-failure-list">
+            {snapshot.failedOutboxEntries.map((failure) => (
+              <RowListItem
+                key={failure.id}
+                testId={`sync-failure-${failure.entityType}`}
+                title={[translate(entityTypeKey(failure.entityType)), failure.label]
+                  .filter(Boolean)
+                  .join(' · ')}
+                description={[
+                  translate(failure.reasonKey),
+                  failure.retryable
+                    ? translate('sync.failure.retryable')
+                    : translate('sync.failure.notRetryable'),
+                ].join(' · ')}
+                trailing={
+                  <Badge tone={failureTone(failure.kind)}>
+                    {translate(failureKindKey(failure.kind))}
+                  </Badge>
+                }
+              />
+            ))}
+          </RowList>
+        </DetailSection>
+      )}
+
+      {snapshot.settingsConflict && snapshot.settingsConflict.length > 0 && (
+        <DetailSection
+          title={translate('sync.settingsConflict.title')}
+          testId="sync-settings-conflict"
+        >
+          <InlineNotice tone="warning" testId="sync-settings-conflict-hint">
+            {translate('sync.settingsConflict.hint')}
+          </InlineNotice>
+          <RowList testId="sync-settings-conflict-list">
+            {snapshot.settingsConflict.map((field) => (
+              <RowListItem
+                key={field.key}
+                testId={`sync-settings-conflict-${field.key}`}
+                title={translate('sync.settingsConflict.field')
+                  .replace('{key}', field.key)
+                  .replace('{local}', formatSettingValue(field.localValue))
+                  .replace('{cloud}', formatSettingValue(field.cloudValue))}
+              />
+            ))}
+          </RowList>
+          <div className="sync-page__actions">
+            <Button
+              type="button"
+              fullWidth
+              data-testid="sync-settings-keep-local"
+              onClick={() => handleSettingsDecision('keep_local')}
+            >
+              {translate('sync.settingsConflict.keepLocal')}
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              fullWidth
+              data-testid="sync-settings-take-cloud"
+              onClick={() => handleSettingsDecision('take_cloud')}
+            >
+              {translate('sync.settingsConflict.takeCloud')}
+            </Button>
+          </div>
+        </DetailSection>
+      )}
 
       {/*
         * VISUAL-POLISH-01D — Geräte-/Arbeitsbereichskennungen und der letzte

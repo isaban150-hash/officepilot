@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { Badge, PageHeader } from '../../components/ui/Card';
 import { BackupExportPanel } from '../../components/settings/BackupExportPanel';
 import { LanguageSwitcher } from '../../components/settings/LanguageSwitcher';
+import { ChartOfAccountsSetting } from '../../components/accounting/ChartOfAccountsSetting';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { isSupabaseConfigured } from '../../lib/supabase';
@@ -93,6 +94,22 @@ export function OperatingSettingsPage() {
         <h2 className="settings-form__legend">{translate('settings.operating.section.language')}</h2>
         <p className="hint-text">{translate('settings.operating.language.hint')}</p>
         <LanguageSwitcher testId="settings-operating-language-switcher" />
+      </section>
+
+      {/* ---------------- Buchhaltung ---------------- */}
+      {/*
+        * STEUERBERATER-06A — der Kontenrahmen des Betriebs. Hier und nicht
+        * bei den Rechnungen: Er betrifft Eingangsbelege genauso wie
+        * Ausgangsrechnungen und ist eine Frage der Buchhaltung, nicht der
+        * Rechnungsstellung.
+        */}
+      <section
+        className="settings-form__section settings-operating__section"
+        data-testid="settings-operating-accounting"
+      >
+        <h2 className="settings-form__legend">{translate('accounting.settings.section')}</h2>
+        <p className="hint-text">{translate('accounting.settings.hint')}</p>
+        <ChartOfAccountsSetting translate={translate} />
       </section>
 
       {/* ---------------- Datensicherung ---------------- */}

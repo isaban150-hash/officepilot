@@ -31,6 +31,7 @@ import type { DocumentFileRef } from '../../types/documentFileRef';
 import { isFinalizedInvoice } from '../invoiceArchiveService';
 import { calculatePaymentSummary, getInvoicePayments } from '../invoicePaymentService';
 import { calculateExpensePaymentSummary, getExpensePayments } from '../expensePaymentCalculations';
+import { checkExpenseMoneyIntegrity } from '../expense/expenseMoneyIntegrity';
 import { isEntitySyncActive } from '../sync/syncMetaService';
 import { isCloudSyncBlockedMockExpenseId } from '../expense/expenseCloudSyncService';
 import { isCloudSyncBlockedMockVorgangId } from '../storage/mockDataDetectionService';
@@ -243,6 +244,38 @@ function resolveExpenseFileRef(expense: Expense, input: MonatsmappeInput): Docum
   return undefined;
 }
 
+/**
+ * FINANZCORE-05B — der Hinweis am Beleg, in fester Reihenfolge.
+ *
+ * Ein widersprüchlicher Geldbetrag ist der schwerwiegendste dieser Hinweise und
+ * steht deshalb vorn: Wer die Übersicht liest, soll ihn nicht hinter einem
+ * fehlenden Originaldokument suchen müssen.
+ *
+ * Seit 05B kann **kein neuer** Beleg mehr widersprüchliche Beträge tragen; das
+ * hier betrifft ausschliesslich Altbestand. Der wird sichtbar gemacht und
+ * ausdrücklich **nicht** gerechnet, gerundet oder repariert — die Zahlen im
+ * Export bleiben exakt die gespeicherten.
+ */
+function resolveExpenseBelegHinweis(expense: Expense, hasDocument: boolean): string | undefined {
+  const hinweise: string[] = [];
+
+  const money = checkExpenseMoneyIntegrity(expense);
+  if (!money.ok) {
+    hinweise.push(
+      `Beträge widersprüchlich (${money.issues.map((issue) => issue.code).join(', ')}) – bitte prüfen`,
+    );
+  }
+
+  if (expense.status === 'storniert') {
+    const stornoDatum = resolveExpenseStornoDatum(expense);
+    hinweise.push(stornoDatum ? `Storniert am ${stornoDatum}` : 'Storniert (Stornodatum nicht erfasst)');
+  } else if (!hasDocument) {
+    hinweise.push('Kein Originaldokument vorhanden');
+  }
+
+  return hinweise.length > 0 ? hinweise.join(' · ') : undefined;
+}
+
 function buildExpenseBeleg(expense: Expense, input: MonatsmappeInput): MonatsmappeBeleg {
   const cancelled = expense.status === 'storniert';
   const summary = calculateExpensePaymentSummary(expense);
@@ -262,13 +295,7 @@ function buildExpenseBeleg(expense: Expense, input: MonatsmappeInput): Monatsmap
     zahlungssumme: cancelled ? 0 : summary.paidAmount,
     documentStatus: ref ? 'archived' : 'missing',
     documents: ref ? [{ kind: 'file_ref', fileRefId: ref.id, fileName: `${base}.${extensionForMime(ref.mimeType, ref.originalFileName)}` }] : [],
-    hinweis: cancelled
-      ? resolveExpenseStornoDatum(expense)
-        ? `Storniert am ${resolveExpenseStornoDatum(expense)}`
-        : 'Storniert (Stornodatum nicht erfasst)'
-      : ref
-        ? undefined
-        : 'Kein Originaldokument vorhanden',
+    hinweis: resolveExpenseBelegHinweis(expense, Boolean(ref)),
   };
 }
 

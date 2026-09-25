@@ -84,13 +84,27 @@ function buildState(vorgaenge: Vorgang[]): AppPersistedState {
 }
 
 describe('CLOUD-DATA-02 allowlist', () => {
-  it('erlaubt vorgang und blockiert Rechnungen/Dokumente/Inbox', () => {
+  it('erlaubt die freigegebenen Typen und haelt die nur-lokalen heraus', () => {
     expect(isSupabaseSyncAllowed('vorgang')).toBe(true);
-    expect(isSupabaseSyncAllowed('document')).toBe(false);
-    expect(isSupabaseSyncAllowed('inbox_item')).toBe(false);
-    expect(isSupabaseSyncAllowed('expense')).toBe(false);
+    // Seit 01B/01C bewusst freigegeben — mit Tabelle, RLS, Push, Pull und Merge.
+    expect(isSupabaseSyncAllowed('document')).toBe(true);
+    expect(isSupabaseSyncAllowed('inbox_item')).toBe(true);
+    expect(isSupabaseSyncAllowed('expense')).toBe(true);
+    // Gedaechtnis und Papierregister verlassen das Geraet weiterhin nie.
+    expect(isSupabaseSyncAllowed('paper_register_entry')).toBe(false);
     expect(LOCAL_ONLY_SYNC_ENTITY_TYPES.has('vorgang')).toBe(false);
-    expect(LOCAL_ONLY_SYNC_ENTITY_TYPES.has('document')).toBe(true);
+    expect(LOCAL_ONLY_SYNC_ENTITY_TYPES.has('paper_register_entry')).toBe(true);
+  });
+
+  /*
+   * Die eigentliche Zusage dahinter, und die gilt unveraendert: Was als
+   * nur-lokal gilt, darf unter keinen Umstaenden in der Allowlist stehen. Diese
+   * Pruefung altert nicht mit jeder Freigabe mit.
+   */
+  it('keine Ueberschneidung zwischen Allowlist und nur-lokalen Typen', () => {
+    for (const entityType of LOCAL_ONLY_SYNC_ENTITY_TYPES) {
+      expect(isSupabaseSyncAllowed(entityType), `${entityType} darf nicht in die Cloud`).toBe(false);
+    }
   });
 });
 

@@ -17,13 +17,37 @@ export type ExpenseCategory =
 
 export type ExpenseStatus = 'entwurf' | 'gebucht' | 'storniert';
 
-/** Vorbereitet für Sprint 20C – Zahlungen */
+/**
+ * Der Zahlstatus einer Ausgabe.
+ *
+ * FINANZCORE-05B-FIX2 — `gutschrift` ist neu und beschreibt einen Beleg mit
+ * negativem Bruttobetrag: eine Lieferantengutschrift.
+ *
+ * Er ist kein Zwischenzustand auf dem Weg zu „bezahlt", sondern etwas anderes
+ * als die übrigen vier: Eine Gutschrift ist keine Verbindlichkeit, die man
+ * begleicht, sondern ein Guthaben gegenüber dem Lieferanten. Ohne eigenen Wert
+ * musste sie sich einen der bestehenden teilen — und landete bei „bezahlt",
+ * obwohl nie Geld geflossen war.
+ *
+ * Bewusst ein zusätzlicher Wert im vorhandenen Aufzählungstyp und keine zweite
+ * Statuswelt: Filter, Sortierung, Abzeichen und Übersetzungen bleiben dieselbe
+ * Maschinerie. Kein Listenfilter zielt auf ihn, also erscheint eine Gutschrift
+ * weder unter den offenen noch unter den bezahlten Ausgaben — nur unter allen.
+ */
+/*
+ * FINANZCORE-05C — `ueberbezahlt` kommt hinzu, mit derselben Begruendung wie
+ * bei den Rechnungen: Eine Ausgabe, auf die zu viel gezahlt wurde, ist nicht
+ * dasselbe wie eine beglichene. Ebenfalls rein abgeleitet — die Ausgabe reist
+ * als JSON-Nutzlast, es gibt keine Statusspalte.
+ */
 export type ExpensePaymentStatus =
   | 'offen'
   | 'teilbezahlt'
   | 'bezahlt'
+  | 'ueberbezahlt'
   | 'ueberfaellig'
-  | 'storniert';
+  | 'storniert'
+  | 'gutschrift';
 
 export interface ExpensePayment {
   id: string;

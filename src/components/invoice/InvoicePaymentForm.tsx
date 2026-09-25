@@ -17,6 +17,7 @@ import {
 import type { InvoicePayment, InvoicePaymentInput, VorgangInvoice } from '../../types/models';
 import type { TranslationKey } from '../../i18n';
 import { getBusinessDay } from '../../services/businessDateService';
+import { formatDisplayDatePadded } from '../../utils/displayFormat';
 
 interface Props {
   /** MANUAL-INVOICE-01B2c — `null` ist die Rechnung ohne Auftrag. */
@@ -47,9 +48,26 @@ export function InvoicePaymentForm({
   const today = getBusinessDay();
   const needsUnsentNotice = willPaymentNeedUnsentConfirm(invoice);
 
+  /*
+   * FINANZCORE-05C-FIX1 — derselbe Vorschlag wie im Ausgabendialog.
+   *
+   * `String(11.9)` ergibt „11.9" — ein gueltiger Zahlenwert, aber kein
+   * Geldbetrag: Das Feld zeigte „11,9", waehrend die Ausgabenseite daneben
+   * „49,00" anbot. Derselbe Dialog, zwei Schreibweisen.
+   *
+   * `toFixed(2)` liefert den **Maschinenwert** mit Punkt und zwei
+   * Nachkommastellen (`11.90`), passend zu `step="0.01"`. Die lokalisierte
+   * Darstellung bleibt Sache des Browsers; ein deutsches Komma im `value`
+   * eines `input[type=number]` wuerde verworfen und das Feld leer lassen —
+   * genau der Fehler aus 05B-FIX3.
+   *
+   * Am Einlesen aendert sich nichts: `parseFloat` liest „11.90" wie zuvor.
+   */
+  const suggestedAmount = (value: number): string => Math.max(0, value).toFixed(2);
+
   const [phase, setPhase] = useState<FormPhase>('form');
   const [date, setDate] = useState(today);
-  const [amount, setAmount] = useState(() => String(Math.max(0, openAmount)));
+  const [amount, setAmount] = useState(() => suggestedAmount(openAmount));
   const [reference, setReference] = useState('');
   const [note, setNote] = useState('');
   const [errorKey, setErrorKey] = useState<string | null>(null);
@@ -61,7 +79,7 @@ export function InvoicePaymentForm({
     if (!open) return;
     setPhase('form');
     setDate(today);
-    setAmount(String(Math.max(0, openAmount)));
+    setAmount(suggestedAmount(openAmount));
     setReference('');
     setNote('');
     setErrorKey(null);
@@ -282,15 +300,45 @@ export function InvoicePaymentForm({
               </p>
             ) : null}
             {overpayAmount > 0 ? (
-              <p className="invoice-payment-form__warning" data-testid="payment-overpay-confirm">
-                {translate('payment.overpaymentConfirmDetail').replace(
-                  '{amount}',
-                  formatPaymentCurrency(overpayAmount),
-                )}
-              </p>
+              <>
+                <p className="invoice-payment-form__warning" data-testid="payment-overpay-confirm">
+                  {translate('payment.overpaymentConfirmDetail').replaceAll(
+                    '{amount}',
+                    formatPaymentCurrency(overpayAmount),
+                  )}
+                </p>
+                {/*
+                  * FINANZCORE-05C — die drei Zahlen ausgeschrieben: woher der
+                  * Beleg kommt, was gebucht wuerde, was dadurch entsteht. Eine
+                  * blosse Differenz zwingt den Nutzer zum Kopfrechnen, genau
+                  * dort, wo er nachrechnen soll. Dieselbe Darstellung wie im
+                  * Ausgabendialog.
+                  */}
+                <dl className="invoice-payment-form__confirm-figures" data-testid="payment-confirm-figures">
+                  <div>
+                    <dt>{translate('payment.confirmOpenAmount')}</dt>
+                    <dd data-testid="payment-confirm-open">{formatPaymentCurrency(openAmount)}</dd>
+                  </div>
+                  <div>
+                    <dt>{translate('payment.confirmPaymentAmount')}</dt>
+                    <dd data-testid="payment-confirm-amount">{formatPaymentCurrency(parsedAmount)}</dd>
+                  </div>
+                  <div>
+                    <dt>{translate('payment.confirmOverpaidAmount')}</dt>
+                    <dd data-testid="payment-confirm-overpaid">{formatPaymentCurrency(overpayAmount)}</dd>
+                  </div>
+                </dl>
+              </>
             ) : null}
-            <p className="invoice-payment-form__confirm-summary">
-              {formatPaymentCurrency(parsedAmount)} · {date}
+            {/*
+              * FINANZCORE-05C-FIX1 — `date` ist der Maschinenwert des
+              * Datumsfelds (`2026-09-24`). In einem Satz, den ein Mensch
+              * bestaetigen soll, gehoert die deutsche Schreibweise hin; den
+              * gemeinsamen Helfer benutzen ohnehin schon Zahlungshistorie und
+              * Detailseiten.
+              */}
+            <p className="invoice-payment-form__confirm-summary" data-testid="payment-confirm-summary">
+              {formatPaymentCurrency(parsedAmount)} · {formatDisplayDatePadded(date)}
             </p>
             {errorKey && (
               <p className="invoice-payment-form__error">
@@ -330,5 +378,10 @@ export function InvoicePaymentForm({
 export function getPaymentSavedToastKey(invoice: VorgangInvoice): TranslationKey {
   const summary = calculatePaymentSummary(invoice);
   if (summary.status === 'bezahlt') return 'payment.savedFullyPaid';
+  /*
+   * FINANZCORE-05C — „vollstaendig bezahlt" waere hier eine halbe Wahrheit.
+   * Der neutrale Erfolgshinweis genuegt; was tatsaechlich steht, sagt der
+   * Zahlungsstand darunter mit Status und Ueberzahlungsbetrag.
+   */
   return 'payment.savedSuccess';
 }

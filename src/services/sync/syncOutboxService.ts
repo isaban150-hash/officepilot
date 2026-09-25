@@ -244,20 +244,112 @@ export function markOutboxEntriesCompleted(outboxIds: string[]): void {
   notifyOutboxChanged();
 }
 
-export function markOutboxEntriesFailed(outboxIds: string[], reason?: string): void {
-  if (outboxIds.length === 0) return;
-  const failedIds = new Set(outboxIds);
-  outbox = outbox.map((entry) =>
-    failedIds.has(entry.id)
-      ? {
-          ...entry,
-          status: 'error',
-          retryCount: entry.retryCount + 1,
-          blockedReason: reason ?? entry.blockedReason,
-        }
-      : entry,
-  );
+/**
+ * FINANZ-SYNC-BLOCKER-01B — ein Fehlschlag pro Auftrag, nicht einer fuer alle.
+ *
+ * Vorher bekam diese Funktion nur eine Liste von Kennungen und **einen**
+ * Grund — den des ersten Fehlschlags. Zwei Folgen hatte das:
+ *
+ *   1. Jeder Auftrag trug denselben, oft fremden Grund. Die Sync-Seite konnte
+ *      deshalb nur zaehlen, nicht benennen.
+ *   2. Jeder Auftrag wurde auf `error` gesetzt — auch der, den der Adapter
+ *      gerade als Versionskonflikt (`blocked`) eingestuft hatte. Der Konflikt
+ *      verschwand damit still im Fehlertopf, und ein Retry haette ihn blind
+ *      erneut gesendet.
+ */
+export interface OutboxFailureDetail {
+  outboxId: string;
+  message: string;
+  retryable: boolean;
+  /** Was der Adapter entschieden hat: echter Fehler oder Versionskonflikt. */
+  status: 'error' | 'blocked';
+}
+
+export function markOutboxEntriesFailed(failures: OutboxFailureDetail[]): void {
+  if (failures.length === 0) return;
+  const byId = new Map(failures.map((failure) => [failure.outboxId, failure]));
+  const failedAt = new Date().toISOString();
+  outbox = outbox.map((entry) => {
+    const failure = byId.get(entry.id);
+    if (!failure) return entry;
+    return {
+      ...entry,
+      status: failure.status,
+      retryCount: entry.retryCount + 1,
+      lastErrorMessage: failure.message,
+      lastErrorAt: failedAt,
+      lastErrorRetryable: failure.retryable,
+    };
+  });
   notifyOutboxChanged();
+}
+
+/**
+ * FINANZ-SYNC-BLOCKER-01B — der Ausgang aus `blocked`.
+ *
+ * Ein blockierter Auftrag wartet auf eine Entscheidung, nicht auf einen
+ * weiteren Versuch: Die Push-Schleife uebergeht ihn, und das Wiederholen
+ * beruehrt nur `error`. Ist der Konflikt fachlich aufgeloest, muss der Auftrag
+ * wieder sendbar werden — sonst haengt er fuer immer.
+ *
+ * Bewusst eng: genau ein Entitaetstyp, genau eine Kennung, und nur aus
+ * `blocked` heraus. Kein „alles entsperren".
+ */
+/**
+ * FINANZ-SYNC-BLOCKER-01F — der Gegenweg zu `releaseBlockedOutboxEntry`.
+ *
+ * Entscheidet sich der Nutzer für den Cloud-Wert, gibt es nichts mehr zu
+ * senden. Den Auftrag dann wieder auf `pending` zu stellen, hiesse einen
+ * gegenstandslosen Rest in der Warteschlange zu lassen, der beim nächsten Lauf
+ * erneut auf denselben Konflikt liefe.
+ *
+ * Bewusst eng: genau ein Entitaetstyp, genau eine Kennung, und nur aus
+ * `blocked` heraus.
+ */
+export function completeBlockedOutboxEntry(
+  entityType: SyncEntityType,
+  entityId: string,
+): boolean {
+  let completed = false;
+  outbox = outbox.map((entry) => {
+    if (entry.entityType !== entityType || entry.entityId !== entityId) return entry;
+    if (entry.status !== 'blocked') return entry;
+    completed = true;
+    return {
+      ...entry,
+      status: 'completed',
+      blockedReason: undefined,
+      lastErrorMessage: undefined,
+      lastErrorAt: undefined,
+      lastErrorRetryable: undefined,
+    };
+  });
+  if (completed) notifyOutboxChanged();
+  return completed;
+}
+
+export function releaseBlockedOutboxEntry(
+  entityType: SyncEntityType,
+  entityId: string,
+  version?: number,
+): boolean {
+  let released = false;
+  outbox = outbox.map((entry) => {
+    if (entry.entityType !== entityType || entry.entityId !== entityId) return entry;
+    if (entry.status !== 'blocked') return entry;
+    released = true;
+    return {
+      ...entry,
+      status: 'pending',
+      version: version ?? entry.version,
+      blockedReason: undefined,
+      lastErrorMessage: undefined,
+      lastErrorAt: undefined,
+      lastErrorRetryable: undefined,
+    };
+  });
+  if (released) notifyOutboxChanged();
+  return released;
 }
 
 export function isSyncOutboxEnabled(): boolean {

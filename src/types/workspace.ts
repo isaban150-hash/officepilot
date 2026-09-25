@@ -31,6 +31,25 @@ export interface WorkspaceMember {
   sync?: SyncMeta;
 }
 
+/** Ein Feld, das lokal und in der Cloud unterschiedlich gesetzt ist. */
+export interface WorkspaceSettingsFieldConflict {
+  readonly key: string;
+  readonly localValue: unknown;
+  readonly cloudValue: unknown;
+}
+
+/**
+ * Ein festgehaltener, noch nicht entschiedener Konflikt.
+ *
+ * `fields` trägt zu jedem strittigen Schlüssel **beide** Werte. Damit lässt
+ * sich die Entscheidung auch nach einem Neustart noch ausführen, ohne dass ein
+ * erneuter Abgleich nötig wäre.
+ */
+export interface WorkspaceSettingsConflictState {
+  readonly fields: readonly WorkspaceSettingsFieldConflict[];
+  readonly detectedAt: string;
+}
+
 export interface WorkspaceSettings {
   workspaceId: string;
   settings: Record<string, unknown>;
@@ -38,6 +57,41 @@ export interface WorkspaceSettings {
   updatedAt: string;
   updatedBy?: string;
   sync?: SyncMeta;
+  /**
+   * FINANZ-SYNC-BLOCKER-01F — der ungelöste Feldkonflikt, falls einer ansteht.
+   *
+   * Er hängt **am Einstellungsobjekt**, nicht neben ihm. In 01B lag er in einer
+   * Modulvariable und war nach jedem Neuladen weg — die Sync-Seite sagte dann
+   * weiter „bitte entscheiden" (das kommt aus dem blockierten Sendeauftrag, der
+   * gespeichert ist), bot aber keine Entscheidung mehr an. Beides muss
+   * dieselbe Lebensdauer haben.
+   *
+   * Hier stehen **beide** Stände. Nur deshalb darf die Oberfläche sagen, dass
+   * bis zur Entscheidung nichts verloren geht.
+   *
+   * Geht nie in die Cloud: `buildWorkspaceSettingsCloudPayload` sendet
+   * ausschliesslich `settings`.
+   */
+  conflict?: WorkspaceSettingsConflictState;
+  /**
+   * FINANZ-SYNC-BLOCKER-01B — welche Felder hier bewusst geändert und noch
+   * nicht übertragen wurden.
+   *
+   * `settings` ist ein offener Beutel: Steht dort ein Wert, sagt er nicht, ob
+   * ihn dieses Gerät gesetzt hat oder ob er aus der Cloud kam. Ohne diese
+   * Angabe liesse sich bei einem Konflikt nur raten — entweder der neuere
+   * Cloud-Stand überschreibt die eigene Änderung, oder ein lokales Objekt mit
+   * einem einzigen Feld überschreibt alles, was die Cloud sonst noch hat.
+   * Beides ist Datenverlust.
+   *
+   * Deshalb merkt sich der Schreibweg, welche Schlüssel angefasst wurden.
+   * Genau die überleben eine Zusammenführung; alles andere kommt aus der
+   * Cloud. Nach erfolgreicher Übertragung ist die Liste leer.
+   *
+   * Fehlt sie (Altbestand vor diesem Block), wird **nicht** geraten — dann
+   * greift die vorsichtigere Regel in `workspaceSettingsConflictService`.
+   */
+  pendingKeys?: string[];
 }
 
 /** Server-side row metadata for singleton workspace entities (setup, profile). */

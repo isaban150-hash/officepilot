@@ -1,6 +1,8 @@
 /** OfficePilot V1 – zentrales Datenmodell (Foundation MVP) */
 
 import type { SyncClientConfig, SyncMeta, SyncOutboxEntry } from './sync';
+import type { AccountingAssignment } from './accounting';
+import type { AccountingPeriodClosure } from './accountingPeriod';
 import type { Workspace, WorkspaceMember, WorkspaceSettings } from './workspace';
 import type { BusinessInterpretationResult } from './businessInterpretation';
 import type { ContractIntelligenceResult, ContractOrderProposal } from './documentIntelligence';
@@ -1184,10 +1186,25 @@ export interface VorgangInvoiceLine {
   lineTotal: number;
 }
 
+/**
+ * FINANZCORE-05C — `ueberbezahlt` kommt hinzu.
+ *
+ * Ein Beleg, auf den mehr gezahlt wurde als er fordert, war bis hierher
+ * schlicht `bezahlt`. Der Betrag stand zwar als `overpaidAmount` in der
+ * Zusammenfassung, aber Abzeichen, Filter und Sortierung sahen einen ganz
+ * gewoehnlichen beglichenen Beleg — die Ueberzahlung war da und zugleich
+ * unsichtbar.
+ *
+ * Rein **abgeleitet**: Es gibt keine Spalte und keine Pruefung in der
+ * Datenbank, an der dieser Wert haengt (der Server entfernt `paymentStatus`
+ * sogar aus der Nutzlast). Deshalb genuegt ein zusaetzlicher Wert im
+ * vorhandenen Aufzaehlungstyp; keine Migration, keine zweite Statuswelt.
+ */
 export type InvoicePaymentStatus =
   | 'offen'
   | 'teilbezahlt'
   | 'bezahlt'
+  | 'ueberbezahlt'
   | 'ueberfaellig'
   | 'storniert';
 
@@ -1999,6 +2016,21 @@ export interface AppPersistedState {
   /** Canonical document work result snapshots (natural key: inboxItemId). */
   documentWorkResults?: DocumentWorkResult[];
   expenses?: Expense[];
+  /**
+   * STEUERBERATER-06A — Kontierungen der Belege.
+   *
+   * Optional: Ein Zustand von vor 06A traegt keine, und das ist kein
+   * Fehlzustand — er hat schlicht noch nichts kontiert. Kein Backfill.
+   */
+  accountingAssignments?: AccountingAssignment[];
+  /**
+   * STEUERBERATER-06B — Abschlussrevisionen der Monate.
+   *
+   * Optional: Ein Zustand von vor 06B traegt keine. Alle bestehenden
+   * Monate bleiben damit offen — kein Backfill, kein Monat gilt
+   * rueckwirkend als abgeschlossen.
+   */
+  accountingPeriodClosures?: AccountingPeriodClosure[];
   /** Persistent customer objects (02A). Optional — old states hydrate as empty. */
   customers?: Customer[];
   vorgangNotes?: VorgangNote[];

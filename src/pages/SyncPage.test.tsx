@@ -203,6 +203,8 @@ describe('SyncPage', () => {
           status: 'pending',
         },
       ],
+      failedOutboxEntries: [],
+      settingsConflict: null,
       isOffline: false,
       hasRetryableErrors: false,
     });
@@ -237,6 +239,8 @@ describe('SyncPage', () => {
       outbox: [],
       outboxCounts: { pending: 0, completed: 2, error: 0 },
       pendingOutboxEntries: [],
+      failedOutboxEntries: [],
+      settingsConflict: null,
       isOffline: false,
       hasRetryableErrors: false,
     });

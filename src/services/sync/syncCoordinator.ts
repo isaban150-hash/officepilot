@@ -20,7 +20,16 @@ export type SyncRunResult = {
   pendingAmendmentIntentClears?: OrderAmendmentIntentClearKey[];
 };
 
-const MAX_RETRY_ATTEMPTS = 3;
+/**
+ * FINANZ-SYNC-BLOCKER-01B — die Grenze gilt der **automatischen** Wiederholung.
+ *
+ * Sie soll verhindern, dass ein dauerhaft scheiternder Auftrag endlos gesendet
+ * wird. Bisher war sie zugleich eine Einbahnstrasse: `retryAttempts` wurde nur
+ * hochgezaehlt und ausserhalb der Tests nie zurueckgesetzt. Nach dem dritten
+ * Versuch blieb der Knopf „Fehler erneut versuchen" dauerhaft wirkungslos — er
+ * loeste sichtbar gar keine Anfrage mehr aus.
+ */
+export const MAX_RETRY_ATTEMPTS = 3;
 
 function pendingOutboxCount(outbox: SyncOutboxEntry[] = []): number {
   return outbox.filter((entry) => entry.status === 'pending' || entry.status === 'error').length;
@@ -71,6 +80,8 @@ export class SyncCoordinator {
   private lastSyncedAt?: string;
   private lastError?: string;
   private retryAttempts = 0;
+  /** Verhindert, dass ein zweiter Klick waehrend eines Laufs erneut sendet. */
+  private retryInFlight = false;
 
   constructor(adapter?: SyncAdapter) {
     this.adapter = adapter ?? createSyncAdapter();
@@ -96,6 +107,15 @@ export class SyncCoordinator {
 
   getLastReport(): SyncCoordinatorReport | null {
     return this.lastReport ? { ...this.lastReport } : null;
+  }
+
+  /** True, wenn ein weiterer **automatischer** Versuch zulaessig waere. */
+  canRetryAutomatically(): boolean {
+    return this.retryAttempts < MAX_RETRY_ATTEMPTS;
+  }
+
+  getRetryAttempts(): number {
+    return this.retryAttempts;
   }
 
   prepareRetry(state: AppPersistedState): AppPersistedState {
@@ -149,7 +169,31 @@ export class SyncCoordinator {
       currentState = pushResult.state;
       await this.adapter.acknowledgeChanges({ outboxIds: pushResult.completedOutboxIds });
 
-      if (!pushResult.success) {
+      /*
+       * FINANZ-SYNC-BLOCKER-01G — ein Versionskonflikt beendet den Lauf nicht.
+       *
+       * Bisher kehrte jeder gescheiterte Sendeversuch hier zurück, **bevor** der
+       * Abgleich lief. Genau das war der Grund, warum nach einem
+       * Einstellungskonflikt sofort ein blockierter Auftrag dastand, aber keine
+       * Entscheidung angeboten wurde: Der Konflikt mit beiden Werten entsteht
+       * erst im Abgleich — und der fand nie statt. Erst ein Neustart löste einen
+       * zweiten Lauf aus, dessen Sendeschleife nichts mehr zu tun hatte, sodass
+       * der Abgleich endlich durchkam.
+       *
+       * Ein Konflikt ist kein Übertragungsfehler. Er ist die Aufforderung
+       * nachzusehen, was die Cloud inzwischen sagt — und genau das tut der
+       * Abgleich. Nur echte Fehler brechen weiterhin ab.
+       */
+      const konfliktIds = new Set(
+        (pushResult.state.syncOutbox ?? [])
+          .filter((entry) => entry.status === 'blocked')
+          .map((entry) => entry.id),
+      );
+      const nurKonflikte =
+        pushResult.failedOutbox.length > 0 &&
+        pushResult.failedOutbox.every((failure) => konfliktIds.has(failure.outboxId));
+
+      if (!pushResult.success && !nurKonflikte) {
         this.syncState = 'error';
         this.lastError = pushResult.failedOutbox[0]?.message;
         const failedReport = mergeReports(
@@ -223,7 +267,20 @@ export class SyncCoordinator {
 
       this.syncState = 'synced';
       this.lastSyncedAt = new Date().toISOString();
+      /*
+       * 01G — ein reiner Konflikt hinterlässt keinen Fehlertext. Sonst stünde im
+       * Kopf „Fehler", während der Fehlerzähler null zeigt — genau der
+       * Widerspruch aus der Abnahme. Dass eine Entscheidung aussteht, liest die
+       * Oberfläche am blockierten Auftrag ab, nicht an einem Fehlerzustand.
+       */
       this.lastError = undefined;
+      /*
+       * FINANZ-SYNC-BLOCKER-01B — ein wirklich gelungener Lauf beendet die
+       * Fehlerserie. Ohne diese Zeile blieb der Zaehler auf seinem Hoechststand
+       * stehen und verbrauchte das Kontingent fuer den naechsten, voellig
+       * unabhaengigen Fehler.
+       */
+      this.retryAttempts = 0;
 
       /*
        * SYNC-DURABILITY-HARDENING-01G — der Sendeauftrag kommt aus **beiden**
@@ -268,7 +325,41 @@ export class SyncCoordinator {
     }
   }
 
-  async retrySync(state: AppPersistedState): Promise<SyncRunResult> {
+  /**
+   * Wiederholen.
+   *
+   * `manual: true` heisst: Ein Mensch hat den Knopf gedrueckt. Das ist kein
+   * Selbstlauf, sondern eine Entscheidung — und sie setzt den Zaehler zurueck,
+   * damit danach wieder ein regulaeres Kontingent automatischer Versuche zur
+   * Verfuegung steht. Eine Endlosschleife entsteht dadurch nicht: Jeder
+   * manuelle Lauf braucht eine neue Nutzerhandlung, und zwei Laeufe zugleich
+   * verhindert die Sperre unten.
+   *
+   * Blockierte Auftraege bleiben aussen vor. Sie warten auf eine fachliche
+   * Entscheidung, nicht auf einen weiteren Versuch; `prepareRetry` ruehrt sie
+   * nicht an.
+   */
+  async retrySync(
+    state: AppPersistedState,
+    options: { manual?: boolean } = {},
+  ): Promise<SyncRunResult> {
+    if (this.retryInFlight) {
+      const startedAt = new Date().toISOString();
+      const report = toCoordinatorReport(createEmptySyncSimulationReport(startedAt), this.retryAttempts, 0, 0);
+      report.finishedAt = startedAt;
+      report.errors.push({ outboxId: 'coordinator', message: 'Ein Wiederholungslauf läuft bereits' });
+      this.lastReport = report;
+      return { state, report, success: false, skipPersist: true };
+    }
+
+    if (options.manual) {
+      /*
+       * Der Nutzer hat ausdruecklich ausgeloest. Das Kontingent beginnt von
+       * vorn — sonst waere der Knopf nach dem Limit fuer immer tot.
+       */
+      this.retryAttempts = 0;
+    }
+
     if (this.retryAttempts >= MAX_RETRY_ATTEMPTS) {
       this.syncState = 'error';
       this.lastError = 'Maximale Retry-Anzahl erreicht';
@@ -280,8 +371,13 @@ export class SyncCoordinator {
       return { state, report, success: false, skipPersist: true };
     }
 
-    const retriedState = this.prepareRetry(state);
-    return this.runSync(retriedState);
+    this.retryInFlight = true;
+    try {
+      const retriedState = this.prepareRetry(state);
+      return await this.runSync(retriedState);
+    } finally {
+      this.retryInFlight = false;
+    }
   }
 
   /** Update last report after UI/Bootstrap post-processing (persist/clear warnings). */
@@ -298,6 +394,7 @@ export class SyncCoordinator {
   }
 
   resetForTests(): void {
+    this.retryInFlight = false;
     this.syncState = 'idle';
     this.lastReport = null;
     this.lastSyncedAt = undefined;

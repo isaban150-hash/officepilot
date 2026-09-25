@@ -17,6 +17,6 @@ describe('SearchPage', () => {
 
     expect(html).toContain('data-testid="search-page"');
     expect(html).toContain('data-testid="global-search-input"');
-    expect(html).toContain('OfficePilot durchsuchen');
+    expect(html).toContain('OfficeTakt durchsuchen');
   });
 });

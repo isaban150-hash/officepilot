@@ -3,6 +3,8 @@ import type { DocumentFileRef } from '../../types/documentFileRef';
 import type { DocumentFileRepresentationBinding } from '../../types/documentFileRepresentationBinding';
 import type { DocumentWorkResult } from '../../types/documentWorkResult';
 import type { Expense } from '../../types/expense';
+import type { AccountingAssignment } from '../../types/accounting';
+import type { AccountingPeriodClosure } from '../../types/accountingPeriod';
 import { parseExpensePaymentEntityId, type ExpensePaymentSyncEntity } from '../expense/expenseCloudSyncService';
 import type { SyncEntityType } from '../../types/sync';
 import type { VorgangNote } from '../../types/communication';
@@ -46,6 +48,21 @@ export type CloudSyncEntityPayload =
       entityType: 'dunning_documentation';
       entityId: string;
       entity: InvoiceDunningDocumentation;
+      rowVersion: number;
+      deleted: boolean;
+    }
+  /* STEUERBERATER-06A/06B — Kontierung und Monatsabschluss. */
+  | {
+      entityType: 'accounting_assignment';
+      entityId: string;
+      entity: AccountingAssignment;
+      rowVersion: number;
+      deleted: boolean;
+    }
+  | {
+      entityType: 'accounting_period_closure';
+      entityId: string;
+      entity: AccountingPeriodClosure;
       rowVersion: number;
       deleted: boolean;
     };
@@ -214,6 +231,34 @@ export function extractCloudSyncEntity(
       if (!expense) return null;
       const payment = (expense.payments ?? []).find((p) => p.id === parsed.paymentId) ?? null;
       return { entityType, entityId, entity: { id: entityId, expenseId: parsed.expenseId, paymentId: parsed.paymentId, payment }, rowVersion: 0, deleted: payment === null };
+    }
+    /*
+     * FINANZ-SYNC-BLOCKER-01B — die beiden Kontierungsentitäten.
+     *
+     * Sie fehlten hier, obwohl Allowlist, Registry und Change-Tracker sie
+     * längst kannten. Der Adapter bekam deshalb null und brach jeden Auftrag
+     * mit „Entity nicht gefunden" ab — vor dem ersten Netzwerkaufruf, mit
+     * hochgezähltem Versuchszähler und ohne dass je eine Anfrage entstand.
+     */
+    case 'accounting_assignment': {
+      const assignment = (state.accountingAssignments ?? []).find((item) => item.id === entityId);
+      if (!assignment) return null;
+      return {
+        entityType,
+        entityId,
+        entity: assignment,
+        rowVersion: assignment.sync?.version ?? 0,
+        deleted: assignment.sync?.deleted ?? false,
+      };
+    }
+    case 'accounting_period_closure': {
+      const closure = (state.accountingPeriodClosures ?? []).find((item) => item.id === entityId);
+      if (!closure) return null;
+      /*
+       * Ein Abschluss kennt keinen Grabstein — er ist der Nachweis. Wieder
+       * öffnen ist eine eigene Serveraktion, kein Löschen.
+       */
+      return { entityType, entityId, entity: closure, rowVersion: closure.sync?.version ?? 0, deleted: false };
     }
     default:
       return null;

@@ -110,7 +110,7 @@ describe('BETA-TEST-01 polish', () => {
       );
 
       expect(html).toContain('data-testid="search-empty-query"');
-      expect(html).toContain('OfficePilot durchsuchen');
+      expect(html).toContain('OfficeTakt durchsuchen');
     });
   });
 
@@ -256,6 +256,8 @@ describe('BETA-TEST-01 polish', () => {
         outbox: [],
         outboxCounts: { pending: 0, completed: 0, error: 0 },
         pendingOutboxEntries: [],
+        failedOutboxEntries: [],
+        settingsConflict: null,
         isOffline: false,
         hasRetryableErrors: false,
       });

@@ -10,7 +10,7 @@ import {
   InvoicePaymentForm,
 } from './InvoicePaymentForm';
 import { paymentStatusTone } from '../../services/ui/statusTone';
-import { isInvoiceCancelled } from '../../services/invoicePaymentService';
+import { canRecordInvoicePayment } from '../../services/invoicePaymentService';
 import { buildInvoiceReachPath } from '../../services/invoiceNavigation';
 import { buildKommunikationPath } from '../communication/communicationNavigation';
 import {
@@ -186,7 +186,8 @@ export function InvoiceOverviewCard({
               <Button type="button" size="sm" onClick={openInvoice} data-testid="invoice-overview-card-open">
                 {translate('invoice.open')}
               </Button>
-              {!isInvoiceCancelled(invoice) && (
+              {/* FINANZCORE-05C — nur solange etwas offen ist. */}
+              {canRecordInvoicePayment(invoice) && (
                 <Button
                   type="button"
                   size="sm"

@@ -31,6 +31,20 @@ import {
   WorkspaceCloudError,
 } from '../workspace/workspaceCloudService';
 import { extractCloudSyncEntity, resolveCloudWorkspaceId } from '../workspace/workspaceSyncPayloadService';
+import {
+  ACCOUNTING_PUSH_ORDER,
+  applyAccountingPushResultToState,
+  isAccountingSyncEntityType,
+  pushAccountingAssignment,
+} from '../accounting/accountingCloudSyncService';
+import {
+  applyAccountingPeriodPushResultToState,
+  pushAccountingPeriodClosure,
+} from '../accounting/accountingPeriodCloudSyncService';
+import {
+  applyAccountingPullToState,
+  pullWorkspaceAccountingFromCloud,
+} from '../accounting/accountingCloudPullService';
 import { mergeRemoteWorkspacePullIntoState } from '../workspace/workspaceProvisioningService';
 import {
   applyRemoteCompanyProfileSyncMeta,
@@ -193,6 +207,7 @@ function updateOutboxEntryStatus(
   outboxId: string,
   status: SyncOutboxEntry['status'],
   retryCount?: number,
+  failure?: { message: string; retryable: boolean },
 ): SyncOutboxEntry[] {
   return outbox.map((entry) =>
     entry.id === outboxId
@@ -200,6 +215,25 @@ function updateOutboxEntryStatus(
           ...entry,
           status,
           retryCount: retryCount ?? entry.retryCount,
+          /*
+           * FINANZ-SYNC-BLOCKER-01B — der Grund bleibt am Auftrag stehen, damit
+           * die Sync-Seite ihn benennen kann statt nur zu zaehlen. Ein
+           * erledigter Auftrag verliert ihn wieder; sonst stuende ein alter
+           * Fehler neben einer laengst gelungenen Uebertragung.
+           */
+          ...(failure
+            ? {
+                lastErrorMessage: failure.message,
+                lastErrorAt: new Date().toISOString(),
+                lastErrorRetryable: failure.retryable,
+              }
+            : status === 'completed'
+              ? {
+                  lastErrorMessage: undefined,
+                  lastErrorAt: undefined,
+                  lastErrorRetryable: undefined,
+                }
+              : {}),
         }
       : entry,
   );
@@ -402,6 +436,13 @@ function applyPushResultToState(
       ...next.workspaceSettings,
       version: rowVersion,
       updatedAt,
+      /*
+       * FINANZ-SYNC-BLOCKER-01B — die Übertragung ist durch, also steht nichts
+       * mehr aus. Bliebe der Vermerk stehen, würde ein späterer Pull dieselben
+       * Felder erneut als „bewusst lokal geändert" behandeln und einen längst
+       * überholten Wert über den Cloud-Stand legen.
+       */
+      pendingKeys: undefined,
     };
   } else if (entityType === 'workspace' && next.workspace) {
     next.workspace = {
@@ -457,6 +498,27 @@ function applyPushResultToState(
       expense.id === entityId
         ? { ...expense, sync: { updatedAt, version: rowVersion, deleted, deletedAt: deleted ? updatedAt : undefined, deviceId: state.syncClient!.deviceId, workspaceId } }
         : expense,
+    );
+  } else if (entityType === 'accounting_assignment') {
+    // STEUERBERATER-06A — nur die Serverversion; die Kontierung selbst bleibt.
+    next.accountingAssignments = applyAccountingPushResultToState(
+      next.accountingAssignments ?? [],
+      entityId,
+      rowVersion,
+      updatedAt,
+      deleted,
+      state.syncClient!.deviceId,
+      workspaceId,
+    );
+  } else if (entityType === 'accounting_period_closure') {
+    // STEUERBERATER-06B — nur die Serverversion; Revision und Manifest bleiben.
+    next.accountingPeriodClosures = applyAccountingPeriodPushResultToState(
+      next.accountingPeriodClosures ?? [],
+      entityId,
+      rowVersion,
+      updatedAt,
+      state.syncClient!.deviceId,
+      workspaceId,
     );
   } else if (entityType === 'dunning_documentation') {
     // CLOUD-DURABILITY-CORE-01D — nur die Serverversion; der Nachweis bleibt.
@@ -713,8 +775,8 @@ export class SupabaseSyncAdapter implements SyncAdapter {
       // ANGEBOT-01B — das Angebot nach seinem Archivdokument: Der Server prueft die Ablage gegen die Dokumentzeile.
       .sort(
         (a, b) =>
-          (INTAKE_PUSH_ORDER[a.entityType] ?? EXPENSE_PUSH_ORDER[a.entityType] ?? OFFER_PUSH_ORDER[a.entityType] ?? -1) -
-          (INTAKE_PUSH_ORDER[b.entityType] ?? EXPENSE_PUSH_ORDER[b.entityType] ?? OFFER_PUSH_ORDER[b.entityType] ?? -1),
+          (INTAKE_PUSH_ORDER[a.entityType] ?? EXPENSE_PUSH_ORDER[a.entityType] ?? OFFER_PUSH_ORDER[a.entityType] ?? ACCOUNTING_PUSH_ORDER[a.entityType] ?? -1) -
+          (INTAKE_PUSH_ORDER[b.entityType] ?? EXPENSE_PUSH_ORDER[b.entityType] ?? OFFER_PUSH_ORDER[b.entityType] ?? ACCOUNTING_PUSH_ORDER[b.entityType] ?? -1),
       );
 
     for (const entry of pendingEntries) {
@@ -765,7 +827,10 @@ export class SupabaseSyncAdapter implements SyncAdapter {
           message: `Entity ${entry.entityType}:${entry.entityId} nicht gefunden`,
           retryable: false,
         });
-        outbox = updateOutboxEntryStatus(outbox, entry.id, 'error', entry.retryCount + 1);
+        outbox = updateOutboxEntryStatus(outbox, entry.id, 'error', entry.retryCount + 1, {
+          message: `Entity ${entry.entityType}:${entry.entityId} nicht gefunden`,
+          retryable: false,
+        });
         report.errorCount += 1;
         report.errors.push({ outboxId: entry.id, message: 'Entity nicht gefunden' });
         continue;
@@ -775,6 +840,82 @@ export class SupabaseSyncAdapter implements SyncAdapter {
         completedOutboxIds.push(entry.id);
         outbox = updateOutboxEntryStatus(outbox, entry.id, 'completed');
         report.completedOutboxCount += 1;
+        continue;
+      }
+
+      /*
+       * FINANZ-SYNC-BLOCKER-01B — Kontierung und Monatsabschluss gehen ueber
+       * ihre eigenen RPCs.
+       *
+       * Ueber das generische Upsert gingen sie nicht nur an der Fachlogik
+       * vorbei: Dessen abschliessendes else haette sie mit "Unbekannter
+       * Entity-Typ" abgelehnt. Fuer den Abschluss gibt es dort ausserdem gar
+       * kein Upsert — Abschliessen und Wiedereroeffnen sind Aktionen, keine
+       * Zeilenzustaende.
+       */
+      if (isAccountingSyncEntityType(entry.entityType)) {
+        try {
+          this.assertClient();
+          const outcome =
+            extracted.entityType === 'accounting_assignment'
+              ? await pushAccountingAssignment(
+                  extracted.entity,
+                  entry.operation,
+                  extracted.rowVersion,
+                  workspaceId,
+                  this.client,
+                )
+              : extracted.entityType === 'accounting_period_closure'
+                ? await pushAccountingPeriodClosure(
+                    extracted.entity,
+                    extracted.rowVersion,
+                    workspaceId,
+                    this.client,
+                  )
+                : ({ kind: 'skipped', reason: 'unsupported' } as const);
+
+          if (outcome.kind === 'pushed') {
+            currentState = applyPushResultToState(
+              currentState,
+              entry.entityType,
+              entry.entityId,
+              outcome.rowVersion,
+              new Date().toISOString(),
+              'deleted' in outcome ? outcome.deleted : false,
+            );
+          }
+          completedOutboxIds.push(entry.id);
+          outbox = updateOutboxEntryStatus(outbox, entry.id, 'completed');
+          report.completedOutboxCount += 1;
+          report.syncedEntities.push({
+            entityType: entry.entityType,
+            entityId: entry.entityId,
+            resolution: outcome.kind === 'pushed' ? 'local_wins' : 'noop',
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Push fehlgeschlagen';
+          const retryable = error instanceof WorkspaceCloudError ? error.retryable : true;
+          const isVersionConflict =
+            error instanceof WorkspaceCloudError && error.code === 'version_conflict';
+          failedOutbox.push({ outboxId: entry.id, message, retryable });
+          outbox = updateOutboxEntryStatus(
+            outbox,
+            entry.id,
+            isVersionConflict ? 'blocked' : 'error',
+            entry.retryCount + 1,
+            { message, retryable },
+          );
+          report.errorCount += 1;
+          report.errors.push({ outboxId: entry.id, message });
+          if (isVersionConflict) {
+            report.conflictCount += 1;
+            report.conflicts.push({
+              entityType: entry.entityType,
+              entityId: entry.entityId,
+              resolution: 'conflict',
+            });
+          }
+        }
         continue;
       }
 
@@ -805,7 +946,7 @@ export class SupabaseSyncAdapter implements SyncAdapter {
           const retryable = error instanceof WorkspaceCloudError ? error.retryable : true;
           const isVersionConflict = error instanceof WorkspaceCloudError && error.code === 'version_conflict';
           failedOutbox.push({ outboxId: entry.id, message, retryable });
-          outbox = updateOutboxEntryStatus(outbox, entry.id, isVersionConflict ? 'blocked' : 'error', entry.retryCount + 1);
+          outbox = updateOutboxEntryStatus(outbox, entry.id, isVersionConflict ? 'blocked' : 'error', entry.retryCount + 1, { message, retryable });
           report.errorCount += 1;
           report.errors.push({ outboxId: entry.id, message });
           if (isVersionConflict) {
@@ -841,7 +982,10 @@ export class SupabaseSyncAdapter implements SyncAdapter {
          */
         const message = `Sendenachweis für ${entry.entityType}:${entry.entityId} konnte nicht gesichert werden`;
         failedOutbox.push({ outboxId: entry.id, message, retryable: true });
-        outbox = updateOutboxEntryStatus(outbox, entry.id, 'error', entry.retryCount + 1);
+        outbox = updateOutboxEntryStatus(outbox, entry.id, 'error', entry.retryCount + 1, {
+          message,
+          retryable: true,
+        });
         report.errorCount += 1;
         report.errors.push({ outboxId: entry.id, message });
         continue;
@@ -990,6 +1134,7 @@ export class SupabaseSyncAdapter implements SyncAdapter {
           entry.id,
           isVersionConflict ? 'blocked' : 'error',
           entry.retryCount + 1,
+          { message, retryable },
         );
         report.errorCount += 1;
         report.errors.push({ outboxId: entry.id, message });
@@ -1011,9 +1156,21 @@ export class SupabaseSyncAdapter implements SyncAdapter {
 
     markOutboxEntriesCompleted(completedOutboxIds);
     if (failedOutbox.length > 0) {
+      /*
+       * FINANZ-SYNC-BLOCKER-01B — jeder Auftrag traegt seinen eigenen Grund und
+       * behaelt die Einstufung, die er oben bekommen hat. Ein Versionskonflikt
+       * bleibt `blocked` und faellt nicht in den Fehlertopf.
+       */
       markOutboxEntriesFailed(
-        failedOutbox.map((item) => item.outboxId),
-        failedOutbox[0]?.message,
+        failedOutbox.map((item) => {
+          const eintrag = outbox.find((candidate) => candidate.id === item.outboxId);
+          return {
+            outboxId: item.outboxId,
+            message: item.message,
+            retryable: item.retryable,
+            status: eintrag?.status === 'blocked' ? ('blocked' as const) : ('error' as const),
+          };
+        }),
       );
     }
 
@@ -1210,6 +1367,47 @@ export class SupabaseSyncAdapter implements SyncAdapter {
           const message = error instanceof Error ? error.message : 'Ausgaben-Pull fehlgeschlagen';
           report.errorCount += 1;
           report.errors.push({ outboxId: 'expense-pull', message });
+        }
+      }
+
+      /*
+       * FINANZ-SYNC-BLOCKER-01C — Kontierungen und Monatsabschluesse.
+       *
+       * Hier fehlte die Gegenrichtung zu 01B: Gesendet wurde, geladen nie. Eine
+       * frische Anmeldung und jedes zweite Geraet standen deshalb ohne
+       * Kontierung und ohne Abschlusshistorie da, obwohl beides in der Cloud
+       * lag — und das Export-Gate haette einen laengst abgeschlossenen Monat als
+       * „nicht abgeschlossen" gemeldet.
+       *
+       * Wie bei den Ausgaben: Mitglieder ohne Finanzrecht bekommen "Kein
+       * Zugriff"; das ist die Rollenregel, kein Fehler, und wird still
+       * uebersprungen.
+       */
+      try {
+        const accountingPull = await pullWorkspaceAccountingFromCloud(workspaceId, this.client);
+        const appliedAccounting = applyAccountingPullToState(intakeState, accountingPull, {
+          deviceId: input.state.syncClient!.deviceId,
+          workspaceId,
+          outbox: input.state.syncOutbox,
+        });
+        intakeState = appliedAccounting.state;
+        report.mergedEntityCount +=
+          appliedAccounting.counts.assignments + appliedAccounting.counts.closures;
+        for (const conflict of appliedAccounting.conflicts) {
+          const trenner = conflict.indexOf(':');
+          report.conflictCount += 1;
+          report.conflicts.push({
+            entityType: conflict.slice(0, trenner) as SyncOutboxEntry['entityType'],
+            entityId: conflict.slice(trenner + 1),
+            resolution: 'conflict',
+          });
+        }
+      } catch (error) {
+        const isRoleDenied = error instanceof WorkspaceCloudError && error.code === 'rls';
+        if (!isRoleDenied) {
+          const message = error instanceof Error ? error.message : 'Kontierungs-Pull fehlgeschlagen';
+          report.errorCount += 1;
+          report.errors.push({ outboxId: 'accounting-pull', message });
         }
       }
 

@@ -469,6 +469,45 @@ const deLegacy = {
   'kunden.detail.closedOrdersEmpty': 'Keine abgeschlossenen Vorgänge.',
   'kunden.detail.invoicesTitle': 'Rechnungen',
   'kunden.detail.openReceivable': 'Offene Forderung',
+  /*
+   * FINANZCORE-05D — Kundensaldo und offene Posten.
+   *
+   * „Rechnerischer Saldo" statt „Saldo": Das Wort soll sagen, dass hier
+   * zusammengezaehlt und nicht gebucht wurde. Eine Ueberzahlung begleicht
+   * keine andere Rechnung.
+   */
+  'kunden.receivables.title': 'Offene Posten',
+  'kunden.receivables.open': 'Offene Forderungen',
+  'kunden.receivables.overdue': 'Davon überfällig',
+  'kunden.receivables.credit': 'Kundenguthaben',
+  'kunden.receivables.netBalance': 'Rechnerischer Saldo',
+  'kunden.receivables.openCount': 'Offene Rechnungen',
+  'kunden.receivables.overdueCount': 'Überfällige Rechnungen',
+  'kunden.receivables.empty': 'Keine offenen Forderungen.',
+  'kunden.receivables.netBalanceHint':
+    'Rechnerische Zusammenfassung. Ein Guthaben wird nicht automatisch mit offenen Rechnungen verrechnet.',
+  'kunden.receivables.agingTitle': 'Fälligkeit der offenen Beträge',
+  /*
+   * 01H — eine unversendete Rechnung ist nach Produktregel nicht fällig, aber
+   * aus einem anderen Grund als eine mit zukünftiger Frist. Das Wort sagt
+   * den Grund, damit ein vergangenes Datum nicht wie ein Rechenfehler wirkt.
+   */
+  'kunden.receivables.aging.notSent': 'Noch nicht versendet',
+  'kunden.receivables.aging.notDue': 'Nicht fällig',
+  'kunden.receivables.aging.days1to30': '1–30 Tage überfällig',
+  'kunden.receivables.aging.days31to60': '31–60 Tage überfällig',
+  'kunden.receivables.aging.days61to90': '61–90 Tage überfällig',
+  'kunden.receivables.aging.over90': 'Über 90 Tage überfällig',
+  'kunden.receivables.itemsTitle': 'Offene Rechnungen',
+  'kunden.receivables.itemDue': 'Fällig',
+  'kunden.receivables.itemNoDue': 'Ohne Fälligkeit',
+  'kunden.receivables.itemAmount': 'Rechnungsbetrag',
+  'kunden.receivables.itemPaid': 'Bezahlt',
+  'kunden.receivables.itemOpen': 'Offen',
+  'kunden.receivables.overdueDays': 'seit {days} Tagen überfällig',
+  'kunden.receivables.creditTitle': 'Kundenguthaben / Überzahlungen',
+  'kunden.receivables.creditHint':
+    'Auf diese Rechnungen wurde mehr gezahlt als gefordert. Der Betrag bleibt stehen, bis er erstattet oder verrechnet wird.',
   'kunden.detail.openInvoicesTitle': 'Offene Rechnungen',
   'kunden.detail.openInvoicesEmpty': 'Keine offenen Rechnungen.',
   'kunden.detail.paidInvoicesTitle': 'Bezahlte Rechnungen',
@@ -690,6 +729,9 @@ const deLegacy = {
   'sync.summary.waitingHint': '{count} Änderungen wurden noch nicht übertragen. Sie werden beim nächsten Abgleich erneut geprüft.',
   'sync.summary.failedOne': '1 Änderung nicht übertragen',
   'sync.summary.failed': '{count} Änderungen nicht übertragen',
+  /* FINANZ-SYNC-BLOCKER-01G — Konflikt ist ein eigener Zustand, kein Fehler. */
+  'sync.summary.conflictOne': 'Entscheidung nötig',
+  'sync.summary.conflict': 'Entscheidung nötig – {count} Konflikte',
   'sync.summary.mergedOne': '1 Änderung wurde automatisch zusammengeführt.',
   'sync.summary.merged': '{count} Änderungen wurden automatisch zusammengeführt.',
   'sync.outboxReason.betaMode': 'Im Testmodus wird nichts übertragen',
@@ -697,6 +739,53 @@ const deLegacy = {
   'sync.outboxReason.failed': 'Übertragung fehlgeschlagen – bitte erneut versuchen',
   'sync.outboxReason.localOnly': 'Bleibt auf diesem Gerät – wird nicht in die Cloud übertragen',
   'sync.outboxStatus.localOnly': 'Nur lokal',
+  'sync.entity.accounting_assignment': 'Kontierung',
+  'sync.entity.accounting_period_closure': 'Monatsabschluss',
+  'sync.entity.workspace_settings': 'Betriebseinstellungen',
+
+  /* FINANZ-SYNC-BLOCKER-01B — was genau nicht übertragen wurde, und warum. */
+  'sync.failure.title': 'Nicht übertragen',
+  /*
+   * FINANZ-SYNC-BLOCKER-01F — der Satz „Verloren geht nichts." stand hier
+   * unbedingt, auch neben einem Konflikt, in dem gerade eine lokale Einstellung
+   * verschwunden war. Eine Zusage, die die Software nicht einlöst, ist
+   * schlimmer als keine. Jetzt steht hier nur noch, was nachweislich stimmt:
+   * Diese Aufträge sind nicht übertragen.
+   */
+  'sync.failure.hint':
+    'Diese Änderungen sind nicht übertragen und liegen weiterhin auf diesem Gerät.',
+  'sync.failure.kind.error': 'Fehler',
+  'sync.failure.kind.conflict': 'Konflikt',
+  'sync.failure.kind.waiting': 'Wartet',
+  'sync.failure.kind.local_only': 'Nur lokal',
+  'sync.failure.retryable': 'Erneuter Versuch möglich',
+  'sync.failure.notRetryable': 'Erneuter Versuch ändert nichts',
+  'sync.failure.attempts': '{count} Versuche',
+  'sync.failure.reason.notDeployed':
+    'Die Cloud kennt diesen Datentyp noch nicht. Die Freischaltung steht noch aus.',
+  'sync.failure.reason.missingLocal':
+    'Der zugehörige Datensatz wurde auf diesem Gerät nicht gefunden.',
+  'sync.failure.reason.conflictPending':
+    'Der Cloud-Stand ist neuer. Beim nächsten Abgleich wird geprüft, was zu entscheiden ist.',
+  'sync.failure.reason.conflict':
+    'Der Cloud-Stand ist neuer. Bitte entscheiden, welcher Stand gelten soll.',
+  'sync.failure.reason.auth': 'Anmeldung abgelaufen. Bitte neu anmelden.',
+  'sync.failure.reason.permission': 'Keine Berechtigung für diesen Arbeitsbereich.',
+  'sync.failure.reason.network': 'Keine Verbindung zur Cloud.',
+  'sync.failure.reason.rejected':
+    'Die Cloud hat den Inhalt abgelehnt. Bitte den Datensatz prüfen.',
+  'sync.failure.reason.notSent': 'Der Sendevorgang konnte nicht abgesichert werden.',
+  'sync.failure.reason.waiting': 'Wartet auf die nächste Übertragung',
+  'sync.failure.reason.unknown': 'Die Übertragung ist fehlgeschlagen.',
+
+  /* Die offene Entscheidung zu den Betriebseinstellungen. */
+  'sync.settingsConflict.title': 'Einstellungen: Entscheidung nötig',
+  'sync.settingsConflict.hint':
+    'Diese Einstellungen wurden auf diesem Gerät und in der Cloud unterschiedlich gesetzt. Beide Stände bleiben erhalten, bis Sie entscheiden. Alle übrigen Einstellungen wurden bereits zusammengeführt.',
+  'sync.settingsConflict.field': '{key}: hier „{local}“, in der Cloud „{cloud}“',
+  'sync.settingsConflict.keepLocal': 'Wert dieses Geräts behalten',
+  'sync.settingsConflict.takeCloud': 'Cloud-Wert übernehmen',
+  'sync.settingsConflict.resolved': 'Entscheidung übernommen. Die Übertragung ist wieder möglich.',
   'sync.resolution.remoteWins': 'Cloud-Stand übernommen',
   'sync.resolution.localWins': 'Stand dieses Geräts übernommen',
   'sync.resolution.union': 'Beide Stände zusammengeführt',
@@ -1276,6 +1365,208 @@ const deLegacy = {
   'vorgang.invoices': 'Rechnungen',
   'vorgang.invoicesSectionIntro':
     'Hier finden Sie vorbereitete und abgeschlossene Rechnungen zu diesem Vorgang.',
+  /*
+   * FINANZCORE-05E — Abrechnung und Zahlungsstand eines Auftrags.
+   *
+   * Die Ueberschriften nennen den Massstab ausdruecklich: Der Auftragswert
+   * ist netto (so stehen die Auftragspositionen da), eine Forderung wird
+   * brutto beglichen. Ohne diese Angabe wuerde jemand 11.900 bezahlt mit
+   * 10.000 Auftragswert vergleichen und einen Fehler sehen, wo keiner ist.
+   */
+  /*
+   * STEUERBERATER-06A — Kontierung.
+   *
+   * Die Statuswoerter sagen, was zu tun ist, nicht wie der Code heisst:
+   * „Zu pruefen", „Bestaetigt", „Klaerung noetig". Und „Vorgeschlagen" ist
+   * eine Aussage ueber die Herkunft, nicht ueber die Gueltigkeit.
+   */
+  'accounting.title': 'Kontierung',
+  'accounting.settings.section': 'Buchhaltung',
+  /*
+   * STEUERBERATER-06B — Monatsabschluss.
+   *
+   * Bewusst ohne „festgeschrieben", „GoBD" oder „rechtssicher": OfficeTakt
+   * sperrt nach dem Abschluss nichts, es erkennt spaetere Aenderungen. Ein
+   * Versprechen, das die Software nicht einloest, waere schlimmer als keines.
+   */
+  /*
+   * STEUERBERATER-06C — Uebergabe an den Steuerberater.
+   *
+   * Das Wort „DATEV" faellt nur dort, wo erklaert wird, warum es das
+   * Format **nicht** gibt. Eine Datei, die so heisst und es nicht ist, waere
+   * schlimmer als keine.
+   */
+  'accountingExport.title': 'Übergabe an den Steuerberater',
+  'accountingExport.package': 'Steuerberater-Paket erstellen',
+  'accountingExport.packageHint':
+    'Enthält Buchungsdaten, Originalbelege, das Abschlussmanifest und einen Prüfbericht.',
+  'accountingExport.running': 'Paket wird erstellt …',
+  'accountingExport.failed': 'Das Paket konnte nicht erstellt werden.',
+  'accountingExport.blockedTitle': 'Übergabe noch nicht möglich',
+  'accountingExport.blocker.not_closed':
+    'Der Monat ist nicht abgeschlossen. Bitte zuerst oben abschließen.',
+  'accountingExport.blocker.changed_after_close':
+    'Seit dem Monatsabschluss wurden steuerlich relevante Daten geändert. Öffnen und prüfen Sie den Monat erneut.',
+  'accountingExport.blocker.period_blockers': 'Es sind noch {count} Punkte offen.',
+  /* DATEV — getrennt bewertet und getrennt erklaert. */
+  'accountingExport.datevTitle': 'DATEV-Buchungsstapel',
+  'accountingExport.datevUnavailable': 'DATEV-Format ist noch nicht eingerichtet.',
+  'accountingExport.datevBlocker.datev_no_specification':
+    'Es ist keine geprüfte DATEV-Formatbeschreibung hinterlegt.',
+  'accountingExport.datevBlocker.datev_no_counter_account':
+    'Für DATEV fehlen noch Gegenkonten und die Buchungsrichtung.',
+  'accountingExport.datevBlocker.datev_no_tax_key': 'Es fehlen die DATEV-Steuerschlüssel.',
+  'accountingExport.datevBlocker.datev_no_client_profile':
+    'Berater- und Mandantennummer sind nicht hinterlegt.',
+  'accountingExport.datevNote':
+    'Das Steuerberater-Paket ist davon unabhängig und enthält die Buchungsdaten als neutrale CSV.',
+  'accountingPeriod.title': 'Monatsabschluss',
+  'accountingPeriod.state': 'Stand',
+  'accountingPeriod.state.open': 'Offen',
+  'accountingPeriod.state.not_ready': 'Noch nicht bereit',
+  'accountingPeriod.state.ready': 'Bereit zum Abschluss',
+  'accountingPeriod.state.closed': 'Abgeschlossen',
+  'accountingPeriod.state.changed_after_close': 'Seit Abschluss geändert',
+  'accountingPeriod.documents': 'Steuerlich relevante Belege',
+  'accountingPeriod.noDocuments': 'Keine steuerlich relevanten Belege in diesem Monat.',
+  'accountingPeriod.blockersTitle': 'Das fehlt noch',
+  'accountingPeriod.blocker.unassigned_documents': 'Belege ohne Kontierung: {count}',
+  'accountingPeriod.blocker.needs_review': 'Kontierungen noch zu prüfen: {count}',
+  'accountingPeriod.blocker.needs_clarification': 'Kontierungen in Klärung: {count}',
+  'accountingPeriod.blocker.confirmed_without_account':
+    'Bestätigte Kontierungen ohne Sachkonto: {count}',
+  'accountingPeriod.blocker.money_integrity': 'Belege mit widersprüchlichen Beträgen: {count}',
+  'accountingPeriod.action.close': 'Monat abschließen',
+  'accountingPeriod.action.reopen': 'Monat wieder öffnen',
+  'accountingPeriod.notReady': 'Der Monat lässt sich noch nicht abschließen.',
+  'accountingPeriod.alreadyClosed':
+    'Für diesen Monat ist bereits ein Abschluss offen. Bitte zuerst wieder öffnen.',
+  'accountingPeriod.notClosed': 'Dieser Monat ist nicht abgeschlossen.',
+  'accountingPeriod.closedAt': 'Abgeschlossen am',
+  'accountingPeriod.closedBy': 'Abgeschlossen von',
+  'accountingPeriod.revision': 'Revision',
+  'accountingPeriod.changedHint':
+    'Die Daten dieses Monats haben sich seit dem Abschluss geändert. Vor einer Übergabe bitte erneut prüfen und den Monat neu abschließen.',
+  'accountingPeriod.closedHint':
+    'Spätere Änderungen an Belegen oder Kontierungen werden erkannt und müssen erneut geprüft werden.',
+  /* Abschlussdialog. */
+  'accountingPeriod.closeDialog.title': 'Monat abschließen',
+  'accountingPeriod.closeDialog.message':
+    'Sie schließen {month} mit {count} steuerlich relevanten Belegen ab. Alle Kontierungen sind bestätigt.',
+  'accountingPeriod.closeDialog.messageEmpty':
+    'Sie schließen {month} ohne steuerlich relevante Belege ab.',
+  'accountingPeriod.closeDialog.confirm': 'Monat abschließen',
+  'accountingPeriod.closeDialog.failed': 'Der Monat konnte nicht abgeschlossen werden.',
+  /* Wiederoeffnungsdialog. */
+  'accountingPeriod.reopenDialog.title': 'Monat wieder öffnen',
+  'accountingPeriod.reopenDialog.message':
+    'Der Monat wird wieder zur Bearbeitung geöffnet. Der bisherige Abschluss bleibt in der Historie erhalten.',
+  'accountingPeriod.reopenDialog.reason': 'Grund (optional)',
+  'accountingPeriod.reopenDialog.confirm': 'Wieder öffnen',
+  'accountingPeriod.reopenDialog.failed': 'Der Monat konnte nicht geöffnet werden.',
+  /* Historie. */
+  'accountingPeriod.historyTitle': 'Abschlussverlauf',
+  'accountingPeriod.history.current': 'Aktuell',
+  'accountingPeriod.history.reopened': 'Später wieder geöffnet',
+  'accountingPeriod.history.reason': 'Grund',
+  'accounting.settings.hint':
+    'Der Kontenrahmen bestimmt, nach welchem Schema Belege kontiert werden. Er gilt für den ganzen Betrieb.',
+  'accounting.chart': 'Kontenrahmen',
+  'accounting.chart.notChosen': 'Noch nicht festgelegt',
+  /*
+   * FINANZ-SYNC-BLOCKER-01G — während ein Konflikt offen ist, zeigt diese Seite
+   * den Cloud-Wert. Ohne Hinweis hielte man ihn für die getroffene Wahl.
+   * Entschieden wird weiterhin zentral auf der Synchronisationsseite.
+   */
+  'accounting.chart.conflictPending':
+    'Für den Kontenrahmen steht eine Sync-Entscheidung offen. Bis dahin ist der hier gezeigte Wert nicht endgültig – klären Sie ihn unter Synchronisation.',
+  'accounting.chart.hint':
+    'Der Kontenrahmen gilt für den ganzen Betrieb. Bestehende Kontierungen behalten den Rahmen, mit dem sie angelegt wurden.',
+  'accounting.chart.invalid': 'Unbekannter Kontenrahmen.',
+  'accounting.chart.noWorkspace': 'Ohne Betrieb lässt sich kein Kontenrahmen speichern.',
+  'accounting.account': 'Sachkonto',
+  'accounting.accountLabel': 'Kontobezeichnung',
+  'accounting.accountEmpty': 'Noch kein Sachkonto',
+  'accounting.taxTreatment': 'Steuerbehandlung',
+  'accounting.bookingText': 'Buchungstext',
+  'accounting.status': 'Stand',
+  'accounting.origin': 'Herkunft',
+  'accounting.status.needs_review': 'Zu prüfen',
+  'accounting.status.confirmed': 'Bestätigt',
+  'accounting.status.needs_clarification': 'Klärung nötig',
+  'accounting.status.none': 'Noch nicht kontiert',
+  'accounting.origin.suggested': 'Vorgeschlagen',
+  'accounting.origin.manual': 'Manuell gewählt',
+  'accounting.notFound': 'Kontierung nicht gefunden.',
+  'accounting.confirmNeedsAccount':
+    'Zum Bestätigen fehlt das Sachkonto. Lieber kein Konto als ein falsches — bitte eintragen.',
+  'accounting.action.start': 'Kontierung anlegen',
+  'accounting.action.edit': 'Bearbeiten',
+  'accounting.action.save': 'Übernehmen',
+  'accounting.action.cancel': 'Abbrechen',
+  'accounting.action.confirm': 'Kontierung bestätigen',
+  'accounting.action.unclear': 'Klärung nötig',
+  'accounting.saveHint':
+    'Übernehmen speichert nur. Bestätigt wird erst mit der ausdrücklichen Bestätigung.',
+  'accounting.empty': 'Für diesen Beleg wurde noch nichts kontiert.',
+  /* Begruendungen des Vorschlags — Produktsprache, keine Codebegriffe. */
+  'accounting.reason.noAccountCatalog':
+    'Buchungstext und Steuerbehandlung stammen vom Beleg. Ein Sachkonto schlägt OfficeTakt nicht vor — bitte eintragen.',
+  'accounting.reason.taxUnclear':
+    'Der Steuerstatus des Belegs ist unklar. Bitte zuerst klären, dann kontieren.',
+  'accounting.reason.expenseCreditNote':
+    'Gutschrift eines Lieferanten. Betrag und Vorzeichen bleiben unverändert; die Buchung bitte prüfen.',
+  'accounting.reason.invoiceCancelled':
+    'Stornierte Rechnung. Sie bleibt für die Übergabe erhalten; die Buchung bitte prüfen.',
+  /* Monatsuebersicht im Steuerberaterbereich. */
+  'accounting.overview.title': 'Kontierungsstand',
+  'accounting.overview.progress': '{done} von {total} Belegen kontiert',
+  'accounting.overview.toReview': '{count} zu prüfen',
+  'accounting.overview.toClarify': '{count} in Klärung',
+  'accounting.overview.unassigned': '{count} nicht kontiert',
+  'accounting.overview.confirmed': '{count} bestätigt',
+  'accounting.overview.empty': 'Für diesen Monat liegen keine steuerlich relevanten Belege vor.',
+  'accounting.overview.allDone': 'Alle Belege dieses Monats sind kontiert und bestätigt.',
+  'accounting.overview.openTitle': 'Noch offen',
+  'accounting.overview.noExport':
+    'Noch keine DATEV-Datei und kein Monatsabschluss — dieser Stand ist die Vorbereitung dafür.',
+  'order.financials.title': 'Abrechnung',
+  'order.financials.billingTitle': 'Abrechnungsfortschritt (netto)',
+  'order.financials.paymentTitle': 'Zahlungsstand (brutto)',
+  'order.financials.orderValue': 'Auftragswert',
+  'order.financials.invoiced': 'Bereits abgerechnet',
+  'order.financials.remaining': 'Noch abzurechnen',
+  'order.financials.invoiceCount': 'Rechnungen',
+  'order.financials.noOrderValue': 'Kein fester Auftragswert',
+  'order.financials.overInvoicedHint':
+    'Es wurde mehr abgerechnet als beauftragt. Bitte prüfen, ob ein Nachtrag fehlt.',
+  'order.financials.paid': 'Bezahlt',
+  'order.financials.open': 'Offen',
+  'order.financials.overdue': 'Davon überfällig',
+  'order.financials.overpaid': 'Überzahlung',
+  'order.financials.overpaidHint':
+    'Auf einzelne Rechnungen wurde mehr gezahlt als gefordert. Der Betrag wird nicht automatisch mit offenen Rechnungen verrechnet.',
+  'order.financials.stateFullyInvoiced': 'Vollständig abgerechnet',
+  'order.financials.stateOpenBilling': 'Noch nicht vollständig abgerechnet',
+  'order.financials.stateSettled': 'Zahlungen ausgeglichen',
+  'order.financials.stateNotSettled': 'Zahlungen noch offen',
+  /*
+   * 01H — zwei Zustände, die bis hierher als „Zahlungen noch offen" erschienen:
+   * keine wirksame Rechnung (etwa nur Stornos) und eine Überzahlung ohne
+   * offenen Rest. Beides ist weder offen noch einfach „bezahlt".
+   */
+  'order.financials.stateNoActiveClaim': 'Keine aktive Forderung',
+  'order.financials.stateOverpaid': 'Nichts offen, Überzahlung vorhanden',
+  'order.financials.stateAwaitsFinal':
+    'Auftragswert rechnerisch erreicht (inkl. Abschlägen) – Schlussrechnung steht noch aus',
+  'order.financials.stateHasFinal': 'Schlussrechnung vorhanden',
+  'order.financials.historyTitle': 'Rechnungsverlauf',
+  'order.financials.noInvoices': 'Noch keine Rechnungen für diesen Auftrag.',
+  'order.financials.itemAmount': 'Betrag',
+  'order.financials.itemPaid': 'Bezahlt',
+  'order.financials.itemOpen': 'Offen',
+  'order.financials.itemOverpaid': 'Überzahlung',
+  'order.financials.cancelled': 'Storniert',
   'vorgang.invoicesSummaryCount': 'Rechnungen',
   'vorgang.invoicesSummaryOpen': 'Offener Rechnungsbetrag',
   'vorgang.invoicesSummaryPaid': 'Bezahlt',
@@ -2256,6 +2547,13 @@ const deLegacy = {
   'expense.nextAction.open': 'Nächster Schritt: Zahlung erfassen, sobald der Beleg bezahlt ist.',
   'expense.nextAction.partial': 'Nächster Schritt: Restzahlung erfassen, sobald bezahlt.',
   'expense.nextAction.paid': 'Bezahlt – nichts weiter zu tun. Der Beleg geht mit der Monatsmappe an den Steuerberater.',
+  /*
+   * FINANZCORE-05C — „nichts weiter zu tun" wäre hier falsch: Es liegt Geld
+   * zu viel beim Lieferanten. Der Satz benennt das und verspricht zugleich
+   * keine Erstattungs- oder Verrechnungsfunktion, die es nicht gibt.
+   */
+  'expense.nextAction.overpaid':
+    'Überbezahlt – es wurde mehr gezahlt als der Beleg fordert. Bitte prüfen; eine falsch erfasste Zahlung lässt sich unten zurücknehmen.',
   'expense.nextAction.cancelled': 'Storniert – gilt der Beleg doch, bitte neu erfassen.',
   'expense.edit.cancelled': 'Stornierte Ausgaben werden nicht mehr bearbeitet.',
   'expense.edit.amountLockedAfterPayment': 'Nach einer gebuchten Zahlung bleiben die Beträge fest. Bei falschem Betrag: Zahlung zurücknehmen oder Ausgabe stornieren und neu erfassen.',
@@ -2271,6 +2569,10 @@ const deLegacy = {
   'expense.titleRequired': 'Titel darf nicht leer sein.',
   'expense.issueDateRequired': 'Rechnungsdatum ist erforderlich.',
   'expense.amountRequired': 'Bruttobetrag muss angegeben werden.',
+  'expense.amountsInconsistent':
+    'Netto, Steuer und Brutto passen nicht zusammen. Netto + Steuer muss Brutto ergeben.',
+  'expense.taxAmountNotAllowedForStatus':
+    'Bei diesem Steuerstatus fällt keine Umsatzsteuer an. Der Steuerbetrag muss 0 sein.',
   'expense.categoryRequired': 'Bitte eine Kategorie wählen.',
   'expense.notFound': 'Ausgabe nicht gefunden.',
   'expense.duplicate': 'Diese Ausgabe existiert bereits (Lieferant + Rechnungsnummer).',
@@ -2302,6 +2604,15 @@ const deLegacy = {
   'financeReference.checkHint': 'Zugehörige Rechnung prüfen',
   'expense.fieldTitle': 'Titel',
   'expense.fieldCategory': 'Kategorie',
+  'expense.fieldTaxStatus': 'Steuer auf diesem Beleg',
+  'expense.taxStatusHint':
+    'Wie der Lieferant abgerechnet hat – nicht, wie Sie selbst Rechnungen schreiben.',
+  'expense.taxStatus.standard_19': '19 % Umsatzsteuer',
+  'expense.taxStatus.standard_7': '7 % Umsatzsteuer',
+  'expense.taxStatus.reverse_charge_13b': 'Reverse Charge / §13b',
+  'expense.taxStatus.tax_free': 'Steuerfrei',
+  'expense.taxStatus.kleinunternehmer_19': 'Kleinunternehmer / keine ausgewiesene Umsatzsteuer',
+  'expense.taxStatus.unclear': 'Unklar / prüfen',
   'expense.fieldSupplier': 'Lieferant',
   'expense.fieldInvoiceNumber': 'Rechnungsnummer',
   'expense.fieldIssueDate': 'Rechnungsdatum',
@@ -2319,8 +2630,15 @@ const deLegacy = {
   'expense.paymentStatus.offen': 'Zahlung offen',
   'expense.paymentStatus.teilbezahlt': 'Teilbezahlt',
   'expense.paymentStatus.bezahlt': 'Bezahlt',
+  'expense.paymentStatus.ueberbezahlt': 'Überbezahlt',
   'expense.paymentStatus.ueberfaellig': 'Überfällig',
   'expense.paymentStatus.storniert': 'Storniert',
+  'expense.paymentStatus.gutschrift': 'Gutschrift',
+  'expense.creditNote.notice':
+    'Dies ist eine Gutschrift des Lieferanten. Sie mindert Ihre Verbindlichkeiten; eine Zahlung wird darauf nicht erfasst.',
+  'expense.creditNote.amountLabel': 'Guthaben',
+  'expense.creditNote.legacyPaymentsNotice':
+    'Zu dieser Gutschrift ist noch eine Zahlung erfasst. Sie bleibt unverändert stehen – bitte prüfen.',
   'expense.category.material': 'Material',
   'expense.category.werkzeug': 'Werkzeug',
   'expense.category.fahrzeug': 'Fahrzeug',
@@ -2366,6 +2684,14 @@ const deLegacy = {
   'expenseOverview.filter.teilbezahlt': 'Teilbezahlt',
   'expenseOverview.filter.ueberfaellig': 'Überfällig',
   'expenseOverview.filter.bezahlt': 'Bezahlt',
+  /*
+   * FINANZCORE-05C-FIX1 — in 05C habe ich die Filteroption ergaenzt, die
+   * Beschriftung aber nicht. Die Seiten bauen ihren Schluessel zusammen
+   * (`overview.filter.${option}`) und casten ihn mit `as TranslationKey` —
+   * damit fiel dem Compiler nichts auf, und in der Liste stand der nackte
+   * Schluessel.
+   */
+  'expenseOverview.filter.ueberbezahlt': 'Überbezahlt',
   'expenseOverview.filter.storniert': 'Storniert',
 
   'invoice.title': 'Rechnung vorbereiten',
@@ -2708,8 +3034,19 @@ const deLegacy = {
   'payment.invoiceOverdueNotice': 'Rechnung ist überfällig.',
   'payment.invoiceCancelledNotice': 'Diese Rechnung wurde storniert.',
   'payment.overpaymentWarning': 'Überzahlung: {amount}',
+  /*
+   * FINANZCORE-05C — der Satz nennt die Folge, nicht nur die Differenz.
+   *
+   * „liegt {amount} über dem offenen Rest" sagte, was der Nutzer falsch
+   * gemacht haben könnte. Entscheidend ist aber, was dadurch entsteht: eine
+   * Überzahlung in genau dieser Höhe. Ruhiger Ton — eine Überzahlung ist
+   * erlaubt, sie soll nur bewusst geschehen.
+   */
   'payment.overpaymentConfirmDetail':
-    'Der Betrag liegt {amount} über dem offenen Rest. Ohne Bestätigung wird nicht gebucht.',
+    'Die Zahlung liegt {amount} über dem offenen Betrag. Dadurch entsteht eine Überzahlung von {amount}.',
+  'payment.confirmOpenAmount': 'Offen',
+  'payment.confirmPaymentAmount': 'Zahlung',
+  'payment.confirmOverpaidAmount': 'Überzahlung',
   'payment.unsentNotice': 'Diese Rechnung ist noch nicht als versendet markiert.',
   'payment.unsentConfirmationRequired':
     'Zahlung vor Versand erfordert eine ausdrückliche Bestätigung.',
@@ -2723,8 +3060,11 @@ const deLegacy = {
   'payment.status.offen': 'Offen',
   'payment.status.teilbezahlt': 'Teilbezahlt',
   'payment.status.bezahlt': 'Bezahlt',
+  /* FINANZCORE-05C — Produktsprache, kein Fachbegriff aus dem Code. */
+  'payment.status.ueberbezahlt': 'Überbezahlt',
   'payment.status.ueberfaellig': 'Überfällig',
   'payment.status.storniert': 'Storniert',
+  'payment.status.gutschrift': 'Gutschrift',
   /*
    * FINAL-INVOICE-CANCELLATION-UI-01A — Stornierung einer Schlussrechnung.
    *
@@ -2862,6 +3202,8 @@ const deLegacy = {
   'overview.filter.teilbezahlt': 'Teilbezahlt',
   'overview.filter.ueberfaellig': 'Überfällig',
   'overview.filter.bezahlt': 'Bezahlt',
+  /* FINANZCORE-05C-FIX1 — siehe `expenseOverview.filter.ueberbezahlt`. */
+  'overview.filter.ueberbezahlt': 'Überbezahlt',
   'overview.filter.storniert': 'Storniert',
 
   'vorgaenge.openInvoices': 'Offene Rechnungen anzeigen',

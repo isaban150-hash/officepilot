@@ -21,6 +21,10 @@ import {
   type InvoiceOverviewItem,
 } from './invoiceOverviewService';
 import { buildInvoiceReachPath } from './invoiceNavigation';
+import {
+  summarizeCustomerReceivables,
+  type CustomerReceivablesSummary,
+} from './customer/customerReceivablesService';
 import { resolveInvoiceCustomerId } from './invoice/invoiceCustomerRelation';
 import { formatPaymentCurrency } from './invoicePaymentService';
 import { getAllTasksFromStore } from './taskStore';
@@ -97,6 +101,14 @@ export interface KundenWorkspace {
   paidInvoices: KundenWorkspaceInvoiceRef[];
   openReceivableTotal: number;
   openReceivableLabel: string;
+  /*
+   * FINANZCORE-05D — offene Posten, Faelligkeiten und rechnerischer Saldo.
+   *
+   * Bewusst hier und nicht in der Seite: Die Kundenzuordnung der Rechnungen
+   * ist eine eigene Regel, die dieser Dienst bereits kennt. Wuerde die
+   * Oberflaeche selbst rechnen, gaebe es die Zuordnung ein zweites Mal.
+   */
+  receivables: CustomerReceivablesSummary;
   documents: KundenWorkspaceDocumentRef[];
   tasks: KundenWorkspaceTaskRef[];
 }
@@ -411,6 +423,13 @@ export function getKundenWorkspace(
     .filter((item) => item.paymentSummary.status === 'bezahlt')
     .map(toInvoiceRef);
   const totals = summarizeInvoiceOverview(invoices);
+  /*
+   * FINANZCORE-05D — dieselbe, bereits gefilterte Rechnungsmenge. Damit
+   * gilt fuer den Kundensaldo genau die Kundenzuordnung, die auch die
+   * Listen darueber benutzen; eine Rechnung kann nicht in der einen
+   * Ansicht zum Kunden gehoeren und in der anderen nicht.
+   */
+  const receivables = summarizeCustomerReceivables(invoices, today);
 
   const documents: KundenWorkspaceDocumentRef[] = [];
   const seenDocIds = new Set<string>();
@@ -498,6 +517,7 @@ export function getKundenWorkspace(
     paidInvoices,
     openReceivableTotal: totals.openReceivables,
     openReceivableLabel: formatPaymentCurrency(totals.openReceivables),
+    receivables,
     documents,
     tasks,
   };

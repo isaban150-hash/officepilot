@@ -89,7 +89,8 @@ describe('calculateExpensePaymentSummary', () => {
     expect(summary.openAmount).toBe(0);
   });
 
-  it('detects overpaidAmount on overpayment while status stays bezahlt', () => {
+  // FINANZCORE-05C — der Status heisst jetzt `ueberbezahlt`; vorher fiel er auf `bezahlt`.
+  it('detects overpaidAmount and reports status ueberbezahlt', () => {
     const expense = createTestExpense({
       payments: [
         {
@@ -102,7 +103,7 @@ describe('calculateExpensePaymentSummary', () => {
     });
 
     const summary = calculateExpensePaymentSummary(expense, '2026-06-10');
-    expect(summary.status).toBe('bezahlt');
+    expect(summary.status).toBe('ueberbezahlt');
     expect(summary.overpaidAmount).toBe(11);
   });
 

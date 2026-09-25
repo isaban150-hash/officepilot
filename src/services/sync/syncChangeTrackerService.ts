@@ -55,6 +55,9 @@ export const TRACKED_SYNC_ENTITY_TYPES: SyncEntityType[] = [
   'business_letter',
   // ANGEBOT-01B — eigene Angebote.
   'offer',
+  // STEUERBERATER-06A — Kontierungen werden wie jede andere Entitaet verfolgt.
+  'accounting_assignment',
+  'accounting_period_closure',
 ];
 
 export const TRACKED_CLOUD_SYNC_ENTITY_TYPES: SyncEntityType[] = [

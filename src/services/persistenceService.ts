@@ -78,6 +78,14 @@ import {
   resetExpenses,
 } from './expenseStore';
 import {
+  getAccountingStoreSnapshot,
+  hydrateAccountingStore,
+} from './accounting/accountingStore';
+import {
+  getAccountingPeriodStoreSnapshot,
+  hydrateAccountingPeriodStore,
+} from './accounting/accountingPeriodStore';
+import {
   getInvoiceNumberSequenceSnapshot,
   hydrateInvoiceNumberSequence,
   resetInvoiceNumberSequence,
@@ -1007,6 +1015,9 @@ export function applyStateToStores(state: AppPersistedState): void {
   );
   hydrateDocumentWorkResultStore(state.documentWorkResults ?? []);
   hydrateExpenseStore(state.expenses ?? []);
+  // STEUERBERATER-06A — Kontierungen sind reload-fest wie jeder andere Bestand.
+  hydrateAccountingStore(state.accountingAssignments ?? []);
+  hydrateAccountingPeriodStore(state.accountingPeriodClosures ?? []);
   hydrateCustomerStore(state.customers ?? []);
   hydrateVorgangNotes(state.vorgangNotes ?? []);
   hydrateBusinessLetters(state.businessLetters ?? []);
@@ -1276,6 +1287,8 @@ export function buildPersistedStateSnapshot(): AppPersistedState {
       getDocumentFileIntakeTransformPlanCarryContextStoreSnapshot(),
     documentWorkResults: getDocumentWorkResultStoreSnapshot(),
     expenses: getExpenseStoreSnapshot(),
+    accountingAssignments: getAccountingStoreSnapshot(),
+    accountingPeriodClosures: getAccountingPeriodStoreSnapshot(),
     customers: getCustomerStoreSnapshot(),
     vorgangNotes: getVorgangNoteStoreSnapshot(),
     businessLetters: getBusinessLetterStoreSnapshot(),

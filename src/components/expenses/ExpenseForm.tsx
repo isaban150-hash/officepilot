@@ -6,7 +6,12 @@ import {
   hasBookedExpensePayments,
   updateExpense,
 } from '../../services/expenseService';
+import {
+  EXPENSE_TAX_STATUS_OPTIONS,
+  MANUAL_EXPENSE_DEFAULT_TAX_STATUS,
+} from '../../services/expense/expenseTaxStatusOptions';
 import type { Expense, ExpenseCategory, ExpenseInput } from '../../types/expense';
+import type { TaxStatus } from '../../types/models';
 import type { TranslationKey } from '../../i18n';
 import { Button } from '../ui/Button';
 import { getBusinessDay } from '../../services/businessDateService';
@@ -22,6 +27,8 @@ export interface ExpenseFormDraft {
   grossAmount: string;
   netAmount: string;
   taxAmount: string;
+  /** FINANZCORE-05B-FIX1 — der Steuerstatus dieses Belegs, sichtbar und waehlbar. */
+  taxStatus: TaxStatus;
 }
 
 function draftFromExpense(expense: Expense): ExpenseFormDraft {
@@ -36,6 +43,8 @@ function draftFromExpense(expense: Expense): ExpenseFormDraft {
     grossAmount: String(expense.grossAmount),
     netAmount: String(expense.netAmount),
     taxAmount: String(expense.taxAmount),
+    // Bearbeiten zeigt den gespeicherten Status — nie einen neu geratenen.
+    taxStatus: expense.taxStatus,
   };
 }
 
@@ -52,6 +61,12 @@ function emptyDraft(): ExpenseFormDraft {
     grossAmount: '',
     netAmount: '',
     taxAmount: '',
+    /*
+     * Der Normalfall einer Lieferantenrechnung. Ausdruecklich **nicht** der
+     * Steuerstatus der eigenen Ausgangsrechnungen: Wer selbst nach 13b
+     * abrechnet, bekommt trotzdem Rechnungen mit ausgewiesenen 19 %.
+     */
+    taxStatus: MANUAL_EXPENSE_DEFAULT_TAX_STATUS,
   };
 }
 
@@ -76,6 +91,7 @@ function toInput(draft: ExpenseFormDraft, linkedInboxId?: string): ExpenseInput 
     grossAmount,
     netAmount: netAmount || undefined,
     taxAmount: taxAmount || undefined,
+    taxStatus: draft.taxStatus,
     linkedInboxId,
   };
 }
@@ -101,6 +117,7 @@ function draftFromInput(input: Partial<ExpenseInput>): ExpenseFormDraft {
     grossAmount: input.grossAmount ? String(input.grossAmount) : base.grossAmount,
     netAmount: input.netAmount ? String(input.netAmount) : base.netAmount,
     taxAmount: input.taxAmount ? String(input.taxAmount) : base.taxAmount,
+    taxStatus: input.taxStatus ?? base.taxStatus,
   };
 }
 
@@ -163,6 +180,37 @@ export function ExpenseForm({ mode, expense, prefill, onSaved, onCancel }: Expen
             </option>
           ))}
         </select>
+      </label>
+
+      {/*
+        * FINANZCORE-05B-FIX1 — der Steuerstatus dieses Belegs, sichtbar.
+        *
+        * Bis hierher gab es ihn im Formular nicht; er kam unsichtbar aus dem
+        * Firmenprofil, also aus der eigenen Fakturierung. Ein Betrieb, der
+        * selbst ohne Umsatzsteuer abrechnet, konnte deshalb keine einzige
+        * Lieferantenrechnung mit 19 % erfassen.
+        *
+        * Angeboten werden ausschliesslich die Werte, die das Modell kennt —
+        * in verständlicher Sprache, nicht als technische Bezeichner.
+        */}
+      <label className="form-group">
+        <span>{translate('expense.fieldTaxStatus')}</span>
+        <select
+          className="input"
+          value={draft.taxStatus}
+          data-testid="expense-tax-status-select"
+          disabled={amountsLocked}
+          onChange={(e) =>
+            setDraft((prev) => ({ ...prev, taxStatus: e.target.value as TaxStatus }))
+          }
+        >
+          {EXPENSE_TAX_STATUS_OPTIONS.map((status) => (
+            <option key={status} value={status}>
+              {translate(`expense.taxStatus.${status}` as TranslationKey)}
+            </option>
+          ))}
+        </select>
+        <span className="hint-text">{translate('expense.taxStatusHint')}</span>
       </label>
 
       <label className="form-group">

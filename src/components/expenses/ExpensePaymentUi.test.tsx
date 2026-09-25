@@ -83,7 +83,8 @@ describe('ExpensePaymentSummary', () => {
 
     expect(html).toContain('payment.totalDue');
     expect(html).toContain('payment.overpaidAmount');
-    expect(html).toContain('payment.status.bezahlt');
+    // FINANZCORE-05C — das Abzeichen verschweigt die Ueberzahlung nicht mehr.
+    expect(html).toContain('payment.status.ueberbezahlt');
   });
 
   it('shows overdue notice for overdue expenses', () => {

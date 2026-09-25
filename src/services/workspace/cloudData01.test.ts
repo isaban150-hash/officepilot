@@ -158,6 +158,29 @@ describe('CLOUD-DATA-01 allowlist', () => {
         'task',
         // CLOUD-DURABILITY-CORE-01D — Mahnnachweise
         'dunning_documentation',
+        /*
+         * BRIEFE-01B und ANGEBOT-01B — beide waren in der Allowlist bereits
+         * freigegeben, standen hier aber nicht. Dieser Waechter meldet genau
+         * das und wurde damals uebersehen; nachgetragen, damit er wieder
+         * greift.
+         */
+        'business_letter',
+        'offer',
+        /*
+         * STEUERBERATER-06A — Kontierungen. Bewusst freigegeben, nachdem
+         * Tabelle, eindeutiger Index, RLS, serverseitige Pruefung,
+         * Upsert-RPC mit Versionsvertrag, Grabstein, Pull, Merge mit
+         * Konfliktmeldung und Laufzeittests gegen eine echte Datenbank
+         * vollstaendig vorliegen.
+         */
+        'accounting_assignment',
+        /*
+         * STEUERBERATER-06B — Abschlussrevisionen. Freigegeben, nachdem
+         * Tabelle, eindeutige Indizes, RLS, Close-/Reopen-/Pull-RPC mit
+         * Revisionsvertrag und Laufzeittests gegen eine echte Datenbank
+         * vollstaendig vorliegen.
+         */
+        'accounting_period_closure',
       ].sort(),
     );
   });

@@ -60,6 +60,8 @@ import {
   type CustomerExtraFields,
 } from '../components/customer/customerDecisionUi';
 import { InvoiceListCard } from '../components/invoice/InvoiceListCard';
+import { OrderFinancialsPanel } from '../components/order/OrderFinancialsPanel';
+import { summarizeOrderFinancials } from '../services/order/orderFinancialsService';
 import { CommunicationIntegrationPanel } from '../components/communication/CommunicationIntegrationPanel';
 import { getBusinessLettersForVorgang } from '../services/businessLetterService';
 import { VORGANG_COMMUNICATION_BUTTON_KEYS } from '../components/communication/communicationNavigation';
@@ -470,6 +472,12 @@ export function VorgangDetailPage() {
     (a, b) => new Date(b.issueDate ?? b.date).getTime() - new Date(a.issueDate ?? a.date).getTime(),
   );
   const paymentTotals = summarizeVorgangInvoicePayments(vorgang.invoices);
+  /*
+   * FINANZCORE-05E — bei jedem Rendern neu abgeleitet, nie gespeichert.
+   * Eine Zahlung, ein Storno oder eine neue Abschlagsrechnung schlaegt
+   * damit sofort durch; ein veralteter Auftragssaldo kann nicht entstehen.
+   */
+  const financials = summarizeOrderFinancials(vorgang);
 
   const openTasks = vorgang.tasks.filter((task) => !task.done);
   const highlights: string[] = [];
@@ -1134,22 +1142,9 @@ export function VorgangDetailPage() {
             </p>
           ) : null}
 
-          {sortedInvoices.length > 0 ? (
-            <Card className="vorgang-invoice-totals" data-testid="vorgang-invoice-summary">
-              <DataRow
-                label={translate('vorgang.invoicesSummaryCount')}
-                value={String(sortedInvoices.length)}
-              />
-              <DataRow
-                label={translate('vorgang.invoicesSummaryOpen')}
-                value={formatPaymentCurrency(paymentTotals.openTotal)}
-              />
-              <DataRow
-                label={translate('vorgang.invoicesSummaryPaid')}
-                value={formatPaymentCurrency(paymentTotals.paidTotal)}
-              />
-            </Card>
-          ) : null}
+          <Card className="vorgang-invoice-totals" data-testid="vorgang-invoice-summary">
+            <OrderFinancialsPanel financials={financials} translate={translate} />
+          </Card>
 
           {sortedInvoices.length === 0 ? (
             <div

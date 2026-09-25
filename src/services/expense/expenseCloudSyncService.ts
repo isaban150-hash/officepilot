@@ -13,6 +13,7 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AppPersistedState } from '../../types/models';
+import { checkExpenseMoneyIntegrity } from './expenseMoneyIntegrity';
 import type { Expense, ExpensePayment } from '../../types/expense';
 import type { SyncEntityType, SyncMeta, SyncOutboxEntry } from '../../types/sync';
 import { getSupabaseClient } from '../../lib/supabase';
@@ -266,6 +267,19 @@ function classify(error: { message?: string; code?: string }): WorkspaceCloudErr
     return new WorkspaceCloudError(message, 'version_conflict', false);
   }
   if (message.includes('Failed to fetch') || message.includes('Network')) return new WorkspaceCloudError(message, 'network', true);
+  /*
+   * FINANZCORE-05B2 - der Serverguard lehnt widerspruechliche Betraege ab.
+   *
+   * Eine solche Ablehnung ist ein Urteil ueber den Inhalt, kein voruebergehender
+   * Ausfall: Derselbe Datensatz wird beim naechsten Versuch genauso abgelehnt.
+   * Ohne diese Einstufung fiele der Auftrag in den Standardfall unten
+   * ('unknown', wiederholbar) und der Sync versuchte es endlos weiter.
+   *
+   * Der Fehlercode bleibt 'unknown': Die Codeliste teilen sich Rechnungs- und
+   * Workspace-Code, und hier zaehlt allein, dass nicht wiederholt wird. Den
+   * Grund nennt der Servertext im Klartext.
+   */
+  if (message.includes('expense_money_')) return new WorkspaceCloudError(message, 'unknown', false);
   return new WorkspaceCloudError(message, 'unknown', true);
 }
 
@@ -354,6 +368,27 @@ export async function pushExpenseEntity(
   if (extracted.entityType === 'expense') {
     if (isCloudSyncBlockedMockExpenseId(extracted.entityId)) return { kind: 'skipped', reason: 'mock' };
     const deleted = operation === 'delete' || extracted.deleted;
+    /*
+     * FINANZCORE-05B — die letzte Grenze vor der Cloud.
+     *
+     * Seit 05B können `addExpense` und `updateExpense` keine widersprüchlichen
+     * Geldwerte mehr erzeugen; hier steht die Absicherung dahinter. Sollte je
+     * ein Weg an der Validierung vorbeischreiben, endet er spätestens an
+     * dieser Stelle — und nicht erst im Beleg des Steuerberaters.
+     *
+     * Ein Grabstein wird ausgenommen: Das Löschen eines bereits vorhandenen,
+     * ungültigen Altbelegs muss möglich bleiben. Sonst hinge er für immer in
+     * der Cloud fest, ohne dass ihn jemand entfernen könnte.
+     */
+    if (!deleted) {
+      const money = checkExpenseMoneyIntegrity(extracted.entity);
+      if (!money.ok) {
+        return {
+          kind: 'skipped',
+          reason: `invalid_money:${money.issues.map((issue) => issue.code).join(',')}`,
+        };
+      }
+    }
     const result = await rpcUpsertWorkspaceExpense(workspaceId, buildExpensePushPayload(extracted.entity, deleted), extracted.rowVersion, explicit);
     if (result.noop) return { kind: 'skipped', reason: 'tombstone_without_row' };
     return { kind: 'pushed', rowVersion: result.rowVersion, deleted: result.deleted };

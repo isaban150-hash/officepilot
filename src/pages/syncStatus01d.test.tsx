@@ -16,6 +16,7 @@ import { SyncPage } from './SyncPage';
 import * as syncUiService from '../services/sync/syncUiService';
 import { summarizeSyncStatus } from '../services/sync/syncUiService';
 import type { SyncCoordinatorReport, SyncOutboxEntry } from '../types/sync';
+import { describeSyncOutboxEntry } from '../services/sync/syncOutboxDescriptionService';
 
 const setup = { ...DEFAULT_SETUP, setupComplete: true };
 
@@ -69,6 +70,10 @@ function snapshot(overrides: Partial<syncUiService.SyncUiSnapshot>): syncUiServi
       error: outbox.filter((e) => e.status === 'error' || e.status === 'failed').length,
     },
     pendingOutboxEntries: outbox.filter((e) => e.status === 'pending' || e.status === 'blocked'),
+    failedOutboxEntries: outbox
+      .filter((e) => e.status === 'error' || e.status === 'failed' || e.status === 'blocked')
+      .map(describeSyncOutboxEntry),
+    settingsConflict: null,
     isOffline: false,
     hasRetryableErrors: outbox.some((e) => e.status === 'error' || e.status === 'failed'),
     ...overrides,
@@ -89,7 +94,14 @@ function render(snap: syncUiService.SyncUiSnapshot): string {
 describe('REAL-PRODUCT-TEST-01D — Sync-Status', () => {
   it('A: alles übertragen', () => {
     const snap = snapshot({});
-    expect(summarizeSyncStatus(snap)).toEqual({ kind: 'synced', waitingCount: 0, failedCount: 0, mergedCount: 0 });
+    expect(summarizeSyncStatus(snap)).toEqual({
+      kind: 'synced',
+      waitingCount: 0,
+      failedCount: 0,
+      mergedCount: 0,
+      /* 01G — eigener Zähler für Konflikte, die der Nutzer entscheiden kann. */
+      conflictCount: 0,
+    });
     const html = render(snap);
     expect(html).toContain('Synchronisiert');
     expect(html).not.toContain('wartet');

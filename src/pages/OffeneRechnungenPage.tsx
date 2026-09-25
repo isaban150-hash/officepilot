@@ -27,6 +27,8 @@ const FILTER_OPTIONS: InvoiceOverviewFilter[] = [
   'teilbezahlt',
   'ueberfaellig',
   'bezahlt',
+  // FINANZCORE-05C — sichtbar auffindbar, ohne unter „offen" zu zaehlen.
+  'ueberbezahlt',
   'storniert',
 ];
 

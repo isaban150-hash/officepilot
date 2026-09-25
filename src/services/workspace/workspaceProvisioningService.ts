@@ -361,6 +361,11 @@ function applyLostAckAdoptionToOutbox(
   markOutboxEntriesCompleted(settled);
 }
 
+import {
+  hasUnsyncedSettingsIntent,
+  mergeWorkspaceSettings,
+} from './workspaceSettingsConflictService';
+
 export function mergeRemoteWorkspacePullIntoState(
   state: AppPersistedState,
   pull: Awaited<ReturnType<typeof rpcPullWorkspaceSyncState>>,
@@ -382,10 +387,38 @@ export function mergeRemoteWorkspacePullIntoState(
   }
 
   if (pull.settings) {
-    const localVersion = state.workspaceSettings?.version ?? 0;
-    if (localVersion > 0 && pull.settings.version > 0 && localVersion !== pull.settings.version) {
-      conflicts.push('workspace_settings');
-    } else if (pull.settings.version >= localVersion) {
+    /*
+     * FINANZ-SYNC-BLOCKER-01B/01F — die Sackgasse und der stille Verlust.
+     *
+     * 01B hat den Feldmerge eingeführt, ihn aber an den **Versionsvergleich**
+     * gehängt: Nur bei ungleichen Nummern wurde zusammengeführt, sonst ersetzte
+     * die Zeile darunter das gesamte lokale Objekt durch das der Cloud. Damit
+     * verschwand jedes bewusst gesetzte, noch nicht übertragene Feld — in der
+     * Abnahme 01E war das chartOfAccounts = SKR03, danach stand dort
+     * „Noch nicht festgelegt".
+     *
+     * Massgeblich ist nicht die Versionsnummer, sondern ob lokal etwas aussteht:
+     * ein vermerkter Schreibvorgang, ein offener Konflikt oder ein aktiver
+     * Sendeauftrag. Steht etwas aus, wird zusammengeführt. Steht nichts aus,
+     * gilt der Cloud-Stand — dann gibt es auch nichts zu verlieren.
+     */
+    const lokal = state.workspaceSettings ?? null;
+    const offenerAuftrag = activeOutboxEntityIds(state, 'workspace_settings').has(
+      pull.settings.workspaceId,
+    );
+
+    if (hasUnsyncedSettingsIntent(lokal, offenerAuftrag)) {
+      const merge = mergeWorkspaceSettings(lokal, pull.settings);
+      next.workspaceSettings = merge.settings;
+      if (merge.outcome === 'needs_decision') {
+        /*
+         * Der Konflikt reist jetzt **im Einstellungsobjekt** mit und übersteht
+         * damit einen Reload — anders als der frühere Modulzustand, der
+         * verschwand, während der blockierte Sendeauftrag blieb.
+         */
+        conflicts.push('workspace_settings');
+      }
+    } else if (pull.settings.version >= (lokal?.version ?? 0)) {
       next.workspaceSettings = pull.settings;
     }
   }

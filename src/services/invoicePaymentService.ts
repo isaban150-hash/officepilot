@@ -6,6 +6,13 @@ import {
 import { isFinalizedInvoice } from './invoiceArchiveService';
 import { buildSkontoDeadline, parseSkontoFromText } from './invoiceTaxService';
 import { generateUuid } from './sync/syncMetaService';
+import {
+  calculateOverpaidAmount,
+  getPaymentOverpayAmount as getPaymentOverpayAmountShared,
+  isSettledPaymentStatus,
+  requiresOverpaymentConfirmation,
+  resolveSettlementStatus,
+} from './payment/paymentSemantics';
 import type { InvoicePaymentCloudOutcome } from './invoice/workspaceInvoicePaymentCloudService';
 import type {
   InvoicePayment,
@@ -146,9 +153,42 @@ export function isSentDateAfterPaymentDue(
   return toDateOnly(sentAt) > toDateOnly(paymentDueDate);
 }
 
+/**
+ * FINANZCORE-05C — die Regel liegt jetzt in `paymentSemantics`, weil die
+ * Ausgabenseite dieselbe braucht. Der Name bleibt: An ihm haengen Aufrufer
+ * und Tests, und die Bedeutung hat sich nicht geaendert.
+ */
 export function getPaymentOverpayAmount(openAmount: number, paymentAmount: number): number {
-  if (!Number.isFinite(paymentAmount) || !Number.isFinite(openAmount)) return 0;
-  return Math.max(0, paymentAmount - openAmount);
+  return getPaymentOverpayAmountShared(openAmount, paymentAmount);
+}
+
+/**
+ * FINANZCORE-05C — darf auf diese Rechnung noch eine normale Zahlung?
+ *
+ * Bis hierher wurde „Zahlung erfassen" ueberall angeboten, solange die
+ * Rechnung nicht storniert war — auch auf einer vollstaendig bezahlten. Ein
+ * fachlicher Grund dafuer war weder im Code noch in den Tests hinterlegt; es
+ * war schlicht die einzige gepruefte Bedingung. Genau darueber entstand die
+ * versehentliche Mehrfachueberzahlung, vor der die Bestaetigung schuetzen
+ * soll.
+ *
+ * Eine Korrektur bleibt moeglich: Die Zahlungsliste auf der Detailseite nimmt
+ * eine Zahlung zurueck, danach ist wieder etwas offen.
+ */
+export function canRecordInvoicePayment(
+  invoice: VorgangInvoice,
+  today: Date | string = new Date(),
+): boolean {
+  if (isInvoiceCancelled(invoice)) return false;
+  return !isSettledPaymentStatus(resolvePaymentStatus(invoice, today));
+}
+
+/** FINANZCORE-05C — verlangt dieser Betrag eine ausdrueckliche Bestaetigung? */
+export function willInvoicePaymentNeedOverpayConfirm(
+  openAmount: number,
+  paymentAmount: number,
+): boolean {
+  return requiresOverpaymentConfirmation(openAmount, paymentAmount);
 }
 
 /** Prepared invoices require an explicit confirmation before recording payment. */
@@ -165,7 +205,7 @@ export function calculatePaymentSummary(
   /* Dieselbe Quelle wie überall — der Skontoausgleich darf nicht zweimal
      unterschiedlich gerechnet werden. */
   const openAmount = getOpenAmount(invoice);
-  const overpaidAmount = Math.max(0, paidAmount - totalDue);
+  const overpaidAmount = calculateOverpaidAmount(totalDue, paidAmount);
   const status = resolvePaymentStatus(invoice, today, {
     paidAmount,
     openAmount,
@@ -194,15 +234,20 @@ export function resolvePaymentStatus(
   const openAmount = amounts?.openAmount ?? getOpenAmount(invoice);
   const overdue = isInvoiceOverdue({ ...invoice, payments: invoice.payments ?? [] }, today);
 
-  if (openAmount <= 0) {
-    return 'bezahlt';
-  }
+  /*
+   * FINANZCORE-05C — dieselbe Reihenfolge wie bei den Ausgaben, aus einer
+   * Quelle. Neu ist allein, dass eine Ueberzahlung nicht mehr als „bezahlt"
+   * durchgeht.
+   *
+   * `overpaidAmount` haengt an `invoice.amount`, nicht am offenen Betrag. Ein
+   * per Skonto ausgeglichener Beleg — bei dem `getOpenAmount` bewusst 0
+   * liefert, obwohl weniger als der volle Betrag geflossen ist — bleibt
+   * dadurch „bezahlt" und wird nicht faelschlich zur Ueberzahlung.
+   */
+  const overpaidAmount =
+    amounts?.overpaidAmount ?? calculateOverpaidAmount(invoice.amount, paidAmount);
 
-  if (paidAmount > 0) {
-    return overdue ? 'ueberfaellig' : 'teilbezahlt';
-  }
-
-  return overdue ? 'ueberfaellig' : 'offen';
+  return resolveSettlementStatus({ paidAmount, openAmount, overpaidAmount, overdue });
 }
 
 export function normalizeInvoicePaymentFields(invoice: VorgangInvoice): VorgangInvoice {

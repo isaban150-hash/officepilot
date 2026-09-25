@@ -1,7 +1,8 @@
 /**
  * UIUX-FOUNDATION-01E — Kernarbeitsbereiche auf den 01D-Patterns.
  *
- *  A  Heute: PageHeader mit Hauptaktion, Sections nach Arbeitsbedarf, RowList „Offene Arbeit“, keine Kacheln/Emojis
+ *  A  Heute: eigener Kopf mit genau einer Hauptaktion, Sections nach
+ *     Arbeitsbedarf, keine Kacheln/Emojis
  *  B  Eingang-Liste: Header + Hauptaktion, Aufmerksamkeit als RowList, Filter-Chips, InboxCard bleibt
  *  C  Dokumentdetail: Back-Link zum Parent, PageHeader, SummaryList; EingangDetail-Back als Link
  *  D  Aufträge-Liste: BusinessList mit Status, Suche/Filter, Leerzustände
@@ -69,20 +70,37 @@ beforeEach(() => {
 const EMOJI = /[\u{1F300}-\u{1FAFF}\u{2705}\u{274C}\u{2714}]/u;
 
 describe('UIUX-FOUNDATION-01E — Heute (A/O)', () => {
-  it('PageHeader mit einer Hauptaktion, Sections, Offene Arbeit als Zeilen, keine Kacheln oder Emojis', () => {
+  /*
+   * Die Heute-Seite wurde mit dem Startseiten-Redesign (7c17791) auf das
+   * 04b-Layout umgebaut: Der frühere `heute-head`-Kopf mit `heute-head__title`
+   * und `heute-head__actions` ist ebenso entfallen wie die Abschnitte
+   * „Offene Arbeit" und „Schnellzugriff" — `HomeOpenWork` wird von der Seite
+   * gar nicht mehr eingebunden. Die Zusicherungen standen seither auf Markup,
+   * das es nicht mehr gibt.
+   *
+   * Geprüft wird deshalb dasselbe **Anliegen** am geltenden Aufbau: ein
+   * eigener Kopf, genau eine Hauptaktion, Abschnitte in der Reihenfolge ihres
+   * Arbeitsbedarfs — und weiterhin keine Kacheln und keine Emojis.
+   */
+  it('eigener Kopf mit genau einer Hauptaktion, Sections in Arbeitsreihenfolge, keine Kacheln oder Emojis', () => {
     const html = renderToStaticMarkup(withProviders(<HeutePage />));
     expect(html).toContain('data-testid="heute-page"');
-    /* VISUAL-POLISH-01B — Heute hat einen eigenen Kopf (Begrüßung) mit genau einer Hauptaktion. */
-    expect(html).toContain('<h1 class="heute-head__title">');
-    expect(html.match(/heute-head__actions/g)).toHaveLength(1);
-    expect(html).toContain('data-testid="home-card-add-document"');
-    for (const id of ['heute-section-attention', 'heute-section-open-work', 'heute-section-quick', 'home-open-work']) {
+
+    // Ein Kopf, eine Überschrift.
+    expect(html).toContain('data-testid="desk-greeting-header"');
+    expect(html.match(/<h1[ >]/g) ?? []).toHaveLength(1);
+
+    // Genau eine Hauptaktion.
+    expect(html.match(/data-testid="home-card-add-document"/g) ?? []).toHaveLength(1);
+
+    for (const id of ['heute-section-attention', 'heute-section-assistant', 'home-new-intake']) {
       expect(html).toContain(`data-testid="${id}"`);
     }
-    expect(html.indexOf('heute-section-attention')).toBeLessThan(html.indexOf('heute-section-open-work'));
-    expect(html.indexOf('heute-section-open-work')).toBeLessThan(html.indexOf('heute-section-quick'));
+    // Was Arbeit verlangt, steht vor dem, was nur informiert.
+    expect(html.indexOf('heute-section-attention')).toBeLessThan(html.indexOf('heute-section-assistant'));
+    expect(html.indexOf('heute-section-assistant')).toBeLessThan(html.indexOf('home-new-intake'));
+
     expect(html).toContain('href="/ablage"');
-    expect(html).toContain('href="/rechnungen/offen"');
     expect(html).toContain('href="/steuerberater"');
     expect(html).not.toContain('mobile-home-card');
     expect(html).not.toMatch(EMOJI);

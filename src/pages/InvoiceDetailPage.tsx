@@ -10,6 +10,10 @@ import {
 import { InvoiceCancelDialog } from '../components/invoice/InvoiceCancelDialog';
 import { InvoicePaymentHistory } from '../components/invoice/InvoicePaymentHistory';
 import { InvoicePaymentSummary } from '../components/invoice/InvoicePaymentSummary';
+import { AccountingAssignmentPanel } from '../components/accounting/AccountingAssignmentPanel';
+import { ensureInvoiceAccountingAssignment } from '../services/accounting/accountingAssignmentService';
+import { getAccountingAssignmentForSource } from '../services/accounting/accountingStore';
+import { DetailSection as AccountingSection } from '../components/ui/Section';
 import { DetailExperienceCard } from '../components/detail/DetailExperienceCard';
 import { CommunicationIntegrationPanel } from '../components/communication/CommunicationIntegrationPanel';
 import { buildKommunikationPath } from '../components/communication/communicationNavigation';
@@ -31,6 +35,7 @@ import { isFinalizedInvoice, buildPrintTitle } from '../services/invoiceArchiveS
 import { buildInvoicePrintModelFromInvoice, formatInvoiceDate } from '../services/invoicePrintModel';
 import {
   calculatePaymentSummary,
+  canRecordInvoicePayment,
   formatPaymentCurrency,
   findLocallyOnlyPayments,
   getInvoicePayments,
@@ -227,6 +232,8 @@ export function InvoiceDetailPage() {
   const [cloudPaymentIds, setCloudPaymentIds] = useState<string[] | null>(null);
   /** Zählt ausdrücklich gewünschte Abgleiche — nach Sicherung oder Stornierung. */
   const [cloudRefreshToken, setCloudRefreshToken] = useState(0);
+  /* STEUERBERATER-06A — laesst die Kontierung neu lesen; kein zweiter Bestand. */
+  const [accountingToken, setAccountingToken] = useState(0);
 
   const pullCloudPaymentIds = useCallback(async (currentInvoiceId: string) => {
     const pulled = await pullInvoicePaymentsFromCloud();
@@ -600,7 +607,8 @@ export function InvoiceDetailPage() {
         cloudState={sentCloudState}
         onCloudStateChange={setSentCloudState}
       />
-      {!isInvoiceCancelled(invoice) && (
+      {/* FINANZCORE-05C — kein Zahlungsknopf, wenn nichts mehr offen ist; Korrektur laeuft ueber die Zahlungsliste. */}
+      {canRecordInvoicePayment(invoice) && (
         <Button type="button" fullWidth onClick={() => setShowPaymentForm(true)}>
           {translate('detail.action.recordPayment')}
         </Button>
@@ -720,6 +728,25 @@ export function InvoiceDetailPage() {
         </div>
 
         <div className="work-detail-grid__side">
+        {/*
+          * STEUERBERATER-06A — die Kontierung steht fuer sich: nicht im
+          * Zahlungsbereich und nicht bei der E-Rechnung. Sie beantwortet eine
+          * eigene Frage fuer einen eigenen Leser, den Steuerberater.
+          */}
+        <AccountingSection title={translate('accounting.title')} testId="invoice-detail-section-accounting">
+          <AccountingAssignmentPanel
+            key={`${invoice.id}:${accountingToken}`}
+            assignment={getAccountingAssignmentForSource('invoice', invoice.id)}
+            onStart={() => {
+              ensureInvoiceAccountingAssignment(invoice);
+              setAccountingToken((value) => value + 1);
+            }}
+            onChanged={() => setAccountingToken((value) => value + 1)}
+            translate={translate}
+            testIdPrefix="invoice"
+          />
+        </AccountingSection>
+
         <DetailSection title={translate('invoiceDetail.section.payment')} surface testId="invoice-detail-section-payment">
           <InvoicePaymentSummary invoice={invoice} translate={translate} />
           {/* PAYMENT-REMINDER-01 — dokumentierter Mahnstand direkt beim Zahlungsstand, nicht versteckt. */}

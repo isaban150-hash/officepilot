@@ -35,6 +35,21 @@ export const SUPABASE_SYNC_ALLOWLIST: ReadonlySet<SyncEntityType> = new Set([
   // ANGEBOT-01B — eigene Angebote. Tabelle, RLS, Push, Pull, Merge, Grabstein,
   // Altbestand und Wiederanlauf wie bei Briefen; Freigabe ueber eigene RPC.
   'offer',
+  /*
+   * STEUERBERATER-06A — Kontierungen. Freigabe erst jetzt, nach derselben
+   * Reihenfolge wie bei Briefen und Angeboten: Tabelle, eindeutiger Index,
+   * RLS, serverseitige Pruefung, Upsert-RPC mit Versionsvertrag, Grabstein,
+   * Pull, Merge mit Konfliktmeldung und Laufzeittests gegen eine echte
+   * Datenbank.
+   */
+  'accounting_assignment',
+  /*
+   * STEUERBERATER-06B — Abschlussrevisionen. Freigabe nach derselben
+   * Reihenfolge: Tabelle, eindeutige Indizes (Revision und hoechstens eine
+   * offene je Monat), RLS, Close-/Reopen-/Pull-RPC mit Revisionsvertrag und
+   * Laufzeittests gegen eine echte Datenbank.
+   */
+  'accounting_period_closure',
 ]);
 
 export const LOCAL_ONLY_SYNC_ENTITY_TYPES: ReadonlySet<SyncEntityType> = new Set([

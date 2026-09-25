@@ -32,6 +32,22 @@ export type SyncEntityType =
   | 'business_letter'
   /** ANGEBOT-01B — eigenes Angebot des Betriebs. */
   | 'offer'
+  /**
+   * STEUERBERATER-06A — die Kontierung eines Belegs.
+   *
+   * Eigene Entitaet und kein Feld am Beleg: Sie hat einen eigenen
+   * Lebenszyklus (vorgeschlagen, geprueft, bestaetigt), eine eigene
+   * Bestaetigungsspur und darf den Beleg selbst nie veraendern.
+   */
+  | 'accounting_assignment'
+  /**
+   * STEUERBERATER-06B — eine Abschlussrevision eines Monats.
+   *
+   * Eigene Entitaet, weil sie einen eigenen Lebenszyklus hat und
+   * **angehaengt** wird: Eine bestehende Revision wird nie ueberschrieben,
+   * nur um ihre Oeffnungsspur ergaenzt.
+   */
+  | 'accounting_period_closure'
   | 'knowledge_fact';
 
 export type SyncOutboxOperation = 'create' | 'update' | 'delete';
@@ -140,6 +156,21 @@ export interface SyncOutboxEntry {
   sentDeleted?: boolean;
   /** Wann er abgeschickt wurde — nur zur Nachvollziehbarkeit. */
   sentAt?: string;
+  /**
+   * FINANZ-SYNC-BLOCKER-01B — warum dieser Auftrag zuletzt nicht durchkam.
+   *
+   * Die Sync-Seite konnte den Fehlschlag bisher nur zählen, nicht benennen:
+   * Der Grund stand allein im Lauf-Report und war nach einem Neuladen weg. Er
+   * gehört an den Auftrag — dort überlebt er den Reload und lässt sich der
+   * Zeile zuordnen, die ihn betrifft.
+   *
+   * Hier steht der rohe Servertext. Die Oberfläche übersetzt ihn in
+   * Nutzersprache, statt ihn vorzuzeigen.
+   */
+  lastErrorMessage?: string;
+  lastErrorAt?: string;
+  /** Ob ein erneuter Versuch überhaupt Aussicht auf Erfolg hat. */
+  lastErrorRetryable?: boolean;
 }
 
 export interface SyncableEntity {

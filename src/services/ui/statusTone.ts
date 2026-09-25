@@ -18,15 +18,27 @@ export type StatusTone = 'neutral' | 'info' | 'success' | 'warning' | 'critical'
 export const STATUS_TONES: readonly StatusTone[] = ['neutral', 'info', 'success', 'warning', 'critical'];
 
 /** Offen ist der Normalzustand, Storniert ist historisch — beide ruhig, nicht alarmierend. */
-const PAYMENT_TONE: Record<InvoicePaymentStatus, StatusTone> = {
+/*
+ * FINANZCORE-05B-FIX2 — `gutschrift` kommt hinzu. Ein Guthaben ist keine
+ * Warnung und kein Erfolg, sondern eine Information.
+ */
+const PAYMENT_TONE: Record<InvoicePaymentStatus | ExpensePaymentStatus, StatusTone> = {
   offen: 'neutral',
   teilbezahlt: 'warning',
   bezahlt: 'success',
+  /*
+   * FINANZCORE-05C — zu viel gezahltes Geld ist kein Erfolg und kein Alarm.
+   * `warning` statt `success`, damit der Beleg sich sichtbar von einem sauber
+   * beglichenen unterscheidet, und nicht `critical`, weil nichts kaputt ist —
+   * es liegt nur etwas zu klaeren an.
+   */
+  ueberbezahlt: 'warning',
   ueberfaellig: 'critical',
   storniert: 'neutral',
+  gutschrift: 'info',
 };
 
-/** Rechnungen und Ausgaben teilen dieselben Zahlungsstatus-Werte. */
+/** Rechnungen und Ausgaben teilen die Zahlungsstatus-Werte; Ausgaben kennen zusaetzlich `gutschrift`. */
 export function paymentStatusTone(status: InvoicePaymentStatus | ExpensePaymentStatus): StatusTone {
   return PAYMENT_TONE[status] ?? 'neutral';
 }

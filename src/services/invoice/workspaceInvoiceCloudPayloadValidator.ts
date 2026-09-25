@@ -178,10 +178,19 @@ const SENT_VIA = enumSet<InvoiceSentVia>({
   sonstige: true,
 });
 
+/*
+ * FINANZCORE-05C — `ueberbezahlt` gehoert dazu.
+ *
+ * Diese Liste entscheidet, ob eine Nutzlast ueberhaupt in die Cloud darf.
+ * Ohne den neuen Wert waere eine ueberbezahlte Rechnung nicht mehr
+ * uebertragbar gewesen — der Status ist zwar rein abgeleitet, reist aber im
+ * Payload mit (der Server entfernt ihn erst danach).
+ */
 const PAYMENT_STATUSES = enumSet<InvoicePaymentStatus>({
   offen: true,
   teilbezahlt: true,
   bezahlt: true,
+  ueberbezahlt: true,
   ueberfaellig: true,
   storniert: true,
 });

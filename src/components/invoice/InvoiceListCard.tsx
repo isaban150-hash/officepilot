@@ -11,9 +11,9 @@ import { InvoicePaymentBadge } from './InvoicePaymentBadge';
 import { isFinalizedInvoice } from '../../services/invoiceArchiveService';
 import {
   calculatePaymentSummary,
+  canRecordInvoicePayment,
   formatPaymentCurrency,
   getPaidAmount,
-  isInvoiceCancelled,
 } from '../../services/invoicePaymentService';
 import { formatInvoiceDate } from '../../services/invoicePrintModel';
 import { getVorgangInvoice } from '../../services/vorgangService';
@@ -136,7 +136,8 @@ export function InvoiceListCard({
             <Button type="button" onClick={openInvoice} data-testid="invoice-list-card-open">
               {translate('invoice.open')}
             </Button>
-            {!isInvoiceCancelled(currentInvoice) && (
+            {/* FINANZCORE-05C — nur solange etwas offen ist. */}
+            {canRecordInvoicePayment(currentInvoice) && (
               <Button
                 type="button"
                 variant="outline"

@@ -24,6 +24,16 @@ function cloneSettings(value: WorkspaceSettings): WorkspaceSettings {
     ...value,
     settings: { ...value.settings },
     sync: value.sync ? { ...value.sync } : undefined,
+    /*
+     * FINANZ-SYNC-BLOCKER-01F — Vermerk und Konflikt sind Teil des Stands und
+     * werden mitkopiert. Ohne eigene Kopie teilten sich Speicher und Aufrufer
+     * dieselben Listen, und eine Entscheidung wirkte auf einen Stand zurück,
+     * der sie nicht bekommen sollte.
+     */
+    pendingKeys: value.pendingKeys ? [...value.pendingKeys] : undefined,
+    conflict: value.conflict
+      ? { ...value.conflict, fields: value.conflict.fields.map((field) => ({ ...field })) }
+      : undefined,
   };
 }
 
@@ -181,6 +191,12 @@ export function updateWorkspaceSettingsLocally(
     version: current.version + 1,
     updatedAt: new Date().toISOString(),
     sync: bumpSyncMeta(current.sync ?? createInitialSyncMeta()),
+    /*
+     * FINANZ-SYNC-BLOCKER-01B — der Schreibweg ist die einzige Stelle, die
+     * sicher weiss, welches Feld absichtlich geändert wurde. Später lässt sich
+     * das aus dem Ergebnis nicht mehr ablesen.
+     */
+    pendingKeys: [...new Set([...(current.pendingKeys ?? []), ...Object.keys(partial)])],
   };
   workspaceSettings = next;
   return cloneSettings(next);

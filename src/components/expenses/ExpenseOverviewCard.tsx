@@ -8,8 +8,8 @@ import { getExpensePaymentSavedToastKey } from './ExpensePaymentSummary';
 import { ExpensePaymentBadge } from './ExpensePaymentBadge';
 import {
   calculateExpensePaymentSummary,
+  canRecordExpensePayment,
   isExpenseCancelled,
-  isExpensePayable,
 } from '../../services/expensePaymentService';
 import type { ExpenseOverviewItem } from '../../types/expense';
 import type { Expense } from '../../types/expense';
@@ -109,7 +109,8 @@ export function ExpenseOverviewCard({
               <Button type="button" size="sm" onClick={openExpense}>
                 {translate('expense.open')}
               </Button>
-              {isExpensePayable(expense) && !isExpenseCancelled(expense) && (
+              {/* FINANZCORE-05C — nur solange etwas offen ist; sonst laeuft die Korrektur ueber die Detailseite. */}
+              {canRecordExpensePayment(expense) && !isExpenseCancelled(expense) && (
                 <Button type="button" size="sm" variant="outline" onClick={() => setShowPaymentForm(true)}>
                   {translate('payment.recordShort')}
                 </Button>

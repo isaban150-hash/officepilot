@@ -1,4 +1,6 @@
 import type { CommunicationEvent } from '../../types/communicationHistory';
+import type { AccountingAssignment } from '../../types/accounting';
+import type { AccountingPeriodClosure } from '../../types/accountingPeriod';
 import type { Expense } from '../../types/expense';
 import type { BusinessLetter } from '../../types/businessLetter';
 import type { Offer } from '../../types/offer';
@@ -107,6 +109,10 @@ export function findEntityInState(
       return state.businessLetters?.find((item) => item.id === entityId) ?? null;
     case 'offer':
       return state.offers?.find((item) => item.id === entityId) ?? null;
+    case 'accounting_assignment':
+      return state.accountingAssignments?.find((item) => item.id === entityId) ?? null;
+    case 'accounting_period_closure':
+      return state.accountingPeriodClosures?.find((item) => item.id === entityId) ?? null;
     case 'communication_event':
       return state.communicationHistory?.find((item) => item.id === entityId) ?? null;
     case 'knowledge_fact':
@@ -187,6 +193,18 @@ export function upsertEntityInState(
       break;
     case 'offer':
       next.offers = upsertInArray(next.offers ?? [], entity as Offer);
+      break;
+    case 'accounting_assignment':
+      next.accountingAssignments = upsertInArray(
+        next.accountingAssignments ?? [],
+        entity as AccountingAssignment,
+      );
+      break;
+    case 'accounting_period_closure':
+      next.accountingPeriodClosures = upsertInArray(
+        next.accountingPeriodClosures ?? [],
+        entity as AccountingPeriodClosure,
+      );
       break;
     case 'communication_event':
       next.communicationHistory = upsertInArray(
@@ -271,6 +289,10 @@ export function listEntitiesByType(
       return [...(state.businessLetters ?? [])];
     case 'offer':
       return [...(state.offers ?? [])];
+    case 'accounting_assignment':
+      return [...(state.accountingAssignments ?? [])];
+    case 'accounting_period_closure':
+      return [...(state.accountingPeriodClosures ?? [])];
     case 'communication_event':
       return [...(state.communicationHistory ?? [])];
     case 'knowledge_fact':

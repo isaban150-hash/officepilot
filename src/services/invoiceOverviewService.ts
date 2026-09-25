@@ -17,6 +17,8 @@ export type InvoiceOverviewFilter =
   | 'teilbezahlt'
   | 'ueberfaellig'
   | 'bezahlt'
+  /* FINANZCORE-05C — sichtbar filterbar; ein ueberbezahlter Beleg ist kein offener. */
+  | 'ueberbezahlt'
   | 'storniert';
 
 export interface InvoiceOverviewItem {
@@ -47,7 +49,9 @@ const STATUS_SORT_ORDER: Record<InvoicePaymentStatus, number> = {
   offen: 1,
   teilbezahlt: 2,
   bezahlt: 3,
-  storniert: 4,
+  /* FINANZCORE-05C — kostet kein Geld mehr, ist aber noch zu klaeren. */
+  ueberbezahlt: 4,
+  storniert: 5,
 };
 
 function buildOverviewItem(

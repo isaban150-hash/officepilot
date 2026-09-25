@@ -1,7 +1,5 @@
 import { PAPER_FOLDERS } from '../data/mockData';
-import { getCachedSetup, persistAll } from './persistenceService';
-import { getCompanyProfile } from './companyProfileService';
-import { resolveDefaultTaxStatus } from './invoice/invoiceDefaults';
+import { persistAll } from './persistenceService';
 import {
   filterSyncActive,
   generateEntityId,
@@ -22,7 +20,11 @@ import {
   normalizeExpense,
 } from './expenseNormalize';
 import { normalizeExpensePaymentFields } from './expensePaymentCalculations';
-import { fromCents, toCents } from './invoiceMoney';
+import { fromCents, isValidMoneyNumber, toCents } from './invoiceMoney';
+import {
+  checkExpenseMoneyIntegrity,
+  type ExpenseMoneyAmounts,
+} from './expense/expenseMoneyIntegrity';
 import { getVorgangById } from './vorgangService';
 import {
   recordExpensePayment,
@@ -36,7 +38,7 @@ import type {
   ExpenseInput,
   ExpenseSummary,
 } from '../types/expense';
-import type { DigitalFolder, PaperFilingRule } from '../types/models';
+import type { DigitalFolder, PaperFilingRule, TaxStatus } from '../types/models';
 
 export type ExpenseMutationResult =
   | { success: true; expense: Expense }
@@ -64,6 +66,70 @@ function defaultPaperFolder(): PaperFilingRule {
   };
 }
 
+/**
+ * FINANZCORE-05B-FIX1 — der Steuerstatus **dieses Belegs**.
+ *
+ * ## Was hier falsch war
+ *
+ * Bis hierher stand an dieser Stelle
+ * `resolveDefaultTaxStatus(getCompanyProfile(), getCachedSetup())` — also der
+ * Steuerstatus, mit dem der Betrieb **seine eigenen Rechnungen schreibt**.
+ *
+ * Das ist ein Kategorienfehler. Der Steuerstatus einer Ausgabe ist eine
+ * Eigenschaft des Lieferantenbelegs, nicht der eigenen Fakturierung. Wer selbst
+ * nach §13b abrechnet oder Kleinunternehmer ist, bekommt trotzdem
+ * Lieferantenrechnungen mit ausgewiesenen 19 %. Das Feld sagt es selbst:
+ * `defaultTaxStatus` ist dokumentiert als Vorbelegung für **neue
+ * Rechnungsentwürfe**, „der Steuerstatus neuer Vorgänge".
+ *
+ * Sichtbar wurde es in der Abnahme von 05B: Bei einem Betrieb mit
+ * Nullsteuer-Status wurde eine völlig korrekte Ausgabe über 100 / 19 / 119 mit
+ * „Bei diesem Steuerstatus fällt keine Umsatzsteuer an" abgelehnt — ohne dass
+ * es im Formular überhaupt einen Steuerstatus zu sehen gab.
+ *
+ * ## Was jetzt gilt
+ *
+ * Der Wert kommt vom Aufrufer. Das manuelle Formular zeigt ihn sichtbar an und
+ * schickt ihn mit; sein Vorschlag ist `standard_19`, der Normalfall einer
+ * Lieferantenrechnung.
+ *
+ * Fehlt er — der Weg aus dem Eingangsdokument sendet keinen —, gilt `unclear`.
+ * Das ist die ehrliche Antwort: Aus einem eingescannten Beleg ist der
+ * Steuerstatus nicht zuverlässig ableitbar, und `unclear` heisst im Modell
+ * genau „unbekannt, bitte prüfen". Pauschal 19 % anzunehmen wäre eine
+ * erfundene Steuerbehandlung; den Firmenstatus zu nehmen war der Fehler, der
+ * gerade behoben wird.
+ */
+function resolveExpenseTaxStatus(input: ExpenseInput): TaxStatus {
+  return input.taxStatus ?? 'unclear';
+}
+
+/**
+ * FINANZCORE-05B — die **eine** Auflösung der drei Geldwerte.
+ *
+ * Netto und Steuer sind im Eingabemodell optional; was fehlt, wird hier
+ * ergänzt. Diese Funktion ist bewusst die einzige Stelle, an der das geschieht:
+ * Prüfte die Validierung andere Werte, als der Bau danach einsetzt, wäre die
+ * Invariante wertlos.
+ *
+ * Gerechnet wird in Cent. Die frühere Ergänzung `Math.max(0, brutto - netto)`
+ * ist dabei **entfallen** — sie war die Ursache eines stillen Widerspruchs:
+ * Bei einer Gutschrift (brutto −119, netto −100) lieferte die Klammer den
+ * Steuerbetrag 0, und damit ergab `netto + steuer` −100 statt −119. Für alle
+ * Fälle mit brutto ≥ netto ändert sich nichts; der einzige Unterschied liegt
+ * dort, wo die Klammer bisher einen ungültigen Beleg erzeugt hat.
+ */
+function resolveExpenseAmounts(input: ExpenseInput): ExpenseMoneyAmounts {
+  const grossAmount = input.grossAmount;
+  const netAmount = input.netAmount ?? grossAmount;
+  const taxAmount =
+    input.taxAmount ??
+    (isValidMoneyNumber(grossAmount) && isValidMoneyNumber(netAmount)
+      ? fromCents(toCents(grossAmount) - toCents(netAmount))
+      : Number.NaN);
+  return { netAmount, taxAmount, grossAmount, taxStatus: resolveExpenseTaxStatus(input) };
+}
+
 function validateInput(input: ExpenseInput): string | null {
   if (!input.supplierName?.trim()) return 'expense.supplierRequired';
   if (!input.title?.trim()) return 'expense.titleRequired';
@@ -72,6 +138,37 @@ function validateInput(input: ExpenseInput): string | null {
     return 'expense.amountRequired';
   }
   if (!EXPENSE_CATEGORIES.includes(input.category)) return 'expense.categoryRequired';
+
+  /*
+   * FINANZCORE-05B — die Geldinvariante, an genau einer Stelle für beide
+   * Schreibwege. `addExpense` prüft die Eingabe, `updateExpense` prüft den
+   * zusammengeführten Stand — beide laufen durch diese Funktion, also kann
+   * keiner von beiden die Prüfung umgehen.
+   *
+   * Fail-closed: Ein widersprüchlicher Beleg wird nicht gerundet, nicht
+   * korrigiert und nicht gespeichert. Er wird abgelehnt.
+   */
+  const money = checkExpenseMoneyIntegrity(resolveExpenseAmounts(input));
+  if (!money.ok) {
+    /*
+     * FINANZCORE-05B-FIX1 — die Reihenfolge der Meldungen.
+     *
+     * Bei 100 / 19 / 200 lagen zwei Befunde gleichzeitig vor, und gemeldet
+     * wurde der über den Steuerstatus. Der Nutzer las „keine Umsatzsteuer
+     * erlaubt", während sein eigentliches Problem war, dass 100 + 19 nicht 200
+     * ergibt — und suchte an der falschen Stelle.
+     *
+     * Der Betragswiderspruch kommt deshalb zuerst: Er ist unmittelbar
+     * nachrechenbar und muss ohnehin behoben werden, bevor die Frage nach dem
+     * Steuerstatus überhaupt sinnvoll ist.
+     */
+    const codes = money.issues.map((issue) => issue.code);
+    if (codes.includes('amount_not_finite')) return 'expense.amountRequired';
+    if (codes.includes('equation_mismatch')) return 'expense.amountsInconsistent';
+    if (codes.includes('tax_sign_mismatch')) return 'expense.amountsInconsistent';
+    return 'expense.taxAmountNotAllowedForStatus';
+  }
+
   return null;
 }
 
@@ -83,9 +180,8 @@ function buildExpenseFromInput(
 ): Expense {
   const supplierName = input.supplierName.trim();
   const invoiceNumber = input.invoiceNumber?.trim() ?? '';
-  const grossAmount = input.grossAmount;
-  const netAmount = input.netAmount ?? grossAmount;
-  const taxAmount = input.taxAmount ?? Math.max(0, grossAmount - netAmount);
+  // FINANZCORE-05B — dieselbe Aufloesung, die auch geprueft wurde.
+  const { netAmount, taxAmount, grossAmount, taxStatus } = resolveExpenseAmounts(input);
 
   return normalizeExpense({
     id,
@@ -98,7 +194,7 @@ function buildExpenseFromInput(
     issueDate: input.issueDate,
     paymentDueDate: input.paymentDueDate ?? null,
     // 01B — Steuerstatus-Default aus dem Firmenprofil (Setup nur Legacy-Spiegel).
-    taxStatus: input.taxStatus ?? resolveDefaultTaxStatus(getCompanyProfile(), getCachedSetup()),
+    taxStatus,
     netAmount,
     taxAmount,
     grossAmount,

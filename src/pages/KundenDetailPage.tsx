@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, useParams, useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { CustomerEditForm } from '../components/customer/CustomerEditForm';
+import { CustomerReceivablesPanel } from '../components/customer/CustomerReceivablesPanel';
 import { updateCustomer } from '../services/customerService';
 import { getCustomerById } from '../services/customerStoreService';
 import type { CustomerBilling } from '../types/models';
@@ -296,11 +297,23 @@ export function KundenDetailPage({ kind }: { kind: KundenIdentityKind }) {
         )}
       </DetailSection>
 
-      <DetailSection title={translate('kunden.detail.invoicesTitle')} testId="kunden-invoices">
-        <SummaryList columns={1} testId="kunden-receivables">
-          <DataRow label={translate('kunden.detail.openReceivable')} value={workspace.openReceivableLabel} />
-        </SummaryList>
+      {/*
+        * FINANZCORE-05D — offene Posten des Kunden.
+        *
+        * Eigener Abschnitt vor den Rechnungslisten: Die Frage „wie viel
+        * schuldet dieser Kunde" ist die, mit der jemand eine Kundenakte
+        * oeffnet. Die bisherige einzelne Zeile „Offene Forderung" ist darin
+        * aufgegangen — sie sagte den Betrag, aber nichts ueber
+        * Faelligkeit, Guthaben oder Alter.
+        */}
+      <DetailSection
+        title={translate('kunden.receivables.title')}
+        testId="kunden-receivables-section"
+      >
+        <CustomerReceivablesPanel receivables={workspace.receivables} translate={translate} />
+      </DetailSection>
 
+      <DetailSection title={translate('kunden.detail.invoicesTitle')} testId="kunden-invoices">
         <h3 className="ui-section-header__title">{translate('kunden.detail.openInvoicesTitle')}</h3>
         {workspace.openInvoices.length === 0 ? (
           <p className="detail-empty">{translate('kunden.detail.openInvoicesEmpty')}</p>

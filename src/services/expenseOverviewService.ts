@@ -15,6 +15,8 @@ export type ExpenseOverviewFilter =
   | 'teilbezahlt'
   | 'ueberfaellig'
   | 'bezahlt'
+  /* FINANZCORE-05C — sichtbar filterbar; ein ueberbezahlter Beleg ist kein offener. */
+  | 'ueberbezahlt'
   | 'storniert';
 
 export interface ExpenseOverviewTotals {
@@ -31,7 +33,17 @@ const STATUS_SORT_ORDER: Record<ExpensePaymentStatus, number> = {
   offen: 1,
   teilbezahlt: 2,
   bezahlt: 3,
-  storniert: 4,
+  /*
+   * FINANZCORE-05C — hinter „bezahlt": Der Beleg kostet kein Geld mehr, aber
+   * er ist noch zu klaeren, und steht damit vor Gutschrift und Storno.
+   */
+  ueberbezahlt: 4,
+  /*
+   * FINANZCORE-05B-FIX2 — eine Gutschrift verlangt nichts. Sie steht hinter
+   * allem, was noch Geld kostet, und vor dem historischen Storno.
+   */
+  gutschrift: 5,
+  storniert: 6,
 };
 
 function isPayableExpense(expense: Expense): boolean {

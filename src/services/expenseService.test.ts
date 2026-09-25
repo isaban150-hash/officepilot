@@ -161,7 +161,17 @@ describe('EXPENSE-IDENTIFIER-COMPLETENESS-01 — nummernlose Belege', () => {
 
   it('A: zwei nummernlose Belege desselben Lieferanten sind beide anlegbar', () => {
     const first = addExpense(receiptInput());
-    const second = addExpense(receiptInput({ grossAmount: 42.1 }));
+    /*
+     * FINANZCORE-05B — der zweite Beleg trägt jetzt einen in sich stimmigen
+     * Betrag. Vorher überschrieb dieser Fall nur das Brutto und liess Netto
+     * 59,25 und Steuer 11,26 stehen; die Summe ergab weiterhin 70,51 und
+     * widersprach dem neuen Brutto. Für die Aussage dieses Tests — zwei
+     * nummernlose Belege desselben Lieferanten sind beide anlegbar — ist das
+     * ohne Belang; es fehlte schlicht die Aufteilung.
+     */
+    const second = addExpense(
+      receiptInput({ grossAmount: 42.1, netAmount: 35.38, taxAmount: 6.72 }),
+    );
 
     expect(first.success, JSON.stringify(first)).toBe(true);
     expect(second.success, JSON.stringify(second)).toBe(true);

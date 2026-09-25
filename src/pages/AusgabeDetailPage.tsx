@@ -17,11 +17,14 @@ import { DetailSection, SummaryList } from '../components/ui/Section';
 import { expenseStatusTone, paymentStatusTone } from '../services/ui/statusTone';
 import { useApp } from '../context/AppContext';
 import { formatPaperFilingInstruction } from '../services/paperFolderService';
+import { AccountingAssignmentPanel } from '../components/accounting/AccountingAssignmentPanel';
+import { ensureExpenseAccountingAssignment } from '../services/accounting/accountingAssignmentService';
+import { getAccountingAssignmentForSource } from '../services/accounting/accountingStore';
 import { formatDisplayDate } from '../utils/displayFormat';
 import {
   calculateExpensePaymentSummary,
+  canRecordExpensePayment,
   isExpenseCancelled,
-  isExpensePayable,
   removeExpensePayment,
 } from '../services/expensePaymentService';
 import {
@@ -56,6 +59,12 @@ export function AusgabeDetailPage() {
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [showAllocationDialog, setShowAllocationDialog] = useState(false);
+  /*
+   * STEUERBERATER-06A — die Kontierung liegt im Speicher, nicht in diesem
+   * Zustand. Der Zaehler sagt nur „bitte neu lesen"; so kann hier keine
+   * zweite, veraltete Fassung entstehen.
+   */
+  const [accountingToken, setAccountingToken] = useState(0);
 
   useEffect(() => {
     if (id) {
@@ -136,7 +145,17 @@ export function AusgabeDetailPage() {
 
   const paymentSummary = calculateExpensePaymentSummary(expense);
   const cancelled = isExpenseCancelled(expense);
-  const canRecordPayment = isExpensePayable(expense) && !cancelled;
+  /*
+   * FINANZCORE-05C — der Stand zaehlt mit, nicht nur die Art des Belegs.
+   *
+   * `isExpensePayable` sagt, ob auf diesen Beleg ueberhaupt gezahlt werden
+   * kann (gebucht, nicht storniert, keine Gutschrift). Ist der offene Betrag
+   * aber 0, fordert er nichts mehr — und ein weiterer Klick auf den
+   * Hauptknopf waere genau die versehentliche Mehrfachueberzahlung, vor der
+   * die Bestaetigung schuetzen soll. Zurueckgenommen wird eine Zahlung unten
+   * in der Zahlungsliste.
+   */
+  const canRecordPayment = canRecordExpensePayment(expense) && !cancelled;
   /*
    * OFFICEPILOT-V1-A — Storno und Bearbeiten nur für gebuchte, nicht stornierte
    * Belege. Der Dienst prüft dasselbe; hier wird es nicht erst angeboten.
@@ -160,13 +179,31 @@ export function AusgabeDetailPage() {
     setExpense(result.expense);
     showToast(translate('expense.allocation.removed'));
   };
-  const nextActionKey: TranslationKey = cancelled
+  /*
+   * FINANZCORE-05B-FIX3 — für eine Gutschrift gibt es keinen nächsten Schritt.
+   *
+   * Die Kette fiel bis hierher auf `expense.nextAction.open` durch und riet
+   * „Zahlung erfassen, sobald der Beleg bezahlt ist" — direkt über einem Beleg,
+   * der weder eine Zahlung erwartet noch einen Knopf dafür anbietet.
+   *
+   * `null` statt eines eigenen Satzes: Was eine Gutschrift ist und dass darauf
+   * keine Zahlung erfasst wird, steht bereits in der Zahlungsübersicht
+   * darunter. Ein zweiter Hinweis wäre Wiederholung — und jede Formulierung
+   * über Verrechnung oder Rückzahlung wäre ein Versprechen auf eine Funktion,
+   * die es nicht gibt.
+   */
+  const nextActionKey: TranslationKey | null = cancelled
     ? 'expense.nextAction.cancelled'
-    : paymentSummary.status === 'bezahlt'
-      ? 'expense.nextAction.paid'
-      : paymentSummary.status === 'teilbezahlt'
-        ? 'expense.nextAction.partial'
-        : 'expense.nextAction.open';
+    : paymentSummary.status === 'gutschrift'
+      ? null
+      /* FINANZCORE-05C — „nichts weiter zu tun" gilt hier nicht; es liegt Geld zu viel. */
+      : paymentSummary.status === 'ueberbezahlt'
+        ? 'expense.nextAction.overpaid'
+        : paymentSummary.status === 'bezahlt'
+          ? 'expense.nextAction.paid'
+          : paymentSummary.status === 'teilbezahlt'
+            ? 'expense.nextAction.partial'
+            : 'expense.nextAction.open';
 
   return (
     <Page testId="ausgabe-detail-page">
@@ -221,9 +258,11 @@ export function AusgabeDetailPage() {
         </section>
       ) : null}
 
-      <p className="invoice-hint" data-testid="ausgabe-next-action">
-        {translate(nextActionKey)}
-      </p>
+      {nextActionKey ? (
+        <p className="invoice-hint" data-testid="ausgabe-next-action">
+          {translate(nextActionKey)}
+        </p>
+      ) : null}
 
       <DetailSection title={translate('payment.summaryTitle')} surface testId="ausgabe-section-payment">
         <ExpensePaymentSummary expense={expense} translate={translate} />
@@ -231,6 +270,25 @@ export function AusgabeDetailPage() {
           expense={expense}
           translate={translate}
           onRemovePayment={handleRemovePayment}
+        />
+      </DetailSection>
+
+      {/*
+        * STEUERBERATER-06A — die Kontierung steht neben dem Zahlungsstand und
+        * nicht darin: Ob ein Beleg bezahlt ist und auf welches Konto er
+        * gehoert, sind zwei verschiedene Fragen an zwei verschiedene Leser.
+        */}
+      <DetailSection title={translate('accounting.title')} testId="ausgabe-section-accounting">
+        <AccountingAssignmentPanel
+          key={`${expense.id}:${accountingToken}`}
+          assignment={getAccountingAssignmentForSource('expense', expense.id)}
+          onStart={() => {
+            ensureExpenseAccountingAssignment(expense);
+            setAccountingToken((value) => value + 1);
+          }}
+          onChanged={() => setAccountingToken((value) => value + 1)}
+          translate={translate}
+          testIdPrefix="ausgabe"
         />
       </DetailSection>
 
@@ -249,6 +307,21 @@ export function AusgabeDetailPage() {
           ) : null}
           <DataRow label={translate('expense.fieldSupplier')} value={expense.supplierName} />
           <DataRow label={translate('expense.fieldCategory')} value={translate(categoryKey)} />
+          {/*
+            * FINANZCORE-05B-FIX2 — der Steuerstatus lesend im Detail.
+            *
+            * Er stand bisher nur hinter "Bearbeiten". Wer den Beleg pruefte,
+            * musste ihn also veraendern wollen, um zu sehen, wie er besteuert
+            * ist. Dieselben Bezeichnungen wie im Formular.
+            */}
+          <DataRow
+            label={translate('expense.fieldTaxStatus')}
+            value={
+              <span data-testid="ausgabe-tax-status">
+                {translate(`expense.taxStatus.${expense.taxStatus}` as TranslationKey)}
+              </span>
+            }
+          />
           {/* V1-B2/01B — Auftragsbezug: Name des Auftrags, nie eine technische Kennung. */}
           <DataRow
             label={translate('expense.allocation.label')}

@@ -126,7 +126,8 @@ describe('calculatePaymentSummary', () => {
     expect(summary.overpaidAmount).toBe(0);
   });
 
-  it('detects overpaidAmount on overpayment while status stays bezahlt', () => {
+  // FINANZCORE-05C — der Status heisst jetzt `ueberbezahlt`; vorher fiel er auf `bezahlt`.
+  it('detects overpaidAmount and reports status ueberbezahlt', () => {
     const invoice = createFinalizedInvoice({
       payments: [
         {
@@ -139,7 +140,7 @@ describe('calculatePaymentSummary', () => {
     });
 
     const summary = calculatePaymentSummary(invoice, '2026-06-10');
-    expect(summary.status).toBe('bezahlt');
+    expect(summary.status).toBe('ueberbezahlt');
     expect(summary.openAmount).toBe(0);
     expect(summary.overpaidAmount).toBeCloseTo(13.25, 2);
   });
@@ -344,7 +345,8 @@ describe('recordPayment / removePayment', () => {
     expect(result.success).toBe(true);
     if (!result.success) return;
     expect(calculatePaymentSummary(result.invoice).overpaidAmount).toBeCloseTo(13.25, 2);
-    expect(result.invoice.paymentStatus).toBe('bezahlt');
+    // FINANZCORE-05C — auch das gespeicherte Feld nennt die Ueberzahlung beim Namen.
+    expect(result.invoice.paymentStatus).toBe('ueberbezahlt');
   });
 
   it('rejects payment on cancelled invoice', () => {

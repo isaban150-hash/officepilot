@@ -4,6 +4,13 @@ import { PageHeader, StatusBadge } from '../components/ui/Card';
 import { RowList, RowListItem } from '../components/ui/Lists';
 import { Page } from '../components/ui/Page';
 import { DetailSection } from '../components/ui/Section';
+import { AccountingChecklistPanel } from '../components/accounting/AccountingChecklistPanel';
+import { getAccountingChecklist } from '../services/accounting/accountingOverviewService';
+import { AccountingPeriodPanel } from '../components/accounting/AccountingPeriodPanel';
+import { getAccountingPeriodState } from '../services/accounting/accountingPeriodService';
+import { AccountingExportPanel } from '../components/accounting/AccountingExportPanel';
+import { evaluateAccountingExportReadiness } from '../services/accounting/accountingExportGateService';
+import { exportAccountingPackage } from '../services/accounting/accountingExportRunner';
 import { InlineNotice, ErrorState } from '../components/ui/States';
 import { Select } from '../components/ui/Select';
 import { ReadOnlyNotice } from '../components/ui/ReadOnlyNotice';
@@ -50,6 +57,8 @@ export function SteuerberaterPage() {
   );
 
   const [selectedMonthKey, setSelectedMonthKey] = useState(defaultMonthKey);
+  /* STEUERBERATER-06B — laesst den Monatsstand neu ableiten; kein zweiter Bestand. */
+  const [periodToken, setPeriodToken] = useState(0);
   const [step, setStep] = useState<FlowStep>('overview');
   const [isExporting, setIsExporting] = useState(false);
   const [exportResult, setExportResult] = useState<MonatsmappeExportResult | null>(null);
@@ -154,6 +163,67 @@ export function SteuerberaterPage() {
         testId="steuerberater-month"
       >
         <span className="sr-only">{overview.monthLabel}</span>
+      </DetailSection>
+
+      {/*
+        * STEUERBERATER-06A — der Kontierungsstand des gewaehlten Monats.
+        * Bei jedem Rendern frisch abgeleitet; nichts davon ist festgeschrieben.
+        */}
+      <DetailSection
+        title={translate('accounting.overview.title')}
+        testId="steuerberater-accounting"
+      >
+        <AccountingChecklistPanel
+          checklist={getAccountingChecklist(selectedMonthKey)}
+          translate={translate}
+        />
+      </DetailSection>
+
+      {/*
+        * STEUERBERATER-06B — der Monatsabschluss.
+        *
+        * Eigener Abschnitt nach dem Kontierungsstand: Erst sieht der Nutzer,
+        * was fehlt, dann entscheidet er. `periodToken` laesst den Stand nach
+        * jeder Aktion neu ableiten — gespeichert wird hier nichts.
+        */}
+      <DetailSection
+        title={translate('accountingPeriod.title')}
+        testId="steuerberater-period"
+      >
+        <AccountingPeriodPanel
+          key={`${selectedMonthKey}:${periodToken}`}
+          state={getAccountingPeriodState(selectedMonthKey)}
+          monthLabel={overview.monthLabel}
+          onChanged={() => setPeriodToken((value) => value + 1)}
+          translate={translate}
+          closedBy={user?.id}
+        />
+      </DetailSection>
+
+      {/*
+        * STEUERBERATER-06C — die Uebergabe.
+        *
+        * Nach dem Abschluss, weil sie ihn voraussetzt. Derselbe `periodToken`:
+        * Wird der Monat abgeschlossen oder wieder geoeffnet, bewertet das Gate
+        * sofort neu — und beim Klick selbst noch einmal.
+        */}
+      <DetailSection
+        title={translate('accountingExport.title')}
+        testId="steuerberater-export"
+      >
+        <AccountingExportPanel
+          key={`${selectedMonthKey}:${periodToken}`}
+          readiness={evaluateAccountingExportReadiness(selectedMonthKey)}
+          onCreatePackage={async () => {
+            const result = await exportAccountingPackage({
+              monthKey: selectedMonthKey,
+              userId: user?.id,
+            });
+            setPeriodToken((value) => value + 1);
+            return result.outcome === 'exported' ? result.fileName : null;
+          }}
+          translate={translate}
+        />
       </DetailSection>
 
       {step === 'review' || step === 'exported' ? (
