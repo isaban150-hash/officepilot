@@ -8,7 +8,7 @@ import { useFormResume } from '../../hooks/useFormResume';
 import { isSupabaseConfigured } from '../../lib/supabase';
 import { getLastPersistSuccess } from '../../services/persistenceService';
 import { getInvoiceNumberSequenceSnapshot } from '../../services/invoiceNumberService';
-import { validateCompanyProfileForSettings } from '../../services/setupValidationService';
+import { ibanErrorKey, validateCompanyProfileForSettings } from '../../services/setupValidationService';
 import { resolveWorkspaceWriteAccess } from '../../services/workspace/workspaceRoleService';
 import type { CompanyProfile } from '../../types/models';
 import type { TranslationKey } from '../../i18n';
@@ -173,6 +173,33 @@ const SECTIONS: SectionSpec[] = [
 
 type CompanySettingsDraft = Pick<CompanyProfile, CompanySettingsField>;
 
+/**
+ * BROWSER-ACCEPTANCE-FIX 01 / B2 — Rechtsform mit Handelsregister-Angaben.
+ *
+ * Nur ein sichtbarer Hinweis, keine Pflicht und keine Rechtsauskunft: Die
+ * Felder gibt es im Profil bereits; fehlen sie bei einer GmbH/UG, sagt die
+ * Seite das, statt still weiterzumachen.
+ */
+const CAPITAL_COMPANY_FORM = /\b(gmbh|ug)\b/i;
+const CAPITAL_COMPANY_FIELDS = [
+  { key: 'managingDirector', labelKey: 'companyProfile.managingDirector' },
+  { key: 'registrationAuthority', labelKey: 'companyProfile.registrationAuthority' },
+  { key: 'registrationNumber', labelKey: 'companyProfile.registrationNumber' },
+] as const satisfies readonly { key: CompanySettingsField; labelKey: TranslationKey }[];
+
+export function missingCapitalCompanyFields(
+  draft: Pick<CompanyProfile, 'legalForm' | 'managingDirector' | 'registrationAuthority' | 'registrationNumber'> &
+    Partial<Pick<CompanyProfile, 'companyName'>>,
+): (typeof CAPITAL_COMPANY_FIELDS)[number][] {
+  /*
+   * Die Rechtsform steht im eigenen Feld; ist es leer, steht sie oft im
+   * Firmennamen („Muster Bau GmbH"). Ein ausgefülltes Feld hat Vorrang.
+   */
+  const form = (draft.legalForm ?? '').trim() || (draft.companyName ?? '');
+  if (!CAPITAL_COMPANY_FORM.test(form)) return [];
+  return CAPITAL_COMPANY_FIELDS.filter((field) => !(draft[field.key] ?? '').trim());
+}
+
 function pickFields(profile: CompanyProfile): CompanySettingsDraft {
   const picked = {} as Record<CompanySettingsField, string>;
   for (const key of COMPANY_SETTINGS_FIELDS) picked[key] = profile[key] ?? '';
@@ -276,6 +303,15 @@ export function CompanySettingsPage() {
     }
   };
 
+  /*
+   * B2 — die IBAN wird schon beim Anzeigen geprüft: Auch eine früher
+   * gespeicherte ungültige IBAN ist sichtbar, geändert wird sie nicht.
+   * Speichern ist erst mit gültiger IBAN möglich (Validator oben).
+   */
+  const ibanCheckKey = (draft.iban ?? '').trim() ? ibanErrorKey(draft.iban ?? '') : null;
+  const ibanIsStored = (draft.iban ?? '') === (companyProfile.iban ?? '');
+  const missingLegalFields = missingCapitalCompanyFields(draft);
+
   const errorFor = (field: FieldSpec): TranslationKey | null => {
     if (errors[field.key]) return errors[field.key] ?? null;
     for (const key of field.errorKeys ?? []) {
@@ -343,6 +379,20 @@ export function CompanySettingsPage() {
                   {error ? (
                     <p className="form-error" id={`${inputId}-error`} data-testid={`${inputId}-error`}>
                       {translate(error)}
+                    </p>
+                  ) : null}
+                  {field.key === 'iban' && !error && ibanCheckKey ? (
+                    <p className="form-error" role="status" data-testid="settings-company-iban-check">
+                      {translate(ibanIsStored ? 'settings.company.iban.storedInvalid' : 'settings.company.iban.invalidNow')}{' '}
+                      {translate(ibanCheckKey)}
+                    </p>
+                  ) : null}
+                  {field.key === 'legalForm' && missingLegalFields.length > 0 ? (
+                    <p className="settings-form__notice" role="status" data-testid="settings-company-legal-hint">
+                      {translate('settings.company.legalForm.missingHint').replace(
+                        '{fields}',
+                        missingLegalFields.map((missing) => translate(missing.labelKey)).join(', '),
+                      )}
                     </p>
                   ) : null}
                 </div>

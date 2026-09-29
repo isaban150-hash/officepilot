@@ -8,7 +8,7 @@
  */
 export const deSettings = {
   'settings.title': 'Einstellungen',
-  'settings.subtitle': 'Verwalte deinen Betrieb, deine Rechnungen und OfficePilot.',
+  'settings.subtitle': 'Verwalten Sie Ihren Betrieb, Ihre Rechnungen und OfficeTakt.',
   'settings.gear': 'Einstellungen öffnen',
   'settings.backToHub': 'Zu den Einstellungen',
 
@@ -20,7 +20,7 @@ export const deSettings = {
   'settings.payment.title': 'Zahlungsziel und Skonto',
   'settings.payment.description': 'Standardwerte für neue Rechnungen — pro Rechnung änderbar',
   'settings.documents.title': 'Rechnungstexte',
-  'settings.documents.description': 'Fußzeile und Hinweise auf deinen Rechnungen',
+  'settings.documents.description': 'Fußzeile und Hinweise auf Ihren Rechnungen',
 
   'settings.group.design': 'Dokumente & Design',
   'settings.design.title': 'Logo und Darstellung',
@@ -115,7 +115,7 @@ export const deSettings = {
   'settings.communication.readOnly': 'Nur Inhaber und Administratoren können die Kommunikationseinstellungen ändern.',
   'settings.communication.historicalHint': 'Diese Werte gelten für neue Sendungen. Bereits versendete Dokumente bleiben unverändert.',
   'settings.communication.section.sender': 'Absender',
-  'settings.communication.sender.hint': 'Gilt für den E-Mail-Versand von Dokumenten (Briefe, Angebote, sonstige Dokumente): Der Empfänger sieht den Anzeigenamen und antwortet an die Antwortadresse. Rechnungen und Korrekturbelege verwenden Firmenname, Rechtsform und Firmen-E-Mail, wie sie bei der Freigabe der Rechnung festgehalten wurden. Die technische Absenderadresse wird vom Versanddienst von OfficePilot gesetzt und ist nicht frei wählbar.',
+  'settings.communication.sender.hint': 'Gilt für den E-Mail-Versand von Dokumenten (Briefe, Angebote, sonstige Dokumente): Der Empfänger sieht den Anzeigenamen und antwortet an die Antwortadresse. Rechnungen und Korrekturbelege verwenden Firmenname, Rechtsform und Firmen-E-Mail, wie sie bei der Freigabe der Rechnung festgehalten wurden. Die technische Absenderadresse wird vom Versanddienst von OfficeTakt gesetzt und ist nicht frei wählbar.',
   'settings.communication.senderDisplayName': 'Absender-Anzeigename (optional)',
   'settings.communication.senderDisplayName.derived': 'Leer = Firmenname und Rechtsform: „{name}“',
   'settings.communication.senderDisplayName.custom': 'Eigener Anzeigename. Leer lassen, um Firmenname und Rechtsform zu verwenden.',
@@ -123,21 +123,21 @@ export const deSettings = {
   'settings.communication.replyToEmail.fallback': 'Leer = Firmen-E-Mail: {email}',
   'settings.communication.replyToEmail.custom': 'Antworten gehen an diese Adresse. Leer lassen, um die Firmen-E-Mail zu verwenden.',
   'settings.communication.identity.from': 'Technischer Absender',
-  'settings.communication.identity.fromValue': 'Versanddienst von OfficePilot (nicht änderbar)',
+  'settings.communication.identity.fromValue': 'Versanddienst von OfficeTakt (nicht änderbar)',
   'settings.communication.identity.displayName': 'Anzeigename',
   'settings.communication.identity.replyTo': 'Antwortadresse',
   'settings.communication.identity.hint': 'So erscheint der Absender beim Empfänger. Beim Versand einer Rechnung gelten die Firmendaten, die auf dieser Rechnung eingefroren sind.',
   'settings.communication.saved': 'Kommunikationseinstellungen gespeichert.',
   'settings.invoices.currency.title': 'Währung',
   'settings.invoices.currency.eurLabel': 'Euro',
-  'settings.invoices.currency.hint': 'OfficePilot rechnet und formatiert derzeit ausschließlich in Euro. Weitere Währungen sind noch nicht verfügbar.',
+  'settings.invoices.currency.hint': 'OfficeTakt rechnet und formatiert derzeit ausschließlich in Euro. Weitere Währungen sind noch nicht verfügbar.',
   'settings.invoices.currency.ambiguous': 'Die Standardwährung konnte nicht automatisch festgelegt werden, weil vorhandene Belege andere Währungen tragen. Bitte prüfen Sie Ihre Ausgaben; neue Rechnungen werden in Euro erstellt.',
   'settings.invoices.email.movedHint': 'Standard-Betreff und -Nachricht für E-Mails finden Sie jetzt unter',
   'settings.invoices.section.email': 'E-Mail-Versand',
   'settings.invoices.email.hint': 'Diese Texte werden für neue Rechnungs-E-Mails vorbelegt und können vor jedem Versand geändert werden. Platzhalter: {invoiceNumber}, {companyName}.',
   'settings.invoices.email.subject': 'Standard-Betreff',
   'settings.invoices.email.body': 'Standard-Nachricht',
-  'settings.invoices.email.fallbackHint': 'Leer = OfficePilot-Standardtext in der eingestellten Sprache.',
+  'settings.invoices.email.fallbackHint': 'Leer = OfficeTakt-Standardtext in der eingestellten Sprache.',
   'settings.invoices.email.preview': 'Beispiel für Rechnung {invoiceNumber}',
 
 
@@ -153,8 +153,8 @@ export const deSettings = {
   'settings.operating.section.admin': 'Mitarbeiter & Betrieb',
   'settings.operating.admin.users': 'Mitarbeiter verwalten',
   'settings.operating.admin.more': 'Weitere Bereiche',
-  'settings.operating.role.admin': 'Du kannst Firmenprofil, Rechnungs-Vorbelegungen und Design für diesen Betrieb ändern.',
-  'settings.operating.role.member': 'Als Mitarbeiter siehst du die Einstellungen; ändern können sie nur Administratoren.',
+  'settings.operating.role.admin': 'Sie können Firmenprofil, Rechnungs-Vorbelegungen und Design für diesen Betrieb ändern.',
+  'settings.operating.role.member': 'Als Mitarbeiter sehen Sie die Einstellungen; ändern können sie nur Administratoren.',
   'settings.invoices.taxFreeNotice': 'Hinweis bei steuerfreien Rechnungen',
   'settings.invoices.taxFreeNotice.hint': 'Erscheint nur auf Rechnungen mit Steuerstatus „Steuerfrei / ohne USt". Leer = Standardhinweis.',
 
@@ -178,8 +178,25 @@ export const deSettings = {
   'settings.company.readOnly':
     'Nur Administratoren können Firmendaten ändern. Die Angaben sind hier nur zur Ansicht.',
   'settings.company.roleUnknown':
-    'Deine Rolle in diesem Betrieb ist noch nicht bekannt. Firmendaten lassen sich erst nach dem nächsten Abgleich ändern.',
+    'Ihre Rolle in diesem Betrieb ist noch nicht bekannt. Firmendaten lassen sich erst nach dem nächsten Abgleich ändern.',
   'settings.company.historicalHint':
     'Änderungen gelten für neue Dokumente. Bereits freigegebene Rechnungen bleiben unverändert.',
-  'settings.company.validationSummary': 'Bitte prüfe die markierten Felder.',
+  // BROWSER-ACCEPTANCE-FIX 01 / B2
+  'settings.company.iban.storedInvalid': 'Die gespeicherte IBAN ist nicht gültig.',
+  'settings.company.iban.invalidNow': 'Diese IBAN ist nicht gültig.',
+  'settings.company.legalForm.missingHint':
+    'Für diese Rechtsform sind noch keine Angaben hinterlegt zu: {fields}. Hinterlegte Angaben erscheinen auf Rechnungen und Briefen.',
+  'settings.company.validationSummary': 'Bitte prüfen Sie die markierten Felder.',
+  // E-MAIL-07C — Signatur und Vorlagen
+  'settings.communication.signature.title': 'Signatur',
+  'settings.communication.signature.hint': 'Wird bei jeder E-Mail aus OfficeTakt einmal unter die Nachricht gesetzt. Im Versanddialog lässt sich der Text vor dem Senden weiterhin anpassen.',
+  'settings.communication.signature.label': 'Geschäftssignatur',
+  'settings.communication.signature.derived': 'Leer: Die Signatur wird aus den Firmendaten gebildet (siehe Platzhaltertext).',
+  'settings.communication.signature.custom': 'Diese Signatur wird für neue E-Mails verwendet.',
+  'settings.communication.template.invoice.title': 'Vorlage Rechnung',
+  'settings.communication.template.offer.title': 'Vorlage Angebot',
+  'settings.communication.template.letter.title': 'Vorlage Geschäftsbrief',
+  'settings.communication.template.hint': 'Vorbelegung für neue E-Mails dieser Art. Leer: die Standardvorlage (Platzhaltertext). Änderungen im Versanddialog verändern diese Vorlage nicht.',
+  'settings.communication.template.placeholders': 'Verfügbare Platzhalter: {list}',
+  'settings.communication.template.preview': 'Vorschau mit Beispielwerten',
 } as const;

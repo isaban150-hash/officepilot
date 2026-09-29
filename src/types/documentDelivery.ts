@@ -15,10 +15,14 @@ export type DeliveryDocumentKind = (typeof DELIVERY_DOCUMENT_KINDS)[number];
  * `provider_accepted` = an den Provider übergeben. Das ist **nicht**
  * „zugestellt"; `delivered`/`bounced`/`complained` kommen erst mit
  * Provider-Ereignissen (Webhooks, später).
+ *
+ * `sending` (E-MAIL-07B) = der Server hat den Versand atomar übernommen und
+ * ruft den Provider auf. Hängt der Zustand, wird er serverseitig `unknown`.
  */
 export const DELIVERY_STATUSES = [
   'prepared',
   'queued',
+  'sending',
   'provider_accepted',
   'failed',
   'unknown',
@@ -70,6 +74,16 @@ export interface DocumentDelivery {
   errorMessageSafe?: string;
   retryOfDeliveryId?: string;
   attemptNumber: number;
+  /**
+   * E-MAIL-07C — ausdrücklicher Kunden-/Vorgangskontext (echte Kennungen).
+   * Ältere Versandaufträge tragen ihn nicht; die Historie leitet ihn dann
+   * ausschliesslich über die Dokument-Verknüpfung ab.
+   */
+  customerId?: string;
+  vorgangId?: string;
+  /** E-MAIL 07F-01B — Rückmeldung des E-Mail-Dienstes (nie „gelesen"). */
+  deliveryState?: import('../services/delivery/providerDeliveryState').ProviderDeliveryState;
+  deliveryStateAt?: string;
   createdAt: string;
   updatedAt: string;
   rowVersion: number;

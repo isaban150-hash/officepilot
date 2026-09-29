@@ -14,6 +14,7 @@ import { mergeSyncEntities } from '../sync/syncMergeEngine';
 import { planLostAckAdoption, type LostAckAdoptionPlan } from '../sync/syncLostAckAdoptionService';
 export type { LostAckAdoptionPlan };
 import { repairContractPlanFromSnapshot } from '../orderPlanIntegrityService';
+import { isCloudSyncBlockedMockVorgangId } from '../storage/mockDataDetectionService';
 import {
   canTransitionVorgangStatus,
   migrateVorgangStatus,
@@ -869,6 +870,15 @@ export function mergeVorgaengeFromPull(
   const dirtyIds = options?.dirtyVorgangIds;
 
   for (const row of remoteRows) {
+    /*
+     * SYNC-AUTOMATIK-01A-FIX4 — Demo-Vorgänge (v-001…v-003) kommen aus der
+     * Cloud nie in einen echten Bestand. Dieselbe ID-Regel wie beim Senden
+     * (`isCloudSyncBlockedMockVorgangId`). Ohne sie brachte jeder vollständige
+     * Abgleich die drei Demo-Vorgänge zurück in die Speicher, der Bootstrap
+     * entfernte sie wieder — ein ständiges Hin und Her, das jedes Mal als
+     * fachliche Änderung zählte und andere Tabs sperrte.
+     */
+    if (isCloudSyncBlockedMockVorgangId(row.vorgang_id)) continue;
     const mapped = mapWorkspaceVorgangRow(row);
     if (!mapped) continue;
 

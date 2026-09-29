@@ -291,7 +291,7 @@ describe('EMAIL-01B3 — InvoiceDeliveryPanel', () => {
 
     const officepilot: VorgangInvoice = { ...manual, sentAt: '2026-09-14', sentVia: 'email', sentSource: 'officepilot', sentDeliveryId: 'd-1', sentManualPrior: { sentAt: '2026-09-01', sentVia: 'post' } };
     await mount(<InvoiceDeliveryPanel vorgangId="v-p3" invoice={officepilot} onInvoiceUpdated={() => {}} />);
-    expect(q('invoice-delivery-source')?.textContent).toContain('Per OfficePilot versendet');
+    expect(q('invoice-delivery-source')?.textContent).toContain('Per OfficeTakt versendet');
     expect(q('invoice-delivery-manual-prior')?.textContent).toMatch(/1.9.2026|01.09.2026/);
     expect(q('invoice-delivery-manual-prior')?.textContent).toContain('Post');
   });

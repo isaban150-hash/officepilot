@@ -106,7 +106,7 @@ describe('Detail pages AreaAiPanel', () => {
 
     mounted = renderPage('/dokumente/doc-detail-ai', <DokumentDetailPage />);
     expect(mounted.container.querySelector('[data-testid="document-understanding-card"]')).not.toBeNull();
-    expect(mounted.container.textContent).toContain('OfficePilot versteht dieses Dokument');
+    expect(mounted.container.textContent).toContain('OfficeTakt versteht dieses Dokument');
     expect(mounted.container.textContent).toContain('Muss ich etwas tun?');
     expect(mounted.container.textContent).toContain('Nächste Schritte');
   });

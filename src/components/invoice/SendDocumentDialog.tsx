@@ -30,7 +30,11 @@ export interface SendDocumentDialogProps {
   attachmentFilename: string;
   /** Diese Rechnung wurde bereits erfolgreich per OfficePilot versendet → Zweitversand bestätigen. */
   alreadySent: boolean;
-  mode: 'send' | 'retry' | 'resume';
+  /**
+   * `retry_uncertain` (E-MAIL-07B): neuer Versuch nach unklarem Versandstatus.
+   * Verlangt immer die ausdrückliche Bestätigung der möglichen Doppelzustellung.
+   */
+  mode: 'send' | 'retry' | 'resume' | 'retry_uncertain';
   /** EMAIL-01B4 — Korrekturbeleg: eigener Titel und Zweitversand-Text; Regeln identisch. V1-B2: letter/offer/other. */
   documentKind?: DeliveryDocumentKind;
   phase: SendPhase | null;
@@ -46,6 +50,8 @@ export interface SendDocumentDialogProps {
   onSend: (fields: { recipientEmail: string; subject: string; bodyText: string }) => void;
 }
 
+type ConfirmStep = 'recipient' | 'resend' | 'uncertain';
+
 const PHASE_KEYS: Record<Exclude<SendPhase, 'draft' | 'done'>, TranslationKey> = {
   preparing: 'delivery.phase.preparing' as TranslationKey,
   uploading: 'delivery.phase.uploading' as TranslationKey,
@@ -60,7 +66,7 @@ export function SendDocumentDialog(props: SendDocumentDialogProps) {
   const [subject, setSubject] = useState(props.initialSubject);
   const [body, setBody] = useState(props.initialBody);
   const [fieldError, setFieldError] = useState<TranslationKey | null>(null);
-  const [confirmStep, setConfirmStep] = useState<'recipient' | 'resend' | null>(null);
+  const [confirmStep, setConfirmStep] = useState<ConfirmStep | null>(null);
   const recipientRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -116,21 +122,23 @@ export function SendDocumentDialog(props: SendDocumentDialogProps) {
     props.onSend({ recipientEmail: normalizedRecipient, subject: subject.trim(), bodyText: body });
   };
 
+  /*
+   * Bewusste Bestätigung nur, wenn wirklich etwas Ungewöhnliches vorliegt —
+   * der Reihe nach, jede genau einmal. 07B: Nach unklarem Versandstatus ist
+   * die Bestätigung der möglichen Doppelzustellung immer Pflicht.
+   */
+  const requiredConfirmations: ConfirmStep[] = [
+    ...(recipientDiffers ? (['recipient'] as const) : []),
+    ...(props.alreadySent && props.mode !== 'resume' && props.mode !== 'retry_uncertain' ? (['resend'] as const) : []),
+    ...(props.mode === 'retry_uncertain' ? (['uncertain'] as const) : []),
+  ];
+
   const handleSendClick = () => {
     if (busy) return;
     if (!validate()) return;
-    // Bewusste Bestätigung nur, wenn wirklich etwas Ungewöhnliches vorliegt.
-    if (confirmStep === null) {
-      if (recipientDiffers) {
-        setConfirmStep('recipient');
-        return;
-      }
-      if (props.alreadySent && props.mode !== 'resume') {
-        setConfirmStep('resend');
-        return;
-      }
-    } else if (confirmStep === 'recipient' && props.alreadySent && props.mode !== 'resume') {
-      setConfirmStep('resend');
+    const done = confirmStep ? requiredConfirmations.indexOf(confirmStep) : -1;
+    if (done < requiredConfirmations.length - 1) {
+      setConfirmStep(requiredConfirmations[done + 1]);
       return;
     }
     submit();
@@ -183,6 +191,8 @@ export function SendDocumentDialog(props: SendDocumentDialogProps) {
         </h3>
         {props.mode === 'retry' ? (
           <p className="vorgang-dialog__subtitle" data-testid="send-document-retry-hint">{translate('delivery.dialog.retryHint' as TranslationKey)}</p>
+        ) : props.mode === 'retry_uncertain' ? (
+          <p className="vorgang-dialog__subtitle" data-testid="send-document-retry-uncertain-hint">{translate('delivery.dialog.retryUncertainHint' as TranslationKey)}</p>
         ) : props.mode === 'resume' ? (
           <p className="vorgang-dialog__subtitle" data-testid="send-document-resume-hint">{translate('delivery.dialog.resumeHint' as TranslationKey)}</p>
         ) : null}
@@ -263,7 +273,13 @@ export function SendDocumentDialog(props: SendDocumentDialogProps) {
 
         {confirmStep ? (
           <div className="invoice-hint invoice-hint--warning send-document-dialog__confirm" role="alert" data-testid={`send-document-confirm-${confirmStep}`}>
-            {translate(confirmStep === 'recipient' ? ('delivery.dialog.confirmRecipientChanged' as TranslationKey) : resendKey)}
+            {translate(
+              confirmStep === 'recipient'
+                ? ('delivery.dialog.confirmRecipientChanged' as TranslationKey)
+                : confirmStep === 'uncertain'
+                  ? ('delivery.dialog.confirmUncertain' as TranslationKey)
+                  : resendKey,
+            )}
           </div>
         ) : null}
 

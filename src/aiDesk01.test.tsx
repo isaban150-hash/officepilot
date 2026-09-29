@@ -204,6 +204,6 @@ describe('AI-DESK-01', () => {
   it('DE/TR Desk-Texte', () => {
     expect(t('desk.greeting.morning', 'de')).toBe('Guten Morgen');
     expect(t('desk.noPriorities', 'de')).toContain('keine wichtigen Aufgaben');
-    expect(t('desk.recommendationTitle', 'tr')).toBe('OfficePilot öneriyor');
+    expect(t('desk.recommendationTitle', 'tr')).toBe('OfficeTakt öneriyor');
   });
 });

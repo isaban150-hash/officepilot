@@ -243,7 +243,7 @@ function buildNextStep(
     return 'Kein weiterer Schritt nötig.';
   }
   if (reasons.includes('reply_open')) return 'Antwort vorbereiten oder als erledigt markieren.';
-  if (reasons.includes('file_original')) return 'Original abheften und in OfficePilot bestätigen.';
+  if (reasons.includes('file_original')) return 'Original abheften und in OfficeTakt bestätigen.';
   if (reasons.includes('deadline_open')) return 'Frist prüfen und rechtzeitig reagieren.';
   if (reasons.includes('proof_missing')) return 'Fehlende Nachweise beschaffen und archivieren.';
   if (reasons.includes('task_open')) return 'Offene Aufgabe erledigen.';

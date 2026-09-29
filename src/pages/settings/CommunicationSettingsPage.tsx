@@ -12,6 +12,7 @@
  * **neue** Versandentwuerfe; bereits versendete Dokumente bleiben unveraendert.
  */
 import { useMemo, useState } from 'react';
+import { MailboxSettingsSection } from '../../components/communication/MailboxSettingsSection';
 import { Button } from '../../components/ui/Button';
 import { PageHeader } from '../../components/ui/Card';
 import { ReadOnlyNotice } from '../../components/ui/ReadOnlyNotice';
@@ -25,7 +26,13 @@ import {
   resolveProfileSenderDisplayName,
   validateCompanyProfileOptionalFields,
 } from '../../services/company/companyProfileSettingsContract';
-import { resolveDeliveryBody, resolveDeliverySubject } from '../../services/delivery/documentDeliveryDefaults';
+import {
+  PLACEHOLDERS_BY_KIND,
+  buildDefaultEmailSignature,
+  composeDeliveryMail,
+  resolveMailTemplate,
+  type MailTemplateKind,
+} from '../../services/delivery/deliveryMailComposer';
 import { getLastPersistSuccess } from '../../services/persistenceService';
 import { PREVIEW_INVOICE_NUMBER } from '../../services/settings/settingsDocumentPreview';
 import { resolveWorkspaceWriteAccess } from '../../services/workspace/workspaceRoleService';
@@ -39,23 +46,39 @@ export const COMMUNICATION_SETTINGS_FIELDS = [
   'replyToEmail',
   'defaultInvoiceEmailSubject',
   'defaultInvoiceEmailBody',
+  // E-MAIL-07C
+  'defaultOfferEmailSubject',
+  'defaultOfferEmailBody',
+  'defaultLetterEmailSubject',
+  'defaultLetterEmailBody',
+  'emailSignature',
 ] as const satisfies readonly (keyof CompanyProfile & string)[];
 
-export interface CommunicationSettingsDraft {
-  senderDisplayName: string;
-  replyToEmail: string;
-  defaultInvoiceEmailSubject: string;
-  defaultInvoiceEmailBody: string;
-}
+export type CommunicationSettingsDraft = Record<(typeof COMMUNICATION_SETTINGS_FIELDS)[number], string>;
 
 export function pickCommunicationSettings(profile: CompanyProfile): CommunicationSettingsDraft {
-  return {
-    senderDisplayName: profile.senderDisplayName ?? '',
-    replyToEmail: profile.replyToEmail ?? '',
-    defaultInvoiceEmailSubject: profile.defaultInvoiceEmailSubject ?? '',
-    defaultInvoiceEmailBody: profile.defaultInvoiceEmailBody ?? '',
-  };
+  return Object.fromEntries(
+    COMMUNICATION_SETTINGS_FIELDS.map((field) => [field, (profile[field] as string | undefined) ?? '']),
+  ) as CommunicationSettingsDraft;
 }
+
+/** E-MAIL-07C — die drei einstellbaren Vorlagen und ihre Profilfelder. */
+const TEMPLATE_SECTIONS: Array<{
+  kind: Extract<MailTemplateKind, 'invoice' | 'offer' | 'letter'>;
+  subject: 'defaultInvoiceEmailSubject' | 'defaultOfferEmailSubject' | 'defaultLetterEmailSubject';
+  body: 'defaultInvoiceEmailBody' | 'defaultOfferEmailBody' | 'defaultLetterEmailBody';
+}> = [
+  { kind: 'invoice', subject: 'defaultInvoiceEmailSubject', body: 'defaultInvoiceEmailBody' },
+  { kind: 'offer', subject: 'defaultOfferEmailSubject', body: 'defaultOfferEmailBody' },
+  { kind: 'letter', subject: 'defaultLetterEmailSubject', body: 'defaultLetterEmailBody' },
+];
+
+/** Beispielwerte nur für die Vorschau in den Einstellungen. */
+const PREVIEW_VALUES: Record<'invoice' | 'offer' | 'letter', { documentNumber?: string; documentTitle?: string; customerName: string }> = {
+  invoice: { documentNumber: PREVIEW_INVOICE_NUMBER, customerName: 'Beispiel Kunde GmbH' },
+  offer: { documentNumber: 'AN-2026-0001', documentTitle: 'Badsanierung', customerName: 'Beispiel Kunde GmbH' },
+  letter: { documentTitle: 'Terminbestätigung', customerName: 'Beispiel Kunde GmbH' },
+};
 
 export function isCommunicationSettingsDirty(draft: CommunicationSettingsDraft, saved: CompanyProfile): boolean {
   const base = pickCommunicationSettings(saved);
@@ -69,6 +92,11 @@ export function buildCommunicationSettingsPayload(draft: CommunicationSettingsDr
     replyToEmail: draft.replyToEmail.trim(),
     defaultInvoiceEmailSubject: draft.defaultInvoiceEmailSubject,
     defaultInvoiceEmailBody: draft.defaultInvoiceEmailBody,
+    defaultOfferEmailSubject: draft.defaultOfferEmailSubject,
+    defaultOfferEmailBody: draft.defaultOfferEmailBody,
+    defaultLetterEmailSubject: draft.defaultLetterEmailSubject,
+    defaultLetterEmailBody: draft.defaultLetterEmailBody,
+    emailSignature: draft.emailSignature,
   };
 }
 
@@ -98,10 +126,9 @@ export function CommunicationSettingsPage() {
   const replyTo = resolveProfileReplyToEmail(candidate);
   const replyToIsFallback = !draft.replyToEmail.trim();
   const senderIsDerived = !draft.senderDisplayName.trim();
-  const previewInvoiceLike = useMemo(
-    () => ({ number: PREVIEW_INVOICE_NUMBER, companySnapshot: { companyName: companyProfile.companyName, legalForm: companyProfile.legalForm } as CompanyProfile }),
-    [companyProfile.companyName, companyProfile.legalForm],
-  );
+  const companyName = [companyProfile.companyName?.trim(), companyProfile.legalForm?.trim()].filter(Boolean).join(' ');
+  const derivedSignature = buildDefaultEmailSignature(companyProfile, language);
+  const t = (key: string) => translate(key as TranslationKey);
 
   const setField = <K extends keyof CommunicationSettingsDraft>(key: K, value: CommunicationSettingsDraft[K]) => {
     setDraft((prev) => ({ ...prev, [key]: value }));
@@ -139,7 +166,7 @@ export function CommunicationSettingsPage() {
   const disabled = !editable || saving;
 
   return (
-    <div className="page settings-page settings-subpage" data-testid="settings-communication-page">
+    <div className="page settings-page settings-subpage settings-communication-page" data-testid="settings-communication-page">
       <PageHeader
         title={translate('settings.communication.title')}
         subtitle={translate('settings.communication.page.subtitle')}
@@ -155,6 +182,9 @@ export function CommunicationSettingsPage() {
           {translate('settings.communication.historicalHint')}
         </p>
       )}
+
+      {/* E-MAIL-07E-MSA: Postfach (eigenes Formular, unabhängig vom Profil-Speichern). */}
+      <MailboxSettingsSection />
 
       <form className="settings-form settings-communication" onSubmit={handleSubmit} noValidate>
         {/* ---------------- Absender ---------------- */}
@@ -218,51 +248,90 @@ export function CommunicationSettingsPage() {
           <p className="form-hint" data-testid="settings-communication-identity-hint">{translate('settings.communication.identity.hint')}</p>
         </fieldset>
 
-        {/* ---------------- Standardtexte (EMAIL-01B4, hierher verschoben) ---------------- */}
-        <fieldset className="form-group settings-form__section" data-testid="settings-communication-section-email" disabled={disabled}>
-          <legend className="settings-form__legend">{translate('settings.invoices.section.email')}</legend>
-          <p className="hint-text">{translate('settings.invoices.email.hint')}</p>
+        {/* ---------------- E-MAIL-07C: zentrale Signatur ---------------- */}
+        <fieldset className="form-group settings-form__section" data-testid="settings-communication-section-signature" disabled={disabled}>
+          <legend className="settings-form__legend">{t('settings.communication.signature.title')}</legend>
+          <p className="hint-text">{t('settings.communication.signature.hint')}</p>
           <div className="settings-form__field">
-            <label htmlFor="settings-communication-defaultInvoiceEmailSubject">{translate('settings.invoices.email.subject')}</label>
-            <input
-              id="settings-communication-defaultInvoiceEmailSubject"
-              name="defaultInvoiceEmailSubject"
-              type="text"
-              className="input"
-              value={draft.defaultInvoiceEmailSubject}
-              maxLength={COMPANY_PROFILE_TEXT_LIMITS.defaultInvoiceEmailSubject}
-              placeholder={resolveDeliverySubject(previewInvoiceLike, language)}
-              readOnly={!editable}
-              onChange={(event) => setField('defaultInvoiceEmailSubject', event.target.value)}
-              data-testid="settings-communication-defaultInvoiceEmailSubject"
-            />
-          </div>
-          <div className="settings-form__field">
-            <label htmlFor="settings-communication-defaultInvoiceEmailBody">{translate('settings.invoices.email.body')}</label>
+            <label htmlFor="settings-communication-emailSignature">{t('settings.communication.signature.label')}</label>
             <textarea
-              id="settings-communication-defaultInvoiceEmailBody"
-              name="defaultInvoiceEmailBody"
+              id="settings-communication-emailSignature"
+              name="emailSignature"
               className="input settings-invoices__textarea"
-              rows={6}
-              value={draft.defaultInvoiceEmailBody}
-              maxLength={COMPANY_PROFILE_TEXT_LIMITS.defaultInvoiceEmailBody}
-              placeholder={resolveDeliveryBody(previewInvoiceLike, language)}
+              rows={7}
+              value={draft.emailSignature}
+              maxLength={COMPANY_PROFILE_TEXT_LIMITS.emailSignature}
+              placeholder={derivedSignature}
               readOnly={!editable}
-              onChange={(event) => setField('defaultInvoiceEmailBody', event.target.value)}
-              data-testid="settings-communication-defaultInvoiceEmailBody"
+              onChange={(event) => setField('emailSignature', event.target.value)}
+              data-testid="settings-communication-emailSignature"
             />
-          </div>
-          <p className="form-hint">{translate('settings.invoices.email.fallbackHint')}</p>
-          <div className="settings-invoices__preview" data-testid="settings-communication-email-preview">
-            <p className="settings-form__legend">{translate('settings.invoices.email.preview').replace('{invoiceNumber}', PREVIEW_INVOICE_NUMBER)}</p>
-            <p className="data-row__value" data-testid="settings-communication-email-preview-subject">
-              {resolveDeliverySubject(previewInvoiceLike, language, candidate)}
+            <p className="form-hint" data-testid="settings-communication-emailSignature-hint">
+              {draft.emailSignature.trim() ? t('settings.communication.signature.custom') : t('settings.communication.signature.derived')}
             </p>
-            <pre className="settings-invoices__mail-preview" data-testid="settings-communication-email-preview-body">
-              {resolveDeliveryBody(previewInvoiceLike, language, candidate)}
-            </pre>
           </div>
         </fieldset>
+
+        {/* ---------------- Vorlagen je Dokumentart (Rechnung: EMAIL-01B4, Angebot/Brief: 07C) ---------------- */}
+        {TEMPLATE_SECTIONS.map((section) => {
+          const fallback = resolveMailTemplate(section.kind, language);
+          const preview = composeDeliveryMail({
+            kind: section.kind,
+            values: { companyName, ...PREVIEW_VALUES[section.kind] },
+            profile: candidate,
+            language,
+          });
+          const placeholders = PLACEHOLDERS_BY_KIND[section.kind].map((name) => `{{${name}}}`).join('  ');
+          return (
+            <fieldset
+              key={section.kind}
+              className="form-group settings-form__section"
+              data-testid={section.kind === 'invoice' ? 'settings-communication-section-email' : `settings-communication-section-template-${section.kind}`}
+              disabled={disabled}
+            >
+              <legend className="settings-form__legend">{t(`settings.communication.template.${section.kind}.title`)}</legend>
+              <p className="hint-text">{t('settings.communication.template.hint')}</p>
+              <p className="form-hint" data-testid={`settings-communication-placeholders-${section.kind}`}>
+                {t('settings.communication.template.placeholders').replace('{list}', placeholders)}
+              </p>
+              <div className="settings-form__field">
+                <label htmlFor={`settings-communication-${section.subject}`}>{t('settings.invoices.email.subject')}</label>
+                <input
+                  id={`settings-communication-${section.subject}`}
+                  name={section.subject}
+                  type="text"
+                  className="input"
+                  value={draft[section.subject]}
+                  maxLength={COMPANY_PROFILE_TEXT_LIMITS[section.subject]}
+                  placeholder={fallback.subject}
+                  readOnly={!editable}
+                  onChange={(event) => setField(section.subject, event.target.value)}
+                  data-testid={`settings-communication-${section.subject}`}
+                />
+              </div>
+              <div className="settings-form__field">
+                <label htmlFor={`settings-communication-${section.body}`}>{t('settings.invoices.email.body')}</label>
+                <textarea
+                  id={`settings-communication-${section.body}`}
+                  name={section.body}
+                  className="input settings-invoices__textarea"
+                  rows={6}
+                  value={draft[section.body]}
+                  maxLength={COMPANY_PROFILE_TEXT_LIMITS[section.body]}
+                  placeholder={fallback.body}
+                  readOnly={!editable}
+                  onChange={(event) => setField(section.body, event.target.value)}
+                  data-testid={`settings-communication-${section.body}`}
+                />
+              </div>
+              <div className="settings-invoices__preview" data-testid={section.kind === 'invoice' ? 'settings-communication-email-preview' : `settings-communication-preview-${section.kind}`}>
+                <p className="settings-form__legend">{t('settings.communication.template.preview')}</p>
+                <p className="data-row__value" data-testid={section.kind === 'invoice' ? 'settings-communication-email-preview-subject' : `settings-communication-preview-${section.kind}-subject`}>{preview.subject}</p>
+                <pre className="settings-invoices__mail-preview" data-testid={section.kind === 'invoice' ? 'settings-communication-email-preview-body' : `settings-communication-preview-${section.kind}-body`}>{preview.bodyText}</pre>
+              </div>
+            </fieldset>
+          );
+        })}
 
         {error ? (
           <p className="form-error" data-testid="settings-communication-error">{translate(error)}</p>

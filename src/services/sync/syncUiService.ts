@@ -4,7 +4,7 @@ import { buildPersistedStateSnapshot, persistAll } from '../persistenceService';
 import { getSyncClient } from './syncClientService';
 import { getSyncOutboxSnapshot, hasPendingCompanyCloudBackup } from './syncOutboxService';
 import { getSyncCoordinator } from './syncCoordinator';
-import { applySyncPullCandidateSafely } from './syncPullPersistService';
+import { applySyncPullCandidateSafely, captureSyncRunBase } from './syncPullPersistService';
 import { runQueuedSyncOperation } from './syncOperationQueue';
 import { createSyncAdapter, isSyncProviderAvailable } from './syncAdapterFactory';
 import { isSupabaseConfigured } from '../../lib/supabase';
@@ -17,6 +17,13 @@ import {
   type WorkspaceSettingsDecision,
   type WorkspaceSettingsFieldConflict,
 } from '../workspace/workspaceSettingsConflictService';
+import {
+  listArchivedDocumentConflicts,
+  resolveArchivedDocumentConflict,
+  type ArchivedDocumentConflict,
+  type ArchivedDocumentConflictResult,
+  type ArchivedDocumentDecision,
+} from '../document/archivedDocumentConflictService';
 
 export interface SyncOutboxCounts {
   pending: number;
@@ -43,6 +50,12 @@ export interface SyncUiSnapshot {
   failedOutboxEntries: SyncOutboxDescription[];
   /** Offener Feldkonflikt der Betriebseinstellungen, falls einer ansteht. */
   settingsConflict: WorkspaceSettingsFieldConflict[] | null;
+  /**
+   * 07B-FIX3B — offene Dokumentkonflikte mit Entscheidungsmöglichkeit. Sie
+   * stehen nur hier und nicht zusätzlich als „Wartet" oder „Nicht übertragen"
+   * — ein Auftrag, eine Zeile.
+   */
+  documentConflicts: ArchivedDocumentConflict[];
   isOffline: boolean;
   hasRetryableErrors: boolean;
 }
@@ -71,13 +84,16 @@ export function getSyncUiSnapshot(): SyncUiSnapshot {
   const coordinator = getSyncCoordinator();
   const status = coordinator.getStatus();
   const isOffline = syncClient.syncPolicy === 'disabled' || status.syncState === 'offline';
+  const documentConflicts = listArchivedDocumentConflicts(outbox);
+  const decidable = new Set(documentConflicts.map((conflict) => conflict.outboxId));
   const pendingOutboxEntries = outbox.filter(
-    (entry) => entry.status === 'pending' || entry.status === 'blocked',
+    (entry) => (entry.status === 'pending' || entry.status === 'blocked') && !decidable.has(entry.id),
   );
   const failedOutboxEntries = outbox
     .filter(
       (entry) =>
-        entry.status === 'error' || entry.status === 'failed' || entry.status === 'blocked',
+        (entry.status === 'error' || entry.status === 'failed' || entry.status === 'blocked') &&
+        !decidable.has(entry.id),
     )
     .map(describeSyncOutboxEntry);
 
@@ -92,6 +108,7 @@ export function getSyncUiSnapshot(): SyncUiSnapshot {
     pendingOutboxEntries,
     failedOutboxEntries,
     settingsConflict: getPendingWorkspaceSettingsConflict()?.undecided ?? null,
+    documentConflicts,
     isOffline,
     hasRetryableErrors: outbox.some((entry) => entry.status === 'error' || entry.status === 'failed'),
   };
@@ -101,6 +118,8 @@ export async function runSyncFromUi(): Promise<SyncCoordinatorReport> {
   // 01P4C: Netzwerk und anschließende Persistenz sind ein Queue-Lauf; der
   // Snapshot entsteht erst beim tatsächlichen Start.
   return runQueuedSyncOperation(async () => {
+    // 01A: Stand beim Start — im selben synchronen Abschnitt wie der Lauf-Snapshot.
+    const base = captureSyncRunBase();
     const result = await getSyncCoordinator().runSync(buildPersistedStateSnapshot());
     if (result.skipPersist) {
       return result.report;
@@ -110,7 +129,34 @@ export async function runSyncFromUi(): Promise<SyncCoordinatorReport> {
       report: result.report,
       pendingInvoiceIntentClears: result.pendingInvoiceIntentClears,
       pendingAmendmentIntentClears: result.pendingAmendmentIntentClears,
+      base,
     }).report;
+  });
+}
+
+export interface PushOnlySyncResult {
+  report: SyncCoordinatorReport;
+  /** Ein Versionskonflikt beim Senden: erst ein vollständiger Abgleich zeigt den Cloud-Stand. */
+  needsFullSync: boolean;
+}
+
+/**
+ * SYNC-AUTOMATIK-01A-FIX1 — Anlass „lokale Änderung": nur senden.
+ *
+ * Derselbe Queue-Lauf und derselbe sichere Apply-Weg wie `runSyncFromUi`:
+ * Wird während des Sendens gespeichert, setzt `applySyncPullCandidateSafely`
+ * das Ergebnis auf den neueren lokalen Stand (Revisionsprüfung, Rebase), und
+ * neu eingereihte Aufträge bleiben offen.
+ */
+export async function pushPendingChangesFromUi(): Promise<PushOnlySyncResult> {
+  return runQueuedSyncOperation(async () => {
+    const base = captureSyncRunBase();
+    const result = await getSyncCoordinator().runPushOnly(buildPersistedStateSnapshot());
+    if (result.skipPersist) {
+      return { report: result.report, needsFullSync: result.needsFullSync };
+    }
+    const applied = applySyncPullCandidateSafely({ state: result.state, report: result.report, base });
+    return { report: applied.report, needsFullSync: result.needsFullSync };
   });
 }
 
@@ -167,6 +213,7 @@ export async function retrySyncFromUi(): Promise<SyncCoordinatorReport> {
      * ein Mensch gedrückt hat. Das automatische Limit gilt für Selbstläufe, und
      * ein ausdrücklicher Versuch muss auch danach noch etwas bewirken.
      */
+    const base = captureSyncRunBase();
     const result = await getSyncCoordinator().retrySync(buildPersistedStateSnapshot(), {
       manual: true,
     });
@@ -178,6 +225,7 @@ export async function retrySyncFromUi(): Promise<SyncCoordinatorReport> {
       report: result.report,
       pendingInvoiceIntentClears: result.pendingInvoiceIntentClears,
       pendingAmendmentIntentClears: result.pendingAmendmentIntentClears,
+      base,
     }).report;
   });
 }
@@ -223,11 +271,21 @@ const SYNCING: SyncState[] = ['checking', 'uploading', 'downloading', 'merging']
  */
 export function summarizeSyncStatus(
   snapshot: Pick<SyncUiSnapshot, 'status' | 'outbox' | 'lastReport' | 'isOffline'> &
-    Partial<Pick<SyncUiSnapshot, 'settingsConflict'>>,
+    Partial<Pick<SyncUiSnapshot, 'settingsConflict' | 'documentConflicts'>>,
 ): SyncStatusSummary {
+  /*
+   * 07B-FIX3B — ein entscheidbarer Dokumentkonflikt wartet nicht, er braucht
+   * eine Entscheidung. Er zählt deshalb nur als Konflikt, nicht zusätzlich als
+   * „1 Änderung wartet".
+   */
+  const documentConflicts = snapshot.documentConflicts ?? [];
+  const decidable = new Set(documentConflicts.map((conflict) => conflict.outboxId));
   /* Nur-lokale Entitäten (z. B. Papierregister, Gedächtnis) warten auf nichts — sie werden nie gesendet. */
   const waitingCount = snapshot.outbox.filter(
-    (entry) => (entry.status === 'pending' || entry.status === 'blocked') && isSupabaseSyncAllowed(entry.entityType),
+    (entry) =>
+      (entry.status === 'pending' || entry.status === 'blocked') &&
+      isSupabaseSyncAllowed(entry.entityType) &&
+      !decidable.has(entry.id),
   ).length;
   const failedCount = snapshot.outbox.filter(
     (entry) => entry.status === 'error' || entry.status === 'failed',
@@ -246,12 +304,22 @@ export function summarizeSyncStatus(
    * halbfertige Zustand, nur an anderer Stelle.
    */
   const conflictCount =
-    (snapshot.settingsConflict?.length ?? 0) > 0
+    ((snapshot.settingsConflict?.length ?? 0) > 0
       ? snapshot.outbox.filter(
           (entry) => entry.status === 'blocked' && entry.entityType === 'workspace_settings',
         ).length
-      : 0;
-  const mergedCount = snapshot.lastReport?.conflictCount ?? 0;
+      : 0) + documentConflicts.length;
+  /*
+   * 07B-FIX3B — „automatisch zusammengeführt" nur für tatsächlich aufgelöste
+   * Konflikte. Ein am Versionskonflikt gescheiterter Push steht im Bericht als
+   * `conflict` und wurde bisher ebenfalls als „zusammengeführt" gemeldet —
+   * obwohl gerade nichts zusammengeführt, sondern blockiert worden war.
+   */
+  const conflicts = snapshot.lastReport?.conflicts ?? [];
+  const mergedCount =
+    conflicts.length > 0
+      ? conflicts.filter((conflict) => conflict.resolution !== 'conflict').length
+      : snapshot.lastReport?.conflictCount ?? 0;
   const state = snapshot.status.syncState;
 
   let kind: SyncStatusKind;
@@ -270,6 +338,18 @@ export function summarizeSyncStatus(
  * FINANZ-SYNC-BLOCKER-01B — die Entscheidung des Nutzers zu den
  * Betriebseinstellungen übernehmen und den blockierten Auftrag freigeben.
  */
+/**
+ * 07B-FIX3B — die Entscheidung des Nutzers zu einem Dokumentkonflikt. Liest den
+ * aktuellen Cloud-Stand, wendet die Entscheidung an und speichert — gesendet
+ * wird danach über den normalen Sync (bei „Änderungen behalten").
+ */
+export async function resolveArchivedDocumentConflictFromUi(
+  documentId: string,
+  decision: ArchivedDocumentDecision,
+): Promise<ArchivedDocumentConflictResult> {
+  return resolveArchivedDocumentConflict(documentId, decision);
+}
+
 export function resolveSettingsConflictFromUi(decision: WorkspaceSettingsDecision): boolean {
   const aufgeloest = resolveWorkspaceSettingsConflict(decision);
   /*

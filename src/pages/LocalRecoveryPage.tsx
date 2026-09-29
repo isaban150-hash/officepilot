@@ -132,7 +132,7 @@ export function LocalRecoveryPage() {
     <div className="auth-page" data-testid="local-recovery-page">
       <div className="auth-card">
         <header className="auth-card__header">
-          <p className="auth-card__brand">OfficePilot</p>
+          <p className="auth-card__brand">OfficeTakt</p>
           <h1 className="auth-card__title">{t('localRecovery.title', lang)}</h1>
           <p className="auth-card__subtitle">{t('localRecovery.intro', lang)}</p>
         </header>

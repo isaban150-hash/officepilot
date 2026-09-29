@@ -14,6 +14,9 @@ import { deBackup } from './backup';
 import { dePilot } from './pilot';
 import { deSettings } from './settings';
 import { deDelivery } from './delivery';
+import { deFreeEmail } from './freeEmail';
+import { deInboundEmail } from './inboundEmail';
+import { deMailboxOAuth } from './mailboxOAuth';
 import { deBusinessLetter } from './businessLetter';
 import { deOffer } from './offer';
 import { deOrder } from './order';
@@ -38,6 +41,9 @@ export const deModules = {
   ...dePilot,
   ...deSettings,
   ...deDelivery,
+  ...deFreeEmail,
+  ...deInboundEmail,
+  ...deMailboxOAuth,
   ...deBusinessLetter,
   ...deOffer,
   ...deOrder,

@@ -11,6 +11,7 @@
  * Freigegebene Angebote öffnen nicht diesen Editor, sondern die Detailseite.
  */
 import { useMemo, useState, type ReactNode } from 'react';
+import { buildCustomerOptionLabels } from '../services/customer/customerOptionLabels';
 import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { PageHeader } from '../components/ui/Card';
@@ -72,6 +73,11 @@ export function AngebotEditorPage() {
 
   const vorhandenes: Offer | null = offerId ? getOfferById(offerId) : null;
   const kunden = useMemo(() => getCustomerStoreSnapshot(), []);
+  // E-MAIL-HALBZEIT-FIX B5 — gleichnamige Kunden unterscheidbar (nur Anzeige).
+  const kundenLabels = useMemo(
+    () => buildCustomerOptionLabels(kunden, { created: translate('customer.option.created'), id: translate('customer.option.id') }),
+    [kunden, translate],
+  );
   const profile = useMemo(() => getCompanyProfileStoreSnapshot(), []);
 
   const startKundeId = vorhandenes?.customerId ?? params.get('customerId') ?? '';
@@ -244,7 +250,7 @@ export function AngebotEditorPage() {
             <option value="">{translate('offer.editor.customerPlaceholder')}</option>
             {kunden.map((k) => (
               <option key={k.id} value={k.id}>
-                {k.name}
+                {kundenLabels.get(k.id) ?? k.name}
               </option>
             ))}
           </select>

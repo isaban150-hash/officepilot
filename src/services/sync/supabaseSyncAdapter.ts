@@ -401,7 +401,7 @@ function buildPushPayload(
   }
 }
 
-function applyPushResultToState(
+export function applyPushResultToState(
   state: AppPersistedState,
   entityType: string,
   entityId: string,
@@ -445,10 +445,22 @@ function applyPushResultToState(
       pendingKeys: undefined,
     };
   } else if (entityType === 'workspace' && next.workspace) {
+    /*
+     * SYNC-AUTOMATIK-01A — beide Versionsangaben gemeinsam.
+     *
+     * Bisher stieg nur `version`; `sync.version` blieb auf dem alten Wert. Der
+     * nächste Pull verglich die alte Sync-Version mit der Serverversion, sah
+     * eine Abweichung und meldete bei jedem Lauf erneut „1 automatisch
+     * zusammengeführt" — und der nächste Workspace-Push hätte mit der alten
+     * Version einen Konflikt ausgelöst.
+     */
     next.workspace = {
       ...next.workspace,
       version: rowVersion,
       updatedAt,
+      ...(next.workspace.sync
+        ? { sync: { ...next.workspace.sync, version: rowVersion, updatedAt } }
+        : {}),
     };
   } else if (entityType === 'customer') {
     // Nur die Serverversion wird übernommen — keine Fachdaten, keine Snapshots.

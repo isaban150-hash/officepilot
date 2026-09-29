@@ -18,7 +18,7 @@ export function LegalPageLayout({ title, children, testId }: LegalPageLayoutProp
         </p>
         <header className="legal-page__header">
           <Link to="/login" className="legal-page__back">
-            ← OfficePilot
+            ← OfficeTakt
           </Link>
           <h1 className="legal-page__title">{title}</h1>
         </header>

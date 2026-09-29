@@ -12,7 +12,7 @@ export const bgIntakeUnderstanding = {
   'document.intakeUnderstanding.invoiceNumber': 'Номер на фактура',
   'document.intakeUnderstanding.amount': 'Сума',
   'document.intakeUnderstanding.deadline': 'Срок',
-  'document.intakeUnderstanding.aiActions': 'OfficePilot препоръчва',
+  'document.intakeUnderstanding.aiActions': 'OfficeTakt препоръчва',
   'document.intakeUnderstanding.uncertainHint':
     'Някои данни са несигурни и не бяха приети автоматично.',
 } as const;

@@ -95,7 +95,8 @@ import { getLastPersistSuccess } from '../services/persistenceService';
 import {
   acceptSuggestedTasks,
   linkWorkflowVorgang,
-  processUploadedDocument,
+  analyzeUploadedDocument,
+  commitUploadedDocumentAnalysis,
 } from '../services/intakeWorkflowService';
 import {
   buildDefaultContractPositionSelections,
@@ -549,7 +550,8 @@ export function EingangDetailPage() {
   // Small documents: sync workflow for first paint (no multi-page OCR payload).
   const syncWorkflow = useMemo(() => {
     if (!item || needsDeferredAnalysis) return null;
-    return processUploadedDocument(item.id);
+    // T1 — reine Berechnung im Render; gespeichert wird im Effekt darunter.
+    return analyzeUploadedDocument(item.id);
   }, [workflowAnalysisKey, needsDeferredAnalysis]);
 
   // Heavy analysis only after paint (double rAF + idle) — never setTimeout(0) alone.
@@ -567,7 +569,7 @@ export function EingangDetailPage() {
     const cancelSchedule = scheduleAfterPaint(() => {
       if (cancelled) return;
       try {
-        const result = processUploadedDocument(item.id);
+        const result = analyzeUploadedDocument(item.id);
         if (cancelled) return;
         setDeferredWorkflow(result);
         setDeferredStatus(result ? 'ready' : 'error');
@@ -583,6 +585,19 @@ export function EingangDetailPage() {
       cancelSchedule();
     };
   }, [workflowAnalysisKey, needsDeferredAnalysis, analysisRetryToken]);
+
+  /*
+   * FINAL-ACCEPTANCE-FIX 02 / T1 — Speichern ist kein Teil des Anzeigens.
+   * Nach dem Render; beim Ansehen nur das erste Ergebnis eines neu erfassten
+   * Dokuments. Ein bereits analysiertes Dokument anzusehen schreibt nichts.
+   * „Analyse erneut" (analysisRetryToken) ist die ausdrückliche Aktion und
+   * speichert die neue Analyse.
+   */
+  const freshAnalysis = syncWorkflow ?? deferredWorkflow;
+  useEffect(() => {
+    if (!freshAnalysis) return;
+    commitUploadedDocumentAnalysis(freshAnalysis, analysisRetryToken > 0 ? 'explicit' : 'onlyIfMissing');
+  }, [freshAnalysis]);
 
   const workflow = useMemo(() => {
     return mergeReviewWorkflowWithRestoredDocumentWorkResult(restoredWorkflow, syncWorkflow ?? deferredWorkflow);
@@ -749,6 +764,38 @@ export function EingangDetailPage() {
       dirty: Boolean(isEditing && editDraft),
     },
   });
+
+  /*
+   * FINAL-ACCEPTANCE-FIX 03 — F-05-Fortsetzung, jetzt vor den frühen Returns.
+   *
+   * Der Effekt stand unterhalb von `!item` / Deferred-Shell / `!workflow` und
+   * wurde deshalb im Shell-Render nicht aufgerufen: Beim Übergang zur fertigen
+   * Ansicht brach React mit „Rendered more hooks…“ ab. Er wird jetzt in jedem
+   * Render aufgerufen und tut nur etwas, wenn die fertige Ansicht steht —
+   * `fullViewReady` ist genau die Umkehrung der drei Return-Bedingungen unten.
+   *
+   * Die Handler entstehen erst in der fertigen Ansicht (unterhalb der
+   * Returns); sie kommen über `filingContinuationRef`, den derselbe fertige
+   * Render setzt. Fachlich unverändert: genau einmal fortsetzen, sobald die
+   * Ablage bestätigt ist.
+   */
+  const fullViewReady =
+    Boolean(item) && Boolean(workflow) && !(needsDeferredAnalysis && deferredStatus !== 'ready');
+  const filingContinuationRef = useRef<{ recordExpense: () => void; executeAll: () => void } | null>(null);
+  useEffect(() => {
+    if (!filingContinuePending) return;
+    if (!item || !fullViewReady) return;
+    if (!isDocumentFilingDecisionConfirmed(item)) return;
+    const continuation = filingContinuationRef.current;
+    if (!continuation) return;
+    const pending = filingContinuePending;
+    setFilingContinuePending(null);
+    if (pending === 'record_expense') {
+      continuation.recordExpense();
+    } else {
+      continuation.executeAll();
+    }
+  }, [filingContinuePending, item, fullViewReady]);
 
   /**
    * CORE-REALTEST-BLOCKER-01D — ab hier beginnen die frühen Returns.
@@ -1230,22 +1277,6 @@ export function EingangDetailPage() {
     }
   };
 
-  /*
-   * F-05 — sobald die Ablage bestätigt ist (neues `item` aus dem Store),
-   * wird die gemerkte Hauptaktion genau einmal fortgesetzt.
-   */
-  useEffect(() => {
-    if (!filingContinuePending) return;
-    if (!isDocumentFilingDecisionConfirmed(item)) return;
-    const pending = filingContinuePending;
-    setFilingContinuePending(null);
-    if (pending === 'record_expense') {
-      runRecordExpense();
-    } else {
-      handleExecuteAll();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filingContinuePending, item]);
 
   const handleApplySuggestion = () => {
     if (item.isAdvertisement) {
@@ -1289,6 +1320,9 @@ export function EingangDetailPage() {
     }
     handleExecuteAll();
   };
+
+  // FINAL-ACCEPTANCE-FIX 03 — die Handler dieses fertigen Renders für die F-05-Fortsetzung (Effekt oben).
+  filingContinuationRef.current = { recordExpense: runRecordExpense, executeAll: handleExecuteAll };
 
   const handleRecordExpense = () => {
     if (item.isAdvertisement) {

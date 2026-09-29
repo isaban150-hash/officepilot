@@ -55,7 +55,8 @@ const GEWERK_RULES: GewerkRule[] = [
   },
   {
     gewerk: 'Sanitär',
-    patterns: [/sanitär|sanitaer/i, /\bheizung\b/i, /badezimmer/i, /rohrleitung/i, /waschbecken/i],
+    // C6 — auch Komposita: Heizungsmodernisierung, Heizungsanlage, Fußbodenheizung …
+    patterns: [/sanitär|sanitaer/i, /heizung/i, /badezimmer/i, /rohrleitung/i, /waschbecken/i],
   },
   {
     gewerk: 'Malerarbeiten',

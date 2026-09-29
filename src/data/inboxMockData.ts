@@ -32,7 +32,7 @@ export const MOCK_INBOX_ITEMS: InboxItem[] = [
       'Neuer Kundenauftrag erkannt. Prüfen Sie Umfang und Termine, dann annehmen oder Rückfrage an den Kunden stellen.',
     nextTaskLabel: 'Auftrag Müller annehmen oder Rückfrage stellen',
     securityHint:
-      'OfficePilot nimmt keine Aufträge automatisch an und versendet keine Antworten ohne Ihre Bestätigung.',
+      'OfficeTakt nimmt keine Aufträge automatisch an und versendet keine Antworten ohne Ihre Bestätigung.',
     taskTemplate: {
       type: 'dokument_pruefen',
       title: 'Auftrag Müller annehmen oder Rückfrage stellen',
@@ -70,7 +70,7 @@ export const MOCK_INBOX_ITEMS: InboxItem[] = [
       'Zahlungserinnerung erkannt. Bitte prüfen, ob diese Rechnung bereits bezahlt wurde, bevor Sie reagieren.',
     nextTaskLabel: 'Zahlung prüfen',
     securityHint:
-      'Bitte prüfen, ob diese Rechnung bereits bezahlt wurde. OfficePilot löst keine Zahlung automatisch aus.',
+      'Bitte prüfen, ob diese Rechnung bereits bezahlt wurde. OfficeTakt löst keine Zahlung automatisch aus.',
     taskTemplate: {
       type: 'dokument_pruefen',
       title: 'Zahlung prüfen',
@@ -113,7 +113,7 @@ export const MOCK_INBOX_ITEMS: InboxItem[] = [
       'Materialrechnung erkannt und Vorgang Müller vorgeschlagen. Bitte Betrag und Zuordnung prüfen.',
     nextTaskLabel: 'Rechnung Vorgang zuordnen und abheften',
     securityHint:
-      'OfficePilot ändert keine Beträge und ordnet nichts endgültig zu ohne Ihre Bestätigung.',
+      'OfficeTakt ändert keine Beträge und ordnet nichts endgültig zu ohne Ihre Bestätigung.',
     taskTemplate: {
       type: 'dokument_pruefen',
       title: 'Materialrechnung Hornbach prüfen',
@@ -152,7 +152,7 @@ export const MOCK_INBOX_ITEMS: InboxItem[] = [
       'Behördenschreiben mit Frist erkannt. Bitte Inhalt prüfen und Original abheften.',
     nextTaskLabel: 'BG BAU Schreiben prüfen',
     securityHint:
-      'OfficePilot gibt keine Steuer- oder Rechtsberatung. Bei Unsicherheit bitte Steuerberater oder Fachanwalt konsultieren.',
+      'OfficeTakt gibt keine Steuer- oder Rechtsberatung. Bei Unsicherheit bitte Steuerberater oder Fachanwalt konsultieren.',
     taskTemplate: {
       type: 'dokument_pruefen',
       title: 'BG BAU Schreiben prüfen',
@@ -190,7 +190,7 @@ export const MOCK_INBOX_ITEMS: InboxItem[] = [
       'Werbung erkannt – keine geschäftliche Relevanz. Entsorgen oder bei Bedarf manuell speichern.',
     nextTaskLabel: 'Keine Aufgabe nötig',
     securityHint:
-      'OfficePilot löscht nichts automatisch. Entsorgung erfolgt nur nach Ihrer ausdrücklichen Bestätigung.',
+      'OfficeTakt löscht nichts automatisch. Entsorgung erfolgt nur nach Ihrer ausdrücklichen Bestätigung.',
   },
   {
     id: 'inbox-006',
@@ -221,7 +221,7 @@ export const MOCK_INBOX_ITEMS: InboxItem[] = [
       'Kontoauszug erkannt. Für den Steuerberater vorbereiten und Original abheften.',
     nextTaskLabel: 'Kontoauszug an Steuerberater vorbereiten',
     securityHint:
-      'OfficePilot leitet keine Bankdaten weiter und versendet nichts automatisch an den Steuerberater.',
+      'OfficeTakt leitet keine Bankdaten weiter und versendet nichts automatisch an den Steuerberater.',
     taskTemplate: {
       type: 'steuerberater_export',
       title: 'Kontoauszug an Steuerberater vorbereiten',
@@ -258,7 +258,7 @@ export const MOCK_INBOX_ITEMS: InboxItem[] = [
       'Finanzamt-Schreiben mit Frist erkannt. Bitte mit Steuerberater besprechen – keine eigenständige Bewertung.',
     nextTaskLabel: 'Finanzamt-Schreiben prüfen',
     securityHint:
-      'OfficePilot gibt keine Steuerberatung. Bei Unsicherheit bitte Steuerberater konsultieren.',
+      'OfficeTakt gibt keine Steuerberatung. Bei Unsicherheit bitte Steuerberater konsultieren.',
     taskTemplate: {
       type: 'steuerberater_export',
       title: 'Finanzamt-Schreiben für Steuerberater vorbereiten',
@@ -294,7 +294,7 @@ export const MOCK_INBOX_ITEMS: InboxItem[] = [
       'Brief mit Termin erkannt. Bitte prüfen, ob Teilnahme gewünscht ist, und Original abheften.',
     nextTaskLabel: 'Brief der Innung prüfen',
     securityHint:
-      'OfficePilot nimmt keine Termine automatisch an und versendet keine Antworten.',
+      'OfficeTakt nimmt keine Termine automatisch an und versendet keine Antworten.',
     taskTemplate: {
       type: 'brief_abheften',
       title: 'Brief der Innung prüfen und abheften',

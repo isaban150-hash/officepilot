@@ -1,6 +1,6 @@
 export const trLetterExplanation = {
   'letter.explain.intro':
-    'OfficePilot yazıyı sade bir dille açıklar. Önemli bilgileri orijinalde kontrol edin.',
+    'OfficeTakt yazıyı sade bir dille açıklar. Önemli bilgileri orijinalde kontrol edin.',
   'letter.explain.uncertainHint':
     'Lütfen orijinali kontrol edin veya mali müşavirinize danışın.',
   'letter.explain.about.brief':

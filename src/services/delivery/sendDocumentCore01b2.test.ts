@@ -83,6 +83,9 @@ function deps(row: DeliveryRow, inv: InvoiceContext | null, options: { canWrite?
     downloadAttachment: vi.fn(async () => (options.bytes === undefined ? PDF : options.bytes)),
     sha256Hex,
     provider: wrapped,
+    // E-MAIL-07B — Claim wie in der Datenbank: queued -> sending, Version +1.
+    claim: vi.fn(async (id, rv) => ({ claimed: true, delivery: { ...row, status: 'sending' as const, row_version: rv + 1 } })),
+    resolveStaleClaim: vi.fn(async () => ({ resolved: false, delivery: row })),
     markAccepted: vi.fn(async (id, messageId, rv) => {
       calls.accepted.push({ id, messageId, rv });
       return { delivery: { ...row, status: 'provider_accepted', provider_message_id: messageId, row_version: rv + 1 }, coupling: row.document_kind === 'invoice' ? 'linked' : 'none' };
@@ -101,7 +104,8 @@ describe('EMAIL-01B2 — Send-Kern', () => {
     const row = await delivery();
     const { d, calls } = deps(row, invoice());
     const outcome = await runSendDocument({ userId: 'u-1', workspaceId: WS, clientDeliveryId: 'cd-1' }, d);
-    expect(outcome).toMatchObject({ ok: true, action: 'sent', coupling: 'linked', delivery: { status: 'provider_accepted', rowVersion: 2 } });
+    // E-MAIL-07B — Claim (queued -> sending) und Annahme zählen je eine Version: 1 -> 2 -> 3.
+    expect(outcome).toMatchObject({ ok: true, action: 'sent', coupling: 'linked', delivery: { status: 'provider_accepted', rowVersion: 3 } });
     expect(calls.sent).toHaveLength(1);
     const sent = calls.sent[0] as { from: { email: string; name: string }; replyTo: { email: string }; to: { email: string }; attachment: { filename: string; contentBase64: string }; idempotencyKey: string };
     expect(sent.from).toEqual({ email: SENDER, name: 'Betrieb GmbH' });
@@ -110,7 +114,8 @@ describe('EMAIL-01B2 — Send-Kern', () => {
     expect(sent.attachment.filename).toBe('Rechnung_2026-0001.pdf');
     expect(atob(sent.attachment.contentBase64)).toBe('%PDF-1.4 test-document');
     expect(sent.idempotencyKey).toBe(`${WS}:cd-1`);
-    expect(calls.accepted).toEqual([{ id: 'd-1', messageId: expect.stringMatching(/^stub-/), rv: 1 }]);
+    // E-MAIL-07B — die Annahme trägt die geclaimte Version (sending, 2), nicht die geladene (queued, 1).
+    expect(calls.accepted).toEqual([{ id: 'd-1', messageId: expect.stringMatching(/^stub-/), rv: 2 }]);
     expect(calls.status).toHaveLength(0);
     expect(JSON.stringify(calls.logs)).not.toContain('kunde@example.invalid');
   });

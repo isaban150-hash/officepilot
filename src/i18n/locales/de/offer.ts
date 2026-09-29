@@ -95,7 +95,8 @@ export const deOffer = {
   'offer.detail.archiveOpen': 'Im Archiv öffnen',
   'offer.detail.archivePending': 'Die Ablage im Archiv wird vorbereitet …',
   'offer.detail.archiveFailed': 'Die Ablage im Archiv ist fehlgeschlagen.',
-  'offer.detail.send': 'Per E-Mail senden',
+  // HALBZEIT-FIX B4 — Überschrift, keine zweite Sende-Aktion (der Button sitzt im Versandbereich).
+  'offer.detail.send': 'E-Mail-Versand',
   'offer.detail.sendHint': 'Der Versand läuft über das archivierte PDF.',
   'offer.detail.markSent': 'Als versendet markieren',
   'offer.detail.reject': 'Als abgelehnt markieren',

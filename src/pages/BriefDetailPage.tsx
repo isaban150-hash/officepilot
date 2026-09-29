@@ -25,6 +25,8 @@ import {
   generateBusinessLetterPdf,
 } from '../services/letter/businessLetterPdfService';
 import { ensureBusinessLetterArchived } from '../services/letter/businessLetterArchiveService';
+import { getDocumentById } from '../services/documentService';
+import { DocumentDeliveryPanel } from '../components/documents/DocumentDeliveryPanel';
 
 export function BriefDetailPage() {
   const { translate, language } = useApp();
@@ -49,8 +51,19 @@ export function BriefDetailPage() {
     if (!brief || !istFertig) return;
     if (abgelegtFuer.current === brief.id) return;
     abgelegtFuer.current = brief.id;
-    const ergebnis = ensureBusinessLetterArchived(brief);
-    if (ergebnis.ok && ergebnis.created) setAblageToken((wert) => wert + 1);
+    /*
+     * E-MAIL-07B — die Ablage legt jetzt auch das PDF ab (asynchron). Neu
+     * angelegt oder PDF nachgezogen: neu einlesen, damit Archiv und Versand
+     * die Datei sehen.
+     */
+    let aktiv = true;
+    void ensureBusinessLetterArchived(brief).then((ergebnis) => {
+      if (!aktiv || !ergebnis.ok) return;
+      if (ergebnis.created || ergebnis.pdf === 'attached') setAblageToken((wert) => wert + 1);
+    });
+    return () => {
+      aktiv = false;
+    };
   }, [brief, istFertig]);
 
   /* Die Vorschau lebt nur, solange die Seite offen ist. */
@@ -81,6 +94,8 @@ export function BriefDetailPage() {
     );
   }
 
+  // 07B-FIX1 — der Archiveintrag dieses Briefes (Quelle des Versands); neu gelesen nach jeder Ablage.
+  const archivDokument = brief.documentId ? getDocumentById(brief.documentId) : undefined;
   const kunde = brief.customerId ? getCustomerById(brief.customerId) : null;
   const vorgang = brief.vorgangId ? getVorgangById(brief.vorgangId) : null;
   const datum = brief.letterDate
@@ -247,6 +262,20 @@ export function BriefDetailPage() {
           {brief.body}
         </p>
       </DetailSection>
+
+      {/*
+        * 07B-FIX1 — versenden, wo der Brief gerade betrachtet wird. Kein
+        * zweiter Versandweg: dasselbe Panel mit demselben Archiveintrag wie im
+        * Dokumentenarchiv — dieselbe Delivery, dieselbe Historie. Der Schlüssel
+        * folgt der Ablage, damit ein nachgerüstetes PDF (07B-FIX2: als Archiv-
+        * Bindung, ohne Änderung am Eintrag) sofort gilt.
+        */}
+      {istFertig && archivDokument ? (
+        <DocumentDeliveryPanel
+          key={`${archivDokument.id}:${ablageToken}`}
+          document={archivDokument}
+        />
+      ) : null}
     </Page>
   );
 }

@@ -204,8 +204,9 @@ describe('CONTRACT-DETAIL-MAINTHREAD-YIELD-01', () => {
     expect(html).toContain('eingang-detail-analysis-pending');
     expect(html).toContain('Dokument wird weiter analysiert.');
 
+    // FINAL-ACCEPTANCE-FIX 02 / T1 — die Seite rechnet über die reine Analyse.
     const processSpy = vi
-      .spyOn(intakeWorkflowService, 'processUploadedDocument')
+      .spyOn(intakeWorkflowService, 'analyzeUploadedDocument')
       .mockReturnValue(null);
 
     vi.useFakeTimers();

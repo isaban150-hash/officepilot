@@ -8,7 +8,7 @@ export function AgbPage() {
         <strong>Platzhalter – AGB (Version {TERMS_VERSION})</strong>
       </p>
       <p>
-        Hier werden später die Nutzungsbedingungen für OfficePilot beschrieben (Leistungsumfang,
+        Hier werden später die Nutzungsbedingungen für OfficeTakt beschrieben (Leistungsumfang,
         Pflichten der Nutzer, Haftung, Vertragslaufzeit).
       </p>
       <p>Dieser Text ist ein Entwurf und muss vor Veröffentlichung rechtlich geprüft werden.</p>

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Card, CardTitle } from '../ui/Card';
 import { Button } from '../ui/Button';
+import { SimpleConfirmDialog } from '../ui/SimpleConfirmDialog';
 import { SendDocumentDialog } from './SendDocumentDialog';
 import { DeliveryHistoryList } from './DeliveryHistoryList';
 import { useApp } from '../../context/AppContext';
@@ -11,11 +12,12 @@ import { isFinalizedInvoice } from '../../services/invoiceArchiveService';
 import { buildInvoicePdfFilename } from '../../services/invoicePdfService';
 import { formatInvoiceDate } from '../../services/invoicePrintModel';
 import {
+  composeInvoiceDeliveryDraft,
   findAcceptedDelivery,
-  resolveDeliveryDraftDefaults,
 } from '../../services/delivery/documentDeliveryDefaults';
-import { hasUncertainDelivery, isDeliveryRetryable } from '../../services/delivery/documentDeliveryContract';
+import { findOpenUncertainDelivery, isDeliveryInProgress, isDeliveryRetryable } from '../../services/delivery/documentDeliveryContract';
 import {
+  checkDeliveryStatus,
   clearSendDraft,
   createSendDraft,
   loadSendDraft,
@@ -61,6 +63,11 @@ const CLIENT_ERROR_KEYS: Record<SendDocumentClientError, TranslationKey> = {
   document_missing: 'delivery.error.documentMissing' as TranslationKey,
   document_not_sendable: 'delivery.error.documentNotSendable' as TranslationKey,
   uncertain_pending: 'delivery.error.uncertainPending' as TranslationKey,
+  uncertain_retry_exists: 'delivery.error.uncertainRetryExists' as TranslationKey,
+  rate_limited: 'delivery.error.rateLimited' as TranslationKey,
+  attachment_not_synced: 'delivery.error.attachmentNotSynced' as TranslationKey,
+  attachment_unavailable: 'delivery.error.attachmentUnavailable' as TranslationKey,
+  document_sync_blocked: 'delivery.error.documentSyncBlocked' as TranslationKey,
   server_unavailable: 'delivery.error.serverUnavailable' as TranslationKey,
   unauthenticated: 'delivery.error.forbidden' as TranslationKey,
   rpc_failed: 'delivery.error.serverUnavailable' as TranslationKey,
@@ -79,7 +86,13 @@ export function InvoiceDeliveryPanel({ vorgangId, invoice, onInvoiceUpdated, doc
   const canSend = cloud && access.canWrite && isFinalizedInvoice(invoice) && documentAvailable;
 
   const [deliveries, setDeliveries] = useState<DocumentDelivery[] | null>(null);
-  const [dialog, setDialog] = useState<{ mode: 'send' | 'retry' | 'resume'; draft?: SendDraftState; retryOf?: DocumentDelivery } | null>(null);
+  const [dialog, setDialog] = useState<{ mode: 'send' | 'retry' | 'resume' | 'retry_uncertain'; draft?: SendDraftState; retryOf?: DocumentDelivery; resendAcknowledged?: boolean } | null>(null);
+  /*
+   * E-MAIL-HALBZEIT-FIX B2 — nach einem erfolgreichen Versand fragt die App
+   * VOR dem Versanddialog ausdrücklich nach (mögliche Doppelzustellung).
+   * Abbrechen: kein Dialog, kein Versandauftrag, kein Provider-Aufruf.
+   */
+  const [resendWarning, setResendWarning] = useState(false);
   const [phase, setPhase] = useState<SendPhase | null>(null);
   const [busy, setBusy] = useState(false);
   const [errorKey, setErrorKey] = useState<TranslationKey | null>(null);
@@ -93,7 +106,8 @@ export function InvoiceDeliveryPanel({ vorgangId, invoice, onInvoiceUpdated, doc
    * eine Delivery tragen ihre eigenen, tatsächlich verwendeten Werte.
    */
   const defaults = useMemo(
-    () => resolveDeliveryDraftDefaults(invoice, language, { profile: companyProfile, kind: documentKind }),
+    // E-MAIL-07C — Rechnungsvorlage (bzw. Korrekturtext) + zentrale Signatur genau einmal.
+    () => composeInvoiceDeliveryDraft(invoice, language, { profile: companyProfile, kind: documentKind }),
     [invoice, language, companyProfile, documentKind],
   );
 
@@ -137,12 +151,32 @@ export function InvoiceDeliveryPanel({ vorgangId, invoice, onInvoiceUpdated, doc
   const latest = deliveries?.[0];
   const alreadySent = isCorrection ? Boolean(accepted) : invoice.sentSource === 'officepilot' || Boolean(accepted);
   /*
-   * V1-B1 — solange irgendein Versuch dieses Dokuments `unknown` ist (Handoff
+   * V1-B1 — solange ein Versuch dieses Dokuments `unknown` ist (Handoff
    * ungewiss), gibt es weder „Erneut versuchen" noch „Per E-Mail senden":
-   * Der Provider könnte die Mail bereits angenommen haben; ein neuer Versand
-   * wäre eine mögliche Doppelzustellung. Nur „Status prüfen" bleibt.
+   * Der Provider könnte die Mail bereits angenommen haben.
+   *
+   * E-MAIL-07B — das ist keine Sackgasse mehr: „Trotzdem erneut senden"
+   * legt nach ausdrücklicher Bestätigung einen neuen Versuch an (der Server
+   * prüft die Bestätigung selbst). Ein so beantworteter unklarer Versuch
+   * sperrt danach nicht mehr. Ein laufender Versand (`sending`) bietet nur
+   * „Status prüfen" — der Server sendet ihn dabei nie erneut.
    */
-  const uncertain = deliveries ? hasUncertainDelivery(deliveries) : false;
+  const uncertainDelivery = deliveries ? findOpenUncertainDelivery(deliveries) : undefined;
+  const uncertain = Boolean(uncertainDelivery);
+  const inProgressDelivery = deliveries?.find((d) => isDeliveryInProgress(d.status));
+
+  const handleCheckStatus = async () => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setBusy(true);
+    try {
+      if (inProgressDelivery) await checkDeliveryStatus({ delivery: inProgressDelivery });
+      await refresh();
+    } finally {
+      inFlight.current = false;
+      setBusy(false);
+    }
+  };
 
   const runWith = async (draft: SendDraftState) => {
     if (inFlight.current) return;
@@ -170,6 +204,7 @@ export function InvoiceDeliveryPanel({ vorgangId, invoice, onInvoiceUpdated, doc
       }
       if (result.action === 'sent' || result.action === 'replayed') showToast(translate('delivery.toast.accepted' as TranslationKey));
       else if (result.action === 'unknown_pending') showToast(translate('delivery.toast.unknown' as TranslationKey));
+      else if (result.action === 'in_progress') showToast(translate('delivery.toast.inProgress' as TranslationKey));
       else showToast(translate('delivery.toast.failed' as TranslationKey));
     } finally {
       inFlight.current = false;
@@ -180,8 +215,8 @@ export function InvoiceDeliveryPanel({ vorgangId, invoice, onInvoiceUpdated, doc
 
   const handleSend = (fields: { recipientEmail: string; subject: string; bodyText: string }) => {
     if (!dialog) return;
-    // V1-B1 — zweite Sperre hinter der Oberfläche: kein neuer Versuch bei ungewissem Handoff.
-    if (uncertain && !(dialog.mode === 'resume' && dialog.draft)) {
+    // V1-B1 — zweite Sperre hinter der Oberfläche: kein gewöhnlicher Versuch bei ungewissem Handoff.
+    if (uncertain && dialog.mode !== 'retry_uncertain' && !(dialog.mode === 'resume' && dialog.draft)) {
       setErrorKey('delivery.error.uncertainPending' as TranslationKey);
       return;
     }
@@ -192,7 +227,13 @@ export function InvoiceDeliveryPanel({ vorgangId, invoice, onInvoiceUpdated, doc
     }
     // Neuer Versuch: neue ID (bei Retry mit Bezug auf die gescheiterte Delivery).
     if (dialog.draft) clearSendDraft(identity, dialog.draft.scopeKey);
-    const draft = createSendDraft({ identity, vorgangId, ...fields, retryOfDeliveryId: dialog.retryOf?.id });
+    const draft = createSendDraft({
+      identity,
+      vorgangId,
+      ...fields,
+      retryOfDeliveryId: dialog.retryOf?.id,
+      confirmUncertainRetry: dialog.mode === 'retry_uncertain',
+    });
     setPendingDraft(draft);
     void runWith(draft);
   };
@@ -221,7 +262,7 @@ export function InvoiceDeliveryPanel({ vorgangId, invoice, onInvoiceUpdated, doc
 
         {isCorrection ? null : (
         <div className="data-row" data-testid="invoice-delivery-source">
-          <span className="data-row__label">{translate('invoice.sent.title' as TranslationKey)}</span>
+          <span className="data-row__label">{translate('delivery.source.label' as TranslationKey)}</span>
           <span className="data-row__value" data-source={invoice.status === 'versendet' ? invoice.sentSource ?? 'manual' : 'none'}>
             {translate(sourceKey)}
             {invoice.status === 'versendet' && invoice.sentAt ? ` · ${formatInvoiceDate(invoice.sentAt)}` : ''}
@@ -247,10 +288,25 @@ export function InvoiceDeliveryPanel({ vorgangId, invoice, onInvoiceUpdated, doc
 
         {canSend ? (
           <div className="invoice-delivery-panel__actions">
-            {uncertain ? (
-              <Button type="button" variant="outline" onClick={() => void refresh()} disabled={busy} data-testid="invoice-delivery-check-status">
+            {inProgressDelivery ? (
+              <Button type="button" variant="outline" onClick={() => void handleCheckStatus()} disabled={busy} data-testid="invoice-delivery-check-status">
                 {translate('delivery.action.checkStatus' as TranslationKey)}
               </Button>
+            ) : uncertainDelivery ? (
+              <>
+                <Button type="button" variant="outline" onClick={() => void handleCheckStatus()} disabled={busy} data-testid="invoice-delivery-check-status">
+                  {translate('delivery.action.checkStatus' as TranslationKey)}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setDialog({ mode: 'retry_uncertain', retryOf: uncertainDelivery })}
+                  disabled={busy}
+                  data-testid="invoice-delivery-retry-uncertain"
+                >
+                  {translate('delivery.action.retryUncertain' as TranslationKey)}
+                </Button>
+              </>
             ) : latest && isDeliveryRetryable(latest.status) && latest.status !== 'bounced' ? (
               <Button type="button" onClick={() => setDialog({ mode: 'retry', retryOf: latest })} disabled={busy} data-testid="invoice-delivery-retry">
                 {translate('delivery.action.retry' as TranslationKey)}
@@ -260,7 +316,7 @@ export function InvoiceDeliveryPanel({ vorgangId, invoice, onInvoiceUpdated, doc
                 {translate('delivery.action.resume' as TranslationKey)}
               </Button>
             ) : (
-              <Button type="button" onClick={() => setDialog({ mode: 'send' })} disabled={busy} data-testid="invoice-delivery-send">
+              <Button type="button" onClick={() => (alreadySent ? setResendWarning(true) : setDialog({ mode: 'send' }))} disabled={busy} data-testid="invoice-delivery-send">
                 {translate((isCorrection
                   ? alreadySent ? 'delivery.correction.action.sendAgain' : 'delivery.correction.action.send'
                   : alreadySent ? 'delivery.action.sendAgain' : 'delivery.action.send') as TranslationKey)}
@@ -279,7 +335,7 @@ export function InvoiceDeliveryPanel({ vorgangId, invoice, onInvoiceUpdated, doc
           initialSubject={dialog.draft?.subject ?? dialog.retryOf?.subject ?? defaults.subject}
           initialBody={dialog.draft?.bodyText ?? dialog.retryOf?.bodyText ?? defaults.bodyText}
           attachmentFilename={buildInvoicePdfFilename(isCorrection ? `Rechnungskorrektur-${invoice.number}` : invoice.number)}
-          alreadySent={alreadySent}
+          alreadySent={alreadySent && !dialog.resendAcknowledged}
           mode={dialog.mode}
           documentKind={documentKind}
           phase={phase}
@@ -291,6 +347,24 @@ export function InvoiceDeliveryPanel({ vorgangId, invoice, onInvoiceUpdated, doc
           onSend={handleSend}
         />
       ) : null}
+
+      <SimpleConfirmDialog
+        open={resendWarning}
+        title={translate('delivery.resendWarning.title' as TranslationKey)}
+        message={translate(isCorrection ? 'delivery.resendWarning.correction' : 'delivery.resendWarning.invoice' as TranslationKey)}
+        confirmLabel={translate('delivery.resendWarning.confirm' as TranslationKey)}
+        cancelLabel={translate('delivery.action.cancel' as TranslationKey)}
+        confirmVariant="primary"
+        dialogTestId="invoice-delivery-resend-warning"
+        confirmTestId="invoice-delivery-resend-warning-confirm"
+        cancelTestId="invoice-delivery-resend-warning-cancel"
+        onCancel={() => setResendWarning(false)}
+        onConfirm={() => {
+          setResendWarning(false);
+          setDialog({ mode: 'send', resendAcknowledged: true });
+          return true;
+        }}
+      />
     </section>
   );
 }

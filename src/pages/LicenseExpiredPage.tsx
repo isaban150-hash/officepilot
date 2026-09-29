@@ -8,7 +8,7 @@ export function LicenseExpiredPage() {
   return (
     <AuthLayout
       title="Lizenz abgelaufen"
-      subtitle="Ihre OfficePilot-Lizenz ist nicht mehr aktiv."
+      subtitle="Ihre OfficeTakt-Lizenz ist nicht mehr aktiv."
       testId="license-expired-page"
     >
       <div className="auth-info">

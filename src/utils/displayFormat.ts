@@ -57,6 +57,32 @@ export function formatDisplayDatePadded(value: string | Date | null | undefined)
   }
 }
 
+/**
+ * E-MAIL-HALBZEIT-FIX B3 — Datum mit Uhrzeit: `26.09.2026, 20:13`.
+ *
+ * Dieselbe Schreibweise, die der Kommunikationsverlauf und die
+ * Auftragsänderungen bereits verwenden (zweistellig, Minutengenauigkeit),
+ * jetzt an einer Stelle für den E-Mail-Bereich (Versandhistorie,
+ * Kommunikation beim Kunden/Vorgang, freie E-Mails). Kein neuer
+ * Formatierer, keine Datumsbibliothek.
+ */
+export function formatDisplayDateTime(value: string | Date | null | undefined): string {
+  if (!value) return EMPTY_DISPLAY;
+  try {
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) return typeof value === 'string' ? value : EMPTY_DISPLAY;
+    return date.toLocaleString('de-DE', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return typeof value === 'string' ? value : EMPTY_DISPLAY;
+  }
+}
+
 /** ISO-Wert für `<time dateTime>`; leer, wenn der Wert kein Datum ist. */
 export function toDateTimeAttribute(value: string | Date | null | undefined): string | undefined {
   if (!value) return undefined;

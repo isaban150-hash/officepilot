@@ -12,6 +12,35 @@ interface BrainOrchestrationCardProps {
   onTryDeepAnswer?: () => void;
 }
 
+/**
+ * BROWSER-ACCEPTANCE-FIX 01 / B1-Nacharbeit — Kontextteile in Klartext.
+ *
+ * `companyContextUsed` trägt interne Schlüssel (`vorgang`, `upload` …).
+ * Angezeigt wird nur, was hier eine Bezeichnung hat; ein unbekannter Schlüssel
+ * erscheint nie roh.
+ */
+const CONTEXT_PART_LABEL_KEYS: Record<string, TranslationKey> = {
+  customer: 'companyContext.part.customer',
+  vorgang: 'companyContext.part.vorgang',
+  baustelle: 'companyContext.part.baustelle',
+  document: 'companyContext.part.document',
+  contract: 'companyContext.part.contract',
+  invoice: 'companyContext.part.invoice',
+  upload: 'companyContext.part.upload',
+  session: 'companyContext.part.session',
+};
+
+export function contextPartLabels(
+  parts: readonly string[] | undefined,
+  translate: (key: TranslationKey) => string,
+): string[] {
+  const labels = (parts ?? [])
+    .map((part) => CONTEXT_PART_LABEL_KEYS[part])
+    .filter((key): key is TranslationKey => Boolean(key))
+    .map((key) => translate(key));
+  return [...new Set(labels)];
+}
+
 function translateMaybe(
   translate: (key: TranslationKey) => string,
   value?: string,
@@ -36,6 +65,7 @@ export function BrainOrchestrationCard({ result, onTryDeepAnswer }: BrainOrchest
 
   const uncertainty = translateMaybe(translate, result.uncertaintyNote);
   const clarification = translateMaybe(translate, result.clarificationQuestion);
+  const contextLabels = contextPartLabels(result.companyContextUsed, translate);
 
   return (
     <div className="brain-orchestration-card" data-testid="brain-orchestration-card">
@@ -74,9 +104,9 @@ export function BrainOrchestrationCard({ result, onTryDeepAnswer }: BrainOrchest
         </div>
       )}
 
-      {result.companyContextUsed && result.companyContextUsed.length > 0 && (
+      {contextLabels.length > 0 && (
         <p className="brain-orchestration-context-used" data-testid="brain-orchestration-context-used">
-          {translate('companyContext.usedLabel')}: {result.companyContextUsed.join(', ')}
+          {translate('companyContext.usedLabel')}: {contextLabels.join(', ')}
         </p>
       )}
 

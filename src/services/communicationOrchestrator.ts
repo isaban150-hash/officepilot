@@ -24,7 +24,7 @@ function blockedResult(
     title: 'communication.blocked.title',
     summary: reasonKey,
     disclaimer:
-      'OfficePilot erteilt keine Rechts- oder Steuerberatung und trifft keine endgültigen Aussagen.',
+      'OfficeTakt erteilt keine Rechts- oder Steuerberatung und trifft keine endgültigen Aussagen.',
   };
 }
 

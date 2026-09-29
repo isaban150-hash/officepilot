@@ -41,6 +41,12 @@ export const deDocumentMeaning = {
   'documentMeaning.candidate.uncertain': 'Bitte prüfen',
   'documentMeaning.candidate.confirm': 'Zuordnung bestätigen',
   'documentMeaning.candidate.choose': 'Bitte wählen Sie selbst aus.',
+  // BROWSER-ACCEPTANCE-FIX 01 / A3 — eigene, verknüpfte Ausgangsrechnung
+  'documentMeaning.customer.assigned': 'Kunde',
+  'documentMeaning.vorgang.assigned': 'Auftrag',
+  'documentMeaning.candidate.fromInvoice': 'Aus der Rechnung übernommen',
+  'documentMeaning.accounting.ownInvoice': 'Eigene Rechnung – bereits erfasst',
+  'documentMeaning.accounting.ownInvoiceHint': 'Der Betrag steht in Ihrer Rechnung. Hier ist nichts neu zu buchen.',
   'documentMeaning.nextStep': 'Nächster Schritt',
   'documentMeaning.next.confirmAndAnswer': 'Zuordnung bestätigen und Antwort vorbereiten.',
   'documentMeaning.next.answerRequired': 'Antwort vorbereiten und Fristen im Blick behalten.',
@@ -48,13 +54,13 @@ export const deDocumentMeaning = {
   'documentMeaning.next.reviewAndBook': 'Beleg prüfen und als Ausgabe übernehmen.',
   'documentMeaning.next.fileOnly': 'Dokument ablegen. Aktuell keine Handlung erforderlich.',
   'documentMeaning.next.reviewYourself': 'Bitte sehen Sie sich das Schreiben selbst an.',
-  'documentMeaning.uncertain': 'Das konnte OfficePilot nicht sicher erkennen',
+  'documentMeaning.uncertain': 'Das konnte OfficeTakt nicht sicher erkennen',
   'documentMeaning.uncertain.noSubject': 'Der Betreff steht nicht eindeutig im Schreiben.',
   'documentMeaning.uncertain.recipient':
     'Ob das Schreiben an Ihren Betrieb gerichtet ist, war nicht eindeutig zu erkennen.',
   'documentMeaning.uncertain.noAssignment': 'Kunde und Auftrag konnten nicht zugeordnet werden.',
   'documentMeaning.disclaimer':
-    'OfficePilot liest das Schreiben maschinell. Bitte prüfen Sie wichtige Angaben im Original.',
+    'OfficeTakt liest das Schreiben maschinell. Bitte prüfen Sie wichtige Angaben im Original.',
 
   /* DOKUMENT-ASSISTENT-01F — Wiedervorlagen. */
   'documentReminder.proposalTitle': 'Wiedervorlage am',

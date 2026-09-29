@@ -6,6 +6,7 @@ import {
   COMPANY_PROFILE_TEXT_LIMITS,
   isTaxStatus,
 } from './company/companyProfileSettingsContract';
+import { checkIban } from '../utils/iban';
 
 export type SetupValidationErrors = Partial<Record<string, TranslationKey>>;
 
@@ -22,9 +23,43 @@ function normalizeIban(value: string): string {
   return value.replace(/\s+/g, '').toUpperCase();
 }
 
-function isValidIban(value: string): boolean {
+/** Die frühere Formprüfung — nur noch für Seiten, auf denen die IBAN nicht bearbeitet wird. */
+function hasIbanShape(value: string): boolean {
   const iban = normalizeIban(value);
   return iban.length >= 15 && iban.length <= 34 && /^[A-Z0-9]+$/.test(iban);
+}
+
+/**
+ * BROWSER-ACCEPTANCE-FIX 01 / B2 — wie wird die IBAN geprüft?
+ *
+ * `strict` (Standard): Ländercode, Länge je Land und Prüfziffer (Mod-97).
+ * `shape`: nur die frühere Formprüfung. Für Seiten, auf denen die IBAN weder
+ * sichtbar noch änderbar ist (Rechnungseinstellungen): Eine alte, ungültige
+ * IBAN soll dort nicht das Speichern anderer Angaben blockieren, ohne dass der
+ * Nutzer sie an Ort und Stelle korrigieren könnte. Korrigiert — und streng
+ * geprüft — wird sie in den Firmendaten.
+ */
+export interface SetupValidationOptions {
+  ibanCheck?: 'strict' | 'shape';
+}
+
+export function ibanErrorKey(value: string): TranslationKey | null {
+  const result = checkIban(value);
+  if (result.valid) return null;
+  switch (result.problem) {
+    case 'empty':
+      return 'setup.error.ibanRequired';
+    case 'characters':
+      return 'setup.error.ibanCharacters';
+    case 'country':
+      return 'setup.error.ibanCountry';
+    case 'length':
+      return result.normalized.startsWith('DE') ? 'setup.error.ibanLengthDe' : 'setup.error.ibanLength';
+    case 'checksum':
+      return 'setup.error.ibanChecksum';
+    default:
+      return 'setup.error.ibanInvalid';
+  }
 }
 
 function hasTaxIdentifier(draft: Pick<SetupWizardDraft, 'taxNumber' | 'vatId'>): boolean {
@@ -34,6 +69,7 @@ function hasTaxIdentifier(draft: Pick<SetupWizardDraft, 'taxNumber' | 'vatId'>):
 export function validateSetupStep(
   step: SetupWizardStep,
   draft: SetupWizardDraft,
+  options: SetupValidationOptions = {},
 ): SetupValidationResult {
   const errors: SetupValidationErrors = {};
 
@@ -54,7 +90,12 @@ export function validateSetupStep(
   if (step === 'bank') {
     const iban = (draft.iban ?? '').toString();
     if (!iban.trim()) errors.iban = 'setup.error.ibanRequired';
-    else if (!isValidIban(iban)) errors.iban = 'setup.error.ibanInvalid';
+    else if (options.ibanCheck === 'shape') {
+      if (!hasIbanShape(iban)) errors.iban = 'setup.error.ibanInvalid';
+    } else {
+      const ibanError = ibanErrorKey(iban);
+      if (ibanError) errors.iban = ibanError;
+    }
   }
 
   if (step === 'invoicing') {
@@ -72,10 +113,13 @@ export function validateSetupStep(
   return { valid: Object.keys(errors).length === 0, errors };
 }
 
-export function validateSetupWizard(draft: SetupWizardDraft): SetupValidationResult {
+export function validateSetupWizard(
+  draft: SetupWizardDraft,
+  options: SetupValidationOptions = {},
+): SetupValidationResult {
   const merged: SetupValidationErrors = {};
   for (const step of ['company', 'tax', 'bank', 'invoicing'] as SetupWizardStep[]) {
-    const result = validateSetupStep(step, draft);
+    const result = validateSetupStep(step, draft, options);
     Object.assign(merged, result.errors);
   }
   return { valid: Object.keys(merged).length === 0, errors: merged };
@@ -84,6 +128,7 @@ export function validateSetupWizard(draft: SetupWizardDraft): SetupValidationRes
 export function validateCompanyProfileForSettings(
   profile: CompanyProfile,
   lastInvoiceNumber?: number,
+  options: SetupValidationOptions = {},
 ): SetupValidationResult {
   const draft: SetupWizardDraft = {
     language: 'de',
@@ -108,7 +153,7 @@ export function validateCompanyProfileForSettings(
     defaultPaymentTerms: profile.defaultPaymentTerms,
     lastInvoiceNumber: lastInvoiceNumber ?? 0,
   };
-  const result = validateSetupWizard(draft);
+  const result = validateSetupWizard(draft, options);
   return {
     ...result,
     ...mergeSettingsFieldErrors(profile, mergeSkontoErrors(profile, result)),

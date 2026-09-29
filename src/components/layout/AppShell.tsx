@@ -4,6 +4,7 @@ import { useMainScrollRestoration } from './useMainScrollRestoration';
 import { BetaModeBanner } from './BetaModeBanner';
 import { PersistenceFailureBanner } from '../system/PersistenceFailureBanner';
 import { CloudBackupPendingBanner } from '../system/CloudBackupPendingBanner';
+import { SyncStatusIndicator } from '../system/SyncStatusIndicator';
 import { BottomNav } from './BottomNav';
 import { SidebarNav } from './SidebarNav';
 import { UserMenu } from './UserMenu';
@@ -41,6 +42,8 @@ export function AppShell() {
           ) : null}
         </div>
         <div className="app-shell__top-right">
+          {/* SYNC-AUTOMATIK-01A — Synchronisationsstand ohne Umweg über die Sync-Seite. */}
+          <SyncStatusIndicator />
           {/*
             * UIUX-FOUNDATION-01C — globale Werkzeuge im Header: Assistent
             * (vorher ein Hauptnavigationsplatz), Einstellungen (Zahnrad),

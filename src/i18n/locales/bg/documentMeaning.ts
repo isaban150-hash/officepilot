@@ -33,6 +33,12 @@ export const bgDocumentMeaning = {
   'documentMeaning.candidate.uncertain': 'Моля, проверете',
   'documentMeaning.candidate.confirm': 'Потвърди връзката',
   'documentMeaning.candidate.choose': 'Моля, изберете сами.',
+  // BROWSER-ACCEPTANCE-FIX 01 / A3 — eigene, verknüpfte Ausgangsrechnung
+  'documentMeaning.customer.assigned': 'Клиент',
+  'documentMeaning.vorgang.assigned': 'Поръчка',
+  'documentMeaning.candidate.fromInvoice': 'Взето от фактурата',
+  'documentMeaning.accounting.ownInvoice': 'Собствена фактура – вече записана',
+  'documentMeaning.accounting.ownInvoiceHint': 'Сумата е във вашата фактура. Тук не е нужно ново осчетоводяване.',
   'documentMeaning.nextStep': 'Следваща стъпка',
   'documentMeaning.next.confirmAndAnswer': 'Потвърдете връзката и подгответе отговор.',
   'documentMeaning.next.answerRequired': 'Подгответе отговор и следете сроковете.',
@@ -40,13 +46,13 @@ export const bgDocumentMeaning = {
   'documentMeaning.next.reviewAndBook': 'Проверете документа и го приемете като разход.',
   'documentMeaning.next.fileOnly': 'Архивирайте документа. Засега не е нужно действие.',
   'documentMeaning.next.reviewYourself': 'Моля, прегледайте писмото сами.',
-  'documentMeaning.uncertain': 'Това OfficePilot не можа да разпознае със сигурност',
+  'documentMeaning.uncertain': 'Това OfficeTakt не можа да разпознае със сигурност',
   'documentMeaning.uncertain.noSubject': 'Темата не е посочена ясно в писмото.',
   'documentMeaning.uncertain.recipient':
     'Не беше ясно дали писмото е адресирано до вашата фирма.',
   'documentMeaning.uncertain.noAssignment': 'Клиент и поръчка не можаха да бъдат свързани.',
   'documentMeaning.disclaimer':
-    'OfficePilot чете писмото машинно. Моля, проверете важните данни в оригинала.',
+    'OfficeTakt чете писмото машинно. Моля, проверете важните данни в оригинала.',
 
   /* DOKUMENT-ASSISTENT-01F */
   'documentReminder.proposalTitle': 'Напомняне на',

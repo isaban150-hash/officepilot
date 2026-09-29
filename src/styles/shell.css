@@ -830,3 +830,55 @@
 .bottom-nav__item[aria-current="page"] .bottom-nav__label {
   color: var(--op-primary);
 }
+
+/* SYNC-AUTOMATIK-01A — globale Statusanzeige im Kopf */
+.app-shell__sync-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-height: 2.75rem;
+  padding: 0 0.625rem;
+  border-radius: var(--radius-pill);
+  color: var(--op-on-primary-muted);
+  font-size: 0.8125rem;
+  text-decoration: none;
+  white-space: nowrap;
+  flex: none;
+}
+
+.app-shell__sync-indicator:hover,
+.app-shell__sync-indicator:focus-visible {
+  background: var(--op-on-primary-hover);
+}
+
+.app-shell__sync-indicator-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--color-success);
+  flex: none;
+}
+
+.app-shell__sync-indicator--syncing .app-shell__sync-indicator-dot {
+  background: var(--op-on-primary-muted);
+}
+
+.app-shell__sync-indicator--offline .app-shell__sync-indicator-dot {
+  background: var(--color-warning);
+}
+
+.app-shell__sync-indicator--action .app-shell__sync-indicator-dot {
+  background: var(--color-danger);
+}
+
+@media (max-width: 640px) {
+  /* Mobil nur der Punkt; der Text bleibt als Name der Schaltfläche erhalten. */
+  .app-shell__sync-indicator-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+}

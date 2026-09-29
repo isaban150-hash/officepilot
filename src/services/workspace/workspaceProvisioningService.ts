@@ -62,7 +62,7 @@ import {
   planVorgangCustomerRelationBackfill,
   planVorgangLostAckAdoption,
 } from '../vorgang/vorgangCloudService';
-import { isDefinitelyMockVorgang } from '../storage/mockDataDetectionService';
+import { isCloudSyncBlockedMockVorgangId, isDefinitelyMockVorgang } from '../storage/mockDataDetectionService';
 import {
   applyRemoteCompanyProfileSyncMeta,
   applyRemoteSetupSyncMeta,
@@ -377,7 +377,13 @@ export function mergeRemoteWorkspacePullIntoState(
   let next: AppPersistedState = { ...state };
 
   if (pull.workspace) {
-    const localVersion = state.workspace?.sync?.version ?? state.workspace?.version ?? 0;
+    /*
+     * SYNC-AUTOMATIK-01A — ein bestätigter Push setzte bisher nur `version`,
+     * `sync.version` blieb zurück. Bestehende Bestände tragen diese Abweichung
+     * noch; massgeblich ist die höhere, vom Server bestätigte Angabe. Lokal
+     * wird keine der beiden hochgezählt (SYNC-VERSION-CONTRACT-02).
+     */
+    const localVersion = Math.max(state.workspace?.sync?.version ?? 0, state.workspace?.version ?? 0);
     const remoteVersion = pull.workspace.version;
     if (localVersion > 0 && remoteVersion > 0 && localVersion !== remoteVersion) {
       conflicts.push('workspace');
@@ -653,9 +659,15 @@ export function mergeRemoteWorkspacePullIntoState(
     next.workspaceMembers = pull.members;
   }
 
+  /*
+   * SYNC-AUTOMATIK-01A-FIX4 — Demo-Vorgänge der Cloud zählen nicht als Cloud-Bestand:
+   * weder für die Frage „ist die Cloud leer?“ noch für den Merge (siehe
+   * `mergeVorgaengeFromPull`).
+   */
+  const remoteVorgaenge = (pull.vorgaenge ?? []).filter((row) => !isCloudSyncBlockedMockVorgangId(row.vorgang_id));
   const activeLocalVorgaenge = filterSyncActive(state.vorgaenge);
   const realLocalVorgaenge = activeLocalVorgaenge.filter((vorgang) => !isDefinitelyMockVorgang(vorgang));
-  if ((pull.vorgaenge ?? []).length === 0 && realLocalVorgaenge.length > 0) {
+  if (remoteVorgaenge.length === 0 && realLocalVorgaenge.length > 0) {
     for (const vorgang of realLocalVorgaenge) {
       enqueueSyncOutbox({
         entityType: 'vorgang',
@@ -664,9 +676,9 @@ export function mergeRemoteWorkspacePullIntoState(
         version: Math.max(1, vorgang.sync?.version ?? 1),
       });
     }
-  } else if ((pull.vorgaenge ?? []).length === 0 && activeLocalVorgaenge.length > 0) {
+  } else if (remoteVorgaenge.length === 0 && activeLocalVorgaenge.length > 0) {
     next.vorgaenge = [];
-  } else if ((pull.vorgaenge ?? []).length > 0) {
+  } else if (remoteVorgaenge.length > 0) {
     const deviceId = state.syncClient!.deviceId;
     /*
      * SYNC-VERSION-CONTRACT-02 — der Dirty-Zustand stammt aus der Outbox
@@ -690,7 +702,7 @@ export function mergeRemoteWorkspacePullIntoState(
      */
     const vorgangAdoption = planVorgangLostAckAdoption(
       state.vorgaenge,
-      pull.vorgaenge ?? [],
+      remoteVorgaenge,
       dirtyVorgangIds,
     );
     const adoptedVorgangIds = new Set([...vorgangAdoption.adopt, ...vorgangAdoption.settle]);
@@ -704,8 +716,8 @@ export function mergeRemoteWorkspacePullIntoState(
           )
         : state.vorgaenge,
       adoptedVorgangIds.size > 0
-        ? (pull.vorgaenge ?? []).filter((row) => !adoptedVorgangIds.has(row.vorgang_id))
-        : (pull.vorgaenge ?? []),
+        ? remoteVorgaenge.filter((row) => !adoptedVorgangIds.has(row.vorgang_id))
+        : remoteVorgaenge,
       deviceId,
       workspaceId,
       { dirtyVorgangIds },
@@ -737,7 +749,7 @@ export function mergeRemoteWorkspacePullIntoState(
    */
   for (const vorgangId of planVorgangCustomerRelationBackfill(
     next.vorgaenge ?? state.vorgaenge,
-    pull.vorgaenge ?? [],
+    remoteVorgaenge,
   )) {
     enqueueSyncOutbox({
       entityType: 'vorgang',

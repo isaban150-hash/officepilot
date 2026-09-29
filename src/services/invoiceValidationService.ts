@@ -9,6 +9,7 @@ import {
   toCents,
 } from './invoiceMoney';
 import { INVOICE_DRAFT_LABEL } from './invoiceNumberService';
+import { isValidIban } from '../utils/iban';
 import { getTaxRateForStatus } from './invoiceTaxService';
 import { usesAbschlagDeductions } from './invoiceTypeService';
 import { selectHistoricalInvoiceLogo } from './invoice/invoiceHistoricalLogo';
@@ -72,6 +73,14 @@ function companyBlocks(company: CompanyProfile, errors: InvoiceValidationIssue[]
 function companyWarnings(company: CompanyProfile, warnings: InvoiceValidationIssue[]): void {
   if (!company.iban?.trim()) {
     warnings.push({ code: 'company_iban', messageKey: 'invoice.validation.warn.iban' });
+  } else if (!isValidIban(company.iban)) {
+    /*
+     * BROWSER-ACCEPTANCE-FIX 01 / B2 — eine ungültige IBAN geht nicht mehr
+     * kommentarlos auf die Rechnung. Ein Hinweis vor der Freigabe, kein Stopp:
+     * Die Firmendaten sind der Ort der Korrektur, und bereits bestehende
+     * Rechnungen bleiben, wie sie sind.
+     */
+    warnings.push({ code: 'company_iban_invalid', messageKey: 'invoice.validation.warn.ibanInvalid' });
   }
   if (!company.phone?.trim() && !company.email?.trim()) {
     warnings.push({ code: 'company_contact', messageKey: 'invoice.validation.warn.contact' });

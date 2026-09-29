@@ -3,6 +3,7 @@ import type { AppLanguage, CompanyProfile, VorgangInvoice } from '../../types/mo
 import type { DeliveryDocumentKind, DeliveryStatus, DocumentDelivery } from '../../types/documentDelivery';
 import { getCustomerById } from '../customerStoreService';
 import { isValidRecipientEmail, normalizeRecipientEmail } from './documentDeliveryContract';
+import { composeDeliveryMail } from './deliveryMailComposer';
 
 /**
  * EMAIL-01B3/01B4 — die **einen** Default-Resolver für einen neuen Send-Entwurf:
@@ -122,7 +123,21 @@ export function deliveryStatusLabelKey(status: DeliveryStatus): TranslationKey {
   return `delivery.status.${status}` as TranslationKey;
 }
 
-export function deliveryErrorLabelKey(delivery: Pick<DocumentDelivery, 'errorCategory'>): TranslationKey {
+/**
+ * E-MAIL-07B — Fehlercodes, die der Nutzer selbst beheben kann (bzw. die ohne
+ * Erklärung missverständlich wären), bekommen einen eigenen Text. Alles
+ * andere bleibt beim Kategorie-Text; Rohtexte des Providers erscheinen nie.
+ */
+const DELIVERY_ERROR_CODE_LABELS = new Set([
+  'test_recipient_not_allowed',
+  'test_recipient_allowlist_invalid',
+  'sender_reply_to_invalid',
+]);
+
+export function deliveryErrorLabelKey(delivery: Pick<DocumentDelivery, 'errorCategory'> & { errorCode?: string }): TranslationKey {
+  if (delivery.errorCode && DELIVERY_ERROR_CODE_LABELS.has(delivery.errorCode)) {
+    return `delivery.error.code.${delivery.errorCode}` as TranslationKey;
+  }
   return `delivery.error.${delivery.errorCategory ?? 'unknown'}` as TranslationKey;
 }
 
@@ -161,4 +176,51 @@ export function resolveDocumentDeliveryDraftDefaults(
     subject: fillDeliveryPlaceholders(t('delivery.mail.documentSubject' as TranslationKey, language), values),
     bodyText: fillDeliveryPlaceholders(t('delivery.mail.documentBody' as TranslationKey, language), values),
   };
+}
+
+/* -------------------------------------------------------------------------- */
+/* E-MAIL-07C — Vorlage je Dokumentart + zentrale Signatur                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Neuer Rechnungs-/Korrektur-Entwurf: Empfänger wie bisher, Betreff und
+ * Nachricht aus der Rechnungsvorlage (bzw. fester Korrekturtext), Signatur
+ * genau einmal. Firmenname aus dem historischen Rechnungs-Snapshot.
+ */
+export function composeInvoiceDeliveryDraft(
+  invoice: VorgangInvoice,
+  language: AppLanguage,
+  options: { profile?: Partial<CompanyProfile>; kind?: DeliveryMailKind } = {},
+): DeliveryDraftDefaults {
+  const kind = options.kind ?? 'invoice';
+  const customerName = invoice.customerSnapshot?.name?.trim() || (invoice.customerId ? getCustomerById(invoice.customerId)?.name?.trim() : undefined);
+  const mail = composeDeliveryMail({
+    kind,
+    values: { companyName: companyDisplayName(invoice), customerName, documentNumber: invoice.number },
+    profile: options.profile,
+    language,
+  });
+  return { recipient: resolveDeliveryRecipient(invoice), subject: mail.subject, bodyText: mail.bodyText };
+}
+
+/** Neuer Entwurf für Brief, Angebot oder sonstiges Archivdokument. */
+export function composeDocumentDeliveryDraft(
+  input: {
+    kind: Exclude<DeliveryDocumentKind, 'invoice' | 'invoice_correction'>;
+    title: string;
+    documentNumber?: string;
+    customerName?: string;
+    vorgangCustomerEmail?: string | null;
+    profile: Partial<CompanyProfile>;
+  },
+  language: AppLanguage,
+): DeliveryDraftDefaults {
+  const companyName = [input.profile.companyName?.trim(), input.profile.legalForm?.trim()].filter(Boolean).join(' ');
+  const mail = composeDeliveryMail({
+    kind: input.kind,
+    values: { companyName, customerName: input.customerName, documentTitle: input.title, documentNumber: input.documentNumber },
+    profile: input.profile,
+    language,
+  });
+  return { recipient: resolveDocumentDeliveryRecipient(input.vorgangCustomerEmail), subject: mail.subject, bodyText: mail.bodyText };
 }

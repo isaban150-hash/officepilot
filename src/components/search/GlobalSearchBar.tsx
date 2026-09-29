@@ -12,7 +12,8 @@ import { Button } from '../ui/Button';
 import { Icon } from '../ui/Icon';
 import { EmptyStateBlock } from '../ui/EmptyStateBlock';
 import { useApp } from '../../context/AppContext';
-import { searchOffice } from '../../services/officeSearchService';
+import { mergeSearchResults, searchOffice } from '../../services/officeSearchService';
+import { searchCloudEmails } from '../../services/search/emailSearchSource';
 import type { SearchResult } from '../../types/officeSearch';
 
 const MOBILE_SEARCH_MQ = '(max-width: 767px)';
@@ -75,7 +76,8 @@ export function SearchResultsList({
                   <span className="search-results-list__snippet">{result.snippet}</span>
                   <span className="search-results-list__meta">
                     {result.matchedField}
-                    {result.status ? ` · ${result.status}` : ''}
+                    {/* A2 — nur Klartext, nie der technische Rohwert. */}
+                    {result.statusLabel ? ` · ${result.statusLabel}` : ''}
                   </span>
                 </>
               )}
@@ -310,16 +312,55 @@ export function GlobalSearchBar({
   );
 }
 
-export function SearchPage() {
+const SEARCH_PAGE_LIMIT = 40;
+
+interface SearchPageProps {
+  /** BROWSER-ACCEPTANCE-FIX 01 / A2 — E-Mail-Quelle; im Test ersetzbar. */
+  searchEmails?: (query: string) => Promise<SearchResult[]>;
+}
+
+export function SearchPage({ searchEmails = searchCloudEmails }: SearchPageProps = {}) {
   const { translate } = useApp();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const query = searchParams.get('q') ?? '';
 
-  const results = useMemo(() => {
+  const localResults = useMemo(() => {
     if (!query.trim()) return [];
-    return searchOffice({ query, limit: 40 });
+    return searchOffice({ query, limit: SEARCH_PAGE_LIMIT });
   }, [query]);
+
+  /*
+   * BROWSER-ACCEPTANCE-FIX 01 / A2 — E-Mails liegen in der Cloud. Sie kommen
+   * nach, ohne die lokalen Treffer aufzuhalten; eine veraltete Antwort (die
+   * Anfrage hat sich inzwischen geändert) wird verworfen.
+   */
+  const [emailResults, setEmailResults] = useState<{ query: string; results: SearchResult[] }>({
+    query: '',
+    results: [],
+  });
+  useEffect(() => {
+    let cancelled = false;
+    if (!query.trim()) return undefined;
+    void searchEmails(query)
+      .catch(() => [] as SearchResult[])
+      .then((results) => {
+        if (!cancelled) setEmailResults({ query, results });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [query, searchEmails]);
+
+  const results = useMemo(
+    () =>
+      mergeSearchResults(
+        localResults,
+        emailResults.query === query ? emailResults.results : [],
+        SEARCH_PAGE_LIMIT,
+      ),
+    [localResults, emailResults, query],
+  );
 
   return (
     <div className="page search-page" data-testid="search-page">

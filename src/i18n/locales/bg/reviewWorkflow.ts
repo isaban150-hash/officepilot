@@ -1,17 +1,17 @@
 export const bgReviewWorkflow = {
   'reviewWorkflow.hero.title': 'Документът е разпознат',
   'reviewWorkflow.hero.intro':
-    'OfficePilot прегледа документа и подготви предложение.',
+    'OfficeTakt прегледа документа и подготви предложение.',
   'reviewWorkflow.hero.introLimited':
-    'OfficePilot запази документа. Моля, проверете относителното съпоставяне.',
+    'OfficeTakt запази документа. Моля, проверете относителното съпоставяне.',
   'reviewWorkflow.hero.introAdvertisement':
-    'OfficePilot откри реклама. Моля, решете дали да запазите документа.',
+    'OfficeTakt откри реклама. Моля, решете дали да запазите документа.',
   'reviewWorkflow.hero.documentType': 'Вид документ',
   'reviewWorkflow.hero.customer': 'Клиент',
   'reviewWorkflow.hero.site': 'Обект',
   'reviewWorkflow.hero.sender': 'Подател',
   'reviewWorkflow.hero.unknown': 'Неизвестно',
-  'reviewWorkflow.recommend.title': 'OfficePilot препоръчва',
+  'reviewWorkflow.recommend.title': 'OfficeTakt препоръчва',
   'reviewWorkflow.recommend.createOrder': 'Създаване на поръчка',
   'reviewWorkflow.recommend.writeInvoice': 'Изписване на фактура',
   'reviewWorkflow.recommend.monitorDeadline': 'Наблюдение на срок',

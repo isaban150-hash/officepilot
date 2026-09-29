@@ -24,6 +24,12 @@ export const COMPANY_PROFILE_TEXT_LIMITS = {
   /** EMAIL-01B4 — wie die Delivery-Grenzen des Servers (Betreff 255, Text 20000). */
   defaultInvoiceEmailSubject: 255,
   defaultInvoiceEmailBody: 20000,
+  /** E-MAIL-07C — dieselben Grenzen für Angebots-/Briefvorlagen; Signatur wie ein Freitext. */
+  defaultOfferEmailSubject: 255,
+  defaultOfferEmailBody: 20000,
+  defaultLetterEmailSubject: 255,
+  defaultLetterEmailBody: 20000,
+  emailSignature: 2000,
 } as const;
 
 export const TAX_STATUS_VALUES: readonly TaxStatus[] = [
@@ -39,7 +45,36 @@ export function isTaxStatus(value: unknown): value is TaxStatus {
   return typeof value === 'string' && (TAX_STATUS_VALUES as readonly string[]).includes(value);
 }
 
-const TEXT_FIELDS = ['accountHolder', 'defaultIntroText', 'defaultClosingText', 'defaultInvoiceEmailSubject', 'defaultInvoiceEmailBody', 'senderDisplayName'] as const;
+const TEXT_FIELDS = [
+  'accountHolder',
+  'defaultIntroText',
+  'defaultClosingText',
+  'defaultInvoiceEmailSubject',
+  'defaultInvoiceEmailBody',
+  'senderDisplayName',
+  // E-MAIL-07C
+  'defaultOfferEmailSubject',
+  'defaultOfferEmailBody',
+  'defaultLetterEmailSubject',
+  'defaultLetterEmailBody',
+  'emailSignature',
+] as const;
+
+/**
+ * E-MAIL-07C — E-Mail-Vorlagen und Signatur: leer bedeutet „die Vorgabe
+ * verwenden". Ein leerer Text wird deshalb nicht gespeichert, sondern der
+ * Schlüssel entfernt — sonst stünde nach dem Leeren ein anderer Bestand als
+ * vor dem ersten Speichern, obwohl beides dasselbe bedeutet.
+ */
+const EMPTY_MEANS_UNSET_FIELDS: ReadonlySet<string> = new Set([
+  'defaultInvoiceEmailSubject',
+  'defaultInvoiceEmailBody',
+  'defaultOfferEmailSubject',
+  'defaultOfferEmailBody',
+  'defaultLetterEmailSubject',
+  'defaultLetterEmailBody',
+  'emailSignature',
+]);
 
 /**
  * PRODUCT-BASIS-FIRMENPROFIL-01B — Schema-Version des Profil-Payloads.
@@ -86,6 +121,8 @@ export function applyCompanyProfileSettingsContract<T extends Record<string, unk
       continue;
     }
     next[field] = value.trim();
+    // E-MAIL-07C — leere Vorlage/Signatur heisst „Vorgabe verwenden": kein leerer Schlüssel.
+    if (next[field] === '' && EMPTY_MEANS_UNSET_FIELDS.has(field)) delete next[field];
   }
 
   if ('defaultTaxStatus' in next && !isTaxStatus(next.defaultTaxStatus)) {

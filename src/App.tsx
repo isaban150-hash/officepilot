@@ -47,6 +47,9 @@ import { MehrPage } from './pages/MehrPage';
 import { FinanzenPage } from './pages/FinanzenPage';
 import { PapierarchivPage } from './pages/PapierarchivPage';
 import { KommunikationPage } from './pages/KommunikationPage';
+import { KommunikationEmailComposePage } from './pages/KommunikationEmailComposePage';
+import { KommunikationEmailDetailPage } from './pages/KommunikationEmailDetailPage';
+import { KommunikationInboundEmailPage } from './pages/KommunikationInboundEmailPage';
 import { InvoiceDetailPage } from './pages/InvoiceDetailPage';
 import { OffeneRechnungenPage } from './pages/OffeneRechnungenPage';
 import { ManualInvoicePage } from './pages/ManualInvoicePage';
@@ -229,6 +232,11 @@ function AppRoutes() {
         <Route path="/papierarchiv" element={<PapierarchivPage />} />
         <Route path="/assistent" element={<AssistentPage />} />
         <Route path="/kommunikation" element={<KommunikationPage />} />
+        {/* E-MAIL-07D — freie Geschäfts-E-Mail. */}
+        <Route path="/kommunikation/email/neu" element={<KommunikationEmailComposePage />} />
+        <Route path="/kommunikation/email/:id" element={<KommunikationEmailDetailPage />} />
+        {/* E-MAIL-07E — eingegangene E-Mail. */}
+        <Route path="/kommunikation/eingang/:id" element={<KommunikationInboundEmailPage />} />
         <Route path="/wissen" element={<WissenPage />} />
         <Route path="/einstellungen" element={<EinstellungenPage />} />
         {/* SETTINGS-01B2 — kanonische Firmenprofil-Seite; /firmendaten ist Alias (ohne Hash) bzw. Legacy (mit Hash). */}

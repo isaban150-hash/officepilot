@@ -1,3 +1,4 @@
+import { countLabel } from '../../utils/germanCount';
 import type {
   FinanceAnalysis,
   FinanceAnalysisSummary,
@@ -149,7 +150,7 @@ function resolveReverseChargeQuestion(session: CompanySessionContext): FinanceKn
   return buildTaxAnswer(
     'Reverse Charge / §13b',
     bullets,
-    'Reverse Charge verschiebt die Umsatzsteuerschuld auf den Leistungsempfänger. OfficePilot ersetzt keine Steuerberatung.',
+    'Reverse Charge verschiebt die Umsatzsteuerschuld auf den Leistungsempfänger. OfficeTakt ersetzt keine Steuerberatung.',
   );
 }
 
@@ -240,7 +241,7 @@ export function tryResolveFinanceQuestion(
       analysis,
       'Zahlungsfristen',
       overdueRisks.length > 0
-        ? `Ich habe ${overdueRisks.length} überfällige Rechnung(en) auf Basis Ihrer Daten erkannt.`
+        ? `Ich habe ${countLabel(overdueRisks.length, 'überfällige Rechnung', 'überfällige Rechnungen')} auf Basis Ihrer Daten erkannt.`
         : 'Auf Basis vorhandener Daten sind keine überfälligen Rechnungen erkannt.',
     );
   }
@@ -278,7 +279,7 @@ export function tryResolveFinanceQuestion(
       analysis,
       'Dublettenprüfung',
       dupRisks.length > 0
-        ? `Ich habe ${dupRisks.length} mögliche Dublette(n) erkannt – bitte manuell prüfen.`
+        ? `Ich habe ${countLabel(dupRisks.length, 'mögliche Dublette', 'mögliche Dubletten')} erkannt – bitte manuell prüfen.`
         : 'Auf Basis vorhandener Daten sind keine Dubletten erkannt.',
     );
   }

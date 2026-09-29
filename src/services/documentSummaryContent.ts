@@ -1,3 +1,5 @@
+import { formatRecognizedMoneyText } from '../utils/moneyText';
+
 /**
  * DOCUMENT-SUMMARY-CONTENT — fact prioritization + first-screen truncation.
  * Presentation only. Does not change DocumentSummary model or pipeline sources.
@@ -327,6 +329,10 @@ export function formatSummaryFactValue(id: string, value: string): string {
   }
   if (id === 'vorgang') {
     return preferVorgangFactValue(trimmed) ?? '';
+  }
+  // BROWSER-ACCEPTANCE-FIX 01 / C5 — sichere Euro-Beträge einheitlich, Rohtext sonst unverändert.
+  if (id === 'amount' || id === 'orderValue') {
+    return truncateSummaryFactText(formatRecognizedMoneyText(trimmed));
   }
   return truncateSummaryFactText(trimmed);
 }

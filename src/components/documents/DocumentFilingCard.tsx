@@ -91,8 +91,14 @@ export function DocumentFilingCard({
           <h3 className="detail-experience-section__label">
             {translate('document.filing.digital')}
           </h3>
-          <p className="detail-experience-section__value" data-testid="document-filing-digital-path">
-            <span className="document-filing-card__digital-name">{digitalName}</span>
+          {/*
+            * BROWSER-ACCEPTANCE-FIX 01 / C3 — <div> statt <p>: <details> darf
+            * nicht in einem Absatz stehen. Der Screenreader hört den Namen
+            * einmal (samt Pfad, ohne Aufklappen) über den sr-only-Text; der
+            * sichtbare Name ist dafür für ihn ausgeblendet.
+            */}
+          <div className="detail-experience-section__value" data-testid="document-filing-digital-path">
+            <span className="document-filing-card__digital-name" aria-hidden="true">{digitalName}</span>
             {digitalPathRaw ? (
               <details className="work-path-details">
                 <summary>{translate('document.filing.pathDetails')}</summary>
@@ -100,7 +106,7 @@ export function DocumentFilingCard({
               </details>
             ) : null}
             <span className="sr-only">{digitalPath}</span>
-          </p>
+          </div>
         </section>
 
         {/*

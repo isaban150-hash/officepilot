@@ -1,9 +1,9 @@
 export const deScan = {
   'heute.scanButton': 'Foto / Scan',
   'scan.title': 'Scan',
-  'scan.subtitle': 'Foto oder PDF – OfficePilot sortiert und legt ab.',
+  'scan.subtitle': 'Foto oder PDF – OfficeTakt sortiert und legt ab.',
   'scan.captureTitle': 'Dokument erfassen',
-  'scan.captureHint': 'Foto aufnehmen oder Datei wählen. OfficePilot erkennt den Inhalt.',
+  'scan.captureHint': 'Foto aufnehmen oder Datei wählen. OfficeTakt erkennt den Inhalt.',
   'scan.selectType': 'Art wählen (optional)',
   'scan.typeAuto': 'Automatisch erkennen',
   'scan.uploadFile': 'Datei wählen',

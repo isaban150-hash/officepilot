@@ -254,7 +254,7 @@ function buildNextSteps(
     !isGeneratedOutgoingInvoiceDocument(document) &&
     (memory?.paperFolder?.folderId || document.paperFolder?.folderId)
   ) {
-    steps.push('Original im Papierordner abheften und in OfficePilot bestätigen.');
+    steps.push('Original im Papierordner abheften und in OfficeTakt bestätigen.');
   }
 
   if (missingProofs.length > 0) {
@@ -323,6 +323,8 @@ function resolveExplanationContext(ref: DocumentExplanationRef): {
 }
 
 interface GeneratedInvoiceOverlay {
+  /** BROWSER-ACCEPTANCE-FIX 01 / A3 — dieselbe Antwort, als Ja/Nein/unklar. */
+  actionNeed: 'yes' | 'no' | 'unclear';
   deadline: string;
   actionRequired: string;
   recommendation: string;
@@ -356,6 +358,7 @@ function buildGeneratedInvoiceOverlay(
   const invoice = document.linkedInvoiceId ? findInvoiceById(document.linkedInvoiceId) : undefined;
   if (!invoice) {
     return {
+      actionNeed: 'unclear',
       deadline: translate('document.ownInvoice.deadline.unknown'),
       actionRequired: translate('document.ownInvoice.action.unknown'),
       recommendation: translate('document.ownInvoice.recommendation.unknown'),
@@ -373,6 +376,7 @@ function buildGeneratedInvoiceOverlay(
 
   if (status === 'storniert') {
     return {
+      actionNeed: 'no',
       deadline: translate('document.ownInvoice.deadline.cancelled'),
       actionRequired: translate('document.ownInvoice.action.cancelled'),
       recommendation: translate('document.ownInvoice.recommendation.cancelled'),
@@ -383,6 +387,7 @@ function buildGeneratedInvoiceOverlay(
   }
   if (status === 'bezahlt') {
     return {
+      actionNeed: 'no',
       deadline: translate('document.ownInvoice.deadline.paid'),
       actionRequired: translate('document.ownInvoice.action.paid'),
       recommendation: translate('document.ownInvoice.recommendation.paid'),
@@ -394,6 +399,7 @@ function buildGeneratedInvoiceOverlay(
   const overdue = status === 'ueberfaellig';
   const partial = status === 'teilbezahlt';
   return {
+    actionNeed: 'yes',
     deadline,
     actionRequired: overdue
       ? translate('document.ownInvoice.action.overdue')
@@ -406,6 +412,32 @@ function buildGeneratedInvoiceOverlay(
     nextSteps: [overdue ? translate('document.ownInvoice.step.overdue') : translate('document.ownInvoice.step.open')],
     risk: overdue ? translate('document.understanding.risk.medium') : translate('document.understanding.risk.low'),
     understandingStatus: 'understood',
+  };
+}
+
+/**
+ * BROWSER-ACCEPTANCE-FIX 01 / A3 — die Handlungsaussage einer eigenen
+ * Ausgangsrechnung, aus derselben Rechnungswahrheit wie die Erklärung.
+ *
+ * Der Verstehen-Bereich darf dazu nichts Eigenes behaupten: Stünde dort
+ * „Nicht sicher erkannt" und direkt darunter „Ja – Zahlungseingang
+ * überwachen", widerspräche sich die Seite. Beide lesen deshalb hier.
+ */
+export function describeGeneratedInvoiceAction(
+  document: CompanyDocument,
+  todayIso: string = getTodayIso(),
+): { need: 'yes' | 'no' | 'unclear'; text: string; nextStep: string } {
+  const language = getCachedSetup()?.language;
+  const overlay = buildGeneratedInvoiceOverlay(
+    document,
+    createPresentationTranslate(language),
+    language,
+    todayIso,
+  );
+  return {
+    need: overlay.actionNeed,
+    text: overlay.actionRequired,
+    nextStep: overlay.nextSteps[0] ?? '',
   };
 }
 

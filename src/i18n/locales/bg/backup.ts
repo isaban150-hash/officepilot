@@ -18,9 +18,9 @@ export const bgBackup = {
   'backup.validate.fileCount': 'Брой файлове',
   'backup.validate.totalSize': 'Общ размер',
   'backup.validate.replaceHint':
-    'Възстановяването заменя всички локални данни на OfficePilot в този браузър.',
+    'Възстановяването заменя всички локални данни на OfficeTakt в този браузър.',
 
-  'backup.validate.error.invalid': 'Файлът не е валидно резервно копие на OfficePilot.',
+  'backup.validate.error.invalid': 'Файлът не е валидно резервно копие на OfficeTakt.',
   'backup.validate.error.tooLarge': 'Файлът е твърде голям и не може да бъде проверен.',
   'backup.validate.error.structure':
     'Структурата на резервното копие е невалидна или непълна.',
@@ -38,7 +38,7 @@ export const bgBackup = {
     'Резервното копие надвишава допустимите граници за размер или брой.',
 
   'backup.restore.confirm':
-    'Разбирам, че всички локални данни на OfficePilot в този браузър ще бъдат заменени.',
+    'Разбирам, че всички локални данни на OfficeTakt в този браузър ще бъдат заменени.',
   'backup.restore.action': 'Възстановяване на резервно копие',
   'backup.restore.success': 'Възстановяването завърши. Страницата ще се презареди.',
   'backup.restore.phase.safety': 'Създава се резервно копие за безопасност …',

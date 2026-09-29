@@ -856,6 +856,22 @@ export interface CompanyProfile {
    */
   defaultInvoiceEmailSubject?: string;
   defaultInvoiceEmailBody?: string;
+  /**
+   * E-MAIL-07C — Vorlagen für Angebots- und Brief-E-Mails (Vorbelegung eines
+   * neuen Versandentwurfs; Platzhalter {{companyName}}, {{customerName}},
+   * {{documentTitle}}, {{documentNumber}} je nach Dokumentart). Fehlend →
+   * neutrale Vorgabe. Die Rechnungsvorlage bleibt `defaultInvoiceEmail*`.
+   */
+  defaultOfferEmailSubject?: string;
+  defaultOfferEmailBody?: string;
+  defaultLetterEmailSubject?: string;
+  defaultLetterEmailBody?: string;
+  /**
+   * E-MAIL-07C — zentrale Geschäftssignatur (Klartext, mehrzeilig). Wird beim
+   * Öffnen eines neuen Versandentwurfs genau einmal angehängt. Fehlend → aus
+   * den Firmendaten abgeleitet.
+   */
+  emailSignature?: string;
   managingDirector?: string;
   taxFreeNotice?: string;
   invoiceFooterNotes: string;

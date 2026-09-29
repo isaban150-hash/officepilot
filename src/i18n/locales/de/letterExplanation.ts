@@ -1,6 +1,6 @@
 export const deLetterExplanation = {
   'letter.explain.intro':
-    'OfficePilot erklärt das Schreiben in einfacher Sprache. Bitte prüfen Sie wichtige Angaben im Original.',
+    'OfficeTakt erklärt das Schreiben in einfacher Sprache. Bitte prüfen Sie wichtige Angaben im Original.',
   'letter.explain.uncertainHint':
     'Bitte prüfen Sie das Original oder fragen Sie Ihren Steuerberater.',
   'letter.explain.about.brief':

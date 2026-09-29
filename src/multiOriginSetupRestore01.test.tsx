@@ -283,7 +283,7 @@ describe('OFFICEPILOT-MULTI-ORIGIN-SETUP-01B2/01B3', () => {
     expect(container.querySelector('[data-testid="first-run-wizard"]')).toBeNull();
     expect(container.querySelector('[data-testid="app-shell"]')).toBeNull();
     expect(container.textContent).toContain('Ihre Firmendaten konnten nicht geladen werden');
-    expect(container.textContent).toContain('OfficePilot startet deshalb keine neue Einrichtung');
+    expect(container.textContent).toContain('OfficeTakt startet deshalb keine neue Einrichtung');
     expect(container.textContent).not.toContain('nicht verloren');
   });
 

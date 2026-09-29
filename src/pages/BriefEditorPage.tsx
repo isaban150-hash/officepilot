@@ -7,6 +7,7 @@
  * Anschrift gehört ab hier zum Brief, nicht mehr zum Kundenstamm.
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { buildCustomerOptionLabels } from '../services/customer/customerOptionLabels';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { isLetterDraftPrefill } from '../services/document/documentReplyBridgeService';
 import { Button } from '../components/ui/Button';
@@ -70,6 +71,11 @@ export function BriefEditorPage() {
 
   const vorhandener = letterId ? getBusinessLetterById(letterId) : null;
   const kunden = useMemo(() => getCustomerStoreSnapshot(), []);
+  // E-MAIL-HALBZEIT-FIX B5 — gleichnamige Kunden unterscheidbar (nur Anzeige).
+  const kundenLabels = useMemo(
+    () => buildCustomerOptionLabels(kunden, { created: translate('customer.option.created'), id: translate('customer.option.id') }),
+    [kunden, translate],
+  );
   const vorgaenge = useMemo(() => getAllVorgaenge(), []);
 
   /* Vorbelegung aus dem Einstieg: Kunde oder Auftrag. */
@@ -283,7 +289,7 @@ export function BriefEditorPage() {
               <option value="">{translate('businessLetter.editor.customerPlaceholder')}</option>
               {kunden.map((kunde) => (
                 <option key={kunde.id} value={kunde.id}>
-                  {kunde.name}
+                  {kundenLabels.get(kunde.id) ?? kunde.name}
                 </option>
               ))}
             </select>

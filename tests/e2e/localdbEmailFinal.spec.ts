@@ -206,7 +206,7 @@ test.describe('EMAIL-FINAL — Gesamtkette (lokal, Stub)', () => {
     await sendThroughDialog(page);
     await expect(page.getByTestId('invoice-delivery-status').first()).toHaveText('An E-Mail-Dienst übergeben');
     await expect(page.getByTestId('invoice-delivery-panel')).not.toContainText('Zugestellt');
-    await expect(page.getByTestId('invoice-delivery-source')).toContainText('Per OfficePilot versendet');
+    await expect(page.getByTestId('invoice-delivery-source')).toContainText('Per OfficeTakt versendet');
     await expectNoOverflow(page, 'Vorgangsrechnung nach Versand');
 
     const sent = await deliveries(invoiceId);
@@ -304,7 +304,7 @@ test.describe('EMAIL-FINAL — Gesamtkette (lokal, Stub)', () => {
     await expect(page.getByTestId('send-document-confirm-resend')).toHaveCount(0);
     await expect(page.getByTestId('send-document-dialog')).toHaveCount(0, { timeout: 60_000 });
     await expect(page.getByTestId('invoice-delivery-status').first()).toHaveText('An E-Mail-Dienst übergeben');
-    await expect(page.getByTestId('invoice-delivery-source')).toContainText('Per OfficePilot versendet');
+    await expect(page.getByTestId('invoice-delivery-source')).toContainText('Per OfficeTakt versendet');
     await expect(page.getByTestId('invoice-delivery-manual-prior')).toBeVisible();
     const sent = await deliveries(invoiceId);
     expect(sent).toHaveLength(1);
@@ -333,8 +333,9 @@ test.describe('EMAIL-FINAL — Gesamtkette (lokal, Stub)', () => {
     await expect(page.getByTestId('invoice-delivery-send')).toHaveText('Erneut per E-Mail senden', { timeout: 30_000 });
     await page.getByTestId('invoice-delivery-send').scrollIntoViewIfNeeded();
     await page.getByTestId('invoice-delivery-send').click();
-    await page.getByTestId('send-document-send').click();
-    await expect(page.getByTestId('send-document-confirm-resend')).toBeVisible();
+    // HALBZEIT-FIX B2 — Duplikatwarnung als App-Dialog VOR dem Versanddialog.
+    await expect(page.getByTestId('invoice-delivery-resend-warning')).toBeVisible();
+    await page.getByTestId('invoice-delivery-resend-warning-confirm').click();
     await page.getByTestId('send-document-send').dblclick();
     await expect(page.getByTestId('send-document-dialog')).toHaveCount(0, { timeout: 60_000 });
     expect(await deliveries(invoiceId)).toHaveLength(2);

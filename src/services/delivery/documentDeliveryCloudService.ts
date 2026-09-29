@@ -4,6 +4,8 @@ import { generateApprovedInvoicePdf, generateInvoiceCorrectionPdf } from '../inv
 import { deliveryIdentityDocumentId, isInvoiceDeliveryIdentity, type ArchivedDocumentDeliveryKind, type DeliveryDocumentIdentity, type DeliveryProvider, type DocumentDelivery } from '../../types/documentDelivery';
 import type { CompanyDocument, VorgangInvoice } from '../../types/models';
 import { resolveDocumentFileRepresentation } from '../documentFileRepresentationReadService';
+import { getDocumentFileRepresentationBindingStoreSnapshot } from '../documentFileRepresentationBindingStoreService';
+import { getSyncOutboxSnapshot } from '../sync/syncOutboxService';
 import { getDocumentFileBlob, getDocumentFileRefById } from '../documentFileStoreService';
 import {
   DELIVERY_ATTACHMENT_BUCKET,
@@ -84,8 +86,13 @@ function mapStorageError(error: { message?: string; statusCode?: string | number
  * V1-B2 — Versandart eines archivierten Dokuments: dieselbe Ableitung wie
  * serverseitig (brief → letter, angebot → offer, sonst other). Der Server
  * lehnt eine abweichende Art ab.
+ *
+ * E-MAIL-07B — ein selbst verfasster Geschäftsbrief (`linkedLetterId`) ist
+ * immer ein Brief. Sein Archiveintrag ist bewusst als „schriftverkehr"
+ * klassifiziert (Ablage), und landete dadurch bis 07B unter `other`.
  */
-export function resolveArchivedDocumentDeliveryKind(document: Pick<CompanyDocument, 'classifiedKind'>): ArchivedDocumentDeliveryKind {
+export function resolveArchivedDocumentDeliveryKind(document: Pick<CompanyDocument, 'classifiedKind' | 'linkedLetterId'>): ArchivedDocumentDeliveryKind {
+  if (document.linkedLetterId?.trim()) return 'letter';
   if (document.classifiedKind === 'brief') return 'letter';
   if (document.classifiedKind === 'angebot') return 'offer';
   return 'other';
@@ -95,14 +102,32 @@ export type PrepareArchivedDocumentAttachmentResult =
   | { ok: true; attachment: PreparedDeliveryAttachment }
   | { ok: false; reason: 'document_missing' | 'no_pdf' | 'file_unavailable' | 'too_large' };
 
-function attachmentFilenameFor(document: Pick<CompanyDocument, 'title' | 'originalFileName'>): string {
+/**
+ * E-MAIL-07B — der **eine** Anhangsname eines archivierten Dokuments: derselbe
+ * Wert steht im Versanddialog und geht an den Server. Nur Zeichen, die die
+ * serverseitige Prüfung zulässt (`^[A-Za-z0-9][A-Za-z0-9 ._-]{0,127}\.pdf$`);
+ * Pfadtrenner und Umlaute werden ersetzt, ein Pfad kann nie entstehen.
+ */
+const FILENAME_TRANSLITERATION: Record<string, string> = {
+  ä: 'ae', ö: 'oe', ü: 'ue', Ä: 'Ae', Ö: 'Oe', Ü: 'Ue', ß: 'ss', '–': '-', '—': '-',
+};
+
+export function buildArchivedDocumentAttachmentFilename(document: Pick<CompanyDocument, 'title' | 'originalFileName'>): string {
   const base = (document.title || document.originalFileName || 'Dokument')
     .replace(/\.pdf$/i, '')
+    // Lesbar statt Unterstrich: dieselbe Umschrift wie beim Brief-Dateinamen.
+    .replace(/[äöüÄÖÜß–—]/g, (zeichen) => FILENAME_TRANSLITERATION[zeichen] ?? '_')
     .replace(/[^A-Za-z0-9 ._-]+/g, '_')
     .replace(/^[^A-Za-z0-9]+/, '')
     .slice(0, 120)
     .trim();
   return `${base || 'Dokument'}.pdf`;
+}
+
+function isCommittedPdfRef(refId: string | undefined): string | null {
+  if (!refId) return null;
+  const ref = getDocumentFileRefById(refId);
+  return ref && ref.mimeType === 'application/pdf' && ref.lifecycleStatus === 'committed' ? ref.id : null;
 }
 
 /**
@@ -111,11 +136,38 @@ function attachmentFilenameFor(document: Pick<CompanyDocument, 'title' | 'origin
  * Kein Rendern, keine Konvertierung hier — nur die bereits gebundene Datei-
  * Wahrheit, die der Server über die Bindings gegenprüft. Synchron nutzbar
  * für die Frage „versendbar?“, die Bytes lädt `prepareArchivedDocumentDeliveryAttachment`.
+ *
+ * E-MAIL-07B — bis hierher prüfte die Funktion entgegen ihrer Beschreibung
+ * nur das Original: Ein Foto mit gültigem Archiv-PDF galt als „keine PDF-Datei".
+ * Ein Bild selbst wird nie als PDF behandelt — nur eine gebundene, fertige
+ * PDF-Datei zählt.
  */
 export function findArchivedDocumentPdfFileRefId(document: Pick<CompanyDocument, 'id' | 'fileRefId' | 'mimeType'>): string | null {
-  const original = document.fileRefId ? getDocumentFileRefById(document.fileRefId) : undefined;
-  if (original && original.mimeType === 'application/pdf' && original.lifecycleStatus === 'committed') return original.id;
-  return null;
+  const archiveBinding = getDocumentFileRepresentationBindingStoreSnapshot().find(
+    (binding) => binding.documentId === document.id && binding.kind === 'archive',
+  );
+  return isCommittedPdfRef(archiveBinding?.fileRefId) ?? isCommittedPdfRef(document.fileRefId);
+}
+
+/**
+ * 07B-FIX2 — steckt der Cloud-Stand dieses Dokuments fest? Ein blockierter
+ * Sync-Auftrag für das Dokument, seine Datei oder seine Dateibindung heißt:
+ * Lokaler und Cloud-Stand sind uneins, eine Entscheidung steht aus. Dann wird
+ * nicht gesendet — ein Versand darf keinen Konflikt „heilen" und kein PDF
+ * verschicken, dessen Online-Stand ungeklärt ist.
+ */
+export function isArchivedDocumentSyncBlocked(document: Pick<CompanyDocument, 'id' | 'fileRefId'>): boolean {
+  const archiveBinding = getDocumentFileRepresentationBindingStoreSnapshot().find(
+    (binding) => binding.documentId === document.id && binding.kind === 'archive',
+  );
+  const fileRefIds = new Set([document.fileRefId, archiveBinding?.fileRefId].filter((id): id is string => Boolean(id)));
+  return getSyncOutboxSnapshot().some(
+    (entry) =>
+      entry.status === 'blocked' &&
+      ((entry.entityType === 'document' && entry.entityId === document.id) ||
+        (entry.entityType === 'document_file_binding' && entry.entityId.startsWith(`${document.id}|`)) ||
+        (entry.entityType === 'document_file' && fileRefIds.has(entry.entityId))),
+  );
 }
 
 export async function prepareArchivedDocumentDeliveryAttachment(
@@ -128,7 +180,7 @@ export async function prepareArchivedDocumentDeliveryAttachment(
   if (archive && archive.kind === 'ready' && archive.fileRef.mimeType === 'application/pdf') {
     blob = archive.blob;
   } else {
-    const refId = findArchivedDocumentPdfFileRefId(document);
+    const refId = isCommittedPdfRef(document.fileRefId);
     if (!refId) return { ok: false, reason: 'no_pdf' };
     blob = await getDocumentFileBlob(refId);
     if (!blob) return { ok: false, reason: 'file_unavailable' };
@@ -139,7 +191,7 @@ export async function prepareArchivedDocumentDeliveryAttachment(
   if (bytes.byteLength > DELIVERY_ATTACHMENT_MAX_BYTES) return { ok: false, reason: 'too_large' };
   return {
     ok: true,
-    attachment: { bytes, filename: attachmentFilenameFor(document), sha256: await sha256Hex(bytes), sizeBytes: bytes.byteLength, mimeType: 'application/pdf' },
+    attachment: { bytes, filename: buildArchivedDocumentAttachmentFilename(document), sha256: await sha256Hex(bytes), sizeBytes: bytes.byteLength, mimeType: 'application/pdf' },
   };
 }
 
@@ -182,6 +234,43 @@ export interface CreateDocumentDeliveryInput {
   attachment: { storagePath: string; sha256: string; sizeBytes: number; filename: string };
   provider: DeliveryProvider;
   retryOfDeliveryId?: string;
+  /**
+   * E-MAIL-07B — ausdrücklich bestätigter Neuversuch nach `unknown`. Wird nur
+   * mitgeschickt, wenn er gesetzt ist; der Server prüft ihn selbst.
+   */
+  confirmUncertainRetry?: boolean;
+  /**
+   * E-MAIL-07C — Kunden-/Vorgangskontext (echte Kennungen). Der Server prüft,
+   * dass beide zum Workspace gehören.
+   */
+  context?: { customerId?: string; vorgangId?: string };
+}
+
+/**
+ * E-MAIL-07C — fehlt die Kontext-RPC in der Cloud noch (Migration
+ * 20261011120000 nicht angewendet), antwortet PostgREST mit PGRST202, ohne
+ * irgendetwas auszuführen. Nur dann — und nur dann — wird derselbe Auftrag
+ * über den unveränderten 07B-Weg angelegt; idempotent über die
+ * client_delivery_id, also ohne Doppelanlage.
+ */
+function isMissingRpcFunction(error: { code?: string; message?: string }): boolean {
+  return error.code === 'PGRST202' || /could not find the function/i.test(error.message ?? '');
+}
+
+/**
+ * E-MAIL-07C — der Server hat nur den **Kontext** abgelehnt (z. B. ein eben
+ * lokal angelegter Kunde ist noch nicht in der Cloud). Die Prüfung läuft vor
+ * jeder Anlage; es entstand nichts. Der Versand darf daran nicht scheitern —
+ * er wird ohne Kontext angelegt, die Historie ordnet ihn weiter über das
+ * Dokument zu. Gespeichert wird nie ein falscher Kontext.
+ */
+function isRejectedContextOnly(error: { message?: string }): boolean {
+  const lower = (error.message ?? '').toLowerCase();
+  return (
+    lower.includes('customer_id gehoert nicht zum workspace') ||
+    lower.includes('vorgang_id gehoert nicht zum workspace') ||
+    lower.includes('vorgang_id passt nicht zur rechnung')
+  );
 }
 
 export type CreateDocumentDeliveryResult =
@@ -196,6 +285,9 @@ export type CreateDocumentDeliveryResult =
         | 'not_found'
         | 'not_sendable'
         | 'uncertain_pending'
+        | 'uncertain_retry_exists'
+        | 'rate_limited'
+        | 'attachment_not_synced'
         | 'invalid_response'
         | 'rpc_failed';
       message?: string;
@@ -204,6 +296,18 @@ export type CreateDocumentDeliveryResult =
 function classifyRpcError(message: string): Exclude<CreateDocumentDeliveryResult, { ok: true }>['error'] {
   const lower = message.toLowerCase();
   if (lower.includes('idempotenzkonflikt')) return 'idempotency_conflict';
+  // E-MAIL-07B — Missbrauchsschutz und „ein Neuversuch je unklarem Versuch".
+  if (lower.includes('versandlimit')) return 'rate_limited';
+  if (lower.includes('bereits angelegt')) return 'uncertain_retry_exists';
+  /*
+   * 07B-FIX1 — der Server kennt das Dokument bzw. dessen PDF-Bindung (noch)
+   * nicht. Das heißt nicht „es gibt kein PDF": Das Archivdokument und seine
+   * Datei kommen erst über den Sync in die Cloud. Bis 07B-FIX1 erschien hier
+   * „keine versendbare PDF-Datei" — neben einem sichtbaren PDF-Anhang.
+   */
+  if (lower.includes('anhang gehoert nicht zu diesem dokument') || lower.includes('dokument nicht gefunden')) {
+    return 'attachment_not_synced';
+  }
   if (lower.includes('kein zugriff') || lower.includes('schreibberechtigung') || lower.includes('nicht angemeldet')) {
     return 'forbidden';
   }
@@ -227,7 +331,7 @@ export async function rpcCreateWorkspaceDocumentDelivery(
   if (!supabase) return { ok: false, error: 'not_configured' };
   if (!isValidRecipientEmail(input.recipientEmail)) return { ok: false, error: 'invalid_recipient' };
 
-  const { data, error } = await supabase.rpc('create_workspace_document_delivery', {
+  const baseArgs = {
     p_workspace_id: input.workspaceId,
     p_client_delivery_id: input.clientDeliveryId,
     p_document_kind: input.identity.kind,
@@ -244,7 +348,22 @@ export async function rpcCreateWorkspaceDocumentDelivery(
     p_provider: input.provider,
     p_retry_of_delivery_id: input.retryOfDeliveryId ?? null,
     p_linked_document_id: isInvoiceDeliveryIdentity(input.identity) ? null : input.identity.clientDocumentId,
-  });
+    // Nur wenn gesetzt: ein gewöhnlicher Versand trägt den Parameter gar nicht.
+    ...(input.confirmUncertainRetry ? { p_confirm_uncertain_retry: true } : {}),
+  };
+  const customerId = input.context?.customerId?.trim() || null;
+  const vorgangId = input.context?.vorgangId?.trim() || null;
+  let { data, error } =
+    customerId || vorgangId
+      ? await supabase.rpc('create_workspace_document_delivery_with_context', {
+          ...baseArgs,
+          p_customer_id: customerId,
+          p_vorgang_id: vorgangId,
+        })
+      : await supabase.rpc('create_workspace_document_delivery', baseArgs);
+  if (error && (customerId || vorgangId) && (isMissingRpcFunction(error) || isRejectedContextOnly(error))) {
+    ({ data, error } = await supabase.rpc('create_workspace_document_delivery', baseArgs));
+  }
   if (error) return { ok: false, error: classifyRpcError(error.message ?? ''), message: error.message };
 
   const envelope = (data ?? null) as { outcome?: unknown; delivery?: unknown } | null;

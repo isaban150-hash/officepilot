@@ -7,7 +7,12 @@ import type {
 } from '../types/officeSearch';
 import type { AssistantAction, AssistantAnswer } from '../types/models';
 import { getCommunicationEvents } from './communicationHistoryService';
-import { searchDocuments } from './documentService';
+import { isGeneratedOutgoingInvoiceDocument, searchDocuments } from './documentService';
+import { getCustomerStoreSnapshot } from './customerStoreService';
+import { findInvoiceById } from './invoice/invoiceRegistryService';
+import { isEntitySyncActive } from './sync/syncMetaService';
+import type { EmailMessage } from '../types/emailMessage';
+import { formatDisplayDatePadded, formatDisplayDateTime } from '../utils/displayFormat';
 import { getOpenDocumentLifecycleItems } from './documentLifecycleService';
 import { searchExpenses } from './expenseService';
 import { getInboxExtractedDocumentText } from './inboxDocumentText';
@@ -51,6 +56,8 @@ const TYPE_BASE_SCORE: Record<SearchResultType, number> = {
   expense: 50,
   communication: 45,
   task: 40,
+  customer: 60,
+  email: 60,
 };
 
 const TYPE_ICON: Record<SearchResultType, string> = {
@@ -63,6 +70,8 @@ const TYPE_ICON: Record<SearchResultType, string> = {
   vorgang: '🏗️',
   task: '☑️',
   communication: '💬',
+  customer: '👤',
+  email: '✉️',
 };
 
 const TYPE_SOURCE_LABEL: Record<SearchResultType, string> = {
@@ -75,7 +84,83 @@ const TYPE_SOURCE_LABEL: Record<SearchResultType, string> = {
   vorgang: 'Auftrag',
   task: 'Aufgabe',
   communication: 'Kommunikation',
+  customer: 'Kunde',
+  email: 'E-Mail',
 };
+
+/**
+ * BROWSER-ACCEPTANCE-FIX 01 / A2 — Statuswerte in Klartext.
+ *
+ * Die Rohwerte (`ueberfaellig`, `in_bearbeitung`, `missing` …) bleiben in
+ * `status`, weil Filter sie prüfen. Angezeigt wird nur, was hier steht; ein
+ * unbekannter Wert wird nicht angezeigt statt roh durchgereicht.
+ */
+const STATUS_LABELS: Record<string, string> = {
+  offen: 'Offen',
+  teilbezahlt: 'Teilweise bezahlt',
+  bezahlt: 'Bezahlt',
+  ueberbezahlt: 'Überzahlt',
+  ueberfaellig: 'Überfällig',
+  storniert: 'Storniert',
+  gutschrift: 'Gutschrift',
+  neu: 'Neu',
+  eingegangen: 'Eingegangen',
+  in_pruefung: 'In Prüfung',
+  in_verhandlung: 'In Verhandlung',
+  beauftragt: 'Beauftragt',
+  in_bearbeitung: 'In Bearbeitung',
+  wartet: 'Wartet',
+  abgeschlossen: 'Abgeschlossen',
+  geprueft: 'Geprüft',
+  abgelegt: 'Abgelegt',
+  spaeter_klaeren: 'Später klären',
+  niedrig: 'Priorität niedrig',
+  mittel: 'Priorität mittel',
+  hoch: 'Priorität hoch',
+  kritisch: 'Priorität kritisch',
+  valid: 'Gültig',
+  expiring: 'Läuft bald ab',
+  expired: 'Abgelaufen',
+  missing: 'Fehlt',
+  pending: 'Wartet',
+  importing: 'Wird übernommen',
+  processed: 'Übernommen',
+  failed: 'Fehlgeschlagen',
+};
+
+const TECHNICAL_STATUS = /^[a-z0-9]+(?:_[a-z0-9]+)+$|^[a-z]+$/;
+
+export function searchStatusLabel(status: string | undefined): string | undefined {
+  if (!status) return undefined;
+  const known = STATUS_LABELS[status];
+  if (known) return known;
+  // Bereits lesbarer Text (z. B. „Antwort offen") bleibt; Rohwerte nicht.
+  return TECHNICAL_STATUS.test(status) ? undefined : status;
+}
+
+/**
+ * BROWSER-ACCEPTANCE-FIX 01 / A2 — deutsche Daten in Trefferzeilen.
+ * Nur echte Kalenderdaten (JJJJ-MM-TT); Rechnungsnummern wie „2026-0018"
+ * haben ein anderes Muster und bleiben unberührt.
+ */
+export function germanizeIsoDates(text: string): string {
+  return text.replace(
+    /\b(\d{4})-(\d{2})-(\d{2})(T[\d:.]+(?:Z|[+-]\d{2}:?\d{2})?)?(?![\d-])/g,
+    (match: string, year: string, month: string, day: string, time?: string) =>
+      // Mit Uhrzeit: in Ortszeit umrechnen, sonst kippt der Tag um Mitternacht.
+      time ? formatDisplayDatePadded(match) : `${day}.${month}.${year}`,
+  );
+}
+
+function presentResult(result: SearchResult): SearchResult {
+  return {
+    ...result,
+    title: germanizeIsoDates(result.title),
+    subtitle: germanizeIsoDates(result.subtitle),
+    snippet: germanizeIsoDates(result.snippet),
+    statusLabel: result.statusLabel ?? searchStatusLabel(result.status),
+  };
+}
 
 const PROOF_LABELS: Record<string, string> = {
   freistellungsbescheinigung: 'Freistellungsbescheinigung',
@@ -150,20 +235,63 @@ function createSnippet(text: string, query: string, maxLength = 120): string {
   return `${start > 0 ? '…' : ''}${trimmed.slice(start, end)}${end < trimmed.length ? '…' : ''}`;
 }
 
+/**
+ * BROWSER-ACCEPTANCE-FIX 01 / A2 — Relevanz.
+ *
+ * Bisher zählte der **erste** passende Begriff; weil Einzelwörter vor der
+ * ganzen Phrase stehen, bekam „AZ Testbau" für „Resume Testbau" dieselbe
+ * Bewertung wie „Resume Testbau GmbH". Jetzt zählt der beste Begriff, und
+ * zusätzlich:
+ *
+ *   * alle Wörter der Anfrage vorhanden  → +10
+ *   * die ganze Phrase vorhanden          → +20
+ *   * Hauptfeld (Name/Titel/Nummer) gleich der Anfrage → +40,
+ *     beginnt damit → +25, enthält sie → +15
+ *
+ * Schwache Teiltreffer bleiben sichtbar, stehen aber hinten.
+ */
 function matchTerms(
   haystack: string,
   terms: string[],
+  query = '',
+  primary: Array<string | null | undefined> = [],
 ): { matched: boolean; matchedField: string; boost: number } {
   if (!haystack) return { matched: false, matchedField: '', boost: 0 };
 
+  let best = { matched: false, matchedField: '', boost: 0 };
   for (const term of terms) {
     if (!term) continue;
-    if (haystack === term) return { matched: true, matchedField: 'Exakter Treffer', boost: 40 };
-    if (haystack.startsWith(term)) return { matched: true, matchedField: 'Titel/Nummer', boost: 30 };
-    if (haystack.includes(term)) return { matched: true, matchedField: 'Inhalt', boost: 15 };
+    const candidate =
+      haystack === term
+        ? { matched: true, matchedField: 'Exakter Treffer', boost: 40 }
+        : haystack.startsWith(term)
+          ? { matched: true, matchedField: 'Titel/Nummer', boost: 30 }
+          : haystack.includes(term)
+            ? { matched: true, matchedField: 'Inhalt', boost: 15 }
+            : null;
+    if (candidate && candidate.boost > best.boost) best = candidate;
   }
+  if (!best.matched || !query) return best;
 
-  return { matched: false, matchedField: '', boost: 0 };
+  let bonus = 0;
+  const words = query.split(' ').filter(Boolean);
+  if (words.length > 1) {
+    if (words.every((word) => haystack.includes(word))) bonus += 10;
+    if (haystack.includes(query)) bonus += 20;
+  }
+  let primaryBonus = 0;
+  for (const field of primary) {
+    const value = normalizeSearchQuery(field ?? '');
+    if (!value) continue;
+    if (value === query) primaryBonus = Math.max(primaryBonus, 40);
+    else if (value.startsWith(query)) primaryBonus = Math.max(primaryBonus, 25);
+    else if (value.includes(query)) primaryBonus = Math.max(primaryBonus, 15);
+  }
+  return {
+    ...best,
+    matchedField: primaryBonus >= 25 ? 'Name/Titel' : best.matchedField,
+    boost: best.boost + bonus + primaryBonus,
+  };
 }
 
 function resultKey(result: SearchResult): string {
@@ -237,7 +365,7 @@ function collectDocumentResults(query: string, terms: string[], todayIso: string
       memory?.letterExplanation?.shortExplanation,
     ]);
 
-    const match = matchTerms(haystack, terms);
+    const match = matchTerms(haystack, terms, query, [doc.title, presentation.title]);
     if (!match.matched && query) continue;
 
     let score = TYPE_BASE_SCORE.document + match.boost;
@@ -250,7 +378,7 @@ function collectDocumentResults(query: string, terms: string[], todayIso: string
     pushResult(results, {
       id: `search-doc-${doc.id}`,
       type: 'document',
-      title: presentation.title,
+      title: generatedInvoiceDocumentTitle(doc, presentation.title),
       subtitle: presentation.subtitle || TYPE_SOURCE_LABEL.document,
       matchedField: match.matchedField || 'Dokument',
       snippet: createSnippet(presentation.snippet, query || terms[0] || ''),
@@ -288,7 +416,7 @@ function collectMemoryResults(query: string, terms: string[], todayIso: string):
       ...(memory.requiredDocuments ?? []),
     ]);
 
-    const match = matchTerms(haystack, terms);
+    const match = matchTerms(haystack, terms, query);
     if (!match.matched && query) continue;
 
     const lifecycle = resolveDocumentLifecycle({ documentId: memory.documentId }, todayIso);
@@ -333,7 +461,7 @@ function collectInboxResults(query: string, terms: string[]): SearchResult[] {
       ...Object.values(item.recognizedData),
     ]);
 
-    const match = matchTerms(haystack, terms);
+    const match = matchTerms(haystack, terms, query);
     if (!match.matched && query) continue;
 
     pushResult(results, {
@@ -365,7 +493,7 @@ function collectMailResults(query: string, terms: string[]): SearchResult[] {
       ...mail.attachments.map((item) => item.fileName),
     ]);
 
-    const match = matchTerms(haystack, terms);
+    const match = matchTerms(haystack, terms, query);
     if (!match.matched && query) continue;
 
     const inboxId = mail.linkedInboxIds[0];
@@ -394,7 +522,7 @@ function collectProofResults(query: string, terms: string[]): SearchResult[] {
     const label = PROOF_LABELS[proof.proofType] ?? proof.proofType;
     const haystack = buildHaystack([label, proof.proofType, proof.status, proof.validUntil ?? '']);
 
-    const match = matchTerms(haystack, terms);
+    const match = matchTerms(haystack, terms, query);
     if (!match.matched && query) continue;
 
     let score = TYPE_BASE_SCORE.proof + match.boost;
@@ -439,7 +567,7 @@ function collectInvoiceResults(query: string, terms: string[], todayIso: string)
       item.paymentSummary.status,
     ]);
 
-    const match = matchTerms(haystack, terms);
+    const match = matchTerms(haystack, terms, query, [item.invoice.number, item.customer]);
     if (!match.matched && query) continue;
 
     let score = TYPE_BASE_SCORE.invoice + match.boost;
@@ -473,7 +601,7 @@ function collectExpenseResults(query: string, terms: string[]): SearchResult[] {
       expense.invoiceNumber,
       String(expense.grossAmount),
     ]);
-    const match = matchTerms(haystack, terms);
+    const match = matchTerms(haystack, terms, query, [expense.title, expense.supplierName, expense.invoiceNumber]);
     if (!match.matched && query) continue;
 
     pushResult(results, {
@@ -494,12 +622,139 @@ function collectExpenseResults(query: string, terms: string[]): SearchResult[] {
   return results;
 }
 
+/**
+ * BROWSER-ACCEPTANCE-FIX 01 / A2 — die eigene Ausgangsrechnung im Archiv hiess
+ * in der Trefferliste nur „Ausgangsrechnung"; zehn davon waren nicht zu
+ * unterscheiden. Die Rechnungsnummer kommt aus der verknüpften Rechnung.
+ */
+function generatedInvoiceDocumentTitle(
+  doc: Parameters<typeof isGeneratedOutgoingInvoiceDocument>[0],
+  title: string,
+): string {
+  if (!isGeneratedOutgoingInvoiceDocument(doc)) return title;
+  const number = findInvoiceById(doc.linkedInvoiceId!.trim())?.number?.trim();
+  if (!number || title.includes(number)) return title;
+  return `${title} ${number}`;
+}
+
+/**
+ * BROWSER-ACCEPTANCE-FIX 01 / A2 — Kunden als eigener Treffer.
+ *
+ * Nur aktive Kunden aus dem eigenen, bereits workspace-gebundenen Bestand.
+ * Angezeigt werden Name und Ort — keine Kennung.
+ */
+function collectCustomerResults(query: string, terms: string[]): SearchResult[] {
+  const results: SearchResult[] = [];
+  if (!query) return results;
+
+  for (const customer of getCustomerStoreSnapshot()) {
+    if (!isEntitySyncActive(customer)) continue;
+    const name = customer.name?.trim();
+    if (!name) continue;
+    const place = [customer.zip, customer.city].filter((part) => part?.trim()).join(' ');
+    const haystack = buildHaystack([
+      name,
+      customer.contactPerson,
+      customer.street,
+      place,
+      customer.email,
+    ]);
+    const match = matchTerms(haystack, terms, query, [name, customer.contactPerson]);
+    if (!match.matched) continue;
+
+    pushResult(results, {
+      id: `search-customer-${customer.id}`,
+      type: 'customer',
+      title: name,
+      subtitle: [customer.contactPerson?.trim(), place].filter(Boolean).join(' · ') || TYPE_SOURCE_LABEL.customer,
+      matchedField: match.matchedField || 'Kunde',
+      snippet: [customer.street?.trim(), place].filter(Boolean).join(', '),
+      score: TYPE_BASE_SCORE.customer + match.boost,
+      route: `/kunden/customer/${encodeURIComponent(customer.id)}`,
+      icon: TYPE_ICON.customer,
+      source: TYPE_SOURCE_LABEL.customer,
+    });
+  }
+
+  return results;
+}
+
+/**
+ * BROWSER-ACCEPTANCE-FIX 01 / A2 — E-Mails aus der Cloud als Treffer.
+ *
+ * Rein: bekommt die bereits workspace-gebunden geladenen Nachrichten
+ * (`list_workspace_*_email_messages` prüft die Mitgliedschaft serverseitig)
+ * und bewertet sie wie jeden anderen Treffer. Durchsucht werden Betreff,
+ * Absender/Empfänger und Text; angezeigt werden nur Betreff, Absender und
+ * Datum — kein Nachrichtentext, keine Kennung.
+ */
+export function buildEmailSearchResults(messages: EmailMessage[], rawQuery: string): SearchResult[] {
+  const query = normalizeSearchQuery(rawQuery);
+  if (!query) return [];
+  const terms = expandSearchTerms(query);
+  const results: SearchResult[] = [];
+
+  for (const message of messages) {
+    const inbound = message.direction === 'inbound';
+    const subject = message.subject?.trim() || '(ohne Betreff)';
+    const counterpart = inbound
+      ? message.fromName?.trim() || message.fromAddress?.trim() || ''
+      : message.to.join(', ');
+    const haystack = buildHaystack([
+      message.subject,
+      message.fromName,
+      message.fromAddress,
+      ...message.to,
+      // Adressen auch in der Form der normalisierten Anfrage („name example de").
+      normalizeSearchQuery(message.fromAddress ?? ''),
+      ...message.to.map(normalizeSearchQuery),
+      message.bodyText,
+    ]);
+    const match = matchTerms(haystack, terms, query, [message.subject]);
+    if (!match.matched) continue;
+    const bodyOnly = !buildHaystack([message.subject, message.fromName, message.fromAddress, ...message.to]).includes(
+      query,
+    );
+    const when = inbound ? message.receivedAt ?? message.createdAt : message.createdAt;
+
+    results.push(
+      presentResult({
+        id: `search-email-${message.id}`,
+        type: 'email',
+        title: subject,
+        subtitle: [inbound ? `Von ${counterpart}` : `An ${counterpart}`, when ? formatDisplayDateTime(when) : '']
+          .filter((part) => part && part.trim() !== 'Von' && part.trim() !== 'An')
+          .join(' · '),
+        matchedField: bodyOnly && match.matchedField !== 'Name/Titel' ? 'Text der E-Mail' : match.matchedField,
+        snippet: inbound ? 'Eingegangene E-Mail' : 'Gesendete E-Mail',
+        score: TYPE_BASE_SCORE.email + match.boost,
+        route: inbound ? `/kommunikation/eingang/${message.id}` : `/kommunikation/email/${message.id}`,
+        icon: TYPE_ICON.email,
+        source: TYPE_SOURCE_LABEL.email,
+      }),
+    );
+  }
+
+  return rankSearchResults(results);
+}
+
+/** Lokale und Cloud-Treffer zu einer Liste, nach Relevanz, ohne Doppelte. */
+export function mergeSearchResults(
+  local: SearchResult[],
+  remote: SearchResult[],
+  limit: number,
+): SearchResult[] {
+  const merged: SearchResult[] = [];
+  for (const result of [...local, ...remote]) pushResult(merged, result);
+  return rankSearchResults(merged).slice(0, limit);
+}
+
 function collectVorgangResults(query: string, terms: string[]): SearchResult[] {
   const results: SearchResult[] = [];
 
   for (const vorgang of getAllVorgaenge()) {
     const haystack = buildHaystack([vorgang.title, vorgang.customer, vorgang.baustelle, vorgang.status]);
-    const match = matchTerms(haystack, terms);
+    const match = matchTerms(haystack, terms, query, [vorgang.title, vorgang.customer]);
     if (!match.matched && query) continue;
 
     pushResult(results, {
@@ -526,14 +781,14 @@ function collectTaskResults(query: string, terms: string[]): SearchResult[] {
   for (const task of getAllTasksFromStore()) {
     if (!isTaskOpen(task)) continue;
     const haystack = buildHaystack([task.title, task.description, task.category]);
-    const match = matchTerms(haystack, terms);
+    const match = matchTerms(haystack, terms, query, [task.title]);
     if (!match.matched && query) continue;
 
     pushResult(results, {
       id: `search-task-${task.id}`,
       type: 'task',
       title: task.title,
-      subtitle: task.dueDate ? `Frist ${task.dueDate.slice(0, 10)}` : 'Offene Aufgabe',
+      subtitle: task.dueDate ? `Frist ${formatDisplayDatePadded(task.dueDate.slice(0, 10))}` : 'Offene Aufgabe',
       matchedField: match.matchedField || 'Aufgabe',
       snippet: createSnippet(task.description ?? task.title, query || terms[0] || ''),
       score: TYPE_BASE_SCORE.task + match.boost,
@@ -552,7 +807,7 @@ function collectCommunicationResults(query: string, terms: string[]): SearchResu
 
   for (const event of getCommunicationEvents()) {
     const haystack = buildHaystack([event.type, event.resultExcerpt, event.userInputExcerpt]);
-    const match = matchTerms(haystack, terms);
+    const match = matchTerms(haystack, terms, query);
     if (!match.matched && query) continue;
 
     const route =
@@ -585,7 +840,7 @@ function collectPaperResults(query: string, terms: string[]): SearchResult[] {
 
   for (const folder of getAllPaperFolders()) {
     const haystack = buildHaystack([folder.name, ...folder.registers]);
-    const match = matchTerms(haystack, terms);
+    const match = matchTerms(haystack, terms, query);
     if (!match.matched && query) continue;
 
     pushResult(results, {
@@ -604,7 +859,7 @@ function collectPaperResults(query: string, terms: string[]): SearchResult[] {
 
   for (const entry of getPaperRegisterEntries()) {
     const haystack = buildHaystack([entry.documentTitle, entry.register, entry.folderId]);
-    const match = matchTerms(haystack, terms);
+    const match = matchTerms(haystack, terms, query);
     if (!match.matched && query) continue;
 
     pushResult(results, {
@@ -732,6 +987,7 @@ export function searchOffice(options: OfficeSearchOptions): SearchResult[] {
   if (includesType(filter, 'proof')) results.push(...collectProofResults(query, terms));
   if (includesType(filter, 'invoice')) results.push(...collectInvoiceResults(query, terms, todayIso));
   if (includesType(filter, 'expense')) results.push(...collectExpenseResults(query, terms));
+  if (includesType(filter, 'customer')) results.push(...collectCustomerResults(query, terms));
   if (includesType(filter, 'vorgang')) results.push(...collectVorgangResults(query, terms));
   if (includesType(filter, 'task')) results.push(...collectTaskResults(query, terms));
   if (includesType(filter, 'communication')) results.push(...collectCommunicationResults(query, terms));
@@ -742,7 +998,7 @@ export function searchOffice(options: OfficeSearchOptions): SearchResult[] {
   if (filter?.proofMissing) results.push(...collectLifecycleStatusResults(todayIso, 'proof_missing'));
 
   results = applyFilters(results, filter);
-  return rankSearchResults(results).slice(0, options.limit ?? 30);
+  return rankSearchResults(results).slice(0, options.limit ?? 30).map(presentResult);
 }
 
 export function isSearchQuestion(question: string): boolean {

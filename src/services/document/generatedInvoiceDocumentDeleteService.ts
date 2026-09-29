@@ -13,7 +13,12 @@
  * Tankbelege, Verträge, Briefe und Fotos behalten unverändert den rein lokalen
  * Löschweg aus fa953da.
  */
-import { deleteDocument, getDocumentById } from '../documentService';
+import {
+  DOCUMENT_DELETE_FINALIZED_INVOICE_KEY,
+  deleteDocument,
+  getDocumentById,
+  isFinalizedInvoiceArchiveDocument,
+} from '../documentService';
 import type { CompanyDocument } from '../../types/models';
 import {
   isDocumentCloudSynced,
@@ -21,6 +26,9 @@ import {
   tombstoneDocumentInCloud,
 } from './workspaceDocumentCloudService';
 import { isCloudEligibleGeneratedInvoiceDocument } from './documentCloudPullOrchestrator';
+
+/** Die Ablehnung aus `tombstone_workspace_document` (20261019120000). */
+const FINALIZED_INVOICE_SERVER_MESSAGE = 'festgeschriebenen Rechnung kann nicht geloescht werden';
 
 /** Fehlerschlüssel, wenn die Cloud-Löschung nicht bewiesen werden konnte. */
 export const DOCUMENT_DELETE_CLOUD_UNCONFIRMED_KEY = 'document.delete.cloudUnconfirmed';
@@ -51,6 +59,14 @@ export async function deleteGeneratedInvoiceDocumentWithCloud(
   const document = getDocumentById(documentId);
   if (!document) return { ok: false, errorKey: 'document.notFound' };
 
+  /*
+   * BROWSER-ACCEPTANCE-FIX 01 / A1 — Beleg einer festgeschriebenen Rechnung:
+   * kein Grabstein-Versuch, kein lokales Löschen.
+   */
+  if (isFinalizedInvoiceArchiveDocument(document)) {
+    return { ok: false, errorKey: DOCUMENT_DELETE_FINALIZED_INVOICE_KEY };
+  }
+
   // Fremddokumente: unveränderter lokaler Löschweg, kein einziger Cloud-Aufruf.
   if (!isCloudEligibleGeneratedInvoiceDocument(document)) {
     return finishLocalDelete(documentId);
@@ -59,6 +75,10 @@ export async function deleteGeneratedInvoiceDocumentWithCloud(
   const tombstone = await tombstoneDocumentInCloud({ clientDocumentId: documentId });
   if (isDocumentCloudSynced(tombstone.outcome)) {
     return finishLocalDelete(documentId);
+  }
+  // Der Server kennt die Rechnung als festgeschrieben, auch wenn sie lokal fehlt.
+  if (tombstone.outcome === 'failed' && tombstone.detail?.includes(FINALIZED_INVOICE_SERVER_MESSAGE)) {
+    return { ok: false, errorKey: DOCUMENT_DELETE_FINALIZED_INVOICE_KEY };
   }
 
   /*

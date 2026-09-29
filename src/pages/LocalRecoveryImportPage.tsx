@@ -513,7 +513,7 @@ export function LocalRecoveryImportPage() {
     <div className="auth-page local-recovery-import-page" data-testid="local-recovery-import-page">
       <div className="auth-card">
         <header className="auth-card__header">
-          <p className="auth-card__brand">OfficePilot</p>
+          <p className="auth-card__brand">OfficeTakt</p>
           <h1 className="auth-card__title">Zielsicherung und Quarantäne</h1>
           <p className="auth-card__subtitle">
             Diese Seite sichert ausschließlich den vorhandenen lokalen Bestand dieser Adresse und

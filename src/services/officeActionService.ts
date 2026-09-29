@@ -23,7 +23,7 @@ import { isClassificationKindWithTasks } from './taskEngineService';
 import { getTodayIso } from './taskNormalize';
 import { scanPendingItems } from './pendingEngineService';
 import { getAllVorgaenge } from './vorgangService';
-import { processUploadedDocument } from './intakeWorkflowService';
+import { analyzeUploadedDocument } from './intakeWorkflowService';
 import { resolveAccountingGate } from './document/documentAccountingGateService';
 import { buildDocumentSemanticCore } from './document/documentSemanticCoreService';
 import { getInboxExtractedDocumentText } from './inboxDocumentText';
@@ -86,7 +86,7 @@ function parseGermanAmount(value: string | undefined): number | null {
 }
 
 function resolveClassifiedKind(item: InboxItem): ClassifiedDocumentKind | undefined {
-  const workflow = processUploadedDocument(item.id);
+  const workflow = analyzeUploadedDocument(item.id);
   return workflow?.classifiedKind ?? item.classifiedKind;
 }
 

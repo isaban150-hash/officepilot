@@ -1,3 +1,4 @@
+import { CommunicationHistorySection } from '../components/communication/CommunicationHistorySection';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
@@ -935,6 +936,9 @@ export function VorgangDetailPage() {
           translate={translate}
           onOpenInvoices={() => setActiveSection('invoices')}
         />
+
+        {/* E-MAIL-07C — Kommunikation zu genau diesem Vorgang (über Kennungen). */}
+        <CommunicationHistorySection target={{ vorgangId: vorgang.id }} testId="vorgang-email-history" />
       </div>
 
       <div {...vorgangSectionPanelProps('order', activeSection)}>

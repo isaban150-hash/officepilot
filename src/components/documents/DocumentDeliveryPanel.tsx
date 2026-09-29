@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Card, CardTitle } from '../ui/Card';
 import { Button } from '../ui/Button';
+import { SimpleConfirmDialog } from '../ui/SimpleConfirmDialog';
 import { SendDocumentDialog } from '../invoice/SendDocumentDialog';
 import { DeliveryHistoryList } from '../invoice/DeliveryHistoryList';
 import { useApp } from '../../context/AppContext';
@@ -9,14 +10,19 @@ import { isSupabaseConfigured } from '../../lib/supabase';
 import { resolveWorkspaceWriteAccess } from '../../services/workspace/workspaceRoleService';
 import { downloadInvoicePdfBytes } from '../../services/invoicePdfService';
 import { getVorgangById } from '../../services/vorgangService';
-import { findAcceptedDelivery, resolveDocumentDeliveryDraftDefaults } from '../../services/delivery/documentDeliveryDefaults';
-import { hasUncertainDelivery, isDeliveryRetryable } from '../../services/delivery/documentDeliveryContract';
+import { resolveBusinessLetterCustomerEmail } from '../../services/letter/businessLetterArchiveService';
+import { composeDocumentDeliveryDraft, findAcceptedDelivery } from '../../services/delivery/documentDeliveryDefaults';
+import { resolveDeliveryDocumentFacts } from '../../services/delivery/deliveryDocumentFacts';
+import { findOpenUncertainDelivery, isDeliveryInProgress, isDeliveryRetryable } from '../../services/delivery/documentDeliveryContract';
 import {
+  buildArchivedDocumentAttachmentFilename,
   findArchivedDocumentPdfFileRefId,
+  isArchivedDocumentSyncBlocked,
   prepareArchivedDocumentDeliveryAttachment,
   resolveArchivedDocumentDeliveryKind,
 } from '../../services/delivery/documentDeliveryCloudService';
 import {
+  checkDeliveryStatus,
   clearSendDraft,
   createSendDraft,
   loadSendDraft,
@@ -61,6 +67,11 @@ const CLIENT_ERROR_KEYS: Record<SendDocumentClientError, TranslationKey> = {
   forbidden: 'delivery.error.forbidden' as TranslationKey,
   not_sendable: 'delivery.error.documentNotSendable' as TranslationKey,
   uncertain_pending: 'delivery.error.uncertainPending' as TranslationKey,
+  uncertain_retry_exists: 'delivery.error.uncertainRetryExists' as TranslationKey,
+  rate_limited: 'delivery.error.rateLimited' as TranslationKey,
+  attachment_not_synced: 'delivery.error.attachmentNotSynced' as TranslationKey,
+  attachment_unavailable: 'delivery.error.attachmentUnavailable' as TranslationKey,
+  document_sync_blocked: 'delivery.error.documentSyncBlocked' as TranslationKey,
   server_unavailable: 'delivery.error.serverUnavailable' as TranslationKey,
   unauthenticated: 'delivery.error.forbidden' as TranslationKey,
   rpc_failed: 'delivery.error.serverUnavailable' as TranslationKey,
@@ -80,10 +91,18 @@ export function DocumentDeliveryPanel({ document, recipientEmail = null, onAccep
   const cloud = isSupabaseConfigured();
   const access = useMemo(() => resolveWorkspaceWriteAccess({ userId: user?.id, cloudConfigured: cloud }), [user?.id, cloud]);
   const sendable = isArchivedDocumentEmailSendable(document);
-  const canSend = cloud && access.canWrite && sendable;
+  // 07B-FIX2 — ungeklärter Sync-Konflikt am Dokument: kein Versand (fail-closed), mit Grund.
+  const syncBlocked = isArchivedDocumentSyncBlocked(document);
+  const canSend = cloud && access.canWrite && sendable && !syncBlocked;
 
   const [deliveries, setDeliveries] = useState<DocumentDelivery[] | null>(null);
-  const [dialog, setDialog] = useState<{ mode: 'send' | 'retry' | 'resume'; draft?: SendDraftState; retryOf?: DocumentDelivery } | null>(null);
+  const [dialog, setDialog] = useState<{ mode: 'send' | 'retry' | 'resume' | 'retry_uncertain'; draft?: SendDraftState; retryOf?: DocumentDelivery; resendAcknowledged?: boolean } | null>(null);
+  /*
+   * E-MAIL-HALBZEIT-FIX B2 — nach einem erfolgreichen Versand fragt die App
+   * VOR dem Versanddialog ausdrücklich nach (mögliche Doppelzustellung).
+   * Abbrechen: kein Dialog, kein Versandauftrag, kein Provider-Aufruf.
+   */
+  const [resendWarning, setResendWarning] = useState(false);
   const [phase, setPhase] = useState<SendPhase | null>(null);
   const [busy, setBusy] = useState(false);
   const [errorKey, setErrorKey] = useState<TranslationKey | null>(null);
@@ -93,11 +112,27 @@ export function DocumentDeliveryPanel({ document, recipientEmail = null, onAccep
 
   const defaults = useMemo(() => {
     const vorgang = document.linkedVorgang ? getVorgangById(document.linkedVorgang.vorgangId) : undefined;
-    return resolveDocumentDeliveryDraftDefaults(
-      { title: document.title, vorgangCustomerEmail: vorgang?.customerBilling?.email ?? recipientEmail ?? null, profile: companyProfile },
+    /*
+     * 07B-FIX1 — ein eigener Geschäftsbrief kennt seinen Kunden strukturell
+     * (Brief → customerId). Diese Adresse geht vor; sonst wie bisher der
+     * Auftrag bzw. der Aufrufer. Nie über Namen geraten.
+     */
+    const letterCustomerEmail = resolveBusinessLetterCustomerEmail(document);
+    // E-MAIL-07C — Vorlage der Dokumentart (Brief/Angebot/sonst) + zentrale Signatur genau einmal.
+    const facts = resolveDeliveryDocumentFacts(document);
+    return composeDocumentDeliveryDraft(
+      {
+        kind,
+        // HALBZEIT-FIX A1 — fachlicher Titel (Angebot) vor dem Archivtitel.
+        title: facts.documentTitle ?? document.title,
+        documentNumber: facts.documentNumber,
+        customerName: facts.customerName,
+        vorgangCustomerEmail: letterCustomerEmail ?? vorgang?.customerBilling?.email ?? recipientEmail ?? null,
+        profile: companyProfile,
+      },
       language,
     );
-  }, [document.title, document.linkedVorgang, companyProfile, language, recipientEmail]);
+  }, [document, companyProfile, language, recipientEmail, kind]);
 
   const refresh = useCallback(async () => {
     if (!cloud) return;
@@ -132,7 +167,23 @@ export function DocumentDeliveryPanel({ document, recipientEmail = null, onAccep
   const accepted = deliveries ? findAcceptedDelivery(deliveries) : undefined;
   const latest = deliveries?.[0];
   const alreadySent = Boolean(accepted);
-  const uncertain = deliveries ? hasUncertainDelivery(deliveries) : false;
+  // E-MAIL-07B — dieselben Regeln wie im Rechnungspanel (offener unklarer Versuch, laufender Versand).
+  const uncertainDelivery = deliveries ? findOpenUncertainDelivery(deliveries) : undefined;
+  const uncertain = Boolean(uncertainDelivery);
+  const inProgressDelivery = deliveries?.find((d) => isDeliveryInProgress(d.status));
+
+  const handleCheckStatus = async () => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setBusy(true);
+    try {
+      if (inProgressDelivery) await checkDeliveryStatus({ delivery: inProgressDelivery });
+      await refresh();
+    } finally {
+      inFlight.current = false;
+      setBusy(false);
+    }
+  };
 
   const runWith = async (draft: SendDraftState) => {
     if (inFlight.current) return;
@@ -158,6 +209,7 @@ export function DocumentDeliveryPanel({ document, recipientEmail = null, onAccep
         onAccepted?.();
       }
       else if (result.action === 'unknown_pending') showToast(translate('delivery.toast.unknown' as TranslationKey));
+      else if (result.action === 'in_progress') showToast(translate('delivery.toast.inProgress' as TranslationKey));
       else showToast(translate('delivery.toast.failed' as TranslationKey));
     } finally {
       inFlight.current = false;
@@ -168,7 +220,7 @@ export function DocumentDeliveryPanel({ document, recipientEmail = null, onAccep
 
   const handleSend = (fields: { recipientEmail: string; subject: string; bodyText: string }) => {
     if (!dialog) return;
-    if (uncertain && !(dialog.mode === 'resume' && dialog.draft)) {
+    if (uncertain && dialog.mode !== 'retry_uncertain' && !(dialog.mode === 'resume' && dialog.draft)) {
       setErrorKey('delivery.error.uncertainPending' as TranslationKey);
       return;
     }
@@ -177,7 +229,13 @@ export function DocumentDeliveryPanel({ document, recipientEmail = null, onAccep
       return;
     }
     if (dialog.draft) clearSendDraft(identity, dialog.draft.scopeKey);
-    const draft = createSendDraft({ identity, vorgangId: null, ...fields, retryOfDeliveryId: dialog.retryOf?.id });
+    const draft = createSendDraft({
+      identity,
+      vorgangId: null,
+      ...fields,
+      retryOfDeliveryId: dialog.retryOf?.id,
+      confirmUncertainRetry: dialog.mode === 'retry_uncertain',
+    });
     setPendingDraft(draft);
     void runWith(draft);
   };
@@ -198,7 +256,8 @@ export function DocumentDeliveryPanel({ document, recipientEmail = null, onAccep
     else showToast(translate('delivery.error.documentNotSendable' as TranslationKey));
   };
 
-  const attachmentFilename = `${(document.title || 'Dokument').replace(/\.pdf$/i, '')}.pdf`;
+  // E-MAIL-07B — derselbe Name, der tatsächlich versendet wird (eine Quelle, serverkonform bereinigt).
+  const attachmentFilename = buildArchivedDocumentAttachmentFilename(document);
 
   return (
     <section className="invoice-delivery-panel document-delivery-panel" data-testid="document-delivery-panel" data-document-kind={kind} data-sendable={sendable ? 'true' : 'false'}>
@@ -212,6 +271,8 @@ export function DocumentDeliveryPanel({ document, recipientEmail = null, onAccep
           <p className="hint-text" data-testid="document-delivery-cloud-required">{translate('delivery.panel.cloudRequired' as TranslationKey)}</p>
         ) : !access.canWrite ? (
           <p className="hint-text" data-testid="document-delivery-readonly">{translate('delivery.panel.readOnly' as TranslationKey)}</p>
+        ) : syncBlocked ? (
+          <p className="hint-text" data-testid="document-delivery-sync-blocked">{translate('delivery.document.panel.syncBlocked' as TranslationKey)}</p>
         ) : null}
 
         {cloud ? (
@@ -223,10 +284,25 @@ export function DocumentDeliveryPanel({ document, recipientEmail = null, onAccep
 
         {canSend ? (
           <div className="invoice-delivery-panel__actions">
-            {uncertain ? (
-              <Button type="button" variant="outline" onClick={() => void refresh()} disabled={busy} data-testid="document-delivery-check-status">
+            {inProgressDelivery ? (
+              <Button type="button" variant="outline" onClick={() => void handleCheckStatus()} disabled={busy} data-testid="document-delivery-check-status">
                 {translate('delivery.action.checkStatus' as TranslationKey)}
               </Button>
+            ) : uncertainDelivery ? (
+              <>
+                <Button type="button" variant="outline" onClick={() => void handleCheckStatus()} disabled={busy} data-testid="document-delivery-check-status">
+                  {translate('delivery.action.checkStatus' as TranslationKey)}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setDialog({ mode: 'retry_uncertain', retryOf: uncertainDelivery })}
+                  disabled={busy}
+                  data-testid="document-delivery-retry-uncertain"
+                >
+                  {translate('delivery.action.retryUncertain' as TranslationKey)}
+                </Button>
+              </>
             ) : latest && isDeliveryRetryable(latest.status) && latest.status !== 'bounced' ? (
               <Button type="button" variant="outline" onClick={() => setDialog({ mode: 'retry', retryOf: latest })} disabled={busy} data-testid="document-delivery-retry">
                 {translate('delivery.action.retry' as TranslationKey)}
@@ -237,7 +313,7 @@ export function DocumentDeliveryPanel({ document, recipientEmail = null, onAccep
               </Button>
             ) : (
               /* Sekundäre Aktion: Outline, nie die Hauptaktion der Dokumentseite. */
-              <Button type="button" variant="outline" onClick={() => setDialog({ mode: 'send' })} disabled={busy} data-testid="document-delivery-send">
+              <Button type="button" variant="outline" onClick={() => (alreadySent ? setResendWarning(true) : setDialog({ mode: 'send' }))} disabled={busy} data-testid="document-delivery-send">
                 {translate((alreadySent ? 'delivery.document.action.sendAgain' : 'delivery.document.action.send') as TranslationKey)}
               </Button>
             )}
@@ -254,7 +330,7 @@ export function DocumentDeliveryPanel({ document, recipientEmail = null, onAccep
           initialSubject={dialog.draft?.subject ?? dialog.retryOf?.subject ?? defaults.subject}
           initialBody={dialog.draft?.bodyText ?? dialog.retryOf?.bodyText ?? defaults.bodyText}
           attachmentFilename={attachmentFilename}
-          alreadySent={alreadySent}
+          alreadySent={alreadySent && !dialog.resendAcknowledged}
           mode={dialog.mode}
           documentKind={kind}
           phase={phase}
@@ -266,6 +342,24 @@ export function DocumentDeliveryPanel({ document, recipientEmail = null, onAccep
           onSend={handleSend}
         />
       ) : null}
+
+      <SimpleConfirmDialog
+        open={resendWarning}
+        title={translate('delivery.resendWarning.title' as TranslationKey)}
+        message={translate('delivery.resendWarning.document' as TranslationKey)}
+        confirmLabel={translate('delivery.resendWarning.confirm' as TranslationKey)}
+        cancelLabel={translate('delivery.action.cancel' as TranslationKey)}
+        confirmVariant="primary"
+        dialogTestId="document-delivery-resend-warning"
+        confirmTestId="document-delivery-resend-warning-confirm"
+        cancelTestId="document-delivery-resend-warning-cancel"
+        onCancel={() => setResendWarning(false)}
+        onConfirm={() => {
+          setResendWarning(false);
+          setDialog({ mode: 'send', resendAcknowledged: true });
+          return true;
+        }}
+      />
     </section>
   );
 }

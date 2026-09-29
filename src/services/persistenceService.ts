@@ -216,7 +216,9 @@ export type PersistFailureReason =
   | 'storage_unavailable'
   | 'unknown_persist_error'
   /** LOAD_FAILED-UX-GUARD-01B — der Bereich ist wegen eines Ladefehlers gesperrt. */
-  | 'load_failed_lock';
+  | 'load_failed_lock'
+  /** SYNC-AUTOMATIK-01A — ein anderer Tab hat diesen Bereich inzwischen neuer gespeichert. */
+  | 'stale_tab';
 
 export interface PersistFailureDiagnostic {
   phase: PersistFailurePhase;
@@ -343,6 +345,350 @@ function buildPersistFailureInfo(
 let cachedSetup: CompanySetup = { ...DEFAULT_SETUP };
 let lastPersistSuccess = true;
 let lastPersistFailure: PersistFailureInfo | null = null;
+
+/**
+ * SYNC-AUTOMATIK-01A — zählt jede gelungene lokale Speicherung.
+ *
+ * Ein Sync-Lauf merkt sich den Wert bei seinem Start. Ist er beim Anwenden
+ * des Ergebnisses ein anderer, wurde inzwischen lokal gespeichert, und das
+ * Ergebnis darf den Speicher nicht einfach ersetzen (`syncLocalRebaseService`).
+ */
+let localMutationRevision = 0;
+
+export function getLocalMutationRevision(): number {
+  return localMutationRevision;
+}
+
+/*
+ * SYNC-AUTOMATIK-01A — minimaler Schutz gegen das Überschreiben durch einen
+ * älteren Tab.
+ *
+ * Mehrere Tabs teilen sich denselben Speicherschlüssel, aber jeder hält seinen
+ * eigenen Arbeitsspeicher. Ein Tab, der vor einer Stunde geladen wurde, schrieb
+ * bisher beim nächsten Speichern seinen alten Stand über alles, was ein anderer
+ * Tab inzwischen gespeichert hatte.
+ *
+ * 01A-FIX3 — zwei Angaben, sauber getrennt, beide vorn im Bestand (lesbar ohne
+ * vollständiges Einlesen, weiterhin genau ein `setItem` je Speichern):
+ *
+ *   - `businessRevision` — die **fachliche** Revision. Sie steigt nur, wenn
+ *     sich der fachliche Inhalt ändert: eine lokale Eingabe oder echter neuer
+ *     Inhalt aus der Cloud. Sie allein entscheidet, ob ein anderer Tab
+ *     veraltet ist.
+ *   - `writeGeneration` — ein rein **technischer** Zähler, der jeden
+ *     Schreibvorgang zählt (Öffnen, Bootstrap, Sendenachweis …). Er dient nur
+ *     der Nachvollziehbarkeit und sperrt nie einen Tab.
+ *
+ * `savedAt` bleibt Zeitstempel für Anzeige und Diagnose, ohne Wirkung auf den
+ * Schutz.
+ *
+ * Bis FIX2 trug ein einziges Feld (`writeGeneration`) beide Rollen. Ein
+ * technischer Schreibvorgang, den der Inhaltsvergleich fälschlich für fachlich
+ * hielt, sperrte damit den anderen Tab. Jetzt wird bei Sync-Übernahmen der
+ * fachliche Inhalt der **Speicher** vor und nach dem Anwenden verglichen — nicht
+ * der rohe Kandidat —, und jede Erhöhung hält fest, welche Bereiche sich
+ * geändert haben (`getLastBusinessRevisionChange`), damit ein unerwarteter
+ * Anstieg ohne Rätselraten zuzuordnen ist.
+ *
+ * Ein Bestand ohne diese Angaben (älter, geleert) ist ungeschützt beschreibbar.
+ * Ein Bestand aus FIX1/FIX2 (`writeGeneration` allein vorn) wird als fachliche
+ * Revision gelesen — dort hatte das Feld bereits diese Bedeutung.
+ */
+const BUSINESS_REVISION_FIELD = 'businessRevision';
+const WRITE_GENERATION_FIELD = 'writeGeneration';
+const REVISION_HEADER_PATTERN = /^\{"businessRevision":(\d+),"writeGeneration":(\d+)[,}]/;
+const LEGACY_GENERATION_PATTERN = /^\{"writeGeneration":(\d+)[,}]/;
+
+interface StoredRevisionHeader {
+  businessRevision: number;
+  writeGeneration: number;
+}
+
+/** Fachliche Revision, die dieser Tab zuletzt gelesen oder geschrieben hat. */
+const knownBusinessRevisions = new Map<string, number>();
+/** Fachlicher Inhalt je Bereich, den dieser Tab zuletzt gelesen oder geschrieben hat. */
+const knownContentAreas = new Map<string, Map<string, string>>();
+let staleTabDetected = false;
+
+export interface BusinessRevisionChange {
+  storageKey: string;
+  businessRevision: number;
+  /** Bereiche (oberste Schlüssel) mit geändertem fachlichem Inhalt — keine Werte. */
+  areas: string[];
+  source: 'save' | 'sync_apply';
+  at: string;
+}
+
+let lastBusinessRevisionChange: BusinessRevisionChange | null = null;
+
+/** Die zuletzt erhöhte fachliche Revision und ihr Anlass — zur Diagnose. */
+export function getLastBusinessRevisionChange(): BusinessRevisionChange | null {
+  return lastBusinessRevisionChange ? { ...lastBusinessRevisionChange, areas: [...lastBusinessRevisionChange.areas] } : null;
+}
+
+/** Oberste Felder ohne fachlichen Inhalt: Revision, Speicherformat, Zeitpunkt, Sendeaufträge, Gerät, Sync-Metadaten. */
+const NON_CONTENT_TOP_LEVEL_KEYS = new Set([
+  BUSINESS_REVISION_FIELD,
+  WRITE_GENERATION_FIELD,
+  'version',
+  'savedAt',
+  'syncOutbox',
+  'syncClient',
+  'setupSync',
+  'companyProfileSync',
+]);
+/** Versionsangaben einzelner Einträge — Sync-Metadaten, kein Inhalt. */
+const NON_CONTENT_META_KEYS: Record<string, ReadonlySet<string>> = {
+  workspace: new Set(['version', 'updatedAt']),
+  workspaceSettings: new Set(['version', 'updatedAt', 'updatedBy']),
+};
+
+/**
+ * Stabile Textform des fachlichen Inhalts: Schlüssel sortiert, leere Werte
+ * ausgelassen (eine Auffüllung mit `[]` ist keine Änderung), `sync` und
+ * der Cloud-Pfad einer Datei ausgelassen. Dateiinhalte zählen über ihre
+ * Kennung und Länge — sie ändern sich unter derselben Kennung nicht.
+ */
+function appendCanonical(value: unknown, out: string[], skip?: ReadonlySet<string>): void {
+  if (Array.isArray(value)) {
+    out.push('[');
+    for (const item of value) {
+      appendCanonical(item, out);
+      out.push(',');
+    }
+    out.push(']');
+    return;
+  }
+  if (typeof value === 'object' && value !== null) {
+    const record = value as Record<string, unknown>;
+    out.push('{');
+    for (const key of Object.keys(record).sort()) {
+      // `contentHash`: aus dem Dateiinhalt abgeleitet, nachgetragen beim Öffnen — kein neuer Inhalt.
+      if (key === 'sync' || key === 'contentHash' || skip?.has(key)) continue;
+      const child = record[key];
+      if (key === 'cloud' && typeof child === 'object') continue;
+      if (isEmptyContentValue(child)) continue;
+      out.push(JSON.stringify(key), ':');
+      appendCanonical(child, out);
+      out.push(',');
+    }
+    out.push('}');
+    return;
+  }
+  out.push(JSON.stringify(value) ?? 'null');
+}
+
+function isEmptyContentValue(value: unknown): boolean {
+  if (value === undefined || value === null) return true;
+  if (Array.isArray(value)) return value.length === 0;
+  return typeof value === 'object' && Object.keys(value as object).length === 0;
+}
+
+/** FNV-1a über die Textform, dazu die Länge — genügt zum Erkennen einer Änderung. */
+function hashText(text: string): string {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return `${(hash >>> 0).toString(16)}:${text.length}`;
+}
+
+/**
+ * 01A-FIX2 — der Fingerabdruck vergleicht die **geladene Form**.
+ *
+ * Der Ladepfad ergänzt deterministisch Werte, die sich aus dem übrigen Bestand
+ * ergeben — etwa `currency` und `defaultTaxStatus` im Firmenprofil
+ * (`migrateCompanyProfileLegacyFields`). Der Cloud-Bootstrap schreibt dagegen
+ * das Profil aus dem Cloud-Payload, dem diese Werte fehlen. Beide Fassungen
+ * sind fachlich gleich; ohne gemeinsame Form hob schon das blosse Öffnen eines
+ * zweiten Tabs die Generation (Browserbefund 01A-FIX1, Schreibpfad
+ * `applyPersistedStateFromSync` im Cloud-Bootstrap). Deshalb läuft jeder
+ * Stand vor dem Fingerabdruck durch dieselbe Aufbereitung wie beim Laden.
+ */
+function toLoadedForm(record: Record<string, unknown>): Record<string, unknown> {
+  try {
+    const state = record as unknown as AppPersistedState;
+    return finalizeLoadedPersistedState({
+      ...state,
+      inboxItems: state.inboxItems ?? [],
+      vorgaenge: state.vorgaenge ?? [],
+      tasks: state.tasks ?? [],
+    }) as unknown as Record<string, unknown>;
+  } catch {
+    return record;
+  }
+}
+
+/** 01A-FIX3 — fachlicher Inhalt je Bereich (oberster Schlüssel) als Fingerabdruck. */
+export function buildBusinessContentAreas(state: object): Map<string, string> {
+  const record = toLoadedForm(state as Record<string, unknown>);
+  const areas = new Map<string, string>();
+  for (const key of Object.keys(record).sort()) {
+    if (NON_CONTENT_TOP_LEVEL_KEYS.has(key)) continue;
+    let child = record[key];
+    if (isEmptyContentValue(child)) continue;
+    if (key === 'documentFileBlobs' && typeof child === 'object') {
+      child = Object.fromEntries(
+        Object.entries(child as Record<string, unknown>).map(([id, blob]) => [
+          id,
+          typeof blob === 'string' ? blob.length : 0,
+        ]),
+      );
+    }
+    const out: string[] = [];
+    appendCanonical(child, out, NON_CONTENT_META_KEYS[key]);
+    areas.set(key, hashText(out.join('')));
+  }
+  return areas;
+}
+
+/** Ein Fingerabdruck über alle Bereiche — für Vergleiche im Ganzen. */
+export function buildBusinessContentFingerprint(state: object): string {
+  const areas = buildBusinessContentAreas(state);
+  return hashText([...areas.entries()].map(([key, hash]) => `${key}=${hash}`).join('|'));
+}
+
+/** Bereiche, deren fachlicher Inhalt sich unterscheidet (hinzugekommen, entfallen, geändert). */
+function diffContentAreas(before: Map<string, string>, after: Map<string, string>): string[] {
+  const changed: string[] = [];
+  for (const key of new Set([...before.keys(), ...after.keys()])) {
+    if (before.get(key) !== after.get(key)) changed.push(key);
+  }
+  return changed.sort();
+}
+
+function contentAreasOfRaw(raw: string | null): Map<string, string> | null {
+  if (!raw) return null;
+  try {
+    return buildBusinessContentAreas(JSON.parse(raw) as object);
+  } catch {
+    return null;
+  }
+}
+
+function parseRevisionHeader(raw: string | null): StoredRevisionHeader | null {
+  if (!raw) return null;
+  const current = REVISION_HEADER_PATTERN.exec(raw);
+  if (current) return { businessRevision: Number(current[1]), writeGeneration: Number(current[2]) };
+  // FIX1/FIX2-Bestand: dort war `writeGeneration` bereits die fachliche Generation.
+  const legacy = LEGACY_GENERATION_PATTERN.exec(raw);
+  if (legacy) return { businessRevision: Number(legacy[1]), writeGeneration: Number(legacy[1]) };
+  return null;
+}
+
+function readRevisionHeader(storageKey: string): StoredRevisionHeader | null {
+  try {
+    return parseRevisionHeader(localStorage.getItem(storageKey));
+  } catch {
+    return null;
+  }
+}
+
+/** Der zu schreibende Text: beide Angaben vorn, der übrige Bestand unverändert dahinter. */
+function serializeWithRevisionHeader(state: object, header: StoredRevisionHeader): string {
+  const rest: Record<string, unknown> = { ...(state as Record<string, unknown>) };
+  delete rest[BUSINESS_REVISION_FIELD];
+  delete rest[WRITE_GENERATION_FIELD];
+  return JSON.stringify({
+    [BUSINESS_REVISION_FIELD]: header.businessRevision,
+    [WRITE_GENERATION_FIELD]: header.writeGeneration,
+    ...rest,
+  });
+}
+
+/** Beim Laden: fachliche Revision und fachlichen Inhalt des gelesenen Bestands merken. */
+function rememberWriteGeneration(storageKey: string): void {
+  let raw: string | null = null;
+  try {
+    raw = localStorage.getItem(storageKey);
+  } catch {
+    raw = null;
+  }
+  knownBusinessRevisions.set(storageKey, parseRevisionHeader(raw)?.businessRevision ?? 0);
+  const areas = contentAreasOfRaw(raw);
+  if (areas) knownContentAreas.set(storageKey, areas);
+  else knownContentAreas.delete(storageKey);
+}
+
+/**
+ * Hat ein anderer Tab diesen Bestand seit unserem letzten Lesen/Schreiben
+ * **fachlich** geändert? Nur die fachliche Revision zählt — nicht
+ * `writeGeneration`, nicht `savedAt`.
+ */
+export function isStorageKeyWrittenByOtherTab(storageKey: string): boolean {
+  const known = knownBusinessRevisions.get(storageKey);
+  const stored = readRevisionHeader(storageKey);
+  return known !== undefined && stored !== null && stored.businessRevision !== known;
+}
+
+/** Dieser Tab trägt einen veralteten Stand; Speichern und automatischer Sync pausieren. */
+export function isLocalStateStaleInThisTab(): boolean {
+  return staleTabDetected;
+}
+
+/**
+ * 01A — sofort sichtbar machen, wenn ein anderer Tab fachlich speichert, nicht
+ * erst beim nächsten eigenen Speicherversuch (der dann abgelehnt würde).
+ */
+export function watchOtherTabWrites(): () => void {
+  if (typeof window === 'undefined') return () => undefined;
+  const onStorage = (event: StorageEvent) => {
+    const activeKey = getActiveStorageKey();
+    if (event.key !== activeKey) return;
+    if (!isStorageKeyWrittenByOtherTab(activeKey)) return;
+    staleTabDetected = true;
+    lastPersistFailure = { reason: 'stale_tab' };
+    publishPersistenceHealth();
+  };
+  window.addEventListener('storage', onStorage);
+  return () => window.removeEventListener('storage', onStorage);
+}
+
+/**
+ * 01A-FIX1 — Grundlinie nach dem Laden: der fachliche Inhalt, wie er **nach**
+ * der Übernahme in die Speicher aussieht. Aufzurufen unmittelbar nach dem
+ * Anwenden eines geladenen Bestands.
+ */
+export function rememberLoadedContentBaseline(): void {
+  try {
+    knownContentAreas.set(getActiveStorageKey(), buildBusinessContentAreas(buildPersistedStateSnapshot()));
+  } catch {
+    /* ohne Grundlinie gilt der Vergleich mit dem Gespeicherten */
+  }
+}
+
+/**
+ * 01A-FIX3 — Stand der Speicher **vor** dem Anwenden eines Sync-Ergebnisses.
+ * Zusammen mit `savePersistedStateAfterSyncApply` entscheidet er, ob die
+ * Übernahme fachlich etwas geändert hat. Verglichen werden die Speicher, nicht
+ * der rohe Kandidat: Deren Aufbereitung gleicht Formunterschiede der Cloud aus.
+ */
+export function captureBusinessContentBeforeSyncApply(): Map<string, string> | null {
+  try {
+    return buildBusinessContentAreas(buildPersistedStateSnapshot());
+  } catch {
+    return null;
+  }
+}
+
+function noteBusinessRevisionChange(change: Omit<BusinessRevisionChange, 'at'>): void {
+  lastBusinessRevisionChange = { ...change, at: new Date().toISOString() };
+  const env = (import.meta as unknown as { env?: { DEV?: boolean; MODE?: string } }).env;
+  if (env?.DEV && env.MODE !== 'test' && typeof window !== 'undefined') {
+    // Nur Bereichsnamen, keine Inhalte — genug, um einen unerwarteten Anstieg zuzuordnen.
+    (window as unknown as { __officetaktLastBusinessRevisionChange?: BusinessRevisionChange }).__officetaktLastBusinessRevisionChange =
+      getLastBusinessRevisionChange() ?? undefined;
+    console.info('[OfficeTakt] Fachliche Revision erhöht:', change.businessRevision, change.source, change.areas);
+  }
+}
+
+export function resetWriteGenerationsForTests(): void {
+  knownBusinessRevisions.clear();
+  knownContentAreas.clear();
+  staleTabDetected = false;
+  lastBusinessRevisionChange = null;
+}
 
 function cloneInboxItem(item: InboxItem): InboxItem {
   return {
@@ -581,6 +927,7 @@ function publishPersistenceHealth(): void {
   notifyPersistenceHealthChanged({
     healthy: lastPersistSuccess,
     hasFailure: !lastPersistSuccess || lastPersistFailure !== null,
+    staleTab: lastPersistFailure?.reason === 'stale_tab',
   });
 }
 
@@ -726,6 +1073,9 @@ export type PersistedStateLoadResult =
   | { status: 'failed'; reason: PersistedStateLoadFailureReason; storageKey: string };
 
 export function loadPersistedStateResultFromKey(storageKey: string): PersistedStateLoadResult {
+  // 01A — jeder Ladevorgang wird angewendet; ab hier kennt dieser Tab den gelesenen Stand.
+  rememberWriteGeneration(storageKey);
+  if (storageKey === getActiveStorageKey()) staleTabDetected = false;
   let raw: string | null;
   try {
     raw = localStorage.getItem(storageKey);
@@ -809,9 +1159,20 @@ export function loadPersistedState(): AppPersistedState | null {
   return loadPersistedStateFromKey(getActiveStorageKey());
 }
 
+export interface SavePersistedStateOptions {
+  /**
+   * 01A-FIX3 — Anwenden eines Sync-Ergebnisses: der fachliche Inhalt der
+   * Speicher **vor** dem Anwenden (`captureBusinessContentBeforeSyncApply`).
+   * Die Speicher tragen beim Aufruf bereits den angewendeten Stand; verglichen
+   * wird Speicher gegen Speicher.
+   */
+  businessContentBefore?: Map<string, string> | null;
+}
+
 export function savePersistedStateToKey(
   scope: StorageScope,
   state: AppPersistedState,
+  options: SavePersistedStateOptions = {},
 ): PersistSaveResult {
   const storageKey = buildStorageKey(scope);
 
@@ -837,11 +1198,66 @@ export function savePersistedStateToKey(
     return { success: false, failure };
   }
 
-  const existingStoredCharacters = readExistingStoredCharacters(storageKey);
+  /*
+   * SYNC-AUTOMATIK-01A-FIX3 — ein anderer Tab hat **fachlich** neuer
+   * gespeichert: nicht blind überschreiben. Verglichen wird allein die
+   * fachliche Revision; `writeGeneration` und `savedAt` spielen keine Rolle.
+   */
+  let storedRaw: string | null = null;
+  try {
+    storedRaw = localStorage.getItem(storageKey);
+  } catch {
+    storedRaw = null;
+  }
+  const storedHeader = parseRevisionHeader(storedRaw);
+  const knownBusinessRevision = knownBusinessRevisions.get(storageKey);
+  if (
+    knownBusinessRevision !== undefined &&
+    storedHeader !== null &&
+    storedHeader.businessRevision !== knownBusinessRevision
+  ) {
+    staleTabDetected = true;
+    const failure: PersistFailureInfo = { reason: 'stale_tab' };
+    lastPersistFailure = failure;
+    return { success: false, failure };
+  }
 
+  const existingStoredCharacters = storedRaw?.length;
+
+  /*
+   * 01A-FIX1/FIX3 — nur eine fachliche Änderung hebt die fachliche Revision.
+   * Öffnen, Bootstrap, Neuladen, reine Sync-Metadaten oder Nachträge schreiben
+   * technisch (neue `writeGeneration`), aber mit derselben fachlichen Revision.
+   */
+  let contentAfter: Map<string, string> | null = null;
+  let changedAreas: string[] = [];
+  const syncApply = options.businessContentBefore !== undefined;
+  try {
+    if (syncApply) {
+      contentAfter = buildBusinessContentAreas(buildPersistedStateSnapshot());
+      changedAreas = options.businessContentBefore
+        ? diffContentAreas(options.businessContentBefore, contentAfter)
+        : ['(unbekannter Vorstand)'];
+    } else {
+      contentAfter = buildBusinessContentAreas(state);
+      let previous = knownContentAreas.get(storageKey);
+      if (previous === undefined && storedHeader !== null) {
+        // Noch nie gelesen (z. B. nach einem Bereichswechsel): mit dem Gespeicherten vergleichen.
+        previous = contentAreasOfRaw(storedRaw) ?? undefined;
+      }
+      changedAreas = previous ? diffContentAreas(previous, contentAfter) : ['(neuer Bestand)'];
+    }
+  } catch {
+    changedAreas = ['(nicht vergleichbar)'];
+  }
+  const businessChanged = changedAreas.length > 0;
+  const nextHeader: StoredRevisionHeader = {
+    businessRevision: (storedHeader?.businessRevision ?? 0) + (businessChanged ? 1 : 0),
+    writeGeneration: (storedHeader?.writeGeneration ?? 0) + 1,
+  };
   let serialized = '';
   try {
-    serialized = JSON.stringify(state);
+    serialized = serializeWithRevisionHeader(state, nextHeader);
   } catch (error) {
     const failure = buildPersistFailureInfo('json_stringify', error, {
       storageKey,
@@ -857,6 +1273,17 @@ export function savePersistedStateToKey(
 
   try {
     localStorage.setItem(storageKey, serialized);
+    knownBusinessRevisions.set(storageKey, nextHeader.businessRevision);
+    if (contentAfter) knownContentAreas.set(storageKey, contentAfter);
+    else knownContentAreas.delete(storageKey);
+    if (businessChanged) {
+      noteBusinessRevisionChange({
+        storageKey,
+        businessRevision: nextHeader.businessRevision,
+        areas: changedAreas,
+        source: syncApply ? 'sync_apply' : 'save',
+      });
+    }
     lastPersistFailure = null;
     return { success: true };
   } catch (error) {
@@ -872,8 +1299,8 @@ export function savePersistedStateToKey(
   }
 }
 
-export function savePersistedState(state: AppPersistedState): boolean {
-  return savePersistedStateToKey(getActiveStorageScope(), state).success;
+export function savePersistedState(state: AppPersistedState, options?: SavePersistedStateOptions): boolean {
+  return savePersistedStateToKey(getActiveStorageScope(), state, options).success;
 }
 
 export function clearPersistedState(): void {
@@ -901,6 +1328,11 @@ export function persistSyncOutboxNow(): boolean {
   try {
     const raw = localStorage.getItem(storageKey);
     if (!raw) return false;
+    // 01A — auch der Sendenachweis überschreibt keinen neueren Bestand eines anderen Tabs.
+    if (isStorageKeyWrittenByOtherTab(storageKey)) {
+      staleTabDetected = true;
+      return false;
+    }
 
     /*
      * Bewusst am Rohbestand und **ohne** die Schemaprüfung des Laders: Hier
@@ -911,7 +1343,14 @@ export function persistSyncOutboxNow(): boolean {
      */
     const parsed = JSON.parse(raw) as Record<string, unknown>;
     parsed.syncOutbox = getSyncOutboxSnapshot();
-    localStorage.setItem(storageKey, JSON.stringify(parsed));
+    // 01A-FIX3 — Sendeaufträge sind kein fachlicher Inhalt: fachliche Revision bleibt, der Schreibvorgang zählt technisch.
+    const header = parseRevisionHeader(raw);
+    const nextHeader: StoredRevisionHeader = {
+      businessRevision: header?.businessRevision ?? 0,
+      writeGeneration: (header?.writeGeneration ?? 0) + 1,
+    };
+    localStorage.setItem(storageKey, serializeWithRevisionHeader(parsed, nextHeader));
+    knownBusinessRevisions.set(storageKey, nextHeader.businessRevision);
     return true;
   } catch (error) {
     console.warn('[OfficePilot] Sendenachweis konnte nicht gespeichert werden:', error);
@@ -1132,6 +1571,7 @@ export function hydrateStoresFromStorage(): CompanySetup {
     recordPersistedStateLoadOutcome(result);
     if (result.status === 'loaded' && result.state.setup.setupComplete) {
       applyStateToStores(result.state);
+      rememberLoadedContentBaseline();
       return getCachedSetup();
     }
     /*
@@ -1147,6 +1587,7 @@ export function hydrateStoresFromStorage(): CompanySetup {
   recordPersistedStateLoadOutcome(result);
   if (result.status === 'loaded') {
     applyStateToStores(result.state);
+    rememberLoadedContentBaseline();
     void backfillMissingFileRefHashes().then(() => persistAll());
     return getCachedSetup();
   }
@@ -1242,8 +1683,31 @@ export function persistAll(setupOverride?: CompanySetup): PersistResult {
 
   lastPersistFailure = null;
   lastPersistSuccess = true;
+  localMutationRevision += 1;
   publishPersistenceHealth();
+  notifyLocalMutationListeners();
   return { success: true };
+}
+
+type LocalMutationListener = () => void;
+const localMutationListeners = new Set<LocalMutationListener>();
+
+/** SYNC-AUTOMATIK-01A — Auslöser für den Sync-Planer: „lokal wurde gespeichert". */
+export function subscribeLocalMutations(listener: LocalMutationListener): () => void {
+  localMutationListeners.add(listener);
+  return () => {
+    localMutationListeners.delete(listener);
+  };
+}
+
+function notifyLocalMutationListeners(): void {
+  for (const listener of [...localMutationListeners]) {
+    try {
+      listener();
+    } catch {
+      /* ein Beobachter darf das Speichern nie scheitern lassen */
+    }
+  }
 }
 
 export function seedSyncChangeTrackerFromCurrentStores(): void {
@@ -1304,8 +1768,10 @@ export function buildPersistedStateSnapshot(): AppPersistedState {
 }
 
 export function applyPersistedStateFromSync(state: AppPersistedState): void {
+  // 01A-FIX3 — fachlich zählt, was die Speicher vorher und nachher tragen, nicht der rohe Kandidat.
+  const businessContentBefore = captureBusinessContentBeforeSyncApply();
   applyStateToStores(state);
-  savePersistedState(state);
+  savePersistedState(state, { businessContentBefore });
   /**
    * REAL-DEVICE-CLOUD-COMPANY-TRACKER-ECHO-FIX-01/01C — der Cloud-Bootstrap
    * wendet einen **rohen** Remote-Kandidaten an. `applyStateToStores` hydriert

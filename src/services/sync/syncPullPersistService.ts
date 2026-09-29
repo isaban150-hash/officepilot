@@ -6,15 +6,39 @@ import { clearMatchedInvoiceFinalizeIntents } from '../invoice/invoiceCloudPullM
 import {
   applyStateToStores,
   buildPersistedStateSnapshot,
+  captureBusinessContentBeforeSyncApply,
+  getLocalMutationRevision,
   savePersistedState,
   seedSyncChangeTrackerFromCurrentStores,
 } from '../persistenceService';
 import { getSyncCoordinator } from './syncCoordinator';
 import { getSyncOutboxSnapshot } from './syncOutboxService';
+import { rebaseSyncCandidateOntoLocalChanges } from './syncLocalRebaseService';
+
+/**
+ * SYNC-AUTOMATIK-01A — der lokale Stand beim Start eines Laufs.
+ *
+ * Ohne ihn lässt sich beim Anwenden nicht erkennen, ob inzwischen gespeichert
+ * wurde. Wer einen Lauf über ein `await` hinweg führt, erfasst ihn **vor** dem
+ * ersten `await`, im selben synchronen Abschnitt wie den Lauf-Snapshot.
+ */
+export interface SyncRunBase {
+  state: AppPersistedState;
+  revision: number;
+}
+
+export function captureSyncRunBase(): SyncRunBase {
+  return { state: buildPersistedStateSnapshot(), revision: getLocalMutationRevision() };
+}
 
 export type ApplySyncPullCandidateResult = {
   persisted: boolean;
   report: SyncCoordinatorReport;
+  /**
+   * 01A — während des Laufs wurde lokal gespeichert; diese Änderungen sind
+   * erhalten, aber noch nicht gesendet. Der Planer stösst einen Folgelauf an.
+   */
+  localChangesDuringRun?: boolean;
 };
 
 function clonePersistedState(state: AppPersistedState): AppPersistedState {
@@ -60,6 +84,8 @@ export function applySyncPullCandidateSafely(input: {
   report: SyncCoordinatorReport;
   pendingInvoiceIntentClears?: string[];
   pendingAmendmentIntentClears?: OrderAmendmentIntentClearKey[];
+  /** 01A — Stand beim Laufstart; fehlt er, gilt der bisherige Weg. */
+  base?: SyncRunBase;
 }): ApplySyncPullCandidateResult {
   const coordinator = getSyncCoordinator();
   const previous = clonePersistedState(buildPersistedStateSnapshot());
@@ -93,19 +119,38 @@ export function applySyncPullCandidateSafely(input: {
    * Bewusst nur hier und nicht in `applyStateToStores`: Backup-Wiederherstellung,
    * Notfall-Import und Bootstrap wenden absichtlich eine fremde Outbox an.
    */
-  const candidateOutbox = input.state.syncOutbox ?? [];
-  const knownOutboxIds = new Set(candidateOutbox.map((outboxEntry) => outboxEntry.id));
-  const addedDuringPull = getSyncOutboxSnapshot().filter(
-    (outboxEntry) => !knownOutboxIds.has(outboxEntry.id),
-  );
-  const stateToApply: AppPersistedState = {
-    ...input.state,
-    syncOutbox: [...candidateOutbox, ...addedDuringPull],
-  };
+  /*
+   * SYNC-AUTOMATIK-01A — wurde seit dem Laufstart lokal gespeichert, trägt der
+   * Speicher neuere Fachdaten als der Kandidat. Dann wird der Kandidat auf den
+   * aktuellen Stand gesetzt statt ihn zu ersetzen — auch hier ohne `await`
+   * zwischen Lesen und Anwenden.
+   */
+  const localChangesDuringRun =
+    input.base !== undefined && input.base.revision !== getLocalMutationRevision();
+  let stateToApply: AppPersistedState;
+  if (localChangesDuringRun) {
+    stateToApply = rebaseSyncCandidateOntoLocalChanges({
+      base: input.base!.state,
+      local: previous,
+      candidate: input.state,
+    }).state;
+  } else {
+    const candidateOutbox = input.state.syncOutbox ?? [];
+    const knownOutboxIds = new Set(candidateOutbox.map((outboxEntry) => outboxEntry.id));
+    const addedDuringPull = getSyncOutboxSnapshot().filter(
+      (outboxEntry) => !knownOutboxIds.has(outboxEntry.id),
+    );
+    stateToApply = {
+      ...input.state,
+      syncOutbox: [...candidateOutbox, ...addedDuringPull],
+    };
+  }
 
   try {
+    // 01A-FIX3 — ob die Übernahme fachlich etwas ändert, entscheidet der Vergleich der Speicher.
+    const businessContentBefore = captureBusinessContentBeforeSyncApply();
     applyStateToStores(stateToApply);
-    const saved = savePersistedState(stateToApply);
+    const saved = savePersistedState(stateToApply, { businessContentBefore });
     if (!saved) {
       applyStateToStores(previous);
       const message = 'Lokale Sync-Persistenz fehlgeschlagen.';
@@ -166,5 +211,5 @@ export function applySyncPullCandidateSafely(input: {
   }
 
   coordinator.publishLastReport(report);
-  return { persisted: true, report };
+  return { persisted: true, report, localChangesDuringRun };
 }

@@ -1,12 +1,12 @@
 export const bgDynamic = {
   'legal.disclaimer':
-    'OfficePilot не предоставя правни или данъчни консултации. Моля, проверете всички съдържания и документи в оригинала.',
+    'OfficeTakt не предоставя правни или данъчни консултации. Моля, проверете всички съдържания и документи в оригинала.',
   'paperFiling.instruction': 'Моля, подредете оригинала в: {folder} → Регистър {register}',
   'paperFiling.summary': '{folder}, Регистър {register}',
   'common.misc': 'Друго',
   'common.unknownSender': 'Подателят не е еднозначно разпознат.',
   'inbox.securityHintBody':
-    'OfficePilot не взема окончателни решения и не изпраща нищо без вашето потвърждение.',
+    'OfficeTakt не взема окончателни решения и не изпраща нищо без вашето потвърждение.',
   'priority.kritisch': 'Критично',
   'priority.hoch': 'Високо',
   'priority.mittel': 'Средно',

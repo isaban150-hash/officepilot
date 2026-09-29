@@ -1,9 +1,9 @@
 export const trScan = {
   'heute.scanButton': 'Fotoğraf / Tarama',
   'scan.title': 'Tarama',
-  'scan.subtitle': 'Fotoğraf veya PDF – OfficePilot sıralar ve arşivler.',
+  'scan.subtitle': 'Fotoğraf veya PDF – OfficeTakt sıralar ve arşivler.',
   'scan.captureTitle': 'Belge kaydet',
-  'scan.captureHint': 'Fotoğraf çekin veya dosya seçin. OfficePilot içeriği tanır.',
+  'scan.captureHint': 'Fotoğraf çekin veya dosya seçin. OfficeTakt içeriği tanır.',
   'scan.selectType': 'Tür seçin (isteğe bağlı)',
   'scan.typeAuto': 'Otomatik tanı',
   'scan.uploadFile': 'Dosya seç',

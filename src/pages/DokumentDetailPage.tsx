@@ -29,15 +29,22 @@ import { useApp } from '../context/AppContext';
 import { formatPaperFilingInstruction } from '../services/paperFolderService';
 import {
   getDocumentById,
+  isFinalizedInvoiceArchiveDocument,
   isGeneratedOutgoingInvoiceDocument,
   isInvoiceCorrectionDocument,
 } from '../services/documentService';
 import { buildInvoiceReachPath } from '../services/invoiceNavigation';
 import { deleteGeneratedInvoiceDocumentWithCloud } from '../services/document/generatedInvoiceDocumentDeleteService';
-import { unlinkInboxItemFromVorgang } from '../services/vorgangService';
+import { getVorgangById, unlinkInboxItemFromVorgang } from '../services/vorgangService';
+import { describeGeneratedInvoiceAction } from '../services/memory/documentExplanationService';
 import { SimpleConfirmDialog } from '../components/ui/SimpleConfirmDialog';
 import { getDocumentLifecycleStatusLabelKey, resolveDocumentLifecycle } from '../services/documentLifecycleService';
 import { recordDocumentContext } from '../services/brain/companySessionService';
+import {
+  ensureBusinessLetterArchived,
+  getBusinessLetterForDocument,
+  isBusinessLetterDocument,
+} from '../services/letter/businessLetterArchiveService';
 import type { CompanyDocument } from '../types/models';
 import type { TranslationKey } from '../i18n';
 import {
@@ -82,6 +89,28 @@ export function DokumentDetailPage() {
     }
   }, [id, navigate]);
 
+  /*
+   * E-MAIL-07B — ein selbst verfasster Geschäftsbrief, der vor 07B ohne PDF
+   * abgelegt wurde: das PDF wird hier einmalig nachgezogen, damit Ansicht
+   * und Versand dieselbe Datei haben. Nur wenn der Eintrag noch gar keine
+   * Datei trägt; eine vorhandene wird nie umgehängt.
+   */
+  const letterDocumentId = document && isBusinessLetterDocument(document) && !document.fileRefId ? document.id : null;
+  useEffect(() => {
+    if (!letterDocumentId) return;
+    const current = getDocumentById(letterDocumentId);
+    const letter = current ? getBusinessLetterForDocument(current) : undefined;
+    if (!letter) return;
+    let aktiv = true;
+    void ensureBusinessLetterArchived(letter).then((ergebnis) => {
+      if (!aktiv || !ergebnis.ok || ergebnis.pdf !== 'attached') return;
+      setDocument(getDocumentById(letterDocumentId));
+    });
+    return () => {
+      aktiv = false;
+    };
+  }, [letterDocumentId]);
+
   if (!document) return null;
 
   const categoryKey = `document.category.${document.category}` as TranslationKey;
@@ -93,6 +122,12 @@ export function DokumentDetailPage() {
    * Bereich sichtbar, nur die Handlungspflicht entfällt.
    */
   const isGeneratedInvoice = isGeneratedOutgoingInvoiceDocument(document);
+  /*
+   * BROWSER-ACCEPTANCE-FIX 01 / A1 — der Beleg einer festgeschriebenen
+   * Rechnung wird nicht gelöscht (Server-Regel in tombstone_workspace_document).
+   * Die Seite bietet den Weg deshalb gar nicht erst an und sagt, warum.
+   */
+  const isDeleteProtected = isFinalizedInvoiceArchiveDocument(document);
   /*
    * BRIEFE-01D — dieselbe Überlegung für ein selbst verfasstes
    * Geschäftsschreiben: Der Betrieb hat es geschrieben, es kam nicht mit der
@@ -208,6 +243,27 @@ export function DokumentDetailPage() {
           : 'neutral';
   const linkedInvoice =
     isGeneratedInvoice && document.linkedInvoiceId ? findInvoiceById(document.linkedInvoiceId) : undefined;
+  /*
+   * BROWSER-ACCEPTANCE-FIX 01 / A3 — die eigene Ausgangsrechnung wird aus ihrer
+   * Verknüpfung verstanden, nicht wie unbekannte Eingangspost: Kunde und
+   * Auftrag kommen aus Rechnung und Vorgang, Handlung und nächster Schritt aus
+   * demselben Rechnungsstatus wie die Erklärung darunter. Für jedes andere
+   * Dokument bleibt der Verstehen-Bereich unverändert.
+   */
+  const linkedVorgangId = document.linkedVorgang?.vorgangId?.trim();
+  const linkedVorgang = linkedVorgangId ? getVorgangById(linkedVorgangId) : undefined;
+  const ownInvoiceMeaning = isGeneratedInvoice
+    ? {
+        customerName: linkedInvoice?.customerSnapshot?.name || linkedVorgang?.customer || undefined,
+        vorgang: linkedVorgangId
+          ? {
+              id: linkedVorgangId,
+              title: linkedVorgang?.title || document.linkedVorgang?.vorgangTitle || '',
+            }
+          : undefined,
+        action: describeGeneratedInvoiceAction(document),
+      }
+    : undefined;
   const headerMeta = [
     linkedInvoice?.customerSnapshot?.name || document.issuer || null,
     document.issueDate
@@ -445,7 +501,11 @@ export function DokumentDetailPage() {
         <Button variant="outline" onClick={() => setIsEditing(true)}>
           {translate('document.edit')}
         </Button>
-        {!confirmDelete ? (
+        {isDeleteProtected ? (
+          <p className="hint-text" data-testid="document-detail-delete-protected">
+            {translate('document.delete.blocked.finalizedInvoice')}
+          </p>
+        ) : !confirmDelete ? (
           <Button
             variant="danger"
             data-testid="document-detail-delete-trigger"
@@ -529,7 +589,11 @@ export function DokumentDetailPage() {
           ) : (
             <>
               {/* DOKUMENTVERSTAENDNIS-01C — was im Schreiben steht, vor der technischen Einordnung. */}
-              <DocumentMeaningPanel text={document.recognizedText} sender={document.issuer} />
+              <DocumentMeaningPanel
+                text={document.recognizedText}
+                sender={document.issuer}
+                ownInvoice={ownInvoiceMeaning}
+              />
 
               <DocumentUnderstandingCard documentId={document.id} />
             </>

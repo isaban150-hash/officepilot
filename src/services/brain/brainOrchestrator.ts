@@ -30,6 +30,7 @@ import { getTodayIso } from '../taskNormalize';
 import { detectPlannedCapability } from './brainCapabilityRegistry';
 import { assessBrainIntent } from './brainIntentRegistry';
 import { tryResolveCompanyContextQuestion } from './companyContextResolver';
+import { tryResolveDailyPriorityQuestion } from './dailyPriorityResolver';
 import { tryResolveHandwerkKnowledgeQuestion } from './handwerkKnowledgeResolver';
 import { tryResolveWorkflowQuestion } from './workflowKnowledgeResolver';
 import { tryResolveFinanceQuestion } from './financeKnowledgeResolver';
@@ -240,6 +241,27 @@ export async function processOfficePilotQuestion(
     });
   }
 
+  /*
+   * BROWSER-ACCEPTANCE-FIX 01 / B1 — „Was soll ich heute erledigen?" ist eine
+   * Frage an den ganzen Betrieb, nicht an den zuletzt geöffneten Auftrag. Sie
+   * wird aus derselben Quelle wie „Jetzt wichtig" beantwortet, rein lesend.
+   * Die sitzungsbezogenen Hinweise zu einem einzelnen Auftrag gehören nicht
+   * dazu — sie erzeugten die widersprüchlich klingenden Zusatzzeilen.
+   *
+   * B1-Nacharbeit: kein `companyContextUsed`. Das Feld sagt, welche Teile der
+   * Sitzung (Kunde, Auftrag, Upload …) verwendet wurden — die Tagesantwort
+   * verwendet keinen davon, sie liest den ganzen Betrieb.
+   */
+  const dailyResolution = tryResolveDailyPriorityQuestion(trimmed, todayIso);
+  if (dailyResolution) {
+    return buildResult({
+      question: trimmed,
+      source: 'rules',
+      assistantAnswer: dailyResolution.answer,
+      proactiveHints: [],
+    });
+  }
+
   const companyResolution = tryResolveCompanyContextQuestion(trimmed, session);
   if (companyResolution) {
     return buildResult({
@@ -301,9 +323,9 @@ export async function processOfficePilotQuestion(
       source: 'planned_capability',
       capabilityId: plannedCapability.id,
       assistantAnswer: {
-        title: 'OfficePilot',
+        title: 'OfficeTakt',
         summary:
-          'Diese Funktion ist für eine spätere Version vorgesehen. OfficePilot nutzt dafür noch keine externen Quellen.',
+          'Diese Funktion ist für eine spätere Version vorgesehen. OfficeTakt nutzt dafür noch keine externen Quellen.',
         bullets: [
           'Ich kann Ihnen bei Dokumenten, Aufträgen, Rechnungen und Kommunikation aus Ihren vorhandenen Daten helfen.',
         ],
@@ -387,7 +409,7 @@ export async function processOfficePilotQuestion(
         question: trimmed,
         source: 'clarification',
         assistantAnswer: rulesResult?.answer ?? {
-          title: 'OfficePilot',
+          title: 'OfficeTakt',
           summary: NO_DATA_MESSAGE,
           bullets: [],
           actions: [],
@@ -412,7 +434,7 @@ export async function processOfficePilotQuestion(
       question: trimmed,
       source: 'unavailable',
       assistantAnswer: {
-        title: 'OfficePilot',
+        title: 'OfficeTakt',
         summary:
           'Eine ausführliche KI-Antwort ist derzeit nicht verfügbar. Bitte prüfen Sie Ihre Daten in Eingang, Aufträgen oder Dokumenten.',
         bullets: [],

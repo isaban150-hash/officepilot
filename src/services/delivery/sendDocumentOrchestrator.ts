@@ -1,3 +1,4 @@
+import { resolveDeliveryContext } from './deliveryCommunicationContext';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getSupabaseClient, getSupabaseUrl, isSupabaseConfigured } from '../../lib/supabase';
 import { buildPersistedStateSnapshot } from '../persistenceService';
@@ -8,8 +9,9 @@ import { getVorgangInvoice, updateInvoiceSentFields } from '../vorgangService';
 import { deliveryIdentityDocumentId, isInvoiceDeliveryIdentity, type DeliveryDocumentIdentity, type DeliveryStatus, type DocumentDelivery } from '../../types/documentDelivery';
 import { getDocumentById } from '../documentService';
 import type { VorgangInvoice } from '../../types/models';
-import { isValidRecipientEmail, normalizeRecipientEmail } from './documentDeliveryContract';
+import { isDeliveryErrorCategory, isDeliveryStatus, isValidRecipientEmail, normalizeRecipientEmail } from './documentDeliveryContract';
 import {
+  isArchivedDocumentSyncBlocked,
   prepareArchivedDocumentDeliveryAttachment,
   prepareInvoiceDeliveryAttachment,
   rpcCreateWorkspaceDocumentDelivery,
@@ -55,6 +57,8 @@ export interface SendDraftState {
   attachmentSizeBytes?: number;
   attachmentFilename?: string;
   retryOfDeliveryId?: string;
+  /** E-MAIL-07B — der Nutzer hat die mögliche Doppelzustellung nach `unknown` ausdrücklich bestätigt. */
+  confirmUncertainRetry?: boolean;
   phase: SendPhase;
   updatedAt: string;
 }
@@ -115,6 +119,7 @@ export interface NewSendDraftInput {
   subject: string;
   bodyText: string;
   retryOfDeliveryId?: string;
+  confirmUncertainRetry?: boolean;
 }
 
 /** Neuer Versuch: neue client_delivery_id — vor jedem Upload/Create/Send. */
@@ -130,6 +135,7 @@ export function createSendDraft(input: NewSendDraftInput): SendDraftState {
     subject: input.subject.trim(),
     bodyText: input.bodyText,
     retryOfDeliveryId: input.retryOfDeliveryId,
+    confirmUncertainRetry: input.confirmUncertainRetry === true && Boolean(input.retryOfDeliveryId) ? true : undefined,
     phase: 'draft',
     updatedAt: new Date().toISOString(),
   };
@@ -150,17 +156,25 @@ export type SendDocumentClientError =
   | 'forbidden'
   | 'not_sendable'
   | 'uncertain_pending'
+  | 'uncertain_retry_exists'
+  | 'rate_limited'
+  | 'attachment_not_synced'
+  | 'attachment_unavailable'
+  | 'document_sync_blocked'
   | 'server_unavailable'
   | 'unauthenticated'
   | 'rpc_failed';
 
+/** `in_progress` (07B): der Server hat den Versand übernommen, das Ergebnis steht noch aus. */
+export type SendDocumentClientAction = 'sent' | 'replayed' | 'unknown_pending' | 'failed' | 'in_progress';
+
 export type SendDocumentClientResult =
-  | { ok: true; action: 'sent' | 'replayed' | 'unknown_pending' | 'failed'; delivery: DocumentDelivery; deliveries: DocumentDelivery[] }
+  | { ok: true; action: SendDocumentClientAction; delivery: DocumentDelivery; deliveries: DocumentDelivery[] }
   | { ok: false; error: SendDocumentClientError; message?: string; draft: SendDraftState };
 
 export interface SendDocumentServerResponse {
   ok: boolean;
-  action?: 'sent' | 'replayed' | 'unknown_pending' | 'failed';
+  action?: SendDocumentClientAction;
   error?: string;
   delivery?: { id: string; status: DeliveryStatus; providerMessageId: string | null; errorCategory: string | null; errorCode: string | null; errorMessageSafe: string | null; rowVersion: number };
 }
@@ -171,6 +185,12 @@ export interface SendDocumentDeps {
   invokeSend?: (input: { workspaceId: string; clientDeliveryId: string }) => Promise<{ status: number; body: SendDocumentServerResponse }>;
   onPhase?: (phase: SendPhase) => void;
   now?: () => string;
+  /**
+   * 07B-FIX1 — einmal synchronisieren, damit ein lokal abgelegtes Archiv-PDF
+   * (Dokument, Datei, Bindung) in der Cloud ankommt. Testbar injizierbar;
+   * Standard ist der normale Sync-Lauf der App.
+   */
+  syncNow?: () => Promise<unknown>;
 }
 
 async function defaultInvokeSend(client: SupabaseClient, input: { workspaceId: string; clientDeliveryId: string }): Promise<{ status: number; body: SendDocumentServerResponse }> {
@@ -185,6 +205,12 @@ async function defaultInvokeSend(client: SupabaseClient, input: { workspaceId: s
   });
   const body = (await response.json().catch(() => ({ ok: false, error: 'invalid_response' }))) as SendDocumentServerResponse;
   return { status: response.status, body };
+}
+
+/** 07B-FIX1 — der normale Sync-Lauf der App; dynamisch geladen, um den Orchestrator schlank zu halten. */
+async function defaultSyncNow(): Promise<unknown> {
+  const { runSyncFromUi } = await import('../sync/syncUiService');
+  return runSyncFromUi();
 }
 
 /**
@@ -280,6 +306,8 @@ export async function runSendDocument(
   if (isInvoice && !invoice) return failWith('invoice_missing');
   const archived = isInvoice ? undefined : getDocumentById(deliveryIdentityDocumentId(draft.identity));
   if (!isInvoice && (!archived || archived.sync?.deleted)) return failWith('document_missing');
+  // 07B-FIX2 — ungeklärter Sync-Konflikt am Dokument: fail-closed, bevor irgendetwas hochgeladen wird.
+  if (archived && isArchivedDocumentSyncBlocked(archived)) return failWith('document_sync_blocked');
 
   // 1–3: PDF + Hash (nur wenn der Anhang dieses Versuchs noch nicht gesichert ist).
   if (!draft.attachmentStoragePath || !draft.attachmentSha256) {
@@ -290,7 +318,12 @@ export async function runSendDocument(
       if (!prepared.ok) return failWith('pdf_failed', prepared.reason);
     } else {
       prepared = await prepareArchivedDocumentDeliveryAttachment(archived);
-      if (!prepared.ok) return failWith(prepared.reason === 'document_missing' ? 'document_missing' : 'document_not_sendable', prepared.reason);
+      if (!prepared.ok) {
+        // 07B-FIX1 — „kein PDF" nur, wenn es wirklich keines gibt; eine unlesbare Datei ist etwas anderes.
+        if (prepared.reason === 'document_missing') return failWith('document_missing', prepared.reason);
+        if (prepared.reason === 'file_unavailable') return failWith('attachment_unavailable', prepared.reason);
+        return failWith('document_not_sendable', prepared.reason);
+      }
     }
     // 4: Upload — vorhandenes Objekt (gleicher Hash) gilt als Erfolg, kein zweiter Upload.
     phase('uploading');
@@ -308,31 +341,50 @@ export async function runSendDocument(
 
   // 5: Delivery anlegen — Replay liefert dieselbe Zeile.
   phase('creating');
-  const created = await rpcCreateWorkspaceDocumentDelivery(
-    {
-      workspaceId: draft.workspaceId,
-      clientDeliveryId: draft.clientDeliveryId,
-      identity: draft.identity,
-      recipientEmail: draft.recipientEmail,
-      subject: draft.subject,
-      bodyText: draft.bodyText,
-      attachment: {
-        storagePath: draft.attachmentStoragePath!,
-        sha256: draft.attachmentSha256!,
-        sizeBytes: draft.attachmentSizeBytes!,
-        filename: draft.attachmentFilename!,
-      },
-      provider: resolveClientMailProvider(),
-      retryOfDeliveryId: draft.retryOfDeliveryId,
+  const createInput = {
+    workspaceId: draft.workspaceId,
+    clientDeliveryId: draft.clientDeliveryId,
+    identity: draft.identity,
+    recipientEmail: draft.recipientEmail,
+    subject: draft.subject,
+    bodyText: draft.bodyText,
+    attachment: {
+      storagePath: draft.attachmentStoragePath!,
+      sha256: draft.attachmentSha256!,
+      sizeBytes: draft.attachmentSizeBytes!,
+      filename: draft.attachmentFilename!,
     },
-    client,
-  );
+    provider: resolveClientMailProvider(),
+    retryOfDeliveryId: draft.retryOfDeliveryId,
+    confirmUncertainRetry: draft.confirmUncertainRetry,
+    // E-MAIL-07C — Kunde/Vorgang ausschliesslich über Kennungen der Dokument-Verknüpfung.
+    context: resolveDeliveryContext(draft.identity),
+  };
+  let created = await rpcCreateWorkspaceDocumentDelivery(createInput, client);
+  /*
+   * 07B-FIX1 — Archivdokument (z. B. frisch nachgerüstetes Brief-PDF) ist
+   * lokal vollständig, in der Cloud aber noch nicht: einmal synchronisieren,
+   * dann denselben Auftrag (gleiche client_delivery_id, idempotent) erneut
+   * anlegen. Der Server prüft die Bindung weiterhin selbst — fail-closed.
+   * Kein Endlosversuch: bleibt es dabei, sagt die Meldung genau das.
+   */
+  if (!created.ok && created.error === 'attachment_not_synced' && !isInvoice) {
+    try {
+      await (deps.syncNow ?? defaultSyncNow)();
+    } catch {
+      /* Der erneute Versuch unten entscheidet. */
+    }
+    created = await rpcCreateWorkspaceDocumentDelivery(createInput, client);
+  }
   if (!created.ok) {
+    if (created.error === 'attachment_not_synced') return failWith('attachment_not_synced', created.message);
     if (created.error === 'idempotency_conflict') return failWith('idempotency_conflict', created.message);
     if (created.error === 'forbidden') return failWith('forbidden', created.message);
     if (created.error === 'not_sendable' || created.error === 'not_found') return failWith('not_sendable', created.message);
     if (created.error === 'invalid_recipient') return failWith('invalid_recipient');
     if (created.error === 'uncertain_pending') return failWith('uncertain_pending', created.message);
+    if (created.error === 'uncertain_retry_exists') return failWith('uncertain_retry_exists', created.message);
+    if (created.error === 'rate_limited') return failWith('rate_limited', created.message);
     return failWith('rpc_failed', created.message);
   }
 
@@ -352,7 +404,14 @@ export async function runSendDocument(
     ? await refreshDeliveries({ vorgangId: input.vorgangId, invoice: invoice!, identity: draft.identity }, { client })
     : await refreshDocumentDeliveries(draft.identity as Extract<DeliveryDocumentIdentity, { clientDocumentId: string }>, { client });
   if (!refreshed.ok) return failWith(refreshed.error);
-  const delivery = refreshed.deliveries.find((d) => d.clientDeliveryId === draft.clientDeliveryId) ?? created.delivery;
+  /*
+   * Die Historie ist die Wahrheit. Fehlt die Zeile dort (Lesereplikat,
+   * Verzögerung), ist die Antwort des Versandaufrufs neuer als der Stand beim
+   * Anlegen — 07B: sonst erschiene ein angenommener Versand als „läuft noch".
+   */
+  const delivery =
+    refreshed.deliveries.find((d) => d.clientDeliveryId === draft.clientDeliveryId) ??
+    withServerResponse(created.delivery, response.body.delivery);
 
   if (!response.body.ok) {
     if (delivery.status === 'queued') {
@@ -366,12 +425,74 @@ export async function runSendDocument(
     }
   }
 
+  // Noch `queued` (der Server hat nichts übernommen): Draft bleibt für ein gefahrloses Fortsetzen.
+  if (delivery.status === 'queued') {
+    draft = { ...draft, phase: 'creating' };
+    saveSendDraft(draft);
+    return { ok: true, action: 'in_progress', delivery, deliveries: refreshed.deliveries };
+  }
+
   // 8: abgeschlossen — Draft entfernen; die Rechnung wurde in refreshDeliveries nachgezogen.
+  // Auch bei `sending` (07B): der Server hält den Versand, ein Fortsetzen von hier wäre sinnlos.
   phase('done');
   clearSendDraft(draft.identity, draft.scopeKey);
-  const action: 'sent' | 'replayed' | 'unknown_pending' | 'failed' =
-    delivery.status === 'unknown' ? 'unknown_pending' : delivery.status === 'failed' || delivery.status === 'rejected' ? 'failed' : response.body.action === 'replayed' ? 'replayed' : 'sent';
-  return { ok: true, action, delivery, deliveries: refreshed.deliveries };
+  return { ok: true, action: resolveClientAction(delivery, response.body.action), delivery, deliveries: refreshed.deliveries };
+}
+
+function withServerResponse(created: DocumentDelivery, response: SendDocumentServerResponse['delivery']): DocumentDelivery {
+  if (!response || response.id !== created.id || !isDeliveryStatus(response.status)) return created;
+  if (Number(response.rowVersion) < created.rowVersion) return created;
+  return {
+    ...created,
+    status: response.status,
+    providerMessageId: response.providerMessageId ?? created.providerMessageId,
+    errorCategory: isDeliveryErrorCategory(response.errorCategory) ? response.errorCategory : created.errorCategory,
+    errorCode: response.errorCode ?? created.errorCode,
+    errorMessageSafe: response.errorMessageSafe ?? created.errorMessageSafe,
+    rowVersion: Number(response.rowVersion),
+  };
+}
+
+/** Die Aktion folgt der Serverwahrheit der Delivery, nicht der (evtl. verlorenen) Antwort. */
+function resolveClientAction(delivery: DocumentDelivery, serverAction: SendDocumentClientAction | undefined): SendDocumentClientAction {
+  if (delivery.status === 'sending') return 'in_progress';
+  if (delivery.status === 'unknown') return 'unknown_pending';
+  if (delivery.status === 'failed' || delivery.status === 'rejected') return 'failed';
+  return serverAction === 'replayed' ? 'replayed' : 'sent';
+}
+
+/**
+ * E-MAIL-07B — „Status prüfen" für einen Versuch in `sending`.
+ *
+ * Fragt die Edge Function mit derselben client_delivery_id. Das ist
+ * gefahrlos: Der Server sendet eine `sending`-Delivery nie erneut — er
+ * meldet `in_progress` oder löst einen hängenden Claim zu `unknown` auf.
+ * Für alle anderen Zustände wird nur die Historie neu geladen.
+ */
+export async function checkDeliveryStatus(
+  input: { delivery: DocumentDelivery },
+  deps: SendDocumentDeps = {},
+): Promise<{ ok: true; deliveries: DocumentDelivery[] } | { ok: false; error: SendDocumentClientError }> {
+  const client = deps.client ?? getSupabaseClient();
+  if (!client || !isSupabaseConfigured()) return { ok: false, error: 'not_configured' };
+  const workspaceId = resolveDeliveryWorkspaceId();
+  if (!workspaceId) return { ok: false, error: 'workspace_missing' };
+  if (input.delivery.status === 'sending') {
+    try {
+      const request = { workspaceId, clientDeliveryId: input.delivery.clientDeliveryId };
+      if (deps.invokeSend) await deps.invokeSend(request);
+      else await defaultInvokeSend(client, request);
+    } catch {
+      /* Antwort verloren — die Historie unten ist die Wahrheit. */
+    }
+  }
+  const identity: DeliveryDocumentIdentity =
+    input.delivery.documentKind === 'invoice' || input.delivery.documentKind === 'invoice_correction'
+      ? { kind: input.delivery.documentKind, clientInvoiceId: input.delivery.linkedInvoiceId ?? '' }
+      : { kind: input.delivery.documentKind, clientDocumentId: input.delivery.linkedDocumentId ?? '' };
+  const listed = await rpcListWorkspaceDocumentDeliveries({ workspaceId, identity }, client);
+  if (!listed.ok) return { ok: false, error: listed.error === 'forbidden' ? 'forbidden' : 'rpc_failed' };
+  return { ok: true, deliveries: listed.deliveries };
 }
 
 /**

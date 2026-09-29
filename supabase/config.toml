@@ -423,3 +423,55 @@ enabled = true
 enabled = true
 verify_jwt = true
 entrypoint = "./functions/send-document/index.ts"
+
+# E-MAIL-07D — Edge Function "send-email" (freie Geschaefts-E-Mail, mehrere
+# Anhaenge). Gleiche Absicherung wie send-document; gleiche Secrets.
+[functions.send-email]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/send-email/index.ts"
+
+# E-MAIL-07E — Edge Function "sync-mailbox" (eingehende E-Mails abrufen).
+# verify_jwt = true: nur angemeldete Nutzer; die Function prueft zusaetzlich
+# Schreibrecht und Postfach-Zugehoerigkeit. Zugangsdaten nur aus Supabase Vault.
+# Sendet nie eine E-Mail.
+[functions.sync-mailbox]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/sync-mailbox/index.ts"
+
+# E-MAIL-07E-MSA — Microsoft-Postfach per delegiertem OAuth (auch persoenliche
+# Konten). "mailbox-oauth-start": nur angemeldete Nutzer mit Schreibrecht;
+# erzeugt state/PKCE serverseitig und liefert die Microsoft-Anmelde-URL.
+[functions.mailbox-oauth-start]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/mailbox-oauth-start/index.ts"
+
+# "mailbox-oauth-callback" ist die bei Microsoft eingetragene Redirect-URI.
+# Microsoft leitet den Browser ohne Supabase-JWT hierher, daher
+# verify_jwt = false; abgesichert durch einmaligen, ablaufenden state (nur
+# SHA-256 gespeichert), PKCE und serverseitigen Code-Tausch.
+[functions.mailbox-oauth-callback]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/mailbox-oauth-callback/index.ts"
+
+# E-MAIL 07E-AUTO-SYNC — "mailbox-auto-sync": automatischer Postfachabruf.
+# Aufrufer ist nur pg_cron (pg_net) ohne Nutzer-JWT, daher verify_jwt = false;
+# abgesichert durch das Scheduler-Geheimnis aus dem Supabase Vault (Header
+# x-officetakt-scheduler). Gleicher Abruf/Lease wie sync-mailbox. Sendet nie.
+[functions.mailbox-auto-sync]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/mailbox-auto-sync/index.ts"
+
+# E-MAIL 07F-01B — "email-provider-webhook": Zustellereignisse des E-Mail-
+# Dienstes (Brevo). Brevo sendet kein Supabase-JWT, daher verify_jwt = false;
+# abgesichert durch das Bearer-Token der Brevo-Webhook-Konfiguration, geprueft
+# gegen das Function-Secret BREVO_WEBHOOK_TOKEN (ohne Secret: alles abgelehnt).
+# Sendet nie, legt keine Nachricht an.
+[functions.email-provider-webhook]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/email-provider-webhook/index.ts"

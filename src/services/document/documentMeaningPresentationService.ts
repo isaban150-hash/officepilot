@@ -77,6 +77,15 @@ export interface DocumentMeaningView {
   customerCandidates: MeaningCandidateRow[];
   vorgangCandidates: MeaningCandidateRow[];
   nextStepKey: TranslationKey;
+  /**
+   * BROWSER-ACCEPTANCE-FIX 01 / A3 — fertige Sätze aus der Rechnungswahrheit.
+   * Nur bei einer eigenen, verknüpften Ausgangsrechnung gesetzt; sie haben dann
+   * Vorrang vor den Schlüsseln oben.
+   */
+  actionNeedText?: string;
+  nextStepText?: string;
+  /** Kunde und Auftrag stehen fest (Verknüpfung), sie sind keine Vorschläge. */
+  assignmentFromInvoice?: boolean;
   /** Was ehrlicherweise offenbleibt. */
   uncertainties: TranslationKey[];
   /** Nichts Belegbares gefunden — die Oberfläche zeigt dann gar nichts. */
@@ -308,6 +317,65 @@ export function buildDocumentMeaningView(input: MeaningViewInput): DocumentMeani
   };
 
   return viewAusKern(vollstaendig);
+}
+
+/**
+ * BROWSER-ACCEPTANCE-FIX 01 / A3 — die eigene, verknüpfte Ausgangsrechnung.
+ *
+ * OfficeTakt hat sie selbst erzeugt; Kunde, Auftrag und Zahlungsstand stehen
+ * über die Rechnungsverknüpfung fest. Die Leseregeln für eingehende Post
+ * (mögliche Kunden, Handlungsbedarf aus Pflichten, Unsicherheiten der
+ * Zuordnung) würden hier Zweifel erfinden, die es nicht gibt:
+ *
+ *   * keine Kandidatensuche — die Verknüpfung gewinnt, es gibt nichts zu wählen;
+ *   * Handlung und nächster Schritt aus dem Rechnungsstatus, nicht geraten;
+ *   * keine Zuordnungs-/Empfänger-Unsicherheit;
+ *   * Pflichten und Fristen im Text richten sich an den Kunden, nicht an den
+ *     Betrieb — sie erscheinen nur zur Kenntnis.
+ *
+ * Betreff, Zweck, Beträge und Termine bleiben sichtbar: Die Analyse wird nicht
+ * versteckt, sie wird richtig eingeordnet. Eingehende Dokumente laufen
+ * unverändert über `buildDocumentMeaningView`.
+ */
+export interface OwnInvoiceMeaningInput {
+  text: string;
+  customerName?: string;
+  vorgang?: { id: string; title: string };
+  action: { need: MeaningActionNeed; text: string; nextStep: string };
+}
+
+export function buildOwnInvoiceMeaningView(input: OwnInvoiceMeaningInput): DocumentMeaningView {
+  const core = buildDocumentSemanticCore({
+    text: input.text ?? '',
+    companyProfile: getCompanyProfileStoreSnapshot() ?? null,
+  });
+  const basis = viewAusKern({ ...core, customerCandidates: [], vorgangCandidates: [] });
+
+  const customerName = input.customerName?.trim();
+  const vorgangTitle = input.vorgang?.title.trim();
+  const fest = (id: string, name: string): MeaningCandidateRow => ({
+    id,
+    name,
+    reason: '',
+    uncertain: false,
+  });
+
+  return {
+    ...basis,
+    actionNeed: input.action.need,
+    actionNeedText: input.action.text,
+    nextStepText: input.action.nextStep || undefined,
+    obligations: [],
+    deadlines: basis.deadlines.map((frist) => ({ ...frist, isAction: false })),
+    accountingLabelKey: 'documentMeaning.accounting.ownInvoice',
+    accountingHintKey: 'documentMeaning.accounting.ownInvoiceHint',
+    customerCandidates: customerName ? [fest('invoice-customer', customerName)] : [],
+    vorgangCandidates:
+      input.vorgang && vorgangTitle ? [fest(input.vorgang.id, vorgangTitle)] : [],
+    assignmentFromInvoice: true,
+    uncertainties: [],
+    isEmpty: false,
+  };
 }
 
 /** Für Aufrufer, die den Kern bereits haben — etwa aus der Interpretation. */

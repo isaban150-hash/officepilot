@@ -53,6 +53,7 @@ import { getLastPersistSuccess } from '../services/persistenceService';
 import { printInvoice } from '../services/invoicePrintService';
 import { getVorgangById } from '../services/vorgangService';
 import { resolveInvoiceDetailRoute } from '../services/invoice/invoiceDetailRouteResolver';
+import { buildInvoiceDetailHighlights } from '../services/invoice/invoiceDetailHighlights';
 import { buildInvoiceReachPath, buildOpenInvoicesPath } from '../services/invoiceNavigation';
 import { buildInvoiceCorrectionModel } from '../services/invoice/invoiceCorrectionModel';
 import { generateInvoiceCorrectionPdf } from '../services/invoicePdfService';
@@ -710,17 +711,15 @@ export function InvoiceDetailPage() {
             '{amount}',
             formatPaymentCurrency(paymentSummary.totalDue),
           )}
-          highlights={
-            paymentSummary.openAmount > 0
-              ? [
-                  translate('invoice.highlight.openAmount').replace(
-                    '{amount}',
-                    formatPaymentCurrency(paymentSummary.openAmount),
-                  ),
-                  translate(statusKey),
-                ]
-              : [translate(statusKey)]
-          }
+          highlights={buildInvoiceDetailHighlights({
+            status: paymentSummary.status,
+            openAmount: paymentSummary.openAmount,
+            openAmountText: translate('invoice.highlight.openAmount').replace(
+              '{amount}',
+              formatPaymentCurrency(paymentSummary.openAmount),
+            ),
+            statusText: translate(statusKey),
+          })}
           actions={primaryActions}
           hideIdentity
           testId="invoice-detail-experience"

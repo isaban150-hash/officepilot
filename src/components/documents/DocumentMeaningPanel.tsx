@@ -17,6 +17,8 @@ import { useApp } from '../../context/AppContext';
 import {
   buildDocumentMeaningView,
   buildDocumentMeaningViewFromCore,
+  buildOwnInvoiceMeaningView,
+  type OwnInvoiceMeaningInput,
 } from '../../services/document/documentMeaningPresentationService';
 import type { DocumentSemanticCore } from '../../types/documentSemanticCore';
 import type { MeaningCandidateRow } from '../../services/document/documentMeaningPresentationService';
@@ -34,17 +36,29 @@ interface DocumentMeaningPanelProps {
   core?: DocumentSemanticCore | null;
   /** Der erkannte Absender, falls bekannt. */
   sender?: string;
+  /**
+   * BROWSER-ACCEPTANCE-FIX 01 / A3 — eigene, verknüpfte Ausgangsrechnung.
+   * Gesetzt, gilt die Rechnungswahrheit statt der Leseregeln für Fremdpost.
+   */
+  ownInvoice?: Omit<OwnInvoiceMeaningInput, 'text'>;
   testId?: string;
 }
 
-export function DocumentMeaningPanel({ text, core, sender, testId }: DocumentMeaningPanelProps) {
+export function DocumentMeaningPanel({
+  text,
+  core,
+  sender,
+  ownInvoice,
+  testId,
+}: DocumentMeaningPanelProps) {
   const { translate } = useApp();
   const view = useMemo(() => {
+    if (ownInvoice) return buildOwnInvoiceMeaningView({ ...ownInvoice, text: text ?? '' });
     /* Der Volltext ist die bessere Quelle: Er folgt den heutigen Leseregeln. */
     if (text && text.trim()) return buildDocumentMeaningView({ text, sender });
     if (core) return buildDocumentMeaningViewFromCore(core);
     return null;
-  }, [text, core, sender]);
+  }, [text, core, sender, ownInvoice]);
 
   if (!view) return null;
 
@@ -63,6 +77,11 @@ export function DocumentMeaningPanel({ text, core, sender, testId }: DocumentMea
           {zeilen.map((zeile) => (
             <li key={zeile.id} className="document-meaning__candidate">
               <span className="document-meaning__candidate-name">{zeile.name}</span>
+              {view.assignmentFromInvoice ? (
+                <span className="document-meaning__candidate-reason">
+                  {translate('documentMeaning.candidate.fromInvoice')}
+                </span>
+              ) : null}
               {zeile.reason ? (
                 <span className="document-meaning__candidate-reason">{zeile.reason}</span>
               ) : null}
@@ -73,7 +92,7 @@ export function DocumentMeaningPanel({ text, core, sender, testId }: DocumentMea
               ) : null}
             </li>
           ))}
-          {zeilen.length > 1 ? (
+          {zeilen.length > 1 && !view.assignmentFromInvoice ? (
             <li className="document-meaning__hint">{translate('documentMeaning.candidate.choose')}</li>
           ) : null}
         </ul>
@@ -127,7 +146,7 @@ export function DocumentMeaningPanel({ text, core, sender, testId }: DocumentMea
           className={`document-meaning__value document-meaning__answer document-meaning__answer--${view.actionNeed}`}
           data-testid="document-meaning-action"
         >
-          {translate(view.actionNeedLabelKey)}
+          {view.actionNeedText ?? translate(view.actionNeedLabelKey)}
         </p>
       </section>
 
@@ -193,13 +212,21 @@ export function DocumentMeaningPanel({ text, core, sender, testId }: DocumentMea
         <p className="document-meaning__hint">{translate(view.accountingHintKey)}</p>
       </section>
 
-      {kandidatenBlock(translate('documentMeaning.customer'), view.customerCandidates, 'customer')}
-      {kandidatenBlock(translate('documentMeaning.vorgang'), view.vorgangCandidates, 'vorgang')}
+      {kandidatenBlock(
+        translate(view.assignmentFromInvoice ? 'documentMeaning.customer.assigned' : 'documentMeaning.customer'),
+        view.customerCandidates,
+        'customer',
+      )}
+      {kandidatenBlock(
+        translate(view.assignmentFromInvoice ? 'documentMeaning.vorgang.assigned' : 'documentMeaning.vorgang'),
+        view.vorgangCandidates,
+        'vorgang',
+      )}
 
       <section className="document-meaning__section">
         <h3 className="document-meaning__label">{translate('documentMeaning.nextStep')}</h3>
         <p className="document-meaning__value" data-testid="document-meaning-next-step">
-          {translate(view.nextStepKey)}
+          {view.nextStepText ?? translate(view.nextStepKey)}
         </p>
       </section>
 

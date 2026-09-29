@@ -3,7 +3,7 @@ import type { HandwerkAdvice } from '../../types/handwerkKnowledge';
 import type { InboxItem, Vorgang } from '../../types/models';
 import { analyzeContractIntelligenceFromInbox } from '../contractIntelligenceService';
 import { getInboxItemById } from '../inboxService';
-import { processUploadedDocument } from '../intakeWorkflowService';
+import { analyzeUploadedDocument } from '../intakeWorkflowService';
 import {
   getBilledQuantity,
   getPositionBillingStatus,
@@ -116,7 +116,7 @@ export function buildHandwerkAdviceForInbox(item: InboxItem): HandwerkAdvice[] {
     });
   }
 
-  const workflow = processUploadedDocument(item.id);
+  const workflow = analyzeUploadedDocument(item.id);
   if (workflow?.similarVorgaenge.length === 1) {
     advice.push({
       messageKey: 'handwerkKnowledge.hint.documentBelongsToVorgang',

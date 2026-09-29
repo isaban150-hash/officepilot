@@ -288,7 +288,7 @@ describe('STORAGE-RECOMMENDATION-02 i18n DE/TR/BG', () => {
 
   it('Kern-Keys sind übersetzbar', () => {
     expect(t('storageRecommendation.level.archive_required', 'de')).toContain('empfohlen');
-    expect(t('storageRecommendation.disclaimer.notLegalAdvice', 'tr')).toContain('OfficePilot');
+    expect(t('storageRecommendation.disclaimer.notLegalAdvice', 'tr')).toContain('OfficeTakt');
     expect(t('storageRecommendation.action.useExisting', 'bg')).toContain('файл');
   });
 });

@@ -148,7 +148,7 @@ test.describe('E-Mail-Versand — freie Rechnung (lokale Datenbank, Stub)', () =
     /* 10.–13. Status und Rechnung */
     await expect(page.getByTestId('invoice-delivery-status')).toHaveText('An E-Mail-Dienst übergeben');
     await expect(page.getByTestId('invoice-delivery-panel')).not.toContainText('Zugestellt');
-    await expect(page.getByTestId('invoice-delivery-source')).toContainText('Per OfficePilot versendet');
+    await expect(page.getByTestId('invoice-delivery-source')).toContainText('Per OfficeTakt versendet');
     await expect(page.getByTestId('invoice-sent-status')).toBeVisible();
     await expect(page.getByTestId('invoice-sent-via')).toContainText('E-Mail');
     await expect(page.getByTestId('invoice-delivery-item')).toContainText('kunde@example.invalid');
@@ -158,15 +158,16 @@ test.describe('E-Mail-Versand — freie Rechnung (lokale Datenbank, Stub)', () =
     await page.reload({ waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId('invoice-delivery-status')).toHaveText('An E-Mail-Dienst übergeben', { timeout: 30_000 });
     await expect(page.getByTestId('send-document-dialog')).toHaveCount(0);
-    await expect(page.getByTestId('invoice-delivery-source')).toContainText('Per OfficePilot versendet');
+    await expect(page.getByTestId('invoice-delivery-source')).toContainText('Per OfficeTakt versendet');
     expect(await countDeliveries(invoiceId)).toBe(1);
 
     /* Zweitversand: Zusatzconfirm, Abbrechen ohne Versand */
     await expect(page.getByTestId('invoice-delivery-send')).toHaveText('Erneut per E-Mail senden');
-    await openSendDialog(page);
-    await page.getByTestId('send-document-send').click();
-    await expect(page.getByTestId('send-document-confirm-resend')).toBeVisible();
-    await page.getByTestId('send-document-cancel').click();
+    // HALBZEIT-FIX B2 — Duplikatwarnung als App-Dialog VOR dem Versanddialog; Abbrechen sendet nichts.
+    await page.getByTestId('invoice-delivery-send').scrollIntoViewIfNeeded();
+    await page.getByTestId('invoice-delivery-send').click();
+    await expect(page.getByTestId('invoice-delivery-resend-warning')).toBeVisible();
+    await page.getByTestId('invoice-delivery-resend-warning-cancel').click();
     await expect(page.getByTestId('send-document-dialog')).toHaveCount(0);
     expect(await countDeliveries(invoiceId)).toBe(1);
     await expectNoOverflow(page, 'Detail nach Versand');
@@ -199,7 +200,7 @@ test.describe('E-Mail-Versand — freie Rechnung (lokale Datenbank, Stub)', () =
     await expect(page.getByTestId('invoice-delivery-item').first()).toContainText('Versuch 2');
     await expect(page.getByTestId('invoice-delivery-item').first()).toContainText('An E-Mail-Dienst übergeben');
     expect(await countDeliveries(invoiceId)).toBe(2);
-    await expect(page.getByTestId('invoice-delivery-source')).toContainText('Per OfficePilot versendet');
+    await expect(page.getByTestId('invoice-delivery-source')).toContainText('Per OfficeTakt versendet');
 
     /* unknown (Timeout) auf einer weiteren Rechnung: kein blindes Retry */
     const url2 = await createFinalizedInvoice(page, 'Timeout Kunde GmbH', 'x@timeout.invalid');

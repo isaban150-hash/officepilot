@@ -1,7 +1,7 @@
 /** SETTINGS-01B2/01B3 — Ayarlar alanı (Türkçe). */
 export const trSettings = {
   'settings.title': 'Ayarlar',
-  'settings.subtitle': 'İşletmeni, faturalarını ve OfficePilot\'u yönet.',
+  'settings.subtitle': 'İşletmeni, faturalarını ve OfficeTakt\'u yönet.',
   'settings.gear': 'Ayarları aç',
   'settings.backToHub': 'Ayarlara dön',
 
@@ -81,7 +81,7 @@ export const trSettings = {
   'settings.communication.readOnly': 'İletişim ayarlarını yalnızca sahipler ve yöneticiler değiştirebilir.',
   'settings.communication.historicalHint': 'Bu değerler yeni gönderimler için geçerlidir. Gönderilmiş belgeler değişmez.',
   'settings.communication.section.sender': 'Gönderen',
-  'settings.communication.sender.hint': 'Belgelerin e-posta ile gönderimi için geçerlidir (mektuplar, teklifler, diğer belgeler): Alıcı görünen adı görür ve yanıt adresine yanıt verir. Faturalar ve düzeltme belgeleri, faturanın onayında kaydedilen firma adı, hukuki biçim ve firma e-postasını kullanır. Teknik gönderen adresi OfficePilot gönderim hizmeti tarafından belirlenir ve serbestçe seçilemez.',
+  'settings.communication.sender.hint': 'Belgelerin e-posta ile gönderimi için geçerlidir (mektuplar, teklifler, diğer belgeler): Alıcı görünen adı görür ve yanıt adresine yanıt verir. Faturalar ve düzeltme belgeleri, faturanın onayında kaydedilen firma adı, hukuki biçim ve firma e-postasını kullanır. Teknik gönderen adresi OfficeTakt gönderim hizmeti tarafından belirlenir ve serbestçe seçilemez.',
   'settings.communication.senderDisplayName': 'Gönderen görünen adı (isteğe bağlı)',
   'settings.communication.senderDisplayName.derived': 'Boş = firma adı ve hukuki şekil: „{name}“',
   'settings.communication.senderDisplayName.custom': 'Özel görünen ad. Firma adı ve hukuki şekli kullanmak için boş bırakın.',
@@ -89,21 +89,21 @@ export const trSettings = {
   'settings.communication.replyToEmail.fallback': 'Boş = firma e-postası: {email}',
   'settings.communication.replyToEmail.custom': 'Yanıtlar bu adrese gider. Firma e-postasını kullanmak için boş bırakın.',
   'settings.communication.identity.from': 'Teknik gönderen',
-  'settings.communication.identity.fromValue': 'OfficePilot gönderim hizmeti (değiştirilemez)',
+  'settings.communication.identity.fromValue': 'OfficeTakt gönderim hizmeti (değiştirilemez)',
   'settings.communication.identity.displayName': 'Görünen ad',
   'settings.communication.identity.replyTo': 'Yanıt adresi',
   'settings.communication.identity.hint': 'Gönderen alıcıda böyle görünür. Bir fatura gönderilirken o faturada dondurulmuş firma verileri geçerlidir.',
   'settings.communication.saved': 'İletişim ayarları kaydedildi.',
   'settings.invoices.currency.title': 'Para birimi',
   'settings.invoices.currency.eurLabel': 'Euro',
-  'settings.invoices.currency.hint': 'OfficePilot şu anda yalnızca Euro ile hesaplar ve biçimlendirir. Başka para birimleri henüz mevcut değil.',
+  'settings.invoices.currency.hint': 'OfficeTakt şu anda yalnızca Euro ile hesaplar ve biçimlendirir. Başka para birimleri henüz mevcut değil.',
   'settings.invoices.currency.ambiguous': 'Mevcut belgeler başka para birimleri taşıdığı için standart para birimi otomatik olarak belirlenemedi. Lütfen giderlerinizi kontrol edin; yeni faturalar Euro olarak oluşturulur.',
   'settings.invoices.email.movedHint': 'E-postalar için standart konu ve mesajı artık şurada bulabilirsiniz:',
   'settings.invoices.section.email': 'E-posta gönderimi',
   'settings.invoices.email.hint': 'Bu metinler yeni fatura e-postaları için ön doldurulur ve her gönderimden önce değiştirilebilir. Yer tutucular: {invoiceNumber}, {companyName}.',
   'settings.invoices.email.subject': 'Standart konu',
   'settings.invoices.email.body': 'Standart mesaj',
-  'settings.invoices.email.fallbackHint': 'Boş = ayarlanan dilde OfficePilot standart metni.',
+  'settings.invoices.email.fallbackHint': 'Boş = ayarlanan dilde OfficeTakt standart metni.',
   'settings.invoices.email.preview': '{invoiceNumber} numaralı fatura için örnek',
 
 
@@ -143,6 +143,10 @@ export const trSettings = {
   'settings.company.readOnly': 'Firma bilgilerini yalnızca yöneticiler değiştirebilir. Bilgiler burada yalnızca görüntülenir.',
   'settings.company.roleUnknown': 'Bu işletmedeki rolün henüz bilinmiyor. Firma bilgileri bir sonraki eşitlemeden sonra değiştirilebilir.',
   'settings.company.historicalHint': 'Değişiklikler yeni belgeler için geçerlidir. Onaylanmış faturalar değişmez.',
+  // BROWSER-ACCEPTANCE-FIX 01 / B2
+  'settings.company.iban.storedInvalid': 'Kayıtlı IBAN geçerli değil.',
+  'settings.company.iban.invalidNow': 'Bu IBAN geçerli değil.',
+  'settings.company.legalForm.missingHint': 'Bu şirket türü için henüz şu bilgiler girilmedi: {fields}. Girilen bilgiler faturalarda ve mektuplarda görünür.',
   'settings.company.validationSummary': 'Lütfen işaretli alanları kontrol et.',
 
   'settings.design.page.subtitle': 'Logo ve şablon yeni belgeler için geçerlidir. Onaylanmış faturalar değişmez.',
@@ -169,4 +173,16 @@ export const trSettings = {
   'settings.design.preview.hint': 'Örnek verilerle önizleme — müşteri, kalemler ve numara gerçek değildir.',
   'settings.design.saved': 'Tasarım kaydedildi.',
   'settings.design.readOnly': 'Logo ve görünümü yalnızca yöneticiler değiştirebilir. Önizleme burada yalnızca görüntülenir.',
+  // E-MAIL-07C — Signatur und Vorlagen
+  'settings.communication.signature.title': 'İmza',
+  'settings.communication.signature.hint': 'OfficeTakt ile gönderilen her e-postanın altına bir kez eklenir. Gönderim penceresinde metin göndermeden önce değiştirilebilir.',
+  'settings.communication.signature.label': 'İş imzası',
+  'settings.communication.signature.derived': 'Boş: İmza firma bilgilerinden oluşturulur (yer tutucu metne bakın).',
+  'settings.communication.signature.custom': 'Bu imza yeni e-postalarda kullanılır.',
+  'settings.communication.template.invoice.title': 'Fatura şablonu',
+  'settings.communication.template.offer.title': 'Teklif şablonu',
+  'settings.communication.template.letter.title': 'İş yazısı şablonu',
+  'settings.communication.template.hint': 'Bu türdeki yeni e-postalar için ön doldurma. Boş: standart şablon (yer tutucu metin). Gönderim penceresindeki değişiklikler bu şablonu değiştirmez.',
+  'settings.communication.template.placeholders': 'Kullanılabilir yer tutucular: {list}',
+  'settings.communication.template.preview': 'Örnek değerlerle önizleme',
 } as const;

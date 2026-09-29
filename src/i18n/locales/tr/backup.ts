@@ -18,9 +18,9 @@ export const trBackup = {
   'backup.validate.fileCount': 'Dosya sayısı',
   'backup.validate.totalSize': 'Toplam boyut',
   'backup.validate.replaceHint':
-    'Geri yükleme bu tarayıcıdaki tüm yerel OfficePilot verilerini değiştirir.',
+    'Geri yükleme bu tarayıcıdaki tüm yerel OfficeTakt verilerini değiştirir.',
 
-  'backup.validate.error.invalid': 'Dosya geçerli bir OfficePilot yedeği değil.',
+  'backup.validate.error.invalid': 'Dosya geçerli bir OfficeTakt yedeği değil.',
   'backup.validate.error.tooLarge': 'Dosya çok büyük; kontrol edilemiyor.',
   'backup.validate.error.structure': 'Yedek dosya yapısı geçersiz veya eksik.',
   'backup.validate.error.manifest': 'Yedek içindekiler listesi geçersiz.',
@@ -36,7 +36,7 @@ export const trBackup = {
     'Yedek izin verilen boyut veya sayı sınırlarını aşıyor.',
 
   'backup.restore.confirm':
-    'Bu tarayıcıdaki tüm yerel OfficePilot verilerinin değiştirileceğini anlıyorum.',
+    'Bu tarayıcıdaki tüm yerel OfficeTakt verilerinin değiştirileceğini anlıyorum.',
   'backup.restore.action': 'Yedeği geri yükle',
   'backup.restore.success': 'Geri yükleme tamamlandı. Sayfa yenilenecek.',
   'backup.restore.phase.safety': 'Güvenlik yedeği oluşturuluyor …',

@@ -197,7 +197,7 @@ export async function buildMonatsmappeZip(
         },
         fehlendeDokumente: model.fehlendeDokumente,
         stornosOhneDatum: model.stornosOhneDatum,
-        hinweis: 'Abgeleitete Uebergabedarstellung aus OfficePilot. Keine Kontierung, keine Buchfuehrungswahrheit.',
+        hinweis: 'Abgeleitete Uebergabedarstellung aus OfficeTakt. Keine Kontierung, keine Buchfuehrungswahrheit.',
       },
       null,
       2,

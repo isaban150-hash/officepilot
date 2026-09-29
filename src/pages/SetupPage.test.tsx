@@ -124,7 +124,7 @@ describe('FirstRunWizard / SetupPage', () => {
 
   it('shows branding and step progress bar', () => {
     mounted = renderSetupPage(incompleteSetup);
-    expect(mounted.container.querySelector('.setup-brand__title')?.textContent).toBe('OfficePilot');
+    expect(mounted.container.querySelector('.setup-brand__title')?.textContent).toBe('OfficeTakt');
     expect(mounted.container.querySelector('[data-testid="setup-progress-bar"]')).not.toBeNull();
     expect(mounted.container.textContent).toContain('Schritt 1 von 5');
   });

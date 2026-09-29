@@ -1,5 +1,5 @@
 export const bgDocAssistant = {
-  'docAssistant.autoDetect': 'OfficePilot автоматично разпознава вида на документа.',
+  'docAssistant.autoDetect': 'OfficeTakt автоматично разпознава вида на документа.',
   'docAssistant.recognized': 'Документът е разпознат',
   'docAssistant.changeType': 'Промяна на вида документ',
   'docAssistant.display.aokLetter': 'Писмо от AOK',
@@ -47,7 +47,7 @@ export const bgDocAssistant = {
   'docAssistant.brief.werkvertragDocument': 'Това е договор за изработка.',
   'docAssistant.brief.angebotDocument': 'Това е оферта.',
   'docAssistant.brief.generalDocument':
-    'OfficePilot разпозна съдържанието и сортира документа за Вас.',
+    'OfficeTakt разпозна съдържанието и сортира документа за Вас.',
   'docAssistant.action.disposeAdvertisement':
     'Рекламата може да се изхвърли – не я архивирайте постоянно.',
   'docAssistant.action.payByDeadline': 'Проверете сумата {amount} до {deadline}.',

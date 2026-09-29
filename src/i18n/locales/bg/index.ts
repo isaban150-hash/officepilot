@@ -16,6 +16,9 @@ import { bgBackup } from './backup';
 import { bgPilot } from './pilot';
 import { bgSettings } from './settings';
 import { bgDelivery } from './delivery';
+import { bgFreeEmail } from './freeEmail';
+import { bgInboundEmail } from './inboundEmail';
+import { bgMailboxOAuth } from './mailboxOAuth';
 import { bgBusinessLetter } from './businessLetter';
 import { bgOffer } from './offer';
 import { bgOrder } from './order';
@@ -45,6 +48,9 @@ export const bgModules = {
   ...bgPilot,
   ...bgSettings,
   ...bgDelivery,
+  ...bgFreeEmail,
+  ...bgInboundEmail,
+  ...bgMailboxOAuth,
   ...bgBusinessLetter,
   ...bgOffer,
   ...bgOrder,

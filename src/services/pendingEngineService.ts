@@ -10,6 +10,7 @@ import { filterActiveItems, getInboxItems } from './inboxService';
 import { getTodayIso, isTaskOpen } from './taskNormalize';
 import { getAllTasksFromStore } from './taskStore';
 import { getTaskSummary, syncOverdueInvoiceTasks } from './taskEngineService';
+import { canAcceptOffer, getOfferById } from './offer/offerService';
 import {
   buildSummaryForCompanyDocument,
   buildSummaryForInboxItem,
@@ -251,6 +252,26 @@ export function scanPendingInboxItems(
   return dedupePendingItems(pending);
 }
 
+/**
+ * FINAL-ACCEPTANCE-FIX 02 / T2 — gilt die Gültigkeit dieses Dokuments noch?
+ *
+ * Das Archivdokument eines eigenen Angebots trägt `validUntil`. Eine
+ * Ablaufwarnung ist nur sinnvoll, solange der Kunde noch entscheiden kann —
+ * dieselbe Regel, nach der eine Annahme überhaupt möglich ist
+ * (`canAcceptOffer`: freigegeben/versendet). Angenommen, abgelehnt,
+ * storniert oder ersetzt: kein „läuft ab", kein „abgelaufen".
+ *
+ * Nur bei einem nachweislich verknüpften, lokal bekannten Angebot. Fremde
+ * Angebote und Dokumente ohne Verknüpfung behalten die bisherige Warnung.
+ */
+function isValidityStillRelevant(doc: CompanyDocument): boolean {
+  const offerId = doc.linkedOfferId?.trim();
+  if (!offerId) return true;
+  const offer = getOfferById(offerId);
+  if (!offer) return true;
+  return canAcceptOffer(offer);
+}
+
 export function scanExpiringDocuments(
   today?: Date | string,
   documents: CompanyDocument[] = getAllDocuments(),
@@ -274,6 +295,7 @@ export function scanExpiringDocuments(
     }
 
     if (!doc.validUntil) continue;
+    if (!isValidityStillRelevant(doc)) continue;
 
     const days = daysUntil(doc.validUntil, todayIso);
 
@@ -289,6 +311,8 @@ export function scanExpiringDocuments(
             dueDate: doc.validUntil,
             daysUntilDue: days,
             description: `${displayTitle} ist abgelaufen`,
+            // B1-Nacharbeit — dieselbe Bezeichnung wie beim bald ablaufenden Dokument.
+            metadata: { proofLabel: inferProofLabel(doc) },
           },
         ),
       );
@@ -326,9 +350,17 @@ function inferProofLabel(doc: CompanyDocument): string {
   return doc.title;
 }
 
-export function scanOverdueInvoices(today?: Date | string): PendingItem[] {
+export function scanOverdueInvoices(
+  today?: Date | string,
+  options: { syncTasks?: boolean } = {},
+): PendingItem[] {
   const todayIso = getTodayIso(today);
-  syncOverdueInvoiceTasks(todayIso);
+  /*
+   * BROWSER-ACCEPTANCE-FIX 01 / B1 — die Heute-Seite legt hier Aufgaben für
+   * überfällige Rechnungen an. Eine reine Frage an den Assistenten darf das
+   * nicht auslösen; sie liest dieselben Rechnungen ohne Nebenwirkung.
+   */
+  if (options.syncTasks !== false) syncOverdueInvoiceTasks(todayIso);
 
   return getOverdueInvoices(todayIso).map((entry) =>
     buildPendingItem(
@@ -562,12 +594,15 @@ export function scanRequiredContractDocuments(
   return dedupePendingItems(pending);
 }
 
-export function scanPendingItems(today?: Date | string): PendingScanResult {
+export function scanPendingItems(
+  today?: Date | string,
+  options: { readOnly?: boolean } = {},
+): PendingScanResult {
   const todayIso = getTodayIso(today);
   const items = dedupePendingItems([
     ...scanPendingInboxItems(),
     ...scanExpiringDocuments(todayIso),
-    ...scanOverdueInvoices(todayIso),
+    ...scanOverdueInvoices(todayIso, { syncTasks: !options.readOnly }),
     ...scanUpcomingInvoiceDueDates(todayIso),
     ...scanExpenseDueDates(todayIso),
     ...scanAuthorityDeadlines(todayIso),
@@ -577,6 +612,23 @@ export function scanPendingItems(today?: Date | string): PendingScanResult {
   return {
     items,
     summary: buildPendingSummary(items, todayIso),
+  };
+}
+
+/**
+ * BROWSER-ACCEPTANCE-FIX 01 / B1 — die befristeten offenen Aufgaben, genau so
+ * ausgewählt wie in `buildPendingSummary` (ohne Behördenaufgaben, die als
+ * Behördenfristen erscheinen). So zählen „Jetzt wichtig" und der Assistent
+ * dieselben Aufgaben.
+ */
+export function listDueTasks(today?: Date | string): { overdue: Task[]; today: Task[] } {
+  const todayIso = getTodayIso(today);
+  const candidates = getAllTasksFromStore().filter(
+    (task) => isTaskOpen(task) && Boolean(task.dueDate) && !isAuthorityTask(task),
+  );
+  return {
+    overdue: candidates.filter((task) => task.dueDate!.slice(0, 10) < todayIso),
+    today: candidates.filter((task) => task.dueDate!.slice(0, 10) === todayIso),
   };
 }
 
@@ -617,11 +669,9 @@ export function buildPendingSummary(
   const missingContractDocuments = countByKind(items, 'contract_missing_proof');
   // Authority due tasks are surfaced as Behördenfristen — don't double-count them.
   // 01D — heute fällig und überfällig sind zwei Aussagen; keine Aufgabe wird doppelt gezählt.
-  const dueTaskCandidates = getAllTasksFromStore().filter(
-    (task) => isTaskOpen(task) && Boolean(task.dueDate) && !isAuthorityTask(task),
-  );
-  const dueTasksToday = dueTaskCandidates.filter((task) => task.dueDate!.slice(0, 10) === todayIso).length;
-  const overdueTasks = dueTaskCandidates.filter((task) => task.dueDate!.slice(0, 10) < todayIso).length;
+  const dueTaskLists = listDueTasks(todayIso);
+  const dueTasksToday = dueTaskLists.today.length;
+  const overdueTasks = dueTaskLists.overdue.length;
 
   pushHighlight(highlights, {
     id: 'authority-deadlines',

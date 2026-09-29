@@ -23,8 +23,38 @@ export function resolveConfiguredSenderEmail(value: string | undefined | null): 
   return normalized;
 }
 
+/**
+ * E-MAIL-07B — Testempfänger-Schutz (`MAIL_TEST_RECIPIENT_ALLOWLIST`).
+ *
+ * Nicht gesetzt oder leer: Normalbetrieb, keine Einschränkung. Gesetzt:
+ * kommagetrennte, exakte Adressen; jede andere Empfängeradresse wird vor dem
+ * Provider-Aufruf abgelehnt (fail-closed). Ein gesetzter, aber unbrauchbarer
+ * Wert (ungültige Einträge) ist eine Fehlkonfiguration — dann wird gar nicht
+ * gesendet, statt den Schutz still abzuschalten.
+ */
+export type TestRecipientAllowlist =
+  | { mode: 'off' }
+  | { mode: 'on'; recipients: readonly string[] }
+  | { mode: 'invalid' };
+
+export function resolveTestRecipientAllowlist(value: string | undefined | null): TestRecipientAllowlist {
+  const raw = (value ?? '').trim();
+  if (!raw) return { mode: 'off' };
+  const entries = raw.split(',').map((entry) => entry.trim().toLowerCase()).filter(Boolean);
+  if (entries.length === 0) return { mode: 'invalid' };
+  if (entries.some((entry) => entry.length > 254 || !SENDER_EMAIL_PATTERN.test(entry))) return { mode: 'invalid' };
+  return { mode: 'on', recipients: Array.from(new Set(entries)) };
+}
+
+/**
+ * E-MAIL-07B — ab wann ein Claim (`sending`) als hängend gilt. Deutlich über
+ * Provider-Timeout (20 s) und Laufzeitgrenze der Edge Function; der Server
+ * erzwingt zusätzlich eine Untergrenze von 120 s.
+ */
+export const STALE_SENDING_CLAIM_SECONDS = 600;
+
 export type DeliveryStatus =
-  | 'prepared' | 'queued' | 'provider_accepted' | 'failed' | 'unknown'
+  | 'prepared' | 'queued' | 'sending' | 'provider_accepted' | 'failed' | 'unknown'
   | 'delivered' | 'bounced' | 'complained' | 'rejected';
 
 export interface DeliveryRow {
@@ -96,11 +126,20 @@ export const DOCUMENT_DELIVERY_KINDS: ReadonlySet<string> = new Set(['letter', '
 export interface SendDocumentDeps {
   /** Validierte technische Absenderadresse (Envelope-/Header-From) aus der Serverkonfiguration. */
   senderEmail: string;
+  /** E-MAIL-07B — serverseitiger Testempfänger-Schutz; fehlt er, gilt Normalbetrieb. */
+  testRecipientAllowlist?: TestRecipientAllowlist;
   userCanWrite(workspaceId: string, userId: string): Promise<boolean>;
   loadDelivery(workspaceId: string, clientDeliveryId: string): Promise<LoadedDelivery | null>;
   downloadAttachment(storagePath: string): Promise<Uint8Array | null>;
   sha256Hex(bytes: Uint8Array): Promise<string>;
   provider: EmailProviderAdapter;
+  /**
+   * E-MAIL-07B — atomarer Übergang `queued -> sending` (ein UPDATE mit Status-
+   * und Versionsbedingung). Nur wer `claimed: true` bekommt, ruft den Provider.
+   */
+  claim(deliveryId: string, expectedRowVersion: number): Promise<{ claimed: boolean; delivery: DeliveryRow }>;
+  /** E-MAIL-07B — ein hängendes `sending` wird `unknown`; nie ein neuer Provider-Aufruf. */
+  resolveStaleClaim(deliveryId: string, staleAfterSeconds: number): Promise<{ resolved: boolean; delivery: DeliveryRow }>;
   markAccepted(deliveryId: string, providerMessageId: string, expectedRowVersion: number): Promise<{ delivery: DeliveryRow; coupling: string }>;
   markStatus(deliveryId: string, status: 'failed' | 'unknown' | 'rejected', error: { category: DeliveryErrorCategory; code: string; message: string }, expectedRowVersion: number): Promise<DeliveryRow>;
   log(entry: Record<string, string | number | boolean | null>): void;
@@ -125,8 +164,14 @@ export interface SendDocumentResponseDelivery {
   rowVersion: number;
 }
 
+/**
+ * `in_progress` (07B): ein anderer Aufruf hält den Claim bzw. der Versand läuft
+ * noch. Kein Fehler und kein zweiter Provider-Aufruf — der Client lädt den Status.
+ */
+export type SendDocumentAction = 'sent' | 'replayed' | 'unknown_pending' | 'failed' | 'in_progress';
+
 export type SendDocumentOutcome =
-  | { ok: true; action: 'sent' | 'replayed' | 'unknown_pending' | 'failed'; coupling?: string; delivery: SendDocumentResponseDelivery }
+  | { ok: true; action: SendDocumentAction; coupling?: string; delivery: SendDocumentResponseDelivery }
   | { ok: false; error: SendDocumentErrorCode };
 
 export function toResponseDelivery(row: DeliveryRow): SendDocumentResponseDelivery {
@@ -147,41 +192,80 @@ function text(value: unknown): string {
 }
 
 /**
- * Absender-Wahrheit (N): Anzeigename und Reply-To aus dem historischen
- * companySnapshot der finalisierten Rechnung — nie aus dem heutigen Profil.
- * Fehlt die Firmen-E-Mail im Snapshot: fail-closed (kein Versand).
+ * E-MAIL-07B — die Kommunikations-Einstellungen des Workspaces
+ * (`senderDisplayName`, `replyToEmail`), serverseitig aus dem Firmenprofil
+ * geladen — nie vom Client übergeben.
+ *
+ * Leer heißt „nicht eingestellt": dann gilt die jeweilige Grundlage (Rechnung:
+ * Snapshot, Dokument: Firmenprofil). Eine **eingetragene, aber ungültige**
+ * Antwortadresse wird nicht still durch eine andere ersetzt: Der Betrieb hat
+ * ausdrücklich eine Adresse gewählt, und Antworten an eine andere Adresse
+ * wären ein stiller Fehler. Dann: fail-closed, kein Versand.
  */
-export function resolveSenderIdentity(invoice: InvoiceContext | null):
+function resolveCommunicationOverrides(company: CompanyContext | null | undefined):
+  | { ok: true; displayName: string; replyTo: string }
+  | { ok: false; code: 'sender_reply_to_invalid' } {
+  const displayName = text(company?.senderDisplayName);
+  const replyTo = text(company?.replyToEmail).toLowerCase();
+  if (replyTo && (replyTo.length > 254 || !SENDER_EMAIL_PATTERN.test(replyTo))) {
+    return { ok: false, code: 'sender_reply_to_invalid' };
+  }
+  return { ok: true, displayName, replyTo };
+}
+
+/**
+ * Absender-Wahrheit (N) für Rechnung und Korrekturbeleg.
+ *
+ * Firmenname und Firmen-E-Mail kommen weiterhin aus dem historischen
+ * companySnapshot der finalisierten Rechnung — sie gehören zum Beleg. 07B:
+ * Anzeigename und Antwortadresse sind dagegen Kommunikations-Einstellungen
+ * des Betriebs und gelten für jeden Versand; sind sie gesetzt, gehen sie vor.
+ * Bis 07B erreichten sie den Versand nie (der Snapshot entfernt sie bewusst).
+ * Fehlt die Firmen-E-Mail im Snapshot und ist keine Antwortadresse
+ * eingestellt: fail-closed (kein Versand).
+ */
+export function resolveSenderIdentity(invoice: InvoiceContext | null, company?: CompanyContext | null):
   | { ok: true; fromName: string; replyTo: string }
-  | { ok: false; code: 'sender_snapshot_missing' | 'sender_reply_to_missing' } {
+  | { ok: false; code: 'sender_snapshot_missing' | 'sender_reply_to_missing' | 'sender_reply_to_invalid' } {
   const snapshot = invoice?.company_snapshot;
   if (!snapshot) return { ok: false, code: 'sender_snapshot_missing' };
-  const name = [text(snapshot.companyName), text(snapshot.legalForm)].filter(Boolean).join(' ');
-  const replyTo = text(snapshot.email).toLowerCase();
+  const overrides = resolveCommunicationOverrides(company);
+  if (!overrides.ok) return overrides;
+  const name = overrides.displayName || [text(snapshot.companyName), text(snapshot.legalForm)].filter(Boolean).join(' ');
+  const replyTo = overrides.replyTo || text(snapshot.email).toLowerCase();
   if (!name) return { ok: false, code: 'sender_snapshot_missing' };
-  if (!replyTo || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(replyTo)) return { ok: false, code: 'sender_reply_to_missing' };
+  if (!replyTo || !SENDER_EMAIL_PATTERN.test(replyTo)) return { ok: false, code: 'sender_reply_to_missing' };
   return { ok: true, fromName: name, replyTo };
 }
 
 /**
  * V1-B2 — Absender fuer normale Dokumente: aktuelles Firmenprofil (Name,
- * Reply-To = Firmen-E-Mail). Fail-closed ohne Name oder gueltige E-Mail; es
- * wird nie eine technische Adresse erfunden.
+ * Reply-To = Firmen-E-Mail), 07B: Anzeigename/Antwortadresse aus den
+ * Kommunikations-Einstellungen gehen vor. Fail-closed ohne Name oder gueltige
+ * E-Mail; es wird nie eine technische Adresse erfunden.
  */
 export function resolveCompanySenderIdentity(company: CompanyContext | null | undefined):
   | { ok: true; fromName: string; replyTo: string }
-  | { ok: false; code: 'sender_company_missing' | 'sender_reply_to_missing' } {
+  | { ok: false; code: 'sender_company_missing' | 'sender_reply_to_missing' | 'sender_reply_to_invalid' } {
   if (!company) return { ok: false, code: 'sender_company_missing' };
-  // Dieselbe Ableitung wie in den Kommunikations-Einstellungen: Anzeigename bzw. Antwortadresse, sonst Firmenname/Firmen-E-Mail.
-  const name = text(company.senderDisplayName) || [text(company.companyName), text(company.legalForm)].filter(Boolean).join(' ');
-  const explicitReplyTo = text(company.replyToEmail).toLowerCase();
-  const replyTo = explicitReplyTo && SENDER_EMAIL_PATTERN.test(explicitReplyTo) ? explicitReplyTo : text(company.email).toLowerCase();
+  const overrides = resolveCommunicationOverrides(company);
+  if (!overrides.ok) return overrides;
+  const name = overrides.displayName || [text(company.companyName), text(company.legalForm)].filter(Boolean).join(' ');
+  const replyTo = overrides.replyTo || text(company.email).toLowerCase();
   if (!name) return { ok: false, code: 'sender_company_missing' };
-  if (!replyTo || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(replyTo)) return { ok: false, code: 'sender_reply_to_missing' };
+  if (!replyTo || !SENDER_EMAIL_PATTERN.test(replyTo)) return { ok: false, code: 'sender_reply_to_missing' };
   return { ok: true, fromName: name, replyTo };
 }
 
-function bytesToBase64(bytes: Uint8Array): string {
+/** E-MAIL-07B — Aktion für eine Delivery, die dieser Aufruf nicht (mehr) sendet. */
+function actionForForeignState(status: DeliveryStatus): SendDocumentAction {
+  if (status === 'provider_accepted' || status === 'delivered' || status === 'bounced' || status === 'complained') return 'replayed';
+  if (status === 'unknown') return 'unknown_pending';
+  if (status === 'failed' || status === 'rejected') return 'failed';
+  return 'in_progress';
+}
+
+export function bytesToBase64(bytes: Uint8Array): string {
   let binary = '';
   const chunk = 0x8000;
   for (let index = 0; index < bytes.length; index += chunk) {
@@ -220,6 +304,21 @@ export async function runSendDocument(
     deps.log({ ...base, outcome: 'replayed', status: delivery.status, coupling });
     return { ok: true, action: 'replayed', coupling, delivery: toResponseDelivery(delivery) };
   }
+  if (delivery.status === 'sending') {
+    /*
+     * 07B — ein anderer Aufruf hält den Claim. Läuft er noch: nichts tun.
+     * Hängt er (Absturz nach dem Claim, verlorene Antwort, Fehler beim
+     * Speichern der Annahme): `unknown` — der Provider kann angenommen haben,
+     * also nie ein neuer Provider-Aufruf von hier aus.
+     */
+    const stale = await deps.resolveStaleClaim(delivery.id, STALE_SENDING_CLAIM_SECONDS);
+    if (stale.resolved) {
+      deps.log({ ...base, outcome: 'stale_claim_unknown' });
+      return { ok: true, action: 'unknown_pending', delivery: toResponseDelivery(stale.delivery) };
+    }
+    deps.log({ ...base, outcome: 'in_progress' });
+    return { ok: true, action: actionForForeignState(stale.delivery.status), delivery: toResponseDelivery(stale.delivery) };
+  }
   if (delivery.status === 'unknown') {
     // (H) Ergebnis des letzten Versuchs ist ungewiss — kein blinder Neuversand.
     deps.log({ ...base, outcome: 'unknown_pending' });
@@ -237,11 +336,29 @@ export async function runSendDocument(
     return { ok: false, error: 'provider_mismatch' };
   }
 
+  /*
+   * Vor dem Claim steht `queued` mit der geladenen Version; nach dem Claim
+   * `sending` mit der geclaimten. Jede Statusänderung trägt die Version, die
+   * dieser Aufruf tatsächlich hält.
+   */
+  let heldRowVersion = delivery.row_version;
   const fail = async (status: 'failed' | 'unknown', category: DeliveryErrorCategory, code: string, message: string) => {
-    const updated = await deps.markStatus(delivery.id, status, { category, code, message }, delivery.row_version);
+    const updated = await deps.markStatus(delivery.id, status, { category, code, message }, heldRowVersion);
     deps.log({ ...base, outcome: status, errorCategory: category, errorCode: code });
     return { ok: true as const, action: status === 'unknown' ? ('unknown_pending' as const) : ('failed' as const), delivery: toResponseDelivery(updated) };
   };
+
+  /*
+   * 07B — Testempfänger-Schutz, vor allem anderen und vor jedem Provider-
+   * Aufruf. Ein unbrauchbar konfigurierter Schutz sendet nicht (fail-closed).
+   */
+  const allowlist = deps.testRecipientAllowlist ?? { mode: 'off' as const };
+  if (allowlist.mode === 'invalid') {
+    return fail('failed', 'unknown', 'test_recipient_allowlist_invalid', 'Der Testmodus ist fehlerhaft eingerichtet. Es wurde nichts gesendet.');
+  }
+  if (allowlist.mode === 'on' && !allowlist.recipients.includes(delivery.recipient_email.trim().toLowerCase())) {
+    return fail('failed', 'recipient', 'test_recipient_not_allowed', 'Testmodus: Diese Empfängeradresse ist für Testsendungen nicht freigegeben. Es wurde nichts gesendet.');
+  }
 
   // Dokumentkontext: Rechnung muss existieren und versandfähig sein (Server glaubt dem Client nicht).
   if (delivery.document_kind === 'invoice' || delivery.document_kind === 'invoice_correction') {
@@ -281,10 +398,27 @@ export async function runSendDocument(
   }
 
   // (N) Absender: Rechnung aus dem historischen Snapshot; normales Dokument aus dem aktuellen Firmenprofil.
-  const sender = isDocumentKind ? resolveCompanySenderIdentity(company) : resolveSenderIdentity(invoice);
+  // 07B: Anzeigename/Antwortadresse aus den Kommunikations-Einstellungen gehen vor.
+  const sender = isDocumentKind ? resolveCompanySenderIdentity(company) : resolveSenderIdentity(invoice, company);
   if (!sender.ok) {
+    if (sender.code === 'sender_reply_to_invalid') {
+      return fail('failed', 'unknown', sender.code, 'Die eingestellte Antwortadresse ist ungültig. Bitte in den Einstellungen korrigieren. Es wurde nichts gesendet.');
+    }
     return fail('failed', 'unknown', sender.code, isDocumentKind ? 'Absenderdaten des Betriebs sind unvollständig (Firmenname oder E-Mail fehlt).' : 'Absenderdaten der Rechnung sind unvollständig.');
   }
+
+  /*
+   * 07B — Sende-Claim. Der **letzte** Schritt vor dem Provider: Alles davor
+   * ist Prüfung ohne Außenwirkung, eine Delivery in `queued` ist also sicher
+   * noch nicht beim Provider gewesen. Nur wer den Claim gewinnt, sendet;
+   * jeder parallele Aufruf endet hier ohne zweite E-Mail.
+   */
+  const claim = await deps.claim(delivery.id, delivery.row_version);
+  if (!claim.claimed) {
+    deps.log({ ...base, outcome: 'claim_lost', status: claim.delivery.status });
+    return { ok: true, action: actionForForeignState(claim.delivery.status), delivery: toResponseDelivery(claim.delivery) };
+  }
+  heldRowVersion = claim.delivery.row_version;
 
   // 8. Provider.
   let result: SendTransactionalEmailResult;
@@ -305,7 +439,12 @@ export async function runSendDocument(
 
   // 9./10. Ergebnis autoritativ übernehmen — bei Annahme inklusive atomarer Rechnungs-Kopplung.
   if (result.accepted) {
-    const accepted = await deps.markAccepted(delivery.id, result.providerMessageId, delivery.row_version);
+    /*
+     * Scheitert das Speichern der Annahme (Netz/DB), bleibt die Delivery in
+     * `sending` und wird später über `resolveStaleClaim` zu `unknown` — nie
+     * wieder `queued`, also kein Neuversand über „Fortsetzen".
+     */
+    const accepted = await deps.markAccepted(delivery.id, result.providerMessageId, heldRowVersion);
     deps.log({ ...base, outcome: 'provider_accepted', coupling: accepted.coupling });
     return { ok: true, action: 'sent', coupling: accepted.coupling, delivery: toResponseDelivery(accepted.delivery) };
   }

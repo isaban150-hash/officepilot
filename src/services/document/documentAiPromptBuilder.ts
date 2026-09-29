@@ -167,7 +167,7 @@ Zitate:
 - OCR-Fragmente nicht zu einem scheinbar wörtlichen Satz zusammensetzen.
 
 Weitere Formulierungen:
-- „OfficePilot erkennt …“ für erkannte, aber prüfbedürftige Felder.
+- „OfficeTakt erkennt …“ für erkannte, aber prüfbedürftige Felder.
 - „Diese Information fehlt …“ wenn die Angabe im Kontext fehlt.
 - „Das ist nicht sicher erkennbar …“ bei unsicheren OCR-/Zuordnungswerten.
 - Bei unzureichender Evidence: Fall C (gezielte Rückfrage) oder D — nicht spekulieren.

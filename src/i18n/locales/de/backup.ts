@@ -18,9 +18,9 @@ export const deBackup = {
   'backup.validate.fileCount': 'Anzahl Dateien',
   'backup.validate.totalSize': 'Gesamtgröße',
   'backup.validate.replaceHint':
-    'Die Wiederherstellung ersetzt alle lokalen OfficePilot-Daten in diesem Browser.',
+    'Die Wiederherstellung ersetzt alle lokalen OfficeTakt-Daten in diesem Browser.',
 
-  'backup.validate.error.invalid': 'Die Datei ist keine gültige OfficePilot-Datensicherung.',
+  'backup.validate.error.invalid': 'Die Datei ist keine gültige OfficeTakt-Datensicherung.',
   'backup.validate.error.tooLarge': 'Die Datei ist zu groß und kann nicht geprüft werden.',
   'backup.validate.error.structure':
     'Die Dateistruktur der Datensicherung ist ungültig oder unvollständig.',
@@ -38,7 +38,7 @@ export const deBackup = {
     'Die Datensicherung überschreitet zulässige Größen- oder Anzahlgrenzen.',
 
   'backup.restore.confirm':
-    'Ich verstehe, dass alle lokalen OfficePilot-Daten in diesem Browser ersetzt werden.',
+    'Ich verstehe, dass alle lokalen OfficeTakt-Daten in diesem Browser ersetzt werden.',
   'backup.restore.action': 'Datensicherung wiederherstellen',
   'backup.restore.success': 'Wiederherstellung abgeschlossen. Die Seite wird neu geladen.',
   'backup.restore.phase.safety': 'Sicherheitsbackup wird erstellt …',

@@ -3,7 +3,7 @@ import type { HandwerkKnowledgeResolution } from '../../types/handwerkKnowledge'
 import type { BrainSuggestedStep } from '../../types/brainOrchestration';
 import { getInboxItemById } from '../inboxService';
 import { buildInvoiceCreatePath, type InvoiceCreateType } from '../invoiceNavigation';
-import { processUploadedDocument } from '../intakeWorkflowService';
+import { analyzeUploadedDocument } from '../intakeWorkflowService';
 import {
   getOpenQuantity,
   getPositionBillingStatus,
@@ -158,7 +158,7 @@ function resolveSchlussrechnungQuestion(session: CompanySessionContext): Handwer
       knowledgeUsed: ['schlussrechnung', 'vorgang'],
       assistantAnswer: {
         title: 'Schlussrechnung',
-        summary: `Noch nicht – bei Auftrag „${vorgang.title}“ sind noch ${openPositions.length} Position(en) offen.`,
+        summary: `Noch nicht – bei Auftrag „${vorgang.title}“ ${openPositions.length === 1 ? 'ist noch 1 Position' : `sind noch ${openPositions.length} Positionen`} offen.`,
         bullets: openPositions.slice(0, 3).map((p) => `Offen: ${p.description}`),
         actions: [],
         linkedRoute: `/vorgaenge/${vorgang.id}`,
@@ -262,7 +262,7 @@ function resolveDocumentTypeQuestion(session: CompanySessionContext): HandwerkKn
   }
 
   if (term) {
-    const workflow = processUploadedDocument(inboxId);
+    const workflow = analyzeUploadedDocument(inboxId);
     const bullets = [term.practicalNote];
     if (workflow?.similarVorgaenge.length === 1) {
       bullets.push(`Passt wahrscheinlich zu Auftrag „${workflow.similarVorgaenge[0].title}“.`);

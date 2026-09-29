@@ -326,6 +326,96 @@ export class SyncCoordinator {
   }
 
   /**
+   * SYNC-AUTOMATIK-01A-FIX1 — nur senden, nicht abrufen.
+   *
+   * Der Anlass einer normalen Speicherung ist eine lokale Änderung; sie muss
+   * in die Cloud, mehr nicht. Bisher folgte jedem Senden der vollständige
+   * Abgleich (rund zehn Abrufe) — auch Sekunden nach dem letzten.
+   *
+   * Dieselbe Sendeschleife wie in `runSync`, dieselbe Behandlung von Fehlern.
+   * Ein Versionskonflikt ist die einzige Lage, in der nach dem Senden gezielt
+   * abgerufen werden muss (01G: erst der Abgleich zeigt, was die Cloud sagt) —
+   * dann meldet der Lauf `needsFullSync`, und der Aufrufer eskaliert.
+   */
+  async runPushOnly(state: AppPersistedState): Promise<SyncRunResult & { needsFullSync: boolean }> {
+    const startedAt = new Date().toISOString();
+    const emptyReport = () => {
+      const report = toCoordinatorReport(createEmptySyncSimulationReport(startedAt), this.retryAttempts, 0, 0);
+      report.finishedAt = new Date().toISOString();
+      return report;
+    };
+
+    if (state.syncClient?.syncPolicy === 'disabled') {
+      this.syncState = 'offline';
+      return { state, report: emptyReport(), success: true, skipPersist: true, needsFullSync: false };
+    }
+
+    const outbox = state.syncOutbox ?? [];
+    if (pendingOutboxCount(outbox) === 0) {
+      // Nichts zu senden — kein Lauf, kein Speichern.
+      return { state, report: emptyReport(), success: true, skipPersist: true, needsFullSync: false };
+    }
+
+    this.syncState = 'uploading';
+    try {
+      const pushResult = await this.adapter.pushChanges({
+        deviceId: state.syncClient!.deviceId,
+        workspaceId: state.syncClient!.workspaceId,
+        state,
+        outbox,
+      });
+      const report = toCoordinatorReport(
+        pushResult.report,
+        this.retryAttempts,
+        pushResult.completedOutboxIds.length,
+        0,
+      );
+      report.finishedAt = new Date().toISOString();
+      report.durationMs = Math.max(0, Date.parse(report.finishedAt) - Date.parse(startedAt));
+      await this.adapter.acknowledgeChanges({ outboxIds: pushResult.completedOutboxIds });
+
+      const konfliktIds = new Set(
+        (pushResult.state.syncOutbox ?? [])
+          .filter((entry) => entry.status === 'blocked')
+          .map((entry) => entry.id),
+      );
+      const nurKonflikte =
+        pushResult.failedOutbox.length > 0 &&
+        pushResult.failedOutbox.every((failure) => konfliktIds.has(failure.outboxId));
+      this.lastReport = report;
+
+      if (!pushResult.success && !nurKonflikte) {
+        this.syncState = 'error';
+        this.lastError = pushResult.failedOutbox[0]?.message;
+        return { state: pushResult.state, report, success: false, needsFullSync: false };
+      }
+
+      // Ein in diesem Lauf neu blockierter Auftrag: erst der Abgleich liefert den Cloud-Stand.
+      const vorherBlockiert = new Set(outbox.filter((entry) => entry.status === 'blocked').map((entry) => entry.id));
+      const neuerKonflikt = [...konfliktIds].some((id) => !vorherBlockiert.has(id));
+
+      this.syncState = 'synced';
+      this.lastError = undefined;
+      this.lastSyncedAt = new Date().toISOString();
+      this.retryAttempts = 0;
+      return {
+        state: { ...pushResult.state, savedAt: new Date().toISOString() },
+        report,
+        success: true,
+        needsFullSync: nurKonflikte || neuerKonflikt,
+      };
+    } catch (error) {
+      this.syncState = 'error';
+      this.lastError = error instanceof Error ? error.message : 'Unbekannter Sync-Fehler';
+      const report = emptyReport();
+      report.errorCount = 1;
+      report.errors.push({ outboxId: 'coordinator', message: this.lastError });
+      this.lastReport = report;
+      return { state, report, success: false, skipPersist: true, needsFullSync: false };
+    }
+  }
+
+  /**
    * Wiederholen.
    *
    * `manual: true` heisst: Ein Mensch hat den Knopf gedrueckt. Das ist kein

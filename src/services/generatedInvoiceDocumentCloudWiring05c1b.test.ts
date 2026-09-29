@@ -22,8 +22,10 @@ import {
   hydrateVorgangStore,
 } from './vorgangService';
 import {
+  deleteDocument,
   getDocumentById,
   hydrateDocumentStore,
+  isFinalizedInvoiceArchiveDocument,
   searchDocuments,
 } from './documentService';
 import {
@@ -396,6 +398,9 @@ describe('OFFICEPILOT-GENERATED-DOCUMENT-CLOUD-WIRING-05C1B', () => {
   /* ---------------------------------------------------------------------- */
 
   it('E: der Cloud-Grabstein kommt vor dem lokalen Soft-Delete', async () => {
+    // BROWSER-ACCEPTANCE-FIX 01 / A1: der Löschweg selbst gilt nur noch für
+    // Belege nicht festgeschriebener Rechnungen — hier ein Entwurf.
+    seed(buildInvoice({ status: 'entwurf' }));
     hydrateDocumentStore([generatedDocument(DOC_A)]);
     const order: string[] = [];
 
@@ -415,6 +420,9 @@ describe('OFFICEPILOT-GENERATED-DOCUMENT-CLOUD-WIRING-05C1B', () => {
   });
 
   it('F: scheitert der Cloud-Grabstein, bleibt das Dokument aktiv', async () => {
+    // BROWSER-ACCEPTANCE-FIX 01 / A1: der Löschweg selbst gilt nur noch für
+    // Belege nicht festgeschriebener Rechnungen — hier ein Entwurf.
+    seed(buildInvoice({ status: 'entwurf' }));
     hydrateDocumentStore([generatedDocument(DOC_A)]);
 
     vi.spyOn(supabaseLib, 'getSupabaseClient').mockReturnValue(
@@ -452,6 +460,9 @@ describe('OFFICEPILOT-GENERATED-DOCUMENT-CLOUD-WIRING-05C1B', () => {
   });
 
   it('F3: ein nachweislich lokales Dokument darf lokal gelöscht werden', async () => {
+    // BROWSER-ACCEPTANCE-FIX 01 / A1: der Löschweg selbst gilt nur noch für
+    // Belege nicht festgeschriebener Rechnungen — hier ein Entwurf.
+    seed(buildInvoice({ status: 'entwurf' }));
     hydrateDocumentStore([generatedDocument(DOC_A)]);
 
     vi.spyOn(supabaseLib, 'getSupabaseClient').mockReturnValue(
@@ -468,6 +479,61 @@ describe('OFFICEPILOT-GENERATED-DOCUMENT-CLOUD-WIRING-05C1B', () => {
 
     expect(result.ok).toBe(true);
     expect(getDocumentById(DOC_A)).toBeUndefined();
+  });
+
+  /* ---------------------------------------------------------------------- */
+  /* BROWSER-ACCEPTANCE-FIX 01 / A1 — Beleg einer festgeschriebenen Rechnung */
+  /* ---------------------------------------------------------------------- */
+
+  it.each(['versendet', 'vorbereitet'] as const)(
+    'A1-1: Beleg einer %s Rechnung wird weder tombstoned noch lokal gelöscht',
+    async (status) => {
+      seed(buildInvoice({ status }));
+      hydrateDocumentStore([generatedDocument(DOC_A)]);
+      const calls: string[] = [];
+      vi.spyOn(supabaseLib, 'getSupabaseClient').mockReturnValue(
+        stubRpc((name) => {
+          calls.push(name);
+          return [cloudRow({ documentId: DOC_A, deletedAt: '2026-08-27T10:00:00.000Z' })];
+        }),
+      );
+
+      const result = await deleteGeneratedInvoiceDocumentWithCloud(DOC_A);
+
+      expect(result).toEqual({ ok: false, errorKey: 'document.delete.blocked.finalizedInvoice' });
+      expect(calls).toEqual([]);
+      expect(getDocumentById(DOC_A)).toBeDefined();
+      expect(stored().status).toBe(status);
+    },
+  );
+
+  it('A1-2: auch der direkte lokale Löschweg lehnt den Beleg ab', () => {
+    hydrateDocumentStore([generatedDocument(DOC_A)]);
+
+    const result = deleteDocument(DOC_A);
+
+    expect(result).toEqual({ success: false, errorKey: 'document.delete.blocked.finalizedInvoice' });
+    expect(getDocumentById(DOC_A)).toBeDefined();
+    expect(isFinalizedInvoiceArchiveDocument(generatedDocument(DOC_A))).toBe(true);
+  });
+
+  it('A1-3: lehnt der Server ab (Rechnung lokal unbekannt), bleibt das Dokument mit klarem Grund', async () => {
+    hydrateVorgangStore([]);
+    hydrateDocumentStore([generatedDocument(DOC_A)]);
+    vi.spyOn(supabaseLib, 'getSupabaseClient').mockReturnValue(
+      stubRpcError('Archivdokument einer festgeschriebenen Rechnung kann nicht geloescht werden'),
+    );
+
+    const result = await deleteGeneratedInvoiceDocumentWithCloud(DOC_A);
+
+    expect(result).toEqual({ ok: false, errorKey: 'document.delete.blocked.finalizedInvoice' });
+    expect(getDocumentById(DOC_A)).toBeDefined();
+  });
+
+  it('A1-4: Fremddokumente und Entwürfe gelten nicht als geschützt', () => {
+    expect(isFinalizedInvoiceArchiveDocument(uploadedDocument('doc-beleg-1'))).toBe(false);
+    seed(buildInvoice({ status: 'entwurf' }));
+    expect(isFinalizedInvoiceArchiveDocument(generatedDocument(DOC_A))).toBe(false);
   });
 
   it('K: Fremddokumente behalten den unveränderten lokalen Löschweg', async () => {

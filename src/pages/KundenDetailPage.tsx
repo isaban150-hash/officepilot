@@ -11,6 +11,7 @@ import { Badge } from '../components/ui/Badge';
 import { BusinessList, BusinessListItem } from '../components/ui/Lists';
 import { Page } from '../components/ui/Page';
 import { DetailSection, SummaryList } from '../components/ui/Section';
+import { CommunicationHistorySection } from '../components/communication/CommunicationHistorySection';
 import { getBusinessLettersForCustomer } from '../services/businessLetterService';
 import { getOffersForCustomer, getOfferTotals } from '../services/offer/offerService';
 import { OfferStatusBadge } from '../components/offer/OfferStatusBadge';
@@ -441,6 +442,8 @@ export function KundenDetailPage({ kind }: { kind: KundenIdentityKind }) {
           </BusinessList>
         )}
       </DetailSection>
+      {/* E-MAIL-07C — was OfficeTakt an diesen Kunden gesendet hat; nur echte Kunden (Kennung). */}
+      {letterCustomerId ? <CommunicationHistorySection target={{ customerId: letterCustomerId }} testId="kunden-email-history" /> : null}
       <DetailSection title={translate('kunden.detail.tasksTitle')} testId="kunden-tasks">
         {workspace.tasks.length === 0 ? (
           <p className="detail-empty">{translate('kunden.detail.tasksEmpty')}</p>

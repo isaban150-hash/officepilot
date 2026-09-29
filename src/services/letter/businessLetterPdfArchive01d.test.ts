@@ -169,10 +169,10 @@ describe('BRIEFE-01D — das Dokument', () => {
 });
 
 describe('BRIEFE-01D — die Ablage', () => {
-  it('legt ein fertiggestelltes Schreiben genau einmal ab', () => {
+  it('legt ein fertiggestelltes Schreiben genau einmal ab', async () => {
     const fertig = stelleFertig(legeAn().id);
 
-    const erst = ensureBusinessLetterArchived(fertig);
+    const erst = await ensureBusinessLetterArchived(fertig);
     expect(erst.ok).toBe(true);
     if (!erst.ok) return;
     expect(erst.created).toBe(true);
@@ -180,7 +180,7 @@ describe('BRIEFE-01D — die Ablage', () => {
     /* Zweiter, dritter und vierter Aufruf — mit dem inzwischen verknüpften Brief. */
     const verknuepft = getBusinessLetterById(fertig.id)!;
     for (let i = 0; i < 3; i += 1) {
-      const weiter = ensureBusinessLetterArchived(verknuepft);
+      const weiter = await ensureBusinessLetterArchived(verknuepft);
       expect(weiter.ok).toBe(true);
       if (!weiter.ok) return;
       expect(weiter.created).toBe(false);
@@ -190,14 +190,14 @@ describe('BRIEFE-01D — die Ablage', () => {
     expect(getAllDocuments().filter((d) => d.linkedLetterId === fertig.id)).toHaveLength(1);
   });
 
-  it('findet die vorhandene Ablage auch wieder, wenn der Rückverweis am Brief fehlt', () => {
+  it('findet die vorhandene Ablage auch wieder, wenn der Rückverweis am Brief fehlt', async () => {
     const fertig = stelleFertig(legeAn().id);
-    const erst = ensureBusinessLetterArchived(fertig);
+    const erst = await ensureBusinessLetterArchived(fertig);
     expect(erst.ok).toBe(true);
     if (!erst.ok) return;
 
     /* Ein Brief ohne `documentId` — etwa von einem Gerät, das sie noch nicht kennt. */
-    const zweit = ensureBusinessLetterArchived({ ...fertig, documentId: undefined });
+    const zweit = await ensureBusinessLetterArchived({ ...fertig, documentId: undefined });
     expect(zweit.ok).toBe(true);
     if (!zweit.ok) return;
     expect(zweit.created).toBe(false);
@@ -205,9 +205,9 @@ describe('BRIEFE-01D — die Ablage', () => {
     expect(getAllDocuments().filter((d) => d.linkedLetterId === fertig.id)).toHaveLength(1);
   });
 
-  it('legt einen Entwurf nicht ab', () => {
+  it('legt einen Entwurf nicht ab', async () => {
     const entwurf = legeAn();
-    const ergebnis = ensureBusinessLetterArchived(entwurf);
+    const ergebnis = await ensureBusinessLetterArchived(entwurf);
 
     expect(ergebnis.ok).toBe(false);
     if (ergebnis.ok) return;
@@ -217,9 +217,9 @@ describe('BRIEFE-01D — die Ablage', () => {
     expect(getAllDocuments().some((d) => d.category === 'geschaeftsschreiben')).toBe(false);
   });
 
-  it('verknüpft beide Richtungen und trägt die Kategorie Geschäftsschreiben', () => {
+  it('verknüpft beide Richtungen und trägt die Kategorie Geschäftsschreiben', async () => {
     const fertig = stelleFertig(legeAn().id);
-    const ergebnis = ensureBusinessLetterArchived(fertig);
+    const ergebnis = await ensureBusinessLetterArchived(fertig);
 
     expect(ergebnis.ok).toBe(true);
     if (!ergebnis.ok) return;
@@ -228,9 +228,9 @@ describe('BRIEFE-01D — die Ablage', () => {
     expect(getBusinessLetterById(fertig.id)?.documentId).toBe(ergebnis.document.id);
   });
 
-  it('lässt den eingefrorenen Briefinhalt beim Verknüpfen unangetastet', () => {
+  it('lässt den eingefrorenen Briefinhalt beim Verknüpfen unangetastet', async () => {
     const fertig = stelleFertig(legeAn().id);
-    ensureBusinessLetterArchived(fertig);
+    await ensureBusinessLetterArchived(fertig);
 
     const danach = getBusinessLetterById(fertig.id)!;
     expect(danach.subject).toBe(fertig.subject);

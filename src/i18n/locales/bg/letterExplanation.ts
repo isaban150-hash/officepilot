@@ -1,6 +1,6 @@
 export const bgLetterExplanation = {
   'letter.explain.intro':
-    'OfficePilot обяснява писмото на прост език. Моля, проверете важните данни в оригинала.',
+    'OfficeTakt обяснява писмото на прост език. Моля, проверете важните данни в оригинала.',
   'letter.explain.uncertainHint':
     'Моля, проверете оригинала или се консултирайте с данъчния си консултант.',
   'letter.explain.about.brief':
@@ -82,7 +82,7 @@ export const bgNavigation = {
   'nav.schreibtisch': 'Начало',
   'nav.dokumente': 'Документи',
   'nav.auftraege': 'Поръчки',
-  'nav.officepilot': 'OfficePilot',
+  'nav.officepilot': 'OfficeTakt',
   'nav.mehr': 'Още',
   'nav.steuerberater': 'Данъчен консултант',
 } as const;

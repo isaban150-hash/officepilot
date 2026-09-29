@@ -77,7 +77,7 @@ export const bgStorageRecommendation = {
   'storageRecommendation.steuerberater.not_relevant': 'Счетоводител: вероятно не е релевантен',
 
   'storageRecommendation.disclaimer.notLegalAdvice':
-    'Забележка: OfficePilot не замества правен или данъчен съвет. Моля, проверете задълженията си за съхранение.',
+    'Забележка: OfficeTakt не замества правен или данъчен съвет. Моля, проверете задълженията си за съхранение.',
 
   'storageRecommendation.action.savePermanently': 'Запази завинаги',
   'storageRecommendation.action.temporaryOnly': 'Само временно запазване',

@@ -1,12 +1,12 @@
 export const deDynamic = {
   'legal.disclaimer':
-    'OfficePilot erteilt keine Rechts- oder Steuerberatung. Bitte prüfen Sie alle Inhalte und Dokumente im Original.',
+    'OfficeTakt erteilt keine Rechts- oder Steuerberatung. Bitte prüfen Sie alle Inhalte und Dokumente im Original.',
   'paperFiling.instruction': 'Bitte Original abheften in: {folder} → Register {register}',
   'paperFiling.summary': '{folder}, Register {register}',
   'common.misc': 'Sonstiges',
   'common.unknownSender': 'Absender nicht eindeutig erkannt.',
   'inbox.securityHintBody':
-    'OfficePilot trifft keine endgültigen Entscheidungen und versendet nichts ohne Ihre Bestätigung.',
+    'OfficeTakt trifft keine endgültigen Entscheidungen und versendet nichts ohne Ihre Bestätigung.',
   'priority.kritisch': 'Kritisch',
   'priority.hoch': 'Hoch',
   'priority.mittel': 'Mittel',

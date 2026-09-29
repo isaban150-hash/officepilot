@@ -1,9 +1,9 @@
 export const bgScan = {
   'heute.scanButton': 'Снимка / Сканиране',
   'scan.title': 'Сканиране',
-  'scan.subtitle': 'Снимка или PDF – OfficePilot сортира и архивира.',
+  'scan.subtitle': 'Снимка или PDF – OfficeTakt сортира и архивира.',
   'scan.captureTitle': 'Записване на документ',
-  'scan.captureHint': 'Направете снимка или изберете файл. OfficePilot разпознава съдържанието.',
+  'scan.captureHint': 'Направете снимка или изберете файл. OfficeTakt разпознава съдържанието.',
   'scan.selectType': 'Изберете вид (по избор)',
   'scan.typeAuto': 'Автоматично разпознаване',
   'scan.uploadFile': 'Избор на файл',

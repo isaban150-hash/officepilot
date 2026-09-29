@@ -8,7 +8,7 @@ import { stripDefinitelyMockDataFromState } from '../storage/mockDataDetectionSe
 import { getSyncCoordinator } from '../sync/syncCoordinator';
 import { getSyncClient } from '../sync/syncClientService';
 import { createSyncAdapter } from '../sync/syncAdapterFactory';
-import { applySyncPullCandidateSafely } from '../sync/syncPullPersistService';
+import { applySyncPullCandidateSafely, captureSyncRunBase } from '../sync/syncPullPersistService';
 import { runQueuedSyncOperation } from '../sync/syncOperationQueue';
 import {
   applyWorkspaceStateToStores,
@@ -234,6 +234,8 @@ export async function bootstrapWorkspaceCloudSyncIfNeeded(): Promise<WorkspaceCl
     // bleiben unverändert und werden nur durchgereicht.
     const queuedSync = await runQueuedSyncOperation(
       async (): Promise<WorkspaceCloudBootstrapResult | null> => {
+        // SYNC-AUTOMATIK-01A: Stand beim Start, vor dem ersten await.
+        const base = captureSyncRunBase();
         const syncResult = await (async () => {
           const coordinator = getSyncCoordinator();
           coordinator.setAdapter(createSyncAdapter({ provider: 'supabase' }));
@@ -250,11 +252,13 @@ export async function bootstrapWorkspaceCloudSyncIfNeeded(): Promise<WorkspaceCl
           report: syncResult.report,
           pendingInvoiceIntentClears: syncResult.pendingInvoiceIntentClears,
           pendingAmendmentIntentClears: syncResult.pendingAmendmentIntentClears,
+          base,
         });
         if (!applied.persisted) {
           return { status: 'failed', reason: 'persist' };
         }
-        applyWorkspaceStateToStores(finalState);
+        // 01A: nach einem Rebase trägt der Speicher den massgeblichen Stand, nicht der rohe Kandidat.
+        applyWorkspaceStateToStores(applied.localChangesDuringRun ? buildPersistedStateSnapshot() : finalState);
         return null;
       },
     );

@@ -1,6 +1,6 @@
 import { formatPaperFilingInstruction } from './paperFolderService';
 import { isScanResultActionAvailable } from './officeActionService';
-import { processUploadedDocument } from './intakeWorkflowService';
+import { analyzeUploadedDocument } from './intakeWorkflowService';
 import type { InboxItem } from '../types/models';
 import type { TranslationKey } from '../i18n';
 
@@ -41,7 +41,7 @@ function buildPaperInstruction(item: InboxItem): string | undefined {
     );
   }
 
-  const workflow = processUploadedDocument(item.id);
+  const workflow = analyzeUploadedDocument(item.id);
   const paper = workflow?.documentExplanation?.paperStorage;
   if (paper && paper.trim()) return paper;
   return undefined;

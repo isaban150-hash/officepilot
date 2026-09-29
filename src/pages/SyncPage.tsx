@@ -5,6 +5,7 @@ import { Page } from '../components/ui/Page';
 import { DetailSection, SummaryList } from '../components/ui/Section';
 import { InlineNotice } from '../components/ui/States';
 import { RowList, RowListItem } from '../components/ui/Lists';
+import { SimpleConfirmDialog } from '../components/ui/SimpleConfirmDialog';
 import { useApp } from '../context/AppContext';
 import type { SyncOutboxEntry, SyncState } from '../types/sync';
 import type { SyncFailureKind } from '../services/sync/syncOutboxDescriptionService';
@@ -14,6 +15,7 @@ import {
   summarizeSyncStatus,
   type SyncStatusSummary,
   isLocalOnlySyncMode,
+  resolveArchivedDocumentConflictFromUi,
   resolveSettingsConflictFromUi,
   retrySyncFromUi,
   runSyncFromUi,
@@ -230,6 +232,28 @@ export function SyncPage() {
     refresh();
   };
 
+  /*
+   * 07B-FIX3B — Dokumentkonflikt: erst bestätigen, dann den frischen
+   * Cloud-Stand lesen und die Entscheidung anwenden. Wie bei den
+   * Einstellungen wird danach nicht heimlich synchronisiert.
+   */
+  const [documentDecision, setDocumentDecision] = useState<{ documentId: string; decision: 'keep_local' | 'take_cloud' } | null>(null);
+  const confirmDocumentDecision = async (): Promise<boolean> => {
+    if (!documentDecision) return false;
+    const result = await resolveArchivedDocumentConflictFromUi(documentDecision.documentId, documentDecision.decision);
+    refresh();
+    if (!result.ok) return false;
+    showToast(
+      translate(
+        documentDecision.decision === 'take_cloud'
+          ? 'sync.documentConflict.resolvedCloud'
+          : 'sync.documentConflict.resolvedLocal',
+      ),
+    );
+    setDocumentDecision(null);
+    return true;
+  };
+
   const summary = summarizeSyncStatus(snapshot);
   const statusLabel = statusLabelFor(summary, snapshot.status.syncState, translate);
   const tone = statusTone(summary.kind);
@@ -404,6 +428,73 @@ export function SyncPage() {
           </div>
         </DetailSection>
       )}
+
+      {(snapshot.documentConflicts ?? []).length > 0 && (
+        <DetailSection title={translate('sync.documentConflict.title')} testId="sync-document-conflicts">
+          <InlineNotice tone="warning" testId="sync-document-conflict-hint">
+            {translate('sync.documentConflict.hint')}
+          </InlineNotice>
+          {(snapshot.documentConflicts ?? []).map((conflict) => (
+            <div key={conflict.outboxId} data-testid={`sync-document-conflict-${conflict.documentId}`}>
+              <RowList>
+                <RowListItem
+                  testId={`sync-document-conflict-title-${conflict.documentId}`}
+                  title={`${translate('sync.entity.document')} · ${conflict.title ?? translate('sync.documentConflict.untitled')}`}
+                  trailing={<Badge tone="warning">{translate('sync.failure.kind.conflict')}</Badge>}
+                />
+              </RowList>
+              <div className="sync-page__actions">
+                <Button
+                  type="button"
+                  fullWidth
+                  disabled={isSyncing}
+                  data-testid={`sync-document-take-cloud-${conflict.documentId}`}
+                  onClick={() => setDocumentDecision({ documentId: conflict.documentId, decision: 'take_cloud' })}
+                >
+                  {translate('sync.documentConflict.takeCloud')}
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  fullWidth
+                  disabled={isSyncing}
+                  data-testid={`sync-document-keep-local-${conflict.documentId}`}
+                  onClick={() => setDocumentDecision({ documentId: conflict.documentId, decision: 'keep_local' })}
+                >
+                  {translate('sync.documentConflict.keepLocal')}
+                </Button>
+              </div>
+            </div>
+          ))}
+        </DetailSection>
+      )}
+
+      <SimpleConfirmDialog
+        open={documentDecision !== null}
+        title={translate(
+          documentDecision?.decision === 'keep_local'
+            ? 'sync.documentConflict.keepLocalTitle'
+            : 'sync.documentConflict.takeCloudTitle',
+        )}
+        message={translate(
+          documentDecision?.decision === 'keep_local'
+            ? 'sync.documentConflict.keepLocalMessage'
+            : 'sync.documentConflict.takeCloudMessage',
+        )}
+        confirmLabel={translate(
+          documentDecision?.decision === 'keep_local'
+            ? 'sync.documentConflict.keepLocal'
+            : 'sync.documentConflict.takeCloud',
+        )}
+        cancelLabel={translate('common.cancel')}
+        confirmVariant="primary"
+        confirmTestId="sync-document-decision-confirm"
+        cancelTestId="sync-document-decision-cancel"
+        dialogTestId="sync-document-decision-dialog"
+        failureMessage={translate('sync.documentConflict.failed')}
+        onConfirm={confirmDocumentDecision}
+        onCancel={() => setDocumentDecision(null)}
+      />
 
       {/*
         * VISUAL-POLISH-01D — Geräte-/Arbeitsbereichskennungen und der letzte

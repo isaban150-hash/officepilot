@@ -21,18 +21,31 @@ export interface EmailAddress {
 
 export interface EmailAttachment {
   filename: string;
-  mimeType: 'application/pdf';
+  /** 07B: nur PDF; E-MAIL-07D (freie E-Mail): die dort erlaubten Typen. */
+  mimeType: string;
   contentBase64: string;
 }
 
 export interface SendTransactionalEmailInput {
   from: EmailAddress;
   replyTo?: EmailAddress;
-  to: EmailAddress;
+  /** 07B: genau ein Empfänger; E-MAIL-07D: mehrere. */
+  to: EmailAddress | EmailAddress[];
+  /** E-MAIL-07D — optional, nur gesetzt, wenn nicht leer. */
+  cc?: EmailAddress[];
+  bcc?: EmailAddress[];
   subject: string;
   text: string;
   attachment?: EmailAttachment;
+  /** E-MAIL-07D — mehrere Anhänge (statt `attachment`). */
+  attachments?: EmailAttachment[];
   idempotencyKey?: string;
+}
+
+/** E-MAIL-07D — alle Empfänger einer Nachricht (TO, CC, BCC). */
+export function allRecipientAddresses(input: Pick<SendTransactionalEmailInput, 'to' | 'cc' | 'bcc'>): string[] {
+  const to = Array.isArray(input.to) ? input.to : [input.to];
+  return [...to, ...(input.cc ?? []), ...(input.bcc ?? [])].map((address) => address.email);
 }
 
 export type SendTransactionalEmailResult =
@@ -97,8 +110,12 @@ export function createStubEmailProvider(): EmailProviderAdapter {
   return {
     provider: 'stub',
     async sendTransactionalEmail(input) {
-      const key = input.idempotencyKey ?? `${input.to.email}|${input.subject}`;
-      switch (resolveStubEmailOutcome(input.to.email)) {
+      const recipients = allRecipientAddresses(input);
+      const key = input.idempotencyKey ?? `${recipients.join(',')}|${input.subject}`;
+      // 07D: der „schlechteste" Empfänger bestimmt das Stub-Ergebnis.
+      const outcomes = recipients.map(resolveStubEmailOutcome);
+      const outcome = outcomes.find((entry) => entry !== 'accepted') ?? 'accepted';
+      switch (outcome) {
         case 'accepted':
           return { accepted: true, providerMessageId: `stub-${stableHash(key)}`, providerStatus: 'queued' };
         case 'recipient':
@@ -170,6 +187,10 @@ export function mapBrevoFailure(status: number, body: unknown): { category: Deli
   return { category: 'unknown', code: `brevo_${status}` };
 }
 
+function toBrevoAddress(address: EmailAddress): { email: string; name?: string } {
+  return address.name ? { email: address.email, name: address.name } : { email: address.email };
+}
+
 export function createBrevoEmailProvider(options: BrevoAdapterOptions): EmailProviderAdapter {
   const fetchImpl = options.fetchImpl ?? fetch;
   const endpoint = options.endpoint ?? BREVO_SEND_ENDPOINT;
@@ -185,14 +206,19 @@ export function createBrevoEmailProvider(options: BrevoAdapterOptions): EmailPro
 
       const payload: Record<string, unknown> = {
         sender: input.from.name ? { email: input.from.email, name: input.from.name } : { email: input.from.email },
-        to: [input.to.name ? { email: input.to.email, name: input.to.name } : { email: input.to.email }],
+        to: (Array.isArray(input.to) ? input.to : [input.to]).map(toBrevoAddress),
         subject: input.subject,
         textContent: input.text,
       };
+      // E-MAIL-07D — CC/BCC nur, wenn vorhanden (07B-Payload bleibt unverändert).
+      if (input.cc && input.cc.length > 0) payload.cc = input.cc.map(toBrevoAddress);
+      if (input.bcc && input.bcc.length > 0) payload.bcc = input.bcc.map(toBrevoAddress);
       if (input.replyTo) {
         payload.replyTo = input.replyTo.name ? { email: input.replyTo.email, name: input.replyTo.name } : { email: input.replyTo.email };
       }
-      if (input.attachment) {
+      if (input.attachments && input.attachments.length > 0) {
+        payload.attachment = input.attachments.map((attachment) => ({ name: attachment.filename, content: attachment.contentBase64 }));
+      } else if (input.attachment) {
         payload.attachment = [{ name: input.attachment.filename, content: input.attachment.contentBase64 }];
       }
 

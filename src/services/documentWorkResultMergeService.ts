@@ -63,6 +63,12 @@ export function mergeDocumentWorkResultOnReanalysis(
 
   return {
     ...nextProjected,
+    /*
+     * FINAL-ACCEPTANCE-FIX 02 / T1 — die Serverversion gehört zur Zeile, nicht
+     * zur Analyse. Ohne sie ging jede Aktualisierung mit Version 1 hinaus und
+     * scheiterte an „Versionskonflikt document_work_result:1".
+     */
+    ...(previous.sync ? { sync: previous.sync } : {}),
     // Preserve workspace binding from previous when next omits it.
     workspaceId: nextProjected.workspaceId ?? previous.workspaceId ?? null,
     businessInterpretation: preserveSemanticCore(previous, nextProjected, fingerprintChanged),

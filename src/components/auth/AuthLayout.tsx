@@ -13,7 +13,7 @@ export function AuthLayout({ title, subtitle, children, testId }: AuthLayoutProp
     <div className="auth-page" data-testid={testId}>
       <div className="auth-card">
         <header className="auth-card__header">
-          <p className="auth-card__brand">OfficePilot</p>
+          <p className="auth-card__brand">OfficeTakt</p>
           <h1 className="auth-card__title">{title}</h1>
           {subtitle ? <p className="auth-card__subtitle">{subtitle}</p> : null}
         </header>

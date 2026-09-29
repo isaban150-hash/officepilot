@@ -7,7 +7,11 @@ export type SearchResultType =
   | 'expense'
   | 'vorgang'
   | 'task'
-  | 'communication';
+  | 'communication'
+  /** BROWSER-ACCEPTANCE-FIX 01 / A2 — Kunde als eigener Treffer. */
+  | 'customer'
+  /** BROWSER-ACCEPTANCE-FIX 01 / A2 — E-Mail aus der Cloud (Eingang/Gesendet). */
+  | 'email';
 
 export interface SearchResult {
   id: string;
@@ -20,6 +24,12 @@ export interface SearchResult {
   route: string;
   icon: string;
   status?: string;
+  /**
+   * BROWSER-ACCEPTANCE-FIX 01 / A2 — der Status in Klartext für die Anzeige.
+   * `status` bleibt der Rohwert, weil Filter darauf prüfen; angezeigt wird nur
+   * dieses Feld — nie ein technischer Wert.
+   */
+  statusLabel?: string;
   source: string;
 }
 

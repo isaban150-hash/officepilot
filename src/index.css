@@ -486,7 +486,7 @@ body {
 .invoice-drift-list__item + .invoice-drift-list__item {
   margin-top: 0.75rem;
   padding-top: 0.75rem;
-  border-top: 1px solid var(--color-border, #e5e7eb);
+  border-top: 1px solid var(--color-border-subtle);
 }
 
 .invoice-drift-list dt {
@@ -557,7 +557,7 @@ body {
 }
 
 .settings-row + .settings-row {
-  border-top: 1px solid var(--color-border, #e5e7eb);
+  border-top: 1px solid var(--color-border-subtle);
 }
 
 .settings-row:hover,
@@ -972,7 +972,7 @@ body {
   flex-direction: column;
   gap: 0.2rem;
   padding: 0.5rem 0;
-  border-top: 1px solid var(--color-border, #e5e7eb);
+  border-top: 1px solid var(--color-border-subtle);
   min-width: 0;
 }
 
@@ -991,6 +991,22 @@ body {
   gap: 0.75rem;
   flex-wrap: wrap;
   margin-top: 0.75rem;
+}
+
+/*
+ * E-MAIL-HALBZEIT-FIX B3/B9 — Hinweise im Versandbereich und in den
+ * Kommunikations-Einstellungen stehen linksbündig unter ihren linksbündigen
+ * Feldern und Einträgen. Bewusst lokal: `.hint-text` zentriert global, und
+ * eine globale Änderung träfe alle anderen Seiten.
+ */
+.invoice-delivery-panel .hint-text,
+.settings-communication-page .hint-text {
+  text-align: left;
+}
+
+.invoice-delivery-panel__retry-of {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted, #6b7280);
 }
 
 @media (max-width: 767px) {
@@ -2931,6 +2947,14 @@ body {
   color: var(--color-text-muted);
 }
 
+/* BROWSER-ACCEPTANCE-FIX 01 / B2 — bedingter Hinweis zur Rechtsform (kein Feldhinweis). */
+.company-profile-form .settings-form__notice {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: var(--color-warning, #b45309);
+}
+
 .company-profile-form__logo-preview {
   display: block;
   max-width: 120px;
@@ -3241,7 +3265,7 @@ body {
 .area-ai-panel__answer {
   margin-top: 1rem;
   padding-top: 1rem;
-  border-top: 1px solid var(--color-border, #e5e7eb);
+  border-top: 1px solid var(--color-border-subtle);
 }
 
 .area-ai-panel__answer--unavailable {
@@ -3880,6 +3904,245 @@ body {
   color: #fff;
 }
 
+/*
+ * E-MAIL-07E — Reiter „Posteingang“ / „Gesendet“: dieselbe Optik wie die
+ * Kanal-Reiter, aber eigene Klassen — die beiden Reiterleisten sind fachlich
+ * verschieden und dürfen nicht verwechselt werden.
+ */
+.email-center-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0 0 1rem;
+}
+
+.email-center-tab {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  border-radius: 999px;
+  padding: 0.35rem 0.85rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.email-center-tab--active {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+
+/* E-MAIL-07E — Firmenpostfach-Zeilen und Filter im Posteingang: ruhig, linksbündig, ohne Listenpunkte. */
+.inbox-email-list__connections {
+  list-style: none;
+  margin: 0 0 0.5rem;
+  padding: 0;
+  font-size: 0.9rem;
+}
+
+.inbox-email-list__connections li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+}
+
+/* E-MAIL-07E: ein Abschnitt (inkl. angehängtem Trennpunkt) bricht nie in sich um. */
+.inbox-email-list__segment {
+  white-space: nowrap;
+}
+
+/* E-MAIL 07F-01A — Gesprächsverlauf: Business-Mail-Verlauf, eingehend/ausgehend über Kennzeichnung und Randfarbe. */
+.email-conversation {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.email-conversation__item {
+  border: 1px solid var(--color-border-subtle);
+  border-left: 3px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  padding: 0.75rem 1rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.email-conversation__item--outbound {
+  border-left-color: var(--color-primary);
+  background: var(--color-bg-soft);
+}
+
+.email-conversation__item--current {
+  box-shadow: var(--shadow-sm);
+}
+
+.email-conversation__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.75rem;
+  margin-bottom: 0.25rem;
+}
+
+.email-conversation__direction {
+  font-weight: 600;
+}
+
+.email-conversation__date,
+.email-conversation__label {
+  color: var(--color-text-muted);
+}
+
+.email-conversation__party,
+.email-conversation__subject {
+  margin: 0.125rem 0;
+  font-size: 0.9rem;
+}
+
+.email-conversation__subject {
+  font-weight: 600;
+}
+
+.email-conversation__body {
+  white-space: pre-wrap;
+  font-family: inherit;
+  margin: 0.5rem 0 0;
+  overflow-wrap: anywhere;
+}
+
+/* Frühere Nachrichten kompakt; die geöffnete Nachricht vollständig. */
+.email-conversation__body--collapsed {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  color: var(--color-text-muted);
+}
+
+.email-conversation__attachments {
+  margin: 0.5rem 0 0;
+  padding-left: 1.25rem;
+  font-size: 0.9rem;
+}
+
+.email-conversation__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.75rem;
+  margin-top: 0.5rem;
+}
+
+/* E-MAIL 07F-01B — Zustellverlauf: kleine, ruhige Liste unter den Versuchen. */
+.email-delivery-history {
+  margin: 0.75rem 0 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.email-delivery-history__title {
+  margin: 0 0 0.25rem;
+  font-weight: 600;
+}
+
+.email-delivery-history ol {
+  margin: 0;
+  padding-left: 1.25rem;
+  font-size: 0.9rem;
+}
+
+/* E-MAIL 07F-01C — Antwortentwurf vorbereiten: Aktion, Hinweise, Platzhalterliste (bricht um, kein Overflow). */
+.email-reply-ai {
+  margin: 0 0 0.75rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.email-reply-ai__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.75rem;
+}
+
+.email-reply-ai p {
+  margin: 0.25rem 0 0;
+}
+
+.email-reply-ai__placeholders {
+  margin-top: 0.25rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.email-reply-ai__placeholders ul {
+  margin: 0.125rem 0 0;
+  padding-left: 1.25rem;
+  font-weight: 600;
+}
+
+/* E-MAIL 07F-01A — „Antwort auf": kompakter Bezug über dem Antwort-Editor. */
+.email-reply-original {
+  border-left: 3px solid var(--color-border);
+  padding: 0.25rem 0 0.25rem 0.75rem;
+  margin: 0 0 1rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.email-reply-original__label {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+
+.email-reply-original__subject {
+  margin: 0.125rem 0;
+  font-weight: 600;
+}
+
+/* E-MAIL-07E-MSA — Postfach in den Einstellungen: ohne Listenpunkte, Einträge klar getrennt. */
+.mailbox-settings__list {
+  list-style: none;
+  margin: 0.5rem 0;
+  padding: 0;
+}
+
+.mailbox-settings__item + .mailbox-settings__item {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+/* E-MAIL-07E-MSA-FIX1 — fester Importordner (Testphase) wie ein Feld-Label + Wert. */
+.mailbox-settings .settings-form__label {
+  font-weight: 600;
+  font-size: 0.9375rem;
+}
+
+.mailbox-settings__fixed-folder {
+  margin: 0.25rem 0;
+}
+
+.mailbox-settings__pending {
+  margin: 0.5rem 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--color-warning);
+  border-radius: 8px;
+}
+
+.inbox-email-list__filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0.5rem 0;
+  font-size: 0.9rem;
+}
+
 .communication-draft-view {
   margin-top: 0.5rem;
 }
@@ -4041,7 +4304,7 @@ body {
 .communication-ai-section {
   margin-top: 1rem;
   padding-top: 1rem;
-  border-top: 1px solid var(--color-border, #e5e7eb);
+  border-top: 1px solid var(--color-border-subtle);
 }
 
 .communication-ai-controls {
@@ -5130,7 +5393,13 @@ body {
   .document-toolbar,
   .chip-group,
   .form-actions,
-  .document-detail__actions {
+  .document-detail__actions,
+  /*
+   * BROWSER-ACCEPTANCE-FIX 01 / C1 — der interne §13b-Prüfhinweis ist eine
+   * Arbeitsnotiz für den Betrieb, kein Rechnungsinhalt. Die kundenrelevanten
+   * Steuerhinweise (__status, __list, invoice-13b-no-vat) bleiben im Druck.
+   */
+  .invoice-tax-notice__review {
     display: none !important;
   }
 
@@ -6101,7 +6370,7 @@ body {
 }
 
 .contract-workspace-summary__status-details {
-  border-top: 1px solid var(--color-border, #e5e7eb);
+  border-top: 1px solid var(--color-border-subtle);
   padding-top: 0.55rem;
 }
 
@@ -6163,7 +6432,7 @@ body {
 
 .contract-order-proposal__compact-item {
   padding: 0.55rem 0;
-  border-top: 1px solid var(--color-border, #e5e7eb);
+  border-top: 1px solid var(--color-border-subtle);
 }
 
 .contract-order-proposal__compact-item:first-child {
@@ -6281,7 +6550,7 @@ body {
 
 .contract-order-proposal__clause-item {
   padding: 0.35rem 0;
-  border-top: 1px solid var(--color-border, #e5e7eb);
+  border-top: 1px solid var(--color-border-subtle);
 }
 
 .contract-order-proposal__clause-item:first-child {

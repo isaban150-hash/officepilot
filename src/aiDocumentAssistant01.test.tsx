@@ -84,7 +84,7 @@ describe('AI-DOCUMENT-ASSISTANT-01', () => {
         </AppProvider>
       </MemoryRouter>,
     );
-    expect(html).toContain('OfficePilot erkennt die Dokumentart automatisch');
+    expect(html).toContain('OfficeTakt erkennt die Dokumentart automatisch');
     expect(html).not.toContain('Materialrechnung');
     expect(html).not.toContain('Kontoauszug');
   });

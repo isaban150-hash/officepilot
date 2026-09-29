@@ -203,7 +203,7 @@ function memoryNextFilingStep(memory: DocumentMemory): string {
   if (!memory.paperFolder?.folderId) {
     return 'Papierablage prüfen oder Original entsorgen.';
   }
-  return 'Original im Papierordner abheften und in OfficePilot bestätigen.';
+  return 'Original im Papierordner abheften und in OfficeTakt bestätigen.';
 }
 
 function answerFreistellungLocation(): MemoryQueryAnswer | null {

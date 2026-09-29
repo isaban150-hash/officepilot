@@ -78,7 +78,8 @@ function fakeServer(options: { outcome?: 'accepted' | 'failed' | 'unknown'; uplo
       if (name === 'list_workspace_document_deliveries') {
         return { data: [...rows.values()].filter((r) => r.linked_invoice_id === args.p_linked_invoice_id).reverse(), error: null };
       }
-      return { data: null, error: { message: `unbekannt: ${name}` } };
+      // E-MAIL-07C — wie PostgREST bei einer (noch) nicht vorhandenen Funktion, z. B. der Kontext-RPC vor ihrer Migration.
+      return { data: null, error: { code: 'PGRST202', message: `Could not find the function public.${name}` } };
     }),
     storage: { from: vi.fn(() => ({ upload: vi.fn(async (path: string) => { uploads.push(path); return { error: options.uploadError ?? null }; }) })) },
     auth: { getSession: vi.fn(async () => ({ data: { session: { access_token: 't' } } })) },

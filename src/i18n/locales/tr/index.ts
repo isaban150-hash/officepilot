@@ -14,6 +14,9 @@ import { trBackup } from './backup';
 import { trPilot } from './pilot';
 import { trSettings } from './settings';
 import { trDelivery } from './delivery';
+import { trFreeEmail } from './freeEmail';
+import { trInboundEmail } from './inboundEmail';
+import { trMailboxOAuth } from './mailboxOAuth';
 import { trBusinessLetter } from './businessLetter';
 import { trOffer } from './offer';
 import { trOrder } from './order';
@@ -40,6 +43,9 @@ export const trModules = {
   ...trPilot,
   ...trSettings,
   ...trDelivery,
+  ...trFreeEmail,
+  ...trInboundEmail,
+  ...trMailboxOAuth,
   ...trBusinessLetter,
   ...trOffer,
   ...trOrder,

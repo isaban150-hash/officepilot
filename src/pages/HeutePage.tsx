@@ -4,6 +4,7 @@ import { DeskSuccesses } from '../components/home/DeskSuccesses';
 import { HomeAssistantPrompt } from '../components/home/HomeAssistantPrompt';
 import { HomeFocusTask } from '../components/home/HomeFocusTask';
 import { HomeMonatsmappe } from '../components/home/HomeMonatsmappe';
+import { HomeNewEmails } from '../components/home/HomeNewEmails';
 import { HomeNewIntake } from '../components/home/HomeNewIntake';
 import { HomeNextTasks } from '../components/home/HomeNextTasks';
 import { Icon } from '../components/ui/Icon';
@@ -138,6 +139,8 @@ export function HeutePage() {
         </section>
 
         <section className="heute-04b__status">
+          {/* E-MAIL-07E: neueste eingegangene E-Mails (nur Anzeige). */}
+          <HomeNewEmails />
           <HomeNewIntake />
           <HomeMonatsmappe />
           {hasSuccesses ? (

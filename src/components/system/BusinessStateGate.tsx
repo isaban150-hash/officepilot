@@ -17,6 +17,7 @@ import { isSupabaseConfigured } from '../../lib/supabase';
 import { getCachedSetup } from '../../services/persistenceService';
 import { t } from '../../i18n';
 import { getWorkspaceStoreSnapshot } from '../../services/workspace/workspaceStore';
+import { startAutomaticSync } from '../../services/sync/syncSchedulerRuntime';
 import { WorkspaceRestoreFailure, WorkspaceSetupNotFound } from './WorkspaceRestoreFailure';
 import { LocalStateLoadFailure } from './LocalStateLoadFailure';
 import { WorkspaceCompanyConflict } from './WorkspaceCompanyConflict';
@@ -223,6 +224,28 @@ export function BusinessStateGate({ children }: BusinessStateGateProps) {
       cancelled = true;
     };
   }, [isAuthReady, isAuthenticated, isAllowed, user?.id, retryToken]);
+
+  /*
+   * SYNC-AUTOMATIK-01A — automatische Synchronisation, solange ein angemeldeter
+   * Nutzer in einem freigegebenen Workspace arbeitet. Der Bootstrap-Lauf oben
+   * bleibt der Start-/Anmelde-Abgleich; der Planer übernimmt danach.
+   *
+   * Der Schlüssel `${user}:${workspace}` entsteht nur nach einer gelungenen
+   * Workspace-Freigabe. Abmeldung (Schlüssel `guest`) und Workspace-Wechsel
+   * beenden den Planer über das Aufräumen dieses Effekts — mit allen
+   * Zeitgebern, Ereignissen und Kanälen.
+   */
+  const automaticSyncReady =
+    setup !== null && isAuthenticated && isAllowed && !localStateLoadFailed && !companyConflict;
+  useEffect(() => {
+    if (!automaticSyncReady || !isSupabaseConfigured()) return;
+    const separator = bootstrapKey.indexOf(':');
+    if (separator <= 0) return;
+    const userId = bootstrapKey.slice(0, separator);
+    const workspaceId = bootstrapKey.slice(separator + 1);
+    if (!userId || !workspaceId || userId !== user?.id) return;
+    return startAutomaticSync({ userId, workspaceId });
+  }, [automaticSyncReady, bootstrapKey, user?.id]);
 
   /*
    * LOAD_FAILED-UX-GUARD-01B — die höchste Sperre, vor allen anderen.

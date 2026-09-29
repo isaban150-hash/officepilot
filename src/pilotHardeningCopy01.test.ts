@@ -4,7 +4,7 @@ import { deBackup } from './i18n/locales/de/backup';
 describe('PILOT-HARDENING-01 copy', () => {
   it('restore hint uses current replace wording', () => {
     expect(deBackup['backup.validate.replaceHint']).toContain(
-      'ersetzt alle lokalen OfficePilot-Daten',
+      'ersetzt alle lokalen OfficeTakt-Daten',
     );
     expect(deBackup['backup.validate.replaceHint']).not.toContain('später');
     expect(

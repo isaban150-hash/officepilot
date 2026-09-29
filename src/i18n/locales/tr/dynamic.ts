@@ -1,12 +1,12 @@
 export const trDynamic = {
   'legal.disclaimer':
-    'OfficePilot hukuki veya vergi danışmanlığı vermez. Lütfen tüm içerikleri ve belgeleri orijinalinde kontrol edin.',
+    'OfficeTakt hukuki veya vergi danışmanlığı vermez. Lütfen tüm içerikleri ve belgeleri orijinalinde kontrol edin.',
   'paperFiling.instruction': 'Lütfen orijinali şuraya dosyalayın: {folder} → Defter {register}',
   'paperFiling.summary': '{folder}, Defter {register}',
   'common.misc': 'Diğer',
   'common.unknownSender': 'Gönderen net olarak tanınmadı.',
   'inbox.securityHintBody':
-    'OfficePilot kesin kararlar vermez ve onayınız olmadan hiçbir şey göndermez.',
+    'OfficeTakt kesin kararlar vermez ve onayınız olmadan hiçbir şey göndermez.',
   'priority.kritisch': 'Kritik',
   'priority.hoch': 'Yüksek',
   'priority.mittel': 'Orta',

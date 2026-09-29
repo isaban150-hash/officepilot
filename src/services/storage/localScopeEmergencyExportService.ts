@@ -252,7 +252,7 @@ export async function buildLocalScopeEmergencyBackup(
     zip.file(
       'README.txt',
       [
-        'OfficePilot — lokale Notfallsicherung',
+        'OfficeTakt — lokale Notfallsicherung',
         '',
         `Herkunft (Origin): ${input.origin}`,
         `Bereich (Scope):   ${scopeKey}`,

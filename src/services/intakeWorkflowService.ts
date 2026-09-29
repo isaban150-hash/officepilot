@@ -36,7 +36,7 @@ import {
   createTasksFromProposals,
 } from './taskEngineService';
 import { interpretBusinessFromWorkflow } from './businessInterpretationService';
-import { commitDocumentWorkResultFromAnalysis } from './documentWorkResultService';
+import { commitDocumentWorkResultFromAnalysis, getDocumentWorkResult } from './documentWorkResultService';
 import { buildWorkflowDecisionForInboxItem } from './workflowDecisionService';
 import { assertContractPlanMutable } from './orderPlanIntegrityService';
 import {
@@ -119,21 +119,47 @@ function withBusinessInterpretation(
     };
   }
 
-  const resultWithDecision = {
+  /*
+   * FINAL-ACCEPTANCE-FIX 02 / T1 — hier wird nur noch gerechnet.
+   *
+   * Früher stand an dieser Stelle `commitDocumentWorkResultFromAnalysis`
+   * (upsert + persistAll). Weil jeder Leser — Eingangsdetail im `useMemo`,
+   * Heute über die Hinweise, der Assistent — diese Funktion aufruft, schrieb
+   * schon das blosse Ansehen ein neues Analyseergebnis. Gespeichert wird jetzt
+   * ausschliesslich über `commitUploadedDocumentAnalysis`.
+   */
+  return {
     ...result,
     workflowDecision: buildWorkflowDecisionForInboxItem(item, result),
   };
+}
 
+/**
+ * FINAL-ACCEPTANCE-FIX 02 / T1 — der einzige Schreibweg der Analyse.
+ *
+ * - `explicit`: ausdrücklich angestossene Analyse (Import-/Analysepfad,
+ *   „Analyse erneut"). Speichert wie bisher.
+ * - `onlyIfMissing`: Ansehen. Gespeichert wird nur das **erste** Ergebnis
+ *   eines neu erfassten Dokuments. Liegt schon eines vor, schreibt Ansehen
+ *   nichts — eine Neuberechnung unterscheidet sich dann nur in `analyzedAt`,
+ *   in der Schlüsselreihenfolge und in neueren abgeleiteten Leseregeln, nicht
+ *   in neuer fachlicher Information.
+ *
+ * Nie während eines Renders aufrufen: `persistAll` aktualisiert die Sync-Anzeige.
+ */
+export function commitUploadedDocumentAnalysis(
+  workflow: WorkflowResult,
+  mode: 'explicit' | 'onlyIfMissing' = 'explicit',
+): void {
+  const item = getInboxItemById(workflow.inboxItemId);
+  if (!item) return;
+  if (mode === 'onlyIfMissing' && getDocumentWorkResult(item.id)) return;
   try {
-    // Successful analysis: merge + upsert + durable flush (DOCUMENT-WORK-RESULT-PERSISTENCE-01).
-    // Unusable / failed projections keep a previous valid DWR; persist failure rolls back.
-    commitDocumentWorkResultFromAnalysis(resultWithDecision, item);
+    commitDocumentWorkResultFromAnalysis(workflow, item);
   } catch (error) {
     // Snapshot commit must never abort the analysis return path.
     console.warn('[documentWorkResult] commit after analysis failed', error);
   }
-  return resultWithDecision;
-  return result;
 }
 
 function inferClassificationConfidence(
@@ -337,7 +363,22 @@ function buildNextActions(
   return actions;
 }
 
-export function processUploadedDocument(
+/**
+ * FINAL-ACCEPTANCE-FIX 02 / T1 — Analyse **mit** Speichern, für ausdrücklich
+ * persistierende Abläufe (Import-/Analysepfad, Tests). Lesende Stellen nehmen
+ * `analyzeUploadedDocument`.
+ */
+export function processUploadedDocument(inboxItemId: string): WorkflowResult | null {
+  const result = analyzeUploadedDocument(inboxItemId);
+  if (result) commitUploadedDocumentAnalysis(result);
+  return result;
+}
+
+/**
+ * FINAL-ACCEPTANCE-FIX 02 / T1 — reine Analyse ohne jeden Schreibzugriff.
+ * Sicher in Render, `useMemo` und lesenden Diensten (Heute, Assistent).
+ */
+export function analyzeUploadedDocument(
   inboxItemId: string,
 ): WorkflowResult | null {
   const item = getInboxItemById(inboxItemId);

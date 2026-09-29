@@ -134,7 +134,7 @@ export function answerDocumentQuestion(
     return {
       questionType,
       answer:
-        'Bitte geben Sie Ihre Kernaussage an (z. B. „Unterlagen schicke ich nächste Woche“). OfficePilot formuliert daraus einen Antwortentwurf — ohne eigene Inhalte.',
+        'Bitte geben Sie Ihre Kernaussage an (z. B. „Unterlagen schicke ich nächste Woche“). OfficeTakt formuliert daraus einen Antwortentwurf — ohne eigene Inhalte.',
       bullets: [],
       confidence: 'high',
       sources: ['communication.policy'],

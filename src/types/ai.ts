@@ -34,7 +34,8 @@ export type GenerateTextResult =
 
 export type AiResultSource = 'ai' | 'unavailable' | 'rule_fallback';
 
-export type AiGuardProfile = 'qa' | 'enhance';
+/** E-MAIL 07F-01C — `reply`: Antwortentwurf (baut auf `enhance` auf, zusätzlich Zeiten, relative Zeitangaben, Prozent, Telefon, Links, Adressen; strukturelle Bereinigung). */
+export type AiGuardProfile = 'qa' | 'enhance' | 'reply';
 
 export interface AiGuardContext {
   originalText?: string;

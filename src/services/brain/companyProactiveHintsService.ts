@@ -1,7 +1,7 @@
 import type { CompanySessionContext, ProactiveHint } from '../../types/companySession';
 import { getAllDocuments } from '../documentService';
 import { getInboxItemById } from '../inboxService';
-import { processUploadedDocument } from '../intakeWorkflowService';
+import { analyzeUploadedDocument } from '../intakeWorkflowService';
 import { isFinalizedInvoice } from '../invoiceArchiveService';
 import { getAllInvoiceOverview } from '../invoiceOverviewService';
 import { getAllVorgaenge, getVorgangById } from '../vorgangService';
@@ -84,7 +84,7 @@ export function buildProactiveHints(session: CompanySessionContext): ProactiveHi
     if (item) {
       // F-03 — eine Definition für „Materialrechnung" (siehe workflowIntelligenceService).
       if (isMaterialInvoiceInbox(item)) {
-        const workflow = processUploadedDocument(uploadId);
+        const workflow = analyzeUploadedDocument(uploadId);
         if (workflow && workflow.similarVorgaenge.length === 1) {
           hints.push({
             messageKey: 'companyContext.hint.materialMatchesVorgang',

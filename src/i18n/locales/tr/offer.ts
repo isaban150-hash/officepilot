@@ -88,7 +88,7 @@ export const trOffer = {
   'offer.detail.archiveOpen': 'Arşivde aç',
   'offer.detail.archivePending': 'Arşive kaydediliyor …',
   'offer.detail.archiveFailed': 'Arşive kaydetme başarısız oldu.',
-  'offer.detail.send': 'E-posta ile gönder',
+  'offer.detail.send': 'E-posta gönderimi',
   'offer.detail.sendHint': 'Gönderim arşivdeki PDF üzerinden yapılır.',
   'offer.detail.markSent': 'Gönderildi olarak işaretle',
   'offer.detail.reject': 'Reddedildi olarak işaretle',

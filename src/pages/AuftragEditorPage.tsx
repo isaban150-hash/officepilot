@@ -12,6 +12,7 @@
  * Abschlägen und dem bestehenden Nachtragsweg.
  */
 import { useMemo, useState, type ReactNode } from 'react';
+import { buildCustomerOptionLabels } from '../services/customer/customerOptionLabels';
 import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { PageHeader } from '../components/ui/Card';
@@ -99,6 +100,11 @@ export function AuftragEditorPage() {
   const writeAccess = resolveWorkspaceWriteAccess({ userId: user?.id, cloudConfigured: isSupabaseConfigured() });
   const profile = getCompanyProfileStoreSnapshot();
   const kunden = useMemo(() => getCustomerStoreSnapshot(), []);
+  // E-MAIL-HALBZEIT-FIX B5 — gleichnamige Kunden unterscheidbar (nur Anzeige).
+  const kundenLabels = useMemo(
+    () => buildCustomerOptionLabels(kunden, { created: translate('customer.option.created'), id: translate('customer.option.id') }),
+    [kunden, translate],
+  );
   const startKundeId = vorhandener?.customerId ?? params.get('customerId') ?? '';
   const startKunde = startKundeId ? getCustomerById(startKundeId) : null;
 
@@ -267,7 +273,7 @@ export function AuftragEditorPage() {
             <option value="">{translate('order.editor.customerNone')}</option>
             {kunden.map((k) => (
               <option key={k.id} value={k.id}>
-                {k.name}
+                {kundenLabels.get(k.id) ?? k.name}
               </option>
             ))}
           </select>

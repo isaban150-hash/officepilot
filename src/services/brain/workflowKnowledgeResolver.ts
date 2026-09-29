@@ -1,3 +1,4 @@
+import { countLabel } from '../../utils/germanCount';
 import type { WorkflowAnalysis, WorkflowAnalysisSummary, WorkflowKnowledgeResolution } from '../../types/workflowIntelligence';
 import type { CompanySessionContext } from '../../types/companySession';
 import type { BrainSuggestedStep } from '../../types/brainOrchestration';
@@ -176,7 +177,7 @@ export function tryResolveWorkflowQuestion(
     return buildWorkflowAnswer(
       analysis,
       'Zusammengehörige Dokumente',
-      `Zu „${analysis.scopeTitle}“ gehören ${analysis.relatedDocumentIds.length} erfasste Dokument(e) in Ihren Daten.`,
+      `Zu „${analysis.scopeTitle}“ ${analysis.relatedDocumentIds.length === 1 ? 'gehört 1 erfasstes Dokument' : `gehören ${analysis.relatedDocumentIds.length} erfasste Dokumente`} in Ihren Daten.`,
     );
   }
 
@@ -186,7 +187,7 @@ export function tryResolveWorkflowQuestion(
       analysis,
       'Risiken im Ablauf',
       riskCount > 0
-        ? `Ich habe ${riskCount} Risiko-Hinweis(e) auf Basis vorhandener Daten erkannt.`
+        ? `Ich habe ${countLabel(riskCount, 'Risiko-Hinweis', 'Risiko-Hinweise')} auf Basis vorhandener Daten erkannt.`
         : 'Auf Basis vorhandener Daten sind keine kritischen Risiken erkannt.',
     );
   }
@@ -197,7 +198,7 @@ export function tryResolveWorkflowQuestion(
     return buildWorkflowAnswer(
       analysis,
       'Workflow-Stand',
-      `Ich habe erkannt: ${done} Schritt(e) erledigt, ${missing} fehlen noch (basierend auf vorhandenen Daten).`,
+      `Ich habe erkannt: ${countLabel(done, 'Schritt', 'Schritte')} erledigt, ${missing === 1 ? '1 fehlt' : `${missing} fehlen`} noch (basierend auf vorhandenen Daten).`,
     );
   }
 

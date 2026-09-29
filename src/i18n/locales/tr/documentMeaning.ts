@@ -33,6 +33,12 @@ export const trDocumentMeaning = {
   'documentMeaning.candidate.uncertain': 'Lütfen kontrol edin',
   'documentMeaning.candidate.confirm': 'Eşleştirmeyi onayla',
   'documentMeaning.candidate.choose': 'Lütfen kendiniz seçin.',
+  // BROWSER-ACCEPTANCE-FIX 01 / A3 — eigene, verknüpfte Ausgangsrechnung
+  'documentMeaning.customer.assigned': 'Müşteri',
+  'documentMeaning.vorgang.assigned': 'Sipariş',
+  'documentMeaning.candidate.fromInvoice': 'Faturadan alındı',
+  'documentMeaning.accounting.ownInvoice': 'Kendi faturanız – zaten kayıtlı',
+  'documentMeaning.accounting.ownInvoiceHint': 'Tutar faturanızda yer alıyor. Burada yeni bir kayıt gerekmez.',
   'documentMeaning.nextStep': 'Sonraki adım',
   'documentMeaning.next.confirmAndAnswer': 'Eşleştirmeyi onaylayın ve yanıt hazırlayın.',
   'documentMeaning.next.answerRequired': 'Yanıt hazırlayın ve süreleri takip edin.',
@@ -40,13 +46,13 @@ export const trDocumentMeaning = {
   'documentMeaning.next.reviewAndBook': 'Belgeyi kontrol edin ve gider olarak alın.',
   'documentMeaning.next.fileOnly': 'Belgeyi arşivleyin. Şimdilik bir işlem gerekmiyor.',
   'documentMeaning.next.reviewYourself': 'Lütfen yazıya kendiniz bakın.',
-  'documentMeaning.uncertain': 'Bunları OfficePilot kesin olarak anlayamadı',
+  'documentMeaning.uncertain': 'Bunları OfficeTakt kesin olarak anlayamadı',
   'documentMeaning.uncertain.noSubject': 'Konu yazıda açıkça yer almıyor.',
   'documentMeaning.uncertain.recipient':
     'Yazının işletmenize gönderilip gönderilmediği kesin anlaşılamadı.',
   'documentMeaning.uncertain.noAssignment': 'Müşteri ve iş eşleştirilemedi.',
   'documentMeaning.disclaimer':
-    'OfficePilot yazıyı makineyle okur. Önemli bilgileri lütfen aslından kontrol edin.',
+    'OfficeTakt yazıyı makineyle okur. Önemli bilgileri lütfen aslından kontrol edin.',
 
   /* DOKUMENT-ASSISTENT-01F */
   'documentReminder.proposalTitle': 'Hatırlatma tarihi',

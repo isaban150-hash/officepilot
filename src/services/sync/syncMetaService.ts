@@ -120,9 +120,13 @@ export function withTombstonedEntity<T extends SyncableEntity & { id: string }>(
  * Erwartung `0`, und genau die bedeutet serverseitig „diese Zeile darf noch
  * nicht existieren" (CREATE-RETRY-CONFLICT-02).
  *
- * `withTombstonedEntity` bleibt unverändert: Alle übrigen Löschpfade —
- * Dokumente, Inbox, Ausgaben, Wissen, Memory — haben keinen versionsgeprüften
- * Serververtrag und behalten ihr bisheriges Verhalten.
+ * `withTombstonedEntity` bleibt unverändert: Die übrigen Löschpfade — Inbox,
+ * Ausgaben, Wissen, Memory — behalten ihr bisheriges Verhalten.
+ *
+ * 07B-FIX2 — archivierte Dokumente gehören **nicht** mehr dazu: Sie gehen
+ * seit 20260916 über `upsert_workspace_intake_entity`, das die Version exakt
+ * prüft. Ändern und Löschen eines Dokuments erhalten deshalb die bestätigte
+ * Serverversion (`documentService`).
  *
  * CLOUD-DURABILITY-CORE-01B: Vorgangsnotizen sind seitdem **nicht** mehr in
  * dieser Aufzählung — sie gehen über `upsert_workspace_sync_entity` und

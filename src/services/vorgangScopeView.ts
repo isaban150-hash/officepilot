@@ -6,6 +6,7 @@ import { getInboxItemById } from './inboxService';
 import {
   decodeHauptleistungen,
   deriveContractScope,
+  deriveGewerk,
 } from './contractScopeDerivationService';
 import type { Vorgang } from '../types/models';
 
@@ -31,7 +32,15 @@ export function buildVorgangScopeView(vorgang: Vorgang): VorgangScopeView {
     positions: vorgang.orderPositions,
   });
 
-  const gewerk = fromInboxGewerk || derived.gewerk;
+  /*
+   * BROWSER-ACCEPTANCE-FIX 01 / C6 — letzter Rückfall: die Auftragsbezeichnung.
+   * „…Heizungsmodernisierung" stand in der Abnahme nur im Titel; Vertragsdaten
+   * und Positionen („Testposition Skonto") trugen kein Fachwort. Der Titel
+   * zählt nur, wenn Vertrag und Positionen gar nichts ergeben — er überstimmt
+   * nie eine Erkennung aus den eigentlichen Leistungsdaten.
+   */
+  const gewerk =
+    fromInboxGewerk || derived.gewerk || deriveGewerk({ vertragsgegenstand: vorgang.title });
   // Prefer live derivation from order positions after accept (truth = imported plan).
   const hauptleistungen =
     derived.hauptleistungen.length > 0 ? derived.hauptleistungen : fromInboxHaupt;

@@ -147,9 +147,14 @@ describe('V1-B2 — Client-Dienste (C1/C2/J)', () => {
     expect(calls[2]).toMatchObject({ name: 'list_workspace_document_deliveries', args: { p_linked_invoice_id: 'inv-1', p_document_kind: 'invoice' } });
 
     for (const [message, error] of [
-      ['Dokument nicht gefunden', 'not_found'],
+      /*
+       * 07B-FIX1 — Dokument bzw. PDF-Bindung sind dem Server (noch) unbekannt:
+       * „noch nicht online gesichert", nicht „keine PDF-Datei". Der
+       * Orchestrator synchronisiert einmal und versucht es erneut (fail-closed).
+       */
+      ['Dokument nicht gefunden', 'attachment_not_synced'],
       ['Dokumentart passt nicht zum Dokument', 'not_sendable'],
-      ['Anhang gehoert nicht zu diesem Dokument', 'not_sendable'],
+      ['Anhang gehoert nicht zu diesem Dokument', 'attachment_not_synced'],
       ['Erneuter Versand nicht moeglich: Versandstatus unklar', 'uncertain_pending'],
     ] as const) {
       const failing = { rpc: vi.fn(async () => ({ data: null, error: { message } })) } as never;
@@ -166,7 +171,8 @@ describe('V1-B2 — Client-Dienste (C1/C2/J)', () => {
     const prepared = await prepareArchivedDocumentDeliveryAttachment(doc());
     expect(prepared.ok).toBe(true);
     if (prepared.ok) {
-      expect(prepared.attachment.filename).toBe('Zertifikat Schwei_en.pdf');
+      // E-MAIL-07B — Umschrift statt Unterstrich; derselbe Name steht im Dialog.
+      expect(prepared.attachment.filename).toBe('Zertifikat Schweissen.pdf');
       expect(prepared.attachment.sizeBytes).toBe('%PDF-1.4 archived'.length);
       expect(prepared.attachment.sha256).toMatch(/^[0-9a-f]{64}$/);
       expect(prepared.attachment.mimeType).toBe('application/pdf');
@@ -253,7 +259,12 @@ describe('V1-B2 — DocumentDeliveryPanel (O/L/M/N)', () => {
     expect(dialog.textContent).toContain('Dokument per E-Mail senden');
     expect((q('send-document-recipient') as HTMLInputElement).value).toBe('');
     expect((q('send-document-subject') as HTMLInputElement).value).toBe('Zertifikat Schweißen - Betrieb GmbH');
-    expect(dialog.textContent).toContain('Zertifikat Schweißen.pdf');
+    /*
+     * E-MAIL-07B — der Dialog zeigt den Namen, der tatsächlich versendet wird
+     * (serverkonform, mit Umschrift). Bis 07B stand hier „Schweißen.pdf",
+     * versendet wurde „Schwei_en.pdf".
+     */
+    expect(dialog.textContent).toContain('Zertifikat Schweissen.pdf');
     expect(dialog.textContent).not.toMatch(/Delivery|Provider|Storage|RPC|Hash/);
   });
 
@@ -283,13 +294,65 @@ describe('V1-B2 — DocumentDeliveryPanel (O/L/M/N)', () => {
     expect(host.textContent).not.toContain('Zugestellt');
     expect(q('document-delivery-send')?.textContent).toBe('Erneut per E-Mail senden');
     await act(async () => { q('document-delivery-send')!.click(); }); await settle();
+    // HALBZEIT-FIX B2 — Zweitversand: erst die Duplikatwarnung (App-Dialog), dann der Versanddialog.
+    expect(q('document-delivery-resend-warning')?.textContent).toContain('doppelt erhalten');
+    expect(q('send-document-recipient')).toBeNull();
+    await act(async () => { q('document-delivery-resend-warning-confirm')!.click(); }); await settle();
     const input = q('send-document-recipient') as HTMLInputElement;
     await act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, 'kunde@example.invalid'); input.dispatchEvent(new Event('input', { bubbles: true })); });
     await act(async () => { q('send-document-send')!.click(); }); await settle();
-    // Zweitversand verlangt Bestätigung
-    expect(q('send-document-confirm-resend')).not.toBeNull();
-    await act(async () => { q('send-document-send')!.click(); }); await settle();
+    // Bereits bestätigt: kein zweiter Inline-Hinweis im Versanddialog.
+    expect(q('send-document-confirm-resend')).toBeNull();
     expect(q('send-document-error')?.textContent).toBe('Der Versanddienst ist nicht erreichbar. Es wurde nichts gesendet.');
     expect(host.textContent).not.toMatch(/HTTP|PGRST|storage\.objects/);
+  });
+  it('HALBZEIT-FIX B2: Duplikatwarnung nur nach erfolgreicher Übergabe; Abbrechen = kein Dialog, kein Versand', async () => {
+    const run = vi.spyOn(orchestrator, 'runSendDocument');
+    withDeliveries([delivery({ status: 'provider_accepted', providerMessageId: 'm', providerAcceptedAt: '2026-09-14T10:01:00.000Z' })]);
+    await mount(doc());
+    await act(async () => { q('document-delivery-send')!.click(); }); await settle();
+    const warning = q('document-delivery-resend-warning');
+    expect(warning?.textContent).toContain('bereits erfolgreich an den E-Mail-Dienst übergeben');
+    expect(warning?.textContent).toContain('doppelt erhalten');
+    expect(q('send-document-dialog')).toBeNull();
+    await act(async () => { q('document-delivery-resend-warning-cancel')!.click(); }); await settle();
+    expect(q('document-delivery-resend-warning')).toBeNull();
+    expect(q('send-document-dialog')).toBeNull();
+    expect(run).not.toHaveBeenCalled();
+    expect(localStorage.length === 0 || !Object.keys(localStorage).some((key) => key.startsWith('officepilot.sendDraft.v1'))).toBe(true);
+  });
+
+  it('HALBZEIT-FIX B2: ohne Erfolg keine Warnung — Erstversand und Neuversuch nach Fehlschlag unverändert', async () => {
+    withDeliveries([]);
+    await mount(doc());
+    await act(async () => { q('document-delivery-send')!.click(); }); await settle();
+    expect(q('document-delivery-resend-warning')).toBeNull();
+    expect(q('send-document-dialog')).not.toBeNull();
+    await act(async () => root.unmount()); host.remove();
+
+    withDeliveries([delivery({ status: 'failed', errorCategory: 'provider' })]);
+    await mount(doc());
+    expect(q('document-delivery-send')).toBeNull();
+    await act(async () => { q('document-delivery-retry')!.click(); }); await settle();
+    expect(q('document-delivery-resend-warning')).toBeNull();
+    expect(q('send-document-dialog')).not.toBeNull();
+  });
+
+  it('HALBZEIT-FIX B3: jeder Versuch beschriftet (auch Versuch 1), Neuversuch-Hinweis linksbündig, Datum im Hausformat', async () => {
+    withDeliveries([
+      delivery({ id: 'd2', clientDeliveryId: 'c2', status: 'provider_accepted', providerMessageId: 'm', providerAcceptedAt: '2026-09-26T18:13:49.000Z', retryOfDeliveryId: 'd1', attemptNumber: 2 }),
+      delivery({ id: 'd1', clientDeliveryId: 'c1', status: 'failed', errorCategory: 'auth', requestedAt: '2026-09-26T09:35:09.000Z', attemptNumber: 1 }),
+    ]);
+    await mount(doc());
+    const items = Array.from(host.querySelectorAll('[data-testid="invoice-delivery-item"]')).map((item) => item.textContent ?? '');
+    expect(items[0]).toContain('Versuch 2');
+    expect(items[1]).toContain('Versuch 1');
+    for (const text of items) {
+      expect(text).toMatch(/\d{2}\.\d{2}\.\d{4}, \d{2}:\d{2}/);
+      expect(text).not.toMatch(/\d{2}:\d{2}:\d{2}/);
+    }
+    const retryOf = q('invoice-delivery-retry-of');
+    expect(retryOf?.className).toBe('invoice-delivery-panel__retry-of');
+    expect(retryOf?.className).not.toContain('hint-text');
   });
 });

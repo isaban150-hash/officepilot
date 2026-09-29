@@ -91,7 +91,8 @@ export function extractCloudSyncEntity(
         entityType,
         entityId,
         entity: workspace,
-        rowVersion: workspace.sync?.version ?? workspace.version ?? 0,
+        // SYNC-AUTOMATIK-01A: ältere Bestände tragen eine zurückgebliebene sync.version — die bestätigte höhere gilt.
+        rowVersion: Math.max(workspace.sync?.version ?? 0, workspace.version ?? 0),
       };
     }
     case 'workspace_member': {

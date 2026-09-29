@@ -2,6 +2,8 @@ export type PersistenceHealthSnapshot = {
   /** True when the last persistAll completed successfully. */
   healthy: boolean;
   hasFailure: boolean;
+  /** SYNC-AUTOMATIK-01A — ein anderer Tab hat neuer gespeichert; Neuladen nötig. */
+  staleTab?: boolean;
 };
 
 type Listener = (snapshot: PersistenceHealthSnapshot) => void;

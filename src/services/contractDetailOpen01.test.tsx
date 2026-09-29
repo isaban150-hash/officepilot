@@ -182,8 +182,9 @@ describe('CONTRACT-DETAIL-OPEN-01', () => {
   it('deferred Analysis höchstens einmal pro Analyse-Key', async () => {
     const item = createLargeContractItem();
     hydrateInboxStore([item]);
+    // FINAL-ACCEPTANCE-FIX 02 / T1 — die Seite rechnet über die reine Analyse.
     const processSpy = vi
-      .spyOn(intakeWorkflowService, 'processUploadedDocument')
+      .spyOn(intakeWorkflowService, 'analyzeUploadedDocument')
       .mockReturnValue(null);
 
     vi.useFakeTimers();
@@ -227,7 +228,8 @@ describe('CONTRACT-DETAIL-OPEN-01', () => {
   it('Analysefehler zeigt lokale Error-UI und behält Shell/Original', async () => {
     const item = createLargeContractItem();
     hydrateInboxStore([item]);
-    vi.spyOn(intakeWorkflowService, 'processUploadedDocument').mockImplementation(() => {
+    // FINAL-ACCEPTANCE-FIX 02 / T1 — die Seite rechnet über die reine Analyse.
+    vi.spyOn(intakeWorkflowService, 'analyzeUploadedDocument').mockImplementation(() => {
       throw new Error('boom');
     });
 

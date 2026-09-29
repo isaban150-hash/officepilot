@@ -3,7 +3,7 @@ import type { BrainSuggestedStep } from '../../types/brainOrchestration';
 import { buildKommunikationPath } from '../../components/communication/communicationNavigation';
 import { getInboxItemById } from '../inboxService';
 import { buildInvoiceCreatePath } from '../invoiceNavigation';
-import { getContractPreviewForInbox, processUploadedDocument } from '../intakeWorkflowService';
+import { getContractPreviewForInbox, analyzeUploadedDocument } from '../intakeWorkflowService';
 import { getVorgangById } from '../vorgangService';
 import {
   getCompanySession,
@@ -59,6 +59,15 @@ function communicationNextStep(session: CompanySessionContext): BrainSuggestedSt
   };
 }
 
+/**
+ * BROWSER-ACCEPTANCE-FIX 01 / C7 — eine Angabe nur, wenn es sie gibt.
+ * „Baustelle:" ohne Wert ist keine Information; die Zeile entfällt.
+ */
+function labeledLine(label: string, value: string | null | undefined): string[] {
+  const text = value?.trim();
+  return text ? [`${label}: ${text}`] : [];
+}
+
 function resolveCustomerQuestion(session: CompanySessionContext): CompanyContextResolution | null {
   const customer =
     session.currentCustomer ??
@@ -73,7 +82,7 @@ function resolveCustomerQuestion(session: CompanySessionContext): CompanyContext
       title: 'Kunde',
       summary: `Der Kunde ist ${customer}.`,
       bullets: vorgang
-        ? [`Auftrag: ${vorgang.title}`, `Baustelle: ${vorgang.baustelle}`]
+        ? [`Auftrag: ${vorgang.title}`, ...labeledLine('Baustelle', vorgang.baustelle)]
         : [],
       actions: [],
       linkedRoute: vorgang ? `/vorgaenge/${vorgang.id}` : undefined,
@@ -160,7 +169,7 @@ function resolveInvoiceCreation(session: CompanySessionContext): CompanyContextR
         title: 'Rechnung erstellen',
         summary: `Für Auftrag „${vorgang.title}“ (${vorgang.customer}) können Sie jetzt eine Rechnung erstellen.`,
         bullets: [
-          `Baustelle: ${vorgang.baustelle}`,
+          ...labeledLine('Baustelle', vorgang.baustelle),
           `${vorgang.orderPositions.length} Positionen im Auftrag`,
         ],
         actions: [],
@@ -200,7 +209,7 @@ function resolveMaterialAssignment(session: CompanySessionContext): CompanyConte
         assistantAnswer: {
           title: 'Zuordnung',
           summary: `Die Materialrechnung „${item.title}“ kann zum Auftrag „${vorgang.title}“ zugeordnet werden.`,
-          bullets: [`Kunde: ${vorgang.customer}`, `Baustelle: ${vorgang.baustelle}`],
+          bullets: [...labeledLine('Kunde', vorgang.customer), ...labeledLine('Baustelle', vorgang.baustelle)],
           actions: [],
           linkedRoute: `/ablage/${uploadId}`,
         },
@@ -209,7 +218,7 @@ function resolveMaterialAssignment(session: CompanySessionContext): CompanyConte
     }
   }
 
-  const workflow = processUploadedDocument(uploadId);
+  const workflow = analyzeUploadedDocument(uploadId);
   if (!workflow) return null;
 
   if (workflow.similarVorgaenge.length === 1) {
@@ -220,7 +229,7 @@ function resolveMaterialAssignment(session: CompanySessionContext): CompanyConte
       assistantAnswer: {
         title: 'Zuordnung',
         summary: `Die Materialrechnung passt wahrscheinlich zu Auftrag „${match.title}“ (${match.customer}).`,
-        bullets: [`Baustelle: ${match.baustelle}`],
+        bullets: labeledLine('Baustelle', match.baustelle),
         actions: [],
         linkedRoute: `/ablage/${uploadId}`,
       },

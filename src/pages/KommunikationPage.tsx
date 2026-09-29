@@ -3,6 +3,7 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { CommunicationInputCard } from '../components/communication/CommunicationInputCard';
 import { CommunicationHistoryPanel } from '../components/communication/CommunicationHistoryPanel';
 import { CommunicationResultCard } from '../components/communication/CommunicationResultCard';
+import { EmailCenter } from '../components/communication/EmailCenter';
 import { parseContextRefFromSearchParams } from '../components/communication/communicationNavigation';
 import { PageHeader } from '../components/ui/Card';
 import { useApp } from '../context/AppContext';
@@ -227,6 +228,8 @@ export function KommunikationPage() {
         title={translate('communication.page.title')}
         subtitle={translate('communication.page.subtitle')}
       />
+      {/* E-MAIL-07D/07E — E-Mails: Posteingang, Gesendet, Neue E-Mail. */}
+      <EmailCenter />
       {contextHintKey && (
         <p className="communication-context-hint" data-testid="communication-context-hint">
           {translate(contextHintKey)}

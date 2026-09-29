@@ -569,12 +569,120 @@ export interface IntakePullApplied {
   counts: Record<string, number>;
 }
 
+// ---------------------------------------------------------------------------
+// 07B-FIX2 — rein additive Dateinachrüstung nach Versionskonflikt
+// ---------------------------------------------------------------------------
+
+/**
+ * Die Felder, die eine Dateibindung an einem Archivdokument ausmachen
+ * (`fileRefId` steht ohnehin nicht im Payload, sondern ist ein Binding).
+ */
+const ADDITIVE_FILE_FIELDS = ['sourceFileHash', 'originalFileName', 'mimeType', 'fileSize'] as const;
+
+function isEmptyValue(value: unknown): boolean {
+  return value === null || value === undefined || value === '';
+}
+
+/** Stabile, schlüsselsortierte Darstellung — Feldreihenfolge ist keine Änderung. */
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
+  if (value && typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, v]) => v !== undefined)
+      .sort(([a], [b]) => a.localeCompare(b));
+    return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${stableStringify(v)}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function withoutFileFields(payload: Record<string, unknown>): string {
+  const rest: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(payload)) {
+    if ((ADDITIVE_FILE_FIELDS as readonly string[]).includes(key)) continue;
+    // null, undefined und '' sind gleichermaßen „nicht gesetzt".
+    if (isEmptyValue(value)) continue;
+    rest[key] = value;
+  }
+  return stableStringify(JSON.parse(JSON.stringify(rest)));
+}
+
+/**
+ * Ist der lokale Stand gegenüber der Cloud-Zeile **nachweisbar** nur um die
+ * Dateibindung reicher?
+ *
+ *  - beide nicht gelöscht,
+ *  - lokal gibt es eine Datei (`fileRefId`),
+ *  - alle übrigen Felder sind identisch (nach Normalisierung),
+ *  - die Cloud hat für jedes Dateifeld keinen oder denselben Wert.
+ *
+ * Nur dann kann das Übernehmen der Cloud-Version und erneute Senden nichts
+ * verlieren: Der Push schreibt exakt den Cloud-Inhalt plus die Datei.
+ */
+export function isPurelyAdditiveFileChange(local: CompanyDocument, remote: CloudArchivedDocumentRow): boolean {
+  if (remote.deleted || local.sync?.deleted) return false;
+  if (!local.fileRefId?.trim()) return false;
+  const localPayload = buildArchivedDocumentPushPayload(local, false).payload as Record<string, unknown>;
+  const remotePayload = (remote.payload ?? {}) as Record<string, unknown>;
+  if (withoutFileFields(localPayload) !== withoutFileFields(remotePayload)) return false;
+  return ADDITIVE_FILE_FIELDS.every(
+    (key) => isEmptyValue(remotePayload[key]) || stableStringify(remotePayload[key]) === stableStringify(localPayload[key]),
+  );
+}
+
+const ARCHIVED_DOCUMENT_VERSION_CONFLICT = 'Versionskonflikt archived_document';
+
+/**
+ * 07B-FIX2 — löst genau einen Konflikttyp, und nur wenn er beweisbar harmlos ist:
+ * ein blockierter Dokument-Auftrag mit Versionskonflikt, dessen lokaler Stand
+ * sich von der Cloud-Zeile ausschließlich durch die Dateibindung unterscheidet
+ * (entstanden durch die Brief-PDF-Nachrüstung vor 07B-FIX2, die die lokale
+ * Version fälschlich erhöhte). Dann: bestätigte Cloud-Version übernehmen,
+ * Auftrag wieder sendebereit — der nächste Push trifft die richtige Version.
+ *
+ * Jeder andere Konflikt bleibt unverändert blockiert; nichts wird still
+ * überschrieben.
+ */
+export function rebaseAdditiveArchivedDocumentConflicts(
+  documents: CompanyDocument[],
+  outbox: SyncOutboxEntry[] | undefined,
+  rows: CloudArchivedDocumentRow[],
+): { documents: CompanyDocument[]; outbox: SyncOutboxEntry[] | undefined; rebased: string[] } {
+  if (!outbox?.length) return { documents, outbox, rebased: [] };
+  const rebased: string[] = [];
+  let nextDocuments = documents;
+  const nextOutbox = outbox.map((entry) => {
+    if (entry.entityType !== 'document' || entry.status !== 'blocked') return entry;
+    if (!(entry.lastErrorMessage ?? '').includes(ARCHIVED_DOCUMENT_VERSION_CONFLICT)) return entry;
+    const local = nextDocuments.find((document) => document.id === entry.entityId);
+    const remote = rows.find((row) => row.client_document_id === entry.entityId && row.document_kind === 'archived_document');
+    if (!local || !remote || !isPurelyAdditiveFileChange(local, remote)) return entry;
+
+    nextDocuments = nextDocuments.map((document) =>
+      document.id === local.id
+        ? ({ ...document, sync: { ...(document.sync as SyncMeta), version: Number(remote.row_version) } } as CompanyDocument)
+        : document,
+    );
+    rebased.push(entry.entityId);
+    return {
+      ...entry,
+      status: 'pending' as const,
+      retryCount: 0,
+      blockedReason: undefined,
+      lastErrorMessage: undefined,
+      lastErrorAt: undefined,
+      lastErrorRetryable: undefined,
+    };
+  });
+  return { documents: nextDocuments, outbox: rebased.length ? nextOutbox : outbox, rebased };
+}
+
 export function applyIntakePullToState(state: AppPersistedState, pull: IntakeCloudPull, context: IntakeMergeContext): IntakePullApplied {
   const files = mergeFileRefsFromPull(state.documentFileRefs ?? [], pull.files, context);
   const bindings = mergeBindingsFromPull(state.documentFileRepresentationBindings ?? [], pull.bindings, context);
   const inbox = mergeInboxItemsFromPull(state.inboxItems, pull.inboxItems, context);
   const work = mergeWorkResultsFromPull(state.documentWorkResults ?? [], pull.workResults, context);
-  const documents = mergeArchivedDocumentsFromPull(state.documents ?? [], pull.archivedDocuments, bindings.originals, context);
+  const merged = mergeArchivedDocumentsFromPull(state.documents ?? [], pull.archivedDocuments, bindings.originals, context);
+  const documents = { ...merged, ...rebaseAdditiveArchivedDocumentConflicts(merged.items, state.syncOutbox, pull.archivedDocuments) };
   return {
     state: {
       ...state,
@@ -582,7 +690,8 @@ export function applyIntakePullToState(state: AppPersistedState, pull: IntakeClo
       documentFileRepresentationBindings: bindings.items,
       inboxItems: inbox.items,
       documentWorkResults: work.items,
-      documents: documents.items,
+      documents: documents.documents,
+      syncOutbox: documents.outbox,
     },
     conflicts: [...files.conflicts, ...bindings.conflicts, ...inbox.conflicts, ...work.conflicts, ...documents.conflicts],
     counts: {
@@ -591,6 +700,7 @@ export function applyIntakePullToState(state: AppPersistedState, pull: IntakeClo
       inboxItems: pull.inboxItems.length,
       workResults: pull.workResults.length,
       archivedDocuments: pull.archivedDocuments.length,
+      rebasedAdditiveConflicts: documents.rebased.length,
     },
   };
 }

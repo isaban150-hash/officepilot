@@ -9,7 +9,7 @@ export function DatenschutzPage() {
       </p>
       <p>
         Hier werden später Informationen zu Verantwortlichem, Zwecken der Verarbeitung,
-        Rechtsgrundlagen, Speicherdauer, Betroffenenrechten und lokalen Daten in OfficePilot
+        Rechtsgrundlagen, Speicherdauer, Betroffenenrechten und lokalen Daten in OfficeTakt
         beschrieben.
       </p>
       <p>Dieser Text ist ein Entwurf und muss vor Veröffentlichung rechtlich geprüft werden.</p>

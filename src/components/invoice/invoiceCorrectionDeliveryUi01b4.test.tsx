@@ -153,8 +153,12 @@ describe('EMAIL-01B4 — Korrekturbeleg-Versand', () => {
     }
     expect(q('invoice-delivery-send')?.textContent).toBe('Korrektur erneut per E-Mail senden');
     await click('invoice-delivery-send');
-    await click('send-document-send');
-    expect(q('send-document-confirm-resend')?.textContent).toContain('Korrekturbeleg');
+    // HALBZEIT-FIX B2 — Duplikatwarnung vor dem Versanddialog, mit Korrekturtext; Abbrechen sendet nichts.
+    expect(q('invoice-delivery-resend-warning')?.textContent).toContain('Korrekturbeleg');
+    expect(q('send-document-send')).toBeNull();
+    await click('invoice-delivery-resend-warning-cancel');
+    expect(q('invoice-delivery-resend-warning')).toBeNull();
+    expect(q('send-document-send')).toBeNull();
     expect(run).toHaveBeenCalledTimes(1);
   });
 

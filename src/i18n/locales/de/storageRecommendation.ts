@@ -77,7 +77,7 @@ export const deStorageRecommendation = {
   'storageRecommendation.steuerberater.not_relevant': 'Steuerberater: voraussichtlich nicht relevant',
 
   'storageRecommendation.disclaimer.notLegalAdvice':
-    'Hinweis: OfficePilot ersetzt keine Rechts- oder Steuerberatung. Bitte prüfen Sie Ihre Aufbewahrungspflicht.',
+    'Hinweis: OfficeTakt ersetzt keine Rechts- oder Steuerberatung. Bitte prüfen Sie Ihre Aufbewahrungspflicht.',
 
   'storageRecommendation.action.savePermanently': 'Dauerhaft speichern',
   'storageRecommendation.action.temporaryOnly': 'Nur vorübergehend behalten',

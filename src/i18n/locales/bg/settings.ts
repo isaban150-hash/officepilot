@@ -1,7 +1,7 @@
 /** SETTINGS-01B2/01B3 — Настройки (български). */
 export const bgSettings = {
   'settings.title': 'Настройки',
-  'settings.subtitle': 'Управлявай фирмата, фактурите и OfficePilot.',
+  'settings.subtitle': 'Управлявай фирмата, фактурите и OfficeTakt.',
   'settings.gear': 'Отвори настройките',
   'settings.backToHub': 'Към настройките',
 
@@ -81,7 +81,7 @@ export const bgSettings = {
   'settings.communication.readOnly': 'Само собственици и администратори могат да променят настройките за комуникация.',
   'settings.communication.historicalHint': 'Тези стойности важат за нови изпращания. Вече изпратените документи остават непроменени.',
   'settings.communication.section.sender': 'Подател',
-  'settings.communication.sender.hint': 'Важи за изпращането на документи по имейл (писма, оферти, други документи): Получателят вижда показваното име и отговаря на адреса за отговор. Фактурите и коригиращите документи използват името на фирмата, правната форма и фирмения имейл, както са записани при одобрението на фактурата. Техническият адрес на подателя се задава от услугата за изпращане на OfficePilot и не може да се избира свободно.',
+  'settings.communication.sender.hint': 'Важи за изпращането на документи по имейл (писма, оферти, други документи): Получателят вижда показваното име и отговаря на адреса за отговор. Фактурите и коригиращите документи използват името на фирмата, правната форма и фирмения имейл, както са записани при одобрението на фактурата. Техническият адрес на подателя се задава от услугата за изпращане на OfficeTakt и не може да се избира свободно.',
   'settings.communication.senderDisplayName': 'Показвано име на подателя (по избор)',
   'settings.communication.senderDisplayName.derived': 'Празно = име на фирмата и правна форма: „{name}“',
   'settings.communication.senderDisplayName.custom': 'Собствено показвано име. Оставете празно, за да се използват името на фирмата и правната форма.',
@@ -89,21 +89,21 @@ export const bgSettings = {
   'settings.communication.replyToEmail.fallback': 'Празно = фирмен имейл: {email}',
   'settings.communication.replyToEmail.custom': 'Отговорите отиват на този адрес. Оставете празно, за да се използва фирменият имейл.',
   'settings.communication.identity.from': 'Технически подател',
-  'settings.communication.identity.fromValue': 'Услуга за изпращане на OfficePilot (не може да се променя)',
+  'settings.communication.identity.fromValue': 'Услуга за изпращане на OfficeTakt (не може да се променя)',
   'settings.communication.identity.displayName': 'Показвано име',
   'settings.communication.identity.replyTo': 'Адрес за отговор',
   'settings.communication.identity.hint': 'Така подателят се показва при получателя. При изпращане на фактура важат фирмените данни, замразени в тази фактура.',
   'settings.communication.saved': 'Настройките за комуникация са запазени.',
   'settings.invoices.currency.title': 'Валута',
   'settings.invoices.currency.eurLabel': 'Евро',
-  'settings.invoices.currency.hint': 'OfficePilot понастоящем изчислява и форматира само в евро. Други валути все още не са налични.',
+  'settings.invoices.currency.hint': 'OfficeTakt понастоящем изчислява и форматира само в евро. Други валути все още не са налични.',
   'settings.invoices.currency.ambiguous': 'Стандартната валута не можа да бъде зададена автоматично, защото съществуващи документи са в други валути. Моля, проверете разходите си; новите фактури се създават в евро.',
   'settings.invoices.email.movedHint': 'Стандартната тема и съобщение за имейли вече се намират в',
   'settings.invoices.section.email': 'Изпращане по имейл',
   'settings.invoices.email.hint': 'Тези текстове се попълват предварително за нови имейли с фактури и могат да бъдат променени преди всяко изпращане. Заместители: {invoiceNumber}, {companyName}.',
   'settings.invoices.email.subject': 'Стандартна тема',
   'settings.invoices.email.body': 'Стандартно съобщение',
-  'settings.invoices.email.fallbackHint': 'Празно = стандартен текст на OfficePilot на избрания език.',
+  'settings.invoices.email.fallbackHint': 'Празно = стандартен текст на OfficeTakt на избрания език.',
   'settings.invoices.email.preview': 'Пример за фактура {invoiceNumber}',
 
 
@@ -143,6 +143,10 @@ export const bgSettings = {
   'settings.company.readOnly': 'Само администратори могат да променят фирмените данни. Тук данните са само за преглед.',
   'settings.company.roleUnknown': 'Ролята ти в тази фирма още не е известна. Фирмените данни ще могат да се променят след следващото синхронизиране.',
   'settings.company.historicalHint': 'Промените важат за нови документи. Вече одобрените фактури остават непроменени.',
+  // BROWSER-ACCEPTANCE-FIX 01 / B2
+  'settings.company.iban.storedInvalid': 'Запазеният IBAN не е валиден.',
+  'settings.company.iban.invalidNow': 'Този IBAN не е валиден.',
+  'settings.company.legalForm.missingHint': 'За тази правна форма все още липсват данни за: {fields}. Въведените данни се показват във фактурите и писмата.',
   'settings.company.validationSummary': 'Моля, провери отбелязаните полета.',
 
   'settings.design.page.subtitle': 'Логото и шаблонът важат за нови документи. Одобрените фактури остават непроменени.',
@@ -169,4 +173,16 @@ export const bgSettings = {
   'settings.design.preview.hint': 'Преглед с примерни данни — клиент, позиции и номер не са истински.',
   'settings.design.saved': 'Дизайнът е записан.',
   'settings.design.readOnly': 'Само администратори могат да променят логото и оформлението. Прегледът тук е само за гледане.',
+  // E-MAIL-07C — Signatur und Vorlagen
+  'settings.communication.signature.title': 'Подпис',
+  'settings.communication.signature.hint': 'Добавя се веднъж под всеки имейл от OfficeTakt. В прозореца за изпращане текстът може да се промени преди изпращане.',
+  'settings.communication.signature.label': 'Фирмен подпис',
+  'settings.communication.signature.derived': 'Празно: подписът се образува от фирмените данни (вижте текста в полето).',
+  'settings.communication.signature.custom': 'Този подпис се използва за нови имейли.',
+  'settings.communication.template.invoice.title': 'Шаблон за фактура',
+  'settings.communication.template.offer.title': 'Шаблон за оферта',
+  'settings.communication.template.letter.title': 'Шаблон за делово писмо',
+  'settings.communication.template.hint': 'Попълване за нови имейли от този вид. Празно: стандартният шаблон (текстът в полето). Промените в прозореца за изпращане не променят шаблона.',
+  'settings.communication.template.placeholders': 'Налични заместители: {list}',
+  'settings.communication.template.preview': 'Преглед с примерни стойности',
 } as const;

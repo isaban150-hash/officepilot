@@ -19,6 +19,7 @@ import {
   replaceDocumentFileDerivativeRecoveryContextStore,
 } from './documentFileDerivativeRecoveryContextStoreService';
 import { getAllExpensesFromStore } from './expenseStore';
+import { listInvoices } from './invoice/invoiceRegistryService';
 import {
   getAllVorgaenge,
   restoreStagedVorgangDocumentDetach,
@@ -50,8 +51,7 @@ import {
   generateEntityId,
   isEntitySyncActive,
   withNewEntitySync,
-  withTombstonedEntity,
-  withUpdatedEntitySync,
+  withTombstonedCloudEntityPreservingRemoteVersion,
 } from './sync/syncMetaService';
 import type {
   CompanyDocument,
@@ -406,10 +406,19 @@ export function stageDocumentUpdate(
   const validationError = validateInput(merged);
   if (validationError) return { success: false, errorKey: validationError };
 
-  const updated = withUpdatedEntitySync(
-    buildDocumentFromInput(merged, current.id, current.createdAt),
-    'document',
-  );
+  /*
+   * 07B-FIX2 — lokale Fachänderung: `sync` bleibt unangetastet (wie bei Brief,
+   * Notiz, Vorgang — SYNC-VERSION-CONTRACT-02). Archivdokumente gehen seit
+   * 20260916 über `upsert_workspace_intake_entity`, und dort muss die
+   * erwartete Version **exakt** die zuletzt vom Server bestätigte sein. Das
+   * frühere `withUpdatedEntitySync` erhöhte sie lokal um 1; jede Änderung an
+   * einem bereits gesyncten Dokument endete damit als „Versionskonflikt
+   * archived_document" (blocked) — sichtbar geworden bei der Brief-PDF-
+   * Nachrüstung. Die Änderung erkennt der Change-Tracker am Inhalt
+   * (`contentKey`), nicht an der Version.
+   */
+  const built = buildDocumentFromInput(merged, current.id, current.createdAt);
+  const updated: CompanyDocument = current.sync ? { ...built, sync: current.sync } : built;
   documents = [...documents.slice(0, index), updated, ...documents.slice(index + 1)];
   return { success: true, document: cloneDocument(updated) };
 }
@@ -443,6 +452,31 @@ export function updateDocument(
 export function isGeneratedOutgoingInvoiceDocument(document: CompanyDocument): boolean {
   return document.category === 'ausgangsrechnung' && Boolean(document.linkedInvoiceId?.trim());
 }
+
+/**
+ * BROWSER-ACCEPTANCE-FIX 01 / A1 — der archivierte Beleg einer
+ * festgeschriebenen Ausgangsrechnung (vorbereitet/versendet).
+ *
+ * Er ist Teil der Rechnungswahrheit und wird nie gelöscht. Die verbindliche
+ * Regel steht serverseitig in `tombstone_workspace_document`; diese lokale
+ * Spiegelung verhindert nur, dass die Oberfläche einen Weg anbietet, den der
+ * Server ohnehin ablehnt. Erkannt über die autoritative Verknüpfung in beide
+ * Richtungen (Dokument → Rechnung, Rechnung → Archivdokument).
+ */
+export function isFinalizedInvoiceArchiveDocument(document: CompanyDocument): boolean {
+  const invoiceId = document.linkedInvoiceId?.trim();
+  const isInvoiceDocument =
+    document.category === 'ausgangsrechnung' || isInvoiceCorrectionDocument(document);
+  if (!isInvoiceDocument) return false;
+  return listInvoices().some(
+    (invoice) =>
+      (invoice.status === 'vorbereitet' || invoice.status === 'versendet') &&
+      ((Boolean(invoiceId) && invoice.id === invoiceId) ||
+        invoice.archiveDocumentId === document.id),
+  );
+}
+
+export const DOCUMENT_DELETE_FINALIZED_INVOICE_KEY = 'document.delete.blocked.finalizedInvoice';
 
 /** Why an archive document may not be deleted — null when it may. */
 export type DocumentDeleteBlockReason = 'confirmed_order' | 'expense' | 'vorgang';
@@ -544,6 +578,10 @@ export function deleteDocument(id: string): DocumentMutationResult {
   if (isInvoiceCorrectionDocument(document)) {
     return { success: false, errorKey: 'document.delete.blocked.correction' };
   }
+  // BROWSER-ACCEPTANCE-FIX 01 / A1 — Beleg einer festgeschriebenen Rechnung.
+  if (isFinalizedInvoiceArchiveDocument(document)) {
+    return { success: false, errorKey: DOCUMENT_DELETE_FINALIZED_INVOICE_KEY };
+  }
   // Capture original + binding FileRefs before bindings are removed.
   const heldFileRefIds = new Set<string>();
   if (document.fileRefId) {
@@ -570,7 +608,8 @@ export function deleteDocument(id: string): DocumentMutationResult {
    * The tombstone must not carry an active-looking relation, so the link is
    * dropped before it is written. The provenance field stays — it is history.
    */
-  const tombstoned = withTombstonedEntity(
+  // 07B-FIX2 — dieselbe Versionsregel wie beim Ändern: die bestätigte Serverversion bleibt die Erwartung.
+  const tombstoned = withTombstonedCloudEntityPreservingRemoteVersion(
     cloneDocument({ ...document, linkedVorgang: null }),
     'document',
   );

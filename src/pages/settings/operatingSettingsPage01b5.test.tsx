@@ -273,7 +273,7 @@ describe('SETTINGS-01B5 — Betrieb, Legacy-Ablösung', () => {
 
     seedWorkspace('admin');
     await renderAt(OPERATING_SETTINGS_ROUTE);
-    expect(q('settings-operating-role')?.textContent).toContain('kannst');
+    expect(q('settings-operating-role')?.textContent).toContain('Sie können'); // BROWSER-ACCEPTANCE-FIX 01 / C4 — Sie-Form
   });
 
   /* ---------------- taxFreeNotice (17–20) ---------------- */

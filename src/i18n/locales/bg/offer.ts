@@ -88,7 +88,7 @@ export const bgOffer = {
   'offer.detail.archiveOpen': 'Отвори в архива',
   'offer.detail.archivePending': 'Подготвя се архивиране …',
   'offer.detail.archiveFailed': 'Архивирането не успя.',
-  'offer.detail.send': 'Изпрати по имейл',
+  'offer.detail.send': 'Имейл изпращане',
   'offer.detail.sendHint': 'Изпращането става чрез архивирания PDF.',
   'offer.detail.markSent': 'Отбележи като изпратена',
   'offer.detail.reject': 'Отбележи като отхвърлена',

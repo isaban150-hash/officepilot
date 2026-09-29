@@ -232,6 +232,8 @@ export function InvoiceSettingsPage() {
       const validation = validateCompanyProfileForSettings(
         candidate,
         getInvoiceNumberSequenceSnapshot().lastIssuedNumber,
+        // B2 — die IBAN steht hier nicht; streng geprüft wird sie in den Firmendaten.
+        { ibanCheck: 'shape' },
       );
       if (!validation.valid) {
         setErrors(validation.errors);

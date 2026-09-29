@@ -3,6 +3,7 @@
  * Sources only: CI / Proposal / Understanding / RecognizedData / BI / Letter.
  * No new parsers, extraction, or AI.
  */
+import { formatRecognizedMoneyText } from '../utils/moneyText';
 import type { TranslationKey } from '../i18n';
 import type { DocumentSemanticCore } from '../types/documentSemanticCore';
 import { formatMessage } from '../i18n/formatMessage';
@@ -340,7 +341,9 @@ function buildHeadline(
     money &&
     (family === 'invoice_in' || family === 'invoice_out' || family === 'tank' || family === 'offer')
   ) {
-    parts.push(money);
+    // Dieselbe Darstellung wie die Betrags-Angabe (C5) — sonst erkennt die
+    // Detailansicht die Doppelung „486,20 EUR" / „486,20 €" nicht mehr.
+    parts.push(formatRecognizedMoneyText(money));
   } else if (
     deadline &&
     (family === 'authority' || family === 'letter' || family === 'invoice_in')

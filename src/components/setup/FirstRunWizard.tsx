@@ -453,7 +453,7 @@ export function FirstRunWizard({ initialDraft, onComplete }: FirstRunWizardProps
           OP
         </div>
         <div className="setup-brand__text">
-          <h1 className="setup-brand__title">OfficePilot</h1>
+          <h1 className="setup-brand__title">OfficeTakt</h1>
           <p className="setup-brand__subtitle">{translate('setup.subtitle')}</p>
         </div>
       </header>

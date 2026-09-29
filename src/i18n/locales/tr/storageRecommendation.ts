@@ -76,7 +76,7 @@ export const trStorageRecommendation = {
   'storageRecommendation.steuerberater.not_relevant': 'Mali müşavir: muhtemelen ilgili değil',
 
   'storageRecommendation.disclaimer.notLegalAdvice':
-    'Not: OfficePilot hukuk veya vergi danışmanlığının yerini almaz. Lütfen saklama yükümlülüğünüzü kontrol edin.',
+    'Not: OfficeTakt hukuk veya vergi danışmanlığının yerini almaz. Lütfen saklama yükümlülüğünüzü kontrol edin.',
 
   'storageRecommendation.action.savePermanently': 'Kalıcı olarak kaydet',
   'storageRecommendation.action.temporaryOnly': 'Yalnızca geçici sakla',

@@ -654,7 +654,7 @@ function buildStepsForVorgang(vorgang: Vorgang, today: Date | string): FinanceSt
 
   return [
     step('auftrag', 'completed', vorgang.title),
-    step('rechnung', rechnungStatus, hasInvoice ? `${finalized.length} Rechnung(en)` : undefined),
+    step('rechnung', rechnungStatus, hasInvoice ? `${finalized.length} ${finalized.length === 1 ? 'Rechnung' : 'Rechnungen'}` : undefined),
     step('zahlung', zahlungStatus),
     step('faelligkeit', faelligkeitStatus),
     step('mahnung', mahnungStatus),

@@ -14,10 +14,13 @@
  * MAIL_PROVIDER muss explizit `stub` oder `brevo` sein (fail-closed).
  * MAIL_SENDER_EMAIL ist die authentifizierte technische Absenderadresse —
  * fehlend oder ungültig: server_misconfigured, kein Provider-Aufruf, Wert nie geloggt.
+ * E-MAIL-07B: MAIL_TEST_RECIPIENT_ALLOWLIST (optional, kommagetrennt) begrenzt
+ * den Versand auf freigegebene Testadressen; nicht gesetzt = Normalbetrieb.
+ * Adressen werden nie geloggt, nur ob der Schutz aktiv ist.
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { createMailProvider, resolveMailProviderName } from '../_shared/emailProvider.ts';
-import { resolveConfiguredSenderEmail, runSendDocument, type CompanyContext, type DeliveryRow, type DocumentContext, type InvoiceContext, type SendDocumentErrorCode } from '../_shared/sendDocumentCore.ts';
+import { resolveConfiguredSenderEmail, resolveTestRecipientAllowlist, runSendDocument, type CompanyContext, type DeliveryRow, type DocumentContext, type InvoiceContext, type SendDocumentErrorCode } from '../_shared/sendDocumentCore.ts';
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -89,12 +92,14 @@ Deno.serve(async (request: Request): Promise<Response> => {
   if (userError || !userId) return fail('unauthenticated');
 
   const provider = createMailProvider({ provider: providerName, brevoApiKey: Deno.env.get('BREVO_API_KEY') });
+  const testRecipientAllowlist = resolveTestRecipientAllowlist(Deno.env.get('MAIL_TEST_RECIPIENT_ALLOWLIST'));
 
   try {
     const outcome = await runSendDocument(
       { userId, workspaceId, clientDeliveryId },
       {
         senderEmail,
+        testRecipientAllowlist,
         async userCanWrite(ws, user) {
           const { data, error } = await admin.rpc('workspace_user_can_write', { p_workspace_id: ws, p_user_id: user });
           if (error) throw new Error(`can_write: ${error.message}`);
@@ -116,6 +121,24 @@ Deno.serve(async (request: Request): Promise<Response> => {
         },
         sha256Hex,
         provider,
+        async claim(deliveryId, expectedRowVersion) {
+          const { data, error } = await admin.rpc('claim_workspace_document_delivery_for_send', {
+            p_delivery_id: deliveryId,
+            p_expected_row_version: expectedRowVersion,
+          });
+          if (error) throw new Error(`claim: ${error.message}`);
+          const envelope = data as { claimed: boolean; delivery: DeliveryRow };
+          return { claimed: envelope.claimed === true, delivery: envelope.delivery };
+        },
+        async resolveStaleClaim(deliveryId, staleAfterSeconds) {
+          const { data, error } = await admin.rpc('resolve_stale_workspace_document_delivery_claim', {
+            p_delivery_id: deliveryId,
+            p_stale_after_seconds: staleAfterSeconds,
+          });
+          if (error) throw new Error(`stale_claim: ${error.message}`);
+          const envelope = data as { resolved: boolean; delivery: DeliveryRow };
+          return { resolved: envelope.resolved === true, delivery: envelope.delivery };
+        },
         async markAccepted(deliveryId, providerMessageId, expectedRowVersion) {
           const { data, error } = await admin.rpc('mark_workspace_document_delivery_accepted', {
             p_delivery_id: deliveryId,
@@ -139,7 +162,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
           if (error) throw new Error(`status: ${error.message}`);
           return data as DeliveryRow;
         },
-        log,
+        log: (entry) => log({ ...entry, testRecipientGuard: testRecipientAllowlist.mode }),
       },
     );
     if (!outcome.ok) return fail(outcome.error);

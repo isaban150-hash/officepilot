@@ -73,6 +73,8 @@ function deps(loaded: LoadedDelivery, options: { bytes?: Uint8Array | null } = {
     downloadAttachment: vi.fn(async () => (options.bytes === undefined ? PDF : options.bytes)),
     sha256Hex,
     provider: { provider: 'stub', async sendTransactionalEmail(input) { calls.sent.push(input); return stub.sendTransactionalEmail(input); } },
+    claim: vi.fn(async (id, rv) => ({ claimed: true, delivery: { ...loaded.delivery, status: 'sending' as const, row_version: rv + 1 } })),
+    resolveStaleClaim: vi.fn(async () => ({ resolved: false, delivery: loaded.delivery })),
     markAccepted: vi.fn(async (id, messageId, rv) => {
       calls.accepted.push({ id, messageId, rv });
       return { delivery: { ...loaded.delivery, status: 'provider_accepted', provider_message_id: messageId, row_version: rv + 1 }, coupling: loaded.delivery.document_kind === 'invoice' ? 'linked' : 'none' };

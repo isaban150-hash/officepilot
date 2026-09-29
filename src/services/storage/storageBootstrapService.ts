@@ -9,6 +9,7 @@ import {
   loadPersistedStateResultFromKey,
   persistAll,
   recordPersistedStateLoadOutcome,
+  rememberLoadedContentBaseline,
   savePersistedStateToKey,
   setActiveStorageScope,
 } from '../persistenceService';
@@ -103,6 +104,8 @@ function loadOrSeedScopedState(scope: StorageScope, userId?: string): BusinessBo
     const stripped = stripDefinitelyMockDataFromState(stored);
     const strippedMockData = JSON.stringify(stripped) !== JSON.stringify(stored);
     applyStateToStores(stripped);
+    // 01A-FIX1 — Öffnen ist keine Änderung: Grundlinie ist der eingelesene Zustand.
+    rememberLoadedContentBaseline();
     if (strippedMockData) {
       savePersistedStateToKey(scope, stripped);
     }
@@ -167,6 +170,7 @@ export function bootstrapBusinessState(input: BusinessBootstrapInput = {}): Busi
       const stored = betaResult.state;
       const stripped = stripDefinitelyMockDataFromState(stored);
       applyStateToStores(stripped);
+      rememberLoadedContentBaseline();
       return {
         setup: getCachedSetup(),
         scope,
