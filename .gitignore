@@ -19,3 +19,6 @@ supabase/.temp
 test-results/
 playwright-report/
 playwright/.auth/
+*.tsbuildinfo
+tmp-wv-lv-01-field-trace.json
+.claude/
