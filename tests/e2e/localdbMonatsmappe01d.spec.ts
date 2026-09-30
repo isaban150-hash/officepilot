@@ -31,6 +31,22 @@ let member: LocalDbUser;
 const company = loadTestWorldOperatorCompany();
 const admin = () => createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
 
+/*
+ * E2E-Kalenderhaertung — ein Testtag fuer den ganzen Lauf, einmal bestimmt.
+ * UTC, weil der Server das Stornodatum als UTC-heute setzt (`cancelled_at =
+ * now()`); Rechnung, Storno und Zahlungen liegen so im selben Testmonat. UTC
+ * liegt nie nach dem lokalen Datum (Europe/Berlin) — kein Datum in der Zukunft.
+ * Keine Uhr wird manipuliert; der Test laeuft in jedem Kalendermonat.
+ */
+const TEST_DAY = new Date().toISOString().slice(0, 10);
+const TEST_MONTH = TEST_DAY.slice(0, 7);
+const TEST_MONTH_FIRST = `${TEST_MONTH}-01`;
+/** Leerer Vergleichsmonat: 12 Monate zurueck — immer in der 24-Monats-Auswahl, im frischen Workspace leer. */
+const EMPTY_MONTH = (() => {
+  const [year, month] = TEST_MONTH.split('-').map(Number);
+  return `${year - 1}-${String(month).padStart(2, '0')}`;
+})();
+
 test.beforeAll(async () => {
   if (!SUPABASE_URL || !SERVICE_ROLE_KEY || !ANON_KEY) throw new Error('E2E_LOCALDB_* fehlen (nur lokal).');
   owner = await provisionLocalDbUser({ supabaseUrl: SUPABASE_URL, serviceRoleKey: SERVICE_ROLE_KEY, label: 'mm-owner' });
@@ -105,8 +121,10 @@ async function createFinalizedInvoice(page: Page): Promise<string> {
   await page.getByTestId('manual-position-commit').click();
   await page.getByTestId('manual-invoice-next').click();
   await expect(page.getByTestId('manual-invoice-progress')).toHaveText('3/4');
-  await page.getByTestId('invoice-edit-service-from').fill('2026-09-01');
-  await page.getByTestId('invoice-edit-service-to').fill('2026-09-05');
+  // Rechnungsdatum ausdruecklich im Testmonat — nicht implizit „heute“ im Browser.
+  await page.getByTestId('invoice-edit-issue-date').fill(TEST_DAY);
+  await page.getByTestId('invoice-edit-service-from').fill(TEST_MONTH_FIRST);
+  await page.getByTestId('invoice-edit-service-to').fill(TEST_DAY);
   await page.getByTestId('manual-invoice-next').click();
   await expect(page.getByTestId('manual-invoice-progress')).toHaveText('4/4');
   const button = page.getByTestId('invoice-approve');
@@ -119,18 +137,18 @@ async function createFinalizedInvoice(page: Page): Promise<string> {
 
 async function createExpenseWithPayment(page: Page): Promise<string> {
   await page.goto('/ausgaben/neu', { waitUntil: 'domcontentloaded' });
-  await page.getByLabel('Titel').fill('Schrauben September');
+  await page.getByLabel('Titel').fill('Schrauben Testmonat');
   // Eindeutig: auch das Steuerstatus-Feld nennt „Lieferant“ in seiner Beschriftung.
   await page.getByRole('textbox', { name: 'Lieferant', exact: true }).fill('Baustoff Nord GmbH');
   await page.getByLabel('Rechnungsnummer').fill(`L-${Date.now()}`);
-  await page.getByLabel('Rechnungsdatum').fill('2026-09-03');
+  await page.getByLabel('Rechnungsdatum').fill(TEST_MONTH_FIRST);
   await page.getByLabel('Bruttobetrag').fill('60');
   await page.getByRole('button', { name: 'Ausgabe speichern' }).click();
   await page.waitForURL(/\/ausgaben\/exp-/, { timeout: 30_000 });
   const expenseId = new URL(page.url()).pathname.split('/').pop()!;
   await page.getByRole('button', { name: 'Zahlung erfassen' }).first().click();
   const dialog = page.getByRole('dialog');
-  await dialog.getByLabel('Zahlungsdatum').fill('2026-09-20');
+  await dialog.getByLabel('Zahlungsdatum').fill(TEST_DAY);
   await dialog.getByLabel('Betrag').fill('60');
   await dialog.getByRole('button', { name: 'Zahlung speichern' }).click();
   await expect(dialog).toBeHidden({ timeout: 10_000 });
@@ -226,31 +244,38 @@ test.describe('FINANZ-CORE-DURABILITY-01D / 02B (lokal)', () => {
     const wsId = await workspaceIdOf(owner.id);
 
     /* M — leerer, nicht abgeschlossener Monat: kein Exportknopf, der Grund steht da */
-    await openMonth(page, '2025-01');
+    await openMonth(page, EMPTY_MONTH);
     await expect(page.getByTestId('accounting-export-blocker-not_closed')).toBeVisible();
     await expect(page.getByTestId('accounting-export-package')).toHaveCount(0);
     await expect(page.getByTestId('steuerberater-handover-bank')).toHaveText('Noch nicht verfügbar');
 
-    /* Daten: Rechnung (heute = 2026-09), Ausgabe + Zahlung */
+    /* Daten im Testmonat: Rechnung, Ausgabe + Zahlung */
     const invoiceId = await createFinalizedInvoice(page);
     const expenseId = await createExpenseWithPayment(page);
+
+    // Die vom Server vergebene Rechnungsnummer — Grundlage der Paket-Regression unten.
+    const numberRow = await admin().from('workspace_invoices').select('invoice_number,payload').eq('workspace_id', wsId).eq('client_invoice_id', invoiceId).single();
+    expect(numberRow.error).toBeNull();
+    const invoiceNumber = numberRow.data!.invoice_number as string;
+    expect(invoiceNumber, 'Rechnungsnummer fehlt').toBeTruthy();
+    expect(String((numberRow.data!.payload as Record<string, unknown>).issueDate ?? '').slice(0, 10)).toBe(TEST_DAY);
 
     /* 06A — beide Belege kontieren und bestaetigen */
     await kontieren(page, `/rechnungen/${invoiceId}`, 'invoice', '8400', 'Erlöse 19 %');
     await kontieren(page, `/ausgaben/${expenseId}`, 'ausgabe', '4930', 'Bürobedarf');
 
     /* 06B — ohne Abschluss kein Paket; nach dem Abschluss genau der 06C-Weg */
-    await openMonth(page, '2026-09');
+    await openMonth(page, TEST_MONTH);
     await expect(page.getByTestId('accounting-export-blocker-not_closed')).toBeVisible();
-    await closeMonth(page, '2026-09');
+    await closeMonth(page, TEST_MONTH);
     await runSync(page);
 
     /* J/A/D/G — Paket auf Geraet 1 */
-    await openMonth(page, '2026-09');
+    await openMonth(page, TEST_MONTH);
     // Fehlender Originalbeleg der Ausgabe: Paket moeglich, aber nicht „vollstaendig“.
     await expect(page.getByTestId('steuerberater-handover')).toHaveAttribute('data-state', 'missing_proofs');
-    const pkg1 = await exportPackage(page, '2026-09', 1);
-    const root1 = 'Steuerberater_2026-09_Revision-1';
+    const pkg1 = await exportPackage(page, TEST_MONTH, 1);
+    const root1 = `Steuerberater_${TEST_MONTH}_Revision-1`;
     for (const file of ['01_Buchungsdaten/buchungen.csv', '01_Buchungsdaten/zahlungen.csv', '01_Buchungsdaten/offene_posten_monatsende.csv', '00_Abschluss/manifest.json', '00_Abschluss/pruefbericht.txt']) {
       expect(pkg1.paths).toContain(`${root1}/${file}`);
     }
@@ -261,6 +286,12 @@ test.describe('FINANZ-CORE-DURABILITY-01D / 02B (lokal)', () => {
 
     const rows1 = businessRows(pkg1.buchungen);
     expect(rows1.some((r) => r.startsWith(`Ausgangsrechnung;${invoiceId};`))).toBe(true);
+    // Rechnungsnummer-Regression: dieselbe Nummer wie auf dem Server, in den Buchungsdaten …
+    expect(rows1.some((r) => r.startsWith(`Ausgangsrechnung;${invoiceId};${invoiceNumber};`)), 'Rechnungsnummer fehlt in buchungen.csv').toBe(true);
+    // … und im PDF-Dateinamen. Die Nummer enthaelt nur Zeichen, die `safeFileNamePart`
+    // unveraendert laesst — so gilt der Produkt-Dateiname ohne zweite Normalisierung.
+    expect(invoiceNumber).toMatch(/^[A-Za-z0-9._-]+$/);
+    expect(invoicePdfPath!.split('/').pop()!.startsWith(`${invoiceNumber}_`), `PDF-Dateiname ohne Rechnungsnummer: ${invoicePdfPath}`).toBe(true);
     const expenseRow = rows1.find((r) => r.startsWith(`Eingangsbeleg;${expenseId};`))!;
     expect(expenseRow).toBeTruthy();
     expect(expenseRow).toContain(';Baustoff Nord GmbH;');
@@ -268,7 +299,7 @@ test.describe('FINANZ-CORE-DURABILITY-01D / 02B (lokal)', () => {
     expect(expenseRow).toMatch(/;Bezahlt;0,00$/);
     expect(rows1.some((r) => /;exp-\d{3};/.test(r))).toBe(false); // L — Demo-Ausgaben nie
     const pay1 = businessRows(pkg1.zahlungen);
-    expect(pay1.some((r) => r.startsWith(`Eingangsbeleg;${expenseId};`) && r.includes(';2026-09-20;60,00;'))).toBe(true);
+    expect(pay1.some((r) => r.startsWith(`Eingangsbeleg;${expenseId};`) && r.includes(`;${TEST_DAY};60,00;`))).toBe(true);
     // Die unbezahlte Rechnung ist zum Monatsende ein offener Posten.
     expect(businessRows(pkg1.offenePosten).some((r) => r.startsWith(`Forderung;${invoiceId};`))).toBe(true);
     expect((pkg1.manifest.fehlendeNachweise as Array<{ id: string }>).map((e) => e.id)).toContain(expenseId);
@@ -279,7 +310,7 @@ test.describe('FINANZ-CORE-DURABILITY-01D / 02B (lokal)', () => {
     /* K — Geraet 2 exportiert denselben fachlichen Bestand (Abschluss und Kontierung aus der Cloud) */
     const device2 = await openSecondDevice(browser, owner);
     try {
-      const pkg2 = await exportPackage(device2.page, '2026-09', 1);
+      const pkg2 = await exportPackage(device2.page, TEST_MONTH, 1);
       expect(businessRows(pkg2.buchungen)).toEqual(rows1);
       expect(businessRows(pkg2.zahlungen)).toEqual(pay1);
       expect(pkg2.paths).toEqual(pkg1.paths);
@@ -293,7 +324,7 @@ test.describe('FINANZ-CORE-DURABILITY-01D / 02B (lokal)', () => {
     await page.getByTestId('invoice-sent-mark').scrollIntoViewIfNeeded();
     await page.getByTestId('invoice-sent-mark').click();
     await expect(page.getByTestId('invoice-sent-form')).toBeVisible();
-    await page.getByTestId('invoice-sent-date-input').fill('2026-09-05');
+    await page.getByTestId('invoice-sent-date-input').fill(TEST_DAY);
     await page.getByTestId('invoice-sent-via-input').selectOption('post');
     await page.getByTestId('invoice-sent-continue').click();
     await expect(page.getByTestId('invoice-sent-confirm')).toBeVisible();
@@ -306,9 +337,20 @@ test.describe('FINANZ-CORE-DURABILITY-01D / 02B (lokal)', () => {
     await page.getByTestId('invoice-cancel-submit').click();
     await expect(page.getByTestId('invoice-cancel-dialog')).toHaveCount(0, { timeout: 45_000 });
     await runSync(page);
+    /*
+     * Der Server datiert den Storno auf UTC-heute. Lief der Test ueber einen
+     * Monatswechsel, laege der Storno in einem anderen Monat — dann ist dies
+     * kein Gleichmonats-Storno mehr. Klar abbrechen statt still auszuweichen.
+     */
+    const cancelledRow = await admin().from('workspace_invoices').select('cancelled_at').eq('workspace_id', wsId).eq('client_invoice_id', invoiceId).single();
+    expect(cancelledRow.error).toBeNull();
+    expect(
+      String(cancelledRow.data!.cancelled_at ?? '').slice(0, 7),
+      `Monatswechsel waehrend des Laufs: Storno liegt nicht im Testmonat ${TEST_MONTH} — Test bitte erneut starten`,
+    ).toBe(TEST_MONTH);
 
     // Der Storno aendert den abgeschlossenen Monat: bestehender Workflow — oeffnen, begruenden, neu abschliessen.
-    await openMonth(page, '2026-09');
+    await openMonth(page, TEST_MONTH);
     await expect(page.getByTestId('steuerberater-handover')).toHaveAttribute('data-state', 'changed_after_close');
     await expect(page.getByTestId('accounting-export-blocker-changed_after_close')).toBeVisible();
     await page.getByTestId('accounting-period-reopen').click();
@@ -316,11 +358,11 @@ test.describe('FINANZ-CORE-DURABILITY-01D / 02B (lokal)', () => {
     await expect(reopenDialog).toBeVisible();
     await reopenDialog.locator('textarea, input[type="text"]').first().fill('Rechnung storniert (Falscher Betrag)');
     await page.getByTestId('accounting-period-reopen-confirm').click();
-    await closeMonth(page, '2026-09');
+    await closeMonth(page, TEST_MONTH);
     await expect(page.getByTestId('accounting-period-revision')).toContainText('2');
     await runSync(page);
 
-    const pkg3 = await exportPackage(page, '2026-09', 2);
+    const pkg3 = await exportPackage(page, TEST_MONTH, 2);
     const rows3 = businessRows(pkg3.buchungen);
     const original = rows3.find((r) => r.startsWith(`Ausgangsrechnung;${invoiceId};`))!;
     // Belegart im Buchungsexport: „Storno Ausgangsrechnung“.
@@ -328,6 +370,9 @@ test.describe('FINANZ-CORE-DURABILITY-01D / 02B (lokal)', () => {
     expect(original, 'Originalzeile fehlt').toBeTruthy();
     expect(storno, 'Rechnungsstorno-Zeile fehlt (Storno-ID-Kollision)').toBeTruthy();
     expect(original).toContain(';Storniert;ja;');
+    // Original und Storno im selben Testmonat.
+    expect(original.split(';')[3].slice(0, 7)).toBe(TEST_MONTH);
+    expect(storno.split(';')[3].slice(0, 7), 'Stornozeile nicht im Testmonat').toBe(TEST_MONTH);
     expect(storno).toContain(`;${invoiceId}-Storno;`);
     // Summe Original + Storno = 0 (keine Doppelzaehlung, keine verschluckte Stornozeile)
     const brutto = (row: string) => Number(row.split(';')[7].replace('.', '').replace(',', '.'));
