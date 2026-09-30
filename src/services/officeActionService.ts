@@ -133,6 +133,49 @@ function toIsoDay(value: string | null | undefined): string | undefined {
   return `${parsed.getFullYear()}-${month}-${day}`;
 }
 
+/*
+ * EINGANG-01A (P0) — die Beispielwerte, die die Erkennung früher ohne Beleg
+ * eintrug. Ältere Eingänge können sie noch tragen.
+ */
+const LEGACY_SAMPLE_AMOUNTS = new Set(['342,16 €', '85,40 €']);
+const LEGACY_SAMPLE_INVOICE_NUMBERS = new Set(['RE-2026-0001']);
+
+function amountSpellings(amount: number): string[] {
+  const fixed = amount.toFixed(2);
+  const [whole, cents] = fixed.split('.');
+  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return [`${whole},${cents}`, `${grouped},${cents}`, fixed];
+}
+
+/**
+ * EINGANG-01A (P0) — Ist der Betrag, der gebucht würde, belegt?
+ *
+ * Nicht belegt ist ein Betrag, der als früherer Beispielwert (oder als
+ * „ca."-Schätzung) im Eingang steht und nicht im Dokumenttext vorkommt, und
+ * jeder Betrag, der im vorhandenen Dokumenttext gar nicht vorkommt. Dasselbe
+ * gilt für die frühere Beispiel-Rechnungsnummer. Ohne gespeicherten Text bleibt
+ * es bei der bisherigen Prüfung (Betrag lesbar) — ein erfundener Beispielwert
+ * wird aber auch dann nicht still gebucht.
+ */
+export function isInboxBookingDataEvidenced(item: InboxItem, grossAmount: number): boolean {
+  const rawAmount = (item.recognizedData.Betrag ?? item.recognizedData.betrag ?? '').trim();
+  const invoiceNumber = resolveExpenseIdentifier(item);
+  const text = getInboxExtractedDocumentText(item);
+  const compactText = text.replace(/\s+/g, '');
+
+  const amountInText = text
+    ? amountSpellings(grossAmount).some((spelling) => compactText.includes(spelling))
+    : false;
+  if (text && !amountInText) return false;
+  if ((LEGACY_SAMPLE_AMOUNTS.has(rawAmount) || /^ca\./i.test(rawAmount)) && !amountInText) {
+    return false;
+  }
+  if (LEGACY_SAMPLE_INVOICE_NUMBERS.has(invoiceNumber) && !text.includes(invoiceNumber)) {
+    return false;
+  }
+  return true;
+}
+
 export function buildExpenseInputFromInbox(
   item: InboxItem,
   classifiedKind?: ClassifiedDocumentKind,
@@ -159,7 +202,8 @@ export function buildExpenseInputFromInbox(
       toIsoDay(item.recognizedData.datum) ??
       toIsoDay(item.deadline) ??
       getTodayIso().slice(0, 10),
-    paymentDueDate: item.deadline,
+    // EINGANG-01A — die Fälligkeit nur als eindeutiges Tagesdatum.
+    paymentDueDate: toIsoDay(item.deadline),
     grossAmount,
     category: kind ? mapClassifiedKindToExpenseCategory(kind) : 'material',
     linkedInboxId: item.id,
@@ -262,7 +306,12 @@ export function createExpenseFromInbox(item: InboxItem): OfficeActionResult {
 
   const input = buildExpenseInputFromInbox(item);
 
-  if (!input.grossAmount) {
+  /*
+   * EINGANG-01A (P0) — ohne belegten Betrag keine stille Buchung: Der Weg
+   * führt in das vorhandene Formular, vorbefüllt aus dem Eingang, und der
+   * Nutzer bestätigt dort selbst.
+   */
+  if (!input.grossAmount || !isInboxBookingDataEvidenced(item, input.grossAmount)) {
     return {
       ok: true,
       kind: 'navigate',

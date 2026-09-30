@@ -19,6 +19,9 @@ import {
   replaceDocumentFileDerivativeRecoveryContextStore,
 } from './documentFileDerivativeRecoveryContextStoreService';
 import { getAllExpensesFromStore } from './expenseStore';
+import { toCanonicalIsoDay } from '../utils/documentDateDisplay';
+import { buildDocumentSemanticCore } from './document/documentSemanticCoreService';
+import { getInboxExtractedDocumentText } from './inboxDocumentText';
 import { listInvoices } from './invoice/invoiceRegistryService';
 import {
   getAllVorgaenge,
@@ -800,6 +803,23 @@ function fileMetaFromInbox(item: InboxItem): Pick<
   };
 }
 
+/**
+ * EINGANG-01A — das Gültigkeitsende eines Eingangs: das erkannte Feld, sonst
+ * ein eindeutiges Gültigkeitsende, das der semantische Kern im gespeicherten
+ * Text findet (ältere Eingänge tragen das Feld noch nicht). Nie die
+ * Handlungsfrist.
+ */
+function resolveInboxValidUntil(item: InboxItem): string | null {
+  const recognized = toCanonicalIsoDay(item.recognizedData.Gültig_bis);
+  if (recognized) return recognized;
+  const text = getInboxExtractedDocumentText(item);
+  if (!text) return null;
+  const ends = buildDocumentSemanticCore({ text, companyProfile: null }).deadlines.filter(
+    (frist) => frist.type === 'validity_period_end',
+  );
+  return ends.length === 1 ? toCanonicalIsoDay(ends[0].date) : null;
+}
+
 export function mapInboxItemToDocumentInput(
   item: InboxItem,
   linkedCompany: string,
@@ -817,7 +837,12 @@ export function mapInboxItemToDocumentInput(
     issuer: item.sender,
     recognizedText: buildRecognizedTextFromInbox(item),
     issueDate: item.receivedAt || null,
-    validUntil: item.deadline,
+    /*
+     * EINGANG-01A — die Gültigkeit kommt aus dem erkannten Gültigkeitsende,
+     * nie aus der Handlungsfrist (`deadline`). Eine Zahlungsfrist ist kein
+     * Ablaufdatum des Dokuments.
+     */
+    validUntil: resolveInboxValidUntil(item),
     digitalFolder: { ...item.digitalFolder },
     paperFolder: { ...paperFolder },
     tags: buildTagsFromInbox(item),

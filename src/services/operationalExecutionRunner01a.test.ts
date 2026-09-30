@@ -36,10 +36,10 @@ import type {
 } from './operationalExecutionTypes';
 import type { SuggestedVorgangLink, WorkflowResult } from '../types/models';
 
-function seedHotel() {
+function seedHotel(selection?: { vorgangId: string; vorgangTitle: string }) {
   const docCase = getDocumentCase('HOTEL-01');
   const observation = runStablePipeline(docCase);
-  hydrateInboxStore([observation.item]);
+  hydrateInboxStore([selection ? { ...observation.item, ...selection } : observation.item]);
   const workflow = processUploadedDocument(observation.item.id) ?? observation.workflow;
   const item = confirmFilingDecisionForTests(observation.item.id);
   return { observation, workflow, item };
@@ -58,7 +58,13 @@ function seedHotelWithLinkableVorgang(vorgangId: string) {
       customer: 'City Lodge Berlin GmbH',
     }),
   ]);
-  return seedHotel();
+  /*
+   * EINGANG-01A — verknüpft wird nur noch ein eindeutiger oder ausdrücklich
+   * gewählter Vorgang. Die bloße Namensgleichheit (Absender = Kunde des
+   * Vorgangs), auf der dieser Aufbau bisher beruhte, verknüpft nicht mehr.
+   * Hier ist der Vorgang am Eingang ausdrücklich gewählt.
+   */
+  return seedHotel({ vorgangId, vorgangTitle: 'Hotelaufenthalt Berlin' });
 }
 
 /** ELIGIBILITY-01 — exakt eine aktivierte Verknüpfungsaktion, keine Anlage, keine Auswahl. */

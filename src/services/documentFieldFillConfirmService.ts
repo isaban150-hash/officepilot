@@ -37,6 +37,7 @@ const FIELD_LABELS: Record<DocumentFieldFillConfirmFieldKey, string> = {
   Rechnungsnummer: 'Rechnungsnummer',
   Betrag: 'Betrag',
   Frist: 'Frist',
+  Gültig_bis: 'Gültig bis',
   Projekt: 'Projekt',
   Straße: 'Straße',
   Ort: 'Ort',

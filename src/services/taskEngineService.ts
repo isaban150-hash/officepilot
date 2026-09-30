@@ -16,6 +16,7 @@ import {
   normalizeTask,
 } from './taskNormalize';
 import { generateEntityId } from './sync/syncMetaService';
+import { toCanonicalIsoDay } from '../utils/documentDateDisplay';
 import type {
   ClassifiedDocumentKind,
   CompanyProfile,
@@ -83,7 +84,8 @@ export function proposeTasksFromClassification(
 
   const classification = getClassificationForItem(item);
   const kind = classification.classifiedKind;
-  const dueDate = item.deadline ?? classification.deadline ?? undefined;
+  const dueDate =
+    toCanonicalIsoDay(item.deadline) ?? toCanonicalIsoDay(classification.deadline) ?? undefined;
   const links = baseInboxLinks(item);
   const proposals: TaskProposal[] = [];
 
@@ -127,7 +129,7 @@ export function proposeTasksFromClassification(
       description: classification.explanation,
       priority: 'hoch',
       category: 'steuern',
-      dueDate: item.recognizedData.Gültig_bis ?? dueDate,
+      dueDate: toCanonicalIsoDay(item.recognizedData.Gültig_bis) ?? dueDate,
       taskKind: 'monitor_freistellung_validity',
       type: 'steuerberater_export',
     });
@@ -166,7 +168,7 @@ export function proposeTaskFromInboxTemplate(
     description: template.description,
     priority: item.priority,
     category: mapTaskTypeToCategory(template.type),
-    dueDate: template.dueDate ?? item.deadline ?? undefined,
+    dueDate: toCanonicalIsoDay(template.dueDate) ?? toCanonicalIsoDay(item.deadline) ?? undefined,
     linkedInboxId: item.id,
     linkedVorgangId: item.vorgangId ?? template.vorgangId,
     linkedVorgangTitle: item.vorgangTitle ?? template.vorgangTitle,
@@ -277,10 +279,34 @@ function proposalToTask(proposal: TaskProposal): Task {
   );
 }
 
+/**
+ * EINGANG-01A (P1) — die fachliche Identität einer vorgeschlagenen Aufgabe:
+ * Quelle + Quellobjekt + Aufgabenart. Dieselbe Aufgabe kam bisher unter zwei
+ * Schlüsseln an (`classification:<id>:payment_check` und, als Hauptaufgabe
+ * umbenannt, `inbox:<id>:follow_up`) und entstand dann zweimal. Ohne
+ * Quellobjekt und bei manuellen Aufgaben gibt es keine solche Identität.
+ */
+export function buildTaskIdentity(
+  proposal: Pick<TaskProposal, 'sourceType' | 'sourceId' | 'taskKind'>,
+): string | null {
+  if (!proposal.sourceId || proposal.sourceType === 'manual') return null;
+  return `${proposal.sourceType}|${proposal.sourceId}|${proposal.taskKind}`;
+}
+
+function findExistingOpenTaskByIdentity(identity: string): Task | null {
+  const match = findTasksInStore(
+    (task) => buildTaskIdentity(task) === identity && isTaskOpen(task) && !task.sync?.deleted,
+  );
+  return match[0] ?? null;
+}
+
 export function createTaskFromProposal(proposal: TaskProposal): Task {
   const dedupeKey = buildDedupeKey(proposal);
   const existing = findExistingOpenTaskByDedupeKey(dedupeKey);
   if (existing) return { ...existing };
+  const identity = buildTaskIdentity(proposal);
+  const sameTask = identity ? findExistingOpenTaskByIdentity(identity) : null;
+  if (sameTask) return { ...sameTask };
 
   const task = proposalToTask({ ...proposal, dedupeKey });
   appendTaskToStore(task);

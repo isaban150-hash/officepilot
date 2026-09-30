@@ -10,7 +10,7 @@ import {
 } from './contractIntelligenceService';
 import {
   getClassificationForItem,
-  getSuggestedVorgangForItem,
+  getExplicitVorgangForItem,
 } from './documentClassificationService';
 import { resolvePrimaryTargetForInboxItem } from './documentPrimaryTargetResolver';
 import { getCompanyProfile } from './companyProfileService';
@@ -30,6 +30,7 @@ import {
 } from './orderUnitMapper';
 import {
   buildDedupeKey,
+  buildTaskIdentity,
   proposePrimaryInboxTask,
   proposeTasksFromClassification,
   proposeTasksFromContract,
@@ -219,8 +220,11 @@ function collectSuggestedTasks(
 
   const push = (proposal: TaskProposal) => {
     const key = proposal.dedupeKey ?? buildDedupeKey(proposal);
-    if (seen.has(key)) return;
+    // EINGANG-01A — dieselbe Aufgabe unter anderem Schlüssel ist keine zweite.
+    const identity = buildTaskIdentity(proposal);
+    if (seen.has(key) || (identity && seen.has(identity))) return;
     seen.add(key);
+    if (identity) seen.add(identity);
     proposals.push({ ...proposal, dedupeKey: key });
   };
 
@@ -468,9 +472,16 @@ export function analyzeUploadedDocument(
   const contractOrderProposal = buildContractOrderProposal(item, contractIntelligence);
   const primaryTarget = resolvePrimaryTargetForInboxItem(item);
   let suggestedVorgang = primaryTarget.suggestedVorgang;
-  // Legacy heuristic remains only as fallback when no usable case match exists.
+  /*
+   * EINGANG-01A (P1) — der Workflow-Vorschlag ist das, was die Übernahme
+   * verknüpft (`link_vorgang` → `executeVorgangAtom`). Er stammt deshalb nur
+   * aus einem eindeutigen Treffer (`exact`, oben) oder aus dem ausdrücklich
+   * am Eingang gewählten Vorgang. Die frühere Ähnlichkeits-Vermutung
+   * (Kunde/Titel, auch „low"/„medium") verknüpfte still; ähnliche Vorgänge
+   * bleiben in `similarVorgaenge` zur ausdrücklichen Auswahl sichtbar.
+   */
   if (!primaryTarget.hasUsableCaseMatch) {
-    suggestedVorgang = getSuggestedVorgangForItem(item) ?? classification.suggestedVorgang ?? null;
+    suggestedVorgang = getExplicitVorgangForItem(item);
   }
   const materialDefault = getCachedSetup()?.materialStandard ?? 'unclear';
   const truthOverrides = resolveDraftTruthOverrides(item);

@@ -15,6 +15,7 @@ import { t, type TranslationKey } from '../i18n';
 import type { DocumentFileIntakeTransformPlanCarryContext } from '../types/documentFileIntakeTransformPlanCarryContext';
 import type { DocumentWorkResult } from '../types/documentWorkResult';
 import { getPaperFolderById } from './paperFolderService';
+import { toCanonicalIsoDay } from '../utils/documentDateDisplay';
 import {
   findDocumentFileIntakeTransformPlanCarryContext,
   getDocumentFileIntakeTransformPlanCarryContextStoreSnapshot,
@@ -422,7 +423,8 @@ export function updateInboxItemRecognizedData(
   };
 
   if (changes.sender !== undefined) merged.sender = changes.sender;
-  if (changes.deadline !== undefined) merged.deadline = changes.deadline || null;
+  // EINGANG-01A — eine Frist wird nur als eindeutiges Tagesdatum gespeichert.
+  if (changes.deadline !== undefined) merged.deadline = toCanonicalIsoDay(changes.deadline);
   if (changes.vorgangTitle !== undefined) merged.vorgangTitle = changes.vorgangTitle || undefined;
   if (changes.priority !== undefined) merged.priority = changes.priority;
   if (changes.recommendedAction !== undefined) {

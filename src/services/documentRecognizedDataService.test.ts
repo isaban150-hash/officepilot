@@ -1009,9 +1009,12 @@ describe('documentRecognizedDataService', () => {
         kindHint: 'eingangsrechnung',
       });
 
-      expect(tank.recognizedData.Betrag).toBe('85,40 €');
-      expect(invoice.recognizedData.Betrag).toBe('342,16 €');
-      expect(invoice.recognizedData.Rechnungsnummer).toBe('RE-2026-0001');
+      // EINGANG-01A — auch der Rückfallweg erfindet keine Beispielwerte mehr.
+      expect(tank.recognizedData.Dokumentart).toBe(tank.classifiedKind);
+      expect(tank.recognizedData.Betrag).toBeUndefined();
+      expect(invoice.recognizedData.Dokumentart).toBe('eingangsrechnung');
+      expect(invoice.recognizedData.Betrag).toBeUndefined();
+      expect(invoice.recognizedData.Rechnungsnummer).toBeUndefined();
     });
   });
 });

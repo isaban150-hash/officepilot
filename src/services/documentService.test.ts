@@ -227,7 +227,8 @@ describe('mapInboxItemToDocumentInput', () => {
     expect(input.issuer).toBe('Familie Schmidt');
     expect(input.recognizedText).toContain('Leistung: Sanierung');
     expect(input.issueDate).toBe('2026-03-27');
-    expect(input.validUntil).toBe('2026-05-01');
+    // EINGANG-01A — eine Handlungsfrist ist kein Gültigkeitsende des Dokuments.
+    expect(input.validUntil).toBeNull();
     expect(input.digitalFolder?.path).toBe('/test/');
     expect(input.paperFolder?.register).toBe('A');
     expect(input.tags).toContain('Inbox:kundenauftrag');

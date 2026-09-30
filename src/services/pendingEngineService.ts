@@ -8,6 +8,7 @@ import { buildInvoiceReachPath } from './invoiceNavigation';
 import { isExpectingPayment } from './invoicePaymentService';
 import { filterActiveItems, getInboxItems } from './inboxService';
 import { getTodayIso, isTaskOpen } from './taskNormalize';
+import { toCanonicalIsoDay } from '../utils/documentDateDisplay';
 import { getAllTasksFromStore } from './taskStore';
 import { getTaskSummary, syncOverdueInvoiceTasks } from './taskEngineService';
 import { canAcceptOffer, getOfferById } from './offer/offerService';
@@ -68,7 +69,8 @@ const PROOF_LABELS: Record<string, string> = {
 
 function daysUntil(isoDate: string, todayIso: string): number {
   const today = new Date(`${todayIso}T12:00:00`);
-  const target = new Date(`${isoDate.slice(0, 10)}T12:00:00`);
+  // EINGANG-01A — auch ein älteres TT.MM.JJJJ wird richtig gelesen.
+  const target = new Date(`${toCanonicalIsoDay(isoDate) ?? isoDate.slice(0, 10)}T12:00:00`);
   return Math.round((target.getTime() - today.getTime()) / (24 * 60 * 60 * 1000));
 }
 
@@ -453,8 +455,9 @@ export function scanAuthorityDeadlines(today?: Date | string): PendingItem[] {
 
   for (const task of getAllTasksFromStore()) {
     if (!isTaskOpen(task) || !task.dueDate) continue;
-    const due = task.dueDate.slice(0, 10);
-    if (due > todayIso) continue;
+    // EINGANG-01A — ein TT.MM.JJJJ-Wert verglich sich als Text falsch mit ISO.
+    const due = toCanonicalIsoDay(task.dueDate);
+    if (!due || due > todayIso) continue;
     if (!isAuthorityTask(task)) continue;
 
     const dedupeKey = task.linkedInboxId ?? `task:${task.id}`;
@@ -479,8 +482,8 @@ export function scanAuthorityDeadlines(today?: Date | string): PendingItem[] {
 
   for (const item of filterActiveItems(getInboxItems())) {
     if (!item.deadline) continue;
-    const due = item.deadline.slice(0, 10);
-    if (due > todayIso) continue;
+    const due = toCanonicalIsoDay(item.deadline);
+    if (!due || due > todayIso) continue;
     if (!isAuthorityDeadlineKind(item.classifiedKind)) continue;
     if (seen.has(item.id)) continue;
     seen.add(item.id);
@@ -632,9 +635,13 @@ export function listDueTasks(today?: Date | string): { overdue: Task[]; today: T
   const candidates = getAllTasksFromStore().filter(
     (task) => isTaskOpen(task) && Boolean(task.dueDate) && !isAuthorityTask(task),
   );
+  const due = (task: Task) => toCanonicalIsoDay(task.dueDate);
   return {
-    overdue: candidates.filter((task) => task.dueDate!.slice(0, 10) < todayIso),
-    today: candidates.filter((task) => task.dueDate!.slice(0, 10) === todayIso),
+    overdue: candidates.filter((task) => {
+      const day = due(task);
+      return day !== null && day < todayIso;
+    }),
+    today: candidates.filter((task) => due(task) === todayIso),
   };
 }
 

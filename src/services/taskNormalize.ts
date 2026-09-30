@@ -5,6 +5,7 @@ import type {
   TaskStatus,
   TaskType,
 } from '../types/models';
+import { toCanonicalIsoDay } from '../utils/documentDateDisplay';
 
 const OPEN_STATUSES: TaskStatus[] = ['open', 'in_progress'];
 
@@ -42,7 +43,12 @@ export function normalizeTask(raw: Partial<Task> & Pick<Task, 'id' | 'title'>): 
     status,
     priority: raw.priority ?? 'mittel',
     category: raw.category ?? mapTaskTypeToCategory(type),
-    dueDate: raw.dueDate,
+    /*
+     * EINGANG-01A — ältere Aufgaben tragen teils TT.MM.JJJJ; das wird tolerant
+     * zum Tagesdatum gelesen. Ein unlesbarer Wert bleibt unverändert stehen
+     * (keine stille Datenlöschung), zählt aber nirgends als Frist.
+     */
+    dueDate: toCanonicalIsoDay(raw.dueDate) ?? raw.dueDate,
     linkedVorgangId,
     linkedVorgangTitle,
     linkedInboxId: raw.linkedInboxId,

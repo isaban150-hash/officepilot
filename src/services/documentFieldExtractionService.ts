@@ -11,6 +11,8 @@ export interface ExtractedDocumentFields {
   Rechnungsnummer?: string;
   Betrag?: string;
   Frist?: string;
+  /** EINGANG-01A — Gültigkeitsende. Keine Handlungsfrist. */
+  Gültig_bis?: string;
   Projekt?: string;
   Straße?: string;
   Ort?: string;
@@ -112,8 +114,15 @@ const INVOICE_NUMBER_PATTERN =
   /\b(?:rechnungs[\s-]*(?:nummer|nr\.?)|invoice(?:\s*no\.?)?|beleg[\s-]*(?:nummer|nr\.?))\s*[:#]?\s*([A-Z0-9][\w./-]{2,})/i;
 const REFERENCE_PATTERN =
   /\b(?:aktenzeichen|az\.?|vorgang(?:snummer|snr\.?)?|auftrags(?:nummer|nr\.?)|referenz)\s*[:#]?\s*([A-Z0-9][\w./-]{2,})/i;
+/*
+ * EINGANG-01A — „gültig bis" ist ein Gültigkeitsende, keine Handlungsfrist
+ * (ein Angebot oder eine Bescheinigung verlangt bis dahin nichts von uns).
+ * Es wird getrennt als `Gültig_bis` erfasst.
+ */
 const DEADLINE_PATTERN =
-  /\b(?:frist|fällig(?:keit| am)?|zahlbar bis|bis zum|zahlungsziel|gültig bis|gueltig bis)\s*[:.]?\s*(\d{1,2}[./]\d{1,2}[./]\d{2,4})/i;
+  /\b(?:frist|fällig(?:keit| am)?|zahlbar bis|bis zum|zahlungsziel)\s*[:.]?\s*(\d{1,2}[./]\d{1,2}[./]\d{2,4})/i;
+const VALIDITY_PATTERN =
+  /\b(?:gültig bis|gueltig bis)\s*[:.]?\s*(\d{1,2}[./]\d{1,2}[./]\d{2,4})/i;
 /** Prefer explicit site labels — bare "Projekt:" often captures titles/table bleed. */
 const SITE_PATTERN =
   /\b(?:baustelle|bauobjekt)\s*[:]\s*(.+)$/i;
@@ -895,6 +904,7 @@ export function extractFieldsWithConfidence(text: string): ExtractedDocumentFiel
     };
   }
   setField(fields, 'Frist', firstMatch(text, DEADLINE_PATTERN), 'high');
+  setField(fields, 'Gültig_bis', firstMatch(text, VALIDITY_PATTERN), 'high');
 
   const subjectLine = lines.find((line) => /^betreff\s*[:]/i.test(line));
   if (subjectLine) {

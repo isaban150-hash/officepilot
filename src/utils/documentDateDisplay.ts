@@ -57,6 +57,33 @@ export function parseSafeDocumentDate(value: string | null | undefined): Date | 
   return date;
 }
 
+/**
+ * EINGANG-01A — die eine kanonische Schreibweise einer Frist: `JJJJ-MM-TT`.
+ *
+ * Nimmt, was `parseSafeDocumentDate` eindeutig lesen kann (ISO, auch mit
+ * Uhrzeit, und TT.MM.JJJJ), und gibt den Kalendertag zurück. Bei ISO wird der
+ * Tag direkt übernommen, ohne Umweg über eine Zeitzone. Alles andere ist
+ * `null` — ein unlesbarer Wert ist keine Frist.
+ */
+export function toCanonicalIsoDay(value: string | null | undefined): string | null {
+  if (value == null) return null;
+  const trimmed = String(value).trim();
+  const date = parseSafeDocumentDate(trimmed);
+  if (!date) return null;
+  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(trimmed);
+  if (iso) {
+    const [year, month, day] = [Number(iso[1]), Number(iso[2]), Number(iso[3])];
+    const check = new Date(year, month - 1, day);
+    if (check.getFullYear() !== year || check.getMonth() !== month - 1 || check.getDate() !== day) {
+      return null;
+    }
+    return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  }
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
 export function formatSafeDocumentDate(
   value: string | null | undefined,
   language: AppLanguage = 'de',

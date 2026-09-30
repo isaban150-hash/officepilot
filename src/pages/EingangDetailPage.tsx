@@ -79,6 +79,7 @@ import { SimpleConfirmDialog } from '../components/ui/SimpleConfirmDialog';
 import { useApp } from '../context/AppContext';
 import { localizeStoredUserText } from '../i18n/resolveStoredText';
 import { formatInboxActionToast } from '../utils/inboxActionToast';
+import { formatSafeDocumentDate } from '../utils/documentDateDisplay';
 import { formatPaperFilingInstruction } from '../services/paperFolderService';
 import {
   FILING_DECISION_ARCHIVE_BLOCKED_MESSAGE,
@@ -1608,7 +1609,10 @@ export function EingangDetailPage() {
                 <DataRow key={key} label={key} value={value} />
               ))}
             {item.deadline && (
-              <DataRow label={translate('analysis.deadline')} value={item.deadline} />
+              <DataRow
+                label={translate('analysis.deadline')}
+                value={formatSafeDocumentDate(item.deadline, 'de', item.deadline)}
+              />
             )}
           </Card>
         )}

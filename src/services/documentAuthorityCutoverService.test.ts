@@ -251,7 +251,8 @@ describe('documentAuthorityCutoverHybridService', () => {
     expect(result.recognizedData.Frist).toBe('10.05.2026');
     expect(result.recognizedData.Frist).not.toBe('10.04.2026');
     expect(result.recognizedData.Absender).toBe('Finanzamt München');
-    expect(result.deadline).toBe('10.05.2026');
+    // EINGANG-01A — die Eingangsfrist ist kanonisch ISO.
+    expect(result.deadline).toBe('2026-05-10');
     expect(result.documentType).toBe('behoerde');
   });
 

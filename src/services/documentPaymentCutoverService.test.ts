@@ -120,7 +120,8 @@ describe('documentPaymentCutoverHybridService', () => {
     expect(result.recognizedData.Fälligkeit).not.toBe('30.03.2026');
     expect(result.recognizedData.Lieferant).toBe('Müller Bau GmbH');
     expect(result.recognizedData.Hinweis).toMatch(/mahnung/i);
-    expect(result.deadline).toBe('31.03.2026');
+    // EINGANG-01A — die Eingangsfrist ist kanonisch ISO; das Feld bleibt deutsch.
+    expect(result.deadline).toBe('2026-03-31');
     expect(result.deadline).not.toBe('2026-03-30');
     expect(result.processType).toBe('reminder_required');
   });

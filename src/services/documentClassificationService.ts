@@ -26,6 +26,8 @@ import { runLegacyDocumentAnalysisShadow } from './documentAnalysisShadowService
 import { resolveHybridClassification } from './documentClassificationHybridService';
 import { extractFieldsFromText, mergeExtractedFields } from './documentFieldExtractionService';
 import { resolvePrimaryTargetObjectForKind } from './documentPrimaryTargetService';
+import { buildDocumentSemanticCore } from './document/documentSemanticCoreService';
+import { toCanonicalIsoDay } from '../utils/documentDateDisplay';
 import {
   buildEvidenceBasedRecognizedData,
   shouldUseEvidenceBasedRecognizedData,
@@ -68,6 +70,26 @@ const SECTOR_INVOICE_TITLE =
   /(?:strom|gas|wasser|abwasser|energie|fernwärme|fernwaerme|mobilfunk|festnetz|internet|hotel|material)rechnung/i;
 const SECTOR_INVOICE_ISSUER =
   /\b(?:stadtwerke|versorger|energieversorger|wasserwerke|telekom|vodafone|\bo2\b|1\s*&\s*1|congstar|hotel)\b/i;
+
+/*
+ * EINGANG-01A — Werbemerkmale. „Werbungskosten" (Steuer) und „Bewerbung" sind
+ * keine Werbung; der frühere reine Teilwort-Treffer machte daraus Werbung.
+ */
+const ADVERTISEMENT_TERMS =
+  /(?<!be)werbung(?!skosten)|reklame|prospekt|newsletter|aktionsmail/;
+/*
+ * Geschäftsdokumente tragen solche Wörter oft nur in der Fußzeile
+ * („Newsletter abonnieren"). Diese Merkmale überstimmen den Werbetreffer.
+ */
+const BUSINESS_DOCUMENT_MARKERS =
+  /\b(?:mahnung|zahlungserinnerung|inkasso|lieferschein|aktenzeichen|bescheid)\b/;
+
+function looksLikeAdvertisement(input: DocumentClassificationInput): boolean {
+  if (input.kindHint === 'werbung') return true;
+  const haystack = buildHaystack(input);
+  if (!ADVERTISEMENT_TERMS.test(haystack)) return false;
+  return !hasStrongInvoiceSignals(haystack) && !BUSINESS_DOCUMENT_MARKERS.test(haystack);
+}
 
 function hasStrongInvoiceSignals(haystack: string): boolean {
   if (/mahnung|zahlungserinnerung|inkasso/.test(haystack)) {
@@ -370,7 +392,7 @@ export function detectClassifiedKindWithReason(input: DocumentClassificationInpu
 
   const haystack = buildHaystack(input);
 
-  if (input.kindHint === 'werbung' || /werbung|reklame|prospekt|newsletter|aktionsmail/.test(haystack)) {
+  if (looksLikeAdvertisement(input)) {
     return { kind: 'sonstiges', reasonKey: 'classification.detect.advertisement' };
   }
 
@@ -451,22 +473,21 @@ function buildRecognizedData(
     Dokumentart: kind,
   };
 
+  /*
+   * EINGANG-01A (P0) — hier standen Beispielwerte (`RE-2026-0001`,
+   * `342,16 €`, `85,40 €`, `ca. 5.000 €`, „Sanierungsarbeiten" …), die
+   * ohne Beleg im Text in `recognizedData` landeten und von dort bis in echte
+   * Ausgaben gelangen konnten. Übrig bleibt nur, was aus der Eingabe selbst
+   * stammt (Absenderhinweis) oder aus der Dokumentart folgt. Auch der
+   * Dateititel wird nicht mehr als `Vorgang` eingetragen — er ist kein Beleg
+   * für einen Vorgang und verstärkte sonst die eigene Vorgangs-Vermutung.
+   */
+  const fromSender = (key: string): Record<string, string> =>
+    input.senderHint?.trim() ? { [key]: input.senderHint.trim() } : {};
   const profiles: Partial<Record<ClassifiedDocumentKind, Record<string, string>>> = {
-    eingangsrechnung: {
-      Rechnungsnummer: 'RE-2026-0001',
-      Betrag: '342,16 €',
-      Lieferant: input.senderHint ?? 'Unbekannt',
-    },
-    rechnung: {
-      Rechnungsnummer: 'RE-2026-0001',
-      Betrag: '342,16 €',
-      Lieferant: input.senderHint ?? 'Unbekannt',
-    },
-    auftrag: {
-      Kunde: input.senderHint ?? 'Unbekannt',
-      Leistung: 'Sanierungsarbeiten',
-      Baustelle: 'Baustelle laut Auftrag',
-    },
+    eingangsrechnung: fromSender('Lieferant'),
+    rechnung: fromSender('Lieferant'),
+    auftrag: fromSender('Kunde'),
     aok: {
       Betreff: 'Mitteilung Krankenkasse',
       Krankenkasse: 'AOK',
@@ -474,28 +495,12 @@ function buildRecognizedData(
     krankenkasse: {
       Betreff: 'Mitteilung Krankenkasse',
     },
-    kontoauszug: {
-      Zeitraum: `${new Date().getFullYear()}`,
-      Konto: 'Geschäftskonto',
-    },
-    angebot: {
-      Kunde: input.senderHint ?? 'Interessent',
-      Angebotssumme: 'ca. 5.000 €',
-    },
-    lieferschein: {
-      Lieferant: input.senderHint ?? 'Lieferant',
-      Vorgang: input.titleHint ?? '',
-    },
-    stundenzettel: {
-      Zeitraum: `${new Date().getFullYear()}`,
-      Mitarbeiter: 'Mitarbeiter',
-    },
-    tankbeleg: {
-      Betrag: '85,40 €',
-      Tankstelle: input.senderHint ?? 'Tankstelle',
-    },
+    kontoauszug: {},
+    angebot: fromSender('Kunde'),
+    lieferschein: fromSender('Lieferant'),
+    stundenzettel: {},
+    tankbeleg: fromSender('Tankstelle'),
     abnahmeprotokoll: {
-      Vorgang: input.titleHint ?? '',
       Status: 'Abnahme',
     },
   };
@@ -601,6 +606,33 @@ export function suggestRelatedVorgang(
   };
 }
 
+/**
+ * EINGANG-01A (P0) — die eine Handlungsfrist eines Eingangs, immer
+ * `JJJJ-MM-TT` oder `null`.
+ *
+ * Vorrang hat die semantische Handlungsfrist (`primaryActionDeadline`): Sie
+ * weiß, ob wir handeln müssen. Sonst gilt das erkannte Feld (`Frist` /
+ * `Fälligkeit`), aber nur eindeutig lesbar — und nicht, wenn der Kern genau
+ * dieses Datum als Gültigkeitsende erkannt hat. Ein vom Kern nur als
+ * „informational" (unsicher) gelesenes Datum sperrt das Feld nicht: Das hieße
+ * nicht „keine Handlung", sondern „nicht verstanden".
+ */
+function resolveCanonicalActionDeadline(
+  input: DocumentClassificationInput,
+  recognizedData: Record<string, string>,
+): string | null {
+  const text = input.recognizedText?.trim() ?? '';
+  const core = text ? buildDocumentSemanticCore({ text, companyProfile: null }) : null;
+  const semantic = toCanonicalIsoDay(core?.primaryActionDeadline?.date);
+  if (semantic) return semantic;
+  const field = toCanonicalIsoDay(recognizedData.Frist) ?? toCanonicalIsoDay(recognizedData.Fälligkeit);
+  if (!field) return null;
+  const isValidityEnd = core?.deadlines.some(
+    (frist) => frist.date === field && frist.type === 'validity_period_end',
+  );
+  return isValidityEnd ? null : field;
+}
+
 export function classifyDocument(input: DocumentClassificationInput): DocumentClassificationResult {
   const legacyDetection = detectClassifiedKindWithReason(input);
   const hybridContext = resolveHybridClassification(input, legacyDetection);
@@ -610,9 +642,7 @@ export function classifyDocument(input: DocumentClassificationInput): DocumentCl
   const needsKindReview =
     Boolean(documentProfile?.needsKindReview) ||
     detection.reasonKey === 'classification.detect.kindReviewRequired';
-  const isAdvertisement =
-    input.kindHint === 'werbung' ||
-    /werbung|reklame|prospekt|aktionsmail|newsletter/.test(buildHaystack(input));
+  const isAdvertisement = looksLikeAdvertisement(input);
 
   const recognizedData = buildRecognizedData(classifiedKind, input);
   const profileSender = documentProfile?.senderEntity?.trim();
@@ -647,7 +677,7 @@ export function classifyDocument(input: DocumentClassificationInput): DocumentCl
   const paperFiling =
     paperResolution.rule ??
     ({ folderId: '', register: '—', label: 'Entsorgen' } satisfies PaperFilingRule);
-  const deadline = recognizedData.Frist ?? recognizedData.Fälligkeit ?? null;
+  const deadline = resolveCanonicalActionDeadline(input, recognizedData);
 
   const explanation = needsKindReview
     ? `Dokumentart bitte prüfen. Mehrere Dokumentarten möglich. Absender: „${sender}“.`
@@ -714,12 +744,13 @@ export function classifyDocument(input: DocumentClassificationInput): DocumentCl
     suggestedKinds: suggestedKinds.length > 0 ? suggestedKinds : undefined,
   };
 
-  if (
-    suggestedVorgangRaw &&
-    ['eingangsrechnung', 'rechnung', 'lieferschein', 'mahnung', 'zahlungserinnerung'].includes(classifiedKind)
-  ) {
-    result.recognizedData.Vorgang = suggestedVorgangRaw.vorgangTitle;
-  }
+  /*
+   * EINGANG-01A (P1) — der vermutete Vorgangstitel wird nicht mehr in
+   * `recognizedData.Vorgang` geschrieben. Er war eine Vermutung und stand
+   * danach wie ein erkannter Wert da; beim nächsten Lauf lieferte er selbst den
+   * „Titeltreffer" für dieselbe Vermutung. Der Vorschlag bleibt in
+   * `suggestedVorgang` — als Vorschlag.
+   */
 
   runLegacyDocumentAnalysisShadow(result, input, {
     legacyDetection,
@@ -798,6 +829,30 @@ export function classifyInboxItem(input: DocumentClassificationInput): InboxItem
       id: `dig-upload-${timestamp}`,
     },
   };
+}
+
+/**
+ * EINGANG-01A (P1) — nur der ausdrücklich am Eingang gesetzte Vorgang
+ * (`vorgangId` + Titel, vom Nutzer gewählt), ohne jede Ähnlichkeitssuche.
+ */
+export function getExplicitVorgangForItem(item: InboxItem): SuggestedVorgangLink | null {
+  if (item.vorgangLinkStatus === 'linked' || item.vorgangLinkStatus === 'created') {
+    return null;
+  }
+
+  if (item.vorgangId && item.vorgangTitle) {
+    const vorgang = getVorgangById(item.vorgangId);
+    if (vorgang) {
+      return {
+        vorgangId: vorgang.id,
+        vorgangTitle: vorgang.title,
+        customer: vorgang.customer,
+        confidence: 'high',
+        reasonKey: 'classification.vorgang.reason.explicit',
+      };
+    }
+  }
+  return null;
 }
 
 export function getSuggestedVorgangForItem(item: InboxItem): SuggestedVorgangLink | null {
