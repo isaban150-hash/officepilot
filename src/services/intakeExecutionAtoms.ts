@@ -11,6 +11,8 @@ import { resolveImportInboxDocumentOptionsFromIntakeCarry } from './documentFile
 import {
   acceptSuggestedTasks,
   createVorgangFromInboxWithContract,
+  buildDeterministicVorgangAssignment,
+  isDeterministicVorgangSuggestion,
   linkWorkflowVorgang,
 } from './intakeWorkflowService';
 import { getInboxItemById } from './inboxService';
@@ -202,8 +204,18 @@ export function executeVorgangAtom(
 
   const contractDraft = buildContractDraft(workflow.contractAnalysis);
 
-  if (workflow.suggestedVorgang && canLinkVorgang) {
-    const linked = linkWorkflowVorgang(item, workflow.suggestedVorgang.vorgangId);
+  /*
+   * EINGANG-01C-1 — automatisch verknüpft wird nur eine eindeutige eigene
+   * Auftrags-/Angebotsreferenz. Ein gespeicherter, unbestätigter Vorgang wird
+   * beim Übernehmen nicht still bestätigt; er bleibt Vorschlag zur Auswahl.
+   */
+  const suggestion = workflow.suggestedVorgang;
+  if (canLinkVorgang && isDeterministicVorgangSuggestion(suggestion)) {
+    const linked = linkWorkflowVorgang(
+      item,
+      suggestion.vorgangId,
+      buildDeterministicVorgangAssignment(suggestion),
+    );
     if (!linked) {
       markIntakeFailure(failedSteps, 'link_vorgang', 'Vorgang konnte nicht verknüpft werden.');
       return { item };

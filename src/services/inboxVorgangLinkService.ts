@@ -26,5 +26,6 @@ export function clearInboxVorgangLink(inboxId: string): InboxItem | null {
     vorgangId: undefined,
     vorgangTitle: undefined,
     vorgangLinkStatus: undefined,
+    vorgangAssignment: undefined,
   });
 }

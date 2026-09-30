@@ -641,6 +641,7 @@ export function deleteDocument(id: string): DocumentMutationResult {
           vorgangId: undefined,
           vorgangTitle: undefined,
           vorgangLinkStatus: undefined,
+          vorgangAssignment: undefined,
         })
       : null;
 

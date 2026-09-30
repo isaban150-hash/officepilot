@@ -24,6 +24,19 @@ export type DocumentCaseMatchCandidate = {
   score: number;
 };
 
+/**
+ * EINGANG-01C-1 — eine deterministische eigene Referenz: eine von OfficeTakt
+ * serverseitig vergebene, je Workspace eindeutige Nummer, die im Dokument als
+ * vollständiges Token steht. Der Typ bleibt erhalten — eine Auftragsnummer ist
+ * keine Rechnungsnummer.
+ */
+export type DocumentOwnReferenceKind = 'order' | 'offer';
+
+export type DocumentOwnReference = {
+  kind: DocumentOwnReferenceKind;
+  value: string;
+};
+
 export type DocumentCaseMatch = {
   matchStatus: DocumentCaseMatchStatus;
   matchedCaseId: string | null;
@@ -31,4 +44,9 @@ export type DocumentCaseMatch = {
   reasons: DocumentCaseMatchReasonId[];
   /** Populated when matchStatus === 'multiple'. */
   candidates: DocumentCaseMatchCandidate[];
+  /**
+   * EINGANG-01C-1 — gesetzt, wenn `exact` auf einer deterministischen eigenen
+   * Referenz beruht (Auftrags- oder Angebotsnummer).
+   */
+  reference?: DocumentOwnReference;
 };

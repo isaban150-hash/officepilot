@@ -79,7 +79,12 @@ export function DocumentActionSuggestionsPanel({
 
   const handleLinkSuggestedVorgang = () => {
     if (!suggestedVorgang) return;
-    const result = linkInboxToExistingVorgang(item, suggestedVorgang.vorgangId);
+    // EINGANG-01C-1 — ausdrücklicher Klick auf diesen Vorschlag.
+    const result = linkInboxToExistingVorgang(item, suggestedVorgang.vorgangId, {
+      source: 'user_confirmed',
+      ...(suggestedVorgang.reference ? { reference: { ...suggestedVorgang.reference } } : {}),
+      decidedAt: new Date().toISOString(),
+    });
     if (result) {
       onVorgangLinked(result.inbox, result.vorgang);
       if (!getLastPersistSuccess()) {

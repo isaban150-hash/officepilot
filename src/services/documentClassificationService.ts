@@ -849,6 +849,7 @@ export function getExplicitVorgangForItem(item: InboxItem): SuggestedVorgangLink
         customer: vorgang.customer,
         confidence: 'high',
         reasonKey: 'classification.vorgang.reason.explicit',
+        basis: 'stored',
       };
     }
   }

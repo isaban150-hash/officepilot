@@ -150,13 +150,16 @@ describe('CONTRACT-PROOF-SYNC-ORDER-01', () => {
         title: 'Badezimmer-Sanierung Müller',
         customer: 'Müller Bau GmbH',
         baustelle: 'Hauptstr. 12, 10115 Berlin',
+        // EINGANG-01C-1 — verknüpft wird nur über eine eigene Referenz im Dokument.
+        orderNumber: 'AU-2026-0044',
       }),
     ]);
 
-    const item = createWerkvertragInbox({
+    const base = createWerkvertragInbox({
       id: 'inbox-cps-link',
       title: 'Werkvertrag zu bestehendem Vorgang',
     });
+    const item = { ...base, recognizedData: { ...base.recognizedData, Auftragsnummer: 'AU-2026-0044' } };
     hydrateInboxStore([item]);
     const workflow = processUploadedDocument(item.id)!;
     // Force suggested link to our seeded vorgang (stable for this regression).
@@ -168,6 +171,9 @@ describe('CONTRACT-PROOF-SYNC-ORDER-01', () => {
         customer: 'Müller Bau GmbH',
         confidence: 'high',
         reasonKey: 'test.suggested',
+        // EINGANG-01C-1 — die Übernahme verknüpft nur einen deterministischen Vorschlag.
+        basis: 'reference',
+        reference: { kind: 'order', value: 'AU-2026-0044' },
       },
     };
     confirmFilingDecisionForTests(item.id);

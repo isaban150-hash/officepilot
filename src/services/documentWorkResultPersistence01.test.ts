@@ -321,6 +321,8 @@ describe('DOCUMENT-WORK-RESULT-PERSISTENCE-01', () => {
         title: VORGANG_TITLE,
         customer: VORGANG_CUSTOMER,
         baustelle: VORGANG_SITE,
+        // EINGANG-01C-1 — ein errechneter Vorschlag entsteht nur noch aus einer eigenen Referenz.
+        orderNumber: 'AU-2026-0043',
       } as never),
     ]);
 
@@ -343,6 +345,7 @@ describe('DOCUMENT-WORK-RESULT-PERSISTENCE-01', () => {
         Kunde: 'Bauherrengemeinschaft Kirchheide GbR',
         Auftraggeber: 'Bauherrengemeinschaft Kirchheide GbR',
         Datum: '01.04.2026',
+        Referenz: 'AU-2026-0043',
       },
     } as unknown as InboxItem;
     hydrateInboxStore([item]);

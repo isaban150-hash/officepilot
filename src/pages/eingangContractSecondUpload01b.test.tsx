@@ -209,8 +209,18 @@ async function click(element: HTMLElement): Promise<void> {
   await settle(12);
 }
 
-describe('INBOX-CONTRACT-SECOND-UPLOAD-01B — Fall B: sicherer Match auf bestätigten Vertragsvorgang', () => {
-  it('B1: contractConfirmation vorhanden → keine Erfassung, keine Kundenentscheidung, Match sichtbar', async () => {
+/*
+ * EINGANG-01C-1 (P1-A) — Produktentscheidung: Kunde, Baustelle und Projekt
+ * beweisen keine Identität. Ein zweiter Upload desselben Vertrags ist davon
+ * nicht zu unterscheiden von einem neuen Vertrag desselben Kunden an derselben
+ * Adresse. Er wird deshalb nicht mehr als „sicherer Match" behandelt, sondern
+ * als Vorschlag: „Vorgang prüfen" mit dem bestehenden Vorgang — nichts wird
+ * verknüpft, nichts automatisch erfasst; eine Erfassung bleibt
+ * bestätigungspflichtig. (Fall B mit sicherer Wirkung gilt weiterhin für
+ * `exact`, also eine eigene Auftragsreferenz oder eine bestätigte Verknüpfung.)
+ */
+describe('INBOX-CONTRACT-SECOND-UPLOAD-01B — Fall B: Namens-/Baustellentreffer auf bestätigten Vertragsvorgang', () => {
+  it('B1: contractConfirmation vorhanden → „Vorgang prüfen" mit bestehendem Vorgang, keine automatische Zuordnung', async () => {
     hydrateVorgangStore([withConfirmation(matchingVorgang())]);
     hydrateInboxStore([secondItem()]);
     expect(getInboxItemById(SECOND_ITEM_ID)?.vorgangId ?? '').toBe('');
@@ -218,26 +228,26 @@ describe('INBOX-CONTRACT-SECOND-UPLOAD-01B — Fall B: sicherer Match auf bestä
     await renderDetail();
 
     const match = find('document-case-match');
-    expect(match, 'Der passende Vorgang wird nicht angezeigt').not.toBeNull();
-    expect(match!.getAttribute('data-match-status')).toBe('exact');
-    expect(buttonsWithText(ACCEPT_LABEL), 'Erfassung trotz bestätigtem Vertragsvorgang angeboten').toHaveLength(0);
-    expect(find('contract-customer-decision'), 'Kundenentscheidung trotz bestätigtem Vertragsvorgang').toBeNull();
-    expect(buttonsWithText(OPEN_CASE_LABEL).length, 'Keine Aktion zum bestehenden Vorgang').toBeGreaterThan(0);
+    expect(match, 'Der mögliche Vorgang wird nicht angezeigt').not.toBeNull();
+    expect(match!.getAttribute('data-match-status')).toBe('likely');
+    expect(match!.textContent).toContain('Vorgang prüfen');
+    expect(match!.textContent).not.toContain('Passender Vorgang gefunden');
+    expect(find('document-case-match-title')?.textContent).toBe(matchingVorgang().title);
+    expect(getInboxItemById(SECOND_ITEM_ID)?.vorgangId ?? '').toBe('');
   });
 
-  it('B2: „Vorgang öffnen" führt exakt zum bestehenden Vorgang — ohne Erfassung, ohne Link, ohne zweiten Kunden', async () => {
+  it('B2: ohne Bestätigung entsteht nichts — kein Link, kein zweiter Vorgang, kein zweiter Kunde, keine Erfassung', async () => {
     hydrateVorgangStore([withConfirmation(matchingVorgang())]);
     hydrateInboxStore([secondItem()]);
 
     await renderDetail();
-    await click(buttonsWithText(OPEN_CASE_LABEL)[0]!);
 
-    expect(currentPath).toBe(`/vorgaenge/${VORGANG_ID}`);
+    expect(currentPath).toBe(DETAIL_ROUTE);
     expect(getAllVorgaenge().map((entry) => entry.id)).toEqual([VORGANG_ID]);
     expect(getCustomerStoreSnapshot()).toHaveLength(0);
     expect(vi.mocked(acceptContractOrderFromProposal)).not.toHaveBeenCalled();
-    // Confirm-first: ein Match ist keine persistente Verknüpfung.
     expect(getInboxItemById(SECOND_ITEM_ID)?.vorgangId ?? '').toBe('');
+    expect(getInboxItemById(SECOND_ITEM_ID)?.vorgangLinkStatus).toBeUndefined();
   });
 
   /*
@@ -248,15 +258,17 @@ describe('INBOX-CONTRACT-SECOND-UPLOAD-01B — Fall B: sicherer Match auf bestä
    * zweiter Auftrag aus demselben Vertrag wäre die Doppelanlage, die lokal
    * tatsächlich entstand (zweiter Vorgang, zweiter Kunde).
    */
-  it('B3: Vorgang aus derselben Vertragsannahme entstanden (ohne contractConfirmation) → ebenfalls keine zweite Erfassung', async () => {
+  it('B3: Vorgang aus derselben Vertragsannahme entstanden → ebenfalls nur Vorschlag, keine automatische Zuordnung', async () => {
     hydrateVorgangStore([withoutConfirmation(matchingVorgang({ createdFromInboxId: FIRST_ITEM_ID }))]);
     hydrateInboxStore([firstItem(), secondItem()]);
 
     await renderDetail();
 
-    expect(buttonsWithText(ACCEPT_LABEL), 'Zweite Erfassung desselben Vertrags angeboten').toHaveLength(0);
-    expect(find('contract-customer-decision')).toBeNull();
-    expect(buttonsWithText(OPEN_CASE_LABEL).length).toBeGreaterThan(0);
+    const match = find('document-case-match');
+    expect(match!.getAttribute('data-match-status')).toBe('likely');
+    expect(find('document-case-match-title')?.textContent).toBe(matchingVorgang().title);
+    expect(vi.mocked(acceptContractOrderFromProposal)).not.toHaveBeenCalled();
+    expect(getInboxItemById(SECOND_ITEM_ID)?.vorgangId ?? '').toBe('');
   });
 });
 

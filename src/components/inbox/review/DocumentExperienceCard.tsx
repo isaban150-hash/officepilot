@@ -375,7 +375,10 @@ export function DocumentExperienceCard({
                 ? translate('vorgangIntelligence.match.multipleTitle')
                 : /* One candidate must never be announced as several. */
                   translate('vorgangIntelligence.match.checkTitle')
-              : translate('vorgangIntelligence.match.title')}
+              : summary.caseMatch.matchStatus === 'likely'
+                ? /* EINGANG-01C-1 — ein Vorschlag wird nicht als „gefunden" angekündigt. */
+                  translate('vorgangIntelligence.match.checkTitle')
+                : translate('vorgangIntelligence.match.title')}
           </h3>
           {summary.caseMatch.matchedCaseTitle ? (
             <p

@@ -134,7 +134,8 @@ describe('VORGANG-INTELLIGENCE-01', () => {
     expect(html).not.toMatch(/%|Prozent|0\.\d{2}/);
   });
 
-  it('exact: Kunde + Baustelle ohne bekannte Verknüpfung', () => {
+  // EINGANG-01C-1 (P1-A): Kunde + Baustelle beweisen keine Identität → Vorschlag, nicht exact.
+  it('likely: Kunde + Baustelle ohne bekannte Verknüpfung', () => {
     hydrateVorgangStore([
       createTestVorgang({
         id: 'v-site-cust',
@@ -152,7 +153,7 @@ describe('VORGANG-INTELLIGENCE-01', () => {
       },
     });
     const match = buildDocumentCaseMatch(item);
-    expect(match.matchStatus).toBe('exact');
+    expect(match.matchStatus).toBe('likely');
     expect(match.matchedCaseId).toBe('v-site-cust');
     expect(match.reasons).toEqual(
       expect.arrayContaining(['same_customer', 'same_site']),
@@ -282,8 +283,9 @@ describe('VORGANG-INTELLIGENCE-01', () => {
         Bauvorhaben: 'Sägewerk Ernst Flisch – Heizzentrale',
       },
     });
+    // EINGANG-01C-1 (P1-A): bester Kandidat bleibt PRJ-001 — aber nur als Vorschlag.
     const match = buildDocumentCaseMatch(item);
-    expect(match.matchStatus).toBe('exact');
+    expect(match.matchStatus).toBe('likely');
     expect(match.matchedCaseId).toBe('PRJ-001');
     expect(match.reasons).toEqual(expect.arrayContaining(['same_project', 'same_customer']));
 

@@ -61,6 +61,8 @@ import type {
   DetectedOrderPosition,
   DocumentClassificationResult,
   InboxItem,
+  InboxVorgangAssignment,
+  SuggestedVorgangLink,
   MaterialStandard,
   OrderPositionInput,
   Task,
@@ -319,7 +321,9 @@ function buildNextActions(
     });
   }
 
-  if (input.primaryTargetAction === 'select_vorgang' && !item.vorgangId) {
+  // EINGANG-01C-1 — auch eine nur gespeicherte, unbestätigte vorgangId hält die
+  // bestätigungspflichtige Auswahl offen (kein stiller No-op für Altbestand).
+  if (input.primaryTargetAction === 'select_vorgang' && !isInboxLinkedToVorgang(item)) {
     actions.push({
       id: 'select_vorgang',
       labelKey: 'vorgangIntelligence.action.select',
@@ -750,8 +754,29 @@ export function importSuggestedPositionsToVorgang(
 export function linkWorkflowVorgang(
   item: InboxItem,
   vorgangId: string,
+  assignment?: InboxVorgangAssignment,
 ): { vorgang: Vorgang; inbox: InboxItem } | null {
-  return linkInboxToExistingVorgang(item, vorgangId);
+  return linkInboxToExistingVorgang(item, vorgangId, assignment);
+}
+
+/**
+ * EINGANG-01C-1 — darf die Übernahme diesen Vorschlag selbst verknüpfen?
+ * Nur bei einer eindeutigen eigenen Auftrags-/Angebotsreferenz. Alles andere
+ * (gespeicherter unbestätigter Vorgang, Vorschläge aus Namen/Baustelle, ältere
+ * Snapshots ohne Grundlage) braucht die ausdrückliche Auswahl des Nutzers.
+ */
+export function isDeterministicVorgangSuggestion(
+  suggestion: SuggestedVorgangLink | null | undefined,
+): suggestion is SuggestedVorgangLink & { basis: 'reference'; reference: { kind: 'order' | 'offer'; value: string } } {
+  return Boolean(suggestion && suggestion.basis === 'reference' && suggestion.reference);
+}
+
+/** EINGANG-01C-1 — der Zuordnungsgrund einer automatischen, deterministischen Verknüpfung. */
+export function buildDeterministicVorgangAssignment(
+  suggestion: SuggestedVorgangLink & { reference: { kind: 'order' | 'offer'; value: string } },
+  now: string = new Date().toISOString(),
+): InboxVorgangAssignment {
+  return { source: 'deterministic_reference', reference: { ...suggestion.reference }, decidedAt: now };
 }
 
 export function createWorkflowVorgang(

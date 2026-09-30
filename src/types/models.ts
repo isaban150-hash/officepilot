@@ -281,6 +281,8 @@ export interface InboxItem {
    * Reist im jsonb-Payload des Eingangs mit; keine eigene Spalte.
    */
   emailOrigin?: InboxEmailOrigin;
+  /** EINGANG-01C-1 — Grund der bestätigten Vorgangszuordnung (nur bei `vorgangId`). */
+  vorgangAssignment?: InboxVorgangAssignment;
   /** Lokale Dateireferenz (DOC-FOUNDATION-01) */
   fileRefId?: string;
   sourceFileHash?: string;
@@ -475,6 +477,29 @@ export interface SuggestedVorgangLink {
   customer: string;
   confidence: 'high' | 'medium' | 'low';
   reasonKey: string;
+  /**
+   * EINGANG-01C-1 — worauf ein Vorschlag beruht: `reference` (eindeutige eigene
+   * Auftrags-/Angebotsnummer im Dokument — der einzige Grund, der beim
+   * Übernehmen automatisch verknüpft) oder `stored` (am Eingang gespeicherter,
+   * bestätigter bzw. noch zu bestätigender Vorgang).
+   */
+  basis?: 'reference' | 'stored';
+  reference?: { kind: 'order' | 'offer'; value: string };
+}
+
+/**
+ * EINGANG-01C-1 — warum ein Eingang einem Vorgang zugeordnet wurde.
+ * Reist im jsonb-Payload des Eingangs mit; keine eigene Spalte, keine Konfidenz.
+ */
+export interface InboxVorgangAssignment {
+  /**
+   * `deterministic_reference` — beim Übernehmen automatisch über eine eindeutige
+   * eigene Auftrags-/Angebotsnummer im Dokument;
+   * `user_confirmed` — ausdrücklich vom Nutzer gewählt oder bestätigt.
+   */
+  source: 'deterministic_reference' | 'user_confirmed';
+  reference?: { kind: 'order' | 'offer'; value: string };
+  decidedAt: string;
 }
 
 export interface DocumentClassificationResult {

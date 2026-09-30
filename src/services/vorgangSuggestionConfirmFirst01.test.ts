@@ -39,7 +39,12 @@ const VORGANG_CUSTOMER = 'Nordwerk Immobilien GmbH';
 const DOCUMENT_CUSTOMER = 'Bauherrengemeinschaft Kirchheide GbR';
 const DOCUMENT_SITE = 'Ostweg 4, 32756 Detmold';
 
-/** Bauvorhaben + Baustelle treffen den Vorgang → same_project + same_site → exact. */
+/**
+ * EINGANG-01C-1 — ein errechneter `exact`-Vorschlag entsteht nur noch aus einer
+ * eigenen Referenz: der Vorgang trägt eine Auftragsnummer, das Dokument nennt sie.
+ * (Bauvorhaben + Baustelle allein sind seit P1-A nur noch ein Vorschlag.)
+ */
+const ORDER_NUMBER = 'AU-2026-0042';
 function seedStores(): void {
   localStorage.clear();
   setTaskStoreForTests([]);
@@ -51,6 +56,7 @@ function seedStores(): void {
       title: VORGANG_TITLE,
       customer: VORGANG_CUSTOMER,
       baustelle: VORGANG_SITE,
+      orderNumber: ORDER_NUMBER,
     } as never),
   ]);
 }
@@ -77,6 +83,7 @@ function offerItem(
       Bauvorhaben: VORGANG_TITLE,
       Baustelle: site ?? VORGANG_SITE,
       Datum: '01.04.2026',
+      Referenz: ORDER_NUMBER,
       ...(customer ? { Kunde: customer, Auftraggeber: customer } : {}),
     },
     ...rest,
@@ -213,9 +220,9 @@ describe('VORGANG-SUGGESTION-CONFIRM-FIRST-01', () => {
     expect(ownResult.site?.value).toBe(DOCUMENT_SITE);
     expect(ownResult.site?.certainty).toBe('detected');
 
-    // Ohne Baustelle traegt same_site den exact-Match nicht mehr. Der Treffer entsteht
-    // hier stattdessen ueber same_project + same_customer — der Dokumentkunde ist also
-    // bewusst der Vorgangskunde. Weder Vorgangs-ID noch suggestedVorgang werden gesetzt.
+    // Ohne Baustelle bleibt der exact-Treffer die eigene Auftragsnummer; daneben
+    // stehen same_project + same_customer — der Dokumentkunde ist bewusst der
+    // Vorgangskunde. Eine Vorgangs-ID wird nicht gesetzt.
     seedStores();
     const withoutSite = offerItem('vscf-site-none', { customer: VORGANG_CUSTOMER });
     delete (withoutSite.recognizedData as Record<string, string>).Baustelle;
@@ -223,7 +230,8 @@ describe('VORGANG-SUGGESTION-CONFIRM-FIRST-01', () => {
 
     const match = buildDocumentCaseMatch(withoutSite);
     expect(match.matchStatus).toBe('exact');
-    expect(match.reasons).toEqual(expect.arrayContaining(['same_project', 'same_customer']));
+    expect(match.reference).toEqual({ kind: 'order', value: ORDER_NUMBER });
+    expect(match.reasons).toEqual(expect.arrayContaining(['same_contract_number', 'same_project', 'same_customer']));
     expect(match.reasons).not.toContain('same_site');
     expect(isInboxLinkedToVorgang(withoutSite)).toBe(false);
 

@@ -137,7 +137,11 @@ export function InboxVorgangPanel({
   const closeDialog = () => setDialogOpen(false);
 
   const handleLink = (vorgangId: string) => {
-    const result = linkInboxToExistingVorgang(item, vorgangId);
+    // EINGANG-01C-1 — ausdrückliche Auswahl im Dialog.
+    const result = linkInboxToExistingVorgang(item, vorgangId, {
+      source: 'user_confirmed',
+      decidedAt: new Date().toISOString(),
+    });
     if (result) {
       onLinked(result.inbox, result.vorgang);
       closeDialog();

@@ -44,6 +44,10 @@ function resolveSuggestedFromExactCaseMatch(
     customer: vorgang.customer,
     confidence: 'high',
     reasonKey: 'classification.vorgang.reason.explicit',
+    // EINGANG-01C-1 — die Grundlage des sicheren Treffers bleibt erhalten.
+    // `exact` entsteht nur noch aus einer eigenen Referenz oder einer bestätigten Verknüpfung.
+    basis: match.reference ? 'reference' : 'stored',
+    ...(match.reference ? { reference: { ...match.reference } } : {}),
   };
 }
 

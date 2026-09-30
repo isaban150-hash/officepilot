@@ -4450,11 +4450,11 @@ const deLegacy = {
   'vorgangIntelligence.reason.sameCustomer': 'gleicher Kunde',
   'vorgangIntelligence.reason.sameSite': 'gleiche Baustelle',
   'vorgangIntelligence.reason.sameProject': 'gleiches Projekt',
-  'vorgangIntelligence.reason.sameContractNumber': 'gleiche Vertragsnummer',
-  'vorgangIntelligence.reason.sameInvoiceNumber': 'gleiche Rechnungsnummer',
+  'vorgangIntelligence.reason.sameContractNumber': 'eigene Auftrags- oder Angebotsnummer im Dokument',
+  'vorgangIntelligence.reason.sameInvoiceNumber': 'eigene Rechnungsnummer im Dokument',
   'vorgangIntelligence.reason.sameSupplier': 'gleicher Lieferant',
   'vorgangIntelligence.reason.sameSubject': 'ähnlicher Betreff',
-  'vorgangIntelligence.reason.sameReference': 'gleiches Aktenzeichen',
+  'vorgangIntelligence.reason.sameReference': 'ähnliche Referenz oder Nummer',
   'vorgangIntelligence.reason.knownLink': 'bereits verknüpft',
 } as const;
 

@@ -12,6 +12,7 @@ import {
   resolvePrimaryTargetObjectForKind,
 } from './documentPrimaryTargetService';
 import { isInboxLinkedToVorgang } from './vorgangService';
+import { isDeterministicVorgangSuggestion } from './intakeWorkflowService';
 
 function hasResolverAction(
   workflow: { nextActions?: WorkflowResult['nextActions'] },
@@ -91,16 +92,19 @@ export function wouldApplyContractFieldsOnSmartIntake(
 export function wouldLinkVorgangOnSmartIntake(
   workflow: Pick<WorkflowResult, 'companyRelevant'> & {
     nextActions?: WorkflowResult['nextActions'];
+    suggestedVorgang?: WorkflowResult['suggestedVorgang'];
   },
   item: Pick<InboxItem, 'vorgangId' | 'vorgangLinkStatus'>,
 ): boolean {
   // buildNextActions already withholds link_vorgang for confirmed links; the item
   // check stays only as a guard and uses the authoritative confirmed-link rule, so
   // a legacy vorgangId without a valid status still reaches the link path.
+  // EINGANG-01C-1 — dieselbe Regel wie executeVorgangAtom: nur eine deterministische Referenz verknüpft selbst.
   return (
     workflow.companyRelevant &&
     !isInboxLinkedToVorgang(item as InboxItem) &&
-    hasResolverAction(workflow, 'link_vorgang')
+    hasResolverAction(workflow, 'link_vorgang') &&
+    isDeterministicVorgangSuggestion(workflow.suggestedVorgang)
   );
 }
 

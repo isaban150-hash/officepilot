@@ -36,10 +36,14 @@ import type {
 } from './operationalExecutionTypes';
 import type { SuggestedVorgangLink, WorkflowResult } from '../types/models';
 
-function seedHotel(selection?: { vorgangId: string; vorgangTitle: string }) {
+function seedHotel(orderReference?: string) {
   const docCase = getDocumentCase('HOTEL-01');
   const observation = runStablePipeline(docCase);
-  hydrateInboxStore([selection ? { ...observation.item, ...selection } : observation.item]);
+  hydrateInboxStore([
+    orderReference
+      ? { ...observation.item, recognizedData: { ...observation.item.recognizedData, Auftragsnummer: orderReference } }
+      : observation.item,
+  ]);
   const workflow = processUploadedDocument(observation.item.id) ?? observation.workflow;
   const item = confirmFilingDecisionForTests(observation.item.id);
   return { observation, workflow, item };
@@ -51,20 +55,22 @@ function seedHotel(selection?: { vorgangId: string; vorgangTitle: string }) {
  * buildNextActions. The WorkflowResult is never patched by hand.
  */
 function seedHotelWithLinkableVorgang(vorgangId: string) {
+  const orderNumber = `AU-2026-${String(vorgangId.length).padStart(4, '0')}`;
   hydrateVorgangStore([
     createTestVorgang({
       id: vorgangId,
       title: 'Hotelaufenthalt Berlin',
       customer: 'City Lodge Berlin GmbH',
+      orderNumber,
     }),
   ]);
   /*
-   * EINGANG-01A — verknüpft wird nur noch ein eindeutiger oder ausdrücklich
-   * gewählter Vorgang. Die bloße Namensgleichheit (Absender = Kunde des
-   * Vorgangs), auf der dieser Aufbau bisher beruhte, verknüpft nicht mehr.
-   * Hier ist der Vorgang am Eingang ausdrücklich gewählt.
+   * EINGANG-01A/01C-1 — die Übernahme verknüpft nur noch über eine
+   * deterministische eigene Referenz. Namensgleichheit (01A) und ein nur am
+   * Eingang gespeicherter Vorgang (01C-1) verknüpfen nicht mehr. Hier nennt
+   * der Beleg die eigene Auftragsnummer des Vorgangs.
    */
-  return seedHotel({ vorgangId, vorgangTitle: 'Hotelaufenthalt Berlin' });
+  return seedHotel(orderNumber);
 }
 
 /** ELIGIBILITY-01 — exakt eine aktivierte Verknüpfungsaktion, keine Anlage, keine Auswahl. */

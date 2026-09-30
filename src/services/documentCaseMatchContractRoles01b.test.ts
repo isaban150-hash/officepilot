@@ -46,8 +46,9 @@ describe('Vertrag: Gegenpartei ist Kunde, nicht Lieferant', () => {
     expect(signals.customer).toBe(CUSTOMER);
     expect(signals.supplier).toBeUndefined();
 
+    // EINGANG-01C-1 (P1-A): die Rollenlogik bleibt; Namen machen aber nur noch einen Vorschlag.
     const match = buildDocumentCaseMatch(item);
-    expect(match.matchStatus).toBe('exact');
+    expect(match.matchStatus).toBe('likely');
     expect(match.reasons).toContain('same_customer');
     expect(match.reasons).not.toContain('same_supplier');
   });

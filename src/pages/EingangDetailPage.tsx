@@ -95,7 +95,6 @@ import { executeSmartIntake } from '../services/intakeExecutionService';
 import { getLastPersistSuccess } from '../services/persistenceService';
 import {
   acceptSuggestedTasks,
-  linkWorkflowVorgang,
   analyzeUploadedDocument,
   commitUploadedDocumentAnalysis,
 } from '../services/intakeWorkflowService';
@@ -1169,19 +1168,11 @@ export function EingangDetailPage() {
       return;
     }
 
-    if (workflow?.suggestedVorgang) {
-      const linked = linkWorkflowVorgang(item, workflow.suggestedVorgang.vorgangId);
-      if (linked) {
-        setItem(linked.inbox);
-        if (!getLastPersistSuccess()) {
-          showToast(translate('persist.failed.userAction'));
-        } else {
-          showToast(translate('vorgang.link.success'));
-        }
-        return;
-      }
-    }
-
+    /*
+     * EINGANG-01C-1 — „Vorgang anlegen" legt an. Bisher verknüpfte dieser Knopf
+     * still einen vorgeschlagenen bestehenden Vorgang — Handlung und Text
+     * wichen voneinander ab. Verknüpfen geht über die Vorgangsauswahl.
+     */
     // CUSTOMER-FACHOBJEKT-04B — a new Vorgang always goes through the dialog so
     // the customer decision is made explicitly. Nothing is created before that.
     setVorgangDialogRequest((n) => n + 1);

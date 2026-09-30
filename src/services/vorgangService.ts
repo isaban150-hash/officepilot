@@ -90,6 +90,7 @@ import type {
   VorgangDraft,
   VorgangInvoice,
   VorgangStatus,
+  InboxVorgangAssignment,
 } from '../types/models';
 import {
   cloneConfirmedOrderAmendments,
@@ -1223,6 +1224,8 @@ export function replaceVorgangContractConfirmation(
 export function linkInboxToExistingVorgang(
   item: InboxItem,
   vorgangId: string,
+  /** EINGANG-01C-1 — warum verknüpft wird; wird am Eingang gespeichert. */
+  assignment?: InboxVorgangAssignment,
 ): { vorgang: Vorgang; inbox: InboxItem } | null {
   const currentItem = resolveInboxItemForLinking(item);
   if (isInboxLinkedToVorgang(currentItem)) return null;
@@ -1283,6 +1286,7 @@ export function linkInboxToExistingVorgang(
     vorgangId: vorgang.id,
     vorgangTitle: vorgang.title,
     vorgangLinkStatus: 'linked',
+    vorgangAssignment: assignment ? { ...assignment } : undefined,
     status: 'geprueft',
     isNewUpload: false,
   });
@@ -1385,6 +1389,8 @@ export function unlinkInboxItemFromVorgang(inboxId: string): UnlinkInboxItemResu
     vorgangId: item.vorgangId,
     vorgangTitle: item.vorgangTitle,
     vorgangLinkStatus: item.vorgangLinkStatus,
+    // EINGANG-01C-1 — auch der Zuordnungsgrund kommt beim Zurückrollen zurück.
+    vorgangAssignment: item.vorgangAssignment ? { ...item.vorgangAssignment } : undefined,
   };
   const archiveId = item.archiveDocumentId?.trim();
   const previousDocumentLink = archiveId ? getDocumentById(archiveId)?.linkedVorgang : undefined;
@@ -1394,6 +1400,7 @@ export function unlinkInboxItemFromVorgang(inboxId: string): UnlinkInboxItemResu
     vorgangId: undefined,
     vorgangTitle: undefined,
     vorgangLinkStatus: undefined,
+    vorgangAssignment: undefined,
   });
   if (!stagedInbox) return { success: false, errorKey: 'inbox.notFound' };
 

@@ -32,6 +32,8 @@ function seedVorgang() {
       title: 'Sägewerk Ernst Flisch',
       customer: 'Ernst Flisch',
       baustelle: 'Werkstraße 1',
+      // EINGANG-01C-1 — eigene Auftragsnummer: der einzige Weg zu einem errechneten exact.
+      orderNumber: 'AU-2026-0501',
     }),
   ]);
 }
@@ -69,7 +71,7 @@ describe('CONFIRMED-VORGANG-LINK-01 – open_vorgang haengt am bestaetigten Link
     const item = createAuftragInboxItem({
       id: 'inbox-computed-exact',
       classifiedKind: 'werkvertrag',
-      recognizedData: RECOGNIZED,
+      recognizedData: { ...RECOGNIZED, Auftragsnummer: 'AU-2026-0501' },
     });
 
     const match = buildDocumentCaseMatch(item);
@@ -92,8 +94,8 @@ describe('CONFIRMED-VORGANG-LINK-01 – open_vorgang haengt am bestaetigten Link
       recognizedData: RECOGNIZED,
     });
 
-    // known_link entsteht trotzdem — genau deshalb darf es nicht als Beweis dienen.
-    expect(buildDocumentCaseMatch(item).reasons).toContain('known_link');
+    // EINGANG-01C-1 — eine nackte vorgangId ist kein known_link mehr (kein Beweis).
+    expect(buildDocumentCaseMatch(item).reasons).not.toContain('known_link');
     expect(isInboxLinkedToVorgang(item)).toBe(false);
     expect(resolveConfirmedLinkCaseId(item)).toBeNull();
 
@@ -104,9 +106,11 @@ describe('CONFIRMED-VORGANG-LINK-01 – open_vorgang haengt am bestaetigten Link
     // Linkpfad reparierbar.
     hydrateInboxStore([item]);
     const workflow = processUploadedDocument(item.id)!;
-    const linkAction = workflow.nextActions.find((action) => action.id === 'link_vorgang');
-    expect(linkAction, 'Reparaturpfad link_vorgang fehlt').toBeTruthy();
-    expect(linkAction!.enabled).toBe(true);
+    // Reparaturpfad bleibt bestätigungspflichtig: Auswahl bzw. Verknüpfung per Dialog.
+    const repair = workflow.nextActions.find(
+      (action) => (action.id === 'select_vorgang' || action.id === 'link_vorgang') && action.enabled,
+    );
+    expect(repair, 'bestätigungspflichtiger Reparaturpfad fehlt').toBeTruthy();
   });
 
   it('bestaetigte Verknuepfung auf geloeschten Vorgang → kein open_vorgang', () => {
