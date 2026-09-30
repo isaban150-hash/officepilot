@@ -814,11 +814,36 @@ function resolveInboxValidUntil(item: InboxItem): string | null {
   const recognized = toCanonicalIsoDay(item.recognizedData.Gültig_bis);
   if (recognized) return recognized;
   const text = getInboxExtractedDocumentText(item);
-  if (!text) return null;
+  if (!text) return resolveLegacyExemptionValidUntil(item);
   const ends = buildDocumentSemanticCore({ text, companyProfile: null }).deadlines.filter(
     (frist) => frist.type === 'validity_period_end',
   );
   return ends.length === 1 ? toCanonicalIsoDay(ends[0].date) : null;
+}
+
+/**
+ * Wartungsfix nach 01C-1 — Rückwärtskompatibilität für Freistellungen vor 01A.
+ *
+ * Vor EINGANG-01A landete das „gültig bis" einer Freistellungsbescheinigung
+ * in `deadline`; `Gültig_bis` und gespeicherter Text fehlen bei diesem
+ * Altbestand. Nur hier — Dokumentart sicher Freistellung, kein neues
+ * Gültigkeitsfeld, kein Text (sonst gilt der Weg über den Text) — wird die
+ * alte `deadline` als Gültigkeitsende gelesen, und nur als eindeutiger Tag.
+ * Für jedes andere Dokument bleibt `deadline` eine Handlungsfrist (01A).
+ *
+ * Positives Altbestands-Merkmal: Vor 01A stand die `deadline` roh als
+ * TT.MM.JJJJ im Datensatz; seit 01A schreiben Klassifikation und Bearbeitung
+ * sie nur noch kanonisch (JJJJ-MM-TT). Eine ISO-`deadline` ohne Text ist
+ * deshalb eine moderne Handlungsfrist — etwa auf einem Zweitgerät, auf das
+ * der Text nicht synchronisiert wird — und nie ein Gültigkeitsende.
+ */
+const LEGACY_RAW_DEADLINE = /^\d{1,2}\.\d{1,2}\.\d{4}$/;
+
+function resolveLegacyExemptionValidUntil(item: InboxItem): string | null {
+  if (item.classifiedKind !== 'freistellungsbescheinigung') return null;
+  const raw = item.deadline?.trim();
+  if (!raw || !LEGACY_RAW_DEADLINE.test(raw)) return null;
+  return toCanonicalIsoDay(raw);
 }
 
 export function mapInboxItemToDocumentInput(

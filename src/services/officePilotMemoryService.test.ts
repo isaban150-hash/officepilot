@@ -35,7 +35,9 @@ function createFreistellungInboxItem(overrides: Partial<InboxItem> = {}): InboxI
     documentType: 'behoerde',
     classifiedKind: 'freistellungsbescheinigung',
     sender: 'Finanzamt München',
-    deadline: '2026-12-31',
+    // Altbestand vor 01A: die `deadline` steht roh als TT.MM.JJJJ im Datensatz
+    // (nur dieses Format liest der Archiv-Import als Legacy-Gültigkeit).
+    deadline: '31.12.2026',
     recognizedData: {
       Dokument: 'Freistellungsbescheinigung nach §48b EStG',
     },
