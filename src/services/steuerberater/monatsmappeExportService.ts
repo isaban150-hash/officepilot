@@ -17,7 +17,6 @@ import { resolveWorkspaceWriteAccess } from '../workspace/workspaceRoleService';
 import { getDocumentFileBlob } from '../documentFileStoreService';
 import { collectMonatsmappeInput } from './monatsmappeInputService';
 import { generateApprovedInvoicePdf, generateInvoiceCorrectionPdf } from '../invoicePdfService';
-import { downloadBackupBlob } from '../backupExportService';
 import {
   BELEGART_FOLDER,
   buildMonatsmappeModel,
@@ -260,14 +259,9 @@ export async function buildMonatsmappeExport(input: {
   }
 }
 
-/** Nutzerweg: bauen und herunterladen. */
-export async function exportMonatsmappe(input: { monthKey: string; userId: string | null | undefined }): Promise<MonatsmappeExportResult> {
-  const result = await buildMonatsmappeExport(input);
-  if (result.outcome !== 'exported') return result;
-  try {
-    downloadBackupBlob(result.blob, result.summary.filename);
-    return result;
-  } catch (error) {
-    return { outcome: 'export_failed', detail: error instanceof Error ? error.message : 'download_failed' };
-  }
-}
+/*
+ * 02B-FINAL — der frühere Nutzerweg `exportMonatsmappe` (bauen und direkt
+ * herunterladen, am 06C-Gate vorbei) ist entfernt. Übergeben wird nur noch über
+ * `exportAccountingPackage` (06C). `buildMonatsmappeExport`/`buildMonatsmappeZip`
+ * bleiben als geprüfte Bausteine bestehen.
+ */

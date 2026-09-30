@@ -17,7 +17,12 @@
  * ein Storno.
  */
 import { fromCents, sumCents, toCents } from '../invoiceMoney';
-import { safeFileNamePart } from '../steuerberater/monatsmappeModelService';
+import {
+  belegBuchungsId,
+  belegExportKey,
+  safeFileNamePart,
+  ZAHLUNGSSTATUS_LABEL,
+} from '../steuerberater/monatsmappeModelService';
 import type { MonatsmappeBeleg, MonatsmappeModel } from '../steuerberater/monatsmappeModelService';
 import type { AccountingAssignment } from '../../types/accounting';
 
@@ -53,6 +58,8 @@ const ASSIGNMENT_LABEL: Record<string, string> = {
 };
 
 export interface BookingExportRow {
+  /** 02B — deterministische, lesbare Buchungs-ID (`<id>` bzw. `<id>-Storno`). */
+  readonly exportId: string;
   readonly belegart: string;
   readonly sourceType: 'expense' | 'invoice';
   readonly sourceId: string;
@@ -71,6 +78,12 @@ export interface BookingExportRow {
   readonly belegstatus: string;
   /** „ja" bei Storno oder Gutschrift — im Export nicht versteckt. */
   readonly stornoOderGutschrift: string;
+  /**
+   * 02B — Zahlungsstatus und offener Betrag zum Monatsende (Originalbelege).
+   * Eine Zahlung im Folgemonat ändert beides nicht. Leer bei Stornozeilen.
+   */
+  readonly zahlungsstatusMonatsende: string;
+  readonly offenMonatsende: number | '';
 }
 
 export interface BookingExportTotals {
@@ -118,12 +131,17 @@ export function buildBookingExport(
 
   for (const beleg of [...model.ausgangsrechnungen, ...model.eingangsbelege, ...model.stornos]) {
     const sourceType = sourceTypeOf(beleg);
-    const key = `${sourceType}:${beleg.id}`;
-    // Ein Beleg genau einmal — eine stornierte Rechnung steht evtl. doppelt im Modell.
-    if (gesehen.has(key)) continue;
-    gesehen.add(key);
+    /*
+     * 02B — je Exportidentität genau einmal. Original (+) und Storno (−)
+     * derselben Rechnung im selben Monat sind zwei Buchungen; vorher fiel die
+     * Stornozeile hier weg und die Kontrollsummen waren zu hoch. Die
+     * Kontierung gehört zur Quelle und gilt für beide Zeilen.
+     */
+    const exportKey = belegExportKey(beleg);
+    if (gesehen.has(exportKey)) continue;
+    gesehen.add(exportKey);
 
-    const assignment = bySource.get(key);
+    const assignment = bySource.get(`${sourceType}:${beleg.id}`);
     if (!assignment || assignment.status !== 'confirmed') continue;
 
     /*
@@ -136,6 +154,7 @@ export function buildBookingExport(
     }
 
     rows.push({
+      exportId: belegBuchungsId(beleg),
       belegart: BELEGART_LABEL[beleg.belegart] ?? beleg.belegart,
       sourceType,
       sourceId: beleg.id,
@@ -154,6 +173,9 @@ export function buildBookingExport(
       kontierungsstatus: ASSIGNMENT_LABEL[assignment.status] ?? assignment.status,
       belegstatus: STATUS_LABEL[beleg.status] ?? beleg.status,
       stornoOderGutschrift: beleg.status !== 'aktiv' || beleg.brutto < 0 ? 'ja' : 'nein',
+      zahlungsstatusMonatsende:
+        beleg.status === 'storno' ? '' : (ZAHLUNGSSTATUS_LABEL[beleg.zahlungsstatus] ?? beleg.zahlungsstatus),
+      offenMonatsende: beleg.status === 'storno' || beleg.offenerBetrag === undefined ? '' : beleg.offenerBetrag,
     });
   }
 
@@ -166,7 +188,8 @@ export function buildBookingExport(
     (a, b) =>
       a.belegdatum.localeCompare(b.belegdatum) ||
       a.belegnummer.localeCompare(b.belegnummer) ||
-      a.sourceId.localeCompare(b.sourceId),
+      a.sourceId.localeCompare(b.sourceId) ||
+      a.exportId.localeCompare(b.exportId),
   );
 
   /* Kontrollsummen in Cent — kein Gleitkomma-Aufaddieren. */
@@ -227,6 +250,9 @@ export function buildBookingCsv(bookings: BookingExport): string {
       'Kontierung',
       'Belegstatus',
       'Storno/Gutschrift',
+      'Buchungs-ID',
+      'Zahlungsstatus zum Monatsende',
+      'Offen zum Monatsende',
     ]),
   ];
 
@@ -249,6 +275,9 @@ export function buildBookingCsv(bookings: BookingExport): string {
         row.kontierungsstatus,
         row.belegstatus,
         row.stornoOderGutschrift,
+        row.exportId,
+        row.zahlungsstatusMonatsende,
+        row.offenMonatsende,
       ]),
     );
   }
@@ -264,6 +293,9 @@ export function buildBookingCsv(bookings: BookingExport): string {
       bookings.totals.netto,
       bookings.totals.steuer,
       bookings.totals.brutto,
+      '',
+      '',
+      '',
       '',
       '',
       '',

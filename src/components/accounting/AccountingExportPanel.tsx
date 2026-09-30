@@ -16,6 +16,7 @@
 import { useState } from 'react';
 import { Button } from '../ui/Button';
 import { InlineNotice } from '../ui/States';
+import { ReadOnlyNotice } from '../ui/ReadOnlyNotice';
 import type { AccountingExportReadiness } from '../../services/accounting/accountingExportGateService';
 import type { TranslationKey } from '../../i18n';
 
@@ -24,12 +25,25 @@ interface Props {
   /** Erzeugt das Paket und liefert den Dateinamen, oder `null` bei Fehlschlag. */
   onCreatePackage: () => Promise<string | null>;
   translate: (key: TranslationKey) => string;
+  /**
+   * 02B-FINAL — darf dieser Nutzer exportieren? Dieselbe Berechtigungswahrheit
+   * wie der Exportweg selbst (`resolveWorkspaceWriteAccess`, geprüft auch in
+   * `assertMonatsmappeAllowed`). Ohne Recht keine aktive Aktion; der Guard im
+   * Exportweg bleibt unabhängig davon bestehen.
+   */
+  canExport?: boolean;
+  /**
+   * 02B-FINAL — das Ergebnis des letzten Exports in diesem Monat. Nach dem
+   * Export wird das Panel neu aufgebaut (neuer Stand); ohne diese Übergabe
+   * gingen Dateiname und Fehlerhinweis dabei verloren.
+   */
+  lastResult?: { fileName: string | null } | null;
 }
 
-export function AccountingExportPanel({ readiness, onCreatePackage, translate }: Props) {
+export function AccountingExportPanel({ readiness, onCreatePackage, translate, canExport = true, lastResult = null }: Props) {
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
-  const [createdName, setCreatedName] = useState<string | null>(null);
+  const [failed, setFailed] = useState(lastResult ? lastResult.fileName === null : false);
+  const [createdName, setCreatedName] = useState<string | null>(lastResult?.fileName ?? null);
 
   const handleCreate = async () => {
     if (busy) return;
@@ -52,7 +66,9 @@ export function AccountingExportPanel({ readiness, onCreatePackage, translate }:
   return (
     <div data-testid="accounting-export">
       {/* ---------------- Steuerberater-Paket ---------------- */}
-      {readiness.packageAllowed ? (
+      {readiness.packageAllowed && !canExport ? (
+        <ReadOnlyNotice message={translate('steuerberater.export.forbidden')} testId="accounting-export-forbidden" />
+      ) : readiness.packageAllowed ? (
         <>
           <p className="detail-hint" data-testid="accounting-export-package-hint">
             {translate('accountingExport.packageHint')}

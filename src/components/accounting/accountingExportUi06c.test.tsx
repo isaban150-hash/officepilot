@@ -11,7 +11,8 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import * as workspaceRoles from '../../services/workspace/workspaceRoleService';
 import { AuthProvider } from '../../context/AuthContext';
 import { TestProviders } from '../../test/testProviders';
 import { DEFAULT_SETUP } from '../../data/mockData';
@@ -275,15 +276,37 @@ describe('AF-Ersatz — die Übergabe ist in der Anwendung erreichbar', () => {
     expect(text()).toContain('Der Monat ist nicht abgeschlossen.');
   });
 
-  it('S3: nach dem Abschluss steht die Paketaktion bereit', async () => {
+  it('S3: nach dem Abschluss steht die Paketaktion bereit (mit Finanzrecht)', async () => {
     setExpenseStoreForTests([ausgabe()]);
     setAccountingStoreForTests([kontierung()]);
     const monthKey = new Date().toISOString().slice(0, 7);
     expect(closeAccountingPeriod(monthKey).success).toBe(true);
+    const spy = vi.spyOn(workspaceRoles, 'resolveWorkspaceWriteAccess').mockReturnValue({
+      canWrite: true, canIntake: true, role: 'owner', reason: 'owner_or_admin',
+    });
 
     await zeigeSeite();
     expect(q('accounting-export-package'), 'die Paketaktion fehlt').not.toBeNull();
     expect(q('accounting-export-blockers')).toBeNull();
+    expect(q('accounting-export-forbidden')).toBeNull();
+    spy.mockRestore();
+  });
+
+  it('S5: ohne Finanzrecht keine aktive Paketaktion — Hinweis statt Knopf', async () => {
+    setExpenseStoreForTests([ausgabe()]);
+    setAccountingStoreForTests([kontierung()]);
+    const monthKey = new Date().toISOString().slice(0, 7);
+    expect(closeAccountingPeriod(monthKey).success).toBe(true);
+    const spy = vi.spyOn(workspaceRoles, 'resolveWorkspaceWriteAccess').mockReturnValue({
+      canWrite: false, canIntake: true, role: 'member', reason: 'member',
+    });
+
+    await zeigeSeite();
+    expect(q('accounting-export-package')).toBeNull();
+    expect(q('accounting-export-forbidden')).not.toBeNull();
+    // Der Übergabebereich selbst bleibt sichtbar (Stand, DATEV-Erklärung).
+    expect(q('accounting-export')).not.toBeNull();
+    spy.mockRestore();
   });
 
   it('S4: die Seite verspricht kein DATEV-Format', async () => {

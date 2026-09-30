@@ -15,6 +15,7 @@ import {
 } from './services/brain/dailyPriorityResolver';
 import { recordVorgangContext, resetCompanySessionForTests } from './services/brain/companySessionService';
 import { buildPendingSummary, scanPendingItems } from './services/pendingEngineService';
+import { reconcileInvoicePaymentTasks } from './services/invoice/invoicePaymentTaskSync';
 import { getAllVorgaenge, hydrateVorgangStore } from './services/vorgangService';
 import { getAllTasksFromStore, setTaskStoreForTests } from './services/taskStore';
 import { normalizeTask } from './services/taskNormalize';
@@ -182,7 +183,12 @@ describe('BROWSER-ACCEPTANCE-FIX 01 / B1 — Tagesprioritäten im Assistenten', 
     seedAbnahmeLage();
     hydrateInboxStore(MOCK_INBOX_ITEMS.slice(0, 2).map((item) => ({ ...item, status: 'neu' as const })));
 
-    // Wie im Produkt: Heute lädt zuerst (und legt „Zahlung prüfen"-Aufgaben an), danach die Frage.
+    /*
+     * Wie im Produkt: Der tägliche Abgleich beim App-Start legt die „Zahlung
+     * prüfen“-Aufgaben an (02B — nicht mehr das Rendern von Heute); Heute und
+     * die Frage lesen danach denselben Stand.
+     */
+    reconcileInvoicePaymentTasks({ today: TODAY });
     const heute = buildPendingSummary(scanPendingItems(TODAY).items, TODAY);
     const assistant = buildDailyPriorityAnswer(TODAY);
 

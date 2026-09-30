@@ -1,3 +1,4 @@
+import { paymentMethodLabel } from '../payment/PaymentMethodField';
 import { useState } from 'react';
 import { Button } from '../ui/Button';
 import { SimpleConfirmDialog } from '../ui/SimpleConfirmDialog';
@@ -60,7 +61,14 @@ export function InvoicePaymentHistory({
             className="invoice-payment-history__item"
             title={<DateDisplay value={payment.date} />}
             amount={<MoneyDisplay value={payment.amount} />}
-            subtitle={payment.reference ? `${translate('payment.reference')}: ${payment.reference}` : undefined}
+            subtitle={
+              [
+                paymentMethodLabel(payment.method, translate),
+                payment.reference ? `${translate('payment.reference')}: ${payment.reference}` : undefined,
+              ]
+                .filter(Boolean)
+                .join(' · ') || undefined
+            }
             meta={payment.note || undefined}
             footer={
               <>

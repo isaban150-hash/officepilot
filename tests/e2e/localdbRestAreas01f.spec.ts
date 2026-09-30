@@ -139,7 +139,16 @@ test.describe('UIUX-FOUNDATION-01F — Restbereiche (lokal)', () => {
     await expect(page.locator('.page-header__actions')).toHaveCount(1);
     await page.getByTestId('steuerberater-prepare-folder').click();
     await expect(page.getByTestId('steuerberater-documents')).toBeVisible();
-    await expect(page.getByTestId('steuerberater-export-button')).toBeVisible();
+    /*
+     * 01B/02B — der fruehere Monatsmappen-Export im Seitenkopf ist entfernt.
+     * Uebergeben wird nur ueber den 06C-Bereich; ohne Abschluss steht dort der
+     * Grund statt einer Aktion.
+     */
+    await expect(page.getByTestId('steuerberater-export-button')).toHaveCount(0);
+    await expect(page.getByTestId('steuerberater-export')).toBeVisible();
+    await expect(page.getByTestId('steuerberater-handover')).toBeVisible();
+    await expect(page.getByTestId('accounting-export-blocker-not_closed')).toBeVisible();
+    await expect(page.getByTestId('accounting-export-package')).toHaveCount(0);
     await expectNoOverflow(page, 'Steuerberater');
 
     /* E — Suche mit Header-Back */

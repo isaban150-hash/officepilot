@@ -14,6 +14,7 @@ import {
 import { getSyncCoordinator } from './syncCoordinator';
 import { getSyncOutboxSnapshot } from './syncOutboxService';
 import { rebaseSyncCandidateOntoLocalChanges } from './syncLocalRebaseService';
+import { reconcileInvoicePaymentTasks } from '../invoice/invoicePaymentTaskSync';
 
 /**
  * SYNC-AUTOMATIK-01A — der lokale Stand beim Start eines Laufs.
@@ -207,6 +208,26 @@ export function applySyncPullCandidateSafely(input: {
       error instanceof Error
         ? error.message
         : 'Nachtrags-Confirm-Intents konnten nach Persistenz nicht gelöscht werden.',
+    );
+  }
+
+  /*
+   * P0/P1-INTEGRITAET 01B / P1 — Zahlungen oder Stornos, die erst mit diesem
+   * Abgleich sichtbar wurden (anderes Gerät), schliessen ihre
+   * Überfälligkeitsaufgabe hier: nach bestätigter Persistenz und gesetzter
+   * Tracker-Baseline, damit die Erledigung als normale Änderung übertragen wird.
+   * 02B: ebenso eine Rücknahme auf einem anderen Gerät (neue Episode) und ein
+   * neuer Stand nach Teilzahlung.
+   */
+  try {
+    reconcileInvoicePaymentTasks();
+  } catch (error) {
+    report = withReportWarning(
+      report,
+      'payment-task-reconcile-warning',
+      error instanceof Error
+        ? error.message
+        : 'Überfälligkeitsaufgaben bezahlter Rechnungen konnten nicht geschlossen werden.',
     );
   }
 

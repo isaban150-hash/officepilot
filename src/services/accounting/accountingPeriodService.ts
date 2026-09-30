@@ -18,7 +18,11 @@ import { buildMonatsmappeModel } from '../steuerberater/monatsmappeModelService'
 import { collectMonatsmappeInput } from '../steuerberater/monatsmappeInputService';
 import { getAllAccountingAssignments } from './accountingStore';
 import { getChartOfAccounts } from './accountingSettingsService';
-import { buildPeriodFingerprint, buildPeriodManifest } from './accountingPeriodFingerprint';
+import {
+  buildPeriodFingerprint,
+  buildPeriodManifest,
+  closureFingerprintVersion,
+} from './accountingPeriodFingerprint';
 import {
   appendAccountingPeriodClosure,
   getActiveClosureForMonth,
@@ -49,8 +53,14 @@ function blocker(
   code: AccountingPeriodBlockerCode,
   sourceIds: readonly string[],
 ): AccountingPeriodBlocker | null {
-  if (sourceIds.length === 0) return null;
-  return { code, count: sourceIds.length, sourceIds: [...sourceIds] };
+  /*
+   * 02B — je Quelle genau einmal. Original und Storno derselben Rechnung sind
+   * zwei Manifest-Einträge, teilen sich aber eine Kontierung; ein fehlender
+   * Kontierungsschritt ist ein offener Punkt, nicht zwei.
+   */
+  const unique = [...new Set(sourceIds)];
+  if (unique.length === 0) return null;
+  return { code, count: unique.length, sourceIds: unique };
 }
 
 /**
@@ -168,10 +178,21 @@ export function buildAccountingPeriodState(
   chartOfAccounts = getChartOfAccounts(),
   closures: readonly AccountingPeriodClosure[] = getClosuresForMonth(model.monthKey),
 ): AccountingPeriodState {
-  const manifest = buildPeriodManifest(model, assignments, chartOfAccounts);
+  const activeClosure = closures.find((item) => !item.reopenedAt) ?? null;
+  /*
+   * P0/P1-INTEGRITAET 01B / P2 — ein aktiver Abschluss wird nach dem
+   * Algorithmus geprüft, mit dem er entstand. Ein alter Abschluss (Version 1,
+   * ohne Zahlungen) bleibt so gültig, solange sich seine Belege nicht ändern;
+   * jeder neue Abschluss entsteht mit Version 2.
+   */
+  const manifest = buildPeriodManifest(
+    model,
+    assignments,
+    chartOfAccounts,
+    activeClosure ? closureFingerprintVersion(activeClosure) : 2,
+  );
   const fingerprint = buildPeriodFingerprint(manifest);
   const blockers = collectPeriodBlockers(manifest);
-  const activeClosure = closures.find((item) => !item.reopenedAt) ?? null;
 
   return {
     monthKey: model.monthKey,

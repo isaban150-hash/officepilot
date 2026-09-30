@@ -13,6 +13,7 @@ import { getSupabaseClient, isSupabaseConfigured } from '../../lib/supabase';
 import { buildPersistedStateSnapshot } from '../persistenceService';
 import { resolveCloudWorkspaceId } from '../workspace/workspaceSyncPayloadService';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { normalizePaymentMethod, type PaymentMethod } from '../../types/models';
 
 /** Eine Zahlungszeile, wie die Cloud sie fuehrt — inklusive Grabstein. */
 export interface WorkspaceInvoicePaymentRow {
@@ -23,6 +24,11 @@ export interface WorkspaceInvoicePaymentRow {
   paidOn: string;
   reference?: string;
   note?: string;
+  /**
+   * 02B — `undefined`: der Server kennt das Feld (noch) nicht; `null`: nicht
+   * erfasst; sonst die Zahlungsart.
+   */
+  method?: PaymentMethod | null;
   createdAt: string;
   updatedAt: string;
   rowVersion: number;
@@ -38,6 +44,8 @@ export interface WorkspaceInvoicePaymentAddInput {
   paidOn: string;
   reference?: string;
   note?: string;
+  /** 02B — optional; nur gesendet, wenn gesetzt. */
+  method?: PaymentMethod;
 }
 
 /**
@@ -125,6 +133,7 @@ export function parseWorkspaceInvoicePaymentRow(raw: unknown): WorkspaceInvoiceP
     paidOn,
     reference: optionalText(raw.reference),
     note: optionalText(raw.note),
+    ...('method' in raw ? { method: normalizePaymentMethod(raw.method) ?? null } : {}),
     createdAt,
     updatedAt,
     rowVersion,
@@ -189,6 +198,7 @@ export async function addInvoicePaymentToCloud(
   const paidOn = input.paidOn.trim();
   const reference = input.reference?.trim() || undefined;
   const note = input.note?.trim() || undefined;
+  const method = normalizePaymentMethod(input.method);
 
   if (!clientInvoiceId || !clientPaymentId) return { outcome: 'failed', detail: 'identity' };
   if (!Number.isFinite(input.amount) || input.amount <= 0) {
@@ -206,6 +216,11 @@ export async function addInvoicePaymentToCloud(
       p_paid_on: paidOn,
       p_reference: reference ?? null,
       p_note: note ?? null,
+      /*
+       * 02B — nur wenn gesetzt: Eine Zahlung ohne Zahlungsart bleibt so auch
+       * gegen einen Server ohne die Erweiterung gültig.
+       */
+      ...(method ? { p_method: method } : {}),
     });
     if (response.error) {
       const message = response.error.message ?? '';
@@ -233,6 +248,7 @@ export async function addInvoicePaymentToCloud(
     row.paidOn !== paidOn ||
     row.reference !== reference ||
     row.note !== note ||
+    (method !== undefined && row.method !== method) ||
     row.reversedAt !== undefined
   ) {
     return { outcome: 'failed', detail: 'response_mismatch' };

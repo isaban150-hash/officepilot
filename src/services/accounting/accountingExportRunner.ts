@@ -17,7 +17,7 @@ import {
   collectMonatsmappeInput,
 } from '../steuerberater/monatsmappeExportService';
 import type { MonatsmappeDocumentLoaders } from '../steuerberater/monatsmappeExportService';
-import { buildMonatsmappeModel, isValidMonthKey } from '../steuerberater/monatsmappeModelService';
+import { isValidMonthKey } from '../steuerberater/monatsmappeModelService';
 import { downloadBackupBlob } from '../backupExportService';
 import { getAllAccountingAssignments } from './accountingStore';
 import { getChartOfAccounts } from './accountingSettingsService';
@@ -25,6 +25,7 @@ import { evaluateAccountingExportReadiness } from './accountingExportGateService
 import { buildBookingExport } from './accountingBookingExportService';
 import { buildAccountingExportPackage } from './accountingExportPackageService';
 import { getWorkspaceStoreSnapshot } from '../workspace/workspaceStore';
+import { collectSteuerberaterMonthFindings, getSteuerberaterHandoverStatus } from '../steuerberaterOverviewService';
 import type { AccountingExportReadiness } from './accountingExportGateService';
 
 export type AccountingExportOutcome =
@@ -66,9 +67,15 @@ export async function buildAccountingExport(
   }
 
   try {
-    const data = collectMonatsmappeInput(input.monthKey);
-    const model = buildMonatsmappeModel(data);
+    /*
+     * 02B — dieselben Befunde wie die Übersicht: Modell, unklare Fälle,
+     * fehlende Unterlagen und der gemeinsame Übergabestatus.
+     */
+    const findings = collectSteuerberaterMonthFindings(input.monthKey);
+    const data = findings.input;
+    const model = findings.model;
     const bookings = buildBookingExport(model, getAllAccountingAssignments(), getChartOfAccounts());
+    const handover = getSteuerberaterHandoverStatus(input.monthKey, findings);
 
     const built = await buildAccountingExportPackage(
       {
@@ -78,6 +85,8 @@ export async function buildAccountingExport(
         currentFingerprint: readiness.state.currentFingerprint,
         workspaceId: getWorkspaceStoreSnapshot()?.id ?? '',
         exportedAt: new Date().toISOString(),
+        findings: { unclearDocuments: findings.unclearDocuments, missingItems: findings.missingItems },
+        handover,
       },
       input.loaders ?? (await defaultLoadersFor(data)),
     );

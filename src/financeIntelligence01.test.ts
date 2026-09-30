@@ -476,14 +476,14 @@ describe('AI-FINANCE-01 resolver and orchestrator', () => {
   it('erklärt Reverse Charge mit Unsicherheitshinweis', () => {
     recordInvoiceContext('v-fin-orch', 'inv-orch');
     const result = tryResolveFinanceQuestion('Was bedeutet Reverse Charge §13b?');
-    expect(result?.assistantAnswer?.bullets).toContain('financeIntelligence.tax.reverseChargeExplain');
-    expect(result?.uncertaintyNote).toBe('financeIntelligence.tax.noAdvice');
+    expect(result?.assistantAnswer?.bullets).toContain(de['financeIntelligence.tax.reverseChargeExplain']); // 01B / P4: übersetzt, nicht der Schlüssel
+    expect(result?.uncertaintyNote).toBe(de['financeIntelligence.tax.noAdvice']);
   });
 
   it('erklärt Kleinunternehmerregelung ohne Steuerentscheidung', () => {
     const result = tryResolveFinanceQuestion('Was bedeutet Kleinunternehmerregelung?');
-    expect(result?.assistantAnswer?.bullets).toContain('financeIntelligence.tax.kleinunternehmerExplain');
-    expect(result?.uncertaintyNote).toBe('financeIntelligence.tax.noAdvice');
+    expect(result?.assistantAnswer?.bullets).toContain(de['financeIntelligence.tax.kleinunternehmerExplain']); // 01B / P4: übersetzt, nicht der Schlüssel
+    expect(result?.uncertaintyNote).toBe(de['financeIntelligence.tax.noAdvice']);
   });
 
   it('liefert Finanzstand mit Schritten und Empfehlung', () => {

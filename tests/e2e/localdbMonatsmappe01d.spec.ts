@@ -11,6 +11,10 @@
  *  01D2     Rechnung versenden -> stornieren (Korrektur) -> Sync -> Export: Original mit
  *           Status storniert + eigener Rechnungsstorno-Beleg, Korrektur-PDF unter
  *           Stornos_Korrekturen (Same-month im Browser; Cross-month per Unit-Test).
+ *  02B      Export nur noch ueber 06C: kontieren -> Monat abschliessen -> Paket
+ *           (buchungen.csv, zahlungen.csv, offene Posten, manifest.json, pruefbericht.txt).
+ *           Nach dem Storno: wieder oeffnen, begruenden, Revision 2, erneut exportieren;
+ *           Original + Storno = 0 ist der Regressionstest fuer die Storno-ID-Kollision.
  */
 import JSZip from 'jszip';
 import { createClient } from '@supabase/supabase-js';
@@ -116,7 +120,8 @@ async function createFinalizedInvoice(page: Page): Promise<string> {
 async function createExpenseWithPayment(page: Page): Promise<string> {
   await page.goto('/ausgaben/neu', { waitUntil: 'domcontentloaded' });
   await page.getByLabel('Titel').fill('Schrauben September');
-  await page.getByLabel('Lieferant').fill('Baustoff Nord GmbH');
+  // Eindeutig: auch das Steuerstatus-Feld nennt „Lieferant“ in seiner Beschriftung.
+  await page.getByRole('textbox', { name: 'Lieferant', exact: true }).fill('Baustoff Nord GmbH');
   await page.getByLabel('Rechnungsnummer').fill(`L-${Date.now()}`);
   await page.getByLabel('Rechnungsdatum').fill('2026-09-03');
   await page.getByLabel('Bruttobetrag').fill('60');
@@ -132,33 +137,79 @@ async function createExpenseWithPayment(page: Page): Promise<string> {
   return expenseId;
 }
 
-interface ExportedPackage { paths: string[]; uebersicht: string; zahlungen: string; manifest: Record<string, unknown>; zip: JSZip }
-async function exportMonth(page: Page, monthKey: string): Promise<ExportedPackage> {
+/*
+ * 02B — der Export laeuft ausschliesslich ueber den 06C-Weg: kontieren,
+ * Monat abschliessen, Paket erstellen. Kein Test-Hack, nur die echte Oberflaeche.
+ */
+interface ExportedPackage {
+  fileName: string;
+  paths: string[];
+  buchungen: string;
+  zahlungen: string;
+  offenePosten: string;
+  pruefbericht: string;
+  manifest: Record<string, unknown>;
+  zip: JSZip;
+}
+
+/** Kontiert einen Beleg ueber die echte Kontierungsflaeche (06A) und bestaetigt ihn. */
+async function kontieren(page: Page, route: string, prefix: 'invoice' | 'ausgabe', account: string, label: string): Promise<void> {
+  await page.goto(route, { waitUntil: 'domcontentloaded' });
+  const panel = page.getByTestId(`${prefix}-accounting`);
+  await expect(panel).toBeVisible({ timeout: 30_000 });
+  await panel.scrollIntoViewIfNeeded();
+  const start = page.getByTestId(`${prefix}-accounting-start`);
+  if (await start.count()) await start.click();
+  await page.getByTestId(`${prefix}-accounting-edit`).click();
+  await page.getByTestId(`${prefix}-accounting-input-account`).fill(account);
+  await page.getByTestId(`${prefix}-accounting-input-label`).fill(label);
+  await page.getByTestId(`${prefix}-accounting-save`).click();
+  await page.getByTestId(`${prefix}-accounting-confirm`).click();
+  await expect(page.getByTestId(`${prefix}-accounting-status`)).toContainText('Bestätigt');
+}
+
+async function openMonth(page: Page, monthKey: string): Promise<void> {
   await page.goto('/steuerberater', { waitUntil: 'domcontentloaded' });
   await expect(page.getByTestId('steuerberater-page')).toBeVisible({ timeout: 30_000 });
   await page.getByTestId('steuerberater-month-input').selectOption(monthKey);
-  await page.getByTestId('steuerberater-prepare-folder').click();
+  // Der alte Monatsmappen-Export existiert nicht mehr — in keinem Schritt.
+  await expect(page.getByTestId('steuerberater-export-button')).toHaveCount(0);
+}
+
+async function closeMonth(page: Page, monthKey: string): Promise<void> {
+  await openMonth(page, monthKey);
+  await page.getByTestId('accounting-period-close').click();
+  await page.getByTestId('accounting-period-close-confirm').click();
+  await expect(page.getByTestId('accounting-period-state')).toHaveText('Abgeschlossen', { timeout: 20_000 });
+}
+
+async function exportPackage(page: Page, monthKey: string, revision: number): Promise<ExportedPackage> {
+  await openMonth(page, monthKey);
   const downloadPromise = page.waitForEvent('download', { timeout: 60_000 });
-  await page.getByTestId('steuerberater-export-button').click();
+  await page.getByTestId('accounting-export-package').click();
   const download = await downloadPromise;
-  expect(download.suggestedFilename()).toBe(`OfficePilot_Steuerberater_${monthKey}.zip`);
-  await expect(page.getByTestId('steuerberater-export-result')).toBeVisible({ timeout: 30_000 });
-  const path = await download.path();
-  const bytes = await (await import('node:fs/promises')).readFile(path!);
+  const fileName = download.suggestedFilename();
+  expect(fileName).toBe(`Steuerberater_${monthKey}_Revision-${revision}.zip`);
+  const bytes = await (await import('node:fs/promises')).readFile((await download.path())!);
   const zip = await JSZip.loadAsync(bytes);
+  const root = `Steuerberater_${monthKey}_Revision-${revision}`;
   const paths = Object.keys(zip.files).filter((p) => !zip.files[p].dir).sort();
+  const read = (path: string) => zip.file(`${root}/${path}`)!.async('string');
   return {
+    fileName,
     paths,
     zip,
-    uebersicht: await zip.file(`${monthKey}/Uebersicht.csv`)!.async('string'),
-    zahlungen: await zip.file(`${monthKey}/Zahlungen.csv`)!.async('string'),
-    manifest: JSON.parse(await zip.file(`${monthKey}/Manifest.json`)!.async('string')),
+    buchungen: await read('01_Buchungsdaten/buchungen.csv'),
+    zahlungen: await read('01_Buchungsdaten/zahlungen.csv'),
+    offenePosten: await read('01_Buchungsdaten/offene_posten_monatsende.csv'),
+    pruefbericht: await read('00_Abschluss/pruefbericht.txt'),
+    manifest: JSON.parse(await read('00_Abschluss/manifest.json')),
   };
 }
 
-/** Fachlicher Bestand ohne Zeitstempel: sortierte CSV-Zeilen. */
+/** Fachlicher Bestand ohne Zeitstempel: sortierte CSV-Zeilen ohne Kopf- und Summenzeile. */
 function businessRows(csv: string): string[] {
-  return csv.replace(/^﻿/, '').split(/\r?\n/).filter(Boolean).slice(1).sort();
+  return csv.replace(/^﻿/, '').split(/\r?\n/).filter(Boolean).slice(1).filter((row) => !row.startsWith('Summe;')).sort();
 }
 
 async function openSecondDevice(browser: Browser, user: LocalDbUser): Promise<{ context: BrowserContext; page: Page }> {
@@ -168,60 +219,75 @@ async function openSecondDevice(browser: Browser, user: LocalDbUser): Promise<{ 
   return { context, page };
 }
 
-test.describe('FINANZ-CORE-DURABILITY-01D (lokal)', () => {
-  test('Owner exportiert Monatsmappe; Geraet 2 exportiert denselben Bestand; Member ohne Freigabe; leerer Monat', async ({ page, browser }) => {
-    test.setTimeout(420_000);
+test.describe('FINANZ-CORE-DURABILITY-01D / 02B (lokal)', () => {
+  test('06C: Owner schliesst ab und exportiert; Geraet 2 exportiert denselben Bestand; Storno netto 0; Member ohne Freigabe; leerer Monat', async ({ page, browser }) => {
+    test.setTimeout(480_000);
     await login(page, owner, true);
     const wsId = await workspaceIdOf(owner.id);
 
-    /* M — leerer Monat, sauber gemeldet, kein Download */
-    await page.goto('/steuerberater', { waitUntil: 'domcontentloaded' });
-    await page.getByTestId('steuerberater-month-input').selectOption('2025-01');
-    await page.getByTestId('steuerberater-prepare-folder').click();
-    await page.getByTestId('steuerberater-export-button').click();
-    await expect(page.getByTestId('steuerberater-export-empty')).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByTestId('steuerberater-export-result')).toHaveCount(0);
+    /* M — leerer, nicht abgeschlossener Monat: kein Exportknopf, der Grund steht da */
+    await openMonth(page, '2025-01');
+    await expect(page.getByTestId('accounting-export-blocker-not_closed')).toBeVisible();
+    await expect(page.getByTestId('accounting-export-package')).toHaveCount(0);
+    await expect(page.getByTestId('steuerberater-handover-bank')).toHaveText('Noch nicht verfügbar');
 
     /* Daten: Rechnung (heute = 2026-09), Ausgabe + Zahlung */
     const invoiceId = await createFinalizedInvoice(page);
     const expenseId = await createExpenseWithPayment(page);
+
+    /* 06A — beide Belege kontieren und bestaetigen */
+    await kontieren(page, `/rechnungen/${invoiceId}`, 'invoice', '8400', 'Erlöse 19 %');
+    await kontieren(page, `/ausgaben/${expenseId}`, 'ausgabe', '4930', 'Bürobedarf');
+
+    /* 06B — ohne Abschluss kein Paket; nach dem Abschluss genau der 06C-Weg */
+    await openMonth(page, '2026-09');
+    await expect(page.getByTestId('accounting-export-blocker-not_closed')).toBeVisible();
+    await closeMonth(page, '2026-09');
     await runSync(page);
 
-    /* J/A/D/G — Export auf Geraet 1 */
-    const pkg1 = await exportMonth(page, '2026-09');
-    expect(pkg1.paths).toContain('2026-09/Uebersicht.csv');
-    expect(pkg1.paths).toContain('2026-09/Zahlungen.csv');
-    expect(pkg1.paths).toContain('2026-09/Manifest.json');
-    expect(pkg1.paths).toContain('2026-09/Fehlende_Dokumente.txt');
-    const invoicePdfPath = pkg1.paths.find((p) => p.startsWith('2026-09/Ausgangsrechnungen/') && p.endsWith('.pdf'));
+    /* J/A/D/G — Paket auf Geraet 1 */
+    await openMonth(page, '2026-09');
+    // Fehlender Originalbeleg der Ausgabe: Paket moeglich, aber nicht „vollstaendig“.
+    await expect(page.getByTestId('steuerberater-handover')).toHaveAttribute('data-state', 'missing_proofs');
+    const pkg1 = await exportPackage(page, '2026-09', 1);
+    const root1 = 'Steuerberater_2026-09_Revision-1';
+    for (const file of ['01_Buchungsdaten/buchungen.csv', '01_Buchungsdaten/zahlungen.csv', '01_Buchungsdaten/offene_posten_monatsende.csv', '00_Abschluss/manifest.json', '00_Abschluss/pruefbericht.txt']) {
+      expect(pkg1.paths).toContain(`${root1}/${file}`);
+    }
+    const invoicePdfPath = pkg1.paths.find((p) => p.startsWith(`${root1}/02_Ausgangsrechnungen/`) && p.endsWith('.pdf'));
     expect(invoicePdfPath, 'Rechnungs-PDF fehlt').toBeTruthy();
     const pdfHead = await pkg1.zip.file(invoicePdfPath!)!.async('uint8array');
     expect(String.fromCharCode(...pdfHead.slice(0, 5))).toBe('%PDF-');
 
-    const rows1 = businessRows(pkg1.uebersicht);
+    const rows1 = businessRows(pkg1.buchungen);
     expect(rows1.some((r) => r.startsWith(`Ausgangsrechnung;${invoiceId};`))).toBe(true);
     const expenseRow = rows1.find((r) => r.startsWith(`Eingangsbeleg;${expenseId};`))!;
     expect(expenseRow).toBeTruthy();
     expect(expenseRow).toContain(';Baustoff Nord GmbH;');
-    expect(expenseRow).toContain(';bezahlt;60,00;nein;');
+    // Zahlungsstatus zum Monatsende: am 20.09. voll bezahlt.
+    expect(expenseRow).toMatch(/;Bezahlt;0,00$/);
     expect(rows1.some((r) => /;exp-\d{3};/.test(r))).toBe(false); // L — Demo-Ausgaben nie
     const pay1 = businessRows(pkg1.zahlungen);
     expect(pay1.some((r) => r.startsWith(`Eingangsbeleg;${expenseId};`) && r.includes(';2026-09-20;60,00;'))).toBe(true);
-    expect((pkg1.manifest.fehlendeDokumente as Array<{ id: string }>).map((e) => e.id)).toEqual([expenseId]);
-    await expect(page.getByTestId('steuerberater-export-missing-documents')).toBeVisible();
+    // Die unbezahlte Rechnung ist zum Monatsende ein offener Posten.
+    expect(businessRows(pkg1.offenePosten).some((r) => r.startsWith(`Forderung;${invoiceId};`))).toBe(true);
+    expect((pkg1.manifest.fehlendeNachweise as Array<{ id: string }>).map((e) => e.id)).toContain(expenseId);
+    expect(pkg1.manifest.uebergabestatus).toMatchObject({ vollstaendig: false, bankabgleich: 'nicht_verfuegbar' });
+    expect(pkg1.pruefbericht).toContain('Originalbeleg fehlt');
+    expect(pkg1.pruefbericht).toContain('Bankabgleich: noch nicht verfügbar');
 
-    /* K — Geraet 2 */
+    /* K — Geraet 2 exportiert denselben fachlichen Bestand (Abschluss und Kontierung aus der Cloud) */
     const device2 = await openSecondDevice(browser, owner);
     try {
-      const pkg2 = await exportMonth(device2.page, '2026-09');
-      expect(businessRows(pkg2.uebersicht)).toEqual(rows1);
+      const pkg2 = await exportPackage(device2.page, '2026-09', 1);
+      expect(businessRows(pkg2.buchungen)).toEqual(rows1);
       expect(businessRows(pkg2.zahlungen)).toEqual(pay1);
       expect(pkg2.paths).toEqual(pkg1.paths);
     } finally {
       await device2.context.close();
     }
 
-    /* 01D2 — Storno/Korrektur ueber den echten UI-Pfad */
+    /* 01D2 / 02B-Block 1 — Storno im selben Monat: Original + Storno = 0 (Regressionstest) */
     await page.goto(`/rechnungen/${invoiceId}`, { waitUntil: 'domcontentloaded' });
     // extern als versendet markieren (kein E-Mail-Dienst noetig) -> Storno wird zur Korrektur
     await page.getByTestId('invoice-sent-mark').scrollIntoViewIfNeeded();
@@ -240,21 +306,41 @@ test.describe('FINANZ-CORE-DURABILITY-01D (lokal)', () => {
     await page.getByTestId('invoice-cancel-submit').click();
     await expect(page.getByTestId('invoice-cancel-dialog')).toHaveCount(0, { timeout: 45_000 });
     await runSync(page);
-    const pkg3 = await exportMonth(page, '2026-09');
-    const rows3 = businessRows(pkg3.uebersicht);
+
+    // Der Storno aendert den abgeschlossenen Monat: bestehender Workflow — oeffnen, begruenden, neu abschliessen.
+    await openMonth(page, '2026-09');
+    await expect(page.getByTestId('steuerberater-handover')).toHaveAttribute('data-state', 'changed_after_close');
+    await expect(page.getByTestId('accounting-export-blocker-changed_after_close')).toBeVisible();
+    await page.getByTestId('accounting-period-reopen').click();
+    const reopenDialog = page.getByTestId('accounting-period-reopen-dialog');
+    await expect(reopenDialog).toBeVisible();
+    await reopenDialog.locator('textarea, input[type="text"]').first().fill('Rechnung storniert (Falscher Betrag)');
+    await page.getByTestId('accounting-period-reopen-confirm').click();
+    await closeMonth(page, '2026-09');
+    await expect(page.getByTestId('accounting-period-revision')).toContainText('2');
+    await runSync(page);
+
+    const pkg3 = await exportPackage(page, '2026-09', 2);
+    const rows3 = businessRows(pkg3.buchungen);
     const original = rows3.find((r) => r.startsWith(`Ausgangsrechnung;${invoiceId};`))!;
-    expect(original).toContain(';storniert;storniert;0,00;ja;Ausgangsrechnungen/');
-    const storno = rows3.find((r) => r.startsWith(`Rechnungsstorno;${invoiceId};`))!;
-    expect(storno, 'Rechnungsstorno-Zeile fehlt').toBeTruthy();
-    expect(storno).toContain(';-100,00;-19,00;-119,00;storno;storniert;0,00;ja;Stornos_Korrekturen/Korrektur_zu_');
-    const correctionPdf = pkg3.paths.find((p) => p.startsWith('2026-09/Stornos_Korrekturen/Korrektur_zu_') && p.endsWith('.pdf'));
+    // Belegart im Buchungsexport: „Storno Ausgangsrechnung“.
+    const storno = rows3.find((r) => r.startsWith(`Storno Ausgangsrechnung;${invoiceId};`))!;
+    expect(original, 'Originalzeile fehlt').toBeTruthy();
+    expect(storno, 'Rechnungsstorno-Zeile fehlt (Storno-ID-Kollision)').toBeTruthy();
+    expect(original).toContain(';Storniert;ja;');
+    expect(storno).toContain(`;${invoiceId}-Storno;`);
+    // Summe Original + Storno = 0 (keine Doppelzaehlung, keine verschluckte Stornozeile)
+    const brutto = (row: string) => Number(row.split(';')[7].replace('.', '').replace(',', '.'));
+    expect(brutto(original)).toBeGreaterThan(0);
+    expect(brutto(original) + brutto(storno)).toBe(0);
+    const correctionPdf = pkg3.paths.find((p) => p.includes('/04_Stornos_Gutschriften/Korrektur_zu_') && p.endsWith('.pdf'));
     expect(correctionPdf, 'Korrektur-PDF fehlt').toBeTruthy();
     const corrHead = await pkg3.zip.file(correctionPdf!)!.async('uint8array');
     expect(String.fromCharCode(...corrHead.slice(0, 5))).toBe('%PDF-');
-    expect((pkg3.manifest.counts as Record<string, number>).stornos).toBe(1);
-    // Summe Original + Storno = 0 (keine Doppelzaehlung)
-    const brutto = (row: string) => Number(row.split(';')[7].replace(',', '.'));
-    expect(brutto(original) + brutto(storno)).toBe(0);
+    // Die Kontrollsumme der Datei nimmt die stornierte Rechnung nicht mehr mit.
+    const summe = pkg3.buchungen.replace(/^﻿/, '').split(/\r?\n/).find((row) => row.startsWith('Summe;'))!;
+    const summeBrutto = Number(summe.split(';')[7].replace('.', '').replace(',', '.'));
+    expect(summeBrutto).toBeCloseTo(60, 2); // nur noch die Ausgabe
 
     /* I — Member: serverseitige Freigabe verweigert; Owner erlaubt */
     const { error: memberErr } = await admin().from('workspace_members').insert({ workspace_id: wsId, user_id: member.id, role: 'member', status: 'active' });

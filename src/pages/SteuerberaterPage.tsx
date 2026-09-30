@@ -9,16 +9,15 @@ import { getAccountingChecklist } from '../services/accounting/accountingOvervie
 import { AccountingPeriodPanel } from '../components/accounting/AccountingPeriodPanel';
 import { getAccountingPeriodState } from '../services/accounting/accountingPeriodService';
 import { AccountingExportPanel } from '../components/accounting/AccountingExportPanel';
+import { SteuerberaterHandoverPanel } from '../components/accounting/SteuerberaterHandoverPanel';
 import { evaluateAccountingExportReadiness } from '../services/accounting/accountingExportGateService';
 import { exportAccountingPackage } from '../services/accounting/accountingExportRunner';
-import { InlineNotice, ErrorState } from '../components/ui/States';
 import { Select } from '../components/ui/Select';
 import { ReadOnlyNotice } from '../components/ui/ReadOnlyNotice';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { resolveWorkspaceWriteAccess } from '../services/workspace/workspaceRoleService';
-import { exportMonatsmappe, type MonatsmappeExportResult } from '../services/steuerberater/monatsmappeExportService';
 import type { TranslationKey } from '../i18n';
 import {
   buildMonthKeyOptions,
@@ -26,21 +25,16 @@ import {
   getSteuerberaterMonthOverview,
 } from '../services/steuerberaterOverviewService';
 
-type FlowStep = 'overview' | 'review' | 'exported';
+type FlowStep = 'overview' | 'review';
 
 /*
- * FINANZ-CORE-DURABILITY-01D — der Export ist echt: Modell aus den kanonischen
- * Finanzdaten, ZIP mit Uebersicht.csv/Zahlungen.csv/Belegen, Download. Jeder
- * Ausgang wird benannt; ein Mitglied ohne Finanzrecht sieht keinen Export.
+ * P0/P1-INTEGRITAET 01B / P3 — es gibt genau einen Exportweg: die Übergabe aus
+ * STEUERBERATER-06C (`AccountingExportPanel` → `exportAccountingPackage`),
+ * die den gültigen Monatsabschluss verlangt und das Gate beim Klick erneut
+ * prüft. Der frühere Monatsmappen-Export im Seitenkopf lief an diesem Gate
+ * vorbei und ist entfernt. „Monatsmappe vorbereiten" zeigt weiterhin nur die
+ * Belegübersicht; ein Mitglied ohne Finanzrecht sieht keinen Export.
  */
-const EXPORT_OUTCOME_KEY: Record<Exclude<MonatsmappeExportResult['outcome'], 'exported'>, TranslationKey> = {
-  empty: 'steuerberater.export.empty',
-  forbidden: 'steuerberater.export.forbidden',
-  invalid_month: 'steuerberater.export.invalidMonth',
-  data_unavailable: 'steuerberater.export.dataUnavailable',
-  document_load_failed: 'steuerberater.export.documentLoadFailed',
-  export_failed: 'steuerberater.export.failed',
-};
 
 export function SteuerberaterPage() {
   const { translate, language } = useApp();
@@ -59,26 +53,15 @@ export function SteuerberaterPage() {
   const [selectedMonthKey, setSelectedMonthKey] = useState(defaultMonthKey);
   /* STEUERBERATER-06B — laesst den Monatsstand neu ableiten; kein zweiter Bestand. */
   const [periodToken, setPeriodToken] = useState(0);
+  /* 02B-FINAL — das letzte Exportergebnis überlebt den Neuaufbau des Panels. */
+  const [exportFeedback, setExportFeedback] = useState<{ monthKey: string; fileName: string | null } | null>(null);
   const [step, setStep] = useState<FlowStep>('overview');
-  const [isExporting, setIsExporting] = useState(false);
-  const [exportResult, setExportResult] = useState<MonatsmappeExportResult | null>(null);
-
-  const handleExport = async () => {
-    if (isExporting) return;
-    setIsExporting(true);
-    setExportResult(null);
-    try {
-      const result = await exportMonatsmappe({ monthKey: selectedMonthKey, userId: user?.id });
-      setExportResult(result);
-      if (result.outcome === 'exported') setStep('exported');
-    } finally {
-      setIsExporting(false);
-    }
-  };
 
   const overview = useMemo(
     () => getSteuerberaterMonthOverview(new Date(), locale, selectedMonthKey),
-    [selectedMonthKey, locale],
+    // 02B — der Übergabestatus folgt Abschluss und Export (`periodToken`).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [selectedMonthKey, locale, periodToken],
   );
 
   const formatOptionLabel = (monthKey: string) =>
@@ -114,10 +97,6 @@ export function SteuerberaterPage() {
             <Button data-testid="steuerberater-prepare-folder" onClick={() => setStep('review')}>
               {translate('steuerberater.prepareFolderButton')}
             </Button>
-          ) : financeAccess.canWrite ? (
-            <Button disabled={isExporting} data-testid="steuerberater-export-button" onClick={() => void handleExport()}>
-              {translate('steuerberater.exportButton')}
-            </Button>
           ) : undefined
         }
       />
@@ -131,7 +110,6 @@ export function SteuerberaterPage() {
           onChange={(e) => {
             setSelectedMonthKey(e.target.value);
             setStep('overview');
-            setExportResult(null);
           }}
           data-testid="steuerberater-month-input"
         >
@@ -211,6 +189,7 @@ export function SteuerberaterPage() {
         title={translate('accountingExport.title')}
         testId="steuerberater-export"
       >
+        <SteuerberaterHandoverPanel status={overview.handover} translate={translate} />
         <AccountingExportPanel
           key={`${selectedMonthKey}:${periodToken}`}
           readiness={evaluateAccountingExportReadiness(selectedMonthKey)}
@@ -219,14 +198,18 @@ export function SteuerberaterPage() {
               monthKey: selectedMonthKey,
               userId: user?.id,
             });
+            const fileName = result.outcome === 'exported' ? result.fileName : null;
+            setExportFeedback({ monthKey: selectedMonthKey, fileName });
             setPeriodToken((value) => value + 1);
-            return result.outcome === 'exported' ? result.fileName : null;
+            return fileName;
           }}
           translate={translate}
+          canExport={financeAccess.canWrite}
+          lastResult={exportFeedback?.monthKey === selectedMonthKey ? exportFeedback : null}
         />
       </DetailSection>
 
-      {step === 'review' || step === 'exported' ? (
+      {step === 'review' ? (
         <>
           <DetailSection title={translate('steuerberater.documentsIncluded')} testId="steuerberater-documents">
             {overview.documents.length === 0 ? (
@@ -250,6 +233,12 @@ export function SteuerberaterPage() {
             </DetailSection>
           ) : null}
 
+          {!financeAccess.canWrite ? (
+            <section data-testid="steuerberater-export-section">
+              <ReadOnlyNotice message={translate('steuerberater.export.forbidden')} testId="steuerberater-export-forbidden" />
+            </section>
+          ) : null}
+
           {overview.unclearDocuments.length > 0 ? (
             <DetailSection title={translate('steuerberater.unclearTitle')} testId="steuerberater-unclear">
               <RowList>
@@ -260,67 +249,6 @@ export function SteuerberaterPage() {
             </DetailSection>
           ) : null}
 
-          {!financeAccess.canWrite ? (
-            <section data-testid="steuerberater-export-section">
-              <ReadOnlyNotice message={translate('steuerberater.export.forbidden')} testId="steuerberater-export-forbidden" />
-            </section>
-          ) : null}
-
-          {exportResult && exportResult.outcome !== 'exported' ? (
-            <ErrorState
-              title={translate(EXPORT_OUTCOME_KEY[exportResult.outcome])}
-              description={
-                exportResult.outcome === 'document_load_failed' ? (
-                  <ul className="steuerberater-mark-list">
-                    {exportResult.failed.map((entry) => (
-                      <li key={`${entry.id}-${entry.fileName}`}>
-                        {entry.belegnummer || entry.id} · {entry.fileName} · {entry.detail}
-                      </li>
-                    ))}
-                  </ul>
-                ) : 'detail' in exportResult && exportResult.detail ? (
-                  exportResult.detail
-                ) : undefined
-              }
-              testId={`steuerberater-export-${exportResult.outcome}`}
-            />
-          ) : null}
-
-          {step === 'exported' && exportResult?.outcome === 'exported' ? (
-            <InlineNotice tone="success" title={translate('steuerberater.packageReady')} testId="steuerberater-export-result">
-              <p>{translate('steuerberater.packageReadyDesc').replace('{month}', overview.monthLabel)}</p>
-              <p data-testid="steuerberater-export-summary">
-                {translate('steuerberater.export.summary')
-                  .replace('{invoices}', String(exportResult.summary.ausgangsrechnungen))
-                  .replace('{expenses}', String(exportResult.summary.eingangsbelege))
-                  .replace('{stornos}', String(exportResult.summary.stornos))
-                  .replace('{payments}', String(exportResult.summary.zahlungen))
-                  .replace('{documents}', String(exportResult.summary.dokumente))}
-              </p>
-              <p className="steuerberater-export-filename">{exportResult.summary.filename}</p>
-              {exportResult.summary.fehlendeDokumente.length > 0 ? (
-                <ul className="steuerberater-mark-list" data-testid="steuerberater-export-missing-documents">
-                  {exportResult.summary.fehlendeDokumente.map((entry) => (
-                    <li key={entry.id} className="steuerberater-mark-list__item steuerberater-mark-list__item--missing">
-                      {translate('steuerberater.export.missingDocument')} · {entry.belegnummer || entry.id}
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-              {exportResult.summary.stornosOhneDatum.length > 0 ? (
-                <ul className="steuerberater-mark-list" data-testid="steuerberater-export-stornos-ohne-datum">
-                  {exportResult.summary.stornosOhneDatum.map((entry) => (
-                    <li key={entry.id} className="steuerberater-mark-list__item steuerberater-mark-list__item--unclear">
-                      {translate('steuerberater.export.stornoWithoutDate')} · {entry.belegnummer || entry.id}
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-              <p className="steuerberater-no-send" data-testid="steuerberater-no-direct-send">
-                {translate('steuerberater.noDirectSend')}
-              </p>
-            </InlineNotice>
-          ) : null}
         </>
       ) : null}
 

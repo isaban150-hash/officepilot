@@ -290,7 +290,8 @@ export function executeRefreshPendingAtom(
   options: SmartIntakeAtomOptions,
   successSteps: WorkflowExecutionStepId[],
 ): PendingSummary {
-  const pendingSummary = scanPendingItems(options.today).summary;
+  // 02B — ausdrücklicher Arbeitsschritt „Offene Punkte aktualisieren“: darf Aufgaben anlegen.
+  const pendingSummary = scanPendingItems(options.today, { syncTasks: true }).summary;
   markIntakeSuccess(successSteps, 'refresh_pending');
   return pendingSummary;
 }

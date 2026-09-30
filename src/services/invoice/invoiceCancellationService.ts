@@ -17,6 +17,7 @@ import {
   rpcCancelWorkspaceInvoice,
 } from './workspaceInvoiceCloudService';
 import { projectInvoiceCorrectionDocument } from './invoiceCorrectionArchive';
+import { reconcileInvoicePaymentTasks } from './invoicePaymentTaskSync';
 import type { VorgangInvoice } from '../../types/models';
 
 /**
@@ -213,6 +214,13 @@ export async function cancelFinalizedInvoice(input: {
     }
     correctionArchiveDocumentId = archived.documentId;
     invoice = getVorgangInvoice(input.vorgangId, input.invoiceId) ?? invoice;
+  }
+
+  // P0/P1-INTEGRITAET 01B / P1 — eine stornierte Rechnung ist keine offene Forderung mehr.
+  try {
+    reconcileInvoicePaymentTasks({ invoiceId: input.invoiceId });
+  } catch (error) {
+    console.warn('[storno] Überfälligkeitsaufgabe konnte nicht geschlossen werden', error);
   }
 
   return {

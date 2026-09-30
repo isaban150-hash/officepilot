@@ -1224,12 +1224,28 @@ export type InvoicePaymentStatus =
   | 'ueberfaellig'
   | 'storniert';
 
+/**
+ * 02B — die Zahlungsart, optional. `bank` (Überweisung, Lastschrift, Karte),
+ * `cash` (bar), `other`. Fehlt sie, ist sie schlicht nicht erfasst — ein
+ * Altbestand wird nie als Bank angenommen. Eine Barzahlung gilt sofort als
+ * Zahlung; ein Bankabgleich ist dafür nicht nötig (und existiert noch nicht).
+ */
+export type PaymentMethod = 'bank' | 'cash' | 'other';
+
+export const PAYMENT_METHODS: readonly PaymentMethod[] = ['bank', 'cash', 'other'];
+
+export function normalizePaymentMethod(value: unknown): PaymentMethod | undefined {
+  return value === 'bank' || value === 'cash' || value === 'other' ? value : undefined;
+}
+
 export interface InvoicePayment {
   id: string;
   date: string;
   amount: number;
   reference?: string;
   note?: string;
+  /** 02B — optional; siehe `PaymentMethod`. */
+  method?: PaymentMethod;
   createdAt: string;
 }
 
@@ -1238,6 +1254,7 @@ export interface InvoicePaymentInput {
   amount: number;
   reference?: string;
   note?: string;
+  method?: PaymentMethod;
 }
 
 export interface PaymentSummary {

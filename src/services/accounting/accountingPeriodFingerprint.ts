@@ -15,10 +15,14 @@
  * nicht die Reihenfolge übernommen, in der die Daten zufällig ankommen.
  */
 import type {
+  AccountingPeriodClosure,
+  AccountingPeriodFingerprintVersion,
   AccountingPeriodManifest,
   AccountingPeriodManifestEntry,
+  AccountingPeriodManifestPayment,
 } from '../../types/accountingPeriod';
 import type { AccountingAssignment } from '../../types/accounting';
+import { belegExportKey } from '../steuerberater/monatsmappeModelService';
 import type { MonatsmappeBeleg, MonatsmappeModel } from '../steuerberater/monatsmappeModelService';
 
 /** Dieselbe Zuordnung wie in der Monatsprüfliste — eine Regel, nicht zwei. */
@@ -43,6 +47,12 @@ export function buildPeriodManifest(
   model: MonatsmappeModel,
   assignments: readonly AccountingAssignment[],
   chartOfAccounts: string,
+  /**
+   * 02B — Version 1 bildet exakt die alte Semantik nach (ein Eintrag je
+   * Quelle, Stornozustand unabhängig vom Stornomonat, keine Zahlungen), damit
+   * alte Abschlüsse nach ihrer eigenen Logik geprüft werden.
+   */
+  version: AccountingPeriodFingerprintVersion = 2,
 ): AccountingPeriodManifest {
   const bySource = new Map<string, AccountingAssignment>();
   for (const assignment of assignments) {
@@ -51,19 +61,23 @@ export function buildPeriodManifest(
 
   const entries: AccountingPeriodManifestEntry[] = [];
   /*
-   * Ein Beleg genau einmal. Eine stornierte Rechnung steht in der Monatsmappe
-   * unter Umständen als Rechnung **und** als Storno; für den Abschluss ist sie
-   * derselbe Beleg.
+   * Ein Beleg genau einmal — je Exportidentität. 02B: Original und Storno
+   * derselben Rechnung im selben Monat sind zwei Buchungen (+ und −), nicht
+   * ein Beleg. Dieselbe Identität verwendet der Buchungsexport. Version 1
+   * dedupliziert wie früher je Quelle.
    */
   const gesehen = new Set<string>();
 
   for (const beleg of [...model.ausgangsrechnungen, ...model.eingangsbelege, ...model.stornos]) {
     const sourceType = sourceTypeOf(beleg);
-    const key = `${sourceType}:${beleg.id}`;
+    const sourceKey = `${sourceType}:${beleg.id}`;
+    const key = version === 1 ? sourceKey : belegExportKey(beleg);
     if (gesehen.has(key)) continue;
     gesehen.add(key);
 
-    const assignment = bySource.get(key);
+    const assignment = bySource.get(sourceKey);
+    /* Version 1 kannte den Stornomonat nicht: storniert ist storniert. */
+    const belegStatus = version === 1 && beleg.spaeterStorniertAm ? 'storniert' : beleg.status;
     entries.push({
       sourceType,
       sourceId: beleg.id,
@@ -72,11 +86,12 @@ export function buildPeriodManifest(
       brutto: round(beleg.brutto),
       netto: round(beleg.netto),
       steuer: round(beleg.steuer),
-      belegStatus: beleg.status,
+      belegStatus,
       accountNumber: assignment?.accountNumber.trim() ?? '',
       taxTreatment: assignment?.taxTreatment ?? '',
       bookingText: assignment?.bookingText.trim() ?? '',
       assignmentStatus: assignment?.status ?? 'none',
+      ...(version === 1 ? {} : { belegart: beleg.belegart }),
     });
   }
 
@@ -88,10 +103,47 @@ export function buildPeriodManifest(
   entries.sort(
     (a, b) =>
       a.sourceType.localeCompare(b.sourceType) ||
-      a.sourceId.localeCompare(b.sourceId),
+      a.sourceId.localeCompare(b.sourceId) ||
+      (a.belegart ?? '').localeCompare(b.belegart ?? ''),
+  );
+
+  if (version === 1) {
+    return {
+      monthKey: model.monthKey,
+      chartOfAccounts,
+      documentCount: entries.length,
+      totalBrutto: round(entries.reduce((sum, entry) => sum + entry.brutto, 0)),
+      totalNetto: round(entries.reduce((sum, entry) => sum + entry.netto, 0)),
+      totalSteuer: round(entries.reduce((sum, entry) => sum + entry.steuer, 0)),
+      entries,
+    };
+  }
+
+  /*
+   * P0/P1-INTEGRITAET 01B / P2 — Zahlungen, deren Zahlungsdatum im Monat
+   * liegt (dieselbe Auswahl wie die Monatsmappe). Eine neue Zahlung, eine
+   * Rücknahme oder eine Teilzahlung im Monat ändert den Stand; eine Zahlung im
+   * Folgemonat nicht.
+   */
+  const payments: AccountingPeriodManifestPayment[] = [
+    ...(model.zahlungenAusgang ?? []),
+    ...(model.zahlungenEingang ?? []),
+  ].map((zahlung) => ({
+    sourceType: zahlung.belegart === 'eingangsbeleg' ? ('expense' as const) : ('invoice' as const),
+    sourceId: zahlung.belegId,
+    paymentId: zahlung.zahlungId,
+    datum: zahlung.datum,
+    betrag: round(zahlung.betrag),
+  }));
+  payments.sort(
+    (a, b) =>
+      a.sourceType.localeCompare(b.sourceType) ||
+      a.sourceId.localeCompare(b.sourceId) ||
+      a.paymentId.localeCompare(b.paymentId),
   );
 
   return {
+    fingerprintVersion: 2,
     monthKey: model.monthKey,
     chartOfAccounts,
     documentCount: entries.length,
@@ -99,7 +151,18 @@ export function buildPeriodManifest(
     totalNetto: round(entries.reduce((sum, entry) => sum + entry.netto, 0)),
     totalSteuer: round(entries.reduce((sum, entry) => sum + entry.steuer, 0)),
     entries,
+    payments,
   };
+}
+
+/** Die Algorithmusversion eines Manifests; ohne Angabe Version 1. */
+export function manifestFingerprintVersion(manifest: AccountingPeriodManifest): AccountingPeriodFingerprintVersion {
+  return manifest.fingerprintVersion === 2 ? 2 : 1;
+}
+
+/** Die Algorithmusversion, mit der ein gespeicherter Abschluss entstand. */
+export function closureFingerprintVersion(closure: AccountingPeriodClosure): AccountingPeriodFingerprintVersion {
+  return manifestFingerprintVersion(closure.manifest) === 2 || closure.fingerprint.startsWith('p2:') ? 2 : 1;
 }
 
 /**
@@ -119,6 +182,7 @@ export function buildPeriodCanonicalText(manifest: AccountingPeriodManifest): st
     `steuer=${manifest.totalSteuer.toFixed(2)}`,
   ].join('|');
 
+  const version = manifestFingerprintVersion(manifest);
   const rows = manifest.entries.map((entry) =>
     [
       entry.sourceType,
@@ -133,10 +197,22 @@ export function buildPeriodCanonicalText(manifest: AccountingPeriodManifest): st
       entry.taxTreatment,
       entry.bookingText,
       entry.assignmentStatus,
+      // 02B — ab Version 2 gehört die Belegart zur Identität des Eintrags.
+      ...(version === 2 ? [entry.belegart ?? ''] : []),
     ].join('\u0001'),
   );
 
-  return [head, ...rows].join('\n');
+  if (version === 1) {
+    return [head, ...rows].join('\n');
+  }
+
+  // Version 2: Kopfzeile und Belegzeilen wie bisher, danach die Zahlungen des Monats.
+  const paymentRows = (manifest.payments ?? []).map((payment) =>
+    ['payment', payment.sourceType, payment.sourceId, payment.paymentId, payment.datum, payment.betrag.toFixed(2)].join(
+      '\u0001',
+    ),
+  );
+  return [`v=2|${head}`, ...rows, ...paymentRows].join('\n');
 }
 
 /**
@@ -158,5 +234,6 @@ export function buildPeriodFingerprint(manifest: AccountingPeriodManifest): stri
     hash ^= text.charCodeAt(index);
     hash = Math.imul(hash, 16777619);
   }
-  return `p1:${(hash >>> 0).toString(16)}:${text.length}`;
+  const prefix = manifestFingerprintVersion(manifest) === 2 ? 'p2' : 'p1';
+  return `${prefix}:${(hash >>> 0).toString(16)}:${text.length}`;
 }

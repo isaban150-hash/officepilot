@@ -19,6 +19,7 @@ import {
 import { getCompanySession, hasActiveCompanyContext } from './companySessionService';
 import { getVorgangInvoice } from '../vorgangService';
 import { buildLegalNotices } from '../invoiceTaxService';
+import { translateWorkflowMessage } from './workflowKnowledgeResolver';
 
 function summarizeAnalysis(analysis: FinanceAnalysis): FinanceAnalysisSummary {
   const completedSteps = analysis.steps
@@ -47,6 +48,15 @@ function formatStepLine(stepId: FinanceStepId, status: FinanceStepStatus): strin
   return `${prefix} ${getFinanceStepLabelDe(stepId)}`;
 }
 
+/**
+ * P0/P1-INTEGRITAET 01B / P4 — ein Finanz-Schlüssel wird übersetzt; fertiger
+ * Text bleibt, wie er ist. Die Antwortkarte übersetzt selbst nur `brain.*`.
+ */
+function financeNoteText(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  return value.startsWith('financeIntelligence.') ? translateWorkflowMessage(value) : value;
+}
+
 function buildFinanceBullets(analysis: FinanceAnalysis): string[] {
   const bullets: string[] = [];
 
@@ -55,17 +65,26 @@ function buildFinanceBullets(analysis: FinanceAnalysis): string[] {
     if (line) bullets.push(line);
   }
 
+  /*
+   * P0/P1-INTEGRITAET 01B / P4 — Hinweise und Empfehlungen tragen
+   * Übersetzungsschlüssel mit Parametern; in die sichtbare Antwort gehört der
+   * übersetzte Text (wie bei `workflowKnowledgeResolver`), nie der Schlüssel.
+   */
   for (const risk of analysis.risks.slice(0, 3)) {
-    bullets.push(`⚠ ${risk.messageKey}`);
+    bullets.push(`⚠ ${translateWorkflowMessage(risk.messageKey, risk.params)}`);
   }
 
   const top = analysis.recommendations[0];
   if (top) {
-    bullets.push(`→ ${top.messageKey}`);
+    bullets.push(`→ ${translateWorkflowMessage(top.messageKey, top.params)}`);
   }
 
   if (analysis.datevRelevantCount && analysis.datevRelevantCount > 0) {
-    bullets.push('financeIntelligence.datev.markForAccounting');
+    bullets.push(
+      translateWorkflowMessage('financeIntelligence.datev.markForAccounting', {
+        count: analysis.datevRelevantCount,
+      }),
+    );
   }
 
   return bullets.slice(0, 12);
@@ -105,10 +124,11 @@ function buildFinanceAnswer(
               : '/offene-rechnungen',
     },
     suggestedNextSteps: recommendationsToSteps(analysis),
-    uncertaintyNote:
+    uncertaintyNote: financeNoteText(
       uncertaintyNote ??
-      analysis.uncertaintyNote ??
-      (analysis.risks.length > 0 ? 'financeIntelligence.uncertainty.reviewRecommended' : undefined),
+        analysis.uncertaintyNote ??
+        (analysis.risks.length > 0 ? 'financeIntelligence.uncertainty.reviewRecommended' : undefined),
+    ),
   };
 }
 
@@ -128,10 +148,11 @@ function buildTaxAnswer(
     assistantAnswer: {
       title: titleKey,
       summary,
-      bullets,
+      // P0/P1-INTEGRITAET 01B / P4 — übersetzt, nicht als Schlüssel.
+      bullets: bullets.map((key) => translateWorkflowMessage(key)),
       actions: [],
     },
-    uncertaintyNote: 'financeIntelligence.tax.noAdvice',
+    uncertaintyNote: financeNoteText('financeIntelligence.tax.noAdvice'),
   };
 }
 

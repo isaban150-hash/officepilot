@@ -1,3 +1,4 @@
+import { normalizePaymentMethod } from '../types/models';
 import {
   addPaymentToExpense as addPaymentToExpenseStore,
   getExpenseFromStoreById,
@@ -134,12 +135,15 @@ export function recordExpensePayment(
    * Kennungen bleiben unangetastet — eine gebuchte Zahlung ist ein Beleg, kein
    * Formatproblem.
    */
+  const method = normalizePaymentMethod(input.method);
   const payment: ExpensePayment = {
     id: generateUuid(),
     date: input.date.slice(0, 10),
     amount: input.amount,
     reference: input.reference?.trim() || undefined,
     note: input.note?.trim() || undefined,
+    // 02B — optional; ohne Angabe bleibt sie nicht erfasst.
+    ...(method ? { method } : {}),
     createdAt: new Date().toISOString(),
   };
 

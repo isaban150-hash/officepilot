@@ -65,6 +65,7 @@ async function applyCloudPaymentsToVorgaenge(
       paidOn: row.paidOn,
       reference: row.reference,
       note: row.note,
+      method: row.method,
       createdAt: row.createdAt,
       reversedAt: row.reversedAt,
     });

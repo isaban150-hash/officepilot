@@ -116,13 +116,19 @@ describe('V1-A — Storno', () => {
 });
 
 describe('V1-A — Monatsmappe (D)', () => {
-  it('Original im Belegmonat als storniert, Storno-Beleg im Stornomonat, Summen ohne Doppelzählung', () => {
+  it('Original im Belegmonat aktiv (Storno erst im Folgemonat), Storno-Beleg im Stornomonat, Summen ohne Doppelzählung', () => {
     const exp = booked();
     cancelExpense(exp.id, 'Beleg doppelt erfasst');
     const cancelledExpense = { ...getExpenseById(exp.id)!, cancelledAt: '2026-10-03T09:00:00.000Z' };
 
     const sept = monatsmappe('2026-09', [cancelledExpense]);
-    expect(sept.eingangsbelege.map((b) => [b.id, b.status, b.zahlungsstatus])).toEqual([[exp.id, 'storniert', 'storniert']]);
+    /*
+     * 02B — ein Storno im Folgemonat ist ein Vorgang des Stornomonats. Im
+     * September war der Beleg aktiv (und unbezahlt); der Vormonat ändert sich
+     * nicht rückwirkend.
+     */
+    expect(sept.eingangsbelege.map((b) => [b.id, b.status, b.spaeterStorniertAm])).toEqual([[exp.id, 'aktiv', '2026-10-03']]);
+    expect(sept.eingangsbelege[0]!.zahlungsstatus).not.toBe('storniert');
     expect(sept.stornos.filter((s) => s.belegart === 'ausgabenstorno')).toHaveLength(0);
     expect(sept.eingangsbelege[0]!.brutto).toBe(119);
     expect(sept.eingangsbelege[0]!.zahlungssumme).toBe(0);

@@ -34,11 +34,13 @@ import { resetStorageScopeForTests } from '../services/storage/storageScopeServi
 import { resetDocumentWorkResultStoreForTests } from '../services/documentWorkResultStoreService';
 import { resetUiSessionStoreForTests } from '../services/uiSession/uiSessionStore';
 import { resetUiSessionLiveState } from '../services/uiSession/uiSessionLiveState';
+import { resetDailyInvoicePaymentTaskReconcileForTests } from '../services/invoice/invoicePaymentTaskSync';
 
 export function resetTestStores(): void {
   resetStorageScopeForTests();
   resetUiSessionStoreForTests();
   resetUiSessionLiveState();
+  resetDailyInvoicePaymentTaskReconcileForTests();
   hydrateInboxStore([]);
   hydrateVorgangStore([]);
   hydrateTaskStore([]);

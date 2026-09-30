@@ -23,6 +23,12 @@ import {
   type MonatsmappeInput,
   type MonatsmappeModel,
 } from './steuerberater/monatsmappeModelService';
+import { evaluateAccountingExportReadiness } from './accounting/accountingExportGateService';
+import {
+  countHandoverOpenSteps,
+  deriveSteuerberaterHandoverStatus,
+  type SteuerberaterHandoverStatus,
+} from './steuerberater/steuerberaterHandoverStatus';
 
 const TAX_RELEVANT_KINDS = new Set([
   'eingangsrechnung',
@@ -63,13 +69,27 @@ export interface SteuerberaterMonthOverview {
   isComplete: boolean;
   isDefaultMonth: boolean;
   completenessPercent: number;
-  /** `empty`: keine Belege; `open`: Belege, aber fehlend/unklar; `ready`: vollständig. */
+  /**
+   * `empty`: keine Belege; `ready`: Übergabe vollständig (gültig
+   * abgeschlossen, keine fehlenden Nachweise, keine unklaren Fälle); sonst
+   * `open`. 02B: dieselbe Quelle wie das 06C-Gate.
+   */
   state: SteuerberaterMonthState;
+  /** 02B — der gemeinsame Übergabestatus (Abschluss, Gate, Lücken, Bank). */
+  handover: SteuerberaterHandoverStatus;
   invoiceCount: number;
   expenseCount: number;
   stornoCount: number;
-  /** Offene Punkte gesamt (fehlende Unterlagen/Dokumente + unklare Eingangsposten). */
+  /** Offene Schritte bis zur vollständigen Übergabe (Abschluss, Lücken, unklare Fälle). */
   openCount: number;
+}
+
+/** 02B — die Befunde eines Monats, die Übersicht und Steuerberater-Paket gemeinsam nutzen. */
+export interface SteuerberaterMonthFindings {
+  input: MonatsmappeInput;
+  model: MonatsmappeModel;
+  unclearDocuments: SteuerberaterDocumentEntry[];
+  missingItems: { id: string; title: string }[];
 }
 
 function monthKeyFromDate(iso: string): string {
@@ -175,6 +195,31 @@ function collectMissingForMonth(monthKey: string, model: MonatsmappeModel): { id
   return missing;
 }
 
+export function collectSteuerberaterMonthFindings(monthKey: string): SteuerberaterMonthFindings {
+  const input = collectMonatsmappeInput(monthKey);
+  const model = buildMonatsmappeModel(input);
+  const unclearDocuments = collectUnclearInboxEntries(bookedInboxIds(model, input)).filter(
+    (doc) => doc.monthKey === monthKey,
+  );
+  return { input, model, unclearDocuments, missingItems: collectMissingForMonth(monthKey, model) };
+}
+
+/**
+ * 02B — der Übergabestatus eines Monats. Unklar sind nicht gebuchte
+ * steuerrelevante Eingangsposten und Stornos ohne Datum; fehlend sind Belege
+ * ohne Original und offene Steuerberater-Unterlagen.
+ */
+export function getSteuerberaterHandoverStatus(
+  monthKey: string,
+  findings: SteuerberaterMonthFindings = collectSteuerberaterMonthFindings(monthKey),
+): SteuerberaterHandoverStatus {
+  return deriveSteuerberaterHandoverStatus({
+    readiness: evaluateAccountingExportReadiness(monthKey),
+    unclearCases: findings.unclearDocuments.length + findings.model.stornosOhneDatum.length,
+    missingProofs: findings.missingItems.length,
+  });
+}
+
 export function getSteuerberaterMonthOverview(
   referenceDate: Date | string = new Date(),
   locale = 'de-DE',
@@ -183,21 +228,24 @@ export function getSteuerberaterMonthOverview(
   const defaultMonthKey = getDefaultSteuerberaterMonthKey(referenceDate);
   const monthKey = monthKeyOverride ?? defaultMonthKey;
   const [year, month] = monthKey.split('-').map(Number);
-  const input = collectMonatsmappeInput(monthKey);
-  const model = buildMonatsmappeModel(input);
+  const findings = collectSteuerberaterMonthFindings(monthKey);
+  const { model } = findings;
 
   /* Belege = exakt das, was die Monatsmappe enthält. */
   const documents = [...model.ausgangsrechnungen, ...model.eingangsbelege, ...model.stornos].map((beleg) =>
     belegEntry(beleg, monthKey),
   );
-  const unclearDocuments = collectUnclearInboxEntries(bookedInboxIds(model, input)).filter(
-    (doc) => doc.monthKey === monthKey,
-  );
-  const missingItems = collectMissingForMonth(monthKey, model);
+  const { unclearDocuments, missingItems } = findings;
   const missingCount = missingItems.length;
   const documentCount = documents.length;
-  const openCount = missingCount + unclearDocuments.length;
-  const isComplete = documentCount > 0 && openCount === 0;
+  /*
+   * 02B — „vollständig“ heisst: gültig abgeschlossen, Paket erlaubt, keine
+   * Lücken. Vorher genügten Belege ohne Lücken; das Badge sagte dann
+   * „vollständig“, während das Gate die Übergabe noch sperrte.
+   */
+  const handover = getSteuerberaterHandoverStatus(monthKey, findings);
+  const openCount = countHandoverOpenSteps(handover);
+  const isComplete = documentCount > 0 && handover.packageComplete;
   const state: SteuerberaterMonthState = documentCount === 0 ? 'empty' : isComplete ? 'ready' : 'open';
   const completenessPercent =
     documentCount === 0 ? 0 : Math.min(100, Math.round((documentCount / (documentCount + openCount)) * 100));
@@ -216,6 +264,7 @@ export function getSteuerberaterMonthOverview(
     isDefaultMonth: monthKey === defaultMonthKey,
     completenessPercent,
     state,
+    handover,
     invoiceCount: model.ausgangsrechnungen.length,
     expenseCount: model.eingangsbelege.length,
     stornoCount: model.stornos.length,

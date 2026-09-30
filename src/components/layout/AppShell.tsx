@@ -1,5 +1,5 @@
 import { Link, Outlet, useLocation } from 'react-router-dom';
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { useMainScrollRestoration } from './useMainScrollRestoration';
 import { BetaModeBanner } from './BetaModeBanner';
 import { PersistenceFailureBanner } from '../system/PersistenceFailureBanner';
@@ -15,6 +15,7 @@ import { UiSessionRecoveryHost } from '../system/UiSessionRecoveryHost';
 import { useApp } from '../../context/AppContext';
 import { Icon } from '../ui/Icon';
 import { ASSISTENT_ROUTE } from './navConfig';
+import { runDailyInvoicePaymentTaskReconcile } from '../../services/invoice/invoicePaymentTaskSync';
 
 export function AppShell() {
   const location = useLocation();
@@ -29,6 +30,19 @@ export function AppShell() {
   /* 01D — Scrollregel: neue Seite oben, Rückweg an gemerkter Position. */
   const mainRef = useRef<HTMLElement | null>(null);
   useMainScrollRestoration(mainRef);
+
+  /*
+   * 02B — einmal je Tag beim App-Start: Überfälligkeitsaufgaben mit dem
+   * Forderungsstand abgleichen. Die Seiten selbst (Heute, Eingang, Aufgaben)
+   * zeigen nur an und legen beim Rendern nichts mehr an.
+   */
+  useEffect(() => {
+    try {
+      runDailyInvoicePaymentTaskReconcile();
+    } catch (error) {
+      console.warn('[tasks] täglicher Abgleich der Überfälligkeitsaufgaben fehlgeschlagen', error);
+    }
+  }, []);
 
   return (
     <div className="app-shell" data-testid="app-shell">

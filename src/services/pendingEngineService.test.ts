@@ -464,8 +464,9 @@ describe('pendingEngineService summary and dedupe', () => {
       }),
     ]);
 
-    const first = scanPendingItems('2026-06-27');
-    const second = scanPendingItems('2026-06-27');
+    // 02B — scanPendingItems liest standardmässig nur; der ausdrückliche Arbeitsschritt darf anlegen.
+    const first = scanPendingItems('2026-06-27', { syncTasks: true });
+    const second = scanPendingItems('2026-06-27', { syncTasks: true });
     expect(first.items.length).toBe(second.items.length);
     expect(getAllTasksFromStore()).toHaveLength(1);
   });

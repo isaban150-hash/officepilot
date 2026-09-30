@@ -596,13 +596,19 @@ export function scanRequiredContractDocuments(
 
 export function scanPendingItems(
   today?: Date | string,
-  options: { readOnly?: boolean } = {},
+  /**
+   * 02B — standardmässig **nur lesend**. Heute, Eingang, Assistent und
+   * Navigationshilfen zeigen nur an; Aufgaben entstehen über
+   * `reconcileInvoicePaymentTasks` (Aktion, Sync, täglicher App-Start). Nur ein
+   * ausdrücklicher Arbeitsschritt übergibt `syncTasks: true`.
+   */
+  options: { readOnly?: boolean; syncTasks?: boolean } = {},
 ): PendingScanResult {
   const todayIso = getTodayIso(today);
   const items = dedupePendingItems([
     ...scanPendingInboxItems(),
     ...scanExpiringDocuments(todayIso),
-    ...scanOverdueInvoices(todayIso, { syncTasks: !options.readOnly }),
+    ...scanOverdueInvoices(todayIso, { syncTasks: options.syncTasks === true && !options.readOnly }),
     ...scanUpcomingInvoiceDueDates(todayIso),
     ...scanExpenseDueDates(todayIso),
     ...scanAuthorityDeadlines(todayIso),

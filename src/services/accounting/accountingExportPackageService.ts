@@ -15,10 +15,14 @@
  * Kontierungen noch die Abschlussrevision.
  */
 import JSZip from 'jszip';
-import type {
-  MonatsmappeBeleg,
-  MonatsmappeModel,
+import {
+  buildOffenePostenCsv,
+  buildZahlungenCsv,
+  monthEndOf,
+  type MonatsmappeBeleg,
+  type MonatsmappeModel,
 } from '../steuerberater/monatsmappeModelService';
+import type { SteuerberaterHandoverStatus } from '../steuerberater/steuerberaterHandoverStatus';
 import type { MonatsmappeDocumentLoaders } from '../steuerberater/monatsmappeExportService';
 import { safeFileNamePart } from '../steuerberater/monatsmappeModelService';
 import { buildBookingCsv, type BookingExport } from './accountingBookingExportService';
@@ -31,6 +35,15 @@ export interface ExportPackageInput {
   readonly currentFingerprint: string;
   readonly workspaceId: string;
   readonly exportedAt: string;
+  /**
+   * 02B — was ein Steuerberater über Lücken wissen muss: unklare, nicht
+   * gebuchte Eingangsposten, fehlende Unterlagen und der Übergabestatus.
+   */
+  readonly findings?: {
+    readonly unclearDocuments: readonly { id: string; title: string }[];
+    readonly missingItems: readonly { id: string; title: string }[];
+  };
+  readonly handover?: SteuerberaterHandoverStatus;
 }
 
 export type ExportPackageResult =
@@ -90,7 +103,14 @@ export async function buildAccountingExportPackage(
   const root = zip.folder(rootName)!;
 
   /* ---------------- Buchungsdaten ---------------- */
-  root.folder(FOLDER.buchungen)!.file('buchungen.csv', buildBookingCsv(bookings));
+  const buchungsdaten = root.folder(FOLDER.buchungen)!;
+  buchungsdaten.file('buchungen.csv', buildBookingCsv(bookings));
+  /*
+   * 02B — die Zahlungen des Monats (nach Zahlungsdatum, dieselben Daten wie im
+   * Abschluss-Fingerprint) und die offenen Posten zum Monatsende.
+   */
+  buchungsdaten.file('zahlungen.csv', buildZahlungenCsv(model));
+  buchungsdaten.file('offene_posten_monatsende.csv', buildOffenePostenCsv(model));
 
   /* ---------------- Originalbelege ---------------- */
   const failed: Array<{ id: string; fileName: string; detail: string }> = [];
@@ -148,9 +168,21 @@ export async function buildAccountingExportPackage(
   if (failed.length > 0) return { ok: false, reason: 'document_load_failed', failed };
 
   /* ---------------- Abschluss und Prüfbericht ---------------- */
+  const offenePosten = model.offenePostenMonatsende ?? [];
+  const sumOf = (values: number[]) => Math.round(values.reduce((sum, value) => sum + value, 0) * 100) / 100;
+  const fehlendeNachweise = [
+    ...bookings.withoutDocument.map((entry) => ({ id: entry.sourceId, titel: `Originalbeleg fehlt: ${entry.belegnummer || entry.sourceId}` })),
+    ...(input.findings?.missingItems ?? [])
+      .filter((item) => !bookings.withoutDocument.some((entry) => entry.sourceId === item.id))
+      .map((item) => ({ id: item.id, titel: item.title })),
+  ];
+  const unklareFaelle = [
+    ...(input.findings?.unclearDocuments ?? []).map((doc) => ({ id: doc.id, titel: `Nicht gebuchter Eingangsbeleg: ${doc.title}` })),
+    ...model.stornosOhneDatum.map((entry) => ({ id: entry.id, titel: `Storno ohne Datum: ${entry.belegnummer || entry.id}` })),
+  ];
   const manifest: Record<string, unknown> = {
     format: 'officetakt-steuerberater-paket',
-    version: 1,
+    version: 2,
     workspaceId: input.workspaceId,
     monthKey: model.monthKey,
     revision: closure.revision,
@@ -161,15 +193,36 @@ export async function buildAccountingExportPackage(
     currentFingerprint: input.currentFingerprint,
     exportedAt,
     chartOfAccounts: bookings.chartOfAccounts,
+    /* 02B — Stichtag für Zahlungsstatus und offene Posten. */
+    stichtag: monthEndOf(model.monthKey),
     counts: {
       buchungen: bookings.totals.belegCount,
       dokumente: documentCount,
       belegeOhneDokument: bookings.withoutDocument.length,
+      zahlungenAusgang: model.zahlungenAusgang.length,
+      zahlungenEingang: model.zahlungenEingang.length,
+      offenePostenMonatsende: offenePosten.length,
+      fehlendeNachweise: fehlendeNachweise.length,
+      unklareFaelle: unklareFaelle.length,
+      stornosOhneDatum: model.stornosOhneDatum.length,
     },
     summen: {
       netto: bookings.totals.netto,
       steuer: bookings.totals.steuer,
       brutto: bookings.totals.brutto,
+      zahlungenAusgang: sumOf(model.zahlungenAusgang.map((z) => z.betrag)),
+      zahlungenEingang: sumOf(model.zahlungenEingang.map((z) => z.betrag)),
+      offeneForderungenMonatsende: sumOf(offenePosten.filter((p) => p.belegart === 'ausgangsrechnung').map((p) => p.offen)),
+      offeneVerbindlichkeitenMonatsende: sumOf(offenePosten.filter((p) => p.belegart === 'eingangsbeleg').map((p) => p.offen)),
+    },
+    fehlendeNachweise,
+    unklareFaelle,
+    uebergabestatus: {
+      /* „vollständig“ nur ohne Lücken — ein Paket mit Lücken heisst nie so. */
+      vollstaendig: fehlendeNachweise.length === 0 && unklareFaelle.length === 0,
+      status: input.handover?.state ?? null,
+      /* Einen Bankabgleich gibt es noch nicht — nie „bestätigt“. */
+      bankabgleich: 'nicht_verfuegbar',
     },
     exportart: 'steuerberater_paket',
     /*
@@ -208,6 +261,10 @@ export function buildPruefbericht(
   bookings: BookingExport,
   manifest: Record<string, unknown>,
 ): string {
+  const counts = (manifest.counts ?? {}) as Record<string, number>;
+  const summen = (manifest.summen ?? {}) as Record<string, number>;
+  const liste = (key: string) => (Array.isArray(manifest[key]) ? (manifest[key] as { titel: string }[]) : []);
+  const uebergabe = (manifest.uebergabestatus ?? {}) as { vollstaendig?: boolean };
   const zeilen: string[] = [
     `Steuerberater-Paket ${bookings.monthKey}`,
     `Erstellt: ${String(manifest.exportedAt)}`,
@@ -230,6 +287,34 @@ export function buildPruefbericht(
     `  Brutto: ${bookings.totals.brutto.toFixed(2)}`,
     '',
   ];
+
+  /* 02B — Zahlungen, offene Posten, Lücken und Übergabestatus. */
+  if (typeof manifest.stichtag === 'string') {
+    zeilen.push(
+      `Zahlungen im Monat (nach Zahlungsdatum)`,
+      `  Eingänge (Ausgangsrechnungen): ${counts.zahlungenAusgang ?? 0}, Summe ${(summen.zahlungenAusgang ?? 0).toFixed(2)}`,
+      `  Ausgänge (Eingangsbelege):     ${counts.zahlungenEingang ?? 0}, Summe ${(summen.zahlungenEingang ?? 0).toFixed(2)}`,
+      '',
+      `Offene Posten zum Monatsende (${manifest.stichtag})`,
+      `  Forderungen:       ${(summen.offeneForderungenMonatsende ?? 0).toFixed(2)}`,
+      `  Verbindlichkeiten: ${(summen.offeneVerbindlichkeitenMonatsende ?? 0).toFixed(2)}`,
+      `  Einzelposten: ${counts.offenePostenMonatsende ?? 0} (siehe offene_posten_monatsende.csv)`,
+      '',
+    );
+    const unklar = liste('unklareFaelle');
+    if (unklar.length > 0) {
+      zeilen.push(`Unklare Fälle (${unklar.length}):`, ...unklar.map((fall) => `  ${fall.titel}`), '');
+    } else {
+      zeilen.push('Keine unklaren Fälle.', '');
+    }
+    const fehlend = liste('fehlendeNachweise');
+    zeilen.push(
+      'Übergabestatus',
+      `  Paket vollständig: ${uebergabe.vollstaendig ? 'ja' : `nein (${fehlend.length} fehlende Nachweise, ${unklar.length} unklare Fälle)`}`,
+      '  Bankabgleich: noch nicht verfügbar (kein Kontoauszugsabgleich in OfficeTakt)',
+      '',
+    );
+  }
 
   if (bookings.withoutDocument.length > 0) {
     zeilen.push(`Originalbeleg fehlt (${bookings.withoutDocument.length}):`);

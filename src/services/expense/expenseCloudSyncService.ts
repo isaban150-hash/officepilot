@@ -20,6 +20,7 @@ import { getSupabaseClient } from '../../lib/supabase';
 import { WorkspaceCloudError } from '../workspace/workspaceCloudService';
 import { calculateExpensePaymentSummary } from '../expensePaymentCalculations';
 import { normalizeExpense } from '../expenseNormalize';
+import { normalizePaymentMethod } from '../../types/models';
 
 export const EXPENSE_SYNC_ENTITY_TYPES: readonly SyncEntityType[] = ['expense', 'expense_payment'];
 
@@ -106,6 +107,8 @@ export interface CloudExpensePaymentRow {
   paid_on: string;
   reference: string | null;
   note: string | null;
+  /** 02B — fehlt bei einem Server ohne die Erweiterung. */
+  method?: string | null;
   created_at: string;
   row_version: number;
   reversed_at: string | null;
@@ -229,16 +232,19 @@ export function mergeExpensesFromPull(local: Expense[], pull: ExpenseCloudPull, 
       }
       const amount = money(row.amount);
       if (amount === null) continue;
+      const previous = payments.get(row.client_payment_id);
+      // 02B — Zahlungsart wie bei Rechnungen: ohne Serverfeld bleibt die lokale Angabe.
+      const method = row.method === undefined ? previous?.method : normalizePaymentMethod(row.method);
       const next: ExpensePayment = {
         id: row.client_payment_id,
         date: row.paid_on,
         amount,
         reference: row.reference ?? undefined,
         note: row.note ?? undefined,
+        ...(method ? { method } : {}),
         createdAt: row.created_at,
       };
-      const previous = payments.get(row.client_payment_id);
-      if (!previous || previous.amount !== next.amount || previous.date !== next.date || previous.reference !== next.reference || previous.note !== next.note) {
+      if (!previous || previous.amount !== next.amount || previous.date !== next.date || previous.reference !== next.reference || previous.note !== next.note || previous.method !== next.method) {
         mergedPayments += 1;
       }
       payments.set(row.client_payment_id, next);
@@ -318,6 +324,8 @@ export async function rpcAddWorkspaceExpensePayment(
     p_paid_on: payment.date.slice(0, 10),
     p_reference: payment.reference ?? null,
     p_note: payment.note ?? null,
+    // 02B — nur wenn gesetzt (rückwärtskompatibel zum Server ohne Erweiterung).
+    ...(payment.method ? { p_method: payment.method } : {}),
   });
   if (error) throw classify(error);
 }

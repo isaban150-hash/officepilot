@@ -26,7 +26,7 @@
  *    Zahlungen stornierter Belege werden nicht als aktiv gefuehrt.
  */
 import type { Expense, ExpensePayment } from '../../types/expense';
-import type { CompanyDocument, InboxItem, InvoicePayment, VorgangInvoice } from '../../types/models';
+import type { CompanyDocument, InboxItem, InvoicePayment, PaymentMethod, VorgangInvoice } from '../../types/models';
 import type { DocumentFileRef } from '../../types/documentFileRef';
 import { isFinalizedInvoice } from '../invoiceArchiveService';
 import { calculatePaymentSummary, getInvoicePayments } from '../invoicePaymentService';
@@ -65,9 +65,22 @@ export interface MonatsmappeBeleg {
   documentStatus: MonatsmappeDocumentStatus;
   documents: MonatsmappeDocumentSource[];
   hinweis?: string;
+  /**
+   * 02B — offener Betrag zum Monatsende (nur Originalbelege). Ein Storno oder
+   * eine Zahlung nach dem Monatsende ändert ihn nicht.
+   */
+  offenerBetrag?: number;
+  /**
+   * 02B — der Beleg wurde erst **nach** dem Monatsende storniert. Er ist in
+   * diesem Monat aktiv; der Storno gehört in den Stornomonat. Nur für die
+   * Rückwärtskompatibilität alter Abschlüsse (Fingerprint v1) mitgeführt.
+   */
+  spaeterStorniertAm?: string;
 }
 
 export interface MonatsmappeZahlung {
+  /** 02B — optional; fehlt sie, ist sie nicht erfasst. */
+  zahlungsart?: PaymentMethod;
   belegart: MonatsmappeBelegart;
   belegId: string;
   belegnummer: string;
@@ -76,6 +89,20 @@ export interface MonatsmappeZahlung {
   betrag: number;
   referenz: string;
   gegenpartei: string;
+}
+
+/** 02B — ein offener Posten zum Monatsende (Forderung bzw. Verbindlichkeit). */
+export interface MonatsmappeOffenerPosten {
+  belegart: 'ausgangsrechnung' | 'eingangsbeleg';
+  belegId: string;
+  belegnummer: string;
+  datum: string;
+  gegenpartei: string;
+  brutto: number;
+  bezahlt: number;
+  offen: number;
+  faelligAm: string;
+  zahlungsstatus: string;
 }
 
 export interface MonatsmappeModel {
@@ -90,6 +117,8 @@ export interface MonatsmappeModel {
   fehlendeDokumente: Array<{ belegart: MonatsmappeBelegart; id: string; belegnummer: string }>;
   /** 01D2 — stornierte Ausgaben ohne kanonisches Stornodatum (Datenmodell-Luecke, sichtbar). */
   stornosOhneDatum: Array<{ belegart: MonatsmappeBelegart; id: string; belegnummer: string }>;
+  /** 02B — offene Posten zum Monatsende, über alle Belegmonate bis dahin. */
+  offenePostenMonatsende?: MonatsmappeOffenerPosten[];
   isEmpty: boolean;
 }
 
@@ -108,6 +137,33 @@ export function isValidMonthKey(monthKey: string): boolean {
 
 export function monthKeyOf(iso: string | undefined | null): string {
   return (iso ?? '').slice(0, 7);
+}
+
+/** 02B — letzter Kalendertag eines Monats (`YYYY-MM-DD`). */
+export function monthEndOf(monthKey: string): string {
+  const [year, month] = monthKey.split('-').map(Number);
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return `${monthKey}-${String(lastDay).padStart(2, '0')}`;
+}
+
+/**
+ * 02B — die deterministische Exportidentität eines Belegs.
+ *
+ * Original und Storno derselben Rechnung tragen dieselbe fachliche `id`
+ * (Kontierung und Dokumente hängen daran), sind aber zwei Buchungen. Die
+ * Belegart unterscheidet sie stabil — ohne zufällige Kennung. Buchungsexport
+ * und Periodenmanifest verwenden genau diese Identität.
+ */
+export function belegExportKey(beleg: Pick<MonatsmappeBeleg, 'belegart' | 'id'>): string {
+  return `${beleg.belegart}:${beleg.id}`;
+}
+
+/**
+ * 02B — dieselbe Identität in lesbarer Form für die Übergabedateien: die
+ * Beleg-ID, beim Storno mit dem Zusatz „-Storno“. Keine technischen Werte im CSV.
+ */
+export function belegBuchungsId(beleg: Pick<MonatsmappeBeleg, 'belegart' | 'id'>): string {
+  return beleg.belegart === 'rechnungsstorno' || beleg.belegart === 'ausgabenstorno' ? `${beleg.id}-Storno` : beleg.id;
 }
 
 export function resolveInvoiceBelegDatum(invoice: VorgangInvoice): string {
@@ -158,9 +214,26 @@ function invoiceGegenpartei(invoice: VorgangInvoice): string {
   return (snapshot?.companyName ?? snapshot?.name ?? '').trim();
 }
 
+/**
+ * 02B — die Rechnung, wie sie am Monatsende stand: nur Zahlungen bis dahin,
+ * storniert nur bei einem Storno bis dahin.
+ */
+function invoiceAsOf(invoice: VorgangInvoice, monthEnd: string, cancelledAsOf: boolean): VorgangInvoice {
+  const payments = getInvoicePayments(invoice).filter((payment) => payment.date.slice(0, 10) <= monthEnd);
+  if (cancelledAsOf) return { ...invoice, payments };
+  return { ...invoice, payments, cancelledAt: undefined, paymentStatus: undefined };
+}
+
+function isInvoiceCancelledAsOf(invoice: VorgangInvoice, monthEnd: string): boolean {
+  const stornoDatum = resolveInvoiceStornoDatum(invoice);
+  return Boolean(stornoDatum) && stornoDatum! <= monthEnd;
+}
+
 function buildInvoiceBeleg(invoice: VorgangInvoice): MonatsmappeBeleg {
-  const cancelled = Boolean(invoice.cancelledAt);
-  const summary = calculatePaymentSummary(invoice);
+  const monthEnd = monthEndOf(monthKeyOf(resolveInvoiceBelegDatum(invoice)));
+  // 02B — ein Storno nach dem Monatsende ist ein Vorgang des Stornomonats.
+  const cancelled = isInvoiceCancelledAsOf(invoice, monthEnd);
+  const summary = calculatePaymentSummary(invoiceAsOf(invoice, monthEnd, cancelled), monthEnd);
   const netto = Number(invoice.subtotal ?? 0);
   const brutto = Number(invoice.amount ?? 0);
   const base = `${safeFileNamePart(invoice.number)}_${shortId(invoice.id)}`;
@@ -186,6 +259,8 @@ function buildInvoiceBeleg(invoice: VorgangInvoice): MonatsmappeBeleg {
         ? `Storniert am ${stornoDatum}, Korrektur ${invoice.correctionNumber ?? `zu ${invoice.number}`}`
         : `Storniert am ${stornoDatum}`
       : undefined,
+    offenerBetrag: cancelled ? 0 : summary.openAmount,
+    ...(!cancelled && stornoDatum ? { spaeterStorniertAm: stornoDatum } : {}),
   };
 }
 
@@ -256,7 +331,7 @@ function resolveExpenseFileRef(expense: Expense, input: MonatsmappeInput): Docum
  * ausdrücklich **nicht** gerechnet, gerundet oder repariert — die Zahlen im
  * Export bleiben exakt die gespeicherten.
  */
-function resolveExpenseBelegHinweis(expense: Expense, hasDocument: boolean): string | undefined {
+function resolveExpenseBelegHinweis(expense: Expense, hasDocument: boolean, cancelledAsOf = expense.status === 'storniert'): string | undefined {
   const hinweise: string[] = [];
 
   const money = checkExpenseMoneyIntegrity(expense);
@@ -266,7 +341,7 @@ function resolveExpenseBelegHinweis(expense: Expense, hasDocument: boolean): str
     );
   }
 
-  if (expense.status === 'storniert') {
+  if (cancelledAsOf) {
     const stornoDatum = resolveExpenseStornoDatum(expense);
     hinweise.push(stornoDatum ? `Storniert am ${stornoDatum}` : 'Storniert (Stornodatum nicht erfasst)');
   } else if (!hasDocument) {
@@ -276,9 +351,26 @@ function resolveExpenseBelegHinweis(expense: Expense, hasDocument: boolean): str
   return hinweise.length > 0 ? hinweise.join(' · ') : undefined;
 }
 
+/** 02B — die Ausgabe am Monatsende (siehe `invoiceAsOf`). */
+function expenseAsOf(expense: Expense, monthEnd: string, cancelledAsOf: boolean): Expense {
+  const payments = getExpensePayments(expense).filter((payment) => payment.date.slice(0, 10) <= monthEnd);
+  if (cancelledAsOf || expense.status !== 'storniert') return { ...expense, payments };
+  // `paymentStatus` ist nur ein Cache; er darf den Storno nicht vorwegnehmen.
+  return { ...expense, payments, status: 'gebucht', cancelledAt: undefined, paymentStatus: 'offen' };
+}
+
+/** Ohne Stornodatum (Altbestand) bleibt es konservativ beim Storno. */
+function isExpenseCancelledAsOf(expense: Expense, monthEnd: string): boolean {
+  if (expense.status !== 'storniert') return false;
+  const stornoDatum = resolveExpenseStornoDatum(expense);
+  return !stornoDatum || stornoDatum <= monthEnd;
+}
+
 function buildExpenseBeleg(expense: Expense, input: MonatsmappeInput): MonatsmappeBeleg {
-  const cancelled = expense.status === 'storniert';
-  const summary = calculateExpensePaymentSummary(expense);
+  const monthEnd = monthEndOf(monthKeyOf(expense.issueDate));
+  const cancelled = isExpenseCancelledAsOf(expense, monthEnd);
+  const summary = calculateExpensePaymentSummary(expenseAsOf(expense, monthEnd, cancelled), monthEnd);
+  const stornoDatum = resolveExpenseStornoDatum(expense);
   const ref = resolveExpenseFileRef(expense, input);
   const base = `${expense.issueDate.slice(0, 10)}_${safeFileNamePart(expense.supplierName, 24)}_${safeFileNamePart(expense.invoiceNumber || 'ohne-nummer', 24)}_${shortId(expense.id)}`;
   return {
@@ -295,7 +387,9 @@ function buildExpenseBeleg(expense: Expense, input: MonatsmappeInput): Monatsmap
     zahlungssumme: cancelled ? 0 : summary.paidAmount,
     documentStatus: ref ? 'archived' : 'missing',
     documents: ref ? [{ kind: 'file_ref', fileRefId: ref.id, fileName: `${base}.${extensionForMime(ref.mimeType, ref.originalFileName)}` }] : [],
-    hinweis: resolveExpenseBelegHinweis(expense, Boolean(ref)),
+    hinweis: resolveExpenseBelegHinweis(expense, Boolean(ref), cancelled),
+    offenerBetrag: cancelled ? 0 : summary.openAmount,
+    ...(!cancelled && expense.status === 'storniert' && stornoDatum ? { spaeterStorniertAm: stornoDatum } : {}),
   };
 }
 
@@ -381,6 +475,7 @@ export function buildMonatsmappeModel(input: MonatsmappeInput): MonatsmappeModel
       zahlungenAusgang.push({
         belegart: 'ausgangsrechnung', belegId: invoice.id, belegnummer: invoice.number, zahlungId: payment.id,
         datum: payment.date.slice(0, 10), betrag: payment.amount, referenz: payment.reference ?? '', gegenpartei: invoiceGegenpartei(invoice),
+        ...(payment.method ? { zahlungsart: payment.method } : {}),
       });
     }
   }
@@ -390,6 +485,7 @@ export function buildMonatsmappeModel(input: MonatsmappeInput): MonatsmappeModel
       zahlungenEingang.push({
         belegart: 'eingangsbeleg', belegId: expense.id, belegnummer: expense.invoiceNumber ?? '', zahlungId: payment.id,
         datum: payment.date.slice(0, 10), betrag: payment.amount, referenz: payment.reference ?? '', gegenpartei: expense.supplierName,
+        ...(payment.method ? { zahlungsart: payment.method } : {}),
       });
     }
   }
@@ -415,6 +511,41 @@ export function buildMonatsmappeModel(input: MonatsmappeInput): MonatsmappeModel
   }
   stornos.sort((a, b) => a.datum.localeCompare(b.datum) || a.belegart.localeCompare(b.belegart) || a.id.localeCompare(b.id));
 
+  /* 02B — offene Posten zum Monatsende: alle Belege bis dahin, Stand Monatsende. */
+  const monthEnd = monthEndOf(monthKey);
+  const offenePostenMonatsende: MonatsmappeOffenerPosten[] = [];
+  for (const invoice of invoices) {
+    const datum = resolveInvoiceBelegDatum(invoice);
+    if (!datum || datum > monthEnd) continue;
+    const cancelledAsOf = isInvoiceCancelledAsOf(invoice, monthEnd);
+    if (cancelledAsOf) continue;
+    const summary = calculatePaymentSummary(invoiceAsOf(invoice, monthEnd, false), monthEnd);
+    if (summary.openAmount <= 0.005) continue;
+    offenePostenMonatsende.push({
+      belegart: 'ausgangsrechnung', belegId: invoice.id, belegnummer: invoice.number, datum,
+      gegenpartei: invoiceGegenpartei(invoice), brutto: Number(invoice.amount ?? 0),
+      bezahlt: summary.paidAmount, offen: summary.openAmount, faelligAm: (invoice.paymentDueDate ?? '').slice(0, 10),
+      zahlungsstatus: summary.status,
+    });
+  }
+  for (const expense of expenses) {
+    const datum = expense.issueDate.slice(0, 10);
+    if (!datum || datum > monthEnd) continue;
+    if (isExpenseCancelledAsOf(expense, monthEnd)) continue;
+    if (expense.status !== 'gebucht' && expense.status !== 'storniert') continue;
+    const summary = calculateExpensePaymentSummary(expenseAsOf(expense, monthEnd, false), monthEnd);
+    if (summary.openAmount <= 0.005) continue;
+    offenePostenMonatsende.push({
+      belegart: 'eingangsbeleg', belegId: expense.id, belegnummer: expense.invoiceNumber ?? '', datum,
+      gegenpartei: expense.supplierName, brutto: expense.grossAmount,
+      bezahlt: summary.paidAmount, offen: summary.openAmount, faelligAm: (expense.paymentDueDate ?? '').slice(0, 10),
+      zahlungsstatus: summary.status,
+    });
+  }
+  offenePostenMonatsende.sort(
+    (a, b) => a.belegart.localeCompare(b.belegart) || a.datum.localeCompare(b.datum) || a.belegId.localeCompare(b.belegId),
+  );
+
   const fehlendeDokumente = [...ausgangsrechnungen, ...eingangsbelege, ...stornos]
     .filter((beleg) => beleg.documentStatus === 'missing')
     .map((beleg) => ({ belegart: beleg.belegart, id: beleg.id, belegnummer: beleg.belegnummer }));
@@ -428,6 +559,7 @@ export function buildMonatsmappeModel(input: MonatsmappeInput): MonatsmappeModel
     stornos,
     fehlendeDokumente,
     stornosOhneDatum,
+    offenePostenMonatsende,
     isEmpty:
       ausgangsrechnungen.length === 0 &&
       eingangsbelege.length === 0 &&
@@ -450,7 +582,25 @@ function csvLine(cells: Array<string | number>): string {
   return cells.map(csvCell).join(';');
 }
 
-const BELEGART_LABEL: Record<MonatsmappeBelegart, string> = {
+/** 02B — Zahlungsart in Klartext; nicht erfasst bleibt leer, nie „Bank“. */
+export const ZAHLUNGSART_LABEL: Record<PaymentMethod, string> = {
+  bank: 'Bank',
+  cash: 'Bar',
+  other: 'Sonstige',
+};
+
+/** 02B — Zahlungsstatus in Klartext für Übergabedateien. */
+export const ZAHLUNGSSTATUS_LABEL: Record<string, string> = {
+  offen: 'Offen',
+  teilbezahlt: 'Teilbezahlt',
+  bezahlt: 'Bezahlt',
+  ueberbezahlt: 'Überbezahlt',
+  ueberfaellig: 'Überfällig',
+  storniert: 'Storniert',
+  gutschrift: 'Gutschrift',
+};
+
+export const BELEGART_LABEL: Record<MonatsmappeBelegart, string> = {
   ausgangsrechnung: 'Ausgangsrechnung',
   eingangsbeleg: 'Eingangsbeleg',
   rechnungsstorno: 'Rechnungsstorno',
@@ -480,9 +630,26 @@ export function buildUebersichtCsv(model: MonatsmappeModel): string {
 }
 
 export function buildZahlungenCsv(model: MonatsmappeModel): string {
-  const lines = [csvLine(['Belegart', 'Beleg-ID', 'Belegnummer', 'Zahlungs-ID', 'Zahlungsdatum', 'Betrag', 'Referenz', 'Gegenpartei'])];
+  const lines = [csvLine(['Belegart', 'Beleg-ID', 'Belegnummer', 'Zahlungs-ID', 'Zahlungsdatum', 'Betrag', 'Referenz', 'Gegenpartei', 'Zahlungsart'])];
   for (const zahlung of [...model.zahlungenAusgang, ...model.zahlungenEingang]) {
-    lines.push(csvLine([BELEGART_LABEL[zahlung.belegart], zahlung.belegId, zahlung.belegnummer, zahlung.zahlungId, zahlung.datum, zahlung.betrag, zahlung.referenz, zahlung.gegenpartei]));
+    lines.push(csvLine([
+      BELEGART_LABEL[zahlung.belegart], zahlung.belegId, zahlung.belegnummer, zahlung.zahlungId, zahlung.datum, zahlung.betrag, zahlung.referenz, zahlung.gegenpartei,
+      zahlung.zahlungsart ? ZAHLUNGSART_LABEL[zahlung.zahlungsart] : '',
+    ]));
+  }
+  return `﻿${lines.join('\r\n')}\r\n`;
+}
+
+/** 02B — offene Posten zum Monatsende (Forderungen und Verbindlichkeiten). */
+export function buildOffenePostenCsv(model: MonatsmappeModel): string {
+  const lines = [csvLine(['Art', 'Beleg-ID', 'Belegnummer', 'Belegdatum', 'Gegenpartei', 'Brutto', 'Bezahlt bis Monatsende', 'Offen zum Monatsende', 'Fällig am', 'Zahlungsstatus zum Monatsende'])];
+  for (const posten of model.offenePostenMonatsende ?? []) {
+    lines.push(csvLine([
+      posten.belegart === 'ausgangsrechnung' ? 'Forderung' : 'Verbindlichkeit',
+      posten.belegId, posten.belegnummer, posten.datum, posten.gegenpartei,
+      posten.brutto, posten.bezahlt, posten.offen, posten.faelligAm,
+      ZAHLUNGSSTATUS_LABEL[posten.zahlungsstatus] ?? posten.zahlungsstatus,
+    ]));
   }
   return `﻿${lines.join('\r\n')}\r\n`;
 }

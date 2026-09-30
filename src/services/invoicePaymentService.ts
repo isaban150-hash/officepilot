@@ -6,6 +6,8 @@ import {
 import { isFinalizedInvoice } from './invoiceArchiveService';
 import { buildSkontoDeadline, parseSkontoFromText } from './invoiceTaxService';
 import { generateUuid } from './sync/syncMetaService';
+import { reconcileInvoicePaymentTasks } from './invoice/invoicePaymentTaskSync';
+import { normalizePaymentMethod } from '../types/models';
 import {
   calculateOverpaidAmount,
   getPaymentOverpayAmount as getPaymentOverpayAmountShared,
@@ -321,12 +323,15 @@ export function recordPayment(
    * Bestehende `pay-…`-Kennungen bleiben unangetastet — eine gebuchte Zahlung
    * ist ein Beleg, kein Formatproblem.
    */
+  const method = normalizePaymentMethod(input.method);
   const payment: InvoicePayment = {
     id: generateUuid(),
     date: input.date.slice(0, 10),
     amount: input.amount,
     reference: input.reference?.trim() || undefined,
     note: input.note?.trim() || undefined,
+    // 02B — optional; ohne Angabe bleibt sie nicht erfasst (nie „Bank“ angenommen).
+    ...(method ? { method } : {}),
     createdAt: new Date().toISOString(),
   };
 
@@ -342,6 +347,19 @@ export function recordPayment(
       errorKey:
         updated.reason === 'persist_failed' ? 'payment.persistFailed' : 'payment.invoiceNotFound',
     };
+  }
+
+  /*
+   * P0/P1-INTEGRITAET 01B / P1 — ist die Forderung jetzt erledigt (voll, Rest,
+   * Skonto, Überzahlung), schliesst sich ihre Überfälligkeitsaufgabe. Eine
+   * Teilzahlung lässt sie offen. Die Zahlung ist bereits gespeichert; ein
+   * Fehler hier darf sie nicht als gescheitert melden.
+   */
+  try {
+    // 02B — Teilzahlung: offene Aufgabe zeigt den neuen offenen Betrag.
+    reconcileInvoicePaymentTasks({ invoiceId });
+  } catch (error) {
+    console.warn('[payment] Überfälligkeitsaufgabe konnte nicht abgeglichen werden', error);
   }
 
   return { success: true, invoice: updated.invoice, payment };
@@ -372,6 +390,17 @@ export function removePayment(
       errorKey:
         updated.reason === 'persist_failed' ? 'payment.persistFailed' : 'payment.invoiceNotFound',
     };
+  }
+
+  /*
+   * 02B — ist die Rechnung durch die Rücknahme wieder überfällig, entsteht die
+   * neue offene Überfälligkeitsaufgabe sofort über den bestehenden Dedupe; die
+   * frühere, erledigte Episode bleibt Historie.
+   */
+  try {
+    reconcileInvoicePaymentTasks({ invoiceId });
+  } catch (error) {
+    console.warn('[payment] Überfälligkeitsaufgabe konnte nicht abgeglichen werden', error);
   }
 
   return { success: true, invoice: updated.invoice };
@@ -419,6 +448,7 @@ export async function syncInvoicePaymentToCloud(
       paidOn: payment.date,
       reference: payment.reference,
       note: payment.note,
+      method: payment.method,
     });
     return result.outcome;
   } catch {

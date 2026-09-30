@@ -13,7 +13,11 @@ let closures: AccountingPeriodClosure[] = [];
 function clone(value: AccountingPeriodClosure): AccountingPeriodClosure {
   return {
     ...value,
-    manifest: { ...value.manifest, entries: value.manifest.entries.map((entry) => ({ ...entry })) },
+    manifest: {
+      ...value.manifest,
+      entries: value.manifest.entries.map((entry) => ({ ...entry })),
+      ...(value.manifest.payments ? { payments: value.manifest.payments.map((payment) => ({ ...payment })) } : {}),
+    },
     sync: value.sync ? { ...value.sync } : undefined,
   };
 }

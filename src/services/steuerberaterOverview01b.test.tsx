@@ -12,7 +12,7 @@
  */
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import type { Expense } from '../types/expense';
 import type { Task, VorgangInvoice } from '../types/models';
 import { DEFAULT_SETUP } from '../data/mockData';
@@ -27,6 +27,11 @@ import { buildMonatsmappeModel } from './steuerberater/monatsmappeModelService';
 import { collectMonatsmappeInput } from './steuerberater/monatsmappeInputService';
 import { HomeKpis } from '../components/home/HomeKpis';
 import { SteuerberaterPage } from '../pages/SteuerberaterPage';
+import { setAccountingStoreForTests } from './accounting/accountingStore';
+import { setAccountingPeriodStoreForTests } from './accounting/accountingPeriodStore';
+import { closeAccountingPeriod } from './accounting/accountingPeriodService';
+import { hydrateWorkspaceStore } from './workspace/workspaceStore';
+import type { AccountingAssignment } from '../types/accounting';
 
 const MONTH = '2026-09';
 const REF = new Date(2026, 8, 16);
@@ -104,6 +109,47 @@ function overview() {
   return getSteuerberaterMonthOverview(REF, 'de-DE', MONTH);
 }
 
+/**
+ * 02B — „bereit“ heisst jetzt: gültig abgeschlossen und ohne Lücken (dieselbe
+ * Quelle wie das 06C-Gate). Für die Fälle, die „bereit“ prüfen, wird der Monat
+ * deshalb über den echten Weg kontiert und abgeschlossen.
+ */
+function kontierung(sourceId: string): AccountingAssignment {
+  return {
+    id: `k-${sourceId}`,
+    sourceType: 'invoice',
+    sourceId,
+    chartOfAccounts: 'SKR03',
+    accountNumber: '8400',
+    accountLabel: 'Erlöse 19 %',
+    taxTreatment: 'standard_19',
+    bookingText: `Kunde A · ${sourceId}`,
+    status: 'confirmed',
+    origin: 'manual',
+    confirmedAt: '2026-09-15T10:00:00.000Z',
+    createdAt: '2026-09-15T10:00:00.000Z',
+    updatedAt: '2026-09-15T10:00:00.000Z',
+  } as AccountingAssignment;
+}
+
+function abschliessen(invoiceIds: string[]): void {
+  setAccountingStoreForTests(invoiceIds.map(kontierung));
+  expect(closeAccountingPeriod(MONTH).success).toBe(true);
+}
+
+beforeEach(() => {
+  setAccountingStoreForTests([]);
+  setAccountingPeriodStoreForTests([]);
+  hydrateWorkspaceStore({
+    workspaceSettings: {
+      workspaceId: '00000000-0000-0000-0000-0000000f0001',
+      settings: { chartOfAccounts: 'SKR03' },
+      version: 1,
+      updatedAt: '2026-09-01T10:00:00.000Z',
+    },
+  });
+});
+
 /*
  * OFFICEPILOT-V1-A (Testkorrektur) — seit Visual Block A (0886002) liegt die
  * Steuerberater-Zeile in „Ihr Betrieb heute“ (HomeKpis), nicht mehr in HomeOpenWork.
@@ -149,7 +195,11 @@ describe('REAL-PRODUCT-TEST-01B — Monatsübersicht aus dem Monatsmappenmodell'
     expect(result.invoiceCount).toBe(1);
     expect(result.documentCount).toBe(1);
     expect(result.documents[0]).toMatchObject({ id: 'inv-1', kind: 'ausgangsrechnung', route: '/rechnungen/inv-1' });
-    expect(result.state).toBe('ready');
+    // 02B — ohne Monatsabschluss nie „bereit“ (Gate und Übersicht widersprechen sich nicht).
+    expect(result.state).toBe('open');
+    expect(result.handover.state).toBe('not_closed');
+    abschliessen(['inv-1']);
+    expect(overview().state).toBe('ready');
   });
 
   it('C: gebuchte Ausgabe zählt; ihr Eingangsposten wird nicht zusätzlich als unklar geführt', () => {
@@ -163,8 +213,11 @@ describe('REAL-PRODUCT-TEST-01B — Monatsübersicht aus dem Monatsmappenmodell'
 
   it('D: unklarer Eingangsposten oder fehlende Unterlage → offen, nicht vollständig', () => {
     hydrateInvoiceStore([{ invoice: invoice(), vorgangId: null }]);
+    abschliessen(['inv-1']);
     const uploaded = processUpload({ kind: 'eingangsrechnung' });
     const withUnclear = overview();
+    // 02B — unklare Fälle blockieren den Abschluss nicht, verhindern aber „vollständig“.
+    expect(withUnclear.handover).toMatchObject({ state: 'unclear_cases', packageAllowed: true, packageComplete: false });
     expect(withUnclear.unclearDocuments.map((doc) => doc.id)).toContain(uploaded.id);
     expect(withUnclear.state).toBe('open');
     expect(withUnclear.isComplete).toBe(false);
@@ -179,7 +232,9 @@ describe('REAL-PRODUCT-TEST-01B — Monatsübersicht aus dem Monatsmappenmodell'
 
   it('E: vollständiger Monat → bereit, 100 %; Beleg ohne Dokument hält ihn offen', () => {
     hydrateInvoiceStore([{ invoice: invoice(), vorgangId: null }, { invoice: invoice({ id: 'inv-2', number: 'RE-2026-003' }), vorgangId: null }]);
+    abschliessen(['inv-1', 'inv-2']);
     const ready = overview();
+    expect(ready.handover).toMatchObject({ state: 'ready', packageComplete: true, bankReconciliation: 'not_available' });
     expect(ready.documentCount).toBe(2);
     expect(ready.state).toBe('ready');
     expect(ready.isComplete).toBe(true);
@@ -205,6 +260,7 @@ describe('REAL-PRODUCT-TEST-01B — Monatsübersicht aus dem Monatsmappenmodell'
 
     /* offen: konkrete Zahl statt „bereit" */
     hydrateInvoiceStore([{ invoice: invoice(), vorgangId: null }]);
+    abschliessen(['inv-1']);
     hydrateTaskStore([steuerTask()]);
     const openHome = renderHome();
     expect(openHome).toContain('1 offenen Punkt prüfen');

@@ -10,7 +10,6 @@ import { useApp } from '../context/AppContext';
 import {
   getTaskSummary,
   getTasksFiltered,
-  syncOverdueInvoiceTasks,
   toggleTaskCompletion,
 } from '../services/taskEngineService';
 import { isTaskDone } from '../services/taskNormalize';
@@ -38,8 +37,12 @@ export function AufgabenPage() {
     setSummary(getTaskSummary());
   };
 
+  /*
+   * 02B — nur anzeigen. Überfälligkeitsaufgaben entstehen über
+   * `reconcileInvoicePaymentTasks` (Aktion, Sync, täglicher App-Start), nicht
+   * durch das Öffnen dieser Seite.
+   */
   useEffect(() => {
-    syncOverdueInvoiceTasks();
     refresh();
   }, [location.pathname, location.key]);
 

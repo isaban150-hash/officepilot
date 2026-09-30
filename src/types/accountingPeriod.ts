@@ -72,9 +72,34 @@ export interface AccountingPeriodManifestEntry {
   readonly taxTreatment: string;
   readonly bookingText: string;
   readonly assignmentStatus: string;
+  /**
+   * 02B (ab Version 2) — die Belegart. Original und Storno derselben Rechnung
+   * sind zwei Einträge; die Belegart unterscheidet sie deterministisch.
+   */
+  readonly belegart?: string;
 }
 
+/**
+ * P0/P1-INTEGRITAET 01B / P2 — eine Zahlung, deren Zahlungsdatum im
+ * Abschlussmonat liegt. Nicht der heutige Zahlungsstatus der Rechnung: eine
+ * Zahlung im Folgemonat ändert den abgeschlossenen Monat nicht.
+ */
+export interface AccountingPeriodManifestPayment {
+  readonly sourceType: 'expense' | 'invoice';
+  readonly sourceId: string;
+  readonly paymentId: string;
+  readonly datum: string;
+  readonly betrag: number;
+}
+
+/**
+ * Version des Fingerprint-Algorithmus. Fehlt sie, entstand der Abschluss mit
+ * Version 1 (ohne Zahlungen) und wird nach genau dieser Logik geprüft.
+ */
+export type AccountingPeriodFingerprintVersion = 1 | 2;
+
 export interface AccountingPeriodManifest {
+  readonly fingerprintVersion?: AccountingPeriodFingerprintVersion;
   readonly monthKey: string;
   readonly chartOfAccounts: string;
   readonly documentCount: number;
@@ -83,6 +108,8 @@ export interface AccountingPeriodManifest {
   readonly totalSteuer: number;
   /** Kanonisch sortiert, damit derselbe Stand dieselbe Reihenfolge ergibt. */
   readonly entries: readonly AccountingPeriodManifestEntry[];
+  /** Ab Version 2: Zahlungen des Monats, kanonisch sortiert. */
+  readonly payments?: readonly AccountingPeriodManifestPayment[];
 }
 
 /**

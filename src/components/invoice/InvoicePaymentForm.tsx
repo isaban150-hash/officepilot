@@ -14,7 +14,8 @@ import {
   isInvoicePaymentCloudSynced,
   syncInvoicePaymentToCloud,
 } from '../../services/invoicePaymentService';
-import type { InvoicePayment, InvoicePaymentInput, VorgangInvoice } from '../../types/models';
+import type { InvoicePayment, InvoicePaymentInput, PaymentMethod, VorgangInvoice } from '../../types/models';
+import { PaymentMethodField } from '../payment/PaymentMethodField';
 import type { TranslationKey } from '../../i18n';
 import { getBusinessDay } from '../../services/businessDateService';
 import { formatDisplayDatePadded } from '../../utils/displayFormat';
@@ -70,6 +71,7 @@ export function InvoicePaymentForm({
   const [amount, setAmount] = useState(() => suggestedAmount(openAmount));
   const [reference, setReference] = useState('');
   const [note, setNote] = useState('');
+  const [method, setMethod] = useState<PaymentMethod | ''>('');
   const [errorKey, setErrorKey] = useState<string | null>(null);
   /** 04B2B1 — gesetzt heißt: lokal gebucht, Cloud-Sicherung offen. */
   const [pendingPayment, setPendingPayment] = useState<InvoicePayment | null>(null);
@@ -82,6 +84,7 @@ export function InvoicePaymentForm({
     setAmount(suggestedAmount(openAmount));
     setReference('');
     setNote('');
+    setMethod('');
     setErrorKey(null);
     // Ein neu geöffnetes Formular kennt keine offene Sicherung.
     setPendingPayment(null);
@@ -102,6 +105,7 @@ export function InvoicePaymentForm({
     amount: parsedAmount,
     reference,
     note,
+    ...(method ? { method } : {}),
   });
 
   /**
@@ -253,6 +257,14 @@ export function InvoicePaymentForm({
                 )}
               </p>
             )}
+
+            <PaymentMethodField
+              value={method}
+              onChange={setMethod}
+              disabled={cancelled}
+              translate={translate}
+              testId="invoice-payment-method"
+            />
 
             <label className="invoice-payment-form__field">
               <span>{translate('payment.reference')}</span>

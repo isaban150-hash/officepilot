@@ -2513,6 +2513,8 @@ export interface CloudInvoicePaymentEntry {
   paidOn: string;
   reference?: string;
   note?: string;
+  /** 02B — `undefined`: Server kennt das Feld nicht; `null`: nicht erfasst. */
+  method?: InvoicePayment['method'] | null;
   createdAt: string;
   /** Gesetzt heißt: storniert — die Zahlung zählt nicht mehr. */
   reversedAt?: string;
@@ -2547,12 +2549,18 @@ export function mergeCloudPaymentsIntoInvoice(
     }
 
     // Für eine bereits synchronisierte Kennung gilt der Cloud-Stand.
+    /*
+     * 02B — Zahlungsart: Liefert der Server das Feld, gilt es (auch „nicht
+     * erfasst“). Kennt er es noch nicht (`undefined`), bleibt die lokale Angabe.
+     */
+    const method = entry.method === undefined ? byId.get(entry.clientPaymentId)?.method : entry.method ?? undefined;
     byId.set(entry.clientPaymentId, {
       id: entry.clientPaymentId,
       date: entry.paidOn,
       amount: entry.amount,
       reference: entry.reference,
       note: entry.note,
+      ...(method ? { method } : {}),
       createdAt: entry.createdAt,
     });
   }

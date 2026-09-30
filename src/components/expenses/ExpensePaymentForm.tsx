@@ -9,6 +9,8 @@ import {
   willExpensePaymentNeedOverpayConfirm,
 } from '../../services/expensePaymentService';
 import type { Expense, ExpensePaymentInput } from '../../types/expense';
+import type { PaymentMethod } from '../../types/models';
+import { PaymentMethodField } from '../payment/PaymentMethodField';
 import type { TranslationKey } from '../../i18n';
 import { getBusinessDay } from '../../services/businessDateService';
 import { formatDisplayDatePadded } from '../../utils/displayFormat';
@@ -66,6 +68,7 @@ export function ExpensePaymentForm({ expense, open, onClose, onSaved, translate 
   const [amount, setAmount] = useState(() => suggestedAmount(openAmount));
   const [reference, setReference] = useState('');
   const [note, setNote] = useState('');
+  const [method, setMethod] = useState<PaymentMethod | ''>('');
   const [errorKey, setErrorKey] = useState<string | null>(null);
 
   useEffect(() => {
@@ -75,6 +78,7 @@ export function ExpensePaymentForm({ expense, open, onClose, onSaved, translate 
     setAmount(suggestedAmount(openAmount));
     setReference('');
     setNote('');
+    setMethod('');
     setErrorKey(null);
   }, [open, openAmount, today]);
 
@@ -102,6 +106,7 @@ export function ExpensePaymentForm({ expense, open, onClose, onSaved, translate 
       amount: parsedAmount,
       reference,
       note,
+      ...(method ? { method } : {}),
     };
 
     const result = recordExpensePayment(expense.id, input, {
@@ -196,6 +201,14 @@ export function ExpensePaymentForm({ expense, open, onClose, onSaved, translate 
                 )}
               </p>
             )}
+
+            <PaymentMethodField
+              value={method}
+              onChange={setMethod}
+              disabled={cancelled || !payable}
+              translate={translate}
+              testId="ausgabe-payment-method"
+            />
 
             <label className="invoice-payment-form__field">
               <span>{translate('payment.reference')}</span>

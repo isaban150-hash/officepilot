@@ -4,9 +4,11 @@
  *  A  Rechnungen & Zahlungen -> Rechnungsnummer: RE, Jahr, 4 Stellen; Vorschau RE-YYYY-0001
  *  B/K Rechnung finalisieren -> Server vergibt RE-YYYY-0001; Detail und Cloud-Zeile tragen sie
  *  E  danach: Abschnitt gesperrt, Hinweis sichtbar, Felder nicht editierbar
- *  M  Steuerberater-Monatsmappe exportiert die Rechnung mit exakt dieser Nummer (PDF-Datei)
+ *
+ *  02B: Der fruehere Teil M (Monatsmappen-Export) ist entfernt. Dieser Test
+ *  prueft Rechnungsnummern; die Steuerberater-Uebergabe (06C) decken die
+ *  Monatsabschluss-/Steuerberater-Specs ab (localdbMonatsmappe01d).
  */
-import JSZip from 'jszip';
 import { createClient } from '@supabase/supabase-js';
 import { expect, test, type Page } from '@playwright/test';
 import { provisionLocalDbUser, removeLocalDbUser, type LocalDbUser } from './support/localDbUser';
@@ -88,7 +90,7 @@ async function createFinalizedInvoice(page: Page): Promise<string> {
 }
 
 test.describe('FIRMENPROFIL-01C — Nummernformat UI (lokal)', () => {
-  test('A/B/E/K/M: Format setzen -> finalisieren -> RE-YYYY-0001 -> Sperre -> Monatsmappe', async ({ page }) => {
+  test('A/B/E/K: Format setzen -> finalisieren -> RE-YYYY-0001 -> Sperre', async ({ page }) => {
     test.setTimeout(300_000);
     await loginAndSetup(page);
 
@@ -131,18 +133,5 @@ test.describe('FIRMENPROFIL-01C — Nummernformat UI (lokal)', () => {
       return null;
     });
     expect(cache).toMatchObject({ format: { prefix: 'RG' }, lockedFormat: { prefix: 'RE' } });
-
-    /* M — Monatsmappe mit exakt dieser Nummer */
-    await page.goto('/steuerberater', { waitUntil: 'domcontentloaded' });
-    await page.getByTestId('steuerberater-month-input').selectOption(`${YEAR}-${String(new Date().getMonth() + 1).padStart(2, '0')}`);
-    await page.getByTestId('steuerberater-prepare-folder').click();
-    const downloadPromise = page.waitForEvent('download', { timeout: 60_000 });
-    await page.getByTestId('steuerberater-export-button').click();
-    const download = await downloadPromise;
-    const zip = await JSZip.loadAsync(await (await import('node:fs/promises')).readFile((await download.path())!));
-    const paths = Object.keys(zip.files).filter((p) => !zip.files[p].dir);
-    expect(paths.some((p) => p.includes(`/Ausgangsrechnungen/RE-${YEAR}-0001_`) && p.endsWith('.pdf'))).toBe(true);
-    const csv = await zip.file(paths.find((p) => p.endsWith('Uebersicht.csv'))!)!.async('string');
-    expect(csv).toContain(`Ausgangsrechnung;${invoiceId};RE-${YEAR}-0001;`);
   });
 });

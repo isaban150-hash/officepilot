@@ -47,7 +47,7 @@ write('companies', 'COMPANY-001', {
   vatId: 'DE312458790',
   taxNumber: '305/5803/1234',
   commercialRegister: 'HRB 12345 Amtsgericht Lemgo',
-  iban: 'DE89 4765 0130 0001 2345 67',
+  iban: 'DE86 4765 0130 0001 2345 67',
   bic: 'WELADED1LIP',
   bankName: 'Sparkasse Lemgo',
   bgBauMemberNumber: 'BG-OWL-88421',

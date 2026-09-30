@@ -276,9 +276,14 @@ describe('01D2 — Periodenwahrheit Storno/Korrektur', () => {
     const august = buildMonatsmappeModel(input({ monthKey: '2026-08', ...data }));
     const september = buildMonatsmappeModel(input({ monthKey: '2026-09', ...data }));
 
-    expect(august.ausgangsrechnungen.map((b) => [b.id, b.status, b.brutto, b.datum])).toEqual([['inv-aug', 'storniert', 119, '2026-08-28']]);
+    /*
+     * 02B — ein Storno im Folgemonat ist ein Vorgang des Stornomonats. Im
+     * August war die Rechnung aktiv; das ändert sich nicht rückwirkend.
+     */
+    expect(august.ausgangsrechnungen.map((b) => [b.id, b.status, b.brutto, b.datum])).toEqual([['inv-aug', 'aktiv', 119, '2026-08-28']]);
     expect(august.ausgangsrechnungen[0].documents.map((d) => d.kind)).toEqual(['invoice_pdf']);
-    expect(august.ausgangsrechnungen[0].hinweis).toBe('Storniert am 2026-09-10, Korrektur RK-2026-003');
+    expect(august.ausgangsrechnungen[0].hinweis).toBeUndefined();
+    expect(august.ausgangsrechnungen[0].spaeterStorniertAm).toBe('2026-09-10');
     expect(august.stornos).toEqual([]);
 
     expect(september.ausgangsrechnungen).toEqual([]);
@@ -322,8 +327,9 @@ describe('01D2 — Periodenwahrheit Storno/Korrektur', () => {
     ] };
     const august = buildMonatsmappeModel(input({ monthKey: '2026-08', ...data }));
     const september = buildMonatsmappeModel(input({ monthKey: '2026-09', ...data }));
+    // 02B — Storno im Folgemonat: im August aktiv; ohne Datum bleibt es konservativ beim Storno.
     expect(august.eingangsbelege.map((b) => [b.id, b.status, b.hinweis])).toEqual([
-      ['exp-real-dated', 'storniert', 'Storniert am 2026-09-02'],
+      ['exp-real-dated', 'aktiv', 'Kein Originaldokument vorhanden'],
       ['exp-real-legacy', 'storniert', 'Storniert (Stornodatum nicht erfasst)'],
     ]);
     expect(august.stornos).toEqual([]);

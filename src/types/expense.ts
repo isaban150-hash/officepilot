@@ -1,4 +1,4 @@
-import type { ClassifiedDocumentKind, DigitalFolder, PaperFilingRule, TaxStatus } from './models';
+import type { ClassifiedDocumentKind, DigitalFolder, PaperFilingRule, PaymentMethod, TaxStatus } from './models';
 import type { SyncMeta } from './sync';
 
 export type ExpenseCategory =
@@ -55,6 +55,8 @@ export interface ExpensePayment {
   amount: number;
   reference?: string;
   note?: string;
+  /** 02B — optional; dieselbe Zahlungsart wie bei Rechnungszahlungen. */
+  method?: PaymentMethod;
   createdAt: string;
 }
 
@@ -63,6 +65,7 @@ export interface ExpensePaymentInput {
   amount: number;
   reference?: string;
   note?: string;
+  method?: PaymentMethod;
 }
 
 export interface ExpensePaymentSummary {
