@@ -48,6 +48,8 @@ export function parseEmailMessageRow(input: unknown): EmailMessage | null {
   const attachments: EmailMessageAttachment[] = Array.isArray(row.attachments)
     ? (row.attachments as Record<string, unknown>[])
         .map((entry) => ({
+          // EINGANG-01B — die echte Server-ID; nie aus Name/Position/Hash gebildet.
+          ...(typeof entry.id === 'string' && entry.id.trim() ? { id: entry.id.trim() } : {}),
           position: Number(entry.position),
           filename: String(entry.filename ?? ''),
           mimeType: String(entry.mime_type ?? ''),

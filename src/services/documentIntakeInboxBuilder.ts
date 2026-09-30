@@ -2,7 +2,7 @@ import type { DocumentClassificationResult, InboxItem } from '../types/models';
 import { buildInboxItemFromClassification } from './documentClassificationService';
 import { withInboxExtractedDocumentText } from './inboxDocumentText';
 import type { CreateInboxFromUploadOptions } from './inboxUploadFactory';
-import { createMockInboxItemFromUpload } from './inboxUploadFactory';
+import { applyInboxOriginOptions, createMockInboxItemFromUpload } from './inboxUploadFactory';
 
 export interface BuildInboxForDocumentIntakeOptions extends CreateInboxFromUploadOptions {
   /**
@@ -72,7 +72,7 @@ export function buildInboxItemForDocumentIntake(
       };
     }
 
-    return item;
+    return applyInboxOriginOptions(item, options);
   }
 
   // Light fallback: never pass pageTexts into classification during save.
@@ -84,5 +84,7 @@ export function buildInboxItemForDocumentIntake(
     senderHint: options.senderHint,
     mailImportId: options.mailImportId,
     importSource: options.importSource,
+    emailOrigin: options.emailOrigin,
+    inboxItemId: options.inboxItemId,
   });
 }

@@ -21,6 +21,13 @@ export interface SkippedInboundAttachment {
 }
 
 export interface EmailMessageAttachment {
+  /**
+   * EINGANG-01B — die Server-UUID der Anhangszeile
+   * (`workspace_email_message_attachments.id`). Technische Herkunftsidentität
+   * eines Anhangs; stabil über erneute Abrufe. Fehlt sie, ist der Anhang nicht
+   * in den Eingang übernehmbar — es wird keine Ersatz-ID gebildet.
+   */
+  id?: string;
   position: number;
   filename: string;
   mimeType: string;

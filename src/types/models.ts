@@ -217,6 +217,16 @@ export interface InboxTaskTemplate {
   dueDate?: string;
 }
 
+/** EINGANG-01B — Herkunft eines Eingangs aus einem eingegangenen Mail-Anhang. */
+export interface InboxEmailOrigin {
+  messageId: string;
+  attachmentId: string;
+  position: number;
+  sha256: string;
+  receivedAt?: string;
+  importedAt: string;
+}
+
 export interface InboxItem {
   id: string;
   title: string;
@@ -264,6 +274,13 @@ export interface InboxItem {
   /** Herkunft aus E-Mail-Import (MAIL-01) */
   mailImportId?: string;
   importSource?: 'scan' | 'upload' | 'email';
+  /**
+   * EINGANG-01B — Herkunft aus einem eingegangenen Cloud-Mail-Anhang
+   * (`workspace_email_messages` / `workspace_email_message_attachments`).
+   * Getrennt von `mailImportId`, das zum lokalen Alt-MailImport gehört.
+   * Reist im jsonb-Payload des Eingangs mit; keine eigene Spalte.
+   */
+  emailOrigin?: InboxEmailOrigin;
   /** Lokale Dateireferenz (DOC-FOUNDATION-01) */
   fileRefId?: string;
   sourceFileHash?: string;

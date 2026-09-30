@@ -44,6 +44,12 @@ import type { EmailMessage, EmailMessageAttachment } from '../types/emailMessage
 import { describeEmailContext, formatBytes, formatTimestamp } from '../components/communication/freeEmailUi';
 import { inboundSenderLabel } from '../components/communication/InboxEmailList';
 import { EmailConversation, buildConversation } from '../components/communication/EmailConversation';
+import {
+  findInboxItemForEmailAttachment,
+  importEmailAttachmentToInbox,
+  isEmailAttachmentIntakeEligible,
+  type EmailAttachmentIntakeResult,
+} from '../services/email/emailAttachmentIntakeService';
 
 const VIEWABLE_MIME_TYPES = new Set(['application/pdf', 'image/png', 'image/jpeg', 'text/plain']);
 
@@ -51,6 +57,7 @@ type LoadMessage = (messageId: string) => Promise<InboundMessageResult>;
 type AssignMessage = (input: { messageId: string; customerId?: string; vorgangId?: string; expectedRowVersion: number }) => Promise<{ ok: true; message: EmailMessage } | { ok: false; error: AssignInboundError }>;
 type DownloadAttachment = (input: { storagePath: string; mimeType: string; storageBucket: EmailMessageAttachment['storageBucket'] }) => Promise<EmailAttachmentDownloadResult>;
 type LoadThread = (messageId: string) => Promise<EmailMessageListResult>;
+type ImportAttachment = typeof importEmailAttachmentToInbox;
 
 function workspace(): string | null {
   if (!isSupabaseConfigured()) return null;
@@ -83,12 +90,15 @@ export function KommunikationInboundEmailPage({
   assign = defaultAssign,
   downloadAttachment = downloadEmailAttachment,
   loadThread = defaultLoadThread,
+  importAttachment = importEmailAttachmentToInbox,
 }: {
   loadMessage?: LoadMessage;
   assign?: AssignMessage;
   downloadAttachment?: DownloadAttachment;
   /** 07F-01A — Gesprächsverlauf laden (Tests ersetzen ihn). */
   loadThread?: LoadThread;
+  /** EINGANG-01B — Anhang in den Eingang übernehmen (Tests ersetzen ihn). */
+  importAttachment?: ImportAttachment;
 }) {
   const { translate, showToast } = useApp();
   const t = (key: string) => translate(key as TranslationKey);
@@ -97,7 +107,10 @@ export function KommunikationInboundEmailPage({
   const [thread, setThread] = useState<EmailMessage[]>([]);
   const user = useOptionalAuth()?.user ?? null;
   const cloud = isSupabaseConfigured();
-  const canWrite = useMemo(() => resolveWorkspaceWriteAccess({ userId: user?.id, cloudConfigured: cloud }).canWrite, [user?.id, cloud]);
+  const access = useMemo(() => resolveWorkspaceWriteAccess({ userId: user?.id, cloudConfigured: cloud }), [user?.id, cloud]);
+  const canWrite = access.canWrite;
+  // EINGANG-01B — dieselbe Berechtigung wie der Upload in den Eingang.
+  const canIntake = access.canIntake;
   const [message, setMessage] = useState<EmailMessage | null | undefined>(undefined);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [customerId, setCustomerId] = useState('');
@@ -106,6 +119,10 @@ export function KommunikationInboundEmailPage({
   const [assignError, setAssignError] = useState<string | null>(null);
   const [attachmentBusy, setAttachmentBusy] = useState<number | null>(null);
   const [attachmentError, setAttachmentError] = useState<{ position: number; text: string } | null>(null);
+  /** EINGANG-01B — Inhaltsduplikat je Anhang (Hinweis + ggf. Ziel). */
+  const [intakeDuplicate, setIntakeDuplicate] = useState<{ position: number; target: string | null } | null>(null);
+  /** Nach einer Übernahme neu lesen, ob der Anhang schon im Eingang liegt. */
+  const [, setIntakeRevision] = useState(0);
 
   const customers = useMemo(
     () => getCustomerStoreSnapshot().filter((customer) => isEntitySyncActive(customer)).sort((a, b) => (a.name ?? '').localeCompare(b.name ?? '', 'de')),
@@ -158,6 +175,34 @@ export function KommunikationInboundEmailPage({
       cancelled = true;
     };
   }, [id, loadThread]);
+
+  /** EINGANG-01B — die Eingangsaktion eines Anhangs, nur wenn fachlich zulässig. */
+  const renderIntakeAction = (attachment: EmailMessageAttachment) => {
+    if (!canIntake || message?.direction !== 'inbound') return null;
+    const known = findInboxItemForEmailAttachment(attachment.id);
+    if (known && !known.removed) {
+      return (
+        <Button type="button" variant="ghost" size="sm" disabled={attachmentBusy !== null} onClick={() => navigate(`/ablage/${encodeURIComponent(known.item.id)}`)} data-testid="kommunikation-inbound-intake-open">
+          {t('inboundEmail.intake.open')}
+        </Button>
+      );
+    }
+    if (known?.removed) {
+      return <span className="form-hint" data-testid="kommunikation-inbound-intake-removed">{t('inboundEmail.intake.removed')}</span>;
+    }
+    const eligibility = isEmailAttachmentIntakeEligible(attachment);
+    if (!eligibility.eligible) {
+      return eligibility.reason === 'too_large' ? (
+        <span className="form-hint" data-testid="kommunikation-inbound-intake-too-large">{t('inboundEmail.intake.tooLarge')}</span>
+      ) : null;
+    }
+    const busy = attachmentBusy === attachment.position;
+    return (
+      <Button type="button" variant="outline" size="sm" disabled={attachmentBusy !== null} aria-busy={busy} onClick={() => void handleIntake(attachment)} data-testid="kommunikation-inbound-intake">
+        {busy ? t('inboundEmail.intake.busy') : t('inboundEmail.intake.button')}
+      </Button>
+    );
+  };
 
   const header = (title: string) => (
     <PageHeader title={title} eyebrow={t('inboundEmail.label')} backHref="/kommunikation" backLabel={t('inboundEmail.detail.back')} backTestId="kommunikation-inbound-back" />
@@ -225,6 +270,51 @@ export function KommunikationInboundEmailPage({
       showToast(t('inboundEmail.assign.saved'));
     } finally {
       setSaving(false);
+    }
+  };
+
+  /*
+   * EINGANG-01B — „In Eingang übernehmen". Der Adapter nutzt die bestehende
+   * Upload-Zweistufe; die Seite zeigt nur Ergebnis und Fehler. Während der
+   * Übernahme sind alle Anhangsknöpfe gesperrt (kein Doppelklick).
+   */
+  const intakeErrorText = (result: Extract<EmailAttachmentIntakeResult, { outcome: 'failed' }>, name: string) =>
+    t(`inboundEmail.intake.error.${result.error}`).replace('{name}', name);
+
+  const handleIntake = async (attachment: EmailMessageAttachment) => {
+    if (attachmentBusy !== null || !message) return;
+    setAttachmentError(null);
+    setIntakeDuplicate(null);
+    setAttachmentBusy(attachment.position);
+    try {
+      const result = await importAttachment(message, attachment, {
+        userId: user?.id,
+        cloudConfigured: cloud,
+        access,
+        download: downloadAttachment,
+      });
+      if (result.outcome === 'created' || result.outcome === 'already_imported') {
+        navigate(`/ablage/${encodeURIComponent(result.inboxItemId)}`);
+        return;
+      }
+      if (result.outcome === 'duplicate') {
+        const target = result.existing
+          ? result.existing.type === 'document'
+            ? `/dokumente/${encodeURIComponent(result.existing.id)}`
+            : `/ablage/${encodeURIComponent(result.existing.id)}`
+          : null;
+        setIntakeDuplicate({ position: attachment.position, target });
+        return;
+      }
+      setAttachmentError({ position: attachment.position, text: intakeErrorText(result, attachment.filename) });
+    } catch {
+      setAttachmentError({
+        position: attachment.position,
+        text: t('inboundEmail.intake.error.intake_failed').replace('{name}', attachment.filename),
+      });
+    } finally {
+      setAttachmentBusy(null);
+      setIntakeRevision((value) => value + 1);
     }
   };
 
@@ -334,6 +424,17 @@ export function KommunikationInboundEmailPage({
                 <Button type="button" variant="ghost" size="sm" disabled={attachmentBusy !== null} onClick={() => void handleAttachment(attachment, 'download')} data-testid="kommunikation-inbound-attachment-download">
                   {t('freeEmail.detail.downloadAttachment')}
                 </Button>
+                {renderIntakeAction(attachment)}
+                {intakeDuplicate?.position === attachment.position ? (
+                  <p className="form-hint" role="status" data-testid="kommunikation-inbound-intake-duplicate">
+                    {t('inboundEmail.intake.duplicate')}{' '}
+                    {intakeDuplicate.target ? (
+                      <Link to={intakeDuplicate.target} data-testid="kommunikation-inbound-intake-duplicate-open">
+                        {t('inboundEmail.intake.duplicateOpen')}
+                      </Link>
+                    ) : null}
+                  </p>
+                ) : null}
                 {attachmentError?.position === attachment.position ? (
                   <p className="form-error" role="alert" data-testid="kommunikation-inbound-attachment-error">{attachmentError.text}</p>
                 ) : null}

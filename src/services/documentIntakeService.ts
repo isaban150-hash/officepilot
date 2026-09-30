@@ -228,6 +228,8 @@ export async function intakeCachedDocumentFile(
       senderHint: options.senderHint,
       mailImportId: options.mailImportId,
       importSource: options.importSource,
+      emailOrigin: options.emailOrigin,
+      inboxItemId: options.inboxItemId,
       previewClassification: options.previewClassification,
     });
   } catch (error) {

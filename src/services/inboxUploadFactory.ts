@@ -1,6 +1,6 @@
 import type { TranslationKey } from '../i18n';
 import { MOCK_INBOX_ITEMS } from '../data/inboxMockData';
-import type { DocumentClassificationInput, InboxItem, UploadDocumentKind } from '../types/models';
+import type { DocumentClassificationInput, InboxEmailOrigin, InboxItem, UploadDocumentKind } from '../types/models';
 import { classifyInboxItem } from './documentClassificationService';
 import { withInboxExtractedDocumentText } from './inboxDocumentText';
 
@@ -41,6 +41,26 @@ export interface CreateInboxFromUploadOptions {
   senderHint?: string;
   mailImportId?: string;
   importSource?: 'scan' | 'upload' | 'email';
+  /** EINGANG-01B — Herkunft aus einem Cloud-Mail-Anhang (nur durchgereicht). */
+  emailOrigin?: InboxEmailOrigin;
+  /**
+   * EINGANG-01B — vorgegebene, deterministische Eingangs-ID
+   * (`inbox-mail-<attachmentId>`). Ohne Vorgabe bleibt es bei der bisherigen ID.
+   */
+  inboxItemId?: string;
+}
+
+/** EINGANG-01B — vorgegebene ID und Mail-Herkunft übernehmen; sonst unverändert. */
+export function applyInboxOriginOptions(
+  item: InboxItem,
+  options: Pick<CreateInboxFromUploadOptions, 'emailOrigin' | 'inboxItemId'>,
+): InboxItem {
+  if (!options.inboxItemId && !options.emailOrigin) return item;
+  return {
+    ...item,
+    ...(options.inboxItemId ? { id: options.inboxItemId } : {}),
+    ...(options.emailOrigin ? { emailOrigin: { ...options.emailOrigin } } : {}),
+  };
 }
 
 function pickRandomKind(): UploadDocumentKind {
@@ -159,5 +179,5 @@ function createInboxItemFromUploadInternal(
     };
   }
 
-  return item;
+  return applyInboxOriginOptions(item, options);
 }

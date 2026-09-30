@@ -2269,6 +2269,25 @@ export function EingangDetailPage() {
       />
 
       {/*
+        * EINGANG-01B — Herkunft aus einem eingegangenen Mail-Anhang. Absender und
+        * Empfangsdatum stehen am Eingang; der Betreff bleibt in der Mail, die über
+        * den Rückverweis geöffnet wird. Normale Uploads/Scans zeigen hier nichts.
+        */}
+      {item.emailOrigin ? (
+        <p className="form-hint" data-testid="eingang-detail-email-origin">
+          {translate('inboundEmail.origin.label')}
+          {item.sender ? ` · ${item.sender}` : ''}
+          {item.emailOrigin.receivedAt ? ` · ${formatSafeDocumentDate(item.emailOrigin.receivedAt, 'de', '')}` : ''}{' '}
+          <Link
+            to={`/kommunikation/eingang/${encodeURIComponent(item.emailOrigin.messageId)}`}
+            data-testid="eingang-detail-email-origin-link"
+          >
+            {translate('inboundEmail.origin.open')}
+          </Link>
+        </p>
+      ) : null}
+
+      {/*
         * DOCUMENT-UNLINK-DELETE-01E — die Wege, auf die der Löschhinweis
         * verweist, stehen jetzt unter „Details anzeigen → Verwaltung".
         * Ihre Bestätigungsdialoge bleiben hier unverändert.
