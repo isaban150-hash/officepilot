@@ -1623,6 +1623,20 @@ export interface Vorgang {
   introText?: string;
   closingText?: string;
   contractTotals?: OrderContractTotals;
+  /**
+   * EINGANG-01C-2 — die echte Vorgangsnummer VG-JJJJ-NNNN.
+   *
+   * Ausschliesslich serverseitig vergeben (Spalte `vorgang_number`), danach
+   * unveränderlich. Lokal nie erzeugt, nie editierbar; Altbestand hat keine.
+   */
+  vorgangNumber?: string;
+  /**
+   * EINGANG-01C-2 — Sync-Metadatum, keine Geschäftseigenschaft: Dieser lokal
+   * neu angelegte Vorgang bittet beim ersten Server-Insert um eine Nummer.
+   * Wird lokal gespeichert, damit ein offline angelegter Vorgang den Wunsch
+   * über einen Neustart behält; nie Teil des Cloud-Payloads.
+   */
+  vorgangNumberRequested?: true;
   sync?: SyncMeta;
 }
 

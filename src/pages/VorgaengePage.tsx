@@ -25,7 +25,7 @@ type VorgangFilter = 'active' | 'done' | 'all';
  */
 function matchesQuery(vorgang: Vorgang, query: string): boolean {
   if (!query) return true;
-  const haystack = `${vorgang.title} ${vorgang.customer} ${vorgang.baustelle}`.toLowerCase();
+  const haystack = `${vorgang.vorgangNumber ?? ''} ${vorgang.title} ${vorgang.customer} ${vorgang.baustelle}`.toLowerCase();
   return haystack.includes(query);
 }
 
@@ -148,7 +148,16 @@ export function VorgaengePage() {
                   <BusinessListItem
                     key={v.id}
                     to={`/vorgaenge/${v.id}`}
-                    title={v.title}
+                    // EINGANG-01C-2 — Vorgangsnummer vor dem Titel, nur wenn vergeben.
+                    title={
+                      v.vorgangNumber ? (
+                        <>
+                          <span data-testid={`vorgaenge-row-number-${v.id}`}>{v.vorgangNumber}</span> · {v.title}
+                        </>
+                      ) : (
+                        v.title
+                      )
+                    }
                     subtitle={[v.customer, v.baustelle].filter(Boolean).join(' · ')}
                     meta={`${translate('vorgaenge.meta.documents').replace('{count}', String(v.documents.length))} · ${translate('vorgaenge.meta.tasks').replace('{count}', String(openTasks))}`}
                     status={<StatusBadge tone={vorgangStatusTone(v.status)} label={translate(statusKey)} icon={false} />}

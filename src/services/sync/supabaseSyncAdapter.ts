@@ -54,6 +54,7 @@ import {
   applyVorgangPushResultToState,
   buildVorgangCloudPushPayload,
   mergeVorgaengeFromPull,
+  readVorgangNumberFromRow,
 } from '../vorgang/vorgangCloudService';
 import {
   applyCustomerPushResultToState,
@@ -409,6 +410,8 @@ export function applyPushResultToState(
   updatedAt: string,
   deleted = false,
   storagePath?: string,
+  /** EINGANG-01C-2 — die bestätigte Serverzeile eines Vorgangs (für die Vorgangsnummer). */
+  serverRow?: Record<string, unknown>,
 ): AppPersistedState {
   const workspaceId = resolveCloudWorkspaceId(state);
   const next = { ...state };
@@ -595,6 +598,8 @@ export function applyPushResultToState(
       deleted,
       state.syncClient!.deviceId,
       workspaceId,
+      // EINGANG-01C-2 — die vom Server vergebene bzw. bestätigte Vorgangsnummer.
+      readVorgangNumberFromRow(serverRow),
     );
   }
 
@@ -1126,6 +1131,8 @@ export class SupabaseSyncAdapter implements SyncAdapter {
           pushResult.rowVersion,
           new Date().toISOString(),
           pushDeleted,
+          undefined,
+          entry.entityType === 'vorgang' ? pushResult.payload : undefined,
         );
         completedOutboxIds.push(entry.id);
         outbox = updateOutboxEntryStatus(outbox, entry.id, 'completed');

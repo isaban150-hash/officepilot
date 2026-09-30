@@ -54,6 +54,40 @@ export interface VorgangCloudPayload {
   introText?: string;
   closingText?: string;
   contractTotals?: Vorgang['contractTotals'];
+  /** EINGANG-01C-2: Abbild der Serverspalte `vorgang_number`; der Server schreibt sie zurück. */
+  vorgangNumber?: string;
+}
+
+/**
+ * EINGANG-01C-2 — nur eine vollständige, gültige Vorgangsnummer zählt. Alles
+ * andere ist „keine Nummer“, nie ein Ersatzwert.
+ */
+const VORGANG_NUMBER_PATTERN = /^VG-\d{4}-\d{4,}$/;
+
+export function readVorgangNumber(value: unknown): string | undefined {
+  return typeof value === 'string' && VORGANG_NUMBER_PATTERN.test(value) ? value : undefined;
+}
+
+/** Die Nummer aus einer Serverzeile (Push-Ergebnis, Pull, RPC): Spalte vor Payload. */
+export function readVorgangNumberFromRow(row: unknown): string | undefined {
+  if (!row || typeof row !== 'object') return undefined;
+  const record = row as Record<string, unknown>;
+  if ('vorgang_number' in record) return readVorgangNumber(record.vorgang_number);
+  const payload = record.payload as Record<string, unknown> | undefined;
+  return readVorgangNumber(payload?.vorgangNumber);
+}
+
+/**
+ * EINGANG-01C-2 — eine vom Server bestätigte Nummer übernehmen. Der Wunsch ist
+ * damit erledigt. Ohne gültige Servernummer bleibt der Vorgang unverändert —
+ * eine lokal vorhandene Nummer wird nie entfernt.
+ */
+export function withServerVorgangNumber<T extends Vorgang>(vorgang: T, serverNumber: string | undefined): T {
+  const number = readVorgangNumber(serverNumber);
+  if (!number) return vorgang;
+  const next = { ...vorgang, vorgangNumber: number };
+  delete next.vorgangNumberRequested;
+  return next;
 }
 
 /** ANGEBOT->AUFTRAG-02B — die Auftragsfelder, die gemeinsam reisen und gemeinsam write-once sind. */
@@ -116,6 +150,8 @@ export interface WorkspaceVorgangRow {
   workspace_id: string;
   vorgang_id: string;
   payload: Record<string, unknown>;
+  /** EINGANG-01C-2 — die Wahrheit der Vorgangsnummer; fehlt bei Zeilen älterer Server. */
+  vorgang_number?: string | null;
   row_version: number;
   deleted: boolean;
   deleted_at: string | null;
@@ -378,6 +414,13 @@ export function stripVorgangForCloud(vorgang: Vorgang): VorgangCloudPayload {
     payload.executionStartedAt = planSource.executionStartedAt;
   }
   assignOrderFacts(payload, readOrderFacts(planSource));
+  /*
+   * EINGANG-01C-2 — die echte Nummer reist mit, damit lokaler Inhalt und
+   * Serverpayload gleich bleiben (keine Dauerdifferenz, kein Replay-Konflikt).
+   * Der Nummernwunsch gehört nicht hierher, er liegt auf der Push-Ebene.
+   */
+  const vorgangNumber = readVorgangNumber(planSource.vorgangNumber);
+  if (vorgangNumber) payload.vorgangNumber = vorgangNumber;
 
   return payload;
 }
@@ -390,12 +433,28 @@ export function buildVorgangCloudPushPayload(
   vorgang: Vorgang,
   deleted = false,
 ): Record<string, unknown> {
-  return {
+  const push: Record<string, unknown> = {
     vorgang_id: vorgang.id,
     id: vorgang.id,
     deleted,
     payload: stripVorgangForCloud(vorgang),
   };
+  /*
+   * EINGANG-01C-2 — der Nummernwunsch, nur beim ersten Insert eines neu
+   * angelegten Vorgangs ohne Nummer und nie für einen Grabstein. Altbestand
+   * trägt das Merkmal nicht und bekommt deshalb auch beim Erst-Upload keine
+   * Nummer.
+   */
+  if (
+    vorgang.vorgangNumberRequested === true &&
+    !readVorgangNumber(vorgang.vorgangNumber) &&
+    (vorgang.sync?.version ?? 0) === 0 &&
+    !deleted &&
+    !vorgang.sync?.deleted
+  ) {
+    push.request_vorgang_number = true;
+  }
+  return push;
 }
 
 export function parseVorgangCloudPayload(payload: Record<string, unknown> | null): VorgangCloudPayload | null {
@@ -423,6 +482,7 @@ export function parseVorgangCloudPayload(payload: Record<string, unknown> | null
     contractConfirmation: readCloudContractConfirmation(inner.contractConfirmation),
     executionStartedAt: readCloudExecutionStartedAt(inner.executionStartedAt),
     ...readOrderFacts(inner as Partial<Record<OrderFactKey, unknown>>),
+    ...(readVorgangNumber(inner.vorgangNumber) ? { vorgangNumber: readVorgangNumber(inner.vorgangNumber) } : {}),
   };
 }
 
@@ -449,6 +509,16 @@ export function shouldDeferContractPlanRepair(vorgang: Pick<
     if (!confirmedIds.has(sourceId)) return true;
   }
   return false;
+}
+
+function resolveMergedVorgangNumber(
+  local: Vorgang | null,
+  cloudPayload: VorgangCloudPayload,
+): Pick<Vorgang, 'vorgangNumber' | 'vorgangNumberRequested'> {
+  const vorgangNumber = readVorgangNumber(cloudPayload.vorgangNumber) ?? readVorgangNumber(local?.vorgangNumber);
+  if (vorgangNumber) return { vorgangNumber };
+  // Nur belegte Felder — ein Bestandsvorgang ohne Nummer bekommt keine neuen Schlüssel.
+  return local?.vorgangNumberRequested === true ? { vorgangNumberRequested: true } : {};
 }
 
 function buildMergedVorgangFromFacts(
@@ -503,7 +573,16 @@ function buildMergedVorgangFromFacts(
     orderPositions: shell.orderPositions ?? [],
     // ANGEBOT->AUFTRAG-02B — Auftragsfakten write-once, Cloud fuellt Luecken.
     ...resolveWriteOnceOrderFacts(local ? readOrderFacts(local) : undefined, readOrderFacts(cloudPayload)),
+    /*
+     * EINGANG-01C-2 — anders als die Auftragsfakten ist die Vorgangsnummer
+     * cloud-autoritativ: Die Serverspalte gewinnt. Ein lokaler Stand ohne
+     * Nummer entfernt sie nie; eine lokal vorhandene Nummer bleibt nur, wenn
+     * die Zeile (noch) keine trägt — sie stammt ohnehin vom Server.
+     */
+    ...resolveMergedVorgangNumber(local, cloudPayload),
   };
+  if (withFacts.vorgangNumber) delete withFacts.vorgangNumberRequested;
+  else delete withFacts.vorgangNumber;
 
   /*
    * 5 resolve status: facts first, then the cloud status.
@@ -666,6 +745,11 @@ export function applyVorgangPushResultToState(
   deleted: boolean,
   deviceId: string,
   workspaceId: string,
+  /**
+   * EINGANG-01C-2 — die Vorgangsnummer der bestätigten Serverzeile. Nur sie
+   * wird übernommen; der übrige Inhalt bleibt lokal wie bisher.
+   */
+  serverVorgangNumber?: string,
 ): Vorgang[] {
   return vorgaenge.map((v) => {
     if (v.id !== vorgangId) return v;
@@ -677,7 +761,7 @@ export function applyVorgangPushResultToState(
       deviceId,
       workspaceId,
     };
-    return { ...v, sync };
+    return withServerVorgangNumber({ ...v, sync }, serverVorgangNumber);
   });
 }
 
@@ -690,6 +774,14 @@ export function mapWorkspaceVorgangRow(row: WorkspaceVorgangRow): {
 } | null {
   const parsed = parseVorgangCloudPayload(row.payload);
   if (!parsed) return null;
+  /*
+   * EINGANG-01C-2 — die Spalte `vorgang_number` hat Vorrang vor dem Payload.
+   * Nur eine Zeile ohne diese Spalte (älterer Server) fällt auf den Payload
+   * zurück.
+   */
+  const vorgangNumber = readVorgangNumberFromRow(row);
+  if (vorgangNumber) parsed.vorgangNumber = vorgangNumber;
+  else delete parsed.vorgangNumber;
   return {
     vorgangId: row.vorgang_id,
     payload: parsed,

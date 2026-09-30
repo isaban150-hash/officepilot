@@ -729,6 +729,8 @@ export function VorgangDetailPage() {
         * Schritte in der Experience-Card bleiben unverändert.
         */}
       <PageHeader
+        // EINGANG-01C-2 — die echte Vorgangsnummer, nur wenn der Server sie vergeben hat.
+        eyebrow={vorgang.vorgangNumber ? <span data-testid="vorgang-detail-number">{vorgang.vorgangNumber}</span> : undefined}
         title={vorgang.orderNumber ? `${vorgang.orderNumber} · ${vorgang.title}` : vorgang.title}
         subtitle={[vorgang.customer, vorgang.baustelle].filter(Boolean).join(' · ')}
         status={<StatusBadge tone={vorgangStatusTone(vorgang.status)} label={translate(statusKey)} data-testid="vorgang-detail-status" />}

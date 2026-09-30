@@ -428,6 +428,10 @@ export function InboxVorgangPanel({
                         onChange={() => setSelectedVorgangId(v.id)}
                       />
                       <span>
+                        {/* EINGANG-01C-2 — Vorgangsnummer nur, wenn vergeben. */}
+                        {v.vorgangNumber ? (
+                          <span data-testid={`similar-vorgang-number-${v.id}`}>{v.vorgangNumber} · </span>
+                        ) : null}
                         <strong>{v.title}</strong>
                         <br />
                         {v.customer} · {v.baustelle}

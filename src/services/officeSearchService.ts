@@ -753,14 +753,16 @@ function collectVorgangResults(query: string, terms: string[]): SearchResult[] {
   const results: SearchResult[] = [];
 
   for (const vorgang of getAllVorgaenge()) {
-    const haystack = buildHaystack([vorgang.title, vorgang.customer, vorgang.baustelle, vorgang.status]);
-    const match = matchTerms(haystack, terms, query, [vorgang.title, vorgang.customer]);
+    // EINGANG-01C-2 — die Vorgangsnummer ist such- und sichtbar, wenn vergeben;
+    // am Ende des Suchtexts, damit die bestehende Titel-Gewichtung gleich bleibt.
+    const haystack = buildHaystack([vorgang.title, vorgang.customer, vorgang.baustelle, vorgang.status, vorgang.vorgangNumber]);
+    const match = matchTerms(haystack, terms, query, [vorgang.title, vorgang.customer, vorgang.vorgangNumber]);
     if (!match.matched && query) continue;
 
     pushResult(results, {
       id: `search-vorgang-${vorgang.id}`,
       type: 'vorgang',
-      title: vorgang.title,
+      title: vorgang.vorgangNumber ? `${vorgang.vorgangNumber} · ${vorgang.title}` : vorgang.title,
       subtitle: `${vorgang.customer}${vorgang.baustelle ? ` – ${vorgang.baustelle}` : ''}`,
       matchedField: match.matchedField || 'Auftrag',
       snippet: createSnippet(`${vorgang.customer} ${vorgang.baustelle ?? ''}`, query || terms[0] || ''),

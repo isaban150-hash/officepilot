@@ -61,6 +61,8 @@ import {
   mergeVorgaengeFromPull,
   planVorgangCustomerRelationBackfill,
   planVorgangLostAckAdoption,
+  readVorgangNumberFromRow,
+  withServerVorgangNumber,
 } from '../vorgang/vorgangCloudService';
 import { isCloudSyncBlockedMockVorgangId, isDefinitelyMockVorgang } from '../storage/mockDataDetectionService';
 import {
@@ -706,12 +708,25 @@ export function mergeRemoteWorkspacePullIntoState(
       dirtyVorgangIds,
     );
     const adoptedVorgangIds = new Set([...vorgangAdoption.adopt, ...vorgangAdoption.settle]);
+    /*
+     * EINGANG-01C-2 — die übernommene Zeile ist der eigene Create. Hat der
+     * Server dabei eine Vorgangsnummer vergeben, ist es genau diese; sie wird
+     * hier übernommen, weil die Zeile anschliessend nicht mehr in den Merge
+     * geht. Keine neue Nummer, keine lokale Nummernlosigkeit.
+     */
+    const adoptedVorgangRows = new Map(
+      remoteVorgaenge.filter((row) => adoptedVorgangIds.has(row.vorgang_id)).map((row) => [row.vorgang_id, row]),
+    );
 
     const vorgangMerge = mergeVorgaengeFromPull(
       adoptedVorgangIds.size > 0
         ? state.vorgaenge.map((vorgang) =>
             adoptedVorgangIds.has(vorgang.id)
-              ? adoptLostAckBaseVersion(vorgang, state, workspaceId)
+              ? adoptLostAckBaseVersion(
+                  withServerVorgangNumber(vorgang, readVorgangNumberFromRow(adoptedVorgangRows.get(vorgang.id))),
+                  state,
+                  workspaceId,
+                )
               : vorgang,
           )
         : state.vorgaenge,

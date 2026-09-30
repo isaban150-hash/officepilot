@@ -924,6 +924,12 @@ export function createVorgangFromInbox(
       photos: [],
       invoices: [],
       createdFromInboxId: item.id,
+      /*
+       * EINGANG-01C-2 — ein neu angelegter Vorgang bittet beim ersten
+       * Server-Insert um seine Vorgangsnummer. Lokal entsteht keine Nummer,
+       * auch offline nicht; bis zur Serverbestätigung trägt er schlicht keine.
+       */
+      vorgangNumberRequested: true,
     }
   );
 
