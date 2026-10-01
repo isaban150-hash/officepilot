@@ -33,7 +33,11 @@ import {
   hasActiveArchiveDocumentForInboxItem,
   releaseDocumentFileIfUnreferenced,
 } from './documentFileReferenceService';
-import { filterSyncActive, isEntitySyncActive, withTombstonedEntity, withUpdatedEntitySync } from './sync/syncMetaService';
+import {
+  filterSyncActive,
+  isEntitySyncActive,
+  withTombstonedCloudEntityPreservingRemoteVersion,
+} from './sync/syncMetaService';
 
 export type { CreateInboxFromUploadOptions };
 export { createMockInboxItemFromUpload } from './inboxUploadFactory';
@@ -91,16 +95,24 @@ function findItem(id: string): InboxItem | undefined {
 }
 
 /**
- * CUSTOMER-FACHOBJEKT-03B2 — same field patch and SyncMeta bump as patchInboxItem,
- * but without persisting. The caller owns the persist and the rollback.
+ * CUSTOMER-FACHOBJEKT-03B2 — same field patch as patchInboxItem, but without
+ * persisting. The caller owns the persist and the rollback.
+ *
+ * P1 INTAKE-VERSIONSKONFLIKT — lokale Fachänderung: `sync` bleibt unangetastet
+ * (wie 07B-FIX2 bei Archivdokumenten). Eingänge gehen über
+ * `upsert_workspace_intake_entity`, das beim Update **exakt** die zuletzt vom
+ * Server bestätigte Version erwartet. Das frühere `withUpdatedEntitySync`
+ * erhöhte sie lokal um 1; jede Änderung an einem bereits gesyncten Eingang
+ * endete als „Versionskonflikt inbox_item" (blocked). Ohne `sync` (nie
+ * gesendet) entsteht auch hier keine erfundene Version — der Push erwartet 0.
+ * Die Änderung erkennt der Change-Tracker am Inhalt, nicht an der Version.
  */
 export function stageInboxItemPatch(id: string, updates: Partial<InboxItem>): InboxItem | null {
   const index = inboxItems.findIndex((i) => i.id === id && isEntitySyncActive(i));
   if (index === -1) return null;
-  const updated = withUpdatedEntitySync(
-    { ...inboxItems[index]!, ...updates },
-    'inbox_item',
-  );
+  const current = inboxItems[index]!;
+  const merged: InboxItem = { ...current, ...updates };
+  const updated: InboxItem = current.sync ? { ...merged, sync: current.sync } : merged;
   inboxItems = [...inboxItems.slice(0, index), updated, ...inboxItems.slice(index + 1)];
   return updated;
 }
@@ -165,7 +177,8 @@ export function stageInboxItemTombstone(
   const workResult = getDocumentWorkResult(id);
   const carryContext = findDocumentFileIntakeTransformPlanCarryContext(id);
 
-  const tombstoned = withTombstonedEntity({ ...existing, ...clearFields }, 'inbox_item');
+  // P1 INTAKE-VERSIONSKONFLIKT — der Grabstein erwartet die bestätigte Serverversion, kein lokales +1.
+  const tombstoned = withTombstonedCloudEntityPreservingRemoteVersion({ ...existing, ...clearFields }, 'inbox_item');
   inboxItems = [...inboxItems.slice(0, index), tombstoned, ...inboxItems.slice(index + 1)];
   removeDocumentFileIntakeTransformPlanCarryContextForInboxItem(id);
   removeDocumentWorkResultForInboxItem(id);
@@ -329,7 +342,8 @@ export async function deleteInboxItem(id: string): Promise<InboxActionResult | n
   const previousCarryContext = findDocumentFileIntakeTransformPlanCarryContext(id);
   const previousWorkResult = getDocumentWorkResult(id);
 
-  const tombstoned = withTombstonedEntity({ ...existing }, 'inbox_item');
+  // P1 INTAKE-VERSIONSKONFLIKT — der Grabstein erwartet die bestätigte Serverversion, kein lokales +1.
+  const tombstoned = withTombstonedCloudEntityPreservingRemoteVersion({ ...existing }, 'inbox_item');
   inboxItems = [...inboxItems.slice(0, index), tombstoned, ...inboxItems.slice(index + 1)];
   removeDocumentFileIntakeTransformPlanCarryContextForInboxItem(id);
   removeDocumentWorkResultForInboxItem(id);
