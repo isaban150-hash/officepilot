@@ -45,6 +45,10 @@ import {
   getBusinessLetterForDocument,
   isBusinessLetterDocument,
 } from '../services/letter/businessLetterArchiveService';
+import {
+  resolveArchivedCreditNoteMeaningSource,
+  resolveArchivedMainDocumentText,
+} from '../services/document/documentAiContextService';
 import type { CompanyDocument } from '../types/models';
 import type { TranslationKey } from '../i18n';
 import {
@@ -264,6 +268,19 @@ export function DokumentDetailPage() {
         action: describeGeneratedInvoiceAction(document),
       }
     : undefined;
+  /*
+   * EINGANG-01D-2 Archiv-Detailfix 1 — eine archivierte Gutschrift mit
+   * Seitenstruktur zeigt dieselbe Hauptdokument-Wahrheit wie Eingang und
+   * Archiv-KI-Kontext (Seite 1, kanonische Frist). Alle anderen Dokumente
+   * bleiben unverändert.
+   */
+  const archivedCreditNoteMeaning = isGeneratedInvoice ? null : resolveArchivedCreditNoteMeaningSource(document);
+  /*
+   * EINGANG-02A-3 — ein institutionelles Schreiben mit sicher abgegrenzter
+   * Fremdanlage zeigt nur sein Hauptschreiben. Die Gutschrift (01D-2) geht vor.
+   */
+  const archivedMainDocumentText =
+    isGeneratedInvoice || archivedCreditNoteMeaning ? null : resolveArchivedMainDocumentText(document);
   const headerMeta = [
     linkedInvoice?.customerSnapshot?.name || document.issuer || null,
     document.issueDate
@@ -590,9 +607,10 @@ export function DokumentDetailPage() {
             <>
               {/* DOKUMENTVERSTAENDNIS-01C — was im Schreiben steht, vor der technischen Einordnung. */}
               <DocumentMeaningPanel
-                text={document.recognizedText}
+                text={archivedCreditNoteMeaning?.text ?? archivedMainDocumentText ?? document.recognizedText}
                 sender={document.issuer}
                 ownInvoice={ownInvoiceMeaning}
+                mainDocument={archivedCreditNoteMeaning?.mainDocument}
               />
 
               <DocumentUnderstandingCard documentId={document.id} />

@@ -17,6 +17,8 @@ import type {
 } from '../types/models';
 import { extractBillOfQuantitiesPositions } from './billOfQuantitiesExtractionService';
 import { getInboxExtractedDocumentText } from './inboxDocumentText';
+import { hasContractFamilyTitle } from './contractIntelligenceExtraction';
+import { isInstitutionalCorrespondence } from './document/institutionalSenderTruth';
 
 export const SAMPLE_WERKVERTRAG_TEXT = `
 Werkvertrag
@@ -557,8 +559,39 @@ export function buildContractAnalysisInputFromInbox(item: InboxItem): ContractAn
   };
 }
 
+/*
+ * EINGANG-02A-1 Nacharbeit 2 — Bauvertragstypen, die die Analyse schon an der
+ * bloßen Erwähnung („aus dem Werkvertrag", „Subunternehmer") erkennt.
+ */
+const MENTION_PRONE_CONTRACT_TYPES: ReadonlySet<ContractType> = new Set([
+  'werkvertrag',
+  'subunternehmervertrag',
+  'nachunternehmervertrag',
+  'bauvertrag',
+]);
+
 export function analyzeContractFromInbox(item: InboxItem): ContractAnalysisResult {
-  return analyzeContract(buildContractAnalysisInputFromInbox(item));
+  const input = buildContractAnalysisInputFromInbox(item);
+  const result = analyzeContract(input);
+  /*
+   * EINGANG-02A-1 Nacharbeit 2 — dieselbe Titelwahrheit wie Klassifikation und
+   * Vertrags-Gate: Ein Behörden- oder Versicherungsschreiben, das einen
+   * Bauvertrag nur erwähnt, ist kein Vertrag (sonst: Vertragsaufgaben,
+   * „Vorgang anlegen", Vertragsschritte bei der Übernahme). Mit echter
+   * Titelzeile bleibt es Vertrag.
+   */
+  if (
+    result.isContract &&
+    result.contractType &&
+    MENTION_PRONE_CONTRACT_TYPES.has(result.contractType) &&
+    // Nacharbeit 3 — institutionelle Art ODER institutioneller Briefkopf.
+    isInstitutionalCorrespondence(item.classifiedKind, input.recognizedText) &&
+    !hasContractFamilyTitle(input.recognizedText ?? '', 'werkvertrag') &&
+    !hasContractFamilyTitle(input.recognizedText ?? '', 'subunternehmervertrag')
+  ) {
+    return emptyResult('Behörden- oder Versicherungsschreiben erwähnt einen Vertrag, ist aber selbst keiner');
+  }
+  return result;
 }
 
 export function resolveMockContractText(kind?: UploadDocumentKind | ClassifiedDocumentKind): string {

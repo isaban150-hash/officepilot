@@ -32,6 +32,10 @@ import {
   ensureDocumentBlobsForActiveScope,
   getDocumentFileRefStoreSnapshot,
 } from '../documentFileStoreService';
+import {
+  cancelIntakeAnalysisRecovery,
+  scheduleIntakeAnalysisRecovery,
+} from '../intakeAnalysisCommitService';
 
 export interface BusinessBootstrapInput {
   userId?: string;
@@ -110,6 +114,8 @@ function loadOrSeedScopedState(scope: StorageScope, userId?: string): BusinessBo
       savePersistedStateToKey(scope, stripped);
     }
     scheduleDocumentFileMaintenance(scope, userId);
+    // EINGANG-01D-1 — verlorene Intake-Analysen aus dem lokalen Volltext nachholen.
+    scheduleIntakeAnalysisRecovery();
     return {
       setup: getCachedSetup(),
       scope,
@@ -154,6 +160,8 @@ function loadOrSeedScopedState(scope: StorageScope, userId?: string): BusinessBo
 }
 
 export function bootstrapBusinessState(input: BusinessBootstrapInput = {}): BusinessBootstrapResult {
+  // Eine laufende Recovery gehört zum vorherigen Bestand.
+  cancelIntakeAnalysisRecovery();
   clearInMemoryBusinessState();
 
   if (input.userId && input.workspaceId) {
@@ -171,6 +179,7 @@ export function bootstrapBusinessState(input: BusinessBootstrapInput = {}): Busi
       const stripped = stripDefinitelyMockDataFromState(stored);
       applyStateToStores(stripped);
       rememberLoadedContentBaseline();
+      scheduleIntakeAnalysisRecovery();
       return {
         setup: getCachedSetup(),
         scope,
@@ -211,6 +220,7 @@ export function switchToWorkspaceScope(
 }
 
 export function isolateBusinessStateOnLogout(): void {
+  cancelIntakeAnalysisRecovery();
   clearInMemoryBusinessState();
   setActiveStorageScope({ type: 'guest' });
   const seed = createSeedState();

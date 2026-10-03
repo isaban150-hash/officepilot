@@ -59,6 +59,8 @@ import { CollapsibleReviewSection, ReviewDetailsGroup } from '../components/inbo
 import { DocumentReviewExperience } from '../components/inbox/review/DocumentReviewExperience';
 import { DocumentMeaningPanel } from '../components/documents/DocumentMeaningPanel';
 import { resolveInboxDocumentText } from '../services/document/documentSourceTextService';
+import { resolveDunningMeaningNote } from '../services/document/intakeAssessmentService';
+import { creditNotePageOneTextOfItem } from '../services/document/creditNotePageTruth';
 import { DocumentFinanceReferencePanel } from '../components/inbox/DocumentFinanceReferencePanel';
 import {
   confirmDocumentFinanceReference,
@@ -1307,6 +1309,19 @@ export function EingangDetailPage() {
       navigate(result.route);
       return;
     }
+    /*
+     * EINGANG-01D-2 — eine bereits erfasste Lieferantengutschrift: die vorhandene
+     * Ausgabe öffnen statt erneut abzuschliessen (keine zweite Ausgabe).
+     */
+    if (
+      result.kind === 'navigate' &&
+      !result.messageKey &&
+      item.classifiedKind === 'gutschrift' &&
+      result.route.startsWith('/ausgaben/')
+    ) {
+      navigate(result.route);
+      return;
+    }
     if (result.kind === 'navigate' && result.messageKey) {
       showToast(translate(result.messageKey));
     }
@@ -1948,9 +1963,13 @@ export function EingangDetailPage() {
    * Sie erscheint erst, wenn eine Hauptaktion daran gescheitert ist, und
    * verschwindet, sobald bestätigt wurde.
    */
-  const primaryActionLabel = workflow
-    ? translate(buildDocumentSummary(item, workflow, { translate }).primaryAction.labelKey as TranslationKey)
-    : '';
+  // EINGANG-01D-2 — wartet „Ausgabe erfassen" (auch die einer Gutschrift), heisst die Bestätigung so.
+  const primaryActionLabel =
+    filingContinuePending === 'record_expense'
+      ? translate('documentExperience.action.recordExpense')
+      : workflow
+        ? translate(buildDocumentSummary(item, workflow, { translate }).primaryAction.labelKey as TranslationKey)
+        : '';
 
   const filingConfirmPrompt =
     filingPromptOpen && !isDocumentFilingDecisionConfirmed(item) ? (
@@ -2109,11 +2128,21 @@ export function EingangDetailPage() {
    * Der gespeicherte Posten traegt den Volltext nicht mehr; die Analyse hat ihn
    * aber aufbewahrt. `resolveInboxDocumentText` holt ihn von dort.
    */
-  const bedeutungsText = resolveInboxDocumentText(item, workflow);
+  /*
+   * EINGANG-01D-2 Paritätsfix 1 — bei einer Gutschrift mit Seitenstruktur ist
+   * Seite 1 das Hauptdokument; spätere Seiten (Rechnungskopie) bleiben Quelltext.
+   */
+  const bedeutungsText = creditNotePageOneTextOfItem(item) ?? resolveInboxDocumentText(item, workflow);
   const meaningCore = workflow?.businessInterpretation?.semantic ?? null;
   const meaningPanel =
     bedeutungsText || meaningCore ? (
-      <DocumentMeaningPanel text={bedeutungsText} core={meaningCore} sender={item.sender} />
+      <DocumentMeaningPanel
+        text={bedeutungsText}
+        core={meaningCore}
+        sender={item.sender}
+        mainDocument={{ classifiedKind: item.classifiedKind, deadline: item.deadline }}
+        financeNote={resolveDunningMeaningNote(item, meaningCore, translate)}
+      />
     ) : null;
 
   const reviewExperience = (

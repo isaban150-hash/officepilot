@@ -26,6 +26,8 @@ import { getAllExpenses } from './expenseService';
 import { calculateExpensePaymentSummary } from './expensePaymentCalculations';
 import { normalizeDedupePart } from './expenseNormalize';
 import { getInboxItemById, patchInboxItem } from './inboxService';
+import { getInboxExtractedDocumentText } from './inboxDocumentText';
+import { extractDunningInvoiceReferences } from './document/dunningText';
 
 /**
  * Dokumentarten, die auf einen bestehenden Beleg **verweisen**, statt selbst
@@ -115,6 +117,16 @@ export function resolveDocumentReferenceNumber(item: InboxItem): string {
   for (const field of REFERENCE_NUMBER_FIELDS) {
     const raw = item.recognizedData?.[field]?.trim();
     if (raw) return raw;
+  }
+  /*
+   * EINGANG-02B — eine Mahnung nennt ihre Rechnung im Fliesstext („Unsere
+   * Rechnung RE-100 vom …", „Rechnung Nr. RE-100"). Nur für Mahnung und
+   * Zahlungserinnerung, nur aus dem Hauptdokumenttext und nur bei genau einer
+   * genannten Nummer — mehrere Nummern sind kein sicherer Bezug.
+   */
+  if (isFinanceReferenceOnlyKind(item.classifiedKind)) {
+    const genannt = extractDunningInvoiceReferences(getInboxExtractedDocumentText(item));
+    if (genannt.length === 1) return genannt[0]!;
   }
   return '';
 }

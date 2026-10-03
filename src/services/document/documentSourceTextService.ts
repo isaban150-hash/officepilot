@@ -16,6 +16,7 @@
  */
 import type { InboxItem } from '../../types/models';
 import { getInboxExtractedDocumentText } from '../inboxDocumentText';
+import { resolveMainDocumentFromRecognizedData } from './mainDocumentPageScope';
 import {
   getDocumentWorkResult,
   getDocumentWorkResultStoreSnapshot,
@@ -23,6 +24,9 @@ import {
 
 function ausRecognizedData(daten: Record<string, string> | undefined): string {
   if (!daten) return '';
+  /* EINGANG-02A-3 — bei abgegrenzter Fremdanlage nur das Hauptschreiben. */
+  const haupt = resolveMainDocumentFromRecognizedData(daten).text;
+  if (haupt) return haupt;
   return (daten._extractedText ?? daten._vertragstext ?? daten.Vertragstext ?? '').trim();
 }
 

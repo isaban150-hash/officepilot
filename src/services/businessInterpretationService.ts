@@ -28,6 +28,7 @@ import { getCompanyProfileStoreSnapshot } from './companyProfileService';
 import { getCustomerStoreSnapshot } from './customerStoreService';
 import { getAllVorgaenge } from './vorgangService';
 import type { DocumentSemanticCore } from '../types/documentSemanticCore';
+import { analysisTextsFromRecognizedData, resolveMainDocumentFromRecognizedData } from './document/mainDocumentPageScope';
 import {
   isAuthorityClassifiedKind,
   isBankClassifiedKind,
@@ -173,8 +174,8 @@ function resolveEvent(
   );
   const family = resolveContractFamily(workflow);
   const earlyCorpus = [
-    item.recognizedData._extractedText,
-    item.recognizedData._vertragstext,
+    // EINGANG-02A-3 — bei abgegrenzter Fremdanlage nur das Hauptschreiben.
+    ...analysisTextsFromRecognizedData(item.recognizedData),
     item.title,
     item.sender,
   ]
@@ -346,8 +347,8 @@ function resolveEvent(
 
   // Text signals: do not treat authority/insurance/bank prose as contract (MEANING-CORE-01).
   const corpus = [
-    item.recognizedData._extractedText,
-    item.recognizedData._vertragstext,
+    // EINGANG-02A-3 — bei abgegrenzter Fremdanlage nur das Hauptschreiben.
+    ...analysisTextsFromRecognizedData(item.recognizedData),
     item.title,
     item.sender,
   ]
@@ -1115,8 +1116,12 @@ function buildSemanticCoreForItem(item: InboxItem): DocumentSemanticCore | undef
     vorgaenge: getAllVorgaenge(),
   });
 
+  /* EINGANG-02A-3 — die Seitenrollen reisen nachvollziehbar mit; der Text oben ist bereits das Hauptschreiben. */
+  const pageScope = resolveMainDocumentFromRecognizedData(item.recognizedData).scope;
+
   return {
     ...core,
+    ...(pageScope ? { pageScope } : {}),
     customerCandidates: kandidaten.customerCandidates,
     vorgangCandidates: kandidaten.vorgangCandidates,
   };

@@ -40,6 +40,45 @@ import { getInboxExtractedDocumentText } from './inboxDocumentText';
 import type { DocumentVisibleFact } from './documentSpatialFieldExtractionService';
 import type { DocumentFactAssignment } from './document/documentFactAiService';
 import { detectClassifiedKindWithReason } from './documentClassificationService';
+import { isInstitutionalCorrespondence } from './document/institutionalSenderTruth';
+import type { ClassifiedDocumentKind } from '../types/models';
+
+/**
+ * EINGANG-02A-1 Nacharbeit 1 — Behörden- und Versicherungsschreiben sind
+ * Bestandskommunikation, solange das Dokument sich nicht selbst als Vertrag
+ * ausweist.
+ *
+ * Rollen („Versicherungsnehmer"), Themen („Beitrag", „Deckung"), eine Partei
+ * oder der allgemeine Vertragsfallback stehen in jedem Beitrags-, Schaden-
+ * oder Adressschreiben. Für diese Arten gilt Vertragsintelligenz deshalb nur
+ * mit positivem Vertragsdokument-Nachweis aus der vorhandenen Evidenz:
+ * bestätigte Familie mit Sicherheit „high" (Überschrift plus Rollen oder
+ * Themen) UND die gewählte Familie als echte Titelzeile (`titleEvidence`).
+ * Nacharbeit 2: Bei Miet-, Leasing-, Werk- & Co. zählt für „high" schon die
+ * bloße Erwähnung („Bitte reichen Sie den Mietvertrag ein.") — erst die
+ * Titelzeile belegt, dass das Dokument selbst der Vertrag ist.
+ * Nacharbeit 3: Behörden-/Versicherungskorrespondenz heißt institutionelle
+ * Art ODER institutioneller Briefkopf (`isInstitutionalCorrespondence`).
+ * Alle anderen Dokumente bleiben unverändert.
+ */
+export function admitsContractIntelligenceForKind(
+  kind: ClassifiedDocumentKind | undefined,
+  intelligence: ContractIntelligenceResult | null | undefined,
+  /** Dokumenttext für die Briefkopf-Wahrheit. */
+  text?: string,
+): intelligence is ContractIntelligenceResult {
+  if (!intelligence) return false;
+  if (!isInstitutionalCorrespondence(kind, text)) return true;
+  const type = intelligence.contractType;
+  return Boolean(
+    type &&
+      type.family !== 'unknown' &&
+      type.family !== 'general_contract' &&
+      type.status === 'confirmed' &&
+      type.confidence === 'high' &&
+      type.titleEvidence === true,
+  );
+}
 
 function resolveDocumentLabel(
   contractType: ReturnType<typeof detectContractType>,
@@ -274,7 +313,9 @@ export function analyzeContractIntelligenceFromInbox(item: InboxItem): ContractI
   const recognizedText = getInboxExtractedDocumentText(item);
   const pageTextsRaw = item.recognizedData._pageTexts;
   const pageTexts = pageTextsRaw ? (JSON.parse(pageTextsRaw) as DocumentPageText[]) : undefined;
-  return analyzeContractIntelligenceFromText(recognizedText, pageTexts);
+  const intelligence = analyzeContractIntelligenceFromText(recognizedText, pageTexts);
+  // EINGANG-02A-1 Nacharbeit 1 — gemeinsamer Ursprung für Workflow, Deutung und Vorschlag.
+  return admitsContractIntelligenceForKind(item.classifiedKind, intelligence, recognizedText) ? intelligence : null;
 }
 
 export function buildContractOrderProposal(
@@ -289,7 +330,10 @@ export function buildContractOrderProposal(
     precomputedIntelligence !== undefined
       ? precomputedIntelligence
       : analyzeContractIntelligenceFromInbox(item);
-  if (!intelligence) return null;
+  // Derselbe Gate für Aufrufer mit eigener Intelligenz (Upload-Vorschau).
+  if (!admitsContractIntelligenceForKind(item.classifiedKind, intelligence, getInboxExtractedDocumentText(item))) {
+    return null;
+  }
 
   // Allow contracts without LV (rent, service, unclear) when structured data exists.
   const hasStructuredSignal =

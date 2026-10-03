@@ -27,7 +27,9 @@ import { analyzeUploadedDocument } from './intakeWorkflowService';
 import { resolveAccountingGate } from './document/documentAccountingGateService';
 import { buildDocumentSemanticCore } from './document/documentSemanticCoreService';
 import { getInboxExtractedDocumentText } from './inboxDocumentText';
+import { resolveInboxDocumentText } from './document/documentSourceTextService';
 import { getCompanyProfileStoreSnapshot } from './companyProfileService';
+import { isOwnCompanyName } from './customerOwnCompanyGuard';
 import {
   resolvePrimaryTargetObjectForDocumentType,
   resolvePrimaryTargetObjectForKind,
@@ -176,21 +178,160 @@ export function isInboxBookingDataEvidenced(item: InboxItem, grossAmount: number
   return true;
 }
 
+/**
+ * EINGANG-01D-1 Nacharbeit — Gesamtbetrag einer Lieferantengutschrift.
+ *
+ * Bewusst eng und nur für Gutschriften: Die vorhandenen Betragsfakten tragen
+ * diese Bedeutung nicht eindeutig (im semantischen Kern ist `credit_amount`
+ * jeder negative Betrag, auch eine Position; die allgemeine Gesamtbetrag-
+ * Erkennung kennt „Gutschriftsbetrag"/„Gutschrift brutto" nicht). Gelesen
+ * werden nur ausdrücklich beschriftete Gesamtbeträge. Ergeben sie nicht genau
+ * einen Wert, gibt es keinen — das Formular bleibt dann leer.
+ */
+/*
+ * WEISS-Nacharbeit — gedruckt wird auch „Gutschriftbetrag" ohne Fugen-s
+ * (realer Fall MB-GS-2026-0311). Ohne diese Schreibweise blieb der
+ * Gesamtbetrag leer und die Anzeige fiel auf den Nettobetrag zurück.
+ */
+const CREDIT_TOTAL_LABELED =
+  /(?:gesamtbetrag|gutschrifts?betrag|gutschrift\s+brutto|bruttobetrag|brutto)\s*[:=]?\s*(?:eur\s*|€\s*)?(-?\s?\d{1,3}(?:\.\d{3})*,\d{2}|-?\s?\d+,\d{2})/gi;
+
+/**
+ * EINGANG-01D-1 Nacharbeit 2/3 (P1) — beschriftete Gesamtbeträge einer
+ * Rechnung bzw. eines Belegs. Zwischen- und Nettosummen zählen nicht — auch
+ * nicht mit Trennzeichen („Netto-Summe", „Netto Summe").
+ *
+ * Ein bloßes „Summe" ist kein sicheres Gesamtlabel: Es steht ebenso vor der
+ * Nettosumme („Summe 200 / MwSt 38 / zusammen 238"). Ein Beleg mit nur einem
+ * Geldbetrag („SUMME 92,95") bleibt über die Einzelbetrag-Regel sicher.
+ */
+const GROSS_TOTAL_LABELED =
+  /(?<!(?:zwischen|netto)[\s-]*)(?:gesamtbetrag|gesamtsumme|rechnungsbetrag|rechnungssumme|bruttobetrag|brutto|zahlbetrag|endbetrag|endsumme|zu\s+zahlen|gesamt|total)(?![\s-]*netto)\s*[:=]?\s*(?:eur\s*|€\s*)?(-?\s?\d{1,3}(?:\.\d{3})*,\d{2}|-?\s?\d+,\d{2})/gi;
+const ANY_MONEY_AMOUNT = /-?\s?\d{1,3}(?:\.\d{3})*,\d{2}|-?\s?\d+,\d{2}/g;
+
+function normalizeDashes(text: string): string {
+  return text.replace(/[‐-―−]/g, '-');
+}
+
+function collectAbsoluteAmounts(matches: Iterable<string>): Set<number> {
+  const values = new Set<number>();
+  for (const raw of matches) {
+    const value = parseGermanAmount(raw.replace(/\s/g, ''));
+    if (value !== null && value !== 0) values.add(Math.round(Math.abs(value) * 100) / 100);
+  }
+  return values;
+}
+
+/** Genau ein beschrifteter Gesamtbetrag, sonst keiner. */
+function resolveUniqueLabeledTotal(text: string, pattern: RegExp): number | null {
+  const values = collectAbsoluteAmounts(Array.from(normalizeDashes(text).matchAll(pattern), (match) => match[1]!));
+  return values.size === 1 ? [...values][0]! : null;
+}
+
+/**
+ * EINGANG-01D-1 Nacharbeit 3 (P2) — die eigene Nummer einer Gutschrift.
+ *
+ * Nur eine als Zeilenbeschriftung ausgewiesene Gutschriftsnummer
+ * („Gutschriftsnummer: GS-1", „Gutschrift-Nr. GS-1", „Gutschrift Nr. GS-1").
+ * Eine im Fließtext erwähnte oder die zitierte Rechnungsnummer zählt nicht.
+ * Mehrdeutig oder nicht vorhanden → leer (nicht raten).
+ */
+const CREDIT_NUMBER_LABELED =
+  /^[ \t]*gutschrift(?:s)?(?:nummer|[ \t-]*nr\.?)[ \t]*[:#]?[ \t]*([a-z0-9][a-z0-9/-]*)/gim;
+
+export function resolveCreditNoteNumber(text: string | undefined | null): string {
+  if (!text?.trim()) return '';
+  const numbers = new Set(
+    Array.from(normalizeDashes(text).matchAll(CREDIT_NUMBER_LABELED), (match) => match[1]!.replace(/[-/]+$/, ''))
+      .filter((value) => /\d/.test(value)),
+  );
+  return numbers.size === 1 ? [...numbers][0]! : '';
+}
+
+export function resolveCreditNoteGrossTotal(text: string | undefined | null): number | null {
+  if (!text?.trim()) return null;
+  return resolveUniqueLabeledTotal(text, CREDIT_TOTAL_LABELED);
+}
+
+/**
+ * EINGANG-01D-1 Nacharbeit 2 (P1) — welcher Bruttobetrag darf aus dem Text
+ * gebucht bzw. vorbelegt werden?
+ *
+ * Der erkannte `Betrag` kann der erste Betrag im Text sein („Material 200"
+ * vor „Gesamtbetrag 238"). Deshalb mit vorhandenem Volltext:
+ *   - genau ein beschrifteter Gesamtbetrag → dieser;
+ *   - sonst nur dann der erkannte Betrag, wenn im Text überhaupt nur ein
+ *     Geldbetrag steht;
+ *   - sonst keiner (0): keine automatische Buchung, Formular ohne Betrag.
+ * Ohne Volltext (Altbestand, Zweitgerät) bleibt das bisherige Verhalten.
+ */
+function resolveSafeGrossAmount(item: InboxItem, printedAmount: number): number {
+  const text = getInboxExtractedDocumentText(item);
+  if (!text) return printedAmount;
+  const labeled = resolveUniqueLabeledTotal(text, GROSS_TOTAL_LABELED);
+  if (labeled !== null) return printedAmount < 0 ? -labeled : labeled;
+  const amounts = collectAbsoluteAmounts(normalizeDashes(text).match(ANY_MONEY_AMOUNT) ?? []);
+  return amounts.size <= 1 ? printedAmount : 0;
+}
+
+/**
+ * EINGANG-01D-1 Nacharbeit 2 (P2) — eine Gutschrift, die der eigene Betrieb
+ * ausgestellt hat (Gutschrift an einen Kunden), ist keine Ausgabe. Belegt nur
+ * über den erkannten Absender gegen das Firmenprofil — nie über Dateinamen
+ * oder Rollenwissen. Ist der Absender unklar, wird nichts behauptet.
+ */
+function isOwnCompanyIssuedDocument(item: InboxItem): boolean {
+  const profile = getCompanyProfileStoreSnapshot();
+  const companyName = profile?.companyName?.trim();
+  if (!companyName) return false;
+  return isOwnCompanyName(item.sender, companyName);
+}
+
 export function buildExpenseInputFromInbox(
   item: InboxItem,
   classifiedKind?: ClassifiedDocumentKind,
 ): ExpenseInput {
   const kind = classifiedKind ?? resolveClassifiedKind(item);
-  const grossAmount =
+  const printedAmount =
     parseGermanAmount(item.recognizedData.Betrag) ??
     parseGermanAmount(item.recognizedData.betrag) ??
     parseGermanAmount(item.recognizedData.Amount) ??
     0;
+  /*
+   * EINGANG-01D-1 (P1) — eine Lieferantengutschrift ist eine Gutschrift, auch
+   * wenn ihr Betrag positiv gedruckt ist. Bisher entschied allein das
+   * Vorzeichen, und eine positiv gedruckte Gutschrift wurde zur offenen
+   * Verbindlichkeit. Die bestehende Semantik bleibt: Gutschrift = negativer
+   * Bruttobetrag (`isCreditNoteExpense`). Ein bereits negativer Betrag bleibt
+   * negativ — keine doppelte Umkehr.
+   */
+  const isSupplierCreditNote = kind === 'gutschrift' && !item.financeReviewReason;
+  /*
+   * EINGANG-01D-1 Nacharbeit (P1) — der Gutschriftbetrag ist der beschriftete
+   * Gesamtbetrag, nie der erste gefundene Betrag („Netto 100" vor „Gesamtbetrag
+   * 119"). Ohne eindeutigen Gesamtbetrag bleibt das Feld leer — kein Raten.
+   */
+  /*
+   * WEISS-Nacharbeit — ein gespeicherter Eingang trägt seinen Volltext nicht
+   * mehr; er liegt im Arbeitsstand der Analyse. Gelesen wird über die
+   * bestehende Quelle (`resolveInboxDocumentText`, Hauptdokument), sonst bliebe
+   * die Vorbelegung nach dem Neuladen leer.
+   */
+  const gutschriftText = isSupplierCreditNote ? resolveInboxDocumentText(item) : '';
+  const creditTotal = isSupplierCreditNote ? resolveCreditNoteGrossTotal(gutschriftText) : null;
+  const grossAmount = isSupplierCreditNote
+    ? creditTotal === null
+      ? 0
+      : -creditTotal
+    : resolveSafeGrossAmount(item, printedAmount);
 
   return {
     title: item.title,
     supplierName: item.sender.trim() || 'Unbekannt',
-    invoiceNumber: resolveExpenseIdentifier(item),
+    // Nacharbeit 3 — eine Gutschrift trägt ihre eigene Nummer, nie die der zitierten Rechnung.
+    invoiceNumber: isSupplierCreditNote
+      ? resolveCreditNoteNumber(gutschriftText)
+      : resolveExpenseIdentifier(item),
     description: item.officePilotSuggestion ?? '',
     issueDate:
       /*
@@ -198,12 +339,21 @@ export function buildExpenseInputFromInbox(
        * sie ungeprüft als ISO weiter (10.02.2026 → „2.10.2026"). Nur eindeutige
        * Werte (ISO / TT.MM.JJJJ) werden übernommen, sonst greift der Fallback.
        */
+      /*
+       * EINGANG-01D-1 — eine Handlungsfrist ist kein Rechnungsdatum. Der frühere
+       * Rückfall auf `item.deadline` machte aus „zahlbar bis" das Belegdatum.
+       */
       toIsoDay(item.recognizedData.Datum) ??
       toIsoDay(item.recognizedData.datum) ??
-      toIsoDay(item.deadline) ??
       getTodayIso().slice(0, 10),
-    // EINGANG-01A — die Fälligkeit nur als eindeutiges Tagesdatum.
-    paymentDueDate: toIsoDay(item.deadline),
+    /*
+     * EINGANG-01A / 01D-1 — das Zahlungsziel nur aus einer echten Zahlungsfrist.
+     * Antwort-, Unterlagen- oder Kündigungsfristen sind kein Zahlungsziel.
+     */
+    // Eine Gutschrift hat kein Zahlungsziel (Nacharbeit).
+    paymentDueDate:
+      !isSupplierCreditNote && item.deadlineType === 'payment_due' ? toIsoDay(item.deadline) : undefined,
+    ...(isSupplierCreditNote ? { isCreditNote: true } : {}),
     grossAmount,
     category: kind ? mapClassifiedKindToExpenseCategory(kind) : 'material',
     linkedInboxId: item.id,
@@ -275,6 +425,31 @@ export function createExpenseFromInbox(item: InboxItem): OfficeActionResult {
    * Beleg statt zu einem zweiten. Nur ein echter Belegkandidat darf weiter —
    * und auch der nur bis zur Bestaetigung durch den Benutzer.
    */
+  /*
+   * EINGANG-01D-1 — Rechnungskorrektur/Storno und Abrechnungsgutschrift werden
+   * nie automatisch gebucht: Die eine wäre eine zweite Verbindlichkeit, die
+   * andere ist ein Erlös. Nur verschärfend, wie die Schranke darunter.
+   */
+  if (item.financeReviewReason) {
+    return { ok: false, errorKey: 'document.accounting.financeReviewRequired' as TranslationKey };
+  }
+  /*
+   * EINGANG-01D-1 Nacharbeit — eine Lieferantengutschrift wird nie aus OCR
+   * gebucht, aber auch nie stillschweigend nur archiviert. Sie führt immer in
+   * das bestätigte Ausgabenformular (negativer Gesamtbetrag, ohne
+   * Zahlungsziel), auch wenn die Schranke sie als „keine Forderung" oder
+   * „Bezug" einordnet: Eine Gutschrift fordert nichts — genau das ist ihr
+   * finanzieller Effekt, und der Nutzer bestätigt ihn selbst.
+   */
+  if (resolveClassifiedKind(item) === 'gutschrift') {
+    // Nacharbeit 2 — die eigene Gutschrift an einen Kunden ist keine Ausgabe.
+    if (isOwnCompanyIssuedDocument(item)) {
+      return { ok: false, errorKey: 'document.accounting.ownCreditNoteReview' as TranslationKey };
+    }
+    const existingCredit = getAllExpenses().find((expense) => expense.linkedInboxId === item.id);
+    if (existingCredit) return { ok: true, kind: 'navigate', route: `/ausgaben/${existingCredit.id}` };
+    return { ok: true, kind: 'navigate', route: `/ausgaben/neu?inboxId=${encodeURIComponent(item.id)}` };
+  }
   const schranke = resolveInboxAccountingGate(item);
   if (schranke.decision === 'reference_only') return openFinanceReferenceForInbox(item);
   if (schranke.decision === 'blocked') {
@@ -311,7 +486,19 @@ export function createExpenseFromInbox(item: InboxItem): OfficeActionResult {
    * führt in das vorhandene Formular, vorbefüllt aus dem Eingang, und der
    * Nutzer bestätigt dort selbst.
    */
-  if (!input.grossAmount || !isInboxBookingDataEvidenced(item, input.grossAmount)) {
+  // EINGANG-01D-1 — belegt wird die gedruckte Zahl; die Gutschrift-Richtung ändert sie nicht.
+  /*
+   * EINGANG-01D-1 Nacharbeit 2 (P1) — automatisch gebucht wird nur, wenn der
+   * sichere Gesamtbetrag aus dem Text und der erkannte Betrag übereinstimmen.
+   * Weichen sie ab (erkannt „Material 200", beschriftet „Gesamtbetrag 238"),
+   * bestätigt der Nutzer im Formular — vorbelegt mit dem sicheren Betrag.
+   */
+  const recognizedAmount =
+    parseGermanAmount(item.recognizedData.Betrag) ??
+    parseGermanAmount(item.recognizedData.betrag) ??
+    parseGermanAmount(item.recognizedData.Amount);
+  const amountAgrees = recognizedAmount !== null && Math.abs(recognizedAmount) === Math.abs(input.grossAmount);
+  if (!input.grossAmount || !amountAgrees || !isInboxBookingDataEvidenced(item, Math.abs(input.grossAmount))) {
     return {
       ok: true,
       kind: 'navigate',
@@ -684,5 +871,9 @@ export function runCreateTaskDelegate(inboxId: string): OfficeActionResult {
 export function getExpensePrefillForInbox(inboxId: string): ExpenseInput | null {
   const item = getInboxItemById(inboxId);
   if (!item) return null;
-  return buildExpenseInputFromInbox(item);
+  // EINGANG-01D-1 Nacharbeit — ein Finanz-Prüffall bekommt keine finanzielle Vorentscheidung.
+  if (item.financeReviewReason) return null;
+  const kind = resolveClassifiedKind(item);
+  if (kind === 'gutschrift' && isOwnCompanyIssuedDocument(item)) return null;
+  return buildExpenseInputFromInbox(item, kind);
 }

@@ -147,7 +147,36 @@ export interface SemanticObligation {
   what: string;
   /** ISO-Tagesdatum, falls die Pflicht befristet ist. */
   byWhen?: string;
+  /**
+   * EINGANG-02A-2A — Art der Pflicht mit den vorhandenen Handlungsfrist-Typen
+   * (Zahlung, Antwort, Unterlagen …). Optional: fehlt, wenn der Satz keine
+   * Art eindeutig belegt.
+   */
+  kind?: BusinessDeadlineType;
+  /**
+   * EINGANG-02A-2B — die relative Frist dieser Pflicht im Wortlaut des
+   * Schreibens („innerhalb von zwei Wochen nach Zugang dieses Schreibens").
+   * Daraus wird nie ein Datum berechnet.
+   */
+  relativeDeadline?: string;
   certainty: BusinessFactCertainty;
+  evidence?: SemanticEvidence;
+}
+
+/**
+ * EINGANG-02A-2B — eine Frist ohne Kalenderdatum: „binnen 14 Tagen nach
+ * Erhalt", „unverzüglich", „innerhalb der gesetzlichen Frist". Sie bleibt im
+ * Wortlaut erhalten und ist immer unsicher — OfficeTakt rechnet keine
+ * Rechtsfristen aus (kein Zugang + 14 Tage, keine Bekanntgabefiktion).
+ */
+export interface SemanticRelativeDeadline {
+  /** Die Fristangabe im Wortlaut des Schreibens. */
+  phrase: string;
+  /** Wofür die Frist gilt, in einem Wort („Antwort", „Unterlagen"). */
+  appliesTo: string;
+  /** Art der zugehörigen eigenen Pflicht, falls sicher. */
+  kind?: BusinessDeadlineType;
+  certainty: 'uncertain';
   evidence?: SemanticEvidence;
 }
 
@@ -270,6 +299,133 @@ export interface DocumentSemanticCore {
    * einzelnes Feld ist und von mehreren Produktwegen gelesen wird.
    */
   primaryActionDeadline?: SemanticDeadline;
+  /**
+   * EINGANG-02A-2B — eigene Pflichten mit relativer Frist. Optional, damit
+   * gespeicherte Kerne gültig bleiben; fehlt, wenn es keine gibt.
+   */
+  relativeDeadlines?: SemanticRelativeDeadline[];
+  /**
+   * EINGANG-02A-2B — das Schreiben sagt ausdrücklich, dass es nur informiert
+   * („Von Ihnen ist nichts weiter zu veranlassen", „Zu Ihrer Information …"),
+   * und enthält weder eigene Pflicht noch Handlungsfrist noch relative Frist
+   * noch eine Forderung an uns. Fehlt in jedem anderen Fall.
+   */
+  informationOnly?: { evidence: SemanticEvidence };
+  /**
+   * EINGANG-02A-2C — ausdrücklich angeforderte Unterlagen einer eigenen
+   * Einreichpflicht, in der Bezeichnung des Schreibens. Optional; fehlt, wenn
+   * keine Liste mit klarem Unterlagenkontext erkannt wurde.
+   */
+  requestedDocuments?: SemanticRequestedDocument[];
+  /**
+   * EINGANG-02A-3 — Seitenrollen eines institutionellen Schreibens mit
+   * Fremdanlage. Fehlt bei einseitigen Dokumenten und überall dort, wo nichts
+   * abzugrenzen war. Ist eine Anlage sicher erkannt, beruht der übrige Kern nur
+   * auf den Hauptseiten.
+   */
+  pageScope?: SemanticPageScope;
+  /**
+   * EINGANG-02B — Mahnungs-Semantik im Wortlaut: Stufe, genannte
+   * Rechnungsnummern, beschriftete Forderungsteile. Keine Buchung, keine
+   * Bewertung. Fehlt bei allem, was keine Mahnung ist.
+   */
+  dunning?: SemanticDunning;
+  /**
+   * EINGANG-02C — Beschwerde, Reklamation, Mängelanzeige: was der Absender
+   * meldet, fordert und ankündigt — immer als Angabe des Absenders, nie als
+   * bestätigte Wahrheit. Fristen, Pflichten, Beträge und Unterlagen bleiben in
+   * ihren bestehenden Feldern. Fehlt bei allem, was keine Beschwerde ist.
+   */
+  complaint?: SemanticComplaint;
+}
+
+/** EINGANG-02C — Art einer Beschwerde laut Titel (bzw. laut Geldforderung ohne Titel). */
+export type SemanticComplaintType =
+  | 'complaint'
+  | 'reclamation'
+  | 'defect_notice'
+  | 'defect_claim'
+  | 'objection'
+  | 'remedy_request'
+  | 'damage_claim';
+
+/**
+ * EINGANG-02C — was der Absender verlangt oder ankündigt. `retention` und
+ * `reduction` sind Ankündigungen des Absenders, keine Buchung.
+ */
+export type SemanticComplaintDemandKind =
+  | 'remedy'
+  | 'statement'
+  | 'documents'
+  | 'damages'
+  | 'reimbursement'
+  | 'reduction'
+  | 'retention'
+  | 'payment';
+
+export interface SemanticComplaintDemand {
+  kind: SemanticComplaintDemandKind;
+  /** Nur ein Betrag, der sprachlich direkt zu dieser Forderung gehört. */
+  amount?: number;
+  /** Datum aus „bis (zum) …" im selben Teilsatz, kanonisch `JJJJ-MM-TT`. */
+  byWhen?: string;
+  evidence: SemanticEvidence;
+}
+
+export type SemanticComplaintEscalation = 'substitute_performance' | 'legal_action';
+
+export interface SemanticComplaint {
+  type: SemanticComplaintType;
+  /**
+   * `incoming` — ein fremdes Schreiben an den eigenen Betrieb;
+   * `outgoing` — ein eigenes Schreiben (eigener Briefkopf), dessen Forderungen
+   * sich an den Empfänger richten.
+   */
+  direction: 'incoming' | 'outgoing';
+  /** Was der Absender meldet/beanstandet, im Wortlaut (höchstens drei Sätze). */
+  reports: SemanticEvidence[];
+  demands: SemanticComplaintDemand[];
+  /** Angekündigte Schritte (Ersatzvornahme, Anwalt/Gericht) — keine Bewertung. */
+  escalation?: SemanticComplaintEscalation[];
+  /** Im Schreiben genannte Bezüge (Auftrag, Rechnung, Vorgang, Angebot), im Wortlaut. */
+  references?: Array<{ kind: 'order' | 'invoice' | 'case' | 'offer'; number: string }>;
+}
+
+/** EINGANG-02B — Stufe einer eingehenden Zahlungsaufforderung. */
+export type SemanticDunningStage = 'payment_reminder' | 'dunning' | 'final_dunning' | 'collection' | 'court_dunning';
+
+export interface SemanticDunning {
+  stage: SemanticDunningStage;
+  /** Die im Text genannten Rechnungsnummern, im Wortlaut. */
+  invoiceReferences?: string[];
+  /** Nur bei eindeutiger Beschriftung („Hauptforderung", „Mahnkosten" …). */
+  principalAmount?: number;
+  reminderFees?: number;
+  interestAmount?: number;
+  totalClaim?: number;
+}
+
+/**
+ * EINGANG-02A-3 — welche Seiten Hauptschreiben, sichere Fremdanlage oder nur
+ * verdächtig sind (1-basierte Seitennummern). Verdächtige Seiten bleiben beim
+ * Hauptschreiben.
+ */
+export interface SemanticPageScope {
+  mainPageNumbers: number[];
+  attachmentPageNumbers: number[];
+  uncertainPageNumbers: number[];
+  evidence: Array<{ page: number; role: 'attachment' | 'uncertain'; header?: string; title?: string }>;
+}
+
+/**
+ * EINGANG-02A-2C — eine angeforderte Unterlage („Reparaturbericht"). Keine
+ * Taxonomie: die Bezeichnung bleibt, wie sie im Schreiben steht.
+ */
+export interface SemanticRequestedDocument {
+  label: string;
+  /** Index der zugehörigen Pflicht in `obligations`. */
+  obligationIndex?: number;
+  evidence?: SemanticEvidence;
 }
 
 /** Ein leerer Kern — für Dokumente, aus denen sich nichts ablesen liess. */

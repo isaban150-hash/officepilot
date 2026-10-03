@@ -15,12 +15,15 @@
 import { useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
 import {
+  alignDocumentMeaningViewWithMainDocument,
   buildDocumentMeaningView,
   buildDocumentMeaningViewFromCore,
   buildOwnInvoiceMeaningView,
+  type MeaningMainDocument,
   type OwnInvoiceMeaningInput,
 } from '../../services/document/documentMeaningPresentationService';
 import type { DocumentSemanticCore } from '../../types/documentSemanticCore';
+import { buildComplaintMeaningLines } from '../../services/document/complaintTruth';
 import type { MeaningCandidateRow } from '../../services/document/documentMeaningPresentationService';
 
 interface DocumentMeaningPanelProps {
@@ -41,6 +44,17 @@ interface DocumentMeaningPanelProps {
    * Gesetzt, gilt die Rechnungswahrheit statt der Leseregeln für Fremdpost.
    */
   ownInvoice?: Omit<OwnInvoiceMeaningInput, 'text'>;
+  /**
+   * EINGANG-01D-2 — kanonische Wahrheit des Hauptdokuments (Art, Frist). Bei
+   * einer Gutschrift entfallen Zahlungsfristen und Forderungen einer
+   * angehängten oder zitierten Rechnung.
+   */
+  mainDocument?: MeaningMainDocument;
+  /**
+   * EINGANG-02B — der Abgleich einer Mahnung mit der bekannten Finanzwahrheit,
+   * fertig formuliert vom Dienst (`resolveDunningMeaningNote`).
+   */
+  financeNote?: string;
   testId?: string;
 }
 
@@ -49,16 +63,26 @@ export function DocumentMeaningPanel({
   core,
   sender,
   ownInvoice,
+  mainDocument,
+  financeNote,
   testId,
 }: DocumentMeaningPanelProps) {
   const { translate } = useApp();
+  const mainKind = mainDocument?.classifiedKind;
+  const mainDeadline = mainDocument?.deadline ?? null;
   const view = useMemo(() => {
     if (ownInvoice) return buildOwnInvoiceMeaningView({ ...ownInvoice, text: text ?? '' });
     /* Der Volltext ist die bessere Quelle: Er folgt den heutigen Leseregeln. */
-    if (text && text.trim()) return buildDocumentMeaningView({ text, sender });
-    if (core) return buildDocumentMeaningViewFromCore(core);
-    return null;
-  }, [text, core, sender, ownInvoice]);
+    const raw =
+      text && text.trim()
+        ? buildDocumentMeaningView({ text, sender })
+        : core
+          ? buildDocumentMeaningViewFromCore(core)
+          : null;
+    return raw
+      ? alignDocumentMeaningViewWithMainDocument(raw, { classifiedKind: mainKind, deadline: mainDeadline })
+      : null;
+  }, [text, core, sender, ownInvoice, mainKind, mainDeadline]);
 
   if (!view) return null;
 
@@ -137,6 +161,27 @@ export function DocumentMeaningPanel({
           <p className="document-meaning__value" data-testid="document-meaning-purpose">
             {view.purpose}
           </p>
+        </section>
+      ) : null}
+
+      {financeNote ? (
+        <section className="document-meaning__section">
+          <h3 className="document-meaning__label">{translate('documentMeaning.financeNote')}</h3>
+          <p className="document-meaning__value" data-testid="document-meaning-finance-note">
+            {financeNote}
+          </p>
+        </section>
+      ) : null}
+
+      {/* EINGANG-02C — Angaben des Absenders, getrennt von dem, was OfficeTakt weiss. */}
+      {view.complaint ? (
+        <section className="document-meaning__section">
+          <h3 className="document-meaning__label">{translate('documentMeaning.complaint')}</h3>
+          <ul className="document-meaning__list" data-testid="document-meaning-complaint">
+            {buildComplaintMeaningLines(view.complaint, translate).map((zeile) => (
+              <li key={zeile}>{zeile}</li>
+            ))}
+          </ul>
         </section>
       ) : null}
 

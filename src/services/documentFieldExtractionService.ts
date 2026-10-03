@@ -5,6 +5,8 @@ export interface ExtractedDocumentFields {
   Empfänger?: string;
   Datum?: string;
   Aktenzeichen?: string;
+  /** EINGANG-02A-3 — Schadennummer einer Versicherung (eigenes Label). */
+  Schadennummer?: string;
   Baustelle?: string;
   Kunde?: string;
   Vorgang?: string;
@@ -97,8 +99,25 @@ const LETTERHEAD_FUEL_STATION =
   /\b((?:Aral|Shell|Esso|Total(?:Energies)?|JET|OMV|Agip|Star|Hem|Westfalen|bft|Oil!\s*Tankstellen?)\s+(?:Station\s+)?[\p{L}][\p{L}\d .&\-]{1,40})/iu;
 const LETTERHEAD_TANKSTELLE =
   /\b([A-ZÄÖÜ][\p{L}\d][\p{L}\d .&\-]{2,45}?)\s+Tankstelle\b/u;
+/**
+ * 02A-1 — „Versicherungs-AG": vor AG darf statt des Leerzeichens auch ein
+ * Bindestrich stehen. Nur für AG; alle anderen Rechtsformen bleiben unverändert.
+ */
 const LETTERHEAD_LEGAL_ENTITY =
-  /\b([A-ZÄÖÜ][\p{L}\d][\p{L}\d .&\-\/'’]{1,55}?\s(?:GmbH(?:\s*&\s*Co\.?\s*KG)?|AG|KG|OHG|GbR|UG|e\.?\s*V\.?))\b/u;
+  /\b([A-ZÄÖÜ][\p{L}\d][\p{L}\d .&\-\/'’]{1,55}?(?:\s(?:GmbH(?:\s*&\s*Co\.?\s*KG)?|AG|KG|OHG|GbR|UG|e\.?\s*V\.?)|-AG))\b/u;
+const LETTERHEAD_LEGAL_ENTITY_ALL = new RegExp(LETTERHEAD_LEGAL_ENTITY.source, 'gu');
+/**
+ * 02A-1 — Kommunale Briefköpfe (Stadt, Gemeinde, Landratsamt, Kreis, Bezirksamt,
+ * Bauordnungsamt). Bewusst nur am Zeilenanfang und nur mit nachfolgendem Namen:
+ * „für die Stadt Köln" im Fließtext ist kein Briefkopf.
+ */
+const LETTERHEAD_MUNICIPAL =
+  /(?:^|\n)[ \t]*((?:Stadt(?:verwaltung)?|Gemeinde(?:verwaltung)?|Landratsamt|Landkreis|Kreisverwaltung|Kreis|Bezirksamt|Bauordnungsamt)[ \t]+[\p{L}][\p{L}\d .&\-\/']{1,80})/u;
+
+/** 02A-1 Nacharbeit 3 — dieselbe kommunale Briefkopfregel für eine einzelne Kopfzeile. */
+export function isMunicipalLetterheadLine(line: string): boolean {
+  return LETTERHEAD_MUNICIPAL.test(line.trim());
+}
 const LETTERHEAD_BRAND =
   /(?:^|[\n|·])\s*(?:[A-ZÄÖÜ]\s+)?([A-ZÄÖÜ][\p{L}\d]+(?:\s+[A-ZÄÖÜ\d][\p{L}\d]*){0,4})\s*[—–\-]\s*(?:Newsletter|Rundschreiben|Mitteilung|Information)\b/u;
 
@@ -113,7 +132,9 @@ const INVOICE_NUMBER_PATTERN =
   // RECEIPT_NUMBER_PATTERN): auch `Rechnungs-Nr.` und `Beleg Nr.` sind gemeint.
   /\b(?:rechnungs[\s-]*(?:nummer|nr\.?)|invoice(?:\s*no\.?)?|beleg[\s-]*(?:nummer|nr\.?))\s*[:#]?\s*([A-Z0-9][\w./-]{2,})/i;
 const REFERENCE_PATTERN =
-  /\b(?:aktenzeichen|az\.?|vorgang(?:snummer|snr\.?)?|auftrags(?:nummer|nr\.?)|referenz)\s*[:#]?\s*([A-Z0-9][\w./-]{2,})/i;
+  /\b(?:aktenzeichen|az\.?|gesch(?:ä|ae)ftszeichen|vorgang(?:snummer|snr\.?)?|auftrags(?:nummer|nr\.?)|referenz)\s*[:#]?\s*([A-Z0-9][\w./-]{2,})/i;
+/** EINGANG-02A-3 — „Schadennummer: S-2026-0077", „Schaden-Nr.", „Schadennr.", „Schadensnummer". */
+const CLAIM_NUMBER_PATTERN = /\bschadens?[\s-]*(?:nummer|nr\.?)\s*[:#]?\s*([A-Z0-9][\w./-]{2,})/i;
 /*
  * EINGANG-01A — „gültig bis" ist ein Gültigkeitsende, keine Handlungsfrist
  * (ein Angebot oder eine Bescheinigung verlangt bis dahin nichts von uns).
@@ -449,8 +470,20 @@ export function pickCleanerMerchantVariant(candidate: string, lines: string[]): 
   return cleaner ?? candidate;
 }
 
-export function inferUnlabeledSenderFromText(text: string): string | undefined {
-  const sender = resolveUnlabeledSenderFromText(text);
+export type UnlabeledSenderOptions = {
+  /**
+   * 02A-1 — verwirft einen Briefkopf-Kandidaten (z. B. die eigene Firma im
+   * Empfängerblock). Der Vergleich gehört dem Aufrufer; dieses Modul bleibt
+   * ohne Profil- und Store-Abhängigkeit.
+   */
+  excludeCandidate?: (candidate: string) => boolean;
+};
+
+export function inferUnlabeledSenderFromText(
+  text: string,
+  options: UnlabeledSenderOptions = {},
+): string | undefined {
+  const sender = resolveUnlabeledSenderFromText(text, options);
   if (!sender) return sender;
   /**
    * OFFICEPILOT-RECEIPT-MERCHANT-SELECTION-FIX-01 — derselbe Auswahlvertrag wie
@@ -460,35 +493,66 @@ export function inferUnlabeledSenderFromText(text: string): string | undefined {
   return pickCleanerMerchantVariant(sender, text.split(/\r?\n/).slice(0, 6));
 }
 
-function resolveUnlabeledSenderFromText(text: string): string | undefined {
+function resolveUnlabeledSenderFromText(
+  text: string,
+  options: UnlabeledSenderOptions = {},
+): string | undefined {
   if (!text?.trim()) return undefined;
   const head = text.slice(0, LETTERHEAD_HEAD_CHARS);
+  const usable = (value: string | undefined): string | undefined =>
+    value && !options.excludeCandidate?.(value) ? value : undefined;
 
-  const institution = head.match(LETTERHEAD_INSTITUTION)?.[1];
-  const cleanedInstitution = institution ? cleanLetterheadCandidate(institution) : undefined;
+  const institutionMatch = head.match(LETTERHEAD_INSTITUTION);
+  const legalMatch = head.match(LETTERHEAD_LEGAL_ENTITY);
+  /**
+   * 02A-1 — ein kommunaler Briefkopf gilt nur, wenn er vor jedem anderen
+   * Institutions- und Rechtsform-Kandidaten steht. Die eigene Rechnung an eine
+   * Stadt behält so ihren eigenen Briefkopf als Absender.
+   */
+  const municipalMatch = head.match(LETTERHEAD_MUNICIPAL);
+  if (
+    municipalMatch?.[1] &&
+    (municipalMatch.index ?? 0) <= (institutionMatch?.index ?? Infinity) &&
+    (municipalMatch.index ?? 0) <= (legalMatch?.index ?? Infinity)
+  ) {
+    const cleanedMunicipal = usable(cleanLetterheadCandidate(municipalMatch[1]));
+    if (cleanedMunicipal) return cleanedMunicipal;
+  }
+
+  const institution = institutionMatch?.[1];
+  const cleanedInstitution = usable(institution ? cleanLetterheadCandidate(institution) : undefined);
   if (cleanedInstitution) return cleanedInstitution;
 
   const issuerBrand = head.match(LETTERHEAD_ISSUER_BRAND)?.[1];
-  const cleanedIssuer = issuerBrand ? cleanLetterheadCandidate(issuerBrand) : undefined;
+  const cleanedIssuer = usable(issuerBrand ? cleanLetterheadCandidate(issuerBrand) : undefined);
   if (cleanedIssuer) return cleanedIssuer;
 
   const fuel = head.match(LETTERHEAD_FUEL_STATION)?.[1];
-  const cleanedFuel = fuel ? cleanLetterheadCandidate(fuel) : undefined;
+  const cleanedFuel = usable(fuel ? cleanLetterheadCandidate(fuel) : undefined);
   if (cleanedFuel) return cleanedFuel;
 
   const tankstelle = head.match(LETTERHEAD_TANKSTELLE)?.[1];
-  const cleanedTankstelle = tankstelle ? cleanLetterheadCandidate(tankstelle) : undefined;
+  const cleanedTankstelle = usable(tankstelle ? cleanLetterheadCandidate(tankstelle) : undefined);
   if (cleanedTankstelle) return cleanedTankstelle;
 
-  const legal = head.match(LETTERHEAD_LEGAL_ENTITY)?.[1];
-  // A role or field label in front of the entity means this is a labelled field,
-  // not a letterhead — strip it and keep only the actual name.
-  const legalWithoutLabel = legal ? stripLeadingFieldLabel(legal) : undefined;
-  const cleanedLegal = legalWithoutLabel ? cleanLetterheadCandidate(legalWithoutLabel) : undefined;
-  if (cleanedLegal) return cleanedLegal;
+  // Ohne Ausschluss zählt wie bisher nur die erste Rechtsform; mit Ausschluss
+  // die erste, die nicht verworfen wird.
+  const legalMatches = options.excludeCandidate
+    ? [...head.matchAll(LETTERHEAD_LEGAL_ENTITY_ALL)]
+    : legalMatch
+      ? [legalMatch]
+      : [];
+  for (const match of legalMatches) {
+    const legal = match[1];
+    // A role or field label in front of the entity means this is a labelled field,
+    // not a letterhead — strip it and keep only the actual name.
+    const legalWithoutLabel = legal ? stripLeadingFieldLabel(legal) : undefined;
+    const cleanedLegal = usable(legalWithoutLabel ? cleanLetterheadCandidate(legalWithoutLabel) : undefined);
+    if (cleanedLegal) return cleanedLegal;
+  }
 
   const brand = text.match(LETTERHEAD_BRAND)?.[1];
-  const cleanedBrand = brand ? cleanLetterheadCandidate(brand) : undefined;
+  const cleanedBrand = usable(brand ? cleanLetterheadCandidate(brand) : undefined);
   if (cleanedBrand) return cleanedBrand;
 
   return undefined;
@@ -891,6 +955,7 @@ export function extractFieldsWithConfidence(text: string): ExtractedDocumentFiel
 
   setField(fields, 'Rechnungsnummer', firstMatch(text, INVOICE_NUMBER_PATTERN), 'high');
   setField(fields, 'Aktenzeichen', firstMatch(text, REFERENCE_PATTERN), 'high');
+  setField(fields, 'Schadennummer', firstMatch(text, CLAIM_NUMBER_PATTERN), 'high');
   // Vehicle docs often carry Kennzeichen instead of Az. — usable as reference fact.
   if (!fields.Aktenzeichen?.value) {
     const plate = firstMatch(text, KENNZEICHEN_LABELED);
@@ -984,6 +1049,7 @@ export function mergeExtractedFields(
     'Datum',
     'Vorgang',
     'Aktenzeichen',
+    'Schadennummer',
     'Straße',
     'Ort',
     'Frist',

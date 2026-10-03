@@ -21,6 +21,7 @@ import { deBusinessLetter } from './businessLetter';
 import { deOffer } from './offer';
 import { deOrder } from './order';
 import { deDocumentMeaning } from './documentMeaning';
+import { deIntakeAssessment } from './intakeAssessment';
 
 export const deModules = {
   ...deAuth,
@@ -48,4 +49,5 @@ export const deModules = {
   ...deOffer,
   ...deOrder,
   ...deDocumentMeaning,
+  ...deIntakeAssessment,
 } as const;

@@ -377,11 +377,17 @@ export function buildPrioritizedDocumentGuidance(
     taskProposals.length > 0 ||
     (businessInterpretation?.requiredConfirmations.length ?? 0) > 0;
 
-  if (hasActionSupport && businessInterpretation?.operational.nextStep) {
+  /*
+   * EINGANG-01D-2 Nacharbeit 1 — bei einer Gutschrift stammt der analysierte
+   * Arbeitsschritt („Rechnungsdaten prüfen …") aus einer angehängten oder
+   * zitierten Rechnung; er ist kein Schritt der Gutschrift.
+   */
+  const creditNote = item.classifiedKind === 'gutschrift';
+  if (!creditNote && hasActionSupport && businessInterpretation?.operational.nextStep) {
     pushUniqueLine(now, 'operational-next-step', businessInterpretation.operational.nextStep);
   }
 
-  addBusinessInterpretationActions(actions, seenActions, businessInterpretation);
+  addBusinessInterpretationActions(actions, seenActions, creditNote ? null : businessInterpretation);
 
   for (const action of workflowDecision?.nextActions ?? workflow?.nextActions ?? []) {
     if (!action.enabled || action.id === 'cancel') continue;
@@ -401,6 +407,7 @@ export function buildPrioritizedDocumentGuidance(
     pushUniqueLine(missing, `missing-${entry.id}`, entry.summary);
   }
   for (const entry of businessInterpretation?.requiredConfirmations ?? []) {
+    if (creditNote && entry.id === 'finalize_invoice') continue;
     pushUniqueLine(missing, `confirm-${entry.id}`, entry.summary);
   }
   for (const entry of workflow?.requiredDocuments ?? []) {
@@ -541,6 +548,11 @@ function buildActions(
  * Composes one unified document guidance from existing services.
  * Does not run OCR, classification, or new AI logic.
  */
+function toGermanDay(iso: string): string {
+  const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  return parts ? `${parts[3]}.${parts[2]}.${parts[1]}` : iso;
+}
+
 export function buildDocumentGuidance(
   item: InboxItem,
   workflow?: WorkflowResult | null,
@@ -565,7 +577,18 @@ export function buildDocumentGuidance(
   });
   const truthCounterparty = truth?.businessInterpretation?.facts.parties.counterparty?.name?.trim();
   const truthDeadline = truth?.businessInterpretation?.facts.timeline.deadline?.value?.trim();
-  const understandingDeadline = truthDeadline || understanding.deadline;
+  /*
+   * EINGANG-01D-2 Nacharbeit 1 — bei einer Gutschrift gilt nur die kanonische
+   * Frist des Hauptdokuments, nicht die einer angehängten Rechnung aus Analyse,
+   * Verständnis oder Brief-Erklärung.
+   */
+  const creditNote = kind === 'gutschrift';
+  const understandingDeadline = creditNote
+    ? item.deadline
+      ? toGermanDay(item.deadline)
+      : undefined
+    : truthDeadline || understanding.deadline;
+  const deadlineLetter = creditNote ? null : letter;
   const paperFolderLabel =
     paper.skipPhysicalFiling
       ? '—'
@@ -573,7 +596,7 @@ export function buildDocumentGuidance(
         ? formatPaperFilingInstruction(paper.rule, lang)
         : '—';
 
-  const hasDeadline = hasDeadlineSignal(item, understandingDeadline, letter);
+  const hasDeadline = hasDeadlineSignal(item, understandingDeadline, deadlineLetter);
   const { actions, usedWorkflow, prioritized } = buildActions(
     item,
     kind,
@@ -594,7 +617,7 @@ export function buildDocumentGuidance(
       prioritized.now[0]?.text,
       buildMustAct(item, kind, hasDeadline),
     ),
-    deadline: buildDeadline(item, understandingDeadline, letter),
+    deadline: buildDeadline(item, understandingDeadline, deadlineLetter),
     mustReply: buildMustReply(item, kind, hasDeadline),
     retain: buildRetain(resolveOriginalGuidance(item, kind)),
     paperFolder: buildPaperFolder(paper.skipPhysicalFiling, paperFolderLabel),

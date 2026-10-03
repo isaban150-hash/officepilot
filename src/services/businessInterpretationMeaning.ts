@@ -14,6 +14,7 @@ import type {
   BusinessStructuredFacts,
 } from '../types/businessInterpretation';
 import type { ClassifiedDocumentKind, InboxItem, WorkflowResult } from '../types/models';
+import { analysisTextsFromRecognizedData } from './document/mainDocumentPageScope';
 
 type WorkflowCore = Omit<WorkflowResult, 'businessInterpretation'>;
 
@@ -67,8 +68,8 @@ function collectCorpus(item: InboxItem, workflow: WorkflowCore): string {
   const parts = [
     item.title,
     item.sender,
-    item.recognizedData._extractedText,
-    item.recognizedData._vertragstext,
+    // EINGANG-02A-3 — bei abgegrenzter Fremdanlage nur das Hauptschreiben.
+    ...analysisTextsFromRecognizedData(item.recognizedData),
     item.recognizedData.Betreff,
     workflow.documentUnderstanding?.documentType,
     workflow.documentUnderstanding?.sender,

@@ -1190,6 +1190,8 @@ const deLegacy = {
   'classification.detect.nachunternehmer': 'Nachunternehmervertrag erkannt',
   'classification.detect.abnahmeprotokoll': 'Abnahmeprotokoll erkannt',
   'classification.detect.maengelprotokoll': 'Mängelprotokoll erkannt',
+  /* EINGANG-02C */
+  'classification.detect.complaint': 'Beschwerde, Reklamation oder Mängelanzeige erkannt',
   'classification.detect.uebergabeprotokoll': 'Übergabeprotokoll erkannt',
   'classification.detect.bgBau': 'BG BAU / Berufsgenossenschaft Bau erkannt',
   'classification.detect.berufsgenossenschaft': 'Berufsgenossenschaft erkannt',
@@ -1221,6 +1223,13 @@ const deLegacy = {
   'classification.detect.zertifikat': 'Zertifikat erkannt',
   'classification.detect.ausgangsrechnung': 'Ausgangsrechnung erkannt',
   'classification.detect.gutschrift': 'Gutschrift erkannt',
+  // EINGANG-01D-1 — Finanzdokumente, die geprüft statt gebucht werden.
+  'classification.detect.invoiceCorrection': 'Rechnungskorrektur / Storno erkannt — bitte prüfen',
+  'classification.detect.selfBillingCredit': 'Gutschrift im Abrechnungsverfahren erkannt — bitte prüfen',
+  'document.accounting.financeReviewRequired':
+    'Rechnungskorrektur, Storno oder Abrechnungsgutschrift: wird nicht automatisch als Ausgabe gebucht. Bitte zuerst den Bezug prüfen.',
+  'document.accounting.ownCreditNoteReview':
+    'Diese Gutschrift hat Ihr eigener Betrieb ausgestellt – sie ist keine Ausgabe. Bitte prüfen.',
   'classification.detect.quittung': 'Quittung erkannt',
   'classification.detect.kassenbeleg': 'Kassenbeleg erkannt',
   'classification.detect.ecBeleg': 'EC-Beleg erkannt',
@@ -4056,6 +4065,8 @@ const deLegacy = {
   'documentExperience.fact.invoiceNumber': 'Rechnungsnummer',
   'documentExperience.fact.receiptNumber': 'Belegnummer',
   'documentExperience.fact.amount': 'Betrag',
+  /* EINGANG-02C */
+  'documentExperience.fact.complaintAmount': 'Betrag laut Absender',
   'documentExperience.fact.date': 'Datum',
   'documentExperience.fact.due': 'Fällig',
   'documentExperience.fact.deadline': 'Frist',
@@ -5308,6 +5319,8 @@ const trLegacy: Partial<Record<keyof typeof de, string>> = {
   'documentExperience.fact.invoiceNumber': 'Fatura no',
   'documentExperience.fact.receiptNumber': 'Fiş no',
   'documentExperience.fact.amount': 'Tutar',
+  /* EINGANG-02C */
+  'documentExperience.fact.complaintAmount': 'Gönderene göre tutar',
   'documentExperience.fact.date': 'Tarih',
   'documentExperience.fact.due': 'Vade',
   'documentExperience.fact.deadline': 'Süre',
@@ -6513,6 +6526,8 @@ const bgLegacy: Partial<Record<keyof typeof de, string>> = {
   'documentExperience.fact.invoiceNumber': 'Фактура №',
   'documentExperience.fact.receiptNumber': 'Бележка №',
   'documentExperience.fact.amount': 'Сума',
+  /* EINGANG-02C */
+  'documentExperience.fact.complaintAmount': 'Сума според подателя',
   'documentExperience.fact.date': 'Дата',
   'documentExperience.fact.due': 'Падеж',
   'documentExperience.fact.deadline': 'Срок',

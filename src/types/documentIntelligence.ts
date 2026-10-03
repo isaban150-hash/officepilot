@@ -145,6 +145,11 @@ export interface DetectedContractType {
   confidence: FieldConfidenceLevel;
   status: ExtractedFieldStatus;
   evidence: string[];
+  /**
+   * EINGANG-02A-1 — die gewählte Familie steht als echte Titelzeile im
+   * Dokument (nicht bloß als Erwähnung). Unabhängig vom gekürzten `evidence`.
+   */
+  titleEvidence?: boolean;
 }
 
 export interface ContractIntelligenceResult {

@@ -51,7 +51,8 @@ export const CLASSIFICATION_RULES: ClassificationRule[] = [
       /kontoauszug|kontoumsätze|kontobewegungen|\bbank\b|sparkasse|volksbank|commerzbank|deutsche bank|ing[\s-]?di?ba|postbank/,
     reasonKey: 'classification.detect.kontoauszug',
   },
-  { kind: 'mahnung', pattern: /mahnung|inkasso|zahlungsaufforderung/, reasonKey: 'classification.detect.mahnung' },
+  // EINGANG-02B — der gerichtliche Mahnbescheid nutzt die vorhandene Art; die Stufe trägt der Kern.
+  { kind: 'mahnung', pattern: /mahnung|inkasso|zahlungsaufforderung|mahnbescheid/, reasonKey: 'classification.detect.mahnung' },
   { kind: 'zahlungserinnerung', pattern: /zahlungserinnerung/, reasonKey: 'classification.detect.zahlungserinnerung' },
   { kind: 'freistellungsbescheinigung', pattern: /freistellungsbescheinigung|§48b|§48 b/, reasonKey: 'classification.detect.freistellung' },
   { kind: 'unbedenklichkeitsbescheinigung', pattern: /unbedenklichkeitsbescheinigung|unbedenklichkeit/, reasonKey: 'classification.detect.unbedenklichkeit' },
@@ -93,7 +94,12 @@ export const CLASSIFICATION_RULES: ClassificationRule[] = [
   { kind: 'betriebserlaubnis', pattern: /betriebserlaubnis/, reasonKey: 'classification.detect.betriebserlaubnis' },
   { kind: 'iso_nachweis', pattern: /iso[\s-]?9001|iso[\s-]?14001|iso-nachweis/, reasonKey: 'classification.detect.isoNachweis' },
   { kind: 'zertifikat', pattern: /zertifikat|zertifizierung/, reasonKey: 'classification.detect.zertifikat' },
-  { kind: 'gutschrift', pattern: /gutschrift/, reasonKey: 'classification.detect.gutschrift' },
+  /*
+   * EINGANG-01D-1 — keine Teilwort-Regel mehr für `gutschrift`: Das Wort steht
+   * auch in Kontoauszügen und in Rechnungen, die auf eine frühere Gutschrift
+   * verweisen. Erkannt wird die Gutschrift nur noch am eigenen Belegkopf
+   * (`detectFinanceDocumentMarkers` in der Klassifikation).
+   */
   { kind: 'quittung', pattern: /quittung/, reasonKey: 'classification.detect.quittung' },
   { kind: 'kassenbeleg', pattern: /kassenbeleg|kassenbon/, reasonKey: 'classification.detect.kassenbeleg' },
   { kind: 'ec_beleg', pattern: /ec-beleg|ec beleg|kartenzahlung/, reasonKey: 'classification.detect.ecBeleg' },

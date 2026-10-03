@@ -47,6 +47,8 @@ import { composeIntelligentDocumentSubject } from './documentSubjectIntelligence
 import { getInboxExtractedDocumentText } from './inboxDocumentText';
 import { attachDocumentCaseMatch } from './documentCaseMatchPresentation';
 import { isFinanceReferenceOnlyKind } from './documentFinanceReferenceService';
+import { resolveComplaint, resolveComplaintAmount } from './document/complaintTruth';
+import { formatDunningAmount } from './document/dunningFinanceTruth';
 
 export type BuildDocumentSummaryOptions = {
   translate: (key: TranslationKey) => string;
@@ -565,7 +567,7 @@ function buildNonContractSummary(
     rd(item, 'Projekt'),
   );
   const aktenzeichen = firstNonEmpty(
-    rd(item, 'Aktenzeichen', 'Az', 'Beitragsnummer'),
+    rd(item, 'Aktenzeichen', 'Az', 'Beitragsnummer', 'Schadennummer'),
     understanding?.referenceNumber,
   );
   const money = moneyNonContract(item, workflow, bi);
@@ -671,7 +673,20 @@ function buildNonContractSummary(
   } else {
     pushFact(facts, 'sender', 'documentExperience.fact.sender', supplier);
     pushFact(facts, 'subject', 'documentExperience.fact.subject', subject);
-    pushFact(facts, 'amount', 'documentExperience.fact.amount', money);
+    /*
+     * EINGANG-02C — bei einer Beschwerde nur der Betrag, den der Absender selbst
+     * fordert oder ankündigt (Einbehalt, Schadenersatz, Minderung), ausdrücklich
+     * „laut Absender". Ein zitierter Rechnungsbetrag ist keine Forderung.
+     */
+    const beschwerde = resolveComplaint(item, bi?.semantic);
+    if (beschwerde) {
+      const betrag = resolveComplaintAmount(beschwerde);
+      if (betrag !== undefined) {
+        pushFact(facts, 'amount', 'documentExperience.fact.complaintAmount', formatDunningAmount(betrag));
+      }
+    } else {
+      pushFact(facts, 'amount', 'documentExperience.fact.amount', money);
+    }
     pushFact(facts, 'deadline', 'documentExperience.fact.deadline', deadline);
     pushFact(facts, 'site', 'documentExperience.fact.site', site);
   }
@@ -778,7 +793,7 @@ export function createInboxWorkflowStub(item: InboxItem): WorkflowResult {
       recipient: item.recognizedData.Empfänger,
       date: item.recognizedData.Datum,
       referenceNumber:
-        item.recognizedData.Aktenzeichen ?? item.recognizedData.Rechnungsnummer,
+        item.recognizedData.Aktenzeichen ?? item.recognizedData.Schadennummer ?? item.recognizedData.Rechnungsnummer,
       constructionSite:
         item.recognizedData.Baustelle ?? item.recognizedData.Baustellenadresse,
       customer: item.recognizedData.Kunde ?? item.recognizedData.Auftraggeber,

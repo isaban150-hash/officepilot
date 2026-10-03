@@ -16,7 +16,26 @@ import {
   normalizeTask,
 } from './taskNormalize';
 import { generateEntityId } from './sync/syncMetaService';
+import { isAuthorityClassifiedKind, isInsuranceClassifiedKind } from './businessInterpretationMeaning';
+import { buildDocumentSemanticCore } from './document/documentSemanticCoreService';
+import { getDocumentWorkResultForItem } from './documentWorkResultService';
+import { getInboxExtractedDocumentText } from './inboxDocumentText';
+import {
+  formatDunningAmount,
+  resolveDunningFinanceTruth,
+  type DunningFinanceState,
+  type DunningFinanceTruth,
+} from './document/dunningFinanceTruth';
+import {
+  buildComplaintTaskDescription,
+  COMPLAINT_OBLIGATION_TITLE,
+  COMPLAINT_TASK_TITLE,
+  resolveComplaint,
+  resolveComplaintAction,
+} from './document/complaintTruth';
 import { toCanonicalIsoDay } from '../utils/documentDateDisplay';
+import type { BusinessDeadlineType } from '../types/businessInterpretation';
+import type { DocumentSemanticCore, SemanticObligation } from '../types/documentSemanticCore';
 import type {
   ClassifiedDocumentKind,
   CompanyProfile,
@@ -76,6 +95,24 @@ export function findExistingOpenTaskByDedupeKey(dedupeKey: string): Task | null 
   return match[0] ?? null;
 }
 
+/* EINGANG-02B — Prüfaufgabe je bekanntem Finanzstand einer Mahnung; nie „zahlen". */
+const DUNNING_TASK_TITLE: Record<DunningFinanceState, string> = {
+  open: 'Mahnung/Forderung prüfen',
+  paid: 'Mahnung gegen Zahlungsstatus prüfen',
+  partially_paid: 'Restforderung prüfen',
+  reference_unclear: 'Rechnungsbezug prüfen',
+  court: 'Mahnbescheid prüfen',
+};
+
+function buildDunningTaskDescription(titel: string, mahnung: DunningFinanceTruth): string {
+  const zeilen = [titel];
+  if (mahnung.invoiceNumber) zeilen.push(`Bezug: ${mahnung.invoiceNumber}`);
+  if (mahnung.claimAmount !== undefined) zeilen.push(`Forderung laut Mahnung: ${formatDunningAmount(mahnung.claimAmount)}`);
+  if (mahnung.invoiceNumber && mahnung.paidAmount !== undefined) zeilen.push(`Bezahlt laut OfficeTakt: ${formatDunningAmount(mahnung.paidAmount)}`);
+  if (mahnung.invoiceNumber && mahnung.openAmount !== undefined) zeilen.push(`Offen laut OfficeTakt: ${formatDunningAmount(mahnung.openAmount)}`);
+  return zeilen.join('\n');
+}
+
 export function proposeTasksFromClassification(
   item: InboxItem,
   profile?: CompanyProfile,
@@ -100,12 +137,21 @@ export function proposeTasksFromClassification(
   };
 
   if (kind === 'mahnung' || kind === 'zahlungserinnerung') {
+    /*
+     * EINGANG-02B — Titel und Hinweis folgen dem bekannten Finanzstand (Bezug,
+     * bezahlt, Rest). Dieselbe Aufgabenidentität wie bisher (`payment_check`),
+     * damit Ablegen, manuelles Anlegen und neue Analyse nichts verdoppeln.
+     */
+    const mahnung = resolveDunningFinanceTruth(item, semanticCoreForItem(item));
+    const titel = mahnung ? DUNNING_TASK_TITLE[mahnung.state] : 'Zahlung prüfen';
     push({
-      title: 'Zahlung prüfen',
-      description: `${classification.title} – offenen Betrag prüfen`,
+      title: titel,
+      description: mahnung
+        ? buildDunningTaskDescription(classification.title, mahnung)
+        : `${classification.title} – offenen Betrag prüfen`,
       priority: 'kritisch',
       category: 'zahlungen',
-      dueDate,
+      ...(mahnung?.state === 'court' ? {} : { dueDate }),
       taskKind: 'payment_check',
       type: 'dokument_pruefen',
     });
@@ -181,12 +227,202 @@ export function proposeTaskFromInboxTemplate(
   };
 }
 
+/**
+ * EINGANG-02A-2B — ein Behörden- oder Versicherungsschreiben, das ausdrücklich
+ * nur informiert („Von Ihnen ist nichts weiter zu veranlassen") und weder
+ * eigene Pflicht noch Handlungsfrist noch relative Frist trägt.
+ *
+ * Bewusst eng: nur diese beiden Familien, nur ohne kanonische Frist und nur mit
+ * dem Informationshinweis des semantischen Kerns. Rechnungen, Mahnungen,
+ * Verträge, Angebote und Gutschriften sind nie betroffen; „kein Datum" allein
+ * genügt nie. Ohne Text und ohne gespeicherten Kern bleibt alles wie bisher.
+ */
+export function isPureInstitutionalInformation(item: InboxItem): boolean {
+  const kind = item.classifiedKind;
+  if (!kind || !(isAuthorityClassifiedKind(kind) || isInsuranceClassifiedKind(kind))) return false;
+  if (item.deadline?.trim()) return false;
+  return Boolean(semanticCoreForItem(item)?.informationOnly);
+}
+
+/**
+ * Der semantische Kern eines Eingangs — derselbe Leser wie in der Analyse, aus
+ * dem Volltext; ohne Text der gespeicherte Kern des Arbeitsstands. Keine
+ * zweite Fristen- oder Pflichtenerkennung.
+ */
+function semanticCoreForItem(item: InboxItem): DocumentSemanticCore | null | undefined {
+  const text = getInboxExtractedDocumentText(item);
+  return text
+    ? buildDocumentSemanticCore({ text, companyProfile: null })
+    : getDocumentWorkResultForItem(item.id)?.businessInterpretation?.semantic;
+}
+
+/* ------------------------------------------------------------------ */
+/* EINGANG-02A-2C — eine Aufgabe je eigener Pflicht                    */
+/* ------------------------------------------------------------------ */
+
+const OBLIGATION_TASK: Record<BusinessDeadlineType, { title: string; category?: TaskCategory }> = {
+  response_due: { title: 'Stellungnahme abgeben' },
+  document_submission_due: { title: 'Unterlagen einreichen' },
+  /* Nur prüfen — gezahlt, erfasst oder gebucht wird nichts. */
+  payment_due: { title: 'Zahlung prüfen', category: 'zahlungen' },
+  service_due: { title: 'Leistung erbringen' },
+  termination_notice: { title: 'Kündigungsfrist prüfen' },
+};
+
+/** Stabile fachliche Identität einer Pflicht: Art und Datum bzw. Fristwortlaut. */
+function obligationTaskKey(obligation: SemanticObligation): string {
+  const wann = obligation.byWhen
+    ? obligation.byWhen
+    : obligation.relativeDeadline
+      ? `relativ-${obligation.relativeDeadline.toLowerCase().replace(/[^a-z0-9äöüß]+/g, '-')}`
+      : 'ohne-frist';
+  return `${obligation.kind}:${wann}`;
+}
+
+/**
+ * EINGANG-02A-2C — mehrere eigene Pflichten eines Behörden-, Versicherungs-
+ * oder sonstigen Schreibens werden zu mehreren konkreten Vorschlägen: je
+ * Art und Frist ein Titel, das eigene Datum (nie die Hauptfrist für alle), die
+ * relative Frist im Wortlaut ohne berechnetes Datum und die angeforderten
+ * Unterlagen. Gibt es weniger als zwei solche Pflichten, bleibt es beim
+ * bisherigen einzelnen Vorschlag — leere Liste.
+ *
+ * Rechnungen, Mahnungen, Gutschriften, Verträge und Angebote haben ihren
+ * eigenen Weg und sind nicht betroffen. Nichts davon handelt nach aussen.
+ */
+export function proposeObligationTasks(
+  item: InboxItem,
+  profile?: CompanyProfile,
+  options: { autoCreated?: boolean } = {},
+): TaskProposal[] {
+  if (!isDocumentAnalysisAllowed(item, profile)) return [];
+  const kind = item.classifiedKind;
+  if (kind && kind !== 'sonstiges' && !isAuthorityClassifiedKind(kind) && !isInsuranceClassifiedKind(kind)) return [];
+  const core = semanticCoreForItem(item);
+  if (!core) return [];
+  /* EINGANG-02C — Pflichten einer eingehenden Beschwerde: prüfen/vorbereiten, Kategorie Dokumente. */
+  const beschwerde = resolveComplaint(item, core);
+
+  /*
+   * Nacharbeit 1 — gleiche Art und gleiche Frist sind dieselbe interne
+   * Handlung („Unterlagen einreichen bis 25.10."). Sie werden zu einer Aufgabe
+   * gruppiert, ohne dass eine Pflicht verloren geht: alle Pflichttexte, alle
+   * Unterlagen (identische nur einmal), alle relativen Fristen. Der Schlüssel
+   * bleibt fachlich (Art + Frist) — kein Index, damit eine spätere Analyse in
+   * anderer Reihenfolge dieselbe Aufgabe wiederfindet.
+   */
+  interface Gruppe {
+    key: string;
+    kind: BusinessDeadlineType;
+    byWhen?: string;
+    texte: string[];
+    unterlagen: string[];
+    relativ: string[];
+  }
+  const gruppen = new Map<string, Gruppe>();
+  let pflichten = 0;
+  core.obligations.forEach((obligation, index) => {
+    if (obligation.who !== 'own_company' || !obligation.kind) return;
+    pflichten += 1;
+    const key = obligationTaskKey(obligation);
+    const gruppe =
+      gruppen.get(key) ??
+      ({ key, kind: obligation.kind, byWhen: obligation.byWhen, texte: [], unterlagen: [], relativ: [] } satisfies Gruppe);
+    gruppen.set(key, gruppe);
+    if (!gruppe.texte.includes(obligation.what)) gruppe.texte.push(obligation.what);
+    for (const doc of core.requestedDocuments ?? []) {
+      if (doc.obligationIndex !== index) continue;
+      if (!gruppe.unterlagen.some((label) => label.toLowerCase() === doc.label.toLowerCase())) gruppe.unterlagen.push(doc.label);
+    }
+    if (obligation.relativeDeadline && !gruppe.relativ.includes(obligation.relativeDeadline)) {
+      gruppe.relativ.push(obligation.relativeDeadline);
+    }
+  });
+  /* Erst ab zwei eigenen Pflichten — auch wenn sie in einer Gruppe landen, damit nichts im Einzelfallback verschwindet. */
+  if (pflichten < 2) return [];
+
+  return [...gruppen.values()].map((gruppe) => {
+    const vorlage = beschwerde
+      ? { title: COMPLAINT_OBLIGATION_TITLE[gruppe.kind] ?? OBLIGATION_TASK[gruppe.kind].title, category: 'dokumente' as TaskCategory }
+      : OBLIGATION_TASK[gruppe.kind];
+    const hinweise = [
+      ...gruppe.texte,
+      gruppe.unterlagen.length > 0 ? `Unterlagen: ${gruppe.unterlagen.join(', ')}` : '',
+      ...gruppe.relativ.map((phrase) => `Frist laut Schreiben: ${phrase} – Datum nicht berechnet, bitte prüfen.`),
+      !gruppe.byWhen && gruppe.relativ.length === 0 ? 'Keine Frist genannt – bitte prüfen.' : '',
+    ].filter(Boolean);
+    return {
+      title: vorlage.title,
+      description: hinweise.join('\n'),
+      priority: item.priority,
+      category: vorlage.category ?? (kind && isInsuranceClassifiedKind(kind) ? 'versicherungen' : 'behoerden'),
+      ...(gruppe.byWhen ? { dueDate: gruppe.byWhen } : {}),
+      ...baseInboxLinks(item),
+      sourceType: 'inbox',
+      sourceId: item.id,
+      taskKind: `obligation:${gruppe.key}`,
+      dedupeKey: `inbox:${item.id}:obligation:${gruppe.key}`,
+      autoCreated: options.autoCreated ?? false,
+      type: 'dokument_pruefen',
+    } satisfies TaskProposal;
+  });
+}
+
+/**
+ * EINGANG-02A-2C — alle Vorschläge, die ein Eingang beim Ablegen bzw. auf
+ * ausdrücklichen Wunsch erzeugt: bei mehreren eigenen Pflichten je Pflicht
+ * einer, sonst unverändert der eine bisherige Vorschlag.
+ */
+export function proposeInboxTasks(
+  item: InboxItem,
+  profile?: CompanyProfile,
+  options: { autoCreated?: boolean } = {},
+): TaskProposal[] {
+  if (!isDocumentAnalysisAllowed(item, profile)) return [];
+  if (options.autoCreated && isPureInstitutionalInformation(item)) return [];
+  const proPflicht = proposeObligationTasks(item, profile, options);
+  if (proPflicht.length > 0) return proPflicht;
+  const primary = proposePrimaryInboxTask(item, profile, options);
+  return primary ? [primary] : [];
+}
+
 export function proposePrimaryInboxTask(
   item: InboxItem,
   profile?: CompanyProfile,
   options: { autoCreated?: boolean } = {},
 ): TaskProposal | null {
   if (!isDocumentAnalysisAllowed(item, profile)) return null;
+  /*
+   * EINGANG-02A-2B — beim Ablegen entsteht für reine Information keine
+   * Wiedervorlage allein aus der Dokumentart. Wer ausdrücklich eine Aufgabe
+   * anlegt, bekommt sie weiterhin.
+   */
+  if (options.autoCreated && isPureInstitutionalInformation(item)) return null;
+
+  /*
+   * EINGANG-02C — eine eingehende Beschwerde mit höchstens einer eigenen
+   * Pflicht bekommt genau eine Prüfaufgabe (statt keiner, weil die Grundart
+   * neutral ist). Ein eigenes Schreiben erzeugt keine eigene Aufgabe.
+   */
+  const beschwerde = resolveComplaint(item, semanticCoreForItem(item));
+  if (beschwerde) {
+    if (beschwerde.direction === 'outgoing') return null;
+    const handlung = resolveComplaintAction(beschwerde, semanticCoreForItem(item), item.deadlineType);
+    return {
+      title: COMPLAINT_TASK_TITLE[handlung],
+      description: buildComplaintTaskDescription(beschwerde),
+      priority: item.priority,
+      category: 'dokumente',
+      ...(item.deadline ? { dueDate: item.deadline } : {}),
+      ...baseInboxLinks(item),
+      sourceType: 'inbox',
+      sourceId: item.id,
+      taskKind: 'complaint_check',
+      dedupeKey: `inbox:${item.id}:complaint`,
+      autoCreated: options.autoCreated ?? false,
+      type: 'dokument_pruefen',
+    } satisfies TaskProposal;
+  }
 
   const classificationProposals = proposeTasksFromClassification(item, profile);
   if (classificationProposals.length > 0) {
@@ -322,9 +558,20 @@ export function createTaskFromInboxItem(
   profile?: CompanyProfile,
   options: { autoCreated?: boolean } = {},
 ): Task | null {
-  const proposal = proposePrimaryInboxTask(item, profile, options);
-  if (!proposal) return null;
-  return createTaskFromProposal(proposal);
+  return createTasksFromInboxItem(item, profile, options)[0] ?? null;
+}
+
+/**
+ * EINGANG-02A-2C — legt alle Vorschläge eines Eingangs an (eine Aufgabe je
+ * eigener Pflicht, sonst die eine bisherige). Die bestehende Dedupe über
+ * `dedupeKey` und Identität macht wiederholtes Ablegen idempotent.
+ */
+export function createTasksFromInboxItem(
+  item: InboxItem,
+  profile?: CompanyProfile,
+  options: { autoCreated?: boolean } = {},
+): Task[] {
+  return createTasksFromProposals(proposeInboxTasks(item, profile, options));
 }
 
 export function createTasksFromContractAnalysis(

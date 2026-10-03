@@ -438,7 +438,15 @@ export function updateInboxItemRecognizedData(
 
   if (changes.sender !== undefined) merged.sender = changes.sender;
   // EINGANG-01A — eine Frist wird nur als eindeutiges Tagesdatum gespeichert.
-  if (changes.deadline !== undefined) merged.deadline = toCanonicalIsoDay(changes.deadline);
+  if (changes.deadline !== undefined) {
+    merged.deadline = toCanonicalIsoDay(changes.deadline);
+    /*
+     * EINGANG-01D-1 — eine von Hand geänderte Frist stammt nicht mehr aus der
+     * Quelle; ihre frühere Art (Zahlung, Antwort …) wäre geraten. Bleibt der
+     * Tag gleich, bleibt auch die Art.
+     */
+    if (merged.deadline !== existing.deadline) merged.deadlineType = undefined;
+  }
   if (changes.vorgangTitle !== undefined) merged.vorgangTitle = changes.vorgangTitle || undefined;
   if (changes.priority !== undefined) merged.priority = changes.priority;
   if (changes.recommendedAction !== undefined) {

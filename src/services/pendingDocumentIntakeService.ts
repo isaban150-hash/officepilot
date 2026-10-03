@@ -15,6 +15,7 @@ import type { PersistingUserStorageDecision } from '../types/userStorageDecision
 import type { StorageRecommendation } from '../types/storageRecommendation';
 import type { ResolvedStoragePolicy } from '../types/storagePolicy';
 import { classifyDocument } from './documentClassificationService';
+import { resolveMainDocumentPageScope } from './document/mainDocumentPageScope';
 import {
   buildStorageRecommendation,
 } from './storageRecommendationService';
@@ -91,10 +92,18 @@ export async function processDocumentFileForPreview(
     options.selectedKind,
   );
 
+  /*
+   * EINGANG-02A-3 — mit sicher abgegrenzter Fremdanlage klassifiziert schon
+   * die Vorschau nur das institutionelle Hauptschreiben (dieselbe Regel wie
+   * bei der Aufnahme); sonst unverändert ohne Seitentexte.
+   */
+  const fremdanlage =
+    (resolveMainDocumentPageScope(extraction.pageTexts?.map((page) => page.text ?? ''))?.attachmentPageNumbers.length ?? 0) > 0;
   const classificationInput = {
     sourceFileName: loaded.payload.fileName,
     kindHint: options.selectedKind,
     recognizedText: extraction.recognizedText,
+    ...(fremdanlage ? { pageTexts: extraction.pageTexts } : {}),
   };
   const classification = classifyDocument(classificationInput);
 

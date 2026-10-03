@@ -27,7 +27,15 @@ import { resolveHybridClassification } from './documentClassificationHybridServi
 import { extractFieldsFromText, mergeExtractedFields } from './documentFieldExtractionService';
 import { resolvePrimaryTargetObjectForKind } from './documentPrimaryTargetService';
 import { buildDocumentSemanticCore } from './document/documentSemanticCoreService';
+import { detectFinanceDocumentMarkers, resolveFinanceReviewReason } from './document/financeDocumentMarkers';
+import { resolveInstitutionalLetterhead, resolveInstitutionalSenderTruth } from './document/institutionalSenderTruth';
+import { mainDocumentTextFromPages, resolveMainDocumentPageScope } from './document/mainDocumentPageScope';
+import { isComplaintLetter } from './document/complaintLetter';
+import { getCompanyProfile } from './companyProfileService';
+import { hasContractFamilyTitle, hasDocumentTitleLine } from './contractIntelligenceExtraction';
+import type { ContractFamily } from '../types/documentIntelligence';
 import { toCanonicalIsoDay } from '../utils/documentDateDisplay';
+import type { BusinessDeadlineType } from '../types/businessInterpretation';
 import {
   buildEvidenceBasedRecognizedData,
   shouldUseEvidenceBasedRecognizedData,
@@ -37,6 +45,7 @@ import type {
   DigitalFolder,
   DocumentClassificationInput,
   DocumentClassificationResult,
+  InboxFinanceReviewReason,
   InboxItem,
   InboxTaskTemplate,
   PaperFilingRule,
@@ -92,7 +101,8 @@ function looksLikeAdvertisement(input: DocumentClassificationInput): boolean {
 }
 
 function hasStrongInvoiceSignals(haystack: string): boolean {
-  if (/mahnung|zahlungserinnerung|inkasso/.test(haystack)) {
+  // EINGANG-02B — auch ein gerichtlicher Mahnbescheid ist keine Rechnung.
+  if (/mahnung|zahlungserinnerung|inkasso|mahnbescheid/.test(haystack)) {
     return false;
   }
   if (SECTOR_INVOICE_TITLE.test(haystack)) {
@@ -384,7 +394,131 @@ export interface DetectionResult {
   reasonKey: string;
 }
 
+/*
+ * EINGANG-01D-1 — Korrektur/Storno und Abrechnungsgutschrift haben keine
+ * eigene eingehende Dokumentart (`rechnungskorrektur` gehört der eigenen
+ * Ausgangsseite). Sie bleiben `sonstiges` und gehen in den bestehenden
+ * Klären-Pfad; der Grund steht im Erkennungsschlüssel und als
+ * `financeReviewReason` am Eingang.
+ */
+const FINANCE_REVIEW_REASON_KEYS: Record<InboxFinanceReviewReason, string> = {
+  invoice_correction: 'classification.detect.invoiceCorrection',
+  self_billing_credit: 'classification.detect.selfBillingCredit',
+};
+const CREDIT_NOTE_REASON_KEY = 'classification.detect.gutschrift';
+/* EINGANG-02C — Beschwerde/Reklamation/Mängelanzeige am Titel erkannt. */
+const COMPLAINT_REASON_KEY = 'classification.detect.complaint';
+
+function detectFinanceDocumentKind(
+  recognizedText: string | undefined,
+  firstPageText?: string,
+): DetectionResult | null {
+  const markers = detectFinanceDocumentMarkers(recognizedText, { firstPageText });
+  const review = resolveFinanceReviewReason(markers);
+  if (review) return { kind: 'sonstiges', reasonKey: FINANCE_REVIEW_REASON_KEYS[review] };
+  if (markers.creditNoteHeader) return { kind: 'gutschrift', reasonKey: CREDIT_NOTE_REASON_KEY };
+  return null;
+}
+
+function financeReviewReasonFromDetection(reasonKey: string): InboxFinanceReviewReason | undefined {
+  return (Object.keys(FINANCE_REVIEW_REASON_KEYS) as InboxFinanceReviewReason[]).find(
+    (reason) => FINANCE_REVIEW_REASON_KEYS[reason] === reasonKey,
+  );
+}
+
+const FINANCE_REVIEW_TITLE: Record<InboxFinanceReviewReason, string> = {
+  invoice_correction: 'Rechnungskorrektur',
+  self_billing_credit: 'Abrechnungsgutschrift',
+};
+const FINANCE_REVIEW_EXPLANATION: Record<InboxFinanceReviewReason, string> = {
+  invoice_correction:
+    'Rechnungskorrektur oder Storno erkannt. Sie bezieht sich auf eine vorhandene Rechnung und wird nicht als neue Ausgabe gebucht — bitte den Bezug prüfen.',
+  self_billing_credit:
+    'Gutschrift im Abrechnungsverfahren erkannt: Hier rechnet der Kunde über unsere Leistung ab. Das ist keine Ausgabe — bitte prüfen.',
+};
+const FINANCE_REVIEW_NEXT_TASK: Record<InboxFinanceReviewReason, string> = {
+  invoice_correction: 'Korrektur prüfen',
+  self_billing_credit: 'Abrechnungsgutschrift prüfen',
+};
+
+const ACTION_DEADLINE_TYPES: ReadonlySet<string> = new Set<BusinessDeadlineType>([
+  'payment_due',
+  'response_due',
+  'document_submission_due',
+  'service_due',
+  'termination_notice',
+]);
+
+function asActionDeadlineType(type: string | undefined): BusinessDeadlineType | undefined {
+  return type && ACTION_DEADLINE_TYPES.has(type) ? (type as BusinessDeadlineType) : undefined;
+}
+
+/*
+ * EINGANG-02A-1 Nacharbeit 2 — ein Behörden- oder Versicherungsschreiben, das
+ * einen Vertrag nur erwähnt („Ihr Auftraggeber … aus dem Werkvertrag",
+ * „Bitte legen Sie den Subunternehmervertrag vor"), ist kein Vertrag.
+ *
+ * Vertragsvorrang und Katalog erkennen diese Arten schon an der bloßen
+ * Erwähnung, und beide stehen vor den Behördenregeln. Deshalb: Stammt der
+ * Briefkopf von einer Behörde oder Versicherung (`resolveInstitutionalLetterhead`)
+ * und steht die Vertragsfamilie nicht als
+ * echte Titelzeile im Dokument (`hasContractFamilyTitle`, dieselbe Wahrheit
+ * wie im Vertrags-Gate), gilt die institutionelle Art. Ein echter Vertrag mit
+ * Titelzeile — auch von einer Stadt oder Versicherung — bleibt Vertrag.
+ */
+const MENTION_PRONE_CONTRACT_KINDS: ReadonlyMap<ClassifiedDocumentKind, readonly ContractFamily[]> = new Map([
+  ['werkvertrag', ['werkvertrag', 'subunternehmervertrag']],
+  ['subunternehmervertrag', ['subunternehmervertrag', 'werkvertrag']],
+  ['nachunternehmervertrag', ['subunternehmervertrag', 'werkvertrag']],
+  ['leasingvertrag', ['leasingvertrag']],
+  // Nacharbeit 3 — gewinnt im Katalog vor den Versicherungsregeln; gilt fachlich als Vertragsart.
+  ['arbeitsvertrag', ['arbeitsvertrag']],
+] as const);
+
+/*
+ * Nacharbeit 3 — Protokolle stehen im Katalog vor allen Behördenregeln und
+ * lösen Abnahme-/Rechnungswege aus („Bitte senden Sie uns das
+ * Abnahmeprotokoll"). Titel ist hier der Begriff der Katalogregel selbst.
+ */
+const MENTION_PRONE_DOCUMENT_KINDS: ReadonlySet<ClassifiedDocumentKind> = new Set([
+  'abnahmeprotokoll',
+  'maengelprotokoll',
+  'uebergabeprotokoll',
+]);
+
+function hasOwnDocumentTitle(text: string, kind: ClassifiedDocumentKind): boolean {
+  const families = MENTION_PRONE_CONTRACT_KINDS.get(kind);
+  if (families) return families.some((family) => hasContractFamilyTitle(text, family));
+  const rule = CLASSIFICATION_RULES.find((candidate) => candidate.kind === kind);
+  return rule ? hasDocumentTitleLine(text, new RegExp(rule.pattern.source, 'i')) : true;
+}
+
+function detectInstitutionalLetterheadKind(input: DocumentClassificationInput): DetectionResult | null {
+  // Nacharbeit 3 — dieselbe Briefkopf-Wahrheit wie Vertrags-Gate und Vertragsanalyse.
+  const letterhead = resolveInstitutionalLetterhead(input.recognizedText, { senderHint: input.senderHint });
+  if (!letterhead) return null;
+  if (letterhead.kind && letterhead.reasonKey) return { kind: letterhead.kind, reasonKey: letterhead.reasonKey };
+  // Kommunaler Briefkopf ohne eigene Katalogart („Stadt Musterstadt"): ein Schreiben, kein Vertrag.
+  return { kind: 'brief', reasonKey: 'classification.detect.brief' };
+}
+
+function guardInstitutionalContractMention(
+  input: DocumentClassificationInput,
+  detection: DetectionResult,
+): DetectionResult {
+  if (detection.reasonKey === 'classification.detect.uploadHint') return detection;
+  if (!MENTION_PRONE_CONTRACT_KINDS.has(detection.kind) && !MENTION_PRONE_DOCUMENT_KINDS.has(detection.kind)) {
+    return detection;
+  }
+  if (hasOwnDocumentTitle(input.recognizedText ?? '', detection.kind)) return detection;
+  return detectInstitutionalLetterheadKind(input) ?? detection;
+}
+
 export function detectClassifiedKindWithReason(input: DocumentClassificationInput): DetectionResult {
+  return guardInstitutionalContractMention(input, detectClassifiedKindCore(input));
+}
+
+function detectClassifiedKindCore(input: DocumentClassificationInput): DetectionResult {
   const fromHint = resolveKindFromHint(input.kindHint);
   if (fromHint && input.kindHint !== 'werbung') {
     return { kind: fromHint, reasonKey: 'classification.detect.uploadHint' };
@@ -399,6 +533,30 @@ export function detectClassifiedKindWithReason(input: DocumentClassificationInpu
   const contractPriority = detectContractPriorityKind(haystack, input.pageTexts);
   if (contractPriority) {
     return contractPriority;
+  }
+
+  /*
+   * EINGANG-01D-1 — Gutschrift, Korrektur und Abrechnungsgutschrift vor der
+   * Rechnungs-Schnellspur: Sonst würde jede von ihnen zur Eingangsrechnung und
+   * damit zu einer neuen Verbindlichkeit. Nach der Vertragspriorität, weil
+   * Verträge das Gutschriftsverfahren als Abrechnungsweg nur erwähnen.
+   */
+  const financeDetection = detectFinanceDocumentKind(input.recognizedText, input.pageTexts?.[0]?.text);
+  if (financeDetection) {
+    return financeDetection;
+  }
+
+  /*
+   * EINGANG-02C — ein Schreiben mit sicherem Beschwerdetitel im Kopf
+   * („Mängelanzeige", „Beschwerde", „Reklamation", „Auftrag AU-… –
+   * Mängelanzeige") ist keine Rechnung und kein Auftrag, auch wenn es eine
+   * Rechnungs- oder Auftragsnummer zitiert. Es bleibt bei der neutralen
+   * Grundart; die Beschwerde-Bedeutung trägt der semantische Kern. Ein Wort
+   * im Fliesstext oder in einer Rechnungsposition genügt nicht.
+   */
+  /* Nacharbeit 1 — ein Behörden-/Versicherungsbriefkopf (02A-1) behält seine Art. */
+  if (isComplaintLetter(input.recognizedText ?? '')) {
+    return { kind: 'sonstiges', reasonKey: COMPLAINT_REASON_KEY };
   }
 
   if (hasStrongInvoiceSignals(haystack)) {
@@ -617,50 +775,192 @@ export function suggestRelatedVorgang(
  * „informational" (unsicher) gelesenes Datum sperrt das Feld nicht: Das hieße
  * nicht „keine Handlung", sondern „nicht verstanden".
  */
+/**
+ * EINGANG-01D-1 Nacharbeit 3 — die Frist einer Gutschrift gehört der Gutschrift.
+ *
+ * Eine Gutschrift fordert keine Zahlung; ein „Zahlbar bis" stammt bei ihr aus
+ * einer angehängten oder zitierten Originalrechnung und würde sonst zur
+ * Handlungsfrist (und zur fälligen Aufgabe) der Gutschrift. Deshalb:
+ *   - mit echten Seitentexten nur Seite 1 (das Hauptdokument) lesen;
+ *   - `payment_due` nie übernehmen — ohne Seitengrenzen fail closed;
+ *   - kein Rückfall auf das erkannte Feld `Frist`, dessen Art und Herkunft
+ *     ungesichert sind.
+ * Andere echte Handlungsfristen der Gutschrift (Antwort, Unterlagen …) bleiben.
+ */
+export function resolveCreditNoteActionDeadline(
+  input: DocumentClassificationInput,
+): { deadline: string | null; deadlineType?: BusinessDeadlineType } {
+  const firstPage = input.pageTexts?.[0]?.text?.trim();
+  const text = firstPage || input.recognizedText?.trim() || '';
+  if (!text) return { deadline: null };
+  const core = buildDocumentSemanticCore({ text, companyProfile: null });
+  const candidates = [core.primaryActionDeadline, ...core.deadlines].filter(
+    (frist): frist is NonNullable<typeof frist> => Boolean(frist),
+  );
+  for (const frist of candidates) {
+    const type = asActionDeadlineType(frist.type);
+    const day = toCanonicalIsoDay(frist.date);
+    if (type && type !== 'payment_due' && day) return { deadline: day, deadlineType: type };
+  }
+  return { deadline: null };
+}
+
 function resolveCanonicalActionDeadline(
   input: DocumentClassificationInput,
   recognizedData: Record<string, string>,
-): string | null {
+  classifiedKind?: ClassifiedDocumentKind,
+): { deadline: string | null; deadlineType?: BusinessDeadlineType } {
+  if (classifiedKind === 'gutschrift') return resolveCreditNoteActionDeadline(input);
   const text = input.recognizedText?.trim() ?? '';
   const core = text ? buildDocumentSemanticCore({ text, companyProfile: null }) : null;
   const semantic = toCanonicalIsoDay(core?.primaryActionDeadline?.date);
-  if (semantic) return semantic;
+  if (semantic) {
+    // EINGANG-01D-1 — die Art reist mit, aber nur eine echte Handlungsfrist-Art.
+    return { deadline: semantic, deadlineType: asActionDeadlineType(core?.primaryActionDeadline?.type) };
+  }
   const field = toCanonicalIsoDay(recognizedData.Frist) ?? toCanonicalIsoDay(recognizedData.Fälligkeit);
-  if (!field) return null;
-  const isValidityEnd = core?.deadlines.some(
-    (frist) => frist.date === field && frist.type === 'validity_period_end',
-  );
-  return isValidityEnd ? null : field;
+  if (!field) return { deadline: null };
+  /*
+   * EINGANG-02C — ein eigenes Schreiben (eigener Briefkopf) setzt dem
+   * Empfänger Fristen, nicht uns; ebenso ist die Zusage der Gegenseite
+   * („Wir melden uns bis …") keine eigene Frist. Das Feld darf sie nicht
+   * wieder zur Handlungsfrist machen.
+   */
+  if (core?.complaint?.direction === 'outgoing') return { deadline: null };
+  const sameDay = core?.deadlines.filter((frist) => toCanonicalIsoDay(frist.date) === field) ?? [];
+  if (sameDay.length > 0 && sameDay.every((frist) => !frist.actionRequired && frist.appliesTo === 'Zusage der Gegenseite')) {
+    return { deadline: null };
+  }
+  const isValidityEnd = sameDay.some((frist) => frist.type === 'validity_period_end');
+  if (isValidityEnd) return { deadline: null };
+  /*
+   * EINGANG-01D-1 — aus dem Feld allein ist die Art nicht sicher. Nur wenn der
+   * Kern genau diesen Tag eindeutig einer Handlungsfrist-Art zuordnet, wird sie
+   * übernommen; sonst bleibt sie offen.
+   */
+  const types = [...new Set(sameDay.map((frist) => asActionDeadlineType(frist.type)).filter(Boolean))];
+  return { deadline: field, deadlineType: types.length === 1 ? types[0] : undefined };
 }
 
-export function classifyDocument(input: DocumentClassificationInput): DocumentClassificationResult {
-  const legacyDetection = detectClassifiedKindWithReason(input);
+/**
+ * EINGANG-02A-3 — ein institutionelles Schreiben mit sicher abgegrenzter
+ * Fremdanlage wird nur auf seinen Hauptseiten klassifiziert; Rechnungs- oder
+ * Angebotssignale der Anlage bestimmen weder Art noch Felder. Ohne Seiten oder
+ * ohne sichere Anlage bleibt die Eingabe unverändert.
+ */
+function projectClassificationInputToMainDocument(input: DocumentClassificationInput): DocumentClassificationInput {
+  const pages = input.pageTexts?.map((page) => page.text ?? '');
+  const scope = resolveMainDocumentPageScope(pages);
+  const mainText = mainDocumentTextFromPages(pages, scope);
+  if (!scope || !mainText) return input;
+  const haupt = new Set(scope.mainPageNumbers);
+  return {
+    ...input,
+    recognizedText: mainText,
+    pageTexts: input.pageTexts?.filter((_, index) => haupt.has(index + 1)),
+  };
+}
+
+/*
+ * EINGANG-02A-3 — Belegarten, die ein institutionelles Hauptschreiben nur
+ * erwähnt („Anbei erhalten Sie die Werkstattrechnung zur Kenntnis"), während
+ * der Beleg selbst als Fremdanlage abgegrenzt ist.
+ */
+const ATTACHMENT_MENTION_KINDS: ReadonlySet<ClassifiedDocumentKind> = new Set([
+  'eingangsrechnung',
+  'rechnung',
+  'reparaturrechnung',
+  'angebot',
+  'auftragsbestaetigung',
+  'lieferschein',
+]);
+
+/**
+ * Ist eine Fremdanlage abgegrenzt und trägt das Hauptschreiben selbst keinen
+ * Belegtitel, gilt der institutionelle Briefkopf — wie der 02A-1-Schutz für
+ * erwähnte Verträge, nur für diesen einen Fall.
+ */
+function guardInstitutionalAttachmentMention(
+  input: DocumentClassificationInput,
+  scoped: boolean,
+  detection: DetectionResult,
+): DetectionResult {
+  if (!scoped || detection.reasonKey === 'classification.detect.uploadHint') return detection;
+  if (!ATTACHMENT_MENTION_KINDS.has(detection.kind)) return detection;
+  if (hasOwnDocumentTitle(input.recognizedText ?? '', detection.kind)) return detection;
+  return detectInstitutionalLetterheadKind(input) ?? detection;
+}
+
+export function classifyDocument(rawInput: DocumentClassificationInput): DocumentClassificationResult {
+  const input = projectClassificationInputToMainDocument(rawInput);
+  const scoped = input !== rawInput;
+  const legacyDetection = guardInstitutionalAttachmentMention(input, scoped, detectClassifiedKindWithReason(input));
   const hybridContext = resolveHybridClassification(input, legacyDetection);
-  const { detection } = hybridContext.resolution;
+  /*
+   * EINGANG-01D-1 — eine am Belegkopf erkannte Gutschrift, Korrektur oder
+   * Abrechnungsgutschrift darf keine Schnellspur mehr zur Eingangsrechnung
+   * machen. Die Regel-Entscheidung gilt dann auch nach dem Hybrid-Abgleich.
+   */
+  const financeDecided =
+    legacyDetection.reasonKey === CREDIT_NOTE_REASON_KEY ||
+    /* EINGANG-02C — der Beschwerdetitel entscheidet wie ein Belegkopf. */
+    legacyDetection.reasonKey === COMPLAINT_REASON_KEY ||
+    Boolean(financeReviewReasonFromDetection(legacyDetection.reasonKey));
+  const detection = guardInstitutionalAttachmentMention(
+    input,
+    scoped,
+    financeDecided ? legacyDetection : hybridContext.resolution.detection,
+  );
+  const financeReviewReason = financeReviewReasonFromDetection(detection.reasonKey);
   const documentProfile = hybridContext.documentProfile;
   const classifiedKind = detection.kind;
   const needsKindReview =
+    Boolean(financeReviewReason) ||
     Boolean(documentProfile?.needsKindReview) ||
     detection.reasonKey === 'classification.detect.kindReviewRequired';
   const isAdvertisement = looksLikeAdvertisement(input);
 
-  const recognizedData = buildRecognizedData(classifiedKind, input);
+  const extractedData = buildRecognizedData(classifiedKind, input);
   const profileSender = documentProfile?.senderEntity?.trim();
-  const sender =
+  const extractedSender =
     input.senderHint ??
     profileSender ??
-    recognizedData.Absender ??
-    recognizedData.Lieferant ??
-    recognizedData.Kunde ??
-    recognizedData.Krankenkasse ??
-    recognizedData.Aussteller ??
+    extractedData.Absender ??
+    extractedData.Lieferant ??
+    extractedData.Kunde ??
+    extractedData.Krankenkasse ??
+    extractedData.Aussteller ??
     UNKNOWN_SENDER_CANONICAL;
+  /*
+   * EINGANG-02A-1 — ein Behörden- oder Versicherungsschreiben hat nie die
+   * eigene Firma aus dem Empfängerblock als Absender. Absender, Absender-Feld
+   * und Profil-Absender werden gemeinsam korrigiert, damit jede Anzeige
+   * dieselbe Wahrheit liest.
+   */
+  const institutionalSender = resolveInstitutionalSenderTruth({
+    classifiedKind,
+    recognizedText: input.recognizedText,
+    senderHint: input.senderHint,
+    sender: extractedSender,
+    recognizedData: extractedData,
+    senderEntity: profileSender,
+    ownCompanyName: getCompanyProfile().companyName,
+    unknownSender: UNKNOWN_SENDER_CANONICAL,
+  });
+  const recognizedData = institutionalSender?.recognizedData ?? extractedData;
+  const sender = institutionalSender?.sender ?? extractedSender;
+  const resolvedDocumentProfile =
+    institutionalSender && documentProfile
+      ? { ...documentProfile, senderEntity: institutionalSender.senderEntity }
+      : documentProfile;
 
   const title =
     input.titleHint ??
-    (needsKindReview
-      ? `Dokument – ${sender}`
-      : `${classifiedKind.charAt(0).toUpperCase()}${classifiedKind.slice(1).replace(/_/g, ' ')} – ${sender}`);
+    (financeReviewReason
+      ? `${FINANCE_REVIEW_TITLE[financeReviewReason]} – ${sender}`
+      : needsKindReview
+        ? `Dokument – ${sender}`
+        : `${classifiedKind.charAt(0).toUpperCase()}${classifiedKind.slice(1).replace(/_/g, ' ')} – ${sender}`);
 
   const suggestedVorgangRaw = suggestRelatedVorgang(recognizedData, sender, title);
   const digitalFolder = suggestDigitalFolder(classifiedKind, {
@@ -677,11 +977,13 @@ export function classifyDocument(input: DocumentClassificationInput): DocumentCl
   const paperFiling =
     paperResolution.rule ??
     ({ folderId: '', register: '—', label: 'Entsorgen' } satisfies PaperFilingRule);
-  const deadline = resolveCanonicalActionDeadline(input, recognizedData);
+  const { deadline, deadlineType } = resolveCanonicalActionDeadline(input, recognizedData, classifiedKind);
 
-  const explanation = needsKindReview
-    ? `Dokumentart bitte prüfen. Mehrere Dokumentarten möglich. Absender: „${sender}“.`
-    : buildExplanation(classifiedKind, sender);
+  const explanation = financeReviewReason
+    ? `${FINANCE_REVIEW_EXPLANATION[financeReviewReason]} Absender: „${sender}“.`
+    : needsKindReview
+      ? `Dokumentart bitte prüfen. Mehrere Dokumentarten möglich. Absender: „${sender}“.`
+      : buildExplanation(classifiedKind, sender);
   const priority = isAdvertisement
     ? 'niedrig'
     : needsKindReview
@@ -699,10 +1001,13 @@ export function classifyDocument(input: DocumentClassificationInput): DocumentCl
       ? 'review_required'
       : suggestProcessType(classifiedKind, primaryTargetObject);
 
-  const suggestedKinds = (documentProfile?.topCandidates ?? [])
-    .map((candidate) => candidate.kind)
-    .filter((kind, index, all) => all.indexOf(kind) === index)
-    .slice(0, 2);
+  // EINGANG-01D-1 — ein Finanz-Prüffall schlägt keine Rechnungsart zur Übernahme vor.
+  const suggestedKinds = financeReviewReason
+    ? []
+    : (documentProfile?.topCandidates ?? [])
+        .map((candidate) => candidate.kind)
+        .filter((kind, index, all) => all.indexOf(kind) === index)
+        .slice(0, 2);
 
   const result: DocumentClassificationResult = {
     classifiedKind,
@@ -714,6 +1019,8 @@ export function classifyDocument(input: DocumentClassificationInput): DocumentCl
     explanation,
     priority,
     deadline,
+    ...(deadline && deadlineType ? { deadlineType } : {}),
+    ...(financeReviewReason ? { financeReviewReason } : {}),
     recommendedAction,
     digitalFolder,
     paperFiling,
@@ -721,9 +1028,11 @@ export function classifyDocument(input: DocumentClassificationInput): DocumentCl
     officePilotSuggestion: explanation,
     nextTaskLabel: isAdvertisement
       ? 'Keine Aufgabe nötig'
-      : needsKindReview
-        ? 'Dokumentart bitte prüfen'
-        : buildNextTask(classifiedKind),
+      : financeReviewReason
+        ? FINANCE_REVIEW_NEXT_TASK[financeReviewReason]
+        : needsKindReview
+          ? 'Dokumentart bitte prüfen'
+          : buildNextTask(classifiedKind),
     securityHint: SECURITY_DEFAULT,
     taskTemplate: isAdvertisement || needsKindReview
       ? undefined
@@ -739,7 +1048,7 @@ export function classifyDocument(input: DocumentClassificationInput): DocumentCl
           },
         ]
       : suggestActions(classifiedKind, { isAdvertisement }),
-    documentProfile: documentProfile ?? undefined,
+    documentProfile: resolvedDocumentProfile ?? undefined,
     needsKindReview: needsKindReview || undefined,
     suggestedKinds: suggestedKinds.length > 0 ? suggestedKinds : undefined,
   };
@@ -794,6 +1103,9 @@ export function buildInboxItemFromClassification(
     sender: classification.sender,
     priority: classification.priority,
     deadline: classification.deadline,
+    // EINGANG-01D-1 — Fristart und Finanz-Prüfhinweis reisen nur mit, wenn belegt.
+    ...(classification.deadline && classification.deadlineType ? { deadlineType: classification.deadlineType } : {}),
+    ...(classification.financeReviewReason ? { financeReviewReason: classification.financeReviewReason } : {}),
     recommendedAction: classification.recommendedAction,
     digitalFolder: { ...classification.digitalFolder },
     paperFiling: { ...classification.paperFiling },
@@ -900,12 +1212,14 @@ export function getClassificationForItem(item: InboxItem): DocumentClassificatio
     pageTexts: parsePageTextsFromItem(item),
   });
 
-  return {
+  const result: DocumentClassificationResult = {
     ...reclassified,
     title: item.title,
     sender: item.sender,
     priority: item.priority,
     deadline: item.deadline,
+    deadlineType: item.deadline ? item.deadlineType : undefined,
+    financeReviewReason: item.financeReviewReason,
     digitalFolder: item.digitalFolder,
     paperFiling: item.paperFiling,
     recognizedData: item.recognizedData,
@@ -914,4 +1228,21 @@ export function getClassificationForItem(item: InboxItem): DocumentClassificatio
     suggestedVorgang: getSuggestedVorgangForItem(item) ?? reclassified.suggestedVorgang,
     actions: suggestActions(reclassified.classifiedKind, item),
   };
+  /*
+   * EINGANG-01D-1 — der gespeicherte Prüfhinweis gilt weiter: Die erneute
+   * Klassifikation läuft mit der gespeicherten Art als Hinweis und sähe ihn
+   * sonst nicht. Ein Prüffall bleibt ein Prüffall — ohne Aufgabe, ohne Buchung.
+   */
+  if (item.financeReviewReason) {
+    return {
+      ...result,
+      needsKindReview: true,
+      recommendedAction: 'klaeren',
+      processType: 'review_required',
+      taskTemplate: undefined,
+      suggestedKinds: undefined,
+      actions: [{ id: 'confirm_filing', labelKey: 'classification.action.confirmFiling', variant: 'primary' }],
+    };
+  }
+  return result;
 }

@@ -18,6 +18,7 @@
 import type {
   DocumentSemanticCore,
   SemanticAmount,
+  SemanticComplaint,
   SemanticDeadline,
   SemanticDeadlineType,
   SemanticPartyCandidate,
@@ -36,6 +37,8 @@ export interface MeaningDeadlineRow {
   text: string;
   /** Nur echte Handlungsfristen dürfen drängen. */
   isAction: boolean;
+  /** EINGANG-01D-2 — Art der Frist, damit die Anzeige der Hauptdokument-Wahrheit folgen kann. */
+  type?: SemanticDeadlineType;
 }
 
 export interface MeaningObligationRow {
@@ -47,6 +50,8 @@ export interface MeaningObligationRow {
 export interface MeaningAmountRow {
   amount: string;
   explanation: string;
+  /** EINGANG-01D-2 — der Betrag ist laut Text eine Forderung an uns. */
+  isClaim?: boolean;
 }
 
 export interface MeaningCandidateRow {
@@ -90,6 +95,8 @@ export interface DocumentMeaningView {
   uncertainties: TranslationKey[];
   /** Nichts Belegbares gefunden — die Oberfläche zeigt dann gar nichts. */
   isEmpty: boolean;
+  /** EINGANG-02C — Angaben des Absenders einer Beschwerde, nie bestätigte Wahrheit. */
+  complaint?: SemanticComplaint;
 }
 
 /* ------------------------------------------------------------------ */
@@ -122,12 +129,22 @@ const FRIST_TEXT: Record<SemanticDeadlineType, string> = {
   informational: 'Termin',
 };
 
+/** EINGANG-02A-2B — Satzanfang einer relativen Frist („Antwort: binnen 14 Tagen …"). */
+const RELATIV_TEXT: Partial<Record<SemanticDeadlineType, string>> = {
+  payment_due: 'Zahlung',
+  response_due: 'Antwort',
+  document_submission_due: 'Unterlagen einreichen',
+  service_due: 'Leistung erbringen',
+  termination_notice: 'Kündigung',
+};
+
 function fristZeile(frist: SemanticDeadline): MeaningDeadlineRow {
   const datum = alsDeutschesDatum(frist.date);
   const einleitung = FRIST_TEXT[frist.type] ?? 'Termin';
   return {
     text: frist.type === 'informational' ? `${einleitung}: ${datum}` : `${einleitung} ${datum}`,
     isAction: frist.actionRequired,
+    type: frist.type,
   };
 }
 
@@ -210,6 +227,21 @@ function ermittleHandlungsbedarf(core: DocumentSemanticCore): MeaningActionNeed 
 
   /* Ein Termin, bis zu dem wir handeln müssen, oder eine befristete Pflicht. */
   if (handlungsfristen.length > 0 || eigenePflichten.some((p) => p.byWhen)) return 'yes';
+
+  /*
+   * EINGANG-02A-2B — eine relative Frist („binnen 14 Tagen nach Erhalt") ist
+   * eine Handlung mit offenem Datum, und ein ausdrücklicher Informationshinweis
+   * ohne jede Pflicht heisst „nichts zu tun".
+   */
+  if ((core.relativeDeadlines?.length ?? 0) > 0) return 'yes';
+  if (core.informationOnly) return 'no';
+
+  /*
+   * 02A-2B — eine sicher typisierte eigene Pflicht ohne Datum („Bitte nehmen
+   * Sie hierzu Stellung", „Wir benötigen noch den Nachweis") ist eine Handlung.
+   * Der Gebrauchshinweis einer Bescheinigung trägt keine Art und bleibt unten.
+   */
+  if (eigenePflichten.some((p) => p.kind) && !core.certificate?.type) return 'yes';
 
   /*
    * Eine Pflicht **ohne** Frist ist oft gar keine Aufforderung, sondern ein
@@ -408,7 +440,14 @@ function bescheinigungsLabel(core: DocumentSemanticCore): TranslationKey | undef
 }
 
 function viewAusKern(core: DocumentSemanticCore): DocumentMeaningView {
-  const bedarf = ermittleHandlungsbedarf(core);
+  /*
+   * EINGANG-02C — eine eingehende Beschwerde ohne eigene Pflicht ist nicht
+   * „nichts zu tun": Der Absender meldet oder fordert etwas, das zu prüfen ist.
+   * Ehrlich ist dann „nicht sicher erkannt" mit „selbst ansehen".
+   */
+  const grundBedarf = ermittleHandlungsbedarf(core);
+  const bedarf: MeaningActionNeed =
+    core.complaint?.direction === 'incoming' && grundBedarf === 'no' ? 'unclear' : grundBedarf;
   const certificateLabelKey = bescheinigungsLabel(core);
 
   /*
@@ -424,19 +463,37 @@ function viewAusKern(core: DocumentSemanticCore): DocumentMeaningView {
       byWhen: p.byWhen ? alsDeutschesDatum(p.byWhen) : undefined,
     }));
 
-  /* Handlungsfristen zuerst, danach Gültigkeiten und blosse Termine. */
-  const deadlines = [...core.deadlines]
-    .filter((f) => f.type !== 'informational' || f.appliesTo !== 'Briefdatum')
-    .sort((a, b) => Number(b.actionRequired) - Number(a.actionRequired) || a.date.localeCompare(b.date))
-    .slice(0, 6)
-    .map(fristZeile);
+  /*
+   * Handlungsfristen zuerst, danach Gültigkeiten und blosse Termine.
+   * EINGANG-02A-2B — relative Fristen stehen im Wortlaut davor; ein Datum
+   * wird nicht berechnet.
+   */
+  const relativeZeilen: MeaningDeadlineRow[] = (core.relativeDeadlines ?? []).map((frist) => ({
+    text: `${(frist.kind && RELATIV_TEXT[frist.kind]) || 'Frist'}: ${frist.phrase}`,
+    isAction: true,
+    ...(frist.kind ? { type: frist.kind } : {}),
+  }));
+  const deadlines = [
+    ...relativeZeilen,
+    ...[...core.deadlines]
+      .filter((f) => f.type !== 'informational' || f.appliesTo !== 'Briefdatum')
+      .sort((a, b) => Number(b.actionRequired) - Number(a.actionRequired) || a.date.localeCompare(b.date))
+      .map(fristZeile),
+  ].slice(0, 6);
 
   const amounts = waehleBetraege(core).map((b) => ({
     amount: formatBetrag(b.value),
     explanation: betragsErklaerung(b),
+    isClaim: b.isClaimAgainstUs,
   }));
 
   const uncertainties: TranslationKey[] = [];
+  /* 02A-2B — Handlung erkannt, Datum nicht bestimmt: das sagen, nicht raten. */
+  if (relativeZeilen.length > 0) {
+    uncertainties.push('documentMeaning.uncertain.relativeDeadline');
+  } else if (bedarf === 'yes' && !core.deadlines.some((f) => f.actionRequired) && !obligations.some((p) => p.byWhen)) {
+    uncertainties.push('documentMeaning.uncertain.noDeadline');
+  }
   if (!core.subject) uncertainties.push('documentMeaning.uncertain.noSubject');
   if (core.recipientCheck.addressedToOwnCompany === 'unknown') {
     uncertainties.push('documentMeaning.uncertain.recipient');
@@ -445,7 +502,9 @@ function viewAusKern(core: DocumentSemanticCore): DocumentMeaningView {
     uncertainties.push('documentMeaning.uncertain.noAssignment');
   }
 
+  /* 02A-2B — ein ausdrücklicher Informationshinweis ist Inhalt: „Muss ich etwas tun? Nein". */
   const istLeer =
+    !core.informationOnly &&
     !core.subject &&
     !core.purpose &&
     obligations.length === 0 &&
@@ -474,7 +533,8 @@ function viewAusKern(core: DocumentSemanticCore): DocumentMeaningView {
     vorgangCandidates: kandidatenZeilen(core.vorgangCandidates),
     nextStepKey: ermittleNaechstenSchritt(core, bedarf),
     uncertainties,
-    isEmpty: istLeer,
+    isEmpty: istLeer && !core.complaint,
+    ...(core.complaint ? { complaint: core.complaint } : {}),
   };
 }
 
@@ -492,5 +552,48 @@ function leereAnsicht(): DocumentMeaningView {
     nextStepKey: 'documentMeaning.next.reviewYourself',
     uncertainties: [],
     isEmpty: true,
+  };
+}
+
+/**
+ * EINGANG-01D-2 — die Anzeige folgt der Hauptdokument-Wahrheit.
+ *
+ * Der Bereich liest den ganzen Text. Hängt an einer Lieferantengutschrift die
+ * Kopie der Originalrechnung, stünden deren „Zahlung bis …", „Offene
+ * Gesamtforderung" und ein „Muss ich etwas tun? Ja" als Aussagen der
+ * Gutschrift da — obwohl die kanonische Wahrheit (01D-1) keine Zahlungsfrist
+ * und keine Forderung kennt. Für eine Gutschrift entfallen deshalb
+ * Zahlungsfristen und Forderungsbeträge; der Handlungsbedarf richtet sich nach
+ * den verbleibenden eigenen Fristen und Pflichten bzw. der kanonischen Frist.
+ * Andere Dokumentarten bleiben unverändert.
+ */
+export interface MeaningMainDocument {
+  classifiedKind?: string;
+  /** Kanonische Frist des Eingangs (JJJJ-MM-TT) oder null. */
+  deadline?: string | null;
+}
+
+export function alignDocumentMeaningViewWithMainDocument(
+  view: DocumentMeaningView,
+  main: MeaningMainDocument | undefined,
+): DocumentMeaningView {
+  if (!main || main.classifiedKind !== 'gutschrift') return view;
+  const deadlines = view.deadlines.filter((row) => row.type !== 'payment_due');
+  const amounts = view.amounts.filter((row) => !row.isClaim);
+  const ownAction =
+    deadlines.some((row) => row.isAction) || view.obligations.some((row) => Boolean(row.byWhen)) || Boolean(main.deadline);
+  const actionNeed: MeaningActionNeed =
+    view.actionNeed === 'yes' && !ownAction ? (view.obligations.length > 0 ? 'unclear' : 'no') : view.actionNeed;
+  return {
+    ...view,
+    deadlines,
+    amounts,
+    actionNeed,
+    actionNeedLabelKey:
+      actionNeed === 'yes'
+        ? 'documentMeaning.action.yes'
+        : actionNeed === 'no'
+          ? 'documentMeaning.action.no'
+          : 'documentMeaning.action.unclear',
   };
 }

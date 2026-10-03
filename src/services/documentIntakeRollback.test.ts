@@ -167,7 +167,18 @@ describe('PHOTO-STORAGE-IDB-01 localStorage payload size', () => {
       recognizedText: AOK_TEXT,
     });
     expect(smallResult.success).toBe(true);
+    const baseJson = JSON.stringify(buildPersistedStateSnapshot()).length;
+
+    // 01D-1: Intake committet zusätzlich das DocumentWorkResult (Metadaten je Dokument).
+    // Invariante bleibt: Dateigröße beeinflusst den App-State nicht – Vergleich gegen ein
+    // zweites kleines Dokument statt gegen einen festen Absolutwert pro Dokument.
+    const secondSmallResult = await intakeCachedDocumentFile(createPayload('small-2', 'small-2.png'), {
+      importSource: 'scan',
+      recognizedText: AOK_TEXT,
+    });
+    expect(secondSmallResult.success).toBe(true);
     const smallJson = JSON.stringify(buildPersistedStateSnapshot()).length;
+    const smallDelta = smallJson - baseJson;
 
     const largeBytes = new Uint8Array(512 * 1024);
     largeBytes.fill(97);
@@ -179,7 +190,7 @@ describe('PHOTO-STORAGE-IDB-01 localStorage payload size', () => {
     expect(largeResult.success).toBe(true);
     const largeJson = JSON.stringify(buildPersistedStateSnapshot()).length;
 
-    expect(largeJson - smallJson).toBeLessThan(4096);
+    expect(Math.abs((largeJson - smallJson) - smallDelta)).toBeLessThan(4096);
     expect(JSON.stringify(buildPersistedStateSnapshot())).not.toContain('data:image/png;base64');
   });
 });

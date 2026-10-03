@@ -31,6 +31,17 @@ export interface ExpenseFormDraft {
   taxStatus: TaxStatus;
 }
 
+/*
+ * EINGANG-01D-1 Nacharbeit 2 (P1) — die eine Schreibweise, in der ein
+ * gespeicherter oder vorbelegter Betrag ins Formular kommt: genau die, die
+ * `parseAmount` zurückliest (Dezimalkomma, kein Tausenderpunkt).
+ * `String(92.95)` ergab „92.95"; der Punkt galt beim Speichern als
+ * Tausendertrenner, und Öffnen + Speichern machte aus 92,95 → 9295.
+ */
+function formatAmountForInput(value: number | null | undefined): string {
+  return typeof value === 'number' && Number.isFinite(value) ? value.toFixed(2).replace('.', ',') : '';
+}
+
 function draftFromExpense(expense: Expense): ExpenseFormDraft {
   return {
     title: expense.title,
@@ -40,9 +51,9 @@ function draftFromExpense(expense: Expense): ExpenseFormDraft {
     description: expense.description,
     issueDate: expense.issueDate,
     paymentDueDate: expense.paymentDueDate ?? '',
-    grossAmount: String(expense.grossAmount),
-    netAmount: String(expense.netAmount),
-    taxAmount: String(expense.taxAmount),
+    grossAmount: formatAmountForInput(expense.grossAmount),
+    netAmount: formatAmountForInput(expense.netAmount),
+    taxAmount: formatAmountForInput(expense.taxAmount),
     // Bearbeiten zeigt den gespeicherten Status — nie einen neu geratenen.
     taxStatus: expense.taxStatus,
   };
@@ -114,9 +125,9 @@ function draftFromInput(input: Partial<ExpenseInput>): ExpenseFormDraft {
     description: input.description ?? base.description,
     issueDate: input.issueDate ?? base.issueDate,
     paymentDueDate: input.paymentDueDate ?? base.paymentDueDate,
-    grossAmount: input.grossAmount ? String(input.grossAmount) : base.grossAmount,
-    netAmount: input.netAmount ? String(input.netAmount) : base.netAmount,
-    taxAmount: input.taxAmount ? String(input.taxAmount) : base.taxAmount,
+    grossAmount: input.grossAmount ? formatAmountForInput(input.grossAmount) : base.grossAmount,
+    netAmount: input.netAmount ? formatAmountForInput(input.netAmount) : base.netAmount,
+    taxAmount: input.taxAmount ? formatAmountForInput(input.taxAmount) : base.taxAmount,
     taxStatus: input.taxStatus ?? base.taxStatus,
   };
 }

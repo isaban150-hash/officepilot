@@ -31,6 +31,7 @@ import {
 import {
   buildDedupeKey,
   buildTaskIdentity,
+  proposeObligationTasks,
   proposePrimaryInboxTask,
   proposeTasksFromClassification,
   proposeTasksFromContract,
@@ -230,10 +231,18 @@ function collectSuggestedTasks(
     proposals.push({ ...proposal, dedupeKey: key });
   };
 
-  proposeTasksFromClassification(item, profile).forEach(push);
-
-  const primary = proposePrimaryInboxTask(item, profile);
-  if (primary) push(primary);
+  /*
+   * EINGANG-02A-2C — mehrere eigene Pflichten: je Pflicht ein konkreter
+   * Vorschlag statt eines generischen „Schreiben prüfen".
+   */
+  const proPflicht = proposeObligationTasks(item, profile);
+  if (proPflicht.length > 0) {
+    proPflicht.forEach(push);
+  } else {
+    proposeTasksFromClassification(item, profile).forEach(push);
+    const primary = proposePrimaryInboxTask(item, profile);
+    if (primary) push(primary);
+  }
 
   if (contractAnalysis?.isContract) {
     proposeTasksFromContract(contractAnalysis, item.id).forEach(push);

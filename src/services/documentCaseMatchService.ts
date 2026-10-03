@@ -137,7 +137,7 @@ export function extractDocumentCaseSignals(item: InboxItem): DocumentCaseSignals
     invoiceNumber: firstNonEmpty(rd.Rechnungsnummer, rd.Belegnummer),
     supplier,
     subject: firstNonEmpty(rd.Betreff, item.title),
-    reference: firstNonEmpty(rd.Aktenzeichen, rd.Az, rd.Beitragsnummer, rd.Referenz),
+    reference: firstNonEmpty(rd.Aktenzeichen, rd.Az, rd.Beitragsnummer, rd.Schadennummer, rd.Referenz),
     /*
      * EINGANG-01C-1 — nur eine bestätigte Verknüpfung (`linked`/`created`) ist
      * ein bekannter Link. Eine nackte `vorgangId` (Alt-/Mock-Daten, nie bestätigt)

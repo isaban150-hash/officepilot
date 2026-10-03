@@ -164,6 +164,8 @@ type FamilyRule = {
   heading: RegExp;
   roles: RegExp;
   topics: RegExp;
+  /** Überschrift zählt für die Familienerkennung nur als echte Titelzeile. */
+  titleOnly?: boolean;
 };
 
 const FAMILY_RULES: FamilyRule[] = [
@@ -234,7 +236,14 @@ const FAMILY_RULES: FamilyRule[] = [
   {
     family: 'versicherungsvertrag',
     labelKey: 'documentIntelligence.label.versicherungsvertrag',
-    heading: /\bversicherungsvertrag\b|versicherungsschein\b/i,
+    /**
+     * EINGANG-02A-1 — jedes Bestandsschreiben einer Versicherung nennt „Ihren
+     * Versicherungsvertrag" oder trägt „Versicherungsschein-Nr. …" als
+     * Referenz. Für diese Familie zählt die Überschrift deshalb nur als echte
+     * Titelzeile (`hasContractTitleLine`).
+     */
+    heading: /\bversicherungsvertrag\b|\bversicherungsschein\b/i,
+    titleOnly: true,
     roles: /versicherer|versicherungsnehmer/i,
     topics: /selbstbeteiligung|versicherungssumme|beitrag|deckung/i,
   },
@@ -825,6 +834,82 @@ function constructionFamilyEligible(text: string, hasHeading: boolean): boolean 
   return countStrongBauSignals(text) >= 2;
 }
 
+/** Direkt hinter dem Titelbegriff eine Nummer: Betreff- oder Referenzzeile, kein Titel. */
+const TITLE_REFERENCE_TAIL = /^[ \t.:-]*(?:nr\b|nummer\b|no\b|[a-z]{0,4}[ -]?\d)/i;
+const TITLE_MAX_LENGTH = 80;
+
+/**
+ * EINGANG-02A-1 — Dokumenttitel-Wahrheit: Der Vertragsbegriff steht als
+ * eigene Titelzeile, nicht bloß irgendwo im Text.
+ *
+ * Eine Titelzeile beginnt mit dem Begriff, ist kurz, endet nicht als Satz und
+ * trägt nicht direkt eine Nummer („Werkvertrag Nr. 12", „Versicherungsschein-Nr.
+ * 1" sind Referenzen). Eine Nummer in der nächsten Zeile bleibt erlaubt.
+ * „Bitte reichen Sie den Mietvertrag ein." oder „Zu Ihrem Leasingvertrag …"
+ * sind Erwähnungen, keine Titel.
+ */
+/** „Werkvertrag Nr. 2026-14" — ausdrückliche Vertragsnummer hinter dem Titel. */
+const TITLE_NUMBER_TAIL = /^[ \t.:-]*(?:nr\b|nummer\b)/i;
+/** Mindestens so viele beschriftete Vertragsparteien belegen eine Vertragsurkunde. */
+const MIN_LABELED_CONTRACT_PARTIES = 2;
+
+/**
+ * Nacharbeit 4 — Zeilen, die mit einer vorhandenen Parteirolle beschriftet
+ * beginnen („Auftraggeber: …", „Vermieter: …"). Gezählt werden Zeilen, nicht
+ * Mustertreffer: „Vermieter: …" trifft auch das Muster „mieter" und darf
+ * trotzdem nur eine Partei sein. Prosa („Ihr Auftraggeber, die …") zählt nicht.
+ */
+function countLabeledContractPartyLines(text: string): number {
+  let count = 0;
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (PARTY_PATTERNS.some((rule) => line.match(rule.pattern)?.index === 0)) count += 1;
+  }
+  return count;
+}
+
+/**
+ * Nacharbeit 3/4 — „Werkvertrag Nr. 2026-14" ist der übliche Titel eines
+ * echten Vertrags (Vergabe, Hochbauamt), in einem Brief aber ebenso ein
+ * Betreff. Außer bei Versicherungen (`strict`: dort sind
+ * „Versicherungsschein-Nr." und „Versicherungsvertrag VS-…" typische
+ * Referenzzeilen) zählt ein Titel mit ausdrücklicher Nummer deshalb nur mit
+ * Vertragsstruktur: mindestens zwei beschriftete Parteien aus `PARTY_PATTERNS`.
+ * Keine Brief- oder Grußformel-Heuristik.
+ */
+function hasContractTitleLine(text: string, term: RegExp, strict = false): boolean {
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.length > TITLE_MAX_LENGTH || /[.!?]$/.test(line)) continue;
+    const match = line.match(term);
+    if (!match || match.index !== 0) continue;
+    const tail = line.slice(match[0].length);
+    if (TITLE_REFERENCE_TAIL.test(tail)) {
+      if (strict || !TITLE_NUMBER_TAIL.test(tail)) continue;
+      if (countLabeledContractPartyLines(text) < MIN_LABELED_CONTRACT_PARTIES) continue;
+    }
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Ist die Vertragsfamilie als Dokumenttitel belegt? Gemeinsame Wahrheit für
+ * Familienerkennung, Vertrags-Gate und Klassifikation.
+ */
+export function hasContractFamilyTitle(text: string, family: ContractFamily): boolean {
+  const rule = FAMILY_RULES.find((candidate) => candidate.family === family);
+  return rule ? hasContractTitleLine(text, rule.heading, Boolean(rule.titleOnly)) : false;
+}
+
+/**
+ * Nacharbeit 3 — dieselbe Titelregel für Dokumentarten außerhalb der
+ * Vertragsfamilien (z. B. „Abnahmeprotokoll" als Titelzeile).
+ */
+export function hasDocumentTitleLine(text: string, term: RegExp): boolean {
+  return hasContractTitleLine(text, term);
+}
+
 export function detectContractType(text: string): DetectedContractType {
   const evidence: string[] = [];
   let best: {
@@ -835,7 +920,7 @@ export function detectContractType(text: string): DetectedContractType {
   } | null = null;
 
   for (const rule of FAMILY_RULES) {
-    const hasHeading = rule.heading.test(text);
+    const hasHeading = rule.titleOnly ? hasContractTitleLine(text, rule.heading, true) : rule.heading.test(text);
     const hasRoles = rule.roles.test(text);
     const hasTopics = rule.topics.test(text);
 
@@ -873,6 +958,7 @@ export function detectContractType(text: string): DetectedContractType {
         confidence: 'low',
         status: 'review_required',
         evidence: ['generic_contract_signal'],
+        titleEvidence: false,
       };
     }
     return {
@@ -881,6 +967,7 @@ export function detectContractType(text: string): DetectedContractType {
       confidence: 'low',
       status: 'review_required',
       evidence: [],
+      titleEvidence: false,
     };
   }
 
@@ -893,6 +980,8 @@ export function detectContractType(text: string): DetectedContractType {
     confidence,
     status: confidence === 'low' ? 'review_required' : 'confirmed',
     evidence: [...new Set(evidence)].slice(0, 8),
+    // Eigenes Feld: `evidence` wird gekürzt und taugt nicht als Wahrheit.
+    titleEvidence: hasContractFamilyTitle(text, best.family),
   };
 }
 

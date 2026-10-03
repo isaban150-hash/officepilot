@@ -17,6 +17,31 @@ export const deDocumentMeaning = {
   'documentMeaning.subject': 'Betreff',
   'documentMeaning.purpose': 'Kurz erklärt',
   'documentMeaning.action.question': 'Muss ich etwas tun?',
+  /* EINGANG-02B */
+  'documentMeaning.financeNote': 'Abgleich mit OfficeTakt',
+  /* EINGANG-02C — Angaben des Absenders, nie bestätigte Wahrheit. */
+  'documentMeaning.complaint': 'Laut Absender',
+  'documentMeaning.complaint.reports': 'Der Absender meldet: „{text}"',
+  'documentMeaning.complaint.demands': 'Der Absender fordert: {what}',
+  'documentMeaning.complaint.announces': 'Der Absender kündigt an: {what}',
+  'documentMeaning.complaint.references': 'Genannter Bezug: {refs}',
+  'documentMeaning.complaint.notConfirmed': 'OfficeTakt bestätigt diese Angaben nicht und erkennt nichts an.',
+  'documentMeaning.complaint.outgoing':
+    'Eigenes Schreiben Ihres Betriebs. Es ist keine Beschwerde gegen Ihren Betrieb; Forderungen und Fristen darin richten sich an den Empfänger.',
+  'documentMeaning.complaint.demand.remedy': 'Nachbesserung bzw. Mangelbeseitigung',
+  'documentMeaning.complaint.demand.statement': 'eine Stellungnahme',
+  'documentMeaning.complaint.demand.documents': 'Unterlagen',
+  'documentMeaning.complaint.demand.damages': 'Schadenersatz',
+  'documentMeaning.complaint.demand.reimbursement': 'Erstattung von Kosten',
+  'documentMeaning.complaint.demand.reduction': 'eine Minderung',
+  'documentMeaning.complaint.demand.retention': 'einen Einbehalt',
+  'documentMeaning.complaint.demand.payment': 'Zahlung',
+  'documentMeaning.complaint.escalation.substitutePerformance': 'eine Ersatzvornahme',
+  'documentMeaning.complaint.escalation.legalAction': 'anwaltliche bzw. gerichtliche Schritte',
+  'documentMeaning.complaint.reference.order': 'Auftrag',
+  'documentMeaning.complaint.reference.invoice': 'Rechnung',
+  'documentMeaning.complaint.reference.case': 'Vorgang',
+  'documentMeaning.complaint.reference.offer': 'Angebot',
   'documentMeaning.action.yes': 'Ja',
   'documentMeaning.action.no': 'Nein',
   'documentMeaning.action.unclear': 'Nicht sicher erkannt',
@@ -59,6 +84,10 @@ export const deDocumentMeaning = {
   'documentMeaning.uncertain.recipient':
     'Ob das Schreiben an Ihren Betrieb gerichtet ist, war nicht eindeutig zu erkennen.',
   'documentMeaning.uncertain.noAssignment': 'Kunde und Auftrag konnten nicht zugeordnet werden.',
+  /* EINGANG-02A-2B */
+  'documentMeaning.uncertain.relativeDeadline':
+    'Die Frist steht nur relativ im Schreiben (z. B. „nach Zugang"). Das genaue Datum bitte selbst prüfen – OfficeTakt rechnet es nicht aus.',
+  'documentMeaning.uncertain.noDeadline': 'Eine Handlung wird verlangt, aber das Schreiben nennt keine Frist.',
   'documentMeaning.disclaimer':
     'OfficeTakt liest das Schreiben maschinell. Bitte prüfen Sie wichtige Angaben im Original.',
 

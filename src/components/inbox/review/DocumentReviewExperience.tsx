@@ -32,6 +32,16 @@ import { ReviewDetailsGroup, ReviewMoreOptionsShell } from './CollapsibleReviewS
 import { ContractOrderProposalPanel } from './ContractOrderProposalPanel';
 import { DocumentExperienceCard } from './DocumentExperienceCard';
 import { buildDocumentLeadText } from '../../../services/documentLeadText';
+import {
+  applyIntakeAssessmentToSummary,
+  buildIntakeAssessmentLead,
+  deriveIntakeAssessment,
+} from '../../../services/document/intakeAssessmentService';
+import { getAllExpenses } from '../../../services/expenseService';
+import { getExpenseOpenAmount, isExpenseCancelled } from '../../../services/expensePaymentCalculations';
+import { getVorgangById } from '../../../services/vorgangService';
+import { getCompanyProfile } from '../../../services/companyProfileService';
+import { IntakeAssessmentPanel } from './IntakeAssessmentPanel';
 
 interface DocumentReviewExperienceProps {
   item: InboxItem;
@@ -137,11 +147,36 @@ export function DocumentReviewExperience({
   });
   const displayBi = truth?.businessInterpretation ?? workflow.businessInterpretation;
 
-  const summary = buildDocumentSummary(item, workflow, {
+  const baseSummary = buildDocumentSummary(item, workflow, {
     translate,
     displayBusinessInterpretation: displayBi,
     letter: letterExplanation,
   });
+
+  /*
+   * EINGANG-01D-2 — sichtbare Einschätzung aus vorhandener Wahrheit. Die Karte
+   * folgt ihr (Hauptaktion, kanonische Frist, eigene Belegnummer); die
+   * Zusammenfassung selbst bleibt unverändert.
+   */
+  const linkedVorgang = item.vorgangId ? getVorgangById(item.vorgangId) : undefined;
+  const linkedExpense = getAllExpenses().find((expense) => expense.linkedInboxId === item.id);
+  const assessment = deriveIntakeAssessment({
+    item,
+    summary: baseSummary,
+    ownCompanyName: getCompanyProfile().companyName,
+    hasLinkedExpense: Boolean(linkedExpense),
+    // Bestehende Finanzwahrheit: offen nur mit Restbetrag und nicht storniert.
+    linkedExpenseOpen: linkedExpense
+      ? !isExpenseCancelled(linkedExpense) && getExpenseOpenAmount(linkedExpense) > 0
+      : undefined,
+    linkedVorgang: linkedVorgang
+      ? { title: linkedVorgang.title, vorgangNumber: linkedVorgang.vorgangNumber }
+      : null,
+    needsKindReview: Boolean(workflow.classification?.needsKindReview),
+    // EINGANG-02A-2B — Pflichten, relative Fristen und Informationshinweis aus dem Kern.
+    semantic: displayBi?.semantic ?? null,
+  });
+  const summary = applyIntakeAssessmentToSummary(baseSummary, assessment);
 
   // Keep overview builder for Details enrichment / conflict lines (not first paint).
   const overview = buildOperationalOverviewView(workflow, {
@@ -194,7 +229,10 @@ export function DocumentReviewExperience({
    * er steht nur nicht mehr an der Stelle der Inhaltszusammenfassung.
    */
   const leadText =
-    buildDocumentLeadText(summary, translate) ?? nextStepDetail?.proseText?.trim() ?? undefined;
+    buildIntakeAssessmentLead(assessment, summary, translate) ??
+    buildDocumentLeadText(summary, translate) ??
+    nextStepDetail?.proseText?.trim() ??
+    undefined;
 
   /*
    * VISUAL-POLISH-01C — die Details beantworten zuerst „Sind die Angaben
@@ -313,6 +351,8 @@ export function DocumentReviewExperience({
           /* 01D — der Karteninhalt liegt jetzt im äusseren Details-Bereich. */
         />
       ) : null}
+
+      {showExperience ? <IntakeAssessmentPanel assessment={assessment} translate={translate} /> : null}
 
       {meaningSlot}
 

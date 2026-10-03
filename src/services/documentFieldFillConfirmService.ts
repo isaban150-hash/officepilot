@@ -31,6 +31,7 @@ const FIELD_LABELS: Record<DocumentFieldFillConfirmFieldKey, string> = {
   Empfänger: 'Empfänger',
   Datum: 'Datum',
   Aktenzeichen: 'Aktenzeichen',
+  Schadennummer: 'Schadennummer',
   Baustelle: 'Baustelle',
   Kunde: 'Kunde',
   Vorgang: 'Vorgang',

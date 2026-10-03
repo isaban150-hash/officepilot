@@ -234,6 +234,12 @@ export interface InboxItem {
   sender: string;
   priority: InboxPriority;
   deadline: string | null;
+  /**
+   * EINGANG-01D-1 — Art der Handlungsfrist in `deadline` (Zahlung, Antwort,
+   * Unterlagen …), nur wenn sie aus der Quelle sicher feststeht. Fehlt bei
+   * Altbestand und nach einer manuellen Friständerung. Nie eine Gültigkeit.
+   */
+  deadlineType?: import('./businessInterpretation').BusinessDeadlineType;
   recommendedAction: RecommendedAction;
   digitalFolder: DigitalFolder;
   paperFiling: PaperFilingRule;
@@ -286,8 +292,23 @@ export interface InboxItem {
   /** Lokale Dateireferenz (DOC-FOUNDATION-01) */
   fileRefId?: string;
   sourceFileHash?: string;
+  /**
+   * EINGANG-01D-1 — strukturierter Prüfhinweis für Finanzdokumente, die nicht
+   * wie eine neue Eingangsrechnung gebucht werden dürfen. Das Dokument bleibt
+   * dabei `sonstiges` im bestehenden Klären-Pfad; der Hinweis sperrt die
+   * automatische Ausgabe und reist im Payload mit.
+   */
+  financeReviewReason?: InboxFinanceReviewReason;
   sync?: SyncMeta;
 }
+
+/**
+ * EINGANG-01D-1 — warum ein Finanzdokument geprüft statt gebucht wird.
+ *   invoice_correction  — eingehende Rechnungskorrektur / Stornorechnung
+ *   self_billing_credit — Gutschrift im Abrechnungsverfahren (§ 14 Abs. 2 UStG):
+ *                         für uns ein Erlös, keine Ausgabe
+ */
+export type InboxFinanceReviewReason = 'invoice_correction' | 'self_billing_credit';
 
 /** Änderungen aus dem Edit-Modus der Eingang-Detailansicht */
 export interface InboxRecognizedDataChanges {
@@ -512,6 +533,10 @@ export interface DocumentClassificationResult {
   explanation: string;
   priority: InboxPriority;
   deadline: string | null;
+  /** EINGANG-01D-1 — Art von `deadline`, nur wenn aus der Quelle sicher. */
+  deadlineType?: import('./businessInterpretation').BusinessDeadlineType;
+  /** EINGANG-01D-1 — Finanzdokument, das geprüft statt gebucht wird. */
+  financeReviewReason?: InboxFinanceReviewReason;
   recommendedAction: RecommendedAction;
   digitalFolder: DigitalFolder;
   paperFiling: PaperFilingRule;

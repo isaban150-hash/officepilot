@@ -7407,3 +7407,45 @@ body {
     gap: 0.1rem;
   }
 }
+
+/* EINGANG-01D-2 — kompakte Einschätzung des Eingangs (zweispaltig, schmal einspaltig) */
+.intake-assessment {
+  margin: 0 0 0.75rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--color-border, #e5e2dc);
+  border-radius: 12px;
+  background: var(--color-surface, #fff);
+}
+
+.intake-assessment__list {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+}
+
+.intake-assessment__row {
+  display: grid;
+  grid-template-columns: minmax(7.5rem, 11rem) minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: baseline;
+}
+
+.intake-assessment__label {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.intake-assessment__value {
+  margin: 0;
+  font-size: 0.95rem;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 480px) {
+  .intake-assessment__row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.1rem;
+  }
+}

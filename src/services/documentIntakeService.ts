@@ -11,6 +11,11 @@ import { extractDocumentTextFromCache } from './ocrDocumentService';
 import type { CreateInboxFromUploadOptions } from './inboxUploadFactory';
 import { buildInboxItemForDocumentIntake } from './documentIntakeInboxBuilder';
 import { stageInboxItem, removeStagedInboxItemById } from './inboxService';
+import { itemNeedsDeferredWorkflowAnalysis } from './inboxWorkflowAnalysisKey';
+import {
+  commitIntakeDocumentAnalysis,
+  scheduleIntakeDocumentAnalysisCommit,
+} from './intakeAnalysisCommitService';
 import {
   applyDocumentFileRefCommittedPromotionInMemory,
   storeDocumentFileFromCachedPayload,
@@ -28,6 +33,9 @@ import {
   type PersistingUserStorageDecision,
 } from '../types/userStorageDecision';
 import { mapDecisionToLifecycleIntent } from './userStorageDecisionService';
+import { alignCreditNoteIntakeItemWithPageOne } from './document/creditNotePageTruth';
+import { resolveMainDocumentPageScope } from './document/mainDocumentPageScope';
+import { classifyDocument } from './documentClassificationService';
 import {
   traceStep,
   traceStepEnd,
@@ -188,18 +196,21 @@ export async function intakeCachedDocumentFile(
 
   let recognizedText = options.recognizedText;
   let pageTextsJson: string | undefined;
+  let intakePageTexts: DocumentIntakeOptions['pageTexts'];
   if (recognizedText === undefined) {
     try {
       const extraction = await extractDocumentTextFromCache(payload);
       recognizedText = extraction.recognizedText.trim() || undefined;
       if (extraction.pageTexts?.length) {
         pageTextsJson = JSON.stringify(extraction.pageTexts);
+        intakePageTexts = extraction.pageTexts;
       }
     } catch {
       recognizedText = undefined;
     }
   } else if (options.pageTexts?.length) {
     pageTextsJson = JSON.stringify(options.pageTexts);
+    intakePageTexts = options.pageTexts;
   }
 
   const pageCount = options.pageTexts?.length ?? 0;
@@ -218,6 +229,24 @@ export async function intakeCachedDocumentFile(
       ? 'preview_classification_reused'
       : 'light_classification_no_page_texts',
   });
+  /*
+   * EINGANG-02A-3 — die Vorschau-Klassifikation kennt keine Seiten. Ist an
+   * einem institutionellen Schreiben eine Fremdanlage sicher abgegrenzt, wird
+   * hier mit Seitentexten klassifiziert (nur die Hauptseiten zählen) statt die
+   * Vorschau über den Gesamttext zu übernehmen. Sonst bleibt alles wie bisher.
+   */
+  const seitenScope = resolveMainDocumentPageScope(intakePageTexts?.map((page) => page.text ?? ''));
+  const previewClassification =
+    seitenScope && seitenScope.attachmentPageNumbers.length > 0 && recognizedText
+      ? classifyDocument({
+          sourceFileName: options.sourceFileName ?? payload.fileName,
+          recognizedText,
+          pageTexts: intakePageTexts,
+          ...(options.titleHint ? { titleHint: options.titleHint } : {}),
+          ...(options.senderHint ? { senderHint: options.senderHint } : {}),
+          ...(options.kind ? { kindHint: options.kind } : {}),
+        })
+      : options.previewClassification;
   let classified: InboxItem;
   try {
     classified = buildInboxItemForDocumentIntake({
@@ -230,13 +259,20 @@ export async function intakeCachedDocumentFile(
       importSource: options.importSource,
       emailOrigin: options.emailOrigin,
       inboxItemId: options.inboxItemId,
-      previewClassification: options.previewClassification,
+      previewClassification,
     });
   } catch (error) {
     // Trace only — do not alter product error handling beyond rethrow.
     traceStepError(saveTraceId, 'intake_failure', error, { pageCount, textLength });
     throw error;
   }
+  /*
+   * EINGANG-01D-2 Paritätsfix 1 — die Vorschau-Klassifikation läuft ohne
+   * Seitentexte. Bei einer Gutschrift mit Seitenstruktur folgen Frist,
+   * Fristart und Aufgabenvorlage deshalb hier Seite 1 (01D-1-Regel) —
+   * keine erneute Klassifikation, keine Wirkung auf andere Dokumentarten.
+   */
+  classified = alignCreditNoteIntakeItemWithPageOne(classified, { recognizedText, pageTexts: intakePageTexts });
   traceStepEnd(saveTraceId, 'classification_start', 'classification_done', {
     pageCount,
     textLength,
@@ -301,6 +337,29 @@ export async function intakeCachedDocumentFile(
     return { success: false, error: 'persist_failed' };
   }
   traceStepEnd(saveTraceId, 'persist_all_start', 'persist_all_done');
+
+  /*
+   * EINGANG-01D-1 — die Einschätzung wird beim Übernehmen festgeschrieben,
+   * nicht erst beim ersten Öffnen der Detailseite. Sonst fehlte sie auf einem
+   * Zweitgerät für jeden nie geöffneten Eingang — und dort lässt sie sich ohne
+   * den lokal gebliebenen Volltext nicht gleichwertig neu berechnen.
+   *
+   * Derselbe Schreibweg wie beim Öffnen (`onlyIfMissing`), dieselbe
+   * deterministische Analyse, keine AI. Der Eingang ist zu diesem Zeitpunkt
+   * bereits gespeichert; scheitert das Festschreiben, bleibt alles wie bisher
+   * (die Detailseite holt es nach) — nie ein halber Fachzustand.
+   *
+   * Grosse Dokumente (dieselbe Schwelle wie auf der Detailseite) werden erst
+   * nach dem Zeichnen analysiert: Speichern bleibt reaktionsschnell
+   * (CONTRACT-DOCUMENT-SAVE-MAIN-THREAD-FIX-01), festgeschrieben wird trotzdem
+   * ohne Öffnen — mit Zeitgeber-Absicherung und Recovery nach dem Laden
+   * (`intakeAnalysisCommitService`).
+   */
+  if (itemNeedsDeferredWorkflowAnalysis(inboxItem)) {
+    scheduleIntakeDocumentAnalysisCommit(inboxItem.id);
+  } else {
+    commitIntakeDocumentAnalysis(inboxItem.id);
+  }
 
   traceStepStart(saveTraceId, 'cached_file_release_start');
   releaseCachedDocumentFile(payload);

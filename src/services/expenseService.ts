@@ -5,8 +5,7 @@ import {
   generateEntityId,
   isEntitySyncActive,
   withNewEntitySync,
-  withTombstonedEntity,
-  withUpdatedEntitySync,
+  withTombstonedCloudEntityPreservingRemoteVersion,
 } from './sync/syncMetaService';
 import {
   appendExpenseToStore,
@@ -46,6 +45,22 @@ export type ExpenseMutationResult =
 
 export { buildExpenseDedupeKey } from './expenseNormalize';
 export { EXPENSE_CATEGORIES } from './expenseCategoryMapping';
+
+/**
+ * P1 EXPENSE-SYNC-VERSIONSVERTRAG — lokale Fachänderung: `sync` bleibt die
+ * zuletzt vom Server bestätigte Fassung (wie der Intake-Fix 5e5425a).
+ *
+ * `upsert_workspace_expense` erwartet beim Update und beim Löschen **exakt**
+ * die bestätigte `row_version` und erhöht sie selbst. Das frühere
+ * `withUpdatedEntitySync` zählte lokal hoch — `updateExpense` setzte über den
+ * neu gebauten Beleg sogar immer 2. Folgen: jede Änderung an einer gesyncten
+ * Ausgabe endete als Versionskonflikt (blocked), und traf die erfundene Zahl
+ * die echte Remote-Version eines anderen Geräts, überschrieb sie dessen
+ * Änderung still. Die Änderung erkennt der Change-Tracker am Inhalt.
+ */
+function withConfirmedExpenseSync(next: Expense, current: Expense): Expense {
+  return current.sync ? { ...next, sync: current.sync } : next;
+}
 
 function defaultDigitalFolder(): DigitalFolder {
   const year = new Date().getFullYear();
@@ -371,9 +386,9 @@ export function updateExpense(id: string, changes: Partial<ExpenseInput>): Expen
   if (duplicate) return { success: false, errorKey: 'expense.duplicate' };
 
   const now = new Date().toISOString();
-  const updated = withUpdatedEntitySync(
+  const updated = withConfirmedExpenseSync(
     buildExpenseFromInput(merged, current.id, current.createdAt, now),
-    'expense',
+    current,
   );
   /*
    * FINANZ-CORE-DURABILITY-01D2 — kanonisches Stornodatum. Der Uebergang nach
@@ -419,7 +434,7 @@ export function cancelExpense(id: string, reason: string): ExpenseMutationResult
   if (hasBookedExpensePayments(current)) return { success: false, errorKey: 'expense.cancel.hasPayments' };
 
   const now = new Date().toISOString();
-  const cancelled = withUpdatedEntitySync(
+  const cancelled = withConfirmedExpenseSync(
     normalizeExpensePaymentFields({
       ...current,
       status: 'storniert',
@@ -427,7 +442,7 @@ export function cancelExpense(id: string, reason: string): ExpenseMutationResult
       cancelReason: trimmedReason,
       updatedAt: now,
     }),
-    'expense',
+    current,
   );
   replaceExpenseInStore(id, cancelled);
   persistAll();
@@ -518,7 +533,7 @@ export function assignExpenseToVorgang(
   }
 
   const now = new Date().toISOString();
-  const updated = withUpdatedEntitySync({ ...current, allocations: [...others, allocation], updatedAt: now }, 'expense');
+  const updated = withConfirmedExpenseSync({ ...current, allocations: [...others, allocation], updatedAt: now }, current);
   replaceExpenseInStore(expenseId, updated);
   persistAll();
   return { success: true, expense: getExpenseById(expenseId)! };
@@ -533,7 +548,7 @@ export function removeExpenseAllocation(expenseId: string, vorgangId: string): E
     return { success: false, errorKey: 'expense.allocation.notFound' };
   }
   const now = new Date().toISOString();
-  const updated = withUpdatedEntitySync({ ...current, allocations: remaining, updatedAt: now }, 'expense');
+  const updated = withConfirmedExpenseSync({ ...current, allocations: remaining, updatedAt: now }, current);
   replaceExpenseInStore(expenseId, updated);
   persistAll();
   return { success: true, expense: getExpenseById(expenseId)! };
@@ -544,7 +559,8 @@ export function deleteExpense(id: string): ExpenseMutationResult {
   if (!current || !isEntitySyncActive(current)) return { success: false, errorKey: 'expense.notFound' };
   // 01C — dieselbe Regel wie in der Cloud: gebuchte Zahlungen halten den Beleg.
   if ((current.payments ?? []).length > 0) return { success: false, errorKey: 'expense.delete.hasPayments' };
-  const tombstoned = withTombstonedEntity(current, 'expense');
+  // P1 EXPENSE-SYNC-VERSIONSVERTRAG — der Grabstein erwartet die bestätigte Serverversion, kein lokales +1.
+  const tombstoned = withTombstonedCloudEntityPreservingRemoteVersion(current, 'expense');
   replaceExpenseInStore(id, tombstoned);
   persistAll();
   return { success: true, expense: tombstoned };
