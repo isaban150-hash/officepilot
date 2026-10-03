@@ -11,6 +11,10 @@
 import type { StartInvoiceDraftFinalizationResult } from './invoiceFinalizationCoordinator';
 import type { TaxStatus } from '../../types/models';
 import type { TranslationKey } from '../../i18n';
+import {
+  detectFinancialActionDenial,
+  financialActionDenialLabelKey,
+} from '../auth/financialActionDenial';
 
 /**
  * Was die Steuerentscheidung noch blockiert. `unclear` ist keine Entscheidung;
@@ -82,6 +86,22 @@ export function mapFinalizationFailureToUx(
      * haben. Die Meldung sagt, was zu tun ist, statt nur zu scheitern.
      */
     messageKey = 'invoice.approve.quantityExceeded';
+  } else if (result.reason === 'financial_action_denied') {
+    /*
+     * R1-SEC-01 Nacharbeit 1 — der Server hat die Freigabe nicht erlaubt. Der
+     * allgemeine Satz „Freigabe fehlgeschlagen" liess offen, woran es lag; der
+     * Nutzer konnte fehlende Berechtigung, nicht freigegebenes Konto und
+     * abgelaufene Lizenz nicht unterscheiden.
+     *
+     * Der Grund steht bereits in `result.message` (dem rohen Servertext) und
+     * wird mit **derselben** zentralen Klassifikation gelesen wie überall
+     * sonst — keine zweite Fehlerlogik. Angezeigt wird nie der Rohtext,
+     * sondern der vorhandene Satz zu diesem Grund.
+     */
+    const denial = detectFinancialActionDenial(result.message);
+    messageKey = denial
+      ? financialActionDenialLabelKey(denial)
+      : 'invoice.approve.notAllowed';
   } else if (result.reason === 'server_integrity_rejected') {
     messageKey = 'invoice.approve.serverRejected';
   } else if (result.reason === 'local_persist_failed' || result.reason === 'persist_failed') {

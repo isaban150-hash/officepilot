@@ -10,6 +10,7 @@
  * sichtbarer.
  */
 import { getSupabaseClient, isSupabaseConfigured } from '../../lib/supabase';
+import { isFinancialActionDenial } from '../auth/financialActionDenial';
 import { buildPersistedStateSnapshot } from '../persistenceService';
 import { resolveCloudWorkspaceId } from '../workspace/workspaceSyncPayloadService';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -57,6 +58,13 @@ export type InvoicePaymentCloudOutcome =
   | 'supabase_not_configured'
   | 'workspace_missing'
   | 'conflict'
+  /**
+   * R1-SEC-01 — der Server hat die Zahlung nicht erlaubt (Rolle, Freigabe oder
+   * Lizenz). Bewusst ein eigener Ausgang: „nur lokal gesichert" waere hier
+   * irrefuehrend — es liegt nicht an der Verbindung, sondern an der
+   * Berechtigung, und ein spaeterer Versuch aendert daran nichts.
+   */
+  | 'denied'
   | 'failed';
 
 export type InvoicePaymentCloudResult =
@@ -178,6 +186,30 @@ function isConflictMessage(message: string): boolean {
   return message.includes('Zahlungskonflikt');
 }
 
+/** R1-SEC-01 — Ablehnung vor Konflikt vor allgemeinem Fehlschlag. */
+function outcomeForMessage(message: string): Exclude<InvoicePaymentCloudOutcome, 'synced'> {
+  if (isFinancialActionDenial(message)) return 'denied';
+  return isConflictMessage(message) ? 'conflict' : 'failed';
+}
+
+/**
+ * R1-SEC-01 WEISS-Nacharbeit 1 — dasselbe fuer das Stornieren einer Zahlung.
+ *
+ * Beide Fehlerwege des Stornos — der vom RPC zurueckgegebene Fehler und der
+ * geworfene — gaben bisher unbesehen `failed` zurueck. Die Oberflaeche las das
+ * als Uebertragungsproblem und bot „bitte erneut versuchen" an, obwohl der
+ * Server die Aktion dauerhaft verweigert hatte: Ein zweiter Versuch mit
+ * demselben Konto endet immer gleich.
+ *
+ * Erkannt wird mit **derselben** zentralen Klassifikation wie ueberall sonst;
+ * eine zweite Liste von `finance_`-Codes gibt es nicht. Alles Uebrige behaelt
+ * bewusst seine bisherige Bedeutung: Ein echter technischer Fehler bleibt
+ * `failed`, und der Stornoweg kennt weiterhin kein `conflict`.
+ */
+function reversalOutcome(message: string): Exclude<InvoicePaymentCloudOutcome, 'synced'> {
+  return isFinancialActionDenial(message) ? 'denied' : 'failed';
+}
+
 /**
  * Legt eine Zahlung an — idempotent ueber
  * (workspace_id, client_invoice_id, client_payment_id).
@@ -224,15 +256,12 @@ export async function addInvoicePaymentToCloud(
     });
     if (response.error) {
       const message = response.error.message ?? '';
-      return {
-        outcome: isConflictMessage(message) ? 'conflict' : 'failed',
-        detail: message || undefined,
-      };
+      return { outcome: outcomeForMessage(message), detail: message || undefined };
     }
     data = response.data;
   } catch (error) {
     const message = error instanceof Error ? error.message : '';
-    return { outcome: isConflictMessage(message) ? 'conflict' : 'failed', detail: message };
+    return { outcome: outcomeForMessage(message), detail: message };
   }
 
   const rows = Array.isArray(data) ? data : [data];
@@ -281,11 +310,13 @@ export async function reverseInvoicePaymentInCloud(
       p_client_payment_id: clientPaymentId,
     });
     if (response.error) {
-      return { outcome: 'failed', detail: response.error.message ?? undefined };
+      const message = response.error.message ?? '';
+      return { outcome: reversalOutcome(message), detail: message || undefined };
     }
     data = response.data;
   } catch (error) {
-    return { outcome: 'failed', detail: error instanceof Error ? error.message : undefined };
+    const message = error instanceof Error ? error.message : '';
+    return { outcome: reversalOutcome(message), detail: message || undefined };
   }
 
   const rows = Array.isArray(data) ? data : [data];

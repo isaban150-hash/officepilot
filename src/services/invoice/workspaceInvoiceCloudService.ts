@@ -23,6 +23,8 @@ import {
  * SupabaseSyncAdapter must keep throwing on reserveInvoiceNumber; use this RPC instead.
  */
 
+import { isFinancialActionDenial } from '../auth/financialActionDenial';
+
 export type WorkspaceInvoiceCloudErrorCode =
   | 'auth'
   | 'rls'
@@ -56,6 +58,12 @@ export type WorkspaceInvoiceCloudErrorCode =
   | 'totals_mismatch'
   | 'customer_mismatch'
   | 'not_found'
+  /**
+   * R1-SEC-01 — der Server hat die Finanzaktion nicht erlaubt (Rolle, Freigabe
+   * oder Lizenz). Fail-closed und **vor** jeder Fachpruefung: Es wurde nichts
+   * geschrieben und keine Nummer verbraucht.
+   */
+  | 'financial_action_denied'
   | 'network'
   | 'unknown';
 
@@ -174,6 +182,15 @@ function getClient(client?: SupabaseClient | null): SupabaseClient {
 
 function classifyInvoiceCloudError(error: { message?: string; code?: string }): WorkspaceInvoiceCloudError {
   const message = error.message ?? 'Unbekannter Cloud-Fehler';
+  /*
+   * R1-SEC-01 — ganz vorn. Ohne diese Zeile fiele die Ablehnung in den
+   * Standardzweig am Ende, und der gilt als „Ausgang unbekannt": Der Entwurf
+   * wuerde gesperrt, obwohl der Guard nachweislich vor jedem Schreibvorgang
+   * laeuft.
+   */
+  if (isFinancialActionDenial(message)) {
+    return new WorkspaceInvoiceCloudError(message, 'financial_action_denied', false);
+  }
   if (message.includes('Nicht angemeldet') || error.code === 'PGRST301') {
     return new WorkspaceInvoiceCloudError(message, 'auth', false);
   }

@@ -26,6 +26,10 @@ import { getExpenseStoreSnapshot } from '../expenseStore';
 import { getWorkspaceSettingsSnapshot } from '../workspace/workspaceStore';
 import type { WorkspaceSettings } from '../../types/workspace';
 import { isSupabaseSyncAllowed } from './cloudSyncAllowlist';
+import {
+  detectFinancialActionDenial,
+  financialActionDenialLabelKey,
+} from '../auth/financialActionDenial';
 
 export type SyncFailureKind = 'error' | 'conflict' | 'waiting' | 'local_only';
 
@@ -66,6 +70,15 @@ export function mapSyncErrorReason(
       : 'sync.failure.reason.conflictPending';
   }
   if (!message) return 'sync.failure.reason.unknown';
+
+  /*
+   * R1-SEC-01 — eine Autorisierungsablehnung ist kein technischer Fehler und
+   * kein Konflikt: Sie wartet weder auf einen neuen Versuch noch auf eine
+   * Entscheidung. Sie steht ganz vorn, damit ihr Grund nicht von einer
+   * allgemeineren Regel darunter verschluckt wird.
+   */
+  const denial = detectFinancialActionDenial(message);
+  if (denial) return financialActionDenialLabelKey(denial);
 
   if (message.includes('Unbekannter Entity-Typ')) return 'sync.failure.reason.notDeployed';
   /*

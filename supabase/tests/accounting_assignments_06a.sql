@@ -25,6 +25,17 @@ values ('00000000-0000-0000-0000-00000000060a', '00000000-0000-0000-0000-0000000
        ('00000000-0000-0000-0000-00000000060b', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
         'fremd-06a@example.invalid', 'x', now(), now(), now(), '{}'::jsonb, '{}'::jsonb);
 
+/*
+ * R1-SEC-01 — Finanzaktionen verlangen seit dieser Migration ein freigegebenes
+ * Konto mit aktiver Lizenz. Der Trigger `handle_new_user` legt Profile mit
+ * 'pending'/'inactive' an; die synthetischen Testnutzer werden deshalb hier auf
+ * denselben Zustand gehoben, den ein produktiv arbeitender Betrieb hat.
+ */
+update public.profiles
+set status = 'approved', license_status = 'active', license_expires_at = null
+where email like '%@example.invalid';
+
+
 insert into public.workspaces (id, name, owner_user_id)
 values ('00000000-0000-0000-0000-0000000a0001', 'Kontierung-06A', '00000000-0000-0000-0000-00000000060a'),
        ('00000000-0000-0000-0000-0000000a0002', 'Fremder Betrieb', '00000000-0000-0000-0000-00000000060b');

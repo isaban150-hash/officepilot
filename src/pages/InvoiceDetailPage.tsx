@@ -280,7 +280,8 @@ export function InvoiceDetailPage() {
 
     const outcome = await syncInvoicePaymentToCloud(invoice.id, payment);
     if (!isInvoicePaymentCloudSynced(outcome)) {
-      showToast(translate('payment.cloudOnlyLocal'));
+      /* R1-SEC-01 — Ablehnung beim Namen nennen, statt sie als Netzproblem auszugeben. */
+      showToast(translate(outcome === 'denied' ? 'payment.cloudDenied' : 'payment.cloudOnlyLocal'));
       return;
     }
     showToast(translate('payment.cloudSecured'));
@@ -313,9 +314,11 @@ export function InvoiceDetailPage() {
       if (!known || known.includes(paymentId)) {
         showToast(
           translate(
-            isInvoicePaymentCloudSilent(outcome)
-              ? 'payment.cloudReversalUnavailable'
-              : 'payment.cloudReversalFailed',
+            outcome === 'denied'
+              ? 'payment.cloudReversalDenied'
+              : isInvoicePaymentCloudSilent(outcome)
+                ? 'payment.cloudReversalUnavailable'
+                : 'payment.cloudReversalFailed',
           ),
         );
         return;

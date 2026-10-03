@@ -18,6 +18,7 @@ import type { Expense, ExpensePayment } from '../../types/expense';
 import type { SyncEntityType, SyncMeta, SyncOutboxEntry } from '../../types/sync';
 import { getSupabaseClient } from '../../lib/supabase';
 import { WorkspaceCloudError } from '../workspace/workspaceCloudService';
+import { isFinancialActionDenial } from '../auth/financialActionDenial';
 import { calculateExpensePaymentSummary } from '../expensePaymentCalculations';
 import { normalizeExpense } from '../expenseNormalize';
 import { normalizePaymentMethod } from '../../types/models';
@@ -265,8 +266,22 @@ export function applyExpensePullToState(state: AppPersistedState, pull: ExpenseC
 // RPC
 // ---------------------------------------------------------------------------
 
+/** Nur fuer Tests: dieselbe Einstufung ohne Netzaufruf. */
+export function classifyExpenseCloudErrorForTests(error: {
+  message?: string;
+  code?: string;
+}): WorkspaceCloudError {
+  return classify(error);
+}
+
 function classify(error: { message?: string; code?: string }): WorkspaceCloudError {
   const message = error.message ?? 'Unbekannter Cloud-Fehler';
+  /*
+   * R1-SEC-01 — der Server hat die Aktion nicht erlaubt. Derselbe Nutzer mit
+   * demselben Konto bekommt dieselbe Antwort; ein Wiederholungslauf waere eine
+   * Endlosschleife.
+   */
+  if (isFinancialActionDenial(message)) return new WorkspaceCloudError(message, 'rls', false);
   if (message.includes('Nicht angemeldet')) return new WorkspaceCloudError(message, 'auth', false);
   if (message.includes('Kein Zugriff') || error.code === '42501') return new WorkspaceCloudError(message, 'rls', false);
   if (message.includes('Versionskonflikt') || message.includes('Zahlungskonflikt')) {

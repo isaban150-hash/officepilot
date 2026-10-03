@@ -745,6 +745,30 @@ const deLegacy = {
   'sync.outboxReason.failed': 'Übertragung fehlgeschlagen – bitte erneut versuchen',
   'sync.outboxReason.localOnly': 'Bleibt auf diesem Gerät – wird nicht in die Cloud übertragen',
   'sync.outboxStatus.localOnly': 'Nur lokal',
+
+  /*
+   * R1-SEC-01 — der Server weist Finanzaktionen jetzt selbst ab. Jede Ablehnung
+   * bekommt einen Satz, der sagt, was zu tun ist; der Rohtext der Datenbank
+   * erscheint nirgends.
+   */
+  /*
+   * Rückfall, falls der Server eine Ablehnung ohne erkennbaren Grund liefert:
+   * immer noch klar, dass es an der Berechtigung liegt — nie ein Rohtext.
+   */
+  'invoice.approve.notAllowed':
+    'Für die Freigabe dieser Rechnung fehlt Ihnen die Berechtigung oder die Freigabe des Kontos. Es wurde nichts freigegeben.',
+  'financeGuard.forbidden_role':
+    'Für diese Aktion fehlt Ihnen die Berechtigung. Rechnungen, Zahlungen und Buchhaltung darf nur die Betriebsleitung ändern.',
+  'financeGuard.account_blocked':
+    'Ihr Konto ist gesperrt. Bitte wenden Sie sich an den Betreiber. Es wurde nichts gespeichert.',
+  'financeGuard.account_not_approved':
+    'Ihr Konto ist noch nicht freigegeben. Bis zur Freigabe sind keine Rechnungs- und Zahlungsvorgänge möglich.',
+  'financeGuard.license_expired':
+    'Ihre Lizenz ist abgelaufen. Bitte verlängern Sie sie, um wieder Rechnungen und Zahlungen bearbeiten zu können.',
+  'financeGuard.license_inactive':
+    'Für Ihr Konto ist keine aktive Lizenz hinterlegt. Bitte wenden Sie sich an den Betreiber.',
+  'sync.failure.reason.financeGuard':
+    'Für diese Änderung fehlt die Berechtigung oder die Freigabe des Kontos. Sie wurde nicht übertragen.',
   'sync.entity.accounting_assignment': 'Kontierung',
   'sync.entity.accounting_period_closure': 'Monatsabschluss',
   'sync.entity.workspace_settings': 'Betriebseinstellungen',
@@ -3199,6 +3223,15 @@ const deLegacy = {
   'payment.cloudNotSecured': 'Diese Zahlung ist noch nicht in der Cloud gesichert.',
   'payment.cloudSecureAction': 'In der Cloud sichern',
   'payment.cloudSecured': 'Die Zahlung ist jetzt in der Cloud gesichert.',
+  /*
+   * R1-SEC-01 — eine abgewiesene Zahlung ist kein Verbindungsproblem. „Nur
+   * lokal gesichert" waere hier eine falsche Beruhigung: Die Zahlung gehoert
+   * nicht in dieses Konto, und ein spaeterer Versuch aendert daran nichts.
+   */
+  'payment.cloudDenied':
+    'Für das Buchen von Zahlungen fehlt Ihnen die Berechtigung oder die Freigabe des Kontos.',
+  'payment.cloudReversalDenied':
+    'Für das Stornieren von Zahlungen fehlt Ihnen die Berechtigung oder die Freigabe des Kontos.',
   'payment.cloudOnlyLocal':
     'Die Zahlung ist auf diesem Gerät gespeichert, konnte aber nicht in die Cloud übertragen werden. Auf anderen Geräten fehlt sie vorerst.',
   'payment.cloudConflict':

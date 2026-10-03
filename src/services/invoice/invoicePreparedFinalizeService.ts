@@ -134,6 +134,8 @@ export type ExecutePreparedFinalizationFailure =
   | 'rpc_failed'
   | 'idempotency_conflict'
   | 'amendment_state_stale'
+  /** R1-SEC-01 — Rolle, Kontofreigabe oder Lizenz erlauben die Aktion nicht. */
+  | 'financial_action_denied'
   /**
    * RECHNUNGSINTEGRITAET-03B — der Server hat die Rechnung geprüft und
    * abgelehnt. Getrennt gehalten, weil der Nutzer im Mengenfall etwas tun kann
@@ -529,6 +531,14 @@ function mapCloudError(
     error.code === 'customer_mismatch'
   ) {
     return { reason: 'server_integrity_rejected', cloudState: 'not_committed' };
+  }
+  /*
+   * R1-SEC-01 — der Autorisierungs-Guard ist die erste Anweisung im RPC. Fuer
+   * diese Finalisierung hat der Server nachweislich nichts geschrieben und
+   * keine Nummer verbraucht; der Entwurf bleibt bedienbar.
+   */
+  if (error.code === 'financial_action_denied') {
+    return { reason: 'financial_action_denied', cloudState: 'not_committed' };
   }
   if (error.code === 'auth') return { reason: 'auth_missing', cloudState: 'not_committed' };
   if (error.code === 'rls') return { reason: 'rpc_failed', cloudState: 'not_committed' };
