@@ -6,6 +6,7 @@ import {
   findTasksInStore,
   getAllTasksFromStore,
   replaceTaskInStore,
+  replaceTaskInStoreChecked,
 } from './taskStore';
 import {
   buildDedupeKey,
@@ -15,11 +16,15 @@ import {
   mapTaskTypeToCategory,
   normalizeTask,
 } from './taskNormalize';
-import { generateEntityId } from './sync/syncMetaService';
+import {
+  generateEntityId,
+  withTombstonedCloudEntityPreservingRemoteVersion,
+} from './sync/syncMetaService';
 import { isAuthorityClassifiedKind, isInsuranceClassifiedKind } from './businessInterpretationMeaning';
 import { buildDocumentSemanticCore } from './document/documentSemanticCoreService';
 import { getDocumentWorkResultForItem } from './documentWorkResultService';
 import { getInboxExtractedDocumentText } from './inboxDocumentText';
+import { getVorgangById } from './vorgangService';
 import {
   formatDunningAmount,
   resolveDunningFinanceTruth,
@@ -536,21 +541,51 @@ function findExistingOpenTaskByIdentity(identity: string): Task | null {
   return match[0] ?? null;
 }
 
-export function createTaskFromProposal(proposal: TaskProposal): Task {
+/**
+ * `null`, wenn der Vorschlag nicht dauerhaft gespeichert werden konnte.
+ *
+ * TAGESARBEIT-V1 — vorher gab diese Funktion die Aufgabe auch dann zurueck,
+ * wenn `persistAll` fehlgeschlagen war; der Aufrufer hielt eine Aufgabe in
+ * Haenden, die es nach dem Neuladen nicht mehr gab. Ein bereits vorhandener
+ * Treffer der Entdopplung bleibt unveraendert ein Erfolg.
+ */
+export function createTaskFromProposal(proposal: TaskProposal): Task | null {
   const dedupeKey = buildDedupeKey(proposal);
-  const existing = findExistingOpenTaskByDedupeKey(dedupeKey);
+  /*
+   * TAGESARBEIT-V1 — ohne eigene Identität wird nicht entdoppelt.
+   *
+   * Fehlen **sowohl** ein ausdrücklicher `dedupeKey` als auch ein `sourceId`,
+   * baut `buildDedupeKey` den Platzhalter `<sourceType>:none:<taskKind>` — ein
+   * Schlüssel, der für jede Aufgabe derselben Art gleich ist und deshalb gar
+   * keine Identität bezeichnet. Die zweite „Kunde anrufen" wäre wortlos
+   * verschwunden.
+   *
+   * Bewusst **nicht** an `sourceType === 'manual'` festgemacht: Auch eine
+   * Wiedervorlage ist `manual`, trägt aber ihren eigenen Schlüssel und soll
+   * sehr wohl entdoppelt werden (`documentReminderProposalService`). Es geht
+   * um das Vorhandensein einer Identität, nicht um die Quellart.
+   *
+   * `buildTaskIdentity` kennt dieselbe Unterscheidung bereits und liefert ohne
+   * `sourceId` `null`; der dedupeKey-Weg tat es als einziger nicht. Cloud und
+   * Server sind sich ebenfalls längst einig
+   * (`hasStableCloudDedupeIdentity`, `workspace_tasks_active_auto_dedupe_idx`).
+   */
+  const traegtIdentitaet = Boolean(proposal.dedupeKey) || Boolean(proposal.sourceId);
+  const existing = traegtIdentitaet ? findExistingOpenTaskByDedupeKey(dedupeKey) : null;
   if (existing) return { ...existing };
   const identity = buildTaskIdentity(proposal);
   const sameTask = identity ? findExistingOpenTaskByIdentity(identity) : null;
   if (sameTask) return { ...sameTask };
 
   const task = proposalToTask({ ...proposal, dedupeKey });
-  appendTaskToStore(task);
-  return { ...task };
+  const written = appendTaskToStore(task);
+  return written.ok ? written.task : null;
 }
 
 export function createTasksFromProposals(proposals: TaskProposal[]): Task[] {
-  return proposals.map((proposal) => createTaskFromProposal(proposal));
+  return proposals
+    .map((proposal) => createTaskFromProposal(proposal))
+    .filter((task): task is Task => task !== null);
 }
 
 export function createTaskFromInboxItem(
@@ -628,6 +663,206 @@ export function toggleTaskCompletion(taskId: string): Task | null {
   return task;
 }
 
+/* ------------------------------------------------------------------------ */
+/* TAGESARBEIT-V1 — Aufgaben, die der Nutzer selbst führt                     */
+/* ------------------------------------------------------------------------ */
+
+/** Serverseitige Grenze aus `upsert_workspace_sync_entity`, hier gespiegelt. */
+export const TASK_TITLE_MAX_LENGTH = 500;
+
+export type TaskMutationResult =
+  | { success: true; task: Task }
+  | { success: false; errorKey: string };
+
+export interface ManualTaskInput {
+  title: string;
+  description?: string;
+  /** `YYYY-MM-DD`; leer oder `null` heisst „keine Frist". */
+  dueDate?: string | null;
+  /** Leer oder `null` heisst „kein Vorgangsbezug". */
+  linkedVorgangId?: string | null;
+}
+
+/**
+ * Was eine Bearbeitung ändern darf. Ein **fehlendes** Feld bleibt unberührt,
+ * `null` entfernt es — der Unterschied ist hier fachlich wichtig, weil
+ * „Frist nicht angefasst" und „Frist entfernt" zwei verschiedene Dinge sind.
+ */
+export interface TaskEditInput {
+  title?: string;
+  description?: string;
+  dueDate?: string | null;
+  linkedVorgangId?: string | null;
+}
+
+function normalizeTitle(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (trimmed.length > TASK_TITLE_MAX_LENGTH) return null;
+  return trimmed;
+}
+
+/**
+ * Die Frist als lokaler Kalendertag `YYYY-MM-DD`.
+ *
+ * 03D — kein `toISOString()`-Weg: Der springt zwischen lokaler und
+ * UTC-Mitternacht einen Tag zurück. `toCanonicalIsoDay` ist der vorhandene
+ * Kanonisierer des Projekts; eine zweite Datumslogik entsteht hier nicht.
+ *
+ * Rückgabe: `undefined` = keine Frist, `null` = Eingabe unbrauchbar.
+ */
+function normalizeDueDate(value: string | null | undefined): string | undefined | null {
+  if (value === null || value === undefined) return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  return toCanonicalIsoDay(trimmed) ?? null;
+}
+
+/** Vorgangsbezug: Kennung und Titel gehören zusammen — beide oder keiner. */
+function resolveVorgangLink(
+  vorgangId: string | null | undefined,
+): { ok: true; id?: string; title?: string } | { ok: false } {
+  if (vorgangId === null || vorgangId === undefined) return { ok: true };
+  const trimmed = vorgangId.trim();
+  if (!trimmed) return { ok: true };
+  const vorgang = getVorgangById(trimmed);
+  if (!vorgang) return { ok: false };
+  return { ok: true, id: vorgang.id, title: vorgang.title };
+}
+
+/**
+ * Legt eine Aufgabe an, die der Nutzer selbst formuliert hat.
+ *
+ * Bewusst **nicht** über `createTaskFromProposal`: Jene Funktion ist der
+ * Ableitungsweg mit Entdopplung. Eine manuelle Aufgabe bekommt stattdessen
+ * ihre **eigene** Quellkennung, womit ihr `dedupeKey` von vornherein einmalig
+ * ist — zwei gleichlautende Notizen bleiben zwei Aufgaben, ohne dass dafür
+ * irgendeine Entdopplung ausgeschaltet werden müsste.
+ */
+export function createManualTask(input: ManualTaskInput): TaskMutationResult {
+  const title = normalizeTitle(input.title);
+  if (!title) return { success: false, errorKey: 'task.error.titleInvalid' };
+
+  const dueDate = normalizeDueDate(input.dueDate);
+  if (dueDate === null) return { success: false, errorKey: 'task.error.dueDateInvalid' };
+
+  const link = resolveVorgangLink(input.linkedVorgangId);
+  if (!link.ok) return { success: false, errorKey: 'task.error.vorgangMissing' };
+
+  const id = generateEntityId('t');
+  const now = new Date().toISOString();
+  const task = normalizeTask({
+    id,
+    title,
+    description: input.description?.trim() ? input.description.trim() : title,
+    status: 'open',
+    priority: 'mittel',
+    category: 'sonstiges',
+    ...(dueDate ? { dueDate } : {}),
+    ...(link.id ? { linkedVorgangId: link.id, linkedVorgangTitle: link.title } : {}),
+    sourceType: 'manual',
+    /* Eigene Quellkennung — siehe oben. */
+    sourceId: id,
+    taskKind: 'manual',
+    dedupeKey: `manual:${id}:manual`,
+    autoCreated: false,
+    createdAt: now,
+    type: 'dokument_pruefen',
+  });
+
+  const written = appendTaskToStore(task);
+  if (!written.ok) return { success: false, errorKey: written.errorKey };
+  return { success: true, task: written.task };
+}
+
+/**
+ * Ändert Titel, Beschreibung, Frist und Vorgangsbezug — für manuelle **und**
+ * automatisch erzeugte Aufgaben.
+ *
+ * `sync` bleibt unberührt (SYNC-VERSION-CONTRACT-02): `sync.version` ist
+ * allein die zuletzt vom Server bestätigte `row_version`; ein selbst erhöhter
+ * Wert endete im Versionskonflikt.
+ */
+export function updateTask(taskId: string, input: TaskEditInput): TaskMutationResult {
+  let title: string | undefined;
+  if (input.title !== undefined) {
+    const normalized = normalizeTitle(input.title);
+    if (!normalized) return { success: false, errorKey: 'task.error.titleInvalid' };
+    title = normalized;
+  }
+
+  let dueDate: string | undefined;
+  let clearDueDate = false;
+  if (input.dueDate !== undefined) {
+    const normalized = normalizeDueDate(input.dueDate);
+    if (normalized === null) return { success: false, errorKey: 'task.error.dueDateInvalid' };
+    if (normalized === undefined) clearDueDate = true;
+    else dueDate = normalized;
+  }
+
+  let link: { id?: string; title?: string } | undefined;
+  if (input.linkedVorgangId !== undefined) {
+    const resolved = resolveVorgangLink(input.linkedVorgangId);
+    if (!resolved.ok) return { success: false, errorKey: 'task.error.vorgangMissing' };
+    link = { id: resolved.id, title: resolved.title };
+  }
+
+  const result = replaceTaskInStoreChecked(taskId, (task) => {
+    const next: Task = { ...task };
+    if (title !== undefined) next.title = title;
+    if (input.description !== undefined) next.description = input.description.trim();
+    if (clearDueDate) {
+      /* Wirklich entfernen, nicht als Leerstring führen. */
+      delete next.dueDate;
+    } else if (dueDate !== undefined) {
+      next.dueDate = dueDate;
+    }
+    if (link) {
+      if (link.id) {
+        next.linkedVorgangId = link.id;
+        next.linkedVorgangTitle = link.title;
+      } else {
+        /* Kennung und Titel fallen gemeinsam — kein verwaister Vorgangstitel. */
+        delete next.linkedVorgangId;
+        delete next.linkedVorgangTitle;
+        delete next.vorgangId;
+        delete next.vorgangTitle;
+      }
+    }
+    return next;
+  });
+
+  if (!result.ok) return { success: false, errorKey: result.errorKey };
+  return { success: true, task: result.task };
+}
+
+/**
+ * Löscht eine **manuelle** Aufgabe.
+ *
+ * Automatisch erzeugte Aufgaben haben keinen Löschweg: Sie entstehen aus einem
+ * Beleg oder einer Frist und kämen bei der nächsten Ableitung ohnehin wieder;
+ * „erledigt" ist dort die richtige Antwort. Geprüft wird das **hier**, nicht
+ * erst in der Oberfläche.
+ *
+ * Gelöscht wird als Grabstein über den zum Sync-Vertrag passenden Helfer:
+ * `withTombstonedCloudEntityPreservingRemoteVersion` lässt die bestätigte
+ * Serverversion stehen, während `withTombstonedEntity` sie erhöhen und damit
+ * einen Versionskonflikt auslösen würde.
+ */
+export function deleteManualTask(taskId: string): TaskMutationResult {
+  const existing = getAllTasksFromStore().find((task) => task.id === taskId);
+  if (!existing) return { success: false, errorKey: 'task.notFound' };
+  if (existing.autoCreated !== false) {
+    return { success: false, errorKey: 'task.error.autoNotDeletable' };
+  }
+
+  const result = replaceTaskInStoreChecked(taskId, (task) =>
+    withTombstonedCloudEntityPreservingRemoteVersion(task, 'task'),
+  );
+  if (!result.ok) return { success: false, errorKey: result.errorKey };
+  return { success: true, task: result.task };
+}
+
 export function getTasksFiltered(
   filter: TaskFilter,
   today: Date | string = new Date(),
@@ -642,7 +877,9 @@ export function getTasksFiltered(
       // 01D — „Heute“ heißt heute fällig; Überfälliges hat seinen eigenen Filter.
       return all.filter((task) => isTaskOpen(task) && task.dueDate && task.dueDate.slice(0, 10) === todayIso);
     case 'ueberfaellig':
-      return all.filter((task) => isTaskOpen(task) && task.dueDate && task.dueDate < todayIso);
+      return all.filter(
+        (task) => isTaskOpen(task) && task.dueDate && task.dueDate.slice(0, 10) < todayIso,
+      );
     case 'kritisch':
       return all.filter((task) => isTaskOpen(task) && task.priority === 'kritisch');
     case 'erledigt':
@@ -656,10 +893,19 @@ export function getTaskSummary(today: Date | string = new Date()): TaskSummary {
   const todayIso = getTodayIso(today);
   const all = getAllTasksFromStore();
   const openTasks = all.filter(isTaskOpen);
+  /*
+   * TAGESARBEIT-V1 — derselbe Kalendertag wie im Filter.
+   *
+   * `getTasksFiltered('heute')` schnitt bereits auf zehn Zeichen ab, die
+   * Kennzahl nicht. Traegt eine Frist einen Zeitanteil, zaehlte dieselbe
+   * Aufgabe im Filter als heute, in der Kennzahl aber nicht. Neue Fristen
+   * werden kanonisiert; der Altbestand wird hier gleich behandelt.
+   */
+  const dayOf = (value: string) => value.slice(0, 10);
   return {
     open: openTasks.length,
-    today: openTasks.filter((t) => t.dueDate && t.dueDate <= todayIso).length,
-    overdue: openTasks.filter((t) => t.dueDate && t.dueDate < todayIso).length,
+    today: openTasks.filter((t) => t.dueDate && dayOf(t.dueDate) <= todayIso).length,
+    overdue: openTasks.filter((t) => t.dueDate && dayOf(t.dueDate) < todayIso).length,
     critical: openTasks.filter((t) => t.priority === 'kritisch').length,
     done: all.filter(isTaskDone).length,
     total: all.length,

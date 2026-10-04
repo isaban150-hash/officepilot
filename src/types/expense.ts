@@ -91,6 +91,21 @@ export interface ExpenseAllocation {
   vorgangTitle: string;
   amount: number;
   orderPositionId?: string;
+  /**
+   * BEREICH-7-V1 — die Auftragsposition, die aus **dieser** Zuordnung durch
+   * Weiterberechnung entstanden ist.
+   *
+   * Bewusst ein eigenes Feld und keine Umdeutung von `orderPositionId`: Jenes
+   * beantwortet „aus welcher Auftragsposition stammt diese Kostenzuordnung",
+   * dieses „in welche Auftragsposition wurde sie weiterberechnet". Zwei
+   * Bedeutungen in einem Feld lassen sich später nicht mehr auseinanderhalten.
+   *
+   * Der Marker lebt an der Zuordnung, weil sie das einzige Objekt ist, das
+   * Beleg **und** Auftrag kennt — und weil sie über den vorhandenen
+   * Expense-Payload bereits synchronisiert. Der Rechnungsentwurf käme nicht in
+   * Frage: Er ist ausdrücklich geräte-lokal (`invoiceDraftDurabilityService`).
+   */
+  rebilledOrderPositionId?: string;
 }
 
 export interface Expense {

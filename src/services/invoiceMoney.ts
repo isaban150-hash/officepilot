@@ -40,3 +40,25 @@ export function taxCentsFromNet(netCents: number, taxRatePercent: number): numbe
   if (taxRatePercent <= 0) return 0;
   return Math.round((netCents * taxRatePercent) / 100);
 }
+
+/**
+ * BEREICH-7-V1 — Weiterberechnungspreis in Cent: Einkaufsnetto plus optionaler
+ * prozentualer Aufschlag.
+ *
+ * **Genau eine Rundung.** Zuerst den Aufschlag zu runden und ihn dann zu
+ * addieren wäre eine zweite Rundungsstelle und würde bei krummen Sätzen um
+ * einen Cent abweichen — deshalb steht hier ein einziger `Math.round` über dem
+ * fertigen Produkt, wie in `taxCentsFromNet` auch.
+ *
+ * Aufschlag `0` ergibt den Einkaufspreis **exakt** und nicht nur ungefähr:
+ * Der Faktor ist dann 1, und `Math.round` eines ganzzahligen Centbetrags ist
+ * dieser Betrag.
+ *
+ * Ein negativer Satz ist kein Rabattmodell, sondern ein Eingabefehler, und
+ * wird deshalb hier nicht abgefangen, sondern vom Dienst abgewiesen.
+ */
+export function rebillPriceCents(netCents: number, markupPercent: number): number {
+  if (!Number.isFinite(netCents) || !Number.isFinite(markupPercent)) return NaN;
+  if (markupPercent === 0) return netCents;
+  return Math.round((netCents * (100 + markupPercent)) / 100);
+}

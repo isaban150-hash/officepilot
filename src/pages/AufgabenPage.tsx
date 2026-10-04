@@ -3,6 +3,8 @@ import { Link, useLocation } from 'react-router-dom';
 import { Badge, PageHeader, StatusBadge } from '../components/ui/Card';
 import { BusinessList, BusinessListItem } from '../components/ui/Lists';
 import { Page, PageToolbar } from '../components/ui/Page';
+import { Button } from '../components/ui/Button';
+import { TaskEditorDialog } from '../components/tasks/TaskEditorDialog';
 import { FilterChips } from '../components/ui/Toolbar';
 import type { StatusTone } from '../services/ui/statusTone';
 import { EmptyStateBlock } from '../components/ui/EmptyStateBlock';
@@ -26,11 +28,16 @@ function priorityTone(priority: Task['priority']): StatusTone {
 }
 
 export function AufgabenPage() {
-  const { translate } = useApp();
+  const { translate, showToast } = useApp();
   const location = useLocation();
   const [filter, setFilter] = useState<TaskFilter>('offen');
   const [tasks, setTasks] = useState<Task[]>(() => getTasksFiltered('offen'));
   const [summary, setSummary] = useState(getTaskSummary);
+  /*
+   * TAGESARBEIT-V1 — ein Dialog fuer Anlegen und Bearbeiten.
+   * `null` heisst geschlossen, `'new'` neue Aufgabe, sonst die bearbeitete.
+   */
+  const [editing, setEditing] = useState<Task | 'new' | null>(null);
 
   const refresh = () => {
     setTasks(getTasksFiltered(filter));
@@ -67,7 +74,14 @@ export function AufgabenPage() {
         subtitle={`${summary.open} ${translate('aufgaben.open')}`}
       />
 
-      <PageToolbar filters={<FilterChips options={filterOptions} value={filter} onChange={setFilter} label={translate('list.filter.label')} testIdPrefix="aufgaben-filter" />} />
+      <PageToolbar
+        filters={<FilterChips options={filterOptions} value={filter} onChange={setFilter} label={translate('list.filter.label')} testIdPrefix="aufgaben-filter" />}
+        extra={
+          <Button type="button" onClick={() => setEditing('new')} data-testid="aufgaben-new">
+            {translate('aufgaben.new')}
+          </Button>
+        }
+      />
 
       {tasks.length === 0 ? (
         <EmptyStateBlock
@@ -119,12 +133,34 @@ export function AufgabenPage() {
                 meta={`${translate(categoryKey)} · ${translate(sourceKey)}`}
                 status={done ? <StatusBadge tone="success" label={translate('aufgaben.filter.erledigt')} icon={false} /> : <StatusBadge tone={priorityTone(task.priority)} label={translate(priorityKey)} icon={false} />}
                 date={task.dueDate ? <Badge tone={done ? 'neutral' : 'warning'}>{task.dueDate}</Badge> : undefined}
+                action={
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setEditing(task)}
+                    data-testid={`aufgaben-edit-${task.id}`}
+                  >
+                    {translate('aufgaben.action.edit')}
+                  </Button>
+                }
                 footer={links.length > 0 ? <div className="task-row__links">{links}</div> : undefined}
               />
             );
           })}
         </BusinessList>
       )}
+
+      {editing ? (
+        <TaskEditorDialog
+          open
+          task={editing === 'new' ? null : editing}
+          onClose={() => setEditing(null)}
+          onSaved={(messageKey) => {
+            showToast(translate(messageKey));
+            refresh();
+          }}
+        />
+      ) : null}
     </Page>
   );
 }

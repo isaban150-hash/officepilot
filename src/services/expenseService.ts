@@ -531,6 +531,18 @@ export function assignExpenseToVorgang(
     /* Positionsbezug bleibt erhalten — 01B baut ihn nicht aus, zerstört ihn aber auch nicht. */
     allocation.orderPositionId = existing.orderPositionId;
   }
+  if (existing?.rebilledOrderPositionId) {
+    /*
+     * BEREICH-7-V1 — der Weiterberechnungsmarker überlebt eine Betragsänderung.
+     *
+     * Ohne diese Zeile würde ein blosses Korrigieren des zugeordneten Betrags
+     * den Marker stillschweigend fallen lassen und die Zuordnung ein zweites
+     * Mal weiterberechenbar machen — der Doppelberechnungsschutz hinge dann an
+     * einer Reihenfolge von Nutzerklicks. Fail-closed: der Marker bleibt, bis
+     * die erzeugte Position tatsächlich verschwindet.
+     */
+    allocation.rebilledOrderPositionId = existing.rebilledOrderPositionId;
+  }
 
   const now = new Date().toISOString();
   const updated = withConfirmedExpenseSync({ ...current, allocations: [...others, allocation], updatedAt: now }, current);
@@ -551,6 +563,108 @@ export function removeExpenseAllocation(expenseId: string, vorgangId: string): E
   const updated = withConfirmedExpenseSync({ ...current, allocations: remaining, updatedAt: now }, current);
   replaceExpenseInStore(expenseId, updated);
   persistAll();
+  return { success: true, expense: getExpenseById(expenseId)! };
+}
+
+/* ------------------------------------------------------------------------ */
+/* BEREICH-7-V1 — Herkunftsmarker der Weiterberechnung                        */
+/* ------------------------------------------------------------------------ */
+
+/**
+ * Setzt den Bezug auf die weiterberechnete Auftragsposition.
+ *
+ * Bewusst klein und ohne Fachlogik: Ob weiterberechnet werden **darf**,
+ * entscheidet `orderCostRebillingService`; hier wird nur geschrieben. Ein
+ * bereits gesetzter Marker wird **nicht** überschrieben — das wäre genau die
+ * stille zweite Weiterberechnung, die der Schutz verhindern soll.
+ */
+export function setAllocationRebilledPosition(
+  expenseId: string,
+  vorgangId: string,
+  orderPositionId: string,
+): ExpenseMutationResult {
+  const current = getExpenseFromStoreById(expenseId);
+  if (!current || !isEntitySyncActive(current)) return { success: false, errorKey: 'expense.notFound' };
+  if (current.status === 'storniert') return { success: false, errorKey: 'expense.allocation.cancelled' };
+
+  const positionId = orderPositionId.trim();
+  if (!positionId) return { success: false, errorKey: 'expense.rebill.positionMissing' };
+
+  const allocations = current.allocations ?? [];
+  const existing = allocations.find((entry) => entry.vorgangId === vorgangId);
+  if (!existing) return { success: false, errorKey: 'expense.allocation.notFound' };
+  if (existing.rebilledOrderPositionId) return { success: false, errorKey: 'expense.rebill.alreadyRebilled' };
+
+  const now = new Date().toISOString();
+  const updated = withConfirmedExpenseSync(
+    {
+      ...current,
+      allocations: allocations.map((entry) =>
+        entry.vorgangId === vorgangId ? { ...entry, rebilledOrderPositionId: positionId } : entry,
+      ),
+      updatedAt: now,
+    },
+    current,
+  );
+  replaceExpenseInStore(expenseId, updated);
+  if (!persistAll().success) {
+    /*
+     * Kein halber Zustand: Ohne diesen Rücksetzer trüge der Beleg den Marker
+     * im Arbeitsspeicher weiter, während der Aufrufer einen Fehlschlag sieht
+     * und die erzeugte Position zurücknimmt — die Zuordnung wäre dann als
+     * „bereits weiterberechnet" markiert, ohne dass es eine Position gäbe.
+     * Dieselbe Zusicherung, die `commitVorgangMutation` auf der Auftragsseite
+     * bereits gibt.
+     */
+    replaceExpenseInStore(expenseId, current);
+    return { success: false, errorKey: 'expense.rebill.persistFailed' };
+  }
+  return { success: true, expense: getExpenseById(expenseId)! };
+}
+
+/**
+ * Entfernt den Bezug wieder — wenn die erzeugte Position regulär gelöscht
+ * wurde, und als Rücknahme, wenn das Markieren selbst fehlgeschlagen ist.
+ *
+ * Anders als beim Setzen ist eine **stornierte** Ausgabe hier kein Hindernis:
+ * Geräumt wird nur ein Verweis auf etwas, das es nicht mehr gibt; kein Betrag,
+ * keine Kategorie, keine Buchung ändert sich. Ein hängengebliebener Marker auf
+ * einem stornierten Beleg wäre dagegen dauerhaft.
+ */
+export function clearAllocationRebilledPosition(
+  expenseId: string,
+  vorgangId: string,
+): ExpenseMutationResult {
+  const current = getExpenseFromStoreById(expenseId);
+  if (!current || !isEntitySyncActive(current)) return { success: false, errorKey: 'expense.notFound' };
+
+  const allocations = current.allocations ?? [];
+  const existing = allocations.find((entry) => entry.vorgangId === vorgangId);
+  if (!existing) return { success: false, errorKey: 'expense.allocation.notFound' };
+  if (!existing.rebilledOrderPositionId) {
+    /* Nichts zu räumen ist kein Fehler — der gewünschte Zustand liegt bereits vor. */
+    return { success: true, expense: getExpenseById(expenseId)! };
+  }
+
+  const now = new Date().toISOString();
+  const updated = withConfirmedExpenseSync(
+    {
+      ...current,
+      allocations: allocations.map((entry) => {
+        if (entry.vorgangId !== vorgangId) return entry;
+        const { rebilledOrderPositionId: _marker, ...rest } = entry;
+        return rest;
+      }),
+      updatedAt: now,
+    },
+    current,
+  );
+  replaceExpenseInStore(expenseId, updated);
+  if (!persistAll().success) {
+    /* Wie beim Setzen: entweder dauerhaft geräumt oder gar nicht. */
+    replaceExpenseInStore(expenseId, current);
+    return { success: false, errorKey: 'expense.rebill.persistFailed' };
+  }
   return { success: true, expense: getExpenseById(expenseId)! };
 }
 

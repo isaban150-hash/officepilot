@@ -81,6 +81,8 @@ export interface OrderCostEntry {
   expenseId: string;
   title: string;
   supplierName: string;
+  /** BEREICH-7-V1 — Belegnummer fuer die Vorbelegung der Weiterberechnung. */
+  invoiceNumber: string;
   category: Expense['category'];
   issueDate: string;
   /** Der diesem Auftrag zugeordnete Nettobetrag — nicht der volle Beleg. */
@@ -111,6 +113,7 @@ function toEntry(expense: Expense, vorgangId: string): OrderCostEntry {
     expenseId: expense.id,
     title: expense.title,
     supplierName: expense.supplierName,
+    invoiceNumber: expense.invoiceNumber,
     category: expense.category,
     issueDate: expense.issueDate,
     allocatedNet: fromCents(allocatedCentsForVorgang(expense, vorgangId)),

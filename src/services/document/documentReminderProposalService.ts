@@ -303,7 +303,7 @@ export function buildReminderProposal(input: {
 
 export type ConfirmReminderResult =
   | { ok: true; task: Task; created: boolean }
-  | { ok: false; reason: 'already_exists' };
+  | { ok: false; reason: 'already_exists' | 'persist_failed' };
 
 /**
  * Legt die Wiedervorlage an — **nur** auf ausdrückliche Bestätigung.
@@ -315,5 +315,10 @@ export type ConfirmReminderResult =
 export function confirmReminderProposal(proposal: TaskProposal): ConfirmReminderResult {
   const bestand = proposal.dedupeKey ? findExistingOpenTaskByDedupeKey(proposal.dedupeKey) : null;
   const task = createTaskFromProposal(proposal);
+  /*
+   * TAGESARBEIT-V1 — `null` heisst: nicht dauerhaft gespeichert. Das als
+   * "gibt es schon" zu melden waere die falsche Beruhigung.
+   */
+  if (!task) return { ok: false, reason: 'persist_failed' };
   return { ok: true, task, created: !bestand };
 }

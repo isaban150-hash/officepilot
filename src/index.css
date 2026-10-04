@@ -1977,6 +1977,36 @@ body {
   gap: 0.5rem;
 }
 
+/*
+ * TAGESARBEIT-V1 — Frist-Zeile im Aufgabendialog.
+ *
+ * `flex-wrap` statt fester Spalten: Auf schmalen Geräten rutscht
+ * „Frist entfernen" unter das Datumsfeld, statt die Zeile über den Rand zu
+ * schieben. `min-width: 0` lässt das Datumsfeld schrumpfen — ohne das erzwingt
+ * seine Eigenbreite in manchen Browsern einen waagerechten Überlauf.
+ */
+.task-editor-dialog__due {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.task-editor-dialog__due > .input {
+  flex: 1 1 10rem;
+  min-width: 0;
+}
+
+/* Löschen steht abgesetzt — es ist nicht dasselbe wie Speichern. */
+.task-editor-dialog__danger {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-border-subtle);
+}
+
 .badge-row {
   display: flex;
   flex-wrap: wrap;

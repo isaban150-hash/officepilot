@@ -2149,6 +2149,36 @@ const deLegacy = {
   'aufgaben.linkInbox': 'Zur Ablage',
   'aufgaben.linkInvoice': 'Zur Rechnung',
   'aufgaben.linkDocument': 'Zum Dokument',
+  'aufgaben.new': 'Neue Aufgabe',
+  'aufgaben.action.edit': 'Bearbeiten',
+  'aufgaben.dialog.createTitle': 'Neue Aufgabe',
+  'aufgaben.dialog.editTitle': 'Aufgabe bearbeiten',
+  'aufgaben.field.title': 'Was ist zu tun?',
+  'aufgaben.field.titlePlaceholder': 'z. B. Kunde Meier wegen Nachtrag anrufen',
+  'aufgaben.field.description': 'Notiz',
+  'aufgaben.field.descriptionPlaceholder': 'Optional — Einzelheiten, die Sie nicht vergessen wollen',
+  'aufgaben.field.dueDate': 'Frist',
+  'aufgaben.field.dueDateHint': 'Optional. Ohne Frist erscheint die Aufgabe nur unter „Offen".',
+  'aufgaben.field.vorgang': 'Auftrag',
+  'aufgaben.field.vorgangNone': 'Kein Auftrag',
+  'aufgaben.action.clearDueDate': 'Frist entfernen',
+  'aufgaben.action.delete': 'Aufgabe löschen',
+  'aufgaben.action.deleteConfirm': 'Diese Aufgabe wirklich löschen? Das lässt sich nicht rückgängig machen.',
+  'aufgaben.auto.hint':
+    'Diese Aufgabe ist automatisch aus einem Beleg entstanden. Sie lässt sich erledigen, aber nicht löschen — die Frist können Sie ändern.',
+  'aufgaben.saved': 'Aufgabe gespeichert.',
+  'aufgaben.created': 'Aufgabe angelegt.',
+  'aufgaben.deleted': 'Aufgabe gelöscht.',
+  'task.notFound': 'Diese Aufgabe wurde nicht gefunden.',
+  'task.persistFailed':
+    'Die Aufgabe konnte nicht dauerhaft gespeichert werden. Es wurde nichts geändert.',
+  'task.error.titleInvalid': 'Bitte geben Sie an, was zu tun ist (höchstens 500 Zeichen).',
+  'task.error.dueDateInvalid': 'Diese Frist konnte nicht gelesen werden.',
+  'task.error.vorgangMissing': 'Dieser Auftrag wurde nicht gefunden.',
+  'task.error.autoNotDeletable':
+    'Automatisch entstandene Aufgaben können nicht gelöscht werden. Erledigen Sie sie stattdessen.',
+  'documentReminder.persistFailed':
+    'Die Wiedervorlage konnte nicht dauerhaft gespeichert werden. Bitte erneut versuchen.',
   'aufgaben.filter.offen': 'Offen',
   'aufgaben.filter.heute': 'Heute',
   'aufgaben.filter.ueberfaellig': 'Überfällig',
@@ -2604,6 +2634,41 @@ const deLegacy = {
   'vorgang.cost.listTitle': 'Zugeordnete Ausgaben',
   'vorgang.cost.cancelledTitle': 'Stornierte Belege (zählen nicht)',
   'vorgang.cost.openExpense': 'Ausgabe öffnen',
+  /* BEREICH-7-V1 — Lieferantenkosten weiterberechnen. */
+  'expense.rebill.action': 'Weiterberechnen',
+  'expense.rebill.dialogTitle': 'Lieferantenkosten weiterberechnen',
+  'expense.rebill.intro':
+    'Daraus entsteht eine abrechenbare Auftragsposition. Sie erscheint in der nächsten Rechnung dieses Auftrags — bestehende Rechnungen bleiben unverändert.',
+  'expense.rebill.descriptionLabel': 'Bezeichnung auf der Rechnung',
+  'expense.rebill.defaultDescription': 'Lieferantenkosten {supplier} {invoiceNumber}',
+  'expense.rebill.purchaseLabel': 'Einkaufspreis (netto)',
+  'expense.rebill.markupLabel': 'Aufschlag in Prozent',
+  'expense.rebill.markupHint':
+    'Gilt nur für diese eine Weiterberechnung. 0 bedeutet: zum Einkaufspreis.',
+  'expense.rebill.resultLabel': 'Verkaufspreis (netto)',
+  'expense.rebill.submit': 'Als Auftragsposition anlegen',
+  'expense.rebill.taxHint':
+    'Die Umsatzsteuer der Kundenrechnung richtet sich wie immer nach dem Steuerstatus der Rechnung. Der Vorsteuersatz der Lieferantenrechnung wird nicht übernommen.',
+  'expense.rebill.saved': 'Als Auftragsposition angelegt.',
+  'expense.rebill.badge': 'Weiterberechnet',
+  'expense.rebill.linkedHint': 'Als Auftragsposition übernommen: {description} ({amount})',
+  'expense.rebill.linkedMissing':
+    'Die weiterberechnete Auftragsposition ist nicht mehr vorhanden. Bitte die Weiterberechnung zurücknehmen.',
+  'expense.rebill.billedHint':
+    'Diese Position ist bereits abgerechnet und kann nicht mehr zurückgenommen werden.',
+  'expense.rebill.undo': 'Weiterberechnung zurücknehmen',
+  'expense.rebill.undone': 'Weiterberechnung zurückgenommen. Der Betrag ist wieder weiterberechenbar.',
+  'expense.rebill.alreadyRebilled':
+    'Diese Kostenzuordnung wurde bereits weiterberechnet. Ein zweites Mal ist nicht möglich.',
+  'expense.rebill.notRebilled': 'Für diese Kostenzuordnung besteht keine Weiterberechnung.',
+  'expense.rebill.descriptionMissing': 'Bitte eine Bezeichnung für die Rechnungsposition eingeben.',
+  'expense.rebill.markupInvalid': 'Bitte einen Aufschlag von 0 oder mehr eingeben.',
+  'expense.rebill.amountInvalid': 'Der zugeordnete Nettobetrag ergibt keinen gültigen Verkaufspreis.',
+  'expense.rebill.positionMissing': 'Die Auftragsposition konnte nicht zugeordnet werden.',
+  'expense.rebill.persistFailed':
+    'Die Weiterberechnung konnte nicht dauerhaft gespeichert werden. Es wurde nichts angelegt.',
+  'expense.rebill.expenseInactive':
+    'Nur gebuchte, nicht stornierte Belege können weiterberechnet werden.',
   /* OFFICEPILOT-V1-A — Ausgabe stornieren / sicher bearbeiten */
   'expense.cancel': 'Ausgabe stornieren',
   'expense.cancel.intro': 'Die Ausgabe wird nicht gelöscht, sondern als storniert geführt. Sie zählt nicht mehr als offen und erscheint in der Monatsmappe als Storno.',
