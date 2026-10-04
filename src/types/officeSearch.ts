@@ -11,7 +11,11 @@ export type SearchResultType =
   /** BROWSER-ACCEPTANCE-FIX 01 / A2 — Kunde als eigener Treffer. */
   | 'customer'
   /** BROWSER-ACCEPTANCE-FIX 01 / A2 — E-Mail aus der Cloud (Eingang/Gesendet). */
-  | 'email';
+  | 'email'
+  /** GLOBALE-SUCHE-V1 — das Angebot selbst, nicht seine Archivkopie. */
+  | 'offer'
+  /** GLOBALE-SUCHE-V1 — das Geschäftsschreiben selbst, nicht seine Archivkopie. */
+  | 'letter';
 
 export interface SearchResult {
   id: string;

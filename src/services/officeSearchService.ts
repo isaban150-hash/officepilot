@@ -35,6 +35,8 @@ import {
   getPhysicalFilingStatusLabel,
 } from './paperFolderService';
 import { getAllTasksFromStore } from './taskStore';
+import { listOffers } from './offer/offerService';
+import { listBusinessLetters } from './businessLetterService';
 import { getTodayIso, isTaskOpen } from './taskNormalize';
 import { getAllVorgaenge } from './vorgangService';
 import { resolveDocumentLifecycle } from './documentLifecycleService';
@@ -45,6 +47,33 @@ import {
   createPresentationTranslate,
   presentDocumentSummaryForSnippet,
 } from './documentSummaryPresentation';
+
+/** GLOBALE-SUCHE-V1 — Klartext, nie ein technischer Statuswert. */
+const ENTWURF_LABEL = 'Entwurf';
+
+/**
+ * GLOBALE-SUCHE-V1 — der Entwurfshinweis in der Unterzeile.
+ *
+ * `statusLabel` allein genügt nicht: Die kompakte Vorschau der Kopfzeilensuche
+ * blendet Schnipsel **und** Metazeile aus (`compact` in `SearchResultsList`),
+ * und damit verschwände genau die Information, dass hier ein Entwurf steht.
+ * Gemessen, nicht vermutet — der UI-Test U3 hielt das fest, bevor diese Zeile
+ * entstand.
+ *
+ * Bewusst klein gehalten: Die Unterzeile wird in beiden Darstellungen gezeigt,
+ * und betroffen sind ausschliesslich Angebots- und Schreibentreffer. Kein
+ * Eingriff in `SearchResultsList`, keine Änderung für andere Suchtypen.
+ */
+function withDraftHint(subtitle: string, isDraft: boolean): string {
+  if (!isDraft) return subtitle;
+  return subtitle ? `${ENTWURF_LABEL} · ${subtitle}` : ENTWURF_LABEL;
+}
+
+/** Die stabile Verknuepfung eines Archivdokuments auf seine fachliche Quelle. */
+interface ArchiveLink {
+  offerRoute?: string;
+  letterRoute?: string;
+}
 
 const TYPE_BASE_SCORE: Record<SearchResultType, number> = {
   document: 70,
@@ -58,6 +87,21 @@ const TYPE_BASE_SCORE: Record<SearchResultType, number> = {
   task: 40,
   customer: 60,
   email: 60,
+  /*
+   * GLOBALE-SUCHE-V1 — das Angebot steht gleichauf mit Rechnung und Auftrag:
+   * Alle drei sind kaufmännische Hauptbelege mit eigener Detailseite, und das
+   * Angebot ist der Vorgänger desselben Vorgangs. Ein anderer Wert würde
+   * behaupten, es sei mehr oder weniger wert als der Auftrag daraus.
+   *
+   * Das Schreiben liegt bei den Ausgaben: ohne Nummer wird es weniger gezielt
+   * gesucht als ein nummerierter Beleg, aber gezielter als eine
+   * Kommunikationszeile (45) oder eine Aufgabe (40).
+   *
+   * Dass eine exakte Angebotsnummer dennoch ganz oben landet, leistet nicht
+   * diese Grundzahl, sondern der vorhandene Primärfeld-Bonus in `matchTerms`.
+   */
+  offer: 55,
+  letter: 50,
 };
 
 const TYPE_ICON: Record<SearchResultType, string> = {
@@ -72,6 +116,9 @@ const TYPE_ICON: Record<SearchResultType, string> = {
   communication: '💬',
   customer: '👤',
   email: '✉️',
+  /* Unterscheidbar von `mail`/`email` (✉️) und von `document` (📄). */
+  offer: '📑',
+  letter: '🖋️',
 };
 
 const TYPE_SOURCE_LABEL: Record<SearchResultType, string> = {
@@ -86,6 +133,8 @@ const TYPE_SOURCE_LABEL: Record<SearchResultType, string> = {
   communication: 'Kommunikation',
   customer: 'Kunde',
   email: 'E-Mail',
+  offer: 'Angebot',
+  letter: 'Schreiben',
 };
 
 /**
@@ -335,8 +384,14 @@ function includesType(filter: OfficeSearchFilter | undefined, type: SearchResult
   return filter.types.includes(type);
 }
 
-function collectDocumentResults(query: string, terms: string[], todayIso: string): SearchResult[] {
+function collectDocumentResults(
+  query: string,
+  terms: string[],
+  todayIso: string,
+): { results: SearchResult[]; archiveLinks: Map<string, ArchiveLink> } {
   const results: SearchResult[] = [];
+  /* Verknuepfung Archivdokument -> fachliche Quelle; siehe dropArchiveDuplicates. */
+  const archiveLinks = new Map<string, ArchiveLink>();
   const translate = createPresentationTranslate(getCachedSetup()?.language);
 
   for (const doc of searchDocuments(query, 'all')) {
@@ -388,9 +443,68 @@ function collectDocumentResults(query: string, terms: string[], todayIso: string
       status: lifecycle?.openItems[0],
       source: memory?.source === 'email' ? 'E-Mail-Dokument' : TYPE_SOURCE_LABEL.document,
     });
+
+    /*
+     * GLOBALE-SUCHE-V1 — die Verknüpfung dieses Archivdokuments, falls es aus
+     * einem Angebot oder einem Schreiben entstanden ist. Gesammelt wird sie
+     * **hier**, wo das Dokument ohnehin in der Hand liegt; der Suchpfad muss
+     * sie später nicht erneut nachschlagen.
+     */
+    const offerId = doc.linkedOfferId?.trim();
+    const letterId = doc.linkedLetterId?.trim();
+    if (offerId || letterId) {
+      archiveLinks.set(`/dokumente/${doc.id}`, {
+        ...(offerId ? { offerRoute: `/angebote/${offerId}` } : {}),
+        ...(letterId ? { letterRoute: `/schreiben/${letterId}` } : {}),
+      });
+    }
   }
 
-  return results;
+  return { results, archiveLinks };
+}
+
+/**
+ * GLOBALE-SUCHE-V1 — ein fachliches Angebot, ein Treffer.
+ *
+ * Passt eine Suche auf **beides** — das Angebot selbst und seine Archivkopie —,
+ * sieht der Nutzer zweimal dieselbe Sache. Unterdrückt wird deshalb die
+ * Archivkopie, aber ausdrücklich nur dann:
+ *
+ *  * Trifft nur das Dokument (etwa über den Positions- oder Brieftext seines
+ *    `recognizedText`) und das Angebot nicht, bleibt das Dokument stehen —
+ *    sonst verlöre die Suche genau die Tiefe, die das Archiv ausmacht.
+ *  * Ein Dokument ohne `linkedOfferId`/`linkedLetterId` wird nie angefasst.
+ *    Historische Altbestände bleiben damit unberührt.
+ *  * Ist die native Entität gelöscht, erzeugt sie keinen Treffer — dann greift
+ *    die Regel nicht, und das Dokument bleibt die einzige Spur.
+ *
+ * Entschieden wird allein über die stabilen Verknüpfungen und die `route`, die
+ * `pushResult` ohnehin als Identität benutzt. **Keine Titel-, Nummern- oder
+ * Ähnlichkeitsheuristik.**
+ *
+ * Wirkt nur auf diese Antwortliste. `searchDocuments` und damit das
+ * Dokumentarchiv selbst bleiben vollständig; Rechnungen bleiben unverändert,
+ * weil sie keine dieser Verknüpfungen tragen.
+ */
+function dropArchiveDuplicates(
+  results: SearchResult[],
+  archiveLinks: Map<string, ArchiveLink>,
+): SearchResult[] {
+  if (archiveLinks.size === 0) return results;
+
+  const nativeRoutes = new Set(
+    results.filter((item) => item.type === 'offer' || item.type === 'letter').map((item) => item.route),
+  );
+  if (nativeRoutes.size === 0) return results;
+
+  return results.filter((item) => {
+    if (item.type !== 'document') return true;
+    const link = archiveLinks.get(item.route);
+    if (!link) return true;
+    if (link.offerRoute && nativeRoutes.has(link.offerRoute)) return false;
+    if (link.letterRoute && nativeRoutes.has(link.letterRoute)) return false;
+    return true;
+  });
 }
 
 function collectMemoryResults(query: string, terms: string[], todayIso: string): SearchResult[] {
@@ -749,6 +863,134 @@ export function mergeSearchResults(
   return rankSearchResults(merged).slice(0, limit);
 }
 
+/**
+ * GLOBALE-SUCHE-V1 — das Angebot als eigener Treffer.
+ *
+ * Gelesen wird aus `listOffers()`, also dem synchronisierten lokalen Bestand
+ * mit `filterSyncActive`. Damit ist der Treffer **archivunabhängig**: Ein
+ * Entwurf wird gefunden, ein fertiggestelltes Angebot auch dann, wenn seine
+ * Detailseite nie geöffnet wurde und deshalb noch keine Archivkopie existiert.
+ *
+ * Der Haystack bleibt bewusst schmal — Nummer, Titel, Kunde, Baustelle. Die
+ * Positionstexte stehen im Archiv-Volltext (`recognizedText`) und bleiben dort
+ * auffindbar; sie hier zu wiederholen würde die Nummern- und Titelsuche
+ * verwässern.
+ *
+ * Stornierte und ersetzte Angebote sind fachliche Zustände, keine Löschung —
+ * sie bleiben suchbar. „Inaktiv" heisst allein `sync.deleted`, und das filtert
+ * `listOffers` bereits.
+ */
+function collectOfferResults(query: string, terms: string[]): SearchResult[] {
+  const results: SearchResult[] = [];
+
+  for (const offer of listOffers()) {
+    /*
+     * Die Angebotsnummer steht **vorn**, anders als die Vorgangsnummer in
+     * `collectVorgangResults`. Das ist gemessen, nicht geraten: Mit der Nummer
+     * am Ende erreicht eine Suche nach der exakten Nummer nur
+     * 55 + 15 (enthalten) + 40 (Primaerfeld) = 110 und verliert damit gegen
+     * ein beliebiges Dokument, das sie im Titel traegt (Grundwert 70). Vorn
+     * gestellt greift der Praefix-Bonus (+30) und das Angebot liegt vorn —
+     * genau die geforderte Wirkung.
+     *
+     * Der Preis ist bekannt: Eine reine Titelsuche beginnt nicht mehr am
+     * Haystack-Anfang. Sie bleibt dennoch kraeftig, weil der Titel Primaerfeld
+     * ist und dort seinen eigenen Bonus traegt.
+     */
+    const haystack = buildHaystack([
+      offer.offerNumber,
+      offer.title,
+      offer.customer?.name,
+      offer.baustelle,
+    ]);
+    const match = matchTerms(haystack, terms, query, [
+      offer.offerNumber,
+      offer.title,
+      offer.customer?.name,
+    ]);
+    if (!match.matched && query) continue;
+
+    const customerName = offer.customer?.name ?? '';
+    const isDraft = offer.status === 'entwurf';
+    pushResult(results, {
+      id: `search-offer-${offer.id}`,
+      type: 'offer',
+      title: offer.offerNumber ? `${offer.offerNumber} · ${offer.title}` : offer.title,
+      subtitle: withDraftHint(
+        `${customerName}${offer.baustelle ? ` – ${offer.baustelle}` : ''}`,
+        isDraft,
+      ),
+      matchedField: match.matchedField || 'Angebot',
+      snippet: createSnippet(`${customerName} ${offer.baustelle ?? ''}`, query || terms[0] || ''),
+      score: TYPE_BASE_SCORE.offer + match.boost,
+      route: `/angebote/${offer.id}`,
+      icon: TYPE_ICON.offer,
+      /*
+       * Nur der Entwurf bekommt ein Etikett, und zwar direkt als Klartext.
+       * Über `status` + `STATUS_LABELS` zu gehen hiesse, einen Eintrag in eine
+       * von allen Typen geteilte Tabelle zu schreiben; der direkte Weg hat
+       * keine Nebenwirkung. `presentResult` übernimmt ihn unverändert.
+       */
+      ...(isDraft ? { statusLabel: ENTWURF_LABEL } : {}),
+      source: TYPE_SOURCE_LABEL.offer,
+    });
+  }
+
+  return results;
+}
+
+/**
+ * GLOBALE-SUCHE-V1 — das Geschäftsschreiben als eigener Treffer.
+ *
+ * Briefe tragen **keine Nummer**; ihre fachliche Identität sind Betreff und
+ * Empfänger. Eine Nummer wird hier nicht erfunden — das wäre ein eigener
+ * Produktblock.
+ *
+ * Der Fliesstext bleibt aussen vor: Er ist über den Archiv-Volltext suchbar,
+ * und ein ganzer Brief im Haystack würde jeden Allerweltsbegriff zum Treffer
+ * machen.
+ */
+function collectLetterResults(query: string, terms: string[]): SearchResult[] {
+  const results: SearchResult[] = [];
+
+  for (const letter of listBusinessLetters()) {
+    /*
+     * Sichtbare Abnahme — der Empfänger ist **beides**: Organisation und
+     * Person. `BusinessLetterRecipient` führt `company` und `name`, und die
+     * Schreiben-Seite zeigt die Organisation zuerst (`company ?? name`) und
+     * sucht über beide. Stand hier nur `name`, war ein Brief an „Bauamt
+     * Teststadt" (Organisation) mit der Kontaktperson „Sachbearbeitung Bau"
+     * über genau den Namen, den der Nutzer in der Liste liest, nicht zu
+     * finden. Die Stadt bleibt bewusst draussen: Sie ist keine Identität und
+     * würde jeden Ort zum Treffer machen.
+     */
+    const company = letter.recipient?.company ?? '';
+    const person = letter.recipient?.name ?? '';
+    /* Angezeigt wird, was die Schreiben-Seite anzeigt. */
+    const recipient = company || person;
+    const isDraft = letter.status === 'draft';
+    const haystack = buildHaystack([letter.subject, company, person]);
+    const match = matchTerms(haystack, terms, query, [letter.subject, company, person]);
+    if (!match.matched && query) continue;
+
+    pushResult(results, {
+      id: `search-letter-${letter.id}`,
+      type: 'letter',
+      title: letter.subject,
+      subtitle: withDraftHint(recipient || TYPE_SOURCE_LABEL.letter, isDraft),
+      matchedField: match.matchedField || 'Schreiben',
+      snippet: createSnippet(`${recipient} ${letter.letterDate ?? ''}`, query || terms[0] || ''),
+      score: TYPE_BASE_SCORE.letter + match.boost,
+      route: `/schreiben/${letter.id}`,
+      icon: TYPE_ICON.letter,
+      ...(isDraft ? { statusLabel: ENTWURF_LABEL } : {}),
+      source: TYPE_SOURCE_LABEL.letter,
+    });
+  }
+
+  return results;
+}
+
 function collectVorgangResults(query: string, terms: string[]): SearchResult[] {
   const results: SearchResult[] = [];
 
@@ -979,8 +1221,12 @@ export function searchOffice(options: OfficeSearchOptions): SearchResult[] {
 
   let results: SearchResult[] = [];
 
+  const archiveLinks = new Map<string, ArchiveLink>();
+
   if (includesType(filter, 'document')) {
-    results.push(...collectDocumentResults(query, terms, todayIso));
+    const documents = collectDocumentResults(query, terms, todayIso);
+    results.push(...documents.results);
+    for (const [route, link] of documents.archiveLinks) archiveLinks.set(route, link);
     results.push(...collectMemoryResults(query, terms, todayIso));
     results.push(...collectPaperResults(query, terms));
   }
@@ -990,6 +1236,8 @@ export function searchOffice(options: OfficeSearchOptions): SearchResult[] {
   if (includesType(filter, 'invoice')) results.push(...collectInvoiceResults(query, terms, todayIso));
   if (includesType(filter, 'expense')) results.push(...collectExpenseResults(query, terms));
   if (includesType(filter, 'customer')) results.push(...collectCustomerResults(query, terms));
+  if (includesType(filter, 'offer')) results.push(...collectOfferResults(query, terms));
+  if (includesType(filter, 'letter')) results.push(...collectLetterResults(query, terms));
   if (includesType(filter, 'vorgang')) results.push(...collectVorgangResults(query, terms));
   if (includesType(filter, 'task')) results.push(...collectTaskResults(query, terms));
   if (includesType(filter, 'communication')) results.push(...collectCommunicationResults(query, terms));
@@ -999,6 +1247,7 @@ export function searchOffice(options: OfficeSearchOptions): SearchResult[] {
   if (filter?.deadlineOpen) results.push(...collectLifecycleStatusResults(todayIso, 'deadline_open'));
   if (filter?.proofMissing) results.push(...collectLifecycleStatusResults(todayIso, 'proof_missing'));
 
+  results = dropArchiveDuplicates(results, archiveLinks);
   results = applyFilters(results, filter);
   return rankSearchResults(results).slice(0, options.limit ?? 30).map(presentResult);
 }
