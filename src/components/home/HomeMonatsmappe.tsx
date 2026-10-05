@@ -10,7 +10,14 @@ import { getSteuerberaterMonthOverview } from '../../services/steuerberaterOverv
  * Der Betrieb soll die Mappe nicht selbst zusammenstellen; OfficeTakt tut
  * das. Die Startseite sagt deshalb nur, wie weit sie ist: der Ring zeigt die
  * Vollständigkeit aus dem vorhandenen Monatsüberblick, die Zahl darin die
- * Belege, die noch eine Prüfung brauchen. Es gibt keine zweite Zählung.
+ * noch offenen **Schritte** bis zur Übergabe. Es gibt keine zweite Zählung.
+ *
+ * WEISS-NACHARBEIT O2 — genau diese Zahl stand vorher als „Belege" da.
+ * Sie ist aber `openCount` aus `countHandoverOpenSteps`: fehlender
+ * Monatsabschluss, unklare Fälle, fehlende Nachweise. Ein Monat mit null
+ * Belegen und drei Zahlungen las sich dadurch als „1 Beleg braucht Ihre
+ * Prüfung", während die Steuerberater-Seite korrekt „0 Belege" zeigte —
+ * ein Widerspruch allein in der Beschriftung, nicht in den Daten.
  *
  * Was hier bewusst **nicht** steht: „An Steuerberater senden". Einen
  * Versand aus der Mappe heraus gibt es in OfficeTakt heute nicht; ein Knopf

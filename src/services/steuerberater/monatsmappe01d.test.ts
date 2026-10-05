@@ -237,7 +237,8 @@ describe('01D — Paket', () => {
       '2026-09/Zahlungen.csv',
     ]);
     const manifest = JSON.parse(await zip.file('2026-09/Manifest.json')!.async('string'));
-    expect(manifest.counts).toEqual({ ausgangsrechnungen: 1, eingangsbelege: 2, zahlungenAusgang: 0, zahlungenEingang: 0, stornos: 0, dokumente: 2 });
+    /* BLOCK 2: das Manifest zaehlt jetzt auch die Zahlungsnachweise. */
+    expect(manifest.counts).toEqual({ ausgangsrechnungen: 1, eingangsbelege: 2, zahlungenAusgang: 0, zahlungenEingang: 0, stornos: 0, zahlungsnachweise: 0, dokumente: 2 });
     expect(manifest.fehlendeDokumente).toEqual([{ belegart: 'eingangsbeleg', id: 'exp-real-nodoc', belegnummer: 'L-200' }]);
     expect(await zip.file('2026-09/Ausgangsrechnungen/RE-2026-001_1.pdf')!.async('string')).toBe('%PDF-inv-1');
   });

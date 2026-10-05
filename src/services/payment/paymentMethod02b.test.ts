@@ -214,7 +214,15 @@ describe('Monatsmappe', () => {
     recordPayment(VORGANG, INVOICE, { amount: 20, date: '2026-09-06' });
     const csv = buildZahlungenCsv(buildMonatsmappeModel(collectMonatsmappeInput('2026-09')));
     const lines = csv.replace(/^﻿/, '').split(/\r?\n/).filter(Boolean);
-    expect(lines[0].endsWith(';Zahlungsart')).toBe(true);
-    expect(lines.slice(1).map((line) => line.split(';').pop())).toEqual(['Bar', '']);
+    /*
+     * STEUERBERATER-EXPORT BLOCK 2 — hinter der Zahlungsart stehen jetzt drei
+     * Nachweisspalten. Die Zahlungsart selbst bleibt an ihrer Stelle; geprueft
+     * wird sie deshalb ueber ihren Index statt ueber das Zeilenende.
+     */
+    const kopf = lines[0].split(';');
+    const artIndex = kopf.indexOf('Zahlungsart');
+    expect(artIndex).toBeGreaterThanOrEqual(0);
+    expect(kopf.slice(artIndex + 1)).toEqual(['Zahlungsnachweis', 'Nachweisdokument', 'Nachweisdatei']);
+    expect(lines.slice(1).map((line) => line.split(';')[artIndex])).toEqual(['Bar', '']);
   });
 });

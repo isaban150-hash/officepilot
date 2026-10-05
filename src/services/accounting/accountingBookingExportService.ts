@@ -21,6 +21,7 @@ import {
   belegBuchungsId,
   belegExportKey,
   safeFileNamePart,
+  ZAHLUNGSART_LABEL,
   ZAHLUNGSSTATUS_LABEL,
 } from '../steuerberater/monatsmappeModelService';
 import type { MonatsmappeBeleg, MonatsmappeModel } from '../steuerberater/monatsmappeModelService';
@@ -84,6 +85,19 @@ export interface BookingExportRow {
    */
   readonly zahlungsstatusMonatsende: string;
   readonly offenMonatsende: number | '';
+  /**
+   * STEUERBERATER-EXPORT BLOCK 2 — Zahlungsdatum und Zahlungsart.
+   *
+   * Diese Zeile beschreibt einen **Beleg**, eine Zahlung gehört aber zu
+   * einem Zahlungsvorgang. Bei genau einer Zahlung im Monat ist die Angabe
+   * eindeutig und steht hier. Bei mehreren Teilzahlungen wäre jedes
+   * einzelne Datum eine Behauptung über den ganzen Beleg — dann steht hier
+   * „mehrere" und der Verweis auf `zahlungen.csv`, die im selben Paket
+   * liegt und jede Zahlung einzeln führt. Lieber ein ehrlicher Verweis als
+   * eine falsche Zahl.
+   */
+  readonly zahlungsdatum: string;
+  readonly zahlungsart: string;
 }
 
 export interface BookingExportTotals {
@@ -115,6 +129,44 @@ function sourceTypeOf(beleg: MonatsmappeBeleg): 'expense' | 'invoice' {
  * eine Übergabe; das Export-Gate lässt einen solchen Monat ohnehin nicht
  * durch, aber diese Funktion verlässt sich nicht darauf.
  */
+/** BLOCK 2 — „mehrere" statt einer erfundenen Einzelangabe. */
+const MEHRERE_ZAHLUNGEN = 'mehrere (siehe zahlungen.csv)';
+
+/**
+ * Die Zahlungen **dieses Belegs** aus dem Monatsmappenmodell.
+ *
+ * Dieselbe Quelle, die auch `zahlungen.csv` speist — es entsteht keine
+ * zweite Zahlungswahrheit. Stornierte Zahlungen sind dort bereits nicht
+ * enthalten; diese Semantik wird hier bewusst nicht geändert.
+ */
+function zahlungenDesBelegs(
+  model: MonatsmappeModel,
+  belegId: string,
+): { zahlungsdatum: string; zahlungsart: string } {
+  const treffer = [...model.zahlungenAusgang, ...model.zahlungenEingang].filter(
+    (zahlung) => zahlung.belegId === belegId,
+  );
+  if (treffer.length === 0) return { zahlungsdatum: '', zahlungsart: '' };
+  if (treffer.length === 1) {
+    const nur = treffer[0]!;
+    return {
+      zahlungsdatum: nur.datum,
+      zahlungsart: nur.zahlungsart ? ZAHLUNGSART_LABEL[nur.zahlungsart] : '',
+    };
+  }
+  /*
+   * Mehrere Zahlungen: Beim Datum ist „mehrere" immer richtig. Bei der
+   * Zahlungsart nur dann, wenn sie sich unterscheiden — zwei Barzahlungen
+   * sind zusammen weiterhin bar, und das darf dastehen.
+   */
+  const arten = new Set(treffer.map((zahlung) => zahlung.zahlungsart ?? null));
+  const einheitlich = arten.size === 1 ? [...arten][0] : null;
+  return {
+    zahlungsdatum: MEHRERE_ZAHLUNGEN,
+    zahlungsart: einheitlich ? ZAHLUNGSART_LABEL[einheitlich] : MEHRERE_ZAHLUNGEN,
+  };
+}
+
 export function buildBookingExport(
   model: MonatsmappeModel,
   assignments: readonly AccountingAssignment[],
@@ -176,6 +228,10 @@ export function buildBookingExport(
       zahlungsstatusMonatsende:
         beleg.status === 'storno' ? '' : (ZAHLUNGSSTATUS_LABEL[beleg.zahlungsstatus] ?? beleg.zahlungsstatus),
       offenMonatsende: beleg.status === 'storno' || beleg.offenerBetrag === undefined ? '' : beleg.offenerBetrag,
+      /* Eine Stornozeile trägt keine Zahlung — wie beim Zahlungsstatus. */
+      ...(beleg.status === 'storno'
+        ? { zahlungsdatum: '', zahlungsart: '' }
+        : zahlungenDesBelegs(model, beleg.id)),
     });
   }
 
@@ -253,6 +309,8 @@ export function buildBookingCsv(bookings: BookingExport): string {
       'Buchungs-ID',
       'Zahlungsstatus zum Monatsende',
       'Offen zum Monatsende',
+      'Zahlungsdatum',
+      'Zahlungsart',
     ]),
   ];
 
@@ -278,6 +336,8 @@ export function buildBookingCsv(bookings: BookingExport): string {
         row.exportId,
         row.zahlungsstatusMonatsende,
         row.offenMonatsende,
+        row.zahlungsdatum,
+        row.zahlungsart,
       ]),
     );
   }

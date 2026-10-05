@@ -26,6 +26,7 @@ import {
   confirmBankReconciliation,
   planBankConfirmation,
 } from '../services/bank/bankReconciliationService';
+import { projectBankReconciliationPayment } from '../services/bank/bankPaymentProjection';
 import { findReconciliationForTransaction } from '../services/bank/bankReconciliationStore';
 import type {
   BankReconciliation,
@@ -776,6 +777,13 @@ function Bestaetigung({
             void confirmBankReconciliation(transaction, kandidat)
               .then((ergebnis) => {
                 if (ergebnis.ok) {
+                  /*
+                   * O1 — die vom Server bestätigte Zahlung sofort lokal
+                   * spiegeln. Ohne das trägt der Beleg bis zum nächsten
+                   * Abzug den alten Rest, und eine zweite Bewegung käme mit
+                   * einem veralteten Betrag zur Bestätigung.
+                   */
+                  projectBankReconciliationPayment(ergebnis.reconciliation);
                   setOffen(false);
                   onGeaendert();
                 } else {

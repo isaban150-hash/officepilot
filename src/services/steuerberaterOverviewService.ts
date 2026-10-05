@@ -18,6 +18,7 @@ import { getAllTasksFromStore } from './taskStore';
 import { isTaskOpen } from './taskNormalize';
 import { collectMonatsmappeInput } from './steuerberater/monatsmappeInputService';
 import {
+  belegExportKey,
   buildMonatsmappeModel,
   type MonatsmappeBeleg,
   type MonatsmappeInput,
@@ -45,6 +46,17 @@ const TAX_RELEVANT_KINDS = new Set([
 
 export interface SteuerberaterDocumentEntry {
   id: string;
+  /**
+   * BLOCK 2 — die **Renderidentität**, nicht die fachliche Kennung.
+   *
+   * Eine im selben Monat stornierte Rechnung steht zweimal in der Liste:
+   * einmal als Beleg, einmal als Storno. Das ist fachlich gewollt — die
+   * Monatsmappe führt beide Buchungen. Nur `id` war dafür als React-Key
+   * zu wenig und kollidierte. Dieselbe Identität wie im Buchungsexport
+   * (`belegart:id`), damit nicht zwei Begriffe von „derselbe Beleg"
+   * entstehen.
+   */
+  entryKey: string;
   title: string;
   kind: string;
   monthKey: string;
@@ -80,6 +92,15 @@ export interface SteuerberaterMonthOverview {
   invoiceCount: number;
   expenseCount: number;
   stornoCount: number;
+  /**
+   * BLOCK 2 — Zahlungen dieses Monats (Zahlungsdatum, nicht Belegdatum).
+   *
+   * Sie sind **keine** Belege und werden nirgends zu welchen erklärt. Sie
+   * gehen aber als eigene Zeilen in `zahlungen.csv` und gehören damit zur
+   * Übergabe. Ein Monat ohne Beleg, aber mit Zahlung, darf deshalb nicht
+   * aussehen, als gäbe es nichts zu übergeben.
+   */
+  paymentCount: number;
   /** Offene Schritte bis zur vollständigen Übergabe (Abschluss, Lücken, unklare Fälle). */
   openCount: number;
 }
@@ -149,6 +170,8 @@ function collectUnclearInboxEntries(bookedIds: ReadonlySet<string>): Steuerberat
     if (!isTaxRelevant) continue;
     entries.push({
       id: item.id,
+      /* Ein Eingangsposten steht hier nur einmal — Kennung und Renderidentität fallen zusammen. */
+      entryKey: `inbox:${item.id}`,
       title: item.title,
       kind,
       monthKey: resolveItemMonth(item),
@@ -167,7 +190,15 @@ function belegRoute(beleg: MonatsmappeBeleg): string {
 
 function belegEntry(beleg: MonatsmappeBeleg, monthKey: string): SteuerberaterDocumentEntry {
   const title = beleg.belegnummer ? `${beleg.belegnummer} · ${beleg.gegenpartei}` : beleg.gegenpartei;
-  return { id: beleg.id, title, kind: beleg.belegart, monthKey, status: 'included', route: belegRoute(beleg) };
+  return {
+    id: beleg.id,
+    entryKey: belegExportKey(beleg),
+    title,
+    kind: beleg.belegart,
+    monthKey,
+    status: 'included',
+    route: belegRoute(beleg),
+  };
 }
 
 /** Eingangsposten, die bereits als Ausgabe im Modell stehen — nie doppelt zählen. */
@@ -246,7 +277,19 @@ export function getSteuerberaterMonthOverview(
   const handover = getSteuerberaterHandoverStatus(monthKey, findings);
   const openCount = countHandoverOpenSteps(handover);
   const isComplete = documentCount > 0 && handover.packageComplete;
-  const state: SteuerberaterMonthState = documentCount === 0 ? 'empty' : isComplete ? 'ready' : 'open';
+  const paymentCount = model.zahlungenAusgang.length + model.zahlungenEingang.length;
+  /*
+   * BLOCK 2 — `empty` heisst jetzt „wirklich nichts da".
+   *
+   * Vorher entschied allein die Belegzahl. In der Abnahme stand dadurch
+   * „Noch keine Belege" über einem Monat, dessen `zahlungen.csv` eine
+   * echte Zeile enthielt — der Nutzer hätte die Übergabe übersprungen.
+   * Eine Zahlung macht den Monat nicht „bereit" (dafür braucht es
+   * weiterhin Belege und ein offenes Gate), aber sie macht ihn auch nicht
+   * leer.
+   */
+  const state: SteuerberaterMonthState =
+    documentCount === 0 && paymentCount === 0 ? 'empty' : isComplete ? 'ready' : 'open';
   const completenessPercent =
     documentCount === 0 ? 0 : Math.min(100, Math.round((documentCount / (documentCount + openCount)) * 100));
 
@@ -268,6 +311,7 @@ export function getSteuerberaterMonthOverview(
     invoiceCount: model.ausgangsrechnungen.length,
     expenseCount: model.eingangsbelege.length,
     stornoCount: model.stornos.length,
+    paymentCount,
     openCount,
   };
 }

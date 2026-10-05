@@ -125,9 +125,23 @@ export function SteuerberaterPage() {
 
       <DetailSection
         title={overview.monthLabel}
+        /*
+         * BLOCK 2 — Zahlungen gehören in die Monatsbeschreibung.
+         *
+         * Ohne sie stand „Noch keine Belege" über einem Monat, dessen
+         * Übergabepaket eine echte Zahlungszeile enthielt. Eine Zahlung
+         * wird dabei nicht zum Beleg — sie wird nur genannt.
+         */
         description={
           overview.documentCount === 0
-            ? translate('steuerberater.noDocuments')
+            ? overview.paymentCount === 0
+              ? translate('steuerberater.noDocuments')
+              : overview.paymentCount === 1
+                ? translate('steuerberater.noDocumentsButPaymentsOne')
+                : translate('steuerberater.noDocumentsButPayments').replace(
+                    '{count}',
+                    String(overview.paymentCount),
+                  )
             : [
                 overview.documentCount === 1
                   ? translate('steuerberater.documentCountOne')
@@ -135,6 +149,7 @@ export function SteuerberaterPage() {
                 countLabel(overview.invoiceCount, 'steuerberater.count.invoiceOne', 'steuerberater.count.invoiceMany'),
                 countLabel(overview.expenseCount, 'steuerberater.count.expenseOne', 'steuerberater.count.expenseMany'),
                 countLabel(overview.stornoCount, 'steuerberater.count.stornoOne', 'steuerberater.count.stornoMany'),
+                countLabel(overview.paymentCount, 'steuerberater.count.paymentOne', 'steuerberater.count.paymentMany'),
               ].join(' · ')
         }
         surface
@@ -213,11 +228,20 @@ export function SteuerberaterPage() {
         <>
           <DetailSection title={translate('steuerberater.documentsIncluded')} testId="steuerberater-documents">
             {overview.documents.length === 0 ? (
-              <p className="detail-empty">{translate('steuerberater.noDocuments')}</p>
+              <p className="detail-empty">
+                {overview.paymentCount === 0
+                  ? translate('steuerberater.noDocuments')
+                  : overview.paymentCount === 1
+                    ? translate('steuerberater.noDocumentsButPaymentsOne')
+                    : translate('steuerberater.noDocumentsButPayments').replace(
+                        '{count}',
+                        String(overview.paymentCount),
+                      )}
+              </p>
             ) : (
               <RowList>
                 {overview.documents.map((doc) => (
-                  <RowListItem key={doc.id} to={doc.route} icon="file" title={doc.title} description={doc.kind} />
+                  <RowListItem key={doc.entryKey} to={doc.route} icon="file" title={doc.title} description={doc.kind} />
                 ))}
               </RowList>
             )}
@@ -243,7 +267,7 @@ export function SteuerberaterPage() {
             <DetailSection title={translate('steuerberater.unclearTitle')} testId="steuerberater-unclear">
               <RowList>
                 {overview.unclearDocuments.map((doc) => (
-                  <RowListItem key={doc.id} to={doc.route} icon="info" title={doc.title} trailing={<StatusBadge tone="info" label={translate('steuerberater.unclearTitle')} icon={false} />} />
+                  <RowListItem key={doc.entryKey} to={doc.route} icon="info" title={doc.title} trailing={<StatusBadge tone="info" label={translate('steuerberater.unclearTitle')} icon={false} />} />
                 ))}
               </RowList>
             </DetailSection>

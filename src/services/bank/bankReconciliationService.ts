@@ -20,6 +20,13 @@ import {
   findReconciliationForTransaction,
 } from './bankReconciliationStore';
 import { persistAll } from '../persistenceService';
+/*
+ * WEISS-NACHARBEIT O1 — dieselben Übersichtsdienste, die auch der
+ * Vorschlagsdienst liest. Nur Lesen: Es wird hier nichts gebucht.
+ */
+import { getAllInvoiceOverview } from '../invoiceOverviewService';
+import { getAllExpenseOverview } from '../expenseOverviewService';
+import { toCents } from '../invoiceMoney';
 import type { BankSuggestionCandidate } from '../../types/bankSuggestion';
 import type { BankTransaction } from '../../types/bankTransaction';
 import type {
@@ -54,12 +61,37 @@ export interface BankConfirmPlan {
  * Verfügung, und er ist der Tag, den der Nutzer auf dem Auszug liest. Die
  * Wertstellung ist eine Zinsangabe und fehlt in vielen Exporten.
  */
+/**
+ * WEISS-NACHARBEIT O1 — der offene Betrag **jetzt**, nicht der aus dem
+ * Vorschlag.
+ *
+ * `kandidat.openCents` ist ein Schnappschuss aus dem Augenblick, in dem
+ * die Vorschläge berechnet wurden. Wurde seither gezahlt, stimmt er nicht
+ * mehr — und der Nutzer las vor einer Geldentscheidung einen veralteten
+ * Rest. Deshalb unmittelbar vor der Bestätigung noch einmal nachsehen.
+ *
+ * Findet sich das Ziel nicht in der Übersicht, bleibt der Wert aus dem
+ * Vorschlag stehen: Dann wissen wir es nicht besser, und der Server
+ * rechnet beim Buchen ohnehin selbst nach.
+ */
+function aktuellerOffenerBetrag(kandidat: BankSuggestionCandidate): number {
+  const offen =
+    kandidat.targetType === 'invoice'
+      ? getAllInvoiceOverview().find((item) => item.invoice.id === kandidat.targetId)?.paymentSummary
+          ?.openAmount
+      : getAllExpenseOverview().find((item) => item.expense.id === kandidat.targetId)?.paymentSummary
+          ?.openAmount;
+  /* Der Typ verspricht `number`, zur Laufzeit kommt bei fehlendem Betrag `null`. */
+  if (typeof offen !== 'number' || !Number.isFinite(offen)) return kandidat.openCents;
+  return Math.max(0, toCents(offen));
+}
+
 export function planBankConfirmation(
   transaction: BankTransaction,
   kandidat: BankSuggestionCandidate,
 ): BankConfirmPlan {
   const amountCents = Math.abs(transaction.amountCents);
-  const openCents = kandidat.openCents;
+  const openCents = aktuellerOffenerBetrag(kandidat);
   const basis: Omit<BankConfirmPlan, 'refusal'> = {
     amountCents,
     openCents,

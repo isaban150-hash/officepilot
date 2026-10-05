@@ -535,11 +535,20 @@ const deLegacy = {
   'heute.pilot.doneEmpty': 'Heute wurde noch nichts verarbeitet.',
   'heute.pilot.folderTitle': 'Monatsmappe {month}',
   'heute.pilot.folderReady': 'Vorbereitet – alle Belege sind fertig.',
-  'heute.pilot.folderOpenOne': '1 Beleg braucht Ihre Prüfung.',
-  'heute.pilot.folderOpen': '{count} Belege brauchen Ihre Prüfung.',
-  'heute.pilot.folderEmpty': 'Für diesen Monat liegen noch keine Belege vor.',
+  /*
+   * WEISS-NACHARBEIT O2 — die Zahl zählt **Schritte**, nicht Belege.
+   *
+   * `openCount` ist die Summe aus fehlendem Monatsabschluss, unklaren
+   * Fällen und fehlenden Nachweisen. Der alte Text nannte sie „Belege"
+   * und widersprach damit der Steuerberater-Seite, die für denselben
+   * Monat „0 Belege" auswies. Dieselbe Quelle, dieselbe Zahl — nur die
+   * Beschriftung war falsch.
+   */
+  'heute.pilot.folderOpenOne': 'Noch 1 Schritt bis zur Übergabe.',
+  'heute.pilot.folderOpen': 'Noch {count} Schritte bis zur Übergabe.',
+  'heute.pilot.folderEmpty': 'Für diesen Monat liegt noch nichts zur Übergabe vor.',
   'heute.pilot.folderHint': 'OfficeTakt sammelt die Belege für den Steuerberater und legt sie in die Mappe.',
-  'heute.pilot.folderCheck': 'Belege prüfen',
+  'heute.pilot.folderCheck': 'Übergabe prüfen',
   'heute.pilot.folderOpenAction': 'Monatsmappe öffnen',
   'desk.successesTitle': 'Heute verarbeitet:',
   'desk.success.documents': '{count} Dokument(e)',
@@ -733,6 +742,13 @@ const deLegacy = {
   'steuerberater.missingTitle': 'Fehlende Belege',
   'steuerberater.unclearTitle': 'Unklare Belege',
   'steuerberater.noDocuments': 'Noch keine Belege für diesen Monat.',
+  // BLOCK 2 — ein Monat ohne Beleg, aber mit Zahlungen, ist nicht leer.
+  'steuerberater.noDocumentsButPaymentsOne':
+    'Keine Belege, aber eine Zahlung in diesem Monat. Sie geht mit in die Übergabe.',
+  'steuerberater.noDocumentsButPayments':
+    'Keine Belege, aber {count} Zahlungen in diesem Monat. Sie gehen mit in die Übergabe.',
+  'steuerberater.count.paymentOne': '1 Zahlung',
+  'steuerberater.count.paymentMany': '{count} Zahlungen',
   'steuerberater.packageReady': 'Paket lokal vorbereitet',
   'steuerberater.packageReadyDesc': 'Alle Belege für {month} sind zusammengestellt.',
   'steuerberater.noDirectSend': 'Der direkte Versand wird noch eingerichtet.',

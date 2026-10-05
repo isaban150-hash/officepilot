@@ -19,6 +19,7 @@ import { collectMonatsmappeInput } from './monatsmappeInputService';
 import { generateApprovedInvoicePdf, generateInvoiceCorrectionPdf } from '../invoicePdfService';
 import {
   BELEGART_FOLDER,
+  NACHWEIS_FOLDER,
   buildMonatsmappeModel,
   buildUebersichtCsv,
   buildZahlungenCsv,
@@ -176,6 +177,29 @@ export async function buildMonatsmappeZip(
       }
     }
   }
+  /*
+   * BLOCK 2 — die Zahlungsnachweise in einem eigenen Ordner.
+   *
+   * Getrennt von den Belegordnern, weil ein Nachweis kein Beleg ist: Die
+   * Rechnung sagt, was geschuldet wird, die Quittung, dass gezahlt wurde.
+   * Welche Zahlung welche Datei meint, steht in Zahlungen.csv.
+   */
+  const nachweise = model.zahlungsnachweise ?? [];
+  if (nachweise.length > 0) {
+    const nachweisOrdner = root.folder(NACHWEIS_FOLDER)!;
+    for (const quelle of nachweise) {
+      const path = `${NACHWEIS_FOLDER}/${quelle.fileName}`;
+      if (usedNames.has(path)) continue;
+      usedNames.add(path);
+      try {
+        nachweisOrdner.file(quelle.fileName, await loaders.fileRefBytes(quelle.fileRefId!));
+        documentCount += 1;
+      } catch (error) {
+        failed.push({ id: quelle.fileRefId ?? '', belegnummer: '', fileName: quelle.fileName, detail: error instanceof Error ? error.message : 'load_failed' });
+      }
+    }
+  }
+
   if (failed.length > 0) return { ok: false, failed };
 
   root.file(
@@ -192,6 +216,7 @@ export async function buildMonatsmappeZip(
           zahlungenAusgang: model.zahlungenAusgang.length,
           zahlungenEingang: model.zahlungenEingang.length,
           stornos: model.stornos.length,
+          zahlungsnachweise: nachweise.length,
           dokumente: documentCount,
         },
         fehlendeDokumente: model.fehlendeDokumente,

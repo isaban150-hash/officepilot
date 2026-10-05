@@ -250,7 +250,7 @@ describe('P — Paketinhalt über den echten 06C-Weg', () => {
     const aug = await paket(AUG);
     const zeile = rows(aug.buchungen).find((r) => r.startsWith('Ausgangsrechnung;inv-aug;'))!;
     // Zum 31. August noch offen — die Septemberzahlung zählt hier nicht.
-    expect(zeile).toMatch(/;Offen;119,00$/);
+    expect(zeile).toMatch(/;Offen;119,00;/); // BLOCK 2: danach folgen Zahlungsdatum und Zahlungsart
     expect(rows(aug.zahlungen)).toEqual([]);
     expect(rows(aug.offenePosten)).toEqual([
       'Forderung;inv-aug;RE-2026-050;2026-08-20;Kunde A;119,00;0,00;119,00;2026-09-30;Offen',
@@ -279,10 +279,11 @@ describe('P — Paketinhalt über den echten 06C-Weg', () => {
     const sep = await paket(SEP);
     const buchungen = rows(sep.buchungen).filter((r) => !r.startsWith('Summe;'));
     expect(buchungen).toHaveLength(2);
-    expect(buchungen.find((r) => r.startsWith('Eingangsbeleg;exp-real-1;'))).toMatch(/;Bezahlt;0,00$/);
+    expect(buchungen.find((r) => r.startsWith('Eingangsbeleg;exp-real-1;'))).toMatch(/;Bezahlt;0,00;/); // BLOCK 2: danach Zahlungsdatum und Zahlungsart
 
     const zahlungen = rows(sep.zahlungen);
-    expect(zahlungen).toEqual(['Eingangsbeleg;exp-real-1;L-100;pay-exp;2026-09-20;59,50;;Lieferant GmbH;Bar']);
+    /* BLOCK 2: drei neue Spalten — hier ohne Nachweis, also sachlich benannt und leer. */
+    expect(zahlungen).toEqual(['Eingangsbeleg;exp-real-1;L-100;pay-exp;2026-09-20;59,50;;Lieferant GmbH;Bar;Kein Zahlungsnachweis;;']);
 
     // Manifest und Dateien sagen dasselbe.
     expect(sep.manifest.counts.buchungen).toBe(buchungen.length);

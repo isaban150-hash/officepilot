@@ -31,6 +31,12 @@ import type {
 } from '../types/models';
 import { getDocumentDisplayLabelKey } from './documentDisplayLabelService';
 import { isAuthorityClassifiedKind } from './businessInterpretationMeaning';
+/*
+ * WEISS-NACHARBEIT 02 — dieselbe Betragswahrheit wie die Detailansicht.
+ * Beide lesen `buildDocumentMeaningView`; es gibt keine zweite Auswahl.
+ */
+import { buildDocumentMeaningView } from './document/documentMeaningPresentationService';
+import { resolveInboxDocumentText } from './document/documentSourceTextService';
 import type { LetterExplanation } from './letterExplanationService';
 import { buildAuftragskarteView } from './auftragskarteView';
 import { UNKNOWN_SENDER_CANONICAL } from '../i18n/resolveStoredText';
@@ -163,6 +169,44 @@ export function downgradeFamilyAgainstSemanticTruth(
 }
 
 /** Priority: BI truth → Understanding → RD → generic fallback. Never invent qty×price totals. */
+/**
+ * WEISS-NACHARBEIT 02 — der führende Betrag aus dem semantischen Kern.
+ *
+ * DER BEFUND
+ *
+ * Eine Lieferantengutschrift über netto 240,00 € + 45,60 € Steuer stand auf
+ * der Eingangskarte mit **240,00 €**, in der Detailansicht desselben Falls
+ * aber mit **285,60 €**. Zwei Zahlen für denselben Beleg, und die kleinere
+ * war die falsche: 240,00 € ist der Nettoteil, nicht der Gesamtbetrag.
+ *
+ * Die Ursache liegt nicht in der Gutschrift. `recognizedData.Betrag` trägt
+ * für diesen Posten schlicht den erstbesten Betrag aus dem Schreiben — bei
+ * jedem Dokument mit Netto, Steuer und Summe kann das der falsche sein. Die
+ * Karte griff bisher direkt auf dieses Rohfeld zu, sobald die
+ * Geschäftsdeutung nichts lieferte; die Detailansicht las dagegen den
+ * semantischen Kern, der die Rollen (Netto, Steuer, Gesamt, Gutschrift)
+ * auseinanderhält.
+ *
+ * Deshalb liest die Karte jetzt **dieselbe** Quelle wie das Detail, bevor
+ * sie auf das Rohfeld zurückfällt: `buildDocumentMeaningView` mit derselben
+ * Auswahl und derselben Reihenfolge. Keine zweite Intelligenz, keine
+ * Sonderregel für Gutschriften, keine Sonderregel für eine Dokumentkennung.
+ *
+ * Der Volltext kommt aus `resolveInboxDocumentText` — synchron und
+ * ausschliesslich aus bereits geladenen Ständen. Fehlt er, bleibt alles
+ * beim Alten: Lieber das Rohfeld als gar nichts, und nie ein erfundener
+ * Betrag.
+ */
+function semantischerLeitbetrag(
+  item: InboxItem,
+  workflow: WorkflowResult | null | undefined,
+): string | undefined {
+  const text = resolveInboxDocumentText(item, workflow ?? null);
+  if (!text.trim()) return undefined;
+  const sicht = buildDocumentMeaningView({ text, sender: item.sender });
+  return sicht.amounts[0]?.amount?.trim() || undefined;
+}
+
 function moneyNonContract(
   item: InboxItem,
   workflow: WorkflowResult | null | undefined,
@@ -176,6 +220,14 @@ function moneyNonContract(
       if (entry?.amount == null) return undefined;
       return `${entry.amount.toLocaleString('de-DE')} ${entry.currency ?? 'EUR'}`;
     })(),
+    /*
+     * Vor `documentUnderstanding`: Dessen `amount` ist auf der Eingangsliste
+     * nur das Rohfeld in anderem Gewand (siehe `createInboxWorkflowStub`).
+     * Der semantische Kern kennt dagegen die Rollen — Netto, Steuer, Summe —
+     * und ist damit die bessere Quelle. Eine echte Geschaeftsdeutung (`bi`)
+     * steht weiterhin an erster Stelle.
+     */
+    semantischerLeitbetrag(item, workflow),
     workflow?.documentUnderstanding?.amount,
     rd(item, 'Betrag', 'Rechnungsbetrag', 'Bruttobetrag', 'Angebotssumme'),
   );

@@ -78,6 +78,16 @@ export interface MonatsmappeBeleg {
   spaeterStorniertAm?: string;
 }
 
+/**
+ * STEUERBERATER-EXPORT BLOCK 2 — der Zustand des Zahlungsnachweises.
+ *
+ * Vier Zustände statt zwei, weil „kein Nachweis erfasst" und „Nachweis
+ * erfasst, Dokument nicht mehr auffindbar" verschiedene Aussagen sind. Ein
+ * Steuerberater muss den Unterschied sehen: Im ersten Fall fehlt der Beleg,
+ * im zweiten ist die Ablage beschädigt.
+ */
+export type MonatsmappeNachweisStatus = 'kein' | 'vorhanden' | 'ohne_datei' | 'nicht_auffindbar';
+
 export interface MonatsmappeZahlung {
   /** 02B — optional; fehlt sie, ist sie nicht erfasst. */
   zahlungsart?: PaymentMethod;
@@ -89,6 +99,17 @@ export interface MonatsmappeZahlung {
   betrag: number;
   referenz: string;
   gegenpartei: string;
+  /**
+   * BLOCK 2 — der Nachweis **dieser** Zahlung.
+   *
+   * Bewusst hier und nicht am Beleg: Zwei Teilzahlungen mit zwei
+   * Quittungen müssen zwei getrennte Zeilen mit zwei getrennten Belegen
+   * ergeben, sonst ist die Zuordnung wieder verloren.
+   */
+  nachweisStatus: MonatsmappeNachweisStatus;
+  nachweisTitel?: string;
+  /** Dateiname im Paket — nur wenn eine Datei wirklich mitgeliefert wird. */
+  nachweisDatei?: string;
 }
 
 /** 02B — ein offener Posten zum Monatsende (Forderung bzw. Verbindlichkeit). */
@@ -119,6 +140,13 @@ export interface MonatsmappeModel {
   stornosOhneDatum: Array<{ belegart: MonatsmappeBelegart; id: string; belegnummer: string }>;
   /** 02B — offene Posten zum Monatsende, über alle Belegmonate bis dahin. */
   offenePostenMonatsende?: MonatsmappeOffenerPosten[];
+  /**
+   * BLOCK 2 — die Originaldateien der Zahlungsnachweise dieses Monats.
+   *
+   * Entdoppelt: Ein Beleg kann zwei Zahlungen nachweisen und wird trotzdem
+   * nur einmal verpackt. Die Zuordnung steht in `Zahlungen.csv`.
+   */
+  zahlungsnachweise?: MonatsmappeDocumentSource[];
   isEmpty: boolean;
 }
 
@@ -300,6 +328,45 @@ function buildInvoiceStornoBeleg(invoice: VorgangInvoice, stornoDatum: string): 
   };
 }
 
+/**
+ * BLOCK 2 — den Zahlungsnachweis einer einzelnen Zahlung auflösen.
+ *
+ * Vier ehrliche Ausgänge:
+ *   - keine Kennung            -> `kein`
+ *   - Dokument + Datei         -> `vorhanden`, Datei reist mit
+ *   - Dokument ohne Datei      -> `ohne_datei`, Titel reist mit
+ *   - Kennung ohne Dokument    -> `nicht_auffindbar`
+ *
+ * Der letzte Fall sollte seit dem Löschschutz nicht mehr entstehen. Der
+ * Export verlässt sich trotzdem nicht darauf: Eine Übergabe, die eine
+ * kaputte Referenz verschweigt, ist schlechter als eine, die sie benennt.
+ */
+function resolveZahlungsnachweis(
+  proofDocumentId: string | undefined,
+  zahlungId: string,
+  input: MonatsmappeInput,
+): { anzeige: Pick<MonatsmappeZahlung, 'nachweisStatus' | 'nachweisTitel' | 'nachweisDatei'>; quelle?: MonatsmappeDocumentSource } {
+  const id = (proofDocumentId ?? '').trim();
+  if (!id) return { anzeige: { nachweisStatus: 'kein' } };
+
+  const dokument = input.documents.find((d) => d.id === id && isEntitySyncActive(d));
+  if (!dokument) return { anzeige: { nachweisStatus: 'nicht_auffindbar' } };
+
+  const titel = dokument.title?.trim() || 'Zahlungsnachweis';
+  const ref = dokument.fileRefId
+    ? input.fileRefs.find((r) => r.id === dokument.fileRefId && r.lifecycleStatus !== 'temp')
+    : undefined;
+  if (!ref) return { anzeige: { nachweisStatus: 'ohne_datei', nachweisTitel: titel } };
+
+  /* Der Dateiname trägt die Zahlungskennung — so ist die Zuordnung auch
+     im Dateisystem eindeutig, wenn ein Beleg zwei Zahlungen nachweist. */
+  const datei = `${safeFileNamePart(titel, 40)}_${shortId(zahlungId)}.${extensionForMime(ref.mimeType, ref.originalFileName)}`;
+  return {
+    anzeige: { nachweisStatus: 'vorhanden', nachweisTitel: titel, nachweisDatei: datei },
+    quelle: { kind: 'file_ref', fileRefId: ref.id, fileName: datei },
+  };
+}
+
 function resolveExpenseFileRef(expense: Expense, input: MonatsmappeInput): DocumentFileRef | undefined {
   const refById = new Map(input.fileRefs.map((ref) => [ref.id, ref]));
   const candidates: Array<string | undefined> = [];
@@ -469,23 +536,40 @@ export function buildMonatsmappeModel(input: MonatsmappeInput): MonatsmappeModel
     .map((expense) => buildExpenseBeleg(expense, input))
     .sort((a, b) => a.datum.localeCompare(b.datum) || a.gegenpartei.localeCompare(b.gegenpartei) || a.id.localeCompare(b.id));
 
+  /* BLOCK 2 — je Dokument genau eine Datei im Paket, auch bei zwei Zahlungen. */
+  const nachweisQuellen = new Map<string, MonatsmappeDocumentSource>();
+  const merkeQuelle = (quelle?: MonatsmappeDocumentSource) => {
+    if (quelle) nachweisQuellen.set(quelle.fileName, quelle);
+  };
+
   const zahlungenAusgang: MonatsmappeZahlung[] = [];
   for (const invoice of invoices) {
     for (const payment of invoicePaymentsOfMonth(invoice, monthKey)) {
+      /*
+       * Rechnungszahlungen tragen clientseitig noch keinen Nachweis — die
+       * Spalte wird hier bewusst leer gelassen statt etwas zu behaupten.
+       * Serverseitig ist das Feld seit Barzahlung Block 1 vorhanden; sobald
+       * ein Weg es setzt, genügt hier derselbe Aufruf wie unten.
+       */
+      const { anzeige } = resolveZahlungsnachweis(undefined, payment.id, input);
       zahlungenAusgang.push({
         belegart: 'ausgangsrechnung', belegId: invoice.id, belegnummer: invoice.number, zahlungId: payment.id,
         datum: payment.date.slice(0, 10), betrag: payment.amount, referenz: payment.reference ?? '', gegenpartei: invoiceGegenpartei(invoice),
         ...(payment.method ? { zahlungsart: payment.method } : {}),
+        ...anzeige,
       });
     }
   }
   const zahlungenEingang: MonatsmappeZahlung[] = [];
   for (const expense of expenses) {
     for (const payment of expensePaymentsOfMonth(expense, monthKey)) {
+      const { anzeige, quelle } = resolveZahlungsnachweis(payment.proofDocumentId, payment.id, input);
+      merkeQuelle(quelle);
       zahlungenEingang.push({
         belegart: 'eingangsbeleg', belegId: expense.id, belegnummer: expense.invoiceNumber ?? '', zahlungId: payment.id,
         datum: payment.date.slice(0, 10), betrag: payment.amount, referenz: payment.reference ?? '', gegenpartei: expense.supplierName,
         ...(payment.method ? { zahlungsart: payment.method } : {}),
+        ...anzeige,
       });
     }
   }
@@ -560,6 +644,7 @@ export function buildMonatsmappeModel(input: MonatsmappeInput): MonatsmappeModel
     fehlendeDokumente,
     stornosOhneDatum,
     offenePostenMonatsende,
+    zahlungsnachweise: [...nachweisQuellen.values()].sort((a, b) => a.fileName.localeCompare(b.fileName)),
     isEmpty:
       ausgangsrechnungen.length === 0 &&
       eingangsbelege.length === 0 &&
@@ -589,6 +674,20 @@ export const ZAHLUNGSART_LABEL: Record<PaymentMethod, string> = {
   other: 'Sonstige',
 };
 
+/**
+ * BLOCK 2 — der Nachweiszustand in Klartext.
+ *
+ * „Kein Zahlungsnachweis" und „Nachweis nicht mehr auffindbar" bleiben
+ * getrennt: Das eine ist ein fehlender Beleg, das andere eine beschädigte
+ * Ablage. Für den Steuerberater sind das zwei verschiedene Rückfragen.
+ */
+export const NACHWEIS_LABEL: Record<MonatsmappeNachweisStatus, string> = {
+  kein: 'Kein Zahlungsnachweis',
+  vorhanden: 'Zahlungsnachweis beiliegend',
+  ohne_datei: 'Zahlungsnachweis erfasst, keine Datei vorhanden',
+  nicht_auffindbar: 'Zahlungsnachweis nicht mehr auffindbar',
+};
+
 /** 02B — Zahlungsstatus in Klartext für Übergabedateien. */
 export const ZAHLUNGSSTATUS_LABEL: Record<string, string> = {
   offen: 'Offen',
@@ -615,6 +714,9 @@ export const BELEGART_FOLDER: Record<MonatsmappeBelegart, string> = {
   ausgabenstorno: 'Stornos_Korrekturen',
 };
 
+/** BLOCK 2 — eigener Ordner, damit ein Nachweis nicht mit einem Beleg verwechselt wird. */
+export const NACHWEIS_FOLDER = 'Zahlungsnachweise';
+
 export function buildUebersichtCsv(model: MonatsmappeModel): string {
   const lines = [csvLine(['Belegart', 'Interne ID', 'Belegnummer', 'Datum', 'Gegenpartei', 'Netto', 'Steuer', 'Brutto', 'Status', 'Zahlungsstatus', 'Zahlungssumme', 'Dokument vorhanden', 'Dokumentdatei', 'Hinweis'])];
   for (const beleg of [...model.ausgangsrechnungen, ...model.eingangsbelege, ...model.stornos]) {
@@ -630,11 +732,22 @@ export function buildUebersichtCsv(model: MonatsmappeModel): string {
 }
 
 export function buildZahlungenCsv(model: MonatsmappeModel): string {
-  const lines = [csvLine(['Belegart', 'Beleg-ID', 'Belegnummer', 'Zahlungs-ID', 'Zahlungsdatum', 'Betrag', 'Referenz', 'Gegenpartei', 'Zahlungsart'])];
+  /*
+   * BLOCK 2 — drei neue Spalten am Ende. Bewusst angehängt und nicht
+   * eingeschoben: Wer die Datei schon einliest, soll seine Spaltenzählung
+   * behalten.
+   */
+  const lines = [csvLine([
+    'Belegart', 'Beleg-ID', 'Belegnummer', 'Zahlungs-ID', 'Zahlungsdatum', 'Betrag', 'Referenz', 'Gegenpartei', 'Zahlungsart',
+    'Zahlungsnachweis', 'Nachweisdokument', 'Nachweisdatei',
+  ])];
   for (const zahlung of [...model.zahlungenAusgang, ...model.zahlungenEingang]) {
     lines.push(csvLine([
       BELEGART_LABEL[zahlung.belegart], zahlung.belegId, zahlung.belegnummer, zahlung.zahlungId, zahlung.datum, zahlung.betrag, zahlung.referenz, zahlung.gegenpartei,
       zahlung.zahlungsart ? ZAHLUNGSART_LABEL[zahlung.zahlungsart] : '',
+      NACHWEIS_LABEL[zahlung.nachweisStatus],
+      zahlung.nachweisTitel ?? '',
+      zahlung.nachweisDatei ? `${NACHWEIS_FOLDER}/${zahlung.nachweisDatei}` : '',
     ]));
   }
   return `﻿${lines.join('\r\n')}\r\n`;

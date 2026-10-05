@@ -24,7 +24,7 @@ import {
 } from '../steuerberater/monatsmappeModelService';
 import type { SteuerberaterHandoverStatus } from '../steuerberater/steuerberaterHandoverStatus';
 import type { MonatsmappeDocumentLoaders } from '../steuerberater/monatsmappeExportService';
-import { safeFileNamePart } from '../steuerberater/monatsmappeModelService';
+import { NACHWEIS_FOLDER, safeFileNamePart } from '../steuerberater/monatsmappeModelService';
 import { buildBookingCsv, type BookingExport } from './accountingBookingExportService';
 import type { AccountingPeriodClosure } from '../../types/accountingPeriod';
 
@@ -162,6 +162,28 @@ export async function buildAccountingExportPackage(
           detail: error instanceof Error ? error.message : 'load_failed',
         });
       }
+    }
+  }
+
+  /*
+   * BLOCK 2 — die Zahlungsnachweise, in demselben eigenen Ordner wie in der
+   * Monatsmappe. Dieselbe Quelle, derselbe Dateiname, dieselbe Zuordnung
+   * ueber zahlungen.csv — zwei Pakete, eine Lesart.
+   */
+  for (const quelle of model.zahlungsnachweise ?? []) {
+    const fileName = sanitizeEntryFileName(quelle.fileName);
+    const path = NACHWEIS_FOLDER + '/' + fileName;
+    if (usedPaths.has(path)) continue;
+    usedPaths.add(path);
+    try {
+      root.folder(NACHWEIS_FOLDER)!.file(fileName, await loaders.fileRefBytes(quelle.fileRefId!));
+      documentCount += 1;
+    } catch (error) {
+      failed.push({
+        id: quelle.fileRefId ?? '',
+        fileName,
+        detail: error instanceof Error ? error.message : 'load_failed',
+      });
     }
   }
 
