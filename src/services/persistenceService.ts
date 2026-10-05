@@ -174,6 +174,12 @@ import { getInvoiceStoreSnapshot, hydrateInvoiceStore } from './invoice/invoiceS
 import { ensureSyncClientFromState, hydrateSyncClient } from './sync/syncClientService';
 import { hydrateSyncOutbox, getSyncOutboxSnapshot } from './sync/syncOutboxService';
 import { getOrderDraftStoreSnapshot, hydrateOrderDrafts } from './order/orderDraftService';
+import { getBankTransactionStoreSnapshot, hydrateBankTransactions } from './bank/bankTransactionStore';
+import { getBankAccountStoreSnapshot, hydrateBankAccounts } from './bank/bankAccountStore';
+import {
+  getBankReconciliationStoreSnapshot,
+  hydrateBankReconciliations,
+} from './bank/bankReconciliationStore';
 import {
   resetSyncChangeTrackerFromState,
   trackPersistedChanges,
@@ -865,6 +871,9 @@ export function createSeedState(setupOverride?: CompanySetup): AppPersistedState
       businessLetters: [],
       offers: [],
       orderDrafts: [],
+      bankTransactions: [],
+      bankAccounts: [],
+      bankReconciliations: [],
       dunningDocumentations: [],
       communicationHistory: [],
       knowledgeFacts: [],
@@ -1025,6 +1034,9 @@ function finalizeLoadedPersistedState(normalized: AppPersistedState): AppPersist
       customerBilling: { ...draft.customerBilling },
       positions: draft.positions.map((position) => ({ ...position })),
     })),
+    bankTransactions: (normalized.bankTransactions ?? []).map((tx) => ({ ...tx })),
+    bankAccounts: (normalized.bankAccounts ?? []).map((acc) => ({ ...acc })),
+    bankReconciliations: (normalized.bankReconciliations ?? []).map((rec) => ({ ...rec })),
     dunningDocumentations: (normalized.dunningDocumentations ?? []).map((doc) => ({ ...doc })),
     communicationHistory: (normalized.communicationHistory ?? []).map(cloneCommunicationEvent),
     knowledgeFacts: (normalized.knowledgeFacts ?? []).map(cloneKnowledgeFact),
@@ -1462,6 +1474,9 @@ export function applyStateToStores(state: AppPersistedState): void {
   hydrateBusinessLetters(state.businessLetters ?? []);
   hydrateOffers(state.offers ?? []);
   hydrateOrderDrafts(state.orderDrafts ?? []);
+  hydrateBankAccounts(state.bankAccounts ?? []);
+  hydrateBankTransactions(state.bankTransactions ?? []);
+  hydrateBankReconciliations(state.bankReconciliations ?? []);
   hydrateDunningDocumentations(state.dunningDocumentations ?? []);
   hydrateCommunicationHistory(state.communicationHistory ?? []);
   hydrateKnowledgeFacts(state.knowledgeFacts ?? []);
@@ -1758,6 +1773,9 @@ export function buildPersistedStateSnapshot(): AppPersistedState {
     businessLetters: getBusinessLetterStoreSnapshot(),
     offers: getOfferStoreSnapshot(),
     orderDrafts: getOrderDraftStoreSnapshot(),
+    bankTransactions: getBankTransactionStoreSnapshot(),
+    bankAccounts: getBankAccountStoreSnapshot(),
+    bankReconciliations: getBankReconciliationStoreSnapshot(),
     dunningDocumentations: getDunningDocumentationStoreSnapshot(),
     communicationHistory: getCommunicationHistorySnapshot(),
     knowledgeFacts: getKnowledgeSnapshot(),

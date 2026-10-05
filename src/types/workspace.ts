@@ -138,6 +138,22 @@ export interface WorkspaceSyncPullPayload {
    * die mitreisen müssten.
    */
   dunningDocumentations: WorkspaceDunningDocumentationRow[];
+  /**
+   * BANKABGLEICH-V1 BLOCK 2B — Importkonten und Bankbewegungen.
+   *
+   * Ebenfalls append-only: Block 2B kennt kein Löschen von Bankdaten, und
+   * beide Serverzweige weisen einen Grabstein ausdrücklich ab. Es gibt
+   * deshalb nichts, was als Grabstein mitreisen müsste.
+   */
+  bankAccounts: import('../services/bank/bankCloudService').WorkspaceBankAccountRow[];
+  bankTransactions: import('../services/bank/bankCloudService').WorkspaceBankTransactionRow[];
+  /**
+   * BANKABGLEICH-V1 BLOCK 4 — bestaetigte Zuordnungen.
+   *
+   * Nur Pull: Sie entstehen ausschliesslich in der Server-RPC und
+   * haben deshalb bewusst keinen Push-Zweig.
+   */
+  bankReconciliations: import('../services/bank/bankCloudService').WorkspaceBankReconciliationRow[];
 }
 
 export interface EnsurePersonalWorkspaceResult {

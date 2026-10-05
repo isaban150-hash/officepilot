@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { releaseReconciliationForPayment } from '../services/bank/bankReconciliationStore';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ExpenseAllocationDialog } from '../components/expenses/ExpenseAllocationDialog';
 import { ExpenseCancelDialog } from '../components/expenses/ExpenseCancelDialog';
@@ -116,6 +117,13 @@ export function AusgabeDetailPage() {
       showToast(translate(result.errorKey as TranslationKey));
       return;
     }
+    /*
+     * BLOCK 5 — die Bankzuordnung fällt mit der Zahlung. Serverseitig
+     * geschieht das in derselben Transaktion wie der Storno; hier fällt sie
+     * im selben Augenblick auf dem Gerät, damit die Bankbewegung nicht bis
+     * zum nächsten Abzug weiter „Zugeordnet" zeigt.
+     */
+    releaseReconciliationForPayment(paymentId);
     setExpense(result.expense);
     showToast(translate('expense.payment.removedSuccess'));
   };
@@ -270,6 +278,7 @@ export function AusgabeDetailPage() {
           expense={expense}
           translate={translate}
           onRemovePayment={handleRemovePayment}
+          onProofChanged={setExpense}
         />
       </DetailSection>
 

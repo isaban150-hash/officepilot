@@ -21,6 +21,7 @@ import {
 import { isAdvertisementContext, resolvePaperFiling } from './paperFolderService';
 import { getAllTasksFromStore } from './taskStore';
 import { getTodayIso, isTaskOpen } from './taskNormalize';
+import { toCanonicalIsoDay } from '../utils/documentDateDisplay';
 
 const DEADLINE_ATTENTION_DAYS = 30;
 
@@ -111,14 +112,37 @@ function isPhysicallyFiled(documentId: string, memory?: DocumentMemory): boolean
   return memory?.physicalFiled ?? entry?.physicalFiled ?? false;
 }
 
-function hasOpenDeadline(memory: DocumentMemory | undefined, inboxItem: InboxItem | undefined, todayIso: string): boolean {
-  const deadline =
+/**
+ * Die offene Frist als Datum — oder `null`, wenn keine im Aufmerksamkeits-
+ * fenster liegt. HEUTE-V2 braucht den Tag; die Regel selbst bleibt unveraendert.
+ */
+function resolveOpenDeadline(
+  memory: DocumentMemory | undefined,
+  inboxItem: InboxItem | undefined,
+  todayIso: string,
+): string | null {
+  const roh =
     memory?.summary?.deadline ??
     (memory?.validUntil ? memory.validUntil.slice(0, 10) : null) ??
     inboxItem?.deadline;
-  if (!deadline) return false;
+  if (!roh) return null;
+  /*
+   * Sichtbare Abnahme — zwei seit vier Tagen ueberfaellige Schreiben der
+   * Westfalen Projektbau GmbH standen im Eingang mit „FRIST 30.09.2026",
+   * tauchten auf der Startseite aber nicht auf. Grund: Die Erkennung legt die
+   * Frist im deutschen Anzeigeformat ab, \`daysUntil\` erwartet einen ISO-Tag.
+   * \`new Date('30.09.2026T12:00:00')\` ergibt \`Invalid Date\`, der Vergleich wird
+   * \`NaN\`, und \`NaN <= 30\` ist false — die Frist verschwand lautlos.
+   *
+   * Bewusst \`toCanonicalIsoDay\` statt eigener Datumslogik: Dieselbe Funktion
+   * vereinheitlicht bereits in documentClassificationService die erkannten
+   * Fristen. Ein nicht lesbares Datum bleibt \`null\` — lieber keine Frist als
+   * eine erfundene.
+   */
+  const deadline = toCanonicalIsoDay(roh);
+  if (!deadline) return null;
   const days = daysUntil(deadline, todayIso);
-  return days <= DEADLINE_ATTENTION_DAYS;
+  return days <= DEADLINE_ATTENTION_DAYS ? deadline : null;
 }
 
 function getMissingProofLabels(vorgangId: string | undefined): string[] {
@@ -317,7 +341,8 @@ export function resolveDocumentLifecycle(
    * Frist gelesen wuerde sie einen Handlungsbedarf behaupten, den es nicht gibt.
    */
   const istEigenesAngebot = document?.classifiedKind === 'angebot' && Boolean(document.linkedOfferId);
-  const openDeadline = !istEigenesAngebot && hasOpenDeadline(memory, inboxItem, todayIso);
+  const deadlineDate = istEigenesAngebot ? null : resolveOpenDeadline(memory, inboxItem, todayIso);
+  const openDeadline = deadlineDate !== null;
   const missingProofs = getMissingProofLabels(
     memory?.linkedVorgangId ?? document?.linkedVorgang?.vorgangId ?? inboxItem?.vorgangId,
   );
@@ -371,6 +396,10 @@ export function resolveDocumentLifecycle(
     nextStep: buildNextStep(status, openItems, reasons, physicalFiled),
     openReasons: reasons,
     route: lifecycleRoute(documentId, memory?.inboxId ?? inboxItem?.id),
+    ...(deadlineDate ? { deadline: deadlineDate } : {}),
+    ...(memory?.classifiedKind ?? inboxItem?.classifiedKind
+      ? { kind: String(memory?.classifiedKind ?? inboxItem?.classifiedKind) }
+      : {}),
   };
 }
 

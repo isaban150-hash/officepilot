@@ -265,6 +265,40 @@ export async function upsertGeneratedInvoiceDocumentToCloud(
  * Setzt den Grabstein. Die Zeile bleibt bestehen — nur so erfaehrt ein anderes
  * Geraet ueberhaupt von der Loeschung.
  */
+/**
+ * BARZAHLUNG-V1 NACHTRAG 1 — führt in der Cloud eine Zahlung dieses
+ * Dokument als Nachweis?
+ *
+ * Nötig, weil stornierte Zahlungen lokal nicht projiziert werden; nur der
+ * Server kennt die vollständige Wahrheit.
+ *
+ * Antwortet im Zweifel mit `false`: Kein Netz, kein Workspace oder ein
+ * Server ohne die Erweiterung sollen das Löschen nicht blockieren. Die
+ * verbindliche Ablehnung kommt ohnehin beim Schreiben — hier geht es
+ * allein um die sofortige, freundliche Antwort.
+ */
+export async function isDocumentPaymentProofInCloud(
+  clientDocumentId: string,
+  override?: { client?: SupabaseClient | null; workspaceId?: string },
+): Promise<boolean> {
+  const resolved = resolveContext(override);
+  if (!resolved.ok) return false;
+  const { client, workspaceId } = resolved.context;
+  const id = clientDocumentId.trim();
+  if (!id) return false;
+
+  try {
+    const response = await client.rpc('is_workspace_document_payment_proof', {
+      p_workspace_id: workspaceId,
+      p_client_document_id: id,
+    });
+    if (response.error) return false;
+    return response.data === true;
+  } catch {
+    return false;
+  }
+}
+
 export async function tombstoneDocumentInCloud(
   input: { clientDocumentId: string },
   override?: { client?: SupabaseClient | null; workspaceId?: string },

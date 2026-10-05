@@ -110,6 +110,8 @@ export interface CloudExpensePaymentRow {
   note: string | null;
   /** 02B — fehlt bei einem Server ohne die Erweiterung. */
   method?: string | null;
+  /** BLOCK 1 — fehlt bei einem Server ohne die Erweiterung. */
+  proof_document_id?: string | null;
   created_at: string;
   row_version: number;
   reversed_at: string | null;
@@ -236,6 +238,15 @@ export function mergeExpensesFromPull(local: Expense[], pull: ExpenseCloudPull, 
       const previous = payments.get(row.client_payment_id);
       // 02B — Zahlungsart wie bei Rechnungen: ohne Serverfeld bleibt die lokale Angabe.
       const method = row.method === undefined ? previous?.method : normalizePaymentMethod(row.method);
+      /*
+       * BLOCK 1 — wie bei der Zahlungsart: Liefert der Server das Feld
+       * gar nicht, bleibt der lokale Stand stehen. Liefert er `null`,
+       * ist der Nachweis dort bewusst entfernt worden.
+       */
+      const proofDocumentId =
+        row.proof_document_id === undefined
+          ? previous?.proofDocumentId
+          : (row.proof_document_id ?? undefined);
       const next: ExpensePayment = {
         id: row.client_payment_id,
         date: row.paid_on,
@@ -243,9 +254,10 @@ export function mergeExpensesFromPull(local: Expense[], pull: ExpenseCloudPull, 
         reference: row.reference ?? undefined,
         note: row.note ?? undefined,
         ...(method ? { method } : {}),
+        ...(proofDocumentId ? { proofDocumentId } : {}),
         createdAt: row.created_at,
       };
-      if (!previous || previous.amount !== next.amount || previous.date !== next.date || previous.reference !== next.reference || previous.note !== next.note || previous.method !== next.method) {
+      if (!previous || previous.amount !== next.amount || previous.date !== next.date || previous.reference !== next.reference || previous.note !== next.note || previous.method !== next.method || previous.proofDocumentId !== next.proofDocumentId) {
         mergedPayments += 1;
       }
       payments.set(row.client_payment_id, next);
@@ -345,6 +357,42 @@ export async function rpcAddWorkspaceExpensePayment(
   if (error) throw classify(error);
 }
 
+/**
+ * BARZAHLUNG-V1 BLOCK 1 — den Zahlungsnachweis setzen oder loesen.
+ *
+ * Getrennt von `add_workspace_expense_payment`, weil der Nachweis — anders
+ * als Betrag, Datum und Zahlungsart — **nicht** zur Identitaet der Zahlung
+ * gehoert: Die Quittung wird oft erst am naechsten Tag fotografiert.
+ *
+ * Ein Server ohne die Erweiterung kennt die Funktion nicht. Das darf den
+ * Zahlungs-Sync nicht anhalten — Geld wiegt schwerer als ein Beleglink —,
+ * also wird genau dieser Fall uebersprungen statt geworfen.
+ */
+export async function rpcSetWorkspaceExpensePaymentProof(
+  workspaceId: string,
+  expenseId: string,
+  paymentId: string,
+  proofDocumentId: string | null,
+  explicit?: SupabaseClient | null,
+): Promise<void> {
+  const { error } = await client(explicit).rpc('set_workspace_expense_payment_proof', {
+    p_workspace_id: workspaceId,
+    p_client_expense_id: expenseId,
+    p_client_payment_id: paymentId,
+    p_proof_document_id: proofDocumentId,
+  });
+  if (!error) return;
+  if (isMissingServerFunction(error)) return;
+  throw classify(error);
+}
+
+/** Kennt dieser Server die Funktion noch nicht? Dann ist nichts kaputt. */
+function isMissingServerFunction(error: { message?: string; code?: string }): boolean {
+  if (error.code === 'PGRST202') return true;
+  const message = error.message ?? '';
+  return /could not find the function|does not exist/i.test(message);
+}
+
 export async function rpcReverseWorkspaceExpensePayment(
   workspaceId: string,
   expenseId: string,
@@ -424,5 +472,22 @@ export async function pushExpenseEntity(
     return { kind: 'skipped', reason: 'reversed' };
   }
   await rpcAddWorkspaceExpensePayment(workspaceId, expenseId, payment, explicit);
+  /*
+   * BLOCK 1 — der Nachweis als zweiter, geldfreier Schritt.
+   *
+   * Immer gesendet, auch leer: Der lokale Stand ist die Wahrheit, und nur
+   * so laesst sich ein versehentlich gesetzter Nachweis auch wieder
+   * entfernen. Der Aufruf ist serverseitig idempotent — gleicher Wert,
+   * keine Aenderung, keine neue Version.
+   *
+   * Bewusst **nach** der Zahlung: Scheitert er, steht das Geld trotzdem.
+   */
+  await rpcSetWorkspaceExpensePaymentProof(
+    workspaceId,
+    expenseId,
+    paymentId,
+    payment.proofDocumentId ?? null,
+    explicit,
+  );
   return { kind: 'skipped', reason: 'payment_added' };
 }

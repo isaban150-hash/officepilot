@@ -187,12 +187,19 @@ describe('UIUX-FOUNDATION-01C — Finanzen-Hub (F)', () => {
   it('verlinkt nur bestehende Finanzbereiche; Zahlungssituation als Kennzahlenfläche', () => {
     const html = renderToStaticMarkup(withProviders(<FinanzenPage />));
     expect(html).toContain('data-testid="finanzen-page"');
-    for (const to of ['/ausgaben', '/ausgaben/offen', '/rechnungen/offen', '/steuerberater']) {
+    for (const to of [
+      '/ausgaben',
+      '/ausgaben/offen',
+      '/rechnungen/offen',
+      '/steuerberater',
+      /* BANKABGLEICH-V1 — der Kontoauszug ist seitdem der fuenfte Finanzbereich. */
+      '/finanzen/kontoauszug',
+    ]) {
       expect(html).toContain(`href="${to}"`);
     }
     /* VISUAL-POLISH-01C — vier Kennzahlen aus den bestehenden Zusammenfassungen (keine neue Aggregation). */
     expect(html).toContain('data-testid="finanzen-kpis"');
-    expect(FINANZEN_HUB_GROUPS.flatMap((g) => g.items)).toHaveLength(4);
+    expect(FINANZEN_HUB_GROUPS.flatMap((g) => g.items)).toHaveLength(5);
   });
 });
 

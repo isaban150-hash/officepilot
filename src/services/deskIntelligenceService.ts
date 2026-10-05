@@ -143,6 +143,27 @@ function deskTopicRank(hint: HomeHint, kind?: PendingHighlight['kind']): number 
   if (kind === 'invoice_due_soon' || kind === 'invoice_partial') return 70;
 
   const key = hint.messageKey;
+
+  /*
+   * HEUTE-V2 — Dokumentfristen sind Arbeit mit Verfallsdatum und dürfen nicht
+   * in den Sammeltopf 90 fallen, in dem jeder 'hints.'-Schlüssel landet.
+   *
+   * Bewusst **nach Dringlichkeit gestaffelt statt in einem Topf**: Eine
+   * überfällige Behördenfrist gehört neben die Aufgabenfrist ganz nach vorn,
+   * eine in vier Wochen vorgemerkte Frist jedoch nicht vor eine überfällige
+   * Rechnung. Sie verschwindet trotzdem nicht — sie steht nur hinten.
+   */
+  if (key === 'hints.documentDeadlineOverdue' || key === 'hints.documentDeadlineToday') return 12;
+  if (key === 'hints.documentDeadlineSoon') return 25;
+  if (
+    key === 'hints.documentProofMissing' ||
+    key === 'hints.documentReplyOpen' ||
+    key === 'hints.documentFileOriginal'
+  ) {
+    return 44;
+  }
+  if (key === 'hints.documentDeadlineLater') return 48;
+
   if (
     key.includes('steuerberater') ||
     key.includes('recommend') ||

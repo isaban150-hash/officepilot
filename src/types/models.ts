@@ -2157,6 +2157,23 @@ export interface AppPersistedState {
    * kein Vorgang, keine Auftragsnummer, kein Cloud-Entity-Typ.
    */
   orderDrafts?: import('./orderDraft').OrderDraft[];
+  /**
+   * BANKABGLEICH-V1 BLOCK 2 — importierte Bankbewegungen als Nachweis.
+   *
+   * Optional: Ein Zustand von vor Block 2 traegt keine, und das ist kein
+   * Fehlzustand — es wurde schlicht noch kein Kontoauszug eingelesen.
+   * Kein Backfill.
+   */
+  bankTransactions?: import('./bankTransaction').BankTransaction[];
+  /** BANKABGLEICH-V1 BLOCK 2B — die Konten, unter denen Auszüge aufbewahrt werden. */
+  bankAccounts?: import('./bankAccount').BankAccount[];
+  /**
+   * BANKABGLEICH-V1 BLOCK 4 — bestaetigte Zuordnungen.
+   *
+   * Nur ein Spiegel der Cloud-Wahrheit: Angelegt werden sie
+   * ausschliesslich serverseitig.
+   */
+  bankReconciliations?: import('./bankReconciliation').BankReconciliation[];
   /** Confirmed payment-reminder / dunning handoffs (local documentation only). */
   dunningDocumentations?: import('./dunningDocumentation').InvoiceDunningDocumentation[];
   communicationHistory?: CommunicationEvent[];

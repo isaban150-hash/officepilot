@@ -11,6 +11,8 @@ import {
 import type { Expense, ExpensePaymentInput } from '../../types/expense';
 import type { PaymentMethod } from '../../types/models';
 import { PaymentMethodField } from '../payment/PaymentMethodField';
+import { PaymentProofField, paymentProofLabel } from '../payment/PaymentProofField';
+import { getDocumentById } from '../../services/documentService';
 import type { TranslationKey } from '../../i18n';
 import { getBusinessDay } from '../../services/businessDateService';
 import { formatDisplayDatePadded } from '../../utils/displayFormat';
@@ -69,6 +71,8 @@ export function ExpensePaymentForm({ expense, open, onClose, onSaved, translate 
   const [reference, setReference] = useState('');
   const [note, setNote] = useState('');
   const [method, setMethod] = useState<PaymentMethod | ''>('');
+  /* BLOCK 1 — optionaler Zahlungsnachweis; leer heisst „keiner". */
+  const [proofDocumentId, setProofDocumentId] = useState('');
   const [errorKey, setErrorKey] = useState<string | null>(null);
 
   useEffect(() => {
@@ -79,6 +83,7 @@ export function ExpensePaymentForm({ expense, open, onClose, onSaved, translate 
     setReference('');
     setNote('');
     setMethod('');
+    setProofDocumentId('');
     setErrorKey(null);
   }, [open, openAmount, today]);
 
@@ -88,6 +93,7 @@ export function ExpensePaymentForm({ expense, open, onClose, onSaved, translate 
     [openAmount, parsedAmount],
   );
   const showOverpaymentWarning = willExpensePaymentOverpay(openAmount, parsedAmount);
+  const gewaehlterNachweis = proofDocumentId ? getDocumentById(proofDocumentId) : undefined;
 
   if (!open) return null;
 
@@ -107,6 +113,7 @@ export function ExpensePaymentForm({ expense, open, onClose, onSaved, translate 
       reference,
       note,
       ...(method ? { method } : {}),
+      ...(proofDocumentId ? { proofDocumentId } : {}),
     };
 
     const result = recordExpensePayment(expense.id, input, {
@@ -210,6 +217,14 @@ export function ExpensePaymentForm({ expense, open, onClose, onSaved, translate 
               testId="ausgabe-payment-method"
             />
 
+            <PaymentProofField
+              value={proofDocumentId}
+              onChange={setProofDocumentId}
+              disabled={cancelled || !payable}
+              translate={translate}
+              testId="ausgabe-payment-proof"
+            />
+
             <label className="invoice-payment-form__field">
               <span>{translate('payment.reference')}</span>
               <input
@@ -285,11 +300,25 @@ export function ExpensePaymentForm({ expense, open, onClose, onSaved, translate 
               </div>
             </dl>
             {/* FINANZCORE-05C-FIX1 — deutsche Schreibweise, gemeinsamer Helfer; wie im Rechnungsdialog. */}
+            {/*
+              * BLOCK 1 — vor der Geldwirkung steht alles da, was gebucht
+              * wird: Betrag, Datum, Zahlungsart und der Nachweis. Ein
+              * fehlender Nachweis wird benannt, nicht verschwiegen.
+              */}
             <p
               className="invoice-payment-form__confirm-summary"
               data-testid="expense-payment-confirm-summary"
             >
               {formatPaymentCurrency(parsedAmount)} · {formatDisplayDatePadded(date)}
+              {method ? ` · ${translate(`payment.method.${method}` as TranslationKey)}` : ''}
+            </p>
+            <p
+              className="invoice-payment-form__confirm-summary"
+              data-testid="expense-payment-confirm-proof"
+            >
+              {gewaehlterNachweis
+                ? `${translate('payment.proof.linked')}: ${paymentProofLabel(gewaehlterNachweis)}`
+                : translate('payment.proof.missing')}
             </p>
             {errorKey && (
               <p className="invoice-payment-form__error">

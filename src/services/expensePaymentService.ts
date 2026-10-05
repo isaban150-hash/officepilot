@@ -1,10 +1,13 @@
 import { normalizePaymentMethod } from '../types/models';
 import {
   addPaymentToExpense as addPaymentToExpenseStore,
+  getAllExpensesFromStore,
   getExpenseFromStoreById,
   removePaymentFromExpense as removePaymentFromExpenseStore,
+  replaceExpensePayment as replaceExpensePaymentInStore,
 } from './expenseStore';
 import { persistAll } from './persistenceService';
+import { getDocumentById } from './documentService';
 import { generateUuid } from './sync/syncMetaService';
 import { enqueueSyncOutbox } from './sync/syncOutboxService';
 import { buildExpensePaymentEntityId } from './expense/expenseCloudSyncService';
@@ -136,6 +139,19 @@ export function recordExpensePayment(
    * Formatproblem.
    */
   const method = normalizePaymentMethod(input.method);
+
+  /*
+   * BLOCK 1 — ein Nachweis muss ein echtes Dokument sein.
+   *
+   * Die Pruefung hier ist Bequemlichkeit, keine Sicherheit: Verbindlich
+   * prueft der Server im selben Workspace. Lokal soll der Nutzer den
+   * Fehler nur sofort sehen statt erst nach dem naechsten Abgleich.
+   */
+  const proofDocumentId = input.proofDocumentId?.trim() || undefined;
+  if (proofDocumentId && !getDocumentById(proofDocumentId)) {
+    return { success: false, errorKey: 'payment.proofNotFound' };
+  }
+
   const payment: ExpensePayment = {
     id: generateUuid(),
     date: input.date.slice(0, 10),
@@ -144,6 +160,8 @@ export function recordExpensePayment(
     note: input.note?.trim() || undefined,
     // 02B — optional; ohne Angabe bleibt sie nicht erfasst.
     ...(method ? { method } : {}),
+    // BLOCK 1 — optional; ohne Angabe ist kein Nachweis verknüpft.
+    ...(proofDocumentId ? { proofDocumentId } : {}),
     createdAt: new Date().toISOString(),
   };
 
@@ -194,6 +212,78 @@ export function removeExpensePayment(
   enqueueSyncOutbox({ entityType: 'expense_payment', entityId: buildExpensePaymentEntityId(expenseId, paymentId), operation: 'delete', version: 1 });
   persistAll();
   return { success: true, expense: updated };
+}
+
+export type SetExpensePaymentProofResult =
+  | { success: true; expense: Expense; payment: ExpensePayment }
+  | { success: false; errorKey: string };
+
+/**
+ * BARZAHLUNG-V1 BLOCK 1 — den Zahlungsnachweis nachtraeglich setzen,
+ * austauschen oder loesen (`null`).
+ *
+ * Ohne diesen Weg muesste man eine Zahlung stornieren und neu buchen, nur
+ * weil die Quittung erst am naechsten Tag fotografiert wurde — eine
+ * Geldbewegung rueckgaengig machen fuer eine Belegfrage. Das waere falsch.
+ *
+ * Bewegt kein Geld: Betrag, Datum, Zahlungsart und Zahlungsstatus bleiben
+ * unberuehrt. Eine stornierte Zahlung ist lokal nicht mehr vorhanden und
+ * damit auch nicht mehr aenderbar; in der Cloud bleibt ihre Zeile mitsamt
+ * Nachweis als Pruefspur stehen.
+ */
+export function setExpensePaymentProof(
+  expenseId: string,
+  paymentId: string,
+  proofDocumentId: string | null,
+): SetExpensePaymentProofResult {
+  const expense = getExpenseFromStoreById(expenseId);
+  if (!expense) {
+    return { success: false, errorKey: 'expense.payment.notFound' };
+  }
+
+  const payments = getExpensePayments(expense);
+  const vorhanden = payments.find((payment) => payment.id === paymentId);
+  if (!vorhanden) {
+    return { success: false, errorKey: 'payment.notFound' };
+  }
+
+  const ziel = proofDocumentId?.trim() || null;
+  if (ziel && !getDocumentById(ziel)) {
+    return { success: false, errorKey: 'payment.proofNotFound' };
+  }
+
+  const aktualisiert: ExpensePayment = { ...vorhanden };
+  if (ziel) aktualisiert.proofDocumentId = ziel;
+  else delete aktualisiert.proofDocumentId;
+
+  const updated = replaceExpensePaymentInStore(expenseId, aktualisiert);
+  if (!updated) {
+    return { success: false, errorKey: 'expense.payment.notFound' };
+  }
+
+  /*
+   * Derselbe Auftrag wie beim Erfassen: Der Push schickt die Zahlung
+   * (serverseitig ein Replay ohne Wirkung) und danach den Nachweis. Kein
+   * eigener Entitaetstyp — die Zahlung ist und bleibt die Einheit, die
+   * reist.
+   */
+  enqueueSyncOutbox({ entityType: 'expense_payment', entityId: buildExpensePaymentEntityId(expenseId, paymentId), operation: 'create', version: 1 });
+  persistAll();
+  return { success: true, expense: updated, payment: aktualisiert };
+}
+
+/** Welche Zahlungen berufen sich auf dieses Dokument? Die Rueckrichtung. */
+export function findExpensePaymentsByProofDocument(
+  documentId: string,
+): Array<{ expenseId: string; payment: ExpensePayment }> {
+  const treffer: Array<{ expenseId: string; payment: ExpensePayment }> = [];
+  if (!documentId) return treffer;
+  for (const expense of getAllExpensesFromStore()) {
+    for (const payment of getExpensePayments(expense)) {
+      if (payment.proofDocumentId === documentId) treffer.push({ expenseId: expense.id, payment });
+    }
+  }
+  return treffer;
 }
 
 export { formatPaymentCurrency } from './invoicePaymentService';

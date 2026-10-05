@@ -44,6 +44,7 @@ import { KundenPage } from './pages/KundenPage';
 import { SteuerberaterPage } from './pages/SteuerberaterPage';
 import { MailImportPage } from './pages/MailImportPage';
 import { MehrPage } from './pages/MehrPage';
+import { BankStatementPage } from './pages/BankStatementPage';
 import { FinanzenPage } from './pages/FinanzenPage';
 import { PapierarchivPage } from './pages/PapierarchivPage';
 import { KommunikationPage } from './pages/KommunikationPage';
@@ -188,6 +189,7 @@ function AppRoutes() {
         <Route path="/mehr" element={<MehrPage />} />
         {/* UIUX-FOUNDATION-01C — Finanzen-Hub: reine Navigation zu bestehenden Bereichen. */}
         <Route path="/finanzen" element={<FinanzenPage />} />
+        <Route path="/finanzen/kontoauszug" element={<BankStatementPage />} />
         <Route path="/mail-import" element={<MailImportPage />} />
         <Route path="/ablage" element={<EingangPage />} />
         <Route path="/ablage/:id" element={<EingangDetailPage />} />

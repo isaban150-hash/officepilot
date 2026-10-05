@@ -55,6 +55,9 @@ export const TRACKED_SYNC_ENTITY_TYPES: SyncEntityType[] = [
   'business_letter',
   // ANGEBOT-01B — eigene Angebote.
   'offer',
+  // BANKABGLEICH-V1 BLOCK 2B — Konto vor Bewegung, siehe BANK_PUSH_ORDER.
+  'bank_account',
+  'bank_transaction',
   // STEUERBERATER-06A — Kontierungen werden wie jede andere Entitaet verfolgt.
   'accounting_assignment',
   'accounting_period_closure',

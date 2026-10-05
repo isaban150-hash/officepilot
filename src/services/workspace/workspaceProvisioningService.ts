@@ -49,6 +49,13 @@ import {
   resolveLocalDunningDocumentationDuplicates,
 } from '../invoice/dunningDocumentationCloudService';
 import {
+  mergeBankAccountsFromPull,
+  mergeBankReconciliationsFromPull,
+  mergeBankTransactionsFromPull,
+  planBankAccountBackfill,
+  planBankTransactionBackfill,
+} from '../bank/bankCloudService';
+import {
   buildCompanyProfileCloudPayload,
   buildCompanySetupCloudPayload,
   parseCompanyProfileFromCloud,
@@ -1256,6 +1263,84 @@ export function mergeRemoteWorkspacePullIntoState(
     enqueueSyncOutbox({
       entityType: 'dunning_documentation',
       entityId: documentationId,
+      operation: 'create',
+      version: 0,
+    });
+  }
+
+  /*
+   * BANKABGLEICH-V1 BLOCK 2B — Importkonten und Bankbewegungen.
+   *
+   * Reihenfolge: erst die Konten, dann die Bewegungen. Eine Bewegung ohne
+   * ihr Konto waere lokal eine Zeile ohne Zuordnung, und der Server weist
+   * sie ohnehin ab.
+   */
+  const remoteBankAccountRows = pull.bankAccounts ?? [];
+  if (remoteBankAccountRows.length > 0) {
+    const accountMerge = mergeBankAccountsFromPull(
+      state.bankAccounts ?? [],
+      remoteBankAccountRows,
+      state.syncClient!.deviceId,
+      workspaceId,
+      activeOutboxEntityIds(state, 'bank_account'),
+    );
+    conflicts.push(...accountMerge.conflicts);
+    next.bankAccounts = accountMerge.accounts;
+  }
+
+  const remoteBankTransactionRows = pull.bankTransactions ?? [];
+  if (remoteBankTransactionRows.length > 0) {
+    const transactionMerge = mergeBankTransactionsFromPull(
+      state.bankTransactions ?? [],
+      remoteBankTransactionRows,
+      state.syncClient!.deviceId,
+      workspaceId,
+      activeOutboxEntityIds(state, 'bank_transaction'),
+    );
+    conflicts.push(...transactionMerge.conflicts);
+    next.bankTransactions = transactionMerge.transactions;
+  }
+
+  /*
+   * BLOCK 4 — bestaetigte Zuordnungen. Nur Pull: Der Server ist die
+   * Wahrheit, lokal gibt es nichts, was mit ihm streiten koennte.
+   */
+  next.bankReconciliations = mergeBankReconciliationsFromPull(
+    pull.bankReconciliations ?? [],
+    state.syncClient!.deviceId,
+    workspaceId,
+  );
+
+  /*
+   * Altbestand — Bankdaten aus der Zeit vor der Freigabe meldet der
+   * Change-Tracker nie nach: Er sieht sie beim Start als unveraendert.
+   * Sie gehen deshalb durch dieselbe Outbox-Tuer wie jede Aenderung.
+   *
+   * Von Natur aus idempotent und wiederholbar: Verglichen wird gegen die
+   * Kennungen aus genau diesem Abzug. Was oben ist, wird nicht erneut
+   * geplant; eine Unterbrechung laesst beim naechsten Lauf den Rest uebrig.
+   *
+   * Konten zuerst in die Warteschlange — die Push-Reihenfolge haelt das
+   * ueber BANK_PUSH_ORDER zusaetzlich ein.
+   */
+  for (const accountId of planBankAccountBackfill(
+    next.bankAccounts ?? state.bankAccounts ?? [],
+    remoteBankAccountRows,
+  )) {
+    enqueueSyncOutbox({
+      entityType: 'bank_account',
+      entityId: accountId,
+      operation: 'create',
+      version: 0,
+    });
+  }
+  for (const transactionId of planBankTransactionBackfill(
+    next.bankTransactions ?? state.bankTransactions ?? [],
+    remoteBankTransactionRows,
+  )) {
+    enqueueSyncOutbox({
+      entityType: 'bank_transaction',
+      entityId: transactionId,
       operation: 'create',
       version: 0,
     });

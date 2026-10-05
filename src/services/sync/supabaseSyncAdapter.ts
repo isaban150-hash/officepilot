@@ -47,6 +47,15 @@ import {
 } from '../accounting/accountingCloudPullService';
 import { mergeRemoteWorkspacePullIntoState } from '../workspace/workspaceProvisioningService';
 import {
+  applyBankAccountPushResult,
+  buildBankAccountCloudContentKey,
+  buildBankAccountCloudPushPayload,
+  buildBankTransactionCloudContentKey,
+  buildBankTransactionCloudPushPayload,
+} from '../bank/bankCloudService';
+import type { BankAccount } from '../../types/bankAccount';
+import type { BankTransaction } from '../../types/bankTransaction';
+import {
   applyRemoteCompanyProfileSyncMeta,
   applyRemoteSetupSyncMeta,
 } from '../workspace/workspaceStore';
@@ -88,6 +97,15 @@ import {
 
 /** ANGEBOT-01B — Angebote nach Dateien/Dokumenten/Ausgaben; alles Uebrige (-1) bleibt davor. */
 const OFFER_PUSH_ORDER: Record<string, number> = { offer: 20 };
+
+/*
+ * BANKABGLEICH-V1 BLOCK 2B — das Konto muss vor seiner Bewegung oben sein.
+ *
+ * Der Server weist eine Bewegung ohne vorhandenes Konto ausdruecklich ab
+ * ("Bankkonto fehlt"). Diese Reihenfolge ist deshalb keine Optimierung,
+ * sondern die Bedingung dafuer, dass ein Import in einem Lauf durchgeht.
+ */
+const BANK_PUSH_ORDER: Record<string, number> = { bank_account: 5, bank_transaction: 6 };
 import { getSyncOutboxSnapshot, recordOutboxSentProof } from './syncOutboxService';
 import { persistSyncOutboxNow } from '../persistenceService';
 import {
@@ -277,6 +295,18 @@ function buildSentWriteProof(
         sentContentKey: buildOfferCloudContentKey(extracted.entity),
         sentDeleted: operation === 'delete' || extracted.deleted === true,
       };
+    case 'bank_account':
+      return {
+        sentContentKey: buildBankAccountCloudContentKey(extracted.entity as unknown as BankAccount),
+        sentDeleted: false,
+      };
+    case 'bank_transaction':
+      return {
+        sentContentKey: buildBankTransactionCloudContentKey(
+          extracted.entity as unknown as BankTransaction,
+        ),
+        sentDeleted: false,
+      };
     default:
       return null;
   }
@@ -397,6 +427,11 @@ function buildPushPayload(
     // 01D — append-only: kein Grabstein-Flag, weil es keine Löschung gibt.
     case 'dunning_documentation':
       return buildDunningDocumentationCloudPushPayload(extracted.entity);
+    /* BLOCK 2B — ebenfalls append-only: kein Grabstein, kein Löschen. */
+    case 'bank_account':
+      return buildBankAccountCloudPushPayload(extracted.entity as unknown as BankAccount);
+    case 'bank_transaction':
+      return buildBankTransactionCloudPushPayload(extracted.entity as unknown as BankTransaction);
     default:
       return {};
   }
@@ -534,6 +569,32 @@ export function applyPushResultToState(
       updatedAt,
       state.syncClient!.deviceId,
       workspaceId,
+    );
+  } else if (entityType === 'bank_account') {
+    /* BLOCK 2B — nur die Serverversion; das Konto selbst bleibt. */
+    next.bankAccounts = applyBankAccountPushResult(
+      next.bankAccounts ?? [],
+      entityId,
+      rowVersion,
+      updatedAt,
+      state.syncClient!.deviceId,
+      workspaceId,
+    );
+  } else if (entityType === 'bank_transaction') {
+    /* Dieselbe Regel: Der Nachweis bleibt, nur die bestätigte Version kommt dazu. */
+    next.bankTransactions = (next.bankTransactions ?? []).map((transaction) =>
+      transaction.id === entityId
+        ? {
+            ...transaction,
+            sync: {
+              updatedAt,
+              version: rowVersion,
+              deleted: false,
+              deviceId: state.syncClient!.deviceId,
+              workspaceId,
+            },
+          }
+        : transaction,
     );
   } else if (entityType === 'dunning_documentation') {
     // CLOUD-DURABILITY-CORE-01D — nur die Serverversion; der Nachweis bleibt.
@@ -792,8 +853,8 @@ export class SupabaseSyncAdapter implements SyncAdapter {
       // ANGEBOT-01B — das Angebot nach seinem Archivdokument: Der Server prueft die Ablage gegen die Dokumentzeile.
       .sort(
         (a, b) =>
-          (INTAKE_PUSH_ORDER[a.entityType] ?? EXPENSE_PUSH_ORDER[a.entityType] ?? OFFER_PUSH_ORDER[a.entityType] ?? ACCOUNTING_PUSH_ORDER[a.entityType] ?? -1) -
-          (INTAKE_PUSH_ORDER[b.entityType] ?? EXPENSE_PUSH_ORDER[b.entityType] ?? OFFER_PUSH_ORDER[b.entityType] ?? ACCOUNTING_PUSH_ORDER[b.entityType] ?? -1),
+          (INTAKE_PUSH_ORDER[a.entityType] ?? EXPENSE_PUSH_ORDER[a.entityType] ?? OFFER_PUSH_ORDER[a.entityType] ?? ACCOUNTING_PUSH_ORDER[a.entityType] ?? BANK_PUSH_ORDER[a.entityType] ?? -1) -
+          (INTAKE_PUSH_ORDER[b.entityType] ?? EXPENSE_PUSH_ORDER[b.entityType] ?? OFFER_PUSH_ORDER[b.entityType] ?? ACCOUNTING_PUSH_ORDER[b.entityType] ?? BANK_PUSH_ORDER[b.entityType] ?? -1),
       );
 
     for (const entry of pendingEntries) {

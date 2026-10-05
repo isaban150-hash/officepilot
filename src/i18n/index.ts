@@ -253,6 +253,163 @@ const deLegacy = {
   'finanzen.openInvoicesDesc': 'Offene und überfällige Rechnungen, Zahlungen erfassen',
   'finanzen.steuerberater': 'Steuerberater-Monatsmappe',
   'finanzen.steuerberaterDesc': 'Belege je Monat prüfen und als Paket exportieren',
+  /*
+   * BANKABGLEICH-V1 BLOCK 1 — Kontoauszug einlesen und verstehen.
+   *
+   * Durchgehend Produktsprache: „Kontoauszug", „Bewegungen", „Zeilen prüfen".
+   * Kein CSV-Fachwort, wo es vermeidbar ist, und nirgends „Parser",
+   * „Transaction" oder „Reconciliation".
+   */
+  'finanzen.group.bank': 'Bank',
+  'finanzen.bankStatement': 'Kontoauszug',
+  'finanzen.bankStatementDesc': 'Kontoauszug als Datei prüfen und Bewegungen ansehen',
+  'bankStatement.title': 'Kontoauszug',
+  'bankStatement.subtitle':
+    'Laden Sie den Kontoauszug Ihrer Bank als CSV-Datei. OfficeTakt zeigt Ihnen die Bewegungen und bewahrt sie auf Wunsch als Nachweis auf.',
+  'bankStatement.dropzone': 'Kontoauszug auswählen',
+  'bankStatement.dropzoneHint': 'CSV-Datei hierher ziehen oder auswählen',
+  'bankStatement.choose': 'Datei auswählen',
+  'bankStatement.reset': 'Andere Datei prüfen',
+  /*
+   * BLOCK 2 — der Satz musste sich aendern: Seit Bewegungen uebernommen
+   * werden koennen, waere „Es wird nichts gespeichert“ schlicht unwahr.
+   * Was bleibt, ist die Zusage, auf die es ankommt: Hier wird keine Rechnung
+   * bezahlt und kein Zahlungsstatus angefasst.
+   */
+  'bankStatement.notSaved': 'Ein Kontoauszug ist ein Nachweis Ihres Kontos. Es wird dabei keine Rechnung bezahlt und kein Zahlungsstatus verändert.',
+  'bankStatement.summaryFile': 'Datei',
+  'bankStatement.summaryCount': '{count} Bewegungen erkannt',
+  'bankStatement.summaryCountOne': '1 Bewegung erkannt',
+  'bankStatement.summaryIssues': '{count} Zeilen prüfen',
+  'bankStatement.summaryIssuesOne': '1 Zeile prüfen',
+  'bankStatement.summaryDuplicates': '{count} möglicherweise doppelt',
+  'bankStatement.columnsFound': 'Erkannte Spalten',
+  'bankStatement.colDate': 'Datum',
+  'bankStatement.colCounterparty': 'Gegenpartei',
+  'bankStatement.colPurpose': 'Verwendungszweck',
+  'bankStatement.colAmount': 'Betrag',
+  'bankStatement.incoming': 'Eingang',
+  'bankStatement.outgoing': 'Ausgang',
+  'bankStatement.duplicateHint': 'Möglicherweise doppelt in dieser Datei',
+  'bankStatement.noCounterparty': 'Ohne Angabe',
+  'bankStatement.issuesTitle': 'Diese Zeilen konnten nicht übernommen werden',
+  'bankStatement.issueRow': 'Zeile {row}',
+  'bankStatement.issue.date_unreadable': 'Datum nicht lesbar',
+  'bankStatement.issue.amount_unreadable': 'Betrag nicht lesbar',
+  'bankStatement.issue.column_count_mismatch': 'Zeile hat zu wenige Spalten',
+  'bankStatement.issue.row_empty': 'Zeile ohne Inhalt',
+  'bankStatement.error.file_unreadable': 'Die Datei konnte nicht gelesen werden. Bitte prüfen Sie, ob es eine CSV-Datei ist.',
+  'bankStatement.error.encoding_unsupported':
+    'Die Zeichen der Datei sind nicht lesbar. Bitte exportieren Sie den Kontoauszug erneut als CSV.',
+  'bankStatement.error.no_header': 'Die erste Zeile enthält keine erkennbaren Spaltenüberschriften.',
+  'bankStatement.error.no_delimiter': 'Die Spalten der Datei sind nicht erkennbar. Erwartet wird Semikolon oder Komma.',
+  'bankStatement.error.missing_required_column': 'In der Datei fehlt eine benötigte Spalte: {detail}.',
+  'bankStatement.error.no_rows': 'Die Datei enthält keine Bewegungen.',
+  'bankStatement.missing.bookingDate': 'das Buchungsdatum',
+  'bankStatement.missing.amount': 'der Betrag',
+  'bankStatement.emptyTitle': 'Noch kein Kontoauszug geladen',
+  'bankStatement.emptyText': 'Wählen Sie eine CSV-Datei Ihrer Bank, um die Bewegungen anzusehen.',
+  /*
+   * BANKABGLEICH-V1 BLOCK 2 — Bewegungen übernehmen und aufbewahren.
+   *
+   * Durchgehend „Bankbewegungen", „neu", „bereits vorhanden", „übernommen".
+   * Ausdrücklich **nicht** „bezahlt", „verbucht" oder „abgeglichen": Hier
+   * wird nichts bezahlt und nichts zugeordnet, und ein solches Wort würde
+   * genau das behaupten.
+   */
+  'bankStatement.planNew': '{count} neue Bewegungen',
+  'bankStatement.planNewOne': '1 neue Bewegung',
+  'bankStatement.planNewNone': 'Keine neuen Bewegungen',
+  'bankStatement.planExisting': '{count} bereits vorhanden',
+  'bankStatement.planExistingOne': '1 bereits vorhanden',
+  'bankStatement.planSkipped': '{count} Zeilen werden nicht übernommen',
+  'bankStatement.planSkippedOne': '1 Zeile wird nicht übernommen',
+  'bankStatement.commit': 'Bewegungen übernehmen',
+  'bankStatement.commitNothing': 'Alles bereits vorhanden',
+  'bankStatement.rowNew': 'Neu',
+  'bankStatement.rowExisting': 'Bereits vorhanden',
+  'bankStatement.committed': '{count} Bewegungen übernommen.',
+  'bankStatement.committedOne': '1 Bewegung übernommen.',
+  'bankStatement.committedNone': 'Es wurde nichts übernommen — alle Bewegungen waren bereits vorhanden.',
+  'bankStatement.storedTitle': 'Aufbewahrte Bankbewegungen',
+  'bankStatement.storedCount': '{count} Bewegungen aufbewahrt',
+  'bankStatement.storedCountOne': '1 Bewegung aufbewahrt',
+  'bankStatement.storedEmpty': 'Es sind noch keine Bankbewegungen aufbewahrt.',
+  'bankStatement.storedNote':
+    'Aufbewahrte Bewegungen sind ein Nachweis Ihres Kontos. Sie verändern keine Rechnung und keinen Zahlungsstatus.',
+  /*
+   * BANKABGLEICH-V1 BLOCK 2B — das Konto eines Auszugs.
+   *
+   * Produktsprache: „Konto“, nicht „Bankverbindung“ und nicht „IBAN“. Es
+   * geht nicht um Banking, sondern darum, unter welchem Konto ein Auszug
+   * aufbewahrt wird.
+   */
+  'bankStatement.accountSectionTitle': 'Konto',
+  'bankStatement.accountDetected': 'Konto erkannt: {name}',
+  'bankStatement.accountDetectedHint': 'OfficeTakt hat das Konto aus der Datei übernommen.',
+  'bankStatement.accountNeeded': 'Zu welchem Konto gehört dieser Auszug?',
+  'bankStatement.accountNeededHint': 'Die Datei nennt kein Konto. Ordnen Sie den Auszug einem Konto zu, damit zwei Konten nicht vermischt werden.',
+  'bankStatement.accountChoose': 'Vorhandenes Konto wählen',
+  'bankStatement.accountNone': 'Bitte wählen',
+  'bankStatement.accountNewLabel': 'Neues Konto anlegen',
+  'bankStatement.accountNewPlaceholder': 'Zum Beispiel: Geschäftskonto Sparkasse',
+  'bankStatement.accountNewButton': 'Konto anlegen',
+  'bankStatement.accountBlocked': 'Ordnen Sie den Auszug zuerst einem Konto zu.',
+  'bankStatement.accountOf': 'Konto: {name}',
+  /*
+   * BANKABGLEICH-V1 BLOCK 3 — Zuordnungsvorschläge.
+   *
+   * Durchgehend Vorschlagssprache. Nirgends „bezahlt", nirgends ein
+   * Prozentwert: Eine Prozentzahl ohne statistische Grundlage wäre eine
+   * Genauigkeit, die niemand belegen kann.
+   */
+  'bankMatch.grade.sehr_passend': 'Sehr passender Vorschlag',
+  'bankMatch.grade.passend': 'Passender Vorschlag',
+  'bankMatch.grade.moeglich': 'Möglicher Vorschlag',
+  'bankMatch.ambiguousInvoices': '{count} mögliche Rechnungen',
+  'bankMatch.ambiguousExpenses': '{count} mögliche Ausgaben',
+  'bankMatch.noneInvoice': 'Keine passende Rechnung gefunden',
+  'bankMatch.noneExpense': 'Keine passende Ausgabe gefunden',
+  'bankMatch.invoiceLabel': 'Rechnung {number}',
+  'bankMatch.expenseLabel': 'Ausgabe {number}',
+  'bankMatch.open': 'Offen',
+  'bankMatch.reasons': 'Gründe',
+  'bankMatch.reason.invoice_number_in_purpose': 'Rechnungsnummer im Verwendungszweck erkannt',
+  'bankMatch.reason.amount_matches_open': 'Betrag stimmt mit dem offenen Betrag überein',
+  'bankMatch.reason.counterparty_matches': 'Gegenpartei passt',
+  'bankMatch.reason.amount_differs': 'Betrag weicht ab',
+  'bankMatch.reason.date_before_document': 'Buchung liegt vor dem Belegdatum',
+  'bankMatch.more': 'Weitere Möglichkeiten',
+  'bankMatch.notAssigned': 'Das ist ein Vorschlag. Es wird nichts zugeordnet und nichts bezahlt.',
+  /*
+   * BANKABGLEICH-V1 BLOCK 4 — bestätigte Zuordnung mit Geldwirkung.
+   *
+   * Hier fällt zum ersten Mal das Wort „Zahlung" — und nur hier, weil hier
+   * wirklich eine entsteht. „Bezahlt" steht nirgends: Eine Teilzahlung macht
+   * eine Rechnung nicht bezahlt.
+   */
+  'bankConfirm.action': 'Zuordnen und Zahlung erfassen',
+  'bankConfirm.title': 'Zuordnung bestätigen',
+  'bankConfirm.intro': 'Danach wird eine Zahlung erfasst. Prüfen Sie bitte die Angaben.',
+  'bankConfirm.movement': 'Bankbewegung',
+  'bankConfirm.target': 'Zuordnung',
+  'bankConfirm.amount': 'Zahlungsbetrag',
+  'bankConfirm.paidOn': 'Zahlungsdatum',
+  'bankConfirm.open': 'Offener Betrag',
+  'bankConfirm.partial': 'Teilzahlung — danach bleibt ein Rest offen.',
+  'bankConfirm.confirm': 'Zahlung jetzt erfassen',
+  'bankConfirm.cancel': 'Abbrechen',
+  'bankConfirm.running': 'Wird erfasst …',
+  'bankConfirm.done': 'Zugeordnet',
+  'bankConfirm.doneDetail': '{amount} am {date} erfasst',
+  'bankConfirm.refusal.already_reconciled': 'Diese Bankbewegung ist bereits zugeordnet.',
+  'bankConfirm.refusal.amount_exceeds_open': 'Bankbetrag ist höher als der offene Betrag.',
+  'bankConfirm.refusal.wrong_direction': 'Richtung passt nicht zu diesem Beleg.',
+  'bankConfirm.refusal.target_not_found': 'Der Beleg wurde nicht gefunden.',
+  'bankConfirm.refusal.transaction_not_found': 'Die Bankbewegung wurde nicht gefunden.',
+  'bankConfirm.refusal.nothing_open': 'Für diesen Beleg ist nichts mehr offen.',
+  'bankConfirm.refusal.offline':
+    'Die Zuordnung konnte nicht gespeichert werden. Bitte später erneut versuchen.',
   /* UIUX-FOUNDATION-01E — Listen, Filter, Heute-Abschnitte. */
   'list.search': 'Suchen…',
   'list.filter.label': 'Filter',
@@ -450,6 +607,20 @@ const deLegacy = {
   'hints.action.snooze3Days': 'In 3 Tagen',
   'hints.action.snoozeNextWeek': 'Nächste Woche',
   'hints.action.hide': '✖ Ausblenden',
+  /*
+   * HEUTE-V2 — offene Dokumentvorgänge auf der Startseite.
+   *
+   * Die Sätze nennen die Handlung, nicht den Zustand, und niemals einen
+   * technischen Grund wie deadline_open. {title} ist der Dokumenttitel,
+   * den der Nutzer ohnehin kennt — keine Kennung.
+   */
+  'hints.documentDeadlineOverdue': 'Frist überschritten: {title}. Bitte heute ansehen.',
+  'hints.documentDeadlineToday': 'Frist läuft heute ab: {title}.',
+  'hints.documentDeadlineSoon': 'Frist läuft bald ab: {title}.',
+  'hints.documentDeadlineLater': 'Frist vorgemerkt: {title}.',
+  'hints.documentReplyOpen': 'Antwort offen: {title}.',
+  'hints.documentProofMissing': 'Nachweis fehlt: {title}.',
+  'hints.documentFileOriginal': 'Original abheften: {title}.',
   'hints.invoiceDueTomorrow': 'Rechnung {customer} morgen fällig.',
   'hints.steuerberaterReady': '{month}-Unterlagen für Steuerberater bereit.',
   'hints.steuerberaterMissing': 'Für {month} fehlen noch {count} Unterlage(n) für den Steuerberater.',
@@ -945,6 +1116,9 @@ const deLegacy = {
     'Dieses Dokument ist die Grundlage eines bestätigten Auftrags und bleibt als Nachweis erhalten.',
   'document.delete.blocked.expense':
     'Dieses Dokument ist der Beleg einer bestehenden Ausgabe und kann deshalb nicht gelöscht werden.',
+  // BARZAHLUNG-V1 NACHTRAG 1
+  'document.delete.blocked.paymentProof':
+    'Dieses Dokument ist als Zahlungsnachweis verknüpft und kann nicht gelöscht werden.',
   // NORMAL-INVOICE-CANCELLATION-01B
   'document.delete.blocked.correction':
     'Dieser Korrekturbeleg gehört zur Stornierung einer Rechnung und kann nicht gelöscht werden.',
@@ -3173,6 +3347,22 @@ const deLegacy = {
   'payment.method.cash': 'Bar',
   'payment.method.other': 'Sonstige',
   'payment.method.cashHint': 'Eine Barzahlung gilt sofort als bezahlt – ein Kontoauszug ist dafür nicht nötig.',
+  'payment.proof': 'Zahlungsnachweis',
+  'payment.proof.none': 'Kein Zahlungsnachweis',
+  'payment.proof.hint': 'Quittung, Kassenbeleg oder Kontoauszug aus dem Archiv. Der Nachweis gehört zu genau dieser Zahlung.',
+  'payment.proof.empty': 'Im Archiv liegt noch kein Beleg, der als Zahlungsnachweis in Frage kommt.',
+  'payment.proof.missing': 'Kein Zahlungsnachweis verknüpft',
+  'payment.proof.linked': 'Zahlungsnachweis',
+  'payment.proof.open': 'Beleg öffnen',
+  'payment.proofNotFound': 'Dieser Zahlungsnachweis wurde nicht gefunden.',
+  'payment.proof.edit': 'Nachweis ändern',
+  'payment.proof.add': 'Nachweis hinzufügen',
+  'payment.proof.dialogTitle': 'Zahlungsnachweis',
+  'payment.proof.dialogIntro': 'Welcher Beleg weist genau diese Zahlung nach? Betrag, Datum und Zahlungsart bleiben unverändert.',
+  'payment.proof.save': 'Nachweis speichern',
+  'payment.proof.groupTypical': 'Quittungen und Zahlungsbelege',
+  'payment.proof.groupOther': 'Weitere Dokumente im Archiv',
+  'payment.proof.unresolved': 'Zahlungsnachweis nicht mehr auffindbar',
   'payment.date': 'Zahlungsdatum',
   'payment.amount': 'Betrag',
   'payment.formTitle': 'Zahlung erfassen',
@@ -3181,6 +3371,11 @@ const deLegacy = {
   'payment.recordShort': 'Zahlung',
   'payment.remove': 'Entfernen',
   'payment.removeConfirm': 'Zahlung wirklich entfernen?',
+  /*
+   * BANKABGLEICH-V1 BLOCK 5 — der Zusatz erscheint nur bei einer Zahlung aus
+   * einer Bankzuordnung. Produktsprache: „Bankbewegung“, nicht „Reconciliation“.
+   */
+  'payment.removeBankHint': 'Die Zahlung stammt aus einer Bankzuordnung. Die Bankbewegung wird danach wieder als offen angezeigt.',
   'payment.savedSuccess': 'Zahlung erfolgreich gespeichert.',
   'payment.savedFullyPaid': 'Rechnung vollständig bezahlt.',
   'payment.removedSuccess': 'Zahlung entfernt.',

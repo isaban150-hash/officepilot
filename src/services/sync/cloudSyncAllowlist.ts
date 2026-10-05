@@ -50,6 +50,20 @@ export const SUPABASE_SYNC_ALLOWLIST: ReadonlySet<SyncEntityType> = new Set([
    * Laufzeittests gegen eine echte Datenbank.
    */
   'accounting_period_closure',
+  /*
+   * BANKABGLEICH-V1 BLOCK 2B — Importkonten und Bankbewegungen.
+   *
+   * Freigabe erst jetzt, nach derselben Reihenfolge wie bei allen
+   * anderen: Tabellen, RLS, Push-Zweig im Dispatcher, Pull in der
+   * Sammelfunktion, Merge, Altbestandsnachtrag, Versionsvertrag und
+   * Laufzeittests gegen eine echte Datenbank. Beide Migrationen sind
+   * remote angewendet.
+   *
+   * Grabsteine gibt es hier nicht: Block 2B kennt kein Loeschen, und
+   * beide Serverzweige weisen es ausdruecklich ab.
+   */
+  'bank_account',
+  'bank_transaction',
 ]);
 
 export const LOCAL_ONLY_SYNC_ENTITY_TYPES: ReadonlySet<SyncEntityType> = new Set([
@@ -60,6 +74,7 @@ export const LOCAL_ONLY_SYNC_ENTITY_TYPES: ReadonlySet<SyncEntityType> = new Set
   'mail_import',
   'communication_event',
   'knowledge_fact',
+
 ]);
 
 export function isSupabaseSyncAllowed(entityType: SyncEntityType): boolean {

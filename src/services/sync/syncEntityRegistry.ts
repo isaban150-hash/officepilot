@@ -1,6 +1,8 @@
 import type { CommunicationEvent } from '../../types/communicationHistory';
 import type { AccountingAssignment } from '../../types/accounting';
 import type { AccountingPeriodClosure } from '../../types/accountingPeriod';
+import type { BankAccount } from '../../types/bankAccount';
+import type { BankTransaction } from '../../types/bankTransaction';
 import type { Expense } from '../../types/expense';
 import type { BusinessLetter } from '../../types/businessLetter';
 import type { Offer } from '../../types/offer';
@@ -111,6 +113,13 @@ export function findEntityInState(
       return state.offers?.find((item) => item.id === entityId) ?? null;
     case 'accounting_assignment':
       return state.accountingAssignments?.find((item) => item.id === entityId) ?? null;
+    /* BANKABGLEICH-V1 BLOCK 2B — Bankbewegung und ihr Konto.
+     * Verdrahtet, aber noch nicht in der Sync-Allowlist: Die Tabelle
+     * existiert remote noch nicht. Siehe cloudSyncAllowlist. */
+    case 'bank_transaction':
+      return state.bankTransactions?.find((item) => item.id === entityId) ?? null;
+    case 'bank_account':
+      return state.bankAccounts?.find((item) => item.id === entityId) ?? null;
     case 'accounting_period_closure':
       return state.accountingPeriodClosures?.find((item) => item.id === entityId) ?? null;
     case 'communication_event':
@@ -193,6 +202,12 @@ export function upsertEntityInState(
       break;
     case 'offer':
       next.offers = upsertInArray(next.offers ?? [], entity as Offer);
+      break;
+    case 'bank_transaction':
+      next.bankTransactions = upsertInArray(next.bankTransactions ?? [], entity as BankTransaction);
+      break;
+    case 'bank_account':
+      next.bankAccounts = upsertInArray(next.bankAccounts ?? [], entity as BankAccount);
       break;
     case 'accounting_assignment':
       next.accountingAssignments = upsertInArray(
@@ -291,6 +306,10 @@ export function listEntitiesByType(
       return [...(state.offers ?? [])];
     case 'accounting_assignment':
       return [...(state.accountingAssignments ?? [])];
+    case 'bank_transaction':
+      return [...(state.bankTransactions ?? [])];
+    case 'bank_account':
+      return [...(state.bankAccounts ?? [])];
     case 'accounting_period_closure':
       return [...(state.accountingPeriodClosures ?? [])];
     case 'communication_event':

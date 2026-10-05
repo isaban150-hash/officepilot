@@ -26,6 +26,7 @@ import {
   tombstoneDocumentInCloud,
 } from './workspaceDocumentCloudService';
 import { isCloudEligibleGeneratedInvoiceDocument } from './documentCloudPullOrchestrator';
+import { isDocumentPaymentProofInCloud } from './workspaceDocumentCloudService';
 
 /** Die Ablehnung aus `tombstone_workspace_document` (20261019120000). */
 const FINALIZED_INVOICE_SERVER_MESSAGE = 'festgeschriebenen Rechnung kann nicht geloescht werden';
@@ -65,6 +66,23 @@ export async function deleteGeneratedInvoiceDocumentWithCloud(
    */
   if (isFinalizedInvoiceArchiveDocument(document)) {
     return { ok: false, errorKey: DOCUMENT_DELETE_FINALIZED_INVOICE_KEY };
+  }
+
+  /*
+   * BARZAHLUNG-V1 NACHTRAG 1 — vor dem lokalen Löschen den Server fragen.
+   *
+   * Eine stornierte Zahlung fällt aus der lokalen Projektion heraus, trägt
+   * ihren Nachweis in der Cloud aber weiter. Ohne diese Rückfrage wäre das
+   * Dokument lokal verschwunden, und der Abgleich hätte danach für immer
+   * abgelehnt — der Nutzer sähe nur ein stilles Scheitern.
+   *
+   * Kann der Server nicht gefragt werden, bleibt es beim lokalen Schutz:
+   * Wir blockieren nicht, nur weil gerade kein Netz da ist. Der Server
+   * weist einen unzulässigen Grabstein ohnehin ab.
+   */
+  const serverBlockiert = await isDocumentPaymentProofInCloud(documentId);
+  if (serverBlockiert) {
+    return { ok: false, errorKey: 'document.delete.blocked.paymentProof' };
   }
 
   // Fremddokumente: unveränderter lokaler Löschweg, kein einziger Cloud-Aufruf.

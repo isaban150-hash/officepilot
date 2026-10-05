@@ -93,6 +93,33 @@ export function addPaymentToExpense(
   );
 }
 
+/**
+ * BARZAHLUNG-V1 BLOCK 1 — eine vorhandene Zahlung an Ort und Stelle ersetzen.
+ *
+ * Nur fuer Felder **ohne** Geldwirkung gedacht (heute: der Zahlungsnachweis).
+ * Der Zahlungsstatus wird deshalb nicht neu gesetzt, sondern unveraendert
+ * uebernommen — eine Belegzuordnung darf einen Beleg nicht umbuchen.
+ *
+ * Die Reihenfolge bleibt erhalten: Eine Zahlungshistorie, die nach dem
+ * Anhaengen einer Quittung die Zeilen vertauscht, waere verwirrend.
+ */
+export function replaceExpensePayment(
+  expenseId: string,
+  payment: ExpensePayment,
+): Expense | null {
+  const current = expenses.find((item) => item.id === expenseId);
+  if (!current) return null;
+
+  const payments = current.payments ?? [];
+  if (!payments.some((entry) => entry.id === payment.id)) return null;
+
+  return updateExpensePaymentFields(
+    expenseId,
+    payments.map((entry) => (entry.id === payment.id ? cloneExpensePayment(payment) : entry)),
+    current.paymentStatus,
+  );
+}
+
 export function removePaymentFromExpense(
   expenseId: string,
   paymentId: string,

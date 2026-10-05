@@ -1,0 +1,290 @@
+/*
+ * BANKABGLEICH-V1 BLOCK 1 — Kontoauszug-Vorschau.
+ *
+ * Ruhige Liste statt ERP-Tabelle: Auf 390 px wird aus jeder Zeile eine Karte,
+ * auf dem Schreibtisch eine Rasterzeile. Dieselbe Struktur, keine zweite
+ * mobile Ansicht — und dadurch nirgends ein waagerechter Überlauf.
+ */
+
+.bank-statement__input {
+  display: none;
+}
+
+.bank-statement__dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  border: 2px dashed var(--op-border-strong);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6) var(--space-4);
+  text-align: center;
+  background: var(--op-surface-sunken);
+}
+
+.bank-statement__dropzone span {
+  color: var(--op-text-muted);
+  font-size: 0.9rem;
+}
+
+.bank-statement__notice {
+  margin: var(--space-3) 0 0;
+  color: var(--op-text-muted);
+  font-size: 0.9rem;
+}
+
+.bank-statement__error {
+  margin-top: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--op-danger);
+  background: var(--op-danger-subtle);
+  color: var(--op-text);
+}
+
+.bank-statement__result {
+  margin-top: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.bank-statement__summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--op-surface-sunken);
+}
+
+.bank-statement__summary span {
+  color: var(--op-text-muted);
+  font-size: 0.9rem;
+}
+
+.bank-statement__rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.bank-statement__row {
+  display: grid;
+  /* Mobil zuerst: eine Spalte, nichts läuft seitlich hinaus. */
+  grid-template-columns: 1fr;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--op-border);
+  border-left: 3px solid var(--op-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--op-surface-raised);
+}
+
+.bank-statement__row--in {
+  border-left-color: var(--op-primary);
+}
+
+.bank-statement__row--out {
+  border-left-color: var(--op-text-muted);
+}
+
+.bank-statement__date {
+  color: var(--op-text-muted);
+  font-size: 0.85rem;
+}
+
+.bank-statement__party {
+  font-weight: 600;
+  /* Lange Empfängernamen brechen um, statt die Zeile zu sprengen. */
+  overflow-wrap: anywhere;
+}
+
+.bank-statement__purpose {
+  color: var(--op-text-muted);
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.bank-statement__amount {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.bank-statement__direction {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--op-text-muted);
+}
+
+.bank-statement__duplicate {
+  font-size: 0.85rem;
+  color: var(--op-text-muted);
+}
+
+.bank-statement__issues {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--op-border);
+  border-radius: var(--radius-md);
+}
+
+.bank-statement__issues h2 {
+  margin: 0 0 var(--space-2);
+  font-size: 1rem;
+}
+
+.bank-statement__issues ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.bank-statement__issues li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  font-size: 0.9rem;
+  color: var(--op-text-muted);
+}
+
+@media (min-width: 720px) {
+  .bank-statement__row {
+    grid-template-columns: 7rem minmax(0, 1fr) minmax(0, 1.4fr) auto;
+    align-items: baseline;
+    gap: var(--space-3);
+  }
+
+  .bank-statement__duplicate {
+    grid-column: 2 / -1;
+  }
+}
+
+/* BANKABGLEICH-V1 BLOCK 2 — Plan, Übernahme und Bestand. */
+
+.bank-statement__status {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--op-text-subtle);
+}
+
+.bank-statement__committed {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--op-success);
+  background: var(--op-success-subtle);
+  color: var(--op-text);
+}
+
+.bank-statement__stored {
+  margin-top: var(--space-6);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--op-divider);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.bank-statement__stored h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.bank-statement__stored p {
+  margin: 0;
+}
+
+@media (min-width: 720px) {
+  .bank-statement__row {
+    /* Block 2 ergänzt die Statusspalte vor der Gegenpartei. */
+    grid-template-columns: 7rem 7rem minmax(0, 1fr) minmax(0, 1.4fr) auto;
+  }
+
+  .bank-statement__stored .bank-statement__row {
+    grid-template-columns: 7rem minmax(0, 1fr) minmax(0, 1.4fr) auto;
+  }
+}
+
+/* BANKABGLEICH-V1 BLOCK 3 — Zuordnungsvorschläge. */
+
+.bank-statement__match {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px dashed var(--op-divider);
+  font-size: 0.9rem;
+}
+
+.bank-statement__match--none,
+.bank-statement__match--ambiguous {
+  color: var(--op-text-muted);
+}
+
+.bank-statement__match-grade--sehr_passend {
+  color: var(--op-success);
+}
+
+.bank-statement__candidate {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bank-statement__candidate-head {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.bank-statement__candidate-open,
+.bank-statement__candidate-reasons,
+.bank-statement__match-more,
+.bank-statement__match-note {
+  color: var(--op-text-muted);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+@media (min-width: 720px) {
+  /* Der Vorschlag spannt unter der Zeile über alle Spalten. */
+  .bank-statement__stored .bank-statement__match {
+    grid-column: 1 / -1;
+  }
+}
+
+/* BANKABGLEICH-V1 BLOCK 4 — bestätigte Zuordnung. */
+
+.bank-statement__confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--op-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--op-surface-sunken);
+  font-size: 0.9rem;
+}
+
+.bank-statement__confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.bank-statement__confirm-partial,
+.bank-statement__confirm-blocked {
+  color: var(--op-text-muted);
+  font-size: 0.85rem;
+}

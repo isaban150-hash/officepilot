@@ -1,4 +1,5 @@
 import { paymentMethodLabel } from '../payment/PaymentMethodField';
+import { isPaymentFromBankReconciliation } from '../../services/bank/bankReconciliationStore';
 import { useState } from 'react';
 import { Button } from '../ui/Button';
 import { SimpleConfirmDialog } from '../ui/SimpleConfirmDialog';
@@ -115,7 +116,20 @@ export function InvoicePaymentHistory({
           <SimpleConfirmDialog
             open={Boolean(pending)}
             title={translate('payment.remove')}
-            message={pending ? `${translate('payment.removeConfirm')} ${formatDisplayDate(pending.date)} · ${formatEuroAmount(pending.amount)}` : translate('payment.removeConfirm')}
+            /*
+             * BLOCK 5 — stammt die Zahlung aus einer Bankzuordnung, sagt die
+             * Rueckfrage, was ausserdem geschieht. Der Nutzer soll nicht
+             * ueberrascht werden, dass die Bankbewegung danach wieder offen ist.
+             */
+            message={
+              pending
+                ? `${translate('payment.removeConfirm')} ${formatDisplayDate(pending.date)} · ${formatEuroAmount(pending.amount)}${
+                    isPaymentFromBankReconciliation(pending.id)
+                      ? ` ${translate('payment.removeBankHint')}`
+                      : ''
+                  }`
+                : translate('payment.removeConfirm')
+            }
             confirmLabel={translate('payment.remove')}
             cancelLabel={translate('common.cancel')}
             dialogTestId="payment-remove-dialog"

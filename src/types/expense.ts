@@ -57,6 +57,22 @@ export interface ExpensePayment {
   note?: string;
   /** 02B — optional; dieselbe Zahlungsart wie bei Rechnungszahlungen. */
   method?: PaymentMethod;
+  /**
+   * BARZAHLUNG-V1 BLOCK 1 — der Beleg, der **diese** Zahlung beweist.
+   *
+   * Die Kennung eines `CompanyDocument` aus dem Archiv, nie eine Kopie der
+   * Datei: Das Original bleibt, wo es hingehört, und es entsteht keine
+   * zweite Ablage.
+   *
+   * Bewusst an der Zahlung und nicht an der Ausgabe — sonst verschmelzen die
+   * Nachweise zweier Teilzahlungen zu einem Haufen, und niemand kann mehr
+   * sagen, welche Quittung zu welchem Geld gehört.
+   *
+   * Optional: Nicht jede Barzahlung hat sofort eine fotografierte Quittung.
+   * Fehlt sie, ist sie schlicht nicht erfasst — daraus wird keine
+   * steuerliche Aussage abgeleitet.
+   */
+  proofDocumentId?: string;
   createdAt: string;
 }
 
@@ -66,6 +82,8 @@ export interface ExpensePaymentInput {
   reference?: string;
   note?: string;
   method?: PaymentMethod;
+  /** BLOCK 1 — optionaler Zahlungsnachweis; siehe `ExpensePayment`. */
+  proofDocumentId?: string;
 }
 
 export interface ExpensePaymentSummary {

@@ -482,13 +482,36 @@ export function isFinalizedInvoiceArchiveDocument(document: CompanyDocument): bo
 export const DOCUMENT_DELETE_FINALIZED_INVOICE_KEY = 'document.delete.blocked.finalizedInvoice';
 
 /** Why an archive document may not be deleted — null when it may. */
-export type DocumentDeleteBlockReason = 'confirmed_order' | 'expense' | 'vorgang';
+export type DocumentDeleteBlockReason =
+  | 'confirmed_order'
+  | 'expense'
+  /** BARZAHLUNG-V1 NACHTRAG 1 — Nachweis einer Zahlung, aktiv oder storniert. */
+  | 'payment_proof'
+  | 'vorgang';
 
 const DOCUMENT_DELETE_BLOCK_ERROR_KEYS: Record<DocumentDeleteBlockReason, string> = {
   confirmed_order: 'document.delete.blocked.confirmedOrder',
   expense: 'document.delete.blocked.expense',
+  payment_proof: 'document.delete.blocked.paymentProof',
   vorgang: 'document.delete.blocked.vorgang',
 };
+
+/**
+ * BARZAHLUNG-V1 NACHTRAG 1 — führt irgendeine Zahlung dieses Dokument als
+ * Nachweis?
+ *
+ * Nur die **lokal sichtbaren** Zahlungen; stornierte fallen aus der
+ * Projektion heraus. Das ist Absicht und kein Versehen: Die verbindliche
+ * Prüfung sitzt serverseitig in `assert_document_not_payment_proof`, die
+ * auch die stornierten Zeilen sieht. Hier geht es nur darum, den
+ * häufigsten Fall sofort zu beantworten, statt den Nutzer auf eine
+ * Netzwerkantwort warten zu lassen.
+ */
+function isPaymentProofDocument(documentId: string): boolean {
+  return getAllExpensesFromStore().some((expense) =>
+    (expense.payments ?? []).some((payment) => payment.proofDocumentId === documentId),
+  );
+}
 
 /** Active Vorgänge that still list this document in their document section. */
 function vorgaengeListingDocument(documentId: string): Vorgang[] {
@@ -547,6 +570,14 @@ export function getDocumentDeleteBlockReason(
   // 3. Receipt of an expense — via its own reference or the shared origin.
   if (isExpenseReceipt(document)) return 'expense';
 
+  /*
+   * 3b. NACHTRAG 1 — Zahlungsnachweis. Steht bewusst neben dem Belegschutz
+   * und nicht in ihm: „Beleg einer Ausgabe" und „Nachweis einer Zahlung"
+   * sind zwei verschiedene Aussagen, und der Nutzer soll die richtige
+   * lesen.
+   */
+  if (isPaymentProofDocument(document.id)) return 'payment_proof';
+
   // 4. Active Vorgang link.
   if (document.linkedVorgang?.vorgangId?.trim()) return 'vorgang';
 
@@ -572,6 +603,14 @@ export function deleteDocument(id: string): DocumentMutationResult {
    */
   if (isExpenseReceipt(document)) {
     return { success: false, errorKey: DOCUMENT_DELETE_BLOCK_ERROR_KEYS.expense };
+  }
+  /*
+   * NACHTRAG 1 — ein Zahlungsnachweis wird nicht gelöscht, auch nicht
+   * lokal. Die Referenz wird dabei **nicht** gelöst: Eine Auditspur still
+   * abzuschneiden wäre schlimmer als eine Löschung, die nicht geht.
+   */
+  if (isPaymentProofDocument(document.id)) {
+    return { success: false, errorKey: DOCUMENT_DELETE_BLOCK_ERROR_KEYS.payment_proof };
   }
   /*
    * NORMAL-INVOICE-CANCELLATION-01B — der Korrekturbeleg ist Teil der

@@ -48,6 +48,15 @@ export type SyncEntityType =
    * nur um ihre Oeffnungsspur ergaenzt.
    */
   | 'accounting_period_closure'
+  /**
+   * BANKABGLEICH-V1 BLOCK 2B — importierte Bankbewegung als Nachweis.
+   *
+   * Eigene Entitaet und kein Feld an einer Zahlung: Sie entsteht aus einem
+   * Kontoauszug, nicht aus einer Zahlung, und darf keine Zahlung veraendern.
+   */
+  | 'bank_transaction'
+  /** BANKABGLEICH-V1 BLOCK 2B — das Konto, unter dem Auszüge aufbewahrt werden. */
+  | 'bank_account'
   | 'knowledge_fact';
 
 export type SyncOutboxOperation = 'create' | 'update' | 'delete';

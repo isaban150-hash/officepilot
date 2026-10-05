@@ -120,6 +120,14 @@ export const FINANZEN_HUB_GROUPS: readonly NavGroupConfig[] = [
     ],
   },
   {
+    /* BANKABGLEICH-V1 — der Kontoauszug gehoert zu den Finanzen, nicht in die Hauptnavigation. */
+    id: 'bank',
+    titleKey: 'finanzen.group.bank',
+    items: [
+      { to: '/finanzen/kontoauszug', key: 'finanzen.bankStatement', descriptionKey: 'finanzen.bankStatementDesc', icon: 'finance' },
+    ],
+  },
+  {
     id: 'tax',
     titleKey: 'finanzen.group.tax',
     items: [

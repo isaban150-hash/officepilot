@@ -5,6 +5,8 @@ import type { DocumentWorkResult } from '../../types/documentWorkResult';
 import type { Expense } from '../../types/expense';
 import type { AccountingAssignment } from '../../types/accounting';
 import type { AccountingPeriodClosure } from '../../types/accountingPeriod';
+import type { BankAccount } from '../../types/bankAccount';
+import type { BankTransaction } from '../../types/bankTransaction';
 import { parseExpensePaymentEntityId, type ExpensePaymentSyncEntity } from '../expense/expenseCloudSyncService';
 import type { SyncEntityType } from '../../types/sync';
 import type { VorgangNote } from '../../types/communication';
@@ -56,6 +58,21 @@ export type CloudSyncEntityPayload =
       entityType: 'accounting_assignment';
       entityId: string;
       entity: AccountingAssignment;
+      rowVersion: number;
+      deleted: boolean;
+    }
+  /* BANKABGLEICH-V1 BLOCK 2B — append-only, deshalb `deleted` immer false. */
+  | {
+      entityType: 'bank_account';
+      entityId: string;
+      entity: BankAccount;
+      rowVersion: number;
+      deleted: boolean;
+    }
+  | {
+      entityType: 'bank_transaction';
+      entityId: string;
+      entity: BankTransaction;
       rowVersion: number;
       deleted: boolean;
     }
@@ -241,6 +258,23 @@ export function extractCloudSyncEntity(
      * mit „Entity nicht gefunden" ab — vor dem ersten Netzwerkaufruf, mit
      * hochgezähltem Versuchszähler und ohne dass je eine Anfrage entstand.
      */
+    case 'bank_account': {
+      const account = (state.bankAccounts ?? []).find((item) => item.id === entityId);
+      if (!account) return null;
+      /* Kein Grabstein: Block 2B kennt kein Loeschen von Bankdaten. */
+      return { entityType, entityId, entity: account, rowVersion: account.sync?.version ?? 0, deleted: false };
+    }
+    case 'bank_transaction': {
+      const transaction = (state.bankTransactions ?? []).find((item) => item.id === entityId);
+      if (!transaction) return null;
+      return {
+        entityType,
+        entityId,
+        entity: transaction,
+        rowVersion: transaction.sync?.version ?? 0,
+        deleted: false,
+      };
+    }
     case 'accounting_assignment': {
       const assignment = (state.accountingAssignments ?? []).find((item) => item.id === entityId);
       if (!assignment) return null;

@@ -18,6 +18,11 @@ import type { WorkspaceBusinessLetterRow } from '../letter/businessLetterCloudSe
 import type { WorkspaceOfferRow } from '../offer/offerCloudService';
 import type { WorkspaceTaskRow } from '../task/taskCloudService';
 import type { WorkspaceDunningDocumentationRow } from '../invoice/dunningDocumentationCloudService';
+import type {
+  WorkspaceBankAccountRow,
+  WorkspaceBankTransactionRow,
+  WorkspaceBankReconciliationRow,
+} from '../bank/bankCloudService';
 
 interface WorkspaceRow {
   id: string;
@@ -212,6 +217,15 @@ export async function rpcPullWorkspaceSyncState(
   // CLOUD-DURABILITY-CORE-01D — Mahnnachweise.
   const dunningRaw =
     (data?.dunning_documentations as WorkspaceDunningDocumentationRow[] | null) ?? [];
+  /*
+   * BANKABGLEICH-V1 BLOCK 2B — Importkonten und Bankbewegungen reisen im
+   * selben Abzug mit. Kein Sonder-Pull.
+   */
+  const bankAccountsRaw = (data?.bank_accounts as WorkspaceBankAccountRow[] | null) ?? [];
+  const bankTransactionsRaw =
+    (data?.bank_transactions as WorkspaceBankTransactionRow[] | null) ?? [];
+  const bankReconciliationsRaw =
+    (data?.bank_reconciliations as WorkspaceBankReconciliationRow[] | null) ?? [];
 
   return {
     workspace: workspaceRow ? mapWorkspaceRow(workspaceRow) : null,
@@ -230,6 +244,9 @@ export async function rpcPullWorkspaceSyncState(
     offers: offersRaw,
     tasks: tasksRaw,
     dunningDocumentations: dunningRaw,
+    bankAccounts: bankAccountsRaw,
+    bankTransactions: bankTransactionsRaw,
+    bankReconciliations: bankReconciliationsRaw,
   };
 }
 

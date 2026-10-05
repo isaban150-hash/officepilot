@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { releaseReconciliationForPayment } from '../services/bank/bankReconciliationStore';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { InvoiceDocumentView } from '../components/invoice/InvoiceDocumentView';
 import { InvoicePrintActions } from '../components/invoice/InvoicePrintActions';
@@ -332,6 +333,13 @@ export function InvoiceDetailPage() {
       showToast(translate(result.errorKey as never));
       return;
     }
+    /*
+     * BLOCK 5 — die Bankzuordnung faellt mit der Zahlung. Serverseitig
+     * geschieht das in derselben Transaktion wie der Storno; hier faellt sie
+     * im selben Augenblick auf dem Geraet, damit die Bankbewegung nicht bis
+     * zum naechsten Abzug weiter „Zugeordnet“ zeigt.
+     */
+    releaseReconciliationForPayment(paymentId);
     setInvoice(result.invoice);
     showToast(translate('payment.removedSuccess'));
   };
