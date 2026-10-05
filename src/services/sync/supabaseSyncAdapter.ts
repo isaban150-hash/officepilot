@@ -94,6 +94,11 @@ import {
   buildOfferCloudContentKey,
   buildOfferCloudPushPayload,
 } from '../offer/offerCloudService';
+import {
+  applyPaperRegisterEntryPushResultToState,
+  buildPaperRegisterEntryCloudContentKey,
+  buildPaperRegisterEntryCloudPushPayload,
+} from '../memory/paperRegisterCloudService';
 
 /** ANGEBOT-01B — Angebote nach Dateien/Dokumenten/Ausgaben; alles Uebrige (-1) bleibt davor. */
 const OFFER_PUSH_ORDER: Record<string, number> = { offer: 20 };
@@ -295,6 +300,12 @@ function buildSentWriteProof(
         sentContentKey: buildOfferCloudContentKey(extracted.entity),
         sentDeleted: operation === 'delete' || extracted.deleted === true,
       };
+    // CLOUD-SYNC S1 — derselbe Wiederanlauf wie bei Briefen und Angeboten.
+    case 'paper_register_entry':
+      return {
+        sentContentKey: buildPaperRegisterEntryCloudContentKey(extracted.entity),
+        sentDeleted: operation === 'delete' || extracted.deleted === true,
+      };
     case 'bank_account':
       return {
         sentContentKey: buildBankAccountCloudContentKey(extracted.entity as unknown as BankAccount),
@@ -421,6 +432,12 @@ function buildPushPayload(
       );
     case 'task':
       return buildTaskCloudPushPayload(
+        extracted.entity,
+        operation === 'delete' || extracted.deleted,
+      );
+    // CLOUD-SYNC S1 — der Grabstein reist mit seinem Dokumentbezug.
+    case 'paper_register_entry':
+      return buildPaperRegisterEntryCloudPushPayload(
         extracted.entity,
         operation === 'delete' || extracted.deleted,
       );
@@ -628,6 +645,26 @@ export function applyPushResultToState(
       state.syncClient!.deviceId,
       workspaceId,
     );
+  } else if (entityType === 'paper_register_entry') {
+    // CLOUD-SYNC S1 — nur die Serverversion; Haken und Ordner bleiben unangetastet.
+    const memory = next.officePilotMemory ?? {
+      documentMemories: [],
+      proofMemories: [],
+      relations: [],
+      paperRegisterEntries: [],
+    };
+    next.officePilotMemory = {
+      ...memory,
+      paperRegisterEntries: applyPaperRegisterEntryPushResultToState(
+        memory.paperRegisterEntries ?? [],
+        entityId,
+        rowVersion,
+        updatedAt,
+        deleted,
+        state.syncClient!.deviceId,
+        workspaceId,
+      ),
+    };
   } else if (entityType === 'business_letter') {
     // BRIEFE-01B — nur die Serverversion; der Briefinhalt bleibt unangetastet.
     next.businessLetters = applyBusinessLetterPushResultToState(
@@ -1183,7 +1220,8 @@ export class SupabaseSyncAdapter implements SyncAdapter {
             entry.entityType === 'vorgang_note' ||
             entry.entityType === 'business_letter' ||
             entry.entityType === 'offer' ||
-            entry.entityType === 'task') &&
+            entry.entityType === 'task' ||
+            entry.entityType === 'paper_register_entry') &&
           (entry.operation === 'delete' || ('deleted' in extracted && extracted.deleted === true));
         currentState = applyPushResultToState(
           currentState,

@@ -25,6 +25,7 @@ import {
   generateEntityId,
   isEntitySyncActive,
   withNewEntitySync,
+  withTombstonedCloudEntityPreservingRemoteVersion,
   withTombstonedEntity,
   withUpdatedEntitySync,
 } from './sync/syncMetaService';
@@ -196,36 +197,169 @@ export function getPaperRegisterEntryForDocument(documentId: string): PaperRegis
   return clonePaperRegisterEntry(entry);
 }
 
+/** CLOUD-SYNC S1 — der Papierablage-Stand eines Dokuments, wie er im Betrieb gilt. */
+export interface PhysicalFilingState {
+  physicalFiled: boolean;
+  filedAt?: string;
+  filedByUser?: string;
+}
+
+/**
+ * CLOUD-SYNC S1 — die eine Lesestelle für „Original abgeheftet".
+ *
+ * Wahrheit ist der Register-Eintrag: Er ist der Teil, der workspaceweit reist.
+ * Das Dokumentgedächtnis trägt dieselben Felder nur als Spiegel dieses Geräts.
+ *
+ * Bisher stand an jeder Lesestelle „Gedächtnis vor Eintrag". Auf einem Gerät,
+ * das das Dokument selbst archiviert hatte, verdeckte damit ein lokales
+ * `physicalFiled: false` den Haken, den ein anderes Gerät gesetzt hatte — der
+ * Eintrag war da, angezeigt wurde er nie.
+ *
+ * Abheften ist im Produkt einseitig: Es gibt kein Zurücknehmen. Deshalb gilt
+ * ein Dokument als abgeheftet, sobald eine der beiden Quellen es bezeugt — der
+ * Eintrag zuerst, das Gedächtnis nur noch für Altbestand ohne Eintrag.
+ */
+export function getPhysicalFilingForDocument(
+  documentId: string,
+  memory: DocumentMemory | undefined = getDocumentMemoryByDocumentId(documentId),
+): PhysicalFilingState {
+  const entry = getPaperRegisterEntryForDocument(documentId);
+  if (entry?.physicalFiled) {
+    return { physicalFiled: true, filedAt: entry.filedAt, filedByUser: entry.filedByUser };
+  }
+  if (memory?.physicalFiled) {
+    return { physicalFiled: true, filedAt: memory.filedAt, filedByUser: memory.filedByUser };
+  }
+  return { physicalFiled: false };
+}
+
+function paperFolderFrom(
+  rule: PaperFilingRule | undefined,
+): { folderId: string; register: string } | null {
+  if (!rule?.folderId && !rule?.label) return null;
+  return { folderId: rule.folderId ?? '', register: rule.register ?? '' };
+}
+
+/**
+ * Hält fest, dass das Papieroriginal abgeheftet ist.
+ *
+ * CLOUD-SYNC S1 — der Register-Eintrag ist die Wahrheit und entsteht jetzt in
+ * jedem Fall. Bisher brach die Funktion ohne lokales Dokumentgedächtnis
+ * stillschweigend ab: Auf einem zweiten Gerät, dessen Dokument aus der Cloud
+ * kam, tat der Knopf nichts. Und ohne vorhandenen Eintrag landete der Haken
+ * nur im Gedächtnis — dort, wo er das Gerät nie verlässt.
+ *
+ * Die Serverversion wird hier nicht angefasst: Sie ist ausschliesslich die
+ * zuletzt bestätigte (SYNC-VERSION-CONTRACT-02). Den Weg in die Cloud nimmt
+ * die Änderung über den Änderungsverfolger.
+ *
+ * `document` braucht es nur dort, wo dieses Gerät kein Gedächtnis zum Dokument
+ * hat: Dann tragen Titel und Papierordner des Dokuments den neuen Eintrag.
+ */
 export function markDocumentPhysicallyFiled(
   documentId: string,
   filedByUser?: string,
-): DocumentMemory | null {
+  document?: Pick<CompanyDocument, 'title' | 'paperFolder'> | null,
+): PaperRegisterEntry | null {
   const memory = getDocumentMemoryByDocumentId(documentId);
-  if (!memory) return null;
+  const stored = getPaperRegisterEntryByDocumentId(documentId);
+  // Ein Grabstein gehört zu einem gelöschten Dokument — er wird nicht wiederbelebt.
+  if (stored && !isEntitySyncActive(stored)) return null;
+
+  const folder = stored
+    ? { folderId: stored.folderId, register: stored.register }
+    : (paperFolderFrom(memory?.paperFolder) ?? paperFolderFrom(document?.paperFolder ?? undefined));
+  if (!folder) return null;
 
   const now = new Date().toISOString();
   const user = filedByUser ?? getCompanyProfile().contactPerson ?? 'Nutzer';
 
-  const entry = getPaperRegisterEntryByDocumentId(documentId);
-  if (entry) {
-    upsertPaperRegisterEntryInStore({
-      ...entry,
+  const entry: PaperRegisterEntry = stored
+    ? { ...stored, physicalFiled: true, filedAt: now, filedByUser: user, updatedAt: now }
+    : {
+        id: paperRegisterEntryId(documentId),
+        documentId,
+        documentTitle: memory?.title ?? document?.title ?? '',
+        ...(memory?.inboxId ? { sourceInboxId: memory.inboxId } : {}),
+        folderId: folder.folderId,
+        register: folder.register,
+        physicalFiled: true,
+        filedAt: now,
+        filedByUser: user,
+        createdAt: now,
+        updatedAt: now,
+      };
+  upsertPaperRegisterEntryInStore(entry);
+
+  // Der Spiegel dieses Geräts bleibt im Gleichschritt — nur, wo es ihn gibt.
+  if (memory) {
+    enrichDocumentMemory(documentId, {
       physicalFiled: true,
       filedAt: now,
       filedByUser: user,
-      updatedAt: now,
+      paperRegisterEntryId: entry.id,
     });
   }
 
-  const updated = enrichDocumentMemory(documentId, {
-    physicalFiled: true,
-    filedAt: now,
-    filedByUser: user,
-    paperRegisterEntryId: entry?.id ?? memory.paperRegisterEntryId,
-  });
-
   persistAll();
-  return updated;
+  return clonePaperRegisterEntry(entry);
+}
+
+/**
+ * CLOUD-SYNC S1 — Altbestand: Haken, die vor S1 nur im Gedächtnis landeten.
+ *
+ * Hatte ein Dokument beim Archivieren keine Papierregel, entstand kein
+ * Register-Eintrag; ein späteres „abgeheftet" stand dann ausschliesslich im
+ * Dokumentgedächtnis dieses Geräts. Würde der Eintrag beim ersten Abgleich
+ * nicht nachgezogen, bliebe genau diese bestätigte Nutzerangabe für immer auf
+ * dem Gerät zurück.
+ *
+ * Rein: Es wird nur geplant, nichts gespeichert. Ein Eintrag entsteht nur,
+ * wenn es für das Dokument weder lokal noch in der Cloud einen gibt — auch
+ * keinen Grabstein — und das Dokument hier noch besteht.
+ */
+export function planLegacyPaperFilingEntries(
+  memories: DocumentMemory[],
+  entries: PaperRegisterEntry[],
+  remote: { entryIds: ReadonlySet<string>; documentIds: ReadonlySet<string> },
+  activeDocumentIds: ReadonlySet<string>,
+): PaperRegisterEntry[] {
+  const knownDocumentIds = new Set(entries.map((entry) => entry.documentId));
+  const knownEntryIds = new Set(entries.map((entry) => entry.id));
+  const planned: PaperRegisterEntry[] = [];
+
+  for (const memory of memories) {
+    if (memory.physicalFiled !== true || !isEntitySyncActive(memory)) continue;
+    if (!activeDocumentIds.has(memory.documentId)) continue;
+    const id = paperRegisterEntryId(memory.documentId);
+    if (
+      knownDocumentIds.has(memory.documentId) ||
+      knownEntryIds.has(id) ||
+      remote.documentIds.has(memory.documentId) ||
+      remote.entryIds.has(id)
+    ) {
+      continue;
+    }
+    const folder = paperFolderFrom(memory.paperFolder) ?? { folderId: '', register: '' };
+    const at = memory.filedAt ?? memory.updatedAt ?? memory.createdAt;
+    planned.push({
+      id,
+      documentId: memory.documentId,
+      documentTitle: memory.title,
+      ...(memory.inboxId ? { sourceInboxId: memory.inboxId } : {}),
+      folderId: folder.folderId,
+      register: folder.register,
+      physicalFiled: true,
+      ...(memory.filedAt ? { filedAt: memory.filedAt } : {}),
+      ...(memory.filedByUser ? { filedByUser: memory.filedByUser } : {}),
+      createdAt: at,
+      updatedAt: at,
+    });
+    knownDocumentIds.add(memory.documentId);
+    knownEntryIds.add(id);
+  }
+
+  return planned;
 }
 
 export function daysUntil(isoDate: string, todayIso: string): number {
@@ -477,7 +611,14 @@ export function tombstoneMemoryForDocument(documentId: string): void {
   }
   const paperEntry = getPaperRegisterEntryByDocumentId(documentId);
   if (paperEntry && isEntitySyncActive(paperEntry)) {
-    upsertPaperRegisterEntryInStore(withTombstonedEntity(paperEntry, 'paper_register_entry'));
+    /*
+     * CLOUD-SYNC S1 — der Eintrag geht über `upsert_workspace_sync_entity` in
+     * die Cloud. Dort ist `sync.version` die zuletzt bestätigte Serverversion,
+     * und der Grabstein darf sie nicht hochzählen (TOMBSTONE-VERSION-CONTRACT-02).
+     */
+    upsertPaperRegisterEntryInStore(
+      withTombstonedCloudEntityPreservingRemoteVersion(paperEntry, 'paper_register_entry'),
+    );
   }
 }
 

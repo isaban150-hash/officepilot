@@ -64,13 +64,20 @@ export const SUPABASE_SYNC_ALLOWLIST: ReadonlySet<SyncEntityType> = new Set([
    */
   'bank_account',
   'bank_transaction',
+  /*
+   * CLOUD-SYNC S1 — der Papierablage-Haken. Freigabe erst jetzt, nach
+   * derselben Reihenfolge: Tabelle, RLS, Push-Zweig im Dispatcher, Pull in der
+   * Sammelfunktion, Abgleich mit Konfliktvertrag, Grabstein, Altbestand,
+   * Wiederanlauf und Laufzeittests gegen eine echte Datenbank. Die Migration
+   * 20261030120000 ist remote angewendet.
+   */
+  'paper_register_entry',
 ]);
 
 export const LOCAL_ONLY_SYNC_ENTITY_TYPES: ReadonlySet<SyncEntityType> = new Set([
   'document_memory',
   'proof_memory',
   'memory_relation',
-  'paper_register_entry',
   'mail_import',
   'communication_event',
   'knowledge_fact',

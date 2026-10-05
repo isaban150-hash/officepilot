@@ -90,10 +90,13 @@ describe('CLOUD-DATA-02 allowlist', () => {
     expect(isSupabaseSyncAllowed('document')).toBe(true);
     expect(isSupabaseSyncAllowed('inbox_item')).toBe(true);
     expect(isSupabaseSyncAllowed('expense')).toBe(true);
-    // Gedaechtnis und Papierregister verlassen das Geraet weiterhin nie.
-    expect(isSupabaseSyncAllowed('paper_register_entry')).toBe(false);
+    // Das Gedaechtnis verlaesst das Geraet weiterhin nie.
+    expect(isSupabaseSyncAllowed('document_memory')).toBe(false);
     expect(LOCAL_ONLY_SYNC_ENTITY_TYPES.has('vorgang')).toBe(false);
-    expect(LOCAL_ONLY_SYNC_ENTITY_TYPES.has('paper_register_entry')).toBe(true);
+    expect(LOCAL_ONLY_SYNC_ENTITY_TYPES.has('document_memory')).toBe(true);
+    // CLOUD-SYNC S1 — der Papierablage-Haken ist seitdem freigegeben.
+    expect(isSupabaseSyncAllowed('paper_register_entry')).toBe(true);
+    expect(LOCAL_ONLY_SYNC_ENTITY_TYPES.has('paper_register_entry')).toBe(false);
   });
 
   /*

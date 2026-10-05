@@ -23,6 +23,7 @@ import type {
   WorkspaceBankTransactionRow,
   WorkspaceBankReconciliationRow,
 } from '../bank/bankCloudService';
+import type { WorkspacePaperRegisterEntryRow } from '../memory/paperRegisterCloudService';
 
 interface WorkspaceRow {
   id: string;
@@ -226,6 +227,9 @@ export async function rpcPullWorkspaceSyncState(
     (data?.bank_transactions as WorkspaceBankTransactionRow[] | null) ?? [];
   const bankReconciliationsRaw =
     (data?.bank_reconciliations as WorkspaceBankReconciliationRow[] | null) ?? [];
+  // CLOUD-SYNC S1 — Papierablage-Haken, inklusive Grabsteine. Kein Sonder-Pull.
+  const paperRegisterEntriesRaw =
+    (data?.paper_register_entries as WorkspacePaperRegisterEntryRow[] | null) ?? [];
 
   return {
     workspace: workspaceRow ? mapWorkspaceRow(workspaceRow) : null,
@@ -247,6 +251,7 @@ export async function rpcPullWorkspaceSyncState(
     bankAccounts: bankAccountsRaw,
     bankTransactions: bankTransactionsRaw,
     bankReconciliations: bankReconciliationsRaw,
+    paperRegisterEntries: paperRegisterEntriesRaw,
   };
 }
 

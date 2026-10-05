@@ -181,6 +181,15 @@ describe('CLOUD-DATA-01 allowlist', () => {
          * vollstaendig vorliegen.
          */
         'accounting_period_closure',
+        /*
+         * BANKABGLEICH-V1 BLOCK 2B — Importkonten und Bankbewegungen. Mit
+         * `a98fb4d` freigegeben, hier aber nie nachgetragen; der Waechter schlug
+         * seitdem an. Nachgetragen in CLOUD-SYNC S1, das dieselbe Liste aendert.
+         */
+        'bank_account',
+        'bank_transaction',
+        // CLOUD-SYNC S1 — der Papierablage-Haken, nach Remote-Migration 20261030120000.
+        'paper_register_entry',
       ].sort(),
     );
   });

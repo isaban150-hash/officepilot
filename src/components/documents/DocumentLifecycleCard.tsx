@@ -4,7 +4,7 @@ import {
   getDocumentLifecycleStatusLabelKey,
   resolveDocumentLifecycle,
 } from '../../services/documentLifecycleService';
-import { getDocumentMemoryByDocumentId } from '../../services/officePilotMemoryService';
+import { getPhysicalFilingForDocument } from '../../services/officePilotMemoryService';
 
 interface DocumentLifecycleCardProps {
   documentId: string;
@@ -15,8 +15,8 @@ export function DocumentLifecycleCard({ documentId, revision = 0 }: DocumentLife
   const { translate } = useApp();
   void revision;
   const lifecycle = resolveDocumentLifecycle({ documentId });
-  const memory = getDocumentMemoryByDocumentId(documentId);
-  const physicalFiled = Boolean(memory?.physicalFiled);
+  // CLOUD-SYNC S1 — dieselbe Lesestelle wie die Ablage-Karte.
+  const physicalFiled = getPhysicalFilingForDocument(documentId).physicalFiled;
 
   if (!lifecycle) {
     return null;

@@ -9,6 +9,7 @@ import {
 import {
   getDocumentMemoryByDocumentId,
   getPaperRegisterEntryForDocument,
+  getPhysicalFilingForDocument,
   markDocumentPhysicallyFiled,
 } from '../../services/officePilotMemoryService';
 import {
@@ -57,12 +58,22 @@ export function DocumentFilingCard({
     ? formatPaperLocationSummary(paperFolder!)
     : translate('document.filing.noPaperFolder');
 
-  const register =
-    registerEntry?.register ?? paperFolder?.register ?? translate('document.filing.noRegister');
+  /*
+   * CLOUD-SYNC S1 — Ordner und Register aus derselben Quelle. Auf dem
+   * archivierenden Gerät ist das das Gedächtnis, und sein Eintrag nennt dasselbe
+   * Register. Jedes andere Gerät hat kein Gedächtnis und zeigt wie vor S1 den
+   * Ordner des Dokuments — dann auch dessen Register, nicht das des
+   * mitgereisten Eintrags. S1 bringt den Haken mit, keinen zweiten Ablageort.
+   */
+  const register = memory
+    ? (registerEntry?.register ?? paperFolder?.register ?? translate('document.filing.noRegister'))
+    : (paperFolder?.register || registerEntry?.register || translate('document.filing.noRegister'));
 
   const isGeneratedInvoice = document ? isGeneratedOutgoingInvoiceDocument(document) : false;
-  const physicalFiled = memory?.physicalFiled ?? registerEntry?.physicalFiled ?? false;
-  const filedAt = memory?.filedAt ?? registerEntry?.filedAt;
+  // CLOUD-SYNC S1 — der Register-Eintrag ist die Wahrheit, das Gedächtnis nur Altbestand.
+  const filing = getPhysicalFilingForDocument(documentId, memory);
+  const physicalFiled = filing.physicalFiled;
+  const filedAt = filing.filedAt;
   const statusInfo = getPhysicalFilingStatusLabel(physicalFiled, filedAt);
   const paperStatusLabel =
     statusInfo.statusKey === 'document.filing.statusFiled' && statusInfo.filedAtLabel
@@ -70,7 +81,8 @@ export function DocumentFilingCard({
       : translate(statusInfo.statusKey);
 
   const handleMarkFiled = () => {
-    const updated = markDocumentPhysicallyFiled(documentId);
+    // S1 — ohne Gedächtnis auf diesem Gerät trägt das Dokument Titel und Ordner.
+    const updated = markDocumentPhysicallyFiled(documentId, undefined, document);
     if (updated) {
       setRevision((value) => value + 1);
       onChanged?.();
@@ -139,14 +151,10 @@ export function DocumentFilingCard({
               {paperStatusLabel}
             </p>
             {/*
-              CLOUD-DURABILITY-CORE-01E — der Haken „im Ordner abgelegt" ist eine
-              Nutzerangabe und bleibt vorerst auf diesem Gerät. Der Hinweis steht
-              direkt beim Status, damit niemand ihn auf einem zweiten Gerät
-              vermisst, ohne den Grund zu kennen.
+              CLOUD-SYNC S1 — hier stand bis jetzt der Hinweis, dass der Haken
+              nur auf diesem Gerät gespeichert wird (01E). Er reist seit S1 mit
+              dem Betrieb; der Satz wäre falsch geworden.
             */}
-            <p className="device-only-hint" data-testid="document-filing-device-only">
-              {translate('deviceOnly.paperFiling')}
-            </p>
           </div>
         </section>
         )}

@@ -56,6 +56,13 @@ import {
   planBankTransactionBackfill,
 } from '../bank/bankCloudService';
 import {
+  mergePaperRegisterEntriesFromPull,
+  planPaperRegisterEntryBackfill,
+  planPaperRegisterEntryLostAckAdoption,
+} from '../memory/paperRegisterCloudService';
+import { planLegacyPaperFilingEntries } from '../officePilotMemoryService';
+import { isSupabaseSyncAllowed } from '../sync/cloudSyncAllowlist';
+import {
   buildCompanyProfileCloudPayload,
   buildCompanySetupCloudPayload,
   parseCompanyProfileFromCloud,
@@ -1344,6 +1351,113 @@ export function mergeRemoteWorkspacePullIntoState(
       operation: 'create',
       version: 0,
     });
+  }
+
+  /*
+   * CLOUD-SYNC S1 — Papierablage-Haken.
+   *
+   * Derselbe Dreischritt wie bei Briefen und Angeboten: Wiederanlauf nach
+   * verlorener Bestaetigung, Abgleich, Altbestand. Dazwischen ein Schritt, den
+   * nur diese Entitaet braucht: Haken, die vor S1 ausschliesslich im
+   * Dokumentgedaechtnis landeten, werden zum Eintrag — sonst blieben genau
+   * diese bestaetigten Nutzerangaben auf dem Geraet zurueck.
+   *
+   * Erst mit der Freigabe des Typs. Vorher verwirft der Versand jeden Auftrag
+   * als nur-lokal, und der Altbestand liefe bei jedem Abzug erneut in die
+   * Warteschlange.
+   */
+  if (isSupabaseSyncAllowed('paper_register_entry')) {
+    const remotePaperRows = pull.paperRegisterEntries ?? [];
+    const memory = next.officePilotMemory ??
+      state.officePilotMemory ?? {
+        documentMemories: [],
+        proofMemories: [],
+        relations: [],
+        paperRegisterEntries: [],
+      };
+    const localPaperEntries = memory.paperRegisterEntries ?? [];
+    const dirtyPaperIds = activeOutboxEntityIds(state, 'paper_register_entry');
+
+    const paperAdoption = planPaperRegisterEntryLostAckAdoption(
+      localPaperEntries,
+      remotePaperRows,
+      dirtyPaperIds,
+      sentWritesFor(state, 'paper_register_entry'),
+    );
+    const adoptedPaperIds = new Set([
+      ...paperAdoption.adopt,
+      ...paperAdoption.settle,
+      ...paperAdoption.notAccepted,
+    ]);
+
+    const paperMerge = mergePaperRegisterEntriesFromPull(
+      adoptedPaperIds.size > 0
+        ? localPaperEntries.map((entry) =>
+            adoptedPaperIds.has(entry.id)
+              ? adoptLostAckBaseVersion(
+                  entry,
+                  state,
+                  workspaceId,
+                  paperAdoption.baseVersions.get(entry.id) ?? 1,
+                )
+              : entry,
+          )
+        : localPaperEntries,
+      adoptedPaperIds.size > 0
+        ? remotePaperRows.filter((row) => !adoptedPaperIds.has(row.client_entry_id))
+        : remotePaperRows,
+      state.syncClient!.deviceId,
+      workspaceId,
+      dirtyPaperIds,
+    );
+
+    applyLostAckAdoptionToOutbox(state, 'paper_register_entry', paperAdoption);
+    conflicts.push(...paperMerge.conflicts);
+    clearOutboxSentProof('paper_register_entry', [
+      ...paperAdoption.adopt,
+      ...paperAdoption.settle,
+      ...paperAdoption.evaluatedProofs,
+    ]);
+
+    const activeDocumentIds = new Set(
+      (state.documents ?? [])
+        .filter((document) => document.sync?.deleted !== true)
+        .map((document) => document.id),
+    );
+    const legacyEntries = planLegacyPaperFilingEntries(
+      memory.documentMemories ?? [],
+      paperMerge.entries,
+      {
+        entryIds: new Set(remotePaperRows.map((row) => row.client_entry_id)),
+        documentIds: new Set(
+          remotePaperRows
+            .map((row) => row.client_document_id)
+            .filter((id): id is string => typeof id === 'string' && id.length > 0),
+        ),
+      },
+      activeDocumentIds,
+    );
+    const paperEntries = [...legacyEntries, ...paperMerge.entries];
+    next.officePilotMemory = { ...memory, paperRegisterEntries: paperEntries };
+
+    /*
+     * Altbestand — wie bei Briefen: verglichen wird gegen alle Serverkennungen.
+     * Hochgeladen wird nur, was zu einem hier bestehenden Dokument gehört: Vor
+     * S1 blieb der Eintrag stehen, wenn ein anderes Gerät das Dokument löschte.
+     * Er würde sonst als aktiver Haken eines gelöschten Dokuments in die Cloud
+     * wandern.
+     */
+    for (const entryId of planPaperRegisterEntryBackfill(
+      paperEntries.filter((entry) => activeDocumentIds.has(entry.documentId)),
+      remotePaperRows,
+    )) {
+      enqueueSyncOutbox({
+        entityType: 'paper_register_entry',
+        entityId: entryId,
+        operation: 'create',
+        version: 0,
+      });
+    }
   }
 
   /**

@@ -3,8 +3,11 @@
  *
  * Nach 01B–01D reisen Notizen, Aufgaben und Mahnnachweise mit. Was weiterhin
  * nur auf einem Gerät liegt, darf nicht so aussehen, als läge es überall:
- * Wissen, der Kommunikationsverlauf und der Haken für die Papierablage sind
- * Nutzerangaben, und genau dort steht jetzt ein kurzer Satz.
+ * Wissen und der Kommunikationsverlauf sind Nutzerangaben, und genau dort
+ * steht ein kurzer Satz.
+ *
+ * CLOUD-SYNC S1 — der Haken für die Papierablage reist seitdem mit. Sein
+ * Hinweis ist entfallen; Test 6 hält fest, dass er nicht zurückkommt.
  *
  * Geprüft wird dreierlei: dass der Satz an der richtigen Stelle erscheint, dass
  * er in allen drei Sprachen existiert und sich unterscheidet, und dass er ohne
@@ -27,7 +30,6 @@ import { hydrateDocumentStore } from './services/documentService';
 const HINT_KEYS: TranslationKey[] = [
   'deviceOnly.knowledge',
   'deviceOnly.communicationHistory',
-  'deviceOnly.paperFiling',
 ];
 
 /** Wörter, die in der Oberfläche eines Handwerksbetriebs nichts zu suchen haben. */
@@ -103,7 +105,7 @@ describe('DEVICE-ONLY-TRANSPARENZ-01E — Oberfläche', () => {
     expect(html.match(/data-testid="communication-history-device-only"/g) ?? []).toHaveLength(1);
   });
 
-  it('6: der Papierablage-Haken sagt es direkt beim Status', () => {
+  it('6: der Papierablage-Haken behauptet nicht mehr, nur auf diesem Gerät zu liegen (S1)', () => {
     resetMemory();
     hydrateDocumentStore([]);
     const result = importInboxDocumentForTests(
@@ -117,8 +119,9 @@ describe('DEVICE-ONLY-TRANSPARENZ-01E — Oberfläche', () => {
     if (!result.success) return;
 
     const html = render(<DocumentFilingCard documentId={result.document.id} />);
+    // Der Status steht weiter da — nur der Gerätehinweis ist entfallen.
     expect(html).toContain('data-testid="document-filing-paper-status"');
-    expect(html).toContain('data-testid="document-filing-device-only"');
-    expect(html).toContain(t('deviceOnly.paperFiling', 'de'));
+    expect(html).not.toContain('data-testid="document-filing-device-only"');
+    expect(html).not.toContain('nur auf diesem Gerät');
   });
 });

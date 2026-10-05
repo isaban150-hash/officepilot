@@ -15,7 +15,7 @@ import { filterActiveItems, getInboxItemById, getInboxItems } from './inboxServi
 import {
   getAllDocumentMemories,
   getDocumentMemoryByDocumentId,
-  getPaperRegisterEntryForDocument,
+  getPhysicalFilingForDocument,
   getProofsForVorgang,
 } from './officePilotMemoryService';
 import { isAdvertisementContext, resolvePaperFiling } from './paperFolderService';
@@ -108,8 +108,8 @@ function needsPaperFolder(
 }
 
 function isPhysicallyFiled(documentId: string, memory?: DocumentMemory): boolean {
-  const entry = getPaperRegisterEntryForDocument(documentId);
-  return memory?.physicalFiled ?? entry?.physicalFiled ?? false;
+  // CLOUD-SYNC S1 — der Register-Eintrag ist die Wahrheit, siehe getPhysicalFilingForDocument.
+  return getPhysicalFilingForDocument(documentId, memory).physicalFiled;
 }
 
 /**

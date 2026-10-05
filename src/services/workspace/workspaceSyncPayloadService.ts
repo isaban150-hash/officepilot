@@ -13,6 +13,7 @@ import type { VorgangNote } from '../../types/communication';
 import type { BusinessLetter } from '../../types/businessLetter';
 import type { Offer } from '../../types/offer';
 import type { InvoiceDunningDocumentation } from '../../types/dunningDocumentation';
+import type { PaperRegisterEntry } from '../../types/memory';
 import type { Workspace, WorkspaceMember, WorkspaceSettings } from '../../types/workspace';
 import {
   getCompanyProfileSyncSnapshot,
@@ -80,6 +81,14 @@ export type CloudSyncEntityPayload =
       entityType: 'accounting_period_closure';
       entityId: string;
       entity: AccountingPeriodClosure;
+      rowVersion: number;
+      deleted: boolean;
+    }
+  /* CLOUD-SYNC S1 — der Papierablage-Haken. */
+  | {
+      entityType: 'paper_register_entry';
+      entityId: string;
+      entity: PaperRegisterEntry;
       rowVersion: number;
       deleted: boolean;
     };
@@ -294,6 +303,18 @@ export function extractCloudSyncEntity(
        * öffnen ist eine eigene Serveraktion, kein Löschen.
        */
       return { entityType, entityId, entity: closure, rowVersion: closure.sync?.version ?? 0, deleted: false };
+    }
+    // CLOUD-SYNC S1 — der Papierablage-Haken, inklusive Grabstein.
+    case 'paper_register_entry': {
+      const entry = (state.officePilotMemory?.paperRegisterEntries ?? []).find((item) => item.id === entityId);
+      if (!entry) return null;
+      return {
+        entityType,
+        entityId,
+        entity: entry,
+        rowVersion: entry.sync?.version ?? 0,
+        deleted: entry.sync?.deleted ?? false,
+      };
     }
     default:
       return null;

@@ -30,6 +30,8 @@ import type { DocumentFileRepresentationBinding } from '../../types/documentFile
 import type { DocumentWorkResult } from '../../types/documentWorkResult';
 import { buildExpenseContentKey, isCloudSyncBlockedMockExpenseId } from '../expense/expenseCloudSyncService';
 import type { Expense } from '../../types/expense';
+import type { PaperRegisterEntry } from '../../types/memory';
+import { buildPaperRegisterEntryCloudContentKey } from '../memory/paperRegisterCloudService';
 
 export const TRACKED_SYNC_ENTITY_TYPES: SyncEntityType[] = [
   'inbox_item',
@@ -215,6 +217,17 @@ function buildOfferFingerprint(offer: Offer): EntitySyncFingerprint {
   };
 }
 
+/** CLOUD-SYNC S1 — fachlicher Fingerabdruck des Papierablage-Eintrags, ohne `sync`. */
+function buildPaperRegisterEntryFingerprint(entry: PaperRegisterEntry): EntitySyncFingerprint {
+  const sync = entry.sync;
+  return {
+    version: sync?.version ?? 0,
+    deleted: sync?.deleted ?? false,
+    updatedAt: sync?.updatedAt ?? '',
+    contentKey: buildPaperRegisterEntryCloudContentKey(entry),
+  };
+}
+
 function buildVorgangFingerprint(vorgang: Vorgang): EntitySyncFingerprint {
   const sync = vorgang.sync;
   return {
@@ -258,6 +271,8 @@ function collectTrackedEntities(state: AppPersistedState): Map<string, TrackedEn
                         ? buildDunningDocumentationFingerprint(
                             entity as unknown as InvoiceDunningDocumentation,
                           )
+                        : entityType === 'paper_register_entry'
+                        ? buildPaperRegisterEntryFingerprint(entity as unknown as PaperRegisterEntry)
                         : buildFingerprint(entity),
       });
     }
@@ -354,7 +369,9 @@ function fingerprintChanged(
     entityType === 'task' ||
     entityType === 'business_letter' ||
     entityType === 'offer' ||
-    entityType === 'dunning_documentation'
+    entityType === 'dunning_documentation' ||
+    // CLOUD-SYNC S1 — dieselbe Regel: eine Rückschreibung ist keine Änderung.
+    entityType === 'paper_register_entry'
   ) {
     return (
       previous.deleted !== current.deleted ||

@@ -21,6 +21,7 @@ import {
   getAllDocumentMemories,
   getDocumentMemoryByDocumentId,
   getPaperRegisterEntryForDocument,
+  getPhysicalFilingForDocument,
   getProofMemories,
   getProofsForVorgang,
 } from '../officePilotMemoryService';
@@ -195,9 +196,8 @@ function buildActionRequiredText(
 }
 
 function buildOriginalFiledStatus(documentId: string, memory?: DocumentMemory): string {
-  const entry = getPaperRegisterEntryForDocument(documentId);
-  const physicalFiled = memory?.physicalFiled ?? entry?.physicalFiled ?? false;
-  const filedAt = memory?.filedAt ?? entry?.filedAt;
+  // CLOUD-SYNC S1 — der Register-Eintrag ist die Wahrheit, siehe getPhysicalFilingForDocument.
+  const { physicalFiled, filedAt } = getPhysicalFilingForDocument(documentId, memory);
   const label = getPhysicalFilingStatusLabel(physicalFiled, filedAt);
   if (label.statusKey === 'document.filing.statusFiled' && label.filedAtLabel) {
     return `Original abgeheftet am ${label.filedAtLabel}.`;
@@ -243,8 +243,7 @@ function buildNextSteps(
     steps.push('Entwurf prüfen und versenden oder Status aktualisieren.');
   }
 
-  const entry = getPaperRegisterEntryForDocument(document.id);
-  const physicalFiled = memory?.physicalFiled ?? entry?.physicalFiled ?? false;
+  const { physicalFiled } = getPhysicalFilingForDocument(document.id, memory);
   /*
    * Eine selbst erzeugte Rechnung hat kein Papieroriginal — die Aufforderung
    * wäre nicht erfüllbar. Der digitale Ablageort bleibt davon unberührt.
@@ -496,9 +495,11 @@ export function buildDocumentExplanation(
       ? 'Kein Papierordner – Entsorgen oder manuell ablegen.'
       : letter.paperStorage || formatPaperLocation(document);
 
+  // CLOUD-SYNC S1 — ohne Gedächtnis Ordner und Register aus derselben Quelle, wie die Ablage-Karte.
   const register =
+    (memory ? registerEntry?.register : undefined) ??
+    (paperFolder?.register || undefined) ??
     registerEntry?.register ??
-    paperFolder?.register ??
     paperResolution.rule?.register ??
     '—';
 

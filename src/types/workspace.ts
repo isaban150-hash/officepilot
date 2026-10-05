@@ -154,6 +154,12 @@ export interface WorkspaceSyncPullPayload {
    * haben deshalb bewusst keinen Push-Zweig.
    */
   bankReconciliations: import('../services/bank/bankCloudService').WorkspaceBankReconciliationRow[];
+  /**
+   * CLOUD-SYNC S1 — Papierablage-Haken, inklusive Grabsteine: Ohne sie bliebe
+   * auf einem zweiten Gerät der Haken eines gelöschten Dokuments stehen, und
+   * der Altbestand lüde ihn wieder hoch.
+   */
+  paperRegisterEntries: import('../services/memory/paperRegisterCloudService').WorkspacePaperRegisterEntryRow[];
 }
 
 export interface EnsurePersonalWorkspaceResult {

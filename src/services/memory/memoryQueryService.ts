@@ -11,6 +11,7 @@ import {
   computeProofStatus,
   getAllDocumentMemories,
   getPaperRegisterEntryForDocument,
+  getPhysicalFilingForDocument,
   getProofMemories,
 } from '../officePilotMemoryService';
 import { getTodayIso } from '../taskNormalize';
@@ -184,9 +185,8 @@ function memoryDigitalLocation(memory: DocumentMemory): string {
 }
 
 function memoryPhysicalStatus(memory: DocumentMemory): string {
-  const entry = getPaperRegisterEntryForDocument(memory.documentId);
-  const physicalFiled = memory.physicalFiled ?? entry?.physicalFiled ?? false;
-  const filedAt = memory.filedAt ?? entry?.filedAt;
+  // CLOUD-SYNC S1 — der Register-Eintrag ist die Wahrheit, siehe getPhysicalFilingForDocument.
+  const { physicalFiled, filedAt } = getPhysicalFilingForDocument(memory.documentId, memory);
   const label = getPhysicalFilingStatusLabel(physicalFiled, filedAt);
   if (label.statusKey === 'document.filing.statusFiled' && label.filedAtLabel) {
     return `Original abgeheftet am ${label.filedAtLabel}`;
@@ -195,8 +195,7 @@ function memoryPhysicalStatus(memory: DocumentMemory): string {
 }
 
 function memoryNextFilingStep(memory: DocumentMemory): string {
-  const entry = getPaperRegisterEntryForDocument(memory.documentId);
-  const physicalFiled = memory.physicalFiled ?? entry?.physicalFiled ?? false;
+  const { physicalFiled } = getPhysicalFilingForDocument(memory.documentId, memory);
   if (physicalFiled) {
     return 'Kein weiterer Schritt – Original ist abgeheftet.';
   }

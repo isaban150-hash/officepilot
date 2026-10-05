@@ -2162,8 +2162,7 @@ const deLegacy = {
   'deviceOnly.knowledge': 'Diese Einträge werden derzeit nur auf diesem Gerät gespeichert.',
   'deviceOnly.communicationHistory':
     'Der Verlauf wird derzeit nur auf diesem Gerät gespeichert.',
-  'deviceOnly.paperFiling':
-    'Der Haken für die Papierablage wird derzeit nur auf diesem Gerät gespeichert.',
+  // CLOUD-SYNC S1 — der Haken für die Papierablage reist seitdem mit; sein Hinweis entfällt.
   'customerDecision.optionalHint': 'Nur der Kundenname ist erforderlich. Die übrigen Angaben sind optional.',
   'customerDecision.required': 'Bitte zuerst die Kundenzuordnung wählen.',
   'kunden.legacyBadge': 'Altbestand',
@@ -6334,8 +6333,6 @@ const trCustomerDecision: Partial<Record<keyof typeof de, string>> = {
   'sync.entity.dunning_documentation': 'Belgelenen ödeme hatırlatması',
   'deviceOnly.knowledge': 'Bu kayıtlar şu anda yalnızca bu cihazda saklanıyor.',
   'deviceOnly.communicationHistory': 'Geçmiş şu anda yalnızca bu cihazda saklanıyor.',
-  'deviceOnly.paperFiling':
-    'Kâğıt arşiv işareti şu anda yalnızca bu cihazda saklanıyor.',
   'customerDecision.optionalHint': 'Yalnızca müşteri adı gereklidir. Diğer bilgiler isteğe bağlıdır.',
   'customerDecision.required': 'Lütfen önce müşteri atamasını seçin.',
   'kunden.legacyBadge': 'Eski kayıt',
@@ -7312,8 +7309,6 @@ const bgCustomerDecision: Partial<Record<keyof typeof de, string>> = {
   'deviceOnly.knowledge': 'Тези записи в момента се съхраняват само на това устройство.',
   'deviceOnly.communicationHistory':
     'Историята в момента се съхранява само на това устройство.',
-  'deviceOnly.paperFiling':
-    'Отметката за хартиения архив в момента се съхранява само на това устройство.',
   'customerDecision.optionalHint': 'Задължително е само името на клиента. Останалите данни са по избор.',
   'customerDecision.required': 'Моля, първо изберете задаване на клиент.',
   'kunden.legacyBadge': 'Стар запис',

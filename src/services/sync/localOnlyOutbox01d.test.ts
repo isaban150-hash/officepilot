@@ -1,7 +1,8 @@
 /**
  * REAL-PRODUCT-TEST-01D — nur-lokale Entitäten bleiben keine dauerhafte Cloud-Sendeaufgabe.
  *
- *  1  eine nur-lokale Entität (Papierregister) wird lokal gespeichert und getrackt
+ *  1  eine nur-lokale Entität (Dokumentgedächtnis) wird lokal gespeichert und getrackt
+ *     (CLOUD-SYNC S1: bis dahin war es das Papierregister — das ist seitdem freigegeben)
  *  2  ihr Outbox-Eintrag wird beim Cloud-Push abgeschlossen (nie gesendet, nie dauerhaft „ausstehend")
  *  3  eine cloud-fähige Entität wird weiterhin normal eingereiht und gesendet
  *  4  blockierte/fehlgeschlagene cloud-fähige Einträge bleiben unverändert
@@ -52,14 +53,16 @@ function entry(overrides: Partial<SyncOutboxEntry>): SyncOutboxEntry {
   } as SyncOutboxEntry;
 }
 
-const registerEntry = {
-  id: 'reg-1',
+const memoryEntry = {
+  id: 'mem-1',
   documentId: 'doc-1',
-  documentTitle: 'Beleg',
-  folderId: 'f-1',
-  register: 'A',
-  label: 'Ordner A',
-  filedAt: '2026-09-16T09:00:00.000Z',
+  title: 'Beleg',
+  issuer: 'Lieferant',
+  digitalFolder: { id: 'd-1', name: 'Belege', path: '/Belege/' },
+  paperFolder: { folderId: 'f-1', register: 'A', label: 'Ordner A' },
+  validUntil: null,
+  createdAt: '2026-09-16T09:00:00.000Z',
+  updatedAt: '2026-09-16T09:00:00.000Z',
   sync: { version: 1, updatedAt: '2026-09-16T09:00:00.000Z', deviceId: 'dev', deleted: false },
 };
 
@@ -74,9 +77,9 @@ describe('REAL-PRODUCT-TEST-01D — nur-lokale Outbox-Einträge', () => {
   it('1+2: nur-lokale Entität wird lokal getrackt und ihr Sendeauftrag beim Push abgeschlossen', async () => {
     const base = buildState();
     resetSyncChangeTrackerFromState(base);
-    const withRegister = buildState({ officePilotMemory: { documentMemories: [], proofMemories: [], relations: [], paperRegisterEntries: [registerEntry] } } as Partial<AppPersistedState>);
+    const withRegister = buildState({ officePilotMemory: { documentMemories: [memoryEntry], proofMemories: [], relations: [], paperRegisterEntries: [] } } as Partial<AppPersistedState>);
     trackPersistedChanges(withRegister);
-    const queued = getSyncOutboxSnapshot().filter((e) => e.entityType === 'paper_register_entry');
+    const queued = getSyncOutboxSnapshot().filter((e) => e.entityType === 'document_memory');
     // Die lokale Speicherung/Verfolgung ist unverändert — der Eintrag entsteht.
     expect(queued).toHaveLength(1);
     expect(queued[0]!.status).toBe('pending');
@@ -90,7 +93,7 @@ describe('REAL-PRODUCT-TEST-01D — nur-lokale Outbox-Einträge', () => {
     expect(result.completedOutboxIds).toEqual([queued[0]!.id]);
     expect(result.failedOutbox).toEqual([]);
     // lokale Daten unberührt
-    expect(withRegister.officePilotMemory?.paperRegisterEntries).toHaveLength(1);
+    expect(withRegister.officePilotMemory?.documentMemories).toHaveLength(1);
   });
 
   it('3+4: cloud-fähige Einträge werden gesendet; blockierte/fehlgeschlagene bleiben, wie sie sind', async () => {
@@ -121,7 +124,7 @@ describe('REAL-PRODUCT-TEST-01D — nur-lokale Outbox-Einträge', () => {
       status: { syncState: 'synced' as const, pendingChanges: 0, lastSyncedAt: '2026-09-16T10:00:00.000Z' },
       lastReport: null,
       isOffline: false,
-      outbox: [entry({ entityType: 'paper_register_entry', entityId: 'reg-1' })],
+      outbox: [entry({ entityType: 'document_memory', entityId: 'mem-1' })],
     };
     expect(summarizeSyncStatus(snapshot)).toMatchObject({ kind: 'synced', waitingCount: 0 });
     snapshot.outbox.push(entry({ entityType: 'expense', entityId: 'exp-1' }));

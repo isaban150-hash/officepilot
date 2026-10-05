@@ -131,6 +131,9 @@ export function withTombstonedEntity<T extends SyncableEntity & { id: string }>(
  * CLOUD-DURABILITY-CORE-01B: Vorgangsnotizen sind seitdem **nicht** mehr in
  * dieser Aufzählung — sie gehen über `upsert_workspace_sync_entity` und
  * benutzen deshalb den versionserhaltenden Weg.
+ *
+ * CLOUD-SYNC S1: ebenso der Papierablage-Eintrag (`paper_register_entry`).
+ * Das übrige Gedächtnis bleibt beim bisherigen Weg.
  */
 export function withTombstonedCloudEntityPreservingRemoteVersion<
   T extends SyncableEntity & { id: string },
