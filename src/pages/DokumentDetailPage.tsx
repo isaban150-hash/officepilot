@@ -55,6 +55,8 @@ import {
   formatSafeDocumentDate,
   formatDocumentValidUntil,
 } from '../utils/documentDateDisplay';
+import { DocumentReplyNeedPanel } from '../components/documents/DocumentReplyNeedPanel';
+import { resolveDocumentReplyNeed } from '../services/documentReplyNeedService';
 
 export function DokumentDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -320,16 +322,40 @@ export function DokumentDetailPage() {
     </Button>
   );
 
+  /*
+   * P1 EINGANGSSCHREIBEN — bei offener Antwort ist der Antwortblock die eine
+   * Hauptaktion (DOC-WF-02B): „Antwort vorbereiten" führt in Brief- bzw.
+   * E-Mail-Editor, „Keine Antwort nötig" hält die Entscheidung fest. Nur wenn der
+   * Lebenszyklus nicht bestimmbar ist, bleibt der bisherige Nachrichtenweg.
+   */
+  const replyNeed = resolveDocumentReplyNeed({ documentId: document.id });
+  const replyNeedPanel = (
+    <DocumentReplyNeedPanel
+      key={`reply-need-${document.id}-${detailRevision}`}
+      need={replyNeed}
+      source={{ type: 'document', id: document.id }}
+      prepareTestId="document-detail-reply-action"
+      fullWidthActions
+      onChanged={() => setDetailRevision((n) => n + 1)}
+    />
+  );
+  const replyAnsweredLine = replyNeed.state === 'answered' ? replyNeedPanel : null;
+
   let experienceActions: ReactNode;
   if (showReplyPrimary) {
     experienceActions = (
       <>
-        {replyButton}
+        {replyOpen ? replyNeedPanel : replyButton}
         {openOrderButton}
       </>
     );
   } else if (fileOriginalOpen) {
-    experienceActions = openOrderButton;
+    experienceActions = (
+      <>
+        {replyAnsweredLine}
+        {openOrderButton}
+      </>
+    );
   } else if (otherOpen) {
     experienceActions = (
       <>
@@ -339,11 +365,17 @@ export function DokumentDetailPage() {
         >
           {lifecycle.nextStep}
         </p>
+        {replyAnsweredLine}
         {openOrderButton}
       </>
     );
   } else {
-    experienceActions = openOrderButton;
+    experienceActions = (
+      <>
+        {replyAnsweredLine}
+        {openOrderButton}
+      </>
+    );
   }
 
   const originalPanel = (

@@ -49,6 +49,12 @@ interface InboxVorgangPanelProps {
   materialDefault: MaterialStandard;
   onLinked: (inbox: InboxItem, vorgang: Vorgang) => void;
   requestOpenDialog?: number;
+  /**
+   * P1 EINGANGSSCHREIBEN — nur der Dialog, ohne Karte. So öffnet die Hauptaktion
+   * „Passendem Vorgang zuordnen" den bestehenden Zuordnungsdialog auch dann,
+   * wenn die Karte in einem eingeklappten Abschnitt steht und nicht gerendert ist.
+   */
+  dialogOnly?: boolean;
 }
 
 export function InboxVorgangPanel({
@@ -56,6 +62,7 @@ export function InboxVorgangPanel({
   materialDefault,
   onLinked,
   requestOpenDialog = 0,
+  dialogOnly = false,
 }: InboxVorgangPanelProps) {
   const { translate, showToast } = useApp();
   const mode = getVorgangCardMode(item);
@@ -93,8 +100,6 @@ export function InboxVorgangPanel({
   /** Synchronous lock — a second click in the same event turn must not create again. */
   const creatingRef = useRef(false);
 
-  if (mode === 'none') return null;
-
   const openDialog = () => {
     const nextDraft = buildVorgangDraftFromInbox(item, materialDefault);
     let matches = findSimilarVorgaenge(nextDraft);
@@ -128,11 +133,19 @@ export function InboxVorgangPanel({
   };
 
   useEffect(() => {
-    if (requestOpenDialog > 0 && mode !== 'open') {
+    if (requestOpenDialog > 0 && mode !== 'open' && mode !== 'none') {
       openDialog();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requestOpenDialog]);
+
+  /*
+   * P1 EINGANGSSCHREIBEN — erst nach allen Hooks. Wechselt ein Schreiben beim
+   * Verknüpfen oder Lösen zwischen „none" und „open", bleibt die Zahl der Hooks
+   * gleich; vorher stand diese Rückgabe vor dem Effekt, und React brach mit
+   * „Rendered more hooks" ab, sobald der Dialog auf Seitenebene montiert war.
+   */
+  if (mode === 'none') return null;
 
   const closeDialog = () => setDialogOpen(false);
 
@@ -256,6 +269,7 @@ export function InboxVorgangPanel({
 
   return (
     <>
+      {dialogOnly ? null : (
       <Card className="vorgang-panel">
         <h3 className="section__title">{translate('vorgang.panelTitle')}</h3>
         {mode === 'open' && item.vorgangTitle && (
@@ -291,6 +305,7 @@ export function InboxVorgangPanel({
           </Button>
         )}
       </Card>
+      )}
 
       {dialogOpen && (
         <div className="vorgang-dialog-backdrop" role="presentation" onClick={closeDialog}>

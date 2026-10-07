@@ -93,6 +93,8 @@ interface DocumentReviewExperienceProps {
    * Prefer content inside Weitere Optionen (F).
    */
   beforeMoreOptions?: ReactNode;
+  /** P1 EINGANGSSCHREIBEN — der Antwortblock direkt unter der Experience Card. */
+  afterExperienceCard?: ReactNode;
   /** Zone E for Experience Card (Guidance / Letter). */
   experienceDetailsExtra?: ReactNode;
   /** Letter explanation for authority/brief Experience facts (builder input only). */
@@ -126,6 +128,7 @@ export function DocumentReviewExperience({
   onRecordExpense,
   moreOptionsContent,
   beforeMoreOptions = null,
+  afterExperienceCard = null,
   experienceDetailsExtra = null,
   letterExplanation = null,
   translate,
@@ -351,6 +354,8 @@ export function DocumentReviewExperience({
           /* 01D — der Karteninhalt liegt jetzt im äusseren Details-Bereich. */
         />
       ) : null}
+
+      {afterExperienceCard}
 
       {showExperience ? <IntakeAssessmentPanel assessment={assessment} translate={translate} /> : null}
 

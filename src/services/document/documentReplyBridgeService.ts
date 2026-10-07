@@ -18,12 +18,16 @@
  * vorhandenen Briefeditor oder an den vorhandenen Kommunikationsweg übergeben,
  * und dort entscheidet der Benutzer.
  */
-import type { CompanyProfile, InboxItem } from '../../types/models';
+import type { ClassifiedDocumentKind, CompanyDocument, CompanyProfile, Customer, InboxItem } from '../../types/models';
 import type { CommunicationContext, CommunicationDraftCore } from '../../types/communication';
+import type { DocumentReplySourceRef } from '../../types/documentReply';
 import type { DocumentSemanticCore } from '../../types/documentSemanticCore';
 import { buildCommunicationDraft } from '../communicationDraftService';
-import { getVorgangById } from '../vorgangService';
+import { getVorgangById, isInboxLinkedToVorgang } from '../vorgangService';
 import { getCustomerById } from '../customerStoreService';
+import { getCompanyProfile } from '../companyProfileService';
+import { normalizeCompanyIdentityValue } from '../companyRelevanceService';
+import { isAuthorityClassifiedKind, isInsuranceClassifiedKind } from '../businessInterpretationMeaning';
 
 /** Welcher Weg nach dem Entwurf naheliegt. */
 export type ReplyChannelPreference = 'letter' | 'email' | 'undecided';
@@ -130,41 +134,124 @@ export interface ReplyRecipient {
 }
 
 /**
+ * P1 EINGANGSSCHREIBEN — der bestätigte Vorgangsbezug des Eingangs: verknüpft
+ * (`linked`) **oder** aus dem Dokument heraus angelegt (`created`). Dieselbe
+ * Regel, die `isInboxLinkedToVorgang` überall sonst anwendet; vorher fiel ein
+ * angelegter Vorgang hier auf den Absendernamen zurück.
+ */
+function confirmedVorgangOfInbox(item: InboxItem) {
+  return isInboxLinkedToVorgang(item) && item.vorgangId ? getVorgangById(item.vorgangId) : undefined;
+}
+
+function recipientFromCustomer(kunde: Customer): ReplyRecipient {
+  return {
+    name: kunde.contactPerson?.trim() || kunde.name,
+    organization: kunde.name,
+    street: kunde.street ?? undefined,
+    zip: kunde.zip ?? undefined,
+    city: kunde.city ?? undefined,
+    email: kunde.email ?? undefined,
+    source: 'confirmed_customer',
+    customerId: kunde.id,
+  };
+}
+
+/** Rechtsformzusätze tragen keine Identität — „GmbH" allein ist niemand. */
+const LEGAL_FORM_WORDS = new Set(['gmbh', 'mbh', 'ug', 'ag', 'kg', 'ohg', 'gbr', 'co', 'e', 'k', 'ek', 'kgaa', 'se', 'haftungsbeschrankt']);
+
+function nameWords(value: string): string[] {
+  return normalizeCompanyIdentityValue(value)
+    .split(' ')
+    .filter((word) => word && !LEGAL_FORM_WORDS.has(word));
+}
+
+/** Alle Wörter des einen Namens stehen im anderen — und eines davon trägt. */
+function coversName(words: string[], other: string[]): boolean {
+  return words.some((word) => word.length >= 4) && words.every((word) => other.includes(word));
+}
+
+/**
+ * P1 EINGANGSSCHREIBEN — ein belegter Name, der die eigene Firma ist, ist kein
+ * Antwortempfänger. Die Erkennung kürzt den eigenen Namen mitunter
+ * („Haustechnik GmbH" statt „Çırmak Haustechnik GmbH"); deshalb zählt hier
+ * auch ein Name, dessen Wörter vollständig im eigenen Namen stehen — oder
+ * umgekehrt. Im Zweifel bleibt der Empfänger offen: Ein offener Empfänger wird
+ * im Entwurf ergänzt, eine Antwort an die eigene Firma wäre falsch.
+ */
+function externalPartyName(candidate: string | undefined | null): string {
+  const name = candidate?.trim() ?? '';
+  return name && !sameParty(name, getCompanyProfile().companyName ?? '') ? name : '';
+}
+
+/** Zwei Namen bezeichnen denselben Beteiligten: gleich nach der Faltung, oder einer deckt den anderen. */
+function sameParty(a: string, b: string): boolean {
+  const x = nameWords(a);
+  const y = nameWords(b);
+  if (!x.length || !y.length) return false;
+  return x.join(' ') === y.join(' ') || coversName(x, y) || coversName(y, x);
+}
+
+/**
+ * P1 EINGANGSSCHREIBEN — der Kunde des bestätigten Vorgangs ist Empfänger, wenn
+ * das Schreiben von ihm kommt: Der belegte Absender ist der Kunde oder sein
+ * Ansprechpartner — oder es ist keiner belegt. Schreibt ein Dritter (das Bauamt
+ * zum Bauvorhaben des Kunden), geht die Antwort an diesen Absender; der Vorgang
+ * bleibt der Bezug. Behörden- und Versicherungsschreiben kommen nie vom Kunden.
+ */
+function replyGoesToCustomer(
+  kunde: Customer,
+  absender: string,
+  kind: ClassifiedDocumentKind | undefined,
+): boolean {
+  if (kind && (isAuthorityClassifiedKind(kind) || isInsuranceClassifiedKind(kind))) return false;
+  if (!absender) return true;
+  return [kunde.name, kunde.contactPerson ?? ''].some((name) => sameParty(absender, name));
+}
+
+function recipientFor(
+  kunde: Customer | undefined,
+  belegterAbsender: string | undefined,
+  kind: ClassifiedDocumentKind | undefined,
+): ReplyRecipient {
+  const absender = externalPartyName(belegterAbsender);
+  if (kunde && replyGoesToCustomer(kunde, absender, kind)) return recipientFromCustomer(kunde);
+  /* Nur der Name ist belegt. Eine Anschrift wird nicht erfunden. */
+  if (absender) return { name: absender, organization: absender, source: 'document' };
+  return { name: '', source: 'unknown' };
+}
+
+/**
  * Wer angeschrieben wird.
  *
- * Rangfolge: ein **bestätigt** zugeordneter Kunde, dann der im Schreiben
- * belegte Absender, sonst nichts. Ein unbestätigter Kandidat wird hier
+ * Rangfolge: ein **bestätigt** zugeordneter Kunde (wenn das Schreiben von ihm
+ * kommt, siehe `replyGoesToCustomer`), dann der im Schreiben belegte Absender,
+ * sonst nichts. Ein unbestätigter Kandidat wird hier
  * ausdrücklich **nicht** zum Kunden befördert — das wäre eine stille
  * Bestätigung durch die Hintertür.
+ *
+ * P1 EINGANGSSCHREIBEN — der semantische Kern liefert keinen Absender:
+ * `recipientCheck.matchedOn` sagt, woran die **eigene** Firma im Schreiben
+ * erkannt wurde, und wird deshalb nie zum Empfänger.
  */
 export function resolveReplyRecipient(
   item: InboxItem,
-  core: DocumentSemanticCore | undefined,
+  _core?: DocumentSemanticCore,
 ): ReplyRecipient {
-  const vorgang =
-    item.vorgangId && item.vorgangLinkStatus === 'linked' ? getVorgangById(item.vorgangId) : undefined;
+  const vorgang = confirmedVorgangOfInbox(item);
   const kunde = vorgang?.customerId ? getCustomerById(vorgang.customerId) : undefined;
+  return recipientFor(kunde, item.sender, item.classifiedKind);
+}
 
-  if (kunde) {
-    return {
-      name: kunde.contactPerson?.trim() || kunde.name,
-      organization: kunde.name,
-      street: kunde.street ?? undefined,
-      zip: kunde.zip ?? undefined,
-      city: kunde.city ?? undefined,
-      email: kunde.email ?? undefined,
-      source: 'confirmed_customer',
-      customerId: kunde.id,
-    };
-  }
-
-  const absender = item.sender?.trim() || core?.recipientCheck.matchedOn[0];
-  if (absender) {
-    /* Nur der Name ist belegt. Eine Anschrift wird nicht erfunden. */
-    return { name: absender, organization: absender, source: 'document' };
-  }
-
-  return { name: '', source: 'unknown' };
+/**
+ * P1 EINGANGSSCHREIBEN — dieselbe Rangfolge für ein archiviertes Schreiben:
+ * der Kunde des verknüpften Vorgangs (Dokument → Vorgang → Kunde), wenn das
+ * Schreiben von ihm kommt, sonst der belegte Aussteller ohne erfundene Anschrift.
+ */
+export function resolveReplyRecipientForDocument(document: CompanyDocument): ReplyRecipient {
+  const vorgangId = document.linkedVorgang?.vorgangId;
+  const vorgang = vorgangId ? getVorgangById(vorgangId) : undefined;
+  const kunde = vorgang?.customerId ? getCustomerById(vorgang.customerId) : undefined;
+  return recipientFor(kunde, document.issuer, document.classifiedKind);
 }
 
 export function hasPostalAddress(recipient: ReplyRecipient): boolean {
@@ -185,6 +272,8 @@ export interface ReplyDraftResult {
   channelPreference: ReplyChannelPreference;
   /** Der bestätigte Auftrag, falls es einen gibt — sonst nichts. */
   confirmedVorgangId?: string;
+  /** P1 EINGANGSSCHREIBEN — das Schreiben, auf das geantwortet wird. */
+  sourceRef: DocumentReplySourceRef;
 }
 
 /**
@@ -204,17 +293,15 @@ export function buildReplyDraft(input: {
   if (!kern) return null;
 
   const recipient = resolveReplyRecipient(input.item, input.core);
-  const vorgang =
-    input.item.vorgangId && input.item.vorgangLinkStatus === 'linked'
-      ? getVorgangById(input.item.vorgangId)
-      : undefined;
+  const vorgang = confirmedVorgangOfInbox(input.item);
+  const absender = externalPartyName(input.item.sender);
 
   const facts = [
     input.core?.subject
       ? { key: 'Betreff des Schreibens', value: input.core.subject.value, source: 'document' as const }
       : null,
-    input.item.sender
-      ? { key: 'Absender', value: input.item.sender, source: 'document' as const }
+    absender
+      ? { key: 'Absender', value: absender, source: 'document' as const }
       : null,
     ...(input.core?.deadlines ?? [])
       .filter((frist) => frist.actionRequired)
@@ -263,6 +350,7 @@ export function buildReplyDraft(input: {
     recipient,
     channelPreference: detectChannelPreference(input.text),
     confirmedVorgangId: vorgang?.id,
+    sourceRef: { type: 'inbox', id: input.item.id },
   };
 }
 
@@ -290,6 +378,11 @@ export interface LetterDraftPrefill {
   /** Nur bei bestätigter Zuordnung gesetzt. */
   customerId?: string;
   vorgangId?: string;
+  /**
+   * P1 EINGANGSSCHREIBEN — das Schreiben, auf das der Brief antwortet. Reine
+   * Herkunft; der Antwortstatus bleibt im Kommunikationsverlauf.
+   */
+  replyTo?: DocumentReplySourceRef;
 }
 
 export const LETTER_DRAFT_PREFILL_STATE_KEY = 'officetaktLetterDraftPrefill';
@@ -310,6 +403,7 @@ export function buildLetterPrefill(result: ReplyDraftResult): LetterDraftPrefill
       ? { customerId: result.recipient.customerId }
       : {}),
     ...(result.confirmedVorgangId ? { vorgangId: result.confirmedVorgangId } : {}),
+    replyTo: { type: result.sourceRef.type, id: result.sourceRef.id },
   };
 }
 

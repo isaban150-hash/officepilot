@@ -28,6 +28,7 @@ import type {
   BusinessLetterInput,
   BusinessLetterRecipient,
 } from '../types/businessLetter';
+import { normalizeDocumentReplySourceRef } from '../types/documentReply';
 
 function cloneRecipient(recipient: BusinessLetterRecipient): BusinessLetterRecipient {
   return { ...recipient };
@@ -38,6 +39,7 @@ function cloneLetter(letter: BusinessLetter): BusinessLetter {
     ...letter,
     recipient: cloneRecipient(letter.recipient),
     companySnapshot: letter.companySnapshot ? { ...letter.companySnapshot } : undefined,
+    replyTo: letter.replyTo ? { ...letter.replyTo } : undefined,
   };
 }
 
@@ -68,6 +70,7 @@ function normalizeLetter(
     status: letter.status ?? 'draft',
     companySnapshot: letter.companySnapshot,
     documentId: letter.documentId || undefined,
+    replyTo: normalizeDocumentReplySourceRef(letter.replyTo),
     createdAt: letter.createdAt ?? now,
     updatedAt: letter.updatedAt,
     sync: letter.sync,
@@ -157,6 +160,7 @@ export function addBusinessLetter(
     recipient: input.recipient,
     customerId: input.customerId,
     vorgangId: input.vorgangId,
+    replyTo: input.replyTo,
     status: 'draft',
   });
 
@@ -194,6 +198,8 @@ export function updateBusinessLetter(
     recipient: changes.recipient ?? current.recipient,
     customerId: changes.customerId !== undefined ? changes.customerId : current.customerId,
     vorgangId: changes.vorgangId !== undefined ? changes.vorgangId : current.vorgangId,
+    /* P1 — die Herkunft bleibt; ein späteres Speichern schreibt sie nicht um. */
+    replyTo: current.replyTo ?? changes.replyTo,
     updatedAt: new Date().toISOString(),
   });
 

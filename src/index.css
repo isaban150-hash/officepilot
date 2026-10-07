@@ -7516,3 +7516,42 @@ body {
     gap: 0.1rem;
   }
 }
+
+/* P1 EINGANGSSCHREIBEN — Antwortblock unter der Dokumentkarte bzw. in der Aktionszeile. */
+.document-reply-need {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0;
+  padding: 12px 16px;
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+}
+
+.document-reply-need__title {
+  margin: 0;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.document-reply-need .form-hint {
+  margin: 0;
+}
+
+.document-reply-need__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.document-reply-need__answered {
+  margin: 8px 0;
+}
+
+@media (max-width: 480px) {
+  .document-reply-need__actions > * {
+    flex: 1 1 100%;
+  }
+}

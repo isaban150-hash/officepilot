@@ -24,6 +24,16 @@ export type CommunicationReplyStatus =
 
 export type CommunicationEventStatus = 'complete' | 'needs_info' | 'blocked';
 
+/**
+ * P1 EINGANGSSCHREIBEN — worauf ein „beantwortet" verweist: der erzeugte Brief
+ * oder die gesendete E-Mail. Nur Nachweis; der Antwortstatus ist das Ereignis
+ * selbst, nicht diese Referenz.
+ */
+export interface CommunicationAnswerRef {
+  kind: 'letter' | 'email';
+  id: string;
+}
+
 export interface CommunicationEvent {
   id: string;
   timestamp: string;
@@ -35,6 +45,8 @@ export interface CommunicationEvent {
   userInputExcerpt?: string;
   resultExcerpt?: string;
   disclaimerShown: boolean;
+  /** P1 — nur bei „beantwortet": die Antwort, mit der das Schreiben erledigt wurde. */
+  answerRef?: CommunicationAnswerRef;
   sync?: SyncMeta;
 }
 

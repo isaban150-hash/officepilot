@@ -24,6 +24,7 @@ import { deDocumentMeaning } from './documentMeaning';
 import { deIntakeAssessment } from './intakeAssessment';
 import { deInvoiceDraftCloud } from './invoiceDraftCloud';
 import { deOrderDraftCloud } from './orderDraftCloud';
+import { deReplyNeed } from './replyNeed';
 
 export const deModules = {
   ...deAuth,
@@ -54,4 +55,5 @@ export const deModules = {
   ...deIntakeAssessment,
   ...deInvoiceDraftCloud,
   ...deOrderDraftCloud,
+  ...deReplyNeed,
 } as const;

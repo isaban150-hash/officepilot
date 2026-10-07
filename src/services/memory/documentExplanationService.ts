@@ -5,7 +5,7 @@ import type {
   MemoryRiskLevel,
   MemorySourceConfidence,
 } from '../../types/memory';
-import { getCommunicationReplyStatus } from '../communicationHistoryService';
+import { resolveDocumentReplyNeed, toLifecycleReplyStatus } from '../documentReplyNeedService';
 import { buildExplanation } from '../documentClassificationCatalog';
 import { getDocumentById, isGeneratedOutgoingInvoiceDocument } from '../documentService';
 import { getInboxItemById } from '../inboxService';
@@ -205,8 +205,13 @@ function buildOriginalFiledStatus(documentId: string, memory?: DocumentMemory): 
   return physicalFiled ? 'Original abgeheftet.' : 'Original noch nicht als abgeheftet markiert.';
 }
 
+/**
+ * P1 EINGANGSSCHREIBEN — dieselbe Antwortbedarf-Ableitung wie Lebenszyklus und
+ * Antwortblock. Ohne erkannten Bedarf und ohne Entscheidung gibt es keinen
+ * Antwortstatus — vorher galt hier jedes Dokument ohne Ereignis als „Antwort offen".
+ */
 function buildCommunicationStatus(documentId: string): string | undefined {
-  const status = getCommunicationReplyStatus({ type: 'document', id: documentId });
+  const status = toLifecycleReplyStatus(resolveDocumentReplyNeed({ documentId }));
   if (status === 'no_reply_needed') return undefined;
   return REPLY_STATUS_LABELS[status] ?? status;
 }

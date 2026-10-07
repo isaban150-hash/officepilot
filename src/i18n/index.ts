@@ -3908,7 +3908,7 @@ const deLegacy = {
   'communication.reply.copyAndSend': 'Kopieren und versenden',
   'communication.reply.markDone': 'Als erledigt markieren',
   'communication.reply.remindLater': 'Später erinnern',
-  'communication.reply.noReplyNeeded': 'Kein Antwort nötig',
+  'communication.reply.noReplyNeeded': 'Keine Antwort nötig',
   'communication.reply.markedDoneToast': 'Als erledigt markiert.',
   'communication.reply.remindLaterToast': 'Erinnerung gespeichert.',
   'communication.reply.noReplyNeededToast': 'Kein Antwortbedarf vermerkt.',

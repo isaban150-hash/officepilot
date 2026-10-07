@@ -12,6 +12,7 @@
  * Brief hängen, wäre nach dem zweiten Versuch nicht mehr unterscheidbar, was
  * der Brief ist und was mit ihm geschah.
  */
+import type { DocumentReplySourceRef } from './documentReply';
 import type { CompanyProfile } from './models';
 import type { SyncableEntity } from './sync';
 
@@ -69,6 +70,13 @@ export interface BusinessLetter extends SyncableEntity {
   companySnapshot?: CompanyProfile;
   /** Das Archivdokument zum erzeugten PDF; entsteht erst in einem späteren Block. */
   documentId?: string;
+  /**
+   * P1 EINGANGSSCHREIBEN — das Eingangsschreiben, auf das dieser Brief
+   * antwortet. Reine Herkunft: Sie wird beim Anlegen gesetzt und danach nicht
+   * mehr umgeschrieben. Ob das Schreiben beantwortet ist, steht allein im
+   * Kommunikationsverlauf.
+   */
+  replyTo?: DocumentReplySourceRef;
   createdAt: string;
   updatedAt?: string;
 }
@@ -81,4 +89,6 @@ export interface BusinessLetterInput {
   recipient: BusinessLetterRecipient;
   customerId?: string;
   vorgangId?: string;
+  /** P1 EINGANGSSCHREIBEN — nur beim Anlegen wirksam (Herkunft). */
+  replyTo?: DocumentReplySourceRef;
 }

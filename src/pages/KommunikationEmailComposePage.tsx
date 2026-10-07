@@ -82,6 +82,13 @@ import {
   type FreeEmailValidationError,
 } from '../services/email/freeEmailOrchestrator';
 import { formatBytes, formatTimestamp } from '../components/communication/freeEmailUi';
+import { parseDocumentReplySourceParam, type DocumentReplySourceRef } from '../types/documentReply';
+import {
+  buildReplyEmailPrefill,
+  replySourceToContextRef,
+  resolveDocumentReplySource,
+} from '../services/document/documentReplySourceService';
+import { recordMarkedAnswered } from '../services/communicationHistoryService';
 
 interface PendingUpload {
   localId: string;
@@ -133,11 +140,13 @@ export function KommunikationEmailComposePage({
 }: { loadReplySource?: LoadReplySource; prepareReplyDraft?: PrepareReplyDraft } = {}) {
   const [searchParams] = useSearchParams();
   const replyToId = searchParams.get('antwortAuf')?.trim() || '';
-  if (!replyToId) return <EmailComposeForm />;
-  return <ReplyCompose key={replyToId} parentId={replyToId} loadSource={loadReplySource} prepareReplyDraft={prepareReplyDraft} />;
+  /* P1 EINGANGSSCHREIBEN — das Eingangsschreiben, auf das geantwortet wird (`?quelle=inbox:<id>`). */
+  const sourceRef = parseDocumentReplySourceParam(searchParams.get('quelle'));
+  if (!replyToId) return <EmailComposeForm sourceRef={sourceRef} />;
+  return <ReplyCompose key={replyToId} parentId={replyToId} loadSource={loadReplySource} prepareReplyDraft={prepareReplyDraft} sourceRef={sourceRef} />;
 }
 
-function ReplyCompose({ parentId, loadSource, prepareReplyDraft }: { parentId: string; loadSource: LoadReplySource; prepareReplyDraft: PrepareReplyDraft }) {
+function ReplyCompose({ parentId, loadSource, prepareReplyDraft, sourceRef }: { parentId: string; loadSource: LoadReplySource; prepareReplyDraft: PrepareReplyDraft; sourceRef?: DocumentReplySourceRef }) {
   const { translate, language, companyProfile } = useApp();
   const t = (key: string) => translate(key as TranslationKey);
   const [state, setState] = useState<{ phase: 'loading' | 'missing' | 'error' } | { phase: 'ready'; draft: FreeEmailDraft; reply: ReplyContext }>({ phase: 'loading' });
@@ -152,7 +161,9 @@ function ReplyCompose({ parentId, loadSource, prepareReplyDraft }: { parentId: s
       const own = [...result.ownAddresses, companyProfile?.email ?? '', resolveProfileReplyToEmail(companyProfile) ?? ''].filter(Boolean);
       const recipients = resolveReplyRecipients({ fromAddress: parent.fromAddress, replyToAddresses: parent.replyToAddresses, cc: parent.cc }, own);
       const thread = result.thread ?? [parent];
-      const existing = loadFreeEmailDraft(undefined, parent.id);
+      const stored = loadFreeEmailDraft(undefined, parent.id);
+      /* P1 — die Quelle reist im Antwortentwurf mit; ein vorhandener Entwurf bekommt sie nachgetragen. */
+      const existing = stored && sourceRef && !stored.sourceRef ? saveFreeEmailDraft({ ...stored, sourceRef }) : stored;
       if (existing) return setState({ phase: 'ready', draft: existing, reply: { parent, problem: recipients.problem, thread } });
       // Kontext nur per Kennung aus dem Original — und nur, wenn er hier bekannt ist (sonst nichts erfinden).
       const customerId = parent.customerId && getCustomerStoreSnapshot().some((customer) => customer.id === parent.customerId) ? parent.customerId : undefined;
@@ -174,6 +185,7 @@ function ReplyCompose({ parentId, loadSource, prepareReplyDraft }: { parentId: s
         vorgangId,
         replyToMessageId: parent.id,
         replyTail: tail,
+        sourceRef,
       });
       setState({ phase: 'ready', draft, reply: { parent, problem: recipients.problem, thread } });
     });
@@ -195,7 +207,7 @@ function ReplyCompose({ parentId, loadSource, prepareReplyDraft }: { parentId: s
   );
 }
 
-function EmailComposeForm({ initialDraft, reply, prepareReplyDraft = prepareEmailReplyDraft }: { initialDraft?: FreeEmailDraft; reply?: ReplyContext; prepareReplyDraft?: PrepareReplyDraft } = {}) {
+function EmailComposeForm({ initialDraft, reply, prepareReplyDraft = prepareEmailReplyDraft, sourceRef }: { initialDraft?: FreeEmailDraft; reply?: ReplyContext; prepareReplyDraft?: PrepareReplyDraft; sourceRef?: DocumentReplySourceRef } = {}) {
   const { translate, language, companyProfile, showToast } = useApp();
   const t = (key: string) => translate(key as TranslationKey);
   const navigate = useNavigate();
@@ -218,6 +230,27 @@ function EmailComposeForm({ initialDraft, reply, prepareReplyDraft = prepareEmai
 
   const [draft, setDraftState] = useState<FreeEmailDraft>(() => {
     if (initialDraft) return initialDraft;
+    if (sourceRef) {
+      /*
+       * P1 EINGANGSSCHREIBEN — eigener Entwurf je Schreiben. Vorbelegt wird nur,
+       * was belegt ist: die Adresse des bestätigten Kunden, der Betreff „Ihr
+       * Schreiben vom …", Kunde und Vorgang. Fehlt eine Adresse, bleibt „An" leer.
+       */
+      const own = loadFreeEmailDraft(undefined, undefined, sourceRef);
+      if (own) return own;
+      const info = resolveDocumentReplySource(sourceRef);
+      const prefill = info ? buildReplyEmailPrefill(info) : { to: '', subject: '' };
+      const signature = resolveEmailSignature(companyProfile, language);
+      return createFreeEmailDraft({
+        to: prefill.to,
+        subject: prefill.subject,
+        bodyText: signature ? `\n\n${appendSignatureOnce('', signature)}` : '',
+        signatureApplied: Boolean(signature),
+        customerId: prefill.customerId && customers.some((customer) => customer.id === prefill.customerId) ? prefill.customerId : undefined,
+        vorgangId: prefill.vorgangId && vorgaenge.some((vorgang) => vorgang.id === prefill.vorgangId) ? prefill.vorgangId : undefined,
+        sourceRef,
+      });
+    }
     const existing = loadFreeEmailDraft();
     if (existing) return existing;
     const signature = resolveEmailSignature(companyProfile, language);
@@ -247,6 +280,12 @@ function EmailComposeForm({ initialDraft, reply, prepareReplyDraft = prepareEmai
   const fileInput = useRef<HTMLInputElement>(null);
   const draftRef = useRef(draft);
   draftRef.current = draft;
+  const replySource = draft.sourceRef ?? sourceRef;
+  const replySourceInfo = useMemo(
+    () => (replySource ? resolveDocumentReplySource(replySource) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [replySource?.type, replySource?.id],
+  );
 
   const locked = draft.phase !== 'editing';
   const setDraft = (patch: Partial<FreeEmailDraft>) => {
@@ -259,7 +298,7 @@ function EmailComposeForm({ initialDraft, reply, prepareReplyDraft = prepareEmai
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
       if (!event.key || !event.key.startsWith('officepilot.freeEmailDraft.v1')) return;
-      const latest = loadFreeEmailDraft(undefined, draftRef.current.replyToMessageId);
+      const latest = loadFreeEmailDraft(undefined, draftRef.current.replyToMessageId, draftRef.current.sourceRef);
       if (latest && latest.clientMessageId === draftRef.current.clientMessageId) {
         draftRef.current = latest;
         setDraftState(latest);
@@ -424,7 +463,8 @@ function EmailComposeForm({ initialDraft, reply, prepareReplyDraft = prepareEmai
       return;
     }
     // Antwort: erst prüfen lassen, dann ausdrücklich bestätigen (unterbrochener Versand setzt ohne Dialog fort).
-    if (reply && !confirmed && current.phase === 'editing') {
+    // P1 EINGANGSSCHREIBEN — dieselbe Pflichtbestätigung für die Antwort auf ein Eingangsschreiben.
+    if ((reply || current.sourceRef) && !confirmed && current.phase === 'editing') {
       setConfirmSend(true);
       return;
     }
@@ -432,7 +472,7 @@ function EmailComposeForm({ initialDraft, reply, prepareReplyDraft = prepareEmai
     try {
       const result = await sendFreeEmail(current, {
         onPhase: () => {
-          const latest = loadFreeEmailDraft(undefined, draftRef.current.replyToMessageId);
+          const latest = loadFreeEmailDraft(undefined, draftRef.current.replyToMessageId, draftRef.current.sourceRef);
           if (latest) {
             draftRef.current = latest;
             setDraftState(latest);
@@ -444,11 +484,18 @@ function EmailComposeForm({ initialDraft, reply, prepareReplyDraft = prepareEmai
           : result.action === 'unknown_pending' ? 'freeEmail.result.unknown'
           : result.action === 'in_progress' ? 'freeEmail.result.in_progress'
           : 'freeEmail.result.sent';
+        /* P1 EINGANGSSCHREIBEN — erst ein tatsächlich gesendeter Versand erledigt das Schreiben. */
+        if (current.sourceRef && (result.action === 'sent' || result.action === 'replayed')) {
+          recordMarkedAnswered(replySourceToContextRef(current.sourceRef), undefined, {
+            channel: 'email',
+            answerRef: { kind: 'email', id: result.message.id },
+          });
+        }
         showToast(t(toastKey));
         navigate(`/kommunikation/email/${result.message.id}`);
         return;
       }
-      const latest = loadFreeEmailDraft(undefined, draftRef.current.replyToMessageId);
+      const latest = loadFreeEmailDraft(undefined, draftRef.current.replyToMessageId, draftRef.current.sourceRef);
       if (latest) {
         draftRef.current = latest;
         setDraftState(latest);
@@ -459,9 +506,15 @@ function EmailComposeForm({ initialDraft, reply, prepareReplyDraft = prepareEmai
     }
   };
 
-  const backHref = reply ? `/kommunikation/eingang/${encodeURIComponent(reply.parent.id)}` : '/kommunikation';
+  const backHref = reply
+    ? `/kommunikation/eingang/${encodeURIComponent(reply.parent.id)}`
+    : replySource
+      ? replySource.type === 'inbox'
+        ? `/ablage/${encodeURIComponent(replySource.id)}`
+        : `/dokumente/${encodeURIComponent(replySource.id)}`
+      : '/kommunikation';
   const handleDiscard = () => {
-    clearFreeEmailDraft(draft.scopeKey, draft.replyToMessageId);
+    clearFreeEmailDraft(draft.scopeKey, draft.replyToMessageId, draft.sourceRef);
     navigate(backHref);
   };
 
@@ -490,6 +543,12 @@ function EmailComposeForm({ initialDraft, reply, prepareReplyDraft = prepareEmai
             <p className="form-error" role="alert" data-testid="kommunikation-reply-recipient-problem">{t(`emailThread.recipientProblem.${reply.problem}`)}</p>
           ) : null}
         </div>
+      ) : null}
+
+      {replySourceInfo ? (
+        <p className="form-hint" data-testid="kommunikation-email-reply-source">
+          {t('replyNeed.email.sourceHint').replace('{title}', replySourceInfo.title || t('replyNeed.sourceUntitled'))}
+        </p>
       ) : null}
 
       {!cloud ? (
@@ -717,7 +776,7 @@ function EmailComposeForm({ initialDraft, reply, prepareReplyDraft = prepareEmai
         </div>
       </form>
 
-      {reply ? (
+      {reply || draft.sourceRef ? (
         <SimpleConfirmDialog
           open={confirmSend}
           title={t('emailThread.confirmTitle')}

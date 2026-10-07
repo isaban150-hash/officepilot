@@ -1,4 +1,3 @@
-import type { CommunicationContextRef } from '../types/communication';
 import type { CommunicationReplyStatus } from '../types/communicationHistory';
 import type {
   DocumentLifecycleReason,
@@ -9,7 +8,8 @@ import type {
 import type { DocumentMemory, ProofMemory } from '../types/memory';
 import type { InboxItem, PendingItem, PendingItemKind } from '../types/models';
 import type { TranslationKey } from '../i18n';
-import { getCommunicationReplyStatus, getEventsForContext } from './communicationHistoryService';
+import { getCommunicationReplyStatus } from './communicationHistoryService';
+import { resolveDocumentReplyNeed, toLifecycleReplyStatus } from './documentReplyNeedService';
 import { getDocumentById, isGeneratedOutgoingInvoiceDocument } from './documentService';
 import { filterActiveItems, getInboxItemById, getInboxItems } from './inboxService';
 import {
@@ -25,40 +25,20 @@ import { toCanonicalIsoDay } from '../utils/documentDateDisplay';
 
 const DEADLINE_ATTENTION_DAYS = 30;
 
-const REPLY_STATUS_EVENT_TYPES = new Set([
-  'marked_answered',
-  'marked_no_reply_needed',
-  'draft_copied',
-  'draft_created',
-  'document_answer',
-  'marked_remind_later',
-]);
-
+/**
+ * P1 EINGANGSSCHREIBEN — der Antwortstatus kommt aus der einen Ableitung
+ * (`documentReplyNeedService`), die auch Erklärung, Assistent und der
+ * Antwortblock lesen: erkannte echte Antwortfrist bzw. Bitte um Rückmeldung,
+ * entschieden durch das jüngste Statusereignis über Eingang und Dokument.
+ */
 function resolveLifecycleReplyStatus(input: {
   documentId?: string;
   inboxItem?: InboxItem;
   memory?: DocumentMemory;
 }): CommunicationReplyStatus {
-  const refs: CommunicationContextRef[] = [];
-  if (input.documentId) refs.push({ type: 'document', id: input.documentId });
-  if (input.inboxItem?.id) refs.push({ type: 'inbox', id: input.inboxItem.id });
-
-  for (const ref of refs) {
-    const status = resolveCommunicationReplyForLifecycle(ref);
-    if (status !== 'no_reply_needed') return status;
-  }
-  return 'no_reply_needed';
-}
-
-function resolveCommunicationReplyForLifecycle(
-  contextRef: CommunicationContextRef | null,
-): CommunicationReplyStatus {
-  if (!contextRef || contextRef.type === 'none') return 'no_reply_needed';
-  const hasStatusEvents = getEventsForContext(contextRef).some((event) =>
-    REPLY_STATUS_EVENT_TYPES.has(event.type),
+  return toLifecycleReplyStatus(
+    resolveDocumentReplyNeed({ documentId: input.documentId, inboxId: input.inboxItem?.id }),
   );
-  if (!hasStatusEvents) return 'no_reply_needed';
-  return getCommunicationReplyStatus(contextRef);
 }
 
 function daysUntil(isoDate: string, todayIso: string): number {

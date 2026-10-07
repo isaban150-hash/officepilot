@@ -25,6 +25,7 @@ import type {
   BusinessLetterStatus,
 } from '../../types/businessLetter';
 import { BUSINESS_LETTER_STATUSES } from '../../types/businessLetter';
+import { normalizeDocumentReplySourceRef, type DocumentReplySourceRef } from '../../types/documentReply';
 import type { CompanyProfile } from '../../types/models';
 import type { SyncMeta } from '../../types/sync';
 
@@ -60,6 +61,8 @@ export interface BusinessLetterCloudPayload {
   vorgangId?: string;
   companySnapshot?: CompanyProfile;
   documentId?: string;
+  /** P1 EINGANGSSCHREIBEN — Herkunft: das beantwortete Eingangsschreiben. */
+  replyTo?: DocumentReplySourceRef;
   updatedAt?: string;
 }
 
@@ -127,6 +130,8 @@ export function stripBusinessLetterForCloud(letter: BusinessLetter): BusinessLet
   if (isNonEmptyString(letter.vorgangId)) payload.vorgangId = letter.vorgangId;
   if (letter.companySnapshot) payload.companySnapshot = letter.companySnapshot;
   if (isNonEmptyString(letter.documentId)) payload.documentId = letter.documentId;
+  const replyTo = normalizeDocumentReplySourceRef(letter.replyTo);
+  if (replyTo) payload.replyTo = replyTo;
   if (isNonEmptyString(letter.updatedAt)) payload.updatedAt = letter.updatedAt;
   return payload;
 }
@@ -187,6 +192,8 @@ export function parseBusinessLetterCloudPayload(
     parsed.companySnapshot = inner.companySnapshot as CompanyProfile;
   }
   if (isNonEmptyString(inner.documentId)) parsed.documentId = inner.documentId;
+  const replyTo = normalizeDocumentReplySourceRef(inner.replyTo);
+  if (replyTo) parsed.replyTo = replyTo;
   if (isNonEmptyString(inner.updatedAt)) parsed.updatedAt = inner.updatedAt;
   return parsed;
 }

@@ -32,6 +32,7 @@ import {
   createDocumentReplyDraftHandoffLocationState,
 } from '../../services/documentReplyDraftHandoffService';
 import { buildDocumentAiContextFromInbox } from '../../services/document/documentAiContextService';
+import { buildKommunikationPath } from '../communication/communicationNavigation';
 import type { AreaAiAnswer, DocumentAiPriorTurn } from '../../types/areaAi';
 import type { DocumentFieldFillFreeTextBridgeParseResult } from '../../types/documentFieldFillFreeTextBridge';
 
@@ -377,8 +378,13 @@ export function DocumentFreeQuestionPanel({
                     } as never,
                     coreMessage: reply.draft.body,
                   });
+                  /*
+                   * P1 EINGANGSSCHREIBEN — der Kontext des Eingangsschreibens reist mit,
+                   * genau wie bei der Übergabe aus dem Antwortentwurf. Vorher landete
+                   * „Als erledigt markieren" hier im Kontext „none".
+                   */
                   navigate(
-                    '/kommunikation',
+                    buildKommunikationPath(payload?.contextRef ?? { type: 'inbox', id: source.item.id }),
                     payload
                       ? { state: createDocumentReplyDraftHandoffLocationState(payload) }
                       : undefined,

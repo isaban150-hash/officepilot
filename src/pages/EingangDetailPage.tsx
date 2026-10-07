@@ -10,6 +10,8 @@ import { ContractAnalysisPanel } from '../components/inbox/ContractAnalysisPanel
 import { DocumentActionSuggestionsPanel } from '../components/inbox/DocumentActionSuggestionsPanel';
 import { ImportToArchiveDialog } from '../components/inbox/ImportToArchiveDialog';
 import { InboxVorgangPanel } from '../components/inbox/InboxVorgangPanel';
+import { DocumentReplyNeedPanel } from '../components/documents/DocumentReplyNeedPanel';
+import { resolveDocumentReplyNeed } from '../services/documentReplyNeedService';
 import {
   CustomerDecisionChoice,
   type CustomerDecisionMode,
@@ -390,6 +392,8 @@ export function EingangDetailPage() {
   /** DUNNING-CHECK-PAYMENT-EXECUTION-01B — Ziel der Zahlungsprüfung. */
   const financeReferenceSectionRef = useRef<HTMLDivElement>(null);
   const [vorgangDialogRequest, setVorgangDialogRequest] = useState(0);
+  /* P1 EINGANGSSCHREIBEN — nach einer Antwort-Entscheidung neu ableiten. */
+  const [replyNeedRevision, setReplyNeedRevision] = useState(0);
   // CUSTOMER-FACHOBJEKT-04C — one decision state for all three manual accept entries.
   const [customerMode, setCustomerMode] = useState<CustomerDecisionMode | null>(null);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
@@ -1829,7 +1833,6 @@ export function EingangDetailPage() {
             item={item}
             materialDefault={setup.materialStandard}
             onLinked={handleVorgangLinked}
-            requestOpenDialog={vorgangDialogRequest}
           />
         )}
 
@@ -2145,8 +2148,24 @@ export function EingangDetailPage() {
       />
     ) : null;
 
+  /*
+   * P1 EINGANGSSCHREIBEN — der Antwortbedarf aus der einen Ableitung, sichtbar
+   * direkt unter der Experience Card. `replyNeedRevision` lässt nach einer
+   * Entscheidung neu ableiten.
+   */
+  const replyNeed = resolveDocumentReplyNeed({ inboxId: item.id });
+  const replyNeedPanel = (
+    <DocumentReplyNeedPanel
+      key={`reply-need-${item.id}-${replyNeedRevision}`}
+      need={replyNeed}
+      source={{ type: 'inbox', id: item.id }}
+      onChanged={() => setReplyNeedRevision((n) => n + 1)}
+    />
+  );
+
   const reviewExperience = (
     <DocumentReviewExperience
+      afterExperienceCard={replyNeedPanel}
       item={item}
       workflow={workflow}
       meaningSlot={meaningPanel}
@@ -2369,6 +2388,27 @@ export function EingangDetailPage() {
       >
         {reviewExperience}
       </div>
+
+      {/*
+        * P1 EINGANGSSCHREIBEN — der Zuordnungsdialog ohne Karte, unabhängig davon,
+        * ob der Technik-Abschnitt mit der Karte gerade gerendert ist. Die Hauptaktion
+        * „Passendem Vorgang zuordnen" öffnet genau diesen bestehenden Dialog.
+        *
+        * Bewusst ohne `analysisAllowed`: Die Karte bietet die Aktion an, also muss
+        * sie wirken. In der App-Abnahme lieferte die Live-Prüfung für eine
+        * angebotene Zuordnung „nicht firmenrelevant" — der Klick blieb ohne
+        * Wirkung. Zugeordnet wird weiterhin nur nach Auswahl und Bestätigung im
+        * Dialog; die Karte im Technik-Abschnitt behält ihre bisherige Bedingung.
+        */}
+      {!workflow?.contractOrderProposal ? (
+        <InboxVorgangPanel
+          item={item}
+          materialDefault={setup.materialStandard}
+          onLinked={handleVorgangLinked}
+          requestOpenDialog={vorgangDialogRequest}
+          dialogOnly
+        />
+      ) : null}
 
       {duplicateDocument && (
         <ImportToArchiveDialog

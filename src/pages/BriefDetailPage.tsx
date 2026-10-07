@@ -20,6 +20,7 @@ import { useApp } from '../context/AppContext';
 import { getBusinessLetterById } from '../services/businessLetterService';
 import { getCustomerById } from '../services/customerStoreService';
 import { getVorgangById } from '../services/vorgangService';
+import { resolveDocumentReplySource } from '../services/document/documentReplySourceService';
 import {
   downloadBusinessLetterPdf,
   generateBusinessLetterPdf,
@@ -98,6 +99,8 @@ export function BriefDetailPage() {
   const archivDokument = brief.documentId ? getDocumentById(brief.documentId) : undefined;
   const kunde = brief.customerId ? getCustomerById(brief.customerId) : null;
   const vorgang = brief.vorgangId ? getVorgangById(brief.vorgangId) : null;
+  /* P1 EINGANGSSCHREIBEN — das Eingangsschreiben, auf das dieser Brief antwortet (nur Herkunft). */
+  const antwortQuelle = brief.replyTo ? resolveDocumentReplySource(brief.replyTo) : null;
   const datum = brief.letterDate
     ? new Date(brief.letterDate).toLocaleDateString(language === 'de' ? 'de-DE' : undefined)
     : '';
@@ -242,6 +245,22 @@ export function BriefDetailPage() {
             <div>
               <dt>{translate('businessLetter.detail.vorgang')}</dt>
               <dd data-testid="letter-detail-vorgang">{vorgang.title}</dd>
+            </div>
+          ) : null}
+          {antwortQuelle ? (
+            <div>
+              <dt>{translate('replyNeed.letter.detailLabel')}</dt>
+              <dd data-testid="letter-detail-reply-to">
+                <Link
+                  to={
+                    antwortQuelle.ref.type === 'inbox'
+                      ? `/ablage/${encodeURIComponent(antwortQuelle.ref.id)}`
+                      : `/dokumente/${encodeURIComponent(antwortQuelle.ref.id)}`
+                  }
+                >
+                  {antwortQuelle.title || translate('replyNeed.sourceUntitled')}
+                </Link>
+              </dd>
             </div>
           ) : null}
           {istFertig && brief.documentId ? (

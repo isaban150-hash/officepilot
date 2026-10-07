@@ -44,6 +44,7 @@ import {
   type UploadedEmailAttachment,
 } from './emailMessageCloudService';
 import type { EmailMessage } from '../../types/emailMessage';
+import { normalizeDocumentReplySourceRef, type DocumentReplySourceRef } from '../../types/documentReply';
 
 export type FreeEmailPhase = 'editing' | 'creating' | 'sending';
 
@@ -70,6 +71,12 @@ export interface FreeEmailDraft {
    * KI-Generierungen dieses Entwurfs (höchstens 3).
    */
   replyTail?: string;
+  /**
+   * P1 EINGANGSSCHREIBEN — das Eingangsschreiben, auf das diese Mail antwortet.
+   * Eigener Entwurfsplatz je Schreiben; nach erfolgreichem Versand gilt es als
+   * beantwortet (Kommunikationsverlauf). Keine zweite Statuswahrheit.
+   */
+  sourceRef?: DocumentReplySourceRef;
   aiInsertedText?: string;
   aiGenerations?: number;
   attachments: UploadedEmailAttachment[];
@@ -84,8 +91,18 @@ function currentScopeKey(): string {
   return buildDocumentBlobScopeKey(getActiveStorageScope());
 }
 
-export function freeEmailDraftStorageKey(scopeKey: string, replyToMessageId?: string): string {
-  return replyToMessageId ? `${DRAFT_PREFIX}:${scopeKey}:reply:${replyToMessageId}` : `${DRAFT_PREFIX}:${scopeKey}`;
+export function freeEmailDraftStorageKey(
+  scopeKey: string,
+  replyToMessageId?: string,
+  sourceRef?: DocumentReplySourceRef,
+): string {
+  if (replyToMessageId) return `${DRAFT_PREFIX}:${scopeKey}:reply:${replyToMessageId}`;
+  if (sourceRef) return `${DRAFT_PREFIX}:${scopeKey}:source:${sourceRef.type}:${sourceRef.id}`;
+  return `${DRAFT_PREFIX}:${scopeKey}`;
+}
+
+function sameSource(a: DocumentReplySourceRef | undefined, b: DocumentReplySourceRef | undefined): boolean {
+  return (a?.type ?? '') === (b?.type ?? '') && (a?.id ?? '') === (b?.id ?? '');
 }
 
 export function generateClientMessageId(): string {
@@ -93,13 +110,18 @@ export function generateClientMessageId(): string {
   throw new Error('E-MAIL: sichere Zufallsquelle nicht verfügbar.');
 }
 
-export function loadFreeEmailDraft(scopeKey = currentScopeKey(), replyToMessageId?: string): FreeEmailDraft | null {
+export function loadFreeEmailDraft(
+  scopeKey = currentScopeKey(),
+  replyToMessageId?: string,
+  sourceRef?: DocumentReplySourceRef,
+): FreeEmailDraft | null {
   try {
-    const raw = localStorage.getItem(freeEmailDraftStorageKey(scopeKey, replyToMessageId));
+    const raw = localStorage.getItem(freeEmailDraftStorageKey(scopeKey, replyToMessageId, sourceRef));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as FreeEmailDraft;
     if (parsed?.version !== 1 || parsed.scopeKey !== scopeKey || typeof parsed.clientMessageId !== 'string' || !parsed.clientMessageId) return null;
     if ((parsed.replyToMessageId ?? undefined) !== (replyToMessageId ?? undefined)) return null;
+    if (!replyToMessageId && sourceRef && !sameSource(normalizeDocumentReplySourceRef(parsed.sourceRef), sourceRef)) return null;
     return { ...parsed, attachments: Array.isArray(parsed.attachments) ? parsed.attachments : [] };
   } catch {
     return null;
@@ -109,22 +131,27 @@ export function loadFreeEmailDraft(scopeKey = currentScopeKey(), replyToMessageI
 export function saveFreeEmailDraft(draft: FreeEmailDraft): FreeEmailDraft {
   const next = { ...draft, updatedAt: new Date().toISOString() };
   try {
-    localStorage.setItem(freeEmailDraftStorageKey(draft.scopeKey, draft.replyToMessageId), JSON.stringify(next));
+    localStorage.setItem(freeEmailDraftStorageKey(draft.scopeKey, draft.replyToMessageId, draft.sourceRef), JSON.stringify(next));
   } catch {
     /* Speicher nicht verfügbar — Versand funktioniert auch ohne Wiederaufnahme. */
   }
   return next;
 }
 
-export function clearFreeEmailDraft(scopeKey = currentScopeKey(), replyToMessageId?: string): void {
+export function clearFreeEmailDraft(
+  scopeKey = currentScopeKey(),
+  replyToMessageId?: string,
+  sourceRef?: DocumentReplySourceRef,
+): void {
   try {
-    localStorage.removeItem(freeEmailDraftStorageKey(scopeKey, replyToMessageId));
+    localStorage.removeItem(freeEmailDraftStorageKey(scopeKey, replyToMessageId, sourceRef));
   } catch {
     /* ignorieren */
   }
 }
 
-export function createFreeEmailDraft(input: Partial<Pick<FreeEmailDraft, 'to' | 'cc' | 'subject' | 'bodyText' | 'customerId' | 'vorgangId' | 'signatureApplied' | 'replyToMessageId' | 'replyTail'>> = {}): FreeEmailDraft {
+export function createFreeEmailDraft(input: Partial<Pick<FreeEmailDraft, 'to' | 'cc' | 'subject' | 'bodyText' | 'customerId' | 'vorgangId' | 'signatureApplied' | 'replyToMessageId' | 'replyTail' | 'sourceRef'>> = {}): FreeEmailDraft {
+  const sourceRef = normalizeDocumentReplySourceRef(input.sourceRef);
   return saveFreeEmailDraft({
     version: 1,
     scopeKey: currentScopeKey(),
@@ -140,6 +167,7 @@ export function createFreeEmailDraft(input: Partial<Pick<FreeEmailDraft, 'to' | 
     vorgangId: input.vorgangId,
     replyToMessageId: input.replyToMessageId,
     replyTail: input.replyTail,
+    ...(sourceRef ? { sourceRef } : {}),
     attachments: [],
     phase: 'editing',
     updatedAt: new Date().toISOString(),
@@ -319,7 +347,7 @@ async function runSendFreeEmail(input: FreeEmailDraft, deps: FreeEmailDeps): Pro
     return { ok: true, action: 'in_progress', message, chain };
   }
 
-  clearFreeEmailDraft(draft.scopeKey, draft.replyToMessageId);
+  clearFreeEmailDraft(draft.scopeKey, draft.replyToMessageId, draft.sourceRef);
   return { ok: true, action: actionFor(message, response.body.action), message, chain };
 }
 

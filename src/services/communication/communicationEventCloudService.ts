@@ -17,7 +17,7 @@
  * Cloud-Wahrheit und erzeugen keine solchen Ereignisse.
  */
 import type { CommunicationContextRef } from '../../types/communication';
-import type { CommunicationEvent } from '../../types/communicationHistory';
+import type { CommunicationAnswerRef, CommunicationEvent } from '../../types/communicationHistory';
 import type { SyncMeta } from '../../types/sync';
 
 /** Zeile aus `public.workspace_communication_events` — exakt die Spalten der Migration. */
@@ -50,6 +50,16 @@ export interface CommunicationEventCloudPayload {
   channel?: CommunicationEvent['channel'];
   userInputExcerpt?: string;
   resultExcerpt?: string;
+  /** P1 EINGANGSSCHREIBEN — Nachweis der Antwort bei „beantwortet". */
+  answerRef?: CommunicationAnswerRef;
+}
+
+/** Nur ein vollständiger Nachweis reist mit — Art und Kennung. */
+function parseAnswerRef(value: unknown): CommunicationAnswerRef | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const raw = value as Record<string, unknown>;
+  if ((raw.kind !== 'letter' && raw.kind !== 'email') || !isNonEmptyString(raw.id)) return undefined;
+  return { kind: raw.kind, id: raw.id };
 }
 
 function isNonEmptyString(value: unknown): value is string {
@@ -83,6 +93,8 @@ export function stripCommunicationEventForCloud(event: CommunicationEvent): Comm
   if (isNonEmptyString(event.channel)) payload.channel = event.channel;
   if (isNonEmptyString(event.userInputExcerpt)) payload.userInputExcerpt = event.userInputExcerpt;
   if (isNonEmptyString(event.resultExcerpt)) payload.resultExcerpt = event.resultExcerpt;
+  const answerRef = parseAnswerRef(event.answerRef);
+  if (answerRef) payload.answerRef = answerRef;
   return payload;
 }
 
@@ -141,6 +153,8 @@ export function parseCommunicationEventCloudPayload(
   if (isNonEmptyString(inner.channel)) parsed.channel = inner.channel as CommunicationEvent['channel'];
   if (isNonEmptyString(inner.userInputExcerpt)) parsed.userInputExcerpt = inner.userInputExcerpt;
   if (isNonEmptyString(inner.resultExcerpt)) parsed.resultExcerpt = inner.resultExcerpt;
+  const answerRef = parseAnswerRef(inner.answerRef);
+  if (answerRef) parsed.answerRef = answerRef;
   return parsed;
 }
 

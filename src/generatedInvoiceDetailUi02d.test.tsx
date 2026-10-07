@@ -261,7 +261,7 @@ describe('OFFICEPILOT-GENERATED-INVOICE-DETAIL-UI-02D', () => {
     unmount(mount);
   });
 
-  it('C: ein Fremddokument behält Papierhinweis und Antwortschritt', async () => {
+  it('C: ein Fremddokument behält Papierhinweis und Antwortweg — ohne erkannten Antwortbedarf kein Antwortschritt (P1)', async () => {
     const foreign = addDocument({
       title: 'Eingangsrechnung Holz AG',
       category: 'eingangsrechnung',
@@ -286,7 +286,13 @@ describe('OFFICEPILOT-GENERATED-INVOICE-DETAIL-UI-02D', () => {
     // wurde nichts.
     expect(text).toContain('Original ablegen');
     expect(text).toContain('Original noch nicht als abgeheftet markiert');
-    expect(text).toContain('Antwort vorbereiten');
+    /*
+     * P1 EINGANGSSCHREIBEN — eine Eingangsrechnung ohne erkannte Antwortfrist
+     * verlangt keine Antwort. Vorher galt jedes Dokument ohne Ereignis als
+     * „Antwort offen" und bekam den Schritt „Antwort vorbereiten …" — der
+     * Widerspruch zum Lebenszyklus ist beseitigt. Der Antwortweg selbst bleibt.
+     */
+    expect(text).not.toContain('Antwort vorbereiten');
     // 02F — auch der aufgeklappte Bereich bleibt für Fremdpost unverändert.
     expect(text).toContain('Original noch abheften');
     expect(text).toContain('Antwort formulieren');

@@ -12,6 +12,7 @@ import type {
   CommunicationResult,
 } from '../types/communication';
 import type {
+  CommunicationAnswerRef,
   CommunicationEvent,
   CommunicationEventInput,
   CommunicationEventType,
@@ -55,7 +56,8 @@ function isDuplicateEvent(candidate: CommunicationEventInput, existing: Communic
     latest.channel === candidate.channel &&
     contextRefsEqual(latest.contextRef, candidate.contextRef) &&
     latest.userInputExcerpt === candidate.userInputExcerpt &&
-    latest.resultExcerpt === candidate.resultExcerpt
+    latest.resultExcerpt === candidate.resultExcerpt &&
+    (latest.answerRef?.id ?? '') === (candidate.answerRef?.id ?? '')
   );
 }
 
@@ -234,17 +236,35 @@ export function getCommunicationReplyStatus(
   return REPLY_STATUS_BY_EVENT[latest.type] ?? 'needs_reply';
 }
 
+/**
+ * „Beantwortet" — ohne Optionen wie bisher die Markierung von Hand.
+ *
+ * P1 EINGANGSSCHREIBEN — nach einer ausdrücklich bestätigten Antwort (Brief
+ * fertiggestellt und als Antwort erfasst, E-Mail gesendet) reisen Kanal und
+ * der Nachweis auf die Antwort mit. Es bleibt dasselbe Ereignis.
+ */
 export function recordMarkedAnswered(
   contextRef: CommunicationContextRef,
   userInput?: string,
+  options: { channel?: CommunicationChannel; answerRef?: CommunicationAnswerRef } = {},
 ): CommunicationEvent | null {
+  const answerRef =
+    options.answerRef && options.answerRef.id.trim()
+      ? { kind: options.answerRef.kind, id: options.answerRef.id.trim() }
+      : undefined;
   return addCommunicationEvent({
     type: 'marked_answered',
     contextRef,
     status: 'complete',
     disclaimerShown: false,
+    ...(options.channel ? { channel: options.channel } : {}),
+    ...(answerRef ? { answerRef } : {}),
     userInputExcerpt: userInput ? createExcerpt(userInput) : undefined,
-    resultExcerpt: 'Als erledigt markiert',
+    resultExcerpt: answerRef
+      ? answerRef.kind === 'letter'
+        ? 'Antwort per Brief erfasst'
+        : 'Antwort per E-Mail gesendet'
+      : 'Als erledigt markiert',
   });
 }
 

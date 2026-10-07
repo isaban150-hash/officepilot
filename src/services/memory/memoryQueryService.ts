@@ -1,6 +1,6 @@
 import type { AssistantAction, AssistantAnswer } from '../../types/models';
 import type { DocumentMemory, MemoryQueryAnswer } from '../../types/memory';
-import { getCommunicationReplyStatus } from '../communicationHistoryService';
+import { resolveDocumentReplyNeed, toLifecycleReplyStatus } from '../documentReplyNeedService';
 import { getAllDocuments } from '../documentService';
 import {
   formatPaperFilingInstruction,
@@ -465,7 +465,8 @@ function answerReplyStatus(): MemoryQueryAnswer | null {
   const statuses = documents
     .map((doc) => ({
       doc,
-      status: getCommunicationReplyStatus({ type: 'document', id: doc.id }),
+      /* P1 EINGANGSSCHREIBEN — dieselbe Ableitung wie Lebenszyklus und Antwortblock. */
+      status: toLifecycleReplyStatus(resolveDocumentReplyNeed({ documentId: doc.id })),
     }))
     .filter((item) => item.status !== 'no_reply_needed');
 

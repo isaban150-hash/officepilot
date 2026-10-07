@@ -28,6 +28,14 @@ import { resolveCloudWorkspaceId } from '../services/workspace/workspaceSyncPayl
 import type { BusinessLetterRecipient } from '../types/businessLetter';
 import type { TranslationKey } from '../i18n';
 import { getBusinessDay } from '../services/businessDateService';
+import { SimpleConfirmDialog } from '../components/ui/SimpleConfirmDialog';
+import { recordMarkedAnswered } from '../services/communicationHistoryService';
+import { isReplyNeedPending, resolveDocumentReplyNeed } from '../services/documentReplyNeedService';
+import {
+  replySourceToContextRef,
+  resolveDocumentReplySource,
+} from '../services/document/documentReplySourceService';
+import { normalizeDocumentReplySourceRef } from '../types/documentReply';
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -99,7 +107,17 @@ export function BriefEditorPage() {
    * Nur ein gespeichertes Schreiben ohne Kunden startet als freier Brief.
    */
   const [freierEmpfaenger, setFreierEmpfaenger] = useState(
-    vorhandener ? !vorhandener.customerId : false,
+    vorhandener
+      ? !vorhandener.customerId
+      : /*
+         * P1 EINGANGSSCHREIBEN — antwortet der Brief einem Absender ohne bestätigten
+         * Kunden, startet er als freier Empfänger mit dem belegten Namen.
+         */
+        Boolean(
+          vorbelegung?.replyTo &&
+            !vorbelegung.customerId &&
+            (vorbelegung.recipient.name.trim() || vorbelegung.recipient.company?.trim()),
+        ),
   );
   const [empfaenger, setEmpfaenger] = useState<BusinessLetterRecipient>(() => {
     if (vorhandener?.recipient) return vorhandener.recipient;
@@ -122,6 +140,18 @@ export function BriefEditorPage() {
   );
   const [fehler, setFehler] = useState<string | null>(null);
   const [gespeicherteId, setGespeicherteId] = useState(vorhandener?.id ?? '');
+  /*
+   * P1 EINGANGSSCHREIBEN — das Eingangsschreiben, auf das dieser Brief antwortet.
+   * Reine Herkunft: Sie reist beim Anlegen mit und bleibt am Brief stehen. Ob das
+   * Schreiben beantwortet ist, entscheidet der Benutzer beim Fertigstellen.
+   */
+  const antwortAuf = vorhandener?.replyTo ?? normalizeDocumentReplySourceRef(vorbelegung?.replyTo);
+  const antwortQuelle = useMemo(
+    () => (antwortAuf ? resolveDocumentReplySource(antwortAuf) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [antwortAuf?.type, antwortAuf?.id],
+  );
+  const [erfassungsFrage, setErfassungsFrage] = useState<string | null>(null);
 
   const effektiveKundeId = kundeId || startKundeAusVorgang;
 
@@ -163,8 +193,9 @@ export function BriefEditorPage() {
 
   const istFertig = vorhandener?.status === 'finalized';
   useEffect(() => {
-    if (istFertig && vorhandener) navigate(`/schreiben/${vorhandener.id}`, { replace: true });
-  }, [istFertig, vorhandener, navigate]);
+    /* P1 — die offene Rückfrage nach dem Fertigstellen wird zuerst beantwortet. */
+    if (istFertig && vorhandener && !erfassungsFrage) navigate(`/schreiben/${vorhandener.id}`, { replace: true });
+  }, [istFertig, vorhandener, navigate, erfassungsFrage]);
 
   const wechsleKunde = (naechsterId: string) => {
     setKundeId(naechsterId);
@@ -188,6 +219,7 @@ export function BriefEditorPage() {
     recipient: empfaenger,
     customerId: freierEmpfaenger ? undefined : effektiveKundeId || undefined,
     vorgangId: vorgangId || undefined,
+    ...(antwortAuf ? { replyTo: antwortAuf } : {}),
   });
 
   const melde = (errorKey: string) => {
@@ -231,6 +263,36 @@ export function BriefEditorPage() {
       return;
     }
     showToast(translate('businessLetter.toast.finalized'));
+    /*
+     * P1 EINGANGSSCHREIBEN — Fertigstellen erledigt das Eingangsschreiben nicht von
+     * selbst. Ist die Antwort dort noch offen, fragt OfficeTakt ausdrücklich, ob
+     * dieser Brief als Antwort erfasst werden soll.
+     */
+    if (
+      antwortAuf &&
+      isReplyNeedPending(
+        resolveDocumentReplyNeed(
+          antwortAuf.type === 'inbox' ? { inboxId: antwortAuf.id } : { documentId: antwortAuf.id },
+        ),
+      )
+    ) {
+      setErfassungsFrage(id);
+      return;
+    }
+    navigate(`/schreiben/${id}`);
+  };
+
+  const beendeErfassungsFrage = (alsBeantwortet: boolean) => {
+    const id = erfassungsFrage;
+    setErfassungsFrage(null);
+    if (!id) return;
+    if (alsBeantwortet && antwortAuf) {
+      const ereignis = recordMarkedAnswered(replySourceToContextRef(antwortAuf), undefined, {
+        channel: 'letter',
+        answerRef: { kind: 'letter', id },
+      });
+      if (ereignis) showToast(translate('replyNeed.letter.recordedToast'));
+    }
     navigate(`/schreiben/${id}`);
   };
 
@@ -245,11 +307,40 @@ export function BriefEditorPage() {
         backTestId="letter-editor-back"
       />
 
+      {antwortAuf ? (
+        <p className="form-hint" data-testid="letter-reply-to">
+          {translate('replyNeed.letter.sourceHint').replace(
+            '{title}',
+            antwortQuelle?.title || translate('replyNeed.sourceUntitled'),
+          )}
+        </p>
+      ) : null}
+
       {fehler ? (
         <p className="form-error" role="alert" data-testid="letter-editor-error">
           {fehler}
         </p>
       ) : null}
+
+      <SimpleConfirmDialog
+        open={Boolean(erfassungsFrage)}
+        title={translate('replyNeed.letter.confirmTitle')}
+        message={translate('replyNeed.letter.confirmMessage').replace(
+          '{title}',
+          antwortQuelle?.title || translate('replyNeed.sourceUntitled'),
+        )}
+        confirmLabel={translate('replyNeed.letter.confirmYes')}
+        cancelLabel={translate('replyNeed.letter.confirmNo')}
+        confirmVariant="primary"
+        confirmTestId="letter-reply-answered-confirm"
+        cancelTestId="letter-reply-answered-cancel"
+        dialogTestId="letter-reply-answered-dialog"
+        onConfirm={() => {
+          beendeErfassungsFrage(true);
+          return true;
+        }}
+        onCancel={() => beendeErfassungsFrage(false)}
+      />
 
       <DetailSection title={translate('businessLetter.editor.recipientSection')}>
         <fieldset className="form-group">
