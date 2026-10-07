@@ -25,6 +25,7 @@ import {
 import type { InvoiceDraftRecord } from './types/invoiceDraftDurability';
 import * as workspaceSyncPayloadService from './services/workspace/workspaceSyncPayloadService';
 import { createTestVorgang } from './test/fixtures';
+import { disableInvoiceDraftCloudSyncForTests } from './test/invoiceDraftCloudSwitch';
 import type { Customer, CustomerBilling, Vorgang, VorgangInvoice } from './types/models';
 
 const completeSetup = { ...DEFAULT_SETUP, setupComplete: true, setupVersion: 1 };
@@ -232,6 +233,10 @@ function seedVorgang(overrides: Partial<Vorgang> = {}): Vorgang {
 describe('CUSTOMER-FACHOBJEKT-05B', () => {
   beforeEach(async () => {
     localStorage.clear();
+    // CLOUD-SYNC S5 — die Szenarien sind unabhängig und setzen nur die IndexedDB
+    // zurück; mit Cloud-Seite setzte ein leerer Slot den Cloud-Entwurf des vorigen
+    // Szenarios fort (S5, Fall B). Deshalb Entwurfs-Sync aus (Notausschalter).
+    disableInvoiceDraftCloudSyncForTests();
     hydrateCustomerStore([]);
     hydrateVorgangStore([]);
     hydrateDocumentStore([]);

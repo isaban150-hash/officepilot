@@ -61,6 +61,33 @@ import {
   planPaperRegisterEntryLostAckAdoption,
 } from '../memory/paperRegisterCloudService';
 import { planLegacyPaperFilingEntries } from '../officePilotMemoryService';
+import {
+  mergeCommunicationEventsFromPull,
+  planCommunicationEventBackfill,
+} from '../communication/communicationEventCloudService';
+import {
+  mergeKnowledgeFactsFromPull,
+  planKnowledgeFactBackfill,
+  planKnowledgeFactLostAckAdoption,
+} from '../knowledge/knowledgeFactCloudService';
+import {
+  mergeInvoiceDraftsFromPull,
+  planInvoiceDraftBackfill,
+  planInvoiceDraftLostAckAdoption,
+} from '../invoice/invoiceDraftCloudService';
+import {
+  mergeOrderDraftsFromPull,
+  planOrderDraftBackfill,
+  planOrderDraftLostAckAdoption,
+} from '../order/orderDraftCloudService';
+import {
+  adoptOrderAmendmentDraftBaseVersions,
+  listOrderAmendmentDraftEntities,
+  mergeOrderAmendmentDraftsFromPull,
+  planOrderAmendmentDraftBackfill,
+  planOrderAmendmentDraftLostAckAdoption,
+} from '../orderAmendment/orderAmendmentDraftCloudService';
+import { listOrderAmendmentConfirmIntents } from '../orderAmendment/orderAmendmentConfirmIntentService';
 import { isSupabaseSyncAllowed } from '../sync/cloudSyncAllowlist';
 import {
   buildCompanyProfileCloudPayload,
@@ -338,6 +365,27 @@ function adoptLostAckBaseVersion<T extends { sync?: SyncMeta }>(
  * gegen lokalen Löschwunsch). Dann wird der Auftrag über die vorhandene
  * `markOutboxEntriesCompleted` abgeschlossen — kein zweiter Grabstein-Write.
  */
+/**
+ * CLOUD-SYNC S6 — offene Sendeauftraege eines Entwurfs abschliessen, die der
+ * Abgleich als gegenstandslos erkannt hat (beide Seiten beendet; ein Verwerfen,
+ * das wegen einer neueren Fassung anderswo nicht uebernommen wurde). Ohne das
+ * stuenden sie dauerhaft als Konflikt in der Warteschlange.
+ */
+function completeActiveDraftOutboxEntries(entityType: SyncEntityType, entityIds: string[]): void {
+  if (entityIds.length === 0) return;
+  const ids = new Set(entityIds);
+  markOutboxEntriesCompleted(
+    getSyncOutboxSnapshot()
+      .filter(
+        (entry) =>
+          entry.entityType === entityType &&
+          ids.has(entry.entityId) &&
+          (entry.status === 'pending' || entry.status === 'error' || entry.status === 'blocked'),
+      )
+      .map((entry) => entry.id),
+  );
+}
+
 function applyLostAckAdoptionToOutbox(
   state: AppPersistedState,
   entityType: SyncEntityType,
@@ -1457,6 +1505,318 @@ export function mergeRemoteWorkspacePullIntoState(
         operation: 'create',
         version: 0,
       });
+    }
+  }
+
+  /*
+   * CLOUD-SYNC S2 — Kommunikationsverlauf.
+   *
+   * Append-only wie die Mahnnachweise: erst der Abgleich als Vereinigung nach
+   * Kennung, dann der Altbestand. Einen Wiederanlauf nach verlorener
+   * Bestaetigung braucht es nicht — der Server gibt eine vorhandene Kennung
+   * unveraendert zurueck, eine Wiederholung ist damit immer ein Replay.
+   *
+   * Erst mit der Freigabe des Typs, aus demselben Grund wie bei S1: Vorher
+   * verwirft der Versand jeden Auftrag als nur-lokal, und der Altbestand liefe
+   * bei jedem Abzug erneut in die Warteschlange.
+   */
+  if (isSupabaseSyncAllowed('communication_event')) {
+    const remoteEventRows = pull.communicationEvents ?? [];
+    const eventMerge = mergeCommunicationEventsFromPull(
+      next.communicationHistory ?? state.communicationHistory ?? [],
+      remoteEventRows,
+      state.syncClient!.deviceId,
+      workspaceId,
+    );
+    conflicts.push(...eventMerge.conflicts);
+    next.communicationHistory = eventMerge.events;
+
+    // Altbestand — Ereignisse aus der Zeit vor S2, genau einmal je Kennung.
+    for (const eventId of planCommunicationEventBackfill(eventMerge.events, remoteEventRows)) {
+      enqueueSyncOutbox({
+        entityType: 'communication_event',
+        entityId: eventId,
+        operation: 'create',
+        version: 0,
+      });
+    }
+  }
+
+  /*
+   * CLOUD-SYNC S3 — bestaetigtes Wissen.
+   *
+   * Derselbe Dreischritt wie bei Notizen, Briefen und der Papierablage:
+   * Wiederanlauf nach verlorener Bestaetigung, Abgleich, Altbestand. Erst mit
+   * der Freigabe des Typs, aus demselben Grund wie bei S1 und S2.
+   */
+  if (isSupabaseSyncAllowed('knowledge_fact')) {
+    const remoteFactRows = pull.knowledgeFacts ?? [];
+    const localFacts = next.knowledgeFacts ?? state.knowledgeFacts ?? [];
+    const dirtyFactIds = activeOutboxEntityIds(state, 'knowledge_fact');
+
+    const factAdoption = planKnowledgeFactLostAckAdoption(
+      localFacts,
+      remoteFactRows,
+      dirtyFactIds,
+      sentWritesFor(state, 'knowledge_fact'),
+    );
+    const adoptedFactIds = new Set([
+      ...factAdoption.adopt,
+      ...factAdoption.settle,
+      ...factAdoption.notAccepted,
+    ]);
+
+    const factMerge = mergeKnowledgeFactsFromPull(
+      adoptedFactIds.size > 0
+        ? localFacts.map((fact) =>
+            adoptedFactIds.has(fact.id)
+              ? adoptLostAckBaseVersion(fact, state, workspaceId, factAdoption.baseVersions.get(fact.id) ?? 1)
+              : fact,
+          )
+        : localFacts,
+      adoptedFactIds.size > 0
+        ? remoteFactRows.filter((row) => !adoptedFactIds.has(row.client_fact_id))
+        : remoteFactRows,
+      state.syncClient!.deviceId,
+      workspaceId,
+      dirtyFactIds,
+    );
+
+    applyLostAckAdoptionToOutbox(state, 'knowledge_fact', factAdoption);
+    conflicts.push(...factMerge.conflicts);
+    next.knowledgeFacts = factMerge.facts;
+    clearOutboxSentProof('knowledge_fact', [
+      ...factAdoption.adopt,
+      ...factAdoption.settle,
+      ...factAdoption.evaluatedProofs,
+    ]);
+
+    // Altbestand — wie bei den Notizen: verglichen wird gegen alle Serverkennungen.
+    for (const factId of planKnowledgeFactBackfill(factMerge.facts, remoteFactRows)) {
+      enqueueSyncOutbox({
+        entityType: 'knowledge_fact',
+        entityId: factId,
+        operation: 'create',
+        version: 0,
+      });
+    }
+  }
+
+  /*
+   * CLOUD-SYNC S5 — Rechnungsentwürfe (fachlicher Kern).
+   *
+   * Derselbe Dreischritt wie bei S1 und S3: Wiederanlauf nach verlorener
+   * Bestaetigung, Abgleich, Altbestand — erst mit der Freigabe des Typs. Anders
+   * als dort haelt der Abgleich einen Konflikt am Spiegel fest, mit dem
+   * Serverstand: Der Rechnungseditor zeigt ihn, und der Nutzer entscheidet.
+   * Nichts wird still ueberschrieben, in keine Richtung.
+   */
+  if (isSupabaseSyncAllowed('invoice_draft')) {
+    const remoteDraftRows = pull.invoiceDrafts ?? [];
+    const localDrafts = next.invoiceDrafts ?? state.invoiceDrafts ?? [];
+    const dirtyDraftIds = activeOutboxEntityIds(state, 'invoice_draft');
+
+    const draftAdoption = planInvoiceDraftLostAckAdoption(
+      localDrafts,
+      remoteDraftRows,
+      dirtyDraftIds,
+      sentWritesFor(state, 'invoice_draft'),
+    );
+    const adoptedDraftIds = new Set([
+      ...draftAdoption.adopt,
+      ...draftAdoption.settle,
+      ...draftAdoption.notAccepted,
+    ]);
+
+    const draftMerge = mergeInvoiceDraftsFromPull(
+      adoptedDraftIds.size > 0
+        ? localDrafts.map((draft) =>
+            adoptedDraftIds.has(draft.id)
+              ? adoptLostAckBaseVersion(draft, state, workspaceId, draftAdoption.baseVersions.get(draft.id) ?? 1)
+              : draft,
+          )
+        : localDrafts,
+      adoptedDraftIds.size > 0
+        ? remoteDraftRows.filter((row) => !adoptedDraftIds.has(row.client_draft_id))
+        : remoteDraftRows,
+      state.syncClient!.deviceId,
+      workspaceId,
+      dirtyDraftIds,
+    );
+
+    applyLostAckAdoptionToOutbox(state, 'invoice_draft', draftAdoption);
+    conflicts.push(...draftMerge.conflicts);
+    next.invoiceDrafts = draftMerge.entities;
+    clearOutboxSentProof('invoice_draft', [
+      ...draftAdoption.adopt,
+      ...draftAdoption.settle,
+      ...draftAdoption.evaluatedProofs,
+    ]);
+
+    // Altbestand — verglichen gegen alle Serverkennungen, Grabsteine eingeschlossen.
+    for (const draftId of planInvoiceDraftBackfill(draftMerge.entities, remoteDraftRows)) {
+      enqueueSyncOutbox({
+        entityType: 'invoice_draft',
+        entityId: draftId,
+        operation: 'create',
+        version: 0,
+      });
+    }
+  }
+
+  /*
+   * CLOUD-SYNC S6 — Auftragsentwürfe.
+   *
+   * Derselbe Dreischritt wie bei S1, S3 und S5: Wiederanlauf nach verlorener
+   * Bestaetigung, Abgleich, Altbestand — erst mit der Freigabe des Typs. Der
+   * Abgleich haelt einen Konflikt am Entwurf fest; ein Ende anderswo
+   * (verworfen, verbraucht) wird nie ueberschrieben und nie wiederbelebt. Eine
+   * Kennung, die bereits ein Vorgang ist, ist zum Auftrag geworden.
+   */
+  if (isSupabaseSyncAllowed('order_draft')) {
+    const remoteOrderDraftRows = pull.orderDrafts ?? [];
+    const localOrderDrafts = next.orderDrafts ?? state.orderDrafts ?? [];
+    const dirtyOrderDraftIds = activeOutboxEntityIds(state, 'order_draft');
+    const orderIds = new Set<string>([
+      ...(next.vorgaenge ?? state.vorgaenge).map((vorgang) => vorgang.id),
+      ...(pull.vorgaenge ?? []).map((row) => row.vorgang_id),
+    ]);
+
+    const orderDraftAdoption = planOrderDraftLostAckAdoption(
+      localOrderDrafts,
+      remoteOrderDraftRows,
+      dirtyOrderDraftIds,
+      sentWritesFor(state, 'order_draft'),
+    );
+    const adoptedOrderDraftIds = new Set([
+      ...orderDraftAdoption.adopt,
+      ...orderDraftAdoption.settle,
+      ...orderDraftAdoption.notAccepted,
+    ]);
+
+    const orderDraftMerge = mergeOrderDraftsFromPull(
+      adoptedOrderDraftIds.size > 0
+        ? localOrderDrafts.map((draft) =>
+            adoptedOrderDraftIds.has(draft.id)
+              ? adoptLostAckBaseVersion(draft, state, workspaceId, orderDraftAdoption.baseVersions.get(draft.id) ?? 1)
+              : draft,
+          )
+        : localOrderDrafts,
+      adoptedOrderDraftIds.size > 0
+        ? remoteOrderDraftRows.filter((row) => !adoptedOrderDraftIds.has(row.client_draft_id))
+        : remoteOrderDraftRows,
+      state.syncClient!.deviceId,
+      workspaceId,
+      dirtyOrderDraftIds,
+      orderIds,
+    );
+
+    applyLostAckAdoptionToOutbox(state, 'order_draft', orderDraftAdoption);
+    conflicts.push(...orderDraftMerge.conflicts);
+    next.orderDrafts = orderDraftMerge.drafts;
+    clearOutboxSentProof('order_draft', [
+      ...orderDraftAdoption.adopt,
+      ...orderDraftAdoption.settle,
+      ...orderDraftAdoption.evaluatedProofs,
+    ]);
+    // Gegenstandslose Sendeauftraege (beide Seiten beendet, abgewiesenes Verwerfen) abschliessen.
+    completeActiveDraftOutboxEntries('order_draft', orderDraftMerge.settledIds);
+
+    // Altbestand — verglichen gegen alle Serverkennungen, Endzustaende eingeschlossen.
+    for (const draftId of planOrderDraftBackfill(
+      orderDraftMerge.drafts,
+      remoteOrderDraftRows,
+      workspaceId,
+      orderIds,
+      dirtyOrderDraftIds,
+    )) {
+      enqueueSyncOutbox({ entityType: 'order_draft', entityId: draftId, operation: 'create', version: 0 });
+    }
+  }
+
+  /*
+   * CLOUD-SYNC S6 — Nachtragsentwuerfe.
+   *
+   * Nach dem Vorgang-Merge: Ein Cloud-Entwurf wird in genau seinen Vorgang
+   * eingehaengt. Fehlt der Auftrag hier noch, bleibt der Entwurf in der Cloud
+   * und kommt mit dem naechsten Abzug wieder — er geht nicht verloren und
+   * landet nie im falschen Vorgang. Entwuerfe mit offener Bestaetigungsabsicht
+   * gehoeren dem Wiederanlauf der Bestaetigung und bleiben unberuehrt.
+   */
+  if (isSupabaseSyncAllowed('order_amendment_draft')) {
+    const remoteAmendmentDraftRows = pull.orderAmendmentDrafts ?? [];
+    const dirtyAmendmentDraftIds = activeOutboxEntityIds(state, 'order_amendment_draft');
+    const intents = listOrderAmendmentConfirmIntents().filter((intent) => intent.workspaceId === workspaceId);
+    const lockedAmendmentDraftIds = new Set(
+      intents
+        .filter((intent) => intent.state === 'outcome_unknown' || intent.state === 'local_apply_pending')
+        .map((intent) => intent.draftId),
+    );
+    const vorgaengeVorher = next.vorgaenge ?? state.vorgaenge;
+    const tombstonesVorher = next.orderAmendmentDraftTombstones ?? state.orderAmendmentDraftTombstones ?? [];
+
+    const amendmentDraftAdoption = planOrderAmendmentDraftLostAckAdoption(
+      listOrderAmendmentDraftEntities({ vorgaenge: vorgaengeVorher, orderAmendmentDraftTombstones: tombstonesVorher }),
+      remoteAmendmentDraftRows,
+      dirtyAmendmentDraftIds,
+      sentWritesFor(state, 'order_amendment_draft'),
+    );
+    const adoptedAmendmentDraftIds = new Set([
+      ...amendmentDraftAdoption.adopt,
+      ...amendmentDraftAdoption.settle,
+      ...amendmentDraftAdoption.notAccepted,
+    ]);
+    const adopted = adoptOrderAmendmentDraftBaseVersions(
+      vorgaengeVorher,
+      tombstonesVorher,
+      amendmentDraftAdoption.baseVersions,
+      adoptedAmendmentDraftIds,
+      { deviceId: state.syncClient!.deviceId, workspaceId },
+    );
+
+    const amendmentDraftMerge = mergeOrderAmendmentDraftsFromPull({
+      vorgaenge: adopted.vorgaenge,
+      tombstones: adopted.tombstones,
+      remoteRows:
+        adoptedAmendmentDraftIds.size > 0
+          ? remoteAmendmentDraftRows.filter((row) => !adoptedAmendmentDraftIds.has(row.client_draft_id))
+          : remoteAmendmentDraftRows,
+      deviceId: state.syncClient!.deviceId,
+      workspaceId,
+      dirtyIds: dirtyAmendmentDraftIds,
+      lockedIds: lockedAmendmentDraftIds,
+    });
+
+    applyLostAckAdoptionToOutbox(state, 'order_amendment_draft', amendmentDraftAdoption);
+    conflicts.push(...amendmentDraftMerge.conflicts);
+    next.vorgaenge = amendmentDraftMerge.vorgaenge;
+    next.orderAmendmentDraftTombstones = amendmentDraftMerge.tombstones;
+    clearOutboxSentProof('order_amendment_draft', [
+      ...amendmentDraftAdoption.adopt,
+      ...amendmentDraftAdoption.settle,
+      ...amendmentDraftAdoption.evaluatedProofs,
+    ]);
+    completeActiveDraftOutboxEntries('order_amendment_draft', amendmentDraftMerge.settledIds);
+
+    // Altbestand — nur zu Auftraegen, die die Cloud als bestaetigte Auftraege kennt; nie mit Absicht.
+    const cloudOrderIds = new Set(
+      (pull.vorgaenge ?? [])
+        .filter((row) => !row.deleted)
+        .filter((row) => {
+          const payload = row.payload as Record<string, unknown> | null | undefined;
+          const confirmation = payload?.contractConfirmation;
+          return Boolean(confirmation) && typeof confirmation === 'object';
+        })
+        .map((row) => row.vorgang_id),
+    );
+    for (const draftId of planOrderAmendmentDraftBackfill({
+      vorgaenge: amendmentDraftMerge.vorgaenge,
+      remoteRows: remoteAmendmentDraftRows,
+      cloudOrderIds,
+      dirtyIds: dirtyAmendmentDraftIds,
+      intentDraftIds: new Set(intents.map((intent) => intent.draftId)),
+    })) {
+      enqueueSyncOutbox({ entityType: 'order_amendment_draft', entityId: draftId, operation: 'create', version: 0 });
     }
   }
 

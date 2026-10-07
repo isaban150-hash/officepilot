@@ -8,8 +8,12 @@ import { resolveMainDocumentFromRecognizedData } from './document/mainDocumentPa
  * sicher abgegrenzt, ist das nur der Text der Hauptseiten. Gespeichert bleibt
  * alles: `_extractedText` und `_pageTexts` werden nicht verändert.
  */
-export function getInboxExtractedDocumentText(item: InboxItem): string {
-  const haupt = resolveMainDocumentFromRecognizedData(item.recognizedData).text;
+export function getInboxExtractedDocumentText(
+  item: InboxItem,
+  /** CLOUD-SYNC S4 — Nacharbeit 1: ausdrückliche Firmenidentität; ohne sie gilt das aktuelle Firmenprofil. */
+  options: { ownCompanyName?: string } = {},
+): string {
+  const haupt = resolveMainDocumentFromRecognizedData(item.recognizedData, options).text;
   if (haupt) return haupt;
   return (
     item.recognizedData._extractedText ??

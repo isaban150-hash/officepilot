@@ -6,9 +6,7 @@ import {
   filterSyncActive,
   generateEntityId,
   isEntitySyncActive,
-  withNewEntitySync,
-  withTombstonedEntity,
-  withUpdatedEntitySync,
+  withTombstonedCloudEntityPreservingRemoteVersion,
 } from './sync/syncMetaService';
 import {
   getAllKnowledgeFromStore,
@@ -97,24 +95,28 @@ export function addKnowledgeFact(input: KnowledgeFactInput): KnowledgeMutationRe
   }
 
   const now = new Date().toISOString();
-  const fact = withNewEntitySync(
-    {
-      id: generateEntityId('knowledge'),
-      scope: input.scope,
-      scopeId,
-      scopeLabel: input.scopeLabel?.trim() || undefined,
-      category: input.category,
-      key,
-      value,
-      displayText,
-      sourceType: input.sourceType ?? 'user',
-      sourceId: input.sourceId,
-      confirmedAt: now,
-      createdAt: now,
-      active,
-    },
-    'knowledge_fact',
-  );
+  /*
+   * CLOUD-SYNC S3 / SYNC-VERSION-CONTRACT-02 — der neue Eintrag bekommt
+   * **keine** Sync-Meta, wie die Vorgangsnotiz. `sync.version` ist die zuletzt
+   * vom Server bestätigte Version; der Startwert 1 aus `withNewEntitySync` wäre
+   * eine Behauptung, die der Server nie bestätigt hat. Den Weg in die Cloud
+   * nimmt der Eintrag über den Änderungsverfolger.
+   */
+  const fact: KnowledgeFact = {
+    id: generateEntityId('knowledge'),
+    scope: input.scope,
+    scopeId,
+    scopeLabel: input.scopeLabel?.trim() || undefined,
+    category: input.category,
+    key,
+    value,
+    displayText,
+    sourceType: input.sourceType ?? 'user',
+    sourceId: input.sourceId,
+    confirmedAt: now,
+    createdAt: now,
+    active,
+  };
 
   prependKnowledgeToStore(fact);
   persistAll();
@@ -149,21 +151,19 @@ export function updateKnowledgeFact(
     return { success: false, errorKey: 'knowledge.duplicate' };
   }
 
-  const updated = withUpdatedEntitySync(
-    {
-      ...current,
-      scope: nextScope,
-      scopeId: nextScopeId,
-      scopeLabel: changes.scopeLabel !== undefined ? changes.scopeLabel.trim() || undefined : current.scopeLabel,
-      category: changes.category ?? current.category,
-      key: nextKey,
-      value: nextValue,
-      displayText: nextDisplayText,
-      active: nextActive,
-      updatedAt: new Date().toISOString(),
-    },
-    'knowledge_fact',
-  );
+  // CLOUD-SYNC S3 — lokale Fachänderung: `sync` bleibt, wie bei der Vorgangsnotiz.
+  const updated: KnowledgeFact = {
+    ...current,
+    scope: nextScope,
+    scopeId: nextScopeId,
+    scopeLabel: changes.scopeLabel !== undefined ? changes.scopeLabel.trim() || undefined : current.scopeLabel,
+    category: changes.category ?? current.category,
+    key: nextKey,
+    value: nextValue,
+    displayText: nextDisplayText,
+    active: nextActive,
+    updatedAt: new Date().toISOString(),
+  };
 
   const saved = replaceKnowledgeInStore(id, updated);
   if (!saved) return { success: false, errorKey: 'knowledge.notFound' };
@@ -174,7 +174,16 @@ export function updateKnowledgeFact(
 export function deleteKnowledgeFact(id: string): KnowledgeMutationResult {
   const current = getAllKnowledgeFromStore().find((fact) => fact.id === id && isEntitySyncActive(fact));
   if (!current) return { success: false, errorKey: 'knowledge.notFound' };
-  const tombstoned = withTombstonedEntity({ ...current, active: false }, 'knowledge_fact');
+  /*
+   * CLOUD-SYNC S3 — der Grabstein geht über `upsert_workspace_sync_entity` und
+   * darf die bestätigte Serverversion nicht hochzählen
+   * (TOMBSTONE-VERSION-CONTRACT-02); sonst wiese der Server ihn als
+   * Versionskonflikt ab, und die Löschung bliebe auf dem zweiten Gerät aus.
+   */
+  const tombstoned = withTombstonedCloudEntityPreservingRemoteVersion(
+    { ...current, active: false },
+    'knowledge_fact',
+  );
   replaceKnowledgeInStore(id, tombstoned);
   persistAll();
   return { success: true, fact: cloneFact(tombstoned) };

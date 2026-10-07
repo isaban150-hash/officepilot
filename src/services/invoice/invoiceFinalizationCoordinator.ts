@@ -61,7 +61,19 @@ import {
   loadInvoiceDraftFinalizationPreparation,
   loadInvoiceDraftRecord,
   loadInvoiceDraftRecordByLocator,
+  reopenInvoiceDraftAfterBindingRejection,
+  resolveInvoiceDraftFinalizationToExisting,
 } from './invoiceDraftDurabilityService';
+import {
+  markInvoiceDraftCloudFromFinalizedRecord,
+  resolveInvoiceDraftCloudBinding,
+} from './invoiceDraftCloudBridge';
+import {
+  parseInvoiceDraftBindingRejection,
+  parseInvoiceDraftFinalizedElsewhere,
+  rpcPullWorkspaceInvoiceRows,
+} from './workspaceInvoiceCloudService';
+import { mapPullRowsIsolated } from './invoiceCloudPullMergeService';
 import { runQueuedSyncOperation, type SyncOperationLease } from '../sync/syncOperationQueue';
 
 export type InvoiceFinalizationCoordinatorFailure =
@@ -77,7 +89,13 @@ export type InvoiceFinalizationCoordinatorFailure =
   | 'storage_unavailable'
   | 'transaction_failed'
   | 'committed_but_unverified'
-  | 'complete_failed';
+  | 'complete_failed'
+  /** CLOUD-SYNC S5 — der Cloud-Entwurf ist noch nicht vollständig angekommen. */
+  | 'draft_not_synced'
+  /** CLOUD-SYNC S5 — offener Abgleich mit einem anderen Gerät; erst entscheiden. */
+  | 'draft_conflict'
+  /** CLOUD-SYNC S5 — der Cloud-Entwurf ist bereits verworfen oder finalisiert. */
+  | 'draft_ended';
 
 export type InvoiceFinalizationRecovery = 'retry_allowed' | 'reload_required' | 'blocked';
 
@@ -664,6 +682,27 @@ async function runResume(
     expectedRevision: finalizingRevision,
   });
   if (!executed.ok) {
+    /* CLOUD-SYNC S5 — dieselben Ausgänge der Entwurfsbindung wie beim Start. */
+    const settled = await settleDraftBindingOutcome({
+      identity,
+      finalizingRevision,
+      clientInvoiceId,
+      contentFingerprint,
+      reason: executed.reason,
+      message: executed.message,
+      lease,
+    });
+    if (settled) {
+      return resumeFail(settled.kind === 'resolved' ? 'draft_finalized_elsewhere' : executed.reason, {
+        recovery: 'reload_required',
+        cloudState: settled.kind === 'reopened' ? 'not_committed' : executed.cloudState,
+        detail: settled.kind === 'unresolved' ? settled.detail : executed.detail,
+        message: executed.message,
+        currentRevision: settled.kind === 'unresolved' ? executed.currentRevision : settled.revision,
+        existingInvoiceId: settled.canonicalInvoiceId,
+        clientInvoiceId,
+      });
+    }
     return resumeFail(executed.reason, {
       recovery: recoveryForExecute(executed.reason, executed.cloudState),
       cloudState: executed.cloudState,
@@ -692,6 +731,9 @@ async function runResume(
       clientInvoiceId,
     });
   }
+
+  // CLOUD-SYNC S5 — der Spiegel hält fest, dass dieser Entwurf zur Rechnung wurde.
+  markInvoiceDraftCloudFromFinalizedRecord(completed.record);
 
   return {
     ok: true,
@@ -774,6 +816,9 @@ async function finishFromProvenInvoice(input: {
     });
   }
 
+  // CLOUD-SYNC S5 — der Spiegel hält fest, dass dieser Entwurf zur Rechnung wurde.
+  markInvoiceDraftCloudFromFinalizedRecord(completed.record);
+
   return {
     ok: true,
     decision,
@@ -782,6 +827,100 @@ async function finishFromProvenInvoice(input: {
     archiveWarning,
     invoice: archived,
   };
+}
+
+/**
+ * CLOUD-SYNC S5 — die beiden Serverausgänge einer an den Cloud-Entwurf
+ * gebundenen Freigabe. Beide laufen auf dem Server vor jedem Schreibvorgang;
+ * für die eigene `clientInvoiceId` existiert danach nachweislich nichts.
+ *
+ *  - `draft_binding_rejected` (anderswo geändert, verworfen, unbekannt,
+ *    slotfremd): Eine Wiederholung derselben gespeicherten Anfrage kann nie
+ *    gelingen. Deshalb der eng gebundene Rückweg `finalizing → active` — nur
+ *    für genau diese Kennung, nur mit der benannten Serverablehnung als Beleg.
+ *  - `draft_finalized_elsewhere`: Ein anderes Gerät hat denselben Entwurf
+ *    bereits zur Rechnung gemacht. Die kanonische Rechnung wird zuerst lokal
+ *    dauerhaft übernommen (Cloud-Abgleich), danach der begonnene Abschluss über
+ *    den vorhandenen Kernweg `resolveInvoiceDraftFinalizationToExisting`
+ *    aufgelöst — keine zweite Recovery-Logik.
+ *
+ * Gelingt ein Schritt nicht, bleibt der Datensatz `finalizing`; die nächste
+ * Wiederaufnahme sendet dieselbe Anfrage, der Server antwortet gleich, und der
+ * Ablauf wiederholt sich ohne Schaden.
+ */
+async function settleDraftBindingOutcome(input: {
+  identity: InvoiceDraftIdentity;
+  finalizingRevision: number;
+  clientInvoiceId: string;
+  contentFingerprint: string;
+  reason: ExecutePreparedFinalizationFailure;
+  message?: string;
+  lease: SyncOperationLease;
+}): Promise<
+  | { kind: 'reopened'; revision: number; canonicalInvoiceId?: undefined }
+  | { kind: 'resolved'; revision: number; canonicalInvoiceId: string }
+  | { kind: 'unresolved'; detail: string; canonicalInvoiceId?: string }
+  | null
+> {
+  const { identity, finalizingRevision, clientInvoiceId, contentFingerprint, lease } = input;
+  if (input.reason === 'draft_binding_rejected') {
+    const rejection = parseInvoiceDraftBindingRejection(input.message ?? '');
+    if (!rejection) return { kind: 'unresolved', detail: 'binding_rejection_unknown' };
+    const reopened = await reopenInvoiceDraftAfterBindingRejection({
+      identity,
+      expectedRevision: finalizingRevision,
+      clientInvoiceId,
+      serverRejection: rejection,
+    });
+    if (!reopened.ok) return { kind: 'unresolved', detail: `reopen:${reopened.reason}` };
+    return { kind: 'reopened', revision: reopened.record.revision };
+  }
+
+  if (input.reason === 'draft_finalized_elsewhere') {
+    const canonicalInvoiceId = parseInvoiceDraftFinalizedElsewhere(input.message ?? '');
+    if (!canonicalInvoiceId || canonicalInvoiceId === clientInvoiceId) {
+      return { kind: 'unresolved', detail: 'canonical_unknown' };
+    }
+    // Vorbedingung des Kernwegs: die kanonische Rechnung liegt lokal dauerhaft vor.
+    const reconciliation = await runInvoiceFinalizationCloudReconciliationWithinSyncOperation(
+      { identity },
+      lease,
+    );
+    if (!reconciliation.ok) {
+      return { kind: 'unresolved', detail: `reconciliation:${reconciliation.reason}`, canonicalInvoiceId };
+    }
+    const local = listLocalInvoicesForIdentity(identity.vorgangId);
+    if (!local.ok || !local.invoices.some((invoice) => invoice.id === canonicalInvoiceId)) {
+      return { kind: 'unresolved', detail: 'canonical_not_local', canonicalInvoiceId };
+    }
+    let rows: unknown[];
+    try {
+      rows = await rpcPullWorkspaceInvoiceRows(identity.workspaceId, { since: null });
+    } catch {
+      return { kind: 'unresolved', detail: 'canonical_pull_failed', canonicalInvoiceId };
+    }
+    const row = mapPullRowsIsolated(rows, identity.workspaceId).mapped.find(
+      (entry) => entry.clientInvoiceId === canonicalInvoiceId,
+    );
+    if (!row) return { kind: 'unresolved', detail: 'canonical_row_missing', canonicalInvoiceId };
+    const resolved = await resolveInvoiceDraftFinalizationToExisting({
+      identity,
+      expectedRevision: finalizingRevision,
+      clientInvoiceId,
+      contentFingerprint,
+      finalizedInvoiceId: canonicalInvoiceId,
+      canonicalCloudInvoiceId: row.cloudInvoiceId,
+      canonicalRowVersion: row.rowVersion,
+      archiveWarning: false,
+    });
+    if (!resolved.ok) {
+      return { kind: 'unresolved', detail: `resolve:${resolved.reason}`, canonicalInvoiceId };
+    }
+    markInvoiceDraftCloudFromFinalizedRecord(resolved.record);
+    return { kind: 'resolved', revision: resolved.record.revision, canonicalInvoiceId };
+  }
+
+  return null;
 }
 
 /** Fehler **vor** einem nachweislich dauerhaften `begin`: nie eine Kennung. */
@@ -907,6 +1046,18 @@ async function runStart(
     });
   }
 
+  /*
+   * 1b. CLOUD-SYNC S5 — die Bindung an den Cloud-Entwurf, synchron und vor jeder
+   * Kennung. Ohne freigegebene Cloud-Seite gibt es keine; mit ihr muss der
+   * Entwurf vollständig angekommen sein (keine offene Übertragung, kein
+   * Konflikt, die Cloud trägt genau diesen Kern). Sonst wird gar nicht erst
+   * begonnen — nichts ist gesperrt, ein späterer Versuch bleibt erlaubt.
+   */
+  const cloudBinding = resolveInvoiceDraftCloudBinding(preflight.draft);
+  if (!cloudBinding.ok) {
+    return failBeforeBegin(cloudBinding.reason, { recovery: 'retry_allowed' });
+  }
+
   /* 2. Prepare — ausschließlich mit dem Snapshot des Preflights. */
   const prepared = await prepareInvoiceDraftFinalization({
     vorgangId: identity.vorgangId,
@@ -914,6 +1065,7 @@ async function runStart(
     setup: preflight.setupSnapshot,
     approvalOptions: input.approvalOptions ?? {},
     overbillingAcknowledged: input.overbillingAcknowledged,
+    draftBinding: cloudBinding.binding,
   });
   if (!prepared.ok) {
     return failBeforeBegin(prepared.reason, {
@@ -1014,6 +1166,29 @@ async function runStart(
     expectedRevision: finalizingRevision,
   });
   if (!executed.ok) {
+    /* CLOUD-SYNC S5 — die beiden Ausgänge der Entwurfsbindung. */
+    const settled = await settleDraftBindingOutcome({
+      identity,
+      finalizingRevision,
+      clientInvoiceId,
+      contentFingerprint: prepared.contentFingerprint,
+      reason: executed.reason,
+      message: executed.message,
+      lease,
+    });
+    if (settled) {
+      return {
+        ok: false,
+        reason: settled.kind === 'resolved' ? 'draft_finalized_elsewhere' : executed.reason,
+        recovery: 'reload_required',
+        cloudState: settled.kind === 'reopened' ? 'not_committed' : executed.cloudState,
+        detail: settled.kind === 'unresolved' ? settled.detail : executed.detail,
+        message: executed.message,
+        currentRevision: settled.kind === 'unresolved' ? executed.currentRevision : settled.revision,
+        existingInvoiceId: settled.canonicalInvoiceId,
+        clientInvoiceId,
+      };
+    }
     // Kein zweiter RPC im selben Startlauf.
     return {
       ok: false,
@@ -1048,6 +1223,9 @@ async function runStart(
       clientInvoiceId,
     };
   }
+
+  // CLOUD-SYNC S5 — der Spiegel hält fest, dass dieser Entwurf zur Rechnung wurde.
+  markInvoiceDraftCloudFromFinalizedRecord(completed.record);
 
   return {
     ok: true,

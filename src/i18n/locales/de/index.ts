@@ -22,6 +22,8 @@ import { deOffer } from './offer';
 import { deOrder } from './order';
 import { deDocumentMeaning } from './documentMeaning';
 import { deIntakeAssessment } from './intakeAssessment';
+import { deInvoiceDraftCloud } from './invoiceDraftCloud';
+import { deOrderDraftCloud } from './orderDraftCloud';
 
 export const deModules = {
   ...deAuth,
@@ -50,4 +52,6 @@ export const deModules = {
   ...deOrder,
   ...deDocumentMeaning,
   ...deIntakeAssessment,
+  ...deInvoiceDraftCloud,
+  ...deOrderDraftCloud,
 } as const;

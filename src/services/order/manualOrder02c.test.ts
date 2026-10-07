@@ -8,8 +8,13 @@
  *    Replay; ein bereits vorhandener Serverauftrag gewinnt über den veränderten Entwurf.
  * D  Rechnungsentwürfe: §13b aus dem manuellen Auftrag für rechnung/abschlag/schluss,
  *    Bestandsvorgang ohne Steuerstatus behält den Firmenstandard.
+ *
+ * CLOUD-SYNC S6 — diese Fälle prüfen die Anlage **ohne** Cloud-Entwurf
+ * (Notausschalter, wie vor S6). Den gebundenen Weg prüfen
+ * `createOrderCloudS6.test.ts` und `orderDraftCloudS6.test.ts`.
  */
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { disableOrderDraftCloudSyncForTests } from '../../test/orderDraftCloudSwitch';
 import type { Vorgang } from '../../types/models';
 import { hydrateCompanyProfileStore, resetCompanyProfile } from '../companyProfileService';
 import { createCompanyProfileFromSetup } from '../../data/companyProfileDefaults';
@@ -140,6 +145,7 @@ function mockServer() {
 }
 
 beforeEach(() => {
+  disableOrderDraftCloudSyncForTests();
   localStorage.clear();
   resetOrderDrafts();
   resetVorgaenge();
@@ -167,6 +173,7 @@ beforeEach(() => {
 
 afterEach(() => {
   clearMockRpcHandlers();
+  vi.restoreAllMocks();
 });
 
 describe('A — lokaler Entwurf', () => {

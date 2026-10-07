@@ -2,7 +2,8 @@
  * REFERENZVERTRAG V1 – SPRINT B — Nachweise nach Accept am Vorgang.
  * Happy-Path UI → REFERENCE WV-LV-01; hier Fallback + Idempotenz.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
+import { suspendMemoryProjectionForTest } from '../test/memoryProjectionTestSupport';
 import { acceptContractOrderFromProposal } from './contractOrderAcceptService';
 import { buildContractOrderProposal } from './contractIntelligenceService';
 import {
@@ -150,6 +151,13 @@ describe('REFERENZVERTRAG V1 – SPRINT B – Nachweise', () => {
   });
 
   it('bestehende erfüllte Nachweise werden nicht auf missing zurückgesetzt', () => {
+    /*
+     * CLOUD-SYNC S4 — geprüft wird die Regel der Annahme an einem gesetzten
+     * Nachweis. Die Projektion ruht dafür; dokumentgestützt kanonisch geprüft
+     * in officePilotMemoryProjectionS4.
+     */
+    const ruhe = suspendMemoryProjectionForTest();
+    onTestFinished(() => ruhe.mockRestore());
     const item = seed();
     const proposal = buildContractOrderProposal(item)!;
     const first = acceptContractOrderFromProposal({

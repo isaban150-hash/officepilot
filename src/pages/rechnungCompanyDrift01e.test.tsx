@@ -9,6 +9,7 @@ import { hydrateCompanyProfileStore } from '../services/companyProfileService';
 import { AppProvider } from '../context/AppContext';
 import { RechnungPage } from './RechnungPage';
 import { createTestVorgangWithExecutedQuantity } from '../test/fixtures';
+import { disableInvoiceDraftCloudSyncForTests } from '../test/invoiceDraftCloudSwitch';
 import { hydrateVorgangStore } from '../services/vorgangService';
 import { resetInvoiceDraftDurabilityDatabaseForTests } from '../services/invoice/invoiceDraftDurabilityService';
 import * as coordinator from '../services/invoice/invoiceFinalizationCoordinator';
@@ -144,6 +145,9 @@ let start: ReturnType<typeof vi.spyOn>;
 
 beforeEach(async () => {
   vi.restoreAllMocks();
+  // CLOUD-SYNC S5 — diese Datei prüft den Freigabeablauf der Seite ohne Cloud-Entwurf:
+  // Entwurfs-Sync aus (Notausschalter). Die Entwurfsbindung prüfen die S5-Tests.
+  disableInvoiceDraftCloudSyncForTests();
   localStorage.clear();
   await resetInvoiceDraftDurabilityDatabaseForTests();
   hydrateVorgangStore([createTestVorgangWithExecutedQuantity({ id: VORGANG, invoices: [] })]);

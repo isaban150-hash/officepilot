@@ -7,7 +7,8 @@
  *  D  Aufgaben: Zeilen mit Checkbox-Aktion, Prioritäts-Status, Filter-Chips
  *  E  Offene Ausgaben / Steuerberater: Zahlungsstand-Section, Notices, Hauptaktion je Schritt
  *  F  Payment-UI: Summary-Notices als InlineNotice, Historie als BusinessList, Badges über StatusBadge
- *  G  Back-Patterns: Upload/MailImport/Sync/Suche = Link, Papierarchiv = History-Button
+ *  G  Back-Patterns: Upload/Sync/Suche = Link, Papierarchiv = History-Button
+ *     (CLOUD-SYNC S7: die frühere Mailimport-Seite gibt es nicht mehr)
  *  H  DetailExperienceCard ohne doppelte Identität
  *  I  Token --op-on-primary vorhanden, Legacy-CSS entfernt
  */
@@ -32,7 +33,6 @@ import { AufgabenPage } from './AufgabenPage';
 import { OffeneAusgabenPage } from './OffeneAusgabenPage';
 import { SteuerberaterPage } from './SteuerberaterPage';
 import { PapierarchivPage } from './PapierarchivPage';
-import { MailImportPage } from './MailImportPage';
 import { DetailExperienceCard } from '../components/detail/DetailExperienceCard';
 import { InvoicePaymentSummary } from '../components/invoice/InvoicePaymentSummary';
 import { InvoicePaymentHistory } from '../components/invoice/InvoicePaymentHistory';
@@ -168,13 +168,10 @@ describe('UIUX-FOUNDATION-01F — Payment-UI (F)', () => {
 });
 
 describe('UIUX-FOUNDATION-01F — Back-Patterns & Titel (G/H)', () => {
-  it('MailImport/Papierarchiv-Back im PageHeader; DetailExperienceCard ohne doppelte Identität', () => {
-    const mail = renderToStaticMarkup(withProviders(<MailImportPage />));
-    expect(mail).toMatch(/<a class="page-header__back" data-testid="mail-import-back" href="\/mehr"/);
+  it('Papierarchiv-Back im PageHeader; DetailExperienceCard ohne doppelte Identität', () => {
     const paper = renderToStaticMarkup(withProviders(<PapierarchivPage />));
     expect(paper).toContain('<button type="button" class="page-header__back" data-testid="papierarchiv-back"');
     expect(paper).toContain('class="row-list"');
-    expect(mail).not.toContain('class="back-link"');
 
     const withId = renderToStaticMarkup(withProviders(<DetailExperienceCard recognizedTitle="R-1" assistantMessage="x" />));
     const noId = renderToStaticMarkup(withProviders(<DetailExperienceCard recognizedTitle="R-1" assistantMessage="x" hideIdentity />));

@@ -477,12 +477,12 @@ export function getDocumentMemoryByDocumentId(documentId: string): DocumentMemor
   return memory ? cloneDocumentMemory(memory) : undefined;
 }
 
-function mergeOptionalString(existing: string | undefined, incoming: string | undefined): string | undefined {
+export function mergeOptionalString(existing: string | undefined, incoming: string | undefined): string | undefined {
   if (!incoming?.trim()) return existing;
   return incoming.trim();
 }
 
-function mergeOptionalArray<T>(existing: T[] | undefined, incoming: T[] | undefined): T[] | undefined {
+export function mergeOptionalArray<T>(existing: T[] | undefined, incoming: T[] | undefined): T[] | undefined {
   if (!incoming?.length) return existing;
   const merged = [...new Set([...(existing ?? []), ...incoming])];
   return merged.length > 0 ? merged : existing;

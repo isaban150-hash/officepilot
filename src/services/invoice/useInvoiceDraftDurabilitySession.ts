@@ -149,6 +149,24 @@ export interface InvoiceDraftDurabilitySessionInput {
   adapter?: InvoiceDraftDurabilityAdapter;
   hasFinalizedInvoice?: FinalizedInvoicePresenceCheck;
   now?: () => string;
+  /**
+   * CLOUD-SYNC S5 — wird nach jedem **dauerhaft bestätigten** Stand eines
+   * aktiven Entwurfs gemeldet (Laden, Anlegen, Speichern). Erst danach darf der
+   * fachliche Kern in die Cloud gespiegelt werden; der lokale Speicher bleibt
+   * zuerst sicher. Ein Fehler hier berührt den lokalen Ablauf nie.
+   */
+  onCommitted?: (record: InvoiceDraftRecord, draft: InvoiceDraft) => void;
+  /**
+   * CLOUD-SYNC S5 — eine kontrollierte Neuinitialisierung desselben Slots,
+   * nachdem eine Cloud-Entscheidung den lokalen Datensatz ersetzt hat
+   * (Cloud-Fassung übernommen, als neuer Entwurf fortgesetzt).
+   */
+  reloadKey?: number;
+  /**
+   * CLOUD-SYNC S5 — ein geladener, abgeschlossener Entwurf (`finalized`) wird
+   * gemeldet, **bevor** der Slot freigegeben und neu angelegt werden kann.
+   */
+  onFinalizedRecord?: (record: InvoiceDraftRecord) => void;
 }
 
 export interface InvoiceDraftDurabilitySession {
@@ -263,6 +281,10 @@ export function useInvoiceDraftDurabilitySession(
   createDraftRef.current = input.createDraft;
   const nowRef = useRef(input.now);
   nowRef.current = input.now;
+  const onCommittedRef = useRef(input.onCommitted);
+  onCommittedRef.current = input.onCommitted;
+  const onFinalizedRecordRef = useRef(input.onFinalizedRecord);
+  onFinalizedRecordRef.current = input.onFinalizedRecord;
   const locatorRef = useRef(input.locator);
   locatorRef.current = input.locator;
   const generationCounterRef = useRef(0);
@@ -326,6 +348,16 @@ export function useInvoiceDraftDurabilitySession(
     };
     queue.terminalOutcome = null;
 
+    /** CLOUD-SYNC S5 — nur bestätigte, aktive Stände; nie ein Einfluss auf diese Sitzung. */
+    const notifyCommitted = (record: InvoiceDraftRecord, draft: InvoiceDraft): void => {
+      if (!queue.active || record.status !== 'active') return;
+      try {
+        onCommittedRef.current?.(record, cloneDraft(draft));
+      } catch {
+        /* die Spiegelung darf den lokalen Arbeitsstand nie stören */
+      }
+    };
+
     const blockStorage = (reason: string) => {
       applyView({ status: 'blocked_storage', issue: classifyIssue(reason) });
       queue.pendingSnapshot = null;
@@ -381,6 +413,7 @@ export function useInvoiceDraftDurabilitySession(
           if (result.ok) {
             queue.revision = result.record.revision;
             applyView({ record: result.record });
+            notifyCommitted(result.record, snapshot);
             if (!queue.pendingSnapshot) applyView({ status: 'saved' });
             continue;
           }
@@ -477,6 +510,7 @@ export function useInvoiceDraftDurabilitySession(
       }
 
       applyView({ status, draft: cloneDraft(queue.draft), record, restored, issue: null });
+      notifyCommitted(record, queue.draft);
     };
 
     const locator = locatorRef.current;
@@ -521,6 +555,13 @@ export function useInvoiceDraftDurabilitySession(
          * der fertigen Rechnung. `active` und `finalizing` bleiben unberührt;
          * jeder Fehlschlag führt zurück in den bisherigen, sicheren Zustand.
          */
+        if (loaded.record.status === 'finalized') {
+          try {
+            onFinalizedRecordRef.current?.(loaded.record);
+          } catch {
+            /* der Vermerk darf den lokalen Ablauf nie stören */
+          }
+        }
         const finalizedInvoiceId =
           loaded.record.status === 'finalized'
             ? (loaded.record.finalization?.finalizedInvoiceId?.trim() ?? '')
@@ -627,7 +668,7 @@ export function useInvoiceDraftDurabilitySession(
       queue.terminalOutcome = 'disposed';
       resolveWaiters('disposed');
     };
-  }, [locatorKey]);
+  }, [locatorKey, input.reloadKey ?? 0]);
 
   /** Callbacks sind an genau die Sitzung gebunden, aus der sie stammen. */
   const callbacks = useMemo(() => {

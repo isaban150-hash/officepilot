@@ -24,6 +24,10 @@ import {
  */
 
 import { isFinancialActionDenial } from '../auth/financialActionDenial';
+import {
+  INVOICE_DRAFT_BINDING_REJECTIONS,
+  type InvoiceDraftBindingRejection,
+} from '../../types/invoiceDraftDurability';
 
 export type WorkspaceInvoiceCloudErrorCode =
   | 'auth'
@@ -64,6 +68,18 @@ export type WorkspaceInvoiceCloudErrorCode =
    * geschrieben und keine Nummer verbraucht.
    */
   | 'financial_action_denied'
+  /**
+   * CLOUD-SYNC S5 — ein anderes Gerät hat **diesen** Cloud-Entwurf bereits zur
+   * Rechnung gemacht. Für diese Kennung wurde nichts geschrieben und keine
+   * Nummer verbraucht; die vorhandene Rechnung ist die kanonische.
+   */
+  | 'draft_finalized_elsewhere'
+  /**
+   * CLOUD-SYNC S5 — die Entwurfsbindung wurde abgelehnt (anderswo geändert,
+   * verworfen, unbekannt, slotfremd, unvollständig). Fail-closed vor jedem
+   * Schreibvorgang; die Transaktion rollt vollständig zurück.
+   */
+  | 'draft_binding_rejected'
   | 'network'
   | 'unknown';
 
@@ -104,6 +120,9 @@ export interface WorkspaceInvoicePreparedFinalizeInput {
    * nur, dass der Nutzer sie bewusst gewollt hat.
    */
   overbillingAcknowledged?: boolean;
+  /** CLOUD-SYNC S5 — die Entwurfsbindung; nur gemeinsam. */
+  clientDraftId?: string;
+  expectedDraftRowVersion?: number;
 }
 
 export interface WorkspaceInvoicePreparedFinalizeResult {
@@ -203,6 +222,17 @@ function classifyInvoiceCloudError(error: { message?: string; code?: string }): 
   }
   if (message.includes('Idempotenzkonflikt')) {
     return new WorkspaceInvoiceCloudError(message, 'idempotency_conflict', false);
+  }
+  /*
+   * CLOUD-SYNC S5 — die Entwurfsbindung, vor der allgemeinen Validierungsregel:
+   * Die Meldungen sind benannt und tragen ihre Fakten (kanonische Kennung,
+   * aktuelle Version), die der Koordinator auswertet.
+   */
+  if (message.includes('invoice_draft_already_finalized')) {
+    return new WorkspaceInvoiceCloudError(message, 'draft_finalized_elsewhere', false);
+  }
+  if (parseInvoiceDraftBindingRejection(message)) {
+    return new WorkspaceInvoiceCloudError(message, 'draft_binding_rejected', false);
   }
   /*
    * RECHNUNGSINTEGRITAET-03B — die fachlichen Serverbefunde.
@@ -323,6 +353,23 @@ function classifyInvoiceCloudError(error: { message?: string; code?: string }): 
     );
   }
   return new WorkspaceInvoiceCloudError(message, 'unknown', true);
+}
+
+/** CLOUD-SYNC S5 — welche Bindungsablehnung der Server benannt hat. */
+export function parseInvoiceDraftBindingRejection(message: string): InvoiceDraftBindingRejection | null {
+  for (const code of INVOICE_DRAFT_BINDING_REJECTIONS) {
+    if (message.includes(code)) return code;
+  }
+  return null;
+}
+
+/** CLOUD-SYNC S5 — die kanonische Rechnungskennung aus `invoice_draft_already_finalized:<id>`. */
+export function parseInvoiceDraftFinalizedElsewhere(message: string): string | null {
+  const marker = 'invoice_draft_already_finalized:';
+  const start = message.indexOf(marker);
+  if (start < 0) return null;
+  const id = message.slice(start + marker.length).split(/[\s"']/)[0]?.trim() ?? '';
+  return id.length > 0 ? id : null;
 }
 
 /** Nur für Tests — dieselbe Klassifizierung, ohne Netz. */
@@ -1412,6 +1459,16 @@ export async function rpcFinalizePreparedWorkspaceInvoice(
       // Unverändert — kein Builder, keine Normalisierung, keine Uhrzeit.
       p_invoice: input.invoicePayload,
       p_overbilling_acknowledged: input.overbillingAcknowledged === true,
+      /*
+       * CLOUD-SYNC S5 — nur mit Bindung. Ohne sie bleibt der Aufruf exakt der
+       * bisherige (fünf Argumente) — auch gegen einen Server ohne S5.
+       */
+      ...(input.clientDraftId !== undefined && input.expectedDraftRowVersion !== undefined
+        ? {
+            p_client_draft_id: input.clientDraftId,
+            p_expected_draft_row_version: input.expectedDraftRowVersion,
+          }
+        : {}),
     });
 
     if (error) {

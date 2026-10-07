@@ -1,4 +1,4 @@
-import type { ClassifiedDocumentKind, CompanyDocument, InboxItem } from '../../types/models';
+import type { AppLanguage, ClassifiedDocumentKind, CompanyDocument, InboxItem } from '../../types/models';
 import type {
   DocumentMemory,
   DocumentSummary,
@@ -33,7 +33,7 @@ function mergeSummary(existing: DocumentSummary | undefined, incoming: DocumentS
   return mergeRulesIntoMemorySummary(existing, incoming);
 }
 
-function deriveMemoryStatus(summary: DocumentSummary): DocumentMemory['memoryStatus'] {
+export function deriveMemoryStatus(summary: DocumentSummary): DocumentMemory['memoryStatus'] {
   if (summary.sourceConfidence === 'high') return 'understood';
   if (summary.sourceConfidence === 'medium') return 'partial';
   return 'pending';
@@ -100,6 +100,8 @@ export function buildPremiumLetterExplanation(
   summary: DocumentSummary,
   classifiedKind?: ClassifiedDocumentKind,
   recognizedData?: Record<string, string>,
+  /** CLOUD-SYNC S4 — Nacharbeit 1: ausdrückliche Sprache; ohne sie die Sprache des Betriebs. */
+  options: { language?: AppLanguage } = {},
 ): PremiumLetterExplanation {
   const about =
     classifiedKind != null
@@ -119,7 +121,7 @@ export function buildPremiumLetterExplanation(
     risks: formatRiskText(summary.riskLevel),
     recommendation: summary.nextAction,
     digitalStorage: formatDigitalLocation(document),
-    paperStorage: formatPaperLocation(document),
+    paperStorage: formatPaperLocation(document, options.language),
     disclaimer: DISCLAIMER,
   };
 }

@@ -43,6 +43,17 @@ const RECORD_TOP_LEVEL_KEYS = new Set(['documentFileBlobs']);
 /** Objekte, deren Felder eigenständige Sammlungen sind. */
 const NESTED_COLLECTION_TOP_LEVEL_KEYS = new Set(['officePilotMemory']);
 
+/**
+ * CLOUD-SYNC S6 — Sammlungen innerhalb einer Entität, deren Einträge eigene
+ * Cloud-Entitäten sind: die Nachtragsentwürfe im Vorgang. Setzt der Lauf dort
+ * nur die Serverversion eines Entwurfs (eigener Push), ist das für den Vorgang
+ * keine Inhaltsänderung — die Sammlung wird Eintrag für Eintrag zusammengeführt
+ * wie eine oberste Sammlung. Sonst ginge die Version verloren, sobald während
+ * des Laufs lokal gespeichert wurde, und der nächste Push liefe in einen
+ * unnötigen Versionskonflikt.
+ */
+const NESTED_ENTITY_COLLECTION_KEYS = new Set(['orderAmendments']);
+
 export interface LocalRebaseResult {
   state: AppPersistedState;
   /** Entitäten, deren lokale Änderung aus dem Lauf-Fenster übernommen wurde. */
@@ -134,12 +145,19 @@ function mergeEntity(base: unknown, local: unknown, candidate: unknown): MergeOu
   const changedByRun = [...new Set([...Object.keys(candidate), ...Object.keys(base)])].filter(
     (key) => !isDeepEqual(candidate[key], base[key]),
   );
-  if (changedByRun.some((key) => !META_KEYS.has(key))) {
+  if (changedByRun.some((key) => !META_KEYS.has(key) && !NESTED_ENTITY_COLLECTION_KEYS.has(key))) {
     return { value: local, preserved: true, conflict: true };
   }
 
   const result: Plain = { ...local };
+  let conflict = false;
   for (const key of changedByRun) {
+    if (NESTED_ENTITY_COLLECTION_KEYS.has(key)) {
+      const nested: Tally = { preserved: 0, conflicts: 0 };
+      assign(result, key, mergeCollection(base[key], local[key], candidate[key], nested));
+      if (nested.conflicts > 0) conflict = true;
+      continue;
+    }
     if (isDeepEqual(local[key], base[key])) {
       assign(result, key, candidate[key]);
     } else if (key === 'sync' || key === 'cloud') {
@@ -151,7 +169,7 @@ function mergeEntity(base: unknown, local: unknown, candidate: unknown): MergeOu
     }
     // pendingKeys: beide geändert → die lokale Absicht bleibt stehen
   }
-  return { value: result, preserved: true, conflict: false };
+  return { value: result, preserved: true, conflict };
 }
 
 function identityOf(item: unknown): string | null {

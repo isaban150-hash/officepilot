@@ -51,6 +51,7 @@ import {
   resetStorageScopeForTests,
   setActiveStorageScope,
 } from '../storage/storageScopeService';
+import { disableInvoiceDraftCloudSyncForTests } from '../../test/invoiceDraftCloudSwitch';
 
 const WORKSPACE = 'ws-d-1';
 const SCOPE = 'workspace:ws-d-1';
@@ -239,6 +240,9 @@ function serverEcho(
 }
 
 function installEnvironment(): void {
+  // CLOUD-SYNC S5 — der Coordinator wird hier ohne Cloud-Entwurf geprüft: Entwurfs-Sync aus
+  // (Notausschalter). Bindung, Retry und Auflösung prüft invoiceDraftCloudFinalizeS5.test.ts.
+  disableInvoiceDraftCloudSyncForTests();
   vi.spyOn(supabaseLib, 'isSupabaseConfigured').mockImplementation(() => cloudState.configured);
   vi.spyOn(supabaseLib, 'getSupabaseClient').mockImplementation(
     () =>

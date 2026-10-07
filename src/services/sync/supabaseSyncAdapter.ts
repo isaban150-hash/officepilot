@@ -99,9 +99,39 @@ import {
   buildPaperRegisterEntryCloudContentKey,
   buildPaperRegisterEntryCloudPushPayload,
 } from '../memory/paperRegisterCloudService';
+import {
+  applyCommunicationEventPushResultToState,
+  buildCommunicationEventCloudPushPayload,
+} from '../communication/communicationEventCloudService';
+import {
+  applyKnowledgeFactPushResultToState,
+  buildKnowledgeFactCloudContentKey,
+  buildKnowledgeFactCloudPushPayload,
+} from '../knowledge/knowledgeFactCloudService';
+import {
+  applyInvoiceDraftPushResultToState,
+  buildInvoiceDraftCloudContentKey,
+  buildInvoiceDraftCloudPushPayload,
+} from '../invoice/invoiceDraftCloudService';
+import {
+  applyOrderDraftPushResultToState,
+  buildOrderDraftCloudContentKey,
+  buildOrderDraftCloudPushPayload,
+} from '../order/orderDraftCloudService';
+import {
+  applyOrderAmendmentDraftPushResultToState,
+  buildOrderAmendmentDraftCloudContentKey,
+  buildOrderAmendmentDraftCloudPushPayload,
+} from '../orderAmendment/orderAmendmentDraftCloudService';
 
 /** ANGEBOT-01B — Angebote nach Dateien/Dokumenten/Ausgaben; alles Uebrige (-1) bleibt davor. */
 const OFFER_PUSH_ORDER: Record<string, number> = { offer: 20 };
+
+/*
+ * CLOUD-SYNC S6 — Entwürfe nach ihren Vorgängen: Ein Nachtragsentwurf
+ * verweist auf einen bestätigten Auftrag, den der Server dafür kennen muss.
+ */
+const DRAFT_PUSH_ORDER: Record<string, number> = { order_draft: 30, order_amendment_draft: 31 };
 
 /*
  * BANKABGLEICH-V1 BLOCK 2B — das Konto muss vor seiner Bewegung oben sein.
@@ -306,6 +336,29 @@ function buildSentWriteProof(
         sentContentKey: buildPaperRegisterEntryCloudContentKey(extracted.entity),
         sentDeleted: operation === 'delete' || extracted.deleted === true,
       };
+    // CLOUD-SYNC S3 — ebenso für das bestätigte Wissen.
+    case 'knowledge_fact':
+      return {
+        sentContentKey: buildKnowledgeFactCloudContentKey(extracted.entity),
+        sentDeleted: operation === 'delete' || extracted.deleted === true,
+      };
+    // CLOUD-SYNC S5 — ebenso für den Spiegel des Rechnungsentwurfs.
+    case 'invoice_draft':
+      return {
+        sentContentKey: buildInvoiceDraftCloudContentKey(extracted.entity),
+        sentDeleted: operation === 'delete' || extracted.deleted === true,
+      };
+    // CLOUD-SYNC S6 — derselbe Wiederanlauf für Auftrags- und Nachtragsentwurf.
+    case 'order_draft':
+      return {
+        sentContentKey: buildOrderDraftCloudContentKey(extracted.entity),
+        sentDeleted: operation === 'delete' || extracted.deleted === true,
+      };
+    case 'order_amendment_draft':
+      return {
+        sentContentKey: buildOrderAmendmentDraftCloudContentKey(extracted.entity),
+        sentDeleted: operation === 'delete' || extracted.deleted === true,
+      };
     case 'bank_account':
       return {
         sentContentKey: buildBankAccountCloudContentKey(extracted.entity as unknown as BankAccount),
@@ -441,9 +494,35 @@ function buildPushPayload(
         extracted.entity,
         operation === 'delete' || extracted.deleted,
       );
+    // CLOUD-SYNC S3 — der Grabstein reist mit seinem Scope.
+    case 'knowledge_fact':
+      return buildKnowledgeFactCloudPushPayload(
+        extracted.entity,
+        operation === 'delete' || extracted.deleted,
+      );
+    // CLOUD-SYNC S5 — der Grabstein „verworfen“ reist mit seinem Slot.
+    case 'invoice_draft':
+      return buildInvoiceDraftCloudPushPayload(
+        extracted.entity,
+        operation === 'delete' || extracted.deleted,
+      );
+    // CLOUD-SYNC S6 — ein Grabstein reist ohne Inhalt.
+    case 'order_draft':
+      return buildOrderDraftCloudPushPayload(
+        extracted.entity,
+        operation === 'delete' || extracted.deleted,
+      );
+    case 'order_amendment_draft':
+      return buildOrderAmendmentDraftCloudPushPayload(
+        extracted.entity,
+        operation === 'delete' || extracted.deleted,
+      );
     // 01D — append-only: kein Grabstein-Flag, weil es keine Löschung gibt.
     case 'dunning_documentation':
       return buildDunningDocumentationCloudPushPayload(extracted.entity);
+    // CLOUD-SYNC S2 — ebenfalls append-only: ein Ereignis wird nie gelöscht.
+    case 'communication_event':
+      return buildCommunicationEventCloudPushPayload(extracted.entity);
     /* BLOCK 2B — ebenfalls append-only: kein Grabstein, kein Löschen. */
     case 'bank_account':
       return buildBankAccountCloudPushPayload(extracted.entity as unknown as BankAccount);
@@ -642,6 +721,62 @@ export function applyPushResultToState(
       rowVersion,
       updatedAt,
       deleted,
+      state.syncClient!.deviceId,
+      workspaceId,
+    );
+  } else if (entityType === 'knowledge_fact') {
+    // CLOUD-SYNC S3 — nur die Serverversion; der Wissenseintrag bleibt unangetastet.
+    next.knowledgeFacts = applyKnowledgeFactPushResultToState(
+      next.knowledgeFacts ?? [],
+      entityId,
+      rowVersion,
+      updatedAt,
+      deleted,
+      state.syncClient!.deviceId,
+      workspaceId,
+    );
+  } else if (entityType === 'invoice_draft') {
+    // CLOUD-SYNC S5 — nur die Serverversion; der fachliche Kern bleibt unangetastet.
+    next.invoiceDrafts = applyInvoiceDraftPushResultToState(
+      next.invoiceDrafts ?? [],
+      entityId,
+      rowVersion,
+      updatedAt,
+      deleted,
+      state.syncClient!.deviceId,
+      workspaceId,
+    );
+  } else if (entityType === 'order_draft') {
+    // CLOUD-SYNC S6 — nur die Serverversion; ein bestätigter Grabstein verschwindet.
+    next.orderDrafts = applyOrderDraftPushResultToState(
+      next.orderDrafts ?? [],
+      entityId,
+      rowVersion,
+      updatedAt,
+      deleted,
+      state.syncClient!.deviceId,
+      workspaceId,
+    );
+  } else if (entityType === 'order_amendment_draft') {
+    // CLOUD-SYNC S6 — dasselbe für den Nachtragsentwurf (lebend im Vorgang, Grabstein daneben).
+    const applied = applyOrderAmendmentDraftPushResultToState(
+      next,
+      entityId,
+      rowVersion,
+      updatedAt,
+      deleted,
+      state.syncClient!.deviceId,
+      workspaceId,
+    );
+    next.vorgaenge = applied.vorgaenge;
+    next.orderAmendmentDraftTombstones = applied.orderAmendmentDraftTombstones;
+  } else if (entityType === 'communication_event') {
+    // CLOUD-SYNC S2 — nur die Serverversion; das Ereignis selbst bleibt, wie es ist.
+    next.communicationHistory = applyCommunicationEventPushResultToState(
+      next.communicationHistory ?? [],
+      entityId,
+      rowVersion,
+      updatedAt,
       state.syncClient!.deviceId,
       workspaceId,
     );
@@ -890,8 +1025,8 @@ export class SupabaseSyncAdapter implements SyncAdapter {
       // ANGEBOT-01B — das Angebot nach seinem Archivdokument: Der Server prueft die Ablage gegen die Dokumentzeile.
       .sort(
         (a, b) =>
-          (INTAKE_PUSH_ORDER[a.entityType] ?? EXPENSE_PUSH_ORDER[a.entityType] ?? OFFER_PUSH_ORDER[a.entityType] ?? ACCOUNTING_PUSH_ORDER[a.entityType] ?? BANK_PUSH_ORDER[a.entityType] ?? -1) -
-          (INTAKE_PUSH_ORDER[b.entityType] ?? EXPENSE_PUSH_ORDER[b.entityType] ?? OFFER_PUSH_ORDER[b.entityType] ?? ACCOUNTING_PUSH_ORDER[b.entityType] ?? BANK_PUSH_ORDER[b.entityType] ?? -1),
+          (INTAKE_PUSH_ORDER[a.entityType] ?? EXPENSE_PUSH_ORDER[a.entityType] ?? OFFER_PUSH_ORDER[a.entityType] ?? ACCOUNTING_PUSH_ORDER[a.entityType] ?? BANK_PUSH_ORDER[a.entityType] ?? DRAFT_PUSH_ORDER[a.entityType] ?? -1) -
+          (INTAKE_PUSH_ORDER[b.entityType] ?? EXPENSE_PUSH_ORDER[b.entityType] ?? OFFER_PUSH_ORDER[b.entityType] ?? ACCOUNTING_PUSH_ORDER[b.entityType] ?? BANK_PUSH_ORDER[b.entityType] ?? DRAFT_PUSH_ORDER[b.entityType] ?? -1),
       );
 
     for (const entry of pendingEntries) {
@@ -1221,7 +1356,11 @@ export class SupabaseSyncAdapter implements SyncAdapter {
             entry.entityType === 'business_letter' ||
             entry.entityType === 'offer' ||
             entry.entityType === 'task' ||
-            entry.entityType === 'paper_register_entry') &&
+            entry.entityType === 'paper_register_entry' ||
+            entry.entityType === 'knowledge_fact' ||
+            entry.entityType === 'invoice_draft' ||
+            entry.entityType === 'order_draft' ||
+            entry.entityType === 'order_amendment_draft') &&
           (entry.operation === 'delete' || ('deleted' in extracted && extracted.deleted === true));
         currentState = applyPushResultToState(
           currentState,

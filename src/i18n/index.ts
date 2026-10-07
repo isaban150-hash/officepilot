@@ -856,8 +856,6 @@ const deLegacy = {
   'mehr.expensesDesc': 'Belege und Ausgaben erfassen',
   'mehr.communication': 'Nachrichten',
   'mehr.communicationDesc': 'Antworten schreiben und versenden',
-  'mehr.mailImport': 'E-Mails importieren',
-  'mehr.mailImportDesc': 'E-Mail-Inhalt und Anhänge in den Eingang übernehmen',
   'mehr.documents': 'Dokumentenarchiv',
   'mehr.documentsDesc': 'Gespeicherte Firmendokumente finden und verwalten.',
   'mehr.paperArchive': 'Papierarchiv',
@@ -2159,9 +2157,8 @@ const deLegacy = {
    * anlegt, die heute noch nicht auf seine anderen Geräte reisen. Bewusst in
    * der Sprache des Betriebs: kein „nur lokal", keine Technik.
    */
-  'deviceOnly.knowledge': 'Diese Einträge werden derzeit nur auf diesem Gerät gespeichert.',
-  'deviceOnly.communicationHistory':
-    'Der Verlauf wird derzeit nur auf diesem Gerät gespeichert.',
+  // CLOUD-SYNC S3 — das bestätigte Wissen reist seitdem mit; sein Hinweis entfällt.
+  // CLOUD-SYNC S2 — der Kommunikationsverlauf reist seitdem mit; sein Hinweis entfällt.
   // CLOUD-SYNC S1 — der Haken für die Papierablage reist seitdem mit; sein Hinweis entfällt.
   'customerDecision.optionalHint': 'Nur der Kundenname ist erforderlich. Die übrigen Angaben sind optional.',
   'customerDecision.required': 'Bitte zuerst die Kundenzuordnung wählen.',
@@ -4681,22 +4678,6 @@ const deLegacy = {
 
   'heute.lifecycleTitle': 'Offene Dokumente',
 
-  'mailImport.title': 'E-Mails importieren',
-  'mailImport.subtitle': 'E-Mail-Inhalt manuell übernehmen – wie ein gescanntes Dokument',
-  'mailImport.formTitle': 'E-Mail übernehmen',
-  'mailImport.formHint': 'Keine Mailbox-Anbindung – Inhalt einfügen oder Anhang hochladen',
-  'mailImport.fieldFrom': 'Absender',
-  'mailImport.fieldFromPlaceholder': 'z. B. bg-bau@service.de',
-  'mailImport.fieldSubject': 'Betreff',
-  'mailImport.fieldSubjectPlaceholder': 'z. B. BG BAU Beitragsbescheid',
-  'mailImport.fieldBody': 'Nachrichtentext',
-  'mailImport.fieldBodyPlaceholder': 'E-Mail-Text hier einfügen …',
-  'mailImport.fieldAttachment': 'Anhang (optional)',
-  'mailImport.submit': 'E-Mail übernehmen',
-  'mailImport.successToast': 'Ich habe die E-Mail übernommen und geprüft.',
-  'mailImport.failedToast': 'E-Mail konnte nicht übernommen werden.',
-  'mailImport.validationRequired': 'Bitte Absender und Betreff angeben.',
-
   'search.title': 'Suche',
   'search.subtitle': 'Dokumente, E-Mails, Rechnungen, Aufträge und mehr',
   'search.globalPlaceholder': 'OfficeTakt durchsuchen…',
@@ -6331,8 +6312,6 @@ const trCustomerDecision: Partial<Record<keyof typeof de, string>> = {
   'sync.entity.document_work_result': 'Analiz sonucu',
   'sync.entity.vorgang_note': 'İş emri notu',
   'sync.entity.dunning_documentation': 'Belgelenen ödeme hatırlatması',
-  'deviceOnly.knowledge': 'Bu kayıtlar şu anda yalnızca bu cihazda saklanıyor.',
-  'deviceOnly.communicationHistory': 'Geçmiş şu anda yalnızca bu cihazda saklanıyor.',
   'customerDecision.optionalHint': 'Yalnızca müşteri adı gereklidir. Diğer bilgiler isteğe bağlıdır.',
   'customerDecision.required': 'Lütfen önce müşteri atamasını seçin.',
   'kunden.legacyBadge': 'Eski kayıt',
@@ -7306,9 +7285,6 @@ const bgCustomerDecision: Partial<Record<keyof typeof de, string>> = {
   'sync.entity.document_work_result': 'Резултат от анализ',
   'sync.entity.vorgang_note': 'Бележка към поръчката',
   'sync.entity.dunning_documentation': 'Документирана покана за плащане',
-  'deviceOnly.knowledge': 'Тези записи в момента се съхраняват само на това устройство.',
-  'deviceOnly.communicationHistory':
-    'Историята в момента се съхранява само на това устройство.',
   'customerDecision.optionalHint': 'Задължително е само името на клиента. Останалите данни са по избор.',
   'customerDecision.required': 'Моля, първо изберете задаване на клиент.',
   'kunden.legacyBadge': 'Стар запис',

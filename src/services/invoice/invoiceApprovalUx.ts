@@ -67,6 +67,19 @@ export function mapFinalizationFailureToUx(
     result.reason === 'possible_existing_invoice'
   ) {
     messageKey = 'invoice.approve.conflict';
+  } else if (result.reason === 'draft_not_synced') {
+    // CLOUD-SYNC S5 — der Entwurf ist noch nicht vollständig in der Cloud; nichts wurde begonnen.
+    messageKey = 'invoiceDraftCloud.approve.notSynced';
+  } else if (result.reason === 'draft_conflict') {
+    messageKey = 'invoiceDraftCloud.approve.conflict';
+  } else if (result.reason === 'draft_ended') {
+    messageKey = 'invoiceDraftCloud.approve.ended';
+  } else if (result.reason === 'draft_binding_rejected') {
+    // CLOUD-SYNC S5 — anderswo geändert oder verworfen; nachweislich keine Rechnung erstellt.
+    messageKey = 'invoiceDraftCloud.approve.changedElsewhere';
+  } else if (result.reason === 'draft_finalized_elsewhere') {
+    // CLOUD-SYNC S5 — ein anderes Gerät hat diesen Entwurf bereits freigegeben; keine zweite Rechnung.
+    messageKey = 'invoiceDraftCloud.approve.finalizedElsewhere';
   } else if (
     result.reason === 'pull_incomplete' ||
     result.reason === 'pull_failed' ||

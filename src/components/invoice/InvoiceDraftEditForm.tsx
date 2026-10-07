@@ -11,6 +11,11 @@ interface Props {
    * component stays pure presentation and knows no service.
    */
   customerMaster?: ReactNode;
+  /**
+   * CLOUD-SYNC S5 — sichtbar gesperrt, solange der Editor keine Änderung
+   * annimmt (z. B. offener Cloud-Konflikt bis zur Entscheidung).
+   */
+  disabled?: boolean;
 }
 
 function Field({
@@ -28,7 +33,7 @@ function Field({
   );
 }
 
-export function InvoiceDraftEditForm({ draft, onChange, customerMaster }: Props) {
+export function InvoiceDraftEditForm({ draft, onChange, customerMaster, disabled = false }: Props) {
   const billing = draft.customerBilling;
 
   /*
@@ -47,7 +52,7 @@ export function InvoiceDraftEditForm({ draft, onChange, customerMaster }: Props)
 
   return (
     <form className="invoice-edit" onSubmit={(event) => event.preventDefault()}>
-      <fieldset className="invoice-edit__section">
+      <fieldset className="invoice-edit__section" disabled={disabled}>
         <legend>Rechnungsdaten</legend>
         <Field label="Rechnungsdatum">
           <input
@@ -117,7 +122,7 @@ export function InvoiceDraftEditForm({ draft, onChange, customerMaster }: Props)
         </Field>
       </fieldset>
 
-      <fieldset className="invoice-edit__section">
+      <fieldset className="invoice-edit__section" disabled={disabled}>
         <legend>Kunde</legend>
         {customerMaster}
         <Field label="Firma">
@@ -225,7 +230,7 @@ export function InvoiceDraftEditForm({ draft, onChange, customerMaster }: Props)
         </Field>
       </fieldset>
 
-      <fieldset className="invoice-edit__section">
+      <fieldset className="invoice-edit__section" disabled={disabled}>
         <legend>Bauvorhaben</legend>
         <Field label="Titel">
           <input
@@ -247,7 +252,7 @@ export function InvoiceDraftEditForm({ draft, onChange, customerMaster }: Props)
         </Field>
       </fieldset>
 
-      <fieldset className="invoice-edit__section">
+      <fieldset className="invoice-edit__section" disabled={disabled}>
         <legend>Texte</legend>
         <Field label="Einleitungstext">
           <textarea

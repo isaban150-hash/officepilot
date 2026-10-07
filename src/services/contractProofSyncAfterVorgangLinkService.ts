@@ -9,6 +9,7 @@ import {
   analyzeContractFromInbox,
 } from './contractAnalysisService';
 import { analyzeContractIntelligenceFromInbox } from './contractIntelligenceService';
+import { contractIntelligenceInputsFromInbox, recallContractIntelligence } from './contractIntelligenceMemo';
 import {
   buildRequiredDocumentsFromContractIntelligence,
   toRequiredDocuments,
@@ -100,18 +101,31 @@ type ResolvedProofSource =
   | { kind: 'noop_no_requirements' }
   | { kind: 'source_unavailable'; message: string };
 
+/** CLOUD-SYNC S4 — Nacharbeit 1: ausdrückliche Firmenidentität; ohne sie gilt wie bisher das aktuelle Firmenprofil. */
+type ProofSourceContext = { ownCompanyName?: string };
+
 function resolveContractIntelligence(
   item: InboxItem,
   precomputedIntelligence?: ContractIntelligenceResult | null,
+  context: ProofSourceContext = {},
 ): ContractIntelligenceResult | null {
-  return precomputedIntelligence !== undefined
-    ? precomputedIntelligence
-    : analyzeContractIntelligenceFromInbox(item);
+  if (precomputedIntelligence !== undefined) return precomputedIntelligence;
+  /*
+   * CLOUD-SYNC S4 — Nacharbeit 2: dieselbe Analyse nicht zweimal rechnen. Hat
+   * die reguläre Vertragsanalyse genau diese Eingaben schon ausgewertet (Text,
+   * Seiten, Dokumentart, eigene Firma), gilt ihr Ergebnis — sonst analysiert
+   * sie jetzt, regulär und sichtbar, und legt ab. So rechnet die Projektion
+   * beim Speichern nichts nach, was das Erfassen schon gerechnet hat.
+   */
+  const vorhanden = recallContractIntelligence(contractIntelligenceInputsFromInbox(item, context));
+  if (vorhanden) return vorhanden.result;
+  return analyzeContractIntelligenceFromInbox(item, context);
 }
 
 function resolveFromInbox(
   item: InboxItem,
   precomputedIntelligence?: ContractIntelligenceResult | null,
+  context: ProofSourceContext = {},
 ): ResolvedProofSource {
   // Expected contract without payload text: do not treat title-only hints as success.
   if (isExpectedContractInbox(item) && !inboxPayloadText(item)) {
@@ -121,8 +135,8 @@ function resolveFromInbox(
     };
   }
 
-  const analysis = analyzeContractFromInbox(item);
-  const intelligence = resolveContractIntelligence(item, precomputedIntelligence);
+  const analysis = analyzeContractFromInbox(item, context);
+  const intelligence = resolveContractIntelligence(item, precomputedIntelligence, context);
   const requiredDocuments = toRequiredDocuments(
     buildRequiredDocumentsFromContractIntelligence(
       intelligence,
@@ -148,6 +162,9 @@ function resolveFromInbox(
 function resolveFromDocument(
   document: CompanyDocument,
   precomputedIntelligence?: ContractIntelligenceResult | null,
+  /** CLOUD-SYNC S4 — ausdrücklich übergebener Eingangsposten statt Speicherzugriff. */
+  linkedInboxOverride?: InboxItem | null,
+  context: ProofSourceContext = {},
 ): ResolvedProofSource {
   const recognizedText = (document.recognizedText ?? '').trim();
   // Expected contract without body text: title/kind alone is not a usable proof source.
@@ -167,11 +184,14 @@ function resolveFromDocument(
   });
 
   if (analysis.isContract) {
-    const linkedInbox = document.sourceInboxItemId
-      ? getInboxItemById(document.sourceInboxItemId)
-      : null;
+    const linkedInbox =
+      linkedInboxOverride !== undefined
+        ? linkedInboxOverride
+        : document.sourceInboxItemId
+          ? getInboxItemById(document.sourceInboxItemId)
+          : null;
     const intelligence = linkedInbox
-      ? resolveContractIntelligence(linkedInbox, precomputedIntelligence)
+      ? resolveContractIntelligence(linkedInbox, precomputedIntelligence, context)
       : precomputedIntelligence !== undefined
         ? precomputedIntelligence
         : null;
@@ -191,6 +211,35 @@ function resolveFromDocument(
     };
   }
 
+  return { kind: 'noop_not_contract' };
+}
+
+export type ContractProofRequirementResolution = ResolvedProofSource;
+
+/**
+ * CLOUD-SYNC S4 — dieselbe Quellenauflösung wie nach dem Zuordnen, aber rein:
+ * kein Speicherzugriff, keine Persistenz. Die Projektion des Firmen-Gedächtnisses
+ * leitet die Nachweisanforderungen eines Vertrags damit genau so ab wie
+ * `syncContractProofRequirementsAfterVorgangLink`. Verwendet wird ausschliesslich
+ * der übergebene Eingangsposten — auch als Vertragsquelle hinter dem Dokument.
+ * Nacharbeit 1: Auch die eigene Firma kommt ausdrücklich herein; sie
+ * entscheidet über Hauptseiten und institutionellen Briefkopf.
+ */
+export function resolveContractProofRequirements(input: {
+  document: CompanyDocument | null;
+  inboxItem: InboxItem | null;
+  ownCompanyName: string;
+}): ContractProofRequirementResolution {
+  const { document, inboxItem } = input;
+  const context: ProofSourceContext = { ownCompanyName: input.ownCompanyName };
+  if (inboxItem) {
+    const resolved = resolveFromInbox(inboxItem, undefined, context);
+    if (resolved.kind === 'noop_not_contract' && document) {
+      return resolveFromDocument(document, undefined, inboxItem, context);
+    }
+    return resolved;
+  }
+  if (document) return resolveFromDocument(document, undefined, null, context);
   return { kind: 'noop_not_contract' };
 }
 

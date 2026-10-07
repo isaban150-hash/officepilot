@@ -18,6 +18,7 @@ import { getCachedSetup } from '../../services/persistenceService';
 import { t } from '../../i18n';
 import { getWorkspaceStoreSnapshot } from '../../services/workspace/workspaceStore';
 import { startAutomaticSync } from '../../services/sync/syncSchedulerRuntime';
+import { runInvoiceDraftCloudBackfillOnce } from '../../services/invoice/invoiceDraftCloudBridge';
 import { WorkspaceRestoreFailure, WorkspaceSetupNotFound } from './WorkspaceRestoreFailure';
 import { LocalStateLoadFailure } from './LocalStateLoadFailure';
 import { WorkspaceCompanyConflict } from './WorkspaceCompanyConflict';
@@ -244,7 +245,15 @@ export function BusinessStateGate({ children }: BusinessStateGateProps) {
     const userId = bootstrapKey.slice(0, separator);
     const workspaceId = bootstrapKey.slice(separator + 1);
     if (!userId || !workspaceId || userId !== user?.id) return;
-    return startAutomaticSync({ userId, workspaceId });
+    const stop = startAutomaticSync({ userId, workspaceId });
+    /*
+     * CLOUD-SYNC S5 — einmal je App-Lauf und Workspace: aktive lokale
+     * Rechnungsentwürfe, die der Spiegel noch nicht kennt, mit ihrer
+     * vorhandenen Kennung spiegeln. Rein lesend auf der IndexedDB; gesendet wird
+     * über die bestehende Kette. Ein Fehlschlag berührt nichts.
+     */
+    void runInvoiceDraftCloudBackfillOnce(workspaceId).catch(() => undefined);
+    return stop;
   }, [automaticSyncReady, bootstrapKey, user?.id]);
 
   /*

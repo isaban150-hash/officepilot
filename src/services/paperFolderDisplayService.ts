@@ -7,9 +7,12 @@ import { getPaperFolderById } from './paperFolderService';
 
 export const PAPER_FOLDER_NAME_KEY_PREFIX = 'paperFolder.' as const;
 
-export function getPaperFolderNameKey(folderId: string): TranslationKey | undefined {
+export function getPaperFolderNameKey(
+  folderId: string,
+  /** CLOUD-SYNC S4 — Nacharbeit 1: ausdrückliche Sprache; ohne sie die Sprache des Betriebs. */
+  lang: AppLanguage = getCachedSetup()?.language ?? 'de',
+): TranslationKey | undefined {
   const key = `${PAPER_FOLDER_NAME_KEY_PREFIX}${folderId}` as TranslationKey;
-  const lang = getCachedSetup()?.language ?? 'de';
   const translated = t(key, lang);
   return translated !== key ? key : undefined;
 }
@@ -19,7 +22,7 @@ export function getLocalizedPaperFolderName(
   fallbackLabel: string,
   lang: AppLanguage = getCachedSetup()?.language ?? 'de',
 ): string {
-  const key = getPaperFolderNameKey(folderId);
+  const key = getPaperFolderNameKey(folderId, lang);
   if (key) return t(key, lang);
   return fallbackLabel;
 }

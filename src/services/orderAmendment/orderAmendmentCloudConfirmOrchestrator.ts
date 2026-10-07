@@ -6,7 +6,11 @@ import { getVorgangById } from '../vorgangService';
 import { hasFinalSchlussrechnung } from '../orderBillingRules';
 import {
   getOrderAmendment,
+  isOrderAmendmentDraftCloudSyncAllowed,
+  resolveOrderAmendmentDraftCloudBinding,
+  type OrderAmendmentDraftCloudBindingResult,
 } from '../orderAmendmentService';
+import { runSyncFromUi } from '../sync/syncUiService';
 import {
   clearOrderAmendmentConfirmIntent,
   getOrderAmendmentConfirmIntent,
@@ -43,7 +47,15 @@ export type OrderAmendmentConfirmFailureReason =
   | 'local_confirmation_conflict'
   | 'already_confirmed'
   | 'draft_locked'
-  | 'rpc_failed';
+  | 'rpc_failed'
+  /** CLOUD-SYNC S6 — Entwurf noch nicht vollständig in der Cloud. */
+  | 'draft_not_synced'
+  /** CLOUD-SYNC S6 — offener Konflikt oder andere Entwurfsversion in der Cloud. */
+  | 'draft_conflict'
+  /** CLOUD-SYNC S6 — der Entwurf wurde verworfen. */
+  | 'draft_ended'
+  /** CLOUD-SYNC S6 — der Entwurf wurde bereits anderswo bestätigt. */
+  | 'draft_consumed';
 
 export type OrderAmendmentConfirmResult =
   | {
@@ -118,6 +130,14 @@ function mapCloudError(
       return 'invalid_response';
     case 'validation':
       return 'invalid_position';
+    case 'draft_consumed':
+      return 'draft_consumed';
+    case 'draft_discarded':
+      return 'draft_ended';
+    case 'draft_version_conflict':
+      return 'draft_conflict';
+    case 'draft_not_synced':
+      return 'draft_not_synced';
     default:
       return 'rpc_failed';
   }
@@ -144,8 +164,32 @@ function errorKeyForReason(reason: OrderAmendmentConfirmFailureReason): string {
     already_confirmed: 'order_amendment_already_confirmed',
     draft_locked: 'order_amendment_confirmation_outcome_unknown',
     rpc_failed: 'order_amendment_cloud_unavailable',
+    draft_not_synced: 'orderAmendmentCloud.confirm.notSynced',
+    draft_conflict: 'orderAmendmentCloud.confirm.conflict',
+    draft_ended: 'orderAmendmentCloud.confirm.ended',
+    draft_consumed: 'orderAmendmentCloud.confirm.consumed',
   };
   return map[reason];
+}
+
+/**
+ * CLOUD-SYNC S6 — „Erst den Entwurf zur Ruhe bringen" vor der Bestätigung
+ * (Muster aus S5): Trägt der Entwurf noch eine nicht übertragene Änderung,
+ * läuft genau ein Sync-Lauf, danach entscheidet die Prüfung. Kein
+ * Endlosversuch.
+ */
+async function prepareOrderAmendmentDraftBinding(
+  vorgangId: string,
+  draftId: string,
+): Promise<OrderAmendmentDraftCloudBindingResult> {
+  const first = resolveOrderAmendmentDraftCloudBinding(vorgangId, draftId);
+  if (first.ok || first.reason !== 'draft_not_synced') return first;
+  try {
+    await runSyncFromUi();
+  } catch {
+    /* die Prüfung unten entscheidet */
+  }
+  return resolveOrderAmendmentDraftCloudBinding(vorgangId, draftId);
 }
 
 export async function confirmOrderAmendmentWithCloud(
@@ -178,8 +222,9 @@ export async function confirmOrderAmendmentWithCloud(
     };
   }
 
+  // CLOUD-SYNC S6 — auch ein anderswo bestätigter Nachtrag nennt seinen Entwurf (`sourceDraftId`).
   const already = (vorgang.confirmedOrderAmendments ?? []).find(
-    (item) => item.localSourceDraftId === draftId,
+    (item) => item.localSourceDraftId === draftId || item.sourceDraftId === draftId,
   );
   if (already) {
     clearOrderAmendmentConfirmIntent(vorgangId, draftId);
@@ -259,11 +304,39 @@ export async function confirmOrderAmendmentWithCloud(
     };
   }
 
-  const rpcInput = existingIntent?.state === 'outcome_unknown' ||
-    existingIntent?.state === 'local_apply_pending'
-    ? existingIntent.rpcInput
-    : buildOrderAmendmentConfirmRpcInput(draft);
+  const lockedIntent =
+    existingIntent?.state === 'outcome_unknown' || existingIntent?.state === 'local_apply_pending'
+      ? existingIntent
+      : null;
+  const rpcInput = lockedIntent ? lockedIntent.rpcInput : buildOrderAmendmentConfirmRpcInput(draft);
   const fingerprint = buildOrderAmendmentConfirmContentFingerprint(vorgangId, rpcInput);
+
+  /*
+   * CLOUD-SYNC S6 — die Bindung an den Cloud-Entwurf. Ein Retry nach unklarem
+   * Ausgang sendet die Bindung der ersten Absicht; sonst wird der Entwurf erst
+   * zur Ruhe gebracht (ein Sync-Lauf, dann die Prüfung). Ohne freigegebenen
+   * Entwurfs-Sync gibt es keine Bindung, und alles bleibt wie bisher.
+   */
+  let binding = lockedIntent?.binding ?? null;
+  if (!binding && isOrderAmendmentDraftCloudSyncAllowed()) {
+    const prepared = await prepareOrderAmendmentDraftBinding(vorgangId, draftId);
+    if (!prepared.ok) {
+      /*
+       * Der Sync-Lauf kann gerade erst den Nachtrag gebracht haben, den ein
+       * anderes Gerät aus genau diesem Entwurf bestätigt hat. Das ist kein
+       * „verworfen": Es gibt den Nachtrag — und keinen zweiten.
+       */
+      const confirmedElsewhere = (getVorgangById(vorgangId)?.confirmedOrderAmendments ?? []).some(
+        (item) => item.sourceDraftId === draftId,
+      );
+      if (confirmedElsewhere) {
+        clearOrderAmendmentConfirmIntent(vorgangId, draftId);
+        return { ok: false, reason: 'draft_consumed', errorKey: errorKeyForReason('draft_consumed') };
+      }
+      return { ok: false, reason: prepared.reason, errorKey: errorKeyForReason(prepared.reason) };
+    }
+    binding = prepared.binding;
+  }
 
   const intent: OrderAmendmentConfirmIntent = resolveOrderAmendmentConfirmIntent({
     workspaceId,
@@ -271,6 +344,7 @@ export async function confirmOrderAmendmentWithCloud(
     draftId,
     contentFingerprint: fingerprint,
     rpcInput,
+    binding,
   });
 
   let rpcResult;
@@ -280,6 +354,7 @@ export async function confirmOrderAmendmentWithCloud(
       vorgangId,
       clientAmendmentId: intent.clientAmendmentId,
       amendment: intent.rpcInput,
+      binding: intent.binding ?? null,
     });
   } catch (error) {
     if (error instanceof WorkspaceOrderAmendmentCloudError) {
@@ -302,9 +377,17 @@ export async function confirmOrderAmendmentWithCloud(
         reason === 'parent_position_not_found' ||
         reason === 'contract_confirmation_missing' ||
         reason === 'vorgang_not_found' ||
-        reason === 'invalid_position'
+        reason === 'invalid_position' ||
+        reason === 'draft_consumed' ||
+        reason === 'draft_ended' ||
+        reason === 'draft_conflict' ||
+        reason === 'draft_not_synced'
       ) {
         clearOrderAmendmentConfirmIntent(vorgangId, draftId);
+      }
+      // CLOUD-SYNC S6 — ein Ende anderswo: Der nächste Abzug bringt den Endzustand und den bestätigten Nachtrag.
+      if (reason === 'draft_consumed' || reason === 'draft_ended' || reason === 'draft_conflict') {
+        void runSyncFromUi().catch(() => undefined);
       }
       return {
         ok: false,

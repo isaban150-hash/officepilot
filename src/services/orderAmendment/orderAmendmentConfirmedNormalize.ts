@@ -55,6 +55,7 @@ export function normalizeConfirmedOrderAmendments(
       reason: amendment.reason?.trim() || undefined,
       positions: amendment.positions.map(clonePosition),
       localSourceDraftId: amendment.localSourceDraftId?.trim() || undefined,
+      sourceDraftId: amendment.sourceDraftId?.trim() || undefined,
     }));
   return next.length > 0 ? next : undefined;
 }

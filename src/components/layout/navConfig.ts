@@ -70,7 +70,6 @@ export const SECONDARY_NAV_GROUPS: readonly NavGroupConfig[] = [
       { to: '/aufgaben', key: 'mehr.tasks', descriptionKey: 'mehr.tasksDesc', icon: 'tasks', sidebar: true },
       { to: '/schreiben', key: 'businessLetter.area.title', descriptionKey: 'businessLetter.area.subtitle', icon: 'documents', sidebar: true },
       { to: '/kommunikation', key: 'mehr.communication', descriptionKey: 'mehr.communicationDesc', icon: 'messages', sidebar: true },
-      { to: '/mail-import', key: 'mehr.mailImport', descriptionKey: 'mehr.mailImportDesc', icon: 'inbox' },
     ],
   },
   {

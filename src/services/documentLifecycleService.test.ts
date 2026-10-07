@@ -18,7 +18,8 @@ import {
   resetMemory,
   syncContractProofRequirementsFromInbox,
 } from './officePilotMemoryService';
-import { createAuftragInboxItem } from '../test/fixtures';
+import { createAuftragInboxItem, createTestVorgang } from '../test/fixtures';
+import { hydrateVorgangStore } from './vorgangService';
 import type { InboxItem } from '../types/models';
 
 const TODAY = '2026-06-27';
@@ -151,6 +152,8 @@ describe('documentLifecycleService', () => {
   });
 
   it('Werkvertrag mit fehlenden Nachweisen → needs_action', () => {
+    // CLOUD-SYNC S4 — Nachweise entstehen nur für einen bestehenden Vorgang, wie im Produkt.
+    hydrateVorgangStore([createTestVorgang({ id: 'v-lifecycle-1', title: 'Projekt Müller' })]);
     const werkvertrag = createWerkvertragInboxItem('v-lifecycle-1');
     syncContractProofRequirementsFromInbox(werkvertrag);
     const result = importInboxDocumentForTests(werkvertrag, 'Test GmbH');

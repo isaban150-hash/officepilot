@@ -123,7 +123,7 @@ export type VorgangOrderAmendmentsUpdateResult =
   | { success: true; vorgang: Vorgang }
   | {
       success: false;
-      errorKey: 'vorgang.notFound' | 'order_amendment_requires_confirmation';
+      errorKey: 'vorgang.notFound' | 'order_amendment_requires_confirmation' | 'order_amendment_persist_failed';
     };
 
 export type VorgangConfirmationUpdateResult =
@@ -546,6 +546,27 @@ function applyVorgangInvoices(next: Vorgang): VorgangInvoice[] {
   const previous = listInvoicesForVorgang(next.id);
   setInvoicesForVorgang(next.id, next.invoices ?? []);
   return previous;
+}
+
+/**
+ * CLOUD-SYNC S6 — wie `updateVorgangInStore`, meldet einen Speicherfehler aber
+ * ehrlich. Der Rückbau war schon immer da; nur der Erfolg wurde trotzdem
+ * gemeldet. Für synchronisierte Nachtragsentwürfe ist das unzulässig: Ein
+ * Stand, dessen lokale Speicherung nicht bestätigt ist, darf weder als
+ * gespeichert erscheinen noch in die Cloud gehen.
+ */
+function updateVorgangInStoreChecked(updated: Vorgang): { ok: true; vorgang: Vorgang } | { ok: false } {
+  const next = { ...updated, invoices: [] };
+  const previousInvoices = applyVorgangInvoices(updated);
+  const previousVorgaenge = vorgaenge;
+
+  vorgaenge = vorgaenge.map((v) => (v.id === next.id ? next : v));
+  if (!persistAll().success) {
+    vorgaenge = previousVorgaenge;
+    setInvoicesForVorgang(updated.id, previousInvoices);
+    return { ok: false };
+  }
+  return { ok: true, vorgang: cloneVorgang(next) };
 }
 
 function updateVorgangInStore(updated: Vorgang): Vorgang {
@@ -1143,7 +1164,10 @@ export function saveVorgangOrderAmendments(
     ...current,
     orderAmendments: hasDrafts ? normalizedAmendments : undefined,
   });
-  return { success: true, vorgang: updateVorgangInStore(updated) };
+  // CLOUD-SYNC S6 — ein Speicherfehler wird gemeldet, nie als Erfolg ausgegeben.
+  const stored = updateVorgangInStoreChecked(updated);
+  if (!stored.ok) return { success: false, errorKey: 'order_amendment_persist_failed' };
+  return { success: true, vorgang: stored.vorgang };
 }
 
 /**

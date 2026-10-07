@@ -8,6 +8,13 @@ import type { BusinessLetter } from '../../types/businessLetter';
 import type { Offer } from '../../types/offer';
 import { parseExpensePaymentEntityId } from '../expense/expenseCloudSyncService';
 import type { KnowledgeFact } from '../../types/knowledge';
+import type { InvoiceDraftCloudEntity } from '../../types/invoiceDraftCloud';
+import type { OrderDraft } from '../../types/orderDraft';
+import type { OrderAmendmentDraftTombstone } from '../../types/orderAmendmentDraftCloud';
+import {
+  findOrderAmendmentDraftEntity,
+  listOrderAmendmentDraftEntities,
+} from '../orderAmendment/orderAmendmentDraftCloudService';
 import type { MailImport } from '../../types/mailImport';
 import type {
   DocumentMemory,
@@ -126,6 +133,15 @@ export function findEntityInState(
       return state.communicationHistory?.find((item) => item.id === entityId) ?? null;
     case 'knowledge_fact':
       return state.knowledgeFacts?.find((item) => item.id === entityId) ?? null;
+    // CLOUD-SYNC S5 — der Spiegel des Rechnungsentwurfs.
+    case 'invoice_draft':
+      return state.invoiceDrafts?.find((item) => item.id === entityId) ?? null;
+    // CLOUD-SYNC S6 — der Auftragsentwurf (inklusive Grabstein).
+    case 'order_draft':
+      return (state.orderDrafts ?? []).find((item) => item.id === entityId) ?? null;
+    // CLOUD-SYNC S6 — der Nachtragsentwurf: lebend im Vorgang oder als Grabstein daneben.
+    case 'order_amendment_draft':
+      return findOrderAmendmentDraftEntity(state, entityId);
     case 'mail_import':
       return state.mailImports?.find((item) => item.id === entityId) ?? null;
     case 'document_memory':
@@ -230,6 +246,42 @@ export function upsertEntityInState(
     case 'knowledge_fact':
       next.knowledgeFacts = upsertInArray(next.knowledgeFacts ?? [], entity as KnowledgeFact);
       break;
+    case 'invoice_draft':
+      next.invoiceDrafts = upsertInArray(
+        next.invoiceDrafts ?? [],
+        entity as unknown as InvoiceDraftCloudEntity,
+      );
+      break;
+    case 'order_draft':
+      next.orderDrafts = upsertInArray(next.orderDrafts ?? [], entity as unknown as OrderDraft);
+      break;
+    case 'order_amendment_draft': {
+      /*
+       * CLOUD-SYNC S6 — ein Grabstein steht neben dem Vorgang, ein lebender
+       * Entwurf in genau seinem Vorgang; nie an beiden Stellen.
+       */
+      const draft = entity as unknown as import('../../types/models').OrderAmendment;
+      next.vorgaenge = next.vorgaenge.map((vorgang) => {
+        const others = (vorgang.orderAmendments ?? []).filter((item) => item.id !== draft.id);
+        if (draft.sync?.deleted || vorgang.id !== draft.vorgangId) {
+          return others.length === (vorgang.orderAmendments ?? []).length
+            ? vorgang
+            : { ...vorgang, orderAmendments: others.length > 0 ? others : undefined };
+        }
+        const index = (vorgang.orderAmendments ?? []).findIndex((item) => item.id === draft.id);
+        const list = [...(vorgang.orderAmendments ?? [])];
+        if (index >= 0) list[index] = draft;
+        else list.push(draft);
+        return { ...vorgang, orderAmendments: list };
+      });
+      const tombstones = (next.orderAmendmentDraftTombstones ?? []).filter((item) => item.id !== draft.id);
+      if (draft.sync?.deleted) {
+        const tombstone: OrderAmendmentDraftTombstone = { id: draft.id, vorgangId: draft.vorgangId, sync: draft.sync };
+        tombstones.push(tombstone);
+      }
+      next.orderAmendmentDraftTombstones = tombstones;
+      break;
+    }
     case 'mail_import':
       next.mailImports = upsertInArray(next.mailImports ?? [], entity as MailImport);
       break;
@@ -316,6 +368,12 @@ export function listEntitiesByType(
       return [...(state.communicationHistory ?? [])];
     case 'knowledge_fact':
       return [...(state.knowledgeFacts ?? [])];
+    case 'invoice_draft':
+      return [...(state.invoiceDrafts ?? [])] as SyncEntity[];
+    case 'order_draft':
+      return [...(state.orderDrafts ?? [])] as SyncEntity[];
+    case 'order_amendment_draft':
+      return listOrderAmendmentDraftEntities(state) as SyncEntity[];
     case 'mail_import':
       return [...(state.mailImports ?? [])];
     case 'document_memory':

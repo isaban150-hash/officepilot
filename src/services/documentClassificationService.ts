@@ -495,7 +495,10 @@ function hasOwnDocumentTitle(text: string, kind: ClassifiedDocumentKind): boolea
 
 function detectInstitutionalLetterheadKind(input: DocumentClassificationInput): DetectionResult | null {
   // Nacharbeit 3 — dieselbe Briefkopf-Wahrheit wie Vertrags-Gate und Vertragsanalyse.
-  const letterhead = resolveInstitutionalLetterhead(input.recognizedText, { senderHint: input.senderHint });
+  const letterhead = resolveInstitutionalLetterhead(input.recognizedText, {
+    senderHint: input.senderHint,
+    ownCompanyName: input.ownCompanyName,
+  });
   if (!letterhead) return null;
   if (letterhead.kind && letterhead.reasonKey) return { kind: letterhead.kind, reasonKey: letterhead.reasonKey };
   // Kommunaler Briefkopf ohne eigene Katalogart („Stadt Musterstadt"): ein Schreiben, kein Vertrag.

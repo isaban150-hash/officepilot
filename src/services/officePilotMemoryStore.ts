@@ -67,6 +67,21 @@ export function hydrateMemoryStore(state: OfficePilotMemoryState): void {
   paperRegisterEntries = (state.paperRegisterEntries ?? []).map(clonePaperRegisterEntry);
 }
 
+/**
+ * CLOUD-SYNC S4 — ersetzt ausschliesslich die abgeleiteten Sammlungen
+ * (Dokumentgedächtnis, Nachweise, Relationen). Die Papierablage (S1) wird
+ * dabei nicht angefasst — nicht einmal neu zugewiesen.
+ */
+export function replaceDerivedMemoryCollectionsInStore(projection: {
+  documentMemories: DocumentMemory[];
+  proofMemories: ProofMemory[];
+  relations: MemoryRelation[];
+}): void {
+  documentMemories = projection.documentMemories.map(cloneDocumentMemory);
+  proofMemories = projection.proofMemories.map(cloneProofMemory);
+  relations = projection.relations.map(cloneRelation);
+}
+
 export function resetMemoryStore(): void {
   documentMemories = [];
   proofMemories = [];

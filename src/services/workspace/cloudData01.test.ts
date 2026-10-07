@@ -114,10 +114,16 @@ describe('CLOUD-DATA-01 allowlist', () => {
     // 01C — Ausgaben und ihre Zahlungen ebenfalls; Aufgaben bleiben ausgeschlossen.
     expect(isSupabaseSyncAllowed('document')).toBe(true);
     expect(isSupabaseSyncAllowed('inbox_item')).toBe(true);
-    // CLOUD-DURABILITY-CORE-01C — Aufgaben sind cloud-dauerhaft; Wissensfakten bleiben lokal.
+    // CLOUD-DURABILITY-CORE-01C — Aufgaben sind cloud-dauerhaft.
     expect(isSupabaseSyncAllowed('task')).toBe(true);
     expect(isSupabaseSyncAllowed('dunning_documentation')).toBe(true);
-    expect(isSupabaseSyncAllowed('knowledge_fact')).toBe(false);
+    // CLOUD-SYNC S3 — Wissensfakten ebenfalls, seit der Remote-Migration 20261101120000.
+    expect(isSupabaseSyncAllowed('knowledge_fact')).toBe(true);
+    // CLOUD-SYNC S5 — Rechnungsentwürfe, seit der Remote-Migration 20261102120000.
+    expect(isSupabaseSyncAllowed('invoice_draft')).toBe(true);
+    // CLOUD-SYNC S6 — Auftrags- und Nachtragsentwürfe, seit der Remote-Migration 20261103120000.
+    expect(isSupabaseSyncAllowed('order_draft')).toBe(true);
+    expect(isSupabaseSyncAllowed('order_amendment_draft')).toBe(true);
     expect(isSupabaseSyncAllowed('expense')).toBe(true);
     expect(isSupabaseSyncAllowed('expense_payment')).toBe(true);
     // CLOUD-DURABILITY-CORE-01B — Vorgangsnotizen sind cloud-dauerhaft.
@@ -190,6 +196,15 @@ describe('CLOUD-DATA-01 allowlist', () => {
         'bank_transaction',
         // CLOUD-SYNC S1 — der Papierablage-Haken, nach Remote-Migration 20261030120000.
         'paper_register_entry',
+        // CLOUD-SYNC S2 — der Kommunikationsverlauf, nach Remote-Migration 20261031120000.
+        'communication_event',
+        // CLOUD-SYNC S3 — bestätigtes Wissen, nach Remote-Migration 20261101120000.
+        'knowledge_fact',
+        // CLOUD-SYNC S5 — Rechnungsentwürfe, nach Remote-Migration 20261102120000.
+        'invoice_draft',
+        // CLOUD-SYNC S6 — Auftrags- und Nachtragsentwürfe, nach Remote-Migration 20261103120000.
+        'order_draft',
+        'order_amendment_draft',
       ].sort(),
     );
   });
@@ -316,9 +331,9 @@ describe('CLOUD-DATA-01 SupabaseSyncAdapter', () => {
       outbox: [
         {
           id: outboxId,
-          // 01B/01C: `document`, `expense` und `task` sind erlaubt — Wissensfakten bleiben lokal.
-          entityType: 'knowledge_fact',
-          entityId: 'fact-1',
+          // CLOUD-SYNC S3: auch Wissensfakten sind freigegeben — das Dokumentgedächtnis bleibt lokal.
+          entityType: 'document_memory',
+          entityId: 'docmem-1',
           operation: 'update',
           version: 1,
           queuedAt: new Date().toISOString(),
@@ -342,7 +357,7 @@ describe('CLOUD-DATA-01 SupabaseSyncAdapter', () => {
     expect(result.state.syncOutbox?.find((entry) => entry.id === outboxId)?.status).toBe('completed');
     // Nie gesendet: die Entität taucht in keinem Sync-Ergebnis als übertragen auf.
     expect(
-      result.report.syncedEntities.some((entity) => entity.entityType === 'knowledge_fact'),
+      result.report.syncedEntities.some((entity) => entity.entityType === 'document_memory'),
     ).toBe(false);
   });
 

@@ -42,7 +42,6 @@ import { HeutePage } from './pages/HeutePage';
 import { KundenDetailPage, KundenLegacyLinkResolver } from './pages/KundenDetailPage';
 import { KundenPage } from './pages/KundenPage';
 import { SteuerberaterPage } from './pages/SteuerberaterPage';
-import { MailImportPage } from './pages/MailImportPage';
 import { MehrPage } from './pages/MehrPage';
 import { BankStatementPage } from './pages/BankStatementPage';
 import { FinanzenPage } from './pages/FinanzenPage';
@@ -190,7 +189,12 @@ function AppRoutes() {
         {/* UIUX-FOUNDATION-01C — Finanzen-Hub: reine Navigation zu bestehenden Bereichen. */}
         <Route path="/finanzen" element={<FinanzenPage />} />
         <Route path="/finanzen/kontoauszug" element={<BankStatementPage />} />
-        <Route path="/mail-import" element={<MailImportPage />} />
+        {/*
+         * CLOUD-SYNC S7 — der frühere manuelle Mailimport ist aus dem Produkt
+         * genommen. Alte Lesezeichen und Links landen bei den Nachrichten mit dem
+         * verbundenen Postfach; Dateien und Mail-Anhänge kommen über den Eingang.
+         */}
+        <Route path="/mail-import" element={<Navigate to="/kommunikation" replace />} />
         <Route path="/ablage" element={<EingangPage />} />
         <Route path="/ablage/:id" element={<EingangDetailPage />} />
         <Route path="/eingang" element={<Navigate to="/ablage" replace />} />

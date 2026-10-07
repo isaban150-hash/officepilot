@@ -251,8 +251,12 @@ describe('S1-A — der Eintrag entsteht und bleibt Wahrheit', () => {
       filedByUser: 'Erika Muster',
     });
     expect(entry?.filedAt).toBeTruthy();
-    // Es entsteht kein Gedächtnis — der Eintrag allein trägt die Wahrheit.
-    expect(getDocumentMemoryByDocumentId(doc.id)).toBeUndefined();
+    /*
+     * Der Eintrag allein trägt die Wahrheit. CLOUD-SYNC S4: Das Gedächtnis ist
+     * seitdem eine Projektion des Dokuments — es entsteht beim Speichern und
+     * spiegelt den Eintrag, eine eigene Wahrheit trägt es nicht.
+     */
+    expect(getDocumentMemoryByDocumentId(doc.id)).toMatchObject({ physicalFiled: true, filedByUser: 'Erika Muster' });
   });
 
   it('A3 — Haken ohne vorhandenen Eintrag landet nicht mehr nur im Gedächtnis', () => {

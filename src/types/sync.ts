@@ -57,7 +57,24 @@ export type SyncEntityType =
   | 'bank_transaction'
   /** BANKABGLEICH-V1 BLOCK 2B — das Konto, unter dem Auszüge aufbewahrt werden. */
   | 'bank_account'
-  | 'knowledge_fact';
+  | 'knowledge_fact'
+  /**
+   * CLOUD-SYNC S5 — der fachliche Kern eines Rechnungsentwurfs. Die
+   * IndexedDB bleibt die sofortige lokale Schreibstelle; reisen tut nur der
+   * Kern. Finalisiert wird ausschliesslich in `finalize_workspace_invoice`.
+   */
+  | 'invoice_draft'
+  /**
+   * CLOUD-SYNC S6 — der Auftragsentwurf (Auftrag ohne vorheriges Angebot vor
+   * der verbindlichen Anlage). Verbraucht wird er ausschliesslich in
+   * `create_workspace_order`.
+   */
+  | 'order_draft'
+  /**
+   * CLOUD-SYNC S6 — der Nachtragsentwurf zu genau einem bestätigten Auftrag.
+   * Verbraucht wird er ausschliesslich in `confirm_workspace_order_amendment`.
+   */
+  | 'order_amendment_draft';
 
 export type SyncOutboxOperation = 'create' | 'update' | 'delete';
 

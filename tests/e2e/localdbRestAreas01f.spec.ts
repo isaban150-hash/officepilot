@@ -3,7 +3,8 @@
  *
  *  A  Kunden: Liste (Hauptaktion, Business-Zeilen) -> Detail (Back-Link, Sections)
  *  B  Dokumente: Toolbar (Suche, Bereichs-Chips), Upload-Seite mit Header-Back
- *  C  Aufgaben / Papierarchiv / Mail-Import / Sync: PageHeader-Back, Zeilenlisten
+ *  C  Aufgaben / Papierarchiv / Sync: PageHeader-Back, Zeilenlisten
+ *     (CLOUD-SYNC S7: die frühere Mail-Import-Seite gibt es nicht mehr — ihre alte Adresse landet bei den Nachrichten)
  *  D  Offene Ausgaben + Steuerberater: Zahlungsstand, Status im Header, eine Hauptaktion
  *  E  Mobile: Touchziele, kein horizontaler Überlauf auf allen Seiten
  */
@@ -106,7 +107,7 @@ test.describe('UIUX-FOUNDATION-01F — Restbereiche (lokal)', () => {
     await page.getByTestId('document-upload-back').click();
     await expect(page).toHaveURL(/\/dokumente$/);
 
-    /* C — Aufgaben, Papierarchiv, Mail-Import, Sync */
+    /* C — Aufgaben, Papierarchiv, alte Mail-Import-Adresse, Sync */
     await page.goto('/aufgaben', { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId('aufgaben-page')).toBeVisible({ timeout: 30_000 });
     await page.getByTestId('aufgaben-filter-erledigt').click();
@@ -117,9 +118,8 @@ test.describe('UIUX-FOUNDATION-01F — Restbereiche (lokal)', () => {
     await expect(page.getByTestId('papierarchiv-list')).toBeVisible();
     await expectNoOverflow(page, 'Papierarchiv');
     await page.goto('/mail-import', { waitUntil: 'domcontentloaded' });
-    await expect(page.getByTestId('mail-import-page')).toBeVisible({ timeout: 30_000 });
-    await page.getByTestId('mail-import-back').click();
-    await expect(page).toHaveURL(/\/mehr$/);
+    await expect(page.getByTestId('kommunikation-page')).toBeVisible({ timeout: 30_000 });
+    await expect(page).toHaveURL(/\/kommunikation$/);
     await page.goto('/synchronisation', { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId('sync-page')).toBeVisible({ timeout: 30_000 });
     await expect(page.getByTestId('sync-back')).toHaveAttribute('href', '/mehr');

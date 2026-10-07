@@ -25,6 +25,7 @@ import { DEFAULT_SETUP } from '../data/mockData';
 import { DEFAULT_COMPANY_PROFILE } from '../data/companyProfileDefaults';
 import { RechnungPage } from './RechnungPage';
 import { createOrderPosition, createTestVorgang } from '../test/fixtures';
+import { disableInvoiceDraftCloudSyncForTests } from '../test/invoiceDraftCloudSwitch';
 import { hydrateCompanyProfileStore } from '../services/companyProfileService';
 import { hydrateDocumentStore } from '../services/documentService';
 import { hydrateVorgangStore } from '../services/vorgangService';
@@ -75,6 +76,10 @@ let root: Root;
 let host: HTMLDivElement;
 
 beforeEach(async () => {
+  // CLOUD-SYNC S5 — die Szenarien gelten als „wirklich frischer Entwurf" und setzen nur
+  // die IndexedDB zurück; mit Cloud-Seite setzte ein leerer Slot den Cloud-Entwurf
+  // des vorigen Szenarios fort (S5, Fall B). Deshalb Entwurfs-Sync aus.
+  disableInvoiceDraftCloudSyncForTests();
   resetInvoiceNumberSequence();
   hydrateDocumentStore([]);
   hydrateVorgangStore([

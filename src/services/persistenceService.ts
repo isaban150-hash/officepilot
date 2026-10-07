@@ -25,6 +25,7 @@ import type {
   VorgangNote,
 } from '../types/models';
 import {
+  getCompanyProfile,
   getCompanyProfileStoreSnapshot,
   hydrateCompanyProfileStore,
   resetCompanyProfile,
@@ -111,6 +112,12 @@ import {
 } from './knowledgeService';
 import { resetKnowledgeStore } from './knowledgeStore';
 import {
+  getInvoiceDraftCloudSnapshot,
+  hydrateInvoiceDraftCloudStore,
+  resetInvoiceDraftCloudStore,
+} from './invoice/invoiceDraftCloudStore';
+import type { InvoiceDraftCloudEntity } from '../types/invoiceDraftCloud';
+import {
   getMailImportSnapshot,
   hydrateMailImports,
   resetMailImports,
@@ -141,7 +148,9 @@ import {
   hydrateTaskStore,
   resetTasks,
 } from './taskService';
-import { normalizeTask } from './taskNormalize';
+import { getTodayIso, normalizeTask } from './taskNormalize';
+import { deriveOfficePilotMemory } from './memory/officePilotMemoryProjection';
+import { replaceDerivedMemoryCollectionsInStore } from './officePilotMemoryStore';
 import {
   cloneCustomer,
   getCustomerStoreSnapshot,
@@ -173,7 +182,12 @@ import {
 import { getInvoiceStoreSnapshot, hydrateInvoiceStore } from './invoice/invoiceStore';
 import { ensureSyncClientFromState, hydrateSyncClient } from './sync/syncClientService';
 import { hydrateSyncOutbox, getSyncOutboxSnapshot } from './sync/syncOutboxService';
-import { getOrderDraftStoreSnapshot, hydrateOrderDrafts } from './order/orderDraftService';
+import { getOrderDraftStoreSnapshot, hydrateOrderDrafts, resetOrderDrafts } from './order/orderDraftService';
+import {
+  getOrderAmendmentDraftTombstoneSnapshot,
+  hydrateOrderAmendmentDraftTombstones,
+  resetOrderAmendmentDraftTombstones,
+} from './orderAmendment/orderAmendmentDraftTombstoneStore';
 import { getBankTransactionStoreSnapshot, hydrateBankTransactions } from './bank/bankTransactionStore';
 import { getBankAccountStoreSnapshot, hydrateBankAccounts } from './bank/bankAccountStore';
 import {
@@ -447,6 +461,13 @@ const NON_CONTENT_TOP_LEVEL_KEYS = new Set([
 const NON_CONTENT_META_KEYS: Record<string, ReadonlySet<string>> = {
   workspace: new Set(['version', 'updatedAt']),
   workspaceSettings: new Set(['version', 'updatedAt', 'updatedBy']),
+  /*
+   * CLOUD-SYNC S4 — Dokumentgedächtnis, Nachweise und Relationen sind eine
+   * Projektion anderer Bereiche (Dokumente, Eingang, Vorgänge, S1). Ihre
+   * Neuberechnung ist keine fachliche Änderung; eine echte Änderung zeigt
+   * sich bereits in ihrer Quelle. Die Papierablage (S1) bleibt Inhalt.
+   */
+  officePilotMemory: new Set(['documentMemories', 'proofMemories', 'relations']),
 };
 
 /**
@@ -788,6 +809,11 @@ function cloneKnowledgeFact(fact: KnowledgeFact): KnowledgeFact {
   return { ...fact };
 }
 
+/** CLOUD-SYNC S5 — der Spiegel ist JSON-treu; eine tiefe Kopie trennt alle Referenzen. */
+function cloneInvoiceDraftCloudEntity(entity: InvoiceDraftCloudEntity): InvoiceDraftCloudEntity {
+  return JSON.parse(JSON.stringify(entity)) as InvoiceDraftCloudEntity;
+}
+
 function cloneMailImport(item: MailImport): MailImport {
   return {
     ...item,
@@ -871,12 +897,14 @@ export function createSeedState(setupOverride?: CompanySetup): AppPersistedState
       businessLetters: [],
       offers: [],
       orderDrafts: [],
+      orderAmendmentDraftTombstones: [],
       bankTransactions: [],
       bankAccounts: [],
       bankReconciliations: [],
       dunningDocumentations: [],
       communicationHistory: [],
       knowledgeFacts: [],
+      invoiceDrafts: [],
       officePilotMemory: {
         documentMemories: [],
         proofMemories: [],
@@ -1032,7 +1060,12 @@ function finalizeLoadedPersistedState(normalized: AppPersistedState): AppPersist
     orderDrafts: (normalized.orderDrafts ?? []).map((draft) => ({
       ...draft,
       customerBilling: { ...draft.customerBilling },
-      positions: draft.positions.map((position) => ({ ...position })),
+      // CLOUD-SYNC S6 — ein Entwurf ohne Positionen (Grabstein, Altbestand) darf das Laden nie scheitern lassen.
+      positions: (draft.positions ?? []).map((position) => ({ ...position })),
+    })),
+    orderAmendmentDraftTombstones: (normalized.orderAmendmentDraftTombstones ?? []).map((tombstone) => ({
+      ...tombstone,
+      sync: { ...tombstone.sync },
     })),
     bankTransactions: (normalized.bankTransactions ?? []).map((tx) => ({ ...tx })),
     bankAccounts: (normalized.bankAccounts ?? []).map((acc) => ({ ...acc })),
@@ -1040,6 +1073,7 @@ function finalizeLoadedPersistedState(normalized: AppPersistedState): AppPersist
     dunningDocumentations: (normalized.dunningDocumentations ?? []).map((doc) => ({ ...doc })),
     communicationHistory: (normalized.communicationHistory ?? []).map(cloneCommunicationEvent),
     knowledgeFacts: (normalized.knowledgeFacts ?? []).map(cloneKnowledgeFact),
+    invoiceDrafts: (normalized.invoiceDrafts ?? []).map(cloneInvoiceDraftCloudEntity),
     officePilotMemory: cloneOfficePilotMemoryState(
       normalized.officePilotMemory ?? {
         documentMemories: [],
@@ -1403,6 +1437,10 @@ export function clearInMemoryBusinessState(): void {
   resetCommunicationHistoryStore();
   resetMailImports();
   resetKnowledgeStore();
+  resetInvoiceDraftCloudStore();
+  // CLOUD-SYNC S6 — Auftragsentwuerfe und Nachtrags-Grabsteine gehoeren dem bisherigen Bereich.
+  resetOrderDrafts();
+  resetOrderAmendmentDraftTombstones();
   resetMemory();
   resetCompanyProfile(DEFAULT_SETUP.companyName);
   resetInvoiceNumberSequence();
@@ -1474,12 +1512,15 @@ export function applyStateToStores(state: AppPersistedState): void {
   hydrateBusinessLetters(state.businessLetters ?? []);
   hydrateOffers(state.offers ?? []);
   hydrateOrderDrafts(state.orderDrafts ?? []);
+  hydrateOrderAmendmentDraftTombstones(state.orderAmendmentDraftTombstones ?? []);
   hydrateBankAccounts(state.bankAccounts ?? []);
   hydrateBankTransactions(state.bankTransactions ?? []);
   hydrateBankReconciliations(state.bankReconciliations ?? []);
   hydrateDunningDocumentations(state.dunningDocumentations ?? []);
   hydrateCommunicationHistory(state.communicationHistory ?? []);
   hydrateKnowledgeFacts(state.knowledgeFacts ?? []);
+  // CLOUD-SYNC S5 — der Spiegel der Cloud-Rechnungsentwürfe.
+  hydrateInvoiceDraftCloudStore(state.invoiceDrafts ?? []);
   hydrateMemory(
     state.officePilotMemory ?? {
       documentMemories: [],
@@ -1496,7 +1537,48 @@ export function applyStateToStores(state: AppPersistedState): void {
     setupSync: state.setupSync ?? null,
     companyProfileSync: state.companyProfileSync ?? null,
   });
+  // CLOUD-SYNC S4 — nach Laden, Cloud-Abzug und Wiederherstellung: das Gedächtnis aus dem neuen Bestand.
+  rebuildOfficePilotMemoryProjection();
   resetSyncChangeTrackerFromState(state);
+}
+
+/**
+ * CLOUD-SYNC S4 — das Firmen-Gedächtnis aus der Workspace-Wahrheit neu aufbauen.
+ *
+ * Dokumentgedächtnis, Nachweise und Nachweis-Relationen werden aus den
+ * aktiven Dokumenten, ihren Eingangsposten, den Vorgängen und der
+ * Papierablage (S1, nur lesend) abgeleitet und ersetzen den bisherigen
+ * Stand; die Papierablage selbst bleibt unberührt. Die Ableitung ist rein —
+ * kein Speichern, keine Warteschlange, kein Netz.
+ *
+ * Eigene Firma und Sprache gibt sie ausdrücklich mit (Nacharbeit 1): aus dem
+ * Firmenprofil und der Einrichtung des Workspace, nicht aus einem
+ * Zwischenspeicher.
+ *
+ * Scheitert sie, bleibt der bisherige Stand stehen: Ein fehlerhaftes
+ * Gedächtnis darf weder Laden noch Speichern verhindern.
+ */
+export function rebuildOfficePilotMemoryProjection(todayIso: string = getTodayIso()): void {
+  const memory = getOfficePilotMemorySnapshot();
+  try {
+    const projection = deriveOfficePilotMemory({
+      documents: getDocumentStoreSnapshot(),
+      inboxItems: getInboxStoreSnapshot(),
+      activeVorgangIds: new Set(
+        getVorgangStoreSnapshot()
+          .filter((vorgang) => !vorgang.sync?.deleted)
+          .map((vorgang) => vorgang.id),
+      ),
+      paperRegisterEntries: memory.paperRegisterEntries,
+      previousDocumentMemories: memory.documentMemories,
+      todayIso,
+      ownCompanyName: getCompanyProfile().companyName,
+      language: cachedSetup.language,
+    });
+    replaceDerivedMemoryCollectionsInStore(projection);
+  } catch (error) {
+    console.warn('[OfficeTakt] Firmen-Gedächtnis konnte nicht neu aufgebaut werden:', error);
+  }
 }
 
 function bootstrapBetaTestState(): CompanySetup {
@@ -1660,6 +1742,9 @@ export function persistAll(setupOverride?: CompanySetup): PersistResult {
     cachedSetup = { ...DEFAULT_SETUP, ...setupOverride };
   }
 
+  // CLOUD-SYNC S4 — jede gespeicherte Änderung trägt das dazu passende Gedächtnis.
+  rebuildOfficePilotMemoryProjection();
+
   const storageKey = buildStorageKey(getActiveStorageScope());
   const existingStoredCharacters = readExistingStoredCharacters(storageKey);
   const syncOutboxBefore = getSyncOutboxSnapshot();
@@ -1773,12 +1858,14 @@ export function buildPersistedStateSnapshot(): AppPersistedState {
     businessLetters: getBusinessLetterStoreSnapshot(),
     offers: getOfferStoreSnapshot(),
     orderDrafts: getOrderDraftStoreSnapshot(),
+    orderAmendmentDraftTombstones: getOrderAmendmentDraftTombstoneSnapshot(),
     bankTransactions: getBankTransactionStoreSnapshot(),
     bankAccounts: getBankAccountStoreSnapshot(),
     bankReconciliations: getBankReconciliationStoreSnapshot(),
     dunningDocumentations: getDunningDocumentationStoreSnapshot(),
     communicationHistory: getCommunicationHistorySnapshot(),
     knowledgeFacts: getKnowledgeSnapshot(),
+    invoiceDrafts: getInvoiceDraftCloudSnapshot(),
     officePilotMemory: getOfficePilotMemorySnapshot(),
     mailImports: getMailImportSnapshot().map(cloneMailImport),
     savedAt: new Date().toISOString(),
@@ -1830,6 +1917,9 @@ export function resetDemoData(options?: { keepSetup?: boolean }): CompanySetup {
   resetCommunicationHistoryStore();
   resetMailImports();
   resetKnowledgeStore();
+  resetInvoiceDraftCloudStore();
+  resetOrderDrafts();
+  resetOrderAmendmentDraftTombstones();
   resetMemory();
   resetCompanyProfile(setup.companyName);
   resetInvoiceNumberSequence();

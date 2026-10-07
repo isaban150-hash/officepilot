@@ -40,14 +40,26 @@ const EMPTY_FORM: KnowledgeFormState = {
   active: true,
 };
 
+/*
+ * CLOUD-SYNC S3 (WEISS-Recheck) — abgeleitete Angaben bleiben beim Bearbeiten
+ * abgeleitet.
+ *
+ * Seit F-07 gilt unter „Weitere Angaben“: leer = automatisch — der Schlüssel
+ * wird aus dem Wissenstext abgeleitet, der Wert aus ihm übernommen. Bisher
+ * füllte das Bearbeiten beide Felder mit dem gespeicherten Stand vor; damit
+ * galten sie als eigene Angaben, und wer nur den Wissenstext änderte, behielt
+ * Wert und Schlüssel der alten Fassung. Was nur abgeleitet ist, erscheint
+ * deshalb leer wie beim Anlegen und folgt beim Speichern dem neuen Text. Eine
+ * eigene Angabe — sie weicht von der Ableitung ab — bleibt unverändert stehen.
+ */
 function factToForm(fact: KnowledgeFact): KnowledgeFormState {
   return {
     scope: fact.scope,
     scopeId: fact.scopeId ?? '',
     scopeLabel: fact.scopeLabel ?? '',
     category: fact.category,
-    key: fact.key,
-    value: fact.value,
+    key: fact.key === deriveKnowledgeKey(fact.displayText) ? '' : fact.key,
+    value: fact.value === fact.displayText ? '' : fact.value,
     displayText: fact.displayText,
     active: fact.active,
   };

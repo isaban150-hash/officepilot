@@ -1,9 +1,12 @@
 /**
  * REAL-PRODUCT-TEST-01D — nur-lokale Entitäten bleiben keine dauerhafte Cloud-Sendeaufgabe.
  *
- *  1  eine nur-lokale Entität (Dokumentgedächtnis) wird lokal gespeichert und getrackt
- *     (CLOUD-SYNC S1: bis dahin war es das Papierregister — das ist seitdem freigegeben)
- *  2  ihr Outbox-Eintrag wird beim Cloud-Push abgeschlossen (nie gesendet, nie dauerhaft „ausstehend")
+ *  1  der Altbestand des früheren Mailimports wird nicht mehr verfolgt
+ *     (CLOUD-SYNC S1: bis dahin war es das Papierregister — das ist seitdem freigegeben;
+ *     CLOUD-SYNC S4: danach das Dokumentgedächtnis — eine Projektion, die gar nicht mehr verfolgt wird;
+ *     CLOUD-SYNC S7: der Mailimport selbst ist aus dem Produkt genommen, sein Altbestand bleibt lesbar)
+ *  2  ein alter nur-lokaler Sendeauftrag wird beim Cloud-Push abgeschlossen (nie gesendet, nie dauerhaft
+ *     „ausstehend", keine Schleife)
  *  3  eine cloud-fähige Entität wird weiterhin normal eingereiht und gesendet
  *  4  blockierte/fehlgeschlagene cloud-fähige Einträge bleiben unverändert
  *  5  SyncPage-Status zählt danach keine wartende Änderung mehr, echte wartende weiterhin
@@ -53,17 +56,21 @@ function entry(overrides: Partial<SyncOutboxEntry>): SyncOutboxEntry {
   } as SyncOutboxEntry;
 }
 
-const memoryEntry = {
-  id: 'mem-1',
-  documentId: 'doc-1',
-  title: 'Beleg',
-  issuer: 'Lieferant',
-  digitalFolder: { id: 'd-1', name: 'Belege', path: '/Belege/' },
-  paperFolder: { folderId: 'f-1', register: 'A', label: 'Ordner A' },
-  validUntil: null,
+const mailImportEntry = {
+  id: 'mail-1',
+  from: 'lieferant@example.org',
+  to: 'buero@example.org',
+  subject: 'Beleg',
+  receivedAt: '2026-09-16T09:00:00.000Z',
+  bodyText: 'Anbei der Beleg.',
+  attachments: [],
+  status: 'processed',
+  source: 'test_data',
+  linkedInboxIds: [],
+  linkedDocumentIds: [],
   createdAt: '2026-09-16T09:00:00.000Z',
   updatedAt: '2026-09-16T09:00:00.000Z',
-  sync: { version: 1, updatedAt: '2026-09-16T09:00:00.000Z', deviceId: 'dev', deleted: false },
+  sync: { version: 1, updatedAt: '2026-09-16T09:00:00.000Z', deviceId: 'dev', workspaceId: 'ws-1', deleted: false },
 };
 
 describe('REAL-PRODUCT-TEST-01D — nur-lokale Outbox-Einträge', () => {
@@ -74,26 +81,32 @@ describe('REAL-PRODUCT-TEST-01D — nur-lokale Outbox-Einträge', () => {
     vi.restoreAllMocks();
   });
 
-  it('1+2: nur-lokale Entität wird lokal getrackt und ihr Sendeauftrag beim Push abgeschlossen', async () => {
+  it('1: der Altbestand des früheren Mailimports wird nicht mehr verfolgt (CLOUD-SYNC S7)', () => {
     const base = buildState();
     resetSyncChangeTrackerFromState(base);
-    const withRegister = buildState({ officePilotMemory: { documentMemories: [memoryEntry], proofMemories: [], relations: [], paperRegisterEntries: [] } } as Partial<AppPersistedState>);
+    const withRegister = buildState({ mailImports: [mailImportEntry] } as Partial<AppPersistedState>);
     trackPersistedChanges(withRegister);
-    const queued = getSyncOutboxSnapshot().filter((e) => e.entityType === 'document_memory');
-    // Die lokale Speicherung/Verfolgung ist unverändert — der Eintrag entsteht.
-    expect(queued).toHaveLength(1);
-    expect(queued[0]!.status).toBe('pending');
+    expect(getSyncOutboxSnapshot().filter((e) => e.entityType === 'mail_import')).toHaveLength(0);
+    // lokale Daten unberührt
+    expect(withRegister.mailImports).toHaveLength(1);
+  });
+
+  it('2: ein alter nur-lokaler Sendeauftrag (Mailimport) wird beim Push abgeschlossen — nie gesendet, keine Schleife', async () => {
+    const withRegister = buildState({ mailImports: [mailImportEntry] } as Partial<AppPersistedState>);
+    const alt = entry({ id: 'ob-mail-alt', entityType: 'mail_import', entityId: 'mail-1', operation: 'create', version: 0 });
 
     vi.spyOn(supabaseLib, 'isSupabaseConfigured').mockReturnValue(true);
-    const upsertSpy = vi.spyOn(workspaceCloudService, 'rpcUpsertWorkspaceSyncEntity').mockResolvedValue({ rowVersion: 1, payload: {} });
+    const upsertSpy = vi
+      .spyOn(workspaceCloudService, 'rpcUpsertWorkspaceSyncEntity')
+      .mockResolvedValue({ rowVersion: 1, payload: {}, entityId: 'mail-1', deduped: false });
     const adapter = new SupabaseSyncAdapter(null);
-    const result = await adapter.pushChanges({ deviceId: 'dev', workspaceId: 'ws-1', state: withRegister, outbox: queued });
+    const result = await adapter.pushChanges({ deviceId: 'dev', workspaceId: 'ws-1', state: withRegister, outbox: [alt] });
 
     expect(upsertSpy).not.toHaveBeenCalled();
-    expect(result.completedOutboxIds).toEqual([queued[0]!.id]);
+    expect(result.completedOutboxIds).toEqual(['ob-mail-alt']);
     expect(result.failedOutbox).toEqual([]);
     // lokale Daten unberührt
-    expect(withRegister.officePilotMemory?.documentMemories).toHaveLength(1);
+    expect(withRegister.mailImports).toHaveLength(1);
   });
 
   it('3+4: cloud-fähige Einträge werden gesendet; blockierte/fehlgeschlagene bleiben, wie sie sind', async () => {

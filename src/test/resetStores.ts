@@ -35,6 +35,7 @@ import { resetDocumentWorkResultStoreForTests } from '../services/documentWorkRe
 import { resetUiSessionStoreForTests } from '../services/uiSession/uiSessionStore';
 import { resetUiSessionLiveState } from '../services/uiSession/uiSessionLiveState';
 import { resetDailyInvoicePaymentTaskReconcileForTests } from '../services/invoice/invoicePaymentTaskSync';
+import { resetInvoiceDraftCloudStore } from '../services/invoice/invoiceDraftCloudStore';
 
 export function resetTestStores(): void {
   resetStorageScopeForTests();
@@ -59,6 +60,8 @@ export function resetTestStores(): void {
   resetDunningDocumentations();
   resetCommunicationHistoryStore();
   resetKnowledgeStore();
+  // CLOUD-SYNC S5 — Entwurfsspiegel (bewusst ohne die Bridge: kein schwerer Import im globalen Setup).
+  resetInvoiceDraftCloudStore();
   setCachedSetup({ ...DEFAULT_SETUP });
   hydrateCompanyProfileStore({ ...DEFAULT_COMPANY_PROFILE, companyName: 'Test GmbH' });
   hydrateInvoiceNumberSequence({ year: 2026, lastIssuedNumber: 0 });

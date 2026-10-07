@@ -1770,6 +1770,16 @@ body {
   }
 }
 
+/*
+ * CLOUD-SYNC S5 — eine gesperrte Steuerwahl (offener Cloud-Konflikt, laufende
+ * Freigabe) ist als gesperrt erkennbar. Nur die Steuerwahl; alle übrigen
+ * Chipgruppen bleiben unverändert.
+ */
+.invoice-tax-decision .chip:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .invoice-tax-decision__selected {
   margin: 0.75rem 0 0;
   font-size: 0.9rem;
@@ -6813,6 +6823,33 @@ body {
   font-size: 0.9rem;
   color: var(--op-text-muted, var(--color-text-muted));
   line-height: 1.45;
+}
+
+/* CLOUD-SYNC S6 — jeder offene Nachtragsentwurf bleibt erreichbar. */
+.order-amendment-draft-list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.order-amendment-draft-list__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--op-border, var(--color-border));
+  border-radius: 8px;
+  color: var(--op-text, var(--color-text));
+}
+
+.order-amendment-draft-list__title {
+  flex: 1 1 10rem;
+  min-width: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
 }
 
 .order-summary-panel__metrics,

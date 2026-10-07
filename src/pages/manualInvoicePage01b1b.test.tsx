@@ -31,6 +31,7 @@ import * as workspacePayload from '../services/workspace/workspaceSyncPayloadSer
 import { resolveHeuteQuickActionRoute } from '../services/officeActionService';
 import { hydrateInvoiceStore, resetInvoiceStore } from '../services/invoice/invoiceStore';
 import { resetTestStores } from '../test/resetStores';
+import { disableInvoiceDraftCloudSyncForTests } from '../test/invoiceDraftCloudSwitch';
 import type { InvoiceDraftLocator } from '../types/invoiceDraftDurability';
 import type { Customer, VorgangInvoice } from '../types/models';
 
@@ -157,6 +158,9 @@ async function walkToReview(mount: Mount, customer: Customer): Promise<void> {
 
 beforeEach(async () => {
   vi.restoreAllMocks();
+  // CLOUD-SYNC S5 — diese Datei prüft den Freigabeablauf der Seite ohne Cloud-Entwurf:
+  // Entwurfs-Sync aus (Notausschalter). Die Entwurfsbindung prüfen die S5-Tests.
+  disableInvoiceDraftCloudSyncForTests();
   localStorage.clear();
   resetTestStores();
   resetInvoiceStore();

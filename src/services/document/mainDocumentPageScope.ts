@@ -187,11 +187,21 @@ export function mainDocumentTextFromPages(
  * direkt verwenden: bei abgegrenzter Fremdanlage nur der Hauptdokumenttext,
  * sonst unverändert beide Felder.
  */
-export function analysisTextsFromRecognizedData(daten: Record<string, string> | undefined): Array<string | undefined> {
-  const haupt = resolveMainDocumentFromRecognizedData(daten).text;
+export function analysisTextsFromRecognizedData(
+  daten: Record<string, string> | undefined,
+  /** CLOUD-SYNC S4 — Nacharbeit 1: ausdrückliche Firmenidentität; ohne sie gilt das aktuelle Firmenprofil. */
+  options: { ownCompanyName?: string } = {},
+): Array<string | undefined> {
+  const haupt = resolveMainDocumentFromRecognizedData(daten, options).text;
   return haupt ? [haupt] : [daten?._extractedText, daten?._vertragstext];
 }
 
+/*
+ * CLOUD-SYNC S4 — Nacharbeit 1: Das Ergebnis hängt an den Seiten UND an der
+ * eigenen Firma (fremder Kopf, institutioneller Briefkopf). Der Schlüssel
+ * trägt deshalb beides — sonst bestimmte der erste Aufruf das Ergebnis für
+ * jedes spätere Firmenprofil.
+ */
 const zwischenspeicher = new Map<string, { scope?: SemanticPageScope; text?: string }>();
 
 /**
@@ -201,16 +211,20 @@ const zwischenspeicher = new Map<string, { scope?: SemanticPageScope; text?: str
  */
 export function resolveMainDocumentFromRecognizedData(
   daten: Record<string, string> | undefined,
+  /** CLOUD-SYNC S4 — Nacharbeit 1: ausdrückliche Firmenidentität; ohne sie gilt das aktuelle Firmenprofil. */
+  options: { ownCompanyName?: string } = {},
 ): { scope?: SemanticPageScope; text?: string } {
   const raw = daten?._pageTexts;
   if (!raw) return {};
-  const bekannt = zwischenspeicher.get(raw);
+  const eigeneFirma = options.ownCompanyName ?? getCompanyProfile().companyName;
+  const schluessel = `${eigeneFirma}\u0000${raw}`;
+  const bekannt = zwischenspeicher.get(schluessel);
   if (bekannt) return bekannt;
   const pages = parseStoredPageTexts(raw);
-  const scope = resolveMainDocumentPageScope(pages);
+  const scope = resolveMainDocumentPageScope(pages, { ownCompanyName: eigeneFirma });
   const text = mainDocumentTextFromPages(pages, scope);
   const ergebnis = { ...(scope ? { scope } : {}), ...(text ? { text } : {}) };
   if (zwischenspeicher.size > 64) zwischenspeicher.clear();
-  zwischenspeicher.set(raw, ergebnis);
+  zwischenspeicher.set(schluessel, ergebnis);
   return ergebnis;
 }

@@ -134,6 +134,8 @@ export function withTombstonedEntity<T extends SyncableEntity & { id: string }>(
  *
  * CLOUD-SYNC S1: ebenso der Papierablage-Eintrag (`paper_register_entry`).
  * Das übrige Gedächtnis bleibt beim bisherigen Weg.
+ *
+ * CLOUD-SYNC S3: ebenso Wissenseinträge (`knowledge_fact`).
  */
 export function withTombstonedCloudEntityPreservingRemoteVersion<
   T extends SyncableEntity & { id: string },

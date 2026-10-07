@@ -1,4 +1,4 @@
-import type { ClassifiedDocumentKind, CompanyDocument, InboxItem } from '../../types/models';
+import type { AppLanguage, ClassifiedDocumentKind, CompanyDocument, InboxItem } from '../../types/models';
 import type {
   DocumentSummary,
   DocumentSummaryOrigin,
@@ -380,9 +380,13 @@ export function formatDigitalLocation(document: CompanyDocument): string {
     : document.digitalFolder.path;
 }
 
-export function formatPaperLocation(document: CompanyDocument): string {
+export function formatPaperLocation(
+  document: CompanyDocument,
+  /** CLOUD-SYNC S4 — Nacharbeit 1: ausdrückliche Sprache; ohne sie die Sprache des Betriebs. */
+  language?: AppLanguage,
+): string {
   if (!document.paperFolder?.folderId && !document.paperFolder?.label) {
     return 'Kein Papierordner hinterlegt – bitte Ablage prüfen.';
   }
-  return formatPaperFilingInstruction(document.paperFolder);
+  return formatPaperFilingInstruction(document.paperFolder, language);
 }

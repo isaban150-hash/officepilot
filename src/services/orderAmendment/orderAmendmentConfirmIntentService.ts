@@ -1,6 +1,7 @@
 import { generateEntityId } from '../sync/syncMetaService';
 import { getActiveStorageKey } from '../storage/storageScopeService';
 import type { OrderAmendmentConfirmRpcInput } from './orderAmendmentConfirmPayload';
+import type { OrderAmendmentDraftCloudBinding } from '../../types/orderAmendmentDraftCloud';
 
 export type OrderAmendmentConfirmIntentState =
   | 'pending'
@@ -17,6 +18,13 @@ export interface OrderAmendmentConfirmIntent {
   state: OrderAmendmentConfirmIntentState;
   createdAt: string;
   updatedAt: string;
+  /**
+   * CLOUD-SYNC S6 — die Bindung an den Cloud-Entwurf, mit der diese Absicht
+   * zuerst gesendet wurde. Ein Retry nach unklarem Ausgang sendet genau sie
+   * wieder: Der Server erkennt seinen eigenen Verbrauch (Version + 1) als
+   * Wiederholung. Gerätelokal wie die ganze Absicht.
+   */
+  binding?: OrderAmendmentDraftCloudBinding;
 }
 
 const INTENT_SUFFIX = ':order-amendment-confirm-intents';
@@ -112,6 +120,7 @@ export function resolveOrderAmendmentConfirmIntent(input: {
   draftId: string;
   contentFingerprint: string;
   rpcInput: OrderAmendmentConfirmRpcInput;
+  binding?: OrderAmendmentDraftCloudBinding | null;
 }): OrderAmendmentConfirmIntent {
   const key = intentKey(input.vorgangId, input.draftId);
   const all = readAll();
@@ -124,6 +133,8 @@ export function resolveOrderAmendmentConfirmIntent(input: {
     const refreshed: OrderAmendmentConfirmIntent = {
       ...existing,
       rpcInput: input.rpcInput,
+      // Eine einmal gesendete Bindung bleibt die der Absicht — sonst wäre ein Retry kein Retry.
+      ...(existing.binding ? {} : input.binding ? { binding: input.binding } : {}),
       updatedAt: new Date().toISOString(),
     };
     all[key] = refreshed;
@@ -142,6 +153,7 @@ export function resolveOrderAmendmentConfirmIntent(input: {
     state: 'pending',
     createdAt: now,
     updatedAt: now,
+    ...(input.binding ? { binding: input.binding } : {}),
   };
   all[key] = next;
   writeAll(all);

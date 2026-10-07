@@ -160,6 +160,30 @@ export interface WorkspaceSyncPullPayload {
    * der Altbestand lüde ihn wieder hoch.
    */
   paperRegisterEntries: import('../services/memory/paperRegisterCloudService').WorkspacePaperRegisterEntryRow[];
+  /**
+   * CLOUD-SYNC S2 — Kommunikationsverlauf. Append-only: keine Grabsteine, die
+   * mitreisen müssten.
+   */
+  communicationEvents: import('../services/communication/communicationEventCloudService').WorkspaceCommunicationEventRow[];
+  /**
+   * CLOUD-SYNC S3 — bestätigtes Wissen, inklusive Grabsteine: Ohne sie bliebe
+   * auf einem zweiten Gerät ein gelöschter Eintrag stehen, und der Altbestand
+   * lüde ihn wieder hoch.
+   */
+  knowledgeFacts: import('../services/knowledge/knowledgeFactCloudService').WorkspaceKnowledgeFactRow[];
+  /**
+   * CLOUD-SYNC S5 — Rechnungsentwürfe, inklusive Grabsteine (verworfen,
+   * finalisiert): Ohne sie lüde ein zweites Gerät einen beendeten Entwurf
+   * wieder hoch.
+   */
+  invoiceDrafts: import('./invoiceDraftCloud').WorkspaceInvoiceDraftRow[];
+  /**
+   * CLOUD-SYNC S6 — Auftrags- und Nachtragsentwürfe, inklusive Endzuständen
+   * (verworfen, verbraucht) ohne Inhalt: Ohne sie lüde ein zweites Gerät einen
+   * beendeten Entwurf wieder hoch.
+   */
+  orderDrafts: import('./orderDraft').WorkspaceOrderDraftRow[];
+  orderAmendmentDrafts: import('./orderAmendmentDraftCloud').WorkspaceOrderAmendmentDraftRow[];
 }
 
 export interface EnsurePersonalWorkspaceResult {

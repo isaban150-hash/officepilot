@@ -1,5 +1,11 @@
 import type { SyncMeta } from './sync';
 
+/*
+ * CLOUD-SYNC S7 — Datenform des früheren manuellen Mailimports. Nur noch, damit ein
+ * vorhandener lokaler Altbestand und alte Backups geladen werden; neue Datensätze
+ * entstehen nicht mehr.
+ */
+
 export type MailImportSource = 'manual' | 'file_upload' | 'test_data';
 
 export type MailImportStatus = 'pending' | 'importing' | 'processed' | 'failed';
@@ -30,13 +36,4 @@ export interface MailImport {
   createdAt: string;
   updatedAt: string;
   sync?: SyncMeta;
-}
-
-export interface CreateMailImportInput {
-  from: string;
-  to?: string;
-  subject: string;
-  bodyText: string;
-  receivedAt?: string;
-  source?: MailImportSource;
 }

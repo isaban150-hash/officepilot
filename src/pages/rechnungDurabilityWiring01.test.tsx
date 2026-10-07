@@ -17,6 +17,7 @@ import { hydrateCompanyProfileStore } from '../services/companyProfileService';
 import { AppProvider } from '../context/AppContext';
 import { RechnungPage } from './RechnungPage';
 import { createTestVorgangWithExecutedQuantity } from '../test/fixtures';
+import { disableInvoiceDraftCloudSyncForTests } from '../test/invoiceDraftCloudSwitch';
 import { hydrateVorgangStore } from '../services/vorgangService';
 import {
   beginInvoiceDraftFinalization,
@@ -242,6 +243,9 @@ function cloudInvoice(id: string): VorgangInvoice {
 
 beforeEach(async () => {
   vi.restoreAllMocks();
+  // CLOUD-SYNC S5 — diese Datei prüft den Freigabeablauf der Seite ohne Cloud-Entwurf:
+  // Entwurfs-Sync aus (Notausschalter). Die Entwurfsbindung prüfen die S5-Tests.
+  disableInvoiceDraftCloudSyncForTests();
   localStorage.clear();
   await resetInvoiceDraftDurabilityDatabaseForTests();
   seedVorgang();

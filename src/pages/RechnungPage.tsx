@@ -41,6 +41,18 @@ import {
   type InvoiceDraftSessionStatus,
 } from '../services/invoice/useInvoiceDraftDurabilitySession';
 import {
+  markInvoiceDraftCloudFromFinalizedRecord,
+  noteInvoiceDraftCommitted,
+  resolveCloudDraftForEmptySlot,
+} from '../services/invoice/invoiceDraftCloudBridge';
+import { useInvoiceDraftCloudState } from '../services/invoice/useInvoiceDraftCloudState';
+import {
+  invoiceDraftCloudPrepMessageKey,
+  prepareInvoiceDraftCloudForFinalization,
+} from '../services/invoice/invoiceDraftCloudFinalizePrep';
+import { InvoiceDraftCloudPanel } from '../components/invoice/InvoiceDraftCloudPanel';
+import { runSyncFromUi } from '../services/sync/syncUiService';
+import {
   resumeInvoiceDraftFinalization,
   startInvoiceDraftFinalization,
 } from '../services/invoice/invoiceFinalizationCoordinator';
@@ -325,14 +337,32 @@ export function RechnungPage() {
   const setupRef = useRef(setup);
   setupRef.current = setup;
   const createDraft = useCallback(
-    () => (id ? buildInvoiceDraftForType(id, setupRef.current, invoiceType) : null),
+    () =>
+      id
+        ? // CLOUD-SYNC S5 — Fall B: ein Cloud-Entwurf dieses Slots wird fortgesetzt, nicht still neu begonnen.
+          (resolveCloudDraftForEmptySlot(id, invoiceType) ??
+          buildInvoiceDraftForType(id, setupRef.current, invoiceType))
+        : null,
     [id, invoiceType],
   );
 
-  const session = useInvoiceDraftDurabilitySession({ locator, createDraft });
+  const [cloudReloadKey, setCloudReloadKey] = useState(0);
+  const session = useInvoiceDraftDurabilitySession({
+    locator,
+    createDraft,
+    // CLOUD-SYNC S5 — erst lokal sicher, dann gespiegelt; ein Grabstein wird vor dem Rollover vermerkt.
+    onCommitted: noteInvoiceDraftCommitted,
+    onFinalizedRecord: markInvoiceDraftCloudFromFinalizedRecord,
+    reloadKey: cloudReloadKey,
+  });
   const draft = session.draft;
   const sessionStatus = session.status;
-  const mutateDraft = session.mutateDraft;
+  /* CLOUD-SYNC S5 — Konflikt sichtbar; bis zur Entscheidung nimmt der Editor keine Änderung an. */
+  const cloud = useInvoiceDraftCloudState({
+    session,
+    onReload: () => setCloudReloadKey((key) => key + 1),
+  });
+  const mutateDraft = cloud.mutateDraft;
 
   /*
    * MOBILE-RESUME-STATE-01B — echter Wechsel, nicht Neuaufbau.
@@ -975,7 +1005,7 @@ export function RechnungPage() {
    */
   const renderTaxDecision = (currentDraft: InvoiceDraft) => (
     <Card className="invoice-tax-decision" data-testid="invoice-tax-decision">
-      <fieldset className="invoice-edit__section">
+      <fieldset className="invoice-edit__section" disabled={cloud.blocked}>
         <legend>{translate('invoice.taxStatus')}</legend>
         <div className="chip-group">
           {TAX_OPTIONS.map((status) => (
@@ -1140,7 +1170,7 @@ export function RechnungPage() {
      * Speicherfehler, Konflikt und fehlende Identität — erlauben keine
      * Finalisierung. Der Schreibschutz der Sitzung ist hier maßgeblich.
      */
-    if (session.readOnly || session.blocked || !session.record) return;
+    if (session.readOnly || session.blocked || cloud.blocked || !session.record) return;
     approveLockRef.current = true;
     setApproving(true);
 
@@ -1247,6 +1277,18 @@ export function RechnungPage() {
       return;
     }
 
+    /*
+     * CLOUD-SYNC S5 — erst den Entwurf zur Ruhe bringen: Die Cloud muss genau
+     * diesen fachlichen Kern tragen. Sonst wird gar nicht erst begonnen.
+     */
+    const cloudReady = await prepareInvoiceDraftCloudForFinalization(record, draft);
+    if (!cloudReady.ok) {
+      approveLockRef.current = false;
+      setApproving(false);
+      showToast(translate(invoiceDraftCloudPrepMessageKey(cloudReady.reason)));
+      return;
+    }
+
     markFinalizationStarted();
     const result = await startInvoiceDraftFinalization({
       identity: {
@@ -1273,6 +1315,19 @@ export function RechnungPage() {
       if (ux.unlock) {
         approveLockRef.current = false;
         setApproving(false);
+      }
+      /*
+       * CLOUD-SYNC S5 — anderswo geändert, verworfen oder bereits freigegeben:
+       * Der Entwurf wurde nachweislich zurückgegeben bzw. aufgelöst. Erst den
+       * Cloud-Stand holen, dann den Slot neu laden — der Editor zeigt danach den
+       * Konflikt oder die vorhandene Rechnung.
+       */
+      if (result.reason === 'draft_binding_rejected' || result.reason === 'draft_finalized_elsewhere') {
+        approveLockRef.current = false;
+        setApproving(false);
+        void runSyncFromUi()
+          .catch(() => undefined)
+          .finally(() => setCloudReloadKey((key) => key + 1));
       }
       return;
     }
@@ -1430,6 +1485,16 @@ export function RechnungPage() {
         }
       />
 
+      {/* CLOUD-SYNC S5 — sichtbarer Konflikt und „Entwurf verwerfen", in jedem Schritt. */}
+      <InvoiceDraftCloudPanel
+        cloud={cloud}
+        translate={translate}
+        canDiscard={session.record?.status === 'active' && !finalizationLocked && !approving}
+        onLeave={(finalizedInvoiceId) =>
+          navigate(finalizedInvoiceId ? `/vorgaenge/${id}/rechnungen/${finalizedInvoiceId}` : `/vorgaenge/${id}`)
+        }
+      />
+
       {step === 'positions' && (
         <>
           <Card className="invoice-type-picker" data-testid="invoice-type-picker">
@@ -1468,6 +1533,7 @@ export function RechnungPage() {
                   type="button"
                   className={`chip ${abschlagMode === 'quantity_based' ? 'chip--active' : ''}`}
                   data-testid="invoice-abschlag-mode-quantity"
+                  disabled={cloud.blocked}
                   onClick={() => handleAbschlagModeChange('quantity_based')}
                 >
                   {translate('invoice.calculationMode.quantity')}
@@ -1476,6 +1542,7 @@ export function RechnungPage() {
                   type="button"
                   className={`chip ${abschlagMode === 'fixed_amount' ? 'chip--active' : ''}`}
                   data-testid="invoice-abschlag-mode-fixed"
+                  disabled={cloud.blocked}
                   onClick={() => handleAbschlagModeChange('fixed_amount')}
                 >
                   {translate('invoice.calculationMode.fixed')}
@@ -1566,6 +1633,7 @@ export function RechnungPage() {
                     step="0.01"
                     value={draft.fixedAmountNet ?? ''}
                     data-testid="invoice-fixed-amount-net"
+                    disabled={cloud.blocked}
                     onChange={(event) => handleFixedAmountChange(event.target.value)}
                   />
                 </label>
@@ -1607,6 +1675,7 @@ export function RechnungPage() {
                 <Button
                   variant="outline"
                   onClick={handleApplyAllPositions}
+                  disabled={cloud.blocked}
                   data-testid="invoice-apply-all-positions"
                 >
                   {translate('invoice.applyAllPositions')}
@@ -1662,7 +1731,7 @@ export function RechnungPage() {
                          * ist — ein ausgeschöpfter Planrest gehört nicht dazu.
                          */
                         value={pos.quantity}
-                        disabled={!pos.billable}
+                        disabled={!pos.billable || cloud.blocked}
                         data-testid={`invoice-qty-${pos.orderPositionId}`}
                         onChange={(next) => handleQuantityChange(pos.id, next)}
                         onEditingValidityChange={(isComplete) =>
@@ -1983,7 +2052,7 @@ export function RechnungPage() {
               <Button
                 fullWidth
                 onClick={handleApprove}
-                disabled={approving}
+                disabled={approving || cloud.blocked}
                 data-testid="invoice-approve"
               >
                 {approving ? translate('invoice.approve.working') : translate('invoice.approve')}
@@ -2008,6 +2077,7 @@ export function RechnungPage() {
             <InvoiceDraftEditForm
               draft={draft}
               onChange={handleMetadataChange}
+              disabled={cloud.blocked}
               customerMaster={
                 masterCustomer && masterBilling ? (
                   <div className="invoice-customer-master" data-testid="invoice-customer-master">

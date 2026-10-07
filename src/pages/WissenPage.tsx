@@ -11,14 +11,11 @@ export function WissenPage() {
     <Page testId="wissen-page">
       <PageHeader title={translate('knowledge.page.title')} subtitle={translate('knowledge.page.subtitle')} />
       {/*
-        CLOUD-DURABILITY-CORE-01E — der Wissensbestand bleibt vorerst auf diesem
-        Gerät. Ein Nutzer, der hier etwas festhält, darf das nicht erst beim
-        Gerätewechsel merken; ein zweiter Satz im vorhandenen Hinweis genügt —
-        keine zusätzliche Karte, keine Warnung.
+        CLOUD-SYNC S3 — hier stand bis jetzt zusätzlich der Satz, dass der
+        Wissensbestand nur auf diesem Gerät gespeichert wird (01E). Er reist
+        seit S3 mit dem Betrieb; der Satz wäre falsch geworden.
       */}
-      <InlineNotice tone="neutral">
-        {translate('knowledge.page.hint')} {translate('deviceOnly.knowledge')}
-      </InlineNotice>
+      <InlineNotice tone="neutral">{translate('knowledge.page.hint')}</InlineNotice>
       <KnowledgePanel />
     </Page>
   );

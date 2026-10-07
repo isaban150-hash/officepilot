@@ -14,6 +14,12 @@ import type { BusinessLetter } from '../../types/businessLetter';
 import type { Offer } from '../../types/offer';
 import type { InvoiceDunningDocumentation } from '../../types/dunningDocumentation';
 import type { PaperRegisterEntry } from '../../types/memory';
+import type { CommunicationEvent } from '../../types/communicationHistory';
+import type { KnowledgeFact } from '../../types/knowledge';
+import type { InvoiceDraftCloudEntity } from '../../types/invoiceDraftCloud';
+import type { OrderDraft } from '../../types/orderDraft';
+import type { OrderAmendment } from '../../types/models';
+import { findOrderAmendmentDraftEntity } from '../orderAmendment/orderAmendmentDraftCloudService';
 import type { Workspace, WorkspaceMember, WorkspaceSettings } from '../../types/workspace';
 import {
   getCompanyProfileSyncSnapshot,
@@ -89,6 +95,45 @@ export type CloudSyncEntityPayload =
       entityType: 'paper_register_entry';
       entityId: string;
       entity: PaperRegisterEntry;
+      rowVersion: number;
+      deleted: boolean;
+    }
+  /* CLOUD-SYNC S2 — ein Ereignis im Kommunikationsverlauf, append-only. */
+  | {
+      entityType: 'communication_event';
+      entityId: string;
+      entity: CommunicationEvent;
+      rowVersion: number;
+      deleted: boolean;
+    }
+  /* CLOUD-SYNC S3 — bestätigtes Wissen, veränderbar mit Grabstein. */
+  | {
+      entityType: 'knowledge_fact';
+      entityId: string;
+      entity: KnowledgeFact;
+      rowVersion: number;
+      deleted: boolean;
+    }
+  /* CLOUD-SYNC S5 — der fachliche Kern eines Rechnungsentwurfs, mit Grabstein. */
+  | {
+      entityType: 'invoice_draft';
+      entityId: string;
+      entity: InvoiceDraftCloudEntity;
+      rowVersion: number;
+      deleted: boolean;
+    }
+  /* CLOUD-SYNC S6 — Auftrags- und Nachtragsentwurf, jeweils mit Grabstein. */
+  | {
+      entityType: 'order_draft';
+      entityId: string;
+      entity: OrderDraft;
+      rowVersion: number;
+      deleted: boolean;
+    }
+  | {
+      entityType: 'order_amendment_draft';
+      entityId: string;
+      entity: OrderAmendment;
       rowVersion: number;
       deleted: boolean;
     };
@@ -314,6 +359,65 @@ export function extractCloudSyncEntity(
         entity: entry,
         rowVersion: entry.sync?.version ?? 0,
         deleted: entry.sync?.deleted ?? false,
+      };
+    }
+    // CLOUD-SYNC S2 — Ereignisse werden nie gelöscht: kein Grabstein.
+    case 'communication_event': {
+      const event = (state.communicationHistory ?? []).find((item) => item.id === entityId);
+      if (!event) return null;
+      return { entityType, entityId, entity: event, rowVersion: event.sync?.version ?? 0, deleted: false };
+    }
+    // CLOUD-SYNC S3 — bestätigtes Wissen, inklusive Grabstein.
+    case 'knowledge_fact': {
+      const fact = (state.knowledgeFacts ?? []).find((item) => item.id === entityId);
+      if (!fact) return null;
+      return {
+        entityType,
+        entityId,
+        entity: fact,
+        rowVersion: fact.sync?.version ?? 0,
+        deleted: fact.sync?.deleted ?? false,
+      };
+    }
+    // CLOUD-SYNC S5 — der Spiegel des Rechnungsentwurfs, inklusive Grabstein.
+    case 'invoice_draft': {
+      const draft = (state.invoiceDrafts ?? []).find((item) => item.id === entityId);
+      if (!draft) return null;
+      return {
+        entityType,
+        entityId,
+        entity: draft,
+        rowVersion: draft.sync?.version ?? 0,
+        deleted: draft.sync?.deleted ?? false,
+      };
+    }
+    /*
+     * CLOUD-SYNC S6 — der Auftragsentwurf, inklusive Grabstein. Ein Entwurf
+     * eines anderen Workspace wird nie in diesen gesendet (Scope-Prüfung vor
+     * jedem Push).
+     */
+    case 'order_draft': {
+      const draft = (state.orderDrafts ?? []).find((item) => item.id === entityId);
+      if (!draft) return null;
+      if (draft.workspaceId && workspaceId && draft.workspaceId !== workspaceId) return null;
+      return {
+        entityType,
+        entityId,
+        entity: draft,
+        rowVersion: draft.sync?.version ?? 0,
+        deleted: draft.sync?.deleted ?? false,
+      };
+    }
+    // CLOUD-SYNC S6 — der Nachtragsentwurf: lebend im Vorgang oder als Grabstein.
+    case 'order_amendment_draft': {
+      const draft = findOrderAmendmentDraftEntity(state, entityId);
+      if (!draft) return null;
+      return {
+        entityType,
+        entityId,
+        entity: draft,
+        rowVersion: draft.sync?.version ?? 0,
+        deleted: draft.sync?.deleted ?? false,
       };
     }
     default:

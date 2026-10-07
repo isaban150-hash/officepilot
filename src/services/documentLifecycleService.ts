@@ -41,8 +41,6 @@ function resolveLifecycleReplyStatus(input: {
 }): CommunicationReplyStatus {
   const refs: CommunicationContextRef[] = [];
   if (input.documentId) refs.push({ type: 'document', id: input.documentId });
-  if (input.memory?.mailImportId) refs.push({ type: 'mail', id: input.memory.mailImportId });
-  if (input.inboxItem?.mailImportId) refs.push({ type: 'mail', id: input.inboxItem.mailImportId });
   if (input.inboxItem?.id) refs.push({ type: 'inbox', id: input.inboxItem.id });
 
   for (const ref of refs) {
@@ -86,6 +84,22 @@ function isAdvertisement(
   });
 }
 
+/**
+ * CLOUD-SYNC S4 — Nacharbeit 1 (C1): die Vorgangszuordnung eines Lebenszyklus.
+ * Mit Gedächtnis gilt dessen Ableitung aus dem Dokument — eine auf
+ * Dokumentebene gelöste Zuordnung bleibt gelöst, die frühere Bindung des
+ * Eingangs stellt sie nicht wieder her. Ohne Gedächtnis (Eingang vor dem
+ * Archivieren, Startbestand) zählt wie bisher Dokument bzw. Eingang.
+ */
+function lifecycleVorgangId(
+  memory: DocumentMemory | undefined,
+  documentVorgangId: string | undefined,
+  inboxItem: InboxItem | undefined,
+): string | undefined {
+  if (memory) return memory.linkedVorgangId;
+  return documentVorgangId ?? inboxItem?.vorgangId;
+}
+
 function needsPaperFolder(
   memory: DocumentMemory | undefined,
   inboxItem: InboxItem | undefined,
@@ -96,7 +110,7 @@ function needsPaperFolder(
     classifiedKind: memory?.classifiedKind ?? inboxItem?.classifiedKind,
     documentType: inboxItem?.documentType,
     issuer: inboxItem?.sender,
-    linkedVorgangId: memory?.linkedVorgangId ?? inboxItem?.vorgangId,
+    linkedVorgangId: lifecycleVorgangId(memory, undefined, inboxItem),
     isAdvertisement: inboxItem?.isAdvertisement,
   });
   if (resolution.skipPhysicalFiling) return false;
@@ -344,7 +358,7 @@ export function resolveDocumentLifecycle(
   const deadlineDate = istEigenesAngebot ? null : resolveOpenDeadline(memory, inboxItem, todayIso);
   const openDeadline = deadlineDate !== null;
   const missingProofs = getMissingProofLabels(
-    memory?.linkedVorgangId ?? document?.linkedVorgang?.vorgangId ?? inboxItem?.vorgangId,
+    lifecycleVorgangId(memory, document?.linkedVorgang?.vorgangId, inboxItem),
   );
   const openTasks = getOpenTasksForInbox(memory?.inboxId ?? inboxItem?.id);
 

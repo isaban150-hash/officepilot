@@ -490,6 +490,8 @@ export interface DocumentClassificationInput {
   senderHint?: string;
   recognizedText?: string;
   pageTexts?: Array<{ pageNumber: number; text: string; items?: Array<{ str?: string }> }>;
+  /** CLOUD-SYNC S4 — Nacharbeit 1: ausdrückliche Firmenidentität für die Briefkopf-Wahrheit; ohne sie das aktuelle Firmenprofil. */
+  ownCompanyName?: string;
 }
 
 export interface SuggestedVorgangLink {
@@ -1208,8 +1210,12 @@ export interface OrderAmendmentDraftPosition {
 }
 
 /**
- * Local-only amendment draft on a confirmed Vorgang.
- * Not synced; must not affect orderPositions, billing, or cloud payload.
+ * Amendment draft on a confirmed Vorgang.
+ * Must not affect orderPositions, billing, or the Vorgang cloud payload.
+ *
+ * CLOUD-SYNC S6 — lokal bleibt er in `Vorgang.orderAmendments`; mit
+ * freigegebenem Entwurfs-Sync reist sein fachlicher Inhalt als eigene
+ * Entität (`order_amendment_draft`), nie im Vorgang-Payload.
  */
 export interface OrderAmendment {
   id: string;
@@ -1220,6 +1226,12 @@ export interface OrderAmendment {
   positions: OrderAmendmentDraftPosition[];
   createdAt: string;
   updatedAt: string;
+  /** CLOUD-SYNC S6 — Serverstand (`row_version`). Fehlt vor dem ersten Abgleich. */
+  sync?: SyncMeta;
+  /** CLOUD-SYNC S6 — gerätelokal: ein offener Konflikt. Nie im Inhaltsschlüssel, nie im Push. */
+  conflict?: import('./draftCloud').DraftCloudConflict<
+    import('./orderAmendmentDraftCloud').OrderAmendmentDraftCloudPayload
+  >;
 }
 
 /** Server-authoritative confirmed amendment (ORDER-AMENDMENT-01B2). Local write-once. */
@@ -1255,6 +1267,12 @@ export interface ConfirmedOrderAmendment {
   updatedAt: string;
   /** Local-only link to the draft that was confirmed — never pushed to cloud. */
   localSourceDraftId?: string;
+  /**
+   * CLOUD-SYNC S6 — der Cloud-Nachtragsentwurf, den diese Bestätigung
+   * verbraucht hat (aus dem bestätigten Payload). Nachträge ohne Bindung
+   * tragen ihn nicht.
+   */
+  sourceDraftId?: string;
 }
 
 export interface VorgangInvoiceLine {
@@ -2030,6 +2048,15 @@ export interface CompanyDocument {
    * Absent on legacy documents; never a live DWR link.
    */
   archiveTruthSnapshot?: import('./documentArchiveTruthSnapshot').DocumentArchiveTruthSnapshot;
+  /**
+   * CLOUD-SYNC S4 — Nacharbeit 1: Die Vorgangszuordnung wurde auf Dokumentebene
+   * ausdrücklich gelöst (Zeitpunkt). Nur so bleibt „gelöst" von „nie auf
+   * Dokumentebene entschieden" unterscheidbar; eine ältere Bindung des Eingangs
+   * stellt das Gelöste dann nicht wieder her. `null`: durch eine neue Zuordnung
+   * aufgehoben. Reist im bestehenden JSON-Payload der Dokumentsynchronisation mit
+   * und braucht keine eigene Spalte.
+   */
+  vorgangLinkReleasedAt?: string | null;
   sync?: SyncMeta;
 }
 
@@ -2061,6 +2088,8 @@ export interface CompanyDocumentInput {
   documentDate?: string | null;
   uploadedAt?: string;
   archiveTruthSnapshot?: import('./documentArchiveTruthSnapshot').DocumentArchiveTruthSnapshot;
+  /** CLOUD-SYNC S4 — Nacharbeit 1: siehe `CompanyDocument.vorgangLinkReleasedAt`. */
+  vorgangLinkReleasedAt?: string | null;
 }
 
 import type { Expense } from './expense';
@@ -2153,10 +2182,18 @@ export interface AppPersistedState {
   /** ANGEBOT-01B — eigene Angebote des Betriebs. */
   offers?: import('./offer').Offer[];
   /**
-   * AUFTRAG-02C — lokale Auftragsentwuerfe. Bewusst nur auf diesem Geraet:
-   * kein Vorgang, keine Auftragsnummer, kein Cloud-Entity-Typ.
+   * AUFTRAG-02C — Auftragsentwuerfe: kein Vorgang, keine Auftragsnummer.
+   * CLOUD-SYNC S6 — mit freigegebenem Entwurfs-Sync reist ihr fachlicher
+   * Inhalt als `order_draft`; Grabsteine bleiben hier, bis die Cloud das
+   * Verwerfen bestaetigt hat.
    */
   orderDrafts?: import('./orderDraft').OrderDraft[];
+  /**
+   * CLOUD-SYNC S6 — Grabsteine verworfener Nachtragsentwuerfe, bis die Cloud
+   * das Verwerfen bestaetigt hat. Neben dem Vorgang, damit
+   * `Vorgang.orderAmendments` ausschliesslich lebende Entwuerfe traegt.
+   */
+  orderAmendmentDraftTombstones?: import('./orderAmendmentDraftCloud').OrderAmendmentDraftTombstone[];
   /**
    * BANKABGLEICH-V1 BLOCK 2 — importierte Bankbewegungen als Nachweis.
    *
@@ -2178,6 +2215,12 @@ export interface AppPersistedState {
   dunningDocumentations?: import('./dunningDocumentation').InvoiceDunningDocumentation[];
   communicationHistory?: CommunicationEvent[];
   knowledgeFacts?: KnowledgeFact[];
+  /**
+   * CLOUD-SYNC S5 — der Workspace-Spiegel der Cloud-Rechnungsentwürfe
+   * (fachlicher Kern, Grabsteine ohne Inhalt). Der Arbeitsstand des Editors
+   * bleibt in der IndexedDB.
+   */
+  invoiceDrafts?: import('./invoiceDraftCloud').InvoiceDraftCloudEntity[];
   officePilotMemory?: OfficePilotMemoryState;
   mailImports?: import('./mailImport').MailImport[];
   savedAt: string;

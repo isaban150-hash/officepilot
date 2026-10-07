@@ -48,13 +48,10 @@ export function CommunicationHistoryPanel({
     <section className="section communication-history-section" data-testid="communication-history">
       <h2 className="section__title">{translate('communication.history.title')}</h2>
       {/*
-        CLOUD-DURABILITY-CORE-01E — der Verlauf ist ein Nachweis für den
-        Betrieb, reist aber noch nicht mit. Eine ruhige Zeile unter der
-        Überschrift, einmal je Bereich statt an jeder Zeile.
+        CLOUD-SYNC S2 — hier stand bis jetzt der Hinweis, dass der Verlauf nur
+        auf diesem Gerät gespeichert wird (01E). Er reist seit S2 mit dem
+        Betrieb; der Satz wäre falsch geworden.
       */}
-      <p className="device-only-hint" data-testid="communication-history-device-only">
-        {translate('deviceOnly.communicationHistory')}
-      </p>
       {events.length === 0 ? (
         <p className="empty-state">{translate('communication.history.empty')}</p>
       ) : (

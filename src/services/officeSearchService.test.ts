@@ -6,11 +6,7 @@ import { resetCommunicationHistoryStore } from './communicationHistoryStore';
 import { recordCommunicationResult } from './communicationHistoryService';
 import { hydrateDocumentStore, importInboxDocument } from './documentService';
 import { hydrateInboxStore } from './inboxService';
-import {
-  createMailImport,
-  importMailAsInboxItem,
-  resetMailImports,
-} from './mailImportService';
+import { hydrateMailImports, resetMailImports } from './mailImportService';
 import {
   getPaperRegisterEntries,
   resetMemory,
@@ -104,16 +100,40 @@ describe('officeSearchService', () => {
     expect(hit?.title).toBe('Werkvertrag');
   });
 
-  it('findet Mail-Import', () => {
-    const mail = createMailImport({
-      from: 'service@bg-bau.de',
-      subject: 'BG BAU Beitragsbescheid',
-      bodyText: 'Beitragsbescheid im Anhang.',
-    });
-    importMailAsInboxItem(mail.id);
+  it('CLOUD-SYNC S7 — der Altbestand des früheren Mailimports erscheint nicht mehr; sein Eingang bleibt auffindbar', () => {
+    hydrateMailImports([
+      {
+        id: 'mail-legacy-s7',
+        from: 'service@bg-bau.de',
+        to: '',
+        subject: 'BG BAU Beitragsbescheid',
+        receivedAt: '2026-07-10',
+        bodyText: 'Beitragsbescheid im Anhang.',
+        attachments: [],
+        status: 'processed',
+        source: 'manual',
+        linkedInboxIds: ['inbox-mail-legacy-s7'],
+        linkedDocumentIds: [],
+        createdAt: '2026-07-10T09:00:00.000Z',
+        updatedAt: '2026-07-10T09:00:00.000Z',
+      },
+    ]);
+    hydrateInboxStore([
+      ...MOCK_INBOX_ITEMS.map((item) => ({ ...item })),
+      createAuftragInboxItem({
+        id: 'inbox-mail-legacy-s7',
+        title: 'BG BAU Beitragsbescheid',
+        sender: 'service@bg-bau.de',
+        mailImportId: 'mail-legacy-s7',
+        importSource: 'email',
+      }),
+    ]);
 
     const results = searchOffice({ query: 'BG BAU', todayIso: TODAY });
-    expect(results.some((item) => item.type === 'mail' || item.source.includes('E-Mail'))).toBe(true);
+    expect(results.some((item) => (item.type as string) === 'mail')).toBe(false);
+    expect(results.some((item) => item.id.includes('mail-legacy-s7') && item.type !== 'inbox')).toBe(false);
+    const eingang = results.find((item) => item.type === 'inbox' && item.route.includes('inbox-mail-legacy-s7'));
+    expect(eingang?.source).toBe('E-Mail-Eingang');
   });
 
   it('findet ProofMemory', () => {

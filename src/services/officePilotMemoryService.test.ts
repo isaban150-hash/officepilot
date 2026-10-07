@@ -1,6 +1,7 @@
 import { importInboxDocumentForTests } from '../test/confirmFilingDecisionForTests';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished } from 'vitest';
 import { getActiveStorageKey } from './persistenceService';
+import { suspendMemoryProjectionForTest } from '../test/memoryProjectionTestSupport';
 import { SAMPLE_WERKVERTRAG_TEXT } from './contractAnalysisService';
 import {
   addDocument,
@@ -206,6 +207,14 @@ describe('officePilotMemoryService – Werkvertrag', () => {
   });
 
   it('erfüllt missing Requirement beim Import einer Freistellung nach Vertragsanalyse', () => {
+    /*
+     * CLOUD-SYNC S4 — geprüft wird die Regel der Schreiber selbst: Anforderung
+     * direkt synchronisiert, Vertrag nicht archiviert. Beim Speichern ersetzte
+     * sonst die Projektion das Gedächtnis; sie leitet nur aus archivierten
+     * Verträgen ab (kanonisch geprüft in officePilotMemoryProjectionS4).
+     */
+    const ruhe = suspendMemoryProjectionForTest();
+    onTestFinished(() => ruhe.mockRestore());
     const werkvertrag = createWerkvertragInboxItem('v-300');
     syncContractProofRequirementsFromInbox(werkvertrag);
     expect(getProofsByStatus('missing').some((item) => item.proofType === 'freistellungsbescheinigung')).toBe(

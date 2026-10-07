@@ -8,12 +8,15 @@ import { assertAmendmentJourney } from '../_lib/assertAmendmentJourney';
 import { getReferenceCase } from '../_lib/loadReferenceCase';
 import { runAmendmentJourney } from '../_lib/runAmendmentJourney';
 import { isOrderAmendmentReference } from '../_lib/types';
+// CLOUD-SYNC S6 — der Goldpfad ohne Cloud-Entwurf (Notausschalter); den gebundenen Weg prüft orderAmendmentDraftCloudS6.test.ts.
+import { disableOrderDraftCloudSyncForTests } from '../../orderDraftCloudSwitch';
 
 const CASE_ID = 'NT-01';
 
 describe(`REFERENCE ${CASE_ID} — Amendment Journey`, () => {
   beforeEach(() => {
     resetOrderAmendmentConfirmIntentsForTests();
+    disableOrderDraftCloudSyncForTests();
   });
 
   afterEach(() => {

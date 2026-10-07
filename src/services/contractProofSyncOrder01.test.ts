@@ -1,7 +1,8 @@
 /**
  * CONTRACT-PROOF-SYNC-ORDER-01 — proof sync after authoritative vorgang create/link.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
+import { suspendMemoryProjectionForTest } from '../test/memoryProjectionTestSupport';
 import { SAMPLE_WERKVERTRAG_TEXT } from './contractAnalysisService';
 import * as contractProofSyncAfterVorgangLinkService from './contractProofSyncAfterVorgangLinkService';
 import { syncContractProofRequirementsAfterVorgangLink } from './contractProofSyncAfterVorgangLinkService';
@@ -379,6 +380,12 @@ describe('CONTRACT-PROOF-SYNC-ORDER-01', () => {
   });
 
   it('9 — Non-missing Proof-Status bleibt erhalten (kein Reset)', () => {
+    /*
+     * CLOUD-SYNC S4 — geprüft wird die Schutzregel des Schreibers an einem
+     * gesetzten Zustand. Die Projektion ruht dafür; sie kennt dieselbe Regel.
+     */
+    const ruhe = suspendMemoryProjectionForTest();
+    onTestFinished(() => ruhe.mockRestore());
     hydrateVorgangStore([createTestVorgang({ id: 'v-status', title: 'Status' })]);
     hydrateMemory({
       documentMemories: [],

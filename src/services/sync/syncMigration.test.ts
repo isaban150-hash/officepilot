@@ -200,7 +200,8 @@ describe('CLOUD-01B tombstones and outbox', () => {
     expect(snapshot[0].sync?.deleted).toBe(true);
 
     const memory = getOfficePilotMemorySnapshot();
-    expect(memory.documentMemories[0].sync?.deleted).toBe(true);
+    // CLOUD-SYNC S4 — das Gedächtnis ist eine Projektion: Ein gelöschtes Dokument hat keines mehr.
+    expect(memory.documentMemories.filter((item) => item.documentId === 'doc-del-1' && !item.sync?.deleted)).toEqual([]);
     expect(memory.paperRegisterEntries[0].sync?.deleted).toBe(true);
   });
 

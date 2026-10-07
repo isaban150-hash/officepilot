@@ -370,3 +370,56 @@ export interface DeleteInvoiceDraftRecordInput {
   identity: InvoiceDraftIdentity;
   expectedRevision: number;
 }
+
+/**
+ * CLOUD-SYNC S5 — die Ablehnungen der Entwurfsbindung in
+ * `finalize_workspace_invoice`. Jede davon wirft der Server **vor** jeder
+ * Rechnungspruefung, der Nummernvergabe und dem Insert; die Transaktion rollt
+ * vollstaendig zurueck. Bewiesen ist damit: keine Rechnung zu dieser Kennung,
+ * keine verbrauchte Nummer, und der Entwurf wurde nicht finalisiert — sonst
+ * haette der Server `invoice_draft_already_finalized` gemeldet, das hier
+ * ausdruecklich **nicht** dazugehoert.
+ */
+export type InvoiceDraftBindingRejection =
+  | 'invoice_draft_version_conflict'
+  | 'invoice_draft_discarded'
+  | 'invoice_draft_not_found'
+  | 'invoice_draft_slot_mismatch'
+  | 'invoice_draft_binding_invalid'
+  /** Nach dem Insert, aber in derselben Transaktion — sie rollt vollstaendig zurueck. */
+  | 'invoice_draft_consume_failed';
+
+export const INVOICE_DRAFT_BINDING_REJECTIONS: readonly InvoiceDraftBindingRejection[] = [
+  'invoice_draft_version_conflict',
+  'invoice_draft_discarded',
+  'invoice_draft_not_found',
+  'invoice_draft_slot_mismatch',
+  'invoice_draft_binding_invalid',
+  'invoice_draft_consume_failed',
+];
+
+/**
+ * CLOUD-SYNC S5 — der beweisgebundene Rueckweg `finalizing → active`.
+ *
+ * Nur fuer genau diese begonnene Freigabe (`clientInvoiceId`) und nur mit einer
+ * der Serverablehnungen oben als Beleg. Keine pauschale Ruecksetzung: Jeder
+ * andere Ausgang einer begonnenen Freigabe bleibt wie bisher gesperrt.
+ */
+export interface ReopenInvoiceDraftAfterBindingRejectionInput {
+  identity: InvoiceDraftIdentity;
+  /** Die Revision des `finalizing`-Datensatzes. */
+  expectedRevision: number;
+  clientInvoiceId: string;
+  serverRejection: InvoiceDraftBindingRejection;
+  now?: string;
+}
+
+/** CLOUD-SYNC S5 — ein gepruefter Datensatz samt Entwurf aus der Workspace-Liste. */
+export interface InvoiceDraftWorkspaceListEntry {
+  record: InvoiceDraftRecord;
+  draft: InvoiceDraft;
+}
+
+export type InvoiceDraftWorkspaceListResult =
+  | { ok: true; entries: InvoiceDraftWorkspaceListEntry[]; skipped: number }
+  | { ok: false; reason: InvoiceDraftStorageFailure };

@@ -39,9 +39,6 @@ export function contextRefsEqual(
 }
 
 function cloneContextRef(ref: CommunicationContextRef): CommunicationContextRef {
-  if (ref.type === 'mail') {
-    return { type: 'mail', id: ref.id };
-  }
   return { ...ref };
 }
 

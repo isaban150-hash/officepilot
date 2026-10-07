@@ -1,7 +1,6 @@
 export type SearchResultType =
   | 'document'
   | 'inbox'
-  | 'mail'
   | 'proof'
   | 'invoice'
   | 'expense'
@@ -50,7 +49,6 @@ export interface OfficeSearchFilter {
   paperFiled?: boolean;
   overdue?: boolean;
   digitalOnly?: boolean;
-  mailOnly?: boolean;
   invoiceOnly?: boolean;
   taskOnly?: boolean;
 }

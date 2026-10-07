@@ -75,6 +75,18 @@ import {
   type InvoiceDraftSessionStatus,
 } from '../services/invoice/useInvoiceDraftDurabilitySession';
 import {
+  markInvoiceDraftCloudFromFinalizedRecord,
+  noteInvoiceDraftCommitted,
+  resolveCloudDraftForEmptySlot,
+} from '../services/invoice/invoiceDraftCloudBridge';
+import { useInvoiceDraftCloudState } from '../services/invoice/useInvoiceDraftCloudState';
+import {
+  invoiceDraftCloudPrepMessageKey,
+  prepareInvoiceDraftCloudForFinalization,
+} from '../services/invoice/invoiceDraftCloudFinalizePrep';
+import { InvoiceDraftCloudPanel } from '../components/invoice/InvoiceDraftCloudPanel';
+import { runSyncFromUi } from '../services/sync/syncUiService';
+import {
   buildManualInvoiceDraft,
   calculateInvoiceTotals,
   updateInvoiceDraftMetadata,
@@ -135,15 +147,32 @@ export function ManualInvoicePage() {
   const setupRef = useRef(setup);
   setupRef.current = setup;
   const createDraft = useCallback(
-    () => buildManualInvoiceDraft({ billing: emptyBilling() }, setupRef.current),
+    () =>
+      // CLOUD-SYNC S5 — Fall B: ein Cloud-Entwurf ohne Auftrag wird fortgesetzt, nicht still neu begonnen.
+      resolveCloudDraftForEmptySlot(null, 'rechnung') ??
+      buildManualInvoiceDraft({ billing: emptyBilling() }, setupRef.current),
     [],
   );
 
-  const session = useInvoiceDraftDurabilitySession({ locator, createDraft });
-  const { draft, mutateDraft, status: sessionStatus } = session;
+  const [cloudReloadKey, setCloudReloadKey] = useState(0);
+  const session = useInvoiceDraftDurabilitySession({
+    locator,
+    createDraft,
+    // CLOUD-SYNC S5 — erst lokal sicher, dann gespiegelt; ein Grabstein wird vor dem Rollover vermerkt.
+    onCommitted: noteInvoiceDraftCommitted,
+    onFinalizedRecord: markInvoiceDraftCloudFromFinalizedRecord,
+    reloadKey: cloudReloadKey,
+  });
+  const { draft, status: sessionStatus } = session;
+  /* CLOUD-SYNC S5 — Konflikt sichtbar; bis zur Entscheidung nimmt der Editor keine Änderung an. */
+  const cloud = useInvoiceDraftCloudState({
+    session,
+    onReload: () => setCloudReloadKey((key) => key + 1),
+  });
+  const mutateDraft = cloud.mutateDraft;
   const finalizationLocked =
     sessionStatus === 'finalization_pending' || sessionStatus === 'already_finalized';
-  const editable = !session.readOnly && !session.blocked && !finalizationLocked;
+  const editable = !session.readOnly && !session.blocked && !finalizationLocked && !cloud.blocked;
 
   /* ---------------- §13b — dieselbe Bindung wie im Auftragsweg ---------------- */
 
@@ -360,7 +389,7 @@ export function ManualInvoicePage() {
 
   const runApproval = async () => {
     if (!draft || approveLockRef.current || approving) return;
-    if (session.readOnly || session.blocked || !session.record) return;
+    if (session.readOnly || session.blocked || cloud.blocked || !session.record) return;
     approveLockRef.current = true;
     setApproving(true);
     setFailure(null);
@@ -396,6 +425,15 @@ export function ManualInvoicePage() {
         return;
       }
 
+      /* CLOUD-SYNC S5 — erst den Entwurf zur Ruhe bringen; sonst gar nicht erst beginnen. */
+      const cloudReady = await prepareInvoiceDraftCloudForFinalization(record, draft);
+      if (!cloudReady.ok) {
+        showToast(translate(invoiceDraftCloudPrepMessageKey(cloudReady.reason)));
+        approveLockRef.current = false;
+        setApproving(false);
+        return;
+      }
+
       finalizationStarted = true;
       const result = await startInvoiceDraftFinalization({
         identity: {
@@ -417,6 +455,14 @@ export function ManualInvoicePage() {
         if (ux.unlock) {
           approveLockRef.current = false;
           setApproving(false);
+        }
+        // CLOUD-SYNC S5 — wie im Auftragsweg: Cloud-Stand holen, dann den Slot neu laden.
+        if (result.reason === 'draft_binding_rejected' || result.reason === 'draft_finalized_elsewhere') {
+          approveLockRef.current = false;
+          setApproving(false);
+          void runSyncFromUi()
+            .catch(() => undefined)
+            .finally(() => setCloudReloadKey((key) => key + 1));
         }
         return;
       }
@@ -592,6 +638,29 @@ export function ManualInvoicePage() {
       />
       <ManualInvoiceStepper current={step} reachable={reachable} onSelect={goTo} translate={translate} />
 
+      {/*
+        CLOUD-SYNC S5 — sichtbarer Konflikt und „Entwurf verwerfen". Dazu der
+        lokale Sitzungskonflikt (zweiter Tab), der bisher nach dem Laden nur
+        still sperrte.
+      */}
+      {session.blocked && (
+        <p className="form-error" data-testid="manual-invoice-session-blocked-loaded">
+          {translate(sessionStatus === 'blocked_conflict' ? 'invoice.session.conflict' : 'invoice.session.storage')}
+        </p>
+      )}
+      <InvoiceDraftCloudPanel
+        cloud={cloud}
+        translate={translate}
+        canDiscard={session.record?.status === 'active' && !finalizationLocked && !approving}
+        onLeave={(finalizedInvoiceId) =>
+          navigate(
+            finalizedInvoiceId
+              ? resolveManualInvoicePostFinalizePath(finalizedInvoiceId, findInvoiceLocatorById(finalizedInvoiceId))
+              : buildOpenInvoicesPath(),
+          )
+        }
+      />
+
       {/* ---------------- 1 Kunde ---------------- */}
       {step === 'customer' && (
         <section className="manual-invoice__step" data-testid="manual-invoice-step-customer">
@@ -724,6 +793,7 @@ export function ManualInvoicePage() {
           <InvoiceDraftEditForm
             draft={draft}
             onChange={(changes) => mutateDraft((prev) => updateInvoiceDraftMetadata(prev, changes))}
+            disabled={!editable}
           />
         </section>
       )}

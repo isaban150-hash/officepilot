@@ -194,6 +194,10 @@ function buildDocumentFromInput(
     linkedInvoiceId: input.linkedInvoiceId ?? null,
     linkedLetterId: input.linkedLetterId ?? null,
     linkedOfferId: input.linkedOfferId ?? null,
+    // CLOUD-SYNC S4 — Nacharbeit 1: nur ein Dokument mit Lösungs-Geschichte trägt das Feld.
+    ...(input.vorgangLinkReleasedAt !== undefined
+      ? { vorgangLinkReleasedAt: input.vorgangLinkReleasedAt }
+      : {}),
     ...fileFieldsFromInput(input),
     ...(input.archiveTruthSnapshot
       ? {
@@ -359,6 +363,25 @@ export function addDocument(input: CompanyDocumentInput): DocumentMutationResult
 }
 
 /**
+ * CLOUD-SYNC S4 — Nacharbeit 1: Wird eine bestehende Vorgangszuordnung am
+ * Dokument entfernt, hält das Dokument fest, dass sie ausdrücklich gelöst
+ * wurde — sonst stellte die ältere Bindung des Eingangs sie im
+ * Firmen-Gedächtnis wieder her. Eine neue Zuordnung hebt das auf: `null`
+ * statt Weglassen, damit das Aufheben auf jedes Gerät reist (der Abzug führt
+ * die Dokumentfelder zusammen). Ein Dokument ohne Lösungs-Geschichte bleibt
+ * unverändert ohne das Feld.
+ */
+function nextVorgangLinkReleasedAt(
+  current: CompanyDocument,
+  changes: Partial<CompanyDocumentInput>,
+): string | null | undefined {
+  if (changes.vorgangLinkReleasedAt !== undefined) return changes.vorgangLinkReleasedAt;
+  if (changes.linkedVorgang === undefined) return current.vorgangLinkReleasedAt;
+  if (changes.linkedVorgang) return current.vorgangLinkReleasedAt === undefined ? undefined : null;
+  return current.linkedVorgang ? new Date().toISOString() : current.vorgangLinkReleasedAt;
+}
+
+/**
  * CUSTOMER-FACHOBJEKT-03B2 — same merge, validation and SyncMeta bump as
  * updateDocument, but without persisting. The caller owns persist and rollback.
  */
@@ -383,6 +406,7 @@ export function stageDocumentUpdate(
     linkedCompany: changes.linkedCompany ?? current.linkedCompany,
     linkedVorgang:
       changes.linkedVorgang !== undefined ? changes.linkedVorgang : current.linkedVorgang,
+    vorgangLinkReleasedAt: nextVorgangLinkReleasedAt(current, changes),
     archived: changes.archived ?? current.archived,
     imagePreview: changes.imagePreview ?? current.imagePreview,
     linkedInvoiceId:
@@ -715,7 +739,17 @@ export function linkDocumentToVorgang(
   id: string,
   link: CompanyDocumentVorgangLink | null,
 ): DocumentMutationResult {
-  const result = updateDocument(id, { linkedVorgang: link });
+  /*
+   * CLOUD-SYNC S4 — Nacharbeit 1: „kein Vorgang" ist hier eine ausdrückliche
+   * Entscheidung auf Dokumentebene — auch wenn die Zuordnung nur noch am
+   * Eingang hing (Altbestand). Ein schon gelöstes Dokument behält seinen Zeitpunkt.
+   */
+  const result = updateDocument(id, {
+    linkedVorgang: link,
+    ...(link
+      ? {}
+      : { vorgangLinkReleasedAt: getDocumentById(id)?.vorgangLinkReleasedAt ?? new Date().toISOString() }),
+  });
   if (!result.success) return result;
 
   const vorgangId = link?.vorgangId?.trim();

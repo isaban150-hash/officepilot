@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+// CLOUD-SYNC S6 — hier die Bestätigung ohne Cloud-Entwurf (Notausschalter); den gebundenen Weg prüft orderAmendmentDraftCloudS6.test.ts.
+import { disableOrderDraftCloudSyncForTests } from '../../test/orderDraftCloudSwitch';
 import { createAbschlagInvoice, createOrderPosition, createTestVorgang, testSetup } from '../../test/fixtures';
 import * as supabaseLib from '../../lib/supabase';
 import * as persistenceService from '../persistenceService';
@@ -201,6 +203,7 @@ function mockSuccessfulRpc() {
 
 beforeEach(() => {  resetOrderAmendmentConfirmIntentsForTests();
   vi.restoreAllMocks();
+  disableOrderDraftCloudSyncForTests();
   seedVorgang();
 });
 

@@ -24,6 +24,11 @@ import type {
   WorkspaceBankReconciliationRow,
 } from '../bank/bankCloudService';
 import type { WorkspacePaperRegisterEntryRow } from '../memory/paperRegisterCloudService';
+import type { WorkspaceCommunicationEventRow } from '../communication/communicationEventCloudService';
+import type { WorkspaceKnowledgeFactRow } from '../knowledge/knowledgeFactCloudService';
+import type { WorkspaceInvoiceDraftRow } from '../../types/invoiceDraftCloud';
+import type { WorkspaceOrderDraftRow } from '../../types/orderDraft';
+import type { WorkspaceOrderAmendmentDraftRow } from '../../types/orderAmendmentDraftCloud';
 
 interface WorkspaceRow {
   id: string;
@@ -230,6 +235,17 @@ export async function rpcPullWorkspaceSyncState(
   // CLOUD-SYNC S1 — Papierablage-Haken, inklusive Grabsteine. Kein Sonder-Pull.
   const paperRegisterEntriesRaw =
     (data?.paper_register_entries as WorkspacePaperRegisterEntryRow[] | null) ?? [];
+  // CLOUD-SYNC S2 — Kommunikationsverlauf, nach Ereigniszeit geordnet. Kein Sonder-Pull.
+  const communicationEventsRaw =
+    (data?.communication_events as WorkspaceCommunicationEventRow[] | null) ?? [];
+  // CLOUD-SYNC S3 — bestätigtes Wissen, inklusive Grabsteine. Kein Sonder-Pull.
+  const knowledgeFactsRaw = (data?.knowledge_facts as WorkspaceKnowledgeFactRow[] | null) ?? [];
+  // CLOUD-SYNC S5 — Rechnungsentwürfe, inklusive Grabsteine. Kein Sonder-Pull.
+  const invoiceDraftsRaw = (data?.invoice_drafts as WorkspaceInvoiceDraftRow[] | null) ?? [];
+  // CLOUD-SYNC S6 — Auftrags- und Nachtragsentwürfe, inklusive Endzuständen. Kein Sonder-Pull.
+  const orderDraftsRaw = (data?.order_drafts as WorkspaceOrderDraftRow[] | null) ?? [];
+  const orderAmendmentDraftsRaw =
+    (data?.order_amendment_drafts as WorkspaceOrderAmendmentDraftRow[] | null) ?? [];
 
   return {
     workspace: workspaceRow ? mapWorkspaceRow(workspaceRow) : null,
@@ -252,6 +268,11 @@ export async function rpcPullWorkspaceSyncState(
     bankTransactions: bankTransactionsRaw,
     bankReconciliations: bankReconciliationsRaw,
     paperRegisterEntries: paperRegisterEntriesRaw,
+    communicationEvents: communicationEventsRaw,
+    knowledgeFacts: knowledgeFactsRaw,
+    invoiceDrafts: invoiceDraftsRaw,
+    orderDrafts: orderDraftsRaw,
+    orderAmendmentDrafts: orderAmendmentDraftsRaw,
   };
 }
 

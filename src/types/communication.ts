@@ -39,7 +39,12 @@ export type DocumentQuestionType =
   | 'custom';
 
 export interface CommunicationContextRef {
-  type: 'inbox' | 'document' | 'vorgang' | 'invoice' | 'expense' | 'mail' | 'none';
+  /*
+   * CLOUD-SYNC S7 — `mail` (Bezug auf den früheren manuellen Mailimport) gibt es
+   * nicht mehr; kein Produktweg hat ihn je erzeugt. Ein alter gespeicherter Bezug
+   * dieser Art wird wie ein unbekannter Kontext behandelt.
+   */
+  type: 'inbox' | 'document' | 'vorgang' | 'invoice' | 'expense' | 'none';
   id?: string;
   vorgangId?: string;
 }

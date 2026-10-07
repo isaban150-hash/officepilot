@@ -14,7 +14,7 @@ import {
   importInboxDocument,
   updateDocumentFromInbox,
 } from './documentService';
-import { archiveMailInboxItem } from './mailImportService';
+import * as mailImportService from './mailImportService';
 import {
   getInboxItemById,
   hydrateInboxStore,
@@ -117,20 +117,8 @@ describe('SERVICE-FILING-CONFIRM-GATE-01', () => {
     }
   });
 
-  it('5 — archiveMailInboxItem ohne Confirm schlägt ohne Side-Effects fehl', () => {
-    const item = seedInbox({ id: 'inbox-filing-gate-mail' });
-    const before = getAllDocuments().length;
-    const documentId = archiveMailInboxItem(item, 'Test GmbH');
-    expect(documentId).toBeNull();
-    expect(getAllDocuments()).toHaveLength(before);
-  });
-
-  it('6 — archiveMailInboxItem mit Confirm funktioniert', () => {
-    const item = seedInbox({ id: 'inbox-filing-gate-mail-ok' });
-    confirmFilingDecisionForTests(item.id);
-    const documentId = archiveMailInboxItem(getInboxItemById(item.id)!, 'Test GmbH');
-    expect(documentId).toBeTruthy();
-    expect(getDocumentById(documentId!)).toBeDefined();
+  it('5/6 — CLOUD-SYNC S7: der frühere Mail-Archivweg existiert nicht mehr; abgelegt wird nur über importInboxDocument (Gate wie 1–4)', () => {
+    expect('archiveMailInboxItem' in mailImportService).toBe(false);
   });
 
   it('7 — Fake-Confirm nur am Parameter wird abgelehnt wenn Store unconfirmed', () => {

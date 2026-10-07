@@ -546,8 +546,12 @@ function emptyResult(reason: string): ContractAnalysisResult {
   };
 }
 
-export function buildContractAnalysisInputFromInbox(item: InboxItem): ContractAnalysisInput {
-  const documentText = getInboxExtractedDocumentText(item);
+export function buildContractAnalysisInputFromInbox(
+  item: InboxItem,
+  /** CLOUD-SYNC S4 — Nacharbeit 1: ausdrückliche Firmenidentität; ohne sie gilt das aktuelle Firmenprofil. */
+  options: { ownCompanyName?: string } = {},
+): ContractAnalysisInput {
+  const documentText = getInboxExtractedDocumentText(item, options);
 
   return {
     recognizedText: documentText,
@@ -570,8 +574,12 @@ const MENTION_PRONE_CONTRACT_TYPES: ReadonlySet<ContractType> = new Set([
   'bauvertrag',
 ]);
 
-export function analyzeContractFromInbox(item: InboxItem): ContractAnalysisResult {
-  const input = buildContractAnalysisInputFromInbox(item);
+export function analyzeContractFromInbox(
+  item: InboxItem,
+  /** CLOUD-SYNC S4 — Nacharbeit 1: ausdrückliche Firmenidentität; ohne sie gilt das aktuelle Firmenprofil. */
+  options: { ownCompanyName?: string } = {},
+): ContractAnalysisResult {
+  const input = buildContractAnalysisInputFromInbox(item, options);
   const result = analyzeContract(input);
   /*
    * EINGANG-02A-1 Nacharbeit 2 — dieselbe Titelwahrheit wie Klassifikation und
@@ -585,7 +593,7 @@ export function analyzeContractFromInbox(item: InboxItem): ContractAnalysisResul
     result.contractType &&
     MENTION_PRONE_CONTRACT_TYPES.has(result.contractType) &&
     // Nacharbeit 3 — institutionelle Art ODER institutioneller Briefkopf.
-    isInstitutionalCorrespondence(item.classifiedKind, input.recognizedText) &&
+    isInstitutionalCorrespondence(item.classifiedKind, input.recognizedText, options) &&
     !hasContractFamilyTitle(input.recognizedText ?? '', 'werkvertrag') &&
     !hasContractFamilyTitle(input.recognizedText ?? '', 'subunternehmervertrag')
   ) {

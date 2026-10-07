@@ -11,7 +11,7 @@
  * und der Auftrag ist ein Vorgang wie jeder andere — mit Rechnungen,
  * Abschlägen und dem bestehenden Nachtragsweg.
  */
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { buildCustomerOptionLabels } from '../services/customer/customerOptionLabels';
 import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
@@ -19,6 +19,9 @@ import { PageHeader } from '../components/ui/Card';
 import { Page } from '../components/ui/Page';
 import { DetailSection } from '../components/ui/Section';
 import { SimpleConfirmDialog } from '../components/ui/SimpleConfirmDialog';
+import { InlineNotice } from '../components/ui/States';
+import { DraftCloudConflictNotice, type DraftCloudConflictAction } from '../components/order/DraftCloudConflictNotice';
+import { useDraftCloudTick } from '../services/order/useDraftCloudTick';
 import { useApp } from '../context/AppContext';
 import { useOptionalAuth } from '../context/AuthContext';
 import { isSupabaseConfigured } from '../lib/supabase';
@@ -33,16 +36,25 @@ import { buildPersistedStateSnapshot } from '../services/persistenceService';
 import { resolveCloudWorkspaceId } from '../services/workspace/workspaceSyncPayloadService';
 import { generateEntityId } from '../services/sync/syncMetaService';
 import {
+  acceptOrderDraftCloudEnd,
+  continueOrderDraftAsNew,
   createOrderDraft,
   deleteOrderDraft,
+  discardOrderDraftAgain,
   emptyOrderDraftCustomerBilling,
   getOrderDraftBlockers,
+  getOrderDraftById,
+  isOrderDraftCloudSyncAllowed,
+  keepLocalOrderDraftVersion,
+  keepOrderDraftAfterRejectedDiscard,
   resolveOrderDraftRoute,
+  takeCloudOrderDraftVersion,
   updateOrderDraft,
+  type OrderDraftCloudDecisionResult,
 } from '../services/order/orderDraftService';
 import { createOrderFromDraftWithCloud } from '../services/order/createOrderCloudService';
 import type { CustomerBilling, OrderUnit, TaxStatus } from '../types/models';
-import type { OrderDraftPosition } from '../types/orderDraft';
+import type { OrderDraft, OrderDraftPosition } from '../types/orderDraft';
 import type { TranslationKey } from '../i18n';
 import { DEFAULT_SETUP } from '../data/mockData';
 
@@ -60,6 +72,52 @@ function Field({ label, children, wide = false }: { label: string; children: Rea
 
 function neuePosition(): OrderDraftPosition {
   return { id: generateEntityId('op'), description: '', plannedQuantity: 1, unit: 'Stunden', unitPrice: 0 };
+}
+
+interface EditorWerte {
+  customerId?: string;
+  customerBilling: CustomerBilling;
+  title: string;
+  baustelle: string;
+  positions: OrderDraftPosition[];
+  taxStatus: TaxStatus;
+  paymentTermsText: string;
+  introText?: string;
+  closingText?: string;
+}
+
+/**
+ * CLOUD-SYNC S6 — ein Vergleichsschlüssel der bearbeitbaren Inhalte, in fester
+ * Reihenfolge (die Rechnungsanschrift nach Feldnamen sortiert): Er dient nur
+ * dazu, ungespeicherte Eingaben und eine Änderung darunter zu erkennen.
+ */
+function werteSchluessel(werte: EditorWerte): string {
+  const billing = werte.customerBilling as unknown as Record<string, unknown>;
+  return JSON.stringify([
+    werte.customerId || null,
+    Object.keys(billing).sort().map((key) => [key, billing[key] ?? null]),
+    werte.title,
+    werte.baustelle,
+    werte.positions.map((p) => [p.id, p.description, p.plannedQuantity, p.unit, p.unitPrice]),
+    werte.taxStatus,
+    werte.paymentTermsText,
+    werte.introText || null,
+    werte.closingText || null,
+  ]);
+}
+
+function werteAusEntwurf(entwurf: OrderDraft, ersatzPosition: () => OrderDraftPosition): EditorWerte {
+  return {
+    customerId: entwurf.customerId,
+    customerBilling: { ...entwurf.customerBilling },
+    title: entwurf.title,
+    baustelle: entwurf.baustelle,
+    positions: entwurf.positions.length ? entwurf.positions.map((p) => ({ ...p })) : [ersatzPosition()],
+    taxStatus: entwurf.taxStatus,
+    paymentTermsText: entwurf.paymentTermsText,
+    introText: entwurf.introText,
+    closingText: entwurf.closingText,
+  };
 }
 
 function billingOf(customer: Partial<CustomerBilling>): CustomerBilling {
@@ -132,6 +190,26 @@ export function AuftragEditorPage() {
   const [verwerfenOffen, setVerwerfenOffen] = useState(false);
   const [laeuft, setLaeuft] = useState(false);
 
+  /*
+   * CLOUD-SYNC S6 — der Editor und sein gespeicherter Entwurf.
+   *
+   * Der Editor hält seine Eingaben lokal und speichert ausdrücklich. Ein Abzug
+   * kann den gespeicherten Entwurf darunter ändern; dann gilt:
+   *  - ohne ungespeicherte Eingaben wird die neuere Fassung geladen;
+   *  - mit ungespeicherten Eingaben erscheint ein Hinweis, und gespeichert wird
+   *    erst nach einer Entscheidung — nie ein stilles Überschreiben.
+   * Ein Konflikt am gespeicherten Entwurf sperrt den Editor bis zur
+   * Entscheidung. Ohne freigegebenen Entwurfs-Sync ändert sich nichts.
+   */
+  useDraftCloudTick();
+  const cloudAktiv = isOrderDraftCloudSyncAllowed();
+  const gespeichert = gespeicherteId ? getOrderDraftById(gespeicherteId) : null;
+  const konflikt = gespeichert?.conflict ?? null;
+  const gesperrt = Boolean(konflikt);
+  const [basis, setBasis] = useState<{ stored: string | null; editor: string } | null>(null);
+  const [bereitsAngelegt, setBereitsAngelegt] = useState<{ vorgangId: string; orderNumber?: string } | null>(null);
+  const [entscheidungLaeuft, setEntscheidungLaeuft] = useState(false);
+
   const totals = calculateLineItemTotals(
     positionen.map((p) => ({ quantity: p.plannedQuantity, unitPrice: p.unitPrice })),
     taxStatus,
@@ -151,6 +229,92 @@ export function AuftragEditorPage() {
 
   const blocker = getOrderDraftBlockers({ customerBilling: kunde, title: titel, positions: positionen });
 
+  const editorSchluessel = werteSchluessel(eingaben());
+  const gespeichertSchluessel = gespeichert ? werteSchluessel(gespeichert) : null;
+  const ungespeichert = basis !== null && editorSchluessel !== basis.editor;
+  const fremdGeaendert = Boolean(
+    cloudAktiv && basis && gespeichert && !konflikt && gespeichertSchluessel !== basis.stored,
+  );
+
+  /** Lädt einen gespeicherten Stand in den Editor und macht ihn zur neuen Basis. */
+  const ladeGespeichert = (entwurf: OrderDraft) => {
+    const werte = werteAusEntwurf(entwurf, neuePosition);
+    setKundeId(werte.customerId ?? '');
+    setKunde(werte.customerBilling);
+    setTitel(werte.title);
+    setBaustelle(werte.baustelle);
+    setTaxStatus(werte.taxStatus);
+    setPositionen(werte.positions);
+    setKonditionen(werte.paymentTermsText);
+    setEinleitung(werte.introText ?? '');
+    setSchluss(werte.closingText ?? '');
+    setGespeicherteId(entwurf.id);
+    setBasis({ stored: werteSchluessel(entwurf), editor: werteSchluessel(werte) });
+  };
+
+  // Die Basis entsteht mit dem ersten Stand des Editors.
+  useEffect(() => {
+    if (basis === null) setBasis({ stored: gespeichertSchluessel, editor: editorSchluessel });
+  }, [basis, gespeichertSchluessel, editorSchluessel]);
+
+  // Neuere Fassung aus der Cloud, hier nichts Ungespeichertes: übernehmen.
+  useEffect(() => {
+    if (fremdGeaendert && !ungespeichert && gespeichert) ladeGespeichert(gespeichert);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fremdGeaendert, ungespeichert, gespeichertSchluessel]);
+
+  const entscheide = async (action: DraftCloudConflictAction): Promise<boolean> => {
+    if (!gespeicherteId) return false;
+    setEntscheidungLaeuft(true);
+    try {
+      let result: OrderDraftCloudDecisionResult;
+      switch (action) {
+        case 'takeCloud':
+          result = takeCloudOrderDraftVersion(gespeicherteId);
+          break;
+        case 'keepMine':
+          result = keepLocalOrderDraftVersion(gespeicherteId);
+          break;
+        case 'acceptEnd':
+          result = acceptOrderDraftCloudEnd(gespeicherteId);
+          break;
+        case 'continueAsNew':
+          result = continueOrderDraftAsNew(gespeicherteId);
+          break;
+        case 'keepDraft':
+          result = keepOrderDraftAfterRejectedDiscard(gespeicherteId);
+          break;
+        default:
+          result = discardOrderDraftAgain(gespeicherteId);
+      }
+      if (!result.ok) return false;
+      if (action === 'acceptEnd' || action === 'discardAgain') {
+        navigate('/vorgaenge');
+        return true;
+      }
+      const naechsteId = result.draftId ?? gespeicherteId;
+      const frisch = getOrderDraftById(naechsteId);
+      if (frisch) ladeGespeichert(frisch);
+      if (result.draftId) navigate(`/auftraege/entwurf/${result.draftId}`, { replace: true });
+      return true;
+    } finally {
+      setEntscheidungLaeuft(false);
+    }
+  };
+
+  /** Der Entwurf wurde anderswo beendet, hier stehen noch Eingaben: als neuen Entwurf sichern. */
+  const sichereAlsNeu = () => {
+    setFehler(null);
+    const workspaceId = resolveCloudWorkspaceId(buildPersistedStateSnapshot());
+    const r = createOrderDraft(workspaceId, eingaben());
+    if (!r.success) {
+      setFehler(translate(r.errorKey as TranslationKey));
+      return;
+    }
+    ladeGespeichert(r.draft);
+    navigate(`/auftraege/entwurf/${r.draft.id}`, { replace: true });
+  };
+
   const wechsleKunde = (id: string) => {
     setKundeId(id);
     const gewaehlt = id ? getCustomerById(id) : null;
@@ -164,12 +328,21 @@ export function AuftragEditorPage() {
   /** Speichert den Entwurf und gibt seine Kennung zurück (sie bleibt stabil). */
   const speichern = (): string | null => {
     setFehler(null);
+    if (gesperrt) {
+      setFehler(translate('order.draft.conflictOpen'));
+      return null;
+    }
+    if (fremdGeaendert && ungespeichert) {
+      setFehler(translate('orderDraftCloud.remoteChanged.saveBlocked'));
+      return null;
+    }
     if (gespeicherteId) {
       const r = updateOrderDraft(gespeicherteId, eingaben());
       if (!r.success) {
         setFehler(translate(r.errorKey as TranslationKey));
         return null;
       }
+      setBasis({ stored: werteSchluessel(r.draft), editor: editorSchluessel });
       return r.draft.id;
     }
     const workspaceId = resolveCloudWorkspaceId(buildPersistedStateSnapshot());
@@ -179,6 +352,7 @@ export function AuftragEditorPage() {
       return null;
     }
     setGespeicherteId(r.draft.id);
+    setBasis({ stored: werteSchluessel(r.draft), editor: editorSchluessel });
     return r.draft.id;
   };
 
@@ -198,6 +372,11 @@ export function AuftragEditorPage() {
       if (!id) return true;
       const r = await createOrderFromDraftWithCloud(id);
       if (!r.ok) {
+        // CLOUD-SYNC S6 — „bereits als Auftrag angelegt" ist kein Erfolg und kein stiller Fehler.
+        if (r.reason === 'already_created') {
+          setBereitsAngelegt({ vorgangId: r.vorgangId, orderNumber: r.orderNumber });
+          return true;
+        }
         const key: TranslationKey =
           r.reason === 'cloud_required'
             ? 'order.confirm.cloudRequired'
@@ -207,8 +386,15 @@ export function AuftragEditorPage() {
                 ? 'order.confirm.serverRejected'
                 : r.reason === 'blocked'
                   ? 'order.blocked.position_invalid'
-                  : 'order.draft.notFound';
-        setFehler(`${translate(key)}${'message' in r ? ` (${r.message})` : ''}`);
+                  : r.reason === 'draft_not_synced'
+                    ? 'orderDraftCloud.create.notSynced'
+                    : r.reason === 'draft_conflict'
+                      ? 'orderDraftCloud.create.conflict'
+                      : r.reason === 'draft_ended'
+                        ? 'orderDraftCloud.create.ended'
+                        : 'order.draft.notFound';
+        // CLOUD-SYNC S6 — bei fehlender Verbindung reicht der Satz; kein technischer Fehlertext für den Nutzer.
+        setFehler(`${translate(key)}${'message' in r && r.reason !== 'network' ? ` (${r.message})` : ''}`);
         return true;
       }
       showToast(translate('order.confirm.success').replace('{number}', r.vorgang.orderNumber ?? ''));
@@ -220,13 +406,35 @@ export function AuftragEditorPage() {
   };
 
   const handleVerwerfen = (): boolean => {
+    if (gespeicherteId) {
+      const r = deleteOrderDraft(gespeicherteId);
+      if (!r.success) {
+        // Der Entwurf ist unverändert erhalten; der Dialog bleibt mit dem Hinweis offen.
+        setFehler(translate(r.errorKey as TranslationKey));
+        return false;
+      }
+    }
     setVerwerfenOffen(false);
-    if (gespeicherteId) deleteOrderDraft(gespeicherteId);
     navigate('/vorgaenge');
     return true;
   };
 
-  if (draftId && !vorhandener) {
+  /*
+   * CLOUD-SYNC S6 — der Entwurf ist anderswo beendet worden (verworfen oder
+   * zum Auftrag geworden), während hier ungespeicherte Eingaben stehen: Der
+   * Editor bleibt mit einem Hinweis stehen, statt die Eingaben wegzuleiten.
+   */
+  const verwaist = Boolean(draftId && !vorhandener && ungespeichert);
+
+  /*
+   * CLOUD-SYNC S6 — „bereits als Auftrag angelegt" bleibt stehen, bis der
+   * Nutzer zum Auftrag geht: Der Abgleich während und nach der Anlage entfernt
+   * den verbrauchten Entwurf, und ohne diesen Halt leitete die Seite still
+   * weiter. Solange die Anlage läuft, entscheidet erst ihr Ergebnis.
+   */
+  const beendet = Boolean(bereitsAngelegt);
+
+  if (draftId && !vorhandener && !verwaist && !beendet && !laeuft) {
     if (bestaetigterAuftrag) return <Navigate to={`/vorgaenge/${bestaetigterAuftrag}`} replace />;
     return (
       <Page className="offer-editor" testId="order-editor-missing">
@@ -266,6 +474,113 @@ export function AuftragEditorPage() {
           {fehler}
         </p>
       ) : null}
+
+      {konflikt ? (
+        <DraftCloudConflictNotice
+          kind={konflikt.kind}
+          textPrefix="orderDraftCloud"
+          translate={translate}
+          busy={entscheidungLaeuft}
+          onDecide={entscheide}
+          orderLink={
+            gespeicherteId
+              ? { label: translate('orderDraftCloud.action.openOrder'), onOpen: () => navigate(`/vorgaenge/${gespeicherteId}`) }
+              : undefined
+          }
+          testIdPrefix="order-draft-cloud"
+        />
+      ) : null}
+
+      {fremdGeaendert && ungespeichert ? (
+        <InlineNotice
+          tone="warning"
+          testId="order-draft-remote-changed"
+          title={translate('orderDraftCloud.remoteChanged.title')}
+          action={
+            <div className="form-actions">
+              <Button
+                type="button"
+                size="sm"
+                variant="primary"
+                onClick={() => {
+                  if (gespeichert) ladeGespeichert(gespeichert);
+                }}
+                data-testid="order-draft-remote-load"
+              >
+                {translate('orderDraftCloud.remoteChanged.load')}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={() => setBasis((prev) => (prev ? { ...prev, stored: gespeichertSchluessel } : prev))}
+                data-testid="order-draft-remote-keep"
+              >
+                {translate('orderDraftCloud.remoteChanged.keep')}
+              </Button>
+            </div>
+          }
+        >
+          {translate('orderDraftCloud.remoteChanged.body')}
+        </InlineNotice>
+      ) : null}
+
+      {verwaist ? (
+        <InlineNotice
+          tone="warning"
+          testId="order-draft-gone"
+          title={translate('orderDraftCloud.gone.title')}
+          action={
+            <div className="form-actions">
+              <Button type="button" size="sm" variant="primary" onClick={sichereAlsNeu} data-testid="order-draft-gone-save-as-new">
+                {translate('orderDraftCloud.gone.saveAsNew')}
+              </Button>
+              {bestaetigterAuftrag ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => navigate(`/vorgaenge/${bestaetigterAuftrag}`)}
+                  data-testid="order-draft-gone-open-order"
+                >
+                  {translate('orderDraftCloud.action.openOrder')}
+                </Button>
+              ) : null}
+            </div>
+          }
+        >
+          {translate('orderDraftCloud.gone.body')}
+        </InlineNotice>
+      ) : null}
+
+      {bereitsAngelegt ? (
+        <InlineNotice
+          tone="info"
+          testId="order-draft-already-created"
+          title={translate('orderDraftCloud.create.alreadyCreated')}
+          action={
+            <Button
+              type="button"
+              size="sm"
+              variant="primary"
+              onClick={() => navigate(`/vorgaenge/${bereitsAngelegt.vorgangId}`)}
+              data-testid="order-draft-already-created-open"
+            >
+              {translate('orderDraftCloud.action.openOrder')}
+              {bereitsAngelegt.orderNumber ? ` ${bereitsAngelegt.orderNumber}` : ''}
+            </Button>
+          }
+        >
+          {translate('orderDraftCloud.create.alreadyCreatedBody')}
+        </InlineNotice>
+      ) : null}
+
+      <fieldset
+        className="order-editor__fields"
+        disabled={gesperrt || verwaist || beendet}
+        data-testid="order-editor-fields"
+        style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}
+      >
 
       <DetailSection title={translate('order.editor.customerSection')}>
         <Field label={translate('order.editor.customerPick')}>
@@ -391,6 +706,7 @@ export function AuftragEditorPage() {
           <textarea className="input" rows={2} value={schluss} onChange={(e) => setSchluss(e.target.value)} data-testid="order-closing" />
         </Field>
       </DetailSection>
+      </fieldset>
 
       {blocker.length > 0 ? (
         <ul className="form-hint" data-testid="order-blockers">
@@ -404,18 +720,24 @@ export function AuftragEditorPage() {
       ) : null}
 
       <div className="form-actions offer-editor__actions">
-        <Button type="button" variant="secondary" onClick={handleSpeichern} data-testid="order-save-draft" disabled={laeuft}>
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={handleSpeichern}
+          data-testid="order-save-draft"
+          disabled={laeuft || gesperrt || verwaist || beendet}
+        >
           {translate('order.draft.save')}
         </Button>
         <Button
           type="button"
           onClick={() => setAnlegenOffen(true)}
           data-testid="order-confirm"
-          disabled={laeuft || blocker.length > 0 || !writeAccess.canWrite}
+          disabled={laeuft || blocker.length > 0 || !writeAccess.canWrite || gesperrt || verwaist || Boolean(bereitsAngelegt)}
         >
           {translate('order.confirm.action')}
         </Button>
-        {gespeicherteId ? (
+        {gespeicherteId && !gesperrt && !verwaist && !beendet ? (
           <Button type="button" variant="ghost" onClick={() => setVerwerfenOffen(true)} data-testid="order-delete-draft">
             {translate('order.draft.discard')}
           </Button>
@@ -442,10 +764,11 @@ export function AuftragEditorPage() {
       <SimpleConfirmDialog
         open={verwerfenOffen}
         title={translate('order.draft.discardTitle')}
-        message={translate('order.draft.discardText')}
+        message={translate(cloudAktiv ? 'orderDraftCloud.discardText' : 'order.draft.discardText')}
         confirmLabel={translate('order.draft.discard')}
         cancelLabel={translate('common.cancel')}
         confirmVariant="danger"
+        failureMessage={translate('order.draft.discardFailed')}
         dialogTestId="order-delete-dialog"
         confirmTestId="order-delete-confirm"
         cancelTestId="order-delete-cancel"

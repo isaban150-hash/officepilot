@@ -156,7 +156,9 @@ describe('OFFICEPILOT-GENERATED-INVOICE-UNDERSTANDING-02B', () => {
       title: 'Werkvertrag Dachsanierung',
       category: 'vertrag',
       issuer: 'Beispiel Projektbau GmbH',
-      recognizedText: 'Werkvertrag',
+      // CLOUD-SYNC S4 — der Vertrag verlangt die Nachweise selbst; daraus entstehen sie.
+      recognizedText:
+        'Werkvertrag\nDer Auftragnehmer legt eine Freistellungsbescheinigung vor und weist seine Betriebshaftpflichtversicherung nach.',
       issueDate: '2026-03-01',
       linkedVorgang: { vorgangId: VORGANG_ID, vorgangTitle: 'Gewerbepark – Dachsanierung' },
       archived: true,

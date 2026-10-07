@@ -39,6 +39,10 @@ import {
   type LoadInvoiceDraftFinalizationPreparationInput,
   type ResolveInvoiceDraftFinalizationToExistingInput,
   type SaveInvoiceDraftRecordInput,
+  INVOICE_DRAFT_BINDING_REJECTIONS,
+  type InvoiceDraftWorkspaceListEntry,
+  type InvoiceDraftWorkspaceListResult,
+  type ReopenInvoiceDraftAfterBindingRejectionInput,
 } from '../../types/invoiceDraftDurability';
 import type { InvoiceDraft } from '../../types/models';
 
@@ -1639,6 +1643,137 @@ export async function loadInvoiceDraftFinalizationPreparation(
 
   // Jeder Aufruf liefert ein frisch geparstes, vom Speicher getrenntes Objekt.
   return { ok: true, record: { ...stored }, preparation: preparation.preparation };
+}
+
+/* -------------------------------------------------------------------------- */
+/* CLOUD-SYNC S5                                                              */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * CLOUD-SYNC S5 — der beweisgebundene Rueckweg einer begonnenen Freigabe.
+ *
+ * Hat der Server die Entwurfsbindung abgelehnt (siehe
+ * `InvoiceDraftBindingRejection`), ist nachgewiesen, dass zu dieser
+ * `clientInvoiceId` nichts geschrieben wurde. Eine Wiederholung derselben
+ * gespeicherten Anfrage koennte trotzdem nie gelingen — die erwartete
+ * Entwurfsversion kommt nicht wieder. Ohne diesen Weg bliebe der Entwurf
+ * dauerhaft gesperrt.
+ *
+ * Eng: nur `finalizing`, nur die genannte Kennung, nur die genannte Revision,
+ * nur einer der benannten Belege. Der Entwurfsinhalt bleibt bytegleich; das
+ * Freigabejournal und die Vorbereitung fallen weg, die Revision steigt.
+ */
+export async function reopenInvoiceDraftAfterBindingRejection(
+  input: ReopenInvoiceDraftAfterBindingRejectionInput,
+): Promise<InvoiceDraftFinalizationResult> {
+  const { identity, expectedRevision, clientInvoiceId, serverRejection } = input;
+  if (!isCompleteIdentity(identity)) return { ok: false, reason: 'invalid_identity' };
+  if (!Number.isInteger(expectedRevision) || expectedRevision < 1) {
+    return { ok: false, reason: 'invalid_identity', detail: 'expectedRevision' };
+  }
+  if (!isNonEmptyString(clientInvoiceId) || !INVOICE_DRAFT_BINDING_REJECTIONS.includes(serverRejection)) {
+    return { ok: false, reason: 'invalid_finalization' };
+  }
+  const now = input.now ?? new Date().toISOString();
+  if (!isNonEmptyString(now)) return { ok: false, reason: 'invalid_finalization' };
+  const recordKey = buildInvoiceDraftRecordKey(identity);
+
+  let outcome: FinalizationOutcome;
+  try {
+    outcome = await withStore<FinalizationOutcome>('readwrite', (store, finish) => {
+      const read = store.get(recordKey);
+      read.onsuccess = () => {
+        const current = read.result as InvoiceDraftRecord | undefined;
+        if (!current) {
+          finish({ kind: 'not_found' });
+          return;
+        }
+        if (!isSupportedRecord(current)) {
+          finish({ kind: 'unsupported_format' });
+          return;
+        }
+        if (!recordMatchesIdentity(current, identity)) {
+          finish({ kind: 'identity_mismatch' });
+          return;
+        }
+        if (current.status !== 'finalizing') {
+          finish({ kind: 'status_conflict', currentStatus: current.status });
+          return;
+        }
+        if (current.revision !== expectedRevision) {
+          finish({ kind: 'conflict', currentRevision: current.revision });
+          return;
+        }
+        if (current.finalization?.clientInvoiceId !== clientInvoiceId) {
+          finish({ kind: 'finalization_mismatch' });
+          return;
+        }
+        const {
+          finalization: _finalization,
+          preparationRawJson: _preparationRawJson,
+          preparationSha256: _preparationSha256,
+          ...rest
+        } = current;
+        const next: InvoiceDraftRecord = {
+          ...rest,
+          revision: current.revision + 1,
+          updatedAt: now,
+          status: 'active',
+        };
+        store.put(next);
+        finish({ kind: 'written', record: next });
+      };
+    });
+  } catch (error) {
+    return { ok: false, reason: storageReason(error) };
+  }
+  if (outcome.kind !== 'written') return mapFinalizationOutcome(outcome);
+  if (!(await verifyWrittenRecord(identity, outcome.record))) {
+    return { ok: false, reason: 'committed_but_unverified' };
+  }
+  return { ok: true, record: { ...outcome.record } };
+}
+
+/**
+ * CLOUD-SYNC S5 — alle Entwuerfe eines Workspace, ausschliesslich lesend, fuer
+ * den einmaligen Altbestand. Nutzt den vorhandenen Index `workspaceId`. Jeder
+ * Datensatz durchlaeuft dieselbe Endpruefung wie beim Laden; ein beschaedigter
+ * wird uebersprungen und gezaehlt — nichts wird repariert oder geloescht.
+ */
+export async function listInvoiceDraftRecordsForWorkspace(
+  workspaceId: string,
+): Promise<InvoiceDraftWorkspaceListResult> {
+  if (!isNonEmptyString(workspaceId)) return { ok: true, entries: [], skipped: 0 };
+  let stored: InvoiceDraftRecord[];
+  try {
+    stored = await withStore<InvoiceDraftRecord[]>('readonly', (store, finish) => {
+      const request = store.index('workspaceId').getAll(workspaceId);
+      request.onsuccess = () => finish((request.result as InvoiceDraftRecord[]) ?? []);
+    });
+  } catch (error) {
+    return { ok: false, reason: storageReason(error) };
+  }
+  const entries: InvoiceDraftWorkspaceListEntry[] = [];
+  let skipped = 0;
+  for (const record of stored) {
+    if (!isSupportedRecord(record)) {
+      skipped += 1;
+      continue;
+    }
+    const verified = await verifyStoredRecord(record, {
+      sourceScopeKey: record.sourceScopeKey,
+      workspaceId: record.workspaceId,
+      vorgangId: record.vorgangId,
+      invoiceType: record.invoiceType,
+      draftId: record.draftId,
+    });
+    if (!verified.ok) {
+      skipped += 1;
+      continue;
+    }
+    entries.push({ record: verified.record, draft: verified.draft });
+  }
+  return { ok: true, entries, skipped };
 }
 
 export async function resetInvoiceDraftDurabilityDatabaseForTests(): Promise<void> {

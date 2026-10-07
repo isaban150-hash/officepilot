@@ -1,5 +1,6 @@
 import { CommunicationHistorySection } from '../components/communication/CommunicationHistorySection';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useDraftCloudTick } from '../services/order/useDraftCloudTick';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { OrderPositionForm } from '../components/vorgang/OrderPositionForm';
@@ -114,6 +115,19 @@ import { useReportUiSession } from '../hooks/useReportUiSession';
 import { useUiSessionRestore } from '../hooks/useUiSessionRestore';
 
 type FormMode = { type: 'add' } | { type: 'edit'; position: OrderPosition } | null;
+
+/**
+ * CLOUD-SYNC S6 — ein Auftrag, der erst mit dem nächsten Abzug ankommt (etwa
+ * „Zum Auftrag" auf einem Gerät, das ihn noch nicht kannte), erscheint ohne
+ * Neuladen. Nur solange die Seite ihn nicht findet.
+ */
+function AuftragNachladen({ id, onFound }: { id: string; onFound: () => void }) {
+  const tick = useDraftCloudTick();
+  useEffect(() => {
+    if (getVorgangById(id)) onFound();
+  }, [tick, id, onFound]);
+  return null;
+}
 
 export function VorgangDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -447,6 +461,7 @@ export function VorgangDetailPage() {
   if (!vorgang) {
     return (
       <div className="page">
+        {id ? <AuftragNachladen id={id} onFound={refreshVorgang} /> : null}
         <EmptyStateBlock
           title={translate('vorgang.notFound')}
           description=""

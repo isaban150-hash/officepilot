@@ -14,6 +14,7 @@
 import type { CompanySetup, InvoiceDraft, VorgangInvoice } from '../../types/models';
 import type { InvoiceApprovalOptions, InvoiceValidationResult } from '../invoiceValidationService';
 import type { InvoiceDraftIdentity } from '../../types/invoiceDraftDurability';
+import type { InvoiceDraftCloudBinding } from '../../types/invoiceDraftCloud';
 import { isSupabaseConfigured, getSupabaseClient } from '../../lib/supabase';
 import { buildPersistedStateSnapshot } from '../persistenceService';
 import { resolveCloudWorkspaceId } from '../workspace/workspaceSyncPayloadService';
@@ -89,6 +90,12 @@ export interface PrepareInvoiceFinalizationInput {
    * Entwurf ab. Der Aufrufer bringt allein seine Entscheidung mit.
    */
   overbillingAcknowledged: boolean;
+  /**
+   * CLOUD-SYNC S5 — die Bindung an den Cloud-Entwurf, vom Koordinator synchron
+   * aus dem Spiegel gelesen. Sie wird mit dem Request eingefroren: Die
+   * erwartete Version gehört zu genau diesem Inhalt.
+   */
+  draftBinding?: InvoiceDraftCloudBinding | null;
 }
 
 export type PrepareInvoiceFinalizationResult =
@@ -146,6 +153,10 @@ export type ExecutePreparedFinalizationFailure =
   | 'server_integrity_rejected'
   /** 01D — für diesen Vorgang existiert bereits eine andere Schlussrechnung. */
   | 'final_invoice_exists'
+  /** CLOUD-SYNC S5 — ein anderes Gerät hat diesen Entwurf bereits zur Rechnung gemacht. */
+  | 'draft_finalized_elsewhere'
+  /** CLOUD-SYNC S5 — Entwurfsbindung abgelehnt; nachweislich nichts geschrieben. */
+  | 'draft_binding_rejected'
   | 'local_persist_failed'
   | 'local_conflict'
   | 'cloud_response_mismatch'
@@ -370,6 +381,13 @@ function buildPreparationSynchronously(input: PrepareInvoiceFinalizationInput): 
     invoicePayload: rawPayload,
     // 03B — dieselbe Aussage wie im Freigabekontext, nur fuer den Server.
     overbillingAcknowledged: input.overbillingAcknowledged === true,
+    // CLOUD-SYNC S5 — die Entwurfsbindung, nur wenn es einen Cloud-Entwurf gibt.
+    ...(input.draftBinding
+      ? {
+          clientDraftId: input.draftBinding.clientDraftId,
+          expectedDraftRowVersion: input.draftBinding.expectedDraftRowVersion,
+        }
+      : {}),
   });
   if (!carrier) return { ok: false, reason: 'preparation_failed', detail: 'serialize' };
 
@@ -498,6 +516,21 @@ function mapCloudError(
 ): { reason: ExecutePreparedFinalizationFailure; cloudState: PreparedFinalizeCloudState } {
   if (error.code === 'idempotency_conflict') {
     return { reason: 'idempotency_conflict', cloudState: 'conflict' };
+  }
+  /*
+   * CLOUD-SYNC S5 — der Cloud-Entwurf ist bereits zur Rechnung eines anderen
+   * Geräts geworden. Für diese Kennung wurde nichts geschrieben; die vorhandene
+   * Rechnung ist die kanonische, auf die der Koordinator auflöst.
+   */
+  if (error.code === 'draft_finalized_elsewhere') {
+    return { reason: 'draft_finalized_elsewhere', cloudState: 'conflict' };
+  }
+  /*
+   * CLOUD-SYNC S5 — die Bindung wurde vor jedem Schreibvorgang abgelehnt:
+   * belegbar `not_committed`.
+   */
+  if (error.code === 'draft_binding_rejected') {
+    return { reason: 'draft_binding_rejected', cloudState: 'not_committed' };
   }
   if (error.message.includes('invoice_amendment_state_stale')) {
     return { reason: 'amendment_state_stale', cloudState: 'not_committed' };
@@ -675,6 +708,13 @@ async function runPreparedFinalization(
       clientInvoiceId: request.clientInvoiceId,
       invoicePayload: request.invoicePayload,
       overbillingAcknowledged: request.overbillingAcknowledged === true,
+      // CLOUD-SYNC S5 — die eingefrorene Entwurfsbindung, unverändert aus dem Request.
+      ...(request.clientDraftId !== undefined && request.expectedDraftRowVersion !== undefined
+        ? {
+            clientDraftId: request.clientDraftId,
+            expectedDraftRowVersion: request.expectedDraftRowVersion,
+          }
+        : {}),
     });
   } catch (error) {
     if (error instanceof WorkspaceInvoiceCloudError) {

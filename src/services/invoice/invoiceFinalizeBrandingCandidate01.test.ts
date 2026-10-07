@@ -215,9 +215,9 @@ describe('INVOICE-FINALIZE-BRANDING-CANDIDATE-01B — Kandidat und Request', () 
     }
   });
 
-  // Der externe Vertrag bleibt unverändert.
-  it('K6: die Request-Formatversion bleibt 3', () => {
-    expect(PREPARED_FINALIZE_REQUEST_FORMAT_VERSION).toBe(3);
+  // CLOUD-SYNC S5 — der Vertrag wurde bewusst um die Entwurfsbindung erweitert (3 → 4).
+  it('K6: die Request-Formatversion ist 4', () => {
+    expect(PREPARED_FINALIZE_REQUEST_FORMAT_VERSION).toBe(4);
   });
 });
 

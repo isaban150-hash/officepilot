@@ -9,6 +9,7 @@ import type {
   OrderPositionCategory,
 } from '../../types/models';
 import type { OrderAmendmentConfirmRpcInput } from './orderAmendmentConfirmPayload';
+import type { OrderAmendmentDraftCloudBinding } from '../../types/orderAmendmentDraftCloud';
 
 export type WorkspaceOrderAmendmentCloudErrorCode =
   | 'auth'
@@ -22,6 +23,14 @@ export type WorkspaceOrderAmendmentCloudErrorCode =
   | 'contract_confirmation_missing'
   | 'vorgang_not_found'
   | 'invalid_response'
+  /** CLOUD-SYNC S6 — der gebundene Entwurf ist bereits von einer anderen Bestätigung verbraucht. */
+  | 'draft_consumed'
+  /** CLOUD-SYNC S6 — der gebundene Entwurf wurde verworfen. */
+  | 'draft_discarded'
+  /** CLOUD-SYNC S6 — die Cloud trägt eine andere Entwurfsversion als die gebundene. */
+  | 'draft_version_conflict'
+  /** CLOUD-SYNC S6 — die Bindung passt nicht (unbekannter Entwurf, anderer Auftrag). */
+  | 'draft_not_synced'
   | 'unknown';
 
 export class WorkspaceOrderAmendmentCloudError extends Error {
@@ -45,6 +54,8 @@ export type ConfirmWorkspaceOrderAmendmentInput = {
   vorgangId: string;
   clientAmendmentId: string;
   amendment: OrderAmendmentConfirmRpcInput;
+  /** CLOUD-SYNC S6 — nur mit freigegebenem Entwurfs-Sync; sonst wie bisher ohne Bindung. */
+  binding?: OrderAmendmentDraftCloudBinding | null;
 };
 
 export type ConfirmWorkspaceOrderAmendmentResult = {
@@ -81,6 +92,23 @@ export function classifyOrderAmendmentCloudError(error: {
     error.code === '42501'
   ) {
     return new WorkspaceOrderAmendmentCloudError(message, 'rls', false);
+  }
+  // CLOUD-SYNC S6 — Befunde der Entwurfsbindung; alle endgültig, keiner wiederholbar.
+  if (message.includes('order_amendment_draft_already_consumed')) {
+    return new WorkspaceOrderAmendmentCloudError(message, 'draft_consumed', false);
+  }
+  if (message.includes('order_amendment_draft_discarded')) {
+    return new WorkspaceOrderAmendmentCloudError(message, 'draft_discarded', false);
+  }
+  if (message.includes('order_amendment_draft_version_conflict')) {
+    return new WorkspaceOrderAmendmentCloudError(message, 'draft_version_conflict', false);
+  }
+  if (
+    message.includes('order_amendment_draft_not_found') ||
+    message.includes('order_amendment_draft_binding_invalid') ||
+    message.includes('order_amendment_draft_consume_failed')
+  ) {
+    return new WorkspaceOrderAmendmentCloudError(message, 'draft_not_synced', false);
   }
   if (message.includes('order_amendment_idempotency_conflict')) {
     return new WorkspaceOrderAmendmentCloudError(message, 'idempotency_conflict', false);
@@ -278,6 +306,9 @@ function parseConfirmedOrderAmendmentFromCloudRow(
         : null;
   if (reason === null) return null;
 
+  // CLOUD-SYNC S6 — der verbrauchte Cloud-Entwurf; ausserhalb des Fingerprints, ältere Nachträge tragen ihn nicht.
+  const sourceDraftId = requireNonEmptyString(payloadSource.sourceDraftId);
+
   return {
     cloudId,
     clientAmendmentId,
@@ -293,6 +324,7 @@ function parseConfirmedOrderAmendmentFromCloudRow(
     rowVersion,
     createdAt,
     updatedAt,
+    ...(sourceDraftId ? { sourceDraftId } : {}),
   };
 }
 
@@ -342,11 +374,22 @@ export async function rpcConfirmWorkspaceOrderAmendment(
   client?: SupabaseClient | null,
 ): Promise<ConfirmWorkspaceOrderAmendmentResult> {
   const supabase = getClient(client);
+  /*
+   * CLOUD-SYNC S6 — die Bindung reist nur mit, wenn es sie gibt. Ohne
+   * freigegebenen Entwurfs-Sync bleibt der Aufruf exakt der bisherige: Eine
+   * Datenbank ohne S6-Migration kennt die beiden Angaben nicht.
+   */
   const { data, error } = await supabase.rpc('confirm_workspace_order_amendment', {
     p_workspace_id: input.workspaceId,
     p_vorgang_id: input.vorgangId,
     p_client_amendment_id: input.clientAmendmentId,
     p_amendment: input.amendment,
+    ...(input.binding
+      ? {
+          p_source_draft_id: input.binding.sourceDraftId,
+          p_expected_draft_row_version: input.binding.expectedDraftRowVersion,
+        }
+      : {}),
   });
 
   if (error) {

@@ -55,7 +55,15 @@ export const PREPARED_FINALIZE_REQUEST_KIND =
  * stillschweigend akzeptierter Fremdversions-Request wäre der Anfang genau der
  * Unschärfe, die dieser Vertrag verhindern soll.
  */
-export const PREPARED_FINALIZE_REQUEST_FORMAT_VERSION = 3 as const;
+/*
+ * CLOUD-SYNC S5 — von 3 auf 4 erhöht.
+ *
+ * Die Whitelist kennt zwei neue, optionale Felder: die Bindung der Freigabe an
+ * den Cloud-Entwurf (`clientDraftId`, `expectedDraftRowVersion`). Sie gelten
+ * nur gemeinsam. Wie bei 01P4E3D und 01F-2 gibt es **keinen dualen Leser**: Ein
+ * mit Version 3 gespeicherter Request wird abgewiesen, nicht umgeschrieben.
+ */
+export const PREPARED_FINALIZE_REQUEST_FORMAT_VERSION = 4 as const;
 
 export const INVOICE_APPROVAL_CONTEXT_KIND = 'officepilot-invoice-approval-context' as const;
 export const INVOICE_APPROVAL_CONTEXT_FORMAT_VERSION = 1 as const;
@@ -82,6 +90,15 @@ export interface PreparedWorkspaceInvoiceFinalizeRequest {
    * weder in den Payload noch in den Fingerabdruck.
    */
   overbillingAcknowledged?: boolean;
+  /**
+   * CLOUD-SYNC S5 — die Bindung an den Cloud-Entwurf: dessen Kennung und die
+   * Version, auf der diese Freigabe vorbereitet wurde. Der Server verbraucht
+   * genau diesen Entwurf in derselben Transaktion wie die Rechnungsanlage — ein
+   * zweites Gerät kann ihn danach nicht ein zweites Mal zur Rechnung machen.
+   * Nur gemeinsam; fehlen beide, gibt es keinen Cloud-Entwurf.
+   */
+  clientDraftId?: string;
+  expectedDraftRowVersion?: number;
   expectedResponseProjectionRawJson: string;
 }
 
@@ -116,6 +133,9 @@ const REQUEST_KEYS = [
   'invoice',
   'invoicePayload',
   'overbillingAcknowledged',
+  // CLOUD-SYNC S5 — die Entwurfsbindung (ab Version 4).
+  'clientDraftId',
+  'expectedDraftRowVersion',
   'expectedResponseProjectionRawJson',
 ] as const;
 
@@ -660,6 +680,17 @@ export function validatePreparedWorkspaceInvoiceFinalizeRequest(
       typeof request.overbillingAcknowledged !== 'boolean'
     ) {
       reject('request.overbillingAcknowledged:not_boolean');
+    }
+    /* CLOUD-SYNC S5 — die Entwurfsbindung: beide Angaben oder keine. */
+    const hasDraftId = request.clientDraftId !== undefined;
+    const hasDraftVersion = request.expectedDraftRowVersion !== undefined;
+    if (hasDraftId !== hasDraftVersion) reject('request.draftBinding:incomplete');
+    if (hasDraftId) {
+      requiredString(request.clientDraftId, 'request.clientDraftId');
+      const version = request.expectedDraftRowVersion;
+      if (typeof version !== 'number' || !Number.isInteger(version) || version < 1) {
+        reject('request.expectedDraftRowVersion:invalid');
+      }
     }
 
     const invoice = checkInvoiceShape(request.invoice, clientInvoiceId, 'request.invoice', 'invoice');

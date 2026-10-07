@@ -111,9 +111,11 @@ export function hasInstitutionalLetterhead(
 export function isInstitutionalCorrespondence(
   kind: ClassifiedDocumentKind | undefined,
   text: string | undefined,
+  /** CLOUD-SYNC S4 — Nacharbeit 1: ausdrückliche Firmenidentität; ohne sie gilt das aktuelle Firmenprofil. */
+  options: { ownCompanyName?: string } = {},
 ): boolean {
   if (kind && (isAuthorityClassifiedKind(kind) || isInsuranceClassifiedKind(kind))) return true;
-  return hasInstitutionalLetterhead(text);
+  return hasInstitutionalLetterhead(text, options);
 }
 
 export type InstitutionalSenderInput = {

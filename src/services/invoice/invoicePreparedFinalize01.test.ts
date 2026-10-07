@@ -2167,8 +2167,14 @@ describe('01P4E3D — Prepared-Request-Formatversion', () => {
    * genau eine gültige Version, kein Default, kein dualer Leser — insbesondere
    * wird die **vorherige** Version 2 weiterhin abgewiesen.
    */
-  it('F1: die innere Request-Version ist 3, die äußere Vorbereitung bleibt 1', () => {
-    expect(PREPARED_FINALIZE_REQUEST_FORMAT_VERSION).toBe(3);
+  /*
+   * CLOUD-SYNC S5 — die Version ist auf 4 gestiegen: Die Whitelist kennt die
+   * optionale Entwurfsbindung (`clientDraftId`, `expectedDraftRowVersion`).
+   * Dieselben Zusicherungen — insbesondere wird die vorherige Version 3
+   * abgewiesen.
+   */
+  it('F1: die innere Request-Version ist 4, die äußere Vorbereitung bleibt 1', () => {
+    expect(PREPARED_FINALIZE_REQUEST_FORMAT_VERSION).toBe(4);
     expect(INVOICE_DRAFT_PREPARATION_FORMAT_VERSION).toBe(1);
     // Die Kennung des Requests bleibt unverändert.
     expect(PREPARED_FINALIZE_REQUEST_KIND).toBe(
@@ -2176,7 +2182,7 @@ describe('01P4E3D — Prepared-Request-Formatversion', () => {
     );
   });
 
-  it('F2: der Request-Validator akzeptiert ausschließlich Version 3', async () => {
+  it('F2: der Request-Validator akzeptiert ausschließlich Version 4', async () => {
     const prepared = await prepareInvoiceDraftFinalization(prepareInput());
     expect(prepared.ok, JSON.stringify(prepared)).toBe(true);
     if (!prepared.ok) return;
@@ -2184,8 +2190,8 @@ describe('01P4E3D — Prepared-Request-Formatversion', () => {
     const base = JSON.parse(JSON.stringify(prepared.request)) as Record<string, unknown>;
     expect(validatePreparedWorkspaceInvoiceFinalizeRequest(base).ok).toBe(true);
 
-    // `2` steht bewusst in der Liste: Requests der Vorversion werden abgewiesen.
-    for (const version of [1, 0, 2, 4, '3', null, true, 2.5] as unknown[]) {
+    // `3` steht bewusst in der Liste: Requests der Vorversion werden abgewiesen.
+    for (const version of [1, 0, 2, 3, 5, '4', null, true, 3.5] as unknown[]) {
       const result = validatePreparedWorkspaceInvoiceFinalizeRequest({
         ...base,
         formatVersion: version,
@@ -2202,7 +2208,7 @@ describe('01P4E3D — Prepared-Request-Formatversion', () => {
     expect(validatePreparedWorkspaceInvoiceFinalizeRequest(withoutVersion).ok).toBe(false);
   });
 
-  it('F3: eine neue Vorbereitung trägt Version 3 und den E3B-Projektionsvertrag', async () => {
+  it('F3: eine neue Vorbereitung trägt Version 4 und den E3B-Projektionsvertrag', async () => {
     const prepared = await prepareInvoiceDraftFinalization(
       prepareInput({ draft: buildSchlussDraft() }),
     );
@@ -2210,7 +2216,7 @@ describe('01P4E3D — Prepared-Request-Formatversion', () => {
     if (!prepared.ok) return;
 
     expect(prepared.request.kind).toBe(PREPARED_FINALIZE_REQUEST_KIND);
-    expect(prepared.request.formatVersion).toBe(3);
+    expect(prepared.request.formatVersion).toBe(4);
     // Der Schluss-Payload trägt das Metafeld weiterhin.
     expect(prepared.request.invoicePayload.expectedAmendmentSequence).toBe(
       SCHLUSS_AMENDMENT_SEQUENCE,
@@ -2334,7 +2340,7 @@ describe('01P4E3D — Prepared-Request-Formatversion', () => {
     expect(localState.upsertCalls.length).toBe(1);
   });
 
-  it('F6: der gespeicherte Rohtext trägt Version 3 und bleibt unverändert', async () => {
+  it('F6: der gespeicherte Rohtext trägt Version 4 und bleibt unverändert', async () => {
     await seedPrepared();
 
     const before = await loadInvoiceDraftRecordByLocator({
@@ -2348,11 +2354,11 @@ describe('01P4E3D — Prepared-Request-Formatversion', () => {
 
     const rawJson = before.record.preparationRawJson!;
     const sha = before.record.preparationSha256!;
-    expect(rawJson).toContain('"formatVersion":3');
+    expect(rawJson).toContain('"formatVersion":4');
     expect(JSON.parse(rawJson).kind).toBe(INVOICE_DRAFT_PREPARATION_KIND);
     // Der äußere Umschlag bleibt Version 1.
     expect(JSON.parse(rawJson).formatVersion).toBe(1);
-    expect(JSON.parse(rawJson).request.formatVersion).toBe(3);
+    expect(JSON.parse(rawJson).request.formatVersion).toBe(4);
 
     // Der gespeicherte Hash passt exakt zum gespeicherten Rohtext.
     const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(rawJson));

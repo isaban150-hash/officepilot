@@ -7,7 +7,6 @@ import {
   type DocumentMutationResult,
   type ImportInboxDocumentOptions,
 } from '../services/documentService';
-import { archiveMailInboxItem } from '../services/mailImportService';
 import { addInboxItem, getInboxItemById } from '../services/inboxService';
 import type { InboxItem } from '../types/models';
 
@@ -55,17 +54,4 @@ export function updateDocumentFromInboxForTests(
   }
   confirmFilingDecisionForTests(item.id);
   return updateDocumentFromInbox(documentId, getInboxItemById(item.id)!, linkedCompany);
-}
-
-/** Test-only wrapper for archiveMailInboxItem with store confirm. */
-export function archiveMailInboxItemForTests(
-  item: InboxItem,
-  linkedCompany: string,
-  mailImportId?: string,
-): string | null {
-  if (!getInboxItemById(item.id)) {
-    addInboxItem(item);
-  }
-  confirmFilingDecisionForTests(item.id);
-  return archiveMailInboxItem(getInboxItemById(item.id)!, linkedCompany, mailImportId);
 }

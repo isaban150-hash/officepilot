@@ -314,6 +314,8 @@ export function isValidPersistedStateV1(value: unknown): value is PersistedState
     (Array.isArray(state.vorgangNotes) || state.vorgangNotes === undefined) &&
     (Array.isArray(state.communicationHistory) || state.communicationHistory === undefined) &&
     (Array.isArray(state.knowledgeFacts) || state.knowledgeFacts === undefined) &&
+    (Array.isArray(state.invoiceDrafts) || state.invoiceDrafts === undefined) &&
+    (Array.isArray(state.orderAmendmentDraftTombstones) || state.orderAmendmentDraftTombstones === undefined) &&
     (state.officePilotMemory === undefined ||
       (Array.isArray(state.officePilotMemory.documentMemories) &&
         Array.isArray(state.officePilotMemory.proofMemories) &&

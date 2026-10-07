@@ -6,6 +6,7 @@ import type {
 } from '../types/documentIntelligence';
 import type { DetectedPaymentTerm, InboxItem, Vorgang } from '../types/models';
 import { getInboxItemById } from './inboxService';
+import { contractIntelligenceInputsFromInbox, rememberContractIntelligence } from './contractIntelligenceMemo';
 import {
   extractBillOfQuantitiesFromPages,
   extractBillOfQuantitiesPositions,
@@ -66,9 +67,11 @@ export function admitsContractIntelligenceForKind(
   intelligence: ContractIntelligenceResult | null | undefined,
   /** Dokumenttext für die Briefkopf-Wahrheit. */
   text?: string,
+  /** CLOUD-SYNC S4 — Nacharbeit 1: ausdrückliche Firmenidentität; ohne sie gilt das aktuelle Firmenprofil. */
+  options: { ownCompanyName?: string } = {},
 ): intelligence is ContractIntelligenceResult {
   if (!intelligence) return false;
-  if (!isInstitutionalCorrespondence(kind, text)) return true;
+  if (!isInstitutionalCorrespondence(kind, text, options)) return true;
   const type = intelligence.contractType;
   return Boolean(
     type &&
@@ -131,6 +134,8 @@ export function analyzeContractIntelligenceFromText(
   /** SCAN-OCR-EVIDENCE-01B — optional spatial evidence from image OCR. */
   visibleFacts?: readonly DocumentVisibleFact[],
   factAssignments?: readonly DocumentFactAssignment[],
+  /** CLOUD-SYNC S4 — Nacharbeit 1: ausdrückliche Firmenidentität; ohne sie gilt das aktuelle Firmenprofil. */
+  options: { ownCompanyName?: string } = {},
 ): ContractIntelligenceResult | null {
   const pageTexts = pageTextsInput ?? splitTextIntoPages(recognizedText);
   if (pageTexts.length === 0 || !recognizedText.trim()) return null;
@@ -262,6 +267,7 @@ export function analyzeContractIntelligenceFromText(
   const classified = detectClassifiedKindWithReason({
     recognizedText: fullCommercialText,
     pageTexts,
+    ownCompanyName: options.ownCompanyName,
   });
 
   if (positions.length === 0) {
@@ -309,13 +315,27 @@ export function analyzeContractIntelligenceFromText(
   return result;
 }
 
-export function analyzeContractIntelligenceFromInbox(item: InboxItem): ContractIntelligenceResult | null {
-  const recognizedText = getInboxExtractedDocumentText(item);
-  const pageTextsRaw = item.recognizedData._pageTexts;
-  const pageTexts = pageTextsRaw ? (JSON.parse(pageTextsRaw) as DocumentPageText[]) : undefined;
-  const intelligence = analyzeContractIntelligenceFromText(recognizedText, pageTexts);
+export function analyzeContractIntelligenceFromInbox(
+  item: InboxItem,
+  /** CLOUD-SYNC S4 — Nacharbeit 1: ausdrückliche Firmenidentität; ohne sie gilt das aktuelle Firmenprofil. */
+  options: { ownCompanyName?: string } = {},
+): ContractIntelligenceResult | null {
+  /*
+   * CLOUD-SYNC S4 — Nacharbeit 2: die Firma einmal auflösen und ausdrücklich
+   * weitergeben — so rechnet die Analyse mit genau den Eingaben, unter denen
+   * ihr Ergebnis danach abgelegt wird (`contractIntelligenceMemo`).
+   */
+  const eingaben = contractIntelligenceInputsFromInbox(item, options);
+  const context = { ownCompanyName: eingaben.ownCompanyName };
+  const recognizedText = eingaben.recognizedText;
+  const pageTexts = eingaben.pageTextsRaw ? (JSON.parse(eingaben.pageTextsRaw) as DocumentPageText[]) : undefined;
+  const intelligence = analyzeContractIntelligenceFromText(recognizedText, pageTexts, undefined, undefined, context);
   // EINGANG-02A-1 Nacharbeit 1 — gemeinsamer Ursprung für Workflow, Deutung und Vorschlag.
-  return admitsContractIntelligenceForKind(item.classifiedKind, intelligence, recognizedText) ? intelligence : null;
+  const ergebnis = admitsContractIntelligenceForKind(eingaben.classifiedKind, intelligence, recognizedText, context)
+    ? intelligence
+    : null;
+  rememberContractIntelligence(eingaben, ergebnis);
+  return ergebnis;
 }
 
 export function buildContractOrderProposal(

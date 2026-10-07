@@ -31,7 +31,6 @@ import {
 } from './services/inboxService';
 import { getDocumentById, importInboxDocument } from './services/documentService';
 import { executeSmartIntake } from './services/intakeExecutionService';
-import { archiveMailInboxItem } from './services/mailImportService';
 import { getDocumentFileDerivativeRecoveryContext } from './services/documentFileDerivativeRecoveryContextService';
 import * as postImportOrch from './services/documentFilePostImportDerivativeOrchestrationService';
 import * as documentService from './services/documentService';
@@ -42,7 +41,7 @@ import {
 import { setPdfTextExtractorForTests } from './services/uploadTextExtractionService';
 import { setImageOcrExtractorForTests } from './services/ocrDocumentService';
 import { createAuftragInboxItem } from './test/fixtures';
-import { confirmFilingDecisionForTests, importInboxDocumentForTests, archiveMailInboxItemForTests } from './test/confirmFilingDecisionForTests';
+import { confirmFilingDecisionForTests, importInboxDocumentForTests } from './test/confirmFilingDecisionForTests';
 import { withNewEntitySync } from './services/sync/syncMetaService';
 import type { WorkflowResult } from './types/models';
 
@@ -295,22 +294,6 @@ describe('STORAGE-DERIVATIVE-INTAKE-PLAN-CONTEXT-CARRY-01', () => {
       }),
     );
     expect(getDocumentFileDerivativeRecoveryContext(imported.document!.id)).toBeNull();
-  });
-
-  it('Mail ohne Context wird nicht geraten', () => {
-    const item = createAuftragInboxItem({ id: 'inbox-carry-mail' });
-    hydrateInboxStore([item]);
-    const orchSpy = vi
-      .spyOn(postImportOrch, 'orchestratePostImportDerivativesAfterImport')
-      .mockResolvedValue({ kind: 'completed', steps: [] });
-
-    const documentId = archiveMailInboxItemForTests(item, 'Test GmbH');
-    expect(documentId).toBeTruthy();
-    expect(orchSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        transformPlan: undefined,
-      }),
-    );
   });
 
   it('alter Persistenzstand ohne Carry-Feld bleibt kompatibel', () => {

@@ -9,7 +9,8 @@ import { Page, PageToolbar } from '../components/ui/Page';
 import { FilterChips, SearchField } from '../components/ui/Toolbar';
 import { useApp } from '../context/AppContext';
 import { getAllVorgaenge } from '../services/vorgangService';
-import { listOrderDrafts } from '../services/order/orderDraftService';
+import { isOrderDraftCloudSyncAllowed, listOrderDrafts } from '../services/order/orderDraftService';
+import { useDraftCloudTick } from '../services/order/useDraftCloudTick';
 import { vorgangStatusTone } from '../services/ui/statusTone';
 import type { TranslationKey } from '../i18n';
 import type { Vorgang } from '../types/models';
@@ -39,10 +40,13 @@ export function VorgaengePage() {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<VorgangFilter>('active');
 
+  // CLOUD-SYNC S6 — ein Abzug kann Entwürfe bringen, beenden oder mit einer Abweichung versehen.
+  const draftTick = useDraftCloudTick();
+
   useEffect(() => {
     setVorgaenge(getAllVorgaenge());
     setEntwuerfe(listOrderDrafts());
-  }, [location.pathname, location.key]);
+  }, [location.pathname, location.key, draftTick]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -95,7 +99,16 @@ export function VorgaengePage() {
       {entwuerfe.length > 0 ? (
         <section className="section" data-testid="vorgaenge-order-drafts">
           <h2 className="section__title">{translate('order.draft.listTitle')}</h2>
-          <p className="form-hint">{translate('order.draft.listHint')}</p>
+          {/*
+           * CLOUD-SYNC S6 — Entwürfe reisen mit dem Betrieb wie alles andere und
+           * brauchen keinen eigenen Hinweis. „Nur auf diesem Gerät" erscheint nur,
+           * wenn der Entwurfs-Sync abgeschaltet ist (Notausschalter).
+           */}
+          {isOrderDraftCloudSyncAllowed() ? null : (
+            <p className="form-hint" data-testid="vorgaenge-order-drafts-hint">
+              {translate('order.draft.listHint')}
+            </p>
+          )}
           <BusinessList>
             {entwuerfe.map((entwurf) => (
               <BusinessListItem
@@ -104,7 +117,13 @@ export function VorgaengePage() {
                 linkTestId={`order-draft-${entwurf.id}`}
                 title={entwurf.title.trim() || translate('order.draft.untitled')}
                 subtitle={entwurf.customerBilling.name}
-                status={<StatusBadge tone="neutral" label={translate('order.draft.badge')} />}
+                status={
+                  entwurf.conflict ? (
+                    <StatusBadge tone="warning" label={translate('orderDraftCloud.badge.conflict')} />
+                  ) : (
+                    <StatusBadge tone="neutral" label={translate('order.draft.badge')} />
+                  )
+                }
               />
             ))}
           </BusinessList>

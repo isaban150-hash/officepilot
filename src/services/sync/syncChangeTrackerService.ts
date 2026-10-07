@@ -32,6 +32,16 @@ import { buildExpenseContentKey, isCloudSyncBlockedMockExpenseId } from '../expe
 import type { Expense } from '../../types/expense';
 import type { PaperRegisterEntry } from '../../types/memory';
 import { buildPaperRegisterEntryCloudContentKey } from '../memory/paperRegisterCloudService';
+import type { CommunicationEvent } from '../../types/communicationHistory';
+import { buildCommunicationEventCloudContentKey } from '../communication/communicationEventCloudService';
+import type { KnowledgeFact } from '../../types/knowledge';
+import { buildKnowledgeFactCloudContentKey } from '../knowledge/knowledgeFactCloudService';
+import type { InvoiceDraftCloudEntity } from '../../types/invoiceDraftCloud';
+import { buildInvoiceDraftCloudContentKey } from '../invoice/invoiceDraftCloudService';
+import type { OrderDraft } from '../../types/orderDraft';
+import type { OrderAmendment } from '../../types/models';
+import { buildOrderDraftCloudContentKey } from '../order/orderDraftCloudService';
+import { buildOrderAmendmentDraftCloudContentKey } from '../orderAmendment/orderAmendmentDraftCloudService';
 
 export const TRACKED_SYNC_ENTITY_TYPES: SyncEntityType[] = [
   'inbox_item',
@@ -39,11 +49,17 @@ export const TRACKED_SYNC_ENTITY_TYPES: SyncEntityType[] = [
   'document_file',
   'document_file_binding',
   'document_work_result',
-  'document_memory',
-  'proof_memory',
-  'memory_relation',
+  /*
+   * CLOUD-SYNC S4 — Dokumentgedächtnis, Nachweise und Relationen sind eine
+   * lokale Projektion der Workspace-Wahrheit und reisen nie. Sie werden
+   * deshalb nicht verfolgt: kein Sendeauftrag, auch kein nur-lokaler.
+   */
   'paper_register_entry',
-  'mail_import',
+  /*
+   * CLOUD-SYNC S7 — `mail_import` (früherer manueller Mailimport) wird nicht mehr
+   * verfolgt: Neue Datensätze entstehen nicht mehr, der lokale Altbestand bleibt
+   * lesbar, aber ohne Sendeauftrag — auch ohne nur-lokalen.
+   */
   'task',
   'expense',
   'vorgang',
@@ -51,6 +67,11 @@ export const TRACKED_SYNC_ENTITY_TYPES: SyncEntityType[] = [
   'vorgang_note',
   'communication_event',
   'knowledge_fact',
+  // CLOUD-SYNC S5 — der fachliche Kern eines Rechnungsentwurfs (Spiegel).
+  'invoice_draft',
+  // CLOUD-SYNC S6 — Auftrags- und Nachtragsentwurf (fachlicher Inhalt, Grabstein).
+  'order_draft',
+  'order_amendment_draft',
   // CLOUD-DURABILITY-CORE-01D — Nachweis über eine übergebene Mahnung.
   'dunning_documentation',
   // BRIEFE-01B — ausgehende Geschaeftsschreiben.
@@ -228,6 +249,70 @@ function buildPaperRegisterEntryFingerprint(entry: PaperRegisterEntry): EntitySy
   };
 }
 
+/** CLOUD-SYNC S2 — fachlicher Fingerabdruck eines Kommunikationsereignisses, ohne `sync`. */
+function buildCommunicationEventFingerprint(event: CommunicationEvent): EntitySyncFingerprint {
+  const sync = event.sync;
+  return {
+    version: sync?.version ?? 0,
+    deleted: sync?.deleted ?? false,
+    updatedAt: sync?.updatedAt ?? '',
+    contentKey: buildCommunicationEventCloudContentKey(event),
+  };
+}
+
+/** CLOUD-SYNC S3 — fachlicher Fingerabdruck eines Wissenseintrags, ohne `sync`. */
+function buildKnowledgeFactFingerprint(fact: KnowledgeFact): EntitySyncFingerprint {
+  const sync = fact.sync;
+  return {
+    version: sync?.version ?? 0,
+    deleted: sync?.deleted ?? false,
+    updatedAt: sync?.updatedAt ?? '',
+    contentKey: buildKnowledgeFactCloudContentKey(fact),
+  };
+}
+
+/**
+ * CLOUD-SYNC S5 — fachlicher Fingerabdruck des Entwurfsspiegels: nur der Kern,
+ * ohne `sync`, Status, lokale Verknüpfung und Konflikt. Eine reine
+ * IndexedDB-Änderung (Revision, Zeitstempel, Hash) erreicht den Spiegel gar nicht
+ * erst; eine Rückschreibung des Servers ist keine Änderung.
+ */
+function buildInvoiceDraftFingerprint(entity: InvoiceDraftCloudEntity): EntitySyncFingerprint {
+  const sync = entity.sync;
+  return {
+    version: sync?.version ?? 0,
+    deleted: sync?.deleted ?? false,
+    updatedAt: sync?.updatedAt ?? '',
+    contentKey: buildInvoiceDraftCloudContentKey(entity),
+  };
+}
+
+/**
+ * CLOUD-SYNC S6 — fachlicher Fingerabdruck eines Auftragsentwurfs: nur der
+ * Inhalt, ohne `sync` und Konflikt. Eine Rückschreibung des Servers oder ein
+ * vermerkter Konflikt ist keine Änderung.
+ */
+function buildOrderDraftFingerprint(draft: OrderDraft): EntitySyncFingerprint {
+  const sync = draft.sync;
+  return {
+    version: sync?.version ?? 0,
+    deleted: sync?.deleted ?? false,
+    updatedAt: sync?.updatedAt ?? '',
+    contentKey: buildOrderDraftCloudContentKey(draft),
+  };
+}
+
+/** CLOUD-SYNC S6 — dasselbe für den Nachtragsentwurf; nie mit Sequenz, Absicht oder Fingerprint. */
+function buildOrderAmendmentDraftFingerprint(draft: OrderAmendment): EntitySyncFingerprint {
+  const sync = draft.sync;
+  return {
+    version: sync?.version ?? 0,
+    deleted: sync?.deleted ?? false,
+    updatedAt: sync?.updatedAt ?? '',
+    contentKey: buildOrderAmendmentDraftCloudContentKey(draft),
+  };
+}
+
 function buildVorgangFingerprint(vorgang: Vorgang): EntitySyncFingerprint {
   const sync = vorgang.sync;
   return {
@@ -240,12 +325,18 @@ function buildVorgangFingerprint(vorgang: Vorgang): EntitySyncFingerprint {
 
 function collectTrackedEntities(state: AppPersistedState): Map<string, TrackedEntityRef> {
   const refs = new Map<string, TrackedEntityRef>();
+  // CLOUD-SYNC S6 — ein Auftragsentwurf eines anderen Workspace wird hier nie verfolgt, also nie gesendet.
+  const draftScope = resolveCloudWorkspaceId(state);
 
   for (const entityType of TRACKED_SYNC_ENTITY_TYPES) {
     for (const entity of listEntitiesByType(state, entityType)) {
       // Vorschau/Thumbnail-Bindings sind lokal regenerierbar und werden nicht verfolgt.
       if (entityType === 'document_file_binding' && !isCloudSyncedBindingKind((entity as unknown as DocumentFileRepresentationBinding).kind)) {
         continue;
+      }
+      if (entityType === 'order_draft') {
+        const scope = (entity as unknown as OrderDraft).workspaceId;
+        if (scope && draftScope && scope !== draftScope) continue;
       }
       refs.set(entityKey(entityType, entity.id), {
         entityType,
@@ -273,6 +364,16 @@ function collectTrackedEntities(state: AppPersistedState): Map<string, TrackedEn
                           )
                         : entityType === 'paper_register_entry'
                         ? buildPaperRegisterEntryFingerprint(entity as unknown as PaperRegisterEntry)
+                        : entityType === 'communication_event'
+                        ? buildCommunicationEventFingerprint(entity as unknown as CommunicationEvent)
+                        : entityType === 'knowledge_fact'
+                        ? buildKnowledgeFactFingerprint(entity as unknown as KnowledgeFact)
+                        : entityType === 'invoice_draft'
+                        ? buildInvoiceDraftFingerprint(entity as unknown as InvoiceDraftCloudEntity)
+                        : entityType === 'order_draft'
+                        ? buildOrderDraftFingerprint(entity as unknown as OrderDraft)
+                        : entityType === 'order_amendment_draft'
+                        ? buildOrderAmendmentDraftFingerprint(entity as unknown as OrderAmendment)
                         : buildFingerprint(entity),
       });
     }
@@ -371,7 +472,16 @@ function fingerprintChanged(
     entityType === 'offer' ||
     entityType === 'dunning_documentation' ||
     // CLOUD-SYNC S1 — dieselbe Regel: eine Rückschreibung ist keine Änderung.
-    entityType === 'paper_register_entry'
+    entityType === 'paper_register_entry' ||
+    // CLOUD-SYNC S2 — ebenso beim Kommunikationsereignis.
+    entityType === 'communication_event' ||
+    // CLOUD-SYNC S3 — und beim bestätigten Wissen.
+    entityType === 'knowledge_fact' ||
+    // CLOUD-SYNC S5 — und beim Spiegel des Rechnungsentwurfs.
+    entityType === 'invoice_draft' ||
+    // CLOUD-SYNC S6 — und bei Auftrags- und Nachtragsentwurf.
+    entityType === 'order_draft' ||
+    entityType === 'order_amendment_draft'
   ) {
     return (
       previous.deleted !== current.deleted ||
@@ -469,6 +579,31 @@ export function trackPersistedChanges(state: AppPersistedState): void {
   trackedFingerprints = new Map(
     [...currentEntities.entries()].map(([key, ref]) => [key, ref.fingerprint]),
   );
+}
+
+/**
+ * CLOUD-SYNC S5 — genau eine Entitaet als „mit dem Server abgeglichen"
+ * vermerken, ohne Sendeauftrag.
+ *
+ * Fuer lokale Uebernahmen eines bereits bekannten Serverstands (Cloud-Fassung
+ * uebernehmen, Grabstein annehmen, eigene Freigabe festhalten): Der Spiegel
+ * aendert sich, aber zu senden gibt es nichts. Ohne diese Quittung meldete der
+ * naechste Speicherlauf eine Aenderung, und der Push erzeugte eine leere neue
+ * Serverversion, die auf jedem anderen Geraet als Konflikt ankaeme. Bewusst eng:
+ * genau ein Typ, genau eine Kennung; alle anderen Fingerabdruecke bleiben.
+ */
+export function acknowledgeTrackedEntityFromState(
+  state: AppPersistedState,
+  entityType: SyncEntityType,
+  entityId: string,
+): void {
+  if (trackedFingerprints === null) return;
+  const key = entityKey(entityType, entityId);
+  const ref = collectTrackedEntities(state).get(key);
+  const next = new Map(trackedFingerprints);
+  if (ref) next.set(key, ref.fingerprint);
+  else next.delete(key);
+  trackedFingerprints = next;
 }
 
 export function getSyncChangeTrackerSnapshotForTests(): Map<string, EntitySyncFingerprint> {

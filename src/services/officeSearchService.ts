@@ -23,7 +23,6 @@ import {
   type InvoiceOverviewItem,
 } from './invoiceOverviewService';
 import { buildInvoiceDetailPath, buildInvoiceReachPath } from './invoiceNavigation';
-import { getMailImports } from './mailImportService';
 import {
   getAllDocumentMemories,
   getDocumentMemoryByDocumentId,
@@ -78,7 +77,6 @@ interface ArchiveLink {
 const TYPE_BASE_SCORE: Record<SearchResultType, number> = {
   document: 70,
   inbox: 65,
-  mail: 60,
   proof: 58,
   invoice: 55,
   vorgang: 55,
@@ -107,7 +105,6 @@ const TYPE_BASE_SCORE: Record<SearchResultType, number> = {
 const TYPE_ICON: Record<SearchResultType, string> = {
   document: '📄',
   inbox: '📥',
-  mail: '✉️',
   proof: '📋',
   invoice: '🧾',
   expense: '💶',
@@ -124,7 +121,6 @@ const TYPE_ICON: Record<SearchResultType, string> = {
 const TYPE_SOURCE_LABEL: Record<SearchResultType, string> = {
   document: 'Dokument',
   inbox: 'Eingang',
-  mail: 'E-Mail',
   proof: 'Nachweis',
   invoice: 'Rechnung',
   expense: 'Ausgabe',
@@ -590,39 +586,6 @@ function collectInboxResults(query: string, terms: string[]): SearchResult[] {
       icon: TYPE_ICON.inbox,
       status: item.status,
       source: item.importSource === 'email' ? 'E-Mail-Eingang' : TYPE_SOURCE_LABEL.inbox,
-    });
-  }
-
-  return results;
-}
-
-function collectMailResults(query: string, terms: string[]): SearchResult[] {
-  const results: SearchResult[] = [];
-
-  for (const mail of getMailImports()) {
-    const haystack = buildHaystack([
-      mail.subject,
-      mail.from,
-      mail.bodyText,
-      ...mail.attachments.map((item) => item.fileName),
-    ]);
-
-    const match = matchTerms(haystack, terms, query);
-    if (!match.matched && query) continue;
-
-    const inboxId = mail.linkedInboxIds[0];
-    pushResult(results, {
-      id: `search-mail-${mail.id}`,
-      type: 'mail',
-      title: mail.subject,
-      subtitle: mail.from,
-      matchedField: match.matchedField || 'E-Mail',
-      snippet: createSnippet(mail.bodyText || mail.subject, query || terms[0] || ''),
-      score: TYPE_BASE_SCORE.mail + match.boost,
-      route: inboxId ? `/ablage/${inboxId}` : '/mail-import',
-      icon: TYPE_ICON.mail,
-      status: mail.status,
-      source: TYPE_SOURCE_LABEL.mail,
     });
   }
 
@@ -1185,7 +1148,6 @@ function applyFilters(results: SearchResult[], filter?: OfficeSearchFilter): Sea
     }
     if (filter.paperMissing && result.status !== 'Original noch abheften') return false;
     if (filter.overdue && result.status !== 'ueberfaellig' && result.status !== 'expired') return false;
-    if (filter.mailOnly && result.type !== 'mail') return false;
     if (filter.invoiceOnly && result.type !== 'invoice') return false;
     if (filter.taskOnly && result.type !== 'task') return false;
     return true;
@@ -1231,7 +1193,6 @@ export function searchOffice(options: OfficeSearchOptions): SearchResult[] {
     results.push(...collectPaperResults(query, terms));
   }
   if (includesType(filter, 'inbox')) results.push(...collectInboxResults(query, terms));
-  if (includesType(filter, 'mail')) results.push(...collectMailResults(query, terms));
   if (includesType(filter, 'proof')) results.push(...collectProofResults(query, terms));
   if (includesType(filter, 'invoice')) results.push(...collectInvoiceResults(query, terms, todayIso));
   if (includesType(filter, 'expense')) results.push(...collectExpenseResults(query, terms));

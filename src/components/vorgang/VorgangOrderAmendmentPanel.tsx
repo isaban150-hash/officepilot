@@ -4,11 +4,23 @@ import { Badge, Card, DataRow } from '../ui/Card';
 import { SimpleConfirmDialog } from '../ui/SimpleConfirmDialog';
 import type { TranslationKey } from '../../i18n';
 import {
+  acceptOrderAmendmentDraftCloudEnd,
+  continueOrderAmendmentDraftAsNew,
   createOrderAmendmentDraft,
   deleteOrderAmendmentDraft,
+  discardOrderAmendmentDraftAgain,
+  isOrderAmendmentDraftCloudSyncAllowed,
+  keepLocalOrderAmendmentDraftVersion,
+  keepOrderAmendmentDraftAfterRejectedDiscard,
   removeOrderAmendmentDraftPosition,
+  takeCloudOrderAmendmentDraftVersion,
+  type OrderAmendmentDraftCloudDecisionResult,
   type OrderAmendmentErrorKey,
 } from '../../services/orderAmendmentService';
+import { getVorgangById } from '../../services/vorgangService';
+import { useDraftCloudTick } from '../../services/order/useDraftCloudTick';
+import { formatDisplayDateTime } from '../../utils/displayFormat';
+import { DraftCloudConflictNotice, type DraftCloudConflictAction } from '../order/DraftCloudConflictNotice';
 import { confirmOrderAmendmentWithCloud } from '../../services/orderAmendment/orderAmendmentCloudConfirmOrchestrator';
 import {
   getOrderAmendmentConfirmIntent,
@@ -74,12 +86,25 @@ export function VorgangOrderAmendmentPanel({
   onToast,
   isSectionActive = true,
 }: VorgangOrderAmendmentPanelProps) {
-  const amendments = vorgang.orderAmendments ?? [];
-  const primaryAmendment: OrderAmendment | undefined = amendments[0];
-  const extraDraftCount = Math.max(0, amendments.length - 1);
-  const confirmedAmendments = sortConfirmedOrderAmendments(vorgang.confirmedOrderAmendments);
-  const schlussExists = hasFinalSchlussrechnung(vorgang);
-  const confirmedParents = vorgang.contractConfirmation?.positions ?? [];
+  /*
+   * CLOUD-SYNC S6 — mehrere echte Entwürfe sind möglich (zwei Geräte, zwei
+   * Entwürfe); jeder bleibt erreichbar und auswählbar. Gelesen wird nach jedem
+   * Speichern und jedem Sync-Lauf frisch aus dem Bestand, damit ein Abzug
+   * sofort sichtbar wird — Entwürfe, bestätigte Nachträge und Schlussrechnung
+   * aus demselben Stand: Wird ein Entwurf anderswo bestätigt, verschwindet er
+   * nicht, ohne dass sein Nachtrag erscheint.
+   */
+  useDraftCloudTick();
+  const currentVorgang = getVorgangById(vorgang.id) ?? vorgang;
+  const amendments = currentVorgang.orderAmendments ?? [];
+  const [selectedDraftId, setSelectedDraftId] = useState<string | null>(null);
+  const primaryAmendment: OrderAmendment | undefined =
+    amendments.find((item) => item.id === selectedDraftId) ?? amendments[0];
+  const draftCloudConflict = primaryAmendment?.conflict ?? null;
+  const [decisionBusy, setDecisionBusy] = useState(false);
+  const confirmedAmendments = sortConfirmedOrderAmendments(currentVorgang.confirmedOrderAmendments);
+  const schlussExists = hasFinalSchlussrechnung(currentVorgang);
+  const confirmedParents = currentVorgang.contractConfirmation?.positions ?? [];
 
   const [positionEditor, setPositionEditor] = useState<PositionEditorState>({ type: 'closed' });
   const [positionEditorBusy, setPositionEditorBusy] = useState(false);
@@ -101,7 +126,7 @@ export function VorgangOrderAmendmentPanel({
   const confirmIntent = primaryAmendment
     ? getOrderAmendmentConfirmIntent(vorgang.id, primaryAmendment.id)
     : null;
-  const inputsDisabled = confirming || draftLocked;
+  const inputsDisabled = confirming || draftLocked || Boolean(draftCloudConflict);
   const lockedStatusKind = intentStateToStatusKind(confirmIntent?.state);
 
   const draftTotals = useMemo(() => {
@@ -116,6 +141,7 @@ export function VorgangOrderAmendmentPanel({
 
   const canConfirm =
     Boolean(primaryAmendment) &&
+    !draftCloudConflict &&
     !schlussExists &&
     !confirming &&
     !draftLocked &&
@@ -158,7 +184,7 @@ export function VorgangOrderAmendmentPanel({
     }
   }, [isSectionActive, positionEditorBusy]);
 
-  if (!vorgang.contractConfirmation) {
+  if (!currentVorgang.contractConfirmation) {
     return (
       <section className="section order-amendment-section" data-testid="vorgang-order-amendment-panel">
         <h2 ref={sectionHeadingRef} tabIndex={-1} className="section__title">
@@ -180,8 +206,46 @@ export function VorgangOrderAmendmentPanel({
       toastError(translate, onToast, result.errorKey);
       return;
     }
+    // CLOUD-SYNC S6 — der neue Entwurf ist der bearbeitete; die übrigen bleiben in der Liste erreichbar.
+    setSelectedDraftId(result.amendment.id);
     onUpdated();
     onToast(translate('orderAmendment.created'));
+  };
+
+  /** CLOUD-SYNC S6 — Entscheidung über einen Konflikt des ausgewählten Entwurfs. */
+  const entscheide = async (action: DraftCloudConflictAction): Promise<boolean> => {
+    if (!primaryAmendment) return false;
+    setDecisionBusy(true);
+    try {
+      let result: OrderAmendmentDraftCloudDecisionResult;
+      switch (action) {
+        case 'takeCloud':
+          result = takeCloudOrderAmendmentDraftVersion(vorgang.id, primaryAmendment.id);
+          break;
+        case 'keepMine':
+          result = keepLocalOrderAmendmentDraftVersion(vorgang.id, primaryAmendment.id);
+          break;
+        case 'acceptEnd':
+          result = acceptOrderAmendmentDraftCloudEnd(vorgang.id, primaryAmendment.id);
+          break;
+        case 'continueAsNew':
+          result = continueOrderAmendmentDraftAsNew(vorgang.id, primaryAmendment.id);
+          break;
+        case 'keepDraft':
+          result = keepOrderAmendmentDraftAfterRejectedDiscard(vorgang.id, primaryAmendment.id);
+          break;
+        default:
+          result = discardOrderAmendmentDraftAgain(vorgang.id, primaryAmendment.id);
+      }
+      if (!result.ok) return false;
+      setSelectedDraftId(
+        result.draftId ?? (action === 'acceptEnd' || action === 'discardAgain' ? null : primaryAmendment.id),
+      );
+      onUpdated();
+      return true;
+    } finally {
+      setDecisionBusy(false);
+    }
   };
 
   const handleDeleteDraft = () => {
@@ -203,6 +267,7 @@ export function VorgangOrderAmendmentPanel({
       }
       setPositionEditor({ type: 'closed' });
       setDiscardOpen(false);
+      setSelectedDraftId(null);
       onUpdated();
       onToast(translate('orderAmendment.deleted'));
       return true;
@@ -343,10 +408,42 @@ export function VorgangOrderAmendmentPanel({
         />
       </div>
 
-      {extraDraftCount > 0 ? (
-        <p className="order-amendment-section__extra-drafts" data-testid="order-amendment-extra-drafts">
-          {translate('orderAmendment.extraDraftsHint').replace('{count}', String(extraDraftCount))}
-        </p>
+      {amendments.length > 1 ? (
+        <div className="order-amendment-section__extra-drafts" data-testid="order-amendment-extra-drafts">
+          <h3 className="section__subtitle">{translate('orderAmendmentCloud.drafts.title')}</h3>
+          <ul className="order-amendment-draft-list">
+            {amendments.map((draft) => {
+              const aktiv = draft.id === primaryAmendment?.id;
+              return (
+                <li
+                  key={draft.id}
+                  className="order-amendment-draft-list__item"
+                  data-testid={`order-amendment-draft-option-${draft.id}`}
+                >
+                  <span className="order-amendment-draft-list__title">
+                    {draft.title?.trim() || translate('orderAmendment.draftBadge')}
+                  </span>
+                  <span className="order-amendment-section__muted">
+                    {translate('orderAmendmentCloud.drafts.updated').replace('{date}', formatDisplayDateTime(draft.updatedAt))}
+                  </span>
+                  {draft.conflict ? <Badge tone="warning">{translate('orderDraftCloud.badge.conflict')}</Badge> : null}
+                  {aktiv ? (
+                    <Badge tone="info">{translate('orderAmendmentCloud.drafts.active')}</Badge>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      disabled={confirming || positionEditorBusy || positionEditor.type === 'open'}
+                      onClick={() => setSelectedDraftId(draft.id)}
+                      data-testid={`order-amendment-draft-select-${draft.id}`}
+                    >
+                      {translate('orderAmendmentCloud.drafts.select')}
+                    </Button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       ) : null}
 
       {!hasAnyContent ? (
@@ -370,9 +467,22 @@ export function VorgangOrderAmendmentPanel({
           <p className="invoice-hint" data-testid="order-amendment-unbinding-hint">
             {translate('orderAmendment.unbindingHint')}
           </p>
-          <p className="order-amendment-section__muted" data-testid="order-amendment-local-hint">
-            {translate('orderAmendment.localOnlyHint')}
-          </p>
+          {draftCloudConflict ? (
+            <DraftCloudConflictNotice
+              kind={draftCloudConflict.kind}
+              textPrefix="orderAmendmentCloud"
+              translate={translate}
+              busy={decisionBusy}
+              onDecide={entscheide}
+              testIdPrefix="order-amendment-cloud"
+            />
+          ) : null}
+          {/* CLOUD-SYNC S6 — „nur auf diesem Gerät" nur, wenn der Entwurfs-Sync abgeschaltet ist (Notausschalter). */}
+          {isOrderAmendmentDraftCloudSyncAllowed() ? null : (
+            <p className="order-amendment-section__muted" data-testid="order-amendment-local-hint">
+              {translate('orderAmendment.localOnlyHint')}
+            </p>
+          )}
 
           {schlussExists ? (
             <p
@@ -398,7 +508,9 @@ export function VorgangOrderAmendmentPanel({
             </div>
           ) : null}
 
+          {/* CLOUD-SYNC S6 — je Entwurf ein eigenes Formular: ein Wechsel nimmt keine offenen Eingaben mit. */}
           <OrderAmendmentHeaderForm
+            key={primaryAmendment.id}
             vorgangId={vorgang.id}
             amendmentId={primaryAmendment.id}
             title={primaryAmendment.title}
@@ -548,6 +660,19 @@ export function VorgangOrderAmendmentPanel({
             </Button>
           </div>
         </Card>
+      ) : null}
+
+      {primaryAmendment ? (
+        <div className="order-amendment-actions order-amendment-actions--secondary">
+          <Button
+            variant="outline"
+            disabled={confirming || positionEditorBusy || positionEditor.type === 'open'}
+            onClick={handlePrepare}
+            data-testid="order-amendment-prepare-another"
+          >
+            {translate('orderAmendmentCloud.drafts.newAnother')}
+          </Button>
+        </div>
       ) : null}
 
       {confirmedAmendments.length > 0 ? (
