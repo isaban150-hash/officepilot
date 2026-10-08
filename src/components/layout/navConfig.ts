@@ -127,6 +127,19 @@ export const FINANZEN_HUB_GROUPS: readonly NavGroupConfig[] = [
     ],
   },
   {
+    /* P1 MITARBEITERZAHLUNGEN — eigener Einstieg, bewusst nicht unter Ausgaben. */
+    id: 'employees',
+    titleKey: 'finanzen.group.employees',
+    items: [
+      {
+        to: '/finanzen/mitarbeiterzahlungen',
+        key: 'finanzen.employeePayments',
+        descriptionKey: 'finanzen.employeePaymentsDesc',
+        icon: 'customers',
+      },
+    ],
+  },
+  {
     id: 'tax',
     titleKey: 'finanzen.group.tax',
     items: [

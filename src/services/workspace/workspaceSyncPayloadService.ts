@@ -3,6 +3,7 @@ import type { DocumentFileRef } from '../../types/documentFileRef';
 import type { DocumentFileRepresentationBinding } from '../../types/documentFileRepresentationBinding';
 import type { DocumentWorkResult } from '../../types/documentWorkResult';
 import type { Expense } from '../../types/expense';
+import type { Employee, EmployeePayment } from '../../types/employee';
 import type { AccountingAssignment } from '../../types/accounting';
 import type { AccountingPeriodClosure } from '../../types/accountingPeriod';
 import type { BankAccount } from '../../types/bankAccount';
@@ -49,6 +50,8 @@ export type CloudSyncEntityPayload =
   | { entityType: 'document_work_result'; entityId: string; entity: DocumentWorkResult; rowVersion: number; deleted: boolean }
   | { entityType: 'expense'; entityId: string; entity: Expense; rowVersion: number; deleted: boolean }
   | { entityType: 'expense_payment'; entityId: string; entity: ExpensePaymentSyncEntity; rowVersion: number; deleted: boolean }
+  | { entityType: 'employee'; entityId: string; entity: Employee; rowVersion: number; deleted: boolean }
+  | { entityType: 'employee_payment'; entityId: string; entity: EmployeePayment; rowVersion: number; deleted: boolean }
   | { entityType: 'vorgang_note'; entityId: string; entity: VorgangNote; rowVersion: number; deleted: boolean }
   | { entityType: 'business_letter'; entityId: string; entity: BusinessLetter; rowVersion: number; deleted: boolean }
   | { entityType: 'offer'; entityId: string; entity: Offer; rowVersion: number; deleted: boolean }
@@ -303,6 +306,17 @@ export function extractCloudSyncEntity(
       if (!expense) return null;
       const payment = (expense.payments ?? []).find((p) => p.id === parsed.paymentId) ?? null;
       return { entityType, entityId, entity: { id: entityId, expenseId: parsed.expenseId, paymentId: parsed.paymentId, payment }, rowVersion: 0, deleted: payment === null };
+    }
+    // P1 MITARBEITERZAHLUNGEN — Stammsatz (Basisversion) und Zahlung (append-only).
+    case 'employee': {
+      const employee = (state.employees ?? []).find((e) => e.id === entityId);
+      if (!employee) return null;
+      return { entityType, entityId, entity: employee, rowVersion: employee.sync?.version ?? 0, deleted: false };
+    }
+    case 'employee_payment': {
+      const payment = (state.employeePayments ?? []).find((p) => p.id === entityId);
+      if (!payment) return null;
+      return { entityType, entityId, entity: payment, rowVersion: 0, deleted: false };
     }
     /*
      * FINANZ-SYNC-BLOCKER-01B — die beiden Kontierungsentitäten.

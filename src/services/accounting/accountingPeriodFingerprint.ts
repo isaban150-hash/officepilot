@@ -18,6 +18,7 @@ import type {
   AccountingPeriodClosure,
   AccountingPeriodFingerprintVersion,
   AccountingPeriodManifest,
+  AccountingPeriodManifestEmployeePayment,
   AccountingPeriodManifestEntry,
   AccountingPeriodManifestPayment,
 } from '../../types/accountingPeriod';
@@ -51,8 +52,10 @@ export function buildPeriodManifest(
    * 02B — Version 1 bildet exakt die alte Semantik nach (ein Eintrag je
    * Quelle, Stornozustand unabhängig vom Stornomonat, keine Zahlungen), damit
    * alte Abschlüsse nach ihrer eigenen Logik geprüft werden.
+   * P1 MITARBEITERZAHLUNGEN — neue Stände entstehen mit Version 3; Version 2
+   * bleibt unverändert, damit ihre Abschlüsse nicht still umgedeutet werden.
    */
-  version: AccountingPeriodFingerprintVersion = 2,
+  version: AccountingPeriodFingerprintVersion = 3,
 ): AccountingPeriodManifest {
   const bySource = new Map<string, AccountingAssignment>();
   for (const assignment of assignments) {
@@ -142,8 +145,7 @@ export function buildPeriodManifest(
       a.paymentId.localeCompare(b.paymentId),
   );
 
-  return {
-    fingerprintVersion: 2,
+  const kopf = {
     monthKey: model.monthKey,
     chartOfAccounts,
     documentCount: entries.length,
@@ -153,15 +155,39 @@ export function buildPeriodManifest(
     entries,
     payments,
   };
+
+  if (version === 2) return { fingerprintVersion: 2, ...kopf };
+
+  /*
+   * P1 MITARBEITERZAHLUNGEN (Version 3) — die Mitarbeiterzahlungen des Monats:
+   * dieselbe Auswahl wie `mitarbeiter_zahlungen.csv`. Eine neue Zahlung, ein
+   * Storno bis zum Monatsende oder ein geänderter Betrag ändert den Stand.
+   */
+  const employeePayments: AccountingPeriodManifestEmployeePayment[] = (model.mitarbeiterZahlungen ?? []).map(
+    (zeile) => ({
+      paymentId: zeile.zahlungId,
+      art: zeile.art,
+      datum: zeile.datum,
+      betrag: round(zeile.betrag),
+      kind: zeile.kind,
+      method: zeile.zahlungsart,
+      status: zeile.status,
+    }),
+  );
+  employeePayments.sort((a, b) => a.paymentId.localeCompare(b.paymentId) || a.art.localeCompare(b.art));
+
+  return { fingerprintVersion: 3, ...kopf, employeePayments };
 }
 
 /** Die Algorithmusversion eines Manifests; ohne Angabe Version 1. */
 export function manifestFingerprintVersion(manifest: AccountingPeriodManifest): AccountingPeriodFingerprintVersion {
+  if (manifest.fingerprintVersion === 3) return 3;
   return manifest.fingerprintVersion === 2 ? 2 : 1;
 }
 
 /** Die Algorithmusversion, mit der ein gespeicherter Abschluss entstand. */
 export function closureFingerprintVersion(closure: AccountingPeriodClosure): AccountingPeriodFingerprintVersion {
+  if (manifestFingerprintVersion(closure.manifest) === 3 || closure.fingerprint.startsWith('p3:')) return 3;
   return manifestFingerprintVersion(closure.manifest) === 2 || closure.fingerprint.startsWith('p2:') ? 2 : 1;
 }
 
@@ -198,7 +224,7 @@ export function buildPeriodCanonicalText(manifest: AccountingPeriodManifest): st
       entry.bookingText,
       entry.assignmentStatus,
       // 02B — ab Version 2 gehört die Belegart zur Identität des Eintrags.
-      ...(version === 2 ? [entry.belegart ?? ''] : []),
+      ...(version >= 2 ? [entry.belegart ?? ''] : []),
     ].join('\u0001'),
   );
 
@@ -212,7 +238,22 @@ export function buildPeriodCanonicalText(manifest: AccountingPeriodManifest): st
       '\u0001',
     ),
   );
-  return [`v=2|${head}`, ...rows, ...paymentRows].join('\n');
+  if (version === 2) return [`v=2|${head}`, ...rows, ...paymentRows].join('\n');
+
+  // Version 3: wie Version 2, danach die Mitarbeiterzahlungen des Monats.
+  const employeeRows = (manifest.employeePayments ?? []).map((payment) =>
+    [
+      'employee_payment',
+      payment.paymentId,
+      payment.art,
+      payment.datum,
+      payment.betrag.toFixed(2),
+      payment.kind,
+      payment.method,
+      payment.status,
+    ].join('\u0001'),
+  );
+  return [`v=3|${head}`, ...rows, ...paymentRows, ...employeeRows].join('\n');
 }
 
 /**
@@ -234,6 +275,6 @@ export function buildPeriodFingerprint(manifest: AccountingPeriodManifest): stri
     hash ^= text.charCodeAt(index);
     hash = Math.imul(hash, 16777619);
   }
-  const prefix = manifestFingerprintVersion(manifest) === 2 ? 'p2' : 'p1';
+  const prefix = `p${manifestFingerprintVersion(manifest)}`;
   return `${prefix}:${(hash >>> 0).toString(16)}:${text.length}`;
 }

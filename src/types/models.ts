@@ -2215,6 +2215,10 @@ export interface AppPersistedState {
   dunningDocumentations?: import('./dunningDocumentation').InvoiceDunningDocumentation[];
   communicationHistory?: CommunicationEvent[];
   knowledgeFacts?: KnowledgeFact[];
+  /** P1 MITARBEITERZAHLUNGEN — Mitarbeiter-Stammsätze (kein Benutzerkonto). */
+  employees?: import('./employee').Employee[];
+  /** P1 MITARBEITERZAHLUNGEN — Mitarbeiterzahlungen, auch stornierte (Prüfspur). */
+  employeePayments?: import('./employee').EmployeePayment[];
   /**
    * CLOUD-SYNC S5 — der Workspace-Spiegel der Cloud-Rechnungsentwürfe
    * (fachlicher Kern, Grabsteine ohne Inhalt). Der Arbeitsstand des Editors

@@ -17,6 +17,7 @@ import { hydrateVorgangNotes } from '../services/vorgangNoteService';
 import { resetDunningDocumentations } from '../services/dunningDocumentationService';
 import { resetCommunicationHistoryStore } from '../services/communicationHistoryStore';
 import { resetKnowledgeStore } from '../services/knowledgeStore';
+import { resetEmployeeStores } from '../services/employee/employeeStore';
 import { resetUploadedDocumentStore } from '../services/uploadedDocumentStore';
 import { resetSyncChangeTrackerForTests } from '../services/sync/syncChangeTrackerService';
 import { resetSyncCoordinatorForTests } from '../services/sync/syncCoordinator';
@@ -60,6 +61,7 @@ export function resetTestStores(): void {
   resetDunningDocumentations();
   resetCommunicationHistoryStore();
   resetKnowledgeStore();
+  resetEmployeeStores();
   // CLOUD-SYNC S5 — Entwurfsspiegel (bewusst ohne die Bridge: kein schwerer Import im globalen Setup).
   resetInvoiceDraftCloudStore();
   setCachedSetup({ ...DEFAULT_SETUP });

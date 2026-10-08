@@ -194,6 +194,17 @@ export function ExpenseForm({ mode, expense, prefill, onSaved, onCancel }: Expen
       </label>
 
       {/*
+        * P1 MITARBEITERZAHLUNGEN — nicht blockierend: Eine Lohnabrechnung ist
+        * keine zusätzliche Ausgabe, und Auszahlungen an Mitarbeiter gehören zu
+        * den Mitarbeiterzahlungen. Gespeichert werden darf trotzdem.
+        */}
+      {draft.category === 'personal' ? (
+        <p className="form-hint" role="note" data-testid="expense-personal-hint">
+          {translate('expense.personalHint')}
+        </p>
+      ) : null}
+
+      {/*
         * FINANZCORE-05B-FIX1 — der Steuerstatus dieses Belegs, sichtbar.
         *
         * Bis hierher gab es ihn im Formular nicht; er kam unsichtbar aus dem

@@ -9,9 +9,16 @@ import { getPhysicalFilingForDocument } from '../../services/officePilotMemorySe
 interface DocumentLifecycleCardProps {
   documentId: string;
   revision?: number;
+  /**
+   * P1MA WEISS-FINAL — eine eindeutig zugeordnete Mitarbeiterquittung nennt
+   * hier denselben nächsten Schritt wie die Deutung oben. Der Lebenszyklus
+   * kennt Quittungs- und Nachweisstand nicht und schriebe sonst „Dokument im
+   * Archiv prüfen" neben „Keine Handlung nötig".
+   */
+  nextStep?: string;
 }
 
-export function DocumentLifecycleCard({ documentId, revision = 0 }: DocumentLifecycleCardProps) {
+export function DocumentLifecycleCard({ documentId, revision = 0, nextStep }: DocumentLifecycleCardProps) {
   const { translate } = useApp();
   void revision;
   const lifecycle = resolveDocumentLifecycle({ documentId });
@@ -69,7 +76,7 @@ export function DocumentLifecycleCard({ documentId, revision = 0 }: DocumentLife
             className="detail-experience-section__value detail-experience-section__value--assistant"
             data-testid="document-lifecycle-next-step"
           >
-            {lifecycle.nextStep}
+            {nextStep ?? lifecycle.nextStep}
           </p>
         </section>
       </Card>

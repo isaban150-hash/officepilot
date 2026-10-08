@@ -183,13 +183,14 @@ export function buildAccountingPeriodState(
    * P0/P1-INTEGRITAET 01B / P2 — ein aktiver Abschluss wird nach dem
    * Algorithmus geprüft, mit dem er entstand. Ein alter Abschluss (Version 1,
    * ohne Zahlungen) bleibt so gültig, solange sich seine Belege nicht ändern;
-   * jeder neue Abschluss entsteht mit Version 2.
+   * jeder neue Abschluss entsteht mit Version 3 (P1 MITARBEITERZAHLUNGEN: samt
+   * Mitarbeiterzahlungen); Abschlüsse der Version 2 bleiben nach Version 2 gültig.
    */
   const manifest = buildPeriodManifest(
     model,
     assignments,
     chartOfAccounts,
-    activeClosure ? closureFingerprintVersion(activeClosure) : 2,
+    activeClosure ? closureFingerprintVersion(activeClosure) : 3,
   );
   const fingerprint = buildPeriodFingerprint(manifest);
   const blockers = collectPeriodBlockers(manifest);

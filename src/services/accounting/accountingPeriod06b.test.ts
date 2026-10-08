@@ -636,8 +636,8 @@ describe('U — die API für den DATEV-Block', () => {
       isCurrentClosureValid: false,
       activeClosure: null,
     });
-    // P0/P1-INTEGRITAET 01B / P2 — neue Stände entstehen mit Fingerprint-Version 2.
-    expect(state.currentFingerprint).toMatch(/^p2:[0-9a-f]+:\d+$/);
+    // P1 MITARBEITERZAHLUNGEN — neue Stände entstehen mit Fingerprint-Version 3 (vorher 2).
+    expect(state.currentFingerprint).toMatch(/^p3:[0-9a-f]+:\d+$/);
     expect(state.currentManifest.entries).toHaveLength(1);
     expect(Array.isArray(state.revisionHistory)).toBe(true);
   });

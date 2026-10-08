@@ -24,6 +24,13 @@ import {
   type ArchivedDocumentConflictResult,
   type ArchivedDocumentDecision,
 } from '../document/archivedDocumentConflictService';
+import {
+  listEmployeeConflicts,
+  resolveEmployeeConflict,
+  type EmployeeConflict,
+  type EmployeeConflictDecision,
+  type EmployeeConflictResult,
+} from '../employee/employeeConflictService';
 
 export interface SyncOutboxCounts {
   pending: number;
@@ -56,6 +63,8 @@ export interface SyncUiSnapshot {
    * — ein Auftrag, eine Zeile.
    */
   documentConflicts: ArchivedDocumentConflict[];
+  /** P1 MITARBEITERZAHLUNGEN — offene Mitarbeiterkonflikte mit Entscheidung; wie Dokumentkonflikte genau eine Zeile. */
+  employeeConflicts: EmployeeConflict[];
   isOffline: boolean;
   hasRetryableErrors: boolean;
 }
@@ -85,7 +94,8 @@ export function getSyncUiSnapshot(): SyncUiSnapshot {
   const status = coordinator.getStatus();
   const isOffline = syncClient.syncPolicy === 'disabled' || status.syncState === 'offline';
   const documentConflicts = listArchivedDocumentConflicts(outbox);
-  const decidable = new Set(documentConflicts.map((conflict) => conflict.outboxId));
+  const employeeConflicts = listEmployeeConflicts(outbox);
+  const decidable = new Set([...documentConflicts, ...employeeConflicts].map((conflict) => conflict.outboxId));
   const pendingOutboxEntries = outbox.filter(
     (entry) => (entry.status === 'pending' || entry.status === 'blocked') && !decidable.has(entry.id),
   );
@@ -109,6 +119,7 @@ export function getSyncUiSnapshot(): SyncUiSnapshot {
     failedOutboxEntries,
     settingsConflict: getPendingWorkspaceSettingsConflict()?.undecided ?? null,
     documentConflicts,
+    employeeConflicts,
     isOffline,
     hasRetryableErrors: outbox.some((entry) => entry.status === 'error' || entry.status === 'failed'),
   };
@@ -271,7 +282,7 @@ const SYNCING: SyncState[] = ['checking', 'uploading', 'downloading', 'merging']
  */
 export function summarizeSyncStatus(
   snapshot: Pick<SyncUiSnapshot, 'status' | 'outbox' | 'lastReport' | 'isOffline'> &
-    Partial<Pick<SyncUiSnapshot, 'settingsConflict' | 'documentConflicts'>>,
+    Partial<Pick<SyncUiSnapshot, 'settingsConflict' | 'documentConflicts' | 'employeeConflicts'>>,
 ): SyncStatusSummary {
   /*
    * 07B-FIX3B — ein entscheidbarer Dokumentkonflikt wartet nicht, er braucht
@@ -279,7 +290,8 @@ export function summarizeSyncStatus(
    * „1 Änderung wartet".
    */
   const documentConflicts = snapshot.documentConflicts ?? [];
-  const decidable = new Set(documentConflicts.map((conflict) => conflict.outboxId));
+  const employeeConflicts = snapshot.employeeConflicts ?? [];
+  const decidable = new Set([...documentConflicts, ...employeeConflicts].map((conflict) => conflict.outboxId));
   /* Nur-lokale Entitäten (z. B. Papierregister, Gedächtnis) warten auf nichts — sie werden nie gesendet. */
   const waitingCount = snapshot.outbox.filter(
     (entry) =>
@@ -308,7 +320,7 @@ export function summarizeSyncStatus(
       ? snapshot.outbox.filter(
           (entry) => entry.status === 'blocked' && entry.entityType === 'workspace_settings',
         ).length
-      : 0) + documentConflicts.length;
+      : 0) + documentConflicts.length + employeeConflicts.length;
   /*
    * 07B-FIX3B — „automatisch zusammengeführt" nur für tatsächlich aufgelöste
    * Konflikte. Ein am Versionskonflikt gescheiterter Push steht im Bericht als
@@ -348,6 +360,14 @@ export async function resolveArchivedDocumentConflictFromUi(
   decision: ArchivedDocumentDecision,
 ): Promise<ArchivedDocumentConflictResult> {
   return resolveArchivedDocumentConflict(documentId, decision);
+}
+
+/** P1 MITARBEITERZAHLUNGEN — dieselbe Entscheidung für einen Mitarbeiterkonflikt. */
+export async function resolveEmployeeConflictFromUi(
+  employeeId: string,
+  decision: EmployeeConflictDecision,
+): Promise<EmployeeConflictResult> {
+  return resolveEmployeeConflict(employeeId, decision);
 }
 
 export function resolveSettingsConflictFromUi(decision: WorkspaceSettingsDecision): boolean {

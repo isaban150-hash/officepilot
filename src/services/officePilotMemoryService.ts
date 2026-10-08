@@ -33,6 +33,7 @@ import {
   resolvePaperFiling,
   type PaperFilingContext,
 } from './paperFolderService';
+import { isPayoutReceiptDocumentId } from './employee/payoutReceiptDocumentId';
 import { getCompanyProfile } from './companyProfileService';
 import { getTodayIso } from './taskNormalize';
 import {
@@ -677,7 +678,14 @@ export function recordArchivedDocumentMemory(
     documentType: options?.inboxItem?.documentType,
     issuer: document.issuer,
     sender: document.issuer,
-    selfAuthored: document.category === 'geschaeftsschreiben',
+    /*
+     * P1 MITARBEITERZAHLUNGEN — die erzeugte Auszahlungsquittung ist selbst
+     * erstellt: kein eigenes Papieroriginal, abgeheftet wird die
+     * unterschriebene Fassung (der Nachweis). Ohne Eingang fiele die Regel
+     * sonst auf „Sonstiges" zurück — ein zweiter Ablageort neben dem des
+     * Dokuments und ein Registereintrag, den niemand abhaken kann.
+     */
+    selfAuthored: document.category === 'geschaeftsschreiben' || isPayoutReceiptDocumentId(document.id),
     isAdvertisement: options?.inboxItem?.isAdvertisement,
     linkedVorgangId,
   });

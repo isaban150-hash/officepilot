@@ -16,6 +16,7 @@ import {
   type SyncStatusSummary,
   isLocalOnlySyncMode,
   resolveArchivedDocumentConflictFromUi,
+  resolveEmployeeConflictFromUi,
   resolveSettingsConflictFromUi,
   retrySyncFromUi,
   runSyncFromUi,
@@ -89,6 +90,9 @@ function entityTypeKey(entityType: string): TranslationKey {
     accounting_assignment: 'sync.entity.accounting_assignment',
     accounting_period_closure: 'sync.entity.accounting_period_closure',
     workspace_settings: 'sync.entity.workspace_settings',
+    // P1 MITARBEITERZAHLUNGEN — sonst stünde hier nur „Eintrag".
+    employee: 'sync.entity.employee',
+    employee_payment: 'sync.entity.employee_payment',
   };
   return map[entityType] ?? 'sync.entity.other';
 }
@@ -251,6 +255,24 @@ export function SyncPage() {
       ),
     );
     setDocumentDecision(null);
+    return true;
+  };
+
+  /* P1 MITARBEITERZAHLUNGEN — Mitarbeiterkonflikt: derselbe Weg wie beim Dokument. */
+  const [employeeDecision, setEmployeeDecision] = useState<{ employeeId: string; decision: 'keep_local' | 'take_cloud' } | null>(null);
+  const confirmEmployeeDecision = async (): Promise<boolean> => {
+    if (!employeeDecision) return false;
+    const result = await resolveEmployeeConflictFromUi(employeeDecision.employeeId, employeeDecision.decision);
+    refresh();
+    if (!result.ok) return false;
+    showToast(
+      translate(
+        employeeDecision.decision === 'take_cloud'
+          ? 'sync.employeeConflict.resolvedCloud'
+          : 'sync.employeeConflict.resolvedLocal',
+      ),
+    );
+    setEmployeeDecision(null);
     return true;
   };
 
@@ -469,6 +491,46 @@ export function SyncPage() {
         </DetailSection>
       )}
 
+      {(snapshot.employeeConflicts ?? []).length > 0 && (
+        <DetailSection title={translate('sync.employeeConflict.title')} testId="sync-employee-conflicts">
+          <InlineNotice tone="warning" testId="sync-employee-conflict-hint">
+            {translate('sync.employeeConflict.hint')}
+          </InlineNotice>
+          {(snapshot.employeeConflicts ?? []).map((conflict) => (
+            <div key={conflict.outboxId} data-testid={`sync-employee-conflict-${conflict.employeeId}`}>
+              <RowList>
+                <RowListItem
+                  testId={`sync-employee-conflict-title-${conflict.employeeId}`}
+                  title={`${translate('sync.entity.employee')} · ${conflict.name ?? translate('sync.documentConflict.untitled')}`}
+                  trailing={<Badge tone="warning">{translate('sync.failure.kind.conflict')}</Badge>}
+                />
+              </RowList>
+              <div className="sync-page__actions">
+                <Button
+                  type="button"
+                  fullWidth
+                  disabled={isSyncing}
+                  data-testid={`sync-employee-take-cloud-${conflict.employeeId}`}
+                  onClick={() => setEmployeeDecision({ employeeId: conflict.employeeId, decision: 'take_cloud' })}
+                >
+                  {translate('sync.employeeConflict.takeCloud')}
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  fullWidth
+                  disabled={isSyncing}
+                  data-testid={`sync-employee-keep-local-${conflict.employeeId}`}
+                  onClick={() => setEmployeeDecision({ employeeId: conflict.employeeId, decision: 'keep_local' })}
+                >
+                  {translate('sync.employeeConflict.keepLocal')}
+                </Button>
+              </div>
+            </div>
+          ))}
+        </DetailSection>
+      )}
+
       <SimpleConfirmDialog
         open={documentDecision !== null}
         title={translate(
@@ -494,6 +556,33 @@ export function SyncPage() {
         failureMessage={translate('sync.documentConflict.failed')}
         onConfirm={confirmDocumentDecision}
         onCancel={() => setDocumentDecision(null)}
+      />
+
+      <SimpleConfirmDialog
+        open={employeeDecision !== null}
+        title={translate(
+          employeeDecision?.decision === 'keep_local'
+            ? 'sync.employeeConflict.keepLocalTitle'
+            : 'sync.employeeConflict.takeCloudTitle',
+        )}
+        message={translate(
+          employeeDecision?.decision === 'keep_local'
+            ? 'sync.employeeConflict.keepLocalMessage'
+            : 'sync.employeeConflict.takeCloudMessage',
+        )}
+        confirmLabel={translate(
+          employeeDecision?.decision === 'keep_local'
+            ? 'sync.employeeConflict.keepLocal'
+            : 'sync.employeeConflict.takeCloud',
+        )}
+        cancelLabel={translate('common.cancel')}
+        confirmVariant="primary"
+        confirmTestId="sync-employee-decision-confirm"
+        cancelTestId="sync-employee-decision-cancel"
+        dialogTestId="sync-employee-decision-dialog"
+        failureMessage={translate('sync.employeeConflict.failed')}
+        onConfirm={confirmEmployeeDecision}
+        onCancel={() => setEmployeeDecision(null)}
       />
 
       {/*

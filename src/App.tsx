@@ -44,6 +44,7 @@ import { KundenPage } from './pages/KundenPage';
 import { SteuerberaterPage } from './pages/SteuerberaterPage';
 import { MehrPage } from './pages/MehrPage';
 import { BankStatementPage } from './pages/BankStatementPage';
+import { MitarbeiterzahlungenPage } from './pages/MitarbeiterzahlungenPage';
 import { FinanzenPage } from './pages/FinanzenPage';
 import { PapierarchivPage } from './pages/PapierarchivPage';
 import { KommunikationPage } from './pages/KommunikationPage';
@@ -189,6 +190,7 @@ function AppRoutes() {
         {/* UIUX-FOUNDATION-01C — Finanzen-Hub: reine Navigation zu bestehenden Bereichen. */}
         <Route path="/finanzen" element={<FinanzenPage />} />
         <Route path="/finanzen/kontoauszug" element={<BankStatementPage />} />
+        <Route path="/finanzen/mitarbeiterzahlungen" element={<MitarbeiterzahlungenPage />} />
         {/*
          * CLOUD-SYNC S7 — der frühere manuelle Mailimport ist aus dem Produkt
          * genommen. Alte Lesezeichen und Links landen bei den Nachrichten mit dem

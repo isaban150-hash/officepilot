@@ -16,6 +16,7 @@ import {
   getDocumentById,
   isGeneratedOutgoingInvoiceDocument,
 } from '../../services/documentService';
+import { isPayoutReceiptDocumentId } from '../../services/employee/payoutReceiptDocumentId';
 
 interface DocumentFilingCardProps {
   documentId: string;
@@ -70,6 +71,12 @@ export function DocumentFilingCard({
     : (paperFolder?.register || registerEntry?.register || translate('document.filing.noRegister'));
 
   const isGeneratedInvoice = document ? isGeneratedOutgoingInvoiceDocument(document) : false;
+  /*
+   * P1 MITARBEITERZAHLUNGEN — die erzeugte Auszahlungsquittung ebenso: Sie
+   * existiert nur digital; abgeheftet wird die unterschriebene Fassung (der
+   * Nachweis), nicht diese Vorlage.
+   */
+  const ohnePapieroriginal = isGeneratedInvoice || isPayoutReceiptDocumentId(documentId);
   // CLOUD-SYNC S1 — der Register-Eintrag ist die Wahrheit, das Gedächtnis nur Altbestand.
   const filing = getPhysicalFilingForDocument(documentId, memory);
   const physicalFiled = filing.physicalFiled;
@@ -126,7 +133,7 @@ export function DocumentFilingCard({
           existiert nur digital. Ein Papierstatus wäre hier keine Information,
           sondern eine Aufforderung, die niemand erfüllen kann.
         */}
-        {isGeneratedInvoice ? null : (
+        {ohnePapieroriginal ? null : (
         <section className="detail-experience-section document-understanding-meta">
           <div>
             <h3 className="detail-experience-section__label">
@@ -159,7 +166,7 @@ export function DocumentFilingCard({
         </section>
         )}
 
-        {hasPaperFolder && !physicalFiled && !isGeneratedInvoice && (
+        {hasPaperFolder && !physicalFiled && !ohnePapieroriginal && (
           <div className="detail-experience-card__actions">
             <Button
               fullWidth

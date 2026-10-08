@@ -410,6 +410,47 @@ export function buildOwnInvoiceMeaningView(input: OwnInvoiceMeaningInput): Docum
   };
 }
 
+/**
+ * P1MA WEISS — eine eindeutig zugeordnete Mitarbeiterquittung (die erzeugte
+ * Auszahlungsquittung oder ihre unterschriebene Fassung als Nachweis).
+ *
+ * Mitarbeiter, Betrag und Zahlung stehen über die Verknüpfung fest. Die
+ * Leseregeln für eingehende Post würden hier Kunden und Aufträge vorschlagen
+ * (Wörter wie „Abnahme" oder ein Monatsname genügen) und eine Zuordnungs-
+ * unsicherheit behaupten, die es nicht gibt. Deshalb wie bei der eigenen
+ * Rechnung: keine Kandidatensuche, keine Unsicherheiten, Handlung aus dem
+ * Zahlungsstand. Anders als dort auch keine gelesenen Fristen und Beträge:
+ * Betrag und Auszahlungsdatum stehen fest in der Verknüpfung, und die
+ * Leseregeln machten daraus „Gutschrift zu Ihren Gunsten" und „Zahlung bis …".
+ */
+export interface EmployeePaymentMeaningInput {
+  text: string;
+  action: { need: MeaningActionNeed; text: string; nextStep: string };
+}
+
+export function buildEmployeePaymentMeaningView(input: EmployeePaymentMeaningInput): DocumentMeaningView {
+  const core = buildDocumentSemanticCore({
+    text: input.text ?? '',
+    companyProfile: getCompanyProfileStoreSnapshot() ?? null,
+  });
+  const basis = viewAusKern({ ...core, customerCandidates: [], vorgangCandidates: [] });
+  return {
+    ...basis,
+    actionNeed: input.action.need,
+    actionNeedText: input.action.text,
+    nextStepText: input.action.nextStep || undefined,
+    obligations: [],
+    deadlines: [],
+    amounts: [],
+    accountingLabelKey: 'documentMeaning.accounting.employeePayment',
+    accountingHintKey: 'documentMeaning.accounting.employeePaymentHint',
+    customerCandidates: [],
+    vorgangCandidates: [],
+    uncertainties: [],
+    isEmpty: false,
+  };
+}
+
 /** Für Aufrufer, die den Kern bereits haben — etwa aus der Interpretation. */
 export function buildDocumentMeaningViewFromCore(core: DocumentSemanticCore): DocumentMeaningView {
   return viewAusKern(core);

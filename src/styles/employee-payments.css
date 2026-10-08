@@ -1,0 +1,253 @@
+/*
+ * P1 MITARBEITERZAHLUNGEN — Liste, Erfassung, Detail, Nachweis.
+ *
+ * Eine Struktur für Telefon und Schreibtisch: Filter, Fakten und Knöpfe
+ * brechen um, statt waagerecht überzulaufen. Lange Namen und Referenzen
+ * dürfen umbrechen.
+ */
+
+.employee-payments .form-hint,
+.employee-payment-form .form-hint,
+.employee-payment-summary .form-hint,
+.employee-payment-detail .form-hint,
+.employee-management .form-hint,
+.employee-proof-upload .form-hint {
+  margin: 0;
+  color: var(--op-text-muted);
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+
+.employee-payments__filters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: var(--space-4) 0;
+}
+
+@media (min-width: 900px) {
+  .employee-payments__filters {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.employee-payments__count,
+.employee-payments__empty {
+  margin: 0 0 var(--space-3);
+  color: var(--op-text-muted);
+}
+
+.employee-payments__row--reversed .business-list__title {
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+
+.employee-payments .business-list__title,
+.employee-payments .business-list__subtitle,
+.employee-payments .business-list__meta {
+  overflow-wrap: anywhere;
+}
+
+/* Erfassung und Zusammenfassung */
+
+.employee-payment-form,
+.employee-payment-summary,
+.employee-payment-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.employee-payment-summary__facts,
+.employee-payment-detail__facts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--op-surface-sunken);
+  overflow-wrap: anywhere;
+}
+
+.employee-payment-summary__hints {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* Detail */
+
+.employee-payment-detail__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.employee-payment-detail__reference {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  overflow-wrap: anywhere;
+}
+
+.employee-payment-detail__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--op-border);
+}
+
+.employee-payment-detail__section-title {
+  margin: 0;
+  font-size: 1rem;
+}
+
+/* Einzelne Handlungsknöpfe behalten ihre natürliche Breite. */
+.employee-payment-detail__section > .btn {
+  align-self: flex-start;
+}
+
+.employee-payment-detail__buttons,
+.employee-proof-upload__choose,
+.employee-proof-upload__actions,
+.employee-management__form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.employee-payment-detail__proof {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.employee-payment-detail__proof-select {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-items: flex-start;
+}
+
+.employee-payment-detail__proof-select > label {
+  width: 100%;
+}
+
+/* Nachweis hochladen */
+
+.employee-proof-upload {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px dashed var(--op-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--op-surface-sunken);
+}
+
+.employee-proof-upload__input {
+  display: none;
+}
+
+.employee-proof-upload__name {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+/* Mitarbeiterverwaltung */
+
+.employee-management {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-8);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--op-border);
+}
+
+.employee-management__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.employee-management__title,
+.employee-management__form-title {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.employee-management__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--op-border);
+  border-radius: var(--radius-md);
+  background: var(--op-surface);
+}
+
+.employee-management__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.employee-management__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--op-border);
+  border-radius: var(--radius-md);
+  background: var(--op-surface);
+}
+
+.employee-management__identity {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.employee-management__name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.employee-management__number {
+  color: var(--op-text-muted);
+  font-size: 0.88rem;
+}
+
+.employee-management__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+/* Steuerberater-Seite: neutraler Bereich */
+
+.steuerberater-employee-payments__kinds {
+  margin: 0 0 var(--space-2);
+  padding-left: 1.2rem;
+  color: var(--op-text-muted);
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.steuerberater-employee-payments__note {
+  margin: 0 0 var(--space-3);
+  color: var(--op-text-muted);
+  font-size: 0.88rem;
+  line-height: 1.4;
+}

@@ -265,7 +265,7 @@ describe('SETTINGS-01B5 — Betrieb, Legacy-Ablösung', () => {
     vi.spyOn(supabaseLib, 'isSupabaseConfigured').mockReturnValue(true);
     seedWorkspace('member');
     await renderAt(OPERATING_SETTINGS_ROUTE);
-    expect(q('settings-operating-role')?.textContent).toContain('Mitarbeiter');
+    expect(q('settings-operating-role')?.textContent).toContain('Benutzerkonto');
     expect(q('settings-operating-role')?.textContent).toContain('Administratoren');
     expect(host.querySelector('form.settings-form')).toBeNull();
     expect(q('settings-operating-language-switcher')).not.toBeNull();

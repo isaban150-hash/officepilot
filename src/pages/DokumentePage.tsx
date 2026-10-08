@@ -35,6 +35,7 @@ import {
   toDocumentSummaryCompactView,
 } from '../services/documentSummaryPresentation';
 import type { TranslationKey } from '../i18n';
+import { isPayoutReceiptDocumentId } from '../services/employee/payoutReceiptDocumentId';
 
 /** Hauptfilter, die immer sichtbar sind (Alle, Rechnungen, Belege, Kunden, Aufträge). */
 const PRIMARY_AREA_FILTER_COUNT = 5;
@@ -187,7 +188,8 @@ export function DokumentePage() {
             const paperStatus = resolveDocumentPaperListStatus(doc, {
               skipPhysicalFiling:
                 isGeneratedOutgoingInvoiceDocument(doc) ||
-                doc.category === 'geschaeftsschreiben',
+                doc.category === 'geschaeftsschreiben' ||
+                isPayoutReceiptDocumentId(doc.id),
             });
             const paperKey =
               paperStatus === 'filed'

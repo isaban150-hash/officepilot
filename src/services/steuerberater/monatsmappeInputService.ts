@@ -11,6 +11,7 @@ import { getAllExpensesFromStore } from '../expenseStore';
 import { getDocumentStoreSnapshot } from '../documentService';
 import { getInboxItems } from '../inboxService';
 import { getDocumentFileRefStoreSnapshot } from '../documentFileStoreService';
+import { getEmployeePaymentStoreSnapshot } from '../employee/employeeStore';
 import type { MonatsmappeInput } from './monatsmappeModelService';
 
 export function collectMonatsmappeInput(monthKey: string): MonatsmappeInput {
@@ -21,5 +22,7 @@ export function collectMonatsmappeInput(monthKey: string): MonatsmappeInput {
     documents: getDocumentStoreSnapshot(),
     inboxItems: getInboxItems(),
     fileRefs: getDocumentFileRefStoreSnapshot(),
+    // P1 MITARBEITERZAHLUNGEN — eigene, neutrale Übergabezeilen.
+    employeePayments: getEmployeePaymentStoreSnapshot(),
   };
 }

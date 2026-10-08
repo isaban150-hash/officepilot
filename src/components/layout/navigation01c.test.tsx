@@ -194,12 +194,14 @@ describe('UIUX-FOUNDATION-01C — Finanzen-Hub (F)', () => {
       '/steuerberater',
       /* BANKABGLEICH-V1 — der Kontoauszug ist seitdem der fuenfte Finanzbereich. */
       '/finanzen/kontoauszug',
+      /* P1 MITARBEITERZAHLUNGEN — der sechste Finanzbereich. */
+      '/finanzen/mitarbeiterzahlungen',
     ]) {
       expect(html).toContain(`href="${to}"`);
     }
     /* VISUAL-POLISH-01C — vier Kennzahlen aus den bestehenden Zusammenfassungen (keine neue Aggregation). */
     expect(html).toContain('data-testid="finanzen-kpis"');
-    expect(FINANZEN_HUB_GROUPS.flatMap((g) => g.items)).toHaveLength(5);
+    expect(FINANZEN_HUB_GROUPS.flatMap((g) => g.items)).toHaveLength(6);
   });
 });
 

@@ -16,6 +16,7 @@ import './styles/workpages.css';
 import './styles/auth.css';
 import './styles/document-upload.css';
 import './styles/bank-statement.css';
+import './styles/employee-payments.css';
 import './styles/system.css';
 /* VISUAL-DESIGN-02B — Pilot fuer Shell und Startseite, bewusst zuletzt geladen. */
 import './styles/visual-pilot-02b.css';

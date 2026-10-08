@@ -23,6 +23,7 @@ import type { TranslationKey } from '../../i18n';
 import { getAccountingStoreSnapshot } from '../accounting/accountingStore';
 import { getAccountingPeriodStoreSnapshot } from '../accounting/accountingPeriodStore';
 import { getExpenseStoreSnapshot } from '../expenseStore';
+import { getEmployeePaymentStoreSnapshot, getEmployeeStoreSnapshot } from '../employee/employeeStore';
 import { getWorkspaceSettingsSnapshot } from '../workspace/workspaceStore';
 import type { WorkspaceSettings } from '../../types/workspace';
 import { isSupabaseSyncAllowed } from './cloudSyncAllowlist';
@@ -141,6 +142,14 @@ export function describeSyncEntity(
       const beleg = getExpenseStoreSnapshot().find((item) => item.id === entityId);
       if (!beleg) return null;
       return shorten(beleg.invoiceNumber?.trim() || beleg.title?.trim() || beleg.supplierName?.trim() || '');
+    }
+    case 'employee': {
+      const mitarbeiter = getEmployeeStoreSnapshot().find((item) => item.id === entityId);
+      return mitarbeiter ? shorten(mitarbeiter.name) : null;
+    }
+    case 'employee_payment': {
+      const zahlung = getEmployeePaymentStoreSnapshot().find((item) => item.id === entityId);
+      return zahlung ? shorten(`${zahlung.receiptReference} · ${zahlung.employeeName}`) : null;
     }
     case 'workspace_settings': {
       const settings = getWorkspaceSettingsSnapshot();

@@ -33,6 +33,7 @@ import {
   isGeneratedOutgoingInvoiceDocument,
   isInvoiceCorrectionDocument,
 } from '../services/documentService';
+import { isPayoutReceiptDocumentId } from '../services/employee/payoutReceiptDocumentId';
 import { buildInvoiceReachPath } from '../services/invoiceNavigation';
 import { deleteGeneratedInvoiceDocumentWithCloud } from '../services/document/generatedInvoiceDocumentDeleteService';
 import { getVorgangById, unlinkInboxItemFromVorgang } from '../services/vorgangService';
@@ -56,6 +57,11 @@ import {
   formatDocumentValidUntil,
 } from '../utils/documentDateDisplay';
 import { DocumentReplyNeedPanel } from '../components/documents/DocumentReplyNeedPanel';
+import { EmployeePaymentDocumentLink } from '../components/employee/EmployeePaymentDocumentLink';
+import { PayrollDocumentHint } from '../components/employee/PayrollDocumentHint';
+import { isPayrollDocumentKind } from '../services/payrollDocumentKind';
+import { findEmployeePaymentsByDocument } from '../services/employee/employeePaymentService';
+import { describeEmployeePaymentDocumentAction } from '../services/employee/employeePaymentDocumentAction';
 import { resolveDocumentReplyNeed } from '../services/documentReplyNeedService';
 
 export function DokumentDetailPage() {
@@ -142,8 +148,10 @@ export function DokumentDetailPage() {
   // ANGEBOT-01B — ein eigenes Angebot ebenso: selbst erzeugt, kein fremdes Original.
   const isOwnOffer = document.classifiedKind === 'angebot' && Boolean(document.linkedOfferId);
   const isOwnLetter = document.category === 'geschaeftsschreiben' || isOwnOffer;
+  // P1 MITARBEITERZAHLUNGEN — die erzeugte Auszahlungsquittung: abgeheftet wird die unterschriebene Fassung.
+  const isPayoutReceipt = isPayoutReceiptDocumentId(document.id);
   const paperInstruction =
-    isGeneratedInvoice || isOwnLetter
+    isGeneratedInvoice || isOwnLetter || isPayoutReceipt
       ? undefined
       : formatPaperFilingInstruction(document.paperFolder);
 
@@ -258,6 +266,23 @@ export function DokumentDetailPage() {
    */
   const linkedVorgangId = document.linkedVorgang?.vorgangId?.trim();
   const linkedVorgang = linkedVorgangId ? getVorgangById(linkedVorgangId) : undefined;
+  /*
+   * P1MA WEISS — eindeutig zugeordnete Mitarbeiterquittung: die erzeugte
+   * Auszahlungsquittung oder ihre unterschriebene Fassung, die als Nachweis an
+   * einer Zahlung hängt und im Personalordner liegt. Ein anderes Dokument, das
+   * nur als Nachweis gewählt wurde (etwa ein Kontoauszug), behält die
+   * allgemeine Deutung.
+   *
+   * WEISS-FINAL — die Antwort auf „Muss ich etwas tun?" kommt aus derselben
+   * Quelle wie im Verständnisblock (buildDocumentExplanation): Zahlungsstand
+   * und Papierstand, nicht die Dokumentart.
+   */
+  const mitarbeiterZahlungen = findEmployeePaymentsByDocument(document.id);
+  const employeeAction = describeEmployeePaymentDocumentAction(document, translate);
+  const isEmployeeReceiptDocument = employeeAction !== null;
+  const employeePaymentMeaning = employeeAction
+    ? { action: { need: employeeAction.need, text: employeeAction.text, nextStep: employeeAction.nextStep } }
+    : undefined;
   const ownInvoiceMeaning = isGeneratedInvoice
     ? {
         customerName: linkedInvoice?.customerSnapshot?.name || linkedVorgang?.customer || undefined,
@@ -377,6 +402,21 @@ export function DokumentDetailPage() {
       </>
     );
   }
+
+  /*
+   * P1MA WEISS — an einer Mitarbeiterquittung bliebe die Karte sonst eine leere
+   * Überschrift „Nächste Schritte". Der Papierhinweis „Bitte Original abheften"
+   * gilt nur, solange das Original offen ist; danach widerspräche er dem „Nein".
+   * Die erzeugte Quittung hat ohnehin keinen. Handlung und nächster Schritt
+   * stehen in der Deutung. Alle anderen Dokumente behalten ihre Karte.
+   */
+  const experiencePaperInstruction =
+    isEmployeeReceiptDocument && !openReasons.includes('file_original') ? undefined : paperInstruction;
+  const experienceActionsEmpty =
+    lifecycleResolved && !replyOpen && !otherOpen && !replyAnsweredLine && !openOrderButton;
+  const experienceCardActions = isEmployeeReceiptDocument && experienceActionsEmpty ? undefined : experienceActions;
+  const hideEmployeeExperienceCard =
+    isEmployeeReceiptDocument && experienceActionsEmpty && !experiencePaperInstruction;
 
   const originalPanel = (
       <Card className="document-detail__preview">
@@ -502,7 +542,7 @@ export function DokumentDetailPage() {
         </SummaryList>
       </DetailSection>
 
-      <DocumentLifecycleCard documentId={document.id} revision={detailRevision} />
+      <DocumentLifecycleCard documentId={document.id} revision={detailRevision} nextStep={employeeAction?.nextStep} />
 
       <CommunicationIntegrationPanel
         contextRef={{ type: 'document', id: document.id }}
@@ -550,9 +590,18 @@ export function DokumentDetailPage() {
         <Button variant="outline" onClick={() => setIsEditing(true)}>
           {translate('document.edit')}
         </Button>
-        {isDeleteProtected ? (
+        {/*
+          * P1MA WEISS-FINAL — Quittung oder Nachweis einer Mitarbeiterzahlung
+          * (auch einer stornierten) wird nie gelöscht; der Server prüft das
+          * verbindlich. Die Seite bietet „Löschen" deshalb gar nicht erst an.
+          */}
+        {isDeleteProtected || mitarbeiterZahlungen.length > 0 ? (
           <p className="hint-text" data-testid="document-detail-delete-protected">
-            {translate('document.delete.blocked.finalizedInvoice')}
+            {translate(
+              isDeleteProtected
+                ? 'document.delete.blocked.finalizedInvoice'
+                : 'employeePayment.document.deleteProtected',
+            )}
           </p>
         ) : !confirmDelete ? (
           <Button
@@ -606,6 +655,13 @@ export function DokumentDetailPage() {
         className="work-detail-head"
       />
 
+      {/* P1 MITARBEITERZAHLUNGEN — Quittung oder Nachweis einer Mitarbeiterzahlung. */}
+      <EmployeePaymentDocumentLink documentId={document.id} />
+      {/* Eine Lohnunterlage, die schon Nachweis einer Mitarbeiterzahlung ist, braucht den Wegweiser nicht. */}
+      {isPayrollDocumentKind(document.classifiedKind) && findEmployeePaymentsByDocument(document.id).length === 0 ? (
+        <PayrollDocumentHint translate={translate} testId="document-payroll-hint" />
+      ) : null}
+
       {/*
         * Zwei Spalten ab 1024 px: links „Muss ich etwas tun?" und die fachliche
         * Erklärung (01C, unverändert), rechts „Auf einen Blick", Original und
@@ -615,13 +671,14 @@ export function DokumentDetailPage() {
       <div className="work-detail-grid document-detail__grid">
         <div className="work-detail-grid__main">
           {/* ANGEBOT-01B — fuer ein eigenes Angebot gibt es hier nichts zu tun; die Karte bliebe leer. */}
-          {isOwnOffer ? null : (
+          {/* P1MA WEISS — ebenso für eine Mitarbeiterquittung ohne offenen Punkt. */}
+          {isOwnOffer || hideEmployeeExperienceCard ? null : (
             <DetailExperienceCard
               recognizedTitle={document.title}
               recognizedSummary={categoryLabel}
               assistantMessage={translate('document.experience.saved')}
-              paperInstruction={paperInstruction}
-              actions={experienceActions}
+              paperInstruction={experiencePaperInstruction}
+              actions={experienceCardActions}
               hideIdentity
               testId="document-detail-experience"
             />
@@ -642,16 +699,23 @@ export function DokumentDetailPage() {
                 text={archivedCreditNoteMeaning?.text ?? archivedMainDocumentText ?? document.recognizedText}
                 sender={document.issuer}
                 ownInvoice={ownInvoiceMeaning}
+                employeePayment={employeePaymentMeaning}
                 mainDocument={archivedCreditNoteMeaning?.mainDocument}
               />
 
-              <DocumentUnderstandingCard documentId={document.id} />
+              {/* P1MA WEISS — die erzeugte Quittung ist kein Fremddokument: keine Deutung, kein „Original abheften". */}
+              {isPayoutReceipt ? null : <DocumentUnderstandingCard documentId={document.id} />}
             </>
           )}
         </div>
 
         <div className="work-detail-grid__side">
-          <DocumentArchiveTruthFactsCard document={document} />
+          {/*
+            * P1MA WEISS — eindeutig zugeordnete Mitarbeiterquittung: Die allgemeine
+            * Analyse („Vorgang zuordnen", „Dokumentart unsicher") gilt hier nicht;
+            * was feststeht, steht in der Verknüpfung zur Zahlung.
+            */}
+          {isEmployeeReceiptDocument ? null : <DocumentArchiveTruthFactsCard document={document} />}
 
           <section className="document-detail__original" data-testid="document-detail-original">
             <h2 className="document-detail__original-title">{translate('document.section.original')}</h2>

@@ -62,6 +62,9 @@ export const bgDocumentMeaning = {
   'documentMeaning.candidate.fromInvoice': 'Взето от фактурата',
   'documentMeaning.accounting.ownInvoice': 'Собствена фактура – вече записана',
   'documentMeaning.accounting.ownInvoiceHint': 'Сумата е във вашата фактура. Тук не е нужно ново осчетоводяване.',
+  'documentMeaning.accounting.employeePayment': 'Плащане към служител – вече записано',
+  'documentMeaning.accounting.employeePaymentHint':
+    'Плащането е записано при плащанията към служители. Без разход, без осчетоводяване, без клиент и без поръчка.',
   'documentMeaning.nextStep': 'Следваща стъпка',
   'documentMeaning.next.confirmAndAnswer': 'Потвърдете връзката и подгответе отговор.',
   'documentMeaning.next.answerRequired': 'Подгответе отговор и следете сроковете.',

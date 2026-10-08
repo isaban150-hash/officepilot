@@ -17,6 +17,9 @@ function clone(value: AccountingPeriodClosure): AccountingPeriodClosure {
       ...value.manifest,
       entries: value.manifest.entries.map((entry) => ({ ...entry })),
       ...(value.manifest.payments ? { payments: value.manifest.payments.map((payment) => ({ ...payment })) } : {}),
+      ...(value.manifest.employeePayments
+        ? { employeePayments: value.manifest.employeePayments.map((payment) => ({ ...payment })) }
+        : {}),
     },
     sync: value.sync ? { ...value.sync } : undefined,
   };

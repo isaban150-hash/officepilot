@@ -18,7 +18,9 @@ import {
   alignDocumentMeaningViewWithMainDocument,
   buildDocumentMeaningView,
   buildDocumentMeaningViewFromCore,
+  buildEmployeePaymentMeaningView,
   buildOwnInvoiceMeaningView,
+  type EmployeePaymentMeaningInput,
   type MeaningMainDocument,
   type OwnInvoiceMeaningInput,
 } from '../../services/document/documentMeaningPresentationService';
@@ -45,6 +47,11 @@ interface DocumentMeaningPanelProps {
    */
   ownInvoice?: Omit<OwnInvoiceMeaningInput, 'text'>;
   /**
+   * P1MA WEISS — eindeutig zugeordnete Mitarbeiterquittung. Gesetzt, gibt es
+   * keine Kunden- oder Auftragssuche und keine Zuordnungsunsicherheit.
+   */
+  employeePayment?: Omit<EmployeePaymentMeaningInput, 'text'>;
+  /**
    * EINGANG-01D-2 — kanonische Wahrheit des Hauptdokuments (Art, Frist). Bei
    * einer Gutschrift entfallen Zahlungsfristen und Forderungen einer
    * angehängten oder zitierten Rechnung.
@@ -63,6 +70,7 @@ export function DocumentMeaningPanel({
   core,
   sender,
   ownInvoice,
+  employeePayment,
   mainDocument,
   financeNote,
   testId,
@@ -72,6 +80,7 @@ export function DocumentMeaningPanel({
   const mainDeadline = mainDocument?.deadline ?? null;
   const view = useMemo(() => {
     if (ownInvoice) return buildOwnInvoiceMeaningView({ ...ownInvoice, text: text ?? '' });
+    if (employeePayment) return buildEmployeePaymentMeaningView({ ...employeePayment, text: text ?? '' });
     /* Der Volltext ist die bessere Quelle: Er folgt den heutigen Leseregeln. */
     const raw =
       text && text.trim()
@@ -82,7 +91,7 @@ export function DocumentMeaningPanel({
     return raw
       ? alignDocumentMeaningViewWithMainDocument(raw, { classifiedKind: mainKind, deadline: mainDeadline })
       : null;
-  }, [text, core, sender, ownInvoice, mainKind, mainDeadline]);
+  }, [text, core, sender, ownInvoice, employeePayment, mainKind, mainDeadline]);
 
   if (!view) return null;
 

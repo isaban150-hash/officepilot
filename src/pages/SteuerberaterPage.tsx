@@ -4,6 +4,7 @@ import { PageHeader, StatusBadge } from '../components/ui/Card';
 import { RowList, RowListItem } from '../components/ui/Lists';
 import { Page } from '../components/ui/Page';
 import { DetailSection } from '../components/ui/Section';
+import { SteuerberaterEmployeePaymentsSection } from '../components/employee/SteuerberaterEmployeePaymentsSection';
 import { AccountingChecklistPanel } from '../components/accounting/AccountingChecklistPanel';
 import { getAccountingChecklist } from '../services/accounting/accountingOverviewService';
 import { AccountingPeriodPanel } from '../components/accounting/AccountingPeriodPanel';
@@ -157,6 +158,15 @@ export function SteuerberaterPage() {
       >
         <span className="sr-only">{overview.monthLabel}</span>
       </DetailSection>
+
+      {/* P1 MITARBEITERZAHLUNGEN — eigener, neutraler Bereich; nur mit Finanzrecht. */}
+      {financeAccess.canWrite ? (
+        <SteuerberaterEmployeePaymentsSection
+          key={`${selectedMonthKey}:${periodToken}`}
+          monthKey={selectedMonthKey}
+          translate={translate}
+        />
+      ) : null}
 
       {/*
         * STEUERBERATER-06A — der Kontierungsstand des gewaehlten Monats.

@@ -34,6 +34,8 @@ import {
   resolvePrimaryTargetObjectForDocumentType,
   resolvePrimaryTargetObjectForKind,
 } from './documentPrimaryTargetService';
+import { isPayrollDocumentKind } from './payrollDocumentKind';
+import { getEmployeePaymentStoreSnapshot } from './employee/employeeStore';
 
 function inboxKommunikationPath(inboxId: string): string {
   return `/kommunikation?context=inbox&id=${encodeURIComponent(inboxId)}`;
@@ -90,6 +92,19 @@ function parseGermanAmount(value: string | undefined): number | null {
 function resolveClassifiedKind(item: InboxItem): ClassifiedDocumentKind | undefined {
   const workflow = analyzeUploadedDocument(item.id);
   return workflow?.classifiedKind ?? item.classifiedKind;
+}
+
+/**
+ * P1 MITARBEITERZAHLUNGEN — gehört dieser Eingang als Quittung oder
+ * unterschriebener Nachweis zu einer Mitarbeiterzahlung? Dann ist er keine
+ * Ausgabe: Die Zahlung ist bereits festgehalten, eine Ausgabe zählte sie doppelt.
+ */
+function isEmployeePaymentDocumentInboxItem(item: InboxItem): boolean {
+  const documentId = item.archiveDocumentId?.trim();
+  if (!documentId) return false;
+  return getEmployeePaymentStoreSnapshot().some(
+    (payment) => payment.proofDocumentId === documentId || payment.receiptDocumentId === documentId,
+  );
 }
 
 function resolvePrimaryTargetForInboxItem(
@@ -418,6 +433,19 @@ function resolveInboxAccountingGate(item: InboxItem) {
 
 export function createExpenseFromInbox(item: InboxItem): OfficeActionResult {
   /*
+   * P1 MITARBEITERZAHLUNGEN — eine Lohnabrechnung oder Lohnunterlage wird nie
+   * zur Ausgabe: Die Abrechnung bucht der Steuerberater, die Auszahlung wird
+   * unter Finanzen → Mitarbeiterzahlungen festgehalten. Eng über die Art, nicht
+   * über die Bezugsdokument-Liste.
+   */
+  // Zuerst die genauere Aussage: ein Nachweis einer bereits erfassten Mitarbeiterzahlung.
+  if (isEmployeePaymentDocumentInboxItem(item)) {
+    return { ok: false, errorKey: 'employeePayment.proof.noExpense' as TranslationKey };
+  }
+  if (isPayrollDocumentKind(resolveClassifiedKind(item))) {
+    return { ok: false, errorKey: 'payroll.error.noExpense' as TranslationKey };
+  }
+  /*
    * DOKUMENTVERSTAENDNIS-01B — erste und wichtigste Verteidigungslinie.
    *
    * Ein Schreiben ohne Forderung an uns wird hier nie zu einer Ausgabe, und
@@ -551,6 +579,8 @@ export function isDocumentActionAvailable(
     case 'monitor_validity':
       return Boolean(item.taskTemplate) || (kind ? isClassificationKindWithTasks(kind) : false);
     case 'record_expense':
+      // P1 MITARBEITERZAHLUNGEN — Lohnabrechnung/Lohnunterlagen und Zahlungsnachweise: keine Ausgabe.
+      if (isPayrollDocumentKind(kind) || isEmployeePaymentDocumentInboxItem(item)) return false;
       /*
        * Ein Bezugsdokument bietet die Ausgabenanlage gar nicht erst an — sonst
        * bliebe der gefährliche Weg als Schaltfläche sichtbar. „Zahlung prüfen"
@@ -562,6 +592,8 @@ export function isDocumentActionAvailable(
         (kind ? mapClassifiedKindToExpenseCategory(kind) !== 'sonstiges' : false)
       );
     case 'check_payment':
+      // P1 MITARBEITERZAHLUNGEN — führt zur Ausgabenanlage; für diese Arten gibt es keine.
+      if (isPayrollDocumentKind(kind) || isEmployeePaymentDocumentInboxItem(item)) return false;
       return (
         primaryTarget === 'expense' ||
         (kind ? mapClassifiedKindToExpenseCategory(kind) !== 'sonstiges' : false) ||
@@ -875,5 +907,7 @@ export function getExpensePrefillForInbox(inboxId: string): ExpenseInput | null 
   if (item.financeReviewReason) return null;
   const kind = resolveClassifiedKind(item);
   if (kind === 'gutschrift' && isOwnCompanyIssuedDocument(item)) return null;
+  // P1 MITARBEITERZAHLUNGEN — keine Vorbelegung aus Lohnabrechnung oder Zahlungsnachweis.
+  if (isPayrollDocumentKind(kind) || isEmployeePaymentDocumentInboxItem(item)) return null;
   return buildExpenseInputFromInbox(item, kind);
 }

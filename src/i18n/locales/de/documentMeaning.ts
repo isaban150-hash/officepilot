@@ -72,6 +72,9 @@ export const deDocumentMeaning = {
   'documentMeaning.candidate.fromInvoice': 'Aus der Rechnung übernommen',
   'documentMeaning.accounting.ownInvoice': 'Eigene Rechnung – bereits erfasst',
   'documentMeaning.accounting.ownInvoiceHint': 'Der Betrag steht in Ihrer Rechnung. Hier ist nichts neu zu buchen.',
+  'documentMeaning.accounting.employeePayment': 'Mitarbeiterzahlung – bereits erfasst',
+  'documentMeaning.accounting.employeePaymentHint':
+    'Die Auszahlung steht unter Mitarbeiterzahlungen. Keine Ausgabe, keine Buchung, kein Kunde und kein Auftrag.',
   'documentMeaning.nextStep': 'Nächster Schritt',
   'documentMeaning.next.confirmAndAnswer': 'Zuordnung bestätigen und Antwort vorbereiten.',
   'documentMeaning.next.answerRequired': 'Antwort vorbereiten und Fristen im Blick behalten.',

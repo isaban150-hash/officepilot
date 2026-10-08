@@ -39,6 +39,7 @@ import {
   createPresentationTranslate,
   presentDocumentSummaryForSnippet,
 } from '../documentSummaryPresentation';
+import { describeEmployeePaymentDocumentAction } from '../employee/employeePaymentDocumentAction';
 import { getCachedSetup } from '../persistenceService';
 
 import { OFFICEPILOT_LEGAL_DISCLAIMER } from '../../config/legalDisclaimer';
@@ -558,6 +559,13 @@ export function buildDocumentExplanation(
   const ownInvoice = isGeneratedInvoice
     ? buildGeneratedInvoiceOverlay(document, translate, language, todayIso)
     : null;
+  /*
+   * P1MA WEISS-FINAL — eine eindeutig zugeordnete Mitarbeiterquittung antwortet
+   * aus Zahlungs- und Papierstand: dieselbe Quelle wie die Deutung oben auf der
+   * Seite. Sonst stünde dort „Ja – Original abheften" und hier „Nein – vorerst
+   * ablegen". Alle anderen Dokumente behalten ihre Regel.
+   */
+  const employeeAction = ownInvoice ? null : describeEmployeePaymentDocumentAction(document, translate);
   const presentationSummary = inboxItem
     ? buildSummaryForInboxItem(inboxItem, { translate })
     : buildSummaryForCompanyDocument(document, { translate });
@@ -570,7 +578,7 @@ export function buildDocumentExplanation(
     shortAnswer: shortAnswerFromPresentation || letter.shortExplanation || summary.shortSummary,
     whatIsIt: letter.whatIsItAbout || summary.topic,
     whyImportant: buildWhyImportant(classifiedKind, document),
-    actionRequired: ownInvoice?.actionRequired ?? actionRequired,
+    actionRequired: ownInvoice?.actionRequired ?? employeeAction?.text ?? actionRequired,
     deadline: ownInvoice?.deadline ?? (deadline === 'Keine Frist erkannt.' ? 'Keine Frist erkannt.' : deadline),
     requiredDocuments:
       requiredDocuments.length > 0 ? requiredDocuments : ['Keine zusätzlichen Unterlagen erkannt.'],

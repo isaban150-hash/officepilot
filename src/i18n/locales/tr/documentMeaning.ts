@@ -62,6 +62,9 @@ export const trDocumentMeaning = {
   'documentMeaning.candidate.fromInvoice': 'Faturadan alındı',
   'documentMeaning.accounting.ownInvoice': 'Kendi faturanız – zaten kayıtlı',
   'documentMeaning.accounting.ownInvoiceHint': 'Tutar faturanızda yer alıyor. Burada yeni bir kayıt gerekmez.',
+  'documentMeaning.accounting.employeePayment': 'Çalışan ödemesi – zaten kaydedildi',
+  'documentMeaning.accounting.employeePaymentHint':
+    'Ödeme çalışan ödemeleri altında kayıtlı. Gider, muhasebe kaydı, müşteri veya iş emri yok.',
   'documentMeaning.nextStep': 'Sonraki adım',
   'documentMeaning.next.confirmAndAnswer': 'Eşleştirmeyi onaylayın ve yanıt hazırlayın.',
   'documentMeaning.next.answerRequired': 'Yanıt hazırlayın ve süreleri takip edin.',

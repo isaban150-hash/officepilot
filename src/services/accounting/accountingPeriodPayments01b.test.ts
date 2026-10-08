@@ -137,7 +137,8 @@ describe('P2 — Zahlungen des Abschlussmonats im Fingerprint', () => {
   });
 
   it('das Manifest trägt Version 2, Zahlungs-ID, Beleg-ID, Datum und Betrag', () => {
-    const manifest = buildPeriodManifest(model([zahlung()]), [kontierung], 'SKR03');
+    /* P1 MITARBEITERZAHLUNGEN — neue Stände entstehen mit Version 3; Version 2 bleibt prüfbar. */
+    const manifest = buildPeriodManifest(model([zahlung()]), [kontierung], 'SKR03', 2);
     expect(manifest.fingerprintVersion).toBe(2);
     expect(manifest.payments).toEqual([
       { sourceType: 'invoice', sourceId: 'inv-1', paymentId: 'pay-1', datum: '2026-09-20', betrag: 1190 },

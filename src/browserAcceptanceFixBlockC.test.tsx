@@ -182,7 +182,7 @@ describe('C4 — Einstellungen in der Sie-Form', () => {
       'Sie können Firmenprofil, Rechnungs-Vorbelegungen und Design für diesen Betrieb ändern.',
     );
     expect(deDicts['settings.operating.role.member']).toBe(
-      'Als Mitarbeiter sehen Sie die Einstellungen; ändern können sie nur Administratoren.',
+      'Mit Ihrem Benutzerkonto sehen Sie die Einstellungen; ändern können sie nur Administratoren.',
     );
   });
   it('C4-2: kein „du/dein" und keine Du-Imperative mehr in den deutschen Einstellungstexten', () => {

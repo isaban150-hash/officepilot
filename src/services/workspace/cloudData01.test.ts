@@ -124,6 +124,9 @@ describe('CLOUD-DATA-01 allowlist', () => {
     // CLOUD-SYNC S6 — Auftrags- und Nachtragsentwürfe, seit der Remote-Migration 20261103120000.
     expect(isSupabaseSyncAllowed('order_draft')).toBe(true);
     expect(isSupabaseSyncAllowed('order_amendment_draft')).toBe(true);
+    // P1 MITARBEITERZAHLUNGEN — Mitarbeiter und Zahlungen, seit der Remote-Migration 20261104120000.
+    expect(isSupabaseSyncAllowed('employee')).toBe(true);
+    expect(isSupabaseSyncAllowed('employee_payment')).toBe(true);
     expect(isSupabaseSyncAllowed('expense')).toBe(true);
     expect(isSupabaseSyncAllowed('expense_payment')).toBe(true);
     // CLOUD-DURABILITY-CORE-01B — Vorgangsnotizen sind cloud-dauerhaft.
@@ -205,6 +208,9 @@ describe('CLOUD-DATA-01 allowlist', () => {
         // CLOUD-SYNC S6 — Auftrags- und Nachtragsentwürfe, nach Remote-Migration 20261103120000.
         'order_draft',
         'order_amendment_draft',
+        // P1 MITARBEITERZAHLUNGEN — Mitarbeiter und Zahlungen, nach Remote-Migration 20261104120000.
+        'employee',
+        'employee_payment',
       ].sort(),
     );
   });

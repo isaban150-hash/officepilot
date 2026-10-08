@@ -112,6 +112,14 @@ import {
 } from './knowledgeService';
 import { resetKnowledgeStore } from './knowledgeStore';
 import {
+  getEmployeePaymentStoreSnapshot,
+  getEmployeeStoreSnapshot,
+  hydrateEmployeePaymentStore,
+  hydrateEmployeeStore,
+  normalizeEmployee,
+  normalizeEmployeePayment,
+} from './employee/employeeStore';
+import {
   getInvoiceDraftCloudSnapshot,
   hydrateInvoiceDraftCloudStore,
   resetInvoiceDraftCloudStore,
@@ -904,6 +912,8 @@ export function createSeedState(setupOverride?: CompanySetup): AppPersistedState
       dunningDocumentations: [],
       communicationHistory: [],
       knowledgeFacts: [],
+      employees: [],
+      employeePayments: [],
       invoiceDrafts: [],
       officePilotMemory: {
         documentMemories: [],
@@ -1073,6 +1083,8 @@ function finalizeLoadedPersistedState(normalized: AppPersistedState): AppPersist
     dunningDocumentations: (normalized.dunningDocumentations ?? []).map((doc) => ({ ...doc })),
     communicationHistory: (normalized.communicationHistory ?? []).map(cloneCommunicationEvent),
     knowledgeFacts: (normalized.knowledgeFacts ?? []).map(cloneKnowledgeFact),
+    employees: (normalized.employees ?? []).map(normalizeEmployee),
+    employeePayments: (normalized.employeePayments ?? []).map(normalizeEmployeePayment),
     invoiceDrafts: (normalized.invoiceDrafts ?? []).map(cloneInvoiceDraftCloudEntity),
     officePilotMemory: cloneOfficePilotMemoryState(
       normalized.officePilotMemory ?? {
@@ -1519,6 +1531,9 @@ export function applyStateToStores(state: AppPersistedState): void {
   hydrateDunningDocumentations(state.dunningDocumentations ?? []);
   hydrateCommunicationHistory(state.communicationHistory ?? []);
   hydrateKnowledgeFacts(state.knowledgeFacts ?? []);
+  // P1 MITARBEITERZAHLUNGEN — Mitarbeiter und ihre Zahlungen.
+  hydrateEmployeeStore(state.employees ?? []);
+  hydrateEmployeePaymentStore(state.employeePayments ?? []);
   // CLOUD-SYNC S5 — der Spiegel der Cloud-Rechnungsentwürfe.
   hydrateInvoiceDraftCloudStore(state.invoiceDrafts ?? []);
   hydrateMemory(
@@ -1865,6 +1880,8 @@ export function buildPersistedStateSnapshot(): AppPersistedState {
     dunningDocumentations: getDunningDocumentationStoreSnapshot(),
     communicationHistory: getCommunicationHistorySnapshot(),
     knowledgeFacts: getKnowledgeSnapshot(),
+    employees: getEmployeeStoreSnapshot(),
+    employeePayments: getEmployeePaymentStoreSnapshot(),
     invoiceDrafts: getInvoiceDraftCloudSnapshot(),
     officePilotMemory: getOfficePilotMemorySnapshot(),
     mailImports: getMailImportSnapshot().map(cloneMailImport),

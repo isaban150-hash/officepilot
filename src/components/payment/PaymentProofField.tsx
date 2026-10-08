@@ -10,7 +10,7 @@
  * die Zahlung gar nicht erst zu erfassen — dann fehlt am Ende beides.
  */
 import { useMemo } from 'react';
-import { getDocumentStoreSnapshot } from '../../services/documentService';
+import { getAllDocuments } from '../../services/documentService';
 import type { ClassifiedDocumentKind, CompanyDocument } from '../../types/models';
 import type { TranslationKey } from '../../i18n';
 
@@ -46,9 +46,15 @@ function neuesteZuerst(a: CompanyDocument, b: CompanyDocument): number {
   return links.localeCompare(rechts);
 }
 
-/** Die typischen Zahlungsbelege, neueste zuerst. */
+/**
+ * Die typischen Zahlungsbelege, neueste zuerst.
+ *
+ * P1 MITARBEITERZAHLUNGEN — nur aktive, nicht gelöschte Dokumente: Ein
+ * gelöschtes Dokument als Nachweis zu wählen, hiesse auf etwas zu zeigen, das
+ * es nicht mehr gibt.
+ */
 export function listPaymentProofDocuments(): CompanyDocument[] {
-  return getDocumentStoreSnapshot().filter(isPaymentProofDocument).sort(neuesteZuerst);
+  return getAllDocuments().filter(isPaymentProofDocument).sort(neuesteZuerst);
 }
 
 /**
@@ -62,7 +68,7 @@ export function listPaymentProofDocuments(): CompanyDocument[] {
  * ihm nur beim Suchen.
  */
 export function listOtherArchiveDocuments(): CompanyDocument[] {
-  return getDocumentStoreSnapshot()
+  return getAllDocuments()
     .filter((document) => !isPaymentProofDocument(document))
     .sort(neuesteZuerst);
 }
@@ -91,11 +97,24 @@ interface Props {
   disabled?: boolean;
   translate: (key: TranslationKey) => string;
   testId: string;
+  /** P1 MITARBEITERZAHLUNGEN — optional engere Auswahl (z. B. ohne erzeugte Quittungen). */
+  isSelectable?: (document: CompanyDocument) => boolean;
 }
 
-export function PaymentProofField({ value, onChange, disabled, translate, testId }: Props) {
-  const typische = useMemo(() => listPaymentProofDocuments(), []);
-  const weitere = useMemo(() => listOtherArchiveDocuments(), []);
+export function PaymentProofField({ value, onChange, disabled, translate, testId, isSelectable }: Props) {
+  /*
+   * P1 MITARBEITERZAHLUNGEN — mit dem Wert neu berechnet: Ein eben
+   * hochgeladener und archivierter Nachweis fehlte sonst unter den Optionen,
+   * und die Auswahl zeigte „Kein Zahlungsnachweis", obwohl er gesetzt war.
+   */
+  const typische = useMemo(
+    () => listPaymentProofDocuments().filter((document) => (isSelectable ? isSelectable(document) : true)),
+    [isSelectable, value],
+  );
+  const weitere = useMemo(
+    () => listOtherArchiveDocuments().filter((document) => (isSelectable ? isSelectable(document) : true)),
+    [isSelectable, value],
+  );
   const dokumente = [...typische, ...weitere];
 
   return (

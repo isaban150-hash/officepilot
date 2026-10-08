@@ -93,10 +93,27 @@ export interface AccountingPeriodManifestPayment {
 }
 
 /**
+ * P1 MITARBEITERZAHLUNGEN (ab Version 3) — eine Zahlung an einen Mitarbeiter,
+ * deren Auszahlungsdatum im Abschlussmonat liegt (Stand zum Monatsende), bzw.
+ * der Storno einer früheren solchen Zahlung im Stornomonat.
+ */
+export interface AccountingPeriodManifestEmployeePayment {
+  readonly paymentId: string;
+  readonly art: 'zahlung' | 'storno';
+  readonly datum: string;
+  readonly betrag: number;
+  readonly kind: string;
+  readonly method: string;
+  readonly status: string;
+}
+
+/**
  * Version des Fingerprint-Algorithmus. Fehlt sie, entstand der Abschluss mit
  * Version 1 (ohne Zahlungen) und wird nach genau dieser Logik geprüft.
+ * Version 3 (P1 MITARBEITERZAHLUNGEN) nimmt die Mitarbeiterzahlungen hinzu;
+ * Abschlüsse der Versionen 1 und 2 bleiben nach ihrer eigenen Logik gültig.
  */
-export type AccountingPeriodFingerprintVersion = 1 | 2;
+export type AccountingPeriodFingerprintVersion = 1 | 2 | 3;
 
 export interface AccountingPeriodManifest {
   readonly fingerprintVersion?: AccountingPeriodFingerprintVersion;
@@ -110,6 +127,8 @@ export interface AccountingPeriodManifest {
   readonly entries: readonly AccountingPeriodManifestEntry[];
   /** Ab Version 2: Zahlungen des Monats, kanonisch sortiert. */
   readonly payments?: readonly AccountingPeriodManifestPayment[];
+  /** Ab Version 3: Mitarbeiterzahlungen des Monats, kanonisch sortiert. */
+  readonly employeePayments?: readonly AccountingPeriodManifestEmployeePayment[];
 }
 
 /**

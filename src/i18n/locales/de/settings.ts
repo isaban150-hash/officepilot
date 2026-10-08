@@ -150,18 +150,18 @@ export const deSettings = {
   'settings.operating.section.backup': 'Datensicherung',
   'settings.operating.section.sync': 'Synchronisation',
   'settings.operating.sync.manage': 'Synchronisation verwalten',
-  'settings.operating.section.admin': 'Mitarbeiter & Betrieb',
-  'settings.operating.admin.users': 'Mitarbeiter verwalten',
+  'settings.operating.section.admin': 'Benutzer & Zugänge',
+  'settings.operating.admin.users': 'Benutzer & Zugänge verwalten',
   'settings.operating.admin.more': 'Weitere Bereiche',
   'settings.operating.role.admin': 'Sie können Firmenprofil, Rechnungs-Vorbelegungen und Design für diesen Betrieb ändern.',
-  'settings.operating.role.member': 'Als Mitarbeiter sehen Sie die Einstellungen; ändern können sie nur Administratoren.',
+  'settings.operating.role.member': 'Mit Ihrem Benutzerkonto sehen Sie die Einstellungen; ändern können sie nur Administratoren.',
   'settings.invoices.taxFreeNotice': 'Hinweis bei steuerfreien Rechnungen',
   'settings.invoices.taxFreeNotice.hint': 'Erscheint nur auf Rechnungen mit Steuerstatus „Steuerfrei / ohne USt". Leer = Standardhinweis.',
 
   'settings.group.team': 'Betrieb',
   'settings.team.operations.title': 'Betrieb und weitere Bereiche',
   'settings.team.operations.description': 'Sprache, Datensicherung und alle übrigen Bereiche',
-  'settings.team.users.title': 'Mitarbeiter',
+  'settings.team.users.title': 'Benutzer & Zugänge',
   'settings.team.users.description': 'Zugänge freigeben und verwalten',
 
   /* SETTINGS-01B2 — Firmenprofil-Unterseite. */

@@ -111,6 +111,17 @@ export const SUPABASE_SYNC_ALLOWLIST: ReadonlySet<SyncEntityType> = new Set([
    */
   'order_draft',
   'order_amendment_draft',
+  /*
+   * P1 MITARBEITERZAHLUNGEN — Mitarbeiter und Zahlungen an Mitarbeiter.
+   * Freigabe erst jetzt, nach derselben Reihenfolge: Tabellen, RLS (Lesen nur
+   * Inhaber/Verwaltung), eigene RPCs mit Finanzschutz statt des generischen
+   * Dispatchers, eigener Abzug, Abgleich mit Konfliktmeldung, Altbestand,
+   * Datenschutz der Belege und Laufzeittests gegen eine echte Datenbank. Die
+   * Migration 20261104120000 ist remote angewendet und gegen die Datei
+   * geprüft (Schema-Abzug, Rechte, Live-Probe ohne Anmeldung).
+   */
+  'employee',
+  'employee_payment',
 ]);
 
 export const LOCAL_ONLY_SYNC_ENTITY_TYPES: ReadonlySet<SyncEntityType> = new Set([

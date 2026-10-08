@@ -15,6 +15,17 @@ import type {
   SyncPushResult,
 } from './syncAdapter';
 import { isSupabaseSyncAllowed } from './cloudSyncAllowlist';
+import { enqueueSyncOutbox } from './syncOutboxService';
+import {
+  EMPLOYEE_PUSH_ORDER,
+  applyEmployeePullToState,
+  applyEmployeePushResultToState,
+  collectDirtyEmployeeKeys,
+  isEmployeeSyncEntityType,
+  pushEmployeeEntity,
+  rpcPullWorkspaceEmployeeData,
+  type EmployeeSyncExtracted,
+} from '../employee/employeeCloudSyncService';
 import { isCloudSyncBlockedMockVorgangId } from '../storage/mockDataDetectionService';
 import {
   createEmptySyncSimulationReport,
@@ -800,6 +811,9 @@ export function applyPushResultToState(
         workspaceId,
       ),
     };
+  } else if (entityType === 'employee') {
+    // P1 MITARBEITERZAHLUNGEN — nur die Serverversion als neue Basisversion.
+    next.employees = applyEmployeePushResultToState(next.employees ?? [], entityId, rowVersion, updatedAt);
   } else if (entityType === 'business_letter') {
     // BRIEFE-01B — nur die Serverversion; der Briefinhalt bleibt unangetastet.
     next.businessLetters = applyBusinessLetterPushResultToState(
@@ -1025,8 +1039,8 @@ export class SupabaseSyncAdapter implements SyncAdapter {
       // ANGEBOT-01B — das Angebot nach seinem Archivdokument: Der Server prueft die Ablage gegen die Dokumentzeile.
       .sort(
         (a, b) =>
-          (INTAKE_PUSH_ORDER[a.entityType] ?? EXPENSE_PUSH_ORDER[a.entityType] ?? OFFER_PUSH_ORDER[a.entityType] ?? ACCOUNTING_PUSH_ORDER[a.entityType] ?? BANK_PUSH_ORDER[a.entityType] ?? DRAFT_PUSH_ORDER[a.entityType] ?? -1) -
-          (INTAKE_PUSH_ORDER[b.entityType] ?? EXPENSE_PUSH_ORDER[b.entityType] ?? OFFER_PUSH_ORDER[b.entityType] ?? ACCOUNTING_PUSH_ORDER[b.entityType] ?? BANK_PUSH_ORDER[b.entityType] ?? DRAFT_PUSH_ORDER[b.entityType] ?? -1),
+          (INTAKE_PUSH_ORDER[a.entityType] ?? EXPENSE_PUSH_ORDER[a.entityType] ?? OFFER_PUSH_ORDER[a.entityType] ?? ACCOUNTING_PUSH_ORDER[a.entityType] ?? BANK_PUSH_ORDER[a.entityType] ?? DRAFT_PUSH_ORDER[a.entityType] ?? EMPLOYEE_PUSH_ORDER[a.entityType] ?? -1) -
+          (INTAKE_PUSH_ORDER[b.entityType] ?? EXPENSE_PUSH_ORDER[b.entityType] ?? OFFER_PUSH_ORDER[b.entityType] ?? ACCOUNTING_PUSH_ORDER[b.entityType] ?? BANK_PUSH_ORDER[b.entityType] ?? DRAFT_PUSH_ORDER[b.entityType] ?? EMPLOYEE_PUSH_ORDER[b.entityType] ?? -1),
       );
 
     for (const entry of pendingEntries) {
@@ -1164,6 +1178,44 @@ export class SupabaseSyncAdapter implements SyncAdapter {
               entityId: entry.entityId,
               resolution: 'conflict',
             });
+          }
+        }
+        continue;
+      }
+
+      /*
+       * P1 MITARBEITERZAHLUNGEN — eigener Zweig mit Finanz-RPCs. Der Mitarbeiter
+       * traegt seine Serverversion zurueck; die Zahlung ist append-only und
+       * wird als idempotente Folge gesendet (anlegen, Belege, Storno).
+       */
+      if (isEmployeeSyncEntityType(entry.entityType)) {
+        try {
+          this.assertClient();
+          const outcome = await pushEmployeeEntity(extracted as EmployeeSyncExtracted, entry.operation, workspaceId, this.client);
+          if (outcome.kind === 'pushed') {
+            currentState = applyPushResultToState(
+              currentState,
+              entry.entityType,
+              entry.entityId,
+              outcome.rowVersion,
+              new Date().toISOString(),
+            );
+          }
+          completedOutboxIds.push(entry.id);
+          outbox = updateOutboxEntryStatus(outbox, entry.id, 'completed');
+          report.completedOutboxCount += 1;
+          report.syncedEntities.push({ entityType: entry.entityType, entityId: entry.entityId, resolution: outcome.kind === 'pushed' ? 'local_wins' : 'noop' });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Push fehlgeschlagen';
+          const retryable = error instanceof WorkspaceCloudError ? error.retryable : true;
+          const isVersionConflict = error instanceof WorkspaceCloudError && error.code === 'version_conflict';
+          failedOutbox.push({ outboxId: entry.id, message, retryable });
+          outbox = updateOutboxEntryStatus(outbox, entry.id, isVersionConflict ? 'blocked' : 'error', entry.retryCount + 1, { message, retryable });
+          report.errorCount += 1;
+          report.errors.push({ outboxId: entry.id, message });
+          if (isVersionConflict) {
+            report.conflictCount += 1;
+            report.conflicts.push({ entityType: entry.entityType, entityId: entry.entityId, resolution: 'conflict' });
           }
         }
         continue;
@@ -1624,6 +1676,50 @@ export class SupabaseSyncAdapter implements SyncAdapter {
           const message = error instanceof Error ? error.message : 'Ausgaben-Pull fehlgeschlagen';
           report.errorCount += 1;
           report.errors.push({ outboxId: 'expense-pull', message });
+        }
+      }
+
+      /*
+       * P1 MITARBEITERZAHLUNGEN — Mitarbeiter und Zahlungen. Erst mit der
+       * Freigabe des Typs (Remote-Vertrag vorhanden); vorher gaebe es die
+       * Serverfunktion nicht, und jeder Lauf meldete einen Fehler. Mitglieder
+       * ohne Finanzrecht bekommen "Kein Zugriff" — die Rollenregel, still.
+       * Lokal Bekanntes, das der Server noch nicht hat, wird nachgereicht.
+       */
+      if (isSupabaseSyncAllowed('employee') && isSupabaseSyncAllowed('employee_payment')) {
+        try {
+          const employeePull = await rpcPullWorkspaceEmployeeData(workspaceId, this.client);
+          const appliedEmployees = applyEmployeePullToState(intakeState, employeePull, {
+            deviceId: input.state.syncClient!.deviceId,
+            workspaceId,
+            dirty: collectDirtyEmployeeKeys(input.state.syncOutbox),
+          });
+          intakeState = appliedEmployees.state;
+          report.mergedEntityCount += appliedEmployees.counts.employees + appliedEmployees.counts.payments;
+          for (const conflict of appliedEmployees.conflicts) {
+            const trenner = conflict.indexOf(':');
+            report.conflictCount += 1;
+            report.conflicts.push({
+              entityType: conflict.slice(0, trenner) as SyncOutboxEntry['entityType'],
+              entityId: conflict.slice(trenner + 1),
+              resolution: 'conflict',
+            });
+          }
+          for (const nachtrag of appliedEmployees.backfill) {
+            enqueueSyncOutbox({
+              entityType: nachtrag.entityType,
+              entityId: nachtrag.entityId,
+              operation: nachtrag.entityType === 'employee' && nachtrag.version > 0 ? 'update' : 'create',
+              version: nachtrag.version,
+            });
+          }
+        } catch (error) {
+          const isRoleDenied = error instanceof WorkspaceCloudError && error.code === 'rls';
+          if (!isRoleDenied) {
+            const message = error instanceof Error ? error.message : 'Mitarbeiter-Pull fehlgeschlagen';
+            report.errorCount += 1;
+            report.errors.push({ outboxId: 'employee-pull', message });
+          }
         }
       }
 

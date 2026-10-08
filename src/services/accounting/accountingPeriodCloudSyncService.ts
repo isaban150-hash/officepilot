@@ -319,6 +319,8 @@ export function rowToAccountingPeriodClosure(
     manifest: {
       // P0/P1-INTEGRITAET 01B / P2 — Version und Zahlungen bleiben erhalten.
       ...(manifest.fingerprintVersion === 2 ? { fingerprintVersion: 2 as const } : {}),
+      // P1 MITARBEITERZAHLUNGEN — Version 3 samt Mitarbeiterzahlungen bleibt erhalten.
+      ...(manifest.fingerprintVersion === 3 ? { fingerprintVersion: 3 as const } : {}),
       monthKey: (manifest.monthKey as string) ?? monthKey,
       chartOfAccounts: (manifest.chartOfAccounts as string) ?? '',
       documentCount: Number(manifest.documentCount ?? 0),
@@ -330,6 +332,12 @@ export function rowToAccountingPeriodClosure(
         : [],
       ...(Array.isArray(manifest.payments)
         ? { payments: manifest.payments as NonNullable<AccountingPeriodClosure['manifest']['payments']> }
+        : {}),
+      ...(Array.isArray(manifest.employeePayments)
+        ? {
+            employeePayments:
+              manifest.employeePayments as NonNullable<AccountingPeriodClosure['manifest']['employeePayments']>,
+          }
         : {}),
     },
     reopenedAt: row.reopened_at ?? undefined,

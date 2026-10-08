@@ -74,7 +74,14 @@ export type SyncEntityType =
    * CLOUD-SYNC S6 — der Nachtragsentwurf zu genau einem bestätigten Auftrag.
    * Verbraucht wird er ausschliesslich in `confirm_workspace_order_amendment`.
    */
-  | 'order_amendment_draft';
+  | 'order_amendment_draft'
+  /**
+   * P1 MITARBEITERZAHLUNGEN — Mitarbeiter-Stammsatz (versionierte Zeile) und
+   * Mitarbeiterzahlung (append-only mit Storno). Eigene Tabellen und RPCs mit
+   * Finanzautorisierung; nicht ueber den generischen Dispatcher.
+   */
+  | 'employee'
+  | 'employee_payment';
 
 export type SyncOutboxOperation = 'create' | 'update' | 'delete';
 

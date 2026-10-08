@@ -22,6 +22,7 @@ import { isAdvertisementContext, resolvePaperFiling } from './paperFolderService
 import { getAllTasksFromStore } from './taskStore';
 import { getTodayIso, isTaskOpen } from './taskNormalize';
 import { toCanonicalIsoDay } from '../utils/documentDateDisplay';
+import { isPayoutReceiptDocumentId } from './employee/payoutReceiptDocumentId';
 
 const DEADLINE_ATTENTION_DAYS = 30;
 
@@ -322,7 +323,9 @@ export function resolveDocumentLifecycle(
   const istEigenesSchreiben =
     document?.category === 'geschaeftsschreiben' ||
     // ANGEBOT-01B — eigenes Angebot: selbst erzeugt, kein Original zum Abheften.
-    (document?.classifiedKind === 'angebot' && Boolean(document.linkedOfferId));
+    (document?.classifiedKind === 'angebot' && Boolean(document.linkedOfferId)) ||
+    // P1 MITARBEITERZAHLUNGEN — erzeugte Quittung; abgeheftet wird die unterschriebene Fassung (Nachweis).
+    isPayoutReceiptDocumentId(document?.id);
   const needsPaper =
     (document ? !isGeneratedOutgoingInvoiceDocument(document) : true) &&
     !istEigenesSchreiben &&

@@ -28,6 +28,7 @@
 import type { Expense, ExpensePayment } from '../../types/expense';
 import type { CompanyDocument, InboxItem, InvoicePayment, PaymentMethod, VorgangInvoice } from '../../types/models';
 import type { DocumentFileRef } from '../../types/documentFileRef';
+import type { EmployeePayment, EmployeePaymentKind, EmployeePaymentMethod } from '../../types/employee';
 import { isFinalizedInvoice } from '../invoiceArchiveService';
 import { calculatePaymentSummary, getInvoicePayments } from '../invoicePaymentService';
 import { calculateExpensePaymentSummary, getExpensePayments } from '../expensePaymentCalculations';
@@ -112,6 +113,44 @@ export interface MonatsmappeZahlung {
   nachweisDatei?: string;
 }
 
+/**
+ * P1 MITARBEITERZAHLUNGEN — eine Zeile der neutralen Übergabe
+ * `mitarbeiter_zahlungen.csv`.
+ *
+ * Bewusst **kein** Beleg und **keine** Buchung: keine Lohnabrechnung, keine
+ * Steuer, keine Sozialversicherung, kein Sachkonto. Eine Zahlung steht im Monat
+ * ihres Auszahlungsdatums, mit dem Stand zum Monatsende. Wird eine Zahlung aus
+ * einem früheren Monat storniert, erscheint im Stornomonat eine eigene
+ * Storno-Zeile mit negativem Betrag — der abgeschlossene Vormonat bleibt, wie er
+ * war.
+ */
+export interface MonatsmappeMitarbeiterZahlung {
+  art: 'zahlung' | 'storno';
+  zahlungId: string;
+  /** Die MZ-Referenz der Zahlung. */
+  referenz: string;
+  /** Auszahlungsdatum, bei einer Storno-Zeile das Stornodatum. */
+  datum: string;
+  zahlungsdatum: string;
+  mitarbeiter: string;
+  personalnummer: string;
+  kind: EmployeePaymentKind;
+  /** Bei einer Storno-Zeile negativ. */
+  betrag: number;
+  zahlungsart: EmployeePaymentMethod;
+  lohnmonat: string;
+  text: string;
+  nachweisStatus: MonatsmappeNachweisStatus;
+  nachweisTitel?: string;
+  nachweisDatei?: string;
+  /** Stand zum Monatsende: `aktiv`, `storniert` oder die Storno-Zeile selbst. */
+  status: 'aktiv' | 'storniert' | 'storno';
+  stornoDatum?: string;
+  stornoGrund?: string;
+  /** Storniert erst nach dem Monatsende — in diesem Monat noch gültig. */
+  spaeterStorniertAm?: string;
+}
+
 /** 02B — ein offener Posten zum Monatsende (Forderung bzw. Verbindlichkeit). */
 export interface MonatsmappeOffenerPosten {
   belegart: 'ausgangsrechnung' | 'eingangsbeleg';
@@ -147,6 +186,10 @@ export interface MonatsmappeModel {
    * nur einmal verpackt. Die Zuordnung steht in `Zahlungen.csv`.
    */
   zahlungsnachweise?: MonatsmappeDocumentSource[];
+  /** P1 MITARBEITERZAHLUNGEN — die Zahlungen an Mitarbeiter dieses Monats (neutral). */
+  mitarbeiterZahlungen?: MonatsmappeMitarbeiterZahlung[];
+  /** P1 MITARBEITERZAHLUNGEN — die unterschriebenen Nachweise dazu, entdoppelt. */
+  mitarbeiterNachweise?: MonatsmappeDocumentSource[];
   isEmpty: boolean;
 }
 
@@ -157,6 +200,8 @@ export interface MonatsmappeInput {
   documents: CompanyDocument[];
   inboxItems: InboxItem[];
   fileRefs: DocumentFileRef[];
+  /** P1 MITARBEITERZAHLUNGEN — optional, damit ältere Aufrufer unverändert bleiben. */
+  employeePayments?: EmployeePayment[];
 }
 
 export function isValidMonthKey(monthKey: string): boolean {
@@ -519,6 +564,99 @@ function eligibleExpenses(input: MonatsmappeInput): Expense[] {
   return result;
 }
 
+/**
+ * P1 MITARBEITERZAHLUNGEN — die Zahlungen an Mitarbeiter eines Monats.
+ *
+ * Auswahl nach Auszahlungsdatum (wie bei allen Zahlungen der Mappe); der
+ * Storno-Zustand gilt zum Monatsende. Der Nachweis wird über dieselbe Regel
+ * aufgelöst wie bei Ausgabenzahlungen.
+ */
+/**
+ * P1 MITARBEITERZAHLUNGEN — der Nachweis heißt wie seine Zahlung. Aus dem
+ * Dokumenttitel („Unterschriebene Auszahlungsquittung MZ-…") wurde auf 40
+ * Zeichen gekürzt mitten in der Referenz abgeschnitten („MZ-2"). Die Referenz
+ * ist im Betrieb eindeutig und genau das, wonach der Steuerberater sucht.
+ */
+function mitReferenzDateiname(
+  aufgeloest: ReturnType<typeof resolveZahlungsnachweis>,
+  referenz: string,
+): ReturnType<typeof resolveZahlungsnachweis> {
+  const bisher = aufgeloest.anzeige.nachweisDatei;
+  if (!aufgeloest.quelle || !bisher) return aufgeloest;
+  const endung = bisher.includes('.') ? bisher.slice(bisher.lastIndexOf('.') + 1) : 'pdf';
+  const datei = `${safeFileNamePart(referenz, 40)}_Nachweis.${endung}`;
+  return { anzeige: { ...aufgeloest.anzeige, nachweisDatei: datei }, quelle: { ...aufgeloest.quelle, fileName: datei } };
+}
+
+export function buildMitarbeiterZahlungen(
+  input: MonatsmappeInput,
+  monthKey: string,
+): { zeilen: MonatsmappeMitarbeiterZahlung[]; nachweise: MonatsmappeDocumentSource[] } {
+  const monthEnd = monthEndOf(monthKey);
+  const zeilen: MonatsmappeMitarbeiterZahlung[] = [];
+  const quellen = new Map<string, MonatsmappeDocumentSource>();
+  const gesehen = new Set<string>();
+
+  for (const payment of input.employeePayments ?? []) {
+    if (gesehen.has(payment.id)) continue;
+    gesehen.add(payment.id);
+    const zahlungsdatum = (payment.paymentDate ?? '').slice(0, 10);
+    const stornoDatum = payment.reversedAt ? payment.reversedAt.slice(0, 10) : undefined;
+    const grund = (payment.reversalReason ?? '').trim();
+    const gemeinsam = {
+      zahlungId: payment.id,
+      referenz: payment.receiptReference,
+      zahlungsdatum,
+      mitarbeiter: payment.employeeName,
+      personalnummer: payment.personnelNumber ?? '',
+      kind: payment.kind,
+      zahlungsart: payment.paymentMethod,
+      lohnmonat: payment.kind === 'wage' ? (payment.wageMonth ?? '') : '',
+      text: [payment.purpose, payment.note].map((teil) => (teil ?? '').trim()).filter(Boolean).join(' · '),
+    };
+
+    if (monthKeyOf(zahlungsdatum) === monthKey) {
+      const storniert = Boolean(stornoDatum && stornoDatum <= monthEnd);
+      const { anzeige, quelle } = mitReferenzDateiname(
+        resolveZahlungsnachweis(payment.proofDocumentId, payment.id, input),
+        payment.receiptReference,
+      );
+      if (quelle) quellen.set(quelle.fileName, quelle);
+      zeilen.push({
+        ...gemeinsam,
+        art: 'zahlung',
+        datum: zahlungsdatum,
+        betrag: Math.round(payment.amount * 100) / 100,
+        status: storniert ? 'storniert' : 'aktiv',
+        ...(stornoDatum ? { stornoDatum, stornoGrund: grund } : {}),
+        ...(stornoDatum && !storniert ? { spaeterStorniertAm: stornoDatum } : {}),
+        ...anzeige,
+      });
+    }
+
+    if (stornoDatum && monthKeyOf(stornoDatum) === monthKey && monthKeyOf(zahlungsdatum) < monthKey) {
+      const { anzeige } = resolveZahlungsnachweis(payment.proofDocumentId, payment.id, input);
+      zeilen.push({
+        ...gemeinsam,
+        art: 'storno',
+        datum: stornoDatum,
+        betrag: negateMoney(Math.round(payment.amount * 100) / 100),
+        status: 'storno',
+        stornoDatum,
+        stornoGrund: grund,
+        ...anzeige,
+        /* Die Datei reist im Monat der Zahlung mit, nicht ein zweites Mal hier. */
+        nachweisDatei: undefined,
+      });
+    }
+  }
+
+  zeilen.sort(
+    (a, b) => a.datum.localeCompare(b.datum) || a.referenz.localeCompare(b.referenz) || a.art.localeCompare(b.art),
+  );
+  return { zeilen, nachweise: [...quellen.values()].sort((a, b) => a.fileName.localeCompare(b.fileName)) };
+}
+
 export function buildMonatsmappeModel(input: MonatsmappeInput): MonatsmappeModel {
   if (!isValidMonthKey(input.monthKey)) throw new Error(`Ungueltiger Monat: ${input.monthKey}`);
   const monthKey = input.monthKey;
@@ -630,6 +768,8 @@ export function buildMonatsmappeModel(input: MonatsmappeInput): MonatsmappeModel
     (a, b) => a.belegart.localeCompare(b.belegart) || a.datum.localeCompare(b.datum) || a.belegId.localeCompare(b.belegId),
   );
 
+  const { zeilen: mitarbeiterZahlungen, nachweise: mitarbeiterNachweise } = buildMitarbeiterZahlungen(input, monthKey);
+
   const fehlendeDokumente = [...ausgangsrechnungen, ...eingangsbelege, ...stornos]
     .filter((beleg) => beleg.documentStatus === 'missing')
     .map((beleg) => ({ belegart: beleg.belegart, id: beleg.id, belegnummer: beleg.belegnummer }));
@@ -645,12 +785,15 @@ export function buildMonatsmappeModel(input: MonatsmappeInput): MonatsmappeModel
     stornosOhneDatum,
     offenePostenMonatsende,
     zahlungsnachweise: [...nachweisQuellen.values()].sort((a, b) => a.fileName.localeCompare(b.fileName)),
+    mitarbeiterZahlungen,
+    mitarbeiterNachweise,
     isEmpty:
       ausgangsrechnungen.length === 0 &&
       eingangsbelege.length === 0 &&
       stornos.length === 0 &&
       zahlungenAusgang.length === 0 &&
-      zahlungenEingang.length === 0,
+      zahlungenEingang.length === 0 &&
+      mitarbeiterZahlungen.length === 0,
   };
 }
 
@@ -751,6 +894,78 @@ export function buildZahlungenCsv(model: MonatsmappeModel): string {
     ]));
   }
   return `﻿${lines.join('\r\n')}\r\n`;
+}
+
+/** P1 MITARBEITERZAHLUNGEN — eigener Unterordner der Zahlungsnachweise. */
+export const MITARBEITER_NACHWEIS_FOLDER = `${NACHWEIS_FOLDER}/Mitarbeiterzahlungen`;
+
+export const MITARBEITER_ZAHLUNG_ART_LABEL: Record<EmployeePaymentKind, string> = {
+  wage: 'Lohn/Gehalt',
+  advance: 'Vorschuss',
+  reimbursement: 'Auslagenerstattung',
+  travel: 'Reisekosten',
+  other: 'Sonstige Mitarbeiterzahlung',
+};
+
+/**
+ * Die neutrale Einordnung je Art — ausdrücklich keine Buchung, keine
+ * Steuerberechnung und keine Sachkontenzuordnung.
+ */
+export const MITARBEITER_ZAHLUNG_EINORDNUNG: Record<EmployeePaymentKind, string> = {
+  wage: 'Auszahlung Lohn/Gehalt – die Lohnabrechnung erstellt der Steuerberater',
+  advance: 'Vorschuss – Forderung gegenüber dem Mitarbeiter, kein Aufwand',
+  reimbursement: 'Auslagenerstattung – zugrunde liegenden Beleg prüfen',
+  travel: 'Reisekosten – zu prüfen',
+  other: 'Sonstige Zahlung – zu prüfen',
+};
+
+const MITARBEITER_NACHWEIS_LABEL: Record<MonatsmappeNachweisStatus, string> = {
+  kein: 'nein',
+  vorhanden: 'ja',
+  ohne_datei: 'ja (ohne Datei)',
+  nicht_auffindbar: 'nicht auffindbar',
+};
+
+const MITARBEITER_STATUS_LABEL: Record<MonatsmappeMitarbeiterZahlung['status'], string> = {
+  aktiv: 'Gültig',
+  storniert: 'Storniert',
+  storno: 'Storno',
+};
+
+/**
+ * P1 MITARBEITERZAHLUNGEN — `mitarbeiter_zahlungen.csv`.
+ *
+ * Eine eigene Datei und keine Zeilen in `zahlungen.csv`: Eine Zahlung an einen
+ * Mitarbeiter ist weder eine Rechnungs- noch eine Ausgabenzahlung.
+ */
+export function buildMitarbeiterZahlungenCsv(model: MonatsmappeModel): string {
+  const lines = [csvLine([
+    'Referenz', 'Datum', 'Mitarbeiter', 'Personalnummer', 'Art', 'Betrag', 'Zahlungsart', 'Lohnmonat',
+    'Notiz/Verwendungszweck', 'Nachweis vorhanden', 'Nachweisdatei', 'Status', 'Stornodatum', 'Stornogrund', 'Einordnung',
+  ])];
+  for (const zeile of model.mitarbeiterZahlungen ?? []) {
+    const hinweis = zeile.spaeterStorniertAm ? ` (storniert nach Monatsende am ${zeile.spaeterStorniertAm})` : '';
+    lines.push(csvLine([
+      zeile.referenz,
+      zeile.datum,
+      zeile.mitarbeiter,
+      zeile.personalnummer,
+      zeile.art === 'storno'
+        ? `${MITARBEITER_ZAHLUNG_ART_LABEL[zeile.kind]} (Storno der Zahlung vom ${zeile.zahlungsdatum})`
+        : MITARBEITER_ZAHLUNG_ART_LABEL[zeile.kind],
+      zeile.betrag,
+      ZAHLUNGSART_LABEL[zeile.zahlungsart] ?? '',
+      zeile.lohnmonat,
+      zeile.text,
+      MITARBEITER_NACHWEIS_LABEL[zeile.nachweisStatus],
+      zeile.nachweisDatei ? `${MITARBEITER_NACHWEIS_FOLDER}/${zeile.nachweisDatei}` : '',
+      `${MITARBEITER_STATUS_LABEL[zeile.status]}${hinweis}`,
+      zeile.stornoDatum ?? '',
+      zeile.stornoGrund ?? '',
+      MITARBEITER_ZAHLUNG_EINORDNUNG[zeile.kind],
+    ]));
+  }
+  return `\uFEFF${lines.join('\r\n')}\r\n`;
 }
 
 /** 02B — offene Posten zum Monatsende (Forderungen und Verbindlichkeiten). */

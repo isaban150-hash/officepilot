@@ -19,6 +19,7 @@ import {
   replaceDocumentFileDerivativeRecoveryContextStore,
 } from './documentFileDerivativeRecoveryContextStoreService';
 import { getAllExpensesFromStore } from './expenseStore';
+import { getEmployeePaymentStoreSnapshot } from './employee/employeeStore';
 import { toCanonicalIsoDay } from '../utils/documentDateDisplay';
 import { buildDocumentSemanticCore } from './document/documentSemanticCoreService';
 import { getInboxExtractedDocumentText } from './inboxDocumentText';
@@ -342,13 +343,32 @@ export function searchDocuments(
 }
 
 export function addDocument(input: CompanyDocumentInput): DocumentMutationResult {
+  return insertNewDocument(input, generateEntityId('doc'));
+}
+
+/**
+ * P1 MITARBEITERZAHLUNGEN — Ablage unter einer festen, vom Aufrufer
+ * abgeleiteten Kennung (etwa `emp-receipt-<payment-id>`).
+ *
+ * Damit erzeugen zwei Geräte für dieselbe Zahlung nie zwei Originale: Beide
+ * landen auf derselben Dokumentkennung. Eine bereits vergebene Kennung — auch
+ * die eines gelöschten Dokuments — wird nie überschrieben.
+ */
+export function addDocumentWithId(input: CompanyDocumentInput, id: string): DocumentMutationResult {
+  const kennung = id.trim();
+  if (!kennung) return { success: false, errorKey: 'document.idInvalid' };
+  if (documents.some((d) => d.id === kennung)) return { success: false, errorKey: 'document.idTaken' };
+  return insertNewDocument(input, kennung);
+}
+
+function insertNewDocument(input: CompanyDocumentInput, id: string): DocumentMutationResult {
   const validationError = validateInput(input);
   if (validationError) return { success: false, errorKey: validationError };
 
   const previousDocuments = documents;
   const now = new Date().toISOString();
   const document = withNewEntitySync(
-    buildDocumentFromInput(input, generateEntityId('doc'), now),
+    buildDocumentFromInput(input, id, now),
     'document',
   );
   documents = [document, ...documents];
@@ -532,8 +552,18 @@ const DOCUMENT_DELETE_BLOCK_ERROR_KEYS: Record<DocumentDeleteBlockReason, string
  * Netzwerkantwort warten zu lassen.
  */
 function isPaymentProofDocument(documentId: string): boolean {
-  return getAllExpensesFromStore().some((expense) =>
-    (expense.payments ?? []).some((payment) => payment.proofDocumentId === documentId),
+  return (
+    getAllExpensesFromStore().some((expense) =>
+      (expense.payments ?? []).some((payment) => payment.proofDocumentId === documentId),
+    ) ||
+    /*
+     * P1 MITARBEITERZAHLUNGEN — erzeugte Quittung und Nachweis. Anders als bei
+     * den Ausgaben bleiben stornierte Mitarbeiterzahlungen lokal sichtbar; ihr
+     * Beleg ist Prüfspur und bleibt geschützt.
+     */
+    getEmployeePaymentStoreSnapshot().some(
+      (payment) => payment.receiptDocumentId === documentId || payment.proofDocumentId === documentId,
+    )
   );
 }
 

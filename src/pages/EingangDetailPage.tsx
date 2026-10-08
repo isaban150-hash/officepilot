@@ -165,6 +165,8 @@ import type {
 } from '../types/models';
 import type { TranslationKey } from '../i18n';
 import { useReportUiSession } from '../hooks/useReportUiSession';
+import { PayrollDocumentHint } from '../components/employee/PayrollDocumentHint';
+import { isPayrollDocumentKind } from '../services/payrollDocumentKind';
 import { useUiSessionRestore } from '../hooks/useUiSessionRestore';
 
 type ReviewSectionId =
@@ -2306,6 +2308,9 @@ export function EingangDetailPage() {
         backTestId="eingang-detail-back"
         testId="eingang-detail-header"
       />
+
+      {/* P1 MITARBEITERZAHLUNGEN — Lohnabrechnung/Lohnunterlagen: keine Ausgabe, Auszahlung unter Mitarbeiterzahlungen. */}
+      {isPayrollDocumentKind(classifiedKind) ? <PayrollDocumentHint translate={translate} /> : null}
 
       {/*
         * EINGANG-01B — Herkunft aus einem eingegangenen Mail-Anhang. Absender und

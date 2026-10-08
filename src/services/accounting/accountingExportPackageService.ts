@@ -16,6 +16,8 @@
  */
 import JSZip from 'jszip';
 import {
+  MITARBEITER_NACHWEIS_FOLDER,
+  buildMitarbeiterZahlungenCsv,
   buildOffenePostenCsv,
   buildZahlungenCsv,
   monthEndOf,
@@ -111,6 +113,14 @@ export async function buildAccountingExportPackage(
    */
   buchungsdaten.file('zahlungen.csv', buildZahlungenCsv(model));
   buchungsdaten.file('offene_posten_monatsende.csv', buildOffenePostenCsv(model));
+  /*
+   * P1 MITARBEITERZAHLUNGEN — eigene, neutrale Datei; nur wenn es im Monat
+   * Mitarbeiterzahlungen gibt. Keine Lohnbuchung, kein Sachkonto.
+   */
+  const mitarbeiterZahlungen = model.mitarbeiterZahlungen ?? [];
+  if (mitarbeiterZahlungen.length > 0) {
+    buchungsdaten.file('mitarbeiter_zahlungen.csv', buildMitarbeiterZahlungenCsv(model));
+  }
 
   /* ---------------- Originalbelege ---------------- */
   const failed: Array<{ id: string; fileName: string; detail: string }> = [];
@@ -187,6 +197,28 @@ export async function buildAccountingExportPackage(
     }
   }
 
+  /*
+   * P1 MITARBEITERZAHLUNGEN — die unterschriebenen Nachweise in einem eigenen
+   * Unterordner der Zahlungsnachweise. Welche Zahlung welche Datei meint, steht
+   * in mitarbeiter_zahlungen.csv.
+   */
+  for (const quelle of model.mitarbeiterNachweise ?? []) {
+    const fileName = sanitizeEntryFileName(quelle.fileName);
+    const path = MITARBEITER_NACHWEIS_FOLDER + '/' + fileName;
+    if (usedPaths.has(path)) continue;
+    usedPaths.add(path);
+    try {
+      root.folder(MITARBEITER_NACHWEIS_FOLDER)!.file(fileName, await loaders.fileRefBytes(quelle.fileRefId!));
+      documentCount += 1;
+    } catch (error) {
+      failed.push({
+        id: quelle.fileRefId ?? '',
+        fileName,
+        detail: error instanceof Error ? error.message : 'load_failed',
+      });
+    }
+  }
+
   if (failed.length > 0) return { ok: false, reason: 'document_load_failed', failed };
 
   /* ---------------- Abschluss und Prüfbericht ---------------- */
@@ -227,6 +259,13 @@ export async function buildAccountingExportPackage(
       fehlendeNachweise: fehlendeNachweise.length,
       unklareFaelle: unklareFaelle.length,
       stornosOhneDatum: model.stornosOhneDatum.length,
+      /* P1 MITARBEITERZAHLUNGEN — neutral gezählt, nicht gebucht. */
+      mitarbeiterZahlungen: mitarbeiterZahlungen.filter((z) => z.art === 'zahlung').length,
+      mitarbeiterZahlungenStorniert: mitarbeiterZahlungen.filter((z) => z.status !== 'aktiv').length,
+      mitarbeiterNachweise: (model.mitarbeiterNachweise ?? []).length,
+      mitarbeiterBarOhneNachweis: mitarbeiterZahlungen.filter(
+        (z) => z.art === 'zahlung' && z.status === 'aktiv' && z.zahlungsart === 'cash' && z.nachweisStatus === 'kein',
+      ).length,
     },
     summen: {
       netto: bookings.totals.netto,
@@ -236,6 +275,14 @@ export async function buildAccountingExportPackage(
       zahlungenEingang: sumOf(model.zahlungenEingang.map((z) => z.betrag)),
       offeneForderungenMonatsende: sumOf(offenePosten.filter((p) => p.belegart === 'ausgangsrechnung').map((p) => p.offen)),
       offeneVerbindlichkeitenMonatsende: sumOf(offenePosten.filter((p) => p.belegart === 'eingangsbeleg').map((p) => p.offen)),
+      /*
+       * P1 MITARBEITERZAHLUNGEN — gültige Auszahlungen des Monats abzüglich
+       * Stornos früherer Zahlungen; Vorschüsse getrennt (Forderung, kein Aufwand).
+       */
+      mitarbeiterZahlungen: sumOf(mitarbeiterZahlungen.filter((z) => z.status !== 'storniert').map((z) => z.betrag)),
+      mitarbeiterVorschuesse: sumOf(
+        mitarbeiterZahlungen.filter((z) => z.kind === 'advance' && z.status !== 'storniert').map((z) => z.betrag),
+      ),
     },
     fehlendeNachweise,
     unklareFaelle,
@@ -334,6 +381,19 @@ export function buildPruefbericht(
       'Übergabestatus',
       `  Paket vollständig: ${uebergabe.vollstaendig ? 'ja' : `nein (${fehlend.length} fehlende Nachweise, ${unklar.length} unklare Fälle)`}`,
       '  Bankabgleich: noch nicht verfügbar (kein Kontoauszugsabgleich in OfficeTakt)',
+      '',
+    );
+  }
+
+  /* P1 MITARBEITERZAHLUNGEN — neutral, ohne Lohnbuchhaltung. */
+  if ((counts.mitarbeiterZahlungen ?? 0) > 0 || (counts.mitarbeiterZahlungenStorniert ?? 0) > 0) {
+    zeilen.push(
+      'Mitarbeiterzahlungen (siehe mitarbeiter_zahlungen.csv)',
+      `  Zahlungen im Monat: ${counts.mitarbeiterZahlungen ?? 0}, Summe ${(summen.mitarbeiterZahlungen ?? 0).toFixed(2)}`,
+      `  davon Vorschüsse (Forderung, kein Aufwand): ${(summen.mitarbeiterVorschuesse ?? 0).toFixed(2)}`,
+      `  storniert bzw. Storno: ${counts.mitarbeiterZahlungenStorniert ?? 0}`,
+      `  Barzahlungen ohne unterschriebenen Nachweis: ${counts.mitarbeiterBarOhneNachweis ?? 0}`,
+      '  Keine Lohnabrechnung, keine Lohnsteuer, keine Sozialversicherung, kein Sachkonto.',
       '',
     );
   }

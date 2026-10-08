@@ -7,6 +7,7 @@ import type { Expense } from '../../types/expense';
 import type { BusinessLetter } from '../../types/businessLetter';
 import type { Offer } from '../../types/offer';
 import { parseExpensePaymentEntityId } from '../expense/expenseCloudSyncService';
+import type { Employee, EmployeePayment } from '../../types/employee';
 import type { KnowledgeFact } from '../../types/knowledge';
 import type { InvoiceDraftCloudEntity } from '../../types/invoiceDraftCloud';
 import type { OrderDraft } from '../../types/orderDraft';
@@ -110,6 +111,11 @@ export function findEntityInState(
       const payment = (expense.payments ?? []).find((item) => item.id === parsed.paymentId) ?? null;
       return { id: entityId, expenseId: parsed.expenseId, paymentId: parsed.paymentId, payment } as unknown as SyncEntity;
     }
+    // P1 MITARBEITERZAHLUNGEN — Stammsatz und Zahlung, je eigene Kennung.
+    case 'employee':
+      return (state.employees ?? []).find((item) => item.id === entityId) ?? null;
+    case 'employee_payment':
+      return ((state.employeePayments ?? []).find((item) => item.id === entityId) ?? null) as unknown as SyncEntity | null;
     case 'vorgang':
       return state.vorgaenge.find((item) => item.id === entityId) ?? null;
     case 'vorgang_note':
@@ -206,6 +212,12 @@ export function upsertEntityInState(
       break;
     case 'expense_payment':
       // Zahlungen werden ueber den Pull-Merge in die Ausgabe eingeflochten, nie einzeln eingesetzt.
+      break;
+    case 'employee':
+      next.employees = upsertInArray(next.employees ?? [], entity as Employee);
+      break;
+    case 'employee_payment':
+      next.employeePayments = upsertInArray(next.employeePayments ?? [], entity as unknown as EmployeePayment & SyncEntity) as unknown as EmployeePayment[];
       break;
     case 'vorgang':
       next.vorgaenge = upsertInArray(next.vorgaenge, entity as Vorgang);
@@ -346,6 +358,9 @@ export function listEntitiesByType(
       return [...(state.expenses ?? [])];
     case 'expense_payment':
       return []; // nicht verfolgt — explizit eingereiht beim Buchen/Entfernen
+    case 'employee':
+    case 'employee_payment':
+      return []; // P1 — nicht verfolgt; explizit eingereiht bei jeder Änderung
     case 'vorgang':
       return [...state.vorgaenge];
     case 'customer':
