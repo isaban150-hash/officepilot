@@ -25,6 +25,9 @@ import {
   loadGoldMasterData,
   resolveTestWorldRoot,
 } from './goldLoader';
+import { GOLD_WRITE_REPORT_ENV, isGoldReportWriteEnabled } from './goldReportWriteGate';
+
+export { GOLD_WRITE_REPORT_ENV, isGoldReportWriteEnabled };
 
 export type PipelineAreaStatus = {
   ok: boolean;
@@ -361,10 +364,17 @@ export function formatSuiteReport(report: GoldPipelineSuiteReport): string {
   return `${lines.join('\n')}\n`;
 }
 
+/**
+ * TEST-INFRA-GOLD-SCHUTZ-01 — geschrieben wird nur mit ausdrücklicher Freigabe
+ * (`GOLD_WRITE_REPORT=1`, siehe `goldReportWriteGate.ts`).
+ *
+ * Schreibt beide Berichte und gibt den Pfad des Markdown-Berichts zurück — ohne Freigabe nichts und `null`. */
 export function writeSuiteReport(
   report: GoldPipelineSuiteReport,
   testWorldRoot: string = resolveTestWorldRoot(),
-): string {
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): string | null {
+  if (!isGoldReportWriteEnabled(env)) return null;
   const dir = join(testWorldRoot, 'reports');
   mkdirSync(dir, { recursive: true });
   const mdPath = join(dir, 'gold-pipeline-04b.md');

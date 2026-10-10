@@ -14,6 +14,8 @@ export default defineConfig({
           environment: 'node',
           include: unitIncludes,
           // No setupFiles: no fake-indexeddb, no resetTestStores, no auth reset.
+          // TEST-INFRA-GOLD-SCHUTZ-01 — Lauf scheitert, wenn er geschützte Artefakte verändert.
+          globalSetup: ['./src/test/protectedArtifactsGlobalSetup.ts'],
         },
       },
       {
@@ -24,6 +26,7 @@ export default defineConfig({
           setupFiles: ['./src/test/setup.ts'],
           include: ['src/**/*.test.{ts,tsx}'],
           exclude: [...configDefaults.exclude, ...unitIncludes],
+          globalSetup: ['./src/test/protectedArtifactsGlobalSetup.ts'],
         },
       },
     ],

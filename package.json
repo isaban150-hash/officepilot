@@ -14,6 +14,8 @@
     "test:watch": "vitest --config vitest.core.config.ts",
     "test:full": "vitest run",
     "test:full:watch": "vitest",
+    "test:safe": "vitest run --config vitest.safe.config.ts",
+    "test:safe:list": "vitest list --filesOnly --config vitest.safe.config.ts",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test --project=smoke",
     "test:e2e:live": "playwright test --project=live",

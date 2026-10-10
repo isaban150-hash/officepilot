@@ -14,6 +14,8 @@ export default defineConfig({
           name: 'core-unit',
           environment: 'node',
           include: [...CORE_UNIT_TEST_FILES],
+          // TEST-INFRA-GOLD-SCHUTZ-01 — Lauf scheitert, wenn er geschützte Artefakte verändert.
+          globalSetup: ['./src/test/protectedArtifactsGlobalSetup.ts'],
         },
       },
       {
@@ -23,6 +25,7 @@ export default defineConfig({
           environment: 'happy-dom',
           setupFiles: ['./src/test/setup.ts'],
           include: [...CORE_DEFAULT_TEST_FILES],
+          globalSetup: ['./src/test/protectedArtifactsGlobalSetup.ts'],
         },
       },
     ],

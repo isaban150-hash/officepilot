@@ -71,4 +71,8 @@ export const UNIT_TEST_FILES = [
   'src/storageTransformDerivativeCapabilityRequirements01.test.ts',
   'src/storageTransformIntentPlanner01.test.ts',
   'src/storageTransformPdfPreflight01.test.ts',
+
+  // TEST-INFRA-GOLD-SCHUTZ-01 — Schutz der Testinfrastruktur (schreibt nur nach os.tmpdir())
+  'src/test/goldReportWriteGate.test.ts',
+  'src/test/protectedArtifacts.test.ts',
 ] as const;

@@ -15,7 +15,9 @@ import {
   resolveTestWorldRoot,
 } from './goldLoader';
 import {
+  GOLD_WRITE_REPORT_ENV,
   formatSuiteReport,
+  isGoldReportWriteEnabled,
   loadGoldPdfBytes,
   runAllGoldPdfPipeline,
   writeSuiteReport,
@@ -87,11 +89,16 @@ describe('TESTWORLD gold PDF pipeline 04B', () => {
         },
       });
 
+      // TEST-INFRA-GOLD-SCHUTZ-01 — geschrieben wird nur mit GOLD_WRITE_REPORT=1.
       const reportPath = writeSuiteReport(report, testWorldRoot);
       // eslint-disable-next-line no-console
       console.log(formatSuiteReport(report));
       // eslint-disable-next-line no-console
-      console.log(`Report written: ${reportPath}`);
+      console.log(
+        reportPath
+          ? `Report written: ${reportPath}`
+          : `Report not written (protected artifact; set ${GOLD_WRITE_REPORT_ENV}=1 to write)`,
+      );
 
       // Regression gate on the live comparison: all 36 PDFs must run through the
       // pipeline (no ERROR) and none may deviate from Expected (no FAIL). The written
@@ -99,7 +106,13 @@ describe('TESTWORLD gold PDF pipeline 04B', () => {
       expect(report.checked).toBe(36);
       expect(report.error).toBe(0);
       expect(report.fail, report.deviations.join('\n')).toBe(0);
-      expect(existsSync(reportPath)).toBe(true);
+      // TEST-INFRA-GOLD-SCHUTZ-01 — mit Freigabe muss der Bericht existieren; ohne Freigabe darf
+      // nichts geschrieben worden sein (der Schutz-Setup prüft zusätzlich die Prüfsummen).
+      if (isGoldReportWriteEnabled()) {
+        expect(reportPath !== null && existsSync(reportPath)).toBe(true);
+      } else {
+        expect(reportPath).toBeNull();
+      }
     },
     300_000,
   );
