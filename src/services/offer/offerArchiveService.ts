@@ -21,6 +21,7 @@ import type { CompanyDocument, PaperFilingRule } from '../../types/models';
 import type { Offer } from '../../types/offer';
 import { attachArchiveDocumentToOffer, getOfferById, isOfferFrozen } from './offerService';
 import { generateOfferPdf } from './offerPdfService';
+import { runAutomaticSyncWrite } from '../sync/syncOutboxService';
 
 export type OfferArchiveResult =
   | { ok: true; document: CompanyDocument; created: boolean }
@@ -62,7 +63,8 @@ export async function ensureOfferArchived(offerId: string): Promise<OfferArchive
   }
   const viaBackLink = getDocumentByLinkedOfferId(offer.id);
   if (viaBackLink) {
-    attachArchiveDocumentToOffer(offer.id, viaBackLink.id);
+    // KONTOSPERRE — automatische Ablage (auch beim Öffnen der Seite): der Änderungsverfolger nimmt den gesperrten Weg.
+    runAutomaticSyncWrite(() => attachArchiveDocumentToOffer(offer.id, viaBackLink.id));
     return { ok: true, document: viaBackLink, created: false };
   }
 
@@ -85,8 +87,11 @@ export async function ensureOfferArchived(offerId: string): Promise<OfferArchive
   }
 
   const company = offer.companySnapshot?.companyName?.trim() ?? '';
-  const result = addDocument({
-    title: `${offer.offerNumber} – Angebot`,
+  // Oben geprüft; als Konstante bleibt die Einengung auch im Schreibbereich erhalten.
+  const offerNumber = offer.offerNumber;
+  // KONTOSPERRE — automatische Ablage (auch beim Öffnen der Seite): der Änderungsverfolger nimmt den gesperrten Weg.
+  const result = runAutomaticSyncWrite(() => addDocument({
+    title: `${offerNumber} – Angebot`,
     category: 'sonstiges',
     classifiedKind: 'angebot',
     issuer: company,
@@ -105,12 +110,12 @@ export async function ensureOfferArchived(offerId: string): Promise<OfferArchive
     paperFolder: paperFolder(),
     archived: true,
     recognizedText: recognizedText(offer),
-    tags: ['Angebot', offer.offerNumber, ...(offer.customer.name ? [offer.customer.name] : [])],
+    tags: ['Angebot', offerNumber, ...(offer.customer.name ? [offer.customer.name] : [])],
     imagePreview: '📄',
-  });
+  }));
   if (!result.success) return { ok: false, reason: 'archive_failed' };
 
-  const linked = attachArchiveDocumentToOffer(offer.id, result.document.id);
+  const linked = runAutomaticSyncWrite(() => attachArchiveDocumentToOffer(offer.id, result.document.id));
   if (!linked.success) return { ok: false, reason: 'archive_failed' };
   return { ok: true, document: result.document, created: true };
 }

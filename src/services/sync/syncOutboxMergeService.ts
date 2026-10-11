@@ -37,7 +37,9 @@
  *  * `completed` — der Server hat den Schreibvorgang angenommen (auch als
  *                  Replay oder Dedupe-Antwort). Das ist eine **endgültige**
  *                  Aussage über genau diesen Auftrag.
- *  * `failed`    — im Supabase-Pfad nicht erzeugt; nur der Vollständigkeit halber.
+ *  * `failed`    — KONTOSPERRE: endgültige Berechtigungsabweisung (Sperre, keine
+ *                  Mitgliedschaft/Rolle). Wird nie automatisch erneut gesendet;
+ *                  ebenso monoton wie `completed` (siehe unten).
  *
  * Daraus folgt die eine Ausnahme von „der Pull lief zuletzt": Ein bereits
  * abgeschlossener Auftrag fällt **nicht** auf `pending`/`blocked`/`error`
@@ -112,6 +114,17 @@ export function mergeOutboxAfterPull({
      * wieder als offen führen.
      */
     if (entry.status === 'completed' && pulled.status !== 'completed') {
+      merged.push(entry);
+      continue;
+    }
+    /*
+     * GO-LIVE-SECURITY-01 / KONTOSPERRE — ebenso endgültig ist eine Berechtigungs-
+     * abweisung (`failed`): Der Pull kennt sie noch nicht und führte den Auftrag sonst
+     * wieder als offen, der nächste automatische Lauf sendete ihn erneut. Nur die
+     * Auflösung durch den Pull selbst (`completed`, etwa der zurückgeholte Cloud-Stand)
+     * gewinnt.
+     */
+    if (entry.status === 'failed' && pulled.status !== 'completed' && pulled.status !== 'failed') {
       merged.push(entry);
       continue;
     }

@@ -28,6 +28,7 @@ import {
 } from '../taskEngineService';
 import { buildDedupeKey, isTaskOpen } from '../taskNormalize';
 import { getAllTasksFromStore, replaceTaskInStore } from '../taskStore';
+import { runAutomaticSyncWrite } from '../sync/syncOutboxService';
 import { findInvoiceById } from './invoiceRegistryService';
 
 const SETTLED_STATUSES: ReadonlySet<InvoicePaymentStatus> = new Set(['bezahlt', 'ueberbezahlt', 'storniert']);
@@ -124,7 +125,8 @@ export function runDailyInvoicePaymentTaskReconcile(today: Date = new Date()): b
   const day = today.toISOString().slice(0, 10);
   if (lastDailyReconcileDay === day) return false;
   lastDailyReconcileDay = day;
-  reconcileInvoicePaymentTasks({ today: day });
+  // KONTOSPERRE — automatischer Schreiber ohne Nutzeraktion: der Änderungsverfolger nimmt den gesperrten Weg.
+  runAutomaticSyncWrite(() => reconcileInvoicePaymentTasks({ today: day }));
   return true;
 }
 

@@ -44,6 +44,16 @@ export interface DocumentFileRepresentationBinding {
   readonly part?: string | null;
   /** 01B — Herkunft der Repraesentation (Cloud-Spiegel); lokal bisher immer `derived`. */
   readonly provenance?: 'received' | 'extracted' | 'derived';
+  /**
+   * GO-LIVE-SECURITY-01 / FINALISIERUNG — die Vertrauensmarke des Servers.
+   *
+   * Gesetzt, wenn eine E-Rechnungsbindung nicht nachweislich von Inhaber oder
+   * Admin unter allen Serverprüfungen stammt (Altbestand vor 20261106120000).
+   * Nur der Server setzt und entfernt sie; hier ist sie ein Spiegel aus dem
+   * Abzug. Eine markierte Datei wird nur ausgeliefert, wenn eine frische
+   * Erzeugung dieselben Bytes ergibt (`einvoiceBindingTrust`).
+   */
+  readonly einvoiceUntrustedAt?: string;
   readonly sync?: import('./sync').SyncMeta;
 }
 

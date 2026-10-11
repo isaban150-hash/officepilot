@@ -10,13 +10,15 @@ import { persistAll } from '../persistenceService';
 import { ensureSyncClientFromState, hydrateSyncClient } from '../sync/syncClientService';
 import {
   completeIdenticalCompanyCloudOutboxEntry,
-  enqueueSyncOutbox,
+  enqueueBackfillSyncOutbox,
+  runAutomaticSyncWrite,
   getSyncOutboxSnapshot,
   markOutboxEntriesCompleted,
   clearOutboxSentProof,
   getUnresolvedSentProofs,
 } from '../sync/syncOutboxService';
 import { filterSyncActive } from '../sync/syncMetaService';
+import { planRoleDeniedTombstoneRestore } from '../sync/syncRoleDenial';
 import {
   mergeCustomersFromPull,
   planCustomerBackfill,
@@ -240,7 +242,9 @@ export function applyWorkspaceStateToStores(state: AppPersistedState): void {
     hydrateCompanyProfileStore(state.companyProfile);
   }
   if (state.setup) {
-    persistAll(state.setup);
+    // KONTOSPERRE — Bootstrap ohne Nutzeraktion: der Änderungsverfolger nimmt den gesperrten Weg
+    // (Betriebsdaten, Firmenprofil, Betrieb einer endgültigen Abweisung werden nicht neu eingereiht).
+    runAutomaticSyncWrite(() => persistAll(state.setup));
   }
 }
 
@@ -355,7 +359,7 @@ function adoptLostAckBaseVersion<T extends { sync?: SyncMeta }>(
  *
  * Ein Versionskonflikt hat den Eintrag auf `blocked` gesetzt, und der Push
  * verarbeitet nur `pending` und `error`. Die neue Basisversion allein liesse
- * den Eintrag also für immer stumm. `enqueueSyncOutbox` führt ihn über die
+ * den Eintrag also für immer stumm. `enqueueBackfillSyncOutbox` führt ihn über die
  * vorhandene Merge-Semantik zurück auf `pending` — `ACTIVE_OUTBOX_STATUSES`
  * schliesst `blocked` ein, es entsteht kein zweiter Eintrag. Die bestehende
  * Operation bleibt erhalten; sie taugt nicht als Create-Beweis, ist aber die
@@ -411,7 +415,8 @@ function applyLostAckAdoptionToOutbox(
     const existing = entries.find(
       (entry) => entry.entityType === entityType && entry.entityId === entityId,
     );
-    enqueueSyncOutbox({
+    // KONTOSPERRE — automatischer Weg: reiht nie eine endgültig abgewiesene Aktion neu ein (enqueueBackfillSyncOutbox).
+    enqueueBackfillSyncOutbox({
       entityType,
       entityId,
       operation: existing?.operation ?? 'update',
@@ -617,7 +622,8 @@ export function mergeRemoteWorkspacePullIntoState(
      * liegt ein echter Betrieb: nachmelden statt nur kommentieren. Defaultwerte
      * werden nie angemeldet (isDefaultSetup).
      */
-    enqueueSyncOutbox({
+    // KONTOSPERRE — automatischer Weg: reiht nie eine endgültig abgewiesene Aktion neu ein (enqueueBackfillSyncOutbox).
+    enqueueBackfillSyncOutbox({
       entityType: 'company_setup',
       entityId: workspaceId,
       operation: 'create',
@@ -711,7 +717,8 @@ export function mergeRemoteWorkspacePullIntoState(
     }
   } else if (!isDefaultCompanyProfile(state.companyProfile)) {
     // Gleiche Regel wie beim Setup: ein echtes lokales Profil wird nachgemeldet.
-    enqueueSyncOutbox({
+    // KONTOSPERRE — automatischer Weg: reiht nie eine endgültig abgewiesene Aktion neu ein (enqueueBackfillSyncOutbox).
+    enqueueBackfillSyncOutbox({
       entityType: 'company_profile',
       entityId: workspaceId,
       operation: 'create',
@@ -733,7 +740,8 @@ export function mergeRemoteWorkspacePullIntoState(
   const realLocalVorgaenge = activeLocalVorgaenge.filter((vorgang) => !isDefinitelyMockVorgang(vorgang));
   if (remoteVorgaenge.length === 0 && realLocalVorgaenge.length > 0) {
     for (const vorgang of realLocalVorgaenge) {
-      enqueueSyncOutbox({
+      // KONTOSPERRE — automatischer Weg: reiht nie eine endgültig abgewiesene Aktion neu ein (enqueueBackfillSyncOutbox).
+      enqueueBackfillSyncOutbox({
         entityType: 'vorgang',
         entityId: vorgang.id,
         operation: 'create',
@@ -828,7 +836,7 @@ export function mergeRemoteWorkspacePullIntoState(
     next.vorgaenge ?? state.vorgaenge,
     remoteVorgaenge,
   )) {
-    enqueueSyncOutbox({
+    enqueueBackfillSyncOutbox({
       entityType: 'vorgang',
       entityId: vorgangId,
       operation: 'update',
@@ -888,7 +896,7 @@ export function mergeRemoteWorkspacePullIntoState(
     next.customers ?? state.customers ?? [],
     remoteCustomerRows,
   )) {
-    enqueueSyncOutbox({
+    enqueueBackfillSyncOutbox({
       entityType: 'customer',
       entityId: customerId,
       operation: 'create',
@@ -1004,7 +1012,7 @@ export function mergeRemoteWorkspacePullIntoState(
     next.vorgangNotes ?? state.vorgangNotes ?? [],
     remoteNoteRows,
   )) {
-    enqueueSyncOutbox({
+    enqueueBackfillSyncOutbox({
       entityType: 'vorgang_note',
       entityId: noteId,
       operation: 'create',
@@ -1080,7 +1088,7 @@ export function mergeRemoteWorkspacePullIntoState(
     next.businessLetters ?? state.businessLetters ?? [],
     remoteLetterRows,
   )) {
-    enqueueSyncOutbox({
+    enqueueBackfillSyncOutbox({
       entityType: 'business_letter',
       entityId: letterId,
       operation: 'create',
@@ -1161,7 +1169,7 @@ export function mergeRemoteWorkspacePullIntoState(
   }
 
   for (const offerId of planOfferBackfill(next.offers ?? state.offers ?? [], remoteOfferRows)) {
-    enqueueSyncOutbox({
+    enqueueBackfillSyncOutbox({
       entityType: 'offer',
       entityId: offerId,
       operation: 'create',
@@ -1264,7 +1272,7 @@ export function mergeRemoteWorkspacePullIntoState(
     next.tasks ?? state.tasks ?? [],
     remoteTaskRows,
   )) {
-    enqueueSyncOutbox({
+    enqueueBackfillSyncOutbox({
       entityType: 'task',
       entityId: taskId,
       operation: 'create',
@@ -1315,7 +1323,7 @@ export function mergeRemoteWorkspacePullIntoState(
     next.dunningDocumentations ?? state.dunningDocumentations ?? [],
     remoteDunningRows,
   )) {
-    enqueueSyncOutbox({
+    enqueueBackfillSyncOutbox({
       entityType: 'dunning_documentation',
       entityId: documentationId,
       operation: 'create',
@@ -1382,7 +1390,7 @@ export function mergeRemoteWorkspacePullIntoState(
     next.bankAccounts ?? state.bankAccounts ?? [],
     remoteBankAccountRows,
   )) {
-    enqueueSyncOutbox({
+    enqueueBackfillSyncOutbox({
       entityType: 'bank_account',
       entityId: accountId,
       operation: 'create',
@@ -1393,7 +1401,7 @@ export function mergeRemoteWorkspacePullIntoState(
     next.bankTransactions ?? state.bankTransactions ?? [],
     remoteBankTransactionRows,
   )) {
-    enqueueSyncOutbox({
+    enqueueBackfillSyncOutbox({
       entityType: 'bank_transaction',
       entityId: transactionId,
       operation: 'create',
@@ -1423,8 +1431,26 @@ export function mergeRemoteWorkspacePullIntoState(
         relations: [],
         paperRegisterEntries: [],
       };
-    const localPaperEntries = memory.paperRegisterEntries ?? [];
-    const dirtyPaperIds = activeOutboxEntityIds(state, 'paper_register_entry');
+    /*
+     * GO-LIVE-SECURITY-01 — eine vom Server wegen der Rolle abgewiesene
+     * Löschung (etwa als Teil der Archivlöschung durch ein Mitglied) kann nie
+     * gelingen. Der lokale Grabstein weicht dem lebenden Cloud-Stand, der
+     * Auftrag gilt als erledigt. Ohne das bliebe der Eintrag nur auf diesem
+     * Gerät verschwunden, und der Auftrag stünde für immer als Fehler da.
+     */
+    const roleDeniedPaper = planRoleDeniedTombstoneRestore(
+      state.syncOutbox,
+      'paper_register_entry',
+      memory.paperRegisterEntries ?? [],
+      new Set(remotePaperRows.filter((row) => !row.deleted).map((row) => row.client_entry_id)),
+    );
+    const localPaperEntries = (memory.paperRegisterEntries ?? []).filter(
+      (entry) => !roleDeniedPaper.entityIds.has(entry.id),
+    );
+    const dirtyPaperIds = new Set(
+      [...activeOutboxEntityIds(state, 'paper_register_entry')].filter((id) => !roleDeniedPaper.entityIds.has(id)),
+    );
+    if (roleDeniedPaper.outboxIds.length > 0) markOutboxEntriesCompleted(roleDeniedPaper.outboxIds);
 
     const paperAdoption = planPaperRegisterEntryLostAckAdoption(
       localPaperEntries,
@@ -1499,7 +1525,7 @@ export function mergeRemoteWorkspacePullIntoState(
       paperEntries.filter((entry) => activeDocumentIds.has(entry.documentId)),
       remotePaperRows,
     )) {
-      enqueueSyncOutbox({
+      enqueueBackfillSyncOutbox({
         entityType: 'paper_register_entry',
         entityId: entryId,
         operation: 'create',
@@ -1533,7 +1559,7 @@ export function mergeRemoteWorkspacePullIntoState(
 
     // Altbestand — Ereignisse aus der Zeit vor S2, genau einmal je Kennung.
     for (const eventId of planCommunicationEventBackfill(eventMerge.events, remoteEventRows)) {
-      enqueueSyncOutbox({
+      enqueueBackfillSyncOutbox({
         entityType: 'communication_event',
         entityId: eventId,
         operation: 'create',
@@ -1593,7 +1619,7 @@ export function mergeRemoteWorkspacePullIntoState(
 
     // Altbestand — wie bei den Notizen: verglichen wird gegen alle Serverkennungen.
     for (const factId of planKnowledgeFactBackfill(factMerge.facts, remoteFactRows)) {
-      enqueueSyncOutbox({
+      enqueueBackfillSyncOutbox({
         entityType: 'knowledge_fact',
         entityId: factId,
         operation: 'create',
@@ -1655,7 +1681,7 @@ export function mergeRemoteWorkspacePullIntoState(
 
     // Altbestand — verglichen gegen alle Serverkennungen, Grabsteine eingeschlossen.
     for (const draftId of planInvoiceDraftBackfill(draftMerge.entities, remoteDraftRows)) {
-      enqueueSyncOutbox({
+      enqueueBackfillSyncOutbox({
         entityType: 'invoice_draft',
         entityId: draftId,
         operation: 'create',
@@ -1730,7 +1756,7 @@ export function mergeRemoteWorkspacePullIntoState(
       orderIds,
       dirtyOrderDraftIds,
     )) {
-      enqueueSyncOutbox({ entityType: 'order_draft', entityId: draftId, operation: 'create', version: 0 });
+      enqueueBackfillSyncOutbox({ entityType: 'order_draft', entityId: draftId, operation: 'create', version: 0 });
     }
   }
 
@@ -1816,7 +1842,7 @@ export function mergeRemoteWorkspacePullIntoState(
       dirtyIds: dirtyAmendmentDraftIds,
       intentDraftIds: new Set(intents.map((intent) => intent.draftId)),
     })) {
-      enqueueSyncOutbox({ entityType: 'order_amendment_draft', entityId: draftId, operation: 'create', version: 0 });
+      enqueueBackfillSyncOutbox({ entityType: 'order_amendment_draft', entityId: draftId, operation: 'create', version: 0 });
     }
   }
 

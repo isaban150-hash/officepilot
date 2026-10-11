@@ -39,6 +39,9 @@ import { formatPaymentCurrency } from '../services/expensePaymentService';
 import { getInboxItemById } from '../services/inboxService';
 import type { Expense } from '../types/expense';
 import type { TranslationKey } from '../i18n';
+import { useOptionalAuth } from '../context/AuthContext';
+import { isSupabaseConfigured } from '../lib/supabase';
+import { resolveWorkspaceWriteAccess } from '../services/workspace/workspaceRoleService';
 
 /**
  * UIUX-FOUNDATION-01D — repräsentative Detailseite.
@@ -52,6 +55,17 @@ export function AusgabeDetailPage() {
   const fromOverview = searchParams.get('from') === 'overview';
   const { translate, showToast } = useApp();
   const navigate = useNavigate();
+  /*
+   * GO-LIVE-SECURITY-01 / ABSCHLUSS — Ausgaben, ihre Zahlungen, Zuordnung,
+   * Storno und Kontierung sind Buchhaltung: nur Inhaber, Verwaltung und der
+   * lokale Betrieb. Mitglieder sehen den Stand und einen Rollenhinweis; der
+   * Server weist sie ohnehin ab (finance_forbidden_role).
+   */
+  const authUser = useOptionalAuth()?.user;
+  const darfFinanzen = resolveWorkspaceWriteAccess({
+    userId: authUser?.id,
+    cloudConfigured: isSupabaseConfigured(),
+  }).canWrite;
   const [expense, setExpense] = useState<Expense | undefined>(() =>
     id ? getExpenseById(id) : undefined,
   );
@@ -242,7 +256,7 @@ export function AusgabeDetailPage() {
         backHref={fromOverview ? '/ausgaben/offen' : '/ausgaben'}
         backTestId="ausgabe-detail-back"
         primaryAction={
-          canRecordPayment ? (
+          canRecordPayment && darfFinanzen ? (
             <Button type="button" onClick={() => setShowPaymentForm(true)} data-testid="ausgabe-record-payment">
               {translate('payment.record')}
             </Button>
@@ -278,7 +292,8 @@ export function AusgabeDetailPage() {
           expense={expense}
           translate={translate}
           onRemovePayment={handleRemovePayment}
-          onProofChanged={setExpense}
+          allowRemove={darfFinanzen}
+          onProofChanged={darfFinanzen ? setExpense : undefined}
         />
       </DetailSection>
 
@@ -290,6 +305,7 @@ export function AusgabeDetailPage() {
       <DetailSection title={translate('accounting.title')} testId="ausgabe-section-accounting">
         <AccountingAssignmentPanel
           key={`${expense.id}:${accountingToken}`}
+          readOnly={!darfFinanzen}
           assignment={getAccountingAssignmentForSource('expense', expense.id)}
           onStart={() => {
             ensureExpenseAccountingAssignment(expense);
@@ -399,6 +415,12 @@ export function AusgabeDetailPage() {
         testIdPrefix="ausgabe"
       />
 
+      {!darfFinanzen ? (
+        <p className="invoice-hint" data-testid="ausgabe-role-hint">
+          {translate('expense.roleHint')}
+        </p>
+      ) : null}
+      {darfFinanzen ? (
       <div className="detail-actions" data-testid="ausgabe-detail-actions">
         {!cancelled ? (
           <Button variant="outline" onClick={() => setIsEditing(true)} data-testid="ausgabe-edit">
@@ -445,6 +467,7 @@ export function AusgabeDetailPage() {
           </>
         )}
       </div>
+      ) : null}
 
       <ExpensePaymentForm
         expense={expense}

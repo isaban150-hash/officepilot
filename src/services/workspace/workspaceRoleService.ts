@@ -22,10 +22,20 @@ export type WorkspaceWriteAccess =
   | { canWrite: false; canIntake: true; role: 'member'; reason: 'member' }
   | { canWrite: false; canIntake: false; role: null; reason: 'membership_unknown' };
 
-export function resolveWorkspaceWriteAccess(input: {
+/** GO-LIVE-SECURITY-01 — wer eine verbindliche Aktion auslöst. */
+export interface WorkspaceActor {
   userId: string | null | undefined;
   cloudConfigured: boolean;
-}): WorkspaceWriteAccess {
+}
+
+/**
+ * GO-LIVE-SECURITY-01 — die strengste Annahme für einen Dienstaufruf ohne
+ * Angabe: Cloud eingerichtet, Nutzer unbekannt. Das ergibt fail-closed keine
+ * Schreibrechte; ein Aufrufer, der die Rolle nicht mitgibt, ändert nichts.
+ */
+export const UNKNOWN_CLOUD_ACTOR: WorkspaceActor = Object.freeze({ userId: null, cloudConfigured: true });
+
+export function resolveWorkspaceWriteAccess(input: WorkspaceActor): WorkspaceWriteAccess {
   if (!input.cloudConfigured) return { canWrite: true, canIntake: true, role: null, reason: 'local_only' };
 
   const workspace = getWorkspaceStoreSnapshot();

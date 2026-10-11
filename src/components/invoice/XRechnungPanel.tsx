@@ -35,8 +35,10 @@ import { Button } from '../ui/Button';
 import { EINVOICE_STANDARDS } from '../../services/einvoice/einvoiceStandards';
 import {
   LEGACY_INVOICE_HINT,
+  SERVICE_PERIOD_UNVERIFIED_TEXT,
   describeCanonicalIssue,
   describeRenderIssue,
+  describeServicePeriodOutputBlocker,
   looksLikeLegacyInvoice,
 } from '../../services/einvoice/einvoiceIssueText';
 import {
@@ -52,6 +54,13 @@ interface Props {
   /** Injizierbar für Tests — Produktionsstandard sind die echten Dienste. */
   ensureArtifact?: typeof ensureXRechnungArtifact;
   readArtifact?: typeof readXRechnungArtifact;
+  /**
+   * GO-LIVE-SECURITY-01 — dieselbe Ausgabesperre wie für PDF, Druck und
+   * ZUGFeRD: Die Cloud trägt die Bestätigung des Leistungszeitraums noch nicht
+   * nachweislich (siehe `invoiceOutputClearance`). Dann wird weder erzeugt noch
+   * heruntergeladen.
+   */
+  outputBlocked?: boolean;
 }
 
 type PanelPhase =
@@ -77,6 +86,7 @@ export function XRechnungPanel({
   invoice,
   ensureArtifact = ensureXRechnungArtifact,
   readArtifact = readXRechnungArtifact,
+  outputBlocked = false,
 }: Props) {
   const [state, setState] = useState<PanelState>({ invoiceId: invoice.id, phase: { kind: 'idle' } });
   const revokeRef = useRef<(() => void) | null>(null);
@@ -138,7 +148,7 @@ export function XRechnungPanel({
   };
 
   const run = async (): Promise<void> => {
-    if (phase.kind === 'working') return;
+    if (phase.kind === 'working' || outputBlocked) return;
     const angefragt = invoice.id;
     setState({ invoiceId: angefragt, phase: { kind: 'working' } });
 
@@ -167,6 +177,14 @@ export function XRechnungPanel({
       }
       if (result.reason === 'render_failed') {
         anwenden({ kind: 'blocked', messages: result.issues.map(describeRenderIssue), legacy: false });
+        return;
+      }
+      if (result.reason === 'service_period_unconfirmed') {
+        anwenden({ kind: 'blocked', messages: result.codes.map(describeServicePeriodOutputBlocker), legacy: false });
+        return;
+      }
+      if (result.reason === 'service_period_unverified') {
+        anwenden({ kind: 'blocked', messages: [SERVICE_PERIOD_UNVERIFIED_TEXT], legacy: false });
         return;
       }
       if (result.reason === 'no_archive_document') {
@@ -204,7 +222,7 @@ export function XRechnungPanel({
         type="button"
         variant="outline"
         fullWidth
-        disabled={phase.kind === 'working'}
+        disabled={phase.kind === 'working' || outputBlocked}
         onClick={() => void run()}
         data-testid="invoice-xrechnung-action"
       >
@@ -214,6 +232,12 @@ export function XRechnungPanel({
             ? 'XRechnung erneut herunterladen'
             : 'XRechnung erzeugen und herunterladen'}
       </Button>
+
+      {outputBlocked && (
+        <p className="hint-text" data-testid="invoice-xrechnung-output-hold">
+          Erst möglich, wenn die Bestätigung des Leistungszeitraums mit der Cloud abgeglichen ist.
+        </p>
+      )}
 
       {phase.kind === 'ready' && (
         <div className="invoice-einvoice__result" data-testid="invoice-xrechnung-result">
@@ -252,7 +276,9 @@ export function XRechnungPanel({
             <dd data-testid="invoice-xrechnung-durability">
               {phase.artifact.durability === 'cloud_backed'
                 ? 'Lokal und in der Cloud gesichert'
-                : 'Lokal gespeichert · Cloud-Sicherung steht noch aus'}
+                : phase.artifact.durability === 'not_stored'
+                  ? 'Nicht abgelegt · nur zum Herunterladen erzeugt; ablegen dürfen Inhaber und Verwaltung'
+                  : 'Lokal gespeichert · Cloud-Sicherung steht noch aus'}
             </dd>
             <dt>Prüfwert (SHA-256)</dt>
             {/*

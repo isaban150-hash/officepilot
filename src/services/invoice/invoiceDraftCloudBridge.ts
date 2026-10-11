@@ -43,6 +43,7 @@ import {
   getSyncOutboxSnapshot,
   markOutboxEntriesCompleted,
   releaseBlockedOutboxEntry,
+  runAutomaticSyncWrite,
 } from '../sync/syncOutboxService';
 import {
   createInvoiceDraftRecord,
@@ -1007,7 +1008,8 @@ export async function runInvoiceDraftCloudBackfillOnce(workspaceId: string): Pro
       report.skippedKnown += 1;
       continue;
     }
-    const outcome = applyLocalDraftCommitToMirror(record, draft);
+    // KONTOSPERRE — automatischer Schreiber ohne Nutzeraktion: der Änderungsverfolger nimmt den gesperrten Weg.
+    const outcome = runAutomaticSyncWrite(() => applyLocalDraftCommitToMirror(record, draft));
     if (outcome === 'created') report.mirrored += 1;
     if (outcome === 'conflict') report.conflicts += 1;
   }

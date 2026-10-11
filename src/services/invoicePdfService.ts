@@ -19,6 +19,7 @@ import { applyPdfA3, attachPdfAFile, type PdfAAttachment } from './einvoice/pdfa
 import { resolveBrandingAsset } from './branding/brandingAssetResolver';
 import { encodeDocumentFileRasterToJpeg } from './documentFileRasterEncodeService';
 import { getSyncClient } from './sync/syncClientService';
+import { checkInvoiceOutput } from './invoice/invoiceOutputGuard';
 import type { HistoricalInvoiceLogoSource } from '../types/branding';
 import type { InvoicePrintModel, VorgangInvoice } from '../types/models';
 
@@ -195,6 +196,13 @@ async function buildApprovedInvoicePdf(
     return { ok: false, reason: 'validation_failed', validation };
   }
 
+  /*
+   * GO-LIVE-SECURITY-01 — die gemeinsame Ausgabegrenze, auch für direkte Aufrufe:
+   * Auf dem Gerät eines Mitglieds braucht die Bestätigung den Cloud-Nachweis.
+   */
+  const ausgabe = await checkInvoiceOutput(invoice);
+  if (ausgabe) return { ok: false, reason: 'validation_failed', message: ausgabe.reason };
+
   let model: InvoicePrintModel;
   try {
     model = buildInvoicePrintModelFromInvoice(invoice);
@@ -261,6 +269,9 @@ export async function generateInvoiceCorrectionPdf(
   if (validation.blockingErrors.length > 0) {
     return { ok: false, reason: 'validation_failed', validation };
   }
+  // GO-LIVE-SECURITY-01 — dieselbe Ausgabegrenze wie für die Rechnung selbst.
+  const ausgabe = await checkInvoiceOutput(invoice);
+  if (ausgabe) return { ok: false, reason: 'validation_failed', message: ausgabe.reason };
 
   let model: InvoicePrintModel;
   try {

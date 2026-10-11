@@ -22,8 +22,10 @@ import { useEffect, useRef, useState } from 'react';
 import { Button } from '../ui/Button';
 import {
   LEGACY_INVOICE_HINT,
+  SERVICE_PERIOD_UNVERIFIED_TEXT,
   describeCanonicalIssue,
   describeRenderIssue,
+  describeServicePeriodOutputBlocker,
   looksLikeLegacyInvoice,
 } from '../../services/einvoice/einvoiceIssueText';
 import {
@@ -39,6 +41,12 @@ interface Props {
   /** Injizierbar für Tests — Produktionsstandard sind die echten Dienste. */
   ensureArtifact?: typeof ensureZugferdArtifact;
   readArtifact?: typeof readZugferdArtifact;
+  /**
+   * GO-LIVE-SECURITY-01 — die Cloud trägt die Bestätigung des
+   * Leistungszeitraums noch nicht nachweislich (siehe
+   * `invoiceOutputClearance`). Dann wird weder erzeugt noch heruntergeladen.
+   */
+  outputBlocked?: boolean;
 }
 
 type PanelPhase =
@@ -57,6 +65,7 @@ export function ZugferdPanel({
   invoice,
   ensureArtifact = ensureZugferdArtifact,
   readArtifact = readZugferdArtifact,
+  outputBlocked = false,
 }: Props) {
   const [state, setState] = useState<PanelState>({ invoiceId: invoice.id, phase: { kind: 'idle' } });
   const revokeRef = useRef<(() => void) | null>(null);
@@ -121,7 +130,7 @@ export function ZugferdPanel({
   };
 
   const run = async (): Promise<void> => {
-    if (phase.kind === 'working') return;
+    if (phase.kind === 'working' || outputBlocked) return;
     const angefragt = invoice.id;
     setState({ invoiceId: angefragt, phase: { kind: 'working' } });
 
@@ -159,6 +168,18 @@ export function ZugferdPanel({
           messages: result.issues.map(describeRenderIssue),
           legacy: false,
         });
+        return;
+      }
+      if (result.reason === 'service_period_unconfirmed') {
+        anwenden({
+          kind: 'blocked',
+          messages: result.codes.map(describeServicePeriodOutputBlocker),
+          legacy: false,
+        });
+        return;
+      }
+      if (result.reason === 'service_period_unverified') {
+        anwenden({ kind: 'blocked', messages: [SERVICE_PERIOD_UNVERIFIED_TEXT], legacy: false });
         return;
       }
       if (result.reason === 'pdf_xml_mismatch') {
@@ -205,7 +226,7 @@ export function ZugferdPanel({
         type="button"
         variant="outline"
         fullWidth
-        disabled={phase.kind === 'working'}
+        disabled={phase.kind === 'working' || outputBlocked}
         onClick={() => void run()}
         data-testid="invoice-zugferd-action"
       >
@@ -215,6 +236,12 @@ export function ZugferdPanel({
             ? 'ZUGFeRD erneut herunterladen'
             : 'ZUGFeRD erzeugen und herunterladen'}
       </Button>
+
+      {outputBlocked && (
+        <p className="hint-text" data-testid="invoice-zugferd-output-hold">
+          Erst möglich, wenn die Bestätigung des Leistungszeitraums mit der Cloud abgeglichen ist.
+        </p>
+      )}
 
       {phase.kind === 'ready' && (
         <div className="invoice-einvoice__result" data-testid="invoice-zugferd-result">
@@ -243,7 +270,9 @@ export function ZugferdPanel({
             <dd data-testid="invoice-zugferd-durability">
               {phase.artifact.durability === 'cloud_backed'
                 ? 'Lokal und in der Cloud gesichert'
-                : 'Lokal gespeichert · Cloud-Sicherung steht noch aus'}
+                : phase.artifact.durability === 'not_stored'
+                  ? 'Nicht abgelegt · nur zum Herunterladen erzeugt; ablegen dürfen Inhaber und Verwaltung'
+                  : 'Lokal gespeichert · Cloud-Sicherung steht noch aus'}
             </dd>
             <dt>Prüfwert (SHA-256)</dt>
             <dd className="invoice-einvoice__hash" data-testid="invoice-zugferd-sha">

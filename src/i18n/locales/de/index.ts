@@ -26,6 +26,7 @@ import { deInvoiceDraftCloud } from './invoiceDraftCloud';
 import { deOrderDraftCloud } from './orderDraftCloud';
 import { deReplyNeed } from './replyNeed';
 import { deEmployeePayments } from './employeePayments';
+import { deWorkspaceRole } from './workspaceRole';
 
 export const deModules = {
   ...deAuth,
@@ -58,4 +59,5 @@ export const deModules = {
   ...deOrderDraftCloud,
   ...deReplyNeed,
   ...deEmployeePayments,
+  ...deWorkspaceRole,
 } as const;

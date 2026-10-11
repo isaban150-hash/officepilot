@@ -37,6 +37,9 @@ import {
   updateOfferDraft,
 } from '../services/offer/offerService';
 import { finalizeOfferWithCloud } from '../services/offer/offerFinalizeCloudService';
+import { useOptionalAuth } from '../context/AuthContext';
+import { isSupabaseConfigured } from '../lib/supabase';
+import { resolveWorkspaceWriteAccess } from '../services/workspace/workspaceRoleService';
 import { ensureOfferArchived } from '../services/offer/offerArchiveService';
 import { buildOfferPrintModel } from '../services/offer/offerPrintModel';
 import type { CustomerBilling, OrderUnit, TaxStatus } from '../types/models';
@@ -68,6 +71,13 @@ function neuePosition(): OfferPosition {
 export function AngebotEditorPage() {
   const { translate, setup, showToast } = useApp();
   const navigate = useNavigate();
+  /*
+   * GO-LIVE-SECURITY-01 — Mitglieder bereiten Angebote vor; freigeben und damit
+   * die Angebotsnummer vergeben dürfen nur Inhaber und Admin. Der Server prüft
+   * das verbindlich; die Seite bietet nur nichts an, was er ablehnen würde.
+   */
+  const authUser = useOptionalAuth()?.user ?? null;
+  const darfFreigeben = resolveWorkspaceWriteAccess({ userId: authUser?.id, cloudConfigured: isSupabaseConfigured() }).canWrite;
   const { offerId } = useParams<{ offerId: string }>();
   const [params] = useSearchParams();
 
@@ -174,6 +184,10 @@ export function AngebotEditorPage() {
   };
 
   const handleFreigeben = async (): Promise<boolean> => {
+    if (!darfFreigeben) {
+      setFehler(translate('offer.finalize.forbidden'));
+      return true;
+    }
     const id = sichere();
     if (!id) return true;
     setLaeuft(true);
@@ -388,9 +402,11 @@ export function AngebotEditorPage() {
         <Button type="button" onClick={handleSpeichern} data-testid="offer-save" disabled={laeuft}>
           {translate('offer.editor.saveDraft')}
         </Button>
-        <Button type="button" variant="secondary" onClick={() => setFreigabeOffen(true)} data-testid="offer-finalize" disabled={laeuft}>
-          {translate('offer.editor.finalize')}
-        </Button>
+        {darfFreigeben ? (
+          <Button type="button" variant="secondary" onClick={() => setFreigabeOffen(true)} data-testid="offer-finalize" disabled={laeuft}>
+            {translate('offer.editor.finalize')}
+          </Button>
+        ) : null}
         <Button type="button" variant="ghost" onClick={() => setVorschau((v) => !v)} data-testid="offer-preview-toggle">
           {translate('offer.editor.preview')}
         </Button>
@@ -400,7 +416,11 @@ export function AngebotEditorPage() {
           </Button>
         ) : null}
       </div>
-      <p className="form-hint">{translate('offer.editor.finalizeHint')}</p>
+      {darfFreigeben ? (
+        <p className="form-hint">{translate('offer.editor.finalizeHint')}</p>
+      ) : (
+        <p className="form-hint" data-testid="offer-finalize-role-hint">{translate('offer.finalize.roleHint')}</p>
+      )}
 
       {vorschauModell ? (
         <DetailSection title={translate('offer.editor.preview')} testId="offer-preview">

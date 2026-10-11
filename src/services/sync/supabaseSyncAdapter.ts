@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AppPersistedState, StoredInvoiceEntry, Vorgang, VorgangInvoice } from '../../types/models';
 import type { SyncOutboxEntry, SyncSimulationReport } from '../../types/sync';
 import { getSupabaseClient, isSupabaseConfigured } from '../../lib/supabase';
+import { isFinalPermissionDenialMessage } from './syncRoleDenial';
 import type {
   SyncAcknowledgeInput,
   SyncAdapter,
@@ -15,7 +16,7 @@ import type {
   SyncPushResult,
 } from './syncAdapter';
 import { isSupabaseSyncAllowed } from './cloudSyncAllowlist';
-import { enqueueSyncOutbox } from './syncOutboxService';
+import { enqueueBackfillSyncOutbox } from './syncOutboxService';
 import {
   EMPLOYEE_PUSH_ORDER,
   applyEmployeePullToState,
@@ -163,6 +164,7 @@ import {
   type WorkspaceDunningDocumentationRow,
 } from '../invoice/dunningDocumentationCloudService';
 import { applyInvoicePullAfterVorgangMerge } from '../invoice/invoiceCloudPullOrchestrator';
+import { resolveWorkspaceWriteAccess } from '../workspace/workspaceRoleService';
 import { applyDocumentPullToState } from '../document/documentCloudPullOrchestrator';
 import { listOrderAmendmentConfirmIntents } from '../orderAmendment/orderAmendmentConfirmIntentService';
 import {
@@ -265,6 +267,33 @@ export function appendMissingInvoicePositionRefsToReport(
       }
     }
   }
+}
+
+/**
+ * GO-LIVE-SECURITY-01 / KONTOSPERRE — wie ein fehlgeschlagener Sendeauftrag weitergeht.
+ *
+ *  * Versionskonflikt → `blocked` (wartet auf den Pull bzw. eine Entscheidung).
+ *  * Endgültige Berechtigungsabweisung (Sperre, keine Mitgliedschaft, keine Rolle, Konto
+ *    nicht freigegeben) → `failed`: Endzustand. Die Push-Schleife sendet nur `pending`
+ *    und `error`, „Erneut versuchen" belebt nur `error`. Vorher stand so ein Auftrag
+ *    als `error` und ging mit jedem automatischen Lauf (Start, Änderung, Fokus, alle
+ *    90 s) erneut hinaus — nach dem Entsperren nahm der Server ihn an.
+ *  * Alles andere (Netz, Zeitüberlauf, Serverfehler) → `error`, weiter wiederholbar.
+ *
+ * Die Einstufung folgt der Servermeldung, nicht nur dem Fehlercode: Finanzwege melden
+ * `finance_account_blocked` ohne SQLSTATE 42501.
+ */
+function pushFailureOutcome(
+  error: unknown,
+  message: string,
+): { status: SyncOutboxEntry['status']; retryable: boolean } {
+  if (error instanceof WorkspaceCloudError && error.code === 'version_conflict') {
+    return { status: 'blocked', retryable: error.retryable };
+  }
+  if (isFinalPermissionDenialMessage(message)) {
+    return { status: 'failed', retryable: false };
+  }
+  return { status: 'error', retryable: error instanceof WorkspaceCloudError ? error.retryable : true };
 }
 
 function updateOutboxEntryStatus(
@@ -997,6 +1026,24 @@ export class SupabaseSyncAdapter implements SyncAdapter {
     return this.client;
   }
 
+  /**
+   * GO-LIVE-SECURITY-01 — ist der angemeldete Nutzer bekanntermaßen Mitglied
+   * ohne Schreibrecht? Nur dann gleicht der Rechnungs-Pull Versand und
+   * Leistungszeitraum an die Cloud an. Unbekannt heißt nein: Ein noch nicht
+   * gesicherter Vermerk von Inhaber oder Verwaltung darf nie verloren gehen.
+   */
+  private async isKnownMember(): Promise<boolean> {
+    try {
+      const { data } = await this.client!.auth.getSession();
+      return (
+        resolveWorkspaceWriteAccess({ userId: data.session?.user?.id ?? null, cloudConfigured: true }).reason ===
+        'member'
+      );
+    } catch {
+      return false;
+    }
+  }
+
   async pushChanges(input: SyncPushInput): Promise<SyncPushResult> {
     this.syncState = 'uploading';
     const startedAt = new Date().toISOString();
@@ -1158,14 +1205,14 @@ export class SupabaseSyncAdapter implements SyncAdapter {
           });
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Push fehlgeschlagen';
-          const retryable = error instanceof WorkspaceCloudError ? error.retryable : true;
+          const { retryable, status: fehlerStatus } = pushFailureOutcome(error, message);
           const isVersionConflict =
             error instanceof WorkspaceCloudError && error.code === 'version_conflict';
           failedOutbox.push({ outboxId: entry.id, message, retryable });
           outbox = updateOutboxEntryStatus(
             outbox,
             entry.id,
-            isVersionConflict ? 'blocked' : 'error',
+            fehlerStatus,
             entry.retryCount + 1,
             { message, retryable },
           );
@@ -1207,10 +1254,10 @@ export class SupabaseSyncAdapter implements SyncAdapter {
           report.syncedEntities.push({ entityType: entry.entityType, entityId: entry.entityId, resolution: outcome.kind === 'pushed' ? 'local_wins' : 'noop' });
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Push fehlgeschlagen';
-          const retryable = error instanceof WorkspaceCloudError ? error.retryable : true;
+          const { retryable, status: fehlerStatus } = pushFailureOutcome(error, message);
           const isVersionConflict = error instanceof WorkspaceCloudError && error.code === 'version_conflict';
           failedOutbox.push({ outboxId: entry.id, message, retryable });
-          outbox = updateOutboxEntryStatus(outbox, entry.id, isVersionConflict ? 'blocked' : 'error', entry.retryCount + 1, { message, retryable });
+          outbox = updateOutboxEntryStatus(outbox, entry.id, fehlerStatus, entry.retryCount + 1, { message, retryable });
           report.errorCount += 1;
           report.errors.push({ outboxId: entry.id, message });
           if (isVersionConflict) {
@@ -1245,10 +1292,10 @@ export class SupabaseSyncAdapter implements SyncAdapter {
           report.syncedEntities.push({ entityType: entry.entityType, entityId: entry.entityId, resolution: outcome.kind === 'pushed' ? 'local_wins' : 'noop' });
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Push fehlgeschlagen';
-          const retryable = error instanceof WorkspaceCloudError ? error.retryable : true;
+          const { retryable, status: fehlerStatus } = pushFailureOutcome(error, message);
           const isVersionConflict = error instanceof WorkspaceCloudError && error.code === 'version_conflict';
           failedOutbox.push({ outboxId: entry.id, message, retryable });
-          outbox = updateOutboxEntryStatus(outbox, entry.id, isVersionConflict ? 'blocked' : 'error', entry.retryCount + 1, { message, retryable });
+          outbox = updateOutboxEntryStatus(outbox, entry.id, fehlerStatus, entry.retryCount + 1, { message, retryable });
           report.errorCount += 1;
           report.errors.push({ outboxId: entry.id, message });
           if (isVersionConflict) {
@@ -1434,14 +1481,14 @@ export class SupabaseSyncAdapter implements SyncAdapter {
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Push fehlgeschlagen';
-        const retryable = error instanceof WorkspaceCloudError ? error.retryable : true;
+        const { retryable, status: fehlerStatus } = pushFailureOutcome(error, message);
         const isVersionConflict = error instanceof WorkspaceCloudError && error.code === 'version_conflict';
 
         failedOutbox.push({ outboxId: entry.id, message, retryable });
         outbox = updateOutboxEntryStatus(
           outbox,
           entry.id,
-          isVersionConflict ? 'blocked' : 'error',
+          fehlerStatus,
           entry.retryCount + 1,
           { message, retryable },
         );
@@ -1468,7 +1515,9 @@ export class SupabaseSyncAdapter implements SyncAdapter {
       /*
        * FINANZ-SYNC-BLOCKER-01B — jeder Auftrag traegt seinen eigenen Grund und
        * behaelt die Einstufung, die er oben bekommen hat. Ein Versionskonflikt
-       * bleibt `blocked` und faellt nicht in den Fehlertopf.
+       * bleibt `blocked` und faellt nicht in den Fehlertopf. KONTOSPERRE: eine
+       * endgueltige Berechtigungsabweisung bleibt `failed` — als `error` ginge
+       * sie mit dem naechsten automatischen Lauf erneut hinaus.
        */
       markOutboxEntriesFailed(
         failedOutbox.map((item) => {
@@ -1477,7 +1526,12 @@ export class SupabaseSyncAdapter implements SyncAdapter {
             outboxId: item.outboxId,
             message: item.message,
             retryable: item.retryable,
-            status: eintrag?.status === 'blocked' ? ('blocked' as const) : ('error' as const),
+            status:
+              eintrag?.status === 'blocked'
+                ? ('blocked' as const)
+                : eintrag?.status === 'failed'
+                  ? ('failed' as const)
+                  : ('error' as const),
           };
         }),
       );
@@ -1582,6 +1636,7 @@ export class SupabaseSyncAdapter implements SyncAdapter {
         ),
         report,
         client: this.client,
+        alignForMember: await this.isKnownMember(),
       });
 
       appendMissingInvoicePositionRefsToReport(invoicePull.vorgaenge, report);
@@ -1705,8 +1760,9 @@ export class SupabaseSyncAdapter implements SyncAdapter {
               resolution: 'conflict',
             });
           }
+          // KONTOSPERRE: endgueltig abgewiesene Mitarbeiterdaten reiht der Backfill nicht erneut ein.
           for (const nachtrag of appliedEmployees.backfill) {
-            enqueueSyncOutbox({
+            enqueueBackfillSyncOutbox({
               entityType: nachtrag.entityType,
               entityId: nachtrag.entityId,
               operation: nachtrag.entityType === 'employee' && nachtrag.version > 0 ? 'update' : 'create',

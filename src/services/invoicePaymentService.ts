@@ -7,6 +7,7 @@ import { isFinalizedInvoice } from './invoiceArchiveService';
 import { buildSkontoDeadline, parseSkontoFromText } from './invoiceTaxService';
 import { generateUuid } from './sync/syncMetaService';
 import { reconcileInvoicePaymentTasks } from './invoice/invoicePaymentTaskSync';
+import { resolveWorkspaceWriteAccess, type WorkspaceActor } from './workspace/workspaceRoleService';
 import { normalizePaymentMethod } from '../types/models';
 import {
   calculateOverpaidAmount,
@@ -268,6 +269,14 @@ export interface RecordPaymentOptions {
   confirmUnsent?: boolean;
   /** Required when amount exceeds the current open remainder. */
   confirmOverpayment?: boolean;
+  /**
+   * GO-LIVE-SECURITY-01 / ABSCHLUSS — wer bucht. Mit Angabe prüft der Dienst die Rolle vor
+   * jeder lokalen Änderung, fail-closed: Ein Mitglied oder eine ungeklärte Rolle bucht nichts
+   * (der Server weist es mit finance_forbidden_role ab, und ein lokaler Scheinerfolg zeigte die
+   * Rechnung auf diesem Gerät als bezahlt). Ohne Angabe wie bisher (Altaufrufer, Tests); die
+   * Oberfläche gibt den Akteur immer mit.
+   */
+  actor?: WorkspaceActor;
 }
 
 export function recordPayment(
@@ -282,6 +291,10 @@ export function recordPayment(
   input: InvoicePaymentInput,
   options: RecordPaymentOptions = {},
 ): PaymentMutationResult {
+  if (options.actor && !resolveWorkspaceWriteAccess(options.actor).canWrite) {
+    return { success: false, errorKey: 'payment.forbidden' };
+  }
+
   const invoice = getVorgangInvoice(vorgangId, invoiceId);
   if (!invoice) {
     return { success: false, errorKey: 'payment.invoiceNotFound' };

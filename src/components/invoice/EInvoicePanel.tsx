@@ -23,9 +23,11 @@ import type { VorgangInvoice } from '../../types/models';
 
 interface Props {
   invoice: VorgangInvoice;
+  /** GO-LIVE-SECURITY-01 — XRechnung und ZUGFeRD warten auf den Nachweis der Bestätigung (siehe `invoiceOutputClearance`). */
+  outputBlocked?: boolean;
 }
 
-export function EInvoicePanel({ invoice }: Props) {
+export function EInvoicePanel({ invoice, outputBlocked = false }: Props) {
   return (
     <Card className="invoice-einvoice" data-testid="invoice-einvoice-panel">
       <h3 className="ui-section-header__title">E-Rechnung</h3>
@@ -36,8 +38,8 @@ export function EInvoicePanel({ invoice }: Props) {
       </p>
 
       <div className="invoice-einvoice__formats">
-        <XRechnungPanel invoice={invoice} />
-        <ZugferdPanel invoice={invoice} />
+        <XRechnungPanel invoice={invoice} outputBlocked={outputBlocked} />
+        <ZugferdPanel invoice={invoice} outputBlocked={outputBlocked} />
       </div>
     </Card>
   );

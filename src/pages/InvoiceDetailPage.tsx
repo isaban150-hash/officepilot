@@ -61,11 +61,24 @@ import { generateInvoiceCorrectionPdf } from '../services/invoicePdfService';
 import { InvoiceSentPanel } from '../components/invoice/InvoiceSentPanel';
 import { InvoiceDeliveryPanel } from '../components/invoice/InvoiceDeliveryPanel';
 import {
+  alignInvoiceSentWithCloudForMember,
   readInvoiceSentStateFromCloud,
   type InvoiceSentCloudState,
 } from '../services/invoiceSentService';
 import { InvoiceServicePeriodConfirmPanel } from '../components/invoice/InvoiceServicePeriodConfirmPanel';
-import { readInvoiceServicePeriodConfirmationFromCloud } from '../services/invoice/invoiceServicePeriodConfirmService';
+import {
+  alignServicePeriodConfirmationForMember,
+  readInvoiceServicePeriodConfirmationFromCloud,
+} from '../services/invoice/invoiceServicePeriodConfirmService';
+import {
+  hasServicePeriodCloudProof,
+  recordServicePeriodCloudProofs,
+  resolveActiveCloudWorkspaceId,
+  resolveInvoiceOutputHold,
+} from '../services/invoice/invoiceOutputClearance';
+import { resolveWorkspaceWriteAccess } from '../services/workspace/workspaceRoleService';
+import { useOptionalAuth } from '../context/AuthContext';
+import { isSupabaseConfigured } from '../lib/supabase';
 import { validateFinalizedInvoiceForPdf } from '../services/invoiceValidationService';
 import type { VorgangInvoice } from '../types/models';
 import type { TranslationKey } from '../i18n';
@@ -84,6 +97,15 @@ export function InvoiceDetailPage() {
   const correctionView = searchParams.get('doc') === 'korrektur';
   const { translate, showToast } = useApp();
   const navigate = useNavigate();
+  /*
+   * GO-LIVE-SECURITY-01 — wer die Seite bedient. Auf dem Gerät eines Mitglieds
+   * gleicht sie Versand und Leistungszeitraum nach dem Cloud-Read an (siehe
+   * `invoiceMemberAlignment`); die Panels zeigen dann einen Hinweis.
+   */
+  const authUserId = useOptionalAuth()?.user?.id ?? null;
+  const cloudConfigured = isSupabaseConfigured();
+  const [sentRoleAligned, setSentRoleAligned] = useState(false);
+  const [servicePeriodRoleAligned, setServicePeriodRoleAligned] = useState(false);
 
   const resolution = useMemo(
     () => resolveInvoiceDetailRoute({ routeVorgangId, invoiceId }),
@@ -120,10 +142,54 @@ export function InvoiceDetailPage() {
     }
   }, [invoice]);
 
+  /*
+   * GO-LIVE-SECURITY-01 — ohne Schreibrecht gibt eine lokale Bestätigung des
+   * Leistungszeitraums Druck, PDF und ZUGFeRD erst frei, wenn die Cloud sie
+   * nachweislich trägt (siehe `invoiceOutputClearance`). Inhaber, Verwaltung
+   * und der lokale Betrieb bleiben beim lokalen Stand, auch offline.
+   */
+  const [servicePeriodProofCheckedFor, setServicePeriodProofCheckedFor] = useState<string | null>(null);
+  const [servicePeriodProofToken, setServicePeriodProofToken] = useState(0);
+  const retryServicePeriodProof = useCallback(() => setServicePeriodProofToken((token) => token + 1), []);
+  /*
+   * GO-LIVE-SECURITY-01 / ABSCHLUSS — dieselbe Rollenauskunft für Ausgabe und
+   * Geld: Zahlung erfassen, Storno, Kontierung und das Sichern lokaler Zahlungen
+   * bietet die Seite nur Inhaber, Verwaltung und dem lokalen Betrieb an. Der
+   * Server weist Mitglieder ohnehin ab (finance_forbidden_role); ohne diese
+   * Sperre zeigte ein Mitgliedsgerät einen Scheinerfolg.
+   */
+  const writeAccess = resolveWorkspaceWriteAccess({ userId: authUserId, cloudConfigured });
+  const darfFinanzen = writeAccess.canWrite;
+  const outputHold = invoice
+    ? resolveInvoiceOutputHold({
+        access: writeAccess,
+        localConfirmed: invoice.servicePeriodConfirmed === true,
+        proven: hasServicePeriodCloudProof(resolveActiveCloudWorkspaceId(), invoice.id),
+        cloudCheckDone: servicePeriodProofCheckedFor === invoice.id,
+      })
+    : null;
+  /*
+   * GO-LIVE-SECURITY-01 / ABSCHLUSS — der Druck über das Browsermenü (Strg+P, Teilen →
+   * Drucken) folgt derselben Regel wie der Druckknopf: Ausgabesperre oder ein Blocker des
+   * PDF-Validators (etwa ein unbestätigter Leistungszeitraum). Das Rechnungsdokument bleibt
+   * am Bildschirm sichtbar; gedruckt wird statt seiner ein Hinweis (index.css).
+   */
+  const printBlocked = invoice
+    ? Boolean(outputHold) || validateFinalizedInvoiceForPdf(invoice).blockingErrors.length > 0
+    : false;
+  const printBlockedClass = printBlocked ? ' invoice-print-document--print-blocked' : '';
+  const printBlockedNotice = printBlocked ? (
+    <p className="invoice-print-blocked-notice" data-testid="invoice-print-blocked-notice">
+      {translate('invoice.print.blockedNotice')}
+    </p>
+  ) : null;
+
   useEffect(() => {
     if (!printModel || !invoice) return;
     const auto = searchParams.get('auto');
     if (auto !== 'print') return;
+    // GO-LIVE-SECURITY-01 — auch der Direktaufruf wartet auf den Nachweis.
+    if (outputHold) return;
     /*
      * LEGACY-INVOICE-SERVICE-PERIOD-RECOVERY-01B — auch der Direktaufruf über
      * `?auto=print` läuft durch denselben Validator wie das PDF. Ein Link darf
@@ -137,7 +203,7 @@ export function InvoiceDetailPage() {
       return;
     }
     printInvoice({ title: buildPrintTitle(printModel) });
-  }, [printModel, invoice, searchParams, correctionView]);
+  }, [printModel, invoice, searchParams, correctionView, outputHold]);
 
   /**
    * LEGACY-INVOICE-SERVICE-PERIOD-RECOVERY-01B — der zuletzt bewiesene
@@ -156,6 +222,7 @@ export function InvoiceDetailPage() {
   const localServicePeriodConfirmed = invoice?.servicePeriodConfirmed === true;
 
   useEffect(() => {
+    setServicePeriodProofCheckedFor(null);
     if (!invoiceId || !localServicePeriodConfirmed) {
       setServicePeriodCloudConfirmed(null);
       return;
@@ -163,6 +230,29 @@ export function InvoiceDetailPage() {
     let cancelled = false;
     void readInvoiceServicePeriodConfirmationFromCloud(invoiceId).then((state) => {
       if (cancelled) return;
+      const actor = { userId: authUserId, cloudConfigured };
+      /*
+       * GO-LIVE-SECURITY-01 — der Nachweis für die Ausgabe ohne Schreibrecht.
+       * Auf dem Gerät von Inhaber und Verwaltung wird nichts vermerkt.
+       */
+      if (state === 'confirmed' && !resolveWorkspaceWriteAccess(actor).canWrite) {
+        recordServicePeriodCloudProofs(resolveActiveCloudWorkspaceId(), [invoiceId]);
+      }
+      setServicePeriodProofCheckedFor(invoiceId);
+      /*
+       * GO-LIVE-SECURITY-01 — Gerät eines Mitglieds: Trägt die Cloud die
+       * Bestätigung nachweislich nicht, ist die lokale nicht freigegeben. Sie
+       * wird zurückgenommen, bevor sie PDF oder Druck freigibt.
+       */
+      if (vorgangId !== undefined) {
+        const angeglichen = alignServicePeriodConfirmationForMember(vorgangId, invoiceId, state, actor);
+        if (angeglichen) {
+          setInvoice(angeglichen);
+          setServicePeriodRoleAligned(true);
+          setServicePeriodCloudConfirmed(null);
+          return;
+        }
+      }
       /*
        * Weder „gesichert" noch „nicht gesichert" ohne Beweis. `missing`,
        * `unknown` und `not_configured` führen alle zu `null`: Im ersten Fall
@@ -177,7 +267,7 @@ export function InvoiceDetailPage() {
       cancelled = true;
     };
     // Nach einer Sicherung meldet das Panel den neuen Stand selbst — kein Neulesen nötig.
-  }, [invoiceId, localServicePeriodConfirmed]);
+  }, [invoiceId, localServicePeriodConfirmed, vorgangId, authUserId, cloudConfigured, servicePeriodProofToken]);
 
   /**
    * INVOICE-SENT-CLOUD-DURABILITY-01B — der abgeleitete Cloud-Versandstand.
@@ -200,15 +290,34 @@ export function InvoiceDetailPage() {
       return;
     }
     let cancelled = false;
-    void readInvoiceSentStateFromCloud(vorgangId, invoiceId).then((state) => {
-      if (!cancelled) setSentCloudState(state);
+    void readInvoiceSentStateFromCloud(vorgangId, invoiceId).then(async (state) => {
+      if (cancelled) return;
+      /*
+       * GO-LIVE-SECURITY-01 — Gerät eines Mitglieds: Ein Versandstand, den die
+       * Cloud nicht trägt, ist nicht freigegeben. Es gilt der Cloud-Stand,
+       * bevor er hier eine Mahnung oder andere Folgeaktion freigibt.
+       */
+      if (state.kind === 'pending' || state.kind === 'conflict') {
+        const angeglichen = await alignInvoiceSentWithCloudForMember(vorgangId, invoiceId, {
+          userId: authUserId,
+          cloudConfigured,
+        });
+        if (cancelled) return;
+        if (angeglichen) {
+          setInvoice(angeglichen);
+          setSentRoleAligned(true);
+          setSentCloudState({ kind: 'synced' });
+          return;
+        }
+      }
+      setSentCloudState(state);
     });
     return () => {
       cancelled = true;
     };
     // Bewusst ohne `invoice`: Die Objektreferenz wechselt bei jedem lokalen
     // Commit; der Cloud-Stand hängt aber nur an der Rechnung selbst.
-  }, [vorgangId, invoiceId, invoiceFinalized]);
+  }, [vorgangId, invoiceId, invoiceFinalized, authUserId, cloudConfigured]);
 
   const handlePaymentSaved = (updated: VorgangInvoice) => {
     setInvoice(updated);
@@ -493,6 +602,8 @@ export function InvoiceDetailPage() {
                 layout="stack"
                 autoDownloadPdf={autoDownloadPdf}
                 generatePdf={generateInvoiceCorrectionPdf}
+                outputHold={outputHold}
+                onRetryOutputCheck={retryServicePeriodProof}
               />
             }
             hideIdentity
@@ -509,7 +620,11 @@ export function InvoiceDetailPage() {
             </p>
           ) : null}
         </div>
-        <div className="invoice-detail__document invoice-print-document" data-testid="invoice-correction-document">
+        <div
+          className={`invoice-detail__document invoice-print-document${printBlockedClass}`}
+          data-testid="invoice-correction-document"
+        >
+          {printBlockedNotice}
           <InvoiceDocumentView model={correctionModel} />
         </div>
       </div>
@@ -530,6 +645,7 @@ export function InvoiceDetailPage() {
         translate={translate}
         onUpdated={setInvoice}
         onCloudStateChange={setServicePeriodCloudConfirmed}
+        roleAligned={servicePeriodRoleAligned}
       />
       <InvoicePrintActions
         invoice={invoice}
@@ -537,6 +653,8 @@ export function InvoiceDetailPage() {
         translate={translate}
         layout="stack"
         autoDownloadPdf={autoDownloadPdf}
+        outputHold={outputHold}
+        onRetryOutputCheck={retryServicePeriodProof}
       />
       {/*
         * E-RECHNUNG-04D — die strukturierte Rechnung neben dem PDF.
@@ -545,7 +663,7 @@ export function InvoiceDetailPage() {
         * Anforderung. Eine eigene Seite braucht es dafuer nicht: Es ist
         * dieselbe Rechnung in einer anderen Ausgabeform.
         */}
-      {!invoiceCancelled && <EInvoicePanel invoice={invoice} />}
+      {!invoiceCancelled && <EInvoicePanel invoice={invoice} outputBlocked={Boolean(outputHold)} />}
       {/*
         * FINAL-INVOICE-CANCELLATION-UI-01A — der Storno steht **über** dem
         * Versandpanel und ersetzt es nicht: „versendet" bleibt ein Faktum der
@@ -618,12 +736,19 @@ export function InvoiceDetailPage() {
         onUpdated={setInvoice}
         cloudState={sentCloudState}
         onCloudStateChange={setSentCloudState}
+        roleAligned={sentRoleAligned}
       />
       {/* FINANZCORE-05C — kein Zahlungsknopf, wenn nichts mehr offen ist; Korrektur laeuft ueber die Zahlungsliste. */}
-      {canRecordInvoicePayment(invoice) && (
+      {canRecordInvoicePayment(invoice) && darfFinanzen && (
         <Button type="button" fullWidth onClick={() => setShowPaymentForm(true)}>
           {translate('detail.action.recordPayment')}
         </Button>
+      )}
+      {/* GO-LIVE-SECURITY-01 / ABSCHLUSS — Mitglieder sehen, warum Zahlung und Storno fehlen. */}
+      {!darfFinanzen && (canRecordInvoicePayment(invoice) || canCancelInvoice) && (
+        <p className="invoice-hint" data-testid="invoice-finance-role-hint">
+          {translate('invoice.finance.roleHint')}
+        </p>
       )}
       {/*
         * PAYMENT-REMINDER-WITHOUT-VORGANG-01 — auch die Rechnung ohne Auftrag
@@ -648,7 +773,7 @@ export function InvoiceDetailPage() {
         * (`invoice_cancel_type_not_supported`). Der Klick storniert nichts — er
         * öffnet den Bestätigungsdialog.
         */}
-      {canCancelInvoice && (
+      {canCancelInvoice && darfFinanzen && (
         <Button
           variant="danger"
           fullWidth
@@ -746,6 +871,7 @@ export function InvoiceDetailPage() {
         <AccountingSection title={translate('accounting.title')} testId="invoice-detail-section-accounting">
           <AccountingAssignmentPanel
             key={`${invoice.id}:${accountingToken}`}
+            readOnly={!darfFinanzen}
             assignment={getAccountingAssignmentForSource('invoice', invoice.id)}
             onStart={() => {
               ensureInvoiceAccountingAssignment(invoice);
@@ -785,8 +911,9 @@ export function InvoiceDetailPage() {
             invoice={invoice}
             translate={translate}
             onRemovePayment={handleRemovePayment}
+            allowRemove={darfFinanzen}
             unsyncedPaymentIds={unsyncedPaymentIds ?? undefined}
-            onSecurePayment={handleSecurePayment}
+            onSecurePayment={darfFinanzen ? handleSecurePayment : undefined}
           />
         </DetailSection>
         </div>
@@ -820,9 +947,10 @@ export function InvoiceDetailPage() {
       <div
         className={`invoice-detail__document invoice-print-document${
           showDetails ? '' : ' invoice-print-document--screen-hidden'
-        }`}
+        }${printBlockedClass}`}
         data-testid="invoice-print-document"
       >
+        {printBlockedNotice}
         <InvoiceDocumentView model={printModel} />
       </div>
 
@@ -832,6 +960,7 @@ export function InvoiceDetailPage() {
         open={showPaymentForm}
         onClose={() => setShowPaymentForm(false)}
         onSaved={handlePaymentSaved}
+        onReverted={setInvoice}
         translate={translate}
       />
 
@@ -840,7 +969,7 @@ export function InvoiceDetailPage() {
         * Damit gibt es keinen Weg, ihn über einen Zustandsrest an einer
         * Rechnung zu öffnen, die gar nicht stornierbar ist.
         */}
-      {canCancelInvoice && (
+      {canCancelInvoice && darfFinanzen && (
         <InvoiceCancelDialog
           vorgangId={vorgangId}
           invoice={invoice}

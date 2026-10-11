@@ -200,6 +200,7 @@ export function SteuerberaterPage() {
           onChanged={() => setPeriodToken((value) => value + 1)}
           translate={translate}
           closedBy={user?.id}
+          canWrite={financeAccess.canWrite}
         />
       </DetailSection>
 

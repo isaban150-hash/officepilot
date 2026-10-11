@@ -25,6 +25,14 @@ import { getVorgangInvoice, hydrateVorgangStore } from '../services/vorgangServi
 import { hydrateWorkspaceStore } from '../services/workspace/workspaceStore';
 import * as supabaseLib from '../lib/supabase';
 import type { InvoicePayment, Vorgang, VorgangInvoice } from '../types/models';
+import { alsInhaber } from '../test/workspaceRoleTestUtils';
+
+/*
+ * GO-LIVE-SECURITY-01 / ABSCHLUSS — Zahlung, Storno, Kontierung, Monatsabschluss und
+ * Ausgaben bietet die Oberfläche nur Inhaber und Verwaltung an (die Testumgebung meldet
+ * Supabase als eingerichtet, die Rolle wäre sonst unbekannt). Diese Tests bedienen sie als Inhaber.
+ */
+beforeEach(() => alsInhaber());
 
 const WORKSPACE = '00000000-0000-4000-8000-00000000b2b2';
 const VORGANG_ID = 'v-pay-safety';

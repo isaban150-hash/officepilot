@@ -25,6 +25,8 @@
 import { buildCanonicalEInvoice } from '../canonicalEInvoiceBuilder';
 import type { CanonicalEInvoice, CanonicalEInvoiceIssue } from '../canonicalEInvoice';
 import { EINVOICE_STANDARDS } from '../einvoiceStandards';
+import type { ServicePeriodOutputCode } from '../einvoiceOutputRule';
+import { checkInvoiceOutput } from '../../invoice/invoiceOutputGuard';
 import { buildInvoicePrintModelFromInvoice } from '../../invoicePrintModel';
 import { generateHybridInvoicePdfA3 } from '../../invoicePdfService';
 import { PDFA_CONFORMANCE, PDFA_PART } from '../pdfa/pdfaProfile';
@@ -44,8 +46,9 @@ import {
 } from './zugferdPdfXmlConsistency';
 import type { CompanyDocument, VorgangInvoice } from '../../../types/models';
 import type { DocumentFileRef } from '../../../types/documentFileRef';
+import type { DocumentFileRepresentationBinding } from '../../../types/documentFileRepresentationBinding';
 import { computeBufferContentHash } from '../../documentFileHashService';
-import { getDocumentByLinkedInvoiceId } from '../../documentService';
+import { getGeneratedInvoiceDocument } from '../../documentService';
 import {
   getDocumentFileBlob,
   getDocumentFileRefById,
@@ -58,6 +61,11 @@ import {
 } from '../../documentFileRepresentationBindingStoreService';
 import { persistAll } from '../../persistenceService';
 import { ZUGFERD_BINDING_PART } from '../einvoiceBindingParts';
+import {
+  isUntrustedEInvoiceBinding,
+  mayStoreEInvoiceArtifact,
+  replaceUntrustedEInvoiceBinding,
+} from '../einvoiceBindingTrust';
 
 /* ------------------------------------------------------------------ */
 /* Artefaktbeschreibung                                                */
@@ -242,7 +250,15 @@ export const ZUGFERD_MIME_TYPE = 'application/pdf';
 export const ZUGFERD_BINDING_KIND = 'structured' as const;
 
 /** Wo die Bytes gerade nachweislich liegen. */
-export type ZugferdDurability = 'local_only' | 'cloud_backed';
+export type ZugferdDurability =
+  | 'local_only'
+  | 'cloud_backed'
+  /**
+   * GO-LIVE-SECURITY-01 / FINALISIERUNG — nicht abgelegt: frisch erzeugt, nur zum
+   * Herunterladen. So erhält ein Mitglied die ZUGFeRD-Rechnung; ablegen dürfen nur
+   * Inhaber und Admin (siehe `einvoiceBindingTrust`).
+   */
+  | 'not_stored';
 
 /** Was ein abgelegtes ZUGFeRD-Dokument über sich weiss. */
 export interface ZugferdStoredArtifact {
@@ -287,10 +303,19 @@ export type ZugferdArtifactResult =
     }
   | { readonly ok: false; readonly reason: 'pdf_failed'; readonly message: string }
   | { readonly ok: false; readonly reason: 'no_archive_document' }
-  | { readonly ok: false; readonly reason: 'storage_failed' };
+  | { readonly ok: false; readonly reason: 'storage_failed' }
+  /** GO-LIVE-SECURITY-01 — Leistungszeitraum fehlt, ist ungültig oder unbestätigt; nichts wurde ausgegeben. */
+  | {
+      readonly ok: false;
+      readonly reason: 'service_period_unconfirmed';
+      readonly codes: readonly ServicePeriodOutputCode[];
+    }
+  /** GO-LIVE-SECURITY-01 — Mitglied ohne Cloud-Nachweis der Bestätigung; nichts wurde ausgegeben. */
+  | { readonly ok: false; readonly reason: 'service_period_unverified' };
 
+/** GO-LIVE-SECURITY-01 / ABSCHLUSS — nur der erzeugte Rechnungsbeleg, wie serverseitig (generated_invoice). */
 function archiveDocumentFor(invoice: VorgangInvoice): CompanyDocument | undefined {
-  return getDocumentByLinkedInvoiceId(invoice.id);
+  return getGeneratedInvoiceDocument(invoice.id);
 }
 
 /**
@@ -301,14 +326,17 @@ function archiveDocumentFor(invoice: VorgangInvoice): CompanyDocument | undefine
  * Rückfallsuche wie bei der XRechnung wäre hier nicht Nachsicht, sondern eine
  * offene Tür — sie könnte die XRechnung desselben Belegs erwischen.
  */
-function boundZugferdFileRef(document: CompanyDocument): DocumentFileRef | undefined {
+function boundZugferd(
+  document: CompanyDocument,
+): { binding: DocumentFileRepresentationBinding; ref: DocumentFileRef } | undefined {
   const binding = getDocumentFileRepresentationBindingStoreSnapshot().find(
     (entry) =>
       entry.documentId === document.id &&
       entry.kind === ZUGFERD_BINDING_KIND &&
       entry.part === ZUGFERD_BINDING_PART,
   );
-  return binding ? getDocumentFileRefById(binding.fileRefId) : undefined;
+  const ref = binding ? getDocumentFileRefById(binding.fileRefId) : undefined;
+  return binding && ref ? { binding, ref } : undefined;
 }
 
 function describeStored(
@@ -344,6 +372,31 @@ function describeStored(
   };
 }
 
+/** GO-LIVE-SECURITY-01 / FINALISIERUNG — frisch erzeugt und nicht abgelegt (Mitglied). */
+function describeUngespeichert(invoice: VorgangInvoice, built: ZugferdArtifact): ZugferdStoredArtifact {
+  return {
+    sourceInvoiceId: invoice.id,
+    sourceInvoiceNumber: invoice.number,
+    format: 'zugferd',
+    standardVersion: EINVOICE_STANDARDS.zugferd.version,
+    facturXVersion: EINVOICE_STANDARDS.zugferd.facturX,
+    profile: 'EN16931',
+    syntax: 'CII',
+    pdfConformance: `PDF/A-${PDFA_PART}${PDFA_CONFORMANCE}`,
+    embeddedFileName: ZUGFERD_EMBEDDED_FILE_NAME,
+    generatorVersion: ZUGFERD_GENERATOR_VERSION,
+    fileName: built.fileName,
+    mimeType: 'application/pdf',
+    contentSha256: built.sha256,
+    byteSize: built.bytes.byteLength,
+    createdAt: new Date().toISOString(),
+    internalValidation: 'passed',
+    fileRefId: '',
+    durability: 'not_stored',
+    bytes: built.bytes,
+  };
+}
+
 /**
  * Das bereits abgelegte ZUGFeRD-Dokument — oder nichts.
  *
@@ -355,15 +408,25 @@ function describeStored(
  * `getDocumentFileBlob` sie aus der Cloud. Dieser Weg prüft Grösse und Hash,
  * bevor er etwas ablegt; hier wird der Hash danach **erneut** gegen die
  * Dateizeile gehalten. Lieber keine Datei als eine falsche.
+ *
+ * GO-LIVE-SECURITY-01 — der Lesezugriff gibt die Bytes heraus und steht deshalb
+ * hinter derselben Ausgabegrenze wie das Erzeugen (`invoiceOutputGuard`).
  */
 export async function readZugferdArtifact(
   invoice: VorgangInvoice,
 ): Promise<ZugferdStoredArtifact | null> {
+  if (await checkInvoiceOutput(invoice)) return null;
+  return leseAbgelegteZugferd(invoice);
+}
+
+/** Der Lesepfad ohne Grenze — nur nach einer bestandenen Prüfung aufrufen. */
+async function leseAbgelegteZugferd(invoice: VorgangInvoice): Promise<ZugferdStoredArtifact | null> {
   try {
     const document = archiveDocumentFor(invoice);
     if (!document) return null;
-    const ref = boundZugferdFileRef(document);
-    if (!ref) return null;
+    const gebunden = boundZugferd(document);
+    if (!gebunden) return null;
+    const { binding, ref } = gebunden;
 
     const blob = await getDocumentFileBlob(ref);
     if (!blob) return null;
@@ -371,6 +434,16 @@ export async function readZugferdArtifact(
 
     const hash = await computeBufferContentHash(bytes);
     if (!hash || hash !== ref.contentHash.toLowerCase()) return null;
+
+    /*
+     * GO-LIVE-SECURITY-01 / FINALISIERUNG — eine Datei mit Vertrauensmarke kann von
+     * einem Mitglied stammen. Ausgeliefert wird sie nur, wenn die frische Erzeugung
+     * genau dieselben Bytes ergibt (die Erzeugung ist deterministisch); sonst gar nicht.
+     */
+    if (isUntrustedEInvoiceBinding(binding)) {
+      const frisch = await buildZugferdInvoice(invoice);
+      if (!frisch.ok || frisch.artifact.sha256.toLowerCase() !== hash) return null;
+    }
 
     return describeStored(invoice, ref, bytes);
   } catch {
@@ -389,7 +462,20 @@ export async function readZugferdArtifact(
 export async function ensureZugferdArtifact(
   invoice: VorgangInvoice,
 ): Promise<ZugferdArtifactResult> {
-  const vorhanden = await readZugferdArtifact(invoice);
+  /*
+   * GO-LIVE-SECURITY-01 — die gemeinsame Ausgabegrenze gilt **vor** der
+   * Wiederverwendung. Sonst lieferte eine früher abgelegte Datei eine Rechnung
+   * aus, deren Leistungszeitraum jetzt nicht bestätigt ist (jede Rolle) oder
+   * deren Bestätigung die Cloud nicht nachweislich trägt (Mitglied); der
+   * PDF-Validator sieht nur neu erzeugte Dateien.
+   */
+  const ausgabe = await checkInvoiceOutput(invoice);
+  if (ausgabe?.reason === 'service_period_unconfirmed') {
+    return { ok: false, reason: 'service_period_unconfirmed', codes: ausgabe.codes };
+  }
+  if (ausgabe) return { ok: false, reason: 'service_period_unverified' };
+
+  const vorhanden = await leseAbgelegteZugferd(invoice);
   if (vorhanden) return { ok: true, artifact: vorhanden, reused: true };
 
   const document = archiveDocumentFor(invoice);
@@ -397,6 +483,16 @@ export async function ensureZugferdArtifact(
 
   const built = await buildZugferdInvoice(invoice);
   if (!built.ok) return built;
+
+  /*
+   * GO-LIVE-SECURITY-01 / FINALISIERUNG — ablegen dürfen nur Inhaber, Admin und der
+   * lokale Betrieb. Ein Mitglied (oder eine ungeklärte Rolle) bekommt die frisch
+   * erzeugte Datei zum Herunterladen; es entsteht weder Datei noch Bindung noch
+   * Sync-Auftrag.
+   */
+  if (!(await mayStoreEInvoiceArtifact())) {
+    return { ok: true, artifact: describeUngespeichert(invoice, built.artifact), reused: false };
+  }
 
   try {
     /*
@@ -415,6 +511,7 @@ export async function ensureZugferdArtifact(
       { lifecycleIntent: 'committed' },
     );
 
+    const bindings = getDocumentFileRepresentationBindingStoreSnapshot();
     const registration = registerDocumentFileRepresentationBinding({
       binding: {
         documentId: document.id,
@@ -422,9 +519,18 @@ export async function ensureZugferdArtifact(
         part: ZUGFERD_BINDING_PART,
         fileRefId: fileRef.id,
       },
-      bindings: getDocumentFileRepresentationBindingStoreSnapshot(),
+      bindings,
     });
-    replaceDocumentFileRepresentationBindingStore([...registration.bindings]);
+    /*
+     * GO-LIVE-SECURITY-01 / FINALISIERUNG — eine markierte Altbindung mit anderen
+     * Bytes wird durch die eigene Erzeugung ersetzt (der Server prüft und entfernt die
+     * Marke). Eine vertrauenswürdige Bindung bleibt, wie sie ist: nie überschreiben.
+     */
+    replaceDocumentFileRepresentationBindingStore(
+      registration.kind === 'conflict' && isUntrustedEInvoiceBinding(registration.existingBinding)
+        ? replaceUntrustedEInvoiceBinding(bindings, registration.existingBinding, fileRef.id)
+        : [...registration.bindings],
+    );
 
     /*
      * Speichern reiht Datei und Bindung in den Sync-Ausgang ein. Schlägt der

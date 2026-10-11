@@ -43,6 +43,12 @@ interface Props {
    * dann wird niemand eingetragen und auch niemand erfunden.
    */
   closedBy?: string;
+  /**
+   * GO-LIVE-SECURITY-01 / ABSCHLUSS — Monat abschließen und wieder öffnen nur
+   * Inhaber und Verwaltung. Ohne Angabe wie bisher (lokaler Betrieb, Tests);
+   * die Steuerberaterseite gibt die Rollenauskunft mit.
+   */
+  canWrite?: boolean;
 }
 
 function readinessTone(readiness: AccountingPeriodReadiness): 'neutral' | 'warning' | 'success' | 'critical' {
@@ -60,7 +66,7 @@ function readinessTone(readiness: AccountingPeriodReadiness): 'neutral' | 'warni
   }
 }
 
-export function AccountingPeriodPanel({ state, monthLabel, onChanged, translate, closedBy }: Props) {
+export function AccountingPeriodPanel({ state, monthLabel, onChanged, translate, closedBy, canWrite = true }: Props) {
   const { readiness, blockers, currentManifest, activeClosure, revisionHistory } = state;
   const [closeOpen, setCloseOpen] = useState(false);
   const [reopenOpen, setReopenOpen] = useState(false);
@@ -150,8 +156,14 @@ export function AccountingPeriodPanel({ state, monthLabel, onChanged, translate,
         </InlineNotice>
       ) : null}
 
+      {!canWrite && (canClose || activeClosure) ? (
+        <p className="detail-hint" data-testid="accounting-period-role-hint">
+          {translate('accounting.period.roleHint')}
+        </p>
+      ) : null}
+
       <div className="vorgang-dialog__actions">
-        {canClose ? (
+        {canClose && canWrite ? (
           <Button
             ref={closeTriggerRef}
             type="button"
@@ -161,7 +173,7 @@ export function AccountingPeriodPanel({ state, monthLabel, onChanged, translate,
             {translate('accountingPeriod.action.close')}
           </Button>
         ) : null}
-        {activeClosure ? (
+        {activeClosure && canWrite ? (
           <Button
             ref={reopenTriggerRef}
             type="button"

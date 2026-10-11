@@ -258,6 +258,18 @@ describe('C — Freigabe über den Server', () => {
     expect(getOfferById(b.id)?.offerNumber).toBe('AN-2026-0002');
   });
 
+  it('GO-LIVE-SECURITY-01: lehnt der Server mangels Rolle ab, meldet der Dienst „forbidden“ — der Entwurf bleibt', async () => {
+    registerMockRpcHandler('finalize_workspace_offer', () => {
+      throw new Error('Keine Schreibberechtigung');
+    });
+    const offer = entwurf();
+    const r = await finalizeOfferWithCloud(offer.id);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe('forbidden');
+    expect(getOfferById(offer.id)?.status).toBe('entwurf');
+    expect(getOfferById(offer.id)?.offerNumber).toBeUndefined();
+  });
+
   it('ohne Cloud keine Freigabe — der Entwurf bleibt', async () => {
     resetSyncClientForTests({
       deviceId: 'device-test',

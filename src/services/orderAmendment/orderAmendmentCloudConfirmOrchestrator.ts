@@ -55,7 +55,9 @@ export type OrderAmendmentConfirmFailureReason =
   /** CLOUD-SYNC S6 — der Entwurf wurde verworfen. */
   | 'draft_ended'
   /** CLOUD-SYNC S6 — der Entwurf wurde bereits anderswo bestätigt. */
-  | 'draft_consumed';
+  | 'draft_consumed'
+  /** GO-LIVE-SECURITY-01 — bestätigen dürfen nur Inhaber und Admin. */
+  | 'forbidden';
 
 export type OrderAmendmentConfirmResult =
   | {
@@ -111,6 +113,8 @@ function mapCloudError(
   switch (error.code) {
     case 'auth':
       return 'session_required';
+    case 'rls':
+      return 'forbidden';
     case 'network':
     case 'unknown':
       return 'network_or_unknown';
@@ -168,6 +172,7 @@ function errorKeyForReason(reason: OrderAmendmentConfirmFailureReason): string {
     draft_conflict: 'orderAmendmentCloud.confirm.conflict',
     draft_ended: 'orderAmendmentCloud.confirm.ended',
     draft_consumed: 'orderAmendmentCloud.confirm.consumed',
+    forbidden: 'orderAmendmentCloud.confirm.forbidden',
   };
   return map[reason];
 }

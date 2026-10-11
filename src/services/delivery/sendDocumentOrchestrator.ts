@@ -8,6 +8,8 @@ import { buildDocumentBlobScopeKey } from '../storage/documentBlobScopeService';
 import { getVorgangInvoice, updateInvoiceSentFields } from '../vorgangService';
 import { deliveryIdentityDocumentId, isInvoiceDeliveryIdentity, type DeliveryDocumentIdentity, type DeliveryStatus, type DocumentDelivery } from '../../types/documentDelivery';
 import { getDocumentById } from '../documentService';
+import { validateFinalizedInvoiceForPdf } from '../invoiceValidationService';
+import { checkInvoiceOutput } from '../invoice/invoiceOutputGuard';
 import type { VorgangInvoice } from '../../types/models';
 import { isDeliveryErrorCategory, isDeliveryStatus, isValidRecipientEmail, normalizeRecipientEmail } from './documentDeliveryContract';
 import {
@@ -337,6 +339,18 @@ export async function runSendDocument(
       attachmentFilename: prepared.attachment.filename,
     };
     saveSendDraft(draft);
+  } else if (isInvoice) {
+    /*
+     * GO-LIVE-SECURITY-01 / ABSCHLUSS — die Fortsetzung mit einem bereits hochgeladenen
+     * Anhang läuft durch dieselbe Ausgabegrenze wie ein neuer Versuch (PDF-Validator und
+     * `checkInvoiceOutput`). Sonst ginge eine Rechnung hinaus, deren Ausgabe inzwischen
+     * gesperrt ist — etwa nach einer zurückgenommenen Bestätigung des Leistungszeitraums.
+     */
+    if (validateFinalizedInvoiceForPdf(invoice!).blockingErrors.length > 0) {
+      return failWith('pdf_failed', 'validation_failed');
+    }
+    const ausgabe = await checkInvoiceOutput(invoice!);
+    if (ausgabe) return failWith('pdf_failed', ausgabe.reason);
   }
 
   // 5: Delivery anlegen — Replay liefert dieselbe Zeile.

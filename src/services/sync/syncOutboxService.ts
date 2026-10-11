@@ -7,6 +7,7 @@ import type {
 } from '../../types/sync';
 import { generateUuid } from './syncMetaService';
 import { getSyncClient } from './syncClientService';
+import { isFinallyDeniedOutboxEntry } from './syncRoleDenial';
 
 let outbox: SyncOutboxEntry[] = [];
 
@@ -75,7 +76,33 @@ export interface EnqueueSyncOutboxInput {
   version: number;
 }
 
+/**
+ * Der Einreihungsweg für BEWUSSTE Nutzeraktionen: der Änderungsverfolger nach einer lokalen
+ * Änderung, Fachdienste hinter einem Klick, „Meine Fassung behalten“.
+ *
+ * GO-LIVE-SECURITY-01 / KONTOSPERRE — eine bewusste neue Aktion löst eine endgültige
+ * Berechtigungsabweisung derselben Entität ab: Der alte Auftrag gilt als erledigt (er wird
+ * nie gesendet), der neue geht normal hinaus. Automatische Wege (Abgleich, Backfill,
+ * Nachmeldung, Wiederaufnahme) nehmen `enqueueBackfillSyncOutbox` und lösen nichts ab.
+ */
 export function enqueueSyncOutbox(input: EnqueueSyncOutboxInput): SyncOutboxEntry {
+  supersedeFinallyDeniedEntries(input.entityType, input.entityId);
+  return enqueueOutboxEntry(input);
+}
+
+function supersedeFinallyDeniedEntries(entityType: SyncEntityType, entityId: string): void {
+  let changed = false;
+  outbox = outbox.map((entry) => {
+    if (entry.entityType !== entityType || entry.entityId !== entityId || !isFinallyDeniedOutboxEntry(entry)) {
+      return entry;
+    }
+    changed = true;
+    return { ...entry, status: 'completed' as const };
+  });
+  if (changed) notifyOutboxChanged();
+}
+
+function enqueueOutboxEntry(input: EnqueueSyncOutboxInput): SyncOutboxEntry {
   const status = resolveOutboxStatus();
   const existingIndex = outbox.findIndex(
     (entry) =>
@@ -261,8 +288,11 @@ export interface OutboxFailureDetail {
   outboxId: string;
   message: string;
   retryable: boolean;
-  /** Was der Adapter entschieden hat: echter Fehler oder Versionskonflikt. */
-  status: 'error' | 'blocked';
+  /**
+   * Was der Adapter entschieden hat: echter Fehler, Versionskonflikt oder — KONTOSPERRE —
+   * endgültige Berechtigungsabweisung (`failed`, wird nie automatisch erneut gesendet).
+   */
+  status: 'error' | 'blocked' | 'failed';
 }
 
 export function markOutboxEntriesFailed(failures: OutboxFailureDetail[]): void {
@@ -350,6 +380,69 @@ export function releaseBlockedOutboxEntry(
   });
   if (released) notifyOutboxChanged();
   return released;
+}
+
+/**
+ * GO-LIVE-SECURITY-01 / KONTOSPERRE — ist die endgültige Berechtigungsabweisung das letzte
+ * Wort zu dieser Entität? Maßgeblich ist der zuletzt eingereihte Auftrag: Hat eine bewusste
+ * neue Aktion danach einen eigenen Auftrag erzeugt, gilt die alte Abweisung nicht mehr.
+ * Netzwerkfehler und Lizenzabweisungen sind keine endgültige Abweisung.
+ */
+export function hasFinallyDeniedOutboxEntry(entityType: SyncEntityType, entityId: string): boolean {
+  let neuester: SyncOutboxEntry | undefined;
+  for (const entry of outbox) {
+    if (entry.entityType !== entityType || entry.entityId !== entityId) continue;
+    // Die Warteschlange führt Neues vorn; bei gleicher Zeit gewinnt der vordere Eintrag.
+    if (!neuester || entry.queuedAt > neuester.queuedAt) neuester = entry;
+  }
+  return neuester !== undefined && isFinallyDeniedOutboxEntry(neuester);
+}
+
+/**
+ * GO-LIVE-SECURITY-01 / KONTOSPERRE — der Einreihungsweg für JEDEN automatischen Weg:
+ * Abgleich und Backfill (Altbestand, den die Cloud nicht kennt), Nachmeldung von
+ * Betriebsdaten, Firmenprofil und Vorgängen, Wiederaufnahme nach verlorener Bestätigung.
+ *
+ * Eine während einer Sperre (oder ohne Mitgliedschaft/Rolle) endgültig abgewiesene Aktion
+ * sieht für diese Wege genau so aus wie Altbestand — ohne diese Prüfung reihte der erste
+ * erfolgreiche Abgleich nach dem Entsperren sie ohne neue Benutzeraktion wieder ein. Solange
+ * die Abweisung das letzte Wort ist, entsteht deshalb kein Auftrag; erst eine bewusste neue
+ * Änderung (über `enqueueSyncOutbox`) erzeugt einen neuen. Der Vertragstest
+ * `backfillSperreGls01.test.ts` (V1/V2) hält fest, welche Stellen welchen Weg nehmen.
+ */
+export function enqueueBackfillSyncOutbox(input: EnqueueSyncOutboxInput): SyncOutboxEntry | null {
+  if (hasFinallyDeniedOutboxEntry(input.entityType, input.entityId)) return null;
+  return enqueueOutboxEntry(input);
+}
+
+/**
+ * GO-LIVE-SECURITY-01 / KONTOSPERRE — automatische Schreiber ohne Nutzeraktion.
+ *
+ * Manche automatischen Abläufe ändern Fachdaten im Speicher, und erst der
+ * Änderungsverfolger macht daraus einen Sendeauftrag: der Abgleich der
+ * Überfälligkeitsaufgaben nach einem angewendeten Abzug und einmal täglich beim Start,
+ * der Nachtrags-Abzug, der Rechnungsentwurfs-Spiegel beim Start. Für den Verfolger sähe
+ * das aus wie eine Nutzeränderung — er hätte eine endgültige Abweisung abgelöst und die
+ * Entität erneut gesendet. Diese Abläufe laufen deshalb in `runAutomaticSyncWrite`; der
+ * Verfolger nimmt darin den gesperrten Weg (`enqueueBackfillSyncOutbox`). Bewusste
+ * Nutzeraktionen laufen außerhalb und lösen eine Abweisung wie gewohnt ab.
+ *
+ * Synchron: Die Fachspeicher persistieren beim Schreiben (`persistAll` → Verfolger), der
+ * Bereich umfasst also genau die Einreihungen dieses Ablaufs.
+ */
+let automaticWriteDepth = 0;
+
+export function runAutomaticSyncWrite<T>(write: () => T): T {
+  automaticWriteDepth += 1;
+  try {
+    return write();
+  } finally {
+    automaticWriteDepth -= 1;
+  }
+}
+
+export function isAutomaticSyncWriteActive(): boolean {
+  return automaticWriteDepth > 0;
 }
 
 export function isSyncOutboxEnabled(): boolean {

@@ -16,7 +16,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { AppProvider } from '../../context/AppContext';
 import { AuthProvider } from '../../context/AuthContext';
 import { DEFAULT_SETUP } from '../../data/mockData';
@@ -35,6 +35,14 @@ import { AusgabeDetailPage } from '../../pages/AusgabeDetailPage';
 import { AusgabenPage } from '../../pages/AusgabenPage';
 import { FinanzenPage } from '../../pages/FinanzenPage';
 import { MehrPage } from '../../pages/MehrPage';
+import { alsInhaber } from '../../test/workspaceRoleTestUtils';
+
+/*
+ * GO-LIVE-SECURITY-01 / ABSCHLUSS — Zahlung, Storno, Kontierung, Monatsabschluss und
+ * Ausgaben bietet die Oberfläche nur Inhaber und Verwaltung an (die Testumgebung meldet
+ * Supabase als eingerichtet, die Rolle wäre sonst unbekannt). Diese Tests bedienen sie als Inhaber.
+ */
+beforeEach(() => alsInhaber());
 
 function withProviders(node: React.ReactNode, entries: string[] = ['/']) {
   return (

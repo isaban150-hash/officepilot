@@ -5,6 +5,7 @@
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { alsInhaber } from './test/workspaceRoleTestUtils';
 import { VorgangOrderAmendmentPanel } from './components/vorgang/VorgangOrderAmendmentPanel';
 import { t, type TranslationKey } from './i18n';
 import {
@@ -77,6 +78,8 @@ describe('ORDER-AMENDMENT-01B2 UI', () => {
   let root: Root;
 
   beforeEach(() => {    vi.restoreAllMocks();
+    // GO-LIVE-SECURITY-01: Nachträge bestätigen nur Inhaber und Admin.
+    alsInhaber();
     container = document.createElement('div');
     document.body.appendChild(container);
   });

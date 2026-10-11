@@ -18,6 +18,14 @@ import {
 import { hydrateVorgangStore, getVorgangById } from '../../services/vorgangService';
 import type { VorgangInvoice } from '../../types/models';
 import type { TranslationKey } from '../../i18n';
+import { alsInhaber } from '../../test/workspaceRoleTestUtils';
+
+/*
+ * GO-LIVE-SECURITY-01 / ABSCHLUSS — Zahlung, Storno, Kontierung, Monatsabschluss und
+ * Ausgaben bietet die Oberfläche nur Inhaber und Verwaltung an (die Testumgebung meldet
+ * Supabase als eingerichtet, die Rolle wäre sonst unbekannt). Diese Tests bedienen sie als Inhaber.
+ */
+beforeEach(() => alsInhaber());
 
 const companySnapshot = {
   ...DEFAULT_COMPANY_PROFILE,

@@ -27,12 +27,23 @@ import {
 } from './workspaceDocumentCloudService';
 import { isCloudEligibleGeneratedInvoiceDocument } from './documentCloudPullOrchestrator';
 import { isDocumentPaymentProofInCloud } from './workspaceDocumentCloudService';
+import { isFinalPermissionDenialMessage } from '../sync/syncRoleDenial';
+import {
+  resolveWorkspaceWriteAccess,
+  UNKNOWN_CLOUD_ACTOR,
+  type WorkspaceActor,
+} from '../workspace/workspaceRoleService';
 
 /** Die Ablehnung aus `tombstone_workspace_document` (20261019120000). */
 const FINALIZED_INVOICE_SERVER_MESSAGE = 'festgeschriebenen Rechnung kann nicht geloescht werden';
 
+/** GO-LIVE-SECURITY-01 — die Rollenabweisung aus `tombstone_workspace_document`. */
+
 /** Fehlerschlüssel, wenn die Cloud-Löschung nicht bewiesen werden konnte. */
 export const DOCUMENT_DELETE_CLOUD_UNCONFIRMED_KEY = 'document.delete.cloudUnconfirmed';
+
+/** GO-LIVE-SECURITY-01 — Löschen ist Verwaltung: nur Inhaber und Admin. */
+export const DOCUMENT_DELETE_FORBIDDEN_KEY = 'document.delete.forbidden';
 
 export type GeneratedInvoiceDocumentDeleteResult =
   | { ok: true; document: CompanyDocument }
@@ -56,7 +67,19 @@ export type GeneratedInvoiceDocumentDeleteResult =
  */
 export async function deleteGeneratedInvoiceDocumentWithCloud(
   documentId: string,
+  actor?: WorkspaceActor,
 ): Promise<GeneratedInvoiceDocumentDeleteResult> {
+  /*
+   * GO-LIVE-SECURITY-01 — vor jeder lokalen Änderung. Der Server weist
+   * Grabsteine von Mitgliedern auf beiden Wegen ab (Archivdokument über den
+   * Eingangsweg, Rechnungsdokument über `tombstone_workspace_document`). Ein
+   * lokaler Löschversuch erzeugte sonst ein Dokument, das nur auf diesem Gerät
+   * fehlt. Ohne Angabe gilt die strengste Annahme (Cloud, Rolle unbekannt).
+   */
+  if (!resolveWorkspaceWriteAccess(actor ?? UNKNOWN_CLOUD_ACTOR).canWrite) {
+    return { ok: false, errorKey: DOCUMENT_DELETE_FORBIDDEN_KEY };
+  }
+
   const document = getDocumentById(documentId);
   if (!document) return { ok: false, errorKey: 'document.notFound' };
 
@@ -97,6 +120,11 @@ export async function deleteGeneratedInvoiceDocumentWithCloud(
   // Der Server kennt die Rechnung als festgeschrieben, auch wenn sie lokal fehlt.
   if (tombstone.outcome === 'failed' && tombstone.detail?.includes(FINALIZED_INVOICE_SERVER_MESSAGE)) {
     return { ok: false, errorKey: DOCUMENT_DELETE_FINALIZED_INVOICE_KEY };
+  }
+  // GO-LIVE-SECURITY-01 — die Rolle reicht nach Serverstand nicht: nichts wird lokal gelöscht.
+  // KONTOSPERRE — ebenso "Kein Zugriff" und account_blocked (gesperrtes Konto, keine Mitgliedschaft).
+  if (tombstone.outcome === 'failed' && isFinalPermissionDenialMessage(tombstone.detail)) {
+    return { ok: false, errorKey: DOCUMENT_DELETE_FORBIDDEN_KEY };
   }
 
   /*

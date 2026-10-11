@@ -76,6 +76,13 @@ export function AngebotDetailPage() {
   const abgelegtFuer = useRef('');
   useEffect(() => {
     if (!offer || !frozen) return;
+    /*
+     * GO-LIVE-SECURITY-01 — die Ablage ordnet nur ein Inhaber- oder Admin-Gerät
+     * zu: Sie ändert den Beleg (archiveDocumentId), und das dürfen Mitglieder
+     * nicht mehr. Ein Mitglied sieht die Ablage des Inhabers zudem nicht und
+     * erzeugte sonst eine doppelte.
+     */
+    if (!writeAccess.canWrite) return;
     if (abgelegtFuer.current === `${offer.id}:${version}`) return;
     abgelegtFuer.current = `${offer.id}:${version}`;
     let alive = true;
@@ -87,7 +94,7 @@ export function AngebotDetailPage() {
     return () => {
       alive = false;
     };
-  }, [offer, frozen, version]);
+  }, [offer, frozen, version, writeAccess.canWrite]);
 
   const [vorschauUrl, setVorschauUrl] = useState('');
   const [pdfFehler, setPdfFehler] = useState('');
@@ -145,6 +152,12 @@ export function AngebotDetailPage() {
 
   const fuehreAktionAus = (): boolean => {
     if (!aktion) return true;
+    // GO-LIVE-SECURITY-01 — verbindliche Status setzen nur Inhaber und Admin.
+    if (!writeAccess.canWrite) {
+      setAktion(null);
+      setAktionFehler(translate('offer.status.roleHint'));
+      return true;
+    }
     const r = aktion === 'versendet' ? markOfferSent(offer.id) : aktion === 'abgelehnt' ? rejectOffer(offer.id) : cancelOffer(offer.id);
     setAktion(null);
     if (!r.success) {
@@ -259,16 +272,21 @@ export function AngebotDetailPage() {
               {translate('offer.detail.archiveOpen')}
             </Link>
           ) : null}
-          {listOfferStatusActions(offer).map((a) => (
-            <Button key={a} type="button" variant="ghost" onClick={() => setAktion(a as Aktion)} data-testid={`offer-action-${a}`}>
-              {translate(AKTION_LABEL[a as Aktion])}
-            </Button>
-          ))}
+          {writeAccess.canWrite
+            ? listOfferStatusActions(offer).map((a) => (
+                <Button key={a} type="button" variant="ghost" onClick={() => setAktion(a as Aktion)} data-testid={`offer-action-${a}`}>
+                  {translate(AKTION_LABEL[a as Aktion])}
+                </Button>
+              ))
+            : null}
         </div>
+      ) : null}
+      {frozen && !writeAccess.canWrite && listOfferStatusActions(offer).length > 0 ? (
+        <p className="form-hint" data-testid="offer-status-role-hint">{translate('offer.status.roleHint')}</p>
       ) : null}
       {pdfFehler ? <p className="form-error" data-testid="offer-pdf-error">{pdfFehler}</p> : null}
       {aktionFehler ? <p className="form-error" data-testid="offer-action-error">{aktionFehler}</p> : null}
-      {frozen && !archiveDocument ? (
+      {frozen && !archiveDocument && writeAccess.canWrite ? (
         <p className="form-hint" data-testid={archiveFailed ? 'offer-archive-failed' : 'offer-archive-pending'}>
           {translate(archiveFailed ? 'offer.detail.archiveFailed' : 'offer.detail.archivePending')}
         </p>

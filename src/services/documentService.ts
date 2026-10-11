@@ -266,12 +266,49 @@ export function getDocumentByLinkedInvoiceId(
   invoiceId: string,
   kind: LinkedInvoiceDocumentKind = 'original',
 ): CompanyDocument | undefined {
-  const doc = documents.find(
+  const candidates = documents.filter(
     (d) =>
       d.linkedInvoiceId === invoiceId &&
       isEntitySyncActive(d) &&
       isInvoiceCorrectionDocument(d) === (kind === 'correction'),
   );
+  /*
+   * GO-LIVE-SECURITY-01 / FINALISIERUNG — der erzeugte Rechnungsbeleg hat Vorrang.
+   *
+   * Bisher gewann das erste Dokument mit passender Rechnung. Ein weiteres Dokument
+   * mit Rechnungsbezug — etwa ein Archivdokument aus dem Eingangsweg — konnte den Beleg
+   * so verdrängen, und die E-Rechnung hätte sich an das falsche Dokument gehängt.
+   */
+  const doc =
+    kind === 'original'
+      ? (candidates.find((d) => d.category === 'ausgangsrechnung' && d.classifiedKind === 'ausgangsrechnung') ??
+        candidates[0])
+      : candidates[0];
+  return doc ? cloneDocument(doc) : undefined;
+}
+
+/**
+ * GO-LIVE-SECURITY-01 / ABSCHLUSS — ausschließlich der erzeugte Rechnungsbeleg.
+ *
+ * `getDocumentByLinkedInvoiceId` fällt ohne Beleg auf jedes Dokument mit Rechnungsbezug
+ * zurück (etwa ein Archivdokument aus dem Eingangsweg). Für die E-Rechnung ist das falsch:
+ * Der Server bindet sie nur an den Beleg der Rechnung (generated_invoice), und eine
+ * strukturierte Fassung an einem anderen Dokument — etwa das extrahierte XML eines
+ * empfangenen Belegs — ist nie die eigene XRechnung. Ohne Beleg gibt es hier nichts.
+ *
+ * Erkannt wie `isGeneratedOutgoingInvoiceDocument` (Kategorie und Rechnungsbezug, ohne
+ * Korrekturbeleg), damit auch ältere Belege ohne `classifiedKind` gelten; der Beleg mit
+ * `classifiedKind` (jeder neue und jeder aus der Cloud) hat Vorrang.
+ */
+export function getGeneratedInvoiceDocument(invoiceId: string): CompanyDocument | undefined {
+  const candidates = documents.filter(
+    (d) =>
+      d.linkedInvoiceId === invoiceId &&
+      isEntitySyncActive(d) &&
+      !isInvoiceCorrectionDocument(d) &&
+      isGeneratedOutgoingInvoiceDocument(d),
+  );
+  const doc = candidates.find((d) => d.classifiedKind === 'ausgangsrechnung') ?? candidates[0];
   return doc ? cloneDocument(doc) : undefined;
 }
 

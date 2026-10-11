@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { alsInhaber } from '../test/workspaceRoleTestUtils';
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
@@ -90,6 +91,9 @@ afterEach(() => {
   vi.restoreAllMocks();
   document.body.innerHTML = '';
 });
+
+// GO-LIVE-SECURITY-01 — die Aktionen hier sind verbindlich (nur Inhaber/Admin); die Tests laufen als Inhaber.
+beforeEach(() => alsInhaber());
 
 describe('INVOICE-PILOT-MARK-SENT-01 — service', () => {
   it('vorbereitet → versendet mit Datum und Versandweg', () => {

@@ -19,7 +19,8 @@
 --   L  Retry und Doppelbestaetigung: genau ein bestaetigter Nachtrag
 --   M  sourceDraftId: im Nachtrag, ausserhalb des Fingerprints, eindeutig
 --   N  Schlussrechnungs-Guard und Nachtragssequenz unveraendert
---   O  Rechte unveraendert: Anlage Inhaber/Admin, Bestaetigung aktives Mitglied, kein R1
+--   O  Rechte: Anlage und Nachtragsbestaetigung nur Inhaber/Admin (GO-LIVE-SECURITY-01,
+--      Produktentscheidung vom 2026-10-09), Vorbereiten jedes aktive Mitglied, kein R1
 --   P  Der Dispatcher ist sonst unveraendert; alte Signaturen gibt es nicht mehr
 --
 -- Ausfuehren (nur lokal, niemals --linked oder remote):
@@ -731,11 +732,19 @@ begin
     'Keine Schreibberechtigung');
   if (pg_temp.od('v-o1')).status <> 'active' then raise exception 'O1 -- Entwurf veraendert'; end if;
 
-  -- O2: Mitglied bestaetigt einen Nachtrag mit Bindung -- wie bisher jedes aktive Mitglied.
+  -- O2: Mitglied bereitet einen Nachtrag mit Bindung vor -- erlaubt. Die verbindliche
+  --     Bestaetigung ist seit GO-LIVE-SECURITY-01 Inhaber und Admin vorbehalten
+  --     (Produktentscheidung vom 2026-10-09). Der Entwurf bleibt unverbraucht, bis der
+  --     Inhaber ihn bestaetigt.
   r := pg_temp.push(ws, 'order_amendment_draft', pg_temp.nachtragsentwurf('oa-o2', 'v-auftrag'), 0);
+  perform pg_temp.erwarte_fehler('O2 Mitglied bestaetigt einen Nachtrag',
+    $q$select public.confirm_workspace_order_amendment('00000000-0000-0000-0000-00000000d601', 'v-auftrag', 'oam-o2', pg_temp.nachtragsdaten('oad-oa-o2'), 'oa-o2', 1)$q$,
+    'Keine Schreibberechtigung');
+  if (pg_temp.ad('oa-o2')).status <> 'active' then raise exception 'O2 -- Entwurf veraendert'; end if;
+  perform pg_temp.anmelden('00000000-0000-0000-0000-0000000d6601'::uuid);
   r := public.confirm_workspace_order_amendment(ws, 'v-auftrag', 'oam-o2', pg_temp.nachtragsdaten('oad-oa-o2'), 'oa-o2', 1);
-  if (r->'row'->>'sequence_no')::integer <> 3 or (pg_temp.ad('oa-o2')).status <> 'consumed' then raise exception 'O2 -- %', r; end if;
-  raise notice 'OK  O1/O2 -- Auftragsanlage bleibt Inhaber/Admin, Nachtragsbestaetigung jedes aktive Mitglied';
+  if (r->'row'->>'sequence_no')::integer <> 3 or (pg_temp.ad('oa-o2')).status <> 'consumed' then raise exception 'O2 -- Inhaber bestaetigt den Entwurf des Mitglieds: %', r; end if;
+  raise notice 'OK  O1/O2 -- Auftragsanlage und Nachtragsbestaetigung bleiben Inhaber/Admin; das Mitglied bereitet vor';
 end $$;
 
 select pg_temp.anmelden('00000000-0000-0000-0000-0000000d6603'::uuid);

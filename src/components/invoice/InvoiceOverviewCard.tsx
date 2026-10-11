@@ -11,6 +11,7 @@ import {
 } from './InvoicePaymentForm';
 import { paymentStatusTone } from '../../services/ui/statusTone';
 import { canRecordInvoicePayment } from '../../services/invoicePaymentService';
+import { useWorkspaceWriteAccess } from '../../hooks/useWorkspaceWriteAccess';
 import { buildInvoiceReachPath } from '../../services/invoiceNavigation';
 import { buildKommunikationPath } from '../communication/communicationNavigation';
 import {
@@ -54,6 +55,8 @@ export function InvoiceOverviewCard({
   const navigate = useNavigate();
   const [currentItem, setCurrentItem] = useState(item);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
+  // GO-LIVE-SECURITY-01 / ABSCHLUSS — Zahlungen erfassen nur Inhaber und Verwaltung.
+  const darfFinanzen = useWorkspaceWriteAccess().canWrite;
   const { invoice, paymentSummary } = currentItem;
   /*
    * MANUAL-INVOICE-UI-01B2 — der Vorgangslink bleibt der Vorgangsrechnung
@@ -109,6 +112,13 @@ export function InvoiceOverviewCard({
     setCurrentItem(nextItem);
     onInvoiceUpdated?.(nextItem);
     onPaymentToast?.(translate(getPaymentSavedToastKey(updated)));
+  };
+
+  // GO-LIVE-SECURITY-01 / ABSCHLUSS — zurückgenommene Zahlung: Stand übernehmen, keine Erfolgsmeldung.
+  const handlePaymentReverted = (updated: VorgangInvoice) => {
+    const nextItem = { ...currentItem, invoice: updated };
+    setCurrentItem(nextItem);
+    onInvoiceUpdated?.(nextItem);
   };
 
   /*
@@ -187,7 +197,7 @@ export function InvoiceOverviewCard({
                 {translate('invoice.open')}
               </Button>
               {/* FINANZCORE-05C — nur solange etwas offen ist. */}
-              {canRecordInvoicePayment(invoice) && (
+              {canRecordInvoicePayment(invoice) && darfFinanzen && (
                 <Button
                   type="button"
                   size="sm"
@@ -256,6 +266,7 @@ export function InvoiceOverviewCard({
         open={showPaymentForm}
         onClose={() => setShowPaymentForm(false)}
         onSaved={handlePaymentSaved}
+        onReverted={handlePaymentReverted}
         translate={translate}
       />
     </>

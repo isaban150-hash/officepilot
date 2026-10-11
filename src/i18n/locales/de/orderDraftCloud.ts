@@ -101,6 +101,12 @@ export const deOrderDraftCloud = {
   'orderAmendmentCloud.confirm.conflict':
     'Der Nachtragsentwurf weicht von der Fassung in der Cloud ab. Bitte entscheiden Sie zuerst über die Fassung.',
   'orderAmendmentCloud.confirm.ended': 'Dieser Nachtragsentwurf wurde auf einem anderen Gerät verworfen. Es wird kein Nachtrag bestätigt.',
+  'orderAmendmentCloud.confirm.forbidden': 'Nachträge bestätigen dürfen nur Inhaber und Verwaltung. Der Entwurf bleibt erhalten.',
+  'orderAmendmentCloud.confirm.readyMember': 'Der Entwurf ist vollständig. Bestätigen können ihn Inhaber und Verwaltung.',
+  'orderAmendmentCloud.sectionIntroMember':
+    'Hier bereiten Sie Ergänzungen zum bestätigten Auftrag vor. Bestätigen dürfen sie Inhaber und Verwaltung.',
+  'orderAmendmentCloud.confirm.roleHint':
+    'Sie können diesen Nachtrag vorbereiten. Verbindlich bestätigen dürfen ihn nur Inhaber und Verwaltung.',
   'orderAmendmentCloud.confirm.consumed':
     'Dieser Nachtrag wurde bereits auf einem anderen Gerät bestätigt. Es entsteht kein zweiter Nachtrag.',
   'order_amendment_conflict_open': 'Bitte entscheiden Sie zuerst über die abweichende Fassung dieses Nachtragsentwurfs.',

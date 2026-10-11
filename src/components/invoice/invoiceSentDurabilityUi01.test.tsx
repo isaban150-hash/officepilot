@@ -9,6 +9,7 @@ import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { alsInhaber } from '../../test/workspaceRoleTestUtils';
 import { DEFAULT_COMPANY_PROFILE } from '../../data/companyProfileDefaults';
 import { createTestVorgang } from '../../test/fixtures';
 import { getVorgangInvoice, hydrateVorgangStore } from '../../services/vorgangService';
@@ -82,6 +83,9 @@ function markup(invoice: VorgangInvoice, cloudState: InvoiceSentCloudState | nul
     }),
   );
 }
+
+// GO-LIVE-SECURITY-01 — die Aktionen hier sind verbindlich (nur Inhaber/Admin); die Tests laufen als Inhaber.
+beforeEach(() => alsInhaber());
 
 describe('SENT-DUR-UI — welche Aktion wann erscheint', () => {
   it('S4b: pending zeigt einen Hinweis und genau eine Sicherungsaktion', () => {
@@ -160,6 +164,7 @@ describe('SENT-DUR-UI — die Aktionen tun das Richtige', () => {
 
   beforeEach(() => {
     vi.restoreAllMocks();
+    alsInhaber();
     hydrateVorgangStore([createTestVorgang({ id: VORGANG_ID, invoices: [sentInvoice()] })]);
     container = document.createElement('div');
     document.body.appendChild(container);
@@ -196,7 +201,12 @@ describe('SENT-DUR-UI — die Aktionen tun das Richtige', () => {
     });
 
     expect(spy).toHaveBeenCalledTimes(1);
-    expect(spy.mock.calls[0]).toEqual([VORGANG_ID, INVOICE_ID]);
+    // GO-LIVE-SECURITY-01 — der Dienst prüft die Rolle selbst; das Panel reicht sie mit.
+    expect(spy.mock.calls[0]).toEqual([
+      VORGANG_ID,
+      INVOICE_ID,
+      expect.objectContaining({ cloudConfigured: expect.any(Boolean) }),
+    ]);
   });
 
   it('S15b: „Stand dieses Geräts verwenden" nutzt genau denselben Weg', async () => {

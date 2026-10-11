@@ -9,6 +9,7 @@ import {
 } from './syncSimulationReportService';
 import { retryFailedOutboxEntries, wrapStateAsVirtualDevice } from './syncSimulatorService';
 import { mergeOutboxAfterPull } from './syncOutboxMergeService';
+import { isRoleDenialFailure } from './syncRoleDenial';
 
 export type SyncRunResult = {
   state: AppPersistedState;
@@ -189,11 +190,19 @@ export class SyncCoordinator {
           .filter((entry) => entry.status === 'blocked')
           .map((entry) => entry.id),
       );
-      const nurKonflikte =
+      /*
+       * GO-LIVE-SECURITY-01 — eine Rollenabweisung ebenso. Sie ist endgültig und
+       * kein Übertragungsfehler; erst der Abgleich holt den Serverstand und
+       * nimmt eine abgewiesene Löschung zurück. Ohne ihn holte ein Gerät mit
+       * einem solchen Auftrag nie wieder etwas ab.
+       */
+      const nurKonflikteOderRollen =
         pushResult.failedOutbox.length > 0 &&
-        pushResult.failedOutbox.every((failure) => konfliktIds.has(failure.outboxId));
+        pushResult.failedOutbox.every(
+          (failure) => konfliktIds.has(failure.outboxId) || isRoleDenialFailure(failure),
+        );
 
-      if (!pushResult.success && !nurKonflikte) {
+      if (!pushResult.success && !nurKonflikteOderRollen) {
         this.syncState = 'error';
         this.lastError = pushResult.failedOutbox[0]?.message;
         const failedReport = mergeReports(
@@ -387,7 +396,14 @@ export class SyncCoordinator {
       if (!pushResult.success && !nurKonflikte) {
         this.syncState = 'error';
         this.lastError = pushResult.failedOutbox[0]?.message;
-        return { state: pushResult.state, report, success: false, needsFullSync: false };
+        /*
+         * GO-LIVE-SECURITY-01 — eine Rollenabweisung bleibt ein Fehler, verlangt
+         * aber den vollständigen Abgleich: Erst er holt den Serverstand zurück.
+         */
+        const nurKonflikteOderRollen = pushResult.failedOutbox.every(
+          (failure) => konfliktIds.has(failure.outboxId) || isRoleDenialFailure(failure),
+        );
+        return { state: pushResult.state, report, success: false, needsFullSync: nurKonflikteOderRollen };
       }
 
       // Ein in diesem Lauf neu blockierter Auftrag: erst der Abgleich liefert den Cloud-Stand.

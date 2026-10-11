@@ -18,6 +18,7 @@ import {
 import { formatInvoiceDate } from '../../services/invoicePrintModel';
 import { getVorgangInvoice } from '../../services/vorgangService';
 import { getInvoiceDocumentTitle } from '../../services/invoiceTypeService';
+import { useWorkspaceWriteAccess } from '../../hooks/useWorkspaceWriteAccess';
 import type { VorgangInvoice } from '../../types/models';
 import type { TranslationKey } from '../../i18n';
 
@@ -56,6 +57,8 @@ export function InvoiceListCard({
   const navigate = useNavigate();
   const [currentInvoice, setCurrentInvoice] = useState(invoice);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
+  // GO-LIVE-SECURITY-01 / ABSCHLUSS — Zahlungen erfassen nur Inhaber und Verwaltung.
+  const darfFinanzen = useWorkspaceWriteAccess().canWrite;
   const readOnly = isFinalizedInvoice(currentInvoice);
   const summary = calculatePaymentSummary(currentInvoice);
 
@@ -81,6 +84,12 @@ export function InvoiceListCard({
     setCurrentInvoice(updated);
     onInvoiceUpdated?.(updated);
     onPaymentToast?.(translate(getPaymentSavedToastKey(updated)));
+  };
+
+  // GO-LIVE-SECURITY-01 / ABSCHLUSS — zurückgenommene Zahlung: Stand übernehmen, keine Erfolgsmeldung.
+  const handlePaymentReverted = (updated: VorgangInvoice) => {
+    setCurrentInvoice(updated);
+    onInvoiceUpdated?.(updated);
   };
 
   return (
@@ -137,7 +146,7 @@ export function InvoiceListCard({
               {translate('invoice.open')}
             </Button>
             {/* FINANZCORE-05C — nur solange etwas offen ist. */}
-            {canRecordInvoicePayment(currentInvoice) && (
+            {canRecordInvoicePayment(currentInvoice) && darfFinanzen && (
               <Button
                 type="button"
                 variant="outline"
@@ -179,6 +188,7 @@ export function InvoiceListCard({
         open={showPaymentForm}
         onClose={() => setShowPaymentForm(false)}
         onSaved={handlePaymentSaved}
+        onReverted={handlePaymentReverted}
         translate={translate}
       />
     </>

@@ -2,6 +2,7 @@ import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { alsInhaber } from './test/workspaceRoleTestUtils';
 import { AppProvider } from './context/AppContext';
 import { DEFAULT_SETUP } from './data/mockData';
 import { VorgangOrderAmendmentPanel } from './components/vorgang/VorgangOrderAmendmentPanel';
@@ -177,6 +178,8 @@ describe('ORDER-AMENDMENT-UI-UX-01B2A1', () => {
 
   beforeEach(() => {    resetOrderAmendmentConfirmIntentsForTests();
     vi.restoreAllMocks();
+    // GO-LIVE-SECURITY-01: Nachträge bestätigen nur Inhaber und Admin.
+    alsInhaber();
     container = document.createElement('div');
     document.body.appendChild(container);
   });

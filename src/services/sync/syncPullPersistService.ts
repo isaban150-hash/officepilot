@@ -12,7 +12,7 @@ import {
   seedSyncChangeTrackerFromCurrentStores,
 } from '../persistenceService';
 import { getSyncCoordinator } from './syncCoordinator';
-import { getSyncOutboxSnapshot } from './syncOutboxService';
+import { getSyncOutboxSnapshot, runAutomaticSyncWrite } from './syncOutboxService';
 import { rebaseSyncCandidateOntoLocalChanges } from './syncLocalRebaseService';
 import { reconcileInvoicePaymentTasks } from '../invoice/invoicePaymentTaskSync';
 
@@ -220,7 +220,8 @@ export function applySyncPullCandidateSafely(input: {
    * neuer Stand nach Teilzahlung.
    */
   try {
-    reconcileInvoicePaymentTasks();
+    // KONTOSPERRE — automatischer Schreiber ohne Nutzeraktion: der Änderungsverfolger nimmt den gesperrten Weg.
+    runAutomaticSyncWrite(() => reconcileInvoicePaymentTasks());
   } catch (error) {
     report = withReportWarning(
       report,

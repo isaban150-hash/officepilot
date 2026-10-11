@@ -11,6 +11,7 @@ import { resolve } from 'node:path';
 import { act, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { alsInhaber } from '../test/workspaceRoleTestUtils';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { DEFAULT_COMPANY_PROFILE } from '../data/companyProfileDefaults';
 import { DEFAULT_SETUP } from '../data/mockData';
@@ -242,6 +243,9 @@ function paymentRow(paymentId: string, amount: number, reversed = false) {
     reversed_at: reversed ? '2026-09-03T09:00:00.000Z' : null,
   };
 }
+
+// GO-LIVE-SECURITY-01 — die Aktionen hier sind verbindlich (nur Inhaber/Admin); die Tests laufen als Inhaber.
+beforeEach(() => alsInhaber());
 
 describe('MANUAL-INVOICE-UI-01B2 — globale Rechnungsdetailseite', () => {
   let mounted: PageMount | null = null;

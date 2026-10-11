@@ -13,6 +13,7 @@
  * Neutrale Beispieldaten, kein Netzwerk.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { alsInhaber } from '../test/workspaceRoleTestUtils';
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
@@ -90,6 +91,9 @@ function stubCloudReady(workspaceId = WORKSPACE): void {
   vi.spyOn(supabaseLib, 'isSupabaseConfigured').mockReturnValue(true);
   vi.spyOn(workspacePayload, 'resolveCloudWorkspaceId').mockReturnValue(workspaceId);
 }
+
+// GO-LIVE-SECURITY-01 — die Aktionen hier sind verbindlich (nur Inhaber/Admin); die Tests laufen als Inhaber.
+beforeEach(() => alsInhaber());
 
 describe('OFFICEPILOT-INVOICE-SENT-CLOUD-VISIBILITY-04B1S — Sync-Vertrag', () => {
   beforeEach(() => {

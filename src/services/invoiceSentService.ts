@@ -1,9 +1,20 @@
-import { getVorgangInvoice, updateInvoiceSentFields } from './vorgangService';
+import { getVorgangInvoice, restoreInvoiceSentState, updateInvoiceSentFields } from './vorgangService';
+import { runAutomaticSyncWrite } from './sync/syncOutboxService';
 import {
   readInvoiceSentSnapshot,
   sentSnapshotsEqual,
   type InvoiceSentSnapshot,
 } from './invoice/invoiceSentSnapshot';
+import {
+  readInvoiceSentState,
+  resolveMemberInvoiceSentTarget,
+  type InvoiceSentState,
+} from './invoice/invoiceMemberAlignment';
+import {
+  resolveWorkspaceWriteAccess,
+  UNKNOWN_CLOUD_ACTOR,
+  type WorkspaceActor,
+} from './workspace/workspaceRoleService';
 import type { InvoiceSentVia, VorgangInvoice } from '../types/models';
 import type { TranslationKey } from '../i18n';
 
@@ -34,8 +45,20 @@ export type InvoiceSentMutationResult =
         | 'invalid_via'
         | 'update_failed'
         /** INVOICE-SENT-PERSIST-01C — im Speicher geändert, aber nicht dauerhaft. */
-        | 'persist_failed';
+        | 'persist_failed'
+        /** GO-LIVE-SECURITY-01 — nur Inhaber und Verwaltung; nichts wurde geändert. */
+        | 'forbidden';
     };
+
+/**
+ * GO-LIVE-SECURITY-01 — den Versand vermerken ist verbindlich: nur Inhaber und
+ * Verwaltung. Geprüft wird hier, vor jeder lokalen Änderung, und nicht nur in
+ * der Oberfläche. Ohne Angabe gilt die strengste Annahme (Cloud, Rolle
+ * unbekannt); im bewusst lokalen Betrieb ohne Cloud bleibt alles erlaubt.
+ */
+function mayRecordInvoiceSent(actor: WorkspaceActor | undefined): boolean {
+  return resolveWorkspaceWriteAccess(actor ?? UNKNOWN_CLOUD_ACTOR).canWrite;
+}
 
 function isIsoDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value.trim())) return false;
@@ -79,7 +102,11 @@ export function markInvoiceAsSent(
   vorgangId: string | null,
   invoiceId: string,
   input: InvoiceSentInput,
+  actor?: WorkspaceActor,
 ): InvoiceSentMutationResult {
+  if (!mayRecordInvoiceSent(actor)) {
+    return { ok: false, reason: 'forbidden' };
+  }
   const invoice = getVorgangInvoice(vorgangId, invoiceId);
   if (!invoice) {
     return { ok: false, reason: 'invoice_missing' };
@@ -119,7 +146,11 @@ export function updateInvoiceSentDetails(
   vorgangId: string | null,
   invoiceId: string,
   input: InvoiceSentInput,
+  actor?: WorkspaceActor,
 ): InvoiceSentMutationResult {
+  if (!mayRecordInvoiceSent(actor)) {
+    return { ok: false, reason: 'forbidden' };
+  }
   const invoice = getVorgangInvoice(vorgangId, invoiceId);
   if (!invoice) {
     return { ok: false, reason: 'invoice_missing' };
@@ -161,7 +192,12 @@ export type InvoiceSentCloudSyncResult =
   | 'supabase_not_configured'
   | 'workspace_missing'
   | 'local_invoice_invalid'
-  | 'failed';
+  | 'failed'
+  /**
+   * GO-LIVE-SECURITY-01 — die Rolle reicht nicht: vor dem Aufruf erkannt oder
+   * vom Server abgewiesen. Ein lokaler Vermerk ist dann nicht freigegeben.
+   */
+  | 'forbidden';
 
 /** Nur diese beiden Ausgänge sind kein Grund zur Warnung. */
 export function isInvoiceSentCloudSyncSilent(result: InvoiceSentCloudSyncResult): boolean {
@@ -183,7 +219,10 @@ export function isInvoiceSentCloudSyncSilent(result: InvoiceSentCloudSyncResult)
 export async function syncInvoiceSentToCloud(
   vorgangId: string | null,
   invoiceId: string,
+  actor?: WorkspaceActor,
 ): Promise<InvoiceSentCloudSyncResult> {
+  // GO-LIVE-SECURITY-01 — ohne Schreibrecht gibt es nichts zu sichern.
+  if (!mayRecordInvoiceSent(actor)) return 'forbidden';
   /*
    * 04B1S — die Funktion ist total: jeder Pfad liefert kontrolliert ein
    * Ergebnis. Vorher lag der erste dynamische Import außerhalb des Schutzes;
@@ -221,8 +260,98 @@ export async function syncInvoiceSentToCloud(
       sentNote: invoice.sentNote,
     });
     return 'synced';
+  } catch (error) {
+    // GO-LIVE-SECURITY-01 — die Rollenabweisung des Servers (42501) ist kein Netzfehler.
+    return isRoleDenial(error) ? 'forbidden' : 'failed';
+  }
+}
+
+/** Rollenabweisung des Servers, eingestuft von `classifyInvoiceCloudError`. */
+function isRoleDenial(error: unknown): boolean {
+  return (error as { code?: unknown } | null)?.code === 'rls';
+}
+
+/**
+ * GO-LIVE-SECURITY-01 — der Versandstand vor einer Aktion. Weist der Server die
+ * Aktion wegen der Rolle ab, wird genau dieser Stand wiederhergestellt.
+ */
+export function captureInvoiceSentState(vorgangId: string | null, invoiceId: string): InvoiceSentState | null {
+  const invoice = getVorgangInvoice(vorgangId, invoiceId);
+  return invoice ? readInvoiceSentState(invoice) : null;
+}
+
+/**
+ * GO-LIVE-SECURITY-01 — der Server hat den Vermerk wegen der Rolle abgewiesen.
+ * Lokal gilt wieder der Stand vor der Aktion: Ein Versand, den es in der Cloud
+ * nicht gibt, darf hier nicht als Erfolg stehen bleiben — er gäbe sonst auf
+ * diesem Gerät Mahnung und Folgeaktionen frei.
+ */
+export function revertInvoiceSentAfterRoleDenial(
+  vorgangId: string | null,
+  invoiceId: string,
+  previous: InvoiceSentState,
+): InvoiceSentMutationResult {
+  const restored = restoreInvoiceSentState(vorgangId, invoiceId, previous);
+  if (!restored.ok) {
+    return { ok: false, reason: restored.reason === 'persist_failed' ? 'persist_failed' : 'invoice_missing' };
+  }
+  return { ok: true, invoice: restored.invoice };
+}
+
+/**
+ * GO-LIVE-SECURITY-01 — Gerät eines Mitglieds: Weicht der lokale Versandstand
+ * von der Cloud ab, stammt er nicht aus einer zulässigen Aktion (siehe
+ * `invoiceMemberAlignment`). Dann gilt der Stand der Cloud.
+ *
+ * Nur für eine bekannte Mitgliedsrolle und nur mit frisch gelesenem
+ * Cloud-Stand. Ohne Antwort bleibt alles, wie es ist. Liefert die angeglichene
+ * Rechnung oder `null`, wenn nichts zu tun war.
+ */
+export async function alignInvoiceSentWithCloudForMember(
+  vorgangId: string | null,
+  invoiceId: string,
+  actor: WorkspaceActor,
+): Promise<VorgangInvoice | null> {
+  if (resolveWorkspaceWriteAccess(actor).reason !== 'member') return null;
+  return adoptCloudInvoiceSentState(vorgangId, invoiceId);
+}
+
+/**
+ * GO-LIVE-SECURITY-01 — „Jetzt sichern" oder „Lokalen Stand verwenden" kam als
+ * Rollenabweisung zurück. Damit ist bewiesen, dass der lokale Stand nicht
+ * freigegeben ist, auch wenn dieses Gerät die Rolle noch anders kennt: Es gilt
+ * der Stand der Cloud.
+ */
+export async function adoptCloudInvoiceSentStateAfterRoleDenial(
+  vorgangId: string | null,
+  invoiceId: string,
+): Promise<VorgangInvoice | null> {
+  return adoptCloudInvoiceSentState(vorgangId, invoiceId);
+}
+
+async function adoptCloudInvoiceSentState(vorgangId: string | null, invoiceId: string): Promise<VorgangInvoice | null> {
+  try {
+    const invoice = getVorgangInvoice(vorgangId, invoiceId);
+    if (!invoice) return null;
+
+    const [{ rpcGetWorkspaceInvoiceSent }, { resolveCloudWorkspaceId }, persistence] = await Promise.all([
+      import('./invoice/workspaceInvoiceCloudService'),
+      import('./workspace/workspaceSyncPayloadService'),
+      import('./persistenceService'),
+    ]);
+    const workspaceId = resolveCloudWorkspaceId(persistence.buildPersistedStateSnapshot()).trim();
+    if (!workspaceId) return null;
+
+    const cloud = await rpcGetWorkspaceInvoiceSent({ workspaceId, clientInvoiceId: invoice.id });
+    if (!cloud.found) return null;
+    const target = resolveMemberInvoiceSentTarget(invoice, { snapshot: cloud.snapshot, status: cloud.status });
+    if (!target) return null;
+    // KONTOSPERRE — automatischer Schreiber ohne Nutzeraktion: der Änderungsverfolger nimmt den gesperrten Weg.
+    const restored = runAutomaticSyncWrite(() => restoreInvoiceSentState(vorgangId, invoiceId, target));
+    return restored.ok ? restored.invoice : null;
   } catch {
-    return 'failed';
+    // Kein Beweis, keine Änderung.
+    return null;
   }
 }
 

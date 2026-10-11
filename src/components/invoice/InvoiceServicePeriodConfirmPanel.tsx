@@ -23,8 +23,12 @@ import {
   confirmFinalizedInvoiceServicePeriod,
   isServicePeriodCloudSyncSilent,
   needsServicePeriodRecovery,
+  revertServicePeriodConfirmationAfterRoleDenial,
   syncInvoiceServicePeriodConfirmationToCloud,
 } from '../../services/invoice/invoiceServicePeriodConfirmService';
+import { useOptionalAuth } from '../../context/AuthContext';
+import { isSupabaseConfigured } from '../../lib/supabase';
+import { resolveWorkspaceWriteAccess } from '../../services/workspace/workspaceRoleService';
 import type { VorgangInvoice } from '../../types/models';
 import type { TranslationKey } from '../../i18n';
 
@@ -37,6 +41,11 @@ interface Props {
   translate: (key: TranslationKey) => string;
   onUpdated: (invoice: VorgangInvoice) => void;
   onCloudStateChange: (confirmed: boolean | null) => void;
+  /**
+   * GO-LIVE-SECURITY-01 — die Detailseite hat auf dem Gerät eines Mitglieds
+   * eine nicht freigegebene Bestätigung zurückgenommen.
+   */
+  roleAligned?: boolean;
 }
 
 function formatDisplayDate(value: string): string {
@@ -52,9 +61,19 @@ export function InvoiceServicePeriodConfirmPanel({
   translate,
   onUpdated,
   onCloudStateChange,
+  roleAligned = false,
 }: Props) {
   const [busy, setBusy] = useState(false);
   const [errorKey, setErrorKey] = useState<TranslationKey | null>(null);
+  /*
+   * GO-LIVE-SECURITY-01 — die Bestätigung gibt PDF und Druck frei und ist
+   * damit verbindlich: nur Inhaber und Verwaltung. Mitglieder sehen den
+   * Zeitraum und einen Rollenhinweis; die Dienste prüfen dieselbe Rolle noch
+   * einmal vor jeder lokalen Änderung.
+   */
+  const authUser = useOptionalAuth()?.user;
+  const actor = { userId: authUser?.id, cloudConfigured: isSupabaseConfigured() };
+  const darfBestaetigen = resolveWorkspaceWriteAccess(actor).canWrite;
 
   const needsRecovery = needsServicePeriodRecovery(invoice);
   const needsCloudSecure = invoice.servicePeriodConfirmed === true && cloudConfirmed === false;
@@ -72,20 +91,43 @@ export function InvoiceServicePeriodConfirmPanel({
    */
   const handleConfirm = async (): Promise<void> => {
     if (busy) return;
+    if (!darfBestaetigen) {
+      setErrorKey('invoice.servicePeriodConfirmForbidden');
+      return;
+    }
     setBusy(true);
     setErrorKey(null);
+    // GO-LIVE-SECURITY-01 — der Wert davor, falls der Server die Bestätigung abweist.
+    const vorher = invoice.servicePeriodConfirmed;
 
     if (needsRecovery) {
-      const result = confirmFinalizedInvoiceServicePeriod(vorgangId, invoice.id);
+      const result = confirmFinalizedInvoiceServicePeriod(vorgangId, invoice.id, actor);
       if (!result.ok) {
-        setErrorKey('invoice.servicePeriodConfirmFailed');
+        setErrorKey(
+          result.reason === 'forbidden'
+            ? 'invoice.servicePeriodConfirmForbidden'
+            : 'invoice.servicePeriodConfirmFailed',
+        );
         setBusy(false);
         return;
       }
       onUpdated(result.invoice);
     }
 
-    const outcome = await syncInvoiceServicePeriodConfirmationToCloud(vorgangId, invoice.id);
+    const outcome = await syncInvoiceServicePeriodConfirmationToCloud(vorgangId, invoice.id, actor);
+    /*
+     * GO-LIVE-SECURITY-01 — eine Rollenabweisung ist kein Netzfehler: Die
+     * Bestätigung war nie zulässig. Sie wird zurückgenommen, PDF und Druck
+     * bleiben gesperrt.
+     */
+    if (outcome === 'forbidden') {
+      const zurueck = revertServicePeriodConfirmationAfterRoleDenial(vorgangId, invoice.id, vorher);
+      if (zurueck.ok) onUpdated(zurueck.invoice);
+      onCloudStateChange(null);
+      setErrorKey('invoice.servicePeriodConfirmForbidden');
+      setBusy(false);
+      return;
+    }
     /*
      * 01B2 — nur ein bewiesener Erfolg wird behauptet.
      *
@@ -127,19 +169,36 @@ export function InvoiceServicePeriodConfirmPanel({
           </span>{' '}
           <strong data-testid="invoice-service-period-value">{period}</strong>
         </p>
-        <Button
-          type="button"
-          fullWidth
-          disabled={busy}
-          onClick={() => void handleConfirm()}
-          data-testid={
-            needsRecovery ? 'invoice-confirm-service-period' : 'invoice-secure-service-period'
-          }
-        >
-          {translate(
-            needsRecovery ? 'invoice.confirmServicePeriod' : 'invoice.servicePeriodSecureNow',
-          )}
-        </Button>
+        {roleAligned ? (
+          <p
+            className="invoice-service-period-confirm__error"
+            data-testid="invoice-service-period-role-aligned"
+          >
+            {translate('invoice.servicePeriodRoleAligned')}
+          </p>
+        ) : null}
+        {darfBestaetigen ? (
+          <Button
+            type="button"
+            fullWidth
+            disabled={busy}
+            onClick={() => void handleConfirm()}
+            data-testid={
+              needsRecovery ? 'invoice-confirm-service-period' : 'invoice-secure-service-period'
+            }
+          >
+            {translate(
+              needsRecovery ? 'invoice.confirmServicePeriod' : 'invoice.servicePeriodSecureNow',
+            )}
+          </Button>
+        ) : (
+          <p
+            className="invoice-service-period-confirm__hint"
+            data-testid="invoice-service-period-role-hint"
+          >
+            {translate('invoice.servicePeriodRoleHint')}
+          </p>
+        )}
         {errorKey ? (
           <p
             className="invoice-service-period-confirm__error"

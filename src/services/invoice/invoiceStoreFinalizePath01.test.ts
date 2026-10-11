@@ -13,6 +13,7 @@
  * Synthetische Daten, kein Netz.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
+import { alsInhaber } from '../../test/workspaceRoleTestUtils';
 
 import { getInvoiceStoreSnapshot } from './invoiceStore';
 import { listInvoices } from './invoiceRegistryService';
@@ -76,6 +77,9 @@ beforeEach(() => {
     }),
   ]);
 });
+
+// GO-LIVE-SECURITY-01 — die Aktionen hier sind verbindlich (nur Inhaber/Admin); die Tests laufen als Inhaber.
+beforeEach(() => alsInhaber());
 
 describe('FIRST-CLASS-LOCAL-INVOICE-STORE-01B2 — Freigabe bis Neuladen', () => {
   it('F1: eine freigegebene Rechnung landet zentral und am Vorgang', () => {

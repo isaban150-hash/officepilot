@@ -8,6 +8,7 @@ import {
 } from '../../services/invoicePdfService';
 import * as invoicePrintService from '../../services/invoicePrintService';
 import { validateFinalizedInvoiceForPdf } from '../../services/invoiceValidationService';
+import type { InvoiceOutputHold } from '../../services/invoice/invoiceOutputClearance';
 import type { InvoicePrintModel, VorgangInvoice } from '../../types/models';
 import type { TranslationKey } from '../../i18n';
 
@@ -24,6 +25,15 @@ interface Props {
    * `generateInvoiceCorrectionPdf` herein — dieselbe Engine, anderes Modell.
    */
   generatePdf?: (invoice: VorgangInvoice) => Promise<GenerateApprovedInvoicePdfResult>;
+  /**
+   * GO-LIVE-SECURITY-01 — die Ausgabe wartet auf den Nachweis, dass die Cloud
+   * die Bestätigung des Leistungszeitraums trägt (siehe
+   * `invoiceOutputClearance`). Solange er fehlt, gibt es weder Druck noch PDF,
+   * auch nicht über `?auto=pdf`.
+   */
+  outputHold?: InvoiceOutputHold | null;
+  /** Fragt die Cloud erneut, wenn es keinen Nachweis gab. */
+  onRetryOutputCheck?: () => void;
 }
 
 export function InvoicePrintActions({
@@ -33,6 +43,8 @@ export function InvoicePrintActions({
   layout = 'stack',
   autoDownloadPdf = false,
   generatePdf = generateApprovedInvoicePdf,
+  outputHold = null,
+  onRetryOutputCheck,
 }: Props) {
   const title = buildPrintTitle(model);
   const [pdfLoading, setPdfLoading] = useState(false);
@@ -41,6 +53,8 @@ export function InvoicePrintActions({
   const autoStartedRef = useRef(false);
   const invoiceRef = useRef(invoice);
   invoiceRef.current = invoice;
+  const holdRef = useRef(outputHold);
+  holdRef.current = outputHold;
 
   useEffect(() => {
     return () => {
@@ -50,7 +64,7 @@ export function InvoicePrintActions({
   }, []);
 
   const runPdfDownload = async (): Promise<void> => {
-    if (pdfLoading) return;
+    if (pdfLoading || holdRef.current) return;
     setPdfLoading(true);
     setPdfError(null);
     const current = invoiceRef.current;
@@ -87,6 +101,7 @@ export function InvoicePrintActions({
    * seinen Blockern. Was der eine Weg verweigert, verweigert auch der andere.
    */
   const runPrint = (): void => {
+    if (holdRef.current) return;
     setPdfError(null);
     const validation = validateFinalizedInvoiceForPdf(invoiceRef.current);
     if (validation.blockingErrors.length > 0) {
@@ -97,17 +112,19 @@ export function InvoicePrintActions({
   };
 
   useEffect(() => {
-    if (!autoDownloadPdf || autoStartedRef.current) return;
+    // GO-LIVE-SECURITY-01 — der Direktaufruf wartet auf den Nachweis, er umgeht ihn nicht.
+    if (!autoDownloadPdf || autoStartedRef.current || outputHold) return;
     autoStartedRef.current = true;
     void runPdfDownload();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot auto download
-  }, [autoDownloadPdf]);
+  }, [autoDownloadPdf, outputHold]);
 
   return (
     <div className={`invoice-print-actions invoice-print-actions--${layout}`}>
       <Button
         type="button"
         onClick={runPrint}
+        disabled={Boolean(outputHold)}
         data-testid="invoice-print"
       >
         {translate('invoice.print')}
@@ -116,11 +133,28 @@ export function InvoicePrintActions({
         type="button"
         variant="outline"
         onClick={() => void runPdfDownload()}
-        disabled={pdfLoading}
+        disabled={pdfLoading || Boolean(outputHold)}
         data-testid="invoice-download-pdf"
       >
         {pdfLoading ? translate('invoice.pdf.loading') : translate('invoice.downloadPdf')}
       </Button>
+      {outputHold ? (
+        <div className="invoice-hint" role="status" data-testid={`invoice-output-hold-${outputHold}`}>
+          <p>
+            {translate(outputHold === 'verifying' ? 'invoice.output.verifying' : 'invoice.output.unverified')}
+          </p>
+          {outputHold === 'unverified' && onRetryOutputCheck ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onRetryOutputCheck}
+              data-testid="invoice-output-hold-retry"
+            >
+              {translate('invoice.output.retry')}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
       {pdfError ? (
         <p className="invoice-print-actions__error" data-testid="invoice-pdf-error">
           {pdfError}

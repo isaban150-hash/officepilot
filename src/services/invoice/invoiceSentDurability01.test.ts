@@ -15,6 +15,7 @@
  * automatisch aufgelöst. Kein Netzwerk — der Supabase-Client wird ersetzt.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { alsInhaber } from '../../test/workspaceRoleTestUtils';
 import type { Vorgang, VorgangInvoice } from '../../types/models';
 import { DEFAULT_COMPANY_PROFILE } from '../../data/companyProfileDefaults';
 import { createTestVorgang } from '../../test/fixtures';
@@ -111,6 +112,9 @@ function seed(inv: VorgangInvoice): Vorgang {
 /* -------------------------------------------------------------------------- */
 /* Der vollständige Snapshot als einzige Definition                            */
 /* -------------------------------------------------------------------------- */
+
+// GO-LIVE-SECURITY-01 — die Aktionen hier sind verbindlich (nur Inhaber/Admin); die Tests laufen als Inhaber.
+beforeEach(() => alsInhaber());
 
 describe('SENT-DUR-01B — was ein vollständiger Versandsatz ist', () => {
   it('S20a: Status, gültiges Datum und gültiger Weg gemeinsam', () => {
@@ -233,6 +237,8 @@ describe('SENT-DUR-01B — schmaler Einzelread', () => {
     expect(result).toEqual({
       found: true,
       snapshot: { sentAt: '2026-09-10', sentVia: 'email' },
+      // GO-LIVE-SECURITY-01 — der rohe Status für den Abgleich auf Mitgliedsgeräten.
+      status: 'versendet',
     });
     expect(calls).toHaveLength(1);
     expect(calls[0].name).toBe('get_workspace_invoice_sent');
@@ -266,7 +272,7 @@ describe('SENT-DUR-01B — schmaler Einzelread', () => {
         { workspaceId: WORKSPACE, clientInvoiceId: INVOICE_ID },
         { client },
       ),
-    ).toEqual({ found: false, snapshot: null });
+    ).toEqual({ found: false, snapshot: null, status: null });
   });
 
   it('S8: ein Serverfehler wird zum Cloud-Fehler, nicht zu "nicht versendet"', async () => {

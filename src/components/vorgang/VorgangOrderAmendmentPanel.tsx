@@ -22,6 +22,9 @@ import { useDraftCloudTick } from '../../services/order/useDraftCloudTick';
 import { formatDisplayDateTime } from '../../utils/displayFormat';
 import { DraftCloudConflictNotice, type DraftCloudConflictAction } from '../order/DraftCloudConflictNotice';
 import { confirmOrderAmendmentWithCloud } from '../../services/orderAmendment/orderAmendmentCloudConfirmOrchestrator';
+import { useOptionalAuth } from '../../context/AuthContext';
+import { isSupabaseConfigured } from '../../lib/supabase';
+import { resolveWorkspaceWriteAccess } from '../../services/workspace/workspaceRoleService';
 import {
   getOrderAmendmentConfirmIntent,
   isOrderAmendmentDraftLockedByIntent,
@@ -95,6 +98,14 @@ export function VorgangOrderAmendmentPanel({
    * nicht, ohne dass sein Nachtrag erscheint.
    */
   useDraftCloudTick();
+  /*
+   * GO-LIVE-SECURITY-01 — Mitglieder bereiten Nachträge vor; verbindlich
+   * bestätigen dürfen nur Inhaber und Admin. Der Server prüft das verbindlich;
+   * das Panel bietet nur nichts an, was er ablehnen würde.
+   */
+  const authUser = useOptionalAuth()?.user ?? null;
+  const darfBestaetigen = resolveWorkspaceWriteAccess({ userId: authUser?.id, cloudConfigured: isSupabaseConfigured() }).canWrite;
+  const abschnittEinleitung = translate(darfBestaetigen ? 'orderAmendment.sectionIntro' : 'orderAmendmentCloud.sectionIntroMember');
   const currentVorgang = getVorgangById(vorgang.id) ?? vorgang;
   const amendments = currentVorgang.orderAmendments ?? [];
   const [selectedDraftId, setSelectedDraftId] = useState<string | null>(null);
@@ -161,8 +172,9 @@ export function VorgangOrderAmendmentPanel({
     if (schlussExists) {
       return translate('orderAmendment.schlussWarning');
     }
-    return translate('orderAmendment.validation.ready');
-  }, [primaryAmendment, schlussExists, translate]);
+    // GO-LIVE-SECURITY-01 — ein Mitglied bestätigt nicht selbst: kein „kann bestätigt werden“.
+    return translate(darfBestaetigen ? 'orderAmendment.validation.ready' : 'orderAmendmentCloud.confirm.readyMember');
+  }, [primaryAmendment, schlussExists, translate, darfBestaetigen]);
 
   useEffect(() => {
     if (!primaryAmendment) {
@@ -190,7 +202,7 @@ export function VorgangOrderAmendmentPanel({
         <h2 ref={sectionHeadingRef} tabIndex={-1} className="section__title">
           {translate('orderAmendment.title')}
         </h2>
-        <p className="order-amendment-section__intro">{translate('orderAmendment.sectionIntro')}</p>
+        <p className="order-amendment-section__intro">{abschnittEinleitung}</p>
         <Card>
           <p className="empty-state" data-testid="order-amendment-unavailable">
             {translate('orderAmendment.requiresConfirmation')}
@@ -333,7 +345,7 @@ export function VorgangOrderAmendmentPanel({
   };
 
   const openConfirmDialog = () => {
-    if (!primaryAmendment || !canConfirm || confirmTriggerDisabled) return;
+    if (!primaryAmendment || !canConfirm || !darfBestaetigen || confirmTriggerDisabled) return;
     if (confirmingRef.current || confirming) return;
     confirmReturnFocusRef.current =
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -391,7 +403,7 @@ export function VorgangOrderAmendmentPanel({
       <h2 ref={sectionHeadingRef} tabIndex={-1} className="section__title">
         {translate('orderAmendment.title')}
       </h2>
-      <p className="order-amendment-section__intro">{translate('orderAmendment.sectionIntro')}</p>
+      <p className="order-amendment-section__intro">{abschnittEinleitung}</p>
 
       <div className="order-amendment-section__summary" data-testid="order-amendment-summary">
         <DataRow
@@ -614,7 +626,12 @@ export function VorgangOrderAmendmentPanel({
           )}
 
           <div className="order-amendment-actions order-amendment-actions--primary">
-            {canConfirm ? (
+            {canConfirm && !darfBestaetigen ? (
+              <p className="invoice-hint" data-testid="order-amendment-confirm-role-hint">
+                {translate('orderAmendmentCloud.confirm.roleHint')}
+              </p>
+            ) : null}
+            {canConfirm && darfBestaetigen ? (
               <>
                 <p className="invoice-hint" data-testid="order-amendment-confirm-hint">
                   {translate('orderAmendment.confirmHint')}

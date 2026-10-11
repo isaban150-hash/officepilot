@@ -11,6 +11,7 @@
  */
 import { getSupabaseClient, isSupabaseConfigured } from '../../lib/supabase';
 import { isFinancialActionDenial } from '../auth/financialActionDenial';
+import { isFinalPermissionDenialMessage } from '../sync/syncRoleDenial';
 import { buildPersistedStateSnapshot } from '../persistenceService';
 import { resolveCloudWorkspaceId } from '../workspace/workspaceSyncPayloadService';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -188,7 +189,9 @@ function isConflictMessage(message: string): boolean {
 
 /** R1-SEC-01 — Ablehnung vor Konflikt vor allgemeinem Fehlschlag. */
 function outcomeForMessage(message: string): Exclude<InvoicePaymentCloudOutcome, 'synced'> {
-  if (isFinancialActionDenial(message)) return 'denied';
+  // KONTOSPERRE — auch "Kein Zugriff", "Keine Schreibberechtigung" und account_blocked sind endgueltig:
+  // Das Formular nimmt die Zahlung dann zurueck, statt sie als "noch nicht gesichert" stehen zu lassen.
+  if (isFinancialActionDenial(message) || isFinalPermissionDenialMessage(message)) return 'denied';
   return isConflictMessage(message) ? 'conflict' : 'failed';
 }
 
@@ -207,7 +210,7 @@ function outcomeForMessage(message: string): Exclude<InvoicePaymentCloudOutcome,
  * `failed`, und der Stornoweg kennt weiterhin kein `conflict`.
  */
 function reversalOutcome(message: string): Exclude<InvoicePaymentCloudOutcome, 'synced'> {
-  return isFinancialActionDenial(message) ? 'denied' : 'failed';
+  return isFinancialActionDenial(message) || isFinalPermissionDenialMessage(message) ? 'denied' : 'failed';
 }
 
 /**

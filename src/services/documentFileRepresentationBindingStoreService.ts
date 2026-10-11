@@ -4,7 +4,7 @@ import { createDocumentFileRepresentationBinding } from './documentFileRepresent
 let representationBindings: DocumentFileRepresentationBinding[] = [];
 
 function cloneBinding(binding: DocumentFileRepresentationBinding): DocumentFileRepresentationBinding {
-  return createDocumentFileRepresentationBinding({
+  const normalized = createDocumentFileRepresentationBinding({
     documentId: binding.documentId,
     kind: binding.kind,
     fileRefId: binding.fileRefId,
@@ -18,6 +18,22 @@ function cloneBinding(binding: DocumentFileRepresentationBinding): DocumentFileR
      * nicht mehr auffindbar.
      */
     part: binding.part,
+  });
+  /*
+   * GO-LIVE-SECURITY-01 / FINALISIERUNG — Serverstand und Vertrauensmarke
+   * überleben das Klonen.
+   *
+   * Die Fabrik kennt nur die fachlichen Felder. Bisher fiel deshalb hier die
+   * Sync-Version weg: Jede gespeicherte Bindung sah danach aus, als hätte die
+   * Cloud sie nie gesehen, und ein Ersetzen ginge mit Version 0 hinaus — in
+   * einen Versionskonflikt. Ebenso fiel die Marke des Servers weg, an der der
+   * Client eine nicht vertrauenswürdige E-Rechnungsdatei erkennt.
+   */
+  if (!binding.sync && !binding.einvoiceUntrustedAt) return normalized;
+  return Object.freeze({
+    ...normalized,
+    ...(binding.einvoiceUntrustedAt ? { einvoiceUntrustedAt: binding.einvoiceUntrustedAt } : {}),
+    ...(binding.sync ? { sync: { ...binding.sync } } : {}),
   });
 }
 

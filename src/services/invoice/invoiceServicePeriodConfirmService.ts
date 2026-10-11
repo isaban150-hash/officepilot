@@ -18,14 +18,35 @@
  */
 import type { VorgangInvoice } from '../../types/models';
 import { isFinalizedInvoice } from '../invoiceArchiveService';
-import { getVorgangInvoice, updateInvoiceServicePeriodConfirmation } from '../vorgangService';
+import { runAutomaticSyncWrite } from '../sync/syncOutboxService';
+import {
+  getVorgangInvoice,
+  resetInvoiceServicePeriodConfirmation,
+  updateInvoiceServicePeriodConfirmation,
+} from '../vorgangService';
+import {
+  resolveWorkspaceWriteAccess,
+  UNKNOWN_CLOUD_ACTOR,
+  type WorkspaceActor,
+} from '../workspace/workspaceRoleService';
 
 export type ServicePeriodConfirmReason =
   | 'invoice_missing'
   | 'not_finalized'
   | 'service_period_missing'
   | 'service_period_invalid'
-  | 'persist_failed';
+  | 'persist_failed'
+  /** GO-LIVE-SECURITY-01 — nur Inhaber und Verwaltung; nichts wurde geändert. */
+  | 'forbidden';
+
+/**
+ * GO-LIVE-SECURITY-01 — die Bestätigung gibt PDF und Druck frei und ist damit
+ * verbindlich: nur Inhaber und Verwaltung. Geprüft vor jeder lokalen Änderung;
+ * ohne Angabe gilt die strengste Annahme (Cloud, Rolle unbekannt).
+ */
+function mayConfirmServicePeriod(actor: WorkspaceActor | undefined): boolean {
+  return resolveWorkspaceWriteAccess(actor ?? UNKNOWN_CLOUD_ACTOR).canWrite;
+}
 
 export type ServicePeriodConfirmResult =
   | { ok: true; invoice: VorgangInvoice; action: 'confirmed' | 'noop' }
@@ -87,7 +108,9 @@ export function confirmFinalizedInvoiceServicePeriod(
   /** MANUAL-INVOICE-UI-01B2 — `null` ist die freie Rechnung ohne Auftrag. */
   vorgangId: string | null,
   invoiceId: string,
+  actor?: WorkspaceActor,
 ): ServicePeriodConfirmResult {
+  if (!mayConfirmServicePeriod(actor)) return { ok: false, reason: 'forbidden' };
   const invoice = getVorgangInvoice(vorgangId, invoiceId);
   if (!invoice) return { ok: false, reason: 'invoice_missing' };
 
@@ -119,7 +142,12 @@ export type ServicePeriodCloudSyncResult =
   | 'supabase_not_configured'
   | 'workspace_missing'
   | 'local_invoice_invalid'
-  | 'failed';
+  | 'failed'
+  /**
+   * GO-LIVE-SECURITY-01 — die Rolle reicht nicht: vor dem Aufruf erkannt oder
+   * vom Server abgewiesen. Eine lokale Bestätigung ist dann nicht freigegeben.
+   */
+  | 'forbidden';
 
 /** Nur diese beiden Ausgänge darf die Oberfläche schweigend hinnehmen. */
 export function isServicePeriodCloudSyncSilent(result: ServicePeriodCloudSyncResult): boolean {
@@ -138,7 +166,10 @@ export function isServicePeriodCloudSyncSilent(result: ServicePeriodCloudSyncRes
 export async function syncInvoiceServicePeriodConfirmationToCloud(
   vorgangId: string | null,
   invoiceId: string,
+  actor?: WorkspaceActor,
 ): Promise<ServicePeriodCloudSyncResult> {
+  // GO-LIVE-SECURITY-01 — ohne Schreibrecht gibt es nichts zu sichern.
+  if (!mayConfirmServicePeriod(actor)) return 'forbidden';
   try {
     const invoice = getVorgangInvoice(vorgangId, invoiceId);
     if (!invoice || !isFinalizedInvoice(invoice) || invoice.servicePeriodConfirmed !== true) {
@@ -164,9 +195,50 @@ export async function syncInvoiceServicePeriodConfirmationToCloud(
 
     await rpcConfirmWorkspaceInvoiceServicePeriod({ workspaceId, clientInvoiceId: invoice.id });
     return 'synced';
-  } catch {
-    return 'failed';
+  } catch (error) {
+    // GO-LIVE-SECURITY-01 — die Rollenabweisung des Servers (42501) ist kein Netzfehler.
+    return (error as { code?: unknown } | null)?.code === 'rls' ? 'forbidden' : 'failed';
   }
+}
+
+/**
+ * GO-LIVE-SECURITY-01 — der Server hat die Bestätigung wegen der Rolle
+ * abgewiesen. Lokal gilt wieder der Wert davor, aber nie `true`: Auch eine
+ * schon vorher lokal stehende Bestätigung, die erst „Jetzt sichern" an den
+ * Server schickt, ist nach der Abweisung nicht freigegeben. Eine Bestätigung,
+ * die es in der Cloud nicht gibt, gibt auf diesem Gerät weder PDF noch Druck frei.
+ */
+export function revertServicePeriodConfirmationAfterRoleDenial(
+  vorgangId: string | null,
+  invoiceId: string,
+  previous: boolean | undefined,
+): ServicePeriodConfirmResult {
+  const reset = resetInvoiceServicePeriodConfirmation(vorgangId, invoiceId, previous === true ? false : previous);
+  if (!reset.ok) {
+    return { ok: false, reason: reset.reason === 'not_found' ? 'invoice_missing' : 'persist_failed' };
+  }
+  return { ok: true, invoice: reset.invoice, action: 'noop' };
+}
+
+/**
+ * GO-LIVE-SECURITY-01 — Gerät eines Mitglieds: Trägt die Cloud die Bestätigung
+ * nachweislich nicht, stammt die lokale nicht aus einer zulässigen Aktion und
+ * wird zurückgenommen (siehe `invoiceMemberAlignment`). Nur für eine bekannte
+ * Mitgliedsrolle; liefert die angeglichene Rechnung oder `null`.
+ */
+export function alignServicePeriodConfirmationForMember(
+  vorgangId: string | null,
+  invoiceId: string,
+  cloudState: ServicePeriodCloudState,
+  actor: WorkspaceActor,
+): VorgangInvoice | null {
+  if (cloudState !== 'not_confirmed') return null;
+  if (resolveWorkspaceWriteAccess(actor).reason !== 'member') return null;
+  const invoice = getVorgangInvoice(vorgangId, invoiceId);
+  if (!invoice || invoice.servicePeriodConfirmed !== true) return null;
+  // KONTOSPERRE — automatischer Schreiber ohne Nutzeraktion: der Änderungsverfolger nimmt den gesperrten Weg.
+  const reset = runAutomaticSyncWrite(() => resetInvoiceServicePeriodConfirmation(vorgangId, invoiceId, false));
+  return reset.ok ? reset.invoice : null;
 }
 
 /**

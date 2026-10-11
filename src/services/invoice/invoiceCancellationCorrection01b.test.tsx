@@ -58,6 +58,14 @@ import { calculatePaymentSummary, recordPayment } from '../invoicePaymentService
 import { getBilledQuantity, isBillingEffective } from '../orderBillingRules';
 import { findInvoiceLocatorById } from './invoiceRegistryService';
 import type { CompanyDocument, Vorgang, VorgangInvoice } from '../../types/models';
+import { alsInhaber } from '../../test/workspaceRoleTestUtils';
+
+/*
+ * GO-LIVE-SECURITY-01 / ABSCHLUSS — Zahlung, Storno, Kontierung, Monatsabschluss und
+ * Ausgaben bietet die Oberfläche nur Inhaber und Verwaltung an (die Testumgebung meldet
+ * Supabase als eingerichtet, die Rolle wäre sonst unbekannt). Diese Tests bedienen sie als Inhaber.
+ */
+beforeEach(() => alsInhaber());
 
 const WORKSPACE = '00000000-0000-4000-8000-00000000c01b';
 const VORGANG_ID = 'v-c01b';

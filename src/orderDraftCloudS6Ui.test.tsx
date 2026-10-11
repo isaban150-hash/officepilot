@@ -51,6 +51,7 @@ import {
 import { stripOrderDraftForCloud } from './services/order/orderDraftCloudService';
 import * as createOrderCloud from './services/order/createOrderCloudService';
 import * as workspaceRole from './services/workspace/workspaceRoleService';
+import { alsInhaber } from './test/workspaceRoleTestUtils';
 import {
   addOrderAmendmentDraftPosition,
   createOrderAmendmentDraft,
@@ -521,6 +522,8 @@ describe('S6-UI — Nachtragspanel', () => {
   beforeEach(() => {
     hydrateVorgangStore([auftrag()]);
     persistAll();
+    // GO-LIVE-SECURITY-01: Nachträge bestätigen nur Inhaber und Admin.
+    alsInhaber();
   });
 
   it('UI-N1 — Notausschalter: ein Entwurf, Hinweis „nur auf diesem Gerät"', () => {

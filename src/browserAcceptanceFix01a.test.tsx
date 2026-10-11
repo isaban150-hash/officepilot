@@ -11,6 +11,7 @@
  * Neutrale Beispieldaten, kein Netzwerk.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { alsInhaber } from './test/workspaceRoleTestUtils';
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -170,6 +171,9 @@ function unmount(mount: Mount): void {
 
 const byTestId = (mount: Mount, id: string) =>
   mount.container.querySelector(`[data-testid="${id}"]`) as HTMLElement | null;
+
+// GO-LIVE-SECURITY-01 — die Aktionen hier sind verbindlich (nur Inhaber/Admin); die Tests laufen als Inhaber.
+beforeEach(() => alsInhaber());
 
 describe('BROWSER-ACCEPTANCE-FIX 01 / A1 — Löschschutz in der Oberfläche', () => {
   beforeEach(() => resetTestStores());

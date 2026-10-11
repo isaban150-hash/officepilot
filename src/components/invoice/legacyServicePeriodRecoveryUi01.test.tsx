@@ -14,6 +14,7 @@ import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { alsInhaber } from '../../test/workspaceRoleTestUtils';
 import { DEFAULT_COMPANY_PROFILE } from '../../data/companyProfileDefaults';
 import { buildInvoicePrintModelFromInvoice } from '../../services/invoicePrintModel';
 import * as invoicePrintService from '../../services/invoicePrintService';
@@ -98,6 +99,9 @@ function panelMarkup(invoice: VorgangInvoice, cloudConfirmed: boolean | null = n
   );
 }
 
+// GO-LIVE-SECURITY-01 — die Aktionen hier sind verbindlich (nur Inhaber/Admin); die Tests laufen als Inhaber.
+beforeEach(() => alsInhaber());
+
 describe('SP-RECOVERY-UI — Sichtbarkeit des Recovery-Panels', () => {
   it('R3: eine Legacy-Rechnung mit gültigem Zeitraum zeigt das Panel', () => {
     const markup = panelMarkup(legacyInvoice());
@@ -169,6 +173,7 @@ describe('SP-RECOVERY-UI — Print/PDF-Parität', () => {
 
   beforeEach(() => {
     vi.restoreAllMocks();
+    alsInhaber();
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);

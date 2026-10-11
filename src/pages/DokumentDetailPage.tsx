@@ -63,11 +63,22 @@ import { isPayrollDocumentKind } from '../services/payrollDocumentKind';
 import { findEmployeePaymentsByDocument } from '../services/employee/employeePaymentService';
 import { describeEmployeePaymentDocumentAction } from '../services/employee/employeePaymentDocumentAction';
 import { resolveDocumentReplyNeed } from '../services/documentReplyNeedService';
+import { useOptionalAuth } from '../context/AuthContext';
+import { isSupabaseConfigured } from '../lib/supabase';
+import { resolveWorkspaceWriteAccess } from '../services/workspace/workspaceRoleService';
 
 export function DokumentDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { translate, showToast, setup } = useApp();
   const navigate = useNavigate();
+  /*
+   * GO-LIVE-SECURITY-01 — Löschen ist Verwaltung: nur Inhaber und Admin. Der
+   * Server weist Grabsteine von Mitgliedern ab; die Seite bietet den Weg
+   * deshalb gar nicht erst an, und der Dienst prüft dieselbe Rolle noch einmal.
+   */
+  const authUserId = useOptionalAuth()?.user?.id;
+  const deleteActor = { userId: authUserId, cloudConfigured: isSupabaseConfigured() };
+  const darfLoeschen = resolveWorkspaceWriteAccess(deleteActor).canWrite;
   const [document, setDocument] = useState<CompanyDocument | undefined>(() =>
     id ? getDocumentById(id) : undefined,
   );
@@ -196,7 +207,7 @@ export function DokumentDetailPage() {
    * läuft unverändert der rein lokale Weg aus fa953da.
    */
   const handleDelete = async () => {
-    const result = await deleteGeneratedInvoiceDocumentWithCloud(document.id);
+    const result = await deleteGeneratedInvoiceDocumentWithCloud(document.id, deleteActor);
     if (result.ok) {
       showToast(translate('document.deleted'));
       navigate('/dokumente', { replace: true });
@@ -602,6 +613,10 @@ export function DokumentDetailPage() {
                 ? 'document.delete.blocked.finalizedInvoice'
                 : 'employeePayment.document.deleteProtected',
             )}
+          </p>
+        ) : !darfLoeschen ? (
+          <p className="hint-text" data-testid="document-detail-delete-role-hint">
+            {translate('document.delete.roleHint')}
           </p>
         ) : !confirmDelete ? (
           <Button

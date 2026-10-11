@@ -10,7 +10,7 @@
  */
 import type { AppPersistedState } from '../../types/models';
 import type { SyncEntityType } from '../../types/sync';
-import { enqueueSyncOutbox } from '../sync/syncOutboxService';
+import { enqueueBackfillSyncOutbox } from '../sync/syncOutboxService';
 import { isEntitySyncActive } from '../sync/syncMetaService';
 import { buildBindingEntityId, isCloudSyncBlockedMockInboxId, isCloudSyncedBindingKind, type CloudBindingKind } from './intakeCloudSyncService';
 import { buildExpensePaymentEntityId, isCloudSyncBlockedMockExpenseId } from '../expense/expenseCloudSyncService';
@@ -93,10 +93,17 @@ export function planIntakeBackfill(state: AppPersistedState): IntakeBackfillPlan
   return { entries, counts };
 }
 
-/** Stellt den Plan in die bestehende Outbox — Dateien zuerst (Push sortiert ohnehin). */
+/**
+ * Stellt den Plan in die bestehende Outbox — Dateien zuerst (Push sortiert ohnehin).
+ * KONTOSPERRE: endgültig abgewiesene Entitäten (etwa ein während einer Sperre angelegtes
+ * Dokument) reiht der Backfill nicht erneut ein; gezählt wird, was tatsächlich eingereiht ist.
+ */
 export function enqueueIntakeBackfill(plan: IntakeBackfillPlan): number {
+  let eingereiht = 0;
   for (const entry of plan.entries) {
-    enqueueSyncOutbox({ entityType: entry.entityType, entityId: entry.entityId, operation: 'create', version: 1 });
+    if (enqueueBackfillSyncOutbox({ entityType: entry.entityType, entityId: entry.entityId, operation: 'create', version: 1 })) {
+      eingereiht += 1;
+    }
   }
-  return plan.entries.length;
+  return eingereiht;
 }

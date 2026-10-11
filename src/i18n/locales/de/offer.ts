@@ -123,6 +123,9 @@ export const deOffer = {
   'offer.finalize.server_rejected': 'Die Freigabe wurde abgelehnt.',
   'offer.finalize.network': 'Keine Verbindung. Der Entwurf bleibt erhalten; bitte später erneut freigeben.',
   'offer.finalize.success': 'Angebot freigegeben.',
+  'offer.finalize.forbidden': 'Angebote freigeben dürfen nur Inhaber und Verwaltung. Ihr Entwurf bleibt erhalten.',
+  'offer.finalize.roleHint':
+    'Sie können diesen Entwurf vorbereiten und speichern. Freigeben und damit die Angebotsnummer vergeben dürfen nur Inhaber und Verwaltung.',
 
   'offer.error.titleRequired': 'Bitte einen Betreff angeben.',
   'offer.error.validUntilRequired': 'Bitte ein gültiges Datum angeben.',
@@ -146,6 +149,7 @@ export const deOffer = {
   'offer.accept.confirmExpired': 'Trotzdem annehmen',
   'offer.accept.success': 'Auftrag {number} angelegt.',
   'offer.accept.roleHint': 'Angebote annehmen und Aufträge anlegen kann nur, wer Aufträge bearbeiten darf.',
+  'offer.status.roleHint': 'Den Status eines freigegebenen Angebots setzen nur Inhaber und Verwaltung, etwa versendet, abgelehnt oder storniert.',
   'offer.accept.notAcceptable': 'Dieses Angebot kann in seinem Zustand nicht angenommen werden.',
   'offer.accept.cloudRequired': 'Für die Annahme braucht OfficeTakt eine Verbindung – die Auftragsnummer wird zentral vergeben.',
   'offer.accept.syncPending': 'Das Angebot wird noch gespeichert. Bitte in einem Moment erneut versuchen.',

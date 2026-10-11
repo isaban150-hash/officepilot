@@ -5,6 +5,7 @@
  * Serverwahrheit → lokale Rechnung), i18n-Parität. Kein Netz.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { alsInhaber } from '../../test/workspaceRoleTestUtils';
 import { de } from '../../i18n';
 import { deDelivery } from '../../i18n/locales/de/delivery';
 import { trDelivery } from '../../i18n/locales/tr/delivery';
@@ -96,6 +97,9 @@ function fakeServer(options: { outcome?: 'accepted' | 'failed' | 'unknown'; uplo
   });
   return { client: client as never, invokeSend, uploads, sends, rows };
 }
+
+// GO-LIVE-SECURITY-01 — die Aktionen hier sind verbindlich (nur Inhaber/Admin); die Tests laufen als Inhaber.
+beforeEach(() => alsInhaber());
 
 describe('EMAIL-01B3 — Resolver', () => {
   beforeEach(() => {
@@ -259,5 +263,30 @@ describe('EMAIL-01B3 — Orchestrator, Resume, client_delivery_id', () => {
     // Ein späteres manuelles Korrigieren stuft nicht zurück.
     const again = markInvoiceAsSent('v-o6', invoice.id, { sentAt: '2026-09-02', sentVia: 'email' });
     expect(again.ok ? 'already' : again.reason).toBe('already_sent');
+  });
+
+  it('O7 (GO-LIVE-SECURITY-01 / ABSCHLUSS): die Fortsetzung mit hochgeladenem Anhang läuft durch die Ausgabegrenze', async () => {
+    const invoice = finalizeInvoice('v-o7');
+    const identity = { kind: 'invoice' as const, clientInvoiceId: invoice.id };
+    const server = fakeServer();
+    const draft = createSendDraft({ identity, vorgangId: 'v-o7', recipientEmail: 'kunde@example.invalid', subject: 'S', bodyText: 'B' });
+    // Ein früherer Versuch hat den Anhang bereits hochgeladen.
+    const fortsetzung: SendDraftState = {
+      ...draft,
+      attachmentStoragePath: `${WS}/invoice-${invoice.id}/${'a'.repeat(64)}.pdf`,
+      attachmentSha256: 'a'.repeat(64),
+      attachmentSizeBytes: 1000,
+      attachmentFilename: 'Rechnung.pdf',
+    };
+    saveSendDraft(fortsetzung);
+    // Inzwischen ist die Ausgabe gesperrt (z. B. Bestätigung des Leistungszeitraums zurückgenommen).
+    const guard = await import('../invoice/invoiceOutputGuard');
+    const pruefung = vi.spyOn(guard, 'checkInvoiceOutput').mockResolvedValue({ reason: 'service_period_unverified' } as never);
+    const result = await runSendDocument({ draft: fortsetzung, vorgangId: 'v-o7' }, { client: server.client, invokeSend: server.invokeSend });
+    expect(pruefung).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({ ok: false, error: 'pdf_failed', message: 'service_period_unverified' });
+    expect(server.rows.size).toBe(0);
+    expect(server.sends).toEqual([]);
+    expect(server.uploads).toEqual([]);
   });
 });

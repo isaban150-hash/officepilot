@@ -75,6 +75,7 @@ import type {
   WorkflowResult,
   WorkflowWarning,
 } from '../types/models';
+import { runAutomaticSyncWrite } from './sync/syncOutboxService';
 
 type WorkflowResultCore = Omit<WorkflowResult, 'businessInterpretation'>;
 
@@ -159,7 +160,12 @@ export function commitUploadedDocumentAnalysis(
   if (!item) return;
   if (mode === 'onlyIfMissing' && getDocumentWorkResult(item.id)) return;
   try {
-    commitDocumentWorkResultFromAnalysis(workflow, item);
+    if (mode === 'onlyIfMissing') {
+      // KONTOSPERRE — automatisch beim ersten Ansehen, ohne Nutzeraktion: der Änderungsverfolger nimmt den gesperrten Weg.
+      runAutomaticSyncWrite(() => commitDocumentWorkResultFromAnalysis(workflow, item));
+    } else {
+      commitDocumentWorkResultFromAnalysis(workflow, item);
+    }
   } catch (error) {
     // Snapshot commit must never abort the analysis return path.
     console.warn('[documentWorkResult] commit after analysis failed', error);

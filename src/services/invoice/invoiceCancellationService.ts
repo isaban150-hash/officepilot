@@ -93,6 +93,8 @@ function mapCloudError(error: WorkspaceInvoiceCloudError): CancelInvoiceFailureR
       return 'not_found';
     case 'auth':
     case 'rls':
+    // GO-LIVE-SECURITY-01 / ABSCHLUSS — Rolle, Sperre oder Lizenz (assert_financial_action_allowed).
+    case 'financial_action_denied':
       return 'forbidden';
     case 'network':
       return 'offline';

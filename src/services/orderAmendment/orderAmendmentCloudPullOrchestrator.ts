@@ -1,5 +1,6 @@
 import { getSupabaseClient, isSupabaseConfigured } from '../../lib/supabase';
 import { buildPersistedStateSnapshot, persistAll } from '../persistenceService';
+import { runAutomaticSyncWrite } from '../sync/syncOutboxService';
 import {
   getAllVorgaenge,
   getVorgangStoreSnapshot,
@@ -320,8 +321,11 @@ export async function pullAndApplyWorkspaceOrderAmendmentsStandalone(): Promise<
   }
 
   const previous = getVorgangStoreSnapshot();
-  hydrateVorgangStore(merge.vorgaenge);
-  const persistResult = persistAll();
+  // KONTOSPERRE — automatischer Schreiber ohne Nutzeraktion: der Änderungsverfolger nimmt den gesperrten Weg.
+  const persistResult = runAutomaticSyncWrite(() => {
+    hydrateVorgangStore(merge.vorgaenge);
+    return persistAll();
+  });
   if (!persistResult.success) {
     hydrateVorgangStore(previous);
     return {

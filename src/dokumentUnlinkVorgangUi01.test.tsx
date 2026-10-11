@@ -12,6 +12,7 @@
  * Neutrale Beispieldaten, kein Netzwerk.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { alsInhaber } from './test/workspaceRoleTestUtils';
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -195,6 +196,9 @@ async function mountDetail(): Promise<Mount> {
   await settle();
   return { container, root };
 }
+
+// GO-LIVE-SECURITY-01 — die Aktionen hier sind verbindlich (nur Inhaber/Admin); die Tests laufen als Inhaber.
+beforeEach(() => alsInhaber());
 
 describe('OFFICEPILOT-DOKUMENT-UNLINK-VORGANG-UI-01G', () => {
   beforeEach(() => {

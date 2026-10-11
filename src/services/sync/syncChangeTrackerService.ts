@@ -1,7 +1,7 @@
 import type { AppPersistedState } from '../../types/models';
 import type { SyncEntityType, SyncOutboxOperation, SyncableEntity } from '../../types/sync';
 import { listEntitiesByType } from './syncEntityRegistry';
-import { enqueueSyncOutbox } from './syncOutboxService';
+import { enqueueBackfillSyncOutbox, enqueueSyncOutbox, isAutomaticSyncWriteActive } from './syncOutboxService';
 import { buildCompanyProfileContentKey } from '../workspace/workspaceStore';
 import { buildVorgangCloudContentKey } from '../vorgang/vorgangCloudService';
 import { buildCustomerCloudContentKey } from '../customer/customerCloudService';
@@ -568,12 +568,23 @@ export function trackPersistedChanges(state: AppPersistedState): void {
       continue;
     }
 
-    enqueueSyncOutbox({
+    const auftrag = {
       entityType: ref.entityType,
       entityId: ref.entityId,
       operation: resolveOperation(previous, ref.fingerprint),
       version: resolveVersion(ref.fingerprint),
-    });
+    };
+    /*
+     * GO-LIVE-SECURITY-01 / KONTOSPERRE — eine lokale Änderung ist hier eine Nutzeraktion
+     * (bewusster Weg, löst eine alte Abweisung ab). Ausnahme: automatische Schreiber in
+     * `runAutomaticSyncWrite` (Aufgabenabgleich, Nachtrags-Abzug, Entwurfsspiegel) — sie
+     * nehmen den gesperrten Weg und reihen eine endgültig abgewiesene Entität nicht neu ein.
+     */
+    if (isAutomaticSyncWriteActive()) {
+      enqueueBackfillSyncOutbox(auftrag);
+    } else {
+      enqueueSyncOutbox(auftrag);
+    }
   }
 
   trackedFingerprints = new Map(

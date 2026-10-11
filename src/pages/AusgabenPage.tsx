@@ -18,6 +18,9 @@ import { expenseStatusTone } from '../services/ui/statusTone';
 import { formatEuroAmount } from '../utils/displayFormat';
 import type { ExpenseCategory } from '../types/expense';
 import type { TranslationKey } from '../i18n';
+import { useOptionalAuth } from '../context/AuthContext';
+import { isSupabaseConfigured } from '../lib/supabase';
+import { resolveWorkspaceWriteAccess } from '../services/workspace/workspaceRoleService';
 
 /**
  * UIUX-FOUNDATION-01D — repräsentative Business-Liste.
@@ -30,6 +33,12 @@ import type { TranslationKey } from '../i18n';
 export function AusgabenPage() {
   const { translate } = useApp();
   const location = useLocation();
+  /* GO-LIVE-SECURITY-01 / ABSCHLUSS — Ausgaben erfassen nur Inhaber, Verwaltung und der lokale Betrieb. */
+  const authUser = useOptionalAuth()?.user;
+  const darfFinanzen = resolveWorkspaceWriteAccess({
+    userId: authUser?.id,
+    cloudConfigured: isSupabaseConfigured(),
+  }).canWrite;
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<ExpenseCategory | 'all'>('all');
   const [expenses, setExpenses] = useState(getAllExpenses);
@@ -67,11 +76,17 @@ export function AusgabenPage() {
           </>
         }
         primaryAction={
-          <Link to="/ausgaben/neu">
-            <Button variant="primary" fullWidth>
-              {translate('expense.add')}
-            </Button>
-          </Link>
+          darfFinanzen ? (
+            <Link to="/ausgaben/neu">
+              <Button variant="primary" fullWidth>
+                {translate('expense.add')}
+              </Button>
+            </Link>
+          ) : (
+            <p className="invoice-hint" data-testid="ausgaben-role-hint">
+              {translate('expense.roleHint')}
+            </p>
+          )
         }
         secondaryAction={
           <Link to="/ausgaben/offen">

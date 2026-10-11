@@ -28,6 +28,7 @@ import { generateBusinessLetterPdf } from './businessLetterPdfService';
 import { PAPER_FOLDERS } from '../../data/mockData';
 import type { BusinessLetter } from '../../types/businessLetter';
 import type { CompanyDocument, PaperFilingRule } from '../../types/models';
+import { runAutomaticSyncWrite } from '../sync/syncOutboxService';
 
 /**
  * E-MAIL-07B — `pdf` sagt, ob am Archiveintrag das tatsächliche PDF hängt:
@@ -153,12 +154,15 @@ async function ensureArchivePdfForExistingEntry(
 
   let bindung: ReturnType<typeof persistDerivedArchiveRepresentationBinding>;
   try {
-    bindung = persistDerivedArchiveRepresentationBinding({ documentId: document.id, archiveFileRefId: datei.fileRefId });
+    // KONTOSPERRE — automatische Ablage (auch beim Öffnen der Seite): der Änderungsverfolger nimmt den gesperrten Weg.
+    bindung = runAutomaticSyncWrite(() =>
+      persistDerivedArchiveRepresentationBinding({ documentId: document.id, archiveFileRefId: datei.fileRefId }),
+    );
   } catch {
     return { document, pdf: 'failed' };
   }
   if (bindung.kind === 'conflict') return { document, pdf: 'kept' };
-  const gesichert = persistAll();
+  const gesichert = runAutomaticSyncWrite(() => persistAll());
   if (!gesichert.success) return { document, pdf: 'failed' };
   return { document: getDocumentById(document.id) ?? document, pdf: 'attached' };
 }
@@ -175,7 +179,8 @@ function findArchiveEntry(letter: BusinessLetter): CompanyDocument | undefined {
   /* 2 — die Ablage gibt es, nur der Rückverweis am Brief fehlt. */
   const ueberRueckweg = getDocumentByLinkedLetterId(letter.id);
   if (ueberRueckweg) {
-    attachArchiveDocumentToLetter(letter.id, ueberRueckweg.id);
+    // KONTOSPERRE — automatische Ablage (auch beim Öffnen der Seite): der Änderungsverfolger nimmt den gesperrten Weg.
+    runAutomaticSyncWrite(() => attachArchiveDocumentToLetter(letter.id, ueberRueckweg.id));
     return ueberRueckweg;
   }
   return undefined;
@@ -185,7 +190,8 @@ function findArchiveEntry(letter: BusinessLetter): CompanyDocument | undefined {
 function createArchiveEntry(letter: BusinessLetter, datei: GespeichertesPdf | null):
   | { ok: true; document: CompanyDocument }
   | { ok: false; reason: 'archive_failed' } {
-  const ergebnis = addDocument({
+  // KONTOSPERRE — automatische Ablage (auch beim Öffnen der Seite): der Änderungsverfolger nimmt den gesperrten Weg.
+  const ergebnis = runAutomaticSyncWrite(() => addDocument({
     title: letter.subject.trim(),
     category: 'geschaeftsschreiben',
     issuer: absenderName(letter),
@@ -224,11 +230,11 @@ function createArchiveEntry(letter: BusinessLetter, datei: GespeichertesPdf | nu
           fileSize: datei.fileSize,
         }
       : {}),
-  });
+  }));
 
   if (!ergebnis.success) return { ok: false, reason: 'archive_failed' };
 
-  const verknuepft = attachArchiveDocumentToLetter(letter.id, ergebnis.document.id);
+  const verknuepft = runAutomaticSyncWrite(() => attachArchiveDocumentToLetter(letter.id, ergebnis.document.id));
   if (!verknuepft.success) return { ok: false, reason: 'archive_failed' };
 
   return { ok: true, document: ergebnis.document };

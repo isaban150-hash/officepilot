@@ -14,6 +14,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { alsInhaber } from '../test/workspaceRoleTestUtils';
 import { resetTestStores } from '../test/resetStores';
 import { createOrderPosition, createTestVorgang } from '../test/fixtures';
 import {
@@ -213,6 +214,9 @@ function stubRpcError(message: string) {
 function parsedRows(raw: Record<string, unknown>[]) {
   return raw.map((row) => parseWorkspaceDocumentRow(row)!);
 }
+
+// GO-LIVE-SECURITY-01 — die Aktionen hier sind verbindlich (nur Inhaber/Admin); die Tests laufen als Inhaber.
+beforeEach(() => alsInhaber());
 
 describe('OFFICEPILOT-GENERATED-DOCUMENT-CLOUD-WIRING-05C1B', () => {
   beforeEach(() => {

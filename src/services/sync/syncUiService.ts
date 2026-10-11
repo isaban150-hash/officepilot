@@ -10,6 +10,7 @@ import { createSyncAdapter, isSyncProviderAvailable } from './syncAdapterFactory
 import { isSupabaseConfigured } from '../../lib/supabase';
 import { bootstrapWorkspaceCloudSyncIfNeeded } from '../workspace/workspaceCloudBootstrapService';
 import { isSupabaseSyncAllowed } from './cloudSyncAllowlist';
+import { isFinallyDeniedOutboxEntry } from './syncRoleDenial';
 import { describeSyncOutboxEntry, type SyncOutboxDescription } from './syncOutboxDescriptionService';
 import {
   getPendingWorkspaceSettingsConflict,
@@ -121,7 +122,14 @@ export function getSyncUiSnapshot(): SyncUiSnapshot {
     documentConflicts,
     employeeConflicts,
     isOffline,
-    hasRetryableErrors: outbox.some((entry) => entry.status === 'error' || entry.status === 'failed'),
+    /*
+     * KONTOSPERRE — ein endgültig abgewiesener Auftrag ist nichts, was ein neuer Versuch
+     * ändert; „Erneut versuchen" belebt ihn auch nicht. Den Knopf deshalb nur, wenn ein
+     * wiederholbarer Fehler da ist.
+     */
+    hasRetryableErrors: outbox.some(
+      (entry) => entry.status === 'error' || (entry.status === 'failed' && !isFinallyDeniedOutboxEntry(entry)),
+    ),
   };
 }
 

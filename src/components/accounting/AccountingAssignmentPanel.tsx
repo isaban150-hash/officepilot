@@ -36,6 +36,12 @@ interface Props {
   onChanged: () => void;
   translate: (key: TranslationKey) => string;
   testIdPrefix: string;
+  /**
+   * GO-LIVE-SECURITY-01 / ABSCHLUSS — Kontieren ist Buchhaltung: nur Inhaber und
+   * Verwaltung. Mitglieder sehen den Stand und einen Rollenhinweis statt der
+   * Aktionen; der Server weist sie ohnehin ab (finance_forbidden_role).
+   */
+  readOnly?: boolean;
 }
 
 /** Zu jedem Stand ein Ton — dieselbe Sprache wie die übrigen Abzeichen. */
@@ -51,6 +57,7 @@ export function AccountingAssignmentPanel({
   onChanged,
   translate,
   testIdPrefix,
+  readOnly = false,
 }: Props) {
   const [editing, setEditing] = useState(false);
   const [accountNumber, setAccountNumber] = useState('');
@@ -71,9 +78,15 @@ export function AccountingAssignmentPanel({
         <p className="detail-empty" data-testid={`${testIdPrefix}-accounting-empty`}>
           {translate('accounting.empty')}
         </p>
-        <Button type="button" onClick={onStart} data-testid={`${testIdPrefix}-accounting-start`}>
-          {translate('accounting.action.start')}
-        </Button>
+        {readOnly ? (
+          <p className="detail-hint" data-testid={`${testIdPrefix}-accounting-role-hint`}>
+            {translate('accounting.roleHint')}
+          </p>
+        ) : (
+          <Button type="button" onClick={onStart} data-testid={`${testIdPrefix}-accounting-start`}>
+            {translate('accounting.action.start')}
+          </Button>
+        )}
       </div>
     );
   }
@@ -259,6 +272,10 @@ export function AccountingAssignmentPanel({
             </Button>
           </div>
         </div>
+      ) : readOnly ? (
+        <p className="detail-hint" data-testid={`${testIdPrefix}-accounting-role-hint`}>
+          {translate('accounting.roleHint')}
+        </p>
       ) : (
         <>
           {errorKey ? (

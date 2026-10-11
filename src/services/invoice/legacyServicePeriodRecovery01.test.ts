@@ -11,6 +11,7 @@
  * ganzen Workspace zieht. Kein Netzwerk: der Supabase-Client wird ersetzt.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { alsInhaber } from '../../test/workspaceRoleTestUtils';
 import type { Vorgang, VorgangInvoice } from '../../types/models';
 import { DEFAULT_COMPANY_PROFILE } from '../../data/companyProfileDefaults';
 import { createTestVorgang } from '../../test/fixtures';
@@ -107,6 +108,9 @@ function seed(invoice: VorgangInvoice): Vorgang {
 function codes(invoice: VorgangInvoice): string[] {
   return validateFinalizedInvoiceForPdf(invoice).blockingErrors.map((e) => e.code);
 }
+
+// GO-LIVE-SECURITY-01 — die Aktionen hier sind verbindlich (nur Inhaber/Admin); die Tests laufen als Inhaber.
+beforeEach(() => alsInhaber());
 
 describe('SP-RECOVERY-01B — Ausgangslage', () => {
   beforeEach(() => seed(legacyInvoice()));

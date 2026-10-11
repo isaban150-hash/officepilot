@@ -63,6 +63,7 @@ import {
   readInvoiceSentSnapshot,
   type InvoiceSentSnapshot,
 } from './invoice/invoiceSentSnapshot';
+import { applyInvoiceSentState, type InvoiceSentState } from './invoice/invoiceMemberAlignment';
 import {
   generateEntityId,
   withTombstonedCloudEntityPreservingRemoteVersion,
@@ -2341,6 +2342,82 @@ export function updateInvoiceServicePeriodConfirmation(
   }
   if (!updatedInvoice) return { ok: false, reason: 'not_found' };
   return { ok: true, invoice: cloneVorgangInvoice(updatedInvoice), action: 'confirmed' };
+}
+
+/**
+ * GO-LIVE-SECURITY-01 — eine Rechnung über denselben Commit-Punkt ändern wie
+ * die übrigen Rechnungswege: geschrieben und persistiert, sonst nichts.
+ */
+function commitSingleInvoiceChange(
+  vorgangId: string | null,
+  invoiceId: string,
+  apply: (current: VorgangInvoice) => VorgangInvoice,
+): UpdateInvoiceSentFieldsResult {
+  if (vorgangId === null) return commitManualInvoiceMutation(invoiceId, apply);
+
+  let updatedInvoice: VorgangInvoice | null = null;
+
+  const committed = commitVorgangMutation(vorgangId, (vorgang) => {
+    const index = vorgang.invoices.findIndex((item) => item.id === invoiceId);
+    if (index === -1) return { errorKey: 'invoice.notFound' };
+
+    const next = apply(vorgang.invoices[index]!);
+    updatedInvoice = next;
+    return {
+      ...vorgang,
+      invoices: [
+        ...vorgang.invoices.slice(0, index),
+        next,
+        ...vorgang.invoices.slice(index + 1),
+      ],
+    };
+  });
+
+  if (!committed.ok) {
+    return {
+      ok: false,
+      reason:
+        committed.errorKey === 'vorgang.notFound' || committed.errorKey === 'invoice.notFound'
+          ? 'not_found'
+          : 'persist_failed',
+    };
+  }
+  if (!updatedInvoice) return { ok: false, reason: 'not_found' };
+  return { ok: true, invoice: cloneVorgangInvoice(updatedInvoice) };
+}
+
+/**
+ * GO-LIVE-SECURITY-01 — setzt die Versandfelder exakt auf einen Stand: den vor
+ * einer vom Server wegen der Rolle abgewiesenen Aktion, oder den der Cloud auf
+ * dem Gerät eines Mitglieds. Fehlende Felder werden entfernt; Positionen,
+ * Beträge, Zahlungen, Storno und Archivbezug bleiben unberührt.
+ */
+export function restoreInvoiceSentState(
+  vorgangId: string | null,
+  invoiceId: string,
+  state: InvoiceSentState,
+): UpdateInvoiceSentFieldsResult {
+  return commitSingleInvoiceChange(vorgangId, invoiceId, (current) => applyInvoiceSentState(current, state));
+}
+
+/**
+ * GO-LIVE-SECURITY-01 — nimmt eine Bestätigung des Leistungszeitraums zurück,
+ * die nicht freigegeben ist: nach einer Rollenabweisung des Servers oder auf
+ * dem Gerät eines Mitglieds, wenn die Cloud sie nachweislich nicht trägt.
+ * `undefined` entfernt das Feld. Ein Widerruf durch den Nutzer bleibt
+ * ausgeschlossen — dafür gibt es diesen Weg nicht.
+ */
+export function resetInvoiceServicePeriodConfirmation(
+  vorgangId: string | null,
+  invoiceId: string,
+  value: boolean | undefined,
+): UpdateInvoiceSentFieldsResult {
+  return commitSingleInvoiceChange(vorgangId, invoiceId, (current) => {
+    const next: VorgangInvoice = { ...current };
+    if (value === undefined) delete next.servicePeriodConfirmed;
+    else next.servicePeriodConfirmed = value;
+    return next;
+  });
 }
 
 /**

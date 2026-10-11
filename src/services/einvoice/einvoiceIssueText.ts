@@ -19,6 +19,7 @@
  * Zusammenhang lebt.
  */
 import type { CanonicalEInvoiceIssue, CanonicalEInvoiceIssueCode } from './canonicalEInvoice';
+import type { ServicePeriodOutputCode } from './einvoiceOutputRule';
 import type { XRechnungRenderIssue } from './xrechnungCiiRenderer';
 
 const TEXTE: Readonly<Record<CanonicalEInvoiceIssueCode, string>> = {
@@ -85,6 +86,26 @@ export const LEGACY_INVOICE_HINT =
 export function describeCanonicalIssue(issue: CanonicalEInvoiceIssue): string {
   return TEXTE[issue.code] ?? 'Für diese Rechnung lässt sich keine XRechnung erzeugen.';
 }
+
+/**
+ * GO-LIVE-SECURITY-01 — warum eine E-Rechnung wie PDF und Druck wartet. Die
+ * Bestätigung steht im Panel darüber; wer sie nicht geben darf, sieht dort den
+ * Rollenhinweis.
+ */
+const LEISTUNGSZEITRAUM: Readonly<Record<ServicePeriodOutputCode, string>> = {
+  service_period: 'Der Leistungszeitraum fehlt oder ist ungültig.',
+  service_period_order: 'Der Leistungszeitraum beginnt nach seinem Ende.',
+  service_period_unconfirmed:
+    'Der Leistungszeitraum ist nicht bestätigt. Wie PDF und Druck ist die E-Rechnung erst nach der Bestätigung durch Inhaber oder Verwaltung möglich.',
+};
+
+export function describeServicePeriodOutputBlocker(code: ServicePeriodOutputCode): string {
+  return LEISTUNGSZEITRAUM[code];
+}
+
+/** GO-LIVE-SECURITY-01 — Gerät eines Mitglieds: Die Cloud trägt die Bestätigung (noch) nicht nachweislich. */
+export const SERVICE_PERIOD_UNVERIFIED_TEXT =
+  'Die Bestätigung des Leistungszeitraums ließ sich nicht mit der Cloud abgleichen. Die E-Rechnung ist erst danach möglich – bitte mit Internetverbindung erneut versuchen.';
 
 export function describeRenderIssue(issue: XRechnungRenderIssue): string {
   return issue.code === 'xml_control_character'

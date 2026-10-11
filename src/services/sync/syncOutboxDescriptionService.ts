@@ -98,7 +98,14 @@ export function mapSyncErrorReason(
   if (message.includes('nicht gefunden')) return 'sync.failure.reason.missingLocal';
   if (message.includes('Versionskonflikt')) return 'sync.failure.reason.conflict';
   if (message.includes('Nicht angemeldet')) return 'sync.failure.reason.auth';
-  if (message.includes('Kein Zugriff')) return 'sync.failure.reason.permission';
+  // KONTOSPERRE — auch Rollen- und Sperrabweisungen sind „keine Berechtigung", nicht „unbekannt".
+  if (
+    message.includes('Kein Zugriff') ||
+    message.includes('Keine Schreibberechtigung') ||
+    message.includes('account_blocked')
+  ) {
+    return 'sync.failure.reason.permission';
+  }
   if (/Failed to fetch|Network|NetworkError/i.test(message)) return 'sync.failure.reason.network';
   if (message.includes('accounting_') || message.includes('closure_') || message.includes('period_')) {
     return 'sync.failure.reason.rejected';

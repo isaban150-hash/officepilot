@@ -1009,6 +1009,11 @@ export interface WorkspaceInvoiceSentReadResult {
   found: boolean;
   /** Nur ein **vollständiger** Versandsatz; alles Halbe ist `null`. */
   snapshot: InvoiceSentSnapshot | null;
+  /**
+   * GO-LIVE-SECURITY-01 — der rohe Cloud-Status. Nur damit lässt sich
+   * „eindeutig unversendet" (`vorbereitet`) von „unvollständig" unterscheiden.
+   */
+  status?: string | null;
 }
 
 /**
@@ -1065,6 +1070,7 @@ export async function rpcGetWorkspaceInvoiceSent(
       sentVia: raw.sent_via,
       sentNote: raw.sent_note,
     }),
+    status: typeof raw.invoice_status === 'string' ? raw.invoice_status : null,
   };
 }
 

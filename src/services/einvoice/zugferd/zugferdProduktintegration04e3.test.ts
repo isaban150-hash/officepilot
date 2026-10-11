@@ -167,6 +167,9 @@ function archivDokument(inv: VorgangInvoice): CompanyDocument {
     id: `doc-${inv.id}`,
     title: `${inv.number} – Rechnung`,
     kind: 'rechnung',
+    // GO-LIVE-SECURITY-01 / ABSCHLUSS — wie ein echter erzeugter Rechnungsbeleg (invoiceArchiveService).
+    category: 'ausgangsrechnung',
+    classifiedKind: 'ausgangsrechnung',
     linkedInvoiceId: inv.id,
     createdAt: '2026-09-24T08:00:00.000Z',
     tags: [],

@@ -7,8 +7,11 @@ import {
   getPaymentOverpayAmount,
   isInvoiceCancelled,
   recordPayment,
+  removePayment,
   willPaymentNeedUnsentConfirm,
 } from '../../services/invoicePaymentService';
+import { useOptionalAuth } from '../../context/AuthContext';
+import { isSupabaseConfigured } from '../../lib/supabase';
 import { getLastPersistSuccess } from '../../services/persistenceService';
 import {
   isInvoicePaymentCloudSynced,
@@ -27,6 +30,12 @@ interface Props {
   open: boolean;
   onClose: () => void;
   onSaved: (invoice: VorgangInvoice) => void;
+  /**
+   * GO-LIVE-SECURITY-01 / ABSCHLUSS — die Cloud hat die Zahlung endgültig abgewiesen und sie
+   * wurde lokal zurückgenommen. Nur den Stand übernehmen, KEINE Erfolgsmeldung zeigen.
+   * Ohne diesen Rückruf fällt das Formular auf `onSaved` zurück.
+   */
+  onReverted?: (invoice: VorgangInvoice) => void;
   translate: (key: TranslationKey) => string;
 }
 
@@ -42,9 +51,13 @@ export function InvoicePaymentForm({
   open,
   onClose,
   onSaved,
+  onReverted,
   translate,
 }: Props) {
   const cancelled = isInvoiceCancelled(invoice);
+  // GO-LIVE-SECURITY-01 / ABSCHLUSS — wer bucht; der Dienst prüft damit die Rolle vor dem lokalen Buchen.
+  const authUser = useOptionalAuth()?.user;
+  const actor = { userId: authUser?.id, cloudConfigured: isSupabaseConfigured() };
   const openAmount = getOpenAmount(invoice);
   const today = getBusinessDay();
   const needsUnsentNotice = willPaymentNeedUnsentConfirm(invoice);
@@ -81,7 +94,6 @@ export function InvoicePaymentForm({
     if (!open) return;
     setPhase('form');
     setDate(today);
-    setAmount(suggestedAmount(openAmount));
     setReference('');
     setNote('');
     setMethod('');
@@ -89,7 +101,20 @@ export function InvoicePaymentForm({
     // Ein neu geöffnetes Formular kennt keine offene Sicherung.
     setPendingPayment(null);
     setSyncing(false);
-  }, [open, openAmount, today]);
+  }, [open, today]);
+
+  /*
+   * GO-LIVE-SECURITY-01 / ABSCHLUSS — ändert sich der offene Betrag bei geöffnetem Formular
+   * (lokale Buchung, Rücknahme nach einer Cloud-Abweisung, Abgleich), folgen nur Vorschlag und
+   * Ansicht. Hinweis, laufende Sicherung und offene Sicherung bleiben stehen: Vorher löschte
+   * genau dieser Reset den Hinweis „Zahlung zurückgenommen“, und ein zweiter Klick während der
+   * Cloud-Sicherung hätte sofort eine weitere Zahlung gebucht.
+   */
+  useEffect(() => {
+    if (!open) return;
+    setPhase('form');
+    setAmount(suggestedAmount(openAmount));
+  }, [open, openAmount]);
 
   const parsedAmount = parseFloat(amount.replace(',', '.')) || 0;
   const overpayAmount = useMemo(
@@ -124,6 +149,20 @@ export function InvoicePaymentForm({
         if (isInvoicePaymentCloudSynced(outcome)) {
           setPendingPayment(null);
           onClose();
+          return;
+        }
+        /*
+         * GO-LIVE-SECURITY-01 / ABSCHLUSS — eine Abweisung der Berechtigung (Rolle,
+         * Sperre, Lizenz) ist endgültig: Die Zahlung gehört nicht in dieses Konto, und
+         * kein späterer Versuch ändert daran etwas. Sie bleibt deshalb nicht lokal stehen
+         * (die Rechnung zeigte sonst auf diesem Gerät „bezahlt“, und die
+         * Überfälligkeitsaufgabe bliebe geschlossen), sondern wird zurückgenommen.
+         */
+        if (outcome === 'denied') {
+          const zurueck = removePayment(vorgangId, invoice.id, payment.id);
+          setPendingPayment(null);
+          if (zurueck.success) (onReverted ?? onSaved)(zurueck.invoice);
+          setErrorKey(zurueck.success ? 'payment.roleReverted' : 'payment.cloudDenied');
           return;
         }
         /*
@@ -167,6 +206,7 @@ export function InvoicePaymentForm({
     const result = recordPayment(vorgangId, invoice.id, buildInput(), {
       confirmUnsent: needsUnsent ? confirmed : undefined,
       confirmOverpayment: needsOverpay ? confirmed : undefined,
+      actor,
     });
 
     if (!result.success) {

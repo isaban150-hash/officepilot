@@ -22,6 +22,7 @@ import type { DocumentWorkResult, DocumentWorkResultOverlayEntry } from '../../t
 import type { SyncEntityType, SyncMeta, SyncOutboxEntry } from '../../types/sync';
 import { WorkspaceCloudError } from '../workspace/workspaceCloudService';
 import { computeBufferContentHash } from '../documentFileHashService';
+import { isRoleDeniedOutboxEntry } from '../sync/syncRoleDenial';
 
 export const WORKSPACE_FILES_BUCKET = 'workspace-files';
 
@@ -232,6 +233,9 @@ export interface CloudBindingRow {
   updated_at: string;
   deleted: boolean;
   row_version: number;
+  /** GO-LIVE-SECURITY-01 / FINALISIERUNG — Vertrauensmarke des Servers (E-Rechnungsbindungen). */
+  einvoice_untrusted_at?: string | null;
+  einvoice_untrusted_reason?: string | null;
 }
 
 export interface CloudInboxRow {
@@ -391,8 +395,15 @@ export function mapCloudBindingRow(row: CloudBindingRow, context: IntakeMergeCon
     fileRefId: row.client_file_ref_id,
     provenance: row.provenance,
     part: row.part,
+    ...(row.einvoice_untrusted_at ? { einvoiceUntrustedAt: row.einvoice_untrusted_at } : {}),
     sync: cloudMeta(row, context.deviceId, context.workspaceId),
   } as DocumentFileRepresentationBinding & { kind: CloudBindingKind; part: string | null };
+}
+
+/** Ist das eine E-Rechnungsbindung (Rolle structured oder E-Rechnungs-Unterrolle, gleich in welcher Schreibweise)? */
+export function isEInvoiceBindingKey(kind: string, part: string | null | undefined): boolean {
+  const unterrolle = (part ?? '').trim().toLowerCase();
+  return kind.trim().toLowerCase() === 'structured' || unterrolle === 'xrechnung-cii' || unterrolle === 'zugferd-en16931';
 }
 
 /**
@@ -421,8 +432,27 @@ export function mergeBindingsFromPull(
     (binding) => buildBindingEntityId(binding.documentId, binding.kind as CloudBindingKind, (binding as { part?: string | null }).part),
     context,
   );
+  /*
+   * GO-LIVE-SECURITY-01 / FINALISIERUNG — die Vertrauensmarke folgt dem Server auch ohne
+   * neue Version: Die Migration setzt sie, ohne die Zeile hochzuzählen, und ein Gerät hält
+   * dieselbe Version oft schon. Übernommen wird sie nur für dieselbe Datei; eine lokale,
+   * noch nicht übertragene Ersetzung ist die eigene Erzeugung und bleibt ohne Marke.
+   */
+  const zeileJeBindung = new Map(
+    rows
+      .filter((row) => row.binding_kind !== 'original')
+      .map((row) => [buildBindingEntityId(row.client_document_id, row.binding_kind, row.part), row]),
+  );
+  const items = merged.items.map((binding) => {
+    const row = zeileJeBindung.get(buildBindingEntityId(binding.documentId, binding.kind as CloudBindingKind, binding.part));
+    if (!row || row.client_file_ref_id !== binding.fileRefId) return binding;
+    const marke = row.einvoice_untrusted_at || undefined;
+    if ((binding.einvoiceUntrustedAt || undefined) === marke) return binding;
+    const { einvoiceUntrustedAt: _bisher, ...ohneMarke } = binding;
+    return marke ? { ...ohneMarke, einvoiceUntrustedAt: marke } : ohneMarke;
+  });
   // Grabsteine verlassen die aktive Binding-Liste (lokal kennt kein tombstoned Binding).
-  return { items: merged.items.filter((binding) => !binding.sync?.deleted), conflicts: merged.conflicts, originals };
+  return { items: items.filter((binding) => !binding.sync?.deleted), conflicts: merged.conflicts, originals };
 }
 
 export function mapCloudInboxRow(row: CloudInboxRow, local: InboxItem | undefined, context: IntakeMergeContext): InboxItem {
@@ -529,16 +559,36 @@ export function mergeWorkResultsFromPull(local: DocumentWorkResult[], rows: Clou
   return { items: [...byId.values()], conflicts };
 }
 
+/**
+ * GO-LIVE-SECURITY-01 / FINALISIERUNG — ein Archivdokument ist nie der Beleg einer Rechnung.
+ *
+ * Rechnungs- und Korrekturbelege kommen ausschliesslich über ihren eigenen Pfad
+ * (`generated_invoice` / `generated_invoice_correction`). Ein Archivdokument aus dem
+ * Eingangsweg, das sich mit Kategorie, Art und Rechnungsbezug als solcher ausgibt, hätte
+ * bisher Projektion (`archiveDocumentId`) und E-Rechnungsablage der Rechnung übernommen:
+ * fälschen, verdrängen, blockieren. Es bleibt sichtbar, verliert aber den Rechnungsbezug.
+ * Seit 20261107120000 legt kein Mitglied ein solches Dokument mehr an; dies hier
+ * entschärft auch den Altbestand.
+ */
+export function withoutInvoiceDocumentClaim(document: CompanyDocument): CompanyDocument {
+  if (!document.linkedInvoiceId) return document;
+  const gibtSichAlsRechnungsbelegAus =
+    document.classifiedKind === 'rechnungskorrektur' ||
+    (document.category === 'ausgangsrechnung' && document.classifiedKind === 'ausgangsrechnung');
+  return gibtSichAlsRechnungsbelegAus ? { ...document, linkedInvoiceId: null } : document;
+}
+
 export function mapCloudArchivedDocumentRow(row: CloudArchivedDocumentRow, local: CompanyDocument | undefined, originalFileRefId: string | undefined, context: IntakeMergeContext): CompanyDocument {
   const payload = row.payload as Partial<CompanyDocument>;
-  return {
+  return withoutInvoiceDocumentClaim({
     ...(local ?? ({} as CompanyDocument)),
     ...payload,
     id: row.client_document_id,
     fileRefId: originalFileRefId ?? local?.fileRefId ?? payload.fileRefId,
-    linkedInvoiceId: row.linked_invoice_id ?? payload.linkedInvoiceId ?? null,
+    // FINALISIERUNG — nur die Spalte zählt; die Nutzlast ist frei beschreibbar.
+    linkedInvoiceId: row.linked_invoice_id ?? null,
     sync: cloudMeta(row, context.deviceId, context.workspaceId),
-  } as CompanyDocument;
+  } as CompanyDocument);
 }
 
 /** Nur archivierte Fremddokumente; generierte Rechnungsdokumente laufen ueber ihren eigenen Pull. */
@@ -676,13 +726,180 @@ export function rebaseAdditiveArchivedDocumentConflicts(
   return { documents: nextDocuments, outbox: rebased.length ? nextOutbox : outbox, rebased };
 }
 
+// ---------------------------------------------------------------------------
+// GO-LIVE-SECURITY-01 — vom Server wegen der Rolle abgewiesene Archivlöschung
+// ---------------------------------------------------------------------------
+
+/** Eine vom Eingangsweg (`upsert_workspace_intake_entity`) wegen der Rolle abgewiesene Löschung. */
+function isRoleDeniedIntakeEntry(entry: SyncOutboxEntry): boolean {
+  return isIntakeSyncEntityType(entry.entityType) && isRoleDeniedOutboxEntry(entry);
+}
+
+export interface RoleDeniedEInvoiceBindingPlan {
+  /** Lokale E-Rechnungsbindungen, die dem Cloud-Stand weichen (Sync-Kennung). */
+  bindingIds: Set<string>;
+  /** Ihre Aufträge: Sie können nie gelingen und gelten als erledigt. */
+  outboxIds: Set<string>;
+}
+
+/**
+ * GO-LIVE-SECURITY-01 / FINALISIERUNG — abgewiesene E-Rechnungsbindungen.
+ *
+ * Eine E-Rechnungsbindung legt nur Inhaber oder Admin ab. Schickt ein Gerät trotzdem eine
+ * — Altbestand eines Mitgliedsgeräts, oder jemand wurde offline herabgestuft —, weist der
+ * Server sie mit „Keine Schreibberechtigung“ ab, und dieser Auftrag kann nie gelingen. Es
+ * gilt der Stand der Cloud: Liegt dort eine Bindung unter demselben Schlüssel, ersetzt sie
+ * die lokale; sonst verschwindet die lokale Bindung. Die Datei bleibt auf dem Gerät.
+ */
+export function planRoleDeniedEInvoiceBindingRelease(state: AppPersistedState): RoleDeniedEInvoiceBindingPlan {
+  const plan: RoleDeniedEInvoiceBindingPlan = { bindingIds: new Set(), outboxIds: new Set() };
+  for (const entry of state.syncOutbox ?? []) {
+    if (entry.entityType !== 'document_file_binding' || !isRoleDeniedIntakeEntry(entry)) continue;
+    const parsed = parseBindingEntityId(entry.entityId);
+    if (!parsed || !isEInvoiceBindingKey(parsed.kind, parsed.part)) continue;
+    plan.bindingIds.add(entry.entityId);
+    plan.outboxIds.add(entry.id);
+  }
+  return plan;
+}
+
+export interface RoleDeniedArchiveRestorePlan {
+  /** Archivdokumente, deren lokaler Grabstein dem Cloud-Stand weicht. */
+  documentIds: Set<string>;
+  /** Ihre Eingangseinträge — dieselbe Löschung hat sie lokal mitgenommen. */
+  inboxItemIds: Set<string>;
+  /** Aufträge dieser Löschung: Sie können nie gelingen und gelten als erledigt. */
+  outboxIds: Set<string>;
+  /** Kennungen (`type:id`), die danach nicht mehr als lokal geändert gelten. */
+  dirtyKeys: Set<string>;
+}
+
+/**
+ * Ein Mitglied löscht nichts, auch kein eigenes Dokument (Eingangsweg seit
+ * FINANZ-CORE-DURABILITY-01B). Gelöscht wird aber zuerst lokal; der Grabstein
+ * geht erst mit dem nächsten Lauf hinaus und kommt als Rollenabweisung zurück.
+ * Bisher blieb das Dokument danach nur auf diesem Gerät verschwunden: Der
+ * Grabstein trägt dieselbe Version wie die Cloud-Zeile, der Abgleich hielt ihn
+ * für aktuell, und der Auftrag stand für immer als Fehler da.
+ *
+ * Hier gilt deshalb der Stand der Cloud, für das Dokument und für das, was
+ * dieselbe Löschung lokal mitgenommen hat: Eingangseintrag, Dateibindungen,
+ * Datei. Nur wenn die Cloud-Zeile nachweislich lebt; sonst bleibt alles, wie
+ * es ist. Entscheidend ist die Abweisung des Servers, nicht die lokale
+ * Rollenauskunft: Sie kann veraltet sein.
+ */
+export function planRoleDeniedArchiveRestore(state: AppPersistedState, pull: IntakeCloudPull): RoleDeniedArchiveRestorePlan {
+  const plan: RoleDeniedArchiveRestorePlan = {
+    documentIds: new Set(),
+    inboxItemIds: new Set(),
+    outboxIds: new Set(),
+    dirtyKeys: new Set(),
+  };
+  const denied = (state.syncOutbox ?? []).filter(isRoleDeniedIntakeEntry);
+  if (denied.length === 0) return plan;
+
+  const liveDocuments = new Set(
+    pull.archivedDocuments
+      .filter((row) => row.document_kind === 'archived_document' && !row.deleted)
+      .map((row) => row.client_document_id),
+  );
+  const documentOfInbox = new Map<string, string>();
+  for (const entry of denied) {
+    if (entry.entityType !== 'document' || !liveDocuments.has(entry.entityId)) continue;
+    const local = (state.documents ?? []).find((document) => document.id === entry.entityId);
+    if (!local?.sync?.deleted) continue;
+    plan.documentIds.add(entry.entityId);
+    plan.outboxIds.add(entry.id);
+    const origin = local.sourceInboxItemId?.trim();
+    if (origin) documentOfInbox.set(origin, entry.entityId);
+  }
+  if (plan.documentIds.size === 0) return plan;
+
+  const restoredFiles = new Set<string>();
+  for (const row of pull.bindings) {
+    if (!row.deleted && plan.documentIds.has(row.client_document_id)) restoredFiles.add(row.client_file_ref_id);
+  }
+  const liveInbox = new Map(pull.inboxItems.filter((row) => !row.deleted).map((row) => [row.client_inbox_id, row]));
+  for (const entry of denied) {
+    if (entry.entityType === 'inbox_item') {
+      const documentId = documentOfInbox.get(entry.entityId);
+      const row = liveInbox.get(entry.entityId);
+      const local = state.inboxItems.find((item) => item.id === entry.entityId);
+      if (!documentId || !row || row.archive_document_id !== documentId || !local?.sync?.deleted) continue;
+      plan.inboxItemIds.add(entry.entityId);
+      plan.outboxIds.add(entry.id);
+      if (row.client_file_ref_id) restoredFiles.add(row.client_file_ref_id);
+    } else if (entry.entityType === 'document_file_binding') {
+      const parsed = parseBindingEntityId(entry.entityId);
+      if (parsed && plan.documentIds.has(parsed.documentId)) plan.outboxIds.add(entry.id);
+    }
+  }
+  for (const entry of denied) {
+    if (entry.entityType === 'document_file' && restoredFiles.has(entry.entityId)) plan.outboxIds.add(entry.id);
+  }
+  for (const entry of denied) {
+    if (plan.outboxIds.has(entry.id)) plan.dirtyKeys.add(`${entry.entityType}:${entry.entityId}`);
+  }
+  return plan;
+}
+
+/** Ein Grabstein, der nicht mehr als aktuell gilt: Die lebende Cloud-Zeile ist neuer. */
+function withRestorableVersion<T extends { sync?: SyncMeta }>(entity: T): T {
+  return entity.sync ? { ...entity, sync: { ...entity.sync, version: 0 } } : entity;
+}
+
 export function applyIntakePullToState(state: AppPersistedState, pull: IntakeCloudPull, context: IntakeMergeContext): IntakePullApplied {
-  const files = mergeFileRefsFromPull(state.documentFileRefs ?? [], pull.files, context);
-  const bindings = mergeBindingsFromPull(state.documentFileRepresentationBindings ?? [], pull.bindings, context);
-  const inbox = mergeInboxItemsFromPull(state.inboxItems, pull.inboxItems, context);
-  const work = mergeWorkResultsFromPull(state.documentWorkResults ?? [], pull.workResults, context);
-  const merged = mergeArchivedDocumentsFromPull(state.documents ?? [], pull.archivedDocuments, bindings.originals, context);
-  const documents = { ...merged, ...rebaseAdditiveArchivedDocumentConflicts(merged.items, state.syncOutbox, pull.archivedDocuments) };
+  const restore = planRoleDeniedArchiveRestore(state, pull);
+  const freigabe = planRoleDeniedEInvoiceBindingRelease(state);
+  for (const id of freigabe.outboxIds) restore.outboxIds.add(id);
+  for (const id of freigabe.bindingIds) restore.dirtyKeys.add(`document_file_binding:${id}`);
+  const restoring = restore.outboxIds.size > 0;
+  const localDocuments = (state.documents ?? []).map((document) =>
+    restore.documentIds.has(document.id) ? withRestorableVersion(document) : document,
+  );
+  const localInbox = state.inboxItems.map((item) => (restore.inboxItemIds.has(item.id) ? withRestorableVersion(item) : item));
+  const mergeContext: IntakeMergeContext = restoring
+    ? { ...context, dirty: new Set([...context.dirty].filter((key) => !restore.dirtyKeys.has(key))) }
+    : context;
+  /*
+   * Erledigt, nicht entfernt: Beim Zusammenführen nach dem Pull gilt für einen
+   * Auftrag, den der Pull nicht mehr kennt, das Push-Ergebnis — er stünde
+   * sonst als Fehler wieder da.
+   */
+  const outbox = restoring
+    ? state.syncOutbox?.map((entry) =>
+        restore.outboxIds.has(entry.id)
+          ? {
+              ...entry,
+              status: 'completed' as const,
+              blockedReason: undefined,
+              lastErrorMessage: undefined,
+              lastErrorAt: undefined,
+              lastErrorRetryable: undefined,
+            }
+          : entry,
+      )
+    : state.syncOutbox;
+
+  const files = mergeFileRefsFromPull(state.documentFileRefs ?? [], pull.files, mergeContext);
+  const localBindings = (state.documentFileRepresentationBindings ?? []).filter(
+    (binding) =>
+      !freigabe.bindingIds.has(buildBindingEntityId(binding.documentId, binding.kind as CloudBindingKind, binding.part)),
+  );
+  const bindings = mergeBindingsFromPull(localBindings, pull.bindings, mergeContext);
+  const inbox = mergeInboxItemsFromPull(localInbox, pull.inboxItems, mergeContext);
+  const work = mergeWorkResultsFromPull(state.documentWorkResults ?? [], pull.workResults, mergeContext);
+  const merged = mergeArchivedDocumentsFromPull(localDocuments, pull.archivedDocuments, bindings.originals, mergeContext);
+  const documents = { ...merged, ...rebaseAdditiveArchivedDocumentConflicts(merged.items, outbox, pull.archivedDocuments) };
+  /*
+   * FINALISIERUNG — auch, was das Gerät schon hält: Ein Archivdokument mit derselben
+   * Version kommt nicht neu durch die Abbildung oben. Massgeblich ist, was der Server
+   * über die Kennung sagt — ein Archivdokument ist kein Rechnungsbeleg.
+   */
+  const archivKennungen = new Set(pull.archivedDocuments.map((row) => row.client_document_id));
+  const dokumente = documents.documents.map((document) =>
+    archivKennungen.has(document.id) ? withoutInvoiceDocumentClaim(document) : document,
+  );
   return {
     state: {
       ...state,
@@ -690,7 +907,7 @@ export function applyIntakePullToState(state: AppPersistedState, pull: IntakeClo
       documentFileRepresentationBindings: bindings.items,
       inboxItems: inbox.items,
       documentWorkResults: work.items,
-      documents: documents.documents,
+      documents: dokumente,
       syncOutbox: documents.outbox,
     },
     conflicts: [...files.conflicts, ...bindings.conflicts, ...inbox.conflicts, ...work.conflicts, ...documents.conflicts],

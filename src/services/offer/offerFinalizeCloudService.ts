@@ -37,6 +37,8 @@ export type FinalizeOfferFailure =
   | { ok: false; reason: 'cloud_required' }
   | { ok: false; reason: 'sync_pending' }
   | { ok: false; reason: 'already_finalized_elsewhere' }
+  /** GO-LIVE-SECURITY-01 — freigeben dürfen nur Inhaber und Admin; endgültig, kein erneuter Versuch. */
+  | { ok: false; reason: 'forbidden' }
   | { ok: false; reason: 'server_rejected'; message: string }
   | { ok: false; reason: 'network'; message: string };
 
@@ -107,6 +109,9 @@ export async function finalizeOfferWithCloud(
     });
     if (response.error) {
       const message = response.error.message ?? 'Unbekannter Fehler';
+      if (response.error.code === '42501' || message.includes('Keine Schreibberechtigung')) {
+        return { ok: false, reason: 'forbidden' };
+      }
       if (message.includes('bereits freigegeben')) return { ok: false, reason: 'already_finalized_elsewhere' };
       if (message.includes('Failed to fetch') || message.includes('Network')) {
         return { ok: false, reason: 'network', message };

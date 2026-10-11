@@ -14,6 +14,8 @@ import {
   mergeCloudPaymentsIntoInvoice,
   type CloudInvoicePaymentEntry,
 } from '../vorgangService';
+import { alignInvoiceFactsForMember } from './invoiceMemberAlignment';
+import { recordServicePeriodCloudProofs } from './invoiceOutputClearance';
 
 export interface ApplyInvoicePullResult {
   vorgaenge: Vorgang[];
@@ -94,12 +96,39 @@ async function applyCloudPaymentsToVorgaenge(
   };
 }
 
+/**
+ * GO-LIVE-SECURITY-01 — auf dem Gerät eines Mitglieds gelten Versand und
+ * Bestätigung des Leistungszeitraums so, wie die Cloud sie trägt (siehe
+ * `invoiceMemberAlignment`). Der monotone Merge davor bleibt unverändert; er
+ * ist für Inhaber und Verwaltung richtig, deren lokaler Stand ein noch nicht
+ * gesicherter Vermerk sein kann.
+ */
+function alignInvoicesForMember(
+  vorgaenge: Vorgang[],
+  manualInvoices: VorgangInvoice[],
+  cloudInvoices: ReadonlyMap<string, VorgangInvoice>,
+): { vorgaenge: Vorgang[]; manualInvoices: VorgangInvoice[] } {
+  const align = (invoice: VorgangInvoice): VorgangInvoice => {
+    const cloud = cloudInvoices.get(invoice.id);
+    return cloud ? (alignInvoiceFactsForMember(invoice, cloud) ?? invoice) : invoice;
+  };
+  return {
+    vorgaenge: vorgaenge.map((vorgang) => {
+      const invoices = vorgang.invoices.map(align);
+      return invoices.some((invoice, index) => invoice !== vorgang.invoices[index]) ? { ...vorgang, invoices } : vorgang;
+    }),
+    manualInvoices: manualInvoices.map(align),
+  };
+}
+
 export async function applyInvoicePullAfterVorgangMerge(input: {
   workspaceId: string;
   vorgaenge: Vorgang[];
   report: SyncSimulationReport;
   client?: SupabaseClient | null;
   since?: string | null;
+  /** GO-LIVE-SECURITY-01 — nur für eine bekannte Mitgliedsrolle setzen. */
+  alignForMember?: boolean;
 }): Promise<ApplyInvoicePullResult> {
   try {
     const rows = await workspaceInvoiceCloud.rpcPullWorkspaceInvoiceRows(input.workspaceId, {
@@ -127,12 +156,32 @@ export async function applyInvoicePullAfterVorgangMerge(input: {
       input.since,
     );
 
+    const aligned = input.alignForMember
+      ? alignInvoicesForMember(
+          withPayments.vorgaenge,
+          withPayments.manualInvoices,
+          new Map(mapped.map((cloud) => [cloud.clientInvoiceId, cloud.invoice])),
+        )
+      : withPayments;
+    if (input.alignForMember) {
+      /*
+       * GO-LIVE-SECURITY-01 — was die Cloud bestätigt trägt, darf dieses Gerät
+       * auch offline ausgeben (siehe `invoiceOutputClearance`).
+       */
+      recordServicePeriodCloudProofs(
+        input.workspaceId,
+        mapped
+          .filter((cloud) => cloud.invoice.servicePeriodConfirmed === true)
+          .map((cloud) => cloud.clientInvoiceId),
+      );
+    }
+
     return {
-      vorgaenge: withPayments.vorgaenge,
+      vorgaenge: aligned.vorgaenge,
       invoiceRpcFailed: false,
       /* 01B2c — der Merge trägt die freien Rechnungen weiter, jetzt mit
          eingeflochtenen Cloud-Zahlungen. */
-      merge: { ...merge, manualInvoices: withPayments.manualInvoices },
+      merge: { ...merge, manualInvoices: aligned.manualInvoices },
       pendingIntentClears: merge.pendingIntentClears,
     };
   } catch (invoiceError) {

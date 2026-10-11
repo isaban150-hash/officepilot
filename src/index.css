@@ -5538,6 +5538,19 @@ body {
   .invoice-print-document--screen-hidden {
     display: block !important;
   }
+
+  /*
+   * GO-LIVE-SECURITY-01 / ABSCHLUSS — gesperrte Ausgabe: Auch der Druck über das
+   * Browsermenü (Strg+P, Teilen → Drucken) gibt die Rechnung nicht heraus, sondern
+   * nur den Hinweis. Dieselbe Regel wie Druckknopf und PDF (InvoiceDetailPage).
+   */
+  .invoice-print-document--print-blocked .invoice-document {
+    display: none !important;
+  }
+
+  .invoice-print-document--print-blocked .invoice-print-blocked-notice {
+    display: block !important;
+  }
 }
 
 /*
@@ -5545,6 +5558,11 @@ body {
  * zur bisherigen UX. Es ist nur immer im DOM, damit der Druck es findet.
  */
 .invoice-print-document--screen-hidden {
+  display: none;
+}
+
+/* GO-LIVE-SECURITY-01 / ABSCHLUSS — der Druck-Sperrhinweis erscheint nur im Druck. */
+.invoice-print-blocked-notice {
   display: none;
 }
 

@@ -2,15 +2,21 @@ import { useEffect, useState } from 'react';
 import { Button } from '../ui/Button';
 import { Card, CardTitle } from '../ui/Card';
 import {
+  adoptCloudInvoiceSentStateAfterRoleDenial,
+  captureInvoiceSentState,
   formatInvoiceSentViaLabel,
   INVOICE_SENT_VIA_OPTIONS,
   isInvoiceSentCloudSyncSilent,
   markInvoiceAsSent,
+  revertInvoiceSentAfterRoleDenial,
   syncInvoiceSentToCloud,
   updateInvoiceSentDetails,
   type InvoiceSentCloudState,
   type InvoiceSentInput,
 } from '../../services/invoiceSentService';
+import { useOptionalAuth } from '../../context/AuthContext';
+import { isSupabaseConfigured } from '../../lib/supabase';
+import { resolveWorkspaceWriteAccess } from '../../services/workspace/workspaceRoleService';
 import { applyInvoiceSentSnapshotFromCloud } from '../../services/vorgangService';
 import type { InvoiceSentSnapshot } from '../../services/invoice/invoiceSentSnapshot';
 import { isSentDateAfterPaymentDue } from '../../services/invoicePaymentService';
@@ -31,6 +37,11 @@ interface Props {
    */
   cloudState?: InvoiceSentCloudState | null;
   onCloudStateChange?: (state: InvoiceSentCloudState) => void;
+  /**
+   * GO-LIVE-SECURITY-01 — die Detailseite hat auf dem Gerät eines Mitglieds
+   * einen nicht freigegebenen Versandstand auf den Cloud-Stand zurückgesetzt.
+   */
+  roleAligned?: boolean;
 }
 
 type FormMode = 'closed' | 'mark' | 'correct' | 'confirm-mark' | 'confirm-correct';
@@ -55,7 +66,17 @@ export function InvoiceSentPanel({
   onUpdated,
   cloudState = null,
   onCloudStateChange,
+  roleAligned = false,
 }: Props) {
+  /*
+   * GO-LIVE-SECURITY-01 — den Versand vermerken ist verbindlich: nur Inhaber
+   * und Verwaltung. Mitglieder sehen den Stand und einen Rollenhinweis; die
+   * Dienste prüfen dieselbe Rolle noch einmal vor jeder lokalen Änderung.
+   */
+  const authUser = useOptionalAuth()?.user;
+  const actor = { userId: authUser?.id, cloudConfigured: isSupabaseConfigured() };
+  const darfVermerken = resolveWorkspaceWriteAccess(actor).canWrite;
+  const [roleDenied, setRoleDenied] = useState(false);
   const [mode, setMode] = useState<FormMode>('closed');
   const [sentAt, setSentAt] = useState(todayIso());
   const [sentVia, setSentVia] = useState<InvoiceSentVia>('email');
@@ -91,14 +112,22 @@ export function InvoiceSentPanel({
   });
 
   const handleConfirm = () => {
+    if (!darfVermerken) {
+      setErrorKey('invoice.sent.error.forbidden');
+      return;
+    }
     const input = buildInput();
+    // GO-LIVE-SECURITY-01 — der Stand davor, falls der Server den Vermerk abweist.
+    const vorher = captureInvoiceSentState(vorgangId, invoice.id);
     const result =
       mode === 'confirm-mark'
-        ? markInvoiceAsSent(vorgangId, invoice.id, input)
-        : updateInvoiceSentDetails(vorgangId, invoice.id, input);
+        ? markInvoiceAsSent(vorgangId, invoice.id, input, actor)
+        : updateInvoiceSentDetails(vorgangId, invoice.id, input, actor);
 
     if (!result.ok) {
-      if (result.reason === 'invalid_date') {
+      if (result.reason === 'forbidden') {
+        setErrorKey('invoice.sent.error.forbidden');
+      } else if (result.reason === 'invalid_date') {
         setErrorKey('invoice.sent.error.date');
       } else if (result.reason === 'invalid_via') {
         setErrorKey('invoice.sent.error.via');
@@ -122,15 +151,27 @@ export function InvoiceSentPanel({
      */
     onUpdated(result.invoice);
     closeAll();
+    setRoleDenied(false);
 
     /*
      * INVOICE-SENT-CLOUD-DURABILITY-04B1 — der lokale Stand steht bereits fest
      * und wird nicht zurückgenommen. Gelingt die geräteübergreifende Sicherung
      * nicht, darf die Oberfläche das aber nicht verschweigen: Auf einem anderen
      * Gerät stünde die Rechnung sonst weiterhin auf „vorbereitet“.
+     *
+     * GO-LIVE-SECURITY-01 — mit einer Ausnahme: Weist der Server den Vermerk
+     * wegen der Rolle ab, war er nie zulässig. Dann gilt wieder der Stand
+     * davor; ein Scheinerfolg gäbe auf diesem Gerät Mahnung und Folgeaktionen frei.
      */
-    void syncInvoiceSentToCloud(vorgangId, invoice.id)
+    void syncInvoiceSentToCloud(vorgangId, invoice.id, actor)
       .then((outcome) => {
+        if (outcome === 'forbidden' && vorher) {
+          const zurueck = revertInvoiceSentAfterRoleDenial(vorgangId, invoice.id, vorher);
+          if (zurueck.ok) onUpdated(zurueck.invoice);
+          setCloudWarning(false);
+          setRoleDenied(true);
+          return;
+        }
         setCloudWarning(!isInvoiceSentCloudSyncSilent(outcome));
         /*
          * 01B — nur ein bewiesener Erfolg wird behauptet. Bei jedem anderen
@@ -154,11 +195,19 @@ export function InvoiceSentPanel({
    * zweite Mutation, keine Sonderbehandlung.
    */
   const secureLocalToCloud = async (): Promise<void> => {
-    if (cloudBusy) return;
+    if (cloudBusy || !darfVermerken) return;
     setCloudBusy(true);
     setCloudWarning(false);
-    const outcome = await syncInvoiceSentToCloud(vorgangId, invoice.id);
-    if (outcome === 'synced') {
+    const outcome = await syncInvoiceSentToCloud(vorgangId, invoice.id, actor);
+    if (outcome === 'forbidden') {
+      // GO-LIVE-SECURITY-01 — bewiesen nicht freigegeben: der Stand der Cloud gilt.
+      const uebernommen = await adoptCloudInvoiceSentStateAfterRoleDenial(vorgangId, invoice.id);
+      if (uebernommen) {
+        onUpdated(uebernommen);
+        onCloudStateChange?.({ kind: 'synced' });
+      }
+      setRoleDenied(true);
+    } else if (outcome === 'synced') {
       onCloudStateChange?.({ kind: 'synced' });
     } else if (!isInvoiceSentCloudSyncSilent(outcome)) {
       // Der Hinweis bleibt stehen; der nächste Read entscheidet erneut.
@@ -204,6 +253,18 @@ export function InvoiceSentPanel({
           </p>
         ) : null}
 
+        {roleDenied ? (
+          <p className="invoice-sent-panel__error" data-testid="invoice-sent-forbidden">
+            {translate('invoice.sent.error.forbidden')}
+          </p>
+        ) : null}
+
+        {roleAligned ? (
+          <p className="invoice-sent-panel__error" data-testid="invoice-sent-role-aligned">
+            {translate('invoice.sent.roleAligned')}
+          </p>
+        ) : null}
+
         {/*
           * 01B — der dauerhaft rekonstruierbare Cloud-Zustand.
           *
@@ -212,7 +273,7 @@ export function InvoiceSentPanel({
           * bei den anderen beiden gibt es keinen Beweis. Ein Knopf, der nie
           * gelingen kann, wäre schlimmer als Schweigen.
           */}
-        {cloudState?.kind === 'pending' ? (
+        {cloudState?.kind === 'pending' && darfVermerken ? (
           <div className="invoice-sent-panel__cloud" data-testid="invoice-sent-cloud-pending">
             <p className="invoice-sent-panel__error">{translate('invoice.sent.cloudPending')}</p>
             <Button
@@ -261,7 +322,7 @@ export function InvoiceSentPanel({
               </div>
             </dl>
 
-            {cloudState.kind === 'conflict' ? (
+            {cloudState.kind === 'conflict' && darfVermerken ? (
               <Button
                 type="button"
                 fullWidth
@@ -315,7 +376,7 @@ export function InvoiceSentPanel({
                 </div>
               ) : null}
             </dl>
-            {mode === 'closed' ? (
+            {mode === 'closed' && darfVermerken ? (
               <Button
                 type="button"
                 variant="outline"
@@ -332,7 +393,7 @@ export function InvoiceSentPanel({
             <p className="invoice-sent-panel__meta">
               {translate('invoice.sent.notSentYet')}
             </p>
-            {mode === 'closed' ? (
+            {mode === 'closed' && darfVermerken ? (
               <Button
                 type="button"
                 size="sm"
@@ -344,6 +405,12 @@ export function InvoiceSentPanel({
             ) : null}
           </div>
         )}
+
+        {!darfVermerken ? (
+          <p className="invoice-sent-panel__meta" data-testid="invoice-sent-role-hint">
+            {translate('invoice.sent.roleHint')}
+          </p>
+        ) : null}
 
         {showForm ? (
           <form
